@@ -1,0 +1,99 @@
+# Operating systems
+.DS_Store
+Thumbs.db
+Desktop.ini
+*Zone.Identifier
+*Zone.Identifier*
+
+# Editors and IDEs
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# Logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+.cache/
+coverage/
+reports/
+
+# JavaScript and TypeScript
+node_modules/
+dist/
+build/
+.vite/
+.next/
+.nuxt/
+.svelte-kit/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+dist/
+build/
+*.egg-info/
+
+# Java and Kotlin
+.gradle/
+target/
+out/
+*.class
+
+# .NET
+bin/
+obj/
+
+# Rust
+target/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+*.tfvars.json
+!*.example.tfvars
+.terraform.lock.hcl
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Generated and large data
+data/generated/
+data/cache/
+artifacts/
+downloads/
+*.parquet
+*.arrow
+*.feather
+
+# Local tool state
+.codex/
+.claude/
