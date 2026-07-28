@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { advanceRouteTime } from "./playback";
+import { advanceRouteTime, currentRouteTime } from "./playback";
 
 describe("playback", () => {
   const range = { minimum: 0, maximum: 1_560 };
@@ -12,5 +12,11 @@ describe("playback", () => {
 
   it("wraps after a time range that extends beyond midnight", () => {
     expect(advanceRouteTime(1_559, 2_000, 1, range)).toBe(1);
+  });
+
+  it("converts the current local clock to route minutes", () => {
+    expect(currentRouteTime(new Date(2026, 6, 29, 23, 37, 30, 500))).toBeCloseTo(
+      1_417 + 30.5 / 60,
+    );
   });
 });

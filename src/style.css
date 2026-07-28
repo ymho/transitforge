@@ -34,6 +34,60 @@ body,
   backdrop-filter: blur(12px);
 }
 
+.control-panel-toggle {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  z-index: 1;
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 999px;
+  color: #d9e3ef;
+  background: rgb(8 17 29 / 55%);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.control-panel-toggle:hover {
+  background: rgb(255 255 255 / 14%);
+}
+
+.hud[data-minimized="true"] {
+  padding: 0.55rem;
+}
+
+.hud[data-minimized="true"] > :not(.time-control, .control-panel-toggle) {
+  display: none;
+}
+
+.hud[data-minimized="true"] .time-control {
+  gap: 0;
+}
+
+.hud[data-minimized="true"] .time-control output,
+.hud[data-minimized="true"] .time-control input {
+  display: none;
+}
+
+.hud[data-minimized="true"] .analog-clock {
+  width: 6.2rem;
+  margin: 0;
+}
+
+.hud[data-minimized="true"] .control-panel-toggle {
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  background: rgb(8 17 29 / 72%);
+}
+
 #map-status {
   margin: 0.6rem 0 0;
   color: #c9d4e1;
@@ -127,6 +181,8 @@ body,
   opacity: 0.55;
 }
 
+.scene-controls,
+.visualization-controls,
 .weather-controls {
   display: flex;
   gap: 0.45rem;
@@ -136,6 +192,8 @@ body,
   border: 0;
 }
 
+.scene-controls button,
+.visualization-controls button,
 .weather-controls button {
   padding: 0.45rem 0.7rem;
   border: 1px solid rgb(104 215 255 / 60%);
@@ -147,15 +205,63 @@ body,
   cursor: pointer;
 }
 
+.scene-controls button[aria-pressed="true"],
+.visualization-controls button[aria-pressed="true"],
 .weather-controls button[aria-pressed="true"] {
   border-color: #fff2bd;
   color: #08111d;
   background: #fff2bd;
 }
 
+.scene-controls button:disabled,
+.visualization-controls button:disabled,
 .weather-controls button:disabled {
   cursor: wait;
   opacity: 0.55;
+}
+
+.congestion-legend {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  color: #d9e3ef;
+  font-size: 0.72rem;
+}
+
+.congestion-legend[hidden] {
+  display: none;
+}
+
+.congestion-legend small {
+  color: #91a6bc;
+  font-size: 0.65rem;
+}
+
+.congestion-legend-scale {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  width: 5rem;
+  height: 0.55rem;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 35%);
+  border-radius: 999px;
+}
+
+.congestion-legend-scale i:nth-child(1) {
+  background: #38b56b;
+}
+
+.congestion-legend-scale i:nth-child(2) {
+  background: #f0c94d;
+}
+
+.congestion-legend-scale i:nth-child(3) {
+  background: #df4851;
+}
+
+.congestion-legend-scale i:nth-child(4) {
+  background: #6d3fb3;
 }
 
 .train-details {
@@ -323,4 +429,25 @@ body,
 .metrics-panel dd {
   margin: 0;
   font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+  .hud {
+    top: 0.65rem;
+    left: 0.65rem;
+    max-width: calc(100vw - 1.3rem);
+    max-height: calc(100vh - 1.3rem);
+    overflow-y: auto;
+  }
+
+  .hud[data-minimized="true"] {
+    overflow: visible;
+  }
+
+  .train-details {
+    right: 0.65rem;
+    bottom: 0.65rem;
+    width: calc(100vw - 1.3rem);
+    max-height: calc(100vh - 1.3rem);
+  }
 }

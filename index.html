@@ -9,7 +9,15 @@
   <body>
     <main id="app">
       <div id="map" aria-label="TransitForge 3D map"></div>
-      <section class="hud" aria-label="TransitForge status">
+      <section id="control-panel" class="hud" aria-label="操作パネル" data-minimized="false">
+        <button
+          id="control-panel-toggle"
+          class="control-panel-toggle"
+          type="button"
+          aria-controls="control-panel"
+          aria-expanded="true"
+          aria-label="操作パネルを最小化"
+        >−</button>
         <label class="time-control" for="display-time" aria-label="表示時刻">
           <svg class="analog-clock" viewBox="0 0 120 105" role="img" aria-label="表示時刻のアナログ時計">
             <rect class="clock-case" x="1" y="1" width="118" height="103" rx="6" />
@@ -47,11 +55,27 @@
             <option value="60">60分/秒</option>
           </select>
         </div>
+        <fieldset class="scene-controls" aria-label="景色の選択">
+          <button type="button" data-scene-mode="normal" aria-pressed="true" disabled>通常</button>
+          <button type="button" data-scene-mode="model" aria-pressed="false" disabled>模型</button>
+        </fieldset>
         <fieldset class="weather-controls" aria-label="天気の選択">
           <button type="button" data-weather="clear" aria-pressed="true" disabled>晴れ</button>
           <button type="button" data-weather="rain" aria-pressed="false" disabled>雨</button>
           <button type="button" data-weather="snow" aria-pressed="false" disabled>雪</button>
         </fieldset>
+        <fieldset class="visualization-controls" aria-label="列車グラフの表示">
+          <button id="congestion-toggle" type="button" aria-pressed="true" disabled>混雑</button>
+          <button id="destination-arcs-toggle" type="button" aria-pressed="false" disabled>行先アーチ</button>
+        </fieldset>
+        <div id="congestion-legend" class="congestion-legend" aria-label="混雑合計。緑は300以下、黄色は600以下、赤は900以下、紫は901以上" hidden>
+          <span>混雑合計</span>
+          <small>少</small>
+          <span class="congestion-legend-scale" aria-hidden="true">
+            <i></i><i></i><i></i><i></i>
+          </span>
+          <small>多</small>
+        </div>
         <details class="metrics-panel">
           <summary>計測</summary>
           <p id="metric-display-summary">経路と列車を集計しています。</p>

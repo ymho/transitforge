@@ -1,6 +1,11 @@
 import mapboxgl from "mapbox-gl";
 import * as THREE from "three";
 
+import {
+  congestionBarColor,
+  congestionBarHeightMeters,
+} from "../data/train-congestion";
+import type { Coordinate } from "../data/path-catalog";
 import { coupledTrainLayouts } from "../domain/coupled-train-layout";
 import type { TrainPosition } from "../domain/train-position";
 import { trainVisualScaleForZoom } from "../domain/train-visual-scale";
@@ -9,6 +14,14 @@ const maximumTrainInstances = 1_000;
 const vehicleLengthMeters = 12;
 const vehicleWidthMeters = 5;
 const vehicleHeightMeters = 5.6;
+const congestionBarWidthMeters = 3.2;
+const congestionBarHitWidthMeters = 8;
+const destinationArcSegments = 24;
+const destinationArcVertexCount =
+  maximumTrainInstances * destinationArcSegments * 2;
+const destinationArcHeightRatio = 0.16;
+const maximumDestinationArcHeightMeters = 30_000;
+const destinationArcEndpointHeightMeters = 8;
 
 export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   readonly id = "trains-3d";
@@ -20,8 +33,22 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   private scene?: THREE.Scene;
   private renderer?: THREE.WebGLRenderer;
   private trains?: THREE.InstancedMesh<THREE.BoxGeometry, THREE.MeshLambertMaterial>;
+  private congestionBars?: THREE.InstancedMesh<
+    THREE.BoxGeometry,
+    THREE.MeshBasicMaterial
+  >;
+  private congestionBarHitTargets?: THREE.InstancedMesh<
+    THREE.BoxGeometry,
+    THREE.MeshBasicMaterial
+  >;
+  private destinationArcs?: THREE.LineSegments<
+    THREE.BufferGeometry,
+    THREE.LineBasicMaterial
+  >;
   private readonly instanceTransform = new THREE.Object3D();
   private readonly instanceColor = new THREE.Color();
+  private readonly raycaster = new THREE.Raycaster();
+  private readonly pointer = new THREE.Vector2();
   // MapboxのMercator座標はY軸が南向きであるため、Three.jsのモデル座標との境界で
   // 一度だけ反転する。車両ごとの行列には負スケールを入れない。
   private readonly mapboxToThreeCoordinates = new THREE.Matrix4().makeScale(1, -1, 1);
@@ -29,8 +56,18 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   private readonly worldOriginTranslation = new THREE.Matrix4();
   private readonly displayedBearingByServiceUid = new Map<string, number>();
   private positions: TrainPosition[] = [];
+  private congestionByTrainNumber: ReadonlyMap<string, number> = new Map();
+  private congestionBarServiceUids: string[] = [];
+  private congestionVisible = true;
+  private destinationArcsVisible = false;
 
-  constructor(private readonly colorsByServiceUid: ReadonlyMap<string, string>) {}
+  constructor(
+    private readonly colorsByServiceUid: ReadonlyMap<string, string>,
+    private readonly destinationCoordinatesByServiceUid: ReadonlyMap<
+      string,
+      Coordinate
+    >,
+  ) {}
 
   onAdd(map: mapboxgl.Map, gl: WebGLRenderingContext | WebGL2RenderingContext): void {
     this.map = map;
@@ -57,6 +94,65 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.trains.frustumCulled = false;
     this.scene.add(this.trains);
 
+    this.congestionBars = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(
+        congestionBarWidthMeters,
+        congestionBarWidthMeters,
+        1,
+      ),
+      new THREE.MeshBasicMaterial({ color: 0xffffff }),
+      maximumTrainInstances,
+    );
+    this.congestionBars.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.congestionBars.frustumCulled = false;
+    this.congestionBars.count = 0;
+    this.scene.add(this.congestionBars);
+
+    // 描画する棒は細いため、レイキャスト専用の広い非表示領域を別に持つ。
+    this.congestionBarHitTargets = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(
+        congestionBarHitWidthMeters,
+        congestionBarHitWidthMeters,
+        1,
+      ),
+      new THREE.MeshBasicMaterial(),
+      maximumTrainInstances,
+    );
+    this.congestionBarHitTargets.instanceMatrix.setUsage(
+      THREE.DynamicDrawUsage,
+    );
+    this.congestionBarHitTargets.count = 0;
+
+    const destinationArcGeometry = new THREE.BufferGeometry();
+    destinationArcGeometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(
+        new Float32Array(destinationArcVertexCount * 3),
+        3,
+      ).setUsage(THREE.DynamicDrawUsage),
+    );
+    destinationArcGeometry.setAttribute(
+      "color",
+      new THREE.BufferAttribute(
+        new Float32Array(destinationArcVertexCount * 3),
+        3,
+      ).setUsage(THREE.DynamicDrawUsage),
+    );
+    destinationArcGeometry.setDrawRange(0, 0);
+    this.destinationArcs = new THREE.LineSegments(
+      destinationArcGeometry,
+      new THREE.LineBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.58,
+        depthWrite: false,
+      }),
+    );
+    this.destinationArcs.frustumCulled = false;
+    this.destinationArcs.visible = false;
+    this.destinationArcs.renderOrder = 1;
+    this.scene.add(this.destinationArcs);
+
     this.renderer = new THREE.WebGLRenderer({
       canvas: map.getCanvas(),
       context: gl,
@@ -75,8 +171,68 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.updateInstances();
   }
 
+  setCongestionByTrainNumber(
+    congestionByTrainNumber: ReadonlyMap<string, number>,
+  ): void {
+    this.congestionByTrainNumber = congestionByTrainNumber;
+    this.updateInstances();
+  }
+
+  setCongestionVisible(visible: boolean): void {
+    this.congestionVisible = visible;
+    if (this.congestionBars) {
+      this.congestionBars.visible = visible;
+    }
+    this.map?.triggerRepaint();
+  }
+
+  setDestinationArcsVisible(visible: boolean): void {
+    this.destinationArcsVisible = visible;
+    if (this.destinationArcs) {
+      this.destinationArcs.visible = visible;
+    }
+    this.updateDestinationArcs();
+    this.map?.triggerRepaint();
+  }
+
+  congestionBarServiceUidAt(point: { x: number; y: number }): string | undefined {
+    if (
+      !this.congestionVisible ||
+      !this.map ||
+      !this.camera ||
+      !this.congestionBarHitTargets
+    ) {
+      return undefined;
+    }
+
+    const canvas = this.map.getCanvas();
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    if (width <= 0 || height <= 0) {
+      return undefined;
+    }
+
+    this.pointer.set(
+      (point.x / width) * 2 - 1,
+      1 - (point.y / height) * 2,
+    );
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    const intersection = this.raycaster.intersectObject(
+      this.congestionBarHitTargets,
+      false,
+    )[0];
+    return intersection?.instanceId === undefined
+      ? undefined
+      : this.congestionBarServiceUids[intersection.instanceId];
+  }
+
   private updateInstances(): void {
-    if (!this.trains || !this.map) {
+    if (
+      !this.trains ||
+      !this.congestionBars ||
+      !this.congestionBarHitTargets ||
+      !this.map
+    ) {
       return;
     }
 
@@ -86,6 +242,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
       visibleLayouts.map(({ bearingTrackingKey }) => bearingTrackingKey),
     );
     const vehicleVisualScale = trainVisualScaleForZoom(this.map.getZoom());
+    let congestionBarCount = 0;
 
     for (const [index, layout] of visibleLayouts.entries()) {
       const { position } = layout;
@@ -137,6 +294,39 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
       this.instanceTransform.updateMatrix();
       this.trains.setMatrixAt(index, this.instanceTransform.matrix);
       this.trains.setColorAt(index, this.colorFor(position.serviceUid));
+
+      const congestion = this.congestionByTrainNumber.get(position.trainNo);
+      if (congestion !== undefined) {
+        const barHeightMeters = congestionBarHeightMeters(congestion);
+        this.instanceTransform.position.z =
+          mercator.z +
+          metersToMercatorUnits *
+            vehicleVisualScale *
+            (vehicleHeightMeters +
+              layout.overlapOffsetMeters.vertical +
+              barHeightMeters / 2);
+        this.instanceTransform.scale.set(
+          metersToMercatorUnits * vehicleVisualScale,
+          metersToMercatorUnits * vehicleVisualScale,
+          metersToMercatorUnits * vehicleVisualScale * barHeightMeters,
+        );
+        this.instanceTransform.updateMatrix();
+        this.congestionBars.setMatrixAt(
+          congestionBarCount,
+          this.instanceTransform.matrix,
+        );
+        this.congestionBarHitTargets.setMatrixAt(
+          congestionBarCount,
+          this.instanceTransform.matrix,
+        );
+        this.congestionBars.setColorAt(
+          congestionBarCount,
+          this.instanceColor.set(congestionBarColor(congestion)),
+        );
+        this.congestionBarServiceUids[congestionBarCount] =
+          position.serviceUid;
+        congestionBarCount += 1;
+      }
     }
 
     for (const bearingTrackingKey of this.displayedBearingByServiceUid.keys()) {
@@ -150,7 +340,119 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     if (this.trains.instanceColor) {
       this.trains.instanceColor.needsUpdate = true;
     }
+    this.congestionBars.count = congestionBarCount;
+    this.congestionBarServiceUids.length = congestionBarCount;
+    this.congestionBars.instanceMatrix.needsUpdate = true;
+    if (this.congestionBars.instanceColor) {
+      this.congestionBars.instanceColor.needsUpdate = true;
+    }
+    this.congestionBarHitTargets.count = congestionBarCount;
+    this.congestionBarHitTargets.instanceMatrix.needsUpdate = true;
+    // InstancedMeshのレイキャストは全インスタンスを包む境界球で早期判定する。
+    // 行列を動的更新した後は明示的な再計算が必要。
+    this.congestionBarHitTargets.computeBoundingSphere();
+    this.updateDestinationArcs();
     this.map.triggerRepaint();
+  }
+
+  private updateDestinationArcs(): void {
+    if (!this.destinationArcs || !this.map) {
+      return;
+    }
+
+    const geometry = this.destinationArcs.geometry;
+    if (!this.destinationArcsVisible) {
+      geometry.setDrawRange(0, 0);
+      return;
+    }
+
+    const positions = geometry.getAttribute(
+      "position",
+    ) as THREE.BufferAttribute;
+    const colors = geometry.getAttribute("color") as THREE.BufferAttribute;
+    let vertexIndex = 0;
+
+    for (const position of this.positions.slice(0, maximumTrainInstances)) {
+      const destination =
+        this.destinationCoordinatesByServiceUid.get(position.serviceUid);
+      if (!destination) {
+        continue;
+      }
+
+      const start = mapboxgl.MercatorCoordinate.fromLngLat(
+        position.coordinate,
+        0,
+      );
+      const end = mapboxgl.MercatorCoordinate.fromLngLat(destination, 0);
+      const metersToMercatorUnits = start.meterInMercatorCoordinateUnits();
+      const distanceMeters =
+        Math.hypot(end.x - start.x, end.y - start.y) /
+        metersToMercatorUnits;
+      const arcHeightMeters = Math.min(
+        distanceMeters * destinationArcHeightRatio,
+        maximumDestinationArcHeightMeters,
+      );
+      const color = this.colorFor(position.serviceUid);
+
+      for (let segment = 0; segment < destinationArcSegments; segment += 1) {
+        const startProgress = segment / destinationArcSegments;
+        const endProgress = (segment + 1) / destinationArcSegments;
+        vertexIndex = this.writeDestinationArcVertex(
+          positions,
+          colors,
+          vertexIndex,
+          start,
+          end,
+          startProgress,
+          metersToMercatorUnits,
+          arcHeightMeters,
+          color,
+        );
+        vertexIndex = this.writeDestinationArcVertex(
+          positions,
+          colors,
+          vertexIndex,
+          start,
+          end,
+          endProgress,
+          metersToMercatorUnits,
+          arcHeightMeters,
+          color,
+        );
+      }
+    }
+
+    geometry.setDrawRange(0, vertexIndex);
+    positions.needsUpdate = true;
+    colors.needsUpdate = true;
+  }
+
+  private writeDestinationArcVertex(
+    positions: THREE.BufferAttribute,
+    colors: THREE.BufferAttribute,
+    vertexIndex: number,
+    start: mapboxgl.MercatorCoordinate,
+    end: mapboxgl.MercatorCoordinate,
+    progress: number,
+    metersToMercatorUnits: number,
+    arcHeightMeters: number,
+    color: THREE.Color,
+  ): number {
+    const x =
+      start.x + (end.x - start.x) * progress - this.worldOrigin.x;
+    const y =
+      -(start.y + (end.y - start.y) * progress - this.worldOrigin.y);
+    const heightMeters =
+      destinationArcEndpointHeightMeters +
+      Math.sin(Math.PI * progress) * arcHeightMeters;
+    positions.setXYZ(
+      vertexIndex,
+      x,
+      y,
+      heightMeters * metersToMercatorUnits,
+    );
+    colors.setXYZ(vertexIndex, color.r, color.g, color.b);
+    return vertexIndex + 1;
   }
 
   render(_gl: WebGLRenderingContext | WebGL2RenderingContext, matrix: number[]): void {
@@ -164,6 +466,9 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
       .fromArray(matrix)
       .multiply(this.worldOriginTranslation)
       .multiply(this.mapboxToThreeCoordinates);
+    this.camera.projectionMatrixInverse
+      .copy(this.camera.projectionMatrix)
+      .invert();
     this.renderer.resetState();
     this.renderer.render(this.scene, this.camera);
   }
@@ -172,6 +477,12 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.map?.off("move", this.recenterWorldOrigin);
     this.trains?.geometry.dispose();
     this.trains?.material.dispose();
+    this.congestionBars?.geometry.dispose();
+    this.congestionBars?.material.dispose();
+    this.congestionBarHitTargets?.geometry.dispose();
+    this.congestionBarHitTargets?.material.dispose();
+    this.destinationArcs?.geometry.dispose();
+    this.destinationArcs?.material.dispose();
     this.renderer?.dispose();
   }
 
