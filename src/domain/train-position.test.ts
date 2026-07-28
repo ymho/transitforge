@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Path } from "../data/path-catalog";
 import type { Train } from "../data/train-index";
 import {
+  destinationCoordinateForTrain,
   interpolatedRouteMeter,
   PathGeometryIndex,
   positionForTrain,
@@ -57,6 +58,25 @@ describe("train position", () => {
   it("skips a train without a usable path", () => {
     const geometry = new PathGeometryIndex([path]);
     expect(positionForTrain({ ...train, path_id: undefined }, geometry, 1440)).toBeUndefined();
+  });
+
+  it("resolves the destination from the final positioned stop", () => {
+    const geometry = new PathGeometryIndex([path]);
+
+    expect(destinationCoordinateForTrain(train, geometry)).toEqual([137, 34]);
+    expect(
+      destinationCoordinateForTrain(
+        {
+          ...train,
+          stops: [
+            { route_meter: 0 },
+            { station_name: "途中駅", route_meter: 150 },
+            { station_name: "座標なし" },
+          ],
+        },
+        geometry,
+      ),
+    ).toEqual([136.5, 34]);
   });
 
 });
