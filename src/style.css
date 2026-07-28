@@ -1,0 +1,326 @@
+:root {
+  color: #f3f7fb;
+  background: #08111d;
+  font-family: Inter, "Noto Sans JP", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app,
+#map {
+  height: 100%;
+  margin: 0;
+}
+
+#map {
+  position: absolute;
+  inset: 0;
+}
+
+.hud {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  max-width: min(28rem, calc(100vw - 3rem));
+  padding: 1rem 1.15rem;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 0.75rem;
+  background: rgb(8 17 29 / 82%);
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 22%);
+  backdrop-filter: blur(12px);
+}
+
+#map-status {
+  margin: 0.6rem 0 0;
+  color: #c9d4e1;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.analog-clock {
+  display: block;
+  width: 7.4rem;
+  height: auto;
+  margin: 0 auto 0.15rem;
+}
+
+.clock-case {
+  fill: rgb(255 255 255 / 8%);
+  stroke: rgb(255 255 255 / 22%);
+  stroke-width: 1;
+}
+
+.clock-face {
+  fill: #dce454;
+  stroke: rgb(8 17 29 / 55%);
+  stroke-width: 0.8;
+}
+
+.clock-numerals {
+  fill: #30383a;
+  font-family: Arial, sans-serif;
+  font-size: 8.5px;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
+.clock-hand {
+  stroke: #252b2d;
+  stroke-linecap: round;
+}
+
+.clock-hour-hand {
+  stroke-width: 6;
+}
+
+.clock-minute-hand {
+  stroke-width: 4.5;
+}
+
+.clock-second-hand {
+  stroke: #71808a;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+
+.clock-pin {
+  fill: #edf0ef;
+  stroke: #343b3e;
+  stroke-width: 0.8;
+}
+
+.playback-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.9rem;
+}
+
+.playback-controls button,
+.playback-controls select {
+  border: 1px solid rgb(104 215 255 / 60%);
+  border-radius: 0.4rem;
+  color: #e6f9ff;
+  background: rgb(20 68 90 / 78%);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.playback-controls button {
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+}
+
+.playback-controls select {
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+}
+
+.playback-controls button:disabled,
+.playback-controls select:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.weather-controls {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.weather-controls button {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid rgb(104 215 255 / 60%);
+  border-radius: 0.4rem;
+  color: #e6f9ff;
+  background: rgb(20 68 90 / 78%);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.weather-controls button[aria-pressed="true"] {
+  border-color: #fff2bd;
+  color: #08111d;
+  background: #fff2bd;
+}
+
+.weather-controls button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.train-details {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  width: min(22rem, calc(100vw - 3rem));
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+  padding: 1rem 1.15rem;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 0.75rem;
+  background: rgb(8 17 29 / 88%);
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 22%);
+  backdrop-filter: blur(12px);
+}
+
+.train-details h2 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.train-destination-suffix {
+  margin-left: 0.12em;
+  font-size: 0.62em;
+  font-weight: 600;
+}
+
+.train-details dl {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.9rem 0 0;
+}
+
+.train-details dl div {
+  display: grid;
+  grid-template-columns: 4rem 1fr;
+  gap: 0.75rem;
+}
+
+.train-details dt {
+  color: #91a6bc;
+}
+
+.train-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.show-coupled-train {
+  position: absolute;
+  top: 0.65rem;
+  right: 2.65rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 999px;
+  color: #d9e3ef;
+  background: rgb(255 255 255 / 8%);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.show-coupled-train:hover {
+  background: rgb(255 255 255 / 16%);
+}
+
+.train-timetable {
+  margin-top: 0.9rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgb(255 255 255 / 12%);
+}
+
+.train-timetable h3 {
+  margin: 0 0 0.5rem;
+  color: #c9d4e1;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.train-timetable ol {
+  max-height: min(40vh, 18rem);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.train-timetable li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+  font-size: 0.8rem;
+}
+
+.train-timetable li span:last-child {
+  color: #fff2bd;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+#close-train-details {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  border: 0;
+  color: #d9e3ef;
+  background: transparent;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.time-control {
+  display: grid;
+  gap: 0.35rem;
+  color: #d9e3ef;
+  font-size: 0.8rem;
+}
+
+.time-control output {
+  color: #fff2bd;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.time-control input {
+  accent-color: #f3b85b;
+}
+
+.metrics-panel {
+  margin-top: 0.85rem;
+  color: #c9d4e1;
+  font-size: 0.75rem;
+}
+
+.metrics-panel summary {
+  cursor: pointer;
+}
+
+.metrics-panel > p {
+  margin: 0.65rem 0 0;
+  color: #d9e3ef;
+  font-size: 0.76rem;
+}
+
+.metrics-panel dl {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.55rem 0 0;
+}
+
+.metrics-panel dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.metrics-panel dt {
+  color: #91a6bc;
+}
+
+.metrics-panel dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}

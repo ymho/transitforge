@@ -1,0 +1,21 @@
+{
+  "name": "transitforge",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "TMPDIR=/tmp vitest run"
+  },
+  "dependencies": {
+    "mapbox-gl": "^3.25.0",
+    "three": "^0.183.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.1",
+    "typescript": "^5.8.3",
+    "vite": "^7.1.7",
+    "vitest": "^4.1.10"
+  }
+}

@@ -86,6 +86,7 @@ crash.log
 *.sqlite3
 
 # Generated and large data
+viewer-input/
 data/generated/
 data/cache/
 artifacts/

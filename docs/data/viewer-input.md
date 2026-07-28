@@ -2,18 +2,20 @@
 
 ## 1. 入力ファイル
 
-ビューワーが読み込むファイルは、次の2つです。
+ビューワーが読み込むファイルは、次の3つです。
 
 ```text
 viewer-input/
 ├─ train_index.json
-└─ path_catalog.json
+├─ path_catalog.json
+└─ station_line_catalog.json
 ```
 
 | ファイル | 内容 |
 |---|---|
 | `train_index.json` | 列車情報、停車時刻、経路参照ID |
 | `path_catalog.json` | 経路参照IDごとの座標列 |
+| `station_line_catalog.json` | 対象事業者についての路線、所属駅、駅代表座標 |
 
 - 文字コード：UTF-8
 - データ形式：JSON
@@ -161,7 +163,41 @@ path_catalog.json
 [135.0000, 34.0000]
 ```
 
-## 6. ビューワーでの読み込み
+## 6. `station_line_catalog.json`
+
+`tools/build_station_line_catalog.py` が国土数値情報の
+`N02-25_Station.geojson` から生成する派生入力です。元GeoJSONは変更せず、
+生成物は他のローカル入力と同様にGit管理しません。
+
+```json
+{
+  "schema_version": "station-line-catalog-v1",
+  "source": "N02-25_Station.geojson",
+  "lines": [
+    {
+      "operator": "運行会社A",
+      "line": "奈良線",
+      "stations": [
+        {
+          "name": "京都",
+          "coordinate": [135.759, 34.985]
+        }
+      ]
+    }
+  ]
+}
+```
+
+列車の行き先駅が所属する路線を候補とし、その列車の停車駅列との一致から
+到着路線を選びます。同じ正式路線内で地域別ラインカラーが異なる場合は、
+行き先駅と直前の同一路線駅の代表座標から区間を判定します。添付路線図から
+色を確定できない路線はグレーで表示します。
+
+事業者名はUnicode表記を正規化します。`WILLER　TRAINS` は
+`京都丹後鉄道`、全角の `ＩＲいしかわ鉄道` は `IRいしかわ鉄道` として
+カタログへ収録します。
+
+## 7. ビューワーでの読み込み
 
 ```javascript
 const trainIndex = await fetch("train_index.json").then(response =>
@@ -195,7 +231,7 @@ for (const train of trainIndex.trains) {
 4. 各列車の `path_id` から `route_coords` を取得する。
 5. `stops` の時刻と `route_meter` から現在位置を計算する。
 
-## 7. 列車位置の計算
+## 8. 列車位置の計算
 
 `route_coords` の各座標点には時刻情報を持たせていません。
 
@@ -218,7 +254,7 @@ route_coords上の現在座標を計算
 
 停車中は、到着時刻から発車時刻まで同じ `route_meter` に列車を配置します。
 
-## 8. ビューワー側の前提
+## 9. ビューワー側の前提
 
 - 列車の一意キーには `service_uid` を使用する。
 - 経路との結合には `path_id` を使用する。
@@ -227,8 +263,9 @@ route_coords上の現在座標を計算
 - 24時を超える時刻を許容する。
 - `path_id` がない列車は表示対象外にする。
 - 対応する経路が見つからない列車は安全にスキップする。
+- ラインカラーの判定は駅・路線カタログを使用し、不明な色はグレーにする。
 
-## 9. 要約
+## 10. 要約
 
 ```text
 train_index.json
@@ -236,6 +273,10 @@ train_index.json
 
 path_catalog.json
   = 経路IDに対応する地図上の座標列
+
+station_line_catalog.json
+  = 対象事業者の路線、所属駅、駅代表座標
 ```
 
-ビューワーは、2つのファイルを `path_id` で結合し、停車時刻と経路上の距離から列車の現在位置を計算します。
+ビューワーは、列車と経路を `path_id` で結合して現在位置を計算し、
+駅・路線カタログから到着路線と車体色を判定します。

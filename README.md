@@ -5,10 +5,15 @@ movements from prepared full-network route and timetable data.
 
 ## Status
 
-Product brief and initial viewer input contract defined.
+Product brief, initial viewer input contract, and a reproducible input
+measurement tool are defined.
 
-No application architecture, programming language, framework, rendering library,
-cloud platform, or deployment model has been selected yet.
+The viewer will be a web-based 3D application using Mapbox. The initial viewer
+uses Vite and TypeScript without a UI framework, and displays all routes plus
+the planned positions of active trains at a selected time. Three.js is currently
+used for a Mapbox integration prototype; its adoption as the train renderer is
+not decided yet. The detailed architecture, cloud platform, and deployment model
+have not been selected yet.
 
 ## Goals
 
@@ -27,11 +32,29 @@ cloud platform, or deployment model has been selected yet.
 │   └── pull_request_template.md
 ├── docs/
 │   ├── architecture/
+│   │   ├── mapbox-three-train-rendering.md
 │   │   └── principles.md
 │   ├── decisions/
 │   │   ├── 0000-template.md
+│   │   ├── 0001-use-mapbox-for-web-3d-visualisation.md
+│   │   ├── 0002-use-vite-and-typescript-for-the-initial-web-viewer.md
+│   │   ├── 0003-serve-local-viewer-input-in-development.md
 │   │   └── README.md
+│   ├── data/
+│   │   └── viewer-input.md
 │   └── product-brief.md
+├── tests/
+│   └── test_measure_viewer_input.py
+├── src/
+│   ├── main.ts
+│   └── style.css
+├── tools/
+│   └── measure_viewer_input.py
+├── .env.example
+├── .nvmrc
+├── index.html
+├── package.json
+├── tsconfig.json
 ├── .editorconfig
 ├── .gitattributes
 ├── .gitignore
@@ -52,7 +75,79 @@ cloud platform, or deployment model has been selected yet.
 
 ## Development commands
 
-Not defined yet. Add commands here after the development environment is selected.
+### Mapbox access token
+
+Copy `.env.example` to `.env.local`, then set `VITE_MAPBOX_ACCESS_TOKEN` to a
+Mapbox public access token. Keep `.env.local` local and do not commit it.
+
+```bash
+cp .env.example .env.local
+```
+
+The token is available to browser code, so it must be a public token and must
+not grant access beyond the viewer's needs.
+
+### Initial 3D map
+
+Use the Node.js version recorded in `.nvmrc`, install dependencies, and start
+the local development server:
+
+```bash
+nvm use
+npm install
+npm run dev
+```
+
+Create a production build with type checking:
+
+```bash
+npm run build
+```
+
+Run the TypeScript tests:
+
+```bash
+npm test
+```
+
+列車のMapbox・Three.js統合と、描画精度を保つためのローカル座標方式は
+[`docs/architecture/mapbox-three-train-rendering.md`](docs/architecture/mapbox-three-train-rendering.md)
+を参照してください。
+
+### Input measurement
+
+Measure full-size viewer input files and write the JSON report to standard
+output:
+
+```bash
+python3 tools/measure_viewer_input.py \
+  viewer-input/train_index.json \
+  viewer-input/path_catalog.json
+```
+
+Run the measurement tool tests:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+### Station-to-line catalog
+
+Generate the compact local station-to-line catalog from the National Land
+Numerical Information station GeoJSON. The generated file stays under the
+Git-ignored `viewer-input/` directory.
+
+```bash
+python3 tools/build_station_line_catalog.py \
+  /path/to/N02-25_Station.geojson \
+  viewer-input/station_line_catalog.json
+```
+
+The generator limits the catalog to the railway operators used by the current
+train input, normalises known operator-name variants, and does not modify the
+source GeoJSON.
+
+Formatting and lint commands are not defined yet.
 
 ## License
 
