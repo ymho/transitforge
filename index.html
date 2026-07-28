@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#08111d" />
+    <title>TransitForge</title>
+  </head>
+  <body>
+    <main id="app">
+      <div id="map" aria-label="TransitForge 3D map"></div>
+      <section class="hud" aria-label="TransitForge status">
+        <label class="time-control" for="display-time" aria-label="表示時刻">
+          <svg class="analog-clock" viewBox="0 0 120 105" role="img" aria-label="表示時刻のアナログ時計">
+            <rect class="clock-case" x="1" y="1" width="118" height="103" rx="6" />
+            <rect class="clock-face" x="9" y="8" width="102" height="89" rx="15" />
+            <g class="clock-numerals" aria-hidden="true">
+              <text x="60" y="24">12</text>
+              <text x="76" y="28">1</text>
+              <text x="89" y="39">2</text>
+              <text x="95" y="56">3</text>
+              <text x="89" y="73">4</text>
+              <text x="76" y="84">5</text>
+              <text x="60" y="88">6</text>
+              <text x="44" y="84">7</text>
+              <text x="31" y="73">8</text>
+              <text x="25" y="56">9</text>
+              <text x="31" y="39">10</text>
+              <text x="44" y="28">11</text>
+            </g>
+            <line id="clock-hour-hand" class="clock-hand clock-hour-hand" x1="60" y1="58" x2="60" y2="35" />
+            <line id="clock-minute-hand" class="clock-hand clock-minute-hand" x1="60" y1="59" x2="60" y2="24" />
+            <line id="clock-second-hand" class="clock-second-hand" x1="60" y1="59" x2="60" y2="22" />
+            <circle class="clock-pin" cx="60" cy="53" r="3.2" />
+          </svg>
+          <output id="time-label">12:00</output>
+          <input id="display-time" type="range" min="0" max="1440" value="720" step="1" disabled />
+        </label>
+        <p id="map-status">Mapboxを初期化しています。</p>
+        <div class="playback-controls" aria-label="時刻の再生操作">
+          <button id="play-toggle" type="button" disabled>再生</button>
+          <button id="real-time-toggle" type="button" disabled>現在時刻</button>
+          <select id="playback-speed" aria-label="再生速度" disabled>
+            <option value="0.016666666666666666" selected>1秒/秒</option>
+            <option value="1">1分/秒</option>
+            <option value="10">10分/秒</option>
+            <option value="60">60分/秒</option>
+          </select>
+        </div>
+        <fieldset class="weather-controls" aria-label="天気の選択">
+          <button type="button" data-weather="clear" aria-pressed="true" disabled>晴れ</button>
+          <button type="button" data-weather="rain" aria-pressed="false" disabled>雨</button>
+          <button type="button" data-weather="snow" aria-pressed="false" disabled>雪</button>
+        </fieldset>
+        <details class="metrics-panel">
+          <summary>計測</summary>
+          <p id="metric-display-summary">経路と列車を集計しています。</p>
+          <dl>
+            <div><dt>経路読込</dt><dd id="metric-route-load">—</dd></div>
+            <div><dt>列車読込</dt><dd id="metric-train-load">—</dd></div>
+            <div><dt>時刻更新</dt><dd id="metric-position-update">—</dd></div>
+            <div><dt>表示列車</dt><dd id="metric-active-trains">—</dd></div>
+            <div><dt>FPS</dt><dd id="metric-fps">—</dd></div>
+            <div><dt>JSヒープ</dt><dd id="metric-heap">—</dd></div>
+          </dl>
+        </details>
+      </section>
+      <aside id="train-details" class="train-details" aria-live="polite" hidden>
+        <button id="close-train-details" type="button" aria-label="列車詳細を閉じる">×</button>
+        <h2 id="selected-train-title"></h2>
+        <dl>
+          <div><dt>列車番号</dt><dd id="selected-train-number"></dd></div>
+          <div><dt>種別</dt><dd id="selected-train-type"></dd></div>
+          <div><dt>区間</dt><dd id="selected-train-route"></dd></div>
+        </dl>
+        <button id="show-coupled-train" class="show-coupled-train" type="button" hidden></button>
+        <section class="train-timetable" aria-labelledby="train-timetable-title">
+          <h3 id="train-timetable-title">停車駅・時刻</h3>
+          <ol id="selected-train-stops"></ol>
+        </section>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
