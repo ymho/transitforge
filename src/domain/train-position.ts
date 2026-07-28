@@ -68,6 +68,24 @@ export function positionForTrain(
   };
 }
 
+export function destinationCoordinateForTrain(
+  train: Pick<Train, "path_id" | "stops">,
+  geometry: PathGeometryIndex,
+): Coordinate | undefined {
+  if (!train.path_id) {
+    return undefined;
+  }
+
+  for (let index = train.stops.length - 1; index >= 0; index -= 1) {
+    const routeMeter = train.stops[index].route_meter;
+    if (typeof routeMeter === "number" && Number.isFinite(routeMeter)) {
+      return geometry.positionAt(train.path_id, routeMeter)?.coordinate;
+    }
+  }
+
+  return undefined;
+}
+
 export function interpolatedRouteMeter(
   rawStops: TrainStop[],
   routeTimeMinutes: number,

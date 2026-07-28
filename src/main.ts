@@ -6,18 +6,33 @@ import {
   toRouteFeatureCollections,
 } from "./data/path-catalog";
 import { loadStationLineCatalog } from "./data/station-line-catalog";
+import {
+  congestionRefreshIntervalMilliseconds,
+  congestionRetryIntervalMilliseconds,
+  loadTrainCongestion,
+} from "./data/train-congestion";
 import { loadTrainIndex } from "./data/train-index";
 import { lightPresetForRouteTime, type LightPreset } from "./domain/map-lighting";
+import {
+  isSceneMode,
+  lightPresetForSceneMode,
+  sceneModeStyleFor,
+  type SceneMode,
+} from "./domain/map-scene-mode";
 import {
   applyWeather,
   isWeatherMode,
   type WeatherMode,
 } from "./domain/map-weather";
 import { dominantLineColorsByPathId } from "./domain/path-line-colors";
-import { advanceRouteTime } from "./domain/playback";
+import { advanceRouteTime, currentRouteTime } from "./domain/playback";
 import { coupledTrainLayouts } from "./domain/coupled-train-layout";
 import { TrainLineColorIndex } from "./domain/train-line-color";
-import { activeTrainPositions, PathGeometryIndex } from "./domain/train-position";
+import {
+  activeTrainPositions,
+  destinationCoordinateForTrain,
+  PathGeometryIndex,
+} from "./domain/train-position";
 import type { TrainPosition } from "./domain/train-position";
 import { timetableRowsFor } from "./presentation/train-timetable";
 import {
@@ -30,6 +45,9 @@ import { RuntimeMetrics } from "./observability/runtime-metrics";
 const minimumPlaybackRenderIntervalMilliseconds = 1_000 / 30;
 
 const token = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+const controlPanel = document.querySelector<HTMLElement>("#control-panel");
+const controlPanelToggle =
+  document.querySelector<HTMLButtonElement>("#control-panel-toggle");
 const status = document.querySelector<HTMLParagraphElement>("#map-status");
 const displayTime = document.querySelector<HTMLInputElement>("#display-time");
 const timeLabel = document.querySelector<HTMLOutputElement>("#time-label");
@@ -39,9 +57,18 @@ const clockSecondHand = document.querySelector<SVGLineElement>("#clock-second-ha
 const playToggle = document.querySelector<HTMLButtonElement>("#play-toggle");
 const realTimeToggle = document.querySelector<HTMLButtonElement>("#real-time-toggle");
 const playbackSpeed = document.querySelector<HTMLSelectElement>("#playback-speed");
+const sceneModeButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-scene-mode]"),
+);
 const weatherButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>("[data-weather]"),
 );
+const congestionToggle =
+  document.querySelector<HTMLButtonElement>("#congestion-toggle");
+const destinationArcsToggle =
+  document.querySelector<HTMLButtonElement>("#destination-arcs-toggle");
+const congestionLegend =
+  document.querySelector<HTMLElement>("#congestion-legend");
 const trainDetails = document.querySelector<HTMLElement>("#train-details");
 const closeTrainDetails = document.querySelector<HTMLButtonElement>("#close-train-details");
 const selectedTrainTitle = document.querySelector<HTMLElement>("#selected-train-title");
@@ -60,6 +87,8 @@ const metricHeap = document.querySelector<HTMLElement>("#metric-heap");
 const metrics = new RuntimeMetrics();
 
 if (
+  controlPanel === null ||
+  controlPanelToggle === null ||
   status === null ||
   displayTime === null ||
   timeLabel === null ||
@@ -69,7 +98,11 @@ if (
   playToggle === null ||
   realTimeToggle === null ||
   playbackSpeed === null ||
+  sceneModeButtons.length !== 2 ||
   weatherButtons.length !== 3 ||
+  congestionToggle === null ||
+  destinationArcsToggle === null ||
+  congestionLegend === null ||
   trainDetails === null ||
   closeTrainDetails === null ||
   selectedTrainTitle === null ||
@@ -82,6 +115,13 @@ if (
 ) {
   throw new Error("A required viewer element is missing.");
 }
+
+configureControlPanelMinimization(controlPanel, controlPanelToggle);
+
+const initialRouteTime = currentRouteTime(new Date());
+displayTime.value = String(initialRouteTime);
+timeLabel.textContent = formatRouteTime(initialRouteTime);
+updateAnalogClock(initialRouteTime);
 
 if (!token) {
   status.textContent =
@@ -113,6 +153,7 @@ if (!token) {
     configureWeather(map, weatherButtons);
     monitorFrames();
     let activeLightPreset: LightPreset | undefined;
+    let activeSceneMode: SceneMode = "normal";
 
     try {
       status.textContent = "全経路を読み込んでいます。";
@@ -135,6 +176,12 @@ if (!token) {
           lineColorIndex.colorFor(train).color,
         ]),
       );
+      const destinationCoordinatesByServiceUid = new Map(
+        trainIndex.trains.flatMap((train) => {
+          const coordinate = destinationCoordinateForTrain(train, geometry);
+          return coordinate ? [[train.service_uid, coordinate] as const] : [];
+        }),
+      );
       const lineColorsByPathId = dominantLineColorsByPathId(
         trainIndex.trains,
         colorsByServiceUid,
@@ -146,9 +193,11 @@ if (!token) {
       );
       metrics.recordTrainLoad(performance.now() - trainLoadStartedAt);
       renderMetrics();
+      const routeLayerIds: string[] = [];
 
       for (const [index, routes] of routeCollections.entries()) {
         const sourceId = `routes-${index}`;
+        routeLayerIds.push(sourceId);
         map.addSource(sourceId, { type: "geojson", data: routes });
         map.addLayer({
           id: sourceId,
@@ -173,8 +222,17 @@ if (!token) {
       const maximumRouteTime = maximumRouteTimeFor(trainIndex.trains);
       displayTime.max = String(Math.ceil(maximumRouteTime / 60) * 60);
 
-        const threeTrainLayer = new MapboxThreeTrainLayer(colorsByServiceUid);
+        const threeTrainLayer = new MapboxThreeTrainLayer(
+          colorsByServiceUid,
+          destinationCoordinatesByServiceUid,
+        );
         map.addLayer(threeTrainLayer);
+        configureDestinationArcs(threeTrainLayer, destinationArcsToggle);
+        configureTrainCongestionUpdates(
+          threeTrainLayer,
+          congestionToggle,
+          congestionLegend,
+        );
         map.addSource("train-hit-targets", { type: "geojson", data: emptyFeatureCollection() });
         map.addLayer({
           id: "train-hit-targets",
@@ -188,10 +246,17 @@ if (!token) {
             "circle-stroke-opacity": 0,
           },
         });
-        const selection = configureTrainSelection(map, trainIndex.trains);
+        const selection = configureTrainSelection(
+          map,
+          trainIndex.trains,
+          threeTrainLayer,
+        );
 
         const updateTrains = (routeTime = Number(displayTime.value)) => {
-          const lightPreset = lightPresetForRouteTime(routeTime);
+          const lightPreset = lightPresetForSceneMode(
+            activeSceneMode,
+            lightPresetForRouteTime(routeTime),
+          );
           if (lightPreset !== activeLightPreset) {
             map.setConfigProperty("basemap", "lightPreset", lightPreset);
             activeLightPreset = lightPreset;
@@ -224,6 +289,16 @@ if (!token) {
         playToggle.disabled = false;
         realTimeToggle.disabled = false;
         playbackSpeed.disabled = false;
+        configureSceneModes(
+          map,
+          sceneModeButtons,
+          routeLayerIds,
+          (mode) => {
+            activeSceneMode = mode;
+            activeLightPreset = undefined;
+            updateTrains();
+          },
+        );
         configurePlayback(updateTrains, maximumRouteTime);
         updateTrains();
     } catch (error) {
@@ -288,6 +363,24 @@ function maximumRouteTimeFor(
 
 function emptyFeatureCollection() {
   return { type: "FeatureCollection" as const, features: [] };
+}
+
+function configureControlPanelMinimization(
+  panel: HTMLElement,
+  toggle: HTMLButtonElement,
+): void {
+  const setMinimized = (minimized: boolean) => {
+    panel.dataset.minimized = String(minimized);
+    toggle.ariaExpanded = String(!minimized);
+    toggle.ariaLabel = minimized
+      ? "操作パネルを元に戻す"
+      : "操作パネルを最小化";
+    toggle.textContent = minimized ? "＋" : "−";
+  };
+
+  toggle.addEventListener("click", () => {
+    setMinimized(panel.dataset.minimized !== "true");
+  });
 }
 
 function configurePlayback(
@@ -434,9 +527,151 @@ function configureWeather(
   selectWeather("clear");
 }
 
+function configureTrainCongestionUpdates(
+  trainLayer: MapboxThreeTrainLayer,
+  toggle: HTMLButtonElement,
+  legend: HTMLElement,
+): void {
+  let timer: number | undefined;
+  let nextRefreshAt = Date.now();
+  let refreshing = false;
+  let enabled = true;
+  let hasData = false;
+
+  const schedule = (delayMilliseconds: number) => {
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      timer = undefined;
+    }
+    nextRefreshAt = Date.now() + delayMilliseconds;
+    if (enabled && document.visibilityState === "visible") {
+      timer = window.setTimeout(() => void refresh(), delayMilliseconds);
+    }
+  };
+
+  const refresh = async () => {
+    if (!enabled || refreshing || document.visibilityState !== "visible") {
+      return;
+    }
+
+    refreshing = true;
+    try {
+      const snapshot = await loadTrainCongestion();
+      trainLayer.setCongestionByTrainNumber(snapshot.byTrainNumber);
+      hasData = true;
+      legend.hidden = !enabled;
+      schedule(congestionRefreshIntervalMilliseconds);
+    } catch (error) {
+      console.warn("列車混雑情報を更新できませんでした。", error);
+      schedule(congestionRetryIntervalMilliseconds);
+    } finally {
+      refreshing = false;
+    }
+  };
+
+  const setEnabled = (nextEnabled: boolean) => {
+    enabled = nextEnabled;
+    toggle.ariaPressed = String(enabled);
+    trainLayer.setCongestionVisible(enabled);
+    legend.hidden = !enabled || !hasData;
+
+    if (!enabled) {
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+        timer = undefined;
+      }
+      return;
+    }
+
+    schedule(Math.max(0, nextRefreshAt - Date.now()));
+  };
+
+  toggle.disabled = false;
+  toggle.addEventListener("click", () => {
+    setEnabled(toggle.ariaPressed !== "true");
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (!enabled || document.visibilityState !== "visible") {
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+        timer = undefined;
+      }
+      return;
+    }
+
+    schedule(Math.max(0, nextRefreshAt - Date.now()));
+  });
+
+  void refresh();
+}
+
+function configureDestinationArcs(
+  trainLayer: MapboxThreeTrainLayer,
+  toggle: HTMLButtonElement,
+): void {
+  toggle.disabled = false;
+  toggle.addEventListener("click", () => {
+    const enabled = toggle.ariaPressed !== "true";
+    toggle.ariaPressed = String(enabled);
+    trainLayer.setDestinationArcsVisible(enabled);
+  });
+}
+
+function configureSceneModes(
+  map: mapboxgl.Map,
+  buttons: HTMLButtonElement[],
+  routeLayerIds: string[],
+  onModeChange: (mode: SceneMode) => void,
+): void {
+  let normalView: { pitch: number; bearing: number } | undefined;
+  let selectedMode: SceneMode = "normal";
+
+  const selectMode = (mode: SceneMode) => {
+    if (mode === selectedMode) {
+      return;
+    }
+
+    const style = sceneModeStyleFor(mode);
+    map.setConfigProperty("basemap", "theme", style.theme);
+    for (const layerId of routeLayerIds) {
+      map.setPaintProperty(layerId, "line-width", style.routeLineWidth);
+      map.setPaintProperty(layerId, "line-opacity", style.routeLineOpacity);
+    }
+
+    if (mode === "model") {
+      normalView = {
+        pitch: map.getPitch(),
+        bearing: map.getBearing(),
+      };
+      map.easeTo({ pitch: 52, bearing: 0, duration: 700 });
+    } else if (normalView) {
+      map.easeTo({ ...normalView, duration: 700 });
+      normalView = undefined;
+    }
+
+    for (const button of buttons) {
+      button.ariaPressed = String(button.dataset.sceneMode === mode);
+    }
+    selectedMode = mode;
+    onModeChange(mode);
+  };
+
+  for (const button of buttons) {
+    button.disabled = false;
+    button.addEventListener("click", () => {
+      const mode = button.dataset.sceneMode;
+      if (isSceneMode(mode)) {
+        selectMode(mode);
+      }
+    });
+  }
+}
+
 function configureTrainSelection(
   map: mapboxgl.Map,
   trains: import("./data/train-index").Train[],
+  trainLayer: MapboxThreeTrainLayer,
 ): { updateTracking: (positions: TrainPosition[]) => void } {
   if (
     trainDetails === null ||
@@ -509,6 +744,14 @@ function configureTrainSelection(
     }
   });
   map.on("click", (event) => {
+    const congestionServiceUid = trainLayer.congestionBarServiceUidAt(
+      event.point,
+    );
+    if (congestionServiceUid) {
+      showTrainDetails(congestionServiceUid);
+      return;
+    }
+
     const clickedTrains = map.queryRenderedFeatures(event.point, {
       layers: ["train-hit-targets"],
     });
