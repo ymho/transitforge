@@ -98,6 +98,12 @@ npm install
 npm run dev
 ```
 
+開発サーバーは、JR西日本の列車混雑情報を同一オリジンの
+`/api/westjr/trainmonitorinfo.json` で提供します。上流へのアクセスは
+サーバー全体で5分間キャッシュされ、クライアントも5分間隔でのみ更新します。
+非表示タブでは更新せず、失敗後は15分待って再試行します。本番環境を追加する
+場合は、同等以上の共有キャッシュを持つプロキシが必要です。
+
 Create a production build with type checking:
 
 ```bash

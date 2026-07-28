@@ -3,6 +3,15 @@ export interface RouteTimeRange {
   maximum: number;
 }
 
+export function currentRouteTime(date: Date): number {
+  return (
+    date.getHours() * 60 +
+    date.getMinutes() +
+    date.getSeconds() / 60 +
+    date.getMilliseconds() / 60_000
+  );
+}
+
 export function advanceRouteTime(
   current: number,
   elapsedMilliseconds: number,
