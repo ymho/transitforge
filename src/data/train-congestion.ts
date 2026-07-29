@@ -1,6 +1,6 @@
 const congestionEndpoint = "/api/westjr/trainmonitorinfo.json";
 
-export const congestionRefreshIntervalMilliseconds = 5 * 60 * 1_000;
+export const congestionRefreshIntervalMilliseconds = 60 * 1_000;
 export const congestionRetryIntervalMilliseconds = 15 * 60 * 1_000;
 
 export interface TrainCongestionSnapshot {

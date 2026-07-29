@@ -11,7 +11,8 @@ import {
   congestionRetryIntervalMilliseconds,
   loadTrainCongestion,
 } from "./data/train-congestion";
-import { loadTrainIndex } from "./data/train-index";
+import { invokeBedrockAgent } from "./data/bedrock-agent";
+import { loadTrainIndex, type Train } from "./data/train-index";
 import { lightPresetForRouteTime, type LightPreset } from "./domain/map-lighting";
 import {
   isSceneMode,
@@ -34,6 +35,16 @@ import {
   PathGeometryIndex,
 } from "./domain/train-position";
 import type { TrainPosition } from "./domain/train-position";
+import { parseViewerAgentActions } from "./domain/viewer-agent-action";
+import { runBedrockViewerAgent } from "./domain/viewer-agent-bedrock";
+import {
+  routeTimeFromPrompt,
+  searchActiveTrainsFromPrompt,
+} from "./domain/viewer-agent-local-tools";
+import {
+  configureAiGuidePanel,
+  type AiGuidePromptHandler,
+} from "./presentation/ai-guide-panel";
 import { timetableRowsFor } from "./presentation/train-timetable";
 import {
   trainServiceLabelFor,
@@ -69,6 +80,21 @@ const destinationArcsToggle =
   document.querySelector<HTMLButtonElement>("#destination-arcs-toggle");
 const congestionLegend =
   document.querySelector<HTMLElement>("#congestion-legend");
+const aiGuidePanel = document.querySelector<HTMLElement>("#ai-guide-panel");
+const aiGuideToggle =
+  document.querySelector<HTMLButtonElement>("#ai-guide-toggle");
+const closeAiGuide =
+  document.querySelector<HTMLButtonElement>("#close-ai-guide");
+const aiGuideMessages =
+  document.querySelector<HTMLOListElement>("#ai-guide-messages");
+const aiGuideForm = document.querySelector<HTMLFormElement>("#ai-guide-form");
+const aiGuideInput =
+  document.querySelector<HTMLInputElement>("#ai-guide-input");
+const aiGuideSubmit =
+  document.querySelector<HTMLButtonElement>("#ai-guide-submit");
+const aiGuideSuggestions = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-prompt]"),
+);
 const trainDetails = document.querySelector<HTMLElement>("#train-details");
 const closeTrainDetails = document.querySelector<HTMLButtonElement>("#close-train-details");
 const selectedTrainTitle = document.querySelector<HTMLElement>("#selected-train-title");
@@ -103,6 +129,14 @@ if (
   congestionToggle === null ||
   destinationArcsToggle === null ||
   congestionLegend === null ||
+  aiGuidePanel === null ||
+  aiGuideToggle === null ||
+  closeAiGuide === null ||
+  aiGuideMessages === null ||
+  aiGuideForm === null ||
+  aiGuideInput === null ||
+  aiGuideSubmit === null ||
+  aiGuideSuggestions.length === 0 ||
   trainDetails === null ||
   closeTrainDetails === null ||
   selectedTrainTitle === null ||
@@ -117,6 +151,21 @@ if (
 }
 
 configureControlPanelMinimization(controlPanel, controlPanelToggle);
+let handleAiGuidePrompt: AiGuidePromptHandler = async () =>
+  "列車データを読み込んでいます。準備が整ってからもう一度お試しください。";
+configureAiGuidePanel(
+  {
+    panel: aiGuidePanel,
+    toggle: aiGuideToggle,
+    close: closeAiGuide,
+    messages: aiGuideMessages,
+    form: aiGuideForm,
+    input: aiGuideInput,
+    submit: aiGuideSubmit,
+    suggestions: aiGuideSuggestions,
+  },
+  (prompt) => handleAiGuidePrompt(prompt),
+);
 
 const initialRouteTime = currentRouteTime(new Date());
 displayTime.value = String(initialRouteTime);
@@ -251,6 +300,7 @@ if (!token) {
           trainIndex.trains,
           threeTrainLayer,
         );
+        let displayedPositions: TrainPosition[] = [];
 
         const updateTrains = (routeTime = Number(displayTime.value)) => {
           const lightPreset = lightPresetForSceneMode(
@@ -263,6 +313,7 @@ if (!token) {
           }
           const updateStartedAt = performance.now();
           const positions = activeTrainPositions(trainIndex.trains, geometry, routeTime);
+          displayedPositions = positions;
           threeTrainLayer.setPositions(positions);
           selection.updateTracking(positions);
           const hitSource = map.getSource("train-hit-targets") as mapboxgl.GeoJSONSource;
@@ -285,6 +336,37 @@ if (!token) {
         };
 
         displayTime.addEventListener("input", () => updateTrains());
+        const localAiGuidePromptHandler = createLocalAiGuidePromptHandler(
+          trainIndex.trains,
+          () => displayedPositions,
+          selection.focusTrain,
+          maximumRouteTime,
+        );
+        handleAiGuidePrompt = async (prompt) => {
+          try {
+            return await runBedrockViewerAgent(
+              prompt,
+              {
+                trains: trainIndex.trains,
+                getPositions: () => displayedPositions,
+                getRouteTime: () => Number(displayTime.value),
+                setRouteTime: (routeTimeMinutes) =>
+                  applyViewerAgentActions(
+                    [{ type: "set_display_time", routeTimeMinutes }],
+                    selection.focusTrain,
+                  ),
+                focusTrain: selection.focusTrain,
+                maximumRouteTime,
+              },
+              invokeBedrockAgent,
+            );
+          } catch (error) {
+            if (import.meta.env.DEV) {
+              return localAiGuidePromptHandler(prompt);
+            }
+            throw error;
+          }
+        };
         displayTime.disabled = false;
         playToggle.disabled = false;
         realTimeToggle.disabled = false;
@@ -363,6 +445,85 @@ function maximumRouteTimeFor(
 
 function emptyFeatureCollection() {
   return { type: "FeatureCollection" as const, features: [] };
+}
+
+function createLocalAiGuidePromptHandler(
+  trains: Train[],
+  getPositions: () => TrainPosition[],
+  focusTrain: (serviceUid: string) => boolean,
+  maximumRouteTime: number,
+): AiGuidePromptHandler {
+  return async (prompt) => {
+    const requestedRouteTime = routeTimeFromPrompt(prompt);
+    const responseParts: string[] = [];
+
+    if (requestedRouteTime !== undefined) {
+      const routeTime = Math.min(requestedRouteTime, maximumRouteTime);
+      applyViewerAgentActions(
+        [{ type: "set_display_time", routeTimeMinutes: routeTime }],
+        focusTrain,
+      );
+      responseParts.push(`表示時刻を${formatRouteTime(routeTime)}に変更しました。`);
+    }
+
+    const routeTime = Number(displayTime?.value ?? 0);
+    const search = searchActiveTrainsFromPrompt(
+      prompt,
+      trains,
+      getPositions(),
+      routeTime,
+    );
+
+    if (search.hasSearchTerms) {
+      const first = search.matches[0];
+      if (!first) {
+        responseParts.push(
+          `${formatRouteTime(routeTime)}に運行中の条件に合う列車は見つかりませんでした。`,
+        );
+      } else {
+        const [focusAction] = parseViewerAgentActions([
+          { type: "focus_train", serviceUid: first.train.service_uid },
+        ]);
+        const focused =
+          focusAction?.type === "focus_train" &&
+          focusTrain(focusAction.serviceUid);
+        const title = trainTitleFor(first.train);
+        const fullTitle = `${title.main}${title.suffix ?? ""}`;
+        responseParts.push(
+          focused
+            ? `${fullTitle}を選択し、列車の位置へ移動しました。`
+            : `${fullTitle}は見つかりましたが、現在位置へ移動できませんでした。`,
+        );
+        if (search.totalMatchCount > 1) {
+          responseParts.push(
+            `条件に合う列車はほかに${search.totalMatchCount - 1}件あります。`,
+          );
+        }
+      }
+    }
+
+    if (responseParts.length === 0) {
+      return "時刻、駅名、列車種別、列車名、列車番号を含めて依頼してください。例:「18時30分に京都へ向かう特急を見せて」";
+    }
+    return responseParts.join("\n");
+  };
+}
+
+function applyViewerAgentActions(
+  value: unknown,
+  focusTrain: (serviceUid: string) => boolean,
+): void {
+  for (const action of parseViewerAgentActions(value)) {
+    if (action.type === "set_display_time") {
+      if (!displayTime) {
+        throw new Error("表示時刻を操作できません。");
+      }
+      displayTime.value = String(action.routeTimeMinutes);
+      displayTime.dispatchEvent(new Event("input", { bubbles: true }));
+    } else if (action.type === "focus_train") {
+      focusTrain(action.serviceUid);
+    }
+  }
 }
 
 function configureControlPanelMinimization(
@@ -672,7 +833,10 @@ function configureTrainSelection(
   map: mapboxgl.Map,
   trains: import("./data/train-index").Train[],
   trainLayer: MapboxThreeTrainLayer,
-): { updateTracking: (positions: TrainPosition[]) => void } {
+): {
+  focusTrain: (serviceUid: string) => boolean;
+  updateTracking: (positions: TrainPosition[]) => void;
+} {
   if (
     trainDetails === null ||
     closeTrainDetails === null ||
@@ -689,6 +853,7 @@ function configureTrainSelection(
   const trainsByServiceUid = new Map(trains.map((train) => [train.service_uid, train]));
   const coupledServiceUidByServiceUid = new Map<string, string>();
   let trackedServiceUid: string | undefined;
+  let displayedPositions: TrainPosition[] = [];
 
   const updateCoupledTrainButton = (serviceUid: string) => {
     const coupledServiceUid = coupledServiceUidByServiceUid.get(serviceUid);
@@ -777,7 +942,24 @@ function configureTrainSelection(
   });
 
   return {
+    focusTrain(serviceUid: string) {
+      const position = displayedPositions.find(
+        (candidate) => candidate.serviceUid === serviceUid,
+      );
+      if (!position || !trainsByServiceUid.has(serviceUid)) {
+        return false;
+      }
+
+      showTrainDetails(serviceUid);
+      map.easeTo({
+        center: position.coordinate,
+        zoom: Math.max(map.getZoom(), 14),
+        duration: 750,
+      });
+      return true;
+    },
     updateTracking(positions: TrainPosition[]) {
+      displayedPositions = positions;
       coupledServiceUidByServiceUid.clear();
       for (const { position, coupledServiceUid } of coupledTrainLayouts(positions)) {
         if (coupledServiceUid) {

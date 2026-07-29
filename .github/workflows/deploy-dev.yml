@@ -1,0 +1,87 @@
+name: Deploy dev
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: transitforge-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: dev
+    env:
+      AWS_REGION: ap-northeast-1
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_VAR_basic_auth_credentials_sha256: ${{ secrets.BASIC_AUTH_CREDENTIALS_SHA256 }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Test and build viewer
+        run: |
+          npm test
+          npm run build
+        env:
+          VITE_MAPBOX_ACCESS_TOKEN: ${{ secrets.VITE_MAPBOX_ACCESS_TOKEN }}
+
+      - name: Run Python tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.12.2
+
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v6.1.2
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Apply Terraform
+        working-directory: infra/terraform/environments/dev
+        run: |
+          terraform init \
+            -backend-config="bucket=transitforge-terraform-state-911167912657" \
+            -backend-config="region=${AWS_REGION}"
+          terraform plan -out=dev.tfplan
+          terraform apply -auto-approve dev.tfplan
+
+      - name: Read deployment outputs
+        id: terraform
+        working-directory: infra/terraform/environments/dev
+        run: |
+          echo "website_bucket=$(terraform output -raw website_bucket_name)" >> "$GITHUB_OUTPUT"
+          echo "distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy viewer assets
+        run: |
+          aws s3 sync dist "s3://${{ steps.terraform.outputs.website_bucket }}/" \
+            --delete \
+            --exclude "viewer-input/*" \
+            --exclude "api/*"
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ steps.terraform.outputs.distribution_id }}" \
+            --paths "/*"

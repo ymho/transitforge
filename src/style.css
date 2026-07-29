@@ -264,6 +264,186 @@ body,
   background: #6d3fb3;
 }
 
+.ai-guide-toggle {
+  position: absolute;
+  bottom: 2.5rem;
+  left: 1.5rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid rgb(220 228 84 / 68%);
+  border-radius: 999px;
+  color: #182022;
+  background: #dce454;
+  box-shadow: 0 0.7rem 2rem rgb(0 0 0 / 24%);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.ai-guide-toggle[aria-expanded="true"] {
+  color: #f3f7fb;
+  background: rgb(8 17 29 / 88%);
+}
+
+.ai-guide-panel {
+  position: absolute;
+  bottom: 5.5rem;
+  left: 1.5rem;
+  display: grid;
+  grid-template-rows: auto minmax(5rem, 1fr) auto auto;
+  width: min(23rem, calc(100vw - 3rem));
+  max-height: min(34rem, calc(100vh - 8rem));
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 0.85rem;
+  background: rgb(8 17 29 / 92%);
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 28%);
+  backdrop-filter: blur(14px);
+}
+
+.ai-guide-panel[hidden] {
+  display: none;
+}
+
+.ai-guide-panel header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.55rem;
+  align-items: center;
+  padding: 0.85rem 0.9rem;
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+}
+
+.ai-guide-panel header p {
+  margin: 0;
+  color: #f3f7fb;
+  font-size: 0.92rem;
+  font-weight: 750;
+}
+
+.ai-guide-panel header small {
+  display: block;
+  margin-top: 0.15rem;
+  color: #91a6bc;
+  font-size: 0.67rem;
+}
+
+.ai-guide-status {
+  padding: 0.2rem 0.45rem;
+  border: 1px solid rgb(220 228 84 / 35%);
+  border-radius: 999px;
+  color: #dce454;
+  font-size: 0.62rem;
+  white-space: nowrap;
+}
+
+#close-ai-guide {
+  display: grid;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  color: #d9e3ef;
+  background: transparent;
+  font: inherit;
+  font-size: 1.15rem;
+  cursor: pointer;
+}
+
+.ai-guide-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0.85rem 0.9rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.ai-guide-message {
+  max-width: 88%;
+  padding: 0.6rem 0.72rem;
+  border-radius: 0.7rem;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.ai-guide-message-assistant {
+  align-self: flex-start;
+  color: #d9e3ef;
+  background: rgb(255 255 255 / 9%);
+}
+
+.ai-guide-message-user {
+  align-self: flex-end;
+  color: #182022;
+  background: #dce454;
+}
+
+.ai-guide-suggestions {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0 0.9rem 0.75rem;
+  overflow-x: auto;
+}
+
+.ai-guide-suggestions button {
+  flex: 0 0 auto;
+  padding: 0.4rem 0.58rem;
+  border: 1px solid rgb(104 215 255 / 38%);
+  border-radius: 999px;
+  color: #cdefff;
+  background: rgb(20 68 90 / 48%);
+  font: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.ai-guide-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  padding: 0.75rem 0.9rem 0.9rem;
+  border-top: 1px solid rgb(255 255 255 / 10%);
+}
+
+.ai-guide-form input,
+.ai-guide-form button {
+  min-height: 2.45rem;
+  border-radius: 0.55rem;
+  font: inherit;
+  font-size: 0.76rem;
+}
+
+.ai-guide-form input {
+  min-width: 0;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgb(255 255 255 / 18%);
+  color: #f3f7fb;
+  outline: none;
+  background: rgb(255 255 255 / 7%);
+}
+
+.ai-guide-form input:focus {
+  border-color: rgb(104 215 255 / 72%);
+}
+
+.ai-guide-form button {
+  padding: 0.5rem 0.72rem;
+  border: 1px solid rgb(220 228 84 / 55%);
+  color: #182022;
+  background: #dce454;
+  cursor: pointer;
+}
+
+.ai-guide-form button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
 .train-details {
   position: absolute;
   right: 1.5rem;
@@ -442,6 +622,18 @@ body,
 
   .hud[data-minimized="true"] {
     overflow: visible;
+  }
+
+  .ai-guide-toggle {
+    bottom: 2.25rem;
+    left: 0.65rem;
+  }
+
+  .ai-guide-panel {
+    bottom: 5.25rem;
+    left: 0.65rem;
+    width: calc(100vw - 1.3rem);
+    max-height: min(70vh, calc(100vh - 7rem));
   }
 
   .train-details {

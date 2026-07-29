@@ -1,0 +1,2 @@
+bucket = "transitforge-terraform-state-123456789012"
+region = "ap-northeast-1"

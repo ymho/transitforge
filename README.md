@@ -100,9 +100,13 @@ npm run dev
 
 開発サーバーは、JR西日本の列車混雑情報を同一オリジンの
 `/api/westjr/trainmonitorinfo.json` で提供します。上流へのアクセスは
-サーバー全体で5分間キャッシュされ、クライアントも5分間隔でのみ更新します。
+サーバー全体で5分間キャッシュされ、クライアントは1分間隔で更新します。
 非表示タブでは更新せず、失敗後は15分待って再試行します。本番環境を追加する
 場合は、同等以上の共有キャッシュを持つプロキシが必要です。
+
+AWS開発環境ではEventBridge SchedulerとLambdaが上流を1分に1回取得し、
+最新値を同じパスでCloudFront配信します。各取得結果はgzip圧縮した時系列データとして
+非公開S3にも保存し、ラッシュ時ピークなどの後続分析に利用できます。
 
 Create a production build with type checking:
 
@@ -119,6 +123,28 @@ npm test
 列車のMapbox・Three.js統合と、描画精度を保つためのローカル座標方式は
 [`docs/architecture/mapbox-three-train-rendering.md`](docs/architecture/mapbox-three-train-rendering.md)
 を参照してください。
+
+AI運行観察員のユーザーインターフェース、許可する画面操作、今後のAPI接続境界は
+[`docs/architecture/ai-operations-guide.md`](docs/architecture/ai-operations-guide.md)
+を参照してください。
+
+### AWS deployment
+
+AWSへの初期デプロイはTerraformで管理する。最初の段階では、非公開S3バケットと
+CloudFront Origin Access Controlで静的ビューワーを配信する。
+
+1. [`infra/terraform/bootstrap`](infra/terraform/bootstrap) でstate用S3バケットを作成する。
+2. [`infra/terraform/environments/dev`](infra/terraform/environments/dev) で開発環境を作成する。
+3. Vite成果物とローカル生成済みの `viewer-input/` をアプリケーション用S3へ配置する。
+
+AI運行観察員は、CloudFrontからのみ呼べるLambda Function URLとAmazon Bedrock
+Nova Liteを使用する。列車検索は大容量入力を持つブラウザ側で実行し、Bedrockには
+最大5件の候補だけを返す。AWS認証情報やMapboxトークンをTerraformファイル、
+tfvars、stateへ保存しない。
+
+GitHub ActionsはPull Requestとmainへのpushでテスト・ビルド・Terraform検証を行う。
+mainへのpush後はGitHub OIDCの一時認証情報でdev環境のTerraformをapplyし、
+Vite成果物をS3へ同期してCloudFrontを無効化する。固定AWSアクセスキーは使用しない。
 
 ### Input measurement
 

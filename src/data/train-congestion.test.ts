@@ -50,10 +50,8 @@ describe("train congestion", () => {
     expect(congestionBarColor(901)).toBe("#6d3fb3");
   });
 
-  it("uses conservative refresh and retry intervals", () => {
-    expect(congestionRefreshIntervalMilliseconds).toBeGreaterThanOrEqual(
-      5 * 60 * 1_000,
-    );
+  it("refreshes once per minute and backs off after failures", () => {
+    expect(congestionRefreshIntervalMilliseconds).toBe(60 * 1_000);
     expect(congestionRetryIntervalMilliseconds).toBeGreaterThan(
       congestionRefreshIntervalMilliseconds,
     );
