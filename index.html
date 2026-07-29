@@ -89,6 +89,50 @@
           </dl>
         </details>
       </section>
+      <button
+        id="ai-guide-toggle"
+        class="ai-guide-toggle"
+        type="button"
+        aria-controls="ai-guide-panel"
+        aria-expanded="false"
+      >AI案内</button>
+      <aside id="ai-guide-panel" class="ai-guide-panel" aria-label="AI運行観察員" hidden>
+        <header>
+          <div>
+            <p>AI運行観察員</p>
+            <small>地図を操作してご案内します</small>
+          </div>
+          <span class="ai-guide-status">基本操作対応</span>
+          <button id="close-ai-guide" type="button" aria-label="AI運行観察員を閉じる">×</button>
+        </header>
+        <ol id="ai-guide-messages" class="ai-guide-messages" aria-live="polite">
+          <li class="ai-guide-message ai-guide-message-assistant">
+            表示時刻の変更、運行中列車の検索、列車位置への移動ができます。
+          </li>
+        </ol>
+        <div class="ai-guide-suggestions" aria-label="質問例">
+          <button type="button" data-prompt="18時30分にして">
+            18時30分にする
+          </button>
+          <button type="button" data-prompt="京都へ向かう特急を見せて">
+            京都方面の特急
+          </button>
+          <button type="button" data-prompt="はるかを見せて">
+            はるかを見る
+          </button>
+        </div>
+        <form id="ai-guide-form" class="ai-guide-form">
+          <input
+            id="ai-guide-input"
+            type="text"
+            maxlength="400"
+            autocomplete="off"
+            aria-label="AI運行観察員への依頼"
+            placeholder="見たい列車や場面を入力"
+          />
+          <button id="ai-guide-submit" type="submit">送信</button>
+        </form>
+      </aside>
       <aside id="train-details" class="train-details" aria-live="polite" hidden>
         <button id="close-train-details" type="button" aria-label="列車詳細を閉じる">×</button>
         <h2 id="selected-train-title"></h2>
