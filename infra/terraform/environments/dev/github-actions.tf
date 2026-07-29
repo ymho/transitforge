@@ -1,0 +1,104 @@
+locals {
+  github_oidc_url       = "https://token.actions.githubusercontent.com"
+  github_environment    = var.environment
+  github_repository_sub = "repo:${var.github_repository}:environment:${local.github_environment}"
+  github_deploy_role    = "${var.project_name}-${var.environment}-github-deploy"
+}
+
+resource "aws_iam_openid_connect_provider" "github_actions" {
+  url            = local.github_oidc_url
+  client_id_list = ["sts.amazonaws.com"]
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+data "aws_iam_policy_document" "github_actions_assume_role" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github_actions.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = [local.github_repository_sub]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_deploy" {
+  name                 = local.github_deploy_role
+  description          = "Deploy TransitForge dev from the protected GitHub environment"
+  assume_role_policy   = data.aws_iam_policy_document.github_actions_assume_role.json
+  max_session_duration = 3600
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "github_deploy_power_user" {
+  role       = aws_iam_role.github_deploy.name
+  policy_arn = "arn:aws:iam::aws:policy/PowerUserAccess"
+}
+
+data "aws_iam_policy_document" "github_deploy_iam" {
+  statement {
+    sid = "ManageTransitForgeRoles"
+    actions = [
+      "iam:AttachRolePolicy",
+      "iam:CreateRole",
+      "iam:DeleteRole",
+      "iam:DeleteRolePolicy",
+      "iam:DetachRolePolicy",
+      "iam:GetRole",
+      "iam:GetRolePolicy",
+      "iam:ListAttachedRolePolicies",
+      "iam:ListRolePolicies",
+      "iam:PassRole",
+      "iam:PutRolePolicy",
+      "iam:TagRole",
+      "iam:UntagRole",
+      "iam:UpdateAssumeRolePolicy",
+      "iam:UpdateRoleDescription",
+    ]
+    resources = [
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-*",
+    ]
+  }
+
+  statement {
+    sid = "ManageGitHubOidcProvider"
+    actions = [
+      "iam:AddClientIDToOpenIDConnectProvider",
+      "iam:CreateOpenIDConnectProvider",
+      "iam:DeleteOpenIDConnectProvider",
+      "iam:GetOpenIDConnectProvider",
+      "iam:ListOpenIDConnectProviderTags",
+      "iam:RemoveClientIDFromOpenIDConnectProvider",
+      "iam:TagOpenIDConnectProvider",
+      "iam:UntagOpenIDConnectProvider",
+      "iam:UpdateOpenIDConnectProviderThumbprint",
+    ]
+    resources = [
+      aws_iam_openid_connect_provider.github_actions.arn,
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "github_deploy_iam" {
+  name   = "manage-transitforge-iam"
+  role   = aws_iam_role.github_deploy.id
+  policy = data.aws_iam_policy_document.github_deploy_iam.json
+}
