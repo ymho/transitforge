@@ -1,0 +1,57 @@
+var crypto = require('crypto');
+
+var expectedUsername = '${auth_username}';
+var expectedCredentialsSha256 = '${credentials_sha256}';
+
+function hashesMatch(left, right) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  var difference = 0;
+  for (var index = 0; index < left.length; index += 1) {
+    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return difference === 0;
+}
+
+function handler(event) {
+  var request = event.request;
+  var authorization = request.headers.authorization;
+
+  if (authorization && authorization.value.indexOf('Basic ') === 0) {
+    try {
+      var credentials = atob(authorization.value.slice(6));
+      if (credentials.indexOf(expectedUsername + ':') !== 0) {
+        return unauthorized();
+      }
+      var credentialsSha256 = crypto
+        .createHash('sha256')
+        .update(credentials)
+        .digest('hex');
+
+      if (hashesMatch(credentialsSha256, expectedCredentialsSha256)) {
+        return request;
+      }
+    } catch (error) {
+      // Malformed Basic credentials are handled as an authentication failure.
+    }
+  }
+
+  return unauthorized();
+}
+
+function unauthorized() {
+  return {
+    statusCode: 401,
+    statusDescription: 'Unauthorized',
+    headers: {
+      'www-authenticate': {
+        value: 'Basic realm="TransitForge", charset="UTF-8"'
+      },
+      'cache-control': {
+        value: 'no-store'
+      }
+    }
+  };
+}

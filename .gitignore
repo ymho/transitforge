@@ -78,7 +78,7 @@ crash.log
 *.tfvars
 *.tfvars.json
 !*.example.tfvars
-.terraform.lock.hcl
+backend.hcl
 
 # Local databases
 *.db
