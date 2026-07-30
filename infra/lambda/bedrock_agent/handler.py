@@ -22,6 +22,9 @@ SYSTEM_PROMPT = """\
 focus_trainへ渡してください。時刻の変更はset_display_timeを使ってください。
 時刻変更と列車検索が同じ依頼に含まれる場合は、時刻を変更して結果を受け取ってから
 列車を検索してください。時刻変更だけの依頼ではsearch_trainsを呼ばないでください。
+指定時刻ごろに駅へ着く列車を尋ねられた場合はsearch_train_arrivalsを使ってください。
+この時刻は検索条件であり、画面の時刻変更も明示されない限りset_display_timeを
+呼ばないでください。到着検索は指定時刻の前後30分を対象にします。
 ツール結果にない列車や情報を推測しないでください。
 過去の混雑やピークについて聞かれた場合はquery_daily_congestion_peakを使い、
 日付指定がなければ利用者メッセージに含まれる日本時間の今日の日付を使ってください。
@@ -29,6 +32,7 @@ focus_trainへ渡してください。時刻の変更はset_display_timeを使�
 晴れ・雨・雪の変更はset_weather、通常・模型モードの変更はset_scene_modeを
 使ってください。混雑の棒グラフや目的地へのアーチの表示・非表示は
 set_layer_visibilityを使ってください。
+利用者が求めていない現在の表示時刻や今日の日付は回答で繰り返さないでください。
 画面操作が完了したら、実行した内容を自然な文章で伝えてください。
 """
 
@@ -94,6 +98,36 @@ TOOLS = [
                         }
                     },
                     "required": ["serviceDate"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "search_train_arrivals",
+            "description": (
+                "指定時刻の前後30分に、指定駅へ到着する列車を種別などで検索します。"
+                "画面の表示時刻は変更しません。"
+            ),
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "駅名と列車種別を含む利用者の検索条件。",
+                        },
+                        "targetTimeMinutes": {
+                            "type": "number",
+                            "description": "検索中心時刻を0時からの分数で指定。",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 5,
+                        },
+                    },
+                    "required": ["query", "targetTimeMinutes"],
                 }
             },
         }

@@ -44,8 +44,10 @@ import {
 } from "./domain/viewer-agent-action";
 import { runBedrockViewerAgent } from "./domain/viewer-agent-bedrock";
 import {
+  localViewerControlActionsFromPrompt,
   routeTimeFromPrompt,
   searchActiveTrainsFromPrompt,
+  searchTrainArrivalsFromPrompt,
 } from "./domain/viewer-agent-local-tools";
 import {
   configureAiGuidePanel,
@@ -369,6 +371,9 @@ if (!token) {
           trainIndex.trains,
           () => displayedPositions,
           selection.focusTrain,
+          selectWeather,
+          selectSceneMode,
+          setLayerVisibility,
           maximumRouteTime,
         );
         handleAiGuidePrompt = async (prompt) => {
@@ -474,12 +479,77 @@ function createLocalAiGuidePromptHandler(
   trains: Train[],
   getPositions: () => TrainPosition[],
   focusTrain: (serviceUid: string) => boolean,
+  setWeather: (weather: WeatherMode) => void,
+  setSceneMode: (mode: SceneMode) => void,
+  setLayerVisibility: (layer: ViewerAgentLayer, visible: boolean) => void,
   maximumRouteTime: number,
 ): AiGuidePromptHandler {
   return async (prompt) => {
-    const requestedRouteTime = routeTimeFromPrompt(prompt);
     const responseParts: string[] = [];
+    const controlActions = localViewerControlActionsFromPrompt(prompt);
+    for (const action of controlActions) {
+      if (action.type === "set_weather") {
+        setWeather(action.weather);
+        const weatherLabel = {
+          clear: "晴れ",
+          rain: "雨",
+          snow: "雪",
+        }[action.weather];
+        responseParts.push(`天気を${weatherLabel}に設定しました。`);
+      } else if (action.type === "set_scene_mode") {
+        setSceneMode(action.sceneMode);
+        responseParts.push(
+          action.sceneMode === "model"
+            ? "模型モードに変更しました。"
+            : "通常表示に変更しました。",
+        );
+      } else if (action.type === "set_layer_visibility") {
+        setLayerVisibility(action.layer, action.visible);
+        const layerLabel =
+          action.layer === "congestion" ? "混雑棒" : "目的地アーチ";
+        responseParts.push(
+          `${layerLabel}を${action.visible ? "表示" : "非表示に"}しました。`,
+        );
+      }
+    }
 
+    const arrivalSearch = searchTrainArrivalsFromPrompt(prompt, trains);
+    if (
+      arrivalSearch.hasSearchTerms &&
+      arrivalSearch.targetTimeMinutes !== undefined
+    ) {
+      const rangeStart =
+        Math.max(
+          0,
+          arrivalSearch.targetTimeMinutes - arrivalSearch.windowMinutes,
+        );
+      const rangeEnd =
+        Math.min(
+          maximumRouteTime,
+          arrivalSearch.targetTimeMinutes + arrivalSearch.windowMinutes,
+        );
+      if (arrivalSearch.matches.length === 0) {
+        responseParts.push(
+          `${formatRouteTime(rangeStart)}〜${formatRouteTime(rangeEnd)}に条件に合う到着列車は見つかりませんでした。`,
+        );
+      } else {
+        const arrivals = arrivalSearch.matches.map(({ train, arrivalTimeMinutes }) => {
+          const title = trainTitleFor(train);
+          return `${formatRouteTime(arrivalTimeMinutes)} ${title.main}${title.suffix ?? ""}`;
+        });
+        responseParts.push(
+          `${formatRouteTime(rangeStart)}〜${formatRouteTime(rangeEnd)}の到着列車です。\n${arrivals.join("\n")}`,
+        );
+        if (arrivalSearch.totalMatchCount > arrivalSearch.matches.length) {
+          responseParts.push(
+            `ほかに${arrivalSearch.totalMatchCount - arrivalSearch.matches.length}件あります。`,
+          );
+        }
+      }
+      return responseParts.join("\n");
+    }
+
+    const requestedRouteTime = routeTimeFromPrompt(prompt);
     if (requestedRouteTime !== undefined) {
       const routeTime = Math.min(requestedRouteTime, maximumRouteTime);
       applyViewerAgentActions(

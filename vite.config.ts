@@ -4,6 +4,7 @@ import { defineConfig } from "vite";
 
 const viewerInputFiles: Record<string, string> = {
   "/viewer-input/train_index.json": "train_index.json",
+  "/viewer-input/train_runtime_index.json": "train_runtime_index.json",
   "/viewer-input/path_catalog.json": "path_catalog.json",
   "/viewer-input/station_line_catalog.json": "station_line_catalog.json",
 };
