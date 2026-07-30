@@ -3,13 +3,18 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
+from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 MODEL_ID = os.environ.get("MODEL_ID", "amazon.nova-lite-v1:0")
+SUMMARY_TABLE = os.environ.get("SUMMARY_TABLE", "")
 MAX_BODY_BYTES = 32 * 1024
 MAX_MESSAGES = 16
 MAX_CONTENT_BLOCKS = 12
 MAX_TEXT_CHARACTERS = 4_000
+DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 SYSTEM_PROMPT = """\
 あなたはTransitForgeのAI運行観察員です。日本語で簡潔に案内してください。
@@ -18,6 +23,9 @@ focus_trainへ渡してください。時刻の変更はset_display_timeを使�
 時刻変更と列車検索が同じ依頼に含まれる場合は、時刻を変更して結果を受け取ってから
 列車を検索してください。時刻変更だけの依頼ではsearch_trainsを呼ばないでください。
 ツール結果にない列車や情報を推測しないでください。
+過去の混雑やピークについて聞かれた場合はquery_daily_congestion_peakを使い、
+日付指定がなければ利用者メッセージに含まれる日本時間の今日の日付を使ってください。
+ツールが返した観測件数、時刻、合計値を根拠として答えてください。
 画面操作が完了したら、実行した内容を自然な文章で伝えてください。
 """
 
@@ -68,6 +76,27 @@ TOOLS = [
     },
     {
         "toolSpec": {
+            "name": "query_daily_congestion_peak",
+            "description": (
+                "指定した日本時間の日付について、1分ごとの保存済み混雑サマリーから"
+                "全列車の合計混雑値が最大だった観測を検索します。"
+            ),
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "serviceDate": {
+                            "type": "string",
+                            "description": "日本時間の日付（YYYY-MM-DD）。",
+                        }
+                    },
+                    "required": ["serviceDate"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
             "name": "focus_train",
             "description": "検索結果に含まれる列車を選択し、カメラを移動します。",
             "inputSchema": {
@@ -99,6 +128,11 @@ def response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
 
 
 def request_messages(event: dict[str, Any]) -> list[dict[str, Any]]:
+    value = request_value(event)
+    return validated_messages(value)
+
+
+def request_value(event: dict[str, Any]) -> dict[str, Any]:
     if event.get("requestContext", {}).get("http", {}).get("method") != "POST":
         raise RequestError(405, "POSTのみ利用できます。")
 
@@ -121,7 +155,10 @@ def request_messages(event: dict[str, Any]) -> list[dict[str, Any]]:
         raise RequestError(400, "JSON形式のリクエストが必要です。") from error
     if not isinstance(value, dict):
         raise RequestError(400, "リクエストの形式が不正です。")
+    return value
 
+
+def validated_messages(value: dict[str, Any]) -> list[dict[str, Any]]:
     messages = value.get("messages")
     if (
         not isinstance(messages, list)
@@ -219,9 +256,104 @@ def converse(bedrock_client: Any, messages: list[dict[str, Any]]) -> dict[str, A
     return {"message": message, "stopReason": stop_reason}
 
 
+def query_daily_congestion_peak(
+    dynamodb_client: Any,
+    summary_table: str,
+    service_date: str,
+) -> dict[str, Any]:
+    if not DATE_PATTERN.fullmatch(service_date):
+        raise RequestError(400, "serviceDateはYYYY-MM-DD形式にしてください。")
+    try:
+        parsed_date = datetime.strptime(service_date, "%Y-%m-%d")
+    except ValueError as error:
+        raise RequestError(400, "serviceDateが実在する日付ではありません。") from error
+    if parsed_date.strftime("%Y-%m-%d") != service_date:
+        raise RequestError(400, "serviceDateが不正です。")
+
+    items: list[dict[str, Any]] = []
+    exclusive_start_key: dict[str, Any] | None = None
+    while True:
+        request: dict[str, Any] = {
+            "TableName": summary_table,
+            "KeyConditionExpression": "serviceDate = :service_date",
+            "ExpressionAttributeValues": {":service_date": {"S": service_date}},
+        }
+        if exclusive_start_key:
+            request["ExclusiveStartKey"] = exclusive_start_key
+        result = dynamodb_client.query(**request)
+        items.extend(result.get("Items", []))
+        exclusive_start_key = result.get("LastEvaluatedKey")
+        if not exclusive_start_key:
+            break
+
+    if not items:
+        return {
+            "serviceDate": service_date,
+            "sampleCount": 0,
+            "peak": None,
+        }
+
+    peak = max(
+        items,
+        key=lambda item: (
+            dynamo_number(item.get("totalCongestion")),
+            item.get("collectedAt", {}).get("S", ""),
+        ),
+    )
+    train_totals = peak.get("trainTotals", {}).get("M", {})
+    top_trains = sorted(
+        (
+            {
+                "trainNumber": train_number,
+                "totalCongestion": number_for_response(dynamo_number(value)),
+            }
+            for train_number, value in train_totals.items()
+        ),
+        key=lambda item: (-item["totalCongestion"], item["trainNumber"]),
+    )[:5]
+    return {
+        "serviceDate": service_date,
+        "sampleCount": len(items),
+        "peak": {
+            "collectedAt": peak["collectedAt"]["S"],
+            "sourceUpdatedAt": peak["sourceUpdatedAt"]["S"],
+            "totalCongestion": number_for_response(
+                dynamo_number(peak["totalCongestion"])
+            ),
+            "trainCount": int(dynamo_number(peak["trainCount"])),
+            "carCount": int(dynamo_number(peak["carCount"])),
+            "topTrains": top_trains,
+        },
+    }
+
+
+def dynamo_number(value: Any) -> Decimal:
+    if not isinstance(value, dict) or not isinstance(value.get("N"), str):
+        return Decimal(0)
+    return Decimal(value["N"])
+
+
+def number_for_response(value: Decimal) -> int | float:
+    integral = value.to_integral_value()
+    return int(integral) if value == integral else float(value)
+
+
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     try:
-        messages = request_messages(event)
+        value = request_value(event)
+        if value.get("operation") == "daily_congestion_peak":
+            service_date = value.get("serviceDate")
+            if not isinstance(service_date, str):
+                raise RequestError(400, "serviceDateが必要です。")
+            import boto3
+
+            result = query_daily_congestion_peak(
+                boto3.client("dynamodb"),
+                SUMMARY_TABLE,
+                service_date,
+            )
+            return response(200, result)
+        messages = validated_messages(value)
     except RequestError as error:
         return response(error.status_code, {"message": str(error)})
 

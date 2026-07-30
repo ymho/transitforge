@@ -11,7 +11,10 @@ import {
   congestionRetryIntervalMilliseconds,
   loadTrainCongestion,
 } from "./data/train-congestion";
-import { invokeBedrockAgent } from "./data/bedrock-agent";
+import {
+  invokeBedrockAgent,
+  queryDailyCongestionPeak,
+} from "./data/bedrock-agent";
 import { loadTrainIndex, type Train } from "./data/train-index";
 import { lightPresetForRouteTime, type LightPreset } from "./domain/map-lighting";
 import {
@@ -356,6 +359,7 @@ if (!token) {
                     selection.focusTrain,
                   ),
                 focusTrain: selection.focusTrain,
+                queryDailyCongestionPeak,
                 maximumRouteTime,
               },
               invokeBedrockAgent,

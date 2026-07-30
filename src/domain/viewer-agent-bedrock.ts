@@ -3,6 +3,7 @@ import type {
   BedrockAgentMessage,
   BedrockAgentResponse,
   BedrockAgentToolResultBlock,
+  DailyCongestionPeakResponse,
 } from "../data/bedrock-agent";
 import type { Train } from "../data/train-index";
 import type { TrainPosition } from "./train-position";
@@ -18,6 +19,9 @@ export interface BedrockViewerAgentDependencies {
   getRouteTime: () => number;
   setRouteTime: (routeTimeMinutes: number) => void;
   focusTrain: (serviceUid: string) => boolean;
+  queryDailyCongestionPeak: (
+    serviceDate: string,
+  ) => Promise<DailyCongestionPeakResponse>;
   maximumRouteTime: number;
 }
 
@@ -39,7 +43,8 @@ export async function runBedrockViewerAgent(
         {
           text:
             `利用者の依頼: ${prompt}\n` +
-            `現在の表示時刻（0時からの分数）: ${dependencies.getRouteTime()}`,
+            `現在の表示時刻（0時からの分数）: ${dependencies.getRouteTime()}\n` +
+            `日本時間の今日の日付: ${currentDateInJapan()}`,
         },
       ],
     },
@@ -63,7 +68,7 @@ export async function runBedrockViewerAgent(
     const toolResults: BedrockAgentToolResultBlock[] = [];
     for (const { toolUse } of toolUses) {
       try {
-        const result = executeTool(
+        const result = await executeTool(
           toolUse.name,
           toolUse.input,
           prompt,
@@ -102,13 +107,13 @@ export async function runBedrockViewerAgent(
   throw new Error("AIの画面操作回数が上限を超えました。");
 }
 
-function executeTool(
+async function executeTool(
   name: string,
   input: Record<string, unknown>,
   originalPrompt: string,
   dependencies: BedrockViewerAgentDependencies,
   searchableServiceUids: Set<string>,
-): unknown {
+): Promise<unknown> {
   if (name === "set_display_time") {
     const requestedTime = input.routeTimeMinutes;
     if (typeof requestedTime !== "number" || !Number.isFinite(requestedTime)) {
@@ -185,7 +190,29 @@ function executeTool(
     return { serviceUid, focused: true };
   }
 
+  if (name === "query_daily_congestion_peak") {
+    const serviceDate = input.serviceDate;
+    if (
+      typeof serviceDate !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(serviceDate)
+    ) {
+      throw new Error("混雑履歴の日付が不正です。");
+    }
+    return dependencies.queryDailyCongestionPeak(serviceDate);
+  }
+
   throw new Error("許可されていないツールです。");
+}
+
+export function currentDateInJapan(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const byType = new Map(parts.map((part) => [part.type, part.value]));
+  return `${byType.get("year")}-${byType.get("month")}-${byType.get("day")}`;
 }
 
 function isToolUseBlock(
