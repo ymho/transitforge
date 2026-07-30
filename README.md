@@ -149,7 +149,8 @@ Nova Liteを使用する。列車検索は大容量入力を持つブラウザ�
 tfvars、stateへ保存しない。
 
 GitHub ActionsはPull Requestとmainへのpushでテスト・ビルド・Terraform検証を行う。
-mainへのpush後はGitHub OIDCの一時認証情報でdev環境のTerraformをapplyし、
+mainへのpushまたは手動実行では、同じWorkflowのテストジョブがすべて成功した場合だけ
+デプロイジョブへ進む。GitHub OIDCの一時認証情報でdev環境のTerraformをapplyし、
 Vite成果物をS3へ同期してCloudFrontを無効化する。固定AWSアクセスキーは使用しない。
 
 ### Input measurement

@@ -81,7 +81,23 @@ function appendMessage(
 ): void {
   const item = document.createElement("li");
   item.className = `ai-guide-message ai-guide-message-${role}`;
-  item.textContent = text;
+  item.textContent = role === "assistant" ? visibleAssistantText(text) : text;
   messages.append(item);
   item.scrollIntoView({ block: "nearest" });
+}
+
+export function visibleAssistantText(text: string): string {
+  const withoutClosedBlocks = text.replace(
+    /<thinking\b[^>]*>[\s\S]*?<\/thinking>/gi,
+    "",
+  );
+  const withoutUnclosedBlock = withoutClosedBlocks.replace(
+    /<thinking\b[^>]*>[\s\S]*$/gi,
+    "",
+  );
+  const withoutTags = withoutUnclosedBlock.replace(
+    /<\/?thinking\b[^>]*>/gi,
+    "",
+  );
+  return withoutTags.trim() || "案内を完了しました。";
 }

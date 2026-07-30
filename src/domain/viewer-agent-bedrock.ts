@@ -6,8 +6,13 @@ import type {
   DailyCongestionPeakResponse,
 } from "../data/bedrock-agent";
 import type { Train } from "../data/train-index";
+import type { SceneMode } from "./map-scene-mode";
+import type { WeatherMode } from "./map-weather";
 import type { TrainPosition } from "./train-position";
-import { parseViewerAgentActions } from "./viewer-agent-action";
+import {
+  parseViewerAgentActions,
+  type ViewerAgentLayer,
+} from "./viewer-agent-action";
 import {
   routeTimeFromPrompt,
   searchActiveTrainsFromPrompt,
@@ -19,6 +24,9 @@ export interface BedrockViewerAgentDependencies {
   getRouteTime: () => number;
   setRouteTime: (routeTimeMinutes: number) => void;
   focusTrain: (serviceUid: string) => boolean;
+  setWeather: (weather: WeatherMode) => void;
+  setSceneMode: (mode: SceneMode) => void;
+  setLayerVisibility: (layer: ViewerAgentLayer, visible: boolean) => void;
   queryDailyCongestionPeak: (
     serviceDate: string,
   ) => Promise<DailyCongestionPeakResponse>;
@@ -199,6 +207,43 @@ async function executeTool(
       throw new Error("混雑履歴の日付が不正です。");
     }
     return dependencies.queryDailyCongestionPeak(serviceDate);
+  }
+
+  if (name === "set_weather") {
+    const [action] = parseViewerAgentActions([
+      { type: "set_weather", weather: input.weather },
+    ]);
+    if (!action || action.type !== "set_weather") {
+      throw new Error("天気を変更できません。");
+    }
+    dependencies.setWeather(action.weather);
+    return { weather: action.weather };
+  }
+
+  if (name === "set_scene_mode") {
+    const [action] = parseViewerAgentActions([
+      { type: "set_scene_mode", sceneMode: input.sceneMode },
+    ]);
+    if (!action || action.type !== "set_scene_mode") {
+      throw new Error("表示モードを変更できません。");
+    }
+    dependencies.setSceneMode(action.sceneMode);
+    return { sceneMode: action.sceneMode };
+  }
+
+  if (name === "set_layer_visibility") {
+    const [action] = parseViewerAgentActions([
+      {
+        type: "set_layer_visibility",
+        layer: input.layer,
+        visible: input.visible,
+      },
+    ]);
+    if (!action || action.type !== "set_layer_visibility") {
+      throw new Error("表示レイヤーを変更できません。");
+    }
+    dependencies.setLayerVisibility(action.layer, action.visible);
+    return { layer: action.layer, visible: action.visible };
   }
 
   throw new Error("許可されていないツールです。");
