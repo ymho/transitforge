@@ -95,8 +95,16 @@ the local development server:
 ```bash
 nvm use
 npm install
+node tools/build_runtime_train_index.mjs \
+  viewer-input/train_index.json \
+  viewer-input/train_runtime_index.json
 npm run dev
 ```
+
+軽量列車インデックスは、元の`train_index.json`から画面で使う項目だけを抽出する
+再生成可能なローカル成果物です。元ファイルは変更せず、生成物もGit管理しません。
+生成物がない場合は元ファイルへフォールバックしますが、JSON解析に多くの時間と
+メモリを使用します。GitHub Actionsのdevデプロイでも同じ軽量版を生成します。
 
 開発サーバーは、収録事業者の列車混雑情報を同一オリジンの
 `/api/traffic/trainmonitorinfo.json` で提供します。上流へのアクセスは

@@ -1,5 +1,6 @@
 import type { Train } from "../data/train-index";
 import type { TrainPosition } from "./train-position";
+import type { ViewerAgentAction } from "./viewer-agent-action";
 
 export interface ViewerTrainSearchResult {
   train: Train;
@@ -12,7 +13,22 @@ export interface ViewerTrainSearchResponse {
   totalMatchCount: number;
 }
 
+export interface ViewerTrainArrivalResult {
+  train: Train;
+  stationName: string;
+  arrivalTimeMinutes: number;
+}
+
+export interface ViewerTrainArrivalResponse {
+  hasSearchTerms: boolean;
+  matches: ViewerTrainArrivalResult[];
+  totalMatchCount: number;
+  targetTimeMinutes?: number;
+  windowMinutes: number;
+}
+
 const serviceTypeKeywords = ["新快速", "新幹線", "特急", "快速", "普通"];
+export const arrivalSearchWindowMinutes = 30;
 
 export function routeTimeFromPrompt(prompt: string): number | undefined {
   const normalizedPrompt = normalize(prompt);
@@ -119,6 +135,168 @@ export function searchActiveTrainsFromPrompt(
   };
 }
 
+export function searchTrainArrivalsFromPrompt(
+  prompt: string,
+  trains: Train[],
+  limit = 5,
+  windowMinutes = arrivalSearchWindowMinutes,
+  requestedTargetTime?: number,
+): ViewerTrainArrivalResponse {
+  const normalizedPrompt = normalize(prompt);
+  const targetTimeMinutes =
+    routeTimeFromPrompt(prompt) ?? requestedTargetTime;
+  const stationNames = longestMentionedValues(
+    normalizedPrompt,
+    trains.flatMap((train) =>
+      train.stops.flatMap(({ station_name }) =>
+        station_name ? [station_name] : [],
+      ),
+    ),
+  );
+  const serviceTypes = new Set(
+    serviceTypeKeywords.filter((keyword) =>
+      normalizedPrompt.includes(normalize(keyword)),
+    ),
+  );
+  const trainNames = longestMentionedValues(
+    normalizedPrompt,
+    trains.flatMap((train) => {
+      const name = trainNameKeyword(train.train_name);
+      return name ? [name] : [];
+    }),
+  );
+  const trainNumbers = new Set(
+    trains
+      .map(({ train_no }) => normalize(train_no))
+      .filter(
+        (trainNumber) =>
+          trainNumber.length >= 2 && normalizedPrompt.includes(trainNumber),
+      ),
+  );
+  const hasSearchTerms =
+    isArrivalPrompt(normalizedPrompt) &&
+    targetTimeMinutes !== undefined &&
+    stationNames.size > 0;
+
+  if (!hasSearchTerms || targetTimeMinutes === undefined) {
+    return {
+      hasSearchTerms: false,
+      matches: [],
+      totalMatchCount: 0,
+      windowMinutes,
+    };
+  }
+
+  const rankedMatches = trains
+    .flatMap((train) => {
+      if (
+        serviceTypes.size > 0 &&
+        !Array.from(serviceTypes).some((keyword) =>
+          normalize(train.service_type).includes(normalize(keyword)),
+        )
+      ) {
+        return [];
+      }
+      if (
+        trainNames.size > 0 &&
+        !trainNames.has(normalize(trainNameKeyword(train.train_name)))
+      ) {
+        return [];
+      }
+      if (
+        trainNumbers.size > 0 &&
+        !trainNumbers.has(normalize(train.train_no))
+      ) {
+        return [];
+      }
+
+      const arrival = train.stops.find(
+        ({ event, station_name, route_time_minutes }) =>
+          event?.includes("着") === true &&
+          station_name !== undefined &&
+          stationNames.has(normalize(station_name)) &&
+          route_time_minutes !== undefined &&
+          Math.abs(route_time_minutes - targetTimeMinutes) <= windowMinutes,
+      );
+      if (
+        !arrival?.station_name ||
+        arrival.route_time_minutes === undefined
+      ) {
+        return [];
+      }
+      return [
+        {
+          train,
+          stationName: arrival.station_name,
+          arrivalTimeMinutes: arrival.route_time_minutes,
+          difference: Math.abs(
+            arrival.route_time_minutes - targetTimeMinutes,
+          ),
+        },
+      ];
+    })
+    .sort(
+      (left, right) =>
+        left.difference - right.difference ||
+        left.arrivalTimeMinutes - right.arrivalTimeMinutes ||
+        left.train.train_no.localeCompare(right.train.train_no, "ja"),
+    );
+
+  return {
+    hasSearchTerms: true,
+    matches: rankedMatches
+      .slice(0, Math.max(1, limit))
+      .map(({ difference: _, ...match }) => match),
+    totalMatchCount: rankedMatches.length,
+    targetTimeMinutes,
+    windowMinutes,
+  };
+}
+
+export function localViewerControlActionsFromPrompt(
+  prompt: string,
+): ViewerAgentAction[] {
+  const normalizedPrompt = normalize(prompt);
+  const actions: ViewerAgentAction[] = [];
+
+  if (normalizedPrompt.includes("雨")) {
+    actions.push({ type: "set_weather", weather: "rain" });
+  } else if (normalizedPrompt.includes("雪")) {
+    actions.push({ type: "set_weather", weather: "snow" });
+  } else if (normalizedPrompt.includes("晴")) {
+    actions.push({ type: "set_weather", weather: "clear" });
+  }
+
+  if (normalizedPrompt.includes("模型")) {
+    actions.push({ type: "set_scene_mode", sceneMode: "model" });
+  } else if (normalizedPrompt.includes("通常")) {
+    actions.push({ type: "set_scene_mode", sceneMode: "normal" });
+  }
+
+  const visible = requestedLayerVisibility(normalizedPrompt);
+  if (visible !== undefined && normalizedPrompt.includes("混雑")) {
+    actions.push({
+      type: "set_layer_visibility",
+      layer: "congestion",
+      visible,
+    });
+  }
+  if (
+    visible !== undefined &&
+    (normalizedPrompt.includes("目的地アーチ") ||
+      normalizedPrompt.includes("行先アーチ") ||
+      normalizedPrompt.includes("行き先アーチ"))
+  ) {
+    actions.push({
+      type: "set_layer_visibility",
+      layer: "destination_arcs",
+      visible,
+    });
+  }
+
+  return actions;
+}
+
 function scoreTrain(
   train: Train,
   stationNames: Set<string>,
@@ -203,6 +381,38 @@ function longestMentionedValues(
 
 function trainNameKeyword(trainName: string): string {
   return trainName.replace(/\s*\d+号?$/u, "").trim();
+}
+
+function isArrivalPrompt(normalizedPrompt: string): boolean {
+  return (
+    normalizedPrompt.includes("到着") ||
+    normalizedPrompt.includes("着く") ||
+    normalizedPrompt.includes("着き") ||
+    normalizedPrompt.includes("着け") ||
+    normalizedPrompt.includes("につく")
+  );
+}
+
+function requestedLayerVisibility(
+  normalizedPrompt: string,
+): boolean | undefined {
+  if (
+    normalizedPrompt.includes("非表示") ||
+    normalizedPrompt.includes("消して") ||
+    normalizedPrompt.includes("隠して") ||
+    normalizedPrompt.includes("オフ")
+  ) {
+    return false;
+  }
+  if (
+    normalizedPrompt.includes("表示") ||
+    normalizedPrompt.includes("見せて") ||
+    normalizedPrompt.includes("出して") ||
+    normalizedPrompt.includes("オン")
+  ) {
+    return true;
+  }
+  return undefined;
 }
 
 function validRouteTime(
