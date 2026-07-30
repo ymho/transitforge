@@ -1,0 +1,112 @@
+<mxfile host="app.diagrams.net" modified="2026-07-30T00:00:00.000Z" agent="Codex" version="31.0.2" type="device" compressed="false">
+  <diagram id="runtime" name="AWS runtime architecture">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="TransitForge — AWSサービス構成" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=28;fontStyle=1;fontColor=#161E2D;" vertex="1" parent="1">
+          <mxGeometry x="40" y="28" width="700" height="42" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="閲覧・AI問い合わせ・1分収集の実行時アーキテクチャ（dev / ap-northeast-1）" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=14;fontColor=#687078;" vertex="1" parent="1">
+          <mxGeometry x="42" y="70" width="800" height="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="aws-cloud" value="AWS Cloud" style="swimlane;html=1;rounded=1;startSize=42;horizontal=1;fillColor=#FFFFFF;strokeColor=#879196;strokeWidth=2;fontFamily=Helvetica;fontSize=16;fontStyle=1;fontColor=#232F3E;swimlaneFillColor=#F7F8F8;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="250" y="120" width="1300" height="800" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-zone" value="配信・認証" style="swimlane;html=1;rounded=1;startSize=30;horizontal=1;fillColor=#FAF7FF;strokeColor=#8C4FFF;strokeWidth=1;fontFamily=Helvetica;fontSize=13;fontStyle=1;fontColor=#5A2CA0;dashed=1;arcSize=8;" vertex="1" parent="aws-cloud">
+          <mxGeometry x="40" y="65" width="400" height="285" as="geometry"/>
+        </mxCell>
+        <mxCell id="app-zone" value="Web・AI" style="swimlane;html=1;rounded=1;startSize=30;horizontal=1;fillColor=#F5FBFA;strokeColor=#01A88D;strokeWidth=1;fontFamily=Helvetica;fontSize=13;fontStyle=1;fontColor=#006B5A;dashed=1;arcSize=8;" vertex="1" parent="aws-cloud">
+          <mxGeometry x="470" y="65" width="780" height="285" as="geometry"/>
+        </mxCell>
+        <mxCell id="ingestion-zone" value="運行情報収集・履歴" style="swimlane;html=1;rounded=1;startSize=30;horizontal=1;fillColor=#FFF8FB;strokeColor=#E7157B;strokeWidth=1;fontFamily=Helvetica;fontSize=13;fontStyle=1;fontColor=#9B0D52;dashed=1;arcSize=8;" vertex="1" parent="aws-cloud">
+          <mxGeometry x="40" y="385" width="1210" height="335" as="geometry"/>
+        </mxCell>
+        <mxCell id="browser" value="利用者&#xa;Webブラウザ" style="shape=mxgraph.aws4.client;html=1;fillColor=#232F3E;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=14;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="1">
+          <mxGeometry x="70" y="310" width="90" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="traffic" value="収録事業者&#xa;列車走行位置API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#147EBA;strokeWidth=2;fontFamily=Helvetica;fontSize=14;fontStyle=1;fontColor=#0B4F73;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="680" width="150" height="76" as="geometry"/>
+        </mxCell>
+        <mxCell id="cf-function" value="CloudFront Functions&#xa;Basic認証" style="shape=mxgraph.aws4.cloudfront_functions;html=1;fillColor=#8C4FFF;strokeColor=none;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="edge-zone">
+          <mxGeometry x="45" y="70" width="70" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="cloudfront" value="Amazon CloudFront&#xa;単一公開入口" style="shape=mxgraph.aws4.cloudfront;html=1;fillColor=#8C4FFF;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=13;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="edge-zone">
+          <mxGeometry x="250" y="125" width="80" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="web-s3" value="Amazon S3&#xa;静的Web・viewer-input&#xa;最新混雑JSON" style="shape=mxgraph.aws4.s3;html=1;fillColor=#7AA116;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="app-zone">
+          <mxGeometry x="55" y="100" width="80" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="agent-lambda" value="AWS Lambda&#xa;AI運行観察員&#xa;Function URL (IAM)" style="shape=mxgraph.aws4.lambda;html=1;fillColor=#ED7100;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="app-zone">
+          <mxGeometry x="285" y="100" width="80" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="bedrock" value="Amazon Bedrock&#xa;Nova Lite / Converse API" style="shape=mxgraph.aws4.bedrock;html=1;fillColor=#01A88D;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="app-zone">
+          <mxGeometry x="520" y="55" width="80" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="scheduler" value="Amazon EventBridge&#xa;Scheduler&#xa;rate(1 minute)" style="shape=mxgraph.aws4.eventbridge_scheduler;html=1;fillColor=#E7157B;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="ingestion-zone">
+          <mxGeometry x="55" y="35" width="80" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="collector" value="AWS Lambda&#xa;運行情報コレクター&#xa;Python 3.12 / arm64" style="shape=mxgraph.aws4.lambda;html=1;fillColor=#ED7100;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="ingestion-zone">
+          <mxGeometry x="330" y="115" width="80" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="archive-s3" value="Amazon S3&#xa;非公開アーカイブ&#xa;raw/*.json.gz / 730日" style="shape=mxgraph.aws4.s3;html=1;fillColor=#7AA116;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="ingestion-zone">
+          <mxGeometry x="620" y="70" width="80" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="ingestion-ddb" value="Amazon DynamoDB&#xa;毎分混雑サマリー&#xa;日別ピーク検索 / TTL 730日" style="shape=mxgraph.aws4.dynamodb;html=1;fillColor=#C925D1;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="ingestion-zone">
+          <mxGeometry x="790" y="185" width="80" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="cloudwatch" value="Amazon CloudWatch Logs&#xa;Lambdaログ / 30日" style="shape=mxgraph.aws4.cloudwatch;html=1;fillColor=#E7157B;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="ingestion-zone">
+          <mxGeometry x="940" y="140" width="80" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="note-client" value="Mapbox GL JS + Three.js&#xa;列車検索・画面操作はブラウザ内" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F2F3F3;strokeColor=#879196;fontFamily=Helvetica;fontSize=12;fontColor=#414D5C;arcSize=12;" vertex="1" parent="aws-cloud">
+          <mxGeometry x="65" y="330" width="260" height="54" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-browser-cf" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#147EBA;strokeWidth=3;fontFamily=Helvetica;fontSize=12;fontStyle=1;endArrow=block;endFill=1;" edge="1" parent="1" source="browser" target="cloudfront">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-function-cf" value="viewer-request" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#8C4FFF;strokeWidth=2;dashed=1;fontFamily=Helvetica;fontSize=11;endArrow=open;endFill=0;" edge="1" parent="1" source="cf-function" target="cloudfront">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-cf-s3" value="GET（OAC / SigV4）" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#147EBA;strokeWidth=2;fontFamily=Helvetica;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="cloudfront" target="web-s3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-cf-agent" value="/api/agent（OAC）" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#8C4FFF;strokeWidth=2;fontFamily=Helvetica;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="cloudfront" target="agent-lambda">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-agent-bedrock" value="Converse" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#01A88D;strokeWidth=3;fontFamily=Helvetica;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="agent-lambda" target="bedrock">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-agent-ddb" value="Query" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#C925D1;strokeWidth=2;fontFamily=Helvetica;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="agent-lambda" target="ingestion-ddb">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-scheduler-collector" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#E7157B;strokeWidth=3;fontFamily=Helvetica;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="scheduler" target="collector">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-api-collector" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#E7157B;strokeWidth=3;fontFamily=Helvetica;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="traffic" target="collector">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-collector-web" value="latest JSON" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#7AA116;strokeWidth=2;fontFamily=Helvetica;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="collector" target="web-s3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-collector-archive" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#7AA116;strokeWidth=2;fontFamily=Helvetica;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="collector" target="archive-s3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-collector-ddb" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#C925D1;strokeWidth=2;fontFamily=Helvetica;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="collector" target="ingestion-ddb">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-agent-logs" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#687078;strokeWidth=1;dashed=1;fontFamily=Helvetica;fontSize=10;endArrow=open;endFill=0;" edge="1" parent="1" source="agent-lambda" target="cloudwatch">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-collector-logs" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#687078;strokeWidth=1;dashed=1;fontFamily=Helvetica;fontSize=10;endArrow=open;endFill=0;" edge="1" parent="1" source="collector" target="cloudwatch">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend" value="青: 閲覧　紫/緑: AI　桃: スケジュール　緑: S3　ピンク: DynamoDB　破線: 関連・ログ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F7F8F8;strokeColor=#D5DBDB;fontFamily=Helvetica;fontSize=12;fontColor=#414D5C;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="280" y="940" width="870" height="34" as="geometry"/>
+        </mxCell>
+        <mxCell id="source" value="Source: Terraform configuration in infra/terraform/environments/dev" style="text;html=1;strokeColor=none;fillColor=none;align=right;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=#879196;" vertex="1" parent="1">
+          <mxGeometry x="1160" y="940" width="360" height="34" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

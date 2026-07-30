@@ -129,6 +129,10 @@ AI運行観察員のユーザーインターフェース、許可する画面操
 [`docs/architecture/ai-operations-guide.md`](docs/architecture/ai-operations-guide.md)
 を参照してください。
 
+AWSサービス構成とGitHub ActionsからのOIDCデプロイ経路は
+[`docs/architecture/README.md`](docs/architecture/README.md)
+のアーキテクチャ図を参照してください。
+
 ### AWS deployment
 
 AWSへの初期デプロイはTerraformで管理する。最初の段階では、非公開S3バケットと
