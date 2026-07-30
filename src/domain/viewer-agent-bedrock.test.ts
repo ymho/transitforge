@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Train } from "../data/train-index";
 import type { TrainPosition } from "./train-position";
-import { runBedrockViewerAgent } from "./viewer-agent-bedrock";
+import {
+  currentDateInJapan,
+  runBedrockViewerAgent,
+} from "./viewer-agent-bedrock";
 
 const train: Train = {
   service_uid: "service-1",
@@ -95,6 +98,7 @@ describe("Bedrock viewer agent", () => {
           routeTime = value;
         },
         focusTrain,
+        queryDailyCongestionPeak: vi.fn(),
         maximumRouteTime: 1_800,
       },
       converse,
@@ -142,11 +146,74 @@ describe("Bedrock viewer agent", () => {
         getRouteTime: () => 1_100,
         setRouteTime: vi.fn(),
         focusTrain,
+        queryDailyCongestionPeak: vi.fn(),
         maximumRouteTime: 1_800,
       },
       converse,
     );
 
     expect(focusTrain).not.toHaveBeenCalled();
+  });
+
+  it("queries the saved daily congestion peak requested by Bedrock", async () => {
+    const queryDailyPeak = vi.fn(async () => ({
+      serviceDate: "2026-07-29",
+      sampleCount: 64,
+      peak: {
+        collectedAt: "2026-07-29T08:15:00+00:00",
+        sourceUpdatedAt: "2026-07-29T08:14:50+00:00",
+        totalCongestion: 3_934,
+        trainCount: 38,
+        carCount: 291,
+        topTrains: [{ trainNumber: "1655H", totalCongestion: 240 }],
+      },
+    }));
+    const converse = vi
+      .fn()
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [
+            {
+              toolUse: {
+                toolUseId: "history",
+                name: "query_daily_congestion_peak",
+                input: { serviceDate: "2026-07-29" },
+              },
+            },
+          ],
+        },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{ text: "ピークは17時15分、合計3,934でした。" }],
+        },
+        stopReason: "end_turn",
+      });
+
+    const result = await runBedrockViewerAgent(
+      "今日の混雑のピークは？",
+      {
+        trains: [train],
+        getPositions: () => [position],
+        getRouteTime: () => 1_100,
+        setRouteTime: vi.fn(),
+        focusTrain: vi.fn(),
+        queryDailyCongestionPeak: queryDailyPeak,
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(queryDailyPeak).toHaveBeenCalledWith("2026-07-29");
+    expect(result).toContain("3,934");
+  });
+
+  it("formats the current date in Japan independently of the browser timezone", () => {
+    expect(currentDateInJapan(new Date("2026-07-29T15:30:00Z"))).toBe(
+      "2026-07-30",
+    );
   });
 });

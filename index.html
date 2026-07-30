@@ -102,12 +102,12 @@
             <p>AI運行観察員</p>
             <small>地図を操作してご案内します</small>
           </div>
-          <span class="ai-guide-status">基本操作対応</span>
+          <span class="ai-guide-status">履歴分析対応</span>
           <button id="close-ai-guide" type="button" aria-label="AI運行観察員を閉じる">×</button>
         </header>
         <ol id="ai-guide-messages" class="ai-guide-messages" aria-live="polite">
           <li class="ai-guide-message ai-guide-message-assistant">
-            表示時刻の変更、運行中列車の検索、列車位置への移動ができます。
+            表示時刻の変更、列車検索・移動、保存済み混雑履歴の分析ができます。
           </li>
         </ol>
         <div class="ai-guide-suggestions" aria-label="質問例">
@@ -119,6 +119,9 @@
           </button>
           <button type="button" data-prompt="はるかを見せて">
             はるかを見る
+          </button>
+          <button type="button" data-prompt="今日の混雑のピークは？">
+            今日の混雑ピーク
           </button>
         </div>
         <form id="ai-guide-form" class="ai-guide-form">

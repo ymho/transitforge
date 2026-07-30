@@ -2,7 +2,8 @@
 
 非公開S3バケットとCloudFront OACを作成し、現在の静的ビューワーを配信する。
 EventBridge SchedulerとLambdaは収録事業者の列車混雑情報を1分間隔で取得し、
-最新値と分析用の時系列アーカイブをS3へ保存する。AI運行観察員はCloudFrontからのみ
+最新値と分析用の時系列アーカイブをS3へ保存し、日別検索用の毎分サマリーを
+DynamoDBへ保存する。AI運行観察員はCloudFrontからのみ
 呼び出せるLambda Function URLを通じてAmazon Bedrock Nova Liteを使用する。
 
 ## 初期化
@@ -99,6 +100,21 @@ GitHub environmentの必須レビュアーやmainのbranch protectionを設定�
 - 既定の保持期間: 730日
 - Scheduler再試行: 0回
 - 重複取得防止: 分単位のS3条件付き書き込み
+- 分析索引: DynamoDBの
+  `serviceDate (JST日付) + collectedAt (UTC収集時刻)`
+- 分析値: 全列車合計、列車数、車両数、列車番号別合計
+- DynamoDB TTL: S3と同じ既定730日
 
 取得に失敗した回は保存せず、次の1分実行まで待つ。利用者数が増えても上流アクセス数は
 増えない。保持期間は `train_monitor_archive_retention_days` で30〜3650日に変更できる。
+
+既存S3アーカイブを新しい分析索引へ取り込む場合は、対象のJST日付を指定してcollectorを
+手動実行する。
+
+```bash
+aws lambda invoke \
+  --function-name transitforge-dev-train-monitor-collector \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{"mode":"backfill","date":"2026-07-30"}' \
+  backfill-result.json
+```
