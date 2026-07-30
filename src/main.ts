@@ -38,7 +38,10 @@ import {
   PathGeometryIndex,
 } from "./domain/train-position";
 import type { TrainPosition } from "./domain/train-position";
-import { parseViewerAgentActions } from "./domain/viewer-agent-action";
+import {
+  parseViewerAgentActions,
+  type ViewerAgentLayer,
+} from "./domain/viewer-agent-action";
 import { runBedrockViewerAgent } from "./domain/viewer-agent-bedrock";
 import {
   routeTimeFromPrompt,
@@ -202,7 +205,7 @@ if (!token) {
     map.setConfigProperty("basemap", "showPlaceLabels", false);
     map.setConfigProperty("basemap", "showRoadLabels", false);
     map.setConfigProperty("basemap", "showTransitLabels", true);
-    configureWeather(map, weatherButtons);
+    const selectWeather = configureWeather(map, weatherButtons);
     monitorFrames();
     let activeLightPreset: LightPreset | undefined;
     let activeSceneMode: SceneMode = "normal";
@@ -279,8 +282,11 @@ if (!token) {
           destinationCoordinatesByServiceUid,
         );
         map.addLayer(threeTrainLayer);
-        configureDestinationArcs(threeTrainLayer, destinationArcsToggle);
-        configureTrainCongestionUpdates(
+        const setDestinationArcsVisible = configureDestinationArcs(
+          threeTrainLayer,
+          destinationArcsToggle,
+        );
+        const setCongestionVisible = configureTrainCongestionUpdates(
           threeTrainLayer,
           congestionToggle,
           congestionLegend,
@@ -339,6 +345,26 @@ if (!token) {
         };
 
         displayTime.addEventListener("input", () => updateTrains());
+        const selectSceneMode = configureSceneModes(
+          map,
+          sceneModeButtons,
+          routeLayerIds,
+          (mode) => {
+            activeSceneMode = mode;
+            activeLightPreset = undefined;
+            updateTrains();
+          },
+        );
+        const setLayerVisibility = (
+          layer: ViewerAgentLayer,
+          visible: boolean,
+        ) => {
+          if (layer === "congestion") {
+            setCongestionVisible(visible);
+          } else {
+            setDestinationArcsVisible(visible);
+          }
+        };
         const localAiGuidePromptHandler = createLocalAiGuidePromptHandler(
           trainIndex.trains,
           () => displayedPositions,
@@ -359,6 +385,9 @@ if (!token) {
                     selection.focusTrain,
                   ),
                 focusTrain: selection.focusTrain,
+                setWeather: selectWeather,
+                setSceneMode: selectSceneMode,
+                setLayerVisibility,
                 queryDailyCongestionPeak,
                 maximumRouteTime,
               },
@@ -375,16 +404,6 @@ if (!token) {
         playToggle.disabled = false;
         realTimeToggle.disabled = false;
         playbackSpeed.disabled = false;
-        configureSceneModes(
-          map,
-          sceneModeButtons,
-          routeLayerIds,
-          (mode) => {
-            activeSceneMode = mode;
-            activeLightPreset = undefined;
-            updateTrains();
-          },
-        );
         configurePlayback(updateTrains, maximumRouteTime);
         updateTrains();
     } catch (error) {
@@ -671,7 +690,7 @@ function configurePlayback(
 function configureWeather(
   map: mapboxgl.Map,
   buttons: HTMLButtonElement[],
-): void {
+): (mode: WeatherMode) => void {
   const selectWeather = (mode: WeatherMode) => {
     applyWeather(map, mode);
     for (const button of buttons) {
@@ -690,13 +709,14 @@ function configureWeather(
   }
 
   selectWeather("clear");
+  return selectWeather;
 }
 
 function configureTrainCongestionUpdates(
   trainLayer: MapboxThreeTrainLayer,
   toggle: HTMLButtonElement,
   legend: HTMLElement,
-): void {
+): (enabled: boolean) => void {
   let timer: number | undefined;
   let nextRefreshAt = Date.now();
   let refreshing = false;
@@ -769,18 +789,23 @@ function configureTrainCongestionUpdates(
   });
 
   void refresh();
+  return setEnabled;
 }
 
 function configureDestinationArcs(
   trainLayer: MapboxThreeTrainLayer,
   toggle: HTMLButtonElement,
-): void {
-  toggle.disabled = false;
-  toggle.addEventListener("click", () => {
-    const enabled = toggle.ariaPressed !== "true";
+): (enabled: boolean) => void {
+  const setEnabled = (enabled: boolean) => {
     toggle.ariaPressed = String(enabled);
     trainLayer.setDestinationArcsVisible(enabled);
+  };
+
+  toggle.disabled = false;
+  toggle.addEventListener("click", () => {
+    setEnabled(toggle.ariaPressed !== "true");
   });
+  return setEnabled;
 }
 
 function configureSceneModes(
@@ -788,7 +813,7 @@ function configureSceneModes(
   buttons: HTMLButtonElement[],
   routeLayerIds: string[],
   onModeChange: (mode: SceneMode) => void,
-): void {
+): (mode: SceneMode) => void {
   let normalView: { pitch: number; bearing: number } | undefined;
   let selectedMode: SceneMode = "normal";
 
@@ -831,6 +856,7 @@ function configureSceneModes(
       }
     });
   }
+  return selectMode;
 }
 
 function configureTrainSelection(

@@ -26,6 +26,9 @@ focus_trainへ渡してください。時刻の変更はset_display_timeを使�
 過去の混雑やピークについて聞かれた場合はquery_daily_congestion_peakを使い、
 日付指定がなければ利用者メッセージに含まれる日本時間の今日の日付を使ってください。
 ツールが返した観測件数、時刻、合計値を根拠として答えてください。
+晴れ・雨・雪の変更はset_weather、通常・模型モードの変更はset_scene_modeを
+使ってください。混雑の棒グラフや目的地へのアーチの表示・非表示は
+set_layer_visibilityを使ってください。
 画面操作が完了したら、実行した内容を自然な文章で伝えてください。
 """
 
@@ -109,6 +112,61 @@ TOOLS = [
                         }
                     },
                     "required": ["serviceUid"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "set_weather",
+            "description": "地図の天気表現を晴れ、雨、雪から選びます。",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "weather": {
+                            "type": "string",
+                            "enum": ["clear", "rain", "snow"],
+                        }
+                    },
+                    "required": ["weather"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "set_scene_mode",
+            "description": "地図を通常表示または模型モードへ変更します。",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "sceneMode": {
+                            "type": "string",
+                            "enum": ["normal", "model"],
+                        }
+                    },
+                    "required": ["sceneMode"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "set_layer_visibility",
+            "description": "混雑の棒グラフまたは目的地アーチを表示・非表示にします。",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "layer": {
+                            "type": "string",
+                            "enum": ["congestion", "destination_arcs"],
+                        },
+                        "visible": {"type": "boolean"},
+                    },
+                    "required": ["layer", "visible"],
                 }
             },
         }
