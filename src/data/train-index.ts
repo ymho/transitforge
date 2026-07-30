@@ -25,7 +25,13 @@ export interface TrainIndex {
 }
 
 export async function loadTrainIndex(): Promise<TrainIndex> {
-  const response = await fetch("/viewer-input/train_index.json");
+  let response = await fetch("/viewer-input/train_runtime_index.json");
+  if (!response.ok) {
+    console.warn(
+      "軽量列車インデックスがないため、元のtrain_index.jsonを読み込みます。",
+    );
+    response = await fetch("/viewer-input/train_index.json");
+  }
 
   if (!response.ok) {
     throw new Error(`列車インデックスを読み込めませんでした (${response.status})。`);

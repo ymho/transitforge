@@ -86,6 +86,7 @@ class BedrockAgentTest(unittest.TestCase):
                 "set_display_time",
                 "search_trains",
                 "query_daily_congestion_peak",
+                "search_train_arrivals",
                 "focus_train",
                 "set_weather",
                 "set_scene_mode",

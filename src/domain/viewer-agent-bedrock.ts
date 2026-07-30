@@ -14,8 +14,10 @@ import {
   type ViewerAgentLayer,
 } from "./viewer-agent-action";
 import {
+  arrivalSearchWindowMinutes,
   routeTimeFromPrompt,
   searchActiveTrainsFromPrompt,
+  searchTrainArrivalsFromPrompt,
 } from "./viewer-agent-local-tools";
 
 export interface BedrockViewerAgentDependencies {
@@ -173,6 +175,49 @@ async function executeTool(
         trainName: train.train_name,
         origin: train.origin_station,
         destination: train.destination_station,
+      })),
+    };
+  }
+
+  if (name === "search_train_arrivals") {
+    const query = input.query;
+    const targetTimeMinutes = input.targetTimeMinutes;
+    if (
+      typeof query !== "string" ||
+      query.trim().length === 0 ||
+      typeof targetTimeMinutes !== "number" ||
+      !Number.isFinite(targetTimeMinutes)
+    ) {
+      throw new Error("到着列車の検索条件が不正です。");
+    }
+    const requestedLimit =
+      typeof input.limit === "number" && Number.isInteger(input.limit)
+        ? input.limit
+        : 5;
+    const limit = Math.max(1, Math.min(5, requestedLimit));
+    const search = searchTrainArrivalsFromPrompt(
+      originalPrompt,
+      dependencies.trains,
+      limit,
+      arrivalSearchWindowMinutes,
+      targetTimeMinutes,
+    );
+    for (const { train } of search.matches) {
+      searchableServiceUids.add(train.service_uid);
+    }
+    return {
+      windowMinutes: search.windowMinutes,
+      targetTimeMinutes: search.targetTimeMinutes,
+      totalMatchCount: search.totalMatchCount,
+      matches: search.matches.map(({ train, stationName, arrivalTimeMinutes }) => ({
+        serviceUid: train.service_uid,
+        trainNumber: train.train_no,
+        serviceType: train.service_type,
+        trainName: train.train_name,
+        origin: train.origin_station,
+        destination: train.destination_station,
+        stationName,
+        arrivalTimeMinutes,
       })),
     };
   }

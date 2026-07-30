@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import type { Train } from "../data/train-index";
 import type { TrainPosition } from "./train-position";
 import {
+  localViewerControlActionsFromPrompt,
   routeTimeFromPrompt,
   searchActiveTrainsFromPrompt,
+  searchTrainArrivalsFromPrompt,
 } from "./viewer-agent-local-tools";
 
 const trains: Train[] = [
@@ -76,6 +78,47 @@ describe("viewer agent local tools", () => {
       totalMatchCount: 0,
     });
   });
+
+  it("searches arrivals within 30 minutes of the requested time", () => {
+    const response = searchTrainArrivalsFromPrompt(
+      "18時30分ごろ京都に着く特急はありますか",
+      trains,
+    );
+
+    expect(response.windowMinutes).toBe(30);
+    expect(response.matches.map(({ train }) => train.service_uid)).toEqual([
+      "special",
+    ]);
+    expect(response.matches[0]?.arrivalTimeMinutes).toBe(1_120);
+  });
+
+  it("does not include arrivals outside the 30 minute window", () => {
+    const response = searchTrainArrivalsFromPrompt(
+      "16時30分ごろ京都に着く特急はありますか",
+      trains,
+    );
+
+    expect(response.hasSearchTerms).toBe(true);
+    expect(response.matches).toEqual([]);
+  });
+
+  it("recognizes reversible map controls in the local fallback", () => {
+    expect(localViewerControlActionsFromPrompt("雨にして")).toEqual([
+      { type: "set_weather", weather: "rain" },
+    ]);
+    expect(
+      localViewerControlActionsFromPrompt(
+        "模型モードにして目的地アーチを表示して",
+      ),
+    ).toEqual([
+      { type: "set_scene_mode", sceneMode: "model" },
+      {
+        type: "set_layer_visibility",
+        layer: "destination_arcs",
+        visible: true,
+      },
+    ]);
+  });
 });
 
 function train(
@@ -96,6 +139,7 @@ function train(
     path_id: "path",
     stops: stops.map(([station_name, route_time_minutes]) => ({
       station_name,
+      event: "着",
       route_time_minutes,
     })),
   };
