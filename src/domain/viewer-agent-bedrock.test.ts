@@ -16,8 +16,8 @@ const train: Train = {
   destination_station: "京都",
   path_id: "path",
   stops: [
-    { station_name: "大阪", route_time_minutes: 1_080 },
-    { station_name: "京都", route_time_minutes: 1_120 },
+    { station_name: "大阪", event: "着", route_time_minutes: 1_080 },
+    { station_name: "京都", event: "着", route_time_minutes: 1_120 },
   ],
 };
 const position: TrainPosition = {
@@ -218,6 +218,63 @@ describe("Bedrock viewer agent", () => {
 
     expect(queryDailyPeak).toHaveBeenCalledWith("2026-07-29");
     expect(result).toContain("3,934");
+  });
+
+  it("searches arrivals in a 30 minute window without changing display time", async () => {
+    const setRouteTime = vi.fn();
+    const converse = vi
+      .fn()
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [
+            {
+              toolUse: {
+                toolUseId: "arrivals",
+                name: "search_train_arrivals",
+                input: {
+                  query: "京都に着く特急",
+                  targetTimeMinutes: 1_110,
+                },
+              },
+            },
+          ],
+        },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{ text: "18時40分着のはるか16号があります。" }],
+        },
+        stopReason: "end_turn",
+      });
+
+    const result = await runBedrockViewerAgent(
+      "18時30分ごろ京都に着く特急はありますか",
+      {
+        trains: [train],
+        getPositions: () => [position],
+        getRouteTime: () => 1_000,
+        setRouteTime,
+        focusTrain: vi.fn(),
+        setWeather: vi.fn(),
+        setSceneMode: vi.fn(),
+        setLayerVisibility: vi.fn(),
+        queryDailyCongestionPeak: vi.fn(),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(setRouteTime).not.toHaveBeenCalled();
+    expect(result).toContain("はるか16号");
+    expect(JSON.stringify(converse.mock.calls[1]?.[0])).toContain(
+      '"arrivalTimeMinutes":1120',
+    );
+    expect(JSON.stringify(converse.mock.calls[1]?.[0])).toContain(
+      '"windowMinutes":30',
+    );
   });
 
   it("changes weather, scene mode, and optional map layers", async () => {

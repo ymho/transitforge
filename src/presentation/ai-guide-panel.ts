@@ -55,16 +55,18 @@ export function configureAiGuidePanel(
     input.disabled = true;
     submit.disabled = true;
     submit.textContent = "送信中";
+    const pendingMessage = appendPendingMessage(messages);
 
     void handlePrompt(prompt)
-      .then((response) => appendMessage(messages, "assistant", response))
-      .catch(() =>
-        appendMessage(
-          messages,
-          "assistant",
+      .then((response) => {
+        resolveAssistantMessage(pendingMessage, response);
+      })
+      .catch(() => {
+        resolveAssistantMessage(
+          pendingMessage,
           "案内を開始できませんでした。時間をおいてもう一度お試しください。",
-        ),
-      )
+        );
+      })
       .finally(() => {
         input.disabled = false;
         submit.disabled = false;
@@ -86,18 +88,56 @@ function appendMessage(
   item.scrollIntoView({ block: "nearest" });
 }
 
+function appendPendingMessage(messages: HTMLOListElement): HTMLLIElement {
+  const item = document.createElement("li");
+  item.className =
+    "ai-guide-message ai-guide-message-assistant ai-guide-message-pending";
+  item.setAttribute("aria-label", "AIが回答を準備しています");
+
+  const label = document.createElement("span");
+  label.textContent = "考え中";
+  const dots = document.createElement("span");
+  dots.className = "ai-guide-thinking-dots";
+  dots.setAttribute("aria-hidden", "true");
+  for (let index = 0; index < 3; index += 1) {
+    dots.append(document.createElement("i"));
+  }
+
+  item.append(label, dots);
+  messages.append(item);
+  item.scrollIntoView({ block: "nearest" });
+  return item;
+}
+
+function resolveAssistantMessage(item: HTMLLIElement, text: string): void {
+  item.classList.remove("ai-guide-message-pending");
+  item.removeAttribute("aria-label");
+  item.textContent = visibleAssistantText(text);
+  item.scrollIntoView({ block: "nearest" });
+}
+
 export function visibleAssistantText(text: string): string {
-  const withoutClosedBlocks = text.replace(
-    /<thinking\b[^>]*>[\s\S]*?<\/thinking>/gi,
-    "",
-  );
-  const withoutUnclosedBlock = withoutClosedBlocks.replace(
-    /<thinking\b[^>]*>[\s\S]*$/gi,
-    "",
-  );
-  const withoutTags = withoutUnclosedBlock.replace(
-    /<\/?thinking\b[^>]*>/gi,
-    "",
-  );
-  return withoutTags.trim() || "案内を完了しました。";
+  const responseBlocks = Array.from(
+    text.matchAll(/<response\b[^>]*>([\s\S]*?)<\/response>/gi),
+    (match) => withoutThinking(match[1] ?? "").trim(),
+  ).filter(Boolean);
+  if (responseBlocks.length > 0) {
+    return responseBlocks.join("\n\n");
+  }
+
+  const visibleSource = withoutThinking(text);
+  const unclosedResponse = visibleSource.match(
+    /<response\b[^>]*>([\s\S]*)$/i,
+  )?.[1];
+  const visibleText = (unclosedResponse ?? visibleSource)
+    .replace(/<\/?response\b[^>]*>/gi, "")
+    .trim();
+  return visibleText || "案内を完了しました。";
+}
+
+function withoutThinking(text: string): string {
+  return text
+    .replace(/<thinking\b[^>]*>[\s\S]*?<\/thinking>/gi, "")
+    .replace(/<thinking\b[^>]*>[\s\S]*$/gi, "")
+    .replace(/<\/?thinking\b[^>]*>/gi, "");
 }

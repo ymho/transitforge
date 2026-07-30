@@ -7,9 +7,14 @@
 ```text
 viewer-input/
 ├─ train_index.json
+├─ train_runtime_index.json
 ├─ path_catalog.json
 └─ station_line_catalog.json
 ```
+
+`train_runtime_index.json`は、`train_index.json`からビューワーが使用するフィールドだけを
+抽出した再生成可能な実行時成果物です。`tools/build_runtime_train_index.mjs`で生成し、
+Gitでは管理しません。存在しない場合、ビューワーは`train_index.json`へフォールバックします。
 
 | ファイル | 内容 |
 |---|---|
