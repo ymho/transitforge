@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import unittest
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,16 @@ class FakeBedrock:
         }
 
 
+class FakeDynamoDB:
+    def __init__(self, items):
+        self.items = items
+        self.queries = []
+
+    def query(self, **kwargs):
+        self.queries.append(kwargs)
+        return {"Items": self.items}
+
+
 class BedrockAgentTest(unittest.TestCase):
     def test_accepts_a_user_message_and_uses_the_configured_tools(self) -> None:
         client = FakeBedrock()
@@ -71,7 +82,12 @@ class BedrockAgentTest(unittest.TestCase):
                 item["toolSpec"]["name"]
                 for item in client.request["toolConfig"]["tools"]
             ],
-            ["set_display_time", "search_trains", "focus_train"],
+            [
+                "set_display_time",
+                "search_trains",
+                "query_daily_congestion_peak",
+                "focus_train",
+            ],
         )
 
     def test_accepts_only_the_tool_conversation_blocks_we_relay(self) -> None:
@@ -162,6 +178,68 @@ class BedrockAgentTest(unittest.TestCase):
 
         self.assertEqual(result["statusCode"], 405)
         self.assertEqual(result["headers"]["cache-control"], "no-store")
+
+    def test_finds_the_peak_observation_and_top_trains_for_a_day(self) -> None:
+        client = FakeDynamoDB(
+            [
+                dynamo_item(
+                    "2026-07-29T00:00:00+00:00",
+                    total=100,
+                    train_totals={"100A": 60, "200B": 40},
+                ),
+                dynamo_item(
+                    "2026-07-29T08:15:00+00:00",
+                    total=240,
+                    train_totals={"100A": 80, "300C": 160},
+                ),
+            ]
+        )
+
+        result = handler.query_daily_congestion_peak(
+            client,
+            "summaries",
+            "2026-07-29",
+        )
+
+        self.assertEqual(result["sampleCount"], 2)
+        self.assertEqual(result["peak"]["totalCongestion"], 240)
+        self.assertEqual(
+            result["peak"]["topTrains"],
+            [
+                {"trainNumber": "300C", "totalCongestion": 160},
+                {"trainNumber": "100A", "totalCongestion": 80},
+            ],
+        )
+        self.assertEqual(client.queries[0]["TableName"], "summaries")
+
+    def test_returns_no_peak_when_a_day_has_no_samples(self) -> None:
+        result = handler.query_daily_congestion_peak(
+            FakeDynamoDB([]),
+            "summaries",
+            "2026-07-29",
+        )
+
+        self.assertEqual(
+            result,
+            {"serviceDate": "2026-07-29", "sampleCount": 0, "peak": None},
+        )
+
+
+def dynamo_item(collected_at, total, train_totals):
+    return {
+        "serviceDate": {"S": "2026-07-29"},
+        "collectedAt": {"S": collected_at},
+        "sourceUpdatedAt": {"S": collected_at},
+        "totalCongestion": {"N": str(Decimal(total))},
+        "trainCount": {"N": str(len(train_totals))},
+        "carCount": {"N": "12"},
+        "trainTotals": {
+            "M": {
+                train_number: {"N": str(Decimal(value))}
+                for train_number, value in train_totals.items()
+            }
+        },
+    }
 
 
 if __name__ == "__main__":
