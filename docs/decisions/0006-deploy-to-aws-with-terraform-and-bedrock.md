@@ -34,6 +34,8 @@ TransitForgeをローカル環境だけでなくAWS上へデプロイし、利�
   独自の認証、利用量プラン、WebSocketが必要になるまで追加しない。
 - GitHub ActionsはGitHub OIDCの一時認証情報を使用する。信頼対象は
   `ymho/transitforge`の`dev` environmentに限定し、固定アクセスキーを保存しない。
+- devデプロイはCIと同じWorkflow内の依存ジョブとし、テスト、ビルド、Terraform検証が
+  すべて成功したmainへのpushまたは手動実行だけで開始する。
 - LambdaのIAM権限は、選択したBedrockモデルの呼び出しと必要なログ出力に限定する。
 - 公開AI APIには、認証、リクエスト上限、スロットリング、予算通知を追加してから
   一般利用を許可する。

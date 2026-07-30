@@ -98,6 +98,9 @@ describe("Bedrock viewer agent", () => {
           routeTime = value;
         },
         focusTrain,
+        setWeather: vi.fn(),
+        setSceneMode: vi.fn(),
+        setLayerVisibility: vi.fn(),
         queryDailyCongestionPeak: vi.fn(),
         maximumRouteTime: 1_800,
       },
@@ -146,6 +149,9 @@ describe("Bedrock viewer agent", () => {
         getRouteTime: () => 1_100,
         setRouteTime: vi.fn(),
         focusTrain,
+        setWeather: vi.fn(),
+        setSceneMode: vi.fn(),
+        setLayerVisibility: vi.fn(),
         queryDailyCongestionPeak: vi.fn(),
         maximumRouteTime: 1_800,
       },
@@ -201,6 +207,9 @@ describe("Bedrock viewer agent", () => {
         getRouteTime: () => 1_100,
         setRouteTime: vi.fn(),
         focusTrain: vi.fn(),
+        setWeather: vi.fn(),
+        setSceneMode: vi.fn(),
+        setLayerVisibility: vi.fn(),
         queryDailyCongestionPeak: queryDailyPeak,
         maximumRouteTime: 1_800,
       },
@@ -209,6 +218,75 @@ describe("Bedrock viewer agent", () => {
 
     expect(queryDailyPeak).toHaveBeenCalledWith("2026-07-29");
     expect(result).toContain("3,934");
+  });
+
+  it("changes weather, scene mode, and optional map layers", async () => {
+    const setWeather = vi.fn();
+    const setSceneMode = vi.fn();
+    const setLayerVisibility = vi.fn();
+    const converse = vi
+      .fn()
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [
+            {
+              toolUse: {
+                toolUseId: "weather",
+                name: "set_weather",
+                input: { weather: "rain" },
+              },
+            },
+            {
+              toolUse: {
+                toolUseId: "scene",
+                name: "set_scene_mode",
+                input: { sceneMode: "model" },
+              },
+            },
+            {
+              toolUse: {
+                toolUseId: "layer",
+                name: "set_layer_visibility",
+                input: { layer: "destination_arcs", visible: true },
+              },
+            },
+          ],
+        },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{ text: "雨の模型モードで目的地アーチを表示しました。" }],
+        },
+        stopReason: "end_turn",
+      });
+
+    const result = await runBedrockViewerAgent(
+      "雨の模型モードにして目的地アーチを表示して",
+      {
+        trains: [train],
+        getPositions: () => [position],
+        getRouteTime: () => 1_100,
+        setRouteTime: vi.fn(),
+        focusTrain: vi.fn(),
+        setWeather,
+        setSceneMode,
+        setLayerVisibility,
+        queryDailyCongestionPeak: vi.fn(),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(setWeather).toHaveBeenCalledWith("rain");
+    expect(setSceneMode).toHaveBeenCalledWith("model");
+    expect(setLayerVisibility).toHaveBeenCalledWith(
+      "destination_arcs",
+      true,
+    );
+    expect(result).toContain("目的地アーチ");
   });
 
   it("formats the current date in Japan independently of the browser timezone", () => {
