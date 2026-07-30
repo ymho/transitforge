@@ -2,6 +2,7 @@ locals {
   train_monitor_archive_bucket = "${local.resource_prefix}-train-monitor-archive"
   train_monitor_latest_key     = "api/westjr/trainmonitorinfo.json"
   train_monitor_upstream_url   = "https://www.train-guide.westjr.co.jp/api/v3/trainmonitorinfo.json"
+  train_congestion_summary     = "${var.project_name}-${var.environment}-train-congestion-summary"
 }
 
 data "archive_file" "train_monitor_collector" {
@@ -80,6 +81,32 @@ resource "aws_s3_bucket_lifecycle_configuration" "train_monitor_archive" {
   }
 }
 
+resource "aws_dynamodb_table" "train_congestion_summary" {
+  name         = local.train_congestion_summary
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "serviceDate"
+  range_key    = "collectedAt"
+
+  attribute {
+    name = "serviceDate"
+    type = "S"
+  }
+
+  attribute {
+    name = "collectedAt"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "expiresAt"
+    enabled        = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+}
+
 data "aws_iam_policy_document" "train_monitor_collector_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -114,6 +141,31 @@ data "aws_iam_policy_document" "train_monitor_collector" {
   }
 
   statement {
+    sid = "ReadRawSnapshotsForBackfill"
+
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.train_monitor_archive.arn]
+
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["raw/*"]
+    }
+  }
+
+  statement {
+    sid       = "ReadRawSnapshotObjectsForBackfill"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.train_monitor_archive.arn}/raw/*"]
+  }
+
+  statement {
+    sid       = "WriteCongestionSummaries"
+    actions   = ["dynamodb:PutItem"]
+    resources = [aws_dynamodb_table.train_congestion_summary.arn]
+  }
+
+  statement {
     sid = "WriteLogs"
 
     actions = [
@@ -141,15 +193,19 @@ resource "aws_lambda_function" "train_monitor_collector" {
   filename         = data.archive_file.train_monitor_collector.output_path
   source_code_hash = data.archive_file.train_monitor_collector.output_base64sha256
 
-  memory_size = 128
-  timeout     = 20
+  memory_size = 256
+  timeout     = 60
 
   environment {
     variables = {
       ARCHIVE_BUCKET = aws_s3_bucket.train_monitor_archive.id
       LATEST_BUCKET  = aws_s3_bucket.website.id
       LATEST_KEY     = local.train_monitor_latest_key
-      UPSTREAM_URL   = local.train_monitor_upstream_url
+      SUMMARY_TABLE  = aws_dynamodb_table.train_congestion_summary.name
+      SUMMARY_RETENTION_DAYS = tostring(
+        var.train_monitor_archive_retention_days
+      )
+      UPSTREAM_URL = local.train_monitor_upstream_url
     }
   }
 

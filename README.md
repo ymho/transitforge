@@ -106,7 +106,8 @@ npm run dev
 
 AWS開発環境ではEventBridge SchedulerとLambdaが上流を1分に1回取得し、
 最新値を同じパスでCloudFront配信します。各取得結果はgzip圧縮した時系列データとして
-非公開S3にも保存し、ラッシュ時ピークなどの後続分析に利用できます。
+非公開S3にも保存します。同時にDynamoDBへ毎分の合算サマリーを保存し、
+AI運行観察員から「今日の混雑のピークは？」などの日別分析に利用できます。
 
 Create a production build with type checking:
 
@@ -139,7 +140,8 @@ CloudFront Origin Access Controlで静的ビューワーを配信する。
 
 AI運行観察員は、CloudFrontからのみ呼べるLambda Function URLとAmazon Bedrock
 Nova Liteを使用する。列車検索は大容量入力を持つブラウザ側で実行し、Bedrockには
-最大5件の候補だけを返す。AWS認証情報やMapboxトークンをTerraformファイル、
+最大5件の候補だけを返す。混雑履歴はDynamoDBの毎分サマリーから検索し、生S3
+アーカイブ全体をモデルへ送らない。AWS認証情報やMapboxトークンをTerraformファイル、
 tfvars、stateへ保存しない。
 
 GitHub ActionsはPull Requestとmainへのpushでテスト・ビルド・Terraform検証を行う。

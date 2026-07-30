@@ -37,3 +37,8 @@ output "train_monitor_schedule_name" {
   description = "1分間隔で収集Lambdaを実行するEventBridge Scheduler名。"
   value       = aws_scheduler_schedule.train_monitor_collector.name
 }
+
+output "train_congestion_summary_table_name" {
+  description = "Bedrockの日別ピーク検索に使用する毎分混雑サマリーテーブル名。"
+  value       = aws_dynamodb_table.train_congestion_summary.name
+}
