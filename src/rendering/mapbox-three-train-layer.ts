@@ -9,6 +9,7 @@ import type { Coordinate } from "../data/path-catalog";
 import { coupledTrainLayouts } from "../domain/coupled-train-layout";
 import type { TrainPosition } from "../domain/train-position";
 import { trainVisualScaleForZoom } from "../domain/train-visual-scale";
+import { weatherHazeMixAtViewportPoint } from "../domain/weather-haze";
 
 const maximumTrainInstances = 1_000;
 const vehicleLengthMeters = 12;
@@ -22,6 +23,7 @@ const destinationArcVertexCount =
 const destinationArcHeightRatio = 0.16;
 const maximumDestinationArcHeightMeters = 30_000;
 const destinationArcEndpointHeightMeters = 8;
+const cloudyAtmosphereColor = new THREE.Color("#c8d0d5");
 
 export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   readonly id = "trains-3d";
@@ -60,6 +62,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   private congestionBarServiceUids: string[] = [];
   private congestionVisible = true;
   private destinationArcsVisible = false;
+  private cloudyAtmosphereEnabled = false;
 
   constructor(
     private readonly colorsByServiceUid: ReadonlyMap<string, string>,
@@ -195,6 +198,11 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.map?.triggerRepaint();
   }
 
+  setCloudyAtmosphereEnabled(enabled: boolean): void {
+    this.cloudyAtmosphereEnabled = enabled;
+    this.updateInstances();
+  }
+
   congestionBarServiceUidAt(point: { x: number; y: number }): string | undefined {
     if (
       !this.congestionVisible ||
@@ -293,7 +301,11 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
       );
       this.instanceTransform.updateMatrix();
       this.trains.setMatrixAt(index, this.instanceTransform.matrix);
-      this.trains.setColorAt(index, this.colorFor(position.serviceUid));
+      const hazeMix = this.hazeMixFor(position.coordinate);
+      this.trains.setColorAt(
+        index,
+        this.colorFor(position.serviceUid).lerp(cloudyAtmosphereColor, hazeMix),
+      );
 
       const congestion = this.congestionByTrainNumber.get(position.trainNo);
       if (congestion !== undefined) {
@@ -321,7 +333,9 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
         );
         this.congestionBars.setColorAt(
           congestionBarCount,
-          this.instanceColor.set(congestionBarColor(congestion)),
+          this.instanceColor
+            .set(congestionBarColor(congestion))
+            .lerp(cloudyAtmosphereColor, hazeMix),
         );
         this.congestionBarServiceUids[congestionBarCount] =
           position.serviceUid;
@@ -488,6 +502,18 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
 
   private colorFor(serviceUid: string): THREE.Color {
     return this.instanceColor.set(this.colorsByServiceUid.get(serviceUid) ?? "#a8aaad");
+  }
+
+  private hazeMixFor(coordinate: Coordinate): number {
+    if (!this.cloudyAtmosphereEnabled || !this.map) {
+      return 0;
+    }
+
+    const canvas = this.map.getCanvas();
+    return weatherHazeMixAtViewportPoint(this.map.project(coordinate), {
+      width: canvas.clientWidth,
+      height: canvas.clientHeight,
+    });
   }
 
   private smoothBearing(serviceUid: string, targetBearingRadians: number): number {

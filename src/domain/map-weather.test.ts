@@ -4,7 +4,7 @@ import { applyWeather, isWeatherMode } from "./map-weather";
 
 describe("map weather", () => {
   it("clears precipitation for clear weather", () => {
-    const map = { setRain: vi.fn(), setSnow: vi.fn() };
+    const map = { setFog: vi.fn(), setRain: vi.fn(), setSnow: vi.fn() };
 
     applyWeather(map, "clear");
 
@@ -12,21 +12,56 @@ describe("map weather", () => {
     expect(map.setRain).toHaveBeenCalledWith(null);
     expect(map.setSnow).toHaveBeenCalledOnce();
     expect(map.setSnow).toHaveBeenCalledWith(null);
+    expect(map.setFog).toHaveBeenCalledOnce();
+    expect(map.setFog).toHaveBeenCalledWith(null);
   });
 
-  it("keeps rain and snow mutually exclusive", () => {
-    const map = { setRain: vi.fn(), setSnow: vi.fn() };
+  it("uses Mapbox fog for a cloudy atmosphere", () => {
+    const map = { setFog: vi.fn(), setRain: vi.fn(), setSnow: vi.fn() };
+
+    applyWeather(map, "cloudy");
+
+    expect(map.setRain).toHaveBeenCalledWith(null);
+    expect(map.setSnow).toHaveBeenCalledWith(null);
+    expect(map.setFog).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        range: [-0.2, 2.5],
+        "high-color": "#aeb9c0",
+        "star-intensity": 0,
+      }),
+    );
+  });
+
+  it("combines rain with the cloudy atmosphere and clears snow", () => {
+    const map = { setFog: vi.fn(), setRain: vi.fn(), setSnow: vi.fn() };
 
     applyWeather(map, "rain");
 
     expect(map.setSnow).toHaveBeenCalledWith(null);
+    expect(map.setFog).toHaveBeenLastCalledWith(
+      expect.objectContaining({ range: [-0.2, 2.5] }),
+    );
     expect(map.setRain).toHaveBeenLastCalledWith(
       expect.objectContaining({ density: 0.65 }),
     );
   });
 
+  it("combines snow with the cloudy atmosphere", () => {
+    const map = { setFog: vi.fn(), setRain: vi.fn(), setSnow: vi.fn() };
+
+    applyWeather(map, "snow");
+
+    expect(map.setFog).toHaveBeenLastCalledWith(
+      expect.objectContaining({ color: "#c8d0d5" }),
+    );
+    expect(map.setSnow).toHaveBeenLastCalledWith(
+      expect.objectContaining({ density: 0.7 }),
+    );
+  });
+
   it("recognizes only supported button values", () => {
     expect(isWeatherMode("snow")).toBe(true);
-    expect(isWeatherMode("cloudy")).toBe(false);
+    expect(isWeatherMode("cloudy")).toBe(true);
+    expect(isWeatherMode("storm")).toBe(false);
   });
 });
