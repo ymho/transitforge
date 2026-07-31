@@ -29,7 +29,7 @@ focus_trainへ渡してください。時刻の変更はset_display_timeを使�
 過去の混雑やピークについて聞かれた場合はquery_daily_congestion_peakを使い、
 日付指定がなければ利用者メッセージに含まれる日本時間の今日の日付を使ってください。
 ツールが返した観測件数、時刻、合計値を根拠として答えてください。
-晴れ・雨・雪の変更はset_weather、通常・模型モードの変更はset_scene_modeを
+晴れ・曇り・雨・雪の変更はset_weather、通常・模型モードの変更はset_scene_modeを
 使ってください。混雑の棒グラフや目的地へのアーチの表示・非表示は
 set_layer_visibilityを使ってください。
 利用者が求めていない現在の表示時刻や今日の日付は回答で繰り返さないでください。
@@ -153,14 +153,14 @@ TOOLS = [
     {
         "toolSpec": {
             "name": "set_weather",
-            "description": "地図の天気表現を晴れ、雨、雪から選びます。",
+            "description": "地図の天気表現を晴れ、曇り、雨、雪から選びます。",
             "inputSchema": {
                 "json": {
                     "type": "object",
                     "properties": {
                         "weather": {
                             "type": "string",
-                            "enum": ["clear", "rain", "snow"],
+                            "enum": ["clear", "cloudy", "rain", "snow"],
                         }
                     },
                     "required": ["weather"],

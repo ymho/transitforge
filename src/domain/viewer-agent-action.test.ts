@@ -8,7 +8,7 @@ describe("viewer agent action", () => {
       parseViewerAgentActions([
         { type: "set_display_time", routeTimeMinutes: 1_080 },
         { type: "focus_train", serviceUid: "service-a" },
-        { type: "set_weather", weather: "rain" },
+        { type: "set_weather", weather: "cloudy" },
         { type: "set_scene_mode", sceneMode: "model" },
         {
           type: "set_layer_visibility",
@@ -19,7 +19,7 @@ describe("viewer agent action", () => {
     ).toEqual([
       { type: "set_display_time", routeTimeMinutes: 1_080 },
       { type: "focus_train", serviceUid: "service-a" },
-      { type: "set_weather", weather: "rain" },
+      { type: "set_weather", weather: "cloudy" },
       { type: "set_scene_mode", sceneMode: "model" },
       {
         type: "set_layer_visibility",
