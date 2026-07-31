@@ -30,6 +30,7 @@ import {
 } from "./domain/map-weather";
 import { dominantLineColorsByPathId } from "./domain/path-line-colors";
 import { advanceRouteTime, currentRouteTime } from "./domain/playback";
+import { TrainFocusSession } from "./domain/train-focus-session";
 import { coupledTrainLayouts } from "./domain/coupled-train-layout";
 import { TrainLineColorIndex } from "./domain/train-line-color";
 import {
@@ -133,7 +134,7 @@ if (
   realTimeToggle === null ||
   playbackSpeed === null ||
   sceneModeButtons.length !== 2 ||
-  weatherButtons.length !== 3 ||
+  weatherButtons.length !== 4 ||
   congestionToggle === null ||
   destinationArcsToggle === null ||
   congestionLegend === null ||
@@ -192,6 +193,8 @@ if (!token) {
     language: "ja",
     center: [135.4959, 34.7025],
     zoom: 15.5,
+    // 日本列島を広く見渡せる一方、地球儀へ遷移して3D表示が浮いて見える縮尺は避ける。
+    minZoom: 5.5,
     pitch: 62,
     bearing: -18,
     antialias: true,
@@ -206,8 +209,15 @@ if (!token) {
     map.setConfigProperty("basemap", "showPointOfInterestLabels", false);
     map.setConfigProperty("basemap", "showPlaceLabels", false);
     map.setConfigProperty("basemap", "showRoadLabels", false);
-    map.setConfigProperty("basemap", "showTransitLabels", true);
-    const selectWeather = configureWeather(map, weatherButtons);
+    // Mapbox Standardでは空港だけを除外できないため、空港を含む交通ラベル群を隠す。
+    // TransitForgeが描画する路線・列車・詳細表示には影響しない。
+    map.setConfigProperty("basemap", "showTransitLabels", false);
+    let applyWeatherToTrains: (mode: WeatherMode) => void = () => undefined;
+    let activeWeatherMode: WeatherMode = "clear";
+    const selectWeather = configureWeather(map, weatherButtons, (mode) => {
+      activeWeatherMode = mode;
+      applyWeatherToTrains(mode);
+    });
     monitorFrames();
     let activeLightPreset: LightPreset | undefined;
     let activeSceneMode: SceneMode = "normal";
@@ -283,6 +293,10 @@ if (!token) {
           colorsByServiceUid,
           destinationCoordinatesByServiceUid,
         );
+        applyWeatherToTrains = (mode) => {
+          threeTrainLayer.setCloudyAtmosphereEnabled(mode !== "clear");
+        };
+        applyWeatherToTrains(activeWeatherMode);
         map.addLayer(threeTrainLayer);
         const setDestinationArcsVisible = configureDestinationArcs(
           threeTrainLayer,
@@ -492,6 +506,7 @@ function createLocalAiGuidePromptHandler(
         setWeather(action.weather);
         const weatherLabel = {
           clear: "晴れ",
+          cloudy: "曇り",
           rain: "雨",
           snow: "雪",
         }[action.weather];
@@ -760,9 +775,11 @@ function configurePlayback(
 function configureWeather(
   map: mapboxgl.Map,
   buttons: HTMLButtonElement[],
+  onWeatherChanged: (mode: WeatherMode) => void,
 ): (mode: WeatherMode) => void {
   const selectWeather = (mode: WeatherMode) => {
     applyWeather(map, mode);
+    onWeatherChanged(mode);
     for (const button of buttons) {
       button.ariaPressed = String(button.dataset.weather === mode);
     }
@@ -952,8 +969,16 @@ function configureTrainSelection(
 
   const trainsByServiceUid = new Map(trains.map((train) => [train.service_uid, train]));
   const coupledServiceUidByServiceUid = new Map<string, string>();
-  let trackedServiceUid: string | undefined;
+  const focusSession = new TrainFocusSession();
   let displayedPositions: TrainPosition[] = [];
+
+  const endFocus = () => {
+    focusSession.end();
+    map.stop();
+    trainDetails.hidden = true;
+    showCoupledTrain.hidden = true;
+    showCoupledTrain.dataset.serviceUid = "";
+  };
 
   const updateCoupledTrainButton = (serviceUid: string) => {
     const coupledServiceUid = coupledServiceUidByServiceUid.get(serviceUid);
@@ -997,7 +1022,7 @@ function configureTrainSelection(
         return item;
       }),
     );
-    trackedServiceUid = train.service_uid;
+    focusSession.start(train.service_uid);
     updateCoupledTrainButton(train.service_uid);
     trainDetails.hidden = false;
   };
@@ -1021,8 +1046,7 @@ function configureTrainSelection(
       layers: ["train-hit-targets"],
     });
     if (clickedTrains.length === 0) {
-      trackedServiceUid = undefined;
-      trainDetails.hidden = true;
+      endFocus();
     }
   });
   map.on("mouseenter", "train-hit-targets", () => {
@@ -1032,7 +1056,7 @@ function configureTrainSelection(
     map.getCanvas().style.cursor = "";
   });
   closeTrainDetails.addEventListener("click", () => {
-    trainDetails.hidden = true;
+    endFocus();
   });
   showCoupledTrain.addEventListener("click", () => {
     const serviceUid = showCoupledTrain.dataset.serviceUid;
@@ -1067,18 +1091,22 @@ function configureTrainSelection(
         }
       }
 
-      if (!trackedServiceUid) {
+      const focusedServiceUid = focusSession.serviceUid;
+      if (!focusedServiceUid) {
         return;
       }
 
-      const position = positions.find(({ serviceUid }) => serviceUid === trackedServiceUid);
+      const position = positions.find(
+        ({ serviceUid }) => serviceUid === focusedServiceUid,
+      );
       if (!position) {
-        trackedServiceUid = undefined;
-        trainDetails.hidden = true;
+        endFocus();
         return;
       }
 
-      updateCoupledTrainButton(trackedServiceUid);
+      // フォーカス中は詳細パネルと列車追跡を常に同じ状態に保つ。
+      trainDetails.hidden = false;
+      updateCoupledTrainButton(focusedServiceUid);
       map.jumpTo({ center: position.coordinate });
     },
   };

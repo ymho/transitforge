@@ -263,6 +263,11 @@ export function localViewerControlActionsFromPrompt(
     actions.push({ type: "set_weather", weather: "rain" });
   } else if (normalizedPrompt.includes("雪")) {
     actions.push({ type: "set_weather", weather: "snow" });
+  } else if (
+    normalizedPrompt.includes("曇") ||
+    normalizedPrompt.includes("雲")
+  ) {
+    actions.push({ type: "set_weather", weather: "cloudy" });
   } else if (normalizedPrompt.includes("晴")) {
     actions.push({ type: "set_weather", weather: "clear" });
   }

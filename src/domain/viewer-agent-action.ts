@@ -63,6 +63,7 @@ export function parseViewerAgentActions(value: unknown): ViewerAgentAction[] {
       case "set_weather":
         if (
           action.weather === "clear" ||
+          action.weather === "cloudy" ||
           action.weather === "rain" ||
           action.weather === "snow"
         ) {

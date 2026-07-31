@@ -61,6 +61,7 @@
         </fieldset>
         <fieldset class="weather-controls" aria-label="天気の選択">
           <button type="button" data-weather="clear" aria-pressed="true" disabled>晴れ</button>
+          <button type="button" data-weather="cloudy" aria-pressed="false" disabled>曇り</button>
           <button type="button" data-weather="rain" aria-pressed="false" disabled>雨</button>
           <button type="button" data-weather="snow" aria-pressed="false" disabled>雪</button>
         </fieldset>
@@ -144,7 +145,7 @@
         </form>
       </aside>
       <aside id="train-details" class="train-details" aria-live="polite" hidden>
-        <button id="close-train-details" type="button" aria-label="列車詳細を閉じる">×</button>
+        <button id="close-train-details" type="button" aria-label="列車詳細を閉じてフォーカスを終了する">×</button>
         <h2 id="selected-train-title"></h2>
         <dl>
           <div><dt>列車番号</dt><dd id="selected-train-number"></dd></div>
