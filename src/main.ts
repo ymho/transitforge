@@ -668,9 +668,11 @@ function renderDisplayDateTime(date: Date): void {
   }
 
   dateTimeSummary.value =
-    `${date.getMonth() + 1}月${date.getDate()}日 ` +
-    `${date.getHours()}時${String(date.getMinutes()).padStart(2, "0")}分` +
-    `${String(date.getSeconds()).padStart(2, "0")}秒`;
+    `${String(date.getMonth() + 1).padStart(2, "0")}.` +
+    `${String(date.getDate()).padStart(2, "0")} / ` +
+    `${String(date.getHours()).padStart(2, "0")}:` +
+    `${String(date.getMinutes()).padStart(2, "0")}:` +
+    `${String(date.getSeconds()).padStart(2, "0")}`;
   displayMonth.value = String(date.getMonth() + 1).padStart(2, "0");
   displayDay.value = String(date.getDate()).padStart(2, "0");
   displayHour.value = String(date.getHours()).padStart(2, "0");

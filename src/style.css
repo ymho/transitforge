@@ -25,13 +25,18 @@ body,
   position: absolute;
   top: 1.5rem;
   left: 1.5rem;
-  width: min(13rem, calc(100vw - 3rem));
-  padding: 0.65rem 0.75rem;
+  width: min(11.5rem, calc(100vw - 3rem));
+  padding: 0.45rem 0.55rem;
   border: 1px solid rgb(255 255 255 / 18%);
-  border-radius: 0.75rem;
-  background: rgb(8 17 29 / 82%);
-  box-shadow: 0 1rem 3rem rgb(0 0 0 / 22%);
-  backdrop-filter: blur(12px);
+  border-radius: 0.85rem;
+  background: linear-gradient(145deg, rgb(12 25 40 / 90%), rgb(8 17 29 / 80%));
+  box-shadow: 0 0.75rem 2.2rem rgb(0 0 0 / 20%);
+  backdrop-filter: blur(14px);
+  transition: width 180ms ease;
+}
+
+.hud:has(.time-control[data-editing="true"]) {
+  width: min(13rem, calc(100vw - 3rem));
 }
 
 #map-status {
@@ -167,6 +172,9 @@ body,
 .route-search-toggle {
   position: absolute;
   z-index: 3;
+  display: inline-flex;
+  gap: 0.38rem;
+  align-items: center;
   bottom: 2.5rem;
   left: 7.15rem;
   padding: 0.6rem 0.85rem;
@@ -244,6 +252,9 @@ body,
 .ai-guide-toggle {
   position: absolute;
   z-index: 3;
+  display: inline-flex;
+  gap: 0.38rem;
+  align-items: center;
   bottom: 2.5rem;
   left: 1.5rem;
   padding: 0.6rem 0.85rem;
@@ -261,6 +272,14 @@ body,
 .ai-guide-toggle[aria-expanded="true"] {
   color: #f3f7fb;
   background: rgb(8 17 29 / 88%);
+}
+
+.guide-toggle-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: 0 0 auto;
+  color: currentcolor;
+  fill: none;
 }
 
 .ai-guide-panel {
@@ -648,10 +667,10 @@ body,
 }
 
 .time-control {
-  margin: -0.35rem;
-  padding: 0.35rem;
+  margin: -0.2rem;
+  padding: 0.2rem;
   border: 1px solid transparent;
-  border-radius: 0.55rem;
+  border-radius: 0.65rem;
   color: #d9e3ef;
   cursor: pointer;
   transition: border-color 150ms ease, background-color 150ms ease;
@@ -670,16 +689,40 @@ body,
 }
 
 .date-time-summary {
-  display: block;
+  display: grid;
+  grid-template-columns: 1.4rem minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  align-items: center;
   width: 100%;
-  color: #fff2bd;
-  font-size: 0.9rem;
-  font-weight: 620;
+  min-height: 2.1rem;
+  padding: 0.15rem 0.2rem;
+  color: #eef7ff;
+}
+
+.date-time-summary-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+  color: #68d7ff;
+  fill: none;
+}
+
+.date-time-summary-value {
+  min-width: 0;
+  color: inherit;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.015em;
-  line-height: 2rem;
-  text-align: center;
+  letter-spacing: 0.025em;
+  line-height: 1;
   white-space: nowrap;
+}
+
+.date-time-summary-chevron {
+  color: #71879d;
+  font-size: 0.85rem;
+  line-height: 1;
+  transform: translateY(-0.08rem);
 }
 
 .time-control[data-editing="true"] .date-time-summary {
