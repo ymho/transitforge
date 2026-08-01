@@ -114,8 +114,16 @@ npm run dev
 
 AWS開発環境ではEventBridge SchedulerとLambdaが上流を1分に1回取得し、
 最新値を同じパスでCloudFront配信します。各取得結果はgzip圧縮した時系列データとして
-非公開S3にも保存します。同時にDynamoDBへ毎分の合算サマリーを保存し、
-AI運行観察員から「今日の混雑のピークは？」などの日別分析に利用できます。
+非公開S3にも保存します。同時にDynamoDBへ毎分の合算サマリーを保存し、AI運行観察員から
+日次ピーク、1時間ごとの混雑推移、混雑した行き先側路線、種別・列車名・行き先付きの
+混雑列車を確認できます。
+
+列車遅延は独立したEventBridge SchedulerとLambdaが、重複排除したJR西日本の
+26個の列車走行位置JSONを1分ごとに各1回だけ取得します。統合した最新値を
+`/api/westjr/delays.json`で配信し、列車番号が一致する遅延列車には地図上の半透明な
+オレンジ色の球形ハローと、列車詳細の「遅延」を表示します。
+全レスポンスは非公開S3、毎分サマリーはDynamoDBへ保存し、AI運行観察員から現在、
+日次ピーク、1時間ごとの傾向、遅れた列車を確認できます。
 
 Create a production build with type checking:
 
@@ -132,6 +140,10 @@ npm test
 列車のMapbox・Three.js統合と、描画精度を保つためのローカル座標方式は
 [`docs/architecture/mapbox-three-train-rendering.md`](docs/architecture/mapbox-three-train-rendering.md)
 を参照してください。
+
+ビューワーの運行日は4:00始まりです。端末時刻またはAI指定時刻が0:00〜3:59の場合、
+表示時刻は前日運行日の24:00〜27:59として扱います。viewer-input自体の時刻補正は
+ビューワーでは行いません。
 
 AI運行観察員のユーザーインターフェース、許可する画面操作、今後のAPI接続境界は
 [`docs/architecture/ai-operations-guide.md`](docs/architecture/ai-operations-guide.md)
@@ -152,8 +164,10 @@ CloudFront Origin Access Controlで静的ビューワーを配信する。
 
 AI運行観察員は、CloudFrontからのみ呼べるLambda Function URLとAmazon Bedrock
 Nova Liteを使用する。列車検索は大容量入力を持つブラウザ側で実行し、Bedrockには
-最大5件の候補だけを返す。混雑履歴はDynamoDBの毎分サマリーから検索し、生S3
-アーカイブ全体をモデルへ送らない。AWS認証情報やMapboxトークンをTerraformファイル、
+最大5件の候補だけを返す。混雑履歴はDynamoDBの毎分サマリーをLambdaで時間別・列車別に
+集計し、ブラウザで路線・列車情報を付加してから上位結果だけをモデルへ返す。生S3
+アーカイブ全体はモデルへ送らない。遅延履歴もDynamoDBで決定的に集計し、時刻表で
+列車情報を付加した上位結果だけをBedrockへ渡す。AWS認証情報やMapboxトークンをTerraformファイル、
 tfvars、stateへ保存しない。
 
 GitHub ActionsはPull Requestとmainへのpushでテスト・ビルド・Terraform検証を行う。

@@ -5,6 +5,7 @@ export interface TrainPosition {
   serviceUid: string;
   trainNo: string;
   serviceType: string;
+  routeMeter: number;
   coordinate: Coordinate;
   bearingRadians: number;
 }
@@ -63,6 +64,7 @@ export function positionForTrain(
     serviceUid: train.service_uid,
     trainNo: train.train_no,
     serviceType: train.service_type,
+    routeMeter,
     coordinate: positionedCoordinate.coordinate,
     bearingRadians: positionedCoordinate.bearingRadians,
   };

@@ -3,12 +3,20 @@ export interface RouteTimeRange {
   maximum: number;
 }
 
+export const operatingDayStartMinutes = 4 * 60;
+
+export function operatingDayRouteTime(routeTimeMinutes: number): number {
+  return routeTimeMinutes >= 0 && routeTimeMinutes < operatingDayStartMinutes
+    ? routeTimeMinutes + 24 * 60
+    : routeTimeMinutes;
+}
+
 export function currentRouteTime(date: Date): number {
-  return (
+  return operatingDayRouteTime(
     date.getHours() * 60 +
-    date.getMinutes() +
-    date.getSeconds() / 60 +
-    date.getMilliseconds() / 60_000
+      date.getMinutes() +
+      date.getSeconds() / 60 +
+      date.getMilliseconds() / 60_000,
   );
 }
 

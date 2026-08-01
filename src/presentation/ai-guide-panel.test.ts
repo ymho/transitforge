@@ -6,9 +6,9 @@ describe("AI guide panel assistant text", () => {
   it("removes a thinking block while preserving the visible answer", () => {
     expect(
       visibleAssistantText(
-        "<thinking>\n候補を比較します。\n</thinking>\n模型モードに変更しました。",
+        "<thinking>\n候補を比較します。\n</thinking>\n天気を雨に変更しました。",
       ),
-    ).toBe("模型モードに変更しました。");
+    ).toBe("天気を雨に変更しました。");
   });
 
   it("does not display an unclosed thinking block", () => {
@@ -46,8 +46,8 @@ describe("AI guide panel assistant text", () => {
   });
 
   it("preserves a plain response from a model that does not use tags", () => {
-    expect(visibleAssistantText("模型モードに変更しました。")).toBe(
-      "模型モードに変更しました。",
+    expect(visibleAssistantText("天気を雨に変更しました。")).toBe(
+      "天気を雨に変更しました。",
     );
   });
 });

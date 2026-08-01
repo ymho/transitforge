@@ -5,7 +5,7 @@ GitHub Actionsのversioned configurationを正として作成している。
 
 ## AWSサービス構成
 
-閲覧、AI問い合わせ、JR西日本列車走行位置APIの1分収集、混雑履歴保存の
+閲覧、AI問い合わせ、JR西日本APIの混雑・遅延1分収集と履歴保存の
 実行時経路を示す。
 
 ![TransitForge AWSサービス構成](transitforge-aws-runtime.svg)

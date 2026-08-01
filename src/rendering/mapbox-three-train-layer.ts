@@ -24,6 +24,9 @@ const destinationArcHeightRatio = 0.16;
 const maximumDestinationArcHeightMeters = 30_000;
 const destinationArcEndpointHeightMeters = 8;
 const cloudyAtmosphereColor = new THREE.Color("#c8d0d5");
+const delayHaloColor = "#f59e0b";
+const delayHaloRadiusMeters = 10;
+const delayHaloOpacity = 0.26;
 
 export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   readonly id = "trains-3d";
@@ -35,6 +38,10 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   private scene?: THREE.Scene;
   private renderer?: THREE.WebGLRenderer;
   private trains?: THREE.InstancedMesh<THREE.BoxGeometry, THREE.MeshLambertMaterial>;
+  private delayHalos?: THREE.InstancedMesh<
+    THREE.SphereGeometry,
+    THREE.MeshBasicMaterial
+  >;
   private congestionBars?: THREE.InstancedMesh<
     THREE.BoxGeometry,
     THREE.MeshBasicMaterial
@@ -59,6 +66,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   private readonly displayedBearingByServiceUid = new Map<string, number>();
   private positions: TrainPosition[] = [];
   private congestionByTrainNumber: ReadonlyMap<string, number> = new Map();
+  private delayByTrainNumber: ReadonlyMap<string, number> = new Map();
   private congestionBarServiceUids: string[] = [];
   private congestionVisible = true;
   private destinationArcsVisible = false;
@@ -96,6 +104,22 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.trains.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.trains.frustumCulled = false;
     this.scene.add(this.trains);
+
+    this.delayHalos = new THREE.InstancedMesh(
+      new THREE.SphereGeometry(delayHaloRadiusMeters, 20, 12),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: delayHaloOpacity,
+        depthWrite: false,
+      }),
+      maximumTrainInstances,
+    );
+    this.delayHalos.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.delayHalos.frustumCulled = false;
+    this.delayHalos.count = 0;
+    this.delayHalos.renderOrder = 2;
+    this.scene.add(this.delayHalos);
 
     this.congestionBars = new THREE.InstancedMesh(
       new THREE.BoxGeometry(
@@ -181,6 +205,13 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.updateInstances();
   }
 
+  setDelayByTrainNumber(
+    delayByTrainNumber: ReadonlyMap<string, number>,
+  ): void {
+    this.delayByTrainNumber = delayByTrainNumber;
+    this.updateInstances();
+  }
+
   setCongestionVisible(visible: boolean): void {
     this.congestionVisible = visible;
     if (this.congestionBars) {
@@ -237,6 +268,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   private updateInstances(): void {
     if (
       !this.trains ||
+      !this.delayHalos ||
       !this.congestionBars ||
       !this.congestionBarHitTargets ||
       !this.map
@@ -251,6 +283,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     );
     const vehicleVisualScale = trainVisualScaleForZoom(this.map.getZoom());
     let congestionBarCount = 0;
+    let delayHaloCount = 0;
 
     for (const [index, layout] of visibleLayouts.entries()) {
       const { position } = layout;
@@ -307,6 +340,28 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
         this.colorFor(position.serviceUid).lerp(cloudyAtmosphereColor, hazeMix),
       );
 
+      const delayMinutes = this.delayByTrainNumber.get(position.trainNo);
+      if (delayMinutes !== undefined && delayMinutes > 0) {
+        // 球形の半透明ハローは地図の向きにかかわらず円形に見え、
+        // 列車本体のラインカラーを残したまま遅延を遠景でも判別できる。
+        this.instanceTransform.rotation.set(0, 0, 0);
+        this.instanceTransform.scale.setScalar(
+          metersToMercatorUnits * vehicleVisualScale,
+        );
+        this.instanceTransform.updateMatrix();
+        this.delayHalos.setMatrixAt(
+          delayHaloCount,
+          this.instanceTransform.matrix,
+        );
+        this.delayHalos.setColorAt(
+          delayHaloCount,
+          this.instanceColor
+            .set(delayHaloColor)
+            .lerp(cloudyAtmosphereColor, hazeMix),
+        );
+        delayHaloCount += 1;
+      }
+
       const congestion = this.congestionByTrainNumber.get(position.trainNo);
       if (congestion !== undefined) {
         const barHeightMeters = congestionBarHeightMeters(congestion);
@@ -353,6 +408,11 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.trains.instanceMatrix.needsUpdate = true;
     if (this.trains.instanceColor) {
       this.trains.instanceColor.needsUpdate = true;
+    }
+    this.delayHalos.count = delayHaloCount;
+    this.delayHalos.instanceMatrix.needsUpdate = true;
+    if (this.delayHalos.instanceColor) {
+      this.delayHalos.instanceColor.needsUpdate = true;
     }
     this.congestionBars.count = congestionBarCount;
     this.congestionBarServiceUids.length = congestionBarCount;
@@ -491,6 +551,8 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.map?.off("move", this.recenterWorldOrigin);
     this.trains?.geometry.dispose();
     this.trains?.material.dispose();
+    this.delayHalos?.geometry.dispose();
+    this.delayHalos?.material.dispose();
     this.congestionBars?.geometry.dispose();
     this.congestionBars?.material.dispose();
     this.congestionBarHitTargets?.geometry.dispose();

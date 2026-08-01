@@ -24,6 +24,7 @@ const position: TrainPosition = {
   serviceUid: train.service_uid,
   trainNo: train.train_no,
   serviceType: train.service_type,
+  routeMeter: 100,
   coordinate: [135.5, 34.7],
   bearingRadians: 0,
 };
@@ -99,9 +100,9 @@ describe("Bedrock viewer agent", () => {
         },
         focusTrain,
         setWeather: vi.fn(),
-        setSceneMode: vi.fn(),
         setLayerVisibility: vi.fn(),
-        queryDailyCongestionPeak: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(),
         maximumRouteTime: 1_800,
       },
       converse,
@@ -112,6 +113,53 @@ describe("Bedrock viewer agent", () => {
     expect(result).toContain("はるか16号");
     const thirdRequest = converse.mock.calls[2]?.[0];
     expect(JSON.stringify(thirdRequest)).toContain('"serviceUid":"service-1"');
+  });
+
+  it("treats a model-requested early-morning time as the previous operating day", async () => {
+    const setRouteTime = vi.fn();
+    const converse = vi
+      .fn()
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [
+            {
+              toolUse: {
+                toolUseId: "time",
+                name: "set_display_time",
+                input: { routeTimeMinutes: 30 },
+              },
+            },
+          ],
+        },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{ text: "表示時刻を24時30分に変更しました。" }],
+        },
+        stopReason: "end_turn",
+      });
+
+    await runBedrockViewerAgent(
+      "深夜の時間にして",
+      {
+        trains: [train],
+        getPositions: () => [position],
+        getRouteTime: () => 1_000,
+        setRouteTime,
+        focusTrain: vi.fn(),
+        setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(setRouteTime).toHaveBeenCalledWith(1_470);
   });
 
   it("does not focus a service identifier that was not returned by search", async () => {
@@ -150,9 +198,9 @@ describe("Bedrock viewer agent", () => {
         setRouteTime: vi.fn(),
         focusTrain,
         setWeather: vi.fn(),
-        setSceneMode: vi.fn(),
         setLayerVisibility: vi.fn(),
-        queryDailyCongestionPeak: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(),
         maximumRouteTime: 1_800,
       },
       converse,
@@ -162,17 +210,22 @@ describe("Bedrock viewer agent", () => {
   });
 
   it("queries the saved daily congestion peak requested by Bedrock", async () => {
-    const queryDailyPeak = vi.fn(async () => ({
+    const queryDailyAnalysis = vi.fn(async () => ({
       serviceDate: "2026-07-29",
       sampleCount: 64,
+      observationStart: "2026-07-29T00:00:00+00:00",
+      observationEnd: "2026-07-29T08:15:00+00:00",
       peak: {
         collectedAt: "2026-07-29T08:15:00+00:00",
-        sourceUpdatedAt: "2026-07-29T08:14:50+00:00",
         totalCongestion: 3_934,
         trainCount: 38,
         carCount: 291,
-        topTrains: [{ trainNumber: "1655H", totalCongestion: 240 }],
+        topTrains: [],
       },
+      hourly: [],
+      topLines: [],
+      topTrains: [],
+      unmatchedTrainCount: 0,
     }));
     const converse = vi
       .fn()
@@ -183,7 +236,7 @@ describe("Bedrock viewer agent", () => {
             {
               toolUse: {
                 toolUseId: "history",
-                name: "query_daily_congestion_peak",
+                name: "query_daily_congestion_analysis",
                 input: { serviceDate: "2026-07-29" },
               },
             },
@@ -208,16 +261,83 @@ describe("Bedrock viewer agent", () => {
         setRouteTime: vi.fn(),
         focusTrain: vi.fn(),
         setWeather: vi.fn(),
-        setSceneMode: vi.fn(),
         setLayerVisibility: vi.fn(),
-        queryDailyCongestionPeak: queryDailyPeak,
+        queryDailyCongestionAnalysis: queryDailyAnalysis,
+        queryTrainDelayAnalysis: vi.fn(),
         maximumRouteTime: 1_800,
       },
       converse,
     );
 
-    expect(queryDailyPeak).toHaveBeenCalledWith("2026-07-29");
+    expect(queryDailyAnalysis).toHaveBeenCalledWith("2026-07-29");
     expect(result).toContain("3,934");
+  });
+
+  it("queries saved train delays requested by Bedrock", async () => {
+    const queryTrainDelayAnalysis = vi.fn(async () => ({
+      serviceDate: "2026-07-29",
+      sampleCount: 60,
+      observationStart: "2026-07-29T08:00:00+00:00",
+      observationEnd: "2026-07-29T08:59:00+00:00",
+      latest: {
+        collectedAt: "2026-07-29T08:59:00+00:00",
+        sourceCount: 26,
+        failureCount: 0,
+        observedTrainCount: 300,
+        delayedTrainCount: 1,
+        totalDelayMinutes: 8,
+        maximumDelayMinutes: 8,
+        topTrains: [],
+      },
+      peak: null,
+      hourly: [],
+      topTrains: [],
+      unmatchedTrainCount: 0,
+    }));
+    const converse = vi
+      .fn()
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [
+            {
+              toolUse: {
+                toolUseId: "delays",
+                name: "query_train_delay_analysis",
+                input: { serviceDate: "2026-07-29" },
+              },
+            },
+          ],
+        },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{ text: "現在1本、最大8分の遅れです。" }],
+        },
+        stopReason: "end_turn",
+      });
+
+    const result = await runBedrockViewerAgent(
+      "現在遅れている列車は？",
+      {
+        trains: [train],
+        getPositions: () => [position],
+        getRouteTime: () => 1_100,
+        setRouteTime: vi.fn(),
+        focusTrain: vi.fn(),
+        setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis,
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(queryTrainDelayAnalysis).toHaveBeenCalledWith("2026-07-29");
+    expect(result).toContain("最大8分");
   });
 
   it("searches arrivals in a 30 minute window without changing display time", async () => {
@@ -259,9 +379,9 @@ describe("Bedrock viewer agent", () => {
         setRouteTime,
         focusTrain: vi.fn(),
         setWeather: vi.fn(),
-        setSceneMode: vi.fn(),
         setLayerVisibility: vi.fn(),
-        queryDailyCongestionPeak: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(),
         maximumRouteTime: 1_800,
       },
       converse,
@@ -277,9 +397,8 @@ describe("Bedrock viewer agent", () => {
     );
   });
 
-  it("changes weather, scene mode, and optional map layers", async () => {
+  it("changes weather and optional map layers", async () => {
     const setWeather = vi.fn();
-    const setSceneMode = vi.fn();
     const setLayerVisibility = vi.fn();
     const converse = vi
       .fn()
@@ -296,13 +415,6 @@ describe("Bedrock viewer agent", () => {
             },
             {
               toolUse: {
-                toolUseId: "scene",
-                name: "set_scene_mode",
-                input: { sceneMode: "model" },
-              },
-            },
-            {
-              toolUse: {
                 toolUseId: "layer",
                 name: "set_layer_visibility",
                 input: { layer: "destination_arcs", visible: true },
@@ -315,13 +427,13 @@ describe("Bedrock viewer agent", () => {
       .mockResolvedValueOnce({
         message: {
           role: "assistant",
-          content: [{ text: "雨の模型モードで目的地アーチを表示しました。" }],
+          content: [{ text: "雨にして目的地アーチを表示しました。" }],
         },
         stopReason: "end_turn",
       });
 
     const result = await runBedrockViewerAgent(
-      "雨の模型モードにして目的地アーチを表示して",
+      "雨にして目的地アーチを表示して",
       {
         trains: [train],
         getPositions: () => [position],
@@ -329,16 +441,15 @@ describe("Bedrock viewer agent", () => {
         setRouteTime: vi.fn(),
         focusTrain: vi.fn(),
         setWeather,
-        setSceneMode,
         setLayerVisibility,
-        queryDailyCongestionPeak: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(),
         maximumRouteTime: 1_800,
       },
       converse,
     );
 
     expect(setWeather).toHaveBeenCalledWith("rain");
-    expect(setSceneMode).toHaveBeenCalledWith("model");
     expect(setLayerVisibility).toHaveBeenCalledWith(
       "destination_arcs",
       true,
