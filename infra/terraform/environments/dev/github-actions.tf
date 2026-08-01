@@ -3,7 +3,7 @@ locals {
   github_environment                 = var.environment
   github_repository_sub              = "repo:${var.github_repository}:environment:${local.github_environment}"
   github_deploy_role                 = "${var.project_name}-${var.environment}-github-deploy"
-  data_builder_github_repository_sub = "repo:${var.data_builder_github_repository}:environment:${local.github_environment}"
+  data_builder_github_repository_sub = var.data_builder_github_oidc_subject
   data_builder_github_deploy_role    = "${var.project_name}-${var.environment}-data-builder-github-deploy"
 }
 
