@@ -2,13 +2,12 @@
 
 ## 1. 入力ファイル
 
-ビューワーが読み込むファイルは、次の3つです。
+ビューワーが読み込むファイルは、次の2つです。
 
 ```text
 viewer-input/
 ├─ train_index.json
-├─ path_catalog.json
-└─ station_line_catalog.json
+└─ path_catalog.json
 ```
 
 `train_index.json`と`path_catalog.json`は`transitforge-data-builder`が生成する
@@ -16,9 +15,8 @@ viewer-input/
 
 | ファイル | 内容 |
 |---|---|
-| `train_index.json` | ビューワーが使用する列車情報、停車時刻、経路参照ID |
+| `train_index.json` | 列車情報、停車時刻、経路参照ID、駅・路線所属カタログ |
 | `path_catalog.json` | 経路参照IDごとの座標列 |
-| `station_line_catalog.json` | 対象事業者についての路線、所属駅、駅代表座標 |
 
 - 文字コード：UTF-8
 - データ形式：JSON
@@ -50,6 +48,13 @@ path_catalog.json
 {
   "schema_version": "train-index-v1",
   "path_catalog": "path_catalog.json",
+  "service_date": "2026-07-12",
+  "timetable_kind": "weekend_holiday",
+  "station_line_catalog": {
+    "schema_version": "station-line-catalog-v1",
+    "source": "N02-25_Station.geojson",
+    "lines": []
+  },
   "trains": [
     {
       "service_uid": "JRW:20260712:782:始発駅:終着駅",
@@ -156,11 +161,10 @@ path_catalog.json
 [135.0000, 34.0000]
 ```
 
-## 6. `station_line_catalog.json`
+## 6. `station_line_catalog`
 
-`tools/build_station_line_catalog.py` が国土数値情報の
-`N02-25_Station.geojson` から生成する派生入力です。元GeoJSONは変更せず、
-生成物は他のローカル入力と同様にGit管理しません。
+`transitforge-data-builder`が国土数値情報の`N02-25_Station.geojson`から生成し、
+`train_index.json`へ内包する派生データです。独立したS3オブジェクトにはしません。
 
 ```json
 {
@@ -267,7 +271,7 @@ train_index.json
 path_catalog.json
   = 経路IDに対応する地図上の座標列
 
-station_line_catalog.json
+train_index.json.station_line_catalog
   = 対象事業者の路線、所属駅、駅代表座標
 ```
 
