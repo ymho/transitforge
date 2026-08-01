@@ -1,6 +1,23 @@
 import { describe, expect, it } from "vitest";
 
-import { visibleAssistantText } from "./ai-guide-panel";
+import {
+  shouldFocusAiGuideInputOnOpen,
+  visibleAssistantText,
+} from "./ai-guide-panel";
+
+describe("AI guide panel focus", () => {
+  it("does not focus the input when opened on a narrow viewport", () => {
+    expect(shouldFocusAiGuideInputOnOpen(390, false)).toBe(false);
+  });
+
+  it("does not focus the input on a coarse-pointer device", () => {
+    expect(shouldFocusAiGuideInputOnOpen(1024, true)).toBe(false);
+  });
+
+  it("focuses the input when opened on a desktop", () => {
+    expect(shouldFocusAiGuideInputOnOpen(1024, false)).toBe(true);
+  });
+});
 
 describe("AI guide panel assistant text", () => {
   it("removes a thinking block while preserving the visible answer", () => {
