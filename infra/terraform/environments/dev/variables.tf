@@ -49,7 +49,7 @@ variable "basic_auth_credentials_sha256" {
 }
 
 variable "bedrock_model_id" {
-  description = "AI運行観察員がConverse APIで使用するAmazon BedrockモデルID。"
+  description = "AI駅員がConverse APIで使用するAmazon BedrockモデルID。"
   type        = string
   default     = "amazon.nova-lite-v1:0"
 
