@@ -5,6 +5,7 @@ import {
   queryDailyCongestionAnalysis,
   queryDailyCongestionPeak,
   queryTrainDelayAnalysis,
+  searchRepresentativeTimetable,
   sha256Hex,
   type BedrockAgentResponse,
 } from "./bedrock-agent";
@@ -190,6 +191,52 @@ describe("Bedrock agent client", () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       operation: "train_delay_analysis",
       serviceDate: "2026-07-29",
+    });
+  });
+
+  it("searches a private representative timetable through the protected endpoint", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({
+        timetableKind: "weekday",
+        serviceDate: "2026-07-31",
+        mode: "arrivals",
+        targetTimeMinutes: 600,
+        totalMatchCount: 1,
+        matches: [
+          {
+            trainNumber: "101M",
+            serviceType: "特急",
+            trainName: "はるか16号",
+            origin: "関西空港",
+            destination: "京都",
+            matchingStops: [
+              {
+                stationName: "大阪",
+                event: "着",
+                routeTimeMinutes: 600,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const result = await searchRepresentativeTimetable(
+      {
+        timetableKind: "weekday",
+        query: "平日の10時ごろ大阪に着く特急",
+        mode: "arrivals",
+        targetTimeMinutes: 600,
+      },
+      fetcher,
+    );
+
+    expect(result.matches[0]?.trainNumber).toBe("101M");
+    const [, init] = fetcher.mock.calls[0] ?? [];
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      operation: "representative_timetable_search",
+      timetableKind: "weekday",
+      mode: "arrivals",
     });
   });
 });

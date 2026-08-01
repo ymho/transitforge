@@ -45,18 +45,17 @@ TransitForgeは次を実現する。
 
 ## 5. 入力データ
 
-初期版は、列車・経路の2ファイルと、国土数値情報からローカル生成した駅・路線カタログを読み込む。
+ビューワーは、列車・経路の2ファイルを読み込む。駅・路線所属は列車インデックスに内包する。
 
 ```text
 viewer-input/
 ├─ train_index.json
-├─ path_catalog.json
-└─ station_line_catalog.json
+└─ path_catalog.json
 ```
 
 入力形式の詳細は [`docs/data/viewer-input.md`](data/viewer-input.md) を正とする。
 
-TransitForgeの初期スコープには、これらのファイルを生成する処理は含めない。
+生成責務は`transitforge-data-builder`に置く。
 
 ## 6. 全量表示の定義
 
@@ -75,7 +74,7 @@ TransitForgeの初期スコープには、これらのファイルを生成す�
 - ローカル環境での起動。
 - Webアプリケーションとしての提供。
 - Mapboxを使用した、実在する建物を含む3D表示。
-- 3つの入力JSONの読み込み。
+- 2つの入力JSONの読み込み。
 - 必須項目とスキーマバージョンの最低限の検証。
 - `path_id` による列車と経路の結合。
 - 全経路を、その経路を使用する列車の代表的なラインカラーで表示。

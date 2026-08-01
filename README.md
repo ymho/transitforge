@@ -150,7 +150,8 @@ AWSサービス構成とGitHub ActionsからのOIDCデプロイ経路は
 のアーキテクチャ図を参照してください。
 
 `train_index.json`と`path_catalog.json`は、EventBridge Schedulerが毎日3:00（JST）に
-起動する`transitforge-data-builder`のECS Fargateタスクで全件再生成し、Web用S3の
+起動する`transitforge-data-builder`のECS Fargateタスクで全件再生成します。生成物は
+日付付き非公開領域へステージし、4:00の昇格タスクが当日分の2ファイルをWeb用S3の
 `viewer-input/`へ配置します。ECS基盤はdata-builderリポジトリのTerraformと
 GitHub Actionsが管理します。TransitForge側の接続設定は
 [`infra/terraform/environments/dev/README.md`](infra/terraform/environments/dev/README.md)
@@ -167,7 +168,8 @@ CloudFront Origin Access Controlで静的ビューワーを配信する。
 
 AI運行観察員は、CloudFrontからのみ呼べるLambda Function URLとAmazon Bedrock
 Nova Liteを使用する。列車検索は大容量入力を持つブラウザ側で実行し、Bedrockには
-最大5件の候補だけを返す。混雑履歴はDynamoDBの毎分サマリーをLambdaで時間別・列車別に
+最大5件の候補だけを返す。平日・土休日の代表ダイヤ検索はLambdaが非公開S3の固定2世代を
+検索し、同じく最大5件だけを返す。混雑履歴はDynamoDBの毎分サマリーをLambdaで時間別・列車別に
 集計し、ブラウザで路線・列車情報を付加してから上位結果だけをモデルへ返す。生S3
 アーカイブ全体はモデルへ送らない。遅延履歴もDynamoDBで決定的に集計し、時刻表で
 列車情報を付加した上位結果だけをBedrockへ渡す。AWS認証情報やMapboxトークンをTerraformファイル、
@@ -194,22 +196,6 @@ Run the measurement tool tests:
 ```bash
 python3 -m unittest discover -s tests -v
 ```
-
-### Station-to-line catalog
-
-Generate the compact local station-to-line catalog from the National Land
-Numerical Information station GeoJSON. The generated file stays under the
-Git-ignored `viewer-input/` directory.
-
-```bash
-python3 tools/build_station_line_catalog.py \
-  /path/to/N02-25_Station.geojson \
-  viewer-input/station_line_catalog.json
-```
-
-The generator limits the catalog to the railway operators used by the current
-train input, normalises known operator-name variants, and does not modify the
-source GeoJSON.
 
 Formatting and lint commands are not defined yet.
 

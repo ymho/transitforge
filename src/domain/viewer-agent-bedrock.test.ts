@@ -462,4 +462,79 @@ describe("Bedrock viewer agent", () => {
       "2026-07-30",
     );
   });
+
+  it("relays a representative timetable search without treating it as a focusable live train", async () => {
+    const searchRepresentativeTimetable = vi.fn(async () => ({
+      timetableKind: "weekday" as const,
+      serviceDate: "2026-07-31",
+      mode: "arrivals" as const,
+      targetTimeMinutes: 600,
+      totalMatchCount: 1,
+      matches: [
+        {
+          trainNumber: "101M",
+          serviceType: "特急",
+          trainName: "はるか16号",
+          origin: "関西空港",
+          destination: "京都",
+          matchingStops: [
+            { stationName: "大阪", event: "着", routeTimeMinutes: 600 },
+          ],
+        },
+      ],
+    }));
+    const converse = vi
+      .fn()
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{
+            toolUse: {
+              toolUseId: "representative",
+              name: "search_representative_timetable",
+              input: {
+                timetableKind: "weekday",
+                query: "平日の10時ごろ大阪に着く特急",
+                mode: "arrivals",
+                targetTimeMinutes: 600,
+              },
+            },
+          }],
+        },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{ text: "代表日の計画ダイヤでは、はるか16号があります。" }],
+        },
+        stopReason: "end_turn",
+      });
+
+    await runBedrockViewerAgent(
+      "平日の10時ごろ大阪に着く特急は？",
+      {
+        trains: [train],
+        getPositions: () => [position],
+        getRouteTime: () => 600,
+        setRouteTime: vi.fn(),
+        focusTrain: vi.fn(),
+        setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(),
+        searchRepresentativeTimetable,
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(searchRepresentativeTimetable).toHaveBeenCalledWith({
+      timetableKind: "weekday",
+      query: "平日の10時ごろ大阪に着く特急",
+      mode: "arrivals",
+      targetTimeMinutes: 600,
+      limit: 5,
+    });
+  });
 });

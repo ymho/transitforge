@@ -8,9 +8,13 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
+import representative_timetable
+
 MODEL_ID = os.environ.get("MODEL_ID", "amazon.nova-lite-v1:0")
 SUMMARY_TABLE = os.environ.get("SUMMARY_TABLE", "")
 DELAY_SUMMARY_TABLE = os.environ.get("DELAY_SUMMARY_TABLE", "")
+AI_TIMETABLE_BUCKET = os.environ.get("AI_TIMETABLE_BUCKET", "")
+AI_TIMETABLE_PREFIX = os.environ.get("AI_TIMETABLE_PREFIX", "ai-timetable")
 MAX_BODY_BYTES = 32 * 1024
 MAX_MESSAGES = 16
 MAX_CONTENT_BLOCKS = 12
@@ -27,6 +31,9 @@ focus_trainへ渡してください。時刻の変更はset_display_timeを使�
 指定時刻ごろに駅へ着く列車を尋ねられた場合はsearch_train_arrivalsを使ってください。
 この時刻は検索条件であり、画面の時刻変更も明示されない限りset_display_timeを
 呼ばないでください。到着検索は指定時刻の前後30分を対象にします。
+平日または土日祝の代表的なダイヤについて尋ねられた場合は
+search_representative_timetableを使ってください。この検索結果は代表日の計画ダイヤであり、
+現在の列車位置や運行実績ではありません。
 ツール結果にない列車や情報を推測しないでください。
 過去の混雑、ピーク、時間別推移、混雑した路線・列車について聞かれた場合は
 query_daily_congestion_analysisを使い、
@@ -137,6 +144,37 @@ TOOLS = [
                         },
                     },
                     "required": ["query", "targetTimeMinutes"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "search_representative_timetable",
+            "description": (
+                "非公開S3に保持した平日または土日祝の代表ダイヤから、"
+                "列車、到着、出発を検索します。現在の運行状況ではありません。"
+            ),
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "timetableKind": {
+                            "type": "string",
+                            "enum": ["weekday", "weekend_holiday"],
+                        },
+                        "query": {"type": "string"},
+                        "mode": {
+                            "type": "string",
+                            "enum": ["active", "arrivals", "departures"],
+                        },
+                        "targetTimeMinutes": {
+                            "type": "number",
+                            "description": "0時からの分数。25時は1500。省略時は時刻で絞りません。",
+                        },
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 5},
+                    },
+                    "required": ["timetableKind", "query", "mode"],
                 }
             },
         }
@@ -860,6 +898,16 @@ def average_for_response(total: Decimal, count: int) -> int | float:
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     try:
         value = request_value(event)
+        if value.get("operation") == "representative_timetable_search":
+            import boto3
+
+            try:
+                result = representative_timetable.search(
+                    boto3.client("s3"), AI_TIMETABLE_BUCKET, AI_TIMETABLE_PREFIX, value
+                )
+            except representative_timetable.TimetableSearchError as error:
+                raise RequestError(400, str(error)) from error
+            return response(200, result)
         if value.get("operation") in {
             "daily_congestion_analysis",
             "daily_congestion_peak",
