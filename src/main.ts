@@ -23,6 +23,10 @@ import {
   searchRepresentativeTimetable,
 } from "./data/bedrock-agent";
 import { loadTrainIndex, type Train } from "./data/train-index";
+import type { StationCoordinate } from "./data/station-line-catalog";
+import {
+  nearestDirectOrigin, searchDirectRoutes, stationNamesFromCatalog,
+} from "./domain/direct-route-search";
 import {
   dateForOperatingRouteTime,
   operatingServiceDateStart,
@@ -67,6 +71,10 @@ import {
   configureAiGuidePanel,
   type AiGuidePromptHandler,
 } from "./presentation/ai-guide-panel";
+import {
+  configureRouteSearchPanel,
+  type RouteSearchHandler,
+} from "./presentation/route-search-panel";
 import { timetableProgressRowsFor } from "./presentation/train-timetable";
 import { trainTitleFor } from "./presentation/train-title";
 import { MapboxThreeTrainLayer } from "./rendering/mapbox-three-train-layer";
@@ -128,6 +136,17 @@ const aiGuideSubmit =
 const aiGuideSuggestions = Array.from(
   document.querySelectorAll<HTMLButtonElement>("[data-prompt]"),
 );
+const routeSearchPanel = document.querySelector<HTMLElement>("#route-search-panel");
+const routeSearchToggle = document.querySelector<HTMLButtonElement>("#route-search-toggle");
+const closeRouteSearch = document.querySelector<HTMLButtonElement>("#close-route-search");
+const routeSearchForm = document.querySelector<HTMLFormElement>("#route-search-form");
+const routeOrigin = document.querySelector<HTMLInputElement>("#route-origin");
+const routeDestination = document.querySelector<HTMLInputElement>("#route-destination");
+const routeDepartureTime = document.querySelector<HTMLInputElement>("#route-departure-time");
+const routeSearchSubmit = document.querySelector<HTMLButtonElement>("#route-search-submit");
+const routeSearchStatus = document.querySelector<HTMLElement>("#route-search-status");
+const routeSearchResults = document.querySelector<HTMLOListElement>("#route-search-results");
+const routeStations = document.querySelector<HTMLDataListElement>("#route-stations");
 const trainDetails = document.querySelector<HTMLElement>("#train-details");
 const closeTrainDetails = document.querySelector<HTMLButtonElement>("#close-train-details");
 const selectedTrainTitle = document.querySelector<HTMLElement>("#selected-train-title");
@@ -168,6 +187,17 @@ if (
   aiGuideInput === null ||
   aiGuideSubmit === null ||
   aiGuideSuggestions.length === 0 ||
+  routeSearchPanel === null ||
+  routeSearchToggle === null ||
+  closeRouteSearch === null ||
+  routeSearchForm === null ||
+  routeOrigin === null ||
+  routeDestination === null ||
+  routeDepartureTime === null ||
+  routeSearchSubmit === null ||
+  routeSearchStatus === null ||
+  routeSearchResults === null ||
+  routeStations === null ||
   trainDetails === null ||
   closeTrainDetails === null ||
   selectedTrainTitle === null ||
@@ -408,6 +438,72 @@ if (!token) {
           logMetrics();
         };
 
+        const searchRoutes: RouteSearchHandler = async (request) => {
+          let originStation = request.originStation;
+          let distanceMeters: number | undefined;
+          if (!originStation) {
+            const coordinate = await currentBrowserCoordinate();
+            const nearest = nearestDirectOrigin(
+              trainIndex.trains,
+              stationLineCatalog,
+              request.destinationStation,
+              request.departureTimeMinutes,
+              coordinate,
+            );
+            if (!nearest) {
+              throw new Error(
+                "現在地の近くから行き先へ直通する駅が見つかりません。出発駅を入力してください。",
+              );
+            }
+            originStation = nearest.stationName;
+            distanceMeters = nearest.distanceMeters;
+          }
+          return {
+            originStation,
+            ...(distanceMeters === undefined ? {} : { distanceMeters }),
+            results: searchDirectRoutes(
+              trainIndex.trains,
+              originStation,
+              request.destinationStation,
+              request.departureTimeMinutes,
+            ),
+          };
+        };
+        const routePanel = configureRouteSearchPanel(
+          {
+            panel: routeSearchPanel,
+            toggle: routeSearchToggle,
+            close: closeRouteSearch,
+            form: routeSearchForm,
+            origin: routeOrigin,
+            destination: routeDestination,
+            departureTime: routeDepartureTime,
+            submit: routeSearchSubmit,
+            status: routeSearchStatus,
+            results: routeSearchResults,
+            stations: routeStations,
+          },
+          stationNamesFromCatalog(stationLineCatalog),
+          () => Number(displayTime.value),
+          searchRoutes,
+          (result) => {
+            displayTime.value = String(result.departureTimeMinutes);
+            updateTrains(result.departureTimeMinutes);
+            selection.focusTrain(result.train.service_uid);
+            routePanel.close();
+          },
+        );
+        routeSearchToggle.disabled = false;
+        routeSearchToggle.addEventListener("click", () => {
+          if (routeSearchToggle.ariaExpanded === "true") {
+            aiGuidePanel.hidden = true;
+            aiGuideToggle.ariaExpanded = "false";
+          }
+        });
+        aiGuideToggle.addEventListener("click", () => {
+          if (aiGuideToggle.ariaExpanded === "true") routePanel.close();
+        });
+
         configureTrainDelayUpdates((delays) => {
           threeTrainLayer.setDelayByTrainNumber(delays);
           selection.updateDelays(delays);
@@ -473,6 +569,7 @@ if (!token) {
                     trainIndex.trains,
                   ),
                 searchRepresentativeTimetable,
+                searchDirectRoutes: searchRoutes,
                 maximumRouteTime,
               },
               invokeBedrockAgent,
@@ -518,6 +615,33 @@ if (!token) {
   map.on("error", (event) => {
     status.hidden = false;
     status.textContent = `地図の読み込みに失敗しました: ${event.error.message}`;
+  });
+}
+
+function currentBrowserCoordinate(): Promise<StationCoordinate> {
+  if (!("geolocation" in navigator)) {
+    return Promise.reject(
+      new Error("この端末では現在地を取得できません。出発駅を入力してください。"),
+    );
+  }
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve([
+        position.coords.longitude,
+        position.coords.latitude,
+      ]),
+      (error) => {
+        const message = error.code === error.PERMISSION_DENIED
+          ? "現在地の利用が許可されていません。出発駅を入力するか、位置情報を許可してください。"
+          : "現在地を取得できませんでした。出発駅を入力してください。";
+        reject(new Error(message));
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 10_000,
+        maximumAge: 5 * 60_000,
+      },
+    );
   });
 }
 

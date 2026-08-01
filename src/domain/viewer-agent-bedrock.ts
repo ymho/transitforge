@@ -13,6 +13,7 @@ import type { DelayAnalysisForAgent } from "./delay-analysis";
 import type { WeatherMode } from "./map-weather";
 import { operatingDayRouteTime } from "./playback";
 import type { TrainPosition } from "./train-position";
+import type { RouteSearchResponse } from "../presentation/route-search-panel";
 import {
   parseViewerAgentActions,
   type ViewerAgentLayer,
@@ -45,6 +46,11 @@ export interface BedrockViewerAgentDependencies {
     targetTimeMinutes?: number;
     limit?: number;
   }) => Promise<RepresentativeTimetableSearchResponse>;
+  searchDirectRoutes?: (request: {
+    originStation?: string;
+    destinationStation: string;
+    departureTimeMinutes: number;
+  }) => Promise<RouteSearchResponse>;
   maximumRouteTime: number;
 }
 
@@ -73,6 +79,7 @@ export async function runBedrockViewerAgent(
     },
   ];
   const searchableServiceUids = new Set<string>();
+  const directRouteServiceUids = new Set<string>();
 
   for (let round = 0; round < maximumToolRounds; round += 1) {
     const response = await converse(messages);
@@ -97,6 +104,7 @@ export async function runBedrockViewerAgent(
           prompt,
           dependencies,
           searchableServiceUids,
+          directRouteServiceUids,
         );
         toolResults.push({
           toolResult: {
@@ -136,6 +144,7 @@ async function executeTool(
   originalPrompt: string,
   dependencies: BedrockViewerAgentDependencies,
   searchableServiceUids: Set<string>,
+  directRouteServiceUids: Set<string>,
 ): Promise<unknown> {
   if (name === "set_display_time") {
     const requestedTime = input.routeTimeMinutes;
@@ -237,11 +246,52 @@ async function executeTool(
     };
   }
 
+  if (name === "search_direct_routes") {
+    const { originStation, destinationStation, departureTimeMinutes } = input;
+    if (
+      (originStation !== undefined && typeof originStation !== "string") ||
+      typeof destinationStation !== "string" ||
+      destinationStation.trim().length === 0 ||
+      typeof departureTimeMinutes !== "number" ||
+      !Number.isFinite(departureTimeMinutes) ||
+      !dependencies.searchDirectRoutes
+    ) {
+      throw new Error("直通経路の検索条件が不正です。");
+    }
+    const response = await dependencies.searchDirectRoutes({
+      ...(typeof originStation === "string" && originStation.trim()
+        ? { originStation: originStation.trim() }
+        : {}),
+      destinationStation: destinationStation.trim(),
+      departureTimeMinutes,
+    });
+    for (const result of response.results) {
+      directRouteServiceUids.add(result.train.service_uid);
+    }
+    return {
+      originStation: response.originStation,
+      ...(response.distanceMeters === undefined
+        ? {}
+        : { distanceMeters: Math.round(response.distanceMeters) }),
+      matches: response.results.map((result) => ({
+        serviceUid: result.train.service_uid,
+        trainNumber: result.train.train_no,
+        serviceType: result.train.service_type,
+        trainName: result.train.train_name,
+        originStation: result.originStation,
+        destinationStation: result.destinationStation,
+        departureTimeMinutes: result.departureTimeMinutes,
+        arrivalTimeMinutes: result.arrivalTimeMinutes,
+      })),
+    };
+  }
+
   if (name === "focus_train") {
     const serviceUid = input.serviceUid;
     if (
       typeof serviceUid !== "string" ||
-      !searchableServiceUids.has(serviceUid)
+      (!searchableServiceUids.has(serviceUid) &&
+        !directRouteServiceUids.has(serviceUid))
     ) {
       throw new Error("検索結果に含まれない列車は選択できません。");
     }

@@ -37,7 +37,7 @@
         <mxCell id="web-s3" value="Amazon S3&#xa;静的Web・viewer-input&#xa;最新混雑・遅延JSON" style="shape=mxgraph.aws4.s3;html=1;fillColor=#7AA116;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="app-zone">
           <mxGeometry x="55" y="100" width="80" height="80" as="geometry"/>
         </mxCell>
-        <mxCell id="agent-lambda" value="AWS Lambda&#xa;AI運行観察員&#xa;Function URL (IAM)" style="shape=mxgraph.aws4.lambda;html=1;fillColor=#ED7100;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="app-zone">
+        <mxCell id="agent-lambda" value="AWS Lambda&#xa;AI駅員&#xa;Function URL (IAM)" style="shape=mxgraph.aws4.lambda;html=1;fillColor=#ED7100;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="app-zone">
           <mxGeometry x="285" y="100" width="80" height="80" as="geometry"/>
         </mxCell>
         <mxCell id="bedrock" value="Amazon Bedrock&#xa;Nova Lite / Converse API" style="shape=mxgraph.aws4.bedrock;html=1;fillColor=#01A88D;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="app-zone">

@@ -104,6 +104,7 @@ class BedrockAgentTest(unittest.TestCase):
                 "set_display_time",
                 "search_trains",
                 "query_daily_congestion_analysis",
+                "search_direct_routes",
                 "search_train_arrivals",
                 "search_representative_timetable",
                 "query_train_delay_analysis",

@@ -14,7 +14,7 @@ output "viewer_url" {
 }
 
 output "bedrock_agent_function_name" {
-  description = "Amazon Bedrockを呼び出すAI運行観察員Lambdaの関数名。"
+  description = "Amazon Bedrockを呼び出すAI駅員Lambdaの関数名。"
   value       = aws_lambda_function.bedrock_agent.function_name
 }
 
