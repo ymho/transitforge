@@ -121,6 +121,32 @@ export interface TrainDelayAnalysisResponse {
   trainStats: TrainDelayStat[];
 }
 
+export type RepresentativeTimetableKind = "weekday" | "weekend_holiday";
+export type RepresentativeTimetableSearchMode =
+  | "active"
+  | "arrivals"
+  | "departures";
+
+export interface RepresentativeTimetableSearchResponse {
+  timetableKind: RepresentativeTimetableKind;
+  serviceDate: string;
+  mode: RepresentativeTimetableSearchMode;
+  targetTimeMinutes: number | null;
+  totalMatchCount: number;
+  matches: Array<{
+    trainNumber: string;
+    serviceType: string;
+    trainName: string;
+    origin: string;
+    destination: string;
+    matchingStops: Array<{
+      stationName: string;
+      event: string;
+      routeTimeMinutes: number;
+    }>;
+  }>;
+}
+
 export async function invokeBedrockAgent(
   messages: BedrockAgentMessage[],
   fetcher: typeof fetch = fetch,
@@ -221,6 +247,38 @@ export async function queryTrainDelayAnalysis(
   const value: unknown = await response.json();
   if (!isTrainDelayAnalysisResponse(value)) {
     throw new Error("列車遅延分析APIから不正な応答を受信しました。");
+  }
+  return value;
+}
+
+export async function searchRepresentativeTimetable(
+  request: {
+    timetableKind: RepresentativeTimetableKind;
+    query: string;
+    mode: RepresentativeTimetableSearchMode;
+    targetTimeMinutes?: number;
+    limit?: number;
+  },
+  fetcher: typeof fetch = fetch,
+): Promise<RepresentativeTimetableSearchResponse> {
+  const body = JSON.stringify({
+    operation: "representative_timetable_search",
+    ...request,
+  });
+  const response = await fetcher("/api/agent", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Amz-Content-Sha256": await sha256Hex(body),
+    },
+    body,
+  });
+  if (!response.ok) {
+    throw new Error(`代表ダイヤを検索できません (${response.status})。`);
+  }
+  const value: unknown = await response.json();
+  if (!isRepresentativeTimetableSearchResponse(value)) {
+    throw new Error("代表ダイヤAPIから不正な応答を受信しました。");
   }
   return value;
 }
@@ -352,6 +410,42 @@ function isTrainDelayAnalysisResponse(
     value.hourly.every(isHourlyTrainDelayAnalysis) &&
     Array.isArray(value.trainStats) &&
     value.trainStats.every(isTrainDelayStat)
+  );
+}
+
+function isRepresentativeTimetableSearchResponse(
+  value: unknown,
+): value is RepresentativeTimetableSearchResponse {
+  return (
+    isRecord(value) &&
+    (value.timetableKind === "weekday" ||
+      value.timetableKind === "weekend_holiday") &&
+    typeof value.serviceDate === "string" &&
+    (value.mode === "active" ||
+      value.mode === "arrivals" ||
+      value.mode === "departures") &&
+    (value.targetTimeMinutes === null ||
+      isNonNegativeNumber(value.targetTimeMinutes)) &&
+    isNonNegativeInteger(value.totalMatchCount) &&
+    Array.isArray(value.matches) &&
+    value.matches.length <= 5 &&
+    value.matches.every(
+      (match) =>
+        isRecord(match) &&
+        typeof match.trainNumber === "string" &&
+        typeof match.serviceType === "string" &&
+        typeof match.trainName === "string" &&
+        typeof match.origin === "string" &&
+        typeof match.destination === "string" &&
+        Array.isArray(match.matchingStops) &&
+        match.matchingStops.every(
+          (stop) =>
+            isRecord(stop) &&
+            typeof stop.stationName === "string" &&
+            typeof stop.event === "string" &&
+            isNonNegativeNumber(stop.routeTimeMinutes),
+        ),
+    )
   );
 }
 

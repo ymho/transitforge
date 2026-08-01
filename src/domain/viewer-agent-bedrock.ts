@@ -3,6 +3,9 @@ import type {
   BedrockAgentMessage,
   BedrockAgentResponse,
   BedrockAgentToolResultBlock,
+  RepresentativeTimetableSearchMode,
+  RepresentativeTimetableSearchResponse,
+  RepresentativeTimetableKind,
 } from "../data/bedrock-agent";
 import type { Train } from "../data/train-index";
 import type { CongestionAnalysisForAgent } from "./congestion-analysis";
@@ -35,6 +38,13 @@ export interface BedrockViewerAgentDependencies {
   queryTrainDelayAnalysis: (
     serviceDate: string,
   ) => Promise<DelayAnalysisForAgent>;
+  searchRepresentativeTimetable?: (request: {
+    timetableKind: RepresentativeTimetableKind;
+    query: string;
+    mode: RepresentativeTimetableSearchMode;
+    targetTimeMinutes?: number;
+    limit?: number;
+  }) => Promise<RepresentativeTimetableSearchResponse>;
   maximumRouteTime: number;
 }
 
@@ -268,6 +278,34 @@ async function executeTool(
       throw new Error("列車遅延の日付が不正です。");
     }
     return dependencies.queryTrainDelayAnalysis(serviceDate);
+  }
+
+  if (name === "search_representative_timetable") {
+    const { timetableKind, query, mode, targetTimeMinutes } = input;
+    if (
+      (timetableKind !== "weekday" &&
+        timetableKind !== "weekend_holiday") ||
+      typeof query !== "string" ||
+      query.trim().length === 0 ||
+      (mode !== "active" && mode !== "arrivals" && mode !== "departures") ||
+      (targetTimeMinutes !== undefined &&
+        (typeof targetTimeMinutes !== "number" ||
+          !Number.isFinite(targetTimeMinutes))) ||
+      !dependencies.searchRepresentativeTimetable
+    ) {
+      throw new Error("代表ダイヤの検索条件が不正です。");
+    }
+    const requestedLimit =
+      typeof input.limit === "number" && Number.isInteger(input.limit)
+        ? input.limit
+        : 5;
+    return dependencies.searchRepresentativeTimetable({
+      timetableKind,
+      query,
+      mode,
+      ...(targetTimeMinutes === undefined ? {} : { targetTimeMinutes }),
+      limit: Math.max(1, Math.min(5, requestedLimit)),
+    });
   }
 
   if (name === "set_weather") {

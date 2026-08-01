@@ -17,22 +17,7 @@ export interface StationLineCatalog {
   lines: StationLineCatalogLine[];
 }
 
-export async function loadStationLineCatalog(): Promise<StationLineCatalog> {
-  const response = await fetch("/viewer-input/station_line_catalog.json");
-
-  if (!response.ok) {
-    throw new Error(`駅・路線カタログを読み込めませんでした (${response.status})。`);
-  }
-
-  const catalog: unknown = await response.json();
-  if (!isStationLineCatalog(catalog)) {
-    throw new Error("駅・路線カタログの形式またはスキーマバージョンが不正です。");
-  }
-
-  return catalog;
-}
-
-function isStationLineCatalog(value: unknown): value is StationLineCatalog {
+export function isStationLineCatalog(value: unknown): value is StationLineCatalog {
   return (
     isRecord(value) &&
     value.schema_version === "station-line-catalog-v1" &&
@@ -40,6 +25,14 @@ function isStationLineCatalog(value: unknown): value is StationLineCatalog {
     Array.isArray(value.lines) &&
     value.lines.every(isStationLineCatalogLine)
   );
+}
+
+export function emptyStationLineCatalog(): StationLineCatalog {
+  return {
+    schema_version: "station-line-catalog-v1",
+    source: "unavailable",
+    lines: [],
+  };
 }
 
 function isStationLineCatalogLine(value: unknown): value is StationLineCatalogLine {

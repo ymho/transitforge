@@ -1,3 +1,8 @@
+import {
+  isStationLineCatalog,
+  type StationLineCatalog,
+} from "./station-line-catalog";
+
 export interface TrainStop {
   station_name?: string;
   event?: string;
@@ -21,6 +26,9 @@ export interface Train {
 export interface TrainIndex {
   schema_version: "train-index-v1";
   path_catalog: string;
+  service_date?: string;
+  timetable_kind?: "weekday" | "weekend_holiday";
+  station_line_catalog?: StationLineCatalog;
   trains: Train[];
 }
 
@@ -45,6 +53,14 @@ function isTrainIndex(value: unknown): value is TrainIndex {
     isRecord(value) &&
     value.schema_version === "train-index-v1" &&
     typeof value.path_catalog === "string" &&
+    (value.service_date === undefined ||
+      (typeof value.service_date === "string" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(value.service_date))) &&
+    (value.timetable_kind === undefined ||
+      value.timetable_kind === "weekday" ||
+      value.timetable_kind === "weekend_holiday") &&
+    (value.station_line_catalog === undefined ||
+      isStationLineCatalog(value.station_line_catalog)) &&
     Array.isArray(value.trains) &&
     value.trains.every(isTrain)
   );

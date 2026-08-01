@@ -1,6 +1,6 @@
 # ADR 0004: 国土数値情報から駅・路線カタログをローカル生成する
 
-- ステータス: Accepted
+- ステータス: Superseded by ADR 0010
 - 日付: 2026-07-28
 - 決定者: TransitForge開発者
 
