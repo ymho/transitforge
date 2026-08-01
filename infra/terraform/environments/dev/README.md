@@ -5,6 +5,8 @@ EventBridge SchedulerとLambdaは収録事業者の列車混雑情報を1分間�
 最新値と分析用の時系列アーカイブをS3へ保存し、日別検索用の毎分サマリーを
 DynamoDBへ保存する。AI運行観察員はCloudFrontからのみ
 呼び出せるLambda Function URLを通じてAmazon Bedrock Nova Liteを使用する。
+列車遅延は別のSchedulerとLambdaが、重複排除した26個の走行位置JSONを1分間隔で
+各1回だけ取得し、最新値、S3履歴、DynamoDB毎分サマリーを保存する。
 
 ## 初期化
 
@@ -102,8 +104,16 @@ GitHub environmentの必須レビュアーやmainのbranch protectionを設定�
 - 重複取得防止: 分単位のS3条件付き書き込み
 - 分析索引: DynamoDBの
   `serviceDate (JST日付) + collectedAt (UTC収集時刻)`
-- 分析値: 全列車合計、列車数、車両数、列車番号別合計
+- 保存分析値: 全列車合計、列車数、車両数、列車番号別合計
+- 問い合わせ時集計: 日次ピーク、JST時間別平均・ピーク、列車別平均・ピーク、
+  ブラウザで付加する行き先側路線・種別・列車名・行き先
 - DynamoDB TTL: S3と同じ既定730日
+
+列車遅延の最新統合値はWeb用S3の`api/traffic/delays.json`、全取得結果は専用の
+非公開遅延アーカイブS3へ保存する。遅延収集はScheduler再試行0回、Lambda予約済み
+同時実行数1、分単位S3条件付きclaimを併用し、1実行で各URLを最大1回だけ取得する。
+同じ列車番号が複数URLにある場合は最大遅延分を採用する。遅延DynamoDBには観測列車数、
+遅延列車数、遅延分合計・最大、列車番号別遅延分を1分1項目で保存する。
 
 取得に失敗した回は保存せず、次の1分実行まで待つ。利用者数が増えても上流アクセス数は
 増えない。保持期間は `train_monitor_archive_retention_days` で30〜3650日に変更できる。

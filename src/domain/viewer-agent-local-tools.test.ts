@@ -28,6 +28,7 @@ const positions: TrainPosition[] = trains.map((item, index) => ({
   serviceUid: item.service_uid,
   trainNo: item.train_no,
   serviceType: item.service_type,
+  routeMeter: index * 100,
   coordinate: [135 + index, 34],
   bearingRadians: 0,
 }));
@@ -36,6 +37,9 @@ describe("viewer agent local tools", () => {
   it("extracts Japanese and colon display times", () => {
     expect(routeTimeFromPrompt("18時30分にして")).toBe(1_110);
     expect(routeTimeFromPrompt("表示を 25:05 にして")).toBe(1_505);
+    expect(routeTimeFromPrompt("0時30分にして")).toBe(1_470);
+    expect(routeTimeFromPrompt("03:59にして")).toBe(1_679);
+    expect(routeTimeFromPrompt("4時にして")).toBe(240);
     expect(routeTimeFromPrompt("18時99分")).toBeUndefined();
   });
 
@@ -111,10 +115,10 @@ describe("viewer agent local tools", () => {
     ]);
     expect(
       localViewerControlActionsFromPrompt(
-        "模型モードにして目的地アーチを表示して",
+        "雨にして目的地アーチを表示して",
       ),
     ).toEqual([
-      { type: "set_scene_mode", sceneMode: "model" },
+      { type: "set_weather", weather: "rain" },
       {
         type: "set_layer_visibility",
         layer: "destination_arcs",

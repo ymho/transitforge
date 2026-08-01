@@ -34,7 +34,7 @@
         <mxCell id="cloudfront" value="Amazon CloudFront&#xa;単一公開入口" style="shape=mxgraph.aws4.cloudfront;html=1;fillColor=#8C4FFF;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=13;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="edge-zone">
           <mxGeometry x="250" y="125" width="80" height="80" as="geometry"/>
         </mxCell>
-        <mxCell id="web-s3" value="Amazon S3&#xa;静的Web・viewer-input&#xa;最新混雑JSON" style="shape=mxgraph.aws4.s3;html=1;fillColor=#7AA116;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="app-zone">
+        <mxCell id="web-s3" value="Amazon S3&#xa;静的Web・viewer-input&#xa;最新混雑・遅延JSON" style="shape=mxgraph.aws4.s3;html=1;fillColor=#7AA116;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="app-zone">
           <mxGeometry x="55" y="100" width="80" height="80" as="geometry"/>
         </mxCell>
         <mxCell id="agent-lambda" value="AWS Lambda&#xa;AI運行観察員&#xa;Function URL (IAM)" style="shape=mxgraph.aws4.lambda;html=1;fillColor=#ED7100;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="app-zone">
@@ -43,16 +43,16 @@
         <mxCell id="bedrock" value="Amazon Bedrock&#xa;Nova Lite / Converse API" style="shape=mxgraph.aws4.bedrock;html=1;fillColor=#01A88D;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="app-zone">
           <mxGeometry x="520" y="55" width="80" height="80" as="geometry"/>
         </mxCell>
-        <mxCell id="scheduler" value="Amazon EventBridge&#xa;Scheduler&#xa;rate(1 minute)" style="shape=mxgraph.aws4.eventbridge_scheduler;html=1;fillColor=#E7157B;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="ingestion-zone">
+        <mxCell id="scheduler" value="Amazon EventBridge&#xa;Scheduler × 2&#xa;各rate(1 minute)" style="shape=mxgraph.aws4.eventbridge_scheduler;html=1;fillColor=#E7157B;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="ingestion-zone">
           <mxGeometry x="55" y="35" width="80" height="80" as="geometry"/>
         </mxCell>
-        <mxCell id="collector" value="AWS Lambda&#xa;運行情報コレクター&#xa;Python 3.12 / arm64" style="shape=mxgraph.aws4.lambda;html=1;fillColor=#ED7100;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="ingestion-zone">
+        <mxCell id="collector" value="AWS Lambda × 2&#xa;混雑・遅延コレクター&#xa;Python 3.12 / arm64" style="shape=mxgraph.aws4.lambda;html=1;fillColor=#ED7100;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="ingestion-zone">
           <mxGeometry x="330" y="115" width="80" height="80" as="geometry"/>
         </mxCell>
-        <mxCell id="archive-s3" value="Amazon S3&#xa;非公開アーカイブ&#xa;raw/*.json.gz / 730日" style="shape=mxgraph.aws4.s3;html=1;fillColor=#7AA116;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="ingestion-zone">
+        <mxCell id="archive-s3" value="Amazon S3 × 2&#xa;混雑・遅延アーカイブ&#xa;raw/*.json.gz / 730日" style="shape=mxgraph.aws4.s3;html=1;fillColor=#7AA116;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="ingestion-zone">
           <mxGeometry x="620" y="70" width="80" height="80" as="geometry"/>
         </mxCell>
-        <mxCell id="ingestion-ddb" value="Amazon DynamoDB&#xa;毎分混雑サマリー&#xa;日別ピーク検索 / TTL 730日" style="shape=mxgraph.aws4.dynamodb;html=1;fillColor=#C925D1;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="ingestion-zone">
+        <mxCell id="ingestion-ddb" value="Amazon DynamoDB × 2&#xa;毎分混雑・遅延サマリー&#xa;日次・時間別分析 / TTL 730日" style="shape=mxgraph.aws4.dynamodb;html=1;fillColor=#C925D1;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="ingestion-zone">
           <mxGeometry x="790" y="185" width="80" height="80" as="geometry"/>
         </mxCell>
         <mxCell id="cloudwatch" value="Amazon CloudWatch Logs&#xa;Lambdaログ / 30日" style="shape=mxgraph.aws4.cloudwatch;html=1;fillColor=#E7157B;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="ingestion-zone">

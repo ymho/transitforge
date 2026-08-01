@@ -3,11 +3,12 @@ import type {
   BedrockAgentMessage,
   BedrockAgentResponse,
   BedrockAgentToolResultBlock,
-  DailyCongestionPeakResponse,
 } from "../data/bedrock-agent";
 import type { Train } from "../data/train-index";
-import type { SceneMode } from "./map-scene-mode";
+import type { CongestionAnalysisForAgent } from "./congestion-analysis";
+import type { DelayAnalysisForAgent } from "./delay-analysis";
 import type { WeatherMode } from "./map-weather";
+import { operatingDayRouteTime } from "./playback";
 import type { TrainPosition } from "./train-position";
 import {
   parseViewerAgentActions,
@@ -27,11 +28,13 @@ export interface BedrockViewerAgentDependencies {
   setRouteTime: (routeTimeMinutes: number) => void;
   focusTrain: (serviceUid: string) => boolean;
   setWeather: (weather: WeatherMode) => void;
-  setSceneMode: (mode: SceneMode) => void;
   setLayerVisibility: (layer: ViewerAgentLayer, visible: boolean) => void;
-  queryDailyCongestionPeak: (
+  queryDailyCongestionAnalysis: (
     serviceDate: string,
-  ) => Promise<DailyCongestionPeakResponse>;
+  ) => Promise<CongestionAnalysisForAgent>;
+  queryTrainDelayAnalysis: (
+    serviceDate: string,
+  ) => Promise<DelayAnalysisForAgent>;
   maximumRouteTime: number;
 }
 
@@ -131,7 +134,9 @@ async function executeTool(
     }
     const deterministicPromptTime = routeTimeFromPrompt(originalPrompt);
     const routeTimeMinutes = Math.min(
-      Math.round(deterministicPromptTime ?? requestedTime),
+      Math.round(
+        deterministicPromptTime ?? operatingDayRouteTime(requestedTime),
+      ),
       dependencies.maximumRouteTime,
     );
     const [action] = parseViewerAgentActions([
@@ -243,7 +248,7 @@ async function executeTool(
     return { serviceUid, focused: true };
   }
 
-  if (name === "query_daily_congestion_peak") {
+  if (name === "query_daily_congestion_analysis") {
     const serviceDate = input.serviceDate;
     if (
       typeof serviceDate !== "string" ||
@@ -251,7 +256,18 @@ async function executeTool(
     ) {
       throw new Error("混雑履歴の日付が不正です。");
     }
-    return dependencies.queryDailyCongestionPeak(serviceDate);
+    return dependencies.queryDailyCongestionAnalysis(serviceDate);
+  }
+
+  if (name === "query_train_delay_analysis") {
+    const serviceDate = input.serviceDate;
+    if (
+      typeof serviceDate !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(serviceDate)
+    ) {
+      throw new Error("列車遅延の日付が不正です。");
+    }
+    return dependencies.queryTrainDelayAnalysis(serviceDate);
   }
 
   if (name === "set_weather") {
@@ -263,17 +279,6 @@ async function executeTool(
     }
     dependencies.setWeather(action.weather);
     return { weather: action.weather };
-  }
-
-  if (name === "set_scene_mode") {
-    const [action] = parseViewerAgentActions([
-      { type: "set_scene_mode", sceneMode: input.sceneMode },
-    ]);
-    if (!action || action.type !== "set_scene_mode") {
-      throw new Error("表示モードを変更できません。");
-    }
-    dependencies.setSceneMode(action.sceneMode);
-    return { sceneMode: action.sceneMode };
   }
 
   if (name === "set_layer_visibility") {
