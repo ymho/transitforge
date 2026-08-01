@@ -1,4 +1,3 @@
-import type { SceneMode } from "./map-scene-mode";
 import type { WeatherMode } from "./map-weather";
 
 export type ViewerAgentLayer = "congestion" | "destination_arcs";
@@ -15,10 +14,6 @@ export type ViewerAgentAction =
   | {
       type: "set_weather";
       weather: WeatherMode;
-    }
-  | {
-      type: "set_scene_mode";
-      sceneMode: SceneMode;
     }
   | {
       type: "set_layer_visibility";
@@ -70,14 +65,6 @@ export function parseViewerAgentActions(value: unknown): ViewerAgentAction[] {
           return {
             type: action.type,
             weather: action.weather,
-          };
-        }
-        break;
-      case "set_scene_mode":
-        if (action.sceneMode === "normal" || action.sceneMode === "model") {
-          return {
-            type: action.type,
-            sceneMode: action.sceneMode,
           };
         }
         break;

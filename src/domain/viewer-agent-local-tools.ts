@@ -1,6 +1,7 @@
 import type { Train } from "../data/train-index";
 import type { TrainPosition } from "./train-position";
 import type { ViewerAgentAction } from "./viewer-agent-action";
+import { operatingDayRouteTime } from "./playback";
 
 export interface ViewerTrainSearchResult {
   train: Train;
@@ -272,12 +273,6 @@ export function localViewerControlActionsFromPrompt(
     actions.push({ type: "set_weather", weather: "clear" });
   }
 
-  if (normalizedPrompt.includes("模型")) {
-    actions.push({ type: "set_scene_mode", sceneMode: "model" });
-  } else if (normalizedPrompt.includes("通常")) {
-    actions.push({ type: "set_scene_mode", sceneMode: "normal" });
-  }
-
   const visible = requestedLayerVisibility(normalizedPrompt);
   if (visible !== undefined && normalizedPrompt.includes("混雑")) {
     actions.push({
@@ -434,7 +429,7 @@ function validRouteTime(
   ) {
     return undefined;
   }
-  return hours * 60 + minutes;
+  return operatingDayRouteTime(hours * 60 + minutes);
 }
 
 function normalize(value: string): string {

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted（Bedrockへ返す分析範囲はADR 0007で一部置換）
 
 ## Context
 

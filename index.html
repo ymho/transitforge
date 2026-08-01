@@ -9,87 +9,80 @@
   <body>
     <main id="app">
       <div id="map" aria-label="TransitForge 3D map"></div>
-      <section id="control-panel" class="hud" aria-label="操作パネル" data-minimized="false">
-        <button
-          id="control-panel-toggle"
-          class="control-panel-toggle"
-          type="button"
-          aria-controls="control-panel"
-          aria-expanded="true"
-          aria-label="操作パネルを最小化"
-        >−</button>
-        <label class="time-control" for="display-time" aria-label="表示時刻">
-          <svg class="analog-clock" viewBox="0 0 120 105" role="img" aria-label="表示時刻のアナログ時計">
-            <rect class="clock-case" x="1" y="1" width="118" height="103" rx="6" />
-            <rect class="clock-face" x="9" y="8" width="102" height="89" rx="15" />
-            <g class="clock-numerals" aria-hidden="true">
-              <text x="60" y="24">12</text>
-              <text x="76" y="28">1</text>
-              <text x="89" y="39">2</text>
-              <text x="95" y="56">3</text>
-              <text x="89" y="73">4</text>
-              <text x="76" y="84">5</text>
-              <text x="60" y="88">6</text>
-              <text x="44" y="84">7</text>
-              <text x="31" y="73">8</text>
-              <text x="25" y="56">9</text>
-              <text x="31" y="39">10</text>
-              <text x="44" y="28">11</text>
-            </g>
-            <line id="clock-hour-hand" class="clock-hand clock-hour-hand" x1="60" y1="58" x2="60" y2="35" />
-            <line id="clock-minute-hand" class="clock-hand clock-minute-hand" x1="60" y1="59" x2="60" y2="24" />
-            <line id="clock-second-hand" class="clock-second-hand" x1="60" y1="59" x2="60" y2="22" />
-            <circle class="clock-pin" cx="60" cy="53" r="3.2" />
-          </svg>
-          <output id="time-label">12:00</output>
-          <input id="display-time" type="range" min="0" max="1440" value="720" step="1" disabled />
-        </label>
+      <section id="control-panel" class="hud" aria-label="表示日時パネル">
+        <div id="date-time-panel" class="time-control" data-editing="false" tabindex="0" aria-expanded="false" aria-label="表示日時。押すと日時を変更できます">
+          <output id="date-time-summary" class="date-time-summary">8月1日 12時00分00秒</output>
+          <div class="date-time-steppers">
+            <div class="date-time-stepper">
+              <button type="button" data-date-time-unit="month" data-date-time-step="1" aria-label="月を進める" disabled>▲</button>
+              <span><output id="display-month">08</output></span>
+              <button type="button" data-date-time-unit="month" data-date-time-step="-1" aria-label="月を戻す" disabled>▼</button>
+            </div>
+            <span class="date-time-separator" aria-hidden="true">-</span>
+            <div class="date-time-stepper">
+              <button type="button" data-date-time-unit="day" data-date-time-step="1" aria-label="日を進める" disabled>▲</button>
+              <span><output id="display-day">01</output></span>
+              <button type="button" data-date-time-unit="day" data-date-time-step="-1" aria-label="日を戻す" disabled>▼</button>
+            </div>
+            <span class="date-time-group-separator" aria-hidden="true"></span>
+            <div class="date-time-stepper">
+              <button type="button" data-date-time-unit="hour" data-date-time-step="1" aria-label="時を進める" disabled>▲</button>
+              <span><output id="display-hour">12</output></span>
+              <button type="button" data-date-time-unit="hour" data-date-time-step="-1" aria-label="時を戻す" disabled>▼</button>
+            </div>
+            <span class="date-time-separator" aria-hidden="true">:</span>
+            <div class="date-time-stepper">
+              <button type="button" data-date-time-unit="minute" data-date-time-step="1" aria-label="分を進める" disabled>▲</button>
+              <span><output id="display-minute">00</output></span>
+              <button type="button" data-date-time-unit="minute" data-date-time-step="-1" aria-label="分を戻す" disabled>▼</button>
+            </div>
+            <span class="date-time-separator" aria-hidden="true">:</span>
+            <div class="date-time-stepper">
+              <button type="button" data-date-time-unit="second" data-date-time-step="1" aria-label="秒を進める" disabled>▲</button>
+              <span><output id="display-second">00</output></span>
+              <button type="button" data-date-time-unit="second" data-date-time-step="-1" aria-label="秒を戻す" disabled>▼</button>
+            </div>
+          </div>
+          <input id="display-time" type="hidden" min="240" max="1440" value="720" />
+        </div>
         <p id="map-status">Mapboxを初期化しています。</p>
-        <div class="playback-controls" aria-label="時刻の再生操作">
-          <button id="play-toggle" type="button" disabled>再生</button>
-          <button id="real-time-toggle" type="button" disabled>現在時刻</button>
-          <select id="playback-speed" aria-label="再生速度" disabled>
-            <option value="0.016666666666666666" selected>1秒/秒</option>
-            <option value="1">1分/秒</option>
-            <option value="10">10分/秒</option>
-            <option value="60">60分/秒</option>
-          </select>
-        </div>
-        <fieldset class="scene-controls" aria-label="景色の選択">
-          <button type="button" data-scene-mode="normal" aria-pressed="true" disabled>通常</button>
-          <button type="button" data-scene-mode="model" aria-pressed="false" disabled>模型</button>
-        </fieldset>
-        <fieldset class="weather-controls" aria-label="天気の選択">
-          <button type="button" data-weather="clear" aria-pressed="true" disabled>晴れ</button>
-          <button type="button" data-weather="cloudy" aria-pressed="false" disabled>曇り</button>
-          <button type="button" data-weather="rain" aria-pressed="false" disabled>雨</button>
-          <button type="button" data-weather="snow" aria-pressed="false" disabled>雪</button>
-        </fieldset>
-        <fieldset class="visualization-controls" aria-label="列車グラフの表示">
-          <button id="congestion-toggle" type="button" aria-pressed="true" disabled>混雑</button>
-          <button id="destination-arcs-toggle" type="button" aria-pressed="false" disabled>行先アーチ</button>
-        </fieldset>
-        <div id="congestion-legend" class="congestion-legend" aria-label="混雑合計。緑は300以下、黄色は600以下、赤は900以下、紫は901以上" hidden>
-          <span>混雑合計</span>
-          <small>少</small>
-          <span class="congestion-legend-scale" aria-hidden="true">
-            <i></i><i></i><i></i><i></i>
-          </span>
-          <small>多</small>
-        </div>
-        <details class="metrics-panel">
-          <summary>計測</summary>
-          <p id="metric-display-summary">経路と列車を集計しています。</p>
-          <dl>
-            <div><dt>経路読込</dt><dd id="metric-route-load">—</dd></div>
-            <div><dt>列車読込</dt><dd id="metric-train-load">—</dd></div>
-            <div><dt>時刻更新</dt><dd id="metric-position-update">—</dd></div>
-            <div><dt>表示列車</dt><dd id="metric-active-trains">—</dd></div>
-            <div><dt>FPS</dt><dd id="metric-fps">—</dd></div>
-            <div><dt>JSヒープ</dt><dd id="metric-heap">—</dd></div>
-          </dl>
-        </details>
       </section>
+      <svg class="map-tool-symbols" aria-hidden="true">
+        <symbol id="icon-play" viewBox="0 0 20 20"><path d="M7 5.5 15 10l-8 4.5z" /></symbol>
+        <symbol id="icon-pause" viewBox="0 0 20 20"><path d="M6.5 5h2.25v10H6.5zm4.75 0h2.25v10h-2.25z" /></symbol>
+        <symbol id="icon-clock" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M10 6v4l3 2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></symbol>
+        <symbol id="icon-sun" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M15.3 4.7l-1.4 1.4M6.1 13.9l-1.4 1.4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/></symbol>
+        <symbol id="icon-cloud" viewBox="0 0 20 20"><path d="M5.2 14.5a3.2 3.2 0 0 1-.3-6.4A5.1 5.1 0 0 1 14.7 7a3.8 3.8 0 0 1 .2 7.5z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.6"/></symbol>
+        <symbol id="icon-rain" viewBox="0 0 20 20"><path d="M5.2 11.8a3 3 0 0 1-.3-6 5.1 5.1 0 0 1 9.8-1.1 3.6 3.6 0 0 1 .2 7.1zM6.5 14l-1 2.5M10.5 14l-1 2.5M14.5 14l-1 2.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></symbol>
+        <symbol id="icon-snow" viewBox="0 0 20 20"><path d="M10 3v14M4 6.5l12 7M4 13.5l12-7M7.8 4.3 10 5.6l2.2-1.3M7.8 15.7 10 14.4l2.2 1.3M4.1 9l2.2.1.1-2.3M15.9 11l-2.2-.1-.1 2.3M4.1 11l2.2-.1.1 2.3M15.9 9l-2.2.1-.1-2.3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.25"/></symbol>
+        <symbol id="icon-congestion" viewBox="0 0 20 20"><path d="M4.5 15.5v-3h2v3zm4.5 0V9h2v6.5zm4.5 0V5h2v10.5z"/><path d="M3.5 16.5h13" fill="none" stroke="currentColor" stroke-linecap="round"/></symbol>
+        <symbol id="icon-arc" viewBox="0 0 20 20"><path d="M3.5 14.5c2.5-7.5 10.5-7.5 13 0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7"/><circle cx="3.5" cy="14.5" r="1.25"/><circle cx="16.5" cy="14.5" r="1.25"/></symbol>
+      </svg>
+      <nav id="map-tools" class="map-tools mapboxgl-ctrl mapboxgl-ctrl-group" aria-label="地図操作">
+        <button id="play-toggle" type="button" aria-label="再生" title="再生" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-play" /></svg></button>
+        <button id="current-time-button" type="button" aria-label="現在時刻へ移動" title="現在時刻へ移動" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-clock" /></svg></button>
+        <div class="playback-speed-menu">
+          <button id="playback-speed-menu-toggle" class="playback-speed-menu-toggle" type="button" aria-label="再生速度を選択（現在は1倍）" title="再生速度: 1倍" aria-expanded="false" aria-controls="playback-speed-options" disabled>1×</button>
+          <input id="playback-speed" type="hidden" value="0.016666666666666666" />
+          <fieldset id="playback-speed-options" class="playback-speed-controls" aria-label="再生速度の選択" hidden>
+            <button type="button" data-playback-speed="0.016666666666666666" data-playback-speed-label="1×" aria-label="1倍速" aria-pressed="true" disabled>1×</button>
+            <button type="button" data-playback-speed="1" data-playback-speed-label="60×" aria-label="60倍速" aria-pressed="false" disabled>60×</button>
+            <button type="button" data-playback-speed="10" data-playback-speed-label="600×" aria-label="600倍速" aria-pressed="false" disabled>600×</button>
+            <button type="button" data-playback-speed="60" data-playback-speed-label="3600×" aria-label="3600倍速" aria-pressed="false" disabled>3600×</button>
+          </fieldset>
+        </div>
+        <div class="weather-menu">
+          <button id="weather-menu-toggle" type="button" aria-label="天気を選択" title="天気を選択" aria-expanded="false" aria-controls="weather-options" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-sun" /></svg></button>
+          <fieldset id="weather-options" class="weather-controls" aria-label="天気の選択" hidden>
+            <button type="button" data-weather="clear" aria-label="晴れ" title="晴れ" aria-pressed="true" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-sun" /></svg></button>
+            <button type="button" data-weather="cloudy" aria-label="曇り" title="曇り" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-cloud" /></svg></button>
+            <button type="button" data-weather="rain" aria-label="雨" title="雨" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-rain" /></svg></button>
+            <button type="button" data-weather="snow" aria-label="雪" title="雪" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-snow" /></svg></button>
+          </fieldset>
+        </div>
+        <button id="congestion-toggle" type="button" aria-label="混雑表示" title="混雑表示" aria-pressed="true" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-congestion" /></svg></button>
+        <button id="destination-arcs-toggle" type="button" aria-label="行先アーチ" title="行先アーチ" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-arc" /></svg></button>
+      </nav>
       <button
         id="ai-guide-toggle"
         class="ai-guide-toggle"
@@ -107,7 +100,7 @@
           <button id="close-ai-guide" type="button" aria-label="AI運行観察員を閉じる">×</button>
         </header>
         <ol id="ai-guide-messages" class="ai-guide-messages" aria-live="polite">
-          <li class="ai-guide-message ai-guide-message-assistant">列車・時刻・カメラに加え、天気、模型表示、混雑棒、目的地アーチも操作できます。</li>
+          <li class="ai-guide-message ai-guide-message-assistant">列車・時刻・カメラに加え、天気、混雑棒、目的地アーチも操作できます。</li>
         </ol>
         <div class="ai-guide-suggestions" aria-label="質問例">
           <button type="button" data-prompt="18時30分にして">
@@ -125,8 +118,17 @@
           <button type="button" data-prompt="今日の混雑のピークは？">
             今日の混雑ピーク
           </button>
-          <button type="button" data-prompt="雨の模型モードにして">
-            雨の模型モード
+          <button type="button" data-prompt="今日の1時間ごとの混雑推移を教えて">
+            今日の時間別混雑
+          </button>
+          <button type="button" data-prompt="今日混んでいた路線と列車を教えて">
+            今日の混雑路線・列車
+          </button>
+          <button type="button" data-prompt="現在遅れている列車を教えて">
+            現在の列車遅延
+          </button>
+          <button type="button" data-prompt="雨にして">
+            雨にする
           </button>
           <button type="button" data-prompt="目的地アーチを表示して">
             目的地アーチ
@@ -151,6 +153,7 @@
           <div><dt>列車番号</dt><dd id="selected-train-number"></dd></div>
           <div><dt>種別</dt><dd id="selected-train-type"></dd></div>
           <div><dt>区間</dt><dd id="selected-train-route"></dd></div>
+          <div><dt>遅延</dt><dd id="selected-train-delay">取得中</dd></div>
         </dl>
         <button id="show-coupled-train" class="show-coupled-train" type="button" hidden></button>
         <section class="train-timetable" aria-labelledby="train-timetable-title">
