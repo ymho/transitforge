@@ -7,18 +7,16 @@
 ```text
 viewer-input/
 ├─ train_index.json
-├─ train_runtime_index.json
 ├─ path_catalog.json
 └─ station_line_catalog.json
 ```
 
-`train_runtime_index.json`は、`train_index.json`からビューワーが使用するフィールドだけを
-抽出した再生成可能な実行時成果物です。`tools/build_runtime_train_index.mjs`で生成し、
-Gitでは管理しません。存在しない場合、ビューワーは`train_index.json`へフォールバックします。
+`train_index.json`と`path_catalog.json`は`transitforge-data-builder`が生成する
+ビューワー向け公開成果物です。取得元や経路生成の診断情報は含めません。
 
 | ファイル | 内容 |
 |---|---|
-| `train_index.json` | 列車情報、停車時刻、経路参照ID |
+| `train_index.json` | ビューワーが使用する列車情報、停車時刻、経路参照ID |
 | `path_catalog.json` | 経路参照IDごとの座標列 |
 | `station_line_catalog.json` | 対象事業者についての路線、所属駅、駅代表座標 |
 
@@ -55,14 +53,11 @@ path_catalog.json
   "trains": [
     {
       "service_uid": "JRW:20260712:782:始発駅:終着駅",
-      "service_date": "20260712",
       "train_no": "782",
       "service_type": "普通",
       "train_name": "",
       "origin_station": "始発駅",
       "destination_station": "終着駅",
-      "departure_time": "10:00",
-      "arrival_time": "10:45",
       "path_id": "path_a1b2c3d4e5f67890",
       "stops": []
     }
@@ -75,14 +70,11 @@ path_catalog.json
 | 項目 | 内容 |
 |---|---|
 | `service_uid` | 列車を一意に識別するID |
-| `service_date` | 対象となるダイヤ日 |
 | `train_no` | 列車番号 |
 | `service_type` | 普通、快速、特急などの種別 |
 | `train_name` | 列車名 |
 | `origin_station` | 始発駅 |
 | `destination_station` | 終着駅 |
-| `departure_time` | 始発時刻 |
-| `arrival_time` | 終着時刻 |
 | `path_id` | `path_catalog.json` 内の経路を参照するID |
 | `stops` | 停車駅、時刻、経路上の位置 |
 
@@ -94,12 +86,10 @@ path_catalog.json
 
 ```json
 {
-  "seq": 0,
   "station_name": "始発駅",
   "event": "発",
   "time": "10:00",
   "normalized_time": "10:00",
-  "time_minutes": 600,
   "route_meter": 0.0,
   "route_time_minutes": 600
 }
@@ -107,12 +97,10 @@ path_catalog.json
 
 | 項目 | 内容 |
 |---|---|
-| `seq` | 列車内の時刻表順序 |
 | `station_name` | 駅名 |
 | `event` | `着`、`発` などの時刻種別 |
 | `time` | 表示用時刻 |
 | `normalized_time` | 日またぎを補正した時刻 |
-| `time_minutes` | ダイヤ日開始からの通算分 |
 | `route_meter` | 経路始点から駅までの累積距離（m） |
 | `route_time_minutes` | 列車位置計算に使う通算時刻（分） |
 

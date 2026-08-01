@@ -7,6 +7,8 @@ DynamoDBへ保存する。AI運行観察員はCloudFrontからのみ
 呼び出せるLambda Function URLを通じてAmazon Bedrock Nova Liteを使用する。
 列車遅延は別のSchedulerとLambdaが、重複排除した26個の走行位置JSONを1分間隔で
 各1回だけ取得し、最新値、S3履歴、DynamoDB毎分サマリーを保存する。
+静的viewer-inputはEventBridge Schedulerが毎日3:00（JST）にECS Fargateの
+`transitforge-data-builder`を起動して全件再生成し、Web用S3へ公開する。
 
 ## 初期化
 
@@ -74,6 +76,34 @@ aws cloudfront create-invalidation \
 `viewer-input/` はサイズが大きく別コマンドで管理し、`api/` は収集Lambdaが管理するため、
 どちらも明示的に削除対象から除外する。
 
+日次バッチ導入後、`train_index.json`と`path_catalog.json`はECSが管理する。
+手動同期は初回移行または障害復旧時だけに限定し、通常のWebデプロイでは更新しない。
+
+## data-builder日次バッチ
+
+ECS、ECR、Scheduler、入力S3、VPCは`transitforge-data-builder`リポジトリの
+Terraformが所有する。TransitForge側はWeb用S3、CloudFront、およびdata-builderの
+GitHub Actionsが専用TerraformをapplyするためのOIDCロールだけを管理する。
+
+TransitForgeのTerraform適用後、data-builderへ渡す値を確認する。
+
+```bash
+terraform output -raw website_bucket_name
+terraform output -raw data_builder_github_deploy_role_arn
+```
+
+`ymho/transitforge-data-builder`のGitHub `dev` environmentへ次の変数を設定する。
+
+| 種別 | 名前 | 値 |
+| --- | --- | --- |
+| Environment variable | `AWS_DEPLOY_ROLE_ARN` | `data_builder_github_deploy_role_arn`の出力 |
+| Environment variable | `VIEWER_INPUT_BUCKET_NAME` | `website_bucket_name`の出力 |
+| Environment variable | `TF_STATE_BUCKET` | bootstrapの`state_bucket_name`の出力 |
+
+data-builderのmain更新時に、GitHub ActionsがOIDCで専用Terraform stateをapplyし、
+続いてDockerイメージをECRへ公開する。入力GeoJSONの配置、日次実行、障害確認は
+data-builder側の運用手順を正とする。
+
 ## GitHub Actions
 
 Terraformを最初にローカルからapplyしてGitHub OIDCプロバイダーとデプロイロールを
@@ -86,7 +116,7 @@ Terraformを最初にローカルからapplyしてGitHub OIDCプロバイダー�
 | Environment secret | `VITE_MAPBOX_ACCESS_TOKEN` | Mapboxの公開トークン |
 
 Pull Requestとmainへのpushでは`.github/workflows/ci.yml`がテスト、ビルド、
-Terraform検証を行う。mainへのpushまたは手動実行では`deploy-dev.yml`がOIDCでAWSへ
+Terraform検証を行う。mainへのpushまたは手動実行では同じWorkflowがOIDCでAWSへ
 接続し、Terraform apply、S3同期、CloudFront無効化を順に行う。データ量の大きい
 `viewer-input/`とLambdaが更新する`api/`はCI/CDの同期対象外とする。
 

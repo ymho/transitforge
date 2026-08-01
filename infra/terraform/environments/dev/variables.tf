@@ -70,6 +70,17 @@ variable "github_repository" {
   }
 }
 
+variable "data_builder_github_repository" {
+  description = "data-builderインフラのデプロイを許可するGitHub owner/repository。"
+  type        = string
+  default     = "ymho/transitforge-data-builder"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.data_builder_github_repository))
+    error_message = "data_builder_github_repositoryはowner/repository形式にしてください。"
+  }
+}
+
 variable "train_monitor_archive_retention_days" {
   description = "毎分収集する運行情報アーカイブの保持日数。"
   type        = number

@@ -95,16 +95,12 @@ the local development server:
 ```bash
 nvm use
 npm install
-node tools/build_runtime_train_index.mjs \
-  viewer-input/train_index.json \
-  viewer-input/train_runtime_index.json
 npm run dev
 ```
 
-軽量列車インデックスは、元の`train_index.json`から画面で使う項目だけを抽出する
-再生成可能なローカル成果物です。元ファイルは変更せず、生成物もGit管理しません。
-生成物がない場合は元ファイルへフォールバックしますが、JSON解析に多くの時間と
-メモリを使用します。GitHub Actionsのdevデプロイでも同じ軽量版を生成します。
+`viewer-input/train_index.json`と`viewer-input/path_catalog.json`は
+`transitforge-data-builder`が生成した公開成果物を使用します。TransitForgeでは入力の
+変換や補正を行いません。
 
 開発サーバーは、JR西日本の列車混雑情報を同一オリジンの
 `/api/westjr/trainmonitorinfo.json` で提供します。上流へのアクセスは
@@ -152,6 +148,13 @@ AI運行観察員のユーザーインターフェース、許可する画面操
 AWSサービス構成とGitHub ActionsからのOIDCデプロイ経路は
 [`docs/architecture/README.md`](docs/architecture/README.md)
 のアーキテクチャ図を参照してください。
+
+`train_index.json`と`path_catalog.json`は、EventBridge Schedulerが毎日3:00（JST）に
+起動する`transitforge-data-builder`のECS Fargateタスクで全件再生成し、Web用S3の
+`viewer-input/`へ配置します。ECS基盤はdata-builderリポジトリのTerraformと
+GitHub Actionsが管理します。TransitForge側の接続設定は
+[`infra/terraform/environments/dev/README.md`](infra/terraform/environments/dev/README.md)
+を参照してください。
 
 ### AWS deployment
 
