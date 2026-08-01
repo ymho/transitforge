@@ -11,7 +11,8 @@ describe("train detail title", () => {
         destination_station: "姫路",
       }),
     ).toEqual({
-      main: "新快速 姫路",
+      badge: "新快速",
+      main: "姫路",
       suffix: "行き",
     });
   });
@@ -24,7 +25,8 @@ describe("train detail title", () => {
         destination_station: "京都",
       }),
     ).toEqual({
-      main: "特急 はるか 16号",
+      badge: "特急",
+      main: "はるか 16号",
     });
   });
 
@@ -36,7 +38,8 @@ describe("train detail title", () => {
     };
 
     expect(trainTitleFor(train)).toEqual({
-      main: "のぞみ 博多",
+      badge: "のぞみ",
+      main: "博多",
       suffix: "行き",
     });
     expect(trainServiceLabelFor(train)).toBe("のぞみ");

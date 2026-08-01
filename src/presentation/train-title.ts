@@ -1,6 +1,7 @@
 import type { Train } from "../data/train-index";
 
 export interface TrainTitle {
+  badge: string;
   main: string;
   suffix?: string;
 }
@@ -12,12 +13,14 @@ export function trainTitleFor(
 
   if (train.service_type.includes("特急") && train.train_name) {
     return {
-      main: `${serviceLabel} ${formatNamedService(train.train_name)}`,
+      badge: serviceLabel,
+      main: formatNamedService(train.train_name),
     };
   }
 
   return {
-    main: `${serviceLabel} ${train.destination_station}`,
+    badge: serviceLabel,
+    main: train.destination_station,
     suffix: "行き",
   };
 }
