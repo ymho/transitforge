@@ -42,7 +42,7 @@ Accepted（Bedrockへ返す分析範囲はADR 0007で一部置換）
 - 分析用サマリーはDynamoDBへ1スナップショット1項目で保存し、JST日付を
   パーティションキー、収集時刻をソートキーとする。TTLはS3と同じ保持期間にする。
 - S3の生レスポンスを正本、DynamoDBを再生成可能な検索索引とする。
-- AI運行観察員の日別ピーク検索はDynamoDBだけを読み、Bedrockへはピーク観測と
+- AI駅員の日別ピーク検索はDynamoDBだけを読み、Bedrockへはピーク観測と
   上位5列車だけを返す。1日分の生JSONをモデルへ送らない。
 
 ## Consequences

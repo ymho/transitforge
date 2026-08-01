@@ -3,7 +3,7 @@
 非公開S3バケットとCloudFront OACを作成し、現在の静的ビューワーを配信する。
 EventBridge SchedulerとLambdaはJR西日本の列車混雑情報を1分間隔で取得し、
 最新値と分析用の時系列アーカイブをS3へ保存し、日別検索用の毎分サマリーを
-DynamoDBへ保存する。AI運行観察員はCloudFrontからのみ
+DynamoDBへ保存する。AI駅員はCloudFrontからのみ
 呼び出せるLambda Function URLを通じてAmazon Bedrock Nova Liteを使用する。
 列車遅延は別のSchedulerとLambdaが、重複排除した26個の走行位置JSONを1分間隔で
 各1回だけ取得し、最新値、S3履歴、DynamoDB毎分サマリーを保存する。

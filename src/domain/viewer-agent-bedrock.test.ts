@@ -537,4 +537,96 @@ describe("Bedrock viewer agent", () => {
       limit: 5,
     });
   });
+
+  it("searches a destination from the browser-selected nearest station and focuses it", async () => {
+    let routeTime = 600;
+    const focusTrain = vi.fn(() => true);
+    const searchDirectRoutes = vi.fn(async () => ({
+      originStation: "大阪",
+      distanceMeters: 420,
+      results: [{
+        train,
+        originStation: "大阪",
+        destinationStation: "京都",
+        departureTimeMinutes: 610,
+        arrivalTimeMinutes: 640,
+      }],
+    }));
+    const converse = vi
+      .fn()
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{
+            toolUse: {
+              toolUseId: "route",
+              name: "search_direct_routes",
+              input: { destinationStation: "京都", departureTimeMinutes: 600 },
+            },
+          }],
+        },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{
+            toolUse: {
+              toolUseId: "time",
+              name: "set_display_time",
+              input: { routeTimeMinutes: 610 },
+            },
+          }],
+        },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{
+            toolUse: {
+              toolUseId: "focus",
+              name: "focus_train",
+              input: { serviceUid: train.service_uid },
+            },
+          }],
+        },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{ text: "最寄りの大阪駅から京都駅までご案内します。" }],
+        },
+        stopReason: "end_turn",
+      });
+
+    await runBedrockViewerAgent(
+      "京都に行きたい",
+      {
+        trains: [train],
+        getPositions: () => [position],
+        getRouteTime: () => routeTime,
+        setRouteTime: (value) => { routeTime = value; },
+        focusTrain,
+        setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(),
+        searchDirectRoutes,
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(searchDirectRoutes).toHaveBeenCalledWith({
+      destinationStation: "京都",
+      departureTimeMinutes: 600,
+    });
+    expect(routeTime).toBe(610);
+    expect(focusTrain).toHaveBeenCalledWith(train.service_uid);
+    const secondRequest = JSON.stringify(converse.mock.calls[1]?.[0]);
+    expect(secondRequest).toContain('"originStation":"大阪"');
+    expect(secondRequest).toContain('"distanceMeters":420');
+  });
 });

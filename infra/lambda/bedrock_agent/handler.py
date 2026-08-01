@@ -23,7 +23,7 @@ DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 JST = timezone(timedelta(hours=9))
 
 SYSTEM_PROMPT = """\
-あなたはTransitForgeのAI運行観察員です。日本語で簡潔に案内してください。
+あなたはTransitForgeのAI駅員です。日本語で簡潔に案内してください。
 利用者が列車を探したい場合はsearch_trainsを使い、その結果のserviceUidだけを
 focus_trainへ渡してください。時刻の変更はset_display_timeを使ってください。
 時刻変更と列車検索が同じ依頼に含まれる場合は、時刻を変更して結果を受け取ってから
@@ -31,6 +31,13 @@ focus_trainへ渡してください。時刻の変更はset_display_timeを使�
 指定時刻ごろに駅へ着く列車を尋ねられた場合はsearch_train_arrivalsを使ってください。
 この時刻は検索条件であり、画面の時刻変更も明示されない限りset_display_timeを
 呼ばないでください。到着検索は指定時刻の前後30分を対象にします。
+出発駅から行き先まで乗り換えなしの経路を尋ねられた場合はsearch_direct_routesを
+使ってください。出発駅が指定されていない場合はoriginStationを省略し、ブラウザが
+現在地から直通可能な最寄り駅を選べるようにしてください。現在地の座標はAIには
+送られません。出発時刻が指定されていない場合は現在の表示時刻を使ってください。
+候補が見つかったら先頭候補の発車時刻をset_display_timeへ渡し、その結果を受け取ってから
+候補のserviceUidをfocus_trainへ渡してください。検索結果は最大3件だけ案内し、
+乗り換え経路を推測しないでください。
 平日または土日祝の代表的なダイヤについて尋ねられた場合は
 search_representative_timetableを使ってください。この検索結果は代表日の計画ダイヤであり、
 現在の列車位置や運行実績ではありません。
@@ -120,6 +127,35 @@ TOOLS = [
     },
     {
         "toolSpec": {
+            "name": "search_direct_routes",
+            "description": (
+                "出発駅から行き先まで、指定時刻以降に乗り換えなしで行ける列車を"
+                "最大3件検索します。出発駅の省略時はブラウザが現在地から最寄り駅を選びます。"
+            ),
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "originStation": {
+                            "type": "string",
+                            "description": "出発駅。利用者が指定しなければ省略する。",
+                        },
+                        "destinationStation": {
+                            "type": "string",
+                            "description": "行き先の駅名。",
+                        },
+                        "departureTimeMinutes": {
+                            "type": "number",
+                            "description": "出発希望時刻を0時からの分数で指定。",
+                        },
+                    },
+                    "required": ["destinationStation", "departureTimeMinutes"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
             "name": "search_train_arrivals",
             "description": (
                 "指定時刻の前後30分に、指定駅へ到着する列車を種別などで検索します。"
@@ -203,14 +239,14 @@ TOOLS = [
     {
         "toolSpec": {
             "name": "focus_train",
-            "description": "検索結果に含まれる列車を選択し、カメラを移動します。",
+            "description": "列車検索または直通経路検索の結果に含まれる列車を選択し、カメラを移動します。",
             "inputSchema": {
                 "json": {
                     "type": "object",
                     "properties": {
                         "serviceUid": {
                             "type": "string",
-                            "description": "search_trainsが返したserviceUid。",
+                            "description": "列車検索ツールが返したserviceUid。",
                         }
                     },
                     "required": ["serviceUid"],
