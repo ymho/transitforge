@@ -433,30 +433,49 @@ body,
 }
 
 .train-details h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
   margin: 0;
   font-size: 1.3rem;
 }
 
+.train-service-badge {
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.35rem;
+  color: #fff;
+  background: var(--train-line-color, #a8aaad);
+  font-size: 0.65em;
+  line-height: 1.2;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 45%);
+}
+
+.train-title-main {
+  min-width: 0;
+}
+
 .train-destination-suffix {
-  margin-left: 0.12em;
   font-size: 0.62em;
   font-weight: 600;
 }
 
 .train-details dl {
   display: grid;
-  gap: 0.55rem;
-  margin: 0.9rem 0 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0.7rem 0 0;
 }
 
 .train-details dl div {
-  display: grid;
-  grid-template-columns: 4rem 1fr;
-  gap: 0.75rem;
+  display: flex;
+  gap: 0.4rem;
+  min-width: 0;
 }
 
 .train-details dt {
   color: #91a6bc;
+  white-space: nowrap;
 }
 
 .train-details dd {
@@ -516,18 +535,6 @@ body,
   border-left: 3px solid #f5a623;
   border-radius: 0.3rem;
   background: rgb(245 166 35 / 12%);
-}
-
-.train-timetable-station {
-  display: flex;
-  flex-direction: column;
-  gap: 0.12rem;
-}
-
-.train-timetable-station small {
-  color: #f6bd60;
-  font-size: 0.64rem;
-  font-weight: 650;
 }
 
 .train-timetable-times {
@@ -718,7 +725,34 @@ body,
   .train-details {
     right: 0.65rem;
     bottom: 0.65rem;
-    width: calc(100vw - 1.3rem);
-    max-height: calc(100vh - 1.3rem);
+    width: min(20rem, calc(100vw - 1.3rem));
+    max-height: min(55dvh, 26rem);
+    padding: 0.7rem 0.75rem;
+  }
+
+  .train-details h2 {
+    gap: 0.3rem;
+    padding-right: 1.4rem;
+    font-size: 1.05rem;
+  }
+
+  .train-details dl {
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .train-timetable {
+    margin-top: 0.55rem;
+    padding-top: 0.5rem;
+  }
+
+  .train-timetable ol {
+    max-height: 30dvh;
+  }
+
+  .train-timetable li {
+    padding: 0.3rem 0.25rem;
+    font-size: 0.75rem;
   }
 }
