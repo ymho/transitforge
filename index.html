@@ -96,16 +96,22 @@
         type="button"
         aria-controls="route-search-panel"
         aria-expanded="false"
+        aria-label="経路検索を開く"
+        title="経路検索"
         disabled
       >
         <svg class="guide-toggle-icon" aria-hidden="true"><use href="#icon-route" /></svg>
-        <span>経路検索</span>
       </button>
       <aside id="route-search-panel" class="route-search-panel" aria-label="直通経路検索" hidden>
         <header>
-          <div>
-            <p>経路検索</p>
-            <small>乗り換えなしで行ける列車を探します</small>
+          <div class="guide-panel-heading">
+            <span class="guide-panel-icon guide-panel-icon-route" aria-hidden="true">
+              <svg><use href="#icon-route" /></svg>
+            </span>
+            <div class="guide-panel-copy">
+              <p>経路検索</p>
+              <small>乗り換えなしで行ける列車を探します</small>
+            </div>
           </div>
           <button id="close-route-search" type="button" aria-label="経路検索を閉じる">×</button>
         </header>
@@ -134,15 +140,21 @@
         type="button"
         aria-controls="ai-guide-panel"
         aria-expanded="false"
+        aria-label="AI駅員を開く"
+        title="AI駅員"
       >
         <svg class="guide-toggle-icon" aria-hidden="true"><use href="#icon-ai-station" /></svg>
-        <span>AI駅員</span>
       </button>
       <aside id="ai-guide-panel" class="ai-guide-panel" aria-label="AI駅員" hidden>
         <header>
-          <div>
-            <p>AI駅員</p>
-            <small>行き先や見たい列車をご案内します</small>
+          <div class="guide-panel-heading">
+            <span class="guide-panel-icon guide-panel-icon-ai" aria-hidden="true">
+              <svg><use href="#icon-ai-station" /></svg>
+            </span>
+            <div class="guide-panel-copy">
+              <p>AI駅員</p>
+              <small>行き先や見たい列車をご案内します</small>
+            </div>
           </div>
           <span class="ai-guide-status">履歴分析対応</span>
           <button id="close-ai-guide" type="button" aria-label="AI駅員を閉じる">×</button>
