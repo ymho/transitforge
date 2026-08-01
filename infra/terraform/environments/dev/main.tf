@@ -155,6 +155,21 @@ resource "aws_cloudfront_distribution" "website" {
     }
   }
 
+  ordered_cache_behavior {
+    path_pattern           = "/viewer-input/*"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD", "OPTIONS"]
+    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_disabled.id
+    target_origin_id       = local.website_origin
+    viewer_protocol_policy = "https-only"
+    compress               = true
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.basic_auth.arn
+    }
+  }
+
   default_cache_behavior {
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD", "OPTIONS"]

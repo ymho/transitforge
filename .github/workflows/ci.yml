@@ -125,26 +125,12 @@ jobs:
           echo "website_bucket=$(terraform output -raw website_bucket_name)" >> "$GITHUB_OUTPUT"
           echo "distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> "$GITHUB_OUTPUT"
 
-      - name: Build runtime train index
-        run: |
-          aws s3 cp \
-            "s3://${{ steps.terraform.outputs.website_bucket }}/viewer-input/train_index.json" \
-            /tmp/transitforge-train-index.json
-          node tools/build_runtime_train_index.mjs \
-            /tmp/transitforge-train-index.json \
-            /tmp/transitforge-train-runtime-index.json
-
       - name: Deploy viewer assets
         run: |
           aws s3 sync dist "s3://${{ steps.terraform.outputs.website_bucket }}/" \
             --delete \
             --exclude "viewer-input/*" \
             --exclude "api/*"
-          aws s3 cp \
-            /tmp/transitforge-train-runtime-index.json \
-            "s3://${{ steps.terraform.outputs.website_bucket }}/viewer-input/train_runtime_index.json" \
-            --content-type "application/json; charset=utf-8" \
-            --cache-control "no-cache"
           aws cloudfront create-invalidation \
             --distribution-id "${{ steps.terraform.outputs.distribution_id }}" \
             --paths "/*"

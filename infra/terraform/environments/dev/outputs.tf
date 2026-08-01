@@ -23,6 +23,11 @@ output "github_actions_deploy_role_arn" {
   value       = aws_iam_role.github_deploy.arn
 }
 
+output "data_builder_github_deploy_role_arn" {
+  description = "data-builderのGitHub Actionsが専用TerraformとECR公開で引き受けるIAMロールARN。"
+  value       = aws_iam_role.data_builder_github_deploy.arn
+}
+
 output "train_monitor_archive_bucket_name" {
   description = "毎分の運行情報gzipスナップショットを保存するS3バケット名。"
   value       = aws_s3_bucket.train_monitor_archive.id

@@ -13,6 +13,19 @@ GitHub Actionsのversioned configurationを正として作成している。
 - [編集用draw.ioファイル](transitforge-aws-runtime.drawio)
 - [SVGファイル](transitforge-aws-runtime.svg)
 
+静的viewer-inputの生成・公開経路は次のとおり。日次バッチはWebアプリのデプロイとは
+独立している。
+
+```mermaid
+flowchart LR
+  Schedule[EventBridge Scheduler<br>毎日 3:00 JST] --> ECS[ECS Fargate<br>data-builder]
+  ECR[ECR<br>data-builder image] --> ECS
+  Source[S3 private<br>GeoJSON input] --> ECS
+  ECS --> Web[S3 private<br>viewer-input]
+  Web --> CloudFront
+  CloudFront --> Browser[TransitForge]
+```
+
 ## GitHub ActionsからAWSへのデプロイ
 
 GitHub OIDC、IAMロール、Terraform state、mainへのマージ後の
