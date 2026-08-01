@@ -21,9 +21,9 @@ export function configureAiGuidePanel(
   const setOpen = (open: boolean) => {
     panel.hidden = !open;
     toggle.ariaExpanded = String(open);
-    if (open) {
+    if (open && shouldFocusAiGuideInputOnOpen()) {
       input.focus();
-    } else {
+    } else if (!open) {
       toggle.focus();
     }
   };
@@ -74,6 +74,13 @@ export function configureAiGuidePanel(
         input.focus();
       });
   });
+}
+
+export function shouldFocusAiGuideInputOnOpen(
+  viewportWidth = window.innerWidth,
+  hasCoarsePointer = window.matchMedia?.("(pointer: coarse)").matches ?? false,
+): boolean {
+  return viewportWidth >= 768 && !hasCoarsePointer;
 }
 
 function appendMessage(
