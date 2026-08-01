@@ -68,10 +68,7 @@ import {
   type AiGuidePromptHandler,
 } from "./presentation/ai-guide-panel";
 import { timetableProgressRowsFor } from "./presentation/train-timetable";
-import {
-  trainServiceLabelFor,
-  trainTitleFor,
-} from "./presentation/train-title";
+import { trainTitleFor } from "./presentation/train-title";
 import { MapboxThreeTrainLayer } from "./rendering/mapbox-three-train-layer";
 import { RuntimeMetrics } from "./observability/runtime-metrics";
 
@@ -135,8 +132,6 @@ const trainDetails = document.querySelector<HTMLElement>("#train-details");
 const closeTrainDetails = document.querySelector<HTMLButtonElement>("#close-train-details");
 const selectedTrainTitle = document.querySelector<HTMLElement>("#selected-train-title");
 const selectedTrainNumber = document.querySelector<HTMLElement>("#selected-train-number");
-const selectedTrainType = document.querySelector<HTMLElement>("#selected-train-type");
-const selectedTrainRoute = document.querySelector<HTMLElement>("#selected-train-route");
 const selectedTrainDelay = document.querySelector<HTMLElement>("#selected-train-delay");
 const selectedTrainStops = document.querySelector<HTMLOListElement>("#selected-train-stops");
 const showCoupledTrain = document.querySelector<HTMLButtonElement>("#show-coupled-train");
@@ -177,8 +172,6 @@ if (
   closeTrainDetails === null ||
   selectedTrainTitle === null ||
   selectedTrainNumber === null ||
-  selectedTrainType === null ||
-  selectedTrainRoute === null ||
   selectedTrainDelay === null ||
   selectedTrainStops === null ||
   showCoupledTrain === null
@@ -383,6 +376,7 @@ if (!token) {
           map,
           trainIndex.trains,
           threeTrainLayer,
+          colorsByServiceUid,
         );
         let displayedPositions: TrainPosition[] = [];
 
@@ -1161,6 +1155,7 @@ function configureTrainSelection(
   map: mapboxgl.Map,
   trains: Train[],
   trainLayer: MapboxThreeTrainLayer,
+  colorsByServiceUid: ReadonlyMap<string, string>,
 ): {
   focusTrain: (serviceUid: string) => boolean;
   updateTracking: (positions: TrainPosition[]) => void;
@@ -1171,8 +1166,6 @@ function configureTrainSelection(
     closeTrainDetails === null ||
     selectedTrainTitle === null ||
     selectedTrainNumber === null ||
-    selectedTrainType === null ||
-    selectedTrainRoute === null ||
     selectedTrainDelay === null ||
     selectedTrainStops === null ||
     showCoupledTrain === null
@@ -1206,7 +1199,7 @@ function configureTrainSelection(
     const coupledTitle = coupledTrain ? trainTitleFor(coupledTrain) : undefined;
     showCoupledTrain.textContent = coupledTitle ? "連結列車" : "";
     showCoupledTrain.ariaLabel = coupledTitle
-      ? `${coupledTitle.main}${coupledTitle.suffix ?? ""}の詳細を見る`
+      ? `${coupledTitle.badge} ${coupledTitle.main}${coupledTitle.suffix ?? ""}の詳細を見る`
       : null;
   };
 
@@ -1245,11 +1238,6 @@ function configureTrainSelection(
 
       if (status) {
         item.dataset.currentStatus = status;
-        if (status === "stopped") {
-          const statusLabel = document.createElement("small");
-          statusLabel.textContent = "停車中";
-          station.append(statusLabel);
-        }
         currentItem = item;
       }
 
@@ -1275,7 +1263,7 @@ function configureTrainSelection(
       return item;
     });
     selectedTrainStops.replaceChildren(...items);
-    currentItem?.scrollIntoView({ block: "nearest" });
+    currentItem?.scrollIntoView({ block: "center" });
   };
 
   const showTrainDetails = (serviceUid: string) => {
@@ -1285,19 +1273,28 @@ function configureTrainSelection(
     }
 
     const title = trainTitleFor(train);
-    selectedTrainTitle.replaceChildren(document.createTextNode(title.main));
+    const badge = document.createElement("span");
+    badge.className = "train-service-badge";
+    badge.textContent = title.badge;
+    const mainTitle = document.createElement("span");
+    mainTitle.className = "train-title-main";
+    mainTitle.textContent = title.main;
+    selectedTrainTitle.replaceChildren(badge, mainTitle);
     if (title.suffix) {
       const suffix = document.createElement("small");
       suffix.className = "train-destination-suffix";
       suffix.textContent = title.suffix;
       selectedTrainTitle.append(suffix);
     }
+    selectedTrainTitle.style.setProperty(
+      "--train-line-color",
+      colorsByServiceUid.get(train.service_uid) ?? "#a8aaad",
+    );
     selectedTrainNumber.textContent = train.train_no || "不明";
-    selectedTrainType.textContent = trainServiceLabelFor(train);
-    selectedTrainRoute.textContent = `${train.origin_station} → ${train.destination_station}`;
     const delay = delaysByTrainNumber.get(train.train_no);
     selectedTrainDelay.textContent =
       delay === undefined ? "情報なし" : delay > 0 ? `${delay}分` : "遅れなし";
+    trainDetails.hidden = false;
     renderTrainTimetable(
       train,
       displayedPositions.find(({ serviceUid: id }) => id === serviceUid),
@@ -1305,7 +1302,6 @@ function configureTrainSelection(
     );
     focusSession.start(train.service_uid);
     updateCoupledTrainButton(train.service_uid);
-    trainDetails.hidden = false;
   };
 
   map.on("click", "train-hit-targets", (event) => {
