@@ -31,29 +31,12 @@ afterEach(() => {
 });
 
 describe("train index loader", () => {
-  it("loads the compact runtime index first", async () => {
+  it("loads the viewer train index", async () => {
     const fetcher = vi.fn(async () => Response.json(index));
     vi.stubGlobal("fetch", fetcher);
 
     await expect(loadTrainIndex()).resolves.toEqual(index);
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(fetcher).toHaveBeenCalledWith(
-      "/viewer-input/train_runtime_index.json",
-    );
-  });
-
-  it("falls back to the source index when the runtime index is unavailable", async () => {
-    const fetcher = vi
-      .fn()
-      .mockResolvedValueOnce(new Response(null, { status: 404 }))
-      .mockResolvedValueOnce(Response.json(index));
-    vi.stubGlobal("fetch", fetcher);
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
-
-    await expect(loadTrainIndex()).resolves.toEqual(index);
-    expect(fetcher).toHaveBeenNthCalledWith(
-      2,
-      "/viewer-input/train_index.json",
-    );
+    expect(fetcher).toHaveBeenCalledWith("/viewer-input/train_index.json");
   });
 });
