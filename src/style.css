@@ -820,6 +820,145 @@ body,
   display: block;
 }
 
+/* AI駅員と経路検索を同じビジュアルシステムでまとめる。 */
+.route-search-toggle,
+.ai-guide-toggle {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 0;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.route-search-toggle {
+  left: 4.85rem;
+  background: linear-gradient(145deg, rgb(30 91 116 / 96%), rgb(14 53 72 / 94%));
+}
+
+.ai-guide-toggle {
+  background: linear-gradient(145deg, #e7ee6d, #cbd43f);
+}
+
+.route-search-toggle:hover:not(:disabled),
+.ai-guide-toggle:hover:not(:disabled) {
+  box-shadow:
+    0 0.75rem 2.2rem rgb(0 0 0 / 30%),
+    0 0 1.2rem rgb(104 215 255 / 16%);
+  transform: translateY(-2px);
+}
+
+.route-search-toggle:focus-visible,
+.ai-guide-toggle:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
+}
+
+.guide-toggle-icon {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.route-search-panel,
+.ai-guide-panel {
+  border-radius: 1.05rem;
+  box-shadow:
+    0 1.2rem 3.5rem rgb(0 0 0 / 34%),
+    0 0 0 1px rgb(255 255 255 / 4%) inset;
+  backdrop-filter: blur(18px);
+}
+
+.route-search-panel {
+  border-color: rgb(104 215 255 / 26%);
+  background:
+    radial-gradient(circle at 12% 0%, rgb(42 112 139 / 24%), transparent 42%),
+    linear-gradient(155deg, rgb(11 26 41 / 97%), rgb(6 14 24 / 95%));
+}
+
+.ai-guide-panel {
+  border-color: rgb(220 228 84 / 22%);
+  background:
+    radial-gradient(circle at 12% 0%, rgb(220 228 84 / 14%), transparent 42%),
+    linear-gradient(155deg, rgb(11 24 37 / 97%), rgb(6 14 24 / 95%));
+}
+
+.route-search-panel header,
+.ai-guide-panel header {
+  padding: 0.9rem 0.95rem;
+}
+
+.route-search-panel header {
+  border-bottom-color: rgb(104 215 255 / 14%);
+  background: linear-gradient(90deg, rgb(30 91 116 / 20%), transparent 70%);
+}
+
+.ai-guide-panel header {
+  border-bottom-color: rgb(220 228 84 / 12%);
+  background: linear-gradient(90deg, rgb(220 228 84 / 10%), transparent 70%);
+}
+
+.guide-panel-heading {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  min-width: 0;
+}
+
+.guide-panel-icon {
+  display: grid;
+  width: 2.15rem;
+  height: 2.15rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 0.7rem;
+  box-shadow: 0 0.45rem 1.1rem rgb(0 0 0 / 18%);
+}
+
+.guide-panel-icon svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  fill: none;
+}
+
+.guide-panel-icon-route {
+  color: #9de8ff;
+  background: rgb(30 91 116 / 58%);
+}
+
+.guide-panel-icon-ai {
+  color: #202827;
+  background: linear-gradient(145deg, #e7ee6d, #cbd43f);
+}
+
+.guide-panel-copy {
+  min-width: 0;
+}
+
+#close-route-search,
+#close-ai-guide {
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 5%);
+}
+
+#close-route-search:hover,
+#close-ai-guide:hover {
+  color: #ffffff;
+  background: rgb(255 255 255 / 11%);
+}
+
+.route-search-form input {
+  border-color: rgb(255 255 255 / 14%);
+  border-radius: 0.7rem;
+  background: rgb(255 255 255 / 6%);
+}
+
 @media (max-width: 600px) {
   .hud {
     top: 0.65rem;
@@ -831,7 +970,7 @@ body,
 
   .route-search-toggle {
     bottom: 2.25rem;
-    left: 6.25rem;
+    left: 4rem;
   }
 
   .route-search-panel {
