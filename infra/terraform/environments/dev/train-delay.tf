@@ -172,9 +172,8 @@ resource "aws_lambda_function" "train_delay_collector" {
   filename         = data.archive_file.train_delay_collector.output_path
   source_code_hash = data.archive_file.train_delay_collector.output_base64sha256
 
-  memory_size                    = 256
-  timeout                        = 90
-  reserved_concurrent_executions = 1
+  memory_size = 256
+  timeout     = 90
 
   environment {
     variables = {
