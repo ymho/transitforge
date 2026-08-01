@@ -70,14 +70,17 @@ variable "github_repository" {
   }
 }
 
-variable "data_builder_github_repository" {
-  description = "data-builderインフラのデプロイを許可するGitHub owner/repository。"
+variable "data_builder_github_oidc_subject" {
+  description = "data-builderインフラのデプロイを許可するGitHub Actions OIDCのimmutable subject。"
   type        = string
-  default     = "ymho/transitforge-data-builder"
+  default     = "repo:ymho@26107646/transitforge-data-builder@1319024314:environment:dev"
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.data_builder_github_repository))
-    error_message = "data_builder_github_repositoryはowner/repository形式にしてください。"
+    condition = can(regex(
+      "^repo:[A-Za-z0-9_.-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+:environment:[A-Za-z0-9_.-]+$",
+      var.data_builder_github_oidc_subject,
+    ))
+    error_message = "data_builder_github_oidc_subjectはowner IDとrepository IDを含むimmutable subject形式にしてください。"
   }
 }
 

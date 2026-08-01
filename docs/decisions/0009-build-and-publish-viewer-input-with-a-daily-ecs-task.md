@@ -28,6 +28,8 @@ data-builderは時刻表取得、全国経路探索、大容量JSON生成を行�
   Terraform stateで管理する。
 - TransitForgeのTerraformはWeb用S3とCloudFrontに加え、data-builderのGitHub Actionsが
   専用stateをapplyするためのOIDCブートストラップロールだけを管理する。
+- data-builder用OIDCロールの信頼条件には、owner IDとrepository IDを含むGitHubの
+  immutable subjectを使用する。
 - data-builderのGitHub Actionsはmain更新時にTerraformをapplyしてからECRへイメージを公開し、
   固定AWSキーを使用しない。ローカル端末からAWSリソースを継続的に更新しない。
 

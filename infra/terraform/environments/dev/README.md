@@ -85,6 +85,11 @@ ECS、ECR、Scheduler、入力S3、VPCは`transitforge-data-builder`リポジト
 Terraformが所有する。TransitForge側はWeb用S3、CloudFront、およびdata-builderの
 GitHub Actionsが専用TerraformをapplyするためのOIDCロールだけを管理する。
 
+data-builderは2026年7月15日以降に作成されたGitHubリポジトリなので、OIDCの`sub`には
+owner IDとrepository IDを含むimmutable subjectを使用する。実際の値は
+`data_builder_github_oidc_subject`で明示的に管理し、CloudTrailで観測したsubjectと
+IAMロールの信頼条件を一致させる。
+
 TransitForgeのTerraform適用後、data-builderへ渡す値を確認する。
 
 ```bash
