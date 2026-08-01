@@ -110,7 +110,7 @@ npm run dev
 
 AWS開発環境ではEventBridge SchedulerとLambdaが上流を1分に1回取得し、
 最新値を同じパスでCloudFront配信します。各取得結果はgzip圧縮した時系列データとして
-非公開S3にも保存します。同時にDynamoDBへ毎分の合算サマリーを保存し、AI運行観察員から
+非公開S3にも保存します。同時にDynamoDBへ毎分の合算サマリーを保存し、AI駅員から
 日次ピーク、1時間ごとの混雑推移、混雑した行き先側路線、種別・列車名・行き先付きの
 混雑列車を確認できます。
 
@@ -118,7 +118,7 @@ AWS開発環境ではEventBridge SchedulerとLambdaが上流を1分に1回取得
 26個の列車走行位置JSONを1分ごとに各1回だけ取得します。統合した最新値を
 `/api/traffic/delays.json`で配信し、列車番号が一致する遅延列車には地図上の半透明な
 オレンジ色の球形ハローと、列車詳細の「遅延」を表示します。
-全レスポンスは非公開S3、毎分サマリーはDynamoDBへ保存し、AI運行観察員から現在、
+全レスポンスは非公開S3、毎分サマリーはDynamoDBへ保存し、AI駅員から現在、
 日次ピーク、1時間ごとの傾向、遅れた列車を確認できます。
 
 Create a production build with type checking:
@@ -141,7 +141,12 @@ npm test
 表示時刻は前日運行日の24:00〜27:59として扱います。viewer-input自体の時刻補正は
 ビューワーでは行いません。
 
-AI運行観察員のユーザーインターフェース、許可する画面操作、今後のAPI接続境界は
+経路検索は、指定時刻以降に同じ列車で出発駅から行き先まで行ける直通列車を最大3件表示します。
+出発駅を省略すると、ブラウザの位置情報から「行き先へ直通できる駅」のうち最寄りを選びます。
+緯度・経度はブラウザ内の駅選択にだけ使用し、AIやAWSへ送信しません。位置情報を利用できない
+場合は、出発駅を入力して検索できます。
+
+AI駅員のユーザーインターフェース、許可する画面操作、今後のAPI接続境界は
 [`docs/architecture/ai-operations-guide.md`](docs/architecture/ai-operations-guide.md)
 を参照してください。
 
@@ -166,10 +171,11 @@ CloudFront Origin Access Controlで静的ビューワーを配信する。
 2. [`infra/terraform/environments/dev`](infra/terraform/environments/dev) で開発環境を作成する。
 3. Vite成果物とローカル生成済みの `viewer-input/` をアプリケーション用S3へ配置する。
 
-AI運行観察員は、CloudFrontからのみ呼べるLambda Function URLとAmazon Bedrock
+AI駅員は、CloudFrontからのみ呼べるLambda Function URLとAmazon Bedrock
 Nova Liteを使用する。列車検索は大容量入力を持つブラウザ側で実行し、Bedrockには
-最大5件の候補だけを返す。平日・土休日の代表ダイヤ検索はLambdaが非公開S3の固定2世代を
-検索し、同じく最大5件だけを返す。混雑履歴はDynamoDBの毎分サマリーをLambdaで時間別・列車別に
+最大5件、直通経路検索は最大3件の候補だけを返す。現在地の座標はBedrockへ送らない。
+平日・土休日の代表ダイヤ検索はLambdaが非公開S3の固定2世代を検索し、同じく最大5件だけを返す。
+混雑履歴はDynamoDBの毎分サマリーをLambdaで時間別・列車別に
 集計し、ブラウザで路線・列車情報を付加してから上位結果だけをモデルへ返す。生S3
 アーカイブ全体はモデルへ送らない。遅延履歴もDynamoDBで決定的に集計し、時刻表で
 列車情報を付加した上位結果だけをBedrockへ渡す。AWS認証情報やMapboxトークンをTerraformファイル、

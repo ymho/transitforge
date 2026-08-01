@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-TransitForgeをローカル環境だけでなくAWS上へデプロイし、利用者がAI運行観察員を
+TransitForgeをローカル環境だけでなくAWS上へデプロイし、利用者がAI駅員を
 使用できるようにしたい。現在のビューワーはViteで生成する静的ファイルと大容量の
 列車入力を読み込み、開発サーバーだけが収録事業者の混雑情報キャッシュを提供している。
 
@@ -25,7 +25,7 @@ TransitForgeをローカル環境だけでなくAWS上へデプロイし、利�
   バージョニング、暗号化、パブリックアクセス遮断、S3ロックファイルを使用する。
 - TerraformのAWS認証情報はコードや変数ファイルへ保存せず、AWS CLIのセッションまたは
   GitHub ActionsのOIDCで取得する。
-- AI運行観察員はAmazon Bedrock Runtimeを使用する。最初のAI接続では、既存の
+- AI駅員はAmazon Bedrock Runtimeを使用する。最初のAI接続では、既存の
   検証済みツール境界を維持しやすいConverse APIをLambdaから呼び出す。
 - 最初のモデルは東京リージョンのAmazon Nova Liteを使用する。ツール利用に対応し、
   小規模な案内用途でコストを抑えやすく、第三者モデルの利用条件を追加しないためである。
