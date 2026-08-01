@@ -166,6 +166,7 @@ body,
 
 .route-search-toggle {
   position: absolute;
+  z-index: 3;
   bottom: 2.5rem;
   left: 7.15rem;
   padding: 0.6rem 0.85rem;
@@ -187,6 +188,7 @@ body,
 
 .route-search-panel {
   position: absolute;
+  z-index: 3;
   bottom: 5.5rem;
   left: 1.5rem;
   width: min(23rem, calc(100vw - 3rem));
@@ -241,6 +243,7 @@ body,
 
 .ai-guide-toggle {
   position: absolute;
+  z-index: 3;
   bottom: 2.5rem;
   left: 1.5rem;
   padding: 0.6rem 0.85rem;
@@ -262,6 +265,7 @@ body,
 
 .ai-guide-panel {
   position: absolute;
+  z-index: 3;
   bottom: 5.5rem;
   left: 1.5rem;
   display: grid;
