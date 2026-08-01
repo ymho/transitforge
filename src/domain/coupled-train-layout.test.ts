@@ -72,6 +72,7 @@ function position(
     serviceUid,
     trainNo,
     serviceType,
+    routeMeter: 100,
     coordinate,
     bearingRadians: 0,
   };

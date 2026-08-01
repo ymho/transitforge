@@ -37,9 +37,12 @@ data "aws_iam_policy_document" "bedrock_agent" {
   }
 
   statement {
-    sid       = "ReadCongestionSummaries"
-    actions   = ["dynamodb:Query"]
-    resources = [aws_dynamodb_table.train_congestion_summary.arn]
+    sid     = "ReadTrainSummaries"
+    actions = ["dynamodb:Query"]
+    resources = [
+      aws_dynamodb_table.train_congestion_summary.arn,
+      aws_dynamodb_table.train_delay_summary.arn,
+    ]
   }
 
   statement {
@@ -74,8 +77,9 @@ resource "aws_lambda_function" "bedrock_agent" {
 
   environment {
     variables = {
-      MODEL_ID      = var.bedrock_model_id
-      SUMMARY_TABLE = aws_dynamodb_table.train_congestion_summary.name
+      MODEL_ID            = var.bedrock_model_id
+      SUMMARY_TABLE       = aws_dynamodb_table.train_congestion_summary.name
+      DELAY_SUMMARY_TABLE = aws_dynamodb_table.train_delay_summary.name
     }
   }
 

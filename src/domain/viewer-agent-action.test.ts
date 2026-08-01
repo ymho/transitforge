@@ -9,7 +9,6 @@ describe("viewer agent action", () => {
         { type: "set_display_time", routeTimeMinutes: 1_080 },
         { type: "focus_train", serviceUid: "service-a" },
         { type: "set_weather", weather: "cloudy" },
-        { type: "set_scene_mode", sceneMode: "model" },
         {
           type: "set_layer_visibility",
           layer: "destination_arcs",
@@ -20,7 +19,6 @@ describe("viewer agent action", () => {
       { type: "set_display_time", routeTimeMinutes: 1_080 },
       { type: "focus_train", serviceUid: "service-a" },
       { type: "set_weather", weather: "cloudy" },
-      { type: "set_scene_mode", sceneMode: "model" },
       {
         type: "set_layer_visibility",
         layer: "destination_arcs",

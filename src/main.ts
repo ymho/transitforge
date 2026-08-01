@@ -12,26 +12,38 @@ import {
   loadTrainCongestion,
 } from "./data/train-congestion";
 import {
+  loadTrainDelays,
+  trainDelayRefreshIntervalMilliseconds,
+  trainDelayRetryIntervalMilliseconds,
+} from "./data/train-delay";
+import {
   invokeBedrockAgent,
-  queryDailyCongestionPeak,
+  queryDailyCongestionAnalysis,
+  queryTrainDelayAnalysis,
 } from "./data/bedrock-agent";
 import { loadTrainIndex, type Train } from "./data/train-index";
-import { lightPresetForRouteTime, type LightPreset } from "./domain/map-lighting";
 import {
-  isSceneMode,
-  lightPresetForSceneMode,
-  sceneModeStyleFor,
-  type SceneMode,
-} from "./domain/map-scene-mode";
+  dateForOperatingRouteTime,
+  operatingServiceDateStart,
+  stepDisplayDateTime,
+  type DisplayDateTimeUnit,
+} from "./domain/display-date-time";
+import { lightPresetForRouteTime, type LightPreset } from "./domain/map-lighting";
 import {
   applyWeather,
   isWeatherMode,
   type WeatherMode,
 } from "./domain/map-weather";
 import { dominantLineColorsByPathId } from "./domain/path-line-colors";
-import { advanceRouteTime, currentRouteTime } from "./domain/playback";
+import {
+  advanceRouteTime,
+  currentRouteTime,
+  operatingDayStartMinutes,
+} from "./domain/playback";
 import { TrainFocusSession } from "./domain/train-focus-session";
 import { coupledTrainLayouts } from "./domain/coupled-train-layout";
+import { congestionAnalysisForAgent } from "./domain/congestion-analysis";
+import { delayAnalysisForAgent } from "./domain/delay-analysis";
 import { TrainLineColorIndex } from "./domain/train-line-color";
 import {
   activeTrainPositions,
@@ -54,7 +66,7 @@ import {
   configureAiGuidePanel,
   type AiGuidePromptHandler,
 } from "./presentation/ai-guide-panel";
-import { timetableRowsFor } from "./presentation/train-timetable";
+import { timetableProgressRowsFor } from "./presentation/train-timetable";
 import {
   trainServiceLabelFor,
   trainTitleFor,
@@ -63,32 +75,46 @@ import { MapboxThreeTrainLayer } from "./rendering/mapbox-three-train-layer";
 import { RuntimeMetrics } from "./observability/runtime-metrics";
 
 const minimumPlaybackRenderIntervalMilliseconds = 1_000 / 30;
+const metricsLogIntervalMilliseconds = 10_000;
+let nextMetricsLogTimestamp = 0;
 
 const token = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
-const controlPanel = document.querySelector<HTMLElement>("#control-panel");
-const controlPanelToggle =
-  document.querySelector<HTMLButtonElement>("#control-panel-toggle");
+const dateTimePanel = document.querySelector<HTMLElement>("#date-time-panel");
 const status = document.querySelector<HTMLParagraphElement>("#map-status");
 const displayTime = document.querySelector<HTMLInputElement>("#display-time");
-const timeLabel = document.querySelector<HTMLOutputElement>("#time-label");
-const clockHourHand = document.querySelector<SVGLineElement>("#clock-hour-hand");
-const clockMinuteHand = document.querySelector<SVGLineElement>("#clock-minute-hand");
-const clockSecondHand = document.querySelector<SVGLineElement>("#clock-second-hand");
-const playToggle = document.querySelector<HTMLButtonElement>("#play-toggle");
-const realTimeToggle = document.querySelector<HTMLButtonElement>("#real-time-toggle");
-const playbackSpeed = document.querySelector<HTMLSelectElement>("#playback-speed");
-const sceneModeButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>("[data-scene-mode]"),
+const dateTimeSummary =
+  document.querySelector<HTMLOutputElement>("#date-time-summary");
+const displayMonth = document.querySelector<HTMLOutputElement>("#display-month");
+const displayDay = document.querySelector<HTMLOutputElement>("#display-day");
+const displayHour = document.querySelector<HTMLOutputElement>("#display-hour");
+const displayMinute = document.querySelector<HTMLOutputElement>("#display-minute");
+const displaySecond = document.querySelector<HTMLOutputElement>("#display-second");
+const dateTimeStepButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-date-time-unit]"),
 );
+const playToggle = document.querySelector<HTMLButtonElement>("#play-toggle");
+const currentTimeButton =
+  document.querySelector<HTMLButtonElement>("#current-time-button");
+const playbackSpeed = document.querySelector<HTMLInputElement>("#playback-speed");
+const playbackSpeedMenuToggle =
+  document.querySelector<HTMLButtonElement>("#playback-speed-menu-toggle");
+const playbackSpeedOptions =
+  document.querySelector<HTMLFieldSetElement>("#playback-speed-options");
+const playbackSpeedButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-playback-speed]"),
+);
+const mapTools = document.querySelector<HTMLElement>("#map-tools");
 const weatherButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>("[data-weather]"),
 );
+const weatherMenuToggle =
+  document.querySelector<HTMLButtonElement>("#weather-menu-toggle");
+const weatherOptions =
+  document.querySelector<HTMLFieldSetElement>("#weather-options");
 const congestionToggle =
   document.querySelector<HTMLButtonElement>("#congestion-toggle");
 const destinationArcsToggle =
   document.querySelector<HTMLButtonElement>("#destination-arcs-toggle");
-const congestionLegend =
-  document.querySelector<HTMLElement>("#congestion-legend");
 const aiGuidePanel = document.querySelector<HTMLElement>("#ai-guide-panel");
 const aiGuideToggle =
   document.querySelector<HTMLButtonElement>("#ai-guide-toggle");
@@ -110,34 +136,34 @@ const selectedTrainTitle = document.querySelector<HTMLElement>("#selected-train-
 const selectedTrainNumber = document.querySelector<HTMLElement>("#selected-train-number");
 const selectedTrainType = document.querySelector<HTMLElement>("#selected-train-type");
 const selectedTrainRoute = document.querySelector<HTMLElement>("#selected-train-route");
+const selectedTrainDelay = document.querySelector<HTMLElement>("#selected-train-delay");
 const selectedTrainStops = document.querySelector<HTMLOListElement>("#selected-train-stops");
 const showCoupledTrain = document.querySelector<HTMLButtonElement>("#show-coupled-train");
-const metricDisplaySummary = document.querySelector<HTMLElement>("#metric-display-summary");
-const metricRouteLoad = document.querySelector<HTMLElement>("#metric-route-load");
-const metricTrainLoad = document.querySelector<HTMLElement>("#metric-train-load");
-const metricPositionUpdate = document.querySelector<HTMLElement>("#metric-position-update");
-const metricActiveTrains = document.querySelector<HTMLElement>("#metric-active-trains");
-const metricFramesPerSecond = document.querySelector<HTMLElement>("#metric-fps");
-const metricHeap = document.querySelector<HTMLElement>("#metric-heap");
 const metrics = new RuntimeMetrics();
 
 if (
-  controlPanel === null ||
-  controlPanelToggle === null ||
+  dateTimePanel === null ||
   status === null ||
   displayTime === null ||
-  timeLabel === null ||
-  clockHourHand === null ||
-  clockMinuteHand === null ||
-  clockSecondHand === null ||
+  dateTimeSummary === null ||
+  displayMonth === null ||
+  displayDay === null ||
+  displayHour === null ||
+  displayMinute === null ||
+  displaySecond === null ||
+  dateTimeStepButtons.length !== 10 ||
   playToggle === null ||
-  realTimeToggle === null ||
+  currentTimeButton === null ||
   playbackSpeed === null ||
-  sceneModeButtons.length !== 2 ||
+  playbackSpeedMenuToggle === null ||
+  playbackSpeedOptions === null ||
+  playbackSpeedButtons.length === 0 ||
+  mapTools === null ||
   weatherButtons.length !== 4 ||
+  weatherMenuToggle === null ||
+  weatherOptions === null ||
   congestionToggle === null ||
   destinationArcsToggle === null ||
-  congestionLegend === null ||
   aiGuidePanel === null ||
   aiGuideToggle === null ||
   closeAiGuide === null ||
@@ -152,14 +178,14 @@ if (
   selectedTrainNumber === null ||
   selectedTrainType === null ||
   selectedTrainRoute === null ||
+  selectedTrainDelay === null ||
   selectedTrainStops === null ||
-  showCoupledTrain === null ||
-  metricDisplaySummary === null
+  showCoupledTrain === null
 ) {
   throw new Error("A required viewer element is missing.");
 }
 
-configureControlPanelMinimization(controlPanel, controlPanelToggle);
+configureDateTimePanel(dateTimePanel);
 let handleAiGuidePrompt: AiGuidePromptHandler = async () =>
   "列車データを読み込んでいます。準備が整ってからもう一度お試しください。";
 configureAiGuidePanel(
@@ -176,10 +202,11 @@ configureAiGuidePanel(
   (prompt) => handleAiGuidePrompt(prompt),
 );
 
-const initialRouteTime = currentRouteTime(new Date());
+const initialDateTime = new Date();
+let displayedServiceDateStart = operatingServiceDateStart(initialDateTime);
+const initialRouteTime = currentRouteTime(initialDateTime);
 displayTime.value = String(initialRouteTime);
-timeLabel.textContent = formatRouteTime(initialRouteTime);
-updateAnalogClock(initialRouteTime);
+renderDisplayDateTime(initialDateTime);
 
 if (!token) {
   status.textContent =
@@ -202,6 +229,28 @@ if (!token) {
 
   map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }));
   map.addControl(new mapboxgl.FullscreenControl());
+  const geolocateControl = new mapboxgl.GeolocateControl({
+    positionOptions: { enableHighAccuracy: true },
+    fitBoundsOptions: { maxZoom: 16 },
+    trackUserLocation: false,
+    showAccuracyCircle: true,
+    showUserHeading: true,
+  });
+  map.addControl(geolocateControl);
+  const geolocateButton = document.querySelector<HTMLButtonElement>(
+    ".mapboxgl-ctrl-geolocate",
+  );
+  if (geolocateButton) {
+    geolocateButton.ariaLabel = "現在地へ移動";
+    geolocateButton.title = "現在地へ移動";
+  }
+  map.addControl(
+    {
+      onAdd: () => mapTools,
+      onRemove: () => mapTools.remove(),
+    },
+    "top-right",
+  );
 
   map.on("style.load", async () => {
     status.hidden = false;
@@ -214,20 +263,25 @@ if (!token) {
     map.setConfigProperty("basemap", "showTransitLabels", false);
     let applyWeatherToTrains: (mode: WeatherMode) => void = () => undefined;
     let activeWeatherMode: WeatherMode = "clear";
-    const selectWeather = configureWeather(map, weatherButtons, (mode) => {
-      activeWeatherMode = mode;
-      applyWeatherToTrains(mode);
-    });
+    const selectWeather = configureWeather(
+      map,
+      weatherButtons,
+      weatherMenuToggle,
+      weatherOptions,
+      (mode) => {
+        activeWeatherMode = mode;
+        applyWeatherToTrains(mode);
+      },
+    );
     monitorFrames();
     let activeLightPreset: LightPreset | undefined;
-    let activeSceneMode: SceneMode = "normal";
 
     try {
       status.textContent = "全経路を読み込んでいます。";
       const routeLoadStartedAt = performance.now();
       const catalog = await loadPathCatalog();
       metrics.recordRouteLoad(performance.now() - routeLoadStartedAt);
-      renderMetrics();
+      logMetrics();
 
       status.textContent = "列車と駅・路線カタログを読み込んでいます。";
       const trainLoadStartedAt = performance.now();
@@ -259,12 +313,13 @@ if (!token) {
         lineColorsByPathId,
       );
       metrics.recordTrainLoad(performance.now() - trainLoadStartedAt);
-      renderMetrics();
-      const routeLayerIds: string[] = [];
-
+      logMetrics();
+      console.debug("[TransitForge] viewer catalog", {
+        routes: catalog.paths.length,
+        trains: trainIndex.trains.length,
+      });
       for (const [index, routes] of routeCollections.entries()) {
         const sourceId = `routes-${index}`;
-        routeLayerIds.push(sourceId);
         map.addSource(sourceId, { type: "geojson", data: routes });
         map.addLayer({
           id: sourceId,
@@ -305,7 +360,6 @@ if (!token) {
         const setCongestionVisible = configureTrainCongestionUpdates(
           threeTrainLayer,
           congestionToggle,
-          congestionLegend,
         );
         map.addSource("train-hit-targets", { type: "geojson", data: emptyFeatureCollection() });
         map.addLayer({
@@ -328,10 +382,7 @@ if (!token) {
         let displayedPositions: TrainPosition[] = [];
 
         const updateTrains = (routeTime = Number(displayTime.value)) => {
-          const lightPreset = lightPresetForSceneMode(
-            activeSceneMode,
-            lightPresetForRouteTime(routeTime),
-          );
+          const lightPreset = lightPresetForRouteTime(routeTime);
           if (lightPreset !== activeLightPreset) {
             map.setConfigProperty("basemap", "lightPreset", lightPreset);
             activeLightPreset = lightPreset;
@@ -350,25 +401,31 @@ if (!token) {
               geometry: { type: "Point" as const, coordinates: position.coordinate },
             })),
           });
-          timeLabel.textContent = formatRouteTime(routeTime);
-          updateAnalogClock(routeTime);
-          metricDisplaySummary.textContent =
-            `${catalog.paths.length.toLocaleString("ja-JP")}経路と` +
-            `${positions.length.toLocaleString("ja-JP")}列車を表示中です。`;
+          renderDisplayDateTime(
+            dateForOperatingRouteTime(displayedServiceDateStart, routeTime),
+          );
           status.hidden = true;
           metrics.recordPositionUpdate(performance.now() - updateStartedAt, positions.length);
-          renderMetrics();
+          logMetrics();
         };
 
+        configureTrainDelayUpdates((delays) => {
+          threeTrainLayer.setDelayByTrainNumber(delays);
+          selection.updateDelays(delays);
+        });
+
         displayTime.addEventListener("input", () => updateTrains());
-        const selectSceneMode = configureSceneModes(
-          map,
-          sceneModeButtons,
-          routeLayerIds,
-          (mode) => {
-            activeSceneMode = mode;
-            activeLightPreset = undefined;
-            updateTrains();
+        configureDateTimeSteppers(
+          dateTimeStepButtons,
+          () =>
+            dateForOperatingRouteTime(
+              displayedServiceDateStart,
+              Number(displayTime.value),
+            ),
+          (date) => {
+            displayedServiceDateStart = operatingServiceDateStart(date);
+            displayTime.value = String(currentRouteTime(date));
+            displayTime.dispatchEvent(new Event("input", { bubbles: true }));
           },
         );
         const setLayerVisibility = (
@@ -386,7 +443,6 @@ if (!token) {
           () => displayedPositions,
           selection.focusTrain,
           selectWeather,
-          selectSceneMode,
           setLayerVisibility,
           maximumRouteTime,
         );
@@ -405,9 +461,18 @@ if (!token) {
                   ),
                 focusTrain: selection.focusTrain,
                 setWeather: selectWeather,
-                setSceneMode: selectSceneMode,
                 setLayerVisibility,
-                queryDailyCongestionPeak,
+                queryDailyCongestionAnalysis: async (serviceDate) =>
+                  congestionAnalysisForAgent(
+                    await queryDailyCongestionAnalysis(serviceDate),
+                    trainIndex.trains,
+                    (train) => lineColorIndex.colorFor(train).lineName,
+                  ),
+                queryTrainDelayAnalysis: async (serviceDate) =>
+                  delayAnalysisForAgent(
+                    await queryTrainDelayAnalysis(serviceDate),
+                    trainIndex.trains,
+                  ),
                 maximumRouteTime,
               },
               invokeBedrockAgent,
@@ -421,9 +486,27 @@ if (!token) {
         };
         displayTime.disabled = false;
         playToggle.disabled = false;
-        realTimeToggle.disabled = false;
-        playbackSpeed.disabled = false;
-        configurePlayback(updateTrains, maximumRouteTime);
+        currentTimeButton.disabled = false;
+        configurePlaybackSpeed(
+          playbackSpeed,
+          playbackSpeedButtons,
+          playbackSpeedMenuToggle,
+          playbackSpeedOptions,
+        );
+        configurePlayback(
+          updateTrains,
+          maximumRouteTime,
+          (date) => {
+            displayedServiceDateStart = operatingServiceDateStart(date);
+          },
+          () => {
+            displayedServiceDateStart = stepDisplayDateTime(
+              displayedServiceDateStart,
+              "day",
+              1,
+            );
+          },
+        );
         updateTrains();
     } catch (error) {
       const message = error instanceof Error ? error.message : "不明なエラーです。";
@@ -448,25 +531,56 @@ function formatRouteTime(routeTimeMinutes: number): string {
   return seconds === 0 ? base : `${base}:${String(seconds).padStart(2, "0")}`;
 }
 
-function updateAnalogClock(routeTimeMinutes: number): void {
+function renderDisplayDateTime(date: Date): void {
   if (
-    clockHourHand === null ||
-    clockMinuteHand === null ||
-    clockSecondHand === null
+    dateTimeSummary === null ||
+    displayMonth === null ||
+    displayDay === null ||
+    displayHour === null ||
+    displayMinute === null ||
+    displaySecond === null
   ) {
     return;
   }
 
-  const minutesInDay = 24 * 60;
-  const normalizedMinutes =
-    ((routeTimeMinutes % minutesInDay) + minutesInDay) % minutesInDay;
-  const hourAngle = normalizedMinutes * 0.5;
-  const minuteAngle = (normalizedMinutes % 60) * 6;
-  const secondAngle = ((normalizedMinutes * 60) % 60) * 6;
+  dateTimeSummary.value =
+    `${date.getMonth() + 1}月${date.getDate()}日 ` +
+    `${date.getHours()}時${String(date.getMinutes()).padStart(2, "0")}分` +
+    `${String(date.getSeconds()).padStart(2, "0")}秒`;
+  displayMonth.value = String(date.getMonth() + 1).padStart(2, "0");
+  displayDay.value = String(date.getDate()).padStart(2, "0");
+  displayHour.value = String(date.getHours()).padStart(2, "0");
+  displayMinute.value = String(date.getMinutes()).padStart(2, "0");
+  displaySecond.value = String(date.getSeconds()).padStart(2, "0");
+}
 
-  clockHourHand.setAttribute("transform", `rotate(${hourAngle} 60 53)`);
-  clockMinuteHand.setAttribute("transform", `rotate(${minuteAngle} 60 53)`);
-  clockSecondHand.setAttribute("transform", `rotate(${secondAngle} 60 53)`);
+function configureDateTimeSteppers(
+  buttons: HTMLButtonElement[],
+  getDate: () => Date,
+  setDate: (date: Date) => void,
+): void {
+  for (const button of buttons) {
+    button.disabled = false;
+    button.addEventListener("click", () => {
+      const unit = button.dataset.dateTimeUnit;
+      const amount = Number(button.dataset.dateTimeStep);
+      if (isDisplayDateTimeUnit(unit) && (amount === 1 || amount === -1)) {
+        setDate(stepDisplayDateTime(getDate(), unit, amount));
+      }
+    });
+  }
+}
+
+function isDisplayDateTimeUnit(
+  value: string | undefined,
+): value is DisplayDateTimeUnit {
+  return (
+    value === "month" ||
+    value === "day" ||
+    value === "hour" ||
+    value === "minute" ||
+    value === "second"
+  );
 }
 
 function maximumRouteTimeFor(
@@ -494,7 +608,6 @@ function createLocalAiGuidePromptHandler(
   getPositions: () => TrainPosition[],
   focusTrain: (serviceUid: string) => boolean,
   setWeather: (weather: WeatherMode) => void,
-  setSceneMode: (mode: SceneMode) => void,
   setLayerVisibility: (layer: ViewerAgentLayer, visible: boolean) => void,
   maximumRouteTime: number,
 ): AiGuidePromptHandler {
@@ -511,13 +624,6 @@ function createLocalAiGuidePromptHandler(
           snow: "雪",
         }[action.weather];
         responseParts.push(`天気を${weatherLabel}に設定しました。`);
-      } else if (action.type === "set_scene_mode") {
-        setSceneMode(action.sceneMode);
-        responseParts.push(
-          action.sceneMode === "model"
-            ? "模型モードに変更しました。"
-            : "通常表示に変更しました。",
-        );
       } else if (action.type === "set_layer_visibility") {
         setLayerVisibility(action.layer, action.visible);
         const layerLabel =
@@ -535,7 +641,7 @@ function createLocalAiGuidePromptHandler(
     ) {
       const rangeStart =
         Math.max(
-          0,
+          operatingDayStartMinutes,
           arrivalSearch.targetTimeMinutes - arrivalSearch.windowMinutes,
         );
       const rangeEnd =
@@ -634,32 +740,51 @@ function applyViewerAgentActions(
   }
 }
 
-function configureControlPanelMinimization(
-  panel: HTMLElement,
-  toggle: HTMLButtonElement,
-): void {
-  const setMinimized = (minimized: boolean) => {
-    panel.dataset.minimized = String(minimized);
-    toggle.ariaExpanded = String(!minimized);
-    toggle.ariaLabel = minimized
-      ? "操作パネルを元に戻す"
-      : "操作パネルを最小化";
-    toggle.textContent = minimized ? "＋" : "−";
+function configureDateTimePanel(panel: HTMLElement): void {
+  const setEditing = (editing: boolean) => {
+    panel.dataset.editing = String(editing);
+    panel.ariaExpanded = String(editing);
+    panel.ariaLabel = editing
+      ? "表示日時を編集中。パネルの余白を押すと閉じます"
+      : "表示日時。押すと日時を変更できます";
   };
 
-  toggle.addEventListener("click", () => {
-    setMinimized(panel.dataset.minimized !== "true");
+  panel.addEventListener("click", (event) => {
+    const target = event.target;
+    if (target instanceof Element && target.closest("button")) {
+      return;
+    }
+    setEditing(panel.dataset.editing !== "true");
+  });
+  panel.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      setEditing(false);
+    } else if (
+      (event.key === "Enter" || event.key === " ") &&
+      event.target === panel
+    ) {
+      event.preventDefault();
+      setEditing(panel.dataset.editing !== "true");
+    }
+  });
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (target instanceof Node && !panel.contains(target)) {
+      setEditing(false);
+    }
   });
 }
 
 function configurePlayback(
   updateTrains: (routeTime?: number) => void,
   maximumRouteTime: number,
+  onCurrentDateSelected: (date: Date) => void,
+  onOperatingDayWrapped: () => void,
 ): void {
   if (
     displayTime === null ||
     playToggle === null ||
-    realTimeToggle === null ||
+    currentTimeButton === null ||
     playbackSpeed === null
   ) {
     throw new Error("Playback controls are missing.");
@@ -667,7 +792,6 @@ function configurePlayback(
 
   let playing = false;
   let animationFrame: number | undefined;
-  let realTimeTimer: number | undefined;
   let lastTimestamp: number | undefined;
   let lastRenderedTimestamp: number | undefined;
   let playbackRouteTime = Number(displayTime.value);
@@ -675,7 +799,7 @@ function configurePlayback(
 
   const setRouteTime = (routeTime: number) => {
     playbackRouteTime = routeTime;
-    displayTime.value = String(Math.round(routeTime));
+    displayTime.value = String(routeTime);
     updateTrains(routeTime);
   };
 
@@ -687,12 +811,9 @@ function configurePlayback(
       cancelAnimationFrame(animationFrame);
       animationFrame = undefined;
     }
-    if (realTimeTimer !== undefined) {
-      clearInterval(realTimeTimer);
-      realTimeTimer = undefined;
-    }
-    playToggle.textContent = "再生";
-    realTimeToggle.textContent = "現在時刻";
+    setMapToolIcon(playToggle, "icon-play");
+    playToggle.ariaLabel = "再生";
+    playToggle.title = "再生";
   };
 
   const tick = (timestamp: number) => {
@@ -702,19 +823,23 @@ function configurePlayback(
 
     if (lastTimestamp !== undefined) {
       const minutesPerSecond = Number(playbackSpeed.value);
-      playbackRouteTime = advanceRouteTime(
+      const nextRouteTime = advanceRouteTime(
         playbackRouteTime,
         timestamp - lastTimestamp,
         minutesPerSecond,
         range,
       );
+      if (nextRouteTime < playbackRouteTime) {
+        onOperatingDayWrapped();
+      }
+      playbackRouteTime = nextRouteTime;
       // 全量の列車位置計算とGeoJSON更新を毎フレーム行うと負荷が大きい。
       // 30fpsを上限として、20fpsだった更新より滑らかに再生する。
       if (
         lastRenderedTimestamp === undefined ||
         timestamp - lastRenderedTimestamp >= minimumPlaybackRenderIntervalMilliseconds
       ) {
-        displayTime.value = String(Math.round(playbackRouteTime));
+        displayTime.value = String(playbackRouteTime);
         updateTrains(playbackRouteTime);
         lastRenderedTimestamp = timestamp;
       }
@@ -729,17 +854,16 @@ function configurePlayback(
       return;
     }
 
-    if (realTimeTimer !== undefined) {
-      stop();
-    }
     playing = true;
     lastTimestamp = undefined;
-    playToggle.textContent = "一時停止";
+    setMapToolIcon(playToggle, "icon-pause");
+    playToggle.ariaLabel = "一時停止";
+    playToggle.title = "一時停止";
     animationFrame = requestAnimationFrame(tick);
   };
 
   displayTime.addEventListener("input", () => {
-    if (playing || realTimeTimer !== undefined) {
+    if (playing) {
       stop();
     }
     playbackRouteTime = Number(displayTime.value);
@@ -752,39 +876,112 @@ function configurePlayback(
 
     start();
   });
-  realTimeToggle.addEventListener("click", () => {
-    if (realTimeTimer !== undefined) {
-      stop();
-      return;
-    }
-
-    stop();
-    const synchronize = () => {
-      const now = new Date();
-      const currentRouteTime = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
-      setRouteTime(Math.min(Math.max(currentRouteTime, range.minimum), range.maximum));
-    };
-    synchronize();
-    realTimeToggle.textContent = "現在時刻を停止";
-    realTimeTimer = window.setInterval(synchronize, 1_000);
+  currentTimeButton.addEventListener("click", () => {
+    const now = new Date();
+    onCurrentDateSelected(now);
+    const routeTime = currentRouteTime(now);
+    setRouteTime(Math.min(Math.max(routeTime, range.minimum), range.maximum));
   });
 
   start();
 }
 
+function configurePlaybackSpeed(
+  value: HTMLInputElement,
+  buttons: HTMLButtonElement[],
+  menuToggle: HTMLButtonElement,
+  options: HTMLFieldSetElement,
+): void {
+  const closeMenu = () => {
+    options.hidden = true;
+    menuToggle.ariaExpanded = "false";
+  };
+  const selectSpeed = (speed: string, label: string) => {
+    value.value = speed;
+    menuToggle.textContent = label;
+    menuToggle.ariaLabel = `再生速度を選択（現在は${label.replace("×", "倍")}）`;
+    menuToggle.title = `再生速度: ${label.replace("×", "倍")}`;
+    for (const button of buttons) {
+      button.ariaPressed = String(button.dataset.playbackSpeed === speed);
+    }
+    closeMenu();
+  };
+
+  menuToggle.disabled = false;
+  menuToggle.addEventListener("click", () => {
+    const open = options.hidden;
+    options.hidden = !open;
+    menuToggle.ariaExpanded = String(open);
+  });
+  for (const button of buttons) {
+    button.disabled = false;
+    button.addEventListener("click", () => {
+      const speed = button.dataset.playbackSpeed;
+      const label = button.dataset.playbackSpeedLabel;
+      if (speed && label) {
+        selectSpeed(speed, label);
+      }
+    });
+  }
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (
+      target instanceof Node &&
+      !options.contains(target) &&
+      !menuToggle.contains(target)
+    ) {
+      closeMenu();
+    }
+  });
+
+  const selectedButton = buttons.find(
+    (button) => button.dataset.playbackSpeed === value.value,
+  );
+  selectSpeed(
+    value.value,
+    selectedButton?.dataset.playbackSpeedLabel ?? "1×",
+  );
+}
+
 function configureWeather(
   map: mapboxgl.Map,
   buttons: HTMLButtonElement[],
+  menuToggle: HTMLButtonElement,
+  options: HTMLFieldSetElement,
   onWeatherChanged: (mode: WeatherMode) => void,
 ): (mode: WeatherMode) => void {
+  const weatherPresentation: Record<
+    WeatherMode,
+    { icon: string; label: string }
+  > = {
+    clear: { icon: "icon-sun", label: "晴れ" },
+    cloudy: { icon: "icon-cloud", label: "曇り" },
+    rain: { icon: "icon-rain", label: "雨" },
+    snow: { icon: "icon-snow", label: "雪" },
+  };
+  const closeMenu = () => {
+    options.hidden = true;
+    menuToggle.ariaExpanded = "false";
+  };
   const selectWeather = (mode: WeatherMode) => {
     applyWeather(map, mode);
     onWeatherChanged(mode);
     for (const button of buttons) {
       button.ariaPressed = String(button.dataset.weather === mode);
     }
+    const presentation = weatherPresentation[mode];
+    setMapToolIcon(menuToggle, presentation.icon);
+    menuToggle.ariaLabel = `天気を選択（現在は${presentation.label}）`;
+    menuToggle.title = `天気: ${presentation.label}`;
+    closeMenu();
   };
 
+  menuToggle.disabled = false;
+  menuToggle.addEventListener("click", () => {
+    const open = options.hidden;
+    options.hidden = !open;
+    menuToggle.ariaExpanded = String(open);
+  });
   for (const button of buttons) {
     button.disabled = false;
     button.addEventListener("click", () => {
@@ -794,21 +991,35 @@ function configureWeather(
       }
     });
   }
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (
+      target instanceof Node &&
+      !options.contains(target) &&
+      !menuToggle.contains(target)
+    ) {
+      closeMenu();
+    }
+  });
 
   selectWeather("clear");
   return selectWeather;
 }
 
+function setMapToolIcon(button: HTMLButtonElement, symbolId: string): void {
+  button
+    .querySelector<SVGUseElement>("use")
+    ?.setAttribute("href", `#${symbolId}`);
+}
+
 function configureTrainCongestionUpdates(
   trainLayer: MapboxThreeTrainLayer,
   toggle: HTMLButtonElement,
-  legend: HTMLElement,
 ): (enabled: boolean) => void {
   let timer: number | undefined;
   let nextRefreshAt = Date.now();
   let refreshing = false;
   let enabled = true;
-  let hasData = false;
 
   const schedule = (delayMilliseconds: number) => {
     if (timer !== undefined) {
@@ -830,8 +1041,6 @@ function configureTrainCongestionUpdates(
     try {
       const snapshot = await loadTrainCongestion();
       trainLayer.setCongestionByTrainNumber(snapshot.byTrainNumber);
-      hasData = true;
-      legend.hidden = !enabled;
       schedule(congestionRefreshIntervalMilliseconds);
     } catch (error) {
       console.warn("列車混雑情報を更新できませんでした。", error);
@@ -845,7 +1054,6 @@ function configureTrainCongestionUpdates(
     enabled = nextEnabled;
     toggle.ariaPressed = String(enabled);
     trainLayer.setCongestionVisible(enabled);
-    legend.hidden = !enabled || !hasData;
 
     if (!enabled) {
       if (timer !== undefined) {
@@ -879,6 +1087,54 @@ function configureTrainCongestionUpdates(
   return setEnabled;
 }
 
+function configureTrainDelayUpdates(
+  onUpdate: (delays: ReadonlyMap<string, number>) => void,
+): void {
+  let timer: number | undefined;
+  let nextRefreshAt = Date.now();
+  let refreshing = false;
+
+  const schedule = (delayMilliseconds: number) => {
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+    }
+    nextRefreshAt = Date.now() + delayMilliseconds;
+    if (document.visibilityState === "visible") {
+      timer = window.setTimeout(() => void refresh(), delayMilliseconds);
+    }
+  };
+
+  const refresh = async () => {
+    if (refreshing || document.visibilityState !== "visible") {
+      return;
+    }
+    refreshing = true;
+    try {
+      const snapshot = await loadTrainDelays();
+      onUpdate(snapshot.byTrainNumber);
+      schedule(trainDelayRefreshIntervalMilliseconds);
+    } catch (error) {
+      console.warn("列車遅延情報を更新できませんでした。", error);
+      schedule(trainDelayRetryIntervalMilliseconds);
+    } finally {
+      refreshing = false;
+    }
+  };
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") {
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+        timer = undefined;
+      }
+      return;
+    }
+    schedule(Math.max(0, nextRefreshAt - Date.now()));
+  });
+
+  void refresh();
+}
+
 function configureDestinationArcs(
   trainLayer: MapboxThreeTrainLayer,
   toggle: HTMLButtonElement,
@@ -895,64 +1151,14 @@ function configureDestinationArcs(
   return setEnabled;
 }
 
-function configureSceneModes(
-  map: mapboxgl.Map,
-  buttons: HTMLButtonElement[],
-  routeLayerIds: string[],
-  onModeChange: (mode: SceneMode) => void,
-): (mode: SceneMode) => void {
-  let normalView: { pitch: number; bearing: number } | undefined;
-  let selectedMode: SceneMode = "normal";
-
-  const selectMode = (mode: SceneMode) => {
-    if (mode === selectedMode) {
-      return;
-    }
-
-    const style = sceneModeStyleFor(mode);
-    map.setConfigProperty("basemap", "theme", style.theme);
-    for (const layerId of routeLayerIds) {
-      map.setPaintProperty(layerId, "line-width", style.routeLineWidth);
-      map.setPaintProperty(layerId, "line-opacity", style.routeLineOpacity);
-    }
-
-    if (mode === "model") {
-      normalView = {
-        pitch: map.getPitch(),
-        bearing: map.getBearing(),
-      };
-      map.easeTo({ pitch: 52, bearing: 0, duration: 700 });
-    } else if (normalView) {
-      map.easeTo({ ...normalView, duration: 700 });
-      normalView = undefined;
-    }
-
-    for (const button of buttons) {
-      button.ariaPressed = String(button.dataset.sceneMode === mode);
-    }
-    selectedMode = mode;
-    onModeChange(mode);
-  };
-
-  for (const button of buttons) {
-    button.disabled = false;
-    button.addEventListener("click", () => {
-      const mode = button.dataset.sceneMode;
-      if (isSceneMode(mode)) {
-        selectMode(mode);
-      }
-    });
-  }
-  return selectMode;
-}
-
 function configureTrainSelection(
   map: mapboxgl.Map,
-  trains: import("./data/train-index").Train[],
+  trains: Train[],
   trainLayer: MapboxThreeTrainLayer,
 ): {
   focusTrain: (serviceUid: string) => boolean;
   updateTracking: (positions: TrainPosition[]) => void;
+  updateDelays: (delays: ReadonlyMap<string, number>) => void;
 } {
   if (
     trainDetails === null ||
@@ -961,6 +1167,7 @@ function configureTrainSelection(
     selectedTrainNumber === null ||
     selectedTrainType === null ||
     selectedTrainRoute === null ||
+    selectedTrainDelay === null ||
     selectedTrainStops === null ||
     showCoupledTrain === null
   ) {
@@ -970,7 +1177,9 @@ function configureTrainSelection(
   const trainsByServiceUid = new Map(trains.map((train) => [train.service_uid, train]));
   const coupledServiceUidByServiceUid = new Map<string, string>();
   const focusSession = new TrainFocusSession();
+  let delaysByTrainNumber = new Map<string, number>();
   let displayedPositions: TrainPosition[] = [];
+  let timetableRenderSignature = "";
 
   const endFocus = () => {
     focusSession.end();
@@ -978,6 +1187,7 @@ function configureTrainSelection(
     trainDetails.hidden = true;
     showCoupledTrain.hidden = true;
     showCoupledTrain.dataset.serviceUid = "";
+    timetableRenderSignature = "";
   };
 
   const updateCoupledTrainButton = (serviceUid: string) => {
@@ -992,6 +1202,74 @@ function configureTrainSelection(
     showCoupledTrain.ariaLabel = coupledTitle
       ? `${coupledTitle.main}${coupledTitle.suffix ?? ""}の詳細を見る`
       : null;
+  };
+
+  const renderTrainTimetable = (
+    train: Train,
+    position: TrainPosition | undefined,
+    delay: number | undefined,
+  ) => {
+    const rows = timetableProgressRowsFor(
+      train.stops,
+      position?.routeMeter,
+      delay,
+    );
+    const currentRowIndex = rows.findIndex(({ status }) => status !== undefined);
+    const currentStatus =
+      currentRowIndex >= 0 ? rows[currentRowIndex]?.status : undefined;
+    const signature = [
+      train.service_uid,
+      delay ?? "unknown",
+      currentRowIndex,
+      currentStatus ?? "none",
+    ].join("|");
+    if (signature === timetableRenderSignature) {
+      return;
+    }
+    timetableRenderSignature = signature;
+
+    let currentItem: HTMLLIElement | undefined;
+    const items = rows.map(({ stationName, times, status }) => {
+      const item = document.createElement("li");
+      const station = document.createElement("span");
+      const timeList = document.createElement("span");
+      station.className = "train-timetable-station";
+      timeList.className = "train-timetable-times";
+      station.append(document.createTextNode(stationName));
+
+      if (status) {
+        item.dataset.currentStatus = status;
+        if (status === "stopped") {
+          const statusLabel = document.createElement("small");
+          statusLabel.textContent = "停車中";
+          station.append(statusLabel);
+        }
+        currentItem = item;
+      }
+
+      for (const [index, { scheduled, adjusted }] of times.entries()) {
+        const time = document.createElement("span");
+        time.className = "train-timetable-time";
+        const scheduledTime = document.createElement("span");
+        scheduledTime.textContent = scheduled;
+        if (adjusted) {
+          scheduledTime.className = "train-timetable-scheduled-replaced";
+          const adjustedTime = document.createElement("strong");
+          adjustedTime.textContent = adjusted;
+          time.append(scheduledTime, " → ", adjustedTime);
+        } else {
+          time.append(scheduledTime);
+        }
+        timeList.append(time);
+        if (index < times.length - 1) {
+          timeList.append(document.createTextNode(" / "));
+        }
+      }
+      item.append(station, timeList);
+      return item;
+    });
+    selectedTrainStops.replaceChildren(...items);
+    currentItem?.scrollIntoView({ block: "nearest" });
   };
 
   const showTrainDetails = (serviceUid: string) => {
@@ -1011,16 +1289,13 @@ function configureTrainSelection(
     selectedTrainNumber.textContent = train.train_no || "不明";
     selectedTrainType.textContent = trainServiceLabelFor(train);
     selectedTrainRoute.textContent = `${train.origin_station} → ${train.destination_station}`;
-    selectedTrainStops.replaceChildren(
-      ...timetableRowsFor(train.stops).map(({ stationName, times }) => {
-        const item = document.createElement("li");
-        const station = document.createElement("span");
-        const time = document.createElement("span");
-        station.textContent = stationName;
-        time.textContent = times.join(" / ");
-        item.append(station, time);
-        return item;
-      }),
+    const delay = delaysByTrainNumber.get(train.train_no);
+    selectedTrainDelay.textContent =
+      delay === undefined ? "情報なし" : delay > 0 ? `${delay}分` : "遅れなし";
+    renderTrainTimetable(
+      train,
+      displayedPositions.find(({ serviceUid: id }) => id === serviceUid),
+      delay,
     );
     focusSession.start(train.service_uid);
     updateCoupledTrainButton(train.service_uid);
@@ -1106,8 +1381,23 @@ function configureTrainSelection(
 
       // フォーカス中は詳細パネルと列車追跡を常に同じ状態に保つ。
       trainDetails.hidden = false;
+      const train = trainsByServiceUid.get(focusedServiceUid);
+      if (train) {
+        renderTrainTimetable(
+          train,
+          position,
+          delaysByTrainNumber.get(train.train_no),
+        );
+      }
       updateCoupledTrainButton(focusedServiceUid);
       map.jumpTo({ center: position.coordinate });
+    },
+    updateDelays(delays: ReadonlyMap<string, number>) {
+      delaysByTrainNumber = new Map(delays);
+      const focusedServiceUid = focusSession.serviceUid;
+      if (focusedServiceUid) {
+        showTrainDetails(focusedServiceUid);
+      }
     },
   };
 }
@@ -1120,7 +1410,7 @@ function monitorFrames(): void {
     if (previousTimestamp !== undefined) {
       metrics.recordFrame(timestamp - previousTimestamp);
       if (timestamp >= nextRenderTimestamp) {
-        renderMetrics();
+        logMetrics();
         nextRenderTimestamp = timestamp + 500;
       }
     }
@@ -1131,24 +1421,17 @@ function monitorFrames(): void {
   requestAnimationFrame(record);
 }
 
-function renderMetrics(): void {
-  const snapshot = metrics.getSnapshot();
-  setMetric(metricRouteLoad, formatMilliseconds(snapshot.routeLoadMilliseconds));
-  setMetric(metricTrainLoad, formatMilliseconds(snapshot.trainLoadMilliseconds));
-  setMetric(metricPositionUpdate, formatMilliseconds(snapshot.positionUpdateMilliseconds));
-  setMetric(metricActiveTrains, snapshot.activeTrainCount.toLocaleString("ja-JP"));
-  setMetric(metricFramesPerSecond, snapshot.framesPerSecond ? `${snapshot.framesPerSecond.toFixed(0)} fps` : "—");
-  setMetric(metricHeap, formatHeapUsage());
-}
-
-function setMetric(element: HTMLElement | null, value: string): void {
-  if (element) {
-    element.textContent = value;
+function logMetrics(): void {
+  const now = performance.now();
+  if (now < nextMetricsLogTimestamp) {
+    return;
   }
-}
-
-function formatMilliseconds(milliseconds: number | undefined): string {
-  return milliseconds === undefined ? "—" : `${milliseconds.toFixed(1)} ms`;
+  nextMetricsLogTimestamp = now + metricsLogIntervalMilliseconds;
+  const snapshot = metrics.getSnapshot();
+  console.debug("[TransitForge] runtime metrics", {
+    ...snapshot,
+    usedJsHeap: formatHeapUsage(),
+  });
 }
 
 function formatHeapUsage(): string {
