@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import gzip
+import io
 import json
+import sys
 import unittest
 from decimal import Decimal
 from pathlib import Path
@@ -18,6 +21,7 @@ def load_handler():
     )
     spec = importlib.util.spec_from_file_location("bedrock_agent_handler", path)
     assert spec and spec.loader
+    sys.path.insert(0, str(path.parent))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -51,6 +55,20 @@ class FakeDynamoDB:
     def query(self, **kwargs):
         self.queries.append(kwargs)
         return {"Items": self.items}
+
+
+class FakeS3:
+    def __init__(self, value):
+        self.value = value
+        self.requests = []
+
+    def get_object(self, **kwargs):
+        self.requests.append(kwargs)
+        payload = gzip.compress(json.dumps(self.value).encode("utf-8"), mtime=0)
+        return {"Body": io.BytesIO(payload)}
+
+    def head_object(self, **kwargs):
+        return {"ETag": '"representative-v1"'}
 
 
 class BedrockAgentTest(unittest.TestCase):
@@ -87,11 +105,51 @@ class BedrockAgentTest(unittest.TestCase):
                 "search_trains",
                 "query_daily_congestion_analysis",
                 "search_train_arrivals",
+                "search_representative_timetable",
                 "query_train_delay_analysis",
                 "focus_train",
                 "set_weather",
                 "set_layer_visibility",
             ],
+        )
+
+    def test_searches_a_private_representative_timetable(self) -> None:
+        handler.representative_timetable._cache.clear()
+        client = FakeS3({
+            "schema_version": "ai-timetable-v1",
+            "service_date": "2026-07-31",
+            "timetable_kind": "weekday",
+            "trains": [{
+                "service_uid": "service-1",
+                "train_no": "101M",
+                "service_type": "特急",
+                "train_name": "はるか16号",
+                "origin_station": "関西空港",
+                "destination_station": "京都",
+                "stops": [
+                    {"station_name": "大阪", "event": "着", "route_time_minutes": 600},
+                    {"station_name": "大阪", "event": "発", "route_time_minutes": 602},
+                ],
+            }],
+        })
+
+        result = handler.representative_timetable.search(
+            client,
+            "private-bucket",
+            "ai-timetable",
+            {
+                "timetableKind": "weekday",
+                "query": "平日の10時ごろ大阪に着く特急",
+                "mode": "arrivals",
+                "targetTimeMinutes": 600,
+            },
+        )
+
+        self.assertEqual(result["serviceDate"], "2026-07-31")
+        self.assertEqual(result["totalMatchCount"], 1)
+        self.assertEqual(result["matches"][0]["trainNumber"], "101M")
+        self.assertEqual(
+            client.requests[0]["Key"], "ai-timetable/weekday.json.gz"
         )
 
     def test_accepts_only_the_tool_conversation_blocks_we_relay(self) -> None:

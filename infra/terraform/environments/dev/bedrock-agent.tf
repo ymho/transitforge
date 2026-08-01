@@ -46,6 +46,12 @@ data "aws_iam_policy_document" "bedrock_agent" {
   }
 
   statement {
+    sid       = "ReadRepresentativeTimetables"
+    actions   = ["s3:GetObject"]
+    resources = ["arn:aws:s3:::${local.resource_prefix}-data-builder-source/ai-timetable/*"]
+  }
+
+  statement {
     sid = "WriteLogs"
     actions = [
       "logs:CreateLogStream",
@@ -72,7 +78,7 @@ resource "aws_lambda_function" "bedrock_agent" {
   filename         = data.archive_file.bedrock_agent.output_path
   source_code_hash = data.archive_file.bedrock_agent.output_base64sha256
 
-  memory_size = 256
+  memory_size = 512
   timeout     = 30
 
   environment {
@@ -80,6 +86,8 @@ resource "aws_lambda_function" "bedrock_agent" {
       MODEL_ID            = var.bedrock_model_id
       SUMMARY_TABLE       = aws_dynamodb_table.train_congestion_summary.name
       DELAY_SUMMARY_TABLE = aws_dynamodb_table.train_delay_summary.name
+      AI_TIMETABLE_BUCKET = "${local.resource_prefix}-data-builder-source"
+      AI_TIMETABLE_PREFIX = "ai-timetable"
     }
   }
 

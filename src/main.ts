@@ -5,7 +5,7 @@ import {
   loadPathCatalog,
   toRouteFeatureCollections,
 } from "./data/path-catalog";
-import { loadStationLineCatalog } from "./data/station-line-catalog";
+import { emptyStationLineCatalog } from "./data/station-line-catalog";
 import {
   congestionRefreshIntervalMilliseconds,
   congestionRetryIntervalMilliseconds,
@@ -20,6 +20,7 @@ import {
   invokeBedrockAgent,
   queryDailyCongestionAnalysis,
   queryTrainDelayAnalysis,
+  searchRepresentativeTimetable,
 } from "./data/bedrock-agent";
 import { loadTrainIndex, type Train } from "./data/train-index";
 import {
@@ -283,12 +284,16 @@ if (!token) {
       metrics.recordRouteLoad(performance.now() - routeLoadStartedAt);
       logMetrics();
 
-      status.textContent = "列車と駅・路線カタログを読み込んでいます。";
+      status.textContent = "列車を読み込んでいます。";
       const trainLoadStartedAt = performance.now();
-      const [trainIndex, stationLineCatalog] = await Promise.all([
-        loadTrainIndex(),
-        loadStationLineCatalog(),
-      ]);
+      const trainIndex = await loadTrainIndex();
+      const stationLineCatalog =
+        trainIndex.station_line_catalog ?? emptyStationLineCatalog();
+      if (!trainIndex.station_line_catalog) {
+        console.warn(
+          "[TransitForge] train_indexに駅・路線カタログがないため、路線色をグレーで表示します。",
+        );
+      }
       const geometry = new PathGeometryIndex(catalog.paths);
       const lineColorIndex = new TrainLineColorIndex(stationLineCatalog);
       const colorsByServiceUid = new Map(
@@ -473,6 +478,7 @@ if (!token) {
                     await queryTrainDelayAnalysis(serviceDate),
                     trainIndex.trains,
                   ),
+                searchRepresentativeTimetable,
                 maximumRouteTime,
               },
               invokeBedrockAgent,

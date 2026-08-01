@@ -8,7 +8,7 @@ DynamoDBへ保存する。AI運行観察員はCloudFrontからのみ
 列車遅延は別のSchedulerとLambdaが、重複排除した26個の走行位置JSONを1分間隔で
 各1回だけ取得し、最新値、S3履歴、DynamoDB毎分サマリーを保存する。
 静的viewer-inputはEventBridge Schedulerが毎日3:00（JST）にECS Fargateの
-`transitforge-data-builder`を起動して全件再生成し、Web用S3へ公開する。
+`transitforge-data-builder`を起動して全件再生成し、4:00に当日分をWeb用S3へ公開する。
 
 ## 初期化
 
@@ -65,8 +65,7 @@ aws s3 sync dist s3://BUCKET_NAME/ \
 aws s3 sync viewer-input s3://BUCKET_NAME/viewer-input/ \
   --exclude "*" \
   --include "train_index.json" \
-  --include "path_catalog.json" \
-  --include "station_line_catalog.json"
+  --include "path_catalog.json"
 aws cloudfront create-invalidation \
   --distribution-id DISTRIBUTION_ID \
   --paths "/*"
