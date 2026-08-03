@@ -1,16 +1,15 @@
-export type LightPreset = "day" | "night";
-type MapboxTimeOfDay = "dawn" | "day" | "dusk" | "night";
+export type LightPreset = "dawn" | "day" | "dusk" | "night";
+export type UiColorMode = "day" | "night";
 
-export function lightPresetForRouteTime(routeTimeMinutes: number): LightPreset {
-  const mapboxTimeOfDay = mapboxTimeOfDayForRouteTime(routeTimeMinutes);
-  return mapboxTimeOfDay === "dawn" || mapboxTimeOfDay === "day"
+export function uiColorModeForLightPreset(lightPreset: LightPreset): UiColorMode {
+  return lightPreset === "dawn" || lightPreset === "day"
     ? "day"
     : "night";
 }
 
-function mapboxTimeOfDayForRouteTime(
+export function lightPresetForRouteTime(
   routeTimeMinutes: number,
-): MapboxTimeOfDay {
+): LightPreset {
   const minutesPerDay = 24 * 60;
   const timeOfDay = ((routeTimeMinutes % minutesPerDay) + minutesPerDay) % minutesPerDay;
 
