@@ -541,14 +541,14 @@
 /* 日時とパネル見出しは、旧テーマの固定色を残さずUIモードに追従させる。 */
 .date-time-summary,
 .date-time-summary-value,
-.guide-panel-copy p {
+.ai-guide-panel header .guide-panel-copy p {
   color: var(--ui-text);
   opacity: 1;
   text-shadow: none;
   -webkit-text-fill-color: currentColor;
 }
 
-.guide-panel-copy small {
+.ai-guide-panel header .guide-panel-copy small {
   color: var(--ui-muted);
   opacity: 1;
   -webkit-text-fill-color: currentColor;
@@ -559,8 +559,13 @@
   cursor: pointer;
 }
 
+.hud:has(.time-control[data-editing="true"]) {
+  width: min(20rem, calc(100vw - 3rem));
+}
+
 .time-control[data-editing="true"] {
-  width: min(19rem, calc(100vw - 3rem));
+  width: 100%;
+  max-width: 100%;
 }
 
 .time-control[data-editing="true"] .date-time-summary {
@@ -642,8 +647,13 @@
 }
 
 @media (max-width: 600px) {
-  .time-control[data-editing="true"] {
-    width: min(19rem, calc(100vw - 1.8rem));
+  .hud:has(.time-control[data-editing="true"]) {
+    width: calc(100vw - 1.3rem);
+    overflow-x: hidden;
+  }
+
+  .date-time-editor-controls {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .date-time-editor input {
