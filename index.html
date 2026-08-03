@@ -23,37 +23,13 @@
             <output id="date-time-summary" class="date-time-summary-value">08.01 / 12:00:00</output>
             <span class="date-time-summary-chevron" aria-hidden="true">⌄</span>
           </div>
-          <div class="date-time-steppers">
-            <div class="date-time-stepper">
-              <button type="button" data-date-time-unit="month" data-date-time-step="1" aria-label="月を進める" disabled>▲</button>
-              <span><output id="display-month">08</output></span>
-              <button type="button" data-date-time-unit="month" data-date-time-step="-1" aria-label="月を戻す" disabled>▼</button>
+          <form id="date-time-editor" class="date-time-editor" hidden>
+            <label for="date-time-input">表示する日付と時刻</label>
+            <div class="date-time-editor-controls">
+              <input id="date-time-input" type="datetime-local" step="1" disabled />
+              <button id="date-time-apply" type="submit" disabled>適用</button>
             </div>
-            <span class="date-time-separator" aria-hidden="true">-</span>
-            <div class="date-time-stepper">
-              <button type="button" data-date-time-unit="day" data-date-time-step="1" aria-label="日を進める" disabled>▲</button>
-              <span><output id="display-day">01</output></span>
-              <button type="button" data-date-time-unit="day" data-date-time-step="-1" aria-label="日を戻す" disabled>▼</button>
-            </div>
-            <span class="date-time-group-separator" aria-hidden="true"></span>
-            <div class="date-time-stepper">
-              <button type="button" data-date-time-unit="hour" data-date-time-step="1" aria-label="時を進める" disabled>▲</button>
-              <span><output id="display-hour">12</output></span>
-              <button type="button" data-date-time-unit="hour" data-date-time-step="-1" aria-label="時を戻す" disabled>▼</button>
-            </div>
-            <span class="date-time-separator" aria-hidden="true">:</span>
-            <div class="date-time-stepper">
-              <button type="button" data-date-time-unit="minute" data-date-time-step="1" aria-label="分を進める" disabled>▲</button>
-              <span><output id="display-minute">00</output></span>
-              <button type="button" data-date-time-unit="minute" data-date-time-step="-1" aria-label="分を戻す" disabled>▼</button>
-            </div>
-            <span class="date-time-separator" aria-hidden="true">:</span>
-            <div class="date-time-stepper">
-              <button type="button" data-date-time-unit="second" data-date-time-step="1" aria-label="秒を進める" disabled>▲</button>
-              <span><output id="display-second">00</output></span>
-              <button type="button" data-date-time-unit="second" data-date-time-step="-1" aria-label="秒を戻す" disabled>▼</button>
-            </div>
-          </div>
+          </form>
           <input id="display-time" type="hidden" min="240" max="1440" value="720" />
         </div>
         <p id="map-status">Mapboxを初期化しています。</p>

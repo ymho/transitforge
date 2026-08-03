@@ -537,3 +537,116 @@
   color: var(--ui-text);
   background: var(--ui-accent-soft);
 }
+
+/* 日時とパネル見出しは、旧テーマの固定色を残さずUIモードに追従させる。 */
+.date-time-summary,
+.date-time-summary-value,
+.guide-panel-copy p {
+  color: var(--ui-text);
+  opacity: 1;
+  text-shadow: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.guide-panel-copy small {
+  color: var(--ui-muted);
+  opacity: 1;
+  -webkit-text-fill-color: currentColor;
+}
+
+.date-time-summary {
+  display: grid;
+  cursor: pointer;
+}
+
+.time-control[data-editing="true"] {
+  width: min(19rem, calc(100vw - 3rem));
+}
+
+.time-control[data-editing="true"] .date-time-summary {
+  display: grid;
+}
+
+.time-control[data-editing="true"] .date-time-summary-chevron {
+  transform: rotate(180deg);
+}
+
+/* 旧ステッパーは新しい日時ピッカーへの移行後は表示しない。 */
+.date-time-steppers,
+.time-control[data-editing="true"] .date-time-steppers {
+  display: none;
+}
+
+.date-time-editor[hidden] {
+  display: none;
+}
+
+.date-time-editor {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.15rem;
+  padding: 0.6rem 0.45rem 0.45rem;
+  border-top: 1px solid var(--ui-border);
+}
+
+.date-time-editor label {
+  color: var(--ui-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.date-time-editor-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+}
+
+.date-time-editor input,
+.date-time-editor button {
+  min-height: 2.35rem;
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  font: inherit;
+}
+
+.date-time-editor input {
+  min-width: 0;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  color: var(--ui-text);
+  background: var(--ui-surface-solid);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-time-editor button {
+  padding: 0.35rem 0.75rem;
+  color: var(--ui-action-text);
+  background: var(--ui-action-bg);
+  cursor: pointer;
+}
+
+.date-time-editor input:focus-visible,
+.date-time-editor button:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 1px;
+}
+
+#app[data-ui-color-mode="day"] .date-time-editor {
+  color-scheme: light;
+}
+
+#app[data-ui-color-mode="night"] .date-time-editor {
+  color-scheme: dark;
+}
+
+@media (max-width: 600px) {
+  .time-control[data-editing="true"] {
+    width: min(19rem, calc(100vw - 1.8rem));
+  }
+
+  .date-time-editor input {
+    font-size: 1rem;
+  }
+}
