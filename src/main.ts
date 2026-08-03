@@ -1,6 +1,7 @@
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./style.css";
+import "./loading-screen.css";
 import {
   loadPathCatalog,
   toRouteFeatureCollections,
@@ -77,6 +78,7 @@ import {
 } from "./presentation/route-search-panel";
 import { timetableProgressRowsFor } from "./presentation/train-timetable";
 import { trainTitleFor } from "./presentation/train-title";
+import { createLoadingScreen } from "./presentation/loading-screen";
 import { MapboxThreeTrainLayer } from "./rendering/mapbox-three-train-layer";
 import { RuntimeMetrics } from "./observability/runtime-metrics";
 
@@ -85,6 +87,13 @@ const metricsLogIntervalMilliseconds = 10_000;
 let nextMetricsLogTimestamp = 0;
 
 const token = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+const app = document.querySelector<HTMLElement>("#app");
+const loadingScreenElement =
+  document.querySelector<HTMLElement>("#loading-screen");
+const loadingScreenMessage =
+  document.querySelector<HTMLElement>("#loading-screen-message");
+const loadingScreenRetry =
+  document.querySelector<HTMLButtonElement>("#loading-screen-retry");
 const dateTimePanel = document.querySelector<HTMLElement>("#date-time-panel");
 const status = document.querySelector<HTMLParagraphElement>("#map-status");
 const displayTime = document.querySelector<HTMLInputElement>("#display-time");
@@ -157,6 +166,10 @@ const showCoupledTrain = document.querySelector<HTMLButtonElement>("#show-couple
 const metrics = new RuntimeMetrics();
 
 if (
+  app === null ||
+  loadingScreenElement === null ||
+  loadingScreenMessage === null ||
+  loadingScreenRetry === null ||
   dateTimePanel === null ||
   status === null ||
   displayTime === null ||
@@ -209,6 +222,14 @@ if (
   throw new Error("A required viewer element is missing.");
 }
 
+const loadingScreen = createLoadingScreen({
+  app,
+  screen: loadingScreenElement,
+  message: loadingScreenMessage,
+  retry: loadingScreenRetry,
+});
+loadingScreenRetry.addEventListener("click", () => window.location.reload());
+
 configureDateTimePanel(dateTimePanel);
 let handleAiGuidePrompt: AiGuidePromptHandler = async () =>
   "列車データを読み込んでいます。準備が整ってからもう一度お試しください。";
@@ -233,8 +254,10 @@ displayTime.value = String(initialRouteTime);
 renderDisplayDateTime(initialDateTime);
 
 if (!token) {
-  status.textContent =
+  const missingTokenMessage =
     "Mapbox公開トークンがありません。.env.localにVITE_MAPBOX_ACCESS_TOKENを設定してください。";
+  status.textContent = missingTokenMessage;
+  loadingScreen.fail(missingTokenMessage);
 } else {
   mapboxgl.accessToken = token;
 
@@ -278,6 +301,7 @@ if (!token) {
 
   map.on("style.load", async () => {
     status.hidden = false;
+    loadingScreen.setMessage("地図の表示を整えています。");
     map.setConfigProperty("basemap", "show3dObjects", true);
     map.setConfigProperty("basemap", "showPointOfInterestLabels", false);
     map.setConfigProperty("basemap", "showPlaceLabels", false);
@@ -302,12 +326,14 @@ if (!token) {
 
     try {
       status.textContent = "全経路を読み込んでいます。";
+      loadingScreen.setMessage("鉄道路線を読み込んでいます。");
       const routeLoadStartedAt = performance.now();
       const catalog = await loadPathCatalog();
       metrics.recordRouteLoad(performance.now() - routeLoadStartedAt);
       logMetrics();
 
       status.textContent = "列車を読み込んでいます。";
+      loadingScreen.setMessage("列車と時刻表を読み込んでいます。");
       const trainLoadStartedAt = performance.now();
       const trainIndex = await loadTrainIndex();
       const stationLineCatalog =
@@ -366,12 +392,16 @@ if (!token) {
         });
 
         status.textContent = `全経路を読み込んでいます (${index + 1}/${routeCollections.length})。`;
+        loadingScreen.setMessage(
+          `鉄道路線を描画しています (${index + 1}/${routeCollections.length})。`,
+        );
         await nextFrame();
       }
 
       const maximumRouteTime = maximumRouteTimeFor(trainIndex.trains);
       displayTime.max = String(Math.ceil(maximumRouteTime / 60) * 60);
 
+        loadingScreen.setMessage("列車の初期位置を準備しています。");
         const threeTrainLayer = new MapboxThreeTrainLayer(
           colorsByServiceUid,
           destinationCoordinatesByServiceUid,
@@ -605,16 +635,24 @@ if (!token) {
           },
         );
         updateTrains();
+        await nextFrame();
+        loadingScreen.complete();
     } catch (error) {
       const message = error instanceof Error ? error.message : "不明なエラーです。";
       status.hidden = false;
       status.textContent = `入力を読み込めませんでした: ${message}`;
+      loadingScreen.fail(`入力を読み込めませんでした: ${message}`);
     }
   });
 
   map.on("error", (event) => {
     status.hidden = false;
     status.textContent = `地図の読み込みに失敗しました: ${event.error.message}`;
+    if (!loadingScreen.isComplete()) {
+      loadingScreen.fail(
+        `地図の読み込みに失敗しました: ${event.error.message}`,
+      );
+    }
   });
 }
 
