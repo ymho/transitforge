@@ -1,0 +1,193 @@
+#app[data-loading-state="loading"] > :not(.loading-screen),
+#app[data-loading-state="error"] > :not(.loading-screen) {
+  visibility: hidden;
+}
+
+.loading-screen {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 1.5rem;
+  color: #edf8ff;
+  background:
+    radial-gradient(circle at 50% 42%, rgb(20 105 142 / 28%), transparent 34%),
+    linear-gradient(150deg, #07111d 0%, #0a1d2d 52%, #07121f 100%);
+  opacity: 1;
+  transition: opacity 400ms ease;
+}
+
+.loading-screen[hidden] {
+  display: none;
+}
+
+.loading-screen-complete {
+  pointer-events: none;
+  opacity: 0;
+}
+
+.loading-screen-backdrop {
+  position: absolute;
+  inset: 0;
+  opacity: 0.36;
+}
+
+.loading-screen-backdrop span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(86vw, 58rem);
+  aspect-ratio: 1;
+  border: 1px solid rgb(100 214 255 / 16%);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.loading-screen-backdrop span:nth-child(2) {
+  width: min(61vw, 40rem);
+}
+
+.loading-screen-backdrop span:nth-child(3) {
+  width: min(36vw, 23rem);
+}
+
+.loading-screen-content {
+  position: relative;
+  width: min(24rem, 100%);
+  text-align: center;
+}
+
+.loading-screen-mark {
+  position: relative;
+  width: 5.5rem;
+  height: 5.5rem;
+  margin: 0 auto 1.35rem;
+  border: 1px solid rgb(113 220 255 / 30%);
+  border-radius: 50%;
+  background: rgb(10 32 49 / 72%);
+  box-shadow: 0 0 3rem rgb(61 190 235 / 18%);
+}
+
+.loading-screen-mark::after {
+  position: absolute;
+  inset: -0.35rem;
+  border: 1px solid transparent;
+  border-top-color: #69d9ff;
+  border-right-color: rgb(105 217 255 / 22%);
+  border-radius: 50%;
+  animation: loading-orbit 1.8s linear infinite;
+  content: "";
+}
+
+.loading-screen-train {
+  position: absolute;
+  top: 1.35rem;
+  left: 1.7rem;
+  width: 2.1rem;
+  height: 2.55rem;
+  border: 2px solid #dff8ff;
+  border-radius: 0.65rem 0.65rem 0.35rem 0.35rem;
+}
+
+.loading-screen-train::before {
+  position: absolute;
+  top: 0.45rem;
+  left: 0.35rem;
+  width: 1.15rem;
+  height: 0.55rem;
+  border-radius: 0.15rem;
+  background: #6bdcff;
+  box-shadow: -0.1rem 1.15rem 0 -0.05rem #dff8ff, 0.85rem 1.15rem 0 -0.05rem #dff8ff;
+  content: "";
+}
+
+.loading-screen-rail {
+  position: absolute;
+  right: 1.35rem;
+  bottom: 0.9rem;
+  left: 1.35rem;
+  height: 1px;
+  background: rgb(105 217 255 / 55%);
+}
+
+.loading-screen-brand {
+  margin: 0 0 0.6rem;
+  color: #76dcff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+}
+
+.loading-screen h1 {
+  margin: 0;
+  font-size: clamp(1.35rem, 5vw, 1.8rem);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.loading-screen-message {
+  min-height: 1.5em;
+  margin: 0.85rem 0 1.15rem;
+  color: #b7cbd9;
+  font-size: 0.83rem;
+  line-height: 1.55;
+}
+
+.loading-screen-progress {
+  width: min(15rem, 72vw);
+  height: 2px;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 10%);
+}
+
+.loading-screen-progress span {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, #76dcff, transparent);
+  animation: loading-progress 1.45s ease-in-out infinite;
+}
+
+.loading-screen-retry {
+  margin-top: 1.35rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid rgb(118 220 255 / 45%);
+  border-radius: 999px;
+  color: #eafaff;
+  background: rgb(32 112 145 / 32%);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.loading-screen-error .loading-screen-mark::after,
+.loading-screen-error .loading-screen-progress span {
+  animation: none;
+}
+
+.loading-screen-error .loading-screen-progress {
+  background: rgb(255 123 108 / 45%);
+}
+
+@keyframes loading-orbit {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes loading-progress {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(350%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-screen,
+  .loading-screen-mark::after,
+  .loading-screen-progress span {
+    animation: none;
+    transition: none;
+  }
+}
