@@ -34,7 +34,6 @@ import {
   dateForOperatingRouteTime,
   operatingServiceDateStart,
   stepDisplayDateTime,
-  type DisplayDateTimeUnit,
 } from "./domain/display-date-time";
 import {
   lightPresetForRouteTime,
@@ -101,14 +100,12 @@ const status = document.querySelector<HTMLParagraphElement>("#map-status");
 const displayTime = document.querySelector<HTMLInputElement>("#display-time");
 const dateTimeSummary =
   document.querySelector<HTMLOutputElement>("#date-time-summary");
-const displayMonth = document.querySelector<HTMLOutputElement>("#display-month");
-const displayDay = document.querySelector<HTMLOutputElement>("#display-day");
-const displayHour = document.querySelector<HTMLOutputElement>("#display-hour");
-const displayMinute = document.querySelector<HTMLOutputElement>("#display-minute");
-const displaySecond = document.querySelector<HTMLOutputElement>("#display-second");
-const dateTimeStepButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>("[data-date-time-unit]"),
-);
+const dateTimeEditor =
+  document.querySelector<HTMLFormElement>("#date-time-editor");
+const dateTimeInput =
+  document.querySelector<HTMLInputElement>("#date-time-input");
+const dateTimeApply =
+  document.querySelector<HTMLButtonElement>("#date-time-apply");
 const playToggle = document.querySelector<HTMLButtonElement>("#play-toggle");
 const currentTimeButton =
   document.querySelector<HTMLButtonElement>("#current-time-button");
@@ -165,12 +162,9 @@ if (
   status === null ||
   displayTime === null ||
   dateTimeSummary === null ||
-  displayMonth === null ||
-  displayDay === null ||
-  displayHour === null ||
-  displayMinute === null ||
-  displaySecond === null ||
-  dateTimeStepButtons.length !== 10 ||
+  dateTimeEditor === null ||
+  dateTimeInput === null ||
+  dateTimeApply === null ||
   playToggle === null ||
   currentTimeButton === null ||
   playbackSpeed === null ||
@@ -210,7 +204,6 @@ const loadingScreen = createLoadingScreen({
 });
 loadingScreenRetry.addEventListener("click", () => window.location.reload());
 
-configureDateTimePanel(dateTimePanel);
 let handleAiGuidePrompt: AiGuidePromptHandler = async () =>
   "列車データを読み込んでいます。準備が整ってからもう一度お試しください。";
 configureAiGuidePanel(
@@ -489,8 +482,11 @@ if (!token) {
         });
 
         displayTime.addEventListener("input", () => updateTrains());
-        configureDateTimeSteppers(
-          dateTimeStepButtons,
+        configureDateTimeEditor(
+          dateTimePanel,
+          dateTimeEditor,
+          dateTimeInput,
+          dateTimeApply,
           () =>
             dateForOperatingRouteTime(
               displayedServiceDateStart,
@@ -643,14 +639,7 @@ function formatRouteTime(routeTimeMinutes: number): string {
 }
 
 function renderDisplayDateTime(date: Date): void {
-  if (
-    dateTimeSummary === null ||
-    displayMonth === null ||
-    displayDay === null ||
-    displayHour === null ||
-    displayMinute === null ||
-    displaySecond === null
-  ) {
+  if (dateTimeSummary === null) {
     return;
   }
 
@@ -660,40 +649,24 @@ function renderDisplayDateTime(date: Date): void {
     `${String(date.getHours()).padStart(2, "0")}:` +
     `${String(date.getMinutes()).padStart(2, "0")}:` +
     `${String(date.getSeconds()).padStart(2, "0")}`;
-  displayMonth.value = String(date.getMonth() + 1).padStart(2, "0");
-  displayDay.value = String(date.getDate()).padStart(2, "0");
-  displayHour.value = String(date.getHours()).padStart(2, "0");
-  displayMinute.value = String(date.getMinutes()).padStart(2, "0");
-  displaySecond.value = String(date.getSeconds()).padStart(2, "0");
-}
-
-function configureDateTimeSteppers(
-  buttons: HTMLButtonElement[],
-  getDate: () => Date,
-  setDate: (date: Date) => void,
-): void {
-  for (const button of buttons) {
-    button.disabled = false;
-    button.addEventListener("click", () => {
-      const unit = button.dataset.dateTimeUnit;
-      const amount = Number(button.dataset.dateTimeStep);
-      if (isDisplayDateTimeUnit(unit) && (amount === 1 || amount === -1)) {
-        setDate(stepDisplayDateTime(getDate(), unit, amount));
-      }
-    });
+  if (dateTimeInput !== null && dateTimePanel?.dataset.editing !== "true") {
+    dateTimeInput.value = formatDateTimeLocal(date);
   }
 }
 
-function isDisplayDateTimeUnit(
-  value: string | undefined,
-): value is DisplayDateTimeUnit {
-  return (
-    value === "month" ||
-    value === "day" ||
-    value === "hour" ||
-    value === "minute" ||
-    value === "second"
-  );
+function formatDateTimeLocal(date: Date): string {
+  const year = String(date.getFullYear()).padStart(4, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  const second = String(date.getSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+}
+
+function parseDateTimeLocal(value: string): Date | undefined {
+  const date = new Date(value);
+  return value !== "" && !Number.isNaN(date.getTime()) ? date : undefined;
 }
 
 function maximumRouteTimeFor(
@@ -853,25 +826,38 @@ function applyViewerAgentActions(
   }
 }
 
-function configureDateTimePanel(panel: HTMLElement): void {
+function configureDateTimeEditor(
+  panel: HTMLElement,
+  editor: HTMLFormElement,
+  input: HTMLInputElement,
+  apply: HTMLButtonElement,
+  getDate: () => Date,
+  setDate: (date: Date) => void,
+): void {
   const setEditing = (editing: boolean) => {
     panel.dataset.editing = String(editing);
     panel.ariaExpanded = String(editing);
+    editor.hidden = !editing;
     panel.ariaLabel = editing
-      ? "表示日時を編集中。パネルの余白を押すと閉じます"
+      ? "表示日時を編集中。Escapeキーまたはパネル外を押すと閉じます"
       : "表示日時。押すと日時を変更できます";
+    if (editing) {
+      input.value = formatDateTimeLocal(getDate());
+    }
   };
 
+  input.disabled = false;
+  apply.disabled = false;
   panel.addEventListener("click", (event) => {
     const target = event.target;
-    if (target instanceof Element && target.closest("button")) {
-      return;
+    if (target instanceof Element && target.closest(".date-time-summary")) {
+      setEditing(panel.dataset.editing !== "true");
     }
-    setEditing(panel.dataset.editing !== "true");
   });
   panel.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       setEditing(false);
+      panel.focus({ preventScroll: true });
     } else if (
       (event.key === "Enter" || event.key === " ") &&
       event.target === panel
@@ -879,6 +865,20 @@ function configureDateTimePanel(panel: HTMLElement): void {
       event.preventDefault();
       setEditing(panel.dataset.editing !== "true");
     }
+  });
+  input.addEventListener("input", () => input.setCustomValidity(""));
+  editor.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const date = parseDateTimeLocal(input.value);
+    if (date === undefined) {
+      input.setCustomValidity("日時を選択してください。");
+      input.reportValidity();
+      return;
+    }
+    input.setCustomValidity("");
+    setDate(date);
+    setEditing(false);
+    panel.focus({ preventScroll: true });
   });
   document.addEventListener("click", (event) => {
     const target = event.target;
