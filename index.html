@@ -9,16 +9,8 @@
   <body>
     <main id="app" data-loading-state="loading" aria-busy="true">
       <section id="loading-screen" class="loading-screen" role="status" aria-live="polite" aria-atomic="true">
-        <div class="loading-screen-backdrop" aria-hidden="true">
-          <span></span><span></span><span></span>
-        </div>
         <div class="loading-screen-content">
-          <div class="loading-screen-mark" aria-hidden="true">
-            <span class="loading-screen-train"></span>
-            <span class="loading-screen-rail"></span>
-          </div>
-          <p class="loading-screen-brand">TRANSITFORGE</p>
-          <h1>列車の旅を準備しています</h1>
+          <p class="loading-screen-brand">TransitForge</p>
           <p id="loading-screen-message" class="loading-screen-message">地図を読み込んでいます。</p>
           <div class="loading-screen-progress" aria-hidden="true"><span></span></div>
           <button id="loading-screen-retry" class="loading-screen-retry" type="button" hidden>再読み込み</button>
@@ -28,7 +20,6 @@
       <section id="control-panel" class="hud" aria-label="表示日時パネル">
         <div id="date-time-panel" class="time-control" data-editing="false" tabindex="0" aria-expanded="false" aria-label="表示日時。押すと日時を変更できます">
           <div class="date-time-summary">
-            <svg class="date-time-summary-icon" aria-hidden="true"><use href="#icon-calendar-clock" /></svg>
             <output id="date-time-summary" class="date-time-summary-value">08.01 / 12:00:00</output>
             <span class="date-time-summary-chevron" aria-hidden="true">⌄</span>
           </div>
@@ -107,50 +98,6 @@
         <button id="destination-arcs-toggle" type="button" aria-label="行先アーチ" title="行先アーチ" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-arc" /></svg></button>
       </nav>
       <button
-        id="route-search-toggle"
-        class="route-search-toggle"
-        type="button"
-        aria-controls="route-search-panel"
-        aria-expanded="false"
-        aria-label="経路検索を開く"
-        title="経路検索"
-        disabled
-      >
-        <svg class="guide-toggle-icon" aria-hidden="true"><use href="#icon-route" /></svg>
-      </button>
-      <aside id="route-search-panel" class="route-search-panel" aria-label="直通経路検索" hidden>
-        <header>
-          <div class="guide-panel-heading">
-            <span class="guide-panel-icon guide-panel-icon-route" aria-hidden="true">
-              <svg><use href="#icon-route" /></svg>
-            </span>
-            <div class="guide-panel-copy">
-              <p>経路検索</p>
-              <small>乗り換えなしで行ける列車を探します</small>
-            </div>
-          </div>
-          <button id="close-route-search" type="button" aria-label="経路検索を閉じる">×</button>
-        </header>
-        <form id="route-search-form" class="route-search-form">
-          <label>
-            <span>出発駅</span>
-            <input id="route-origin" type="text" list="route-stations" autocomplete="off" placeholder="空欄なら現在地から自動選択" />
-          </label>
-          <label>
-            <span>行き先</span>
-            <input id="route-destination" type="text" list="route-stations" autocomplete="off" required placeholder="例: 京都" />
-          </label>
-          <label>
-            <span>出発時刻</span>
-            <input id="route-departure-time" type="text" inputmode="numeric" pattern="[0-9]{1,2}:[0-9]{2}" required placeholder="18:30" />
-          </label>
-          <datalist id="route-stations"></datalist>
-          <button id="route-search-submit" type="submit">直通列車を検索</button>
-        </form>
-        <p id="route-search-status" class="route-search-status" aria-live="polite">出発駅を空欄にすると、現在地に近い駅を使います。</p>
-        <ol id="route-search-results" class="route-search-results"></ol>
-      </aside>
-      <button
         id="ai-guide-toggle"
         class="ai-guide-toggle"
         type="button"
@@ -169,14 +116,13 @@
             </span>
             <div class="guide-panel-copy">
               <p>AI駅員</p>
-              <small>行き先や見たい列車をご案内します</small>
+              <small>列車・経路・地図操作</small>
             </div>
           </div>
-          <span class="ai-guide-status">履歴分析対応</span>
           <button id="close-ai-guide" type="button" aria-label="AI駅員を閉じる">×</button>
         </header>
         <ol id="ai-guide-messages" class="ai-guide-messages" aria-live="polite">
-          <li class="ai-guide-message ai-guide-message-assistant">行き先や見たい列車を話しかけてください。行き先だけなら、現在地に近い駅から乗り換えなしの列車を探します。地図の時刻・天気・混雑表示・目的地アーチも変更できます。</li>
+          <li class="ai-guide-message ai-guide-message-assistant">行き先や列車について入力してください。行き先だけなら、現在地に近い駅から直通列車を探します。時刻や天気などの地図表示も変更できます。</li>
         </ol>
         <div class="ai-guide-suggestions" aria-label="質問例">
           <button type="button" data-prompt="18時30分にして">
@@ -199,7 +145,7 @@
             maxlength="400"
             autocomplete="off"
             aria-label="AI駅員への依頼"
-            placeholder="見たい列車や場面を入力"
+            placeholder="列車や行き先を入力"
           />
           <button id="ai-guide-submit" type="submit">送信</button>
         </form>
