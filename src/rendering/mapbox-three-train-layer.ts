@@ -30,6 +30,8 @@ const delayHaloOpacity = 0.26;
 const focusRingColor = "#4264fb";
 const focusRingInnerRadiusMeters = 8;
 const focusRingOuterRadiusMeters = 12;
+const focusRingGroundOffsetMeters = 0.15;
+const focusRingOpacity = 0.55;
 
 export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   readonly id = "trains-3d";
@@ -118,7 +120,9 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
       ),
       new THREE.MeshBasicMaterial({
         color: focusRingColor,
-        depthTest: false,
+        transparent: true,
+        opacity: focusRingOpacity,
+        depthTest: true,
         depthWrite: false,
         side: THREE.DoubleSide,
       }),
@@ -371,8 +375,11 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
       );
       if (this.focusRing && position.serviceUid === this.focusedServiceUid) {
         this.focusRing.position.copy(this.instanceTransform.position);
-        this.focusRing.position.z +=
-          metersToMercatorUnits * vehicleVisualScale * vehicleHeightMeters;
+        this.focusRing.position.z =
+          mercator.z +
+          metersToMercatorUnits *
+            vehicleVisualScale *
+            focusRingGroundOffsetMeters;
         this.focusRing.scale.setScalar(
           metersToMercatorUnits * vehicleVisualScale,
         );

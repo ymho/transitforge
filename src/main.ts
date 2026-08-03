@@ -95,17 +95,10 @@ const loadingScreenMessage =
   document.querySelector<HTMLElement>("#loading-screen-message");
 const loadingScreenRetry =
   document.querySelector<HTMLButtonElement>("#loading-screen-retry");
-const dateTimePanel = document.querySelector<HTMLElement>("#date-time-panel");
 const status = document.querySelector<HTMLParagraphElement>("#map-status");
 const displayTime = document.querySelector<HTMLInputElement>("#display-time");
-const dateTimeSummary =
-  document.querySelector<HTMLOutputElement>("#date-time-summary");
-const dateTimeEditor =
-  document.querySelector<HTMLFormElement>("#date-time-editor");
 const dateTimeInput =
   document.querySelector<HTMLInputElement>("#date-time-input");
-const dateTimeApply =
-  document.querySelector<HTMLButtonElement>("#date-time-apply");
 const playToggle = document.querySelector<HTMLButtonElement>("#play-toggle");
 const currentTimeButton =
   document.querySelector<HTMLButtonElement>("#current-time-button");
@@ -158,13 +151,9 @@ if (
   loadingScreenElement === null ||
   loadingScreenMessage === null ||
   loadingScreenRetry === null ||
-  dateTimePanel === null ||
   status === null ||
   displayTime === null ||
-  dateTimeSummary === null ||
-  dateTimeEditor === null ||
   dateTimeInput === null ||
-  dateTimeApply === null ||
   playToggle === null ||
   currentTimeButton === null ||
   playbackSpeed === null ||
@@ -482,11 +471,8 @@ if (!token) {
         });
 
         displayTime.addEventListener("input", () => updateTrains());
-        configureDateTimeEditor(
-          dateTimePanel,
-          dateTimeEditor,
+        configureDateTimeInput(
           dateTimeInput,
-          dateTimeApply,
           () =>
             dateForOperatingRouteTime(
               displayedServiceDateStart,
@@ -639,19 +625,11 @@ function formatRouteTime(routeTimeMinutes: number): string {
 }
 
 function renderDisplayDateTime(date: Date): void {
-  if (dateTimeSummary === null) {
+  if (dateTimeInput === null || document.activeElement === dateTimeInput) {
     return;
   }
 
-  dateTimeSummary.value =
-    `${String(date.getMonth() + 1).padStart(2, "0")}.` +
-    `${String(date.getDate()).padStart(2, "0")} / ` +
-    `${String(date.getHours()).padStart(2, "0")}:` +
-    `${String(date.getMinutes()).padStart(2, "0")}:` +
-    `${String(date.getSeconds()).padStart(2, "0")}`;
-  if (dateTimeInput !== null && dateTimePanel?.dataset.editing !== "true") {
-    dateTimeInput.value = formatDateTimeLocal(date);
-  }
+  dateTimeInput.value = formatDateTimeLocal(date);
 }
 
 function formatDateTimeLocal(date: Date): string {
@@ -826,65 +804,23 @@ function applyViewerAgentActions(
   }
 }
 
-function configureDateTimeEditor(
-  panel: HTMLElement,
-  editor: HTMLFormElement,
+function configureDateTimeInput(
   input: HTMLInputElement,
-  apply: HTMLButtonElement,
   getDate: () => Date,
   setDate: (date: Date) => void,
 ): void {
-  const setEditing = (editing: boolean) => {
-    panel.dataset.editing = String(editing);
-    panel.ariaExpanded = String(editing);
-    editor.hidden = !editing;
-    panel.ariaLabel = editing
-      ? "表示日時を編集中。Escapeキーまたはパネル外を押すと閉じます"
-      : "表示日時。押すと日時を変更できます";
-    if (editing) {
-      input.value = formatDateTimeLocal(getDate());
-    }
-  };
-
   input.disabled = false;
-  apply.disabled = false;
-  panel.addEventListener("click", (event) => {
-    const target = event.target;
-    if (target instanceof Element && target.closest(".date-time-summary")) {
-      setEditing(panel.dataset.editing !== "true");
-    }
+  input.value = formatDateTimeLocal(getDate());
+  input.addEventListener("focus", () => {
+    input.value = formatDateTimeLocal(getDate());
   });
-  panel.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      setEditing(false);
-      panel.focus({ preventScroll: true });
-    } else if (
-      (event.key === "Enter" || event.key === " ") &&
-      event.target === panel
-    ) {
-      event.preventDefault();
-      setEditing(panel.dataset.editing !== "true");
-    }
-  });
-  input.addEventListener("input", () => input.setCustomValidity(""));
-  editor.addEventListener("submit", (event) => {
-    event.preventDefault();
+  input.addEventListener("change", () => {
     const date = parseDateTimeLocal(input.value);
     if (date === undefined) {
-      input.setCustomValidity("日時を選択してください。");
-      input.reportValidity();
+      input.value = formatDateTimeLocal(getDate());
       return;
     }
-    input.setCustomValidity("");
     setDate(date);
-    setEditing(false);
-    panel.focus({ preventScroll: true });
-  });
-  document.addEventListener("click", (event) => {
-    const target = event.target;
-    if (target instanceof Node && !panel.contains(target)) {
-      setEditing(false);
-    }
   });
 }
 
