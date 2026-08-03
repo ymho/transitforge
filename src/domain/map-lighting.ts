@@ -1,6 +1,16 @@
-export type LightPreset = "dawn" | "day" | "dusk" | "night";
+export type LightPreset = "day" | "night";
+type MapboxTimeOfDay = "dawn" | "day" | "dusk" | "night";
 
 export function lightPresetForRouteTime(routeTimeMinutes: number): LightPreset {
+  const mapboxTimeOfDay = mapboxTimeOfDayForRouteTime(routeTimeMinutes);
+  return mapboxTimeOfDay === "dawn" || mapboxTimeOfDay === "day"
+    ? "day"
+    : "night";
+}
+
+function mapboxTimeOfDayForRouteTime(
+  routeTimeMinutes: number,
+): MapboxTimeOfDay {
   const minutesPerDay = 24 * 60;
   const timeOfDay = ((routeTimeMinutes % minutesPerDay) + minutesPerDay) % minutesPerDay;
 

@@ -27,6 +27,9 @@ const cloudyAtmosphereColor = new THREE.Color("#c8d0d5");
 const delayHaloColor = "#f59e0b";
 const delayHaloRadiusMeters = 10;
 const delayHaloOpacity = 0.26;
+const focusRingColor = "#4264fb";
+const focusRingInnerRadiusMeters = 8;
+const focusRingOuterRadiusMeters = 12;
 
 export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   readonly id = "trains-3d";
@@ -42,6 +45,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     THREE.SphereGeometry,
     THREE.MeshBasicMaterial
   >;
+  private focusRing?: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
   private congestionBars?: THREE.InstancedMesh<
     THREE.BoxGeometry,
     THREE.MeshBasicMaterial
@@ -65,6 +69,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   private readonly worldOriginTranslation = new THREE.Matrix4();
   private readonly displayedBearingByServiceUid = new Map<string, number>();
   private positions: TrainPosition[] = [];
+  private focusedServiceUid?: string;
   private congestionByTrainNumber: ReadonlyMap<string, number> = new Map();
   private delayByTrainNumber: ReadonlyMap<string, number> = new Map();
   private congestionBarServiceUids: string[] = [];
@@ -105,6 +110,22 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.trains.frustumCulled = false;
     this.scene.add(this.trains);
 
+    this.focusRing = new THREE.Mesh(
+      new THREE.RingGeometry(
+        focusRingInnerRadiusMeters,
+        focusRingOuterRadiusMeters,
+        32,
+      ),
+      new THREE.MeshBasicMaterial({
+        color: focusRingColor,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    this.focusRing.visible = false;
+    this.focusRing.renderOrder = 3;
+    this.scene.add(this.focusRing);
     this.delayHalos = new THREE.InstancedMesh(
       new THREE.SphereGeometry(delayHaloRadiusMeters, 20, 12),
       new THREE.MeshBasicMaterial({
@@ -198,6 +219,11 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.updateInstances();
   }
 
+  setFocusedServiceUid(serviceUid: string | undefined): void {
+    this.focusedServiceUid = serviceUid;
+    this.updateInstances();
+  }
+
   setCongestionByTrainNumber(
     congestionByTrainNumber: ReadonlyMap<string, number>,
   ): void {
@@ -285,6 +311,10 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     let congestionBarCount = 0;
     let delayHaloCount = 0;
 
+    if (this.focusRing) {
+      this.focusRing.visible = false;
+    }
+
     for (const [index, layout] of visibleLayouts.entries()) {
       const { position } = layout;
       const mercator = mapboxgl.MercatorCoordinate.fromLngLat(
@@ -339,6 +369,15 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
         index,
         this.colorFor(position.serviceUid).lerp(cloudyAtmosphereColor, hazeMix),
       );
+      if (this.focusRing && position.serviceUid === this.focusedServiceUid) {
+        this.focusRing.position.copy(this.instanceTransform.position);
+        this.focusRing.position.z +=
+          metersToMercatorUnits * vehicleVisualScale * vehicleHeightMeters;
+        this.focusRing.scale.setScalar(
+          metersToMercatorUnits * vehicleVisualScale,
+        );
+        this.focusRing.visible = true;
+      }
 
       const delayMinutes = this.delayByTrainNumber.get(position.trainNo);
       if (delayMinutes !== undefined && delayMinutes > 0) {
@@ -555,6 +594,8 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.delayHalos?.material.dispose();
     this.congestionBars?.geometry.dispose();
     this.congestionBars?.material.dispose();
+    this.focusRing?.geometry.dispose();
+    this.focusRing?.material.dispose();
     this.congestionBarHitTargets?.geometry.dispose();
     this.congestionBarHitTargets?.material.dispose();
     this.destinationArcs?.geometry.dispose();
