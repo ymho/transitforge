@@ -36,7 +36,11 @@ import {
   stepDisplayDateTime,
   type DisplayDateTimeUnit,
 } from "./domain/display-date-time";
-import { lightPresetForRouteTime, type LightPreset } from "./domain/map-lighting";
+import {
+  lightPresetForRouteTime,
+  uiColorModeForLightPreset,
+  type LightPreset,
+} from "./domain/map-lighting";
 import {
   applyWeather,
   isWeatherMode,
@@ -226,6 +230,9 @@ configureAiGuidePanel(
 const initialDateTime = new Date();
 let displayedServiceDateStart = operatingServiceDateStart(initialDateTime);
 const initialRouteTime = currentRouteTime(initialDateTime);
+app.dataset.uiColorMode = uiColorModeForLightPreset(
+  lightPresetForRouteTime(initialRouteTime),
+);
 displayTime.value = String(initialRouteTime);
 renderDisplayDateTime(initialDateTime);
 
@@ -420,6 +427,7 @@ if (!token) {
           const lightPreset = lightPresetForRouteTime(routeTime);
           if (lightPreset !== activeLightPreset) {
             map.setConfigProperty("basemap", "lightPreset", lightPreset);
+            app.dataset.uiColorMode = uiColorModeForLightPreset(lightPreset);
             activeLightPreset = lightPreset;
           }
           const updateStartedAt = performance.now();
