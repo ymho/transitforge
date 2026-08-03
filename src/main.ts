@@ -2,6 +2,7 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./style.css";
 import "./loading-screen.css";
+import "./simple-ui.css";
 import {
   loadPathCatalog,
   toRouteFeatureCollections,
@@ -26,7 +27,8 @@ import {
 import { loadTrainIndex, type Train } from "./data/train-index";
 import type { StationCoordinate } from "./data/station-line-catalog";
 import {
-  nearestDirectOrigin, searchDirectRoutes, stationNamesFromCatalog,
+  nearestDirectOrigin, searchDirectRoutes,
+  type DirectRouteSearchHandler,
 } from "./domain/direct-route-search";
 import {
   dateForOperatingRouteTime,
@@ -72,10 +74,6 @@ import {
   configureAiGuidePanel,
   type AiGuidePromptHandler,
 } from "./presentation/ai-guide-panel";
-import {
-  configureRouteSearchPanel,
-  type RouteSearchHandler,
-} from "./presentation/route-search-panel";
 import { timetableProgressRowsFor } from "./presentation/train-timetable";
 import { trainTitleFor } from "./presentation/train-title";
 import { createLoadingScreen } from "./presentation/loading-screen";
@@ -145,17 +143,6 @@ const aiGuideSubmit =
 const aiGuideSuggestions = Array.from(
   document.querySelectorAll<HTMLButtonElement>("[data-prompt]"),
 );
-const routeSearchPanel = document.querySelector<HTMLElement>("#route-search-panel");
-const routeSearchToggle = document.querySelector<HTMLButtonElement>("#route-search-toggle");
-const closeRouteSearch = document.querySelector<HTMLButtonElement>("#close-route-search");
-const routeSearchForm = document.querySelector<HTMLFormElement>("#route-search-form");
-const routeOrigin = document.querySelector<HTMLInputElement>("#route-origin");
-const routeDestination = document.querySelector<HTMLInputElement>("#route-destination");
-const routeDepartureTime = document.querySelector<HTMLInputElement>("#route-departure-time");
-const routeSearchSubmit = document.querySelector<HTMLButtonElement>("#route-search-submit");
-const routeSearchStatus = document.querySelector<HTMLElement>("#route-search-status");
-const routeSearchResults = document.querySelector<HTMLOListElement>("#route-search-results");
-const routeStations = document.querySelector<HTMLDataListElement>("#route-stations");
 const trainDetails = document.querySelector<HTMLElement>("#train-details");
 const closeTrainDetails = document.querySelector<HTMLButtonElement>("#close-train-details");
 const selectedTrainTitle = document.querySelector<HTMLElement>("#selected-train-title");
@@ -200,17 +187,6 @@ if (
   aiGuideInput === null ||
   aiGuideSubmit === null ||
   aiGuideSuggestions.length === 0 ||
-  routeSearchPanel === null ||
-  routeSearchToggle === null ||
-  closeRouteSearch === null ||
-  routeSearchForm === null ||
-  routeOrigin === null ||
-  routeDestination === null ||
-  routeDepartureTime === null ||
-  routeSearchSubmit === null ||
-  routeSearchStatus === null ||
-  routeSearchResults === null ||
-  routeStations === null ||
   trainDetails === null ||
   closeTrainDetails === null ||
   selectedTrainTitle === null ||
@@ -468,7 +444,7 @@ if (!token) {
           logMetrics();
         };
 
-        const searchRoutes: RouteSearchHandler = async (request) => {
+        const searchRoutes: DirectRouteSearchHandler = async (request) => {
           let originStation = request.originStation;
           let distanceMeters: number | undefined;
           if (!originStation) {
@@ -499,41 +475,6 @@ if (!token) {
             ),
           };
         };
-        const routePanel = configureRouteSearchPanel(
-          {
-            panel: routeSearchPanel,
-            toggle: routeSearchToggle,
-            close: closeRouteSearch,
-            form: routeSearchForm,
-            origin: routeOrigin,
-            destination: routeDestination,
-            departureTime: routeDepartureTime,
-            submit: routeSearchSubmit,
-            status: routeSearchStatus,
-            results: routeSearchResults,
-            stations: routeStations,
-          },
-          stationNamesFromCatalog(stationLineCatalog),
-          () => Number(displayTime.value),
-          searchRoutes,
-          (result) => {
-            displayTime.value = String(result.departureTimeMinutes);
-            updateTrains(result.departureTimeMinutes);
-            selection.focusTrain(result.train.service_uid);
-            routePanel.close();
-          },
-        );
-        routeSearchToggle.disabled = false;
-        routeSearchToggle.addEventListener("click", () => {
-          if (routeSearchToggle.ariaExpanded === "true") {
-            aiGuidePanel.hidden = true;
-            aiGuideToggle.ariaExpanded = "false";
-          }
-        });
-        aiGuideToggle.addEventListener("click", () => {
-          if (aiGuideToggle.ariaExpanded === "true") routePanel.close();
-        });
-
         configureTrainDelayUpdates((delays) => {
           threeTrainLayer.setDelayByTrainNumber(delays);
           selection.updateDelays(delays);
@@ -1346,6 +1287,7 @@ function configureTrainSelection(
 
   const endFocus = () => {
     focusSession.end();
+    trainLayer.setFocusedServiceUid(undefined);
     map.stop();
     trainDetails.hidden = true;
     showCoupledTrain.hidden = true;
@@ -1465,6 +1407,7 @@ function configureTrainSelection(
       delay,
     );
     focusSession.start(train.service_uid);
+    trainLayer.setFocusedServiceUid(train.service_uid);
     updateCoupledTrainButton(train.service_uid);
   };
 
