@@ -18,18 +18,8 @@
       </section>
       <div id="map" aria-label="TransitForge 3D map"></div>
       <section id="control-panel" class="hud" aria-label="表示日時パネル">
-        <div id="date-time-panel" class="time-control" data-editing="false" tabindex="0" aria-expanded="false" aria-label="表示日時。押すと日時を変更できます">
-          <div class="date-time-summary">
-            <output id="date-time-summary" class="date-time-summary-value">08.01 / 12:00:00</output>
-            <span class="date-time-summary-chevron" aria-hidden="true">⌄</span>
-          </div>
-          <form id="date-time-editor" class="date-time-editor" hidden>
-            <label for="date-time-input">表示する日付と時刻</label>
-            <div class="date-time-editor-controls">
-              <input id="date-time-input" type="datetime-local" step="1" disabled />
-              <button id="date-time-apply" type="submit" disabled>適用</button>
-            </div>
-          </form>
+        <div id="date-time-panel" class="time-control">
+          <input id="date-time-input" class="date-time-input" type="datetime-local" step="1" aria-label="表示日時を変更" disabled />
           <input id="display-time" type="hidden" min="240" max="1440" value="720" />
         </div>
         <p id="map-status">Mapboxを初期化しています。</p>
