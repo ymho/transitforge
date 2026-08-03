@@ -14,6 +14,18 @@ export interface NearestDirectOrigin {
   distanceMeters: number;
 }
 
+export interface DirectRouteSearchResponse {
+  originStation: string;
+  distanceMeters?: number;
+  results: DirectRouteResult[];
+}
+
+export type DirectRouteSearchHandler = (request: {
+  originStation?: string;
+  destinationStation: string;
+  departureTimeMinutes: number;
+}) => Promise<DirectRouteSearchResponse>;
+
 interface StopGroup {
   stationName: string;
   normalizedName: string;
@@ -123,15 +135,6 @@ export function nearestDirectOrigin(
   return nearest;
 }
 
-export function stationNamesFromCatalog(catalog: StationLineCatalog): string[] {
-  return Array.from(
-    new Map(
-      catalog.lines.flatMap((line) =>
-        line.stations.map((station) => [normalizeStationName(station.name), station.name]),
-      ),
-    ).values(),
-  ).sort((left, right) => left.localeCompare(right, "ja"));
-}
 
 export function normalizeStationName(value: string): string {
   return value.normalize("NFKC").trim().replace(/[\s　]+/g, "").replace(/駅$/, "");

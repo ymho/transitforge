@@ -13,7 +13,7 @@ import type { DelayAnalysisForAgent } from "./delay-analysis";
 import type { WeatherMode } from "./map-weather";
 import { operatingDayRouteTime } from "./playback";
 import type { TrainPosition } from "./train-position";
-import type { RouteSearchResponse } from "../presentation/route-search-panel";
+import type { DirectRouteSearchResponse } from "./direct-route-search";
 import {
   parseViewerAgentActions,
   type ViewerAgentLayer,
@@ -50,7 +50,7 @@ export interface BedrockViewerAgentDependencies {
     originStation?: string;
     destinationStation: string;
     departureTimeMinutes: number;
-  }) => Promise<RouteSearchResponse>;
+  }) => Promise<DirectRouteSearchResponse>;
   maximumRouteTime: number;
 }
 
