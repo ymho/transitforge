@@ -4,6 +4,7 @@ import gzip
 import json
 import math
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
@@ -40,6 +41,8 @@ SOURCE_IDS = (
     "bantan",
 )
 MAX_FETCH_WORKERS = 4
+DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+DEFAULT_BACKFILL_PAGE_SIZE = 100
 
 
 def source_urls(base_url: str = DEFAULT_UPSTREAM_BASE_URL) -> dict[str, str]:
@@ -261,6 +264,78 @@ def store_delay_summary(
     )
 
 
+def backfill_summaries(
+    s3_client: Any,
+    dynamodb_client: Any,
+    archive_bucket: str,
+    summary_table: str,
+    service_date: str,
+    retention_days: int,
+    continuation_token: str | None = None,
+    page_size: int = DEFAULT_BACKFILL_PAGE_SIZE,
+) -> dict[str, Any]:
+    if not DATE_PATTERN.fullmatch(service_date):
+        raise ValueError("backfill date must use YYYY-MM-DD")
+    parsed_date = datetime.strptime(service_date, "%Y-%m-%d")
+    if not isinstance(page_size, int) or isinstance(page_size, bool):
+        raise ValueError("backfill page size must be an integer")
+    prefix = (
+        f"raw/year={parsed_date:%Y}/month={parsed_date:%m}/"
+        f"day={parsed_date:%d}/"
+    )
+    request: dict[str, Any] = {
+        "Bucket": archive_bucket,
+        "Prefix": prefix,
+        "MaxKeys": max(1, min(1_000, page_size)),
+    }
+    if continuation_token:
+        request["ContinuationToken"] = continuation_token
+    listing = s3_client.list_objects_v2(**request)
+    processed = 0
+    for entry in listing.get("Contents", []):
+        key = entry.get("Key")
+        if not isinstance(key, str) or not key.endswith(".json.gz"):
+            continue
+        stored = s3_client.get_object(Bucket=archive_bucket, Key=key)
+        raw_bundle = json.loads(gzip.decompress(stored["Body"].read()))
+        if not isinstance(raw_bundle, dict):
+            raise ValueError(f"archive object is not a JSON object: {key}")
+        collected_at_text = raw_bundle.get("collectedAt")
+        snapshots = raw_bundle.get("sources")
+        failures = raw_bundle.get("failures")
+        if (
+            not isinstance(collected_at_text, str)
+            or not isinstance(snapshots, dict)
+            or not isinstance(failures, dict)
+        ):
+            raise ValueError(f"archive object has an invalid delay bundle: {key}")
+        collected_at = datetime.fromisoformat(collected_at_text)
+        validated_snapshots = {
+            source_id: validate_snapshot(
+                json.dumps(snapshot, ensure_ascii=False).encode()
+            )
+            for source_id, snapshot in snapshots.items()
+            if isinstance(source_id, str)
+        }
+        normalized = normalized_snapshot(
+            validated_snapshots,
+            {str(source_id): str(error) for source_id, error in failures.items()},
+            collected_at,
+        )
+        store_delay_summary(
+            dynamodb_client,
+            summary_table,
+            delay_summary(normalized, retention_days),
+        )
+        processed += 1
+    next_token = listing.get("NextContinuationToken")
+    return {
+        "serviceDate": service_date,
+        "processed": processed,
+        **({"nextContinuationToken": next_token} if next_token else {}),
+    }
+
+
 def collect(
     s3_client: Any,
     dynamodb_client: Any,
@@ -323,6 +398,20 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     s3_client = boto3.client("s3")
     collected_at = datetime.now(timezone.utc)
     archive_bucket = os.environ["ARCHIVE_BUCKET"]
+    if event.get("mode") == "backfill":
+        continuation_token = event.get("continuationToken")
+        if continuation_token is not None and not isinstance(continuation_token, str):
+            raise ValueError("backfill continuationToken must be a string")
+        return backfill_summaries(
+            s3_client=s3_client,
+            dynamodb_client=boto3.client("dynamodb"),
+            archive_bucket=archive_bucket,
+            summary_table=os.environ["SUMMARY_TABLE"],
+            service_date=event.get("date", ""),
+            retention_days=int(os.environ["SUMMARY_RETENTION_DAYS"]),
+            continuation_token=continuation_token,
+            page_size=event.get("pageSize", DEFAULT_BACKFILL_PAGE_SIZE),
+        )
     if not claim_collection_slot(s3_client, archive_bucket, collected_at):
         return {
             "collectedAt": collected_at.isoformat(),

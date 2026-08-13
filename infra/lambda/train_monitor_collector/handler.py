@@ -15,6 +15,7 @@ DEFAULT_UPSTREAM_URL = (
     "https://www.train-guide.westjr.co.jp/api/v3/trainmonitorinfo.json"
 )
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+DEFAULT_BACKFILL_PAGE_SIZE = 100
 
 
 def fetch_snapshot(url: str, timeout_seconds: int = 10) -> bytes:
@@ -247,6 +248,8 @@ def backfill_summaries(
     summary_table: str,
     service_date: str,
     summary_retention_days: int,
+    continuation_token: str | None = None,
+    page_size: int = DEFAULT_BACKFILL_PAGE_SIZE,
 ) -> dict[str, Any]:
     if not DATE_PATTERN.fullmatch(service_date):
         raise ValueError("backfill date must use YYYY-MM-DD")
@@ -255,37 +258,41 @@ def backfill_summaries(
         f"raw/year={parsed_date:%Y}/month={parsed_date:%m}/"
         f"day={parsed_date:%d}/"
     )
+    if not isinstance(page_size, int) or isinstance(page_size, bool):
+        raise ValueError("backfill page size must be an integer")
+    request: dict[str, Any] = {
+        "Bucket": archive_bucket,
+        "Prefix": prefix,
+        "MaxKeys": max(1, min(1_000, page_size)),
+    }
+    if continuation_token:
+        request["ContinuationToken"] = continuation_token
+    listing = s3_client.list_objects_v2(**request)
     processed = 0
-    continuation_token: str | None = None
-
-    while True:
-        request: dict[str, Any] = {"Bucket": archive_bucket, "Prefix": prefix}
-        if continuation_token:
-            request["ContinuationToken"] = continuation_token
-        listing = s3_client.list_objects_v2(**request)
-        for entry in listing.get("Contents", []):
-            key = entry.get("Key")
-            if not isinstance(key, str) or not key.endswith(".json.gz"):
-                continue
-            stored = s3_client.get_object(Bucket=archive_bucket, Key=key)
-            body = gzip.decompress(stored["Body"].read())
-            metadata = stored.get("Metadata", {})
-            collected_at_text = metadata.get("collected-at")
-            if not isinstance(collected_at_text, str):
-                continue
-            collected_at = datetime.fromisoformat(collected_at_text)
-            summary = congestion_summary(
-                validate_snapshot(body),
-                collected_at,
-                summary_retention_days,
-            )
-            store_congestion_summary(dynamodb_client, summary_table, summary)
-            processed += 1
-        continuation_token = listing.get("NextContinuationToken")
-        if not continuation_token:
-            break
-
-    return {"serviceDate": service_date, "processed": processed}
+    for entry in listing.get("Contents", []):
+        key = entry.get("Key")
+        if not isinstance(key, str) or not key.endswith(".json.gz"):
+            continue
+        stored = s3_client.get_object(Bucket=archive_bucket, Key=key)
+        body = gzip.decompress(stored["Body"].read())
+        metadata = stored.get("Metadata", {})
+        collected_at_text = metadata.get("collected-at")
+        if not isinstance(collected_at_text, str):
+            raise ValueError(f"archive object lacks collected-at metadata: {key}")
+        collected_at = datetime.fromisoformat(collected_at_text)
+        summary = congestion_summary(
+            validate_snapshot(body),
+            collected_at,
+            summary_retention_days,
+        )
+        store_congestion_summary(dynamodb_client, summary_table, summary)
+        processed += 1
+    next_token = listing.get("NextContinuationToken")
+    return {
+        "serviceDate": service_date,
+        "processed": processed,
+        **({"nextContinuationToken": next_token} if next_token else {}),
+    }
 
 
 def number_for_response(value: Decimal) -> int | float:
@@ -303,6 +310,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     summary_table = os.environ["SUMMARY_TABLE"]
     summary_retention_days = int(os.environ["SUMMARY_RETENTION_DAYS"])
     if event.get("mode") == "backfill":
+        continuation_token = event.get("continuationToken")
+        if continuation_token is not None and not isinstance(continuation_token, str):
+            raise ValueError("backfill continuationToken must be a string")
         return backfill_summaries(
             s3_client=s3_client,
             dynamodb_client=dynamodb_client,
@@ -310,6 +320,8 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             summary_table=summary_table,
             service_date=event.get("date", ""),
             summary_retention_days=summary_retention_days,
+            continuation_token=continuation_token,
+            page_size=event.get("pageSize", DEFAULT_BACKFILL_PAGE_SIZE),
         )
     if not claim_collection_slot(s3_client, archive_bucket, collected_at):
         return {
