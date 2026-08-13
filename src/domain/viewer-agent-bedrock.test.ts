@@ -631,4 +631,72 @@ describe("Bedrock viewer agent", () => {
     expect(secondRequest).toContain('"originStation":"大阪"');
     expect(secondRequest).toContain('"distanceMeters":420');
   });
+
+  it("formats after-midnight direct-route times without model arithmetic", async () => {
+    const searchDirectRoutes = vi.fn(async () => ({
+      originStation: "向日町",
+      results: [{
+        train: {
+          ...train,
+          train_no: "538C",
+          service_type: "普通",
+          train_name: "",
+        },
+        originStation: "向日町",
+        destinationStation: "京都",
+        departureTimeMinutes: 1_475,
+        arrivalTimeMinutes: 1_483,
+      }],
+    }));
+    const converse = vi
+      .fn()
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{
+            toolUse: {
+              toolUseId: "route",
+              name: "search_direct_routes",
+              input: { destinationStation: "京都", departureTimeMinutes: 885 },
+            },
+          }],
+        },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{
+            text: "向日町を14時45分に発車し、14時53分に到着します。",
+          }],
+        },
+        stopReason: "end_turn",
+      });
+
+    const result = await runBedrockViewerAgent(
+      "京都に行きたい",
+      {
+        trains: [train],
+        getPositions: () => [],
+        getRouteTime: () => 1_463,
+        setRouteTime: vi.fn(),
+        focusTrain: vi.fn(),
+        setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(),
+        searchDirectRoutes,
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(searchDirectRoutes).toHaveBeenCalledWith({
+      destinationStation: "京都",
+      departureTimeMinutes: 1_463,
+    });
+    expect(result).toContain("0時35分 向日町発");
+    expect(result).toContain("0時43分 京都着");
+    expect(result).not.toContain("14時45分");
+  });
 });
