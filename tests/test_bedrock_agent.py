@@ -54,7 +54,14 @@ class FakeDynamoDB:
 
     def query(self, **kwargs):
         self.queries.append(kwargs)
-        return {"Items": self.items}
+        service_date = kwargs["ExpressionAttributeValues"][":service_date"]["S"]
+        return {
+            "Items": [
+                item
+                for item in self.items
+                if item.get("serviceDate", {}).get("S") == service_date
+            ]
+        }
 
 
 class FakeS3:
@@ -433,6 +440,49 @@ class BedrockAgentTest(unittest.TestCase):
         self.assertEqual(len(result["hourly"]), 24)
         self.assertIsNone(result["hourly"][0]["averageDelayedTrainCount"])
 
+    def test_queries_delays_from_4am_through_359am_as_one_operating_day(self) -> None:
+        client = FakeDynamoDB(
+            [
+                delay_dynamo_item(
+                    "2026-07-28T18:59:59+00:00",
+                    {"before": 1},
+                    service_date="2026-07-29",
+                ),
+                delay_dynamo_item(
+                    "2026-07-28T19:00:00+00:00",
+                    {"start": 2},
+                    service_date="2026-07-29",
+                ),
+                delay_dynamo_item(
+                    "2026-07-29T18:59:59+00:00",
+                    {"end": 3},
+                    service_date="2026-07-30",
+                ),
+                delay_dynamo_item(
+                    "2026-07-29T19:00:00+00:00",
+                    {"after": 4},
+                    service_date="2026-07-30",
+                ),
+            ]
+        )
+
+        result = handler.query_train_delay_analysis(
+            client,
+            "delay-summaries",
+            "2026-07-29",
+        )
+
+        self.assertEqual(result["sampleCount"], 2)
+        self.assertEqual(result["observationStart"], "2026-07-28T19:00:00+00:00")
+        self.assertEqual(result["observationEnd"], "2026-07-29T18:59:59+00:00")
+        self.assertEqual(
+            [
+                query["ExpressionAttributeValues"][":service_date"]["S"]
+                for query in client.queries
+            ],
+            ["2026-07-29", "2026-07-30"],
+        )
+
 
 def dynamo_item(collected_at, total, train_totals):
     return {
@@ -451,9 +501,14 @@ def dynamo_item(collected_at, total, train_totals):
     }
 
 
-def delay_dynamo_item(collected_at, train_delays, failures=0):
+def delay_dynamo_item(
+    collected_at,
+    train_delays,
+    failures=0,
+    service_date="2026-07-29",
+):
     return {
-        "serviceDate": {"S": "2026-07-29"},
+        "serviceDate": {"S": service_date},
         "collectedAt": {"S": collected_at},
         "sourceCount": {"N": "25"},
         "failureCount": {"N": str(failures)},
