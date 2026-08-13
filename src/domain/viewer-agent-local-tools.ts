@@ -28,6 +28,12 @@ export interface ViewerTrainArrivalResponse {
   windowMinutes: number;
 }
 
+export interface DirectRoutePromptRequest {
+  originStation?: string;
+  destinationStation: string;
+  departureTimeMinutes?: number;
+}
+
 const serviceTypeKeywords = ["新快速", "新幹線", "特急", "快速", "普通"];
 export const arrivalSearchWindowMinutes = 30;
 
@@ -51,6 +57,83 @@ export function routeTimeFromPrompt(prompt: string): number | undefined {
   }
 
   return undefined;
+}
+
+export function directRouteRequestFromPrompt(
+  prompt: string,
+  trains: Train[],
+): DirectRoutePromptRequest | undefined {
+  const normalizedPrompt = normalize(prompt);
+  const hasRouteIntent =
+    normalizedPrompt.includes("行きたい") ||
+    normalizedPrompt.includes("行き方") ||
+    normalizedPrompt.includes("経路") ||
+    normalizedPrompt.includes("直通") ||
+    normalizedPrompt.includes("乗り換えなし") ||
+    normalizedPrompt.includes("から");
+  if (!hasRouteIntent) {
+    return undefined;
+  }
+
+  const stationByNormalizedName = new Map<string, string>();
+  for (const train of trains) {
+    for (const stationName of [
+      train.origin_station,
+      train.destination_station,
+      ...train.stops.flatMap(({ station_name }) =>
+        station_name ? [station_name] : [],
+      ),
+    ]) {
+      const normalizedName = normalize(stationName).replace(/駅$/u, "");
+      if (
+        normalizedName.length >= 2 &&
+        !stationByNormalizedName.has(normalizedName)
+      ) {
+        stationByNormalizedName.set(
+          normalizedName,
+          stationName.replace(/駅$/u, ""),
+        );
+      }
+    }
+  }
+
+  const mentions = Array.from(stationByNormalizedName)
+    .flatMap(([normalizedName, stationName]) => {
+      const index = normalizedPrompt.indexOf(normalizedName);
+      return index < 0 ? [] : [{ index, normalizedName, stationName }];
+    })
+    .filter(
+      (candidate, _, all) =>
+        !all.some(
+          (other) =>
+            other.index === candidate.index &&
+            other.normalizedName.length > candidate.normalizedName.length,
+        ),
+    )
+    .sort((left, right) => left.index - right.index);
+  if (mentions.length === 0) {
+    return undefined;
+  }
+
+  const fromIndex = normalizedPrompt.indexOf("から");
+  const origin =
+    fromIndex < 0
+      ? undefined
+      : mentions.filter(({ index }) => index < fromIndex).at(-1);
+  const destination =
+    fromIndex < 0
+      ? mentions.at(-1)
+      : mentions.find(({ index }) => index > fromIndex);
+  if (!destination || destination.stationName === origin?.stationName) {
+    return undefined;
+  }
+
+  const departureTimeMinutes = routeTimeFromPrompt(prompt);
+  return {
+    ...(origin ? { originStation: origin.stationName } : {}),
+    destinationStation: destination.stationName,
+    ...(departureTimeMinutes === undefined ? {} : { departureTimeMinutes }),
+  };
 }
 
 export function searchActiveTrainsFromPrompt(

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Train } from "../data/train-index";
 import type { TrainPosition } from "./train-position";
 import {
+  directRouteRequestFromPrompt,
   localViewerControlActionsFromPrompt,
   routeTimeFromPrompt,
   searchActiveTrainsFromPrompt,
@@ -41,6 +42,20 @@ describe("viewer agent local tools", () => {
     expect(routeTimeFromPrompt("03:59にして")).toBe(1_679);
     expect(routeTimeFromPrompt("4時にして")).toBe(240);
     expect(routeTimeFromPrompt("18時99分")).toBeUndefined();
+  });
+
+  it("extracts direct-route destinations and optional origins", () => {
+    expect(directRouteRequestFromPrompt("京都に行きたい", trains)).toEqual({
+      destinationStation: "京都",
+    });
+    expect(
+      directRouteRequestFromPrompt("大阪駅から京都駅に18時30分に行きたい", trains),
+    ).toEqual({
+      originStation: "大阪",
+      destinationStation: "京都",
+      departureTimeMinutes: 1_110,
+    });
+    expect(directRouteRequestFromPrompt("京都へ向かう特急を見せて", trains)).toBeUndefined();
   });
 
   it("searches active trains by remaining station and service type", () => {

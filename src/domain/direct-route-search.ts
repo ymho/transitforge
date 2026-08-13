@@ -26,6 +26,15 @@ export type DirectRouteSearchHandler = (request: {
   departureTimeMinutes: number;
 }) => Promise<DirectRouteSearchResponse>;
 
+export function directRouteDepartureTime(
+  requestedTimeMinutes: number | undefined,
+  currentRouteTimeMinutes: number,
+  maximumRouteTimeMinutes: number,
+): number {
+  const candidate = requestedTimeMinutes ?? currentRouteTimeMinutes;
+  return Math.max(0, Math.min(Math.round(candidate), maximumRouteTimeMinutes));
+}
+
 interface StopGroup {
   stationName: string;
   normalizedName: string;

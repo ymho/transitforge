@@ -90,5 +90,8 @@ flowchart LR
 ## 実装場所と確認方法
 
 - 実装: `src/rendering/mapbox-three-train-layer.ts`
+- 行先アーチの純粋な高さ・頂点計算: `src/domain/destination-arc-geometry.ts`
+- WebGLに依存しない行先アーチ計算は単体テストし、描画クラスはMapbox・Three.jsへの
+  データ反映に専念する。
 - 動作確認: `npm run dev` で起動し、列車が表示される場所をズーム・回転・再生して確認する。
 - 自動確認: `npm test` と `npm run build`

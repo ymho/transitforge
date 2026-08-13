@@ -539,7 +539,7 @@ describe("Bedrock viewer agent", () => {
   });
 
   it("searches a destination from the browser-selected nearest station and focuses it", async () => {
-    let routeTime = 600;
+    let routeTime = 1_388;
     const focusTrain = vi.fn(() => true);
     const searchDirectRoutes = vi.fn(async () => ({
       originStation: "大阪",
@@ -548,8 +548,8 @@ describe("Bedrock viewer agent", () => {
         train,
         originStation: "大阪",
         destinationStation: "京都",
-        departureTimeMinutes: 610,
-        arrivalTimeMinutes: 640,
+        departureTimeMinutes: 1_395,
+        arrivalTimeMinutes: 1_425,
       }],
     }));
     const converse = vi
@@ -561,7 +561,8 @@ describe("Bedrock viewer agent", () => {
             toolUse: {
               toolUseId: "route",
               name: "search_direct_routes",
-              input: { destinationStation: "京都", departureTimeMinutes: 600 },
+              // モデルが現在時刻を誤っても、ブラウザの表示時刻を検索に使う。
+              input: { destinationStation: "京都", departureTimeMinutes: 833 },
             },
           }],
         },
@@ -574,7 +575,8 @@ describe("Bedrock viewer agent", () => {
             toolUse: {
               toolUseId: "time",
               name: "set_display_time",
-              input: { routeTimeMinutes: 610 },
+              // 経路検索後の時刻変更要求は、モデルの値にかかわらず無視する。
+              input: { routeTimeMinutes: 833 },
             },
           }],
         },
@@ -621,9 +623,9 @@ describe("Bedrock viewer agent", () => {
 
     expect(searchDirectRoutes).toHaveBeenCalledWith({
       destinationStation: "京都",
-      departureTimeMinutes: 600,
+      departureTimeMinutes: 1_388,
     });
-    expect(routeTime).toBe(610);
+    expect(routeTime).toBe(1_388);
     expect(focusTrain).toHaveBeenCalledWith(train.service_uid);
     const secondRequest = JSON.stringify(converse.mock.calls[1]?.[0]);
     expect(secondRequest).toContain('"originStation":"大阪"');

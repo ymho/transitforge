@@ -1,8 +1,6 @@
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import "./style.css";
-import "./loading-screen.css";
-import "./simple-ui.css";
+import "./viewer.css";
 import {
   loadPathCatalog,
   toRouteFeatureCollections,
@@ -24,7 +22,7 @@ import {
   queryTrainDelayAnalysis,
   searchRepresentativeTimetable,
 } from "./data/bedrock-agent";
-import { loadTrainIndex, type Train } from "./data/train-index";
+import { loadTrainIndex } from "./data/train-index";
 import type { StationCoordinate } from "./data/station-line-catalog";
 import {
   nearestDirectOrigin, searchDirectRoutes,
@@ -46,13 +44,8 @@ import {
   type WeatherMode,
 } from "./domain/map-weather";
 import { dominantLineColorsByPathId } from "./domain/path-line-colors";
-import {
-  advanceRouteTime,
-  currentRouteTime,
-  operatingDayStartMinutes,
-} from "./domain/playback";
-import { TrainFocusSession } from "./domain/train-focus-session";
-import { coupledTrainLayouts } from "./domain/coupled-train-layout";
+import { currentRouteTime } from "./domain/playback";
+import { PlaybackController } from "./domain/playback-controller";
 import { congestionAnalysisForAgent } from "./domain/congestion-analysis";
 import { delayAnalysisForAgent } from "./domain/delay-analysis";
 import { TrainLineColorIndex } from "./domain/train-line-color";
@@ -67,18 +60,12 @@ import {
   type ViewerAgentLayer,
 } from "./domain/viewer-agent-action";
 import { runBedrockViewerAgent } from "./domain/viewer-agent-bedrock";
-import {
-  localViewerControlActionsFromPrompt,
-  routeTimeFromPrompt,
-  searchActiveTrainsFromPrompt,
-  searchTrainArrivalsFromPrompt,
-} from "./domain/viewer-agent-local-tools";
+import { createLocalViewerAgent } from "./domain/viewer-agent-local";
 import {
   configureAiGuidePanel,
   type AiGuidePromptHandler,
 } from "./presentation/ai-guide-panel";
-import { timetableProgressRowsFor } from "./presentation/train-timetable";
-import { trainTitleFor } from "./presentation/train-title";
+import { configureTrainSelection } from "./presentation/train-selection-controller";
 import { createLoadingScreen } from "./presentation/loading-screen";
 import { MapboxThreeTrainLayer } from "./rendering/mapbox-three-train-layer";
 import { RuntimeMetrics } from "./observability/runtime-metrics";
@@ -402,6 +389,15 @@ if (!token) {
           trainIndex.trains,
           threeTrainLayer,
           colorsByServiceUid,
+          {
+            details: trainDetails,
+            close: closeTrainDetails,
+            title: selectedTrainTitle,
+            number: selectedTrainNumber,
+            delay: selectedTrainDelay,
+            stops: selectedTrainStops,
+            showCoupled: showCoupledTrain,
+          },
         );
         let displayedPositions: TrainPosition[] = [];
 
@@ -494,14 +490,21 @@ if (!token) {
             setDestinationArcsVisible(visible);
           }
         };
-        const localAiGuidePromptHandler = createLocalAiGuidePromptHandler(
-          trainIndex.trains,
-          () => displayedPositions,
-          selection.focusTrain,
-          selectWeather,
+        const localAiGuidePromptHandler = createLocalViewerAgent({
+          trains: trainIndex.trains,
+          getPositions: () => displayedPositions,
+          getRouteTime: () => Number(displayTime.value),
+          setRouteTime: (routeTimeMinutes) =>
+            applyViewerAgentActions(
+              [{ type: "set_display_time", routeTimeMinutes }],
+              selection.focusTrain,
+            ),
+          focusTrain: selection.focusTrain,
+          setWeather: selectWeather,
           setLayerVisibility,
+          searchDirectRoutes: searchRoutes,
           maximumRouteTime,
-        );
+        });
         handleAiGuidePrompt = async (prompt) => {
           try {
             return await runBedrockViewerAgent(
@@ -614,16 +617,6 @@ function currentBrowserCoordinate(): Promise<StationCoordinate> {
   });
 }
 
-function formatRouteTime(routeTimeMinutes: number): string {
-  const totalSeconds = Math.round(routeTimeMinutes * 60);
-  const hours = Math.floor(totalSeconds / 3_600);
-  const minutes = Math.floor((totalSeconds % 3_600) / 60);
-  const seconds = totalSeconds % 60;
-  const base = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-
-  return seconds === 0 ? base : `${base}:${String(seconds).padStart(2, "0")}`;
-}
-
 function renderDisplayDateTime(date: Date): void {
   if (dateTimeInput === null || document.activeElement === dateTimeInput) {
     return;
@@ -665,126 +658,6 @@ function maximumRouteTimeFor(
 
 function emptyFeatureCollection() {
   return { type: "FeatureCollection" as const, features: [] };
-}
-
-function createLocalAiGuidePromptHandler(
-  trains: Train[],
-  getPositions: () => TrainPosition[],
-  focusTrain: (serviceUid: string) => boolean,
-  setWeather: (weather: WeatherMode) => void,
-  setLayerVisibility: (layer: ViewerAgentLayer, visible: boolean) => void,
-  maximumRouteTime: number,
-): AiGuidePromptHandler {
-  return async (prompt) => {
-    const responseParts: string[] = [];
-    const controlActions = localViewerControlActionsFromPrompt(prompt);
-    for (const action of controlActions) {
-      if (action.type === "set_weather") {
-        setWeather(action.weather);
-        const weatherLabel = {
-          clear: "晴れ",
-          cloudy: "曇り",
-          rain: "雨",
-          snow: "雪",
-        }[action.weather];
-        responseParts.push(`天気を${weatherLabel}に設定しました。`);
-      } else if (action.type === "set_layer_visibility") {
-        setLayerVisibility(action.layer, action.visible);
-        const layerLabel =
-          action.layer === "congestion" ? "混雑棒" : "目的地アーチ";
-        responseParts.push(
-          `${layerLabel}を${action.visible ? "表示" : "非表示に"}しました。`,
-        );
-      }
-    }
-
-    const arrivalSearch = searchTrainArrivalsFromPrompt(prompt, trains);
-    if (
-      arrivalSearch.hasSearchTerms &&
-      arrivalSearch.targetTimeMinutes !== undefined
-    ) {
-      const rangeStart =
-        Math.max(
-          operatingDayStartMinutes,
-          arrivalSearch.targetTimeMinutes - arrivalSearch.windowMinutes,
-        );
-      const rangeEnd =
-        Math.min(
-          maximumRouteTime,
-          arrivalSearch.targetTimeMinutes + arrivalSearch.windowMinutes,
-        );
-      if (arrivalSearch.matches.length === 0) {
-        responseParts.push(
-          `${formatRouteTime(rangeStart)}〜${formatRouteTime(rangeEnd)}に条件に合う到着列車は見つかりませんでした。`,
-        );
-      } else {
-        const arrivals = arrivalSearch.matches.map(({ train, arrivalTimeMinutes }) => {
-          const title = trainTitleFor(train);
-          return `${formatRouteTime(arrivalTimeMinutes)} ${title.main}${title.suffix ?? ""}`;
-        });
-        responseParts.push(
-          `${formatRouteTime(rangeStart)}〜${formatRouteTime(rangeEnd)}の到着列車です。\n${arrivals.join("\n")}`,
-        );
-        if (arrivalSearch.totalMatchCount > arrivalSearch.matches.length) {
-          responseParts.push(
-            `ほかに${arrivalSearch.totalMatchCount - arrivalSearch.matches.length}件あります。`,
-          );
-        }
-      }
-      return responseParts.join("\n");
-    }
-
-    const requestedRouteTime = routeTimeFromPrompt(prompt);
-    if (requestedRouteTime !== undefined) {
-      const routeTime = Math.min(requestedRouteTime, maximumRouteTime);
-      applyViewerAgentActions(
-        [{ type: "set_display_time", routeTimeMinutes: routeTime }],
-        focusTrain,
-      );
-      responseParts.push(`表示時刻を${formatRouteTime(routeTime)}に変更しました。`);
-    }
-
-    const routeTime = Number(displayTime?.value ?? 0);
-    const search = searchActiveTrainsFromPrompt(
-      prompt,
-      trains,
-      getPositions(),
-      routeTime,
-    );
-
-    if (search.hasSearchTerms) {
-      const first = search.matches[0];
-      if (!first) {
-        responseParts.push(
-          `${formatRouteTime(routeTime)}に運行中の条件に合う列車は見つかりませんでした。`,
-        );
-      } else {
-        const [focusAction] = parseViewerAgentActions([
-          { type: "focus_train", serviceUid: first.train.service_uid },
-        ]);
-        const focused =
-          focusAction?.type === "focus_train" &&
-          focusTrain(focusAction.serviceUid);
-        const title = trainTitleFor(first.train);
-        const fullTitle = `${title.main}${title.suffix ?? ""}`;
-        responseParts.push(
-          focused
-            ? `${fullTitle}を選択し、列車の位置へ移動しました。`
-            : `${fullTitle}は見つかりましたが、現在位置へ移動できませんでした。`,
-        );
-        if (search.totalMatchCount > 1) {
-          responseParts.push(
-            `条件に合う列車はほかに${search.totalMatchCount - 1}件あります。`,
-          );
-        }
-      }
-    }
-
-    if (responseParts.length === 0) {
-      return "時刻、駅名、列車種別、列車名、列車番号を含めて依頼してください。例:「18時30分に京都へ向かう特急を見せて」";
-    }
-    return responseParts.join("\n");
-  };
 }
 
 function applyViewerAgentActions(
@@ -839,100 +712,50 @@ function configurePlayback(
     throw new Error("Playback controls are missing.");
   }
 
-  let playing = false;
-  let animationFrame: number | undefined;
-  let lastTimestamp: number | undefined;
-  let lastRenderedTimestamp: number | undefined;
-  let playbackRouteTime = Number(displayTime.value);
   const range = { minimum: Number(displayTime.min), maximum: maximumRouteTime };
-
-  const setRouteTime = (routeTime: number) => {
-    playbackRouteTime = routeTime;
-    displayTime.value = String(routeTime);
-    updateTrains(routeTime);
-  };
-
-  const stop = () => {
-    playing = false;
-    lastTimestamp = undefined;
-    lastRenderedTimestamp = undefined;
-    if (animationFrame !== undefined) {
-      cancelAnimationFrame(animationFrame);
-      animationFrame = undefined;
-    }
-    setMapToolIcon(playToggle, "icon-play");
-    playToggle.ariaLabel = "再生";
-    playToggle.title = "再生";
-  };
-
-  const tick = (timestamp: number) => {
-    if (!playing) {
-      return;
-    }
-
-    if (lastTimestamp !== undefined) {
-      const minutesPerSecond = Number(playbackSpeed.value);
-      const nextRouteTime = advanceRouteTime(
-        playbackRouteTime,
-        timestamp - lastTimestamp,
-        minutesPerSecond,
-        range,
-      );
-      if (nextRouteTime < playbackRouteTime) {
-        onOperatingDayWrapped();
-      }
-      playbackRouteTime = nextRouteTime;
-      // 全量の列車位置計算とGeoJSON更新を毎フレーム行うと負荷が大きい。
-      // 30fpsを上限として、20fpsだった更新より滑らかに再生する。
-      if (
-        lastRenderedTimestamp === undefined ||
-        timestamp - lastRenderedTimestamp >= minimumPlaybackRenderIntervalMilliseconds
-      ) {
-        displayTime.value = String(playbackRouteTime);
-        updateTrains(playbackRouteTime);
-        lastRenderedTimestamp = timestamp;
-      }
-    }
-
-    lastTimestamp = timestamp;
-    animationFrame = requestAnimationFrame(tick);
-  };
-
-  const start = () => {
-    if (playing) {
-      return;
-    }
-
-    playing = true;
-    lastTimestamp = undefined;
-    setMapToolIcon(playToggle, "icon-pause");
-    playToggle.ariaLabel = "一時停止";
-    playToggle.title = "一時停止";
-    animationFrame = requestAnimationFrame(tick);
+  const controller = new PlaybackController({
+    initialRouteTime: Number(displayTime.value),
+    range,
+    getMinutesPerSecond: () => Number(playbackSpeed.value),
+    render: (routeTime) => {
+      displayTime.value = String(routeTime);
+      updateTrains(routeTime);
+    },
+    onOperatingDayWrapped,
+    // 全量の列車位置計算とGeoJSON更新は30fpsを上限にする。
+    minimumRenderIntervalMilliseconds:
+      minimumPlaybackRenderIntervalMilliseconds,
+  });
+  const renderPlaybackState = () => {
+    const playing = controller.isPlaying();
+    setMapToolIcon(playToggle, playing ? "icon-pause" : "icon-play");
+    playToggle.ariaLabel = playing ? "一時停止" : "再生";
+    playToggle.title = playing ? "一時停止" : "再生";
   };
 
   displayTime.addEventListener("input", () => {
-    if (playing) {
-      stop();
-    }
-    playbackRouteTime = Number(displayTime.value);
+    // 描画は既存のinputリスナーが行い、再生基準だけを移動する。
+    controller.seek(Number(displayTime.value), false);
   });
   playToggle.addEventListener("click", () => {
-    if (playing) {
-      stop();
-      return;
+    if (controller.isPlaying()) {
+      controller.stop();
+    } else {
+      controller.start();
     }
-
-    start();
+    renderPlaybackState();
   });
   currentTimeButton.addEventListener("click", () => {
     const now = new Date();
     onCurrentDateSelected(now);
     const routeTime = currentRouteTime(now);
-    setRouteTime(Math.min(Math.max(routeTime, range.minimum), range.maximum));
+    controller.seek(
+      Math.min(Math.max(routeTime, range.minimum), range.maximum),
+    );
   });
 
-  start();
+  controller.start();
+  renderPlaybackState();
 }
 
 function configurePlaybackSpeed(
@@ -1198,261 +1021,6 @@ function configureDestinationArcs(
     setEnabled(toggle.ariaPressed !== "true");
   });
   return setEnabled;
-}
-
-function configureTrainSelection(
-  map: mapboxgl.Map,
-  trains: Train[],
-  trainLayer: MapboxThreeTrainLayer,
-  colorsByServiceUid: ReadonlyMap<string, string>,
-): {
-  focusTrain: (serviceUid: string) => boolean;
-  updateTracking: (positions: TrainPosition[]) => void;
-  updateDelays: (delays: ReadonlyMap<string, number>) => void;
-} {
-  if (
-    trainDetails === null ||
-    closeTrainDetails === null ||
-    selectedTrainTitle === null ||
-    selectedTrainNumber === null ||
-    selectedTrainDelay === null ||
-    selectedTrainStops === null ||
-    showCoupledTrain === null
-  ) {
-    throw new Error("Train detail elements are missing.");
-  }
-
-  const trainsByServiceUid = new Map(trains.map((train) => [train.service_uid, train]));
-  const coupledServiceUidByServiceUid = new Map<string, string>();
-  const focusSession = new TrainFocusSession();
-  let delaysByTrainNumber = new Map<string, number>();
-  let displayedPositions: TrainPosition[] = [];
-  let timetableRenderSignature = "";
-
-  const endFocus = () => {
-    focusSession.end();
-    trainLayer.setFocusedServiceUid(undefined);
-    map.stop();
-    trainDetails.hidden = true;
-    showCoupledTrain.hidden = true;
-    showCoupledTrain.dataset.serviceUid = "";
-    timetableRenderSignature = "";
-  };
-
-  const updateCoupledTrainButton = (serviceUid: string) => {
-    const coupledServiceUid = coupledServiceUidByServiceUid.get(serviceUid);
-    const coupledTrain = coupledServiceUid
-      ? trainsByServiceUid.get(coupledServiceUid)
-      : undefined;
-    showCoupledTrain.hidden = coupledTrain === undefined;
-    showCoupledTrain.dataset.serviceUid = coupledTrain?.service_uid ?? "";
-    const coupledTitle = coupledTrain ? trainTitleFor(coupledTrain) : undefined;
-    showCoupledTrain.textContent = coupledTitle ? "連結列車" : "";
-    showCoupledTrain.ariaLabel = coupledTitle
-      ? `${coupledTitle.badge} ${coupledTitle.main}${coupledTitle.suffix ?? ""}の詳細を見る`
-      : null;
-  };
-
-  const renderTrainTimetable = (
-    train: Train,
-    position: TrainPosition | undefined,
-    delay: number | undefined,
-  ) => {
-    const rows = timetableProgressRowsFor(
-      train.stops,
-      position?.routeMeter,
-      delay,
-    );
-    const currentRowIndex = rows.findIndex(({ status }) => status !== undefined);
-    const currentStatus =
-      currentRowIndex >= 0 ? rows[currentRowIndex]?.status : undefined;
-    const signature = [
-      train.service_uid,
-      delay ?? "unknown",
-      currentRowIndex,
-      currentStatus ?? "none",
-    ].join("|");
-    if (signature === timetableRenderSignature) {
-      return;
-    }
-    timetableRenderSignature = signature;
-
-    let currentItem: HTMLLIElement | undefined;
-    const items = rows.map(({ stationName, times, status }) => {
-      const item = document.createElement("li");
-      const station = document.createElement("span");
-      const timeList = document.createElement("span");
-      station.className = "train-timetable-station";
-      timeList.className = "train-timetable-times";
-      station.append(document.createTextNode(stationName));
-
-      if (status) {
-        item.dataset.currentStatus = status;
-        currentItem = item;
-      }
-
-      for (const [index, { scheduled, adjusted }] of times.entries()) {
-        const time = document.createElement("span");
-        time.className = "train-timetable-time";
-        const scheduledTime = document.createElement("span");
-        scheduledTime.textContent = scheduled;
-        if (adjusted) {
-          scheduledTime.className = "train-timetable-scheduled-replaced";
-          const adjustedTime = document.createElement("strong");
-          adjustedTime.textContent = adjusted;
-          time.append(scheduledTime, " → ", adjustedTime);
-        } else {
-          time.append(scheduledTime);
-        }
-        timeList.append(time);
-        if (index < times.length - 1) {
-          timeList.append(document.createTextNode(" / "));
-        }
-      }
-      item.append(station, timeList);
-      return item;
-    });
-    selectedTrainStops.replaceChildren(...items);
-    currentItem?.scrollIntoView({ block: "center" });
-  };
-
-  const showTrainDetails = (serviceUid: string) => {
-    const train = trainsByServiceUid.get(serviceUid);
-    if (!train) {
-      return;
-    }
-
-    const title = trainTitleFor(train);
-    const badge = document.createElement("span");
-    badge.className = "train-service-badge";
-    badge.textContent = title.badge;
-    const mainTitle = document.createElement("span");
-    mainTitle.className = "train-title-main";
-    mainTitle.textContent = title.main;
-    selectedTrainTitle.replaceChildren(badge, mainTitle);
-    if (title.suffix) {
-      const suffix = document.createElement("small");
-      suffix.className = "train-destination-suffix";
-      suffix.textContent = title.suffix;
-      selectedTrainTitle.append(suffix);
-    }
-    selectedTrainTitle.style.setProperty(
-      "--train-line-color",
-      colorsByServiceUid.get(train.service_uid) ?? "#a8aaad",
-    );
-    selectedTrainNumber.textContent = train.train_no || "不明";
-    const delay = delaysByTrainNumber.get(train.train_no);
-    selectedTrainDelay.textContent =
-      delay === undefined ? "情報なし" : delay > 0 ? `${delay}分` : "遅れなし";
-    trainDetails.hidden = false;
-    renderTrainTimetable(
-      train,
-      displayedPositions.find(({ serviceUid: id }) => id === serviceUid),
-      delay,
-    );
-    focusSession.start(train.service_uid);
-    trainLayer.setFocusedServiceUid(train.service_uid);
-    updateCoupledTrainButton(train.service_uid);
-  };
-
-  map.on("click", "train-hit-targets", (event) => {
-    const serviceUid = event.features?.[0]?.properties?.service_uid;
-    if (typeof serviceUid === "string") {
-      showTrainDetails(serviceUid);
-    }
-  });
-  map.on("click", (event) => {
-    const congestionServiceUid = trainLayer.congestionBarServiceUidAt(
-      event.point,
-    );
-    if (congestionServiceUid) {
-      showTrainDetails(congestionServiceUid);
-      return;
-    }
-
-    const clickedTrains = map.queryRenderedFeatures(event.point, {
-      layers: ["train-hit-targets"],
-    });
-    if (clickedTrains.length === 0) {
-      endFocus();
-    }
-  });
-  map.on("mouseenter", "train-hit-targets", () => {
-    map.getCanvas().style.cursor = "pointer";
-  });
-  map.on("mouseleave", "train-hit-targets", () => {
-    map.getCanvas().style.cursor = "";
-  });
-  closeTrainDetails.addEventListener("click", () => {
-    endFocus();
-  });
-  showCoupledTrain.addEventListener("click", () => {
-    const serviceUid = showCoupledTrain.dataset.serviceUid;
-    if (serviceUid) {
-      showTrainDetails(serviceUid);
-    }
-  });
-
-  return {
-    focusTrain(serviceUid: string) {
-      const position = displayedPositions.find(
-        (candidate) => candidate.serviceUid === serviceUid,
-      );
-      if (!position || !trainsByServiceUid.has(serviceUid)) {
-        return false;
-      }
-
-      showTrainDetails(serviceUid);
-      map.easeTo({
-        center: position.coordinate,
-        zoom: Math.max(map.getZoom(), 14),
-        duration: 750,
-      });
-      return true;
-    },
-    updateTracking(positions: TrainPosition[]) {
-      displayedPositions = positions;
-      coupledServiceUidByServiceUid.clear();
-      for (const { position, coupledServiceUid } of coupledTrainLayouts(positions)) {
-        if (coupledServiceUid) {
-          coupledServiceUidByServiceUid.set(position.serviceUid, coupledServiceUid);
-        }
-      }
-
-      const focusedServiceUid = focusSession.serviceUid;
-      if (!focusedServiceUid) {
-        return;
-      }
-
-      const position = positions.find(
-        ({ serviceUid }) => serviceUid === focusedServiceUid,
-      );
-      if (!position) {
-        endFocus();
-        return;
-      }
-
-      // フォーカス中は詳細パネルと列車追跡を常に同じ状態に保つ。
-      trainDetails.hidden = false;
-      const train = trainsByServiceUid.get(focusedServiceUid);
-      if (train) {
-        renderTrainTimetable(
-          train,
-          position,
-          delaysByTrainNumber.get(train.train_no),
-        );
-      }
-      updateCoupledTrainButton(focusedServiceUid);
-      map.jumpTo({ center: position.coordinate });
-    },
-    updateDelays(delays: ReadonlyMap<string, number>) {
-      delaysByTrainNumber = new Map(delays);
-      const focusedServiceUid = focusSession.serviceUid;
-      if (focusedServiceUid) {
-        showTrainDetails(focusedServiceUid);
-      }
-    },
-  };
 }
 
 function monitorFrames(): void {

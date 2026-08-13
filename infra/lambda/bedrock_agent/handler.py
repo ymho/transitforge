@@ -1,25 +1,34 @@
 from __future__ import annotations
 
-import base64
-import json
 import os
-import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
 import representative_timetable
+from dynamodb_analysis import (
+    average_for_response,
+    dynamo_number,
+    dynamo_number_map,
+    dynamo_string,
+    number_for_response,
+    query_daily_summary_items,
+    validate_service_date,
+)
+from request_contract import (
+    ALLOWED_TOOL_NAMES,
+    RequestError,
+    request_messages,
+    request_value,
+    response,
+    validated_messages,
+)
 
 MODEL_ID = os.environ.get("MODEL_ID", "amazon.nova-lite-v1:0")
 SUMMARY_TABLE = os.environ.get("SUMMARY_TABLE", "")
 DELAY_SUMMARY_TABLE = os.environ.get("DELAY_SUMMARY_TABLE", "")
 AI_TIMETABLE_BUCKET = os.environ.get("AI_TIMETABLE_BUCKET", "")
 AI_TIMETABLE_PREFIX = os.environ.get("AI_TIMETABLE_PREFIX", "ai-timetable")
-MAX_BODY_BYTES = 32 * 1024
-MAX_MESSAGES = 16
-MAX_CONTENT_BLOCKS = 12
-MAX_TEXT_CHARACTERS = 4_000
-DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 JST = timezone(timedelta(hours=9))
 
 SYSTEM_PROMPT = """\
@@ -34,9 +43,12 @@ focus_trainへ渡してください。時刻の変更はset_display_timeを使�
 出発駅から行き先まで乗り換えなしの経路を尋ねられた場合はsearch_direct_routesを
 使ってください。出発駅が指定されていない場合はoriginStationを省略し、ブラウザが
 現在地から直通可能な最寄り駅を選べるようにしてください。現在地の座標はAIには
-送られません。出発時刻が指定されていない場合は現在の表示時刻を使ってください。
-候補が見つかったら先頭候補の発車時刻をset_display_timeへ渡し、その結果を受け取ってから
-候補のserviceUidをfocus_trainへ渡してください。検索結果は最大3件だけ案内し、
+送られません。出発時刻が指定されていない場合は、利用者メッセージに含まれる
+現在の表示時刻をそのまま使い、別の時刻を推測しないでください。
+候補が見つかったら、表示時刻を変更せずに候補のserviceUidをfocus_trainへ渡してください。
+候補がまだ運行開始前でフォーカスできない場合も、発着時刻をそのまま案内してください。
+経路検索のためにset_display_timeを呼ばないでください。画面の再生は継続します。
+検索結果は最大3件だけ案内し、
 乗り換え経路を推測しないでください。
 平日または土日祝の代表的なダイヤについて尋ねられた場合は
 search_representative_timetableを使ってください。この検索結果は代表日の計画ダイヤであり、
@@ -146,7 +158,10 @@ TOOLS = [
                         },
                         "departureTimeMinutes": {
                             "type": "number",
-                            "description": "出発希望時刻を0時からの分数で指定。",
+                            "description": (
+                                "出発希望時刻を0時からの分数で指定。利用者が時刻を"
+                                "指定していなければ、利用者メッセージ中の現在の表示時刻を使う。"
+                            ),
                         },
                     },
                     "required": ["destinationStation", "departureTimeMinutes"],
@@ -293,135 +308,8 @@ TOOLS = [
     },
 ]
 
-
-def response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "statusCode": status_code,
-        "headers": {
-            "content-type": "application/json; charset=utf-8",
-            "cache-control": "no-store",
-        },
-        "body": json.dumps(body, ensure_ascii=False, separators=(",", ":")),
-    }
-
-
-def request_messages(event: dict[str, Any]) -> list[dict[str, Any]]:
-    value = request_value(event)
-    return validated_messages(value)
-
-
-def request_value(event: dict[str, Any]) -> dict[str, Any]:
-    if event.get("requestContext", {}).get("http", {}).get("method") != "POST":
-        raise RequestError(405, "POSTのみ利用できます。")
-
-    raw_body = event.get("body")
-    if not isinstance(raw_body, str):
-        raise RequestError(400, "リクエスト本文が必要です。")
-    if event.get("isBase64Encoded") is True:
-        try:
-            body = base64.b64decode(raw_body, validate=True)
-        except ValueError as error:
-            raise RequestError(400, "リクエスト本文を読み取れません。") from error
-    else:
-        body = raw_body.encode("utf-8")
-    if len(body) > MAX_BODY_BYTES:
-        raise RequestError(413, "リクエストが大きすぎます。")
-
-    try:
-        value = json.loads(body)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise RequestError(400, "JSON形式のリクエストが必要です。") from error
-    if not isinstance(value, dict):
-        raise RequestError(400, "リクエストの形式が不正です。")
-    return value
-
-
-def validated_messages(value: dict[str, Any]) -> list[dict[str, Any]]:
-    messages = value.get("messages")
-    if (
-        not isinstance(messages, list)
-        or not messages
-        or len(messages) > MAX_MESSAGES
-    ):
-        raise RequestError(400, "messagesの件数が不正です。")
-    return [_validated_message(message) for message in messages]
-
-
-def _validated_message(value: Any) -> dict[str, Any]:
-    if not isinstance(value, dict) or value.get("role") not in {"user", "assistant"}:
-        raise RequestError(400, "messageのroleが不正です。")
-    content = value.get("content")
-    if (
-        not isinstance(content, list)
-        or not content
-        or len(content) > MAX_CONTENT_BLOCKS
-    ):
-        raise RequestError(400, "messageのcontentが不正です。")
-
-    role = value["role"]
-    blocks = [_validated_content_block(block, role) for block in content]
-    return {"role": role, "content": blocks}
-
-
-def _validated_content_block(value: Any, role: str) -> dict[str, Any]:
-    if not isinstance(value, dict) or len(value) != 1:
-        raise RequestError(400, "content blockの形式が不正です。")
-    if "text" in value:
-        text = value["text"]
-        if isinstance(text, str) and 0 < len(text) <= MAX_TEXT_CHARACTERS:
-            return {"text": text}
-    if "toolUse" in value and role == "assistant":
-        tool_use = value["toolUse"]
-        if (
-            isinstance(tool_use, dict)
-            and isinstance(tool_use.get("toolUseId"), str)
-            and tool_use.get("name") in {tool["toolSpec"]["name"] for tool in TOOLS}
-            and isinstance(tool_use.get("input"), dict)
-        ):
-            return {
-                "toolUse": {
-                    "toolUseId": tool_use["toolUseId"][:128],
-                    "name": tool_use["name"],
-                    "input": tool_use["input"],
-                }
-            }
-    if "toolResult" in value and role == "user":
-        tool_result = value["toolResult"]
-        if (
-            isinstance(tool_result, dict)
-            and isinstance(tool_result.get("toolUseId"), str)
-            and tool_result.get("status") in {"success", "error"}
-            and _valid_tool_result_content(tool_result.get("content"))
-        ):
-            return {
-                "toolResult": {
-                    "toolUseId": tool_result["toolUseId"][:128],
-                    "status": tool_result["status"],
-                    "content": tool_result["content"],
-                }
-            }
-    raise RequestError(400, "許可されていないcontent blockです。")
-
-
-def _valid_tool_result_content(value: Any) -> bool:
-    if not isinstance(value, list) or len(value) != 1:
-        return False
-    block = value[0]
-    if not isinstance(block, dict) or len(block) != 1 or "json" not in block:
-        return False
-    try:
-        return (
-            len(
-                json.dumps(
-                    block["json"],
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                )
-            )
-            <= 8_000
-        )
-    except (TypeError, ValueError):
-        return False
+if {tool["toolSpec"]["name"] for tool in TOOLS} != ALLOWED_TOOL_NAMES:
+    raise RuntimeError("Bedrock tool definitions and request validation are out of sync")
 
 
 def converse(bedrock_client: Any, messages: list[dict[str, Any]]) -> dict[str, Any]:
@@ -486,41 +374,6 @@ def query_daily_congestion_analysis(
         "hourly": hourly_analysis(samples),
         "trainStats": daily_train_stats(samples),
     }
-
-
-def validate_service_date(service_date: str) -> None:
-    if not DATE_PATTERN.fullmatch(service_date):
-        raise RequestError(400, "serviceDateはYYYY-MM-DD形式にしてください。")
-    try:
-        parsed_date = datetime.strptime(service_date, "%Y-%m-%d")
-    except ValueError as error:
-        raise RequestError(400, "serviceDateが実在する日付ではありません。") from error
-    if parsed_date.strftime("%Y-%m-%d") != service_date:
-        raise RequestError(400, "serviceDateが不正です。")
-
-
-def query_daily_summary_items(
-    dynamodb_client: Any,
-    summary_table: str,
-    service_date: str,
-) -> list[dict[str, Any]]:
-    items: list[dict[str, Any]] = []
-    exclusive_start_key: dict[str, Any] | None = None
-    while True:
-        request: dict[str, Any] = {
-            "TableName": summary_table,
-            "KeyConditionExpression": "serviceDate = :service_date",
-            "ExpressionAttributeValues": {":service_date": {"S": service_date}},
-        }
-        if exclusive_start_key:
-            request["ExclusiveStartKey"] = exclusive_start_key
-        result = dynamodb_client.query(**request)
-        items.extend(result.get("Items", []))
-        exclusive_start_key = result.get("LastEvaluatedKey")
-        if not exclusive_start_key:
-            break
-
-    return items
 
 
 def congestion_sample(item: dict[str, Any]) -> dict[str, Any] | None:
@@ -898,39 +751,6 @@ def daily_delay_train_stats(samples: list[dict[str, Any]]) -> list[dict[str, Any
     )
 
 
-def dynamo_number(value: Any) -> Decimal:
-    if not isinstance(value, dict) or not isinstance(value.get("N"), str):
-        return Decimal(0)
-    return Decimal(value["N"])
-
-
-def dynamo_string(value: Any) -> str | None:
-    if not isinstance(value, dict) or not isinstance(value.get("S"), str):
-        return None
-    return value["S"]
-
-
-def dynamo_number_map(value: Any) -> dict[str, Decimal]:
-    if not isinstance(value, dict) or not isinstance(value.get("M"), dict):
-        return {}
-    return {
-        key: dynamo_number(raw_value)
-        for key, raw_value in value["M"].items()
-        if isinstance(key, str)
-    }
-
-
-def number_for_response(value: Decimal) -> int | float:
-    integral = value.to_integral_value()
-    return int(integral) if value == integral else float(value)
-
-
-def average_for_response(total: Decimal, count: int) -> int | float:
-    if count <= 0:
-        return 0
-    return number_for_response((total / Decimal(count)).quantize(Decimal("0.01")))
-
-
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     try:
         value = request_value(event)
@@ -974,9 +794,3 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     result = converse(boto3.client("bedrock-runtime"), messages)
     return response(200, result)
-
-
-class RequestError(ValueError):
-    def __init__(self, status_code: int, message: str):
-        super().__init__(message)
-        self.status_code = status_code
