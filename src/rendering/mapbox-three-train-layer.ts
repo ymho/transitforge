@@ -7,6 +7,10 @@ import {
 } from "../data/train-congestion";
 import type { Coordinate } from "../data/path-catalog";
 import { coupledTrainLayouts } from "../domain/coupled-train-layout";
+import {
+  destinationArcHeightMeters,
+  destinationArcVertex,
+} from "../domain/destination-arc-geometry";
 import type { TrainPosition } from "../domain/train-position";
 import { trainVisualScaleForZoom } from "../domain/train-visual-scale";
 import { weatherHazeMixAtViewportPoint } from "../domain/weather-haze";
@@ -20,9 +24,6 @@ const congestionBarHitWidthMeters = 8;
 const destinationArcSegments = 24;
 const destinationArcVertexCount =
   maximumTrainInstances * destinationArcSegments * 2;
-const destinationArcHeightRatio = 0.16;
-const maximumDestinationArcHeightMeters = 30_000;
-const destinationArcEndpointHeightMeters = 8;
 const cloudyAtmosphereColor = new THREE.Color("#c8d0d5");
 const delayHaloColor = "#f59e0b";
 const delayHaloRadiusMeters = 10;
@@ -508,10 +509,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
       const distanceMeters =
         Math.hypot(end.x - start.x, end.y - start.y) /
         metersToMercatorUnits;
-      const arcHeightMeters = Math.min(
-        distanceMeters * destinationArcHeightRatio,
-        maximumDestinationArcHeightMeters,
-      );
+      const arcHeightMeters = destinationArcHeightMeters(distanceMeters);
       const color = this.colorFor(position.serviceUid);
 
       for (let segment = 0; segment < destinationArcSegments; segment += 1) {
@@ -558,19 +556,15 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     arcHeightMeters: number,
     color: THREE.Color,
   ): number {
-    const x =
-      start.x + (end.x - start.x) * progress - this.worldOrigin.x;
-    const y =
-      -(start.y + (end.y - start.y) * progress - this.worldOrigin.y);
-    const heightMeters =
-      destinationArcEndpointHeightMeters +
-      Math.sin(Math.PI * progress) * arcHeightMeters;
-    positions.setXYZ(
-      vertexIndex,
-      x,
-      y,
-      heightMeters * metersToMercatorUnits,
+    const vertex = destinationArcVertex(
+      start,
+      end,
+      progress,
+      metersToMercatorUnits,
+      arcHeightMeters,
+      this.worldOrigin,
     );
+    positions.setXYZ(vertexIndex, vertex.x, vertex.y, vertex.z);
     colors.setXYZ(vertexIndex, color.r, color.g, color.b);
     return vertexIndex + 1;
   }
