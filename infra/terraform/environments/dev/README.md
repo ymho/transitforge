@@ -124,6 +124,23 @@ Terraform検証を行う。mainへのpushまたは手動実行では同じWorkfl
 接続し、Terraform apply、S3同期、CloudFront無効化を順に行う。データ量の大きい
 `viewer-input/`とLambdaが更新する`api/`はCI/CDの同期対象外とする。
 
+## 自前の時刻表経路検索
+
+AI駅員の`search_direct_routes`ツールを受けたブラウザは、出発駅・到着駅・業務日付・
+希望時刻だけを`/api/agent`へ送る。出発駅を省略した場合の最寄り駅選択は端末内で行い、
+位置情報をLambdaへ送らない。
+
+Lambdaは非公開S3の`timetable-connection-index-v1`を読み、時刻順の接続走査を行う。
+同一`trip_id`の接続は同じ列車への乗車継続、別`trip_id`は乗換として扱い、駅別または
+既定の最低乗換時間を満たす場合だけ候補にする。DynamoDBに最新遅延があれば列車番号ごとに
+接続時刻へ加える。現在のBedrockツールは`maxTransfers=0`で直通だけを返すが、探索器と
+レスポンス契約は最大3回の乗換を評価できる。
+
+各検索は`journey_search_trace`という1行JSONをCloudWatch Logsへ出す。走査接続数、
+希望時刻より前の接続数、到達不能、乗換時間不足、乗換上限、採用ラベル数、選択経路の
+列車IDを含む。ドメインルールを調整するときはこの集計から、どの制約で候補が落ちたかを
+先に確認する。APIへ`includeTrace: true`を明示したローカル診断では同じtraceを応答にも含める。
+
 GitHub environmentの必須レビュアーやmainのbranch protectionを設定すると、
 意図しないデプロイに対する追加の承認境界になる。
 
