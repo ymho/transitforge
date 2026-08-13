@@ -146,6 +146,24 @@ data "aws_iam_policy_document" "train_delay_collector" {
   }
 
   statement {
+    sid       = "ReadRawDelaySnapshotsForBackfill"
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.train_delay_archive.arn]
+
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["raw/*"]
+    }
+  }
+
+  statement {
+    sid       = "ReadRawDelaySnapshotObjectsForBackfill"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.train_delay_archive.arn}/raw/*"]
+  }
+
+  statement {
     sid = "WriteLogs"
     actions = [
       "logs:CreateLogStream",

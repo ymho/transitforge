@@ -166,7 +166,12 @@ class TrainMonitorCollectorTest(unittest.TestCase):
         ).encode()
 
         class ArchiveS3(FakeS3):
+            def __init__(self):
+                super().__init__()
+                self.list_requests = []
+
             def list_objects_v2(self, **kwargs):
+                self.list_requests.append(kwargs)
                 return {
                     "Contents": [
                         {
@@ -186,9 +191,10 @@ class TrainMonitorCollectorTest(unittest.TestCase):
                     },
                 }
 
+        archive = ArchiveS3()
         dynamodb = FakeDynamoDB()
         result = collector.backfill_summaries(
-            s3_client=ArchiveS3(),
+            s3_client=archive,
             dynamodb_client=dynamodb,
             archive_bucket="archive",
             summary_table="summaries",
@@ -197,10 +203,33 @@ class TrainMonitorCollectorTest(unittest.TestCase):
         )
 
         self.assertEqual(result, {"serviceDate": "2026-07-29", "processed": 1})
+        self.assertEqual(archive.list_requests[0]["MaxKeys"], 100)
         self.assertEqual(
             dynamodb.puts[0]["Item"]["totalCongestion"],
             {"N": "8"},
         )
+
+    def test_backfill_returns_the_next_page_token(self):
+        class ArchiveS3(FakeS3):
+            def list_objects_v2(self, **kwargs):
+                self.request = kwargs
+                return {"Contents": [], "NextContinuationToken": "next-page"}
+
+        archive = ArchiveS3()
+        result = collector.backfill_summaries(
+            s3_client=archive,
+            dynamodb_client=FakeDynamoDB(),
+            archive_bucket="archive",
+            summary_table="summaries",
+            service_date="2026-07-29",
+            summary_retention_days=730,
+            continuation_token="current-page",
+            page_size=25,
+        )
+
+        self.assertEqual(archive.request["ContinuationToken"], "current-page")
+        self.assertEqual(archive.request["MaxKeys"], 25)
+        self.assertEqual(result["nextContinuationToken"], "next-page")
 
 
 if __name__ == "__main__":
