@@ -1,17 +1,17 @@
-# Contributing
+# コントリビューションガイド
 
-## Workflow
+## 作業の流れ
 
-1. Create a branch from the current default branch.
-2. Make one focused change.
-3. Add or update tests where behavior changes.
-4. Update documentation where interfaces, commands, or decisions change.
-5. Run all documented checks.
-6. Open a pull request using the repository template.
+1. デフォルトブランチから作業ブランチを作る
+2. 変更範囲を1つの目的に絞る
+3. 挙動変更に合わせてテストを追加または更新する
+4. インターフェース コマンド 判断を変えた場合は文書を更新する
+5. 文書化された確認コマンドを実行する
+6. リポジトリのテンプレートからPRを作る
 
-## Branch names
+## ブランチ名
 
-Use short names that describe the intent.
+目的が分かる短い名前を使う
 
 ```text
 feature/first-map-view
@@ -20,38 +20,68 @@ docs/product-scope
 chore/development-environment
 ```
 
-## Commit messages
+## コミットメッセージ
 
-Use an imperative summary.
+絵文字と自然な日本語で変更内容を短く表す
+句読点は意味の区切りに必要な場合だけ使う
 
 ```text
-Add initial product brief
-Define station domain model
-Configure local development environment
+🎉 TransitForgeの初期構成を作成
+🔖 v1.0.0を公開
+✨ 駅ドメインモデルを追加
+🐛 深夜帯の時刻表示を修正
+♻️ AI操作モジュールを分割
+📚 ECS運用手順を更新
+🎨 モバイルの列車詳細を改善
+🐎 列車描画を高速化
+🔧 開発環境を整備
+🚨 経路検索の回帰テストを追加
+💩 旧入力形式を非推奨化
+🗑️ 未使用の変換処理を削除
+🚧 乗換検索を試作
 ```
 
-## Architecture decisions
+使用する分類
 
-Create an Architecture Decision Record when a change selects or rejects a
-meaningful technical direction, including:
+| 種類 | 絵文字 |
+| --- | --- |
+| 初回コミット | 🎉 |
+| バージョンタグ | 🔖 |
+| 新機能 | ✨ |
+| バグ修正 | 🐛 |
+| リファクタリング | ♻️ |
+| ドキュメント | 📚 |
+| デザイン UI UX アクセシビリティ | 🎨 |
+| パフォーマンス | 🐎 |
+| ツール | 🔧 |
+| テスト | 🚨 |
+| 非推奨追加 | 💩 |
+| 削除 | 🗑️ |
+| WIP | 🚧 |
 
-- primary language or framework;
-- mapping or visualisation engine;
-- data acquisition strategy;
-- storage technology;
-- public API shape;
-- deployment platform;
-- authentication model;
-- major performance trade-off.
+## アーキテクチャ判断
 
-Copy `docs/decisions/0000-template.md` and assign the next number.
+重要な技術方針を選択または却下した場合はADRを作る
 
-## Pull requests
+- 主要言語やフレームワーク
+- 地図や可視化エンジン
+- データ取得方針
+- ストレージ技術
+- 公開APIの形
+- デプロイ基盤
+- 認証方式
+- 大きなパフォーマンストレードオフ
 
-A pull request should explain:
+`docs/decisions/0000-template.md`をコピーして次の番号を付ける
 
-- the problem;
-- the chosen approach;
-- important alternatives;
-- validation performed;
-- remaining risks or follow-up work.
+## PR
+
+タイトルと本文は自然な日本語の常体で書く
+英語を直訳した表現と不要な句読点を避ける
+PRには次を含める
+
+- 解決する問題
+- 採用した方法
+- 重要な代替案
+- 実施した確認
+- 残るリスクと後続作業
