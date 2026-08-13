@@ -13,7 +13,10 @@ import type { DelayAnalysisForAgent } from "./delay-analysis";
 import type { WeatherMode } from "./map-weather";
 import { operatingDayRouteTime } from "./playback";
 import type { TrainPosition } from "./train-position";
-import type { DirectRouteSearchResponse } from "./direct-route-search";
+import {
+  directRouteDepartureTime,
+  type DirectRouteSearchResponse,
+} from "./direct-route-search";
 import {
   parseViewerAgentActions,
   type ViewerAgentLayer,
@@ -80,6 +83,7 @@ export async function runBedrockViewerAgent(
   ];
   const searchableServiceUids = new Set<string>();
   const directRouteServiceUids = new Set<string>();
+  const toolState = { directRouteSearched: false };
 
   for (let round = 0; round < maximumToolRounds; round += 1) {
     const response = await converse(messages);
@@ -105,6 +109,7 @@ export async function runBedrockViewerAgent(
           dependencies,
           searchableServiceUids,
           directRouteServiceUids,
+          toolState,
         );
         toolResults.push({
           toolResult: {
@@ -145,11 +150,19 @@ async function executeTool(
   dependencies: BedrockViewerAgentDependencies,
   searchableServiceUids: Set<string>,
   directRouteServiceUids: Set<string>,
+  toolState: { directRouteSearched: boolean },
 ): Promise<unknown> {
   if (name === "set_display_time") {
     const requestedTime = input.routeTimeMinutes;
     if (typeof requestedTime !== "number" || !Number.isFinite(requestedTime)) {
       throw new Error("表示時刻が不正です。");
+    }
+    if (toolState.directRouteSearched) {
+      return {
+        routeTimeMinutes: dependencies.getRouteTime(),
+        changed: false,
+        reason: "直通経路検索では表示時刻を変更しません。",
+      };
     }
     const deterministicPromptTime = routeTimeFromPrompt(originalPrompt);
     const routeTimeMinutes = Math.min(
@@ -258,18 +271,27 @@ async function executeTool(
     ) {
       throw new Error("直通経路の検索条件が不正です。");
     }
+    const promptDepartureTime = routeTimeFromPrompt(originalPrompt);
+    const resolvedDepartureTime = directRouteDepartureTime(
+      promptDepartureTime,
+      dependencies.getRouteTime(),
+      dependencies.maximumRouteTime,
+    );
     const response = await dependencies.searchDirectRoutes({
       ...(typeof originStation === "string" && originStation.trim()
         ? { originStation: originStation.trim() }
         : {}),
       destinationStation: destinationStation.trim(),
-      departureTimeMinutes,
+      departureTimeMinutes: resolvedDepartureTime,
     });
+    toolState.directRouteSearched = true;
+    directRouteServiceUids.clear();
     for (const result of response.results) {
       directRouteServiceUids.add(result.train.service_uid);
     }
     return {
       originStation: response.originStation,
+      searchTimeMinutes: resolvedDepartureTime,
       ...(response.distanceMeters === undefined
         ? {}
         : { distanceMeters: Math.round(response.distanceMeters) }),

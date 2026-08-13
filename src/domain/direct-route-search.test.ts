@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { StationLineCatalog } from "../data/station-line-catalog";
 import type { Train } from "../data/train-index";
-import { nearestDirectOrigin, searchDirectRoutes } from "./direct-route-search";
+import {
+  directRouteDepartureTime,
+  nearestDirectOrigin,
+  searchDirectRoutes,
+} from "./direct-route-search";
 
 const trains: Train[] = [
   {
@@ -59,6 +63,12 @@ const catalog: StationLineCatalog = {
 };
 
 describe("direct route search", () => {
+  it("uses an explicit departure time or falls back to the current route time", () => {
+    expect(directRouteDepartureTime(600, 1_388, 1_800)).toBe(600);
+    expect(directRouteDepartureTime(undefined, 1_388.4, 1_800)).toBe(1_388);
+    expect(directRouteDepartureTime(undefined, 1_900, 1_800)).toBe(1_800);
+  });
+
   it("returns direct trains after the requested time in departure order", () => {
     const results = searchDirectRoutes(trains, "大阪駅", "京都", 600);
     expect(results.map((result) => result.train.service_uid)).toEqual([
