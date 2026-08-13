@@ -121,3 +121,45 @@ export interface RepresentativeTimetableSearchResponse {
     }>;
   }>;
 }
+
+export interface TravelCandidateSearchResponse {
+  serviceDate: string;
+  originStation: string;
+  destinationStation: string;
+  searchTimeMinutes: number;
+  totalMatchCount: number;
+  matches: Array<{
+    serviceUid: string;
+    trainNumber: string;
+    serviceType: string;
+    trainName: string;
+    originStation: string;
+    destinationStation: string;
+    departureTimeMinutes: number;
+    arrivalTimeMinutes: number;
+    scheduledDepartureTimeMinutes: number;
+    scheduledArrivalTimeMinutes: number;
+    delayMinutes: number;
+    source: "transitforge";
+    discoverySource: "timetable-graph";
+    sourceReference: string;
+  }>;
+  journeys: Array<{
+    departureTimeMinutes: number;
+    arrivalTimeMinutes: number;
+    transferCount: number;
+    legs: Array<{
+      serviceUid: string;
+      trainNumber: string;
+      serviceType: string;
+      trainName: string;
+      originStation: string;
+      destinationStation: string;
+      departureTimeMinutes: number;
+      arrivalTimeMinutes: number;
+      scheduledDepartureTimeMinutes: number;
+      scheduledArrivalTimeMinutes: number;
+      delayMinutes: number;
+    }>;
+  }>;
+}
