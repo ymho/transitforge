@@ -6,6 +6,7 @@ import {
   queryDailyCongestionPeak,
   queryTrainDelayAnalysis,
   searchRepresentativeTimetable,
+  searchTravelCandidates,
   sha256Hex,
   type BedrockAgentResponse,
 } from "./bedrock-agent";
@@ -259,6 +260,69 @@ describe("Bedrock agent client", () => {
       operation: "representative_timetable_search",
       timetableKind: "weekday",
       mode: "arrivals",
+    });
+  });
+
+  it("searches server-side timetable journeys", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => Response.json({
+      serviceDate: "2026-08-14",
+      originStation: "西大路",
+      destinationStation: "京都",
+      searchTimeMinutes: 590,
+      totalMatchCount: 1,
+      matches: [{
+        serviceUid: "service-1",
+        trainNumber: "538C",
+        serviceType: "普通",
+        trainName: "",
+        originStation: "西大路",
+        destinationStation: "京都",
+        departureTimeMinutes: 605,
+        arrivalTimeMinutes: 613,
+        scheduledDepartureTimeMinutes: 600,
+        scheduledArrivalTimeMinutes: 608,
+        delayMinutes: 5,
+        source: "transitforge",
+        discoverySource: "timetable-graph",
+        sourceReference: "connection-scan",
+      }],
+      journeys: [{
+        departureTimeMinutes: 605,
+        arrivalTimeMinutes: 613,
+        transferCount: 0,
+        legs: [{
+          serviceUid: "service-1",
+          trainNumber: "538C",
+          serviceType: "普通",
+          trainName: "",
+          originStation: "西大路",
+          destinationStation: "京都",
+          departureTimeMinutes: 605,
+          arrivalTimeMinutes: 613,
+          scheduledDepartureTimeMinutes: 600,
+          scheduledArrivalTimeMinutes: 608,
+          delayMinutes: 5,
+        }],
+      }],
+    }));
+
+    const result = await searchTravelCandidates({
+      serviceDate: "2026-08-14",
+      originStation: "西大路",
+      destinationStation: "京都",
+      departureTimeMinutes: 590,
+    }, fetcher);
+
+    expect(result.matches[0]?.delayMinutes).toBe(5);
+    const [, init] = fetcher.mock.calls[0] ?? [];
+    const body = JSON.parse(String(init?.body));
+    expect(body).toEqual({
+      operation: "journey_search",
+      maxTransfers: 0,
+      serviceDate: "2026-08-14",
+      originStation: "西大路",
+      destinationStation: "京都",
+      departureTimeMinutes: 590,
     });
   });
 });
