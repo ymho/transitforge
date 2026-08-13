@@ -12,6 +12,7 @@ import type {
   TrainDelayAnalysisResponse,
   TrainDelaySnapshotAnalysis,
   TrainDelayStat,
+  TravelCandidateSearchResponse,
 } from "./bedrock-agent-contract";
 
 export function isBedrockAgentResponse(value: unknown): value is BedrockAgentResponse {
@@ -57,6 +58,37 @@ export function isRepresentativeTimetableSearchResponse(value: unknown): value i
       typeof match.destination === "string" && Array.isArray(match.matchingStops) &&
       match.matchingStops.every((stop) => isRecord(stop) && typeof stop.stationName === "string" &&
         typeof stop.event === "string" && isNonNegativeNumber(stop.routeTimeMinutes)));
+}
+
+export function isTravelCandidateSearchResponse(value: unknown): value is TravelCandidateSearchResponse {
+  return isRecord(value) && typeof value.serviceDate === "string" &&
+    typeof value.originStation === "string" && typeof value.destinationStation === "string" &&
+    isNonNegativeNumber(value.searchTimeMinutes) && isNonNegativeInteger(value.totalMatchCount) &&
+    Array.isArray(value.matches) && value.matches.length <= 5 && value.matches.every((match) =>
+      isRecord(match) && typeof match.serviceUid === "string" &&
+      typeof match.trainNumber === "string" && typeof match.serviceType === "string" &&
+      typeof match.trainName === "string" && typeof match.originStation === "string" &&
+      typeof match.destinationStation === "string" &&
+      isNonNegativeNumber(match.departureTimeMinutes) &&
+      isNonNegativeNumber(match.arrivalTimeMinutes) &&
+      isNonNegativeNumber(match.scheduledDepartureTimeMinutes) &&
+      isNonNegativeNumber(match.scheduledArrivalTimeMinutes) &&
+      isNonNegativeNumber(match.delayMinutes) && match.source === "transitforge" &&
+      match.discoverySource === "timetable-graph" && typeof match.sourceReference === "string") &&
+    Array.isArray(value.journeys) && value.journeys.length <= 5 &&
+    value.journeys.every(isJourney);
+}
+
+function isJourney(value: unknown): boolean {
+  return isRecord(value) && isNonNegativeNumber(value.departureTimeMinutes) &&
+    isNonNegativeNumber(value.arrivalTimeMinutes) && isNonNegativeInteger(value.transferCount) &&
+    Array.isArray(value.legs) && value.legs.length > 0 && value.legs.every((leg) =>
+      isRecord(leg) && typeof leg.serviceUid === "string" && typeof leg.trainNumber === "string" &&
+      typeof leg.serviceType === "string" && typeof leg.trainName === "string" &&
+      typeof leg.originStation === "string" && typeof leg.destinationStation === "string" &&
+      isNonNegativeNumber(leg.departureTimeMinutes) && isNonNegativeNumber(leg.arrivalTimeMinutes) &&
+      isNonNegativeNumber(leg.scheduledDepartureTimeMinutes) &&
+      isNonNegativeNumber(leg.scheduledArrivalTimeMinutes) && isNonNegativeNumber(leg.delayMinutes));
 }
 
 function isDailyCongestionPeak(value: unknown): value is DailyCongestionPeak {

@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 import representative_timetable
+import journey_search
 from dynamodb_analysis import (
     average_for_response,
     dynamo_number,
@@ -29,6 +30,7 @@ SUMMARY_TABLE = os.environ.get("SUMMARY_TABLE", "")
 DELAY_SUMMARY_TABLE = os.environ.get("DELAY_SUMMARY_TABLE", "")
 AI_TIMETABLE_BUCKET = os.environ.get("AI_TIMETABLE_BUCKET", "")
 AI_TIMETABLE_PREFIX = os.environ.get("AI_TIMETABLE_PREFIX", "ai-timetable")
+PLANNING_TIMETABLE_PREFIX = os.environ.get("PLANNING_TIMETABLE_PREFIX", "timetable")
 JST = timezone(timedelta(hours=9))
 
 SYSTEM_PROMPT = """\
@@ -764,6 +766,23 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 )
             except representative_timetable.TimetableSearchError as error:
                 raise RequestError(400, str(error)) from error
+            return response(200, result)
+        if value.get("operation") == "journey_search":
+            import boto3
+
+            try:
+                result = journey_search.search(
+                    boto3.client("s3"),
+                    boto3.client("dynamodb"),
+                    bucket=AI_TIMETABLE_BUCKET,
+                    prefix=PLANNING_TIMETABLE_PREFIX,
+                    delay_table=DELAY_SUMMARY_TABLE,
+                    value=value,
+                )
+            except RequestError:
+                raise
+            except Exception as error:
+                raise RequestError(503, "旅行候補を検索できません。") from error
             return response(200, result)
         if value.get("operation") in {
             "daily_congestion_analysis",

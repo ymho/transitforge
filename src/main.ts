@@ -21,6 +21,7 @@ import {
   queryDailyCongestionAnalysis,
   queryTrainDelayAnalysis,
   searchRepresentativeTimetable,
+  searchTravelCandidates,
 } from "./data/bedrock-agent";
 import { loadTrainIndex } from "./data/train-index";
 import type { StationCoordinate } from "./data/station-line-catalog";
@@ -430,7 +431,7 @@ if (!token) {
           logMetrics();
         };
 
-        const searchRoutes: DirectRouteSearchHandler = async (request) => {
+        const resolveDirectRouteOrigin = async (request: Parameters<DirectRouteSearchHandler>[0]) => {
           let originStation = request.originStation;
           let distanceMeters: number | undefined;
           if (!originStation) {
@@ -450,6 +451,10 @@ if (!token) {
             originStation = nearest.stationName;
             distanceMeters = nearest.distanceMeters;
           }
+          return { originStation, distanceMeters };
+        };
+        const localSearchRoutes: DirectRouteSearchHandler = async (request) => {
+          const { originStation, distanceMeters } = await resolveDirectRouteOrigin(request);
           return {
             originStation,
             ...(distanceMeters === undefined ? {} : { distanceMeters }),
@@ -459,6 +464,33 @@ if (!token) {
               request.destinationStation,
               request.departureTimeMinutes,
             ),
+          };
+        };
+        const backendSearchRoutes: DirectRouteSearchHandler = async (request) => {
+          const { originStation, distanceMeters } = await resolveDirectRouteOrigin(request);
+          const response = await searchTravelCandidates({
+            serviceDate: formatServiceDate(displayedServiceDateStart),
+            originStation,
+            destinationStation: request.destinationStation,
+            departureTimeMinutes: request.departureTimeMinutes,
+            limit: 3,
+          });
+          const trainsByServiceUid = new Map(
+            trainIndex.trains.map((train) => [train.service_uid, train]),
+          );
+          return {
+            originStation: response.originStation,
+            ...(distanceMeters === undefined ? {} : { distanceMeters }),
+            results: response.matches.flatMap((match) => {
+              const train = trainsByServiceUid.get(match.serviceUid);
+              return train ? [{
+                train,
+                originStation: match.originStation,
+                destinationStation: match.destinationStation,
+                departureTimeMinutes: match.departureTimeMinutes,
+                arrivalTimeMinutes: match.arrivalTimeMinutes,
+              }] : [];
+            }),
           };
         };
         configureTrainDelayUpdates((delays) => {
@@ -502,7 +534,7 @@ if (!token) {
           focusTrain: selection.focusTrain,
           setWeather: selectWeather,
           setLayerVisibility,
-          searchDirectRoutes: searchRoutes,
+          searchDirectRoutes: localSearchRoutes,
           maximumRouteTime,
         });
         handleAiGuidePrompt = async (prompt) => {
@@ -533,7 +565,7 @@ if (!token) {
                     trainIndex.trains,
                   ),
                 searchRepresentativeTimetable,
-                searchDirectRoutes: searchRoutes,
+                searchDirectRoutes: backendSearchRoutes,
                 maximumRouteTime,
               },
               invokeBedrockAgent,
@@ -633,6 +665,14 @@ function formatDateTimeLocal(date: Date): string {
   const minute = String(date.getMinutes()).padStart(2, "0");
   const second = String(date.getSeconds()).padStart(2, "0");
   return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+}
+
+function formatServiceDate(date: Date): string {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 function parseDateTimeLocal(value: string): Date | undefined {
