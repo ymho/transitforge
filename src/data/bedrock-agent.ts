@@ -19,7 +19,7 @@ import {
 export type * from "./bedrock-agent-contract";
 
 export async function invokeBedrockAgent(messages: BedrockAgentMessage[], fetcher: typeof fetch = fetch): Promise<BedrockAgentResponse> {
-  return postAgent({ messages }, "AI案内APIを利用できません", "AI案内", isBedrockAgentResponse, fetcher);
+  return postAgent({ messages }, "AI案内APIを利用できません", "AI案内", isBedrockAgentResponse, fetcher, true);
 }
 
 export async function queryDailyCongestionPeak(serviceDate: string, fetcher: typeof fetch = fetch): Promise<DailyCongestionPeakResponse> {
@@ -59,16 +59,35 @@ async function postAgent<T>(
   label: string,
   validate: (value: unknown) => value is T,
   fetcher: typeof fetch,
+  retryTransientFailure = false,
 ): Promise<T> {
   const body = JSON.stringify(request);
-  const response = await fetcher("/api/agent", {
+  const requestInit: RequestInit = {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Amz-Content-Sha256": await sha256Hex(body),
     },
     body,
-  });
+  };
+  let response: Response;
+  let retried = false;
+  try {
+    response = await fetcher("/api/agent", requestInit);
+  } catch (error) {
+    if (!retryTransientFailure) {
+      throw error;
+    }
+    retried = true;
+    response = await fetcher("/api/agent", requestInit);
+  }
+  if (
+    retryTransientFailure &&
+    !retried &&
+    isTransientStatus(response.status)
+  ) {
+    response = await fetcher("/api/agent", requestInit);
+  }
   if (!response.ok) {
     throw new Error(`${unavailableMessage} (${response.status})。`);
   }
@@ -77,6 +96,10 @@ async function postAgent<T>(
     throw new Error(`${label}APIから不正な応答を受信しました。`);
   }
   return value;
+}
+
+function isTransientStatus(status: number): boolean {
+  return status === 429 || status >= 500;
 }
 
 export async function sha256Hex(value: string): Promise<string> {

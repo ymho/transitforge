@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Train } from "../data/train-index";
 import type { TrainPosition } from "./train-position";
 import {
-  currentDateInJapan,
+  currentServiceDateInJapan,
   runBedrockViewerAgent,
 } from "./viewer-agent-bedrock";
 
@@ -457,10 +457,13 @@ describe("Bedrock viewer agent", () => {
     expect(result).toContain("目的地アーチ");
   });
 
-  it("formats the current date in Japan independently of the browser timezone", () => {
-    expect(currentDateInJapan(new Date("2026-07-29T15:30:00Z"))).toBe(
-      "2026-07-30",
-    );
+  it("uses the 4:00 JST operating-day boundary for the current service date", () => {
+    expect(
+      currentServiceDateInJapan(new Date("2026-07-29T18:59:59Z")),
+    ).toBe("2026-07-29");
+    expect(
+      currentServiceDateInJapan(new Date("2026-07-29T19:00:00Z")),
+    ).toBe("2026-07-30");
   });
 
   it("relays a representative timetable search without treating it as a focusable live train", async () => {
@@ -698,5 +701,76 @@ describe("Bedrock viewer agent", () => {
     expect(result).toContain("0時35分 向日町発");
     expect(result).toContain("0時43分 京都着");
     expect(result).not.toContain("14時45分");
+  });
+
+  it("uses stations parsed from the prompt when the model omits the origin", async () => {
+    const routeTrain: Train = {
+      ...train,
+      service_type: "普通",
+      train_name: "",
+      train_no: "538C",
+      stops: [
+        { station_name: "西大路", event: "発", route_time_minutes: 1_480 },
+        { station_name: "京都", event: "着", route_time_minutes: 1_483 },
+      ],
+    };
+    const searchDirectRoutes = vi.fn(async () => ({
+      originStation: "西大路駅",
+      results: [{
+        train: routeTrain,
+        originStation: "西大路駅",
+        destinationStation: "京都駅",
+        departureTimeMinutes: 1_480,
+        arrivalTimeMinutes: 1_483,
+      }],
+    }));
+    const converse = vi
+      .fn()
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{
+            toolUse: {
+              toolUseId: "route",
+              name: "search_direct_routes",
+              input: { destinationStation: "京都", departureTimeMinutes: 1_463 },
+            },
+          }],
+        },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{ text: "京都まで案内します。" }],
+        },
+        stopReason: "end_turn",
+      });
+
+    const result = await runBedrockViewerAgent(
+      "西大路から京都に行きたい",
+      {
+        trains: [routeTrain],
+        getPositions: () => [],
+        getRouteTime: () => 1_463,
+        setRouteTime: vi.fn(),
+        focusTrain: vi.fn(),
+        setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(),
+        searchDirectRoutes,
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(searchDirectRoutes).toHaveBeenCalledWith({
+      originStation: "西大路",
+      destinationStation: "京都",
+      departureTimeMinutes: 1_463,
+    });
+    expect(result).toContain("西大路駅から京都駅への直通列車");
+    expect(result).not.toContain("駅駅");
   });
 });

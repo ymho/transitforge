@@ -7,6 +7,7 @@ import type { TrainPosition } from "./train-position";
 import type { ViewerAgentLayer } from "./viewer-agent-action";
 import {
   directRouteRequestFromPrompt,
+  formatStationLabel,
   localViewerControlActionsFromPrompt,
   routeTimeFromPrompt,
   searchActiveTrainsFromPrompt,
@@ -168,7 +169,7 @@ async function directRouteSearchResponse(
     });
     const first = response.results[0];
     if (!first) {
-      return `${formatRouteTime(departureTimeMinutes)}以降に${response.originStation}駅から${request.destinationStation}駅へ直通する列車は見つかりませんでした。`;
+      return `${formatRouteTime(departureTimeMinutes)}以降に${formatStationLabel(response.originStation)}から${formatStationLabel(request.destinationStation)}へ直通する列車は見つかりませんでした。`;
     }
     const focused = dependencies.focusTrain(first.train.service_uid);
     const routes = response.results.map((route, index) => {
@@ -178,7 +179,7 @@ async function directRouteSearchResponse(
     const focusMessage = focused
       ? "先頭の列車の現在位置を選択しました。"
       : "先頭の列車はまだ運行開始前のため、経路のみ案内します。";
-    return `${response.originStation}駅から${request.destinationStation}駅への直通列車です。${focusMessage}\n${routes.join("\n")}`;
+    return `${formatStationLabel(response.originStation)}から${formatStationLabel(request.destinationStation)}への直通列車です。${focusMessage}\n${routes.join("\n")}`;
   } catch (error) {
     return error instanceof Error
       ? error.message

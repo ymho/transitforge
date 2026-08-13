@@ -12,7 +12,7 @@ from dynamodb_analysis import (
     dynamo_number_map,
     dynamo_string,
     number_for_response,
-    query_daily_summary_items,
+    query_operating_day_summary_items,
     validate_service_date,
 )
 from request_contract import (
@@ -56,7 +56,7 @@ search_representative_timetableを使ってください。この検索結果は�
 ツール結果にない列車や情報を推測しないでください。
 過去の混雑、ピーク、時間別推移、混雑した路線・列車について聞かれた場合は
 query_daily_congestion_analysisを使い、
-日付指定がなければ利用者メッセージに含まれる日本時間の今日の日付を使ってください。
+日付指定がなければ利用者メッセージに含まれる4時切替の業務日付を使ってください。
 ツールが返した観測期間、観測件数、時間別平均、ピーク、路線・列車順位を根拠として
 答えてください。未観測の時間帯を混雑ゼロとして扱わないでください。
 列車順位を説明するときは、列車番号だけでなく、取得できた種別、列車名、行き先も
@@ -64,6 +64,7 @@ query_daily_congestion_analysisを使い、
 現在または過去の列車の遅れ、時間別の遅延傾向について聞かれた場合は
 query_train_delay_analysisを使ってください。現在の遅れはlatest、1日の傾向はhourlyと
 topTrainsを根拠にし、観測されていない時間や列車を遅れなしと断定しないでください。
+日付指定がなければ利用者メッセージに含まれる4時切替の業務日付を使ってください。
 晴れ・曇り・雨・雪の変更はset_weatherを使ってください。
 混雑の棒グラフや目的地へのアーチの表示・非表示は
 set_layer_visibilityを使ってください。
@@ -120,7 +121,7 @@ TOOLS = [
         "toolSpec": {
             "name": "query_daily_congestion_analysis",
             "description": (
-                "指定した日本時間の日付について、1分ごとの保存済み混雑サマリーから、"
+                "指定した4時切替の業務日付について、1分ごとの保存済み混雑サマリーから、"
                 "日次ピーク、1時間ごとの推移、混雑した路線と列車を分析します。"
             ),
             "inputSchema": {
@@ -129,7 +130,7 @@ TOOLS = [
                     "properties": {
                         "serviceDate": {
                             "type": "string",
-                            "description": "日本時間の日付（YYYY-MM-DD）。",
+                            "description": "4時切替の業務日付（YYYY-MM-DD）。",
                         }
                     },
                     "required": ["serviceDate"],
@@ -234,7 +235,7 @@ TOOLS = [
         "toolSpec": {
             "name": "query_train_delay_analysis",
             "description": (
-                "指定した日本時間の日付について、保存済みの毎分列車遅延から、"
+                "指定した4時切替の業務日付について、保存済みの毎分列車遅延から、"
                 "最新状況、日次ピーク、1時間ごとの傾向、遅れた列車を分析します。"
             ),
             "inputSchema": {
@@ -243,7 +244,7 @@ TOOLS = [
                     "properties": {
                         "serviceDate": {
                             "type": "string",
-                            "description": "日本時間の日付（YYYY-MM-DD）。",
+                            "description": "4時切替の業務日付（YYYY-MM-DD）。",
                         }
                     },
                     "required": ["serviceDate"],
@@ -337,7 +338,7 @@ def query_daily_congestion_analysis(
     service_date: str,
 ) -> dict[str, Any]:
     validate_service_date(service_date)
-    items = query_daily_summary_items(
+    items = query_operating_day_summary_items(
         dynamodb_client,
         summary_table,
         service_date,
@@ -569,7 +570,7 @@ def query_train_delay_analysis(
     samples = sorted(
         (
             sample
-            for item in query_daily_summary_items(
+            for item in query_operating_day_summary_items(
                 dynamodb_client, summary_table, service_date
             )
             if (sample := delay_sample(item)) is not None

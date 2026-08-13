@@ -52,6 +52,28 @@ describe("Bedrock agent client", () => {
     ).rejects.toThrow("不正な応答");
   });
 
+  it("retries the AI guide once after a transient server error", async () => {
+    const bedrockResponse: BedrockAgentResponse = {
+      message: {
+        role: "assistant",
+        content: [{ text: "案内しました。" }],
+      },
+      stopReason: "end_turn",
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(Response.json(bedrockResponse));
+
+    const result = await invokeBedrockAgent(
+      [{ role: "user", content: [{ text: "京都に行きたい" }] }],
+      fetcher,
+    );
+
+    expect(result).toEqual(bedrockResponse);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it("requests a daily congestion peak through the protected endpoint", async () => {
     const fetcher = vi.fn<typeof fetch>(async () =>
       new Response(
