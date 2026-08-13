@@ -63,6 +63,28 @@ export type BedrockAgentConverse = (
 
 const maximumToolRounds = 6;
 
+interface DirectRouteToolMatch {
+  serviceUid: string;
+  trainNumber: string;
+  serviceType: string;
+  trainName: string;
+  originStation: string;
+  destinationStation: string;
+  departureTimeMinutes: number;
+  arrivalTimeMinutes: number;
+}
+
+interface DirectRouteToolState {
+  searched: boolean;
+  focusedServiceUid?: string;
+  response?: {
+    originStation: string;
+    destinationStation: string;
+    searchTimeMinutes: number;
+    matches: DirectRouteToolMatch[];
+  };
+}
+
 export async function runBedrockViewerAgent(
   prompt: string,
   dependencies: BedrockViewerAgentDependencies,
@@ -83,7 +105,7 @@ export async function runBedrockViewerAgent(
   ];
   const searchableServiceUids = new Set<string>();
   const directRouteServiceUids = new Set<string>();
-  const toolState = { directRouteSearched: false };
+  const toolState: DirectRouteToolState = { searched: false };
 
   for (let round = 0; round < maximumToolRounds; round += 1) {
     const response = await converse(messages);
@@ -91,6 +113,10 @@ export async function runBedrockViewerAgent(
     const toolUses = response.message.content.filter(isToolUseBlock);
 
     if (toolUses.length === 0) {
+      const directRouteResponse = directRouteResponseText(toolState);
+      if (directRouteResponse !== undefined) {
+        return directRouteResponse;
+      }
       const text = response.message.content
         .filter(isTextBlock)
         .map((block) => block.text.trim())
@@ -150,14 +176,14 @@ async function executeTool(
   dependencies: BedrockViewerAgentDependencies,
   searchableServiceUids: Set<string>,
   directRouteServiceUids: Set<string>,
-  toolState: { directRouteSearched: boolean },
+  toolState: DirectRouteToolState,
 ): Promise<unknown> {
   if (name === "set_display_time") {
     const requestedTime = input.routeTimeMinutes;
     if (typeof requestedTime !== "number" || !Number.isFinite(requestedTime)) {
       throw new Error("表示時刻が不正です。");
     }
-    if (toolState.directRouteSearched) {
+    if (toolState.searched) {
       return {
         routeTimeMinutes: dependencies.getRouteTime(),
         changed: false,
@@ -284,13 +310,14 @@ async function executeTool(
       destinationStation: destinationStation.trim(),
       departureTimeMinutes: resolvedDepartureTime,
     });
-    toolState.directRouteSearched = true;
+    toolState.searched = true;
     directRouteServiceUids.clear();
     for (const result of response.results) {
       directRouteServiceUids.add(result.train.service_uid);
     }
-    return {
+    const result = {
       originStation: response.originStation,
+      destinationStation: destinationStation.trim(),
       searchTimeMinutes: resolvedDepartureTime,
       ...(response.distanceMeters === undefined
         ? {}
@@ -306,6 +333,8 @@ async function executeTool(
         arrivalTimeMinutes: result.arrivalTimeMinutes,
       })),
     };
+    toolState.response = result;
+    return result;
   }
 
   if (name === "focus_train") {
@@ -326,6 +355,9 @@ async function executeTool(
       !dependencies.focusTrain(action.serviceUid)
     ) {
       throw new Error("列車の現在位置へ移動できませんでした。");
+    }
+    if (directRouteServiceUids.has(serviceUid)) {
+      toolState.focusedServiceUid = serviceUid;
     }
     return { serviceUid, focused: true };
   }
@@ -418,6 +450,38 @@ export function currentDateInJapan(now = new Date()): string {
   }).formatToParts(now);
   const byType = new Map(parts.map((part) => [part.type, part.value]));
   return `${byType.get("year")}-${byType.get("month")}-${byType.get("day")}`;
+}
+
+function directRouteResponseText(
+  state: DirectRouteToolState,
+): string | undefined {
+  const response = state.response;
+  if (!response) {
+    return undefined;
+  }
+  if (response.matches.length === 0) {
+    return `${formatClockTime(response.searchTimeMinutes)}以降に${response.originStation}駅から${response.destinationStation}駅へ直通する列車は見つかりませんでした。`;
+  }
+  const routes = response.matches.map((match, index) => {
+    const trainLabel = [
+      match.serviceType,
+      match.trainName,
+      match.trainNumber ? `${match.trainNumber}` : "",
+    ].filter(Boolean).join(" ");
+    return `${index + 1}. ${formatClockTime(match.departureTimeMinutes)} ${match.originStation}発 → ${formatClockTime(match.arrivalTimeMinutes)} ${match.destinationStation}着 ${trainLabel}`;
+  });
+  const first = response.matches[0];
+  const focusMessage =
+    first && state.focusedServiceUid === first.serviceUid
+      ? "先頭の列車にフォーカスしました。"
+      : "先頭の列車はまだ表示時刻に運行していないため、経路のみ案内します。";
+  return `${response.originStation}駅から${response.destinationStation}駅への直通列車です。${focusMessage}\n${routes.join("\n")}`;
+}
+
+function formatClockTime(routeTimeMinutes: number): string {
+  const roundedMinutes = Math.round(routeTimeMinutes);
+  const clockMinutes = ((roundedMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
+  return `${Math.floor(clockMinutes / 60)}時${String(clockMinutes % 60).padStart(2, "0")}分`;
 }
 
 function isToolUseBlock(
