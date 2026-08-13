@@ -1,10 +1,10 @@
-# 0006: AWSへTerraformでデプロイしAI基盤にAmazon Bedrockを使用する
+# ADR 0006: AWSへTerraformでデプロイしAI基盤にAmazon Bedrockを使用する
 
-## Status
+## ステータス
 
 Accepted
 
-## Context
+## 背景
 
 TransitForgeをローカル環境だけでなくAWS上へデプロイし、利用者がAI駅員を
 使用できるようにしたい。現在のビューワーはViteで生成する静的ファイルと大容量の
@@ -13,7 +13,7 @@ TransitForgeをローカル環境だけでなくAWS上へデプロイし、利�
 デプロイ先、インフラ管理方式、AIモデル呼び出し方式を決めないまま個別のAWSリソースを
 作ると、再現できない手作業、過剰な権限、APIキーの露出、環境差異が生じやすい。
 
-## Decision
+## 決定
 
 - アプリケーションとAIバックエンドのデプロイ先をAWSとする。
 - AWSリソースはTerraformで宣言し、コンソールでの継続的な手作業を前提としない。
@@ -42,7 +42,7 @@ TransitForgeをローカル環境だけでなくAWS上へデプロイし、利�
 - 混雑情報はEventBridge Schedulerから1分間隔でLambdaを起動して取得し、
   最新値とgzip時系列アーカイブをS3へ保存する。ブラウザから上流URLへ直接アクセスしない。
 
-## Alternatives
+## 代替案
 
 ### AWS CDK
 
@@ -58,7 +58,7 @@ TransitForgeをローカル環境だけでなくAWS上へデプロイし、利�
 管理機能は多いが、現在必要なツールは列車検索と可逆的な画面操作に限定されている。
 まずLambdaとConverse APIで小さく接続し、実測後に必要性を再評価する。
 
-## Consequences
+## 影響
 
 - 静的ビューワーを先にデプロイし、混雑キャッシュとAI APIを独立して追加できる。
 - S3、CloudFront、Lambda、Bedrock、EventBridge、IAMの構成をコードレビューできる。

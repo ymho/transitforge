@@ -1,49 +1,35 @@
 # AGENTS.md
 
-## Working mode
+## 作業前
 
-This repository is a greenfield project.
+1. `README.md`を読む
+2. `docs/product-brief.md`を読む
+3. 関連するADRと仕様書を読む
+4. 既存テストと開発コマンドを確認
+5. リポジトリに答えがない場合は前提を明示
 
-Use only the requirements, decisions, and source code currently stored in this
-repository or explicitly provided in the active task. Do not assume an earlier
-implementation, hidden convention, existing data format, or preferred
-technology stack.
+## 変更方針
 
-## Before changing code
+- 変更範囲を1つの目的に絞る
+- ドメインをUI ストレージ 通信 ベンダー実装から分離
+- フレームワークやサービス追加時は理由をADRへ記録
+- 秘密情報 個人情報 著作物 大容量生成物を追加しない
+- 派生データはバージョン管理された入力から再生成可能にする
+- 無関係な整形やリファクタリングを避ける
+- 挙動 コマンド 契約 設計を変えた場合は文書を更新
 
-1. Read `README.md`.
-2. Read `docs/product-brief.md`.
-3. Read applicable records in `docs/decisions/`.
-4. Inspect existing tests and development commands.
-5. State assumptions when the repository does not yet define an answer.
+## 確認
 
-## Change principles
+完了前に次を行う
 
-- Keep each change focused.
-- Do not introduce a framework or service without recording why it is needed.
-- Separate domain concepts from UI, storage, networking, and vendor-specific
-  implementations.
-- Do not commit credentials, personal data, copyrighted datasets, or large
-  generated files.
-- Prefer generated outputs that can be reproduced from versioned inputs.
-- Avoid unrelated formatting or refactoring.
-- Preserve backward compatibility only when the repository explicitly requires
-  it.
-- Update documentation when behavior, commands, interfaces, or architecture
-  changes.
-
-## Validation
-
-Before declaring a task complete:
-
-1. Run the repository's documented formatting, lint, test, and build commands.
-2. Report commands that were not run and why.
-3. Review the final diff for accidental or unrelated changes.
-4. Confirm that no secrets or generated bulk data were added.
+1. 文書化されたformat lint test buildを実行
+2. 実行しなかった確認と理由を報告
+3. 最終差分から無関係な変更を除外
+4. 秘密情報と大容量生成物がないことを確認
 
 ## Git
 
-- Do not commit, push, merge, rewrite history, or create releases unless
-  explicitly requested.
-- Use small, descriptive commits when commit creation is requested.
-- Do not work directly on a protected default branch.
+- 明示依頼なしにcommit push merge release 履歴書き換えを行わない
+- 保護されたデフォルトブランチで直接作業しない
+- コミットは絵文字と自然な日本語で簡潔に書く
+- PRタイトルと本文は日本語の常体で書く

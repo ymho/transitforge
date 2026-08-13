@@ -1,25 +1,18 @@
-# Architecture Decision Records
+# アーキテクチャ判断記録
 
-This directory contains decisions that materially shape the system.
+このディレクトリは重要な技術判断と当時の前提を記録する
+現在の利用方法はREADMEと各仕様書を正とし ADRは判断の履歴として読む
 
-## File naming
+## 状態
 
-```text
-0001-short-decision-title.md
-0002-next-decision-title.md
-```
+- Proposed 提案中
+- Accepted 採用
+- Superseded 後続ADRで置換
+- Rejected 不採用
 
-## Status values
+## 追加手順
 
-- Proposed
-- Accepted
-- Superseded
-- Rejected
-
-## Process
-
-1. Copy `0000-template.md`.
-2. Assign the next sequential number.
-3. Describe the context and alternatives.
-4. Record the decision and consequences.
-5. Link any superseded decision.
+1. `0000-template.md`をコピー
+2. 連番を付ける
+3. 背景 選択肢 判断 影響を記録
+4. 置き換えるADRがあれば明記
