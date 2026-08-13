@@ -1,195 +1,55 @@
 # TransitForge
 
-TransitForge is a greenfield personal project for visualising planned train
-movements from prepared full-network route and timetable data.
+実時刻表をもとに列車の計画位置を3D地図へ表示する個人開発プロジェクト
 
-## Status
+指定時刻に運行中の列車を動かしながら眺められるほか 混雑と遅延の表示 AI駅員による列車案内と直通経路検索に対応する
 
-Product brief, initial viewer input contract, and a reproducible input
-measurement tool are defined.
+## 主な機能
 
-The viewer will be a web-based 3D application using Mapbox. The initial viewer
-uses Vite and TypeScript without a UI framework, and displays all routes plus
-the planned positions of active trains at a selected time. Three.js is currently
-used for a Mapbox integration prototype; its adoption as the train renderer is
-not decided yet. The detailed architecture, cloud platform, and deployment model
-have not been selected yet.
+- MapboxとThree.jsによる列車と全経路の3D表示
+- 現在時刻への同期 手動時刻変更 再生速度変更
+- 4時を境界とする業務日付と24時を超える時刻の処理
+- 列車詳細 フォーカス 追跡 連結列車表示
+- 混雑棒グラフ 遅延表示 行き先アーチ
+- 天候と時間帯に応じた表示
+- AI駅員による列車検索 到着検索 直通経路検索
+- 混雑と遅延の履歴分析
 
-## Goals
+経路検索は収録事業者内の直通列車を対象とする
+乗換検索 宿泊 観光 予約は現時点の対象外
 
-- Define the problem before selecting technology.
-- Build the smallest useful end-to-end slice first.
-- Keep domain logic independent from presentation and infrastructure.
-- Make important decisions explicit and reviewable.
-- Add automated checks alongside implementation.
-- Prefer reproducible data processing over manual correction.
+## 開発環境
 
-## Repository structure
-
-```text
-.
-├── .github/
-│   └── pull_request_template.md
-├── docs/
-│   ├── architecture/
-│   │   ├── mapbox-three-train-rendering.md
-│   │   └── principles.md
-│   ├── decisions/
-│   │   ├── 0000-template.md
-│   │   ├── 0001-use-mapbox-for-web-3d-visualisation.md
-│   │   ├── 0002-use-vite-and-typescript-for-the-initial-web-viewer.md
-│   │   ├── 0003-serve-local-viewer-input-in-development.md
-│   │   └── README.md
-│   ├── data/
-│   │   └── viewer-input.md
-│   └── product-brief.md
-├── tests/
-│   └── test_measure_viewer_input.py
-├── src/
-│   ├── main.ts
-│   └── style.css
-├── tools/
-│   └── measure_viewer_input.py
-├── .env.example
-├── .nvmrc
-├── index.html
-├── package.json
-├── tsconfig.json
-├── .editorconfig
-├── .gitattributes
-├── .gitignore
-├── AGENTS.md
-├── CHANGELOG.md
-├── CONTRIBUTING.md
-└── README.md
-```
-
-## First steps
-
-1. Measure the actual full-size input files.
-2. Define the minimum complete viewer and performance targets.
-3. Compare and select the technical stack.
-4. Record the initial technology decisions under `docs/decisions/`.
-5. Create the development environment.
-6. Add build, test, lint, and CI commands to this README.
-
-## Development commands
-
-### Mapbox access token
-
-Copy `.env.example` to `.env.local`, then set `VITE_MAPBOX_ACCESS_TOKEN` to a
-Mapbox public access token. Keep `.env.local` local and do not commit it.
-
-```bash
-cp .env.example .env.local
-```
-
-The token is available to browser code, so it must be a public token and must
-not grant access beyond the viewer's needs.
-
-### Initial 3D map
-
-Use the Node.js version recorded in `.nvmrc`, install dependencies, and start
-the local development server:
+Node.jsのバージョンは`.nvmrc`を正とする
 
 ```bash
 nvm use
 npm install
+cp .env.example .env.local
 npm run dev
 ```
 
-`viewer-input/train_index.json`と`viewer-input/path_catalog.json`は
-`transitforge-data-builder`が生成した公開成果物を使用します。TransitForgeでは入力の
-変換や補正を行いません。
+`.env.local`へMapboxの公開アクセストークンを設定する
+ブラウザへ渡る値なので必要最小限の権限に限定し Gitへ追加しない
 
-開発サーバーは、収録事業者の列車混雑情報を同一オリジンの
-`/api/traffic/trainmonitorinfo.json` で提供します。上流へのアクセスは
-サーバー全体で5分間キャッシュされ、クライアントは1分間隔で更新します。
-非表示タブでは更新せず、失敗後は15分待って再試行します。本番環境を追加する
-場合は、同等以上の共有キャッシュを持つプロキシが必要です。
+ローカル表示には`transitforge-data-builder`が生成した次の2ファイルが必要
 
-AWS開発環境ではEventBridge SchedulerとLambdaが上流を1分に1回取得し、
-最新値を同じパスでCloudFront配信します。各取得結果はgzip圧縮した時系列データとして
-非公開S3にも保存します。同時にDynamoDBへ毎分の合算サマリーを保存し、AI駅員から
-日次ピーク、1時間ごとの混雑推移、混雑した行き先側路線、種別・列車名・行き先付きの
-混雑列車を確認できます。
-
-列車遅延は独立したEventBridge SchedulerとLambdaが、重複排除した収録事業者の
-26個の列車走行位置JSONを1分ごとに各1回だけ取得します。統合した最新値を
-`/api/traffic/delays.json`で配信し、列車番号が一致する遅延列車には地図上の半透明な
-オレンジ色の球形ハローと、列車詳細の「遅延」を表示します。
-全レスポンスは非公開S3、毎分サマリーはDynamoDBへ保存し、AI駅員から現在、
-日次ピーク、1時間ごとの傾向、遅れた列車を確認できます。
-
-Create a production build with type checking:
-
-```bash
-npm run build
+```text
+viewer-input/train_index.json
+viewer-input/path_catalog.json
 ```
 
-Run the TypeScript tests:
+入力形式は[ビューワー入力仕様](docs/data/viewer-input.md)を参照
+
+## 確認コマンド
 
 ```bash
 npm test
+npm run build
+python3 -m unittest discover -s tests -v
 ```
 
-列車のMapbox・Three.js統合と、描画精度を保つためのローカル座標方式は
-[`docs/architecture/mapbox-three-train-rendering.md`](docs/architecture/mapbox-three-train-rendering.md)
-を参照してください。
-
-ビューワーの運行日は4:00始まりです。端末時刻またはAI指定時刻が0:00〜3:59の場合、
-表示時刻は前日運行日の24:00〜27:59として扱います。viewer-input自体の時刻補正は
-ビューワーでは行いません。
-
-経路検索は、指定時刻以降に同じ列車で出発駅から行き先まで行ける直通列車を最大3件表示します。
-出発駅を省略すると、ブラウザの位置情報から「行き先へ直通できる駅」のうち最寄りを選びます。
-緯度・経度はブラウザ内の駅選択にだけ使用し、AIやAWSへ送信しません。位置情報を利用できない
-場合は、出発駅を入力して検索できます。
-
-AI駅員のユーザーインターフェース、許可する画面操作、今後のAPI接続境界は
-[`docs/architecture/ai-operations-guide.md`](docs/architecture/ai-operations-guide.md)
-を参照してください。
-
-AWSサービス構成とGitHub ActionsからのOIDCデプロイ経路は
-[`docs/architecture/README.md`](docs/architecture/README.md)
-のアーキテクチャ図を参照してください。
-
-`train_index.json`と`path_catalog.json`は、EventBridge Schedulerが毎日3:00（JST）に
-起動する`transitforge-data-builder`のECS Fargateタスクで全件再生成します。生成物は
-日付付き非公開領域へステージし、4:00の昇格タスクが当日分の2ファイルをWeb用S3の
-`viewer-input/`へ配置します。ECS基盤はdata-builderリポジトリのTerraformと
-GitHub Actionsが管理します。TransitForge側の接続設定は
-[`infra/terraform/environments/dev/README.md`](infra/terraform/environments/dev/README.md)
-を参照してください。
-
-### AWS deployment
-
-AWSへの初期デプロイはTerraformで管理する。最初の段階では、非公開S3バケットと
-CloudFront Origin Access Controlで静的ビューワーを配信する。
-
-1. [`infra/terraform/bootstrap`](infra/terraform/bootstrap) でstate用S3バケットを作成する。
-2. [`infra/terraform/environments/dev`](infra/terraform/environments/dev) で開発環境を作成する。
-3. Vite成果物とローカル生成済みの `viewer-input/` をアプリケーション用S3へ配置する。
-
-AI駅員は、CloudFrontからのみ呼べるLambda Function URLとAmazon Bedrock
-Nova Liteを使用する。列車検索は大容量入力を持つブラウザ側で実行し、Bedrockには
-最大5件、直通経路検索は最大3件の候補だけを返す。現在地の座標はBedrockへ送らない。
-平日・土休日の代表ダイヤ検索はLambdaが非公開S3の固定2世代を検索し、同じく最大5件だけを返す。
-混雑履歴はDynamoDBの毎分サマリーをLambdaで時間別・列車別に
-集計し、ブラウザで路線・列車情報を付加してから上位結果だけをモデルへ返す。生S3
-アーカイブ全体はモデルへ送らない。遅延履歴もDynamoDBで決定的に集計し、時刻表で
-列車情報を付加した上位結果だけをBedrockへ渡す。AWS認証情報やMapboxトークンをTerraformファイル、
-tfvars、stateへ保存しない。
-
-GitHub ActionsはPull Requestとmainへのpushでテスト・ビルド・Terraform検証を行う。
-mainへのpushまたは手動実行では、同じWorkflowのテストジョブがすべて成功した場合だけ
-デプロイジョブへ進む。GitHub OIDCの一時認証情報でdev環境のTerraformをapplyし、
-Vite成果物をS3へ同期してCloudFrontを無効化する。固定AWSアクセスキーは使用しない。
-
-### Input measurement
-
-Measure full-size viewer input files and write the JSON report to standard
-output:
+入力データの規模を確認する場合は次を実行
 
 ```bash
 python3 tools/measure_viewer_input.py \
@@ -197,15 +57,25 @@ python3 tools/measure_viewer_input.py \
   viewer-input/path_catalog.json
 ```
 
-Run the measurement tool tests:
+## データとAIの境界
 
-```bash
-python3 -m unittest discover -s tests -v
-```
+- viewer inputの生成は`transitforge-data-builder`が担当
+- 現在地の座標は最寄り駅の選択だけに使い AWSやモデルへ送信しない
+- ブラウザやBedrockへ全履歴を渡さず Lambdaで決定的に絞り込む
+- AIが実行できる画面操作は検証済みの可逆操作に限定
+- AWS認証情報や秘密値をソース Terraform変数ファイル stateへ保存しない
 
-Formatting and lint commands are not defined yet.
+詳細は[プロダクト概要](docs/product-brief.md) [AI駅員の境界](docs/architecture/ai-operations-guide.md) [ADR](docs/decisions/README.md)を参照
 
-## License
+## AWS
 
-No license has been selected. Do not assume permission for external reuse or
-distribution until a license is added.
+静的ビューワー AI Lambda 混雑と遅延の収集基盤をTerraformで管理する
+継続的なデプロイはGitHub ActionsとOIDCを使用し 固定AWSアクセスキーを使わない
+
+環境固有の値はGitHub EnvironmentまたはGit管理外のローカル変数で与える
+詳しい入口は[Terraform dev環境](infra/terraform/environments/dev/README.md)を参照
+
+## ライセンス
+
+ライセンス未設定
+外部データや生成物をこのリポジトリへ含めない
