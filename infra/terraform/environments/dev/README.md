@@ -162,3 +162,19 @@ aws lambda invoke \
   --payload '{"mode":"backfill","date":"2026-07-30"}' \
   backfill-result.json
 ```
+
+混雑・遅延の保持済みS3アーカイブ全体を再集計する場合は、collectorの1回の実行を
+最大100オブジェクトに分割し、継続トークンがなくなるまで次のツールで呼び出す。
+同じDynamoDBキーへの上書きなので、中断後は同じ期間を再実行できる。
+
+```bash
+python3 tools/backfill_analytics.py \
+  --service congestion \
+  --start-date 2026-07-29 \
+  --end-date 2026-08-14
+
+python3 tools/backfill_analytics.py \
+  --service delay \
+  --start-date 2026-08-01 \
+  --end-date 2026-08-14
+```
