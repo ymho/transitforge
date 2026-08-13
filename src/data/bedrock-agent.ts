@@ -7,6 +7,7 @@ import type {
   RepresentativeTimetableSearchMode,
   RepresentativeTimetableSearchResponse,
   TrainDelayAnalysisResponse,
+  TravelCandidateSearchResponse,
 } from "./bedrock-agent-contract";
 import {
   isBedrockAgentResponse,
@@ -14,6 +15,7 @@ import {
   isDailyCongestionPeakResponse,
   isRepresentativeTimetableSearchResponse,
   isTrainDelayAnalysisResponse,
+  isTravelCandidateSearchResponse,
 } from "./bedrock-agent-validation";
 
 export type * from "./bedrock-agent-contract";
@@ -50,6 +52,26 @@ export async function searchRepresentativeTimetable(
     "代表ダイヤ",
     isRepresentativeTimetableSearchResponse,
     fetcher,
+  );
+}
+
+export async function searchTravelCandidates(
+  request: {
+    serviceDate: string;
+    originStation: string;
+    destinationStation: string;
+    departureTimeMinutes: number;
+    limit?: number;
+  },
+  fetcher: typeof fetch = fetch,
+): Promise<TravelCandidateSearchResponse> {
+  return postAgent(
+    { operation: "journey_search", maxTransfers: 0, ...request },
+    "旅行候補を検索できません",
+    "旅行候補",
+    isTravelCandidateSearchResponse,
+    fetcher,
+    true,
   );
 }
 

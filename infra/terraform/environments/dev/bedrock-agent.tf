@@ -46,9 +46,12 @@ data "aws_iam_policy_document" "bedrock_agent" {
   }
 
   statement {
-    sid       = "ReadRepresentativeTimetables"
-    actions   = ["s3:GetObject"]
-    resources = ["arn:aws:s3:::${local.resource_prefix}-data-builder-source/ai-timetable/*"]
+    sid     = "ReadRepresentativeTimetables"
+    actions = ["s3:GetObject"]
+    resources = [
+      "arn:aws:s3:::${local.resource_prefix}-data-builder-source/ai-timetable/*",
+      "arn:aws:s3:::${local.resource_prefix}-data-builder-source/timetable/normalized/*",
+    ]
   }
 
   statement {
@@ -83,11 +86,12 @@ resource "aws_lambda_function" "bedrock_agent" {
 
   environment {
     variables = {
-      MODEL_ID            = var.bedrock_model_id
-      SUMMARY_TABLE       = aws_dynamodb_table.train_congestion_summary.name
-      DELAY_SUMMARY_TABLE = aws_dynamodb_table.train_delay_summary.name
-      AI_TIMETABLE_BUCKET = "${local.resource_prefix}-data-builder-source"
-      AI_TIMETABLE_PREFIX = "ai-timetable"
+      MODEL_ID                  = var.bedrock_model_id
+      SUMMARY_TABLE             = aws_dynamodb_table.train_congestion_summary.name
+      DELAY_SUMMARY_TABLE       = aws_dynamodb_table.train_delay_summary.name
+      AI_TIMETABLE_BUCKET       = "${local.resource_prefix}-data-builder-source"
+      AI_TIMETABLE_PREFIX       = "ai-timetable"
+      PLANNING_TIMETABLE_PREFIX = "timetable"
     }
   }
 
