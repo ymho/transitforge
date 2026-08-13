@@ -1,27 +1,24 @@
-## Problem
+## 変更内容
 
-Describe the problem this change addresses.
+- （変更内容を記載）
 
-## Changes
+## 背景
 
-Describe the implementation at a useful level.
 
-## Decisions and alternatives
+## 判断と代替案
 
-Link relevant ADRs and explain important rejected alternatives.
 
-## Validation
+## 確認
 
-List the commands, tests, and manual checks performed.
+- （確認内容を記載）
 
-## Risks and follow-up
+## 残課題
 
-Describe known limitations, migration concerns, or future work.
 
-## Checklist
+## チェック
 
-- [ ] The change is focused.
-- [ ] Tests were added or updated where behavior changed.
-- [ ] Documentation was updated where needed.
-- [ ] Formatting, lint, tests, and build passed.
-- [ ] No secrets or large generated files were committed.
+- [ ] 変更範囲を絞った
+- [ ] 挙動変更に合わせてテストを追加または更新した
+- [ ] 必要な文書を更新した
+- [ ] format lint test buildを確認した
+- [ ] 秘密情報や大容量生成物を含めていない
