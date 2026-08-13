@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
 from request_contract import RequestError
 
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+JST = timezone(timedelta(hours=9))
+OPERATING_DAY_START_HOUR = 4
 
 
 def validate_service_date(service_date: str) -> None:
@@ -41,6 +43,53 @@ def query_daily_summary_items(
         exclusive_start_key = result.get("LastEvaluatedKey")
         if not exclusive_start_key:
             return items
+
+
+def query_operating_day_summary_items(
+    dynamodb_client: Any,
+    summary_table: str,
+    service_date: str,
+) -> list[dict[str, Any]]:
+    service_day = datetime.strptime(service_date, "%Y-%m-%d").date()
+    next_date = service_day + timedelta(days=1)
+    range_start = datetime.combine(
+        service_day,
+        datetime.min.time(),
+        JST,
+    ) + timedelta(hours=OPERATING_DAY_START_HOUR)
+    range_end = range_start + timedelta(days=1)
+    items = query_daily_summary_items(
+        dynamodb_client,
+        summary_table,
+        service_date,
+    ) + query_daily_summary_items(
+        dynamodb_client,
+        summary_table,
+        next_date.isoformat(),
+    )
+    return [
+        item
+        for item in items
+        if item_is_in_range(item, range_start, range_end)
+    ]
+
+
+def item_is_in_range(
+    item: dict[str, Any],
+    range_start: datetime,
+    range_end: datetime,
+) -> bool:
+    collected_at = dynamo_string(item.get("collectedAt"))
+    if collected_at is None:
+        return False
+    try:
+        parsed = datetime.fromisoformat(collected_at)
+    except ValueError:
+        return False
+    return (
+        parsed.tzinfo is not None
+        and range_start <= parsed.astimezone(JST) < range_end
+    )
 
 
 def dynamo_number(value: Any) -> Decimal:

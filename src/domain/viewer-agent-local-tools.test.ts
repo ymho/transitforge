@@ -4,6 +4,7 @@ import type { Train } from "../data/train-index";
 import type { TrainPosition } from "./train-position";
 import {
   directRouteRequestFromPrompt,
+  formatStationLabel,
   localViewerControlActionsFromPrompt,
   routeTimeFromPrompt,
   searchActiveTrainsFromPrompt,
@@ -35,6 +36,11 @@ const positions: TrainPosition[] = trains.map((item, index) => ({
 }));
 
 describe("viewer agent local tools", () => {
+  it("formats station labels without duplicating the station suffix", () => {
+    expect(formatStationLabel("西大路")).toBe("西大路駅");
+    expect(formatStationLabel("西大路駅")).toBe("西大路駅");
+  });
+
   it("extracts Japanese and colon display times", () => {
     expect(routeTimeFromPrompt("18時30分にして")).toBe(1_110);
     expect(routeTimeFromPrompt("表示を 25:05 にして")).toBe(1_505);

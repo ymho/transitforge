@@ -23,6 +23,8 @@ import {
 } from "./viewer-agent-action";
 import {
   arrivalSearchWindowMinutes,
+  directRouteRequestFromPrompt,
+  formatStationLabel,
   routeTimeFromPrompt,
   searchActiveTrainsFromPrompt,
   searchTrainArrivalsFromPrompt,
@@ -98,7 +100,7 @@ export async function runBedrockViewerAgent(
           text:
             `利用者の依頼: ${prompt}\n` +
             `現在の表示時刻（0時からの分数）: ${dependencies.getRouteTime()}\n` +
-            `日本時間の今日の日付: ${currentDateInJapan()}`,
+            `現在の業務日付（日本時間4時切替）: ${currentServiceDateInJapan()}`,
         },
       ],
     },
@@ -286,7 +288,14 @@ async function executeTool(
   }
 
   if (name === "search_direct_routes") {
-    const { originStation, destinationStation, departureTimeMinutes } = input;
+    const { departureTimeMinutes } = input;
+    const promptRequest = directRouteRequestFromPrompt(
+      originalPrompt,
+      dependencies.trains,
+    );
+    const originStation = promptRequest?.originStation ?? input.originStation;
+    const destinationStation =
+      promptRequest?.destinationStation ?? input.destinationStation;
     if (
       (originStation !== undefined && typeof originStation !== "string") ||
       typeof destinationStation !== "string" ||
@@ -441,13 +450,14 @@ async function executeTool(
   throw new Error("許可されていないツールです。");
 }
 
-export function currentDateInJapan(now = new Date()): string {
+export function currentServiceDateInJapan(now = new Date()): string {
+  const operatingDayNow = new Date(now.getTime() - 4 * 60 * 60 * 1_000);
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Tokyo",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(now);
+  }).formatToParts(operatingDayNow);
   const byType = new Map(parts.map((part) => [part.type, part.value]));
   return `${byType.get("year")}-${byType.get("month")}-${byType.get("day")}`;
 }
@@ -460,7 +470,7 @@ function directRouteResponseText(
     return undefined;
   }
   if (response.matches.length === 0) {
-    return `${formatClockTime(response.searchTimeMinutes)}以降に${response.originStation}駅から${response.destinationStation}駅へ直通する列車は見つかりませんでした。`;
+    return `${formatClockTime(response.searchTimeMinutes)}以降に${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}へ直通する列車は見つかりませんでした。`;
   }
   const routes = response.matches.map((match, index) => {
     const trainLabel = [
@@ -475,7 +485,7 @@ function directRouteResponseText(
     first && state.focusedServiceUid === first.serviceUid
       ? "先頭の列車にフォーカスしました。"
       : "先頭の列車はまだ表示時刻に運行していないため、経路のみ案内します。";
-  return `${response.originStation}駅から${response.destinationStation}駅への直通列車です。${focusMessage}\n${routes.join("\n")}`;
+  return `${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}への直通列車です。${focusMessage}\n${routes.join("\n")}`;
 }
 
 function formatClockTime(routeTimeMinutes: number): string {

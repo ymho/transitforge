@@ -37,6 +37,10 @@ export interface DirectRoutePromptRequest {
 const serviceTypeKeywords = ["新快速", "新幹線", "特急", "快速", "普通"];
 export const arrivalSearchWindowMinutes = 30;
 
+export function formatStationLabel(stationName: string): string {
+  return `${stationName.normalize("NFKC").trim().replace(/駅$/u, "")}駅`;
+}
+
 export function routeTimeFromPrompt(prompt: string): number | undefined {
   const normalizedPrompt = normalize(prompt);
   const colonTime = normalizedPrompt.match(
