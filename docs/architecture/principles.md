@@ -1,52 +1,42 @@
-# Architecture principles
+# 設計原則
 
-These are starting constraints, not a final architecture.
+## ドメインを先に決める
 
-## 1. Domain before infrastructure
+列車 時刻 経路 遅延などの概念と規則をUI ストレージ 外部APIから分離する
 
-Model the concepts and behavior required by the first use case before selecting
-cloud services, databases, message brokers, or UI frameworks.
+## 小さく通して作る
 
-## 2. Small vertical slices
+大きな基盤を部分的に作るより 入力から利用者へ届く小さな機能を完成させる
 
-Prefer a complete thin path from input to visible result over a large partial
-platform.
+## 境界を明示する
 
-## 3. Explicit boundaries
+- データ取得と正規化
+- 列車位置と経路検索
+- UIと描画
+- AIと外部サービス
+- インフラとデプロイ
 
-Keep these concerns separable:
+サービス分割を前提にせず 運用上の理由がある場合だけ分離する
 
-- domain model;
-- data acquisition and import;
-- simulation or state calculation;
-- query and API interfaces;
-- visualisation;
-- infrastructure and deployment.
+## 再生成できる状態を保つ
 
-Separation does not require separate services. Start with modules unless an
-operational reason justifies distribution.
+派生データはバージョン管理されたコードと設定から再生成する
+手作業の補正はレビュー可能な規則またはデータとして残す
 
-## 4. Reproducibility
+## 判断できるログを残す
 
-Derived data should be reproducible from versioned source inputs and code.
-Manual corrections must be captured as explicit, reviewable rules or data.
+重要な処理は入力日付 件数 所要時間 除外理由 出力先を確認できるようにする
 
-## 5. Observability from the start
+## 計測して最適化する
 
-Important pipelines and runtime paths should expose errors, durations, input
-versions, and output counts.
+代表的なデータ量と操作を決め 変更前後の値で効果を確認する
 
-## 6. Measured performance
+## 外部依存を狭くする
 
-Do not optimise from intuition alone. Define representative workloads and
-record measurements before and after meaningful performance changes.
+ベンダー固有のAPIと形式は小さな境界へ閉じ込める
+外部サービスの結果だけで列車経路を確定しない
 
-## 7. Replaceable external dependencies
+## 公開を前提に守る
 
-Wrap vendor-specific APIs and data formats behind narrow interfaces where the
-cost is reasonable.
-
-## 8. Secure defaults
-
-Keep secrets outside the repository, minimise collected data, and grant only
-the permissions required for the current use case.
+秘密情報 個人情報 著作物 大容量生成物をリポジトリへ含めない
+権限は用途ごとに最小化し 位置情報を端末外へ送らない

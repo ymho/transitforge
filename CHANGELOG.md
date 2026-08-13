@@ -1,13 +1,6 @@
-# Changelog
+# 変更履歴
 
-All notable changes to this project will be documented in this file.
+正式リリース前
 
-The project has not released a version yet.
-
-## Unreleased
-
-### Added
-
-- Initial repository structure.
-- Product, architecture, and decision-record templates.
-- Contribution and AI-agent working rules.
+変更単位の記録はGitHubのPRとコミットを正とする
+バージョン公開後にこの文書へリリース単位の変更を記録する
