@@ -483,6 +483,87 @@ class BedrockAgentTest(unittest.TestCase):
             ["2026-07-29", "2026-07-30"],
         )
 
+    def test_connection_scan_applies_delay_and_returns_readable_trace(self) -> None:
+        index = connection_index_fixture()
+        result = handler.journey_search.search_index(
+            index,
+            {"538C": Decimal(5)},
+            {
+                "serviceDate": "2026-08-14", "originStation": "西大路",
+                "destinationStation": "京都", "departureTimeMinutes": 590.0,
+                "limit": 3, "maxTransfers": 0, "includeTrace": True,
+            },
+        )
+
+        self.assertEqual(result["totalMatchCount"], 1)
+        self.assertEqual(result["matches"][0]["departureTimeMinutes"], 605)
+        self.assertEqual(result["matches"][0]["arrivalTimeMinutes"], 613)
+        self.assertEqual(result["matches"][0]["discoverySource"], "timetable-graph")
+        self.assertGreater(result["trace"]["connectionsScanned"], 0)
+        self.assertEqual(result["trace"]["selectedJourneys"][0]["trips"], ["trip-direct"])
+
+    def test_connection_scan_allows_one_transfer_only_with_enough_time(self) -> None:
+        index = connection_index_fixture()
+        request = {
+            "serviceDate": "2026-08-14", "originStation": "向日町",
+            "destinationStation": "大阪", "departureTimeMinutes": 580.0,
+            "limit": 3, "maxTransfers": 1, "includeTrace": True,
+        }
+        result = handler.journey_search.search_index(index, {}, request)
+
+        self.assertEqual(result["journeys"][0]["transferCount"], 1)
+        self.assertEqual(
+            [leg["serviceUid"] for leg in result["journeys"][0]["legs"]],
+            ["trip-direct", "trip-transfer"],
+        )
+        self.assertEqual(result["matches"], [])
+        self.assertEqual(result["trace"]["stationTransferRulesUsed"], {"京都": 5.0})
+
+        tight_index = connection_index_fixture()
+        tight_index["connections"][2]["departure_time_minutes"] = 612
+        tight_result = handler.journey_search.search_index(tight_index, {}, request)
+        self.assertEqual(tight_result["journeys"], [])
+        self.assertGreater(tight_result["trace"]["labelsRejectedByTransferTime"], 0)
+
+
+def connection_index_fixture():
+    return {
+        "schema_version": "timetable-connection-index-v1",
+        "service_date": "2026-08-14",
+        "default_transfer_minutes": 5,
+        "station_transfer_minutes": {},
+        "trips": {
+            "trip-direct": {
+                "service_uid": "trip-direct", "train_no": "538C",
+                "service_type": "普通", "train_name": "",
+            },
+            "trip-transfer": {
+                "service_uid": "trip-transfer", "train_no": "1001M",
+                "service_type": "新快速", "train_name": "",
+            },
+        },
+        "connections": [
+            {
+                "connection_id": "direct:0", "trip_id": "trip-direct",
+                "from_station": "向日町", "to_station": "西大路",
+                "departure_time_minutes": 590, "arrival_time_minutes": 598,
+                "stop_sequence": 0,
+            },
+            {
+                "connection_id": "direct:1", "trip_id": "trip-direct",
+                "from_station": "西大路", "to_station": "京都",
+                "departure_time_minutes": 600, "arrival_time_minutes": 608,
+                "stop_sequence": 1,
+            },
+            {
+                "connection_id": "transfer:0", "trip_id": "trip-transfer",
+                "from_station": "京都", "to_station": "大阪",
+                "departure_time_minutes": 615, "arrival_time_minutes": 640,
+                "stop_sequence": 0,
+            },
+        ],
+    }
+
 
 def dynamo_item(collected_at, total, train_totals):
     return {
