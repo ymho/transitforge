@@ -1,50 +1,48 @@
-# ADR 0000: Decision title
+# ADR 0000: 判断の題名
 
-- Status: Proposed
-- Date: YYYY-MM-DD
-- Decision owners: To be defined
+- ステータス: Proposed
+- 日付: YYYY-MM-DD
 
-## Context
+## 背景
 
-What problem or constraint requires a decision?
+判断が必要な問題と制約
 
-## Decision drivers
+## 判断要因
 
-- Driver one.
-- Driver two.
+- 要因
 
-## Considered options
+## 選択肢
 
-### Option A
+### 選択肢A
 
-Description.
+説明
 
-### Option B
+### 選択肢B
 
-Description.
+説明
 
-## Decision
+## 決定
 
-State the selected option and the boundaries of the decision.
+採用する選択肢と境界
 
-## Consequences
+## 影響
 
-### Positive
+### 良い影響
 
-- To be defined.
+- 影響
 
-### Negative
+### 悪い影響
 
-- To be defined.
+- 影響
 
-### Risks
+### リスク
 
-- To be defined.
+- リスク
 
-## Validation
+## 確認
 
-How will the decision be tested or reviewed?
+判断を確認する方法
 
-## Supersedes
+## 置き換えるADR
 
-None.
+なし

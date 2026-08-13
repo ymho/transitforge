@@ -1,10 +1,10 @@
-# 0009: viewer-inputを日次ECSタスクで生成してS3へ公開する
+# ADR 0009: viewer-inputを日次ECSタスクで生成してS3へ公開する
 
-## Status
+## ステータス
 
 Superseded by ADR 0010
 
-## Context
+## 背景
 
 `train_index.json`と`path_catalog.json`の軽量化を含む生成責務を
 `transitforge-data-builder`へ集約した。TransitForgeのデプロイ時に元データを変換せず、
@@ -13,7 +13,7 @@ Superseded by ADR 0010
 data-builderは時刻表取得、全国経路探索、大容量JSON生成を行うため、Lambdaの短時間・小容量実行より
 コンテナバッチが適している。入力となる国土数値情報GeoJSONは自動取得せず、再配布もしない。
 
-## Decision
+## 決定
 
 - `transitforge-data-builder`をECRへ保存し、ECS Fargateの一回限りのタスクとして実行する。
 - EventBridge Schedulerが毎日3:00（Asia/Tokyo）にタスクを開始する。
@@ -33,7 +33,7 @@ data-builderは時刻表取得、全国経路探索、大容量JSON生成を行�
 - data-builderのGitHub Actionsはmain更新時にTerraformをapplyしてからECRへイメージを公開し、
   固定AWSキーを使用しない。ローカル端末からAWSリソースを継続的に更新しない。
 
-## Consequences
+## 影響
 
 - TransitForgeはデータ生成コードやデプロイ時変換を持たず、完成済み入力だけを読み込める。
 - ビューワーのデプロイとデータ更新を独立して運用できる。
@@ -43,7 +43,7 @@ data-builderは時刻表取得、全国経路探索、大容量JSON生成を行�
 - 2ファイルの上書きは完全なトランザクションではない。カタログを先に置くことで、短い更新中に
   新しい列車インデックスが未配置のカタログを参照する状態を避ける。
 
-## Alternatives
+## 代替案
 
 ### TransitForgeのGitHub Actionsで変換する
 
