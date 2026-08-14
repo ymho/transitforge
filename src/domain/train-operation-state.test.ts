@@ -6,6 +6,7 @@ import {
   delayByTrainNumber,
   destinationChangedServiceUids,
   operationsForDisplay,
+  operationsWithTimetableTrainNumberAliases,
   trainsForOperations,
 } from "./train-operation-state";
 
@@ -98,6 +99,39 @@ describe("train operation state", () => {
     expect(trainsForOperations(trains, undefined)).toBe(trains);
     expect(delayByTrainNumber(undefined).size).toBe(0);
   });
+
+  it("matches an Osaka Loop snapshot number without the timetable M suffix", () => {
+    const trains = [train("4204M", "京橋", "関空快速")];
+    const operation = {
+      delayMinutes: 0,
+      destination: "天王寺",
+      sources: ["osakaloop"],
+    };
+    const resolved = operationsWithTimetableTrainNumberAliases(
+      trains,
+      new Map([["4204", operation]]),
+    );
+
+    expect(resolved?.get("4204M")).toBe(operation);
+    expect(trainsForOperations(trains, resolved)).toHaveLength(1);
+    expect(delayByTrainNumber(resolved).get("4204M")).toBe(0);
+  });
+
+  it("does not apply the Osaka Loop alias to unrelated timetable trains", () => {
+    const trains = [
+      train("1512E", "京橋", "関空快速"),
+      train("4204M", "京橋", "普通"),
+    ];
+    const resolved = operationsWithTimetableTrainNumberAliases(
+      trains,
+      new Map([
+        ["1512", { delayMinutes: 0, destination: "京橋", sources: ["osakaloop"] }],
+      ]),
+    );
+
+    expect(resolved?.has("1512E")).toBe(false);
+    expect(resolved?.has("4204M")).toBe(false);
+  });
 });
 
 function operationSnapshot(collectedAt: string): TrainDelaySnapshot {
@@ -113,11 +147,15 @@ function operationSnapshot(collectedAt: string): TrainDelaySnapshot {
   };
 }
 
-function train(trainNumber: string, destination: string): Train {
+function train(
+  trainNumber: string,
+  destination: string,
+  serviceType = "普通",
+): Train {
   return {
     service_uid: `service-${trainNumber}`,
     train_no: trainNumber,
-    service_type: "普通",
+    service_type: serviceType,
     train_name: "",
     origin_station: "神戸",
     destination_station: destination,
