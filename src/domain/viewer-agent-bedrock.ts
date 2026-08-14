@@ -32,6 +32,7 @@ import {
 
 export interface BedrockViewerAgentDependencies {
   trains: Train[];
+  getTrains?: () => Train[];
   getPositions: () => TrainPosition[];
   getRouteTime: () => number;
   setRouteTime: (routeTimeMinutes: number) => void;
@@ -222,7 +223,7 @@ async function executeTool(
     const limit = Math.max(1, Math.min(5, requestedLimit));
     const search = searchActiveTrainsFromPrompt(
       query,
-      dependencies.trains,
+      currentTrains(dependencies),
       dependencies.getPositions(),
       dependencies.getRouteTime(),
       limit,
@@ -262,7 +263,7 @@ async function executeTool(
     const limit = Math.max(1, Math.min(5, requestedLimit));
     const search = searchTrainArrivalsFromPrompt(
       originalPrompt,
-      dependencies.trains,
+      currentTrains(dependencies),
       limit,
       arrivalSearchWindowMinutes,
       targetTimeMinutes,
@@ -291,7 +292,7 @@ async function executeTool(
     const { departureTimeMinutes } = input;
     const promptRequest = directRouteRequestFromPrompt(
       originalPrompt,
-      dependencies.trains,
+      currentTrains(dependencies),
     );
     const originStation = promptRequest?.originStation ?? input.originStation;
     const destinationStation =
@@ -492,6 +493,10 @@ function formatClockTime(routeTimeMinutes: number): string {
   const roundedMinutes = Math.round(routeTimeMinutes);
   const clockMinutes = ((roundedMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
   return `${Math.floor(clockMinutes / 60)}時${String(clockMinutes % 60).padStart(2, "0")}分`;
+}
+
+function currentTrains(dependencies: BedrockViewerAgentDependencies): Train[] {
+  return dependencies.getTrains?.() ?? dependencies.trains;
 }
 
 function isToolUseBlock(

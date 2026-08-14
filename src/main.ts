@@ -15,6 +15,8 @@ import {
   loadTrainDelays,
   trainDelayRefreshIntervalMilliseconds,
   trainDelayRetryIntervalMilliseconds,
+  type TrainDelaySnapshot,
+  type TrainOperation,
 } from "./data/train-delay";
 import {
   browserPollingEnvironment,
@@ -54,6 +56,12 @@ import { PlaybackController } from "./domain/playback-controller";
 import { congestionAnalysisForAgent } from "./domain/congestion-analysis";
 import { delayAnalysisForAgent } from "./domain/delay-analysis";
 import { TrainLineColorIndex } from "./domain/train-line-color";
+import {
+  delayByTrainNumber,
+  destinationChangedTrainNumbers,
+  operationsForDisplay,
+  trainsForOperations,
+} from "./domain/train-operation-state";
 import {
   activeTrainPositions,
   destinationCoordinateForTrain,
@@ -114,6 +122,8 @@ const congestionToggle =
   document.querySelector<HTMLButtonElement>("#congestion-toggle");
 const destinationArcsToggle =
   document.querySelector<HTMLButtonElement>("#destination-arcs-toggle");
+const timetableModeToggle =
+  document.querySelector<HTMLButtonElement>("#timetable-mode-toggle");
 const aiGuidePanel = document.querySelector<HTMLElement>("#ai-guide-panel");
 const aiGuideToggle =
   document.querySelector<HTMLButtonElement>("#ai-guide-toggle");
@@ -158,6 +168,7 @@ if (
   weatherOptions === null ||
   congestionToggle === null ||
   destinationArcsToggle === null ||
+  timetableModeToggle === null ||
   aiGuidePanel === null ||
   aiGuideToggle === null ||
   closeAiGuide === null ||
@@ -409,6 +420,69 @@ if (!token) {
           },
         );
         let displayedPositions: TrainPosition[] = [];
+        let latestDelaySnapshot: TrainDelaySnapshot | undefined;
+        let timetableModeRequested = false;
+        let appliedOperations:
+          | ReadonlyMap<string, TrainOperation>
+          | undefined
+          | null = null;
+        let displayTrains = trainIndex.trains;
+        let displayDelays: ReadonlyMap<string, number> = new Map();
+
+        const applyOperationMode = (displayedAt: Date) => {
+          const now = new Date();
+          const realtimeOperations = operationsForDisplay(
+            latestDelaySnapshot,
+            displayedAt,
+            now,
+            false,
+          );
+          const operations = timetableModeRequested
+            ? undefined
+            : realtimeOperations;
+          renderTimetableModeToggle(
+            timetableModeToggle,
+            realtimeOperations !== undefined,
+            operations === undefined,
+          );
+          if (operations === appliedOperations) {
+            return;
+          }
+          appliedOperations = operations;
+          displayTrains = trainsForOperations(trainIndex.trains, operations);
+          displayDelays = delayByTrainNumber(operations);
+          const destinationChanges = destinationChangedTrainNumbers(
+            trainIndex.trains,
+            operations,
+          );
+          const operationDestinationCoordinates = new Map(
+            displayTrains.flatMap((train) => {
+              const coordinate = destinationCoordinateForTrain(train, geometry);
+              return coordinate
+                ? [[train.service_uid, coordinate] as const]
+                : [];
+            }),
+          );
+          threeTrainLayer.setDelayByTrainNumber(displayDelays);
+          threeTrainLayer.setDestinationChanges(
+            destinationChanges,
+            operationDestinationCoordinates,
+          );
+          selection.updateOperations(operations);
+          console.info("[TransitForge] 列車表示モード", {
+            mode: operations ? "realtime" : "timetable",
+            timetableTrains: trainIndex.trains.length,
+            displayedTrains: displayTrains.length,
+            unobservedTimetableEntries: operations
+              ? trainIndex.trains.length - displayTrains.length
+              : 0,
+            delayedTrains: [...displayDelays.values()].filter(
+              (delay) => delay > 0,
+            ).length,
+            destinationChangedTrains: destinationChanges.size,
+            collectedAt: latestDelaySnapshot?.collectedAt,
+          });
+        };
 
         const updateTrains = (routeTime = Number(displayTime.value)) => {
           const lightPreset = lightPresetForRouteTime(routeTime);
@@ -418,7 +492,17 @@ if (!token) {
             activeLightPreset = lightPreset;
           }
           const updateStartedAt = performance.now();
-          const positions = activeTrainPositions(trainIndex.trains, geometry, routeTime);
+          const displayedAt = dateForOperatingRouteTime(
+            displayedServiceDateStart,
+            routeTime,
+          );
+          applyOperationMode(displayedAt);
+          const positions = activeTrainPositions(
+            displayTrains,
+            geometry,
+            routeTime,
+            displayDelays,
+          );
           displayedPositions = positions;
           threeTrainLayer.setPositions(positions);
           selection.updateTracking(positions);
@@ -431,9 +515,7 @@ if (!token) {
               geometry: { type: "Point" as const, coordinates: position.coordinate },
             })),
           });
-          renderDisplayDateTime(
-            dateForOperatingRouteTime(displayedServiceDateStart, routeTime),
-          );
+          renderDisplayDateTime(displayedAt);
           status.hidden = true;
           metrics.recordPositionUpdate(performance.now() - updateStartedAt, positions.length);
           logMetrics();
@@ -445,7 +527,7 @@ if (!token) {
           if (!originStation) {
             const coordinate = await currentBrowserCoordinate();
             const nearest = nearestDirectOrigin(
-              trainIndex.trains,
+              displayTrains,
               stationLineCatalog,
               request.destinationStation,
               request.departureTimeMinutes,
@@ -467,7 +549,7 @@ if (!token) {
             originStation,
             ...(distanceMeters === undefined ? {} : { distanceMeters }),
             results: searchDirectRoutes(
-              trainIndex.trains,
+              displayTrains,
               originStation,
               request.destinationStation,
               request.departureTimeMinutes,
@@ -484,7 +566,7 @@ if (!token) {
             limit: 3,
           });
           const trainsByServiceUid = new Map(
-            trainIndex.trains.map((train) => [train.service_uid, train]),
+            displayTrains.map((train) => [train.service_uid, train]),
           );
           return {
             originStation: response.originStation,
@@ -501,9 +583,9 @@ if (!token) {
             }),
           };
         };
-        const disposeDelayUpdates = configureTrainDelayUpdates((delays) => {
-          threeTrainLayer.setDelayByTrainNumber(delays);
-          selection.updateDelays(delays);
+        const disposeDelayUpdates = configureTrainDelayUpdates((snapshot) => {
+          latestDelaySnapshot = snapshot;
+          updateTrains();
         });
         disposeDataUpdates = () => {
           congestionUpdates.dispose();
@@ -511,6 +593,13 @@ if (!token) {
         };
 
         displayTime.addEventListener("input", () => updateTrains());
+        timetableModeToggle.addEventListener("click", () => {
+          if (timetableModeToggle.disabled) {
+            return;
+          }
+          timetableModeRequested = timetableModeToggle.ariaPressed !== "true";
+          updateTrains();
+        });
         configureDateTimeInput(
           dateTimeInput,
           () =>
@@ -536,6 +625,7 @@ if (!token) {
         };
         const localAiGuidePromptHandler = createLocalViewerAgent({
           trains: trainIndex.trains,
+          getTrains: () => displayTrains,
           getPositions: () => displayedPositions,
           getRouteTime: () => Number(displayTime.value),
           setRouteTime: (routeTimeMinutes) =>
@@ -555,6 +645,7 @@ if (!token) {
               prompt,
               {
                 trains: trainIndex.trains,
+                getTrains: () => displayTrains,
                 getPositions: () => displayedPositions,
                 getRouteTime: () => Number(displayTime.value),
                 setRouteTime: (routeTimeMinutes) =>
@@ -978,12 +1069,24 @@ function configureTrainCongestionUpdates(
 }
 
 function configureTrainDelayUpdates(
-  onUpdate: (delays: ReadonlyMap<string, number>) => void,
+  onUpdate: (snapshot: TrainDelaySnapshot) => void,
 ): () => void {
   const poller = createPollingController(
     {
       load: loadTrainDelays,
-      apply: (snapshot) => onUpdate(snapshot.byTrainNumber),
+      apply: (snapshot) => {
+        if (snapshot.failedSources.length > 0) {
+          console.warn(
+            "[TransitForge] 遅延スナップショットが不完全なため時刻表表示を維持します。",
+            {
+              collectedAt: snapshot.collectedAt,
+              failedSources: snapshot.failedSources,
+            },
+          );
+          return;
+        }
+        onUpdate(snapshot);
+      },
       onError: (error) =>
         console.warn("列車遅延情報を更新できませんでした。", error),
       refreshIntervalMilliseconds: trainDelayRefreshIntervalMilliseconds,
@@ -992,6 +1095,25 @@ function configureTrainDelayUpdates(
     browserPollingEnvironment(),
   );
   return poller.dispose;
+}
+
+function renderTimetableModeToggle(
+  toggle: HTMLButtonElement,
+  realtimeAvailable: boolean,
+  timetableMode: boolean,
+): void {
+  toggle.disabled = !realtimeAvailable;
+  toggle.ariaPressed = String(timetableMode);
+  if (!realtimeAvailable) {
+    toggle.ariaLabel = "リアルタイム情報がないため時刻表どおりに表示中";
+    toggle.title = "リアルタイム情報がないため時刻表どおりに表示中";
+  } else if (timetableMode) {
+    toggle.ariaLabel = "リアルタイム表示に戻す";
+    toggle.title = "リアルタイム表示に戻す";
+  } else {
+    toggle.ariaLabel = "時刻表どおりに表示";
+    toggle.title = "時刻表どおりに表示";
+  }
 }
 
 function configureDestinationArcs(

@@ -55,4 +55,39 @@ describe("local viewer agent", () => {
     expect(response).toContain("23時23分 京都着");
     expect(response).toContain("経路のみ案内します");
   });
+
+  it("uses the latest operation trains when interpreting a destination", async () => {
+    const liveTrain: Train = {
+      ...train,
+      destination_station: "大阪",
+      stops: [
+        train.stops[0],
+        { station_name: "大阪", event: "着", route_time_minutes: 1_400 },
+      ],
+    };
+    const searchDirectRoutes = vi.fn(async () => ({
+      originStation: "向日町",
+      results: [],
+    }));
+    const handlePrompt = createLocalViewerAgent({
+      trains: [train],
+      getTrains: () => [liveTrain],
+      getPositions: () => [],
+      getRouteTime: () => 1_388,
+      setRouteTime: vi.fn(),
+      focusTrain: vi.fn(() => false),
+      setWeather: vi.fn(),
+      setLayerVisibility: vi.fn(),
+      searchDirectRoutes,
+      maximumRouteTime: 1_800,
+    });
+
+    await handlePrompt("向日町駅から大阪駅に行きたい");
+
+    expect(searchDirectRoutes).toHaveBeenCalledWith({
+      originStation: "向日町",
+      destinationStation: "大阪",
+      departureTimeMinutes: 1_388,
+    });
+  });
 });
