@@ -13,7 +13,8 @@
 
 - 取得 raw保存 正規化はprivateなdata-builderが担当する
 - TransitForgeは同一オリジンに公開された正規化済みデータだけを読む
-- ローカル開発では`viewer-input/congestion.json`と`viewer-input/delays.json`を読む
+- ローカル開発では`viewer-input/congestion.json`と`viewer-input/delays.json`を読み
+  存在しない場合はリアルタイム情報なしとして扱う
 - S3アーカイブとDynamoDBサマリーはTransitForge側で維持し AI分析から参照する
 - 取得元URL 収集Lambda Schedulerは公開リポジトリに置かない
 

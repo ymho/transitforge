@@ -4,7 +4,7 @@ import type { TrainPosition } from "./train-position";
 import { coupledTrainLayouts } from "./coupled-train-layout";
 
 describe("coupled train layout", () => {
-  it("joins matching Kansai-airport and Kishuji rapid services into one train length", () => {
+  it("joins matching Kansai-airport and Kishuji rapid services as two train bodies", () => {
     const layouts = coupledTrainLayouts([
       position("airport", "4107M", "関空快速", [135.5, 34.7]),
       position("kishuji", "4507H", "紀州路快速", [135.5, 34.7]),
@@ -12,19 +12,19 @@ describe("coupled train layout", () => {
 
     expect(layouts).toEqual([
       expect.objectContaining({
-        lengthScale: 0.5,
-        longitudinalOffsetInVehicleLengths: 0.25,
+        lengthScale: 1,
+        longitudinalOffsetInVehicleLengths: 0.5,
         coupledServiceUid: "kishuji",
         linkKind: "coupled-service",
       }),
       expect.objectContaining({
-        lengthScale: 0.5,
-        longitudinalOffsetInVehicleLengths: -0.25,
+        lengthScale: 1,
+        longitudinalOffsetInVehicleLengths: -0.5,
         coupledServiceUid: "airport",
         linkKind: "coupled-service",
       }),
     ]);
-    expect(layouts.reduce((sum, layout) => sum + layout.lengthScale, 0)).toBe(1);
+    expect(layouts.reduce((sum, layout) => sum + layout.lengthScale, 0)).toBe(2);
     expect(layouts[0].renderCoordinate).toEqual(layouts[1].renderCoordinate);
     expect(layouts[0].renderBearingRadians).toBe(layouts[1].renderBearingRadians);
     expect(layouts[0].bearingTrackingKey).toBe(layouts[1].bearingTrackingKey);
@@ -33,7 +33,7 @@ describe("coupled train layout", () => {
     );
   });
 
-  it("joins split services of the same train into one train length", () => {
+  it("joins split services of the same train as two train bodies", () => {
     const layouts = coupledTrainLayouts([
       position("section-a", "783T", "普通", [135.5, 34.7]),
       position("section-b", "783T", "普通", [135.5, 34.7]),
@@ -41,12 +41,12 @@ describe("coupled train layout", () => {
 
     expect(layouts).toEqual([
       expect.objectContaining({
-        lengthScale: 0.5,
+        lengthScale: 1,
         coupledServiceUid: "section-b",
         linkKind: "same-operation",
       }),
       expect.objectContaining({
-        lengthScale: 0.5,
+        lengthScale: 1,
         coupledServiceUid: "section-a",
         linkKind: "same-operation",
       }),
@@ -73,7 +73,7 @@ describe("coupled train layout", () => {
     expect(layouts).toEqual([
       expect.objectContaining({
         position: expect.objectContaining({ serviceUid: "main" }),
-        lengthScale: 0.5,
+        lengthScale: 1,
         coupledServiceUid: "north",
       }),
       expect.objectContaining({
@@ -81,7 +81,7 @@ describe("coupled train layout", () => {
           serviceUid: "north",
           trainNo: "3216M",
         }),
-        lengthScale: 0.5,
+        lengthScale: 1,
         coupledServiceUid: "main",
       }),
     ]);
