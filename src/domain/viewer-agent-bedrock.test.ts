@@ -770,7 +770,89 @@ describe("Bedrock viewer agent", () => {
       destinationStation: "京都",
       departureTimeMinutes: 1_463,
     });
-    expect(result).toContain("西大路駅から京都駅への直通列車");
+    expect(result).toContain("西大路駅から京都駅への経路候補");
     expect(result).not.toContain("駅駅");
+  });
+
+  it("formats a one-transfer journey with its station and wait time", async () => {
+    const searchDirectRoutes = vi.fn(async () => ({
+      originStation: "嵯峨嵐山",
+      results: [],
+      journeys: [{
+        departureTimeMinutes: 602,
+        arrivalTimeMinutes: 710,
+        transferCount: 1,
+        legs: [
+          {
+            serviceUid: "first",
+            trainNumber: "1230M",
+            serviceType: "普通",
+            trainName: "",
+            originStation: "嵯峨嵐山",
+            destinationStation: "京都",
+            departureTimeMinutes: 602,
+            arrivalTimeMinutes: 619,
+          },
+          {
+            serviceUid: "second",
+            trainNumber: "1019M",
+            serviceType: "特急",
+            trainName: "はるか19号",
+            originStation: "京都",
+            destinationStation: "関西空港",
+            departureTimeMinutes: 630,
+            arrivalTimeMinutes: 710,
+          },
+        ],
+      }],
+    }));
+    const converse = vi
+      .fn()
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{
+            toolUse: {
+              toolUseId: "route",
+              name: "search_direct_routes",
+              input: {
+                originStation: "嵯峨嵐山",
+                destinationStation: "関西空港",
+                departureTimeMinutes: 600,
+              },
+            },
+          }],
+        },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{ text: "経路を案内します。" }],
+        },
+        stopReason: "end_turn",
+      });
+
+    const result = await runBedrockViewerAgent(
+      "嵯峨嵐山から関西空港に行きたい",
+      {
+        trains: [train],
+        getPositions: () => [],
+        getRouteTime: () => 600,
+        setRouteTime: vi.fn(),
+        focusTrain: vi.fn(),
+        setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(),
+        searchDirectRoutes,
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(result).toContain("10時02分 嵯峨嵐山発 → 10時19分 京都着");
+    expect(result).toContain("10時30分 京都発 → 11時50分 関西空港着");
+    expect(result).toContain("京都で乗換 11分待ち");
   });
 });

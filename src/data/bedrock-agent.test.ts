@@ -318,7 +318,7 @@ describe("Bedrock agent client", () => {
     const body = JSON.parse(String(init?.body));
     expect(body).toEqual({
       operation: "journey_search",
-      maxTransfers: 0,
+      maxTransfers: 1,
       serviceDate: "2026-08-14",
       originStation: "西大路",
       destinationStation: "京都",

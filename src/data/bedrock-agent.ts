@@ -62,11 +62,12 @@ export async function searchTravelCandidates(
     destinationStation: string;
     departureTimeMinutes: number;
     limit?: number;
+    maxTransfers?: 0 | 1;
   },
   fetcher: typeof fetch = fetch,
 ): Promise<TravelCandidateSearchResponse> {
   return postAgent(
-    { operation: "journey_search", maxTransfers: 0, ...request },
+    { operation: "journey_search", maxTransfers: 1, ...request },
     "旅行候補を検索できません",
     "旅行候補",
     isTravelCandidateSearchResponse,
