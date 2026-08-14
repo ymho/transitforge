@@ -84,6 +84,7 @@
         <svg class="guide-toggle-icon" aria-hidden="true"><use href="#icon-ai-station" /></svg>
       </button>
       <aside id="ai-guide-panel" class="ai-guide-panel" aria-label="AI駅員" hidden>
+        <span class="sheet-grabber" aria-hidden="true"></span>
         <header>
           <div class="guide-panel-heading">
             <span class="guide-panel-icon guide-panel-icon-ai" aria-hidden="true">
@@ -159,13 +160,11 @@
       <aside id="train-details" class="train-details" aria-live="polite" hidden>
         <button id="close-train-details" type="button" aria-label="列車詳細を閉じてフォーカスを終了する">×</button>
         <h2 id="selected-train-title"></h2>
-        <dl class="train-details-facts">
-          <div><dt>列車番号</dt><dd id="selected-train-number"></dd></div>
-          <div><dt>遅延</dt><dd id="selected-train-delay">取得中</dd></div>
-        </dl>
-        <button id="show-coupled-train" class="show-coupled-train" type="button" hidden></button>
-        <section class="train-timetable" aria-labelledby="train-timetable-title">
-          <h3 id="train-timetable-title">停車駅・時刻</h3>
+        <section class="train-timetable" aria-label="時刻表">
+          <div class="train-detail-badges" aria-label="運行情報">
+            <span id="selected-train-delay" class="train-delay-badge" hidden></span>
+          </div>
+          <div id="train-detail-tabs" class="train-detail-tabs" role="tablist" aria-label="併結列車の行き先" hidden></div>
           <ol id="selected-train-stops"></ol>
         </section>
       </aside>

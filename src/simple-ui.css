@@ -362,7 +362,7 @@
 
 .journey-segment span::after {
   margin-left: 0.35rem;
-  content: "途中駅を見る";
+  content: "途中駅";
   color: var(--ui-accent);
   font-size: 0.6rem;
 }
@@ -381,15 +381,19 @@
 }
 
 .journey-intermediate-stops {
-  display: grid;
+  display: none;
   gap: 0.25rem;
-  margin: 0.35rem 0 0.55rem 3.65rem;
+  margin: 0.1rem 0 0.45rem 3.65rem;
   padding: 0.45rem 0.55rem;
   border-left: 2px solid var(--journey-line-color);
   color: var(--ui-muted);
   background: var(--ui-surface-muted);
   font-size: 0.65rem;
   list-style: none;
+}
+
+.journey-leg[open] .journey-intermediate-stops {
+  display: grid;
 }
 
 .journey-transfer {
@@ -587,7 +591,7 @@
 
 @media (max-width: 600px) {
   .ai-guide-panel {
-    max-height: min(66dvh, calc(100vh - 7rem));
+    max-height: min(82dvh, calc(100dvh - 6rem));
   }
 
   .train-details {
@@ -750,16 +754,6 @@
   border-color: var(--ui-border);
   background: var(--ui-surface);
   box-shadow: 0 8px 28px var(--ui-shadow);
-}
-
-.show-coupled-train {
-  border-color: var(--ui-border);
-  color: var(--ui-text);
-  background: var(--ui-hover);
-}
-
-.show-coupled-train:hover {
-  background: var(--ui-surface-muted);
 }
 
 .train-timetable li {

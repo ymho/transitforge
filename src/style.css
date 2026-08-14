@@ -289,8 +289,9 @@ body,
   left: 1.5rem;
   display: grid;
   grid-template-rows: auto minmax(5rem, 1fr) auto auto;
-  width: min(23rem, calc(100vw - 3rem));
-  max-height: min(34rem, calc(100vh - 8rem));
+  width: min(38rem, calc(100vw - 3rem));
+  height: min(46rem, calc(100vh - 8rem));
+  max-height: calc(100vh - 8rem);
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 18%);
   border-radius: 0.85rem;
@@ -580,24 +581,6 @@ body,
 .train-details dd {
   margin: 0;
   overflow-wrap: anywhere;
-}
-
-.show-coupled-train {
-  position: absolute;
-  top: 0.65rem;
-  right: 2.65rem;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid rgb(255 255 255 / 24%);
-  border-radius: 999px;
-  color: #d9e3ef;
-  background: rgb(255 255 255 / 8%);
-  font: inherit;
-  font-size: 0.7rem;
-  cursor: pointer;
-}
-
-.show-coupled-train:hover {
-  background: rgb(255 255 255 / 16%);
 }
 
 .train-timetable {
@@ -993,7 +976,8 @@ body,
     bottom: 5.25rem;
     left: 0.65rem;
     width: calc(100vw - 1.3rem);
-    max-height: min(70vh, calc(100vh - 7rem));
+    height: min(82dvh, calc(100dvh - 6rem));
+    max-height: min(82dvh, calc(100dvh - 6rem));
   }
 
   .ai-guide-form input {

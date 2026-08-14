@@ -56,6 +56,10 @@ import { currentRouteTime } from "./domain/playback";
 import { PlaybackController } from "./domain/playback-controller";
 import { congestionAnalysisForAgent } from "./domain/congestion-analysis";
 import { delayAnalysisForAgent } from "./domain/delay-analysis";
+import {
+  coupledTrainLayouts,
+  trainHitTargetsFor,
+} from "./domain/coupled-train-layout";
 import { TrainLineColorIndex } from "./domain/train-line-color";
 import { trainFormationLinks } from "./domain/train-formation-link";
 import {
@@ -78,6 +82,7 @@ import {
 import { resolveViewerDisplayMode } from "./domain/viewer-display-mode";
 import { runBedrockViewerAgent } from "./domain/viewer-agent-bedrock";
 import { createLocalViewerAgent } from "./domain/viewer-agent-local";
+import type { ViewerAgentJourneyPlan } from "./domain/viewer-agent-response";
 import {
   configureAiGuidePanel,
   type AiGuidePromptHandler,
@@ -160,10 +165,9 @@ const journeyRankingPreference =
 const trainDetails = document.querySelector<HTMLElement>("#train-details");
 const closeTrainDetails = document.querySelector<HTMLButtonElement>("#close-train-details");
 const selectedTrainTitle = document.querySelector<HTMLElement>("#selected-train-title");
-const selectedTrainNumber = document.querySelector<HTMLElement>("#selected-train-number");
 const selectedTrainDelay = document.querySelector<HTMLElement>("#selected-train-delay");
 const selectedTrainStops = document.querySelector<HTMLOListElement>("#selected-train-stops");
-const showCoupledTrain = document.querySelector<HTMLButtonElement>("#show-coupled-train");
+const trainDetailTabs = document.querySelector<HTMLElement>("#train-detail-tabs");
 const metrics = new RuntimeMetrics();
 
 if (
@@ -206,10 +210,9 @@ if (
   trainDetails === null ||
   closeTrainDetails === null ||
   selectedTrainTitle === null ||
-  selectedTrainNumber === null ||
   selectedTrainDelay === null ||
   selectedTrainStops === null ||
-  showCoupledTrain === null
+  trainDetailTabs === null
 ) {
   throw new Error("A required viewer element is missing.");
 }
@@ -445,10 +448,9 @@ if (!token) {
             details: trainDetails,
             close: closeTrainDetails,
             title: selectedTrainTitle,
-            number: selectedTrainNumber,
             delay: selectedTrainDelay,
             stops: selectedTrainStops,
-            showCoupled: showCoupledTrain,
+            coupledTabs: trainDetailTabs,
           },
         );
         let displayedPositions: TrainPosition[] = [];
@@ -562,12 +564,13 @@ if (!token) {
           threeTrainLayer.setPositions(positions);
           selection.updateTracking(positions);
           const hitSource = map.getSource("train-hit-targets") as mapboxgl.GeoJSONSource;
+          const trainLayouts = coupledTrainLayouts(positions, formationLinks);
           hitSource.setData({
             type: "FeatureCollection",
-            features: positions.map((position) => ({
+            features: trainHitTargetsFor(trainLayouts).map((target) => ({
               type: "Feature" as const,
-              properties: { service_uid: position.serviceUid },
-              geometry: { type: "Point" as const, coordinates: position.coordinate },
+              properties: { service_uid: target.serviceUid },
+              geometry: { type: "Point" as const, coordinates: target.coordinate },
             })),
           });
           renderDisplayDateTime(displayedAt);
@@ -733,9 +736,10 @@ if (!token) {
           searchDirectRoutes: localSearchRoutes,
           maximumRouteTime,
         });
+        let previousJourneyPlan: ViewerAgentJourneyPlan | undefined;
         handleAiGuidePrompt = async (prompt, preferences) => {
           try {
-            return await runBedrockViewerAgent(
+            const response = await runBedrockViewerAgent(
               prompt,
               {
                 trains: trainIndex.trains,
@@ -764,10 +768,15 @@ if (!token) {
                 searchRepresentativeTimetable,
                 searchDirectRoutes: backendSearchRoutes,
                 getJourneySearchPreferences: () => preferences,
+                getPreviousJourneyPlan: () => previousJourneyPlan,
                 maximumRouteTime,
               },
               invokeBedrockAgent,
             );
+            if (typeof response !== "string") {
+              previousJourneyPlan = response.journeyPlan;
+            }
+            return response;
           } catch (error) {
             if (import.meta.env.DEV) {
               return localAiGuidePromptHandler(prompt);
@@ -930,6 +939,11 @@ function configureDateTimeInput(
   input.value = formatDateTimeLocal(getDate());
   input.addEventListener("focus", () => {
     input.value = formatDateTimeLocal(getDate());
+  });
+  input.addEventListener("click", () => {
+    if (!input.disabled && typeof input.showPicker === "function") {
+      input.showPicker();
+    }
   });
   input.addEventListener("change", () => {
     const date = parseDateTimeLocal(input.value);
@@ -1282,6 +1296,14 @@ function renderDisplayMode(
   displayModeLabel.textContent = digitalTwinMode
     ? "デジタルツインモード"
     : "シミュレーションモード";
+  if (dateTimeInput) {
+    dateTimeInput.disabled = digitalTwinMode;
+    const display = dateTimeInput.closest<HTMLElement>(".date-time-display");
+    display?.setAttribute("aria-disabled", String(digitalTwinMode));
+  }
+  if (currentTimeButton) {
+    currentTimeButton.hidden = digitalTwinMode;
+  }
   toggle.disabled = !realtimeAvailable;
   toggle.ariaPressed = String(digitalTwinMode);
   if (!realtimeAvailable) {
