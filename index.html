@@ -97,7 +97,7 @@
           <button id="close-ai-guide" type="button" aria-label="AI駅員を閉じる">×</button>
         </header>
         <ol id="ai-guide-messages" class="ai-guide-messages" aria-live="polite">
-          <li class="ai-guide-message ai-guide-message-assistant">行き先や列車について入力してください。行き先だけなら、現在地に近い駅から直通列車を探します。時刻や天気などの地図表示も変更できます。</li>
+          <li class="ai-guide-message ai-guide-message-assistant">行き先や列車について入力してください。日付と時刻を指定した経路検索にも対応しています。時刻や天気などの地図表示も変更できます。</li>
         </ol>
         <div class="ai-guide-suggestions" aria-label="質問例">
           <button type="button" data-prompt="18時30分にして">
@@ -112,6 +112,37 @@
           <button type="button" data-prompt="雨にして">
             雨にする
           </button>
+        </div>
+        <div class="journey-settings">
+          <button
+            id="journey-settings-toggle"
+            class="journey-settings-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="journey-settings-panel"
+          >
+            経路設定
+          </button>
+          <div id="journey-settings-panel" class="journey-settings-panel" hidden>
+            <label>
+              <span>乗換ペース</span>
+              <select id="journey-transfer-pace">
+                <option value="hurried">急ぐ</option>
+                <option value="standard" selected>普通</option>
+                <option value="relaxed">ゆっくり</option>
+              </select>
+            </label>
+            <label>
+              <span>経路の優先</span>
+              <select id="journey-ranking-preference">
+                <option value="balanced" selected>バランス</option>
+                <option value="earliest-arrival">早く着く</option>
+                <option value="latest-departure">遅く出る</option>
+                <option value="fewest-transfers">乗換少なめ</option>
+              </select>
+            </label>
+            <small>最大3回の乗換まで検索</small>
+          </div>
         </div>
         <form id="ai-guide-form" class="ai-guide-form">
           <input

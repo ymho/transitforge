@@ -2,36 +2,45 @@ from __future__ import annotations
 
 import gzip
 import json
-import unicodedata
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
+import connection_scan_journey_search
 import direct_service_journey_search
-from dynamodb_analysis import (
-    dynamo_number_map,
-    dynamo_string,
-    query_operating_day_summary_items,
-    validate_service_date,
-)
+from dynamodb_analysis import validate_service_date
 from request_contract import RequestError
 
 
 MAX_ROUTE_TIME_MINUTES = 48 * 60
 MAX_TRANSFERS = 3
 _index_cache: dict[str, tuple[str, dict[str, Any]]] = {}
+JST = timezone(timedelta(hours=9))
+REALTIME_TOLERANCE = timedelta(minutes=5)
 
 
 def search(
     s3_client: Any,
-    dynamodb_client: Any,
     *,
     bucket: str,
     prefix: str,
-    delay_table: str,
+    snapshot_bucket: str = "",
+    snapshot_key: str = "api/traffic/delays.json",
     value: dict[str, Any],
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     request = _validated_request(value)
-    delays = _latest_delays(dynamodb_client, delay_table, request["serviceDate"])
+    operations, realtime = _current_operations(
+        s3_client,
+        snapshot_bucket,
+        snapshot_key,
+        request,
+        now or datetime.now(timezone.utc),
+    )
+    delays = {
+        train_number: Decimal(str(operation["delayMinutes"]))
+        for train_number, operation in operations.items()
+    }
     if request["maxTransfers"] <= 1:
         index = _load_index(
             s3_client,
@@ -41,7 +50,13 @@ def search(
             "direct-service-index.json.gz",
             "direct-service-index-v1",
         )
-        result = direct_service_journey_search.search_index(index, delays, request)
+        result = direct_service_journey_search.search_index(
+            index,
+            delays,
+            request,
+            operations=operations if realtime["applied"] else None,
+            realtime_route_time=realtime.get("snapshotRouteTimeMinutes"),
+        )
     else:
         index = _load_index(
             s3_client,
@@ -51,7 +66,15 @@ def search(
             "connection-index.json.gz",
             "timetable-connection-index-v1",
         )
-        result = search_index(index, delays, request)
+        result = search_index(
+            index,
+            delays,
+            request,
+            operations=operations if realtime["applied"] else None,
+            realtime_route_time=realtime.get("snapshotRouteTimeMinutes"),
+        )
+    result["realtime"] = realtime
+    result["trace"]["realtime"] = realtime
     print(json.dumps({
         "event": "journey_search_trace",
         "serviceDate": request["serviceDate"],
@@ -68,195 +91,22 @@ def search_index(
     index: dict[str, Any],
     delays: dict[str, Decimal],
     request: dict[str, Any],
+    *,
+    operations: dict[str, dict[str, Any]] | None = None,
+    realtime_route_time: float | None = None,
 ) -> dict[str, Any]:
-    if index.get("schema_version") != "timetable-connection-index-v1":
-        raise RequestError(503, "指定日の接続インデックス形式が不正です。")
-    trips = index.get("trips")
-    raw_connections = index.get("connections")
-    if not isinstance(trips, dict) or not isinstance(raw_connections, list):
-        raise RequestError(503, "指定日の接続インデックス形式が不正です。")
-
-    origin = _normalize_station(request["originStation"])
-    destination = _normalize_station(request["destinationStation"])
-    default_transfer = _non_negative_number(index.get("default_transfer_minutes"), 5)
-    station_transfers = index.get("station_transfer_minutes")
-    station_transfers = station_transfers if isinstance(station_transfers, dict) else {}
-    trace: dict[str, Any] = {
-        "schemaVersion": "journey-search-trace-v1",
-        "indexConnections": len(raw_connections),
-        "connectionsScanned": 0,
-        "connectionsBeforeRequestedTime": 0,
-        "connectionsWithoutReachableOrigin": 0,
-        "labelsRejectedByTransferTime": 0,
-        "labelsRejectedByTransferLimit": 0,
-        "labelsAccepted": 0,
-        "destinationImprovements": 0,
-        "defaultTransferMinutes": default_transfer,
-        "stationTransferRulesUsed": {},
-        "selectedJourneys": [],
+    enriched_request = {
+        "transferPace": "standard",
+        "rankingPreference": "balanced",
+        **request,
     }
-    labels: dict[str, list[dict[str, Any]]] = {
-        origin: [{
-            "station": request["originStation"],
-            "arrival": request["departureTimeMinutes"],
-            "boardings": 0,
-            "lastTrip": None,
-            "path": [],
-        }]
-    }
-    connections = sorted(
-        (_expected_connection(item, trips, delays) for item in raw_connections),
-        key=lambda item: (
-            item["expectedDeparture"], item["expectedArrival"],
-            item["trip_id"], item.get("stop_sequence", 0),
-        ),
+    return connection_scan_journey_search.search_index(
+        index,
+        delays,
+        enriched_request,
+        operations=operations,
+        realtime_route_time=realtime_route_time,
     )
-    maximum_boardings = request["maxTransfers"] + 1
-
-    for connection in connections:
-        trace["connectionsScanned"] += 1
-        if connection["expectedDeparture"] < request["departureTimeMinutes"]:
-            trace["connectionsBeforeRequestedTime"] += 1
-            continue
-        from_station = _normalize_station(connection["from_station"])
-        reachable = labels.get(from_station, [])
-        if not reachable:
-            trace["connectionsWithoutReachableOrigin"] += 1
-            continue
-        accepted_for_connection = False
-        for label in list(reachable):
-            same_trip = label["lastTrip"] == connection["trip_id"]
-            new_boarding = label["lastTrip"] is None or not same_trip
-            boardings = label["boardings"] + (1 if new_boarding else 0)
-            if boardings > maximum_boardings:
-                trace["labelsRejectedByTransferLimit"] += 1
-                continue
-            transfer_minutes = 0
-            if label["lastTrip"] is not None and not same_trip:
-                transfer_minutes = _station_transfer_minutes(
-                    connection["from_station"], station_transfers, default_transfer
-                )
-                trace["stationTransferRulesUsed"][connection["from_station"]] = transfer_minutes
-            if label["arrival"] + transfer_minutes > connection["expectedDeparture"]:
-                trace["labelsRejectedByTransferTime"] += 1
-                continue
-            accepted_for_connection = True
-            candidate = {
-                "station": connection["to_station"],
-                "arrival": connection["expectedArrival"],
-                "boardings": boardings,
-                "lastTrip": connection["trip_id"],
-                "path": [*label["path"], connection],
-            }
-            destination_labels = labels.setdefault(
-                _normalize_station(connection["to_station"]), []
-            )
-            key = (boardings, connection["trip_id"])
-            existing = next((item for item in destination_labels
-                if (item["boardings"], item["lastTrip"]) == key), None)
-            if existing is None or candidate["arrival"] < existing["arrival"]:
-                if existing is not None:
-                    destination_labels.remove(existing)
-                destination_labels.append(candidate)
-                trace["labelsAccepted"] += 1
-                if _normalize_station(connection["to_station"]) == destination:
-                    trace["destinationImprovements"] += 1
-        if not accepted_for_connection:
-            continue
-
-    journeys = [
-        _journey_from_label(label, trips)
-        for label in labels.get(destination, [])
-        if label["path"]
-    ]
-    journeys.sort(key=lambda item: (
-        item["arrivalTimeMinutes"], item["transferCount"],
-        item["departureTimeMinutes"],
-    ))
-    journeys = journeys[:request["limit"]]
-    trace["selectedJourneys"] = [{
-        "departureTimeMinutes": item["departureTimeMinutes"],
-        "arrivalTimeMinutes": item["arrivalTimeMinutes"],
-        "transferCount": item["transferCount"],
-        "trips": [leg["serviceUid"] for leg in item["legs"]],
-    } for item in journeys]
-    direct_matches = [
-        _direct_match(journey)
-        for journey in journeys
-        if journey["transferCount"] == 0 and len(journey["legs"]) == 1
-    ]
-    return {
-        "serviceDate": request["serviceDate"],
-        "originStation": request["originStation"],
-        "destinationStation": request["destinationStation"],
-        "searchTimeMinutes": request["departureTimeMinutes"],
-        "totalMatchCount": len(journeys),
-        "matches": direct_matches,
-        "journeys": journeys,
-        "trace": trace,
-    }
-
-
-def _journey_from_label(label: dict[str, Any], trips: dict[str, Any]) -> dict[str, Any]:
-    legs: list[dict[str, Any]] = []
-    for connection in label["path"]:
-        trip_id = connection["trip_id"]
-        trip = trips.get(trip_id, {})
-        if legs and legs[-1]["serviceUid"] == trip_id:
-            legs[-1]["destinationStation"] = connection["to_station"]
-            legs[-1]["arrivalTimeMinutes"] = connection["expectedArrival"]
-            legs[-1]["scheduledArrivalTimeMinutes"] = connection["arrival_time_minutes"]
-            continue
-        legs.append({
-            "serviceUid": trip_id,
-            "trainNumber": str(trip.get("train_no") or ""),
-            "serviceType": str(trip.get("service_type") or ""),
-            "trainName": str(trip.get("train_name") or ""),
-            "originStation": connection["from_station"],
-            "destinationStation": connection["to_station"],
-            "departureTimeMinutes": connection["expectedDeparture"],
-            "arrivalTimeMinutes": connection["expectedArrival"],
-            "scheduledDepartureTimeMinutes": connection["departure_time_minutes"],
-            "scheduledArrivalTimeMinutes": connection["arrival_time_minutes"],
-            "delayMinutes": connection["delayMinutes"],
-        })
-    return {
-        "departureTimeMinutes": legs[0]["departureTimeMinutes"],
-        "arrivalTimeMinutes": legs[-1]["arrivalTimeMinutes"],
-        "transferCount": max(0, len(legs) - 1),
-        "legs": legs,
-    }
-
-
-def _direct_match(journey: dict[str, Any]) -> dict[str, Any]:
-    leg = journey["legs"][0]
-    return {
-        **leg,
-        "source": "transitforge",
-        "discoverySource": "timetable-graph",
-        "sourceReference": "connection-scan",
-    }
-
-
-def _expected_connection(
-    value: Any, trips: dict[str, Any], delays: dict[str, Decimal]
-) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        raise RequestError(503, "接続インデックス内の接続形式が不正です。")
-    trip_id = str(value.get("trip_id") or "")
-    trip = trips.get(trip_id)
-    if not isinstance(trip, dict):
-        raise RequestError(503, "接続インデックス内の列車参照が不正です。")
-    departure = _required_number(value.get("departure_time_minutes"))
-    arrival = _required_number(value.get("arrival_time_minutes"))
-    delay = max(Decimal(0), delays.get(str(trip.get("train_no") or ""), Decimal(0)))
-    return {
-        **value,
-        "trip_id": trip_id,
-        "expectedDeparture": float(Decimal(str(departure)) + delay),
-        "expectedArrival": float(Decimal(str(arrival)) + delay),
-        "delayMinutes": float(delay),
-    }
 
 
 def _validated_request(value: dict[str, Any]) -> dict[str, Any]:
@@ -265,7 +115,9 @@ def _validated_request(value: dict[str, Any]) -> dict[str, Any]:
     service_date = value.get("serviceDate")
     departure = value.get("departureTimeMinutes")
     limit = value.get("limit", 3)
-    max_transfers = value.get("maxTransfers", 0)
+    max_transfers = value.get("maxTransfers", 3)
+    transfer_pace = value.get("transferPace", "standard")
+    ranking_preference = value.get("rankingPreference", "balanced")
     if not isinstance(origin, str) or not origin.strip():
         raise RequestError(400, "originStationが必要です。")
     if not isinstance(destination, str) or not destination.strip():
@@ -277,15 +129,34 @@ def _validated_request(value: dict[str, Any]) -> dict[str, Any]:
         raise RequestError(400, "departureTimeMinutesが不正です。")
     if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 5:
         raise RequestError(400, "limitは1から5にしてください。")
-    if not isinstance(max_transfers, int) or isinstance(max_transfers, bool) or not 0 <= max_transfers <= MAX_TRANSFERS:
+    if (
+        not isinstance(max_transfers, int)
+        or isinstance(max_transfers, bool)
+        or not 0 <= max_transfers <= MAX_TRANSFERS
+    ):
         raise RequestError(400, "maxTransfersは0から3にしてください。")
+    if transfer_pace not in {"hurried", "standard", "relaxed"}:
+        raise RequestError(400, "transferPaceが不正です。")
+    if ranking_preference not in {
+        "balanced",
+        "earliest-arrival",
+        "latest-departure",
+        "fewest-transfers",
+    }:
+        raise RequestError(400, "rankingPreferenceが不正です。")
     include_trace = value.get("includeTrace", False)
     if not isinstance(include_trace, bool):
         raise RequestError(400, "includeTraceが不正です。")
     return {
-        "originStation": origin.strip(), "destinationStation": destination.strip(),
-        "serviceDate": service_date, "departureTimeMinutes": float(departure),
-        "limit": limit, "maxTransfers": max_transfers, "includeTrace": include_trace,
+        "originStation": origin.strip(),
+        "destinationStation": destination.strip(),
+        "serviceDate": service_date,
+        "departureTimeMinutes": float(departure),
+        "limit": limit,
+        "maxTransfers": max_transfers,
+        "transferPace": transfer_pace,
+        "rankingPreference": ranking_preference,
+        "includeTrace": include_trace,
     }
 
 
@@ -303,6 +174,7 @@ def _load_index(
         cached = _index_cache.get(key)
         if cached is not None and cached[0] == etag:
             return cached[1]
+        _index_cache.clear()
         body = s3_client.get_object(Bucket=bucket, Key=key)["Body"].read()
         value = json.loads(gzip.decompress(body).decode("utf-8"))
     except Exception as error:
@@ -313,40 +185,86 @@ def _load_index(
     return value
 
 
-def _latest_delays(dynamodb_client: Any, table: str, service_date: str) -> dict[str, Decimal]:
-    if not table:
-        return {}
-    items = query_operating_day_summary_items(dynamodb_client, table, service_date)
-    valid = [item for item in items if dynamo_string(item.get("collectedAt"))]
-    if not valid:
-        return {}
-    latest = max(valid, key=lambda item: dynamo_string(item.get("collectedAt")) or "")
-    return dynamo_number_map(latest.get("trainDelays"))
+def _current_operations(
+    s3_client: Any,
+    bucket: str,
+    key: str,
+    request: dict[str, Any],
+    now: datetime,
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    current_service_date = (now.astimezone(JST) - timedelta(hours=4)).date().isoformat()
+    base = {
+        "applied": False,
+        "reason": "future-or-past-service-date",
+        "currentServiceDate": current_service_date,
+    }
+    if request["serviceDate"] != current_service_date:
+        return {}, base
+    if not bucket or not key:
+        return {}, {**base, "reason": "snapshot-not-configured"}
+    try:
+        body = s3_client.get_object(Bucket=bucket, Key=key)["Body"].read()
+        snapshot = json.loads(body.decode("utf-8"))
+    except Exception:
+        return {}, {**base, "reason": "snapshot-unavailable"}
+    if not isinstance(snapshot, dict):
+        return {}, {**base, "reason": "snapshot-invalid"}
+    failed_sources = snapshot.get("failedSources")
+    if not isinstance(failed_sources, list) or failed_sources:
+        return {}, {**base, "reason": "snapshot-incomplete"}
+    try:
+        collected_at = datetime.fromisoformat(str(snapshot.get("collectedAt")))
+    except ValueError:
+        return {}, {**base, "reason": "snapshot-invalid"}
+    if collected_at.tzinfo is None or abs(now - collected_at) > REALTIME_TOLERANCE:
+        return {}, {**base, "reason": "snapshot-stale"}
+    requested_at = (
+        datetime.strptime(request["serviceDate"], "%Y-%m-%d").replace(tzinfo=JST)
+        + timedelta(minutes=request["departureTimeMinutes"])
+    )
+    if abs(requested_at - collected_at.astimezone(JST)) > REALTIME_TOLERANCE:
+        return {}, {**base, "reason": "search-time-not-current"}
+    trains = snapshot.get("trains")
+    if not isinstance(trains, dict):
+        return {}, {**base, "reason": "snapshot-invalid"}
+    operations = {
+        train_number: operation
+        for train_number, operation in trains.items()
+        if isinstance(train_number, str)
+        and isinstance(operation, dict)
+        and _valid_operation(operation)
+    }
+    service_start = datetime.strptime(
+        request["serviceDate"], "%Y-%m-%d"
+    ).replace(tzinfo=JST)
+    return operations, {
+        **base,
+        "applied": True,
+        "reason": "current-complete-snapshot",
+        "snapshotCollectedAt": collected_at.isoformat(),
+        "snapshotRouteTimeMinutes": (
+            collected_at.astimezone(JST) - service_start
+        ).total_seconds() / 60,
+        "operationCount": len(operations),
+    }
 
 
-def _station_transfer_minutes(station: str, rules: dict[str, Any], fallback: float) -> float:
-    normalized = _normalize_station(station)
-    value = next((raw for name, raw in rules.items()
-        if _normalize_station(str(name)) == normalized), fallback)
-    return _non_negative_number(value, fallback)
-
-
-def _normalize_station(value: str) -> str:
-    return "".join(unicodedata.normalize("NFKC", value).split()).removesuffix("駅")
-
-
-def _required_number(value: Any) -> float:
-    if not _number_in_range(value, 0, MAX_ROUTE_TIME_MINUTES):
-        raise RequestError(503, "接続インデックス内の時刻が不正です。")
-    return float(value)
-
-
-def _non_negative_number(value: Any, fallback: float) -> float:
-    return float(value) if _number_in_range(value, 0, MAX_ROUTE_TIME_MINUTES) else fallback
+def _valid_operation(value: dict[str, Any]) -> bool:
+    delay = value.get("delayMinutes")
+    return (
+        isinstance(delay, (int, float))
+        and not isinstance(delay, bool)
+        and delay >= 0
+        and isinstance(value.get("destination"), str)
+        and isinstance(value.get("sources"), list)
+        and all(isinstance(source, str) for source in value["sources"])
+    )
 
 
 def _number_in_range(value: Any, minimum: float, maximum: float) -> bool:
     return (
-        isinstance(value, (int, float)) and not isinstance(value, bool)
-        and value == value and minimum <= value <= maximum
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and value == value
+        and minimum <= value <= maximum
     )

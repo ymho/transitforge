@@ -31,6 +31,10 @@ DELAY_SUMMARY_TABLE = os.environ.get("DELAY_SUMMARY_TABLE", "")
 AI_TIMETABLE_BUCKET = os.environ.get("AI_TIMETABLE_BUCKET", "")
 AI_TIMETABLE_PREFIX = os.environ.get("AI_TIMETABLE_PREFIX", "ai-timetable")
 PLANNING_TIMETABLE_PREFIX = os.environ.get("PLANNING_TIMETABLE_PREFIX", "timetable")
+TRAFFIC_SNAPSHOT_BUCKET = os.environ.get("TRAFFIC_SNAPSHOT_BUCKET", "")
+TRAFFIC_SNAPSHOT_KEY = os.environ.get(
+    "TRAFFIC_SNAPSHOT_KEY", "api/traffic/delays.json"
+)
 JST = timezone(timedelta(hours=9))
 
 SYSTEM_PROMPT = """\
@@ -47,7 +51,9 @@ focus_trainへ渡してください。時刻の変更はset_display_timeを使�
 現在地から出発可能な最寄り駅を選べるようにしてください。現在地の座標はAIには
 送られません。出発時刻が指定されていない場合は、利用者メッセージに含まれる
 現在の表示時刻をそのまま使い、別の時刻を推測しないでください。
-直通と乗換1回の候補を比較し、乗換候補では乗換駅と待ち時間を案内してください。
+利用者が出発日を指定した場合は実日付をYYYY-MM-DDにしてdepartureDateへ渡してください。
+平日か土休日かは推測せず、日付だけを渡してください。
+直通と乗換3回までの候補を比較し、乗換候補では乗換駅と待ち時間を案内してください。
 候補が見つかったら、表示時刻を変更せずに先頭候補の最初のserviceUidを
 focus_trainへ渡してください。
 候補がまだ運行開始前でフォーカスできない場合も、発着時刻をそのまま案内してください。
@@ -145,7 +151,7 @@ TOOLS = [
         "toolSpec": {
             "name": "search_direct_routes",
             "description": (
-                "出発駅から行き先まで、指定時刻以降に直通または乗換1回で行ける経路を"
+                "出発駅から行き先まで、指定時刻以降に直通または乗換3回までで行ける経路を"
                 "最大3件検索します。出発駅の省略時はブラウザが現在地から最寄り駅を選びます。"
             ),
             "inputSchema": {
@@ -165,6 +171,13 @@ TOOLS = [
                             "description": (
                                 "出発希望時刻を0時からの分数で指定。利用者が時刻を"
                                 "指定していなければ、利用者メッセージ中の現在の表示時刻を使う。"
+                            ),
+                        },
+                        "departureDate": {
+                            "type": "string",
+                            "description": (
+                                "利用者が指定した実日付（YYYY-MM-DD）。"
+                                "日付指定がなければ省略する。"
                             ),
                         },
                     },
@@ -774,10 +787,10 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             try:
                 result = journey_search.search(
                     boto3.client("s3"),
-                    boto3.client("dynamodb"),
                     bucket=AI_TIMETABLE_BUCKET,
                     prefix=PLANNING_TIMETABLE_PREFIX,
-                    delay_table=DELAY_SUMMARY_TABLE,
+                    snapshot_bucket=TRAFFIC_SNAPSHOT_BUCKET,
+                    snapshot_key=TRAFFIC_SNAPSHOT_KEY,
                     value=value,
                 )
             except RequestError:

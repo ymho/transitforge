@@ -149,6 +149,14 @@ const aiGuideSubmit =
 const aiGuideSuggestions = Array.from(
   document.querySelectorAll<HTMLButtonElement>("[data-prompt]"),
 );
+const journeySettingsToggle =
+  document.querySelector<HTMLButtonElement>("#journey-settings-toggle");
+const journeySettingsPanel =
+  document.querySelector<HTMLElement>("#journey-settings-panel");
+const journeyTransferPace =
+  document.querySelector<HTMLSelectElement>("#journey-transfer-pace");
+const journeyRankingPreference =
+  document.querySelector<HTMLSelectElement>("#journey-ranking-preference");
 const trainDetails = document.querySelector<HTMLElement>("#train-details");
 const closeTrainDetails = document.querySelector<HTMLButtonElement>("#close-train-details");
 const selectedTrainTitle = document.querySelector<HTMLElement>("#selected-train-title");
@@ -191,6 +199,10 @@ if (
   aiGuideInput === null ||
   aiGuideSubmit === null ||
   aiGuideSuggestions.length === 0 ||
+  journeySettingsToggle === null ||
+  journeySettingsPanel === null ||
+  journeyTransferPace === null ||
+  journeyRankingPreference === null ||
   trainDetails === null ||
   closeTrainDetails === null ||
   selectedTrainTitle === null ||
@@ -222,8 +234,12 @@ configureAiGuidePanel(
     input: aiGuideInput,
     submit: aiGuideSubmit,
     suggestions: aiGuideSuggestions,
+    settingsToggle: journeySettingsToggle,
+    settingsPanel: journeySettingsPanel,
+    transferPace: journeyTransferPace,
+    rankingPreference: journeyRankingPreference,
   },
-  (prompt) => handleAiGuidePrompt(prompt),
+  (prompt, preferences) => handleAiGuidePrompt(prompt, preferences),
 );
 
 const initialDateTime = new Date();
@@ -597,33 +613,57 @@ if (!token) {
         const backendSearchRoutes: DirectRouteSearchHandler = async (request) => {
           const { originStation, distanceMeters } = await resolveDirectRouteOrigin(request);
           const response = await searchTravelCandidates({
-            serviceDate: formatServiceDate(displayedServiceDateStart),
+            serviceDate:
+              request.serviceDate ?? formatServiceDate(displayedServiceDateStart),
             originStation,
             destinationStation: request.destinationStation,
             departureTimeMinutes: request.departureTimeMinutes,
             limit: 3,
-            maxTransfers: 1,
+            maxTransfers: request.maxTransfers ?? 3,
+            transferPace: request.transferPace,
+            rankingPreference: request.rankingPreference,
           });
           const trainsByServiceUid = new Map(
             displayTrains.map((train) => [train.service_uid, train]),
           );
           return {
             originStation: response.originStation,
+            serviceDate: response.serviceDate,
+            ...(request.departureDate === undefined
+              ? {}
+              : { departureDate: request.departureDate }),
+            transferPace: response.transferPace ?? request.transferPace,
+            rankingPreference:
+              response.rankingPreference ?? request.rankingPreference,
+            maxTransfers: response.maxTransfers ?? request.maxTransfers,
             ...(distanceMeters === undefined ? {} : { distanceMeters }),
             journeys: response.journeys.map((journey) => ({
               departureTimeMinutes: journey.departureTimeMinutes,
               arrivalTimeMinutes: journey.arrivalTimeMinutes,
               transferCount: journey.transferCount,
-              legs: journey.legs.map((leg) => ({
-                serviceUid: leg.serviceUid,
-                trainNumber: leg.trainNumber,
-                serviceType: leg.serviceType,
-                trainName: leg.trainName,
-                originStation: leg.originStation,
-                destinationStation: leg.destinationStation,
-                departureTimeMinutes: leg.departureTimeMinutes,
-                arrivalTimeMinutes: leg.arrivalTimeMinutes,
-              })),
+              legs: journey.legs.map((leg) => {
+                const line = lineColorIndex.colorForStations(
+                  leg.serviceType,
+                  leg.destinationStation,
+                  leg.stops?.map((stop) => stop.stationName) ?? [
+                    leg.originStation,
+                    leg.destinationStation,
+                  ],
+                );
+                return {
+                  serviceUid: leg.serviceUid,
+                  trainNumber: leg.trainNumber,
+                  serviceType: leg.serviceType,
+                  trainName: leg.trainName,
+                  originStation: leg.originStation,
+                  destinationStation: leg.destinationStation,
+                  departureTimeMinutes: leg.departureTimeMinutes,
+                  arrivalTimeMinutes: leg.arrivalTimeMinutes,
+                  lineName: line.lineName,
+                  lineColor: line.color,
+                  stops: leg.stops,
+                };
+              }),
             })),
             results: response.matches.flatMap((match) => {
               const train = trainsByServiceUid.get(match.serviceUid);
@@ -693,7 +733,7 @@ if (!token) {
           searchDirectRoutes: localSearchRoutes,
           maximumRouteTime,
         });
-        handleAiGuidePrompt = async (prompt) => {
+        handleAiGuidePrompt = async (prompt, preferences) => {
           try {
             return await runBedrockViewerAgent(
               prompt,
@@ -723,6 +763,7 @@ if (!token) {
                   ),
                 searchRepresentativeTimetable,
                 searchDirectRoutes: backendSearchRoutes,
+                getJourneySearchPreferences: () => preferences,
                 maximumRouteTime,
               },
               invokeBedrockAgent,

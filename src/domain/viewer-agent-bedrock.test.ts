@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Train } from "../data/train-index";
 import type { TrainPosition } from "./train-position";
+import type { ViewerAgentResponse } from "./viewer-agent-response";
 import {
   currentServiceDateInJapan,
   runBedrockViewerAgent,
@@ -95,6 +96,7 @@ describe("Bedrock viewer agent", () => {
         trains: [train],
         getPositions: () => [position],
         getRouteTime: () => routeTime,
+        getCurrentDate: () => new Date("2026-08-14T12:00:00+09:00"),
         setRouteTime: (value) => {
           routeTime = value;
         },
@@ -627,6 +629,11 @@ describe("Bedrock viewer agent", () => {
     expect(searchDirectRoutes).toHaveBeenCalledWith({
       destinationStation: "京都",
       departureTimeMinutes: 1_388,
+      departureDate: "2026-08-14",
+      serviceDate: "2026-08-14",
+      transferPace: "standard",
+      rankingPreference: "balanced",
+      maxTransfers: 3,
     });
     expect(routeTime).toBe(1_388);
     expect(focusTrain).toHaveBeenCalledWith(train.service_uid);
@@ -682,6 +689,7 @@ describe("Bedrock viewer agent", () => {
         trains: [train],
         getPositions: () => [],
         getRouteTime: () => 1_463,
+        getCurrentDate: () => new Date("2026-08-14T00:23:00+09:00"),
         setRouteTime: vi.fn(),
         focusTrain: vi.fn(),
         setWeather: vi.fn(),
@@ -697,10 +705,17 @@ describe("Bedrock viewer agent", () => {
     expect(searchDirectRoutes).toHaveBeenCalledWith({
       destinationStation: "京都",
       departureTimeMinutes: 1_463,
+      departureDate: "2026-08-14",
+      serviceDate: "2026-08-13",
+      transferPace: "standard",
+      rankingPreference: "balanced",
+      maxTransfers: 3,
     });
-    expect(result).toContain("0時35分 向日町発");
-    expect(result).toContain("0時43分 京都着");
-    expect(result).not.toContain("14時45分");
+    const rich = requireRichResponse(result);
+    expect(rich.journeyPlan.journeys[0]).toMatchObject({
+      departureTimeMinutes: 1_475,
+      arrivalTimeMinutes: 1_483,
+    });
   });
 
   it("uses stations parsed from the prompt when the model omits the origin", async () => {
@@ -753,6 +768,7 @@ describe("Bedrock viewer agent", () => {
         trains: [routeTrain],
         getPositions: () => [],
         getRouteTime: () => 1_463,
+        getCurrentDate: () => new Date("2026-08-14T00:23:00+09:00"),
         setRouteTime: vi.fn(),
         focusTrain: vi.fn(),
         setWeather: vi.fn(),
@@ -769,9 +785,15 @@ describe("Bedrock viewer agent", () => {
       originStation: "西大路",
       destinationStation: "京都",
       departureTimeMinutes: 1_463,
+      departureDate: "2026-08-14",
+      serviceDate: "2026-08-13",
+      transferPace: "standard",
+      rankingPreference: "balanced",
+      maxTransfers: 3,
     });
-    expect(result).toContain("西大路駅から京都駅への経路候補");
-    expect(result).not.toContain("駅駅");
+    const rich = requireRichResponse(result);
+    expect(rich.text).toContain("西大路駅から京都駅への経路候補");
+    expect(rich.text).not.toContain("駅駅");
   });
 
   it("formats a one-transfer journey with its station and wait time", async () => {
@@ -834,7 +856,7 @@ describe("Bedrock viewer agent", () => {
       });
 
     const result = await runBedrockViewerAgent(
-      "嵯峨嵐山から関西空港に行きたい",
+      "8/15の7:00に嵯峨嵐山から関西空港に行きたい",
       {
         trains: [train],
         getPositions: () => [],
@@ -846,13 +868,38 @@ describe("Bedrock viewer agent", () => {
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         searchDirectRoutes,
+        getCurrentDate: () => new Date("2026-08-14T12:00:00+09:00"),
         maximumRouteTime: 1_800,
       },
       converse,
     );
 
-    expect(result).toContain("10時02分 嵯峨嵐山発 → 10時19分 京都着");
-    expect(result).toContain("10時30分 京都発 → 11時50分 関西空港着");
-    expect(result).toContain("京都で乗換 11分待ち");
+    expect(searchDirectRoutes).toHaveBeenCalledWith({
+      originStation: "嵯峨嵐山",
+      destinationStation: "関西空港",
+      departureTimeMinutes: 420,
+      departureDate: "2026-08-15",
+      serviceDate: "2026-08-15",
+      transferPace: "standard",
+      rankingPreference: "balanced",
+      maxTransfers: 3,
+    });
+    const rich = requireRichResponse(result);
+    expect(rich.text).toContain("8月15日の");
+    expect(rich.journeyPlan.journeys[0]?.legs.map((leg) => leg.trainNumber)).toEqual([
+      "1230M",
+      "1019M",
+    ]);
+    expect(
+      (rich.journeyPlan.journeys[0]?.legs[1]?.departureTimeMinutes ?? 0) -
+      (rich.journeyPlan.journeys[0]?.legs[0]?.arrivalTimeMinutes ?? 0),
+    ).toBe(11);
   });
 });
+
+function requireRichResponse(result: ViewerAgentResponse) {
+  if (typeof result === "string") {
+    throw new Error(`Expected a rich response but received: ${result}`);
+  }
+  return result;
+}
