@@ -2,12 +2,14 @@
 
 ## ファイル
 
-ビューワーはdata-builderが生成する2つのUTF-8 JSONを読む
+ビューワーはdata-builderが生成する時刻表2ファイルと交通スナップショット2ファイルを読む
 
 ```text
 viewer-input/
 ├─ train_index.json
-└─ path_catalog.json
+├─ path_catalog.json
+├─ congestion.json
+└─ delays.json
 ```
 
 取得元 診断情報 中間生成物を含めない
@@ -16,6 +18,8 @@ viewer-input/
 | --- | --- |
 | `train_index.json` | 列車 停車時刻 経路参照 駅と路線のカタログ |
 | `path_catalog.json` | 経路参照ごとの座標列 |
+| `congestion.json` | 列車番号ごとの最新混雑度 |
+| `delays.json` | 列車番号ごとの最新遅延分と行き先 |
 
 列車の`path_id`と経路の`path_id`を結合する
 同じ経路を走る列車は同じ`path_id`を共有できる
@@ -134,3 +138,28 @@ viewer-input/
 - `path_id`がない列車を表示対象外とする
 - 対応する経路がない列車を安全にスキップ
 - 不明な路線色をグレーで表示
+
+## `delays.json`
+
+```json
+{
+  "collectedAt": "2026-08-14T03:00:00+00:00",
+  "failedSources": [],
+  "trains": {
+    "100A": {
+      "delayMinutes": 6,
+      "destination": "変更後の終着駅",
+      "sources": ["source-a"]
+    }
+  }
+}
+```
+
+現在時刻と表示時刻の両方が`collectedAt`から5分以内で `failedSources`が空の場合だけリアルタイム表示へ使う
+
+- `trains`に存在する列車番号だけを運行中として表示する
+- `delayMinutes`を時刻表上の位置へ反映する
+- `destination`を行き先の正本とする
+- 時刻表と異なる行き先は赤いハローで表示する
+- 取得元に失敗があるスナップショットは誤った運休判定を避けるため適用しない
+- リアルタイム情報を適用できない日時は時刻表どおりに表示する

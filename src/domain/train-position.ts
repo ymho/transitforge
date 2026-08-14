@@ -1,5 +1,6 @@
 import type { Path, Coordinate } from "../data/path-catalog";
 import type { Train, TrainStop } from "../data/train-index";
+import { normalizeStationName } from "./direct-route-search";
 
 export interface TrainPosition {
   serviceUid: string;
@@ -28,11 +29,16 @@ export function activeTrainPositions(
   trains: Train[],
   geometry: PathGeometryIndex,
   routeTimeMinutes: number,
+  delayByTrainNumber: ReadonlyMap<string, number> = new Map(),
 ): TrainPosition[] {
   const positions: TrainPosition[] = [];
 
   for (const train of trains) {
-    const position = positionForTrain(train, geometry, routeTimeMinutes);
+    const position = positionForTrain(
+      train,
+      geometry,
+      routeTimeMinutes - (delayByTrainNumber.get(train.train_no) ?? 0),
+    );
     if (position) {
       positions.push(position);
     }
@@ -71,11 +77,24 @@ export function positionForTrain(
 }
 
 export function destinationCoordinateForTrain(
-  train: Pick<Train, "path_id" | "stops">,
+  train: Pick<Train, "path_id" | "stops" | "destination_station">,
   geometry: PathGeometryIndex,
 ): Coordinate | undefined {
   if (!train.path_id) {
     return undefined;
+  }
+
+  const normalizedDestination = normalizeStationName(train.destination_station);
+  for (let index = train.stops.length - 1; index >= 0; index -= 1) {
+    const stop = train.stops[index];
+    if (
+      typeof stop.station_name === "string" &&
+      normalizeStationName(stop.station_name) === normalizedDestination &&
+      typeof stop.route_meter === "number" &&
+      Number.isFinite(stop.route_meter)
+    ) {
+      return geometry.positionAt(train.path_id, stop.route_meter)?.coordinate;
+    }
   }
 
   for (let index = train.stops.length - 1; index >= 0; index -= 1) {
