@@ -214,8 +214,8 @@ function setLinkedLayouts(
     renderBearingRadians,
     bearingTrackingKey,
     overlapOffsetMeters: zeroOverlapOffset(),
-    lengthScale: 0.5,
-    longitudinalOffsetInVehicleLengths: 0.25,
+    lengthScale: 1,
+    longitudinalOffsetInVehicleLengths: 0.5,
     coupledServiceUid: rear.serviceUid,
     linkKind,
   });
@@ -224,8 +224,8 @@ function setLinkedLayouts(
     renderBearingRadians,
     bearingTrackingKey,
     overlapOffsetMeters: zeroOverlapOffset(),
-    lengthScale: 0.5,
-    longitudinalOffsetInVehicleLengths: -0.25,
+    lengthScale: 1,
+    longitudinalOffsetInVehicleLengths: -0.5,
     coupledServiceUid: front.serviceUid,
     linkKind,
   });

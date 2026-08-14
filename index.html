@@ -7,7 +7,7 @@
     <title>TransitForge</title>
   </head>
   <body>
-    <main id="app" data-loading-state="loading" data-ui-color-mode="day" aria-busy="true">
+    <main id="app" data-loading-state="loading" data-ui-color-mode="day" data-display-mode="timetable" aria-busy="true">
       <section id="loading-screen" class="loading-screen" role="status" aria-live="polite" aria-atomic="true">
         <div class="loading-screen-content">
           <p class="loading-screen-brand">TransitForge</p>
@@ -19,9 +19,17 @@
       <div id="map" aria-label="TransitForge 3D map"></div>
       <section id="control-panel" class="hud" aria-label="表示日時パネル">
         <div id="date-time-panel" class="time-control">
-          <input id="date-time-input" class="date-time-input" type="datetime-local" step="1" aria-label="表示日時を変更" disabled />
+          <label class="date-time-display" aria-label="表示日時">
+            <span id="date-time-date" class="date-time-date">----</span>
+            <time id="date-time-clock" class="date-time-clock">--:--:--</time>
+            <input id="date-time-input" class="date-time-input" type="datetime-local" step="1" aria-label="表示日時を変更" disabled />
+          </label>
           <input id="display-time" type="hidden" min="240" max="1440" value="720" />
         </div>
+        <p id="display-mode-indicator" class="display-mode-indicator" role="status">
+          <span class="display-mode-dot" aria-hidden="true"></span>
+          <span id="display-mode-label">時刻表モード</span>
+        </p>
         <p id="map-status">Mapboxを初期化しています。</p>
       </section>
       <svg class="map-tool-symbols" aria-hidden="true">
@@ -36,7 +44,7 @@
         <symbol id="icon-arc" viewBox="0 0 20 20"><path d="M3.5 14.5c2.5-7.5 10.5-7.5 13 0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7"/><circle cx="3.5" cy="14.5" r="1.25"/><circle cx="16.5" cy="14.5" r="1.25"/></symbol>
         <symbol id="icon-route" viewBox="0 0 20 20"><circle cx="4.25" cy="14.75" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="15.75" cy="5.25" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6.2 14.4c4.8-.7 2.7-7.5 7.55-8.7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6"/><path d="m11.8 4.7 2.1.9-1.3 1.85" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35"/></symbol>
         <symbol id="icon-ai-station" viewBox="0 0 20 20"><path d="M3.25 5.5h9.5a2 2 0 0 1 2 2v4.25a2 2 0 0 1-2 2H8l-3.5 2v-2H3.25a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.45"/><path d="M15.6 1.8v3.4M13.9 3.5h3.4M11.1 8.2l.45 1.05 1.05.45-1.05.45-.45 1.05-.45-1.05-1.05-.45 1.05-.45z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.15"/></symbol>
-        <symbol id="icon-calendar-clock" viewBox="0 0 20 20"><rect x="2.5" y="3.5" width="15" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M2.5 7.5h15M6 2.5v2M14 2.5v2M10 10v3l2 1.2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></symbol>
+        <symbol id="icon-digital-twin" viewBox="0 0 20 20"><path d="m10 2.7 6.4 3.4-6.4 3.4-6.4-3.4zM3.6 10l6.4 3.4 6.4-3.4M3.6 13.9l6.4 3.4 6.4-3.4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.55"/></symbol>
       </svg>
       <nav id="map-tools" class="map-tools mapboxgl-ctrl mapboxgl-ctrl-group" aria-label="地図操作">
         <button id="play-toggle" type="button" aria-label="再生" title="再生" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-play" /></svg></button>
@@ -62,7 +70,7 @@
         </div>
         <button id="congestion-toggle" type="button" aria-label="混雑表示" title="混雑表示" aria-pressed="true" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-congestion" /></svg></button>
         <button id="destination-arcs-toggle" type="button" aria-label="行先アーチ" title="行先アーチ" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-arc" /></svg></button>
-        <button id="timetable-mode-toggle" type="button" aria-label="時刻表どおりに表示" title="時刻表どおりに表示" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-calendar-clock" /></svg></button>
+        <button id="digital-twin-mode-toggle" type="button" aria-label="デジタルツインモード" title="デジタルツインモード" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-digital-twin" /></svg></button>
       </nav>
       <button
         id="ai-guide-toggle"
