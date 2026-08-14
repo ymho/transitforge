@@ -1,11 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  timetableDisplayTimeParts,
   timetableProgressRowsFor,
   timetableRowsFor,
 } from "./train-timetable";
 
 describe("train timetable rows", () => {
+  it("separates a clock from its compact arrival or departure suffix", () => {
+    expect(timetableDisplayTimeParts("着 10:15")).toEqual({
+      clock: "10:15",
+      event: "着",
+    });
+    expect(timetableDisplayTimeParts("10:16")).toEqual({ clock: "10:16" });
+  });
+
   it("groups consecutive arrival and departure records for the same station", () => {
     expect(
       timetableRowsFor([

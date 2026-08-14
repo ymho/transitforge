@@ -229,7 +229,7 @@ def search_index(
         )
     ]
     journeys = _pareto_journeys([
-        _journey_from_label(label, trips) for label in destination_labels
+        _journey_from_label(label, trips, operations) for label in destination_labels
     ])
     journeys.sort(key=lambda item: _journey_rank(item, request))
     journeys = journeys[:request["limit"]]
@@ -385,7 +385,11 @@ def _pareto_journeys(journeys: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def _journey_from_label(label: dict[str, Any], trips: dict[str, Any]) -> dict[str, Any]:
+def _journey_from_label(
+    label: dict[str, Any],
+    trips: dict[str, Any],
+    operations: dict[str, dict[str, Any]] | None,
+) -> dict[str, Any]:
     connections: list[dict[str, Any]] = []
     current: dict[str, Any] | None = label
     while current is not None:
@@ -399,6 +403,14 @@ def _journey_from_label(label: dict[str, Any], trips: dict[str, Any]) -> dict[st
     for connection in connections:
         trip_id = connection["trip_id"]
         trip = trips.get(trip_id, {})
+        operation = _operation_for(trip, operations) if operations is not None else None
+        service_destination = (
+            operation.get("destination")
+            if operation is not None
+            and "osakaloop" not in operation.get("sources", [])
+            and operation.get("destination")
+            else trip.get("destination_station")
+        )
         if legs and legs[-1]["serviceUid"] == trip_id:
             previous_stop = legs[-1]["stops"][-1]
             previous_stop["departureTimeMinutes"] = connection["expectedDeparture"]
@@ -415,6 +427,7 @@ def _journey_from_label(label: dict[str, Any], trips: dict[str, Any]) -> dict[st
             "trainNumber": str(trip.get("train_no") or ""),
             "serviceType": str(trip.get("service_type") or ""),
             "trainName": str(trip.get("train_name") or ""),
+            "serviceDestination": str(service_destination or ""),
             "originStation": connection["from_station"],
             "destinationStation": connection["to_station"],
             "departureTimeMinutes": connection["expectedDeparture"],

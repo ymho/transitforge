@@ -16,6 +16,11 @@ export interface TrainTimetableProgressRow {
   status?: "approaching" | "stopped";
 }
 
+export interface TimetableDisplayTimeParts {
+  clock: string;
+  event?: string;
+}
+
 interface DetailedTimetableEntry {
   displayTime: string;
   event?: string;
@@ -64,6 +69,11 @@ export function timetableProgressRowsFor(
     })),
     ...(current?.index === index ? { status: current.status } : {}),
   }));
+}
+
+export function timetableDisplayTimeParts(value: string): TimetableDisplayTimeParts {
+  const match = /^(着|発)\s+(.+)$/u.exec(value.trim());
+  return match ? { clock: match[2], event: match[1] } : { clock: value };
 }
 
 function detailedTimetableRowsFor(stops: TrainStop[]): DetailedTimetableRow[] {
