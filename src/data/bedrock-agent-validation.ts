@@ -64,6 +64,9 @@ export function isTravelCandidateSearchResponse(value: unknown): value is Travel
   return isRecord(value) && typeof value.serviceDate === "string" &&
     typeof value.originStation === "string" && typeof value.destinationStation === "string" &&
     isNonNegativeNumber(value.searchTimeMinutes) && isNonNegativeInteger(value.totalMatchCount) &&
+    (value.transferPace === undefined || ["hurried", "standard", "relaxed"].includes(String(value.transferPace))) &&
+    (value.rankingPreference === undefined || ["balanced", "earliest-arrival", "latest-departure", "fewest-transfers"].includes(String(value.rankingPreference))) &&
+    (value.maxTransfers === undefined || (isNonNegativeInteger(value.maxTransfers) && value.maxTransfers <= 3)) &&
     Array.isArray(value.matches) && value.matches.length <= 5 && value.matches.every((match) =>
       isRecord(match) && typeof match.serviceUid === "string" &&
       typeof match.trainNumber === "string" && typeof match.serviceType === "string" &&
@@ -89,7 +92,11 @@ function isJourney(value: unknown): boolean {
       typeof leg.originStation === "string" && typeof leg.destinationStation === "string" &&
       isNonNegativeNumber(leg.departureTimeMinutes) && isNonNegativeNumber(leg.arrivalTimeMinutes) &&
       isNonNegativeNumber(leg.scheduledDepartureTimeMinutes) &&
-      isNonNegativeNumber(leg.scheduledArrivalTimeMinutes) && isNonNegativeNumber(leg.delayMinutes));
+      isNonNegativeNumber(leg.scheduledArrivalTimeMinutes) && isNonNegativeNumber(leg.delayMinutes) &&
+      (leg.stops === undefined || (Array.isArray(leg.stops) && leg.stops.every((stop) =>
+        isRecord(stop) && typeof stop.stationName === "string" &&
+        (stop.arrivalTimeMinutes === undefined || isNonNegativeNumber(stop.arrivalTimeMinutes)) &&
+        (stop.departureTimeMinutes === undefined || isNonNegativeNumber(stop.departureTimeMinutes))))));
 }
 
 function isDailyCongestionPeak(value: unknown): value is DailyCongestionPeak {

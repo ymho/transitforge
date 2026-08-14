@@ -103,6 +103,18 @@ export class TrainLineColorIndex {
     const destinationCoordinate = best.candidate.stations.get(destinationName);
     return colorForLine(best.candidate, destinationCoordinate, approachCoordinate);
   }
+
+  colorForStations(
+    serviceType: string,
+    destinationStation: string,
+    stationNames: string[],
+  ): TrainLineColor {
+    return this.colorFor({
+      service_type: serviceType,
+      destination_station: destinationStation,
+      stops: stationNames.map((stationName) => ({ station_name: stationName })),
+    });
+  }
 }
 
 function scoreCandidate(candidate: IndexedLine, stationNames: string[]): number {

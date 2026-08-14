@@ -1,9 +1,31 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  loadJourneySearchPreferences,
   shouldFocusAiGuideInputOnOpen,
   visibleAssistantText,
 } from "./ai-guide-panel";
+
+describe("AI guide journey preferences", () => {
+  it("loads valid preferences and ignores invalid saved values", () => {
+    expect(loadJourneySearchPreferences({
+      getItem: () => JSON.stringify({
+        transferPace: "relaxed",
+        rankingPreference: "fewest-transfers",
+      }),
+    })).toEqual({
+      transferPace: "relaxed",
+      rankingPreference: "fewest-transfers",
+      maxTransfers: 3,
+    });
+    expect(loadJourneySearchPreferences({
+      getItem: () => "broken",
+    })).toMatchObject({
+      transferPace: "standard",
+      rankingPreference: "balanced",
+    });
+  });
+});
 
 describe("AI guide panel focus", () => {
   it("does not focus the input when opened on a narrow viewport", () => {

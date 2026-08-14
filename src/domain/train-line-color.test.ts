@@ -51,6 +51,13 @@ describe("train line colors", () => {
     });
   });
 
+  it("selects a line color for a journey leg without the viewer train", () => {
+    expect(colors.colorForStations("普通", "京都", ["二条", "京都"])).toEqual({
+      color: "#7887c3",
+      lineName: "嵯峨野線・山陰線",
+    });
+  });
+
   it("uses the regional color within a formal line spanning several map areas", () => {
     expect(colors.colorFor(train("岡山", ["上郡", "岡山"]))).toEqual({
       color: "#b0d235",

@@ -21,6 +21,9 @@ def search_index(
     index: dict[str, Any],
     delays: dict[str, Decimal],
     request: dict[str, Any],
+    *,
+    operations: dict[str, dict[str, Any]] | None = None,
+    realtime_route_time: float | None = None,
 ) -> dict[str, Any]:
     if index.get("schema_version") != "direct-service-index-v1":
         raise RequestError(503, "指定日の直通インデックス形式が不正です。")
@@ -49,6 +52,7 @@ def search_index(
         "secondBoardingsRejectedByTransferTime": 0,
         "directCandidates": 0,
         "transferCandidates": 0,
+        "realtimeActiveServicesRejected": 0,
         "defaultTransferMinutes": DEFAULT_TRANSFER_MINUTES,
         "transferRankingPenaltyMinutes": TRANSFER_RANKING_PENALTY_MINUTES,
         "stationTransferRulesUsed": {},
@@ -66,8 +70,13 @@ def search_index(
         service = services.get(str(service_id))
         if not isinstance(service, dict):
             continue
-        delay = _delay_minutes(service, delays)
-        calls = _calls(service)
+        delay = _delay_minutes(service, delays, operations)
+        calls = _effective_calls(service, operations)
+        if _missing_active_operation(
+            service, calls, operations, realtime_route_time
+        ):
+            trace["realtimeActiveServicesRejected"] += 1
+            continue
         for index_in_calls, call in enumerate(calls):
             if _normalize(call.get("station_name")) != origin:
                 continue
@@ -97,8 +106,8 @@ def search_index(
         if worst_score is not None and departure > worst_score:
             break
         trace["firstBoardingsEvaluated"] += 1
-        calls = _calls(first_service)
-        delay = _delay_minutes(first_service, delays)
+        calls = _effective_calls(first_service, operations)
+        delay = _delay_minutes(first_service, delays, operations)
         direct_leg = _leg_to_destination(
             first_service,
             calls,
@@ -135,6 +144,8 @@ def search_index(
                     station_origins,
                     services,
                     delays,
+                    operations,
+                    realtime_route_time,
                 )
                 destination_options_by_station[transfer] = (
                     options,
@@ -165,6 +176,7 @@ def search_index(
                     first_service,
                     calls[origin_index],
                     transfer_call,
+                    calls[origin_index:transfer_index + 1],
                     departure,
                     arrival,
                     scheduled_departure,
@@ -202,6 +214,8 @@ def _destination_options(
     station_origins: dict[str, Any],
     services: dict[str, Any],
     delays: dict[str, Decimal],
+    operations: dict[str, dict[str, Any]] | None,
+    realtime_route_time: float | None,
 ) -> list[dict[str, Any]]:
     station_name = station_names.get(origin)
     service_ids = station_origins.get(station_name, []) if station_name else []
@@ -212,8 +226,12 @@ def _destination_options(
         service = services.get(str(service_id))
         if not isinstance(service, dict):
             continue
-        calls = _calls(service)
-        delay = _delay_minutes(service, delays)
+        calls = _effective_calls(service, operations)
+        if _missing_active_operation(
+            service, calls, operations, realtime_route_time
+        ):
+            continue
+        delay = _delay_minutes(service, delays, operations)
         for origin_index, call in enumerate(calls):
             if _normalize(call.get("station_name")) != origin:
                 continue
@@ -247,7 +265,10 @@ def _leg_to_destination(
     scheduled_departure: float,
     delay: float,
 ) -> dict[str, Any] | None:
-    for destination_call in calls[origin_index + 1:]:
+    for destination_index, destination_call in enumerate(
+        calls[origin_index + 1:],
+        start=origin_index + 1,
+    ):
         if _normalize(destination_call.get("station_name")) != destination:
             continue
         scheduled_arrival = _arrival_time(destination_call)
@@ -257,6 +278,7 @@ def _leg_to_destination(
             service,
             calls[origin_index],
             destination_call,
+            calls[origin_index:destination_index + 1],
             departure,
             scheduled_arrival + delay,
             scheduled_departure,
@@ -270,6 +292,7 @@ def _leg(
     service: dict[str, Any],
     origin_call: dict[str, Any],
     destination_call: dict[str, Any],
+    segment_calls: list[dict[str, Any]],
     departure: float,
     arrival: float,
     scheduled_departure: float,
@@ -288,6 +311,26 @@ def _leg(
         "scheduledDepartureTimeMinutes": scheduled_departure,
         "scheduledArrivalTimeMinutes": scheduled_arrival,
         "delayMinutes": delay,
+        "stops": [
+            {
+                "stationName": str(call.get("station_name") or ""),
+                **(
+                    {"arrivalTimeMinutes": arrival_time}
+                    if (arrival_time := _adjusted_time(
+                        call.get("arrival_time_minutes"), delay
+                    )) is not None
+                    else {}
+                ),
+                **(
+                    {"departureTimeMinutes": departure_time}
+                    if (departure_time := _adjusted_time(
+                        call.get("departure_time_minutes"), delay
+                    )) is not None
+                    else {}
+                ),
+            }
+            for call in segment_calls
+        ],
     }
 
 
@@ -355,6 +398,10 @@ def _time(primary: Any, fallback: Any) -> float | None:
     return float(value) if _is_time(value) else None
 
 
+def _adjusted_time(value: Any, delay: float) -> float | None:
+    return float(value) + delay if _is_time(value) else None
+
+
 def _is_time(value: Any) -> bool:
     return (
         isinstance(value, (int, float))
@@ -364,9 +411,77 @@ def _is_time(value: Any) -> bool:
     )
 
 
-def _delay_minutes(service: dict[str, Any], delays: dict[str, Decimal]) -> float:
+def _delay_minutes(
+    service: dict[str, Any],
+    delays: dict[str, Decimal],
+    operations: dict[str, dict[str, Any]] | None = None,
+) -> float:
+    operation = _operation_for(service, operations)
+    if operation is not None:
+        return float(operation["delayMinutes"])
     delay = delays.get(str(service.get("train_no") or ""), Decimal(0))
     return float(max(Decimal(0), delay))
+
+
+def _effective_calls(
+    service: dict[str, Any],
+    operations: dict[str, dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    calls = _calls(service)
+    operation = _operation_for(service, operations)
+    if operation is None or "osakaloop" in operation.get("sources", []):
+        return calls
+    destination = _normalize(operation.get("destination"))
+    scheduled_destination = _normalize(service.get("destination_station"))
+    if not destination or destination == scheduled_destination:
+        return calls
+    destination_index = next(
+        (
+            index
+            for index, call in enumerate(calls[1:-1], start=1)
+            if _normalize(call.get("station_name")) == destination
+        ),
+        None,
+    )
+    return calls[:destination_index + 1] if destination_index is not None else calls
+
+
+def _missing_active_operation(
+    service: dict[str, Any],
+    calls: list[dict[str, Any]],
+    operations: dict[str, dict[str, Any]] | None,
+    realtime_route_time: float | None,
+) -> bool:
+    if operations is None or realtime_route_time is None:
+        return False
+    if _operation_for(service, operations) is not None or not calls:
+        return False
+    start = _departure_time(calls[0])
+    end = _arrival_time(calls[-1])
+    return (
+        start is not None
+        and end is not None
+        and start <= realtime_route_time <= end
+    )
+
+
+def _operation_for(
+    service: dict[str, Any],
+    operations: dict[str, dict[str, Any]] | None,
+) -> dict[str, Any] | None:
+    if operations is None:
+        return None
+    train_number = str(service.get("train_no") or "")
+    operation = operations.get(train_number)
+    if operation is not None:
+        return operation
+    if "関空快速" not in str(service.get("service_type") or ""):
+        return None
+    if train_number.endswith("M"):
+        alias = operations.get(train_number[:-1])
+        if alias is not None and "osakaloop" in alias.get("sources", []):
+            return alias
+    return None
 
 
 def _transfer_minutes(station: str) -> float:

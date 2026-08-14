@@ -128,6 +128,13 @@ export interface TravelCandidateSearchResponse {
   destinationStation: string;
   searchTimeMinutes: number;
   totalMatchCount: number;
+  transferPace?: "hurried" | "standard" | "relaxed";
+  rankingPreference?:
+    | "balanced"
+    | "earliest-arrival"
+    | "latest-departure"
+    | "fewest-transfers";
+  maxTransfers?: number;
   matches: Array<{
     serviceUid: string;
     trainNumber: string;
@@ -160,6 +167,11 @@ export interface TravelCandidateSearchResponse {
       scheduledDepartureTimeMinutes: number;
       scheduledArrivalTimeMinutes: number;
       delayMinutes: number;
+      stops?: Array<{
+        stationName: string;
+        arrivalTimeMinutes?: number;
+        departureTimeMinutes?: number;
+      }>;
     }>;
   }>;
 }

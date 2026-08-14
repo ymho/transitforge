@@ -51,6 +51,7 @@ data "aws_iam_policy_document" "bedrock_agent" {
     resources = [
       "arn:aws:s3:::${local.resource_prefix}-data-builder-source/ai-timetable/*",
       "arn:aws:s3:::${local.resource_prefix}-data-builder-source/timetable/normalized/*",
+      "${aws_s3_bucket.website.arn}/api/traffic/delays.json",
     ]
   }
 
@@ -92,6 +93,8 @@ resource "aws_lambda_function" "bedrock_agent" {
       AI_TIMETABLE_BUCKET       = "${local.resource_prefix}-data-builder-source"
       AI_TIMETABLE_PREFIX       = "ai-timetable"
       PLANNING_TIMETABLE_PREFIX = "timetable"
+      TRAFFIC_SNAPSHOT_BUCKET   = aws_s3_bucket.website.id
+      TRAFFIC_SNAPSHOT_KEY      = "api/traffic/delays.json"
     }
   }
 

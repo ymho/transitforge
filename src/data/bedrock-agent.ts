@@ -17,6 +17,10 @@ import {
   isTrainDelayAnalysisResponse,
   isTravelCandidateSearchResponse,
 } from "./bedrock-agent-validation";
+import type {
+  JourneyRankingPreference,
+  TransferPace,
+} from "../domain/journey-search-preferences";
 
 export type * from "./bedrock-agent-contract";
 
@@ -62,12 +66,14 @@ export async function searchTravelCandidates(
     destinationStation: string;
     departureTimeMinutes: number;
     limit?: number;
-    maxTransfers?: 0 | 1;
+    maxTransfers?: 0 | 1 | 2 | 3;
+    transferPace?: TransferPace;
+    rankingPreference?: JourneyRankingPreference;
   },
   fetcher: typeof fetch = fetch,
 ): Promise<TravelCandidateSearchResponse> {
   return postAgent(
-    { operation: "journey_search", maxTransfers: 1, ...request },
+    { operation: "journey_search", maxTransfers: 3, ...request },
     "旅行候補を検索できません",
     "旅行候補",
     isTravelCandidateSearchResponse,
