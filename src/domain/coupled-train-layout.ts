@@ -40,7 +40,12 @@ export function coupledTrainLayouts(
           ({ serviceUid }) => serviceUid === link.partnerServiceUid,
         )
       : undefined;
-    if (!link || !partner || pairedServiceUids.has(train.serviceUid)) {
+    if (
+      !link ||
+      !partner ||
+      !formationLinkIsActive(link, train) ||
+      pairedServiceUids.has(train.serviceUid)
+    ) {
       continue;
     }
 
@@ -158,7 +163,11 @@ function positionsWithFormationPartners(
 
   for (const position of positions) {
     const link = formationLinks.get(position.serviceUid);
-    if (!link || visibleServiceUids.has(link.partnerServiceUid)) {
+    if (
+      !link ||
+      !formationLinkIsActive(link, position) ||
+      visibleServiceUids.has(link.partnerServiceUid)
+    ) {
       continue;
     }
     result.push({
@@ -171,6 +180,17 @@ function positionsWithFormationPartners(
   }
 
   return result;
+}
+
+function formationLinkIsActive(
+  link: TrainFormationLink,
+  position: TrainPosition,
+): boolean {
+  const range = link.activeRouteMeterRange;
+  return (
+    !range ||
+    (position.routeMeter >= range[0] && position.routeMeter <= range[1])
+  );
 }
 
 function closestMatchingPosition(
@@ -214,8 +234,8 @@ function setLinkedLayouts(
     renderBearingRadians,
     bearingTrackingKey,
     overlapOffsetMeters: zeroOverlapOffset(),
-    lengthScale: 1,
-    longitudinalOffsetInVehicleLengths: 0.5,
+    lengthScale: 0.5,
+    longitudinalOffsetInVehicleLengths: 0.25,
     coupledServiceUid: rear.serviceUid,
     linkKind,
   });
@@ -224,8 +244,8 @@ function setLinkedLayouts(
     renderBearingRadians,
     bearingTrackingKey,
     overlapOffsetMeters: zeroOverlapOffset(),
-    lengthScale: 1,
-    longitudinalOffsetInVehicleLengths: -0.5,
+    lengthScale: 0.5,
+    longitudinalOffsetInVehicleLengths: -0.25,
     coupledServiceUid: front.serviceUid,
     linkKind,
   });

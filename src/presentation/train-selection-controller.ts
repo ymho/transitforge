@@ -173,7 +173,7 @@ export function configureTrainSelection(
     const delay = operationsByTrainNumber?.get(train.train_no)?.delayMinutes;
     elements.delay.textContent =
       operationsByTrainNumber === undefined
-        ? "時刻表表示"
+        ? "シミュレーション"
         : delay === undefined
           ? "情報なし"
           : delay > 0

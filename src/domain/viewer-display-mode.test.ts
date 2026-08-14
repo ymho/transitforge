@@ -6,21 +6,24 @@ describe("viewer display mode", () => {
   it("uses digital twin mode when current realtime data is available", () => {
     expect(resolveViewerDisplayMode(true, true)).toEqual({
       mode: "digital-twin",
-      realtimeVisualizationsEnabled: true,
+      congestionEnabled: true,
+      simulationControlsEnabled: false,
     });
   });
 
-  it("uses timetable mode when the user turns digital twin mode off", () => {
+  it("uses simulation mode when the user turns digital twin mode off", () => {
     expect(resolveViewerDisplayMode(true, false)).toEqual({
-      mode: "timetable",
-      realtimeVisualizationsEnabled: false,
+      mode: "simulation",
+      congestionEnabled: false,
+      simulationControlsEnabled: true,
     });
   });
 
-  it("falls back to timetable mode when realtime data is unavailable", () => {
+  it("falls back to simulation mode when realtime data is unavailable", () => {
     expect(resolveViewerDisplayMode(false, true)).toEqual({
-      mode: "timetable",
-      realtimeVisualizationsEnabled: false,
+      mode: "simulation",
+      congestionEnabled: false,
+      simulationControlsEnabled: true,
     });
   });
 });

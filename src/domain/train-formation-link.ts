@@ -5,6 +5,7 @@ export interface TrainFormationLink {
   partnerTrainNo: string;
   partnerServiceType: string;
   linkKind: "coupled-service";
+  activeRouteMeterRange?: readonly [number, number];
 }
 
 const maibaraStation = "米原";
@@ -20,6 +21,7 @@ export function trainFormationLinks(
   trains: Train[],
 ): ReadonlyMap<string, TrainFormationLink> {
   const links = new Map<string, TrainFormationLink>();
+  addKansaiAirportKishujiLinks(trains, links);
   const northernSectionsBySuffix = new Map<string, Train[]>();
 
   for (const train of trains) {
@@ -67,6 +69,103 @@ export function trainFormationLinks(
   }
 
   return links;
+}
+
+function addKansaiAirportKishujiLinks(
+  trains: Train[],
+  links: Map<string, TrainFormationLink>,
+): void {
+  const kishujiByNumber = new Map<number, Train[]>();
+  for (const train of trains) {
+    const number = numericTrainNumber(train.train_no);
+    if (number === undefined || !train.service_type.includes("紀州路快速")) {
+      continue;
+    }
+    const candidates = kishujiByNumber.get(number) ?? [];
+    candidates.push(train);
+    kishujiByNumber.set(number, candidates);
+  }
+
+  for (const airportTrain of trains) {
+    const airportNumber = numericTrainNumber(airportTrain.train_no);
+    if (
+      airportNumber === undefined ||
+      !airportTrain.service_type.includes("関空快速")
+    ) {
+      continue;
+    }
+    const partnerMatch = (kishujiByNumber.get(airportNumber + 400) ?? [])
+      .map((candidate) => ({
+        candidate,
+        sharedStopTimes: sharedStopTimes(airportTrain, candidate),
+      }))
+      .filter(({ sharedStopTimes }) => sharedStopTimes.size >= 2)
+      .sort((left, right) =>
+        left.candidate.service_uid.localeCompare(right.candidate.service_uid),
+      )[0];
+    const partner = partnerMatch?.candidate;
+    if (!partner) {
+      continue;
+    }
+    links.set(
+      airportTrain.service_uid,
+      formationLinkFor(
+        partner,
+        sharedRouteMeterRange(airportTrain, partnerMatch.sharedStopTimes),
+      ),
+    );
+    links.set(
+      partner.service_uid,
+      formationLinkFor(
+        airportTrain,
+        sharedRouteMeterRange(partner, partnerMatch.sharedStopTimes),
+      ),
+    );
+  }
+}
+
+function formationLinkFor(
+  partner: Train,
+  activeRouteMeterRange?: readonly [number, number],
+): TrainFormationLink {
+  return {
+    partnerServiceUid: partner.service_uid,
+    partnerTrainNo: partner.train_no,
+    partnerServiceType: partner.service_type,
+    linkKind: "coupled-service",
+    ...(activeRouteMeterRange ? { activeRouteMeterRange } : {}),
+  };
+}
+
+function sharedStopTimes(left: Train, right: Train): ReadonlySet<string> {
+  const rightStopTimes = new Set(
+    right.stops.map((stop) => `${stop.station_name}:${stop.route_time_minutes}`),
+  );
+  return new Set(
+    left.stops
+      .map((stop) => `${stop.station_name}:${stop.route_time_minutes}`)
+      .filter((key) => rightStopTimes.has(key)),
+  );
+}
+
+function sharedRouteMeterRange(
+  train: Train,
+  sharedStopTimes: ReadonlySet<string>,
+): readonly [number, number] | undefined {
+  const routeMeters = train.stops.flatMap((stop) =>
+    typeof stop.route_meter === "number" &&
+    sharedStopTimes.has(`${stop.station_name}:${stop.route_time_minutes}`)
+      ? [stop.route_meter]
+      : [],
+  );
+  return routeMeters.length > 0
+    ? [Math.min(...routeMeters), Math.max(...routeMeters)]
+    : undefined;
+}
+
+function numericTrainNumber(trainNumber: string): number | undefined {
+  const match = /^(\d+)/u.exec(trainNumber);
+  return match ? Number(match[1]) : undefined;
 }
 
 function maibaraConnectionGap(

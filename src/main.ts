@@ -62,6 +62,7 @@ import {
   delayByTrainNumber,
   destinationChangedServiceUids,
   operationsForDisplay,
+  operationsWithTimetableTrainNumberAliases,
   trainsForOperations,
 } from "./domain/train-operation-state";
 import {
@@ -437,6 +438,9 @@ if (!token) {
         let displayedPositions: TrainPosition[] = [];
         let latestDelaySnapshot: TrainDelaySnapshot | undefined;
         let digitalTwinModeRequested = true;
+        let playbackControls: PlaybackUiController | undefined;
+        let aliasedOperationsSource: ReadonlyMap<string, TrainOperation> | undefined;
+        let aliasedOperations: ReadonlyMap<string, TrainOperation> | undefined;
         let appliedOperations:
           | ReadonlyMap<string, TrainOperation>
           | undefined
@@ -456,16 +460,26 @@ if (!token) {
             realtimeOperations !== undefined,
             digitalTwinModeRequested,
           );
-          const operations = modeState.mode === "digital-twin"
+          const sourceOperations = modeState.mode === "digital-twin"
             ? realtimeOperations
             : undefined;
+          if (sourceOperations !== aliasedOperationsSource) {
+            aliasedOperationsSource = sourceOperations;
+            aliasedOperations = operationsWithTimetableTrainNumberAliases(
+              trainIndex.trains,
+              sourceOperations,
+            );
+          }
+          const operations = aliasedOperations;
           renderDisplayMode(
             digitalTwinModeToggle,
             realtimeOperations !== undefined,
             modeState.mode,
           );
-          congestionUpdates.setAvailable(modeState.realtimeVisualizationsEnabled);
-          destinationArcs.setAvailable(modeState.realtimeVisualizationsEnabled);
+          congestionUpdates.setAvailable(modeState.congestionEnabled);
+          playbackControls?.setDigitalTwinMode(
+            !modeState.simulationControlsEnabled,
+          );
           if (operations === appliedOperations) {
             return;
           }
@@ -495,7 +509,7 @@ if (!token) {
           );
           selection.updateOperations(operations, destinationChanges);
           console.info("[TransitForge] 列車表示モード", {
-            mode: operations ? "digital-twin" : "timetable",
+            mode: operations ? "digital-twin" : "simulation",
             timetableTrains: trainIndex.trains.length,
             displayedTrains: displayTrains.length,
             unobservedTimetableEntries: operations
@@ -706,15 +720,14 @@ if (!token) {
           }
         };
         displayTime.disabled = false;
-        playToggle.disabled = false;
         currentTimeButton.disabled = false;
-        configurePlaybackSpeed(
+        const playbackSpeedControls = configurePlaybackSpeed(
           playbackSpeed,
           playbackSpeedButtons,
           playbackSpeedMenuToggle,
           playbackSpeedOptions,
         );
-        configurePlayback(
+        playbackControls = configurePlayback(
           updateTrains,
           maximumRouteTime,
           (date) => {
@@ -727,6 +740,7 @@ if (!token) {
               1,
             );
           },
+          playbackSpeedControls,
         );
         updateTrains();
         await nextFrame();
@@ -871,12 +885,22 @@ function configureDateTimeInput(
   });
 }
 
+interface PlaybackSpeedUiController {
+  setEnabled(enabled: boolean): void;
+  selectRealtimeSpeed(): void;
+}
+
+interface PlaybackUiController {
+  setDigitalTwinMode(enabled: boolean): void;
+}
+
 function configurePlayback(
   updateTrains: (routeTime?: number) => void,
   maximumRouteTime: number,
   onCurrentDateSelected: (date: Date) => void,
   onOperatingDayWrapped: () => void,
-): void {
+  speedControls: PlaybackSpeedUiController,
+): PlaybackUiController {
   if (
     displayTime === null ||
     playToggle === null ||
@@ -912,6 +936,9 @@ function configurePlayback(
     controller.seek(Number(displayTime.value), false);
   });
   playToggle.addEventListener("click", () => {
+    if (playToggle.disabled) {
+      return;
+    }
     if (controller.isPlaying()) {
       controller.stop();
     } else {
@@ -930,6 +957,29 @@ function configurePlayback(
 
   controller.start();
   renderPlaybackState();
+  let digitalTwinMode: boolean | undefined;
+  return {
+    setDigitalTwinMode(enabled) {
+      if (enabled === digitalTwinMode) {
+        return;
+      }
+      digitalTwinMode = enabled;
+      if (enabled) {
+        speedControls.selectRealtimeSpeed();
+        controller.start();
+      }
+      playToggle.disabled = enabled;
+      playToggle.title = enabled
+        ? "デジタルツインモードでは常時再生"
+        : controller.isPlaying() ? "一時停止" : "再生";
+      playToggle.ariaLabel = playToggle.title;
+      speedControls.setEnabled(!enabled);
+      setMapToolIcon(
+        playToggle,
+        controller.isPlaying() ? "icon-pause" : "icon-play",
+      );
+    },
+  };
 }
 
 function configurePlaybackSpeed(
@@ -937,7 +987,7 @@ function configurePlaybackSpeed(
   buttons: HTMLButtonElement[],
   menuToggle: HTMLButtonElement,
   options: HTMLFieldSetElement,
-): void {
+): PlaybackSpeedUiController {
   const closeMenu = () => {
     options.hidden = true;
     menuToggle.ariaExpanded = "false";
@@ -987,6 +1037,26 @@ function configurePlaybackSpeed(
     value.value,
     selectedButton?.dataset.playbackSpeedLabel ?? "1×",
   );
+  return {
+    setEnabled(enabled) {
+      menuToggle.disabled = !enabled;
+      for (const button of buttons) {
+        button.disabled = !enabled;
+      }
+      if (!enabled) {
+        closeMenu();
+      }
+    },
+    selectRealtimeSpeed() {
+      const realtimeButton = buttons.find(
+        (button) => button.dataset.playbackSpeedLabel === "1×",
+      );
+      selectSpeed(
+        realtimeButton?.dataset.playbackSpeed ?? "0.016666666666666666",
+        realtimeButton?.dataset.playbackSpeedLabel ?? "1×",
+      );
+    },
+  };
 }
 
 function configureWeather(
@@ -1122,7 +1192,7 @@ function configureTrainDelayUpdates(
       apply: (snapshot) => {
         if (snapshot.failedSources.length > 0) {
           console.warn(
-            "[TransitForge] 遅延スナップショットが不完全なため時刻表表示を維持します。",
+            "[TransitForge] 遅延スナップショットが不完全なためシミュレーション表示を維持します。",
             {
               collectedAt: snapshot.collectedAt,
               failedSources: snapshot.failedSources,
@@ -1145,7 +1215,7 @@ function configureTrainDelayUpdates(
 function renderDisplayMode(
   toggle: HTMLButtonElement,
   realtimeAvailable: boolean,
-  mode: "digital-twin" | "timetable",
+  mode: "digital-twin" | "simulation",
 ): void {
   if (app === null || displayModeIndicator === null || displayModeLabel === null) {
     return;
@@ -1155,12 +1225,12 @@ function renderDisplayMode(
   displayModeIndicator.dataset.mode = mode;
   displayModeLabel.textContent = digitalTwinMode
     ? "デジタルツインモード"
-    : "時刻表モード";
+    : "シミュレーションモード";
   toggle.disabled = !realtimeAvailable;
   toggle.ariaPressed = String(digitalTwinMode);
   if (!realtimeAvailable) {
-    toggle.ariaLabel = "リアルタイム情報がないため時刻表モード";
-    toggle.title = "リアルタイム情報がないため時刻表モード";
+    toggle.ariaLabel = "リアルタイム情報がないためシミュレーションモード";
+    toggle.title = "リアルタイム情報がないためシミュレーションモード";
   } else if (digitalTwinMode) {
     toggle.ariaLabel = "デジタルツインモードを終了";
     toggle.title = "デジタルツインモード: オン";
@@ -1175,21 +1245,21 @@ interface RealtimeVisualizationController {
   setAvailable(available: boolean): void;
 }
 
+interface VisualizationController {
+  setEnabled(enabled: boolean): void;
+}
+
 function configureDestinationArcs(
   trainLayer: MapboxThreeTrainLayer,
   toggle: HTMLButtonElement,
-): RealtimeVisualizationController {
+): VisualizationController {
   let requested = false;
-  let available = false;
   const apply = () => {
-    const visible = available && requested;
-    toggle.disabled = !available;
-    toggle.ariaPressed = String(visible);
-    toggle.title = available ? "行先アーチ" : "デジタルツインモードで利用可能";
-    toggle.ariaLabel = available
-      ? "行先アーチ"
-      : "行先アーチはデジタルツインモードで利用可能";
-    trainLayer.setDestinationArcsVisible(visible);
+    toggle.disabled = false;
+    toggle.ariaPressed = String(requested);
+    toggle.title = "行先アーチ";
+    toggle.ariaLabel = "行先アーチ";
+    trainLayer.setDestinationArcsVisible(requested);
   };
   const setEnabled = (nextEnabled: boolean) => {
     requested = nextEnabled;
@@ -1200,13 +1270,7 @@ function configureDestinationArcs(
     setEnabled(!requested);
   });
   apply();
-  return {
-    setEnabled,
-    setAvailable: (nextAvailable) => {
-      available = nextAvailable;
-      apply();
-    },
-  };
+  return { setEnabled };
 }
 
 function monitorFrames(): void {
