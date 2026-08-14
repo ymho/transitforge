@@ -8,25 +8,25 @@ const catalog: StationLineCatalog = {
   schema_version: "station-line-catalog-v1",
   source: "test.geojson",
   lines: [
-    catalogLine("西日本旅客鉄道", "東海道線", [
+    catalogLine("運行会社A", "東海道線", [
       ["西大路", 135.73],
       ["京都", 135.76],
     ]),
-    catalogLine("西日本旅客鉄道", "奈良線", [
+    catalogLine("運行会社A", "奈良線", [
       ["東福寺", 135.77],
       ["京都", 135.76],
       ["平城山", 135.81],
       ["奈良", 135.82],
     ]),
-    catalogLine("西日本旅客鉄道", "山陰線", [
+    catalogLine("運行会社A", "山陰線", [
       ["二条", 135.74],
       ["京都", 135.76],
     ]),
-    catalogLine("西日本旅客鉄道", "山陽線", [
+    catalogLine("運行会社A", "山陽線", [
       ["上郡", 134.35],
       ["岡山", 133.92],
     ]),
-    catalogLine("東海旅客鉄道", "東海道線", [
+    catalogLine("運行会社B", "未対応線", [
       ["岐阜", 136.72],
       ["名古屋", 136.88],
     ]),

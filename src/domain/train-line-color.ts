@@ -26,7 +26,7 @@ const shinkansenLine: TrainLineColor = {
   lineName: "新幹線",
 };
 
-const jrWestLineColors = new Map<string, TrainLineColor>([
+const regionalLineColors = new Map<string, TrainLineColor>([
   ["東海道線", line("#007cc3", "琵琶湖線・JR京都線・JR神戸線")],
   ["北陸線", line("#007cc3", "北陸線")],
   ["湖西線", line("#00b3e6", "湖西線")],
@@ -141,9 +141,6 @@ function colorForLine(
   destinationCoordinate?: StationCoordinate,
   approachCoordinate?: StationCoordinate,
 ): TrainLineColor {
-  if (candidate.operator !== "西日本旅客鉄道") {
-    return neutralLine;
-  }
   if (candidate.line.includes("新幹線")) {
     return shinkansenLine;
   }
@@ -166,7 +163,7 @@ function colorForLine(
       : line("#f16469", "赤穂線（岡山エリア）");
   }
 
-  return jrWestLineColors.get(candidate.line) ?? neutralLine;
+  return regionalLineColors.get(candidate.line) ?? neutralLine;
 }
 
 function sanyoLineColor(longitude?: number): TrainLineColor {

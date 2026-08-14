@@ -1,4 +1,4 @@
-const trainDelayEndpoint = "/api/westjr/delays.json";
+const trainDelayEndpoint = "/api/traffic/delays.json";
 
 export const trainDelayRefreshIntervalMilliseconds = 60 * 1_000;
 export const trainDelayRetryIntervalMilliseconds = 15 * 60 * 1_000;
