@@ -4,7 +4,7 @@ import type { TrainDelaySnapshot, TrainOperation } from "../data/train-delay";
 import type { Train } from "../data/train-index";
 import {
   delayByTrainNumber,
-  destinationChangedTrainNumbers,
+  destinationChangedServiceUids,
   operationsForDisplay,
   trainsForOperations,
 } from "./train-operation-state";
@@ -40,10 +40,17 @@ describe("train operation state", () => {
   it("removes unobserved trains and applies an authoritative destination", () => {
     const trains = [train("100A", "姫路"), train("200B", "京都")];
     const operations = new Map<string, TrainOperation>([
-      ["100A", { delayMinutes: 6, destination: "大阪" }],
+      [
+        "100A",
+        { delayMinutes: 6, destination: "大阪", sources: ["source-a"] },
+      ],
     ]);
+    const destinationChanges = destinationChangedServiceUids(
+      trains,
+      operations,
+    );
 
-    const displayed = trainsForOperations(trains, operations);
+    const displayed = trainsForOperations(trains, operations, destinationChanges);
 
     expect(displayed).toHaveLength(1);
     expect(displayed[0].destination_station).toBe("大阪");
@@ -52,9 +59,38 @@ describe("train operation state", () => {
       "大阪",
     ]);
     expect(delayByTrainNumber(operations).get("100A")).toBe(6);
-    expect(destinationChangedTrainNumbers(trains, operations)).toEqual(
-      new Set(["100A"]),
+    expect(destinationChanges).toEqual(
+      new Set(["service-100A"]),
     );
+  });
+
+  it("does not mark normal through segments or loop direction labels as changes", () => {
+    const throughSegments = [
+      train("100A", "大阪"),
+      {
+        ...train("100A", "姫路"),
+        service_uid: "service-100A-continuation",
+        origin_station: "大阪",
+        stops: [
+          { station_name: "大阪", route_meter: 0, route_time_minutes: 631 },
+          { station_name: "姫路", route_meter: 1_000, route_time_minutes: 660 },
+        ],
+      },
+    ];
+    const throughOperation = new Map<string, TrainOperation>([
+      ["100A", { delayMinutes: 0, destination: "姫路", sources: ["source-a"] }],
+    ]);
+    const loopOperation = new Map<string, TrainOperation>([
+      ["100A", { delayMinutes: 0, destination: "大阪", sources: ["osakaloop"] }],
+    ]);
+
+    expect(
+      destinationChangedServiceUids(throughSegments, throughOperation).size,
+    ).toBe(0);
+    expect(destinationChangedServiceUids([train("100A", "姫路")], loopOperation).size).toBe(0);
+    expect(
+      trainsForOperations(throughSegments, throughOperation)[0].stops,
+    ).toHaveLength(3);
   });
 
   it("returns the original timetable without an applicable snapshot", () => {
@@ -69,7 +105,10 @@ function operationSnapshot(collectedAt: string): TrainDelaySnapshot {
     collectedAt,
     failedSources: [],
     operationsByTrainNumber: new Map([
-      ["100A", { delayMinutes: 6, destination: "大阪" }],
+      [
+        "100A",
+        { delayMinutes: 6, destination: "大阪", sources: ["source-a"] },
+      ],
     ]),
   };
 }

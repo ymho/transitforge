@@ -56,9 +56,10 @@ import { PlaybackController } from "./domain/playback-controller";
 import { congestionAnalysisForAgent } from "./domain/congestion-analysis";
 import { delayAnalysisForAgent } from "./domain/delay-analysis";
 import { TrainLineColorIndex } from "./domain/train-line-color";
+import { trainFormationLinks } from "./domain/train-formation-link";
 import {
   delayByTrainNumber,
-  destinationChangedTrainNumbers,
+  destinationChangedServiceUids,
   operationsForDisplay,
   trainsForOperations,
 } from "./domain/train-operation-state";
@@ -371,11 +372,13 @@ if (!token) {
 
       const maximumRouteTime = maximumRouteTimeFor(trainIndex.trains);
       displayTime.max = String(Math.ceil(maximumRouteTime / 60) * 60);
+      const formationLinks = trainFormationLinks(trainIndex.trains);
 
         loadingScreen.setMessage("列車の初期位置を準備しています。");
         const threeTrainLayer = new MapboxThreeTrainLayer(
           colorsByServiceUid,
           destinationCoordinatesByServiceUid,
+          formationLinks,
         );
         applyWeatherToTrains = (mode) => {
           threeTrainLayer.setCloudyAtmosphereEnabled(mode !== "clear");
@@ -409,6 +412,7 @@ if (!token) {
           trainIndex.trains,
           threeTrainLayer,
           colorsByServiceUid,
+          formationLinks,
           {
             details: trainDetails,
             close: closeTrainDetails,
@@ -449,12 +453,16 @@ if (!token) {
             return;
           }
           appliedOperations = operations;
-          displayTrains = trainsForOperations(trainIndex.trains, operations);
-          displayDelays = delayByTrainNumber(operations);
-          const destinationChanges = destinationChangedTrainNumbers(
+          const destinationChanges = destinationChangedServiceUids(
             trainIndex.trains,
             operations,
           );
+          displayTrains = trainsForOperations(
+            trainIndex.trains,
+            operations,
+            destinationChanges,
+          );
+          displayDelays = delayByTrainNumber(operations);
           const operationDestinationCoordinates = new Map(
             displayTrains.flatMap((train) => {
               const coordinate = destinationCoordinateForTrain(train, geometry);
@@ -468,7 +476,7 @@ if (!token) {
             destinationChanges,
             operationDestinationCoordinates,
           );
-          selection.updateOperations(operations);
+          selection.updateOperations(operations, destinationChanges);
           console.info("[TransitForge] 列車表示モード", {
             mode: operations ? "realtime" : "timetable",
             timetableTrains: trainIndex.trains.length,

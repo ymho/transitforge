@@ -1,4 +1,5 @@
 import type { TrainPosition } from "./train-position";
+import type { TrainFormationLink } from "./train-formation-link";
 
 export interface TrainRenderLayout {
   position: TrainPosition;
@@ -13,31 +14,91 @@ export interface TrainRenderLayout {
   lengthScale: number;
   longitudinalOffsetInVehicleLengths: number;
   coupledServiceUid?: string;
+  linkKind?: TrainLinkKind;
 }
+
+export type TrainLinkKind = "same-operation" | "coupled-service";
 
 const maximumCouplingDistanceMeters = 20;
 const maximumBearingDifferenceRadians = Math.PI / 12;
 
 export function coupledTrainLayouts(
   positions: TrainPosition[],
+  formationLinks: ReadonlyMap<string, TrainFormationLink> = new Map(),
 ): TrainRenderLayout[] {
+  const linkedPositions = positionsWithFormationPartners(
+    positions,
+    formationLinks,
+  );
   const layouts = new Map<string, Omit<TrainRenderLayout, "position">>();
-  const kansaiAirportRapid = positions
-    .filter(({ serviceType }) => serviceType.includes("関空快速"))
+  const pairedServiceUids = new Set<string>();
+
+  for (const train of linkedPositions) {
+    const link = formationLinks.get(train.serviceUid);
+    const partner = link
+      ? linkedPositions.find(
+          ({ serviceUid }) => serviceUid === link.partnerServiceUid,
+        )
+      : undefined;
+    if (!link || !partner || pairedServiceUids.has(train.serviceUid)) {
+      continue;
+    }
+
+    setLinkedLayouts(layouts, train, partner, link.linkKind);
+    pairedServiceUids.add(train.serviceUid);
+    pairedServiceUids.add(partner.serviceUid);
+  }
+
+  // A single physical train can be split into multiple timetable services.
+  // Train numbers are not globally unique, so only join entries that are also
+  // at the same place and moving in the same direction.
+  for (const train of [...linkedPositions].sort(compareServiceUid)) {
+    if (pairedServiceUids.has(train.serviceUid)) {
+      continue;
+    }
+
+    const partner = closestMatchingPosition(
+      train,
+      linkedPositions.filter(
+        (candidate) =>
+          candidate.serviceUid !== train.serviceUid &&
+          !pairedServiceUids.has(candidate.serviceUid) &&
+          candidate.trainNo === train.trainNo,
+      ),
+    );
+    if (!partner) {
+      continue;
+    }
+
+    setLinkedLayouts(layouts, train, partner, "same-operation");
+    pairedServiceUids.add(train.serviceUid);
+    pairedServiceUids.add(partner.serviceUid);
+  }
+
+  const kansaiAirportRapid = linkedPositions
+    .filter(
+      ({ serviceUid, serviceType }) =>
+        !pairedServiceUids.has(serviceUid) && serviceType.includes("関空快速"),
+    )
     .sort(compareServiceUid);
-  const kishujiRapid = positions
-    .filter(({ serviceType }) => serviceType.includes("紀州路快速"))
+  const kishujiRapid = linkedPositions
+    .filter(
+      ({ serviceUid, serviceType }) =>
+        !pairedServiceUids.has(serviceUid) && serviceType.includes("紀州路快速"),
+    )
     .sort(compareServiceUid);
-  const pairedKishujiServiceUids = new Set<string>();
 
   for (const airportTrain of kansaiAirportRapid) {
+    if (pairedServiceUids.has(airportTrain.serviceUid)) {
+      continue;
+    }
     const airportNumber = numericTrainNumber(airportTrain.trainNo);
     if (airportNumber === undefined) {
       continue;
     }
 
     const partner = kishujiRapid
-      .filter(({ serviceUid }) => !pairedKishujiServiceUids.has(serviceUid))
+      .filter(({ serviceUid }) => !pairedServiceUids.has(serviceUid))
       .map((candidate) => ({
         candidate,
         distance: distanceInMeters(airportTrain.coordinate, candidate.coordinate),
@@ -60,39 +121,12 @@ export function coupledTrainLayouts(
       continue;
     }
 
-    pairedKishujiServiceUids.add(partner.serviceUid);
-    const renderCoordinate = midpoint(
-      airportTrain.coordinate,
-      partner.coordinate,
-    );
-    const renderBearingRadians = averageBearing(
-      airportTrain.bearingRadians,
-      partner.bearingRadians,
-    );
-    const bearingTrackingKey = [airportTrain.serviceUid, partner.serviceUid]
-      .sort()
-      .join("|");
-    layouts.set(airportTrain.serviceUid, {
-      renderCoordinate,
-      renderBearingRadians,
-      bearingTrackingKey,
-      overlapOffsetMeters: zeroOverlapOffset(),
-      lengthScale: 0.5,
-      longitudinalOffsetInVehicleLengths: 0.25,
-      coupledServiceUid: partner.serviceUid,
-    });
-    layouts.set(partner.serviceUid, {
-      renderCoordinate,
-      renderBearingRadians,
-      bearingTrackingKey,
-      overlapOffsetMeters: zeroOverlapOffset(),
-      lengthScale: 0.5,
-      longitudinalOffsetInVehicleLengths: -0.25,
-      coupledServiceUid: airportTrain.serviceUid,
-    });
+    setLinkedLayouts(layouts, airportTrain, partner, "coupled-service");
+    pairedServiceUids.add(airportTrain.serviceUid);
+    pairedServiceUids.add(partner.serviceUid);
   }
 
-  return withOverlapOffsets(positions.map((position) => ({
+  return withOverlapOffsets(linkedPositions.map((position) => ({
     position,
     renderCoordinate:
       layouts.get(position.serviceUid)?.renderCoordinate ?? position.coordinate,
@@ -109,7 +143,92 @@ export function coupledTrainLayouts(
     longitudinalOffsetInVehicleLengths:
       layouts.get(position.serviceUid)?.longitudinalOffsetInVehicleLengths ?? 0,
     coupledServiceUid: layouts.get(position.serviceUid)?.coupledServiceUid,
+    linkKind: layouts.get(position.serviceUid)?.linkKind,
   })));
+}
+
+function positionsWithFormationPartners(
+  positions: TrainPosition[],
+  formationLinks: ReadonlyMap<string, TrainFormationLink>,
+): TrainPosition[] {
+  const result = [...positions];
+  const visibleServiceUids = new Set(
+    positions.map(({ serviceUid }) => serviceUid),
+  );
+
+  for (const position of positions) {
+    const link = formationLinks.get(position.serviceUid);
+    if (!link || visibleServiceUids.has(link.partnerServiceUid)) {
+      continue;
+    }
+    result.push({
+      ...position,
+      serviceUid: link.partnerServiceUid,
+      trainNo: link.partnerTrainNo,
+      serviceType: link.partnerServiceType,
+    });
+    visibleServiceUids.add(link.partnerServiceUid);
+  }
+
+  return result;
+}
+
+function closestMatchingPosition(
+  train: TrainPosition,
+  candidates: TrainPosition[],
+): TrainPosition | undefined {
+  return candidates
+    .map((candidate) => ({
+      candidate,
+      distance: distanceInMeters(train.coordinate, candidate.coordinate),
+    }))
+    .filter(
+      ({ candidate, distance }) =>
+        distance <= maximumCouplingDistanceMeters &&
+        bearingDifference(train.bearingRadians, candidate.bearingRadians) <=
+          maximumBearingDifferenceRadians,
+    )
+    .sort(
+      (left, right) =>
+        left.distance - right.distance ||
+        compareServiceUid(left.candidate, right.candidate),
+    )[0]?.candidate;
+}
+
+function setLinkedLayouts(
+  layouts: Map<string, Omit<TrainRenderLayout, "position">>,
+  first: TrainPosition,
+  second: TrainPosition,
+  linkKind: TrainLinkKind,
+): void {
+  const [front, rear] = [first, second].sort(compareServiceUid);
+  const renderCoordinate = midpoint(front.coordinate, rear.coordinate);
+  const renderBearingRadians = averageBearing(
+    front.bearingRadians,
+    rear.bearingRadians,
+  );
+  const bearingTrackingKey = [front.serviceUid, rear.serviceUid].join("|");
+
+  layouts.set(front.serviceUid, {
+    renderCoordinate,
+    renderBearingRadians,
+    bearingTrackingKey,
+    overlapOffsetMeters: zeroOverlapOffset(),
+    lengthScale: 0.5,
+    longitudinalOffsetInVehicleLengths: 0.25,
+    coupledServiceUid: rear.serviceUid,
+    linkKind,
+  });
+  layouts.set(rear.serviceUid, {
+    renderCoordinate,
+    renderBearingRadians,
+    bearingTrackingKey,
+    overlapOffsetMeters: zeroOverlapOffset(),
+    lengthScale: 0.5,
+    longitudinalOffsetInVehicleLengths: -0.25,
+    coupledServiceUid: front.serviceUid,
+    linkKind,
+  });
 }
 
 function withOverlapOffsets(layouts: TrainRenderLayout[]): TrainRenderLayout[] {
