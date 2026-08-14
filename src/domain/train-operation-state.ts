@@ -32,19 +32,29 @@ export function operationsForDisplay(
 export function trainsForOperations(
   timetableTrains: Train[],
   operations: ReadonlyMap<string, TrainOperation> | undefined,
+  destinationChangedServiceUids: ReadonlySet<string> = new Set(),
 ): Train[] {
   if (operations === undefined) {
     return timetableTrains;
   }
   return timetableTrains.flatMap((train) => {
     const operation = operations.get(train.train_no);
-    return operation ? [trainWithOperation(train, operation)] : [];
+    return operation
+      ? [
+          trainWithOperation(
+            train,
+            operation,
+            destinationChangedServiceUids.has(train.service_uid),
+          ),
+        ]
+      : [];
   });
 }
 
 export function trainWithOperation(
   train: Train,
   operation: TrainOperation,
+  destinationChanged = false,
 ): Train {
   const destination = operation.destination || train.destination_station;
   if (
@@ -56,7 +66,9 @@ export function trainWithOperation(
   return {
     ...train,
     destination_station: destination,
-    stops: stopsThroughDestination(train.stops, destination),
+    stops: destinationChanged
+      ? stopsThroughDestination(train.stops, destination)
+      : train.stops,
   };
 }
 
@@ -71,7 +83,7 @@ export function delayByTrainNumber(
   );
 }
 
-export function destinationChangedTrainNumbers(
+export function destinationChangedServiceUids(
   timetableTrains: Train[],
   operations: ReadonlyMap<string, TrainOperation> | undefined,
 ): ReadonlySet<string> {
@@ -80,14 +92,29 @@ export function destinationChangedTrainNumbers(
   }
   return new Set(
     timetableTrains.flatMap((train) => {
-      const destination = operations.get(train.train_no)?.destination;
+      const operation = operations.get(train.train_no);
+      const destination = operation?.destination;
       return destination &&
+        !operation.sources.includes("osakaloop") &&
         normalizeStationName(destination) !==
-          normalizeStationName(train.destination_station)
-        ? [train.train_no]
+          normalizeStationName(train.destination_station) &&
+        isIntermediateStop(train.stops, destination)
+        ? [train.service_uid]
         : [];
     }),
   );
+}
+
+function isIntermediateStop(stops: TrainStop[], destination: string): boolean {
+  const normalizedDestination = normalizeStationName(destination);
+  const stationNames = stops.flatMap((stop) =>
+    typeof stop.station_name === "string"
+      ? [normalizeStationName(stop.station_name)]
+      : [],
+  );
+  return stationNames
+    .slice(1, -1)
+    .some((stationName) => stationName === normalizedDestination);
 }
 
 function stopsThroughDestination(

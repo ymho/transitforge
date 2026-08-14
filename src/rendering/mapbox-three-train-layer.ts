@@ -12,6 +12,7 @@ import {
   destinationArcVertex,
 } from "../domain/destination-arc-geometry";
 import type { TrainPosition } from "../domain/train-position";
+import type { TrainFormationLink } from "../domain/train-formation-link";
 import { trainVisualScaleForZoom } from "../domain/train-visual-scale";
 import { weatherHazeMixAtViewportPoint } from "../domain/weather-haze";
 
@@ -76,7 +77,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   private focusedServiceUid?: string;
   private congestionByTrainNumber: ReadonlyMap<string, number> = new Map();
   private delayByTrainNumber: ReadonlyMap<string, number> = new Map();
-  private destinationChangedTrainNumbers: ReadonlySet<string> = new Set();
+  private destinationChangedServiceUids: ReadonlySet<string> = new Set();
   private congestionBarServiceUids: string[] = [];
   private congestionVisible = true;
   private destinationArcsVisible = false;
@@ -88,6 +89,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
       string,
       Coordinate
     >,
+    private readonly formationLinks: ReadonlyMap<string, TrainFormationLink>,
   ) {}
 
   onAdd(map: mapboxgl.Map, gl: WebGLRenderingContext | WebGL2RenderingContext): void {
@@ -246,10 +248,10 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   }
 
   setDestinationChanges(
-    changedTrainNumbers: ReadonlySet<string>,
+    changedServiceUids: ReadonlySet<string>,
     destinationCoordinatesByServiceUid: ReadonlyMap<string, Coordinate>,
   ): void {
-    this.destinationChangedTrainNumbers = changedTrainNumbers;
+    this.destinationChangedServiceUids = changedServiceUids;
     this.destinationCoordinatesByServiceUid = destinationCoordinatesByServiceUid;
     this.updateInstances();
   }
@@ -319,7 +321,10 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     }
 
     const visiblePositions = this.positions.slice(0, maximumTrainInstances);
-    const visibleLayouts = coupledTrainLayouts(visiblePositions);
+    const visibleLayouts = coupledTrainLayouts(
+      visiblePositions,
+      this.formationLinks,
+    ).slice(0, maximumTrainInstances);
     const visibleBearingTrackingKeys = new Set(
       visibleLayouts.map(({ bearingTrackingKey }) => bearingTrackingKey),
     );
@@ -399,8 +404,8 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
       }
 
       const delayMinutes = this.delayByTrainNumber.get(position.trainNo);
-      const destinationChanged = this.destinationChangedTrainNumbers.has(
-        position.trainNo,
+      const destinationChanged = this.destinationChangedServiceUids.has(
+        position.serviceUid,
       );
       if (
         (delayMinutes !== undefined && delayMinutes > 0) ||
