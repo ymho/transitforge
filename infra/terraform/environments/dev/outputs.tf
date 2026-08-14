@@ -5,12 +5,38 @@ output "website_bucket_name" {
 
 output "cloudfront_distribution_id" {
   description = "デプロイ後のキャッシュ無効化に使用するCloudFront Distribution ID。"
-  value       = aws_cloudfront_distribution.website.id
+  value       = var.cloudflare_front_door_enabled ? aws_cloudfront_distribution.viewer[0].id : aws_cloudfront_distribution.website.id
 }
 
 output "viewer_url" {
-  description = "TransitForge開発環境のCloudFront URL。"
+  description = "TransitForge開発環境の正規URL。"
+  value       = var.cloudflare_front_door_enabled ? "https://${var.viewer_domain_name}" : "https://${aws_cloudfront_distribution.website.domain_name}"
+}
+
+output "legacy_cloudfront_url" {
+  description = "独自ドメイン移行前のCloudFront URL。移行後は正規URLへリダイレクトする。"
   value       = "https://${aws_cloudfront_distribution.website.domain_name}"
+}
+
+output "viewer_cloudfront_domain_name" {
+  description = "Cloudflare DNSのCNAME参照先。front door有効化前はnull。"
+  value       = var.cloudflare_front_door_enabled ? aws_cloudfront_distribution.viewer[0].domain_name : null
+}
+
+output "viewer_certificate_dns_validation_records" {
+  description = "Cloudflare DNSへ追加するACM検証用CNAME。"
+  value = {
+    for option in aws_acm_certificate.viewer.domain_validation_options : option.domain_name => {
+      name  = option.resource_record_name
+      type  = option.resource_record_type
+      value = option.resource_record_value
+    }
+  }
+}
+
+output "mtls_trust_store_bucket_name" {
+  description = "Cloudflare AOPのCA証明書bundleを配置する非公開S3バケット名。"
+  value       = aws_s3_bucket.mtls_trust_store.id
 }
 
 output "bedrock_agent_function_name" {
