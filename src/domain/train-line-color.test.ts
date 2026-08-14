@@ -26,7 +26,7 @@ const catalog: StationLineCatalog = {
       ["上郡", 134.35],
       ["岡山", 133.92],
     ]),
-    catalogLine("運行会社B", "東海道線", [
+    catalogLine("運行会社B", "未対応線", [
       ["岐阜", 136.72],
       ["名古屋", 136.88],
     ]),

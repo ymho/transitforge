@@ -141,9 +141,6 @@ function colorForLine(
   destinationCoordinate?: StationCoordinate,
   approachCoordinate?: StationCoordinate,
 ): TrainLineColor {
-  if (candidate.operator !== "運行会社A") {
-    return neutralLine;
-  }
   if (candidate.line.includes("新幹線")) {
     return shinkansenLine;
   }

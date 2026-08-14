@@ -1,4 +1,4 @@
-const congestionEndpoint = "/api/traffic/trainmonitorinfo.json";
+const congestionEndpoint = "/api/traffic/congestion.json";
 
 export const congestionRefreshIntervalMilliseconds = 60 * 1_000;
 export const congestionRetryIntervalMilliseconds = 15 * 60 * 1_000;
