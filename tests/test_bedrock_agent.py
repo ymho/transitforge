@@ -550,6 +550,10 @@ class BedrockAgentTest(unittest.TestCase):
             [leg["trainNumber"] for leg in result["journeys"][0]["legs"]],
             ["1M", "2M", "3M"],
         )
+        self.assertEqual(
+            [leg["serviceDestination"] for leg in result["journeys"][0]["legs"]],
+            ["B", "C", "D"],
+        )
 
         relaxed = handler.journey_search.search_index(
             multi_transfer_index_fixture(), {},
@@ -648,6 +652,10 @@ class BedrockAgentTest(unittest.TestCase):
             ["100M", "200M"],
         )
         self.assertEqual(result["journeys"][0]["arrivalTimeMinutes"], 625)
+        self.assertEqual(
+            [leg["serviceDestination"] for leg in result["journeys"][0]["legs"]],
+            ["乗換", "到着"],
+        )
         self.assertEqual(
             result["journeys"][0]["legs"][0]["stops"],
             [

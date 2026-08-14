@@ -89,6 +89,7 @@ function isJourney(value: unknown): boolean {
     Array.isArray(value.legs) && value.legs.length > 0 && value.legs.every((leg) =>
       isRecord(leg) && typeof leg.serviceUid === "string" && typeof leg.trainNumber === "string" &&
       typeof leg.serviceType === "string" && typeof leg.trainName === "string" &&
+      (leg.serviceDestination === undefined || typeof leg.serviceDestination === "string") &&
       typeof leg.originStation === "string" && typeof leg.destinationStation === "string" &&
       isNonNegativeNumber(leg.departureTimeMinutes) && isNonNegativeNumber(leg.arrivalTimeMinutes) &&
       isNonNegativeNumber(leg.scheduledDepartureTimeMinutes) &&

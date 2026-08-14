@@ -1,4 +1,7 @@
-import type { JourneyRouteResult } from "../domain/direct-route-search";
+import type {
+  JourneyRouteLeg,
+  JourneyRouteResult,
+} from "../domain/direct-route-search";
 import {
   defaultJourneySearchPreferences,
   isJourneyRankingPreference,
@@ -11,6 +14,7 @@ import type {
   ViewerAgentJourneyPlan,
   ViewerAgentResponse,
 } from "../domain/viewer-agent-response";
+import { hideSheet, showSheet } from "./sheet-transition";
 
 export interface AiGuidePanelElements {
   panel: HTMLElement;
@@ -32,12 +36,20 @@ export type AiGuidePromptHandler = (
   preferences: JourneySearchPreferences,
 ) => Promise<ViewerAgentResponse>;
 
+export type JourneyLegAlternativeHandler = (request: {
+  plan: ViewerAgentJourneyPlan;
+  journey: JourneyRouteResult;
+  leg: JourneyRouteLeg;
+  legIndex: number;
+}) => Promise<JourneyRouteLeg[]>;
+
 let journeyPlanSequence = 0;
 const journeyPreferencesStorageKey = "transitforge.journey-search-preferences.v1";
 
 export function configureAiGuidePanel(
   elements: AiGuidePanelElements,
   handlePrompt: AiGuidePromptHandler,
+  findLegAlternatives?: JourneyLegAlternativeHandler,
 ): void {
   const {
     panel,
@@ -76,16 +88,18 @@ export function configureAiGuidePanel(
   });
 
   const setOpen = (open: boolean) => {
-    panel.hidden = !open;
     toggle.ariaExpanded = String(open);
-    if (open && shouldFocusAiGuideInputOnOpen()) {
-      input.focus();
-    } else if (!open) {
-      toggle.focus();
+    if (open) {
+      showSheet(panel);
+      if (shouldFocusAiGuideInputOnOpen()) {
+        input.focus();
+      }
+    } else {
+      hideSheet(panel, () => toggle.focus());
     }
   };
 
-  toggle.addEventListener("click", () => setOpen(panel.hidden));
+  toggle.addEventListener("click", () => setOpen(toggle.ariaExpanded !== "true"));
   close.addEventListener("click", () => setOpen(false));
   panel.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
@@ -111,12 +125,13 @@ export function configureAiGuidePanel(
     input.value = "";
     input.disabled = true;
     submit.disabled = true;
-    submit.textContent = "送信中";
+    submit.ariaLabel = "送信中";
+    submit.dataset.submitting = "true";
     const pendingMessage = appendPendingMessage(messages);
 
     void handlePrompt(prompt, preferences())
       .then((response) => {
-        resolveAssistantMessage(pendingMessage, response);
+        resolveAssistantMessage(pendingMessage, response, findLegAlternatives);
       })
       .catch(() => {
         resolveAssistantMessage(
@@ -127,7 +142,8 @@ export function configureAiGuidePanel(
       .finally(() => {
         input.disabled = false;
         submit.disabled = false;
-        submit.textContent = "送信";
+        submit.ariaLabel = "送信";
+        delete submit.dataset.submitting;
         input.focus();
       });
   });
@@ -176,6 +192,7 @@ function appendPendingMessage(messages: HTMLOListElement): HTMLLIElement {
 function resolveAssistantMessage(
   item: HTMLLIElement,
   response: ViewerAgentResponse,
+  findLegAlternatives?: JourneyLegAlternativeHandler,
 ): void {
   item.classList.remove("ai-guide-message-pending");
   item.removeAttribute("aria-label");
@@ -187,12 +204,15 @@ function resolveAssistantMessage(
     const text = document.createElement("p");
     text.className = "journey-plan-intro";
     text.textContent = visibleAssistantText(response.text);
-    item.append(text, renderJourneyPlan(response.journeyPlan));
+    item.append(text, renderJourneyPlan(response.journeyPlan, findLegAlternatives));
   }
   item.scrollIntoView({ block: "nearest" });
 }
 
-function renderJourneyPlan(plan: ViewerAgentJourneyPlan): HTMLElement {
+function renderJourneyPlan(
+  plan: ViewerAgentJourneyPlan,
+  findLegAlternatives?: JourneyLegAlternativeHandler,
+): HTMLElement {
   const planSequence = ++journeyPlanSequence;
   const container = document.createElement("section");
   container.className = "journey-plan";
@@ -202,6 +222,7 @@ function renderJourneyPlan(plan: ViewerAgentJourneyPlan): HTMLElement {
   tabs.setAttribute("aria-label", "経路候補");
   const panels = document.createElement("div");
   panels.className = "journey-plan-panels";
+  const hasMultipleJourneys = plan.journeys.length > 1;
   if (plan.transferPace && plan.rankingPreference) {
     const conditions = document.createElement("p");
     conditions.className = "journey-plan-conditions";
@@ -214,20 +235,30 @@ function renderJourneyPlan(plan: ViewerAgentJourneyPlan): HTMLElement {
     const panel = document.createElement("article");
     const tabId = `journey-tab-${planSequence}-${index}`;
     const panelId = `journey-panel-${planSequence}-${index}`;
-    tab.type = "button";
-    tab.id = tabId;
-    tab.className = "journey-plan-tab";
-    tab.setAttribute("role", "tab");
-    tab.setAttribute("aria-controls", panelId);
-    tab.setAttribute("aria-selected", String(index === 0));
-    tab.textContent = `候補${index + 1}`;
+    if (hasMultipleJourneys) {
+      tab.type = "button";
+      tab.id = tabId;
+      tab.className = "journey-plan-tab";
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-controls", panelId);
+      tab.setAttribute("aria-selected", String(index === 0));
+      tab.textContent = `候補${index + 1}`;
+    }
     panel.id = panelId;
     panel.className = "journey-plan-panel";
-    panel.setAttribute("role", "tabpanel");
-    panel.setAttribute("aria-labelledby", tabId);
-    panel.tabIndex = 0;
+    if (hasMultipleJourneys) {
+      panel.setAttribute("role", "tabpanel");
+      panel.setAttribute("aria-labelledby", tabId);
+      panel.tabIndex = 0;
+    }
     panel.hidden = index !== 0;
-    panel.append(renderJourneySummary(journey), renderJourneyTimeline(journey));
+    const renderPanel = () => {
+      panel.replaceChildren(
+        renderJourneySummary(journey),
+        renderJourneyTimeline(journey, plan, renderPanel, findLegAlternatives),
+      );
+    };
+    renderPanel();
     tab.addEventListener("click", () => {
       for (const candidate of tabs.querySelectorAll<HTMLButtonElement>("[role=tab]")) {
         candidate.setAttribute("aria-selected", String(candidate === tab));
@@ -237,10 +268,11 @@ function renderJourneyPlan(plan: ViewerAgentJourneyPlan): HTMLElement {
       }
       panel.focus({ preventScroll: true });
     });
-    tabs.append(tab);
+    if (hasMultipleJourneys) tabs.append(tab);
     panels.append(panel);
   });
-  container.append(tabs, panels);
+  if (hasMultipleJourneys) container.append(tabs);
+  container.append(panels);
   return container;
 }
 
@@ -256,7 +288,12 @@ function renderJourneySummary(journey: JourneyRouteResult): HTMLElement {
   return summary;
 }
 
-function renderJourneyTimeline(journey: JourneyRouteResult): HTMLElement {
+function renderJourneyTimeline(
+  journey: JourneyRouteResult,
+  plan: ViewerAgentJourneyPlan,
+  renderPanel: () => void,
+  findLegAlternatives?: JourneyLegAlternativeHandler,
+): HTMLElement {
   const timeline = document.createElement("div");
   timeline.className = "journey-timeline";
   journey.legs.forEach((leg, index) => {
@@ -264,12 +301,14 @@ function renderJourneyTimeline(journey: JourneyRouteResult): HTMLElement {
     segment.className = "journey-leg";
     segment.style.setProperty("--journey-line-color", safeLineColor(leg.lineColor));
     const summary = document.createElement("summary");
-    const trainLabel = [leg.lineName, leg.serviceType, leg.trainName, leg.trainNumber]
-      .filter(Boolean)
-      .join(" ");
+    const trainLabel = [
+      leg.serviceType,
+      leg.trainName,
+      destinationLabel(leg.serviceDestination ?? leg.destinationStation),
+    ].filter(Boolean).join(" ");
     summary.append(
-      stationRow(formatClock(leg.departureTimeMinutes), leg.originStation, "発"),
-      segmentLine(trainLabel),
+      stationRow(formatClock(leg.departureTimeMinutes), leg.originStation),
+      segmentLine(trainLabel, leg.lineName),
     );
     const intermediateStops = leg.stops?.slice(1, -1) ?? [];
     if (intermediateStops.length > 0) {
@@ -288,10 +327,20 @@ function renderJourneyTimeline(journey: JourneyRouteResult): HTMLElement {
       segment.classList.add("journey-leg-without-stops");
     }
     summary.append(
-      stationRow(formatClock(leg.arrivalTimeMinutes), leg.destinationStation, "着"),
+      stationRow(formatClock(leg.arrivalTimeMinutes), leg.destinationStation),
     );
     segment.append(summary);
     timeline.append(segment);
+    if (findLegAlternatives) {
+      timeline.append(renderLegAlternativeControl(
+        plan,
+        journey,
+        leg,
+        index,
+        renderPanel,
+        findLegAlternatives,
+      ));
+    }
     const nextLeg = journey.legs[index + 1];
     if (nextLeg) {
       const transfer = document.createElement("p");
@@ -303,28 +352,99 @@ function renderJourneyTimeline(journey: JourneyRouteResult): HTMLElement {
   return timeline;
 }
 
-function stationRow(time: string, station: string, event: string): HTMLElement {
+function renderLegAlternativeControl(
+  plan: ViewerAgentJourneyPlan,
+  journey: JourneyRouteResult,
+  leg: JourneyRouteLeg,
+  legIndex: number,
+  renderPanel: () => void,
+  findLegAlternatives: JourneyLegAlternativeHandler,
+): HTMLElement {
+  const control = document.createElement("div");
+  control.className = "journey-leg-alternatives";
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "journey-leg-alternatives-trigger";
+  trigger.textContent = "別の列車";
+  trigger.addEventListener("click", () => {
+    trigger.disabled = true;
+    trigger.textContent = "検索中";
+    void findLegAlternatives({ plan, journey, leg, legIndex })
+      .then((alternatives) => {
+        if (alternatives.length === 0) {
+          const empty = document.createElement("span");
+          empty.className = "journey-leg-alternatives-empty";
+          empty.textContent = "変更できる列車はありません";
+          control.replaceChildren(empty);
+          return;
+        }
+        const list = document.createElement("div");
+        list.className = "journey-leg-alternative-list";
+        for (const alternative of alternatives) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = alternativeLabel(alternative);
+          button.addEventListener("click", () => {
+            journey.legs[legIndex] = alternative;
+            journey.departureTimeMinutes = journey.legs[0].departureTimeMinutes;
+            journey.arrivalTimeMinutes = journey.legs.at(-1)?.arrivalTimeMinutes ??
+              journey.arrivalTimeMinutes;
+            renderPanel();
+          });
+          list.append(button);
+        }
+        control.replaceChildren(list);
+      })
+      .catch(() => {
+        const error = document.createElement("span");
+        error.className = "journey-leg-alternatives-empty";
+        error.textContent = "候補を取得できませんでした";
+        control.replaceChildren(error);
+      });
+  });
+  control.append(trigger);
+  return control;
+}
+
+function alternativeLabel(leg: JourneyRouteLeg): string {
+  const train = [leg.serviceType, leg.trainName].filter(Boolean).join(" ");
+  return `${formatClock(leg.departureTimeMinutes)} → ${formatClock(leg.arrivalTimeMinutes)} ${train}`;
+}
+
+function stationRow(time: string, station: string): HTMLElement {
   const row = document.createElement("span");
   row.className = "journey-station";
   const timeElement = document.createElement("time");
   timeElement.textContent = time;
   const name = document.createElement("strong");
   name.textContent = station;
-  const eventElement = document.createElement("small");
-  eventElement.textContent = event;
-  row.append(timeElement, name, eventElement);
+  row.append(timeElement, name);
   return row;
 }
 
-function segmentLine(label: string): HTMLElement {
+function segmentLine(label: string, lineName?: string): HTMLElement {
   const row = document.createElement("span");
   row.className = "journey-segment";
   const line = document.createElement("i");
   line.setAttribute("aria-hidden", "true");
   const text = document.createElement("span");
-  text.textContent = label;
+  const primary = document.createElement("strong");
+  primary.textContent = label;
+  text.append(primary);
+  if (lineName) {
+    const secondary = document.createElement("small");
+    secondary.textContent = lineName;
+    text.append(secondary);
+  }
   row.append(line, text);
   return row;
+}
+
+function destinationLabel(value: string): string {
+  const destination = value.trim().replace(/駅$/u, "");
+  return destination === "" || /行き$/u.test(destination)
+    ? destination
+    : `${destination}行き`;
 }
 
 function formatClock(minutes: number): string {

@@ -33,8 +33,10 @@ import { loadTrainIndex } from "./data/train-index";
 import type { StationCoordinate } from "./data/station-line-catalog";
 import {
   nearestOriginWithDepartures, searchDirectRoutes,
+  type JourneyRouteLeg,
   type DirectRouteSearchHandler,
 } from "./domain/direct-route-search";
+import { journeyLegAlternativeFits } from "./domain/journey-leg-alternative";
 import {
   dateForOperatingRouteTime,
   displayDateTimeLabels,
@@ -86,6 +88,7 @@ import type { ViewerAgentJourneyPlan } from "./domain/viewer-agent-response";
 import {
   configureAiGuidePanel,
   type AiGuidePromptHandler,
+  type JourneyLegAlternativeHandler,
 } from "./presentation/ai-guide-panel";
 import { configureTrainSelection } from "./presentation/train-selection-controller";
 import { createLoadingScreen } from "./presentation/loading-screen";
@@ -110,10 +113,6 @@ const dateTimeInput =
   document.querySelector<HTMLInputElement>("#date-time-input");
 const dateTimeDate = document.querySelector<HTMLElement>("#date-time-date");
 const dateTimeClock = document.querySelector<HTMLTimeElement>("#date-time-clock");
-const displayModeIndicator =
-  document.querySelector<HTMLElement>("#display-mode-indicator");
-const displayModeLabel =
-  document.querySelector<HTMLElement>("#display-mode-label");
 const playToggle = document.querySelector<HTMLButtonElement>("#play-toggle");
 const currentTimeButton =
   document.querySelector<HTMLButtonElement>("#current-time-button");
@@ -180,8 +179,6 @@ if (
   dateTimeInput === null ||
   dateTimeDate === null ||
   dateTimeClock === null ||
-  displayModeIndicator === null ||
-  displayModeLabel === null ||
   playToggle === null ||
   currentTimeButton === null ||
   playbackSpeed === null ||
@@ -227,6 +224,7 @@ loadingScreenRetry.addEventListener("click", () => window.location.reload());
 
 let handleAiGuidePrompt: AiGuidePromptHandler = async () =>
   "列車データを読み込んでいます。準備が整ってからもう一度お試しください。";
+let findJourneyLegAlternatives: JourneyLegAlternativeHandler = async () => [];
 configureAiGuidePanel(
   {
     panel: aiGuidePanel,
@@ -243,6 +241,7 @@ configureAiGuidePanel(
     rankingPreference: journeyRankingPreference,
   },
   (prompt, preferences) => handleAiGuidePrompt(prompt, preferences),
+  (request) => findJourneyLegAlternatives(request),
 );
 
 const initialDateTime = new Date();
@@ -276,7 +275,6 @@ if (!token) {
   });
 
   map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }));
-  map.addControl(new mapboxgl.FullscreenControl());
   const geolocateControl = new mapboxgl.GeolocateControl({
     positionOptions: { enableHighAccuracy: true },
     fitBoundsOptions: { maxZoom: 16 },
@@ -296,6 +294,18 @@ if (!token) {
     {
       onAdd: () => mapTools,
       onRemove: () => mapTools.remove(),
+    },
+    "top-right",
+  );
+  map.addControl(
+    {
+      onAdd: () => {
+        const control = document.createElement("div");
+        control.className = "ai-guide-control mapboxgl-ctrl";
+        control.append(aiGuideToggle);
+        return control;
+      },
+      onRemove: () => aiGuideToggle.remove(),
     },
     "top-right",
   );
@@ -658,6 +668,7 @@ if (!token) {
                   trainNumber: leg.trainNumber,
                   serviceType: leg.serviceType,
                   trainName: leg.trainName,
+                  serviceDestination: leg.serviceDestination,
                   originStation: leg.originStation,
                   destinationStation: leg.destinationStation,
                   departureTimeMinutes: leg.departureTimeMinutes,
@@ -679,6 +690,51 @@ if (!token) {
               }] : [];
             }),
           };
+        };
+        const routeLeg = (leg: {
+          serviceUid: string;
+          trainNumber: string;
+          serviceType: string;
+          trainName: string;
+          serviceDestination?: string;
+          originStation: string;
+          destinationStation: string;
+          departureTimeMinutes: number;
+          arrivalTimeMinutes: number;
+          stops?: JourneyRouteLeg["stops"];
+        }): JourneyRouteLeg => {
+          const line = lineColorIndex.colorForStations(
+            leg.serviceType,
+            leg.destinationStation,
+            leg.stops?.map((stop) => stop.stationName) ?? [
+              leg.originStation,
+              leg.destinationStation,
+            ],
+          );
+          return { ...leg, lineName: line.lineName, lineColor: line.color };
+        };
+        findJourneyLegAlternatives = async ({ plan, journey, leg, legIndex }) => {
+          const response = await searchTravelCandidates({
+            serviceDate: plan.serviceDate ?? formatServiceDate(displayedServiceDateStart),
+            originStation: leg.originStation,
+            destinationStation: leg.destinationStation,
+            departureTimeMinutes: leg.departureTimeMinutes,
+            limit: 5,
+            maxTransfers: 0,
+            transferPace: plan.transferPace,
+            rankingPreference: "earliest-arrival",
+          });
+          return response.journeys
+            .filter((candidate) => candidate.legs.length === 1)
+            .map((candidate) => routeLeg(candidate.legs[0]))
+            .filter((candidate) =>
+              candidate.serviceUid !== leg.serviceUid &&
+              journeyLegAlternativeFits(
+                journey,
+                legIndex,
+                candidate,
+                plan.transferPace,
+              ));
         };
         const disposeDelayUpdates = configureTrainDelayUpdates((snapshot) => {
           latestDelaySnapshot = snapshot;
@@ -863,7 +919,12 @@ function renderDisplayDateTime(date: Date): void {
 
   const labels = displayDateTimeLabels(date);
   dateTimeDate.textContent = labels.date;
-  dateTimeClock.textContent = labels.time;
+  const [hour, minute, second] = labels.time.split(":");
+  const primaryTime = document.createElement("span");
+  primaryTime.textContent = `${hour}:${minute}`;
+  const seconds = document.createElement("small");
+  seconds.textContent = `:${second}`;
+  dateTimeClock.replaceChildren(primaryTime, seconds);
   dateTimeClock.dateTime = date.toISOString();
   if (document.activeElement !== dateTimeInput) {
     dateTimeInput.value = formatDateTimeLocal(date);
@@ -886,11 +947,6 @@ function formatServiceDate(date: Date): string {
     String(date.getMonth() + 1).padStart(2, "0"),
     String(date.getDate()).padStart(2, "0"),
   ].join("-");
-}
-
-function parseDateTimeLocal(value: string): Date | undefined {
-  const date = new Date(value);
-  return value !== "" && !Number.isNaN(date.getTime()) ? date : undefined;
 }
 
 function maximumRouteTimeFor(
@@ -935,24 +991,203 @@ function configureDateTimeInput(
   getDate: () => Date,
   setDate: (date: Date) => void,
 ): void {
-  input.disabled = false;
-  input.value = formatDateTimeLocal(getDate());
-  input.addEventListener("focus", () => {
-    input.value = formatDateTimeLocal(getDate());
-  });
-  input.addEventListener("click", () => {
-    if (!input.disabled && typeof input.showPicker === "function") {
-      input.showPicker();
-    }
-  });
-  input.addEventListener("change", () => {
-    const date = parseDateTimeLocal(input.value);
-    if (date === undefined) {
-      input.value = formatDateTimeLocal(getDate());
+  const display = input.closest<HTMLElement>(".date-time-display");
+  const control = input.closest<HTMLElement>(".time-control");
+  if (!display || !control) {
+    throw new Error("表示日時コントロールが見つかりません。");
+  }
+  const picker = createDateTimePicker();
+  control.append(picker.element);
+  display.setAttribute("aria-controls", picker.element.id);
+
+  let selectedDate = getDate();
+  let visibleMonth = new Date(
+    selectedDate.getFullYear(),
+    selectedDate.getMonth(),
+    1,
+  );
+  const close = () => {
+    picker.element.hidden = true;
+    display.ariaExpanded = "false";
+  };
+  const render = () => {
+    picker.month.textContent = `${visibleMonth.getFullYear()}年${visibleMonth.getMonth() + 1}月`;
+    picker.days.replaceChildren(...calendarDayButtons(
+      visibleMonth,
+      selectedDate,
+      (date) => {
+        selectedDate = new Date(
+          date.getFullYear(),
+          date.getMonth(),
+          date.getDate(),
+          selectedDate.getHours(),
+          selectedDate.getMinutes(),
+          selectedDate.getSeconds(),
+        );
+        render();
+      },
+    ));
+    picker.hour.value = String(selectedDate.getHours()).padStart(2, "0");
+    picker.minute.value = String(selectedDate.getMinutes()).padStart(2, "0");
+    picker.second.value = String(selectedDate.getSeconds()).padStart(2, "0");
+  };
+  const open = () => {
+    if (input.disabled) {
       return;
     }
-    setDate(date);
+    selectedDate = getDate();
+    visibleMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+    render();
+    picker.element.hidden = false;
+    display.ariaExpanded = "true";
+  };
+
+  input.disabled = false;
+  input.value = formatDateTimeLocal(getDate());
+  display.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (picker.element.hidden) {
+      open();
+    } else {
+      close();
+    }
   });
+  display.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      open();
+    } else if (event.key === "Escape") {
+      close();
+    }
+  });
+  picker.previous.addEventListener("click", () => {
+    visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1);
+    render();
+  });
+  picker.next.addEventListener("click", () => {
+    visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1);
+    render();
+  });
+  picker.cancel.addEventListener("click", close);
+  picker.apply.addEventListener("click", () => {
+    selectedDate.setHours(
+      boundedNumber(picker.hour.value, 0, 23),
+      boundedNumber(picker.minute.value, 0, 59),
+      boundedNumber(picker.second.value, 0, 59),
+      0,
+    );
+    setDate(selectedDate);
+    close();
+  });
+  picker.element.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      close();
+      display.focus();
+    }
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (!control.contains(event.target as Node)) {
+      close();
+    }
+  });
+}
+
+interface DateTimePickerElements {
+  element: HTMLElement;
+  month: HTMLElement;
+  days: HTMLElement;
+  previous: HTMLButtonElement;
+  next: HTMLButtonElement;
+  hour: HTMLSelectElement;
+  minute: HTMLSelectElement;
+  second: HTMLSelectElement;
+  cancel: HTMLButtonElement;
+  apply: HTMLButtonElement;
+}
+
+function createDateTimePicker(): DateTimePickerElements {
+  const element = document.createElement("section");
+  element.id = "date-time-picker";
+  element.className = "date-time-picker";
+  element.setAttribute("role", "dialog");
+  element.setAttribute("aria-label", "表示日時を選択");
+  element.hidden = true;
+  const hours = timeSelectOptions(23);
+  const minutesAndSeconds = timeSelectOptions(59);
+  element.innerHTML = `
+    <header>
+      <strong class="date-time-picker-month"></strong>
+      <span class="date-time-picker-navigation">
+        <button type="button" data-picker-action="previous" aria-label="前の月"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12.5 5-5 5 5 5"/></svg></button>
+        <button type="button" data-picker-action="next" aria-label="次の月"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 5 5 5-5 5"/></svg></button>
+      </span>
+    </header>
+    <div class="date-time-picker-weekdays" aria-hidden="true"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>
+    <div class="date-time-picker-days" role="grid"></div>
+    <div class="date-time-picker-time" aria-label="時刻">
+      <label><select data-picker-time="hour" aria-label="時">${hours}</select></label>
+      <b aria-hidden="true">:</b>
+      <label><select data-picker-time="minute" aria-label="分">${minutesAndSeconds}</select></label>
+      <b aria-hidden="true">:</b>
+      <label><select data-picker-time="second" aria-label="秒">${minutesAndSeconds}</select></label>
+    </div>
+    <footer>
+      <button type="button" data-picker-action="cancel" aria-label="閉じる" title="閉じる"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 5.5 9 9m0-9-9 9"/></svg></button>
+      <button type="button" data-picker-action="apply" aria-label="この日時に変更" title="この日時に変更"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4.5 10.5 3.5 3.5 7.5-8"/></svg></button>
+    </footer>`;
+  const required = <T extends Element>(selector: string): T => {
+    const value = element.querySelector<T>(selector);
+    if (!value) throw new Error(`日時ピッカー要素が見つかりません: ${selector}`);
+    return value;
+  };
+  return {
+    element,
+    month: required(".date-time-picker-month"),
+    days: required(".date-time-picker-days"),
+    previous: required('[data-picker-action="previous"]'),
+    next: required('[data-picker-action="next"]'),
+    hour: required('[data-picker-time="hour"]'),
+    minute: required('[data-picker-time="minute"]'),
+    second: required('[data-picker-time="second"]'),
+    cancel: required('[data-picker-action="cancel"]'),
+    apply: required('[data-picker-action="apply"]'),
+  };
+}
+
+function timeSelectOptions(maximum: number): string {
+  return Array.from({ length: maximum + 1 }, (_, value) => {
+    const label = String(value).padStart(2, "0");
+    return `<option value="${label}">${label}</option>`;
+  }).join("");
+}
+
+function calendarDayButtons(
+  month: Date,
+  selected: Date,
+  select: (date: Date) => void,
+): HTMLButtonElement[] {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const start = new Date(first.getFullYear(), first.getMonth(), 1 - first.getDay());
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + index);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("role", "gridcell");
+    button.textContent = String(date.getDate());
+    button.dataset.outsideMonth = String(date.getMonth() !== month.getMonth());
+    button.ariaSelected = String(
+      date.getFullYear() === selected.getFullYear() &&
+      date.getMonth() === selected.getMonth() &&
+      date.getDate() === selected.getDate(),
+    );
+    button.addEventListener("click", () => select(date));
+    return button;
+  });
+}
+
+function boundedNumber(value: string, minimum: number, maximum: number): number {
+  const number = Number.parseInt(value, 10);
+  return Number.isFinite(number) ? Math.min(maximum, Math.max(minimum, number)) : minimum;
 }
 
 interface PlaybackSpeedUiController {
@@ -1287,19 +1522,20 @@ function renderDisplayMode(
   realtimeAvailable: boolean,
   mode: "digital-twin" | "simulation",
 ): void {
-  if (app === null || displayModeIndicator === null || displayModeLabel === null) {
+  if (app === null) {
     return;
   }
   const digitalTwinMode = mode === "digital-twin";
   app.dataset.displayMode = mode;
-  displayModeIndicator.dataset.mode = mode;
-  displayModeLabel.textContent = digitalTwinMode
-    ? "デジタルツインモード"
-    : "シミュレーションモード";
   if (dateTimeInput) {
     dateTimeInput.disabled = digitalTwinMode;
     const display = dateTimeInput.closest<HTMLElement>(".date-time-display");
     display?.setAttribute("aria-disabled", String(digitalTwinMode));
+    if (digitalTwinMode) {
+      const picker = document.querySelector<HTMLElement>("#date-time-picker");
+      if (picker) picker.hidden = true;
+      if (display) display.ariaExpanded = "false";
+    }
   }
   if (currentTimeButton) {
     currentTimeButton.hidden = digitalTwinMode;
