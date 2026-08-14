@@ -61,6 +61,21 @@ resource "aws_cloudfront_trust_store" "cloudflare_aop" {
   }
 }
 
+resource "aws_cloudfront_response_headers_policy" "cloudflare_no_store" {
+  count = var.cloudflare_front_door_enabled ? 1 : 0
+
+  name    = "${var.project_name}-${var.environment}-cloudflare-no-store"
+  comment = "Prevent Cloudflare from caching responses protected by CloudFront Basic authentication"
+
+  custom_headers_config {
+    items {
+      header   = "Cloudflare-CDN-Cache-Control"
+      override = true
+      value    = "no-store"
+    }
+  }
+}
+
 resource "aws_cloudfront_distribution" "viewer" {
   count = var.cloudflare_front_door_enabled ? 1 : 0
 
@@ -93,14 +108,15 @@ resource "aws_cloudfront_distribution" "viewer" {
   }
 
   ordered_cache_behavior {
-    path_pattern             = "/api/agent"
-    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods           = ["GET", "HEAD"]
-    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
-    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
-    target_origin_id         = local.ai_agent_origin
-    viewer_protocol_policy   = "https-only"
-    compress                 = true
+    path_pattern               = "/api/agent"
+    allowed_methods            = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods             = ["GET", "HEAD"]
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
+    target_origin_id           = local.ai_agent_origin
+    viewer_protocol_policy     = "https-only"
+    compress                   = true
 
     function_association {
       event_type   = "viewer-request"
@@ -109,13 +125,14 @@ resource "aws_cloudfront_distribution" "viewer" {
   }
 
   ordered_cache_behavior {
-    path_pattern           = "/viewer-input/*"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD", "OPTIONS"]
-    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_disabled.id
-    target_origin_id       = local.website_origin
-    viewer_protocol_policy = "https-only"
-    compress               = true
+    path_pattern               = "/viewer-input/*"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD", "OPTIONS"]
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
+    target_origin_id           = local.website_origin
+    viewer_protocol_policy     = "https-only"
+    compress                   = true
 
     function_association {
       event_type   = "viewer-request"
@@ -124,12 +141,13 @@ resource "aws_cloudfront_distribution" "viewer" {
   }
 
   default_cache_behavior {
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD", "OPTIONS"]
-    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
-    target_origin_id       = local.website_origin
-    viewer_protocol_policy = "https-only"
-    compress               = true
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD", "OPTIONS"]
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_optimized.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
+    target_origin_id           = local.website_origin
+    viewer_protocol_policy     = "https-only"
+    compress                   = true
 
     function_association {
       event_type   = "viewer-request"
