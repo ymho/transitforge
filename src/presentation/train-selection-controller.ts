@@ -4,6 +4,7 @@ import { coupledTrainLayouts } from "../domain/coupled-train-layout";
 import { TrainFocusSession } from "../domain/train-focus-session";
 import { trainWithOperation } from "../domain/train-operation-state";
 import type { TrainPosition } from "../domain/train-position";
+import type { TrainFormationLink } from "../domain/train-formation-link";
 import type { MapboxThreeTrainLayer } from "../rendering/mapbox-three-train-layer";
 import { timetableProgressRowsFor } from "./train-timetable";
 import { trainTitleFor } from "./train-title";
@@ -23,6 +24,7 @@ export interface TrainSelectionController {
   updateTracking: (positions: TrainPosition[]) => void;
   updateOperations: (
     operations: ReadonlyMap<string, TrainOperation> | undefined,
+    destinationChangedServiceUids?: ReadonlySet<string>,
   ) => void;
 }
 
@@ -31,6 +33,7 @@ export function configureTrainSelection(
   trains: Train[],
   trainLayer: MapboxThreeTrainLayer,
   colorsByServiceUid: ReadonlyMap<string, string>,
+  formationLinks: ReadonlyMap<string, TrainFormationLink>,
   elements: TrainSelectionElements,
 ): TrainSelectionController {
   const trainsByServiceUid = new Map(
@@ -39,6 +42,7 @@ export function configureTrainSelection(
   const coupledServiceUidByServiceUid = new Map<string, string>();
   const focusSession = new TrainFocusSession();
   let operationsByTrainNumber: ReadonlyMap<string, TrainOperation> | undefined;
+  let destinationChangedServiceUids: ReadonlySet<string> = new Set();
   let displayedPositions: TrainPosition[] = [];
   let timetableRenderSignature = "";
 
@@ -54,7 +58,13 @@ export function configureTrainSelection(
 
   const effectiveTrain = (train: Train): Train => {
     const operation = operationsByTrainNumber?.get(train.train_no);
-    return operation ? trainWithOperation(train, operation) : train;
+    return operation
+      ? trainWithOperation(
+          train,
+          operation,
+          destinationChangedServiceUids.has(train.service_uid),
+        )
+      : train;
   };
 
   const updateCoupledTrainButton = (serviceUid: string) => {
@@ -68,7 +78,7 @@ export function configureTrainSelection(
     elements.showCoupled.hidden = coupledTrain === undefined;
     elements.showCoupled.dataset.serviceUid = coupledTrain?.service_uid ?? "";
     const coupledTitle = coupledTrain ? trainTitleFor(coupledTrain) : undefined;
-    elements.showCoupled.textContent = coupledTitle ? "連結列車" : "";
+    elements.showCoupled.textContent = coupledTitle ? "併結" : "";
     elements.showCoupled.ariaLabel = coupledTitle
       ? `${coupledTitle.badge} ${coupledTitle.main}${coupledTitle.suffix ?? ""}の詳細を見る`
       : null;
@@ -232,9 +242,13 @@ export function configureTrainSelection(
       return true;
     },
     updateTracking(positions) {
-      displayedPositions = positions;
+      const layouts = coupledTrainLayouts(positions, formationLinks);
+      displayedPositions = layouts.map(({ position }) => position);
       coupledServiceUidByServiceUid.clear();
-      for (const { position, coupledServiceUid } of coupledTrainLayouts(positions)) {
+      for (const {
+        position,
+        coupledServiceUid,
+      } of layouts) {
         if (coupledServiceUid) {
           coupledServiceUidByServiceUid.set(position.serviceUid, coupledServiceUid);
         }
@@ -243,7 +257,7 @@ export function configureTrainSelection(
       if (!focusedServiceUid) {
         return;
       }
-      const position = positions.find(
+      const position = displayedPositions.find(
         ({ serviceUid }) => serviceUid === focusedServiceUid,
       );
       if (!position) {
@@ -263,8 +277,9 @@ export function configureTrainSelection(
       updateCoupledTrainButton(focusedServiceUid);
       map.jumpTo({ center: position.coordinate });
     },
-    updateOperations(operations) {
+    updateOperations(operations, changedServiceUids = new Set()) {
       operationsByTrainNumber = operations;
+      destinationChangedServiceUids = changedServiceUids;
       timetableRenderSignature = "";
       const focusedServiceUid = focusSession.serviceUid;
       if (focusedServiceUid) {

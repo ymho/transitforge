@@ -8,10 +8,15 @@ describe("train delay data", () => {
       collectedAt: "2026-07-31T08:36:00+00:00",
       failedSources: ["sanin2"],
       trains: {
-        "100A": { delayMinutes: 4, destination: " 姫路 " },
-        "200B": { delayMinutes: 0, destination: "京都" },
-        invalid: { delayMinutes: -1, destination: "大阪" },
-        missingDestination: { delayMinutes: 2 },
+        "100A": {
+          delayMinutes: 4,
+          destination: " 姫路 ",
+          sources: ["source-a"],
+        },
+        "200B": { delayMinutes: 0, destination: "京都", sources: [] },
+        invalid: { delayMinutes: -1, destination: "大阪", sources: [] },
+        missingDestination: { delayMinutes: 2, sources: [] },
+        missingSources: { delayMinutes: 2, destination: "大阪" },
       },
     });
 
@@ -19,13 +24,16 @@ describe("train delay data", () => {
     expect(result.operationsByTrainNumber.get("100A")).toEqual({
       delayMinutes: 4,
       destination: "姫路",
+      sources: ["source-a"],
     });
     expect(result.operationsByTrainNumber.get("200B")).toEqual({
       delayMinutes: 0,
       destination: "京都",
+      sources: [],
     });
     expect(result.operationsByTrainNumber.has("invalid")).toBe(false);
     expect(result.operationsByTrainNumber.has("missingDestination")).toBe(false);
+    expect(result.operationsByTrainNumber.has("missingSources")).toBe(false);
   });
 
   it("rejects unexpected snapshots", () => {

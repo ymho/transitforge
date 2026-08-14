@@ -6,6 +6,7 @@ export const trainDelayRetryIntervalMilliseconds = 15 * 60 * 1_000;
 export interface TrainOperation {
   delayMinutes: number;
   destination: string;
+  sources: readonly string[];
 }
 
 export interface TrainDelaySnapshot {
@@ -47,11 +48,14 @@ export function parseTrainDelays(value: unknown): TrainDelaySnapshot {
       typeof rawTrain.delayMinutes === "number" &&
       Number.isFinite(rawTrain.delayMinutes) &&
       rawTrain.delayMinutes >= 0 &&
-      typeof rawTrain.destination === "string"
+      typeof rawTrain.destination === "string" &&
+      Array.isArray(rawTrain.sources) &&
+      rawTrain.sources.every((source) => typeof source === "string")
     ) {
       operationsByTrainNumber.set(trainNumber, {
         delayMinutes: rawTrain.delayMinutes,
         destination: rawTrain.destination.trim(),
+        sources: rawTrain.sources,
       });
     }
   }
