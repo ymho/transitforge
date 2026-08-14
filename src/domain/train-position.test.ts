@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Path } from "../data/path-catalog";
 import type { Train } from "../data/train-index";
 import {
+  activeTrainPositions,
   destinationCoordinateForTrain,
   interpolatedRouteMeter,
   PathGeometryIndex,
@@ -55,6 +56,19 @@ describe("train position", () => {
     expect(positionForTrain(train, geometry, 1450)?.bearingRadians).toBeCloseTo(Math.PI / 2);
   });
 
+  it("places a delayed train at its corresponding earlier timetable time", () => {
+    const geometry = new PathGeometryIndex([path]);
+
+    expect(
+      activeTrainPositions(
+        [train],
+        geometry,
+        1450,
+        new Map([[train.train_no, 10]]),
+      )[0],
+    ).toMatchObject({ routeMeter: 100, coordinate: [136, 34] });
+  });
+
   it("skips a train without a usable path", () => {
     const geometry = new PathGeometryIndex([path]);
     expect(positionForTrain({ ...train, path_id: undefined }, geometry, 1440)).toBeUndefined();
@@ -77,6 +91,25 @@ describe("train position", () => {
         geometry,
       ),
     ).toEqual([136.5, 34]);
+  });
+
+  it("resolves a changed destination from its matching stop", () => {
+    const geometry = new PathGeometryIndex([path]);
+
+    expect(
+      destinationCoordinateForTrain(
+        {
+          ...train,
+          destination_station: "途中駅",
+          stops: [
+            { station_name: "始発駅", route_meter: 0 },
+            { station_name: "途中駅", route_meter: 100 },
+            { station_name: "終着駅", route_meter: 200 },
+          ],
+        },
+        geometry,
+      ),
+    ).toEqual([136, 34]);
   });
 
 });

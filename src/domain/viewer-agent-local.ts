@@ -17,6 +17,7 @@ import { trainTitleFor } from "../presentation/train-title";
 
 export interface LocalViewerAgentDependencies {
   trains: Train[];
+  getTrains?: () => Train[];
   getPositions: () => TrainPosition[];
   getRouteTime: () => number;
   setRouteTime: (routeTimeMinutes: number) => void;
@@ -58,7 +59,7 @@ export function createLocalViewerAgent(
     const routeTime = dependencies.getRouteTime();
     const search = searchActiveTrainsFromPrompt(
       prompt,
-      dependencies.trains,
+      currentTrains(dependencies),
       dependencies.getPositions(),
       routeTime,
     );
@@ -122,7 +123,7 @@ function arrivalSearchResponse(
   prompt: string,
   dependencies: LocalViewerAgentDependencies,
 ): string | undefined {
-  const search = searchTrainArrivalsFromPrompt(prompt, dependencies.trains);
+  const search = searchTrainArrivalsFromPrompt(prompt, currentTrains(dependencies));
   if (!search.hasSearchTerms || search.targetTimeMinutes === undefined) {
     return undefined;
   }
@@ -153,7 +154,7 @@ async function directRouteSearchResponse(
   prompt: string,
   dependencies: LocalViewerAgentDependencies,
 ): Promise<string | undefined> {
-  const request = directRouteRequestFromPrompt(prompt, dependencies.trains);
+  const request = directRouteRequestFromPrompt(prompt, currentTrains(dependencies));
   if (!request) {
     return undefined;
   }
@@ -185,6 +186,10 @@ async function directRouteSearchResponse(
       ? error.message
       : "直通経路を検索できませんでした。出発駅を入力してください。";
   }
+}
+
+function currentTrains(dependencies: LocalViewerAgentDependencies): Train[] {
+  return dependencies.getTrains?.() ?? dependencies.trains;
 }
 
 function formatRouteTime(routeTimeMinutes: number): string {

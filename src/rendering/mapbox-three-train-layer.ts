@@ -26,6 +26,7 @@ const destinationArcVertexCount =
   maximumTrainInstances * destinationArcSegments * 2;
 const cloudyAtmosphereColor = new THREE.Color("#c8d0d5");
 const delayHaloColor = "#f59e0b";
+const destinationChangeHaloColor = "#ef3340";
 const delayHaloRadiusMeters = 10;
 const delayHaloOpacity = 0.26;
 const focusRingColor = "#4264fb";
@@ -75,6 +76,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   private focusedServiceUid?: string;
   private congestionByTrainNumber: ReadonlyMap<string, number> = new Map();
   private delayByTrainNumber: ReadonlyMap<string, number> = new Map();
+  private destinationChangedTrainNumbers: ReadonlySet<string> = new Set();
   private congestionBarServiceUids: string[] = [];
   private congestionVisible = true;
   private destinationArcsVisible = false;
@@ -82,7 +84,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
 
   constructor(
     private readonly colorsByServiceUid: ReadonlyMap<string, string>,
-    private readonly destinationCoordinatesByServiceUid: ReadonlyMap<
+    private destinationCoordinatesByServiceUid: ReadonlyMap<
       string,
       Coordinate
     >,
@@ -243,6 +245,15 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.updateInstances();
   }
 
+  setDestinationChanges(
+    changedTrainNumbers: ReadonlySet<string>,
+    destinationCoordinatesByServiceUid: ReadonlyMap<string, Coordinate>,
+  ): void {
+    this.destinationChangedTrainNumbers = changedTrainNumbers;
+    this.destinationCoordinatesByServiceUid = destinationCoordinatesByServiceUid;
+    this.updateInstances();
+  }
+
   setCongestionVisible(visible: boolean): void {
     this.congestionVisible = visible;
     if (this.congestionBars) {
@@ -388,7 +399,13 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
       }
 
       const delayMinutes = this.delayByTrainNumber.get(position.trainNo);
-      if (delayMinutes !== undefined && delayMinutes > 0) {
+      const destinationChanged = this.destinationChangedTrainNumbers.has(
+        position.trainNo,
+      );
+      if (
+        (delayMinutes !== undefined && delayMinutes > 0) ||
+        destinationChanged
+      ) {
         // 球形の半透明ハローは地図の向きにかかわらず円形に見え、
         // 列車本体のラインカラーを残したまま遅延を遠景でも判別できる。
         this.instanceTransform.rotation.set(0, 0, 0);
@@ -403,7 +420,9 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
         this.delayHalos.setColorAt(
           delayHaloCount,
           this.instanceColor
-            .set(delayHaloColor)
+            .set(
+              destinationChanged ? destinationChangeHaloColor : delayHaloColor,
+            )
             .lerp(cloudyAtmosphereColor, hazeMix),
         );
         delayHaloCount += 1;
