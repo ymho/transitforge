@@ -51,6 +51,30 @@ export function trainsForOperations(
   });
 }
 
+export function operationsWithTimetableTrainNumberAliases(
+  timetableTrains: Train[],
+  operations: ReadonlyMap<string, TrainOperation> | undefined,
+): ReadonlyMap<string, TrainOperation> | undefined {
+  if (operations === undefined) {
+    return undefined;
+  }
+  const resolved = new Map(operations);
+  for (const train of timetableTrains) {
+    if (resolved.has(train.train_no)) {
+      continue;
+    }
+    const alias = realtimeTrainNumberAlias(train);
+    const operation = alias ? operations.get(alias) : undefined;
+    if (operation && !operation.sources.includes("osakaloop")) {
+      continue;
+    }
+    if (operation) {
+      resolved.set(train.train_no, operation);
+    }
+  }
+  return resolved;
+}
+
 export function trainWithOperation(
   train: Train,
   operation: TrainOperation,
@@ -140,4 +164,12 @@ function stopsThroughDestination(
     lastDestinationIndex += 1;
   }
   return stops.slice(0, lastDestinationIndex + 1);
+}
+
+function realtimeTrainNumberAlias(train: Train): string | undefined {
+  if (!train.service_type.includes("関空快速")) {
+    return undefined;
+  }
+  const match = /^(\d+)M$/u.exec(train.train_no);
+  return match?.[1];
 }

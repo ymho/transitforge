@@ -1,8 +1,9 @@
-export type ViewerDisplayMode = "digital-twin" | "timetable";
+export type ViewerDisplayMode = "digital-twin" | "simulation";
 
 export interface ViewerDisplayModeState {
   mode: ViewerDisplayMode;
-  realtimeVisualizationsEnabled: boolean;
+  congestionEnabled: boolean;
+  simulationControlsEnabled: boolean;
 }
 
 export function resolveViewerDisplayMode(
@@ -11,7 +12,8 @@ export function resolveViewerDisplayMode(
 ): ViewerDisplayModeState {
   const digitalTwinEnabled = realtimeAvailable && digitalTwinRequested;
   return {
-    mode: digitalTwinEnabled ? "digital-twin" : "timetable",
-    realtimeVisualizationsEnabled: digitalTwinEnabled,
+    mode: digitalTwinEnabled ? "digital-twin" : "simulation",
+    congestionEnabled: digitalTwinEnabled,
+    simulationControlsEnabled: !digitalTwinEnabled,
   };
 }
