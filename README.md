@@ -65,7 +65,7 @@ python3 tools/measure_viewer_input.py \
 - AIが実行できる画面操作は検証済みの可逆操作に限定
 - AWS認証情報や秘密値をソース Terraform変数ファイル stateへ保存しない
 
-詳細は[プロダクト概要](docs/product-brief.md) [AI駅員の境界](docs/architecture/ai-operations-guide.md) [ADR](docs/decisions/README.md)を参照
+詳細は[プロダクト概要](docs/product-brief.md) [AI駅員の境界](docs/architecture/ai-operations-guide.md) [Issue運用](.github/ISSUE_MANAGEMENT.md) [ADR](docs/decisions/README.md)を参照
 
 ## AWS
 
