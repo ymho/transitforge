@@ -10,7 +10,11 @@ import { trainWithOperation } from "../domain/train-operation-state";
 import type { TrainPosition } from "../domain/train-position";
 import type { TrainFormationLink } from "../domain/train-formation-link";
 import type { MapboxThreeTrainLayer } from "../rendering/mapbox-three-train-layer";
-import { timetableProgressRowsFor } from "./train-timetable";
+import {
+  timetableDisplayTimeParts,
+  timetableProgressRowsFor,
+} from "./train-timetable";
+import { hideSheet, showSheet } from "./sheet-transition";
 import { trainTitleFor } from "./train-title";
 
 export interface TrainSelectionElements {
@@ -54,9 +58,10 @@ export function configureTrainSelection(
     focusSession.end();
     trainLayer.setFocusedServiceUid(undefined);
     map.stop();
-    elements.details.hidden = true;
-    elements.coupledTabs.hidden = true;
-    elements.coupledTabs.replaceChildren();
+    hideSheet(elements.details, () => {
+      elements.coupledTabs.hidden = true;
+      elements.coupledTabs.replaceChildren();
+    });
     timetableRenderSignature = "";
   };
 
@@ -101,9 +106,18 @@ export function configureTrainSelection(
       tab.type = "button";
       tab.setAttribute("role", "tab");
       tab.setAttribute("aria-selected", String(train.service_uid === serviceUid));
-      tab.textContent = train.destination_station || title.main;
-      tab.ariaLabel = `${title.badge} ${train.destination_station || title.main}方面の時刻表`;
-      tab.addEventListener("click", () => showTrainDetails(train.service_uid));
+      tab.dataset.serviceUid = train.service_uid;
+      tab.textContent = title.badge || title.main;
+      tab.ariaLabel = `${title.badge || title.main}の時刻表`;
+      tab.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+      });
+      tab.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        timetableRenderSignature = "";
+        showTrainDetails(train.service_uid);
+      });
       return tab;
     });
     elements.coupledTabs.replaceChildren(...tabs);
@@ -150,18 +164,24 @@ export function configureTrainSelection(
         const time = document.createElement("span");
         time.className = "train-timetable-time";
         const scheduledTime = document.createElement("span");
-        scheduledTime.textContent = scheduled;
+        appendDisplayTime(scheduledTime, scheduled);
         if (adjusted) {
           scheduledTime.className = "train-timetable-scheduled-replaced";
           const adjustedTime = document.createElement("strong");
-          adjustedTime.textContent = adjusted;
-          time.append(scheduledTime, " → ", adjustedTime);
+          const arrow = document.createElement("span");
+          arrow.className = "train-timetable-delay-arrow";
+          arrow.textContent = "→";
+          appendDisplayTime(adjustedTime, adjusted);
+          time.append(scheduledTime, arrow, adjustedTime);
         } else {
           time.append(scheduledTime);
         }
         timeList.append(time);
         if (index < times.length - 1) {
-          timeList.append(document.createTextNode(" / "));
+          const separator = document.createElement("span");
+          separator.className = "train-timetable-time-separator";
+          separator.setAttribute("aria-hidden", "true");
+          timeList.append(separator);
         }
       }
       item.append(station, timeList);
@@ -181,15 +201,7 @@ export function configureTrainSelection(
       linkKindByServiceUid.get(serviceUid) === "same-operation"
         ? mergeSameOperationTrains(detailTrains, effectiveTrain(timetableTrain))
         : effectiveTrain(timetableTrain);
-    const detailTitles = (
-      linkKindByServiceUid.get(serviceUid) === "coupled-service"
-        ? detailTrains
-        : [train]
-    ).map(trainTitleFor);
-    const title = {
-      badge: distinctText(detailTitles.map(({ badge }) => badge)).join("・"),
-      main: distinctText(detailTitles.map(({ main }) => main)).join("・"),
-    };
+    const title = trainTitleFor(train);
     const badge = document.createElement("span");
     badge.className = "train-service-badge";
     badge.textContent = title.badge;
@@ -197,14 +209,13 @@ export function configureTrainSelection(
     mainTitle.className = "train-title-main";
     mainTitle.textContent = title.main;
     elements.title.replaceChildren(badge, mainTitle);
-    elements.title.style.setProperty(
-      "--train-line-color",
-      colorsByServiceUid.get(train.service_uid) ?? "#a8aaad",
-    );
+    const lineColor = colorsByServiceUid.get(train.service_uid) ?? "#a8aaad";
+    elements.title.style.setProperty("--train-line-color", lineColor);
+    elements.details.style.setProperty("--train-line-color", lineColor);
     const delay = operationsByTrainNumber?.get(train.train_no)?.delayMinutes;
     elements.delay.hidden = delay === undefined || delay <= 0;
     elements.delay.textContent = delay !== undefined && delay > 0 ? `遅延 ${delay}分` : "";
-    elements.details.hidden = false;
+    showSheet(elements.details);
     renderTrainTimetable(
       train,
       displayedPositions.find(({ serviceUid: id }) => id === serviceUid),
@@ -287,7 +298,7 @@ export function configureTrainSelection(
         endFocus();
         return;
       }
-      elements.details.hidden = false;
+      showSheet(elements.details);
       const timetableTrain = trainsByServiceUid.get(focusedServiceUid);
       if (timetableTrain) {
         const effective = effectiveTrain(timetableTrain);
@@ -319,6 +330,16 @@ export function configureTrainSelection(
   };
 }
 
-function distinctText(values: string[]): string[] {
-  return [...new Set(values.filter((value) => value !== ""))];
+function appendDisplayTime(container: HTMLElement, value: string): void {
+  const { clock, event } = timetableDisplayTimeParts(value);
+  const clockElement = document.createElement("span");
+  clockElement.className = "train-timetable-clock";
+  clockElement.textContent = clock;
+  container.append(clockElement);
+  if (event) {
+    const eventElement = document.createElement("small");
+    eventElement.className = "train-timetable-event";
+    eventElement.textContent = event;
+    container.append(eventElement);
+  }
 }

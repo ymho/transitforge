@@ -92,6 +92,7 @@ interface DirectRouteToolMatch {
   trainNumber: string;
   serviceType: string;
   trainName: string;
+  serviceDestination?: string;
   originStation: string;
   destinationStation: string;
   departureTimeMinutes: number;
@@ -434,6 +435,7 @@ async function executeTool(
         trainNumber: route.train.train_no,
         serviceType: route.train.service_type,
         trainName: route.train.train_name,
+        serviceDestination: route.train.destination_station,
         originStation: route.originStation,
         destinationStation: route.destinationStation,
         departureTimeMinutes: route.departureTimeMinutes,

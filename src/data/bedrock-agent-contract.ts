@@ -160,6 +160,7 @@ export interface TravelCandidateSearchResponse {
       trainNumber: string;
       serviceType: string;
       trainName: string;
+      serviceDestination?: string;
       originStation: string;
       destinationStation: string;
       departureTimeMinutes: number;
