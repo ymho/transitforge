@@ -61,6 +61,9 @@ data-builder側へ渡す値はTerraform出力から取得し data-builderの`dev
 
 正規URLは`https://app.ohmyki.com`とする
 Cloudflareのper-hostname Authenticated Origin PullsとCloudFront viewer mTLS required modeを組み合わせる
+Basic認証はCloudFront Functionで維持し Cloudflare AccessやWorkerへ重複実装しない
+独自ドメイン用Distributionは`Cloudflare-CDN-Cache-Control: no-store`を返し Cloudflareキャッシュで認証を迂回させない
+CloudFront自身のキャッシュは維持する
 
 切り替えは次の順で行う
 
@@ -74,9 +77,11 @@ Cloudflareのper-hostname Authenticated Origin PullsとCloudFront viewer mTLS re
 8. `CLOUDFLARE_FRONT_DOOR_ENABLED=true`へ変更してworkflowを手動実行
 9. `viewer_cloudfront_domain_name`を参照するproxied CNAME `app`をCloudflare DNSへ追加
 10. CloudflareのSSLモードをFull strictへ変更して独自ドメインを確認
-11. CloudFrontの直接URLがクライアント証明書なしで失敗することを確認
-12. `LEGACY_CLOUDFRONT_REDIRECT_ENABLED=true`へ変更してworkflowを手動実行
-13. 既存CloudFront URLがパスとクエリを保ったまま正規URLへ308で移動することを確認
+11. 認証なしで401 正しいBasic認証で200になることを確認
+12. 成功応答の`CF-Cache-Status`が`HIT`にならないことを確認
+13. CloudFrontの直接URLがクライアント証明書なしで失敗することを確認
+14. `LEGACY_CLOUDFRONT_REDIRECT_ENABLED=true`へ変更してworkflowを手動実行
+15. 既存CloudFront URLがパスとクエリを保ったまま正規URLへ308で移動することを確認
 
 CA秘密鍵はクライアント証明書を署名した後に破棄する
 証明書更新時は新しいCAを追加したbundleで先にCloudFront trust storeを更新し Cloudflare側を切り替えてから古いCAを外す
