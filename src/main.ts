@@ -17,6 +17,10 @@ import {
   trainDelayRetryIntervalMilliseconds,
 } from "./data/train-delay";
 import {
+  browserPollingEnvironment,
+  createPollingController,
+} from "./data/polling-controller";
+import {
   invokeBedrockAgent,
   queryDailyCongestionAnalysis,
   queryTrainDelayAnalysis,
@@ -252,7 +256,10 @@ if (!token) {
     "top-right",
   );
 
+  let disposeDataUpdates = () => undefined;
   map.on("style.load", async () => {
+    disposeDataUpdates();
+    disposeDataUpdates = () => undefined;
     status.hidden = false;
     loadingScreen.setMessage("地図の表示を整えています。");
     map.setConfigProperty("basemap", "show3dObjects", true);
@@ -368,10 +375,11 @@ if (!token) {
           threeTrainLayer,
           destinationArcsToggle,
         );
-        const setCongestionVisible = configureTrainCongestionUpdates(
+        const congestionUpdates = configureTrainCongestionUpdates(
           threeTrainLayer,
           congestionToggle,
         );
+        const setCongestionVisible = congestionUpdates.setEnabled;
         map.addSource("train-hit-targets", { type: "geojson", data: emptyFeatureCollection() });
         map.addLayer({
           id: "train-hit-targets",
@@ -493,10 +501,14 @@ if (!token) {
             }),
           };
         };
-        configureTrainDelayUpdates((delays) => {
+        const disposeDelayUpdates = configureTrainDelayUpdates((delays) => {
           threeTrainLayer.setDelayByTrainNumber(delays);
           selection.updateDelays(delays);
         });
+        disposeDataUpdates = () => {
+          congestionUpdates.dispose();
+          disposeDelayUpdates();
+        };
 
         displayTime.addEventListener("input", () => updateTrains());
         configureDateTimeInput(
@@ -927,124 +939,59 @@ function setMapToolIcon(button: HTMLButtonElement, symbolId: string): void {
 function configureTrainCongestionUpdates(
   trainLayer: MapboxThreeTrainLayer,
   toggle: HTMLButtonElement,
-): (enabled: boolean) => void {
-  let timer: number | undefined;
-  let nextRefreshAt = Date.now();
-  let refreshing = false;
+): { setEnabled(enabled: boolean): void; dispose(): void } {
   let enabled = true;
-
-  const schedule = (delayMilliseconds: number) => {
-    if (timer !== undefined) {
-      window.clearTimeout(timer);
-      timer = undefined;
-    }
-    nextRefreshAt = Date.now() + delayMilliseconds;
-    if (enabled && document.visibilityState === "visible") {
-      timer = window.setTimeout(() => void refresh(), delayMilliseconds);
-    }
-  };
-
-  const refresh = async () => {
-    if (!enabled || refreshing || document.visibilityState !== "visible") {
-      return;
-    }
-
-    refreshing = true;
-    try {
-      const snapshot = await loadTrainCongestion();
-      trainLayer.setCongestionByTrainNumber(snapshot.byTrainNumber);
-      schedule(congestionRefreshIntervalMilliseconds);
-    } catch (error) {
-      console.warn("列車混雑情報を更新できませんでした。", error);
-      schedule(congestionRetryIntervalMilliseconds);
-    } finally {
-      refreshing = false;
-    }
-  };
+  const poller = createPollingController(
+    {
+      load: loadTrainCongestion,
+      apply: (snapshot) => {
+        trainLayer.setCongestionByTrainNumber(snapshot.byTrainNumber);
+      },
+      onError: (error) =>
+        console.warn("列車混雑情報を更新できませんでした。", error),
+      refreshIntervalMilliseconds: congestionRefreshIntervalMilliseconds,
+      retryIntervalMilliseconds: congestionRetryIntervalMilliseconds,
+    },
+    browserPollingEnvironment(),
+  );
 
   const setEnabled = (nextEnabled: boolean) => {
     enabled = nextEnabled;
     toggle.ariaPressed = String(enabled);
     trainLayer.setCongestionVisible(enabled);
-
-    if (!enabled) {
-      if (timer !== undefined) {
-        window.clearTimeout(timer);
-        timer = undefined;
-      }
-      return;
-    }
-
-    schedule(Math.max(0, nextRefreshAt - Date.now()));
+    poller.setEnabled(enabled);
   };
 
   toggle.disabled = false;
-  toggle.addEventListener("click", () => {
+  const handleToggle = () => {
     setEnabled(toggle.ariaPressed !== "true");
-  });
+  };
+  toggle.addEventListener("click", handleToggle);
 
-  document.addEventListener("visibilitychange", () => {
-    if (!enabled || document.visibilityState !== "visible") {
-      if (timer !== undefined) {
-        window.clearTimeout(timer);
-        timer = undefined;
-      }
-      return;
-    }
-
-    schedule(Math.max(0, nextRefreshAt - Date.now()));
-  });
-
-  void refresh();
-  return setEnabled;
+  return {
+    setEnabled,
+    dispose: () => {
+      toggle.removeEventListener("click", handleToggle);
+      poller.dispose();
+    },
+  };
 }
 
 function configureTrainDelayUpdates(
   onUpdate: (delays: ReadonlyMap<string, number>) => void,
-): void {
-  let timer: number | undefined;
-  let nextRefreshAt = Date.now();
-  let refreshing = false;
-
-  const schedule = (delayMilliseconds: number) => {
-    if (timer !== undefined) {
-      window.clearTimeout(timer);
-    }
-    nextRefreshAt = Date.now() + delayMilliseconds;
-    if (document.visibilityState === "visible") {
-      timer = window.setTimeout(() => void refresh(), delayMilliseconds);
-    }
-  };
-
-  const refresh = async () => {
-    if (refreshing || document.visibilityState !== "visible") {
-      return;
-    }
-    refreshing = true;
-    try {
-      const snapshot = await loadTrainDelays();
-      onUpdate(snapshot.byTrainNumber);
-      schedule(trainDelayRefreshIntervalMilliseconds);
-    } catch (error) {
-      console.warn("列車遅延情報を更新できませんでした。", error);
-      schedule(trainDelayRetryIntervalMilliseconds);
-    } finally {
-      refreshing = false;
-    }
-  };
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState !== "visible") {
-      if (timer !== undefined) {
-        window.clearTimeout(timer);
-        timer = undefined;
-      }
-      return;
-    }
-    schedule(Math.max(0, nextRefreshAt - Date.now()));
-  });
-
-  void refresh();
+): () => void {
+  const poller = createPollingController(
+    {
+      load: loadTrainDelays,
+      apply: (snapshot) => onUpdate(snapshot.byTrainNumber),
+      onError: (error) =>
+        console.warn("列車遅延情報を更新できませんでした。", error),
+      refreshIntervalMilliseconds: trainDelayRefreshIntervalMilliseconds,
+      retryIntervalMilliseconds: trainDelayRetryIntervalMilliseconds,
+    },
+    browserPollingEnvironment(),
+  );
+  return poller.dispose;
 }
 
 function configureDestinationArcs(
