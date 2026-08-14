@@ -48,6 +48,40 @@ variable "basic_auth_credentials_sha256" {
   }
 }
 
+variable "viewer_domain_name" {
+  description = "Cloudflare経由で公開するTransitForgeのFQDN。"
+  type        = string
+  default     = "app.ohmyki.com"
+
+  validation {
+    condition     = can(regex("^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$", var.viewer_domain_name))
+    error_message = "viewer_domain_nameには小文字のFQDNを指定してください。"
+  }
+}
+
+variable "cloudflare_front_door_enabled" {
+  description = "Cloudflare AOPからだけ接続できる独自ドメイン用CloudFrontを作成するか。"
+  type        = bool
+  default     = false
+}
+
+variable "legacy_cloudfront_redirect_enabled" {
+  description = "既存CloudFrontドメインを独自ドメインへのリダイレクト専用に切り替えるか。"
+  type        = bool
+  default     = false
+}
+
+variable "mtls_ca_bundle_key" {
+  description = "CloudFront viewer mTLSが信頼するCA証明書bundleのS3キー。"
+  type        = string
+  default     = "cloudflare-aop/ca.pem"
+
+  validation {
+    condition     = !startswith(var.mtls_ca_bundle_key, "/") && endswith(var.mtls_ca_bundle_key, ".pem")
+    error_message = "mtls_ca_bundle_keyには先頭スラッシュなしのPEMファイルキーを指定してください。"
+  }
+}
+
 variable "bedrock_model_id" {
   description = "AI駅員がConverse APIで使用するAmazon BedrockモデルID。"
   type        = string

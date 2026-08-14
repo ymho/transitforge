@@ -85,6 +85,8 @@ jobs:
       TF_VAR_basic_auth_credentials_sha256: ${{ secrets.BASIC_AUTH_CREDENTIALS_SHA256 }}
       TF_VAR_github_repository: ${{ github.repository }}
       TF_VAR_data_builder_github_oidc_subject: ${{ vars.DATA_BUILDER_GITHUB_OIDC_SUBJECT }}
+      TF_VAR_cloudflare_front_door_enabled: ${{ vars.CLOUDFLARE_FRONT_DOOR_ENABLED || 'false' }}
+      TF_VAR_legacy_cloudfront_redirect_enabled: ${{ vars.LEGACY_CLOUDFRONT_REDIRECT_ENABLED || 'false' }}
 
     steps:
       - name: Check out repository

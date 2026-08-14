@@ -112,6 +112,16 @@ resource "aws_cloudfront_function" "basic_auth" {
   })
 }
 
+resource "aws_cloudfront_function" "legacy_redirect" {
+  name    = "${var.project_name}-${var.environment}-legacy-redirect"
+  comment = "Redirect the legacy CloudFront hostname to the canonical viewer hostname"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code = templatefile("${path.module}/cloudfront-redirect.js.tftpl", {
+    target_hostname = var.viewer_domain_name
+  })
+}
+
 resource "aws_cloudfront_distribution" "website" {
   enabled             = true
   default_root_object = "index.html"
@@ -123,50 +133,62 @@ resource "aws_cloudfront_distribution" "website" {
     origin_id                = local.website_origin
   }
 
-  origin {
-    domain_name = trimsuffix(
-      trimprefix(aws_lambda_function_url.ai_agent.function_url, "https://"),
-      "/",
-    )
-    origin_access_control_id = aws_cloudfront_origin_access_control.ai_agent.id
-    origin_id                = local.ai_agent_origin
+  dynamic "origin" {
+    for_each = var.legacy_cloudfront_redirect_enabled ? [] : [true]
 
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "https-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
+    content {
+      domain_name = trimsuffix(
+        trimprefix(aws_lambda_function_url.ai_agent.function_url, "https://"),
+        "/",
+      )
+      origin_access_control_id = aws_cloudfront_origin_access_control.ai_agent.id
+      origin_id                = local.ai_agent_origin
+
+      custom_origin_config {
+        http_port              = 80
+        https_port             = 443
+        origin_protocol_policy = "https-only"
+        origin_ssl_protocols   = ["TLSv1.2"]
+      }
     }
   }
 
-  ordered_cache_behavior {
-    path_pattern             = "/api/agent"
-    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods           = ["GET", "HEAD"]
-    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
-    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
-    target_origin_id         = local.ai_agent_origin
-    viewer_protocol_policy   = "https-only"
-    compress                 = true
+  dynamic "ordered_cache_behavior" {
+    for_each = var.legacy_cloudfront_redirect_enabled ? [] : [true]
 
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.basic_auth.arn
+    content {
+      path_pattern             = "/api/agent"
+      allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+      cached_methods           = ["GET", "HEAD"]
+      cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+      origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+      target_origin_id         = local.ai_agent_origin
+      viewer_protocol_policy   = "https-only"
+      compress                 = true
+
+      function_association {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.basic_auth.arn
+      }
     }
   }
 
-  ordered_cache_behavior {
-    path_pattern           = "/viewer-input/*"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD", "OPTIONS"]
-    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_disabled.id
-    target_origin_id       = local.website_origin
-    viewer_protocol_policy = "https-only"
-    compress               = true
+  dynamic "ordered_cache_behavior" {
+    for_each = var.legacy_cloudfront_redirect_enabled ? [] : [true]
 
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.basic_auth.arn
+    content {
+      path_pattern           = "/viewer-input/*"
+      allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+      cached_methods         = ["GET", "HEAD", "OPTIONS"]
+      cache_policy_id        = data.aws_cloudfront_cache_policy.caching_disabled.id
+      target_origin_id       = local.website_origin
+      viewer_protocol_policy = "https-only"
+      compress               = true
+
+      function_association {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.basic_auth.arn
+      }
     }
   }
 
@@ -175,12 +197,12 @@ resource "aws_cloudfront_distribution" "website" {
     cached_methods         = ["GET", "HEAD", "OPTIONS"]
     cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
     target_origin_id       = local.website_origin
-    viewer_protocol_policy = "redirect-to-https"
+    viewer_protocol_policy = var.legacy_cloudfront_redirect_enabled ? "allow-all" : "redirect-to-https"
     compress               = true
 
     function_association {
       event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.basic_auth.arn
+      function_arn = var.legacy_cloudfront_redirect_enabled ? aws_cloudfront_function.legacy_redirect.arn : aws_cloudfront_function.basic_auth.arn
     }
   }
 
@@ -192,6 +214,13 @@ resource "aws_cloudfront_distribution" "website" {
 
   viewer_certificate {
     cloudfront_default_certificate = true
+  }
+
+  lifecycle {
+    precondition {
+      condition     = !var.legacy_cloudfront_redirect_enabled || var.cloudflare_front_door_enabled
+      error_message = "legacy_cloudfront_redirect_enabledを有効にする前にcloudflare_front_door_enabledを有効にしてください。"
+    }
   }
 }
 
@@ -210,7 +239,10 @@ data "aws_iam_policy_document" "website" {
     condition {
       test     = "ArnEquals"
       variable = "AWS:SourceArn"
-      values   = [aws_cloudfront_distribution.website.arn]
+      values = compact([
+        var.legacy_cloudfront_redirect_enabled ? null : aws_cloudfront_distribution.website.arn,
+        var.cloudflare_front_door_enabled ? aws_cloudfront_distribution.viewer[0].arn : null,
+      ])
     }
   }
 }

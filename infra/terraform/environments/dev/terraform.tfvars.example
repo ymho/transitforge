@@ -9,3 +9,8 @@ data_builder_github_oidc_subject = "repo:example@12345/transitforge-data-builder
 # printf 'trf:<PASSWORD>' | sha256sum
 basic_auth_username           = "trf"
 basic_auth_credentials_sha256 = "REPLACE_WITH_64_CHARACTER_LOWERCASE_SHA256"
+
+# Cloudflare AOPの準備と疎通確認に合わせて段階的に有効化する。
+viewer_domain_name                      = "app.ohmyki.com"
+cloudflare_front_door_enabled           = false
+legacy_cloudfront_redirect_enabled      = false
