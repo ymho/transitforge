@@ -557,6 +557,26 @@ class BedrockAgentTest(unittest.TestCase):
         )
         self.assertEqual(relaxed["journeys"], [])
 
+    def test_connection_scan_does_not_transfer_between_same_named_stations(self) -> None:
+        request = {
+            "serviceDate": "2026-08-14",
+            "originStation": "清音", "destinationStation": "出雲市",
+            "departureTimeMinutes": 600,
+            "limit": 3, "maxTransfers": 3, "includeTrace": True,
+            "transferPace": "standard", "rankingPreference": "balanced",
+        }
+        index = connection_index_from_legs([
+            ("ibara", "1321D", "清音", "小田", 600, 619),
+            ("sanin", "324D", "小田", "出雲市", 641, 661),
+        ])
+
+        result = handler.journey_search.search_index(index, {}, request)
+
+        self.assertEqual(result["journeys"], [])
+        self.assertGreater(
+            result["trace"]["labelsRejectedByNonUniqueStation"], 0
+        )
+
     def test_connection_scan_can_prefer_a_later_departure(self) -> None:
         request = {
             "serviceDate": "2026-08-14",

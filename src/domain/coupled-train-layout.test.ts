@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { TrainPosition } from "./train-position";
-import { coupledTrainLayouts } from "./coupled-train-layout";
+import {
+  coupledTrainLayouts,
+  trainHitTargetsFor,
+} from "./coupled-train-layout";
 
 describe("coupled train layout", () => {
   it("joins matching rapid services within one train body's total length", () => {
@@ -31,6 +34,12 @@ describe("coupled train layout", () => {
     expect(layouts[0].overlapOffsetMeters).toEqual(
       layouts[1].overlapOffsetMeters,
     );
+    expect(trainHitTargetsFor(layouts)).toEqual([
+      {
+        serviceUid: "airport",
+        coordinate: layouts[0].renderCoordinate,
+      },
+    ]);
   });
 
   it("joins split services within one train body's total length", () => {

@@ -63,7 +63,7 @@ describe("train formation links", () => {
       partnerServiceUid: "north",
       partnerTrainNo: "3216M",
       partnerServiceType: "新快速",
-      linkKind: "coupled-service",
+      linkKind: "same-operation",
     });
   });
 
