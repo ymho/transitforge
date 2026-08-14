@@ -1,7 +1,11 @@
 import type { TrainOperation } from "../data/train-delay";
 import type { Train } from "../data/train-index";
-import { coupledTrainLayouts } from "../domain/coupled-train-layout";
+import {
+  coupledTrainLayouts,
+  type TrainLinkKind,
+} from "../domain/coupled-train-layout";
 import { TrainFocusSession } from "../domain/train-focus-session";
+import { mergeSameOperationTrains } from "../domain/train-detail-service";
 import { trainWithOperation } from "../domain/train-operation-state";
 import type { TrainPosition } from "../domain/train-position";
 import type { TrainFormationLink } from "../domain/train-formation-link";
@@ -13,10 +17,9 @@ export interface TrainSelectionElements {
   details: HTMLElement;
   close: HTMLButtonElement;
   title: HTMLElement;
-  number: HTMLElement;
   delay: HTMLElement;
   stops: HTMLOListElement;
-  showCoupled: HTMLButtonElement;
+  coupledTabs: HTMLElement;
 }
 
 export interface TrainSelectionController {
@@ -40,6 +43,7 @@ export function configureTrainSelection(
     trains.map((train) => [train.service_uid, train]),
   );
   const coupledServiceUidByServiceUid = new Map<string, string>();
+  const linkKindByServiceUid = new Map<string, TrainLinkKind>();
   const focusSession = new TrainFocusSession();
   let operationsByTrainNumber: ReadonlyMap<string, TrainOperation> | undefined;
   let destinationChangedServiceUids: ReadonlySet<string> = new Set();
@@ -51,8 +55,8 @@ export function configureTrainSelection(
     trainLayer.setFocusedServiceUid(undefined);
     map.stop();
     elements.details.hidden = true;
-    elements.showCoupled.hidden = true;
-    elements.showCoupled.dataset.serviceUid = "";
+    elements.coupledTabs.hidden = true;
+    elements.coupledTabs.replaceChildren();
     timetableRenderSignature = "";
   };
 
@@ -67,21 +71,43 @@ export function configureTrainSelection(
       : train;
   };
 
-  const updateCoupledTrainButton = (serviceUid: string) => {
+  const detailTrainsFor = (serviceUid: string): Train[] => {
     const coupledServiceUid = coupledServiceUidByServiceUid.get(serviceUid);
-    const timetableCoupledTrain = coupledServiceUid
-      ? trainsByServiceUid.get(coupledServiceUid)
-      : undefined;
-    const coupledTrain = timetableCoupledTrain
-      ? effectiveTrain(timetableCoupledTrain)
-      : undefined;
-    elements.showCoupled.hidden = coupledTrain === undefined;
-    elements.showCoupled.dataset.serviceUid = coupledTrain?.service_uid ?? "";
-    const coupledTitle = coupledTrain ? trainTitleFor(coupledTrain) : undefined;
-    elements.showCoupled.textContent = coupledTitle ? "併結" : "";
-    elements.showCoupled.ariaLabel = coupledTitle
-      ? `${coupledTitle.badge} ${coupledTitle.main}${coupledTitle.suffix ?? ""}の詳細を見る`
-      : null;
+    return (coupledServiceUid ? [serviceUid, coupledServiceUid] : [serviceUid])
+      .map((id) => trainsByServiceUid.get(id))
+      .filter((train): train is Train => train !== undefined)
+      .map(effectiveTrain)
+      .sort(
+        (left, right) =>
+          left.train_no.localeCompare(right.train_no, "ja", { numeric: true }) ||
+          left.service_uid.localeCompare(right.service_uid),
+      );
+  };
+
+  const renderCoupledTrainTabs = (serviceUid: string) => {
+    const trains = detailTrainsFor(serviceUid);
+    if (
+      trains.length < 2 ||
+      linkKindByServiceUid.get(serviceUid) !== "coupled-service"
+    ) {
+      elements.coupledTabs.hidden = true;
+      elements.coupledTabs.replaceChildren();
+      return;
+    }
+
+    const tabs = trains.map((train) => {
+      const title = trainTitleFor(train);
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", String(train.service_uid === serviceUid));
+      tab.textContent = train.destination_station || title.main;
+      tab.ariaLabel = `${title.badge} ${train.destination_station || title.main}方面の時刻表`;
+      tab.addEventListener("click", () => showTrainDetails(train.service_uid));
+      return tab;
+    });
+    elements.coupledTabs.replaceChildren(...tabs);
+    elements.coupledTabs.hidden = false;
   };
 
   const renderTrainTimetable = (
@@ -150,8 +176,20 @@ export function configureTrainSelection(
     if (!timetableTrain) {
       return;
     }
-    const train = effectiveTrain(timetableTrain);
-    const title = trainTitleFor(train);
+    const detailTrains = detailTrainsFor(serviceUid);
+    const train =
+      linkKindByServiceUid.get(serviceUid) === "same-operation"
+        ? mergeSameOperationTrains(detailTrains, effectiveTrain(timetableTrain))
+        : effectiveTrain(timetableTrain);
+    const detailTitles = (
+      linkKindByServiceUid.get(serviceUid) === "coupled-service"
+        ? detailTrains
+        : [train]
+    ).map(trainTitleFor);
+    const title = {
+      badge: distinctText(detailTitles.map(({ badge }) => badge)).join("・"),
+      main: distinctText(detailTitles.map(({ main }) => main)).join("・"),
+    };
     const badge = document.createElement("span");
     badge.className = "train-service-badge";
     badge.textContent = title.badge;
@@ -159,26 +197,13 @@ export function configureTrainSelection(
     mainTitle.className = "train-title-main";
     mainTitle.textContent = title.main;
     elements.title.replaceChildren(badge, mainTitle);
-    if (title.suffix) {
-      const suffix = document.createElement("small");
-      suffix.className = "train-destination-suffix";
-      suffix.textContent = title.suffix;
-      elements.title.append(suffix);
-    }
     elements.title.style.setProperty(
       "--train-line-color",
       colorsByServiceUid.get(train.service_uid) ?? "#a8aaad",
     );
-    elements.number.textContent = train.train_no || "不明";
     const delay = operationsByTrainNumber?.get(train.train_no)?.delayMinutes;
-    elements.delay.textContent =
-      operationsByTrainNumber === undefined
-        ? "シミュレーション"
-        : delay === undefined
-          ? "情報なし"
-          : delay > 0
-            ? `${delay}分`
-            : "遅れなし";
+    elements.delay.hidden = delay === undefined || delay <= 0;
+    elements.delay.textContent = delay !== undefined && delay > 0 ? `遅延 ${delay}分` : "";
     elements.details.hidden = false;
     renderTrainTimetable(
       train,
@@ -187,7 +212,7 @@ export function configureTrainSelection(
     );
     focusSession.start(train.service_uid);
     trainLayer.setFocusedServiceUid(train.service_uid);
-    updateCoupledTrainButton(train.service_uid);
+    renderCoupledTrainTabs(train.service_uid);
   };
 
   map.on("click", "train-hit-targets", (event) => {
@@ -218,13 +243,6 @@ export function configureTrainSelection(
     map.getCanvas().style.cursor = "";
   });
   elements.close.addEventListener("click", endFocus);
-  elements.showCoupled.addEventListener("click", () => {
-    const serviceUid = elements.showCoupled.dataset.serviceUid;
-    if (serviceUid) {
-      showTrainDetails(serviceUid);
-    }
-  });
-
   return {
     focusTrain(serviceUid) {
       const position = displayedPositions.find(
@@ -245,12 +263,17 @@ export function configureTrainSelection(
       const layouts = coupledTrainLayouts(positions, formationLinks);
       displayedPositions = layouts.map(({ position }) => position);
       coupledServiceUidByServiceUid.clear();
+      linkKindByServiceUid.clear();
       for (const {
         position,
         coupledServiceUid,
+        linkKind,
       } of layouts) {
         if (coupledServiceUid) {
           coupledServiceUidByServiceUid.set(position.serviceUid, coupledServiceUid);
+        }
+        if (linkKind) {
+          linkKindByServiceUid.set(position.serviceUid, linkKind);
         }
       }
       const focusedServiceUid = focusSession.serviceUid;
@@ -267,14 +290,21 @@ export function configureTrainSelection(
       elements.details.hidden = false;
       const timetableTrain = trainsByServiceUid.get(focusedServiceUid);
       if (timetableTrain) {
-        const train = effectiveTrain(timetableTrain);
+        const effective = effectiveTrain(timetableTrain);
+        const train =
+          linkKindByServiceUid.get(focusedServiceUid) === "same-operation"
+            ? mergeSameOperationTrains(
+                detailTrainsFor(focusedServiceUid),
+                effective,
+              )
+            : effective;
         renderTrainTimetable(
           train,
           position,
           operationsByTrainNumber?.get(train.train_no)?.delayMinutes,
         );
       }
-      updateCoupledTrainButton(focusedServiceUid);
+      renderCoupledTrainTabs(focusedServiceUid);
       map.jumpTo({ center: position.coordinate });
     },
     updateOperations(operations, changedServiceUids = new Set()) {
@@ -287,4 +317,8 @@ export function configureTrainSelection(
       }
     },
   };
+}
+
+function distinctText(values: string[]): string[] {
+  return [...new Set(values.filter((value) => value !== ""))];
 }

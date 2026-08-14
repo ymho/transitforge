@@ -270,23 +270,27 @@ function renderJourneyTimeline(journey: JourneyRouteResult): HTMLElement {
     summary.append(
       stationRow(formatClock(leg.departureTimeMinutes), leg.originStation, "発"),
       segmentLine(trainLabel),
-      stationRow(formatClock(leg.arrivalTimeMinutes), leg.destinationStation, "着"),
     );
-    segment.append(summary);
     const intermediateStops = leg.stops?.slice(1, -1) ?? [];
     if (intermediateStops.length > 0) {
-      const stops = document.createElement("ol");
+      const stops = document.createElement("span");
       stops.className = "journey-intermediate-stops";
+      stops.setAttribute("role", "list");
       for (const stop of intermediateStops) {
-        const item = document.createElement("li");
+        const item = document.createElement("span");
+        item.setAttribute("role", "listitem");
         const time = stop.departureTimeMinutes ?? stop.arrivalTimeMinutes;
         item.textContent = `${time === undefined ? "--:--" : formatClock(time)} ${stop.stationName}`;
         stops.append(item);
       }
-      segment.append(stops);
+      summary.append(stops);
     } else {
       segment.classList.add("journey-leg-without-stops");
     }
+    summary.append(
+      stationRow(formatClock(leg.arrivalTimeMinutes), leg.destinationStation, "着"),
+    );
+    segment.append(summary);
     timeline.append(segment);
     const nextLeg = journey.legs[index + 1];
     if (nextLeg) {

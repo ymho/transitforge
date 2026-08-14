@@ -21,6 +21,9 @@ ARRIVAL_TOLERANCE_MINUTES = {
     "latest-departure": 45.0,
     "fewest-transfers": 120.0,
 }
+# v1は駅名だけを持つため同名の別駅を識別できない。
+# 駅IDを持つ後続スキーマへ移行するまで判明した同名駅での乗換を禁止する。
+NON_UNIQUE_STATION_NAMES_V1 = frozenset({"小田"})
 
 
 def search_index(
@@ -52,6 +55,7 @@ def search_index(
         "connectionsBeforeRequestedTime": 0,
         "connectionsWithoutReachableOrigin": 0,
         "labelsRejectedByTransferTime": 0,
+        "labelsRejectedByNonUniqueStation": 0,
         "labelsRejectedByTransferLimit": 0,
         "labelsRejectedByDominance": 0,
         "labelsTrimmed": 0,
@@ -142,6 +146,12 @@ def search_index(
 
             for label in station_labels.get((from_station, boardings - 1), []):
                 if label["lastTrip"] == trip_id:
+                    continue
+                if (
+                    label["lastTrip"] is not None
+                    and from_station in NON_UNIQUE_STATION_NAMES_V1
+                ):
+                    trace["labelsRejectedByNonUniqueStation"] += 1
                     continue
                 transfer_minutes = 0.0
                 if label["lastTrip"] is not None:

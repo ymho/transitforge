@@ -1,0 +1,1226 @@
+/* Figma TransitForge UI Researchを正本にした最終UIレイヤー */
+#app[data-ui-color-mode="day"] {
+  --glass-canvas: #f4f7fb;
+  --glass-surface: rgb(250 250 250 / 70%);
+  --glass-surface-strong: rgb(255 255 255 / 65%);
+  --glass-surface-muted: rgb(120 120 128 / 16%);
+  --glass-surface-dark: rgb(7 12 19 / 88%);
+  --glass-border: rgb(255 255 255 / 72%);
+  --glass-border-subtle: rgb(35 57 82 / 12%);
+  --glass-text: #0c141e;
+  --glass-muted: #556377;
+  --glass-accent: #0096f6;
+  --glass-accent-strong: #0078d4;
+  --glass-accent-soft: rgb(0 150 246 / 12%);
+  --glass-danger: #df3d4f;
+  --glass-shadow: rgb(37 55 78 / 18%);
+  --glass-backdrop: blur(28px) saturate(150%);
+}
+
+#app[data-ui-color-mode="night"] {
+  --glass-canvas: #070c13;
+  --glass-surface: rgb(28 28 30 / 72%);
+  --glass-surface-strong: rgb(44 44 46 / 78%);
+  --glass-surface-muted: rgb(120 120 128 / 24%);
+  --glass-surface-dark: rgb(5 9 15 / 92%);
+  --glass-border: rgb(255 255 255 / 18%);
+  --glass-border-subtle: rgb(255 255 255 / 10%);
+  --glass-text: #f0f5fb;
+  --glass-muted: #a5b5cc;
+  --glass-accent: #18a7ff;
+  --glass-accent-strong: #70c8ff;
+  --glass-accent-soft: rgb(24 167 255 / 16%);
+  --glass-danger: #ff6677;
+  --glass-shadow: rgb(0 0 0 / 42%);
+  --glass-backdrop: blur(30px) saturate(145%);
+}
+
+#app {
+  color: var(--glass-text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Noto Sans JP", system-ui, sans-serif;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 3px solid rgb(0 150 246 / 34%);
+  outline-offset: 2px;
+}
+
+/* 日時とモードは地図上の主情報として一枚のガラス面にまとめる */
+.hud {
+  top: 1.125rem;
+  left: 1.125rem;
+  width: min(24rem, calc(100vw - 8.25rem));
+  min-width: 0;
+  padding: 0.55rem;
+  overflow: visible;
+  border: 1px solid var(--glass-border);
+  border-radius: 1.5rem;
+  color: var(--glass-text);
+  background: var(--glass-surface);
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+}
+
+.time-control,
+.time-control:hover,
+.time-control:focus-within {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--glass-text);
+  background: transparent;
+}
+
+.date-time-display {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  min-height: 3.25rem;
+  padding: 0.55rem 1rem;
+  border: 0;
+  border-radius: 1rem;
+  background: transparent;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.date-time-display[aria-disabled="true"] {
+  cursor: default;
+}
+
+.date-time-display[aria-disabled="true"]:hover {
+  background: transparent;
+}
+
+.date-time-display:hover {
+  background: var(--glass-surface-muted);
+}
+
+.date-time-display:focus-within {
+  border-color: rgb(0 150 246 / 38%);
+  outline: none;
+  background: var(--glass-accent-soft);
+}
+
+.date-time-date {
+  color: var(--glass-muted);
+  font-size: 1rem;
+  font-weight: 510;
+  letter-spacing: -0.025em;
+}
+
+.date-time-clock {
+  color: var(--glass-text);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 510;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
+}
+
+.date-time-input {
+  z-index: 2;
+  padding: 0;
+  appearance: none;
+  touch-action: manipulation;
+}
+
+.date-time-input:disabled {
+  pointer-events: none;
+  cursor: default;
+}
+
+.date-time-input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.display-mode-indicator {
+  gap: 0.45rem;
+  margin: 0.05rem 0.8rem 0.45rem;
+  color: var(--glass-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+}
+
+.display-mode-dot {
+  width: 0.48rem;
+  height: 0.48rem;
+  background: #9a793c;
+  box-shadow: 0 0 0 4px rgb(154 121 60 / 13%);
+}
+
+#map-status {
+  max-height: 3.2rem;
+  margin: 0.25rem 0.8rem 0.45rem;
+  overflow: hidden;
+  color: var(--glass-muted);
+  font-size: 0.66rem;
+  line-height: 1.45;
+}
+
+#app[data-display-mode="digital-twin"] .hud {
+  border-color: rgb(0 168 196 / 42%);
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%), 0 0 0 1px rgb(0 168 196 / 10%);
+}
+
+#app[data-display-mode="digital-twin"] .display-mode-indicator {
+  color: #009bb4;
+}
+
+#app[data-ui-color-mode="night"][data-display-mode="digital-twin"] .display-mode-indicator {
+  color: #68d9eb;
+}
+
+#app[data-display-mode="digital-twin"] .display-mode-dot {
+  background: #00b4ce;
+  box-shadow: 0 0 0 4px rgb(0 180 206 / 14%), 0 0 0.8rem rgb(0 180 206 / 52%);
+}
+
+/* Mapbox標準操作とTransitForge操作を同じフローティング部品として扱う */
+.mapboxgl-ctrl-top-right {
+  top: 0.75rem;
+  right: 0.75rem;
+}
+
+.mapboxgl-ctrl-top-right .mapboxgl-ctrl {
+  margin: 0.4rem 0.4rem 0 0;
+}
+
+.mapboxgl-ctrl-group,
+.map-tools {
+  box-sizing: border-box;
+  width: 2.75rem;
+  overflow: visible;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 18.5rem !important;
+  color: var(--glass-text);
+  background: var(--glass-surface) !important;
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%) !important;
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+}
+
+.mapboxgl-ctrl-group {
+  display: grid;
+  gap: 0;
+  justify-items: center;
+  padding: 0.25rem;
+}
+
+.map-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: center;
+  padding: 0.25rem;
+}
+
+.map-tools > button,
+.playback-speed-menu > button,
+.weather-menu > button,
+.mapboxgl-ctrl-group button {
+  box-sizing: border-box;
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  padding: 0;
+  place-items: center;
+  border: 0 !important;
+  border-radius: 50% !important;
+  color: var(--glass-text);
+  background: transparent !important;
+  transition: color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.mapboxgl-ctrl-group button + button {
+  border-top: 0;
+}
+
+.map-tools button[hidden] {
+  display: none !important;
+}
+
+.map-tools > :not(:first-child) {
+  border-top: 0;
+}
+
+.map-tools button:hover:not(:disabled),
+.playback-speed-menu > button:hover:not(:disabled),
+.weather-menu > button:hover:not(:disabled),
+.mapboxgl-ctrl-group button:hover:not(:disabled) {
+  color: var(--glass-text);
+  background: var(--glass-surface-muted) !important;
+  transform: scale(1.04);
+}
+
+.map-tools > button[aria-pressed="true"],
+.map-tools div > button[aria-pressed="true"],
+.playback-speed-controls button[aria-pressed="true"],
+.weather-controls button[aria-pressed="true"] {
+  color: #ffffff;
+  background: var(--glass-accent) !important;
+  box-shadow: 0 0.35rem 1rem rgb(0 150 246 / 28%);
+}
+
+.map-tools button:disabled,
+.playback-speed-controls button:disabled,
+.weather-controls button:disabled {
+  opacity: 0.28;
+  transform: none;
+}
+
+.map-tool-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+}
+
+.playback-speed-menu,
+.weather-menu {
+  display: grid;
+  width: 2.25rem;
+  justify-items: center;
+  place-items: center;
+}
+
+.playback-speed-menu-toggle {
+  font: 590 0.68rem/2.25rem -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.playback-speed-controls,
+.weather-controls {
+  top: 50%;
+  right: calc(100% + 0.7rem);
+  gap: 0.25rem;
+  padding: 0.3rem;
+  overflow: visible;
+  border: 1px solid var(--glass-border);
+  border-radius: 18.5rem;
+  background: var(--glass-surface-strong);
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%);
+  backdrop-filter: var(--glass-backdrop);
+  transform: translateY(-50%);
+}
+
+.playback-speed-controls button,
+.weather-controls button {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 0;
+  border-radius: 999px;
+  color: var(--glass-text);
+  background: transparent;
+}
+
+.playback-speed-controls button {
+  width: auto;
+  min-width: 3.25rem;
+  padding: 0 0.7rem;
+  font: 590 0.68rem/2.5rem -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* AI駅員はLiquid Glassボタンから大きなシートとして開く */
+.ai-guide-toggle {
+  bottom: 1.25rem;
+  left: 1.25rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 56%);
+  border-radius: 50%;
+  color: #ffffff;
+  background: #0091ff;
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%);
+  backdrop-filter: blur(22px) saturate(160%);
+  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+
+.ai-guide-toggle:hover:not(:disabled) {
+  color: #ffffff;
+  background: #007ddc;
+  box-shadow: 0 0.65rem 2.5rem rgb(0 0 0 / 18%);
+  transform: translateY(-2px) scale(1.03);
+}
+
+.ai-guide-toggle[aria-expanded="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.guide-toggle-icon {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.sheet-grabber {
+  display: none;
+}
+
+.ai-guide-panel {
+  bottom: 1.25rem;
+  left: 1.25rem;
+  display: grid;
+  grid-template-rows: auto minmax(8rem, 1fr) auto auto auto;
+  width: min(40rem, calc(100vw - 2.5rem));
+  height: min(50rem, calc(100dvh - 2.5rem));
+  max-height: calc(100dvh - 2.5rem);
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 1.25rem;
+  color: var(--glass-text);
+  background: var(--glass-surface);
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+}
+
+.ai-guide-panel[hidden] {
+  display: none;
+}
+
+.ai-guide-panel header {
+  min-height: 4rem;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--glass-border-subtle);
+  background: transparent;
+}
+
+.guide-panel-heading {
+  gap: 0.75rem;
+}
+
+.guide-panel-icon {
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 0;
+  border-radius: 0.6rem;
+  color: var(--glass-accent);
+  background: transparent;
+  box-shadow: none;
+}
+
+.guide-panel-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.guide-panel-copy p,
+.ai-guide-panel header .guide-panel-copy p {
+  color: var(--glass-text);
+  font-size: 1.0625rem;
+  font-weight: 590;
+  letter-spacing: -0.026rem;
+}
+
+.guide-panel-copy small,
+.ai-guide-panel header .guide-panel-copy small {
+  color: var(--glass-muted);
+  font-size: 0.68rem;
+}
+
+#close-ai-guide,
+#close-train-details {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: var(--glass-muted);
+  background: rgb(120 120 128 / 16%);
+  font-size: 1.15rem;
+  cursor: pointer;
+}
+
+#close-ai-guide:hover,
+#close-train-details:hover {
+  color: var(--glass-text);
+  background: var(--glass-accent-soft);
+}
+
+.ai-guide-messages {
+  gap: 0.75rem;
+  padding: 1rem;
+  scroll-padding: 1rem;
+}
+
+.ai-guide-message {
+  max-width: 88%;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: 1.15rem;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  box-shadow: none;
+}
+
+.ai-guide-message-assistant {
+  width: auto;
+  max-width: 88%;
+  color: var(--glass-text);
+  background: var(--glass-surface-strong);
+}
+
+.ai-guide-message-user {
+  border-color: rgb(255 255 255 / 22%);
+  color: #ffffff;
+  background: var(--glass-accent);
+  box-shadow: 0 0.45rem 1.4rem rgb(0 150 246 / 18%);
+}
+
+.ai-guide-message-journey {
+  width: 100%;
+  max-width: 100%;
+  padding: 0.8rem;
+  border-radius: 1.35rem;
+}
+
+.ai-guide-message-pending {
+  display: flex;
+  width: fit-content;
+  border-radius: 999px;
+}
+
+.ai-guide-suggestions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.45rem;
+  padding: 0 1rem 0.75rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ai-guide-suggestions::-webkit-scrollbar {
+  display: none;
+}
+
+.ai-guide-suggestions button {
+  min-height: 2.15rem;
+  flex: 0 0 auto;
+  padding: 0.4rem 0.75rem;
+  border: 0;
+  border-radius: 999px;
+  color: var(--glass-text);
+  background: var(--glass-surface-muted);
+  font-size: 0.7rem;
+}
+
+.ai-guide-suggestions button:hover {
+  color: var(--glass-accent-strong);
+  background: var(--glass-accent-soft);
+}
+
+.journey-settings {
+  padding: 0 1rem 0.75rem;
+}
+
+.journey-settings-toggle {
+  min-height: 2.4rem;
+  padding: 0.45rem 0.8rem;
+  border: 0;
+  border-radius: 0.75rem;
+  color: var(--glass-muted);
+  background: var(--glass-surface-muted);
+}
+
+.journey-settings-panel {
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: var(--glass-surface-strong);
+}
+
+.journey-settings-panel label,
+.journey-settings-panel small {
+  color: var(--glass-muted);
+}
+
+.journey-settings-panel select {
+  min-height: 2.2rem;
+  padding: 0.4rem 0.55rem;
+  border: 0;
+  border-radius: 0.6rem;
+  color: var(--glass-text);
+  background: var(--glass-surface-muted);
+}
+
+.ai-guide-form {
+  gap: 0.625rem;
+  padding: 0.625rem 1rem 0.75rem;
+  border-top: 1px solid var(--glass-border-subtle);
+  background: var(--glass-surface-strong);
+}
+
+.ai-guide-form input {
+  min-height: 3.25rem;
+  padding: 0.65rem 1rem;
+  border: 0;
+  border-radius: 18.5rem;
+  color: var(--glass-text);
+  background: var(--glass-surface-muted);
+  box-shadow: none;
+  font-size: 1.0625rem;
+  letter-spacing: -0.026rem;
+}
+
+.ai-guide-form input::placeholder {
+  color: var(--glass-muted);
+}
+
+.ai-guide-form input:focus {
+  border-color: rgb(0 150 246 / 50%);
+  outline: 3px solid rgb(0 150 246 / 12%);
+  box-shadow: none;
+}
+
+.ai-guide-form button {
+  min-width: 4.75rem;
+  min-height: 2.75rem;
+  border: 0;
+  border-radius: 18.5rem;
+  color: #ffffff;
+  background: #0091ff;
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%);
+}
+
+.ai-guide-form button:hover:not(:disabled) {
+  background: var(--glass-accent-strong);
+}
+
+.ai-guide-form button:disabled {
+  opacity: 0.5;
+}
+
+/* 複数経路はSegmented ControlとTipKit型カードで比較する */
+.journey-plan-intro {
+  margin: 0 0 0.75rem;
+  color: var(--glass-text);
+}
+
+.journey-plan {
+  overflow: hidden;
+  border: 0;
+  border-radius: 1.15rem;
+  background: transparent;
+}
+
+.journey-plan-conditions {
+  margin: 0 0 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border: 0;
+  border-radius: 0.8rem;
+  color: var(--glass-muted);
+  background: var(--glass-surface-muted);
+  font-size: 0.64rem;
+}
+
+.journey-plan-tabs {
+  display: grid;
+  grid-auto-columns: minmax(5rem, 1fr);
+  grid-auto-flow: column;
+  gap: 0;
+  padding: 0.25rem;
+  overflow-x: auto;
+  border: 0;
+  border-radius: 999px;
+  background: var(--glass-surface-strong);
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%);
+}
+
+.journey-plan-tab {
+  min-height: 2.25rem;
+  padding: 0.45rem 0.8rem;
+  border: 0;
+  border-radius: 999px;
+  color: var(--glass-muted);
+  background: transparent;
+  font-size: 0.75rem;
+  font-weight: 590;
+}
+
+.journey-plan-tab[aria-selected="true"] {
+  border: 0;
+  color: #0088ff;
+  background: rgb(120 120 128 / 16%);
+  box-shadow: none;
+}
+
+.journey-plan-panels {
+  margin-top: 0.65rem;
+}
+
+.journey-plan-panel {
+  padding: 0.75rem 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--glass-text);
+  background: transparent;
+}
+
+.journey-plan-summary {
+  margin-bottom: 0.8rem;
+  padding: 0.25rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--glass-border-subtle);
+}
+
+.journey-plan-summary strong {
+  color: var(--glass-text);
+  font-size: 1.12rem;
+}
+
+.journey-plan-summary span,
+.journey-station small,
+.journey-segment,
+.journey-intermediate-stops {
+  color: var(--glass-muted);
+}
+
+.journey-leg summary {
+  padding: 0 1rem;
+  border-radius: 0;
+}
+
+.journey-leg summary:hover {
+  background: rgb(120 120 128 / 8%);
+}
+
+.journey-station {
+  grid-template-columns: 3.35rem minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  min-height: 3.25rem;
+}
+
+.journey-station time {
+  font-weight: 750;
+}
+
+.journey-station strong {
+  color: var(--glass-text);
+  font-size: 0.82rem;
+}
+
+.journey-segment {
+  grid-template-columns: 3.35rem minmax(0, 1fr);
+  min-height: 3rem;
+  gap: 0.55rem;
+}
+
+.journey-segment i {
+  width: 0.3rem;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--journey-line-color), transparent 82%);
+}
+
+.journey-segment span::after {
+  display: inline-flex;
+  min-height: 1.55rem;
+  align-items: center;
+  margin-left: 0.5rem;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  content: "途中駅";
+  color: var(--glass-accent-strong);
+  background: var(--glass-accent-soft);
+  font-size: 0.6rem;
+}
+
+.journey-leg[open] .journey-segment span::after {
+  content: "閉じる";
+}
+
+.journey-leg-without-stops .journey-segment span::after {
+  display: none;
+  content: none;
+}
+
+.journey-intermediate-stops {
+  gap: 0.35rem;
+  margin: 0.2rem 0 0.55rem 3.9rem;
+  padding: 0.6rem 0.7rem;
+  border: 0;
+  border-left: 0.25rem solid var(--journey-line-color);
+  border-radius: 0;
+  background: transparent;
+}
+
+.journey-transfer {
+  margin: 0;
+  padding: 0.65rem 1rem 0.65rem 4.9rem;
+  border-radius: 0;
+  color: var(--glass-text);
+  background: var(--glass-accent-soft);
+}
+
+/* 列車詳細も同じガラスシートへ統一する */
+.train-details {
+  right: 5.25rem;
+  bottom: 1.25rem;
+  width: min(23rem, calc(100vw - 6.5rem));
+  max-height: min(68dvh, 40rem);
+  padding: 1rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 1.25rem;
+  color: var(--glass-text);
+  background: var(--glass-surface);
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+}
+
+.train-details h2 {
+  min-height: 2.75rem;
+  margin-right: 0;
+  padding-right: 3.25rem;
+  color: var(--glass-text);
+  font-size: 1.08rem;
+}
+
+.train-service-badge {
+  min-height: 2rem;
+  padding: 0.3rem 0.8rem;
+  border: 0;
+  border-radius: 62.5rem;
+  color: #ffffff;
+  background: var(--train-line-color, #0091ff);
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%);
+  font-size: 0.72rem;
+  font-weight: 510;
+  line-height: 1;
+  text-shadow: none;
+}
+
+.train-detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  min-height: 0;
+  margin: 0;
+}
+
+.train-delay-badge {
+  display: inline-flex;
+  min-height: 1.65rem;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 18.5rem;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 590;
+  line-height: 1;
+}
+
+.train-delay-badge {
+  color: #ffffff;
+  background: #ff3b30;
+}
+
+.train-delay-badge[hidden] {
+  display: none;
+}
+
+.train-timetable h3,
+.train-timetable-scheduled-replaced {
+  color: var(--glass-muted);
+}
+
+.train-details dd,
+.train-timetable-times,
+.train-timetable li {
+  color: var(--glass-text);
+}
+
+.train-timetable {
+  margin-top: 0.8rem;
+}
+
+.train-detail-tabs {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  width: fit-content;
+  max-width: calc(100% - 3.25rem);
+  gap: 0;
+  margin: 0 0 0.65rem;
+  padding: 0.1875rem;
+  overflow-x: auto;
+  border-radius: 18.5rem;
+  background: var(--glass-surface-strong);
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%);
+}
+
+.train-detail-tabs[hidden] {
+  display: none;
+}
+
+.train-detail-tabs button {
+  min-width: 0;
+  min-height: 1.875rem;
+  padding: 0.25rem 0.65rem;
+  border: 0;
+  border-radius: 18.5rem;
+  color: var(--glass-muted);
+  background: transparent;
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 590;
+  cursor: pointer;
+  pointer-events: auto;
+  white-space: nowrap;
+}
+
+#close-train-details {
+  z-index: 3;
+}
+
+.train-detail-tabs button[aria-selected="true"] {
+  color: #0088ff;
+  background: rgb(120 120 128 / 16%);
+}
+
+.train-timetable li {
+  margin-bottom: 0.25rem;
+  border: 0;
+  border-left: 0.22rem solid transparent;
+  border-radius: 0.75rem;
+  background: transparent;
+}
+
+.train-timetable li[data-current-status] {
+  border-left-color: var(--glass-accent);
+  color: var(--glass-text);
+  background: var(--glass-accent-soft);
+}
+
+/* 読み込み中も完成後と同じ素材感にする */
+.loading-screen {
+  color: #f0f5fb;
+  background: #070c13;
+}
+
+.loading-screen-content {
+  width: min(25rem, calc(100vw - 3rem));
+  padding: 1.5rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 1.5rem;
+  background: rgb(18 25 34 / 76%);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 34%);
+  backdrop-filter: blur(24px);
+}
+
+.loading-screen-brand {
+  color: #f0f5fb;
+  font: 590 1.1rem/1.2 -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.loading-screen-message {
+  color: #a5b5cc;
+}
+
+.loading-screen-progress {
+  height: 0.25rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 10%);
+}
+
+.loading-screen-progress span {
+  border-radius: inherit;
+  background: #18a7ff;
+  box-shadow: 0 0 1rem rgb(24 167 255 / 42%);
+}
+
+.loading-screen-retry {
+  border-color: rgb(255 255 255 / 16%);
+  border-radius: 0.85rem;
+  color: #ffffff;
+  background: rgb(255 255 255 / 8%);
+}
+
+@media (max-width: 720px) {
+  .hud {
+    top: 0.65rem;
+    left: 0.65rem;
+    width: calc(100vw - 4.9rem);
+    max-height: none;
+    padding: 0.38rem;
+    overflow: visible;
+    border-radius: 1.25rem;
+  }
+
+  .date-time-display {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    min-height: 3.25rem;
+    padding: 0.55rem 0.75rem;
+  }
+
+  .date-time-clock {
+    grid-row: auto;
+    font-size: 0.9rem;
+  }
+
+  .date-time-date {
+    grid-row: auto;
+    overflow: hidden;
+    font-size: 0.9rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .display-mode-indicator {
+    margin: 0.05rem 0.65rem 0.35rem;
+    font-size: 0.62rem;
+  }
+
+  #map-status {
+    display: none;
+  }
+
+  .mapboxgl-ctrl-top-right {
+    top: 0.35rem;
+    right: 0.35rem;
+  }
+
+  .map-tools {
+    gap: 0;
+    padding: 0.25rem;
+    border-radius: 18.5rem !important;
+  }
+
+  .mapboxgl-ctrl-group,
+  .map-tools {
+    width: 2.75rem;
+  }
+
+  .mapboxgl-ctrl-group {
+    gap: 0;
+    padding: 0.25rem;
+  }
+
+  .map-tools > button,
+  .playback-speed-menu > button,
+  .weather-menu > button,
+  .mapboxgl-ctrl-group button {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .playback-speed-menu,
+  .weather-menu {
+    width: 2.25rem;
+  }
+
+  .map-tool-icon {
+    width: 1.1rem;
+    height: 1.1rem;
+    margin: 0;
+  }
+
+  .playback-speed-menu-toggle {
+    line-height: 2.25rem;
+  }
+
+  .playback-speed-controls,
+  .weather-controls {
+    right: calc(100% + 0.45rem);
+    max-width: calc(100vw - 4.5rem);
+    overflow-x: auto;
+  }
+
+  .ai-guide-toggle {
+    bottom: max(0.8rem, env(safe-area-inset-bottom));
+    left: 0.8rem;
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .ai-guide-panel {
+    inset: auto 0 0;
+    grid-template-rows: auto auto minmax(8rem, 1fr) auto auto auto;
+    width: 100%;
+    height: min(88dvh, 52rem);
+    max-height: 88dvh;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 2.125rem 2.125rem 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .sheet-grabber {
+    display: block;
+    width: 2.25rem;
+    height: 0.3125rem;
+    margin: 0.3125rem auto 0;
+    border-radius: 6.25rem;
+    background: rgb(120 120 128 / 36%);
+  }
+
+  .ai-guide-panel header {
+    position: relative;
+    justify-content: center;
+    min-height: 4rem;
+    padding-top: 0.25rem;
+  }
+
+  .ai-guide-panel .guide-panel-heading {
+    justify-content: center;
+  }
+
+  .ai-guide-panel .guide-panel-icon,
+  .ai-guide-panel .guide-panel-copy small {
+    display: none;
+  }
+
+  .ai-guide-panel #close-ai-guide {
+    position: absolute;
+    left: 1rem;
+  }
+
+  .ai-guide-messages {
+    padding: 0.85rem;
+  }
+
+  .ai-guide-message,
+  .ai-guide-message-assistant {
+    max-width: 92%;
+  }
+
+  .ai-guide-message-journey {
+    max-width: 100%;
+  }
+
+  .ai-guide-suggestions,
+  .journey-settings {
+    padding-right: 0.85rem;
+    padding-left: 0.85rem;
+  }
+
+  .ai-guide-form {
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+  }
+
+  .journey-plan-panel {
+    padding: 0.7rem 0;
+  }
+
+  .journey-settings-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .journey-settings-panel small {
+    grid-column: 1;
+  }
+
+  .train-details {
+    inset: auto 0 0;
+    width: 100%;
+    max-height: min(70dvh, 38rem);
+    padding: 0.9rem max(0.9rem, env(safe-area-inset-right)) max(0.9rem, env(safe-area-inset-bottom)) max(0.9rem, env(safe-area-inset-left));
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 2.125rem 2.125rem 0 0;
+  }
+
+  .train-details::before {
+    display: block;
+    width: 2.25rem;
+    height: 0.3125rem;
+    margin: -0.55rem auto 0.75rem;
+    border-radius: 6.25rem;
+    background: rgb(120 120 128 / 36%);
+    content: "";
+  }
+}
+
+@media (max-width: 430px) {
+  .hud {
+    width: calc(100vw - 4.45rem);
+  }
+
+  .date-time-display {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+  }
+
+  .date-time-clock {
+    grid-row: auto;
+    font-size: 0.84rem;
+  }
+
+  .date-time-date {
+    grid-row: auto;
+    font-size: 0.84rem;
+  }
+
+  .display-mode-indicator {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ai-guide-panel {
+    height: 92dvh;
+    max-height: 92dvh;
+  }
+
+  .journey-station,
+  .journey-segment {
+    grid-template-columns: 3rem minmax(0, 1fr) auto;
+  }
+
+  .journey-segment {
+    grid-template-columns: 3rem minmax(0, 1fr);
+  }
+
+  .journey-intermediate-stops {
+    margin-left: 3.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-guide-toggle,
+  .map-tools button,
+  .mapboxgl-ctrl-group button {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .hud,
+  .mapboxgl-ctrl-group,
+  .map-tools,
+  .ai-guide-panel,
+  .train-details {
+    background: var(--glass-surface-strong) !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

@@ -20,7 +20,10 @@ import {
 } from "./journey-search-preferences";
 import { operatingDayRouteTime } from "./playback";
 import type { TrainPosition } from "./train-position";
-import type { ViewerAgentResponse } from "./viewer-agent-response";
+import type {
+  ViewerAgentJourneyPlan,
+  ViewerAgentResponse,
+} from "./viewer-agent-response";
 import {
   directRouteDepartureTime,
   type DirectRouteSearchResponse,
@@ -74,6 +77,7 @@ export interface BedrockViewerAgentDependencies {
   }) => Promise<DirectRouteSearchResponse>;
   getCurrentDate?: () => Date;
   getJourneySearchPreferences?: () => JourneySearchPreferences;
+  getPreviousJourneyPlan?: () => ViewerAgentJourneyPlan | undefined;
   maximumRouteTime: number;
 }
 
@@ -127,6 +131,13 @@ export async function runBedrockViewerAgent(
   dependencies: BedrockViewerAgentDependencies,
   converse: BedrockAgentConverse,
 ): Promise<ViewerAgentResponse> {
+  const followUpResponse = journeyTrainFollowUpResponse(
+    prompt,
+    dependencies.getPreviousJourneyPlan?.(),
+  );
+  if (followUpResponse) {
+    return followUpResponse;
+  }
   const messages: BedrockAgentMessage[] = [
     {
       role: "user",
@@ -202,9 +213,46 @@ export async function runBedrockViewerAgent(
       }
     }
     messages.push({ role: "user", content: toolResults });
+
+    // 経路候補と表示文は検索ツールの構造化結果だけから確定できる。
+    // モデルへ再送すると不要な画面操作を繰り返す場合があるためここで終了する。
+    const directRouteResponse = directRouteResponseText(toolState);
+    if (directRouteResponse !== undefined) {
+      return directRouteResponse;
+    }
   }
 
   throw new Error("AIの画面操作回数が上限を超えました。");
+}
+
+function journeyTrainFollowUpResponse(
+  prompt: string,
+  plan: ViewerAgentJourneyPlan | undefined,
+): ViewerAgentResponse | undefined {
+  if (!plan) {
+    return undefined;
+  }
+  const normalizedPrompt = prompt.normalize("NFKC").replace(/\s+/gu, "");
+  for (const [journeyIndex, journey] of plan.journeys.entries()) {
+    for (const leg of journey.legs) {
+      const trainName = leg.trainName.trim();
+      const baseTrainName = trainName.replace(/\d+号$/u, "");
+      const keys = [leg.trainNumber, trainName, baseTrainName]
+        .map((value) => value.normalize("NFKC").replace(/\s+/gu, ""))
+        .filter((value) => value.length >= 2);
+      if (!keys.some((value) => normalizedPrompt.includes(value))) {
+        continue;
+      }
+      const serviceLabel = [leg.serviceType, trainName || leg.trainNumber]
+        .filter(Boolean)
+        .join(" ");
+      return {
+        text: `直前の候補${journeyIndex + 1}では${formatStationLabel(leg.originStation)}を${formatClockTime(leg.departureTimeMinutes)}に発車する${serviceLabel}を利用し ${formatStationLabel(leg.destinationStation)}へ向かいます。`,
+        journeyPlan: plan,
+      };
+    }
+  }
+  return undefined;
 }
 
 async function executeTool(
@@ -413,6 +461,10 @@ async function executeTool(
       journeys,
     };
     toolState.response = result;
+    const firstServiceUid = journeys[0]?.legs[0]?.serviceUid;
+    if (firstServiceUid && dependencies.focusTrain(firstServiceUid)) {
+      toolState.focusedServiceUid = firstServiceUid;
+    }
     return result;
   }
 

@@ -621,6 +621,7 @@ describe("Bedrock viewer agent", () => {
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         searchDirectRoutes,
+        getCurrentDate: () => new Date("2026-08-14T23:08:00+09:00"),
         maximumRouteTime: 1_800,
       },
       converse,
@@ -637,9 +638,7 @@ describe("Bedrock viewer agent", () => {
     });
     expect(routeTime).toBe(1_388);
     expect(focusTrain).toHaveBeenCalledWith(train.service_uid);
-    const secondRequest = JSON.stringify(converse.mock.calls[1]?.[0]);
-    expect(secondRequest).toContain('"originStation":"大阪"');
-    expect(secondRequest).toContain('"distanceMeters":420');
+    expect(converse).toHaveBeenCalledTimes(1);
   });
 
   it("formats after-midnight direct-route times without model arithmetic", async () => {
@@ -894,6 +893,63 @@ describe("Bedrock viewer agent", () => {
       (rich.journeyPlan.journeys[0]?.legs[1]?.departureTimeMinutes ?? 0) -
       (rich.journeyPlan.journeys[0]?.legs[0]?.arrivalTimeMinutes ?? 0),
     ).toBe(11);
+  });
+
+  it("answers a train-name follow-up from the previous journey without another model call", async () => {
+    const converse = vi.fn();
+    const result = await runBedrockViewerAgent(
+      "特急やくもは？",
+      {
+        trains: [train],
+        getPositions: () => [],
+        getRouteTime: () => 420,
+        setRouteTime: vi.fn(),
+        focusTrain: vi.fn(),
+        setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(),
+        getPreviousJourneyPlan: () => ({
+          departureDate: "2026-08-15",
+          originStation: "京都",
+          destinationStation: "出雲市",
+          journeys: [{
+            departureTimeMinutes: 483,
+            arrivalTimeMinutes: 737,
+            transferCount: 1,
+            legs: [
+              {
+                serviceUid: "nozomi-99",
+                trainNumber: "99A",
+                serviceType: "新幹線",
+                trainName: "のぞみ",
+                originStation: "京都",
+                destinationStation: "岡山",
+                departureTimeMinutes: 483,
+                arrivalTimeMinutes: 543,
+              },
+              {
+                serviceUid: "yakumo-5",
+                trainNumber: "1005M",
+                serviceType: "特急",
+                trainName: "やくも5号",
+                originStation: "岡山",
+                destinationStation: "出雲市",
+                departureTimeMinutes: 553,
+                arrivalTimeMinutes: 737,
+              },
+            ],
+          }],
+        }),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    const rich = requireRichResponse(result);
+    expect(rich.text).toContain("岡山駅を9時13分に発車する特急 やくも5号");
+    expect(rich.journeyPlan.destinationStation).toBe("出雲市");
+    expect(converse).not.toHaveBeenCalled();
   });
 });
 

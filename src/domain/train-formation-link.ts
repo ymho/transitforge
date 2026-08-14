@@ -4,7 +4,7 @@ export interface TrainFormationLink {
   partnerServiceUid: string;
   partnerTrainNo: string;
   partnerServiceType: string;
-  linkKind: "coupled-service";
+  linkKind: "coupled-service" | "same-operation";
   activeRouteMeterRange?: readonly [number, number];
 }
 
@@ -64,7 +64,8 @@ export function trainFormationLinks(
       partnerServiceUid: partner.service_uid,
       partnerTrainNo: partner.train_no,
       partnerServiceType: partner.service_type,
-      linkKind: "coupled-service",
+      // 時刻表上で分割された同一列車として詳細は1本にまとめる
+      linkKind: "same-operation",
     });
   }
 

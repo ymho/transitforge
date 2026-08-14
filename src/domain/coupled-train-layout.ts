@@ -17,6 +17,11 @@ export interface TrainRenderLayout {
   linkKind?: TrainLinkKind;
 }
 
+export interface TrainHitTarget {
+  serviceUid: string;
+  coordinate: [number, number];
+}
+
 export type TrainLinkKind = "same-operation" | "coupled-service";
 
 const maximumCouplingDistanceMeters = 20;
@@ -150,6 +155,23 @@ export function coupledTrainLayouts(
     coupledServiceUid: layouts.get(position.serviceUid)?.coupledServiceUid,
     linkKind: layouts.get(position.serviceUid)?.linkKind,
   })));
+}
+
+export function trainHitTargetsFor(
+  layouts: TrainRenderLayout[],
+): TrainHitTarget[] {
+  const targets = new Map<string, TrainHitTarget>();
+  for (const layout of [...layouts].sort((left, right) =>
+    left.position.serviceUid.localeCompare(right.position.serviceUid),
+  )) {
+    if (!targets.has(layout.bearingTrackingKey)) {
+      targets.set(layout.bearingTrackingKey, {
+        serviceUid: layout.position.serviceUid,
+        coordinate: layout.renderCoordinate,
+      });
+    }
+  }
+  return [...targets.values()];
 }
 
 function positionsWithFormationPartners(
