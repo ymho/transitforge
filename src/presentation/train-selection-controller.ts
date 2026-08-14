@@ -1,6 +1,8 @@
+import type { TrainOperation } from "../data/train-delay";
 import type { Train } from "../data/train-index";
 import { coupledTrainLayouts } from "../domain/coupled-train-layout";
 import { TrainFocusSession } from "../domain/train-focus-session";
+import { trainWithOperation } from "../domain/train-operation-state";
 import type { TrainPosition } from "../domain/train-position";
 import type { MapboxThreeTrainLayer } from "../rendering/mapbox-three-train-layer";
 import { timetableProgressRowsFor } from "./train-timetable";
@@ -19,7 +21,9 @@ export interface TrainSelectionElements {
 export interface TrainSelectionController {
   focusTrain: (serviceUid: string) => boolean;
   updateTracking: (positions: TrainPosition[]) => void;
-  updateDelays: (delays: ReadonlyMap<string, number>) => void;
+  updateOperations: (
+    operations: ReadonlyMap<string, TrainOperation> | undefined,
+  ) => void;
 }
 
 export function configureTrainSelection(
@@ -34,7 +38,7 @@ export function configureTrainSelection(
   );
   const coupledServiceUidByServiceUid = new Map<string, string>();
   const focusSession = new TrainFocusSession();
-  let delaysByTrainNumber = new Map<string, number>();
+  let operationsByTrainNumber: ReadonlyMap<string, TrainOperation> | undefined;
   let displayedPositions: TrainPosition[] = [];
   let timetableRenderSignature = "";
 
@@ -48,10 +52,18 @@ export function configureTrainSelection(
     timetableRenderSignature = "";
   };
 
+  const effectiveTrain = (train: Train): Train => {
+    const operation = operationsByTrainNumber?.get(train.train_no);
+    return operation ? trainWithOperation(train, operation) : train;
+  };
+
   const updateCoupledTrainButton = (serviceUid: string) => {
     const coupledServiceUid = coupledServiceUidByServiceUid.get(serviceUid);
-    const coupledTrain = coupledServiceUid
+    const timetableCoupledTrain = coupledServiceUid
       ? trainsByServiceUid.get(coupledServiceUid)
+      : undefined;
+    const coupledTrain = timetableCoupledTrain
+      ? effectiveTrain(timetableCoupledTrain)
       : undefined;
     elements.showCoupled.hidden = coupledTrain === undefined;
     elements.showCoupled.dataset.serviceUid = coupledTrain?.service_uid ?? "";
@@ -124,10 +136,11 @@ export function configureTrainSelection(
   };
 
   const showTrainDetails = (serviceUid: string) => {
-    const train = trainsByServiceUid.get(serviceUid);
-    if (!train) {
+    const timetableTrain = trainsByServiceUid.get(serviceUid);
+    if (!timetableTrain) {
       return;
     }
+    const train = effectiveTrain(timetableTrain);
     const title = trainTitleFor(train);
     const badge = document.createElement("span");
     badge.className = "train-service-badge";
@@ -147,9 +160,15 @@ export function configureTrainSelection(
       colorsByServiceUid.get(train.service_uid) ?? "#a8aaad",
     );
     elements.number.textContent = train.train_no || "不明";
-    const delay = delaysByTrainNumber.get(train.train_no);
+    const delay = operationsByTrainNumber?.get(train.train_no)?.delayMinutes;
     elements.delay.textContent =
-      delay === undefined ? "情報なし" : delay > 0 ? `${delay}分` : "遅れなし";
+      operationsByTrainNumber === undefined
+        ? "時刻表表示"
+        : delay === undefined
+          ? "情報なし"
+          : delay > 0
+            ? `${delay}分`
+            : "遅れなし";
     elements.details.hidden = false;
     renderTrainTimetable(
       train,
@@ -232,19 +251,21 @@ export function configureTrainSelection(
         return;
       }
       elements.details.hidden = false;
-      const train = trainsByServiceUid.get(focusedServiceUid);
-      if (train) {
+      const timetableTrain = trainsByServiceUid.get(focusedServiceUid);
+      if (timetableTrain) {
+        const train = effectiveTrain(timetableTrain);
         renderTrainTimetable(
           train,
           position,
-          delaysByTrainNumber.get(train.train_no),
+          operationsByTrainNumber?.get(train.train_no)?.delayMinutes,
         );
       }
       updateCoupledTrainButton(focusedServiceUid);
       map.jumpTo({ center: position.coordinate });
     },
-    updateDelays(delays) {
-      delaysByTrainNumber = new Map(delays);
+    updateOperations(operations) {
+      operationsByTrainNumber = operations;
+      timetableRenderSignature = "";
       const focusedServiceUid = focusSession.serviceUid;
       if (focusedServiceUid) {
         showTrainDetails(focusedServiceUid);
