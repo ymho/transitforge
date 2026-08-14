@@ -108,6 +108,8 @@ resource "aws_lambda_function_url" "ai_agent" {
 }
 
 resource "aws_lambda_permission" "cloudfront_function_url" {
+  count = var.legacy_cloudfront_redirect_enabled ? 0 : 1
+
   statement_id           = "AllowCloudFrontInvokeFunctionUrl"
   action                 = "lambda:InvokeFunctionUrl"
   function_name          = aws_lambda_function.bedrock_agent.function_name
@@ -117,10 +119,34 @@ resource "aws_lambda_permission" "cloudfront_function_url" {
 }
 
 resource "aws_lambda_permission" "cloudfront_invoke_function" {
+  count = var.legacy_cloudfront_redirect_enabled ? 0 : 1
+
   statement_id             = "AllowCloudFrontInvokeFunction"
   action                   = "lambda:InvokeFunction"
   function_name            = aws_lambda_function.bedrock_agent.function_name
   principal                = "cloudfront.amazonaws.com"
   source_arn               = aws_cloudfront_distribution.website.arn
+  invoked_via_function_url = true
+}
+
+resource "aws_lambda_permission" "viewer_cloudfront_function_url" {
+  count = var.cloudflare_front_door_enabled ? 1 : 0
+
+  statement_id           = "AllowViewerCloudFrontInvokeFunctionUrl"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.bedrock_agent.function_name
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = aws_cloudfront_distribution.viewer[0].arn
+  function_url_auth_type = "AWS_IAM"
+}
+
+resource "aws_lambda_permission" "viewer_cloudfront_invoke_function" {
+  count = var.cloudflare_front_door_enabled ? 1 : 0
+
+  statement_id             = "AllowViewerCloudFrontInvokeFunction"
+  action                   = "lambda:InvokeFunction"
+  function_name            = aws_lambda_function.bedrock_agent.function_name
+  principal                = "cloudfront.amazonaws.com"
+  source_arn               = aws_cloudfront_distribution.viewer[0].arn
   invoked_via_function_url = true
 }
