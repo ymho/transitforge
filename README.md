@@ -15,7 +15,7 @@
 - AI駅員による列車検索 到着検索 直通経路検索
 - 混雑と遅延の履歴分析
 
-経路検索はJR西日本内の直通列車を対象とする
+経路検索は収録路線内の直通列車を対象とする
 乗換検索 宿泊 観光 予約は現時点の対象外
 
 ## 開発環境
@@ -32,11 +32,13 @@ npm run dev
 `.env.local`へMapboxの公開アクセストークンを設定する
 ブラウザへ渡る値なので必要最小限の権限に限定し Gitへ追加しない
 
-ローカル表示には`transitforge-data-builder`が生成した次の2ファイルが必要
+ローカル表示には`transitforge-data-builder`が生成した次のファイルが必要
 
 ```text
 viewer-input/train_index.json
 viewer-input/path_catalog.json
+viewer-input/congestion.json
+viewer-input/delays.json
 ```
 
 入力形式は[ビューワー入力仕様](docs/data/viewer-input.md)を参照
@@ -69,7 +71,7 @@ python3 tools/measure_viewer_input.py \
 
 ## AWS
 
-静的ビューワー AI Lambda 混雑と遅延の収集基盤をTerraformで管理する
+静的ビューワー AI Lambda 混雑と遅延の保存基盤をTerraformで管理する
 継続的なデプロイはGitHub ActionsとOIDCを使用し 固定AWSアクセスキーを使わない
 
 環境固有の値はGitHub EnvironmentまたはGit管理外のローカル変数で与える

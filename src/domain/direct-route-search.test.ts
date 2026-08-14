@@ -52,7 +52,7 @@ const catalog: StationLineCatalog = {
   schema_version: "station-line-catalog-v1",
   source: "test",
   lines: [{
-    operator: "JR",
+    operator: "運行会社A",
     line: "テスト線",
     stations: [
       { name: "大阪", coordinate: [135.5, 34.7] },

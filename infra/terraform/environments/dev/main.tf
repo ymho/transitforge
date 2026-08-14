@@ -76,7 +76,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "website" {
     status = "Enabled"
 
     filter {
-      prefix = "api/westjr/"
+      prefix = "api/traffic/"
     }
 
     noncurrent_version_expiration {

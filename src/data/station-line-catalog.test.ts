@@ -9,12 +9,12 @@ describe("station line catalog contract", () => {
       source: "N02-25_Station.geojson",
       lines: [
         {
-          operator: "西日本旅客鉄道",
+          operator: "運行会社A",
           line: "東海道線",
           stations: [{ name: "京都", coordinate: [135.758, 34.986] }],
         },
         {
-          operator: "西日本旅客鉄道",
+          operator: "運行会社A",
           line: "奈良線",
           stations: [{ name: "京都", coordinate: [135.759, 34.985] }],
         },
