@@ -2,6 +2,8 @@ import type { Path, Coordinate } from "../data/path-catalog";
 import type { Train, TrainStop } from "../data/train-index";
 import { normalizeStationName } from "./direct-route-search";
 
+const bearingTangentDistanceMeters = 300;
+
 export interface TrainPosition {
   serviceUid: string;
   trainNo: string;
@@ -177,7 +179,12 @@ class PathGeometry {
       return undefined;
     }
 
-    const tangentDistance = Math.min(10, this.path.route_length_m / 2);
+    // 駅の代表点へ接続する短い折り返しや細かな経路の揺れで
+    // 車両の向きが反転しないよう 前後を広めに見て進行方向を求める
+    const tangentDistance = Math.min(
+      bearingTangentDistanceMeters,
+      this.path.route_length_m / 2,
+    );
     const before = this.coordinateAt(Math.max(0, routeMeter - tangentDistance));
     const after = this.coordinateAt(Math.min(this.path.route_length_m, routeMeter + tangentDistance));
 

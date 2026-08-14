@@ -2,11 +2,19 @@ import { describe, expect, it } from "vitest";
 
 import {
   dateForOperatingRouteTime,
+  displayDateTimeLabels,
   operatingServiceDateStart,
   stepDisplayDateTime,
 } from "./display-date-time";
 
 describe("display date and time", () => {
+  it("formats a compact Japanese date and clock for the viewer", () => {
+    expect(displayDateTimeLabels(new Date(2026, 7, 14, 2, 48, 9))).toEqual({
+      date: "2026年8月14日(金)",
+      time: "02:48:09",
+    });
+  });
+
   it("clamps the day when stepping into a shorter month", () => {
     const result = stepDisplayDateTime(new Date(2024, 0, 31, 12), "month", 1);
 

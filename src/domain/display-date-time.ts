@@ -2,6 +2,25 @@ import { operatingDayStartMinutes } from "./playback";
 
 export type DisplayDateTimeUnit = "month" | "day" | "hour" | "minute" | "second";
 
+export interface DisplayDateTimeLabels {
+  date: string;
+  time: string;
+}
+
+const japaneseWeekdays = ["日", "月", "火", "水", "木", "金", "土"] as const;
+
+export function displayDateTimeLabels(date: Date): DisplayDateTimeLabels {
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  const second = String(date.getSeconds()).padStart(2, "0");
+  return {
+    date: `${date.getFullYear()}年${month}月${day}日(${japaneseWeekdays[date.getDay()]})`,
+    time: `${hour}:${minute}:${second}`,
+  };
+}
+
 export function stepDisplayDateTime(
   date: Date,
   unit: DisplayDateTimeUnit,

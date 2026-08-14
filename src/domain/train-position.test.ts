@@ -53,7 +53,10 @@ describe("train position", () => {
       serviceUid: "service-a",
       coordinate: [136.5, 34],
     });
-    expect(positionForTrain(train, geometry, 1450)?.bearingRadians).toBeCloseTo(Math.PI / 2);
+    expect(positionForTrain(train, geometry, 1450)?.bearingRadians).toBeCloseTo(
+      Math.PI / 2,
+      1,
+    );
   });
 
   it("places a delayed train at its corresponding earlier timetable time", () => {
@@ -110,6 +113,28 @@ describe("train position", () => {
         geometry,
       ),
     ).toEqual([136, 34]);
+  });
+
+  it("ignores a short local reversal when calculating the train bearing", () => {
+    const geometry = new PathGeometryIndex([
+      {
+        path_id: "path-with-local-reversal",
+        coord_count: 5,
+        route_length_m: 218,
+        bbox: [135, 34, 135.002, 34],
+        route_coords: [
+          [135, 34],
+          [135.001, 34],
+          [135.0011, 34],
+          [135.0009, 34],
+          [135.002, 34],
+        ],
+      },
+    ]);
+
+    expect(
+      geometry.positionAt("path-with-local-reversal", 109)?.bearingRadians,
+    ).toBeCloseTo(Math.PI / 2);
   });
 
 });

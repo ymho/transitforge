@@ -37,6 +37,7 @@ import {
 } from "./domain/direct-route-search";
 import {
   dateForOperatingRouteTime,
+  displayDateTimeLabels,
   operatingServiceDateStart,
   stepDisplayDateTime,
 } from "./domain/display-date-time";
@@ -73,6 +74,7 @@ import {
   parseViewerAgentActions,
   type ViewerAgentLayer,
 } from "./domain/viewer-agent-action";
+import { resolveViewerDisplayMode } from "./domain/viewer-display-mode";
 import { runBedrockViewerAgent } from "./domain/viewer-agent-bedrock";
 import { createLocalViewerAgent } from "./domain/viewer-agent-local";
 import {
@@ -100,6 +102,12 @@ const status = document.querySelector<HTMLParagraphElement>("#map-status");
 const displayTime = document.querySelector<HTMLInputElement>("#display-time");
 const dateTimeInput =
   document.querySelector<HTMLInputElement>("#date-time-input");
+const dateTimeDate = document.querySelector<HTMLElement>("#date-time-date");
+const dateTimeClock = document.querySelector<HTMLTimeElement>("#date-time-clock");
+const displayModeIndicator =
+  document.querySelector<HTMLElement>("#display-mode-indicator");
+const displayModeLabel =
+  document.querySelector<HTMLElement>("#display-mode-label");
 const playToggle = document.querySelector<HTMLButtonElement>("#play-toggle");
 const currentTimeButton =
   document.querySelector<HTMLButtonElement>("#current-time-button");
@@ -123,8 +131,8 @@ const congestionToggle =
   document.querySelector<HTMLButtonElement>("#congestion-toggle");
 const destinationArcsToggle =
   document.querySelector<HTMLButtonElement>("#destination-arcs-toggle");
-const timetableModeToggle =
-  document.querySelector<HTMLButtonElement>("#timetable-mode-toggle");
+const digitalTwinModeToggle =
+  document.querySelector<HTMLButtonElement>("#digital-twin-mode-toggle");
 const aiGuidePanel = document.querySelector<HTMLElement>("#ai-guide-panel");
 const aiGuideToggle =
   document.querySelector<HTMLButtonElement>("#ai-guide-toggle");
@@ -157,6 +165,10 @@ if (
   status === null ||
   displayTime === null ||
   dateTimeInput === null ||
+  dateTimeDate === null ||
+  dateTimeClock === null ||
+  displayModeIndicator === null ||
+  displayModeLabel === null ||
   playToggle === null ||
   currentTimeButton === null ||
   playbackSpeed === null ||
@@ -169,7 +181,7 @@ if (
   weatherOptions === null ||
   congestionToggle === null ||
   destinationArcsToggle === null ||
-  timetableModeToggle === null ||
+  digitalTwinModeToggle === null ||
   aiGuidePanel === null ||
   aiGuideToggle === null ||
   closeAiGuide === null ||
@@ -385,7 +397,7 @@ if (!token) {
         };
         applyWeatherToTrains(activeWeatherMode);
         map.addLayer(threeTrainLayer);
-        const setDestinationArcsVisible = configureDestinationArcs(
+        const destinationArcs = configureDestinationArcs(
           threeTrainLayer,
           destinationArcsToggle,
         );
@@ -393,7 +405,6 @@ if (!token) {
           threeTrainLayer,
           congestionToggle,
         );
-        const setCongestionVisible = congestionUpdates.setEnabled;
         map.addSource("train-hit-targets", { type: "geojson", data: emptyFeatureCollection() });
         map.addLayer({
           id: "train-hit-targets",
@@ -425,7 +436,7 @@ if (!token) {
         );
         let displayedPositions: TrainPosition[] = [];
         let latestDelaySnapshot: TrainDelaySnapshot | undefined;
-        let timetableModeRequested = false;
+        let digitalTwinModeRequested = true;
         let appliedOperations:
           | ReadonlyMap<string, TrainOperation>
           | undefined
@@ -441,14 +452,20 @@ if (!token) {
             now,
             false,
           );
-          const operations = timetableModeRequested
-            ? undefined
-            : realtimeOperations;
-          renderTimetableModeToggle(
-            timetableModeToggle,
+          const modeState = resolveViewerDisplayMode(
             realtimeOperations !== undefined,
-            operations === undefined,
+            digitalTwinModeRequested,
           );
+          const operations = modeState.mode === "digital-twin"
+            ? realtimeOperations
+            : undefined;
+          renderDisplayMode(
+            digitalTwinModeToggle,
+            realtimeOperations !== undefined,
+            modeState.mode,
+          );
+          congestionUpdates.setAvailable(modeState.realtimeVisualizationsEnabled);
+          destinationArcs.setAvailable(modeState.realtimeVisualizationsEnabled);
           if (operations === appliedOperations) {
             return;
           }
@@ -478,7 +495,7 @@ if (!token) {
           );
           selection.updateOperations(operations, destinationChanges);
           console.info("[TransitForge] 列車表示モード", {
-            mode: operations ? "realtime" : "timetable",
+            mode: operations ? "digital-twin" : "timetable",
             timetableTrains: trainIndex.trains.length,
             displayedTrains: displayTrains.length,
             unobservedTimetableEntries: operations
@@ -601,11 +618,11 @@ if (!token) {
         };
 
         displayTime.addEventListener("input", () => updateTrains());
-        timetableModeToggle.addEventListener("click", () => {
-          if (timetableModeToggle.disabled) {
+        digitalTwinModeToggle.addEventListener("click", () => {
+          if (digitalTwinModeToggle.disabled) {
             return;
           }
-          timetableModeRequested = timetableModeToggle.ariaPressed !== "true";
+          digitalTwinModeRequested = digitalTwinModeToggle.ariaPressed !== "true";
           updateTrains();
         });
         configureDateTimeInput(
@@ -626,9 +643,9 @@ if (!token) {
           visible: boolean,
         ) => {
           if (layer === "congestion") {
-            setCongestionVisible(visible);
+            congestionUpdates.setEnabled(visible);
           } else {
-            setDestinationArcsVisible(visible);
+            destinationArcs.setEnabled(visible);
           }
         };
         const localAiGuidePromptHandler = createLocalViewerAgent({
@@ -761,11 +778,17 @@ function currentBrowserCoordinate(): Promise<StationCoordinate> {
 }
 
 function renderDisplayDateTime(date: Date): void {
-  if (dateTimeInput === null || document.activeElement === dateTimeInput) {
+  if (dateTimeInput === null || dateTimeDate === null || dateTimeClock === null) {
     return;
   }
 
-  dateTimeInput.value = formatDateTimeLocal(date);
+  const labels = displayDateTimeLabels(date);
+  dateTimeDate.textContent = labels.date;
+  dateTimeClock.textContent = labels.time;
+  dateTimeClock.dateTime = date.toISOString();
+  if (document.activeElement !== dateTimeInput) {
+    dateTimeInput.value = formatDateTimeLocal(date);
+  }
 }
 
 function formatDateTimeLocal(date: Date): string {
@@ -1038,8 +1061,9 @@ function setMapToolIcon(button: HTMLButtonElement, symbolId: string): void {
 function configureTrainCongestionUpdates(
   trainLayer: MapboxThreeTrainLayer,
   toggle: HTMLButtonElement,
-): { setEnabled(enabled: boolean): void; dispose(): void } {
-  let enabled = true;
+): RealtimeVisualizationController & { dispose(): void } {
+  let requested = true;
+  let available = false;
   const poller = createPollingController(
     {
       load: loadTrainCongestion,
@@ -1054,21 +1078,34 @@ function configureTrainCongestionUpdates(
     browserPollingEnvironment(),
   );
 
+  const apply = () => {
+    const visible = available && requested;
+    toggle.disabled = !available;
+    toggle.ariaPressed = String(visible);
+    toggle.title = available ? "混雑表示" : "デジタルツインモードで利用可能";
+    toggle.ariaLabel = available
+      ? "混雑表示"
+      : "混雑表示はデジタルツインモードで利用可能";
+    trainLayer.setCongestionVisible(visible);
+    poller.setEnabled(visible);
+  };
   const setEnabled = (nextEnabled: boolean) => {
-    enabled = nextEnabled;
-    toggle.ariaPressed = String(enabled);
-    trainLayer.setCongestionVisible(enabled);
-    poller.setEnabled(enabled);
+    requested = nextEnabled;
+    apply();
   };
 
-  toggle.disabled = false;
   const handleToggle = () => {
-    setEnabled(toggle.ariaPressed !== "true");
+    setEnabled(!requested);
   };
   toggle.addEventListener("click", handleToggle);
+  apply();
 
   return {
     setEnabled,
+    setAvailable: (nextAvailable) => {
+      available = nextAvailable;
+      apply();
+    },
     dispose: () => {
       toggle.removeEventListener("click", handleToggle);
       poller.dispose();
@@ -1105,39 +1142,71 @@ function configureTrainDelayUpdates(
   return poller.dispose;
 }
 
-function renderTimetableModeToggle(
+function renderDisplayMode(
   toggle: HTMLButtonElement,
   realtimeAvailable: boolean,
-  timetableMode: boolean,
+  mode: "digital-twin" | "timetable",
 ): void {
-  toggle.disabled = !realtimeAvailable;
-  toggle.ariaPressed = String(timetableMode);
-  if (!realtimeAvailable) {
-    toggle.ariaLabel = "リアルタイム情報がないため時刻表どおりに表示中";
-    toggle.title = "リアルタイム情報がないため時刻表どおりに表示中";
-  } else if (timetableMode) {
-    toggle.ariaLabel = "リアルタイム表示に戻す";
-    toggle.title = "リアルタイム表示に戻す";
-  } else {
-    toggle.ariaLabel = "時刻表どおりに表示";
-    toggle.title = "時刻表どおりに表示";
+  if (app === null || displayModeIndicator === null || displayModeLabel === null) {
+    return;
   }
+  const digitalTwinMode = mode === "digital-twin";
+  app.dataset.displayMode = mode;
+  displayModeIndicator.dataset.mode = mode;
+  displayModeLabel.textContent = digitalTwinMode
+    ? "デジタルツインモード"
+    : "時刻表モード";
+  toggle.disabled = !realtimeAvailable;
+  toggle.ariaPressed = String(digitalTwinMode);
+  if (!realtimeAvailable) {
+    toggle.ariaLabel = "リアルタイム情報がないため時刻表モード";
+    toggle.title = "リアルタイム情報がないため時刻表モード";
+  } else if (digitalTwinMode) {
+    toggle.ariaLabel = "デジタルツインモードを終了";
+    toggle.title = "デジタルツインモード: オン";
+  } else {
+    toggle.ariaLabel = "デジタルツインモードを開始";
+    toggle.title = "デジタルツインモード: オフ";
+  }
+}
+
+interface RealtimeVisualizationController {
+  setEnabled(enabled: boolean): void;
+  setAvailable(available: boolean): void;
 }
 
 function configureDestinationArcs(
   trainLayer: MapboxThreeTrainLayer,
   toggle: HTMLButtonElement,
-): (enabled: boolean) => void {
-  const setEnabled = (enabled: boolean) => {
-    toggle.ariaPressed = String(enabled);
-    trainLayer.setDestinationArcsVisible(enabled);
+): RealtimeVisualizationController {
+  let requested = false;
+  let available = false;
+  const apply = () => {
+    const visible = available && requested;
+    toggle.disabled = !available;
+    toggle.ariaPressed = String(visible);
+    toggle.title = available ? "行先アーチ" : "デジタルツインモードで利用可能";
+    toggle.ariaLabel = available
+      ? "行先アーチ"
+      : "行先アーチはデジタルツインモードで利用可能";
+    trainLayer.setDestinationArcsVisible(visible);
+  };
+  const setEnabled = (nextEnabled: boolean) => {
+    requested = nextEnabled;
+    apply();
   };
 
-  toggle.disabled = false;
   toggle.addEventListener("click", () => {
-    setEnabled(toggle.ariaPressed !== "true");
+    setEnabled(!requested);
   });
-  return setEnabled;
+  apply();
+  return {
+    setEnabled,
+    setAvailable: (nextAvailable) => {
+      available = nextAvailable;
+      apply();
+    },
+  };
 }
 
 function monitorFrames(): void {
