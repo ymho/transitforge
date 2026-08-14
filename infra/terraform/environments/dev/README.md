@@ -36,8 +36,13 @@ terraform plan
 | 種別 | 名前 | 用途 |
 | --- | --- | --- |
 | Variable | `AWS_DEPLOY_ROLE_ARN` | TransitForgeのデプロイロール |
+| Variable | `TF_STATE_BUCKET` | 共有stateバケット |
+| Variable | `DATA_BUILDER_GITHUB_OIDC_SUBJECT` | owner IDとrepository IDを含むdata-builderのimmutable subject |
 | Secret | `BASIC_AUTH_CREDENTIALS_SHA256` | 開発環境の認証情報ハッシュ |
 | Secret | `VITE_MAPBOX_ACCESS_TOKEN` | Mapbox公開トークン |
+
+TransitForge自身のOIDC対象リポジトリはGitHub Actionsの`github.repository`から渡す
+必須VariableはAWS認証より前に検証し 未設定ならapplyを開始しない
 
 data-builder側へ渡す値はTerraform出力から取得し data-builderの`dev` environmentへ設定する
 

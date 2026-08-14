@@ -55,6 +55,9 @@ jobs:
 
       - name: Validate Terraform dev environment
         working-directory: infra/terraform/environments/dev
+        env:
+          TF_VAR_github_repository: example/transitforge
+          TF_VAR_data_builder_github_oidc_subject: repo:example@12345/transitforge-data-builder@67890:environment:dev
         run: |
           terraform init -backend=false -input=false
           terraform validate
@@ -75,13 +78,23 @@ jobs:
       cancel-in-progress: false
     env:
       AWS_REGION: ap-northeast-1
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
       TF_VAR_basic_auth_credentials_sha256: ${{ secrets.BASIC_AUTH_CREDENTIALS_SHA256 }}
+      TF_VAR_github_repository: ${{ github.repository }}
+      TF_VAR_data_builder_github_oidc_subject: ${{ vars.DATA_BUILDER_GITHUB_OIDC_SUBJECT }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Validate deployment inputs
+        run: |
+          : "${AWS_DEPLOY_ROLE_ARN:?dev Environment variable AWS_DEPLOY_ROLE_ARN is required}"
+          : "${TF_STATE_BUCKET:?dev Environment variable TF_STATE_BUCKET is required}"
+          : "${TF_VAR_data_builder_github_oidc_subject:?dev Environment variable DATA_BUILDER_GITHUB_OIDC_SUBJECT is required}"
 
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -105,7 +118,7 @@ jobs:
       - name: Configure AWS credentials with GitHub OIDC
         uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           mask-aws-account-id: true
 
@@ -113,7 +126,7 @@ jobs:
         working-directory: infra/terraform/environments/dev
         run: |
           terraform init \
-            -backend-config="bucket=transitforge-terraform-state-911167912657" \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
             -backend-config="region=${AWS_REGION}"
           terraform plan -out=dev.tfplan
           terraform apply -auto-approve dev.tfplan

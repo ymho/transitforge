@@ -62,7 +62,6 @@ variable "bedrock_model_id" {
 variable "github_repository" {
   description = "GitHub Actions OIDCでAWSへのデプロイを許可するowner/repository。"
   type        = string
-  default     = "ymho/transitforge"
 
   validation {
     condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_repository))
@@ -73,7 +72,6 @@ variable "github_repository" {
 variable "data_builder_github_oidc_subject" {
   description = "data-builderインフラのデプロイを許可するGitHub Actions OIDCのimmutable subject。"
   type        = string
-  default     = "repo:ymho@26107646/transitforge-data-builder@1319024314:environment:dev"
 
   validation {
     condition = can(regex(
