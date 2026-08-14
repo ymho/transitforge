@@ -141,7 +141,7 @@ export interface TravelCandidateSearchResponse {
     scheduledArrivalTimeMinutes: number;
     delayMinutes: number;
     source: "transitforge";
-    discoverySource: "timetable-graph";
+    discoverySource: "timetable-graph" | "direct-service-index";
     sourceReference: string;
   }>;
   journeys: Array<{

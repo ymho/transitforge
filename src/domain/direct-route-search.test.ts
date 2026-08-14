@@ -4,6 +4,7 @@ import type { Train } from "../data/train-index";
 import {
   directRouteDepartureTime,
   nearestDirectOrigin,
+  nearestOriginWithDepartures,
   searchDirectRoutes,
 } from "./direct-route-search";
 
@@ -102,5 +103,17 @@ describe("direct route search", () => {
     expect(
       nearestDirectOrigin(trains, catalog, "東京", 600, [135.5, 34.7]),
     ).toBeUndefined();
+  });
+
+  it("chooses a nearby departure station without requiring a direct train", () => {
+    const nearest = nearestOriginWithDepartures(
+      trains,
+      catalog,
+      600,
+      [135.5011, 34.7011],
+    );
+
+    expect(nearest?.stationName).toBe("新大阪");
+    expect(nearest?.distanceMeters).toBeLessThan(20);
   });
 });

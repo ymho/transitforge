@@ -525,6 +525,112 @@ class BedrockAgentTest(unittest.TestCase):
         self.assertEqual(tight_result["journeys"], [])
         self.assertGreater(tight_result["trace"]["labelsRejectedByTransferTime"], 0)
 
+    def test_direct_index_compares_direct_and_one_transfer_journeys(self) -> None:
+        result = handler.journey_search.direct_service_journey_search.search_index(
+            direct_service_index_fixture(),
+            {},
+            {
+                "serviceDate": "2026-08-14", "originStation": "出発",
+                "destinationStation": "到着", "departureTimeMinutes": 590.0,
+                "limit": 3, "maxTransfers": 1, "includeTrace": True,
+            },
+        )
+
+        self.assertEqual(result["journeys"][0]["transferCount"], 1)
+        self.assertEqual(
+            [leg["trainNumber"] for leg in result["journeys"][0]["legs"]],
+            ["100M", "200M"],
+        )
+        self.assertEqual(result["journeys"][0]["arrivalTimeMinutes"], 625)
+        self.assertEqual(result["journeys"][1]["transferCount"], 0)
+        self.assertEqual(result["trace"]["strategy"], "direct-service-index")
+        self.assertEqual(
+            result["trace"]["selectedJourneys"][0]["transferStations"],
+            ["乗換"],
+        )
+        self.assertEqual(
+            result["trace"]["selectedJourneys"][0]["transferWaitMinutes"],
+            [5.0],
+        )
+
+    def test_direct_index_rejects_tight_transfer_and_applies_delay(self) -> None:
+        index = direct_service_index_fixture()
+        index["services"]["second"]["calls"][0]["departure_time_minutes"] = 614
+        result = handler.journey_search.direct_service_journey_search.search_index(
+            index,
+            {"100M": Decimal(5), "300M": Decimal(5)},
+            {
+                "serviceDate": "2026-08-14", "originStation": "出発駅",
+                "destinationStation": "到着駅", "departureTimeMinutes": 590.0,
+                "limit": 3, "maxTransfers": 1, "includeTrace": True,
+            },
+        )
+
+        self.assertTrue(all(
+            journey["transferCount"] == 0 for journey in result["journeys"]
+        ))
+        self.assertEqual(result["journeys"][0]["departureTimeMinutes"], 605)
+        self.assertEqual(result["journeys"][0]["arrivalTimeMinutes"], 645)
+        self.assertGreater(
+            result["trace"]["secondBoardingsRejectedByTransferTime"], 0
+        )
+
+    def test_direct_index_can_limit_the_search_to_direct_journeys(self) -> None:
+        result = handler.journey_search.direct_service_journey_search.search_index(
+            direct_service_index_fixture(),
+            {},
+            {
+                "serviceDate": "2026-08-14", "originStation": "出発",
+                "destinationStation": "到着", "departureTimeMinutes": 590.0,
+                "limit": 3, "maxTransfers": 0, "includeTrace": True,
+            },
+        )
+
+        self.assertEqual(len(result["journeys"]), 1)
+        self.assertEqual(result["journeys"][0]["transferCount"], 0)
+        self.assertEqual(result["journeys"][0]["legs"][0]["trainNumber"], "300M")
+        self.assertEqual(result["trace"]["transferCandidates"], 0)
+
+    def test_direct_index_prefers_a_close_direct_arrival(self) -> None:
+        index = direct_service_index_fixture()
+        index["services"]["second"]["calls"][1]["arrival_time_minutes"] = 635
+        result = handler.journey_search.direct_service_journey_search.search_index(
+            index,
+            {},
+            {
+                "serviceDate": "2026-08-14", "originStation": "出発",
+                "destinationStation": "到着", "departureTimeMinutes": 590.0,
+                "limit": 3, "maxTransfers": 1, "includeTrace": True,
+            },
+        )
+
+        self.assertEqual(result["journeys"][0]["transferCount"], 0)
+        self.assertEqual(result["journeys"][0]["arrivalTimeMinutes"], 640)
+        self.assertEqual(result["journeys"][1]["arrivalTimeMinutes"], 635)
+
+    def test_journey_search_loads_the_direct_index_for_one_transfer(self) -> None:
+        handler.journey_search._index_cache.clear()
+        client = FakeS3(direct_service_index_fixture())
+
+        result = handler.journey_search.search(
+            client,
+            FakeDynamoDB([]),
+            bucket="private-bucket",
+            prefix="timetable",
+            delay_table="",
+            value={
+                "serviceDate": "2026-08-14", "originStation": "出発",
+                "destinationStation": "到着", "departureTimeMinutes": 590,
+                "limit": 3, "maxTransfers": 1, "includeTrace": True,
+            },
+        )
+
+        self.assertEqual(result["journeys"][0]["transferCount"], 1)
+        self.assertEqual(
+            client.requests[0]["Key"],
+            "timetable/normalized/2026-08-14/direct-service-index.json.gz",
+        )
+
 
 def connection_index_fixture():
     return {
@@ -561,6 +667,52 @@ def connection_index_fixture():
                 "departure_time_minutes": 615, "arrival_time_minutes": 640,
                 "stop_sequence": 0,
             },
+        ],
+    }
+
+
+def direct_service_index_fixture():
+    services = {
+        "direct": direct_service(
+            "direct", "300M",
+            [("出発", None, 600), ("到着", 640, None)],
+        ),
+        "first": direct_service(
+            "first", "100M",
+            [("出発", None, 600), ("乗換", 610, None)],
+        ),
+        "second": direct_service(
+            "second", "200M",
+            [("乗換", None, 615), ("到着", 625, None)],
+        ),
+    }
+    return {
+        "schema_version": "direct-service-index-v1",
+        "service_date": "2026-08-14",
+        "timetable_kind": "weekday",
+        "services": services,
+        "station_origins": {
+            "出発": ["direct", "first"],
+            "乗換": ["second"],
+        },
+    }
+
+
+def direct_service(service_uid, train_no, calls):
+    return {
+        "service_uid": service_uid,
+        "train_no": train_no,
+        "service_type": "普通",
+        "train_name": "",
+        "origin_station": calls[0][0],
+        "destination_station": calls[-1][0],
+        "calls": [
+            {
+                "station_name": station,
+                **({"arrival_time_minutes": arrival} if arrival is not None else {}),
+                **({"departure_time_minutes": departure} if departure is not None else {}),
+            }
+            for station, arrival, departure in calls
         ],
     }
 
