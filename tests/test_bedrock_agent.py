@@ -6,6 +6,7 @@ import io
 import json
 import sys
 import unittest
+from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -65,12 +66,19 @@ class FakeDynamoDB:
 
 
 class FakeS3:
-    def __init__(self, value):
+    def __init__(self, value, snapshot=None):
         self.value = value
+        self.snapshot = snapshot
         self.requests = []
 
     def get_object(self, **kwargs):
         self.requests.append(kwargs)
+        if kwargs["Key"] == "api/traffic/delays.json":
+            if self.snapshot is None:
+                raise FileNotFoundError(kwargs["Key"])
+            return {
+                "Body": io.BytesIO(json.dumps(self.snapshot).encode("utf-8"))
+            }
         payload = gzip.compress(json.dumps(self.value).encode("utf-8"), mtime=0)
         return {"Body": io.BytesIO(payload)}
 
@@ -517,13 +525,91 @@ class BedrockAgentTest(unittest.TestCase):
             ["trip-direct", "trip-transfer"],
         )
         self.assertEqual(result["matches"], [])
-        self.assertEqual(result["trace"]["stationTransferRulesUsed"], {"京都": 5.0})
+        self.assertEqual(result["trace"]["stationTransferRulesUsed"], {})
 
         tight_index = connection_index_fixture()
         tight_index["connections"][2]["departure_time_minutes"] = 612
         tight_result = handler.journey_search.search_index(tight_index, {}, request)
         self.assertEqual(tight_result["journeys"], [])
         self.assertGreater(tight_result["trace"]["labelsRejectedByTransferTime"], 0)
+
+    def test_connection_scan_supports_multiple_transfers_and_transfer_pace(self) -> None:
+        request = {
+            "serviceDate": "2026-08-14",
+            "originStation": "A", "destinationStation": "D",
+            "departureTimeMinutes": 600,
+            "limit": 3, "maxTransfers": 3, "includeTrace": True,
+            "transferPace": "standard", "rankingPreference": "balanced",
+        }
+        result = handler.journey_search.search_index(
+            multi_transfer_index_fixture(), {}, request
+        )
+
+        self.assertEqual(result["journeys"][0]["transferCount"], 2)
+        self.assertEqual(
+            [leg["trainNumber"] for leg in result["journeys"][0]["legs"]],
+            ["1M", "2M", "3M"],
+        )
+
+        relaxed = handler.journey_search.search_index(
+            multi_transfer_index_fixture(), {},
+            {**request, "transferPace": "relaxed"},
+        )
+        self.assertEqual(relaxed["journeys"], [])
+
+    def test_connection_scan_can_prefer_a_later_departure(self) -> None:
+        request = {
+            "serviceDate": "2026-08-14",
+            "originStation": "A", "destinationStation": "D",
+            "departureTimeMinutes": 600,
+            "limit": 3, "maxTransfers": 3, "includeTrace": True,
+            "transferPace": "standard", "rankingPreference": "balanced",
+        }
+        balanced = handler.journey_search.search_index(
+            preference_index_fixture(), {}, request
+        )
+        latest = handler.journey_search.search_index(
+            preference_index_fixture(), {},
+            {**request, "rankingPreference": "latest-departure"},
+        )
+
+        self.assertEqual(balanced["journeys"][0]["departureTimeMinutes"], 600)
+        self.assertEqual(latest["journeys"][0]["departureTimeMinutes"], 615)
+
+    def test_connection_scan_applies_destination_changes_and_cancellations(self) -> None:
+        request = {
+            "serviceDate": "2026-08-14", "originStation": "向日町",
+            "destinationStation": "大阪", "departureTimeMinutes": 580,
+            "limit": 3, "maxTransfers": 3, "includeTrace": True,
+            "transferPace": "standard", "rankingPreference": "balanced",
+        }
+        destination_changed = handler.journey_search.search_index(
+            connection_index_fixture(), {}, request,
+            operations={
+                "538C": {
+                    "delayMinutes": 0, "destination": "西大路", "sources": ["web"],
+                },
+                "1001M": {
+                    "delayMinutes": 0, "destination": "大阪", "sources": ["web"],
+                },
+            },
+            realtime_route_time=595,
+        )
+        cancelled = handler.journey_search.search_index(
+            connection_index_fixture(), {}, request,
+            operations={
+                "1001M": {
+                    "delayMinutes": 0, "destination": "大阪", "sources": ["web"],
+                },
+            },
+            realtime_route_time=595,
+        )
+
+        self.assertEqual(destination_changed["journeys"], [])
+        self.assertEqual(cancelled["journeys"], [])
+        self.assertGreater(
+            destination_changed["trace"]["realtimeActiveServicesRejected"], 0
+        )
 
     def test_direct_index_compares_direct_and_one_transfer_journeys(self) -> None:
         result = handler.journey_search.direct_service_journey_search.search_index(
@@ -542,6 +628,13 @@ class BedrockAgentTest(unittest.TestCase):
             ["100M", "200M"],
         )
         self.assertEqual(result["journeys"][0]["arrivalTimeMinutes"], 625)
+        self.assertEqual(
+            result["journeys"][0]["legs"][0]["stops"],
+            [
+                {"stationName": "出発", "departureTimeMinutes": 600.0},
+                {"stationName": "乗換", "arrivalTimeMinutes": 610.0},
+            ],
+        )
         self.assertEqual(result["journeys"][1]["transferCount"], 0)
         self.assertEqual(result["trace"]["strategy"], "direct-service-index")
         self.assertEqual(
@@ -608,16 +701,51 @@ class BedrockAgentTest(unittest.TestCase):
         self.assertEqual(result["journeys"][0]["arrivalTimeMinutes"], 640)
         self.assertEqual(result["journeys"][1]["arrivalTimeMinutes"], 635)
 
+    def test_direct_index_uses_the_realtime_destination_as_authoritative(self) -> None:
+        index = direct_service_index_fixture()
+        index["services"]["direct"]["calls"].insert(
+            1,
+            {
+                "station_name": "途中",
+                "arrival_time_minutes": 620,
+                "departure_time_minutes": 621,
+            },
+        )
+        result = handler.journey_search.direct_service_journey_search.search_index(
+            index,
+            {},
+            {
+                "serviceDate": "2026-08-14", "originStation": "出発",
+                "destinationStation": "到着", "departureTimeMinutes": 590.0,
+                "limit": 3, "maxTransfers": 1, "includeTrace": True,
+            },
+            operations={
+                "300M": {
+                    "delayMinutes": 0,
+                    "destination": "途中",
+                    "sources": ["source-a"],
+                },
+            },
+            realtime_route_time=590,
+        )
+
+        self.assertNotIn(
+            "300M",
+            [
+                leg["trainNumber"]
+                for journey in result["journeys"]
+                for leg in journey["legs"]
+            ],
+        )
+
     def test_journey_search_loads_the_direct_index_for_one_transfer(self) -> None:
         handler.journey_search._index_cache.clear()
         client = FakeS3(direct_service_index_fixture())
 
         result = handler.journey_search.search(
             client,
-            FakeDynamoDB([]),
             bucket="private-bucket",
             prefix="timetable",
-            delay_table="",
             value={
                 "serviceDate": "2026-08-14", "originStation": "出発",
                 "destinationStation": "到着", "departureTimeMinutes": 590,
@@ -629,6 +757,64 @@ class BedrockAgentTest(unittest.TestCase):
         self.assertEqual(
             client.requests[0]["Key"],
             "timetable/normalized/2026-08-14/direct-service-index.json.gz",
+        )
+
+    def test_journey_search_uses_a_fresh_current_snapshot_only(self) -> None:
+        handler.journey_search._index_cache.clear()
+        snapshot = {
+            "collectedAt": "2026-08-14T01:00:00+00:00",
+            "failedSources": [],
+            "trains": {
+                "100M": {
+                    "delayMinutes": 5,
+                    "destination": "乗換",
+                    "sources": ["source-a"],
+                },
+                "200M": {
+                    "delayMinutes": 5,
+                    "destination": "到着",
+                    "sources": ["source-a"],
+                },
+            },
+        }
+        client = FakeS3(direct_service_index_fixture(), snapshot)
+        request = {
+            "serviceDate": "2026-08-14", "originStation": "出発",
+            "destinationStation": "到着", "departureTimeMinutes": 600,
+            "limit": 3, "maxTransfers": 1, "includeTrace": True,
+        }
+
+        current = handler.journey_search.search(
+            client,
+            bucket="private-bucket",
+            prefix="timetable",
+            snapshot_bucket="web-bucket",
+            value=request,
+            now=datetime(2026, 8, 14, 1, 0, tzinfo=timezone.utc),
+        )
+
+        self.assertTrue(current["realtime"]["applied"])
+        self.assertEqual(current["journeys"][0]["legs"][0]["delayMinutes"], 5)
+        self.assertIn(
+            "api/traffic/delays.json",
+            [item["Key"] for item in client.requests],
+        )
+
+        client.requests.clear()
+        future = handler.journey_search.search(
+            client,
+            bucket="private-bucket",
+            prefix="timetable",
+            snapshot_bucket="web-bucket",
+            value={**request, "serviceDate": "2026-08-15"},
+            now=datetime(2026, 8, 14, 1, 0, tzinfo=timezone.utc),
+        )
+
+        self.assertFalse(future["realtime"]["applied"])
+        self.assertEqual(future["realtime"]["reason"], "future-or-past-service-date")
+        self.assertNotIn(
+            "api/traffic/delays.json",
+            [item["Key"] for item in client.requests],
         )
 
 
@@ -667,6 +853,54 @@ def connection_index_fixture():
                 "departure_time_minutes": 615, "arrival_time_minutes": 640,
                 "stop_sequence": 0,
             },
+        ],
+    }
+
+
+def multi_transfer_index_fixture():
+    return connection_index_from_legs([
+        ("first", "1M", "A", "B", 600, 610),
+        ("second", "2M", "B", "C", 615, 625),
+        ("third", "3M", "C", "D", 630, 640),
+    ])
+
+
+def preference_index_fixture():
+    return connection_index_from_legs([
+        ("early", "10M", "A", "D", 600, 660),
+        ("late-first", "11M", "A", "B", 615, 625),
+        ("late-second", "12M", "B", "D", 630, 662),
+    ])
+
+
+def connection_index_from_legs(legs):
+    return {
+        "schema_version": "timetable-connection-index-v1",
+        "service_date": "2026-08-14",
+        "default_transfer_minutes": 5,
+        "station_transfer_minutes": {},
+        "trips": {
+            trip_id: {
+                "service_uid": trip_id,
+                "train_no": train_number,
+                "service_type": "普通",
+                "train_name": "",
+                "origin_station": origin,
+                "destination_station": destination,
+            }
+            for trip_id, train_number, origin, destination, _, _ in legs
+        },
+        "connections": [
+            {
+                "connection_id": f"{trip_id}:0",
+                "trip_id": trip_id,
+                "from_station": origin,
+                "to_station": destination,
+                "departure_time_minutes": departure,
+                "arrival_time_minutes": arrival,
+                "stop_sequence": 0,
+            }
+            for trip_id, _, origin, destination, departure, arrival in legs
         ],
     }
 

@@ -11,8 +11,16 @@ import type { Train } from "../data/train-index";
 import type { CongestionAnalysisForAgent } from "./congestion-analysis";
 import type { DelayAnalysisForAgent } from "./delay-analysis";
 import type { WeatherMode } from "./map-weather";
+import {
+  defaultJourneySearchPreferences,
+  journeySearchPreferencesFromPrompt,
+  type JourneyRankingPreference,
+  type JourneySearchPreferences,
+  type TransferPace,
+} from "./journey-search-preferences";
 import { operatingDayRouteTime } from "./playback";
 import type { TrainPosition } from "./train-position";
+import type { ViewerAgentResponse } from "./viewer-agent-response";
 import {
   directRouteDepartureTime,
   type DirectRouteSearchResponse,
@@ -23,9 +31,11 @@ import {
 } from "./viewer-agent-action";
 import {
   arrivalSearchWindowMinutes,
+  currentCalendarDateInJapan,
   directRouteRequestFromPrompt,
   formatStationLabel,
   routeTimeFromPrompt,
+  routeCalendarDateFromPrompt,
   searchActiveTrainsFromPrompt,
   searchTrainArrivalsFromPrompt,
 } from "./viewer-agent-local-tools";
@@ -56,7 +66,14 @@ export interface BedrockViewerAgentDependencies {
     originStation?: string;
     destinationStation: string;
     departureTimeMinutes: number;
+    serviceDate?: string;
+    departureDate?: string;
+    transferPace?: TransferPace;
+    rankingPreference?: JourneyRankingPreference;
+    maxTransfers?: 0 | 1 | 2 | 3;
   }) => Promise<DirectRouteSearchResponse>;
+  getCurrentDate?: () => Date;
+  getJourneySearchPreferences?: () => JourneySearchPreferences;
   maximumRouteTime: number;
 }
 
@@ -75,12 +92,24 @@ interface DirectRouteToolMatch {
   destinationStation: string;
   departureTimeMinutes: number;
   arrivalTimeMinutes: number;
+  lineName?: string;
+  lineColor?: string;
+  stops?: Array<{
+    stationName: string;
+    arrivalTimeMinutes?: number;
+    departureTimeMinutes?: number;
+  }>;
 }
 
 interface DirectRouteToolState {
   searched: boolean;
   focusedServiceUid?: string;
   response?: {
+    serviceDate?: string;
+    departureDate?: string;
+    transferPace: TransferPace;
+    rankingPreference: JourneyRankingPreference;
+    maxTransfers: number;
     originStation: string;
     destinationStation: string;
     searchTimeMinutes: number;
@@ -97,7 +126,7 @@ export async function runBedrockViewerAgent(
   prompt: string,
   dependencies: BedrockViewerAgentDependencies,
   converse: BedrockAgentConverse,
-): Promise<string> {
+): Promise<ViewerAgentResponse> {
   const messages: BedrockAgentMessage[] = [
     {
       role: "user",
@@ -106,7 +135,8 @@ export async function runBedrockViewerAgent(
           text:
             `利用者の依頼: ${prompt}\n` +
             `現在の表示時刻（0時からの分数）: ${dependencies.getRouteTime()}\n` +
-            `現在の業務日付（日本時間4時切替）: ${currentServiceDateInJapan()}`,
+            `今日の実日付（日本時間）: ${currentCalendarDateInJapan(currentDate(dependencies))}\n` +
+            `現在の業務日付（日本時間4時切替）: ${currentServiceDateInJapan(currentDate(dependencies))}`,
         },
       ],
     },
@@ -318,12 +348,32 @@ async function executeTool(
       dependencies.getRouteTime(),
       dependencies.maximumRouteTime,
     );
+    const routeDate =
+      routeCalendarDateFromPrompt(
+        originalPrompt,
+        resolvedDepartureTime,
+        currentDate(dependencies),
+      ) ??
+      (typeof input.departureDate === "string"
+        ? routeCalendarDateFromPrompt(
+            input.departureDate,
+            resolvedDepartureTime,
+            currentDate(dependencies),
+          )
+        : undefined);
+    const preferences = journeySearchPreferencesFromPrompt(
+      originalPrompt,
+      dependencies.getJourneySearchPreferences?.() ??
+        defaultJourneySearchPreferences,
+    );
     const response = await dependencies.searchDirectRoutes({
       ...(typeof originStation === "string" && originStation.trim()
         ? { originStation: originStation.trim() }
         : {}),
       destinationStation: destinationStation.trim(),
       departureTimeMinutes: resolvedDepartureTime,
+      ...(routeDate ?? {}),
+      ...preferences,
     });
     toolState.searched = true;
     directRouteServiceUids.clear();
@@ -348,6 +398,12 @@ async function executeTool(
       }
     }
     const result = {
+      serviceDate: response.serviceDate ?? routeDate?.serviceDate,
+      departureDate: response.departureDate ?? routeDate?.departureDate,
+      transferPace: response.transferPace ?? preferences.transferPace,
+      rankingPreference:
+        response.rankingPreference ?? preferences.rankingPreference,
+      maxTransfers: response.maxTransfers ?? preferences.maxTransfers,
       originStation: response.originStation,
       destinationStation: destinationStation.trim(),
       searchTimeMinutes: resolvedDepartureTime,
@@ -478,7 +534,7 @@ export function currentServiceDateInJapan(now = new Date()): string {
 
 function directRouteResponseText(
   state: DirectRouteToolState,
-): string | undefined {
+): ViewerAgentResponse | undefined {
   const response = state.response;
   if (!response) {
     return undefined;
@@ -486,30 +542,32 @@ function directRouteResponseText(
   if (response.journeys.length === 0) {
     return `${formatClockTime(response.searchTimeMinutes)}以降に${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}へ行く経路は見つかりませんでした。`;
   }
-  const routes = response.journeys.map((journey, index) => {
-    const legs = journey.legs.map((leg) => {
-      const trainLabel = [
-        leg.serviceType,
-        leg.trainName,
-        leg.trainNumber,
-      ].filter(Boolean).join(" ");
-      return `${formatClockTime(leg.departureTimeMinutes)} ${leg.originStation}発 → ${formatClockTime(leg.arrivalTimeMinutes)} ${leg.destinationStation}着 ${trainLabel}`;
-    });
-    const transfer = journey.transferCount === 0
-      ? "乗換なし"
-      : journey.legs.slice(0, -1).map((leg, legIndex) => {
-          const wait = journey.legs[legIndex + 1].departureTimeMinutes
-            - leg.arrivalTimeMinutes;
-          return `${leg.destinationStation}で乗換 ${Math.round(wait)}分待ち`;
-        }).join(" ");
-    return `${index + 1}. ${legs.join(" / ")}（${transfer}）`;
-  });
   const first = response.journeys[0]?.legs[0];
   const focusMessage =
     first && state.focusedServiceUid === first.serviceUid
       ? "先頭の列車にフォーカスしました。"
       : "先頭の列車はまだ表示時刻に運行していないため、経路のみ案内します。";
-  return `${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}への経路候補です。${focusMessage}\n${routes.join("\n")}`;
+  const dateLabel = response.departureDate
+    ? `${formatCalendarDate(response.departureDate)}の`
+    : "";
+  return {
+    text: `${dateLabel}${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}への経路候補です。${focusMessage}`,
+    journeyPlan: {
+      ...(response.departureDate ? { departureDate: response.departureDate } : {}),
+      ...(response.serviceDate ? { serviceDate: response.serviceDate } : {}),
+      transferPace: response.transferPace,
+      rankingPreference: response.rankingPreference,
+      maxTransfers: response.maxTransfers,
+      originStation: response.originStation,
+      destinationStation: response.destinationStation,
+      journeys: response.journeys,
+    },
+  };
+}
+
+function formatCalendarDate(value: string): string {
+  const [, , month, day] = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value) ?? [];
+  return month && day ? `${Number(month)}月${Number(day)}日` : value;
 }
 
 function formatClockTime(routeTimeMinutes: number): string {
@@ -520,6 +578,10 @@ function formatClockTime(routeTimeMinutes: number): string {
 
 function currentTrains(dependencies: BedrockViewerAgentDependencies): Train[] {
   return dependencies.getTrains?.() ?? dependencies.trains;
+}
+
+function currentDate(dependencies: BedrockViewerAgentDependencies): Date {
+  return dependencies.getCurrentDate?.() ?? new Date();
 }
 
 function isToolUseBlock(

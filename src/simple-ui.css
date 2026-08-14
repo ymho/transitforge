@@ -230,6 +230,177 @@
   display: none;
 }
 
+.ai-guide-message-journey {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.65rem;
+}
+
+.journey-plan-intro {
+  margin: 0 0 0.65rem;
+}
+
+.journey-plan {
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: 7px;
+  background: var(--ui-surface-solid);
+}
+
+.journey-plan-tabs {
+  display: grid;
+  grid-auto-columns: minmax(4.5rem, 1fr);
+  grid-auto-flow: column;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.journey-plan-tab {
+  padding: 0.55rem 0.45rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--ui-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.journey-plan-tab[aria-selected="true"] {
+  border-bottom-color: var(--ui-accent);
+  color: var(--ui-text);
+  background: var(--ui-accent-soft);
+  font-weight: 650;
+}
+
+.journey-plan-panel {
+  padding: 0.7rem;
+  color: var(--ui-text);
+  outline: none;
+}
+
+.journey-plan-panel[hidden] {
+  display: none;
+}
+
+.journey-plan-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.journey-plan-summary strong {
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+}
+
+.journey-plan-summary span {
+  color: var(--ui-muted);
+  font-size: 0.66rem;
+}
+
+.journey-leg {
+  --journey-line-color: #8b96a1;
+}
+
+.journey-leg summary {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  list-style: none;
+  cursor: pointer;
+}
+
+.journey-leg summary::-webkit-details-marker {
+  display: none;
+}
+
+.journey-station {
+  display: grid;
+  grid-template-columns: 3.2rem minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.journey-station time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.journey-station strong {
+  font-size: 0.78rem;
+}
+
+.journey-station small {
+  color: var(--ui-muted);
+  font-size: 0.62rem;
+}
+
+.journey-segment {
+  display: grid;
+  grid-template-columns: 3.2rem minmax(0, 1fr);
+  min-height: 2.25rem;
+  gap: 0.45rem;
+  color: var(--ui-muted);
+  font-size: 0.66rem;
+}
+
+.journey-segment i {
+  width: 4px;
+  height: 100%;
+  margin: 0 auto;
+  border-radius: 999px;
+  background: var(--journey-line-color);
+}
+
+.journey-segment span {
+  align-self: center;
+}
+
+.journey-segment span::after {
+  margin-left: 0.35rem;
+  content: "途中駅を見る";
+  color: var(--ui-accent);
+  font-size: 0.6rem;
+}
+
+.journey-leg[open] .journey-segment span::after {
+  content: "閉じる";
+}
+
+.journey-leg-without-stops summary {
+  cursor: default;
+  pointer-events: none;
+}
+
+.journey-leg-without-stops .journey-segment span::after {
+  content: none;
+}
+
+.journey-intermediate-stops {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.35rem 0 0.55rem 3.65rem;
+  padding: 0.45rem 0.55rem;
+  border-left: 2px solid var(--journey-line-color);
+  color: var(--ui-muted);
+  background: var(--ui-surface-muted);
+  font-size: 0.65rem;
+  list-style: none;
+}
+
+.journey-transfer {
+  margin: 0.55rem 0;
+  padding: 0.4rem 0.5rem;
+  border-radius: 4px;
+  color: var(--ui-text);
+  background: var(--ui-accent-soft);
+  font-size: 0.66rem;
+}
+
 .ai-guide-message-user {
   color: #ffffff;
   background: #3a4652;
@@ -247,6 +418,78 @@
   color: #c9d0d6;
   background: transparent;
   box-shadow: none;
+}
+
+.journey-settings {
+  padding: 0 0.75rem 0.55rem;
+}
+
+.journey-settings-toggle {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  color: var(--ui-muted);
+  background: var(--ui-surface-muted);
+  font: inherit;
+  font-size: 0.68rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.journey-settings-toggle::after {
+  float: right;
+  content: "＋";
+}
+
+.journey-settings-toggle[aria-expanded="true"]::after {
+  content: "−";
+}
+
+.journey-settings-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.45rem;
+  padding: 0.6rem;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  background: var(--ui-surface-muted);
+}
+
+.journey-settings-panel[hidden] {
+  display: none;
+}
+
+.journey-settings-panel label {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--ui-muted);
+  font-size: 0.62rem;
+}
+
+.journey-settings-panel select {
+  min-width: 0;
+  padding: 0.4rem;
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  font: inherit;
+}
+
+.journey-settings-panel small {
+  grid-column: 1 / -1;
+  color: var(--ui-muted);
+  font-size: 0.58rem;
+}
+
+.journey-plan-conditions {
+  margin: 0;
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-muted);
+  font-size: 0.62rem;
 }
 
 .ai-guide-form {

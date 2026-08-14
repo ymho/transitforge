@@ -34,6 +34,11 @@ export interface DirectRoutePromptRequest {
   departureTimeMinutes?: number;
 }
 
+export interface RouteCalendarDate {
+  departureDate: string;
+  serviceDate: string;
+}
+
 const serviceTypeKeywords = ["新快速", "新幹線", "特急", "快速", "普通"];
 export const arrivalSearchWindowMinutes = 30;
 
@@ -61,6 +66,103 @@ export function routeTimeFromPrompt(prompt: string): number | undefined {
   }
 
   return undefined;
+}
+
+export function routeCalendarDateFromPrompt(
+  prompt: string,
+  departureTimeMinutes: number,
+  now = new Date(),
+): RouteCalendarDate | undefined {
+  const departureDate = calendarDateFromPrompt(prompt, now);
+  if (!departureDate) {
+    return undefined;
+  }
+  return {
+    departureDate,
+    serviceDate: departureTimeMinutes >= 24 * 60
+      ? stepIsoDate(departureDate, -1)
+      : departureDate,
+  };
+}
+
+export function currentCalendarDateInJapan(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const byType = new Map(parts.map((part) => [part.type, part.value]));
+  return `${byType.get("year")}-${byType.get("month")}-${byType.get("day")}`;
+}
+
+function calendarDateFromPrompt(prompt: string, now: Date): string | undefined {
+  const normalizedPrompt = normalize(prompt);
+  const referenceDate = currentCalendarDateInJapan(now);
+  if (normalizedPrompt.includes("明後日")) {
+    return stepIsoDate(referenceDate, 2);
+  }
+  if (normalizedPrompt.includes("明日")) {
+    return stepIsoDate(referenceDate, 1);
+  }
+  if (normalizedPrompt.includes("今日") || normalizedPrompt.includes("本日")) {
+    return referenceDate;
+  }
+
+  const fullDate = normalizedPrompt.match(
+    /(\d{4})(?:年|[\/-])(\d{1,2})(?:月|[\/-])(\d{1,2})日?/,
+  );
+  if (fullDate) {
+    return validIsoDate(
+      Number(fullDate[1]),
+      Number(fullDate[2]),
+      Number(fullDate[3]),
+    );
+  }
+
+  const monthDay = normalizedPrompt.match(
+    /(?:^|\D)(\d{1,2})(?:月|\/)(\d{1,2})日?/,
+  );
+  if (!monthDay) {
+    return referenceDate;
+  }
+  const month = Number(monthDay[1]);
+  const day = Number(monthDay[2]);
+  const referenceYear = Number(referenceDate.slice(0, 4));
+  const referenceTime = Date.parse(`${referenceDate}T00:00:00Z`);
+  return [referenceYear - 1, referenceYear, referenceYear + 1]
+    .flatMap((year) => {
+      const date = validIsoDate(year, month, day);
+      return date
+        ? [{
+            date,
+            distance: Math.abs(
+              Date.parse(`${date}T00:00:00Z`) - referenceTime,
+            ),
+          }]
+        : [];
+    })
+    .sort((left, right) =>
+      left.distance - right.distance || left.date.localeCompare(right.date),
+    )[0]?.date;
+}
+
+function validIsoDate(year: number, month: number, day: number): string | undefined {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return undefined;
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+function stepIsoDate(value: string, amount: number): string {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
 }
 
 export function directRouteRequestFromPrompt(

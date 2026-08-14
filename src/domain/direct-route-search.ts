@@ -1,5 +1,9 @@
 import type { StationLineCatalog, StationCoordinate } from "../data/station-line-catalog";
 import type { Train, TrainStop } from "../data/train-index";
+import type {
+  JourneyRankingPreference,
+  TransferPace,
+} from "./journey-search-preferences";
 
 export interface DirectRouteResult {
   train: Train;
@@ -18,6 +22,15 @@ export interface JourneyRouteLeg {
   destinationStation: string;
   departureTimeMinutes: number;
   arrivalTimeMinutes: number;
+  lineName?: string;
+  lineColor?: string;
+  stops?: JourneyRouteStop[];
+}
+
+export interface JourneyRouteStop {
+  stationName: string;
+  arrivalTimeMinutes?: number;
+  departureTimeMinutes?: number;
 }
 
 export interface JourneyRouteResult {
@@ -34,6 +47,11 @@ export interface NearestDirectOrigin {
 
 export interface DirectRouteSearchResponse {
   originStation: string;
+  serviceDate?: string;
+  departureDate?: string;
+  transferPace?: TransferPace;
+  rankingPreference?: JourneyRankingPreference;
+  maxTransfers?: number;
   distanceMeters?: number;
   results: DirectRouteResult[];
   journeys?: JourneyRouteResult[];
@@ -43,6 +61,11 @@ export type DirectRouteSearchHandler = (request: {
   originStation?: string;
   destinationStation: string;
   departureTimeMinutes: number;
+  serviceDate?: string;
+  departureDate?: string;
+  transferPace?: TransferPace;
+  rankingPreference?: JourneyRankingPreference;
+  maxTransfers?: 0 | 1 | 2 | 3;
 }) => Promise<DirectRouteSearchResponse>;
 
 export function directRouteDepartureTime(

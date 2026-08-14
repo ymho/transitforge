@@ -311,6 +311,8 @@ describe("Bedrock agent client", () => {
       originStation: "西大路",
       destinationStation: "京都",
       departureTimeMinutes: 590,
+      transferPace: "relaxed",
+      rankingPreference: "fewest-transfers",
     }, fetcher);
 
     expect(result.matches[0]?.delayMinutes).toBe(5);
@@ -318,11 +320,13 @@ describe("Bedrock agent client", () => {
     const body = JSON.parse(String(init?.body));
     expect(body).toEqual({
       operation: "journey_search",
-      maxTransfers: 1,
+      maxTransfers: 3,
       serviceDate: "2026-08-14",
       originStation: "西大路",
       destinationStation: "京都",
       departureTimeMinutes: 590,
+      transferPace: "relaxed",
+      rankingPreference: "fewest-transfers",
     });
   });
 });

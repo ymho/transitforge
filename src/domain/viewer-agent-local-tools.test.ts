@@ -6,6 +6,7 @@ import {
   directRouteRequestFromPrompt,
   formatStationLabel,
   localViewerControlActionsFromPrompt,
+  routeCalendarDateFromPrompt,
   routeTimeFromPrompt,
   searchActiveTrainsFromPrompt,
   searchTrainArrivalsFromPrompt,
@@ -48,6 +49,37 @@ describe("viewer agent local tools", () => {
     expect(routeTimeFromPrompt("03:59にして")).toBe(1_679);
     expect(routeTimeFromPrompt("4時にして")).toBe(240);
     expect(routeTimeFromPrompt("18時99分")).toBeUndefined();
+  });
+
+  it("maps a calendar date to the generated service date", () => {
+    const now = new Date("2026-08-14T12:00:00+09:00");
+
+    expect(routeCalendarDateFromPrompt("京都に行きたい", 420, now)).toEqual({
+      departureDate: "2026-08-14",
+      serviceDate: "2026-08-14",
+    });
+    expect(routeCalendarDateFromPrompt("8/15の7:00", 420, now)).toEqual({
+      departureDate: "2026-08-15",
+      serviceDate: "2026-08-15",
+    });
+    expect(routeCalendarDateFromPrompt("8/15の2:00", 1_560, now)).toEqual({
+      departureDate: "2026-08-15",
+      serviceDate: "2026-08-14",
+    });
+    expect(routeCalendarDateFromPrompt("明日の7時", 420, now)).toEqual({
+      departureDate: "2026-08-15",
+      serviceDate: "2026-08-15",
+    });
+  });
+
+  it("resolves a year boundary without selecting a timetable kind", () => {
+    expect(
+      routeCalendarDateFromPrompt(
+        "1月1日の7時",
+        420,
+        new Date("2026-12-31T12:00:00+09:00"),
+      ),
+    ).toEqual({ departureDate: "2027-01-01", serviceDate: "2027-01-01" });
   });
 
   it("extracts direct-route destinations and optional origins", () => {
