@@ -9,6 +9,24 @@ export interface DirectRouteResult {
   arrivalTimeMinutes: number;
 }
 
+export interface JourneyRouteLeg {
+  serviceUid: string;
+  trainNumber: string;
+  serviceType: string;
+  trainName: string;
+  originStation: string;
+  destinationStation: string;
+  departureTimeMinutes: number;
+  arrivalTimeMinutes: number;
+}
+
+export interface JourneyRouteResult {
+  departureTimeMinutes: number;
+  arrivalTimeMinutes: number;
+  transferCount: number;
+  legs: JourneyRouteLeg[];
+}
+
 export interface NearestDirectOrigin {
   stationName: string;
   distanceMeters: number;
@@ -18,6 +36,7 @@ export interface DirectRouteSearchResponse {
   originStation: string;
   distanceMeters?: number;
   results: DirectRouteResult[];
+  journeys?: JourneyRouteResult[];
 }
 
 export type DirectRouteSearchHandler = (request: {
@@ -126,10 +145,37 @@ export function nearestDirectOrigin(
     }
   }
 
+  return nearestCatalogStation(catalog, eligibleOrigins, userCoordinate);
+}
+
+export function nearestOriginWithDepartures(
+  trains: Train[],
+  catalog: StationLineCatalog,
+  departureTimeMinutes: number,
+  userCoordinate: StationCoordinate,
+): NearestDirectOrigin | undefined {
+  const eligibleOrigins = new Set<string>();
+  for (const train of trains) {
+    const groups = groupedStops(train.stops);
+    for (const group of groups.slice(0, -1)) {
+      const departure = departureTimeFor(group);
+      if (departure !== undefined && departure >= departureTimeMinutes) {
+        eligibleOrigins.add(group.normalizedName);
+      }
+    }
+  }
+  return nearestCatalogStation(catalog, eligibleOrigins, userCoordinate);
+}
+
+function nearestCatalogStation(
+  catalog: StationLineCatalog,
+  eligibleStations: ReadonlySet<string>,
+  userCoordinate: StationCoordinate,
+): NearestDirectOrigin | undefined {
   let nearest: NearestDirectOrigin | undefined;
   for (const line of catalog.lines) {
     for (const station of line.stations) {
-      if (!eligibleOrigins.has(normalizeStationName(station.name))) {
+      if (!eligibleStations.has(normalizeStationName(station.name))) {
         continue;
       }
       const distanceMeters = haversineDistanceMeters(

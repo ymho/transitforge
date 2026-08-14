@@ -84,7 +84,12 @@ interface DirectRouteToolState {
     originStation: string;
     destinationStation: string;
     searchTimeMinutes: number;
-    matches: DirectRouteToolMatch[];
+    journeys: Array<{
+      departureTimeMinutes: number;
+      arrivalTimeMinutes: number;
+      transferCount: number;
+      legs: DirectRouteToolMatch[];
+    }>;
   };
 }
 
@@ -190,7 +195,7 @@ async function executeTool(
       return {
         routeTimeMinutes: dependencies.getRouteTime(),
         changed: false,
-        reason: "直通経路検索では表示時刻を変更しません。",
+        reason: "経路検索では表示時刻を変更しません。",
       };
     }
     const deterministicPromptTime = routeTimeFromPrompt(originalPrompt);
@@ -305,7 +310,7 @@ async function executeTool(
       !Number.isFinite(departureTimeMinutes) ||
       !dependencies.searchDirectRoutes
     ) {
-      throw new Error("直通経路の検索条件が不正です。");
+      throw new Error("経路の検索条件が不正です。");
     }
     const promptDepartureTime = routeTimeFromPrompt(originalPrompt);
     const resolvedDepartureTime = directRouteDepartureTime(
@@ -322,8 +327,25 @@ async function executeTool(
     });
     toolState.searched = true;
     directRouteServiceUids.clear();
-    for (const result of response.results) {
-      directRouteServiceUids.add(result.train.service_uid);
+    const journeys = response.journeys ?? response.results.map((route) => ({
+      departureTimeMinutes: route.departureTimeMinutes,
+      arrivalTimeMinutes: route.arrivalTimeMinutes,
+      transferCount: 0,
+      legs: [{
+        serviceUid: route.train.service_uid,
+        trainNumber: route.train.train_no,
+        serviceType: route.train.service_type,
+        trainName: route.train.train_name,
+        originStation: route.originStation,
+        destinationStation: route.destinationStation,
+        departureTimeMinutes: route.departureTimeMinutes,
+        arrivalTimeMinutes: route.arrivalTimeMinutes,
+      }],
+    }));
+    for (const journey of journeys) {
+      for (const leg of journey.legs) {
+        directRouteServiceUids.add(leg.serviceUid);
+      }
     }
     const result = {
       originStation: response.originStation,
@@ -332,16 +354,7 @@ async function executeTool(
       ...(response.distanceMeters === undefined
         ? {}
         : { distanceMeters: Math.round(response.distanceMeters) }),
-      matches: response.results.map((result) => ({
-        serviceUid: result.train.service_uid,
-        trainNumber: result.train.train_no,
-        serviceType: result.train.service_type,
-        trainName: result.train.train_name,
-        originStation: result.originStation,
-        destinationStation: result.destinationStation,
-        departureTimeMinutes: result.departureTimeMinutes,
-        arrivalTimeMinutes: result.arrivalTimeMinutes,
-      })),
+      journeys,
     };
     toolState.response = result;
     return result;
@@ -470,23 +483,33 @@ function directRouteResponseText(
   if (!response) {
     return undefined;
   }
-  if (response.matches.length === 0) {
-    return `${formatClockTime(response.searchTimeMinutes)}以降に${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}へ直通する列車は見つかりませんでした。`;
+  if (response.journeys.length === 0) {
+    return `${formatClockTime(response.searchTimeMinutes)}以降に${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}へ行く経路は見つかりませんでした。`;
   }
-  const routes = response.matches.map((match, index) => {
-    const trainLabel = [
-      match.serviceType,
-      match.trainName,
-      match.trainNumber ? `${match.trainNumber}` : "",
-    ].filter(Boolean).join(" ");
-    return `${index + 1}. ${formatClockTime(match.departureTimeMinutes)} ${match.originStation}発 → ${formatClockTime(match.arrivalTimeMinutes)} ${match.destinationStation}着 ${trainLabel}`;
+  const routes = response.journeys.map((journey, index) => {
+    const legs = journey.legs.map((leg) => {
+      const trainLabel = [
+        leg.serviceType,
+        leg.trainName,
+        leg.trainNumber,
+      ].filter(Boolean).join(" ");
+      return `${formatClockTime(leg.departureTimeMinutes)} ${leg.originStation}発 → ${formatClockTime(leg.arrivalTimeMinutes)} ${leg.destinationStation}着 ${trainLabel}`;
+    });
+    const transfer = journey.transferCount === 0
+      ? "乗換なし"
+      : journey.legs.slice(0, -1).map((leg, legIndex) => {
+          const wait = journey.legs[legIndex + 1].departureTimeMinutes
+            - leg.arrivalTimeMinutes;
+          return `${leg.destinationStation}で乗換 ${Math.round(wait)}分待ち`;
+        }).join(" ");
+    return `${index + 1}. ${legs.join(" / ")}（${transfer}）`;
   });
-  const first = response.matches[0];
+  const first = response.journeys[0]?.legs[0];
   const focusMessage =
     first && state.focusedServiceUid === first.serviceUid
       ? "先頭の列車にフォーカスしました。"
       : "先頭の列車はまだ表示時刻に運行していないため、経路のみ案内します。";
-  return `${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}への直通列車です。${focusMessage}\n${routes.join("\n")}`;
+  return `${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}への経路候補です。${focusMessage}\n${routes.join("\n")}`;
 }
 
 function formatClockTime(routeTimeMinutes: number): string {

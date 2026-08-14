@@ -32,7 +32,7 @@ import {
 import { loadTrainIndex } from "./data/train-index";
 import type { StationCoordinate } from "./data/station-line-catalog";
 import {
-  nearestDirectOrigin, searchDirectRoutes,
+  nearestOriginWithDepartures, searchDirectRoutes,
   type DirectRouteSearchHandler,
 } from "./domain/direct-route-search";
 import {
@@ -565,16 +565,15 @@ if (!token) {
           let distanceMeters: number | undefined;
           if (!originStation) {
             const coordinate = await currentBrowserCoordinate();
-            const nearest = nearestDirectOrigin(
-              displayTrains,
+            const nearest = nearestOriginWithDepartures(
+              trainIndex.trains,
               stationLineCatalog,
-              request.destinationStation,
               request.departureTimeMinutes,
               coordinate,
             );
             if (!nearest) {
               throw new Error(
-                "現在地の近くから行き先へ直通する駅が見つかりません。出発駅を入力してください。",
+                "現在地の近くに出発可能な駅が見つかりません。出発駅を入力してください。",
               );
             }
             originStation = nearest.stationName;
@@ -603,6 +602,7 @@ if (!token) {
             destinationStation: request.destinationStation,
             departureTimeMinutes: request.departureTimeMinutes,
             limit: 3,
+            maxTransfers: 1,
           });
           const trainsByServiceUid = new Map(
             displayTrains.map((train) => [train.service_uid, train]),
@@ -610,6 +610,21 @@ if (!token) {
           return {
             originStation: response.originStation,
             ...(distanceMeters === undefined ? {} : { distanceMeters }),
+            journeys: response.journeys.map((journey) => ({
+              departureTimeMinutes: journey.departureTimeMinutes,
+              arrivalTimeMinutes: journey.arrivalTimeMinutes,
+              transferCount: journey.transferCount,
+              legs: journey.legs.map((leg) => ({
+                serviceUid: leg.serviceUid,
+                trainNumber: leg.trainNumber,
+                serviceType: leg.serviceType,
+                trainName: leg.trainName,
+                originStation: leg.originStation,
+                destinationStation: leg.destinationStation,
+                departureTimeMinutes: leg.departureTimeMinutes,
+                arrivalTimeMinutes: leg.arrivalTimeMinutes,
+              })),
+            })),
             results: response.matches.flatMap((match) => {
               const train = trainsByServiceUid.get(match.serviceUid);
               return train ? [{

@@ -74,7 +74,8 @@ export function isTravelCandidateSearchResponse(value: unknown): value is Travel
       isNonNegativeNumber(match.scheduledDepartureTimeMinutes) &&
       isNonNegativeNumber(match.scheduledArrivalTimeMinutes) &&
       isNonNegativeNumber(match.delayMinutes) && match.source === "transitforge" &&
-      match.discoverySource === "timetable-graph" && typeof match.sourceReference === "string") &&
+      ["timetable-graph", "direct-service-index"].includes(String(match.discoverySource)) &&
+      typeof match.sourceReference === "string") &&
     Array.isArray(value.journeys) && value.journeys.length <= 5 &&
     value.journeys.every(isJourney);
 }

@@ -6,6 +6,7 @@ import unicodedata
 from decimal import Decimal
 from typing import Any
 
+import direct_service_journey_search
 from dynamodb_analysis import (
     dynamo_number_map,
     dynamo_string,
@@ -17,6 +18,7 @@ from request_contract import RequestError
 
 MAX_ROUTE_TIME_MINUTES = 48 * 60
 MAX_TRANSFERS = 3
+_index_cache: dict[str, tuple[str, dict[str, Any]]] = {}
 
 
 def search(
@@ -29,9 +31,27 @@ def search(
     value: dict[str, Any],
 ) -> dict[str, Any]:
     request = _validated_request(value)
-    index = _load_index(s3_client, bucket, prefix, request["serviceDate"])
     delays = _latest_delays(dynamodb_client, delay_table, request["serviceDate"])
-    result = search_index(index, delays, request)
+    if request["maxTransfers"] <= 1:
+        index = _load_index(
+            s3_client,
+            bucket,
+            prefix,
+            request["serviceDate"],
+            "direct-service-index.json.gz",
+            "direct-service-index-v1",
+        )
+        result = direct_service_journey_search.search_index(index, delays, request)
+    else:
+        index = _load_index(
+            s3_client,
+            bucket,
+            prefix,
+            request["serviceDate"],
+            "connection-index.json.gz",
+            "timetable-connection-index-v1",
+        )
+        result = search_index(index, delays, request)
     print(json.dumps({
         "event": "journey_search_trace",
         "serviceDate": request["serviceDate"],
@@ -269,15 +289,27 @@ def _validated_request(value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _load_index(s3_client: Any, bucket: str, prefix: str, service_date: str) -> dict[str, Any]:
-    key = f"{prefix.strip('/')}/normalized/{service_date}/connection-index.json.gz"
+def _load_index(
+    s3_client: Any,
+    bucket: str,
+    prefix: str,
+    service_date: str,
+    filename: str,
+    schema_version: str,
+) -> dict[str, Any]:
+    key = f"{prefix.strip('/')}/normalized/{service_date}/{filename}"
     try:
+        etag = str(s3_client.head_object(Bucket=bucket, Key=key).get("ETag", ""))
+        cached = _index_cache.get(key)
+        if cached is not None and cached[0] == etag:
+            return cached[1]
         body = s3_client.get_object(Bucket=bucket, Key=key)["Body"].read()
         value = json.loads(gzip.decompress(body).decode("utf-8"))
     except Exception as error:
-        raise RequestError(503, "指定日の接続インデックスを読み込めません。") from error
-    if not isinstance(value, dict):
-        raise RequestError(503, "指定日の接続インデックス形式が不正です。")
+        raise RequestError(503, "指定日の検索インデックスを読み込めません。") from error
+    if not isinstance(value, dict) or value.get("schema_version") != schema_version:
+        raise RequestError(503, "指定日の検索インデックス形式が不正です。")
+    _index_cache[key] = (etag, value)
     return value
 
 
