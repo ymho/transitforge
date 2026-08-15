@@ -26,6 +26,11 @@ import type {
 } from "./viewer-agent-response";
 import { journeyChatFollowUpIntent } from "./journey-chat-follow-up";
 import {
+  journeyNavigationGuidanceFromPrompt,
+  mergeJourneyNavigationGuidance,
+  type JourneyNavigationGuidance,
+} from "./journey-navigation-intent";
+import {
   directRouteDepartureTime,
   type DirectRouteSearchResponse,
 } from "./direct-route-search";
@@ -79,10 +84,15 @@ export interface BedrockViewerAgentDependencies {
     excludedTrainNames?: string[];
     excludedTrainNumbers?: string[];
     excludedServiceUids?: string[];
+    requiredServiceTypes?: string[];
+    requiredTrainNames?: string[];
+    requiredTrainNumbers?: string[];
+    allowedServiceTypes?: string[];
   }) => Promise<DirectRouteSearchResponse>;
   getCurrentDate?: () => Date;
   getJourneySearchPreferences?: () => JourneySearchPreferences;
   getPreviousJourneyPlan?: () => ViewerAgentJourneyPlan | undefined;
+  getPendingJourneyGuidance?: () => JourneyNavigationGuidance | undefined;
   maximumRouteTime: number;
 }
 
@@ -124,6 +134,10 @@ interface DirectRouteToolState {
     excludedTrainNames?: string[];
     excludedTrainNumbers?: string[];
     excludedServiceUids?: string[];
+    requiredServiceTypes?: string[];
+    requiredTrainNames?: string[];
+    requiredTrainNumbers?: string[];
+    allowedServiceTypes?: string[];
     originStation: string;
     destinationStation: string;
     searchTimeMinutes: number;
@@ -426,11 +440,18 @@ async function executeTool(
             currentDate(dependencies),
           )
         : undefined);
-    const preferences = journeySearchPreferencesFromPrompt(
-      originalPrompt,
-      dependencies.getJourneySearchPreferences?.() ??
-        defaultJourneySearchPreferences,
+    const guidance = mergeJourneyNavigationGuidance(
+      dependencies.getPendingJourneyGuidance?.(),
+      journeyNavigationGuidanceFromPrompt(originalPrompt, dependencies.trains),
     );
+    const defaultPreferences = dependencies.getJourneySearchPreferences?.() ??
+      defaultJourneySearchPreferences;
+    const preferences = journeySearchPreferencesFromPrompt(originalPrompt, {
+      transferPace: guidance.transferPace ?? defaultPreferences.transferPace,
+      rankingPreference:
+        guidance.rankingPreference ?? defaultPreferences.rankingPreference,
+      maxTransfers: guidance.maxTransfers ?? defaultPreferences.maxTransfers,
+    });
     const response = await dependencies.searchDirectRoutes({
       ...(typeof originStation === "string" && originStation.trim()
         ? { originStation: originStation.trim() }
@@ -439,6 +460,27 @@ async function executeTool(
       departureTimeMinutes: resolvedDepartureTime,
       ...(routeDate ?? {}),
       ...preferences,
+      ...(guidance.requiredServiceTypes.length
+        ? { requiredServiceTypes: guidance.requiredServiceTypes }
+        : {}),
+      ...(guidance.requiredTrainNames.length
+        ? { requiredTrainNames: guidance.requiredTrainNames }
+        : {}),
+      ...(guidance.requiredTrainNumbers.length
+        ? { requiredTrainNumbers: guidance.requiredTrainNumbers }
+        : {}),
+      ...(guidance.allowedServiceTypes.length
+        ? { allowedServiceTypes: guidance.allowedServiceTypes }
+        : {}),
+      ...(guidance.excludedServiceTypes.length
+        ? { excludedServiceTypes: guidance.excludedServiceTypes }
+        : {}),
+      ...(guidance.excludedTrainNames.length
+        ? { excludedTrainNames: guidance.excludedTrainNames }
+        : {}),
+      ...(guidance.excludedTrainNumbers.length
+        ? { excludedTrainNumbers: guidance.excludedTrainNumbers }
+        : {}),
     });
     toolState.searched = true;
     directRouteServiceUids.clear();
@@ -455,18 +497,29 @@ async function executeTool(
       rankingPreference:
         response.rankingPreference ?? preferences.rankingPreference,
       maxTransfers: response.maxTransfers ?? preferences.maxTransfers,
-      ...(response.excludedServiceTypes?.length
-        ? { excludedServiceTypes: response.excludedServiceTypes }
+      ...((response.excludedServiceTypes ?? guidance.excludedServiceTypes).length
+        ? { excludedServiceTypes:
+          response.excludedServiceTypes ?? guidance.excludedServiceTypes }
         : {}),
-      ...(response.excludedTrainNames?.length
-        ? { excludedTrainNames: response.excludedTrainNames }
+      ...((response.excludedTrainNames ?? guidance.excludedTrainNames).length
+        ? { excludedTrainNames:
+          response.excludedTrainNames ?? guidance.excludedTrainNames }
         : {}),
-      ...(response.excludedTrainNumbers?.length
-        ? { excludedTrainNumbers: response.excludedTrainNumbers }
+      ...((response.excludedTrainNumbers ?? guidance.excludedTrainNumbers).length
+        ? { excludedTrainNumbers:
+          response.excludedTrainNumbers ?? guidance.excludedTrainNumbers }
         : {}),
       ...(response.excludedServiceUids?.length
         ? { excludedServiceUids: response.excludedServiceUids }
         : {}),
+      requiredServiceTypes:
+        response.requiredServiceTypes ?? guidance.requiredServiceTypes,
+      requiredTrainNames:
+        response.requiredTrainNames ?? guidance.requiredTrainNames,
+      requiredTrainNumbers:
+        response.requiredTrainNumbers ?? guidance.requiredTrainNumbers,
+      allowedServiceTypes:
+        response.allowedServiceTypes ?? guidance.allowedServiceTypes,
       originStation: response.originStation,
       destinationStation: destinationStation.trim(),
       searchTimeMinutes: resolvedDepartureTime,
@@ -614,8 +667,18 @@ function directRouteResponseText(
   const exclusionLabel = excludedLabels.length
     ? `${excludedLabels.join("・")}を使わない条件で`
     : "";
+  const requiredLabels = uniqueStrings([
+    ...(response.requiredServiceTypes ?? []),
+    ...(response.requiredTrainNames ?? []),
+    ...(response.requiredTrainNumbers ?? []),
+  ]);
+  const requirementLabel = requiredLabels.length
+    ? `${requiredLabels.join("・")}を利用する条件で`
+    : response.allowedServiceTypes?.length
+    ? `${response.allowedServiceTypes.join("・")}だけを利用する条件で`
+    : "";
   if (response.journeys.length === 0) {
-    return `${exclusionLabel}${formatClockTime(response.searchTimeMinutes)}以降に${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}へ行く経路は見つかりませんでした。`;
+    return `${exclusionLabel}${requirementLabel}${formatClockTime(response.searchTimeMinutes)}以降に${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}へ行く経路は見つかりませんでした。`;
   }
   const first = response.journeys[0]?.legs[0];
   const focusMessage =
@@ -626,7 +689,7 @@ function directRouteResponseText(
     ? `${formatCalendarDate(response.departureDate)}の`
     : "";
   return {
-    text: `${exclusionLabel}${dateLabel}${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}への経路候補です。${focusMessage}`,
+    text: `${exclusionLabel}${requirementLabel}${dateLabel}${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}への経路候補です。${focusMessage}`,
     journeyPlan: {
       ...(response.departureDate ? { departureDate: response.departureDate } : {}),
       ...(response.serviceDate ? { serviceDate: response.serviceDate } : {}),
@@ -646,6 +709,18 @@ function directRouteResponseText(
       ...(response.excludedServiceUids?.length
         ? { excludedServiceUids: response.excludedServiceUids }
         : {}),
+      ...(response.requiredServiceTypes?.length
+        ? { requiredServiceTypes: response.requiredServiceTypes }
+        : {}),
+      ...(response.requiredTrainNames?.length
+        ? { requiredTrainNames: response.requiredTrainNames }
+        : {}),
+      ...(response.requiredTrainNumbers?.length
+        ? { requiredTrainNumbers: response.requiredTrainNumbers }
+        : {}),
+      ...(response.allowedServiceTypes?.length
+        ? { allowedServiceTypes: response.allowedServiceTypes }
+        : {}),
       originStation: response.originStation,
       destinationStation: response.destinationStation,
       journeys: response.journeys,
@@ -658,29 +733,65 @@ async function journeyConstraintFollowUpResponse(
   dependencies: BedrockViewerAgentDependencies,
 ): Promise<ViewerAgentResponse | undefined> {
   const plan = dependencies.getPreviousJourneyPlan?.();
-  const intent = journeyChatFollowUpIntent(prompt, plan);
+  const exclusionIntent = journeyChatFollowUpIntent(prompt, plan);
+  const parsedGuidance = journeyNavigationGuidanceFromPrompt(
+    prompt,
+    dependencies.trains,
+  );
+  const requestedGuidance = exclusionIntent?.type === "exclude-trains" &&
+      parsedGuidance
+    ? {
+      ...parsedGuidance,
+      excludedServiceTypes: [],
+      excludedTrainNames: [],
+      excludedTrainNumbers: [],
+    }
+    : parsedGuidance;
   if (
-    intent?.type !== "exclude-trains" ||
     !plan ||
-    !dependencies.searchDirectRoutes
+    !dependencies.searchDirectRoutes ||
+    (exclusionIntent?.type !== "exclude-trains" && !requestedGuidance)
   ) {
     return undefined;
   }
+  const guidance = mergeJourneyNavigationGuidance({
+    excludedServiceTypes: plan.excludedServiceTypes ?? [],
+    excludedTrainNames: plan.excludedTrainNames ?? [],
+    excludedTrainNumbers: plan.excludedTrainNumbers ?? [],
+    requiredServiceTypes: plan.requiredServiceTypes ?? [],
+    requiredTrainNames: plan.requiredTrainNames ?? [],
+    requiredTrainNumbers: plan.requiredTrainNumbers ?? [],
+    allowedServiceTypes: plan.allowedServiceTypes ?? [],
+    transferPace: plan.transferPace,
+    rankingPreference: plan.rankingPreference,
+    maxTransfers: supportedMaximumTransfers(plan.maxTransfers),
+  }, requestedGuidance);
   const excludedServiceTypes = uniqueStrings([
-    ...(plan.excludedServiceTypes ?? []),
-    ...intent.exclusions.serviceTypes,
-  ]);
+    ...guidance.excludedServiceTypes,
+    ...(exclusionIntent?.type === "exclude-trains"
+      ? exclusionIntent.exclusions.serviceTypes
+      : []),
+  ]).filter((value) =>
+    !guidance.requiredServiceTypes.includes(value) &&
+    !guidance.allowedServiceTypes.includes(value)
+  );
   const excludedTrainNames = uniqueStrings([
-    ...(plan.excludedTrainNames ?? []),
-    ...intent.exclusions.trainNames,
-  ]);
+    ...guidance.excludedTrainNames,
+    ...(exclusionIntent?.type === "exclude-trains"
+      ? exclusionIntent.exclusions.trainNames
+      : []),
+  ]).filter((value) => !guidance.requiredTrainNames.includes(value));
   const excludedTrainNumbers = uniqueStrings([
-    ...(plan.excludedTrainNumbers ?? []),
-    ...intent.exclusions.trainNumbers,
-  ]);
+    ...guidance.excludedTrainNumbers,
+    ...(exclusionIntent?.type === "exclude-trains"
+      ? exclusionIntent.exclusions.trainNumbers
+      : []),
+  ]).filter((value) => !guidance.requiredTrainNumbers.includes(value));
   const excludedServiceUids = uniqueStrings([
     ...(plan.excludedServiceUids ?? []),
-    ...intent.exclusions.serviceUids,
+    ...(exclusionIntent?.type === "exclude-trains"
+      ? exclusionIntent.exclusions.serviceUids
+      : []),
   ]);
   const searchTimeMinutes =
     plan.searchTimeMinutes ??
@@ -692,13 +803,25 @@ async function journeyConstraintFollowUpResponse(
     departureTimeMinutes: searchTimeMinutes,
     ...(plan.serviceDate ? { serviceDate: plan.serviceDate } : {}),
     ...(plan.departureDate ? { departureDate: plan.departureDate } : {}),
-    transferPace: plan.transferPace,
-    rankingPreference: plan.rankingPreference,
-    maxTransfers: supportedMaximumTransfers(plan.maxTransfers),
+    transferPace: guidance.transferPace,
+    rankingPreference: guidance.rankingPreference,
+    maxTransfers: guidance.maxTransfers,
     ...(excludedServiceTypes.length ? { excludedServiceTypes } : {}),
     ...(excludedTrainNames.length ? { excludedTrainNames } : {}),
     ...(excludedTrainNumbers.length ? { excludedTrainNumbers } : {}),
     ...(excludedServiceUids.length ? { excludedServiceUids } : {}),
+    ...(guidance.requiredServiceTypes.length
+      ? { requiredServiceTypes: guidance.requiredServiceTypes }
+      : {}),
+    ...(guidance.requiredTrainNames.length
+      ? { requiredTrainNames: guidance.requiredTrainNames }
+      : {}),
+    ...(guidance.requiredTrainNumbers.length
+      ? { requiredTrainNumbers: guidance.requiredTrainNumbers }
+      : {}),
+    ...(guidance.allowedServiceTypes.length
+      ? { allowedServiceTypes: guidance.allowedServiceTypes }
+      : {}),
   });
   const journeys = journeysFromSearchResponse(response);
   const state: DirectRouteToolState = {
@@ -708,19 +831,23 @@ async function journeyConstraintFollowUpResponse(
       departureDate: response.departureDate ?? plan.departureDate,
       transferPace:
         response.transferPace ??
-        plan.transferPace ??
+        guidance.transferPace ??
         defaultJourneySearchPreferences.transferPace,
       rankingPreference:
         response.rankingPreference ??
-        plan.rankingPreference ??
+        guidance.rankingPreference ??
         defaultJourneySearchPreferences.rankingPreference,
       maxTransfers:
         response.maxTransfers ??
-        supportedMaximumTransfers(plan.maxTransfers),
+        guidance.maxTransfers ?? supportedMaximumTransfers(plan.maxTransfers),
       excludedServiceTypes,
       excludedTrainNames,
       excludedTrainNumbers,
       excludedServiceUids,
+      requiredServiceTypes: guidance.requiredServiceTypes,
+      requiredTrainNames: guidance.requiredTrainNames,
+      requiredTrainNumbers: guidance.requiredTrainNumbers,
+      allowedServiceTypes: guidance.allowedServiceTypes,
       originStation: response.originStation,
       destinationStation: plan.destinationStation,
       searchTimeMinutes,

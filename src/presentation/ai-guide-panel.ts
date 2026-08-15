@@ -215,6 +215,11 @@ function renderJourneyPlan(
     ...(plan.excludedTrainNames ?? []),
     ...(plan.excludedTrainNumbers ?? []),
   ])];
+  const requiredLabels = [...new Set([
+    ...(plan.requiredServiceTypes ?? []),
+    ...(plan.requiredTrainNames ?? []),
+    ...(plan.requiredTrainNumbers ?? []),
+  ])];
   if (plan.transferPace && plan.rankingPreference) {
     const conditions = document.createElement("p");
     conditions.className = "journey-plan-conditions";
@@ -224,6 +229,12 @@ function renderJourneyPlan(
       `最大乗換: ${plan.maxTransfers ?? 3}回`,
       ...(excludedLabels.length
         ? [`除外: ${excludedLabels.join("・")}`]
+        : []),
+      ...(requiredLabels.length
+        ? [`利用: ${requiredLabels.join("・")}`]
+        : []),
+      ...(plan.allowedServiceTypes?.length
+        ? [`限定: ${plan.allowedServiceTypes.join("・")}`]
         : []),
     ].join("　");
     container.append(conditions);

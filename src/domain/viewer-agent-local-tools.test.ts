@@ -113,6 +113,16 @@ describe("viewer agent local tools", () => {
     ).toEqual({
       destinationStation: "関西空港",
     });
+    expect(
+      directRouteRequestFromPrompt("鈍行で京都にいきたい", routeTrains),
+    ).toEqual({
+      destinationStation: "京都",
+    });
+    expect(
+      directRouteRequestFromPrompt("はるかで関西空港へ", routeTrains),
+    ).toEqual({
+      destinationStation: "関西空港",
+    });
     expect(directRouteRequestFromPrompt("京都へ向かう特急を見せて", trains)).toBeUndefined();
   });
 

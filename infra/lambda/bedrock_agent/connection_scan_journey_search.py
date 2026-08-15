@@ -8,10 +8,12 @@ from decimal import Decimal
 from typing import Any
 
 from journey_delay_prediction import estimate_trip_delays
-from journey_exclusions import (
-    excluded_service_ids,
-    response_exclusions,
-    trace_exclusions,
+from journey_constraints import (
+    eligible_service_ids,
+    required_requirement_mask,
+    response_constraints,
+    service_requirement_mask,
+    trace_constraints,
 )
 from request_contract import RequestError
 
@@ -54,12 +56,19 @@ def search_index(
     station_transfers = index.get("station_transfer_minutes")
     station_transfers = station_transfers if isinstance(station_transfers, dict) else {}
     maximum_boardings = request["maxTransfers"] + 1
-    excluded_trip_ids = excluded_service_ids(trips, request)
+    eligible_trip_ids = eligible_service_ids(trips, request)
+    excluded_trip_ids = set(map(str, trips)) - eligible_trip_ids
+    required_mask = required_requirement_mask(request)
+    trip_requirement_masks = {
+        str(trip_id): service_requirement_mask(trip, request)
+        for trip_id, trip in trips.items()
+        if isinstance(trip, dict)
+    }
     trace: dict[str, Any] = {
         "schemaVersion": "journey-search-trace-v1",
         "strategy": "multi-criteria-connection-scan",
         "indexConnections": len(raw_connections),
-        **trace_exclusions(request),
+        **trace_constraints(request),
         "excludedTrips": len(excluded_trip_ids),
         "excludedServiceConnectionsRejected": 0,
         "connectionsScanned": 0,
@@ -136,11 +145,16 @@ def search_index(
         "journeyDeparture": request["departureTimeMinutes"],
         "parent": None,
         "connection": None,
+        "requirementMask": 0,
     }
-    station_labels: dict[tuple[str, int], list[dict[str, Any]]] = {
-        (origin, 0): [origin_label]
+    station_labels: dict[tuple[str, int, int], list[dict[str, Any]]] = {
+        (origin, 0, 0): [origin_label]
     }
-    trip_labels: dict[tuple[str, int], dict[str, Any]] = {}
+    station_masks: dict[tuple[str, int], set[int]] = {
+        (origin, 0): {0}
+    }
+    trip_labels: dict[tuple[str, int, int], dict[str, Any]] = {}
+    trip_masks: dict[tuple[str, int], set[int]] = defaultdict(set)
     best_destination_arrival: float | None = None
 
     for raw_connection in connections[start_index:]:
@@ -175,84 +189,109 @@ def search_index(
         reached_connection = False
 
         for boardings in range(1, maximum_boardings + 1):
-            sources: list[dict[str, Any]] = []
-            onboard = trip_labels.get((trip_id, boardings))
-            if (
-                onboard is not None
-                and _normalize_station(onboard["station"]) == from_station
-                and onboard["arrival"] <= connection["expectedDeparture"]
-            ):
-                sources.append(onboard)
-
-            for label in station_labels.get((from_station, boardings - 1), []):
-                if label["lastTrip"] == trip_id:
-                    continue
+            sources_by_mask: dict[int, list[dict[str, Any]]] = defaultdict(list)
+            for source_mask in trip_masks.get((trip_id, boardings), set()):
+                onboard = trip_labels[(trip_id, boardings, source_mask)]
                 if (
-                    label["lastTrip"] is not None
-                    and from_station in NON_UNIQUE_STATION_NAMES_V1
+                    _normalize_station(onboard["station"]) == from_station
+                    and onboard["arrival"] <= connection["expectedDeparture"]
                 ):
-                    trace["labelsRejectedByNonUniqueStation"] += 1
-                    continue
-                transfer_minutes = 0.0
-                if label["lastTrip"] is not None:
-                    transfer_minutes = _paced_transfer_minutes(
-                        connection["from_station"],
-                        station_transfers,
-                        default_transfer,
-                        request["transferPace"],
-                    )
-                    if _has_station_transfer_rule(
-                        connection["from_station"], station_transfers
-                    ):
-                        trace["stationTransferRulesUsed"][connection["from_station"]] = transfer_minutes
-                if label["arrival"] + transfer_minutes <= connection["expectedDeparture"]:
-                    sources.append(label)
-                else:
-                    trace["labelsRejectedByTransferTime"] += 1
+                    sources_by_mask[source_mask].append(onboard)
 
-            if not sources:
+            for source_mask in station_masks.get(
+                (from_station, boardings - 1), set()
+            ):
+                labels = station_labels[
+                    (from_station, boardings - 1, source_mask)
+                ]
+                for label in labels:
+                    if label["lastTrip"] == trip_id:
+                        continue
+                    if (
+                        label["lastTrip"] is not None
+                        and from_station in NON_UNIQUE_STATION_NAMES_V1
+                    ):
+                        trace["labelsRejectedByNonUniqueStation"] += 1
+                        continue
+                    transfer_minutes = 0.0
+                    if label["lastTrip"] is not None:
+                        transfer_minutes = _paced_transfer_minutes(
+                            connection["from_station"],
+                            station_transfers,
+                            default_transfer,
+                            request["transferPace"],
+                        )
+                        if _has_station_transfer_rule(
+                            connection["from_station"], station_transfers
+                        ):
+                            trace["stationTransferRulesUsed"][
+                                connection["from_station"]
+                            ] = transfer_minutes
+                    if (
+                        label["arrival"] + transfer_minutes
+                        <= connection["expectedDeparture"]
+                    ):
+                        next_mask = source_mask | trip_requirement_masks.get(
+                            trip_id, 0
+                        )
+                        sources_by_mask[next_mask].append(label)
+                    else:
+                        trace["labelsRejectedByTransferTime"] += 1
+
+            if not sources_by_mask:
                 continue
-            source = max(
-                sources,
-                key=lambda label: (
-                    label["journeyDeparture"],
-                    -label["arrival"],
-                ),
-            )
-            journey_departure = (
-                connection["expectedDeparture"]
-                if source["boardings"] == 0
-                else source["journeyDeparture"]
-            )
-            candidate = {
-                "station": connection["to_station"],
-                "arrival": connection["expectedArrival"],
-                "boardings": boardings,
-                "lastTrip": trip_id,
-                "journeyDeparture": journey_departure,
-                "parent": source,
-                "connection": connection,
-            }
-            trip_labels[(trip_id, boardings)] = candidate
-            accepted, trimmed = _add_station_label(
-                station_labels.setdefault((to_station, boardings), []),
-                candidate,
-                request,
-            )
-            if accepted:
-                reached_connection = True
-                trace["labelsAccepted"] += 1
-                trace["labelsTrimmed"] += trimmed
-                if to_station == destination:
-                    trace["destinationImprovements"] += 1
-                    best_destination_arrival = min(
-                        best_destination_arrival
-                        if best_destination_arrival is not None
-                        else candidate["arrival"],
-                        candidate["arrival"],
+            for requirement_mask, sources in sources_by_mask.items():
+                source = max(
+                    sources,
+                    key=lambda label: (
+                        label["journeyDeparture"],
+                        -label["arrival"],
+                    ),
+                )
+                journey_departure = (
+                    connection["expectedDeparture"]
+                    if source["boardings"] == 0
+                    else source["journeyDeparture"]
+                )
+                candidate = {
+                    "station": connection["to_station"],
+                    "arrival": connection["expectedArrival"],
+                    "boardings": boardings,
+                    "lastTrip": trip_id,
+                    "journeyDeparture": journey_departure,
+                    "parent": source,
+                    "connection": connection,
+                    "requirementMask": requirement_mask,
+                }
+                trip_labels[(trip_id, boardings, requirement_mask)] = candidate
+                trip_masks[(trip_id, boardings)].add(requirement_mask)
+                accepted, trimmed = _add_station_label(
+                    station_labels.setdefault(
+                        (to_station, boardings, requirement_mask), []
+                    ),
+                    candidate,
+                    request,
+                )
+                if accepted:
+                    station_masks.setdefault((to_station, boardings), set()).add(
+                        requirement_mask
                     )
-            else:
-                trace["labelsRejectedByDominance"] += 1
+                    reached_connection = True
+                    trace["labelsAccepted"] += 1
+                    trace["labelsTrimmed"] += trimmed
+                    if (
+                        to_station == destination
+                        and requirement_mask == required_mask
+                    ):
+                        trace["destinationImprovements"] += 1
+                        best_destination_arrival = min(
+                            best_destination_arrival
+                            if best_destination_arrival is not None
+                            else candidate["arrival"],
+                            candidate["arrival"],
+                        )
+                else:
+                    trace["labelsRejectedByDominance"] += 1
 
         if not reached_connection:
             trace["connectionsWithoutReachableOrigin"] += 1
@@ -260,7 +299,9 @@ def search_index(
     destination_labels = [
         label
         for boardings in range(1, maximum_boardings + 1)
-        for label in station_labels.get((destination, boardings), [])
+        for label in station_labels.get(
+            (destination, boardings, required_mask), []
+        )
         if (
             best_destination_arrival is None
             or label["arrival"]
@@ -660,7 +701,7 @@ def _response(
         "totalMatchCount": len(journeys),
         "matches": direct_matches,
         "journeys": journeys,
-        **response_exclusions(request),
+        **response_constraints(request),
         "trace": trace,
     }
 

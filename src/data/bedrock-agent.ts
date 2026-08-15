@@ -73,6 +73,10 @@ export async function searchTravelCandidates(
     excludedTrainNames?: string[];
     excludedTrainNumbers?: string[];
     excludedServiceUids?: string[];
+    requiredServiceTypes?: string[];
+    requiredTrainNames?: string[];
+    requiredTrainNumbers?: string[];
+    allowedServiceTypes?: string[];
   },
   fetcher: typeof fetch = fetch,
 ): Promise<TravelCandidateSearchResponse> {
