@@ -376,7 +376,7 @@ async function executeTool(
     const { departureTimeMinutes } = input;
     const promptRequest = directRouteRequestFromPrompt(
       originalPrompt,
-      currentTrains(dependencies),
+      dependencies.trains,
     );
     const originStation = promptRequest?.originStation ?? input.originStation;
     const destinationStation =

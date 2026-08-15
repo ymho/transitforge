@@ -64,6 +64,10 @@ import {
 } from "./domain/map-weather";
 import { dominantLineColorsByPathId } from "./domain/path-line-colors";
 import { currentRouteTime } from "./domain/playback";
+import {
+  browserDigitalTwinClockEnvironment,
+  createDigitalTwinClockSynchronizer,
+} from "./domain/digital-twin-clock";
 import { PlaybackController } from "./domain/playback-controller";
 import { congestionAnalysisForAgent } from "./domain/congestion-analysis";
 import { delayAnalysisForAgent } from "./domain/delay-analysis";
@@ -1325,6 +1329,13 @@ function configurePlayback(
     playToggle.ariaLabel = playing ? "一時停止" : "再生";
     playToggle.title = playing ? "一時停止" : "再生";
   };
+  const digitalTwinClock = createDigitalTwinClockSynchronizer((now) => {
+    onCurrentDateSelected(now);
+    const routeTime = currentRouteTime(now);
+    controller.synchronize(
+      Math.min(Math.max(routeTime, range.minimum), range.maximum),
+    );
+  }, browserDigitalTwinClockEnvironment());
 
   displayTime.addEventListener("input", () => {
     // 描画は既存のinputリスナーが行い、再生基準だけを移動する。
@@ -1359,6 +1370,7 @@ function configurePlayback(
         return;
       }
       digitalTwinMode = enabled;
+      digitalTwinClock.setEnabled(enabled);
       if (enabled) {
         speedControls.selectRealtimeSpeed();
         controller.start();

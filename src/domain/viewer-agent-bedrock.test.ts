@@ -795,6 +795,69 @@ describe("Bedrock viewer agent", () => {
     expect(rich.text).not.toContain("駅駅");
   });
 
+  it("does not treat the temporal phrase いまから as the route separator", async () => {
+    const airportRoute: Train = {
+      ...train,
+      service_uid: "himeji-airport",
+      origin_station: "姫路",
+      destination_station: "関西空港",
+      stops: [
+        { station_name: "姫路", event: "発", route_time_minutes: 750 },
+        { station_name: "関西空港", event: "着", route_time_minutes: 870 },
+      ],
+    };
+    const searchDirectRoutes = vi.fn(async () => ({
+      originStation: "姫路",
+      results: [],
+      journeys: [],
+    }));
+    const converse = vi.fn().mockResolvedValueOnce({
+      message: {
+        role: "assistant",
+        content: [{
+          toolUse: {
+            toolUseId: "route",
+            name: "search_direct_routes",
+            input: {
+              originStation: "姫路",
+              destinationStation: "姫路",
+              departureTimeMinutes: 742,
+            },
+          },
+        }],
+      },
+      stopReason: "tool_use",
+    });
+
+    const result = await runBedrockViewerAgent(
+      "いまから姫路から関西空港にいきたい",
+      {
+        trains: [airportRoute],
+        getTrains: () => [],
+        getPositions: () => [],
+        getRouteTime: () => 742,
+        setRouteTime: vi.fn(),
+        focusTrain: vi.fn(),
+        setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(),
+        searchDirectRoutes,
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(searchDirectRoutes).toHaveBeenCalledWith(expect.objectContaining({
+      originStation: "姫路",
+      destinationStation: "関西空港",
+      departureTimeMinutes: 742,
+    }));
+    expect(result).toBe(
+      "12時22分以降に姫路駅から関西空港駅へ行く経路は見つかりませんでした。",
+    );
+  });
+
   it("formats a one-transfer journey with its station and wait time", async () => {
     const searchDirectRoutes = vi.fn(async () => ({
       originStation: "嵯峨嵐山",
