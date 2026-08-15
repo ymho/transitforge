@@ -83,6 +83,12 @@ describe("viewer agent local tools", () => {
   });
 
   it("extracts direct-route destinations and optional origins", () => {
+    const airportRoute = train("airport", "1001M", "特急", "はるか1号", "関西空港", [
+      ["姫路", 720],
+      ["関西空港", 840],
+    ]);
+    const routeTrains = [...trains, airportRoute];
+
     expect(directRouteRequestFromPrompt("京都に行きたい", trains)).toEqual({
       destinationStation: "京都",
     });
@@ -92,6 +98,20 @@ describe("viewer agent local tools", () => {
       originStation: "大阪",
       destinationStation: "京都",
       departureTimeMinutes: 1_110,
+    });
+    expect(
+      directRouteRequestFromPrompt(
+        "いまから姫路から関西空港にいきたい",
+        routeTrains,
+      ),
+    ).toEqual({
+      originStation: "姫路",
+      destinationStation: "関西空港",
+    });
+    expect(
+      directRouteRequestFromPrompt("これから関西空港に行きたい", routeTrains),
+    ).toEqual({
+      destinationStation: "関西空港",
     });
     expect(directRouteRequestFromPrompt("京都へ向かう特急を見せて", trains)).toBeUndefined();
   });

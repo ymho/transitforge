@@ -221,7 +221,14 @@ export function directRouteRequestFromPrompt(
     return undefined;
   }
 
-  const fromIndex = normalizedPrompt.indexOf("から");
+  const fromIndex = Array.from(normalizedPrompt.matchAll(/から/gu))
+    .map((match) => match.index)
+    .filter((separatorIndex) =>
+      mentions.some(({ index, normalizedName }) =>
+        index + normalizedName.length <= separatorIndex
+      ) && mentions.some(({ index }) => index > separatorIndex)
+    )
+    .at(-1) ?? -1;
   const origin =
     fromIndex < 0
       ? undefined
