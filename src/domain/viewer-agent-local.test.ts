@@ -90,4 +90,39 @@ describe("local viewer agent", () => {
       departureTimeMinutes: 1_388,
     });
   });
+
+  it("applies a local-only wish remembered before a route request", async () => {
+    const searchDirectRoutes = vi.fn(async () => ({
+      originStation: "向日町",
+      results: [],
+    }));
+    const handlePrompt = createLocalViewerAgent({
+      trains: [train],
+      getPositions: () => [],
+      getRouteTime: () => 1_388,
+      setRouteTime: vi.fn(),
+      focusTrain: vi.fn(() => false),
+      setWeather: vi.fn(),
+      setLayerVisibility: vi.fn(),
+      searchDirectRoutes,
+      getPendingJourneyGuidance: () => ({
+        excludedServiceTypes: [],
+        excludedTrainNames: [],
+        excludedTrainNumbers: [],
+        requiredServiceTypes: [],
+        requiredTrainNames: [],
+        requiredTrainNumbers: [],
+        allowedServiceTypes: ["普通"],
+      }),
+      maximumRouteTime: 1_800,
+    });
+
+    await handlePrompt("向日町から京都へ行きたい");
+
+    expect(searchDirectRoutes).toHaveBeenCalledWith(expect.objectContaining({
+      originStation: "向日町",
+      destinationStation: "京都",
+      allowedServiceTypes: ["普通"],
+    }));
+  });
 });

@@ -17,6 +17,10 @@ export interface ViewerAgentJourneyPlan {
   excludedTrainNames?: string[];
   excludedTrainNumbers?: string[];
   excludedServiceUids?: string[];
+  requiredServiceTypes?: string[];
+  requiredTrainNames?: string[];
+  requiredTrainNumbers?: string[];
+  allowedServiceTypes?: string[];
   journeys: JourneyRouteResult[];
 }
 

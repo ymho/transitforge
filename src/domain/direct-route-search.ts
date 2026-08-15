@@ -63,6 +63,10 @@ export interface DirectRouteSearchResponse {
   excludedTrainNames?: string[];
   excludedTrainNumbers?: string[];
   excludedServiceUids?: string[];
+  requiredServiceTypes?: string[];
+  requiredTrainNames?: string[];
+  requiredTrainNumbers?: string[];
+  allowedServiceTypes?: string[];
   distanceMeters?: number;
   results: DirectRouteResult[];
   journeys?: JourneyRouteResult[];
@@ -81,6 +85,10 @@ export type DirectRouteSearchHandler = (request: {
   excludedTrainNames?: string[];
   excludedTrainNumbers?: string[];
   excludedServiceUids?: string[];
+  requiredServiceTypes?: string[];
+  requiredTrainNames?: string[];
+  requiredTrainNumbers?: string[];
+  allowedServiceTypes?: string[];
 }) => Promise<DirectRouteSearchResponse>;
 
 export function directRouteDepartureTime(

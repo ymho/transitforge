@@ -45,6 +45,14 @@ import {
   type JourneyLegAlternativeSearch,
   type PendingJourneyLegChange,
 } from "./domain/journey-chat-follow-up";
+import {
+  journeyNavigationGuidanceFromPrompt,
+  journeyNavigationGuidanceResponse,
+  mergeJourneyNavigationGuidance,
+  unsupportedJourneyExperienceFromPrompt,
+  unsupportedJourneyExperienceResponse,
+  type JourneyNavigationGuidance,
+} from "./domain/journey-navigation-intent";
 import { journeyLegAlternativeFits } from "./domain/journey-leg-alternative";
 import {
   dateForOperatingRouteTime,
@@ -99,6 +107,7 @@ import {
 import { resolveViewerDisplayMode } from "./domain/viewer-display-mode";
 import { runBedrockViewerAgent } from "./domain/viewer-agent-bedrock";
 import { createLocalViewerAgent } from "./domain/viewer-agent-local";
+import { directRouteRequestFromPrompt } from "./domain/viewer-agent-local-tools";
 import type { ViewerAgentJourneyPlan } from "./domain/viewer-agent-response";
 import {
   configureAiGuidePanel,
@@ -661,6 +670,16 @@ if (!token) {
           const excludedServiceUids = new Set(
             request.excludedServiceUids ?? [],
           );
+          const requiredServiceTypes = new Set(
+            request.requiredServiceTypes ?? [],
+          );
+          const requiredTrainNames = new Set(request.requiredTrainNames ?? []);
+          const requiredTrainNumbers = new Set(
+            request.requiredTrainNumbers ?? [],
+          );
+          const allowedServiceTypes = new Set(
+            request.allowedServiceTypes ?? [],
+          );
           const normalizeExclusion = (value: string) =>
             value.normalize("NFKC").replace(/\s+/gu, "");
           const locallyExcluded = (train: Train) => {
@@ -677,6 +696,21 @@ if (!token) {
               excludedTrainNumbers.has(train.train_no) ||
               excludedServiceUids.has(train.service_uid);
           };
+          const locallyRequired = (train: Train) => {
+            const trainName = normalizeExclusion(train.train_name);
+            const trainFamily = trainName.replace(/[0-9]+号$/u, "");
+            const hasRequiredName = [...requiredTrainNames].every((value) => {
+              const requiredName = normalizeExclusion(value);
+              return /[0-9]+号$/u.test(requiredName)
+                ? trainName === requiredName
+                : trainFamily === requiredName;
+            });
+            return [...requiredServiceTypes].every(
+              (value) => train.service_type === value,
+            ) && hasRequiredName && [...requiredTrainNumbers].every(
+              (value) => train.train_no === value,
+            );
+          };
           return {
             originStation,
             ...(excludedServiceTypes.size > 0
@@ -691,9 +725,26 @@ if (!token) {
             ...(excludedServiceUids.size > 0
               ? { excludedServiceUids: [...excludedServiceUids] }
               : {}),
+            ...(requiredServiceTypes.size > 0
+              ? { requiredServiceTypes: [...requiredServiceTypes] }
+              : {}),
+            ...(requiredTrainNames.size > 0
+              ? { requiredTrainNames: [...requiredTrainNames] }
+              : {}),
+            ...(requiredTrainNumbers.size > 0
+              ? { requiredTrainNumbers: [...requiredTrainNumbers] }
+              : {}),
+            ...(allowedServiceTypes.size > 0
+              ? { allowedServiceTypes: [...allowedServiceTypes] }
+              : {}),
             ...(distanceMeters === undefined ? {} : { distanceMeters }),
             results: searchDirectRoutes(
-              displayTrains.filter((train) => !locallyExcluded(train)),
+              displayTrains.filter((train) =>
+                !locallyExcluded(train) &&
+                locallyRequired(train) &&
+                (allowedServiceTypes.size === 0 ||
+                  allowedServiceTypes.has(train.service_type))
+              ),
               originStation,
               request.destinationStation,
               request.departureTimeMinutes,
@@ -716,6 +767,10 @@ if (!token) {
             excludedTrainNames: request.excludedTrainNames,
             excludedTrainNumbers: request.excludedTrainNumbers,
             excludedServiceUids: request.excludedServiceUids,
+            requiredServiceTypes: request.requiredServiceTypes,
+            requiredTrainNames: request.requiredTrainNames,
+            requiredTrainNumbers: request.requiredTrainNumbers,
+            allowedServiceTypes: request.allowedServiceTypes,
           });
           const trainsByServiceUid = new Map(
             displayTrains.map((train) => [train.service_uid, train]),
@@ -738,6 +793,14 @@ if (!token) {
               response.excludedTrainNumbers ?? request.excludedTrainNumbers,
             excludedServiceUids:
               response.excludedServiceUids ?? request.excludedServiceUids,
+            requiredServiceTypes:
+              response.requiredServiceTypes ?? request.requiredServiceTypes,
+            requiredTrainNames:
+              response.requiredTrainNames ?? request.requiredTrainNames,
+            requiredTrainNumbers:
+              response.requiredTrainNumbers ?? request.requiredTrainNumbers,
+            allowedServiceTypes:
+              response.allowedServiceTypes ?? request.allowedServiceTypes,
             ...(distanceMeters === undefined ? {} : { distanceMeters }),
             journeys: response.journeys.map((journey) => ({
               departureTimeMinutes: journey.departureTimeMinutes,
@@ -860,6 +923,9 @@ if (!token) {
             destinationArcs.setEnabled(visible);
           }
         };
+        let previousJourneyPlan: ViewerAgentJourneyPlan | undefined;
+        let pendingJourneyLegChange: PendingJourneyLegChange | undefined;
+        let pendingJourneyGuidance: JourneyNavigationGuidance | undefined;
         const localAiGuidePromptHandler = createLocalViewerAgent({
           trains: trainIndex.trains,
           getTrains: () => displayTrains,
@@ -874,12 +940,35 @@ if (!token) {
           setWeather: selectWeather,
           setLayerVisibility,
           searchDirectRoutes: localSearchRoutes,
+          getPendingJourneyGuidance: () => pendingJourneyGuidance,
           maximumRouteTime,
         });
-        let previousJourneyPlan: ViewerAgentJourneyPlan | undefined;
-        let pendingJourneyLegChange: PendingJourneyLegChange | undefined;
         handleAiGuidePrompt = async (prompt, preferences) => {
           try {
+            const requestedGuidance = journeyNavigationGuidanceFromPrompt(
+              prompt,
+              trainIndex.trains,
+            );
+            const routeRequest = directRouteRequestFromPrompt(
+              prompt,
+              trainIndex.trains,
+            );
+            const unsupportedExperience =
+              unsupportedJourneyExperienceFromPrompt(prompt);
+            if (unsupportedExperience) {
+              return unsupportedJourneyExperienceResponse(
+                unsupportedExperience,
+              );
+            }
+            if (requestedGuidance && !routeRequest && !previousJourneyPlan) {
+              pendingJourneyGuidance = mergeJourneyNavigationGuidance(
+                pendingJourneyGuidance,
+                requestedGuidance,
+              );
+              return journeyNavigationGuidanceResponse(
+                pendingJourneyGuidance,
+              );
+            }
             const followUp = journeyChatFollowUpIntent(
               prompt,
               previousJourneyPlan,
@@ -968,6 +1057,7 @@ if (!token) {
                 searchDirectRoutes: backendSearchRoutes,
                 getJourneySearchPreferences: () => preferences,
                 getPreviousJourneyPlan: () => previousJourneyPlan,
+                getPendingJourneyGuidance: () => pendingJourneyGuidance,
                 maximumRouteTime,
               },
               invokeBedrockAgent,
@@ -975,11 +1065,16 @@ if (!token) {
             if (typeof response !== "string") {
               previousJourneyPlan = response.journeyPlan;
               pendingJourneyLegChange = undefined;
+              pendingJourneyGuidance = undefined;
             }
             return response;
           } catch (error) {
             if (import.meta.env.DEV) {
-              return localAiGuidePromptHandler(prompt);
+              const localResponse = await localAiGuidePromptHandler(prompt);
+              if (directRouteRequestFromPrompt(prompt, trainIndex.trains)) {
+                pendingJourneyGuidance = undefined;
+              }
+              return localResponse;
             }
             throw error;
           }

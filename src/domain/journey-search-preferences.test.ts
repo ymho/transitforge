@@ -41,4 +41,19 @@ describe("journey search preferences", () => {
       maxTransfers: 3,
     });
   });
+
+  it("limits transfers when the prompt asks for a journey shape", () => {
+    expect(
+      journeySearchPreferencesFromPrompt(
+        "乗換なしで行きたい",
+        defaultJourneySearchPreferences,
+      ).maxTransfers,
+    ).toBe(0);
+    expect(
+      journeySearchPreferencesFromPrompt(
+        "乗換2回まで",
+        defaultJourneySearchPreferences,
+      ).maxTransfers,
+    ).toBe(2);
+  });
 });
