@@ -290,7 +290,7 @@ function renderJourneyTimeline(
     ].filter(Boolean).join(" ");
     summary.append(
       stationRow(formatClock(leg.departureTimeMinutes), leg.originStation),
-      segmentLine(trainLabel, leg.lineName),
+      segmentLine(trainLabel, leg.lineName, journeyDelayLabel(leg), leg.delayBasis),
     );
     summary.append(
       stationRow(formatClock(leg.arrivalTimeMinutes), leg.destinationStation),
@@ -319,7 +319,12 @@ function stationRow(time: string, station: string): HTMLElement {
   return row;
 }
 
-function segmentLine(label: string, lineName?: string): HTMLElement {
+function segmentLine(
+  label: string,
+  lineName?: string,
+  delayLabel?: string,
+  delayBasis?: string,
+): HTMLElement {
   const row = document.createElement("span");
   row.className = "journey-segment";
   const line = document.createElement("i");
@@ -333,8 +338,25 @@ function segmentLine(label: string, lineName?: string): HTMLElement {
     secondary.textContent = lineName;
     text.append(secondary);
   }
+  if (delayLabel) {
+    const delay = document.createElement("small");
+    delay.className = "journey-delay-badge";
+    delay.textContent = delayLabel;
+    if (delayBasis) {
+      delay.title = `${delayBasis}を走る近隣列車から推定`;
+    }
+    text.append(delay);
+  }
   row.append(line, text);
   return row;
+}
+
+export function journeyDelayLabel(leg: JourneyRouteResult["legs"][number]): string | undefined {
+  const delay = Math.round(leg.delayMinutes ?? 0);
+  if (delay <= 0) return undefined;
+  return leg.delayStatus === "estimated"
+    ? `遅延見込み +${delay}分`
+    : `遅延 +${delay}分`;
 }
 
 function destinationLabel(value: string): string {

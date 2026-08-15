@@ -6,6 +6,7 @@ import unicodedata
 from decimal import Decimal
 from typing import Any
 
+from journey_delay_prediction import estimate_trip_delays
 from request_contract import RequestError
 
 
@@ -61,6 +62,26 @@ def search_index(
     if not origin_name or origin == destination:
         return _response(request, [], trace)
 
+    delay_predictions = estimate_trip_delays(
+        services,
+        {
+            str(service_id): _service_edges(service)
+            for service_id, service in services.items()
+            if isinstance(service_id, str) and isinstance(service, dict)
+        },
+        operations,
+        request["departureTimeMinutes"],
+        _operation_for,
+    )
+    trace["observedDelayTrips"] = sum(
+        info.get("delayStatus") == "observed" and info["delayMinutes"] > 0
+        for info in delay_predictions.values()
+    )
+    trace["estimatedDelayTrips"] = sum(
+        info.get("delayStatus") == "estimated"
+        for info in delay_predictions.values()
+    )
+
     service_ids = station_origins.get(origin_name)
     if not isinstance(service_ids, list):
         return _response(request, [], trace)
@@ -70,7 +91,7 @@ def search_index(
         service = services.get(str(service_id))
         if not isinstance(service, dict):
             continue
-        delay = _delay_minutes(service, delays, operations)
+        delay = _delay_info(service, delays, operations, delay_predictions)["delayMinutes"]
         calls = _effective_calls(service, operations)
         if _missing_active_operation(
             service, calls, operations, realtime_route_time
@@ -107,7 +128,10 @@ def search_index(
             break
         trace["firstBoardingsEvaluated"] += 1
         calls = _effective_calls(first_service, operations)
-        delay = _delay_minutes(first_service, delays, operations)
+        delay_info = _delay_info(
+            first_service, delays, operations, delay_predictions
+        )
+        delay = delay_info["delayMinutes"]
         direct_leg = _leg_to_destination(
             first_service,
             calls,
@@ -115,7 +139,7 @@ def search_index(
             destination,
             departure,
             scheduled_departure,
-            delay,
+            delay_info,
         )
         if direct_leg is not None:
             _add_candidate(candidates, [direct_leg])
@@ -146,6 +170,7 @@ def search_index(
                     delays,
                     operations,
                     realtime_route_time,
+                    delay_predictions,
                 )
                 destination_options_by_station[transfer] = (
                     options,
@@ -182,7 +207,7 @@ def search_index(
                     arrival,
                     scheduled_departure,
                     scheduled_arrival,
-                    delay,
+                    delay_info,
                 )
                 _add_candidate(candidates, [first_leg, second_leg])
                 trace["transferCandidates"] += 1
@@ -217,6 +242,7 @@ def _destination_options(
     delays: dict[str, Decimal],
     operations: dict[str, dict[str, Any]] | None,
     realtime_route_time: float | None,
+    delay_predictions: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     station_name = station_names.get(origin)
     service_ids = station_origins.get(station_name, []) if station_name else []
@@ -232,7 +258,8 @@ def _destination_options(
             service, calls, operations, realtime_route_time
         ):
             continue
-        delay = _delay_minutes(service, delays, operations)
+        delay_info = _delay_info(service, delays, operations, delay_predictions)
+        delay = delay_info["delayMinutes"]
         for origin_index, call in enumerate(calls):
             if _normalize(call.get("station_name")) != origin:
                 continue
@@ -246,7 +273,7 @@ def _destination_options(
                 destination,
                 scheduled_departure + delay,
                 scheduled_departure,
-                delay,
+                delay_info,
             )
             if leg is not None:
                 options.append(leg)
@@ -264,8 +291,9 @@ def _leg_to_destination(
     destination: str,
     departure: float,
     scheduled_departure: float,
-    delay: float,
+    delay_info: dict[str, Any],
 ) -> dict[str, Any] | None:
+    delay = delay_info["delayMinutes"]
     for destination_index, destination_call in enumerate(
         calls[origin_index + 1:],
         start=origin_index + 1,
@@ -285,7 +313,7 @@ def _leg_to_destination(
             scheduled_arrival + delay,
             scheduled_departure,
             scheduled_arrival,
-            delay,
+            delay_info,
         )
     return None
 
@@ -300,8 +328,9 @@ def _leg(
     arrival: float,
     scheduled_departure: float,
     scheduled_arrival: float,
-    delay: float,
+    delay_info: dict[str, Any],
 ) -> dict[str, Any]:
+    delay = delay_info["delayMinutes"]
     return {
         "serviceUid": str(service.get("service_uid") or ""),
         "trainNumber": str(service.get("train_no") or ""),
@@ -315,6 +344,21 @@ def _leg(
         "scheduledDepartureTimeMinutes": scheduled_departure,
         "scheduledArrivalTimeMinutes": scheduled_arrival,
         "delayMinutes": delay,
+        **(
+            {"delayStatus": delay_info["delayStatus"]}
+            if "delayStatus" in delay_info
+            else {}
+        ),
+        **(
+            {"delaySampleCount": delay_info["delaySampleCount"]}
+            if "delaySampleCount" in delay_info
+            else {}
+        ),
+        **(
+            {"delayBasis": delay_info["delayBasis"]}
+            if "delayBasis" in delay_info
+            else {}
+        ),
         "stops": [
             {
                 "stationName": str(call.get("station_name") or ""),
@@ -425,6 +469,37 @@ def _delay_minutes(
         return float(operation["delayMinutes"])
     delay = delays.get(str(service.get("train_no") or ""), Decimal(0))
     return float(max(Decimal(0), delay))
+
+
+def _delay_info(
+    service: dict[str, Any],
+    delays: dict[str, Decimal],
+    operations: dict[str, dict[str, Any]] | None,
+    predictions: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    predicted = predictions.get(str(service.get("service_uid") or ""))
+    if predicted is not None:
+        return predicted
+    delay = _delay_minutes(service, delays, operations)
+    return {
+        "delayMinutes": delay,
+        **({"delayStatus": "observed"} if delay > 0 else {}),
+    }
+
+
+def _service_edges(service: dict[str, Any]) -> list[dict[str, Any]]:
+    calls = _calls(service)
+    edges: list[dict[str, Any]] = []
+    for current, following in zip(calls, calls[1:]):
+        departure = _departure_time(current)
+        if departure is None:
+            continue
+        edges.append({
+            "from_station": str(current.get("station_name") or ""),
+            "to_station": str(following.get("station_name") or ""),
+            "departure_time_minutes": departure,
+        })
+    return edges
 
 
 def _effective_calls(

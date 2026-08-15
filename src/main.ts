@@ -77,12 +77,14 @@ import {
   delayByTrainNumber,
   destinationChangedServiceUids,
   operationsForDisplay,
+  operationsWithCoupledTrainOperations,
   operationsWithTimetableTrainNumberAliases,
   trainsForOperations,
 } from "./domain/train-operation-state";
 import {
   activeTrainPositions,
   destinationCoordinateForTrain,
+  freezeLongTimeStoppingPositions,
   PathGeometryIndex,
 } from "./domain/train-position";
 import type { TrainPosition } from "./domain/train-position";
@@ -486,6 +488,7 @@ if (!token) {
         let displayTrains = trainIndex.trains;
         let displayDelays: ReadonlyMap<string, number> = new Map();
         let displayDestinationChanges: ReadonlySet<string> = new Set();
+        let displayLongTimeStoppingServiceUids: ReadonlySet<string> = new Set();
 
         const applyOperationMode = (displayedAt: Date) => {
           const now = new Date();
@@ -504,9 +507,14 @@ if (!token) {
             : undefined;
           if (sourceOperations !== aliasedOperationsSource) {
             aliasedOperationsSource = sourceOperations;
-            aliasedOperations = operationsWithTimetableTrainNumberAliases(
+            const trainNumberOperations = operationsWithTimetableTrainNumberAliases(
               trainIndex.trains,
               sourceOperations,
+            );
+            aliasedOperations = operationsWithCoupledTrainOperations(
+              trainIndex.trains,
+              trainNumberOperations,
+              formationLinks,
             );
           }
           const operations = aliasedOperations;
@@ -534,6 +542,13 @@ if (!token) {
             destinationChanges,
           );
           displayDelays = delayByTrainNumber(operations);
+          displayLongTimeStoppingServiceUids = new Set(
+            displayTrains.flatMap((train) =>
+              operations?.get(train.train_no)?.longTimeStopping === true
+                ? [train.service_uid]
+                : [],
+            ),
+          );
           const operationDestinationCoordinates = new Map(
             displayTrains.flatMap((train) => {
               const coordinate = destinationCoordinateForTrain(train, geometry);
@@ -559,6 +574,7 @@ if (!token) {
               (delay) => delay > 0,
             ).length,
             destinationChangedTrains: destinationChanges.size,
+            longTimeStoppingTrains: displayLongTimeStoppingServiceUids.size,
             collectedAt: latestDelaySnapshot?.collectedAt,
           });
         };
@@ -576,11 +592,17 @@ if (!token) {
             routeTime,
           );
           applyOperationMode(displayedAt);
-          const positions = activeTrainPositions(
+          const calculatedPositions = activeTrainPositions(
             displayTrains,
             geometry,
             routeTime,
             displayDelays,
+            displayDestinationChanges,
+          );
+          const positions = freezeLongTimeStoppingPositions(
+            calculatedPositions,
+            displayedPositions,
+            displayLongTimeStoppingServiceUids,
             displayDestinationChanges,
           );
           displayedPositions = positions;
@@ -686,6 +708,12 @@ if (!token) {
                   destinationStation: leg.destinationStation,
                   departureTimeMinutes: leg.departureTimeMinutes,
                   arrivalTimeMinutes: leg.arrivalTimeMinutes,
+                  scheduledDepartureTimeMinutes: leg.scheduledDepartureTimeMinutes,
+                  scheduledArrivalTimeMinutes: leg.scheduledArrivalTimeMinutes,
+                  delayMinutes: leg.delayMinutes,
+                  delayStatus: leg.delayStatus,
+                  delaySampleCount: leg.delaySampleCount,
+                  delayBasis: leg.delayBasis,
                   lineName: line.lineName,
                   lineColor: line.color,
                   stops: leg.stops,
@@ -704,18 +732,7 @@ if (!token) {
             }),
           };
         };
-        const routeLeg = (leg: {
-          serviceUid: string;
-          trainNumber: string;
-          serviceType: string;
-          trainName: string;
-          serviceDestination?: string;
-          originStation: string;
-          destinationStation: string;
-          departureTimeMinutes: number;
-          arrivalTimeMinutes: number;
-          stops?: JourneyRouteLeg["stops"];
-        }): JourneyRouteLeg => {
+        const routeLeg = (leg: JourneyRouteLeg): JourneyRouteLeg => {
           const line = lineColorIndex.colorForStations(
             leg.serviceType,
             leg.destinationStation,

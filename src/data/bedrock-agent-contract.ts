@@ -147,6 +147,9 @@ export interface TravelCandidateSearchResponse {
     scheduledDepartureTimeMinutes: number;
     scheduledArrivalTimeMinutes: number;
     delayMinutes: number;
+    delayStatus?: "observed" | "estimated";
+    delaySampleCount?: number;
+    delayBasis?: string;
     source: "transitforge";
     discoverySource: "timetable-graph" | "direct-service-index";
     sourceReference: string;
@@ -168,6 +171,9 @@ export interface TravelCandidateSearchResponse {
       scheduledDepartureTimeMinutes: number;
       scheduledArrivalTimeMinutes: number;
       delayMinutes: number;
+      delayStatus?: "observed" | "estimated";
+      delaySampleCount?: number;
+      delayBasis?: string;
       stops?: Array<{
         stationName: string;
         arrivalTimeMinutes?: number;

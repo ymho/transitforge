@@ -510,6 +510,72 @@ class BedrockAgentTest(unittest.TestCase):
         self.assertGreater(result["trace"]["connectionsScanned"], 0)
         self.assertEqual(result["trace"]["selectedJourneys"][0]["trips"], ["trip-direct"])
 
+    def test_connection_scan_estimates_a_future_train_from_the_same_local_direction(self) -> None:
+        index = connection_index_from_legs([
+            ("observed", "100M", "姫路", "東姫路", 580, 584),
+            ("candidate", "102M", "姫路", "東姫路", 610, 614),
+            ("reverse", "200M", "東姫路", "姫路", 605, 609),
+        ])
+        request = {
+            "serviceDate": "2026-08-14", "originStation": "姫路",
+            "destinationStation": "東姫路", "departureTimeMinutes": 600,
+            "limit": 3, "maxTransfers": 0, "includeTrace": True,
+        }
+        result = handler.journey_search.search_index(
+            index,
+            {},
+            request,
+            operations={
+                "100M": {
+                    "delayMinutes": 12, "destination": "東姫路",
+                    "sources": ["source-a"],
+                },
+                "200M": {
+                    "delayMinutes": 40, "destination": "姫路",
+                    "sources": ["source-a"],
+                },
+            },
+        )
+
+        leg = result["journeys"][0]["legs"][0]
+        self.assertEqual(leg["trainNumber"], "102M")
+        self.assertEqual(leg["departureTimeMinutes"], 622)
+        self.assertEqual(leg["delayMinutes"], 12)
+        self.assertEqual(leg["delayStatus"], "estimated")
+        self.assertEqual(leg["delayBasis"], "姫路→東姫路")
+        self.assertEqual(result["trace"]["estimatedDelayTrips"], 1)
+
+    def test_connection_scan_does_not_estimate_from_reverse_or_remote_trains(self) -> None:
+        index = connection_index_from_legs([
+            ("remote", "100M", "姫路", "東姫路", 400, 404),
+            ("reverse", "200M", "東姫路", "姫路", 605, 609),
+            ("candidate", "102M", "姫路", "東姫路", 610, 614),
+        ])
+        result = handler.journey_search.search_index(
+            index,
+            {},
+            {
+                "serviceDate": "2026-08-14", "originStation": "姫路",
+                "destinationStation": "東姫路", "departureTimeMinutes": 600,
+                "limit": 3, "maxTransfers": 0, "includeTrace": True,
+            },
+            operations={
+                "100M": {
+                    "delayMinutes": 20, "destination": "東姫路",
+                    "sources": ["source-a"],
+                },
+                "200M": {
+                    "delayMinutes": 30, "destination": "姫路",
+                    "sources": ["source-a"],
+                },
+            },
+        )
+
+        leg = result["journeys"][0]["legs"][0]
+        self.assertEqual(leg["departureTimeMinutes"], 610)
+        self.assertEqual(leg["delayMinutes"], 0)
+        self.assertNotIn("delayStatus", leg)
+
     def test_connection_scan_allows_one_transfer_only_with_enough_time(self) -> None:
         index = connection_index_fixture()
         request = {
@@ -695,6 +761,44 @@ class BedrockAgentTest(unittest.TestCase):
         self.assertGreater(
             result["trace"]["secondBoardingsRejectedByTransferTime"], 0
         )
+
+    def test_direct_index_estimates_a_future_direct_train_delay(self) -> None:
+        index = {
+            "schema_version": "direct-service-index-v1",
+            "service_date": "2026-08-14",
+            "services": {
+                "observed": direct_service(
+                    "observed", "100M",
+                    [("姫路", None, 580), ("東姫路", 584, None)],
+                ),
+                "candidate": direct_service(
+                    "candidate", "102M",
+                    [("姫路", None, 610), ("東姫路", 614, None)],
+                ),
+            },
+            "station_origins": {"姫路": ["observed", "candidate"]},
+        }
+        result = handler.journey_search.direct_service_journey_search.search_index(
+            index,
+            {},
+            {
+                "serviceDate": "2026-08-14", "originStation": "姫路",
+                "destinationStation": "東姫路", "departureTimeMinutes": 600,
+                "limit": 3, "maxTransfers": 0, "includeTrace": True,
+            },
+            operations={
+                "100M": {
+                    "delayMinutes": 8, "destination": "東姫路",
+                    "sources": ["source-a"],
+                },
+            },
+        )
+
+        leg = result["journeys"][0]["legs"][0]
+        self.assertEqual(leg["departureTimeMinutes"], 618)
+        self.assertEqual(leg["arrivalTimeMinutes"], 622)
+        self.assertEqual(leg["delayStatus"], "estimated")
+        self.assertEqual(result["trace"]["estimatedDelayTrips"], 1)
 
     def test_direct_index_can_limit_the_search_to_direct_journeys(self) -> None:
         result = handler.journey_search.direct_service_journey_search.search_index(

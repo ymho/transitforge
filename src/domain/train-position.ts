@@ -58,6 +58,38 @@ export function activeTrainPositions(
   return positions;
 }
 
+export function freezeLongTimeStoppingPositions(
+  currentPositions: TrainPosition[],
+  previousPositions: TrainPosition[],
+  longTimeStoppingServiceUids: ReadonlySet<string>,
+  removedServiceUids: ReadonlySet<string> = new Set(),
+): TrainPosition[] {
+  if (longTimeStoppingServiceUids.size === 0) {
+    return currentPositions;
+  }
+  const previousByServiceUid = new Map(
+    previousPositions.map((position) => [position.serviceUid, position]),
+  );
+  const frozen = currentPositions.map((position) =>
+    longTimeStoppingServiceUids.has(position.serviceUid)
+      ? previousByServiceUid.get(position.serviceUid) ?? position
+      : position,
+  );
+  const currentServiceUids = new Set(
+    currentPositions.map((position) => position.serviceUid),
+  );
+  for (const previous of previousPositions) {
+    if (
+      longTimeStoppingServiceUids.has(previous.serviceUid) &&
+      !removedServiceUids.has(previous.serviceUid) &&
+      !currentServiceUids.has(previous.serviceUid)
+    ) {
+      frozen.push(previous);
+    }
+  }
+  return frozen;
+}
+
 export function hasArrivedAtDestination(
   train: Pick<Train, "stops" | "destination_station">,
   routeTimeMinutes: number,
