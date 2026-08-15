@@ -1,7 +1,4 @@
-import type {
-  JourneyRouteLeg,
-  JourneyRouteResult,
-} from "../domain/direct-route-search";
+import type { JourneyRouteResult } from "../domain/direct-route-search";
 import {
   defaultJourneySearchPreferences,
   isJourneyRankingPreference,
@@ -36,20 +33,12 @@ export type AiGuidePromptHandler = (
   preferences: JourneySearchPreferences,
 ) => Promise<ViewerAgentResponse>;
 
-export type JourneyLegAlternativeHandler = (request: {
-  plan: ViewerAgentJourneyPlan;
-  journey: JourneyRouteResult;
-  leg: JourneyRouteLeg;
-  legIndex: number;
-}) => Promise<JourneyRouteLeg[]>;
-
 let journeyPlanSequence = 0;
 const journeyPreferencesStorageKey = "transitforge.journey-search-preferences.v1";
 
 export function configureAiGuidePanel(
   elements: AiGuidePanelElements,
   handlePrompt: AiGuidePromptHandler,
-  findLegAlternatives?: JourneyLegAlternativeHandler,
 ): void {
   const {
     panel,
@@ -131,7 +120,7 @@ export function configureAiGuidePanel(
 
     void handlePrompt(prompt, preferences())
       .then((response) => {
-        resolveAssistantMessage(pendingMessage, response, findLegAlternatives);
+        resolveAssistantMessage(pendingMessage, response);
       })
       .catch(() => {
         resolveAssistantMessage(
@@ -192,7 +181,6 @@ function appendPendingMessage(messages: HTMLOListElement): HTMLLIElement {
 function resolveAssistantMessage(
   item: HTMLLIElement,
   response: ViewerAgentResponse,
-  findLegAlternatives?: JourneyLegAlternativeHandler,
 ): void {
   item.classList.remove("ai-guide-message-pending");
   item.removeAttribute("aria-label");
@@ -204,14 +192,13 @@ function resolveAssistantMessage(
     const text = document.createElement("p");
     text.className = "journey-plan-intro";
     text.textContent = visibleAssistantText(response.text);
-    item.append(text, renderJourneyPlan(response.journeyPlan, findLegAlternatives));
+    item.append(text, renderJourneyPlan(response.journeyPlan));
   }
   item.scrollIntoView({ block: "nearest" });
 }
 
 function renderJourneyPlan(
   plan: ViewerAgentJourneyPlan,
-  findLegAlternatives?: JourneyLegAlternativeHandler,
 ): HTMLElement {
   const planSequence = ++journeyPlanSequence;
   const container = document.createElement("section");
@@ -252,13 +239,10 @@ function renderJourneyPlan(
       panel.tabIndex = 0;
     }
     panel.hidden = index !== 0;
-    const renderPanel = () => {
-      panel.replaceChildren(
-        renderJourneySummary(journey),
-        renderJourneyTimeline(journey, plan, renderPanel, findLegAlternatives),
-      );
-    };
-    renderPanel();
+    panel.replaceChildren(
+      renderJourneySummary(journey),
+      renderJourneyTimeline(journey),
+    );
     tab.addEventListener("click", () => {
       for (const candidate of tabs.querySelectorAll<HTMLButtonElement>("[role=tab]")) {
         candidate.setAttribute("aria-selected", String(candidate === tab));
@@ -290,17 +274,15 @@ function renderJourneySummary(journey: JourneyRouteResult): HTMLElement {
 
 function renderJourneyTimeline(
   journey: JourneyRouteResult,
-  plan: ViewerAgentJourneyPlan,
-  renderPanel: () => void,
-  findLegAlternatives?: JourneyLegAlternativeHandler,
 ): HTMLElement {
   const timeline = document.createElement("div");
   timeline.className = "journey-timeline";
   journey.legs.forEach((leg, index) => {
-    const segment = document.createElement("details");
+    const segment = document.createElement("section");
     segment.className = "journey-leg";
     segment.style.setProperty("--journey-line-color", safeLineColor(leg.lineColor));
-    const summary = document.createElement("summary");
+    const summary = document.createElement("div");
+    summary.className = "journey-leg-summary";
     const trainLabel = [
       leg.serviceType,
       leg.trainName,
@@ -310,37 +292,11 @@ function renderJourneyTimeline(
       stationRow(formatClock(leg.departureTimeMinutes), leg.originStation),
       segmentLine(trainLabel, leg.lineName),
     );
-    const intermediateStops = leg.stops?.slice(1, -1) ?? [];
-    if (intermediateStops.length > 0) {
-      const stops = document.createElement("span");
-      stops.className = "journey-intermediate-stops";
-      stops.setAttribute("role", "list");
-      for (const stop of intermediateStops) {
-        const item = document.createElement("span");
-        item.setAttribute("role", "listitem");
-        const time = stop.departureTimeMinutes ?? stop.arrivalTimeMinutes;
-        item.textContent = `${time === undefined ? "--:--" : formatClock(time)} ${stop.stationName}`;
-        stops.append(item);
-      }
-      summary.append(stops);
-    } else {
-      segment.classList.add("journey-leg-without-stops");
-    }
     summary.append(
       stationRow(formatClock(leg.arrivalTimeMinutes), leg.destinationStation),
     );
     segment.append(summary);
     timeline.append(segment);
-    if (findLegAlternatives) {
-      timeline.append(renderLegAlternativeControl(
-        plan,
-        journey,
-        leg,
-        index,
-        renderPanel,
-        findLegAlternatives,
-      ));
-    }
     const nextLeg = journey.legs[index + 1];
     if (nextLeg) {
       const transfer = document.createElement("p");
@@ -350,65 +306,6 @@ function renderJourneyTimeline(
     }
   });
   return timeline;
-}
-
-function renderLegAlternativeControl(
-  plan: ViewerAgentJourneyPlan,
-  journey: JourneyRouteResult,
-  leg: JourneyRouteLeg,
-  legIndex: number,
-  renderPanel: () => void,
-  findLegAlternatives: JourneyLegAlternativeHandler,
-): HTMLElement {
-  const control = document.createElement("div");
-  control.className = "journey-leg-alternatives";
-  const trigger = document.createElement("button");
-  trigger.type = "button";
-  trigger.className = "journey-leg-alternatives-trigger";
-  trigger.textContent = "別の列車";
-  trigger.addEventListener("click", () => {
-    trigger.disabled = true;
-    trigger.textContent = "検索中";
-    void findLegAlternatives({ plan, journey, leg, legIndex })
-      .then((alternatives) => {
-        if (alternatives.length === 0) {
-          const empty = document.createElement("span");
-          empty.className = "journey-leg-alternatives-empty";
-          empty.textContent = "変更できる列車はありません";
-          control.replaceChildren(empty);
-          return;
-        }
-        const list = document.createElement("div");
-        list.className = "journey-leg-alternative-list";
-        for (const alternative of alternatives) {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.textContent = alternativeLabel(alternative);
-          button.addEventListener("click", () => {
-            journey.legs[legIndex] = alternative;
-            journey.departureTimeMinutes = journey.legs[0].departureTimeMinutes;
-            journey.arrivalTimeMinutes = journey.legs.at(-1)?.arrivalTimeMinutes ??
-              journey.arrivalTimeMinutes;
-            renderPanel();
-          });
-          list.append(button);
-        }
-        control.replaceChildren(list);
-      })
-      .catch(() => {
-        const error = document.createElement("span");
-        error.className = "journey-leg-alternatives-empty";
-        error.textContent = "候補を取得できませんでした";
-        control.replaceChildren(error);
-      });
-  });
-  control.append(trigger);
-  return control;
-}
-
-function alternativeLabel(leg: JourneyRouteLeg): string {
-  const train = [leg.serviceType, leg.trainName].filter(Boolean).join(" ");
-  return `${formatClock(leg.departureTimeMinutes)} → ${formatClock(leg.arrivalTimeMinutes)} ${train}`;
 }
 
 function stationRow(time: string, station: string): HTMLElement {

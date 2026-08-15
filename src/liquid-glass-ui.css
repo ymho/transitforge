@@ -13,6 +13,7 @@
   --glass-accent-strong: #0078d4;
   --glass-accent-soft: rgb(0 150 246 / 12%);
   --glass-danger: #df3d4f;
+  --glass-delay: #a63b00;
   --glass-shadow: rgb(37 55 78 / 18%);
   --glass-backdrop: blur(28px) saturate(150%);
 }
@@ -31,6 +32,7 @@
   --glass-accent-strong: #70c8ff;
   --glass-accent-soft: rgb(24 167 255 / 16%);
   --glass-danger: #ff6677;
+  --glass-delay: #ffb15c;
   --glass-shadow: rgb(0 0 0 / 42%);
   --glass-backdrop: blur(30px) saturate(145%);
 }
@@ -531,23 +533,11 @@ summary:focus-visible {
 }
 
 .ai-guide-button-icon {
-  position: relative;
-  display: grid;
-  width: 1.5rem;
-  height: 1.5rem;
-  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
   color: #ffffff;
-  font: 750 0.68rem/1 -apple-system, BlinkMacSystemFont, sans-serif;
-  letter-spacing: -0.04em;
-}
-
-.ai-guide-button-icon::after {
-  position: absolute;
-  top: -0.15rem;
-  right: -0.12rem;
-  content: "✦";
-  font-size: 0.5rem;
-  line-height: 1;
+  fill: currentColor;
+  filter: drop-shadow(0 0 0.4rem rgb(255 255 255 / 42%));
 }
 
 .sheet-grabber {
@@ -899,18 +889,13 @@ summary:focus-visible {
 
 .journey-plan-summary span,
 .journey-station small,
-.journey-segment,
-.journey-intermediate-stops {
+.journey-segment {
   color: var(--glass-muted);
 }
 
-.journey-leg summary {
+.journey-leg-summary {
   padding: 0 1rem;
   border-radius: 0;
-}
-
-.journey-leg summary:hover {
-  background: rgb(120 120 128 / 8%);
 }
 
 .journey-station {
@@ -959,71 +944,12 @@ summary:focus-visible {
   font-weight: 510;
 }
 
-.journey-segment > span::after {
-  display: inline-flex;
-  min-height: 1.55rem;
-  align-items: center;
-  margin-top: 0.2rem;
-  margin-left: 0;
-  padding: 0 0.5rem;
-  border-radius: 999px;
-  content: "途中駅";
-  color: var(--glass-accent-strong);
-  background: var(--glass-accent-soft);
-  font-size: 0.6rem;
-}
-
-.journey-leg[open] .journey-segment > span::after {
-  content: "閉じる";
-}
-
-.journey-leg-without-stops .journey-segment > span::after {
-  display: none;
-  content: none;
-}
-
-.journey-intermediate-stops {
-  gap: 0.35rem;
-  margin: 0.2rem 0 0.55rem 1.55rem;
-  padding: 0.6rem 0.7rem 0.6rem 2.35rem;
-  border: 0;
-  border-left: 0.25rem solid var(--journey-line-color);
-  border-radius: 0;
-  background: transparent;
-}
-
 .journey-transfer {
   margin: 0;
   padding: 0.65rem 1rem 0.65rem 4.9rem;
   border-radius: 0;
   color: var(--glass-text);
   background: var(--glass-accent-soft);
-}
-
-.journey-leg-alternatives {
-  margin: -0.35rem 1rem 0.45rem 4.9rem;
-}
-
-.journey-leg-alternatives button {
-  min-height: 1.8rem;
-  padding: 0.2rem 0.65rem;
-  border: 0;
-  border-radius: 999px;
-  color: var(--glass-accent-strong);
-  background: var(--glass-accent-soft);
-  font: inherit;
-  font-size: 0.68rem;
-}
-
-.journey-leg-alternative-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.journey-leg-alternatives-empty {
-  color: var(--glass-muted);
-  font-size: 0.68rem;
 }
 
 /* 列車詳細も同じガラスシートへ統一する */
@@ -1106,6 +1032,30 @@ summary:focus-visible {
   line-height: 1.2;
 }
 
+.train-destination-change {
+  display: inline-flex;
+  min-height: 1.75rem;
+  gap: 0.35rem;
+  align-items: center;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.train-destination-scheduled {
+  color: var(--glass-muted);
+  text-decoration-line: line-through;
+  text-decoration-style: double;
+  text-decoration-thickness: 1px;
+}
+
+.train-destination-change-arrow {
+  color: var(--glass-muted);
+}
+
+.train-destination-current {
+  color: var(--glass-danger);
+}
+
 .train-detail-badges {
   display: flex;
   flex-wrap: wrap;
@@ -1115,7 +1065,8 @@ summary:focus-visible {
   margin: 0;
 }
 
-.train-delay-badge {
+.train-delay-badge,
+.train-stopping-badge {
   display: inline-flex;
   min-height: 1.65rem;
   align-items: center;
@@ -1132,7 +1083,14 @@ summary:focus-visible {
   background: #ff3b30;
 }
 
-.train-delay-badge[hidden] {
+.train-stopping-badge {
+  color: #ffffff;
+  background: #202124;
+  box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 18%);
+}
+
+.train-delay-badge[hidden],
+.train-stopping-badge[hidden] {
   display: none;
 }
 
@@ -1292,7 +1250,12 @@ summary:focus-visible {
 }
 
 .train-timetable-delay-arrow {
-  color: var(--glass-muted);
+  color: var(--glass-delay);
+}
+
+.train-timetable-time .train-timetable-adjusted {
+  color: var(--glass-delay);
+  font-weight: 750;
 }
 
 /* 読み込み中も完成後と同じ素材感にする */
@@ -1570,10 +1533,6 @@ summary:focus-visible {
     grid-template-columns: 3rem minmax(0, 1fr);
   }
 
-  .journey-intermediate-stops {
-    margin-left: 1.375rem;
-    padding-left: 2.175rem;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -72,6 +72,32 @@ describe("train position", () => {
     ).toMatchObject({ routeMeter: 100, coordinate: [136, 34] });
   });
 
+  it("removes a destination-changed train when it reaches the new destination", () => {
+    const geometry = new PathGeometryIndex([path]);
+    const changedTrain: Train = {
+      ...train,
+      destination_station: "途中駅",
+      stops: [
+        { station_name: "始発駅", route_time_minutes: 600, route_meter: 0 },
+        { station_name: "途中駅", route_time_minutes: 630, route_meter: 100 },
+      ],
+    };
+    const changed = new Set([changedTrain.service_uid]);
+
+    expect(activeTrainPositions(
+      [changedTrain], geometry, 629, new Map(), changed,
+    )).toHaveLength(1);
+    expect(activeTrainPositions(
+      [changedTrain], geometry, 630, new Map(), changed,
+    )).toHaveLength(0);
+    expect(activeTrainPositions(
+      [changedTrain], geometry, 634, new Map([[changedTrain.train_no, 5]]), changed,
+    )).toHaveLength(1);
+    expect(activeTrainPositions(
+      [changedTrain], geometry, 635, new Map([[changedTrain.train_no, 5]]), changed,
+    )).toHaveLength(0);
+  });
+
   it("skips a train without a usable path", () => {
     const geometry = new PathGeometryIndex([path]);
     expect(positionForTrain({ ...train, path_id: undefined }, geometry, 1440)).toBeUndefined();
