@@ -32,14 +32,23 @@ export function activeTrainPositions(
   geometry: PathGeometryIndex,
   routeTimeMinutes: number,
   delayByTrainNumber: ReadonlyMap<string, number> = new Map(),
+  destinationChangedServiceUids: ReadonlySet<string> = new Set(),
 ): TrainPosition[] {
   const positions: TrainPosition[] = [];
 
   for (const train of trains) {
+    const timetableRouteTime =
+      routeTimeMinutes - (delayByTrainNumber.get(train.train_no) ?? 0);
+    if (
+      destinationChangedServiceUids.has(train.service_uid) &&
+      hasArrivedAtDestination(train, timetableRouteTime)
+    ) {
+      continue;
+    }
     const position = positionForTrain(
       train,
       geometry,
-      routeTimeMinutes - (delayByTrainNumber.get(train.train_no) ?? 0),
+      timetableRouteTime,
     );
     if (position) {
       positions.push(position);
@@ -47,6 +56,24 @@ export function activeTrainPositions(
   }
 
   return positions;
+}
+
+export function hasArrivedAtDestination(
+  train: Pick<Train, "stops" | "destination_station">,
+  routeTimeMinutes: number,
+): boolean {
+  const destination = normalizeStationName(train.destination_station);
+  const arrival = train.stops
+    .filter(
+      (stop) =>
+        typeof stop.station_name === "string" &&
+        normalizeStationName(stop.station_name) === destination &&
+        typeof stop.route_time_minutes === "number" &&
+        Number.isFinite(stop.route_time_minutes),
+    )
+    .map((stop) => stop.route_time_minutes as number)
+    .sort((left, right) => left - right)[0];
+  return arrival !== undefined && routeTimeMinutes >= arrival;
 }
 
 export function positionForTrain(

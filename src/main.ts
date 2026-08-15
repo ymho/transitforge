@@ -36,6 +36,15 @@ import {
   type JourneyRouteLeg,
   type DirectRouteSearchHandler,
 } from "./domain/direct-route-search";
+import {
+  alternativeProposalResponse,
+  appliedAlternativeResponse,
+  applyJourneyLegAlternative,
+  intermediateStopsResponse,
+  journeyChatFollowUpIntent,
+  type JourneyLegAlternativeSearch,
+  type PendingJourneyLegChange,
+} from "./domain/journey-chat-follow-up";
 import { journeyLegAlternativeFits } from "./domain/journey-leg-alternative";
 import {
   dateForOperatingRouteTime,
@@ -88,7 +97,6 @@ import type { ViewerAgentJourneyPlan } from "./domain/viewer-agent-response";
 import {
   configureAiGuidePanel,
   type AiGuidePromptHandler,
-  type JourneyLegAlternativeHandler,
 } from "./presentation/ai-guide-panel";
 import { configureTrainSelection } from "./presentation/train-selection-controller";
 import { createLoadingScreen } from "./presentation/loading-screen";
@@ -165,6 +173,7 @@ const trainDetails = document.querySelector<HTMLElement>("#train-details");
 const closeTrainDetails = document.querySelector<HTMLButtonElement>("#close-train-details");
 const selectedTrainTitle = document.querySelector<HTMLElement>("#selected-train-title");
 const selectedTrainDelay = document.querySelector<HTMLElement>("#selected-train-delay");
+const selectedTrainStopping = document.querySelector<HTMLElement>("#selected-train-stopping");
 const selectedTrainStops = document.querySelector<HTMLOListElement>("#selected-train-stops");
 const trainDetailTabs = document.querySelector<HTMLElement>("#train-detail-tabs");
 const metrics = new RuntimeMetrics();
@@ -208,6 +217,7 @@ if (
   closeTrainDetails === null ||
   selectedTrainTitle === null ||
   selectedTrainDelay === null ||
+  selectedTrainStopping === null ||
   selectedTrainStops === null ||
   trainDetailTabs === null
 ) {
@@ -224,7 +234,7 @@ loadingScreenRetry.addEventListener("click", () => window.location.reload());
 
 let handleAiGuidePrompt: AiGuidePromptHandler = async () =>
   "列車データを読み込んでいます。準備が整ってからもう一度お試しください。";
-let findJourneyLegAlternatives: JourneyLegAlternativeHandler = async () => [];
+let findJourneyLegAlternatives: JourneyLegAlternativeSearch = async () => [];
 configureAiGuidePanel(
   {
     panel: aiGuidePanel,
@@ -241,7 +251,6 @@ configureAiGuidePanel(
     rankingPreference: journeyRankingPreference,
   },
   (prompt, preferences) => handleAiGuidePrompt(prompt, preferences),
-  (request) => findJourneyLegAlternatives(request),
 );
 
 const initialDateTime = new Date();
@@ -458,6 +467,7 @@ if (!token) {
             details: trainDetails,
             close: closeTrainDetails,
             title: selectedTrainTitle,
+            stopping: selectedTrainStopping,
             delay: selectedTrainDelay,
             stops: selectedTrainStops,
             coupledTabs: trainDetailTabs,
@@ -475,6 +485,7 @@ if (!token) {
           | null = null;
         let displayTrains = trainIndex.trains;
         let displayDelays: ReadonlyMap<string, number> = new Map();
+        let displayDestinationChanges: ReadonlySet<string> = new Set();
 
         const applyOperationMode = (displayedAt: Date) => {
           const now = new Date();
@@ -516,6 +527,7 @@ if (!token) {
             trainIndex.trains,
             operations,
           );
+          displayDestinationChanges = destinationChanges;
           displayTrains = trainsForOperations(
             trainIndex.trains,
             operations,
@@ -569,6 +581,7 @@ if (!token) {
             geometry,
             routeTime,
             displayDelays,
+            displayDestinationChanges,
           );
           displayedPositions = positions;
           threeTrainLayer.setPositions(positions);
@@ -793,8 +806,67 @@ if (!token) {
           maximumRouteTime,
         });
         let previousJourneyPlan: ViewerAgentJourneyPlan | undefined;
+        let pendingJourneyLegChange: PendingJourneyLegChange | undefined;
         handleAiGuidePrompt = async (prompt, preferences) => {
           try {
+            const followUp = journeyChatFollowUpIntent(
+              prompt,
+              previousJourneyPlan,
+              pendingJourneyLegChange,
+            );
+            if (followUp?.type === "intermediate-stops" && previousJourneyPlan) {
+              return intermediateStopsResponse(
+                previousJourneyPlan,
+                followUp.journeyIndex,
+                followUp.legIndex,
+              );
+            }
+            if (followUp?.type === "alternative" && previousJourneyPlan) {
+              const journey = previousJourneyPlan.journeys[followUp.journeyIndex];
+              const leg = journey?.legs[followUp.legIndex];
+              if (journey && leg) {
+                let alternatives = await findJourneyLegAlternatives({
+                  plan: previousJourneyPlan,
+                  journey,
+                  leg,
+                  legIndex: followUp.legIndex,
+                });
+                if (followUp.preferLaterDeparture) {
+                  alternatives = alternatives.filter(
+                    (candidate) =>
+                      candidate.departureTimeMinutes > leg.departureTimeMinutes,
+                  );
+                }
+                alternatives = alternatives.slice(0, 3);
+                pendingJourneyLegChange = alternatives.length > 0
+                  ? {
+                      plan: previousJourneyPlan,
+                      journeyIndex: followUp.journeyIndex,
+                      legIndex: followUp.legIndex,
+                      alternatives,
+                    }
+                  : undefined;
+                return alternativeProposalResponse(leg, alternatives);
+              }
+            }
+            if (
+              followUp?.type === "confirm-alternative" &&
+              pendingJourneyLegChange
+            ) {
+              const pending = pendingJourneyLegChange;
+              previousJourneyPlan = applyJourneyLegAlternative(
+                pending,
+                followUp.alternativeIndex,
+              );
+              pendingJourneyLegChange = undefined;
+              return {
+                text: appliedAlternativeResponse(
+                  pending,
+                  followUp.alternativeIndex,
+                ),
+                journeyPlan: previousJourneyPlan,
+              };
+            }
             const response = await runBedrockViewerAgent(
               prompt,
               {
@@ -831,6 +903,7 @@ if (!token) {
             );
             if (typeof response !== "string") {
               previousJourneyPlan = response.journeyPlan;
+              pendingJourneyLegChange = undefined;
             }
             return response;
           } catch (error) {

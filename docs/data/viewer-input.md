@@ -152,6 +152,7 @@ viewer-input/
     "100A": {
       "delayMinutes": 6,
       "destination": "変更後の終着駅",
+      "longTimeStopping": true,
       "sources": ["source-a"]
     }
   }
@@ -163,6 +164,7 @@ viewer-input/
 - `trains`に存在する列車番号だけを運行中として表示する
 - `delayMinutes`を時刻表上の位置へ反映する
 - `destination`を行き先の正本とする
+- 同じ位置へ30分を超えて在線する列車は`longTimeStopping`を`true`にする
 - 区間内の途中駅へ行き先が短縮された列車は赤いハローで表示する
 - 同じ列車番号の通常の区間分割 環状線の方向表示 経路外の行き先は変更判定に使わない
 - 取得元に失敗があるスナップショットは誤った運休判定を避けるため適用しない

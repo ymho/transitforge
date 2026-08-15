@@ -7,6 +7,7 @@ export interface TrainOperation {
   delayMinutes: number;
   destination: string;
   sources: readonly string[];
+  longTimeStopping?: boolean;
 }
 
 export interface TrainDelaySnapshot {
@@ -56,6 +57,7 @@ export function parseTrainDelays(value: unknown): TrainDelaySnapshot {
         delayMinutes: rawTrain.delayMinutes,
         destination: rawTrain.destination.trim(),
         sources: rawTrain.sources,
+        longTimeStopping: rawTrain.longTimeStopping === true,
       });
     }
   }
