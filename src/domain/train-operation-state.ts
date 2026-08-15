@@ -1,6 +1,7 @@
 import type { TrainOperation, TrainDelaySnapshot } from "../data/train-delay";
 import type { Train, TrainStop } from "../data/train-index";
 import { normalizeStationName } from "./direct-route-search";
+import type { TrainFormationLink } from "./train-formation-link";
 
 export const realtimeSnapshotToleranceMilliseconds = 5 * 60 * 1_000;
 
@@ -75,6 +76,85 @@ export function operationsWithTimetableTrainNumberAliases(
   return resolved;
 }
 
+export function operationsWithCoupledTrainOperations(
+  timetableTrains: Train[],
+  operations: ReadonlyMap<string, TrainOperation> | undefined,
+  formationLinks: ReadonlyMap<string, TrainFormationLink>,
+): ReadonlyMap<string, TrainOperation> | undefined {
+  if (operations === undefined) {
+    return undefined;
+  }
+  const resolved = new Map(operations);
+  const trainsByServiceUid = new Map(
+    timetableTrains.map((train) => [train.service_uid, train]),
+  );
+  const processedPairs = new Set<string>();
+
+  for (const [serviceUid, link] of formationLinks) {
+    if (link.linkKind !== "coupled-service") {
+      continue;
+    }
+    const pairKey = [serviceUid, link.partnerServiceUid].sort().join("\t");
+    if (processedPairs.has(pairKey)) {
+      continue;
+    }
+    processedPairs.add(pairKey);
+
+    const left = trainsByServiceUid.get(serviceUid);
+    const right = trainsByServiceUid.get(link.partnerServiceUid);
+    if (!left || !right) {
+      continue;
+    }
+    const leftOperation = resolved.get(left.train_no);
+    const rightOperation = resolved.get(right.train_no);
+    if (!leftOperation && !rightOperation) {
+      continue;
+    }
+
+    const availableOperations = [leftOperation, rightOperation].filter(
+      (operation): operation is TrainOperation => operation !== undefined,
+    );
+    const delayMinutes = Math.max(
+      ...availableOperations.map((operation) => operation.delayMinutes),
+    );
+    const sources = [
+      ...new Set(availableOperations.flatMap((operation) => operation.sources)),
+    ];
+    const longTimeStopping = availableOperations.some(
+      (operation) => operation.longTimeStopping === true,
+    );
+    const changedDestination = sharedChangedDestination(
+      left,
+      right,
+      leftOperation,
+      rightOperation,
+    );
+    const effectiveSources = changedDestination
+      ? sources.filter((source) => source !== "osakaloop")
+      : sources;
+
+    resolved.set(left.train_no, {
+      delayMinutes,
+      destination:
+        changedDestination ??
+        leftOperation?.destination ??
+        left.destination_station,
+      sources: effectiveSources,
+      longTimeStopping,
+    });
+    resolved.set(right.train_no, {
+      delayMinutes,
+      destination:
+        changedDestination ??
+        rightOperation?.destination ??
+        right.destination_station,
+      sources: effectiveSources,
+      longTimeStopping,
+    });
+  }
+  return resolved;
+}
+
 export function trainWithOperation(
   train: Train,
   operation: TrainOperation,
@@ -117,15 +197,59 @@ export function destinationChangedServiceUids(
   return new Set(
     timetableTrains.flatMap((train) => {
       const operation = operations.get(train.train_no);
-      const destination = operation?.destination;
-      return destination &&
-        !operation.sources.includes("osakaloop") &&
-        normalizeStationName(destination) !==
-          normalizeStationName(train.destination_station) &&
-        isIntermediateStop(train.stops, destination)
+      return operationChangesDestination(train, operation)
         ? [train.service_uid]
         : [];
     }),
+  );
+}
+
+function sharedChangedDestination(
+  left: Train,
+  right: Train,
+  leftOperation: TrainOperation | undefined,
+  rightOperation: TrainOperation | undefined,
+): string | undefined {
+  const candidates = [
+    { train: left, operation: leftOperation },
+    { train: right, operation: rightOperation },
+  ]
+    .filter(
+      (candidate): candidate is { train: Train; operation: TrainOperation } =>
+        operationChangesDestination(candidate.train, candidate.operation),
+    )
+    .filter(({ operation }) =>
+      hasStop(left.stops, operation.destination) &&
+      hasStop(right.stops, operation.destination),
+    )
+    .sort(
+      (a, b) =>
+        b.operation.delayMinutes - a.operation.delayMinutes ||
+        a.operation.destination.localeCompare(b.operation.destination, "ja"),
+    );
+  return candidates[0]?.operation.destination;
+}
+
+function operationChangesDestination(
+  train: Train,
+  operation: TrainOperation | undefined,
+): boolean {
+  const destination = operation?.destination;
+  return Boolean(
+    destination &&
+      !operation.sources.includes("osakaloop") &&
+      normalizeStationName(destination) !==
+        normalizeStationName(train.destination_station) &&
+      isIntermediateStop(train.stops, destination),
+  );
+}
+
+function hasStop(stops: TrainStop[], destination: string): boolean {
+  const normalizedDestination = normalizeStationName(destination);
+  return stops.some(
+    (stop) =>
+      typeof stop.station_name === "string" &&
+      normalizeStationName(stop.station_name) === normalizedDestination,
   );
 }
 

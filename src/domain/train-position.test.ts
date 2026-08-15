@@ -5,6 +5,7 @@ import type { Train } from "../data/train-index";
 import {
   activeTrainPositions,
   destinationCoordinateForTrain,
+  freezeLongTimeStoppingPositions,
   interpolatedRouteMeter,
   PathGeometryIndex,
   positionForTrain,
@@ -70,6 +71,40 @@ describe("train position", () => {
         new Map([[train.train_no, 10]]),
       )[0],
     ).toMatchObject({ routeMeter: 100, coordinate: [136, 34] });
+  });
+
+  it("keeps a long-time-stopping train at its previously displayed position", () => {
+    const previous = {
+      serviceUid: "service-a",
+      trainNo: "1A",
+      serviceType: "普通",
+      routeMeter: 80,
+      coordinate: [135.8, 34] as [number, number],
+      bearingRadians: 0,
+    };
+    const moving = { ...previous, routeMeter: 100, coordinate: [136, 34] as [number, number] };
+
+    expect(freezeLongTimeStoppingPositions(
+      [moving],
+      [previous],
+      new Set(["service-a"]),
+    )).toEqual([previous]);
+    expect(freezeLongTimeStoppingPositions(
+      [moving],
+      [previous],
+      new Set(),
+    )).toEqual([moving]);
+    expect(freezeLongTimeStoppingPositions(
+      [],
+      [previous],
+      new Set(["service-a"]),
+    )).toEqual([previous]);
+    expect(freezeLongTimeStoppingPositions(
+      [],
+      [previous],
+      new Set(["service-a"]),
+      new Set(["service-a"]),
+    )).toEqual([]);
   });
 
   it("removes a destination-changed train when it reaches the new destination", () => {
