@@ -24,6 +24,7 @@ import type {
   ViewerAgentJourneyPlan,
   ViewerAgentResponse,
 } from "./viewer-agent-response";
+import { journeyChatFollowUpIntent } from "./journey-chat-follow-up";
 import {
   directRouteDepartureTime,
   type DirectRouteSearchResponse,
@@ -74,6 +75,10 @@ export interface BedrockViewerAgentDependencies {
     transferPace?: TransferPace;
     rankingPreference?: JourneyRankingPreference;
     maxTransfers?: 0 | 1 | 2 | 3;
+    excludedServiceTypes?: string[];
+    excludedTrainNames?: string[];
+    excludedTrainNumbers?: string[];
+    excludedServiceUids?: string[];
   }) => Promise<DirectRouteSearchResponse>;
   getCurrentDate?: () => Date;
   getJourneySearchPreferences?: () => JourneySearchPreferences;
@@ -115,6 +120,10 @@ interface DirectRouteToolState {
     transferPace: TransferPace;
     rankingPreference: JourneyRankingPreference;
     maxTransfers: number;
+    excludedServiceTypes?: string[];
+    excludedTrainNames?: string[];
+    excludedTrainNumbers?: string[];
+    excludedServiceUids?: string[];
     originStation: string;
     destinationStation: string;
     searchTimeMinutes: number;
@@ -132,6 +141,13 @@ export async function runBedrockViewerAgent(
   dependencies: BedrockViewerAgentDependencies,
   converse: BedrockAgentConverse,
 ): Promise<ViewerAgentResponse> {
+  const constraintResponse = await journeyConstraintFollowUpResponse(
+    prompt,
+    dependencies,
+  );
+  if (constraintResponse !== undefined) {
+    return constraintResponse;
+  }
   const followUpResponse = journeyTrainFollowUpResponse(
     prompt,
     dependencies.getPreviousJourneyPlan?.(),
@@ -426,22 +442,7 @@ async function executeTool(
     });
     toolState.searched = true;
     directRouteServiceUids.clear();
-    const journeys = response.journeys ?? response.results.map((route) => ({
-      departureTimeMinutes: route.departureTimeMinutes,
-      arrivalTimeMinutes: route.arrivalTimeMinutes,
-      transferCount: 0,
-      legs: [{
-        serviceUid: route.train.service_uid,
-        trainNumber: route.train.train_no,
-        serviceType: route.train.service_type,
-        trainName: route.train.train_name,
-        serviceDestination: route.train.destination_station,
-        originStation: route.originStation,
-        destinationStation: route.destinationStation,
-        departureTimeMinutes: route.departureTimeMinutes,
-        arrivalTimeMinutes: route.arrivalTimeMinutes,
-      }],
-    }));
+    const journeys = journeysFromSearchResponse(response);
     for (const journey of journeys) {
       for (const leg of journey.legs) {
         directRouteServiceUids.add(leg.serviceUid);
@@ -454,6 +455,18 @@ async function executeTool(
       rankingPreference:
         response.rankingPreference ?? preferences.rankingPreference,
       maxTransfers: response.maxTransfers ?? preferences.maxTransfers,
+      ...(response.excludedServiceTypes?.length
+        ? { excludedServiceTypes: response.excludedServiceTypes }
+        : {}),
+      ...(response.excludedTrainNames?.length
+        ? { excludedTrainNames: response.excludedTrainNames }
+        : {}),
+      ...(response.excludedTrainNumbers?.length
+        ? { excludedTrainNumbers: response.excludedTrainNumbers }
+        : {}),
+      ...(response.excludedServiceUids?.length
+        ? { excludedServiceUids: response.excludedServiceUids }
+        : {}),
       originStation: response.originStation,
       destinationStation: destinationStation.trim(),
       searchTimeMinutes: resolvedDepartureTime,
@@ -593,8 +606,16 @@ function directRouteResponseText(
   if (!response) {
     return undefined;
   }
+  const excludedLabels = uniqueStrings([
+    ...(response.excludedServiceTypes ?? []),
+    ...(response.excludedTrainNames ?? []),
+    ...(response.excludedTrainNumbers ?? []),
+  ]);
+  const exclusionLabel = excludedLabels.length
+    ? `${excludedLabels.join("・")}を使わない条件で`
+    : "";
   if (response.journeys.length === 0) {
-    return `${formatClockTime(response.searchTimeMinutes)}以降に${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}へ行く経路は見つかりませんでした。`;
+    return `${exclusionLabel}${formatClockTime(response.searchTimeMinutes)}以降に${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}へ行く経路は見つかりませんでした。`;
   }
   const first = response.journeys[0]?.legs[0];
   const focusMessage =
@@ -605,18 +626,143 @@ function directRouteResponseText(
     ? `${formatCalendarDate(response.departureDate)}の`
     : "";
   return {
-    text: `${dateLabel}${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}への経路候補です。${focusMessage}`,
+    text: `${exclusionLabel}${dateLabel}${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}への経路候補です。${focusMessage}`,
     journeyPlan: {
       ...(response.departureDate ? { departureDate: response.departureDate } : {}),
       ...(response.serviceDate ? { serviceDate: response.serviceDate } : {}),
       transferPace: response.transferPace,
       rankingPreference: response.rankingPreference,
       maxTransfers: response.maxTransfers,
+      searchTimeMinutes: response.searchTimeMinutes,
+      ...(response.excludedServiceTypes?.length
+        ? { excludedServiceTypes: response.excludedServiceTypes }
+        : {}),
+      ...(response.excludedTrainNames?.length
+        ? { excludedTrainNames: response.excludedTrainNames }
+        : {}),
+      ...(response.excludedTrainNumbers?.length
+        ? { excludedTrainNumbers: response.excludedTrainNumbers }
+        : {}),
+      ...(response.excludedServiceUids?.length
+        ? { excludedServiceUids: response.excludedServiceUids }
+        : {}),
       originStation: response.originStation,
       destinationStation: response.destinationStation,
       journeys: response.journeys,
     },
   };
+}
+
+async function journeyConstraintFollowUpResponse(
+  prompt: string,
+  dependencies: BedrockViewerAgentDependencies,
+): Promise<ViewerAgentResponse | undefined> {
+  const plan = dependencies.getPreviousJourneyPlan?.();
+  const intent = journeyChatFollowUpIntent(prompt, plan);
+  if (
+    intent?.type !== "exclude-trains" ||
+    !plan ||
+    !dependencies.searchDirectRoutes
+  ) {
+    return undefined;
+  }
+  const excludedServiceTypes = uniqueStrings([
+    ...(plan.excludedServiceTypes ?? []),
+    ...intent.exclusions.serviceTypes,
+  ]);
+  const excludedTrainNames = uniqueStrings([
+    ...(plan.excludedTrainNames ?? []),
+    ...intent.exclusions.trainNames,
+  ]);
+  const excludedTrainNumbers = uniqueStrings([
+    ...(plan.excludedTrainNumbers ?? []),
+    ...intent.exclusions.trainNumbers,
+  ]);
+  const excludedServiceUids = uniqueStrings([
+    ...(plan.excludedServiceUids ?? []),
+    ...intent.exclusions.serviceUids,
+  ]);
+  const searchTimeMinutes =
+    plan.searchTimeMinutes ??
+    plan.journeys[0]?.departureTimeMinutes ??
+    dependencies.getRouteTime();
+  const response = await dependencies.searchDirectRoutes({
+    originStation: plan.originStation,
+    destinationStation: plan.destinationStation,
+    departureTimeMinutes: searchTimeMinutes,
+    ...(plan.serviceDate ? { serviceDate: plan.serviceDate } : {}),
+    ...(plan.departureDate ? { departureDate: plan.departureDate } : {}),
+    transferPace: plan.transferPace,
+    rankingPreference: plan.rankingPreference,
+    maxTransfers: supportedMaximumTransfers(plan.maxTransfers),
+    ...(excludedServiceTypes.length ? { excludedServiceTypes } : {}),
+    ...(excludedTrainNames.length ? { excludedTrainNames } : {}),
+    ...(excludedTrainNumbers.length ? { excludedTrainNumbers } : {}),
+    ...(excludedServiceUids.length ? { excludedServiceUids } : {}),
+  });
+  const journeys = journeysFromSearchResponse(response);
+  const state: DirectRouteToolState = {
+    searched: true,
+    response: {
+      serviceDate: response.serviceDate ?? plan.serviceDate,
+      departureDate: response.departureDate ?? plan.departureDate,
+      transferPace:
+        response.transferPace ??
+        plan.transferPace ??
+        defaultJourneySearchPreferences.transferPace,
+      rankingPreference:
+        response.rankingPreference ??
+        plan.rankingPreference ??
+        defaultJourneySearchPreferences.rankingPreference,
+      maxTransfers:
+        response.maxTransfers ??
+        supportedMaximumTransfers(plan.maxTransfers),
+      excludedServiceTypes,
+      excludedTrainNames,
+      excludedTrainNumbers,
+      excludedServiceUids,
+      originStation: response.originStation,
+      destinationStation: plan.destinationStation,
+      searchTimeMinutes,
+      journeys,
+    },
+  };
+  const firstServiceUid = journeys[0]?.legs[0]?.serviceUid;
+  if (firstServiceUid && dependencies.focusTrain(firstServiceUid)) {
+    state.focusedServiceUid = firstServiceUid;
+  }
+  return directRouteResponseText(state);
+}
+
+function supportedMaximumTransfers(value: number | undefined): 0 | 1 | 2 | 3 {
+  return value === 0 || value === 1 || value === 2 || value === 3
+    ? value
+    : defaultJourneySearchPreferences.maxTransfers;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function journeysFromSearchResponse(
+  response: DirectRouteSearchResponse,
+): NonNullable<DirectRouteToolState["response"]>["journeys"] {
+  return response.journeys ?? response.results.map((route) => ({
+    departureTimeMinutes: route.departureTimeMinutes,
+    arrivalTimeMinutes: route.arrivalTimeMinutes,
+    transferCount: 0,
+    legs: [{
+      serviceUid: route.train.service_uid,
+      trainNumber: route.train.train_no,
+      serviceType: route.train.service_type,
+      trainName: route.train.train_name,
+      serviceDestination: route.train.destination_station,
+      originStation: route.originStation,
+      destinationStation: route.destinationStation,
+      departureTimeMinutes: route.departureTimeMinutes,
+      arrivalTimeMinutes: route.arrivalTimeMinutes,
+    }],
+  }));
 }
 
 function formatCalendarDate(value: string): string {

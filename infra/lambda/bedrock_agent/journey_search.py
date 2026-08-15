@@ -17,6 +17,8 @@ MAX_TRANSFERS = 3
 _index_cache: dict[str, tuple[str, dict[str, Any]]] = {}
 JST = timezone(timedelta(hours=9))
 REALTIME_TOLERANCE = timedelta(minutes=5)
+MAX_EXCLUSIONS_PER_FIELD = 8
+MAX_EXCLUSION_LENGTH = 160
 
 
 def search(
@@ -118,6 +120,15 @@ def _validated_request(value: dict[str, Any]) -> dict[str, Any]:
     max_transfers = value.get("maxTransfers", 3)
     transfer_pace = value.get("transferPace", "standard")
     ranking_preference = value.get("rankingPreference", "balanced")
+    exclusion_fields = {
+        field: _validated_exclusion_list(value.get(field, []))
+        for field in (
+            "excludedServiceTypes",
+            "excludedTrainNames",
+            "excludedTrainNumbers",
+            "excludedServiceUids",
+        )
+    }
     if not isinstance(origin, str) or not origin.strip():
         raise RequestError(400, "originStationが必要です。")
     if not isinstance(destination, str) or not destination.strip():
@@ -156,8 +167,24 @@ def _validated_request(value: dict[str, Any]) -> dict[str, Any]:
         "maxTransfers": max_transfers,
         "transferPace": transfer_pace,
         "rankingPreference": ranking_preference,
+        **exclusion_fields,
         "includeTrace": include_trace,
     }
+
+
+def _validated_exclusion_list(value: Any) -> list[str]:
+    if (
+        not isinstance(value, list)
+        or len(value) > MAX_EXCLUSIONS_PER_FIELD
+        or any(
+            not isinstance(item, str)
+            or not item.strip()
+            or len(item) > MAX_EXCLUSION_LENGTH
+            for item in value
+        )
+    ):
+        raise RequestError(400, "列車の除外条件が不正です。")
+    return list(dict.fromkeys(item.strip() for item in value))
 
 
 def _load_index(
