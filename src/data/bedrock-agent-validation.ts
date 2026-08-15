@@ -67,6 +67,10 @@ export function isTravelCandidateSearchResponse(value: unknown): value is Travel
     (value.transferPace === undefined || ["hurried", "standard", "relaxed"].includes(String(value.transferPace))) &&
     (value.rankingPreference === undefined || ["balanced", "earliest-arrival", "latest-departure", "fewest-transfers"].includes(String(value.rankingPreference))) &&
     (value.maxTransfers === undefined || (isNonNegativeInteger(value.maxTransfers) && value.maxTransfers <= 3)) &&
+    isOptionalExclusionList(value.excludedServiceTypes) &&
+    isOptionalExclusionList(value.excludedTrainNames) &&
+    isOptionalExclusionList(value.excludedTrainNumbers) &&
+    isOptionalExclusionList(value.excludedServiceUids) &&
     Array.isArray(value.matches) && value.matches.length <= 5 && value.matches.every((match) =>
       isRecord(match) && typeof match.serviceUid === "string" &&
       typeof match.trainNumber === "string" && typeof match.serviceType === "string" &&
@@ -106,6 +110,13 @@ function isDelayMetadata(value: Record<string, unknown>): boolean {
   return (value.delayStatus === undefined || ["observed", "estimated"].includes(String(value.delayStatus))) &&
     (value.delaySampleCount === undefined || isNonNegativeInteger(value.delaySampleCount)) &&
     (value.delayBasis === undefined || typeof value.delayBasis === "string");
+}
+
+function isOptionalExclusionList(value: unknown): boolean {
+  return value === undefined ||
+    (Array.isArray(value) && value.length <= 8 && value.every((item) =>
+      typeof item === "string" && item.length > 0 && item.length <= 160
+    ));
 }
 
 function isDailyCongestionPeak(value: unknown): value is DailyCongestionPeak {

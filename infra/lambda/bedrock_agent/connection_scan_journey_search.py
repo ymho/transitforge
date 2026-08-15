@@ -8,6 +8,11 @@ from decimal import Decimal
 from typing import Any
 
 from journey_delay_prediction import estimate_trip_delays
+from journey_exclusions import (
+    excluded_service_ids,
+    response_exclusions,
+    trace_exclusions,
+)
 from request_contract import RequestError
 
 
@@ -49,10 +54,14 @@ def search_index(
     station_transfers = index.get("station_transfer_minutes")
     station_transfers = station_transfers if isinstance(station_transfers, dict) else {}
     maximum_boardings = request["maxTransfers"] + 1
+    excluded_trip_ids = excluded_service_ids(trips, request)
     trace: dict[str, Any] = {
         "schemaVersion": "journey-search-trace-v1",
         "strategy": "multi-criteria-connection-scan",
         "indexConnections": len(raw_connections),
+        **trace_exclusions(request),
+        "excludedTrips": len(excluded_trip_ids),
+        "excludedServiceConnectionsRejected": 0,
         "connectionsScanned": 0,
         "connectionsBeforeRequestedTime": 0,
         "connectionsWithoutReachableOrigin": 0,
@@ -151,6 +160,9 @@ def search_index(
             trace["connectionsBeforeRequestedTime"] += 1
             continue
         trip_id = connection["trip_id"]
+        if trip_id in excluded_trip_ids:
+            trace["excludedServiceConnectionsRejected"] += 1
+            continue
         policy = policies.get(trip_id)
         if policy == "unavailable" or (
             isinstance(policy, int)
@@ -648,6 +660,7 @@ def _response(
         "totalMatchCount": len(journeys),
         "matches": direct_matches,
         "journeys": journeys,
+        **response_exclusions(request),
         "trace": trace,
     }
 
