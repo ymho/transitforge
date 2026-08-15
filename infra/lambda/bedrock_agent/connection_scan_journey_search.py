@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import bisect
 import unicodedata
+from collections import defaultdict
 from decimal import Decimal
 from typing import Any
 
+from journey_delay_prediction import estimate_trip_delays
 from request_contract import RequestError
 
 
@@ -75,11 +77,35 @@ def search_index(
     if not origin or origin == destination:
         return _response(request, [], trace)
 
-    trip_delays = {
-        trip_id: _delay_for_trip(trip, delays, operations)
+    edges_by_trip: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for connection in raw_connections:
+        if isinstance(connection, dict):
+            edges_by_trip[str(connection.get("trip_id") or "")].append(connection)
+    delay_predictions = estimate_trip_delays(
+        trips,
+        dict(edges_by_trip),
+        operations,
+        request["departureTimeMinutes"],
+        _operation_for,
+    )
+    trip_delay_info = {
+        trip_id: _delay_info_for_trip(
+            trip_id, trip, delays, operations, delay_predictions
+        )
         for trip_id, trip in trips.items()
         if isinstance(trip_id, str) and isinstance(trip, dict)
     }
+    trip_delays = {
+        trip_id: info["delayMinutes"] for trip_id, info in trip_delay_info.items()
+    }
+    trace["observedDelayTrips"] = sum(
+        info.get("delayStatus") == "observed" and info["delayMinutes"] > 0
+        for info in trip_delay_info.values()
+    )
+    trace["estimatedDelayTrips"] = sum(
+        info.get("delayStatus") == "estimated"
+        for info in trip_delay_info.values()
+    )
     policies = _realtime_trip_policies(
         raw_connections, trips, operations, realtime_route_time
     )
@@ -109,7 +135,9 @@ def search_index(
     best_destination_arrival: float | None = None
 
     for raw_connection in connections[start_index:]:
-        connection = _expected_connection(raw_connection, trips, trip_delays)
+        connection = _expected_connection(
+            raw_connection, trips, trip_delays, trip_delay_info
+        )
         if (
             best_destination_arrival is not None
             and connection["expectedDeparture"]
@@ -275,6 +303,7 @@ def _expected_connection(
     value: Any,
     trips: dict[str, Any],
     trip_delays: dict[str, float],
+    trip_delay_info: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise RequestError(503, "接続インデックス内の接続形式が不正です。")
@@ -284,12 +313,28 @@ def _expected_connection(
     departure = _required_number(value.get("departure_time_minutes"))
     arrival = _required_number(value.get("arrival_time_minutes"))
     delay = trip_delays.get(trip_id, 0.0)
+    delay_info = trip_delay_info.get(trip_id, {})
     return {
         **value,
         "trip_id": trip_id,
         "expectedDeparture": departure + delay,
         "expectedArrival": arrival + delay,
         "delayMinutes": delay,
+        **(
+            {"delayStatus": delay_info["delayStatus"]}
+            if delay_info.get("delayStatus") in {"observed", "estimated"}
+            else {}
+        ),
+        **(
+            {"delaySampleCount": delay_info["delaySampleCount"]}
+            if "delaySampleCount" in delay_info
+            else {}
+        ),
+        **(
+            {"delayBasis": delay_info["delayBasis"]}
+            if "delayBasis" in delay_info
+            else {}
+        ),
     }
 
 
@@ -435,6 +480,21 @@ def _journey_from_label(
             "scheduledDepartureTimeMinutes": connection["departure_time_minutes"],
             "scheduledArrivalTimeMinutes": connection["arrival_time_minutes"],
             "delayMinutes": connection["delayMinutes"],
+            **(
+                {"delayStatus": connection["delayStatus"]}
+                if "delayStatus" in connection
+                else {}
+            ),
+            **(
+                {"delaySampleCount": connection["delaySampleCount"]}
+                if "delaySampleCount" in connection
+                else {}
+            ),
+            **(
+                {"delayBasis": connection["delayBasis"]}
+                if "delayBasis" in connection
+                else {}
+            ),
             "stops": [
                 {
                     "stationName": connection["from_station"],
@@ -524,6 +584,23 @@ def _delay_for_trip(
             return float(operation["delayMinutes"])
     delay = delays.get(str(trip.get("train_no") or ""), Decimal(0))
     return float(max(Decimal(0), delay))
+
+
+def _delay_info_for_trip(
+    trip_id: str,
+    trip: dict[str, Any],
+    delays: dict[str, Decimal],
+    operations: dict[str, dict[str, Any]] | None,
+    predictions: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    predicted = predictions.get(trip_id)
+    if predicted is not None:
+        return predicted
+    delay = _delay_for_trip(trip, delays, operations)
+    return {
+        "delayMinutes": delay,
+        **({"delayStatus": "observed"} if delay > 0 else {}),
+    }
 
 
 def _paced_transfer_minutes(

@@ -342,6 +342,18 @@
   font-size: 0.66rem;
 }
 
+.journey-delay-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 0.2rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  color: #7c2d12;
+  background: #ffedd5;
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
 .journey-segment i {
   width: 4px;
   height: 100%;
@@ -825,7 +837,7 @@
 }
 
 #digital-twin-mode-toggle[aria-pressed="true"] {
-  color: #009cb5;
+  color: #ffffff;
 }
 
 @media (max-width: 600px) {

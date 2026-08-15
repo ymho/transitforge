@@ -23,6 +23,12 @@ export interface JourneyRouteLeg {
   destinationStation: string;
   departureTimeMinutes: number;
   arrivalTimeMinutes: number;
+  scheduledDepartureTimeMinutes?: number;
+  scheduledArrivalTimeMinutes?: number;
+  delayMinutes?: number;
+  delayStatus?: "observed" | "estimated";
+  delaySampleCount?: number;
+  delayBasis?: string;
   lineName?: string;
   lineColor?: string;
   stops?: JourneyRouteStop[];

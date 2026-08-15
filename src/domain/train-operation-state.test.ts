@@ -6,9 +6,11 @@ import {
   delayByTrainNumber,
   destinationChangedServiceUids,
   operationsForDisplay,
+  operationsWithCoupledTrainOperations,
   operationsWithTimetableTrainNumberAliases,
   trainsForOperations,
 } from "./train-operation-state";
+import type { TrainFormationLink } from "./train-formation-link";
 
 describe("train operation state", () => {
   const now = new Date("2026-08-14T12:00:00+09:00");
@@ -132,7 +134,111 @@ describe("train operation state", () => {
     expect(resolved?.has("1512E")).toBe(false);
     expect(resolved?.has("4204M")).toBe(false);
   });
+
+  it("shares the largest delay across a coupled airport and Kishuji formation", () => {
+    const airport = coupledTrain("airport", "4127M", "関西空港");
+    const kishuji = coupledTrain("kishuji", "4527H", "和歌山");
+    const resolved = operationsWithCoupledTrainOperations(
+      [airport, kishuji],
+      new Map([
+        ["4127M", operation(40, "関西空港", "kansaiairport")],
+        ["4527H", operation(28, "和歌山", "hanwahagoromo")],
+      ]),
+      coupledLinks(),
+    );
+
+    expect(resolved?.get("4127M")?.delayMinutes).toBe(40);
+    expect(resolved?.get("4527H")?.delayMinutes).toBe(40);
+    expect(resolved?.get("4127M")?.destination).toBe("関西空港");
+    expect(resolved?.get("4527H")?.destination).toBe("和歌山");
+  });
+
+  it("supplies a missing coupled operation without inventing a destination change", () => {
+    const airport = coupledTrain("airport", "4127M", "関西空港");
+    const kishuji = coupledTrain("kishuji", "4527H", "和歌山");
+    const resolved = operationsWithCoupledTrainOperations(
+      [airport, kishuji],
+      new Map([["4127M", operation(12, "関西空港", "kansaiairport")]]),
+      coupledLinks(),
+    );
+
+    expect(resolved?.get("4527H")).toMatchObject({
+      delayMinutes: 12,
+      destination: "和歌山",
+    });
+    expect(destinationChangedServiceUids([airport, kishuji], resolved)).toEqual(
+      new Set(),
+    );
+  });
+
+  it("shares a destination change across both halves of a coupled formation", () => {
+    const airport = coupledTrain("airport", "4127M", "関西空港");
+    const kishuji = coupledTrain("kishuji", "4527H", "和歌山");
+    const resolved = operationsWithCoupledTrainOperations(
+      [airport, kishuji],
+      new Map([
+        ["4127M", operation(12, "天王寺", "kansaiairport")],
+        ["4527H", operation(8, "和歌山", "osakaloop")],
+      ]),
+      coupledLinks(),
+    );
+
+    expect(resolved?.get("4127M")?.destination).toBe("天王寺");
+    expect(resolved?.get("4527H")?.destination).toBe("天王寺");
+    expect(destinationChangedServiceUids([airport, kishuji], resolved)).toEqual(
+      new Set(["airport", "kishuji"]),
+    );
+  });
 });
+
+function operation(
+  delayMinutes: number,
+  destination: string,
+  source: string,
+): TrainOperation {
+  return { delayMinutes, destination, sources: [source] };
+}
+
+function coupledTrain(
+  serviceUid: string,
+  trainNumber: string,
+  destination: string,
+): Train {
+  return {
+    ...train(trainNumber, destination, serviceUid === "airport" ? "関空快速" : "紀州路快速"),
+    service_uid: serviceUid,
+    origin_station: "京橋",
+    stops: [
+      { station_name: "京橋", route_meter: 0, route_time_minutes: 600 },
+      { station_name: "天王寺", route_meter: 500, route_time_minutes: 620 },
+      { station_name: "日根野", route_meter: 1_000, route_time_minutes: 650 },
+      { station_name: destination, route_meter: 2_000, route_time_minutes: 680 },
+    ],
+  };
+}
+
+function coupledLinks(): ReadonlyMap<string, TrainFormationLink> {
+  return new Map([
+    [
+      "airport",
+      {
+        partnerServiceUid: "kishuji",
+        partnerTrainNo: "4527H",
+        partnerServiceType: "紀州路快速",
+        linkKind: "coupled-service",
+      },
+    ],
+    [
+      "kishuji",
+      {
+        partnerServiceUid: "airport",
+        partnerTrainNo: "4127M",
+        partnerServiceType: "関空快速",
+        linkKind: "coupled-service",
+      },
+    ],
+  ]);
+}
 
 function operationSnapshot(collectedAt: string): TrainDelaySnapshot {
   return {
