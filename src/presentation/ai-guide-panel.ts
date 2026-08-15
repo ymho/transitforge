@@ -210,10 +210,22 @@ function renderJourneyPlan(
   const panels = document.createElement("div");
   panels.className = "journey-plan-panels";
   const hasMultipleJourneys = plan.journeys.length > 1;
+  const excludedLabels = [...new Set([
+    ...(plan.excludedServiceTypes ?? []),
+    ...(plan.excludedTrainNames ?? []),
+    ...(plan.excludedTrainNumbers ?? []),
+  ])];
   if (plan.transferPace && plan.rankingPreference) {
     const conditions = document.createElement("p");
     conditions.className = "journey-plan-conditions";
-    conditions.textContent = `乗換: ${transferPaceLabel(plan.transferPace)}　優先: ${rankingPreferenceLabel(plan.rankingPreference)}　最大乗換: ${plan.maxTransfers ?? 3}回`;
+    conditions.textContent = [
+      `乗換: ${transferPaceLabel(plan.transferPace)}`,
+      `優先: ${rankingPreferenceLabel(plan.rankingPreference)}`,
+      `最大乗換: ${plan.maxTransfers ?? 3}回`,
+      ...(excludedLabels.length
+        ? [`除外: ${excludedLabels.join("・")}`]
+        : []),
+    ].join("　");
     container.append(conditions);
   }
 

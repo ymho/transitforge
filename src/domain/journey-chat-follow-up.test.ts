@@ -46,6 +46,53 @@ const plan: ViewerAgentJourneyPlan = {
 };
 
 describe("journey chat follow-up", () => {
+  it("recognizes a request to avoid the Shinkansen in the previous route", () => {
+    expect(journeyChatFollowUpIntent(
+      "新幹線を使いたくない",
+      plan,
+    )).toEqual({
+      type: "exclude-trains",
+      exclusions: {
+        serviceTypes: ["新幹線"],
+        trainNames: [],
+        trainNumbers: [],
+        serviceUids: [],
+      },
+    });
+  });
+
+  it("distinguishes a service type from a named limited express", () => {
+    expect(journeyChatFollowUpIntent("特急を使いたくない", plan)).toEqual({
+      type: "exclude-trains",
+      exclusions: {
+        serviceTypes: ["特急"],
+        trainNames: [],
+        trainNumbers: [],
+        serviceUids: [],
+      },
+    });
+    expect(journeyChatFollowUpIntent("特急やくもを避けて", plan)).toEqual({
+      type: "exclude-trains",
+      exclusions: {
+        serviceTypes: [],
+        trainNames: ["やくも"],
+        trainNumbers: [],
+        serviceUids: [],
+      },
+    });
+  });
+
+  it("recognizes a train number and a contextual leg", () => {
+    expect(journeyChatFollowUpIntent("1005Mを除外", plan)).toMatchObject({
+      type: "exclude-trains",
+      exclusions: { trainNumbers: ["1005M"] },
+    });
+    expect(journeyChatFollowUpIntent("2本目の列車を避けて", plan)).toMatchObject({
+      type: "exclude-trains",
+      exclusions: { serviceUids: ["second"] },
+    });
+  });
+
   it("finds the referenced leg for an intermediate-stop question", () => {
     expect(journeyChatFollowUpIntent(
       "新大阪から岡山までに停車する駅は？",

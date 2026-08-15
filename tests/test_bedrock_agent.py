@@ -257,6 +257,24 @@ class BedrockAgentTest(unittest.TestCase):
         self.assertEqual(result["statusCode"], 405)
         self.assertEqual(result["headers"]["cache-control"], "no-store")
 
+    def test_rejects_unbounded_journey_exclusions(self) -> None:
+        base = {
+            "serviceDate": "2026-08-15",
+            "originStation": "高槻",
+            "destinationStation": "米原",
+            "departureTimeMinutes": 600,
+        }
+        for exclusions in (
+            {"excludedTrainNames": ["a"] * 9},
+            {"excludedTrainNumbers": [""]},
+            {"excludedServiceUids": ["a" * 161]},
+        ):
+            with self.subTest(exclusions=exclusions):
+                with self.assertRaises(handler.RequestError):
+                    handler.journey_search._validated_request({
+                        **base, **exclusions,
+                    })
+
     def test_finds_the_peak_observation_and_top_trains_for_a_day(self) -> None:
         client = FakeDynamoDB(
             [
@@ -666,6 +684,36 @@ class BedrockAgentTest(unittest.TestCase):
         self.assertEqual(balanced["journeys"][0]["departureTimeMinutes"], 600)
         self.assertEqual(latest["journeys"][0]["departureTimeMinutes"], 615)
 
+    def test_connection_scan_excludes_shinkansen_during_search(self) -> None:
+        index = connection_index_from_legs([
+            ("shinkansen", "500A", "高槻", "米原", 600, 640),
+            ("conventional", "3450M", "高槻", "米原", 605, 680),
+        ])
+        index["trips"]["shinkansen"]["service_type"] = "新幹線"
+        result = handler.journey_search.search_index(
+            index,
+            {},
+            {
+                "serviceDate": "2026-08-15",
+                "originStation": "高槻",
+                "destinationStation": "米原",
+                "departureTimeMinutes": 590,
+                "limit": 3,
+                "maxTransfers": 3,
+                "includeTrace": True,
+                "excludedServiceTypes": ["新幹線"],
+            },
+        )
+
+        self.assertEqual(
+            result["journeys"][0]["legs"][0]["trainNumber"], "3450M"
+        )
+        self.assertEqual(result["excludedServiceTypes"], ["新幹線"])
+        self.assertEqual(result["trace"]["excludedTrips"], 1)
+        self.assertGreater(
+            result["trace"]["excludedServiceConnectionsRejected"], 0
+        )
+
     def test_connection_scan_applies_destination_changes_and_cancellations(self) -> None:
         request = {
             "serviceDate": "2026-08-14", "originStation": "向日町",
@@ -739,6 +787,92 @@ class BedrockAgentTest(unittest.TestCase):
             result["trace"]["selectedJourneys"][0]["transferWaitMinutes"],
             [5.0],
         )
+
+    def test_direct_index_excludes_shinkansen_services(self) -> None:
+        index = direct_service_index_fixture()
+        index["services"]["direct"]["service_type"] = "新幹線"
+        result = handler.journey_search.direct_service_journey_search.search_index(
+            index,
+            {},
+            {
+                "serviceDate": "2026-08-15",
+                "originStation": "出発",
+                "destinationStation": "到着",
+                "departureTimeMinutes": 590,
+                "limit": 3,
+                "maxTransfers": 1,
+                "includeTrace": True,
+                "excludedServiceTypes": ["新幹線"],
+            },
+        )
+
+        self.assertEqual(result["trace"]["excludedServices"], 1)
+        self.assertTrue(result["journeys"])
+        self.assertTrue(all(
+            leg["serviceType"] != "新幹線"
+            for journey in result["journeys"]
+            for leg in journey["legs"]
+        ))
+
+    def test_direct_index_excludes_named_and_specific_trains(self) -> None:
+        exclusion_cases = (
+            ("excludedTrainNames", "ひかり", "ひかり500号"),
+            ("excludedTrainNames", "ひかり500号", "ひかり500号"),
+            ("excludedTrainNumbers", "300M", "ひかり500号"),
+            ("excludedServiceUids", "direct", "ひかり500号"),
+        )
+        for field, value, train_name in exclusion_cases:
+            with self.subTest(field=field, value=value):
+                index = direct_service_index_fixture()
+                index["services"]["direct"]["train_name"] = train_name
+                result = (
+                    handler.journey_search.direct_service_journey_search.search_index(
+                        index,
+                        {},
+                        {
+                            "serviceDate": "2026-08-15",
+                            "originStation": "出発",
+                            "destinationStation": "到着",
+                            "departureTimeMinutes": 590,
+                            "limit": 3,
+                            "maxTransfers": 1,
+                            "includeTrace": True,
+                            field: [value],
+                        },
+                    )
+                )
+
+                self.assertTrue(result["journeys"])
+                self.assertTrue(all(
+                    leg["serviceUid"] != "direct"
+                    for journey in result["journeys"]
+                    for leg in journey["legs"]
+                ))
+                self.assertEqual(result["trace"][field], [value])
+
+    def test_train_name_with_a_different_number_is_not_excluded(self) -> None:
+        index = direct_service_index_fixture()
+        index["services"]["direct"]["train_name"] = "ひかり500号"
+        result = handler.journey_search.direct_service_journey_search.search_index(
+            index,
+            {},
+            {
+                "serviceDate": "2026-08-15",
+                "originStation": "出発",
+                "destinationStation": "到着",
+                "departureTimeMinutes": 590,
+                "limit": 3,
+                "maxTransfers": 1,
+                "includeTrace": True,
+                "excludedTrainNames": ["ひかり501号"],
+            },
+        )
+
+        self.assertTrue(any(
+            leg["serviceUid"] == "direct"
+            for journey in result["journeys"]
+            for leg in journey["legs"]
+        ))
 
     def test_direct_index_rejects_tight_transfer_and_applies_delay(self) -> None:
         index = direct_service_index_fixture()

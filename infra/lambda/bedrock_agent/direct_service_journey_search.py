@@ -7,6 +7,11 @@ from decimal import Decimal
 from typing import Any
 
 from journey_delay_prediction import estimate_trip_delays
+from journey_exclusions import (
+    excluded_service_ids,
+    response_exclusions,
+    trace_exclusions,
+)
 from request_contract import RequestError
 
 
@@ -28,10 +33,17 @@ def search_index(
 ) -> dict[str, Any]:
     if index.get("schema_version") != "direct-service-index-v1":
         raise RequestError(503, "指定日の直通インデックス形式が不正です。")
-    services = index.get("services")
+    raw_services = index.get("services")
     station_origins = index.get("station_origins")
-    if not isinstance(services, dict) or not isinstance(station_origins, dict):
+    if not isinstance(raw_services, dict) or not isinstance(station_origins, dict):
         raise RequestError(503, "指定日の直通インデックス形式が不正です。")
+    excluded_ids = excluded_service_ids(raw_services, request)
+    services = {
+        service_id: service
+        for service_id, service in raw_services.items()
+        if isinstance(service, dict)
+        and str(service_id) not in excluded_ids
+    }
 
     station_names = {
         _normalize(name): name
@@ -44,7 +56,9 @@ def search_index(
     trace: dict[str, Any] = {
         "schemaVersion": "journey-search-trace-v1",
         "strategy": "direct-service-index",
-        "indexServices": len(services),
+        "indexServices": len(raw_services),
+        **trace_exclusions(request),
+        "excludedServices": len(raw_services) - len(services),
         "originServices": 0,
         "firstBoardingsEvaluated": 0,
         "firstBoardingsBeforeRequestedTime": 0,
@@ -424,6 +438,7 @@ def _response(
         "totalMatchCount": len(journeys),
         "matches": direct_matches,
         "journeys": journeys,
+        **response_exclusions(request),
         "trace": trace,
     }
 

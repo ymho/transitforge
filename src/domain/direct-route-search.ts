@@ -59,6 +59,10 @@ export interface DirectRouteSearchResponse {
   transferPace?: TransferPace;
   rankingPreference?: JourneyRankingPreference;
   maxTransfers?: number;
+  excludedServiceTypes?: string[];
+  excludedTrainNames?: string[];
+  excludedTrainNumbers?: string[];
+  excludedServiceUids?: string[];
   distanceMeters?: number;
   results: DirectRouteResult[];
   journeys?: JourneyRouteResult[];
@@ -73,6 +77,10 @@ export type DirectRouteSearchHandler = (request: {
   transferPace?: TransferPace;
   rankingPreference?: JourneyRankingPreference;
   maxTransfers?: 0 | 1 | 2 | 3;
+  excludedServiceTypes?: string[];
+  excludedTrainNames?: string[];
+  excludedTrainNumbers?: string[];
+  excludedServiceUids?: string[];
 }) => Promise<DirectRouteSearchResponse>;
 
 export function directRouteDepartureTime(

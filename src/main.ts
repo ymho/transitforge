@@ -29,7 +29,7 @@ import {
   searchRepresentativeTimetable,
   searchTravelCandidates,
 } from "./data/bedrock-agent";
-import { loadTrainIndex } from "./data/train-index";
+import { loadTrainIndex, type Train } from "./data/train-index";
 import type { StationCoordinate } from "./data/station-line-catalog";
 import {
   nearestOriginWithDepartures, searchDirectRoutes,
@@ -651,11 +651,49 @@ if (!token) {
         };
         const localSearchRoutes: DirectRouteSearchHandler = async (request) => {
           const { originStation, distanceMeters } = await resolveDirectRouteOrigin(request);
+          const excludedServiceTypes = new Set(
+            request.excludedServiceTypes ?? [],
+          );
+          const excludedTrainNames = new Set(request.excludedTrainNames ?? []);
+          const excludedTrainNumbers = new Set(
+            request.excludedTrainNumbers ?? [],
+          );
+          const excludedServiceUids = new Set(
+            request.excludedServiceUids ?? [],
+          );
+          const normalizeExclusion = (value: string) =>
+            value.normalize("NFKC").replace(/\s+/gu, "");
+          const locallyExcluded = (train: Train) => {
+            const trainName = normalizeExclusion(train.train_name);
+            const trainFamily = trainName.replace(/[0-9]+号$/u, "");
+            const excludedByName = [...excludedTrainNames].some((value) => {
+              const excludedName = normalizeExclusion(value);
+              return /[0-9]+号$/u.test(excludedName)
+                ? trainName === excludedName
+                : trainFamily === excludedName;
+            });
+            return excludedServiceTypes.has(train.service_type) ||
+              excludedByName ||
+              excludedTrainNumbers.has(train.train_no) ||
+              excludedServiceUids.has(train.service_uid);
+          };
           return {
             originStation,
+            ...(excludedServiceTypes.size > 0
+              ? { excludedServiceTypes: [...excludedServiceTypes] }
+              : {}),
+            ...(excludedTrainNames.size > 0
+              ? { excludedTrainNames: [...excludedTrainNames] }
+              : {}),
+            ...(excludedTrainNumbers.size > 0
+              ? { excludedTrainNumbers: [...excludedTrainNumbers] }
+              : {}),
+            ...(excludedServiceUids.size > 0
+              ? { excludedServiceUids: [...excludedServiceUids] }
+              : {}),
             ...(distanceMeters === undefined ? {} : { distanceMeters }),
             results: searchDirectRoutes(
-              displayTrains,
+              displayTrains.filter((train) => !locallyExcluded(train)),
               originStation,
               request.destinationStation,
               request.departureTimeMinutes,
@@ -674,6 +712,10 @@ if (!token) {
             maxTransfers: request.maxTransfers ?? 3,
             transferPace: request.transferPace,
             rankingPreference: request.rankingPreference,
+            excludedServiceTypes: request.excludedServiceTypes,
+            excludedTrainNames: request.excludedTrainNames,
+            excludedTrainNumbers: request.excludedTrainNumbers,
+            excludedServiceUids: request.excludedServiceUids,
           });
           const trainsByServiceUid = new Map(
             displayTrains.map((train) => [train.service_uid, train]),
@@ -688,6 +730,14 @@ if (!token) {
             rankingPreference:
               response.rankingPreference ?? request.rankingPreference,
             maxTransfers: response.maxTransfers ?? request.maxTransfers,
+            excludedServiceTypes:
+              response.excludedServiceTypes ?? request.excludedServiceTypes,
+            excludedTrainNames:
+              response.excludedTrainNames ?? request.excludedTrainNames,
+            excludedTrainNumbers:
+              response.excludedTrainNumbers ?? request.excludedTrainNumbers,
+            excludedServiceUids:
+              response.excludedServiceUids ?? request.excludedServiceUids,
             ...(distanceMeters === undefined ? {} : { distanceMeters }),
             journeys: response.journeys.map((journey) => ({
               departureTimeMinutes: journey.departureTimeMinutes,

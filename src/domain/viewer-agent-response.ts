@@ -12,6 +12,11 @@ export interface ViewerAgentJourneyPlan {
   transferPace?: TransferPace;
   rankingPreference?: JourneyRankingPreference;
   maxTransfers?: number;
+  searchTimeMinutes?: number;
+  excludedServiceTypes?: string[];
+  excludedTrainNames?: string[];
+  excludedTrainNumbers?: string[];
+  excludedServiceUids?: string[];
   journeys: JourneyRouteResult[];
 }
 

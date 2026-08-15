@@ -135,6 +135,10 @@ export interface TravelCandidateSearchResponse {
     | "latest-departure"
     | "fewest-transfers";
   maxTransfers?: number;
+  excludedServiceTypes?: string[];
+  excludedTrainNames?: string[];
+  excludedTrainNumbers?: string[];
+  excludedServiceUids?: string[];
   matches: Array<{
     serviceUid: string;
     trainNumber: string;

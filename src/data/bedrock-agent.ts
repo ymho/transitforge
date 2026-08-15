@@ -69,6 +69,10 @@ export async function searchTravelCandidates(
     maxTransfers?: 0 | 1 | 2 | 3;
     transferPace?: TransferPace;
     rankingPreference?: JourneyRankingPreference;
+    excludedServiceTypes?: string[];
+    excludedTrainNames?: string[];
+    excludedTrainNumbers?: string[];
+    excludedServiceUids?: string[];
   },
   fetcher: typeof fetch = fetch,
 ): Promise<TravelCandidateSearchResponse> {
