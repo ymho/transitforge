@@ -12,6 +12,7 @@ describe("train delay data", () => {
           delayMinutes: 4,
           destination: " 姫路 ",
           sources: ["source-a"],
+          longTimeStopping: true,
         },
         "200B": { delayMinutes: 0, destination: "京都", sources: [] },
         invalid: { delayMinutes: -1, destination: "大阪", sources: [] },
@@ -25,11 +26,13 @@ describe("train delay data", () => {
       delayMinutes: 4,
       destination: "姫路",
       sources: ["source-a"],
+      longTimeStopping: true,
     });
     expect(result.operationsByTrainNumber.get("200B")).toEqual({
       delayMinutes: 0,
       destination: "京都",
       sources: [],
+      longTimeStopping: false,
     });
     expect(result.operationsByTrainNumber.has("invalid")).toBe(false);
     expect(result.operationsByTrainNumber.has("missingDestination")).toBe(false);

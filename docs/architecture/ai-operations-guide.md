@@ -52,12 +52,27 @@ flowchart LR
 - 深夜帯の発着時刻はブラウザで通常時刻へ整形
 - 現在の業務日付かつ現在時刻付近ではS3の最新`delays.json`から遅延 行き先変更 運休を評価する
 - 未来日 過去日 古いスナップショット 取得失敗を含むスナップショットでは計画ダイヤだけを使う
-- 候補は構造化データとして返し タブ 路線色付き区間 展開可能な途中停車駅として描画する
+- 候補は構造化データとして返し タブと路線色付き区間として描画する
+- 途中停車駅は直前の経路に対する追質問として回答する
+- 区間の別列車は候補だけを先に返し 利用者が番号か列車名で確定した後に経路を差し替える
 
 検索ごとに`journey_search_trace`を構造化ログへ出す
 接続走査数 支配判定で除外したラベル数 乗換時間不足 打ち切り条件
 採用経路 乗換駅 待ち時間 適用した嗜好を確認できる
 リアルタイム情報の適用可否と適用しなかった理由も確認できる
+
+### 経路検索シナリオ
+
+`tests/fixtures/journey-search-scenarios.json`へ小さな列車と期待経路を記述する
+実在の時刻表やS3へ接続せず 直通 乗換時間 嗜好 遅延 深夜時刻を決定的に再現できる
+
+```bash
+python3 tools/run_journey_search_scenarios.py
+python3 tools/run_journey_search_scenarios.py latest-departure
+python3 tools/run_journey_search_scenarios.py --list
+```
+
+通常のPythonテストでも全シナリオを実行するため CIへの追加設定は不要
 
 ## 許可する画面操作
 
