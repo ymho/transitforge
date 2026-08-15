@@ -1,0 +1,371 @@
+[
+  {
+    "id": "direct",
+    "name": "直通列車で到着する",
+    "services": [
+      {
+        "id": "direct",
+        "trainNumber": "10M",
+        "stops": [
+          { "station": "A", "departure": 600 },
+          { "station": "D", "arrival": 640 }
+        ]
+      }
+    ],
+    "request": {
+      "originStation": "A",
+      "destinationStation": "D",
+      "departureTimeMinutes": 590,
+      "maxTransfers": 0
+    },
+    "expect": {
+      "journeyCount": 1,
+      "firstJourney": {
+        "trains": ["10M"],
+        "departure": 600,
+        "arrival": 640,
+        "transferCount": 0,
+        "transferStations": []
+      }
+    }
+  },
+  {
+    "id": "one-transfer",
+    "name": "5分以上の待ち時間で乗り換える",
+    "services": [
+      {
+        "id": "first",
+        "trainNumber": "11M",
+        "stops": [
+          { "station": "A", "departure": 600 },
+          { "station": "B", "arrival": 610 }
+        ]
+      },
+      {
+        "id": "second",
+        "trainNumber": "12M",
+        "stops": [
+          { "station": "B", "departure": 616 },
+          { "station": "D", "arrival": 630 }
+        ]
+      }
+    ],
+    "request": {
+      "originStation": "A",
+      "destinationStation": "D",
+      "departureTimeMinutes": 590,
+      "maxTransfers": 3
+    },
+    "expect": {
+      "journeyCount": 1,
+      "firstJourney": {
+        "trains": ["11M", "12M"],
+        "departure": 600,
+        "arrival": 630,
+        "transferCount": 1,
+        "transferStations": ["B"]
+      }
+    }
+  },
+  {
+    "id": "tight-transfer",
+    "name": "乗換時間が不足する経路を除外する",
+    "services": [
+      {
+        "id": "first",
+        "trainNumber": "21M",
+        "stops": [
+          { "station": "A", "departure": 600 },
+          { "station": "B", "arrival": 610 }
+        ]
+      },
+      {
+        "id": "second",
+        "trainNumber": "22M",
+        "stops": [
+          { "station": "B", "departure": 614 },
+          { "station": "D", "arrival": 630 }
+        ]
+      }
+    ],
+    "request": {
+      "originStation": "A",
+      "destinationStation": "D",
+      "departureTimeMinutes": 590,
+      "maxTransfers": 3
+    },
+    "expect": {
+      "journeyCount": 0,
+      "traceMinimum": { "labelsRejectedByTransferTime": 1 }
+    }
+  },
+  {
+    "id": "relaxed-transfer",
+    "name": "ゆっくり設定では10分の乗換時間を確保する",
+    "services": [
+      {
+        "id": "first",
+        "trainNumber": "31M",
+        "stops": [
+          { "station": "A", "departure": 600 },
+          { "station": "B", "arrival": 610 }
+        ]
+      },
+      {
+        "id": "second",
+        "trainNumber": "32M",
+        "stops": [
+          { "station": "B", "departure": 619 },
+          { "station": "D", "arrival": 635 }
+        ]
+      }
+    ],
+    "request": {
+      "originStation": "A",
+      "destinationStation": "D",
+      "departureTimeMinutes": 590,
+      "maxTransfers": 3,
+      "transferPace": "relaxed"
+    },
+    "expect": {
+      "journeyCount": 0,
+      "traceMinimum": { "labelsRejectedByTransferTime": 1 }
+    }
+  },
+  {
+    "id": "latest-departure",
+    "name": "遅く出る設定で後発列車を優先する",
+    "services": [
+      {
+        "id": "early",
+        "trainNumber": "40M",
+        "stops": [
+          { "station": "A", "departure": 600 },
+          { "station": "D", "arrival": 650 }
+        ]
+      },
+      {
+        "id": "late-first",
+        "trainNumber": "41M",
+        "stops": [
+          { "station": "A", "departure": 615 },
+          { "station": "B", "arrival": 625 }
+        ]
+      },
+      {
+        "id": "late-second",
+        "trainNumber": "42M",
+        "stops": [
+          { "station": "B", "departure": 630 },
+          { "station": "D", "arrival": 652 }
+        ]
+      }
+    ],
+    "request": {
+      "originStation": "A",
+      "destinationStation": "D",
+      "departureTimeMinutes": 590,
+      "maxTransfers": 3,
+      "rankingPreference": "latest-departure"
+    },
+    "expect": {
+      "journeyCount": 2,
+      "firstJourney": {
+        "trains": ["41M", "42M"],
+        "departure": 615,
+        "arrival": 652,
+        "transferCount": 1,
+        "transferStations": ["B"]
+      }
+    }
+  },
+  {
+    "id": "fewest-transfers",
+    "name": "乗換少なめ設定で直通を優先する",
+    "services": [
+      {
+        "id": "direct",
+        "trainNumber": "50M",
+        "stops": [
+          { "station": "A", "departure": 600 },
+          { "station": "D", "arrival": 660 }
+        ]
+      },
+      {
+        "id": "first",
+        "trainNumber": "51M",
+        "stops": [
+          { "station": "A", "departure": 605 },
+          { "station": "B", "arrival": 615 }
+        ]
+      },
+      {
+        "id": "second",
+        "trainNumber": "52M",
+        "stops": [
+          { "station": "B", "departure": 620 },
+          { "station": "D", "arrival": 630 }
+        ]
+      }
+    ],
+    "request": {
+      "originStation": "A",
+      "destinationStation": "D",
+      "departureTimeMinutes": 590,
+      "maxTransfers": 3,
+      "rankingPreference": "fewest-transfers"
+    },
+    "expect": {
+      "journeyCount": 2,
+      "firstJourney": {
+        "trains": ["50M"],
+        "departure": 600,
+        "arrival": 660,
+        "transferCount": 0,
+        "transferStations": []
+      }
+    }
+  },
+  {
+    "id": "station-transfer-rule",
+    "name": "駅固有の乗換時間を適用する",
+    "stationTransferMinutes": { "B": 8 },
+    "services": [
+      {
+        "id": "first",
+        "trainNumber": "61M",
+        "stops": [
+          { "station": "A", "departure": 600 },
+          { "station": "B", "arrival": 610 }
+        ]
+      },
+      {
+        "id": "second",
+        "trainNumber": "62M",
+        "stops": [
+          { "station": "B", "departure": 616 },
+          { "station": "D", "arrival": 630 }
+        ]
+      }
+    ],
+    "request": {
+      "originStation": "A",
+      "destinationStation": "D",
+      "departureTimeMinutes": 590,
+      "maxTransfers": 3
+    },
+    "expect": {
+      "journeyCount": 0,
+      "traceMinimum": { "labelsRejectedByTransferTime": 1 }
+    }
+  },
+  {
+    "id": "delayed-transfer",
+    "name": "遅延で成立しなくなった乗換を除外する",
+    "delays": { "71M": 5 },
+    "services": [
+      {
+        "id": "first",
+        "trainNumber": "71M",
+        "stops": [
+          { "station": "A", "departure": 600 },
+          { "station": "B", "arrival": 610 }
+        ]
+      },
+      {
+        "id": "second",
+        "trainNumber": "72M",
+        "stops": [
+          { "station": "B", "departure": 616 },
+          { "station": "D", "arrival": 630 }
+        ]
+      }
+    ],
+    "request": {
+      "originStation": "A",
+      "destinationStation": "D",
+      "departureTimeMinutes": 590,
+      "maxTransfers": 3
+    },
+    "expect": {
+      "journeyCount": 0,
+      "traceMinimum": { "labelsRejectedByTransferTime": 1 }
+    }
+  },
+  {
+    "id": "two-transfers",
+    "name": "2回乗り換えて到着する",
+    "services": [
+      {
+        "id": "first",
+        "trainNumber": "81M",
+        "stops": [
+          { "station": "A", "departure": 600 },
+          { "station": "B", "arrival": 610 }
+        ]
+      },
+      {
+        "id": "second",
+        "trainNumber": "82M",
+        "stops": [
+          { "station": "B", "departure": 615 },
+          { "station": "C", "arrival": 625 }
+        ]
+      },
+      {
+        "id": "third",
+        "trainNumber": "83M",
+        "stops": [
+          { "station": "C", "departure": 630 },
+          { "station": "D", "arrival": 640 }
+        ]
+      }
+    ],
+    "request": {
+      "originStation": "A",
+      "destinationStation": "D",
+      "departureTimeMinutes": 590,
+      "maxTransfers": 3
+    },
+    "expect": {
+      "journeyCount": 1,
+      "firstJourney": {
+        "trains": ["81M", "82M", "83M"],
+        "departure": 600,
+        "arrival": 640,
+        "transferCount": 2,
+        "transferStations": ["B", "C"]
+      }
+    }
+  },
+  {
+    "id": "after-midnight",
+    "name": "24時を超える時刻で検索する",
+    "services": [
+      {
+        "id": "late",
+        "trainNumber": "80M",
+        "stops": [
+          { "station": "A", "departure": 1450 },
+          { "station": "D", "arrival": 1470 }
+        ]
+      }
+    ],
+    "request": {
+      "originStation": "A",
+      "destinationStation": "D",
+      "departureTimeMinutes": 1440,
+      "maxTransfers": 0
+    },
+    "expect": {
+      "journeyCount": 1,
+      "firstJourney": {
+        "trains": ["80M"],
+        "departure": 1450,
+        "arrival": 1470,
+        "transferCount": 0,
+        "transferStations": []
+      }
+    }
+  }
+]

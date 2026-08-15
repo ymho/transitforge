@@ -306,16 +306,10 @@
   --journey-line-color: #8b96a1;
 }
 
-.journey-leg summary {
+.journey-leg-summary {
   display: grid;
   gap: 0;
   padding: 0;
-  list-style: none;
-  cursor: pointer;
-}
-
-.journey-leg summary::-webkit-details-marker {
-  display: none;
 }
 
 .journey-station {
@@ -358,42 +352,6 @@
 
 .journey-segment span {
   align-self: center;
-}
-
-.journey-segment span::after {
-  margin-left: 0.35rem;
-  content: "途中駅";
-  color: var(--ui-accent);
-  font-size: 0.6rem;
-}
-
-.journey-leg[open] .journey-segment span::after {
-  content: "閉じる";
-}
-
-.journey-leg-without-stops summary {
-  cursor: default;
-  pointer-events: none;
-}
-
-.journey-leg-without-stops .journey-segment span::after {
-  content: none;
-}
-
-.journey-intermediate-stops {
-  display: none;
-  gap: 0.25rem;
-  margin: 0.1rem 0 0.45rem 3.65rem;
-  padding: 0.45rem 0.55rem;
-  border-left: 2px solid var(--journey-line-color);
-  color: var(--ui-muted);
-  background: var(--ui-surface-muted);
-  font-size: 0.65rem;
-  list-style: none;
-}
-
-.journey-leg[open] .journey-intermediate-stops {
-  display: grid;
 }
 
 .journey-transfer {

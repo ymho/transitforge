@@ -21,6 +21,7 @@ export interface TrainSelectionElements {
   details: HTMLElement;
   close: HTMLButtonElement;
   title: HTMLElement;
+  stopping: HTMLElement;
   delay: HTMLElement;
   stops: HTMLOListElement;
   coupledTabs: HTMLElement;
@@ -100,6 +101,25 @@ export function configureTrainSelection(
       return;
     }
 
+    const existingTabs = Array.from(
+      elements.coupledTabs.querySelectorAll<HTMLButtonElement>("[role=tab]"),
+    );
+    const sameServices =
+      existingTabs.length === trains.length &&
+      existingTabs.every(
+        (tab, index) => tab.dataset.serviceUid === trains[index]?.service_uid,
+      );
+    if (sameServices) {
+      for (const tab of existingTabs) {
+        tab.setAttribute(
+          "aria-selected",
+          String(tab.dataset.serviceUid === serviceUid),
+        );
+      }
+      elements.coupledTabs.hidden = false;
+      return;
+    }
+
     const tabs = trains.map((train) => {
       const title = trainTitleFor(train);
       const tab = document.createElement("button");
@@ -168,6 +188,7 @@ export function configureTrainSelection(
         if (adjusted) {
           scheduledTime.className = "train-timetable-scheduled-replaced";
           const adjustedTime = document.createElement("strong");
+          adjustedTime.className = "train-timetable-adjusted";
           const arrow = document.createElement("span");
           arrow.className = "train-timetable-delay-arrow";
           arrow.textContent = "→";
@@ -208,11 +229,38 @@ export function configureTrainSelection(
     const mainTitle = document.createElement("span");
     mainTitle.className = "train-title-main";
     mainTitle.textContent = title.main;
-    elements.title.replaceChildren(badge, mainTitle);
+    const titleChildren: HTMLElement[] = [badge, mainTitle];
+    if (destinationChangedServiceUids.has(serviceUid)) {
+      const destinationChange = document.createElement("span");
+      destinationChange.className = "train-destination-change";
+      const scheduledDestination = document.createElement("span");
+      scheduledDestination.className = "train-destination-scheduled";
+      scheduledDestination.textContent = timetableTrain.destination_station;
+      const arrow = document.createElement("span");
+      arrow.className = "train-destination-change-arrow";
+      arrow.textContent = "→";
+      arrow.setAttribute("aria-hidden", "true");
+      const currentDestination = document.createElement("strong");
+      currentDestination.className = "train-destination-current";
+      currentDestination.textContent = train.destination_station;
+      destinationChange.append(
+        scheduledDestination,
+        arrow,
+        currentDestination,
+      );
+      if (title.suffix) {
+        mainTitle.replaceChildren(destinationChange);
+      } else {
+        titleChildren.push(destinationChange);
+      }
+    }
+    elements.title.replaceChildren(...titleChildren);
     const lineColor = colorsByServiceUid.get(train.service_uid) ?? "#a8aaad";
     elements.title.style.setProperty("--train-line-color", lineColor);
     elements.details.style.setProperty("--train-line-color", lineColor);
-    const delay = operationsByTrainNumber?.get(train.train_no)?.delayMinutes;
+    const operation = operationsByTrainNumber?.get(train.train_no);
+    const delay = operation?.delayMinutes;
+    elements.stopping.hidden = operation?.longTimeStopping !== true;
     elements.delay.hidden = delay === undefined || delay <= 0;
     elements.delay.textContent = delay !== undefined && delay > 0 ? `遅延 ${delay}分` : "";
     showSheet(elements.details);
@@ -263,10 +311,17 @@ export function configureTrainSelection(
         return false;
       }
       showTrainDetails(serviceUid);
+      const padding = trainFocusPadding(
+        window.innerWidth,
+        window.innerHeight,
+        elements.details.getBoundingClientRect().height,
+      );
       map.easeTo({
         center: position.coordinate,
         zoom: Math.max(map.getZoom(), 14),
         duration: 750,
+        padding,
+        retainPadding: false,
       });
       return true;
     },
@@ -316,7 +371,15 @@ export function configureTrainSelection(
         );
       }
       renderCoupledTrainTabs(focusedServiceUid);
-      map.jumpTo({ center: position.coordinate });
+      map.jumpTo({
+        center: position.coordinate,
+        padding: trainFocusPadding(
+          window.innerWidth,
+          window.innerHeight,
+          elements.details.getBoundingClientRect().height,
+        ),
+        retainPadding: false,
+      });
     },
     updateOperations(operations, changedServiceUids = new Set()) {
       operationsByTrainNumber = operations;
@@ -327,6 +390,22 @@ export function configureTrainSelection(
         showTrainDetails(focusedServiceUid);
       }
     },
+  };
+}
+
+export function trainFocusPadding(
+  viewportWidth: number,
+  viewportHeight: number,
+  sheetHeight: number,
+): { top: number; right: number; bottom: number; left: number } {
+  return {
+    top: 0,
+    right: 0,
+    bottom:
+      viewportWidth <= 720
+        ? Math.max(0, Math.min(sheetHeight, viewportHeight * 0.72))
+        : 0,
+    left: 0,
   };
 }
 
