@@ -7,10 +7,11 @@ from decimal import Decimal
 from typing import Any
 
 from journey_delay_prediction import estimate_trip_delays
-from journey_exclusions import (
-    excluded_service_ids,
-    response_exclusions,
-    trace_exclusions,
+from journey_constraints import (
+    eligible_service_ids,
+    journey_satisfies_requirements,
+    response_constraints,
+    trace_constraints,
 )
 from request_contract import RequestError
 
@@ -37,12 +38,12 @@ def search_index(
     station_origins = index.get("station_origins")
     if not isinstance(raw_services, dict) or not isinstance(station_origins, dict):
         raise RequestError(503, "指定日の直通インデックス形式が不正です。")
-    excluded_ids = excluded_service_ids(raw_services, request)
+    eligible_ids = eligible_service_ids(raw_services, request)
     services = {
         service_id: service
         for service_id, service in raw_services.items()
         if isinstance(service, dict)
-        and str(service_id) not in excluded_ids
+        and str(service_id) in eligible_ids
     }
 
     station_names = {
@@ -57,7 +58,7 @@ def search_index(
         "schemaVersion": "journey-search-trace-v1",
         "strategy": "direct-service-index",
         "indexServices": len(raw_services),
-        **trace_exclusions(request),
+        **trace_constraints(request),
         "excludedServices": len(raw_services) - len(services),
         "originServices": 0,
         "firstBoardingsEvaluated": 0,
@@ -156,8 +157,8 @@ def search_index(
             delay_info,
         )
         if direct_leg is not None:
-            _add_candidate(candidates, [direct_leg])
-            trace["directCandidates"] += 1
+            if _add_candidate(candidates, [direct_leg], request):
+                trace["directCandidates"] += 1
         if request["maxTransfers"] == 0:
             continue
 
@@ -223,8 +224,10 @@ def search_index(
                     scheduled_arrival,
                     delay_info,
                 )
-                _add_candidate(candidates, [first_leg, second_leg])
-                trace["transferCandidates"] += 1
+                if _add_candidate(
+                    candidates, [first_leg, second_leg], request
+                ):
+                    trace["transferCandidates"] += 1
 
     journeys = sorted(candidates.values(), key=_journey_rank)[:limit]
     trace["selectedJourneys"] = [
@@ -399,7 +402,10 @@ def _leg(
 def _add_candidate(
     candidates: dict[tuple[Any, ...], dict[str, Any]],
     legs: list[dict[str, Any]],
-) -> None:
+    request: dict[str, Any],
+) -> bool:
+    if not journey_satisfies_requirements(legs, request):
+        return False
     key = tuple(
         (leg["serviceUid"], leg["departureTimeMinutes"], leg["arrivalTimeMinutes"])
         for leg in legs
@@ -413,6 +419,7 @@ def _add_candidate(
     current = candidates.get(key)
     if current is None or _journey_rank(journey) < _journey_rank(current):
         candidates[key] = journey
+    return True
 
 
 def _response(
@@ -438,7 +445,7 @@ def _response(
         "totalMatchCount": len(journeys),
         "matches": direct_matches,
         "journeys": journeys,
-        **response_exclusions(request),
+        **response_constraints(request),
         "trace": trace,
     }
 

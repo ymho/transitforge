@@ -172,11 +172,14 @@ export function directRouteRequestFromPrompt(
   const normalizedPrompt = normalize(prompt);
   const hasRouteIntent =
     normalizedPrompt.includes("行きたい") ||
+    normalizedPrompt.includes("いきたい") ||
     normalizedPrompt.includes("行き方") ||
     normalizedPrompt.includes("経路") ||
     normalizedPrompt.includes("直通") ||
     normalizedPrompt.includes("乗り換えなし") ||
-    normalizedPrompt.includes("から");
+    normalizedPrompt.includes("から") ||
+    normalizedPrompt.endsWith("へ") ||
+    normalizedPrompt.endsWith("まで");
   if (!hasRouteIntent) {
     return undefined;
   }

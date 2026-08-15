@@ -1,6 +1,11 @@
 import type { Train } from "../data/train-index";
 import type { DirectRouteSearchHandler } from "./direct-route-search";
 import { directRouteDepartureTime } from "./direct-route-search";
+import {
+  journeyNavigationGuidanceFromPrompt,
+  mergeJourneyNavigationGuidance,
+  type JourneyNavigationGuidance,
+} from "./journey-navigation-intent";
 import type { WeatherMode } from "./map-weather";
 import { operatingDayStartMinutes } from "./playback";
 import type { TrainPosition } from "./train-position";
@@ -25,6 +30,7 @@ export interface LocalViewerAgentDependencies {
   setWeather: (weather: WeatherMode) => void;
   setLayerVisibility: (layer: ViewerAgentLayer, visible: boolean) => void;
   searchDirectRoutes: DirectRouteSearchHandler;
+  getPendingJourneyGuidance?: () => JourneyNavigationGuidance | undefined;
   maximumRouteTime: number;
 }
 
@@ -163,10 +169,44 @@ async function directRouteSearchResponse(
     dependencies.getRouteTime(),
     dependencies.maximumRouteTime,
   );
+  const guidance = mergeJourneyNavigationGuidance(
+    dependencies.getPendingJourneyGuidance?.(),
+    journeyNavigationGuidanceFromPrompt(prompt, dependencies.trains),
+  );
   try {
     const response = await dependencies.searchDirectRoutes({
       ...request,
       departureTimeMinutes,
+      ...(guidance.transferPace
+        ? { transferPace: guidance.transferPace }
+        : {}),
+      ...(guidance.rankingPreference
+        ? { rankingPreference: guidance.rankingPreference }
+        : {}),
+      ...(guidance.maxTransfers === undefined
+        ? {}
+        : { maxTransfers: guidance.maxTransfers }),
+      ...(guidance.requiredServiceTypes.length
+        ? { requiredServiceTypes: guidance.requiredServiceTypes }
+        : {}),
+      ...(guidance.requiredTrainNames.length
+        ? { requiredTrainNames: guidance.requiredTrainNames }
+        : {}),
+      ...(guidance.requiredTrainNumbers.length
+        ? { requiredTrainNumbers: guidance.requiredTrainNumbers }
+        : {}),
+      ...(guidance.allowedServiceTypes.length
+        ? { allowedServiceTypes: guidance.allowedServiceTypes }
+        : {}),
+      ...(guidance.excludedServiceTypes.length
+        ? { excludedServiceTypes: guidance.excludedServiceTypes }
+        : {}),
+      ...(guidance.excludedTrainNames.length
+        ? { excludedTrainNames: guidance.excludedTrainNames }
+        : {}),
+      ...(guidance.excludedTrainNumbers.length
+        ? { excludedTrainNumbers: guidance.excludedTrainNumbers }
+        : {}),
     });
     const first = response.results[0];
     if (!first) {

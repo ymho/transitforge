@@ -9,7 +9,7 @@ export type JourneyRankingPreference =
 export interface JourneySearchPreferences {
   transferPace: TransferPace;
   rankingPreference: JourneyRankingPreference;
-  maxTransfers: 3;
+  maxTransfers: 0 | 1 | 2 | 3;
 }
 
 export const defaultJourneySearchPreferences: JourneySearchPreferences = {
@@ -25,6 +25,7 @@ export function journeySearchPreferencesFromPrompt(
   const normalized = prompt.normalize("NFKC").replace(/\s+/gu, "");
   let transferPace = defaults.transferPace;
   let rankingPreference = defaults.rankingPreference;
+  let maxTransfers = defaults.maxTransfers;
 
   if (/ゆっくり|余裕を(?:持って|もって)|乗換(?:に)?余裕/u.test(normalized)) {
     transferPace = "relaxed";
@@ -42,7 +43,17 @@ export function journeySearchPreferencesFromPrompt(
     rankingPreference = "balanced";
   }
 
-  return { transferPace, rankingPreference, maxTransfers: 3 };
+  if (/乗換(?:え)?なし|直通だけ/u.test(normalized)) {
+    maxTransfers = 0;
+  } else {
+    const requestedLimit = /乗換(?:え)?([1-3])回(?:まで|以内)/u
+      .exec(normalized)?.[1];
+    if (requestedLimit) {
+      maxTransfers = Number(requestedLimit) as 1 | 2 | 3;
+    }
+  }
+
+  return { transferPace, rankingPreference, maxTransfers };
 }
 
 export function isTransferPace(value: unknown): value is TransferPace {
