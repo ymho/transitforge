@@ -64,6 +64,13 @@ export class PlaybackController {
     }
   }
 
+  synchronize(routeTimeMinutes: number): void {
+    this.routeTime = routeTimeMinutes;
+    this.lastTimestamp = undefined;
+    this.lastRenderedTimestamp = undefined;
+    this.options.render(routeTimeMinutes);
+  }
+
   private readonly tick = (timestamp: number): void => {
     if (!this.playing) {
       return;

@@ -53,4 +53,33 @@ describe("PlaybackController", () => {
     expect(controller.isPlaying()).toBe(false);
     expect(scheduler.cancel).toHaveBeenCalledWith(7);
   });
+
+  it("does not add the inactive duration again after clock synchronization", () => {
+    let scheduled: ((timestamp: number) => void) | undefined;
+    const scheduler: AnimationScheduler = {
+      request: vi.fn((callback) => {
+        scheduled = callback;
+        return 1;
+      }),
+      cancel: vi.fn(),
+    };
+    const render = vi.fn();
+    const controller = new PlaybackController({
+      initialRouteTime: 600,
+      range: { minimum: 0, maximum: 1_800 },
+      getMinutesPerSecond: () => 1,
+      render,
+      onOperatingDayWrapped: vi.fn(),
+      scheduler,
+    });
+
+    controller.start();
+    scheduled?.(1_000);
+    controller.synchronize(700);
+    scheduled?.(61_000);
+    scheduled?.(62_000);
+
+    expect(render).toHaveBeenNthCalledWith(1, 700);
+    expect(render).toHaveBeenNthCalledWith(2, 701);
+  });
 });
