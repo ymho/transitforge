@@ -275,6 +275,18 @@ class BedrockAgentTest(unittest.TestCase):
                         **base, **exclusions,
                     })
 
+    def test_rejects_too_many_required_journey_conditions(self) -> None:
+        with self.assertRaises(handler.RequestError):
+            handler.journey_search._validated_request({
+                "serviceDate": "2026-08-15",
+                "originStation": "京都",
+                "destinationStation": "出雲市",
+                "departureTimeMinutes": 600,
+                "requiredServiceTypes": ["特急", "新幹線"],
+                "requiredTrainNames": ["やくも", "はるか"],
+                "requiredTrainNumbers": ["1005M"],
+            })
+
     def test_finds_the_peak_observation_and_top_trains_for_a_day(self) -> None:
         client = FakeDynamoDB(
             [
@@ -714,6 +726,63 @@ class BedrockAgentTest(unittest.TestCase):
             result["trace"]["excludedServiceConnectionsRejected"], 0
         )
 
+    def test_connection_scan_keeps_a_required_train_when_a_faster_route_exists(self) -> None:
+        index = connection_index_from_legs([
+            ("fast-local", "100M", "A", "D", 600, 620),
+            ("feeder", "101M", "A", "B", 602, 612),
+            ("yakumo", "1005M", "B", "D", 620, 650),
+        ])
+        index["trips"]["yakumo"].update({
+            "service_type": "特急",
+            "train_name": "やくも5号",
+        })
+        result = handler.journey_search.search_index(
+            index,
+            {},
+            {
+                "serviceDate": "2026-08-15",
+                "originStation": "A",
+                "destinationStation": "D",
+                "departureTimeMinutes": 590,
+                "limit": 3,
+                "maxTransfers": 3,
+                "includeTrace": True,
+                "requiredTrainNames": ["やくも"],
+            },
+        )
+
+        self.assertEqual(
+            [leg["serviceUid"] for leg in result["journeys"][0]["legs"]],
+            ["feeder", "yakumo"],
+        )
+        self.assertEqual(result["requiredTrainNames"], ["やくも"])
+
+    def test_connection_scan_limits_local_only_search_to_ordinary_trains(self) -> None:
+        index = connection_index_from_legs([
+            ("rapid", "3400M", "A", "D", 600, 620),
+            ("local", "100M", "A", "D", 605, 650),
+        ])
+        index["trips"]["rapid"]["service_type"] = "新快速"
+        result = handler.journey_search.search_index(
+            index,
+            {},
+            {
+                "serviceDate": "2026-08-15",
+                "originStation": "A",
+                "destinationStation": "D",
+                "departureTimeMinutes": 590,
+                "limit": 3,
+                "maxTransfers": 3,
+                "includeTrace": True,
+                "allowedServiceTypes": ["普通"],
+            },
+        )
+
+        self.assertEqual(
+            result["journeys"][0]["legs"][0]["serviceUid"], "local"
+        )
+        self.assertEqual(result["allowedServiceTypes"], ["普通"])
+
     def test_connection_scan_applies_destination_changes_and_cancellations(self) -> None:
         request = {
             "serviceDate": "2026-08-14", "originStation": "向日町",
@@ -813,6 +882,33 @@ class BedrockAgentTest(unittest.TestCase):
             for journey in result["journeys"]
             for leg in journey["legs"]
         ))
+
+    def test_direct_index_requires_a_named_train_in_the_whole_journey(self) -> None:
+        index = direct_service_index_fixture()
+        index["services"]["second"].update({
+            "service_type": "特急",
+            "train_name": "やくも5号",
+        })
+        result = handler.journey_search.direct_service_journey_search.search_index(
+            index,
+            {},
+            {
+                "serviceDate": "2026-08-15",
+                "originStation": "出発",
+                "destinationStation": "到着",
+                "departureTimeMinutes": 590,
+                "limit": 3,
+                "maxTransfers": 1,
+                "includeTrace": True,
+                "requiredTrainNames": ["やくも"],
+            },
+        )
+
+        self.assertEqual(len(result["journeys"]), 1)
+        self.assertEqual(
+            [leg["serviceUid"] for leg in result["journeys"][0]["legs"]],
+            ["first", "second"],
+        )
 
     def test_direct_index_excludes_named_and_specific_trains(self) -> None:
         exclusion_cases = (

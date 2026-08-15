@@ -1015,6 +1015,91 @@ describe("Bedrock viewer agent", () => {
     expect(converse).not.toHaveBeenCalled();
   });
 
+  it("applies a named-train wish remembered before the route request", async () => {
+    const searchDirectRoutes = vi.fn(async () => ({
+      originStation: "大阪",
+      requiredTrainNames: ["はるか"],
+      results: [],
+      journeys: [{
+        departureTimeMinutes: 1_080,
+        arrivalTimeMinutes: 1_120,
+        transferCount: 0,
+        legs: [{
+          serviceUid: train.service_uid,
+          trainNumber: train.train_no,
+          serviceType: train.service_type,
+          trainName: train.train_name,
+          originStation: "大阪",
+          destinationStation: "京都",
+          departureTimeMinutes: 1_080,
+          arrivalTimeMinutes: 1_120,
+        }],
+      }],
+    }));
+    const converse = vi
+      .fn()
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{
+            toolUse: {
+              toolUseId: "route",
+              name: "search_direct_routes",
+              input: {
+                originStation: "大阪",
+                destinationStation: "京都",
+                departureTimeMinutes: 1_070,
+              },
+            },
+          }],
+        },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant",
+          content: [{ text: "経路を案内します。" }],
+        },
+        stopReason: "end_turn",
+      });
+
+    const result = await runBedrockViewerAgent(
+      "大阪から京都へ行きたい",
+      {
+        trains: [train],
+        getPositions: () => [],
+        getRouteTime: () => 1_070,
+        setRouteTime: vi.fn(),
+        focusTrain: vi.fn(() => true),
+        setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(),
+        searchDirectRoutes,
+        getPendingJourneyGuidance: () => ({
+          excludedServiceTypes: ["新幹線"],
+          excludedTrainNames: [],
+          excludedTrainNumbers: [],
+          requiredServiceTypes: [],
+          requiredTrainNames: ["はるか"],
+          requiredTrainNumbers: [],
+          allowedServiceTypes: [],
+        }),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(searchDirectRoutes).toHaveBeenCalledWith(expect.objectContaining({
+      originStation: "大阪",
+      destinationStation: "京都",
+      excludedServiceTypes: ["新幹線"],
+      requiredTrainNames: ["はるか"],
+    }));
+    expect(requireRichResponse(result).journeyPlan.requiredTrainNames)
+      .toEqual(["はるか"]);
+  });
+
   it("reruns the previous journey without Shinkansen from a follow-up", async () => {
     const converse = vi.fn();
     const focusTrain = vi.fn(() => true);
@@ -1201,6 +1286,91 @@ describe("Bedrock viewer agent", () => {
     const rich = requireRichResponse(result);
     expect(rich.journeyPlan.excludedServiceTypes).toEqual(["新幹線"]);
     expect(rich.journeyPlan.excludedTrainNames).toEqual(["やくも"]);
+    expect(converse).not.toHaveBeenCalled();
+  });
+
+  it("reruns the previous route to include a requested named train", async () => {
+    const yakumoTrain: Train = {
+      ...train,
+      service_uid: "yakumo-5",
+      train_no: "1005M",
+      service_type: "特急",
+      train_name: "やくも5号",
+      origin_station: "岡山",
+      destination_station: "出雲市",
+    };
+    const converse = vi.fn();
+    const searchDirectRoutes = vi.fn(async () => ({
+      originStation: "京都",
+      requiredTrainNames: ["やくも"],
+      results: [],
+      journeys: [{
+        departureTimeMinutes: 480,
+        arrivalTimeMinutes: 720,
+        transferCount: 1,
+        legs: [{
+          serviceUid: "kyoto-okayama",
+          trainNumber: "99A",
+          serviceType: "新幹線",
+          trainName: "のぞみ99号",
+          originStation: "京都",
+          destinationStation: "岡山",
+          departureTimeMinutes: 480,
+          arrivalTimeMinutes: 540,
+        }, {
+          serviceUid: "yakumo-5",
+          trainNumber: "1005M",
+          serviceType: "特急",
+          trainName: "やくも5号",
+          originStation: "岡山",
+          destinationStation: "出雲市",
+          departureTimeMinutes: 553,
+          arrivalTimeMinutes: 720,
+        }],
+      }],
+    }));
+    const result = await runBedrockViewerAgent(
+      "やくもにのりたい",
+      {
+        trains: [train, yakumoTrain],
+        getPositions: () => [],
+        getRouteTime: () => 470,
+        setRouteTime: vi.fn(),
+        focusTrain: vi.fn(() => true),
+        setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(),
+        searchDirectRoutes,
+        getPreviousJourneyPlan: () => ({
+          serviceDate: "2026-08-15",
+          originStation: "京都",
+          destinationStation: "出雲市",
+          transferPace: "standard",
+          rankingPreference: "balanced",
+          maxTransfers: 3,
+          searchTimeMinutes: 470,
+          journeys: [{
+            departureTimeMinutes: 475,
+            arrivalTimeMinutes: 700,
+            transferCount: 1,
+            legs: [],
+          }],
+        }),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(searchDirectRoutes).toHaveBeenCalledWith(expect.objectContaining({
+      originStation: "京都",
+      destinationStation: "出雲市",
+      departureTimeMinutes: 470,
+      requiredTrainNames: ["やくも"],
+    }));
+    const rich = requireRichResponse(result);
+    expect(rich.text).toContain("やくもを利用する条件");
+    expect(rich.journeyPlan.requiredTrainNames).toEqual(["やくも"]);
     expect(converse).not.toHaveBeenCalled();
   });
 });

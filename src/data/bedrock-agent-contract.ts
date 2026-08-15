@@ -139,6 +139,10 @@ export interface TravelCandidateSearchResponse {
   excludedTrainNames?: string[];
   excludedTrainNumbers?: string[];
   excludedServiceUids?: string[];
+  requiredServiceTypes?: string[];
+  requiredTrainNames?: string[];
+  requiredTrainNumbers?: string[];
+  allowedServiceTypes?: string[];
   matches: Array<{
     serviceUid: string;
     trainNumber: string;
