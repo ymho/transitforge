@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   loadJourneySearchPreferences,
+  journeyDelayLabel,
   shouldFocusAiGuideInputOnOpen,
   visibleAssistantText,
 } from "./ai-guide-panel";
@@ -88,5 +89,35 @@ describe("AI guide panel assistant text", () => {
     expect(visibleAssistantText("天気を雨に変更しました。")).toBe(
       "天気を雨に変更しました。",
     );
+  });
+});
+
+describe("AI guide journey delay", () => {
+  const leg = {
+    serviceUid: "102M",
+    trainNumber: "102M",
+    serviceType: "新快速",
+    trainName: "",
+    originStation: "姫路",
+    destinationStation: "京都",
+    departureTimeMinutes: 622,
+    arrivalTimeMinutes: 714,
+  };
+
+  it("distinguishes observed delay from an estimate", () => {
+    expect(journeyDelayLabel({
+      ...leg,
+      delayMinutes: 12,
+      delayStatus: "observed",
+    })).toBe("遅延 +12分");
+    expect(journeyDelayLabel({
+      ...leg,
+      delayMinutes: 12,
+      delayStatus: "estimated",
+    })).toBe("遅延見込み +12分");
+  });
+
+  it("hides a zero delay", () => {
+    expect(journeyDelayLabel({ ...leg, delayMinutes: 0 })).toBeUndefined();
   });
 });

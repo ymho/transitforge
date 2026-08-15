@@ -944,6 +944,18 @@ summary:focus-visible {
   font-weight: 510;
 }
 
+.journey-segment > span .journey-delay-badge {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.18rem 0.45rem;
+  border: 1px solid rgb(180 83 9 / 28%);
+  border-radius: 999px;
+  color: #7c2d12;
+  background: rgb(255 237 213 / 88%);
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
 .journey-transfer {
   margin: 0;
   padding: 0.65rem 1rem 0.65rem 4.9rem;
@@ -1015,7 +1027,7 @@ summary:focus-visible {
   justify-content: center;
   padding: 0.25rem 0.7rem;
   border: 0;
-  border-radius: 62.5rem;
+  border-radius: 0.4rem;
   color: #ffffff;
   background: var(--train-line-color, #0091ff);
   box-shadow: 0 0.35rem 1rem color-mix(in srgb, var(--train-line-color), transparent 72%);
@@ -1037,8 +1049,9 @@ summary:focus-visible {
   min-height: 1.75rem;
   gap: 0.35rem;
   align-items: center;
-  font-size: 0.82rem;
-  font-weight: 650;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
 }
 
 .train-destination-scheduled {

@@ -76,7 +76,8 @@ export function isTravelCandidateSearchResponse(value: unknown): value is Travel
       isNonNegativeNumber(match.arrivalTimeMinutes) &&
       isNonNegativeNumber(match.scheduledDepartureTimeMinutes) &&
       isNonNegativeNumber(match.scheduledArrivalTimeMinutes) &&
-      isNonNegativeNumber(match.delayMinutes) && match.source === "transitforge" &&
+      isNonNegativeNumber(match.delayMinutes) && isDelayMetadata(match) &&
+      match.source === "transitforge" &&
       ["timetable-graph", "direct-service-index"].includes(String(match.discoverySource)) &&
       typeof match.sourceReference === "string") &&
     Array.isArray(value.journeys) && value.journeys.length <= 5 &&
@@ -94,10 +95,17 @@ function isJourney(value: unknown): boolean {
       isNonNegativeNumber(leg.departureTimeMinutes) && isNonNegativeNumber(leg.arrivalTimeMinutes) &&
       isNonNegativeNumber(leg.scheduledDepartureTimeMinutes) &&
       isNonNegativeNumber(leg.scheduledArrivalTimeMinutes) && isNonNegativeNumber(leg.delayMinutes) &&
+      isDelayMetadata(leg) &&
       (leg.stops === undefined || (Array.isArray(leg.stops) && leg.stops.every((stop) =>
         isRecord(stop) && typeof stop.stationName === "string" &&
         (stop.arrivalTimeMinutes === undefined || isNonNegativeNumber(stop.arrivalTimeMinutes)) &&
         (stop.departureTimeMinutes === undefined || isNonNegativeNumber(stop.departureTimeMinutes))))));
+}
+
+function isDelayMetadata(value: Record<string, unknown>): boolean {
+  return (value.delayStatus === undefined || ["observed", "estimated"].includes(String(value.delayStatus))) &&
+    (value.delaySampleCount === undefined || isNonNegativeInteger(value.delaySampleCount)) &&
+    (value.delayBasis === undefined || typeof value.delayBasis === "string");
 }
 
 function isDailyCongestionPeak(value: unknown): value is DailyCongestionPeak {
