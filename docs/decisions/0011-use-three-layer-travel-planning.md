@@ -18,7 +18,7 @@
    ローリング保持、日次補完、直通検索インデックス生成を担当する。
 2. TransitForgeは時刻表、列車、遅延データを正として直通区間を再評価し、比較可能な
    旅行候補を組み立てる。
-3. Mapbox、旅行提供者、OpenWeatherなどは宿、観光、地図、天気の補助に限定する。
+3. Mapbox、外部旅行提供者、OpenWeatherなどは宿、観光、地図、天気の補助に限定する。
 
 Bedrockには既存の`search_direct_routes`をツールとして公開する。ツール実行はブラウザで
 始まるが、経路探索は保護されたAI Lambdaの`journey_search`操作で
