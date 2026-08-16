@@ -15,12 +15,15 @@ export function journeyLegAlternativeFits(
   legIndex: number,
   alternative: JourneyRouteLeg,
   transferPace: TransferPace = "standard",
+  endLegIndex = legIndex,
 ): boolean {
   const current = journey.legs[legIndex];
+  const finalCurrent = journey.legs[endLegIndex];
   if (
     current === undefined ||
+    finalCurrent === undefined ||
     normalizedStation(current.originStation) !== normalizedStation(alternative.originStation) ||
-    normalizedStation(current.destinationStation) !== normalizedStation(alternative.destinationStation)
+    normalizedStation(finalCurrent.destinationStation) !== normalizedStation(alternative.destinationStation)
   ) {
     return false;
   }
@@ -30,7 +33,7 @@ export function journeyLegAlternativeFits(
   if (previous && alternative.departureTimeMinutes < previous.arrivalTimeMinutes + transfer) {
     return false;
   }
-  const next = journey.legs[legIndex + 1];
+  const next = journey.legs[endLegIndex + 1];
   return !next || alternative.arrivalTimeMinutes + transfer <= next.departureTimeMinutes;
 }
 
