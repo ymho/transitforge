@@ -167,6 +167,10 @@ describe("journey chat follow-up", () => {
       type: "confirm-alternative",
       alternativeIndex: 0,
     });
+    expect(journeyChatFollowUpIntent("1", plan, pending)).toEqual({
+      type: "confirm-alternative",
+      alternativeIndex: 0,
+    });
     const changed = applyJourneyLegAlternative(pending, 0);
     expect(changed.journeys[0].legs[0].trainNumber).toBe("101A");
     expect(changed.journeys[0].departureTimeMinutes).toBe(495);
