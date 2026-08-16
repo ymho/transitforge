@@ -82,6 +82,7 @@ def _offerings(value: Any, request: TravelProviderSearch) -> list[AccommodationO
             check_out_date=request.end_date,
             booking_url=_optional_string(basic.get("hotelInformationUrl")),
             area_name=_optional_string(basic.get("address1")),
+            image_url=_optional_https_url(basic.get("hotelImageUrl")),
         ))
     return offerings
 
@@ -101,3 +102,8 @@ def _hotel_basic_info(value: Any) -> dict[str, Any] | None:
 
 def _optional_string(value: Any) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _optional_https_url(value: Any) -> str | None:
+    value = _optional_string(value)
+    return value if value and value.startswith("https://") else None

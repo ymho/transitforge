@@ -35,6 +35,7 @@ export interface ViewerAgentAccommodation {
   checkOutDate: string;
   bookingUrl?: string;
   areaName?: string;
+  imageUrl?: string;
 }
 
 export interface ViewerAgentTravelPlan {

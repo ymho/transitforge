@@ -29,6 +29,7 @@ class TravelProviderAccommodationTest(unittest.TestCase):
                 "hotelNo": 42,
                 "hotelName": "駅前の宿",
                 "hotelInformationUrl": "https://booking.example/42",
+                "hotelImageUrl": "https://images.example/42.jpg",
                 "address1": "出雲市",
             }}]]})
 
@@ -41,6 +42,7 @@ class TravelProviderAccommodationTest(unittest.TestCase):
         self.assertEqual(len(offerings), 1)
         self.assertEqual(offerings[0].provider_item_id, "42")
         self.assertIsNone(offerings[0].price)
+        self.assertEqual(offerings[0].image_url, "https://images.example/42.jpg")
         request, timeout = requests[0]
         self.assertEqual(timeout, 8)
         self.assertEqual(request.headers["Accesskey"], "secret")

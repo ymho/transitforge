@@ -121,12 +121,13 @@ export function configureAiGuidePanel(
 
     void handlePrompt(prompt, preferences())
       .then((response) => {
-        resolveAssistantMessage(pendingMessage, response);
+        resolveAssistantMessage(pendingMessage, response, input);
       })
       .catch(() => {
         resolveAssistantMessage(
           pendingMessage,
           "案内を開始できませんでした。時間をおいてもう一度お試しください。",
+          input,
         );
       })
       .finally(() => {
@@ -182,6 +183,7 @@ function appendPendingMessage(messages: HTMLOListElement): HTMLLIElement {
 function resolveAssistantMessage(
   item: HTMLLIElement,
   response: ViewerAgentResponse,
+  input: HTMLInputElement,
 ): void {
   item.classList.remove("ai-guide-message-pending");
   item.removeAttribute("aria-label");
@@ -193,7 +195,10 @@ function resolveAssistantMessage(
     const text = document.createElement("p");
     text.className = "journey-plan-intro";
     text.textContent = visibleAssistantText(response.text);
-    item.append(text, renderTravelPlan(response.travelPlan));
+    item.append(text, renderTravelPlan(response.travelPlan, (prompt) => {
+      input.value = prompt;
+      input.focus();
+    }));
   } else {
     item.classList.add("ai-guide-message-journey");
     item.replaceChildren();
@@ -205,7 +210,10 @@ function resolveAssistantMessage(
   item.scrollIntoView({ block: "nearest" });
 }
 
-function renderTravelPlan(plan: ViewerAgentTravelPlan): HTMLElement {
+function renderTravelPlan(
+  plan: ViewerAgentTravelPlan,
+  beginSightseeingConsultation: (prompt: string) => void,
+): HTMLElement {
   const container = document.createElement("section");
   container.className = "travel-plan";
   container.append(travelPlanOverview(plan));
@@ -213,11 +221,30 @@ function renderTravelPlan(plan: ViewerAgentTravelPlan): HTMLElement {
   itinerary.className = "travel-plan-itinerary";
   itinerary.append(
     travelPlanSection("行き", plan.outbound),
-    travelPlanAccommodationSection(plan),
+    sightseeingInsertion(plan.destination, "到着後に観光を追加", beginSightseeingConsultation),
+    travelPlanAccommodationSection(plan, beginSightseeingConsultation),
+    sightseeingInsertion(plan.destination, "翌日に観光を追加", beginSightseeingConsultation),
     travelPlanSection("帰り", plan.returning),
   );
   container.append(itinerary);
   return container;
+}
+
+function sightseeingInsertion(
+  destination: string,
+  label: string,
+  beginSightseeingConsultation: (prompt: string) => void,
+): HTMLElement {
+  const section = document.createElement("div");
+  section.className = "travel-plan-insertion";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "travel-plan-add-sightseeing";
+  button.textContent = `＋ ${label}`;
+  button.addEventListener("click", () =>
+    beginSightseeingConsultation(`${destination}で立ち寄りたい観光を相談したい`));
+  section.append(button);
+  return section;
 }
 
 function travelPlanOverview(plan: ViewerAgentTravelPlan): HTMLElement {
@@ -255,7 +282,10 @@ function travelPlanSection(label: string, plan: ViewerAgentJourneyPlan): HTMLEle
   return section;
 }
 
-function travelPlanAccommodationSection(plan: ViewerAgentTravelPlan): HTMLElement {
+function travelPlanAccommodationSection(
+  plan: ViewerAgentTravelPlan,
+  beginSightseeingConsultation: (prompt: string) => void,
+): HTMLElement {
   const section = document.createElement("section");
   section.className = "travel-plan-section travel-plan-accommodations";
   const heading = document.createElement("h3");
@@ -273,8 +303,17 @@ function travelPlanAccommodationSection(plan: ViewerAgentTravelPlan): HTMLElemen
   selectedNotice.className = "travel-plan-selection-notice";
   selectedNotice.hidden = true;
   const selectButtons: HTMLButtonElement[] = [];
+  let selectedAccommodationName: string | undefined;
   for (const accommodation of plan.accommodations.slice(0, 3)) {
     const item = document.createElement("li");
+    if (accommodation.imageUrl) {
+      const image = document.createElement("img");
+      image.className = "travel-plan-accommodation-image";
+      image.src = accommodation.imageUrl;
+      image.alt = "";
+      image.loading = "lazy";
+      item.append(image);
+    }
     const name = document.createElement(accommodation.bookingUrl ? "a" : "strong");
     name.textContent = accommodation.name;
     if (name instanceof HTMLAnchorElement && accommodation.bookingUrl) {
@@ -304,6 +343,7 @@ function travelPlanAccommodationSection(plan: ViewerAgentTravelPlan): HTMLElemen
       }
       selectedNotice.textContent = `${accommodation.name}を宿泊先として選びました。行きと帰りはこの旅程をベースに、会話で変更できます。`;
       selectedNotice.hidden = false;
+      selectedAccommodationName = accommodation.name;
     });
     selectButtons.push(select);
     actions.append(select);
@@ -311,6 +351,14 @@ function travelPlanAccommodationSection(plan: ViewerAgentTravelPlan): HTMLElemen
     list.append(item);
   }
   section.append(list, selectedNotice);
+  const sightseeing = sightseeingInsertion(
+    plan.destination,
+    "宿の周辺で観光を追加",
+    () => beginSightseeingConsultation(
+      `${selectedAccommodationName ?? plan.destination}周辺で立ち寄りたい観光を相談したい`,
+    ),
+  );
+  section.append(sightseeing);
   return section;
 }
 

@@ -29,6 +29,7 @@ class AccommodationOffering:
     price: TravelProviderPrice | None = None
     booking_url: str | None = None
     area_name: str | None = None
+    image_url: str | None = None
 
     def as_response(self) -> dict[str, object]:
         return {
@@ -41,6 +42,7 @@ class AccommodationOffering:
             **price_response(self.price),
             **optional_response("bookingUrl", self.booking_url),
             **optional_response("areaName", self.area_name),
+            **optional_response("imageUrl", self.image_url),
         }
 
 
