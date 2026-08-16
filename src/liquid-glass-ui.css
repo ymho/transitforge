@@ -683,6 +683,15 @@ summary:focus-visible {
 .travel-profile-introduction > p:not(.travel-onboarding-eyebrow) { max-width: 27rem; margin: 0; color: var(--travel-profile-muted); line-height: 1.8; }
 .travel-profile-introduction small { color: var(--travel-profile-muted); font-size: .74rem; }
 .travel-profile-introduction .travel-profile-next { margin: .65rem 0 0; padding-inline: 1.4rem; transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease; }
+.travel-concierge-match { display: grid; min-height: 34rem; align-content: center; justify-items: center; gap: .85rem; padding: 2.6rem 2rem; animation: travel-profile-content-in 260ms cubic-bezier(.22, 1, .36, 1); text-align: center; }
+.travel-concierge-match > img { width: 8.25rem; height: 8.25rem; border: 2px solid rgb(255 255 255 / 64%); border-radius: 50%; object-fit: cover; object-position: center 20%; background: rgb(255 255 255 / 28%); box-shadow: 0 1rem 2.4rem rgb(43 113 182 / 23%); animation: travel-concierge-avatar-in 460ms cubic-bezier(.22, 1, .36, 1); }
+.travel-concierge-match h2 { margin: 0; font-size: clamp(1.7rem, 6vw, 2.4rem); letter-spacing: -.06rem; }
+.travel-concierge-match strong { color: var(--glass-accent); font-size: .82rem; }
+.travel-concierge-match > p:not(.travel-onboarding-eyebrow) { max-width: 28rem; margin: .3rem 0; color: var(--travel-profile-muted); line-height: 1.75; }
+.travel-concierge-match .travel-profile-next { margin: .85rem 0 0; padding-inline: 1.4rem; }
+.travel-concierge-searching h2 { max-width: 20rem; font-size: clamp(1.45rem, 5vw, 2rem); }
+.travel-match-orbit { display: grid; width: 5.25rem; height: 5.25rem; place-items: center; border: 1px solid rgb(37 137 255 / 22%); border-radius: 50%; background: rgb(89 177 255 / 10%); box-shadow: inset 0 0 0 .55rem rgb(255 255 255 / 18%); animation: travel-match-pulse 1.1s ease-in-out infinite; }
+.travel-match-orbit i { color: #1e83f2; font-size: 1.75rem; font-style: normal; animation: travel-match-spin 2.2s linear infinite; }
 .travel-onboarding-header { position: relative; padding: 2rem 2rem 1rem; }
 .travel-onboarding-header h2, .travel-profile-complete h2 { margin: .7rem 0 .4rem; font-size: clamp(1.55rem, 5vw, 2.25rem); letter-spacing: -.06rem; }
 .travel-onboarding-header p, .travel-profile-complete p { margin: 0; color: var(--travel-profile-muted); font-size: .94rem; }
@@ -732,8 +741,11 @@ summary:focus-visible {
 .travel-profile-edit-link { padding: .28rem .5rem !important; color: var(--travel-profile-muted) !important; background: transparent !important; font-size: .72rem !important; text-decoration: underline; }
 @keyframes travel-profile-dialog-in { from { opacity: 0; transform: translateY(.8rem) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes travel-profile-content-in { from { opacity: 0; transform: translateY(.65rem); } to { opacity: 1; transform: translateY(0); } }
+@keyframes travel-concierge-avatar-in { from { opacity: 0; transform: scale(.76); } to { opacity: 1; transform: scale(1); } }
+@keyframes travel-match-pulse { 50% { transform: scale(1.07); box-shadow: inset 0 0 0 .55rem rgb(255 255 255 / 26%), 0 0 1.8rem rgb(52 155 255 / 22%); } }
+@keyframes travel-match-spin { to { transform: rotate(1turn); } }
 @media (prefers-reduced-motion: reduce) {
-  .travel-profile-dialog, .travel-onboarding, .travel-profile-complete, .travel-profile-introduction { animation: none; }
+  .travel-profile-dialog, .travel-onboarding, .travel-profile-complete, .travel-profile-introduction, .travel-concierge-match, .travel-concierge-match > img, .travel-match-orbit, .travel-match-orbit i { animation: none; }
   .travel-profile-choice span, .travel-profile-chips span, .travel-profile-back, .travel-profile-next, .travel-profile-complete button { transition: none; }
 }
 @media (max-width: 480px) {
