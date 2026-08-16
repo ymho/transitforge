@@ -172,6 +172,7 @@ class BedrockAgentHttpTest(unittest.TestCase):
 
         self.assertEqual(result["statusCode"], 405)
         self.assertEqual(result["headers"]["cache-control"], "no-store")
+        self.assertIn("x-transitforge-request-id", result["headers"])
 
     def test_rejects_unbounded_journey_exclusions(self) -> None:
         base = {

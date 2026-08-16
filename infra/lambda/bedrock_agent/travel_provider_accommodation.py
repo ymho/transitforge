@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, Protocol
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -21,6 +22,8 @@ def search_accommodations(
     request: TravelProviderSearch,
     credentials: TravelProviderCredentials,
     opener: Any = urlopen,
+    request_id: str | None = None,
+    log_event: Any = None,
 ) -> list[AccommodationOffering]:
     query = {
         "applicationId": credentials.application_id,
@@ -35,11 +38,18 @@ def search_accommodations(
         f"{credentials.hotel_search_url}?{urlencode(query)}",
         headers={"accessKey": credentials.access_key, "Accept": "application/json"},
     )
+    started = time.perf_counter()
+    if log_event and request_id:
+        log_event("travel_provider_request_started", request_id)
     try:
         with opener(http_request, timeout=8) as response:
             value = json.loads(response.read().decode("utf-8"))
     except Exception as error:
+        if log_event and request_id:
+            log_event("travel_provider_request_failed", request_id, durationMs=round((time.perf_counter() - started) * 1000), errorType=type(error).__name__)
         raise ValueError("宿泊提供者の検索を利用できません。") from error
+    if log_event and request_id:
+        log_event("travel_provider_request_completed", request_id, durationMs=round((time.perf_counter() - started) * 1000))
     return _offerings(value, request)
 
 
