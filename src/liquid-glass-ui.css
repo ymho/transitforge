@@ -614,6 +614,7 @@ summary:focus-visible {
 }
 
 #close-ai-guide,
+#travel-profile-toggle,
 #close-train-details {
   display: grid;
   width: 2.75rem;
@@ -629,10 +630,43 @@ summary:focus-visible {
 }
 
 #close-ai-guide:hover,
+#travel-profile-toggle:hover,
 #close-train-details:hover {
   color: var(--glass-text);
   background: var(--glass-accent-soft);
 }
+
+#travel-profile-toggle {
+  margin-left: auto;
+  width: auto;
+  height: 2.25rem;
+  padding: 0 .75rem;
+  border-radius: 999px;
+  font-size: .75rem;
+}
+
+.travel-profile-dialog {
+  width: min(34rem, calc(100vw - 2rem));
+  max-height: min(48rem, calc(100vh - 2rem));
+  border: 1px solid color-mix(in srgb, white 52%, transparent);
+  border-radius: 1.5rem;
+  background: color-mix(in srgb, #f7fbff 88%, transparent);
+  box-shadow: 0 1.5rem 4rem #07142b44;
+  color: #172235;
+}
+.travel-profile-dialog::backdrop { background: #07142b66; backdrop-filter: blur(8px); }
+.travel-profile-form, .travel-profile-view { display: grid; gap: .8rem; }
+.travel-profile-form header, .travel-profile-view header { display: grid; gap: .2rem; }
+.travel-profile-form p, .travel-profile-view p { margin: 0; font-size: 1.25rem; font-weight: 750; }
+.travel-profile-form label { display: grid; gap: .3rem; font-weight: 650; }
+.travel-profile-form input, .travel-profile-form select { border: 0; border-radius: .75rem; padding: .7rem; background: #ffffffb8; color: inherit; }
+.travel-profile-form fieldset { display: flex; flex-wrap: wrap; gap: .55rem; border: 0; margin: 0; padding: 0; }
+.travel-profile-form fieldset label { display: flex; align-items: center; gap: .25rem; font-weight: 500; }
+.travel-profile-form footer, .travel-profile-view footer { display: flex; justify-content: flex-end; gap: .5rem; }
+.travel-profile-form button, .travel-profile-view button { border: 0; border-radius: 999px; padding: .6rem .85rem; background: #e8eef8; color: inherit; }
+.travel-profile-form button[type="submit"] { background: #2f83ef; color: white; }
+.travel-profile-view dl { display: grid; grid-template-columns: 7rem 1fr; gap: .55rem; margin: 0; }
+.travel-profile-view dt { color: #617086; }.travel-profile-view dd { margin: 0; }
 
 .ai-guide-messages {
   gap: 0.75rem;

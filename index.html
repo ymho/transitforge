@@ -76,12 +76,12 @@
         type="button"
         aria-controls="ai-guide-panel"
         aria-expanded="false"
-        aria-label="AI駅員を開く"
-        title="AI駅員"
+        aria-label="コンシェルジュを開く"
+        title="コンシェルジュ"
       >
         <svg class="guide-toggle-icon ai-guide-button-icon" aria-hidden="true"><use href="#icon-ai-sparkles" /></svg>
       </button>
-      <aside id="ai-guide-panel" class="ai-guide-panel" aria-label="AI駅員" hidden>
+      <aside id="ai-guide-panel" class="ai-guide-panel" aria-label="コンシェルジュ" hidden>
         <span class="sheet-grabber" aria-hidden="true"></span>
         <header>
           <div class="guide-panel-heading">
@@ -89,11 +89,12 @@
               <svg><use href="#icon-ai-station" /></svg>
             </span>
             <div class="guide-panel-copy">
-              <p>AI駅員</p>
-              <small>列車・経路・地図操作</small>
+              <p>コンシェルジュ</p>
+              <small>列車・旅程・地図操作</small>
             </div>
           </div>
-          <button id="close-ai-guide" type="button" aria-label="AI駅員を閉じる">×</button>
+          <button id="travel-profile-toggle" type="button">プロフィール</button>
+          <button id="close-ai-guide" type="button" aria-label="コンシェルジュを閉じる">×</button>
         </header>
         <ol id="ai-guide-messages" class="ai-guide-messages" aria-live="polite">
           <li class="ai-guide-message ai-guide-message-assistant">行き先や列車について入力してください。日付と時刻を指定した経路検索にも対応しています。時刻や天気などの地図表示も変更できます。</li>
@@ -149,14 +150,15 @@
             type="text"
             maxlength="400"
             autocomplete="off"
-            aria-label="AI駅員への依頼"
-            placeholder="列車や行き先を入力"
+            aria-label="コンシェルジュへの依頼"
+            placeholder="列車、行き先、旅の相談を入力"
           />
           <button id="ai-guide-submit" type="submit" aria-label="送信" title="送信">
             <svg aria-hidden="true"><use href="#icon-send" /></svg>
           </button>
         </form>
       </aside>
+      <dialog id="travel-profile-dialog" class="travel-profile-dialog" aria-label="旅行プロフィール"></dialog>
       <aside id="train-details" class="train-details" aria-live="polite" hidden>
         <button id="close-train-details" type="button" aria-label="列車詳細を閉じてフォーカスを終了する">×</button>
         <h2 id="selected-train-title"></h2>
