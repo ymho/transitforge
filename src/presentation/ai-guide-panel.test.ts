@@ -28,6 +28,7 @@ describe("AI guide journey preferences", () => {
   });
 });
 
+
 describe("AI guide panel focus", () => {
   it("does not focus the input when opened on a narrow viewport", () => {
     expect(shouldFocusAiGuideInputOnOpen(390, false)).toBe(false);

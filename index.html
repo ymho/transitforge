@@ -39,6 +39,8 @@
         <symbol id="icon-congestion" viewBox="0 0 20 20"><path d="M4.5 15.5v-3h2v3zm4.5 0V9h2v6.5zm4.5 0V5h2v10.5z"/><path d="M3.5 16.5h13" fill="none" stroke="currentColor" stroke-linecap="round"/></symbol>
         <symbol id="icon-arc" viewBox="0 0 20 20"><path d="M3.5 14.5c2.5-7.5 10.5-7.5 13 0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7"/><circle cx="3.5" cy="14.5" r="1.25"/><circle cx="16.5" cy="14.5" r="1.25"/></symbol>
         <symbol id="icon-route" viewBox="0 0 20 20"><circle cx="4.25" cy="14.75" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="15.75" cy="5.25" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6.2 14.4c4.8-.7 2.7-7.5 7.55-8.7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6"/><path d="m11.8 4.7 2.1.9-1.3 1.85" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35"/></symbol>
+        <symbol id="icon-train" viewBox="0 0 20 20"><rect x="5" y="2.8" width="10" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7.2 17.2 9 14.8m3.8 2.4L11 14.8M7.4 7h5.2M7.4 10.8h.1m5.1 0h.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/></symbol>
+        <symbol id="icon-user" viewBox="0 0 20 20"><circle cx="10" cy="7" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4.3 17c.7-3 2.6-4.5 5.7-4.5s5 1.5 5.7 4.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/></symbol>
         <symbol id="icon-ai-station" viewBox="0 0 20 20"><path d="M3.25 5.5h9.5a2 2 0 0 1 2 2v4.25a2 2 0 0 1-2 2H8l-3.5 2v-2H3.25a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.45"/><path d="M15.6 1.8v3.4M13.9 3.5h3.4M11.1 8.2l.45 1.05 1.05.45-1.05.45-.45 1.05-.45-1.05-1.05-.45 1.05-.45z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.15"/></symbol>
         <symbol id="icon-ai-sparkles" viewBox="0 0 20 20"><path d="M9.2 2.3c.55 3.8 2.7 5.95 6.5 6.5-3.8.55-5.95 2.7-6.5 6.5-.55-3.8-2.7-5.95-6.5-6.5 3.8-.55 5.95-2.7 6.5-6.5Z"/><path d="M15.6 1.8c.15 1.25.85 1.95 2.1 2.1-1.25.15-1.95.85-2.1 2.1-.15-1.25-.85-1.95-2.1-2.1 1.25-.15 1.95-.85 2.1-2.1ZM15.7 13.2c.18 1.5 1.05 2.37 2.55 2.55-1.5.18-2.37 1.05-2.55 2.55-.18-1.5-1.05-2.37-2.55-2.55 1.5-.18 2.37-1.05 2.55-2.55Z"/></symbol>
         <symbol id="icon-send" viewBox="0 0 20 20"><path d="m3 4 14 6-14 6 2.5-6z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"/><path d="M5.5 10H13" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6"/></symbol>
@@ -91,57 +93,15 @@
               <small id="concierge-role">はじめて旅のナビゲーター</small>
             </div>
           </div>
-          <button id="travel-profile-toggle" type="button">プロフィール</button>
-          <button id="close-ai-guide" type="button" aria-label="コンシェルジュを閉じる">×</button>
+          <div class="guide-panel-actions">
+            <button id="journey-settings-toggle" type="button" aria-label="経路設定" title="経路設定" aria-controls="journey-settings-panel"><svg aria-hidden="true"><use href="#icon-train" /></svg></button>
+            <button id="travel-profile-toggle" type="button" aria-label="プロフィール" title="プロフィール"><svg aria-hidden="true"><use href="#icon-user" /></svg></button>
+            <button id="close-ai-guide" type="button" aria-label="コンシェルジュを閉じる">×</button>
+          </div>
         </header>
         <ol id="ai-guide-messages" class="ai-guide-messages" aria-live="polite">
-          <li class="ai-guide-message ai-guide-message-assistant">行き先や列車について入力してください。日付と時刻を指定した経路検索にも対応しています。時刻や天気などの地図表示も変更できます。</li>
+          <li id="ai-guide-context-choices" class="ai-guide-context-choices" aria-label="旅行条件の候補" hidden></li>
         </ol>
-        <div class="ai-guide-suggestions" aria-label="質問例">
-          <button type="button" data-prompt="18時30分にして">
-            18時30分にする
-          </button>
-          <button type="button" data-prompt="京都に行きたい">
-            京都に行きたい
-          </button>
-          <button type="button" data-prompt="現在遅れている列車を教えて">
-            現在の列車遅延
-          </button>
-          <button type="button" data-prompt="雨にして">
-            雨にする
-          </button>
-        </div>
-        <div class="journey-settings">
-          <button
-            id="journey-settings-toggle"
-            class="journey-settings-toggle"
-            type="button"
-            aria-expanded="false"
-            aria-controls="journey-settings-panel"
-          >
-            経路設定
-          </button>
-          <div id="journey-settings-panel" class="journey-settings-panel" hidden>
-            <label>
-              <span>乗換ペース</span>
-              <select id="journey-transfer-pace">
-                <option value="hurried">急ぐ</option>
-                <option value="standard" selected>普通</option>
-                <option value="relaxed">ゆっくり</option>
-              </select>
-            </label>
-            <label>
-              <span>経路の優先</span>
-              <select id="journey-ranking-preference">
-                <option value="balanced" selected>バランス</option>
-                <option value="earliest-arrival">早く着く</option>
-                <option value="latest-departure">遅く出る</option>
-                <option value="fewest-transfers">乗換少なめ</option>
-              </select>
-            </label>
-            <small>最大3回の乗換まで検索</small>
-          </div>
-        </div>
         <form id="ai-guide-form" class="ai-guide-form">
           <input
             id="ai-guide-input"
@@ -157,6 +117,14 @@
         </form>
       </aside>
       <dialog id="travel-profile-dialog" class="travel-profile-dialog" aria-label="旅行プロフィール"></dialog>
+      <dialog id="journey-settings-panel" class="journey-settings-dialog" aria-label="経路設定">
+        <section>
+          <header><h2>経路設定</h2><button type="button" data-close-journey-settings aria-label="閉じる">×</button></header>
+          <label><span>乗換ペース</span><select id="journey-transfer-pace"><option value="hurried">急ぐ</option><option value="standard" selected>普通</option><option value="relaxed">ゆっくり</option></select></label>
+          <label><span>経路の優先</span><select id="journey-ranking-preference"><option value="balanced" selected>バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label>
+          <small>最大3回の乗換まで検索</small>
+        </section>
+      </dialog>
       <aside id="train-details" class="train-details" aria-live="polite" hidden>
         <button id="close-train-details" type="button" aria-label="列車詳細を閉じてフォーカスを終了する">×</button>
         <h2 id="selected-train-title"></h2>

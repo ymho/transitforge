@@ -425,6 +425,11 @@ summary:focus-visible {
   transform: scale(1.04);
 }
 
+/* Mapboxの標準アイコンは背景SVGなので、テーマに合わせて明度を反転する */
+#app[data-ui-color-mode="night"] .mapboxgl-ctrl-group .mapboxgl-ctrl-icon {
+  filter: invert(1) brightness(1.35);
+}
+
 .map-tools > button[aria-pressed="true"],
 .map-tools div > button[aria-pressed="true"],
 .playback-speed-controls button[aria-pressed="true"],
@@ -580,6 +585,13 @@ summary:focus-visible {
   background: transparent;
 }
 
+.guide-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
 .guide-panel-heading {
   display: flex;
   align-items: center;
@@ -629,6 +641,7 @@ summary:focus-visible {
 
 #close-ai-guide,
 #travel-profile-toggle,
+#journey-settings-toggle,
 #close-train-details {
   display: grid;
   width: 2.75rem;
@@ -651,13 +664,14 @@ summary:focus-visible {
 }
 
 #travel-profile-toggle {
-  margin-left: auto;
-  width: auto;
-  height: 2.25rem;
-  padding: 0 .75rem;
-  border-radius: 999px;
-  font-size: .75rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border-radius: 50%;
 }
+
+#travel-profile-toggle svg,
+#journey-settings-toggle svg { width: 1.2rem; height: 1.2rem; }
 
 .travel-profile-dialog {
   --travel-profile-text: #172235;
@@ -703,7 +717,7 @@ summary:focus-visible {
 .travel-onboarding footer, .travel-profile-complete footer { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: 1.15rem 2rem 1.6rem; border-top: 1px solid rgb(90 120 150 / 12%); }
 .travel-profile-stack { display: grid; gap: 1rem; }
 .travel-profile-stack label { display: grid; gap: .45rem; color: var(--travel-profile-text); font-size: .86rem; font-weight: 700; }
-.travel-profile-stack input { width: 100%; box-sizing: border-box; padding: .9rem 1rem; border: 1px solid rgb(255 255 255 / 55%); border-radius: 1rem; outline: 0; color: var(--travel-profile-text); background: var(--travel-profile-surface); box-shadow: inset 0 1px rgb(255 255 255 / 65%); font: inherit; }
+.travel-profile-stack input { width: 100%; box-sizing: border-box; padding: .9rem 1rem; border: 1px solid rgb(255 255 255 / 55%); border-radius: 1rem; outline: 0; color: var(--travel-profile-text); background: var(--travel-profile-surface); box-shadow: inset 0 1px rgb(255 255 255 / 65%); font: inherit; font-size: 1rem; }
 .travel-profile-stack input:focus { border-color: #2589ff; box-shadow: 0 0 0 .22rem rgb(37 137 255 / 16%); }
 .travel-profile-stack small { color: var(--travel-profile-muted); font-size: .76rem; }
 .travel-profile-choice { display: flex; flex-wrap: wrap; gap: .55rem; margin: .2rem 0 0; padding: 0; border: 0; }
@@ -798,69 +812,93 @@ summary:focus-visible {
   border-radius: 999px;
 }
 
-.ai-guide-suggestions {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 0.45rem;
-  padding: 0 1rem 0.75rem;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.ai-guide-suggestions::-webkit-scrollbar {
-  display: none;
-}
-
-.ai-guide-suggestions button {
-  min-height: 2.15rem;
-  flex: 0 0 auto;
-  padding: 0.4rem 0.75rem;
-  border: 0;
-  border-radius: 999px;
+.journey-settings-dialog {
+  width: min(24rem, calc(100vw - 2rem));
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: 1.35rem;
   color: var(--glass-text);
-  background: var(--glass-surface-muted);
-  font-size: 0.7rem;
+  background: var(--glass-surface);
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 20%);
+  backdrop-filter: var(--glass-backdrop);
 }
 
-.ai-guide-suggestions button:hover {
-  color: var(--glass-accent-strong);
-  background: var(--glass-accent-soft);
-}
-
-.journey-settings {
-  padding: 0 1rem 0.75rem;
-}
-
-.journey-settings-toggle {
-  min-height: 2.4rem;
-  padding: 0.45rem 0.8rem;
-  border: 0;
-  border-radius: 0.75rem;
-  color: var(--glass-muted);
-  background: var(--glass-surface-muted);
-}
-
-.journey-settings-panel {
+.journey-settings-dialog::backdrop { background: rgb(7 20 43 / 42%); backdrop-filter: blur(10px); }
+.journey-settings-dialog section {
+  display: grid;
   gap: 0.65rem;
-  margin-top: 0.5rem;
-  padding: 0.75rem;
+  padding: 1rem;
   border: 0;
-  border-radius: 0.75rem;
-  background: var(--glass-surface-strong);
 }
 
-.journey-settings-panel label,
-.journey-settings-panel small {
+.journey-settings-dialog header { display: flex; align-items: center; justify-content: space-between; }
+.journey-settings-dialog h2 { margin: 0; font-size: 1rem; }
+.journey-settings-dialog header button { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; border: 0; border-radius: 50%; color: var(--glass-muted); background: rgb(120 120 128 / 16%); font-size: 1.1rem; }
+
+.concierge-intro {
+  width: 100%;
+  max-width: 100%;
+  padding: 0.3rem;
+  border: 0;
+  background: transparent;
+}
+
+.concierge-intro > p {
+  margin: 0.15rem 0.35rem 0.7rem;
+  color: var(--glass-text);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.concierge-intro-cards {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.concierge-intro-cards button {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: 1rem;
+  color: var(--glass-text);
+  background: var(--glass-surface-muted);
+  text-align: left;
+}
+
+.concierge-intro-card-icon { width: 2.5rem; height: 2.5rem; padding: .6rem; border-radius: .85rem; color: var(--glass-accent-strong); background: var(--glass-accent-soft); }
+.concierge-intro-card-copy { display: grid; gap: .2rem; }
+.concierge-intro-cards button strong { font-size: 0.8rem; }
+.concierge-intro-cards button small { color: var(--glass-muted); font-size: 0.68rem; }
+.concierge-intro-cards button:hover { border-color: var(--glass-accent); background: var(--glass-accent-soft); }
+
+.journey-settings-dialog label,
+.journey-settings-dialog small {
   color: var(--glass-muted);
 }
 
-.journey-settings-panel select {
+.journey-settings-dialog label { display: grid; gap: 0.35rem; font-size: .76rem; }
+.journey-settings-dialog select {
+  appearance: none;
   min-height: 2.2rem;
-  padding: 0.4rem 0.55rem;
-  border: 0;
-  border-radius: 0.6rem;
+  padding: 0.4rem 2rem 0.4rem 0.7rem;
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: 0.75rem;
   color: var(--glass-text);
-  background: var(--glass-surface-muted);
+  background:
+    linear-gradient(45deg, transparent 50%, var(--glass-muted) 50%) calc(100% - 1rem) calc(50% - .12rem) / .36rem .36rem no-repeat,
+    linear-gradient(135deg, var(--glass-muted) 50%, transparent 50%) calc(100% - .64rem) calc(50% - .12rem) / .36rem .36rem no-repeat,
+    var(--glass-surface-muted);
+  box-shadow: inset 0 1px rgb(255 255 255 / 11%), 0 .35rem 1rem rgb(0 0 0 / 8%);
+}
+
+.journey-settings-dialog select:focus,
+.landmark-date-choices input:focus {
+  outline: 2px solid rgb(0 150 246 / 60%);
+  outline-offset: 2px;
 }
 
 .ai-guide-form {
@@ -868,6 +906,43 @@ summary:focus-visible {
   padding: 0.625rem 1rem 0.75rem;
   border-top: 1px solid var(--glass-border-subtle);
   background: var(--glass-surface-strong);
+}
+
+.ai-guide-context-choices {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: .45rem;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0;
+  overflow-x: auto;
+  border: 0;
+  background: transparent;
+  scrollbar-width: none;
+}
+
+.ai-guide-context-choices button {
+  min-height: 2.15rem;
+  padding: .4rem .8rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: 999px;
+  color: var(--glass-text);
+  background: var(--glass-surface-muted);
+  font: inherit;
+  font-size: .76rem;
+  font-weight: 700;
+}
+
+.ai-guide-context-choices button:hover { background: var(--glass-accent-soft); color: var(--glass-accent-strong); }
+
+.concierge-intro.is-resolved .concierge-intro-cards {
+  opacity: .48;
+}
+
+.concierge-intro-cards button:disabled {
+  cursor: default;
 }
 
 .ai-guide-form input {
@@ -1247,6 +1322,46 @@ summary:focus-visible {
   color: var(--glass-accent-strong);
   background: var(--glass-accent-soft);
 }
+
+.landmark-journey-choices {
+  display: flex;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+}
+
+.landmark-date-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+}
+
+.landmark-journey-choices button {
+  min-height: 2rem;
+  padding: 0.35rem 0.75rem;
+  border: 0;
+  border-radius: 999px;
+  color: var(--glass-accent-strong);
+  background: var(--glass-surface-strong);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.landmark-date-choices button,
+.landmark-date-choices input {
+  min-height: 2rem;
+  padding: 0.35rem 0.75rem;
+  border: 0;
+  border-radius: 999px;
+  color: var(--glass-accent-strong);
+  background: var(--glass-surface-strong);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+#app[data-ui-color-mode="day"] .landmark-date-choices input { color-scheme: light; }
+#app[data-ui-color-mode="night"] .landmark-date-choices input { color-scheme: dark; }
 
 /* 列車詳細も同じガラスシートへ統一する */
 .train-details {
@@ -1719,13 +1834,13 @@ summary:focus-visible {
 
   .ai-guide-panel header {
     position: relative;
-    justify-content: center;
+    justify-content: flex-start;
     min-height: 4rem;
     padding-top: 0.25rem;
   }
 
   .ai-guide-panel .guide-panel-heading {
-    justify-content: center;
+    justify-content: flex-start;
   }
 
   .ai-guide-panel .guide-panel-icon,
@@ -1733,9 +1848,10 @@ summary:focus-visible {
     display: none;
   }
 
-  .ai-guide-panel #close-ai-guide {
+  .ai-guide-panel .guide-panel-actions {
     position: absolute;
-    left: 1rem;
+    right: 1rem;
+    margin: 0;
   }
 
   .ai-guide-messages {
@@ -1751,12 +1867,6 @@ summary:focus-visible {
     max-width: 100%;
   }
 
-  .ai-guide-suggestions,
-  .journey-settings {
-    padding-right: 0.85rem;
-    padding-left: 0.85rem;
-  }
-
   .ai-guide-form {
     padding-right: max(0.75rem, env(safe-area-inset-right));
     padding-left: max(0.75rem, env(safe-area-inset-left));
@@ -1766,13 +1876,6 @@ summary:focus-visible {
     padding: 0.7rem 0;
   }
 
-  .journey-settings-panel {
-    grid-template-columns: 1fr;
-  }
-
-  .journey-settings-panel small {
-    grid-column: 1;
-  }
 
   .train-details {
     inset: auto 0 0;

@@ -1,5 +1,10 @@
 import type { JourneyRouteResult } from "../domain/direct-route-search";
 import {
+  loadUserProfile,
+  type UserProfile,
+} from "../domain/travel-profile";
+import { recommendedTravelDestinations } from "../domain/travel-destination";
+import {
   defaultJourneySearchPreferences,
   isJourneyRankingPreference,
   isTransferPace,
@@ -23,6 +28,7 @@ export interface AiGuidePanelElements {
   input: HTMLInputElement;
   submit: HTMLButtonElement;
   suggestions: HTMLButtonElement[];
+  contextChoices: HTMLElement;
   settingsToggle: HTMLButtonElement;
   settingsPanel: HTMLElement;
   transferPace: HTMLSelectElement;
@@ -34,13 +40,18 @@ export type AiGuidePromptHandler = (
   preferences: JourneySearchPreferences,
 ) => Promise<ViewerAgentResponse>;
 
+export interface AiGuidePanelController {
+  openLandmarkJourney(name: string, type?: string): void;
+  open(): void;
+}
+
 let journeyPlanSequence = 0;
 const journeyPreferencesStorageKey = "transitforge.journey-search-preferences.v1";
 
 export function configureAiGuidePanel(
   elements: AiGuidePanelElements,
   handlePrompt: AiGuidePromptHandler,
-): void {
+): AiGuidePanelController {
   const {
     panel,
     toggle,
@@ -50,6 +61,7 @@ export function configureAiGuidePanel(
     input,
     submit,
     suggestions,
+    contextChoices,
     settingsToggle,
     settingsPanel,
     transferPace,
@@ -71,11 +83,17 @@ export function configureAiGuidePanel(
   const savePreferences = () => storeJourneySearchPreferences(preferences());
   transferPace.addEventListener("change", savePreferences);
   rankingPreference.addEventListener("change", savePreferences);
-  settingsToggle.addEventListener("click", () => {
-    const open = settingsPanel.hidden;
-    settingsPanel.hidden = !open;
-    settingsToggle.ariaExpanded = String(open);
-  });
+  if (settingsPanel instanceof HTMLDialogElement) {
+    settingsToggle.addEventListener("click", () => settingsPanel.showModal());
+    settingsPanel.querySelector<HTMLElement>("[data-close-journey-settings]")
+      ?.addEventListener("click", () => settingsPanel.close());
+  } else {
+    settingsToggle.addEventListener("click", () => {
+      const open = settingsPanel.hidden;
+      settingsPanel.hidden = !open;
+      settingsToggle.ariaExpanded = String(open);
+    });
+  }
 
   const setOpen = (open: boolean) => {
     toggle.ariaExpanded = String(open);
@@ -89,7 +107,11 @@ export function configureAiGuidePanel(
     }
   };
 
-  toggle.addEventListener("click", () => setOpen(toggle.ariaExpanded !== "true"));
+  toggle.addEventListener("click", () => {
+    const open = toggle.ariaExpanded !== "true";
+    setOpen(open);
+    if (open) showConciergeIntro();
+  });
   close.addEventListener("click", () => setOpen(false));
   panel.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
@@ -104,9 +126,21 @@ export function configureAiGuidePanel(
     });
   }
 
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const prompt = input.value.trim();
+  let landmarkJourney: { name: string; departureText?: string } | undefined;
+  const setContextChoices = (choices: string[]) => {
+    contextChoices.replaceChildren();
+    contextChoices.hidden = choices.length === 0;
+    for (const choiceText of choices) {
+      const choice = document.createElement("button");
+      choice.type = "button";
+      choice.textContent = choiceText;
+      choice.addEventListener("click", () => submitPrompt(choiceText));
+      contextChoices.append(choice);
+    }
+    if (choices.length > 0) messages.append(contextChoices);
+  };
+
+  const sendPrompt = (prompt: string) => {
     if (!prompt || submit.disabled) {
       return;
     }
@@ -137,7 +171,123 @@ export function configureAiGuidePanel(
         delete submit.dataset.submitting;
         input.focus();
       });
+  };
+
+  const submitPrompt = (prompt: string) => {
+    if (!prompt || submit.disabled) return;
+    if (landmarkJourney && landmarkJourney.departureText === undefined) {
+      const journey = landmarkJourney;
+      journey.departureText = prompt;
+      appendMessage(messages, "user", prompt);
+      appendMessage(
+        messages,
+        "assistant",
+        `${prompt}に${journey.name}へ行く予定ですね。何泊しますか？`,
+      );
+      input.value = "";
+      input.placeholder = "例: 1泊、2泊、日帰り";
+      setContextChoices(["日帰り", "1泊", "2泊"]);
+      input.focus();
+      return;
+    }
+    if (landmarkJourney?.departureText) {
+      const { name, departureText } = landmarkJourney;
+      landmarkJourney = undefined;
+      input.placeholder = "列車、行き先、旅の相談を入力";
+      setContextChoices([]);
+      const stayPhrase = prompt === "日帰り" ? "日帰りで" : `${prompt}で`;
+      sendPrompt(`${departureText}、${name}へ${stayPhrase}観光したい`);
+      return;
+    }
+    sendPrompt(prompt);
+  };
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitPrompt(input.value.trim());
   });
+
+  let hasShownConciergeIntro = false;
+  const showConciergeIntro = () => {
+    if (hasShownConciergeIntro || messages.querySelector(".ai-guide-message") !== null) return;
+    appendConciergeIntroCards(
+      messages,
+      loadUserProfile(localStorage),
+      (destination) => controller.openLandmarkJourney(destination),
+    );
+    hasShownConciergeIntro = true;
+  };
+
+  const controller: AiGuidePanelController = {
+    openLandmarkJourney(name) {
+      setOpen(true);
+      showConciergeIntro();
+      landmarkJourney = { name };
+      appendMessage(
+        messages,
+        "assistant",
+        `${name}ですね。いつ出発しますか？ 日付は自由に入力できます。`,
+      );
+      input.value = "";
+      input.placeholder = "例: 来週の火曜日、9月3日";
+      setContextChoices(["今日", "明日", "今週末"]);
+      input.focus();
+    },
+    open() {
+      setOpen(true);
+      showConciergeIntro();
+    },
+  };
+  return controller;
+}
+
+function appendConciergeIntroCards(
+  messages: HTMLOListElement,
+  profile?: UserProfile,
+  selectDestination?: (destination: string) => void,
+): void {
+  const item = document.createElement("li");
+  item.className = "ai-guide-message ai-guide-message-assistant concierge-intro";
+  const title = document.createElement("p");
+  title.textContent = "あなたが興味がありそうなスポット";
+  const cards = document.createElement("div");
+  cards.className = "concierge-intro-cards";
+  for (const destination of recommendedTravelDestinations(profile)) {
+    const card = document.createElement("button");
+    card.type = "button";
+    const iconElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    iconElement.classList.add("concierge-intro-card-icon");
+    iconElement.setAttribute("aria-hidden", "true");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", "#icon-ai-sparkles");
+    iconElement.append(use);
+    const copy = document.createElement("span");
+    copy.className = "concierge-intro-card-copy";
+    const heading = document.createElement("strong");
+    heading.textContent = destination.name;
+    const caption = document.createElement("small");
+    caption.textContent = `${destination.interests.slice(0, 2).map(travelPreferenceLabel).join("・")}を楽しむ旅`;
+    copy.append(heading, caption);
+    card.append(iconElement, copy);
+    card.addEventListener("click", () => {
+      for (const candidate of cards.querySelectorAll<HTMLButtonElement>("button")) {
+        candidate.disabled = true;
+      }
+      item.classList.add("is-resolved");
+      selectDestination?.(destination.name);
+    });
+    cards.append(card);
+  }
+  item.append(title, cards);
+  messages.append(item);
+}
+
+function travelPreferenceLabel(value: string): string {
+  return {
+    sea: "海", mountain: "山", nature: "自然", onsen: "温泉", food: "食",
+    railway: "鉄道", history: "歴史", cityWalk: "街歩き", animals: "動物",
+    art: "アート", themePark: "テーマパーク", shopping: "買い物",
+  }[value] ?? "旅";
 }
 
 export function shouldFocusAiGuideInputOnOpen(
@@ -151,12 +301,13 @@ function appendMessage(
   messages: HTMLOListElement,
   role: "assistant" | "user",
   text: string,
-): void {
+): HTMLLIElement {
   const item = document.createElement("li");
   item.className = `ai-guide-message ai-guide-message-${role}`;
   item.textContent = role === "assistant" ? visibleAssistantText(text) : text;
   messages.append(item);
   item.scrollIntoView({ block: "nearest" });
+  return item;
 }
 
 function appendPendingMessage(messages: HTMLOListElement): HTMLLIElement {
