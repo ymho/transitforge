@@ -53,4 +53,21 @@ describe("journeyLegAlternativeFits", () => {
     expect(journeyLegAlternativeFits(journey, 1, alternative, "standard")).toBe(true);
     expect(journeyLegAlternativeFits(journey, 1, alternative, "relaxed")).toBe(false);
   });
+
+  it("accepts a replacement for consecutive legs when the outer connections fit", () => {
+    expect(journeyLegAlternativeFits(
+      journey,
+      0,
+      leg("express", "京都", "大阪", 425, 468),
+      "standard",
+      1,
+    )).toBe(true);
+    expect(journeyLegAlternativeFits(
+      journey,
+      0,
+      leg("late-express", "京都", "大阪", 425, 471),
+      "standard",
+      1,
+    )).toBe(false);
+  });
 });

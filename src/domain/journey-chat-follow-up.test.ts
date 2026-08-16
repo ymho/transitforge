@@ -109,7 +109,43 @@ describe("journey chat follow-up", () => {
       type: "alternative",
       journeyIndex: 0,
       legIndex: 0,
+      endLegIndex: 0,
       preferLaterDeparture: true,
+      requiredServiceTypes: [],
+    });
+  });
+
+  it("recognizes a service preference for a multi-leg segment", () => {
+    const multiLegPlan: ViewerAgentJourneyPlan = {
+      ...plan,
+      originStation: "京都",
+      journeys: [{
+        ...plan.journeys[0],
+        legs: [{
+          ...plan.journeys[0].legs[0],
+          originStation: "京都",
+          destinationStation: "新大阪",
+        }, {
+          ...plan.journeys[0].legs[0],
+          serviceUid: "second-first",
+          trainNumber: "3500M",
+          serviceType: "新快速",
+          trainName: "",
+          originStation: "新大阪",
+          destinationStation: "岡山",
+        }, plan.journeys[0].legs[1]],
+      }],
+    };
+    expect(journeyChatFollowUpIntent(
+      "京都から岡山は新幹線が良い",
+      multiLegPlan,
+    )).toEqual({
+      type: "alternative",
+      journeyIndex: 0,
+      legIndex: 0,
+      endLegIndex: 1,
+      preferLaterDeparture: false,
+      requiredServiceTypes: ["新幹線"],
     });
   });
 
@@ -135,5 +171,37 @@ describe("journey chat follow-up", () => {
     expect(changed.journeys[0].legs[0].trainNumber).toBe("101A");
     expect(changed.journeys[0].departureTimeMinutes).toBe(495);
     expect(plan.journeys[0].legs[0].trainNumber).toBe("99A");
+  });
+
+  it("replaces every leg in the selected segment while preserving the rest", () => {
+    const extendedPlan: ViewerAgentJourneyPlan = {
+      ...plan,
+      journeys: [{
+        ...plan.journeys[0],
+        legs: [
+          plan.journeys[0].legs[0],
+          { ...plan.journeys[0].legs[0], serviceUid: "middle", originStation: "岡山", destinationStation: "倉敷" },
+          { ...plan.journeys[0].legs[1], originStation: "倉敷" },
+        ],
+      }],
+    };
+    const pending: PendingJourneyLegChange = {
+      plan: extendedPlan,
+      journeyIndex: 0,
+      legIndex: 0,
+      endLegIndex: 1,
+      alternatives: [{
+        ...plan.journeys[0].legs[0],
+        serviceUid: "replacement",
+        originStation: "新大阪",
+        destinationStation: "倉敷",
+      }],
+    };
+    const changed = applyJourneyLegAlternative(pending, 0);
+    expect(changed.journeys[0].legs.map((leg) => leg.serviceUid)).toEqual([
+      "replacement",
+      "second",
+    ]);
+    expect(changed.journeys[0].transferCount).toBe(1);
   });
 });
