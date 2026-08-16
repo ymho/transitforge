@@ -43,6 +43,7 @@ import {
   currentCalendarDateInJapan,
   directRouteRequestFromPrompt,
   formatStationLabel,
+  isUsableOriginStation,
   routeTimeFromPrompt,
   routeCalendarDateFromPrompt,
   searchActiveTrainsFromPrompt,
@@ -419,11 +420,11 @@ async function executeTool(
       originalPrompt,
       dependencies.trains,
     );
-    const originStation = promptRequest?.originStation ?? input.originStation;
+    const originStation = promptRequest?.originStation ??
+      explicitOriginStationFromPrompt(originalPrompt, input.originStation);
     const destinationStation =
       promptRequest?.destinationStation ?? input.destinationStation;
     if (
-      (originStation !== undefined && typeof originStation !== "string") ||
       typeof destinationStation !== "string" ||
       destinationStation.trim().length === 0 ||
       typeof departureTimeMinutes !== "number" ||
@@ -669,6 +670,25 @@ async function executeTool(
   }
 
   throw new Error("許可されていないツールです。");
+}
+
+function explicitOriginStationFromPrompt(
+  prompt: string,
+  value: unknown,
+): string | undefined {
+  if (!isUsableOriginStation(value)) {
+    return undefined;
+  }
+  const candidate = value.trim();
+  const normalizedPrompt = normalizeStationPrompt(prompt);
+  const normalizedCandidate = normalizeStationPrompt(candidate);
+  return normalizedCandidate && normalizedPrompt.includes(normalizedCandidate)
+    ? candidate
+    : undefined;
+}
+
+function normalizeStationPrompt(value: string): string {
+  return value.normalize("NFKC").replace(/駅$/u, "").replace(/\s+/gu, "");
 }
 
 export function currentServiceDateInJapan(now = new Date()): string {

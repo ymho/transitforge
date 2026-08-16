@@ -46,6 +46,16 @@ export function formatStationLabel(stationName: string): string {
   return `${stationName.normalize("NFKC").trim().replace(/駅$/u, "")}駅`;
 }
 
+/**
+ * モデルが駅名未指定を表すために出力する値は、経路検索の出発駅として扱わない。
+ * 実在の駅名は利用者の入力または端末内の最寄り駅選択だけを正本にする。
+ */
+export function isUsableOriginStation(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const candidate = value.trim();
+  return Boolean(candidate) && !/(?:&quot;|&lt;|&gt;|<\/?[a-z]+>|省略|現在地から最寄り駅)/iu.test(candidate);
+}
+
 export function routeTimeFromPrompt(prompt: string): number | undefined {
   const normalizedPrompt = normalize(prompt);
   const colonTime = normalizedPrompt.match(

@@ -108,7 +108,10 @@ import {
 import { resolveViewerDisplayMode } from "./domain/viewer-display-mode";
 import { runBedrockViewerAgent } from "./domain/viewer-agent-bedrock";
 import { createLocalViewerAgent } from "./domain/viewer-agent-local";
-import { directRouteRequestFromPrompt } from "./domain/viewer-agent-local-tools";
+import {
+  directRouteRequestFromPrompt,
+  isUsableOriginStation,
+} from "./domain/viewer-agent-local-tools";
 import type { ViewerAgentJourneyPlan } from "./domain/viewer-agent-response";
 import {
   configureAiGuidePanel,
@@ -684,7 +687,10 @@ if (!token) {
         };
 
         const resolveDirectRouteOrigin = async (request: Parameters<DirectRouteSearchHandler>[0]) => {
-          let originStation = request.originStation;
+          // Bedrockなど外部境界からの値は、駅名未指定のプレースホルダーを信用しない。
+          let originStation = isUsableOriginStation(request.originStation)
+            ? request.originStation.trim()
+            : undefined;
           let distanceMeters: number | undefined;
           if (!originStation) {
             const coordinate = await currentBrowserCoordinate();

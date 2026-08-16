@@ -567,7 +567,11 @@ describe("Bedrock viewer agent", () => {
               toolUseId: "route",
               name: "search_direct_routes",
               // モデルが現在時刻を誤っても、ブラウザの表示時刻を検索に使う。
-              input: { destinationStation: "京都", departureTimeMinutes: 833 },
+              input: {
+                destinationStation: "京都",
+                departureTimeMinutes: 833,
+                originStation: "&quot;現在地から最寄り駅&quot;",
+              },
             },
           }],
         },
