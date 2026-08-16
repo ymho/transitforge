@@ -288,6 +288,17 @@ if (!token) {
   const map = new mapboxgl.Map({
     container: "map",
     style: "mapbox://styles/mapbox/standard",
+    config: {
+      basemap: {
+        // 地図を抑えた背景へ寄せ、半透明の操作面と路線色を主役にする。
+        theme: "faded",
+        show3dObjects: true,
+        showPointOfInterestLabels: false,
+        showPlaceLabels: false,
+        showRoadLabels: false,
+        showTransitLabels: false,
+      },
+    },
     language: "ja",
     center: [135.4959, 34.7025],
     zoom: 15.5,
