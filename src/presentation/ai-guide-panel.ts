@@ -208,6 +208,7 @@ function resolveAssistantMessage(
 function renderTravelPlan(plan: ViewerAgentTravelPlan): HTMLElement {
   const container = document.createElement("section");
   container.className = "travel-plan";
+  container.append(travelPlanOverview(plan));
   const itinerary = document.createElement("div");
   itinerary.className = "travel-plan-itinerary";
   itinerary.append(
@@ -217,6 +218,19 @@ function renderTravelPlan(plan: ViewerAgentTravelPlan): HTMLElement {
   );
   container.append(itinerary);
   return container;
+}
+
+function travelPlanOverview(plan: ViewerAgentTravelPlan): HTMLElement {
+  const overview = document.createElement("header");
+  overview.className = "travel-plan-overview";
+  const title = document.createElement("strong");
+  title.textContent = `${plan.destination} 1泊2日`;
+  const dates = document.createElement("span");
+  dates.textContent = `${formatCalendarDate(plan.checkInDate)} → ${formatCalendarDate(plan.checkOutDate)}`;
+  const hint = document.createElement("small");
+  hint.textContent = "宿を選ぶと、この旅程をベースに行きと帰りを調整できます。";
+  overview.append(title, dates, hint);
+  return overview;
 }
 
 function travelPlanSection(label: string, plan: ViewerAgentJourneyPlan): HTMLElement {
@@ -230,7 +244,13 @@ function travelPlanSection(label: string, plan: ViewerAgentJourneyPlan): HTMLEle
     empty.textContent = "条件に合う経路は見つかりませんでした。";
     section.append(empty);
   } else {
-    section.append(renderJourneySummary(plan.journeys[0]), renderJourneyTimeline(plan.journeys[0]));
+    const journey = plan.journeys[0];
+    const details = document.createElement("details");
+    details.className = "travel-plan-route-details";
+    const summary = document.createElement("summary");
+    summary.textContent = `${formatClock(journey.departureTimeMinutes)} → ${formatClock(journey.arrivalTimeMinutes)}　${journey.transferCount === 0 ? "乗換なし" : `乗換${journey.transferCount}回`}`;
+    details.append(summary, renderJourneyTimeline(journey));
+    section.append(details);
   }
   return section;
 }
@@ -249,7 +269,11 @@ function travelPlanAccommodationSection(plan: ViewerAgentTravelPlan): HTMLElemen
   }
   const list = document.createElement("ul");
   list.className = "travel-plan-accommodation-list";
-  for (const accommodation of plan.accommodations) {
+  const selectedNotice = document.createElement("p");
+  selectedNotice.className = "travel-plan-selection-notice";
+  selectedNotice.hidden = true;
+  const selectButtons: HTMLButtonElement[] = [];
+  for (const accommodation of plan.accommodations.slice(0, 3)) {
     const item = document.createElement("li");
     const name = document.createElement(accommodation.bookingUrl ? "a" : "strong");
     name.textContent = accommodation.name;
@@ -264,9 +288,29 @@ function travelPlanAccommodationSection(plan: ViewerAgentTravelPlan): HTMLElemen
       area.textContent = accommodation.areaName;
       item.append(area);
     }
+    const actions = document.createElement("div");
+    actions.className = "travel-plan-accommodation-actions";
+    const select = document.createElement("button");
+    select.type = "button";
+    select.className = "travel-plan-accommodation-select";
+    select.textContent = "この宿を選ぶ";
+    select.setAttribute("aria-pressed", "false");
+    select.addEventListener("click", () => {
+      for (const button of selectButtons) {
+        const active = button === select;
+        button.setAttribute("aria-pressed", String(active));
+        button.textContent = active ? "選択中" : "この宿を選ぶ";
+        button.closest("li")?.classList.toggle("is-selected", active);
+      }
+      selectedNotice.textContent = `${accommodation.name}を宿泊先として選びました。行きと帰りはこの旅程をベースに、会話で変更できます。`;
+      selectedNotice.hidden = false;
+    });
+    selectButtons.push(select);
+    actions.append(select);
+    item.append(actions);
     list.append(item);
   }
-  section.append(list);
+  section.append(list, selectedNotice);
   return section;
 }
 

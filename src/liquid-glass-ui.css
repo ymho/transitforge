@@ -1090,6 +1090,29 @@ summary:focus-visible {
   gap: 0.75rem;
 }
 
+.travel-plan-overview {
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  background: var(--glass-surface-muted);
+}
+
+.travel-plan-overview strong {
+  color: var(--glass-text);
+  font-size: 1rem;
+}
+
+.travel-plan-overview span,
+.travel-plan-overview small {
+  color: var(--glass-muted);
+  font-size: 0.7rem;
+}
+
+.travel-plan-overview small {
+  margin-top: 0.2rem;
+}
+
 .travel-plan-section {
   overflow: hidden;
   padding: 0.8rem 0;
@@ -1109,6 +1132,25 @@ summary:focus-visible {
   font-size: 0.75rem;
 }
 
+.travel-plan-route-details {
+  margin: 0;
+}
+
+.travel-plan-route-details summary {
+  margin: 0 1rem;
+  padding: 0.72rem 0.8rem;
+  border-radius: 0.8rem;
+  color: var(--glass-text);
+  background: var(--glass-surface-muted);
+  cursor: pointer;
+  font-size: 0.77rem;
+  font-weight: 650;
+}
+
+.travel-plan-route-details[open] summary {
+  margin-bottom: 0.45rem;
+}
+
 .travel-plan-accommodation-list {
   display: grid;
   gap: 0.45rem;
@@ -1125,6 +1167,11 @@ summary:focus-visible {
   background: var(--glass-surface-muted);
 }
 
+.travel-plan-accommodation-list li.is-selected {
+  outline: 2px solid color-mix(in srgb, var(--glass-accent-strong), transparent 30%);
+  background: color-mix(in srgb, var(--glass-accent-soft), var(--glass-surface) 55%);
+}
+
 .travel-plan-accommodation-list a,
 .travel-plan-accommodation-list strong {
   color: var(--glass-text);
@@ -1134,6 +1181,36 @@ summary:focus-visible {
 .travel-plan-accommodation-list small {
   color: var(--glass-muted);
   font-size: 0.65rem;
+}
+
+.travel-plan-accommodation-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.2rem;
+}
+
+.travel-plan-accommodation-select {
+  min-height: 2rem;
+  padding: 0.35rem 0.7rem;
+  border: 0;
+  border-radius: 999px;
+  color: white;
+  background: var(--glass-accent-strong);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.travel-plan-accommodation-select[aria-pressed="true"] {
+  color: var(--glass-accent-strong);
+  background: white;
+}
+
+.travel-plan-selection-notice {
+  margin-top: 0.65rem !important;
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.8rem;
+  color: var(--glass-text) !important;
+  background: var(--glass-accent-soft);
 }
 
 /* 列車詳細も同じガラスシートへ統一する */
