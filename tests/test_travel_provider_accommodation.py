@@ -25,12 +25,12 @@ class TravelProviderAccommodationTest(unittest.TestCase):
 
         def opener(request: object, timeout: int) -> FakeResponse:
             requests.append((request, timeout))
-            return FakeResponse({"hotels": [{"hotelBasicInfo": {
+            return FakeResponse({"hotels": [[{"hotelBasicInfo": {
                 "hotelNo": 42,
                 "hotelName": "駅前の宿",
                 "hotelInformationUrl": "https://booking.example/42",
                 "address1": "出雲市",
-            }}]})
+            }}]]})
 
         offerings = search_accommodations(
             TravelProviderSearch("出雲市", "2026-08-17", "2026-08-18", 1, 3),

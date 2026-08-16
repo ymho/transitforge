@@ -48,9 +48,15 @@ def search_accommodations(
         if log_event and request_id:
             log_event("travel_provider_request_failed", request_id, durationMs=round((time.perf_counter() - started) * 1000), errorType=type(error).__name__)
         raise ValueError("宿泊提供者の検索を利用できません。") from error
+    offerings = _offerings(value, request)
     if log_event and request_id:
-        log_event("travel_provider_request_completed", request_id, durationMs=round((time.perf_counter() - started) * 1000))
-    return _offerings(value, request)
+        log_event(
+            "travel_provider_request_completed",
+            request_id,
+            durationMs=round((time.perf_counter() - started) * 1000),
+            resultCount=len(offerings),
+        )
+    return offerings
 
 
 def _offerings(value: Any, request: TravelProviderSearch) -> list[AccommodationOffering]:
@@ -61,7 +67,7 @@ def _offerings(value: Any, request: TravelProviderSearch) -> list[AccommodationO
         return []
     offerings: list[AccommodationOffering] = []
     for hotel in hotels[: request.limit]:
-        basic = hotel.get("hotelBasicInfo") if isinstance(hotel, dict) else None
+        basic = _hotel_basic_info(hotel)
         if not isinstance(basic, dict):
             continue
         hotel_id = basic.get("hotelNo")
@@ -78,6 +84,19 @@ def _offerings(value: Any, request: TravelProviderSearch) -> list[AccommodationO
             area_name=_optional_string(basic.get("address1")),
         ))
     return offerings
+
+
+def _hotel_basic_info(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        basic = value.get("hotelBasicInfo")
+        return basic if isinstance(basic, dict) else None
+    if not isinstance(value, list):
+        return None
+    for item in value:
+        basic = _hotel_basic_info(item)
+        if basic is not None:
+            return basic
+    return None
 
 
 def _optional_string(value: Any) -> str | None:
