@@ -117,6 +117,7 @@ import {
   configureAiGuidePanel,
   type AiGuidePromptHandler,
 } from "./presentation/ai-guide-panel";
+import { configureLandmarkJourneyInteraction } from "./presentation/landmark-journey-interaction";
 import { configureTrainSelection } from "./presentation/train-selection-controller";
 import { createLoadingScreen } from "./presentation/loading-screen";
 import { MapboxThreeTrainLayer } from "./rendering/mapbox-three-train-layer";
@@ -193,6 +194,8 @@ const conciergeRole =
 const aiGuideSuggestions = Array.from(
   document.querySelectorAll<HTMLButtonElement>("[data-prompt]"),
 );
+const aiGuideContextChoices =
+  document.querySelector<HTMLElement>("#ai-guide-context-choices");
 const journeySettingsToggle =
   document.querySelector<HTMLButtonElement>("#journey-settings-toggle");
 const journeySettingsPanel =
@@ -240,10 +243,10 @@ if (
   aiGuideForm === null ||
   aiGuideInput === null ||
   aiGuideSubmit === null ||
+  aiGuideContextChoices === null ||
   conciergeAvatar === null ||
   conciergeName === null ||
   conciergeRole === null ||
-  aiGuideSuggestions.length === 0 ||
   journeySettingsToggle === null ||
   journeySettingsPanel === null ||
   journeyTransferPace === null ||
@@ -287,8 +290,7 @@ const updateConciergeIdentity = (resetGreeting = false) => {
 updateConciergeIdentity(true);
 document.addEventListener(travelProfileChangedEvent, () =>
   updateConciergeIdentity(true));
-configureTravelProfile(document);
-configureAiGuidePanel(
+const aiGuideController = configureAiGuidePanel(
   {
     panel: aiGuidePanel,
     toggle: aiGuideToggle,
@@ -298,6 +300,7 @@ configureAiGuidePanel(
     input: aiGuideInput,
     submit: aiGuideSubmit,
     suggestions: aiGuideSuggestions,
+    contextChoices: aiGuideContextChoices,
     settingsToggle: journeySettingsToggle,
     settingsPanel: journeySettingsPanel,
     transferPace: journeyTransferPace,
@@ -305,6 +308,7 @@ configureAiGuidePanel(
   },
   (prompt, preferences) => handleAiGuidePrompt(prompt, preferences),
 );
+configureTravelProfile(document, () => aiGuideController.open());
 
 const initialDateTime = new Date();
 let displayedServiceDateStart = operatingServiceDateStart(initialDateTime);
@@ -335,6 +339,8 @@ if (!token) {
         showPlaceLabels: false,
         showRoadLabels: false,
         showTransitLabels: false,
+        showLandmarkIcons: true,
+        showLandmarkIconLabels: true,
       },
     },
     language: "ja",
@@ -396,6 +402,9 @@ if (!token) {
     // Mapbox Standardでは空港だけを除外できないため、空港を含む交通ラベル群を隠す。
     // TransitForgeが描画する路線・列車・詳細表示には影響しない。
     map.setConfigProperty("basemap", "showTransitLabels", false);
+    map.setConfigProperty("basemap", "showLandmarkIcons", true);
+    map.setConfigProperty("basemap", "showLandmarkIconLabels", true);
+    configureLandmarkJourneyInteraction(map, aiGuideController.openLandmarkJourney);
     let applyWeatherToTrains: (mode: WeatherMode) => void = () => undefined;
     let activeWeatherMode: WeatherMode = "clear";
     const selectWeather = configureWeather(

@@ -11,7 +11,10 @@ const titles = ["出発地", "同行者", "旅行ペース", "好きなもの", 
 const questions = ["普段、どこから旅に出ますか？", "誰と旅行することが多いですか？", "旅行では、どちらに近いですか？", "旅行で心惹かれるものを選んでください", "どんな旅に惹かれますか？", "どれくらいの移動なら旅行として楽しめますか？", "旅行で、なるべく避けたいものはありますか？"];
 type Draft = Omit<UserProfile, "version" | "updatedAt">;
 
-export function configureTravelProfile(document: Document): void {
+export function configureTravelProfile(
+  document: Document,
+  onProfileCompleted: () => void = () => undefined,
+): void {
   const dialog = document.querySelector<HTMLDialogElement>("#travel-profile-dialog");
   const toggle = document.querySelector<HTMLButtonElement>("#travel-profile-toggle");
   if (!dialog || !toggle) return;
@@ -37,7 +40,10 @@ export function configureTravelProfile(document: Document): void {
     dialog.querySelector<HTMLButtonElement>("[data-back]")?.addEventListener("click", () => { update(); step -= 1; render(); });
     dialog.querySelector<HTMLButtonElement>("[data-edit]")?.addEventListener("click", () => { conciergeMatchState = undefined; complete = false; step = 0; render(); });
     dialog.querySelector<HTMLButtonElement>("[data-delete]")?.addEventListener("click", () => { deleteUserProfile(localStorage); document.dispatchEvent(new Event(travelProfileChangedEvent)); matchedConcierge = undefined; conciergeMatchState = undefined; draft = createDraft(); complete = false; step = -1; render(); });
-    dialog.querySelector<HTMLButtonElement>("[data-start]")?.addEventListener("click", () => dialog.close());
+    dialog.querySelector<HTMLButtonElement>("[data-start]")?.addEventListener("click", () => {
+      dialog.close();
+      onProfileCompleted();
+    });
     dialog.querySelector("[name=companions]")?.addEventListener("change", () => { update(); render(); });
     dialog.querySelector<HTMLFormElement>("form")?.addEventListener("submit", event => {
       event.preventDefault(); update();

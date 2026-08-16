@@ -50,6 +50,7 @@ import {
   searchActiveTrainsFromPrompt,
   searchTrainArrivalsFromPrompt,
 } from "./viewer-agent-local-tools";
+import { travelDestinationAccess } from "./travel-destination";
 
 export interface BedrockViewerAgentDependencies {
   trains: Train[];
@@ -432,6 +433,11 @@ async function executeTool(
       originalPrompt,
       dependencies.trains,
     );
+    if (isStayTravelRequest(originalPrompt)) {
+      throw new Error(
+        "宿泊を伴う旅行相談では、まずsearch_accommodationsで行き先と宿泊日を検索してください。観光地は駅名として経路検索しません。",
+      );
+    }
     const originStation = promptRequest?.originStation ??
       explicitOriginStationFromPrompt(originalPrompt, input.originStation);
     const destinationStation =
@@ -621,12 +627,14 @@ async function executeTool(
       ? input.limit : 3;
     const adults = typeof input.adults === "number" && Number.isInteger(input.adults)
       ? input.adults : 1;
+    const travelDestination = travelDestinationAccess(destination);
     const accommodations = await dependencies.searchAccommodations({
-      destination: destination.trim(), checkInDate, checkOutDate,
+      destination: travelDestination?.accommodationDestination ?? destination.trim(), checkInDate, checkOutDate,
       adults: Math.max(1, Math.min(10, adults)), limit: Math.max(1, Math.min(5, requestedLimit)),
     });
     if (isStayTravelRequest(originalPrompt) && dependencies.searchDirectRoutes) {
-      const destinationStation = stationForTravelDestination(destination, dependencies.trains);
+      const destinationStation = travelDestination?.accessStation ??
+        stationForTravelDestination(destination, dependencies.trains);
       if (destinationStation) {
         const preferences = dependencies.getJourneySearchPreferences?.() ??
           defaultJourneySearchPreferences;
@@ -790,6 +798,7 @@ function stationForTravelDestination(
     normalizeStationPrompt(station).startsWith(normalizedDestination),
   );
 }
+
 
 function journeyPlanFromSearchResponse(
   response: DirectRouteSearchResponse,

@@ -16,7 +16,11 @@ export function renderConciergeIdentity(
   elements.avatar.alt = `${concierge.presentation.name}のアバター`;
   elements.name.textContent = concierge.presentation.name;
   elements.role.textContent = concierge.presentation.role;
-  if (resetGreeting && elements.messages.childElementCount === 1) {
+  if (
+    resetGreeting &&
+    elements.messages.childElementCount === 1 &&
+    !elements.messages.firstElementChild?.classList.contains("concierge-intro")
+  ) {
     const firstMessage = elements.messages.firstElementChild;
     if (firstMessage instanceof HTMLElement) {
       firstMessage.textContent = concierge.conversation.greeting;
