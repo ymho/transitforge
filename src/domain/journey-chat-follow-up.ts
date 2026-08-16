@@ -318,7 +318,9 @@ function confirmedAlternativeIndex(
   prompt: string,
   pending: PendingJourneyLegChange,
 ): number | undefined {
-  const numbered = /(?:候補)?([1-5])番/u.exec(prompt)?.[1];
+  const numbered =
+    /(?:候補)?([1-5])番/u.exec(prompt)?.[1] ??
+    /^(?:候補)?([1-5])$/u.exec(prompt)?.[1];
   if (numbered) {
     const index = Number(numbered) - 1;
     return pending.alternatives[index] ? index : undefined;
