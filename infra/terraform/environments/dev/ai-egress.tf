@@ -130,16 +130,18 @@ resource "aws_eip" "ai_egress" {
 }
 
 resource "aws_instance" "ai_nat" {
-  ami                    = data.aws_ssm_parameter.ai_nat_instance_ami.value
-  instance_type          = var.ai_nat_instance_type
-  iam_instance_profile   = aws_iam_instance_profile.ai_nat.name
-  subnet_id              = aws_subnet.ai_egress_public.id
-  vpc_security_group_ids = [aws_security_group.ai_nat.id]
-  source_dest_check      = false
+  ami                         = data.aws_ssm_parameter.ai_nat_instance_ami.value
+  instance_type               = var.ai_nat_instance_type
+  iam_instance_profile        = aws_iam_instance_profile.ai_nat.name
+  subnet_id                   = aws_subnet.ai_egress_public.id
+  vpc_security_group_ids      = [aws_security_group.ai_nat.id]
+  source_dest_check           = false
+  user_data_replace_on_change = true
 
   user_data = <<-EOT
     #!/bin/bash
     set -euo pipefail
+    dnf install -y iptables-nft
     cat >/usr/local/sbin/transitforge-nat <<'EOF'
     #!/bin/bash
     set -euo pipefail
