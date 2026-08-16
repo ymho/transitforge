@@ -56,6 +56,12 @@ data "aws_iam_policy_document" "bedrock_agent" {
   }
 
   statement {
+    sid       = "ReadTravelProviderCredentials"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [aws_secretsmanager_secret.travel_provider.arn]
+  }
+
+  statement {
     sid = "WriteLogs"
     actions = [
       "logs:CreateLogStream",
@@ -97,14 +103,15 @@ resource "aws_lambda_function" "bedrock_agent" {
 
   environment {
     variables = {
-      MODEL_ID                  = var.bedrock_model_id
-      SUMMARY_TABLE             = aws_dynamodb_table.train_congestion_summary.name
-      DELAY_SUMMARY_TABLE       = aws_dynamodb_table.train_delay_summary.name
-      AI_TIMETABLE_BUCKET       = "${local.resource_prefix}-data-builder-source"
-      AI_TIMETABLE_PREFIX       = "ai-timetable"
-      PLANNING_TIMETABLE_PREFIX = "timetable"
-      TRAFFIC_SNAPSHOT_BUCKET   = aws_s3_bucket.website.id
-      TRAFFIC_SNAPSHOT_KEY      = "api/traffic/delays.json"
+      MODEL_ID                   = var.bedrock_model_id
+      SUMMARY_TABLE              = aws_dynamodb_table.train_congestion_summary.name
+      DELAY_SUMMARY_TABLE        = aws_dynamodb_table.train_delay_summary.name
+      AI_TIMETABLE_BUCKET        = "${local.resource_prefix}-data-builder-source"
+      AI_TIMETABLE_PREFIX        = "ai-timetable"
+      PLANNING_TIMETABLE_PREFIX  = "timetable"
+      TRAFFIC_SNAPSHOT_BUCKET    = aws_s3_bucket.website.id
+      TRAFFIC_SNAPSHOT_KEY       = "api/traffic/delays.json"
+      TRAVEL_PROVIDER_SECRET_ARN = aws_secretsmanager_secret.travel_provider.arn
     }
   }
 
