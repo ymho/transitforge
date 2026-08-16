@@ -93,6 +93,17 @@ variable "bedrock_model_id" {
   }
 }
 
+variable "ai_nat_instance_type" {
+  description = "AI Lambdaの固定送信元IPに使うNATインスタンスの種別。"
+  type        = string
+  default     = "t4g.nano"
+
+  validation {
+    condition     = can(regex("^t4g\\.(nano|micro|small)$", var.ai_nat_instance_type))
+    error_message = "ai_nat_instance_typeにはt4g.nano t4g.micro t4g.smallのいずれかを指定してください。"
+  }
+}
+
 variable "github_repository" {
   description = "GitHub Actions OIDCでAWSへのデプロイを許可するowner/repository。"
   type        = string

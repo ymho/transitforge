@@ -7,6 +7,7 @@
 - 非公開S3とCloudFront
 - Cloudflare AOPで保護する独自ドメイン配信
 - AI駅員のLambda Function URLとBedrock権限
+- 旅行提供者へ固定IPで接続するAI LambdaのNATインスタンスとElastic IP
 - 混雑と遅延の収集Lambda EventBridge Scheduler S3 DynamoDB
 - GitHub Actions用OIDCロール
 - data-builderデプロイ用OIDCロール
@@ -108,6 +109,7 @@ mainでは確認成功後にOIDCの一時認証情報でTerraformをapplyし 静
 - 外部データはブラウザから直接ポーリングしない
 - 生履歴は非公開S3 分析索引はDynamoDBへ保存
 - AIへ全履歴を渡さず Lambdaで決定的に集計
+- 旅行提供者のAPIキーはバックエンドだけへ置き `ai_provider_egress_ip_address`だけを許可リストへ登録
 - 現在地の座標をAWSへ送信しない
 - 固定AWSアクセスキーを使わない
 
