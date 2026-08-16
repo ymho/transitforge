@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from journey_delay_prediction import estimate_trip_delays
+from journey_operations import delay_info, operation_for, service_destination
 from journey_constraints import (
     eligible_service_ids,
     required_requirement_mask,
@@ -104,10 +105,10 @@ def search_index(
         dict(edges_by_trip),
         operations,
         request["departureTimeMinutes"],
-        _operation_for,
+        operation_for,
     )
     trip_delay_info = {
-        trip_id: _delay_info_for_trip(
+        trip_id: delay_info(
             trip_id, trip, delays, operations, delay_predictions
         )
         for trip_id, trip in trips.items()
@@ -501,14 +502,7 @@ def _journey_from_label(
     for connection in connections:
         trip_id = connection["trip_id"]
         trip = trips.get(trip_id, {})
-        operation = _operation_for(trip, operations) if operations is not None else None
-        service_destination = (
-            operation.get("destination")
-            if operation is not None
-            and "osakaloop" not in operation.get("sources", [])
-            and operation.get("destination")
-            else trip.get("destination_station")
-        )
+        resolved_destination = service_destination(trip, operations)
         if legs and legs[-1]["serviceUid"] == trip_id:
             previous_stop = legs[-1]["stops"][-1]
             previous_stop["departureTimeMinutes"] = connection["expectedDeparture"]
@@ -525,7 +519,7 @@ def _journey_from_label(
             "trainNumber": str(trip.get("train_no") or ""),
             "serviceType": str(trip.get("service_type") or ""),
             "trainName": str(trip.get("train_name") or ""),
-            "serviceDestination": str(service_destination or ""),
+            "serviceDestination": resolved_destination,
             "originStation": connection["from_station"],
             "destinationStation": connection["to_station"],
             "departureTimeMinutes": connection["expectedDeparture"],
@@ -596,7 +590,7 @@ def _realtime_trip_policies(
     for trip_id, trip in trips.items():
         if not isinstance(trip_id, str) or not isinstance(trip, dict):
             continue
-        operation = _operation_for(trip, operations)
+        operation = operation_for(trip, operations)
         bound = bounds.get(trip_id)
         if operation is None:
             if bound and bound[0] <= realtime_route_time <= bound[1]:
@@ -610,50 +604,6 @@ def _realtime_trip_policies(
             cutoff = destination_sequences.get((trip_id, destination))
             policies[trip_id] = cutoff if cutoff is not None else "unavailable"
     return policies
-
-
-def _operation_for(
-    trip: dict[str, Any], operations: dict[str, dict[str, Any]]
-) -> dict[str, Any] | None:
-    train_number = str(trip.get("train_no") or "")
-    operation = operations.get(train_number)
-    if operation is not None:
-        return operation
-    if "関空快速" in str(trip.get("service_type") or "") and train_number.endswith("M"):
-        alias = operations.get(train_number[:-1])
-        if alias is not None and "osakaloop" in alias.get("sources", []):
-            return alias
-    return None
-
-
-def _delay_for_trip(
-    trip: dict[str, Any],
-    delays: dict[str, Decimal],
-    operations: dict[str, dict[str, Any]] | None,
-) -> float:
-    if operations is not None:
-        operation = _operation_for(trip, operations)
-        if operation is not None:
-            return float(operation["delayMinutes"])
-    delay = delays.get(str(trip.get("train_no") or ""), Decimal(0))
-    return float(max(Decimal(0), delay))
-
-
-def _delay_info_for_trip(
-    trip_id: str,
-    trip: dict[str, Any],
-    delays: dict[str, Decimal],
-    operations: dict[str, dict[str, Any]] | None,
-    predictions: dict[str, dict[str, Any]],
-) -> dict[str, Any]:
-    predicted = predictions.get(trip_id)
-    if predicted is not None:
-        return predicted
-    delay = _delay_for_trip(trip, delays, operations)
-    return {
-        "delayMinutes": delay,
-        **({"delayStatus": "observed"} if delay > 0 else {}),
-    }
 
 
 def _paced_transfer_minutes(
