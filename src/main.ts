@@ -26,6 +26,7 @@ import {
   invokeBedrockAgent,
   queryDailyCongestionAnalysis,
   queryTrainDelayAnalysis,
+  searchAccommodations,
   searchRepresentativeTimetable,
   searchTravelCandidates,
 } from "./data/bedrock-agent";
@@ -117,12 +118,14 @@ import { configureTrainSelection } from "./presentation/train-selection-controll
 import { createLoadingScreen } from "./presentation/loading-screen";
 import { MapboxThreeTrainLayer } from "./rendering/mapbox-three-train-layer";
 import { RuntimeMetrics } from "./observability/runtime-metrics";
+import { configureTravelProfile } from "./presentation/travel-profile-panel";
 
 const minimumPlaybackRenderIntervalMilliseconds = 1_000 / 30;
 const metricsLogIntervalMilliseconds = 10_000;
 let nextMetricsLogTimestamp = 0;
 
 const token = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+configureTravelProfile(document);
 const app = document.querySelector<HTMLElement>("#app");
 const loadingScreenElement =
   document.querySelector<HTMLElement>("#loading-screen");
@@ -1087,6 +1090,7 @@ if (!token) {
                   ),
                 searchRepresentativeTimetable,
                 searchDirectRoutes: backendSearchRoutes,
+                searchAccommodations,
                 getJourneySearchPreferences: () => preferences,
                 getPreviousJourneyPlan: () => previousJourneyPlan,
                 getPendingJourneyGuidance: () => pendingJourneyGuidance,

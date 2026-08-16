@@ -16,6 +16,7 @@ ALLOWED_TOOL_NAMES = {
     "search_train_arrivals",
     "search_representative_timetable",
     "query_train_delay_analysis",
+    "search_accommodations",
     "focus_train",
     "set_weather",
     "set_layer_visibility",

@@ -89,6 +89,13 @@ export interface BedrockViewerAgentDependencies {
     requiredTrainNumbers?: string[];
     allowedServiceTypes?: string[];
   }) => Promise<DirectRouteSearchResponse>;
+  searchAccommodations?: (request: {
+    destination: string;
+    checkInDate: string;
+    checkOutDate: string;
+    adults?: number;
+    limit?: number;
+  }) => Promise<unknown>;
   getCurrentDate?: () => Date;
   getJourneySearchPreferences?: () => JourneySearchPreferences;
   getPreviousJourneyPlan?: () => ViewerAgentJourneyPlan | undefined;
@@ -581,6 +588,26 @@ async function executeTool(
       throw new Error("列車遅延の日付が不正です。");
     }
     return dependencies.queryTrainDelayAnalysis(serviceDate);
+  }
+
+  if (name === "search_accommodations") {
+    const { destination, checkInDate, checkOutDate } = input;
+    if (
+      typeof destination !== "string" || destination.trim().length === 0 ||
+      typeof checkInDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(checkInDate) ||
+      typeof checkOutDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(checkOutDate) ||
+      !dependencies.searchAccommodations
+    ) {
+      throw new Error("宿泊候補の検索条件が不正です。");
+    }
+    const requestedLimit = typeof input.limit === "number" && Number.isInteger(input.limit)
+      ? input.limit : 3;
+    const adults = typeof input.adults === "number" && Number.isInteger(input.adults)
+      ? input.adults : 1;
+    return dependencies.searchAccommodations({
+      destination: destination.trim(), checkInDate, checkOutDate,
+      adults: Math.max(1, Math.min(10, adults)), limit: Math.max(1, Math.min(5, requestedLimit)),
+    });
   }
 
   if (name === "search_representative_timetable") {

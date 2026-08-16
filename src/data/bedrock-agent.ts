@@ -1,6 +1,7 @@
 import type {
   BedrockAgentMessage,
   BedrockAgentResponse,
+  AccommodationSearchResponse,
   DailyCongestionAnalysisResponse,
   DailyCongestionPeakResponse,
   RepresentativeTimetableKind,
@@ -11,6 +12,7 @@ import type {
 } from "./bedrock-agent-contract";
 import {
   isBedrockAgentResponse,
+  isAccommodationSearchResponse,
   isDailyCongestionAnalysisResponse,
   isDailyCongestionPeakResponse,
   isRepresentativeTimetableSearchResponse,
@@ -38,6 +40,20 @@ export async function queryDailyCongestionAnalysis(serviceDate: string, fetcher:
 
 export async function queryTrainDelayAnalysis(serviceDate: string, fetcher: typeof fetch = fetch): Promise<TrainDelayAnalysisResponse> {
   return postAgent({ operation: "train_delay_analysis", serviceDate }, "列車遅延分析を取得できません", "列車遅延分析", isTrainDelayAnalysisResponse, fetcher);
+}
+
+export async function searchAccommodations(
+  request: { destination: string; checkInDate: string; checkOutDate: string; adults?: number; limit?: number },
+  fetcher: typeof fetch = fetch,
+): Promise<AccommodationSearchResponse> {
+  return postAgent(
+    { operation: "travel_accommodation_search", ...request },
+    "宿泊候補を検索できません",
+    "宿泊候補",
+    isAccommodationSearchResponse,
+    fetcher,
+    true,
+  );
 }
 
 export async function searchRepresentativeTimetable(
