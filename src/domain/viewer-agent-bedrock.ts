@@ -100,6 +100,7 @@ export interface BedrockViewerAgentDependencies {
   getJourneySearchPreferences?: () => JourneySearchPreferences;
   getPreviousJourneyPlan?: () => ViewerAgentJourneyPlan | undefined;
   getPendingJourneyGuidance?: () => JourneyNavigationGuidance | undefined;
+  conciergeInstruction?: string;
   maximumRouteTime: number;
 }
 
@@ -182,6 +183,9 @@ export async function runBedrockViewerAgent(
       content: [
         {
           text:
+            (dependencies.conciergeInstruction === undefined
+              ? ""
+              : `コンシェルジュの会話方針:\n${dependencies.conciergeInstruction}\n\n`) +
             `利用者の依頼: ${prompt}\n` +
             `現在の表示時刻（0時からの分数）: ${dependencies.getRouteTime()}\n` +
             `今日の実日付（日本時間）: ${currentCalendarDateInJapan(currentDate(dependencies))}\n` +

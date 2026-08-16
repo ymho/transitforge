@@ -1,4 +1,5 @@
 export const travelProfileStorageKey = "transitforge.travel-profile.v2";
+export const travelProfileChangedEvent = "transitforge:travel-profile-changed";
 
 export type TravelCompanion = "solo" | "partner" | "friends" | "children" | "family";
 export type ChildAgeGroup = "baby" | "preschool" | "elementary" | "teen";

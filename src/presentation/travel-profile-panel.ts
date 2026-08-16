@@ -1,4 +1,4 @@
-import { deleteUserProfile, loadUserProfile, saveUserProfile, travelPreferenceLabels, travelStyleSummary, type ChildAgeGroup, type TravelCompanion, type TravelPreference, type UserProfile } from "../domain/travel-profile";
+import { deleteUserProfile, loadUserProfile, saveUserProfile, travelPreferenceLabels, travelProfileChangedEvent, travelStyleSummary, type ChildAgeGroup, type TravelCompanion, type TravelPreference, type UserProfile } from "../domain/travel-profile";
 
 const companionOptions: Array<[TravelCompanion, string]> = [["solo", "一人"], ["partner", "パートナー"], ["friends", "友人"], ["children", "子どもと一緒"], ["family", "家族"]];
 const ageGroups: Array<[ChildAgeGroup, string]> = [["baby", "0〜2歳"], ["preschool", "3〜5歳"], ["elementary", "小学生"], ["teen", "中学生以上"]];
@@ -14,11 +14,13 @@ export function configureTravelProfile(document: Document): void {
   const dialog = document.querySelector<HTMLDialogElement>("#travel-profile-dialog");
   const toggle = document.querySelector<HTMLButtonElement>("#travel-profile-toggle");
   if (!dialog || !toggle) return;
-  let step = 0;
+  let step = -1;
   let complete = false;
   let draft = createDraft(loadUserProfile(localStorage));
   const render = () => {
-    dialog.innerHTML = complete ? completion(draft) : onboarding(draft, step);
+    dialog.innerHTML = complete
+      ? completion(draft)
+      : step < 0 ? introduction() : onboarding(draft, step);
     bind();
   };
   const update = () => {
@@ -27,19 +29,29 @@ export function configureTravelProfile(document: Document): void {
   };
   const bind = () => {
     dialog.querySelector<HTMLButtonElement>("[data-close]")?.addEventListener("click", () => dialog.close());
+    dialog.querySelector<HTMLButtonElement>("[data-begin]")?.addEventListener("click", () => { step = 0; render(); });
     dialog.querySelector<HTMLButtonElement>("[data-back]")?.addEventListener("click", () => { update(); step -= 1; render(); });
     dialog.querySelector<HTMLButtonElement>("[data-edit]")?.addEventListener("click", () => { complete = false; step = 0; render(); });
-    dialog.querySelector<HTMLButtonElement>("[data-delete]")?.addEventListener("click", () => { deleteUserProfile(localStorage); draft = createDraft(); complete = false; step = 0; render(); });
+    dialog.querySelector<HTMLButtonElement>("[data-delete]")?.addEventListener("click", () => { deleteUserProfile(localStorage); document.dispatchEvent(new Event(travelProfileChangedEvent)); draft = createDraft(); complete = false; step = -1; render(); });
     dialog.querySelector<HTMLButtonElement>("[data-start]")?.addEventListener("click", () => dialog.close());
     dialog.querySelector("[name=companions]")?.addEventListener("change", () => { update(); render(); });
     dialog.querySelector<HTMLFormElement>("form")?.addEventListener("submit", event => {
       event.preventDefault(); update();
       if (step < 6) { step += 1; render(); return; }
-      saveUserProfile(localStorage, draft); complete = true; render();
+      saveUserProfile(localStorage, draft); document.dispatchEvent(new Event(travelProfileChangedEvent)); complete = true; render();
     });
   };
   toggle.addEventListener("click", () => { draft = createDraft(loadUserProfile(localStorage)); complete = true; render(); dialog.showModal(); });
   if (!loadUserProfile(localStorage)) { render(); dialog.showModal(); }
+}
+
+export function profileIntroductionGreeting(date = new Date()): string {
+  const hour = date.getHours();
+  return hour >= 18 || hour < 5 ? "こんばんは" : "こんにちは";
+}
+
+function introduction(): string {
+  return '<section class="travel-profile-introduction"><button type="button" class="travel-profile-dismiss" data-close aria-label="閉じる">×</button><span class="travel-complete-icon" aria-hidden="true">✦</span><p class="travel-onboarding-eyebrow">あなたの旅を知る</p><h2>' + profileIntroductionGreeting() + '</h2><p>これからいくつか質問します。あなたに合う旅の楽しみ方を見つけて、コンシェルジュが旅行プランをご案内します。</p><button type="button" class="travel-profile-next" data-begin>はじめる</button><small>入力内容はこの端末にだけ保存されます</small></section>';
 }
 
 function onboarding(draft: Draft, step: number): string {

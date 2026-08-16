@@ -119,13 +119,18 @@ import { createLoadingScreen } from "./presentation/loading-screen";
 import { MapboxThreeTrainLayer } from "./rendering/mapbox-three-train-layer";
 import { RuntimeMetrics } from "./observability/runtime-metrics";
 import { configureTravelProfile } from "./presentation/travel-profile-panel";
+import {
+  buildConciergePrompt,
+  selectConciergeForUserProfile,
+} from "./features/concierge";
+import { loadUserProfile, travelProfileChangedEvent } from "./domain/travel-profile";
+import { renderConciergeIdentity } from "./presentation/concierge-identity";
 
 const minimumPlaybackRenderIntervalMilliseconds = 1_000 / 30;
 const metricsLogIntervalMilliseconds = 10_000;
 let nextMetricsLogTimestamp = 0;
 
 const token = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
-configureTravelProfile(document);
 const app = document.querySelector<HTMLElement>("#app");
 const loadingScreenElement =
   document.querySelector<HTMLElement>("#loading-screen");
@@ -176,6 +181,12 @@ const aiGuideInput =
   document.querySelector<HTMLInputElement>("#ai-guide-input");
 const aiGuideSubmit =
   document.querySelector<HTMLButtonElement>("#ai-guide-submit");
+const conciergeAvatar =
+  document.querySelector<HTMLImageElement>("#concierge-avatar");
+const conciergeName =
+  document.querySelector<HTMLElement>("#concierge-name");
+const conciergeRole =
+  document.querySelector<HTMLElement>("#concierge-role");
 const aiGuideSuggestions = Array.from(
   document.querySelectorAll<HTMLButtonElement>("[data-prompt]"),
 );
@@ -226,6 +237,9 @@ if (
   aiGuideForm === null ||
   aiGuideInput === null ||
   aiGuideSubmit === null ||
+  conciergeAvatar === null ||
+  conciergeName === null ||
+  conciergeRole === null ||
   aiGuideSuggestions.length === 0 ||
   journeySettingsToggle === null ||
   journeySettingsPanel === null ||
@@ -253,6 +267,24 @@ loadingScreenRetry.addEventListener("click", () => window.location.reload());
 let handleAiGuidePrompt: AiGuidePromptHandler = async () =>
   "列車データを読み込んでいます。準備が整ってからもう一度お試しください。";
 let findJourneyLegAlternatives: JourneyLegAlternativeSearch = async () => [];
+let activeConcierge = selectConciergeForUserProfile(loadUserProfile(localStorage));
+const updateConciergeIdentity = (resetGreeting = false) => {
+  activeConcierge = selectConciergeForUserProfile(loadUserProfile(localStorage));
+  renderConciergeIdentity(
+    {
+      avatar: conciergeAvatar,
+      name: conciergeName,
+      role: conciergeRole,
+      messages: aiGuideMessages,
+    },
+    activeConcierge,
+    resetGreeting,
+  );
+};
+updateConciergeIdentity(true);
+document.addEventListener(travelProfileChangedEvent, () =>
+  updateConciergeIdentity(true));
+configureTravelProfile(document);
 configureAiGuidePanel(
   {
     panel: aiGuidePanel,
@@ -1094,6 +1126,7 @@ if (!token) {
                 getJourneySearchPreferences: () => preferences,
                 getPreviousJourneyPlan: () => previousJourneyPlan,
                 getPendingJourneyGuidance: () => pendingJourneyGuidance,
+                conciergeInstruction: buildConciergePrompt(activeConcierge),
                 maximumRouteTime,
               },
               invokeBedrockAgent,
