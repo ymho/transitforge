@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Callable
+import time
 
 import journey_search
 import representative_timetable
@@ -51,6 +52,8 @@ def dispatch(
     dynamodb_client: Callable[[], Any],
     secrets_manager_client: Callable[[], Any] | None = None,
     http_opener: Callable[..., Any] | None = None,
+    request_id: str | None = None,
+    log_event: Callable[..., None] | None = None,
 ) -> dict[str, Any] | None:
     operation = value.get("operation")
     if operation == "representative_timetable_search":
@@ -82,11 +85,15 @@ def dispatch(
             raise RequestError(503, "宿泊提供者の設定を読み取れません。")
         try:
             request = travel_search_request.provider_search_from(value)
+            started = time.perf_counter()
             credentials = travel_provider_credentials.load_travel_provider_credentials(
                 config.travel_provider_secret_arn, secrets_manager_client()
             )
+            if log_event and request_id:
+                log_event("travel_provider_credentials_loaded", request_id, durationMs=round((time.perf_counter() - started) * 1000))
             offerings = travel_provider_accommodation.search_accommodations(
-                request, credentials, opener=http_opener or travel_provider_accommodation.urlopen
+                request, credentials, opener=http_opener or travel_provider_accommodation.urlopen,
+                request_id=request_id, log_event=log_event,
             )
             return {"accommodations": [offering.as_response() for offering in offerings]}
         except ValueError as error:

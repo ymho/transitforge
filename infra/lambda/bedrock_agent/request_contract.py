@@ -29,13 +29,20 @@ class RequestError(ValueError):
         self.status_code = status_code
 
 
-def response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
+def response(
+    status_code: int,
+    body: dict[str, Any],
+    request_id: str | None = None,
+) -> dict[str, Any]:
+    headers = {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "no-store",
+    }
+    if request_id:
+        headers["x-transitforge-request-id"] = request_id
     return {
         "statusCode": status_code,
-        "headers": {
-            "content-type": "application/json; charset=utf-8",
-            "cache-control": "no-store",
-        },
+        "headers": headers,
         "body": json.dumps(body, ensure_ascii=False, separators=(",", ":")),
     }
 

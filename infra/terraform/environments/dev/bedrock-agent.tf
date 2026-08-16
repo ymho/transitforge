@@ -94,7 +94,7 @@ resource "aws_lambda_function" "bedrock_agent" {
   source_code_hash = data.archive_file.bedrock_agent.output_base64sha256
 
   memory_size = 512
-  timeout     = 30
+  timeout     = 60
 
   vpc_config {
     subnet_ids         = [aws_subnet.ai_egress_private.id]
