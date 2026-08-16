@@ -71,6 +71,11 @@ resource "aws_iam_role_policy" "bedrock_agent" {
   policy = data.aws_iam_policy_document.bedrock_agent.json
 }
 
+resource "aws_iam_role_policy_attachment" "bedrock_agent_vpc_access" {
+  role       = aws_iam_role.bedrock_agent.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
 resource "aws_lambda_function" "bedrock_agent" {
   function_name = local.bedrock_agent_function_name
   description   = "Relay validated TransitForge tool conversations to Amazon Bedrock"
@@ -84,6 +89,11 @@ resource "aws_lambda_function" "bedrock_agent" {
 
   memory_size = 512
   timeout     = 30
+
+  vpc_config {
+    subnet_ids         = [aws_subnet.ai_egress_private.id]
+    security_group_ids = [aws_security_group.ai_lambda.id]
+  }
 
   environment {
     variables = {
@@ -101,6 +111,8 @@ resource "aws_lambda_function" "bedrock_agent" {
   depends_on = [
     aws_cloudwatch_log_group.bedrock_agent,
     aws_iam_role_policy.bedrock_agent,
+    aws_iam_role_policy_attachment.bedrock_agent_vpc_access,
+    aws_eip_association.ai_nat,
   ]
 }
 
