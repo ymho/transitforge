@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  clearLatestAgentRequestId,
   invokeBedrockAgent,
+  lastAgentRequestId,
   queryDailyCongestionAnalysis,
   queryDailyCongestionPeak,
   queryTrainDelayAnalysis,
@@ -12,6 +14,14 @@ import {
 } from "./bedrock-agent";
 
 describe("Bedrock agent client", () => {
+  it("keeps the request ID from an agent response", async () => {
+    clearLatestAgentRequestId();
+    await invokeBedrockAgent([{ role: "user", content: [{ text: "京都に行きたい" }] }], async () => new Response(
+      JSON.stringify({ message: { role: "assistant", content: [{ text: "案内します" }] }, stopReason: "end_turn" }),
+      { status: 200, headers: { "x-transitforge-request-id": "request-123" } },
+    ));
+    expect(lastAgentRequestId()).toBe("request-123");
+  });
   it("sends the payload hash required by a CloudFront Lambda origin", async () => {
     const bedrockResponse: BedrockAgentResponse = {
       message: {

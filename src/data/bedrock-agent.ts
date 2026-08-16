@@ -26,6 +26,29 @@ import type {
 
 export type * from "./bedrock-agent-contract";
 
+let latestAgentRequestId: string | undefined;
+
+export function clearLatestAgentRequestId(): void {
+  latestAgentRequestId = undefined;
+}
+
+export function lastAgentRequestId(): string | undefined {
+  return latestAgentRequestId;
+}
+
+export async function submitConversationFeedback(
+  feedback: { rating: "good" | "bad"; conversation: Array<{ role: "user" | "assistant"; text: string }>; requestIds: string[] },
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
+  const body = JSON.stringify({ operation: "conversation_feedback", ...feedback });
+  const response = await fetcher("/api/agent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Amz-Content-Sha256": await sha256Hex(body) },
+    body,
+  });
+  if (!response.ok) throw new Error("フィードバックを保存できませんでした。");
+}
+
 export async function invokeBedrockAgent(messages: BedrockAgentMessage[], fetcher: typeof fetch = fetch): Promise<BedrockAgentResponse> {
   return postAgent({ messages }, "AI案内APIを利用できません", "AI案内", isBedrockAgentResponse, fetcher, true);
 }
@@ -144,6 +167,7 @@ async function postAgent<T>(
   if (!response.ok) {
     throw new Error(`${unavailableMessage} (${response.status})。`);
   }
+  latestAgentRequestId = response.headers.get("x-transitforge-request-id") ?? undefined;
   const value: unknown = await response.json();
   if (!validate(value)) {
     throw new Error(`${label}APIから不正な応答を受信しました。`);
