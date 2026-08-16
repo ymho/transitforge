@@ -45,7 +45,10 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   private camera?: THREE.Camera;
   private scene?: THREE.Scene;
   private renderer?: THREE.WebGLRenderer;
-  private trains?: THREE.InstancedMesh<THREE.BoxGeometry, THREE.MeshLambertMaterial>;
+  private trains?: THREE.InstancedMesh<
+    THREE.BoxGeometry,
+    THREE.MeshPhysicalMaterial
+  >;
   private delayHalos?: THREE.InstancedMesh<
     THREE.SphereGeometry,
     THREE.MeshBasicMaterial
@@ -97,8 +100,8 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.camera = new THREE.Camera();
     this.scene = new THREE.Scene();
 
-    const ambient = new THREE.AmbientLight(0xffffff, 1.8);
-    const directional = new THREE.DirectionalLight(0xffe2a5, 2.4);
+    const ambient = new THREE.AmbientLight(0xeaf5ff, 2.1);
+    const directional = new THREE.DirectionalLight(0xd7ecff, 2.7);
     directional.position.set(0, -1, 1).normalize();
     this.scene.add(ambient, directional);
 
@@ -107,9 +110,17 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
       vehicleWidthMeters,
       vehicleHeightMeters,
     );
-    const material = new THREE.MeshLambertMaterial({
-      // インスタンスカラーは基本色と乗算されるため、白を使ってラインカラーを保つ。
+    const material = new THREE.MeshPhysicalMaterial({
+      // インスタンスカラーは基本色と乗算されるため、白を使って路線色を保つ。
+      // 高いクリアコートと低い粗さで、周囲の地図光を拾うガラスの車体にする。
       color: 0xffffff,
+      roughness: 0.2,
+      metalness: 0.08,
+      clearcoat: 1,
+      clearcoatRoughness: 0.12,
+      transparent: true,
+      opacity: 0.84,
+      depthWrite: true,
     });
     this.trains = new THREE.InstancedMesh(geometry, material, maximumTrainInstances);
     // インスタンス行列は常に正のスケールだけを使用する。
@@ -157,7 +168,11 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
         congestionBarWidthMeters,
         1,
       ),
-      new THREE.MeshBasicMaterial({ color: 0xffffff }),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.68,
+      }),
       maximumTrainInstances,
     );
     this.congestionBars.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
