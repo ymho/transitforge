@@ -96,7 +96,8 @@ variable "bedrock_model_id" {
 variable "ai_nat_instance_type" {
   description = "AI Lambdaの固定送信元IPに使うNATインスタンスの種別。"
   type        = string
-  default     = "t4g.nano"
+  # 初回起動でNATルール用パッケージを安全に導入できるメモリを確保する
+  default = "t4g.micro"
 
   validation {
     condition     = can(regex("^t4g\\.(nano|micro|small)$", var.ai_nat_instance_type))
