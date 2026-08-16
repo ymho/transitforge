@@ -121,11 +121,15 @@ describe("journey navigation intent", () => {
     });
   });
 
-  it("recognizes wishes that need future data sources", () => {
+  it("recognizes fare and seat wishes that are outside the search scope", () => {
     expect(unsupportedJourneyExperienceFromPrompt("できるだけ安く行きたい"))
       .toBe("fare");
-    expect(unsupportedJourneyExperienceFromPrompt("途中で泊まれる宿を探して"))
-      .toBe("lodging");
+    expect(unsupportedJourneyExperienceFromPrompt("指定席に座りたい"))
+      .toBe("seat");
+    expect(unsupportedJourneyExperienceFromPrompt("明日出雲で1泊したい"))
+      .toBeUndefined();
+    expect(unsupportedJourneyExperienceFromPrompt("観光もしたい"))
+      .toBeUndefined();
   });
 });
 

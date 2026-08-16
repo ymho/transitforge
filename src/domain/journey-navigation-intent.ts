@@ -19,9 +19,7 @@ export interface JourneyNavigationGuidance {
 
 export type UnsupportedJourneyExperience =
   | "fare"
-  | "seat"
-  | "scenery"
-  | "lodging";
+  | "seat";
 
 const defaultGuidance: JourneyNavigationGuidance = {
   excludedServiceTypes: [],
@@ -246,8 +244,6 @@ export function unsupportedJourneyExperienceFromPrompt(
   const normalized = normalize(prompt);
   if (/安く|最安|運賃|料金/u.test(normalized)) return "fare";
   if (/指定席|自由席|グリーン車|座席/u.test(normalized)) return "seat";
-  if (/景色|眺め|観光|寄り道/u.test(normalized)) return "scenery";
-  if (/ホテル|宿|泊まり|宿泊/u.test(normalized)) return "lodging";
   return undefined;
 }
 
@@ -257,8 +253,6 @@ export function unsupportedJourneyExperienceResponse(
   const unavailable = {
     fare: "運賃と料金の比較",
     seat: "座席設備と空席の比較",
-    scenery: "景色や観光地を含む比較",
-    lodging: "宿泊施設を含む旅行計画",
   }[experience];
   return `${unavailable}はまだ検索条件へ反映できません。現在は乗りたい列車や種別 鈍行限定 乗換回数 出発時刻と到着時刻を指定できます。`;
 }
