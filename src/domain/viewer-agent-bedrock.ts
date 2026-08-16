@@ -22,6 +22,7 @@ import { operatingDayRouteTime } from "./playback";
 import type { TrainPosition } from "./train-position";
 import type {
   ViewerAgentJourneyPlan,
+  ViewerAgentTravelPlan,
   ViewerAgentResponse,
 } from "./viewer-agent-response";
 import { journeyChatFollowUpIntent } from "./journey-chat-follow-up";
@@ -159,6 +160,10 @@ interface DirectRouteToolState {
   };
 }
 
+interface TravelToolState {
+  response?: ViewerAgentTravelPlan;
+}
+
 export async function runBedrockViewerAgent(
   prompt: string,
   dependencies: BedrockViewerAgentDependencies,
@@ -198,6 +203,7 @@ export async function runBedrockViewerAgent(
   const searchableServiceUids = new Set<string>();
   const directRouteServiceUids = new Set<string>();
   const toolState: DirectRouteToolState = { searched: false };
+  const travelState: TravelToolState = {};
 
   for (let round = 0; round < maximumToolRounds; round += 1) {
     const response = await converse(messages);
@@ -228,6 +234,7 @@ export async function runBedrockViewerAgent(
           searchableServiceUids,
           directRouteServiceUids,
           toolState,
+          travelState,
         );
         toolResults.push({
           toolResult: {
@@ -259,6 +266,10 @@ export async function runBedrockViewerAgent(
 
     // 経路候補と表示文は検索ツールの構造化結果だけから確定できる。
     // モデルへ再送すると不要な画面操作を繰り返す場合があるためここで終了する。
+    const travelResponse = travelResponseText(travelState);
+    if (travelResponse !== undefined) {
+      return travelResponse;
+    }
     const directRouteResponse = directRouteResponseText(toolState);
     if (directRouteResponse !== undefined) {
       return directRouteResponse;
@@ -306,6 +317,7 @@ async function executeTool(
   searchableServiceUids: Set<string>,
   directRouteServiceUids: Set<string>,
   toolState: DirectRouteToolState,
+  travelState: TravelToolState,
 ): Promise<unknown> {
   if (name === "set_display_time") {
     const requestedTime = input.routeTimeMinutes;
@@ -609,10 +621,53 @@ async function executeTool(
       ? input.limit : 3;
     const adults = typeof input.adults === "number" && Number.isInteger(input.adults)
       ? input.adults : 1;
-    return dependencies.searchAccommodations({
+    const accommodations = await dependencies.searchAccommodations({
       destination: destination.trim(), checkInDate, checkOutDate,
       adults: Math.max(1, Math.min(10, adults)), limit: Math.max(1, Math.min(5, requestedLimit)),
     });
+    if (isStayTravelRequest(originalPrompt) && dependencies.searchDirectRoutes) {
+      const destinationStation = stationForTravelDestination(destination, dependencies.trains);
+      if (destinationStation) {
+        const preferences = dependencies.getJourneySearchPreferences?.() ??
+          defaultJourneySearchPreferences;
+        const outboundResult = await dependencies.searchDirectRoutes({
+          destinationStation,
+          departureTimeMinutes: 8 * 60,
+          departureDate: checkInDate,
+          serviceDate: checkInDate,
+          ...preferences,
+        });
+        const outbound = journeyPlanFromSearchResponse(outboundResult, {
+          destinationStation,
+          departureDate: checkInDate,
+          searchTimeMinutes: 8 * 60,
+          preferences,
+        });
+        const returningResult = await dependencies.searchDirectRoutes({
+          originStation: destinationStation,
+          destinationStation: outbound.originStation,
+          departureTimeMinutes: 10 * 60,
+          departureDate: checkOutDate,
+          serviceDate: checkOutDate,
+          ...preferences,
+        });
+        travelState.response = {
+          destination: destination.trim(),
+          checkInDate,
+          checkOutDate,
+          outbound,
+          returning: journeyPlanFromSearchResponse(returningResult, {
+            originStation: destinationStation,
+            destinationStation: outbound.originStation,
+            departureDate: checkOutDate,
+            searchTimeMinutes: 10 * 60,
+            preferences,
+          }),
+          accommodations: accommodationValues(accommodations),
+        };
+      }
+    }
+    return accommodations;
   }
 
   if (name === "search_representative_timetable") {
@@ -701,6 +756,84 @@ export function currentServiceDateInJapan(now = new Date()): string {
   }).formatToParts(operatingDayNow);
   const byType = new Map(parts.map((part) => [part.type, part.value]));
   return `${byType.get("year")}-${byType.get("month")}-${byType.get("day")}`;
+}
+
+function travelResponseText(
+  state: TravelToolState,
+): ViewerAgentResponse | undefined {
+  const plan = state.response;
+  if (!plan) return undefined;
+  return {
+    text: `${formatCalendarDate(plan.checkInDate)}から${formatCalendarDate(plan.checkOutDate)}までの${plan.destination}旅行です。行きと帰りの経路、宿泊候補をまとめました。`,
+    travelPlan: plan,
+  };
+}
+
+function isStayTravelRequest(prompt: string): boolean {
+  const normalized = prompt.normalize("NFKC").replace(/\s+/gu, "");
+  return /(?:旅行|観光|\d+泊|泊まり|宿泊)/u.test(normalized);
+}
+
+function stationForTravelDestination(
+  destination: string,
+  trains: Train[],
+): string | undefined {
+  const normalizedDestination = normalizeStationPrompt(destination);
+  const stations = new Set(trains.flatMap((train) => [
+    train.origin_station,
+    train.destination_station,
+    ...train.stops.flatMap((stop) => stop.station_name ? [stop.station_name] : []),
+  ]).map((station) => station.replace(/駅$/u, "")));
+  return [...stations].find((station) =>
+    normalizeStationPrompt(station) === normalizedDestination,
+  ) ?? [...stations].find((station) =>
+    normalizeStationPrompt(station).startsWith(normalizedDestination),
+  );
+}
+
+function journeyPlanFromSearchResponse(
+  response: DirectRouteSearchResponse,
+  fallback: {
+    originStation?: string;
+    destinationStation: string;
+    departureDate: string;
+    searchTimeMinutes: number;
+    preferences: JourneySearchPreferences;
+  },
+): ViewerAgentJourneyPlan {
+  return {
+    departureDate: response.departureDate ?? fallback.departureDate,
+    ...(response.serviceDate ? { serviceDate: response.serviceDate } : {}),
+    originStation: response.originStation ?? fallback.originStation ?? "現在地近くの駅",
+    destinationStation: fallback.destinationStation,
+    transferPace: response.transferPace ?? fallback.preferences.transferPace,
+    rankingPreference: response.rankingPreference ?? fallback.preferences.rankingPreference,
+    maxTransfers: response.maxTransfers ?? fallback.preferences.maxTransfers,
+    searchTimeMinutes: fallback.searchTimeMinutes,
+    journeys: journeysFromSearchResponse(response),
+  };
+}
+
+function accommodationValues(value: unknown): ViewerAgentTravelPlan["accommodations"] {
+  if (!value || typeof value !== "object" || !("accommodations" in value) ||
+    !Array.isArray(value.accommodations)) return [];
+  return value.accommodations.flatMap((accommodation) => {
+    if (!accommodation || typeof accommodation !== "object" ||
+      typeof accommodation.name !== "string" ||
+      typeof accommodation.checkInDate !== "string" ||
+      typeof accommodation.checkOutDate !== "string") return [];
+    return [{
+      name: accommodation.name,
+      checkInDate: accommodation.checkInDate,
+      checkOutDate: accommodation.checkOutDate,
+      ...(typeof accommodation.bookingUrl === "string"
+        ? { bookingUrl: accommodation.bookingUrl }
+        : {}),
+      ...(typeof accommodation.areaName === "string"
+        ? { areaName: accommodation.areaName }
+        : {}),
+    }];
+  });
 }
 
 function directRouteResponseText(

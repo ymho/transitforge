@@ -9,6 +9,7 @@ import {
 } from "../domain/journey-search-preferences";
 import type {
   ViewerAgentJourneyPlan,
+  ViewerAgentTravelPlan,
   ViewerAgentResponse,
 } from "../domain/viewer-agent-response";
 import { hideSheet, showSheet } from "./sheet-transition";
@@ -185,7 +186,14 @@ function resolveAssistantMessage(
   item.classList.remove("ai-guide-message-pending");
   item.removeAttribute("aria-label");
   if (typeof response === "string") {
-    item.textContent = visibleAssistantText(response);
+    item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response)));
+  } else if ("travelPlan" in response) {
+    item.classList.add("ai-guide-message-journey");
+    item.replaceChildren();
+    const text = document.createElement("p");
+    text.className = "journey-plan-intro";
+    text.textContent = visibleAssistantText(response.text);
+    item.append(text, renderTravelPlan(response.travelPlan));
   } else {
     item.classList.add("ai-guide-message-journey");
     item.replaceChildren();
@@ -195,6 +203,71 @@ function resolveAssistantMessage(
     item.append(text, renderJourneyPlan(response.journeyPlan));
   }
   item.scrollIntoView({ block: "nearest" });
+}
+
+function renderTravelPlan(plan: ViewerAgentTravelPlan): HTMLElement {
+  const container = document.createElement("section");
+  container.className = "travel-plan";
+  const itinerary = document.createElement("div");
+  itinerary.className = "travel-plan-itinerary";
+  itinerary.append(
+    travelPlanSection("行き", plan.outbound),
+    travelPlanAccommodationSection(plan),
+    travelPlanSection("帰り", plan.returning),
+  );
+  container.append(itinerary);
+  return container;
+}
+
+function travelPlanSection(label: string, plan: ViewerAgentJourneyPlan): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "travel-plan-section";
+  const heading = document.createElement("h3");
+  heading.textContent = `${label}　${formatCalendarDate(plan.departureDate)}`;
+  section.append(heading);
+  if (plan.journeys.length === 0) {
+    const empty = document.createElement("p");
+    empty.textContent = "条件に合う経路は見つかりませんでした。";
+    section.append(empty);
+  } else {
+    section.append(renderJourneySummary(plan.journeys[0]), renderJourneyTimeline(plan.journeys[0]));
+  }
+  return section;
+}
+
+function travelPlanAccommodationSection(plan: ViewerAgentTravelPlan): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "travel-plan-section travel-plan-accommodations";
+  const heading = document.createElement("h3");
+  heading.textContent = `宿泊　${formatCalendarDate(plan.checkInDate)}から1泊`;
+  section.append(heading);
+  if (plan.accommodations.length === 0) {
+    const empty = document.createElement("p");
+    empty.textContent = "宿泊候補は見つかりませんでした。";
+    section.append(empty);
+    return section;
+  }
+  const list = document.createElement("ul");
+  list.className = "travel-plan-accommodation-list";
+  for (const accommodation of plan.accommodations) {
+    const item = document.createElement("li");
+    const name = document.createElement(accommodation.bookingUrl ? "a" : "strong");
+    name.textContent = accommodation.name;
+    if (name instanceof HTMLAnchorElement && accommodation.bookingUrl) {
+      name.href = accommodation.bookingUrl;
+      name.target = "_blank";
+      name.rel = "noreferrer";
+    }
+    item.append(name);
+    if (accommodation.areaName) {
+      const area = document.createElement("small");
+      area.textContent = accommodation.areaName;
+      item.append(area);
+    }
+    list.append(item);
+  }
+  section.append(list);
+  return section;
 }
 
 function renderJourneyPlan(
@@ -401,6 +474,12 @@ function formatDuration(minutes: number): string {
   return hours > 0 ? `${hours}時間${rounded % 60}分` : `${rounded}分`;
 }
 
+function formatCalendarDate(value: string | undefined): string {
+  if (!value) return "日程未指定";
+  const [, month, day] = /^(?:\d{4})-(\d{2})-(\d{2})$/u.exec(value) ?? [];
+  return month && day ? `${Number(month)}月${Number(day)}日` : value;
+}
+
 function safeLineColor(value: string | undefined): string {
   return value && /^#[0-9a-f]{6}$/iu.test(value) ? value : "#8b96a1";
 }
@@ -471,6 +550,58 @@ export function visibleAssistantText(text: string): string {
     .replace(/<\/?response\b[^>]*>/gi, "")
     .trim();
   return visibleText || "案内を完了しました。";
+}
+
+/** AIのMarkdownは許可した最小限の記法だけDOMへ変換し HTMLとしては解釈しない。 */
+function renderAssistantMarkdown(text: string): DocumentFragment {
+  const fragment = document.createDocumentFragment();
+  const lines = text.split(/\r?\n/u);
+  let list: HTMLUListElement | undefined;
+  const flushList = () => {
+    if (list) fragment.append(list);
+    list = undefined;
+  };
+  for (const line of lines) {
+    const listMatch = /^\s*(?:[-*]|\d+\.)\s+(.+)$/u.exec(line);
+    if (listMatch) {
+      list ??= document.createElement("ul");
+      const item = document.createElement("li");
+      appendInlineMarkdown(item, listMatch[1]);
+      list.append(item);
+      continue;
+    }
+    flushList();
+    if (!line.trim()) continue;
+    const paragraph = document.createElement("p");
+    appendInlineMarkdown(paragraph, line);
+    fragment.append(paragraph);
+  }
+  flushList();
+  return fragment;
+}
+
+function appendInlineMarkdown(target: HTMLElement, value: string): void {
+  const tokens = value.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/gu);
+  for (const token of tokens) {
+    const bold = /^\*\*([^*]+)\*\*$/u.exec(token);
+    if (bold) {
+      const strong = document.createElement("strong");
+      strong.textContent = bold[1];
+      target.append(strong);
+      continue;
+    }
+    const link = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/u.exec(token);
+    if (link) {
+      const anchor = document.createElement("a");
+      anchor.textContent = link[1];
+      anchor.href = link[2];
+      anchor.target = "_blank";
+      anchor.rel = "noreferrer";
+      target.append(anchor);
+      continue;
+    }
+    target.append(document.createTextNode(token));
+  }
 }
 
 function withoutThinking(text: string): string {
