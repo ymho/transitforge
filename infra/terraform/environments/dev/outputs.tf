@@ -44,6 +44,11 @@ output "bedrock_agent_function_name" {
   value       = aws_lambda_function.bedrock_agent.function_name
 }
 
+output "ai_provider_egress_ip_address" {
+  description = "楽天など送信元IP許可制の外部提供者へ登録するAI Lambdaの固定IPv4アドレス。"
+  value       = aws_eip.ai_egress.public_ip
+}
+
 output "github_actions_deploy_role_arn" {
   description = "GitHubのdev environmentからOIDCで引き受けるデプロイロールARN。"
   value       = aws_iam_role.github_deploy.arn
