@@ -49,6 +49,11 @@ output "ai_provider_egress_ip_address" {
   value       = aws_eip.ai_egress.public_ip
 }
 
+output "travel_provider_secret_name" {
+  description = "旅行提供者認証情報を登録するSecrets Managerの名前。値そのものはTerraformで管理しない。"
+  value       = aws_secretsmanager_secret.travel_provider.name
+}
+
 output "github_actions_deploy_role_arn" {
   description = "GitHubのdev environmentからOIDCで引き受けるデプロイロールARN。"
   value       = aws_iam_role.github_deploy.arn
