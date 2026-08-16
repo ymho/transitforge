@@ -140,6 +140,7 @@ resource "aws_instance" "ai_nat" {
 
   user_data = <<-EOT
     #!/bin/bash
+    # Bootstrap profile: ${var.ai_nat_instance_type}
     set -euo pipefail
     dnf install -y iptables-nft
     cat >/usr/local/sbin/transitforge-nat <<'EOF'
