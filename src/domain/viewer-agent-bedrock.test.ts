@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Train } from "../data/train-index";
 import type { TrainPosition } from "./train-position";
-import type { ViewerAgentResponse } from "./viewer-agent-response";
+import type {
+  ViewerAgentResponse,
+  ViewerAgentRichResponse,
+} from "./viewer-agent-response";
 import {
   currentServiceDateInJapan,
   runBedrockViewerAgent,
@@ -1377,10 +1380,66 @@ describe("Bedrock viewer agent", () => {
     expect(rich.journeyPlan.requiredTrainNames).toEqual(["やくも"]);
     expect(converse).not.toHaveBeenCalled();
   });
+
+  it("combines an overnight trip with outbound and return rail routes", async () => {
+    const izumoTrain: Train = {
+      ...train,
+      origin_station: "京都",
+      destination_station: "出雲市",
+      stops: [{ station_name: "出雲市", event: "着", route_time_minutes: 780 }],
+    };
+    const searchDirectRoutes = vi.fn()
+      .mockResolvedValueOnce({ originStation: "京都", serviceDate: "2026-08-17", results: [{
+        train: izumoTrain, originStation: "京都", destinationStation: "出雲市",
+        departureTimeMinutes: 480, arrivalTimeMinutes: 780,
+      }] })
+      .mockResolvedValueOnce({ originStation: "出雲市", serviceDate: "2026-08-18", results: [{
+        train: { ...izumoTrain, origin_station: "出雲市", destination_station: "京都" },
+        originStation: "出雲市", destinationStation: "京都",
+        departureTimeMinutes: 600, arrivalTimeMinutes: 900,
+      }] });
+    const converse = vi.fn().mockResolvedValue({
+      message: { role: "assistant", content: [{ toolUse: {
+        toolUseId: "stay", name: "search_accommodations", input: {
+          destination: "出雲", checkInDate: "2026-08-17", checkOutDate: "2026-08-18",
+        },
+      } }] },
+      stopReason: "tool_use",
+    });
+
+    const result = await runBedrockViewerAgent(
+      "明日、出雲で1泊して観光したい",
+      {
+        trains: [izumoTrain], getPositions: () => [], getRouteTime: () => 1_200,
+        getCurrentDate: () => new Date("2026-08-16T21:00:00+09:00"),
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
+        searchAccommodations: vi.fn(async () => ({ accommodations: [{
+          name: "出雲の宿", checkInDate: "2026-08-17", checkOutDate: "2026-08-18",
+          bookingUrl: "https://example.com/stay",
+        }] })),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(typeof result).not.toBe("string");
+    if (typeof result === "string" || !("travelPlan" in result)) throw new Error("旅行プランがありません。");
+    expect(result.travelPlan.outbound.destinationStation).toBe("出雲市");
+    expect(result.travelPlan.returning.destinationStation).toBe("京都");
+    expect(result.travelPlan.accommodations[0]?.name).toBe("出雲の宿");
+    expect(searchDirectRoutes).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      destinationStation: "出雲市", departureDate: "2026-08-17",
+    }));
+    expect(searchDirectRoutes).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      originStation: "出雲市", destinationStation: "京都", departureDate: "2026-08-18",
+    }));
+  });
 });
 
-function requireRichResponse(result: ViewerAgentResponse) {
-  if (typeof result === "string") {
+function requireRichResponse(result: ViewerAgentResponse): ViewerAgentRichResponse {
+  if (typeof result === "string" || !("journeyPlan" in result)) {
     throw new Error(`Expected a rich response but received: ${result}`);
   }
   return result;

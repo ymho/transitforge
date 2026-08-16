@@ -1073,6 +1073,57 @@ summary:focus-visible {
   background: var(--glass-accent-soft);
 }
 
+.travel-plan {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.travel-plan-section {
+  overflow: hidden;
+  padding: 0.8rem 0;
+  border-top: 1px solid var(--glass-border-subtle);
+}
+
+.travel-plan-section h3 {
+  margin: 0 1rem 0.65rem;
+  color: var(--glass-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.travel-plan-section > p {
+  margin: 0 1rem;
+  color: var(--glass-muted);
+  font-size: 0.75rem;
+}
+
+.travel-plan-accommodation-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0 1rem;
+  list-style: none;
+}
+
+.travel-plan-accommodation-list li {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.8rem;
+  background: var(--glass-surface-muted);
+}
+
+.travel-plan-accommodation-list a,
+.travel-plan-accommodation-list strong {
+  color: var(--glass-text);
+  font-size: 0.8rem;
+}
+
+.travel-plan-accommodation-list small {
+  color: var(--glass-muted);
+  font-size: 0.65rem;
+}
+
 /* 列車詳細も同じガラスシートへ統一する */
 .train-details {
   z-index: 6;

@@ -1137,7 +1137,7 @@ if (!token) {
               },
               invokeBedrockAgent,
             );
-            if (typeof response !== "string") {
+            if (typeof response !== "string" && "journeyPlan" in response) {
               previousJourneyPlan = response.journeyPlan;
               pendingJourneyLegChange = undefined;
               pendingJourneyGuidance = undefined;

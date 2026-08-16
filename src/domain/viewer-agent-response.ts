@@ -29,4 +29,29 @@ export interface ViewerAgentRichResponse {
   journeyPlan: ViewerAgentJourneyPlan;
 }
 
-export type ViewerAgentResponse = string | ViewerAgentRichResponse;
+export interface ViewerAgentAccommodation {
+  name: string;
+  checkInDate: string;
+  checkOutDate: string;
+  bookingUrl?: string;
+  areaName?: string;
+}
+
+export interface ViewerAgentTravelPlan {
+  destination: string;
+  checkInDate: string;
+  checkOutDate: string;
+  outbound: ViewerAgentJourneyPlan;
+  returning: ViewerAgentJourneyPlan;
+  accommodations: ViewerAgentAccommodation[];
+}
+
+export interface ViewerAgentTravelResponse {
+  text: string;
+  travelPlan: ViewerAgentTravelPlan;
+}
+
+export type ViewerAgentResponse =
+  | string
+  | ViewerAgentRichResponse
+  | ViewerAgentTravelResponse;
