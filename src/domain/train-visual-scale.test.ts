@@ -21,15 +21,17 @@ describe("train visual scale", () => {
     );
   });
 
-  it("makes trains smaller on screen when zoomed in", () => {
-    const referenceScreenSize = trainVisualScaleForZoom(15.5) * 2 ** 15.5;
-    const zoomedInScreenSize = trainVisualScaleForZoom(18) * 2 ** 18;
-
-    expect(zoomedInScreenSize).toBeLessThan(referenceScreenSize);
+  it("uses the building-safe minimum when zoomed in", () => {
+    expect(trainVisualScaleForZoom(18)).toBe(1.5);
   });
 
   it("keeps extreme zoom values within safe scale limits", () => {
     expect(trainVisualScaleForZoom(-10)).toBe(250_000);
-    expect(trainVisualScaleForZoom(30)).toBe(0.05);
+    expect(trainVisualScaleForZoom(30)).toBe(1.5);
+  });
+
+  it("does not shrink a train below the building-safe minimum", () => {
+    expect(trainVisualScaleForZoom(20)).toBe(1.5);
+    expect(trainVisualScaleForZoom(30)).toBe(1.5);
   });
 });

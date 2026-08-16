@@ -47,7 +47,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   private renderer?: THREE.WebGLRenderer;
   private trains?: THREE.InstancedMesh<
     THREE.BoxGeometry,
-    THREE.MeshPhysicalMaterial
+    THREE.MeshBasicMaterial
   >;
   private delayHalos?: THREE.InstancedMesh<
     THREE.SphereGeometry,
@@ -100,27 +100,19 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.camera = new THREE.Camera();
     this.scene = new THREE.Scene();
 
-    const ambient = new THREE.AmbientLight(0xeaf5ff, 2.1);
-    const directional = new THREE.DirectionalLight(0xd7ecff, 2.7);
-    directional.position.set(0, -1, 1).normalize();
-    this.scene.add(ambient, directional);
-
     const geometry = new THREE.BoxGeometry(
       vehicleLengthMeters,
       vehicleWidthMeters,
       vehicleHeightMeters,
     );
-    const material = new THREE.MeshPhysicalMaterial({
+    const material = new THREE.MeshBasicMaterial({
       // インスタンスカラーは基本色と乗算されるため、白を使って路線色を保つ。
-      // 高いクリアコートと低い粗さで、周囲の地図光を拾うガラスの車体にする。
+      // UIと同じく透過だけでガラス感を作り、地図照明で路線色が暗転しないようにする。
       color: 0xffffff,
-      roughness: 0.2,
-      metalness: 0.08,
-      clearcoat: 1,
-      clearcoatRoughness: 0.12,
       transparent: true,
-      opacity: 0.84,
+      opacity: 0.86,
       depthWrite: true,
+      toneMapped: false,
     });
     this.trains = new THREE.InstancedMesh(geometry, material, maximumTrainInstances);
     // インスタンス行列は常に正のスケールだけを使用する。

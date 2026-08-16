@@ -3,7 +3,8 @@ const referenceVisualScale = 4;
 const zoomResponseExponent = 1.06;
 const minimumZoomedOutScreenSizeRatio = 0.3;
 const zoomedOutScreenSizeDecay = 0.35;
-const minimumVisualScale = 0.05;
+// 近接時に地図上の建物より小さくならない最小の列車サイズ。
+const minimumVisualScale = 1.5;
 const maximumVisualScale = 250_000;
 
 export function trainVisualScaleForZoom(zoom: number): number {
