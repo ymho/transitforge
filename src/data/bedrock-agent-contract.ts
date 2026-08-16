@@ -31,6 +31,7 @@ export interface AccommodationSearchResponse {
     checkOutDate: string;
     bookingUrl?: string;
     areaName?: string;
+    imageUrl?: string;
   }>;
 }
 export interface DailyCongestionPeak {

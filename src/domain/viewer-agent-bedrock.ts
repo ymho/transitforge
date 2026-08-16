@@ -832,6 +832,9 @@ function accommodationValues(value: unknown): ViewerAgentTravelPlan["accommodati
       ...(typeof accommodation.areaName === "string"
         ? { areaName: accommodation.areaName }
         : {}),
+      ...(typeof accommodation.imageUrl === "string"
+        ? { imageUrl: accommodation.imageUrl }
+        : {}),
     }];
   });
 }

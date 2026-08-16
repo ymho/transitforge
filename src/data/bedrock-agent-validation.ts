@@ -28,7 +28,8 @@ export function isAccommodationSearchResponse(value: unknown): value is Accommod
       typeof item.name === "string" && typeof item.checkInDate === "string" &&
       typeof item.checkOutDate === "string" &&
       (item.bookingUrl === undefined || typeof item.bookingUrl === "string") &&
-      (item.areaName === undefined || typeof item.areaName === "string"));
+      (item.areaName === undefined || typeof item.areaName === "string") &&
+      (item.imageUrl === undefined || typeof item.imageUrl === "string"));
 }
 
 export function isDailyCongestionPeakResponse(value: unknown): value is DailyCongestionPeakResponse {
