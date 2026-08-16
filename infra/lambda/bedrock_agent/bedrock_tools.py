@@ -42,6 +42,8 @@ query_daily_congestion_analysisを使い、
 query_train_delay_analysisを使ってください。現在の遅れはlatest、1日の傾向はhourlyと
 topTrainsを根拠にし、観測されていない時間や列車を遅れなしと断定しないでください。
 日付指定がなければ利用者メッセージに含まれる4時切替の業務日付を使ってください。
+宿泊先を探す依頼では、行き先とチェックイン・チェックアウト日が明示されている場合だけ
+search_accommodationsを使ってください。空室や日付別の料金はこの検索結果から推測しないでください。
 晴れ・曇り・雨・雪の変更はset_weatherを使ってください。
 混雑の棒グラフや目的地へのアーチの表示・非表示は
 set_layer_visibilityを使ってください。
@@ -50,6 +52,25 @@ set_layer_visibilityを使ってください。
 """
 
 TOOLS = [
+    {
+        "toolSpec": {
+            "name": "search_accommodations",
+            "description": "指定した行き先と宿泊日程に合う宿泊施設候補を最大5件検索します。料金と空室は含まれない場合があります。",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "destination": {"type": "string"},
+                        "checkInDate": {"type": "string", "description": "YYYY-MM-DD"},
+                        "checkOutDate": {"type": "string", "description": "YYYY-MM-DD"},
+                        "adults": {"type": "integer", "minimum": 1, "maximum": 10},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 5},
+                    },
+                    "required": ["destination", "checkInDate", "checkOutDate"],
+                }
+            },
+        }
+    },
     {
         "toolSpec": {
             "name": "set_display_time",

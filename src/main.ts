@@ -26,6 +26,7 @@ import {
   invokeBedrockAgent,
   queryDailyCongestionAnalysis,
   queryTrainDelayAnalysis,
+  searchAccommodations,
   searchRepresentativeTimetable,
   searchTravelCandidates,
 } from "./data/bedrock-agent";
@@ -1087,6 +1088,7 @@ if (!token) {
                   ),
                 searchRepresentativeTimetable,
                 searchDirectRoutes: backendSearchRoutes,
+                searchAccommodations,
                 getJourneySearchPreferences: () => preferences,
                 getPreviousJourneyPlan: () => previousJourneyPlan,
                 getPendingJourneyGuidance: () => pendingJourneyGuidance,

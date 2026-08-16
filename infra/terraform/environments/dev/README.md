@@ -53,11 +53,12 @@ Terraform apply後に`/transitforge/dev/travel-provider`が作成されるため
 ```json
 {
   "application_id": "旅行提供者アプリID",
-  "affiliate_id": "アフィリエイトID"
+  "access_key": "旅行提供者アクセスキー",
+  "hotel_search_url": "旅行提供者の宿泊検索API URL"
 }
 ```
 
-`affiliate_id`は旅行提供者リンクを使う場合だけ指定する。値はTerraform stateやGitHubへ保存せず AI Lambdaだけが実行時に取得する。
+`affiliate_id`は予約リンクの計測が必要な場合だけ指定する。値はTerraform stateやGitHubへ保存せず AI Lambdaだけが実行時に取得する。
 
 TransitForge自身のOIDC対象リポジトリはGitHub Actionsの`github.repository`から渡す
 必須VariableはAWS認証より前に検証し 未設定ならapplyを開始しない

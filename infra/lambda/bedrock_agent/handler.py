@@ -31,6 +31,7 @@ TRAFFIC_SNAPSHOT_BUCKET = os.environ.get("TRAFFIC_SNAPSHOT_BUCKET", "")
 TRAFFIC_SNAPSHOT_KEY = os.environ.get(
     "TRAFFIC_SNAPSHOT_KEY", "api/traffic/delays.json"
 )
+TRAVEL_PROVIDER_SECRET_ARN = os.environ.get("TRAVEL_PROVIDER_SECRET_ARN", "")
 OPERATION_CONFIG = OperationConfig(
     summary_table=SUMMARY_TABLE,
     delay_summary_table=DELAY_SUMMARY_TABLE,
@@ -39,6 +40,7 @@ OPERATION_CONFIG = OperationConfig(
     planning_timetable_prefix=PLANNING_TIMETABLE_PREFIX,
     traffic_snapshot_bucket=TRAFFIC_SNAPSHOT_BUCKET,
     traffic_snapshot_key=TRAFFIC_SNAPSHOT_KEY,
+    travel_provider_secret_arn=TRAVEL_PROVIDER_SECRET_ARN,
 )
 
 
@@ -72,6 +74,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 OPERATION_CONFIG,
                 s3_client=lambda: boto3.client("s3"),
                 dynamodb_client=lambda: boto3.client("dynamodb"),
+                secrets_manager_client=lambda: boto3.client("secretsmanager"),
             )
             return response(200, result)
         messages = validated_messages(value)

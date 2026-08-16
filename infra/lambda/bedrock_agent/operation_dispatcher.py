@@ -5,6 +5,9 @@ from typing import Any, Callable
 
 import journey_search
 import representative_timetable
+import travel_provider_accommodation
+import travel_provider_credentials
+import travel_search_request
 from congestion_analysis import (
     query_daily_congestion_analysis,
     query_daily_congestion_peak,
@@ -20,6 +23,7 @@ HANDLED_OPERATIONS = frozenset(
         "daily_congestion_analysis",
         "daily_congestion_peak",
         "train_delay_analysis",
+        "travel_accommodation_search",
     }
 )
 
@@ -33,6 +37,7 @@ class OperationConfig:
     planning_timetable_prefix: str
     traffic_snapshot_bucket: str
     traffic_snapshot_key: str
+    travel_provider_secret_arn: str
 
 
 def handles(value: dict[str, Any]) -> bool:
@@ -44,6 +49,8 @@ def dispatch(
     config: OperationConfig,
     s3_client: Callable[[], Any],
     dynamodb_client: Callable[[], Any],
+    secrets_manager_client: Callable[[], Any] | None = None,
+    http_opener: Callable[..., Any] | None = None,
 ) -> dict[str, Any] | None:
     operation = value.get("operation")
     if operation == "representative_timetable_search":
@@ -70,6 +77,20 @@ def dispatch(
             raise
         except Exception as error:
             raise RequestError(503, "旅行候補を検索できません。") from error
+    if operation == "travel_accommodation_search":
+        if secrets_manager_client is None:
+            raise RequestError(503, "宿泊提供者の設定を読み取れません。")
+        try:
+            request = travel_search_request.provider_search_from(value)
+            credentials = travel_provider_credentials.load_travel_provider_credentials(
+                config.travel_provider_secret_arn, secrets_manager_client()
+            )
+            offerings = travel_provider_accommodation.search_accommodations(
+                request, credentials, opener=http_opener or travel_provider_accommodation.urlopen
+            )
+            return {"accommodations": [offering.as_response() for offering in offerings]}
+        except ValueError as error:
+            raise RequestError(503, str(error)) from error
     if operation not in HANDLED_OPERATIONS:
         return None
 

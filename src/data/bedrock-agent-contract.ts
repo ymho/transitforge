@@ -21,6 +21,18 @@ export interface BedrockAgentResponse {
   message: BedrockAgentMessage;
   stopReason: "end_turn" | "tool_use" | "max_tokens";
 }
+export interface AccommodationSearchResponse {
+  accommodations: Array<{
+    kind: "accommodation";
+    provider: string;
+    providerItemId: string;
+    name: string;
+    checkInDate: string;
+    checkOutDate: string;
+    bookingUrl?: string;
+    areaName?: string;
+  }>;
+}
 export interface DailyCongestionPeak {
   collectedAt: string;
   sourceUpdatedAt: string;

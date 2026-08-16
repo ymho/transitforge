@@ -2,6 +2,7 @@ import type {
   BedrockAgentContentBlock,
   BedrockAgentMessage,
   BedrockAgentResponse,
+  AccommodationSearchResponse,
   DailyCongestionAnalysisResponse,
   DailyCongestionPeak,
   DailyCongestionPeakResponse,
@@ -18,6 +19,16 @@ import type {
 export function isBedrockAgentResponse(value: unknown): value is BedrockAgentResponse {
   return isRecord(value) && ["end_turn", "tool_use", "max_tokens"].includes(String(value.stopReason)) &&
     isMessage(value.message) && value.message.role === "assistant";
+}
+
+export function isAccommodationSearchResponse(value: unknown): value is AccommodationSearchResponse {
+  return isRecord(value) && Array.isArray(value.accommodations) && value.accommodations.length <= 5 &&
+    value.accommodations.every((item) => isRecord(item) && item.kind === "accommodation" &&
+      typeof item.provider === "string" && typeof item.providerItemId === "string" &&
+      typeof item.name === "string" && typeof item.checkInDate === "string" &&
+      typeof item.checkOutDate === "string" &&
+      (item.bookingUrl === undefined || typeof item.bookingUrl === "string") &&
+      (item.areaName === undefined || typeof item.areaName === "string"));
 }
 
 export function isDailyCongestionPeakResponse(value: unknown): value is DailyCongestionPeakResponse {
