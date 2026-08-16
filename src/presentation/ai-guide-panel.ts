@@ -18,6 +18,7 @@ import type {
   ViewerAgentResponse,
 } from "../domain/viewer-agent-response";
 import { hideSheet, showSheet } from "./sheet-transition";
+import { clearLatestAgentRequestId, lastAgentRequestId, submitConversationFeedback } from "../data/bedrock-agent";
 
 export interface AiGuidePanelElements {
   panel: HTMLElement;
@@ -126,7 +127,27 @@ export function configureAiGuidePanel(
     });
   }
 
+  messages.addEventListener("click", (event) => {
+    const target = event.target instanceof Element
+      ? event.target.closest<HTMLButtonElement>("[data-conversation-feedback]")
+      : null;
+    if (!target || target.disabled) return;
+    const rating = target.dataset.conversationFeedback;
+    if (rating !== "good" && rating !== "bad") return;
+    target.disabled = true;
+    const conversation = Array.from(messages.querySelectorAll<HTMLElement>(".ai-guide-message"))
+      .map((message) => ({
+        role: message.classList.contains("ai-guide-message-user") ? "user" as const : "assistant" as const,
+        text: message.dataset.feedbackText ?? message.textContent?.trim() ?? "",
+      }))
+      .filter((message) => message.text.length > 0);
+    void submitConversationFeedback({ rating, conversation, requestIds: [...agentRequestIds] })
+      .then(() => { target.dataset.feedbackStored = "true"; })
+      .catch(() => { target.disabled = false; });
+  });
+
   let landmarkJourney: { name: string; departureText?: string } | undefined;
+  const agentRequestIds = new Set<string>();
   const setContextChoices = (choices: string[]) => {
     contextChoices.replaceChildren();
     contextChoices.hidden = choices.length === 0;
@@ -153,8 +174,11 @@ export function configureAiGuidePanel(
     submit.dataset.submitting = "true";
     const pendingMessage = appendPendingMessage(messages);
 
+    clearLatestAgentRequestId();
     void handlePrompt(prompt, preferences())
       .then((response) => {
+        const requestId = lastAgentRequestId();
+        if (requestId) agentRequestIds.add(requestId);
         resolveAssistantMessage(pendingMessage, response, input);
       })
       .catch(() => {
@@ -305,6 +329,20 @@ function appendMessage(
   const item = document.createElement("li");
   item.className = `ai-guide-message ai-guide-message-${role}`;
   item.textContent = role === "assistant" ? visibleAssistantText(text) : text;
+  item.dataset.feedbackText = item.textContent;
+  if (role === "assistant") {
+    const feedback = document.createElement("span");
+    feedback.className = "conversation-feedback";
+    for (const [rating, label] of [["good", "よい回答"], ["bad", "改善が必要"]]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.conversationFeedback = rating;
+      button.ariaLabel = label;
+      button.textContent = rating === "good" ? "👍" : "👎";
+      feedback.append(button);
+    }
+    item.append(feedback);
+  }
   messages.append(item);
   item.scrollIntoView({ block: "nearest" });
   return item;
@@ -402,13 +440,18 @@ function travelPlanOverview(plan: ViewerAgentTravelPlan): HTMLElement {
   const overview = document.createElement("header");
   overview.className = "travel-plan-overview";
   const title = document.createElement("strong");
-  title.textContent = `${plan.destination} 1泊2日`;
+  title.textContent = travelPlanTitle(plan);
   const dates = document.createElement("span");
   dates.textContent = `${formatCalendarDate(plan.checkInDate)} → ${formatCalendarDate(plan.checkOutDate)}`;
-  const hint = document.createElement("small");
-  hint.textContent = "宿を選ぶと、この旅程をベースに行きと帰りを調整できます。";
-  overview.append(title, dates, hint);
+  overview.append(title, dates);
   return overview;
+}
+
+function travelPlanTitle(plan: ViewerAgentTravelPlan): string {
+  const themes = ["ゆったり巡る旅", "季節を味わう小旅行", "寄り道を楽しむ旅", "心ほどける滞在"];
+  const key = [...`${plan.destination}${plan.checkInDate}${plan.checkOutDate}`]
+    .reduce((total, character) => total + character.charCodeAt(0), 0);
+  return `${plan.destination}を${themes[key % themes.length]}`;
 }
 
 function travelPlanSection(label: string, plan: ViewerAgentJourneyPlan): HTMLElement {
@@ -440,7 +483,7 @@ function travelPlanAccommodationSection(
   const section = document.createElement("section");
   section.className = "travel-plan-section travel-plan-accommodations";
   const heading = document.createElement("h3");
-  heading.textContent = `宿泊　${formatCalendarDate(plan.checkInDate)}から1泊`;
+  heading.textContent = `宿泊　${formatCalendarDate(plan.checkInDate)}から${nightsBetween(plan.checkInDate, plan.checkOutDate)}泊`;
   section.append(heading);
   if (plan.accommodations.length === 0) {
     const empty = document.createElement("p");
@@ -511,6 +554,10 @@ function travelPlanAccommodationSection(
   );
   section.append(sightseeing);
   return section;
+}
+
+function nightsBetween(checkInDate: string, checkOutDate: string): number {
+  return Math.max(1, Math.round((Date.parse(checkOutDate) - Date.parse(checkInDate)) / 86_400_000));
 }
 
 function renderJourneyPlan(

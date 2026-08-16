@@ -786,11 +786,26 @@ summary:focus-visible {
 }
 
 .ai-guide-message-assistant {
-  width: auto;
-  max-width: 88%;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.35rem 0.15rem;
+  border: 0;
+  border-radius: 0;
   color: var(--glass-text);
+  background: transparent;
+}
+
+.ai-guide-message-assistant.ai-guide-message-journey {
+  padding: 0.8rem;
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: 1.35rem;
   background: var(--glass-surface-strong);
 }
+
+.conversation-feedback { display: flex; gap: .2rem; margin-top: .25rem; opacity: .42; transition: opacity 140ms ease; }
+.conversation-feedback button { width: 1.2rem; height: 1.2rem; padding: 0; border: 0; border-radius: .3rem; color: var(--glass-muted); background: transparent; font-size: .64rem; line-height: 1; filter: grayscale(1); }
+.ai-guide-message-assistant:hover .conversation-feedback, .conversation-feedback:focus-within { opacity: 1; }
+.conversation-feedback button:hover, .conversation-feedback button[data-feedback-stored="true"] { color: var(--glass-accent-strong); filter: none; }
 
 .ai-guide-message-user {
   border-color: rgb(255 255 255 / 22%);
@@ -1174,6 +1189,10 @@ summary:focus-visible {
 }
 
 .travel-plan-overview strong {
+  display: block;
+  min-width: 0;
+  overflow-wrap: normal;
+  white-space: nowrap;
   color: var(--glass-text);
   font-size: 1rem;
 }
@@ -1191,7 +1210,7 @@ summary:focus-visible {
 .travel-plan-section {
   overflow: hidden;
   padding: 0.8rem 0;
-  border-top: 1px solid var(--glass-border-subtle);
+  border-top: 0;
 }
 
 .travel-plan-section h3 {

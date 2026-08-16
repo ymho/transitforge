@@ -15,6 +15,7 @@ from congestion_analysis import (
 )
 from delay_analysis import query_train_delay_analysis
 from operation_dispatcher import OperationConfig, dispatch, handles
+from conversation_feedback import store_feedback
 from request_contract import (
     RequestError,
     request_messages,
@@ -35,6 +36,7 @@ TRAFFIC_SNAPSHOT_KEY = os.environ.get(
     "TRAFFIC_SNAPSHOT_KEY", "api/traffic/delays.json"
 )
 TRAVEL_PROVIDER_SECRET_ARN = os.environ.get("TRAVEL_PROVIDER_SECRET_ARN", "")
+CONVERSATION_FEEDBACK_BUCKET = os.environ.get("CONVERSATION_FEEDBACK_BUCKET", "")
 OPERATION_CONFIG = OperationConfig(
     summary_table=SUMMARY_TABLE,
     delay_summary_table=DELAY_SUMMARY_TABLE,
@@ -91,6 +93,11 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         value = request_value(event)
         operation = value.get("operation", "bedrock_converse")
         log_event("agent_request_started", request_id, operation=operation)
+        if operation == "conversation_feedback":
+            import boto3
+            result = store_feedback(value, CONVERSATION_FEEDBACK_BUCKET, boto3.client("s3"))
+            log_event("conversation_feedback_stored", request_id, rating=value.get("rating"), feedbackId=result["feedbackId"])
+            return response(200, result, request_id)
         if handles(value):
             import boto3
 

@@ -29,11 +29,31 @@ resource "aws_cloudwatch_log_group" "bedrock_agent" {
   retention_in_days = 30
 }
 
+resource "aws_s3_bucket" "conversation_feedback" {
+  bucket = "${local.resource_prefix}-conversation-feedback"
+}
+resource "aws_s3_bucket_public_access_block" "conversation_feedback" {
+  bucket = aws_s3_bucket.conversation_feedback.id
+  block_public_acls = true
+  block_public_policy = true
+  ignore_public_acls = true
+  restrict_public_buckets = true
+}
+resource "aws_s3_bucket_lifecycle_configuration" "conversation_feedback" {
+  bucket = aws_s3_bucket.conversation_feedback.id
+  rule { id = "expire-feedback" status = "Enabled" filter {} expiration { days = 90 } }
+}
+
 data "aws_iam_policy_document" "bedrock_agent" {
   statement {
     sid       = "InvokeSelectedModel"
     actions   = ["bedrock:InvokeModel"]
     resources = ["arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"]
+  }
+  statement {
+    sid = "WriteConversationFeedback"
+    actions = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.conversation_feedback.arn}/*"]
   }
 
   statement {
@@ -112,6 +132,7 @@ resource "aws_lambda_function" "bedrock_agent" {
       TRAFFIC_SNAPSHOT_BUCKET    = aws_s3_bucket.website.id
       TRAFFIC_SNAPSHOT_KEY       = "api/traffic/delays.json"
       TRAVEL_PROVIDER_SECRET_ARN = aws_secretsmanager_secret.travel_provider.arn
+      CONVERSATION_FEEDBACK_BUCKET = aws_s3_bucket.conversation_feedback.id
     }
   }
 
