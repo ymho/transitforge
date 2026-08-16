@@ -45,6 +45,20 @@ terraform plan
 | Secret | `BASIC_AUTH_CREDENTIALS_SHA256` | 開発環境の認証情報ハッシュ |
 | Secret | `VITE_MAPBOX_ACCESS_TOKEN` | Mapbox公開トークン |
 
+## 外部旅行提供者の認証情報
+
+楽天トラベルの認証情報はGitHub Secretsや`.env.local`ではなく AWS Secrets Managerへ保存する。
+Terraform apply後に`/transitforge/dev/rakuten-travel`が作成されるため AWSコンソールまたは次の形式で値を登録する。
+
+```json
+{
+  "application_id": "楽天アプリID",
+  "affiliate_id": "アフィリエイトID"
+}
+```
+
+`affiliate_id`は楽天リンクを使う場合だけ指定する。値はTerraform stateやGitHubへ保存せず AI Lambdaだけが実行時に取得する。
+
 TransitForge自身のOIDC対象リポジトリはGitHub Actionsの`github.repository`から渡す
 必須VariableはAWS認証より前に検証し 未設定ならapplyを開始しない
 

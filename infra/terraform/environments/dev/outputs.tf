@@ -49,6 +49,11 @@ output "ai_provider_egress_ip_address" {
   value       = aws_eip.ai_egress.public_ip
 }
 
+output "rakuten_travel_secret_name" {
+  description = "楽天トラベル認証情報を登録するSecrets Managerの名前。値そのものはTerraformで管理しない。"
+  value       = aws_secretsmanager_secret.rakuten_travel.name
+}
+
 output "github_actions_deploy_role_arn" {
   description = "GitHubのdev environmentからOIDCで引き受けるデプロイロールARN。"
   value       = aws_iam_role.github_deploy.arn

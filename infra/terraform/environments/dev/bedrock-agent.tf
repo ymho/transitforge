@@ -56,6 +56,12 @@ data "aws_iam_policy_document" "bedrock_agent" {
   }
 
   statement {
+    sid       = "ReadRakutenTravelCredentials"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [aws_secretsmanager_secret.rakuten_travel.arn]
+  }
+
+  statement {
     sid = "WriteLogs"
     actions = [
       "logs:CreateLogStream",
@@ -105,6 +111,7 @@ resource "aws_lambda_function" "bedrock_agent" {
       PLANNING_TIMETABLE_PREFIX = "timetable"
       TRAFFIC_SNAPSHOT_BUCKET   = aws_s3_bucket.website.id
       TRAFFIC_SNAPSHOT_KEY      = "api/traffic/delays.json"
+      RAKUTEN_TRAVEL_SECRET_ARN = aws_secretsmanager_secret.rakuten_travel.arn
     }
   }
 
