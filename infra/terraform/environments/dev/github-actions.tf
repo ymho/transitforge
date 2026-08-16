@@ -60,12 +60,17 @@ data "aws_iam_policy_document" "github_deploy_iam" {
     sid = "ManageTransitForgeRoles"
     actions = [
       "iam:AttachRolePolicy",
+      "iam:AddRoleToInstanceProfile",
       "iam:CreateRole",
+      "iam:CreateInstanceProfile",
+      "iam:DeleteInstanceProfile",
       "iam:DeleteRole",
       "iam:DeleteRolePolicy",
       "iam:DetachRolePolicy",
+      "iam:GetInstanceProfile",
       "iam:GetRole",
       "iam:GetRolePolicy",
+      "iam:RemoveRoleFromInstanceProfile",
       "iam:ListAttachedRolePolicies",
       "iam:ListInstanceProfilesForRole",
       "iam:ListRolePolicies",
@@ -78,6 +83,7 @@ data "aws_iam_policy_document" "github_deploy_iam" {
     ]
     resources = [
       "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-*",
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:instance-profile/${var.project_name}-*",
     ]
   }
 
