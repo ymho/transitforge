@@ -860,27 +860,42 @@ if (!token) {
           );
           return { ...leg, lineName: line.lineName, lineColor: line.color };
         };
-        findJourneyLegAlternatives = async ({ plan, journey, leg, legIndex }) => {
+        findJourneyLegAlternatives = async ({
+          plan,
+          journey,
+          startLegIndex,
+          endLegIndex,
+          requiredServiceTypes,
+        }) => {
+          const startLeg = journey.legs[startLegIndex];
+          const endLeg = journey.legs[endLegIndex];
+          if (!startLeg || !endLeg) {
+            return [];
+          }
           const response = await searchTravelCandidates({
             serviceDate: plan.serviceDate ?? formatServiceDate(displayedServiceDateStart),
-            originStation: leg.originStation,
-            destinationStation: leg.destinationStation,
-            departureTimeMinutes: leg.departureTimeMinutes,
+            originStation: startLeg.originStation,
+            destinationStation: endLeg.destinationStation,
+            departureTimeMinutes: startLeg.departureTimeMinutes,
             limit: 5,
             maxTransfers: 0,
             transferPace: plan.transferPace,
             rankingPreference: "earliest-arrival",
+            ...(requiredServiceTypes.length
+              ? { requiredServiceTypes }
+              : {}),
           });
           return response.journeys
             .filter((candidate) => candidate.legs.length === 1)
             .map((candidate) => routeLeg(candidate.legs[0]))
             .filter((candidate) =>
-              candidate.serviceUid !== leg.serviceUid &&
+              candidate.serviceUid !== startLeg.serviceUid &&
               journeyLegAlternativeFits(
                 journey,
-                legIndex,
+                startLegIndex,
                 candidate,
                 plan.transferPace,
+                endLegIndex,
               ));
         };
         const disposeDelayUpdates = configureTrainDelayUpdates((snapshot) => {
@@ -984,12 +999,14 @@ if (!token) {
             if (followUp?.type === "alternative" && previousJourneyPlan) {
               const journey = previousJourneyPlan.journeys[followUp.journeyIndex];
               const leg = journey?.legs[followUp.legIndex];
-              if (journey && leg) {
+              const endLeg = journey?.legs[followUp.endLegIndex];
+              if (journey && leg && endLeg) {
                 let alternatives = await findJourneyLegAlternatives({
                   plan: previousJourneyPlan,
                   journey,
-                  leg,
-                  legIndex: followUp.legIndex,
+                  startLegIndex: followUp.legIndex,
+                  endLegIndex: followUp.endLegIndex,
+                  requiredServiceTypes: followUp.requiredServiceTypes,
                 });
                 if (followUp.preferLaterDeparture) {
                   alternatives = alternatives.filter(
@@ -1003,10 +1020,14 @@ if (!token) {
                       plan: previousJourneyPlan,
                       journeyIndex: followUp.journeyIndex,
                       legIndex: followUp.legIndex,
+                      endLegIndex: followUp.endLegIndex,
                       alternatives,
                     }
                   : undefined;
-                return alternativeProposalResponse(leg, alternatives);
+                return alternativeProposalResponse(
+                  { ...leg, destinationStation: endLeg.destinationStation },
+                  alternatives,
+                );
               }
             }
             if (

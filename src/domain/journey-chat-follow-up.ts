@@ -8,6 +8,7 @@ export interface PendingJourneyLegChange {
   plan: ViewerAgentJourneyPlan;
   journeyIndex: number;
   legIndex: number;
+  endLegIndex?: number;
   alternatives: JourneyRouteLeg[];
 }
 
@@ -25,15 +26,18 @@ export type JourneyChatFollowUpIntent =
       type: "alternative";
       journeyIndex: number;
       legIndex: number;
+      endLegIndex: number;
       preferLaterDeparture: boolean;
+      requiredServiceTypes: string[];
     }
   | { type: "confirm-alternative"; alternativeIndex: number };
 
 export type JourneyLegAlternativeSearch = (request: {
   plan: ViewerAgentJourneyPlan;
   journey: JourneyRouteResult;
-  leg: JourneyRouteLeg;
-  legIndex: number;
+  startLegIndex: number;
+  endLegIndex: number;
+  requiredServiceTypes: string[];
 }) => Promise<JourneyRouteLeg[]>;
 
 export function journeyChatFollowUpIntent(
@@ -56,23 +60,30 @@ export function journeyChatFollowUpIntent(
     return { type: "exclude-trains", exclusions };
   }
   const wantsIntermediateStops = /(途中駅|停車駅|停車する駅)/u.test(normalized);
-  const wantsAlternative = /(別の列車|違う列車|ほかの列車|他の列車|列車を変)/u.test(
-    normalized,
-  );
+  const requestedServiceTypes = serviceTypesInPrompt(normalized);
+  const wantsAlternative =
+    /(別の列車|違う列車|ほかの列車|他の列車|列車を変)/u.test(normalized) ||
+    (requestedServiceTypes.length > 0 &&
+      /(?:が|を)(?:良い|いい|使いたい|利用したい)/u.test(normalized));
   if (!wantsIntermediateStops && !wantsAlternative) {
     return undefined;
   }
-  const referenced = referencedLeg(normalized, plan);
+  const referenced = referencedSegment(normalized, plan);
   if (!referenced) {
     return undefined;
   }
   if (wantsIntermediateStops) {
-    return { type: "intermediate-stops", ...referenced };
+    return {
+      type: "intermediate-stops",
+      journeyIndex: referenced.journeyIndex,
+      legIndex: referenced.legIndex,
+    };
   }
   return {
     type: "alternative",
     ...referenced,
     preferLaterDeparture: /(遅く家を出|遅く出|後の列車|後発)/u.test(normalized),
+    requiredServiceTypes: requestedServiceTypes,
   };
 }
 
@@ -223,15 +234,19 @@ export function applyJourneyLegAlternative(
   if (!alternative || !selectedJourney) {
     return pending.plan;
   }
-  const legs = selectedJourney.legs.map((leg, index) =>
-    index === pending.legIndex ? alternative : leg,
-  );
+  const endLegIndex = pending.endLegIndex ?? pending.legIndex;
+  const replacedLegs = [
+    ...selectedJourney.legs.slice(0, pending.legIndex),
+    alternative,
+    ...selectedJourney.legs.slice(endLegIndex + 1),
+  ];
   const journey = {
     ...selectedJourney,
-    legs,
-    departureTimeMinutes: legs[0]?.departureTimeMinutes ?? selectedJourney.departureTimeMinutes,
+    legs: replacedLegs,
+    transferCount: Math.max(0, replacedLegs.length - 1),
+    departureTimeMinutes: replacedLegs[0]?.departureTimeMinutes ?? selectedJourney.departureTimeMinutes,
     arrivalTimeMinutes:
-      legs.at(-1)?.arrivalTimeMinutes ?? selectedJourney.arrivalTimeMinutes,
+      replacedLegs.at(-1)?.arrivalTimeMinutes ?? selectedJourney.arrivalTimeMinutes,
   };
   return {
     ...pending.plan,
@@ -255,28 +270,48 @@ export function appliedAlternativeResponse(
   return `${formatClock(leg.departureTimeMinutes)}発の${train}へ変更しました。変更後の経路です。`;
 }
 
-function referencedLeg(
+function referencedSegment(
   prompt: string,
   plan: ViewerAgentJourneyPlan,
-): { journeyIndex: number; legIndex: number } | undefined {
+): { journeyIndex: number; legIndex: number; endLegIndex: number } | undefined {
   const requestedJourney = /候補([1-3])/u.exec(prompt)?.[1];
   const journeyIndex = requestedJourney ? Number(requestedJourney) - 1 : 0;
   const journey = plan.journeys[journeyIndex];
   if (!journey) {
     return undefined;
   }
-  const scored = journey.legs
-    .map((leg, legIndex) => ({
+  const segments = journey.legs.flatMap((first, legIndex) =>
+    journey.legs.slice(legIndex).map((last, offset) => ({
       legIndex,
+      endLegIndex: legIndex + offset,
       score:
-        Number(prompt.includes(normalizeStation(leg.originStation))) +
-        Number(prompt.includes(normalizeStation(leg.destinationStation))),
-    }))
-    .sort((left, right) => right.score - left.score);
-  if ((scored[0]?.score ?? 0) > 0) {
-    return { journeyIndex, legIndex: scored[0].legIndex };
+        Number(prompt.includes(normalizeStation(first.originStation))) +
+        Number(prompt.includes(normalizeStation(last.destinationStation))),
+    })),
+  ).sort((left, right) =>
+    right.score - left.score || left.endLegIndex - left.legIndex -
+      (right.endLegIndex - right.legIndex),
+  );
+  if ((segments[0]?.score ?? 0) > 0) {
+    return {
+      journeyIndex,
+      legIndex: segments[0].legIndex,
+      endLegIndex: segments[0].endLegIndex,
+    };
   }
-  return journey.legs.length === 1 ? { journeyIndex, legIndex: 0 } : undefined;
+  return journey.legs.length === 1
+    ? { journeyIndex, legIndex: 0, endLegIndex: 0 }
+    : undefined;
+}
+
+function serviceTypesInPrompt(prompt: string): string[] {
+  return standardServiceTypes
+    .filter((serviceType) => prompt.includes(serviceType))
+    .filter((serviceType, _index, all) =>
+      !all.some((other) =>
+        other.length > serviceType.length && other.includes(serviceType)
+      ),
+    );
 }
 
 function confirmedAlternativeIndex(
