@@ -4,6 +4,7 @@ import type {
   TransferPace,
 } from "./journey-search-preferences";
 import type { ConversationGuidance } from "./conversation-guidance";
+import type { TripPlanUpdateProposal } from "./trip-plan";
 
 export interface ViewerAgentJourneyPlan {
   departureDate?: string;
@@ -57,9 +58,11 @@ export interface ViewerAgentConversationResponse {
   text: string;
   conversation: ConversationGuidance;
 }
+export interface ViewerAgentTripPlanUpdateResponse { text: string; tripPlanUpdate: TripPlanUpdateProposal; }
 
 export type ViewerAgentResponse =
   | string
   | ViewerAgentRichResponse
   | ViewerAgentTravelResponse
-  | ViewerAgentConversationResponse;
+  | ViewerAgentConversationResponse
+  | ViewerAgentTripPlanUpdateResponse;

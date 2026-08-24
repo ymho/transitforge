@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Train } from "../data/train-index";
 import type { TrainPosition } from "./train-position";
+import type { UserProfile } from "./travel-profile";
 import type {
   ViewerAgentResponse,
   ViewerAgentRichResponse,
@@ -1419,6 +1420,11 @@ describe("Bedrock viewer agent", () => {
           name: "出雲の宿", checkInDate: "2026-08-17", checkOutDate: "2026-08-18",
           bookingUrl: "https://example.com/stay",
         }] })),
+        getUserProfile: () => ({
+          home: { station: "京都", carAvailable: false },
+          travelStyle: { transferTolerance: 0.5 },
+          transport: { maxTypicalTravelMinutes: 120 },
+        } as unknown as UserProfile),
         maximumRouteTime: 1_800,
       },
       converse,
@@ -1429,8 +1435,10 @@ describe("Bedrock viewer agent", () => {
     expect(result.travelPlan.outbound.destinationStation).toBe("出雲市");
     expect(result.travelPlan.returning.destinationStation).toBe("京都");
     expect(result.travelPlan.accommodations[0]?.name).toBe("出雲の宿");
+    expect(result.text).toContain("普段許容している移動時間より長め");
     expect(searchDirectRoutes).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      destinationStation: "出雲市", departureDate: "2026-08-17",
+      originStation: "京都", destinationStation: "出雲市",
+      departureDate: "2026-08-17",
     }));
     expect(searchDirectRoutes).toHaveBeenNthCalledWith(2, expect.objectContaining({
       originStation: "出雲市", destinationStation: "京都", departureDate: "2026-08-18",
@@ -1513,6 +1521,89 @@ describe("Bedrock viewer agent", () => {
       expectedInput: "departure-date",
       tripContext: { destinationWish: "出雲大社" },
     });
+  });
+
+  it("returns a confirmable proposal for a rental-car movement", async () => {
+    vi.stubGlobal("crypto", { randomUUID: () => "movement-id" });
+    const converse = vi.fn().mockResolvedValue({
+      message: { role: "assistant", content: [{ toolUse: {
+        toolUseId: "update",
+        name: "propose_trip_update",
+        input: {
+          summary: "駅から宿までレンタカー移動を追加",
+          patches: [{
+            type: "addMovement",
+            mode: "rental-car",
+            origin: "出雲市駅",
+            destination: "宿",
+            afterId: "outbound",
+          }],
+        },
+      } }] },
+      stopReason: "tool_use",
+    });
+
+    const result = await runBedrockViewerAgent(
+      "駅からレンタカーを借りたい",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(), maximumRouteTime: 1_800,
+        getTripPlan: () => ({
+          version: 1, id: "trip", title: "出雲の旅", destination: "出雲",
+          updatedAt: "2026-08-24", items: [{
+            id: "outbound", type: "sightseeing",
+            place: { name: "出雲大社", provider: "manual" },
+          }],
+        }),
+      },
+      converse,
+    );
+
+    expect(typeof result).not.toBe("string");
+    if (typeof result === "string" || !("tripPlanUpdate" in result)) {
+      throw new Error("旅程変更案がありません。");
+    }
+    expect(result.tripPlanUpdate.patches[0]).toMatchObject({
+      type: "add",
+      item: { type: "movement", mode: "rental-car", origin: "出雲市駅" },
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("persists high-confidence memory and session summary before answering", async () => {
+    const remember = vi.fn();
+    const update = vi.fn();
+    const converse = vi.fn()
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [
+          { toolUse: { toolUseId: "memory", name: "remember_travel_preference", input: { statement: "早朝は避けたい", confidence: "high" } } },
+          { toolUse: { toolUseId: "session", name: "update_conversation_session", input: { scope: "trip", summary: "出雲旅行を相談中", pendingTopics: ["出発日"] } } },
+        ] },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ text: "早朝を避けて考えます。" }] },
+        stopReason: "end_turn",
+      });
+
+    const result = await runBedrockViewerAgent(
+      "旅行ではいつも早朝を避けたい",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(), maximumRouteTime: 1_800,
+        rememberTravelPreference: remember,
+        updateConversationSession: update,
+      },
+      converse,
+    );
+
+    expect(result).toBe("早朝を避けて考えます。");
+    expect(remember).toHaveBeenCalledWith("早朝は避けたい", "high");
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ scope: "trip", summary: "出雲旅行を相談中" }));
   });
 });
 

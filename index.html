@@ -94,6 +94,7 @@
             </div>
           </div>
           <div class="guide-panel-actions">
+            <button id="trip-plan-toggle" type="button" aria-label="旅程" title="旅程" hidden><svg aria-hidden="true"><use href="#icon-route" /></svg></button>
             <button id="journey-settings-toggle" type="button" aria-label="経路設定" title="経路設定" aria-controls="journey-settings-panel"><svg aria-hidden="true"><use href="#icon-train" /></svg></button>
             <button id="travel-profile-toggle" type="button" aria-label="プロフィール" title="プロフィール"><svg aria-hidden="true"><use href="#icon-user" /></svg></button>
             <button id="close-ai-guide" type="button" aria-label="コンシェルジュを閉じる">×</button>
@@ -115,6 +116,10 @@
             <svg aria-hidden="true"><use href="#icon-send" /></svg>
           </button>
         </form>
+      </aside>
+      <aside id="trip-plan-panel" class="trip-plan-panel" aria-label="旅程" hidden>
+        <header><strong>旅程</strong><button id="close-trip-plan" type="button" aria-label="旅程を閉じる">×</button></header>
+        <div id="trip-plan-content" class="trip-plan-content"></div>
       </aside>
       <dialog id="travel-profile-dialog" class="travel-profile-dialog" aria-label="旅行プロフィール"></dialog>
       <dialog id="journey-settings-panel" class="journey-settings-dialog" aria-label="経路設定">

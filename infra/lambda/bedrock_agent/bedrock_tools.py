@@ -6,7 +6,7 @@ from request_contract import ALLOWED_TOOL_NAMES
 
 
 SYSTEM_PROMPT = """\
-あなたはTransitForgeのAI駅員です。日本語で簡潔に案内してください。
+あなたはTransitForgeの旅行コンシェルジュです。日本語で自然に案内してください。
 利用者が列車を探したい場合はsearch_trainsを使い、その結果のserviceUidだけを
 focus_trainへ渡してください。時刻の変更はset_display_timeを使ってください。
 時刻変更と列車検索が同じ依頼に含まれる場合は、時刻を変更して結果を受け取ってから
@@ -54,6 +54,12 @@ search_direct_routesのdestinationStationに観光地名を渡さないでくだ
 ask_follow_upを使って質問してください。このツールは質問と候補を画面へ構造化して表示します。
 質問文だけを通常の文章で返して会話を止めないでください。既に分かっている旅行条件はtripContextへ
 引き継ぎ、利用者が答えた条件を更新してから次の質問に進んでください。
+会話から継続的な旅行の好みが高い確信で分かったときだけremember_travel_preferenceを使ってください。
+一度きりの希望や推測は記憶しないでください。会話の要約と確認済み 未確認の話題は
+update_conversation_sessionで更新し、相談対象に合わせてscopeも選んでください。
+既存の旅程を変える提案はpropose_trip_updateを使い、利用者の確定前に保存内容を変更しないでください。
+レンタカー 車 バス 徒歩など鉄道以外の移動を旅程へ加える場合もpropose_trip_updateの
+addMovementを使ってください。所要時間や予約情報は検索結果がない限り推測しないでください。
 晴れ・曇り・雨・雪の変更はset_weatherを使ってください。
 混雑の棒グラフや目的地へのアーチの表示・非表示は
 set_layer_visibilityを使ってください。
@@ -62,6 +68,55 @@ set_layer_visibilityを使ってください。
 """
 
 TOOLS = [
+    {
+        "toolSpec": {
+            "name": "propose_trip_update",
+            "description": "現在の旅程に対する観光・鉄道以外の移動の追加 削除 並べ替え メタデータ変更を提案します。日程や鉄道経路の変更は先に宿泊・経路検索を実行してください。",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "summary": {"type": "string"},
+                        "patches": {
+                            "type": "array",
+                            "maxItems": 12,
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "type": {"type": "string", "enum": ["metadata", "remove", "move", "addSightseeing", "addMovement"]},
+                                    "itemId": {"type": "string"},
+                                    "afterId": {"type": "string"},
+                                    "title": {"type": "string"},
+                                    "destination": {"type": "string"},
+                                    "name": {"type": "string"},
+                                    "date": {"type": "string"},
+                                    "mode": {"type": "string", "enum": ["rental-car", "car", "bus", "walk", "other"]},
+                                    "origin": {"type": "string"},
+                                    "note": {"type": "string"},
+                                },
+                                "required": ["type"],
+                            },
+                        },
+                    },
+                    "required": ["summary", "patches"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "remember_travel_preference",
+            "description": "高確信の継続的な旅行の好みを端末内に記憶します。",
+            "inputSchema": {"json": {"type": "object", "properties": {"statement": {"type": "string"}, "confidence": {"type": "string", "enum": ["low", "high"]}}, "required": ["statement", "confidence"]}},
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "update_conversation_session",
+            "description": "現在の相談の対象 短い要約と確認済み 未確認の話題を更新します。",
+            "inputSchema": {"json": {"type": "object", "properties": {"scope": {"type": "string", "enum": ["general", "trip", "place", "route"]}, "summary": {"type": "string"}, "resolvedTopics": {"type": "array", "items": {"type": "string"}}, "pendingTopics": {"type": "array", "items": {"type": "string"}}}}},
+        }
+    },
     {
         "toolSpec": {
             "name": "ask_follow_up",

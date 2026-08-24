@@ -2,7 +2,7 @@
 
 実時刻表をもとに列車の計画位置を3D地図へ表示する個人開発プロジェクト
 
-指定時刻に運行中の列車を動かしながら眺められるほか 混雑と遅延の表示 AI駅員による列車案内と乗換3回までの経路検索に対応する
+指定時刻に運行中の列車を動かしながら眺められるほか 混雑と遅延の表示 コンシェルジュによる列車案内と乗換3回までの経路検索に対応する
 
 ## 主な機能
 
@@ -14,8 +14,10 @@
 - デジタルツインモードとシミュレーションモードの切り替え
 - 両モードでの行先アーチ表示
 - 天候と時間帯に応じた表示
-- AI駅員による列車検索 到着検索 直通または乗換3回までの経路検索
+- コンシェルジュによる列車検索 到着検索 直通または乗換3回までの経路検索
 - 旅行プロフィールに応じたコンシェルジュの選定 アバター表示 口調の切り替え
+- UUIDで分けた会話セッションと端末内の旅程 継続的な好みの保存
+- チャットと分離した移動 滞在 観光の旅程編集
 - 乗換ペースと経路優先の保存 自然言語による検索単位の上書き
 - 経路候補のタブ表示と路線色付きタイムライン
 - 直前の経路に対する途中停車駅の質問と区間列車の変更
@@ -89,7 +91,7 @@ python3 tools/measure_viewer_input.py \
 - AIが実行できる画面操作は検証済みの可逆操作に限定
 - AWS認証情報や秘密値をソース Terraform変数ファイル stateへ保存しない
 
-詳細は[プロダクト概要](docs/product-brief.md) [標準データモデル](docs/architecture/domain-model.md) [AI駅員の境界](docs/architecture/ai-operations-guide.md) [Issue運用](.github/ISSUE_MANAGEMENT.md) [ADR](docs/decisions/README.md)を参照
+詳細は[プロダクト概要](docs/product-brief.md) [標準データモデル](docs/architecture/domain-model.md) [コンシェルジュの境界](docs/architecture/ai-operations-guide.md) [Issue運用](.github/ISSUE_MANAGEMENT.md) [ADR](docs/decisions/README.md)を参照
 
 ## AWS
 
