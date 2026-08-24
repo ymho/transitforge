@@ -128,6 +128,7 @@ import {
   selectConciergeForUserProfile,
 } from "./features/concierge";
 import { loadUserProfile, travelProfileChangedEvent } from "./domain/travel-profile";
+import { promptWithConversationContext } from "./domain/conversation-guidance";
 import { renderConciergeIdentity } from "./presentation/concierge-identity";
 
 const minimumPlaybackRenderIntervalMilliseconds = 1_000 / 30;
@@ -306,7 +307,11 @@ const aiGuideController = configureAiGuidePanel(
     transferPace: journeyTransferPace,
     rankingPreference: journeyRankingPreference,
   },
-  (prompt, preferences) => handleAiGuidePrompt(prompt, preferences),
+  (prompt, preferences, conversation) =>
+    handleAiGuidePrompt(
+      promptWithConversationContext(prompt, conversation),
+      preferences,
+    ),
 );
 configureTravelProfile(document, () => aiGuideController.open());
 

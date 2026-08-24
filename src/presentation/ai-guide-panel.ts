@@ -3,6 +3,10 @@ import {
   loadUserProfile,
   type UserProfile,
 } from "../domain/travel-profile";
+import type {
+  ConversationGuidance,
+  ConversationSubmission,
+} from "../domain/conversation-guidance";
 import { recommendedTravelDestinations } from "../domain/travel-destination";
 import {
   defaultJourneySearchPreferences,
@@ -39,6 +43,7 @@ export interface AiGuidePanelElements {
 export type AiGuidePromptHandler = (
   prompt: string,
   preferences: JourneySearchPreferences,
+  conversation?: ConversationSubmission,
 ) => Promise<ViewerAgentResponse>;
 
 export interface AiGuidePanelController {
@@ -146,22 +151,23 @@ export function configureAiGuidePanel(
       .catch(() => { target.disabled = false; });
   });
 
-  let landmarkJourney: { name: string; departureText?: string } | undefined;
   const agentRequestIds = new Set<string>();
-  const setContextChoices = (choices: string[]) => {
+  let activeConversation: ConversationGuidance | undefined;
+  const setContextChoices = (guidance?: ConversationGuidance) => {
     contextChoices.replaceChildren();
+    const choices = guidance?.quickReplies ?? [];
     contextChoices.hidden = choices.length === 0;
-    for (const choiceText of choices) {
+    for (const reply of choices) {
       const choice = document.createElement("button");
       choice.type = "button";
-      choice.textContent = choiceText;
-      choice.addEventListener("click", () => submitPrompt(choiceText));
+      choice.textContent = reply.label;
+      choice.addEventListener("click", () => submitPrompt(reply.value));
       contextChoices.append(choice);
     }
     if (choices.length > 0) messages.append(contextChoices);
   };
 
-  const sendPrompt = (prompt: string) => {
+  const sendPrompt = (prompt: string, conversation?: ConversationSubmission) => {
     if (!prompt || submit.disabled) {
       return;
     }
@@ -175,10 +181,20 @@ export function configureAiGuidePanel(
     const pendingMessage = appendPendingMessage(messages);
 
     clearLatestAgentRequestId();
-    void handlePrompt(prompt, preferences())
+    void handlePrompt(prompt, preferences(), conversation)
       .then((response) => {
         const requestId = lastAgentRequestId();
         if (requestId) agentRequestIds.add(requestId);
+        const guidance = typeof response === "string" || !("conversation" in response)
+          ? undefined
+          : response.conversation;
+        activeConversation = guidance;
+        setContextChoices(guidance);
+        if (guidance) {
+          input.placeholder = inputPlaceholderForConversation(guidance);
+        } else {
+          input.placeholder = "列車、行き先、旅の相談を入力";
+        }
         resolveAssistantMessage(pendingMessage, response, input);
       })
       .catch(() => {
@@ -199,31 +215,12 @@ export function configureAiGuidePanel(
 
   const submitPrompt = (prompt: string) => {
     if (!prompt || submit.disabled) return;
-    if (landmarkJourney && landmarkJourney.departureText === undefined) {
-      const journey = landmarkJourney;
-      journey.departureText = prompt;
-      appendMessage(messages, "user", prompt);
-      appendMessage(
-        messages,
-        "assistant",
-        `${prompt}に${journey.name}へ行く予定ですね。何泊しますか？`,
-      );
-      input.value = "";
-      input.placeholder = "例: 1泊、2泊、日帰り";
-      setContextChoices(["日帰り", "1泊", "2泊"]);
-      input.focus();
-      return;
-    }
-    if (landmarkJourney?.departureText) {
-      const { name, departureText } = landmarkJourney;
-      landmarkJourney = undefined;
-      input.placeholder = "列車、行き先、旅の相談を入力";
-      setContextChoices([]);
-      const stayPhrase = prompt === "日帰り" ? "日帰りで" : `${prompt}で`;
-      sendPrompt(`${departureText}、${name}へ${stayPhrase}観光したい`);
-      return;
-    }
-    sendPrompt(prompt);
+    const conversation = activeConversation === undefined
+      ? undefined
+      : { answer: prompt, guidance: activeConversation };
+    activeConversation = undefined;
+    setContextChoices();
+    sendPrompt(prompt, conversation);
   };
 
   form.addEventListener("submit", (event) => {
@@ -246,16 +243,7 @@ export function configureAiGuidePanel(
     openLandmarkJourney(name) {
       setOpen(true);
       showConciergeIntro();
-      landmarkJourney = { name };
-      appendMessage(
-        messages,
-        "assistant",
-        `${name}ですね。いつ出発しますか？ 日付は自由に入力できます。`,
-      );
-      input.value = "";
-      input.placeholder = "例: 来週の火曜日、9月3日";
-      setContextChoices(["今日", "明日", "今週末"]);
-      input.focus();
+      sendPrompt(`${name}へ旅行したい`);
     },
     open() {
       setOpen(true);
@@ -263,6 +251,15 @@ export function configureAiGuidePanel(
     },
   };
   return controller;
+}
+
+function inputPlaceholderForConversation(guidance: ConversationGuidance): string {
+  switch (guidance.expectedInput) {
+    case "departure-date": return "例: 来週の火曜日、9月3日";
+    case "stay-length": return "例: 1泊、2泊、日帰り";
+    case "traveler-count": return "例: 大人2人、子ども1人";
+    default: return "自由に入力できます";
+  }
 }
 
 function appendConciergeIntroCards(
@@ -378,6 +375,8 @@ function resolveAssistantMessage(
   item.removeAttribute("aria-label");
   if (typeof response === "string") {
     item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response)));
+  } else if ("conversation" in response) {
+    item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response.text)));
   } else if ("travelPlan" in response) {
     item.classList.add("ai-guide-message-journey");
     item.replaceChildren();

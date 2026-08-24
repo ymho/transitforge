@@ -3,6 +3,7 @@ import type {
   JourneyRankingPreference,
   TransferPace,
 } from "./journey-search-preferences";
+import type { ConversationGuidance } from "./conversation-guidance";
 
 export interface ViewerAgentJourneyPlan {
   departureDate?: string;
@@ -52,7 +53,13 @@ export interface ViewerAgentTravelResponse {
   travelPlan: ViewerAgentTravelPlan;
 }
 
+export interface ViewerAgentConversationResponse {
+  text: string;
+  conversation: ConversationGuidance;
+}
+
 export type ViewerAgentResponse =
   | string
   | ViewerAgentRichResponse
-  | ViewerAgentTravelResponse;
+  | ViewerAgentTravelResponse
+  | ViewerAgentConversationResponse;

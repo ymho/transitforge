@@ -50,6 +50,10 @@ search_direct_routesのdestinationStationに観光地名を渡さないでくだ
 チェックイン・チェックアウト日を計算して渡してください。宿泊だけを求める依頼では、出発駅や
 経路を推測してsearch_direct_routesを呼ばないでください。空室や日付別の料金はこの検索結果から
 推測しないでください。
+旅行相談で、出発日、宿泊数、人数など次の検索に必要な条件が不足している場合は、
+ask_follow_upを使って質問してください。このツールは質問と候補を画面へ構造化して表示します。
+質問文だけを通常の文章で返して会話を止めないでください。既に分かっている旅行条件はtripContextへ
+引き継ぎ、利用者が答えた条件を更新してから次の質問に進んでください。
 晴れ・曇り・雨・雪の変更はset_weatherを使ってください。
 混雑の棒グラフや目的地へのアーチの表示・非表示は
 set_layer_visibilityを使ってください。
@@ -58,6 +62,48 @@ set_layer_visibilityを使ってください。
 """
 
 TOOLS = [
+    {
+        "toolSpec": {
+            "name": "ask_follow_up",
+            "description": "旅行相談の次の質問と任意の選択肢を表示します。検索に必要な条件が不足している場合に使います。",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "question": {"type": "string"},
+                        "expectedInput": {
+                            "type": "string",
+                            "enum": ["departure-date", "stay-length", "traveler-count", "free-text"],
+                        },
+                        "quickReplies": {
+                            "type": "array",
+                            "maxItems": 5,
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "label": {"type": "string"},
+                                    "value": {"type": "string"},
+                                },
+                                "required": ["label", "value"],
+                            },
+                        },
+                        "tripContext": {
+                            "type": "object",
+                            "properties": {
+                                "destinationWish": {"type": "string"},
+                                "startDate": {"type": "string", "description": "YYYY-MM-DD"},
+                                "endDate": {"type": "string", "description": "YYYY-MM-DD"},
+                                "pace": {"type": "number", "minimum": 0, "maximum": 1},
+                                "maximumTravelMinutes": {"type": ["number", "null"]},
+                                "carAvailable": {"type": "boolean"},
+                            },
+                        },
+                    },
+                    "required": ["question", "expectedInput", "tripContext"],
+                }
+            },
+        }
+    },
     {
         "toolSpec": {
             "name": "search_accommodations",

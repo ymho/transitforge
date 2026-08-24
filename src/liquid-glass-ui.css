@@ -910,8 +910,7 @@ summary:focus-visible {
   box-shadow: inset 0 1px rgb(255 255 255 / 11%), 0 .35rem 1rem rgb(0 0 0 / 8%);
 }
 
-.journey-settings-dialog select:focus,
-.landmark-date-choices input:focus {
+.journey-settings-dialog select:focus {
   outline: 2px solid rgb(0 150 246 / 60%);
   outline-offset: 2px;
 }
@@ -1341,46 +1340,6 @@ summary:focus-visible {
   color: var(--glass-accent-strong);
   background: var(--glass-accent-soft);
 }
-
-.landmark-journey-choices {
-  display: flex;
-  gap: 0.45rem;
-  margin-top: 0.65rem;
-}
-
-.landmark-date-choices {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  margin-top: 0.65rem;
-}
-
-.landmark-journey-choices button {
-  min-height: 2rem;
-  padding: 0.35rem 0.75rem;
-  border: 0;
-  border-radius: 999px;
-  color: var(--glass-accent-strong);
-  background: var(--glass-surface-strong);
-  font-size: 0.7rem;
-  font-weight: 700;
-}
-
-.landmark-date-choices button,
-.landmark-date-choices input {
-  min-height: 2rem;
-  padding: 0.35rem 0.75rem;
-  border: 0;
-  border-radius: 999px;
-  color: var(--glass-accent-strong);
-  background: var(--glass-surface-strong);
-  font: inherit;
-  font-size: 0.7rem;
-  font-weight: 700;
-}
-
-#app[data-ui-color-mode="day"] .landmark-date-choices input { color-scheme: light; }
-#app[data-ui-color-mode="night"] .landmark-date-choices input { color-scheme: dark; }
 
 /* 列車詳細も同じガラスシートへ統一する */
 .train-details {
