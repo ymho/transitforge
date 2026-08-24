@@ -833,25 +833,75 @@ summary:focus-visible {
   border-radius: 999px;
 }
 
-.trip-plan-panel { position: fixed; z-index: 8; top: 1rem; right: 1rem; bottom: 1rem; width: min(25rem, 34vw); overflow: auto; border: 1px solid var(--glass-border); border-radius: 1.5rem; color: var(--glass-text); background: var(--glass-surface); box-shadow: 0 .7rem 2.5rem rgb(0 0 0 / 22%); backdrop-filter: var(--glass-backdrop); }
+.trip-plan-panel {
+  position: fixed;
+  z-index: 8;
+  top: 1rem;
+  right: 1rem;
+  bottom: 1rem;
+  width: min(44rem, 48vw);
+  overflow: auto;
+  border: 1px solid var(--glass-border);
+  border-radius: 1.75rem;
+  color: var(--glass-text);
+  background: var(--glass-surface);
+  box-shadow: 0 .7rem 2.5rem rgb(0 0 0 / 22%);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+}
 .trip-plan-panel[hidden] { display: none; }
-.trip-plan-panel header { display: flex; align-items: center; justify-content: space-between; padding: 1rem; border-bottom: 1px solid var(--glass-border-subtle); }
+.trip-plan-panel > header { position: sticky; z-index: 2; top: 0; display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid var(--glass-border-subtle); background: var(--glass-surface); backdrop-filter: var(--glass-backdrop); }
 .trip-plan-panel header button { width: 2.5rem; height: 2.5rem; border: 0; border-radius: 50%; color: var(--glass-muted); background: var(--glass-surface-strong); font-size: 1.5rem; }
-.trip-plan-content { display: grid; gap: .65rem; padding: 1rem; }
-.trip-plan-content h2 { margin: 0 0 .25rem; font-size: 1.2rem; }
-.trip-plan-item { padding: .8rem; border-radius: 1rem; background: var(--glass-surface-strong); font-size: .8rem; line-height: 1.6; }
-.trip-plan-item > strong { display: block; margin-bottom: .2rem; color: var(--glass-muted); font-size: .7rem; }
-.trip-plan-item > p { margin: 0; }
-.trip-plan-item-movement { border-left: .2rem solid var(--glass-accent-strong); }
-.trip-plan-item-stay { border-left: .2rem solid #a572d9; }
-.trip-plan-item-sightseeing { border-left: .2rem solid #45a97a; }
-.trip-plan-stay-options { display: grid; gap: .35rem; margin-top: .65rem; }
-.trip-plan-stay-options button,
-.trip-plan-consult { padding: .45rem .65rem; border: 1px solid var(--glass-border); border-radius: .8rem; color: var(--glass-text); background: var(--glass-surface); font: inherit; text-align: left; cursor: pointer; }
-.trip-plan-stay-options button[aria-pressed="true"] { border-color: var(--glass-accent-strong); background: var(--glass-accent-soft); }
-.trip-plan-consult { margin-top: .65rem; color: var(--glass-accent-strong); }
-.trip-plan-content > button { justify-self: start; padding: .45rem .7rem; border: 1px solid var(--glass-border); border-radius: 999px; color: var(--glass-accent-strong); background: transparent; font: inherit; font-size: .75rem; }
-@media (max-width: 767px) { .trip-plan-panel { inset: auto 0 0; width: 100%; max-height: 74dvh; border-radius: 1.6rem 1.6rem 0 0; } }
+.trip-plan-content { display: grid; gap: 1rem; padding: 1.25rem; }
+.trip-plan-heading { display: grid; gap: .2rem; }
+.trip-plan-heading span { color: var(--glass-accent-strong); font-size: .72rem; font-weight: 700; }
+.trip-plan-heading h2 { margin: 0; font-size: clamp(1.3rem, 2vw, 1.75rem); letter-spacing: -.03em; }
+.trip-plan-cards { display: grid; gap: 1rem; }
+.trip-plan-card { overflow: hidden; border: 1px solid var(--glass-border); border-radius: 1.35rem; background: var(--glass-surface-strong); box-shadow: inset 0 1px 0 rgb(255 255 255 / 22%); }
+.trip-plan-card > header { display: flex; align-items: center; justify-content: space-between; padding: .75rem 1rem; border-bottom: 1px solid var(--glass-border-subtle); }
+.trip-plan-card > header strong { font-size: .78rem; }
+.trip-plan-card > header span { color: var(--glass-muted); font-size: .7rem; }
+.trip-plan-card > footer { display: flex; justify-content: flex-end; padding: .7rem 1rem; border-top: 1px solid var(--glass-border-subtle); }
+.trip-plan-route { padding: 1rem; }
+.trip-plan-route-overview { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding-bottom: .9rem; }
+.trip-plan-route-overview strong { font-size: 1.15rem; }
+.trip-plan-route-overview span { color: var(--glass-muted); font-size: .72rem; }
+.trip-plan-route-legs { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.trip-plan-route-leg { --trip-route-color: #4a93ff; position: relative; display: grid; gap: .55rem; padding-left: 1.3rem; }
+.trip-plan-route-leg::before { position: absolute; top: .5rem; bottom: .5rem; left: .28rem; width: .24rem; border-radius: 999px; background: var(--trip-route-color); content: ""; }
+.trip-plan-station { display: grid; grid-template-columns: 3.6rem minmax(0, 1fr); align-items: baseline; gap: .55rem; }
+.trip-plan-station time { font-variant-numeric: tabular-nums; font-size: .78rem; font-weight: 700; }
+.trip-plan-station strong { font-size: .86rem; }
+.trip-plan-route-service { display: grid; gap: .12rem; margin-left: 4.15rem; padding: .5rem .65rem; border-radius: .8rem; background: var(--glass-surface); }
+.trip-plan-route-service > strong { font-size: .78rem; }
+.trip-plan-route-service > span,
+.trip-plan-route-service > p { margin: 0; color: var(--glass-muted); font-size: .68rem; }
+.trip-plan-route-service em { justify-self: start; padding: .12rem .4rem; border-radius: 999px; color: #8a4c00; background: rgb(255 181 71 / 26%); font-size: .65rem; font-style: normal; font-weight: 700; }
+.trip-plan-transfer { margin: .55rem 0 .55rem 1.3rem; padding: .45rem .7rem; border-radius: .75rem; color: var(--glass-muted); background: var(--glass-accent-soft); font-size: .68rem; }
+.trip-plan-manual-movement,
+.trip-plan-stay,
+.trip-plan-card-sightseeing > .trip-plan-place { display: grid; gap: .3rem; margin: 0; padding: 1rem; }
+.trip-plan-manual-movement p,
+.trip-plan-stay > p { margin: 0; }
+.trip-plan-note { color: var(--glass-muted); font-size: .7rem; }
+.trip-plan-place { font-size: .9rem; font-weight: 700; }
+.trip-plan-stay-options { display: flex; gap: .65rem; margin-top: .65rem; padding-bottom: .2rem; overflow-x: auto; scroll-snap-type: x mandatory; }
+.trip-plan-stay-option { display: grid; flex: 0 0 min(15rem, 78%); gap: .45rem; overflow: hidden; padding: 0; border: 1px solid var(--glass-border); border-radius: 1rem; color: var(--glass-text); background: var(--glass-surface); font: inherit; text-align: left; scroll-snap-align: start; cursor: pointer; }
+.trip-plan-stay-option img { width: 100%; height: 7rem; object-fit: cover; }
+.trip-plan-stay-option > span { display: grid; gap: .15rem; padding: .65rem .75rem; }
+.trip-plan-stay-option strong { font-size: .75rem; }
+.trip-plan-stay-option p { margin: 0; color: var(--glass-muted); font-size: .65rem; }
+.trip-plan-stay-option[aria-pressed="true"] { border-color: var(--glass-accent-strong); background: var(--glass-accent-soft); box-shadow: inset 0 0 0 1px var(--glass-accent-strong); }
+.trip-plan-consult,
+.trip-plan-add { padding: .45rem .75rem; border: 1px solid var(--glass-border); border-radius: 999px; color: var(--glass-accent-strong); background: var(--glass-surface); font: inherit; font-size: .7rem; font-weight: 700; cursor: pointer; }
+.trip-plan-add { justify-self: center; }
+.trip-plan-route-empty,
+.trip-plan-empty { margin: 0; color: var(--glass-muted); font-size: .78rem; }
+@media (max-width: 767px) {
+  .trip-plan-panel { inset: auto 0 0; width: 100%; max-height: 88dvh; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 1.75rem 1.75rem 0 0; }
+  .trip-plan-content { padding: 1rem; }
+  .trip-plan-route-service { margin-left: 0; }
+}
 
 .journey-settings-dialog {
   width: min(24rem, calc(100vw - 2rem));
