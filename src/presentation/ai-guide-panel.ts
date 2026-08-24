@@ -7,6 +7,10 @@ import type {
   ConversationGuidance,
   ConversationSubmission,
 } from "../domain/conversation-guidance";
+import {
+  appendConversationHistory,
+  loadConversationHistory,
+} from "../domain/conversation-history";
 import { recommendedTravelDestinations } from "../domain/travel-destination";
 import {
   defaultJourneySearchPreferences,
@@ -21,6 +25,7 @@ import type {
   ViewerAgentTravelPlan,
   ViewerAgentResponse,
 } from "../domain/viewer-agent-response";
+import type { TripContext } from "../domain/travel-profile";
 import { hideSheet, showSheet } from "./sheet-transition";
 import { clearLatestAgentRequestId, lastAgentRequestId, submitConversationFeedback } from "../data/bedrock-agent";
 
@@ -141,10 +146,10 @@ export function configureAiGuidePanel(
     if (rating !== "good" && rating !== "bad") return;
     target.disabled = true;
     const conversation = Array.from(messages.querySelectorAll<HTMLElement>(".ai-guide-message"))
-      .map((message) => ({
+      .flatMap((message) => message.dataset.feedbackText === undefined ? [] : [{
         role: message.classList.contains("ai-guide-message-user") ? "user" as const : "assistant" as const,
-        text: message.dataset.feedbackText ?? message.textContent?.trim() ?? "",
-      }))
+        text: message.dataset.feedbackText,
+      }])
       .filter((message) => message.text.length > 0);
     void submitConversationFeedback({ rating, conversation, requestIds: [...agentRequestIds] })
       .then(() => { target.dataset.feedbackStored = "true"; })
@@ -153,6 +158,18 @@ export function configureAiGuidePanel(
 
   const agentRequestIds = new Set<string>();
   let activeConversation: ConversationGuidance | undefined;
+  let activeTripContext: TripContext | undefined;
+  for (const entry of loadConversationHistory(localStorage)) {
+    if (entry.role === "user") {
+      appendMessage(messages, "user", entry.text);
+    } else {
+      const restored = appendPendingMessage(messages);
+      resolveAssistantMessage(restored, entry.response, input);
+      if (typeof entry.response !== "string" && "travelPlan" in entry.response) {
+        activeTripContext = tripContextFromTravelPlan(entry.response.travelPlan);
+      }
+    }
+  }
   const setContextChoices = (guidance?: ConversationGuidance) => {
     contextChoices.replaceChildren();
     const choices = guidance?.quickReplies ?? [];
@@ -173,6 +190,7 @@ export function configureAiGuidePanel(
     }
 
     appendMessage(messages, "user", prompt);
+    appendConversationHistory(localStorage, { role: "user", text: prompt });
     input.value = "";
     input.disabled = true;
     submit.disabled = true;
@@ -189,6 +207,9 @@ export function configureAiGuidePanel(
           ? undefined
           : response.conversation;
         activeConversation = guidance;
+        activeTripContext = typeof response !== "string" && "travelPlan" in response
+          ? tripContextFromTravelPlan(response.travelPlan)
+          : guidance?.tripContext;
         setContextChoices(guidance);
         if (guidance) {
           input.placeholder = inputPlaceholderForConversation(guidance);
@@ -196,13 +217,12 @@ export function configureAiGuidePanel(
           input.placeholder = "列車、行き先、旅の相談を入力";
         }
         resolveAssistantMessage(pendingMessage, response, input);
+        appendConversationHistory(localStorage, { role: "assistant", response });
       })
       .catch(() => {
-        resolveAssistantMessage(
-          pendingMessage,
-          "案内を開始できませんでした。時間をおいてもう一度お試しください。",
-          input,
-        );
+        const errorResponse = "案内を開始できませんでした。時間をおいてもう一度お試しください。";
+        resolveAssistantMessage(pendingMessage, errorResponse, input);
+        appendConversationHistory(localStorage, { role: "assistant", response: errorResponse });
       })
       .finally(() => {
         input.disabled = false;
@@ -215,9 +235,13 @@ export function configureAiGuidePanel(
 
   const submitPrompt = (prompt: string) => {
     if (!prompt || submit.disabled) return;
-    const conversation = activeConversation === undefined
-      ? undefined
-      : { answer: prompt, guidance: activeConversation };
+    const guidance = activeConversation ?? (activeTripContext === undefined ? undefined : {
+      question: "現在の旅行条件を変更します",
+      expectedInput: "free-text" as const,
+      quickReplies: [],
+      tripContext: activeTripContext,
+    });
+    const conversation = guidance === undefined ? undefined : { answer: prompt, guidance };
     activeConversation = undefined;
     setContextChoices();
     sendPrompt(prompt, conversation);
@@ -251,6 +275,14 @@ export function configureAiGuidePanel(
     },
   };
   return controller;
+}
+
+function tripContextFromTravelPlan(plan: ViewerAgentTravelPlan): TripContext {
+  return {
+    destinationWish: plan.destination,
+    startDate: plan.checkInDate,
+    endDate: plan.checkOutDate,
+  };
 }
 
 function inputPlaceholderForConversation(guidance: ConversationGuidance): string {
@@ -327,19 +359,7 @@ function appendMessage(
   item.className = `ai-guide-message ai-guide-message-${role}`;
   item.textContent = role === "assistant" ? visibleAssistantText(text) : text;
   item.dataset.feedbackText = item.textContent;
-  if (role === "assistant") {
-    const feedback = document.createElement("span");
-    feedback.className = "conversation-feedback";
-    for (const [rating, label] of [["good", "よい回答"], ["bad", "改善が必要"]]) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.dataset.conversationFeedback = rating;
-      button.ariaLabel = label;
-      button.textContent = rating === "good" ? "👍" : "👎";
-      feedback.append(button);
-    }
-    item.append(feedback);
-  }
+  if (role === "assistant") appendConversationFeedback(item);
   messages.append(item);
   item.scrollIntoView({ block: "nearest" });
   return item;
@@ -395,7 +415,25 @@ function resolveAssistantMessage(
     text.textContent = visibleAssistantText(response.text);
     item.append(text, renderJourneyPlan(response.journeyPlan));
   }
+  item.dataset.feedbackText = typeof response === "string"
+    ? visibleAssistantText(response)
+    : visibleAssistantText(response.text);
+  appendConversationFeedback(item);
   item.scrollIntoView({ block: "nearest" });
+}
+
+function appendConversationFeedback(item: HTMLLIElement): void {
+  const feedback = document.createElement("span");
+  feedback.className = "conversation-feedback";
+  for (const [rating, label] of [["good", "よい回答"], ["bad", "改善が必要"]]) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.conversationFeedback = rating;
+    button.ariaLabel = label;
+    button.textContent = rating === "good" ? "👍" : "👎";
+    feedback.append(button);
+  }
+  item.append(feedback);
 }
 
 function renderTravelPlan(
