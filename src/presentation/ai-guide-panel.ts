@@ -324,7 +324,9 @@ function appendConciergeIntroCards(
   selectDestination?: (destination: string) => void,
 ): void {
   const item = document.createElement("li");
-  item.className = "ai-guide-message ai-guide-message-assistant concierge-intro";
+  // おすすめは会話履歴ではなく入力前の補助コンテンツとして扱う。
+  item.className = "concierge-intro";
+  item.setAttribute("aria-label", "おすすめの行き先");
   const title = document.createElement("p");
   title.textContent = "あなたが興味がありそうなスポット";
   const cards = document.createElement("div");
