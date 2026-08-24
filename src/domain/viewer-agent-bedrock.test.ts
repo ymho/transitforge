@@ -1403,6 +1403,7 @@ describe("Bedrock viewer agent", () => {
       message: { role: "assistant", content: [{ toolUse: {
         toolUseId: "stay", name: "search_accommodations", input: {
           destination: "出雲", checkInDate: "2026-08-17", checkOutDate: "2026-08-18",
+          adults: 2, children: 1, considerations: ["早朝を避ける"],
         },
       } }] },
       stopReason: "tool_use",
@@ -1435,6 +1436,11 @@ describe("Bedrock viewer agent", () => {
     expect(result.travelPlan.outbound.destinationStation).toBe("出雲市");
     expect(result.travelPlan.returning.destinationStation).toBe("京都");
     expect(result.travelPlan.accommodations[0]?.name).toBe("出雲の宿");
+    expect(result.travelPlan).toMatchObject({
+      adults: 2,
+      children: 1,
+      considerations: ["早朝を避ける"],
+    });
     expect(result.text).toContain("普段許容している移動時間より長め");
     expect(searchDirectRoutes).toHaveBeenNthCalledWith(1, expect.objectContaining({
       originStation: "京都", destinationStation: "出雲市",
@@ -1537,6 +1543,11 @@ describe("Bedrock viewer agent", () => {
             origin: "出雲市駅",
             destination: "宿",
             afterId: "outbound",
+          }, {
+            type: "metadata",
+            adults: 2,
+            children: 1,
+            considerations: ["歩く時間を短めにする"],
           }],
         },
       } }] },
@@ -1568,6 +1579,14 @@ describe("Bedrock viewer agent", () => {
     expect(result.tripPlanUpdate.patches[0]).toMatchObject({
       type: "add",
       item: { type: "movement", mode: "rental-car", origin: "出雲市駅" },
+    });
+    expect(result.tripPlanUpdate.patches[1]).toEqual({
+      type: "metadata",
+      conditions: {
+        adults: 2,
+        children: 1,
+        considerations: ["歩く時間を短めにする"],
+      },
     });
     vi.unstubAllGlobals();
   });

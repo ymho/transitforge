@@ -2,6 +2,7 @@ import type { JourneyRouteLeg } from "../domain/direct-route-search";
 import {
   applyTripPlanPatches,
   loadTripPlan,
+  migrateLegacyTripPlan,
   saveTripPlan,
   selectTripPlanAccommodation,
   type MovementMode,
@@ -13,6 +14,7 @@ import type { ViewerAgentAccommodation } from "../domain/viewer-agent-response";
 
 export interface TripPlanPanelController {
   show(plan: TripPlan): void;
+  showPreview(plan: TripPlan): void;
   apply(patches: TripPlanPatch[]): void;
   selectAccommodation(accommodation: ViewerAgentAccommodation): void;
   open(): void;
@@ -23,13 +25,21 @@ export function configureTripPlanPanel(
   content: HTMLElement,
   close: HTMLButtonElement,
   toggle: HTMLButtonElement,
+  conversationSessionId: string,
   beginChat: (prompt: string) => void,
 ): TripPlanPanelController {
-  let plan = loadTripPlan(localStorage);
+  let plan = migrateLegacyTripPlan(localStorage, conversationSessionId) ??
+    loadTripPlan(localStorage, conversationSessionId);
+  let persistChanges = true;
+  const collapsedItems = new Set<string>();
 
   const open = () => {
     render();
     panel.hidden = false;
+  };
+  const startChat = (prompt: string) => {
+    panel.hidden = true;
+    beginChat(prompt);
   };
   const render = () => {
     content.replaceChildren();
@@ -38,37 +48,53 @@ export function configureTripPlanPanel(
       content.append(paragraph("旅行の相談をすると、ここに旅程が作られます。", "trip-plan-empty"));
       return;
     }
+    const currentPlan = plan;
 
-    content.append(renderPlanHeading(plan));
+    content.append(renderPlanHeading(currentPlan, startChat));
+    content.append(renderPlanConditions(currentPlan, startChat));
     const cards = document.createElement("div");
     cards.className = "trip-plan-cards";
-    for (const item of plan.items) {
-      cards.append(renderTripPlanCard(item, plan, beginChat, controller));
-    }
+    currentPlan.items.forEach((item, index) => {
+      cards.append(renderTripPlanCard(
+        item,
+        currentPlan,
+        startChat,
+        controller,
+        collapsedItems,
+      ));
+      const next = currentPlan.items[index + 1];
+      if (next) cards.append(renderInsertionControl(item, next, startChat));
+    });
     content.append(cards);
 
     const add = button("＋ 観光を追加", "trip-plan-add");
     add.addEventListener("click", () =>
-      beginChat(`${plan?.destination ?? ""}で立ち寄る観光地を探したい`));
+      startChat(`${currentPlan.destination}で立ち寄る観光地を探したい`));
     content.append(add);
   };
 
   const controller: TripPlanPanelController = {
     show(next) {
       plan = next;
-      saveTripPlan(localStorage, plan);
+      persistChanges = true;
+      saveTripPlan(localStorage, conversationSessionId, plan);
+      open();
+    },
+    showPreview(next) {
+      plan = next;
+      persistChanges = false;
       open();
     },
     apply(patches) {
       if (!plan) return;
       plan = applyTripPlanPatches(plan, patches);
-      saveTripPlan(localStorage, plan);
+      if (persistChanges) saveTripPlan(localStorage, conversationSessionId, plan);
       open();
     },
     selectAccommodation(accommodation) {
       if (!plan) return;
       plan = selectTripPlanAccommodation(plan, accommodation);
-      saveTripPlan(localStorage, plan);
+      if (persistChanges) saveTripPlan(localStorage, conversationSessionId, plan);
       render();
     },
     open,
@@ -80,15 +106,153 @@ export function configureTripPlanPanel(
   return controller;
 }
 
-function renderPlanHeading(plan: TripPlan): HTMLElement {
+function renderPlanConditions(
+  plan: TripPlan,
+  beginChat: (prompt: string) => void,
+): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "trip-plan-conditions";
+  const header = document.createElement("header");
+  const copy = document.createElement("span");
+  const title = document.createElement("h3");
+  title.textContent = "この旅で考慮したこと";
+  const description = document.createElement("p");
+  description.textContent = "人数や過ごし方など、プランの前提です";
+  copy.append(title, description);
+  const edit = button("条件を相談", "trip-plan-conditions-edit");
+  edit.addEventListener("click", () => beginChat(
+    `${plan.destination}旅行の人数やペース、避けたいことを確認して変更したい`,
+  ));
+  header.append(copy, edit);
+  section.append(header);
+
+  const values = document.createElement("ul");
+  values.className = "trip-plan-condition-list";
+  const conditions = plan.conditions;
+  if (conditions) {
+    if (conditions.adults > 0) values.append(conditionChip(`大人${conditions.adults}人`));
+    if (conditions.children > 0) values.append(conditionChip(`子ども${conditions.children}人`));
+  }
+  const stay = plan.items.find((item) => item.type === "stay");
+  if (stay?.type === "stay") {
+    const stayNights = nights(stay.checkInDate, stay.checkOutDate);
+    values.append(conditionChip(`${stayNights}泊${stayNights + 1}日`));
+  }
+  for (const consideration of conditions?.considerations ?? []) {
+    values.append(conditionChip(consideration));
+  }
+  if (values.childElementCount === 0) {
+    values.append(conditionChip("人数や考慮事項はまだ未設定", true));
+  }
+  section.append(values);
+  return section;
+}
+
+function conditionChip(text: string, muted = false): HTMLLIElement {
+  const item = document.createElement("li");
+  item.textContent = text;
+  item.classList.toggle("is-muted", muted);
+  return item;
+}
+
+function renderPlanHeading(
+  plan: TripPlan,
+  beginChat: (prompt: string) => void,
+): HTMLElement {
   const heading = document.createElement("section");
   heading.className = "trip-plan-heading";
-  const eyebrow = document.createElement("span");
-  eyebrow.textContent = plan.destination;
+  const row = document.createElement("div");
   const title = document.createElement("h2");
   title.textContent = plan.title;
-  heading.append(eyebrow, title);
+  const actions = document.createElement("span");
+  actions.className = "trip-plan-heading-actions";
+  const regenerate = iconButton("#icon-refresh", "旅の内容からタイトルを再生成");
+  regenerate.addEventListener("click", () =>
+    beginChat(tripPlanTitleRegenerationPrompt(plan)));
+  const share = iconButton("#icon-share", "旅程を共有");
+  const status = document.createElement("small");
+  status.className = "trip-plan-share-status";
+  status.setAttribute("aria-live", "polite");
+  share.addEventListener("click", () => {
+    void shareTripPlan(plan).then((message) => {
+      status.textContent = message;
+      window.setTimeout(() => {
+        if (status.textContent === message) status.textContent = "";
+      }, 2_500);
+    });
+  });
+  actions.append(regenerate, share);
+  row.append(title, actions);
+  heading.append(row, status);
   return heading;
+}
+
+function iconButton(iconId: string, label: string): HTMLButtonElement {
+  const control = button("", "trip-plan-heading-action");
+  control.ariaLabel = label;
+  control.title = label;
+  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  icon.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttribute("href", iconId);
+  icon.append(use);
+  control.append(icon);
+  return control;
+}
+
+async function shareTripPlan(plan: TripPlan): Promise<string> {
+  const text = tripPlanShareText(plan);
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: plan.title, text });
+      return "共有しました";
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return "";
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    return "旅程をコピーしました";
+  } catch {
+    return "共有できませんでした";
+  }
+}
+
+export function tripPlanShareText(plan: TripPlan): string {
+  const lines = [plan.title];
+  if (plan.conditions) {
+    const travelers = [
+      plan.conditions.adults > 0 ? `大人${plan.conditions.adults}人` : "",
+      plan.conditions.children > 0 ? `子ども${plan.conditions.children}人` : "",
+    ].filter(Boolean).join(" ");
+    if (travelers) lines.push(travelers);
+    if (plan.conditions.considerations.length > 0) {
+      lines.push(`考慮事項: ${plan.conditions.considerations.join("・")}`);
+    }
+  }
+  plan.items.forEach((item, index) => {
+    lines.push(`${index + 1}. ${itemSummary(item)}${itemDateLabel(item)}`);
+  });
+  return lines.join("\n");
+}
+
+export function tripPlanTitleRegenerationPrompt(plan: TripPlan): string {
+  return [
+    "次の旅程にある移動、滞在、観光の内容を見て、現在とは異なる旅のタイトルを1つ再生成して。",
+    "行程は変更せず、propose_trip_updateのmetadata.titleとして変更案を出して。",
+    tripPlanShareText(plan).slice(0, 1_200),
+  ].join("\n");
+}
+
+function itemDateLabel(item: TripPlanItem): string {
+  if (item.type === "movement") {
+    const date = item.mode === "rail" ? item.route.departureDate : item.date;
+    return date ? ` ${formatDate(date)}` : "";
+  }
+  if (item.type === "stay") {
+    return ` ${formatDate(item.checkInDate)}から${nights(item.checkInDate, item.checkOutDate)}泊`;
+  }
+  return item.date ? ` ${formatDate(item.date)}` : "";
 }
 
 function renderTripPlanCard(
@@ -96,43 +260,98 @@ function renderTripPlanCard(
   plan: TripPlan,
   beginChat: (prompt: string) => void,
   controller: TripPlanPanelController,
+  collapsedItems: Set<string>,
 ): HTMLElement {
   const card = document.createElement("article");
   card.className = `trip-plan-card trip-plan-card-${item.type}`;
-  card.append(renderCardHeader(item));
+  const body = document.createElement("div");
+  body.className = "trip-plan-card-body";
+  const collapsed = collapsedItems.has(item.id);
+  body.hidden = collapsed;
+  card.classList.toggle("is-collapsed", collapsed);
+  card.append(renderCardHeader(item, collapsed, () => {
+    const shouldCollapse = !body.hidden;
+    body.hidden = shouldCollapse;
+    card.classList.toggle("is-collapsed", shouldCollapse);
+    if (shouldCollapse) collapsedItems.add(item.id);
+    else collapsedItems.delete(item.id);
+  }));
 
   if (item.type === "movement") {
-    card.append(item.mode === "rail"
+    body.append(item.mode === "rail"
       ? renderRailMovement(item.route)
       : renderManualMovement(item.mode, item.origin, item.destination, item.note));
   } else if (item.type === "stay") {
-    card.append(renderStay(item, controller));
+    body.append(renderStay(item, controller));
   } else {
-    card.append(paragraph(item.place.name, "trip-plan-place"));
+    body.append(paragraph(item.place.name, "trip-plan-place"));
   }
 
   const footer = document.createElement("footer");
   const consult = button("相談する", "trip-plan-consult");
   consult.addEventListener("click", () => beginChat(consultationPrompt(item, plan)));
   footer.append(consult);
-  card.append(footer);
+  body.append(footer);
+  card.append(body);
   return card;
 }
 
-function renderCardHeader(item: TripPlanItem): HTMLElement {
+function renderCardHeader(
+  item: TripPlanItem,
+  collapsed: boolean,
+  toggle: () => void,
+): HTMLElement {
   const header = document.createElement("header");
+  const trigger = button("", "trip-plan-card-toggle");
+  trigger.ariaExpanded = String(!collapsed);
+  trigger.ariaLabel = `${itemSummary(item)}の詳細を${collapsed ? "開く" : "閉じる"}`;
+  trigger.addEventListener("click", () => {
+    toggle();
+    trigger.ariaExpanded = String(trigger.ariaExpanded !== "true");
+    trigger.ariaLabel = `${itemSummary(item)}の詳細を${trigger.ariaExpanded === "true" ? "閉じる" : "開く"}`;
+  });
+  const copy = document.createElement("span");
+  copy.className = "trip-plan-card-heading";
   const label = document.createElement("strong");
   label.textContent = item.type === "movement"
     ? "移動"
     : item.type === "stay" ? "滞在" : "観光";
-  const date = document.createElement("span");
+  const summary = document.createElement("small");
+  summary.textContent = itemSummary(item);
+  const date = document.createElement("time");
   date.textContent = item.type === "movement"
     ? formatDate(item.mode === "rail" ? item.route.departureDate : item.date)
     : item.type === "stay" ? `${formatDate(item.checkInDate)}から${nights(item.checkInDate, item.checkOutDate)}泊`
       : formatDate(item.date);
-  header.append(label);
-  if (date.textContent) header.append(date);
+  copy.append(label, summary);
+  trigger.append(copy);
+  if (date.textContent) trigger.append(date);
+  const chevron = document.createElement("span");
+  chevron.className = "trip-plan-card-chevron";
+  chevron.setAttribute("aria-hidden", "true");
+  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttribute("href", "#icon-chevron-down");
+  icon.append(use);
+  chevron.append(icon);
+  trigger.append(chevron);
+  header.append(trigger);
   return header;
+}
+
+function renderInsertionControl(
+  previous: TripPlanItem,
+  next: TripPlanItem,
+  beginChat: (prompt: string) => void,
+): HTMLElement {
+  const slot = document.createElement("div");
+  slot.className = "trip-plan-insertion";
+  const add = button("＋ 予定を追加", "trip-plan-insertion-button");
+  add.addEventListener("click", () => beginChat(
+    `${itemSummary(previous)}と${itemSummary(next)}の間に予定を追加したい`,
+  ));
+  slot.append(add);
+  return slot;
 }
 
 function renderRailMovement(
@@ -232,8 +451,14 @@ function renderStay(
 ): HTMLElement {
   const body = document.createElement("div");
   body.className = "trip-plan-stay";
-  body.append(paragraph(item.accommodation?.name ?? item.destination, "trip-plan-place"));
-  if (!item.options?.length) return body;
+  body.append(paragraph(
+    item.accommodation ? "選択した宿泊先" : "宿泊先を選んでください",
+    "trip-plan-stay-guidance",
+  ));
+  if (!item.options?.length) {
+    body.append(paragraph(item.accommodation?.name ?? `${item.destination}の宿泊先を相談できます`, "trip-plan-place"));
+    return body;
+  }
 
   const options = document.createElement("div");
   options.className = "trip-plan-stay-options";
@@ -252,12 +477,28 @@ function renderStay(
     name.textContent = accommodation.name;
     copy.append(name);
     if (accommodation.areaName) copy.append(paragraph(accommodation.areaName));
+    const action = document.createElement("span");
+    action.className = "trip-plan-stay-action";
+    action.textContent = item.accommodation?.name === accommodation.name
+      ? "選択中"
+      : "この宿を選ぶ";
+    copy.append(action);
     select.append(copy);
     select.addEventListener("click", () => controller.selectAccommodation(accommodation));
     options.append(select);
   }
   body.append(options);
   return body;
+}
+
+function itemSummary(item: TripPlanItem): string {
+  if (item.type === "movement") {
+    return item.mode === "rail"
+      ? `${item.route.originStation}から${item.route.destinationStation}への移動`
+      : `${item.origin}から${item.destination}への移動`;
+  }
+  if (item.type === "stay") return `${item.destination}での滞在`;
+  return `${item.place.name}の観光`;
 }
 
 function consultationPrompt(item: TripPlanItem, plan: TripPlan): string {

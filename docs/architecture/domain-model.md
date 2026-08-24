@@ -138,18 +138,28 @@ AI応答には取得できた`x-transitforge-request-id`も保存し 再読み�
 ### `TripPlan` `TripPlanItem` `TripPlanPatch`
 
 - 定義: `src/domain/trip-plan.ts`
-- 保存先: LocalStorage `transitforge.trip-plan.v1`
+- 保存先: LocalStorage `transitforge.trip-plans.v2`
+
+1つの`ConversationSession.id`に対して編集対象の`TripPlan`は1つだけ保持する。別の旅行は新しい会話
+セッションとして分離する。同じ旅行の変更案やタイトル再生成は旅程を増やさず 現在の旅程への
+`TripPlanPatch`として扱う。旧キー`transitforge.trip-plan.v1`の単一旅程は現在の会話へ一度だけ移行する。
 
 編集可能な旅程は`movement` `stay` `sightseeing`の3種類だけで構成する。`movement`は鉄道経路のほか
 レンタカー 車 バス 徒歩を表現できる。鉄道区間は検索済みの`ViewerAgentJourneyPlan`を保持し
 検索結果のない所要時間や予約情報を補完しない。
 
+`TripPlanConditions`は今回の旅行だけに適用する大人人数 子どもの人数 最大8件の考慮事項を持つ。
+普段の同行者や好みを表す`UserProfile`とは分離し 旅程のメタデータ変更として確認後に保存する。
+
 画面では各項目を独立したカードとして表示する。鉄道移動は保持している経路から発着時刻 列車
 行き先 路線 乗換待ち時間 遅延を描画し 自由文から経路情報を補完しない。
+カードの開閉状態とカード間の追加導線は画面状態であり`TripPlan`へ保存しない。追加導線は前後の
+`TripPlanItem`を自然文の相談へ変換し AIが提案した`TripPlanPatch`だけを確認後に反映する。
 
 既存旅程の変更は`TripPlanPatch`の追加 置換 削除 並べ替え メタデータ変更として提案する。
 AI応答だけでは保存せず 利用者が画面で反映を選んだ後に適用する。日程と鉄道経路の変更は
 自由文から組み立てず 宿泊検索と経路検索の構造化結果からパッチを生成する。
+タイトル再生成は現在の移動 滞在 観光をAIへ渡し 行程を変えず`metadata.title`だけを提案する。
 
 ## AIと旅行候補の応答
 

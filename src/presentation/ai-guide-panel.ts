@@ -434,8 +434,16 @@ function resolveAssistantMessage(
       changes.append(change);
     }
     item.append(changes);
-    const apply = document.createElement("button"); apply.type = "button"; apply.textContent = "この変更を反映";
-    apply.addEventListener("click", () => { onTripPlanUpdate?.(response.tripPlanUpdate); apply.disabled = true; apply.textContent = "反映しました"; }); item.append(apply);
+    const apply = document.createElement("button");
+    apply.type = "button";
+    apply.className = "trip-plan-update-apply";
+    apply.textContent = "旅程に反映";
+    apply.addEventListener("click", () => {
+      onTripPlanUpdate?.(response.tripPlanUpdate);
+      apply.disabled = true;
+      apply.textContent = "旅程に反映済み";
+    });
+    item.append(apply);
   } else if ("travelPlan" in response) {
     item.classList.add("ai-guide-message-journey");
     item.replaceChildren();
@@ -460,7 +468,9 @@ function resolveAssistantMessage(
 }
 
 function tripPlanPatchLabel(patch: import("../domain/trip-plan").TripPlanPatch): string {
-  if (patch.type === "metadata") return "旅程の基本情報を変更";
+  if (patch.type === "metadata") {
+    return patch.conditions ? "人数と考慮事項を変更" : "旅程の基本情報を変更";
+  }
   if (patch.type === "add") return patch.item.type === "sightseeing" ? `${patch.item.place.name}を観光へ追加` : `${patch.item.type === "movement" ? "移動" : "滞在"}を追加`;
   if (patch.type === "replace") return `${patch.item.type === "movement" ? "移動経路" : patch.item.type === "stay" ? "滞在" : "観光"}を更新`;
   if (patch.type === "remove") return "旅程から項目を削除";

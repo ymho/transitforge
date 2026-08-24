@@ -57,7 +57,13 @@ ask_follow_upを使って質問してください。このツールは質問と�
 会話から継続的な旅行の好みが高い確信で分かったときだけremember_travel_preferenceを使ってください。
 一度きりの希望や推測は記憶しないでください。会話の要約と確認済み 未確認の話題は
 update_conversation_sessionで更新し、相談対象に合わせてscopeも選んでください。
+宿泊検索時に今回の大人人数 子どもの人数 明示された考慮事項が分かっている場合は
+search_accommodationsのadults children considerationsへ含めてください。推測した条件は含めないでください。
 既存の旅程を変える提案はpropose_trip_updateを使い、利用者の確定前に保存内容を変更しないでください。
+今回の旅行の大人人数 子どもの人数 考慮事項を変える場合はmetadataのadults children considerationsを
+使ってください。普段の好みとしてプロフィールへ混ぜないでください。
+旅程のタイトル再生成を求められた場合は移動 滞在 観光の内容を反映し 現在とは異なる短いtitleを
+必ずmetadataで1つ提案してください。このとき利用者が求めていない行程変更を含めないでください。
 レンタカー 車 バス 徒歩など鉄道以外の移動を旅程へ加える場合もpropose_trip_updateの
 addMovementを使ってください。所要時間や予約情報は検索結果がない限り推測しないでください。
 晴れ・曇り・雨・雪の変更はset_weatherを使ってください。
@@ -88,6 +94,9 @@ TOOLS = [
                                     "afterId": {"type": "string"},
                                     "title": {"type": "string"},
                                     "destination": {"type": "string"},
+                                    "adults": {"type": "integer", "minimum": 0, "maximum": 20},
+                                    "children": {"type": "integer", "minimum": 0, "maximum": 20},
+                                    "considerations": {"type": "array", "maxItems": 8, "items": {"type": "string"}},
                                     "name": {"type": "string"},
                                     "date": {"type": "string"},
                                     "mode": {"type": "string", "enum": ["rental-car", "car", "bus", "walk", "other"]},
@@ -171,6 +180,8 @@ TOOLS = [
                         "checkInDate": {"type": "string", "description": "YYYY-MM-DD"},
                         "checkOutDate": {"type": "string", "description": "YYYY-MM-DD"},
                         "adults": {"type": "integer", "minimum": 1, "maximum": 10},
+                        "children": {"type": "integer", "minimum": 0, "maximum": 10},
+                        "considerations": {"type": "array", "maxItems": 8, "items": {"type": "string"}},
                         "limit": {"type": "integer", "minimum": 1, "maximum": 5},
                     },
                     "required": ["destination", "checkInDate", "checkOutDate"],
