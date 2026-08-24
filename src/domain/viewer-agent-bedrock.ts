@@ -56,7 +56,15 @@ import {
   type ConversationExpectedInput,
   type ConversationGuidance,
 } from "./conversation-guidance";
-import type { TripContext } from "./travel-profile";
+import type { TripContext, UserProfile } from "./travel-profile";
+import {
+  tripPlanPatchesFromTravelPlan,
+  type MovementMode,
+  type TripPlan,
+  type TripPlanPatch,
+  type TripPlanUpdateProposal,
+} from "./trip-plan";
+import type { ConversationScope } from "./conversation-session";
 
 export interface BedrockViewerAgentDependencies {
   trains: Train[];
@@ -110,6 +118,15 @@ export interface BedrockViewerAgentDependencies {
   getPreviousJourneyPlan?: () => ViewerAgentJourneyPlan | undefined;
   getPendingJourneyGuidance?: () => JourneyNavigationGuidance | undefined;
   conciergeInstruction?: string;
+  rememberTravelPreference?: (statement: string, confidence: "low" | "high") => void;
+  updateConversationSession?: (update: {
+    scope?: ConversationScope;
+    summary?: string;
+    resolvedTopics?: string[];
+    pendingTopics?: string[];
+  }) => void;
+  getTripPlan?: () => TripPlan | undefined;
+  getUserProfile?: () => UserProfile | undefined;
   maximumRouteTime: number;
 }
 
@@ -174,6 +191,9 @@ interface TravelToolState {
 interface ConversationToolState {
   response?: ConversationGuidance;
 }
+interface TripPlanUpdateToolState {
+  proposal?: TripPlanUpdateProposal;
+}
 
 export async function runBedrockViewerAgent(
   prompt: string,
@@ -216,6 +236,7 @@ export async function runBedrockViewerAgent(
   const toolState: DirectRouteToolState = { searched: false };
   const travelState: TravelToolState = {};
   const conversationState: ConversationToolState = {};
+  const tripPlanUpdateState: TripPlanUpdateToolState = {};
 
   for (let round = 0; round < maximumToolRounds; round += 1) {
     const response = await converse(messages);
@@ -248,6 +269,7 @@ export async function runBedrockViewerAgent(
           toolState,
           travelState,
           conversationState,
+          tripPlanUpdateState,
         );
         toolResults.push({
           toolResult: {
@@ -279,13 +301,23 @@ export async function runBedrockViewerAgent(
 
     // 経路候補と表示文は検索ツールの構造化結果だけから確定できる。
     // モデルへ再送すると不要な画面操作を繰り返す場合があるためここで終了する。
-    const travelResponse = travelResponseText(travelState);
+    const travelResponse = travelResponseText(
+      travelState,
+      dependencies.getTripPlan?.(),
+      dependencies.getUserProfile?.(),
+    );
     if (travelResponse !== undefined) {
       return travelResponse;
     }
     const conversationResponse = conversationResponseText(conversationState);
     if (conversationResponse !== undefined) {
       return conversationResponse;
+    }
+    if (tripPlanUpdateState.proposal) {
+      return {
+        text: tripPlanUpdateState.proposal.summary,
+        tripPlanUpdate: tripPlanUpdateState.proposal,
+      };
     }
     const directRouteResponse = directRouteResponseText(toolState);
     if (directRouteResponse !== undefined) {
@@ -336,7 +368,42 @@ async function executeTool(
   toolState: DirectRouteToolState,
   travelState: TravelToolState,
   conversationState: ConversationToolState,
+  tripPlanUpdateState: TripPlanUpdateToolState,
 ): Promise<unknown> {
+  if (name === "propose_trip_update") {
+    const current = dependencies.getTripPlan?.();
+    const summary = typeof input.summary === "string" ? input.summary.trim() : "";
+    if (!current || !summary) throw new Error("変更する旅程がありません。");
+    const patches = tripPlanPatchesFromToolInput(input.patches, current);
+    if (patches.length === 0) throw new Error("旅程の変更内容がありません。");
+    tripPlanUpdateState.proposal = { summary, patches };
+    return { proposed: true, summary };
+  }
+  if (name === "remember_travel_preference") {
+    const statement = typeof input.statement === "string" ? input.statement.trim() : "";
+    const confidence = input.confidence === "high" ? "high" : "low";
+    if (!statement || statement.length > 160) throw new Error("記憶する内容が不正です。");
+    dependencies.rememberTravelPreference?.(statement, confidence);
+    return { remembered: true, statement, confidence };
+  }
+  if (name === "update_conversation_session") {
+    const list = (value: unknown) => Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string")
+          .map((item) => item.slice(0, 80))
+          .slice(0, 8)
+      : undefined;
+    const resolvedTopics = list(input.resolvedTopics);
+    const pendingTopics = list(input.pendingTopics);
+    dependencies.updateConversationSession?.({
+      ...(isConversationScope(input.scope) ? { scope: input.scope } : {}),
+      ...(typeof input.summary === "string"
+        ? { summary: input.summary.slice(0, 400) }
+        : {}),
+      ...(resolvedTopics ? { resolvedTopics } : {}),
+      ...(pendingTopics ? { pendingTopics } : {}),
+    });
+    return { updated: true };
+  }
   if (name === "ask_follow_up") {
     const guidance = conversationGuidanceFromToolInput(input);
     conversationState.response = guidance;
@@ -660,7 +727,9 @@ async function executeTool(
       if (destinationStation) {
         const preferences = dependencies.getJourneySearchPreferences?.() ??
           defaultJourneySearchPreferences;
+        const profileOriginStation = dependencies.getUserProfile?.()?.home.station;
         const outboundResult = await dependencies.searchDirectRoutes({
+          ...(profileOriginStation ? { originStation: profileOriginStation } : {}),
           destinationStation,
           departureTimeMinutes: 8 * 60,
           departureDate: checkInDate,
@@ -790,13 +859,107 @@ export function currentServiceDateInJapan(now = new Date()): string {
 
 function travelResponseText(
   state: TravelToolState,
+  currentPlan?: TripPlan,
+  profile?: UserProfile,
 ): ViewerAgentResponse | undefined {
   const plan = state.response;
   if (!plan) return undefined;
+  const advisory = travelBurdenAdvisory(plan, profile);
+  if (currentPlan) {
+    return {
+      text: `${formatCalendarDate(plan.checkInDate)}から${formatCalendarDate(plan.checkOutDate)}へ日程と経路を組み直しました。${advisory}変更内容を確認してください。`,
+      tripPlanUpdate: {
+        summary: `${formatCalendarDate(plan.checkInDate)}から${formatCalendarDate(plan.checkOutDate)}の日程へ変更`,
+        patches: tripPlanPatchesFromTravelPlan(plan),
+      },
+    };
+  }
   return {
-    text: `${formatCalendarDate(plan.checkInDate)}から${formatCalendarDate(plan.checkOutDate)}までの${plan.destination}旅行です。行きと帰りの経路、宿泊候補をまとめました。`,
+    text: `${formatCalendarDate(plan.checkInDate)}から${formatCalendarDate(plan.checkOutDate)}までの${plan.destination}旅行です。${advisory}行きと帰りの経路、宿泊候補をまとめました。`,
     travelPlan: plan,
   };
+}
+
+function travelBurdenAdvisory(
+  plan: ViewerAgentTravelPlan,
+  profile?: UserProfile,
+): string {
+  const journey = plan.outbound.journeys[0];
+  if (!journey || !profile) return "";
+  const concerns: string[] = [];
+  const maximum = profile.transport.maxTypicalTravelMinutes;
+  const duration = journey.arrivalTimeMinutes - journey.departureTimeMinutes;
+  if (maximum !== null && duration > maximum + 30) {
+    const hours = Math.floor(duration / 60);
+    const minutes = duration % 60;
+    const durationLabel = `${hours > 0 ? `${hours}時間` : ""}${minutes > 0 ? `${minutes}分` : ""}`;
+    concerns.push(`行きの移動は${durationLabel}で、普段許容している移動時間より長め`);
+  }
+  if (profile.travelStyle.transferTolerance <= 0.35 && journey.transferCount >= 2) {
+    concerns.push(`乗換が${journey.transferCount}回あり、普段の好みより多め`);
+  }
+  return concerns.length === 0
+    ? ""
+    : `${concerns.join("です。また、")}です。候補は作りましたが、負担を軽くしたい場合は移動条件を調整できます。`;
+}
+
+function tripPlanPatchesFromToolInput(value: unknown, current: TripPlan): TripPlanPatch[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 12).flatMap((raw): TripPlanPatch[] => {
+    if (!raw || typeof raw !== "object") return [];
+    const patch = raw as Record<string, unknown>;
+    if (patch.type === "metadata") {
+      const title = typeof patch.title === "string" ? patch.title.trim().slice(0, 80) : undefined;
+      const destination = typeof patch.destination === "string" ? patch.destination.trim().slice(0, 80) : undefined;
+      return title || destination ? [{ type: "metadata", ...(title ? { title } : {}), ...(destination ? { destination } : {}) }] : [];
+    }
+    const itemId = typeof patch.itemId === "string" && current.items.some((item) => item.id === patch.itemId) ? patch.itemId : undefined;
+    if (patch.type === "remove" && itemId) return [{ type: "remove", itemId }];
+    if (patch.type === "move" && itemId) {
+      const afterId = typeof patch.afterId === "string" && current.items.some((item) => item.id === patch.afterId) ? patch.afterId : undefined;
+      return [{ type: "move", itemId, ...(afterId ? { afterId } : {}) }];
+    }
+    if (patch.type === "addSightseeing" && typeof patch.name === "string" && patch.name.trim()) {
+      const afterId = typeof patch.afterId === "string" && current.items.some((item) => item.id === patch.afterId) ? patch.afterId : undefined;
+      return [{ type: "add", item: { id: `sightseeing-${crypto.randomUUID()}`, type: "sightseeing", place: { name: patch.name.trim().slice(0, 100), provider: "manual" }, ...(typeof patch.date === "string" ? { date: patch.date.slice(0, 10) } : {}) }, ...(afterId ? { afterId } : {}) }];
+    }
+    if (patch.type === "addMovement" && isManualMovementMode(patch.mode) &&
+      typeof patch.origin === "string" && patch.origin.trim() &&
+      typeof patch.destination === "string" && patch.destination.trim()) {
+      const afterId = typeof patch.afterId === "string" &&
+        current.items.some((item) => item.id === patch.afterId)
+        ? patch.afterId
+        : undefined;
+      return [{
+        type: "add",
+        item: {
+          id: `movement-${crypto.randomUUID()}`,
+          type: "movement",
+          mode: patch.mode,
+          origin: patch.origin.trim().slice(0, 100),
+          destination: patch.destination.trim().slice(0, 100),
+          ...(typeof patch.date === "string" ? { date: patch.date.slice(0, 10) } : {}),
+          ...(typeof patch.note === "string" && patch.note.trim()
+            ? { note: patch.note.trim().slice(0, 500) }
+            : {}),
+        },
+        ...(afterId ? { afterId } : {}),
+      }];
+    }
+    return [];
+  });
+}
+
+function isManualMovementMode(
+  value: unknown,
+): value is Exclude<MovementMode, "rail"> {
+  return value === "rental-car" || value === "car" || value === "bus" ||
+    value === "walk" || value === "other";
+}
+
+function isConversationScope(value: unknown): value is ConversationScope {
+  return value === "general" || value === "trip" || value === "place" ||
+    value === "route";
 }
 
 function conversationResponseText(

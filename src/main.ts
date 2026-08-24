@@ -130,6 +130,20 @@ import {
 import { loadUserProfile, travelProfileChangedEvent } from "./domain/travel-profile";
 import { promptWithConversationContext } from "./domain/conversation-guidance";
 import { renderConciergeIdentity } from "./presentation/concierge-identity";
+import { configureTripPlanPanel } from "./presentation/trip-plan-panel";
+import { loadTripPlan, tripPlanFromTravelPlan } from "./domain/trip-plan";
+import {
+  conversationContextSummary,
+  createConversationSession,
+  loadConversationSession,
+  loadTravelMemories,
+  rememberTravelPreference,
+  saveConversationSession,
+} from "./domain/conversation-session";
+import {
+  loadConversationHistory,
+  recentConversationContext,
+} from "./domain/conversation-history";
 
 const minimumPlaybackRenderIntervalMilliseconds = 1_000 / 30;
 const metricsLogIntervalMilliseconds = 10_000;
@@ -205,6 +219,11 @@ const journeyTransferPace =
   document.querySelector<HTMLSelectElement>("#journey-transfer-pace");
 const journeyRankingPreference =
   document.querySelector<HTMLSelectElement>("#journey-ranking-preference");
+const tripPlanToggle =
+  document.querySelector<HTMLButtonElement>("#trip-plan-toggle");
+const tripPlanPanel = document.querySelector<HTMLElement>("#trip-plan-panel");
+const tripPlanContent = document.querySelector<HTMLElement>("#trip-plan-content");
+const closeTripPlan = document.querySelector<HTMLButtonElement>("#close-trip-plan");
 const trainDetails = document.querySelector<HTMLElement>("#train-details");
 const closeTrainDetails = document.querySelector<HTMLButtonElement>("#close-train-details");
 const selectedTrainTitle = document.querySelector<HTMLElement>("#selected-train-title");
@@ -252,6 +271,10 @@ if (
   journeySettingsPanel === null ||
   journeyTransferPace === null ||
   journeyRankingPreference === null ||
+  tripPlanToggle === null ||
+  tripPlanPanel === null ||
+  tripPlanContent === null ||
+  closeTripPlan === null ||
   trainDetails === null ||
   closeTrainDetails === null ||
   selectedTrainTitle === null ||
@@ -274,7 +297,12 @@ loadingScreenRetry.addEventListener("click", () => window.location.reload());
 let handleAiGuidePrompt: AiGuidePromptHandler = async () =>
   "列車データを読み込んでいます。準備が整ってからもう一度お試しください。";
 let findJourneyLegAlternatives: JourneyLegAlternativeSearch = async () => [];
-let activeConcierge = selectConciergeForUserProfile(loadUserProfile(localStorage));
+let activeConcierge = selectConciergeForUserProfile(
+  loadUserProfile(localStorage),
+);
+const activeConversationSession = loadConversationSession(localStorage) ??
+  createConversationSession();
+saveConversationSession(localStorage, activeConversationSession);
 const updateConciergeIdentity = (resetGreeting = false) => {
   activeConcierge = selectConciergeForUserProfile(loadUserProfile(localStorage));
   renderConciergeIdentity(
@@ -288,11 +316,34 @@ const updateConciergeIdentity = (resetGreeting = false) => {
     resetGreeting,
   );
 };
+const currentConciergeInstruction = (prompt: string) => [
+  buildConciergePrompt(activeConcierge).slice(0, 450),
+  "この文脈は明示希望を上書きしない。既知の条件を聞き直さず、推測に確信がないときだけ短く確認する。遠い移動や多い乗換はプロフィールの許容度と照合し、懸念と代替案を先に示す。",
+  `利用者と旅行の現在の文脈:\n${conversationContextSummary(
+    loadUserProfile(localStorage),
+    loadTripPlan(localStorage),
+    activeConversationSession,
+    loadTravelMemories(localStorage),
+  )}`,
+  `現在のセッションの直近の会話:\n${recentConversationContext(
+    loadConversationHistory(localStorage, activeConversationSession.id),
+    prompt,
+  )}`,
+].join("\n\n").slice(0, 2_350);
 updateConciergeIdentity(true);
 document.addEventListener(travelProfileChangedEvent, () =>
   updateConciergeIdentity(true));
-const aiGuideController = configureAiGuidePanel(
+let aiGuideController: ReturnType<typeof configureAiGuidePanel>;
+const tripPlanController = configureTripPlanPanel(
+  tripPlanPanel,
+  tripPlanContent,
+  closeTripPlan,
+  tripPlanToggle,
+  (prompt) => aiGuideController.ask(prompt),
+);
+aiGuideController = configureAiGuidePanel(
   {
+    conversationSessionId: activeConversationSession.id,
     panel: aiGuidePanel,
     toggle: aiGuideToggle,
     close: closeAiGuide,
@@ -306,6 +357,25 @@ const aiGuideController = configureAiGuidePanel(
     settingsPanel: journeySettingsPanel,
     transferPace: journeyTransferPace,
     rankingPreference: journeyRankingPreference,
+    onTravelPlan: (plan) => {
+      const tripPlan = tripPlanFromTravelPlan(plan);
+      tripPlanController.show(tripPlan);
+      Object.assign(activeConversationSession, {
+        scope: "trip",
+        tripPlanId: tripPlan.id,
+        updatedAt: new Date().toISOString(),
+      });
+      saveConversationSession(localStorage, activeConversationSession);
+    },
+    onTripPlanUpdate: (proposal) => {
+      tripPlanController.apply(proposal.patches);
+      Object.assign(activeConversationSession, {
+        scope: "trip",
+        summary: proposal.summary,
+        updatedAt: new Date().toISOString(),
+      });
+      saveConversationSession(localStorage, activeConversationSession);
+    },
   },
   (prompt, preferences, conversation) =>
     handleAiGuidePrompt(
@@ -1146,7 +1216,22 @@ if (!token) {
                 getJourneySearchPreferences: () => preferences,
                 getPreviousJourneyPlan: () => previousJourneyPlan,
                 getPendingJourneyGuidance: () => pendingJourneyGuidance,
-                conciergeInstruction: buildConciergePrompt(activeConcierge),
+                conciergeInstruction: currentConciergeInstruction(prompt),
+                rememberTravelPreference: (statement, confidence) =>
+                  rememberTravelPreference(
+                    localStorage,
+                    statement,
+                    activeConversationSession.id,
+                    confidence,
+                  ),
+                updateConversationSession: (update) => {
+                  Object.assign(activeConversationSession, update, {
+                    updatedAt: new Date().toISOString(),
+                  });
+                  saveConversationSession(localStorage, activeConversationSession);
+                },
+                getTripPlan: () => loadTripPlan(localStorage),
+                getUserProfile: () => loadUserProfile(localStorage),
                 maximumRouteTime,
               },
               invokeBedrockAgent,

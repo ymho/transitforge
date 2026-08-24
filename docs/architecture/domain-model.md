@@ -95,6 +95,7 @@
 
 普段の出発地 同行者 好み 旅行ペース 許容移動時間を表す。個人を直接特定する情報や子どもの
 生年月日は保存しない。コンシェルジュの選定と将来の旅行推薦に使う。
+旅行検索で出発駅が明示されていないときは`home.station`を普段の出発駅として使う。
 
 ### `TripContext`
 
@@ -116,10 +117,36 @@ UIはこの契約を共通入力として描画するだけで 会話パター�
 ### `ConversationHistoryEntry`
 
 - 定義: `src/domain/conversation-history.ts`
-- 保存先: LocalStorage `transitforge.concierge-history.v1`
+- 保存先: LocalStorage `transitforge.concierge-history.v2`
 
-コンシェルジュ画面に表示した利用者の発話と構造化されたAI応答を最大50件保存する。再読み込み後も
-表示を復元するための端末内履歴であり Bedrockへ全履歴を送信する用途には使わない。
+コンシェルジュ画面に表示した利用者の発話と構造化されたAI応答を会話セッションごとに最大50件保存する。
+再読み込み後も表示を復元し 同じセッションの直近3件だけを短いテキストへ変換してBedrockの文脈に使う。
+別の相談の全履歴を無条件に混ぜない。
+AI応答には取得できた`x-transitforge-request-id`も保存し 再読み込み後の明示的なフィードバックへ紐付ける。
+
+### `ConversationSession` `TravelMemory`
+
+- 定義: `src/domain/conversation-session.ts`
+- 保存先: LocalStorage `transitforge.conversation-sessions.v2` `transitforge.travel-memories.v1`
+
+`ConversationSession`はUUIDで相談を識別し 現在の対象を`general` `trip` `place` `route`のスコープで表す。
+短い要約 確認済みの話題 未確認の話題と 関連する`TripPlan.id`を持つ。直近20セッションを端末内に保持する。
+
+`TravelMemory`は会話から得た継続的な好みである。一回限りの`TripContext`と分離し 高確度の記憶だけを
+別セッションのAI文脈へ渡す。現在の明示的な依頼と`UserProfile`を上書きしない。
+
+### `TripPlan` `TripPlanItem` `TripPlanPatch`
+
+- 定義: `src/domain/trip-plan.ts`
+- 保存先: LocalStorage `transitforge.trip-plan.v1`
+
+編集可能な旅程は`movement` `stay` `sightseeing`の3種類だけで構成する。`movement`は鉄道経路のほか
+レンタカー 車 バス 徒歩を表現できる。鉄道区間は検索済みの`ViewerAgentJourneyPlan`を保持し
+検索結果のない所要時間や予約情報を補完しない。
+
+既存旅程の変更は`TripPlanPatch`の追加 置換 削除 並べ替え メタデータ変更として提案する。
+AI応答だけでは保存せず 利用者が画面で反映を選んだ後に適用する。日程と鉄道経路の変更は
+自由文から組み立てず 宿泊検索と経路検索の構造化結果からパッチを生成する。
 
 ## AIと旅行候補の応答
 
@@ -143,7 +170,8 @@ AI応答からUIへ渡す経路表示用モデルである。`JourneyRouteResult
 - 定義: `src/domain/viewer-agent-response.ts`
 
 AIからUIへ返す合併型である。文字列 経路 `ViewerAgentJourneyPlan` 旅行 `ViewerAgentTravelPlan`
-追加質問 `ConversationGuidance`のいずれかを返す。AIの自由文をUIの状態遷移に使わない。
+追加質問 `ConversationGuidance` 旅程変更 `TripPlanUpdateProposal`のいずれかを返す。
+AIの自由文をUIの状態遷移に使わない。
 
 ## 明示的なフィードバック
 

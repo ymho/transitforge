@@ -30,6 +30,7 @@ import { hideSheet, showSheet } from "./sheet-transition";
 import { clearLatestAgentRequestId, lastAgentRequestId, submitConversationFeedback } from "../data/bedrock-agent";
 
 export interface AiGuidePanelElements {
+  conversationSessionId: string;
   panel: HTMLElement;
   toggle: HTMLButtonElement;
   close: HTMLButtonElement;
@@ -43,6 +44,8 @@ export interface AiGuidePanelElements {
   settingsPanel: HTMLElement;
   transferPace: HTMLSelectElement;
   rankingPreference: HTMLSelectElement;
+  onTravelPlan?: (plan: ViewerAgentTravelPlan) => void;
+  onTripPlanUpdate?: (proposal: import("../domain/trip-plan").TripPlanUpdateProposal) => void;
 }
 
 export type AiGuidePromptHandler = (
@@ -54,6 +57,7 @@ export type AiGuidePromptHandler = (
 export interface AiGuidePanelController {
   openLandmarkJourney(name: string, type?: string): void;
   open(): void;
+  ask(prompt: string): void;
 }
 
 let journeyPlanSequence = 0;
@@ -159,12 +163,13 @@ export function configureAiGuidePanel(
   const agentRequestIds = new Set<string>();
   let activeConversation: ConversationGuidance | undefined;
   let activeTripContext: TripContext | undefined;
-  for (const entry of loadConversationHistory(localStorage)) {
+  for (const entry of loadConversationHistory(localStorage, elements.conversationSessionId)) {
     if (entry.role === "user") {
       appendMessage(messages, "user", entry.text);
     } else {
+      if (entry.requestId) agentRequestIds.add(entry.requestId);
       const restored = appendPendingMessage(messages);
-      resolveAssistantMessage(restored, entry.response, input);
+      resolveAssistantMessage(restored, entry.response, undefined, elements.onTripPlanUpdate);
       if (typeof entry.response !== "string" && "travelPlan" in entry.response) {
         activeTripContext = tripContextFromTravelPlan(entry.response.travelPlan);
       }
@@ -190,7 +195,11 @@ export function configureAiGuidePanel(
     }
 
     appendMessage(messages, "user", prompt);
-    appendConversationHistory(localStorage, { role: "user", text: prompt });
+    appendConversationHistory(
+      localStorage,
+      elements.conversationSessionId,
+      { role: "user", text: prompt },
+    );
     input.value = "";
     input.disabled = true;
     submit.disabled = true;
@@ -216,13 +225,27 @@ export function configureAiGuidePanel(
         } else {
           input.placeholder = "列車、行き先、旅の相談を入力";
         }
-        resolveAssistantMessage(pendingMessage, response, input);
-        appendConversationHistory(localStorage, { role: "assistant", response });
+        resolveAssistantMessage(pendingMessage, response, elements.onTravelPlan, elements.onTripPlanUpdate);
+        appendConversationHistory(
+          localStorage,
+          elements.conversationSessionId,
+          {
+            role: "assistant",
+            response,
+            ...(requestId ? { requestId } : {}),
+          },
+        );
       })
       .catch(() => {
+        const requestId = lastAgentRequestId();
+        if (requestId) agentRequestIds.add(requestId);
         const errorResponse = "案内を開始できませんでした。時間をおいてもう一度お試しください。";
-        resolveAssistantMessage(pendingMessage, errorResponse, input);
-        appendConversationHistory(localStorage, { role: "assistant", response: errorResponse });
+        resolveAssistantMessage(pendingMessage, errorResponse);
+        appendConversationHistory(localStorage, elements.conversationSessionId, {
+          role: "assistant",
+          response: errorResponse,
+          ...(requestId ? { requestId } : {}),
+        });
       })
       .finally(() => {
         input.disabled = false;
@@ -273,6 +296,7 @@ export function configureAiGuidePanel(
       setOpen(true);
       showConciergeIntro();
     },
+    ask(prompt) { setOpen(true); sendPrompt(prompt); },
   };
   return controller;
 }
@@ -389,7 +413,8 @@ function appendPendingMessage(messages: HTMLOListElement): HTMLLIElement {
 function resolveAssistantMessage(
   item: HTMLLIElement,
   response: ViewerAgentResponse,
-  input: HTMLInputElement,
+  onTravelPlan?: (plan: ViewerAgentTravelPlan) => void,
+  onTripPlanUpdate?: (proposal: import("../domain/trip-plan").TripPlanUpdateProposal) => void,
 ): void {
   item.classList.remove("ai-guide-message-pending");
   item.removeAttribute("aria-label");
@@ -397,16 +422,26 @@ function resolveAssistantMessage(
     item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response)));
   } else if ("conversation" in response) {
     item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response.text)));
+  } else if ("tripPlanUpdate" in response) {
+    item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response.text)));
+    const changes = document.createElement("ul");
+    changes.className = "trip-plan-update-changes";
+    for (const patch of response.tripPlanUpdate.patches) {
+      const change = document.createElement("li");
+      change.textContent = tripPlanPatchLabel(patch);
+      changes.append(change);
+    }
+    item.append(changes);
+    const apply = document.createElement("button"); apply.type = "button"; apply.textContent = "この変更を反映";
+    apply.addEventListener("click", () => { onTripPlanUpdate?.(response.tripPlanUpdate); apply.disabled = true; apply.textContent = "反映しました"; }); item.append(apply);
   } else if ("travelPlan" in response) {
     item.classList.add("ai-guide-message-journey");
     item.replaceChildren();
     const text = document.createElement("p");
     text.className = "journey-plan-intro";
     text.textContent = visibleAssistantText(response.text);
-    item.append(text, renderTravelPlan(response.travelPlan, (prompt) => {
-      input.value = prompt;
-      input.focus();
-    }));
+    item.append(text);
+    onTravelPlan?.(response.travelPlan);
   } else {
     item.classList.add("ai-guide-message-journey");
     item.replaceChildren();
@@ -422,6 +457,14 @@ function resolveAssistantMessage(
   item.scrollIntoView({ block: "nearest" });
 }
 
+function tripPlanPatchLabel(patch: import("../domain/trip-plan").TripPlanPatch): string {
+  if (patch.type === "metadata") return "旅程の基本情報を変更";
+  if (patch.type === "add") return patch.item.type === "sightseeing" ? `${patch.item.place.name}を観光へ追加` : `${patch.item.type === "movement" ? "移動" : "滞在"}を追加`;
+  if (patch.type === "replace") return `${patch.item.type === "movement" ? "移動経路" : patch.item.type === "stay" ? "滞在" : "観光"}を更新`;
+  if (patch.type === "remove") return "旅程から項目を削除";
+  return "旅程の順番を変更";
+}
+
 function appendConversationFeedback(item: HTMLLIElement): void {
   const feedback = document.createElement("span");
   feedback.className = "conversation-feedback";
@@ -434,167 +477,6 @@ function appendConversationFeedback(item: HTMLLIElement): void {
     feedback.append(button);
   }
   item.append(feedback);
-}
-
-function renderTravelPlan(
-  plan: ViewerAgentTravelPlan,
-  beginSightseeingConsultation: (prompt: string) => void,
-): HTMLElement {
-  const container = document.createElement("section");
-  container.className = "travel-plan";
-  container.append(travelPlanOverview(plan));
-  const itinerary = document.createElement("div");
-  itinerary.className = "travel-plan-itinerary";
-  itinerary.append(
-    travelPlanSection("行き", plan.outbound),
-    sightseeingInsertion(plan.destination, "到着後に観光を追加", beginSightseeingConsultation),
-    travelPlanAccommodationSection(plan, beginSightseeingConsultation),
-    sightseeingInsertion(plan.destination, "翌日に観光を追加", beginSightseeingConsultation),
-    travelPlanSection("帰り", plan.returning),
-  );
-  container.append(itinerary);
-  return container;
-}
-
-function sightseeingInsertion(
-  destination: string,
-  label: string,
-  beginSightseeingConsultation: (prompt: string) => void,
-): HTMLElement {
-  const section = document.createElement("div");
-  section.className = "travel-plan-insertion";
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "travel-plan-add-sightseeing";
-  button.textContent = `＋ ${label}`;
-  button.addEventListener("click", () =>
-    beginSightseeingConsultation(`${destination}で立ち寄りたい観光を相談したい`));
-  section.append(button);
-  return section;
-}
-
-function travelPlanOverview(plan: ViewerAgentTravelPlan): HTMLElement {
-  const overview = document.createElement("header");
-  overview.className = "travel-plan-overview";
-  const title = document.createElement("strong");
-  title.textContent = travelPlanTitle(plan);
-  const dates = document.createElement("span");
-  dates.textContent = `${formatCalendarDate(plan.checkInDate)} → ${formatCalendarDate(plan.checkOutDate)}`;
-  overview.append(title, dates);
-  return overview;
-}
-
-function travelPlanTitle(plan: ViewerAgentTravelPlan): string {
-  const themes = ["ゆったり巡る旅", "季節を味わう小旅行", "寄り道を楽しむ旅", "心ほどける滞在"];
-  const key = [...`${plan.destination}${plan.checkInDate}${plan.checkOutDate}`]
-    .reduce((total, character) => total + character.charCodeAt(0), 0);
-  return `${plan.destination}を${themes[key % themes.length]}`;
-}
-
-function travelPlanSection(label: string, plan: ViewerAgentJourneyPlan): HTMLElement {
-  const section = document.createElement("section");
-  section.className = "travel-plan-section";
-  const heading = document.createElement("h3");
-  heading.textContent = `${label}　${formatCalendarDate(plan.departureDate)}`;
-  section.append(heading);
-  if (plan.journeys.length === 0) {
-    const empty = document.createElement("p");
-    empty.textContent = "条件に合う経路は見つかりませんでした。";
-    section.append(empty);
-  } else {
-    const journey = plan.journeys[0];
-    const details = document.createElement("details");
-    details.className = "travel-plan-route-details";
-    const summary = document.createElement("summary");
-    summary.textContent = `${formatClock(journey.departureTimeMinutes)} → ${formatClock(journey.arrivalTimeMinutes)}　${journey.transferCount === 0 ? "乗換なし" : `乗換${journey.transferCount}回`}`;
-    details.append(summary, renderJourneyTimeline(journey));
-    section.append(details);
-  }
-  return section;
-}
-
-function travelPlanAccommodationSection(
-  plan: ViewerAgentTravelPlan,
-  beginSightseeingConsultation: (prompt: string) => void,
-): HTMLElement {
-  const section = document.createElement("section");
-  section.className = "travel-plan-section travel-plan-accommodations";
-  const heading = document.createElement("h3");
-  heading.textContent = `宿泊　${formatCalendarDate(plan.checkInDate)}から${nightsBetween(plan.checkInDate, plan.checkOutDate)}泊`;
-  section.append(heading);
-  if (plan.accommodations.length === 0) {
-    const empty = document.createElement("p");
-    empty.textContent = "宿泊候補は見つかりませんでした。";
-    section.append(empty);
-    return section;
-  }
-  const list = document.createElement("ul");
-  list.className = "travel-plan-accommodation-list";
-  const selectedNotice = document.createElement("p");
-  selectedNotice.className = "travel-plan-selection-notice";
-  selectedNotice.hidden = true;
-  const selectButtons: HTMLButtonElement[] = [];
-  let selectedAccommodationName: string | undefined;
-  for (const accommodation of plan.accommodations.slice(0, 3)) {
-    const item = document.createElement("li");
-    if (accommodation.imageUrl) {
-      const image = document.createElement("img");
-      image.className = "travel-plan-accommodation-image";
-      image.src = accommodation.imageUrl;
-      image.alt = "";
-      image.loading = "lazy";
-      item.append(image);
-    }
-    const name = document.createElement(accommodation.bookingUrl ? "a" : "strong");
-    name.textContent = accommodation.name;
-    if (name instanceof HTMLAnchorElement && accommodation.bookingUrl) {
-      name.href = accommodation.bookingUrl;
-      name.target = "_blank";
-      name.rel = "noreferrer";
-    }
-    item.append(name);
-    if (accommodation.areaName) {
-      const area = document.createElement("small");
-      area.textContent = accommodation.areaName;
-      item.append(area);
-    }
-    const actions = document.createElement("div");
-    actions.className = "travel-plan-accommodation-actions";
-    const select = document.createElement("button");
-    select.type = "button";
-    select.className = "travel-plan-accommodation-select";
-    select.textContent = "この宿を選ぶ";
-    select.setAttribute("aria-pressed", "false");
-    select.addEventListener("click", () => {
-      for (const button of selectButtons) {
-        const active = button === select;
-        button.setAttribute("aria-pressed", String(active));
-        button.textContent = active ? "選択中" : "この宿を選ぶ";
-        button.closest("li")?.classList.toggle("is-selected", active);
-      }
-      selectedNotice.textContent = `${accommodation.name}を宿泊先として選びました。行きと帰りはこの旅程をベースに、会話で変更できます。`;
-      selectedNotice.hidden = false;
-      selectedAccommodationName = accommodation.name;
-    });
-    selectButtons.push(select);
-    actions.append(select);
-    item.append(actions);
-    list.append(item);
-  }
-  section.append(list, selectedNotice);
-  const sightseeing = sightseeingInsertion(
-    plan.destination,
-    "宿の周辺で観光を追加",
-    () => beginSightseeingConsultation(
-      `${selectedAccommodationName ?? plan.destination}周辺で立ち寄りたい観光を相談したい`,
-    ),
-  );
-  section.append(sightseeing);
-  return section;
-}
-
-function nightsBetween(checkInDate: string, checkOutDate: string): number {
-  return Math.max(1, Math.round((Date.parse(checkOutDate) - Date.parse(checkInDate)) / 86_400_000));
 }
 
 function renderJourneyPlan(
@@ -799,12 +681,6 @@ function formatDuration(minutes: number): string {
   const rounded = Math.round(minutes);
   const hours = Math.floor(rounded / 60);
   return hours > 0 ? `${hours}時間${rounded % 60}分` : `${rounded}分`;
-}
-
-function formatCalendarDate(value: string | undefined): string {
-  if (!value) return "日程未指定";
-  const [, month, day] = /^(?:\d{4})-(\d{2})-(\d{2})$/u.exec(value) ?? [];
-  return month && day ? `${Number(month)}月${Number(day)}日` : value;
 }
 
 function safeLineColor(value: string | undefined): string {
