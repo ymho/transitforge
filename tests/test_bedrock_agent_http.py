@@ -31,6 +31,7 @@ class BedrockAgentHttpTest(unittest.TestCase):
                 for item in client.request["toolConfig"]["tools"]
             ],
             [
+                "ask_follow_up",
                 "search_accommodations",
                 "set_display_time",
                 "search_trains",

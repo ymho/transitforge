@@ -51,6 +51,12 @@ import {
   searchTrainArrivalsFromPrompt,
 } from "./viewer-agent-local-tools";
 import { travelDestinationAccess } from "./travel-destination";
+import {
+  normalizedConversationGuidance,
+  type ConversationExpectedInput,
+  type ConversationGuidance,
+} from "./conversation-guidance";
+import type { TripContext } from "./travel-profile";
 
 export interface BedrockViewerAgentDependencies {
   trains: Train[];
@@ -165,6 +171,10 @@ interface TravelToolState {
   response?: ViewerAgentTravelPlan;
 }
 
+interface ConversationToolState {
+  response?: ConversationGuidance;
+}
+
 export async function runBedrockViewerAgent(
   prompt: string,
   dependencies: BedrockViewerAgentDependencies,
@@ -205,6 +215,7 @@ export async function runBedrockViewerAgent(
   const directRouteServiceUids = new Set<string>();
   const toolState: DirectRouteToolState = { searched: false };
   const travelState: TravelToolState = {};
+  const conversationState: ConversationToolState = {};
 
   for (let round = 0; round < maximumToolRounds; round += 1) {
     const response = await converse(messages);
@@ -236,6 +247,7 @@ export async function runBedrockViewerAgent(
           directRouteServiceUids,
           toolState,
           travelState,
+          conversationState,
         );
         toolResults.push({
           toolResult: {
@@ -270,6 +282,10 @@ export async function runBedrockViewerAgent(
     const travelResponse = travelResponseText(travelState);
     if (travelResponse !== undefined) {
       return travelResponse;
+    }
+    const conversationResponse = conversationResponseText(conversationState);
+    if (conversationResponse !== undefined) {
+      return conversationResponse;
     }
     const directRouteResponse = directRouteResponseText(toolState);
     if (directRouteResponse !== undefined) {
@@ -319,7 +335,13 @@ async function executeTool(
   directRouteServiceUids: Set<string>,
   toolState: DirectRouteToolState,
   travelState: TravelToolState,
+  conversationState: ConversationToolState,
 ): Promise<unknown> {
+  if (name === "ask_follow_up") {
+    const guidance = conversationGuidanceFromToolInput(input);
+    conversationState.response = guidance;
+    return { accepted: true, ...guidance };
+  }
   if (name === "set_display_time") {
     const requestedTime = input.routeTimeMinutes;
     if (typeof requestedTime !== "number" || !Number.isFinite(requestedTime)) {
@@ -774,6 +796,63 @@ function travelResponseText(
   return {
     text: `${formatCalendarDate(plan.checkInDate)}から${formatCalendarDate(plan.checkOutDate)}までの${plan.destination}旅行です。行きと帰りの経路、宿泊候補をまとめました。`,
     travelPlan: plan,
+  };
+}
+
+function conversationResponseText(
+  state: ConversationToolState,
+): ViewerAgentResponse | undefined {
+  if (!state.response) return undefined;
+  return { text: state.response.question, conversation: state.response };
+}
+
+function conversationGuidanceFromToolInput(
+  input: Record<string, unknown>,
+): ConversationGuidance {
+  const question = typeof input.question === "string" ? input.question : "";
+  if (!question.trim()) {
+    throw new Error("次の質問が必要です。");
+  }
+  const expectedInput = isConversationExpectedInput(input.expectedInput)
+    ? input.expectedInput
+    : "free-text";
+  const quickReplies = Array.isArray(input.quickReplies)
+    ? input.quickReplies.flatMap((value) => {
+      if (!value || typeof value !== "object") return [];
+      const reply = value as Record<string, unknown>;
+      if (typeof reply.label !== "string" || typeof reply.value !== "string") return [];
+      return [{ label: reply.label, value: reply.value }];
+    })
+    : [];
+  return normalizedConversationGuidance({
+    question,
+    expectedInput,
+    quickReplies,
+    tripContext: tripContextFromToolInput(input.tripContext),
+  });
+}
+
+function isConversationExpectedInput(value: unknown): value is ConversationExpectedInput {
+  return value === "departure-date" || value === "stay-length" ||
+    value === "traveler-count" || value === "free-text";
+}
+
+function tripContextFromToolInput(value: unknown): TripContext {
+  if (!value || typeof value !== "object") return {};
+  const input = value as Record<string, unknown>;
+  const stringValue = (key: string) =>
+    typeof input[key] === "string" && input[key].trim() ? input[key].trim() : undefined;
+  return {
+    ...(stringValue("destinationWish") ? { destinationWish: stringValue("destinationWish") } : {}),
+    ...(stringValue("startDate") ? { startDate: stringValue("startDate") } : {}),
+    ...(stringValue("endDate") ? { endDate: stringValue("endDate") } : {}),
+    ...(typeof input.pace === "number" && input.pace >= 0 && input.pace <= 1
+      ? { pace: input.pace }
+      : {}),
+    ...(typeof input.maximumTravelMinutes === "number" || input.maximumTravelMinutes === null
+      ? { maximumTravelMinutes: input.maximumTravelMinutes as number | null }
+      : {}),
+    ...(typeof input.carAvailable === "boolean" ? { carAvailable: input.carAvailable } : {}),
   };
 }
 

@@ -1477,6 +1477,43 @@ describe("Bedrock viewer agent", () => {
       destinationStation: "出雲市",
     }));
   });
+
+  it("returns a structured follow-up question without a presentation-specific branch", async () => {
+    const converse = vi.fn().mockResolvedValue({
+      message: { role: "assistant", content: [{ toolUse: {
+        toolUseId: "follow-up", name: "ask_follow_up", input: {
+          question: "いつ出発しますか？",
+          expectedInput: "departure-date",
+          quickReplies: [
+            { label: "今日", value: "今日" },
+            { label: "明日", value: "明日" },
+          ],
+          tripContext: { destinationWish: "出雲大社" },
+        },
+      } }] },
+      stopReason: "tool_use",
+    });
+
+    const result = await runBedrockViewerAgent(
+      "出雲大社へ旅行したい",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(), maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(typeof result).not.toBe("string");
+    if (typeof result === "string" || !("conversation" in result)) {
+      throw new Error("会話ガイダンスがありません。");
+    }
+    expect(result.conversation).toMatchObject({
+      expectedInput: "departure-date",
+      tripContext: { destinationWish: "出雲大社" },
+    });
+  });
 });
 
 function requireRichResponse(result: ViewerAgentResponse): ViewerAgentRichResponse {
