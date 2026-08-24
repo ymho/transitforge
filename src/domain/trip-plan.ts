@@ -4,7 +4,15 @@ import type {
   ViewerAgentTravelPlan,
 } from "./viewer-agent-response";
 
+/** @deprecated v2へ移行するために読み取りだけで使う。 */
 export const tripPlanStorageKey = "transitforge.trip-plan.v1";
+export const tripPlanStoreStorageKey = "transitforge.trip-plans.v2";
+const maximumTripPlans = 20;
+
+interface TripPlanStore {
+  version: 2;
+  plansBySessionId: Record<string, TripPlan>;
+}
 
 interface TripPlanItemBase {
   id: string;
@@ -45,11 +53,17 @@ export interface SightseeingPlanItem extends TripPlanItemBase {
   date?: string;
 }
 export type TripPlanItem = MovementPlanItem | StayPlanItem | SightseeingPlanItem;
+export interface TripPlanConditions {
+  adults: number;
+  children: number;
+  considerations: string[];
+}
 export interface TripPlan {
   version: 1;
   id: string;
   title: string;
   destination: string;
+  conditions?: TripPlanConditions;
   items: TripPlanItem[];
   updatedAt: string;
 }
@@ -62,7 +76,7 @@ export type TripPlanPatch =
   | { type: "replace"; itemId: string; item: TripPlanItem }
   | { type: "remove"; itemId: string }
   | { type: "move"; itemId: string; afterId?: string }
-  | { type: "metadata"; title?: string; destination?: string };
+  | { type: "metadata"; title?: string; destination?: string; conditions?: TripPlanConditions };
 
 export function applyTripPlanPatches(
   plan: TripPlan,
@@ -72,6 +86,7 @@ export function applyTripPlanPatches(
   let items = [...plan.items];
   let title = plan.title;
   let destination = plan.destination;
+  let conditions = plan.conditions;
   for (const patch of patches) {
     if (patch.type === "add" && !items.some((item) => item.id === patch.item.id)) {
       const afterIndex = patch.afterId
@@ -102,9 +117,10 @@ export function applyTripPlanPatches(
     if (patch.type === "metadata") {
       title = patch.title ?? title;
       destination = patch.destination ?? destination;
+      conditions = patch.conditions ?? conditions;
     }
   }
-  return { ...plan, title, destination, items, updatedAt: now.toISOString() };
+  return { ...plan, title, destination, conditions, items, updatedAt: now.toISOString() };
 }
 
 export function tripPlanFromTravelPlan(
@@ -116,6 +132,11 @@ export function tripPlanFromTravelPlan(
     id: `trip-${crypto.randomUUID()}`,
     title: titleForTravelPlan(value),
     destination: value.destination,
+    conditions: {
+      adults: value.adults ?? 1,
+      children: value.children ?? 0,
+      considerations: value.considerations?.slice(0, 8) ?? [],
+    },
     items: [
       { id: "outbound", type: "movement", mode: "rail", route: value.outbound },
       {
@@ -166,17 +187,55 @@ export function tripPlanPatchesFromTravelPlan(
   ];
 }
 
-export function loadTripPlan(storage: Pick<Storage, "getItem">): TripPlan | undefined {
+export function loadTripPlan(
+  storage: Pick<Storage, "getItem">,
+  conversationSessionId: string,
+): TripPlan | undefined {
+  if (!isConversationSessionId(conversationSessionId)) return undefined;
   try {
-    const raw = storage.getItem(tripPlanStorageKey);
-    return raw ? parseTripPlan(JSON.parse(raw)) : undefined;
+    const raw = storage.getItem(tripPlanStoreStorageKey);
+    if (!raw) return undefined;
+    const store = parseTripPlanStore(JSON.parse(raw));
+    return store?.plansBySessionId[conversationSessionId];
   } catch {
     return undefined;
   }
 }
 
-export function saveTripPlan(storage: Pick<Storage, "setItem">, plan: TripPlan): void {
-  storage.setItem(tripPlanStorageKey, JSON.stringify(plan));
+export function saveTripPlan(
+  storage: Pick<Storage, "getItem" | "setItem">,
+  conversationSessionId: string,
+  plan: TripPlan,
+): void {
+  if (!isConversationSessionId(conversationSessionId)) return;
+  const previous = readTripPlanStore(storage)?.plansBySessionId ?? {};
+  const entries = Object.entries({
+    ...previous,
+    [conversationSessionId]: plan,
+  }).sort((left, right) => right[1].updatedAt.localeCompare(left[1].updatedAt))
+    .slice(0, maximumTripPlans);
+  storage.setItem(tripPlanStoreStorageKey, JSON.stringify({
+    version: 2,
+    plansBySessionId: Object.fromEntries(entries),
+  } satisfies TripPlanStore));
+}
+
+export function migrateLegacyTripPlan(
+  storage: Pick<Storage, "getItem" | "setItem" | "removeItem">,
+  conversationSessionId: string,
+): TripPlan | undefined {
+  const current = loadTripPlan(storage, conversationSessionId);
+  if (current) return current;
+  try {
+    const raw = storage.getItem(tripPlanStorageKey);
+    const legacy = raw ? parseTripPlan(JSON.parse(raw)) : undefined;
+    if (!legacy) return undefined;
+    saveTripPlan(storage, conversationSessionId, legacy);
+    storage.removeItem(tripPlanStorageKey);
+    return legacy;
+  } catch {
+    return undefined;
+  }
 }
 
 export function selectTripPlanAccommodation(
@@ -199,16 +258,64 @@ function parseTripPlan(value: unknown): TripPlan | undefined {
     return undefined;
   }
   const items = value.items.filter(isTripPlanItem).slice(0, 100);
+  const conditions = value.conditions === undefined
+    ? undefined
+    : parseTripPlanConditions(value.conditions);
   if (items.length !== value.items.length || new Set(items.map((item) => item.id)).size !== items.length) {
     return undefined;
   }
+  if (value.conditions !== undefined && conditions === undefined) return undefined;
   return {
     version: 1,
     id: value.id,
     title: value.title,
     destination: value.destination,
+    ...(conditions ? { conditions } : {}),
     updatedAt: value.updatedAt,
     items,
+  };
+}
+
+function readTripPlanStore(
+  storage: Pick<Storage, "getItem">,
+): TripPlanStore | undefined {
+  try {
+    const raw = storage.getItem(tripPlanStoreStorageKey);
+    return raw ? parseTripPlanStore(JSON.parse(raw)) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseTripPlanStore(value: unknown): TripPlanStore | undefined {
+  if (!isRecord(value) || value.version !== 2 ||
+    !isRecord(value.plansBySessionId)) return undefined;
+  const entries = Object.entries(value.plansBySessionId);
+  if (entries.length > maximumTripPlans || entries.some(([sessionId]) =>
+    !isConversationSessionId(sessionId))) return undefined;
+  const plans = entries.flatMap(([sessionId, candidate]) => {
+    const plan = parseTripPlan(candidate);
+    return plan ? [[sessionId, plan] as const] : [];
+  });
+  if (plans.length !== entries.length) return undefined;
+  return { version: 2, plansBySessionId: Object.fromEntries(plans) };
+}
+
+function isConversationSessionId(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(value);
+}
+
+function parseTripPlanConditions(value: unknown): TripPlanConditions | undefined {
+  if (!isRecord(value) || !isWholeNumber(value.adults, 0, 20) ||
+    !isWholeNumber(value.children, 0, 20) || value.adults + value.children < 1 ||
+    !Array.isArray(value.considerations) || value.considerations.length > 8 ||
+    !value.considerations.every((item) => isBoundedString(item, 80))) {
+    return undefined;
+  }
+  return {
+    adults: value.adults,
+    children: value.children,
+    considerations: [...value.considerations],
   };
 }
 
@@ -278,6 +385,11 @@ function isDateString(value: unknown): value is string {
 
 function optionalBoundedString(value: unknown, maximum: number): boolean {
   return value === undefined || isBoundedString(value, maximum);
+}
+
+function isWholeNumber(value: unknown, minimum: number, maximum: number): value is number {
+  return typeof value === "number" && Number.isInteger(value) &&
+    value >= minimum && value <= maximum;
 }
 
 function isBoundedString(value: unknown, maximum: number): value is string {

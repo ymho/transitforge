@@ -321,7 +321,7 @@ const currentConciergeInstruction = (prompt: string) => [
   "この文脈は明示希望を上書きしない。既知の条件を聞き直さず、推測に確信がないときだけ短く確認する。遠い移動や多い乗換はプロフィールの許容度と照合し、懸念と代替案を先に示す。",
   `利用者と旅行の現在の文脈:\n${conversationContextSummary(
     loadUserProfile(localStorage),
-    loadTripPlan(localStorage),
+    loadTripPlan(localStorage, activeConversationSession.id),
     activeConversationSession,
     loadTravelMemories(localStorage),
   )}`,
@@ -334,13 +334,25 @@ updateConciergeIdentity(true);
 document.addEventListener(travelProfileChangedEvent, () =>
   updateConciergeIdentity(true));
 let aiGuideController: ReturnType<typeof configureAiGuidePanel>;
+const tripPreviewEnabled = import.meta.env.DEV &&
+  new URLSearchParams(window.location.search).get("trip-preview") === "1";
 const tripPlanController = configureTripPlanPanel(
   tripPlanPanel,
   tripPlanContent,
   closeTripPlan,
   tripPlanToggle,
+  activeConversationSession.id,
   (prompt) => aiGuideController.ask(prompt),
 );
+const sessionTripPlan = loadTripPlan(localStorage, activeConversationSession.id);
+if (sessionTripPlan && activeConversationSession.tripPlanId !== sessionTripPlan.id) {
+  Object.assign(activeConversationSession, {
+    scope: "trip",
+    tripPlanId: sessionTripPlan.id,
+    updatedAt: new Date().toISOString(),
+  });
+  saveConversationSession(localStorage, activeConversationSession);
+}
 aiGuideController = configureAiGuidePanel(
   {
     conversationSessionId: activeConversationSession.id,
@@ -384,6 +396,12 @@ aiGuideController = configureAiGuidePanel(
     ),
 );
 configureTravelProfile(document, () => aiGuideController.open());
+if (tripPreviewEnabled) {
+  loadingScreen.complete();
+  document.querySelector<HTMLDialogElement>("#travel-profile-dialog")?.close();
+  void import("./dev/trip-plan-preview").then(({ tripPlanPreview }) =>
+    tripPlanController.showPreview(tripPlanPreview));
+}
 
 const initialDateTime = new Date();
 let displayedServiceDateStart = operatingServiceDateStart(initialDateTime);
@@ -1230,7 +1248,10 @@ if (!token) {
                   });
                   saveConversationSession(localStorage, activeConversationSession);
                 },
-                getTripPlan: () => loadTripPlan(localStorage),
+                getTripPlan: () => loadTripPlan(
+                  localStorage,
+                  activeConversationSession.id,
+                ),
                 getUserProfile: () => loadUserProfile(localStorage),
                 maximumRouteTime,
               },

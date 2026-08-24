@@ -134,7 +134,9 @@ export function conversationContextSummary(
     } : undefined,
     tripPlan: plan ? {
       id: plan.id,
+      title: plan.title,
       destination: plan.destination,
+      conditions: plan.conditions,
       items: plan.items.slice(0, 12).map(compactTripPlanItem),
     } : undefined,
     session: {

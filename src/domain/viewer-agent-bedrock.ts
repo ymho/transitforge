@@ -716,6 +716,13 @@ async function executeTool(
       ? input.limit : 3;
     const adults = typeof input.adults === "number" && Number.isInteger(input.adults)
       ? input.adults : 1;
+    const children = boundedInteger(input.children, 0, 10) ?? 0;
+    const considerations = Array.isArray(input.considerations)
+      ? input.considerations.flatMap((item) =>
+        typeof item === "string" && item.trim()
+          ? [item.trim().slice(0, 80)]
+          : []).slice(0, 8)
+      : [];
     const travelDestination = travelDestinationAccess(destination);
     const accommodations = await dependencies.searchAccommodations({
       destination: travelDestination?.accommodationDestination ?? destination.trim(), checkInDate, checkOutDate,
@@ -752,6 +759,9 @@ async function executeTool(
         });
         travelState.response = {
           destination: destination.trim(),
+          adults: Math.max(1, Math.min(10, adults)),
+          children,
+          considerations,
           checkInDate,
           checkOutDate,
           outbound,
@@ -911,7 +921,28 @@ function tripPlanPatchesFromToolInput(value: unknown, current: TripPlan): TripPl
     if (patch.type === "metadata") {
       const title = typeof patch.title === "string" ? patch.title.trim().slice(0, 80) : undefined;
       const destination = typeof patch.destination === "string" ? patch.destination.trim().slice(0, 80) : undefined;
-      return title || destination ? [{ type: "metadata", ...(title ? { title } : {}), ...(destination ? { destination } : {}) }] : [];
+      const adults = boundedInteger(patch.adults, 0, 20);
+      const children = boundedInteger(patch.children, 0, 20);
+      const considerations = Array.isArray(patch.considerations)
+        ? patch.considerations.flatMap((item) =>
+          typeof item === "string" && item.trim()
+            ? [item.trim().slice(0, 80)]
+            : []).slice(0, 8)
+        : undefined;
+      const hasConditions = adults !== undefined || children !== undefined ||
+        considerations !== undefined;
+      const conditions = hasConditions ? {
+        adults: adults ?? current.conditions?.adults ?? 1,
+        children: children ?? current.conditions?.children ?? 0,
+        considerations: considerations ?? current.conditions?.considerations ?? [],
+      } : undefined;
+      if (conditions && conditions.adults + conditions.children < 1) return [];
+      return title || destination || conditions ? [{
+        type: "metadata",
+        ...(title ? { title } : {}),
+        ...(destination ? { destination } : {}),
+        ...(conditions ? { conditions } : {}),
+      }] : [];
     }
     const itemId = typeof patch.itemId === "string" && current.items.some((item) => item.id === patch.itemId) ? patch.itemId : undefined;
     if (patch.type === "remove" && itemId) return [{ type: "remove", itemId }];
@@ -948,6 +979,15 @@ function tripPlanPatchesFromToolInput(value: unknown, current: TripPlan): TripPl
     }
     return [];
   });
+}
+
+function boundedInteger(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) &&
+    value >= minimum && value <= maximum ? value : undefined;
 }
 
 function isManualMovementMode(

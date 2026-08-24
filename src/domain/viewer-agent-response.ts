@@ -42,6 +42,9 @@ export interface ViewerAgentAccommodation {
 
 export interface ViewerAgentTravelPlan {
   destination: string;
+  adults?: number;
+  children?: number;
+  considerations?: string[];
   checkInDate: string;
   checkOutDate: string;
   outbound: ViewerAgentJourneyPlan;

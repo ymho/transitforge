@@ -43,6 +43,10 @@ npm run dev
 ローカルURLは`http://localhost:5173`を使う
 `congestion.json`と`delays.json`がない場合はシミュレーションモードだけで起動する
 
+旅程UIだけをAPIやBedrockなしで確認する場合は開発サーバーを起動して
+`http://localhost:5173/?trip-preview=1`を開く。検索済み経路と宿泊候補を含むダミー旅程を表示し
+LocalStorageの旅程は上書きしない
+
 `.env.local`へMapboxの公開アクセストークンを設定する
 ブラウザへ渡る値なので必要最小限の権限に限定し Gitへ追加しない
 
