@@ -1,4 +1,4 @@
-from tests.agent_api_test_support import *
+from tests.services.agent_api.support import *
 
 import travel_search_request
 from request_contract import RequestError

@@ -13,13 +13,19 @@
 
 ## Python
 
-Agent API本体は`services/agent-api`へ置き テストは`tests`からサービスの公開境界を読み込む
+Agent API本体は`services/agent-api`へ置き テストは`tests/services/agent_api`からサービスの公開境界を読み込む
 テストをサービス内へ入れないことで Lambdaパッケージへの混入を防ぐ
 
-- `agent_api_test_support.py`はAgent API用のfakeと共有fixtureを所有する
+- `tests/services/agent_api`: Agent APIと鉄道 旅行Domain Tool
+- `tests/infra`: Terraform周辺とデプロイpackaging
+- `tests/repository_tools`: リポジトリ保守コマンドとscenario runner
+- `tests/services/agent_api/support.py`はAgent API用のfakeと共有fixtureを所有する
 - `test_agent_application.py`はAWSイベントに依存しないApplication境界を確認する
 - `test_agent_api_*.py`はHTTP境界とAgent API全体の振る舞いを確認する
 - 経路と旅行のテストはDomain Tool単位で分ける
+
+各ディレクトリはPython packageとして扱い `python3 -m unittest discover -s tests -v`で再帰実行する
+共有supportは上位層や別境界のテストをimportしない
 
 ## Fixture
 

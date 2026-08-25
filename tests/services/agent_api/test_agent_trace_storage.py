@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from io import StringIO
 from unittest.mock import patch
 
-from tests.agent_api_test_support import handler
+from tests.services.agent_api.support import handler
 
 from agent_trace_storage import store_agent_trace
 

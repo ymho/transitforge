@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 
-ROOT = Path(__file__).parents[1]
+ROOT = Path(__file__).parents[2]
 SPEC = importlib.util.spec_from_file_location(
     "build_lambda_package", ROOT / "tools" / "build_lambda_package.py"
 )

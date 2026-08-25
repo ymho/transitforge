@@ -14,7 +14,7 @@ from typing import Any
 
 def load_handler():
     path = (
-        Path(__file__).parents[1]
+        Path(__file__).parents[3]
         / "services"
         / "agent-api"
         / "handler.py"
