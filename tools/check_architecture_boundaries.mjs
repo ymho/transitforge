@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
@@ -42,15 +42,21 @@ const layerRules = {
   rendering: {
     forbiddenLayers: new Set(["features", "infrastructure", "presentation"]),
   },
-  infrastructure: {
-    forbiddenLayers: new Set(["data", "features", "presentation", "rendering"]),
-  },
 };
 
 const migrationExceptions = [];
 
 const usedExceptions = new Set();
 const violations = [];
+
+if (existsSync(resolve(sourceRoot, "infrastructure"))) {
+  violations.push({
+    source: "src/infrastructure",
+    kind: "ambiguous-infrastructure-root",
+    line: 1,
+    message: "実行時Adapterはsrc/adaptersへ置き AWS構成はルートinfraへ置いてください",
+  });
+}
 
 for (const absolutePath of sourceFiles(sourceRoot)) {
   const source = repositoryPath(absolutePath);

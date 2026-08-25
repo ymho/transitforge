@@ -271,8 +271,8 @@ CI分離の判断は[ADR 0029](../decisions/0029-separate-smoke-and-full-agent-e
 ### Read-only MCP Adapter
 
 - 共通Registry: `src/application/agent/readonly-transit-tool-registry.ts`
-- Protocol Adapter: `src/infrastructure/mcp/readonly-transit-mcp.ts`
-- stdio transport: `src/infrastructure/mcp/stdio.ts`
+- Protocol Adapter: `src/adapters/mcp/readonly-transit-mcp.ts`
+- stdio transport: `src/adapters/mcp/stdio.ts`
 - 判断記録: [ADR 0030](../decisions/0030-expose-read-only-domain-tools-through-mcp.md)
 
 MCPはDomain Serviceを外部Agentへ公開するProtocol Adapterであり 鉄道ロジックを持たない。
