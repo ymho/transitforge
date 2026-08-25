@@ -16,6 +16,8 @@ export function renderAgentEvaluationMarkdown(report: AgentEvaluationReport): st
     `- Task Completion: ${percent(report.metrics.taskCompletion)}`,
     `- Viewer Action Validity: ${percent(report.metrics.viewerActionValidity)}`,
     "",
+    ...renderCategoryTable(report),
+    "",
     ...renderCaseTable(report),
   ];
   return `${lines.join("\n")}\n`;
@@ -49,8 +51,36 @@ export function renderAgentEvaluationRunMarkdown(
     lines.push("", "## Threshold failures", "");
     for (const failure of report.thresholdFailures) lines.push(`- ${failure}`);
   }
-  lines.push("", "## Cases", "", ...renderCaseTable(report));
+  lines.push(
+    "",
+    "## Categories",
+    "",
+    ...renderCategoryTable(report),
+    "",
+    "## Cases",
+    "",
+    ...renderCaseTable(report),
+  );
   return `${lines.join("\n")}\n`;
+}
+
+function renderCategoryTable(report: AgentEvaluationReport): string[] {
+  const lines = [
+    "| Category | Cases | Tools | Constraints | Grounded | Unsupported | Completion | Viewer |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+  ];
+  for (const item of report.categories) {
+    lines.push(
+      `| ${item.category} | ${item.passedCaseCount}/${item.caseCount} | ` +
+      `${percent(item.metrics.toolSelectionAccuracy)} | ` +
+      `${percent(item.metrics.constraintSatisfaction)} | ` +
+      `${optionalPercent(item.metrics.groundedClaimRate)} | ` +
+      `${optionalPercent(item.metrics.unsupportedClaimRate)} | ` +
+      `${percent(item.metrics.taskCompletion)} | ` +
+      `${percent(item.metrics.viewerActionValidity)} |`,
+    );
+  }
+  return lines;
 }
 
 function renderCaseTable(report: AgentEvaluationReport): string[] {

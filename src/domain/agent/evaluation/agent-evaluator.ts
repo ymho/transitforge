@@ -7,6 +7,7 @@ import type {
   AgentEvaluationObservationSet,
   AgentEvaluationReport,
 } from "./evaluation-contract";
+import { agentEvaluationCategories } from "./evaluation-contract";
 
 export function observeAgentRuntimeResult(
   caseId: string,
@@ -45,29 +46,53 @@ export function evaluateAgentDataset(
   const byCase = new Map(observationSet.observations.map((item) => [item.caseId, item]));
   const cases = dataset.cases.map((testCase) =>
     evaluateCase(testCase, byCase.get(testCase.id)));
-  const claimCounts = observationSet.observations.reduce((counts, observation) => {
+  const metrics = aggregateMetrics(cases, observationSet.observations);
+  return {
+    schemaVersion: "agent-eval-report-v2",
+    datasetSchemaVersion: dataset.schemaVersion,
+    caseCount: cases.length,
+    passedCaseCount: cases.filter(({ passed }) => passed).length,
+    metrics,
+    categories: agentEvaluationCategories.flatMap((category) => {
+      const categoryCaseIds = new Set(dataset.cases
+        .filter(({ tags }) => tags.includes(category))
+        .map(({ id }) => id));
+      const categoryCases = cases.filter(({ id }) => categoryCaseIds.has(id));
+      if (categoryCases.length === 0) return [];
+      return [{
+        category,
+        caseCount: categoryCases.length,
+        passedCaseCount: categoryCases.filter(({ passed }) => passed).length,
+        metrics: aggregateMetrics(
+          categoryCases,
+          observationSet.observations.filter(({ caseId }) => categoryCaseIds.has(caseId)),
+        ),
+      }];
+    }),
+    cases,
+  };
+}
+
+function aggregateMetrics(
+  cases: AgentEvaluationCaseResult[],
+  observations: AgentEvaluationObservation[],
+): AgentEvaluationReport["metrics"] {
+  const claimCounts = observations.reduce((counts, observation) => {
     for (const status of observation.claimStatuses) counts[status] += 1;
     return counts;
   }, { supported: 0, unsupported: 0, unknown: 0 });
   const groundedDenominator = claimCounts.supported + claimCounts.unsupported;
   return {
-    schemaVersion: "agent-eval-report-v1",
-    datasetSchemaVersion: dataset.schemaVersion,
-    caseCount: cases.length,
-    passedCaseCount: cases.filter(({ passed }) => passed).length,
-    metrics: {
-      toolSelectionAccuracy: average(cases, "toolSelectionAccuracy"),
-      constraintSatisfaction: average(cases, "constraintSatisfaction"),
-      groundedClaimRate: groundedDenominator === 0
-        ? null
-        : claimCounts.supported / groundedDenominator,
-      unsupportedClaimRate: groundedDenominator === 0
-        ? null
-        : claimCounts.unsupported / groundedDenominator,
-      taskCompletion: average(cases, "taskCompletion"),
-      viewerActionValidity: average(cases, "viewerActionValidity"),
-    },
-    cases,
+    toolSelectionAccuracy: average(cases, "toolSelectionAccuracy"),
+    constraintSatisfaction: average(cases, "constraintSatisfaction"),
+    groundedClaimRate: groundedDenominator === 0
+      ? null
+      : claimCounts.supported / groundedDenominator,
+    unsupportedClaimRate: groundedDenominator === 0
+      ? null
+      : claimCounts.unsupported / groundedDenominator,
+    taskCompletion: average(cases, "taskCompletion"),
+    viewerActionValidity: average(cases, "viewerActionValidity"),
   };
 }
 

@@ -7,7 +7,7 @@
       "feature": "journey_planning",
       "userRequest": "AからDへ直通で行きたい",
       "journeyScenarioId": "direct",
-      "tags": ["smoke", "journey", "direct"],
+      "tags": ["smoke", "journey", "direct", "viewer-action"],
       "expected": {
         "toolSequence": ["search_journeys"],
         "constraints": { "maxTransfers": 0 },
@@ -24,7 +24,7 @@
       "feature": "journey_planning",
       "userRequest": "AからDへの直通候補を比較して",
       "journeyScenarioId": "direct",
-      "tags": ["journey", "comparison"],
+      "tags": ["journey", "comparison", "multi-tool", "viewer-action"],
       "expected": {
         "toolSequence": ["search_journeys", "compare_journeys"],
         "constraints": { "maxTransfers": 0 },
@@ -41,7 +41,7 @@
       "feature": "journey_planning",
       "userRequest": "AからDへ普通の乗換ペースで行きたい",
       "journeyScenarioId": "one-transfer",
-      "tags": ["smoke", "journey", "transfer"],
+      "tags": ["smoke", "journey", "transfer", "constraint", "viewer-action"],
       "expected": {
         "toolSequence": ["search_journeys"],
         "constraints": { "transferPace": "standard", "maxTransfers": 3 },
@@ -58,7 +58,7 @@
       "feature": "journey_planning",
       "userRequest": "AからDへの乗換候補を比べて",
       "journeyScenarioId": "one-transfer",
-      "tags": ["journey", "comparison", "transfer"],
+      "tags": ["journey", "comparison", "transfer", "multi-tool", "viewer-action"],
       "expected": {
         "toolSequence": ["search_journeys", "compare_journeys"],
         "constraints": { "maxTransfers": 3 },
@@ -109,7 +109,7 @@
       "feature": "journey_planning",
       "userRequest": "AからDへできるだけ遅く出たい",
       "journeyScenarioId": "latest-departure",
-      "tags": ["smoke", "journey", "ranking"],
+      "tags": ["smoke", "journey", "ranking", "viewer-action"],
       "expected": {
         "toolSequence": ["search_journeys"],
         "constraints": { "rankingPreference": "latest-departure" },
@@ -126,7 +126,7 @@
       "feature": "journey_planning",
       "userRequest": "AからDへ遅く出られる候補を比較して",
       "journeyScenarioId": "latest-departure",
-      "tags": ["journey", "ranking", "comparison"],
+      "tags": ["journey", "ranking", "comparison", "multi-tool", "viewer-action"],
       "expected": {
         "toolSequence": ["search_journeys", "compare_journeys"],
         "constraints": { "rankingPreference": "latest-departure" },
@@ -143,7 +143,7 @@
       "feature": "journey_planning",
       "userRequest": "AからDへ乗換を少なくして",
       "journeyScenarioId": "fewest-transfers",
-      "tags": ["smoke", "journey", "ranking"],
+      "tags": ["smoke", "journey", "ranking", "viewer-action"],
       "expected": {
         "toolSequence": ["search_journeys"],
         "constraints": { "rankingPreference": "fewest-transfers" },
@@ -160,7 +160,7 @@
       "feature": "journey_planning",
       "userRequest": "AからDへの経路を乗換回数で比較して",
       "journeyScenarioId": "fewest-transfers",
-      "tags": ["journey", "ranking", "comparison"],
+      "tags": ["journey", "ranking", "comparison", "multi-tool", "viewer-action"],
       "expected": {
         "toolSequence": ["search_journeys", "compare_journeys"],
         "constraints": { "rankingPreference": "fewest-transfers" },
@@ -211,7 +211,7 @@
       "feature": "journey_planning",
       "userRequest": "AからDへ今の遅延を考慮して行きたい",
       "journeyScenarioId": "delayed-transfer",
-      "tags": ["smoke", "journey", "realtime"],
+      "tags": ["smoke", "journey", "realtime", "delay", "viewer-action"],
       "expected": {
         "toolSequence": ["search_journeys"],
         "constraints": { "useRealtime": true },
@@ -228,7 +228,7 @@
       "feature": "journey_planning",
       "userRequest": "AからDへ遅延込みで候補を比較して",
       "journeyScenarioId": "delayed-transfer",
-      "tags": ["journey", "realtime", "comparison"],
+      "tags": ["journey", "realtime", "comparison", "delay", "multi-tool", "viewer-action"],
       "expected": {
         "toolSequence": ["search_journeys", "compare_journeys"],
         "constraints": { "useRealtime": true },
@@ -329,7 +329,7 @@
       "name": "到着地不足を質問で補う",
       "feature": "journey_planning",
       "userRequest": "明日の朝に出発したい",
-      "tags": ["smoke", "follow-up"],
+      "tags": ["smoke", "follow-up", "information-gap"],
       "expected": {
         "toolSequence": [],
         "constraints": {},
@@ -339,6 +339,130 @@
         "allowedViewerActions": [],
         "requiredViewerActions": []
       }
+    },
+    {
+      "id": "ambiguous-station",
+      "name": "曖昧な駅名を確認する",
+      "feature": "train_guidance",
+      "userRequest": "大阪の駅から出発したい",
+      "tags": ["ambiguous-request", "information-gap"],
+      "expected": { "toolSequence": ["inspect_station"], "constraints": { "stationName": "大阪" }, "status": "follow_up", "minimumGroundedClaimRate": 0, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": [], "requiredViewerActions": [] }
+    },
+    {
+      "id": "missing-origin",
+      "name": "出発地不足を確認する",
+      "feature": "journey_planning",
+      "userRequest": "明日京都へ行きたい",
+      "tags": ["information-gap"],
+      "expected": { "toolSequence": [], "constraints": { "destinationStation": "京都" }, "status": "follow_up", "minimumGroundedClaimRate": 0, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": [], "requiredViewerActions": [] }
+    },
+    {
+      "id": "vague-destination",
+      "name": "曖昧な行き先を確認する",
+      "feature": "travel_planning",
+      "userRequest": "週末どこかへゆっくり行きたい",
+      "tags": ["ambiguous-request", "information-gap"],
+      "expected": { "toolSequence": [], "constraints": { "pace": "relaxed" }, "status": "follow_up", "minimumGroundedClaimRate": 0, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": [], "requiredViewerActions": [] }
+    },
+    {
+      "id": "cancelled-service",
+      "name": "運休列車を除いて経路を案内する",
+      "feature": "journey_planning",
+      "userRequest": "運休を考慮してAからDへ行きたい",
+      "journeyScenarioId": "delayed-transfer",
+      "tags": ["cancellation", "delay", "viewer-action"],
+      "expected": { "toolSequence": ["search_journeys"], "constraints": { "useRealtime": true, "excludeCancelled": true }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["highlight_route", "show_evidence"], "requiredViewerActions": ["show_evidence"] }
+    },
+    {
+      "id": "destination-change",
+      "name": "行き先変更を正本として検索する",
+      "feature": "journey_planning",
+      "userRequest": "行き先変更を含めてAからDへ行きたい",
+      "journeyScenarioId": "delayed-transfer",
+      "tags": ["cancellation", "delay", "viewer-action"],
+      "expected": { "toolSequence": ["search_journeys"], "constraints": { "useRealtime": true, "authoritativeDestination": true }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["highlight_route", "show_evidence"], "requiredViewerActions": ["highlight_route"] }
+    },
+    {
+      "id": "exclude-shinkansen",
+      "name": "新幹線を除外して検索する",
+      "feature": "journey_planning",
+      "userRequest": "新幹線を使わずAからDへ行きたい",
+      "journeyScenarioId": "one-transfer",
+      "tags": ["constraint", "viewer-action"],
+      "expected": { "toolSequence": ["search_journeys"], "constraints": { "excludedServiceTypes": ["新幹線"] }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["highlight_route", "show_evidence"], "requiredViewerActions": ["highlight_route"] }
+    },
+    {
+      "id": "require-yakumo",
+      "name": "指定列車を含む経路を検索する",
+      "feature": "journey_planning",
+      "userRequest": "やくもを使って京都から出雲市へ行きたい",
+      "tags": ["constraint", "viewer-action"],
+      "expected": { "toolSequence": ["search_journeys"], "constraints": { "requiredTrainNames": ["やくも"] }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["highlight_route", "show_evidence"], "requiredViewerActions": ["highlight_route"] }
+    },
+    {
+      "id": "exclude-specific-train",
+      "name": "特定列車を除外して再検索する",
+      "feature": "journey_planning",
+      "userRequest": "1005Mを避けて別の経路にして",
+      "tags": ["constraint", "viewer-action"],
+      "expected": { "toolSequence": ["search_journeys"], "constraints": { "excludedTrainNumbers": ["1005M"] }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["highlight_route", "show_evidence"], "requiredViewerActions": ["highlight_route"] }
+    },
+    {
+      "id": "inspect-train",
+      "name": "列車を照会して根拠を示す",
+      "feature": "train_guidance",
+      "userRequest": "この列車はどこ行き？",
+      "tags": ["viewer-action"],
+      "expected": { "toolSequence": ["inspect_train"], "constraints": { "serviceUid": "service-a" }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["show_evidence"], "requiredViewerActions": ["show_evidence"] }
+    },
+    {
+      "id": "inspect-station",
+      "name": "駅の路線を照会する",
+      "feature": "train_guidance",
+      "userRequest": "京都駅にはどの路線がある？",
+      "tags": ["viewer-action"],
+      "expected": { "toolSequence": ["inspect_station"], "constraints": { "stationName": "京都" }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["show_evidence"], "requiredViewerActions": ["show_evidence"] }
+    },
+    {
+      "id": "delay-analysis",
+      "name": "業務日付の遅延を分析する",
+      "feature": "operational_analysis",
+      "userRequest": "今日の遅れは？",
+      "tags": ["delay", "viewer-action"],
+      "expected": { "toolSequence": ["analyze_delay"], "constraints": { "serviceDate": "2026-08-25" }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["show_evidence"], "requiredViewerActions": ["show_evidence"] }
+    },
+    {
+      "id": "congestion-analysis",
+      "name": "業務日付の混雑を分析する",
+      "feature": "operational_analysis",
+      "userRequest": "今日の混雑傾向は？",
+      "tags": ["viewer-action"],
+      "expected": { "toolSequence": ["analyze_congestion"], "constraints": { "serviceDate": "2026-08-25" }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["show_evidence"], "requiredViewerActions": ["show_evidence"] }
+    },
+    {
+      "id": "route-delay-compare",
+      "name": "経路と路線遅延を組み合わせて比較する",
+      "feature": "journey_planning",
+      "userRequest": "遅延状況も調べてAからDへの候補を比較して",
+      "journeyScenarioId": "delayed-transfer",
+      "tags": ["delay", "multi-tool", "viewer-action"],
+      "expected": { "toolSequence": ["search_journeys", "analyze_delay", "compare_journeys"], "constraints": { "useRealtime": true }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["compare_journeys", "show_evidence"], "requiredViewerActions": ["compare_journeys", "show_evidence"] }
+    },
+    {
+      "id": "station-then-search",
+      "name": "駅を確認してから経路を検索する",
+      "feature": "journey_planning",
+      "userRequest": "京都駅を確認して大阪まで案内して",
+      "tags": ["multi-tool", "viewer-action"],
+      "expected": { "toolSequence": ["inspect_station", "search_journeys"], "constraints": { "originStation": "京都", "destinationStation": "大阪" }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["highlight_route", "show_evidence"], "requiredViewerActions": ["highlight_route"] }
+    },
+    {
+      "id": "unobserved-delay-day",
+      "name": "未観測の遅延を推測しない",
+      "feature": "operational_analysis",
+      "userRequest": "観測のない日の遅延を教えて",
+      "tags": ["delay", "information-gap"],
+      "expected": { "toolSequence": ["analyze_delay"], "constraints": { "serviceDate": "2026-08-26" }, "status": "completed", "minimumGroundedClaimRate": 0, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": [], "requiredViewerActions": [] }
     }
   ]
 }
