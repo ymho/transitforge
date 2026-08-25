@@ -8,6 +8,7 @@ import {
 } from "./journey-navigation-intent";
 import type { WeatherMode } from "./map-weather";
 import { operatingDayStartMinutes } from "./playback";
+import { formatJapaneseServiceTime } from "./route-time-format";
 import type { TrainPosition } from "./train-position";
 import type { ViewerAgentLayer } from "./viewer-agent-action";
 import {
@@ -59,7 +60,7 @@ export function createLocalViewerAgent(
         dependencies.maximumRouteTime,
       );
       dependencies.setRouteTime(routeTime);
-      responseParts.push(`表示時刻を${formatRouteTime(routeTime)}に変更しました。`);
+      responseParts.push(`表示時刻を${formatJapaneseServiceTime(routeTime)}に変更しました。`);
     }
 
     const routeTime = dependencies.getRouteTime();
@@ -73,7 +74,7 @@ export function createLocalViewerAgent(
       const first = search.matches[0];
       if (!first) {
         responseParts.push(
-          `${formatRouteTime(routeTime)}に運行中の条件に合う列車は見つかりませんでした。`,
+          `${formatJapaneseServiceTime(routeTime)}に運行中の条件に合う列車は見つかりませんでした。`,
         );
       } else {
         const focused = dependencies.focusTrain(first.train.service_uid);
@@ -142,15 +143,15 @@ function arrivalSearchResponse(
     search.targetTimeMinutes + search.windowMinutes,
   );
   if (search.matches.length === 0) {
-    return `${formatRouteTime(rangeStart)}〜${formatRouteTime(rangeEnd)}に条件に合う到着列車は見つかりませんでした。`;
+    return `${formatJapaneseServiceTime(rangeStart)}〜${formatJapaneseServiceTime(rangeEnd)}に条件に合う到着列車は見つかりませんでした。`;
   }
   const arrivals = search.matches.map(({ train, arrivalTimeMinutes }) => {
     const title = trainTitleFor(train);
-    return `${formatRouteTime(arrivalTimeMinutes)} ${title.main}${title.suffix ?? ""}`;
+    return `${formatJapaneseServiceTime(arrivalTimeMinutes)} ${title.main}${title.suffix ?? ""}`;
   });
   const remaining = search.totalMatchCount - search.matches.length;
   return [
-    `${formatRouteTime(rangeStart)}〜${formatRouteTime(rangeEnd)}の到着列車です。`,
+    `${formatJapaneseServiceTime(rangeStart)}〜${formatJapaneseServiceTime(rangeEnd)}の到着列車です。`,
     ...arrivals,
     ...(remaining > 0 ? [`ほかに${remaining}件あります。`] : []),
   ].join("\n");
@@ -210,12 +211,12 @@ async function directRouteSearchResponse(
     });
     const first = response.results[0];
     if (!first) {
-      return `${formatRouteTime(departureTimeMinutes)}以降に${formatStationLabel(response.originStation)}から${formatStationLabel(request.destinationStation)}へ直通する列車は見つかりませんでした。`;
+      return `${formatJapaneseServiceTime(departureTimeMinutes)}以降に${formatStationLabel(response.originStation)}から${formatStationLabel(request.destinationStation)}へ直通する列車は見つかりませんでした。`;
     }
     const focused = dependencies.focusTrain(first.train.service_uid);
     const routes = response.results.map((route, index) => {
       const title = trainTitleFor(route.train);
-      return `${index + 1}. ${formatRouteTime(route.departureTimeMinutes)} ${route.originStation}発 → ${formatRouteTime(route.arrivalTimeMinutes)} ${route.destinationStation}着 ${title.main}${title.suffix ?? ""}`;
+      return `${index + 1}. ${formatJapaneseServiceTime(route.departureTimeMinutes)} ${route.originStation}発 → ${formatJapaneseServiceTime(route.arrivalTimeMinutes)} ${route.destinationStation}着 ${title.main}${title.suffix ?? ""}`;
     });
     const focusMessage = focused
       ? "先頭の列車の現在位置を選択しました。"
@@ -230,13 +231,4 @@ async function directRouteSearchResponse(
 
 function currentTrains(dependencies: LocalViewerAgentDependencies): Train[] {
   return dependencies.getTrains?.() ?? dependencies.trains;
-}
-
-function formatRouteTime(routeTimeMinutes: number): string {
-  const totalSeconds = Math.round(routeTimeMinutes * 60);
-  const hours = Math.floor(totalSeconds / 3_600);
-  const minutes = Math.floor((totalSeconds % 3_600) / 60);
-  const seconds = totalSeconds % 60;
-  const base = `${hours}時${String(minutes).padStart(2, "0")}分`;
-  return seconds === 0 ? base : `${base}${String(seconds).padStart(2, "0")}秒`;
 }

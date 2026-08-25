@@ -1,4 +1,5 @@
 import type { TrainStop } from "../data/train-index";
+import { formatServiceTime } from "../domain/route-time-format";
 
 export interface TrainTimetableRow {
   stationName: string;
@@ -62,7 +63,7 @@ export function timetableProgressRowsFor(
         ? {
             adjusted: displayEventTime(
               event,
-              formatRouteTime(routeTimeMinutes + delayMinutes),
+              formatServiceTime(routeTimeMinutes + delayMinutes),
             ),
           }
         : {}),
@@ -149,9 +150,5 @@ function formatRouteTime(routeTimeMinutes: number | undefined): string {
   if (routeTimeMinutes === undefined) {
     return "—";
   }
-
-  const totalMinutes = Math.round(routeTimeMinutes);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  return formatServiceTime(routeTimeMinutes);
 }

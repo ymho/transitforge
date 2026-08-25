@@ -1,4 +1,5 @@
 import type { JourneyRouteResult } from "../domain/direct-route-search";
+import { formatRouteClockTime } from "../domain/route-time-format";
 import {
   loadUserProfile,
   type UserProfile,
@@ -581,7 +582,7 @@ function renderJourneySummary(journey: JourneyRouteResult): HTMLElement {
   const summary = document.createElement("div");
   summary.className = "journey-plan-summary";
   const time = document.createElement("strong");
-  time.textContent = `${formatClock(journey.departureTimeMinutes)} → ${formatClock(journey.arrivalTimeMinutes)}`;
+  time.textContent = `${formatRouteClockTime(journey.departureTimeMinutes)} → ${formatRouteClockTime(journey.arrivalTimeMinutes)}`;
   const detail = document.createElement("span");
   const duration = Math.max(0, journey.arrivalTimeMinutes - journey.departureTimeMinutes);
   detail.textContent = `${formatDuration(duration)}・${journey.transferCount === 0 ? "乗換なし" : `乗換${journey.transferCount}回`}`;
@@ -606,11 +607,11 @@ function renderJourneyTimeline(
       destinationLabel(leg.serviceDestination ?? leg.destinationStation),
     ].filter(Boolean).join(" ");
     summary.append(
-      stationRow(formatClock(leg.departureTimeMinutes), leg.originStation),
+      stationRow(formatRouteClockTime(leg.departureTimeMinutes), leg.originStation),
       segmentLine(trainLabel, leg.lineName, journeyDelayLabel(leg), leg.delayBasis),
     );
     summary.append(
-      stationRow(formatClock(leg.arrivalTimeMinutes), leg.destinationStation),
+      stationRow(formatRouteClockTime(leg.arrivalTimeMinutes), leg.destinationStation),
     );
     segment.append(summary);
     timeline.append(segment);
@@ -681,12 +682,6 @@ function destinationLabel(value: string): string {
   return destination === "" || /行き$/u.test(destination)
     ? destination
     : `${destination}行き`;
-}
-
-function formatClock(minutes: number): string {
-  const rounded = Math.round(minutes);
-  const clock = ((rounded % (24 * 60)) + 24 * 60) % (24 * 60);
-  return `${String(Math.floor(clock / 60)).padStart(2, "0")}:${String(clock % 60).padStart(2, "0")}`;
 }
 
 function formatDuration(minutes: number): string {

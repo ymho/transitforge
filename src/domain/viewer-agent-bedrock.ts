@@ -19,6 +19,8 @@ import {
   type TransferPace,
 } from "./journey-search-preferences";
 import { operatingDayRouteTime } from "./playback";
+import { formatJapaneseRouteClockTime } from "./route-time-format";
+import { normalizeStationName } from "./station-name";
 import type { TrainPosition } from "./train-position";
 import type {
   ViewerAgentJourneyPlan,
@@ -350,7 +352,7 @@ function journeyTrainFollowUpResponse(
         .filter(Boolean)
         .join(" ");
       return {
-        text: `直前の候補${journeyIndex + 1}では${formatStationLabel(leg.originStation)}を${formatClockTime(leg.departureTimeMinutes)}に発車する${serviceLabel}を利用し ${formatStationLabel(leg.destinationStation)}へ向かいます。`,
+        text: `直前の候補${journeyIndex + 1}では${formatStationLabel(leg.originStation)}を${formatJapaneseRouteClockTime(leg.departureTimeMinutes)}に発車する${serviceLabel}を利用し ${formatStationLabel(leg.destinationStation)}へ向かいます。`,
         journeyPlan: plan,
       };
     }
@@ -844,15 +846,11 @@ function explicitOriginStationFromPrompt(
     return undefined;
   }
   const candidate = value.trim();
-  const normalizedPrompt = normalizeStationPrompt(prompt);
-  const normalizedCandidate = normalizeStationPrompt(candidate);
+  const normalizedPrompt = normalizeStationName(prompt);
+  const normalizedCandidate = normalizeStationName(candidate);
   return normalizedCandidate && normalizedPrompt.includes(normalizedCandidate)
     ? candidate
     : undefined;
-}
-
-function normalizeStationPrompt(value: string): string {
-  return value.normalize("NFKC").replace(/駅$/u, "").replace(/\s+/gu, "");
 }
 
 export function currentServiceDateInJapan(now = new Date()): string {
@@ -1068,16 +1066,16 @@ function stationForTravelDestination(
   destination: string,
   trains: Train[],
 ): string | undefined {
-  const normalizedDestination = normalizeStationPrompt(destination);
+  const normalizedDestination = normalizeStationName(destination);
   const stations = new Set(trains.flatMap((train) => [
     train.origin_station,
     train.destination_station,
     ...train.stops.flatMap((stop) => stop.station_name ? [stop.station_name] : []),
   ]).map((station) => station.replace(/駅$/u, "")));
   return [...stations].find((station) =>
-    normalizeStationPrompt(station) === normalizedDestination,
+    normalizeStationName(station) === normalizedDestination,
   ) ?? [...stations].find((station) =>
-    normalizeStationPrompt(station).startsWith(normalizedDestination),
+    normalizeStationName(station).startsWith(normalizedDestination),
   );
 }
 
@@ -1156,7 +1154,7 @@ function directRouteResponseText(
     ? `${response.allowedServiceTypes.join("・")}だけを利用する条件で`
     : "";
   if (response.journeys.length === 0) {
-    return `${exclusionLabel}${requirementLabel}${formatClockTime(response.searchTimeMinutes)}以降に${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}へ行く経路は見つかりませんでした。`;
+    return `${exclusionLabel}${requirementLabel}${formatJapaneseRouteClockTime(response.searchTimeMinutes)}以降に${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}へ行く経路は見つかりませんでした。`;
   }
   const first = response.journeys[0]?.legs[0];
   const focusMessage =
@@ -1373,12 +1371,6 @@ function journeysFromSearchResponse(
 function formatCalendarDate(value: string): string {
   const [, , month, day] = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value) ?? [];
   return month && day ? `${Number(month)}月${Number(day)}日` : value;
-}
-
-function formatClockTime(routeTimeMinutes: number): string {
-  const roundedMinutes = Math.round(routeTimeMinutes);
-  const clockMinutes = ((roundedMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
-  return `${Math.floor(clockMinutes / 60)}時${String(clockMinutes % 60).padStart(2, "0")}分`;
 }
 
 function currentTrains(dependencies: BedrockViewerAgentDependencies): Train[] {
