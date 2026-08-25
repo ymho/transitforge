@@ -103,6 +103,9 @@ python3 tools/measure_viewer_input.py \
 静的ビューワー AI Lambda 混雑と遅延の保存基盤をTerraformで管理する
 継続的なデプロイはGitHub ActionsとOIDCを使用し 固定AWSアクセスキーを使わない
 
+`CI / Test`はPRとmain revisionを検証する。`CD / Deploy`はmainのCI成功後または
+mainからの手動実行だけでdev環境を更新する。両者は別Workflowとして権限と結果を分離する
+
 環境固有の値はGitHub EnvironmentまたはGit管理外のローカル変数で与える
 詳しい入口は[Terraform dev環境](infra/terraform/environments/dev/README.md)を参照
 
