@@ -228,6 +228,13 @@ JSONとMarkdownは`reports/`などGit管理外の場所へ生成する。S3を�
 将来Bedrockによる補助分類を加える場合は入力schema 出力schema token上限 対象件数上限を
 別Adapterで固定し 決定的clusterとのBenchmark比較なしに既定化しない。
 
+`tools/export_feedback_issues.py`はdry-runを既定とし reportの公開可能な要約だけから
+Issue本文を作る。`--create`に加えてレビュー済みfingerprintを明示した場合だけ書き込む。
+本文へfeedback ID request ID コメント 会話本文を含めない。同じfingerprint markerがあるIssueや
+同じタイトルのopen Issueがある場合は新規作成を止める。作成時は担当 `ymho`
+Label `area: ai` `type: reliability` Milestone `会話体験と改善ループ` 親Issue #184を既定とする。
+同じreportを再実行してもmarkerにより一つのIssueだけが残る。
+
 ## 実装の分離
 
 - クライアント契約 通信 レスポンス検証を別モジュールに分ける

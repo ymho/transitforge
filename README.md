@@ -119,6 +119,15 @@ python3 tools/analyze_conversation_feedback.py \
   --output-markdown reports/feedback.md
 ```
 
+分析済みclusterをIssue候補として確認する場合はExporterをdry-runで実行する。
+作成時は人が確認したfingerprintだけを明示する。
+
+```bash
+python3 tools/export_feedback_issues.py reports/feedback.json
+python3 tools/export_feedback_issues.py reports/feedback.json \
+  --create --approved-fingerprint 0123456789abcdef
+```
+
 シナリオは`tests/fixtures/journey-search-scenarios.json`へ追加する
 IDまたは名前を引数へ渡すと対象を絞り込める
 
