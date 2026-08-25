@@ -1,6 +1,8 @@
 export type AgentToolErrorCode =
   | "invalid_input"
   | "unknown_tool"
+  | "not_found"
+  | "ambiguous_entity"
   | "execution_failed";
 
 export interface AgentToolError {
