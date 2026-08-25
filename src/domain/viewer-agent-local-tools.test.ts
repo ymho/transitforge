@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { Train } from "../data/train-index";
+import type { Train } from "./rail/train";
 import type { TrainPosition } from "./train-position";
 import {
   directRouteRequestFromPrompt,

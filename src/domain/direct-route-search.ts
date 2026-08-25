@@ -1,5 +1,5 @@
-import type { StationLineCatalog, StationCoordinate } from "../data/station-line-catalog";
-import type { Train, TrainStop } from "../data/train-index";
+import type { StationCoordinate, StationLineCatalog } from "./rail/station";
+import type { Train, TrainStop } from "./rail/train";
 import type {
   JourneyRankingPreference,
   TransferPace,

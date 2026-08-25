@@ -1,8 +1,8 @@
 import type {
   DailyCongestionAnalysisResponse,
   TrainCongestionStat,
-} from "../data/bedrock-agent";
-import type { Train } from "../data/train-index";
+} from "./operations/analysis";
+import type { Train } from "./rail/train";
 
 export interface CongestionTrainAnalysis {
   trainNumber: string;

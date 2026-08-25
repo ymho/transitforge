@@ -31,7 +31,7 @@ import { hideSheet, showSheet } from "./sheet-transition";
 import {
   submitConversationFeedback,
   type AgentResponseMetadata,
-} from "../data/bedrock-agent";
+} from "../adapters/http/agent-api/bedrock-agent";
 
 export interface AiGuidePanelElements {
   conversationSessionId: string;

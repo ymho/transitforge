@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { searchTravelCandidates } from "../../data/bedrock-agent";
+import { searchTravelCandidates } from "../../adapters/http/agent-api/bedrock-agent";
 import type {
   JourneySearchRequest,
   JourneySearchResponse,

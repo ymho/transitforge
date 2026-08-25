@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { Train } from "../data/train-index";
+import type { Train } from "./rail/train";
 import type { TrainPosition } from "./train-position";
 import type { UserProfile } from "./travel-profile";
 import type {

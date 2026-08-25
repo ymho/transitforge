@@ -1,4 +1,4 @@
-import type { Train } from "../data/train-index";
+import type { Train } from "./rail/train";
 import type { DirectRouteSearchHandler } from "./direct-route-search";
 import { directRouteDepartureTime } from "./direct-route-search";
 import {
@@ -6,7 +6,7 @@ import {
   mergeJourneyNavigationGuidance,
   type JourneyNavigationGuidance,
 } from "./journey-navigation-intent";
-import type { WeatherMode } from "./map-weather";
+import type { WeatherMode } from "./weather";
 import { operatingDayStartMinutes } from "./playback";
 import { formatJapaneseServiceTime } from "./route-time-format";
 import type { TrainPosition } from "./train-position";

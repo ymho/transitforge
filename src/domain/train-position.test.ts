@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { Path } from "../data/path-catalog";
-import type { Train } from "../data/train-index";
+import type { Path } from "./rail/path";
+import type { Train } from "./rail/train";
 import {
   activeTrainPositions,
   destinationCoordinateForTrain,

@@ -1,8 +1,8 @@
 import type {
   DailyCongestionAnalysisResponse,
   TrainDelayAnalysisResponse,
-} from "../../data/bedrock-agent";
-import type { Train } from "../../data/train-index";
+} from "../operations/analysis";
+import type { Train } from "../rail/train";
 import {
   congestionAnalysisForAgent,
   type CongestionAnalysisForAgent,

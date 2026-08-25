@@ -6,11 +6,11 @@ import type {
   RepresentativeTimetableSearchMode,
   RepresentativeTimetableSearchResponse,
   RepresentativeTimetableKind,
-} from "../data/bedrock-agent";
-import type { Train } from "../data/train-index";
+} from "../adapters/http/agent-api/bedrock-agent";
+import type { Train } from "./rail/train";
 import type { CongestionAnalysisForAgent } from "./congestion-analysis";
 import type { DelayAnalysisForAgent } from "./delay-analysis";
-import type { WeatherMode } from "./map-weather";
+import type { WeatherMode } from "./weather";
 import {
   defaultJourneySearchPreferences,
   journeySearchPreferencesFromPrompt,

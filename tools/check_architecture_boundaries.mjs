@@ -7,7 +7,7 @@ const sourceRoot = resolve(repositoryRoot, "src");
 const layerRules = {
   domain: {
     forbiddenLayers: new Set([
-      "data",
+      "adapters",
       "features",
       "infrastructure",
       "observability",
@@ -17,9 +17,9 @@ const layerRules = {
     forbidExternalPackages: true,
   },
   features: {
-    forbiddenLayers: new Set(["data", "infrastructure", "rendering"]),
+    forbiddenLayers: new Set(["adapters", "infrastructure", "rendering"]),
   },
-  data: {
+  adapters: {
     forbiddenLayers: new Set([
       "features",
       "infrastructure",
@@ -28,7 +28,7 @@ const layerRules = {
     ]),
   },
   presentation: {
-    forbiddenLayers: new Set(["data", "infrastructure", "rendering"]),
+    forbiddenLayers: new Set(["adapters", "infrastructure", "rendering"]),
   },
   rendering: {
     forbiddenLayers: new Set(["features", "infrastructure", "presentation"]),
@@ -39,48 +39,21 @@ const layerRules = {
 };
 
 const migrationExceptions = [
-  ...[
-    "src/domain/congestion-analysis.ts",
-    "src/domain/delay-analysis.ts",
-    "src/domain/direct-route-search.ts",
-    "src/domain/journey-navigation-intent.ts",
-    "src/domain/network-inspection-service.ts",
-    "src/domain/path-line-colors.ts",
-    "src/domain/train-detail-service.ts",
-    "src/domain/train-formation-link.ts",
-    "src/domain/train-line-color.ts",
-    "src/domain/train-operation-state.ts",
-    "src/domain/train-position.ts",
-    "src/domain/viewer-agent-bedrock.ts",
-    "src/domain/viewer-agent-local-tools.ts",
-    "src/domain/viewer-agent-local.ts",
-    "src/domain/agent/operational-analysis-tools.ts",
-  ].map((source) => ({ source, kind: "layer:data", issue: 157 })),
+  {
+    source: "src/domain/viewer-agent-bedrock.ts",
+    kind: "layer:adapters",
+    issue: 158,
+  },
   {
     source: "src/domain/viewer-agent-local.ts",
     kind: "layer:presentation",
     issue: 158,
   },
   {
-    source: "src/domain/map-weather.ts",
-    kind: "external:mapbox-gl",
-    issue: 157,
+    source: "src/presentation/ai-guide-panel.ts",
+    kind: "layer:adapters",
+    issue: 159,
   },
-  {
-    source: "src/domain/digital-twin-clock.ts",
-    kind: "browser-globals",
-    issue: 157,
-  },
-  ...[
-    "src/presentation/ai-guide-panel.ts",
-    "src/presentation/train-selection-controller.ts",
-    "src/presentation/train-timetable.ts",
-    "src/presentation/train-title.ts",
-  ].map((source) => ({
-    source,
-    kind: "layer:data",
-    issue: source.includes("ai-guide") ? 159 : 157,
-  })),
   {
     source: "src/presentation/train-selection-controller.ts",
     kind: "layer:rendering",

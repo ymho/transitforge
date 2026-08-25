@@ -24,7 +24,8 @@
 
 ### `TrainIndex` `Train` `TrainStop`
 
-- 定義: `src/data/train-index.ts`
+- Domain契約: `src/domain/rail/train.ts`
+- 入力Adapter: `src/adapters/http/viewer-input/train-index.ts`
 - 保存先: `viewer-input/train_index.json`
 - 生成元: transitforge-data-builder
 - 用途: 列車表示 経路検索 駅と路線のカタログ
@@ -34,7 +35,9 @@
 
 ### `PathCatalog`
 
-- 契約: `docs/data/viewer-input.md`
+- Domain契約: `src/domain/rail/path.ts`
+- 入力Adapter: `src/adapters/http/viewer-input/path-catalog.ts`
+- JSON契約: `docs/data/viewer-input.md`
 - 保存先: `viewer-input/path_catalog.json`
 - 結合キー: `Train.path_id` → `PathCatalog.paths[].path_id`
 
@@ -42,7 +45,8 @@
 
 ### `TrainDelaySnapshot` `TrainOperation`
 
-- 定義: `src/data/train-delay.ts`
+- Domain契約: `src/domain/rail/operation.ts`
+- 入力Adapter: `src/adapters/http/traffic/train-delay.ts`
 - 保存先: `/api/traffic/delays.json`
 - 結合キー: `Train.train_no` → `operationsByTrainNumber`
 
@@ -51,7 +55,8 @@
 
 ### `TrainCongestionSnapshot`
 
-- 定義: `src/data/train-congestion.ts`
+- Domain契約: `src/domain/rail/operation.ts`
+- 入力Adapter: `src/adapters/http/traffic/train-congestion.ts`
 - 保存先: `/api/traffic/congestion.json`
 - 結合キー: 列車番号
 

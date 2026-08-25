@@ -1,20 +1,17 @@
+import type {
+  TrainDelaySnapshot,
+  TrainOperation,
+} from "../../../domain/rail/operation";
+
+export type {
+  TrainDelaySnapshot,
+  TrainOperation,
+} from "../../../domain/rail/operation";
+
 const trainDelayEndpoint = "/api/traffic/delays.json";
 
 export const trainDelayRefreshIntervalMilliseconds = 60 * 1_000;
 export const trainDelayRetryIntervalMilliseconds = 15 * 60 * 1_000;
-
-export interface TrainOperation {
-  delayMinutes: number;
-  destination: string;
-  sources: readonly string[];
-  longTimeStopping?: boolean;
-}
-
-export interface TrainDelaySnapshot {
-  collectedAt: string;
-  failedSources: string[];
-  operationsByTrainNumber: ReadonlyMap<string, TrainOperation>;
-}
 
 export async function loadTrainDelays(
   signal?: AbortSignal,

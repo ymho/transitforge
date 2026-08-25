@@ -15,7 +15,7 @@
 - contentは`text` `tool_call` `tool_result`に限定する
 - stop reasonは`completed` `tool_calls` `max_tokens`に正規化する
 - request ID model latency token usageを共通metadataへ格納する
-- Bedrock形式との相互変換は`src/data/bedrock-model-provider.ts`だけで行う
+- Bedrock形式との相互変換は`src/adapters/bedrock/bedrock-model-provider.ts`だけで行う
 - Tool定義は共通`AgentToolDescriptor`として渡し Lambda境界で許可名 件数 schemaを検証する
 - 現在の一度だけの一時エラー再試行とレスポンスごとのrequest ID分離を維持する
 

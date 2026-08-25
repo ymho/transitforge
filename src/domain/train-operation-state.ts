@@ -1,5 +1,5 @@
-import type { TrainOperation, TrainDelaySnapshot } from "../data/train-delay";
-import type { Train, TrainStop } from "../data/train-index";
+import type { TrainDelaySnapshot, TrainOperation } from "./rail/operation";
+import type { Train, TrainStop } from "./rail/train";
 import { normalizeStationName } from "./station-name";
 import type { TrainFormationLink } from "./train-formation-link";
 

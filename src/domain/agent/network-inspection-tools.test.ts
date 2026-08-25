@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { StationLineCatalog } from "../../data/station-line-catalog";
-import type { TrainIndex } from "../../data/train-index";
+import type { StationLineCatalog } from "../rail/station";
+import type { TrainIndex } from "../rail/train";
 import {
   maximumRouteDetailStops,
   NetworkInspectionService,

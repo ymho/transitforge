@@ -2,8 +2,8 @@ import type {
   StationCoordinate,
   StationLineCatalog,
   StationLineCatalogLine,
-} from "../data/station-line-catalog";
-import type { Train } from "../data/train-index";
+} from "./rail/station";
+import type { Train } from "./rail/train";
 import { normalizeStationName } from "./station-name";
 
 export interface TrainLineColor {

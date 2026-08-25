@@ -1,4 +1,4 @@
-import type { WeatherMode } from "./map-weather";
+import type { WeatherMode } from "./weather";
 
 export type ViewerAgentLayer = "congestion" | "destination_arcs";
 

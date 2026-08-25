@@ -1,12 +1,11 @@
+import type { TrainCongestionSnapshot } from "../../../domain/rail/operation";
+
+export type { TrainCongestionSnapshot } from "../../../domain/rail/operation";
+
 const congestionEndpoint = "/api/traffic/congestion.json";
 
 export const congestionRefreshIntervalMilliseconds = 60 * 1_000;
 export const congestionRetryIntervalMilliseconds = 15 * 60 * 1_000;
-
-export interface TrainCongestionSnapshot {
-  updatedAt: string;
-  byTrainNumber: ReadonlyMap<string, number>;
-}
 
 export async function loadTrainCongestion(
   signal?: AbortSignal,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { Train } from "../data/train-index";
+import type { Train } from "./rail/train";
 import { createLocalViewerAgent } from "./viewer-agent-local";
 
 const train: Train = {

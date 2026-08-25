@@ -1,27 +1,29 @@
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./viewer.css";
+import { browserDigitalTwinClockEnvironment } from "./adapters/browser/digital-twin-clock-environment";
+import { applyWeather } from "./adapters/mapbox/map-weather";
 import {
   loadPathCatalog,
   toRouteFeatureCollections,
-} from "./data/path-catalog";
-import { emptyStationLineCatalog } from "./data/station-line-catalog";
+} from "./adapters/http/viewer-input/path-catalog";
+import { emptyStationLineCatalog } from "./adapters/http/viewer-input/station-line-catalog";
 import {
   congestionRefreshIntervalMilliseconds,
   congestionRetryIntervalMilliseconds,
   loadTrainCongestion,
-} from "./data/train-congestion";
+} from "./adapters/http/traffic/train-congestion";
 import {
   loadTrainDelays,
   trainDelayRefreshIntervalMilliseconds,
   trainDelayRetryIntervalMilliseconds,
   type TrainDelaySnapshot,
   type TrainOperation,
-} from "./data/train-delay";
+} from "./adapters/http/traffic/train-delay";
 import {
   browserPollingEnvironment,
   createPollingController,
-} from "./data/polling-controller";
+} from "./adapters/browser/polling-controller";
 import {
   invokeBedrockAgent,
   queryDailyCongestionAnalysis,
@@ -29,9 +31,10 @@ import {
   searchAccommodations,
   searchRepresentativeTimetable,
   journeySearchService,
-} from "./data/bedrock-agent";
-import { loadTrainIndex, type Train } from "./data/train-index";
-import type { StationCoordinate } from "./data/station-line-catalog";
+} from "./adapters/http/agent-api/bedrock-agent";
+import { loadTrainIndex } from "./adapters/http/viewer-input/train-index";
+import type { StationCoordinate } from "./domain/rail/station";
+import type { Train } from "./domain/rail/train";
 import {
   nearestOriginWithDepartures, searchDirectRoutes,
   type JourneyRouteLeg,
@@ -66,17 +69,10 @@ import {
   uiColorModeForLightPreset,
   type LightPreset,
 } from "./domain/map-lighting";
-import {
-  applyWeather,
-  isWeatherMode,
-  type WeatherMode,
-} from "./domain/map-weather";
+import { isWeatherMode, type WeatherMode } from "./domain/weather";
 import { dominantLineColorsByPathId } from "./domain/path-line-colors";
 import { currentRouteTime } from "./domain/playback";
-import {
-  browserDigitalTwinClockEnvironment,
-  createDigitalTwinClockSynchronizer,
-} from "./domain/digital-twin-clock";
+import { createDigitalTwinClockSynchronizer } from "./domain/digital-twin-clock";
 import { PlaybackController } from "./domain/playback-controller";
 import { congestionAnalysisForAgent } from "./domain/congestion-analysis";
 import { delayAnalysisForAgent } from "./domain/delay-analysis";
