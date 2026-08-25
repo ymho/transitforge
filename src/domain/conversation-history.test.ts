@@ -17,14 +17,14 @@ function memoryStorage(initial: Record<string, string> = {}) {
 describe("conversation history", () => {
   it("keeps histories separate by conversation session", () => {
     const storage = memoryStorage();
-    appendConversationHistory(storage, "session-a", { role: "user", text: "出雲へ行きたい" });
-    appendConversationHistory(storage, "session-b", { role: "user", text: "城崎へ行きたい" });
+    appendConversationHistory(storage, "session-a", { messageId: "a-1", role: "user", text: "出雲へ行きたい" });
+    appendConversationHistory(storage, "session-b", { messageId: "b-1", role: "user", text: "城崎へ行きたい" });
 
     expect(loadConversationHistory(storage, "session-a")).toEqual([
-      { role: "user", text: "出雲へ行きたい" },
+      { messageId: "a-1", role: "user", text: "出雲へ行きたい" },
     ]);
     expect(loadConversationHistory(storage, "session-b")).toEqual([
-      { role: "user", text: "城崎へ行きたい" },
+      { messageId: "b-1", role: "user", text: "城崎へ行きたい" },
     ]);
   });
 
@@ -35,16 +35,34 @@ describe("conversation history", () => {
       ]),
     });
 
-    appendConversationHistory(storage, "session-a", { role: "assistant", response: "続けます" });
+    appendConversationHistory(storage, "session-a", { messageId: "a-2", role: "assistant", response: "続けます" });
 
     expect(loadConversationHistory(storage, "session-a")).toHaveLength(2);
     expect(storage.getItem(conversationHistoryStorageKey)).toContain("session-a");
   });
 
+  it("reads v2 history with deterministic message IDs until it is rewritten", () => {
+    const storage = memoryStorage({
+      "transitforge.concierge-history.v2": JSON.stringify({
+        version: 2,
+        sessions: {
+          "session-a": [{ role: "user", text: "以前の相談" }],
+        },
+      }),
+    });
+
+    expect(loadConversationHistory(storage, "session-a")).toEqual([{
+      messageId: "legacy-message-1",
+      role: "user",
+      text: "以前の相談",
+    }]);
+    expect(loadConversationHistory(storage, "session-b")).toEqual([]);
+  });
+
   it("ignores malformed persisted entries", () => {
     const storage = memoryStorage({
       [conversationHistoryStorageKey]: JSON.stringify({
-        version: 2,
+        version: 3,
         sessions: { valid: [{ role: "assistant", response: { unexpected: true } }] },
       }),
     });
@@ -54,9 +72,9 @@ describe("conversation history", () => {
 
   it("builds a compact context without duplicating the current prompt", () => {
     const context = recentConversationContext([
-      { role: "user", text: "出雲へ行きたい" },
-      { role: "assistant", response: { text: "いつ出発しますか", conversation: { question: "いつ出発しますか", expectedInput: "departure-date", quickReplies: [], tripContext: {} } } },
-      { role: "user", text: "明日" },
+      { messageId: "m-1", role: "user", text: "出雲へ行きたい" },
+      { messageId: "m-2", role: "assistant", response: { text: "いつ出発しますか", conversation: { question: "いつ出発しますか", expectedInput: "departure-date", quickReplies: [], tripContext: {} } } },
+      { messageId: "m-3", role: "user", text: "明日" },
     ], "明日");
 
     expect(context).toContain("出雲へ行きたい");
@@ -67,6 +85,7 @@ describe("conversation history", () => {
   it("preserves the API request id with an assistant response", () => {
     const storage = memoryStorage();
     appendConversationHistory(storage, "session-a", {
+      messageId: "m-1",
       role: "assistant",
       response: "案内しました",
       requestId: "request-123",

@@ -25,6 +25,7 @@ import type {
 } from "../../../domain/journey-search-service";
 import type { AgentToolDescriptor } from "../../../application/agent/tool-contract";
 import type { AgentTrace } from "../../../application/agent/agent-trace";
+import type { ConversationFeedbackV2 } from "../../../application/concierge/conversation-feedback";
 import {
   journeySearchContractVersion,
   toJourneySearchResponse,
@@ -42,7 +43,7 @@ export interface AgentApiResult<T> {
 }
 
 export async function submitConversationFeedback(
-  feedback: { rating: "good" | "bad"; conversation: Array<{ role: "user" | "assistant"; text: string }>; requestIds: string[] },
+  feedback: ConversationFeedbackV2,
   fetcher: typeof fetch = fetch,
 ): Promise<void> {
   const body = JSON.stringify({ operation: "conversation_feedback", ...feedback });
