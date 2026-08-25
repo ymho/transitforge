@@ -136,6 +136,7 @@ python3 tools/run_journey_search_scenarios.py --list
 ## 実装の分離
 
 - クライアント契約 通信 レスポンス検証を別モジュールに分ける
+- AI通信は本文と`x-transitforge-request-id`由来のメタデータを組で返す。最新IDをモジュール共有状態へ保存せず 応答ごとに会話履歴へ渡す
 - 列車選択と追跡を起動処理から分離する
 - Lambdaの入力契約 DynamoDB集計 経路探索を入口ハンドラーから分離する
 - 再生状態は時刻変更から独立して管理する

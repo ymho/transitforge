@@ -26,14 +26,13 @@ import type {
 
 export type * from "./bedrock-agent-contract";
 
-let latestAgentRequestId: string | undefined;
-
-export function clearLatestAgentRequestId(): void {
-  latestAgentRequestId = undefined;
+export interface AgentResponseMetadata {
+  requestId?: string;
 }
 
-export function lastAgentRequestId(): string | undefined {
-  return latestAgentRequestId;
+export interface AgentApiResult<T> {
+  body: T;
+  metadata: AgentResponseMetadata;
 }
 
 export async function submitConversationFeedback(
@@ -49,27 +48,30 @@ export async function submitConversationFeedback(
   if (!response.ok) throw new Error("フィードバックを保存できませんでした。");
 }
 
-export async function invokeBedrockAgent(messages: BedrockAgentMessage[], fetcher: typeof fetch = fetch): Promise<BedrockAgentResponse> {
+export async function invokeBedrockAgent(
+  messages: BedrockAgentMessage[],
+  fetcher: typeof fetch = fetch,
+): Promise<AgentApiResult<BedrockAgentResponse>> {
   return postAgent({ messages }, "AI案内APIを利用できません", "AI案内", isBedrockAgentResponse, fetcher, true);
 }
 
 export async function queryDailyCongestionPeak(serviceDate: string, fetcher: typeof fetch = fetch): Promise<DailyCongestionPeakResponse> {
-  return postAgent({ operation: "daily_congestion_peak", serviceDate }, "混雑履歴を取得できません", "混雑履歴", isDailyCongestionPeakResponse, fetcher);
+  return postAgentBody({ operation: "daily_congestion_peak", serviceDate }, "混雑履歴を取得できません", "混雑履歴", isDailyCongestionPeakResponse, fetcher);
 }
 
 export async function queryDailyCongestionAnalysis(serviceDate: string, fetcher: typeof fetch = fetch): Promise<DailyCongestionAnalysisResponse> {
-  return postAgent({ operation: "daily_congestion_analysis", serviceDate }, "混雑分析を取得できません", "混雑分析", isDailyCongestionAnalysisResponse, fetcher);
+  return postAgentBody({ operation: "daily_congestion_analysis", serviceDate }, "混雑分析を取得できません", "混雑分析", isDailyCongestionAnalysisResponse, fetcher);
 }
 
 export async function queryTrainDelayAnalysis(serviceDate: string, fetcher: typeof fetch = fetch): Promise<TrainDelayAnalysisResponse> {
-  return postAgent({ operation: "train_delay_analysis", serviceDate }, "列車遅延分析を取得できません", "列車遅延分析", isTrainDelayAnalysisResponse, fetcher);
+  return postAgentBody({ operation: "train_delay_analysis", serviceDate }, "列車遅延分析を取得できません", "列車遅延分析", isTrainDelayAnalysisResponse, fetcher);
 }
 
 export async function searchAccommodations(
   request: { destination: string; checkInDate: string; checkOutDate: string; adults?: number; limit?: number },
   fetcher: typeof fetch = fetch,
 ): Promise<AccommodationSearchResponse> {
-  return postAgent(
+  return postAgentBody(
     { operation: "travel_accommodation_search", ...request },
     "宿泊候補を検索できません",
     "宿泊候補",
@@ -89,7 +91,7 @@ export async function searchRepresentativeTimetable(
   },
   fetcher: typeof fetch = fetch,
 ): Promise<RepresentativeTimetableSearchResponse> {
-  return postAgent(
+  return postAgentBody(
     { operation: "representative_timetable_search", ...request },
     "代表ダイヤを検索できません",
     "代表ダイヤ",
@@ -119,7 +121,7 @@ export async function searchTravelCandidates(
   },
   fetcher: typeof fetch = fetch,
 ): Promise<TravelCandidateSearchResponse> {
-  return postAgent(
+  return postAgentBody(
     { operation: "journey_search", maxTransfers: 3, ...request },
     "旅行候補を検索できません",
     "旅行候補",
@@ -136,7 +138,7 @@ async function postAgent<T>(
   validate: (value: unknown) => value is T,
   fetcher: typeof fetch,
   retryTransientFailure = false,
-): Promise<T> {
+): Promise<AgentApiResult<T>> {
   const body = JSON.stringify(request);
   const requestInit: RequestInit = {
     method: "POST",
@@ -167,12 +169,33 @@ async function postAgent<T>(
   if (!response.ok) {
     throw new Error(`${unavailableMessage} (${response.status})。`);
   }
-  latestAgentRequestId = response.headers.get("x-transitforge-request-id") ?? undefined;
+  const requestId = response.headers.get("x-transitforge-request-id") ?? undefined;
   const value: unknown = await response.json();
   if (!validate(value)) {
     throw new Error(`${label}APIから不正な応答を受信しました。`);
   }
-  return value;
+  return {
+    body: value,
+    metadata: requestId ? { requestId } : {},
+  };
+}
+
+async function postAgentBody<T>(
+  request: unknown,
+  unavailableMessage: string,
+  label: string,
+  validate: (value: unknown) => value is T,
+  fetcher: typeof fetch,
+  retryTransientFailure = false,
+): Promise<T> {
+  return (await postAgent(
+    request,
+    unavailableMessage,
+    label,
+    validate,
+    fetcher,
+    retryTransientFailure,
+  )).body;
 }
 
 function isTransientStatus(status: number): boolean {
