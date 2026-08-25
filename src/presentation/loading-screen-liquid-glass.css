@@ -1,0 +1,291 @@
+/* 読み込み中も完成後と同じ素材感にする */
+.loading-screen {
+  color: #f0f5fb;
+  background: #070c13;
+}
+
+.loading-screen-content {
+  width: min(25rem, calc(100vw - 3rem));
+  padding: 1.5rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 1.5rem;
+  background: rgb(18 25 34 / 76%);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 34%);
+  backdrop-filter: blur(24px);
+}
+
+.loading-screen-brand {
+  color: #f0f5fb;
+  font: 590 1.1rem/1.2 -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.loading-screen-message {
+  color: #a5b5cc;
+}
+
+.loading-screen-progress {
+  height: 0.25rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 10%);
+}
+
+.loading-screen-progress span {
+  border-radius: inherit;
+  background: #18a7ff;
+  box-shadow: 0 0 1rem rgb(24 167 255 / 42%);
+}
+
+.loading-screen-retry {
+  border-color: rgb(255 255 255 / 16%);
+  border-radius: 0.85rem;
+  color: #ffffff;
+  background: rgb(255 255 255 / 8%);
+}
+
+@media (max-width: 720px) {
+  .hud {
+    top: 0.65rem;
+    left: 0.65rem;
+    width: min(10.75rem, calc(100vw - 4.9rem));
+    max-height: none;
+    padding: 0.38rem;
+    overflow: visible;
+    border-radius: 1.25rem;
+  }
+
+  .date-time-display {
+    grid-template-areas:
+      "clock"
+      "date";
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.15rem;
+    min-height: 3.75rem;
+    padding: 0.55rem 0.7rem;
+  }
+
+  .date-time-clock {
+    grid-row: auto;
+    font-size: 1.35rem;
+  }
+
+  .date-time-date {
+    grid-row: auto;
+    overflow: hidden;
+    font-size: 0.68rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #map-status {
+    display: none;
+  }
+
+  .mapboxgl-ctrl-top-right {
+    top: 0.35rem;
+    right: 0.35rem;
+  }
+
+  .map-tools {
+    gap: 0;
+    padding: 0.25rem;
+    border-radius: 18.5rem !important;
+  }
+
+  .mapboxgl-ctrl-group,
+  .map-tools {
+    width: 2.75rem;
+  }
+
+  .mapboxgl-ctrl-group {
+    gap: 0;
+    padding: 0.25rem;
+  }
+
+  .map-tools > button,
+  .playback-speed-menu > button,
+  .weather-menu > button,
+  .mapboxgl-ctrl-group button {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .playback-speed-menu,
+  .weather-menu {
+    width: 2.25rem;
+  }
+
+  .map-tool-icon {
+    width: 1.1rem;
+    height: 1.1rem;
+    margin: 0;
+  }
+
+  .playback-speed-menu-toggle {
+    line-height: 2.25rem;
+  }
+
+  .playback-speed-controls,
+  .weather-controls {
+    right: calc(100% + 0.45rem);
+    max-width: calc(100vw - 4.5rem);
+    overflow-x: auto;
+  }
+
+  .ai-guide-toggle {
+    bottom: max(0.8rem, env(safe-area-inset-bottom));
+    left: 0.8rem;
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .ai-guide-panel {
+    inset: auto 0 0;
+    grid-template-rows: auto auto minmax(8rem, 1fr) auto auto auto;
+    width: 100%;
+    height: min(88dvh, 52rem);
+    max-height: 88dvh;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 2.125rem 2.125rem 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .sheet-grabber {
+    display: block;
+    width: 2.25rem;
+    height: 0.3125rem;
+    margin: 0.3125rem auto 0;
+    border-radius: 6.25rem;
+    background: rgb(120 120 128 / 36%);
+  }
+
+  .ai-guide-panel header {
+    position: relative;
+    justify-content: flex-start;
+    min-height: 4rem;
+    padding-top: 0.25rem;
+  }
+
+  .ai-guide-panel .guide-panel-heading {
+    justify-content: flex-start;
+  }
+
+  .ai-guide-panel .guide-panel-icon,
+  .ai-guide-panel .guide-panel-copy small {
+    display: none;
+  }
+
+  .ai-guide-panel .guide-panel-actions {
+    position: absolute;
+    right: 1rem;
+    margin: 0;
+  }
+
+  .ai-guide-messages {
+    padding: 0.85rem;
+  }
+
+  .ai-guide-message,
+  .ai-guide-message-assistant {
+    max-width: 92%;
+  }
+
+  .ai-guide-message-journey {
+    max-width: 100%;
+  }
+
+  .ai-guide-form {
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+  }
+
+  .journey-plan-panel {
+    padding: 0.7rem 0;
+  }
+
+
+  .train-details {
+    inset: auto 0 0;
+    width: 100%;
+    max-height: min(70dvh, 38rem);
+    padding: 0.9rem max(0.9rem, env(safe-area-inset-right)) max(0.9rem, env(safe-area-inset-bottom)) max(0.9rem, env(safe-area-inset-left));
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 2.125rem 2.125rem 0 0;
+  }
+
+  .train-details::before {
+    display: block;
+    width: 2.25rem;
+    height: 0.3125rem;
+    margin: -0.55rem auto 0.75rem;
+    border-radius: 6.25rem;
+    background: rgb(120 120 128 / 36%);
+    content: "";
+  }
+}
+
+@media (max-width: 430px) {
+  .hud {
+    width: min(10.75rem, calc(100vw - 4.45rem));
+  }
+
+  .date-time-display {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.15rem;
+  }
+
+  .date-time-clock {
+    grid-row: auto;
+    font-size: 1.3rem;
+  }
+
+  .date-time-date {
+    grid-row: auto;
+    font-size: 0.65rem;
+  }
+
+  .ai-guide-panel {
+    height: 92dvh;
+    max-height: 92dvh;
+  }
+
+  .journey-station,
+  .journey-segment {
+    grid-template-columns: 3rem minmax(0, 1fr);
+  }
+
+  .journey-segment {
+    grid-template-columns: 3rem minmax(0, 1fr);
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-guide-toggle,
+  .map-tools button,
+  .mapboxgl-ctrl-group button,
+  .ai-guide-panel,
+  .train-details {
+    transition: none;
+    animation: none;
+  }
+
+  .ai-guide-form button[data-submitting="true"] svg {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .hud,
+  .mapboxgl-ctrl-group,
+  .map-tools,
+  .ai-guide-panel,
+  .train-details {
+    background: var(--glass-surface-strong) !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

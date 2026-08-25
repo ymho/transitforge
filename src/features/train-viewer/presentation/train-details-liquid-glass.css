@@ -1,0 +1,307 @@
+/* 列車詳細も同じガラスシートへ統一する */
+.train-details {
+  z-index: 6;
+  right: 5.25rem;
+  bottom: 1.25rem;
+  width: min(24rem, calc(100vw - 6.5rem));
+  max-height: min(68dvh, 40rem);
+  padding: 1.05rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 1.25rem;
+  color: var(--glass-text);
+  background: var(--glass-surface);
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  animation: sheet-rise-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  isolation: isolate;
+  pointer-events: auto;
+}
+
+@keyframes sheet-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(2.5rem) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sheet-drop-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(2.5rem) scale(0.985);
+  }
+}
+
+.train-details h2 {
+  min-height: 2.5rem;
+  margin-right: 0;
+  padding-right: 3.25rem;
+  color: var(--glass-text);
+  gap: 0.55rem;
+  font-size: 1.12rem;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.train-service-badge {
+  display: inline-flex;
+  min-height: 1.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.7rem;
+  border: 0;
+  border-radius: 0.4rem;
+  color: #ffffff;
+  background: var(--train-line-color, #0091ff);
+  box-shadow: 0 0.35rem 1rem color-mix(in srgb, var(--train-line-color), transparent 72%);
+  font-size: 0.72rem;
+  font-weight: 510;
+  line-height: 1;
+  text-shadow: none;
+}
+
+.train-title-main {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  line-height: 1.2;
+}
+
+.train-destination-change {
+  display: inline-flex;
+  min-height: 1.75rem;
+  gap: 0.35rem;
+  align-items: center;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+}
+
+.train-destination-scheduled {
+  color: var(--glass-muted);
+  text-decoration-line: line-through;
+  text-decoration-style: double;
+  text-decoration-thickness: 1px;
+}
+
+.train-destination-change-arrow {
+  color: var(--glass-muted);
+}
+
+.train-destination-current {
+  color: var(--glass-danger);
+}
+
+.train-detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  min-height: 0;
+  margin: 0;
+}
+
+.train-delay-badge,
+.train-stopping-badge {
+  display: inline-flex;
+  min-height: 1.65rem;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 18.5rem;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 590;
+  line-height: 1;
+}
+
+.train-delay-badge {
+  color: #ffffff;
+  background: #ff3b30;
+}
+
+.train-stopping-badge {
+  color: #ffffff;
+  background: #202124;
+  box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 18%);
+}
+
+.train-delay-badge[hidden],
+.train-stopping-badge[hidden] {
+  display: none;
+}
+
+.train-timetable h3,
+.train-timetable-scheduled-replaced {
+  color: var(--glass-muted);
+}
+
+.train-details dd,
+.train-timetable-times,
+.train-timetable li {
+  color: var(--glass-text);
+}
+
+.train-timetable {
+  margin-top: 0.65rem;
+}
+
+.train-detail-tabs {
+  position: relative;
+  z-index: 8;
+  display: grid;
+  width: 100%;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 0;
+  box-sizing: border-box;
+  margin: 0.75rem 0 0.9rem;
+  padding: 0.1875rem;
+  overflow: hidden;
+  border-radius: 18.5rem;
+  background: var(--glass-surface-strong);
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%);
+  isolation: isolate;
+  pointer-events: auto;
+}
+
+.train-detail-tabs[hidden] {
+  display: none;
+}
+
+.train-detail-tabs button {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  min-width: 5rem;
+  min-height: 2.75rem;
+  padding: 0.45rem 0.8rem;
+  border: 0;
+  border-radius: 18.5rem;
+  color: var(--glass-muted);
+  background: transparent;
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 590;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  user-select: none;
+  white-space: nowrap;
+}
+
+#close-train-details {
+  z-index: 3;
+}
+
+.train-detail-tabs button[aria-selected="true"] {
+  color: #0088ff;
+  background: rgb(120 120 128 / 16%);
+}
+
+.train-timetable li {
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0.35rem 0.15rem 0;
+  padding: 0.55rem 0.65rem;
+  border: 0;
+  border-radius: 0.8rem;
+  background: transparent;
+}
+
+.train-timetable li[data-current-status] {
+  color: var(--glass-text);
+  background: var(--glass-accent-soft);
+}
+
+.train-timetable ol {
+  position: relative;
+  max-height: min(43vh, 21rem);
+  padding: 0.25rem 0 0.25rem 0.2rem;
+  scrollbar-color: rgb(120 120 128 / 38%) transparent;
+  scrollbar-width: thin;
+}
+
+.train-timetable ol::-webkit-scrollbar {
+  width: 0.375rem;
+}
+
+.train-timetable ol::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.train-timetable ol::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgb(120 120 128 / 38%);
+}
+
+.train-timetable ol::-webkit-scrollbar-button {
+  display: none;
+}
+
+.train-timetable-station {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.82rem;
+  font-weight: 590;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.train-timetable-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  justify-content: flex-end;
+  align-items: center;
+  font-size: 0.75rem;
+}
+
+.train-timetable-time {
+  display: inline-flex;
+  gap: 0.2rem;
+  align-items: baseline;
+  padding: 0;
+  background: transparent;
+}
+
+.train-timetable-clock {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.train-timetable-event {
+  color: var(--glass-muted);
+  font-size: 0.58rem;
+  font-weight: 590;
+}
+
+.train-timetable-time-separator {
+  color: var(--glass-muted);
+  font-size: 0.65rem;
+}
+
+.train-timetable-time-separator::before {
+  content: "／";
+}
+
+.train-timetable-delay-arrow {
+  color: var(--glass-delay);
+}
+
+.train-timetable-time .train-timetable-adjusted {
+  color: var(--glass-delay);
+  font-weight: 750;
+}
+
