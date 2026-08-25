@@ -159,6 +159,21 @@ Evidenceは`deterministic_fact` `derived_value` `model_interpretation`
 事実Claimは`unsupported`として検出する。情報不足はEvidenceを捏造せず`unknown` Claimとして表す。
 Grounding判定はモデルの自己申告ではなく`validateEvidenceAndClaims`が決定論的に行う。
 
+### Structured Agent Trace
+
+- モデルとRecorder: `src/domain/agent/agent-trace.ts`
+
+1回のAgent実行は`executionId`に紐づく順序付きeventとして記録する。eventは利用者の依頼
+正規化した意図 plan Tool呼び出しと結果 Evidence 再計画判断 モデルmetadata 応答
+Viewer Actionと完了状態を区別する。これにより会話文や巨大なTool結果を丸ごと保存せず
+後続のRuntimeとEvaluationが同じ実行過程を再現できる。
+
+Recorderは既定200件で追記を停止し 超過件数を`droppedEventCount`へ記録する。
+payloadは件数 深さ 文字数を制限して要約し 秘密値 Authorization cookie
+現在地の緯度経度を記録前に除去する。Tool errorのcodeと再試行可否 Viewer Actionの
+拒否理由は残すが 例外そのものやProviderへ送った未加工payloadは残さない。
+現段階のTraceは実行中のメモリだけに保持し AWS保存と分析UIは対象外とする。
+
 ### `JourneySearchPreferences`
 
 - 定義: `src/domain/journey-search-preferences.ts`
