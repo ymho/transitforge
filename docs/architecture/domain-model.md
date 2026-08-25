@@ -174,6 +174,21 @@ payloadは件数 深さ 文字数を制限して要約し 秘密値 Authorizatio
 拒否理由は残すが 例外そのものやProviderへ送った未加工payloadは残さない。
 現段階のTraceは実行中のメモリだけに保持し AWS保存と分析UIは対象外とする。
 
+### Multi-step Agent Runtime
+
+- Runtime: `src/domain/agent/agent-runtime.ts`
+- 契約: `src/domain/agent/runtime-contract.ts`
+- 制限: `src/domain/agent/runtime-policies.ts`
+- 判断記録: [ADR 0023](../decisions/0023-build-bounded-multi-step-agent-runtime.md)
+
+Problem Framing Planner Tool RegistryとExecutor Evidence Responseを別責務として接続する。
+RuntimeはProvider固有形式を扱わず 既定で反復4回 model call 5回 Tool 8回
+実行15秒 Evidence 20件を上限とする。複数Toolは順番に実行し 結果をTool call IDで
+次のmodel callへ返す。不足情報がある場合はToolを実行せずfollow-upを返す。
+
+機能単位の`AgentRuntimeRolloutRouter`を境界として既存loopと併存させる。
+新Runtimeを`src/main.ts`へ一括適用せず End-to-Endシナリオごとに切り替える。
+
 ### `JourneySearchPreferences`
 
 - 定義: `src/domain/journey-search-preferences.ts`
