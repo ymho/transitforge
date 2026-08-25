@@ -4,6 +4,7 @@ import type {
   StationLineCatalogLine,
 } from "../data/station-line-catalog";
 import type { Train } from "../data/train-index";
+import { normalizeStationName } from "./station-name";
 
 export interface TrainLineColor {
   color: string;
@@ -242,10 +243,6 @@ function indexLine(catalogLine: StationLineCatalogLine): IndexedLine {
       ]),
     ),
   };
-}
-
-function normalizeStationName(stationName: string): string {
-  return stationName.normalize("NFKC").trim().replaceAll("ヶ", "ケ");
 }
 
 function meanLongitude(

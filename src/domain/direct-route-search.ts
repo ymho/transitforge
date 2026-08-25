@@ -4,6 +4,9 @@ import type {
   JourneyRankingPreference,
   TransferPace,
 } from "./journey-search-preferences";
+import { normalizeStationName } from "./station-name";
+
+export { normalizeStationName } from "./station-name";
 
 export interface DirectRouteResult {
   train: Train;
@@ -236,10 +239,6 @@ function nearestCatalogStation(
   return nearest;
 }
 
-
-export function normalizeStationName(value: string): string {
-  return value.normalize("NFKC").trim().replace(/[\s　]+/g, "").replace(/駅$/, "");
-}
 
 function groupedStops(stops: TrainStop[]): StopGroup[] {
   const groups: StopGroup[] = [];

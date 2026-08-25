@@ -1,6 +1,6 @@
 import type { TrainOperation, TrainDelaySnapshot } from "../data/train-delay";
 import type { Train, TrainStop } from "../data/train-index";
-import { normalizeStationName } from "./direct-route-search";
+import { normalizeStationName } from "./station-name";
 import type { TrainFormationLink } from "./train-formation-link";
 
 export const realtimeSnapshotToleranceMilliseconds = 5 * 60 * 1_000;

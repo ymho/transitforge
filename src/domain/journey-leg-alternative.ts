@@ -3,6 +3,7 @@ import type {
   JourneyRouteResult,
 } from "./direct-route-search";
 import type { TransferPace } from "./journey-search-preferences";
+import { normalizeStationName } from "./station-name";
 
 const minimumTransferMinutes: Record<TransferPace, number> = {
   hurried: 3.5,
@@ -19,11 +20,17 @@ export function journeyLegAlternativeFits(
 ): boolean {
   const current = journey.legs[legIndex];
   const finalCurrent = journey.legs[endLegIndex];
+  const originMatches = current &&
+    normalizeStationName(current.originStation).toLowerCase() ===
+      normalizeStationName(alternative.originStation).toLowerCase();
+  const destinationMatches = finalCurrent &&
+    normalizeStationName(finalCurrent.destinationStation).toLowerCase() ===
+      normalizeStationName(alternative.destinationStation).toLowerCase();
   if (
     current === undefined ||
     finalCurrent === undefined ||
-    normalizedStation(current.originStation) !== normalizedStation(alternative.originStation) ||
-    normalizedStation(finalCurrent.destinationStation) !== normalizedStation(alternative.destinationStation)
+    !originMatches ||
+    !destinationMatches
   ) {
     return false;
   }
@@ -35,8 +42,4 @@ export function journeyLegAlternativeFits(
   }
   const next = journey.legs[endLegIndex + 1];
   return !next || alternative.arrivalTimeMinutes + transfer <= next.departureTimeMinutes;
-}
-
-function normalizedStation(value: string): string {
-  return value.normalize("NFKC").replace(/駅$/u, "").replace(/\s+/gu, "").toLowerCase();
 }

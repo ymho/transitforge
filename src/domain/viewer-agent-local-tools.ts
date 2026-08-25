@@ -2,6 +2,9 @@ import type { Train } from "../data/train-index";
 import type { TrainPosition } from "./train-position";
 import type { ViewerAgentAction } from "./viewer-agent-action";
 import { operatingDayRouteTime } from "./playback";
+import { normalizeStationName } from "./station-name";
+
+export { formatStationLabel } from "./station-name";
 
 export interface ViewerTrainSearchResult {
   train: Train;
@@ -41,10 +44,6 @@ export interface RouteCalendarDate {
 
 const serviceTypeKeywords = ["新快速", "新幹線", "特急", "快速", "普通"];
 export const arrivalSearchWindowMinutes = 30;
-
-export function formatStationLabel(stationName: string): string {
-  return `${stationName.normalize("NFKC").trim().replace(/駅$/u, "")}駅`;
-}
 
 /**
  * モデルが駅名未指定を表すために出力する値は、経路検索の出発駅として扱わない。
@@ -203,7 +202,7 @@ export function directRouteRequestFromPrompt(
         station_name ? [station_name] : [],
       ),
     ]) {
-      const normalizedName = normalize(stationName).replace(/駅$/u, "");
+      const normalizedName = normalizeStationName(stationName);
       if (
         normalizedName.length >= 2 &&
         !stationByNormalizedName.has(normalizedName)

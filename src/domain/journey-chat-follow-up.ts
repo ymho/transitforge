@@ -3,6 +3,8 @@ import type {
   JourneyRouteResult,
 } from "./direct-route-search";
 import type { ViewerAgentJourneyPlan } from "./viewer-agent-response";
+import { formatRouteClockTime } from "./route-time-format";
+import { formatStationLabel, normalizeStationName } from "./station-name";
 
 export interface PendingJourneyLegChange {
   plan: ViewerAgentJourneyPlan;
@@ -171,7 +173,7 @@ function referencedExcludedLeg(
     return journey.legs[Number(numbered) - 1];
   }
   const byOrigin = journey.legs.find((leg) =>
-    prompt.includes(normalizeStation(leg.originStation))
+    prompt.includes(normalizeStationName(leg.originStation))
   );
   if (byOrigin && /(?:から乗る|からの)(?:列車)?/u.test(prompt)) {
     return byOrigin;
@@ -194,15 +196,15 @@ export function intermediateStopsResponse(
   }
   const stops = leg.stops?.slice(1, -1) ?? [];
   if (stops.length === 0) {
-    return `${stationLabel(leg.originStation)}から${stationLabel(leg.destinationStation)}までに途中停車駅はありません。`;
+    return `${formatStationLabel(leg.originStation)}から${formatStationLabel(leg.destinationStation)}までに途中停車駅はありません。`;
   }
   const values = stops.map((stop) => {
     const time = stop.departureTimeMinutes ?? stop.arrivalTimeMinutes;
     return time === undefined
-      ? stationLabel(stop.stationName)
-      : `${formatClock(time)} ${stationLabel(stop.stationName)}`;
+      ? formatStationLabel(stop.stationName)
+      : `${formatRouteClockTime(time)} ${formatStationLabel(stop.stationName)}`;
   });
-  return `${stationLabel(leg.originStation)}から${stationLabel(leg.destinationStation)}までの途中停車駅は ${values.join(" → ")} です。`;
+  return `${formatStationLabel(leg.originStation)}から${formatStationLabel(leg.destinationStation)}までの途中停車駅は ${values.join(" → ")} です。`;
 }
 
 export function alternativeProposalResponse(
@@ -210,16 +212,16 @@ export function alternativeProposalResponse(
   alternatives: JourneyRouteLeg[],
 ): string {
   if (alternatives.length === 0) {
-    return `${stationLabel(current.originStation)}から${stationLabel(current.destinationStation)}までで変更できる列車は見つかりませんでした。`;
+    return `${formatStationLabel(current.originStation)}から${formatStationLabel(current.destinationStation)}までで変更できる列車は見つかりませんでした。`;
   }
   const options = alternatives.map((leg, index) => {
     const train = [leg.serviceType, leg.trainName || leg.trainNumber]
       .filter(Boolean)
       .join(" ");
-    return `${index + 1}. ${formatClock(leg.departureTimeMinutes)} → ${formatClock(leg.arrivalTimeMinutes)} ${train}`;
+    return `${index + 1}. ${formatRouteClockTime(leg.departureTimeMinutes)} → ${formatRouteClockTime(leg.arrivalTimeMinutes)} ${train}`;
   });
   return [
-    `${stationLabel(current.originStation)}から${stationLabel(current.destinationStation)}までの別の列車です。まだ経路は変更していません。`,
+    `${formatStationLabel(current.originStation)}から${formatStationLabel(current.destinationStation)}までの別の列車です。まだ経路は変更していません。`,
     ...options,
     "番号か列車名を指定すると経路へ反映します。",
   ].join("\n");
@@ -267,7 +269,7 @@ export function appliedAlternativeResponse(
   const train = [leg.serviceType, leg.trainName || leg.trainNumber]
     .filter(Boolean)
     .join(" ");
-  return `${formatClock(leg.departureTimeMinutes)}発の${train}へ変更しました。変更後の経路です。`;
+  return `${formatRouteClockTime(leg.departureTimeMinutes)}発の${train}へ変更しました。変更後の経路です。`;
 }
 
 function referencedSegment(
@@ -285,8 +287,8 @@ function referencedSegment(
       legIndex,
       endLegIndex: legIndex + offset,
       score:
-        Number(prompt.includes(normalizeStation(first.originStation))) +
-        Number(prompt.includes(normalizeStation(last.destinationStation))),
+        Number(prompt.includes(normalizeStationName(first.originStation))) +
+        Number(prompt.includes(normalizeStationName(last.destinationStation))),
     })),
   ).sort((left, right) =>
     right.score - left.score || left.endLegIndex - left.legIndex -
@@ -344,17 +346,4 @@ function confirmedAlternativeIndex(
 
 function normalize(value: string): string {
   return value.normalize("NFKC").replace(/\s+/gu, "");
-}
-
-function normalizeStation(value: string): string {
-  return normalize(value).replace(/駅$/u, "");
-}
-
-function stationLabel(value: string): string {
-  return `${value.replace(/駅$/u, "")}駅`;
-}
-
-function formatClock(minutes: number): string {
-  const normalized = ((Math.round(minutes) % 1440) + 1440) % 1440;
-  return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
 }
