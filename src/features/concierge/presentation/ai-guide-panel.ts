@@ -9,9 +9,12 @@ import type {
   ConversationSubmission,
 } from "../../../domain/conversation-guidance";
 import {
-  appendConversationHistory,
-  loadConversationHistory,
-} from "../../../domain/conversation-history";
+  type ConversationHistoryRepository,
+} from "../../../application/concierge/conversation-history-repository";
+import {
+  buildConversationFeedback,
+  type ConversationFeedbackV2,
+} from "../../../application/concierge/conversation-feedback";
 import { recommendedTravelDestinations } from "../../../domain/travel-destination";
 import {
   defaultJourneySearchPreferences,
@@ -41,11 +44,7 @@ export interface AgentResponseMetadata {
   requestId?: string;
 }
 
-export interface ConversationFeedback {
-  rating: "good" | "bad";
-  conversation: Array<{ role: "user" | "assistant"; text: string }>;
-  requestIds: string[];
-}
+export type ConversationFeedback = ConversationFeedbackV2;
 
 export interface AiGuidePanelElements {
   conversationSessionId: string;
@@ -63,6 +62,7 @@ export interface AiGuidePanelElements {
   transferPace: HTMLSelectElement;
   rankingPreference: HTMLSelectElement;
   storage: Storage;
+  historyRepository: ConversationHistoryRepository;
   submitFeedback: (feedback: ConversationFeedback) => Promise<void>;
   onFirstPrompt?: (prompt: string) => void;
   onTravelPlan?: (plan: ViewerAgentTravelPlan) => void;
@@ -104,6 +104,7 @@ export function configureAiGuidePanel(
     rankingPreference,
     storage,
     submitFeedback,
+    historyRepository,
   } = elements;
   const savedPreferences = loadJourneySearchPreferences(storage);
   transferPace.value = savedPreferences.transferPace;
@@ -172,28 +173,29 @@ export function configureAiGuidePanel(
     const rating = target.dataset.conversationFeedback;
     if (rating !== "good" && rating !== "bad") return;
     target.disabled = true;
-    const conversation = Array.from(messages.querySelectorAll<HTMLElement>(".ai-guide-message"))
-      .flatMap((message) => message.dataset.feedbackText === undefined ? [] : [{
-        role: message.classList.contains("ai-guide-message-user") ? "user" as const : "assistant" as const,
-        text: message.dataset.feedbackText,
-      }])
-      .filter((message) => message.text.length > 0);
-    void submitFeedback({ rating, conversation, requestIds: [...agentRequestIds] })
+    const targetMessageId = target.closest<HTMLElement>(".ai-guide-message")
+      ?.dataset.messageId;
+    if (!targetMessageId) return;
+    const feedback = buildConversationFeedback(
+      elements.conversationSessionId,
+      historyRepository.list(elements.conversationSessionId),
+      targetMessageId,
+      rating,
+    );
+    void submitFeedback(feedback)
       .then(() => { target.dataset.feedbackStored = "true"; })
       .catch(() => { target.disabled = false; });
   });
 
-  const agentRequestIds = new Set<string>();
   let activeConversation: ConversationGuidance | undefined;
   let activeTripContext: TripContext | undefined;
-  const restoredHistory = loadConversationHistory(storage, elements.conversationSessionId);
+  const restoredHistory = historyRepository.list(elements.conversationSessionId);
   let hasConversationHistory = restoredHistory.length > 0;
   for (const entry of restoredHistory) {
     if (entry.role === "user") {
-      appendMessage(messages, "user", entry.text);
+      appendMessage(messages, "user", entry.text, entry.messageId);
     } else {
-      if (entry.requestId) agentRequestIds.add(entry.requestId);
-      const restored = appendPendingMessage(messages);
+      const restored = appendPendingMessage(messages, entry.messageId);
       resolveAssistantMessage(restored, entry.response, undefined, elements.onTripPlanUpdate);
       if (typeof entry.response !== "string" && "travelPlan" in entry.response) {
         activeTripContext = tripContextFromTravelPlan(entry.response.travelPlan);
@@ -223,12 +225,11 @@ export function configureAiGuidePanel(
       elements.onFirstPrompt?.(prompt);
       hasConversationHistory = true;
     }
-    appendMessage(messages, "user", prompt);
-    appendConversationHistory(
-      storage,
+    const userMessage = historyRepository.append(
       elements.conversationSessionId,
       { role: "user", text: prompt },
     );
+    appendMessage(messages, "user", prompt, userMessage.messageId);
     input.value = "";
     input.disabled = true;
     submit.disabled = true;
@@ -239,7 +240,6 @@ export function configureAiGuidePanel(
     let requestId: string | undefined;
     void handlePrompt(prompt, preferences(), conversation, (metadata) => {
       requestId = metadata.requestId;
-      if (requestId) agentRequestIds.add(requestId);
     })
       .then((response) => {
         const guidance = typeof response === "string" || !("conversation" in response)
@@ -256,8 +256,7 @@ export function configureAiGuidePanel(
           input.placeholder = "列車、行き先、旅の相談を入力";
         }
         resolveAssistantMessage(pendingMessage, response, elements.onTravelPlan, elements.onTripPlanUpdate);
-        appendConversationHistory(
-          storage,
+        const assistantMessage = historyRepository.append(
           elements.conversationSessionId,
           {
             role: "assistant",
@@ -265,15 +264,17 @@ export function configureAiGuidePanel(
             ...(requestId ? { requestId } : {}),
           },
         );
+        pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
       .catch(() => {
         const errorResponse = "案内を開始できませんでした。時間をおいてもう一度お試しください。";
         resolveAssistantMessage(pendingMessage, errorResponse);
-        appendConversationHistory(storage, elements.conversationSessionId, {
+        const assistantMessage = historyRepository.append(elements.conversationSessionId, {
           role: "assistant",
           response: errorResponse,
           ...(requestId ? { requestId } : {}),
         });
+        pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
       .finally(() => {
         input.disabled = false;
@@ -408,22 +409,27 @@ function appendMessage(
   messages: HTMLOListElement,
   role: "assistant" | "user",
   text: string,
+  messageId?: string,
 ): HTMLLIElement {
   const item = document.createElement("li");
   item.className = `ai-guide-message ai-guide-message-${role}`;
   item.textContent = role === "assistant" ? visibleAssistantText(text) : text;
-  item.dataset.feedbackText = item.textContent;
+  if (messageId) item.dataset.messageId = messageId;
   if (role === "assistant") appendConversationFeedback(item);
   messages.append(item);
   item.scrollIntoView({ block: "nearest" });
   return item;
 }
 
-function appendPendingMessage(messages: HTMLOListElement): HTMLLIElement {
+function appendPendingMessage(
+  messages: HTMLOListElement,
+  messageId?: string,
+): HTMLLIElement {
   const item = document.createElement("li");
   item.className =
     "ai-guide-message ai-guide-message-assistant ai-guide-message-pending";
   item.setAttribute("aria-label", "AIが回答を準備しています");
+  if (messageId) item.dataset.messageId = messageId;
 
   const label = document.createElement("span");
   label.textContent = "考え中";
@@ -488,9 +494,6 @@ function resolveAssistantMessage(
     text.textContent = visibleAssistantText(response.text);
     item.append(text, renderJourneyPlan(response.journeyPlan));
   }
-  item.dataset.feedbackText = typeof response === "string"
-    ? visibleAssistantText(response)
-    : visibleAssistantText(response.text);
   appendConversationFeedback(item);
   item.scrollIntoView({ block: "nearest" });
 }

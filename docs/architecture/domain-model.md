@@ -419,6 +419,18 @@ AIの自由文をUIの状態遷移に使わない。
 `requestIds`は最大50件 各IDは1〜128文字とする。保存失敗は成功として扱わず
 request ID付き503と本文を含まない構造化ログを返す。
 
+### `conversation-feedback-v2`
+
+- TypeScript定義: `src/application/concierge/conversation-feedback.ts`
+- Server検証: `services/agent-api/conversation_feedback.py`
+- 追加項目: `sessionId` `targetMessageId` 任意の`comment` 各会話の`messageId`
+
+画面のDOMから本文を再構成せず Conversation History Repositoryに保存された会話の先頭から
+評価対象の回答までを送る。対象回答より後の会話は含めない。Bad評価だけ1000文字以内の任意コメントを
+付けられる。保存前にメッセージIDの一意性 対象回答が末尾のassistantであること
+会話内request IDと`requestIds`の対応を検証する。256KiBを超える場合は黙って欠落させず413を返す。
+v1入力は既存クライアントとの互換用に引き続き受け付ける。
+
 利用者が👍または👎を押したときだけ保存する。会話分析やIssue化は別の処理として扱い 本モデルは
 画面表示とAIプロンプトへ自動再投入しない。
 

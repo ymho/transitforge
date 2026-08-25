@@ -155,10 +155,8 @@ import {
   browserConversationSessionStorageEvents,
   LocalConversationSessionRepository,
 } from "./adapters/browser/conversation-session-repository";
-import {
-  loadConversationHistory,
-  recentConversationContext,
-} from "./domain/conversation-history";
+import { LocalConversationHistoryRepository } from "./adapters/browser/conversation-history-repository";
+import { recentConversationContext } from "./domain/conversation-history";
 
 const metricsLogIntervalMilliseconds = 10_000;
 let nextMetricsLogTimestamp = 0;
@@ -256,6 +254,7 @@ const conversationSessionRepository = new LocalConversationSessionRepository(
   localStorage,
   browserConversationSessionStorageEvents(),
 );
+const conversationHistoryRepository = new LocalConversationHistoryRepository(localStorage);
 const activeConversationSession = conversationSessionRepository.active() ??
   conversationSessionRepository.create();
 const updateConciergeIdentity = (resetGreeting = false) => {
@@ -281,7 +280,7 @@ const currentConciergeInstruction = (prompt: string) => [
     loadTravelMemories(localStorage),
   )}`,
   `現在のセッションの直近の会話:\n${recentConversationContext(
-    loadConversationHistory(localStorage, activeConversationSession.id),
+    conversationHistoryRepository.list(activeConversationSession.id),
     prompt,
   )}`,
 ].join("\n\n").slice(0, 2_350);
@@ -326,6 +325,7 @@ aiGuideController = configureAiGuidePanel(
     transferPace: journeyTransferPace,
     rankingPreference: journeyRankingPreference,
     storage: localStorage,
+    historyRepository: conversationHistoryRepository,
     submitFeedback: submitConversationFeedback,
     onFirstPrompt: (prompt) => {
       if (activeConversationSession.title !== "新しい会話") return;

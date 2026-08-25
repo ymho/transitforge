@@ -135,6 +135,63 @@ class ConversationFeedbackTest(unittest.TestCase):
         self.assertNotIn("private storage failure", logs)
         self.assertNotIn("京都へ行きたい", logs)
 
+    def test_stores_v2_comment_and_message_identifiers(self) -> None:
+        client = RecordingS3()
+
+        store_feedback(submission_v2(), "private-bucket", client)
+
+        payload = json.loads(client.puts[0]["Body"])
+        self.assertEqual(payload["schemaVersion"], "conversation-feedback-v2")
+        self.assertEqual(payload["comment"], "条件が反映されていません")
+        self.assertEqual(payload["sessionId"], "session-1")
+        self.assertEqual(payload["targetMessageId"], "message-2")
+        self.assertEqual(payload["conversation"][-1]["requestId"], "request-1")
+
+    def test_rejects_v2_target_comment_and_request_mismatches(self) -> None:
+        invalid = [
+            {**submission_v2(), "targetMessageId": "message-1"},
+            {**submission_v2(), "comment": "\x00secret"},
+            {**submission_v2(), "comment": " "},
+            {**submission_v2(), "comment": "x" * 1001},
+            {**submission_v2(), "rating": "good", "comment": "不要"},
+            {**submission_v2(), "requestIds": []},
+            {
+                **submission_v2(),
+                "conversation": [
+                    submission_v2()["conversation"][0],
+                    {
+                        **submission_v2()["conversation"][1],
+                        "messageId": "message-1",
+                    },
+                ],
+                "targetMessageId": "message-1",
+            },
+        ]
+
+        for value in invalid:
+            with self.subTest(value=value):
+                with self.assertRaises(handler.RequestError) as raised:
+                    store_feedback(value, "private-bucket", RecordingS3())
+                self.assertEqual(raised.exception.status_code, 400)
+
+    def test_rejects_v2_payload_instead_of_silently_truncating(self) -> None:
+        value = submission_v2()
+        value["conversation"] = [
+            {
+                "messageId": f"message-{index}",
+                "role": "assistant" if index == 49 else "user",
+                "text": "界" * 4000,
+            }
+            for index in range(50)
+        ]
+        value["targetMessageId"] = "message-49"
+        value["requestIds"] = []
+
+        with self.assertRaises(handler.RequestError) as raised:
+            store_feedback(value, "private-bucket", RecordingS3())
+
+        self.assertEqual(raised.exception.status_code, 413)
+
 
 def submission():
     return {
@@ -143,6 +200,30 @@ def submission():
         "conversation": [
             message("user", " 京都へ行きたい "),
             message("assistant", " 経路を案内します "),
+        ],
+    }
+
+
+def submission_v2():
+    return {
+        "schemaVersion": "conversation-feedback-v2",
+        "rating": "bad",
+        "comment": " 条件が反映されていません ",
+        "sessionId": "session-1",
+        "targetMessageId": "message-2",
+        "requestIds": ["request-1"],
+        "conversation": [
+            {
+                "messageId": "message-1",
+                "role": "user",
+                "text": "京都へ行きたい",
+            },
+            {
+                "messageId": "message-2",
+                "role": "assistant",
+                "text": "経路を案内します",
+                "requestId": "request-1",
+            },
         ],
     }
 

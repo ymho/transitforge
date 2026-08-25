@@ -101,6 +101,7 @@ describe("LocalConversationSessionRepository", () => {
     const target = repository.create("trip", "削除する旅");
     repository.create("general", "残す会話");
     appendConversationHistory(storage, target.id, {
+      messageId: "message-1",
       role: "assistant",
       response: "案内しました",
       requestId: "request-123",
@@ -126,7 +127,7 @@ describe("LocalConversationSessionRepository", () => {
       () => new Date(Date.UTC(2026, 7, 25, 0, minute++)),
     );
     const oldest = repository.create();
-    appendConversationHistory(storage, oldest.id, { role: "user", text: "古い会話" });
+    appendConversationHistory(storage, oldest.id, { messageId: "message-1", role: "user", text: "古い会話" });
     saveTripPlan(storage, oldest.id, tripPlan());
     for (let index = 0; index < maximumConversationSessions; index += 1) {
       repository.create("general", `会話${index + 1}`);
