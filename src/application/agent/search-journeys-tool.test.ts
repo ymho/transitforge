@@ -85,7 +85,10 @@ describe("search_journeys tool", () => {
 
   it("returns the same candidates times constraints and delay metadata as the API", async () => {
     const apiResponse = response();
-    const fetcher = vi.fn<typeof fetch>(async () => Response.json(apiResponse));
+    const fetcher = vi.fn<typeof fetch>(async () => Response.json({
+      contractVersion: "journey-search-v1",
+      ...apiResponse,
+    }));
     const service: JourneySearchService = {
       search: (input) => searchTravelCandidates(input, fetcher),
     };

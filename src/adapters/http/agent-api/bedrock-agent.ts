@@ -25,6 +25,10 @@ import type {
 } from "../../../domain/journey-search-service";
 import type { AgentToolDescriptor } from "../../../application/agent/tool-contract";
 import type { AgentTrace } from "../../../application/agent/agent-trace";
+import {
+  journeySearchContractVersion,
+  toJourneySearchResponse,
+} from "./journey-search-contract";
 
 export type * from "./bedrock-agent-contract";
 
@@ -153,14 +157,20 @@ export async function searchTravelCandidates(
   request: JourneySearchRequest,
   fetcher: typeof fetch = fetch,
 ): Promise<TravelCandidateSearchResponse> {
-  return postAgentBody(
-    { operation: "journey_search", maxTransfers: 3, ...request },
+  const response = await postAgentBody(
+    {
+      operation: "journey_search",
+      contractVersion: journeySearchContractVersion,
+      maxTransfers: 3,
+      ...request,
+    },
     "旅行候補を検索できません",
     "旅行候補",
     isTravelCandidateSearchResponse,
     fetcher,
     true,
   );
+  return toJourneySearchResponse(response);
 }
 
 export const journeySearchService: JourneySearchService = {

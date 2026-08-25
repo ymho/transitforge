@@ -375,6 +375,7 @@ describe("Bedrock agent client", () => {
 
   it("searches server-side timetable journeys", async () => {
     const fetcher = vi.fn<typeof fetch>(async () => Response.json({
+      contractVersion: "journey-search-v1",
       serviceDate: "2026-08-14",
       originStation: "西大路",
       destinationStation: "京都",
@@ -430,6 +431,7 @@ describe("Bedrock agent client", () => {
     const body = JSON.parse(String(init?.body));
     expect(body).toEqual({
       operation: "journey_search",
+      contractVersion: "journey-search-v1",
       maxTransfers: 3,
       serviceDate: "2026-08-14",
       originStation: "西大路",
@@ -438,5 +440,25 @@ describe("Bedrock agent client", () => {
       transferPace: "relaxed",
       rankingPreference: "fewest-transfers",
     });
+  });
+
+  it("rejects a journey response from another contract version", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => Response.json({
+      contractVersion: "journey-search-v2",
+      serviceDate: "2026-08-14",
+      originStation: "西大路",
+      destinationStation: "京都",
+      searchTimeMinutes: 590,
+      totalMatchCount: 0,
+      matches: [],
+      journeys: [],
+    }));
+
+    await expect(searchTravelCandidates({
+      serviceDate: "2026-08-14",
+      originStation: "西大路",
+      destinationStation: "京都",
+      departureTimeMinutes: 590,
+    }, fetcher)).rejects.toThrow("不正な応答");
   });
 });

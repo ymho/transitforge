@@ -1,6 +1,6 @@
 from tests.services.agent_api.support import *
 
-import travel_providers
+from domain.travel import models as travel_providers
 
 
 class TravelProviderContractTest(unittest.TestCase):
