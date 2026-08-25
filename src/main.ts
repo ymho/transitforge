@@ -389,10 +389,12 @@ aiGuideController = configureAiGuidePanel(
       saveConversationSession(localStorage, activeConversationSession);
     },
   },
-  (prompt, preferences, conversation) =>
+  (prompt, preferences, conversation, onResponseMetadata) =>
     handleAiGuidePrompt(
       promptWithConversationContext(prompt, conversation),
       preferences,
+      undefined,
+      onResponseMetadata,
     ),
 );
 configureTravelProfile(document, () => aiGuideController.open());
@@ -1112,7 +1114,12 @@ if (!token) {
           getPendingJourneyGuidance: () => pendingJourneyGuidance,
           maximumRouteTime,
         });
-        handleAiGuidePrompt = async (prompt, preferences) => {
+        handleAiGuidePrompt = async (
+          prompt,
+          preferences,
+          _conversation,
+          onResponseMetadata,
+        ) => {
           try {
             const requestedGuidance = journeyNavigationGuidanceFromPrompt(
               prompt,
@@ -1255,7 +1262,11 @@ if (!token) {
                 getUserProfile: () => loadUserProfile(localStorage),
                 maximumRouteTime,
               },
-              invokeBedrockAgent,
+              async (messages) => {
+                const result = await invokeBedrockAgent(messages);
+                onResponseMetadata?.(result.metadata);
+                return result.body;
+              },
             );
             if (typeof response !== "string" && "journeyPlan" in response) {
               previousJourneyPlan = response.journeyPlan;

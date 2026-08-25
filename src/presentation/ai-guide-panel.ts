@@ -28,7 +28,10 @@ import type {
 } from "../domain/viewer-agent-response";
 import type { TripContext } from "../domain/travel-profile";
 import { hideSheet, showSheet } from "./sheet-transition";
-import { clearLatestAgentRequestId, lastAgentRequestId, submitConversationFeedback } from "../data/bedrock-agent";
+import {
+  submitConversationFeedback,
+  type AgentResponseMetadata,
+} from "../data/bedrock-agent";
 
 export interface AiGuidePanelElements {
   conversationSessionId: string;
@@ -53,6 +56,7 @@ export type AiGuidePromptHandler = (
   prompt: string,
   preferences: JourneySearchPreferences,
   conversation?: ConversationSubmission,
+  onResponseMetadata?: (metadata: AgentResponseMetadata) => void,
 ) => Promise<ViewerAgentResponse>;
 
 export interface AiGuidePanelController {
@@ -208,11 +212,12 @@ export function configureAiGuidePanel(
     submit.dataset.submitting = "true";
     const pendingMessage = appendPendingMessage(messages);
 
-    clearLatestAgentRequestId();
-    void handlePrompt(prompt, preferences(), conversation)
+    let requestId: string | undefined;
+    void handlePrompt(prompt, preferences(), conversation, (metadata) => {
+      requestId = metadata.requestId;
+      if (requestId) agentRequestIds.add(requestId);
+    })
       .then((response) => {
-        const requestId = lastAgentRequestId();
-        if (requestId) agentRequestIds.add(requestId);
         const guidance = typeof response === "string" || !("conversation" in response)
           ? undefined
           : response.conversation;
@@ -238,8 +243,6 @@ export function configureAiGuidePanel(
         );
       })
       .catch(() => {
-        const requestId = lastAgentRequestId();
-        if (requestId) agentRequestIds.add(requestId);
         const errorResponse = "案内を開始できませんでした。時間をおいてもう一度お試しください。";
         resolveAssistantMessage(pendingMessage, errorResponse);
         appendConversationHistory(localStorage, elements.conversationSessionId, {

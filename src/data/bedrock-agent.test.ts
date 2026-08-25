@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  clearLatestAgentRequestId,
   invokeBedrockAgent,
-  lastAgentRequestId,
   queryDailyCongestionAnalysis,
   queryDailyCongestionPeak,
   queryTrainDelayAnalysis,
@@ -14,13 +12,13 @@ import {
 } from "./bedrock-agent";
 
 describe("Bedrock agent client", () => {
-  it("keeps the request ID from an agent response", async () => {
-    clearLatestAgentRequestId();
-    await invokeBedrockAgent([{ role: "user", content: [{ text: "京都に行きたい" }] }], async () => new Response(
+  it("returns the request ID with its agent response", async () => {
+    const result = await invokeBedrockAgent([{ role: "user", content: [{ text: "京都に行きたい" }] }], async () => new Response(
       JSON.stringify({ message: { role: "assistant", content: [{ text: "案内します" }] }, stopReason: "end_turn" }),
       { status: 200, headers: { "x-transitforge-request-id": "request-123" } },
     ));
-    expect(lastAgentRequestId()).toBe("request-123");
+    expect(result.metadata.requestId).toBe("request-123");
+    expect(result.body.stopReason).toBe("end_turn");
   });
   it("sends the payload hash required by a CloudFront Lambda origin", async () => {
     const bedrockResponse: BedrockAgentResponse = {
@@ -73,16 +71,41 @@ describe("Bedrock agent client", () => {
     };
     const fetcher = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response(null, { status: 503 }))
-      .mockResolvedValueOnce(Response.json(bedrockResponse));
+      .mockResolvedValueOnce(new Response(null, {
+        status: 503,
+        headers: { "x-transitforge-request-id": "request-first" },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(bedrockResponse), {
+        status: 200,
+        headers: { "x-transitforge-request-id": "request-final" },
+      }));
 
     const result = await invokeBedrockAgent(
       [{ role: "user", content: [{ text: "京都に行きたい" }] }],
       fetcher,
     );
 
-    expect(result).toEqual(bedrockResponse);
+    expect(result.body).toEqual(bedrockResponse);
+    expect(result.metadata.requestId).toBe("request-final");
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps concurrent response metadata separate", async () => {
+    const responseBody = (text: string) => JSON.stringify({
+      message: { role: "assistant", content: [{ text }] },
+      stopReason: "end_turn",
+    });
+    const [first, second] = await Promise.all([
+      invokeBedrockAgent([], async () => new Response(responseBody("最初"), {
+        headers: { "x-transitforge-request-id": "request-a" },
+      })),
+      invokeBedrockAgent([], async () => new Response(responseBody("次"), {
+        headers: { "x-transitforge-request-id": "request-b" },
+      })),
+    ]);
+
+    expect(first.metadata.requestId).toBe("request-a");
+    expect(second.metadata.requestId).toBe("request-b");
   });
 
   it("requests a daily congestion peak through the protected endpoint", async () => {
