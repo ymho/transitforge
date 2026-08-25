@@ -245,6 +245,20 @@ Unsupportedを`N/A`とし 0件を成功率100%として偽装しない。
 runnerの`--case`はcase IDでdatasetとobservationを同時に1件へ絞り込む。
 存在しないIDは全件実行へフォールバックせず明示的に失敗する。
 
+### Re-planとReflectionの戦略実験
+
+- 実験契約: `src/domain/agent/evaluation/strategy-experiment.ts`
+- fixture: `tests/fixtures/agent-strategy-experiment.json`
+- 判断記録: [ADR 0031](../decisions/0031-retain-result-driven-replan-without-always-on-reflection.md)
+
+35件Benchmarkから回復可能な失敗と成功controlを含む8件を固定し single pass
+結果駆動再計画 常時ReflectionのON/OFF比較を再現する。各戦略は同じEvaluation Frameworkで
+品質を判定し model call Tool call latency tokenを別に集計する。
+
+latencyとtokenは固定Provider相当の決定論的コストモデルによる相対値で AWS料金ではない。
+結果駆動再計画は品質改善が確認できたため既存Runtimeで維持する。常時Reflectionは追加改善がなく
+相対コストだけが増えたため本番Runtimeへ追加しない。
+
 Evaluation profileは`smoke`と`full`を持つ。Smokeはtagで選んだ軽量集合 Fullは全datasetを使う。
 run reportは6指標の実測値 閾値 判定とcase結果を含み case失敗または閾値未達で失敗する。
 CI分離の判断は[ADR 0029](../decisions/0029-separate-smoke-and-full-agent-evaluation.md)を参照する。

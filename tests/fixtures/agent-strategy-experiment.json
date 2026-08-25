@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "agent-strategy-experiment-v1",
+  "hypothesis": "Tool結果に応じた再計画は回復可能な失敗を改善するが 常時Reflectionは品質を改善せずlatencyとtokenだけを増やす",
+  "measurementBasis": "固定Provider相当の1 model call = 80ms 200 input tokens 50 output tokensとする決定論的な相対コスト",
+  "benchmarkCaseIds": [
+    "ambiguous-station",
+    "cancelled-service",
+    "route-delay-compare",
+    "station-then-search",
+    "missing-origin",
+    "delayed-transfer",
+    "exclude-shinkansen",
+    "inspect-train"
+  ],
+  "strategies": [
+    {
+      "id": "single-pass",
+      "measurement": { "modelCalls": 8, "toolCalls": 7, "totalLatencyMs": 640, "inputTokens": 1600, "outputTokens": 400 },
+      "observations": [
+        { "caseId": "ambiguous-station", "toolSequence": ["search_journeys"], "normalizedConstraints": { "stationName": "大阪" }, "status": "failed", "claimStatuses": ["unsupported"], "viewerActions": [] },
+        { "caseId": "cancelled-service", "toolSequence": ["search_journeys"], "normalizedConstraints": { "useRealtime": true }, "status": "failed", "claimStatuses": ["unsupported"], "viewerActions": [] },
+        { "caseId": "route-delay-compare", "toolSequence": ["search_journeys"], "normalizedConstraints": { "useRealtime": true }, "status": "failed", "claimStatuses": ["supported"], "viewerActions": [] },
+        { "caseId": "station-then-search", "toolSequence": ["inspect_station"], "normalizedConstraints": { "originStation": "京都", "destinationStation": "大阪" }, "status": "failed", "claimStatuses": ["supported"], "viewerActions": [] },
+        { "caseId": "missing-origin", "toolSequence": [], "normalizedConstraints": { "destinationStation": "京都" }, "status": "follow_up", "claimStatuses": [], "viewerActions": [] },
+        { "caseId": "delayed-transfer", "toolSequence": ["search_journeys"], "normalizedConstraints": { "useRealtime": true }, "status": "completed", "claimStatuses": ["supported"], "viewerActions": [{ "actionType": "show_evidence", "status": "applied" }] },
+        { "caseId": "exclude-shinkansen", "toolSequence": ["search_journeys"], "normalizedConstraints": { "excludedServiceTypes": ["新幹線"] }, "status": "completed", "claimStatuses": ["supported"], "viewerActions": [{ "actionType": "highlight_route", "status": "applied" }] },
+        { "caseId": "inspect-train", "toolSequence": ["inspect_train"], "normalizedConstraints": { "serviceUid": "service-a" }, "status": "completed", "claimStatuses": ["supported"], "viewerActions": [{ "actionType": "show_evidence", "status": "applied" }] }
+      ]
+    },
+    {
+      "id": "result-driven-replan",
+      "measurement": { "modelCalls": 16, "toolCalls": 11, "totalLatencyMs": 1280, "inputTokens": 3200, "outputTokens": 800 },
+      "observations": [
+        { "caseId": "ambiguous-station", "toolSequence": ["inspect_station"], "normalizedConstraints": { "stationName": "大阪" }, "status": "follow_up", "claimStatuses": ["unknown"], "viewerActions": [] },
+        { "caseId": "cancelled-service", "toolSequence": ["search_journeys"], "normalizedConstraints": { "useRealtime": true, "excludeCancelled": true }, "status": "completed", "claimStatuses": ["supported", "supported"], "viewerActions": [{ "actionType": "show_evidence", "status": "applied" }] },
+        { "caseId": "route-delay-compare", "toolSequence": ["search_journeys", "analyze_delay", "compare_journeys"], "normalizedConstraints": { "useRealtime": true }, "status": "completed", "claimStatuses": ["supported", "supported"], "viewerActions": [{ "actionType": "compare_journeys", "status": "applied" }, { "actionType": "show_evidence", "status": "applied" }] },
+        { "caseId": "station-then-search", "toolSequence": ["inspect_station", "search_journeys"], "normalizedConstraints": { "originStation": "京都", "destinationStation": "大阪" }, "status": "completed", "claimStatuses": ["supported", "supported"], "viewerActions": [{ "actionType": "highlight_route", "status": "applied" }] },
+        { "caseId": "missing-origin", "toolSequence": [], "normalizedConstraints": { "destinationStation": "京都" }, "status": "follow_up", "claimStatuses": [], "viewerActions": [] },
+        { "caseId": "delayed-transfer", "toolSequence": ["search_journeys"], "normalizedConstraints": { "useRealtime": true }, "status": "completed", "claimStatuses": ["supported"], "viewerActions": [{ "actionType": "show_evidence", "status": "applied" }] },
+        { "caseId": "exclude-shinkansen", "toolSequence": ["search_journeys"], "normalizedConstraints": { "excludedServiceTypes": ["新幹線"] }, "status": "completed", "claimStatuses": ["supported"], "viewerActions": [{ "actionType": "highlight_route", "status": "applied" }] },
+        { "caseId": "inspect-train", "toolSequence": ["inspect_train"], "normalizedConstraints": { "serviceUid": "service-a" }, "status": "completed", "claimStatuses": ["supported"], "viewerActions": [{ "actionType": "show_evidence", "status": "applied" }] }
+      ]
+    },
+    {
+      "id": "always-on-reflection",
+      "measurement": { "modelCalls": 24, "toolCalls": 11, "totalLatencyMs": 1920, "inputTokens": 4800, "outputTokens": 1200 },
+      "observations": [
+        { "caseId": "ambiguous-station", "toolSequence": ["inspect_station"], "normalizedConstraints": { "stationName": "大阪" }, "status": "follow_up", "claimStatuses": ["unknown"], "viewerActions": [] },
+        { "caseId": "cancelled-service", "toolSequence": ["search_journeys"], "normalizedConstraints": { "useRealtime": true, "excludeCancelled": true }, "status": "completed", "claimStatuses": ["supported", "supported"], "viewerActions": [{ "actionType": "show_evidence", "status": "applied" }] },
+        { "caseId": "route-delay-compare", "toolSequence": ["search_journeys", "analyze_delay", "compare_journeys"], "normalizedConstraints": { "useRealtime": true }, "status": "completed", "claimStatuses": ["supported", "supported"], "viewerActions": [{ "actionType": "compare_journeys", "status": "applied" }, { "actionType": "show_evidence", "status": "applied" }] },
+        { "caseId": "station-then-search", "toolSequence": ["inspect_station", "search_journeys"], "normalizedConstraints": { "originStation": "京都", "destinationStation": "大阪" }, "status": "completed", "claimStatuses": ["supported", "supported"], "viewerActions": [{ "actionType": "highlight_route", "status": "applied" }] },
+        { "caseId": "missing-origin", "toolSequence": [], "normalizedConstraints": { "destinationStation": "京都" }, "status": "follow_up", "claimStatuses": [], "viewerActions": [] },
+        { "caseId": "delayed-transfer", "toolSequence": ["search_journeys"], "normalizedConstraints": { "useRealtime": true }, "status": "completed", "claimStatuses": ["supported"], "viewerActions": [{ "actionType": "show_evidence", "status": "applied" }] },
+        { "caseId": "exclude-shinkansen", "toolSequence": ["search_journeys"], "normalizedConstraints": { "excludedServiceTypes": ["新幹線"] }, "status": "completed", "claimStatuses": ["supported"], "viewerActions": [{ "actionType": "highlight_route", "status": "applied" }] },
+        { "caseId": "inspect-train", "toolSequence": ["inspect_train"], "normalizedConstraints": { "serviceUid": "service-a" }, "status": "completed", "claimStatuses": ["supported"], "viewerActions": [{ "actionType": "show_evidence", "status": "applied" }] }
+      ]
+    }
+  ]
+}
