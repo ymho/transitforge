@@ -1,0 +1,58 @@
+.hud {
+  width: auto;
+  min-width: 10.75rem;
+  padding: 0.25rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 7px;
+  background: rgb(18 24 30 / 94%);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 24%);
+  backdrop-filter: blur(8px);
+}
+
+.time-control {
+  border-radius: 5px;
+  color: #f3f5f7;
+  background: transparent;
+}
+
+.date-time-summary {
+  grid-template-columns: 1fr auto;
+  min-height: 2rem;
+  padding: 0 0.45rem;
+}
+
+.date-time-summary-value {
+  font-size: 0.75rem;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+}
+
+.date-time-summary-chevron {
+  color: #87919b;
+}
+
+.date-time-steppers {
+  margin: 0.15rem;
+  padding: 0.45rem 0.35rem;
+  border-top: 1px solid rgb(255 255 255 / 10%);
+  background: transparent;
+}
+
+.date-time-stepper button {
+  border: 0;
+  color: #9da8b3;
+  background: transparent;
+  box-shadow: none;
+}
+
+.date-time-stepper button:hover:not(:disabled) {
+  color: #ffffff;
+  background: rgb(255 255 255 / 8%);
+}
+
+#map-status {
+  margin: 0.2rem 0.45rem 0.35rem;
+  color: #9da8b3;
+  font-size: 0.68rem;
+}
+

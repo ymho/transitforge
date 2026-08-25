@@ -1,0 +1,24 @@
+.hud {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  box-shadow: 0 4px 14px var(--ui-shadow);
+}
+
+.time-control:hover,
+.time-control:focus-visible,
+.time-control[data-editing="true"] {
+  border-color: var(--ui-border);
+  background: var(--ui-hover);
+}
+
+.date-time-steppers,
+.ai-guide-panel header,
+.ai-guide-form {
+  border-color: var(--ui-border);
+}
+
+.date-time-stepper button:hover:not(:disabled) {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+

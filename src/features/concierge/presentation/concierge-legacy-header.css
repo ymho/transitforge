@@ -1,0 +1,14 @@
+/* AI駅員の見出しは旧テーマの固定色を残さずUIモードに追従させる。 */
+.ai-guide-panel header .guide-panel-copy p {
+  color: var(--ui-text);
+  opacity: 1;
+  text-shadow: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.ai-guide-panel header .guide-panel-copy small {
+  color: var(--ui-muted);
+  opacity: 1;
+  -webkit-text-fill-color: currentColor;
+}
+

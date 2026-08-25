@@ -1,0 +1,42 @@
+/*
+ * 移行用の交差上書き
+ * legacy `--ui-*` tokenを参照する既存selectorだけを保持する。
+ * 各Featureが`--glass-*`へ移ったselectorから削除し 新しいselectorは追加しない。
+ */
+.loading-screen {
+  color: var(--ui-text);
+  background: var(--ui-loading-bg);
+}
+
+.loading-screen-brand,
+.time-control,
+.guide-panel-copy p,
+.train-details {
+  color: var(--ui-text);
+}
+
+.loading-screen-message,
+.date-time-summary-chevron,
+.date-time-stepper button,
+#map-status,
+.guide-panel-copy small,
+#close-ai-guide,
+#close-train-details,
+.train-details dt,
+.train-timetable h3,
+.train-timetable-scheduled-replaced {
+  color: var(--ui-muted);
+}
+
+.loading-screen-progress {
+  background: var(--ui-border);
+}
+
+.loading-screen-progress span {
+  background: var(--ui-text);
+}
+
+.loading-screen-retry {
+  border-color: var(--ui-border);
+  color: var(--ui-text);
+}
