@@ -1,0 +1,117 @@
+name: CD / Deploy
+
+on:
+  workflow_run:
+    workflows:
+      - CI / Test
+    branches:
+      - main
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: transitforge-dev
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-northeast-1
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform.d/plugin-cache
+      TF_VAR_basic_auth_credentials_sha256: ${{ secrets.BASIC_AUTH_CREDENTIALS_SHA256 }}
+      TF_VAR_github_repository: ${{ github.repository }}
+      TF_VAR_data_builder_github_oidc_subject: ${{ vars.DATA_BUILDER_GITHUB_OIDC_SUBJECT }}
+      TF_VAR_cloudflare_front_door_enabled: ${{ vars.CLOUDFLARE_FRONT_DOOR_ENABLED || 'false' }}
+      TF_VAR_legacy_cloudfront_redirect_enabled: ${{ vars.LEGACY_CLOUDFRONT_REDIRECT_ENABLED || 'false' }}
+
+    steps:
+      - name: Check out verified revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Validate deployment inputs
+        run: |
+          : "${AWS_DEPLOY_ROLE_ARN:?dev Environment variable AWS_DEPLOY_ROLE_ARN is required}"
+          : "${TF_STATE_BUCKET:?dev Environment variable TF_STATE_BUCKET is required}"
+          : "${TF_VAR_data_builder_github_oidc_subject:?dev Environment variable DATA_BUILDER_GITHUB_OIDC_SUBJECT is required}"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Build viewer with deployment token
+        run: npm run build
+        env:
+          VITE_MAPBOX_ACCESS_TOKEN: ${{ secrets.VITE_MAPBOX_ACCESS_TOKEN }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.12.2
+
+      - name: Prepare Terraform provider cache
+        run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
+
+      - name: Restore Terraform provider cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: terraform-${{ runner.os }}-1.12.2-${{ hashFiles('infra/terraform/**/.terraform.lock.hcl') }}
+          restore-keys: |
+            terraform-${{ runner.os }}-1.12.2-
+
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Apply Terraform
+        working-directory: infra/terraform/environments/dev
+        run: |
+          terraform init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="region=${AWS_REGION}"
+          terraform plan -out=dev.tfplan
+          terraform apply -auto-approve dev.tfplan
+
+      - name: Read deployment outputs
+        id: terraform
+        working-directory: infra/terraform/environments/dev
+        run: |
+          echo "website_bucket=$(terraform output -raw website_bucket_name)" >> "$GITHUB_OUTPUT"
+          echo "distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy viewer assets
+        run: |
+          aws s3 sync dist "s3://${{ steps.terraform.outputs.website_bucket }}/" \
+            --delete \
+            --exclude "viewer-input/*" \
+            --exclude "api/*"
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ steps.terraform.outputs.distribution_id }}" \
+            --paths "/*"
