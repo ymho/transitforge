@@ -1,6 +1,6 @@
 import { serveStdio, type StdioServerHandle } from "@modelcontextprotocol/server/stdio";
 
-import type { AgentToolRegistry } from "../../domain/agent/tool-registry";
+import type { AgentToolRegistry } from "../../application/agent/tool-registry";
 import { createReadonlyTransitMcpServer } from "./readonly-transit-mcp";
 
 /**

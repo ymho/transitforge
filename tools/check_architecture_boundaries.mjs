@@ -16,6 +16,15 @@ const layerRules = {
     ]),
     forbidExternalPackages: true,
   },
+  application: {
+    forbiddenLayers: new Set([
+      "adapters",
+      "features",
+      "infrastructure",
+      "presentation",
+      "rendering",
+    ]),
+  },
   features: {
     forbiddenLayers: new Set(["adapters", "infrastructure", "rendering"]),
   },
@@ -39,16 +48,6 @@ const layerRules = {
 };
 
 const migrationExceptions = [
-  {
-    source: "src/domain/viewer-agent-bedrock.ts",
-    kind: "layer:adapters",
-    issue: 158,
-  },
-  {
-    source: "src/domain/viewer-agent-local.ts",
-    kind: "layer:presentation",
-    issue: 158,
-  },
   {
     source: "src/presentation/ai-guide-panel.ts",
     kind: "layer:adapters",
