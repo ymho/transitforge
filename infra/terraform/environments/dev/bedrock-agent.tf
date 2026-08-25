@@ -1,10 +1,13 @@
 locals {
   bedrock_agent_function_name = "${var.project_name}-${var.environment}-bedrock-agent"
+  bedrock_agent_package = jsondecode(
+    file("${path.module}/../../../packaging/agent-api.json")
+  )
 }
 
 data "archive_file" "bedrock_agent" {
   type        = "zip"
-  source_dir  = "${path.module}/../../../../services/agent-api"
+  source_dir  = "${path.module}/../../../../${local.bedrock_agent_package.source}"
   output_path = "${path.module}/.terraform/bedrock-agent.zip"
   excludes = [
     "__pycache__/**",
@@ -142,7 +145,7 @@ resource "aws_lambda_function" "bedrock_agent" {
   role          = aws_iam_role.bedrock_agent.arn
   runtime       = "python3.12"
   architectures = ["arm64"]
-  handler       = "handler.lambda_handler"
+  handler       = local.bedrock_agent_package.handler
 
   filename         = data.archive_file.bedrock_agent.output_path
   source_code_hash = data.archive_file.bedrock_agent.output_base64sha256
