@@ -22,6 +22,7 @@ from request_contract import (
     request_value,
     response,
     validated_messages,
+    validated_tool_definitions,
 )
 
 
@@ -57,6 +58,7 @@ def converse(
     bedrock_client: Any,
     messages: list[dict[str, Any]],
     request_id: str | None = None,
+    tools: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     if request_id:
@@ -65,7 +67,7 @@ def converse(
         modelId=MODEL_ID,
         system=[{"text": SYSTEM_PROMPT}],
         messages=messages,
-        toolConfig={"tools": TOOLS},
+        toolConfig={"tools": tools if tools is not None else TOOLS},
         inferenceConfig={"maxTokens": 500, "temperature": 0},
     )
     message = result.get("output", {}).get("message")
@@ -83,7 +85,32 @@ def converse(
             durationMs=round((time.perf_counter() - started) * 1000),
             stopReason=stop_reason,
         )
-    return {"message": message, "stopReason": stop_reason}
+    measured_latency_ms = round((time.perf_counter() - started) * 1000)
+    usage = result.get("usage")
+    safe_usage = {
+        key: int(usage[key])
+        for key in ("inputTokens", "outputTokens", "totalTokens")
+        if isinstance(usage, dict)
+        and isinstance(usage.get(key), (int, float))
+        and usage[key] >= 0
+    }
+    metrics = result.get("metrics")
+    provider_latency = (
+        metrics.get("latencyMs")
+        if isinstance(metrics, dict)
+        and isinstance(metrics.get("latencyMs"), (int, float))
+        and metrics["latencyMs"] >= 0
+        else measured_latency_ms
+    )
+    return {
+        "message": message,
+        "stopReason": stop_reason,
+        "metadata": {
+            "modelId": MODEL_ID,
+            "latencyMs": round(provider_latency),
+            **({"usage": safe_usage} if safe_usage else {}),
+        },
+    }
 
 
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -114,12 +141,18 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             log_event("agent_request_completed", request_id, operation=operation, durationMs=round((time.perf_counter() - dispatch_started) * 1000))
             return response(200, result, request_id)
         messages = validated_messages(value)
+        tool_definitions = validated_tool_definitions(value)
     except RequestError as error:
         log_event("agent_request_rejected", request_id, statusCode=error.status_code)
         return response(error.status_code, {"message": str(error)}, request_id)
 
     import boto3
 
-    result = converse(boto3.client("bedrock-runtime"), messages, request_id)
+    result = converse(
+        boto3.client("bedrock-runtime"),
+        messages,
+        request_id,
+        tool_definitions,
+    )
     log_event("agent_request_completed", request_id, operation="bedrock_converse", durationMs=round((time.perf_counter() - started) * 1000))
     return response(200, result, request_id)

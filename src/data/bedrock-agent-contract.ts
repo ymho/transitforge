@@ -20,6 +20,15 @@ export interface BedrockAgentMessage {
 export interface BedrockAgentResponse {
   message: BedrockAgentMessage;
   stopReason: "end_turn" | "tool_use" | "max_tokens";
+  metadata?: {
+    modelId?: string;
+    latencyMs?: number;
+    usage?: {
+      inputTokens?: number;
+      outputTokens?: number;
+      totalTokens?: number;
+    };
+  };
 }
 export interface AccommodationSearchResponse {
   accommodations: Array<{

@@ -48,6 +48,57 @@ class BedrockAgentHttpTest(unittest.TestCase):
                 "set_layer_visibility",
             ],
         )
+        self.assertEqual(result["metadata"]["modelId"], handler.MODEL_ID)
+        self.assertEqual(result["metadata"]["latencyMs"], 25)
+        self.assertEqual(result["metadata"]["usage"]["totalTokens"], 16)
+
+    def test_accepts_bounded_provider_independent_tool_definitions(self) -> None:
+        value = {
+            "messages": [{"role": "user", "content": [{"text": "経路を検索"}]}],
+            "toolDefinitions": [{
+                "name": "search_journeys",
+                "description": "時刻表から経路を検索する",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"originStation": {"type": "string"}},
+                    "additionalProperties": False,
+                },
+            }],
+        }
+
+        definitions = handler.validated_tool_definitions(value)
+        client = FakeBedrock()
+        handler.converse(client, value["messages"], tools=definitions)
+
+        assert client.request
+        self.assertEqual(
+            client.request["toolConfig"]["tools"][0],
+            {
+                "toolSpec": {
+                    "name": "search_journeys",
+                    "description": "時刻表から経路を検索する",
+                    "inputSchema": {
+                        "json": value["toolDefinitions"][0]["inputSchema"]
+                    },
+                }
+            },
+        )
+
+    def test_rejects_unknown_or_duplicate_tool_definitions(self) -> None:
+        definition = {
+            "name": "search_journeys",
+            "description": "経路を検索する",
+            "inputSchema": {"type": "object", "properties": {}},
+        }
+        for definitions in (
+            [{**definition, "name": "delete_train"}],
+            [definition, definition],
+        ):
+            with self.subTest(definitions=definitions):
+                with self.assertRaises(handler.RequestError):
+                    handler.validated_tool_definitions({
+                        "toolDefinitions": definitions
+                    })
 
     def test_searches_a_private_representative_timetable(self) -> None:
         handler.representative_timetable._cache.clear()
