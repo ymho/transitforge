@@ -1,4 +1,4 @@
-import type { Train, TrainStop } from "../data/train-index";
+import type { Train, TrainStop } from "./rail/train";
 
 export function mergeSameOperationTrains(
   trains: Train[],

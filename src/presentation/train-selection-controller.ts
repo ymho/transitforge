@@ -1,5 +1,5 @@
-import type { TrainOperation } from "../data/train-delay";
-import type { Train } from "../data/train-index";
+import type { TrainOperation } from "../domain/rail/operation";
+import type { Train } from "../domain/rail/train";
 import {
   coupledTrainLayouts,
   type TrainLinkKind,

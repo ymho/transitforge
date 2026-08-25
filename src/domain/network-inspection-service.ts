@@ -1,5 +1,5 @@
-import type { StationCoordinate, StationLineCatalog } from "../data/station-line-catalog";
-import type { Train, TrainIndex } from "../data/train-index";
+import type { StationCoordinate, StationLineCatalog } from "./rail/station";
+import type { Train, TrainIndex } from "./rail/train";
 import { normalizeStationName } from "./station-name";
 import { TrainLineColorIndex } from "./train-line-color";
 

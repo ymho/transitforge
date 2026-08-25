@@ -1,5 +1,5 @@
 import type { AgentTraceRecorder } from "./agent/agent-trace";
-import type { WeatherMode } from "./map-weather";
+import type { WeatherMode } from "./weather";
 import {
   parseViewerAgentActions,
   type ViewerAgentLayer,

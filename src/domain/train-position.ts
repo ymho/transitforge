@@ -1,5 +1,5 @@
-import type { Path, Coordinate } from "../data/path-catalog";
-import type { Train, TrainStop } from "../data/train-index";
+import type { Coordinate, Path } from "./rail/path";
+import type { Train, TrainStop } from "./rail/train";
 import { normalizeStationName } from "./station-name";
 
 const bearingTangentDistanceMeters = 300;

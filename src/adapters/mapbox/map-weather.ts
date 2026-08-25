@@ -4,7 +4,7 @@ import type {
   SnowSpecification,
 } from "mapbox-gl";
 
-export type WeatherMode = "clear" | "cloudy" | "rain" | "snow";
+import type { WeatherMode } from "../../domain/weather";
 
 export interface WeatherMap {
   setFog(fog?: FogSpecification | null): unknown;
@@ -52,22 +52,7 @@ export function applyWeather(map: WeatherMap, mode: WeatherMode): void {
   map.setRain(null);
   map.setSnow(null);
 
-  if (mode !== "clear") {
-    map.setFog(cloudyFog);
-  }
-
-  if (mode === "rain") {
-    map.setRain(rain);
-  } else if (mode === "snow") {
-    map.setSnow(snow);
-  }
-}
-
-export function isWeatherMode(value: string | undefined): value is WeatherMode {
-  return (
-    value === "clear" ||
-    value === "cloudy" ||
-    value === "rain" ||
-    value === "snow"
-  );
+  if (mode !== "clear") map.setFog(cloudyFog);
+  if (mode === "rain") map.setRain(rain);
+  if (mode === "snow") map.setSnow(snow);
 }

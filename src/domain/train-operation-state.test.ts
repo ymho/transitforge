@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { TrainDelaySnapshot, TrainOperation } from "../data/train-delay";
-import type { Train } from "../data/train-index";
+import type { TrainDelaySnapshot, TrainOperation } from "./rail/operation";
+import type { Train } from "./rail/train";
 import {
   delayByTrainNumber,
   destinationChangedServiceUids,

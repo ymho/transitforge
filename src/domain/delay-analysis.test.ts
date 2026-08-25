@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { TrainDelayAnalysisResponse } from "../data/bedrock-agent";
-import type { Train } from "../data/train-index";
+import type { TrainDelayAnalysisResponse } from "./operations/analysis";
+import type { Train } from "./rail/train";
 import { delayAnalysisForAgent } from "./delay-analysis";
 
 describe("delay analysis for the agent", () => {

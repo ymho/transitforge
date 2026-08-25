@@ -22,9 +22,9 @@ import {
 import type {
   JourneySearchRequest,
   JourneySearchService,
-} from "../domain/journey-search-service";
-import type { AgentToolDescriptor } from "../domain/agent/tool-contract";
-import type { AgentTrace } from "../domain/agent/agent-trace";
+} from "../../../domain/journey-search-service";
+import type { AgentToolDescriptor } from "../../../domain/agent/tool-contract";
+import type { AgentTrace } from "../../../domain/agent/agent-trace";
 
 export type * from "./bedrock-agent-contract";
 

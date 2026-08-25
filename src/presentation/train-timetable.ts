@@ -1,4 +1,4 @@
-import type { TrainStop } from "../data/train-index";
+import type { TrainStop } from "../domain/rail/train";
 import { formatServiceTime } from "../domain/route-time-format";
 
 export interface TrainTimetableRow {

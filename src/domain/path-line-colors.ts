@@ -1,4 +1,4 @@
-import type { Train } from "../data/train-index";
+import type { Train } from "./rail/train";
 
 const neutralColor = "#a8aaad";
 

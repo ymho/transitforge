@@ -2,15 +2,15 @@ import type {
   BedrockAgentContentBlock,
   BedrockAgentMessage,
   BedrockAgentResponse,
-} from "./bedrock-agent-contract";
-import { invokeBedrockAgent } from "./bedrock-agent";
+} from "../http/agent-api/bedrock-agent-contract";
+import { invokeBedrockAgent } from "../http/agent-api/bedrock-agent";
 import type {
   AgentModelContent,
   AgentModelMessage,
   AgentModelProvider,
   AgentModelRequest,
   AgentModelResponse,
-} from "../domain/agent/model-provider";
+} from "../../domain/agent/model-provider";
 
 export class BedrockModelProvider implements AgentModelProvider {
   constructor(private readonly fetcher: typeof fetch = fetch) {}

@@ -4,8 +4,8 @@ import * as THREE from "three";
 import {
   congestionBarColor,
   congestionBarHeightMeters,
-} from "../data/train-congestion";
-import type { Coordinate } from "../data/path-catalog";
+} from "../adapters/http/traffic/train-congestion";
+import type { Coordinate } from "../domain/rail/path";
 import { coupledTrainLayouts } from "../domain/coupled-train-layout";
 import {
   destinationArcHeightMeters,

@@ -1,21 +1,15 @@
-export type StationCoordinate = [longitude: number, latitude: number];
+import type {
+  StationLineCatalog,
+  StationLineCatalogLine,
+  StationLineCatalogStation,
+} from "../../../domain/rail/station";
 
-export interface StationLineCatalogStation {
-  name: string;
-  coordinate: StationCoordinate;
-}
-
-export interface StationLineCatalogLine {
-  operator: string;
-  line: string;
-  stations: StationLineCatalogStation[];
-}
-
-export interface StationLineCatalog {
-  schema_version: "station-line-catalog-v1";
-  source: string;
-  lines: StationLineCatalogLine[];
-}
+export type {
+  StationCoordinate,
+  StationLineCatalog,
+  StationLineCatalogLine,
+  StationLineCatalogStation,
+} from "../../../domain/rail/station";
 
 export function isStationLineCatalog(value: unknown): value is StationLineCatalog {
   return (

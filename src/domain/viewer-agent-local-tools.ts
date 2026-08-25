@@ -1,4 +1,4 @@
-import type { Train } from "../data/train-index";
+import type { Train } from "./rail/train";
 import type { TrainPosition } from "./train-position";
 import type { ViewerAgentAction } from "./viewer-agent-action";
 import { operatingDayRouteTime } from "./playback";

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { StationLineCatalog } from "../data/station-line-catalog";
-import type { Train } from "../data/train-index";
+import type { StationLineCatalog } from "./rail/station";
+import type { Train } from "./rail/train";
 import { TrainLineColorIndex } from "./train-line-color";
 
 const catalog: StationLineCatalog = {

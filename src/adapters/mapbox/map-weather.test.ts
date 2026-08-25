@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { applyWeather, isWeatherMode } from "./map-weather";
+import { applyWeather } from "./map-weather";
 
 describe("map weather", () => {
   it("clears precipitation for clear weather", () => {
@@ -59,9 +59,4 @@ describe("map weather", () => {
     );
   });
 
-  it("recognizes only supported button values", () => {
-    expect(isWeatherMode("snow")).toBe(true);
-    expect(isWeatherMode("cloudy")).toBe(true);
-    expect(isWeatherMode("storm")).toBe(false);
-  });
 });

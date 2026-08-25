@@ -1,4 +1,4 @@
-import type { Train } from "../data/train-index";
+import type { Train } from "./rail/train";
 
 export interface TrainFormationLink {
   partnerServiceUid: string;
