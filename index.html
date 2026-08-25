@@ -41,6 +41,8 @@
         <symbol id="icon-route" viewBox="0 0 20 20"><circle cx="4.25" cy="14.75" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="15.75" cy="5.25" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6.2 14.4c4.8-.7 2.7-7.5 7.55-8.7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6"/><path d="m11.8 4.7 2.1.9-1.3 1.85" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35"/></symbol>
         <symbol id="icon-train" viewBox="0 0 20 20"><rect x="5" y="2.8" width="10" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7.2 17.2 9 14.8m3.8 2.4L11 14.8M7.4 7h5.2M7.4 10.8h.1m5.1 0h.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/></symbol>
         <symbol id="icon-user" viewBox="0 0 20 20"><circle cx="10" cy="7" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4.3 17c.7-3 2.6-4.5 5.7-4.5s5 1.5 5.7 4.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/></symbol>
+        <symbol id="icon-new-conversation" viewBox="0 0 20 20"><path d="M4 4.5h8.5a2 2 0 0 1 2 2V11a2 2 0 0 1-2 2H8l-3.5 2v-2H4a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/><path d="M15.5 2.5v5M13 5h5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/></symbol>
+        <symbol id="icon-conversation-history" viewBox="0 0 20 20"><path d="M4 5.5h12M4 10h12M4 14.5h8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6"/><circle cx="2" cy="5.5" r=".75"/><circle cx="2" cy="10" r=".75"/><circle cx="2" cy="14.5" r=".75"/></symbol>
         <symbol id="icon-ai-station" viewBox="0 0 20 20"><path d="M3.25 5.5h9.5a2 2 0 0 1 2 2v4.25a2 2 0 0 1-2 2H8l-3.5 2v-2H3.25a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.45"/><path d="M15.6 1.8v3.4M13.9 3.5h3.4M11.1 8.2l.45 1.05 1.05.45-1.05.45-.45 1.05-.45-1.05-1.05-.45 1.05-.45z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.15"/></symbol>
         <symbol id="icon-ai-sparkles" viewBox="0 0 20 20"><path d="M9.2 2.3c.55 3.8 2.7 5.95 6.5 6.5-3.8.55-5.95 2.7-6.5 6.5-.55-3.8-2.7-5.95-6.5-6.5 3.8-.55 5.95-2.7 6.5-6.5Z"/><path d="M15.6 1.8c.15 1.25.85 1.95 2.1 2.1-1.25.15-1.95.85-2.1 2.1-.15-1.25-.85-1.95-2.1-2.1 1.25-.15 1.95-.85 2.1-2.1ZM15.7 13.2c.18 1.5 1.05 2.37 2.55 2.55-1.5.18-2.37 1.05-2.55 2.55-.18-1.5-1.05-2.37-2.55-2.55 1.5-.18 2.37-1.05 2.55-2.55Z"/></symbol>
         <symbol id="icon-send" viewBox="0 0 20 20"><path d="m3 4 14 6-14 6 2.5-6z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"/><path d="M5.5 10H13" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6"/></symbol>
@@ -97,6 +99,8 @@
             </div>
           </div>
           <div class="guide-panel-actions">
+            <button id="new-conversation" type="button" aria-label="新しい会話" title="新しい会話"><svg aria-hidden="true"><use href="#icon-new-conversation" /></svg></button>
+            <button id="conversation-history-toggle" type="button" aria-label="会話履歴" title="会話履歴"><svg aria-hidden="true"><use href="#icon-conversation-history" /></svg></button>
             <button id="trip-plan-toggle" type="button" aria-label="旅程" title="旅程" hidden><svg aria-hidden="true"><use href="#icon-route" /></svg></button>
             <button id="journey-settings-toggle" type="button" aria-label="経路設定" title="経路設定" aria-controls="journey-settings-panel"><svg aria-hidden="true"><use href="#icon-train" /></svg></button>
             <button id="travel-profile-toggle" type="button" aria-label="プロフィール" title="プロフィール"><svg aria-hidden="true"><use href="#icon-user" /></svg></button>
@@ -120,6 +124,16 @@
           </button>
         </form>
       </aside>
+      <dialog id="conversation-history-dialog" class="conversation-history-dialog" aria-labelledby="conversation-history-title">
+        <section>
+          <header>
+            <div><h2 id="conversation-history-title">会話履歴</h2><small>端末に保存した最近の会話</small></div>
+            <button id="close-conversation-history" type="button" aria-label="会話履歴を閉じる">×</button>
+          </header>
+          <p id="conversation-history-empty" class="conversation-history-empty" hidden>過去の会話はまだありません</p>
+          <ol id="conversation-history-list" class="conversation-history-list"></ol>
+        </section>
+      </dialog>
       <aside id="trip-plan-panel" class="trip-plan-panel" aria-label="旅程" hidden>
         <header><strong>旅程</strong><button id="close-trip-plan" type="button" aria-label="旅程を閉じる">×</button></header>
         <div id="trip-plan-content" class="trip-plan-content"></div>

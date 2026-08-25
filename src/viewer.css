@@ -18,6 +18,7 @@
 @import "./styles/tokens.css";
 @import "./styles/liquid-glass-foundation.css";
 @import "./features/concierge/presentation/concierge-liquid-glass.css";
+@import "./features/concierge/presentation/conversation-history-liquid-glass.css";
 @import "./features/trip-plan/presentation/trip-plan-liquid-glass.css";
 @import "./features/concierge/presentation/journey-liquid-glass.css";
 @import "./features/train-viewer/presentation/train-details-liquid-glass.css";

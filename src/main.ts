@@ -143,16 +143,18 @@ import {
 import { loadUserProfile, travelProfileChangedEvent } from "./domain/travel-profile";
 import { promptWithConversationContext } from "./domain/conversation-guidance";
 import { renderConciergeIdentity } from "./features/concierge/presentation/concierge-identity";
+import { configureConversationHistoryPanel } from "./features/concierge/presentation/conversation-history-panel";
 import { configureTripPlanPanel } from "./features/trip-plan/presentation/trip-plan-panel";
 import { loadTripPlan, tripPlanFromTravelPlan } from "./domain/trip-plan";
 import {
   conversationContextSummary,
-  createConversationSession,
-  loadConversationSession,
   loadTravelMemories,
   rememberTravelPreference,
-  saveConversationSession,
 } from "./domain/conversation-session";
+import {
+  browserConversationSessionStorageEvents,
+  LocalConversationSessionRepository,
+} from "./adapters/browser/conversation-session-repository";
 import {
   loadConversationHistory,
   recentConversationContext,
@@ -205,6 +207,12 @@ const {
   conciergeAvatar,
   conciergeName,
   conciergeRole,
+  newConversation,
+  conversationHistoryToggle,
+  conversationHistoryDialog,
+  closeConversationHistory,
+  conversationHistoryList,
+  conversationHistoryEmpty,
   aiGuideSuggestions,
   aiGuideContextChoices,
   journeySettingsToggle,
@@ -244,9 +252,12 @@ let findJourneyLegAlternatives: JourneyLegAlternativeSearch = async () => [];
 let activeConcierge = selectConciergeForUserProfile(
   loadUserProfile(localStorage),
 );
-const activeConversationSession = loadConversationSession(localStorage) ??
-  createConversationSession();
-saveConversationSession(localStorage, activeConversationSession);
+const conversationSessionRepository = new LocalConversationSessionRepository(
+  localStorage,
+  browserConversationSessionStorageEvents(),
+);
+const activeConversationSession = conversationSessionRepository.active() ??
+  conversationSessionRepository.create();
 const updateConciergeIdentity = (resetGreeting = false) => {
   activeConcierge = selectConciergeForUserProfile(loadUserProfile(localStorage));
   renderConciergeIdentity(
@@ -296,7 +307,7 @@ if (sessionTripPlan && activeConversationSession.tripPlanId !== sessionTripPlan.
     tripPlanId: sessionTripPlan.id,
     updatedAt: new Date().toISOString(),
   });
-  saveConversationSession(localStorage, activeConversationSession);
+  conversationSessionRepository.save(activeConversationSession);
 }
 aiGuideController = configureAiGuidePanel(
   {
@@ -316,6 +327,14 @@ aiGuideController = configureAiGuidePanel(
     rankingPreference: journeyRankingPreference,
     storage: localStorage,
     submitFeedback: submitConversationFeedback,
+    onFirstPrompt: (prompt) => {
+      if (activeConversationSession.title !== "新しい会話") return;
+      const renamed = conversationSessionRepository.rename(
+        activeConversationSession.id,
+        prompt.slice(0, 32),
+      );
+      if (renamed) Object.assign(activeConversationSession, renamed);
+    },
     onTravelPlan: (plan) => {
       const tripPlan = tripPlanFromTravelPlan(plan);
       tripPlanController.show(tripPlan);
@@ -324,7 +343,7 @@ aiGuideController = configureAiGuidePanel(
         tripPlanId: tripPlan.id,
         updatedAt: new Date().toISOString(),
       });
-      saveConversationSession(localStorage, activeConversationSession);
+      conversationSessionRepository.save(activeConversationSession);
     },
     onTripPlanUpdate: (proposal) => {
       tripPlanController.apply(proposal.patches);
@@ -333,7 +352,7 @@ aiGuideController = configureAiGuidePanel(
         summary: proposal.summary,
         updatedAt: new Date().toISOString(),
       });
-      saveConversationSession(localStorage, activeConversationSession);
+      conversationSessionRepository.save(activeConversationSession);
     },
   },
   (prompt, preferences, conversation, onResponseMetadata) =>
@@ -344,6 +363,17 @@ aiGuideController = configureAiGuidePanel(
       onResponseMetadata,
     ),
 );
+configureConversationHistoryPanel({
+  newConversation,
+  toggle: conversationHistoryToggle,
+  dialog: conversationHistoryDialog,
+  close: closeConversationHistory,
+  list: conversationHistoryList,
+  empty: conversationHistoryEmpty,
+  storage: localStorage,
+  repository: conversationSessionRepository,
+  onSessionSelected: () => window.location.reload(),
+});
 configureTravelProfile(document, localStorage, () => aiGuideController.open());
 if (tripPreviewEnabled) {
   loadingScreen.complete();
@@ -1226,7 +1256,7 @@ if (!token) {
                   Object.assign(activeConversationSession, update, {
                     updatedAt: new Date().toISOString(),
                   });
-                  saveConversationSession(localStorage, activeConversationSession);
+                  conversationSessionRepository.save(activeConversationSession);
                 },
                 getTripPlan: () => loadTripPlan(
                   localStorage,
