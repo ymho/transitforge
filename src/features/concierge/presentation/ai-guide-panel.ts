@@ -172,19 +172,41 @@ export function configureAiGuidePanel(
     if (!target || target.disabled) return;
     const rating = target.dataset.conversationFeedback;
     if (rating !== "good" && rating !== "bad") return;
-    target.disabled = true;
-    const targetMessageId = target.closest<HTMLElement>(".ai-guide-message")
-      ?.dataset.messageId;
-    if (!targetMessageId) return;
-    const feedback = buildConversationFeedback(
-      elements.conversationSessionId,
-      historyRepository.list(elements.conversationSessionId),
-      targetMessageId,
-      rating,
-    );
-    void submitFeedback(feedback)
-      .then(() => { target.dataset.feedbackStored = "true"; })
-      .catch(() => { target.disabled = false; });
+    const message = target.closest<HTMLElement>(".ai-guide-message");
+    if (!message?.dataset.messageId) return;
+    const send = (comment?: string, status?: HTMLElement) => {
+      setFeedbackControlsDisabled(message, true);
+      if (status) status.textContent = "送信中";
+      const feedback = buildConversationFeedback(
+        elements.conversationSessionId,
+        historyRepository.list(elements.conversationSessionId),
+        message.dataset.messageId!,
+        rating,
+        comment,
+      );
+      void submitFeedback(feedback)
+        .then(() => {
+          target.dataset.feedbackStored = "true";
+          message.querySelector(".conversation-feedback-comment")?.remove();
+          if (status) {
+            status.textContent = "フィードバックを送信しました";
+          } else {
+            message.querySelector(".conversation-feedback")
+              ?.append(feedbackStatus("フィードバックを送信しました"));
+          }
+        })
+        .catch(() => {
+          setFeedbackControlsDisabled(message, false);
+          if (status) status.textContent = "送信できませんでした。もう一度お試しください";
+        });
+    };
+    if (rating === "good") {
+      const status = feedbackStatus("");
+      message.querySelector(".conversation-feedback")?.append(status);
+      send(undefined, status);
+      return;
+    }
+    showBadFeedbackComment(message, send);
   });
 
   let activeConversation: ConversationGuidance | undefined;
@@ -520,6 +542,82 @@ function appendConversationFeedback(item: HTMLLIElement): void {
     feedback.append(button);
   }
   item.append(feedback);
+}
+
+function showBadFeedbackComment(
+  item: HTMLElement,
+  submit: (comment?: string, status?: HTMLElement) => void,
+): void {
+  const existing = item.querySelector<HTMLFormElement>(".conversation-feedback-comment");
+  if (existing) {
+    existing.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+    return;
+  }
+  const form = document.createElement("form");
+  form.className = "conversation-feedback-comment";
+  const label = document.createElement("label");
+  label.textContent = "改善点があれば教えてください";
+  const textarea = document.createElement("textarea");
+  textarea.maxLength = 1000;
+  textarea.rows = 2;
+  textarea.placeholder = "任意入力";
+  label.append(textarea);
+  const actions = document.createElement("span");
+  actions.className = "conversation-feedback-comment-actions";
+  const sendWithComment = feedbackAction("コメントを添えて送信", "submit");
+  const sendWithoutComment = feedbackAction("コメントなしで送信", "button");
+  const cancel = feedbackAction("キャンセル", "button");
+  const status = feedbackStatus("");
+  actions.append(sendWithComment, sendWithoutComment, cancel);
+  form.append(label, actions, status);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const comment = normalizedFeedbackComment(textarea.value);
+    if (comment === undefined) {
+      status.textContent = "コメントを入力するか コメントなしで送信してください";
+      textarea.focus();
+      return;
+    }
+    submit(comment, status);
+  });
+  sendWithoutComment.addEventListener("click", () => submit(undefined, status));
+  cancel.addEventListener("click", () => {
+    form.remove();
+    item.querySelector<HTMLButtonElement>('[data-conversation-feedback="bad"]')
+      ?.focus();
+  });
+  item.append(form);
+  textarea.focus();
+}
+
+export function normalizedFeedbackComment(value: string): string | undefined {
+  return value.trim() || undefined;
+}
+
+function feedbackAction(
+  label: string,
+  type: "button" | "submit",
+): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = type;
+  button.textContent = label;
+  return button;
+}
+
+function feedbackStatus(text: string): HTMLSpanElement {
+  const status = document.createElement("span");
+  status.className = "conversation-feedback-status";
+  status.setAttribute("role", "status");
+  status.textContent = text;
+  return status;
+}
+
+function setFeedbackControlsDisabled(item: HTMLElement, disabled: boolean): void {
+  for (const control of item.querySelectorAll<HTMLButtonElement | HTMLTextAreaElement>(
+    ".conversation-feedback button, .conversation-feedback-comment button, .conversation-feedback-comment textarea",
+  )) {
+    control.disabled = disabled;
+  }
 }
 
 function renderJourneyPlan(

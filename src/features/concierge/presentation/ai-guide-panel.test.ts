@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   loadJourneySearchPreferences,
   journeyDelayLabel,
+  normalizedFeedbackComment,
   shouldFocusAiGuideInputOnOpen,
   visibleAssistantText,
 } from "./ai-guide-panel";
@@ -25,6 +26,14 @@ describe("AI guide journey preferences", () => {
       transferPace: "standard",
       rankingPreference: "balanced",
     });
+  });
+});
+
+describe("feedback comment", () => {
+  it("trims an optional comment without inventing content", () => {
+    expect(normalizedFeedbackComment(" 条件が反映されていません "))
+      .toBe("条件が反映されていません");
+    expect(normalizedFeedbackComment("   ")).toBeUndefined();
   });
 });
 
