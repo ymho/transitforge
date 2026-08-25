@@ -1,0 +1,6 @@
+{
+  "source": "services/agent-api",
+  "handler": "handler.lambda_handler",
+  "includeExtensions": [".py"],
+  "excludeDirectories": ["__pycache__"]
+}

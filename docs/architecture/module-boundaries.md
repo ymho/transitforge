@@ -32,6 +32,7 @@ infra/
 AWSリソース名 API path viewer-input形式はフォルダ移動を理由に変更しない
 現在この公開repositoryが所有するBackend実装は`services/agent-api`である
 交通収集の正本はprivateなdata-builder側にあり 公開側へ複製しない
+Infrastructureの確認と障害調査は`infra/README.md`を正本とする
 
 ## 依存方向
 
