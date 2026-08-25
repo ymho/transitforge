@@ -110,18 +110,20 @@ export function conversationUpdatedLabel(value: string, now = new Date()): strin
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "更新日時不明";
   const elapsedDays = Math.floor(
-    (startOfDay(now).getTime() - startOfDay(date).getTime()) / 86_400_000,
+    calendarDayIndex(now) - calendarDayIndex(date),
   );
   if (elapsedDays === 0) {
     return new Intl.DateTimeFormat("ja-JP", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Asia/Tokyo",
     }).format(date);
   }
   if (elapsedDays === 1) return "昨日";
   return new Intl.DateTimeFormat("ja-JP", {
     month: "numeric",
     day: "numeric",
+    timeZone: "Asia/Tokyo",
   }).format(date);
 }
 
@@ -156,6 +158,14 @@ function historyRow(
   return row;
 }
 
-function startOfDay(value: Date): Date {
-  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+function calendarDayIndex(value: Date): number {
+  const parts = new Intl.DateTimeFormat("en", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    timeZone: "Asia/Tokyo",
+  }).formatToParts(value);
+  const number = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return Date.UTC(number("year"), number("month") - 1, number("day")) / 86_400_000;
 }
