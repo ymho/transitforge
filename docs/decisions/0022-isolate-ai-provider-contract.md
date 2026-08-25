@@ -10,7 +10,7 @@
 
 ## 決定
 
-`src/domain/agent/model-provider.ts`にProvider非依存のmessage request response metadata契約を置く
+`src/application/agent/model-provider.ts`にProvider非依存のmessage request response metadata契約を置く
 
 - contentは`text` `tool_call` `tool_result`に限定する
 - stop reasonは`completed` `tool_calls` `max_tokens`に正規化する

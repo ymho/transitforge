@@ -99,7 +99,7 @@
 ### `JourneySearchService` `search_journeys`
 
 - ドメイン契約: `src/domain/journey-search-service.ts`
-- Agent Adapter: `src/domain/agent/search-journeys-tool.ts`
+- Agent Adapter: `src/application/agent/search-journeys-tool.ts`
 - 現在の実装: `/api/agent`の`journey_search`を呼ぶHTTP client
 
 `JourneySearchService`はCSAや直通インデックスの実行場所を利用側から隠し 日付 乗換上限
@@ -112,7 +112,7 @@ Agentへ返す候補は最大3件 直列化後64KiBまでに制限する。予�
 ### `NetworkInspectionService`
 
 - ドメイン実装: `src/domain/network-inspection-service.ts`
-- Agent Adapter: `src/domain/agent/network-inspection-tools.ts`
+- Agent Adapter: `src/application/agent/network-inspection-tools.ts`
 - 入力: `TrainIndex`と`StationLineCatalog`
 
 列車 駅 1列車内の経路詳細を読み取り専用で照会する。`inspect_train`はserviceUidが完全一致する
@@ -125,7 +125,7 @@ Agentへ返す候補は最大3件 直列化後64KiBまでに制限する。予�
 
 ### 運行分析Tool
 
-- Adapter: `src/domain/agent/operational-analysis-tools.ts`
+- Adapter: `src/application/agent/operational-analysis-tools.ts`
 - 既存集計: `infra/lambda/bedrock_agent/delay_analysis.py`
   `infra/lambda/bedrock_agent/congestion_analysis.py`
 - 列車メタデータ結合: `src/domain/delay-analysis.ts`
@@ -142,7 +142,7 @@ sample countが0の場合は`observationStatus: unobserved`とし 未観測値�
 ### `compare_journeys`
 
 - 比較ロジック: `src/domain/journey-comparison-service.ts`
-- Agent Adapter: `src/domain/agent/compare-journeys-tool.ts`
+- Agent Adapter: `src/application/agent/compare-journeys-tool.ts`
 
 同一Agent実行内で`search_journeys`が検証した検索結果だけをIDで解決し 最大3候補を比較する。
 モデルから経路本体を入力させず 存在しない検索結果IDや候補番号を拒否するため 比較処理が新しい経路を
@@ -159,8 +159,8 @@ processをまたぐ永続状態や会話履歴としては扱わない。
 
 ### EvidenceとGrounded Claim
 
-- モデル: `src/domain/agent/evidence-model.ts`
-- Tool結果変換: `src/domain/agent/tool-result-evidence.ts`
+- モデル: `src/application/agent/evidence-model.ts`
+- Tool結果変換: `src/application/agent/tool-result-evidence.ts`
 
 Evidenceは`deterministic_fact` `derived_value` `model_interpretation`
 `unverified_information`を区別する。情報源は`sourceType` `sourceRef` `retrievedAt`
@@ -177,7 +177,7 @@ task scopeへ渡す。判断記録は[ADR 0026](../decisions/0026-ground-agent-r
 
 ### Structured Agent Trace
 
-- モデルとRecorder: `src/domain/agent/agent-trace.ts`
+- モデルとRecorder: `src/application/agent/agent-trace.ts`
 
 1回のAgent実行は`executionId`に紐づく順序付きeventとして記録する。eventは利用者の依頼
 正規化した意図 plan Tool呼び出しと結果 Evidence 再計画判断 モデルmetadata 応答
@@ -195,9 +195,9 @@ Lambdaが同じschemaと秘匿情報除去を再検証してからprivate S3へ3
 
 ### Multi-step Agent Runtime
 
-- Runtime: `src/domain/agent/agent-runtime.ts`
-- 契約: `src/domain/agent/runtime-contract.ts`
-- 制限: `src/domain/agent/runtime-policies.ts`
+- Runtime: `src/application/agent/agent-runtime.ts`
+- 契約: `src/application/agent/runtime-contract.ts`
+- 制限: `src/application/agent/runtime-policies.ts`
 - 判断記録: [ADR 0023](../decisions/0023-build-bounded-multi-step-agent-runtime.md)
 
 Problem Framing Planner Tool RegistryとExecutor Evidence Responseを別責務として接続する。
@@ -214,9 +214,9 @@ Tool順序 ClaimのGrounding Viewer Actionのtask scopeとTraceを同じテス�
 
 ### Viewer Action Policy
 
-- Action契約: `src/domain/viewer-agent-action.ts`
-- task scopeとPolicy: `src/domain/viewer-action-policy.ts`
-- Executor: `src/domain/viewer-action-executor.ts`
+- Action契約: `src/application/viewer/viewer-action.ts`
+- task scopeとPolicy: `src/application/viewer/viewer-action-policy.ts`
+- Executor: `src/application/viewer/viewer-action-executor.ts`
 - 判断記録: [ADR 0024](../decisions/0024-restrict-viewer-actions-to-task-scope.md)
 
 Agentが提案できる操作を`focus_train` `highlight_route` `set_display_time`
@@ -230,8 +230,8 @@ ExecutorはDOMやMapboxを直接参照せず表示用Portだけを呼び出す�
 
 ### Agent Evaluation
 
-- 契約: `src/domain/agent/evaluation/evaluation-contract.ts`
-- 判定: `src/domain/agent/evaluation/agent-evaluator.ts`
+- 契約: `src/application/agent/evaluation/evaluation-contract.ts`
+- 判定: `src/application/agent/evaluation/agent-evaluator.ts`
 - dataset: `tests/fixtures/agent-eval-cases.json`
 - 判断記録: [ADR 0027](../decisions/0027-evaluate-agent-quality-with-objective-metrics.md)
 
@@ -252,7 +252,7 @@ runnerの`--case`はcase IDでdatasetとobservationを同時に1件へ絞り込�
 
 ### Re-planとReflectionの戦略実験
 
-- 実験契約: `src/domain/agent/evaluation/strategy-experiment.ts`
+- 実験契約: `src/application/agent/evaluation/strategy-experiment.ts`
 - fixture: `tests/fixtures/agent-strategy-experiment.json`
 - 判断記録: [ADR 0031](../decisions/0031-retain-result-driven-replan-without-always-on-reflection.md)
 
@@ -270,7 +270,7 @@ CI分離の判断は[ADR 0029](../decisions/0029-separate-smoke-and-full-agent-e
 
 ### Read-only MCP Adapter
 
-- 共通Registry: `src/domain/agent/readonly-transit-tool-registry.ts`
+- 共通Registry: `src/application/agent/readonly-transit-tool-registry.ts`
 - Protocol Adapter: `src/infrastructure/mcp/readonly-transit-mcp.ts`
 - stdio transport: `src/infrastructure/mcp/stdio.ts`
 - 判断記録: [ADR 0030](../decisions/0030-expose-read-only-domain-tools-through-mcp.md)
@@ -407,7 +407,7 @@ AIの自由文をUIの状態遷移に使わない。
 
 ### `agent-trace-submission-v1`
 
-- TypeScript定義: `src/domain/agent/agent-trace.ts`
+- TypeScript定義: `src/application/agent/agent-trace.ts`
 - Server検証: `infra/lambda/bedrock_agent/agent_trace_storage.py`
 - 保存先: private S3 `agent-traces/YYYY/MM/DD/<taskId>/<traceId>.json`
 - 保持期間: 30日

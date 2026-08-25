@@ -10,7 +10,7 @@ import type {
   AgentModelProvider,
   AgentModelRequest,
   AgentModelResponse,
-} from "../../domain/agent/model-provider";
+} from "../../application/agent/model-provider";
 
 export class BedrockModelProvider implements AgentModelProvider {
   constructor(private readonly fetcher: typeof fetch = fetch) {}

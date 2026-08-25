@@ -31,7 +31,7 @@ Adapter変換が必要になるが Domain ToolをAgentとMCPで共有できる
 
 ## 決定
 
-`src/domain/agent/`にProvider非依存のTool ContractとRegistryを置く
+`src/application/agent/`にProvider非依存のTool ContractとRegistryを置く
 
 - Toolは名前 説明 入力Schema 入力parser 実行関数を持つ
 - JSON SchemaはProviderへ能力を提示する記述であり 入力parserを実行時検証の正本とする

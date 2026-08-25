@@ -14,7 +14,7 @@ Provider非依存のオーケストレーション境界が必要になる
 
 ## 決定
 
-`src/domain/agent`へ次の責務を分けた最小Runtimeを置く
+`src/application/agent`へ次の責務を分けた最小Runtimeを置く
 
 - `problem-framing`: 利用者の目的 意図 制約 不足情報
 - `agent-planner`: 利用可能なToolに基づく実行方針

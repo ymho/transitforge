@@ -99,17 +99,17 @@ import {
 import type { TrainPosition } from "./domain/train-position";
 import {
   type ViewerAgentLayer,
-} from "./domain/viewer-agent-action";
-import { AgentTraceRecorder } from "./domain/agent/agent-trace";
-import { ViewerActionExecutor } from "./domain/viewer-action-executor";
-import { ViewerActionTaskScope } from "./domain/viewer-action-policy";
+} from "./application/viewer/viewer-action";
+import { AgentTraceRecorder } from "./application/agent/agent-trace";
+import { ViewerActionExecutor } from "./application/viewer/viewer-action-executor";
+import { ViewerActionTaskScope } from "./application/viewer/viewer-action-policy";
 import { resolveViewerDisplayMode } from "./domain/viewer-display-mode";
-import { runBedrockViewerAgent } from "./domain/viewer-agent-bedrock";
-import { createLocalViewerAgent } from "./domain/viewer-agent-local";
+import { runBedrockViewerAgent } from "./adapters/bedrock/legacy-viewer-agent";
+import { createLocalViewerAgent } from "./application/viewer-agent/viewer-agent-local";
 import {
   directRouteRequestFromPrompt,
   isUsableOriginStation,
-} from "./domain/viewer-agent-local-tools";
+} from "./application/viewer-agent/viewer-agent-local-tools";
 import type { ViewerAgentJourneyPlan } from "./domain/viewer-agent-response";
 import {
   configureAiGuidePanel,
@@ -117,6 +117,7 @@ import {
 } from "./presentation/ai-guide-panel";
 import { configureLandmarkJourneyInteraction } from "./presentation/landmark-journey-interaction";
 import { configureTrainSelection } from "./presentation/train-selection-controller";
+import { trainTitleFor } from "./presentation/train-title";
 import { createLoadingScreen } from "./presentation/loading-screen";
 import { MapboxThreeTrainLayer } from "./rendering/mapbox-three-train-layer";
 import { RuntimeMetrics } from "./observability/runtime-metrics";
@@ -1129,6 +1130,10 @@ if (!token) {
           setLayerVisibility,
           searchDirectRoutes: localSearchRoutes,
           getPendingJourneyGuidance: () => pendingJourneyGuidance,
+          formatTrainTitle: (train) => {
+            const title = trainTitleFor(train);
+            return `${title.main}${title.suffix ?? ""}`;
+          },
           maximumRouteTime,
         });
         handleAiGuidePrompt = async (
