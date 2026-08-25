@@ -147,6 +147,11 @@ sample countが0の場合は`observationStatus: unobserved`とし 未観測値�
 最早到着 最遅出発 最短時間 最少乗換 最少遅延などの理由は列挙値で返し 同じ入力では常に
 同じ候補と理由を返す。運賃 空席 景色や旅行の主観的魅力度は比較しない。
 
+`search_journeys`と`compare_journeys`を同じAgent実行で使う場合は
+`VerifiedJourneySearchResultStore`へ検索結果をboundedに保持する。Tool応答にはopaqueな
+`searchResultId`を含め 比較Toolは同じ`executionId`で保存された結果だけを解決する。
+processをまたぐ永続状態や会話履歴としては扱わない。
+
 ### EvidenceとGrounded Claim
 
 - モデル: `src/domain/agent/evidence-model.ts`
@@ -159,6 +164,11 @@ Evidenceは`deterministic_fact` `derived_value` `model_interpretation`
 事実Claimは1件以上の存在するEvidence IDを必要とする。参照がない または存在しないIDを参照する
 事実Claimは`unsupported`として検出する。情報不足はEvidenceを捏造せず`unknown` Claimとして表す。
 Grounding判定はモデルの自己申告ではなく`validateEvidenceAndClaims`が決定論的に行う。
+
+Grounded End-to-Endフローでは最終応答を本文 Claim Viewer Actionへ構造化する。
+Runtimeは全Claimを検証し unsupportedな事実が1件でもあれば本文を安全側の失敗応答へ置き換え
+Viewer Actionを実行しない。Grounding成功後のActionだけを同じ実行で収集したEvidenceから作る
+task scopeへ渡す。判断記録は[ADR 0026](../decisions/0026-ground-agent-responses-before-viewer-actions.md)を参照する。
 
 ### Structured Agent Trace
 
@@ -192,6 +202,10 @@ RuntimeはProvider固有形式を扱わず 既定で反復4回 model call 5回 T
 
 機能単位の`AgentRuntimeRolloutRouter`を境界として既存loopと併存させる。
 新Runtimeを`src/main.ts`へ一括適用せず End-to-Endシナリオごとに切り替える。
+
+最初のE2Eシナリオは当日遅延を含む経路検索から候補比較を行い Evidence付き回答と
+検証済み経路の強調 Evidence表示までをoffline fixtureで通す。ProviderやS3へ接続せず
+Tool順序 ClaimのGrounding Viewer Actionのtask scopeとTraceを同じテストで確認する。
 
 ### Viewer Action Policy
 
