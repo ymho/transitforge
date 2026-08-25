@@ -1,4 +1,4 @@
-import type { JourneyRouteLeg } from "../domain/direct-route-search";
+import type { JourneyRouteLeg } from "../../../domain/direct-route-search";
 import {
   applyTripPlanPatches,
   loadTripPlan,
@@ -9,8 +9,8 @@ import {
   type TripPlan,
   type TripPlanItem,
   type TripPlanPatch,
-} from "../domain/trip-plan";
-import type { ViewerAgentAccommodation } from "../domain/viewer-agent-response";
+} from "../../../domain/trip-plan";
+import type { ViewerAgentAccommodation } from "../../../domain/viewer-agent-response";
 
 export interface TripPlanPanelController {
   show(plan: TripPlan): void;
@@ -27,9 +27,10 @@ export function configureTripPlanPanel(
   toggle: HTMLButtonElement,
   conversationSessionId: string,
   beginChat: (prompt: string) => void,
+  storage: Storage,
 ): TripPlanPanelController {
-  let plan = migrateLegacyTripPlan(localStorage, conversationSessionId) ??
-    loadTripPlan(localStorage, conversationSessionId);
+  let plan = migrateLegacyTripPlan(storage, conversationSessionId) ??
+    loadTripPlan(storage, conversationSessionId);
   let persistChanges = true;
   const collapsedItems = new Set<string>();
 
@@ -77,7 +78,7 @@ export function configureTripPlanPanel(
     show(next) {
       plan = next;
       persistChanges = true;
-      saveTripPlan(localStorage, conversationSessionId, plan);
+      saveTripPlan(storage, conversationSessionId, plan);
       open();
     },
     showPreview(next) {
@@ -88,13 +89,13 @@ export function configureTripPlanPanel(
     apply(patches) {
       if (!plan) return;
       plan = applyTripPlanPatches(plan, patches);
-      if (persistChanges) saveTripPlan(localStorage, conversationSessionId, plan);
+      if (persistChanges) saveTripPlan(storage, conversationSessionId, plan);
       open();
     },
     selectAccommodation(accommodation) {
       if (!plan) return;
       plan = selectTripPlanAccommodation(plan, accommodation);
-      if (persistChanges) saveTripPlan(localStorage, conversationSessionId, plan);
+      if (persistChanges) saveTripPlan(storage, conversationSessionId, plan);
       render();
     },
     open,

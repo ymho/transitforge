@@ -26,6 +26,7 @@ import {
   searchAccommodations,
   searchRepresentativeTimetable,
   journeySearchService,
+  submitConversationFeedback,
 } from "./adapters/http/agent-api/bedrock-agent";
 import { loadTrainIndex } from "./adapters/http/viewer-input/train-index";
 import type { StationCoordinate } from "./domain/rail/station";
@@ -108,10 +109,10 @@ import type { ViewerAgentJourneyPlan } from "./domain/viewer-agent-response";
 import {
   configureAiGuidePanel,
   type AiGuidePromptHandler,
-} from "./presentation/ai-guide-panel";
-import { configureLandmarkJourneyInteraction } from "./presentation/landmark-journey-interaction";
-import { configureTrainSelection } from "./presentation/train-selection-controller";
-import { trainTitleFor } from "./presentation/train-title";
+} from "./features/concierge/presentation/ai-guide-panel";
+import { configureLandmarkJourneyInteraction } from "./features/concierge/presentation/landmark-journey-interaction";
+import { configureTrainSelection } from "./features/train-viewer/presentation/train-selection-controller";
+import { trainTitleFor } from "./features/train-viewer/presentation/train-title";
 import {
   configureTrainCongestionUpdates,
   configureTrainDelayUpdates,
@@ -134,15 +135,15 @@ import {
 import { createLoadingScreen } from "./presentation/loading-screen";
 import { MapboxThreeTrainLayer } from "./rendering/mapbox-three-train-layer";
 import { RuntimeMetrics } from "./observability/runtime-metrics";
-import { configureTravelProfile } from "./presentation/travel-profile-panel";
+import { configureTravelProfile } from "./features/concierge/presentation/travel-profile-panel";
 import {
   buildConciergePrompt,
   selectConciergeForUserProfile,
 } from "./features/concierge";
 import { loadUserProfile, travelProfileChangedEvent } from "./domain/travel-profile";
 import { promptWithConversationContext } from "./domain/conversation-guidance";
-import { renderConciergeIdentity } from "./presentation/concierge-identity";
-import { configureTripPlanPanel } from "./presentation/trip-plan-panel";
+import { renderConciergeIdentity } from "./features/concierge/presentation/concierge-identity";
+import { configureTripPlanPanel } from "./features/trip-plan/presentation/trip-plan-panel";
 import { loadTripPlan, tripPlanFromTravelPlan } from "./domain/trip-plan";
 import {
   conversationContextSummary,
@@ -286,6 +287,7 @@ const tripPlanController = configureTripPlanPanel(
   tripPlanToggle,
   activeConversationSession.id,
   (prompt) => aiGuideController.ask(prompt),
+  localStorage,
 );
 const sessionTripPlan = loadTripPlan(localStorage, activeConversationSession.id);
 if (sessionTripPlan && activeConversationSession.tripPlanId !== sessionTripPlan.id) {
@@ -312,6 +314,8 @@ aiGuideController = configureAiGuidePanel(
     settingsPanel: journeySettingsPanel,
     transferPace: journeyTransferPace,
     rankingPreference: journeyRankingPreference,
+    storage: localStorage,
+    submitFeedback: submitConversationFeedback,
     onTravelPlan: (plan) => {
       const tripPlan = tripPlanFromTravelPlan(plan);
       tripPlanController.show(tripPlan);
@@ -340,7 +344,7 @@ aiGuideController = configureAiGuidePanel(
       onResponseMetadata,
     ),
 );
-configureTravelProfile(document, () => aiGuideController.open());
+configureTravelProfile(document, localStorage, () => aiGuideController.open());
 if (tripPreviewEnabled) {
   loadingScreen.complete();
   document.querySelector<HTMLDialogElement>("#travel-profile-dialog")?.close();

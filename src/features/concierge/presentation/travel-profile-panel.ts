@@ -1,5 +1,5 @@
-import { deleteUserProfile, loadUserProfile, saveUserProfile, travelPreferenceLabels, travelProfileChangedEvent, travelStyleSummary, type ChildAgeGroup, type TravelCompanion, type TravelPreference, type UserProfile } from "../domain/travel-profile";
-import { selectConciergeForUserProfile, type ConciergeProfile } from "../features/concierge";
+import { deleteUserProfile, loadUserProfile, saveUserProfile, travelPreferenceLabels, travelProfileChangedEvent, travelStyleSummary, type ChildAgeGroup, type TravelCompanion, type TravelPreference, type UserProfile } from "../../../domain/travel-profile";
+import { selectConciergeForUserProfile, type ConciergeProfile } from "..";
 
 const companionOptions: Array<[TravelCompanion, string]> = [["solo", "一人"], ["partner", "パートナー"], ["friends", "友人"], ["children", "子どもと一緒"], ["family", "家族"]];
 const ageGroups: Array<[ChildAgeGroup, string]> = [["baby", "0〜2歳"], ["preschool", "3〜5歳"], ["elementary", "小学生"], ["teen", "中学生以上"]];
@@ -13,6 +13,7 @@ type Draft = Omit<UserProfile, "version" | "updatedAt">;
 
 export function configureTravelProfile(
   document: Document,
+  storage: Storage,
   onProfileCompleted: () => void = () => undefined,
 ): void {
   const dialog = document.querySelector<HTMLDialogElement>("#travel-profile-dialog");
@@ -22,7 +23,7 @@ export function configureTravelProfile(
   let complete = false;
   let matchedConcierge: ConciergeProfile | undefined;
   let conciergeMatchState: "searching" | "result" | undefined;
-  let draft = createDraft(loadUserProfile(localStorage));
+  let draft = createDraft(loadUserProfile(storage));
   const render = () => {
     dialog.innerHTML = conciergeMatchState && matchedConcierge
       ? conciergeMatch(matchedConcierge, conciergeMatchState === "searching")
@@ -39,7 +40,7 @@ export function configureTravelProfile(
     dialog.querySelector<HTMLButtonElement>("[data-match-continue]")?.addEventListener("click", () => { conciergeMatchState = undefined; complete = true; render(); });
     dialog.querySelector<HTMLButtonElement>("[data-back]")?.addEventListener("click", () => { update(); step -= 1; render(); });
     dialog.querySelector<HTMLButtonElement>("[data-edit]")?.addEventListener("click", () => { conciergeMatchState = undefined; complete = false; step = 0; render(); });
-    dialog.querySelector<HTMLButtonElement>("[data-delete]")?.addEventListener("click", () => { deleteUserProfile(localStorage); document.dispatchEvent(new Event(travelProfileChangedEvent)); matchedConcierge = undefined; conciergeMatchState = undefined; draft = createDraft(); complete = false; step = -1; render(); });
+    dialog.querySelector<HTMLButtonElement>("[data-delete]")?.addEventListener("click", () => { deleteUserProfile(storage); document.dispatchEvent(new Event(travelProfileChangedEvent)); matchedConcierge = undefined; conciergeMatchState = undefined; draft = createDraft(); complete = false; step = -1; render(); });
     dialog.querySelector<HTMLButtonElement>("[data-start]")?.addEventListener("click", () => {
       dialog.close();
       onProfileCompleted();
@@ -48,7 +49,7 @@ export function configureTravelProfile(
     dialog.querySelector<HTMLFormElement>("form")?.addEventListener("submit", event => {
       event.preventDefault(); update();
       if (step < 6) { step += 1; render(); return; }
-      const saved = saveUserProfile(localStorage, draft);
+      const saved = saveUserProfile(storage, draft);
       document.dispatchEvent(new Event(travelProfileChangedEvent));
       matchedConcierge = selectConciergeForUserProfile(saved);
       conciergeMatchState = "searching";
@@ -61,8 +62,8 @@ export function configureTravelProfile(
       }, 900);
     });
   };
-  toggle.addEventListener("click", () => { matchedConcierge = undefined; conciergeMatchState = undefined; draft = createDraft(loadUserProfile(localStorage)); complete = true; render(); dialog.showModal(); });
-  if (!loadUserProfile(localStorage)) { render(); dialog.showModal(); }
+  toggle.addEventListener("click", () => { matchedConcierge = undefined; conciergeMatchState = undefined; draft = createDraft(loadUserProfile(storage)); complete = true; render(); dialog.showModal(); });
+  if (!loadUserProfile(storage)) { render(); dialog.showModal(); }
 }
 
 export function profileIntroductionGreeting(date = new Date()): string {

@@ -1,20 +1,19 @@
-import type { TrainOperation } from "../domain/rail/operation";
-import type { Train } from "../domain/rail/train";
+import type { TrainOperation } from "../../../domain/rail/operation";
+import type { Train } from "../../../domain/rail/train";
 import {
   coupledTrainLayouts,
   type TrainLinkKind,
-} from "../domain/coupled-train-layout";
-import { TrainFocusSession } from "../domain/train-focus-session";
-import { mergeSameOperationTrains } from "../domain/train-detail-service";
-import { trainWithOperation } from "../domain/train-operation-state";
-import type { TrainPosition } from "../domain/train-position";
-import type { TrainFormationLink } from "../domain/train-formation-link";
-import type { MapboxThreeTrainLayer } from "../rendering/mapbox-three-train-layer";
+} from "../../../domain/coupled-train-layout";
+import { TrainFocusSession } from "../../../domain/train-focus-session";
+import { mergeSameOperationTrains } from "../../../domain/train-detail-service";
+import { trainWithOperation } from "../../../domain/train-operation-state";
+import type { TrainPosition } from "../../../domain/train-position";
+import type { TrainFormationLink } from "../../../domain/train-formation-link";
 import {
   timetableDisplayTimeParts,
   timetableProgressRowsFor,
 } from "./train-timetable";
-import { hideSheet, showSheet } from "./sheet-transition";
+import { hideSheet, showSheet } from "../../../presentation/sheet-transition";
 import { trainTitleFor } from "./train-title";
 
 export interface TrainSelectionElements {
@@ -36,10 +35,15 @@ export interface TrainSelectionController {
   ) => void;
 }
 
+export interface TrainSelectionLayer {
+  setFocusedServiceUid(serviceUid: string | undefined): void;
+  congestionBarServiceUidAt(point: { x: number; y: number }): string | undefined;
+}
+
 export function configureTrainSelection(
   map: mapboxgl.Map,
   trains: Train[],
-  trainLayer: MapboxThreeTrainLayer,
+  trainLayer: TrainSelectionLayer,
   colorsByServiceUid: ReadonlyMap<string, string>,
   formationLinks: ReadonlyMap<string, TrainFormationLink>,
   elements: TrainSelectionElements,

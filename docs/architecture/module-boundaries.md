@@ -69,12 +69,18 @@ Feature側は通信やMapboxの具体実装を生成しない
 `main.ts`がAdapterを注入することでコントローラをMapbox実体なしで検証できるようにする
 style再読込時は前回の定期更新を破棄してから新しい購読を開始する
 
+Viewer UIは機能ごとの`presentation`に置く
+
+- `features/concierge/presentation`: 会話 プロフィール Landmark操作
+- `features/trip-plan/presentation`: 旅程表示と編集提案
+- `features/train-viewer/presentation`: 列車選択 詳細 時刻表
+- `presentation`: Sheet遷移やLoading Screenなど複数Featureで共有する小さなUI
+
 ## 移行中の例外
 
 `npm run architecture:check`は新しい逆向き依存を拒否する
 既に存在する違反だけを`tools/check_architecture_boundaries.mjs`へ移行Issue付きで列挙する
-
-- #159 Feature UIの再編
+現在の例外はない
 
 例外が不要になった場合は同じPRでallowlistから削除する
 例外だけが残った場合も検査を失敗させるため 恒久的な抜け道として利用しない

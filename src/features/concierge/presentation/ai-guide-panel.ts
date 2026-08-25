@@ -1,18 +1,18 @@
-import type { JourneyRouteResult } from "../domain/direct-route-search";
-import { formatRouteClockTime } from "../domain/route-time-format";
+import type { JourneyRouteResult } from "../../../domain/direct-route-search";
+import { formatRouteClockTime } from "../../../domain/route-time-format";
 import {
   loadUserProfile,
   type UserProfile,
-} from "../domain/travel-profile";
+} from "../../../domain/travel-profile";
 import type {
   ConversationGuidance,
   ConversationSubmission,
-} from "../domain/conversation-guidance";
+} from "../../../domain/conversation-guidance";
 import {
   appendConversationHistory,
   loadConversationHistory,
-} from "../domain/conversation-history";
-import { recommendedTravelDestinations } from "../domain/travel-destination";
+} from "../../../domain/conversation-history";
+import { recommendedTravelDestinations } from "../../../domain/travel-destination";
 import {
   defaultJourneySearchPreferences,
   isJourneyRankingPreference,
@@ -20,18 +20,32 @@ import {
   type JourneyRankingPreference,
   type JourneySearchPreferences,
   type TransferPace,
-} from "../domain/journey-search-preferences";
+} from "../../../domain/journey-search-preferences";
 import type {
   ViewerAgentJourneyPlan,
   ViewerAgentTravelPlan,
   ViewerAgentResponse,
-} from "../domain/viewer-agent-response";
-import type { TripContext } from "../domain/travel-profile";
-import { hideSheet, showSheet } from "./sheet-transition";
+} from "../../../domain/viewer-agent-response";
+import type { TripContext } from "../../../domain/travel-profile";
+import { hideSheet, showSheet } from "../../../presentation/sheet-transition";
+import { renderAssistantMarkdown, visibleAssistantText } from "./assistant-markdown";
 import {
-  submitConversationFeedback,
-  type AgentResponseMetadata,
-} from "../adapters/http/agent-api/bedrock-agent";
+  loadJourneySearchPreferences,
+  saveJourneySearchPreferences,
+} from "./journey-preferences-storage";
+
+export { visibleAssistantText } from "./assistant-markdown";
+export { loadJourneySearchPreferences } from "./journey-preferences-storage";
+
+export interface AgentResponseMetadata {
+  requestId?: string;
+}
+
+export interface ConversationFeedback {
+  rating: "good" | "bad";
+  conversation: Array<{ role: "user" | "assistant"; text: string }>;
+  requestIds: string[];
+}
 
 export interface AiGuidePanelElements {
   conversationSessionId: string;
@@ -48,8 +62,10 @@ export interface AiGuidePanelElements {
   settingsPanel: HTMLElement;
   transferPace: HTMLSelectElement;
   rankingPreference: HTMLSelectElement;
+  storage: Storage;
+  submitFeedback: (feedback: ConversationFeedback) => Promise<void>;
   onTravelPlan?: (plan: ViewerAgentTravelPlan) => void;
-  onTripPlanUpdate?: (proposal: import("../domain/trip-plan").TripPlanUpdateProposal) => void;
+  onTripPlanUpdate?: (proposal: import("../../../domain/trip-plan").TripPlanUpdateProposal) => void;
 }
 
 export type AiGuidePromptHandler = (
@@ -66,7 +82,6 @@ export interface AiGuidePanelController {
 }
 
 let journeyPlanSequence = 0;
-const journeyPreferencesStorageKey = "transitforge.journey-search-preferences.v1";
 
 export function configureAiGuidePanel(
   elements: AiGuidePanelElements,
@@ -86,8 +101,10 @@ export function configureAiGuidePanel(
     settingsPanel,
     transferPace,
     rankingPreference,
+    storage,
+    submitFeedback,
   } = elements;
-  const savedPreferences = loadJourneySearchPreferences();
+  const savedPreferences = loadJourneySearchPreferences(storage);
   transferPace.value = savedPreferences.transferPace;
   rankingPreference.value = savedPreferences.rankingPreference;
 
@@ -100,7 +117,7 @@ export function configureAiGuidePanel(
       : defaultJourneySearchPreferences.rankingPreference,
     maxTransfers: 3,
   });
-  const savePreferences = () => storeJourneySearchPreferences(preferences());
+  const savePreferences = () => saveJourneySearchPreferences(storage, preferences());
   transferPace.addEventListener("change", savePreferences);
   rankingPreference.addEventListener("change", savePreferences);
   if (settingsPanel instanceof HTMLDialogElement) {
@@ -160,7 +177,7 @@ export function configureAiGuidePanel(
         text: message.dataset.feedbackText,
       }])
       .filter((message) => message.text.length > 0);
-    void submitConversationFeedback({ rating, conversation, requestIds: [...agentRequestIds] })
+    void submitFeedback({ rating, conversation, requestIds: [...agentRequestIds] })
       .then(() => { target.dataset.feedbackStored = "true"; })
       .catch(() => { target.disabled = false; });
   });
@@ -168,7 +185,7 @@ export function configureAiGuidePanel(
   const agentRequestIds = new Set<string>();
   let activeConversation: ConversationGuidance | undefined;
   let activeTripContext: TripContext | undefined;
-  for (const entry of loadConversationHistory(localStorage, elements.conversationSessionId)) {
+  for (const entry of loadConversationHistory(storage, elements.conversationSessionId)) {
     if (entry.role === "user") {
       appendMessage(messages, "user", entry.text);
     } else {
@@ -201,7 +218,7 @@ export function configureAiGuidePanel(
 
     appendMessage(messages, "user", prompt);
     appendConversationHistory(
-      localStorage,
+      storage,
       elements.conversationSessionId,
       { role: "user", text: prompt },
     );
@@ -233,7 +250,7 @@ export function configureAiGuidePanel(
         }
         resolveAssistantMessage(pendingMessage, response, elements.onTravelPlan, elements.onTripPlanUpdate);
         appendConversationHistory(
-          localStorage,
+          storage,
           elements.conversationSessionId,
           {
             role: "assistant",
@@ -245,7 +262,7 @@ export function configureAiGuidePanel(
       .catch(() => {
         const errorResponse = "案内を開始できませんでした。時間をおいてもう一度お試しください。";
         resolveAssistantMessage(pendingMessage, errorResponse);
-        appendConversationHistory(localStorage, elements.conversationSessionId, {
+        appendConversationHistory(storage, elements.conversationSessionId, {
           role: "assistant",
           response: errorResponse,
           ...(requestId ? { requestId } : {}),
@@ -284,7 +301,7 @@ export function configureAiGuidePanel(
     if (hasShownConciergeIntro || messages.querySelector(".ai-guide-message") !== null) return;
     appendConciergeIntroCards(
       messages,
-      loadUserProfile(localStorage),
+      loadUserProfile(storage),
       (destination) => controller.openLandmarkJourney(destination),
     );
     hasShownConciergeIntro = true;
@@ -420,7 +437,7 @@ function resolveAssistantMessage(
   item: HTMLLIElement,
   response: ViewerAgentResponse,
   onTravelPlan?: (plan: ViewerAgentTravelPlan) => void,
-  onTripPlanUpdate?: (proposal: import("../domain/trip-plan").TripPlanUpdateProposal) => void,
+  onTripPlanUpdate?: (proposal: import("../../../domain/trip-plan").TripPlanUpdateProposal) => void,
 ): void {
   item.classList.remove("ai-guide-message-pending");
   item.removeAttribute("aria-label");
@@ -471,7 +488,7 @@ function resolveAssistantMessage(
   item.scrollIntoView({ block: "nearest" });
 }
 
-function tripPlanPatchLabel(patch: import("../domain/trip-plan").TripPlanPatch): string {
+function tripPlanPatchLabel(patch: import("../../../domain/trip-plan").TripPlanPatch): string {
   if (patch.type === "metadata") {
     return patch.conditions ? "人数と考慮事項を変更" : "旅程の基本情報を変更";
   }
@@ -697,42 +714,6 @@ function safeLineColor(value: string | undefined): string {
   return value && /^#[0-9a-f]{6}$/iu.test(value) ? value : "#8b96a1";
 }
 
-export function loadJourneySearchPreferences(
-  storage: Pick<Storage, "getItem"> = window.localStorage,
-): JourneySearchPreferences {
-  try {
-    const value: unknown = JSON.parse(storage.getItem(journeyPreferencesStorageKey) ?? "null");
-    if (
-      typeof value === "object" &&
-      value !== null &&
-      "transferPace" in value &&
-      "rankingPreference" in value &&
-      isTransferPace(value.transferPace) &&
-      isJourneyRankingPreference(value.rankingPreference)
-    ) {
-      return {
-        transferPace: value.transferPace,
-        rankingPreference: value.rankingPreference,
-        maxTransfers: 3,
-      };
-    }
-  } catch {
-    // 読み込めない保存値は既定値へ戻す
-  }
-  return { ...defaultJourneySearchPreferences };
-}
-
-function storeJourneySearchPreferences(
-  preferences: JourneySearchPreferences,
-  storage: Pick<Storage, "setItem"> = window.localStorage,
-): void {
-  try {
-    storage.setItem(journeyPreferencesStorageKey, JSON.stringify(preferences));
-  } catch {
-    // 保存できなくても現在の検索設定は使える
-  }
-}
-
 function transferPaceLabel(value: TransferPace): string {
   return { hurried: "急ぐ", standard: "普通", relaxed: "ゆっくり" }[value];
 }
@@ -744,82 +725,4 @@ function rankingPreferenceLabel(value: JourneyRankingPreference): string {
     "latest-departure": "遅く出る",
     "fewest-transfers": "乗換少なめ",
   }[value];
-}
-
-export function visibleAssistantText(text: string): string {
-  const responseBlocks = Array.from(
-    text.matchAll(/<response\b[^>]*>([\s\S]*?)<\/response>/gi),
-    (match) => withoutThinking(match[1] ?? "").trim(),
-  ).filter(Boolean);
-  if (responseBlocks.length > 0) {
-    return responseBlocks.join("\n\n");
-  }
-
-  const visibleSource = withoutThinking(text);
-  const unclosedResponse = visibleSource.match(
-    /<response\b[^>]*>([\s\S]*)$/i,
-  )?.[1];
-  const visibleText = (unclosedResponse ?? visibleSource)
-    .replace(/<\/?response\b[^>]*>/gi, "")
-    .trim();
-  return visibleText || "案内を完了しました。";
-}
-
-/** AIのMarkdownは許可した最小限の記法だけDOMへ変換し HTMLとしては解釈しない。 */
-function renderAssistantMarkdown(text: string): DocumentFragment {
-  const fragment = document.createDocumentFragment();
-  const lines = text.split(/\r?\n/u);
-  let list: HTMLUListElement | undefined;
-  const flushList = () => {
-    if (list) fragment.append(list);
-    list = undefined;
-  };
-  for (const line of lines) {
-    const listMatch = /^\s*(?:[-*]|\d+\.)\s+(.+)$/u.exec(line);
-    if (listMatch) {
-      list ??= document.createElement("ul");
-      const item = document.createElement("li");
-      appendInlineMarkdown(item, listMatch[1]);
-      list.append(item);
-      continue;
-    }
-    flushList();
-    if (!line.trim()) continue;
-    const paragraph = document.createElement("p");
-    appendInlineMarkdown(paragraph, line);
-    fragment.append(paragraph);
-  }
-  flushList();
-  return fragment;
-}
-
-function appendInlineMarkdown(target: HTMLElement, value: string): void {
-  const tokens = value.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/gu);
-  for (const token of tokens) {
-    const bold = /^\*\*([^*]+)\*\*$/u.exec(token);
-    if (bold) {
-      const strong = document.createElement("strong");
-      strong.textContent = bold[1];
-      target.append(strong);
-      continue;
-    }
-    const link = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/u.exec(token);
-    if (link) {
-      const anchor = document.createElement("a");
-      anchor.textContent = link[1];
-      anchor.href = link[2];
-      anchor.target = "_blank";
-      anchor.rel = "noreferrer";
-      target.append(anchor);
-      continue;
-    }
-    target.append(document.createTextNode(token));
-  }
-}
-
-function withoutThinking(text: string): string {
-  return text
-    .replace(/<thinking\b[^>]*>[\s\S]*?<\/thinking>/gi, "")
-    .replace(/<thinking\b[^>]*>[\s\S]*$/gi, "")
-    .replace(/<\/?thinking\b[^>]*>/gi, "");
 }
