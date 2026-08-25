@@ -410,7 +410,14 @@ AIの自由文をUIの状態遷移に使わない。
 
 - 定義: `services/agent-api/conversation_feedback.py`
 - 保存先: private S3 `conversation-feedback/YYYY/MM/DD/<feedbackId>.json`
-- 内容: 評価 `rating` 会話 `conversation` APIリクエストID `requestIds`
+- 保持期間: 90日
+- 暗号化: S3管理キーによるサーバー側暗号化 `AES256`
+- 内容: `schemaVersion` `feedbackId` `createdAt` 評価 `rating`
+  会話 `conversation` APIリクエストID `requestIds`
+
+`rating`は`good | bad` 会話は`user | assistant`の1〜50件 各本文は1〜4000文字とする。
+`requestIds`は最大50件 各IDは1〜128文字とする。保存失敗は成功として扱わず
+request ID付き503と本文を含まない構造化ログを返す。
 
 利用者が👍または👎を押したときだけ保存する。会話分析やIssue化は別の処理として扱い 本モデルは
 画面表示とAIプロンプトへ自動再投入しない。
