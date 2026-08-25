@@ -108,6 +108,17 @@ Viewer Actionのカテゴリ別に6指標を出す。失敗したcase IDは`--ca
 python3 tools/run_journey_search_scenarios.py
 ```
 
+非公開S3から取得した会話Feedbackをローカルで匿名化・集約する場合は次を使う。
+生会話は標準出力とreportへ出さず `reports/`はGit管理対象外とする。
+
+```bash
+python3 tools/analyze_conversation_feedback.py \
+  --input-dir /path/to/private-feedback \
+  --from 2026-08-01 --to 2026-08-31 --limit 200 --dry-run \
+  --output-json reports/feedback.json \
+  --output-markdown reports/feedback.md
+```
+
 シナリオは`tests/fixtures/journey-search-scenarios.json`へ追加する
 IDまたは名前を引数へ渡すと対象を絞り込める
 
