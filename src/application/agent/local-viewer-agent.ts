@@ -18,7 +18,7 @@ import {
   routeTimeFromPrompt,
   searchActiveTrainsFromPrompt,
   searchTrainArrivalsFromPrompt,
-} from "./viewer-agent-local-tools";
+} from "../viewer/viewer-local-tools";
 
 export interface LocalViewerAgentDependencies {
   trains: Train[];

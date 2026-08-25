@@ -15,7 +15,7 @@
 - JSON HTTP Bedrock Browser Mapboxとの変換と副作用を`src/adapters`へ置く
 - AdapterはDomain契約へ依存できるが DomainからAdapterへ依存しない
 - 入力JSON API path AWS resource nameは配置変更を理由に変えない
-- 旧Viewer Agentだけは#158で共通Runtimeへ移すまで移行例外として追跡する
+- Viewer Agentも共通RuntimeからDomain Portを呼び Adapter内へ鉄道計算を追加しない
 
 ## 影響
 

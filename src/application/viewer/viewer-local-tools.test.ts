@@ -10,7 +10,7 @@ import {
   routeTimeFromPrompt,
   searchActiveTrainsFromPrompt,
   searchTrainArrivalsFromPrompt,
-} from "./viewer-agent-local-tools";
+} from "./viewer-local-tools";
 
 const trains: Train[] = [
   train("special", "101M", "特急", "はるか16号", "京都", [

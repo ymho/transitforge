@@ -211,8 +211,10 @@ RuntimeはProvider固有形式を扱わず 既定で反復4回 model call 5回 T
 実行15秒 Evidence 20件を上限とする。複数Toolは順番に実行し 結果をTool call IDで
 次のmodel callへ返す。不足情報がある場合はToolを実行せずfollow-upを返す。
 
-機能単位の`AgentRuntimeRolloutRouter`を境界として既存loopと併存させる。
-新Runtimeを`src/main.ts`へ一括適用せず End-to-Endシナリオごとに切り替える。
+導入中は機能単位の`AgentRuntimeRolloutRouter`で比較した。現在の本番モデル実行は
+`MultiStepAgentRuntime`へ一本化し Bedrock AdapterはProvider DTOとTool Adapterを組成する。
+Toolが提案したViewer Actionも共通Runtime内でEvidence scopeを検証してから適用する。
+判断記録は[ADR 0034](../decisions/0034-use-one-production-agent-runtime.md)を参照する。
 
 最初のE2Eシナリオは当日遅延を含む経路検索から候補比較を行い Evidence付き回答と
 検証済み経路の強調 Evidence表示までをoffline fixtureで通す。ProviderやS3へ接続せず

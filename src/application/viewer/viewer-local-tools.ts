@@ -1,6 +1,6 @@
 import type { Train } from "../../domain/rail/train";
 import type { TrainPosition } from "../../domain/train-position";
-import type { ViewerAgentAction } from "../viewer/viewer-action";
+import type { ViewerAgentAction } from "./viewer-action";
 import { operatingDayRouteTime } from "../../domain/playback";
 import { normalizeStationName } from "../../domain/station-name";
 

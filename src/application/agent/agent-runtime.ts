@@ -20,6 +20,7 @@ import type { AgentRuntimeRequest, AgentRuntimeResult } from "./runtime-contract
 import { AgentToolRegistry } from "./tool-registry";
 import type { AgentViewerActionHandler } from "./viewer-action-handler";
 import type { AgentViewerActionOutcome } from "./runtime-contract";
+import { ToolViewerActionRegistry } from "./tool-viewer-action-registry";
 
 export interface AgentRuntimeDependencies {
   model: AgentModelProvider;
@@ -29,6 +30,8 @@ export interface AgentRuntimeDependencies {
   planner?: AgentPlanner;
   responseGenerator?: AgentResponseGenerator;
   viewerActionHandler?: AgentViewerActionHandler;
+  toolViewerActions?: ToolViewerActionRegistry;
+  terminalToolResult?: (toolName: string, output: unknown) => string | undefined;
   limits?: Partial<AgentRuntimeLimits>;
   now?: () => Date;
 }
@@ -75,6 +78,7 @@ export class MultiStepAgentRuntime {
     let modelCalls = 0;
     let toolCalls = 0;
     let iterations = 0;
+    const toolViewerActionOutcomes: AgentViewerActionOutcome[] = [];
 
     while (true) {
       if (
@@ -82,7 +86,7 @@ export class MultiStepAgentRuntime {
         modelCalls >= this.limits.maxModelCalls ||
         this.now().getTime() >= deadline
       ) {
-        return this.limitResult(trace, evidence, startedAt);
+        return this.limitResult(trace, evidence, toolViewerActionOutcomes, startedAt);
       }
 
       const remainingMs = Math.max(1, deadline - this.now().getTime());
@@ -94,10 +98,10 @@ export class MultiStepAgentRuntime {
         remainingMs,
       );
       if (modelOutcome.kind === "timeout") {
-        return this.limitResult(trace, evidence, startedAt);
+        return this.limitResult(trace, evidence, toolViewerActionOutcomes, startedAt);
       }
       if (modelOutcome.kind === "error") {
-        return this.failureResult(trace, evidence, startedAt, "model_call_failed");
+        return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "model_call_failed");
       }
       const modelResponse = modelOutcome.value;
       modelCalls += 1;
@@ -105,7 +109,7 @@ export class MultiStepAgentRuntime {
       messages.push(modelResponse.message);
 
       if (modelResponse.stopReason === "max_tokens") {
-        return this.limitResult(trace, evidence, startedAt);
+        return this.limitResult(trace, evidence, toolViewerActionOutcomes, startedAt);
       }
 
       const calls = modelResponse.message.content.filter(
@@ -113,14 +117,14 @@ export class MultiStepAgentRuntime {
           content.type === "tool_call",
       );
       if (modelResponse.stopReason === "tool_calls" && calls.length === 0) {
-        return this.failureResult(trace, evidence, startedAt, "missing_tool_call");
+        return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "missing_tool_call");
       }
       if (modelResponse.stopReason !== "tool_calls") {
         let generated;
         try {
           generated = this.responseGenerator.fromModel(modelResponse, evidence);
         } catch {
-          return this.failureResult(trace, evidence, startedAt, "invalid_response_format");
+          return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_response_format");
         }
         const grounding = validateEvidenceAndClaims(evidence, generated.claims);
         if (
@@ -140,11 +144,11 @@ export class MultiStepAgentRuntime {
             response,
             evidence,
             grounding.claims,
-            [],
+            toolViewerActionOutcomes,
             trace,
           );
         }
-        const viewerActions = this.dependencies.viewerActionHandler?.apply(
+        const responseViewerActions = this.dependencies.viewerActionHandler?.apply(
           generated.viewerActions,
           evidence,
           request,
@@ -157,15 +161,16 @@ export class MultiStepAgentRuntime {
           generated.text,
           evidence,
           grounding.claims,
-          viewerActions,
+          [...toolViewerActionOutcomes, ...responseViewerActions],
           trace,
         );
       }
       if (toolCalls + calls.length > this.limits.maxToolCalls) {
-        return this.limitResult(trace, evidence, startedAt);
+        return this.limitResult(trace, evidence, toolViewerActionOutcomes, startedAt);
       }
 
       const toolResults: AgentModelContent[] = [];
+      let terminalResponse: string | undefined;
       for (const call of calls) {
         const execution = await this.dependencies.toolExecutor.execute({
           executionId: request.executionId,
@@ -184,6 +189,26 @@ export class MultiStepAgentRuntime {
           evidence.push(...collected);
           if (collected.length > 0) trace.evidenceCollected(collected);
         }
+        if (execution.result.ok && this.dependencies.viewerActionHandler) {
+          const proposedActions = this.dependencies.toolViewerActions?.collect(
+            call.name,
+            execution.result.output,
+          ) ?? [];
+          toolViewerActionOutcomes.push(
+            ...this.dependencies.viewerActionHandler.apply(
+              proposedActions,
+              evidence,
+              request,
+              trace,
+            ),
+          );
+        }
+        if (execution.result.ok) {
+          terminalResponse ??= this.dependencies.terminalToolResult?.(
+            call.name,
+            execution.result.output,
+          );
+        }
         toolResults.push({
           type: "tool_result",
           toolCallId: call.toolCallId,
@@ -194,6 +219,18 @@ export class MultiStepAgentRuntime {
         });
       }
       messages.push({ role: "user", content: toolResults });
+      if (terminalResponse !== undefined) {
+        trace.responseGenerated(terminalResponse);
+        trace.taskCompleted("completed", elapsed(startedAt, this.now));
+        return result(
+          "completed",
+          terminalResponse,
+          evidence,
+          [],
+          toolViewerActionOutcomes,
+          trace,
+        );
+      }
       iterations += 1;
       trace.replanDecided(true, "Tool結果を受けて次の手順を判断する", plan.steps);
     }
@@ -202,24 +239,26 @@ export class MultiStepAgentRuntime {
   private limitResult(
     trace: AgentTraceRecorder,
     evidence: Evidence[],
+    viewerActions: AgentViewerActionOutcome[],
     startedAt: number,
   ): AgentRuntimeResult {
     const response = this.responseGenerator.limitReached();
     trace.responseGenerated(response);
     trace.taskCompleted("failed", elapsed(startedAt, this.now), "runtime_limit_reached");
-    return result("limit_reached", response, evidence, [], [], trace);
+    return result("limit_reached", response, evidence, [], viewerActions, trace);
   }
 
   private failureResult(
     trace: AgentTraceRecorder,
     evidence: Evidence[],
+    viewerActions: AgentViewerActionOutcome[],
     startedAt: number,
     reason: string,
   ): AgentRuntimeResult {
     const response = this.responseGenerator.failure();
     trace.responseGenerated(response);
     trace.taskCompleted("failed", elapsed(startedAt, this.now), reason);
-    return result("failed", response, evidence, [], [], trace);
+    return result("failed", response, evidence, [], viewerActions, trace);
   }
 }
 

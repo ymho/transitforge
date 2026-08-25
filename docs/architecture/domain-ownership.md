@@ -47,10 +47,10 @@ TypeScriptは送受信時に契約を検証し Pythonは受信時と返却時に
 - Provider固有payloadをDomain型として扱うこと
 - Viewer Actionの検証をUIイベントごとに独自実装すること
 
-## 移行中の扱い
+## Agentからの利用
 
-旧Viewer Agentが使うブラウザ内の直通経路型と表示変換は移行期間だけ残す
-新Runtimeへ接続した機能から順に`JourneySearchService`へ集約し 旧経路検索を拡張しない
+本番Agentは共通RuntimeのTool Adapterから`JourneySearchService`を利用する。
+UI向けの経路 旅行 会話型への変換は鉄道探索を再実装せず 検証済みTool結果を投影する。
 
 Agent APIは外部APIとLambda entrypointを維持したまま Domain Application Adapterへ分ける
 ファイル移動だけで責務が変わったことにせず 依存方向とテストで所有権を確認する

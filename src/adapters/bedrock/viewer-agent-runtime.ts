@@ -2,7 +2,6 @@ import type {
   BedrockAgentContentBlock,
   BedrockAgentMessage,
   BedrockAgentResponse,
-  BedrockAgentToolResultBlock,
   RepresentativeTimetableSearchMode,
   RepresentativeTimetableSearchResponse,
   RepresentativeTimetableKind,
@@ -51,7 +50,7 @@ import {
   routeCalendarDateFromPrompt,
   searchActiveTrainsFromPrompt,
   searchTrainArrivalsFromPrompt,
-} from "../../application/viewer-agent/viewer-agent-local-tools";
+} from "../../application/viewer/viewer-local-tools";
 import { travelDestinationAccess } from "../../domain/travel-destination";
 import {
   normalizedConversationGuidance,
@@ -67,8 +66,32 @@ import {
   type TripPlanUpdateProposal,
 } from "../../domain/trip-plan";
 import type { ConversationScope } from "../../domain/conversation-session";
+import { MultiStepAgentRuntime } from "../../application/agent/agent-runtime";
+import { AgentToolRegistry } from "../../application/agent/tool-registry";
+import { AgentToolExecutor } from "../../application/agent/agent-tool-executor";
+import { ToolEvidenceRegistry } from "../../application/agent/tool-evidence-registry";
+import { ToolViewerActionRegistry } from "../../application/agent/tool-viewer-action-registry";
+import {
+  failedAgentToolResult,
+  invalidAgentToolInput,
+  successfulAgentToolResult,
+  validAgentToolInput,
+  type AgentTool,
+} from "../../application/agent/tool-contract";
+import type {
+  AgentModelContent,
+  AgentModelMessage,
+  AgentModelProvider,
+  AgentModelRequest,
+  AgentModelResponse,
+} from "../../application/agent/model-provider";
+import type { AgentProblemFramer } from "../../application/agent/problem-framing";
+import { ViewerActionExecutor } from "../../application/viewer/viewer-action-executor";
+import { EvidenceScopedViewerActionHandler } from "../../application/agent/viewer-action-handler";
+import type { Evidence } from "../../application/agent/evidence-model";
+import type { AgentTrace } from "../../application/agent/agent-trace";
 
-export interface BedrockViewerAgentDependencies {
+export interface ViewerAgentRuntimeDependencies {
   trains: Train[];
   getTrains?: () => Train[];
   getPositions: () => TrainPosition[];
@@ -129,14 +152,13 @@ export interface BedrockViewerAgentDependencies {
   }) => void;
   getTripPlan?: () => TripPlan | undefined;
   getUserProfile?: () => UserProfile | undefined;
+  storeAgentTrace?: (trace: AgentTrace) => Promise<void>;
   maximumRouteTime: number;
 }
 
 export type BedrockAgentConverse = (
   messages: BedrockAgentMessage[],
 ) => Promise<BedrockAgentResponse>;
-
-const maximumToolRounds = 6;
 
 interface DirectRouteToolMatch {
   serviceUid: string;
@@ -197,9 +219,9 @@ interface TripPlanUpdateToolState {
   proposal?: TripPlanUpdateProposal;
 }
 
-export async function runBedrockViewerAgent(
+export async function runViewerAgentRuntime(
   prompt: string,
-  dependencies: BedrockViewerAgentDependencies,
+  dependencies: ViewerAgentRuntimeDependencies,
   converse: BedrockAgentConverse,
 ): Promise<ViewerAgentResponse> {
   const constraintResponse = await journeyConstraintFollowUpResponse(
@@ -216,118 +238,353 @@ export async function runBedrockViewerAgent(
   if (followUpResponse) {
     return followUpResponse;
   }
-  const messages: BedrockAgentMessage[] = [
-    {
-      role: "user",
-      content: [
-        {
-          text:
-            (dependencies.conciergeInstruction === undefined
-              ? ""
-              : `コンシェルジュの会話方針:\n${dependencies.conciergeInstruction}\n\n`) +
-            `利用者の依頼: ${prompt}\n` +
-            `現在の表示時刻（0時からの分数）: ${dependencies.getRouteTime()}\n` +
-            `今日の実日付（日本時間）: ${currentCalendarDateInJapan(currentDate(dependencies))}\n` +
-            `現在の業務日付（日本時間4時切替）: ${currentServiceDateInJapan(currentDate(dependencies))}`,
-        },
-      ],
-    },
-  ];
   const searchableServiceUids = new Set<string>();
   const directRouteServiceUids = new Set<string>();
   const toolState: DirectRouteToolState = { searched: false };
   const travelState: TravelToolState = {};
   const conversationState: ConversationToolState = {};
   const tripPlanUpdateState: TripPlanUpdateToolState = {};
+  const tools = viewerToolRegistry({
+    prompt,
+    dependencies,
+    searchableServiceUids,
+    directRouteServiceUids,
+    toolState,
+    travelState,
+    conversationState,
+    tripPlanUpdateState,
+  });
+  const evidenceMappers = viewerEvidenceMappers();
+  const toolViewerActions = viewerToolActionMappers();
+  const viewerActionHandler = new EvidenceScopedViewerActionHandler(
+    new ViewerActionExecutor({
+      setDisplayTime: dependencies.setRouteTime,
+      focusTrain: dependencies.focusTrain,
+      highlightRoute: () => false,
+      compareJourneys: () => false,
+      showEvidence: () => false,
+      setWeather: dependencies.setWeather,
+      setLayerVisibility: dependencies.setLayerVisibility,
+    }, dependencies.maximumRouteTime),
+  );
+  const runtime = new MultiStepAgentRuntime({
+    model: new ConverseModelProvider(converse),
+    tools,
+    toolExecutor: new AgentToolExecutor(tools, evidenceMappers),
+    problemFramer: viewerProblemFramer(prompt, dependencies),
+    viewerActionHandler,
+    toolViewerActions,
+    terminalToolResult: (toolName) => terminalToolNames.has(toolName)
+      ? "構造化した案内を準備しました。"
+      : undefined,
+    limits: { maxIterations: 6, maxModelCalls: 7, maxToolCalls: 12 },
+  });
+  const runtimeResult = await runtime.run({
+    executionId: crypto.randomUUID(),
+    feature: featureFromPrompt(prompt),
+    userRequest: prompt,
+  });
+  await dependencies.storeAgentTrace?.(runtimeResult.trace).catch(() => undefined);
 
-  for (let round = 0; round < maximumToolRounds; round += 1) {
-    const response = await converse(messages);
-    messages.push(response.message);
-    const toolUses = response.message.content.filter(isToolUseBlock);
-
-    if (toolUses.length === 0) {
-      const directRouteResponse = directRouteResponseText(toolState);
-      if (directRouteResponse !== undefined) {
-        return directRouteResponse;
-      }
-      const text = response.message.content
-        .filter(isTextBlock)
-        .map((block) => block.text.trim())
-        .filter(Boolean)
-        .join("\n");
-      return text || "案内を完了しました。";
-    }
-
-    const toolResults: BedrockAgentToolResultBlock[] = [];
-    for (const { toolUse } of toolUses) {
-      try {
-        const result = await executeTool(
-          toolUse.name,
-          toolUse.input,
-          prompt,
-          dependencies,
-          searchableServiceUids,
-          directRouteServiceUids,
-          toolState,
-          travelState,
-          conversationState,
-          tripPlanUpdateState,
-        );
-        toolResults.push({
-          toolResult: {
-            toolUseId: toolUse.toolUseId,
-            status: "success",
-            content: [{ json: result }],
-          },
-        });
-      } catch (error) {
-        toolResults.push({
-          toolResult: {
-            toolUseId: toolUse.toolUseId,
-            status: "error",
-            content: [
-              {
-                json: {
-                  message:
-                    error instanceof Error
-                      ? error.message
-                      : "ツールを実行できませんでした。",
-                },
-              },
-            ],
-          },
-        });
-      }
-    }
-    messages.push({ role: "user", content: toolResults });
-
-    // 経路候補と表示文は検索ツールの構造化結果だけから確定できる。
-    // モデルへ再送すると不要な画面操作を繰り返す場合があるためここで終了する。
-    const travelResponse = travelResponseText(
-      travelState,
-      dependencies.getTripPlan?.(),
-      dependencies.getUserProfile?.(),
-    );
-    if (travelResponse !== undefined) {
-      return travelResponse;
-    }
-    const conversationResponse = conversationResponseText(conversationState);
-    if (conversationResponse !== undefined) {
-      return conversationResponse;
-    }
-    if (tripPlanUpdateState.proposal) {
-      return {
-        text: tripPlanUpdateState.proposal.summary,
-        tripPlanUpdate: tripPlanUpdateState.proposal,
-      };
-    }
-    const directRouteResponse = directRouteResponseText(toolState);
-    if (directRouteResponse !== undefined) {
-      return directRouteResponse;
-    }
+  const travelResponse = travelResponseText(
+    travelState,
+    dependencies.getTripPlan?.(),
+    dependencies.getUserProfile?.(),
+  );
+  if (travelResponse !== undefined) return travelResponse;
+  const conversationResponse = conversationResponseText(conversationState);
+  if (conversationResponse !== undefined) return conversationResponse;
+  if (tripPlanUpdateState.proposal) {
+    return {
+      text: tripPlanUpdateState.proposal.summary,
+      tripPlanUpdate: tripPlanUpdateState.proposal,
+    };
   }
+  return directRouteResponseText(toolState) ?? runtimeResult.response;
+}
 
-  throw new Error("AIの画面操作回数が上限を超えました。");
+interface ViewerToolContext {
+  prompt: string;
+  dependencies: ViewerAgentRuntimeDependencies;
+  searchableServiceUids: Set<string>;
+  directRouteServiceUids: Set<string>;
+  toolState: DirectRouteToolState;
+  travelState: TravelToolState;
+  conversationState: ConversationToolState;
+  tripPlanUpdateState: TripPlanUpdateToolState;
+}
+
+const viewerToolNames = [
+  "propose_trip_update",
+  "remember_travel_preference",
+  "update_conversation_session",
+  "ask_follow_up",
+  "set_display_time",
+  "search_trains",
+  "search_train_arrivals",
+  "search_direct_routes",
+  "focus_train",
+  "query_daily_congestion_analysis",
+  "query_train_delay_analysis",
+  "search_accommodations",
+  "search_representative_timetable",
+  "set_weather",
+  "set_layer_visibility",
+] as const;
+
+const terminalToolNames = new Set<string>([
+  "propose_trip_update",
+  "ask_follow_up",
+  "search_direct_routes",
+  "search_accommodations",
+]);
+
+function viewerToolRegistry(context: ViewerToolContext): AgentToolRegistry {
+  const registry = new AgentToolRegistry();
+  for (const name of viewerToolNames) {
+    registry.register(viewerTool(name, context));
+  }
+  return registry;
+}
+
+function viewerTool(
+  name: typeof viewerToolNames[number],
+  context: ViewerToolContext,
+): AgentTool<Record<string, unknown>, unknown> {
+  return {
+    name,
+    description: viewerToolDescription(name),
+    inputSchema: { type: "object", properties: {}, additionalProperties: true },
+    parseInput(value) {
+      return isRecord(value)
+        ? validAgentToolInput(value)
+        : invalidAgentToolInput("Tool入力はオブジェクトで指定してください");
+    },
+    async execute(input) {
+      try {
+        return successfulAgentToolResult(await executeViewerToolAdapter(
+          name,
+          input,
+          context.prompt,
+          context.dependencies,
+          context.searchableServiceUids,
+          context.directRouteServiceUids,
+          context.toolState,
+          context.travelState,
+          context.conversationState,
+          context.tripPlanUpdateState,
+        ));
+      } catch (error) {
+        return failedAgentToolResult({
+          code: "invalid_input",
+          message: error instanceof Error
+            ? error.message
+            : "Toolを実行できませんでした",
+          retryable: false,
+        });
+      }
+    },
+  };
+}
+
+function viewerToolDescription(name: typeof viewerToolNames[number]): string {
+  const descriptions: Record<typeof viewerToolNames[number], string> = {
+    propose_trip_update: "現在の旅程に対する安全な変更案を構造化します",
+    remember_travel_preference: "高確信の継続的な旅行の好みを端末内へ記憶します",
+    update_conversation_session: "現在の会話Sessionの要約と話題を更新します",
+    ask_follow_up: "旅行相談で不足している条件を構造化して質問します",
+    set_display_time: "Viewerの計画ダイヤ表示時刻を変更します",
+    search_trains: "現在表示中の列車を決定論的に検索します",
+    search_train_arrivals: "指定駅へ指定時刻ごろ到着する列車を検索します",
+    search_direct_routes: "自前の時刻表と運行情報で乗換を含む経路を検索します",
+    focus_train: "同じタスクで検索済みの列車へViewerを移動します",
+    query_daily_congestion_analysis: "指定業務日付の観測済み混雑を分析します",
+    query_train_delay_analysis: "指定業務日付の観測済み遅延を分析します",
+    search_accommodations: "指定日程と行き先の宿泊候補を検索します",
+    search_representative_timetable: "平日または土休日の代表ダイヤを検索します",
+    set_weather: "Viewerの天気表現を変更します",
+    set_layer_visibility: "Viewerの混雑またはアーチ表示を変更します",
+  };
+  return descriptions[name];
+}
+
+function viewerEvidenceMappers(): ToolEvidenceRegistry {
+  const registry = new ToolEvidenceRegistry();
+  registry.register("search_direct_routes", routeEvidence);
+  registry.register("search_trains", trainSearchEvidence);
+  registry.register("search_train_arrivals", trainSearchEvidence);
+  return registry;
+}
+
+function routeEvidence(output: unknown, context: { retrievedAt: string }): Evidence[] {
+  if (!isRecord(output) || !Array.isArray(output.journeys)) return [];
+  return output.journeys.slice(0, 3).flatMap((journey, index) => {
+    if (!isRecord(journey) || !Array.isArray(journey.legs)) return [];
+    const serviceUids = journey.legs.flatMap((leg) =>
+      isRecord(leg) && typeof leg.serviceUid === "string" ? [leg.serviceUid] : []);
+    if (serviceUids.length === 0) return [];
+    return [{
+      id: `journey:${encodeURIComponent(String(output.serviceDate ?? "unknown"))}:${index}`,
+      category: "journey" as const,
+      knowledgeKind: "derived_value" as const,
+      subject: `${String(output.originStation ?? "出発駅")}から${String(output.destinationStation ?? "到着駅")}の経路候補${index + 1}`,
+      facts: { serviceUids },
+      references: [{
+        sourceType: "timetable-graph" as const,
+        sourceRef: `${String(output.serviceDate ?? "unknown")}:journey-${index + 1}`,
+        retrievedAt: context.retrievedAt,
+        freshness: "scheduled" as const,
+        summary: "自前の時刻表と運行情報で検索した経路",
+      }],
+    }];
+  });
+}
+
+function trainSearchEvidence(output: unknown, context: { retrievedAt: string }): Evidence[] {
+  if (!isRecord(output) || !Array.isArray(output.matches)) return [];
+  return output.matches.slice(0, 5).flatMap((match) => {
+    if (!isRecord(match) || typeof match.serviceUid !== "string") return [];
+    return [{
+      id: `train:${encodeURIComponent(match.serviceUid)}`,
+      category: "train" as const,
+      knowledgeKind: "deterministic_fact" as const,
+      subject: String(match.trainNumber ?? match.serviceUid),
+      facts: { serviceUid: match.serviceUid },
+      references: [{
+        sourceType: "timetable-index" as const,
+        sourceRef: match.serviceUid,
+        retrievedAt: context.retrievedAt,
+        freshness: "current" as const,
+        summary: "現在の表示時刻と列車indexによる検索結果",
+      }],
+    }];
+  });
+}
+
+function viewerToolActionMappers(): ToolViewerActionRegistry {
+  const registry = new ToolViewerActionRegistry();
+  registry.register("set_display_time", (output) =>
+    isRecord(output) && typeof output.routeTimeMinutes === "number"
+      ? [{ type: "set_display_time", routeTimeMinutes: output.routeTimeMinutes }]
+      : []);
+  registry.register("focus_train", (output) =>
+    isRecord(output) && typeof output.serviceUid === "string"
+      ? [{ type: "focus_train", serviceUid: output.serviceUid }]
+      : []);
+  registry.register("search_direct_routes", (output) => {
+    if (!isRecord(output) || !Array.isArray(output.journeys)) return [];
+    const journey = output.journeys[0];
+    const leg = isRecord(journey) && Array.isArray(journey.legs)
+      ? journey.legs[0]
+      : undefined;
+    return isRecord(leg) && typeof leg.serviceUid === "string"
+      ? [{ type: "focus_train", serviceUid: leg.serviceUid }]
+      : [];
+  });
+  registry.register("set_weather", (output) =>
+    isRecord(output) && ["clear", "cloudy", "rain", "snow"].includes(String(output.weather))
+      ? [{ type: "set_weather", weather: output.weather as WeatherMode }]
+      : []);
+  registry.register("set_layer_visibility", (output) =>
+    isRecord(output) &&
+      (output.layer === "congestion" || output.layer === "destination_arcs") &&
+      typeof output.visible === "boolean"
+      ? [{ type: "set_layer_visibility", layer: output.layer, visible: output.visible }]
+      : []);
+  return registry;
+}
+
+function viewerProblemFramer(
+  prompt: string,
+  dependencies: ViewerAgentRuntimeDependencies,
+): AgentProblemFramer {
+  return {
+    frame(request) {
+      const objective =
+        (dependencies.conciergeInstruction === undefined
+          ? ""
+          : `コンシェルジュの会話方針:\n${dependencies.conciergeInstruction}\n\n`) +
+        `利用者の依頼: ${prompt}\n` +
+        `現在の表示時刻（0時からの分数）: ${dependencies.getRouteTime()}\n` +
+        `今日の実日付（日本時間）: ${currentCalendarDateInJapan(currentDate(dependencies))}\n` +
+        `現在の業務日付（日本時間4時切替）: ${currentServiceDateInJapan(currentDate(dependencies))}`;
+      return {
+        feature: request.feature,
+        normalizedIntent: request.feature,
+        objective,
+        constraints: {},
+        missingInformation: prompt.trim() ? [] : ["user_request"],
+      };
+    },
+  };
+}
+
+function featureFromPrompt(prompt: string): "journey_planning" | "train_guidance" | "operational_analysis" | "travel_planning" {
+  const normalized = prompt.normalize("NFKC");
+  if (/(?:旅行|観光|宿泊|\d+泊|ホテル|旅館)/u.test(normalized)) return "travel_planning";
+  if (/(?:遅延|遅れ|混雑|ピーク)/u.test(normalized)) return "operational_analysis";
+  if (/(?:から.+(?:へ|まで)|経路|乗換|行きたい)/u.test(normalized)) return "journey_planning";
+  return "train_guidance";
+}
+
+class ConverseModelProvider implements AgentModelProvider {
+  constructor(private readonly converse: BedrockAgentConverse) {}
+
+  async generate(request: AgentModelRequest): Promise<AgentModelResponse> {
+    const response = await this.converse(request.messages.map(toBedrockMessage));
+    return {
+      message: fromBedrockMessage(response.message),
+      stopReason: response.stopReason === "tool_use"
+        ? "tool_calls"
+        : response.stopReason === "max_tokens" ? "max_tokens" : "completed",
+      metadata: {
+        provider: "bedrock",
+        model: response.metadata?.modelId,
+        latencyMs: response.metadata?.latencyMs,
+        usage: response.metadata?.usage,
+      },
+    };
+  }
+}
+
+function toBedrockMessage(message: AgentModelMessage): BedrockAgentMessage {
+  return { role: message.role, content: message.content.map(toBedrockContent) };
+}
+
+function toBedrockContent(content: AgentModelContent): BedrockAgentContentBlock {
+  if (content.type === "text") return { text: content.text };
+  if (content.type === "tool_call") {
+    return { toolUse: { toolUseId: content.toolCallId, name: content.name, input: content.input } };
+  }
+  return {
+    toolResult: {
+      toolUseId: content.toolCallId,
+      status: content.status,
+      content: [{ json: content.output }],
+    },
+  };
+}
+
+function fromBedrockMessage(message: BedrockAgentMessage): AgentModelMessage {
+  return { role: message.role, content: message.content.map(fromBedrockContent) };
+}
+
+function fromBedrockContent(content: BedrockAgentContentBlock): AgentModelContent {
+  if ("text" in content) return { type: "text", text: content.text };
+  if ("toolUse" in content) {
+    return {
+      type: "tool_call",
+      toolCallId: content.toolUse.toolUseId,
+      name: content.toolUse.name,
+      input: content.toolUse.input,
+    };
+  }
+  return {
+    type: "tool_result",
+    toolCallId: content.toolResult.toolUseId,
+    status: content.toolResult.status,
+    output: content.toolResult.content[0]?.json ?? null,
+  };
 }
 
 function journeyTrainFollowUpResponse(
@@ -360,11 +617,11 @@ function journeyTrainFollowUpResponse(
   return undefined;
 }
 
-async function executeTool(
+async function executeViewerToolAdapter(
   name: string,
   input: Record<string, unknown>,
   originalPrompt: string,
-  dependencies: BedrockViewerAgentDependencies,
+  dependencies: ViewerAgentRuntimeDependencies,
   searchableServiceUids: Set<string>,
   directRouteServiceUids: Set<string>,
   toolState: DirectRouteToolState,
@@ -436,7 +693,6 @@ async function executeTool(
     if (!action || action.type !== "set_display_time") {
       throw new Error("表示時刻を変更できません。");
     }
-    dependencies.setRouteTime(action.routeTimeMinutes);
     searchableServiceUids.clear();
     return { routeTimeMinutes: action.routeTimeMinutes };
   }
@@ -651,7 +907,7 @@ async function executeTool(
     };
     toolState.response = result;
     const firstServiceUid = journeys[0]?.legs[0]?.serviceUid;
-    if (firstServiceUid && dependencies.focusTrain(firstServiceUid)) {
+    if (firstServiceUid) {
       toolState.focusedServiceUid = firstServiceUid;
     }
     return result;
@@ -671,8 +927,7 @@ async function executeTool(
     ]);
     if (
       !action ||
-      action.type !== "focus_train" ||
-      !dependencies.focusTrain(action.serviceUid)
+      action.type !== "focus_train"
     ) {
       throw new Error("列車の現在位置へ移動できませんでした。");
     }
@@ -816,7 +1071,6 @@ async function executeTool(
     if (!action || action.type !== "set_weather") {
       throw new Error("天気を変更できません。");
     }
-    dependencies.setWeather(action.weather);
     return { weather: action.weather };
   }
 
@@ -831,7 +1085,6 @@ async function executeTool(
     if (!action || action.type !== "set_layer_visibility") {
       throw new Error("表示レイヤーを変更できません。");
     }
-    dependencies.setLayerVisibility(action.layer, action.visible);
     return { layer: action.layer, visible: action.visible };
   }
 
@@ -1206,7 +1459,7 @@ function directRouteResponseText(
 
 async function journeyConstraintFollowUpResponse(
   prompt: string,
-  dependencies: BedrockViewerAgentDependencies,
+  dependencies: ViewerAgentRuntimeDependencies,
 ): Promise<ViewerAgentResponse | undefined> {
   const plan = dependencies.getPreviousJourneyPlan?.();
   const exclusionIntent = journeyChatFollowUpIntent(prompt, plan);
@@ -1373,22 +1626,14 @@ function formatCalendarDate(value: string): string {
   return month && day ? `${Number(month)}月${Number(day)}日` : value;
 }
 
-function currentTrains(dependencies: BedrockViewerAgentDependencies): Train[] {
+function currentTrains(dependencies: ViewerAgentRuntimeDependencies): Train[] {
   return dependencies.getTrains?.() ?? dependencies.trains;
 }
 
-function currentDate(dependencies: BedrockViewerAgentDependencies): Date {
+function currentDate(dependencies: ViewerAgentRuntimeDependencies): Date {
   return dependencies.getCurrentDate?.() ?? new Date();
 }
 
-function isToolUseBlock(
-  block: BedrockAgentContentBlock,
-): block is Extract<BedrockAgentContentBlock, { toolUse: unknown }> {
-  return "toolUse" in block;
-}
-
-function isTextBlock(
-  block: BedrockAgentContentBlock,
-): block is Extract<BedrockAgentContentBlock, { text: string }> {
-  return "text" in block;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
