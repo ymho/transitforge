@@ -16,6 +16,7 @@ from congestion_analysis import (
 from delay_analysis import query_train_delay_analysis
 from operation_dispatcher import OperationConfig, dispatch, handles
 from conversation_feedback import store_feedback
+from agent_trace_storage import store_agent_trace
 from request_contract import (
     RequestError,
     request_messages,
@@ -38,6 +39,7 @@ TRAFFIC_SNAPSHOT_KEY = os.environ.get(
 )
 TRAVEL_PROVIDER_SECRET_ARN = os.environ.get("TRAVEL_PROVIDER_SECRET_ARN", "")
 CONVERSATION_FEEDBACK_BUCKET = os.environ.get("CONVERSATION_FEEDBACK_BUCKET", "")
+AGENT_TRACE_BUCKET = os.environ.get("AGENT_TRACE_BUCKET", "")
 OPERATION_CONFIG = OperationConfig(
     summary_table=SUMMARY_TABLE,
     delay_summary_table=DELAY_SUMMARY_TABLE,
@@ -124,6 +126,37 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             import boto3
             result = store_feedback(value, CONVERSATION_FEEDBACK_BUCKET, boto3.client("s3"))
             log_event("conversation_feedback_stored", request_id, rating=value.get("rating"), feedbackId=result["feedbackId"])
+            return response(200, result, request_id)
+        if operation == "agent_trace":
+            import boto3
+            try:
+                result = store_agent_trace(
+                    value,
+                    AGENT_TRACE_BUCKET,
+                    boto3.client("s3"),
+                )
+            except RequestError:
+                raise
+            except Exception:
+                log_event(
+                    "agent_trace_store_failed",
+                    request_id,
+                    durationMs=round((time.perf_counter() - started) * 1000),
+                )
+                return response(
+                    503,
+                    {"message": "Agent Traceを保存できませんでした。"},
+                    request_id,
+                )
+            log_event(
+                "agent_trace_stored",
+                request_id,
+                traceId=result["traceId"],
+                taskId=value.get("taskId"),
+                eventCount=result["eventCount"],
+                relatedRequestCount=len(value.get("requestIds", [])),
+                durationMs=round((time.perf_counter() - started) * 1000),
+            )
             return response(200, result, request_id)
         if handles(value):
             import boto3

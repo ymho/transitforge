@@ -7,11 +7,88 @@ import {
   queryTrainDelayAnalysis,
   searchRepresentativeTimetable,
   searchTravelCandidates,
+  submitAgentTrace,
   sha256Hex,
   type BedrockAgentResponse,
 } from "./bedrock-agent";
 
 describe("Bedrock agent client", () => {
+  it("submits a bounded Agent Trace and keeps the storage request ID", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(
+      JSON.stringify({ traceId: "trace-1", eventCount: 1 }),
+      {
+        status: 200,
+        headers: { "x-transitforge-request-id": "storage-request-1" },
+      },
+    ));
+    const result = await submitAgentTrace({
+      taskId: "task-1",
+      requestIds: ["model-request-1"],
+      trace: {
+        executionId: "execution-1",
+        droppedEventCount: 0,
+        events: [{
+          type: "task_started",
+          sequence: 1,
+          occurredAt: "2026-08-25T09:00:00.000Z",
+          userRequest: "京都から出雲市へ行きたい",
+        }],
+      },
+    }, fetcher);
+
+    expect(result).toEqual({
+      body: { traceId: "trace-1", eventCount: 1 },
+      metadata: { requestId: "storage-request-1" },
+    });
+    const [, init] = fetcher.mock.calls[0] ?? [];
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      operation: "agent_trace",
+      taskId: "task-1",
+      requestIds: ["model-request-1"],
+      trace: { executionId: "execution-1" },
+    });
+    expect(new Headers(init?.headers).get("X-Amz-Content-Sha256"))
+      .toBe(await sha256Hex(String(init?.body)));
+  });
+
+  it("rejects an invalid Agent Trace storage response", async () => {
+    await expect(submitAgentTrace({
+      taskId: "task-1",
+      requestIds: [],
+      trace: { executionId: "execution-1", events: [], droppedEventCount: 0 },
+    }, async () => new Response(JSON.stringify({ traceId: 1 }), { status: 200 })))
+      .rejects.toThrow("不正な応答");
+  });
+
+  it("bounds stored Trace events and carries the omitted count", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(
+      JSON.stringify({ traceId: "trace-1", eventCount: 100 }),
+      { status: 200 },
+    ));
+    const event = {
+      type: "task_started" as const,
+      occurredAt: "2026-08-25T09:00:00.000Z",
+      userRequest: "検索して",
+    };
+    await submitAgentTrace({
+      taskId: "task-1",
+      requestIds: [],
+      trace: {
+        executionId: "execution-1",
+        droppedEventCount: 2,
+        events: Array.from({ length: 105 }, (_, index) => ({
+          ...event,
+          sequence: index + 1,
+        })),
+      },
+    }, fetcher);
+
+    const [, init] = fetcher.mock.calls[0] ?? [];
+    const submitted = JSON.parse(String(init?.body));
+    expect(submitted.trace.events).toHaveLength(100);
+    expect(submitted.trace.droppedEventCount).toBe(7);
+  });
+
   it("returns the request ID with its agent response", async () => {
     const result = await invokeBedrockAgent([{ role: "user", content: [{ text: "京都に行きたい" }] }], async () => new Response(
       JSON.stringify({ message: { role: "assistant", content: [{ text: "案内します" }] }, stopReason: "end_turn" }),
