@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 
-MODULE_PATH = Path(__file__).parents[1] / "tools" / "measure_viewer_input.py"
+MODULE_PATH = Path(__file__).parents[2] / "tools" / "measure_viewer_input.py"
 SPEC = importlib.util.spec_from_file_location("measure_viewer_input", MODULE_PATH)
 measure_viewer_input = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None

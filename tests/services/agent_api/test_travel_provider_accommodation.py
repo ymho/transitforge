@@ -1,4 +1,4 @@
-from tests.agent_api_test_support import *
+from tests.services.agent_api.support import *
 
 from travel_provider_accommodation import search_accommodations
 from travel_provider_credentials import TravelProviderCredentials
