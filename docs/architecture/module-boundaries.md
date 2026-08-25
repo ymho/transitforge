@@ -46,6 +46,7 @@ Infrastructureの確認と障害調査は`infra/README.md`を正本とする
 
 外側から内側へ依存する。Domainは最も内側に置き 外部サービスの都合を持ち込まない
 Agentは推論とToolのオーケストレーションを担当し 鉄道の計算はDomain Serviceへ委譲する
+TypeScriptとPythonをまたぐ正本と重複のルールは[Domainの所有権](domain-ownership.md)を参照する
 
 ## 契約の所有者
 
