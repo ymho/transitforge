@@ -11,9 +11,9 @@ from typing import Any
 
 
 ROOT = Path(__file__).parents[1]
-BEDROCK_AGENT = ROOT / "infra" / "lambda" / "bedrock_agent"
+AGENT_API = ROOT / "services" / "agent-api"
 SCENARIO_FILE = ROOT / "tests" / "fixtures" / "journey-search-scenarios.json"
-sys.path.insert(0, str(BEDROCK_AGENT))
+sys.path.insert(0, str(AGENT_API))
 
 import journey_search  # noqa: E402
 

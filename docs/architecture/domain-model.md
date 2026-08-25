@@ -126,8 +126,8 @@ Agentへ返す候補は最大3件 直列化後64KiBまでに制限する。予�
 ### 運行分析Tool
 
 - Adapter: `src/application/agent/operational-analysis-tools.ts`
-- 既存集計: `infra/lambda/bedrock_agent/delay_analysis.py`
-  `infra/lambda/bedrock_agent/congestion_analysis.py`
+- 既存集計: `services/agent-api/delay_analysis.py`
+  `services/agent-api/congestion_analysis.py`
 - 列車メタデータ結合: `src/domain/delay-analysis.ts`
   `src/domain/congestion-analysis.ts`
 
@@ -396,7 +396,7 @@ AIの自由文をUIの状態遷移に使わない。
 
 ### `conversation-feedback-v1`
 
-- 定義: `infra/lambda/bedrock_agent/conversation_feedback.py`
+- 定義: `services/agent-api/conversation_feedback.py`
 - 保存先: private S3 `conversation-feedback/YYYY/MM/DD/<feedbackId>.json`
 - 内容: 評価 `rating` 会話 `conversation` APIリクエストID `requestIds`
 
@@ -408,7 +408,7 @@ AIの自由文をUIの状態遷移に使わない。
 ### `agent-trace-submission-v1`
 
 - TypeScript定義: `src/application/agent/agent-trace.ts`
-- Server検証: `infra/lambda/bedrock_agent/agent_trace_storage.py`
+- Server検証: `services/agent-api/agent_trace_storage.py`
 - 保存先: private S3 `agent-traces/YYYY/MM/DD/<taskId>/<traceId>.json`
 - 保持期間: 30日
 - 判断記録: [ADR 0025](../decisions/0025-store-bounded-agent-traces-privately.md)

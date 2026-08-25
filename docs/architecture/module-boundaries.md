@@ -30,6 +30,8 @@ infra/
 
 空のディレクトリを先に作らず 責務を抽出するPRで必要な配置を追加する
 AWSリソース名 API path viewer-input形式はフォルダ移動を理由に変更しない
+現在この公開repositoryが所有するBackend実装は`services/agent-api`である
+交通収集の正本はprivateなdata-builder側にあり 公開側へ複製しない
 
 ## 依存方向
 
