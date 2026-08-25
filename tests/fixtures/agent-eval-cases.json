@@ -1,0 +1,344 @@
+{
+  "schemaVersion": "agent-eval-dataset-v1",
+  "cases": [
+    {
+      "id": "direct-standard",
+      "name": "直通経路を検索する",
+      "feature": "journey_planning",
+      "userRequest": "AからDへ直通で行きたい",
+      "journeyScenarioId": "direct",
+      "tags": ["smoke", "journey", "direct"],
+      "expected": {
+        "toolSequence": ["search_journeys"],
+        "constraints": { "maxTransfers": 0 },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence"],
+        "requiredViewerActions": ["highlight_route"]
+      }
+    },
+    {
+      "id": "direct-compare",
+      "name": "直通候補を比較する",
+      "feature": "journey_planning",
+      "userRequest": "AからDへの直通候補を比較して",
+      "journeyScenarioId": "direct",
+      "tags": ["journey", "comparison"],
+      "expected": {
+        "toolSequence": ["search_journeys", "compare_journeys"],
+        "constraints": { "maxTransfers": 0 },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence", "compare_journeys"],
+        "requiredViewerActions": ["highlight_route", "show_evidence"]
+      }
+    },
+    {
+      "id": "one-transfer-standard",
+      "name": "標準の乗換時間で1回乗り換える",
+      "feature": "journey_planning",
+      "userRequest": "AからDへ普通の乗換ペースで行きたい",
+      "journeyScenarioId": "one-transfer",
+      "tags": ["smoke", "journey", "transfer"],
+      "expected": {
+        "toolSequence": ["search_journeys"],
+        "constraints": { "transferPace": "standard", "maxTransfers": 3 },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence"],
+        "requiredViewerActions": ["highlight_route"]
+      }
+    },
+    {
+      "id": "one-transfer-compare",
+      "name": "乗換経路を比較する",
+      "feature": "journey_planning",
+      "userRequest": "AからDへの乗換候補を比べて",
+      "journeyScenarioId": "one-transfer",
+      "tags": ["journey", "comparison", "transfer"],
+      "expected": {
+        "toolSequence": ["search_journeys", "compare_journeys"],
+        "constraints": { "maxTransfers": 3 },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence", "compare_journeys"],
+        "requiredViewerActions": ["compare_journeys"]
+      }
+    },
+    {
+      "id": "tight-transfer-rejected",
+      "name": "短すぎる乗換を採用しない",
+      "feature": "journey_planning",
+      "userRequest": "AからDへ無理のない乗換で行きたい",
+      "journeyScenarioId": "tight-transfer",
+      "tags": ["smoke", "journey", "constraint"],
+      "expected": {
+        "toolSequence": ["search_journeys"],
+        "constraints": { "transferPace": "standard" },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["show_evidence"],
+        "requiredViewerActions": []
+      }
+    },
+    {
+      "id": "relaxed-transfer-rejected",
+      "name": "ゆっくり設定の乗換時間を守る",
+      "feature": "journey_planning",
+      "userRequest": "AからDへゆっくり乗り換えて行きたい",
+      "journeyScenarioId": "relaxed-transfer",
+      "tags": ["journey", "constraint", "preference"],
+      "expected": {
+        "toolSequence": ["search_journeys"],
+        "constraints": { "transferPace": "relaxed" },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["show_evidence"],
+        "requiredViewerActions": []
+      }
+    },
+    {
+      "id": "latest-departure",
+      "name": "遅く出る経路を優先する",
+      "feature": "journey_planning",
+      "userRequest": "AからDへできるだけ遅く出たい",
+      "journeyScenarioId": "latest-departure",
+      "tags": ["smoke", "journey", "ranking"],
+      "expected": {
+        "toolSequence": ["search_journeys"],
+        "constraints": { "rankingPreference": "latest-departure" },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence"],
+        "requiredViewerActions": ["highlight_route"]
+      }
+    },
+    {
+      "id": "latest-departure-compare",
+      "name": "後発候補を比較する",
+      "feature": "journey_planning",
+      "userRequest": "AからDへ遅く出られる候補を比較して",
+      "journeyScenarioId": "latest-departure",
+      "tags": ["journey", "ranking", "comparison"],
+      "expected": {
+        "toolSequence": ["search_journeys", "compare_journeys"],
+        "constraints": { "rankingPreference": "latest-departure" },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence", "compare_journeys"],
+        "requiredViewerActions": ["show_evidence"]
+      }
+    },
+    {
+      "id": "fewest-transfers",
+      "name": "乗換回数が少ない経路を優先する",
+      "feature": "journey_planning",
+      "userRequest": "AからDへ乗換を少なくして",
+      "journeyScenarioId": "fewest-transfers",
+      "tags": ["smoke", "journey", "ranking"],
+      "expected": {
+        "toolSequence": ["search_journeys"],
+        "constraints": { "rankingPreference": "fewest-transfers" },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence"],
+        "requiredViewerActions": ["highlight_route"]
+      }
+    },
+    {
+      "id": "fewest-transfers-compare",
+      "name": "乗換回数で経路を比較する",
+      "feature": "journey_planning",
+      "userRequest": "AからDへの経路を乗換回数で比較して",
+      "journeyScenarioId": "fewest-transfers",
+      "tags": ["journey", "ranking", "comparison"],
+      "expected": {
+        "toolSequence": ["search_journeys", "compare_journeys"],
+        "constraints": { "rankingPreference": "fewest-transfers" },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence", "compare_journeys"],
+        "requiredViewerActions": ["compare_journeys"]
+      }
+    },
+    {
+      "id": "station-transfer-rule",
+      "name": "駅固有の乗換時間を守る",
+      "feature": "journey_planning",
+      "userRequest": "AからDへ駅の乗換時間を考慮して",
+      "journeyScenarioId": "station-transfer-rule",
+      "tags": ["smoke", "journey", "constraint"],
+      "expected": {
+        "toolSequence": ["search_journeys"],
+        "constraints": { "transferPace": "standard" },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence"],
+        "requiredViewerActions": ["highlight_route"]
+      }
+    },
+    {
+      "id": "station-transfer-compare",
+      "name": "駅固有の乗換時間を含めて比較する",
+      "feature": "journey_planning",
+      "userRequest": "AからDへの候補を駅の乗換時間込みで比較して",
+      "journeyScenarioId": "station-transfer-rule",
+      "tags": ["journey", "constraint", "comparison"],
+      "expected": {
+        "toolSequence": ["search_journeys", "compare_journeys"],
+        "constraints": { "transferPace": "standard" },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence", "compare_journeys"],
+        "requiredViewerActions": ["show_evidence"]
+      }
+    },
+    {
+      "id": "delayed-transfer",
+      "name": "当日遅延を反映して検索する",
+      "feature": "journey_planning",
+      "userRequest": "AからDへ今の遅延を考慮して行きたい",
+      "journeyScenarioId": "delayed-transfer",
+      "tags": ["smoke", "journey", "realtime"],
+      "expected": {
+        "toolSequence": ["search_journeys"],
+        "constraints": { "useRealtime": true },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence"],
+        "requiredViewerActions": ["show_evidence"]
+      }
+    },
+    {
+      "id": "delayed-transfer-compare",
+      "name": "遅延反映後の候補を比較する",
+      "feature": "journey_planning",
+      "userRequest": "AからDへ遅延込みで候補を比較して",
+      "journeyScenarioId": "delayed-transfer",
+      "tags": ["journey", "realtime", "comparison"],
+      "expected": {
+        "toolSequence": ["search_journeys", "compare_journeys"],
+        "constraints": { "useRealtime": true },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence", "compare_journeys"],
+        "requiredViewerActions": ["highlight_route", "show_evidence"]
+      }
+    },
+    {
+      "id": "two-transfers",
+      "name": "2回乗換の経路を検索する",
+      "feature": "journey_planning",
+      "userRequest": "AからDへ乗換2回までで行きたい",
+      "journeyScenarioId": "two-transfers",
+      "tags": ["smoke", "journey", "transfer"],
+      "expected": {
+        "toolSequence": ["search_journeys"],
+        "constraints": { "maxTransfers": 2 },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence"],
+        "requiredViewerActions": ["highlight_route"]
+      }
+    },
+    {
+      "id": "two-transfers-compare",
+      "name": "2回乗換を含む候補を比較する",
+      "feature": "journey_planning",
+      "userRequest": "AからDへ乗換2回までの候補を比較して",
+      "journeyScenarioId": "two-transfers",
+      "tags": ["journey", "transfer", "comparison"],
+      "expected": {
+        "toolSequence": ["search_journeys", "compare_journeys"],
+        "constraints": { "maxTransfers": 2 },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence", "compare_journeys"],
+        "requiredViewerActions": ["compare_journeys"]
+      }
+    },
+    {
+      "id": "after-midnight",
+      "name": "4時切替の深夜時刻を検索する",
+      "feature": "journey_planning",
+      "userRequest": "業務日付の深夜にAからDへ行きたい",
+      "journeyScenarioId": "after-midnight",
+      "tags": ["smoke", "journey", "operating-day"],
+      "expected": {
+        "toolSequence": ["search_journeys"],
+        "constraints": { "operatingDay": true },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence", "set_display_time"],
+        "requiredViewerActions": ["highlight_route"]
+      }
+    },
+    {
+      "id": "after-midnight-compare",
+      "name": "深夜の候補を業務日付内で比較する",
+      "feature": "journey_planning",
+      "userRequest": "業務日付の深夜にAからDへの候補を比較して",
+      "journeyScenarioId": "after-midnight",
+      "tags": ["journey", "operating-day", "comparison"],
+      "expected": {
+        "toolSequence": ["search_journeys", "compare_journeys"],
+        "constraints": { "operatingDay": true },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence", "compare_journeys", "set_display_time"],
+        "requiredViewerActions": ["show_evidence"]
+      }
+    },
+    {
+      "id": "local-only",
+      "name": "鈍行限定の制約を検索へ渡す",
+      "feature": "journey_planning",
+      "userRequest": "AからDへ鈍行だけで行きたい",
+      "journeyScenarioId": "one-transfer",
+      "tags": ["smoke", "journey", "constraint"],
+      "expected": {
+        "toolSequence": ["search_journeys"],
+        "constraints": { "allowedServiceTypes": ["普通"] },
+        "status": "completed",
+        "minimumGroundedClaimRate": 1,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": ["highlight_route", "show_evidence"],
+        "requiredViewerActions": ["highlight_route"]
+      }
+    },
+    {
+      "id": "missing-destination",
+      "name": "到着地不足を質問で補う",
+      "feature": "journey_planning",
+      "userRequest": "明日の朝に出発したい",
+      "tags": ["smoke", "follow-up"],
+      "expected": {
+        "toolSequence": [],
+        "constraints": {},
+        "status": "follow_up",
+        "minimumGroundedClaimRate": 0,
+        "maximumUnsupportedClaimRate": 0,
+        "allowedViewerActions": [],
+        "requiredViewerActions": []
+      }
+    }
+  ]
+}

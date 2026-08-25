@@ -223,6 +223,21 @@ ExecutorはDOMやMapboxを直接参照せず表示用Portだけを呼び出す�
 表示だけの効果に限定し 提案 適用 拒否をTraceへ記録する。従来`main.ts`にあった時刻Actionの
 解釈と実行もExecutorへ移し Viewer起動処理にはPortの接続だけを残す。
 
+### Agent Evaluation
+
+- 契約: `src/domain/agent/evaluation/evaluation-contract.ts`
+- 判定: `src/domain/agent/evaluation/agent-evaluator.ts`
+- dataset: `tests/fixtures/agent-eval-cases.json`
+- 判断記録: [ADR 0027](../decisions/0027-evaluate-agent-quality-with-objective-metrics.md)
+
+version付きdatasetとProvider非依存のobservationを入力し Tool選択 制約充足 Grounded Claim
+Unsupported Claim Task完了 Viewer Actionの6指標をコードで判定する。Runtime結果は
+Structured Trace Claim Viewer Actionからobservationへ正規化する。初期20ケースは既存の
+journey search scenario IDを参照し 鉄道fixtureを重複定義しない。
+
+reportは機械処理用JSONとレビュー用Markdownを同じ結果から生成する。
+datasetにないobservationや不足するobservationは失敗として扱い 評価対象の取り違えを隠さない。
+
 ### `JourneySearchPreferences`
 
 - 定義: `src/domain/journey-search-preferences.ts`

@@ -144,6 +144,23 @@ npx vitest run src/domain/agent/grounded-journey-agent.e2e.test.ts
 存在しないEvidence IDを参照する鉄道事実は失敗応答へ置き換え Viewerを操作しない。
 検索結果IDは同じ`executionId`からだけ解決でき 保持件数と実行件数に上限がある。
 
+## Agent Evaluation
+
+初期20ケースの再現可能なobservationを評価し JSONとMarkdown reportを生成する。
+
+```bash
+npm run eval:agent
+npm run eval:agent -- --output-dir /tmp/rai-agent-eval
+```
+
+既定出力先は`/tmp/transitforge-agent-eval`とする。reportは
+`agent-eval-report.json`と`agent-eval-report.md`の2ファイルで 失敗caseが1件でもあれば
+runnerは非0で終了する。
+
+datasetは入力 期待Tool順 正規化制約 完了状態 Grounding閾値 許可Viewer Actionを保持する。
+observation fixtureは評価器の再現確認用であり 実Agentの評価では
+`observeAgentRuntimeResult`でRuntime結果から生成したobservationを使う。
+
 ## データ境界
 
 - 現在地の緯度経度をLambda Bedrock ログへ送信しない
