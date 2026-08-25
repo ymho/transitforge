@@ -339,10 +339,14 @@ AI応答には取得できた`x-transitforge-request-id`も保存し 再読み�
 ### `ConversationSession` `TravelMemory`
 
 - 定義: `src/domain/conversation-session.ts`
-- 保存先: LocalStorage `transitforge.conversation-sessions.v2` `transitforge.travel-memories.v1`
+- Repository Port: `src/application/concierge/conversation-session-repository.ts`
+- Browser Adapter: `src/adapters/browser/conversation-session-repository.ts`
+- 保存先: LocalStorage `transitforge.conversation-sessions.v3` `transitforge.travel-memories.v1`
 
 `ConversationSession`はUUIDで相談を識別し 現在の対象を`general` `trip` `place` `route`のスコープで表す。
-短い要約 確認済みの話題 未確認の話題と 関連する`TripPlan.id`を持つ。直近20セッションを端末内に保持する。
+表示タイトル 短い要約 確認済みの話題 未確認の話題と 関連する`TripPlan.id`を持つ。
+Repositoryは作成 選択 改名 削除を提供し 最終更新が新しい20セッションを端末内に保持する。
+上限超過または明示削除時は同じUUIDの会話履歴と旅程も削除する。v2のUUIDと要約はv3へ一度だけ移行する。
 
 `TravelMemory`は会話から得た継続的な好みである。一回限りの`TripContext`と分離し 高確度の記憶だけを
 別セッションのAI文脈へ渡す。現在の明示的な依頼と`UserProfile`を上書きしない。
