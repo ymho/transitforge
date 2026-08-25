@@ -31,6 +31,12 @@ export interface ViewerElements {
   conciergeAvatar: HTMLImageElement;
   conciergeName: HTMLElement;
   conciergeRole: HTMLElement;
+  newConversation: HTMLButtonElement;
+  conversationHistoryToggle: HTMLButtonElement;
+  conversationHistoryDialog: HTMLDialogElement;
+  closeConversationHistory: HTMLButtonElement;
+  conversationHistoryList: HTMLOListElement;
+  conversationHistoryEmpty: HTMLParagraphElement;
   aiGuideSuggestions: HTMLButtonElement[];
   aiGuideContextChoices: HTMLElement;
   journeySettingsToggle: HTMLButtonElement;
@@ -84,6 +90,12 @@ export function loadViewerElements(root: ParentNode): ViewerElements {
     conciergeAvatar: required(root, "#concierge-avatar"),
     conciergeName: required(root, "#concierge-name"),
     conciergeRole: required(root, "#concierge-role"),
+    newConversation: required(root, "#new-conversation"),
+    conversationHistoryToggle: required(root, "#conversation-history-toggle"),
+    conversationHistoryDialog: required(root, "#conversation-history-dialog"),
+    closeConversationHistory: required(root, "#close-conversation-history"),
+    conversationHistoryList: required(root, "#conversation-history-list"),
+    conversationHistoryEmpty: required(root, "#conversation-history-empty"),
     aiGuideSuggestions: all(root, "[data-prompt]"),
     aiGuideContextChoices: required(root, "#ai-guide-context-choices"),
     journeySettingsToggle: required(root, "#journey-settings-toggle"),

@@ -64,6 +64,7 @@ export interface AiGuidePanelElements {
   rankingPreference: HTMLSelectElement;
   storage: Storage;
   submitFeedback: (feedback: ConversationFeedback) => Promise<void>;
+  onFirstPrompt?: (prompt: string) => void;
   onTravelPlan?: (plan: ViewerAgentTravelPlan) => void;
   onTripPlanUpdate?: (proposal: import("../../../domain/trip-plan").TripPlanUpdateProposal) => void;
 }
@@ -185,7 +186,9 @@ export function configureAiGuidePanel(
   const agentRequestIds = new Set<string>();
   let activeConversation: ConversationGuidance | undefined;
   let activeTripContext: TripContext | undefined;
-  for (const entry of loadConversationHistory(storage, elements.conversationSessionId)) {
+  const restoredHistory = loadConversationHistory(storage, elements.conversationSessionId);
+  let hasConversationHistory = restoredHistory.length > 0;
+  for (const entry of restoredHistory) {
     if (entry.role === "user") {
       appendMessage(messages, "user", entry.text);
     } else {
@@ -216,6 +219,10 @@ export function configureAiGuidePanel(
       return;
     }
 
+    if (!hasConversationHistory) {
+      elements.onFirstPrompt?.(prompt);
+      hasConversationHistory = true;
+    }
     appendMessage(messages, "user", prompt);
     appendConversationHistory(
       storage,
