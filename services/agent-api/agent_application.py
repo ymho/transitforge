@@ -38,16 +38,29 @@ def execute(
     operation = value.get("operation", "bedrock_converse")
     log_event("agent_request_started", request_id, operation=operation)
     if operation == "conversation_feedback":
-        result = store_feedback(
-            value,
-            config.conversation_feedback_bucket,
-            dependencies.s3_client(),
-        )
+        try:
+            result = store_feedback(
+                value,
+                config.conversation_feedback_bucket,
+                dependencies.s3_client(),
+            )
+        except RequestError:
+            raise
+        except Exception:
+            log_event(
+                "conversation_feedback_store_failed",
+                request_id,
+                durationMs=round((time.perf_counter() - started) * 1000),
+            )
+            return 503, {"message": "会話フィードバックを保存できませんでした。"}
         log_event(
             "conversation_feedback_stored",
             request_id,
             rating=value.get("rating"),
             feedbackId=result["feedbackId"],
+            messageCount=len(value.get("conversation", [])),
+            relatedRequestCount=len(value.get("requestIds", [])),
+            durationMs=round((time.perf_counter() - started) * 1000),
         )
         return 200, result
     if operation == "agent_trace":
