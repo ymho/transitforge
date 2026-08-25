@@ -23,6 +23,7 @@ import type {
   JourneySearchRequest,
   JourneySearchService,
 } from "../domain/journey-search-service";
+import type { AgentToolDescriptor } from "../domain/agent/tool-contract";
 
 export type * from "./bedrock-agent-contract";
 
@@ -51,8 +52,16 @@ export async function submitConversationFeedback(
 export async function invokeBedrockAgent(
   messages: BedrockAgentMessage[],
   fetcher: typeof fetch = fetch,
+  tools?: AgentToolDescriptor[],
 ): Promise<AgentApiResult<BedrockAgentResponse>> {
-  return postAgent({ messages }, "AI案内APIを利用できません", "AI案内", isBedrockAgentResponse, fetcher, true);
+  return postAgent(
+    { messages, ...(tools === undefined ? {} : { toolDefinitions: tools }) },
+    "AI案内APIを利用できません",
+    "AI案内",
+    isBedrockAgentResponse,
+    fetcher,
+    true,
+  );
 }
 
 export async function queryDailyCongestionPeak(serviceDate: string, fetcher: typeof fetch = fetch): Promise<DailyCongestionPeakResponse> {

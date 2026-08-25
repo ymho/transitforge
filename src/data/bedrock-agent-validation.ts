@@ -18,7 +18,19 @@ import type {
 
 export function isBedrockAgentResponse(value: unknown): value is BedrockAgentResponse {
   return isRecord(value) && ["end_turn", "tool_use", "max_tokens"].includes(String(value.stopReason)) &&
-    isMessage(value.message) && value.message.role === "assistant";
+    isMessage(value.message) && value.message.role === "assistant" &&
+    (value.metadata === undefined || isBedrockResponseMetadata(value.metadata));
+}
+
+function isBedrockResponseMetadata(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return (value.modelId === undefined || typeof value.modelId === "string") &&
+    (value.latencyMs === undefined || isNonNegativeNumber(value.latencyMs)) &&
+    (value.usage === undefined || (
+      isRecord(value.usage) &&
+      [value.usage.inputTokens, value.usage.outputTokens, value.usage.totalTokens]
+        .every((item) => item === undefined || isNonNegativeInteger(item))
+    ));
 }
 
 export function isAccommodationSearchResponse(value: unknown): value is AccommodationSearchResponse {

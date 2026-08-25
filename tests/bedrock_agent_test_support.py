@@ -45,6 +45,8 @@ class FakeBedrock:
                 }
             },
             "stopReason": "end_turn",
+            "usage": {"inputTokens": 12, "outputTokens": 4, "totalTokens": 16},
+            "metrics": {"latencyMs": 25},
         }
 
 

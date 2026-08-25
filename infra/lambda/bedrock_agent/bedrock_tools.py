@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from request_contract import ALLOWED_TOOL_NAMES
+from request_contract import LEGACY_TOOL_NAMES
 
 
 SYSTEM_PROMPT = """\
@@ -432,5 +432,5 @@ TOOLS = [
     },
 ]
 
-if {tool["toolSpec"]["name"] for tool in TOOLS} != ALLOWED_TOOL_NAMES:
+if {tool["toolSpec"]["name"] for tool in TOOLS} != LEGACY_TOOL_NAMES:
     raise RuntimeError("Bedrock tool definitions and request validation are out of sync")

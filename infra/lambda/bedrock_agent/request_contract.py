@@ -8,7 +8,8 @@ MAX_BODY_BYTES = 32 * 1024
 MAX_MESSAGES = 16
 MAX_CONTENT_BLOCKS = 12
 MAX_TEXT_CHARACTERS = 4_000
-ALLOWED_TOOL_NAMES = {
+MAX_TOOL_DEFINITIONS = 20
+LEGACY_TOOL_NAMES = {
     "set_display_time",
     "search_trains",
     "query_daily_congestion_analysis",
@@ -25,6 +26,16 @@ ALLOWED_TOOL_NAMES = {
     "set_weather",
     "set_layer_visibility",
 }
+COMMON_AGENT_TOOL_NAMES = {
+    "search_journeys",
+    "inspect_train",
+    "inspect_station",
+    "get_route_details",
+    "analyze_delay",
+    "analyze_congestion",
+    "compare_journeys",
+}
+ALLOWED_TOOL_NAMES = LEGACY_TOOL_NAMES | COMMON_AGENT_TOOL_NAMES
 
 
 class RequestError(ValueError):
@@ -84,6 +95,47 @@ def validated_messages(value: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(messages, list) or not messages or len(messages) > MAX_MESSAGES:
         raise RequestError(400, "messagesの件数が不正です。")
     return [_validated_message(message) for message in messages]
+
+
+def validated_tool_definitions(
+    value: dict[str, Any],
+) -> list[dict[str, Any]] | None:
+    definitions = value.get("toolDefinitions")
+    if definitions is None:
+        return None
+    if (
+        not isinstance(definitions, list)
+        or not definitions
+        or len(definitions) > MAX_TOOL_DEFINITIONS
+    ):
+        raise RequestError(400, "toolDefinitionsの件数が不正です。")
+    result: list[dict[str, Any]] = []
+    names: set[str] = set()
+    for definition in definitions:
+        if not isinstance(definition, dict):
+            raise RequestError(400, "toolDefinitionの形式が不正です。")
+        name = definition.get("name")
+        description = definition.get("description")
+        input_schema = definition.get("inputSchema")
+        if (
+            name not in ALLOWED_TOOL_NAMES
+            or name in names
+            or not isinstance(description, str)
+            or not 1 <= len(description) <= 500
+            or not isinstance(input_schema, dict)
+            or input_schema.get("type") != "object"
+            or not isinstance(input_schema.get("properties"), dict)
+        ):
+            raise RequestError(400, "toolDefinitionが許可されていません。")
+        names.add(name)
+        result.append({
+            "toolSpec": {
+                "name": name,
+                "description": description,
+                "inputSchema": {"json": input_schema},
+            }
+        })
+    return result
 
 
 def _validated_message(value: Any) -> dict[str, Any]:
