@@ -1,4 +1,4 @@
-import type { Train } from "../domain/rail/train";
+import type { Train } from "../../../domain/rail/train";
 
 export interface TrainTitle {
   badge: string;

@@ -47,18 +47,7 @@ const layerRules = {
   },
 };
 
-const migrationExceptions = [
-  {
-    source: "src/presentation/ai-guide-panel.ts",
-    kind: "layer:adapters",
-    issue: 159,
-  },
-  {
-    source: "src/presentation/train-selection-controller.ts",
-    kind: "layer:rendering",
-    issue: 159,
-  },
-];
+const migrationExceptions = [];
 
 const usedExceptions = new Set();
 const violations = [];

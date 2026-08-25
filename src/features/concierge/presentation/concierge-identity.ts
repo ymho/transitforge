@@ -1,4 +1,4 @@
-import type { ConciergeProfile } from "../features/concierge";
+import type { ConciergeProfile } from "..";
 
 export interface ConciergeIdentityElements {
   avatar: HTMLImageElement;
