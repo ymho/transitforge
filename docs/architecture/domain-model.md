@@ -133,6 +133,19 @@ operating day summaryをPythonで決定論的に集計した結果を利用す�
 sample countが0の場合は`observationStatus: unobserved`とし 未観測値を0で補完しない。
 ランキングは既存境界どおり上位5件に限定し Tool応答は直列化後48KiBを上限とする。
 
+### `compare_journeys`
+
+- 比較ロジック: `src/domain/journey-comparison-service.ts`
+- Agent Adapter: `src/domain/agent/compare-journeys-tool.ts`
+
+同一Agent実行内で`search_journeys`が検証した検索結果だけをIDで解決し 最大3候補を比較する。
+モデルから経路本体を入力させず 存在しない検索結果IDや候補番号を拒否するため 比較処理が新しい経路を
+推測または生成することはない。
+
+比較値は発着時刻 所要時間 乗換数 各列車へ適用した遅延 明示制約の充足状態とする。
+最早到着 最遅出発 最短時間 最少乗換 最少遅延などの理由は列挙値で返し 同じ入力では常に
+同じ候補と理由を返す。運賃 空席 景色や旅行の主観的魅力度は比較しない。
+
 ### `JourneySearchPreferences`
 
 - 定義: `src/domain/journey-search-preferences.ts`
