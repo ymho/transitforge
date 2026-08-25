@@ -189,6 +189,22 @@ RuntimeはProvider固有形式を扱わず 既定で反復4回 model call 5回 T
 機能単位の`AgentRuntimeRolloutRouter`を境界として既存loopと併存させる。
 新Runtimeを`src/main.ts`へ一括適用せず End-to-Endシナリオごとに切り替える。
 
+### Viewer Action Policy
+
+- Action契約: `src/domain/viewer-agent-action.ts`
+- task scopeとPolicy: `src/domain/viewer-action-policy.ts`
+- Executor: `src/domain/viewer-action-executor.ts`
+- 判断記録: [ADR 0024](../decisions/0024-restrict-viewer-actions-to-task-scope.md)
+
+Agentが提案できる操作を`focus_train` `highlight_route` `set_display_time`
+`compare_journeys` `show_evidence`などの列挙型へ限定する。列車 経路 Evidenceを対象にする
+操作は同じ`executionId`のTool結果からApplicationがtask scopeへ登録したEntityだけを許可する。
+時刻は生成済みダイヤの最大時刻以内とし 未知Action 余分なfield 別taskのEntityをPort実行前に拒否する。
+
+ExecutorはDOMやMapboxを直接参照せず表示用Portだけを呼び出す。操作は可逆な表示設定または
+表示だけの効果に限定し 提案 適用 拒否をTraceへ記録する。従来`main.ts`にあった時刻Actionの
+解釈と実行もExecutorへ移し Viewer起動処理にはPortの接続だけを残す。
+
 ### `JourneySearchPreferences`
 
 - 定義: `src/domain/journey-search-preferences.ts`

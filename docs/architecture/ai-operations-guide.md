@@ -117,9 +117,16 @@ python3 tools/run_journey_search_scenarios.py --list
 | `focus_train` | 列車を選択して追跡 |
 | `set_weather` | 天候を変更 |
 | `set_layer_visibility` | 混雑棒と行き先アーチを切り替え |
+| `highlight_route` | 同じタスクで検索した経路を強調表示 |
+| `compare_journeys` | 同じタスクで検索した2〜3経路を比較表示 |
+| `show_evidence` | 応答が参照するEvidenceを表示 |
 
-未知の操作 不足した引数 無効な時刻 未知のレイヤーを実行前に拒否する
-`focus_train`は同じ依頼内の検索結果に含まれる`serviceUid`だけを受け付ける
+未知の操作 余分な引数 無効な時刻 未知のレイヤーを実行前に拒否する。
+`ViewerActionTaskScope`はAgent実行IDごとに検証済みの列車 経路 Evidenceを保持し
+`focus_train` `highlight_route` `compare_journeys` `show_evidence`はscope内のEntityだけを受け付ける。
+別のAgent実行のscopeは利用できない。操作は時刻 天候 レイヤーの可逆な変更または
+フォーカス 強調 比較 Evidenceの表示だけに限定し 任意DOM JavaScript 外部書き込みを許可しない。
+提案 適用 拒否と拒否理由は同じ実行のStructured Agent Traceへ記録する。
 
 ## データ境界
 
