@@ -103,6 +103,20 @@
 Agentへ返す候補は最大3件 直列化後64KiBまでに制限する。予定時刻 遅延適用後の時刻
 遅延の観測または推定区分 制約結果はService応答を変更せず保持する。
 
+### `NetworkInspectionService`
+
+- ドメイン実装: `src/domain/network-inspection-service.ts`
+- Agent Adapter: `src/domain/agent/network-inspection-tools.ts`
+- 入力: `TrainIndex`と`StationLineCatalog`
+
+列車 駅 1列車内の経路詳細を読み取り専用で照会する。`inspect_train`はserviceUidが完全一致する
+列車の概要だけを返し 全停車駅は含めない。`inspect_station`は共通駅名正規化による完全一致だけを
+採用し 前方一致候補が複数ある入力を曖昧な駅として拒否する。LLMや外部APIによる駅名補正は行わない。
+
+`get_route_details`はserviceUidと任意の発着駅で検証した区間を返す。停車記録は1回20件まで
+ページングし 3つのToolはいずれも直列化後48KiBを上限とする。応答には取得できる場合だけ
+業務日付 代表ダイヤ区分 カタログの生成元を含める。
+
 ### `JourneySearchPreferences`
 
 - 定義: `src/domain/journey-search-preferences.ts`
