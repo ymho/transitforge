@@ -1,4 +1,18 @@
-# 経路検索シナリオ
+# Fixtureガイド
+
+このディレクトリには外部通信なしで再現できる小さな入力と期待結果だけを置く
+各JSONは手動でレビューする正本であり 外部サービスの応答をそのまま保存しない
+
+| ファイル | 所有する検証 | 更新後の確認 |
+| --- | --- | --- |
+| `journey-search-scenarios.json` | 経路探索と順位付け | `python3 tools/run_journey_search_scenarios.py` |
+| `agent-eval-cases.json` | AgentのDomain Benchmark | `npm run eval:agent:smoke`と`npm run eval:agent:full` |
+| `agent-eval-observations.json` | 評価ケースで再現するTool観測 | `npm run eval:agent:full` |
+| `agent-strategy-experiment.json` | Agent戦略の比較条件 | `npm run eval:agent:strategies` |
+
+評価レポートなどの派生物は`/tmp/transitforge-agent-eval`へ生成し Gitへ追加しない
+
+## 経路検索シナリオ
 
 `journey-search-scenarios.json`は外部データを使わない小さな時刻表と期待結果を持つ
 

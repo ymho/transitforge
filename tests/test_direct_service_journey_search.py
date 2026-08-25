@@ -1,4 +1,4 @@
-from tests.bedrock_agent_test_support import *
+from tests.agent_api_test_support import *
 
 class DirectServiceJourneySearchTest(unittest.TestCase):
 
@@ -362,4 +362,3 @@ class DirectServiceJourneySearchTest(unittest.TestCase):
             "api/traffic/delays.json",
             [item["Key"] for item in client.requests],
         )
-

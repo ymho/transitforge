@@ -1,4 +1,6 @@
-# TransitForge
+# Raiquora
+
+Agentic Transit Intelligence
 
 実時刻表をもとに列車の計画位置を3D地図へ表示する個人開発プロジェクト
 
@@ -61,6 +63,24 @@ viewer-input/delays.json
 
 入力形式は[ビューワー入力仕様](docs/data/viewer-input.md)を参照
 
+## リポジトリ構成
+
+```text
+src/domain/          鉄道とAgentの決定論的な契約と計算
+src/application/     ユースケースと外部境界のPort
+src/features/        画面機能ごとのUI 状態 表示変換
+src/adapters/        ブラウザ HTTP Mapbox Bedrockへの接続
+src/rendering/       Three.jsによる列車描画
+services/agent-api/  Agent APIのPythonアプリケーション
+infra/               パッケージ契約とTerraform
+tests/               Pythonサービスと境界を横断するテスト
+tools/               検証 評価 再生成コマンド
+```
+
+TypeScriptのテストは対象モジュールの隣へ置く。Pythonの配置とfixtureの更新方法は
+[テストガイド](tests/README.md)を参照する。AWSリソース名など互換性に関わる
+`transitforge`識別子は製品名とは分けて維持する
+
 ## 確認コマンド
 
 ```bash
@@ -68,6 +88,7 @@ npm run architecture:check
 npm test
 npm run build
 python3 -m unittest discover -s tests -v
+python3 tools/build_lambda_package.py --check-only
 npm run eval:agent
 npm run eval:agent:smoke
 npm run eval:agent:full

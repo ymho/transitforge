@@ -1,4 +1,4 @@
-# 0034 Viewer UIをFeature単位で配置する
+# ADR 0034: Viewer UIをFeature単位で配置する
 
 ## 状態
 
