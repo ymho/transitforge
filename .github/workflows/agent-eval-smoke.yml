@@ -1,0 +1,42 @@
+name: Agent Eval / Smoke
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-eval-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke-eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Run deterministic Smoke Eval
+        run: npm run eval:agent:smoke -- --output-dir .artifacts/agent-eval/smoke
+
+      - name: Upload Smoke Eval report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: agent-eval-smoke-${{ github.run_id }}
+          path: .artifacts/agent-eval/smoke/
+          if-no-files-found: error
+          retention-days: 14

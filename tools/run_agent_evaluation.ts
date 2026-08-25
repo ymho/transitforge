@@ -1,12 +1,13 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { evaluateAgentDataset } from "../src/domain/agent/evaluation/agent-evaluator";
 import {
   parseAgentEvaluationDataset,
   parseAgentEvaluationObservations,
 } from "../src/domain/agent/evaluation/evaluation-dataset";
-import { renderAgentEvaluationMarkdown } from "../src/domain/agent/evaluation/evaluation-report";
+import { renderAgentEvaluationRunMarkdown } from "../src/domain/agent/evaluation/evaluation-report";
+import { runAgentEvaluationProfile } from "../src/domain/agent/evaluation/evaluation-run";
+import type { AgentEvaluationProfile } from "../src/domain/agent/evaluation/evaluation-contract";
 
 const root = resolve(import.meta.dirname, "..");
 const outputDirectory = resolve(argument("--output-dir") ?? "/tmp/transitforge-agent-eval");
@@ -16,10 +17,11 @@ const datasetPath = resolve(
 const observationsPath = resolve(
   argument("--observations") ?? `${root}/tests/fixtures/agent-eval-observations.json`,
 );
+const profile = parseProfile(argument("--profile") ?? "full");
 
 const dataset = parseAgentEvaluationDataset(await readJson(datasetPath));
 const observations = parseAgentEvaluationObservations(await readJson(observationsPath));
-const report = evaluateAgentDataset(dataset, observations);
+const report = runAgentEvaluationProfile(dataset, observations, profile);
 await mkdir(outputDirectory, { recursive: true });
 await Promise.all([
   writeFile(
@@ -29,7 +31,7 @@ await Promise.all([
   ),
   writeFile(
     `${outputDirectory}/agent-eval-report.md`,
-    renderAgentEvaluationMarkdown(report),
+    renderAgentEvaluationRunMarkdown(report),
     "utf8",
   ),
 ]);
@@ -38,7 +40,7 @@ console.log(
   `Agent Eval: ${report.passedCaseCount}/${report.caseCount} passed ` +
   `(${outputDirectory})`,
 );
-if (report.passedCaseCount !== report.caseCount) process.exitCode = 1;
+if (!report.passed) process.exitCode = 1;
 
 function argument(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -47,4 +49,11 @@ function argument(name: string): string | undefined {
 
 async function readJson(path: string): Promise<unknown> {
   return JSON.parse(await readFile(path, "utf8"));
+}
+
+function parseProfile(value: string): AgentEvaluationProfile {
+  if (value !== "smoke" && value !== "full") {
+    throw new Error("--profileはsmokeまたはfullで指定してください");
+  }
+  return value;
 }

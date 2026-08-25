@@ -238,6 +238,10 @@ journey search scenario IDを参照し 鉄道fixtureを重複定義しない。
 reportは機械処理用JSONとレビュー用Markdownを同じ結果から生成する。
 datasetにないobservationや不足するobservationは失敗として扱い 評価対象の取り違えを隠さない。
 
+Evaluation profileは`smoke`と`full`を持つ。Smokeはtagで選んだ軽量集合 Fullは全datasetを使う。
+run reportは6指標の実測値 閾値 判定とcase結果を含み case失敗または閾値未達で失敗する。
+CI分離の判断は[ADR 0029](../decisions/0029-separate-smoke-and-full-agent-evaluation.md)を参照する。
+
 ### `JourneySearchPreferences`
 
 - 定義: `src/domain/journey-search-preferences.ts`

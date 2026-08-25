@@ -68,6 +68,8 @@ npm test
 npm run build
 python3 -m unittest discover -s tests -v
 npm run eval:agent
+npm run eval:agent:smoke
+npm run eval:agent:full
 ```
 
 経路検索のシナリオだけを読みやすい結果付きで確認する場合は次を実行する
