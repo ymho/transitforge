@@ -4,7 +4,7 @@ from datetime import date
 from typing import Any
 
 from request_contract import RequestError
-from travel_providers import TravelProviderSearch
+from domain.travel.models import TravelProviderSearch
 
 
 MAX_DESTINATION_LENGTH = 80

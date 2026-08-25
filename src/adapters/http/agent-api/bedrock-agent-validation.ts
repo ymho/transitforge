@@ -13,8 +13,11 @@ import type {
   TrainDelayAnalysisResponse,
   TrainDelaySnapshotAnalysis,
   TrainDelayStat,
-  TravelCandidateSearchResponse,
 } from "./bedrock-agent-contract";
+import {
+  journeySearchContractVersion,
+  type JourneySearchWireResponse,
+} from "./journey-search-contract";
 
 export function isBedrockAgentResponse(value: unknown): value is BedrockAgentResponse {
   return isRecord(value) && ["end_turn", "tool_use", "max_tokens"].includes(String(value.stopReason)) &&
@@ -84,8 +87,9 @@ export function isRepresentativeTimetableSearchResponse(value: unknown): value i
         typeof stop.event === "string" && isNonNegativeNumber(stop.routeTimeMinutes)));
 }
 
-export function isTravelCandidateSearchResponse(value: unknown): value is TravelCandidateSearchResponse {
-  return isRecord(value) && typeof value.serviceDate === "string" &&
+export function isTravelCandidateSearchResponse(value: unknown): value is JourneySearchWireResponse {
+  return isRecord(value) && value.contractVersion === journeySearchContractVersion &&
+    typeof value.serviceDate === "string" &&
     typeof value.originStation === "string" && typeof value.destinationStation === "string" &&
     isNonNegativeNumber(value.searchTimeMinutes) && isNonNegativeInteger(value.totalMatchCount) &&
     (value.transferPace === undefined || ["hurried", "standard", "relaxed"].includes(String(value.transferPace))) &&

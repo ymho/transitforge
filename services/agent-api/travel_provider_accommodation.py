@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from travel_provider_credentials import TravelProviderCredentials
-from travel_providers import AccommodationOffering, TravelProviderSearch
+from domain.travel.models import AccommodationOffering, TravelProviderSearch
 
 
 class HttpResponse(Protocol):

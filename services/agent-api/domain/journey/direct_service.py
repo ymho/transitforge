@@ -6,15 +6,15 @@ import unicodedata
 from decimal import Decimal
 from typing import Any
 
-from journey_delay_prediction import estimate_trip_delays
-from journey_operations import delay_info, effective_calls, operation_for
-from journey_constraints import (
+from domain.journey.delay_prediction import estimate_trip_delays
+from domain.journey.operations import delay_info, effective_calls, operation_for
+from domain.journey.constraints import (
     eligible_service_ids,
     journey_satisfies_requirements,
     response_constraints,
     trace_constraints,
 )
-from request_contract import RequestError
+from domain.journey.errors import JourneyDataError
 
 
 DEFAULT_TRANSFER_MINUTES = 5.0
@@ -34,11 +34,11 @@ def search_index(
     realtime_route_time: float | None = None,
 ) -> dict[str, Any]:
     if index.get("schema_version") != "direct-service-index-v1":
-        raise RequestError(503, "指定日の直通インデックス形式が不正です。")
+        raise JourneyDataError("指定日の直通インデックス形式が不正です。")
     raw_services = index.get("services")
     station_origins = index.get("station_origins")
     if not isinstance(raw_services, dict) or not isinstance(station_origins, dict):
-        raise RequestError(503, "指定日の直通インデックス形式が不正です。")
+        raise JourneyDataError("指定日の直通インデックス形式が不正です。")
     eligible_ids = eligible_service_ids(raw_services, request)
     services = {
         service_id: service

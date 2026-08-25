@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Sequence
 
-from travel_providers import AccommodationOffering, ExperienceOffering
+from domain.travel.models import AccommodationOffering, ExperienceOffering
 
 
 @dataclass(frozen=True)

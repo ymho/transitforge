@@ -7,16 +7,16 @@ from collections import defaultdict
 from decimal import Decimal
 from typing import Any
 
-from journey_delay_prediction import estimate_trip_delays
-from journey_operations import delay_info, operation_for, service_destination
-from journey_constraints import (
+from domain.journey.delay_prediction import estimate_trip_delays
+from domain.journey.operations import delay_info, operation_for, service_destination
+from domain.journey.constraints import (
     eligible_service_ids,
     required_requirement_mask,
     response_constraints,
     service_requirement_mask,
     trace_constraints,
 )
-from request_contract import RequestError
+from domain.journey.errors import JourneyDataError
 
 
 MAX_LABELS_PER_STATION_AND_BOARDING = 8
@@ -45,11 +45,11 @@ def search_index(
     realtime_route_time: float | None = None,
 ) -> dict[str, Any]:
     if index.get("schema_version") != "timetable-connection-index-v1":
-        raise RequestError(503, "指定日の接続インデックス形式が不正です。")
+        raise JourneyDataError("指定日の接続インデックス形式が不正です。")
     trips = index.get("trips")
     raw_connections = index.get("connections")
     if not isinstance(trips, dict) or not isinstance(raw_connections, list):
-        raise RequestError(503, "指定日の接続インデックス形式が不正です。")
+        raise JourneyDataError("指定日の接続インデックス形式が不正です。")
 
     origin = _normalize_station(request["originStation"])
     destination = _normalize_station(request["destinationStation"])
@@ -360,10 +360,10 @@ def _expected_connection(
     trip_delay_info: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     if not isinstance(value, dict):
-        raise RequestError(503, "接続インデックス内の接続形式が不正です。")
+        raise JourneyDataError("接続インデックス内の接続形式が不正です。")
     trip_id = str(value.get("trip_id") or "")
     if not isinstance(trips.get(trip_id), dict):
-        raise RequestError(503, "接続インデックス内の列車参照が不正です。")
+        raise JourneyDataError("接続インデックス内の列車参照が不正です。")
     departure = _required_number(value.get("departure_time_minutes"))
     arrival = _required_number(value.get("arrival_time_minutes"))
     delay = trip_delays.get(trip_id, 0.0)
@@ -672,7 +672,7 @@ def _normalize_station(value: Any) -> str:
 def _required_number(value: Any) -> float:
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return float(value)
-    raise RequestError(503, "接続インデックス内の時刻形式が不正です。")
+    raise JourneyDataError("接続インデックス内の時刻形式が不正です。")
 
 
 def _non_negative_number(value: Any, fallback: float) -> float:

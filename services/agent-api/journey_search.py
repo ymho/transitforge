@@ -6,8 +6,9 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-import connection_scan_journey_search
-import direct_service_journey_search
+from domain.journey import connection_scan as connection_scan_journey_search
+from domain.journey import direct_service as direct_service_journey_search
+from domain.journey.errors import JourneyDataError
 from dynamodb_analysis import validate_service_date
 from request_contract import RequestError
 
@@ -53,13 +54,16 @@ def search(
             "direct-service-index.json.gz",
             "direct-service-index-v1",
         )
-        result = direct_service_journey_search.search_index(
-            index,
-            delays,
-            request,
-            operations=operations if realtime["applied"] else None,
-            realtime_route_time=realtime.get("snapshotRouteTimeMinutes"),
-        )
+        try:
+            result = direct_service_journey_search.search_index(
+                index,
+                delays,
+                request,
+                operations=operations if realtime["applied"] else None,
+                realtime_route_time=realtime.get("snapshotRouteTimeMinutes"),
+            )
+        except JourneyDataError as error:
+            raise RequestError(503, str(error)) from error
     else:
         index = _load_index(
             s3_client,
@@ -103,13 +107,16 @@ def search_index(
         "rankingPreference": "balanced",
         **request,
     }
-    return connection_scan_journey_search.search_index(
-        index,
-        delays,
-        enriched_request,
-        operations=operations,
-        realtime_route_time=realtime_route_time,
-    )
+    try:
+        return connection_scan_journey_search.search_index(
+            index,
+            delays,
+            enriched_request,
+            operations=operations,
+            realtime_route_time=realtime_route_time,
+        )
+    except JourneyDataError as error:
+        raise RequestError(503, str(error)) from error
 
 
 def _validated_request(value: dict[str, Any]) -> dict[str, Any]:

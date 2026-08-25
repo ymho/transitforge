@@ -2,7 +2,7 @@ from tests.services.agent_api.support import *
 
 from travel_provider_accommodation import search_accommodations
 from travel_provider_credentials import TravelProviderCredentials
-from travel_providers import TravelProviderSearch
+from domain.travel.models import TravelProviderSearch
 
 
 class FakeResponse:

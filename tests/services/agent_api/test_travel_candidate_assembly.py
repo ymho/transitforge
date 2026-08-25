@@ -1,7 +1,7 @@
 from tests.services.agent_api.support import *
 
-import travel_candidate_assembly
-import travel_providers
+from domain.travel import candidate_assembly as travel_candidate_assembly
+from domain.travel import models as travel_providers
 
 
 class TravelCandidateAssemblyTest(unittest.TestCase):

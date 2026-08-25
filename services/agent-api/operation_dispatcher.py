@@ -5,6 +5,7 @@ from typing import Any, Callable
 import time
 
 import journey_search
+import journey_search_contract
 import representative_timetable
 import travel_provider_accommodation
 import travel_provider_credentials
@@ -67,15 +68,16 @@ def dispatch(
         except representative_timetable.TimetableSearchError as error:
             raise RequestError(400, str(error)) from error
     if operation == "journey_search":
+        journey_search_contract.validate_request(value)
         try:
-            return journey_search.search(
+            return journey_search_contract.response(journey_search.search(
                 s3_client(),
                 bucket=config.timetable_bucket,
                 prefix=config.planning_timetable_prefix,
                 snapshot_bucket=config.traffic_snapshot_bucket,
                 snapshot_key=config.traffic_snapshot_key,
                 value=value,
-            )
+            ))
         except RequestError:
             raise
         except Exception as error:
