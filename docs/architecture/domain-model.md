@@ -242,6 +242,22 @@ Evaluation profileは`smoke`と`full`を持つ。Smokeはtagで選んだ軽量�
 run reportは6指標の実測値 閾値 判定とcase結果を含み case失敗または閾値未達で失敗する。
 CI分離の判断は[ADR 0029](../decisions/0029-separate-smoke-and-full-agent-evaluation.md)を参照する。
 
+### Read-only MCP Adapter
+
+- 共通Registry: `src/domain/agent/readonly-transit-tool-registry.ts`
+- Protocol Adapter: `src/infrastructure/mcp/readonly-transit-mcp.ts`
+- stdio transport: `src/infrastructure/mcp/stdio.ts`
+- 判断記録: [ADR 0030](../decisions/0030-expose-read-only-domain-tools-through-mcp.md)
+
+MCPはDomain Serviceを外部Agentへ公開するProtocol Adapterであり 鉄道ロジックを持たない。
+内部Agentと同じTool Registryから`search_journeys` `inspect_train` `inspect_station`
+`analyze_delay` `analyze_congestion`だけを公開する。Tool Contractの入力SchemaをMCP用Schemaへ
+変換した後も 各Toolの`parseInput`を正本として検証する。
+
+Viewer Action `get_route_details` 書き込み操作は公開しない。stdio serverは具体的な
+Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。remote transport 認証
+公開デプロイはこのAdapterの責務に含めない。
+
 ### `JourneySearchPreferences`
 
 - 定義: `src/domain/journey-search-preferences.ts`
