@@ -36,7 +36,11 @@ remote transportとデプロイはこの判断へ含めず Composition Rootで�
 - 内部AgentとMCPで鉄道ロジックと入力検証を重複実装しない
 - Viewer Action 経路詳細 外部書き込みはMCPへ公開されない
 - Tool追加時にallowlistとProtocol testの明示更新が必要になる
-- MCP SDKとZodへの依存はInfrastructure Adapter内へ閉じる
+- MCP SDKとZodへの依存はProtocol Adapter内へ閉じる
+
+MCPは独立デプロイされるBackend Serviceではなく Application Tool Registryを外部protocolへ
+変換する境界であるため`src/adapters/mcp`へ置く。AWS構成とpackagingを所有するルート`infra`と
+同じInfrastructureという名前は使わない
 
 ## 検証
 

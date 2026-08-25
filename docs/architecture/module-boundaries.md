@@ -15,7 +15,6 @@ src/
   adapters/        Browser HTTP Bedrock Mapbox Storageの実装
   presentation/    状態を所有しないViewと小さなUI部品
   rendering/       Mapbox Three.jsによる描画
-  infrastructure/  MCPなどprocess境界の入口
   observability/   実行時の計測
   main.ts           起動と依存注入だけを行うComposition Root
 
@@ -44,7 +43,6 @@ Infrastructureの確認と障害調査は`infra/README.md`を正本とする
 | Adapters | Domain Application 外部SDK | PresentationとFeature状態 |
 | Presentation | Domainの表示用値とUI部品 | 通信 Storage Infrastructure |
 | Rendering | Domainの描画用値と描画SDK | Conciergeや旅程のFeature状態 |
-| Infrastructure | ApplicationとDomainの公開契約 | PresentationとRendering |
 
 外側から内側へ依存する。Domainは最も内側に置き 外部サービスの都合を持ち込まない
 Agentは推論とToolのオーケストレーションを担当し 鉄道の計算はDomain Serviceへ委譲する
