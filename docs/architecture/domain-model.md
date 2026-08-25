@@ -117,6 +117,22 @@ Agentへ返す候補は最大3件 直列化後64KiBまでに制限する。予�
 ページングし 3つのToolはいずれも直列化後48KiBを上限とする。応答には取得できる場合だけ
 業務日付 代表ダイヤ区分 カタログの生成元を含める。
 
+### 運行分析Tool
+
+- Adapter: `src/domain/agent/operational-analysis-tools.ts`
+- 既存集計: `infra/lambda/bedrock_agent/delay_analysis.py`
+  `infra/lambda/bedrock_agent/congestion_analysis.py`
+- 列車メタデータ結合: `src/domain/delay-analysis.ts`
+  `src/domain/congestion-analysis.ts`
+
+`analyze_delay`と`analyze_congestion`は4時切替の業務日付を受け取り DynamoDBの
+operating day summaryをPythonで決定論的に集計した結果を利用する。Adapterで集計式を
+再実装せず 時刻表との結合 入力検証 出力制限だけを担当する。
+
+応答には観測期間 sample countと`operating-day-summary`のsource metadataを付ける。
+sample countが0の場合は`observationStatus: unobserved`とし 未観測値を0で補完しない。
+ランキングは既存境界どおり上位5件に限定し Tool応答は直列化後48KiBを上限とする。
+
 ### `JourneySearchPreferences`
 
 - 定義: `src/domain/journey-search-preferences.ts`
