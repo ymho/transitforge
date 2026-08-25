@@ -90,6 +90,19 @@
 検索条件と候補を1つにまとめる応答である。日付 `departureDate`と業務日付 `serviceDate`は別の値として
 保持する。除外 必須 種別限定の条件は検索後の表示処理ではなく検索契約として保持する。
 
+### `JourneySearchService` `search_journeys`
+
+- ドメイン契約: `src/domain/journey-search-service.ts`
+- Agent Adapter: `src/domain/agent/search-journeys-tool.ts`
+- 現在の実装: `/api/agent`の`journey_search`を呼ぶHTTP client
+
+`JourneySearchService`はCSAや直通インデックスの実行場所を利用側から隠し 日付 乗換上限
+乗換ペース 順位条件 列車の除外と必須条件を構造化して渡す。`search_journeys`はこのServiceを
+呼ぶ薄いAdapterであり 経路や順位をLLMで再計算しない。
+
+Agentへ返す候補は最大3件 直列化後64KiBまでに制限する。予定時刻 遅延適用後の時刻
+遅延の観測または推定区分 制約結果はService応答を変更せず保持する。
+
 ### `JourneySearchPreferences`
 
 - 定義: `src/domain/journey-search-preferences.ts`

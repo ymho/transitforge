@@ -20,9 +20,9 @@ import {
   isTravelCandidateSearchResponse,
 } from "./bedrock-agent-validation";
 import type {
-  JourneyRankingPreference,
-  TransferPace,
-} from "../domain/journey-search-preferences";
+  JourneySearchRequest,
+  JourneySearchService,
+} from "../domain/journey-search-service";
 
 export type * from "./bedrock-agent-contract";
 
@@ -101,24 +101,7 @@ export async function searchRepresentativeTimetable(
 }
 
 export async function searchTravelCandidates(
-  request: {
-    serviceDate: string;
-    originStation: string;
-    destinationStation: string;
-    departureTimeMinutes: number;
-    limit?: number;
-    maxTransfers?: 0 | 1 | 2 | 3;
-    transferPace?: TransferPace;
-    rankingPreference?: JourneyRankingPreference;
-    excludedServiceTypes?: string[];
-    excludedTrainNames?: string[];
-    excludedTrainNumbers?: string[];
-    excludedServiceUids?: string[];
-    requiredServiceTypes?: string[];
-    requiredTrainNames?: string[];
-    requiredTrainNumbers?: string[];
-    allowedServiceTypes?: string[];
-  },
+  request: JourneySearchRequest,
   fetcher: typeof fetch = fetch,
 ): Promise<TravelCandidateSearchResponse> {
   return postAgentBody(
@@ -130,6 +113,10 @@ export async function searchTravelCandidates(
     true,
   );
 }
+
+export const journeySearchService: JourneySearchService = {
+  search: (request) => searchTravelCandidates(request),
+};
 
 async function postAgent<T>(
   request: unknown,

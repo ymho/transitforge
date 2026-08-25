@@ -28,7 +28,7 @@ import {
   queryTrainDelayAnalysis,
   searchAccommodations,
   searchRepresentativeTimetable,
-  searchTravelCandidates,
+  journeySearchService,
 } from "./data/bedrock-agent";
 import { loadTrainIndex, type Train } from "./data/train-index";
 import type { StationCoordinate } from "./data/station-line-catalog";
@@ -909,7 +909,7 @@ if (!token) {
         };
         const backendSearchRoutes: DirectRouteSearchHandler = async (request) => {
           const { originStation, distanceMeters } = await resolveDirectRouteOrigin(request);
-          const response = await searchTravelCandidates({
+          const response = await journeySearchService.search({
             serviceDate:
               request.serviceDate ?? formatServiceDate(displayedServiceDateStart),
             originStation,
@@ -1028,7 +1028,7 @@ if (!token) {
           if (!startLeg || !endLeg) {
             return [];
           }
-          const response = await searchTravelCandidates({
+          const response = await journeySearchService.search({
             serviceDate: plan.serviceDate ?? formatServiceDate(displayedServiceDateStart),
             originStation: startLeg.originStation,
             destinationStation: endLeg.destinationStation,
