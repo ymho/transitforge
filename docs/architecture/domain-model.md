@@ -146,6 +146,19 @@ sample countが0の場合は`observationStatus: unobserved`とし 未観測値�
 最早到着 最遅出発 最短時間 最少乗換 最少遅延などの理由は列挙値で返し 同じ入力では常に
 同じ候補と理由を返す。運賃 空席 景色や旅行の主観的魅力度は比較しない。
 
+### EvidenceとGrounded Claim
+
+- モデル: `src/domain/agent/evidence-model.ts`
+- Tool結果変換: `src/domain/agent/tool-result-evidence.ts`
+
+Evidenceは`deterministic_fact` `derived_value` `model_interpretation`
+`unverified_information`を区別する。情報源は`sourceType` `sourceRef` `retrievedAt`
+`freshness` `summary`を持ち 時刻表 経路 列車 駅 遅延 混雑 比較結果から共通形式へ変換する。
+
+事実Claimは1件以上の存在するEvidence IDを必要とする。参照がない または存在しないIDを参照する
+事実Claimは`unsupported`として検出する。情報不足はEvidenceを捏造せず`unknown` Claimとして表す。
+Grounding判定はモデルの自己申告ではなく`validateEvidenceAndClaims`が決定論的に行う。
+
 ### `JourneySearchPreferences`
 
 - 定義: `src/domain/journey-search-preferences.ts`
