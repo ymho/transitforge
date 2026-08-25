@@ -18,6 +18,18 @@
 - 無関係な整形やリファクタリングを避ける
 - 挙動 コマンド 契約 設計を変えた場合は文書を更新
 
+## 配置判断
+
+- 鉄道やAgentの決定論的な契約と計算は`src/domain`
+- ユースケースと外部境界のPortは`src/application`
+- 画面機能のUI 状態 表示変換 CSSは`src/features/<feature>`
+- ブラウザ HTTP Mapbox Bedrockなど外部技術への接続は`src/adapters`
+- Three.js固有の描画は`src/rendering`
+- Agent APIのPythonコードは`services/agent-api` インフラ定義は`infra`
+- TypeScriptテストは対象ファイルの隣へ置く
+- Pythonサービスと境界を横断するテストは`tests`へ置き fixtureは`tests/fixtures/README.md`に従う
+- 新規ファイルを慣習だけで`src`直下へ置かず 所有する責務を決めてから配置する
+
 ## 確認
 
 完了前に次を行う

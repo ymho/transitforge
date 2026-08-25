@@ -1,4 +1,4 @@
-from tests.bedrock_agent_test_support import *
+from tests.agent_api_test_support import *
 
 class ConnectionScanJourneySearchTest(unittest.TestCase):
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from tests.bedrock_agent_test_support import handler
+from tests.agent_api_test_support import handler
 from agent_application import (
     AgentApplicationConfig,
     AgentApplicationDependencies,
