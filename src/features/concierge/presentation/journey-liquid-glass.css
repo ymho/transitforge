@@ -1,0 +1,154 @@
+/* 複数経路はSegmented ControlとTipKit型カードで比較する */
+.journey-plan-intro {
+  margin: 0 0 0.75rem;
+  color: var(--glass-text);
+}
+
+.journey-plan {
+  overflow: hidden;
+  border: 0;
+  border-radius: 1.15rem;
+  background: transparent;
+}
+
+.journey-plan-conditions {
+  margin: 0 0 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border: 0;
+  border-radius: 0.8rem;
+  color: var(--glass-muted);
+  background: var(--glass-surface-muted);
+  font-size: 0.64rem;
+}
+
+.journey-plan-tabs {
+  display: grid;
+  grid-auto-columns: minmax(5rem, 1fr);
+  grid-auto-flow: column;
+  gap: 0;
+  padding: 0.25rem;
+  overflow-x: auto;
+  border: 0;
+  border-radius: 999px;
+  background: var(--glass-surface-strong);
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%);
+}
+
+.journey-plan-tab {
+  min-height: 2.25rem;
+  padding: 0.45rem 0.8rem;
+  border: 0;
+  border-radius: 999px;
+  color: var(--glass-muted);
+  background: transparent;
+  font-size: 0.75rem;
+  font-weight: 590;
+}
+
+.journey-plan-tab[aria-selected="true"] {
+  border: 0;
+  color: #0088ff;
+  background: rgb(120 120 128 / 16%);
+  box-shadow: none;
+}
+
+.journey-plan-panels {
+  margin-top: 0.65rem;
+}
+
+.journey-plan-panel {
+  padding: 0.75rem 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--glass-text);
+  background: transparent;
+}
+
+.journey-plan-summary {
+  margin-bottom: 0.8rem;
+  padding: 0.25rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--glass-border-subtle);
+}
+
+.journey-plan-summary strong {
+  color: var(--glass-text);
+  font-size: 1.12rem;
+}
+
+.journey-plan-summary span,
+.journey-station small,
+.journey-segment {
+  color: var(--glass-muted);
+}
+
+.journey-leg-summary {
+  padding: 0 1rem;
+  border-radius: 0;
+}
+
+.journey-station {
+  grid-template-columns: 3.35rem minmax(0, 1fr);
+  gap: 0.55rem;
+  min-height: 3.25rem;
+}
+
+.journey-station time {
+  font-weight: 750;
+}
+
+.journey-station strong {
+  color: var(--glass-text);
+  font-size: 0.82rem;
+}
+
+.journey-segment {
+  grid-template-columns: 3.35rem minmax(0, 1fr);
+  min-height: 3rem;
+  gap: 0.55rem;
+}
+
+.journey-segment i {
+  width: 0.3rem;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--journey-line-color), transparent 82%);
+}
+
+.journey-segment > span {
+  display: grid;
+  gap: 0.18rem;
+  align-self: center;
+  justify-items: start;
+}
+
+.journey-segment > span strong {
+  color: var(--glass-text);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.journey-segment > span small {
+  color: var(--glass-muted);
+  font-size: 0.64rem;
+  font-weight: 510;
+}
+
+.journey-segment > span .journey-delay-badge {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.18rem 0.45rem;
+  border: 1px solid rgb(180 83 9 / 28%);
+  border-radius: 999px;
+  color: #7c2d12;
+  background: rgb(255 237 213 / 88%);
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+.journey-transfer {
+  margin: 0;
+  padding: 0.65rem 1rem 0.65rem 4.9rem;
+  border-radius: 0;
+  color: var(--glass-text);
+  background: var(--glass-accent-soft);
+}
+

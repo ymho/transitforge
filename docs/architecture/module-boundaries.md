@@ -76,6 +76,8 @@ Viewer UIは機能ごとの`presentation`に置く
 - `features/train-viewer/presentation`: 列車選択 詳細 時刻表
 - `presentation`: Sheet遷移やLoading Screenなど複数Featureで共有する小さなUI
 
+CSSの所有範囲と表示比較は`docs/architecture/viewer-styles.md`を正本とする
+
 ## 移行中の例外
 
 `npm run architecture:check`は新しい逆向き依存を拒否する
