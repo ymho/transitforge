@@ -24,6 +24,7 @@ import type {
   JourneySearchService,
 } from "../domain/journey-search-service";
 import type { AgentToolDescriptor } from "../domain/agent/tool-contract";
+import type { AgentTrace } from "../domain/agent/agent-trace";
 
 export type * from "./bedrock-agent-contract";
 
@@ -47,6 +48,45 @@ export async function submitConversationFeedback(
     body,
   });
   if (!response.ok) throw new Error("フィードバックを保存できませんでした。");
+}
+
+export interface AgentTraceSubmission {
+  taskId: string;
+  requestIds: string[];
+  trace: AgentTrace;
+}
+
+export interface AgentTraceStoredResponse {
+  traceId: string;
+  eventCount: number;
+}
+
+export const maximumStoredAgentTraceEvents = 100;
+
+export async function submitAgentTrace(
+  submission: AgentTraceSubmission,
+  fetcher: typeof fetch = fetch,
+): Promise<AgentApiResult<AgentTraceStoredResponse>> {
+  const omittedEventCount = Math.max(
+    0,
+    submission.trace.events.length - maximumStoredAgentTraceEvents,
+  );
+  return postAgent(
+    {
+      operation: "agent_trace",
+      ...submission,
+      trace: {
+        ...submission.trace,
+        events: submission.trace.events.slice(0, maximumStoredAgentTraceEvents),
+        droppedEventCount:
+          submission.trace.droppedEventCount + omittedEventCount,
+      },
+    },
+    "Agent Traceを保存できません",
+    "Agent Trace",
+    isAgentTraceStoredResponse,
+    fetcher,
+  );
 }
 
 export async function invokeBedrockAgent(
@@ -196,6 +236,17 @@ async function postAgentBody<T>(
 
 function isTransientStatus(status: number): boolean {
   return status === 429 || status >= 500;
+}
+
+function isAgentTraceStoredResponse(value: unknown): value is AgentTraceStoredResponse {
+  return typeof value === "object" &&
+    value !== null &&
+    "traceId" in value &&
+    typeof value.traceId === "string" &&
+    "eventCount" in value &&
+    typeof value.eventCount === "number" &&
+    Number.isInteger(value.eventCount) &&
+    value.eventCount >= 0;
 }
 
 export async function sha256Hex(value: string): Promise<string> {

@@ -15,6 +15,7 @@
 | 旅行相談 | 普段の好みと今回の条件 会話の状態 | `src/domain/`とブラウザLocalStorage |
 | AI応答 | UIへ返す経路 旅行 会話の構造化結果 | `src/domain/viewer-agent-response.ts` |
 | フィードバック | 利用者が明示送信した会話と評価 | private S3 |
+| Agent Trace | 上限付き実行eventと関連request ID | private S3 |
 
 ブラウザの画面状態やMapbox Three.jsの描画オブジェクトはドメインモデルではない。AWS認証情報
 外部提供者の秘密値 現在地座標もこのモデルへ含めない。
@@ -172,7 +173,10 @@ Recorderは既定200件で追記を停止し 超過件数を`droppedEventCount`�
 payloadは件数 深さ 文字数を制限して要約し 秘密値 Authorization cookie
 現在地の緯度経度を記録前に除去する。Tool errorのcodeと再試行可否 Viewer Actionの
 拒否理由は残すが 例外そのものやProviderへ送った未加工payloadは残さない。
-現段階のTraceは実行中のメモリだけに保持し AWS保存と分析UIは対象外とする。
+通常のTraceは実行中のメモリだけに保持し 自動的な全量保存と分析UIは対象外とする。
+
+評価と不具合調査へ利用するTraceだけは`agent_trace` operationで明示送信できる。
+Lambdaが同じschemaと秘匿情報除去を再検証してからprivate S3へ30日間保存する。
 
 ### Multi-step Agent Runtime
 
@@ -323,6 +327,22 @@ AIの自由文をUIの状態遷移に使わない。
 
 利用者が👍または👎を押したときだけ保存する。会話分析やIssue化は別の処理として扱い 本モデルは
 画面表示とAIプロンプトへ自動再投入しない。
+
+## Agent Trace保存
+
+### `agent-trace-submission-v1`
+
+- TypeScript定義: `src/domain/agent/agent-trace.ts`
+- Server検証: `infra/lambda/bedrock_agent/agent_trace_storage.py`
+- 保存先: private S3 `agent-traces/YYYY/MM/DD/<taskId>/<traceId>.json`
+- 保持期間: 30日
+- 判断記録: [ADR 0025](../decisions/0025-store-bounded-agent-traces-privately.md)
+
+`taskId` `executionId` 関連するAPI `requestIds`と最大100件のeventを保存する。
+本文は24KiBを上限とし Lambdaでevent schema 順序 field型を再検証する。
+秘密値 Authorization cookieと現在地座標はブラウザ側のRecorderに加え
+保存直前にも除去する。生のTool payload 会話全文 例外詳細は保存しない。
+S3書込失敗は成功として扱わず request ID付き503と構造化ログを返す。
 
 ## 変更時の確認
 

@@ -46,10 +46,25 @@ resource "aws_s3_bucket_lifecycle_configuration" "conversation_feedback" {
     id     = "expire-feedback"
     status = "Enabled"
 
-    filter {}
+    filter {
+      prefix = "conversation-feedback/"
+    }
 
     expiration {
       days = 90
+    }
+  }
+
+  rule {
+    id     = "expire-agent-traces"
+    status = "Enabled"
+
+    filter {
+      prefix = "agent-traces/"
+    }
+
+    expiration {
+      days = 30
     }
   }
 }
@@ -61,9 +76,12 @@ data "aws_iam_policy_document" "bedrock_agent" {
     resources = ["arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"]
   }
   statement {
-    sid       = "WriteConversationFeedback"
-    actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.conversation_feedback.arn}/*"]
+    sid     = "WritePrivateAgentRecords"
+    actions = ["s3:PutObject"]
+    resources = [
+      "${aws_s3_bucket.conversation_feedback.arn}/conversation-feedback/*",
+      "${aws_s3_bucket.conversation_feedback.arn}/agent-traces/*",
+    ]
   }
 
   statement {
@@ -143,6 +161,7 @@ resource "aws_lambda_function" "bedrock_agent" {
       TRAFFIC_SNAPSHOT_KEY         = "api/traffic/delays.json"
       TRAVEL_PROVIDER_SECRET_ARN   = aws_secretsmanager_secret.travel_provider.arn
       CONVERSATION_FEEDBACK_BUCKET = aws_s3_bucket.conversation_feedback.id
+      AGENT_TRACE_BUCKET           = aws_s3_bucket.conversation_feedback.id
     }
   }
 

@@ -137,6 +137,8 @@ python3 tools/run_journey_search_scenarios.py --list
 - API本文 会話数 ツール往復数に上限を設ける
 - 利用者入力をHTMLとして描画しない
 - 会話は保存しない。ただし利用者が応答の評価を送信した場合だけ、評価時点までの会話本文と関連リクエストIDを非公開のフィードバック保存先へ90日間保存する
+- 評価と不具合調査用Agent Traceは会話全文を含めず 最大100 event 24KiBに制限して非公開S3へ30日間保存する
+- TraceはブラウザとLambdaの両方で秘密値と現在地座標を除去し task ID execution ID request IDで追跡する
 - AI API応答ヘッダーのx-transitforge-request-idと構造化ログのrequestIdを対応付ける
 - 外部書き込みや破壊的操作を追加しない
 

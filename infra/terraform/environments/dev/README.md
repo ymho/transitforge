@@ -8,6 +8,7 @@
 - Cloudflare AOPで保護する独自ドメイン配信
 - AI駅員のLambda Function URLとBedrock権限
 - 旅行提供者へ固定IPで接続するAI LambdaのNATインスタンスとElastic IP
+- 明示的フィードバックとbounded Agent Traceを短期保存する非公開S3
 - 混雑と遅延の収集Lambda EventBridge Scheduler S3 DynamoDB
 - GitHub Actions用OIDCロール
 - data-builderデプロイ用OIDCロール
