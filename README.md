@@ -85,6 +85,7 @@ TypeScriptのテストは対象モジュールの隣へ置く。Pythonの配置�
 
 ```bash
 npm run architecture:check
+npm run assets:check
 npm test
 npm run build
 python3 -m unittest discover -s tests -v

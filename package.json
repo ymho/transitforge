@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run assets:check && tsc --noEmit && vite build",
     "test": "TMPDIR=/tmp vitest run",
     "architecture:check": "node tools/check_architecture_boundaries.mjs",
+    "assets:check": "node --import tsx tools/check_concierge_assets.ts",
     "eval:agent": "node --import tsx tools/run_agent_evaluation.ts",
     "eval:agent:smoke": "npm run eval:agent -- --profile smoke",
     "eval:agent:full": "npm run eval:agent -- --profile full",
