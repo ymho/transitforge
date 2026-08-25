@@ -2,12 +2,8 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./viewer.css";
 import { browserDigitalTwinClockEnvironment } from "./adapters/browser/digital-twin-clock-environment";
+import { browserPollingEnvironment } from "./adapters/browser/polling-controller";
 import { applyWeather } from "./adapters/mapbox/map-weather";
-import {
-  loadPathCatalog,
-  toRouteFeatureCollections,
-} from "./adapters/http/viewer-input/path-catalog";
-import { emptyStationLineCatalog } from "./adapters/http/viewer-input/station-line-catalog";
 import {
   congestionRefreshIntervalMilliseconds,
   congestionRetryIntervalMilliseconds,
@@ -17,13 +13,12 @@ import {
   loadTrainDelays,
   trainDelayRefreshIntervalMilliseconds,
   trainDelayRetryIntervalMilliseconds,
-  type TrainDelaySnapshot,
-  type TrainOperation,
 } from "./adapters/http/traffic/train-delay";
 import {
-  browserPollingEnvironment,
-  createPollingController,
-} from "./adapters/browser/polling-controller";
+  loadPathCatalog,
+  toRouteFeatureCollections,
+} from "./adapters/http/viewer-input/path-catalog";
+import { emptyStationLineCatalog } from "./adapters/http/viewer-input/station-line-catalog";
 import {
   invokeBedrockAgent,
   queryDailyCongestionAnalysis,
@@ -35,6 +30,7 @@ import {
 import { loadTrainIndex } from "./adapters/http/viewer-input/train-index";
 import type { StationCoordinate } from "./domain/rail/station";
 import type { Train } from "./domain/rail/train";
+import type { TrainDelaySnapshot, TrainOperation } from "./domain/rail/operation";
 import {
   nearestOriginWithDepartures, searchDirectRoutes,
   type JourneyRouteLeg,
@@ -60,7 +56,6 @@ import {
 import { journeyLegAlternativeFits } from "./domain/journey-leg-alternative";
 import {
   dateForOperatingRouteTime,
-  displayDateTimeLabels,
   operatingServiceDateStart,
   stepDisplayDateTime,
 } from "./domain/display-date-time";
@@ -69,11 +64,9 @@ import {
   uiColorModeForLightPreset,
   type LightPreset,
 } from "./domain/map-lighting";
-import { isWeatherMode, type WeatherMode } from "./domain/weather";
+import type { WeatherMode } from "./domain/weather";
 import { dominantLineColorsByPathId } from "./domain/path-line-colors";
 import { currentRouteTime } from "./domain/playback";
-import { createDigitalTwinClockSynchronizer } from "./domain/digital-twin-clock";
-import { PlaybackController } from "./domain/playback-controller";
 import { congestionAnalysisForAgent } from "./domain/congestion-analysis";
 import { delayAnalysisForAgent } from "./domain/delay-analysis";
 import {
@@ -103,6 +96,7 @@ import {
 import { AgentTraceRecorder } from "./application/agent/agent-trace";
 import { ViewerActionExecutor } from "./application/viewer/viewer-action-executor";
 import { ViewerActionTaskScope } from "./application/viewer/viewer-action-policy";
+import { loadViewerElements } from "./application/viewer/viewer-elements";
 import { resolveViewerDisplayMode } from "./domain/viewer-display-mode";
 import { runBedrockViewerAgent } from "./adapters/bedrock/legacy-viewer-agent";
 import { createLocalViewerAgent } from "./application/viewer-agent/viewer-agent-local";
@@ -118,6 +112,25 @@ import {
 import { configureLandmarkJourneyInteraction } from "./presentation/landmark-journey-interaction";
 import { configureTrainSelection } from "./presentation/train-selection-controller";
 import { trainTitleFor } from "./presentation/train-title";
+import {
+  configureTrainCongestionUpdates,
+  configureTrainDelayUpdates,
+} from "./features/train-viewer/realtime-updates";
+import {
+  configureDateTimeInput,
+  maximumRouteTimeFor,
+  renderDisplayDateTime,
+} from "./features/train-viewer/date-time-control";
+import {
+  configurePlayback,
+  configurePlaybackSpeed,
+  type PlaybackUiController,
+} from "./features/train-viewer/playback-controls";
+import {
+  configureDestinationArcs,
+  configureWeather,
+  renderDisplayMode,
+} from "./features/train-viewer/map-controls";
 import { createLoadingScreen } from "./presentation/loading-screen";
 import { MapboxThreeTrainLayer } from "./rendering/mapbox-three-train-layer";
 import { RuntimeMetrics } from "./observability/runtime-metrics";
@@ -144,146 +157,77 @@ import {
   recentConversationContext,
 } from "./domain/conversation-history";
 
-const minimumPlaybackRenderIntervalMilliseconds = 1_000 / 30;
 const metricsLogIntervalMilliseconds = 10_000;
 let nextMetricsLogTimestamp = 0;
 
-const token = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
-const app = document.querySelector<HTMLElement>("#app");
-const loadingScreenElement =
-  document.querySelector<HTMLElement>("#loading-screen");
-const loadingScreenMessage =
-  document.querySelector<HTMLElement>("#loading-screen-message");
-const loadingScreenRetry =
-  document.querySelector<HTMLButtonElement>("#loading-screen-retry");
-const status = document.querySelector<HTMLParagraphElement>("#map-status");
-const displayTime = document.querySelector<HTMLInputElement>("#display-time");
-const dateTimeInput =
-  document.querySelector<HTMLInputElement>("#date-time-input");
-const dateTimeDate = document.querySelector<HTMLElement>("#date-time-date");
-const dateTimeClock = document.querySelector<HTMLTimeElement>("#date-time-clock");
-const playToggle = document.querySelector<HTMLButtonElement>("#play-toggle");
-const currentTimeButton =
-  document.querySelector<HTMLButtonElement>("#current-time-button");
-const playbackSpeed = document.querySelector<HTMLInputElement>("#playback-speed");
-const playbackSpeedMenuToggle =
-  document.querySelector<HTMLButtonElement>("#playback-speed-menu-toggle");
-const playbackSpeedOptions =
-  document.querySelector<HTMLFieldSetElement>("#playback-speed-options");
-const playbackSpeedButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>("[data-playback-speed]"),
-);
-const mapTools = document.querySelector<HTMLElement>("#map-tools");
-const weatherButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>("[data-weather]"),
-);
-const weatherMenuToggle =
-  document.querySelector<HTMLButtonElement>("#weather-menu-toggle");
-const weatherOptions =
-  document.querySelector<HTMLFieldSetElement>("#weather-options");
-const congestionToggle =
-  document.querySelector<HTMLButtonElement>("#congestion-toggle");
-const destinationArcsToggle =
-  document.querySelector<HTMLButtonElement>("#destination-arcs-toggle");
-const digitalTwinModeToggle =
-  document.querySelector<HTMLButtonElement>("#digital-twin-mode-toggle");
-const aiGuidePanel = document.querySelector<HTMLElement>("#ai-guide-panel");
-const aiGuideToggle =
-  document.querySelector<HTMLButtonElement>("#ai-guide-toggle");
-const closeAiGuide =
-  document.querySelector<HTMLButtonElement>("#close-ai-guide");
-const aiGuideMessages =
-  document.querySelector<HTMLOListElement>("#ai-guide-messages");
-const aiGuideForm = document.querySelector<HTMLFormElement>("#ai-guide-form");
-const aiGuideInput =
-  document.querySelector<HTMLInputElement>("#ai-guide-input");
-const aiGuideSubmit =
-  document.querySelector<HTMLButtonElement>("#ai-guide-submit");
-const conciergeAvatar =
-  document.querySelector<HTMLImageElement>("#concierge-avatar");
-const conciergeName =
-  document.querySelector<HTMLElement>("#concierge-name");
-const conciergeRole =
-  document.querySelector<HTMLElement>("#concierge-role");
-const aiGuideSuggestions = Array.from(
-  document.querySelectorAll<HTMLButtonElement>("[data-prompt]"),
-);
-const aiGuideContextChoices =
-  document.querySelector<HTMLElement>("#ai-guide-context-choices");
-const journeySettingsToggle =
-  document.querySelector<HTMLButtonElement>("#journey-settings-toggle");
-const journeySettingsPanel =
-  document.querySelector<HTMLElement>("#journey-settings-panel");
-const journeyTransferPace =
-  document.querySelector<HTMLSelectElement>("#journey-transfer-pace");
-const journeyRankingPreference =
-  document.querySelector<HTMLSelectElement>("#journey-ranking-preference");
-const tripPlanToggle =
-  document.querySelector<HTMLButtonElement>("#trip-plan-toggle");
-const tripPlanPanel = document.querySelector<HTMLElement>("#trip-plan-panel");
-const tripPlanContent = document.querySelector<HTMLElement>("#trip-plan-content");
-const closeTripPlan = document.querySelector<HTMLButtonElement>("#close-trip-plan");
-const trainDetails = document.querySelector<HTMLElement>("#train-details");
-const closeTrainDetails = document.querySelector<HTMLButtonElement>("#close-train-details");
-const selectedTrainTitle = document.querySelector<HTMLElement>("#selected-train-title");
-const selectedTrainDelay = document.querySelector<HTMLElement>("#selected-train-delay");
-const selectedTrainStopping = document.querySelector<HTMLElement>("#selected-train-stopping");
-const selectedTrainStops = document.querySelector<HTMLOListElement>("#selected-train-stops");
-const trainDetailTabs = document.querySelector<HTMLElement>("#train-detail-tabs");
-const metrics = new RuntimeMetrics();
+const realtimeUpdateDependencies = {
+  pollingEnvironment: browserPollingEnvironment,
+  loadCongestion: loadTrainCongestion,
+  congestionRefreshIntervalMilliseconds,
+  congestionRetryIntervalMilliseconds,
+  loadDelays: loadTrainDelays,
+  delayRefreshIntervalMilliseconds: trainDelayRefreshIntervalMilliseconds,
+  delayRetryIntervalMilliseconds: trainDelayRetryIntervalMilliseconds,
+};
 
-if (
-  app === null ||
-  loadingScreenElement === null ||
-  loadingScreenMessage === null ||
-  loadingScreenRetry === null ||
-  status === null ||
-  displayTime === null ||
-  dateTimeInput === null ||
-  dateTimeDate === null ||
-  dateTimeClock === null ||
-  playToggle === null ||
-  currentTimeButton === null ||
-  playbackSpeed === null ||
-  playbackSpeedMenuToggle === null ||
-  playbackSpeedOptions === null ||
-  playbackSpeedButtons.length === 0 ||
-  mapTools === null ||
-  weatherButtons.length !== 4 ||
-  weatherMenuToggle === null ||
-  weatherOptions === null ||
-  congestionToggle === null ||
-  destinationArcsToggle === null ||
-  digitalTwinModeToggle === null ||
-  aiGuidePanel === null ||
-  aiGuideToggle === null ||
-  closeAiGuide === null ||
-  aiGuideMessages === null ||
-  aiGuideForm === null ||
-  aiGuideInput === null ||
-  aiGuideSubmit === null ||
-  aiGuideContextChoices === null ||
-  conciergeAvatar === null ||
-  conciergeName === null ||
-  conciergeRole === null ||
-  journeySettingsToggle === null ||
-  journeySettingsPanel === null ||
-  journeyTransferPace === null ||
-  journeyRankingPreference === null ||
-  tripPlanToggle === null ||
-  tripPlanPanel === null ||
-  tripPlanContent === null ||
-  closeTripPlan === null ||
-  trainDetails === null ||
-  closeTrainDetails === null ||
-  selectedTrainTitle === null ||
-  selectedTrainDelay === null ||
-  selectedTrainStopping === null ||
-  selectedTrainStops === null ||
-  trainDetailTabs === null
-) {
-  throw new Error("A required viewer element is missing.");
-}
+const token = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+const {
+  app,
+  loadingScreenElement,
+  loadingScreenMessage,
+  loadingScreenRetry,
+  status,
+  displayTime,
+  dateTimeInput,
+  dateTimeDate,
+  dateTimeClock,
+  playToggle,
+  currentTimeButton,
+  playbackSpeed,
+  playbackSpeedMenuToggle,
+  playbackSpeedOptions,
+  playbackSpeedButtons,
+  mapTools,
+  weatherButtons,
+  weatherMenuToggle,
+  weatherOptions,
+  congestionToggle,
+  destinationArcsToggle,
+  digitalTwinModeToggle,
+  aiGuidePanel,
+  aiGuideToggle,
+  closeAiGuide,
+  aiGuideMessages,
+  aiGuideForm,
+  aiGuideInput,
+  aiGuideSubmit,
+  conciergeAvatar,
+  conciergeName,
+  conciergeRole,
+  aiGuideSuggestions,
+  aiGuideContextChoices,
+  journeySettingsToggle,
+  journeySettingsPanel,
+  journeyTransferPace,
+  journeyRankingPreference,
+  tripPlanToggle,
+  tripPlanPanel,
+  tripPlanContent,
+  closeTripPlan,
+  trainDetails,
+  closeTrainDetails,
+  selectedTrainTitle,
+  selectedTrainDelay,
+  selectedTrainStopping,
+  selectedTrainStops,
+  trainDetailTabs,
+} = loadViewerElements(document);
+const dateTimeDisplayElements = {
+  input: dateTimeInput,
+  date: dateTimeDate,
+  clock: dateTimeClock,
+};
+const metrics = new RuntimeMetrics();
 
 const loadingScreen = createLoadingScreen({
   app,
@@ -411,7 +355,7 @@ app.dataset.uiColorMode = uiColorModeForLightPreset(
   lightPresetForRouteTime(initialRouteTime),
 );
 displayTime.value = String(initialRouteTime);
-renderDisplayDateTime(initialDateTime);
+renderDisplayDateTime(dateTimeDisplayElements, initialDateTime);
 
 if (!token) {
   const missingTokenMessage =
@@ -510,6 +454,7 @@ if (!token) {
         activeWeatherMode = mode;
         applyWeatherToTrains(mode);
       },
+      applyWeather,
     );
     monitorFrames();
     let activeLightPreset: LightPreset | undefined;
@@ -610,6 +555,7 @@ if (!token) {
         const congestionUpdates = configureTrainCongestionUpdates(
           threeTrainLayer,
           congestionToggle,
+          realtimeUpdateDependencies,
         );
         map.addSource("train-hit-targets", { type: "geojson", data: emptyFeatureCollection() });
         map.addLayer({
@@ -684,7 +630,12 @@ if (!token) {
           }
           const operations = aliasedOperations;
           renderDisplayMode(
-            digitalTwinModeToggle,
+            {
+              app,
+              dateTimeInput,
+              currentTimeButton,
+              toggle: digitalTwinModeToggle,
+            },
             realtimeOperations !== undefined,
             modeState.mode,
           );
@@ -783,7 +734,7 @@ if (!token) {
               geometry: { type: "Point" as const, coordinates: target.coordinate },
             })),
           });
-          renderDisplayDateTime(displayedAt);
+          renderDisplayDateTime(dateTimeDisplayElements, displayedAt);
           status.hidden = true;
           metrics.recordPositionUpdate(performance.now() - updateStartedAt, positions.length);
           logMetrics();
@@ -1056,7 +1007,7 @@ if (!token) {
         const disposeDelayUpdates = configureTrainDelayUpdates((snapshot) => {
           latestDelaySnapshot = snapshot;
           updateTrains();
-        });
+        }, realtimeUpdateDependencies);
         disposeDataUpdates = () => {
           congestionUpdates.dispose();
           disposeDelayUpdates();
@@ -1312,6 +1263,7 @@ if (!token) {
           playbackSpeedOptions,
         );
         playbackControls = configurePlayback(
+          { displayTime, playToggle, currentTimeButton, playbackSpeed },
           updateTrains,
           maximumRouteTime,
           (date) => {
@@ -1325,6 +1277,7 @@ if (!token) {
             );
           },
           playbackSpeedControls,
+          browserDigitalTwinClockEnvironment(),
         );
         updateTrains();
         await nextFrame();
@@ -1375,35 +1328,6 @@ function currentBrowserCoordinate(): Promise<StationCoordinate> {
   });
 }
 
-function renderDisplayDateTime(date: Date): void {
-  if (dateTimeInput === null || dateTimeDate === null || dateTimeClock === null) {
-    return;
-  }
-
-  const labels = displayDateTimeLabels(date);
-  dateTimeDate.textContent = labels.date;
-  const [hour, minute, second] = labels.time.split(":");
-  const primaryTime = document.createElement("span");
-  primaryTime.textContent = `${hour}:${minute}`;
-  const seconds = document.createElement("small");
-  seconds.textContent = `:${second}`;
-  dateTimeClock.replaceChildren(primaryTime, seconds);
-  dateTimeClock.dateTime = date.toISOString();
-  if (document.activeElement !== dateTimeInput) {
-    dateTimeInput.value = formatDateTimeLocal(date);
-  }
-}
-
-function formatDateTimeLocal(date: Date): string {
-  const year = String(date.getFullYear()).padStart(4, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  const second = String(date.getSeconds()).padStart(2, "0");
-  return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
-}
-
 function formatServiceDate(date: Date): string {
   return [
     date.getFullYear(),
@@ -1412,633 +1336,8 @@ function formatServiceDate(date: Date): string {
   ].join("-");
 }
 
-function maximumRouteTimeFor(
-  trains: Array<{ stops: Array<{ route_time_minutes?: number }> }>,
-): number {
-  let maximumRouteTime = 24 * 60;
-
-  for (const train of trains) {
-    for (const stop of train.stops) {
-      if (typeof stop.route_time_minutes === "number") {
-        maximumRouteTime = Math.max(maximumRouteTime, stop.route_time_minutes);
-      }
-    }
-  }
-
-  return maximumRouteTime;
-}
-
 function emptyFeatureCollection() {
   return { type: "FeatureCollection" as const, features: [] };
-}
-
-function configureDateTimeInput(
-  input: HTMLInputElement,
-  getDate: () => Date,
-  setDate: (date: Date) => void,
-): void {
-  const display = input.closest<HTMLElement>(".date-time-display");
-  const control = input.closest<HTMLElement>(".time-control");
-  if (!display || !control) {
-    throw new Error("表示日時コントロールが見つかりません。");
-  }
-  const picker = createDateTimePicker();
-  control.append(picker.element);
-  display.setAttribute("aria-controls", picker.element.id);
-
-  let selectedDate = getDate();
-  let visibleMonth = new Date(
-    selectedDate.getFullYear(),
-    selectedDate.getMonth(),
-    1,
-  );
-  const close = () => {
-    picker.element.hidden = true;
-    display.ariaExpanded = "false";
-  };
-  const render = () => {
-    picker.month.textContent = `${visibleMonth.getFullYear()}年${visibleMonth.getMonth() + 1}月`;
-    picker.days.replaceChildren(...calendarDayButtons(
-      visibleMonth,
-      selectedDate,
-      (date) => {
-        selectedDate = new Date(
-          date.getFullYear(),
-          date.getMonth(),
-          date.getDate(),
-          selectedDate.getHours(),
-          selectedDate.getMinutes(),
-          selectedDate.getSeconds(),
-        );
-        render();
-      },
-    ));
-    picker.hour.value = String(selectedDate.getHours()).padStart(2, "0");
-    picker.minute.value = String(selectedDate.getMinutes()).padStart(2, "0");
-    picker.second.value = String(selectedDate.getSeconds()).padStart(2, "0");
-  };
-  const open = () => {
-    if (input.disabled) {
-      return;
-    }
-    selectedDate = getDate();
-    visibleMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
-    render();
-    picker.element.hidden = false;
-    display.ariaExpanded = "true";
-  };
-
-  input.disabled = false;
-  input.value = formatDateTimeLocal(getDate());
-  display.addEventListener("click", (event) => {
-    event.preventDefault();
-    if (picker.element.hidden) {
-      open();
-    } else {
-      close();
-    }
-  });
-  display.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      open();
-    } else if (event.key === "Escape") {
-      close();
-    }
-  });
-  picker.previous.addEventListener("click", () => {
-    visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1);
-    render();
-  });
-  picker.next.addEventListener("click", () => {
-    visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1);
-    render();
-  });
-  picker.cancel.addEventListener("click", close);
-  picker.apply.addEventListener("click", () => {
-    selectedDate.setHours(
-      boundedNumber(picker.hour.value, 0, 23),
-      boundedNumber(picker.minute.value, 0, 59),
-      boundedNumber(picker.second.value, 0, 59),
-      0,
-    );
-    setDate(selectedDate);
-    close();
-  });
-  picker.element.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      close();
-      display.focus();
-    }
-  });
-  document.addEventListener("pointerdown", (event) => {
-    if (!control.contains(event.target as Node)) {
-      close();
-    }
-  });
-}
-
-interface DateTimePickerElements {
-  element: HTMLElement;
-  month: HTMLElement;
-  days: HTMLElement;
-  previous: HTMLButtonElement;
-  next: HTMLButtonElement;
-  hour: HTMLSelectElement;
-  minute: HTMLSelectElement;
-  second: HTMLSelectElement;
-  cancel: HTMLButtonElement;
-  apply: HTMLButtonElement;
-}
-
-function createDateTimePicker(): DateTimePickerElements {
-  const element = document.createElement("section");
-  element.id = "date-time-picker";
-  element.className = "date-time-picker";
-  element.setAttribute("role", "dialog");
-  element.setAttribute("aria-label", "表示日時を選択");
-  element.hidden = true;
-  const hours = timeSelectOptions(23);
-  const minutesAndSeconds = timeSelectOptions(59);
-  element.innerHTML = `
-    <header>
-      <strong class="date-time-picker-month"></strong>
-      <span class="date-time-picker-navigation">
-        <button type="button" data-picker-action="previous" aria-label="前の月"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12.5 5-5 5 5 5"/></svg></button>
-        <button type="button" data-picker-action="next" aria-label="次の月"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 5 5 5-5 5"/></svg></button>
-      </span>
-    </header>
-    <div class="date-time-picker-weekdays" aria-hidden="true"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>
-    <div class="date-time-picker-days" role="grid"></div>
-    <div class="date-time-picker-time" aria-label="時刻">
-      <label><select data-picker-time="hour" aria-label="時">${hours}</select></label>
-      <b aria-hidden="true">:</b>
-      <label><select data-picker-time="minute" aria-label="分">${minutesAndSeconds}</select></label>
-      <b aria-hidden="true">:</b>
-      <label><select data-picker-time="second" aria-label="秒">${minutesAndSeconds}</select></label>
-    </div>
-    <footer>
-      <button type="button" data-picker-action="cancel" aria-label="閉じる" title="閉じる"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 5.5 9 9m0-9-9 9"/></svg></button>
-      <button type="button" data-picker-action="apply" aria-label="この日時に変更" title="この日時に変更"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4.5 10.5 3.5 3.5 7.5-8"/></svg></button>
-    </footer>`;
-  const required = <T extends Element>(selector: string): T => {
-    const value = element.querySelector<T>(selector);
-    if (!value) throw new Error(`日時ピッカー要素が見つかりません: ${selector}`);
-    return value;
-  };
-  return {
-    element,
-    month: required(".date-time-picker-month"),
-    days: required(".date-time-picker-days"),
-    previous: required('[data-picker-action="previous"]'),
-    next: required('[data-picker-action="next"]'),
-    hour: required('[data-picker-time="hour"]'),
-    minute: required('[data-picker-time="minute"]'),
-    second: required('[data-picker-time="second"]'),
-    cancel: required('[data-picker-action="cancel"]'),
-    apply: required('[data-picker-action="apply"]'),
-  };
-}
-
-function timeSelectOptions(maximum: number): string {
-  return Array.from({ length: maximum + 1 }, (_, value) => {
-    const label = String(value).padStart(2, "0");
-    return `<option value="${label}">${label}</option>`;
-  }).join("");
-}
-
-function calendarDayButtons(
-  month: Date,
-  selected: Date,
-  select: (date: Date) => void,
-): HTMLButtonElement[] {
-  const first = new Date(month.getFullYear(), month.getMonth(), 1);
-  const start = new Date(first.getFullYear(), first.getMonth(), 1 - first.getDay());
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + index);
-    const button = document.createElement("button");
-    button.type = "button";
-    button.setAttribute("role", "gridcell");
-    button.textContent = String(date.getDate());
-    button.dataset.outsideMonth = String(date.getMonth() !== month.getMonth());
-    button.ariaSelected = String(
-      date.getFullYear() === selected.getFullYear() &&
-      date.getMonth() === selected.getMonth() &&
-      date.getDate() === selected.getDate(),
-    );
-    button.addEventListener("click", () => select(date));
-    return button;
-  });
-}
-
-function boundedNumber(value: string, minimum: number, maximum: number): number {
-  const number = Number.parseInt(value, 10);
-  return Number.isFinite(number) ? Math.min(maximum, Math.max(minimum, number)) : minimum;
-}
-
-interface PlaybackSpeedUiController {
-  setEnabled(enabled: boolean): void;
-  selectRealtimeSpeed(): void;
-}
-
-interface PlaybackUiController {
-  setDigitalTwinMode(enabled: boolean): void;
-}
-
-function configurePlayback(
-  updateTrains: (routeTime?: number) => void,
-  maximumRouteTime: number,
-  onCurrentDateSelected: (date: Date) => void,
-  onOperatingDayWrapped: () => void,
-  speedControls: PlaybackSpeedUiController,
-): PlaybackUiController {
-  if (
-    displayTime === null ||
-    playToggle === null ||
-    currentTimeButton === null ||
-    playbackSpeed === null
-  ) {
-    throw new Error("Playback controls are missing.");
-  }
-
-  const range = { minimum: Number(displayTime.min), maximum: maximumRouteTime };
-  const controller = new PlaybackController({
-    initialRouteTime: Number(displayTime.value),
-    range,
-    getMinutesPerSecond: () => Number(playbackSpeed.value),
-    render: (routeTime) => {
-      displayTime.value = String(routeTime);
-      updateTrains(routeTime);
-    },
-    onOperatingDayWrapped,
-    // 全量の列車位置計算とGeoJSON更新は30fpsを上限にする。
-    minimumRenderIntervalMilliseconds:
-      minimumPlaybackRenderIntervalMilliseconds,
-  });
-  const renderPlaybackState = () => {
-    const playing = controller.isPlaying();
-    setMapToolIcon(playToggle, playing ? "icon-pause" : "icon-play");
-    playToggle.ariaLabel = playing ? "一時停止" : "再生";
-    playToggle.title = playing ? "一時停止" : "再生";
-  };
-  const digitalTwinClock = createDigitalTwinClockSynchronizer((now) => {
-    onCurrentDateSelected(now);
-    const routeTime = currentRouteTime(now);
-    controller.synchronize(
-      Math.min(Math.max(routeTime, range.minimum), range.maximum),
-    );
-  }, browserDigitalTwinClockEnvironment());
-
-  displayTime.addEventListener("input", () => {
-    // 描画は既存のinputリスナーが行い、再生基準だけを移動する。
-    controller.seek(Number(displayTime.value), false);
-  });
-  playToggle.addEventListener("click", () => {
-    if (playToggle.disabled) {
-      return;
-    }
-    if (controller.isPlaying()) {
-      controller.stop();
-    } else {
-      controller.start();
-    }
-    renderPlaybackState();
-  });
-  currentTimeButton.addEventListener("click", () => {
-    const now = new Date();
-    onCurrentDateSelected(now);
-    const routeTime = currentRouteTime(now);
-    controller.seek(
-      Math.min(Math.max(routeTime, range.minimum), range.maximum),
-    );
-  });
-
-  controller.start();
-  renderPlaybackState();
-  let digitalTwinMode: boolean | undefined;
-  return {
-    setDigitalTwinMode(enabled) {
-      if (enabled === digitalTwinMode) {
-        return;
-      }
-      digitalTwinMode = enabled;
-      digitalTwinClock.setEnabled(enabled);
-      if (enabled) {
-        speedControls.selectRealtimeSpeed();
-        controller.start();
-      }
-      playToggle.disabled = enabled;
-      playToggle.title = enabled
-        ? "デジタルツインモードでは常時再生"
-        : controller.isPlaying() ? "一時停止" : "再生";
-      playToggle.ariaLabel = playToggle.title;
-      speedControls.setEnabled(!enabled);
-      setMapToolIcon(
-        playToggle,
-        controller.isPlaying() ? "icon-pause" : "icon-play",
-      );
-    },
-  };
-}
-
-function configurePlaybackSpeed(
-  value: HTMLInputElement,
-  buttons: HTMLButtonElement[],
-  menuToggle: HTMLButtonElement,
-  options: HTMLFieldSetElement,
-): PlaybackSpeedUiController {
-  const closeMenu = () => {
-    options.hidden = true;
-    menuToggle.ariaExpanded = "false";
-  };
-  const selectSpeed = (speed: string, label: string) => {
-    value.value = speed;
-    menuToggle.textContent = label;
-    menuToggle.ariaLabel = `再生速度を選択（現在は${label.replace("×", "倍")}）`;
-    menuToggle.title = `再生速度: ${label.replace("×", "倍")}`;
-    for (const button of buttons) {
-      button.ariaPressed = String(button.dataset.playbackSpeed === speed);
-    }
-    closeMenu();
-  };
-
-  menuToggle.disabled = false;
-  menuToggle.addEventListener("click", () => {
-    const open = options.hidden;
-    options.hidden = !open;
-    menuToggle.ariaExpanded = String(open);
-  });
-  for (const button of buttons) {
-    button.disabled = false;
-    button.addEventListener("click", () => {
-      const speed = button.dataset.playbackSpeed;
-      const label = button.dataset.playbackSpeedLabel;
-      if (speed && label) {
-        selectSpeed(speed, label);
-      }
-    });
-  }
-  document.addEventListener("click", (event) => {
-    const target = event.target;
-    if (
-      target instanceof Node &&
-      !options.contains(target) &&
-      !menuToggle.contains(target)
-    ) {
-      closeMenu();
-    }
-  });
-
-  const selectedButton = buttons.find(
-    (button) => button.dataset.playbackSpeed === value.value,
-  );
-  selectSpeed(
-    value.value,
-    selectedButton?.dataset.playbackSpeedLabel ?? "1×",
-  );
-  return {
-    setEnabled(enabled) {
-      menuToggle.disabled = !enabled;
-      for (const button of buttons) {
-        button.disabled = !enabled;
-      }
-      if (!enabled) {
-        closeMenu();
-      }
-    },
-    selectRealtimeSpeed() {
-      const realtimeButton = buttons.find(
-        (button) => button.dataset.playbackSpeedLabel === "1×",
-      );
-      selectSpeed(
-        realtimeButton?.dataset.playbackSpeed ?? "0.016666666666666666",
-        realtimeButton?.dataset.playbackSpeedLabel ?? "1×",
-      );
-    },
-  };
-}
-
-function configureWeather(
-  map: mapboxgl.Map,
-  buttons: HTMLButtonElement[],
-  menuToggle: HTMLButtonElement,
-  options: HTMLFieldSetElement,
-  onWeatherChanged: (mode: WeatherMode) => void,
-): (mode: WeatherMode) => void {
-  const weatherPresentation: Record<
-    WeatherMode,
-    { icon: string; label: string }
-  > = {
-    clear: { icon: "icon-sun", label: "晴れ" },
-    cloudy: { icon: "icon-cloud", label: "曇り" },
-    rain: { icon: "icon-rain", label: "雨" },
-    snow: { icon: "icon-snow", label: "雪" },
-  };
-  const closeMenu = () => {
-    options.hidden = true;
-    menuToggle.ariaExpanded = "false";
-  };
-  const selectWeather = (mode: WeatherMode) => {
-    applyWeather(map, mode);
-    onWeatherChanged(mode);
-    for (const button of buttons) {
-      button.ariaPressed = String(button.dataset.weather === mode);
-    }
-    const presentation = weatherPresentation[mode];
-    setMapToolIcon(menuToggle, presentation.icon);
-    menuToggle.ariaLabel = `天気を選択（現在は${presentation.label}）`;
-    menuToggle.title = `天気: ${presentation.label}`;
-    closeMenu();
-  };
-
-  menuToggle.disabled = false;
-  menuToggle.addEventListener("click", () => {
-    const open = options.hidden;
-    options.hidden = !open;
-    menuToggle.ariaExpanded = String(open);
-  });
-  for (const button of buttons) {
-    button.disabled = false;
-    button.addEventListener("click", () => {
-      const mode = button.dataset.weather;
-      if (isWeatherMode(mode)) {
-        selectWeather(mode);
-      }
-    });
-  }
-  document.addEventListener("click", (event) => {
-    const target = event.target;
-    if (
-      target instanceof Node &&
-      !options.contains(target) &&
-      !menuToggle.contains(target)
-    ) {
-      closeMenu();
-    }
-  });
-
-  selectWeather("clear");
-  return selectWeather;
-}
-
-function setMapToolIcon(button: HTMLButtonElement, symbolId: string): void {
-  button
-    .querySelector<SVGUseElement>("use")
-    ?.setAttribute("href", `#${symbolId}`);
-}
-
-function configureTrainCongestionUpdates(
-  trainLayer: MapboxThreeTrainLayer,
-  toggle: HTMLButtonElement,
-): RealtimeVisualizationController & { dispose(): void } {
-  let requested = true;
-  let available = false;
-  const poller = createPollingController(
-    {
-      load: loadTrainCongestion,
-      apply: (snapshot) => {
-        trainLayer.setCongestionByTrainNumber(snapshot.byTrainNumber);
-      },
-      onError: (error) =>
-        console.warn("列車混雑情報を更新できませんでした。", error),
-      refreshIntervalMilliseconds: congestionRefreshIntervalMilliseconds,
-      retryIntervalMilliseconds: congestionRetryIntervalMilliseconds,
-    },
-    browserPollingEnvironment(),
-  );
-
-  const apply = () => {
-    const visible = available && requested;
-    toggle.disabled = !available;
-    toggle.ariaPressed = String(visible);
-    toggle.title = available ? "混雑表示" : "デジタルツインモードで利用可能";
-    toggle.ariaLabel = available
-      ? "混雑表示"
-      : "混雑表示はデジタルツインモードで利用可能";
-    trainLayer.setCongestionVisible(visible);
-    poller.setEnabled(visible);
-  };
-  const setEnabled = (nextEnabled: boolean) => {
-    requested = nextEnabled;
-    apply();
-  };
-
-  const handleToggle = () => {
-    setEnabled(!requested);
-  };
-  toggle.addEventListener("click", handleToggle);
-  apply();
-
-  return {
-    setEnabled,
-    setAvailable: (nextAvailable) => {
-      available = nextAvailable;
-      apply();
-    },
-    dispose: () => {
-      toggle.removeEventListener("click", handleToggle);
-      poller.dispose();
-    },
-  };
-}
-
-function configureTrainDelayUpdates(
-  onUpdate: (snapshot: TrainDelaySnapshot) => void,
-): () => void {
-  const poller = createPollingController(
-    {
-      load: loadTrainDelays,
-      apply: (snapshot) => {
-        if (snapshot.failedSources.length > 0) {
-          console.warn(
-            "[TransitForge] 遅延スナップショットが不完全なためシミュレーション表示を維持します。",
-            {
-              collectedAt: snapshot.collectedAt,
-              failedSources: snapshot.failedSources,
-            },
-          );
-          return;
-        }
-        onUpdate(snapshot);
-      },
-      onError: (error) =>
-        console.warn("列車遅延情報を更新できませんでした。", error),
-      refreshIntervalMilliseconds: trainDelayRefreshIntervalMilliseconds,
-      retryIntervalMilliseconds: trainDelayRetryIntervalMilliseconds,
-    },
-    browserPollingEnvironment(),
-  );
-  return poller.dispose;
-}
-
-function renderDisplayMode(
-  toggle: HTMLButtonElement,
-  realtimeAvailable: boolean,
-  mode: "digital-twin" | "simulation",
-): void {
-  if (app === null) {
-    return;
-  }
-  const digitalTwinMode = mode === "digital-twin";
-  app.dataset.displayMode = mode;
-  if (dateTimeInput) {
-    dateTimeInput.disabled = digitalTwinMode;
-    const display = dateTimeInput.closest<HTMLElement>(".date-time-display");
-    display?.setAttribute("aria-disabled", String(digitalTwinMode));
-    if (digitalTwinMode) {
-      const picker = document.querySelector<HTMLElement>("#date-time-picker");
-      if (picker) picker.hidden = true;
-      if (display) display.ariaExpanded = "false";
-    }
-  }
-  if (currentTimeButton) {
-    currentTimeButton.hidden = digitalTwinMode;
-  }
-  toggle.disabled = !realtimeAvailable;
-  toggle.ariaPressed = String(digitalTwinMode);
-  if (!realtimeAvailable) {
-    toggle.ariaLabel = "リアルタイム情報がないためシミュレーションモード";
-    toggle.title = "リアルタイム情報がないためシミュレーションモード";
-  } else if (digitalTwinMode) {
-    toggle.ariaLabel = "デジタルツインモードを終了";
-    toggle.title = "デジタルツインモード: オン";
-  } else {
-    toggle.ariaLabel = "デジタルツインモードを開始";
-    toggle.title = "デジタルツインモード: オフ";
-  }
-}
-
-interface RealtimeVisualizationController {
-  setEnabled(enabled: boolean): void;
-  setAvailable(available: boolean): void;
-}
-
-interface VisualizationController {
-  setEnabled(enabled: boolean): void;
-}
-
-function configureDestinationArcs(
-  trainLayer: MapboxThreeTrainLayer,
-  toggle: HTMLButtonElement,
-): VisualizationController {
-  let requested = false;
-  const apply = () => {
-    toggle.disabled = false;
-    toggle.ariaPressed = String(requested);
-    toggle.title = "行先アーチ";
-    toggle.ariaLabel = "行先アーチ";
-    trainLayer.setDestinationArcsVisible(requested);
-  };
-  const setEnabled = (nextEnabled: boolean) => {
-    requested = nextEnabled;
-    apply();
-  };
-
-  toggle.addEventListener("click", () => {
-    setEnabled(!requested);
-  });
-  apply();
-  return { setEnabled };
 }
 
 function monitorFrames(): void {
