@@ -313,6 +313,20 @@
 .conversation-feedback button { width: 1.2rem; height: 1.2rem; padding: 0; border: 0; border-radius: .3rem; color: var(--glass-muted); background: transparent; font-size: .64rem; line-height: 1; filter: grayscale(1); }
 .ai-guide-message-assistant:hover .conversation-feedback, .conversation-feedback:focus-within { opacity: 1; }
 .conversation-feedback button:hover, .conversation-feedback button[data-feedback-stored="true"] { color: var(--glass-accent-strong); filter: none; }
+.conversation-feedback-comment { display: grid; gap: .55rem; max-width: 30rem; margin-top: .55rem; padding: .75rem; border: 1px solid var(--glass-border-subtle); border-radius: 1rem; background: var(--glass-surface-muted); backdrop-filter: blur(18px) saturate(140%); }
+.conversation-feedback-comment label { display: grid; gap: .35rem; color: var(--glass-muted); font-size: .76rem; font-weight: 650; }
+.conversation-feedback-comment textarea { box-sizing: border-box; width: 100%; min-height: 4rem; resize: vertical; padding: .65rem .75rem; border: 1px solid var(--glass-border-subtle); border-radius: .8rem; color: var(--glass-text); background: var(--glass-surface-strong); font: inherit; font-size: 1rem; line-height: 1.45; }
+.conversation-feedback-comment textarea:focus { border-color: var(--glass-accent); outline: 2px solid color-mix(in srgb, var(--glass-accent) 28%, transparent); outline-offset: 1px; }
+.conversation-feedback-comment-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
+.conversation-feedback-comment-actions button { min-height: 2rem; padding: .38rem .7rem; border: 1px solid var(--glass-border-subtle); border-radius: 999px; color: var(--glass-text); background: var(--glass-surface-strong); font: inherit; font-size: .72rem; font-weight: 700; cursor: pointer; }
+.conversation-feedback-comment-actions button[type="submit"] { border-color: transparent; color: #fff; background: var(--glass-accent); }
+.conversation-feedback-comment-actions button:disabled { opacity: .55; cursor: wait; }
+.conversation-feedback-status { align-self: center; color: var(--glass-muted); font-size: .7rem; }
+.conversation-feedback > .conversation-feedback-status { width: auto; height: auto; margin-left: .25rem; filter: none; }
+@media (max-width: 600px) {
+  .conversation-feedback-comment { max-width: none; }
+  .conversation-feedback-comment-actions button { min-height: 2.5rem; }
+}
 .trip-plan-update-changes { display: grid; gap: .3rem; margin: .6rem 0; padding-left: 1.2rem; color: var(--glass-muted); font-size: .75rem; }
 .trip-plan-update-apply { min-height: 2.35rem; padding: .55rem 1rem; border: 0; border-radius: 999px; color: #fff; background: var(--glass-accent); box-shadow: 0 .45rem 1.2rem rgb(0 150 246 / 24%); font: inherit; font-size: .75rem; font-weight: 700; cursor: pointer; }
 .trip-plan-update-apply:hover { filter: brightness(1.06); }
@@ -337,4 +351,3 @@
   width: fit-content;
   border-radius: 999px;
 }
-
