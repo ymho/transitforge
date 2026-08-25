@@ -54,13 +54,26 @@ Agentは推論とToolのオーケストレーションを担当し 鉄道の計�
 - Viewer ActionはApplication Portを通してPresentationとRenderingへ適用する
 - `main.ts`とLambda handlerは実装を持たず依存を組み立てる
 
+### Viewer起動の責務
+
+| 責務 | 所有するモジュール |
+| --- | --- |
+| 必須DOM参照の取得と検証 | `application/viewer/viewer-elements.ts` |
+| 表示日時と日時ピッカー | `features/train-viewer/date-time-control.ts` |
+| 再生とデジタルツイン同期 | `features/train-viewer/playback-controls.ts` |
+| 天気 表示モード 行先アーチ | `features/train-viewer/map-controls.ts` |
+| 混雑と遅延の定期更新 | `features/train-viewer/realtime-updates.ts` |
+| HTTP Browser Mapbox実装の注入 | `main.ts` |
+
+Feature側は通信やMapboxの具体実装を生成しない
+`main.ts`がAdapterを注入することでコントローラをMapbox実体なしで検証できるようにする
+style再読込時は前回の定期更新を破棄してから新しい購読を開始する
+
 ## 移行中の例外
 
 `npm run architecture:check`は新しい逆向き依存を拒否する
 既に存在する違反だけを`tools/check_architecture_boundaries.mjs`へ移行Issue付きで列挙する
 
-- #157 Domain契約とAdapterの分離
-- #158 旧Viewer Agentの共通Runtimeへの統合
 - #159 Feature UIの再編
 
 例外が不要になった場合は同じPRでallowlistから削除する
