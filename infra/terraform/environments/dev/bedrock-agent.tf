@@ -4,8 +4,14 @@ locals {
 
 data "archive_file" "bedrock_agent" {
   type        = "zip"
-  source_dir  = "${path.module}/../../../lambda/bedrock_agent"
+  source_dir  = "${path.module}/../../../../services/agent-api"
   output_path = "${path.module}/.terraform/bedrock-agent.zip"
+  excludes = [
+    "__pycache__/**",
+    "**/__pycache__/**",
+    "*.pyc",
+    "**/*.pyc",
+  ]
 }
 
 data "aws_iam_policy_document" "bedrock_agent_assume_role" {

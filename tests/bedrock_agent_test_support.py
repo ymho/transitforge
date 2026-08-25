@@ -15,12 +15,11 @@ from typing import Any
 def load_handler():
     path = (
         Path(__file__).parents[1]
-        / "infra"
-        / "lambda"
-        / "bedrock_agent"
+        / "services"
+        / "agent-api"
         / "handler.py"
     )
-    spec = importlib.util.spec_from_file_location("bedrock_agent_handler", path)
+    spec = importlib.util.spec_from_file_location("agent_api_handler", path)
     assert spec and spec.loader
     sys.path.insert(0, str(path.parent))
     module = importlib.util.module_from_spec(spec)
