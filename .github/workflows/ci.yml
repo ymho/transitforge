@@ -34,6 +34,9 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
+      - name: Check architecture boundaries
+        run: npm run architecture:check
+
       - name: Run TypeScript tests
         run: npm test
 
