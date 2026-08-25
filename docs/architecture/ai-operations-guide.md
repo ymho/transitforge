@@ -128,6 +128,22 @@ python3 tools/run_journey_search_scenarios.py --list
 フォーカス 強調 比較 Evidenceの表示だけに限定し 任意DOM JavaScript 外部書き込みを許可しない。
 提案 適用 拒否と拒否理由は同じ実行のStructured Agent Traceへ記録する。
 
+## Grounded End-to-End確認
+
+最小シナリオは固定Providerとoffline経路fixtureを使い 次の順序を検証する。
+
+1. `search_journeys`で当日の遅延を含む候補を取得する
+2. 同一実行へ保存した`searchResultId`で`compare_journeys`を呼ぶ
+3. 比較結果を参照するClaimを決定論的にGroundingする
+4. Grounding成功後だけ`highlight_route`と`show_evidence`を実行する
+
+```bash
+npx vitest run src/domain/agent/grounded-journey-agent.e2e.test.ts
+```
+
+存在しないEvidence IDを参照する鉄道事実は失敗応答へ置き換え Viewerを操作しない。
+検索結果IDは同じ`executionId`からだけ解決でき 保持件数と実行件数に上限がある。
+
 ## データ境界
 
 - 現在地の緯度経度をLambda Bedrock ログへ送信しない

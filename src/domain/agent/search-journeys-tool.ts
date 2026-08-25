@@ -15,6 +15,14 @@ import {
 export const maximumJourneyToolResults = 3;
 export const maximumJourneyToolPayloadBytes = 64 * 1_024;
 
+export interface VerifiedJourneySearchResultWriter {
+  save(executionId: string, result: JourneySearchResponse): string;
+}
+
+export type JourneySearchToolOutput = JourneySearchResponse & {
+  searchResultId?: string;
+};
+
 const transferPaces = new Set(["hurried", "standard", "relaxed"]);
 const rankingPreferences = new Set([
   "balanced",
@@ -46,7 +54,8 @@ const allowedInputFields = new Set([
 
 export function createSearchJourneysTool(
   service: JourneySearchService,
-): AgentTool<JourneySearchRequest, JourneySearchResponse> {
+  verifiedResults?: VerifiedJourneySearchResultWriter,
+): AgentTool<JourneySearchRequest, JourneySearchToolOutput> {
   return {
     name: "search_journeys",
     description: "自前の時刻表と当日の運行情報を使って鉄道経路を検索します",
@@ -76,7 +85,7 @@ export function createSearchJourneysTool(
       additionalProperties: false,
     },
     parseInput: parseJourneySearchInput,
-    execute: async (input) => {
+    execute: async (input, context) => {
       try {
         const limit = input.limit ?? maximumJourneyToolResults;
         const response = await service.search({
@@ -89,14 +98,23 @@ export function createSearchJourneysTool(
           matches: response.matches.slice(0, limit),
           journeys: response.journeys.slice(0, limit),
         };
-        if (payloadBytes(bounded) > maximumJourneyToolPayloadBytes) {
+        const projectedOutput = verifiedResults === undefined
+          ? bounded
+          : { ...bounded, searchResultId: "journey-search-4" };
+        if (payloadBytes(projectedOutput) > maximumJourneyToolPayloadBytes) {
           return failedAgentToolResult({
             code: "execution_failed",
             message: "経路検索結果がToolの上限を超えました",
             retryable: false,
           });
         }
-        return successfulAgentToolResult(bounded);
+        const output: JourneySearchToolOutput = verifiedResults === undefined
+          ? bounded
+          : {
+              ...bounded,
+              searchResultId: verifiedResults.save(context.executionId, bounded),
+            };
+        return successfulAgentToolResult(output);
       } catch {
         return failedAgentToolResult({
           code: "execution_failed",

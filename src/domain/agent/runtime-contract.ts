@@ -1,4 +1,4 @@
-import type { Evidence } from "./evidence-model";
+import type { AssessedEvidenceClaim, Evidence } from "./evidence-model";
 import type { AgentTrace } from "./agent-trace";
 
 export type AgentRuntimeFeature =
@@ -31,9 +31,18 @@ export type AgentRuntimeStatus =
   | "limit_reached"
   | "failed";
 
+export interface AgentViewerActionOutcome {
+  actionType: string;
+  status: "applied" | "rejected";
+  code?: string;
+  reason?: string;
+}
+
 export interface AgentRuntimeResult {
   status: AgentRuntimeStatus;
   response: string;
   evidence: Evidence[];
+  claims: AssessedEvidenceClaim[];
+  viewerActions: AgentViewerActionOutcome[];
   trace: AgentTrace;
 }

@@ -7,13 +7,19 @@ import {
   type AgentResponseGenerator,
 } from "./agent-response-generator";
 import { AgentToolExecutor } from "./agent-tool-executor";
-import type { Evidence } from "./evidence-model";
+import {
+  validateEvidenceAndClaims,
+  type AssessedEvidenceClaim,
+  type Evidence,
+} from "./evidence-model";
 import {
   validateAgentRuntimeLimits,
   type AgentRuntimeLimits,
 } from "./runtime-policies";
 import type { AgentRuntimeRequest, AgentRuntimeResult } from "./runtime-contract";
 import { AgentToolRegistry } from "./tool-registry";
+import type { AgentViewerActionHandler } from "./viewer-action-handler";
+import type { AgentViewerActionOutcome } from "./runtime-contract";
 
 export interface AgentRuntimeDependencies {
   model: AgentModelProvider;
@@ -22,6 +28,7 @@ export interface AgentRuntimeDependencies {
   problemFramer?: AgentProblemFramer;
   planner?: AgentPlanner;
   responseGenerator?: AgentResponseGenerator;
+  viewerActionHandler?: AgentViewerActionHandler;
   limits?: Partial<AgentRuntimeLimits>;
   now?: () => Date;
 }
@@ -58,7 +65,7 @@ export class MultiStepAgentRuntime {
       const response = this.responseGenerator.followUp(problem);
       trace.responseGenerated(response);
       trace.taskCompleted("completed", elapsed(startedAt, this.now));
-      return result("follow_up", response, evidence, trace);
+      return result("follow_up", response, evidence, [], [], trace);
     }
 
     const messages: AgentModelMessage[] = [{
@@ -109,10 +116,50 @@ export class MultiStepAgentRuntime {
         return this.failureResult(trace, evidence, startedAt, "missing_tool_call");
       }
       if (modelResponse.stopReason !== "tool_calls") {
-        const response = this.responseGenerator.fromModel(modelResponse, evidence);
-        trace.responseGenerated(response);
+        let generated;
+        try {
+          generated = this.responseGenerator.fromModel(modelResponse, evidence);
+        } catch {
+          return this.failureResult(trace, evidence, startedAt, "invalid_response_format");
+        }
+        const grounding = validateEvidenceAndClaims(evidence, generated.claims);
+        if (
+          !grounding.valid ||
+          grounding.claims.some(({ groundingStatus }) =>
+            groundingStatus === "unsupported")
+        ) {
+          const response = this.responseGenerator.groundingFailure();
+          trace.responseGenerated(response, grounding.claims.map(({ id }) => id));
+          trace.taskCompleted(
+            "failed",
+            elapsed(startedAt, this.now),
+            "unsupported_claim",
+          );
+          return result(
+            "failed",
+            response,
+            evidence,
+            grounding.claims,
+            [],
+            trace,
+          );
+        }
+        const viewerActions = this.dependencies.viewerActionHandler?.apply(
+          generated.viewerActions,
+          evidence,
+          request,
+          trace,
+        ) ?? [];
+        trace.responseGenerated(generated.text, grounding.claims.map(({ id }) => id));
         trace.taskCompleted("completed", elapsed(startedAt, this.now));
-        return result("completed", response, evidence, trace);
+        return result(
+          "completed",
+          generated.text,
+          evidence,
+          grounding.claims,
+          viewerActions,
+          trace,
+        );
       }
       if (toolCalls + calls.length > this.limits.maxToolCalls) {
         return this.limitResult(trace, evidence, startedAt);
@@ -160,7 +207,7 @@ export class MultiStepAgentRuntime {
     const response = this.responseGenerator.limitReached();
     trace.responseGenerated(response);
     trace.taskCompleted("failed", elapsed(startedAt, this.now), "runtime_limit_reached");
-    return result("limit_reached", response, evidence, trace);
+    return result("limit_reached", response, evidence, [], [], trace);
   }
 
   private failureResult(
@@ -172,7 +219,7 @@ export class MultiStepAgentRuntime {
     const response = this.responseGenerator.failure();
     trace.responseGenerated(response);
     trace.taskCompleted("failed", elapsed(startedAt, this.now), reason);
-    return result("failed", response, evidence, trace);
+    return result("failed", response, evidence, [], [], trace);
   }
 }
 
@@ -180,12 +227,16 @@ function result(
   status: AgentRuntimeResult["status"],
   response: string,
   evidence: Evidence[],
+  claims: AssessedEvidenceClaim[],
+  viewerActions: AgentViewerActionOutcome[],
   trace: AgentTraceRecorder,
 ): AgentRuntimeResult {
   return {
     status,
     response,
     evidence: [...evidence],
+    claims: [...claims],
+    viewerActions: [...viewerActions],
     trace: trace.snapshot(),
   };
 }
