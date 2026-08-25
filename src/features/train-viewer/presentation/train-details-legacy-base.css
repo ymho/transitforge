@@ -1,0 +1,62 @@
+.train-details {
+  padding: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 8px;
+  background: rgb(18 24 30 / 97%);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 30%);
+  backdrop-filter: blur(10px);
+}
+
+.train-details h2 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.train-service-badge {
+  border: 0;
+  border-radius: 3px;
+  box-shadow: none;
+}
+
+.train-details-facts {
+  margin-top: 0.55rem;
+  padding: 0.45rem 0;
+  border: 0;
+  background: transparent;
+}
+
+.train-details-facts div {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.train-timetable {
+  margin-top: 0.55rem;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.train-timetable h3 {
+  color: #9da8b3;
+  font-size: 0.7rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.train-timetable li {
+  border-radius: 0;
+  border-bottom: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.train-timetable li[data-current-status] {
+  border-left-color: #4264fb;
+  color: #ffffff;
+  background: rgb(66 100 251 / 10%);
+  box-shadow: none;
+}
+

@@ -1,0 +1,20 @@
+.train-details {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  box-shadow: 0 8px 28px var(--ui-shadow);
+}
+
+.train-timetable li {
+  color: var(--ui-text);
+}
+
+.train-timetable-times {
+  color: var(--ui-text);
+}
+
+.train-timetable li[data-current-status] {
+  border-left-color: var(--ui-accent);
+  color: var(--ui-text);
+  background: var(--ui-accent-soft);
+}
+

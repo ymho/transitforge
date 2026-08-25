@@ -1,0 +1,36 @@
+#app[data-ui-color-mode="day"] {
+  --ui-loading-bg: #f2f4f6;
+  --ui-surface: rgb(255 255 255 / 96%);
+  --ui-surface-solid: #ffffff;
+  --ui-surface-muted: #edf1f4;
+  --ui-text: #17212b;
+  --ui-muted: #66727d;
+  --ui-border: rgb(20 31 42 / 16%);
+  --ui-hover: rgb(20 31 42 / 7%);
+  --ui-shadow: rgb(31 43 55 / 18%);
+  --ui-action-bg: #17212b;
+  --ui-action-text: #ffffff;
+  --ui-user-bg: #4264fb;
+  --ui-user-text: #ffffff;
+  --ui-accent: #4264fb;
+  --ui-accent-soft: rgb(66 100 251 / 10%);
+}
+
+#app[data-ui-color-mode="night"] {
+  --ui-loading-bg: #10161d;
+  --ui-surface: rgb(18 24 30 / 97%);
+  --ui-surface-solid: #11171d;
+  --ui-surface-muted: #252d35;
+  --ui-text: #f3f5f7;
+  --ui-muted: #9da8b3;
+  --ui-border: rgb(255 255 255 / 14%);
+  --ui-hover: rgb(255 255 255 / 8%);
+  --ui-shadow: rgb(0 0 0 / 32%);
+  --ui-action-bg: #e4e8eb;
+  --ui-action-text: #11171d;
+  --ui-user-bg: #3a4652;
+  --ui-user-text: #ffffff;
+  --ui-accent: #6f8cff;
+  --ui-accent-soft: rgb(111 140 255 / 12%);
+}
+

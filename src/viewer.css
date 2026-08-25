@@ -2,7 +2,19 @@
 @import "./styles/map-layout.css";
 @import "./features/concierge/presentation/concierge-base.css";
 @import "./presentation/loading-screen.css";
-@import "./styles/compatibility-ui.css";
+/* Legacy cascade is split by owner but kept in the original order until each final layer replaces it. */
+@import "./styles/legacy-theme-tokens.css";
+@import "./presentation/loading-screen-legacy.css";
+@import "./features/train-viewer/presentation/date-time-legacy-base.css";
+@import "./features/concierge/presentation/concierge-legacy-base.css";
+@import "./features/train-viewer/presentation/train-details-legacy-base.css";
+@import "./styles/legacy-responsive-overrides.css";
+@import "./styles/legacy-theme-overrides.css";
+@import "./features/train-viewer/presentation/date-time-legacy-theme.css";
+@import "./features/concierge/presentation/concierge-legacy-theme.css";
+@import "./features/train-viewer/presentation/train-details-legacy-theme.css";
+@import "./features/concierge/presentation/concierge-legacy-header.css";
+@import "./features/train-viewer/presentation/date-time-current.css";
 @import "./styles/tokens.css";
 @import "./styles/liquid-glass-foundation.css";
 @import "./features/concierge/presentation/concierge-liquid-glass.css";

@@ -1,0 +1,26 @@
+/*
+ * 移行用の交差上書き
+ * Concierge Train Details Loading Screenの各final CSSが同じmobileとreduced-motion状態を
+ * 所有した時点で削除する。新しいselectorは追加しない。
+ */
+@media (max-width: 600px) {
+  .ai-guide-panel {
+    max-height: min(82dvh, calc(100dvh - 6rem));
+  }
+
+  .train-details {
+    width: min(18rem, calc(100vw - 1.3rem));
+    max-height: min(46dvh, 22rem);
+    padding: 0.6rem;
+  }
+
+  .train-timetable ol {
+    max-height: 23dvh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-screen-progress span {
+    animation: none;
+  }
+}

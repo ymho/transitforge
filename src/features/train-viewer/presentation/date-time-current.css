@@ -1,0 +1,110 @@
+/* 日時は端末標準の編集UIを透明な操作面として残し、読みやすい時計を前面に出す。 */
+.hud {
+  width: min(16rem, calc(100vw - 5.25rem));
+  min-width: 0;
+}
+
+.time-control {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.time-control:hover,
+.time-control:focus-within {
+  border-color: transparent;
+  background: transparent;
+}
+
+.date-time-display {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--ui-text);
+  background: transparent;
+  cursor: pointer;
+}
+
+.date-time-display:hover {
+  background: var(--ui-hover);
+}
+
+.date-time-display:focus-within {
+  border-color: var(--ui-border);
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 1px;
+}
+
+.date-time-date {
+  overflow: hidden;
+  color: var(--ui-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.date-time-clock {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.date-time-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+#app[data-display-mode="digital-twin"] .hud {
+  border-color: rgb(0 156 181 / 48%);
+  box-shadow: 0 4px 14px var(--ui-shadow), 0 0 0 1px rgb(0 156 181 / 12%);
+}
+
+#digital-twin-mode-toggle[aria-pressed="true"] {
+  color: #ffffff;
+}
+
+@media (max-width: 600px) {
+  .hud {
+    width: min(11.75rem, calc(100vw - 5.25rem));
+    overflow-x: hidden;
+  }
+
+  .date-time-display {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+    padding: 0.4rem 0.5rem 0.45rem;
+  }
+
+  .date-time-clock {
+    grid-row: 1;
+    font-size: 1.35rem;
+    letter-spacing: -0.04em;
+  }
+
+  .date-time-date {
+    grid-row: 2;
+    font-size: 0.68rem;
+  }
+
+}

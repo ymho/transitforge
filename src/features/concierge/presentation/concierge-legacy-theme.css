@@ -1,0 +1,78 @@
+.ai-guide-toggle {
+  border-color: var(--ui-border);
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  box-shadow: 0 4px 14px var(--ui-shadow);
+}
+
+.ai-guide-toggle:hover:not(:disabled) {
+  border-color: var(--ui-border);
+  color: var(--ui-text);
+  background: var(--ui-surface-muted);
+  box-shadow: 0 4px 14px var(--ui-shadow);
+}
+
+.ai-guide-panel {
+  border-color: var(--ui-border);
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  box-shadow: 0 8px 28px var(--ui-shadow);
+}
+
+.guide-panel-icon {
+  color: var(--ui-text);
+}
+
+.ai-guide-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ai-guide-message-assistant {
+  display: block;
+  width: 92%;
+  max-width: 92%;
+  align-self: flex-start;
+  color: var(--ui-text);
+  background: var(--ui-surface-muted);
+}
+
+.ai-guide-message-pending {
+  display: flex;
+  width: fit-content;
+}
+
+.ai-guide-message-user {
+  color: var(--ui-user-text);
+  background: var(--ui-user-bg);
+}
+
+.ai-guide-suggestions button {
+  border-color: var(--ui-border);
+  color: var(--ui-text);
+  background: transparent;
+}
+
+.ai-guide-suggestions button:hover {
+  background: var(--ui-hover);
+}
+
+.ai-guide-form input {
+  border-color: var(--ui-border);
+  color: var(--ui-text);
+  background: var(--ui-surface-solid);
+}
+
+.ai-guide-form input::placeholder {
+  color: var(--ui-muted);
+}
+
+.ai-guide-form input:focus {
+  border-color: var(--ui-accent);
+}
+
+.ai-guide-form button {
+  color: var(--ui-action-text);
+  background: var(--ui-action-bg);
+}
+

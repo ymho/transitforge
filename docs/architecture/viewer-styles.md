@@ -10,15 +10,23 @@
 | `styles/map-layout.css` | 地図とHUDの基礎配置 |
 | `styles/tokens.css` | day night共通の色 影 ぼかし Focus |
 | `styles/liquid-glass-foundation.css` | 時計と地図操作のLiquid Glass基盤 |
-| `styles/compatibility-ui.css` | Feature移行前の互換スタイル |
+| `styles/legacy-*.css` | 複数Featureへまたがる移行中のtokenと上書き |
 | `features/concierge/presentation/*.css` | 会話 プロフィール 経路候補 |
 | `features/trip-plan/presentation/*.css` | 旅程PanelとCard |
 | `features/train-viewer/presentation/*.css` | 列車詳細と時刻表 |
 | `presentation/loading-screen*.css` | 起動中と失敗時の表示 |
 
-新しいComponentのselectorを`compatibility-ui.css`へ追加しない
+共通Presentationは2つ以上のFeatureが同じ契約で使う 状態を持たないprimitiveに限定する
+Featureの語彙 状態 DOM classを持つViewとCSSは対象Featureの`presentation`へ置く
+
+新しいComponentのselectorを`styles/legacy-*.css`へ追加しない
 変更するFeatureのCSSへ置き 共通値は`tokens.css`へ追加する
 import順による上書きが必要な場合は`viewer.css`ではなく所有するCSS内で隣接させ 理由をコメントする
+
+旧`compatibility-ui.css`は行順を維持したまま所有Featureへ分割した
+`legacy-responsive-overrides.css`と`legacy-theme-overrides.css`に残る交差指定は
+各Featureのfinal CSSがday night mobile reduced-motionをすべて所有した時点で削除する
+移行ファイルを変更するPRでは対象selectorを所有先へ移せない理由を本文へ記載する
 
 ## 表示比較
 
