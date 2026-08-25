@@ -215,6 +215,19 @@ Composition Rootやremote transportは別の運用判断として追加する。
 - AI API応答ヘッダーのx-transitforge-request-idと構造化ログのrequestIdを対応付ける
 - 外部書き込みや破壊的操作を追加しない
 
+## 会話Feedbackの分析
+
+`tools/analyze_conversation_feedback.py`は日付範囲と最大500件の上限を必須境界として
+private S3またはローカルへ退避したFeedbackを読む。Goodは大量分析せず Badだけを
+機能 意図 症状 期待結果 重大度へ決定的に分類する。分類結果のfingerprintとJaccard類似度で
+同じ症状をcluster化するため Feedback一件ごとのモデル呼び出しは行わない。
+
+reportには生会話 コメント メールアドレス 電話番号 token 現在地座標を含めない。
+追跡用のfeedback IDとrequest IDは非公開reportだけに保持し 標準出力には件数だけを出す。
+JSONとMarkdownは`reports/`などGit管理外の場所へ生成する。S3を読む場合も書き戻しは行わない。
+将来Bedrockによる補助分類を加える場合は入力schema 出力schema token上限 対象件数上限を
+別Adapterで固定し 決定的clusterとのBenchmark比較なしに既定化しない。
+
 ## 実装の分離
 
 - クライアント契約 通信 レスポンス検証を別モジュールに分ける
