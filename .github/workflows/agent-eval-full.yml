@@ -1,0 +1,43 @@
+name: Agent Eval / Full
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 18 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-eval-full
+  cancel-in-progress: false
+
+jobs:
+  full-eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Run deterministic Full Eval
+        run: npm run eval:agent:full -- --output-dir .artifacts/agent-eval/full
+
+      - name: Upload Full Eval report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: agent-eval-full-${{ github.run_id }}
+          path: .artifacts/agent-eval/full/
+          if-no-files-found: error
+          retention-days: 30

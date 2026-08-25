@@ -151,6 +151,8 @@ npx vitest run src/domain/agent/grounded-journey-agent.e2e.test.ts
 ```bash
 npm run eval:agent
 npm run eval:agent -- --output-dir /tmp/rai-agent-eval
+npm run eval:agent:smoke -- --output-dir /tmp/rai-agent-eval-smoke
+npm run eval:agent:full -- --output-dir /tmp/rai-agent-eval-full
 ```
 
 既定出力先は`/tmp/transitforge-agent-eval`とする。reportは
@@ -160,6 +162,12 @@ runnerは非0で終了する。
 datasetは入力 期待Tool順 正規化制約 完了状態 Grounding閾値 許可Viewer Actionを保持する。
 observation fixtureは評価器の再現確認用であり 実Agentの評価では
 `observeAgentRuntimeResult`でRuntime結果から生成したobservationを使う。
+
+`Agent Eval / Smoke`はPRで`smoke` tagのcaseだけを外部APIなしで実行する。
+`Agent Eval / Full`は手動または毎週月曜3時17分ごろ（日本時間）に全caseを実行する。
+どちらも実測値と閾値をJSON Markdownへ出し artifactとしてSmoke 14日 Full 30日保持する。
+現在の決定論的profileでは各指標の最低値を100% Unsupported Claim Rateの最大値を0%とする。
+通常のunit testとEvalは別Workflowであり 失敗箇所を別checkとして確認する。
 
 ## データ境界
 

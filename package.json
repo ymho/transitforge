@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test": "TMPDIR=/tmp vitest run",
-    "eval:agent": "node --import tsx tools/run_agent_evaluation.ts"
+    "eval:agent": "node --import tsx tools/run_agent_evaluation.ts",
+    "eval:agent:smoke": "npm run eval:agent -- --profile smoke",
+    "eval:agent:full": "npm run eval:agent -- --profile full"
   },
   "dependencies": {
     "mapbox-gl": "^3.25.0",

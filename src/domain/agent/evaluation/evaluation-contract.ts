@@ -75,3 +75,24 @@ export interface AgentEvaluationReport {
   };
   cases: AgentEvaluationCaseResult[];
 }
+
+export type AgentEvaluationProfile = "smoke" | "full";
+export type AgentEvaluationMetricName = keyof AgentEvaluationReport["metrics"];
+
+export interface AgentEvaluationThreshold {
+  operator: "minimum" | "maximum";
+  value: number;
+}
+
+export type AgentEvaluationThresholds = Record<
+  AgentEvaluationMetricName,
+  AgentEvaluationThreshold
+>;
+
+export interface AgentEvaluationRunReport extends AgentEvaluationReport {
+  profile: AgentEvaluationProfile;
+  selectedTag?: string;
+  thresholds: AgentEvaluationThresholds;
+  passed: boolean;
+  thresholdFailures: string[];
+}
