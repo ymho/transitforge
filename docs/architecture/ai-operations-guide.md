@@ -169,6 +169,17 @@ observation fixtureは評価器の再現確認用であり 実Agentの評価で�
 現在の決定論的profileでは各指標の最低値を100% Unsupported Claim Rateの最大値を0%とする。
 通常のunit testとEvalは別Workflowであり 失敗箇所を別checkとして確認する。
 
+## Read-only MCP
+
+外部Agent向けMCPは内部Agentと同じ読み取り専用Domain Tool Registryを使う。
+公開能力は経路検索 列車照会 駅照会 遅延分析 混雑分析の5つに限定し
+Viewer Action DOM操作 外部書き込みを公開しない。
+
+MCP Adapterは既存Tool Contractをprotocolへ変換するだけで 経路検索や集計を再実装しない。
+入力はMCP SchemaとTool固有parserの両方で検証する。stdioのstdoutはprotocol専用とし
+アプリケーションログを混在させない。具体的なデータ取得と認証を注入して起動する
+Composition Rootやremote transportは別の運用判断として追加する。
+
 ## データ境界
 
 - 現在地の緯度経度をLambda Bedrock ログへ送信しない

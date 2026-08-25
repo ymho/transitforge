@@ -96,6 +96,7 @@ python3 tools/measure_viewer_input.py \
 - ブラウザやBedrockへ全履歴を渡さず Lambdaで決定的に絞り込む
 - 利用者の暦日は4時境界で業務日付へ変換し 日付別の生成済みダイヤを検索する
 - AIが実行できる画面操作は検証済みの可逆操作に限定
+- 外部Agent向けMCPは内部Agentと同じDomain Serviceを使い 読み取り専用の5能力だけを公開
 - AWS認証情報や秘密値をソース Terraform変数ファイル stateへ保存しない
 
 詳細は[プロダクト概要](docs/product-brief.md) [標準データモデル](docs/architecture/domain-model.md) [コンシェルジュの境界](docs/architecture/ai-operations-guide.md) [Issue運用](.github/ISSUE_MANAGEMENT.md) [ADR](docs/decisions/README.md)を参照
