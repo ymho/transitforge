@@ -9,7 +9,8 @@
     "test": "TMPDIR=/tmp vitest run",
     "eval:agent": "node --import tsx tools/run_agent_evaluation.ts",
     "eval:agent:smoke": "npm run eval:agent -- --profile smoke",
-    "eval:agent:full": "npm run eval:agent -- --profile full"
+    "eval:agent:full": "npm run eval:agent -- --profile full",
+    "eval:agent:strategies": "node --import tsx tools/run_agent_strategy_experiment.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

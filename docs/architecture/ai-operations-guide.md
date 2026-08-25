@@ -176,6 +176,20 @@ Viewer Action Validityをカテゴリ別にも出す。失敗caseは表示され
 1件だけ再実行できる。運休 行き先変更 列車制約など既知不具合に対応するcaseは削除せず
 regressionとして維持する。
 
+### Re-plan / Reflection比較
+
+```bash
+npm run eval:agent:strategies
+```
+
+35件Benchmarkから8件を選び single pass 結果駆動再計画 常時Reflectionを同じ期待値で比較する。
+reportは完了case率と6指標に加え 1caseあたりのlatency model call Tool call tokenを出す。
+固定Provider相当の相対コストであり AWS料金や実modelの応答速度として解釈しない。
+
+現在は結果駆動再計画だけを採用し 常時Reflectionは無効である。常時Reflectionは品質を改善せず
+model call分のlatencyとtokenが増えた。新しい回復不能caseがBenchmarkへ追加された場合だけ
+そのcaseを含めて再評価し 改善を確認する前に本番既定化しない。
+
 ## Read-only MCP
 
 外部Agent向けMCPは内部Agentと同じ読み取り専用Domain Tool Registryを使う。
