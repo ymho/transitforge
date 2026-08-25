@@ -62,7 +62,7 @@ Pythonが所有する。TypeScriptのAgent Applicationは計算を呼ぶPortとT
 
 - wire contractを両側で検証する必要がある
 - Browserだけでは本番相当の経路計算を完結できない
-- 旧Viewer Agentの移行中は一時的な型と表示変換が残る
+- UI向けの経路 旅行 会話型と表示変換はDomain計算から分離して維持する
 
 ### リスク
 

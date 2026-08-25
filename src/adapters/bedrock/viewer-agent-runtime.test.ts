@@ -9,8 +9,8 @@ import type {
 } from "../../domain/viewer-agent-response";
 import {
   currentServiceDateInJapan,
-  runBedrockViewerAgent,
-} from "./legacy-viewer-agent";
+  runViewerAgentRuntime,
+} from "./viewer-agent-runtime";
 
 const train: Train = {
   service_uid: "service-1",
@@ -38,6 +38,9 @@ describe("Bedrock viewer agent", () => {
   it("changes time, searches at that time, and focuses only a search result", async () => {
     let routeTime = 1_000;
     const focusTrain = vi.fn(() => true);
+    const storeAgentTrace = vi.fn(async (
+      _trace: import("../../application/agent/agent-trace").AgentTrace,
+    ) => undefined);
     const converse = vi
       .fn()
       .mockResolvedValueOnce({
@@ -94,7 +97,7 @@ describe("Bedrock viewer agent", () => {
         stopReason: "end_turn",
       });
 
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "18時20分に京都へ向かう特急を見せて",
       {
         trains: [train],
@@ -109,6 +112,7 @@ describe("Bedrock viewer agent", () => {
         setLayerVisibility: vi.fn(),
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
+        storeAgentTrace,
         maximumRouteTime: 1_800,
       },
       converse,
@@ -117,6 +121,11 @@ describe("Bedrock viewer agent", () => {
     expect(routeTime).toBe(1_100);
     expect(focusTrain).toHaveBeenCalledWith("service-1");
     expect(result).toContain("はるか16号");
+    expect(storeAgentTrace).toHaveBeenCalledOnce();
+    expect(storeAgentTrace.mock.calls[0]?.[0].events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "tool_called", toolName: "search_trains" }),
+      expect.objectContaining({ type: "viewer_action", status: "applied" }),
+    ]));
     const thirdRequest = converse.mock.calls[2]?.[0];
     expect(JSON.stringify(thirdRequest)).toContain('"serviceUid":"service-1"');
   });
@@ -148,7 +157,7 @@ describe("Bedrock viewer agent", () => {
         stopReason: "end_turn",
       });
 
-    await runBedrockViewerAgent(
+    await runViewerAgentRuntime(
       "深夜の時間にして",
       {
         trains: [train],
@@ -195,7 +204,7 @@ describe("Bedrock viewer agent", () => {
         stopReason: "end_turn",
       });
 
-    await runBedrockViewerAgent(
+    await runViewerAgentRuntime(
       "列車を見せて",
       {
         trains: [train],
@@ -258,7 +267,7 @@ describe("Bedrock viewer agent", () => {
         stopReason: "end_turn",
       });
 
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "今日の混雑のピークは？",
       {
         trains: [train],
@@ -325,7 +334,7 @@ describe("Bedrock viewer agent", () => {
         stopReason: "end_turn",
       });
 
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "現在遅れている列車は？",
       {
         trains: [train],
@@ -376,7 +385,7 @@ describe("Bedrock viewer agent", () => {
         stopReason: "end_turn",
       });
 
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "18時30分ごろ京都に着く特急はありますか",
       {
         trains: [train],
@@ -438,7 +447,7 @@ describe("Bedrock viewer agent", () => {
         stopReason: "end_turn",
       });
 
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "雨にして目的地アーチを表示して",
       {
         trains: [train],
@@ -520,7 +529,7 @@ describe("Bedrock viewer agent", () => {
         stopReason: "end_turn",
       });
 
-    await runBedrockViewerAgent(
+    await runViewerAgentRuntime(
       "平日の10時ごろ大阪に着く特急は？",
       {
         trains: [train],
@@ -616,7 +625,7 @@ describe("Bedrock viewer agent", () => {
         stopReason: "end_turn",
       });
 
-    await runBedrockViewerAgent(
+    await runViewerAgentRuntime(
       "京都に行きたい",
       {
         trains: [train],
@@ -690,7 +699,7 @@ describe("Bedrock viewer agent", () => {
         stopReason: "end_turn",
       });
 
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "京都に行きたい",
       {
         trains: [train],
@@ -769,7 +778,7 @@ describe("Bedrock viewer agent", () => {
         stopReason: "end_turn",
       });
 
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "西大路から京都に行きたい",
       {
         trains: [routeTrain],
@@ -837,7 +846,7 @@ describe("Bedrock viewer agent", () => {
       stopReason: "tool_use",
     });
 
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "いまから姫路から関西空港にいきたい",
       {
         trains: [airportRoute],
@@ -925,7 +934,7 @@ describe("Bedrock viewer agent", () => {
         stopReason: "end_turn",
       });
 
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "8/15の7:00に嵯峨嵐山から関西空港に行きたい",
       {
         trains: [train],
@@ -968,7 +977,7 @@ describe("Bedrock viewer agent", () => {
 
   it("answers a train-name follow-up from the previous journey without another model call", async () => {
     const converse = vi.fn();
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "特急やくもは？",
       {
         trains: [train],
@@ -1071,7 +1080,7 @@ describe("Bedrock viewer agent", () => {
         stopReason: "end_turn",
       });
 
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "大阪から京都へ行きたい",
       {
         trains: [train],
@@ -1146,7 +1155,7 @@ describe("Bedrock viewer agent", () => {
       }],
     }));
 
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "新幹線を使いたくない",
       {
         trains: [train],
@@ -1241,7 +1250,7 @@ describe("Bedrock viewer agent", () => {
         }],
       }],
     }));
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "特急やくもを避けて",
       {
         trains: [train],
@@ -1337,7 +1346,7 @@ describe("Bedrock viewer agent", () => {
         }],
       }],
     }));
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "やくもにのりたい",
       {
         trains: [train, yakumoTrain],
@@ -1409,7 +1418,7 @@ describe("Bedrock viewer agent", () => {
       stopReason: "tool_use",
     });
 
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "明日、出雲で1泊して観光したい",
       {
         trains: [izumoTrain], getPositions: () => [], getRouteTime: () => 1_200,
@@ -1471,7 +1480,7 @@ describe("Bedrock viewer agent", () => {
       stopReason: "tool_use",
     });
 
-    await runBedrockViewerAgent(
+    await runViewerAgentRuntime(
       "明日、出雲大社に1泊して観光したい",
       {
         trains: [izumoTrain], getPositions: () => [], getRouteTime: () => 1_200,
@@ -1508,7 +1517,7 @@ describe("Bedrock viewer agent", () => {
       stopReason: "tool_use",
     });
 
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "出雲大社へ旅行したい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
@@ -1554,7 +1563,7 @@ describe("Bedrock viewer agent", () => {
       stopReason: "tool_use",
     });
 
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "駅からレンタカーを借りたい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
@@ -1607,7 +1616,7 @@ describe("Bedrock viewer agent", () => {
         stopReason: "end_turn",
       });
 
-    const result = await runBedrockViewerAgent(
+    const result = await runViewerAgentRuntime(
       "旅行ではいつも早朝を避けたい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,

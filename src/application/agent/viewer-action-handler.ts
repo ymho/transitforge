@@ -45,6 +45,9 @@ export function scopeFromEvidence(
   const scope = new ViewerActionTaskScope(executionId);
   for (const item of evidence) {
     scope.registerEvidence(item.id);
+    if (item.category === "train" && typeof item.facts.serviceUid === "string") {
+      scope.registerTrain(item.facts.serviceUid);
+    }
     if (item.category !== "journey") continue;
     const serviceUids = item.facts.serviceUids;
     scope.registerJourney(

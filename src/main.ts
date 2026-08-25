@@ -27,6 +27,7 @@ import {
   searchRepresentativeTimetable,
   journeySearchService,
   submitConversationFeedback,
+  submitAgentTrace,
 } from "./adapters/http/agent-api/bedrock-agent";
 import { loadTrainIndex } from "./adapters/http/viewer-input/train-index";
 import type { StationCoordinate } from "./domain/rail/station";
@@ -99,12 +100,12 @@ import { ViewerActionExecutor } from "./application/viewer/viewer-action-executo
 import { ViewerActionTaskScope } from "./application/viewer/viewer-action-policy";
 import { loadViewerElements } from "./application/viewer/viewer-elements";
 import { resolveViewerDisplayMode } from "./domain/viewer-display-mode";
-import { runBedrockViewerAgent } from "./adapters/bedrock/legacy-viewer-agent";
-import { createLocalViewerAgent } from "./application/viewer-agent/viewer-agent-local";
+import { runViewerAgentRuntime } from "./adapters/bedrock/viewer-agent-runtime";
+import { createLocalViewerAgent } from "./application/agent/local-viewer-agent";
 import {
   directRouteRequestFromPrompt,
   isUsableOriginStation,
-} from "./application/viewer-agent/viewer-agent-local-tools";
+} from "./application/viewer/viewer-local-tools";
 import type { ViewerAgentJourneyPlan } from "./domain/viewer-agent-response";
 import {
   configureAiGuidePanel,
@@ -1216,7 +1217,8 @@ if (!token) {
                 journeyPlan: previousJourneyPlan,
               };
             }
-            const response = await runBedrockViewerAgent(
+            const runtimeRequestIds: string[] = [];
+            const response = await runViewerAgentRuntime(
               prompt,
               {
                 trains: trainIndex.trains,
@@ -1263,11 +1265,21 @@ if (!token) {
                   activeConversationSession.id,
                 ),
                 getUserProfile: () => loadUserProfile(localStorage),
+                storeAgentTrace: async (trace) => {
+                  await submitAgentTrace({
+                    taskId: activeConversationSession.id,
+                    requestIds: runtimeRequestIds,
+                    trace,
+                  });
+                },
                 maximumRouteTime,
               },
               async (messages) => {
                 const result = await invokeBedrockAgent(messages);
                 onResponseMetadata?.(result.metadata);
+                if (result.metadata.requestId) {
+                  runtimeRequestIds.push(result.metadata.requestId);
+                }
                 return result.body;
               },
             );

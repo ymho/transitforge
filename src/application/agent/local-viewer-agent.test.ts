@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { Train } from "../../domain/rail/train";
-import { createLocalViewerAgent } from "./viewer-agent-local";
+import { createLocalViewerAgent } from "./local-viewer-agent";
 
 const train: Train = {
   service_uid: "direct",

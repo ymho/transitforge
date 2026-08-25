@@ -78,6 +78,10 @@ tests/               Pythonサービスと境界を横断するテスト
 tools/               検証 評価 再生成コマンド
 ```
 
+本番のコンシェルジュは`src/application/agent/agent-runtime.ts`を唯一のモデル実行入口とする。
+Bedrock接続は`src/adapters/bedrock/viewer-agent-runtime.ts`で共通Tool Evidence Trace
+Viewer Actionへ適合し ローカル開発用Agentは`src/application/agent/local-viewer-agent.ts`へ分離する。
+
 TypeScriptのテストは対象モジュールの隣へ置く。Pythonの配置とfixtureの更新方法は
 [テストガイド](tests/README.md)を参照する。AWSリソース名など互換性に関わる
 `transitforge`識別子は製品名とは分けて維持する
