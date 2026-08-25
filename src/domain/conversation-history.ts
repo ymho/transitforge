@@ -52,6 +52,21 @@ export function appendConversationHistory(
   } satisfies StoredConversationHistory));
 }
 
+export function deleteConversationHistory(
+  storage: Pick<Storage, "getItem" | "setItem">,
+  sessionId: string,
+): void {
+  if (!isSafeIdentifier(sessionId)) return;
+  const stored = readStoredHistory(storage);
+  if (!stored || !(sessionId in stored.sessions)) return;
+  const sessions = { ...stored.sessions };
+  delete sessions[sessionId];
+  storage.setItem(conversationHistoryStorageKey, JSON.stringify({
+    version: 2,
+    sessions,
+  } satisfies StoredConversationHistory));
+}
+
 export function recentConversationContext(
   entries: ConversationHistoryEntry[],
   currentPrompt?: string,

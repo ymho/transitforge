@@ -3,7 +3,7 @@ import type { UserProfile } from "./travel-profile";
 
 export const conversationSessionStorageKey = "transitforge.conversation-sessions.v2";
 export const travelMemoryStorageKey = "transitforge.travel-memories.v1";
-const legacyConversationSessionStorageKey = "transitforge.conversation-sessions.v1";
+export const legacyConversationSessionStorageKey = "transitforge.conversation-sessions.v1";
 const maximumSessions = 20;
 const maximumMemories = 20;
 
@@ -11,6 +11,7 @@ export type ConversationScope = "general" | "trip" | "place" | "route";
 
 export interface ConversationSession {
   id: string;
+  title: string;
   scope: ConversationScope;
   tripPlanId?: string;
   summary: string;
@@ -42,6 +43,7 @@ export function createConversationSession(
   const timestamp = now.toISOString();
   return {
     id: crypto.randomUUID(),
+    title: "新しい会話",
     scope,
     ...(tripPlanId ? { tripPlanId } : {}),
     summary: "",
@@ -215,7 +217,10 @@ function readConversationSessionStore(
       typeof value.activeSessionId !== "string" || !Array.isArray(value.sessions)) {
       return undefined;
     }
-    const sessions = value.sessions.filter(isConversationSession).slice(-maximumSessions);
+    const sessions = value.sessions.flatMap((session) => {
+      const parsed = parseConversationSession(session);
+      return parsed ? [parsed] : [];
+    }).slice(-maximumSessions);
     if (!sessions.some((session) => session.id === value.activeSessionId)) return undefined;
     return { version: 2, activeSessionId: value.activeSessionId, sessions };
   } catch {
@@ -230,20 +235,41 @@ function readLegacyConversationSession(
     const raw = storage.getItem(legacyConversationSessionStorageKey);
     if (!raw) return undefined;
     const value: unknown = JSON.parse(raw);
-    return isConversationSession(value) ? value : undefined;
+    return parseConversationSession(value);
   } catch {
     return undefined;
   }
 }
 
-function isConversationSession(value: unknown): value is ConversationSession {
+export function parseConversationSession(value: unknown): ConversationSession | undefined {
   if (!isRecord(value) || !isSafeIdentifier(value.id) ||
     !isConversationScope(value.scope) || typeof value.summary !== "string" ||
     !isStringArray(value.resolvedTopics) || !isStringArray(value.pendingTopics) ||
     typeof value.createdAt !== "string" || typeof value.updatedAt !== "string") {
-    return false;
+    return undefined;
   }
-  return value.tripPlanId === undefined || isSafeIdentifier(value.tripPlanId);
+  if (value.tripPlanId !== undefined && !isSafeIdentifier(value.tripPlanId)) {
+    return undefined;
+  }
+  const title = typeof value.title === "string" && value.title.trim()
+    ? value.title.trim().slice(0, 80)
+    : titleFromSummary(value.summary);
+  return {
+    id: value.id,
+    title,
+    scope: value.scope,
+    ...(value.tripPlanId ? { tripPlanId: value.tripPlanId } : {}),
+    summary: value.summary,
+    resolvedTopics: [...value.resolvedTopics],
+    pendingTopics: [...value.pendingTopics],
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+  };
+}
+
+function titleFromSummary(summary: string): string {
+  const title = summary.trim().replaceAll(/\s+/g, " ").slice(0, 40);
+  return title || "過去の会話";
 }
 
 function isTravelMemory(value: unknown): value is TravelMemory {

@@ -25,7 +25,7 @@ describe("conversation session", () => {
   });
 
   it("only includes high confidence memories in model context", () => {
-    const session = { id: "s", scope: "general" as const, summary: "", resolvedTopics: [], pendingTopics: [], createdAt: "", updatedAt: "" };
+    const session = { id: "s", title: "会話", scope: "general" as const, summary: "", resolvedTopics: [], pendingTopics: [], createdAt: "", updatedAt: "" };
     const summary = conversationContextSummary(undefined, undefined, session, [
       { id: "1", statement: "早朝を避けたい", confidence: "high", sourceSessionId: "s", createdAt: "" },
       { id: "2", statement: "海が好きかもしれない", confidence: "low", sourceSessionId: "s", createdAt: "" },
@@ -37,6 +37,7 @@ describe("conversation session", () => {
   it("bounds a large model context without producing broken JSON", () => {
     const session = {
       id: "s",
+      title: "会話",
       scope: "trip" as const,
       summary: "長い相談".repeat(200),
       resolvedTopics: [],
@@ -59,7 +60,7 @@ describe("conversation session", () => {
 
   it("keeps recent sessions and restores the active session", () => {
     const storage = memoryStorage();
-    const first = { id: "first", scope: "general" as const, summary: "", resolvedTopics: [], pendingTopics: [], createdAt: "2026-08-23", updatedAt: "2026-08-23" };
+    const first = { id: "first", title: "最初", scope: "general" as const, summary: "", resolvedTopics: [], pendingTopics: [], createdAt: "2026-08-23", updatedAt: "2026-08-23" };
     const second = { ...first, id: "second", scope: "trip" as const, updatedAt: "2026-08-24" };
     saveConversationSession(storage, first);
     saveConversationSession(storage, second);

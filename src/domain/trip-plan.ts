@@ -220,6 +220,21 @@ export function saveTripPlan(
   } satisfies TripPlanStore));
 }
 
+export function deleteTripPlan(
+  storage: Pick<Storage, "getItem" | "setItem">,
+  conversationSessionId: string,
+): void {
+  if (!isConversationSessionId(conversationSessionId)) return;
+  const previous = readTripPlanStore(storage)?.plansBySessionId;
+  if (!previous || !(conversationSessionId in previous)) return;
+  const plansBySessionId = { ...previous };
+  delete plansBySessionId[conversationSessionId];
+  storage.setItem(tripPlanStoreStorageKey, JSON.stringify({
+    version: 2,
+    plansBySessionId,
+  } satisfies TripPlanStore));
+}
+
 export function migrateLegacyTripPlan(
   storage: Pick<Storage, "getItem" | "setItem" | "removeItem">,
   conversationSessionId: string,
