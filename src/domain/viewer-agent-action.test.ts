@@ -8,6 +8,9 @@ describe("viewer agent action", () => {
       parseViewerAgentActions([
         { type: "set_display_time", routeTimeMinutes: 1_080 },
         { type: "focus_train", serviceUid: "service-a" },
+        { type: "highlight_route", journeyId: "journey-a" },
+        { type: "compare_journeys", journeyIds: ["journey-a", "journey-b"] },
+        { type: "show_evidence", evidenceIds: ["evidence-a"] },
         { type: "set_weather", weather: "cloudy" },
         {
           type: "set_layer_visibility",
@@ -18,6 +21,9 @@ describe("viewer agent action", () => {
     ).toEqual([
       { type: "set_display_time", routeTimeMinutes: 1_080 },
       { type: "focus_train", serviceUid: "service-a" },
+      { type: "highlight_route", journeyId: "journey-a" },
+      { type: "compare_journeys", journeyIds: ["journey-a", "journey-b"] },
+      { type: "show_evidence", evidenceIds: ["evidence-a"] },
       { type: "set_weather", weather: "cloudy" },
       {
         type: "set_layer_visibility",
@@ -35,5 +41,14 @@ describe("viewer agent action", () => {
     expect(() =>
       parseViewerAgentActions([{ type: "delete_train", serviceUid: "service-a" }]),
     ).toThrow("1 件目");
+    expect(() => parseViewerAgentActions([
+      { type: "focus_train", serviceUid: "service-a", javascript: "alert(1)" },
+    ])).toThrow("1 件目");
+    expect(() => parseViewerAgentActions([
+      { type: "compare_journeys", journeyIds: ["journey-a", "journey-a"] },
+    ])).toThrow("1 件目");
+    expect(() => parseViewerAgentActions([
+      { type: "set_weather", weather: "rain", command: "unsafe" },
+    ])).toThrow("1 件目");
   });
 });

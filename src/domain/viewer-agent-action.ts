@@ -12,6 +12,18 @@ export type ViewerAgentAction =
       serviceUid: string;
     }
   | {
+      type: "highlight_route";
+      journeyId: string;
+    }
+  | {
+      type: "compare_journeys";
+      journeyIds: string[];
+    }
+  | {
+      type: "show_evidence";
+      evidenceIds: string[];
+    }
+  | {
       type: "set_weather";
       weather: WeatherMode;
     }
@@ -34,6 +46,7 @@ export function parseViewerAgentActions(value: unknown): ViewerAgentAction[] {
     switch (action.type) {
       case "set_display_time":
         if (
+          hasOnlyFields(action, ["type", "routeTimeMinutes"]) &&
           typeof action.routeTimeMinutes === "number" &&
           Number.isFinite(action.routeTimeMinutes) &&
           action.routeTimeMinutes >= 0
@@ -46,8 +59,8 @@ export function parseViewerAgentActions(value: unknown): ViewerAgentAction[] {
         break;
       case "focus_train":
         if (
-          typeof action.serviceUid === "string" &&
-          action.serviceUid.length > 0
+          hasOnlyFields(action, ["type", "serviceUid"]) &&
+          isBoundedIdentifier(action.serviceUid)
         ) {
           return {
             type: action.type,
@@ -55,12 +68,37 @@ export function parseViewerAgentActions(value: unknown): ViewerAgentAction[] {
           };
         }
         break;
+      case "highlight_route":
+        if (
+          hasOnlyFields(action, ["type", "journeyId"]) &&
+          isBoundedIdentifier(action.journeyId)
+        ) {
+          return { type: action.type, journeyId: action.journeyId };
+        }
+        break;
+      case "compare_journeys":
+        if (
+          hasOnlyFields(action, ["type", "journeyIds"]) &&
+          isIdentifierList(action.journeyIds, 2, 3)
+        ) {
+          return { type: action.type, journeyIds: [...action.journeyIds] };
+        }
+        break;
+      case "show_evidence":
+        if (
+          hasOnlyFields(action, ["type", "evidenceIds"]) &&
+          isIdentifierList(action.evidenceIds, 1, 10)
+        ) {
+          return { type: action.type, evidenceIds: [...action.evidenceIds] };
+        }
+        break;
       case "set_weather":
         if (
-          action.weather === "clear" ||
-          action.weather === "cloudy" ||
-          action.weather === "rain" ||
-          action.weather === "snow"
+          hasOnlyFields(action, ["type", "weather"]) &&
+          (action.weather === "clear" ||
+            action.weather === "cloudy" ||
+            action.weather === "rain" ||
+            action.weather === "snow")
         ) {
           return {
             type: action.type,
@@ -70,6 +108,7 @@ export function parseViewerAgentActions(value: unknown): ViewerAgentAction[] {
         break;
       case "set_layer_visibility":
         if (
+          hasOnlyFields(action, ["type", "layer", "visible"]) &&
           (action.layer === "congestion" ||
             action.layer === "destination_arcs") &&
           typeof action.visible === "boolean"
@@ -92,5 +131,26 @@ function invalidAction(index: number): Error {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyFields(value: Record<string, unknown>, fields: string[]): boolean {
+  const allowed = new Set(fields);
+  return Object.keys(value).every((field) => allowed.has(field));
+}
+
+function isBoundedIdentifier(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0 && value.length <= 160;
+}
+
+function isIdentifierList(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+): value is string[] {
+  return Array.isArray(value) &&
+    value.length >= minimum &&
+    value.length <= maximum &&
+    value.every(isBoundedIdentifier) &&
+    new Set(value).size === value.length;
 }

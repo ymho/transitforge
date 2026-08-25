@@ -102,9 +102,11 @@ import {
 } from "./domain/train-position";
 import type { TrainPosition } from "./domain/train-position";
 import {
-  parseViewerAgentActions,
   type ViewerAgentLayer,
 } from "./domain/viewer-agent-action";
+import { AgentTraceRecorder } from "./domain/agent/agent-trace";
+import { ViewerActionExecutor } from "./domain/viewer-action-executor";
+import { ViewerActionTaskScope } from "./domain/viewer-action-policy";
 import { resolveViewerDisplayMode } from "./domain/viewer-display-mode";
 import { runBedrockViewerAgent } from "./domain/viewer-agent-bedrock";
 import { createLocalViewerAgent } from "./domain/viewer-agent-local";
@@ -1094,6 +1096,29 @@ if (!token) {
             destinationArcs.setEnabled(visible);
           }
         };
+        const viewerControlExecutionId = "viewer-control-session";
+        const viewerControlScope = new ViewerActionTaskScope(viewerControlExecutionId);
+        const viewerControlTrace = new AgentTraceRecorder(viewerControlExecutionId);
+        const viewerActionExecutor = new ViewerActionExecutor({
+          setDisplayTime: (routeTimeMinutes) => {
+            displayTime.value = String(routeTimeMinutes);
+            displayTime.dispatchEvent(new Event("input", { bubbles: true }));
+          },
+          focusTrain: selection.focusTrain,
+          highlightRoute: () => false,
+          compareJourneys: () => false,
+          showEvidence: () => false,
+          setWeather: selectWeather,
+          setLayerVisibility,
+        }, maximumRouteTime);
+        const setViewerDisplayTime = (routeTimeMinutes: number) => {
+          const execution = viewerActionExecutor.execute(
+            { type: "set_display_time", routeTimeMinutes },
+            viewerControlScope,
+            viewerControlTrace,
+          );
+          if (!execution.ok) throw new Error(execution.reason);
+        };
         let previousJourneyPlan: ViewerAgentJourneyPlan | undefined;
         let pendingJourneyLegChange: PendingJourneyLegChange | undefined;
         let pendingJourneyGuidance: JourneyNavigationGuidance | undefined;
@@ -1102,11 +1127,7 @@ if (!token) {
           getTrains: () => displayTrains,
           getPositions: () => displayedPositions,
           getRouteTime: () => Number(displayTime.value),
-          setRouteTime: (routeTimeMinutes) =>
-            applyViewerAgentActions(
-              [{ type: "set_display_time", routeTimeMinutes }],
-              selection.focusTrain,
-            ),
+          setRouteTime: setViewerDisplayTime,
           focusTrain: selection.focusTrain,
           setWeather: selectWeather,
           setLayerVisibility,
@@ -1216,11 +1237,7 @@ if (!token) {
                 getTrains: () => displayTrains,
                 getPositions: () => displayedPositions,
                 getRouteTime: () => Number(displayTime.value),
-                setRouteTime: (routeTimeMinutes) =>
-                  applyViewerAgentActions(
-                    [{ type: "set_display_time", routeTimeMinutes }],
-                    selection.focusTrain,
-                  ),
+                setRouteTime: setViewerDisplayTime,
                 focusTrain: selection.focusTrain,
                 setWeather: selectWeather,
                 setLayerVisibility,
@@ -1412,23 +1429,6 @@ function maximumRouteTimeFor(
 
 function emptyFeatureCollection() {
   return { type: "FeatureCollection" as const, features: [] };
-}
-
-function applyViewerAgentActions(
-  value: unknown,
-  focusTrain: (serviceUid: string) => boolean,
-): void {
-  for (const action of parseViewerAgentActions(value)) {
-    if (action.type === "set_display_time") {
-      if (!displayTime) {
-        throw new Error("表示時刻を操作できません。");
-      }
-      displayTime.value = String(action.routeTimeMinutes);
-      displayTime.dispatchEvent(new Event("input", { bubbles: true }));
-    } else if (action.type === "focus_train") {
-      focusTrain(action.serviceUid);
-    }
-  }
 }
 
 function configureDateTimeInput(
