@@ -3,6 +3,18 @@ import type { AgentRuntimeFeature, AgentRuntimeStatus } from "../runtime-contrac
 export const agentEvaluationDatasetSchemaVersion = "agent-eval-dataset-v1";
 export const agentEvaluationObservationSchemaVersion = "agent-eval-observations-v1";
 
+export const agentEvaluationCategories = [
+  "ambiguous-request",
+  "cancellation",
+  "delay",
+  "constraint",
+  "information-gap",
+  "multi-tool",
+  "viewer-action",
+] as const;
+
+export type AgentEvaluationCategory = typeof agentEvaluationCategories[number];
+
 export interface AgentEvaluationDataset {
   schemaVersion: typeof agentEvaluationDatasetSchemaVersion;
   cases: AgentEvaluationCase[];
@@ -61,7 +73,7 @@ export interface AgentEvaluationCaseResult {
 }
 
 export interface AgentEvaluationReport {
-  schemaVersion: "agent-eval-report-v1";
+  schemaVersion: "agent-eval-report-v2";
   datasetSchemaVersion: typeof agentEvaluationDatasetSchemaVersion;
   caseCount: number;
   passedCaseCount: number;
@@ -73,7 +85,15 @@ export interface AgentEvaluationReport {
     taskCompletion: number;
     viewerActionValidity: number;
   };
+  categories: AgentEvaluationCategoryReport[];
   cases: AgentEvaluationCaseResult[];
+}
+
+export interface AgentEvaluationCategoryReport {
+  category: AgentEvaluationCategory;
+  caseCount: number;
+  passedCaseCount: number;
+  metrics: AgentEvaluationReport["metrics"];
 }
 
 export type AgentEvaluationProfile = "smoke" | "full";
@@ -92,6 +112,7 @@ export type AgentEvaluationThresholds = Record<
 export interface AgentEvaluationRunReport extends AgentEvaluationReport {
   profile: AgentEvaluationProfile;
   selectedTag?: string;
+  selectedCaseId?: string;
   thresholds: AgentEvaluationThresholds;
   passed: boolean;
   thresholdFailures: string[];

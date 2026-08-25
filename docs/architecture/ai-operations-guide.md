@@ -146,13 +146,14 @@ npx vitest run src/domain/agent/grounded-journey-agent.e2e.test.ts
 
 ## Agent Evaluation
 
-初期20ケースの再現可能なobservationを評価し JSONとMarkdown reportを生成する。
+35ケースの再現可能なobservationを評価し JSONとMarkdown reportを生成する。
 
 ```bash
 npm run eval:agent
 npm run eval:agent -- --output-dir /tmp/rai-agent-eval
 npm run eval:agent:smoke -- --output-dir /tmp/rai-agent-eval-smoke
 npm run eval:agent:full -- --output-dir /tmp/rai-agent-eval-full
+npm run eval:agent -- --case cancelled-service
 ```
 
 既定出力先は`/tmp/transitforge-agent-eval`とする。reportは
@@ -168,6 +169,12 @@ observation fixtureは評価器の再現確認用であり 実Agentの評価で�
 どちらも実測値と閾値をJSON Markdownへ出し artifactとしてSmoke 14日 Full 30日保持する。
 現在の決定論的profileでは各指標の最低値を100% Unsupported Claim Rateの最大値を0%とする。
 通常のunit testとEvalは別Workflowであり 失敗箇所を別checkとして確認する。
+
+Full reportは曖昧要求 運休 遅延 制約 情報不足 複数Tool Viewer Actionについて
+Tool Selection Constraint Satisfaction Grounded Claim Unsupported Claim Task Completion
+Viewer Action Validityをカテゴリ別にも出す。失敗caseは表示されたIDを`--case`へ渡して
+1件だけ再実行できる。運休 行き先変更 列車制約など既知不具合に対応するcaseは削除せず
+regressionとして維持する。
 
 ## Read-only MCP
 

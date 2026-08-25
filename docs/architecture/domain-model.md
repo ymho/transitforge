@@ -232,11 +232,18 @@ ExecutorはDOMやMapboxを直接参照せず表示用Portだけを呼び出す�
 
 version付きdatasetとProvider非依存のobservationを入力し Tool選択 制約充足 Grounded Claim
 Unsupported Claim Task完了 Viewer Actionの6指標をコードで判定する。Runtime結果は
-Structured Trace Claim Viewer Actionからobservationへ正規化する。初期20ケースは既存の
+Structured Trace Claim Viewer Actionからobservationへ正規化する。35ケースのうち経路fixtureを
+利用できるものは既存の
 journey search scenario IDを参照し 鉄道fixtureを重複定義しない。
 
 reportは機械処理用JSONとレビュー用Markdownを同じ結果から生成する。
 datasetにないobservationや不足するobservationは失敗として扱い 評価対象の取り違えを隠さない。
+曖昧要求 運休 遅延 制約 情報不足 複数Tool Viewer Actionを固定カテゴリとして
+全6指標をJSONとMarkdownへ出す。事実Claimが存在しない情報不足カテゴリではGroundedと
+Unsupportedを`N/A`とし 0件を成功率100%として偽装しない。
+
+runnerの`--case`はcase IDでdatasetとobservationを同時に1件へ絞り込む。
+存在しないIDは全件実行へフォールバックせず明示的に失敗する。
 
 Evaluation profileは`smoke`と`full`を持つ。Smokeはtagで選んだ軽量集合 Fullは全datasetを使う。
 run reportは6指標の実測値 閾値 判定とcase結果を含み case失敗または閾値未達で失敗する。

@@ -70,7 +70,11 @@ python3 -m unittest discover -s tests -v
 npm run eval:agent
 npm run eval:agent:smoke
 npm run eval:agent:full
+npm run eval:agent -- --case cancelled-service
 ```
+
+Agent Benchmarkは35件を収録し 曖昧要求 運休 遅延 制約 情報不足 複数Tool
+Viewer Actionのカテゴリ別に6指標を出す。失敗したcase IDは`--case`で単独再実行できる
 
 経路検索のシナリオだけを読みやすい結果付きで確認する場合は次を実行する
 

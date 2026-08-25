@@ -56,3 +56,22 @@ export function runAgentEvaluationProfile(
     thresholdFailures,
   };
 }
+
+export function selectAgentEvaluationCase(
+  dataset: AgentEvaluationDataset,
+  observations: AgentEvaluationObservationSet,
+  caseId: string,
+): {
+  dataset: AgentEvaluationDataset;
+  observations: AgentEvaluationObservationSet;
+} {
+  const selected = dataset.cases.find(({ id }) => id === caseId);
+  if (!selected) throw new Error(`Agent Eval caseが見つかりません: ${caseId}`);
+  return {
+    dataset: { ...dataset, cases: [selected] },
+    observations: {
+      ...observations,
+      observations: observations.observations.filter((item) => item.caseId === caseId),
+    },
+  };
+}

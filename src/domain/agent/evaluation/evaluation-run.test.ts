@@ -7,7 +7,7 @@ import {
   parseAgentEvaluationObservations,
 } from "./evaluation-dataset";
 import { renderAgentEvaluationRunMarkdown } from "./evaluation-report";
-import { runAgentEvaluationProfile } from "./evaluation-run";
+import { runAgentEvaluationProfile, selectAgentEvaluationCase } from "./evaluation-run";
 
 const fixtures = fileURLToPath(new URL("../../../../tests/fixtures/", import.meta.url));
 
@@ -23,9 +23,28 @@ describe("Agent Evaluation profiles", () => {
     expect(smoke.caseCount).toBe(11);
     expect(smoke.selectedTag).toBe("smoke");
     expect(smoke.passed).toBe(true);
-    expect(full.caseCount).toBe(20);
+    expect(full.caseCount).toBe(35);
     expect(full.selectedTag).toBeUndefined();
     expect(full.passed).toBe(true);
+  });
+
+  it("selects one failed case for deterministic reruns", () => {
+    const dataset = parseAgentEvaluationDataset(readJson("agent-eval-cases.json"));
+    const observations = parseAgentEvaluationObservations(
+      readJson("agent-eval-observations.json"),
+    );
+
+    const selected = selectAgentEvaluationCase(dataset, observations, "cancelled-service");
+    expect(selected.dataset.cases.map(({ id }) => id)).toEqual(["cancelled-service"]);
+    expect(selected.observations.observations.map(({ caseId }) => caseId))
+      .toEqual(["cancelled-service"]);
+    expect(runAgentEvaluationProfile(
+      selected.dataset,
+      selected.observations,
+      "full",
+    ).caseCount).toBe(1);
+    expect(() => selectAgentEvaluationCase(dataset, observations, "missing"))
+      .toThrow("Agent Eval caseが見つかりません: missing");
   });
 
   it("prints the failed metric and threshold in both report formats", () => {

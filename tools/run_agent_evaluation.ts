@@ -6,7 +6,10 @@ import {
   parseAgentEvaluationObservations,
 } from "../src/domain/agent/evaluation/evaluation-dataset";
 import { renderAgentEvaluationRunMarkdown } from "../src/domain/agent/evaluation/evaluation-report";
-import { runAgentEvaluationProfile } from "../src/domain/agent/evaluation/evaluation-run";
+import {
+  runAgentEvaluationProfile,
+  selectAgentEvaluationCase,
+} from "../src/domain/agent/evaluation/evaluation-run";
 import type { AgentEvaluationProfile } from "../src/domain/agent/evaluation/evaluation-contract";
 
 const root = resolve(import.meta.dirname, "..");
@@ -19,9 +22,16 @@ const observationsPath = resolve(
 );
 const profile = parseProfile(argument("--profile") ?? "full");
 
-const dataset = parseAgentEvaluationDataset(await readJson(datasetPath));
-const observations = parseAgentEvaluationObservations(await readJson(observationsPath));
-const report = runAgentEvaluationProfile(dataset, observations, profile);
+const parsedDataset = parseAgentEvaluationDataset(await readJson(datasetPath));
+const parsedObservations = parseAgentEvaluationObservations(await readJson(observationsPath));
+const selectedCaseId = argument("--case");
+const selection = selectedCaseId === undefined
+  ? { dataset: parsedDataset, observations: parsedObservations }
+  : selectAgentEvaluationCase(parsedDataset, parsedObservations, selectedCaseId);
+const report = {
+  ...runAgentEvaluationProfile(selection.dataset, selection.observations, profile),
+  ...(selectedCaseId === undefined ? {} : { selectedCaseId }),
+};
 await mkdir(outputDirectory, { recursive: true });
 await Promise.all([
   writeFile(

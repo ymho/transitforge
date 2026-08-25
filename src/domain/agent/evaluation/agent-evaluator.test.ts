@@ -13,7 +13,7 @@ import { renderAgentEvaluationMarkdown } from "./evaluation-report";
 const fixtures = fileURLToPath(new URL("../../../../tests/fixtures/", import.meta.url));
 
 describe("Agent Evaluation Framework", () => {
-  it("evaluates 20 reproducible cases and reuses known journey scenarios", () => {
+  it("evaluates 35 reproducible cases and reuses known journey scenarios", () => {
     const dataset = parseAgentEvaluationDataset(readJson("agent-eval-cases.json"));
     const observations = parseAgentEvaluationObservations(
       readJson("agent-eval-observations.json"),
@@ -21,12 +21,12 @@ describe("Agent Evaluation Framework", () => {
     const journeyScenarios = readJson("journey-search-scenarios.json") as Array<{ id: string }>;
     const journeyScenarioIds = new Set(journeyScenarios.map(({ id }) => id));
 
-    expect(dataset.cases).toHaveLength(20);
+    expect(dataset.cases).toHaveLength(35);
     expect(dataset.cases.every(({ journeyScenarioId }) =>
       journeyScenarioId === undefined || journeyScenarioIds.has(journeyScenarioId))).toBe(true);
 
     const report = evaluateAgentDataset(dataset, observations);
-    expect(report.passedCaseCount).toBe(20);
+    expect(report.passedCaseCount).toBe(35);
     expect(report.metrics).toEqual({
       toolSelectionAccuracy: 1,
       constraintSatisfaction: 1,
@@ -35,9 +35,26 @@ describe("Agent Evaluation Framework", () => {
       taskCompletion: 1,
       viewerActionValidity: 1,
     });
+    expect(report.categories.map(({ category }) => category)).toEqual([
+      "ambiguous-request",
+      "cancellation",
+      "delay",
+      "constraint",
+      "information-gap",
+      "multi-tool",
+      "viewer-action",
+    ]);
+    expect(report.categories.every(({ metrics }) =>
+      metrics.toolSelectionAccuracy === 1 &&
+      metrics.constraintSatisfaction === 1 &&
+      (metrics.groundedClaimRate === 1 || metrics.groundedClaimRate === null) &&
+      (metrics.unsupportedClaimRate === 0 || metrics.unsupportedClaimRate === null) &&
+      metrics.taskCompletion === 1 &&
+      metrics.viewerActionValidity === 1)).toBe(true);
     const markdown = renderAgentEvaluationMarkdown(report);
-    expect(markdown).toContain("Cases: 20/20 passed");
+    expect(markdown).toContain("Cases: 35/35 passed");
     expect(markdown).toContain("Tool Selection Accuracy: 100.0%");
+    expect(markdown).toContain("| cancellation |");
   });
 
   it("detects tool constraint claim completion and Viewer regressions objectively", () => {
