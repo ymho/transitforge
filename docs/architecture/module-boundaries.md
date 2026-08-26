@@ -3,7 +3,7 @@
 ## 目的
 
 コードを技術ではなく責務から探せる状態にし 変更理由の異なるモジュールを分離する
-この文書は移行中の目標構成とimport方向の正本である
+この文書は現在の構成とimport方向の正本である
 
 Issue #203で採用した次期構成と段階移行は[ADR 0037](../decisions/0037-adopt-typescript-workspaces-and-shared-domain-modules.md)と
 [TypeScript構成移行台帳](typescript-migration-inventory.md)を参照する。この文書は現在稼働している境界を説明する。
@@ -82,10 +82,10 @@ Viewer UIは`presentation`の機能別ディレクトリに置く
 
 CSSの所有範囲と表示比較は`docs/architecture/viewer-styles.md`を正本とする
 
-## 移行中の例外
+## 依存方向の例外
 
 `npm run architecture:check`は新しい逆向き依存を拒否する
-既に存在する違反だけを`tools/check_architecture_boundaries.mjs`へ移行Issue付きで列挙する
+例外が必要な場合だけ`tools/check_architecture_boundaries.mjs`へ期限付きIssueとともに列挙する
 現在の例外はない
 
 例外が不要になった場合は同じPRでallowlistから削除する

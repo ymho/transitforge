@@ -1,6 +1,6 @@
 # ADR 0033: AgentのオーケストレーションをApplicationへ置く
 
-- ステータス: Superseded by ADR 0034
+- ステータス: Superseded by ADR 0038
 - 日付: 2026-08-25
 
 ## 背景
@@ -25,7 +25,7 @@ Agent Runtime Tool Registry Evidence Trace EvaluationとViewer Actionが`src/dom
 - 旧Bedrock経路は機能単位の移行が終わるまでAdapterとして残る
 - `main.ts`はApplicationとAdapterを接続するComposition Rootとして扱う
 
-本番実行の一本化後の配置と境界は[ADR 0034](0034-use-one-production-agent-runtime.md)を正本とする。
+本番実行の一本化後の配置と境界は[ADR 0038](0038-use-one-production-agent-runtime.md)を正本とする。
 
 ## 確認
 

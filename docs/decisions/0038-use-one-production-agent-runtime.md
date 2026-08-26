@@ -1,4 +1,4 @@
-# ADR 0034: 本番Agent実行を共通Runtimeへ一本化する
+# ADR 0038: 本番Agent実行を共通Runtimeへ一本化する
 
 - ステータス: Accepted
 - 日付: 2026-08-25

@@ -73,7 +73,7 @@ modules/train/       列車 駅 経路座標と業務時刻の共有Domain
 modules/operation/   遅延 混雑 運休 行き先変更の共有Domain
 modules/journey/     経路条件 候補 比較 直通検索の共有Domain
 modules/trip/        旅行候補 費用 Profile TripContext 旅程の共有Domain
-frontend/src/domain/          移行中の鉄道 Agentの決定論的な契約と計算
+frontend/src/domain/          Viewerと端末内状態に閉じた決定論的な契約と計算
 frontend/src/usecases/        ユースケースと外部境界のPort
 frontend/src/features/        Concierge設定など画面へ渡す機能固有データ
 frontend/src/adapters/        ブラウザ HTTP Mapbox Bedrockへの接続
@@ -93,6 +93,10 @@ Viewer Actionへ適合し ローカル開発用Agentは`frontend/src/usecases/ag
 TypeScriptのテストは対象モジュールの隣へ置く。repository保守toolとfixtureの更新方法は
 [テストガイド](tests/README.md)を参照する。AWSリソース名など互換性に関わる
 `transitforge`識別子は製品名とは分けて維持する
+
+責務と依存方向は[モジュール境界](docs/architecture/module-boundaries.md)
+計算の正本は[Domainの所有権](docs/architecture/domain-ownership.md)
+移行結果は[TypeScript構成再編の完了監査](docs/architecture/typescript-reorganization-audit.md)を参照する
 
 ## 確認コマンド
 

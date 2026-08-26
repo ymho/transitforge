@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | 時刻表入力 | 列車 停車時刻 経路 駅 路線の計画データ | data-builder生成の`viewer-input` |
 | リアルタイム入力 | 混雑 遅延 行き先変更 停車状態 | data-builder収集の交通スナップショット |
-| 検索ドメイン | 入力をもとにした経路候補と制約 | `modules/`と移行中の`frontend/src/domain/` |
+| 検索ドメイン | 入力をもとにした経路候補と制約 | `modules/journey/domain` |
 | 旅行相談 | 普段の好みと今回の条件 旅行候補 旅程 | `modules/trip/domain` |
 | 会話状態 | セッション 履歴と端末内保存 | `frontend/src/domain/`とブラウザLocalStorage |
 | AI応答 | UIへ返す経路 旅行 会話の構造化結果 | `frontend/src/domain/viewer-agent-response.ts` |
@@ -215,7 +215,7 @@ RuntimeはProvider固有形式を扱わず 既定で反復4回 model call 5回 T
 導入中は機能単位の`AgentRuntimeRolloutRouter`で比較した。現在の本番モデル実行は
 `MultiStepAgentRuntime`へ一本化し Bedrock AdapterはProvider DTOとTool Adapterを組成する。
 Toolが提案したViewer Actionも共通Runtime内でEvidence scopeを検証してから適用する。
-判断記録は[ADR 0034](../decisions/0034-use-one-production-agent-runtime.md)を参照する。
+判断記録は[ADR 0038](../decisions/0038-use-one-production-agent-runtime.md)を参照する。
 
 最初のE2Eシナリオは当日遅延を含む経路検索から候補比較を行い Evidence付き回答と
 検証済み経路の強調 Evidence表示までをoffline fixtureで通す。ProviderやS3へ接続せず

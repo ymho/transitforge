@@ -1,8 +1,8 @@
 # TypeScript Agent API
 
-Agent APIをNode.jsへ段階移行するためのBackend Application
+Node.jsで動作するAgent APIのBackend Application
 
-現時点ではLambda eventとHTTP応答 operation dispatchの契約互換基盤だけを持つ
+Lambda eventとHTTP応答 operation dispatch Domain Tool接続を所有する
 本番LambdaはこのworkspaceをbundleしたNode.js artifactを使用する
 
 ## 境界
@@ -14,9 +14,8 @@ Agent APIをNode.jsへ段階移行するためのBackend Application
 - `handler.ts`: AWS eventをApplicationへ渡す薄い入口
 
 AWS SDKの型は`contracts` `ports` `usecases` `handler.ts`へ持ち込まない
-今後追加するAdapterがSDK固有の入力と出力をPortへ変換する
 
-Feedback v1 v2とAgent TraceはPython版と同じschema S3 key prefix サイズ上限を維持する
+Feedback v1 v2とAgent Traceは既存schema S3 key prefix サイズ上限を維持する
 保存ログには会話本文や保存失敗の例外内容を含めない
 
 Bedrock会話は`ConversationModel` Portを通し provider固有の`system` `toolConfig`
