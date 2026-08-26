@@ -16,6 +16,7 @@
     "workspace:check": "node tools/check_workspace_layout.mjs",
     "architecture:check": "npm run workspace:check && node tools/check_architecture_boundaries.mjs",
     "assets:check": "npm run assets:check --workspace @raiquora/frontend",
+    "lambda:check": "npm run build --workspace @raiquora/agent-api && npm run lambda:check --workspace @raiquora/agent-api",
     "eval:agent": "node --import tsx tools/run_agent_evaluation.ts",
     "eval:agent:smoke": "npm run eval:agent -- --profile smoke",
     "eval:agent:full": "npm run eval:agent -- --profile full",

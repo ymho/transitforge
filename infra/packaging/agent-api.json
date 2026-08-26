@@ -1,6 +1,6 @@
 {
-  "source": "services/agent-api",
-  "handler": "handler.lambda_handler",
-  "includeExtensions": [".py"],
-  "excludeDirectories": ["__pycache__"]
+  "source": "backend/agent-api/dist/lambda",
+  "handler": "index.handler",
+  "runtime": "nodejs22.x",
+  "files": ["index.mjs"]
 }

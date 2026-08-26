@@ -4,16 +4,24 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1118.0",
+    "@aws-sdk/client-dynamodb": "^3.1118.0",
+    "@aws-sdk/client-s3": "^3.1118.0",
+    "@aws-sdk/client-secrets-manager": "^3.1118.0",
     "@raiquora/journey": "*",
     "@raiquora/operation": "*",
     "@raiquora/trip": "*"
   },
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "npm run typecheck && npm run bundle:lambda",
+    "typecheck": "tsc --noEmit",
+    "bundle:lambda": "esbuild src/lambda.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/lambda/index.mjs",
+    "lambda:check": "node ../../tools/check_lambda_package.mjs",
     "test": "TMPDIR=/tmp vitest run --root ../.. backend/agent-api/src"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
+    "esbuild": "^0.28.2",
     "typescript": "^5.8.3",
     "vitest": "^4.1.10"
   }

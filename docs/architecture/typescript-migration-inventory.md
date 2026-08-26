@@ -59,7 +59,7 @@
 | 対象 | 現在 | 移行先 | 移行Issue |
 | --- | --- | --- | --- |
 | Node依存とTypeScript設定 | npm workspaceと共通tsconfig | 同左 | #205 完了 |
-| Lambda artifact | Python source zip | bundled Node.js artifact | #219 |
+| Lambda artifact | bundled Node.js artifact | 同左 | #219 完了 |
 | Terraform Lambda runtime handler | `python3.12` `handler.lambda_handler` | Node.js runtimeとbundle handler | #219 |
 | CI CD | root ViteとPython test | workspace test build package check | #205 #219 |
 | Python Backendと固有test | `services/agent-api` `tests/services/agent_api` | TypeScript隣接test | #220 |

@@ -9,12 +9,6 @@ data "archive_file" "bedrock_agent" {
   type        = "zip"
   source_dir  = "${path.module}/../../../../${local.bedrock_agent_package.source}"
   output_path = "${path.module}/.terraform/bedrock-agent.zip"
-  excludes = [
-    "__pycache__/**",
-    "**/__pycache__/**",
-    "*.pyc",
-    "**/*.pyc",
-  ]
 }
 
 data "aws_iam_policy_document" "bedrock_agent_assume_role" {
@@ -143,7 +137,7 @@ resource "aws_lambda_function" "bedrock_agent" {
   function_name = local.bedrock_agent_function_name
   description   = "Relay validated TransitForge tool conversations to Amazon Bedrock"
   role          = aws_iam_role.bedrock_agent.arn
-  runtime       = "python3.12"
+  runtime       = local.bedrock_agent_package.runtime
   architectures = ["arm64"]
   handler       = local.bedrock_agent_package.handler
 
