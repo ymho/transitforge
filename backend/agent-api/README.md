@@ -19,6 +19,10 @@ AWS SDKの型は`contracts` `ports` `usecases` `handler.ts`へ持ち込まない
 Feedback v1 v2とAgent TraceはPython版と同じschema S3 key prefix サイズ上限を維持する
 保存ログには会話本文や保存失敗の例外内容を含めない
 
+Bedrock会話は`ConversationModel` Portを通し provider固有の`system` `toolConfig`
+`inferenceConfig`と応答検証をAdapter内へ閉じる。Applicationへ返すmetadataはmodel ID
+latency token usageだけに限定する
+
 ## 確認
 
 ```bash
