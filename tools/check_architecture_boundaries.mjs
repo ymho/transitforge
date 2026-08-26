@@ -5,7 +5,6 @@ const repositoryRoot = resolve(import.meta.dirname, "..");
 const sourceRoot = resolve(repositoryRoot, "frontend/src");
 const backendAgentApiRoot = resolve(repositoryRoot, "backend/agent-api/src");
 const modulesRoot = resolve(repositoryRoot, "modules");
-const agentApiDomainRoot = resolve(repositoryRoot, "services/agent-api/domain");
 const internalWorkspacePrefix = "@raiquora/";
 
 const layerRules = {
@@ -170,32 +169,6 @@ for (const absolutePath of sourceFiles(backendAgentApiRoot)) {
   }
 }
 
-for (const absolutePath of pythonFiles(agentApiDomainRoot)) {
-  const source = repositoryPath(absolutePath);
-  const content = readFileSync(absolutePath, "utf8");
-  for (const forbidden of [
-    "request_contract",
-    "boto3",
-    "bedrock_conversation",
-    "travel_provider_accommodation",
-    "travel_provider_credentials",
-  ]) {
-    const pattern = new RegExp(
-      `^\\s*(?:from\\s+${forbidden.replaceAll(".", "\\.")}\\b|import\\s+${forbidden.replaceAll(".", "\\.")}\\b)`,
-      "m",
-    );
-    const index = content.search(pattern);
-    if (index >= 0) {
-      violations.push({
-        source,
-        kind: `python-domain:${forbidden}`,
-        line: lineNumber(content, index),
-        message: `Agent API Domainから外部境界 ${forbidden} への依存は禁止されています`,
-      });
-    }
-  }
-}
-
 const staleExceptions = migrationExceptions.filter(
   (_, index) => !usedExceptions.has(index),
 );
@@ -234,15 +207,6 @@ function sourceFiles(directory) {
     if (statSync(path).isDirectory()) return sourceFiles(path);
     if (!path.endsWith(".ts") || path.endsWith(".test.ts")) return [];
     return [path];
-  });
-}
-
-function pythonFiles(directory) {
-  if (!existsSync(directory)) return [];
-  return readdirSync(directory).flatMap((name) => {
-    const path = resolve(directory, name);
-    if (statSync(path).isDirectory()) return pythonFiles(path);
-    return path.endsWith(".py") ? [path] : [];
   });
 }
 

@@ -25,7 +25,7 @@
 - 画面機能のView DOM操作 CSSは`frontend/src/presentation/<feature>`
 - ブラウザ HTTP Mapbox Bedrockなど外部技術への接続は`frontend/src/adapters`
 - Three.js固有の描画は`frontend/src/presentation/train-viewer/rendering`
-- Agent APIのPythonコードは`services/agent-api` インフラ定義は`infra`
+- Agent APIのTypeScriptコードは`backend/agent-api` インフラ定義は`infra`
 - TypeScriptテストは対象ファイルの隣へ置く
 - Pythonサービスと境界を横断するテストは`tests`へ置き fixtureは`tests/fixtures/README.md`に従う
 - 新規ファイルを慣習だけで`src`直下へ置かず 所有する責務を決めてから配置する

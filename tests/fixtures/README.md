@@ -5,7 +5,7 @@
 
 | ファイル | 所有する検証 | 更新後の確認 |
 | --- | --- | --- |
-| `journey-search-scenarios.json` | 経路探索と順位付け | `python3 tools/run_journey_search_scenarios.py` |
+| `journey-search-scenarios.json` | 経路探索と順位付け | `npm run test:journey-scenarios` |
 | `agent-eval-cases.json` | AgentのDomain Benchmark | `npm run eval:agent:smoke`と`npm run eval:agent:full` |
 | `agent-eval-observations.json` | 評価ケースで再現するTool観測 | `npm run eval:agent:full` |
 | `agent-strategy-experiment.json` | Agent戦略の比較条件 | `npm run eval:agent:strategies` |
@@ -49,6 +49,5 @@
 ## 実行
 
 ```bash
-python3 tools/run_journey_search_scenarios.py
-python3 tools/run_journey_search_scenarios.py sample
+npm run test:journey-scenarios
 ```

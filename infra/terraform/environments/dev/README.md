@@ -111,7 +111,7 @@ CA秘密鍵はクライアント証明書を署名した後に破棄する
 
 PRとmainへのpushで次を確認する
 
-- TypeScriptテストと移行期間中のPython互換テスト
+- TypeScriptテストとrepository保守toolのPythonテスト
 - 本番ビルド
 - Terraform formatとvalidate
 

@@ -79,10 +79,9 @@ frontend/src/features/        Concierge設定など画面へ渡す機能固有�
 frontend/src/adapters/        ブラウザ HTTP Mapbox Bedrockへの接続
 frontend/src/presentation/    画面機能ごとのView CSS Three.js描画
 frontend/src/composition/     Viewerの依存組成
-backend/agent-api/  Node.jsへ段階移行中のAgent API契約とApplication
-services/agent-api/  Agent APIのPythonアプリケーション
+backend/agent-api/  Node.js Agent APIの契約 Application Adapter Lambda entrypoint
 infra/               パッケージ契約とTerraform
-tests/               Pythonサービスと境界を横断するテスト
+tests/               境界fixtureとrepository保守toolのPythonテスト
 tools/               検証 評価 再生成コマンド
 ```
 
@@ -90,9 +89,8 @@ tools/               検証 評価 再生成コマンド
 Bedrock接続は`frontend/src/adapters/bedrock/viewer-agent-runtime.ts`で共通Tool Evidence Trace
 Viewer Actionへ適合し ローカル開発用Agentは`frontend/src/usecases/agent/local-viewer-agent.ts`へ分離する。
 
-本番Agent LambdaはIssue #219の切替まで`services/agent-api`を使い
-`backend/agent-api`は同じ契約を保つNode.js実装として段階的に能力を移す
-TypeScriptのテストは対象モジュールの隣へ置く。Pythonの配置とfixtureの更新方法は
+本番Agent Lambdaは`backend/agent-api`のNode.js bundleを使う
+TypeScriptのテストは対象モジュールの隣へ置く。repository保守toolとfixtureの更新方法は
 [テストガイド](tests/README.md)を参照する。AWSリソース名など互換性に関わる
 `transitforge`識別子は製品名とは分けて維持する
 
@@ -105,7 +103,8 @@ npm run assets:check
 npm test
 npm run build
 python3 -m unittest discover -s tests -v
-python3 tools/build_lambda_package.py --check-only
+npm run lambda:check
+npm run test:journey-scenarios
 npm run eval:agent
 npm run eval:agent:smoke
 npm run eval:agent:full
@@ -117,10 +116,10 @@ Agent Benchmarkは35件を収録し 曖昧要求 運休 遅延 制約 情報不�
 Viewer Actionのカテゴリ別に6指標を出す。失敗したcase IDは`--case`で単独再実行できる
 戦略実験はsingle pass 結果駆動再計画 常時Reflectionの品質と相対コストを比較する
 
-経路検索のシナリオだけを読みやすい結果付きで確認する場合は次を実行する
+経路検索のシナリオだけを確認する場合は次を実行する
 
 ```bash
-python3 tools/run_journey_search_scenarios.py
+npm run test:journey-scenarios
 ```
 
 非公開S3から取得した会話Feedbackをローカルで匿名化・集約する場合は次を使う。
