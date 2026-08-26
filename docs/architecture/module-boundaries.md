@@ -6,8 +6,7 @@
 この文書は移行中の目標構成とimport方向の正本である
 
 Issue #203で採用した次期構成と段階移行は[ADR 0037](../decisions/0037-adopt-typescript-workspaces-and-shared-domain-modules.md)と
-[TypeScript構成移行台帳](typescript-migration-inventory.md)を参照する。この文書は#221で移行完了後の構成へ置き換えるまで
-現在稼働している境界を説明する。
+[TypeScript構成移行台帳](typescript-migration-inventory.md)を参照する。この文書は現在稼働している境界を説明する。
 
 ## 目標構成
 
@@ -23,20 +22,15 @@ frontend/src/
   main.ts           起動と依存注入だけを行うComposition Root
 
 backend/
-  agent-api/        Node.jsへ段階移行中のAgent API契約 Application Port
-
-services/
-  agent-api/        切替まで本番を担当するPython Agent API
-  traffic-collectors/ 運行情報を収集するBackend Application
+  agent-api/        Node.js Agent APIの契約 Application Port Adapter Lambda entrypoint
 
 infra/
   terraform/        AWS構成と環境差分
-  packaging/        servicesからデプロイ成果物を作る定義
+  packaging/        backendからデプロイ成果物を作る定義
 ```
 
 空のディレクトリを先に作らず 責務を抽出するPRで必要な配置を追加する
 AWSリソース名 API path viewer-input形式はフォルダ移動を理由に変更しない
-現在の本番Backendは`services/agent-api`であり `backend/agent-api`へoperation単位で移行する
 Node.js側ではAWS SDK型をAdapterより内側へ漏らさず handlerもApplication呼出しだけを担当する
 交通収集の正本はprivateなdata-builder側にあり 公開側へ複製しない
 Infrastructureの確認と障害調査は`infra/README.md`を正本とする
@@ -54,7 +48,7 @@ Infrastructureの確認と障害調査は`infra/README.md`を正本とする
 
 外側から内側へ依存する。Domainは最も内側に置き 外部サービスの都合を持ち込まない
 Agentは推論とToolのオーケストレーションを担当し 鉄道の計算はDomain Serviceへ委譲する
-TypeScriptとPythonをまたぐ正本と重複のルールは[Domainの所有権](domain-ownership.md)を参照する
+正本と重複のルールは[Domainの所有権](domain-ownership.md)を参照する
 
 ## 契約の所有者
 

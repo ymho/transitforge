@@ -5,7 +5,7 @@
 型とスキーマの実装を正本とし この文書は責務 保存先 生成元 結合キーを説明する。型を変更するときは
 対応する実装 テスト この文書を同時に見直す。ER図が必要な範囲だけ 将来`domain-model.dbml`を補助資料として追加する。
 
-TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有権](domain-ownership.md)を参照する。
+計算の正本と実行境界は[Domainの所有権](domain-ownership.md)を参照する。
 
 ## 境界
 
@@ -110,9 +110,9 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 乗換ペース 順位条件 列車の除外と必須条件を構造化して渡す。`search_journeys`はこのServiceを
 呼ぶ薄いAdapterであり 経路や順位をLLMで再計算しない。
 
-決定論的なCSAと直通検索は`services/agent-api/domain/journey`が所有する。
-Browserとのwire形式は`journey-search-v1`を明示し Node Backendと移行中のPython互換実装でversionを検証する。
-Providerに依存しない旅行候補モデルと費用集計は`services/agent-api/domain/travel`が所有する。
+決定論的なCSAと直通検索は`modules/journey/domain`が所有する。
+Browserとのwire形式は`journey-search-v1`を明示し FrontendとNode Backendでversionを検証する。
+Providerに依存しない旅行候補モデルと費用集計は`modules/trip/domain`が所有する。
 
 Agentへ返す候補は最大3件 直列化後64KiBまでに制限する。予定時刻 遅延適用後の時刻
 遅延の観測または推定区分 制約結果はService応答を変更せず保持する。
@@ -134,13 +134,12 @@ Agentへ返す候補は最大3件 直列化後64KiBまでに制限する。予�
 ### 運行分析Tool
 
 - Adapter: `frontend/src/usecases/agent/operational-analysis-tools.ts`
-- 既存集計: `services/agent-api/delay_analysis.py`
-  `services/agent-api/congestion_analysis.py`
+- 集計: `backend/agent-api/src/usecases/operation-analysis.ts`
 - 列車メタデータ結合: `frontend/src/domain/delay-analysis.ts`
   `frontend/src/domain/congestion-analysis.ts`
 
 `analyze_delay`と`analyze_congestion`は4時切替の業務日付を受け取り DynamoDBの
-operating day summaryをPythonで決定論的に集計した結果を利用する。Adapterで集計式を
+operating day summaryをTypeScriptで決定論的に集計した結果を利用する。Adapterで集計式を
 再実装せず 時刻表との結合 入力検証 出力制限だけを担当する。
 
 応答には観測期間 sample countと`operating-day-summary`のsource metadataを付ける。
@@ -423,7 +422,7 @@ AIの自由文をUIの状態遷移に使わない。
 
 ### `conversation-feedback-v1`
 
-- 定義: `services/agent-api/conversation_feedback.py`
+- Server定義: `backend/agent-api/src/usecases/conversation-feedback.ts`
 - 保存先: private S3 `conversation-feedback/YYYY/MM/DD/<feedbackId>.json`
 - 保持期間: 90日
 - 暗号化: S3管理キーによるサーバー側暗号化 `AES256`
@@ -437,7 +436,7 @@ request ID付き503と本文を含まない構造化ログを返す。
 ### `conversation-feedback-v2`
 
 - TypeScript定義: `frontend/src/usecases/concierge/conversation-feedback.ts`
-- Server検証: `services/agent-api/conversation_feedback.py`
+- Server検証: `backend/agent-api/src/usecases/conversation-feedback.ts`
 - 追加項目: `sessionId` `targetMessageId` 任意の`comment` 各会話の`messageId`
 
 画面のDOMから本文を再構成せず Conversation History Repositoryに保存された会話の先頭から
@@ -456,7 +455,7 @@ Goodは1操作で送信し Badだけ対象回答の直下でコメント付き �
 ### `agent-trace-submission-v1`
 
 - TypeScript定義: `frontend/src/usecases/agent/agent-trace.ts`
-- Server検証: `services/agent-api/agent_trace_storage.py`
+- Server検証: `backend/agent-api/src/usecases/agent-trace.ts`
 - 保存先: private S3 `agent-traces/YYYY/MM/DD/<taskId>/<traceId>.json`
 - 保持期間: 30日
 - 判断記録: [ADR 0025](../decisions/0025-store-bounded-agent-traces-privately.md)

@@ -25,8 +25,8 @@
 | 駅名比較 業務時刻整形 | `modules/train/domain/station-name.ts` `route-time.ts` | `modules/train/domain` | #206 完了 | 表示文言の装飾はFrontendへ残す |
 | 遅延 混雑 行き先変更 運休契約 | `modules/operation/domain` | `modules/operation/domain` | #207 完了 | S3 DynamoDB HTTPは含めない |
 | 経路条件 区間 候補 比較 | `modules/journey/domain` | `modules/journey/domain` | #208 完了 | wire parseとUI projectionは含めない |
-| 直通検索 CSA 乗換 遅延予測 | `modules/journey/domain/journey-search-engine.ts` | 同左 | #217 完了 | Pythonは#220までlegacy互換実装として残す |
-| 旅行候補 費用 旅程 Profile TripContext | `modules/trip/domain`を正本としPythonをlegacy互換として併設 | `modules/trip/domain` | #209 #218 完了 | LocalStorageはFrontend Adapterが担当 |
+| 直通検索 CSA 乗換 遅延予測 | `modules/journey/domain/journey-search-engine.ts` | 同左 | #217 #220 完了 | Backendも同じshared Domainを利用 |
+| 旅行候補 費用 旅程 Profile TripContext | `modules/trip/domain` | 同左 | #209 #218 #220 完了 | LocalStorageはFrontend Adapterが担当 |
 
 ## Frontend
 
@@ -47,12 +47,12 @@
 
 | operationまたは責務 | 現在 | 移行先 | 移行Issue |
 | --- | --- | --- | --- |
-| Lambda event HTTP応答 operation dispatch | Pythonを本番利用しTypeScript契約とApplicationを併設 | `backend/agent-api/src/handler.ts`とusecases | #213 完了 |
-| Feedback Agent Trace保存 | Pythonを本番利用しTypeScript usecaseとS3 Adapterを併設 | TypeScript usecaseとS3 Adapter | #214 完了 |
-| Bedrock conversation Tool relay | Pythonを本番利用しTypeScript PortとBedrock Adapterを併設 | TypeScript usecaseとBedrock Adapter | #215 完了 |
-| 代表ダイヤ 遅延 混雑分析 | Pythonを本番利用しTypeScript Domain Usecase Adapterを併設 | TypeScript usecaseとS3 DynamoDB Adapter | #216 完了 |
-| journey search | TypeScriptを正本としPythonをlegacy互換として併設 | TypeScript usecaseと`modules/journey` | #217 完了 |
-| accommodation searchと費用 | TypeScript usecase Adapterと`modules/trip`を正本としPythonをlegacy互換として併設 | 同左 | #218 完了 |
+| Lambda event HTTP応答 operation dispatch | `backend/agent-api/src/handler.ts`とusecases | 同左 | #213 #220 完了 |
+| Feedback Agent Trace保存 | TypeScript usecaseとS3 Adapter | 同左 | #214 #220 完了 |
+| Bedrock conversation Tool relay | TypeScript PortとBedrock Adapter | 同左 | #215 #220 完了 |
+| 代表ダイヤ 遅延 混雑分析 | TypeScript Domain Usecase Adapter | 同左 | #216 #220 完了 |
+| journey search | TypeScript usecaseと`modules/journey` | 同左 | #217 #220 完了 |
+| accommodation searchと費用 | TypeScript usecase Adapterと`modules/trip` | 同左 | #218 #220 完了 |
 
 ## Infrastructureとtooling
 
@@ -60,17 +60,15 @@
 | --- | --- | --- | --- |
 | Node依存とTypeScript設定 | npm workspaceと共通tsconfig | 同左 | #205 完了 |
 | Lambda artifact | bundled Node.js artifact | 同左 | #219 完了 |
-| Terraform Lambda runtime handler | `python3.12` `handler.lambda_handler` | Node.js runtimeとbundle handler | #219 |
-| CI CD | root ViteとPython test | workspace test build package check | #205 #219 |
-| Python Backendと固有test | `services/agent-api` `tests/services/agent_api` | TypeScript隣接test | #220 |
+| Terraform Lambda runtime handler | Node.js runtimeとbundle handler | 同左 | #219 完了 |
+| CI CD | workspace test build package check | 同左 | #205 #219 完了 |
+| Python Backendと固有test | 撤去済み | TypeScript隣接test | #220 完了 |
 | 最終文書と依存検査 | 現行path基準 | frontend backend modules基準 | #221 |
 
 ## 一時的な共存と撤去条件
 
 | 一時状態 | 許容理由 | 撤去条件 |
 | --- | --- | --- |
-| PythonとNode Agent API | operationごとにcontract parityを確認する | #219のdev smoke成功 |
-| PythonとTypeScriptのJourney Travel計算 | scenarioとfixtureで結果を比較する | #217 #218完了後 #220でPythonを削除 |
 | 旧architecture pathの文書 | 移行中の実装を正しく説明する | #221で最終構成へ更新 |
 
 共存期間に仕様変更が必要になった場合は新旧両方のcontract testを先に更新する。
@@ -81,10 +79,10 @@
 2026-08-27の移行開始時点で次を満たす。
 
 - TypeScript 79 test file 336 test
-- Python 80 test
+- repository保守toolとinfraのPython test
 - Agent Smoke Eval 11/11
 - architecture check成功
-- Python Lambda package check成功
+- Node Lambda package check成功
 
 各Issueは担当範囲の検証に加えて このbaselineから意図しない能力低下がないことを確認する。
 

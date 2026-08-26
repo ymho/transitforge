@@ -102,12 +102,10 @@ flowchart LR
 実在の時刻表やS3へ接続せず 直通 乗換時間 嗜好 遅延 深夜時刻を決定的に再現できる
 
 ```bash
-python3 tools/run_journey_search_scenarios.py
-python3 tools/run_journey_search_scenarios.py latest-departure
-python3 tools/run_journey_search_scenarios.py --list
+npm run test:journey-scenarios
 ```
 
-通常のPythonテストでも全シナリオを実行するため CIへの追加設定は不要
+通常のTypeScriptテストでも全シナリオを実行するため CIへの追加設定は不要
 
 ## 許可する画面操作
 
