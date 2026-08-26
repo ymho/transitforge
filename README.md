@@ -36,7 +36,7 @@ Agentic Transit Intelligence
 
 Node.jsのバージョンは`.nvmrc`を正とする
 依存管理はrootのnpm workspaceと`package-lock.json`を正本にする
-移行中はroot packageがViewerを実行し #210で`frontend` workspaceへ移す
+Viewerは`frontend` workspaceで実行する
 
 ```bash
 nvm use
@@ -79,6 +79,7 @@ frontend/src/features/        Concierge設定など画面へ渡す機能固有�
 frontend/src/adapters/        ブラウザ HTTP Mapbox Bedrockへの接続
 frontend/src/presentation/    画面機能ごとのView CSS Three.js描画
 frontend/src/composition/     Viewerの依存組成
+backend/agent-api/  Node.jsへ段階移行中のAgent API契約とApplication
 services/agent-api/  Agent APIのPythonアプリケーション
 infra/               パッケージ契約とTerraform
 tests/               Pythonサービスと境界を横断するテスト
@@ -89,6 +90,8 @@ tools/               検証 評価 再生成コマンド
 Bedrock接続は`frontend/src/adapters/bedrock/viewer-agent-runtime.ts`で共通Tool Evidence Trace
 Viewer Actionへ適合し ローカル開発用Agentは`frontend/src/usecases/agent/local-viewer-agent.ts`へ分離する。
 
+本番Agent LambdaはIssue #219の切替まで`services/agent-api`を使い
+`backend/agent-api`は同じ契約を保つNode.js実装として段階的に能力を移す
 TypeScriptのテストは対象モジュールの隣へ置く。Pythonの配置とfixtureの更新方法は
 [テストガイド](tests/README.md)を参照する。AWSリソース名など互換性に関わる
 `transitforge`識別子は製品名とは分けて維持する

@@ -8,6 +8,7 @@
 - FrontendのユースケースとPolicyは`frontend/src/usecases`
 - View DOM操作と表示変換は`frontend/src/presentation/<feature>`
 - Adapterと描画固有の振る舞いは各実装の隣
+- Node Agent APIの契約 Port Usecase Handlerは`backend/agent-api/src`の対象ファイルの隣
 
 複数層を通すシナリオでも 可能な限り公開Portから実行し 内部実装へ依存しない
 
