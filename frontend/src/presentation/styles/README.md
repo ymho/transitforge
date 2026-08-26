@@ -13,4 +13,4 @@ Featureに依存しないtokenとViewer shellだけを置く
 
 `legacy-*`へ新しいselectorを追加しない
 変更対象のselectorはConcierge Trip Plan Train Viewer Loading Screenの所有CSSへ移してから直す
-FeatureのDOM classを参照する新規Styleは`src/features/<feature>/presentation`へ置く
+画面固有のDOM classを参照する新規Styleは`frontend/src/presentation/<feature>`へ置く

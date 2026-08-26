@@ -3,17 +3,17 @@ import type { Train } from "@raiquora/train/train";
 import {
   coupledTrainLayouts,
   type TrainLinkKind,
-} from "../../../domain/coupled-train-layout";
-import { TrainFocusSession } from "../../../domain/train-focus-session";
-import { mergeSameOperationTrains } from "../../../domain/train-detail-service";
+} from "../../domain/coupled-train-layout";
+import { TrainFocusSession } from "../../domain/train-focus-session";
+import { mergeSameOperationTrains } from "../../domain/train-detail-service";
 import { trainWithOperation } from "@raiquora/operation/train-operation-state";
-import type { TrainPosition } from "../../../domain/train-position";
-import type { TrainFormationLink } from "../../../domain/train-formation-link";
+import type { TrainPosition } from "../../domain/train-position";
+import type { TrainFormationLink } from "../../domain/train-formation-link";
 import {
   timetableDisplayTimeParts,
   timetableProgressRowsFor,
 } from "./train-timetable";
-import { hideSheet, showSheet } from "../../../presentation/sheet-transition";
+import { hideSheet, showSheet } from "../shared/sheet-transition";
 import { trainTitleFor } from "./train-title";
 
 export interface TrainSelectionElements {

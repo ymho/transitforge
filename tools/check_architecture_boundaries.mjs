@@ -29,7 +29,7 @@ const layerRules = {
     ]),
   },
   features: {
-    forbiddenLayers: new Set(["adapters", "infrastructure", "rendering"]),
+    forbiddenLayers: new Set(["adapters", "infrastructure", "presentation", "rendering"]),
   },
   adapters: {
     forbiddenLayers: new Set([

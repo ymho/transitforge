@@ -106,7 +106,7 @@ flowchart LR
 
 ## 実装場所と確認方法
 
-- 実装: `frontend/src/rendering/mapbox-three-train-layer.ts`
+- 実装: `frontend/src/presentation/train-viewer/rendering/mapbox-three-train-layer.ts`
 - 行先アーチの純粋な高さ・頂点計算: `frontend/src/domain/destination-arc-geometry.ts`
 - WebGLに依存しない行先アーチ計算は単体テストし、描画クラスはMapbox・Three.jsへの
   データ反映に専念する。

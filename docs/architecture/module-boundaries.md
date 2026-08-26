@@ -65,9 +65,9 @@ TypeScriptとPythonをまたぐ正本と重複のルールは[Domainの所有権
 | 責務 | 所有するモジュール |
 | --- | --- |
 | 必須DOM参照の取得と検証 | `application/viewer/viewer-elements.ts` |
-| 表示日時と日時ピッカー | `features/train-viewer/date-time-control.ts` |
-| 再生とデジタルツイン同期 | `features/train-viewer/playback-controls.ts` |
-| 天気 表示モード 行先アーチ | `features/train-viewer/map-controls.ts` |
+| 表示日時と日時ピッカー | `presentation/train-viewer/date-time-control.ts` |
+| 再生とデジタルツイン同期 | `presentation/train-viewer/playback-controls.ts` |
+| 天気 表示モード 行先アーチ | `presentation/train-viewer/map-controls.ts` |
 | 混雑と遅延の定期更新 | `features/train-viewer/realtime-updates.ts` |
 | HTTP Browser Mapbox実装の注入 | `main.ts` |
 
@@ -75,12 +75,12 @@ Feature側は通信やMapboxの具体実装を生成しない
 `main.ts`がAdapterを注入することでコントローラをMapbox実体なしで検証できるようにする
 style再読込時は前回の定期更新を破棄してから新しい購読を開始する
 
-Viewer UIは機能ごとの`presentation`に置く
+Viewer UIは`presentation`の機能別ディレクトリに置く
 
-- `features/concierge/presentation`: 会話 プロフィール Landmark操作
-- `features/trip-plan/presentation`: 旅程表示と編集提案
-- `features/train-viewer/presentation`: 列車選択 詳細 時刻表
-- `presentation`: Sheet遷移やLoading Screenなど複数Featureで共有する小さなUI
+- `presentation/concierge`: 会話 プロフィール Landmark操作
+- `presentation/trip-plan`: 旅程表示と編集提案
+- `presentation/train-viewer`: 列車選択 詳細 時刻表 Three.js描画
+- `presentation/shared`: Sheet遷移やLoading Screenなど複数画面で共有する小さなUI
 
 CSSの所有範囲と表示比較は`docs/architecture/viewer-styles.md`を正本とする
 

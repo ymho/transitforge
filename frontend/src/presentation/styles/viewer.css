@@ -1,0 +1,25 @@
+/* Cascade order is explicit: legacy foundations first, then feature-owned final UI. */
+@import "./map-layout.css";
+@import "../concierge/concierge-base.css";
+@import "../shared/loading-screen.css";
+/* Legacy cascade is split by owner but kept in the original order until each final layer replaces it. */
+@import "./legacy-theme-tokens.css";
+@import "../shared/loading-screen-legacy.css";
+@import "../train-viewer/date-time-legacy-base.css";
+@import "../concierge/concierge-legacy-base.css";
+@import "../train-viewer/train-details-legacy-base.css";
+@import "./legacy-responsive-overrides.css";
+@import "./legacy-theme-overrides.css";
+@import "../train-viewer/date-time-legacy-theme.css";
+@import "../concierge/concierge-legacy-theme.css";
+@import "../train-viewer/train-details-legacy-theme.css";
+@import "../concierge/concierge-legacy-header.css";
+@import "../train-viewer/date-time-current.css";
+@import "./tokens.css";
+@import "./liquid-glass-foundation.css";
+@import "../concierge/concierge-liquid-glass.css";
+@import "../concierge/conversation-history-liquid-glass.css";
+@import "../trip-plan/trip-plan-liquid-glass.css";
+@import "../concierge/journey-liquid-glass.css";
+@import "../train-viewer/train-details-liquid-glass.css";
+@import "../shared/loading-screen-liquid-glass.css";

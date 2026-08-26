@@ -1,18 +1,18 @@
 import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
 import { formatRouteClockTime } from "@raiquora/train/route-time";
 import type { UserProfile } from "@raiquora/trip/travel-profile";
-import { loadUserProfile } from "../../../application/trip-profile/user-profile-repository";
+import { loadUserProfile } from "../../application/trip-profile/user-profile-repository";
 import type {
   ConversationGuidance,
   ConversationSubmission,
-} from "../../../domain/conversation-guidance";
+} from "../../domain/conversation-guidance";
 import {
   type ConversationHistoryRepository,
-} from "../../../application/concierge/conversation-history-repository";
+} from "../../application/concierge/conversation-history-repository";
 import {
   buildConversationFeedback,
   type ConversationFeedbackV2,
-} from "../../../application/concierge/conversation-feedback";
+} from "../../application/concierge/conversation-feedback";
 import { recommendedTravelDestinations } from "@raiquora/trip/travel-destination";
 import {
   defaultJourneySearchPreferences,
@@ -26,9 +26,9 @@ import type {
   ViewerAgentJourneyPlan,
   ViewerAgentTravelPlan,
   ViewerAgentResponse,
-} from "../../../domain/viewer-agent-response";
+} from "../../domain/viewer-agent-response";
 import type { TripContext } from "@raiquora/trip/travel-profile";
-import { hideSheet, showSheet } from "../../../presentation/sheet-transition";
+import { hideSheet, showSheet } from "../shared/sheet-transition";
 import { renderAssistantMarkdown, visibleAssistantText } from "./assistant-markdown";
 import {
   loadJourneySearchPreferences,

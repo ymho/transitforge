@@ -11,8 +11,8 @@ import {
   loadTripPlan,
   migrateLegacyTripPlan,
   saveTripPlan,
-} from "../../../application/trip-plan/trip-plan-repository";
-import type { ViewerAgentAccommodation } from "../../../domain/viewer-agent-response";
+} from "../../application/trip-plan/trip-plan-repository";
+import type { ViewerAgentAccommodation } from "../../domain/viewer-agent-response";
 
 export interface TripPlanPanelController {
   show(plan: TripPlan): void;

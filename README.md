@@ -75,9 +75,9 @@ modules/journey/     経路条件 候補 比較 直通検索の共有Domain
 modules/trip/        旅行候補 費用 Profile TripContext 旅程の共有Domain
 frontend/src/domain/          移行中の鉄道 Agentの決定論的な契約と計算
 frontend/src/application/     ユースケースと外部境界のPort
-frontend/src/features/        画面機能ごとのUI 状態 表示変換
+frontend/src/features/        Concierge設定など画面へ渡す機能固有データ
 frontend/src/adapters/        ブラウザ HTTP Mapbox Bedrockへの接続
-frontend/src/rendering/       Three.jsによる列車描画
+frontend/src/presentation/    画面機能ごとのView CSS Three.js描画
 services/agent-api/  Agent APIのPythonアプリケーション
 infra/               パッケージ契約とTerraform
 tests/               Pythonサービスと境界を横断するテスト

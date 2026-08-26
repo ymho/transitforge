@@ -4,8 +4,8 @@ import {
   loadUserProfile,
   saveUserProfile,
   travelProfileChangedEvent,
-} from "../../../application/trip-profile/user-profile-repository";
-import { selectConciergeForUserProfile, type ConciergeProfile } from "..";
+} from "../../application/trip-profile/user-profile-repository";
+import { selectConciergeForUserProfile, type ConciergeProfile } from "../../features/concierge";
 
 const companionOptions: Array<[TravelCompanion, string]> = [["solo", "一人"], ["partner", "パートナー"], ["friends", "友人"], ["children", "子どもと一緒"], ["family", "家族"]];
 const ageGroups: Array<[ChildAgeGroup, string]> = [["baby", "0〜2歳"], ["preschool", "3〜5歳"], ["elementary", "小学生"], ["teen", "中学生以上"]];

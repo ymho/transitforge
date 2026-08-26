@@ -1,20 +1,17 @@
 import mapboxgl from "mapbox-gl";
 import * as THREE from "three";
 
-import {
-  congestionBarColor,
-  congestionBarHeightMeters,
-} from "../adapters/http/traffic/train-congestion";
+import { congestionBarColor, congestionBarHeightMeters } from "./congestion-bar";
 import type { Coordinate } from "@raiquora/train/path";
-import { coupledTrainLayouts } from "../domain/coupled-train-layout";
+import { coupledTrainLayouts } from "../../../domain/coupled-train-layout";
 import {
   destinationArcHeightMeters,
   destinationArcVertex,
-} from "../domain/destination-arc-geometry";
-import type { TrainPosition } from "../domain/train-position";
-import type { TrainFormationLink } from "../domain/train-formation-link";
-import { trainVisualScaleForZoom } from "../domain/train-visual-scale";
-import { weatherHazeMixAtViewportPoint } from "../domain/weather-haze";
+} from "../../../domain/destination-arc-geometry";
+import type { TrainPosition } from "../../../domain/train-position";
+import type { TrainFormationLink } from "../../../domain/train-formation-link";
+import { trainVisualScaleForZoom } from "../../../domain/train-visual-scale";
+import { weatherHazeMixAtViewportPoint } from "../../../domain/weather-haze";
 
 const maximumTrainInstances = 1_000;
 const vehicleLengthMeters = 12;

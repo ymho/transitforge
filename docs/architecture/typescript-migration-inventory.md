@@ -33,8 +33,8 @@
 | 対象責務 | 現在 | 移行先 | 移行Issue |
 | --- | --- | --- | --- |
 | Vite appとBrowser起動 | `frontend/src` `frontend/public` `frontend/vite.config.ts` | `frontend` workspace | #210 完了 |
-| Concierge Trip Plan Train ViewerのViewとCSS | `frontend/src/features` `frontend/src/presentation` | `frontend/src/presentation` | #211 |
-| Three.js列車描画 | `frontend/src/rendering` | `frontend/src/presentation/train-viewer/rendering` | #211 |
+| Concierge Trip Plan Train ViewerのViewとCSS | `frontend/src/presentation/<feature>` | `frontend/src/presentation` | #211 完了 |
+| Three.js列車描画 | `frontend/src/presentation/train-viewer/rendering` | 同左 | #211 完了 |
 | Viewer 会話 Agent clientのBrowser usecase | `frontend/src/application`と一部Feature | `frontend/src/usecases` | #212 |
 | Browser HTTP Mapbox Bedrock LocalStorage | `frontend/src/adapters` | `frontend/src/adapters` | #210 完了 #212でusecase境界を整理 |
 | Composition Root | `frontend/src/main.ts` | `frontend/src/main.ts` | #210 完了 #212で縮小 |

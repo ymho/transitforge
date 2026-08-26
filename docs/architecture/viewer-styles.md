@@ -2,22 +2,22 @@
 
 ## 所有範囲
 
-`frontend/src/viewer.css`を唯一の入口とし import順を明示する
+`frontend/src/presentation/styles/viewer.css`を唯一の入口とし import順を明示する
 各ファイルの内容を連結した順序は整理前と同一に保つ
 
 | パス | 責務 |
 | --- | --- |
-| `styles/map-layout.css` | 地図とHUDの基礎配置 |
-| `styles/tokens.css` | day night共通の色 影 ぼかし Focus |
-| `styles/liquid-glass-foundation.css` | 時計と地図操作のLiquid Glass基盤 |
-| `styles/legacy-*.css` | 複数Featureへまたがる移行中のtokenと上書き |
-| `features/concierge/presentation/*.css` | 会話 プロフィール 経路候補 |
-| `features/trip-plan/presentation/*.css` | 旅程PanelとCard |
-| `features/train-viewer/presentation/*.css` | 列車詳細と時刻表 |
-| `presentation/loading-screen*.css` | 起動中と失敗時の表示 |
+| `presentation/styles/map-layout.css` | 地図とHUDの基礎配置 |
+| `presentation/styles/tokens.css` | day night共通の色 影 ぼかし Focus |
+| `presentation/styles/liquid-glass-foundation.css` | 時計と地図操作のLiquid Glass基盤 |
+| `presentation/styles/legacy-*.css` | 複数Featureへまたがる移行中のtokenと上書き |
+| `presentation/concierge/*.css` | 会話 プロフィール 経路候補 |
+| `presentation/trip-plan/*.css` | 旅程PanelとCard |
+| `presentation/train-viewer/*.css` | 列車詳細と時刻表 |
+| `presentation/shared/loading-screen*.css` | 起動中と失敗時の表示 |
 
 共通Presentationは2つ以上のFeatureが同じ契約で使う 状態を持たないprimitiveに限定する
-Featureの語彙 状態 DOM classを持つViewとCSSは対象Featureの`presentation`へ置く
+画面の語彙 状態 DOM classを持つViewとCSSは対象機能の`presentation/<feature>`へ置く
 
 新しいComponentのselectorを`styles/legacy-*.css`へ追加しない
 変更するFeatureのCSSへ置き 共通値は`tokens.css`へ追加する

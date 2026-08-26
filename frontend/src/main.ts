@@ -1,6 +1,6 @@
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import "./viewer.css";
+import "./presentation/styles/viewer.css";
 import { browserDigitalTwinClockEnvironment } from "./adapters/browser/digital-twin-clock-environment";
 import { browserPollingEnvironment } from "./adapters/browser/polling-controller";
 import { applyWeather } from "./adapters/mapbox/map-weather";
@@ -110,10 +110,10 @@ import type { ViewerAgentJourneyPlan } from "./domain/viewer-agent-response";
 import {
   configureAiGuidePanel,
   type AiGuidePromptHandler,
-} from "./features/concierge/presentation/ai-guide-panel";
-import { configureLandmarkJourneyInteraction } from "./features/concierge/presentation/landmark-journey-interaction";
-import { configureTrainSelection } from "./features/train-viewer/presentation/train-selection-controller";
-import { trainTitleFor } from "./features/train-viewer/presentation/train-title";
+} from "./presentation/concierge/ai-guide-panel";
+import { configureLandmarkJourneyInteraction } from "./presentation/concierge/landmark-journey-interaction";
+import { configureTrainSelection } from "./presentation/train-viewer/train-selection-controller";
+import { trainTitleFor } from "./presentation/train-viewer/train-title";
 import {
   configureTrainCongestionUpdates,
   configureTrainDelayUpdates,
@@ -122,21 +122,21 @@ import {
   configureDateTimeInput,
   maximumRouteTimeFor,
   renderDisplayDateTime,
-} from "./features/train-viewer/date-time-control";
+} from "./presentation/train-viewer/date-time-control";
 import {
   configurePlayback,
   configurePlaybackSpeed,
   type PlaybackUiController,
-} from "./features/train-viewer/playback-controls";
+} from "./presentation/train-viewer/playback-controls";
 import {
   configureDestinationArcs,
   configureWeather,
   renderDisplayMode,
-} from "./features/train-viewer/map-controls";
-import { createLoadingScreen } from "./presentation/loading-screen";
-import { MapboxThreeTrainLayer } from "./rendering/mapbox-three-train-layer";
+} from "./presentation/train-viewer/map-controls";
+import { createLoadingScreen } from "./presentation/shared/loading-screen";
+import { MapboxThreeTrainLayer } from "./presentation/train-viewer/rendering/mapbox-three-train-layer";
 import { RuntimeMetrics } from "./observability/runtime-metrics";
-import { configureTravelProfile } from "./features/concierge/presentation/travel-profile-panel";
+import { configureTravelProfile } from "./presentation/concierge/travel-profile-panel";
 import {
   buildConciergePrompt,
   selectConciergeForUserProfile,
@@ -146,9 +146,9 @@ import {
   travelProfileChangedEvent,
 } from "./application/trip-profile/user-profile-repository";
 import { promptWithConversationContext } from "./domain/conversation-guidance";
-import { renderConciergeIdentity } from "./features/concierge/presentation/concierge-identity";
-import { configureConversationHistoryPanel } from "./features/concierge/presentation/conversation-history-panel";
-import { configureTripPlanPanel } from "./features/trip-plan/presentation/trip-plan-panel";
+import { renderConciergeIdentity } from "./presentation/concierge/concierge-identity";
+import { configureConversationHistoryPanel } from "./presentation/concierge/conversation-history-panel";
+import { configureTripPlanPanel } from "./presentation/trip-plan/trip-plan-panel";
 import { tripPlanFromTravelPlan } from "@raiquora/trip/trip-plan";
 import { loadTripPlan } from "./application/trip-plan/trip-plan-repository";
 import {

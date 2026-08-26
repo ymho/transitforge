@@ -51,9 +51,26 @@ for (const requiredPath of [
   "frontend/index.html",
   "frontend/src/main.ts",
   "frontend/public",
+  "frontend/src/presentation/concierge",
+  "frontend/src/presentation/trip-plan",
+  "frontend/src/presentation/train-viewer/rendering",
+  "frontend/src/presentation/shared",
+  "frontend/src/presentation/styles/viewer.css",
 ]) {
   if (!existsSync(resolve(repositoryRoot, requiredPath))) {
     errors.push(`${requiredPath}が必要です`);
+  }
+}
+for (const obsoletePath of [
+  "frontend/src/rendering",
+  "frontend/src/styles",
+  "frontend/src/viewer.css",
+  "frontend/src/features/concierge/presentation",
+  "frontend/src/features/trip-plan/presentation",
+  "frontend/src/features/train-viewer/presentation",
+]) {
+  if (existsSync(resolve(repositoryRoot, obsoletePath))) {
+    errors.push(`${obsoletePath}はfrontend/src/presentationの機能別ディレクトリへ統一してください`);
   }
 }
 if (existsSync(resolve(repositoryRoot, "src"))) {
