@@ -3,11 +3,18 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "workspaces": [
+    "frontend",
+    "backend/*",
+    "modules/*",
+    "lib"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "npm run assets:check && tsc --noEmit && vite build",
     "test": "TMPDIR=/tmp vitest run",
-    "architecture:check": "node tools/check_architecture_boundaries.mjs",
+    "workspace:check": "node tools/check_workspace_layout.mjs",
+    "architecture:check": "npm run workspace:check && node tools/check_architecture_boundaries.mjs",
     "assets:check": "node --import tsx tools/check_concierge_assets.ts",
     "eval:agent": "node --import tsx tools/run_agent_evaluation.ts",
     "eval:agent:smoke": "npm run eval:agent -- --profile smoke",
