@@ -9,7 +9,8 @@
     "./journey-comparison-service": "./domain/journey-comparison-service.ts",
     "./journey-leg-alternative": "./domain/journey-leg-alternative.ts",
     "./journey-search-preferences": "./domain/journey-search-preferences.ts",
-    "./journey-search-service": "./domain/journey-search-service.ts"
+    "./journey-search-service": "./domain/journey-search-service.ts",
+    "./journey-search-engine": "./domain/journey-search-engine.ts"
   },
   "dependencies": {
     "@raiquora/train": "*"
