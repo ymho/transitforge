@@ -39,7 +39,7 @@ describe("Bedrock viewer agent", () => {
     let routeTime = 1_000;
     const focusTrain = vi.fn(() => true);
     const storeAgentTrace = vi.fn(async (
-      _trace: import("../../application/agent/agent-trace").AgentTrace,
+      _trace: import("../../usecases/agent/agent-trace").AgentTrace,
     ) => undefined);
     const converse = vi
       .fn()

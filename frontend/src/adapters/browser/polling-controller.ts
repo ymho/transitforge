@@ -1,4 +1,4 @@
-import type { PollingEnvironment } from "../../application/polling-controller";
+import type { PollingEnvironment } from "../../usecases/polling-controller";
 
 export function browserPollingEnvironment(): PollingEnvironment {
   return {

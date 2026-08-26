@@ -11,17 +11,20 @@ const layerRules = {
   domain: {
     forbiddenLayers: new Set([
       "adapters",
+      "composition",
       "features",
       "infrastructure",
       "observability",
       "presentation",
       "rendering",
+      "usecases",
     ]),
     forbidExternalPackages: true,
   },
-  application: {
+  usecases: {
     forbiddenLayers: new Set([
       "adapters",
+      "composition",
       "features",
       "infrastructure",
       "presentation",
@@ -29,18 +32,25 @@ const layerRules = {
     ]),
   },
   features: {
-    forbiddenLayers: new Set(["adapters", "infrastructure", "presentation", "rendering"]),
+    forbiddenLayers: new Set([
+      "adapters",
+      "composition",
+      "infrastructure",
+      "presentation",
+      "rendering",
+    ]),
   },
   adapters: {
     forbiddenLayers: new Set([
       "features",
+      "composition",
       "infrastructure",
       "presentation",
       "rendering",
     ]),
   },
   presentation: {
-    forbiddenLayers: new Set(["adapters", "infrastructure", "rendering"]),
+    forbiddenLayers: new Set(["adapters", "composition", "infrastructure", "rendering"]),
   },
   rendering: {
     forbiddenLayers: new Set(["features", "infrastructure", "presentation"]),

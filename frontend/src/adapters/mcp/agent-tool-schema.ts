@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { AgentToolInputSchema } from "../../application/agent/tool-contract";
+import type { AgentToolInputSchema } from "../../usecases/agent/tool-contract";
 
 interface JsonSchemaProperty {
   type?: unknown;

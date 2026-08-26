@@ -50,6 +50,8 @@ for (const requiredPath of [
   "frontend/vite.config.ts",
   "frontend/index.html",
   "frontend/src/main.ts",
+  "frontend/src/composition/viewer-composition.ts",
+  "frontend/src/usecases",
   "frontend/public",
   "frontend/src/presentation/concierge",
   "frontend/src/presentation/trip-plan",
@@ -68,9 +70,17 @@ for (const obsoletePath of [
   "frontend/src/features/concierge/presentation",
   "frontend/src/features/trip-plan/presentation",
   "frontend/src/features/train-viewer/presentation",
+  "frontend/src/application",
 ]) {
   if (existsSync(resolve(repositoryRoot, obsoletePath))) {
     errors.push(`${obsoletePath}はfrontend/src/presentationの機能別ディレクトリへ統一してください`);
+  }
+}
+const frontendMain = resolve(repositoryRoot, "frontend/src/main.ts");
+if (existsSync(frontendMain)) {
+  const mainSource = readFileSync(frontendMain, "utf8");
+  if (mainSource.split("\n").length > 20 || !mainSource.includes("startViewer();")) {
+    errors.push("frontend/src/main.tsはCSS読込とComposition Rootの起動だけに限定してください");
   }
 }
 if (existsSync(resolve(repositoryRoot, "src"))) {

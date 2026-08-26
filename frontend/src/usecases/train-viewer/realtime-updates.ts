@@ -1,7 +1,7 @@
 import {
   createPollingController,
   type PollingEnvironment,
-} from "../../application/polling-controller";
+} from "../polling-controller";
 import type {
   TrainCongestionSnapshot,
   TrainDelaySnapshot,

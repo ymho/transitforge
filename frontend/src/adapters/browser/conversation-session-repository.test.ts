@@ -5,7 +5,7 @@ import type { TripPlan } from "@raiquora/trip/trip-plan";
 import {
   loadTripPlan,
   saveTripPlan,
-} from "../../application/trip-plan/trip-plan-repository";
+} from "../../usecases/trip-plan/trip-plan-repository";
 import {
   conversationSessionStorageKey as conversationSessionStorageKeyV2,
 } from "../../domain/conversation-session";

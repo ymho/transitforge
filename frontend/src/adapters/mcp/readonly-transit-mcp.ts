@@ -5,8 +5,8 @@ import { McpServer } from "@modelcontextprotocol/server";
 import {
   readonlyTransitToolNames,
   type ReadonlyTransitToolName,
-} from "../../application/agent/readonly-transit-tool-registry";
-import type { AgentToolRegistry } from "../../application/agent/tool-registry";
+} from "../../usecases/agent/readonly-transit-tool-registry";
+import type { AgentToolRegistry } from "../../usecases/agent/tool-registry";
 import { agentToolInputSchemaToZod } from "./agent-tool-schema";
 
 const readonlyToolNameSet = new Set<string>(readonlyTransitToolNames);

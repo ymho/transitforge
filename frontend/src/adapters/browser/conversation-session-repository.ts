@@ -1,4 +1,4 @@
-import type { ConversationSessionRepository } from "../../application/concierge/conversation-session-repository";
+import type { ConversationSessionRepository } from "../../usecases/concierge/conversation-session-repository";
 import {
   conversationSessionStorageKey as conversationSessionStorageKeyV2,
   createConversationSession,
@@ -8,7 +8,7 @@ import {
   type ConversationSession,
 } from "../../domain/conversation-session";
 import { deleteConversationHistory } from "../../domain/conversation-history";
-import { deleteTripPlan } from "../../application/trip-plan/trip-plan-repository";
+import { deleteTripPlan } from "../../usecases/trip-plan/trip-plan-repository";
 
 export const conversationSessionStorageKey = "transitforge.conversation-sessions.v3";
 export const maximumConversationSessions = 20;

@@ -2,7 +2,7 @@ import type {
   ConversationHistoryRepository,
   ConversationMessage,
   NewConversationMessage,
-} from "../../application/concierge/conversation-history-repository";
+} from "../../usecases/concierge/conversation-history-repository";
 import {
   appendConversationHistory,
   deleteConversationHistory,
