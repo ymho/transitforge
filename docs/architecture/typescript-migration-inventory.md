@@ -47,7 +47,7 @@
 
 | operationまたは責務 | 現在 | 移行先 | 移行Issue |
 | --- | --- | --- | --- |
-| Lambda event HTTP応答 operation dispatch | Python `handler.py` `agent_application.py` | `backend/agent-api/src/handler.ts`とusecases | #213 |
+| Lambda event HTTP応答 operation dispatch | Pythonを本番利用しTypeScript契約とApplicationを併設 | `backend/agent-api/src/handler.ts`とusecases | #213 完了 |
 | Feedback Agent Trace保存 | Python storage module | TypeScript usecaseとS3 Adapter | #214 |
 | Bedrock conversation Tool relay | Python Bedrock module | TypeScript usecaseとBedrock Adapter | #215 |
 | 代表ダイヤ 遅延 混雑分析 | Python analysis module | TypeScript usecaseとS3 DynamoDB Adapter | #216 |
@@ -58,7 +58,7 @@
 
 | 対象 | 現在 | 移行先 | 移行Issue |
 | --- | --- | --- | --- |
-| Node依存とTypeScript設定 | root単一package | npm workspaceと共通tsconfig | #205 |
+| Node依存とTypeScript設定 | npm workspaceと共通tsconfig | 同左 | #205 完了 |
 | Lambda artifact | Python source zip | bundled Node.js artifact | #219 |
 | Terraform Lambda runtime handler | `python3.12` `handler.lambda_handler` | Node.js runtimeとbundle handler | #219 |
 | CI CD | root ViteとPython test | workspace test build package check | #205 #219 |
@@ -96,3 +96,4 @@
 - 各workspaceは実コードを移すIssueで作成し 空packageを先に追加しない
 - Browser依存とVite entrypointは`frontend` workspaceだけが所有する
 - rootの`architecture:check`はworkspace構成と依存方向をまとめて検査する
+- `backend/agent-api`の契約 Port Usecase HandlerはAWS SDK型へ依存せず Adapterで変換する

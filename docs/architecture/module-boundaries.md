@@ -22,8 +22,11 @@ frontend/src/
   observability/   実行時の計測
   main.ts           起動と依存注入だけを行うComposition Root
 
+backend/
+  agent-api/        Node.jsへ段階移行中のAgent API契約 Application Port
+
 services/
-  agent-api/        Agentと旅行検索のBackend Application
+  agent-api/        切替まで本番を担当するPython Agent API
   traffic-collectors/ 運行情報を収集するBackend Application
 
 infra/
@@ -33,7 +36,8 @@ infra/
 
 空のディレクトリを先に作らず 責務を抽出するPRで必要な配置を追加する
 AWSリソース名 API path viewer-input形式はフォルダ移動を理由に変更しない
-現在この公開repositoryが所有するBackend実装は`services/agent-api`である
+現在の本番Backendは`services/agent-api`であり `backend/agent-api`へoperation単位で移行する
+Node.js側ではAWS SDK型をAdapterより内側へ漏らさず handlerもApplication呼出しだけを担当する
 交通収集の正本はprivateなdata-builder側にあり 公開側へ複製しない
 Infrastructureの確認と障害調査は`infra/README.md`を正本とする
 

@@ -11,8 +11,8 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace @raiquora/frontend",
-    "build": "npm run build --workspace @raiquora/frontend",
-    "test": "npm run test --workspace @raiquora/frontend",
+    "build": "npm run build --workspace @raiquora/frontend && npm run build --workspace @raiquora/agent-api",
+    "test": "npm run test --workspace @raiquora/frontend && npm run test --workspace @raiquora/agent-api",
     "workspace:check": "node tools/check_workspace_layout.mjs",
     "architecture:check": "npm run workspace:check && node tools/check_architecture_boundaries.mjs",
     "assets:check": "npm run assets:check --workspace @raiquora/frontend",

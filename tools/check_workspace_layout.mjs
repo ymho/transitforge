@@ -58,6 +58,12 @@ for (const requiredPath of [
   "frontend/src/presentation/train-viewer/rendering",
   "frontend/src/presentation/shared",
   "frontend/src/presentation/styles/viewer.css",
+  "backend/agent-api/package.json",
+  "backend/agent-api/tsconfig.json",
+  "backend/agent-api/src/handler.ts",
+  "backend/agent-api/src/contracts",
+  "backend/agent-api/src/ports",
+  "backend/agent-api/src/usecases",
 ]) {
   if (!existsSync(resolve(repositoryRoot, requiredPath))) {
     errors.push(`${requiredPath}が必要です`);

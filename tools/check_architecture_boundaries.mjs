@@ -3,6 +3,7 @@ import { dirname, relative, resolve, sep } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const sourceRoot = resolve(repositoryRoot, "frontend/src");
+const backendAgentApiRoot = resolve(repositoryRoot, "backend/agent-api/src");
 const modulesRoot = resolve(repositoryRoot, "modules");
 const agentApiDomainRoot = resolve(repositoryRoot, "services/agent-api/domain");
 const internalWorkspacePrefix = "@raiquora/";
@@ -141,6 +142,34 @@ for (const absolutePath of sharedDomainFiles(modulesRoot)) {
   }
 }
 
+for (const absolutePath of sourceFiles(backendAgentApiRoot)) {
+  const source = repositoryPath(absolutePath);
+  const backendLayer = relative(backendAgentApiRoot, absolutePath).split(sep)[0];
+  const content = readFileSync(absolutePath, "utf8");
+  for (const imported of importedSpecifiers(content)) {
+    if (imported.specifier.startsWith("@aws-sdk/")) {
+      violations.push({
+        source,
+        kind: "backend-aws-sdk-leak",
+        line: lineNumber(content, imported.index),
+        message: "AWS SDK型はAgent APIの契約 Port Usecase Handlerへ持ち込めません",
+      });
+    }
+    if (
+      backendLayer === "usecases" &&
+      imported.specifier.startsWith(".") &&
+      localBackendTargetLayer(absolutePath, imported.specifier) === "adapters"
+    ) {
+      violations.push({
+        source,
+        kind: "backend-usecase-adapter",
+        line: lineNumber(content, imported.index),
+        message: "Agent API UsecaseからAdapterへの依存は禁止されています",
+      });
+    }
+  }
+}
+
 for (const absolutePath of pythonFiles(agentApiDomainRoot)) {
   const source = repositoryPath(absolutePath);
   const content = readFileSync(absolutePath, "utf8");
@@ -238,6 +267,14 @@ function localTargetLayer(source, specifier) {
   if (!specifier.startsWith(".")) return undefined;
   const target = resolve(dirname(source), specifier);
   const targetRelative = relative(sourceRoot, target);
+  if (targetRelative.startsWith("..")) return undefined;
+  return targetRelative.split(sep)[0];
+}
+
+function localBackendTargetLayer(source, specifier) {
+  if (!specifier.startsWith(".")) return undefined;
+  const target = resolve(dirname(source), specifier);
+  const targetRelative = relative(backendAgentApiRoot, target);
   if (targetRelative.startsWith("..")) return undefined;
   return targetRelative.split(sep)[0];
 }
