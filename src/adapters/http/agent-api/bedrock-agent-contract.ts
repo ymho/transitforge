@@ -81,4 +81,4 @@ export type {
   TrainDelayAnalysisResponse,
   TrainDelaySnapshotAnalysis,
   TrainDelayStat,
-} from "../../../domain/operations/analysis";
+} from "@raiquora/operation/analysis";

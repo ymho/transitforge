@@ -1,7 +1,14 @@
-import type { TrainDelaySnapshot, TrainOperation } from "./rail/operation";
+import type { TrainDelaySnapshot, TrainOperation } from "./operation";
 import type { Train, TrainStop } from "@raiquora/train/train";
 import { normalizeStationName } from "@raiquora/train/station-name";
-import type { TrainFormationLink } from "./train-formation-link";
+
+export interface TrainFormationOperationLink {
+  partnerServiceUid: string;
+  partnerTrainNo: string;
+  partnerServiceType: string;
+  linkKind: "coupled-service" | "same-operation";
+  activeRouteMeterRange?: readonly [number, number];
+}
 
 export const realtimeSnapshotToleranceMilliseconds = 5 * 60 * 1_000;
 
@@ -79,7 +86,7 @@ export function operationsWithTimetableTrainNumberAliases(
 export function operationsWithCoupledTrainOperations(
   timetableTrains: Train[],
   operations: ReadonlyMap<string, TrainOperation> | undefined,
-  formationLinks: ReadonlyMap<string, TrainFormationLink>,
+  formationLinks: ReadonlyMap<string, TrainFormationOperationLink>,
 ): ReadonlyMap<string, TrainOperation> | undefined {
   if (operations === undefined) {
     return undefined;

@@ -1,6 +1,6 @@
-import type { TrainCongestionSnapshot } from "../../../domain/rail/operation";
+import type { TrainCongestionSnapshot } from "@raiquora/operation/operation";
 
-export type { TrainCongestionSnapshot } from "../../../domain/rail/operation";
+export type { TrainCongestionSnapshot } from "@raiquora/operation/operation";
 
 const congestionEndpoint = "/api/traffic/congestion.json";
 

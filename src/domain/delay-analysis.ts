@@ -2,7 +2,7 @@ import type {
   TrainDelayAnalysisResponse,
   TrainDelaySnapshotAnalysis,
   TrainDelayStat,
-} from "./operations/analysis";
+} from "@raiquora/operation/analysis";
 import type { Train } from "@raiquora/train/train";
 
 export interface DelayTrainForAgent {

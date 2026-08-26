@@ -5,7 +5,7 @@ import {
 import type {
   TrainCongestionSnapshot,
   TrainDelaySnapshot,
-} from "../../domain/rail/operation";
+} from "@raiquora/operation/operation";
 
 export interface RealtimeVisualizationController {
   setEnabled(enabled: boolean): void;

@@ -1,4 +1,4 @@
-import type { TrainOperation } from "../../../domain/rail/operation";
+import type { TrainOperation } from "@raiquora/operation/operation";
 import type { Train } from "@raiquora/train/train";
 import {
   coupledTrainLayouts,
@@ -6,7 +6,7 @@ import {
 } from "../../../domain/coupled-train-layout";
 import { TrainFocusSession } from "../../../domain/train-focus-session";
 import { mergeSameOperationTrains } from "../../../domain/train-detail-service";
-import { trainWithOperation } from "../../../domain/train-operation-state";
+import { trainWithOperation } from "@raiquora/operation/train-operation-state";
 import type { TrainPosition } from "../../../domain/train-position";
 import type { TrainFormationLink } from "../../../domain/train-formation-link";
 import {
