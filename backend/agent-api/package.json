@@ -5,7 +5,8 @@
   "type": "module",
   "dependencies": {
     "@raiquora/journey": "*",
-    "@raiquora/operation": "*"
+    "@raiquora/operation": "*",
+    "@raiquora/trip": "*"
   },
   "scripts": {
     "build": "tsc --noEmit",

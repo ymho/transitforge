@@ -9,6 +9,7 @@
     "./travel-destination": "./domain/travel-destination.ts",
     "./travel-plan": "./domain/travel-plan.ts",
     "./travel-profile": "./domain/travel-profile.ts",
+    "./travel-provider": "./domain/travel-provider.ts",
     "./trip-plan": "./domain/trip-plan.ts"
   },
   "dependencies": {
