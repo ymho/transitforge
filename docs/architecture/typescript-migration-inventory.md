@@ -88,3 +88,12 @@
 - Python Lambda package check成功
 
 各Issueは担当範囲の検証に加えて このbaselineから意図しない能力低下がないことを確認する。
+
+## workspace規約
+
+- root `package-lock.json`を唯一のlockfileとする
+- root `tsconfig.base.json`をTypeScriptのstrict option正本とする
+- workspace候補は`frontend` `backend/*` `modules/*` `lib`に限定する
+- 各workspaceは実コードを移すIssueで作成し 空packageを先に追加しない
+- 移行中のroot Viewerは#210までroot packageとして維持する
+- rootの`architecture:check`はworkspace構成と依存方向をまとめて検査する

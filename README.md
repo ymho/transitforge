@@ -35,6 +35,8 @@ Agentic Transit Intelligence
 ## 開発環境
 
 Node.jsのバージョンは`.nvmrc`を正とする
+依存管理はrootのnpm workspaceと`package-lock.json`を正本にする
+移行中はroot packageがViewerを実行し #210で`frontend` workspaceへ移す
 
 ```bash
 nvm use
@@ -90,6 +92,7 @@ TypeScriptのテストは対象モジュールの隣へ置く。Pythonの配置�
 
 ```bash
 npm run architecture:check
+npm run workspace:check
 npm run assets:check
 npm test
 npm run build
