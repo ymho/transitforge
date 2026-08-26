@@ -86,7 +86,7 @@ backend.hcl
 *.sqlite3
 
 # Generated and large data
-viewer-input/
+/viewer-input/
 data/generated/
 data/cache/
 artifacts/

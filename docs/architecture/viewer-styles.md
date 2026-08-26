@@ -2,7 +2,7 @@
 
 ## 所有範囲
 
-`src/viewer.css`を唯一の入口とし import順を明示する
+`frontend/src/viewer.css`を唯一の入口とし import順を明示する
 各ファイルの内容を連結した順序は整理前と同一に保つ
 
 | パス | 責務 |

@@ -1,5 +1,5 @@
 {
-  "extends": "./tsconfig.base.json",
+  "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
@@ -7,5 +7,5 @@
     "allowImportingTsExtensions": false,
     "noEmit": true
   },
-  "include": ["frontend/src", "modules", "tools/run_agent_evaluation.ts"]
+  "include": ["src", "../modules"]
 }
