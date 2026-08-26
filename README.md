@@ -73,20 +73,20 @@ modules/train/       列車 駅 経路座標と業務時刻の共有Domain
 modules/operation/   遅延 混雑 運休 行き先変更の共有Domain
 modules/journey/     経路条件 候補 比較 直通検索の共有Domain
 modules/trip/        旅行候補 費用 Profile TripContext 旅程の共有Domain
-src/domain/          移行中の鉄道 Agentの決定論的な契約と計算
-src/application/     ユースケースと外部境界のPort
-src/features/        画面機能ごとのUI 状態 表示変換
-src/adapters/        ブラウザ HTTP Mapbox Bedrockへの接続
-src/rendering/       Three.jsによる列車描画
+frontend/src/domain/          移行中の鉄道 Agentの決定論的な契約と計算
+frontend/src/application/     ユースケースと外部境界のPort
+frontend/src/features/        画面機能ごとのUI 状態 表示変換
+frontend/src/adapters/        ブラウザ HTTP Mapbox Bedrockへの接続
+frontend/src/rendering/       Three.jsによる列車描画
 services/agent-api/  Agent APIのPythonアプリケーション
 infra/               パッケージ契約とTerraform
 tests/               Pythonサービスと境界を横断するテスト
 tools/               検証 評価 再生成コマンド
 ```
 
-本番のコンシェルジュは`src/application/agent/agent-runtime.ts`を唯一のモデル実行入口とする。
-Bedrock接続は`src/adapters/bedrock/viewer-agent-runtime.ts`で共通Tool Evidence Trace
-Viewer Actionへ適合し ローカル開発用Agentは`src/application/agent/local-viewer-agent.ts`へ分離する。
+本番のコンシェルジュは`frontend/src/application/agent/agent-runtime.ts`を唯一のモデル実行入口とする。
+Bedrock接続は`frontend/src/adapters/bedrock/viewer-agent-runtime.ts`で共通Tool Evidence Trace
+Viewer Actionへ適合し ローカル開発用Agentは`frontend/src/application/agent/local-viewer-agent.ts`へ分離する。
 
 TypeScriptのテストは対象モジュールの隣へ置く。Pythonの配置とfixtureの更新方法は
 [テストガイド](tests/README.md)を参照する。AWSリソース名など互換性に関わる

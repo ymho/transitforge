@@ -10,34 +10,18 @@
     "lib"
   ],
   "scripts": {
-    "dev": "vite",
-    "build": "npm run assets:check && tsc --noEmit && vite build",
-    "test": "TMPDIR=/tmp vitest run",
+    "dev": "npm run dev --workspace @raiquora/frontend",
+    "build": "npm run build --workspace @raiquora/frontend",
+    "test": "npm run test --workspace @raiquora/frontend",
     "workspace:check": "node tools/check_workspace_layout.mjs",
     "architecture:check": "npm run workspace:check && node tools/check_architecture_boundaries.mjs",
-    "assets:check": "node --import tsx tools/check_concierge_assets.ts",
+    "assets:check": "npm run assets:check --workspace @raiquora/frontend",
     "eval:agent": "node --import tsx tools/run_agent_evaluation.ts",
     "eval:agent:smoke": "npm run eval:agent -- --profile smoke",
     "eval:agent:full": "npm run eval:agent -- --profile full",
     "eval:agent:strategies": "node --import tsx tools/run_agent_strategy_experiment.ts"
   },
-  "dependencies": {
-    "@raiquora/journey": "*",
-    "@raiquora/operation": "*",
-    "@raiquora/train": "*",
-    "@raiquora/trip": "*",
-    "@modelcontextprotocol/server": "^2.0.0",
-    "mapbox-gl": "^3.25.0",
-    "three": "^0.183.1",
-    "zod": "^4.4.3"
-  },
   "devDependencies": {
-    "@modelcontextprotocol/client": "^2.0.0",
-    "@types/node": "^22.20.1",
-    "@types/three": "^0.185.1",
-    "tsx": "^4.23.12",
-    "typescript": "^5.8.3",
-    "vite": "^7.1.7",
-    "vitest": "^4.1.10"
+    "tsx": "^4.23.12"
   }
 }

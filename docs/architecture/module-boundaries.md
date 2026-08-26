@@ -12,7 +12,7 @@ Issue #203で採用した次期構成と段階移行は[ADR 0037](../decisions/0
 ## 目標構成
 
 ```text
-src/
+frontend/src/
   domain/          鉄道 運行 経路 旅行のモデルと決定論的な規則
   application/     Agent Viewer 旅程のユースケースとPort
   features/        Concierge Trip Plan Train Viewerの機能単位の接続

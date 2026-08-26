@@ -32,12 +32,12 @@
 
 | 対象責務 | 現在 | 移行先 | 移行Issue |
 | --- | --- | --- | --- |
-| Vite appとBrowser起動 | root `src` `public` `vite.config.ts` | `frontend` workspace | #210 |
-| Concierge Trip Plan Train ViewerのViewとCSS | `src/features` `src/presentation` | `frontend/src/presentation` | #211 |
-| Three.js列車描画 | `src/rendering` | `frontend/src/presentation/train-viewer/rendering` | #211 |
-| Viewer 会話 Agent clientのBrowser usecase | `src/application`と一部Feature | `frontend/src/usecases` | #212 |
-| Browser HTTP Mapbox Bedrock LocalStorage | `src/adapters` | `frontend/src/adapters` | #210 #212 |
-| Composition Root | `src/main.ts` | `frontend/src/main.ts` | #210 #212 |
+| Vite appとBrowser起動 | `frontend/src` `frontend/public` `frontend/vite.config.ts` | `frontend` workspace | #210 完了 |
+| Concierge Trip Plan Train ViewerのViewとCSS | `frontend/src/features` `frontend/src/presentation` | `frontend/src/presentation` | #211 |
+| Three.js列車描画 | `frontend/src/rendering` | `frontend/src/presentation/train-viewer/rendering` | #211 |
+| Viewer 会話 Agent clientのBrowser usecase | `frontend/src/application`と一部Feature | `frontend/src/usecases` | #212 |
+| Browser HTTP Mapbox Bedrock LocalStorage | `frontend/src/adapters` | `frontend/src/adapters` | #210 完了 #212でusecase境界を整理 |
+| Composition Root | `frontend/src/main.ts` | `frontend/src/main.ts` | #210 完了 #212で縮小 |
 
 `digital-twin-clock` `playback` `map-lighting` `weather` `train-visual-scale`などBrowser表示だけで
 意味を持つ決定論的処理はshared Domainへ機械的に移さず Frontendのusecaseまたはpresentation所有とする。
@@ -69,7 +69,6 @@
 
 | 一時状態 | 許容理由 | 撤去条件 |
 | --- | --- | --- |
-| root Viewerとworkspace設定 | Frontendの一括移動を避ける | #210のbuildとtest成功 |
 | PythonとNode Agent API | operationごとにcontract parityを確認する | #219のdev smoke成功 |
 | PythonとTypeScriptのJourney Travel計算 | scenarioとfixtureで結果を比較する | #217 #218完了後 #220でPythonを削除 |
 | 旧architecture pathの文書 | 移行中の実装を正しく説明する | #221で最終構成へ更新 |
@@ -95,5 +94,5 @@
 - root `tsconfig.base.json`をTypeScriptのstrict option正本とする
 - workspace候補は`frontend` `backend/*` `modules/*` `lib`に限定する
 - 各workspaceは実コードを移すIssueで作成し 空packageを先に追加しない
-- 移行中のroot Viewerは#210までroot packageとして維持する
+- Browser依存とVite entrypointは`frontend` workspaceだけが所有する
 - rootの`architecture:check`はworkspace構成と依存方向をまとめて検査する

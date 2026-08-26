@@ -22,11 +22,16 @@ const optionalLocalDataFallbacks: Record<string, string> = {
 };
 
 export default defineConfig({
+  envDir: "..",
+  build: {
+    outDir: "../dist",
+    emptyOutDir: true,
+  },
   plugins: [
     {
       name: "serve-local-data-files",
       configureServer(server) {
-        const viewerInputDirectory = resolve(process.cwd(), "viewer-input");
+        const viewerInputDirectory = resolve(import.meta.dirname, "..", "viewer-input");
 
         server.middlewares.use((request, response, next) => {
           const pathname = new URL(request.url ?? "/", "http://localhost").pathname;

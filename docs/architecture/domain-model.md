@@ -13,10 +13,10 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 | --- | --- | --- |
 | 時刻表入力 | 列車 停車時刻 経路 駅 路線の計画データ | data-builder生成の`viewer-input` |
 | リアルタイム入力 | 混雑 遅延 行き先変更 停車状態 | data-builder収集の交通スナップショット |
-| 検索ドメイン | 入力をもとにした経路候補と制約 | `modules/`と移行中の`src/domain/` |
+| 検索ドメイン | 入力をもとにした経路候補と制約 | `modules/`と移行中の`frontend/src/domain/` |
 | 旅行相談 | 普段の好みと今回の条件 旅行候補 旅程 | `modules/trip/domain` |
-| 会話状態 | セッション 履歴と端末内保存 | `src/domain/`とブラウザLocalStorage |
-| AI応答 | UIへ返す経路 旅行 会話の構造化結果 | `src/domain/viewer-agent-response.ts` |
+| 会話状態 | セッション 履歴と端末内保存 | `frontend/src/domain/`とブラウザLocalStorage |
+| AI応答 | UIへ返す経路 旅行 会話の構造化結果 | `frontend/src/domain/viewer-agent-response.ts` |
 | フィードバック | 利用者が明示送信した会話と評価 | private S3 |
 | Agent Trace | 上限付き実行eventと関連request ID | private S3 |
 
@@ -28,7 +28,7 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 ### `TrainIndex` `Train` `TrainStop`
 
 - Domain契約: `modules/train/domain/train.ts`
-- 入力Adapter: `src/adapters/http/viewer-input/train-index.ts`
+- 入力Adapter: `frontend/src/adapters/http/viewer-input/train-index.ts`
 - 保存先: `viewer-input/train_index.json`
 - 生成元: transitforge-data-builder
 - 用途: 列車表示 経路検索 駅と路線のカタログ
@@ -39,7 +39,7 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 ### `PathCatalog`
 
 - Domain契約: `modules/train/domain/path.ts`
-- 入力Adapter: `src/adapters/http/viewer-input/path-catalog.ts`
+- 入力Adapter: `frontend/src/adapters/http/viewer-input/path-catalog.ts`
 - JSON契約: `docs/data/viewer-input.md`
 - 保存先: `viewer-input/path_catalog.json`
 - 結合キー: `Train.path_id` → `PathCatalog.paths[].path_id`
@@ -50,7 +50,7 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 
 - Domain契約: `modules/operation/domain/operation.ts`
 - 状態適用: `modules/operation/domain/train-operation-state.ts`
-- 入力Adapter: `src/adapters/http/traffic/train-delay.ts`
+- 入力Adapter: `frontend/src/adapters/http/traffic/train-delay.ts`
 - 保存先: `/api/traffic/delays.json`
 - 結合キー: `Train.train_no` → `operationsByTrainNumber`
 
@@ -60,7 +60,7 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 ### `TrainCongestionSnapshot`
 
 - Domain契約: `modules/operation/domain/operation.ts`
-- 入力Adapter: `src/adapters/http/traffic/train-congestion.ts`
+- 入力Adapter: `frontend/src/adapters/http/traffic/train-congestion.ts`
 - 保存先: `/api/traffic/congestion.json`
 - 結合キー: 列車番号
 
@@ -103,7 +103,7 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 ### `JourneySearchService` `search_journeys`
 
 - ドメイン契約: `modules/journey/domain/journey-search-service.ts`
-- Agent Adapter: `src/application/agent/search-journeys-tool.ts`
+- Agent Adapter: `frontend/src/application/agent/search-journeys-tool.ts`
 - 現在の実装: `/api/agent`の`journey_search`を呼ぶHTTP client
 
 `JourneySearchService`はCSAや直通インデックスの実行場所を利用側から隠し 日付 乗換上限
@@ -119,8 +119,8 @@ Agentへ返す候補は最大3件 直列化後64KiBまでに制限する。予�
 
 ### `NetworkInspectionService`
 
-- ドメイン実装: `src/domain/network-inspection-service.ts`
-- Agent Adapter: `src/application/agent/network-inspection-tools.ts`
+- ドメイン実装: `frontend/src/domain/network-inspection-service.ts`
+- Agent Adapter: `frontend/src/application/agent/network-inspection-tools.ts`
 - 入力: `TrainIndex`と`StationLineCatalog`
 
 列車 駅 1列車内の経路詳細を読み取り専用で照会する。`inspect_train`はserviceUidが完全一致する
@@ -133,11 +133,11 @@ Agentへ返す候補は最大3件 直列化後64KiBまでに制限する。予�
 
 ### 運行分析Tool
 
-- Adapter: `src/application/agent/operational-analysis-tools.ts`
+- Adapter: `frontend/src/application/agent/operational-analysis-tools.ts`
 - 既存集計: `services/agent-api/delay_analysis.py`
   `services/agent-api/congestion_analysis.py`
-- 列車メタデータ結合: `src/domain/delay-analysis.ts`
-  `src/domain/congestion-analysis.ts`
+- 列車メタデータ結合: `frontend/src/domain/delay-analysis.ts`
+  `frontend/src/domain/congestion-analysis.ts`
 
 `analyze_delay`と`analyze_congestion`は4時切替の業務日付を受け取り DynamoDBの
 operating day summaryをPythonで決定論的に集計した結果を利用する。Adapterで集計式を
@@ -150,7 +150,7 @@ sample countが0の場合は`observationStatus: unobserved`とし 未観測値�
 ### `compare_journeys`
 
 - 比較ロジック: `modules/journey/domain/journey-comparison-service.ts`
-- Agent Adapter: `src/application/agent/compare-journeys-tool.ts`
+- Agent Adapter: `frontend/src/application/agent/compare-journeys-tool.ts`
 
 同一Agent実行内で`search_journeys`が検証した検索結果だけをIDで解決し 最大3候補を比較する。
 モデルから経路本体を入力させず 存在しない検索結果IDや候補番号を拒否するため 比較処理が新しい経路を
@@ -167,8 +167,8 @@ processをまたぐ永続状態や会話履歴としては扱わない。
 
 ### EvidenceとGrounded Claim
 
-- モデル: `src/application/agent/evidence-model.ts`
-- Tool結果変換: `src/application/agent/tool-result-evidence.ts`
+- モデル: `frontend/src/application/agent/evidence-model.ts`
+- Tool結果変換: `frontend/src/application/agent/tool-result-evidence.ts`
 
 Evidenceは`deterministic_fact` `derived_value` `model_interpretation`
 `unverified_information`を区別する。情報源は`sourceType` `sourceRef` `retrievedAt`
@@ -185,7 +185,7 @@ task scopeへ渡す。判断記録は[ADR 0026](../decisions/0026-ground-agent-r
 
 ### Structured Agent Trace
 
-- モデルとRecorder: `src/application/agent/agent-trace.ts`
+- モデルとRecorder: `frontend/src/application/agent/agent-trace.ts`
 
 1回のAgent実行は`executionId`に紐づく順序付きeventとして記録する。eventは利用者の依頼
 正規化した意図 plan Tool呼び出しと結果 Evidence 再計画判断 モデルmetadata 応答
@@ -203,9 +203,9 @@ Lambdaが同じschemaと秘匿情報除去を再検証してからprivate S3へ3
 
 ### Multi-step Agent Runtime
 
-- Runtime: `src/application/agent/agent-runtime.ts`
-- 契約: `src/application/agent/runtime-contract.ts`
-- 制限: `src/application/agent/runtime-policies.ts`
+- Runtime: `frontend/src/application/agent/agent-runtime.ts`
+- 契約: `frontend/src/application/agent/runtime-contract.ts`
+- 制限: `frontend/src/application/agent/runtime-policies.ts`
 - 判断記録: [ADR 0023](../decisions/0023-build-bounded-multi-step-agent-runtime.md)
 
 Problem Framing Planner Tool RegistryとExecutor Evidence Responseを別責務として接続する。
@@ -224,9 +224,9 @@ Tool順序 ClaimのGrounding Viewer Actionのtask scopeとTraceを同じテス�
 
 ### Viewer Action Policy
 
-- Action契約: `src/application/viewer/viewer-action.ts`
-- task scopeとPolicy: `src/application/viewer/viewer-action-policy.ts`
-- Executor: `src/application/viewer/viewer-action-executor.ts`
+- Action契約: `frontend/src/application/viewer/viewer-action.ts`
+- task scopeとPolicy: `frontend/src/application/viewer/viewer-action-policy.ts`
+- Executor: `frontend/src/application/viewer/viewer-action-executor.ts`
 - 判断記録: [ADR 0024](../decisions/0024-restrict-viewer-actions-to-task-scope.md)
 
 Agentが提案できる操作を`focus_train` `highlight_route` `set_display_time`
@@ -240,8 +240,8 @@ ExecutorはDOMやMapboxを直接参照せず表示用Portだけを呼び出す�
 
 ### Agent Evaluation
 
-- 契約: `src/application/agent/evaluation/evaluation-contract.ts`
-- 判定: `src/application/agent/evaluation/agent-evaluator.ts`
+- 契約: `frontend/src/application/agent/evaluation/evaluation-contract.ts`
+- 判定: `frontend/src/application/agent/evaluation/agent-evaluator.ts`
 - dataset: `tests/fixtures/agent-eval-cases.json`
 - 判断記録: [ADR 0027](../decisions/0027-evaluate-agent-quality-with-objective-metrics.md)
 
@@ -262,7 +262,7 @@ runnerの`--case`はcase IDでdatasetとobservationを同時に1件へ絞り込�
 
 ### Re-planとReflectionの戦略実験
 
-- 実験契約: `src/application/agent/evaluation/strategy-experiment.ts`
+- 実験契約: `frontend/src/application/agent/evaluation/strategy-experiment.ts`
 - fixture: `tests/fixtures/agent-strategy-experiment.json`
 - 判断記録: [ADR 0031](../decisions/0031-retain-result-driven-replan-without-always-on-reflection.md)
 
@@ -280,9 +280,9 @@ CI分離の判断は[ADR 0029](../decisions/0029-separate-smoke-and-full-agent-e
 
 ### Read-only MCP Adapter
 
-- 共通Registry: `src/application/agent/readonly-transit-tool-registry.ts`
-- Protocol Adapter: `src/adapters/mcp/readonly-transit-mcp.ts`
-- stdio transport: `src/adapters/mcp/stdio.ts`
+- 共通Registry: `frontend/src/application/agent/readonly-transit-tool-registry.ts`
+- Protocol Adapter: `frontend/src/adapters/mcp/readonly-transit-mcp.ts`
+- stdio transport: `frontend/src/adapters/mcp/stdio.ts`
 - 判断記録: [ADR 0030](../decisions/0030-expose-read-only-domain-tools-through-mcp.md)
 
 MCPはDomain Serviceを外部Agentへ公開するProtocol Adapterであり 鉄道ロジックを持たない。
@@ -306,7 +306,7 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 ### `UserProfile`
 
 - 定義: `modules/trip/domain/travel-profile.ts`
-- Repository: `src/application/trip-profile/user-profile-repository.ts`
+- Repository: `frontend/src/application/trip-profile/user-profile-repository.ts`
 - 保存先: LocalStorage `transitforge.travel-profile.v2`
 - 更新元: 初回オンボーディングとプロフィール編集
 
@@ -324,7 +324,7 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 
 ### `ConversationGuidance` `ConversationSubmission`
 
-- 定義: `src/domain/conversation-guidance.ts`
+- 定義: `frontend/src/domain/conversation-guidance.ts`
 - 生成元: Bedrockの`ask_follow_up`ツール
 
 `ConversationGuidance`は次の質問 質問の種類 クイックリプライ `TripContext`を持つ。
@@ -333,7 +333,7 @@ UIはこの契約を共通入力として描画するだけで 会話パター�
 
 ### `ConversationHistoryEntry`
 
-- 定義: `src/domain/conversation-history.ts`
+- 定義: `frontend/src/domain/conversation-history.ts`
 - 保存先: LocalStorage `transitforge.concierge-history.v2`
 
 コンシェルジュ画面に表示した利用者の発話と構造化されたAI応答を会話セッションごとに最大50件保存する。
@@ -343,9 +343,9 @@ AI応答には取得できた`x-transitforge-request-id`も保存し 再読み�
 
 ### `ConversationSession` `TravelMemory`
 
-- 定義: `src/domain/conversation-session.ts`
-- Repository Port: `src/application/concierge/conversation-session-repository.ts`
-- Browser Adapter: `src/adapters/browser/conversation-session-repository.ts`
+- 定義: `frontend/src/domain/conversation-session.ts`
+- Repository Port: `frontend/src/application/concierge/conversation-session-repository.ts`
+- Browser Adapter: `frontend/src/adapters/browser/conversation-session-repository.ts`
 - 保存先: LocalStorage `transitforge.conversation-sessions.v3` `transitforge.travel-memories.v1`
 
 `ConversationSession`はUUIDで相談を識別し 現在の対象を`general` `trip` `place` `route`のスコープで表す。
@@ -361,7 +361,7 @@ Repositoryは作成 選択 改名 削除を提供し 最終更新が新しい20�
 ### `TripPlan` `TripPlanItem` `TripPlanPatch`
 
 - 定義: `modules/trip/domain/trip-plan.ts`
-- Repository: `src/application/trip-plan/trip-plan-repository.ts`
+- Repository: `frontend/src/application/trip-plan/trip-plan-repository.ts`
 - 保存先: LocalStorage `transitforge.trip-plans.v2`
 
 1つの`ConversationSession.id`に対して編集対象の`TripPlan`は1つだけ保持する。別の旅行は新しい会話
@@ -397,7 +397,7 @@ AI応答だけでは保存せず 利用者が画面で反映を選んだ後に�
 ### `ViewerAgentJourneyPlan`
 
 - 定義: `modules/trip/domain/travel-plan.ts`
-- Viewer応答alias: `src/domain/viewer-agent-response.ts`
+- Viewer応答alias: `frontend/src/domain/viewer-agent-response.ts`
 - 内容: 検索条件と`JourneyRouteResult[]`
 
 AI応答からUIへ渡す経路表示用モデルである。`JourneyRouteResult`をそのまま再解釈せず タブと
@@ -406,14 +406,14 @@ AI応答からUIへ渡す経路表示用モデルである。`JourneyRouteResult
 ### `ViewerAgentTravelPlan`
 
 - 定義: `modules/trip/domain/travel-plan.ts`
-- Viewer応答alias: `src/domain/viewer-agent-response.ts`
+- Viewer応答alias: `frontend/src/domain/viewer-agent-response.ts`
 - 内容: 行きの経路 帰りの経路 宿泊候補
 
 旅行の鉄道運賃は含めない。宿泊候補の空室と日付別料金は正本データがない限り保持も表示もしない。
 
 ### `ViewerAgentResponse`
 
-- 定義: `src/domain/viewer-agent-response.ts`
+- 定義: `frontend/src/domain/viewer-agent-response.ts`
 
 AIからUIへ返す合併型である。文字列 経路 `ViewerAgentJourneyPlan` 旅行 `ViewerAgentTravelPlan`
 追加質問 `ConversationGuidance` 旅程変更 `TripPlanUpdateProposal`のいずれかを返す。
@@ -436,7 +436,7 @@ request ID付き503と本文を含まない構造化ログを返す。
 
 ### `conversation-feedback-v2`
 
-- TypeScript定義: `src/application/concierge/conversation-feedback.ts`
+- TypeScript定義: `frontend/src/application/concierge/conversation-feedback.ts`
 - Server検証: `services/agent-api/conversation_feedback.py`
 - 追加項目: `sessionId` `targetMessageId` 任意の`comment` 各会話の`messageId`
 
@@ -455,7 +455,7 @@ Goodは1操作で送信し Badだけ対象回答の直下でコメント付き �
 
 ### `agent-trace-submission-v1`
 
-- TypeScript定義: `src/application/agent/agent-trace.ts`
+- TypeScript定義: `frontend/src/application/agent/agent-trace.ts`
 - Server検証: `services/agent-api/agent_trace_storage.py`
 - 保存先: private S3 `agent-traces/YYYY/MM/DD/<taskId>/<traceId>.json`
 - 保持期間: 30日

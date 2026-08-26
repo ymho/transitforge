@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
-const sourceRoot = resolve(repositoryRoot, "src");
+const sourceRoot = resolve(repositoryRoot, "frontend/src");
 const modulesRoot = resolve(repositoryRoot, "modules");
 const agentApiDomainRoot = resolve(repositoryRoot, "services/agent-api/domain");
 const internalWorkspacePrefix = "@raiquora/";
@@ -54,16 +54,16 @@ const violations = [];
 
 if (existsSync(resolve(sourceRoot, "infrastructure"))) {
   violations.push({
-    source: "src/infrastructure",
+    source: "frontend/src/infrastructure",
     kind: "ambiguous-infrastructure-root",
     line: 1,
-    message: "実行時Adapterはsrc/adaptersへ置き AWS構成はルートinfraへ置いてください",
+    message: "実行時Adapterはfrontend/src/adaptersへ置き AWS構成はルートinfraへ置いてください",
   });
 }
 
 for (const absolutePath of sourceFiles(sourceRoot)) {
   const source = repositoryPath(absolutePath);
-  const layer = source.split("/")[1];
+  const layer = relative(sourceRoot, absolutePath).split(sep)[0];
   const rule = layerRules[layer];
   if (!rule) continue;
 

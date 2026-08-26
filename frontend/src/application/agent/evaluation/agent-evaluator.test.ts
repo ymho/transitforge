@@ -10,7 +10,7 @@ import {
 } from "./evaluation-dataset";
 import { renderAgentEvaluationMarkdown } from "./evaluation-report";
 
-const fixtures = fileURLToPath(new URL("../../../../tests/fixtures/", import.meta.url));
+const fixtures = fileURLToPath(new URL("../../../../../tests/fixtures/", import.meta.url));
 
 describe("Agent Evaluation Framework", () => {
   it("evaluates 35 reproducible cases and reuses known journey scenarios", () => {

@@ -9,7 +9,7 @@ import {
 import { renderAgentEvaluationRunMarkdown } from "./evaluation-report";
 import { runAgentEvaluationProfile, selectAgentEvaluationCase } from "./evaluation-run";
 
-const fixtures = fileURLToPath(new URL("../../../../tests/fixtures/", import.meta.url));
+const fixtures = fileURLToPath(new URL("../../../../../tests/fixtures/", import.meta.url));
 
 describe("Agent Evaluation profiles", () => {
   it("runs the tagged Smoke subset independently from the Full dataset", () => {

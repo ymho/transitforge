@@ -4,9 +4,9 @@
 
 対象モジュールと同じディレクトリへ`*.test.ts`を置く
 
-- Domainの計算と契約は`src/domain`
-- ApplicationのユースケースとPolicyは`src/application`
-- UIの状態と表示変換は`src/features/<feature>`
+- Domainの計算と契約は`frontend/src/domain`
+- ApplicationのユースケースとPolicyは`frontend/src/application`
+- UIの状態と表示変換は`frontend/src/features/<feature>`
 - Adapterと描画固有の振る舞いは各実装の隣
 
 複数層を通すシナリオでも 可能な限り公開Portから実行し 内部実装へ依存しない

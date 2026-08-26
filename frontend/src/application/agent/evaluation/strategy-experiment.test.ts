@@ -9,7 +9,7 @@ import {
 } from "./strategy-experiment";
 import { renderAgentStrategyExperimentMarkdown } from "./strategy-experiment-report";
 
-const fixtures = fileURLToPath(new URL("../../../../tests/fixtures/", import.meta.url));
+const fixtures = fileURLToPath(new URL("../../../../../tests/fixtures/", import.meta.url));
 
 describe("Re-plan / Reflection experiment", () => {
   it("reproduces the quality latency and token comparison", () => {

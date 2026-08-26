@@ -8,6 +8,7 @@ const errors = [];
 const rootPackage = readJson(resolve(repositoryRoot, "package.json"));
 const lockfile = readJson(resolve(repositoryRoot, "package-lock.json"));
 const rootTsconfig = readJson(resolve(repositoryRoot, "tsconfig.json"));
+const frontendRoot = resolve(repositoryRoot, "frontend");
 
 if (rootPackage.private !== true) {
   errors.push("root package.jsonはprivateである必要があります");
@@ -40,6 +41,34 @@ for (const directory of existingWorkspaceDirectories()) {
   const manifest = readJson(manifestPath);
   if (manifest.private !== true) {
     errors.push(`${repositoryPath(manifestPath)}はprivateである必要があります`);
+  }
+}
+
+for (const requiredPath of [
+  "frontend/package.json",
+  "frontend/tsconfig.json",
+  "frontend/vite.config.ts",
+  "frontend/index.html",
+  "frontend/src/main.ts",
+  "frontend/public",
+]) {
+  if (!existsSync(resolve(repositoryRoot, requiredPath))) {
+    errors.push(`${requiredPath}が必要です`);
+  }
+}
+if (existsSync(resolve(repositoryRoot, "src"))) {
+  errors.push("root srcはfrontend/srcへ統一してください");
+}
+if (existsSync(resolve(repositoryRoot, "public"))) {
+  errors.push("root publicはfrontend/publicへ統一してください");
+}
+if (existsSync(resolve(repositoryRoot, "vite.config.ts"))) {
+  errors.push("root vite.config.tsはfrontendへ統一してください");
+}
+if (existsSync(frontendRoot)) {
+  const frontendPackage = readJson(resolve(frontendRoot, "package.json"));
+  if (frontendPackage.name !== "@raiquora/frontend") {
+    errors.push("frontend package名は@raiquora/frontendにしてください");
   }
 }
 

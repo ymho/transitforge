@@ -1,12 +1,12 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { parseAgentEvaluationDataset } from "../src/application/agent/evaluation/evaluation-dataset";
+import { parseAgentEvaluationDataset } from "../frontend/src/application/agent/evaluation/evaluation-dataset";
 import {
   evaluateAgentStrategyExperiment,
   parseAgentStrategyExperiment,
-} from "../src/application/agent/evaluation/strategy-experiment";
-import { renderAgentStrategyExperimentMarkdown } from "../src/application/agent/evaluation/strategy-experiment-report";
+} from "../frontend/src/application/agent/evaluation/strategy-experiment";
+import { renderAgentStrategyExperimentMarkdown } from "../frontend/src/application/agent/evaluation/strategy-experiment-report";
 
 const root = resolve(import.meta.dirname, "..");
 const outputDirectory = resolve(argument("--output-dir") ??

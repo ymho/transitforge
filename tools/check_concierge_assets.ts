@@ -1,9 +1,9 @@
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { concierges } from "../src/features/concierge/profiles";
+import { concierges } from "../frontend/src/features/concierge/profiles";
 
-const assetDirectory = resolve("public/assets/concierges");
+const assetDirectory = resolve(import.meta.dirname, "../frontend/public/assets/concierges");
 const expectedFiles = new Set<string>();
 const errors: string[] = [];
 
