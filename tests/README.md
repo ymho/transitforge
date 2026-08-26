@@ -6,7 +6,7 @@
 
 - Domainの計算と契約は`frontend/src/domain`
 - ApplicationのユースケースとPolicyは`frontend/src/application`
-- UIの状態と表示変換は`frontend/src/features/<feature>`
+- View DOM操作と表示変換は`frontend/src/presentation/<feature>`
 - Adapterと描画固有の振る舞いは各実装の隣
 
 複数層を通すシナリオでも 可能な限り公開Portから実行し 内部実装へ依存しない

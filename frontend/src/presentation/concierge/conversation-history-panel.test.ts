@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ConversationSession } from "../../../domain/conversation-session";
+import type { ConversationSession } from "../../domain/conversation-session";
 import {
   conversationHistoryListItems,
   conversationUpdatedLabel,

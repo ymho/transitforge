@@ -22,9 +22,9 @@
 
 - 鉄道やAgentの決定論的な契約と計算は`frontend/src/domain`
 - ユースケースと外部境界のPortは`frontend/src/application`
-- 画面機能のUI 状態 表示変換 CSSは`frontend/src/features/<feature>`
+- 画面機能のView DOM操作 CSSは`frontend/src/presentation/<feature>`
 - ブラウザ HTTP Mapbox Bedrockなど外部技術への接続は`frontend/src/adapters`
-- Three.js固有の描画は`frontend/src/rendering`
+- Three.js固有の描画は`frontend/src/presentation/train-viewer/rendering`
 - Agent APIのPythonコードは`services/agent-api` インフラ定義は`infra`
 - TypeScriptテストは対象ファイルの隣へ置く
 - Pythonサービスと境界を横断するテストは`tests`へ置き fixtureは`tests/fixtures/README.md`に従う

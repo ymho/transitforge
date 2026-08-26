@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { conciergeWelcomeMessage, profileIntroductionGreeting } from "./travel-profile-panel";
-import { akari } from "../profiles/akari";
-import { mia } from "../profiles/mia";
+import { akari } from "../../features/concierge/profiles/akari";
+import { mia } from "../../features/concierge/profiles/mia";
 
 describe("profileIntroductionGreeting", () => {
   it("夜間はこんばんはと案内する", () => {
