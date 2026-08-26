@@ -21,7 +21,7 @@
 ## 配置判断
 
 - 鉄道やAgentの決定論的な契約と計算は`frontend/src/domain`
-- ユースケースと外部境界のPortは`frontend/src/application`
+- ユースケースと外部境界のPortは`frontend/src/usecases`
 - 画面機能のView DOM操作 CSSは`frontend/src/presentation/<feature>`
 - ブラウザ HTTP Mapbox Bedrockなど外部技術への接続は`frontend/src/adapters`
 - Three.js固有の描画は`frontend/src/presentation/train-viewer/rendering`

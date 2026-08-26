@@ -1,18 +1,18 @@
 import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
 import { formatRouteClockTime } from "@raiquora/train/route-time";
 import type { UserProfile } from "@raiquora/trip/travel-profile";
-import { loadUserProfile } from "../../application/trip-profile/user-profile-repository";
+import { loadUserProfile } from "../../usecases/trip-profile/user-profile-repository";
 import type {
   ConversationGuidance,
   ConversationSubmission,
 } from "../../domain/conversation-guidance";
 import {
   type ConversationHistoryRepository,
-} from "../../application/concierge/conversation-history-repository";
+} from "../../usecases/concierge/conversation-history-repository";
 import {
   buildConversationFeedback,
   type ConversationFeedbackV2,
-} from "../../application/concierge/conversation-feedback";
+} from "../../usecases/concierge/conversation-feedback";
 import { recommendedTravelDestinations } from "@raiquora/trip/travel-destination";
 import {
   defaultJourneySearchPreferences,

@@ -35,9 +35,9 @@
 | Vite appとBrowser起動 | `frontend/src` `frontend/public` `frontend/vite.config.ts` | `frontend` workspace | #210 完了 |
 | Concierge Trip Plan Train ViewerのViewとCSS | `frontend/src/presentation/<feature>` | `frontend/src/presentation` | #211 完了 |
 | Three.js列車描画 | `frontend/src/presentation/train-viewer/rendering` | 同左 | #211 完了 |
-| Viewer 会話 Agent clientのBrowser usecase | `frontend/src/application`と一部Feature | `frontend/src/usecases` | #212 |
-| Browser HTTP Mapbox Bedrock LocalStorage | `frontend/src/adapters` | `frontend/src/adapters` | #210 完了 #212でusecase境界を整理 |
-| Composition Root | `frontend/src/main.ts` | `frontend/src/main.ts` | #210 完了 #212で縮小 |
+| Viewer 会話 Agent clientのBrowser usecase | `frontend/src/usecases`と一部Feature | `frontend/src/usecases` | #212 完了 |
+| Browser HTTP Mapbox Bedrock LocalStorage | `frontend/src/adapters` | `frontend/src/adapters` | #210 #212 完了 |
+| Composition Root | `frontend/src/composition/viewer-composition.ts` | 同左 | #212 完了 |
 
 `digital-twin-clock` `playback` `map-lighting` `weather` `train-visual-scale`などBrowser表示だけで
 意味を持つ決定論的処理はshared Domainへ機械的に移さず Frontendのusecaseまたはpresentation所有とする。

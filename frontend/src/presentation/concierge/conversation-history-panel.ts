@@ -1,6 +1,6 @@
-import type { ConversationSessionRepository } from "../../application/concierge/conversation-session-repository";
+import type { ConversationSessionRepository } from "../../usecases/concierge/conversation-session-repository";
 import type { ConversationSession } from "../../domain/conversation-session";
-import { loadTripPlan } from "../../application/trip-plan/trip-plan-repository";
+import { loadTripPlan } from "../../usecases/trip-plan/trip-plan-repository";
 
 export interface ConversationHistoryPanelElements {
   newConversation: HTMLButtonElement;

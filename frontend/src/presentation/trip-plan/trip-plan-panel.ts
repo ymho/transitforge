@@ -11,7 +11,7 @@ import {
   loadTripPlan,
   migrateLegacyTripPlan,
   saveTripPlan,
-} from "../../application/trip-plan/trip-plan-repository";
+} from "../../usecases/trip-plan/trip-plan-repository";
 import type { ViewerAgentAccommodation } from "../../domain/viewer-agent-response";
 
 export interface TripPlanPanelController {

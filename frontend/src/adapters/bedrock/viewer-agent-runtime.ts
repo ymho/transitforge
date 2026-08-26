@@ -39,7 +39,7 @@ import {
 import {
   parseViewerAgentActions,
   type ViewerAgentLayer,
-} from "../../application/viewer/viewer-action";
+} from "../../usecases/viewer/viewer-action";
 import {
   arrivalSearchWindowMinutes,
   currentCalendarDateInJapan,
@@ -50,7 +50,7 @@ import {
   routeCalendarDateFromPrompt,
   searchActiveTrainsFromPrompt,
   searchTrainArrivalsFromPrompt,
-} from "../../application/viewer/viewer-local-tools";
+} from "../../usecases/viewer/viewer-local-tools";
 import { travelDestinationAccess } from "@raiquora/trip/travel-destination";
 import {
   normalizedConversationGuidance,
@@ -66,30 +66,30 @@ import {
   type TripPlanUpdateProposal,
 } from "@raiquora/trip/trip-plan";
 import type { ConversationScope } from "../../domain/conversation-session";
-import { MultiStepAgentRuntime } from "../../application/agent/agent-runtime";
-import { AgentToolRegistry } from "../../application/agent/tool-registry";
-import { AgentToolExecutor } from "../../application/agent/agent-tool-executor";
-import { ToolEvidenceRegistry } from "../../application/agent/tool-evidence-registry";
-import { ToolViewerActionRegistry } from "../../application/agent/tool-viewer-action-registry";
+import { MultiStepAgentRuntime } from "../../usecases/agent/agent-runtime";
+import { AgentToolRegistry } from "../../usecases/agent/tool-registry";
+import { AgentToolExecutor } from "../../usecases/agent/agent-tool-executor";
+import { ToolEvidenceRegistry } from "../../usecases/agent/tool-evidence-registry";
+import { ToolViewerActionRegistry } from "../../usecases/agent/tool-viewer-action-registry";
 import {
   failedAgentToolResult,
   invalidAgentToolInput,
   successfulAgentToolResult,
   validAgentToolInput,
   type AgentTool,
-} from "../../application/agent/tool-contract";
+} from "../../usecases/agent/tool-contract";
 import type {
   AgentModelContent,
   AgentModelMessage,
   AgentModelProvider,
   AgentModelRequest,
   AgentModelResponse,
-} from "../../application/agent/model-provider";
-import type { AgentProblemFramer } from "../../application/agent/problem-framing";
-import { ViewerActionExecutor } from "../../application/viewer/viewer-action-executor";
-import { EvidenceScopedViewerActionHandler } from "../../application/agent/viewer-action-handler";
-import type { Evidence } from "../../application/agent/evidence-model";
-import type { AgentTrace } from "../../application/agent/agent-trace";
+} from "../../usecases/agent/model-provider";
+import type { AgentProblemFramer } from "../../usecases/agent/problem-framing";
+import { ViewerActionExecutor } from "../../usecases/viewer/viewer-action-executor";
+import { EvidenceScopedViewerActionHandler } from "../../usecases/agent/viewer-action-handler";
+import type { Evidence } from "../../usecases/agent/evidence-model";
+import type { AgentTrace } from "../../usecases/agent/agent-trace";
 
 export interface ViewerAgentRuntimeDependencies {
   trains: Train[];

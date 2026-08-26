@@ -138,7 +138,7 @@ python3 tools/run_journey_search_scenarios.py --list
 4. Grounding成功後だけ`highlight_route`と`show_evidence`を実行する
 
 ```bash
-npx vitest run frontend/src/application/agent/grounded-journey-agent.e2e.test.ts
+npx vitest run frontend/src/usecases/agent/grounded-journey-agent.e2e.test.ts
 ```
 
 存在しないEvidence IDを参照する鉄道事実は失敗応答へ置き換え Viewerを操作しない。

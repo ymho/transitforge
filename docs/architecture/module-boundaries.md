@@ -14,11 +14,11 @@ Issue #203で採用した次期構成と段階移行は[ADR 0037](../decisions/0
 ```text
 frontend/src/
   domain/          鉄道 運行 経路 旅行のモデルと決定論的な規則
-  application/     Agent Viewer 旅程のユースケースとPort
-  features/        Concierge Trip Plan Train Viewerの機能単位の接続
+  usecases/        Agent Viewer 旅程のユースケースとPort
+  features/        Concierge設定など画面へ渡す機能固有データ
   adapters/        Browser HTTP Bedrock Mapbox Storageの実装
-  presentation/    状態を所有しないViewと小さなUI部品
-  rendering/       Mapbox Three.jsによる描画
+  presentation/    機能別View CSS Mapbox Three.js描画
+  composition/     外部実装 View Usecaseの依存組成
   observability/   実行時の計測
   main.ts           起動と依存注入だけを行うComposition Root
 
@@ -42,11 +42,11 @@ Infrastructureの確認と障害調査は`infra/README.md`を正本とする
 | 呼び出し元 | 依存してよい対象 | 依存してはいけない対象 |
 | --- | --- | --- |
 | Domain | Domainと標準ライブラリ | DOM Storage 通信 Vendor UI Infrastructure |
-| Application | DomainとApplication Port | Vendor実装 DOMの具体型 Terraform |
-| Features | Application Domain Presentation | Data Loader Infrastructure Renderingの具体型 |
-| Adapters | Domain Application 外部SDK | PresentationとFeature状態 |
-| Presentation | Domainの表示用値とUI部品 | 通信 Storage Infrastructure |
-| Rendering | Domainの描画用値と描画SDK | Conciergeや旅程のFeature状態 |
+| Usecases | DomainとUsecase Port | Vendor実装 DOMの具体型 Terraform |
+| Features | Domainと固有設定 | Adapter Presentation Infrastructure |
+| Adapters | Domain Usecases 外部SDK | PresentationとFeature状態 |
+| Presentation | Usecases Domainの表示用値とUI部品 | 通信 Storage Infrastructure |
+| Composition | Adapters Usecases Presentation Features | 業務計算の再実装 |
 
 外側から内側へ依存する。Domainは最も内側に置き 外部サービスの都合を持ち込まない
 Agentは推論とToolのオーケストレーションを担当し 鉄道の計算はDomain Serviceへ委譲する
@@ -57,22 +57,22 @@ TypeScriptとPythonをまたぐ正本と重複のルールは[Domainの所有権
 - `Train` `TrainStop` `Journey` `Operation`はDomainが所有する
 - JSON HTTP Bedrock AWSイベントの形式はAdapterが所有する
 - Adapterは外部形式をDomain契約へ変換する
-- Viewer ActionはApplication Portを通してPresentationとRenderingへ適用する
+- Viewer ActionはUsecase Portを通してPresentationとRenderingへ適用する
 - `main.ts`とLambda handlerは実装を持たず依存を組み立てる
 
 ### Viewer起動の責務
 
 | 責務 | 所有するモジュール |
 | --- | --- |
-| 必須DOM参照の取得と検証 | `application/viewer/viewer-elements.ts` |
+| 必須DOM参照の取得と検証 | `usecases/viewer/viewer-elements.ts` |
 | 表示日時と日時ピッカー | `presentation/train-viewer/date-time-control.ts` |
 | 再生とデジタルツイン同期 | `presentation/train-viewer/playback-controls.ts` |
 | 天気 表示モード 行先アーチ | `presentation/train-viewer/map-controls.ts` |
-| 混雑と遅延の定期更新 | `features/train-viewer/realtime-updates.ts` |
-| HTTP Browser Mapbox実装の注入 | `main.ts` |
+| 混雑と遅延の定期更新 | `usecases/train-viewer/realtime-updates.ts` |
+| HTTP Browser Mapbox実装の注入 | `composition/viewer-composition.ts` |
 
 Feature側は通信やMapboxの具体実装を生成しない
-`main.ts`がAdapterを注入することでコントローラをMapbox実体なしで検証できるようにする
+Composition RootがAdapterを注入することでコントローラをMapbox実体なしで検証できるようにする
 style再読込時は前回の定期更新を破棄してから新しい購読を開始する
 
 Viewer UIは`presentation`の機能別ディレクトリに置く

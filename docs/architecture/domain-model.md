@@ -103,7 +103,7 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 ### `JourneySearchService` `search_journeys`
 
 - ドメイン契約: `modules/journey/domain/journey-search-service.ts`
-- Agent Adapter: `frontend/src/application/agent/search-journeys-tool.ts`
+- Agent Adapter: `frontend/src/usecases/agent/search-journeys-tool.ts`
 - 現在の実装: `/api/agent`の`journey_search`を呼ぶHTTP client
 
 `JourneySearchService`はCSAや直通インデックスの実行場所を利用側から隠し 日付 乗換上限
@@ -120,7 +120,7 @@ Agentへ返す候補は最大3件 直列化後64KiBまでに制限する。予�
 ### `NetworkInspectionService`
 
 - ドメイン実装: `frontend/src/domain/network-inspection-service.ts`
-- Agent Adapter: `frontend/src/application/agent/network-inspection-tools.ts`
+- Agent Adapter: `frontend/src/usecases/agent/network-inspection-tools.ts`
 - 入力: `TrainIndex`と`StationLineCatalog`
 
 列車 駅 1列車内の経路詳細を読み取り専用で照会する。`inspect_train`はserviceUidが完全一致する
@@ -133,7 +133,7 @@ Agentへ返す候補は最大3件 直列化後64KiBまでに制限する。予�
 
 ### 運行分析Tool
 
-- Adapter: `frontend/src/application/agent/operational-analysis-tools.ts`
+- Adapter: `frontend/src/usecases/agent/operational-analysis-tools.ts`
 - 既存集計: `services/agent-api/delay_analysis.py`
   `services/agent-api/congestion_analysis.py`
 - 列車メタデータ結合: `frontend/src/domain/delay-analysis.ts`
@@ -150,7 +150,7 @@ sample countが0の場合は`observationStatus: unobserved`とし 未観測値�
 ### `compare_journeys`
 
 - 比較ロジック: `modules/journey/domain/journey-comparison-service.ts`
-- Agent Adapter: `frontend/src/application/agent/compare-journeys-tool.ts`
+- Agent Adapter: `frontend/src/usecases/agent/compare-journeys-tool.ts`
 
 同一Agent実行内で`search_journeys`が検証した検索結果だけをIDで解決し 最大3候補を比較する。
 モデルから経路本体を入力させず 存在しない検索結果IDや候補番号を拒否するため 比較処理が新しい経路を
@@ -167,8 +167,8 @@ processをまたぐ永続状態や会話履歴としては扱わない。
 
 ### EvidenceとGrounded Claim
 
-- モデル: `frontend/src/application/agent/evidence-model.ts`
-- Tool結果変換: `frontend/src/application/agent/tool-result-evidence.ts`
+- モデル: `frontend/src/usecases/agent/evidence-model.ts`
+- Tool結果変換: `frontend/src/usecases/agent/tool-result-evidence.ts`
 
 Evidenceは`deterministic_fact` `derived_value` `model_interpretation`
 `unverified_information`を区別する。情報源は`sourceType` `sourceRef` `retrievedAt`
@@ -185,7 +185,7 @@ task scopeへ渡す。判断記録は[ADR 0026](../decisions/0026-ground-agent-r
 
 ### Structured Agent Trace
 
-- モデルとRecorder: `frontend/src/application/agent/agent-trace.ts`
+- モデルとRecorder: `frontend/src/usecases/agent/agent-trace.ts`
 
 1回のAgent実行は`executionId`に紐づく順序付きeventとして記録する。eventは利用者の依頼
 正規化した意図 plan Tool呼び出しと結果 Evidence 再計画判断 モデルmetadata 応答
@@ -203,9 +203,9 @@ Lambdaが同じschemaと秘匿情報除去を再検証してからprivate S3へ3
 
 ### Multi-step Agent Runtime
 
-- Runtime: `frontend/src/application/agent/agent-runtime.ts`
-- 契約: `frontend/src/application/agent/runtime-contract.ts`
-- 制限: `frontend/src/application/agent/runtime-policies.ts`
+- Runtime: `frontend/src/usecases/agent/agent-runtime.ts`
+- 契約: `frontend/src/usecases/agent/runtime-contract.ts`
+- 制限: `frontend/src/usecases/agent/runtime-policies.ts`
 - 判断記録: [ADR 0023](../decisions/0023-build-bounded-multi-step-agent-runtime.md)
 
 Problem Framing Planner Tool RegistryとExecutor Evidence Responseを別責務として接続する。
@@ -224,9 +224,9 @@ Tool順序 ClaimのGrounding Viewer Actionのtask scopeとTraceを同じテス�
 
 ### Viewer Action Policy
 
-- Action契約: `frontend/src/application/viewer/viewer-action.ts`
-- task scopeとPolicy: `frontend/src/application/viewer/viewer-action-policy.ts`
-- Executor: `frontend/src/application/viewer/viewer-action-executor.ts`
+- Action契約: `frontend/src/usecases/viewer/viewer-action.ts`
+- task scopeとPolicy: `frontend/src/usecases/viewer/viewer-action-policy.ts`
+- Executor: `frontend/src/usecases/viewer/viewer-action-executor.ts`
 - 判断記録: [ADR 0024](../decisions/0024-restrict-viewer-actions-to-task-scope.md)
 
 Agentが提案できる操作を`focus_train` `highlight_route` `set_display_time`
@@ -240,8 +240,8 @@ ExecutorはDOMやMapboxを直接参照せず表示用Portだけを呼び出す�
 
 ### Agent Evaluation
 
-- 契約: `frontend/src/application/agent/evaluation/evaluation-contract.ts`
-- 判定: `frontend/src/application/agent/evaluation/agent-evaluator.ts`
+- 契約: `frontend/src/usecases/agent/evaluation/evaluation-contract.ts`
+- 判定: `frontend/src/usecases/agent/evaluation/agent-evaluator.ts`
 - dataset: `tests/fixtures/agent-eval-cases.json`
 - 判断記録: [ADR 0027](../decisions/0027-evaluate-agent-quality-with-objective-metrics.md)
 
@@ -262,7 +262,7 @@ runnerの`--case`はcase IDでdatasetとobservationを同時に1件へ絞り込�
 
 ### Re-planとReflectionの戦略実験
 
-- 実験契約: `frontend/src/application/agent/evaluation/strategy-experiment.ts`
+- 実験契約: `frontend/src/usecases/agent/evaluation/strategy-experiment.ts`
 - fixture: `tests/fixtures/agent-strategy-experiment.json`
 - 判断記録: [ADR 0031](../decisions/0031-retain-result-driven-replan-without-always-on-reflection.md)
 
@@ -280,7 +280,7 @@ CI分離の判断は[ADR 0029](../decisions/0029-separate-smoke-and-full-agent-e
 
 ### Read-only MCP Adapter
 
-- 共通Registry: `frontend/src/application/agent/readonly-transit-tool-registry.ts`
+- 共通Registry: `frontend/src/usecases/agent/readonly-transit-tool-registry.ts`
 - Protocol Adapter: `frontend/src/adapters/mcp/readonly-transit-mcp.ts`
 - stdio transport: `frontend/src/adapters/mcp/stdio.ts`
 - 判断記録: [ADR 0030](../decisions/0030-expose-read-only-domain-tools-through-mcp.md)
@@ -306,7 +306,7 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 ### `UserProfile`
 
 - 定義: `modules/trip/domain/travel-profile.ts`
-- Repository: `frontend/src/application/trip-profile/user-profile-repository.ts`
+- Repository: `frontend/src/usecases/trip-profile/user-profile-repository.ts`
 - 保存先: LocalStorage `transitforge.travel-profile.v2`
 - 更新元: 初回オンボーディングとプロフィール編集
 
@@ -344,7 +344,7 @@ AI応答には取得できた`x-transitforge-request-id`も保存し 再読み�
 ### `ConversationSession` `TravelMemory`
 
 - 定義: `frontend/src/domain/conversation-session.ts`
-- Repository Port: `frontend/src/application/concierge/conversation-session-repository.ts`
+- Repository Port: `frontend/src/usecases/concierge/conversation-session-repository.ts`
 - Browser Adapter: `frontend/src/adapters/browser/conversation-session-repository.ts`
 - 保存先: LocalStorage `transitforge.conversation-sessions.v3` `transitforge.travel-memories.v1`
 
@@ -361,7 +361,7 @@ Repositoryは作成 選択 改名 削除を提供し 最終更新が新しい20�
 ### `TripPlan` `TripPlanItem` `TripPlanPatch`
 
 - 定義: `modules/trip/domain/trip-plan.ts`
-- Repository: `frontend/src/application/trip-plan/trip-plan-repository.ts`
+- Repository: `frontend/src/usecases/trip-plan/trip-plan-repository.ts`
 - 保存先: LocalStorage `transitforge.trip-plans.v2`
 
 1つの`ConversationSession.id`に対して編集対象の`TripPlan`は1つだけ保持する。別の旅行は新しい会話
@@ -436,7 +436,7 @@ request ID付き503と本文を含まない構造化ログを返す。
 
 ### `conversation-feedback-v2`
 
-- TypeScript定義: `frontend/src/application/concierge/conversation-feedback.ts`
+- TypeScript定義: `frontend/src/usecases/concierge/conversation-feedback.ts`
 - Server検証: `services/agent-api/conversation_feedback.py`
 - 追加項目: `sessionId` `targetMessageId` 任意の`comment` 各会話の`messageId`
 
@@ -455,7 +455,7 @@ Goodは1操作で送信し Badだけ対象回答の直下でコメント付き �
 
 ### `agent-trace-submission-v1`
 
-- TypeScript定義: `frontend/src/application/agent/agent-trace.ts`
+- TypeScript定義: `frontend/src/usecases/agent/agent-trace.ts`
 - Server検証: `services/agent-api/agent_trace_storage.py`
 - 保存先: private S3 `agent-traces/YYYY/MM/DD/<taskId>/<traceId>.json`
 - 保持期間: 30日

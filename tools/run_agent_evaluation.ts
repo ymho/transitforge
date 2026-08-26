@@ -4,13 +4,13 @@ import { resolve } from "node:path";
 import {
   parseAgentEvaluationDataset,
   parseAgentEvaluationObservations,
-} from "../frontend/src/application/agent/evaluation/evaluation-dataset";
-import { renderAgentEvaluationRunMarkdown } from "../frontend/src/application/agent/evaluation/evaluation-report";
+} from "../frontend/src/usecases/agent/evaluation/evaluation-dataset";
+import { renderAgentEvaluationRunMarkdown } from "../frontend/src/usecases/agent/evaluation/evaluation-report";
 import {
   runAgentEvaluationProfile,
   selectAgentEvaluationCase,
-} from "../frontend/src/application/agent/evaluation/evaluation-run";
-import type { AgentEvaluationProfile } from "../frontend/src/application/agent/evaluation/evaluation-contract";
+} from "../frontend/src/usecases/agent/evaluation/evaluation-run";
+import type { AgentEvaluationProfile } from "../frontend/src/usecases/agent/evaluation/evaluation-contract";
 
 const root = resolve(import.meta.dirname, "..");
 const outputDirectory = resolve(argument("--output-dir") ?? "/tmp/transitforge-agent-eval");

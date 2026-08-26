@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createPollingController,
   type PollingEnvironment,
-} from "../../application/polling-controller";
+} from "../../usecases/polling-controller";
 
 class FakePollingEnvironment implements PollingEnvironment {
   currentTime = 0;
