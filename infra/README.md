@@ -1,13 +1,13 @@
 # Infrastructure
 
 `infra`はAWS構成とデプロイpackageの契約だけを所有する
-Agent 経路検索 旅行候補などのApplication実装は`services`へ置く
+Agent 経路検索 旅行候補などのApplication実装は`backend`と`modules`へ置く
 
 ## 構成
 
 - `terraform/bootstrap`: remote stateとGitHub Actions用の初期構成
 - `terraform/environments/dev`: dev環境のAWS resource
-- `packaging`: servicesからLambda artifactを作るmanifest
+- `packaging`: BackendからLambda artifactを作るmanifest
 
 AWS resource名 state address API path S3 keyはフォルダ整理を理由に変更しない
 package manifestはsourceとhandlerの正本であり Terraformとpackage testの両方から読む
@@ -15,7 +15,7 @@ package manifestはsourceとhandlerの正本であり Terraformとpackage test�
 ## ローカル確認
 
 ```bash
-python3 tools/build_lambda_package.py --check-only
+npm run lambda:check
 terraform fmt -check -recursive infra/terraform
 terraform -chdir=infra/terraform/bootstrap init -backend=false -input=false
 terraform -chdir=infra/terraform/bootstrap validate
@@ -23,15 +23,15 @@ terraform -chdir=infra/terraform/environments/dev init -backend=false -input=fal
 terraform -chdir=infra/terraform/environments/dev validate
 ```
 
-artifactを手元で確認するときだけ出力先を指定する
+artifactを手元で確認するときはbundleを生成して内容を確認する
 
 ```bash
-python3 tools/build_lambda_package.py --output /tmp/transitforge-agent-api.zip
-unzip -l /tmp/transitforge-agent-api.zip
+npm run build --workspace @raiquora/agent-api
+npm run lambda:check --workspace @raiquora/agent-api
 ```
 
 生成物はrepositoryへ追加しない
-packageにはmanifestで許可したPython sourceだけを含め `__pycache__` bytecode secret stateを含めない
+packageにはmanifestで許可したNode.jsの単一bundleだけを含め secret state source mapを含めない
 
 ## Planとdeploy
 
@@ -44,10 +44,10 @@ CIとCDはいずれもLambda packageを事前検証する
 
 ## 障害調査
 
-- package失敗: `python3 tools/build_lambda_package.py --check-only`
+- package失敗: `npm run lambda:check`
 - Terraform構文とprovider: `terraform validate`
 - 予定外のresource差分: `terraform plan -refresh=false`
-- Lambda起動失敗: handler名とzip rootの`handler.py`を確認
-- Backend機能の回帰: `python3 -m unittest discover -s tests -v`
+- Lambda起動失敗: handler名とzip rootの`index.mjs`を確認
+- Backend機能の回帰: `npm test`
 
 credential tfstate tfvarsの内容をIssue PR logへ貼らない

@@ -3,7 +3,7 @@
 Agent APIをNode.jsへ段階移行するためのBackend Application
 
 現時点ではLambda eventとHTTP応答 operation dispatchの契約互換基盤だけを持つ
-本番Lambdaは引き続き`services/agent-api`のPython実装を使用し Issue #219の切替まで変更しない
+本番LambdaはこのworkspaceをbundleしたNode.js artifactを使用する
 
 ## 境界
 
@@ -35,4 +35,5 @@ latency token usageだけに限定する
 ```bash
 npm run build --workspace @raiquora/agent-api
 npm run test --workspace @raiquora/agent-api
+npm run lambda:check --workspace @raiquora/agent-api
 ```
