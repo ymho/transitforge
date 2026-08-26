@@ -1,9 +1,7 @@
 import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
 import { formatRouteClockTime } from "@raiquora/train/route-time";
-import {
-  loadUserProfile,
-  type UserProfile,
-} from "../../../domain/travel-profile";
+import type { UserProfile } from "@raiquora/trip/travel-profile";
+import { loadUserProfile } from "../../../application/trip-profile/user-profile-repository";
 import type {
   ConversationGuidance,
   ConversationSubmission,
@@ -15,7 +13,7 @@ import {
   buildConversationFeedback,
   type ConversationFeedbackV2,
 } from "../../../application/concierge/conversation-feedback";
-import { recommendedTravelDestinations } from "../../../domain/travel-destination";
+import { recommendedTravelDestinations } from "@raiquora/trip/travel-destination";
 import {
   defaultJourneySearchPreferences,
   isJourneyRankingPreference,
@@ -29,7 +27,7 @@ import type {
   ViewerAgentTravelPlan,
   ViewerAgentResponse,
 } from "../../../domain/viewer-agent-response";
-import type { TripContext } from "../../../domain/travel-profile";
+import type { TripContext } from "@raiquora/trip/travel-profile";
 import { hideSheet, showSheet } from "../../../presentation/sheet-transition";
 import { renderAssistantMarkdown, visibleAssistantText } from "./assistant-markdown";
 import {
@@ -66,7 +64,7 @@ export interface AiGuidePanelElements {
   submitFeedback: (feedback: ConversationFeedback) => Promise<void>;
   onFirstPrompt?: (prompt: string) => void;
   onTravelPlan?: (plan: ViewerAgentTravelPlan) => void;
-  onTripPlanUpdate?: (proposal: import("../../../domain/trip-plan").TripPlanUpdateProposal) => void;
+  onTripPlanUpdate?: (proposal: import("@raiquora/trip/trip-plan").TripPlanUpdateProposal) => void;
 }
 
 export type AiGuidePromptHandler = (
@@ -472,7 +470,7 @@ function resolveAssistantMessage(
   item: HTMLLIElement,
   response: ViewerAgentResponse,
   onTravelPlan?: (plan: ViewerAgentTravelPlan) => void,
-  onTripPlanUpdate?: (proposal: import("../../../domain/trip-plan").TripPlanUpdateProposal) => void,
+  onTripPlanUpdate?: (proposal: import("@raiquora/trip/trip-plan").TripPlanUpdateProposal) => void,
 ): void {
   item.classList.remove("ai-guide-message-pending");
   item.removeAttribute("aria-label");
@@ -520,7 +518,7 @@ function resolveAssistantMessage(
   item.scrollIntoView({ block: "nearest" });
 }
 
-function tripPlanPatchLabel(patch: import("../../../domain/trip-plan").TripPlanPatch): string {
+function tripPlanPatchLabel(patch: import("@raiquora/trip/trip-plan").TripPlanPatch): string {
   if (patch.type === "metadata") {
     return patch.conditions ? "人数と考慮事項を変更" : "旅程の基本情報を変更";
   }

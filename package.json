@@ -25,6 +25,7 @@
     "@raiquora/journey": "*",
     "@raiquora/operation": "*",
     "@raiquora/train": "*",
+    "@raiquora/trip": "*",
     "@modelcontextprotocol/server": "^2.0.0",
     "mapbox-gl": "^3.25.0",
     "three": "^0.183.1",

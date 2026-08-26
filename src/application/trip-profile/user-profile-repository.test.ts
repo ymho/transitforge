@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { deleteUserProfile, loadUserProfile, saveUserProfile, travelProfileStorageKey, travelStyleSummary, type TravelCompanion } from "./travel-profile";
+import {
+  travelStyleSummary,
+  type TravelCompanion,
+} from "@raiquora/trip/travel-profile";
+import {
+  deleteUserProfile,
+  loadUserProfile,
+  saveUserProfile,
+  travelProfileStorageKey,
+} from "./user-profile-repository";
 
 function storage() {
   const values = new Map<string, string>();

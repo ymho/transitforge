@@ -1,4 +1,4 @@
-import type { TripPlan } from "../domain/trip-plan";
+import type { TripPlan } from "@raiquora/trip/trip-plan";
 
 export const tripPlanPreview: TripPlan = {
   version: 1,

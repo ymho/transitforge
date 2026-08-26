@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Train } from "@raiquora/train/train";
 import type { TrainPosition } from "../../domain/train-position";
-import type { UserProfile } from "../../domain/travel-profile";
+import type { UserProfile } from "@raiquora/trip/travel-profile";
 import type {
   ViewerAgentResponse,
   ViewerAgentRichResponse,

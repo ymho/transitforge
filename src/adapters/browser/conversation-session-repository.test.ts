@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { appendConversationHistory, loadConversationHistory } from "../../domain/conversation-history";
-import { loadTripPlan, saveTripPlan, type TripPlan } from "../../domain/trip-plan";
+import type { TripPlan } from "@raiquora/trip/trip-plan";
+import {
+  loadTripPlan,
+  saveTripPlan,
+} from "../../application/trip-plan/trip-plan-repository";
 import {
   conversationSessionStorageKey as conversationSessionStorageKeyV2,
 } from "../../domain/conversation-session";

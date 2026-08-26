@@ -141,12 +141,16 @@ import {
   buildConciergePrompt,
   selectConciergeForUserProfile,
 } from "./features/concierge";
-import { loadUserProfile, travelProfileChangedEvent } from "./domain/travel-profile";
+import {
+  loadUserProfile,
+  travelProfileChangedEvent,
+} from "./application/trip-profile/user-profile-repository";
 import { promptWithConversationContext } from "./domain/conversation-guidance";
 import { renderConciergeIdentity } from "./features/concierge/presentation/concierge-identity";
 import { configureConversationHistoryPanel } from "./features/concierge/presentation/conversation-history-panel";
 import { configureTripPlanPanel } from "./features/trip-plan/presentation/trip-plan-panel";
-import { loadTripPlan, tripPlanFromTravelPlan } from "./domain/trip-plan";
+import { tripPlanFromTravelPlan } from "@raiquora/trip/trip-plan";
+import { loadTripPlan } from "./application/trip-plan/trip-plan-repository";
 import {
   conversationContextSummary,
   loadTravelMemories,
@@ -337,7 +341,11 @@ aiGuideController = configureAiGuidePanel(
       if (renamed) Object.assign(activeConversationSession, renamed);
     },
     onTravelPlan: (plan) => {
-      const tripPlan = tripPlanFromTravelPlan(plan);
+      const tripPlan = tripPlanFromTravelPlan(
+        plan,
+        new Date(),
+        `trip-${crypto.randomUUID()}`,
+      );
       tripPlanController.show(tripPlan);
       Object.assign(activeConversationSession, {
         scope: "trip",

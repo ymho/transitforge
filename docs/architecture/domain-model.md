@@ -14,7 +14,8 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 | 時刻表入力 | 列車 停車時刻 経路 駅 路線の計画データ | data-builder生成の`viewer-input` |
 | リアルタイム入力 | 混雑 遅延 行き先変更 停車状態 | data-builder収集の交通スナップショット |
 | 検索ドメイン | 入力をもとにした経路候補と制約 | `modules/`と移行中の`src/domain/` |
-| 旅行相談 | 普段の好みと今回の条件 会話の状態 | `src/domain/`とブラウザLocalStorage |
+| 旅行相談 | 普段の好みと今回の条件 旅行候補 旅程 | `modules/trip/domain` |
+| 会話状態 | セッション 履歴と端末内保存 | `src/domain/`とブラウザLocalStorage |
 | AI応答 | UIへ返す経路 旅行 会話の構造化結果 | `src/domain/viewer-agent-response.ts` |
 | フィードバック | 利用者が明示送信した会話と評価 | private S3 |
 | Agent Trace | 上限付き実行eventと関連request ID | private S3 |
@@ -304,7 +305,8 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 
 ### `UserProfile`
 
-- 定義: `src/domain/travel-profile.ts`
+- 定義: `modules/trip/domain/travel-profile.ts`
+- Repository: `src/application/trip-profile/user-profile-repository.ts`
 - 保存先: LocalStorage `transitforge.travel-profile.v2`
 - 更新元: 初回オンボーディングとプロフィール編集
 
@@ -314,7 +316,7 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 
 ### `TripContext`
 
-- 定義: `src/domain/travel-profile.ts`
+- 定義: `modules/trip/domain/travel-profile.ts`
 - 保持範囲: 現在の旅行相談
 
 今回の行き先 希望日 興味 同行者 移動条件などを表す。一回限りの「海に行きたい」はここへ入り
@@ -358,7 +360,8 @@ Repositoryは作成 選択 改名 削除を提供し 最終更新が新しい20�
 
 ### `TripPlan` `TripPlanItem` `TripPlanPatch`
 
-- 定義: `src/domain/trip-plan.ts`
+- 定義: `modules/trip/domain/trip-plan.ts`
+- Repository: `src/application/trip-plan/trip-plan-repository.ts`
 - 保存先: LocalStorage `transitforge.trip-plans.v2`
 
 1つの`ConversationSession.id`に対して編集対象の`TripPlan`は1つだけ保持する。別の旅行は新しい会話
@@ -384,9 +387,17 @@ AI応答だけでは保存せず 利用者が画面で反映を選んだ後に�
 
 ## AIと旅行候補の応答
 
+### `TravelCandidate` `TravelExpenseSummary`
+
+- 定義: `modules/trip/domain/travel-candidate.ts`
+
+鉄道経路へ宿泊と体験を組み合わせるProvider非依存の候補である。費用はJPYの既知価格だけを合計し
+価格がない項目は`hasUnpricedItems`で明示する。鉄道運賃は取得も推定もせず常に集計対象外とする。
+
 ### `ViewerAgentJourneyPlan`
 
-- 定義: `src/domain/viewer-agent-response.ts`
+- 定義: `modules/trip/domain/travel-plan.ts`
+- Viewer応答alias: `src/domain/viewer-agent-response.ts`
 - 内容: 検索条件と`JourneyRouteResult[]`
 
 AI応答からUIへ渡す経路表示用モデルである。`JourneyRouteResult`をそのまま再解釈せず タブと
@@ -394,7 +405,8 @@ AI応答からUIへ渡す経路表示用モデルである。`JourneyRouteResult
 
 ### `ViewerAgentTravelPlan`
 
-- 定義: `src/domain/viewer-agent-response.ts`
+- 定義: `modules/trip/domain/travel-plan.ts`
+- Viewer応答alias: `src/domain/viewer-agent-response.ts`
 - 内容: 行きの経路 帰りの経路 宿泊候補
 
 旅行の鉄道運賃は含めない。宿泊候補の空室と日付別料金は正本データがない限り保持も表示もしない。
