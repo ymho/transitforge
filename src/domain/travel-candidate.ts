@@ -1,4 +1,4 @@
-import type { JourneyRouteResult } from "./direct-route-search";
+import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
 
 export type TravelCostCategory = "accommodation" | "experience";
 

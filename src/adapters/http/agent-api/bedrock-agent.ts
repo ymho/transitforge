@@ -22,7 +22,7 @@ import {
 import type {
   JourneySearchRequest,
   JourneySearchService,
-} from "../../../domain/journey-search-service";
+} from "@raiquora/journey/journey-search-service";
 import type { AgentToolDescriptor } from "../../../application/agent/tool-contract";
 import type { AgentTrace } from "../../../application/agent/agent-trace";
 import type { ConversationFeedbackV2 } from "../../../application/concierge/conversation-feedback";

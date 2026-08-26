@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { JourneyRouteResult } from "./direct-route-search";
+import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
 import { createTravelCandidate } from "./travel-candidate";
 
 const journey: JourneyRouteResult = {

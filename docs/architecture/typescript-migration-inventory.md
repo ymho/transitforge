@@ -24,7 +24,7 @@
 | 列車 駅 停車時刻 経路座標 | `modules/train/domain` | `modules/train/domain` | #206 完了 | JSON読込とMapbox変換は含めない |
 | 駅名比較 業務時刻整形 | `modules/train/domain/station-name.ts` `route-time.ts` | `modules/train/domain` | #206 完了 | 表示文言の装飾はFrontendへ残す |
 | 遅延 混雑 行き先変更 運休契約 | `modules/operation/domain` | `modules/operation/domain` | #207 完了 | S3 DynamoDB HTTPは含めない |
-| 経路条件 区間 候補 比較 | `src/domain`のJourney関連 | `modules/journey/domain` | #208 | wire parseとUI projectionは含めない |
+| 経路条件 区間 候補 比較 | `modules/journey/domain` | `modules/journey/domain` | #208 完了 | wire parseとUI projectionは含めない |
 | 直通検索 CSA 乗換 遅延予測 | `services/agent-api/domain/journey` | `modules/journey/domain` | #217 | parity確認後にTypeScriptを正本化する |
 | 旅行候補 費用 旅程 Profile TripContext | TypeScriptとPythonのTravel関連 | `modules/trip/domain` | #209 #218 | Provider payloadとLocalStorageは含めない |
 

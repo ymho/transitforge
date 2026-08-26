@@ -1,8 +1,8 @@
-import type { JourneySearchResponse } from "../../domain/journey-search-service";
+import type { JourneySearchResponse } from "@raiquora/journey/journey-search-service";
 import {
   compareJourneySearchResult,
   type JourneyComparison,
-} from "../../domain/journey-comparison-service";
+} from "@raiquora/journey/journey-comparison-service";
 import {
   failedAgentToolResult,
   invalidAgentToolInput,

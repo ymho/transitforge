@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type {
   JourneySearchResponse,
   JourneySearchService,
-} from "../../domain/journey-search-service";
+} from "@raiquora/journey/journey-search-service";
 import { ViewerActionExecutor } from "../viewer/viewer-action-executor";
 import { MultiStepAgentRuntime } from "./agent-runtime";
 import { AgentToolExecutor } from "./agent-tool-executor";
@@ -21,7 +21,7 @@ import {
 } from "./tool-result-evidence";
 import { StructuredAgentResponseGenerator } from "./structured-response-generator";
 import { EvidenceScopedViewerActionHandler } from "./viewer-action-handler";
-import type { JourneyComparison } from "../../domain/journey-comparison-service";
+import type { JourneyComparison } from "@raiquora/journey/journey-comparison-service";
 
 const executionId = "grounded-e2e-1";
 const selectedJourneyEvidenceId = "journey:2026-08-25:1";

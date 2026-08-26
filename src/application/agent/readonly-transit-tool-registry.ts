@@ -1,4 +1,4 @@
-import type { JourneySearchService } from "../../domain/journey-search-service";
+import type { JourneySearchService } from "@raiquora/journey/journey-search-service";
 import type { NetworkInspectionService } from "../../domain/network-inspection-service";
 import {
   createInspectStationTool,

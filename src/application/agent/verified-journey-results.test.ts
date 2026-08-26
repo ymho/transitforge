@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { VerifiedJourneySearchResultStore } from "./verified-journey-results";
-import type { JourneySearchResponse } from "../../domain/journey-search-service";
+import type { JourneySearchResponse } from "@raiquora/journey/journey-search-service";
 
 describe("VerifiedJourneySearchResultStore", () => {
   it("resolves only results saved by the same execution and returns a copy", async () => {
