@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { JourneySearchResponse } from "../../domain/journey-search-service";
+import type { JourneySearchResponse } from "@raiquora/journey/journey-search-service";
 import {
   createCompareJourneysTool,
   type VerifiedJourneySearchResultSource,

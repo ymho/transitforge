@@ -1,4 +1,4 @@
-import type { JourneyRouteResult } from "../../../domain/direct-route-search";
+import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
 import { formatRouteClockTime } from "@raiquora/train/route-time";
 import {
   loadUserProfile,
@@ -23,7 +23,7 @@ import {
   type JourneyRankingPreference,
   type JourneySearchPreferences,
   type TransferPace,
-} from "../../../domain/journey-search-preferences";
+} from "@raiquora/journey/journey-search-preferences";
 import type {
   ViewerAgentJourneyPlan,
   ViewerAgentTravelPlan,

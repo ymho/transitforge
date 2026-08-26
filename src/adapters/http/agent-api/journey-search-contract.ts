@@ -1,4 +1,4 @@
-import type { JourneySearchResponse } from "../../../domain/journey-search-service";
+import type { JourneySearchResponse } from "@raiquora/journey/journey-search-service";
 
 export const journeySearchContractVersion = "journey-search-v1" as const;
 

@@ -1,6 +1,6 @@
 import type { Train } from "@raiquora/train/train";
-import type { DirectRouteSearchHandler } from "../../domain/direct-route-search";
-import { directRouteDepartureTime } from "../../domain/direct-route-search";
+import type { DirectRouteSearchHandler } from "@raiquora/journey/direct-route-search";
+import { directRouteDepartureTime } from "@raiquora/journey/direct-route-search";
 import {
   journeyNavigationGuidanceFromPrompt,
   mergeJourneyNavigationGuidance,

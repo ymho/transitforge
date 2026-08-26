@@ -1,0 +1,17 @@
+{
+  "name": "@raiquora/journey",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./domain/index.ts",
+    "./direct-route-search": "./domain/direct-route-search.ts",
+    "./journey-comparison-service": "./domain/journey-comparison-service.ts",
+    "./journey-leg-alternative": "./domain/journey-leg-alternative.ts",
+    "./journey-search-preferences": "./domain/journey-search-preferences.ts",
+    "./journey-search-service": "./domain/journey-search-service.ts"
+  },
+  "dependencies": {
+    "@raiquora/train": "*"
+  }
+}

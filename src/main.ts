@@ -37,7 +37,7 @@ import {
   nearestOriginWithDepartures, searchDirectRoutes,
   type JourneyRouteLeg,
   type DirectRouteSearchHandler,
-} from "./domain/direct-route-search";
+} from "@raiquora/journey/direct-route-search";
 import {
   alternativeProposalResponse,
   appliedAlternativeResponse,
@@ -55,7 +55,7 @@ import {
   unsupportedJourneyExperienceResponse,
   type JourneyNavigationGuidance,
 } from "./domain/journey-navigation-intent";
-import { journeyLegAlternativeFits } from "./domain/journey-leg-alternative";
+import { journeyLegAlternativeFits } from "@raiquora/journey/journey-leg-alternative";
 import {
   dateForOperatingRouteTime,
   operatingServiceDateStart,

@@ -1,4 +1,4 @@
-import type { JourneySearchResponse } from "../../domain/journey-search-service";
+import type { JourneySearchResponse } from "@raiquora/journey/journey-search-service";
 import type { VerifiedJourneySearchResultSource } from "./compare-journeys-tool";
 import type { VerifiedJourneySearchResultWriter } from "./search-journeys-tool";
 

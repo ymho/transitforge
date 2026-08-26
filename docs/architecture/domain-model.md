@@ -84,7 +84,7 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 
 ### `JourneyRouteLeg` `JourneyRouteResult`
 
-- 定義: `src/domain/direct-route-search.ts`
+- 定義: `modules/journey/domain/direct-route-search.ts`
 - 生成元: 日付別接続インデックスを使う経路検索
 
 `JourneyRouteLeg`は1列車で移動する区間 `JourneyRouteResult`は複数区間を含む候補である。
@@ -93,7 +93,7 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 
 ### `DirectRouteSearchResponse`
 
-- 定義: `src/domain/direct-route-search.ts`
+- 定義: `modules/journey/domain/direct-route-search.ts`
 - 境界: ブラウザからAI Lambdaへの経路検索結果
 
 検索条件と候補を1つにまとめる応答である。日付 `departureDate`と業務日付 `serviceDate`は別の値として
@@ -101,7 +101,7 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 
 ### `JourneySearchService` `search_journeys`
 
-- ドメイン契約: `src/domain/journey-search-service.ts`
+- ドメイン契約: `modules/journey/domain/journey-search-service.ts`
 - Agent Adapter: `src/application/agent/search-journeys-tool.ts`
 - 現在の実装: `/api/agent`の`journey_search`を呼ぶHTTP client
 
@@ -148,7 +148,7 @@ sample countが0の場合は`observationStatus: unobserved`とし 未観測値�
 
 ### `compare_journeys`
 
-- 比較ロジック: `src/domain/journey-comparison-service.ts`
+- 比較ロジック: `modules/journey/domain/journey-comparison-service.ts`
 - Agent Adapter: `src/application/agent/compare-journeys-tool.ts`
 
 同一Agent実行内で`search_journeys`が検証した検索結果だけをIDで解決し 最大3候補を比較する。
@@ -295,7 +295,7 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 
 ### `JourneySearchPreferences`
 
-- 定義: `src/domain/journey-search-preferences.ts`
+- 定義: `modules/journey/domain/journey-search-preferences.ts`
 - 保存先: ブラウザLocalStorage
 
 乗換ペース 経路優先 最大乗換回数を表す。これは検索時の好みであり 旅行プロフィールには含めない。

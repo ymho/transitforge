@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { JourneySearchResponse } from "../../domain/journey-search-service";
+import type { JourneySearchResponse } from "@raiquora/journey/journey-search-service";
 import type { TrainInspection } from "../../domain/network-inspection-service";
 import {
   validateEvidenceAndClaims,

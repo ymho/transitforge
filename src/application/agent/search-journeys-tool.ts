@@ -2,7 +2,7 @@ import type {
   JourneySearchRequest,
   JourneySearchResponse,
   JourneySearchService,
-} from "../../domain/journey-search-service";
+} from "@raiquora/journey/journey-search-service";
 import {
   failedAgentToolResult,
   invalidAgentToolInput,

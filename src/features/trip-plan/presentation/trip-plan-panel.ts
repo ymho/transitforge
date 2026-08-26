@@ -1,4 +1,4 @@
-import type { JourneyRouteLeg } from "../../../domain/direct-route-search";
+import type { JourneyRouteLeg } from "@raiquora/journey/direct-route-search";
 import {
   applyTripPlanPatches,
   loadTripPlan,

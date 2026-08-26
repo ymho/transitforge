@@ -1,8 +1,8 @@
-import type { JourneyRouteResult } from "./direct-route-search";
+import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
 import type {
   JourneyRankingPreference,
   TransferPace,
-} from "./journey-search-preferences";
+} from "@raiquora/journey/journey-search-preferences";
 import type { ConversationGuidance } from "./conversation-guidance";
 import type { TripPlanUpdateProposal } from "./trip-plan";
 

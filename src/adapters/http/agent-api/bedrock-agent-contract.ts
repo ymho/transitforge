@@ -70,7 +70,7 @@ export interface RepresentativeTimetableSearchResponse {
 
 export type {
   JourneySearchResponse as TravelCandidateSearchResponse,
-} from "../../../domain/journey-search-service";
+} from "@raiquora/journey/journey-search-service";
 export type {
   DailyCongestionAnalysisResponse,
   DailyCongestionPeak,

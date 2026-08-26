@@ -1,5 +1,5 @@
-import type { JourneyComparison } from "../../domain/journey-comparison-service";
-import type { JourneySearchResponse } from "../../domain/journey-search-service";
+import type { JourneyComparison } from "@raiquora/journey/journey-comparison-service";
+import type { JourneySearchResponse } from "@raiquora/journey/journey-search-service";
 import type {
   RouteDetails,
   StationInspection,

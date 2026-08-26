@@ -3,7 +3,7 @@ import {
   isJourneyRankingPreference,
   isTransferPace,
   type JourneySearchPreferences,
-} from "../../../domain/journey-search-preferences";
+} from "@raiquora/journey/journey-search-preferences";
 
 const storageKey = "transitforge.journey-search-preferences.v1";
 

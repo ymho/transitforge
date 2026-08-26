@@ -16,7 +16,7 @@ import {
   type JourneyRankingPreference,
   type JourneySearchPreferences,
   type TransferPace,
-} from "../../domain/journey-search-preferences";
+} from "@raiquora/journey/journey-search-preferences";
 import { operatingDayRouteTime } from "../../domain/playback";
 import { formatJapaneseRouteClockTime } from "@raiquora/train/route-time";
 import { normalizeStationName } from "@raiquora/train/station-name";
@@ -35,7 +35,7 @@ import {
 import {
   directRouteDepartureTime,
   type DirectRouteSearchResponse,
-} from "../../domain/direct-route-search";
+} from "@raiquora/journey/direct-route-search";
 import {
   parseViewerAgentActions,
   type ViewerAgentLayer,

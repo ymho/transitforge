@@ -1,7 +1,7 @@
 import type {
   JourneyRouteLeg,
   JourneyRouteResult,
-} from "./direct-route-search";
+} from "@raiquora/journey/direct-route-search";
 import type { ViewerAgentJourneyPlan } from "./viewer-agent-response";
 import { formatRouteClockTime } from "@raiquora/train/route-time";
 import { formatStationLabel, normalizeStationName } from "@raiquora/train/station-name";

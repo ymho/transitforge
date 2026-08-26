@@ -2,7 +2,7 @@ import type { Train } from "@raiquora/train/train";
 import type {
   JourneyRankingPreference,
   TransferPace,
-} from "./journey-search-preferences";
+} from "@raiquora/journey/journey-search-preferences";
 
 export interface JourneyNavigationGuidance {
   excludedServiceTypes: string[];

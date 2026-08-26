@@ -19,7 +19,7 @@ LLMは曖昧な要求の理解とToolの選択を担い 鉄道と旅行の計算
 | 列車 駅 停車時刻 経路座標と業務時刻 | `modules/train/domain`とdata-builder生成入力 | Browser Adapterがviewer-inputをDomainへ変換 | shared moduleの隣接テストとviewer-input fixture |
 | 遅延 混雑 運休 行き先変更と列車への状態適用 | `modules/operation/domain`とdata-builder生成入力 | HTTP Adapterが外部payloadを検証してDomainへ変換 | shared moduleとtraffic Adapterの隣接テスト |
 | 表示日時 業務時刻 列車フォーカス | `src/domain`と`src/application/viewer` | FeatureとRenderingがApplication Portを利用 | TypeScriptの隣接テスト |
-| 経路検索の要求と応答 | `src/domain/journey-search-service.ts`のPort | HTTP AdapterがAgent APIのversioned contractへ変換 | Browser AdapterテストとPython request contractテスト |
+| 経路条件 候補 比較と直通検索 | `modules/journey/domain` | HTTP AdapterがAgent APIのversioned contractへ変換 | shared module Browser Adapter Python request contractのテスト |
 | 直通検索 CSA 乗換判定 順位付け | `services/agent-api`のJourney Domain | `journey_search` operationとTool Adapterから利用 | Python unit testとjourney search scenario |
 | 遅延予測 遅延と混雑の履歴分析 | `services/agent-api`のTraffic Domain | Agent Toolは集計済みの応答を変更せず利用 | Python unit testとAgent Eval |
 | 旅行候補 宿泊の既知価格と費用集計 | `services/agent-api`のTravel Domain | 外部提供者Adapterが候補へ変換 | Python unit testとprovider contract test |
@@ -29,7 +29,7 @@ LLMは曖昧な要求の理解とToolの選択を担い 鉄道と旅行の計算
 
 ## TypeScriptとPythonの境界
 
-TypeScriptの`JourneySearchService`は経路計算の実装ではなくApplicationが依存するPortである
+TypeScriptの`JourneySearchService`は`modules/journey`が公開する境界であり CSAの実装ではない
 日付別の時刻表とprivateな運行データを使う決定論的な検索はAgent APIのPythonだけが実行する
 ブラウザは返された候補を表示 比較 フォーカスできるが CSAや乗換判定を再実装しない
 
