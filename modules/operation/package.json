@@ -6,6 +6,8 @@
   "exports": {
     ".": "./domain/index.ts",
     "./analysis": "./domain/analysis.ts",
+    "./analysis-engine": "./domain/analysis-engine.ts",
+    "./operating-day": "./domain/operating-day.ts",
     "./operation": "./domain/operation.ts",
     "./train-operation-state": "./domain/train-operation-state.ts"
   },

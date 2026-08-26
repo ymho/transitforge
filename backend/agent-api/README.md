@@ -23,6 +23,10 @@ Bedrock会話は`ConversationModel` Portを通し provider固有の`system` `too
 `inferenceConfig`と応答検証をAdapter内へ閉じる。Applicationへ返すmetadataはmodel ID
 latency token usageだけに限定する
 
+代表ダイヤはS3 AdapterでgzipとETag cacheを扱い 検索Usecaseは最大5件に制限する
+混雑と遅延はDynamoDB AdapterがAttributeValueを正規化し `@raiquora/operation`が
+4時境界の業務日付 未観測値 日次 時間別 列車別の集計規則を所有する
+
 ## 確認
 
 ```bash

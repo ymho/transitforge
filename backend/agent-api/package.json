@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "dependencies": {
+    "@raiquora/operation": "*"
+  },
   "scripts": {
     "build": "tsc --noEmit",
     "test": "TMPDIR=/tmp vitest run --root ../.. backend/agent-api/src"
