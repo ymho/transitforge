@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { DailyCongestionAnalysisResponse } from "./operations/analysis";
-import type { Train } from "./rail/train";
+import type { Train } from "@raiquora/train/train";
 import { congestionAnalysisForAgent } from "./congestion-analysis";
 
 describe("congestion analysis for the agent", () => {

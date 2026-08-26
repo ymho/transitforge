@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { Train } from "./rail/train";
+import type { Train } from "@raiquora/train/train";
 import {
   journeyNavigationGuidanceFromPrompt,
   mergeJourneyNavigationGuidance,

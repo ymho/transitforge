@@ -2,14 +2,14 @@ import type {
   StationLineCatalog,
   StationLineCatalogLine,
   StationLineCatalogStation,
-} from "../../../domain/rail/station";
+} from "@raiquora/train/station";
 
 export type {
   StationCoordinate,
   StationLineCatalog,
   StationLineCatalogLine,
   StationLineCatalogStation,
-} from "../../../domain/rail/station";
+} from "@raiquora/train/station";
 
 export function isStationLineCatalog(value: unknown): value is StationLineCatalog {
   return (

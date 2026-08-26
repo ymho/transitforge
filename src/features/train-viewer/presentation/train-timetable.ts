@@ -1,5 +1,5 @@
-import type { TrainStop } from "../../../domain/rail/train";
-import { formatServiceTime } from "../../../domain/route-time-format";
+import type { TrainStop } from "@raiquora/train/train";
+import { formatServiceTime } from "@raiquora/train/route-time";
 
 export interface TrainTimetableRow {
   stationName: string;

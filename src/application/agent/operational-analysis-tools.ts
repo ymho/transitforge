@@ -2,7 +2,7 @@ import type {
   DailyCongestionAnalysisResponse,
   TrainDelayAnalysisResponse,
 } from "../../domain/operations/analysis";
-import type { Train } from "../../domain/rail/train";
+import type { Train } from "@raiquora/train/train";
 import {
   congestionAnalysisForAgent,
   type CongestionAnalysisForAgent,

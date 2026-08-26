@@ -5,7 +5,7 @@ import {
   formatJapaneseServiceTime,
   formatRouteClockTime,
   formatServiceTime,
-} from "./route-time-format";
+} from "./route-time";
 
 describe("route time format", () => {
   it("distinguishes clock time from service-day time", () => {

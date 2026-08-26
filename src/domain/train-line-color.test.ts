@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { StationLineCatalog } from "./rail/station";
-import type { Train } from "./rail/train";
+import type { StationLineCatalog } from "@raiquora/train/station";
+import type { Train } from "@raiquora/train/train";
 import { TrainLineColorIndex } from "./train-line-color";
 
 const catalog: StationLineCatalog = {

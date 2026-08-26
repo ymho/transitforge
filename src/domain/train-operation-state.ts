@@ -1,6 +1,6 @@
 import type { TrainDelaySnapshot, TrainOperation } from "./rail/operation";
-import type { Train, TrainStop } from "./rail/train";
-import { normalizeStationName } from "./station-name";
+import type { Train, TrainStop } from "@raiquora/train/train";
+import { normalizeStationName } from "@raiquora/train/station-name";
 import type { TrainFormationLink } from "./train-formation-link";
 
 export const realtimeSnapshotToleranceMilliseconds = 5 * 60 * 1_000;

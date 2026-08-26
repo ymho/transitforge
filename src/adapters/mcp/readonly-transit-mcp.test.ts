@@ -1,7 +1,7 @@
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { describe, expect, it } from "vitest";
 
-import type { TrainIndex } from "../../domain/rail/train";
+import type { TrainIndex } from "@raiquora/train/train";
 import { createReadonlyTransitToolRegistry } from "../../application/agent/readonly-transit-tool-registry";
 import { NetworkInspectionService } from "../../domain/network-inspection-service";
 import { AgentToolRegistry } from "../../application/agent/tool-registry";

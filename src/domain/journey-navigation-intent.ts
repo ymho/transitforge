@@ -1,4 +1,4 @@
-import type { Train } from "./rail/train";
+import type { Train } from "@raiquora/train/train";
 import type {
   JourneyRankingPreference,
   TransferPace,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { Train } from "../../domain/rail/train";
+import type { Train } from "@raiquora/train/train";
 import type { TrainPosition } from "../../domain/train-position";
 import {
   directRouteRequestFromPrompt,

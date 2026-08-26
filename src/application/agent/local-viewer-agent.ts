@@ -1,4 +1,4 @@
-import type { Train } from "../../domain/rail/train";
+import type { Train } from "@raiquora/train/train";
 import type { DirectRouteSearchHandler } from "../../domain/direct-route-search";
 import { directRouteDepartureTime } from "../../domain/direct-route-search";
 import {
@@ -8,7 +8,7 @@ import {
 } from "../../domain/journey-navigation-intent";
 import type { WeatherMode } from "../../domain/weather";
 import { operatingDayStartMinutes } from "../../domain/playback";
-import { formatJapaneseServiceTime } from "../../domain/route-time-format";
+import { formatJapaneseServiceTime } from "@raiquora/train/route-time";
 import type { TrainPosition } from "../../domain/train-position";
 import type { ViewerAgentLayer } from "../viewer/viewer-action";
 import {

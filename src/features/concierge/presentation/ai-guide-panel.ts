@@ -1,5 +1,5 @@
 import type { JourneyRouteResult } from "../../../domain/direct-route-search";
-import { formatRouteClockTime } from "../../../domain/route-time-format";
+import { formatRouteClockTime } from "@raiquora/train/route-time";
 import {
   loadUserProfile,
   type UserProfile,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { Train } from "../../domain/rail/train";
+import type { Train } from "@raiquora/train/train";
 import { createLocalViewerAgent } from "./local-viewer-agent";
 
 const train: Train = {
