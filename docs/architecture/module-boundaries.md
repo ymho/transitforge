@@ -5,6 +5,10 @@
 コードを技術ではなく責務から探せる状態にし 変更理由の異なるモジュールを分離する
 この文書は移行中の目標構成とimport方向の正本である
 
+Issue #203で採用した次期構成と段階移行は[ADR 0037](../decisions/0037-adopt-typescript-workspaces-and-shared-domain-modules.md)と
+[TypeScript構成移行台帳](typescript-migration-inventory.md)を参照する。この文書は#221で移行完了後の構成へ置き換えるまで
+現在稼働している境界を説明する。
+
 ## 目標構成
 
 ```text
