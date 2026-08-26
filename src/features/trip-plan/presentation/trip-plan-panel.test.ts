@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { TripPlan } from "../../../domain/trip-plan";
+import type { TripPlan } from "@raiquora/trip/trip-plan";
 import {
   tripPlanShareText,
   tripPlanTitleRegenerationPrompt,

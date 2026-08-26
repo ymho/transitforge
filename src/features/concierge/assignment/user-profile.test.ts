@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { UserProfile } from "../../../domain/travel-profile";
+import type { UserProfile } from "@raiquora/trip/travel-profile";
 import { selectConciergeForUserProfile } from "./user-profile";
 
 function profile(overrides: Partial<UserProfile> = {}): UserProfile {

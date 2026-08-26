@@ -1,6 +1,3 @@
-export const travelProfileStorageKey = "transitforge.travel-profile.v2";
-export const travelProfileChangedEvent = "transitforge:travel-profile-changed";
-
 export type TravelCompanion = "solo" | "partner" | "friends" | "children" | "family";
 export type ChildAgeGroup = "baby" | "preschool" | "elementary" | "teen";
 export type TravelPreference =
@@ -39,31 +36,6 @@ export interface TripContext {
   carAvailable?: boolean;
 }
 
-export function loadUserProfile(storage: Pick<Storage, "getItem">): UserProfile | undefined {
-  const raw = storage.getItem(travelProfileStorageKey);
-  if (!raw) return undefined;
-  try {
-    const value: unknown = JSON.parse(raw);
-    return isUserProfile(value) ? value : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export function saveUserProfile(
-  storage: Pick<Storage, "setItem">,
-  profile: Omit<UserProfile, "version" | "updatedAt">,
-  now: Date = new Date(),
-): UserProfile {
-  const saved: UserProfile = { ...profile, version: 2, updatedAt: now.toISOString() };
-  storage.setItem(travelProfileStorageKey, JSON.stringify(saved));
-  return saved;
-}
-
-export function deleteUserProfile(storage: Pick<Storage, "removeItem">): void {
-  storage.removeItem(travelProfileStorageKey);
-}
-
 export function travelStyleSummary(profile: UserProfile): string {
   const favorites = (Object.entries(profile.preferences) as Array<[TravelPreference, number]>)
     .filter(([, weight]) => weight >= 0.8)
@@ -81,7 +53,7 @@ export const travelPreferenceLabels: Record<TravelPreference, string> = {
   history: "歴史", cityWalk: "街歩き", animals: "動物", art: "アート", themePark: "テーマパーク", shopping: "買い物",
 };
 
-function isUserProfile(value: unknown): value is UserProfile {
+export function isUserProfile(value: unknown): value is UserProfile {
   if (!value || typeof value !== "object") return false;
   const profile = value as Record<string, unknown>;
   return profile.version === 2 && isObject(profile.home) && typeof profile.home.carAvailable === "boolean" &&

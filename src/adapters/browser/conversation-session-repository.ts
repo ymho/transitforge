@@ -8,7 +8,7 @@ import {
   type ConversationSession,
 } from "../../domain/conversation-session";
 import { deleteConversationHistory } from "../../domain/conversation-history";
-import { deleteTripPlan } from "../../domain/trip-plan";
+import { deleteTripPlan } from "../../application/trip-plan/trip-plan-repository";
 
 export const conversationSessionStorageKey = "transitforge.conversation-sessions.v3";
 export const maximumConversationSessions = 20;

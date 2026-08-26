@@ -51,20 +51,20 @@ import {
   searchActiveTrainsFromPrompt,
   searchTrainArrivalsFromPrompt,
 } from "../../application/viewer/viewer-local-tools";
-import { travelDestinationAccess } from "../../domain/travel-destination";
+import { travelDestinationAccess } from "@raiquora/trip/travel-destination";
 import {
   normalizedConversationGuidance,
   type ConversationExpectedInput,
   type ConversationGuidance,
 } from "../../domain/conversation-guidance";
-import type { TripContext, UserProfile } from "../../domain/travel-profile";
+import type { TripContext, UserProfile } from "@raiquora/trip/travel-profile";
 import {
   tripPlanPatchesFromTravelPlan,
   type MovementMode,
   type TripPlan,
   type TripPlanPatch,
   type TripPlanUpdateProposal,
-} from "../../domain/trip-plan";
+} from "@raiquora/trip/trip-plan";
 import type { ConversationScope } from "../../domain/conversation-session";
 import { MultiStepAgentRuntime } from "../../application/agent/agent-runtime";
 import { AgentToolRegistry } from "../../application/agent/tool-registry";

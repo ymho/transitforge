@@ -1,4 +1,4 @@
-import type { TripContext } from "./travel-profile";
+import type { TripContext } from "@raiquora/trip/travel-profile";
 
 /**
  * A small, UI-neutral contract for one turn in a travel consultation.

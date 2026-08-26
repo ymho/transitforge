@@ -1,4 +1,10 @@
-import { deleteUserProfile, loadUserProfile, saveUserProfile, travelPreferenceLabels, travelProfileChangedEvent, travelStyleSummary, type ChildAgeGroup, type TravelCompanion, type TravelPreference, type UserProfile } from "../../../domain/travel-profile";
+import { travelPreferenceLabels, travelStyleSummary, type ChildAgeGroup, type TravelCompanion, type TravelPreference, type UserProfile } from "@raiquora/trip/travel-profile";
+import {
+  deleteUserProfile,
+  loadUserProfile,
+  saveUserProfile,
+  travelProfileChangedEvent,
+} from "../../../application/trip-profile/user-profile-repository";
 import { selectConciergeForUserProfile, type ConciergeProfile } from "..";
 
 const companionOptions: Array<[TravelCompanion, string]> = [["solo", "一人"], ["partner", "パートナー"], ["friends", "友人"], ["children", "子どもと一緒"], ["family", "家族"]];

@@ -1,15 +1,17 @@
 import type { JourneyRouteLeg } from "@raiquora/journey/direct-route-search";
 import {
   applyTripPlanPatches,
-  loadTripPlan,
-  migrateLegacyTripPlan,
-  saveTripPlan,
   selectTripPlanAccommodation,
   type MovementMode,
   type TripPlan,
   type TripPlanItem,
   type TripPlanPatch,
-} from "../../../domain/trip-plan";
+} from "@raiquora/trip/trip-plan";
+import {
+  loadTripPlan,
+  migrateLegacyTripPlan,
+  saveTripPlan,
+} from "../../../application/trip-plan/trip-plan-repository";
 import type { ViewerAgentAccommodation } from "../../../domain/viewer-agent-response";
 
 export interface TripPlanPanelController {

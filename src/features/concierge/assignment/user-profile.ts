@@ -1,4 +1,4 @@
-import type { UserProfile } from "../../../domain/travel-profile";
+import type { UserProfile } from "@raiquora/trip/travel-profile";
 import { akari } from "../profiles/akari";
 import type { ConciergeProfile } from "../types";
 import { selectConcierge } from "./select";

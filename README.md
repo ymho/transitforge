@@ -72,6 +72,7 @@ viewer-input/delays.json
 modules/train/       列車 駅 経路座標と業務時刻の共有Domain
 modules/operation/   遅延 混雑 運休 行き先変更の共有Domain
 modules/journey/     経路条件 候補 比較 直通検索の共有Domain
+modules/trip/        旅行候補 費用 Profile TripContext 旅程の共有Domain
 src/domain/          移行中の鉄道 Agentの決定論的な契約と計算
 src/application/     ユースケースと外部境界のPort
 src/features/        画面機能ごとのUI 状態 表示変換

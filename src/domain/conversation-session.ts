@@ -1,5 +1,5 @@
-import type { TripPlan } from "./trip-plan";
-import type { UserProfile } from "./travel-profile";
+import type { TripPlan } from "@raiquora/trip/trip-plan";
+import type { UserProfile } from "@raiquora/trip/travel-profile";
 
 export const conversationSessionStorageKey = "transitforge.conversation-sessions.v2";
 export const travelMemoryStorageKey = "transitforge.travel-memories.v1";

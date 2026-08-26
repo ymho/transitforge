@@ -1,56 +1,20 @@
-import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
-import type {
-  JourneyRankingPreference,
-  TransferPace,
-} from "@raiquora/journey/journey-search-preferences";
 import type { ConversationGuidance } from "./conversation-guidance";
-import type { TripPlanUpdateProposal } from "./trip-plan";
+import type { TripPlanUpdateProposal } from "@raiquora/trip/trip-plan";
+import type {
+  TravelPlan,
+  TripAccommodation,
+  TripJourneyPlan,
+} from "@raiquora/trip/travel-plan";
 
-export interface ViewerAgentJourneyPlan {
-  departureDate?: string;
-  serviceDate?: string;
-  originStation: string;
-  destinationStation: string;
-  transferPace?: TransferPace;
-  rankingPreference?: JourneyRankingPreference;
-  maxTransfers?: number;
-  searchTimeMinutes?: number;
-  excludedServiceTypes?: string[];
-  excludedTrainNames?: string[];
-  excludedTrainNumbers?: string[];
-  excludedServiceUids?: string[];
-  requiredServiceTypes?: string[];
-  requiredTrainNames?: string[];
-  requiredTrainNumbers?: string[];
-  allowedServiceTypes?: string[];
-  journeys: JourneyRouteResult[];
-}
+export type ViewerAgentJourneyPlan = TripJourneyPlan;
 
 export interface ViewerAgentRichResponse {
   text: string;
   journeyPlan: ViewerAgentJourneyPlan;
 }
 
-export interface ViewerAgentAccommodation {
-  name: string;
-  checkInDate: string;
-  checkOutDate: string;
-  bookingUrl?: string;
-  areaName?: string;
-  imageUrl?: string;
-}
-
-export interface ViewerAgentTravelPlan {
-  destination: string;
-  adults?: number;
-  children?: number;
-  considerations?: string[];
-  checkInDate: string;
-  checkOutDate: string;
-  outbound: ViewerAgentJourneyPlan;
-  returning: ViewerAgentJourneyPlan;
-  accommodations: ViewerAgentAccommodation[];
-}
+export type ViewerAgentAccommodation = TripAccommodation;
+export type ViewerAgentTravelPlan = TravelPlan;
 
 export interface ViewerAgentTravelResponse {
   text: string;
