@@ -106,12 +106,12 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 - Agent Adapter: `frontend/src/usecases/agent/search-journeys-tool.ts`
 - 現在の実装: `/api/agent`の`journey_search`を呼ぶHTTP client
 
-`JourneySearchService`はCSAや直通インデックスの実行場所を利用側から隠し 日付 乗換上限
+`JourneySearchService`は`modules/journey`のCSAや直通インデックス実装を利用側から隠し 日付 乗換上限
 乗換ペース 順位条件 列車の除外と必須条件を構造化して渡す。`search_journeys`はこのServiceを
 呼ぶ薄いAdapterであり 経路や順位をLLMで再計算しない。
 
 決定論的なCSAと直通検索は`services/agent-api/domain/journey`が所有する。
-Browserとのwire形式は`journey-search-v1`を明示し TypeScriptとPythonの両側でversionを検証する。
+Browserとのwire形式は`journey-search-v1`を明示し Node Backendと移行中のPython互換実装でversionを検証する。
 Providerに依存しない旅行候補モデルと費用集計は`services/agent-api/domain/travel`が所有する。
 
 Agentへ返す候補は最大3件 直列化後64KiBまでに制限する。予定時刻 遅延適用後の時刻

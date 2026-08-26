@@ -2,7 +2,7 @@
 
 ## 目的
 
-RaiquoraはブラウザのTypeScriptとAgent APIのPythonを併用する
+RaiquoraはTypeScriptを正本とし Lambda切替までAgent APIのPythonを互換実装として併用する
 この文書は同じ概念を両言語で別々に実装しないために 正本と境界契約を定める
 
 Issue #203ではBackendをTypeScriptへ統一し shared Domainを`modules`へ移す判断を採用した。
@@ -19,9 +19,8 @@ LLMは曖昧な要求の理解とToolの選択を担い 鉄道と旅行の計算
 | 列車 駅 停車時刻 経路座標と業務時刻 | `modules/train/domain`とdata-builder生成入力 | Browser Adapterがviewer-inputをDomainへ変換 | shared moduleの隣接テストとviewer-input fixture |
 | 遅延 混雑 運休 行き先変更と列車への状態適用 | `modules/operation/domain`とdata-builder生成入力 | HTTP Adapterが外部payloadを検証してDomainへ変換 | shared moduleとtraffic Adapterの隣接テスト |
 | 表示日時 業務時刻 列車フォーカス | `frontend/src/domain`と`frontend/src/usecases/viewer` | PresentationがUsecase Portを利用 | TypeScriptの隣接テスト |
-| 経路条件 候補 比較と直通検索 | `modules/journey/domain` | HTTP AdapterがAgent APIのversioned contractへ変換 | shared module Browser Adapter Python request contractのテスト |
-| 直通検索 CSA 乗換判定 順位付け | `services/agent-api`のJourney Domain | `journey_search` operationとTool Adapterから利用 | Python unit testとjourney search scenario |
-| 遅延予測 遅延と混雑の履歴分析 | `services/agent-api`のTraffic Domain | Agent Toolは集計済みの応答を変更せず利用 | Python unit testとAgent Eval |
+| 経路条件 候補 比較 直通検索 CSA 乗換判定 順位付け | `modules/journey/domain` | Node Agent APIが日付別indexをAdapterから渡す | shared moduleとjourney search scenario |
+| 遅延予測 遅延と混雑の履歴分析 | `modules/journey/domain`と`modules/operation/domain` | Agent Toolは計算済みの応答を変更せず利用 | shared module Python互換test Agent Eval |
 | 旅行候補 既知価格の費用集計 Profile TripContext 旅程 | `modules/trip/domain` | Browser保存と外部Providerを境界の外へ分離 | shared module LocalStorage migration provider contractのテスト |
 | Agent Tool Evidence Trace Policy | `frontend/src/usecases/agent` | Provider AdapterとViewer UsecaseがPortを実装 | TypeScript unit testとAgent Eval |
 | HTTP Bedrock AWS 外部提供者の形式 | `frontend/src/adapters`と`services/agent-api`のAdapter | Domainへ変換してからUsecaseへ渡す | Adapter contract testとLambda package check |
@@ -29,9 +28,9 @@ LLMは曖昧な要求の理解とToolの選択を担い 鉄道と旅行の計算
 
 ## TypeScriptとPythonの境界
 
-TypeScriptの`JourneySearchService`は`modules/journey`が公開する境界であり CSAの実装ではない
-日付別の時刻表とprivateな運行データを使う決定論的な検索はAgent APIのPythonだけが実行する
-ブラウザは返された候補を表示 比較 フォーカスできるが CSAや乗換判定を再実装しない
+TypeScriptの`JourneySearchService`と探索engineは`modules/journey`が公開する正本である
+日付別時刻表とprivateな運行データの取得だけをBackend Adapterへ分離する
+ブラウザとLLMは返された候補を表示 比較 フォーカスできるが CSAや乗換判定を再実装しない
 
 両言語の共有点は内部クラスではなくversioned HTTP contractである
 TypeScriptは送受信時に契約を検証し Pythonは受信時と返却時に同じ制約を検証する
@@ -46,7 +45,7 @@ TypeScriptは送受信時に契約を検証し Pythonは受信時と返却時に
 
 ## 重複を禁止する範囲
 
-- CSA 直通検索 乗換可否 順位付けのTypeScript再実装
+- CSA 直通検索 乗換可否 順位付けをFrontend AdapterやLLMへ再実装すること
 - 遅延予測や混雑集計をAgent ToolやLLM promptで再計算すること
 - 宿泊費の集計や不明価格の補完をPresentationで行うこと
 - Provider固有payloadをDomain型として扱うこと

@@ -27,6 +27,9 @@ latency token usageだけに限定する
 混雑と遅延はDynamoDB AdapterがAttributeValueを正規化し `@raiquora/operation`が
 4時境界の業務日付 未観測値 日次 時間別 列車別の集計規則を所有する
 
+経路探索は`@raiquora/journey`の直通indexと多目的探索を正本とし S3 Adapterは
+日付別gzip indexと当日snapshotの取得だけを担う。Agentは経路や乗換を再計算しない
+
 ## 確認
 
 ```bash
