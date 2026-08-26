@@ -5,6 +5,10 @@
 RaiquoraはブラウザのTypeScriptとAgent APIのPythonを併用する
 この文書は同じ概念を両言語で別々に実装しないために 正本と境界契約を定める
 
+Issue #203ではBackendをTypeScriptへ統一し shared Domainを`modules`へ移す判断を採用した。
+移行中の正本と撤去条件は[TypeScript構成移行台帳](typescript-migration-inventory.md)を参照する。
+この文書のPython境界はNode Lambdaへ切り替えるまでの現在状態を示す。
+
 所有権は言語ではなく実行責務で決める
 LLMは曖昧な要求の理解とToolの選択を担い 鉄道と旅行の計算結果を生成しない
 

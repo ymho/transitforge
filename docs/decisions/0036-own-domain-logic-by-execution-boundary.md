@@ -1,6 +1,6 @@
 # ADR 0036: Domain Logicを実行境界ごとに一意に所有する
 
-- ステータス: Accepted
+- ステータス: Superseded by ADR 0037
 - 日付: 2026-08-25
 
 ## 背景
@@ -79,3 +79,6 @@ Pythonが所有する。TypeScriptのAgent Applicationは計算を呼ぶPortとT
 ## 置き換えるADR
 
 なし
+
+BackendをTypeScriptへ統一し共有Domain moduleを正本とする後続判断は
+[ADR 0037](0037-adopt-typescript-workspaces-and-shared-domain-modules.md)を参照する。

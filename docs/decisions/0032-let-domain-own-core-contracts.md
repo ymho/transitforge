@@ -1,6 +1,6 @@
 # ADR 0032: Domainが中核契約を所有する
 
-- ステータス: Accepted
+- ステータス: Superseded by ADR 0037
 - 日付: 2026-08-25
 
 ## 背景
@@ -30,3 +30,6 @@
 - `npm test`
 - `npm run build`
 - viewer-inputとAgent APIの回帰テスト
+
+TypeScript workspaceと共有Domain moduleへの移行後の配置は
+[ADR 0037](0037-adopt-typescript-workspaces-and-shared-domain-modules.md)を正本とする。

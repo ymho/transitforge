@@ -1,8 +1,7 @@
 # ADR 0034: Viewer UIをFeature単位で配置する
 
-## 状態
-
-採用
+- ステータス: Superseded by ADR 0037
+- 日付: 2026-08-25
 
 ## 背景
 
@@ -27,3 +26,6 @@ Feature間で共有すべきUIだけがルートのPresentationへ残る
 
 Featureが外部実装を必要とする場合はPortを先に定義する必要がある
 UIファイルの物理移動だけを目的にせず 状態と副作用の所有者も同時に確認する
+
+Frontend workspace内の`presentation`へ再配置する後続判断は
+[ADR 0037](0037-adopt-typescript-workspaces-and-shared-domain-modules.md)を正本とする。
