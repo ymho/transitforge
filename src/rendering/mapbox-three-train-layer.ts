@@ -5,7 +5,7 @@ import {
   congestionBarColor,
   congestionBarHeightMeters,
 } from "../adapters/http/traffic/train-congestion";
-import type { Coordinate } from "../domain/rail/path";
+import type { Coordinate } from "@raiquora/train/path";
 import { coupledTrainLayouts } from "../domain/coupled-train-layout";
 import {
   destinationArcHeightMeters,

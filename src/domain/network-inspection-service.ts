@@ -1,6 +1,6 @@
-import type { StationCoordinate, StationLineCatalog } from "./rail/station";
-import type { Train, TrainIndex } from "./rail/train";
-import { normalizeStationName } from "./station-name";
+import type { StationCoordinate, StationLineCatalog } from "@raiquora/train/station";
+import type { Train, TrainIndex } from "@raiquora/train/train";
+import { normalizeStationName } from "@raiquora/train/station-name";
 import { TrainLineColorIndex } from "./train-line-color";
 
 export type NetworkInspectionErrorCode =

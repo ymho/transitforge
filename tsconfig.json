@@ -7,5 +7,5 @@
     "allowImportingTsExtensions": false,
     "noEmit": true
   },
-  "include": ["src", "tools/run_agent_evaluation.ts"]
+  "include": ["src", "modules", "tools/run_agent_evaluation.ts"]
 }

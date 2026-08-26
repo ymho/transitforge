@@ -3,7 +3,9 @@ import { dirname, relative, resolve, sep } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const sourceRoot = resolve(repositoryRoot, "src");
+const modulesRoot = resolve(repositoryRoot, "modules");
 const agentApiDomainRoot = resolve(repositoryRoot, "services/agent-api/domain");
+const internalWorkspacePrefix = "@raiquora/";
 
 const layerRules = {
   domain: {
@@ -80,7 +82,8 @@ for (const absolutePath of sourceFiles(sourceRoot)) {
     if (
       rule.forbidExternalPackages &&
       !imported.specifier.startsWith(".") &&
-      !imported.specifier.startsWith("node:")
+      !imported.specifier.startsWith("node:") &&
+      !imported.specifier.startsWith(internalWorkspacePrefix)
     ) {
       recordOrAllow({
         source,
@@ -97,6 +100,33 @@ for (const absolutePath of sourceFiles(sourceRoot)) {
       kind: "browser-globals",
       line: lineNumber(content, content.search(/\b(?:window|document|localStorage)\b/)),
       message: "domainからbrowser globalへの依存は禁止されています",
+    });
+  }
+}
+
+for (const absolutePath of sharedDomainFiles(modulesRoot)) {
+  const source = repositoryPath(absolutePath);
+  const content = readFileSync(absolutePath, "utf8");
+  for (const imported of importedSpecifiers(content)) {
+    if (
+      !imported.specifier.startsWith(".") &&
+      !imported.specifier.startsWith("node:") &&
+      !imported.specifier.startsWith(internalWorkspacePrefix)
+    ) {
+      violations.push({
+        source,
+        kind: `shared-domain-external:${packageName(imported.specifier)}`,
+        line: lineNumber(content, imported.index),
+        message: `shared Domainから外部package ${packageName(imported.specifier)} への依存は禁止されています`,
+      });
+    }
+  }
+  if (/\b(?:window|document|localStorage)\b/.test(content)) {
+    violations.push({
+      source,
+      kind: "shared-domain-browser-globals",
+      line: lineNumber(content, content.search(/\b(?:window|document|localStorage)\b/)),
+      message: "shared Domainからbrowser globalへの依存は禁止されています",
     });
   }
 }
@@ -174,6 +204,14 @@ function pythonFiles(directory) {
     const path = resolve(directory, name);
     if (statSync(path).isDirectory()) return pythonFiles(path);
     return path.endsWith(".py") ? [path] : [];
+  });
+}
+
+function sharedDomainFiles(directory) {
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory).flatMap((moduleName) => {
+    const domainRoot = resolve(directory, moduleName, "domain");
+    return existsSync(domainRoot) ? sourceFiles(domainRoot) : [];
   });
 }
 

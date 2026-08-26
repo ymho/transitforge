@@ -13,7 +13,7 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 | --- | --- | --- |
 | 時刻表入力 | 列車 停車時刻 経路 駅 路線の計画データ | data-builder生成の`viewer-input` |
 | リアルタイム入力 | 混雑 遅延 行き先変更 停車状態 | data-builder収集の交通スナップショット |
-| 検索ドメイン | 入力をもとにした経路候補と制約 | `src/domain/` |
+| 検索ドメイン | 入力をもとにした経路候補と制約 | `modules/`と移行中の`src/domain/` |
 | 旅行相談 | 普段の好みと今回の条件 会話の状態 | `src/domain/`とブラウザLocalStorage |
 | AI応答 | UIへ返す経路 旅行 会話の構造化結果 | `src/domain/viewer-agent-response.ts` |
 | フィードバック | 利用者が明示送信した会話と評価 | private S3 |
@@ -26,7 +26,7 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 
 ### `TrainIndex` `Train` `TrainStop`
 
-- Domain契約: `src/domain/rail/train.ts`
+- Domain契約: `modules/train/domain/train.ts`
 - 入力Adapter: `src/adapters/http/viewer-input/train-index.ts`
 - 保存先: `viewer-input/train_index.json`
 - 生成元: transitforge-data-builder
@@ -37,7 +37,7 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 
 ### `PathCatalog`
 
-- Domain契約: `src/domain/rail/path.ts`
+- Domain契約: `modules/train/domain/path.ts`
 - 入力Adapter: `src/adapters/http/viewer-input/path-catalog.ts`
 - JSON契約: `docs/data/viewer-input.md`
 - 保存先: `viewer-input/path_catalog.json`
@@ -69,8 +69,8 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 
 ### 駅名と業務時刻の値表現
 
-- 駅名比較の正本: `src/domain/station-name.ts`
-- 経路時刻表示の正本: `src/domain/route-time-format.ts`
+- 駅名比較の正本: `modules/train/domain/station-name.ts`
+- 経路時刻表示の正本: `modules/train/domain/route-time.ts`
 
 入力に含まれる駅名表記は保持し 比較と索引を作るときだけNFKC 空白 末尾の`駅`と
 `ヶ` `ケ`の表記揺れを正規化する。画面用の駅名を比較用の値で上書きしない。

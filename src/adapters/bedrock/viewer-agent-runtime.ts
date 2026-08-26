@@ -6,7 +6,7 @@ import type {
   RepresentativeTimetableSearchResponse,
   RepresentativeTimetableKind,
 } from "../http/agent-api/bedrock-agent";
-import type { Train } from "../../domain/rail/train";
+import type { Train } from "@raiquora/train/train";
 import type { CongestionAnalysisForAgent } from "../../domain/congestion-analysis";
 import type { DelayAnalysisForAgent } from "../../domain/delay-analysis";
 import type { WeatherMode } from "../../domain/weather";
@@ -18,8 +18,8 @@ import {
   type TransferPace,
 } from "../../domain/journey-search-preferences";
 import { operatingDayRouteTime } from "../../domain/playback";
-import { formatJapaneseRouteClockTime } from "../../domain/route-time-format";
-import { normalizeStationName } from "../../domain/station-name";
+import { formatJapaneseRouteClockTime } from "@raiquora/train/route-time";
+import { normalizeStationName } from "@raiquora/train/station-name";
 import type { TrainPosition } from "../../domain/train-position";
 import type {
   ViewerAgentJourneyPlan,

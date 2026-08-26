@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { Path } from "./rail/path";
-import type { Train } from "./rail/train";
+import type { Path } from "@raiquora/train/path";
+import type { Train } from "@raiquora/train/train";
 import {
   activeTrainPositions,
   destinationCoordinateForTrain,

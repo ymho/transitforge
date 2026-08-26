@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { TrainDelaySnapshot, TrainOperation } from "./rail/operation";
-import type { Train } from "./rail/train";
+import type { Train } from "@raiquora/train/train";
 import {
   delayByTrainNumber,
   destinationChangedServiceUids,

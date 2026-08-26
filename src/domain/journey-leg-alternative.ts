@@ -3,7 +3,7 @@ import type {
   JourneyRouteResult,
 } from "./direct-route-search";
 import type { TransferPace } from "./journey-search-preferences";
-import { normalizeStationName } from "./station-name";
+import { normalizeStationName } from "@raiquora/train/station-name";
 
 const minimumTransferMinutes: Record<TransferPace, number> = {
   hurried: 3.5,

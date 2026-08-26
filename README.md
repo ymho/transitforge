@@ -69,7 +69,8 @@ viewer-input/delays.json
 ## リポジトリ構成
 
 ```text
-src/domain/          鉄道とAgentの決定論的な契約と計算
+modules/train/       列車 駅 経路座標と業務時刻の共有Domain
+src/domain/          移行中の鉄道 Agentの決定論的な契約と計算
 src/application/     ユースケースと外部境界のPort
 src/features/        画面機能ごとのUI 状態 表示変換
 src/adapters/        ブラウザ HTTP Mapbox Bedrockへの接続

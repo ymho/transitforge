@@ -1,6 +1,6 @@
-import type { Coordinate, Path } from "./rail/path";
-import type { Train, TrainStop } from "./rail/train";
-import { normalizeStationName } from "./station-name";
+import type { Coordinate, Path } from "@raiquora/train/path";
+import type { Train, TrainStop } from "@raiquora/train/train";
+import { normalizeStationName } from "@raiquora/train/station-name";
 
 const bearingTangentDistanceMeters = 300;
 

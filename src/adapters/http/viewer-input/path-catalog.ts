@@ -4,7 +4,7 @@ import type {
   Path,
   PathCatalog,
   RouteFeatureCollection,
-} from "../../../domain/rail/path";
+} from "@raiquora/train/path";
 
 export type {
   BoundingBox,
@@ -12,7 +12,7 @@ export type {
   Path,
   PathCatalog,
   RouteFeatureCollection,
-} from "../../../domain/rail/path";
+} from "@raiquora/train/path";
 
 export async function loadPathCatalog(): Promise<PathCatalog> {
   const response = await fetch("/viewer-input/path_catalog.json");

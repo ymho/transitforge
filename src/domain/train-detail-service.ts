@@ -1,4 +1,4 @@
-import type { Train, TrainStop } from "./rail/train";
+import type { Train, TrainStop } from "@raiquora/train/train";
 
 export function mergeSameOperationTrains(
   trains: Train[],

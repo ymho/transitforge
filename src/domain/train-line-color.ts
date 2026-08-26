@@ -2,9 +2,9 @@ import type {
   StationCoordinate,
   StationLineCatalog,
   StationLineCatalogLine,
-} from "./rail/station";
-import type { Train } from "./rail/train";
-import { normalizeStationName } from "./station-name";
+} from "@raiquora/train/station";
+import type { Train } from "@raiquora/train/train";
+import { normalizeStationName } from "@raiquora/train/station-name";
 
 export interface TrainLineColor {
   color: string;

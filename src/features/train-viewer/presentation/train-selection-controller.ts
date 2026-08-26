@@ -1,5 +1,5 @@
 import type { TrainOperation } from "../../../domain/rail/operation";
-import type { Train } from "../../../domain/rail/train";
+import type { Train } from "@raiquora/train/train";
 import {
   coupledTrainLayouts,
   type TrainLinkKind,

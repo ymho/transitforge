@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { StationLineCatalog } from "../../domain/rail/station";
-import type { TrainIndex } from "../../domain/rail/train";
+import type { StationLineCatalog } from "@raiquora/train/station";
+import type { TrainIndex } from "@raiquora/train/train";
 import {
   maximumRouteDetailStops,
   NetworkInspectionService,

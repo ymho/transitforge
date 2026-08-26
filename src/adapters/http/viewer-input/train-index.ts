@@ -1,9 +1,9 @@
 import {
   isStationLineCatalog,
 } from "./station-line-catalog";
-import type { Train, TrainIndex, TrainStop } from "../../../domain/rail/train";
+import type { Train, TrainIndex, TrainStop } from "@raiquora/train/train";
 
-export type { Train, TrainIndex, TrainStop } from "../../../domain/rail/train";
+export type { Train, TrainIndex, TrainStop } from "@raiquora/train/train";
 
 export async function loadTrainIndex(): Promise<TrainIndex> {
   const response = await fetch("/viewer-input/train_index.json");

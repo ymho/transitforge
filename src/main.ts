@@ -30,8 +30,8 @@ import {
   submitAgentTrace,
 } from "./adapters/http/agent-api/bedrock-agent";
 import { loadTrainIndex } from "./adapters/http/viewer-input/train-index";
-import type { StationCoordinate } from "./domain/rail/station";
-import type { Train } from "./domain/rail/train";
+import type { StationCoordinate } from "@raiquora/train/station";
+import type { Train } from "@raiquora/train/train";
 import type { TrainDelaySnapshot, TrainOperation } from "./domain/rail/operation";
 import {
   nearestOriginWithDepartures, searchDirectRoutes,

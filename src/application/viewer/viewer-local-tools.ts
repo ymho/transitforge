@@ -1,10 +1,10 @@
-import type { Train } from "../../domain/rail/train";
+import type { Train } from "@raiquora/train/train";
 import type { TrainPosition } from "../../domain/train-position";
 import type { ViewerAgentAction } from "./viewer-action";
 import { operatingDayRouteTime } from "../../domain/playback";
-import { normalizeStationName } from "../../domain/station-name";
+import { normalizeStationName } from "@raiquora/train/station-name";
 
-export { formatStationLabel } from "../../domain/station-name";
+export { formatStationLabel } from "@raiquora/train/station-name";
 
 export interface ViewerTrainSearchResult {
   train: Train;

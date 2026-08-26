@@ -1,12 +1,12 @@
-import type { StationCoordinate, StationLineCatalog } from "./rail/station";
-import type { Train, TrainStop } from "./rail/train";
+import type { StationCoordinate, StationLineCatalog } from "@raiquora/train/station";
+import type { Train, TrainStop } from "@raiquora/train/train";
 import type {
   JourneyRankingPreference,
   TransferPace,
 } from "./journey-search-preferences";
-import { normalizeStationName } from "./station-name";
+import { normalizeStationName } from "@raiquora/train/station-name";
 
-export { normalizeStationName } from "./station-name";
+export { normalizeStationName } from "@raiquora/train/station-name";
 
 export interface DirectRouteResult {
   train: Train;
