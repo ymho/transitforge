@@ -9,11 +9,15 @@ Agent APIをNode.jsへ段階移行するためのBackend Application
 
 - `contracts`: Lambda event リクエスト HTTP応答のversioned contract
 - `ports`: Bedrock S3 DynamoDBなど外部能力を抽象化する境界
-- `usecases`: operation選択 入力検証 構造化ログ
+- `usecases`: operation選択 入力検証 構造化ログ FeedbackとTraceのbounded record
+- `adapters`: S3など外部技術をPortへ変換する実装
 - `handler.ts`: AWS eventをApplicationへ渡す薄い入口
 
 AWS SDKの型は`contracts` `ports` `usecases` `handler.ts`へ持ち込まない
 今後追加するAdapterがSDK固有の入力と出力をPortへ変換する
+
+Feedback v1 v2とAgent TraceはPython版と同じschema S3 key prefix サイズ上限を維持する
+保存ログには会話本文や保存失敗の例外内容を含めない
 
 ## 確認
 
