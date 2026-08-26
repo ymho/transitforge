@@ -26,7 +26,7 @@
 | 遅延 混雑 行き先変更 運休契約 | `modules/operation/domain` | `modules/operation/domain` | #207 完了 | S3 DynamoDB HTTPは含めない |
 | 経路条件 区間 候補 比較 | `modules/journey/domain` | `modules/journey/domain` | #208 完了 | wire parseとUI projectionは含めない |
 | 直通検索 CSA 乗換 遅延予測 | `modules/journey/domain/journey-search-engine.ts` | 同左 | #217 完了 | Pythonは#220までlegacy互換実装として残す |
-| 旅行候補 費用 旅程 Profile TripContext | `modules/trip/domain`と移行中のPython Travel | `modules/trip/domain` | #209 完了 #218でPython側を統合 | Provider payloadとLocalStorageは含めない |
+| 旅行候補 費用 旅程 Profile TripContext | `modules/trip/domain`を正本としPythonをlegacy互換として併設 | `modules/trip/domain` | #209 #218 完了 | LocalStorageはFrontend Adapterが担当 |
 
 ## Frontend
 
@@ -52,7 +52,7 @@
 | Bedrock conversation Tool relay | Pythonを本番利用しTypeScript PortとBedrock Adapterを併設 | TypeScript usecaseとBedrock Adapter | #215 完了 |
 | 代表ダイヤ 遅延 混雑分析 | Pythonを本番利用しTypeScript Domain Usecase Adapterを併設 | TypeScript usecaseとS3 DynamoDB Adapter | #216 完了 |
 | journey search | TypeScriptを正本としPythonをlegacy互換として併設 | TypeScript usecaseと`modules/journey` | #217 完了 |
-| accommodation searchと費用 | Python Travel DomainとProvider | TypeScript usecase Adapterと`modules/trip` | #218 |
+| accommodation searchと費用 | TypeScript usecase Adapterと`modules/trip`を正本としPythonをlegacy互換として併設 | 同左 | #218 完了 |
 
 ## Infrastructureとtooling
 

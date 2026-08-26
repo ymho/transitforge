@@ -20,6 +20,7 @@ export interface AccommodationOffering extends TravelOffering {
   checkInDate: string;
   checkOutDate: string;
   areaName?: string;
+  imageUrl?: string;
 }
 
 export interface ExperienceOffering extends TravelOffering {
