@@ -69,9 +69,8 @@ Domainは外部Adapterをimportしない。Adapterはusecaseが定義するPort�
 移行順と各責務の撤去条件は
 [TypeScript構成移行台帳](../architecture/typescript-migration-inventory.md)を正本とする。
 
-Node Backendは全operationのcontract parityを確認するまでPython Lambdaと並行して構築する。
-この期間の二重実装は移行検証だけに使い 新しい仕様を片方だけへ追加しない。
-本番切替は既存Lambda resourceをin-placeでNode.js runtimeへ更新し dev確認後にPython実装を撤去する。
+Node Backendは全operationのcontract parityを確認して既存Lambda resourceをin-placeでNode.js runtimeへ更新する。
+2026-08-27にdev配備を確認し Python実装を撤去した。
 
 ## 影響
 
@@ -109,5 +108,5 @@ Node Backendは全operationのcontract parityを確認するまでPython Lambda�
 - [ADR 0034 Viewer UI](0034-organize-viewer-ui-by-feature.md)の`src/features`を正本とする配置判断
 - [ADR 0036](0036-own-domain-logic-by-execution-boundary.md)のPythonとTypeScriptでDomain正本を分ける判断
 
-[ADR 0034 本番Agent Runtime](0034-use-one-production-agent-runtime.md)の単一Runtime Tool Evidence
+[ADR 0038 本番Agent Runtime](0038-use-one-production-agent-runtime.md)の単一Runtime Tool Evidence
 Trace Viewer Actionに関する判断は置き換えず 移行先のBackendで維持する。

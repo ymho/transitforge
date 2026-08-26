@@ -20,7 +20,9 @@
 
 ## 配置判断
 
-- 鉄道やAgentの決定論的な契約と計算は`frontend/src/domain`
+- 共有する鉄道 運行 経路 旅行の決定論的な契約と計算は`modules/*/domain`
+- Viewerと端末内状態に閉じた契約と計算は`frontend/src/domain`
+- Agentの推論 Tool Evidence Trace Policyは`frontend/src/usecases/agent`
 - ユースケースと外部境界のPortは`frontend/src/usecases`
 - 画面機能のView DOM操作 CSSは`frontend/src/presentation/<feature>`
 - ブラウザ HTTP Mapbox Bedrockなど外部技術への接続は`frontend/src/adapters`

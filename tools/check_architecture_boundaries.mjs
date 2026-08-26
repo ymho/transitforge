@@ -57,6 +57,13 @@ const layerRules = {
   },
 };
 
+const backendLayerRules = {
+  contracts: new Set(["adapters", "ports", "usecases"]),
+  ports: new Set(["adapters", "usecases"]),
+  usecases: new Set(["adapters"]),
+  adapters: new Set(["usecases"]),
+};
+
 const migrationExceptions = [];
 
 const usedExceptions = new Set();
@@ -154,16 +161,15 @@ for (const absolutePath of sourceFiles(backendAgentApiRoot)) {
         message: "AWS SDK型はAgent APIの契約 Port Usecase Handlerへ持ち込めません",
       });
     }
-    if (
-      backendLayer === "usecases" &&
-      imported.specifier.startsWith(".") &&
-      localBackendTargetLayer(absolutePath, imported.specifier) === "adapters"
-    ) {
+    const targetLayer = imported.specifier.startsWith(".")
+      ? localBackendTargetLayer(absolutePath, imported.specifier)
+      : undefined;
+    if (targetLayer && backendLayerRules[backendLayer]?.has(targetLayer)) {
       violations.push({
         source,
-        kind: "backend-usecase-adapter",
+        kind: `backend-${backendLayer}-${targetLayer}`,
         line: lineNumber(content, imported.index),
-        message: "Agent API UsecaseからAdapterへの依存は禁止されています",
+        message: `Agent API ${backendLayer}から${targetLayer}への依存は禁止されています`,
       });
     }
   }

@@ -1,10 +1,10 @@
-# TypeScript構成移行台帳
+# TypeScript構成移行完了記録
 
 ## 目的
 
-この文書はIssue #203で行う構成移行の現在地 対象責務 一時的な共存 撤去条件を追跡する。
+この文書はIssue #203で完了した構成移行 対象責務 互換性の固定点を記録する。
 新しい構成の判断は[ADR 0037](../decisions/0037-adopt-typescript-workspaces-and-shared-domain-modules.md)を正本とする。
-移行完了までは現在の実装pathも有効であり ファイル移動だけで正本が変わったとは判断しない。
+2026-08-27にNode Lambdaのdev配備とPython Backend撤去まで完了した。
 
 ## 互換性の固定点
 
@@ -65,26 +65,23 @@
 | Python Backendと固有test | 撤去済み | TypeScript隣接test | #220 完了 |
 | 最終文書と依存検査 | 現行path基準 | frontend backend modules基準 | #221 |
 
-## 一時的な共存と撤去条件
+## 移行終了
 
-| 一時状態 | 許容理由 | 撤去条件 |
-| --- | --- | --- |
-| 旧architecture pathの文書 | 移行中の実装を正しく説明する | #221で最終構成へ更新 |
-
-共存期間に仕様変更が必要になった場合は新旧両方のcontract testを先に更新する。
-片方だけへ機能を追加して二重実装を恒久化しない。
+一時的なPython Backendと旧architecture pathは#220と#221で撤去した。
+現在の構成は[モジュール境界](module-boundaries.md)と[Domainの所有権](domain-ownership.md)を正本とする。
 
 ## 検証baseline
 
-2026-08-27の移行開始時点で次を満たす。
+2026-08-27の移行完了時点で次を満たす。
 
-- TypeScript 79 test file 336 test
-- repository保守toolとinfraのPython test
+- TypeScript 104 test file 396 test
+- repository保守toolとinfraのPython 11 test
 - Agent Smoke Eval 11/11
+- Agent Full Eval 35/35
 - architecture check成功
 - Node Lambda package check成功
 
-各Issueは担当範囲の検証に加えて このbaselineから意図しない能力低下がないことを確認する。
+今後の変更はこのbaselineから意図しない能力低下がないことを確認する。
 
 ## workspace規約
 

@@ -4,7 +4,7 @@
 
 対象モジュールと同じディレクトリへ`*.test.ts`を置く
 
-- Domainの計算と契約は`frontend/src/domain`
+- 共有Domainの計算と契約は`modules/*/domain` Browser固有Domainは`frontend/src/domain`
 - FrontendのユースケースとPolicyは`frontend/src/usecases`
 - View DOM操作と表示変換は`frontend/src/presentation/<feature>`
 - Adapterと描画固有の振る舞いは各実装の隣

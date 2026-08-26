@@ -61,9 +61,13 @@ for (const requiredPath of [
   "backend/agent-api/package.json",
   "backend/agent-api/tsconfig.json",
   "backend/agent-api/src/handler.ts",
+  "backend/agent-api/src/lambda.ts",
+  "backend/agent-api/src/composition-root.ts",
   "backend/agent-api/src/contracts",
   "backend/agent-api/src/ports",
   "backend/agent-api/src/usecases",
+  "backend/agent-api/src/adapters",
+  "docs/architecture/typescript-reorganization-audit.md",
 ]) {
   if (!existsSync(resolve(repositoryRoot, requiredPath))) {
     errors.push(`${requiredPath}が必要です`);
@@ -77,11 +81,15 @@ for (const obsoletePath of [
   "frontend/src/features/trip-plan/presentation",
   "frontend/src/features/train-viewer/presentation",
   "frontend/src/application",
+  "services/agent-api",
+  "tests/services/agent_api",
 ]) {
   if (existsSync(resolve(repositoryRoot, obsoletePath))) {
     errors.push(`${obsoletePath}はfrontend/src/presentationの機能別ディレクトリへ統一してください`);
   }
 }
+
+validateDecisionRecords();
 const frontendMain = resolve(repositoryRoot, "frontend/src/main.ts");
 if (existsSync(frontendMain)) {
   const mainSource = readFileSync(frontendMain, "utf8");
@@ -127,6 +135,25 @@ function existingWorkspaceDirectories() {
     }
   }
   return directories;
+}
+
+function validateDecisionRecords() {
+  const decisionsRoot = resolve(repositoryRoot, "docs/decisions");
+  const files = readdirSync(decisionsRoot).filter((name) => /^\d{4}-.*\.md$/u.test(name) && name !== "0000-template.md");
+  const numbers = new Map();
+  for (const name of files) {
+    const number = name.slice(0, 4);
+    if (numbers.has(number)) errors.push(`ADR番号${number}が${numbers.get(number)}と${name}で重複しています`);
+    numbers.set(number, name);
+    const content = readFileSync(resolve(decisionsRoot, name), "utf8");
+    if (!content.includes("- ステータス:") && !/^## (?:状態|ステータス)\s*$/mu.test(content)) {
+      errors.push(`${name}にADRの状態がありません`);
+    }
+    const successor = content.match(/Superseded by ADR (\d{4})/u)?.[1];
+    if (successor && !files.some((candidate) => candidate.startsWith(`${successor}-`))) {
+      errors.push(`${name}の後継ADR ${successor}が見つかりません`);
+    }
+  }
 }
 
 function findNamedFiles(directory, filename) {
