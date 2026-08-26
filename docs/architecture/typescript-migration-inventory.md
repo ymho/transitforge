@@ -48,7 +48,7 @@
 | operationまたは責務 | 現在 | 移行先 | 移行Issue |
 | --- | --- | --- | --- |
 | Lambda event HTTP応答 operation dispatch | Pythonを本番利用しTypeScript契約とApplicationを併設 | `backend/agent-api/src/handler.ts`とusecases | #213 完了 |
-| Feedback Agent Trace保存 | Python storage module | TypeScript usecaseとS3 Adapter | #214 |
+| Feedback Agent Trace保存 | Pythonを本番利用しTypeScript usecaseとS3 Adapterを併設 | TypeScript usecaseとS3 Adapter | #214 完了 |
 | Bedrock conversation Tool relay | Python Bedrock module | TypeScript usecaseとBedrock Adapter | #215 |
 | 代表ダイヤ 遅延 混雑分析 | Python analysis module | TypeScript usecaseとS3 DynamoDB Adapter | #216 |
 | journey search | Python Journey Domainとdispatcher | TypeScript usecaseと`modules/journey` | #217 |

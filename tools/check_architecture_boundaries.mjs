@@ -147,7 +147,7 @@ for (const absolutePath of sourceFiles(backendAgentApiRoot)) {
   const backendLayer = relative(backendAgentApiRoot, absolutePath).split(sep)[0];
   const content = readFileSync(absolutePath, "utf8");
   for (const imported of importedSpecifiers(content)) {
-    if (imported.specifier.startsWith("@aws-sdk/")) {
+    if (backendLayer !== "adapters" && imported.specifier.startsWith("@aws-sdk/")) {
       violations.push({
         source,
         kind: "backend-aws-sdk-leak",
