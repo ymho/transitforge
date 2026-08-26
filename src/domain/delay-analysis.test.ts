@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { TrainDelayAnalysisResponse } from "./operations/analysis";
+import type { TrainDelayAnalysisResponse } from "@raiquora/operation/analysis";
 import type { Train } from "@raiquora/train/train";
 import { delayAnalysisForAgent } from "./delay-analysis";
 

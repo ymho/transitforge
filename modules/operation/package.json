@@ -1,0 +1,15 @@
+{
+  "name": "@raiquora/operation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./domain/index.ts",
+    "./analysis": "./domain/analysis.ts",
+    "./operation": "./domain/operation.ts",
+    "./train-operation-state": "./domain/train-operation-state.ts"
+  },
+  "dependencies": {
+    "@raiquora/train": "*"
+  }
+}

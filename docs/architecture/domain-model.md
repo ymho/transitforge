@@ -47,7 +47,8 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 
 ### `TrainDelaySnapshot` `TrainOperation`
 
-- Domain契約: `src/domain/rail/operation.ts`
+- Domain契約: `modules/operation/domain/operation.ts`
+- 状態適用: `modules/operation/domain/train-operation-state.ts`
 - 入力Adapter: `src/adapters/http/traffic/train-delay.ts`
 - 保存先: `/api/traffic/delays.json`
 - 結合キー: `Train.train_no` → `operationsByTrainNumber`
@@ -57,7 +58,7 @@ TypeScriptとPythonのどちらが計算の正本を持つかは[Domainの所有
 
 ### `TrainCongestionSnapshot`
 
-- Domain契約: `src/domain/rail/operation.ts`
+- Domain契約: `modules/operation/domain/operation.ts`
 - 入力Adapter: `src/adapters/http/traffic/train-congestion.ts`
 - 保存先: `/api/traffic/congestion.json`
 - 結合キー: 列車番号

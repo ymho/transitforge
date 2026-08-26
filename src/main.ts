@@ -32,7 +32,7 @@ import {
 import { loadTrainIndex } from "./adapters/http/viewer-input/train-index";
 import type { StationCoordinate } from "@raiquora/train/station";
 import type { Train } from "@raiquora/train/train";
-import type { TrainDelaySnapshot, TrainOperation } from "./domain/rail/operation";
+import type { TrainDelaySnapshot, TrainOperation } from "@raiquora/operation/operation";
 import {
   nearestOriginWithDepartures, searchDirectRoutes,
   type JourneyRouteLeg,
@@ -84,7 +84,7 @@ import {
   operationsWithCoupledTrainOperations,
   operationsWithTimetableTrainNumberAliases,
   trainsForOperations,
-} from "./domain/train-operation-state";
+} from "@raiquora/operation/train-operation-state";
 import {
   activeTrainPositions,
   destinationCoordinateForTrain,

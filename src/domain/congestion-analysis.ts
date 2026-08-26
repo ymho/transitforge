@@ -1,7 +1,7 @@
 import type {
   DailyCongestionAnalysisResponse,
   TrainCongestionStat,
-} from "./operations/analysis";
+} from "@raiquora/operation/analysis";
 import type { Train } from "@raiquora/train/train";
 
 export interface CongestionTrainAnalysis {

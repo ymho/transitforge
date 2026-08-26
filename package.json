@@ -22,6 +22,7 @@
     "eval:agent:strategies": "node --import tsx tools/run_agent_strategy_experiment.ts"
   },
   "dependencies": {
+    "@raiquora/operation": "*",
     "@raiquora/train": "*",
     "@modelcontextprotocol/server": "^2.0.0",
     "mapbox-gl": "^3.25.0",

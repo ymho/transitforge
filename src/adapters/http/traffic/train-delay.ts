@@ -1,12 +1,12 @@
 import type {
   TrainDelaySnapshot,
   TrainOperation,
-} from "../../../domain/rail/operation";
+} from "@raiquora/operation/operation";
 
 export type {
   TrainDelaySnapshot,
   TrainOperation,
-} from "../../../domain/rail/operation";
+} from "@raiquora/operation/operation";
 
 const trainDelayEndpoint = "/api/traffic/delays.json";
 

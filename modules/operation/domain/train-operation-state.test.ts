@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { TrainDelaySnapshot, TrainOperation } from "./rail/operation";
+import type { TrainDelaySnapshot, TrainOperation } from "./operation";
 import type { Train } from "@raiquora/train/train";
 import {
   delayByTrainNumber,
@@ -10,7 +10,7 @@ import {
   operationsWithTimetableTrainNumberAliases,
   trainsForOperations,
 } from "./train-operation-state";
-import type { TrainFormationLink } from "./train-formation-link";
+import type { TrainFormationOperationLink } from "./train-operation-state";
 
 describe("train operation state", () => {
   const now = new Date("2026-08-14T12:00:00+09:00");
@@ -217,7 +217,7 @@ function coupledTrain(
   };
 }
 
-function coupledLinks(): ReadonlyMap<string, TrainFormationLink> {
+function coupledLinks(): ReadonlyMap<string, TrainFormationOperationLink> {
   return new Map([
     [
       "airport",
