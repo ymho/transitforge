@@ -126,7 +126,7 @@ export function createJourneySearchHandlers(
 
   const backendSearchRoutes: DirectRouteSearchHandler = async (request) => {
     const { originStation, distanceMeters } = await resolveOrigin(request);
-    const response = await dependencies.journeySearchService.search({
+    const searchRequest = {
       serviceDate: request.serviceDate ?? formatServiceDate(
         dependencies.getDisplayedServiceDateStart(),
       ),
@@ -145,7 +145,29 @@ export function createJourneySearchHandlers(
       requiredTrainNames: request.requiredTrainNames,
       requiredTrainNumbers: request.requiredTrainNumbers,
       allowedServiceTypes: request.allowedServiceTypes,
+    };
+    const requestedMaxTransfers = request.maxTransfers ?? 3;
+    const progressiveDepths: Array<0 | 1 | 2 | 3> =
+      (request.rankingPreference === undefined ||
+        request.rankingPreference === "balanced" ||
+        request.rankingPreference === "fewest-transfers") &&
+        requestedMaxTransfers > 1
+        ? Array.from(
+            { length: requestedMaxTransfers },
+            (_, index) => (index + 1) as 1 | 2 | 3,
+          )
+        : [requestedMaxTransfers];
+    let response = await dependencies.journeySearchService.search({
+      ...searchRequest,
+      maxTransfers: progressiveDepths[0],
     });
+    for (const maxTransfers of progressiveDepths.slice(1)) {
+      if (response.journeys.length > 0) break;
+      response = await dependencies.journeySearchService.search({
+        ...searchRequest,
+        maxTransfers,
+      });
+    }
     const trainsByServiceUid = new Map(
       dependencies.getDisplayTrains().map((train) => [train.service_uid, train]),
     );

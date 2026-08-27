@@ -1723,7 +1723,7 @@ describe("Bedrock viewer agent", () => {
     await runViewerAgentRuntime(
       [
         "旅行相談の会話を継続しています。",
-        '現在の旅行条件: {"destinationWish":"出雲大社","startDate":"2026-08-28"}',
+        '現在の旅行条件: {"destinationWish":"出雲大社","startDate":"2026-08-28","endDate":"2026-08-29","stayNights":1}',
         "直前の質問: いつ出発しますか？",
         "利用者の今回の回答: 明日の朝出発",
       ].join("\n"),
@@ -1772,11 +1772,11 @@ describe("Bedrock viewer agent", () => {
         toolUseId: "follow-up", name: "ask_follow_up", input: {
           recommendation: "大阪方面からなら1泊にして、出雲大社と稲佐の浜をゆっくり巡るのがおすすめです。",
           reason: "出発日が分かると実際のダイヤと宿泊日を揃えて比較できます。日程未定なら混雑を避けやすい候補日から考えられます。",
-          question: "いつ出発しますか？",
+          question: "いつ出発しますか？また、何泊くらいで行きたいですか？",
           expectedInput: "departure-date",
           quickReplies: [
-            { label: "今日", value: "今日" },
-            { label: "明日", value: "明日" },
+            { label: "1泊", value: "1泊" },
+            { label: "2泊", value: "2泊" },
           ],
           tripContext: { destinationWish: "出雲大社" },
         },
@@ -1805,8 +1805,82 @@ describe("Bedrock viewer agent", () => {
       expectedInput: "departure-date",
       tripContext: { destinationWish: "出雲大社" },
     });
+    expect(result.conversation.question).toBe("いつ出発しますか？");
+    expect(result.conversation.quickReplies).toEqual([]);
     expect(result.text).toContain("日程未定なら");
     expect(result.text).toContain("1泊にして");
+  });
+
+  it("defers route search for a destination-only trip instead of exposing a terminal placeholder", async () => {
+    const searchDirectRoutes = vi.fn();
+    const converse = vi.fn().mockResolvedValue({
+      message: { role: "assistant", content: [{ toolUse: {
+        toolUseId: "premature-route",
+        name: "search_direct_routes",
+        input: {},
+      } }] },
+      stopReason: "tool_use",
+    });
+
+    const result = await runViewerAgentRuntime(
+      "出雲大社へ旅行したい",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(searchDirectRoutes).not.toHaveBeenCalled();
+    expect(typeof result).not.toBe("string");
+    if (typeof result === "string" || !("conversation" in result)) {
+      throw new Error("旅行相談の追加質問がありません。");
+    }
+    expect(result.text).not.toContain("構造化した案内");
+    expect(result.conversation).toMatchObject({
+      expectedInput: "departure-date",
+      question: "いつ出発しますか？",
+      tripContext: { destinationWish: "出雲大社" },
+    });
+  });
+
+  it("does not search accommodations with dates invented outside the conversation", async () => {
+    const searchAccommodations = vi.fn();
+    const converse = vi.fn().mockResolvedValue({
+      message: { role: "assistant", content: [{ toolUse: {
+        toolUseId: "premature-stay",
+        name: "search_accommodations",
+        input: {
+          destination: "出雲大社",
+          checkInDate: "2026-08-28",
+          checkOutDate: "2026-08-29",
+        },
+      } }] },
+      stopReason: "tool_use",
+    });
+
+    const result = await runViewerAgentRuntime(
+      "出雲大社へ旅行したい",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(), searchAccommodations,
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(searchAccommodations).not.toHaveBeenCalled();
+    expect(typeof result).not.toBe("string");
+    if (typeof result === "string" || !("conversation" in result)) {
+      throw new Error("旅行相談の追加質問がありません。");
+    }
+    expect(result.conversation.expectedInput).toBe("departure-date");
+    expect(result.conversation.tripContext).not.toHaveProperty("startDate");
   });
 
   it("returns a confirmable proposal for a rental-car movement", async () => {

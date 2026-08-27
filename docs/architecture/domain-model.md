@@ -318,7 +318,7 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 - 定義: `modules/trip/domain/travel-profile.ts`
 - 保持範囲: 現在の旅行相談
 
-今回の行き先 希望日 興味 同行者 移動条件などを表す。一回限りの「海に行きたい」はここへ入り
+今回の行き先 希望日 泊数 興味 同行者 移動条件などを表す。一回限りの「海に行きたい」はここへ入り
 普段の「山が好き」は`UserProfile`へ入る。両者を混在させない。
 
 ### `ConversationGuidance` `ConversationSubmission`

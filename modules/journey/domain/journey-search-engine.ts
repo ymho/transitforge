@@ -18,7 +18,7 @@ interface ServiceCall { stationName: string; arrivalTimeMinutes?: number; depart
 interface SearchService { serviceUid: string; trainNumber: string; serviceType: string; trainName: string; originStation: string; destinationStation: string; calls: ServiceCall[]; }
 interface DelayInfo { delayMinutes: number; delayStatus?: "observed" | "estimated"; delaySampleCount?: number; delayBasis?: string; }
 type NormalizedRequest = Required<Pick<JourneySearchRequest, "limit" | "maxTransfers" | "transferPace" | "rankingPreference">> & JourneySearchRequest;
-interface SearchContext { request: NormalizedRequest; servicesByStation: Map<string, SearchService[]>; stationTransferMinutes: Record<string, number>; defaultTransferMinutes: number; delays: Map<string, DelayInfo>; labels: Map<string, Array<{ arrival: number; departure: number }>>; trace: JourneySearchTrace; }
+interface SearchContext { request: NormalizedRequest; servicesByStation: Map<string, SearchService[]>; stationTransferMinutes: Record<string, number>; defaultTransferMinutes: number; delays: Map<string, DelayInfo>; labels: Map<string, Array<{ arrival: number; departure: number }>>; reachableStationsByLeg: Array<Set<string>>; trace: JourneySearchTrace; }
 
 export function searchJourneyIndex(request: JourneySearchRequest, input: JourneySearchRuntimeInput): JourneySearchResponse & { trace: JourneySearchTrace } {
   const strategy = input.index.schema_version === "direct-service-index-v1" ? "direct-service-index" : "multi-criteria-connection-scan";
@@ -45,7 +45,7 @@ export function searchJourneyIndex(request: JourneySearchRequest, input: Journey
     if (!values.includes(service)) values.push(service);
     servicesByStation.set(key, values);
   }
-  const context: SearchContext = { request: normalizedRequest, servicesByStation, stationTransferMinutes, defaultTransferMinutes, delays: delayInfo, labels: new Map(), trace };
+  const context: SearchContext = { request: normalizedRequest, servicesByStation, stationTransferMinutes, defaultTransferMinutes, delays: delayInfo, labels: new Map(), reachableStationsByLeg: reachableStations(realtimeServices, request.destinationStation, normalizedRequest.maxTransfers + 1), trace };
   const found: JourneySearchResponse["journeys"] = [];
   explore(context, normalizeStation(request.originStation), request.departureTimeMinutes, [], new Set(), found);
   const journeys = pareto(found.filter((journey) => requirementsSatisfied(journey.legs, normalizedRequest))).sort((a, b) => compareJourney(a, b, normalizedRequest)).slice(0, normalizedRequest.limit);
@@ -56,6 +56,8 @@ export function searchJourneyIndex(request: JourneySearchRequest, input: Journey
 
 function explore(context: SearchContext, station: string, availableAt: number, legs: JourneySearchLeg[], used: Set<string>, found: JourneySearchResponse["journeys"]): void {
   if (legs.length > context.request.maxTransfers) return;
+  const remainingLegs = context.request.maxTransfers + 1 - legs.length;
+  if (!context.reachableStationsByLeg[remainingLegs]?.has(station)) return;
   for (const service of context.servicesByStation.get(station) ?? []) {
     if (used.has(service.serviceUid)) continue;
     const from = service.calls.findIndex((call) => normalizeStation(call.stationName) === station && call.departureTimeMinutes !== undefined);
@@ -71,15 +73,41 @@ function explore(context: SearchContext, station: string, availableAt: number, l
       const leg = toLeg(service, from, to, delay);
       const next = [...legs, leg];
       if (normalizeStation(destination.stationName) === normalizeStation(context.request.destinationStation)) found.push({ departureTimeMinutes: next[0]!.departureTimeMinutes, arrivalTimeMinutes: leg.arrivalTimeMinutes, transferCount: next.length - 1, legs: next });
-      if (next.length <= context.request.maxTransfers && acceptLabel(context, destination.stationName, next)) explore(context, normalizeStation(destination.stationName), leg.arrivalTimeMinutes, next, new Set([...used, service.serviceUid]), found);
+      const nextStation = normalizeStation(destination.stationName);
+      const nextRemainingLegs = context.request.maxTransfers + 1 - next.length;
+      if (next.length <= context.request.maxTransfers && context.reachableStationsByLeg[nextRemainingLegs]?.has(nextStation) && acceptLabel(context, destination.stationName, next)) explore(context, nextStation, leg.arrivalTimeMinutes, next, new Set([...used, service.serviceUid]), found);
     }
   }
+}
+
+function reachableStations(
+  services: SearchService[],
+  destinationStation: string,
+  maximumLegs: number,
+): Array<Set<string>> {
+  const result = [new Set([normalizeStation(destinationStation)])];
+  for (let leg = 1; leg <= maximumLegs; leg += 1) {
+    const previous = result[leg - 1]!;
+    const current = new Set(previous);
+    for (const service of services) {
+      let reachesPreviousRound = false;
+      for (let index = service.calls.length - 1; index >= 0; index -= 1) {
+        const station = normalizeStation(service.calls[index]!.stationName);
+        if (previous.has(station)) reachesPreviousRound = true;
+        if (reachesPreviousRound) current.add(station);
+      }
+    }
+    result.push(current);
+  }
+  return result;
 }
 
 function acceptLabel(context: SearchContext, station: string, legs: JourneySearchLeg[]): boolean {
   const arrival = legs.at(-1)!.arrivalTimeMinutes;
   const departure = legs[0]!.departureTimeMinutes;
-  const key = `${normalizeStation(station)}:${legs.length}:${legs.at(-1)!.serviceUid}`;
+  // 次の乗換候補は駅 到着時刻 乗車回数で決まる
+  // 到着列車までキーへ含めると同等ラベルが大量に残り 広域探索が組合せ的に増える
+  const key = `${normalizeStation(station)}:${legs.length}`;
   const labels = context.labels.get(key) ?? [];
   if (labels.some((label) => label.arrival <= arrival && label.departure >= departure)) return false;
   const retained = labels.filter((label) => !(arrival <= label.arrival && departure >= label.departure));
@@ -101,9 +129,17 @@ function servicesFromIndex(index: Record<string, unknown>) {
   }
   if (index.schema_version !== "timetable-connection-index-v1" || !isRecord(index.trips) || !Array.isArray(index.connections)) throw new Error("指定日の接続インデックス形式が不正です。");
   const connections = index.connections.filter(isRecord);
+  const connectionsByTrip = new Map<string, Array<Record<string, unknown>>>();
+  for (const connection of connections) {
+    const tripId = String(connection.trip_id ?? "");
+    const values = connectionsByTrip.get(tripId) ?? [];
+    values.push(connection);
+    connectionsByTrip.set(tripId, values);
+  }
   const services = Object.entries(index.trips).flatMap(([id, value]) => {
     if (!isRecord(value)) return [];
-    const edges = connections.filter((edge) => String(edge.trip_id ?? "") === id).sort((a, b) => num(a.stop_sequence) - num(b.stop_sequence));
+    const edges = (connectionsByTrip.get(id) ?? [])
+      .sort((a, b) => num(a.stop_sequence) - num(b.stop_sequence));
     if (!edges.length) return [];
     const calls: ServiceCall[] = [{ stationName: String(edges[0]!.from_station ?? ""), departureTimeMinutes: num(edges[0]!.departure_time_minutes) }];
     for (const edge of edges) { const previous = calls.at(-1)!; if (normalizeStation(previous.stationName) === normalizeStation(edge.from_station)) previous.departureTimeMinutes = num(edge.departure_time_minutes); calls.push({ stationName: String(edge.to_station ?? ""), arrivalTimeMinutes: num(edge.arrival_time_minutes) }); }
