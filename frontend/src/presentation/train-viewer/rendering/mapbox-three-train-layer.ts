@@ -12,13 +12,14 @@ import type { TrainPosition } from "../../../domain/train-position";
 import type { TrainFormationLink } from "../../../domain/train-formation-link";
 import { trainVisualScaleForZoom } from "../../../domain/train-visual-scale";
 import { weatherHazeMixAtViewportPoint } from "../../../domain/weather-haze";
+import { distanceToScreenSegment } from "./screen-segment-hit-test";
 
 const maximumTrainInstances = 1_000;
 const vehicleLengthMeters = 12;
 const vehicleWidthMeters = 5;
 const vehicleHeightMeters = 5.6;
 const congestionBarWidthMeters = 3.2;
-const congestionBarHitWidthMeters = 8;
+const congestionBarHitRadiusPixels = 14;
 const destinationArcSegments = 24;
 const destinationArcVertexCount =
   maximumTrainInstances * destinationArcSegments * 2;
@@ -55,18 +56,12 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     THREE.BoxGeometry,
     THREE.MeshBasicMaterial
   >;
-  private congestionBarHitTargets?: THREE.InstancedMesh<
-    THREE.BoxGeometry,
-    THREE.MeshBasicMaterial
-  >;
   private destinationArcs?: THREE.LineSegments<
     THREE.BufferGeometry,
     THREE.LineBasicMaterial
   >;
   private readonly instanceTransform = new THREE.Object3D();
   private readonly instanceColor = new THREE.Color();
-  private readonly raycaster = new THREE.Raycaster();
-  private readonly pointer = new THREE.Vector2();
   // MapboxのMercator座標はY軸が南向きであるため、Three.jsのモデル座標との境界で
   // 一度だけ反転する。車両ごとの行列には負スケールを入れない。
   private readonly mapboxToThreeCoordinates = new THREE.Matrix4().makeScale(1, -1, 1);
@@ -78,7 +73,12 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   private congestionByTrainNumber: ReadonlyMap<string, number> = new Map();
   private delayByTrainNumber: ReadonlyMap<string, number> = new Map();
   private destinationChangedServiceUids: ReadonlySet<string> = new Set();
-  private congestionBarServiceUids: string[] = [];
+  private congestionBarHitAreas: Array<{
+    serviceUid: string;
+    coordinate: Coordinate;
+    baseAltitudeMeters: number;
+    topAltitudeMeters: number;
+  }> = [];
   private congestionVisible = true;
   private destinationArcsVisible = false;
   private cloudyAtmosphereEnabled = false;
@@ -168,21 +168,6 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.congestionBars.frustumCulled = false;
     this.congestionBars.count = 0;
     this.scene.add(this.congestionBars);
-
-    // 描画する棒は細いため、レイキャスト専用の広い非表示領域を別に持つ。
-    this.congestionBarHitTargets = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(
-        congestionBarHitWidthMeters,
-        congestionBarHitWidthMeters,
-        1,
-      ),
-      new THREE.MeshBasicMaterial(),
-      maximumTrainInstances,
-    );
-    this.congestionBarHitTargets.instanceMatrix.setUsage(
-      THREE.DynamicDrawUsage,
-    );
-    this.congestionBarHitTargets.count = 0;
 
     const destinationArcGeometry = new THREE.BufferGeometry();
     destinationArcGeometry.setAttribute(
@@ -286,31 +271,21 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     if (
       !this.congestionVisible ||
       !this.map ||
-      !this.camera ||
-      !this.congestionBarHitTargets
+      !this.camera
     ) {
       return undefined;
     }
 
-    const canvas = this.map.getCanvas();
-    const width = canvas.clientWidth;
-    const height = canvas.clientHeight;
-    if (width <= 0 || height <= 0) {
-      return undefined;
+    let nearest: { serviceUid: string; distance: number } | undefined;
+    for (const area of this.congestionBarHitAreas) {
+      const base = this.map.project(area.coordinate, area.baseAltitudeMeters);
+      const top = this.map.project(area.coordinate, area.topAltitudeMeters);
+      const distance = distanceToScreenSegment(point, base, top);
+      if (distance <= congestionBarHitRadiusPixels && (!nearest || distance < nearest.distance)) {
+        nearest = { serviceUid: area.serviceUid, distance };
+      }
     }
-
-    this.pointer.set(
-      (point.x / width) * 2 - 1,
-      1 - (point.y / height) * 2,
-    );
-    this.raycaster.setFromCamera(this.pointer, this.camera);
-    const intersection = this.raycaster.intersectObject(
-      this.congestionBarHitTargets,
-      false,
-    )[0];
-    return intersection?.instanceId === undefined
-      ? undefined
-      : this.congestionBarServiceUids[intersection.instanceId];
+    return nearest?.serviceUid;
   }
 
   private updateInstances(): void {
@@ -318,7 +293,6 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
       !this.trains ||
       !this.delayHalos ||
       !this.congestionBars ||
-      !this.congestionBarHitTargets ||
       !this.map
     ) {
       return;
@@ -457,18 +431,20 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
           congestionBarCount,
           this.instanceTransform.matrix,
         );
-        this.congestionBarHitTargets.setMatrixAt(
-          congestionBarCount,
-          this.instanceTransform.matrix,
-        );
         this.congestionBars.setColorAt(
           congestionBarCount,
           this.instanceColor
             .set(congestionBarColor(congestion))
             .lerp(cloudyAtmosphereColor, hazeMix),
         );
-        this.congestionBarServiceUids[congestionBarCount] =
-          position.serviceUid;
+        const baseAltitudeMeters = vehicleVisualScale *
+          (vehicleHeightMeters + layout.overlapOffsetMeters.vertical);
+        this.congestionBarHitAreas[congestionBarCount] = {
+          serviceUid: position.serviceUid,
+          coordinate: layout.renderCoordinate,
+          baseAltitudeMeters,
+          topAltitudeMeters: baseAltitudeMeters + vehicleVisualScale * barHeightMeters,
+        };
         congestionBarCount += 1;
       }
     }
@@ -490,16 +466,11 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
       this.delayHalos.instanceColor.needsUpdate = true;
     }
     this.congestionBars.count = congestionBarCount;
-    this.congestionBarServiceUids.length = congestionBarCount;
+    this.congestionBarHitAreas.length = congestionBarCount;
     this.congestionBars.instanceMatrix.needsUpdate = true;
     if (this.congestionBars.instanceColor) {
       this.congestionBars.instanceColor.needsUpdate = true;
     }
-    this.congestionBarHitTargets.count = congestionBarCount;
-    this.congestionBarHitTargets.instanceMatrix.needsUpdate = true;
-    // InstancedMeshのレイキャストは全インスタンスを包む境界球で早期判定する。
-    // 行列を動的更新した後は明示的な再計算が必要。
-    this.congestionBarHitTargets.computeBoundingSphere();
     this.updateDestinationArcs();
     this.map.triggerRepaint();
   }
@@ -625,8 +596,6 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     this.congestionBars?.material.dispose();
     this.focusRing?.geometry.dispose();
     this.focusRing?.material.dispose();
-    this.congestionBarHitTargets?.geometry.dispose();
-    this.congestionBarHitTargets?.material.dispose();
     this.destinationArcs?.geometry.dispose();
     this.destinationArcs?.material.dispose();
     this.renderer?.dispose();
