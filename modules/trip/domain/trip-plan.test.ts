@@ -126,3 +126,30 @@ it("copies explicit search conditions into a new trip plan", () => {
     considerations: ["早朝を避ける"],
   });
 });
+
+it("creates a day trip without a stay card", () => {
+  const travel = {
+    destination: "宮島",
+    dayTrip: true,
+    checkInDate: "2026-08-28",
+    checkOutDate: "2026-08-28",
+    outbound: { originStation: "京都", destinationStation: "宮島口", journeys: [] },
+    returning: { originStation: "宮島口", destinationStation: "京都", journeys: [] },
+    accommodations: [],
+  };
+  const next = tripPlanFromTravelPlan(travel);
+  expect(next.items.map(({ id }) => id)).toEqual(["outbound", "return"]);
+
+  const updated = applyTripPlanPatches({
+    ...next,
+    items: [
+      next.items[0]!,
+      {
+        id: "stay", type: "stay", destination: "宮島",
+        checkInDate: "2026-08-28", checkOutDate: "2026-08-29",
+      },
+      next.items[1]!,
+    ],
+  }, tripPlanPatchesFromTravelPlan(travel));
+  expect(updated.items.some(({ type }) => type === "stay")).toBe(false);
+});

@@ -35,6 +35,7 @@ export interface TripAccommodation {
 
 export interface TravelPlan {
   destination: string;
+  dayTrip?: boolean;
   adults?: number;
   children?: number;
   considerations?: string[];

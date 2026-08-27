@@ -18,6 +18,8 @@ export const allowedToolNames = new Set([
   "search_representative_timetable",
   "query_train_delay_analysis",
   "search_accommodations",
+  "plan_day_trip",
+  "search_trip_route_update",
   "ask_follow_up",
   "remember_travel_preference",
   "update_conversation_session",
