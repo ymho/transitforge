@@ -2,5 +2,5 @@
   "source": "backend/agent-api/dist/lambda",
   "handler": "index.handler",
   "runtime": "nodejs22.x",
-  "files": ["index.mjs"]
+  "files": ["index.cjs"]
 }
