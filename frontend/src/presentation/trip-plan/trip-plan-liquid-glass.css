@@ -198,15 +198,20 @@
 
 .ai-guide-context-choices {
   display: flex;
-  justify-content: flex-start;
+  align-self: center;
+  justify-content: safe center;
   align-items: center;
   gap: .45rem;
-  width: fit-content;
-  max-width: 100%;
+  width: max-content;
+  min-width: 0;
+  max-width: calc(100% - 2rem);
+  margin-inline: auto;
   padding: 0;
   overflow-x: auto;
   border: 0;
   background: transparent;
+  list-style: none;
+  overscroll-behavior-inline: contain;
   scrollbar-width: none;
 }
 
@@ -221,6 +226,7 @@
   font: inherit;
   font-size: .76rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .ai-guide-context-choices button:hover { background: var(--glass-accent-soft); color: var(--glass-accent-strong); }
@@ -293,4 +299,3 @@
 .ai-guide-form button:disabled {
   opacity: 0.5;
 }
-
