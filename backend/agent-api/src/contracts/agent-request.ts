@@ -7,7 +7,6 @@ export const maximumBodyBytes = 32 * 1_024;
 const maximumMessages = 16;
 const maximumContentBlocks = 12;
 const maximumTextCharacters = 4_000;
-const maximumToolDefinitions = 20;
 
 export const allowedToolNames = new Set([
   "set_display_time",
@@ -21,6 +20,7 @@ export const allowedToolNames = new Set([
   "search_weather_forecast",
   "search_place_media",
   "search_flights",
+  "schedule_trip_recheck",
   "plan_day_trip",
   "search_trip_route_update",
   "ask_follow_up",
@@ -38,6 +38,10 @@ export const allowedToolNames = new Set([
   "analyze_congestion",
   "compare_journeys",
 ]);
+
+// Tool名は閉じたallowlistで制限するため 件数上限もallowlistを正本にする。
+// 個別の固定値にするとTool追加時に正当な定義だけが400で拒否される。
+const maximumToolDefinitions = allowedToolNames.size;
 
 export class RequestError extends Error {
   constructor(readonly statusCode: number, message: string) {

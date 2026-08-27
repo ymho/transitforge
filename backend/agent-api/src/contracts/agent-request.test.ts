@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import {
+  allowedToolNames,
   maximumBodyBytes,
   RequestError,
   requestValue,
@@ -83,6 +84,20 @@ describe("Agent API request contract", () => {
     expect(() => validatedToolDefinitions({
       toolDefinitions: [definition, definition],
     })).toThrow(RequestError);
+  });
+
+  it("accepts every allowlisted tool without a separate count ceiling", () => {
+    const definitions = [...allowedToolNames].map((name) => ({
+      name,
+      description: `${name}を実行する`,
+      inputSchema: { type: "object", properties: {} },
+    }));
+
+    expect(definitions).toHaveLength(28);
+    expect(definitions.some(({ name }) => name === "schedule_trip_recheck"))
+      .toBe(true);
+    expect(validatedToolDefinitions({ toolDefinitions: definitions }))
+      .toHaveLength(28);
   });
 });
 
