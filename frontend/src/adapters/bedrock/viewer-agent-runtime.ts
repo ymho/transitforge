@@ -391,10 +391,10 @@ function viewerTool(
 
 function viewerToolDescription(name: typeof viewerToolNames[number]): string {
   const descriptions: Record<typeof viewerToolNames[number], string> = {
-    propose_trip_update: "現在の旅程に対する安全な変更案を構造化します",
+    propose_trip_update: "現在の旅程に対する観光 移動 滞在 条件の変更案を構造化します。利用者が変更を依頼し内容が明確なら追加確認せず使います",
     remember_travel_preference: "高確信の継続的な旅行の好みを端末内へ記憶します",
     update_conversation_session: "現在の会話Sessionの要約と話題を更新します",
-    ask_follow_up: "旅行相談で不足している条件を構造化して質問します",
+    ask_follow_up: "旅行相談で本当に不足している今回固有の条件だけを構造化して質問します。プロフィールと現在の旅程にある条件は聞き直しません",
     set_display_time: "Viewerの計画ダイヤ表示時刻を変更します",
     search_trains: "現在表示中の列車を決定論的に検索します",
     search_train_arrivals: "指定駅へ指定時刻ごろ到着する列車を検索します",
@@ -402,7 +402,7 @@ function viewerToolDescription(name: typeof viewerToolNames[number]): string {
     focus_train: "同じタスクで検索済みの列車へViewerを移動します",
     query_daily_congestion_analysis: "指定業務日付の観測済み混雑を分析します",
     query_train_delay_analysis: "指定業務日付の観測済み遅延を分析します",
-    search_accommodations: "指定日程と行き先の宿泊候補を検索します",
+    search_accommodations: "新しい宿泊旅行 日程変更 宿泊地変更 宿の再検索で指定日程の宿泊候補を検索します。観光相談 人数やペースだけの変更 経路の部分変更には使いません",
     search_representative_timetable: "平日または土休日の代表ダイヤを検索します",
     set_weather: "Viewerの天気表現を変更します",
     set_layer_visibility: "Viewerの混雑またはアーチ表示を変更します",
