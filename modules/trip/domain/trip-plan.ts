@@ -146,14 +146,14 @@ export function tripPlanFromTravelPlan(
     },
     items: [
       { id: "outbound", type: "movement", mode: "rail", route: value.outbound },
-      {
+      ...(value.dayTrip ? [] : [{
         id: "stay",
-        type: "stay",
+        type: "stay" as const,
         destination: value.destination,
         checkInDate: value.checkInDate,
         checkOutDate: value.checkOutDate,
         options: value.accommodations,
-      },
+      }]),
       { id: "return", type: "movement", mode: "rail", route: value.returning },
     ],
     updatedAt: now.toISOString(),
@@ -172,7 +172,10 @@ export function tripPlanPatchesFromTravelPlan(value: TravelPlan): TripPlanPatch[
       itemId: "outbound",
       item: { id: "outbound", type: "movement", mode: "rail", route: value.outbound },
     },
-    {
+    ...(value.dayTrip ? [{
+      type: "remove" as const,
+      itemId: "stay",
+    }] : [{
       type: "replace",
       itemId: "stay",
       item: {
@@ -183,7 +186,7 @@ export function tripPlanPatchesFromTravelPlan(value: TravelPlan): TripPlanPatch[
         checkOutDate: value.checkOutDate,
         options: value.accommodations,
       },
-    },
+    } as const]),
     {
       type: "replace",
       itemId: "return",

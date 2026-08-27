@@ -329,6 +329,8 @@ const viewerToolNames = [
   "query_daily_congestion_analysis",
   "query_train_delay_analysis",
   "search_accommodations",
+  "plan_day_trip",
+  "search_trip_route_update",
   "search_representative_timetable",
   "set_weather",
   "set_layer_visibility",
@@ -339,6 +341,8 @@ const terminalToolNames = new Set<string>([
   "ask_follow_up",
   "search_direct_routes",
   "search_accommodations",
+  "plan_day_trip",
+  "search_trip_route_update",
 ]);
 
 function viewerToolRegistry(context: ViewerToolContext): AgentToolRegistry {
@@ -403,6 +407,8 @@ function viewerToolDescription(name: typeof viewerToolNames[number]): string {
     query_daily_congestion_analysis: "指定業務日付の観測済み混雑を分析します",
     query_train_delay_analysis: "指定業務日付の観測済み遅延を分析します",
     search_accommodations: "新しい宿泊旅行 日程変更 宿泊地変更 宿の再検索で指定日程の宿泊候補を検索します。観光相談 人数やペースだけの変更 経路の部分変更には使いません",
+    plan_day_trip: "宿泊施設を検索せず 指定日の行きと帰りの鉄道経路を組み合わせて日帰り旅程を作ります",
+    search_trip_route_update: "現在の旅程にある行きまたは帰りの鉄道移動を再検索します。出発を遅らせる変更と途中駅への立寄りに使います",
     search_representative_timetable: "平日または土休日の代表ダイヤを検索します",
     set_weather: "Viewerの天気表現を変更します",
     set_layer_visibility: "Viewerの混雑またはアーチ表示を変更します",
@@ -441,6 +447,35 @@ function viewerToolInputSchema(
         limit: { type: "integer", minimum: 1, maximum: 5 },
       },
       required: ["destination", "checkInDate", "checkOutDate"],
+      additionalProperties: false,
+    };
+  }
+  if (name === "plan_day_trip") {
+    return {
+      type: "object",
+      properties: {
+        destination: { type: "string" },
+        date: {
+          type: "string",
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+          description: "日帰り旅行の日付。YYYY-MM-DD形式",
+        },
+        outboundTimeMinutes: { type: "integer", minimum: 0, maximum: 1_800 },
+        returnTimeMinutes: { type: "integer", minimum: 0, maximum: 1_800 },
+      },
+      required: ["destination", "date"],
+      additionalProperties: false,
+    };
+  }
+  if (name === "search_trip_route_update") {
+    return {
+      type: "object",
+      properties: {
+        target: { type: "string", enum: ["outbound", "return"] },
+        departureTimeMinutes: { type: "integer", minimum: 0, maximum: 1_800 },
+        stopoverStation: { type: "string" },
+      },
+      required: ["target"],
       additionalProperties: false,
     };
   }
@@ -1134,6 +1169,145 @@ async function executeViewerToolAdapter(
     return accommodations;
   }
 
+  if (name === "plan_day_trip") {
+    const destination = typeof input.destination === "string"
+      ? input.destination.trim()
+      : "";
+    const date = typeof input.date === "string" ? input.date : "";
+    if (!destination || !/^\d{4}-\d{2}-\d{2}$/u.test(date) ||
+      !dependencies.searchDirectRoutes) {
+      throw new Error("日帰り旅行の検索条件が不正です。");
+    }
+    const destinationStation = travelDestinationAccess(destination)?.accessStation ??
+      stationForTravelDestination(destination, dependencies.trains);
+    if (!destinationStation) {
+      throw new Error("日帰り旅行の最寄り駅を判断できません。");
+    }
+    const preferences = dependencies.getJourneySearchPreferences?.() ??
+      defaultJourneySearchPreferences;
+    const originStation = dependencies.getUserProfile?.()?.home.station;
+    const outboundTime = boundedInteger(input.outboundTimeMinutes, 0, 1_800) ??
+      8 * 60;
+    const returnTime = boundedInteger(input.returnTimeMinutes, 0, 1_800) ??
+      17 * 60;
+    const outboundResult = await dependencies.searchDirectRoutes({
+      ...(originStation ? { originStation } : {}),
+      destinationStation,
+      departureTimeMinutes: outboundTime,
+      departureDate: date,
+      serviceDate: date,
+      ...preferences,
+    });
+    const outbound = journeyPlanFromSearchResponse(outboundResult, {
+      destinationStation,
+      departureDate: date,
+      searchTimeMinutes: outboundTime,
+      preferences,
+    });
+    const returningResult = await dependencies.searchDirectRoutes({
+      originStation: destinationStation,
+      destinationStation: outbound.originStation,
+      departureTimeMinutes: returnTime,
+      departureDate: date,
+      serviceDate: date,
+      ...preferences,
+    });
+    travelState.response = {
+      destination,
+      dayTrip: true,
+      checkInDate: date,
+      checkOutDate: date,
+      outbound,
+      returning: journeyPlanFromSearchResponse(returningResult, {
+        originStation: destinationStation,
+        destinationStation: outbound.originStation,
+        departureDate: date,
+        searchTimeMinutes: returnTime,
+        preferences,
+      }),
+      accommodations: [],
+    };
+    return { planned: true, destination, date };
+  }
+
+  if (name === "search_trip_route_update") {
+    const current = dependencies.getTripPlan?.();
+    const target = input.target === "outbound" || input.target === "return"
+      ? input.target
+      : undefined;
+    const movement = current?.items.find((item) =>
+      item.id === target && item.type === "movement" && item.mode === "rail");
+    if (!current || !target || !movement || movement.type !== "movement" ||
+      movement.mode !== "rail" || !dependencies.searchDirectRoutes) {
+      throw new Error("変更する鉄道移動を特定できません。");
+    }
+    const route = movement.route;
+    const departureDate = route.departureDate;
+    if (!departureDate) throw new Error("変更する鉄道移動の日付がありません。");
+    const preferences = dependencies.getJourneySearchPreferences?.() ??
+      defaultJourneySearchPreferences;
+    const currentDeparture = route.journeys[0]?.departureTimeMinutes ??
+      route.searchTimeMinutes ?? 8 * 60;
+    const departureTime = boundedInteger(input.departureTimeMinutes, 0, 1_800) ??
+      currentDeparture;
+    const stopover = typeof input.stopoverStation === "string" &&
+      input.stopoverStation.trim() ? input.stopoverStation.trim() : undefined;
+    const firstDestination = stopover ?? route.destinationStation;
+    const firstResult = await dependencies.searchDirectRoutes({
+      originStation: route.originStation,
+      destinationStation: firstDestination,
+      departureTimeMinutes: departureTime,
+      departureDate,
+      serviceDate: departureDate,
+      ...preferences,
+    });
+    const firstPlan = journeyPlanFromSearchResponse(firstResult, {
+      originStation: route.originStation,
+      destinationStation: firstDestination,
+      departureDate,
+      searchTimeMinutes: departureTime,
+      preferences,
+    });
+    const patches: TripPlanPatch[] = [{
+      type: "replace",
+      itemId: target,
+      item: { id: target, type: "movement", mode: "rail", route: firstPlan },
+    }];
+    if (stopover) {
+      const stopoverDeparture = (firstPlan.journeys[0]?.arrivalTimeMinutes ??
+        departureTime) + 30;
+      const secondResult = await dependencies.searchDirectRoutes({
+        originStation: stopover,
+        destinationStation: route.destinationStation,
+        departureTimeMinutes: stopoverDeparture,
+        departureDate,
+        serviceDate: departureDate,
+        ...preferences,
+      });
+      patches.push({
+        type: "add",
+        item: {
+          id: `${target}-after-stopover-${crypto.randomUUID()}`,
+          type: "movement",
+          mode: "rail",
+          route: journeyPlanFromSearchResponse(secondResult, {
+            originStation: stopover,
+            destinationStation: route.destinationStation,
+            departureDate,
+            searchTimeMinutes: stopoverDeparture,
+            preferences,
+          }),
+        },
+        afterId: target,
+      });
+    }
+    const summary = stopover
+      ? `${target === "return" ? "帰り" : "行き"}に${stopover}への立寄りを追加`
+      : `${target === "return" ? "帰り" : "行き"}の出発を${formatJapaneseRouteClockTime(departureTime)}以降へ変更`;
+    tripPlanUpdateState.proposal = { summary, patches };
+    return { proposed: true, summary };
+  }
+
   if (name === "search_representative_timetable") {
     const { timetableKind, query, mode, targetTimeMinutes } = input;
     if (
@@ -1224,6 +1398,21 @@ function travelResponseText(
   const plan = state.response;
   if (!plan) return undefined;
   const advisory = travelBurdenAdvisory(plan, profile);
+  if (plan.dayTrip) {
+    if (currentPlan) {
+      return {
+        text: `${formatCalendarDate(plan.checkInDate)}の${plan.destination}日帰り旅行へ組み直しました。${advisory}変更内容を確認してください。`,
+        tripPlanUpdate: {
+          summary: `${formatCalendarDate(plan.checkInDate)}の${plan.destination}日帰り旅行へ変更`,
+          patches: tripPlanPatchesFromTravelPlan(plan),
+        },
+      };
+    }
+    return {
+      text: `${formatCalendarDate(plan.checkInDate)}の${plan.destination}日帰り旅行です。${advisory}行きと帰りの経路をまとめました。`,
+      travelPlan: plan,
+    };
+  }
   if (currentPlan) {
     return {
       text: `${formatCalendarDate(plan.checkInDate)}から${formatCalendarDate(plan.checkOutDate)}へ日程と経路を組み直しました。${advisory}変更内容を確認してください。`,
@@ -1410,7 +1599,8 @@ function tripContextFromToolInput(value: unknown): TripContext {
 
 function isStayTravelRequest(prompt: string): boolean {
   const normalized = prompt.normalize("NFKC").replace(/\s+/gu, "");
-  return /(?:旅行|観光|\d+泊|泊まり|宿泊)/u.test(normalized);
+  return !normalized.includes("日帰り") &&
+    /(?:\d+泊|泊まり|宿泊|ホテル|旅館)/u.test(normalized);
 }
 
 function stationForTravelDestination(

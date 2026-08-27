@@ -8,5 +8,6 @@ describe("agentSystemPrompt", () => {
     expect(agentSystemPrompt).toContain("観光の相談 人数やペースの変更 経路の部分変更ではsearch_accommodationsを使わない");
     expect(agentSystemPrompt).toContain("プロフィールと現在の旅程にある条件を聞き直さず");
     expect(agentSystemPrompt).toContain("propose_trip_updateで確認可能な変更案");
+    expect(agentSystemPrompt).toContain("日帰りが明示された旅行はplan_day_trip");
   });
 });

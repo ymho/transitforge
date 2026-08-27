@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Train } from "@raiquora/train/train";
 import type { TrainPosition } from "../../domain/train-position";
 import type { UserProfile } from "@raiquora/trip/travel-profile";
+import type { TripPlan } from "@raiquora/trip/trip-plan";
 import type {
   ViewerAgentResponse,
   ViewerAgentRichResponse,
@@ -1461,6 +1462,59 @@ describe("Bedrock viewer agent", () => {
     }));
   });
 
+  it("builds a day trip without searching accommodations", async () => {
+    const searchDirectRoutes = vi.fn()
+      .mockResolvedValueOnce({ originStation: "京都", results: [] })
+      .mockResolvedValueOnce({ originStation: "宮島口", results: [] });
+    const searchAccommodations = vi.fn();
+    const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
+      expect(tools?.find(({ name }) => name === "plan_day_trip")?.inputSchema)
+        .toMatchObject({ required: ["destination", "date"] });
+      return {
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "day-trip", name: "plan_day_trip", input: {
+            destination: "宮島", date: "2026-08-28",
+          },
+        } }] },
+        stopReason: "tool_use",
+      };
+    });
+
+    const result = await runViewerAgentRuntime(
+      "8月28日に宮島へ日帰りで行きたい",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
+        searchAccommodations,
+        getUserProfile: () => ({
+          home: { station: "京都", carAvailable: false },
+          travelStyle: { transferTolerance: 0.5 },
+          transport: { maxTypicalTravelMinutes: null },
+        } as unknown as UserProfile),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(searchAccommodations).not.toHaveBeenCalled();
+    expect(searchDirectRoutes).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      originStation: "京都", destinationStation: "宮島口",
+      departureDate: "2026-08-28",
+    }));
+    expect(searchDirectRoutes).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      originStation: "宮島口", destinationStation: "京都",
+      departureDate: "2026-08-28",
+    }));
+    if (typeof result === "string" || !("travelPlan" in result)) {
+      throw new Error("日帰り旅程がありません。");
+    }
+    expect(result.travelPlan.dayTrip).toBe(true);
+    expect(result.travelPlan.accommodations).toEqual([]);
+    expect(result.text).toContain("日帰り旅行");
+  });
+
   it("passes a bounded accommodation contract to the conversation model", async () => {
     const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
       const accommodation = tools?.find(({ name }) => name === "search_accommodations");
@@ -1642,6 +1696,85 @@ describe("Bedrock viewer agent", () => {
     vi.unstubAllGlobals();
   });
 
+  it("re-searches only the return route at a later departure time", async () => {
+    const searchDirectRoutes = vi.fn(async () => ({
+      originStation: "倉敷", results: [],
+    }));
+    const converse = vi.fn<BedrockAgentConverse>(async () => ({
+      message: { role: "assistant", content: [{ toolUse: {
+        toolUseId: "return-later", name: "search_trip_route_update", input: {
+          target: "return", departureTimeMinutes: 18 * 60,
+        },
+      } }] },
+      stopReason: "tool_use",
+    }));
+    const result = await runViewerAgentRuntime(
+      "倉敷から摂津富田までの帰りを18時まで後ろ倒しにしたい",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
+        getTripPlan: () => tripPlanWithRailReturn(),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+    expect(searchDirectRoutes).toHaveBeenCalledWith(expect.objectContaining({
+      originStation: "倉敷", destinationStation: "摂津富田",
+      departureTimeMinutes: 18 * 60,
+    }));
+    if (typeof result === "string" || !("tripPlanUpdate" in result)) {
+      throw new Error("帰路変更案がありません。");
+    }
+    expect(result.tripPlanUpdate.patches).toHaveLength(1);
+    expect(result.tripPlanUpdate.summary).toContain("帰りの出発");
+  });
+
+  it("splits a rail movement around a requested stopover", async () => {
+    vi.stubGlobal("crypto", { randomUUID: () => "stopover" });
+    const searchDirectRoutes = vi.fn()
+      .mockResolvedValueOnce({
+        originStation: "倉敷", results: [{
+          train, originStation: "倉敷", destinationStation: "岡山",
+          departureTimeMinutes: 600, arrivalTimeMinutes: 620,
+        }],
+      })
+      .mockResolvedValueOnce({ originStation: "岡山", results: [] });
+    const converse = vi.fn<BedrockAgentConverse>(async () => ({
+      message: { role: "assistant", content: [{ toolUse: {
+        toolUseId: "stopover", name: "search_trip_route_update", input: {
+          target: "return", stopoverStation: "岡山",
+        },
+      } }] },
+      stopReason: "tool_use",
+    }));
+    const result = await runViewerAgentRuntime(
+      "帰りの途中で岡山に寄りたい",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
+        getTripPlan: () => tripPlanWithRailReturn(),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+    expect(searchDirectRoutes).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      originStation: "倉敷", destinationStation: "岡山",
+    }));
+    expect(searchDirectRoutes).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      originStation: "岡山", destinationStation: "摂津富田",
+    }));
+    if (typeof result === "string" || !("tripPlanUpdate" in result)) {
+      throw new Error("立寄り変更案がありません。");
+    }
+    expect(result.tripPlanUpdate.patches).toHaveLength(2);
+    expect(result.tripPlanUpdate.summary).toContain("岡山への立寄り");
+    vi.unstubAllGlobals();
+  });
+
   it("persists high-confidence memory and session summary before answering", async () => {
     const remember = vi.fn();
     const update = vi.fn();
@@ -1682,4 +1815,32 @@ function requireRichResponse(result: ViewerAgentResponse): ViewerAgentRichRespon
     throw new Error(`Expected a rich response but received: ${result}`);
   }
   return result;
+}
+
+function tripPlanWithRailReturn(): TripPlan {
+  return {
+    version: 1,
+    id: "trip",
+    title: "倉敷を巡る旅",
+    destination: "倉敷",
+    updatedAt: "2026-08-25T00:00:00Z",
+    items: [{
+      id: "return",
+      type: "movement",
+      mode: "rail",
+      route: {
+        departureDate: "2026-08-30",
+        serviceDate: "2026-08-30",
+        originStation: "倉敷",
+        destinationStation: "摂津富田",
+        searchTimeMinutes: 600,
+        journeys: [{
+          departureTimeMinutes: 600,
+          arrivalTimeMinutes: 750,
+          transferCount: 1,
+          legs: [],
+        }],
+      },
+    }],
+  };
 }
