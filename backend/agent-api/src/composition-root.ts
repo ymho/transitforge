@@ -1,4 +1,7 @@
 import { HttpAccommodationProvider } from "./adapters/http-accommodation-provider.js";
+import { OpenMeteoWeatherProvider } from "./adapters/open-meteo-weather-provider.js";
+import { WikipediaPlaceMediaProvider } from "./adapters/wikipedia-place-media-provider.js";
+import { AmadeusFlightProvider } from "./adapters/amadeus-flight-provider.js";
 import { AwsBedrockConverseClient, AwsDynamoDbQueryClient, AwsS3Client, AwsSecretsManagerClient } from "./adapters/aws-sdk-clients.js";
 import { BedrockConversationModel } from "./adapters/bedrock-conversation-model.js";
 import { DynamoDbOperationSummaryRepository } from "./adapters/dynamodb-operation-summary.js";
@@ -6,6 +9,7 @@ import { S3JourneyDataRepository } from "./adapters/s3-journey-data.js";
 import { S3PrivateObjectStorage } from "./adapters/s3-private-object-storage.js";
 import { S3RepresentativeTimetableRepository } from "./adapters/s3-representative-timetable.js";
 import { SecretsManagerTravelProviderCredentials } from "./adapters/secrets-manager-travel-provider-credentials.js";
+import { SecretsManagerFlightProviderCredentials } from "./adapters/secrets-manager-flight-provider-credentials.js";
 import { createAccommodationSearchOperation } from "./usecases/accommodation-search.js";
 import { AgentApplication } from "./usecases/agent-application.js";
 import { agentSystemPrompt } from "./usecases/agent-system-prompt.js";
@@ -15,6 +19,9 @@ import { createConversationFeedbackOperation } from "./usecases/conversation-fee
 import { createJourneySearchOperation } from "./usecases/journey-search.js";
 import { createCongestionAnalysisOperation, createCongestionPeakOperation, createDelayAnalysisOperation } from "./usecases/operation-analysis.js";
 import { createRepresentativeTimetableOperation } from "./usecases/representative-timetable.js";
+import { createWeatherForecastOperation } from "./usecases/weather-forecast.js";
+import { createPlaceMediaSearchOperation } from "./usecases/place-media-search.js";
+import { createFlightSearchOperation } from "./usecases/flight-search.js";
 
 export type RuntimeEnvironment = Readonly<Record<string, string | undefined>>;
 
@@ -32,8 +39,14 @@ export function createAgentApplication(environment: RuntimeEnvironment = process
     snapshotKey: environment.TRAFFIC_SNAPSHOT_KEY ?? "api/traffic/delays.json",
   });
   const representativeTimetable = new S3RepresentativeTimetableRepository(s3, timetableBucket, timetablePrefix);
-  const credentials = new SecretsManagerTravelProviderCredentials(new AwsSecretsManagerClient(), required(environment, "TRAVEL_PROVIDER_SECRET_ARN"));
-  const accommodation = new HttpAccommodationProvider({ fetch: globalThis.fetch }, credentials);
+  const secrets = new AwsSecretsManagerClient();
+  const secretArn = required(environment, "TRAVEL_PROVIDER_SECRET_ARN");
+  const accommodationCredentials = new SecretsManagerTravelProviderCredentials(secrets, secretArn);
+  const flightCredentials = new SecretsManagerFlightProviderCredentials(secrets, secretArn);
+  const accommodation = new HttpAccommodationProvider({ fetch: globalThis.fetch }, accommodationCredentials);
+  const weather = new OpenMeteoWeatherProvider({ fetch: globalThis.fetch });
+  const places = new WikipediaPlaceMediaProvider({ fetch: globalThis.fetch });
+  const flights = new AmadeusFlightProvider({ fetch: globalThis.fetch }, flightCredentials);
   const model = new BedrockConversationModel(new AwsBedrockConverseClient(), {
     modelId: environment.MODEL_ID ?? "amazon.nova-lite-v1:0",
     systemPrompt: agentSystemPrompt,
@@ -47,6 +60,9 @@ export function createAgentApplication(environment: RuntimeEnvironment = process
     ["daily_congestion_peak", createCongestionPeakOperation(summary, required(environment, "SUMMARY_TABLE"))],
     ["train_delay_analysis", createDelayAnalysisOperation(summary, required(environment, "DELAY_SUMMARY_TABLE"))],
     ["travel_accommodation_search", createAccommodationSearchOperation(accommodation)],
+    ["weather_forecast_search", createWeatherForecastOperation(weather)],
+    ["place_media_search", createPlaceMediaSearchOperation(places)],
+    ["flight_search", createFlightSearchOperation(flights)],
   ]);
   return new AgentApplication({ defaultOperation: createBedrockConverseOperation(model, log), operations, log });
 }

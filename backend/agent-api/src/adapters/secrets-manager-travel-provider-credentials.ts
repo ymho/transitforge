@@ -27,10 +27,10 @@ function required(value: unknown, name: string): string {
   if (typeof value !== "string" || !value.trim()) throw new Error(`旅行提供者の${name}が必要です。`);
   return value.trim();
 }
-function assertHttpsUrl(value: string): void {
+function assertHttpsUrl(value: string, name = "hotel_search_url"): void {
   try {
     const url = new URL(value);
     if (url.protocol !== "https:" || url.username || url.password) throw new Error();
-  } catch { throw new Error("旅行提供者のhotel_search_urlはHTTPS URLにしてください。"); }
+  } catch { throw new Error(`旅行提供者の${name}はHTTPS URLにしてください。`); }
 }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }

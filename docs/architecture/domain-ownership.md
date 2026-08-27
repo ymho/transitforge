@@ -19,7 +19,7 @@ LLMは曖昧な要求の理解とToolの選択を担い 鉄道と旅行の計算
 | 表示日時 業務時刻 列車フォーカス | `frontend/src/domain`と`frontend/src/usecases/viewer` | PresentationがUsecase Portを利用 | TypeScriptの隣接テスト |
 | 経路条件 候補 比較 直通検索 CSA 乗換判定 順位付け | `modules/journey/domain` | Node Agent APIが日付別indexをAdapterから渡す | shared moduleとjourney search scenario |
 | 遅延予測 遅延と混雑の履歴分析 | `modules/journey/domain`と`modules/operation/domain` | Agent Toolは計算済みの応答を変更せず利用 | shared module test Agent Eval |
-| 旅行候補 既知価格の費用集計 Profile TripContext 旅程 | `modules/trip/domain` | Browser保存と外部Providerを境界の外へ分離 | shared module LocalStorage migration provider contractのテスト |
+| 旅行候補 既知価格の費用集計 Profile TripContext 旅程 外部旅行情報のEvidenceと鮮度 天気 航空 Place 再確認 | `modules/trip/domain` | Browser保存と外部Providerを境界の外へ分離 | shared module LocalStorage migration provider contractのテスト |
 | Agent Tool Evidence Trace Policy | `frontend/src/usecases/agent` | Provider AdapterとViewer UsecaseがPortを実装 | TypeScript unit testとAgent Eval |
 | HTTP Bedrock AWS 外部提供者の形式 | `frontend/src/adapters`と`backend/agent-api/src/adapters` | Domainへ変換してからUsecaseへ渡す | Adapter contract testとLambda package check |
 | 会話Session 履歴と端末内保存 | `frontend/src/domain`とUsecase Repository | ConciergeとTrip PlanのPresentationが利用 | TypeScript unit testとLocalStorage migration test |
@@ -54,5 +54,9 @@ UI向けの経路 旅行 会話型への変換は鉄道探索を再実装せず 
 
 Agent APIは外部APIとLambda entrypointを維持したまま Domain Application Adapterへ分ける
 ファイル移動だけで責務が変わったことにせず 依存方向とテストで所有権を確認する
+
+外部旅行Toolの名前 Schema 入力検証 状態収集 Evidence変換は`frontend/src/usecases/agent/external-travel-tools.ts`を正本とする。
+Bedrock AdapterはToolを再定義せず 共通Registryへ登録する。Provider固有payloadの取得と正規化は
+`backend/agent-api/src/adapters`が所有し 認証情報はProviderごとのPortからだけ参照する。
 
 判断の背景は[ADR 0036](../decisions/0036-own-domain-logic-by-execution-boundary.md)を参照する

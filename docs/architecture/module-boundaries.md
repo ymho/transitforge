@@ -50,6 +50,14 @@ Infrastructureの確認と障害調査は`infra/README.md`を正本とする
 Agentは推論とToolのオーケストレーションを担当し 鉄道の計算はDomain Serviceへ委譲する
 正本と重複のルールは[Domainの所有権](domain-ownership.md)を参照する
 
+外部旅行情報も同じ依存方向を使う。`usecases/agent/external-travel-tools.ts`がProvider非依存の
+Tool契約 入力検証 実行結果の収集 Evidence変換を所有し `adapters/bedrock`はモデル形式との変換だけを行う。
+天気 観光 航空のカード表示は`presentation/concierge/external-travel-cards.ts`へ閉じ
+チャット本体は外部Providerの応答構造を解釈しない。
+
+Backendでは宿泊 航空 天気 Placeを別々のPortとAdapterとして組成する。同じSecrets Manager JSONを
+互換性のため共有する場合も 宿泊と航空のCredentials Repositoryは分け 一方の必須項目を他方へ要求しない。
+
 ## 契約の所有者
 
 - `Train` `TrainStop` `Journey` `Operation`はDomainが所有する
@@ -76,6 +84,7 @@ style再読込時は前回の定期更新を破棄してから新しい購読を
 Viewer UIは`presentation`の機能別ディレクトリに置く
 
 - `presentation/concierge`: 会話 プロフィール Landmark操作
+- `presentation/concierge/external-travel-cards.ts`: 天気 Place 航空のEvidence付き表示
 - `presentation/trip-plan`: 旅程表示と編集提案
 - `presentation/train-viewer`: 列車選択 詳細 時刻表 Three.js描画
 - `presentation/shared`: Sheet遷移やLoading Screenなど複数画面で共有する小さなUI
