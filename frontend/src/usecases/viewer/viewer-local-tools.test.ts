@@ -48,6 +48,8 @@ describe("viewer agent local tools", () => {
     expect(routeTimeFromPrompt("0時30分にして")).toBe(1_470);
     expect(routeTimeFromPrompt("03:59にして")).toBe(1_679);
     expect(routeTimeFromPrompt("4時にして")).toBe(240);
+    expect(routeTimeFromPrompt("明日の朝出発")).toBe(480);
+    expect(routeTimeFromPrompt("夕方に出たい")).toBe(1_020);
     expect(routeTimeFromPrompt("18時99分")).toBeUndefined();
   });
 

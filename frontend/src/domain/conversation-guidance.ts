@@ -18,6 +18,7 @@ export interface ConversationQuickReply {
 }
 
 export interface ConversationGuidance {
+  recommendation?: string;
   reason?: string;
   question: string;
   expectedInput: ConversationExpectedInput;
@@ -35,6 +36,9 @@ export function normalizedConversationGuidance(
 ): ConversationGuidance {
   return {
     ...guidance,
+    ...(guidance.recommendation?.trim()
+      ? { recommendation: guidance.recommendation.trim() }
+      : { recommendation: undefined }),
     ...(guidance.reason?.trim() ? { reason: guidance.reason.trim() } : { reason: undefined }),
     question: guidance.question.trim(),
     quickReplies: guidance.quickReplies

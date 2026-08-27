@@ -1473,6 +1473,19 @@ describe("Bedrock viewer agent", () => {
         .toBe(true);
       expect(tools?.find(({ name }) => name === "plan_day_trip")?.inputSchema)
         .toMatchObject({ required: ["destination", "date"] });
+      expect(tools?.find(({ name }) => name === "search_direct_routes")?.inputSchema)
+        .toMatchObject({
+          required: ["destinationStation"],
+          additionalProperties: false,
+          properties: {
+            originStation: { type: "string" },
+            destinationStation: { type: "string" },
+            departureDate: { type: "string" },
+            departureTimeMinutes: { type: "integer" },
+          },
+        });
+      expect(tools?.find(({ name }) => name === "ask_follow_up")?.inputSchema)
+        .toMatchObject({ properties: { recommendation: { type: "string" } } });
       return {
         message: { role: "assistant", content: [{ toolUse: {
           toolUseId: "day-trip", name: "plan_day_trip", input: {
@@ -1684,10 +1697,80 @@ describe("Bedrock viewer agent", () => {
     }));
   });
 
+  it("resolves a landmark and qualitative time without requiring model minute arithmetic", async () => {
+    const searchDirectRoutes = vi.fn(async () => ({
+      originStation: "向日町",
+      results: [],
+    }));
+    const converse = vi.fn()
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "route",
+          name: "search_direct_routes",
+          input: {
+            originStation: "向日町",
+            destinationStation: "出雲大社",
+            departureDate: "2026-08-28",
+          },
+        } }] },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ text: "明日の朝に向日町から出雲市へ向かう経路を確認しました。" }] },
+        stopReason: "end_turn",
+      });
+
+    await runViewerAgentRuntime(
+      [
+        "旅行相談の会話を継続しています。",
+        '現在の旅行条件: {"destinationWish":"出雲大社","startDate":"2026-08-28"}',
+        "直前の質問: いつ出発しますか？",
+        "利用者の今回の回答: 明日の朝出発",
+      ].join("\n"),
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        getCurrentDate: () => new Date("2026-08-27T14:00:00+09:00"),
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
+        getUserProfile: () => ({
+          version: 2,
+          home: { station: "向日町", carAvailable: false },
+          companions: { usual: [], children: [] },
+          travelStyle: {
+            pace: 0.5, novelty: 0.5,
+            crowdTolerance: 0.5, walkingTolerance: 0.5,
+            transferTolerance: 0.5, earlyMorningTolerance: 0.5,
+            lateNightTolerance: 0.5,
+            drivingTolerance: 0.5, busTolerance: 0.5,
+          },
+          preferences: {
+            sea: 0.3, mountain: 0.3, nature: 0.8, onsen: 0.3,
+            food: 0.7, railway: 0.3, history: 0.8, cityWalk: 0.3,
+            animals: 0.3, art: 0.3, themePark: 0.3, shopping: 0.3,
+          },
+          transport: { maxTypicalTravelMinutes: null },
+          updatedAt: "2026-08-27T00:00:00.000Z",
+        }),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(searchDirectRoutes).toHaveBeenCalledWith(expect.objectContaining({
+      originStation: "向日町",
+      destinationStation: "出雲市",
+      departureTimeMinutes: 480,
+      departureDate: "2026-08-28",
+      serviceDate: "2026-08-28",
+    }));
+  });
+
   it("returns a structured follow-up question without a presentation-specific branch", async () => {
     const converse = vi.fn().mockResolvedValue({
       message: { role: "assistant", content: [{ toolUse: {
         toolUseId: "follow-up", name: "ask_follow_up", input: {
+          recommendation: "大阪方面からなら1泊にして、出雲大社と稲佐の浜をゆっくり巡るのがおすすめです。",
           reason: "出発日が分かると実際のダイヤと宿泊日を揃えて比較できます。日程未定なら混雑を避けやすい候補日から考えられます。",
           question: "いつ出発しますか？",
           expectedInput: "departure-date",
@@ -1717,11 +1800,13 @@ describe("Bedrock viewer agent", () => {
       throw new Error("会話ガイダンスがありません。");
     }
     expect(result.conversation).toMatchObject({
+      recommendation: expect.stringContaining("稲佐の浜"),
       reason: expect.stringContaining("実際のダイヤ"),
       expectedInput: "departure-date",
       tripContext: { destinationWish: "出雲大社" },
     });
     expect(result.text).toContain("日程未定なら");
+    expect(result.text).toContain("1泊にして");
   });
 
   it("returns a confirmable proposal for a rental-car movement", async () => {

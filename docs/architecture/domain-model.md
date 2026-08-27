@@ -326,7 +326,8 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 - 定義: `frontend/src/domain/conversation-guidance.ts`
 - 生成元: Bedrockの`ask_follow_up`ツール
 
-`ConversationGuidance`は次の質問 質問の種類 クイックリプライ `TripContext`を持つ。
+`ConversationGuidance`は条件不足でも先に示せる仮の推奨 次の質問 質問の種類 クイックリプライ
+`TripContext`を持つ。
 UIはこの契約を共通入力として描画するだけで 会話パターンごとの日付入力や宿泊数入力を持たない。
 `ConversationSubmission`は利用者の回答と直前のガイダンスを結び 次のAI呼び出しへ渡す。
 

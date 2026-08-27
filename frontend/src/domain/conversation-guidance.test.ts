@@ -7,6 +7,7 @@ import {
 describe("conversation guidance", () => {
   it("limits and normalizes quick replies for the presentation layer", () => {
     const result = normalizedConversationGuidance({
+      recommendation: " まずは1泊で考えるのがおすすめです。 ",
       question: " 何泊しますか？ ",
       expectedInput: "stay-length",
       quickReplies: [
@@ -21,6 +22,7 @@ describe("conversation guidance", () => {
     });
 
     expect(result.question).toBe("何泊しますか？");
+    expect(result.recommendation).toBe("まずは1泊で考えるのがおすすめです。");
     expect(result.quickReplies).toHaveLength(5);
     expect(result.quickReplies[0]).toEqual({ label: "日帰り", value: "日帰り" });
   });

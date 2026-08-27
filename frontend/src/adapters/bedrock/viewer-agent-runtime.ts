@@ -435,7 +435,7 @@ function viewerToolDescription(name: typeof viewerToolNames[number]): string {
     set_display_time: "Viewerの計画ダイヤ表示時刻を変更します",
     search_trains: "現在表示中の列車を決定論的に検索します",
     search_train_arrivals: "指定駅へ指定時刻ごろ到着する列車を検索します",
-    search_direct_routes: "自前の時刻表と運行情報で乗換を含む経路を検索します",
+    search_direct_routes: "自前の時刻表と運行情報で駅間の乗換を含む経路を検索します。観光地はそのアクセス駅を指定します",
     focus_train: "同じタスクで検索済みの列車へViewerを移動します",
     query_daily_congestion_analysis: "指定業務日付の観測済み混雑を分析します",
     query_train_delay_analysis: "指定業務日付の観測済み遅延を分析します",
@@ -513,10 +513,42 @@ function viewerToolInputSchema(
       additionalProperties: false,
     };
   }
+  if (name === "search_direct_routes") {
+    return {
+      type: "object",
+      properties: {
+        originStation: {
+          type: "string",
+          description: "出発駅。省略時はプロフィールまたは端末の現在地から解決する",
+        },
+        destinationStation: {
+          type: "string",
+          description: "到着駅。観光地の場合は鉄道で到達するためのアクセス駅",
+        },
+        departureDate: {
+          type: "string",
+          description: "利用者が指定した出発日。YYYY-MM-DD形式",
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+        },
+        departureTimeMinutes: {
+          type: "integer",
+          minimum: 0,
+          maximum: 1_800,
+          description: "出発時刻。0時からの分数。未指定なら利用者の表現またはViewer時刻から決定する",
+        },
+      },
+      required: ["destinationStation"],
+      additionalProperties: false,
+    };
+  }
   if (name === "ask_follow_up") {
     return {
       type: "object",
       properties: {
+        recommendation: {
+          type: "string",
+          description: "条件が不足していても先に示せる仮の旅行案。目的地相談ではプロフィールを踏まえた方向性を短く提案する",
+        },
         reason: {
           type: "string",
           description: "この確認が必要な理由。経路や旅程の既知事実に基づき 利点と負担を短く説明する",
@@ -960,7 +992,6 @@ async function executeViewerToolAdapter(
   }
 
   if (name === "search_direct_routes") {
-    const { departureTimeMinutes } = input;
     const promptRequest = directRouteRequestFromPrompt(
       originalPrompt,
       dependencies.trains,
@@ -971,18 +1002,23 @@ async function executeViewerToolAdapter(
       );
     }
     const originStation = promptRequest?.originStation ??
-      explicitOriginStationFromPrompt(originalPrompt, input.originStation);
-    const destinationStation =
+      explicitOriginStationFromPrompt(originalPrompt, input.originStation) ??
+      dependencies.getUserProfile?.()?.home.station;
+    const requestedDestination =
       promptRequest?.destinationStation ?? input.destinationStation;
+    const destinationStation = typeof requestedDestination === "string"
+      ? travelDestinationAccess(requestedDestination)?.accessStation ??
+        requestedDestination
+      : requestedDestination;
     if (
       typeof destinationStation !== "string" ||
       destinationStation.trim().length === 0 ||
-      typeof departureTimeMinutes !== "number" ||
-      !Number.isFinite(departureTimeMinutes) ||
       !dependencies.searchDirectRoutes
     ) {
       throw new Error("経路の検索条件が不正です。");
     }
+    // The browser clock and the user's words are authoritative. A model-provided
+    // minute value is intentionally not used for arithmetic or the current time.
     const promptDepartureTime = routeTimeFromPrompt(originalPrompt);
     const resolvedDepartureTime = directRouteDepartureTime(
       promptDepartureTime,
@@ -1616,9 +1652,13 @@ function conversationResponseText(
 ): ViewerAgentResponse | undefined {
   if (!state.response) return undefined;
   return {
-    text: state.response.reason
-      ? `${state.response.reason}\n\n${state.response.question}`
-      : state.response.question,
+    text: [
+      state.response.recommendation,
+      state.response.reason,
+      state.response.question,
+    ].filter((value, index, values): value is string =>
+      Boolean(value) && values.indexOf(value) === index
+    ).join("\n\n"),
     conversation: state.response,
   };
 }
@@ -1642,6 +1682,9 @@ function conversationGuidanceFromToolInput(
     })
     : [];
   return normalizedConversationGuidance({
+    ...(typeof input.recommendation === "string" && input.recommendation.trim()
+      ? { recommendation: input.recommendation.trim().slice(0, 800) }
+      : {}),
     ...(typeof input.reason === "string" && input.reason.trim()
       ? { reason: input.reason.trim().slice(0, 240) }
       : {}),
