@@ -27,7 +27,12 @@ describe("BedrockConversationModel", () => {
       tools: [{
         name: "search_journeys",
         description: "時刻表から経路を検索する",
-        inputSchema: { type: "object", properties: { originStation: { type: "string" } } },
+        inputSchema: {
+          type: "object",
+          properties: { originStation: { type: "string" } },
+          required: ["originStation"],
+          additionalProperties: false,
+        },
       }],
     });
 
@@ -38,7 +43,11 @@ describe("BedrockConversationModel", () => {
       toolConfig: { tools: [{ toolSpec: {
         name: "search_journeys",
         description: "時刻表から経路を検索する",
-        inputSchema: { json: { type: "object", properties: { originStation: { type: "string" } } } },
+        inputSchema: { json: {
+          type: "object",
+          properties: { originStation: { type: "string" } },
+          required: ["originStation"],
+        } },
       } }] },
       inferenceConfig: { maxTokens: 500, temperature: 0 },
     });
