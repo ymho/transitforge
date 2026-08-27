@@ -10,6 +10,7 @@ import type {
 import {
   currentServiceDateInJapan,
   runViewerAgentRuntime,
+  type BedrockAgentConverse,
 } from "./viewer-agent-runtime";
 
 const train: Train = {
@@ -1458,6 +1459,47 @@ describe("Bedrock viewer agent", () => {
     expect(searchDirectRoutes).toHaveBeenNthCalledWith(2, expect.objectContaining({
       originStation: "出雲市", destinationStation: "京都", departureDate: "2026-08-18",
     }));
+  });
+
+  it("passes a bounded accommodation contract to the conversation model", async () => {
+    const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
+      const accommodation = tools?.find(({ name }) => name === "search_accommodations");
+      expect(accommodation?.inputSchema).toMatchObject({
+        required: ["destination", "checkInDate", "checkOutDate"],
+        additionalProperties: false,
+        properties: {
+          destination: { type: "string" },
+          checkInDate: { type: "string" },
+          checkOutDate: { type: "string" },
+          adults: { type: "integer", minimum: 1, maximum: 10 },
+          limit: { type: "integer", minimum: 1, maximum: 5 },
+        },
+      });
+      return {
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "stay", name: "search_accommodations", input: {
+            destination: "宮島", checkInDate: "2026-08-28",
+            checkOutDate: "2026-08-29",
+          },
+        } }] },
+        stopReason: "tool_use",
+      };
+    });
+
+    await runViewerAgentRuntime(
+      "明日から宮島へ1泊したい",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(),
+        searchAccommodations: vi.fn(async () => ({ accommodations: [] })),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(converse).toHaveBeenCalled();
   });
 
   it("uses an access station and accommodation area for a landmark stay", async () => {

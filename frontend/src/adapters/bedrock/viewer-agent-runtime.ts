@@ -77,6 +77,7 @@ import {
   successfulAgentToolResult,
   validAgentToolInput,
   type AgentTool,
+  type AgentToolInputSchema,
 } from "../../usecases/agent/tool-contract";
 import type {
   AgentModelContent,
@@ -158,6 +159,7 @@ export interface ViewerAgentRuntimeDependencies {
 
 export type BedrockAgentConverse = (
   messages: BedrockAgentMessage[],
+  tools?: import("../../usecases/agent/tool-contract").AgentToolDescriptor[],
 ) => Promise<BedrockAgentResponse>;
 
 interface DirectRouteToolMatch {
@@ -354,7 +356,7 @@ function viewerTool(
   return {
     name,
     description: viewerToolDescription(name),
-    inputSchema: { type: "object", properties: {}, additionalProperties: true },
+    inputSchema: viewerToolInputSchema(name),
     parseInput(value) {
       return isRecord(value)
         ? validAgentToolInput(value)
@@ -406,6 +408,99 @@ function viewerToolDescription(name: typeof viewerToolNames[number]): string {
     set_layer_visibility: "Viewerの混雑またはアーチ表示を変更します",
   };
   return descriptions[name];
+}
+
+function viewerToolInputSchema(
+  name: typeof viewerToolNames[number],
+): AgentToolInputSchema {
+  if (name === "search_accommodations") {
+    return {
+      type: "object",
+      properties: {
+        destination: {
+          type: "string",
+          description: "宿泊する地域または観光地。現在の旅程を変更する場合も省略しない",
+        },
+        checkInDate: {
+          type: "string",
+          description: "チェックイン日。YYYY-MM-DD形式",
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+        },
+        checkOutDate: {
+          type: "string",
+          description: "チェックアウト日。YYYY-MM-DD形式でcheckInDateより後",
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+        },
+        adults: { type: "integer", minimum: 1, maximum: 10 },
+        children: { type: "integer", minimum: 0, maximum: 10 },
+        considerations: {
+          type: "array",
+          maxItems: 8,
+          items: { type: "string" },
+        },
+        limit: { type: "integer", minimum: 1, maximum: 5 },
+      },
+      required: ["destination", "checkInDate", "checkOutDate"],
+      additionalProperties: false,
+    };
+  }
+  if (name === "ask_follow_up") {
+    return {
+      type: "object",
+      properties: {
+        question: { type: "string" },
+        expectedInput: {
+          type: "string",
+          enum: ["departure-date", "stay-length", "traveler-count", "free-text"],
+        },
+        quickReplies: {
+          type: "array",
+          maxItems: 5,
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string" },
+              value: { type: "string" },
+            },
+            required: ["label", "value"],
+            additionalProperties: false,
+          },
+        },
+        tripContext: {
+          type: "object",
+          description: "既に判明している今回の旅行条件。質問していない条件も失わず引き継ぐ",
+          properties: {
+            destinationWish: { type: "string" },
+            startDate: { type: "string" },
+            endDate: { type: "string" },
+            pace: { type: "number", minimum: 0, maximum: 1 },
+            maximumTravelMinutes: { type: ["number", "null"] },
+            carAvailable: { type: "boolean" },
+          },
+          additionalProperties: false,
+        },
+      },
+      required: ["question", "expectedInput", "quickReplies", "tripContext"],
+      additionalProperties: false,
+    };
+  }
+  if (name === "propose_trip_update") {
+    return {
+      type: "object",
+      properties: {
+        summary: { type: "string" },
+        patches: {
+          type: "array",
+          minItems: 1,
+          maxItems: 12,
+          items: { type: "object", additionalProperties: true },
+        },
+      },
+      required: ["summary", "patches"],
+      additionalProperties: false,
+    };
+  }
+  return { type: "object", properties: {}, additionalProperties: true };
 }
 
 function viewerEvidenceMappers(): ToolEvidenceRegistry {
@@ -531,7 +626,10 @@ class ConverseModelProvider implements AgentModelProvider {
   constructor(private readonly converse: BedrockAgentConverse) {}
 
   async generate(request: AgentModelRequest): Promise<AgentModelResponse> {
-    const response = await this.converse(request.messages.map(toBedrockMessage));
+    const response = await this.converse(
+      request.messages.map(toBedrockMessage),
+      request.tools,
+    );
     return {
       message: fromBedrockMessage(response.message),
       stopReason: response.stopReason === "tool_use"
