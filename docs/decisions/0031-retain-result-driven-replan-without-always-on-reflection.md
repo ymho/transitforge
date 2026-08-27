@@ -18,7 +18,7 @@ latency token利用量 実装と評価の複雑性が増える。
 Tool結果に応じた再計画は回復可能なTool選択 制約 複数Toolの失敗を改善する。
 一方 常時Reflectionは結果駆動再計画から品質を改善せず model call分のlatencyとtokenを増やす。
 
-対象は35件Benchmarkから次の8件とする。
+対象は38件Benchmarkから次の8件とする。
 
 - 曖昧な駅名
 - 運休反映

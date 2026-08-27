@@ -18,6 +18,7 @@ export interface ConversationQuickReply {
 }
 
 export interface ConversationGuidance {
+  reason?: string;
   question: string;
   expectedInput: ConversationExpectedInput;
   quickReplies: ConversationQuickReply[];
@@ -34,6 +35,7 @@ export function normalizedConversationGuidance(
 ): ConversationGuidance {
   return {
     ...guidance,
+    ...(guidance.reason?.trim() ? { reason: guidance.reason.trim() } : { reason: undefined }),
     question: guidance.question.trim(),
     quickReplies: guidance.quickReplies
       .map((reply) => ({ label: reply.label.trim(), value: reply.value.trim() }))

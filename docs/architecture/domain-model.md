@@ -265,7 +265,7 @@ runnerの`--case`はcase IDでdatasetとobservationを同時に1件へ絞り込�
 - fixture: `tests/fixtures/agent-strategy-experiment.json`
 - 判断記録: [ADR 0031](../decisions/0031-retain-result-driven-replan-without-always-on-reflection.md)
 
-35件Benchmarkから回復可能な失敗と成功controlを含む8件を固定し single pass
+38件Benchmarkから回復可能な失敗と成功controlを含む8件を固定し single pass
 結果駆動再計画 常時ReflectionのON/OFF比較を再現する。各戦略は同じEvaluation Frameworkで
 品質を判定し model call Tool call latency tokenを別に集計する。
 
@@ -468,6 +468,31 @@ Goodは1操作で送信し Badだけ対象回答の直下でコメント付き �
 秘密値 Authorization cookieと現在地座標はブラウザ側のRecorderに加え
 保存直前にも除去する。生のTool payload 会話全文 例外詳細は保存しない。
 S3書込失敗は成功として扱わず request ID付き503と構造化ログを返す。
+
+## 外部旅行情報と再確認
+
+天気 航空便 観光地 写真など変動する情報は`ExternalTravelInformation<T>`へ正規化する
+状態`available` `unavailable` `unknown`と鮮度`fresh` `stale` `unknown`を分け Source Evidenceへprovider source URL 取得時刻 有効期限 attribution confidenceを保持する
+
+- `WeatherForecast`: 時間別 日別予報と地点 タイムゾーン
+- `FlightSearchResult`: 航空便区間 販売可否 空席 価格。不明な値は生成しない
+- `PlaceMediaSearchResult`: Place ID 名称 座標 写真 利用条件 attribution
+
+チャットカード 地図 旅程は同じProvider Entity IDを使う
+Providerレスポンス本文や認証情報はAgent Traceへ保存しない
+
+Agentから利用する外部旅行Toolは`search_weather_forecast` `search_place_media` `search_flights`
+`schedule_trip_recheck`をProvider非依存のApplication契約として定義する。Bedrock Adapterはこの契約を
+共通Tool Registryへ組み込み 外部情報の構造化状態は会話カード 地図 旅程へ同じEntity IDのまま投影する。
+カードの描画はApplication Toolから分離し Provider障害時も`unavailable`や`unknown`を表示契約へ残す。
+
+航空便と空港アクセス鉄道は1つの推測結果へ混ぜない。Agentは航空便Toolで空港と時刻を確認し
+`airportRailAccess`で対応駅が既知の場合だけ既存Journey Toolを続けて実行する。対応駅がない場合は
+鉄道アクセスを推測せず不足情報として説明する。
+
+利用者が明示した場合だけ`TravelRecheckRequest`を端末へ保存する
+旅程 情報種別 Entity 実行希望日時 タイムゾーン 有効期限で識別し 同じ対象の重複予定を置換する
+再取得に失敗した結果は古い値を最新として扱わない
 
 ## 変更時の確認
 

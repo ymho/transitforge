@@ -9,6 +9,9 @@ import type {
   RepresentativeTimetableSearchResponse,
   TrainDelayAnalysisResponse,
   TravelCandidateSearchResponse,
+  WeatherForecastSearchResponse,
+  PlaceMediaSearchResponse,
+  FlightSearchResponse,
 } from "./bedrock-agent-contract";
 import {
   isBedrockAgentResponse,
@@ -18,6 +21,9 @@ import {
   isRepresentativeTimetableSearchResponse,
   isTrainDelayAnalysisResponse,
   isTravelCandidateSearchResponse,
+  isWeatherForecastSearchResponse,
+  isPlaceMediaSearchResponse,
+  isFlightSearchResponse,
 } from "./bedrock-agent-validation";
 import type {
   JourneySearchRequest,
@@ -133,6 +139,41 @@ export async function searchAccommodations(
     fetcher,
     true,
   );
+}
+
+export async function searchWeatherForecast(
+  request: { location: string; startDate?: string; endDate?: string },
+  fetcher: typeof fetch = fetch,
+): Promise<WeatherForecastSearchResponse> {
+  return postAgentBody(
+    { operation: "weather_forecast_search", ...request },
+    "天気予報を検索できません",
+    "天気予報",
+    isWeatherForecastSearchResponse,
+    fetcher,
+    true,
+  );
+}
+
+export async function searchPlaceMedia(
+  request: { query: string; latitude?: number; longitude?: number; radiusMeters?: number; limit?: number },
+  fetcher: typeof fetch = fetch,
+): Promise<PlaceMediaSearchResponse> {
+  return postAgentBody(
+    { operation: "place_media_search", ...request },
+    "観光地情報を検索できません",
+    "観光地情報",
+    isPlaceMediaSearchResponse,
+    fetcher,
+    true,
+  );
+}
+
+export async function searchFlights(
+  request: { originAirportCode: string; destinationAirportCode: string; departureDate: string; adults?: number; nonStop?: boolean; limit?: number },
+  fetcher: typeof fetch = fetch,
+): Promise<FlightSearchResponse> {
+  return postAgentBody({ operation: "flight_search", ...request }, "航空便を検索できません", "航空便", isFlightSearchResponse, fetcher, true);
 }
 
 export async function searchRepresentativeTimetable(

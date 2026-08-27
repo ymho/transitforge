@@ -4,6 +4,9 @@ import { browserPollingEnvironment } from "../adapters/browser/polling-controlle
 import { currentBrowserCoordinate } from "../adapters/browser/current-coordinate";
 import { createRuntimeMonitor, nextBrowserFrame } from "../adapters/browser/runtime-monitor";
 import { applyWeather } from "../adapters/mapbox/map-weather";
+import { showVerifiedPlaces } from "../adapters/mapbox/place-media-layer";
+import { BrowserTravelRecheckRepository } from "../adapters/browser/travel-recheck-repository";
+import { runDueTravelRechecks } from "../usecases/trip-plan/travel-recheck-runner";
 import {
   congestionRefreshIntervalMilliseconds,
   congestionRetryIntervalMilliseconds,
@@ -24,6 +27,9 @@ import {
   queryDailyCongestionAnalysis,
   queryTrainDelayAnalysis,
   searchAccommodations,
+  searchWeatherForecast,
+  searchPlaceMedia,
+  searchFlights,
   searchRepresentativeTimetable,
   journeySearchService,
   submitConversationFeedback,
@@ -252,6 +258,7 @@ const conversationSessionRepository = new LocalConversationSessionRepository(
   browserConversationSessionStorageEvents(),
 );
 const conversationHistoryRepository = new LocalConversationHistoryRepository(localStorage);
+const travelRecheckRepository = new BrowserTravelRecheckRepository(localStorage);
 const activeConversationSession = conversationSessionRepository.active() ??
   conversationSessionRepository.create();
 const updateConciergeIdentity = (resetGreeting = false) => {
@@ -285,6 +292,8 @@ updateConciergeIdentity(true);
 document.addEventListener(travelProfileChangedEvent, () =>
   updateConciergeIdentity(true));
 let aiGuideController: ReturnType<typeof configureAiGuidePanel>;
+let viewerMap: mapboxgl.Map | undefined;
+let applyForecastWeather: ((forecast: import("@raiquora/trip/weather-forecast").WeatherForecast) => void) | undefined;
 const tripPreviewEnabled = import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get("trip-preview") === "1";
 const tripPlanController = configureTripPlanPanel(
@@ -346,6 +355,8 @@ aiGuideController = configureAiGuidePanel(
       });
       conversationSessionRepository.save(activeConversationSession);
     },
+    onPlaces: (places) => viewerMap && showVerifiedPlaces(viewerMap, places, (place) => aiGuideController.ask(`${place.name}を旅程へ追加したい`)),
+    onWeather: (forecast) => applyForecastWeather?.(forecast),
     onTripPlanUpdate: (proposal) => {
       tripPlanController.apply(proposal.patches);
       Object.assign(activeConversationSession, {
@@ -364,6 +375,14 @@ aiGuideController = configureAiGuidePanel(
       onResponseMetadata,
     ),
 );
+void runDueTravelRechecks(travelRecheckRepository, {
+  weather: (location) => searchWeatherForecast({ location }),
+  flights: (originAirportCode, destinationAirportCode, departureDate) => searchFlights({ originAirportCode, destinationAirportCode, departureDate }),
+  railOperation: async (serviceDate) => ({
+    data: await queryTrainDelayAnalysis(serviceDate),
+    evidence: [{ id: `rail-operation:${serviceDate}`, kind: "event", provider: "raiquora-operation-snapshot", retrievedAt: new Date().toISOString(), attribution: "Raiquora operation snapshot", confidence: "observed" }],
+  }),
+}).then((notices) => { for (const notice of notices) aiGuideController.notify(notice); }).catch(() => undefined);
 configureConversationHistoryPanel({
   newConversation,
   toggle: conversationHistoryToggle,
@@ -425,6 +444,7 @@ if (!token) {
     bearing: -18,
     antialias: true,
   });
+  viewerMap = map;
 
   map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }));
   const geolocateControl = new mapboxgl.GeolocateControl({
@@ -491,6 +511,10 @@ if (!token) {
       },
       applyWeather,
     );
+    applyForecastWeather = (forecast) => {
+      const code = forecast.hourly[0]?.weatherCode ?? forecast.daily[0]?.weatherCode ?? 0;
+      selectWeather(code >= 51 ? "rain" : code >= 1 ? "cloudy" : "clear");
+    };
     runtimeMonitor.start();
     let activeLightPreset: LightPreset | undefined;
 
@@ -510,7 +534,7 @@ if (!token) {
         trainIndex.station_line_catalog ?? emptyStationLineCatalog();
       if (!trainIndex.station_line_catalog) {
         console.warn(
-          "[TransitForge] train_indexに駅・路線カタログがないため、路線色をグレーで表示します。",
+          "[Raiquora] train_indexに駅・路線カタログがないため、路線色をグレーで表示します。",
         );
       }
       const geometry = new PathGeometryIndex(catalog.paths);
@@ -538,7 +562,7 @@ if (!token) {
       );
       metrics.recordTrainLoad(performance.now() - trainLoadStartedAt);
       runtimeMonitor.log();
-      console.debug("[TransitForge] viewer catalog", {
+      console.debug("[Raiquora] viewer catalog", {
         routes: catalog.paths.length,
         trains: trainIndex.trains.length,
       });
@@ -714,7 +738,7 @@ if (!token) {
             operationDestinationCoordinates,
           );
           selection.updateOperations(operations, destinationChanges);
-          console.info("[TransitForge] 列車表示モード", {
+          console.info("[Raiquora] 列車表示モード", {
             mode: operations ? "digital-twin" : "simulation",
             timetableTrains: trainIndex.trains.length,
             displayedTrains: displayTrains.length,
@@ -993,6 +1017,10 @@ if (!token) {
                 searchRepresentativeTimetable,
                 searchDirectRoutes: backendSearchRoutes,
                 searchAccommodations,
+                searchWeatherForecast,
+                searchPlaceMedia,
+                searchFlights,
+                scheduleTravelRecheck: (request) => travelRecheckRepository.schedule(request),
                 getJourneySearchPreferences: () => preferences,
                 getPreviousJourneyPlan: () => previousJourneyPlan,
                 getPendingJourneyGuidance: () => pendingJourneyGuidance,

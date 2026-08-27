@@ -180,7 +180,7 @@ regressionとして維持する。
 npm run eval:agent:strategies
 ```
 
-35件Benchmarkから8件を選び single pass 結果駆動再計画 常時Reflectionを同じ期待値で比較する。
+38件Benchmarkから8件を選び single pass 結果駆動再計画 常時Reflectionを同じ期待値で比較する。
 reportは完了case率と6指標に加え 1caseあたりのlatency model call Tool call tokenを出す。
 固定Provider相当の相対コストであり AWS料金や実modelの応答速度として解釈しない。
 

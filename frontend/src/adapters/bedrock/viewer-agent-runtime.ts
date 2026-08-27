@@ -25,7 +25,10 @@ import type {
   ViewerAgentJourneyPlan,
   ViewerAgentTravelPlan,
   ViewerAgentResponse,
+  ViewerAgentTravelResponse,
+  ViewerAgentTripPlanUpdateResponse,
 } from "../../domain/viewer-agent-response";
+import { adventureIntensityFromRequest } from "@raiquora/trip/adventure-safety";
 import { journeyChatFollowUpIntent } from "../../domain/journey-chat-follow-up";
 import {
   journeyNavigationGuidanceFromPrompt,
@@ -94,8 +97,23 @@ import { ViewerActionExecutor } from "../../usecases/viewer/viewer-action-execut
 import { EvidenceScopedViewerActionHandler } from "../../usecases/agent/viewer-action-handler";
 import type { Evidence } from "../../usecases/agent/evidence-model";
 import type { AgentTrace } from "../../usecases/agent/agent-trace";
+import {
+  agentContextText,
+  createAgentContextSnapshot,
+} from "../../usecases/agent/agent-context-snapshot";
+import {
+  executeExternalTravelTool,
+  externalTravelEvidence,
+  externalTravelToolDescription,
+  externalTravelToolInputSchema,
+  externalTravelToolNames,
+  hasExternalTravelInformation,
+  isExternalTravelToolName,
+  type ExternalTravelToolDependencies,
+  type ExternalTravelToolState,
+} from "../../usecases/agent/external-travel-tools";
 
-export interface ViewerAgentRuntimeDependencies {
+export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDependencies {
   trains: Train[];
   getTrains?: () => Train[];
   getPositions: () => TrainPosition[];
@@ -154,7 +172,6 @@ export interface ViewerAgentRuntimeDependencies {
     resolvedTopics?: string[];
     pendingTopics?: string[];
   }) => void;
-  getTripPlan?: () => TripPlan | undefined;
   getUserProfile?: () => UserProfile | undefined;
   storeAgentTrace?: (trace: AgentTrace) => Promise<void>;
   maximumRouteTime: number;
@@ -223,7 +240,6 @@ interface ConversationToolState {
 interface TripPlanUpdateToolState {
   proposal?: TripPlanUpdateProposal;
 }
-
 export async function runViewerAgentRuntime(
   prompt: string,
   dependencies: ViewerAgentRuntimeDependencies,
@@ -249,6 +265,7 @@ export async function runViewerAgentRuntime(
   const travelState: TravelToolState = {};
   const conversationState: ConversationToolState = {};
   const tripPlanUpdateState: TripPlanUpdateToolState = {};
+  const externalState: ExternalTravelToolState = {};
   const tools = viewerToolRegistry({
     prompt,
     dependencies,
@@ -258,6 +275,7 @@ export async function runViewerAgentRuntime(
     travelState,
     conversationState,
     tripPlanUpdateState,
+    externalState,
   });
   const evidenceMappers = viewerEvidenceMappers();
   const toolViewerActions = viewerToolActionMappers();
@@ -296,7 +314,12 @@ export async function runViewerAgentRuntime(
     dependencies.getTripPlan?.(),
     dependencies.getUserProfile?.(),
   );
-  if (travelResponse !== undefined) return travelResponse;
+  if (travelResponse !== undefined) {
+    if (hasExternalTravelInformation(externalState) && "travelPlan" in travelResponse) {
+      return { ...travelResponse, external: externalState };
+    }
+    return travelResponse;
+  }
   const conversationResponse = conversationResponseText(conversationState);
   if (conversationResponse !== undefined) return conversationResponse;
   if (tripPlanUpdateState.proposal) {
@@ -304,6 +327,9 @@ export async function runViewerAgentRuntime(
       text: tripPlanUpdateState.proposal.summary,
       tripPlanUpdate: tripPlanUpdateState.proposal,
     };
+  }
+  if (hasExternalTravelInformation(externalState)) {
+    return { text: runtimeResult.response, external: externalState };
   }
   return directRouteResponseText(toolState) ?? runtimeResult.response;
 }
@@ -317,6 +343,7 @@ interface ViewerToolContext {
   travelState: TravelToolState;
   conversationState: ConversationToolState;
   tripPlanUpdateState: TripPlanUpdateToolState;
+  externalState: ExternalTravelToolState;
 }
 
 const viewerToolNames = [
@@ -332,6 +359,7 @@ const viewerToolNames = [
   "query_daily_congestion_analysis",
   "query_train_delay_analysis",
   "search_accommodations",
+  ...externalTravelToolNames,
   "plan_day_trip",
   "search_trip_route_update",
   "search_representative_timetable",
@@ -382,6 +410,7 @@ function viewerTool(
           context.travelState,
           context.conversationState,
           context.tripPlanUpdateState,
+          context.externalState,
         ));
       } catch (error) {
         return failedAgentToolResult({
@@ -397,11 +426,12 @@ function viewerTool(
 }
 
 function viewerToolDescription(name: typeof viewerToolNames[number]): string {
-  const descriptions: Record<typeof viewerToolNames[number], string> = {
+  if (isExternalTravelToolName(name)) return externalTravelToolDescription(name);
+  const descriptions: Record<Exclude<typeof viewerToolNames[number], typeof externalTravelToolNames[number]>, string> = {
     propose_trip_update: "現在の旅程に対する観光 移動 滞在 条件の変更案を構造化します。利用者が変更を依頼し内容が明確なら追加確認せず使います",
     remember_travel_preference: "高確信の継続的な旅行の好みを端末内へ記憶します",
     update_conversation_session: "現在の会話Sessionの要約と話題を更新します",
-    ask_follow_up: "旅行相談で本当に不足している今回固有の条件だけを構造化して質問します。プロフィールと現在の旅程にある条件は聞き直しません",
+    ask_follow_up: "旅行相談で本当に不足している今回固有の条件だけを構造化して質問します。プロフィールと現在の旅程にある条件は聞き直しません。負担条件を尋ねる場合は理由と代替案を添えます",
     set_display_time: "Viewerの計画ダイヤ表示時刻を変更します",
     search_trains: "現在表示中の列車を決定論的に検索します",
     search_train_arrivals: "指定駅へ指定時刻ごろ到着する列車を検索します",
@@ -422,6 +452,7 @@ function viewerToolDescription(name: typeof viewerToolNames[number]): string {
 function viewerToolInputSchema(
   name: typeof viewerToolNames[number],
 ): AgentToolInputSchema {
+  if (isExternalTravelToolName(name)) return externalTravelToolInputSchema(name);
   if (name === "search_accommodations") {
     return {
       type: "object",
@@ -486,6 +517,10 @@ function viewerToolInputSchema(
     return {
       type: "object",
       properties: {
+        reason: {
+          type: "string",
+          description: "この確認が必要な理由。経路や旅程の既知事実に基づき 利点と負担を短く説明する",
+        },
         question: { type: "string" },
         expectedInput: {
           type: "string",
@@ -546,6 +581,9 @@ function viewerEvidenceMappers(): ToolEvidenceRegistry {
   registry.register("search_direct_routes", routeEvidence);
   registry.register("search_trains", trainSearchEvidence);
   registry.register("search_train_arrivals", trainSearchEvidence);
+  for (const name of externalTravelToolNames) {
+    if (name !== "schedule_trip_recheck") registry.register(name, externalTravelEvidence);
+  }
   return registry;
 }
 
@@ -633,11 +671,16 @@ function viewerProblemFramer(
 ): AgentProblemFramer {
   return {
     frame(request) {
+      const context = agentContextText(createAgentContextSnapshot(
+        dependencies.getUserProfile?.(),
+        dependencies.getTripPlan?.(),
+      ));
       const objective =
         (dependencies.conciergeInstruction === undefined
           ? ""
           : `コンシェルジュの会話方針:\n${dependencies.conciergeInstruction}\n\n`) +
         `利用者の依頼: ${prompt}\n` +
+        (context === undefined ? "" : `${context}\n`) +
         `現在の表示時刻（0時からの分数）: ${dependencies.getRouteTime()}\n` +
         `今日の実日付（日本時間）: ${currentCalendarDateInJapan(currentDate(dependencies))}\n` +
         `現在の業務日付（日本時間4時切替）: ${currentServiceDateInJapan(currentDate(dependencies))}`;
@@ -645,7 +688,9 @@ function viewerProblemFramer(
         feature: request.feature,
         normalizedIntent: request.feature,
         objective,
-        constraints: {},
+        constraints: {
+          ...(adventureIntensityFromRequest(prompt) === undefined ? {} : { adventureIntensity: adventureIntensityFromRequest(prompt) }),
+        },
         missingInformation: prompt.trim() ? [] : ["user_request"],
       };
     },
@@ -764,7 +809,11 @@ async function executeViewerToolAdapter(
   travelState: TravelToolState,
   conversationState: ConversationToolState,
   tripPlanUpdateState: TripPlanUpdateToolState,
+  externalState: ExternalTravelToolState,
 ): Promise<unknown> {
+  if (isExternalTravelToolName(name)) {
+    return executeExternalTravelTool(name, input, dependencies, externalState);
+  }
   if (name === "propose_trip_update") {
     const current = dependencies.getTripPlan?.();
     const summary = typeof input.summary === "string" ? input.summary.trim() : "";
@@ -1397,7 +1446,7 @@ function travelResponseText(
   state: TravelToolState,
   currentPlan?: TripPlan,
   profile?: UserProfile,
-): ViewerAgentResponse | undefined {
+): ViewerAgentTravelResponse | ViewerAgentTripPlanUpdateResponse | undefined {
   const plan = state.response;
   if (!plan) return undefined;
   const advisory = travelBurdenAdvisory(plan, profile);
@@ -1566,7 +1615,12 @@ function conversationResponseText(
   state: ConversationToolState,
 ): ViewerAgentResponse | undefined {
   if (!state.response) return undefined;
-  return { text: state.response.question, conversation: state.response };
+  return {
+    text: state.response.reason
+      ? `${state.response.reason}\n\n${state.response.question}`
+      : state.response.question,
+    conversation: state.response,
+  };
 }
 
 function conversationGuidanceFromToolInput(
@@ -1588,6 +1642,9 @@ function conversationGuidanceFromToolInput(
     })
     : [];
   return normalizedConversationGuidance({
+    ...(typeof input.reason === "string" && input.reason.trim()
+      ? { reason: input.reason.trim().slice(0, 240) }
+      : {}),
     question,
     expectedInput,
     quickReplies,

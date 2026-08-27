@@ -1685,6 +1685,7 @@ describe("Bedrock viewer agent", () => {
     const converse = vi.fn().mockResolvedValue({
       message: { role: "assistant", content: [{ toolUse: {
         toolUseId: "follow-up", name: "ask_follow_up", input: {
+          reason: "出発日が分かると実際のダイヤと宿泊日を揃えて比較できます。日程未定なら混雑を避けやすい候補日から考えられます。",
           question: "いつ出発しますか？",
           expectedInput: "departure-date",
           quickReplies: [
@@ -1713,9 +1714,11 @@ describe("Bedrock viewer agent", () => {
       throw new Error("会話ガイダンスがありません。");
     }
     expect(result.conversation).toMatchObject({
+      reason: expect.stringContaining("実際のダイヤ"),
       expectedInput: "departure-date",
       tripContext: { destinationWish: "出雲大社" },
     });
+    expect(result.text).toContain("日程未定なら");
   });
 
   it("returns a confirmable proposal for a rental-car movement", async () => {
@@ -1891,6 +1894,48 @@ describe("Bedrock viewer agent", () => {
     expect(result).toBe("早朝を避けて考えます。");
     expect(remember).toHaveBeenCalledWith("早朝は避けたい", "high");
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ scope: "trip", summary: "出雲旅行を相談中" }));
+  });
+
+  it("passes a safe profile and current trip summary instead of asking the model to rediscover them", async () => {
+    const converse = vi.fn().mockResolvedValue({
+      message: { role: "assistant", content: [{ text: "現在の旅程を基に案内します。" }] },
+      stopReason: "end_turn",
+    });
+    await runViewerAgentRuntime(
+      "現在の旅程を教えて",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(), maximumRouteTime: 1_800,
+        getUserProfile: () => ({
+          version: 2,
+          home: { station: "向日町駅", carAvailable: false },
+          companions: { usual: ["partner"], children: [] },
+          travelStyle: {
+            pace: 0.3, novelty: 0.7, crowdTolerance: 0.2, walkingTolerance: 0.5,
+            transferTolerance: 0.5, earlyMorningTolerance: 0.2, lateNightTolerance: 0.5,
+            drivingTolerance: 0.2, busTolerance: 0.5,
+          },
+          preferences: {
+            sea: 0.3, mountain: 0.3, nature: 0.8, onsen: 0.3, food: 0.7,
+            railway: 0.3, history: 0.8, cityWalk: 0.3, animals: 0.3, art: 0.3,
+            themePark: 0.3, shopping: 0.3,
+          },
+          transport: { maxTypicalTravelMinutes: 180 },
+          updatedAt: "2026-08-27T00:00:00Z",
+        }),
+        getTripPlan: tripPlanWithRailReturn,
+      },
+      converse,
+    );
+
+    const firstPrompt = JSON.stringify(converse.mock.calls[0]?.[0]);
+    expect(firstPrompt).toContain("向日町駅");
+    expect(firstPrompt).toContain("倉敷を巡る旅");
+    expect(firstPrompt).toContain("倉敷→摂津富田");
+    expect(firstPrompt).not.toContain("updatedAt");
+    expect(firstPrompt).not.toContain('"id":"trip"');
   });
 });
 
