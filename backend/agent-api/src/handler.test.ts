@@ -47,7 +47,11 @@ describe("TypeScript Agent API handler", () => {
 
   it("returns a no-store request-id error without calling the application", async () => {
     const execute = vi.fn();
-    const handler = createAgentApiHandler({ execute }, { requestId: () => "generated-id" });
+    const log = vi.fn();
+    const handler = createAgentApiHandler(
+      { execute },
+      { requestId: () => "generated-id", log },
+    );
     const response = await handler({ requestContext: { http: { method: "GET" } } });
 
     expect(response.statusCode).toBe(405);
@@ -55,6 +59,11 @@ describe("TypeScript Agent API handler", () => {
     expect(response.headers["x-transitforge-request-id"]).toBe("generated-id");
     expect(JSON.parse(response.body)).toEqual({ message: "POSTのみ利用できます。" });
     expect(execute).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith("agent_request_rejected", {
+      requestId: "generated-id",
+      statusCode: 405,
+      reason: "POSTのみ利用できます。",
+    });
   });
 
   it("does not expose unexpected failures", async () => {

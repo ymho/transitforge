@@ -31,7 +31,11 @@ export function createAgentApiHandler(
       return jsonResponse(result.statusCode ?? 200, result.body, requestId);
     } catch (error) {
       if (error instanceof RequestError) {
-        log("agent_request_rejected", { requestId, statusCode: error.statusCode });
+        log("agent_request_rejected", {
+          requestId,
+          statusCode: error.statusCode,
+          reason: error.message,
+        });
         return jsonResponse(error.statusCode, { message: error.message }, requestId);
       }
       log("agent_request_failed", { requestId, statusCode: 500 });
