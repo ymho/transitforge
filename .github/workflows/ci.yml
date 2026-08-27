@@ -45,6 +45,9 @@ jobs:
         env:
           VITE_MAPBOX_ACCESS_TOKEN: test-token-for-build-only
 
+      - name: Check viewer bundle budget
+        run: npm run bundle:check
+
       - name: Run Python tests
         run: python3 -m unittest discover -s tests -v
 
