@@ -1599,6 +1599,47 @@ describe("Bedrock viewer agent", () => {
     expect(converse).toHaveBeenCalled();
   });
 
+  it("explains the same-area assumption and alternatives for a long stay", async () => {
+    const searchDirectRoutes = vi.fn()
+      .mockResolvedValueOnce({ originStation: "京都", results: [] })
+      .mockResolvedValueOnce({ originStation: "宮島口", results: [] });
+    const converse = vi.fn<BedrockAgentConverse>(async () => ({
+      message: { role: "assistant", content: [{ toolUse: {
+        toolUseId: "long-stay", name: "search_accommodations", input: {
+          destination: "宮島",
+          checkInDate: "2026-08-28",
+          checkOutDate: "2026-08-31",
+        },
+      } }] },
+      stopReason: "tool_use",
+    }));
+
+    const result = await runViewerAgentRuntime(
+      "8月28日から宮島へ3泊したい",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
+        searchAccommodations: vi.fn(async () => ({ accommodations: [] })),
+        getUserProfile: () => ({
+          home: { station: "京都", carAvailable: false },
+          travelStyle: { transferTolerance: 0.5 },
+          transport: { maxTypicalTravelMinutes: null },
+        } as unknown as UserProfile),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(typeof result).not.toBe("string");
+    if (typeof result === "string" || !("travelPlan" in result)) {
+      throw new Error("長期旅行の旅程がありません。");
+    }
+    expect(result.text).toContain("3泊を同じ地域で過ごす前提");
+    expect(result.text).toContain("広島や倉敷美観地区");
+  });
+
   it("uses an access station and accommodation area for a landmark stay", async () => {
     const izumoTrain: Train = {
       ...train,

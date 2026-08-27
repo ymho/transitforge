@@ -51,7 +51,10 @@ import {
   searchActiveTrainsFromPrompt,
   searchTrainArrivalsFromPrompt,
 } from "../../usecases/viewer/viewer-local-tools";
-import { travelDestinationAccess } from "@raiquora/trip/travel-destination";
+import {
+  extendedStayDestinations,
+  travelDestinationAccess,
+} from "@raiquora/trip/travel-destination";
 import {
   normalizedConversationGuidance,
   type ConversationExpectedInput,
@@ -1398,6 +1401,7 @@ function travelResponseText(
   const plan = state.response;
   if (!plan) return undefined;
   const advisory = travelBurdenAdvisory(plan, profile);
+  const stayAdvisory = extendedStayAdvisory(plan);
   if (plan.dayTrip) {
     if (currentPlan) {
       return {
@@ -1415,7 +1419,7 @@ function travelResponseText(
   }
   if (currentPlan) {
     return {
-      text: `${formatCalendarDate(plan.checkInDate)}から${formatCalendarDate(plan.checkOutDate)}へ日程と経路を組み直しました。${advisory}変更内容を確認してください。`,
+      text: `${formatCalendarDate(plan.checkInDate)}から${formatCalendarDate(plan.checkOutDate)}へ日程と経路を組み直しました。${advisory}${stayAdvisory}変更内容を確認してください。`,
       tripPlanUpdate: {
         summary: `${formatCalendarDate(plan.checkInDate)}から${formatCalendarDate(plan.checkOutDate)}の日程へ変更`,
         patches: tripPlanPatchesFromTravelPlan(plan),
@@ -1423,9 +1427,27 @@ function travelResponseText(
     };
   }
   return {
-    text: `${formatCalendarDate(plan.checkInDate)}から${formatCalendarDate(plan.checkOutDate)}までの${plan.destination}旅行です。${advisory}行きと帰りの経路、宿泊候補をまとめました。`,
+    text: `${formatCalendarDate(plan.checkInDate)}から${formatCalendarDate(plan.checkOutDate)}までの${plan.destination}旅行です。${advisory}${stayAdvisory}行きと帰りの経路、宿泊候補をまとめました。`,
     travelPlan: plan,
   };
+}
+
+function extendedStayAdvisory(plan: ViewerAgentTravelPlan): string {
+  if (plan.dayTrip) return "";
+  const nights = calendarDayDifference(plan.checkInDate, plan.checkOutDate);
+  if (nights < 3) return "";
+  const alternatives = extendedStayDestinations(plan.destination);
+  const suggestion = alternatives.length > 0
+    ? `${alternatives.join("や")}へ滞在先を分ける相談もできます。`
+    : "別の地域へ滞在先を分ける相談もできます。";
+  return `宿泊候補は${nights}泊を同じ地域で過ごす前提です。${suggestion}`;
+}
+
+function calendarDayDifference(start: string, end: string): number {
+  const startTime = Date.parse(`${start}T00:00:00Z`);
+  const endTime = Date.parse(`${end}T00:00:00Z`);
+  if (!Number.isFinite(startTime) || !Number.isFinite(endTime)) return 0;
+  return Math.max(0, Math.round((endTime - startTime) / 86_400_000));
 }
 
 function travelBurdenAdvisory(
