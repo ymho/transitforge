@@ -10,7 +10,14 @@
     "./travel-plan": "./domain/travel-plan.ts",
     "./travel-profile": "./domain/travel-profile.ts",
     "./travel-provider": "./domain/travel-provider.ts",
-    "./trip-plan": "./domain/trip-plan.ts"
+    "./trip-plan": "./domain/trip-plan.ts",
+    "./external-travel-information": "./domain/external-travel-information.ts",
+    "./weather-forecast": "./domain/weather-forecast.ts",
+    "./place-media": "./domain/place-media.ts",
+    "./flight-search": "./domain/flight-search.ts",
+    "./adventure-safety": "./domain/adventure-safety.ts",
+    "./travel-recheck": "./domain/travel-recheck.ts",
+    "./airport-access": "./domain/airport-access.ts"
   },
   "dependencies": {
     "@raiquora/journey": "*"

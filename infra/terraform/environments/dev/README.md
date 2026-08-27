@@ -55,13 +55,17 @@ Terraform apply後に`/transitforge/dev/travel-provider`が作成されるため
 {
   "application_id": "旅行提供者アプリID",
   "access_key": "旅行提供者アクセスキー",
-  "hotel_search_url": "旅行提供者の宿泊検索API URL"
+  "hotel_search_url": "旅行提供者の宿泊検索API URL",
+  "amadeus_client_id": "航空便ProviderのClient ID（任意）",
+  "amadeus_client_secret": "航空便ProviderのClient Secret（任意）"
 }
 ```
 
-`affiliate_id`は予約リンクの計測が必要な場合だけ指定する。値はTerraform stateやGitHubへ保存せず AI Lambdaだけが実行時に取得する。
+`affiliate_id`は予約リンクの計測が必要な場合だけ指定する。航空便検索を使わない場合は`amadeus_*`も省略する。値はTerraform stateやGitHubへ保存せず AI Lambdaだけが実行時に取得する。
+宿泊と航空は保存先を共有していても別のCredentials Repositoryで読み込む。航空項目の未設定は
+宿泊検索を停止せず 航空便Toolだけを`unavailable`として扱う。
 
-TransitForge自身のOIDC対象リポジトリはGitHub Actionsの`github.repository`から渡す
+Raiquora自身のOIDC対象リポジトリはGitHub Actionsの`github.repository`から渡す
 必須VariableはAWS認証より前に検証し 未設定ならapplyを開始しない
 
 data-builder側へ渡す値はTerraform出力から取得し data-builderの`dev` environmentへ設定する

@@ -5,6 +5,10 @@ import type {
   TripAccommodation,
   TripJourneyPlan,
 } from "@raiquora/trip/travel-plan";
+import type { ExternalTravelInformation } from "@raiquora/trip/external-travel-information";
+import type { WeatherForecast } from "@raiquora/trip/weather-forecast";
+import type { PlaceMediaSearchResult } from "@raiquora/trip/place-media";
+import type { FlightSearchResult } from "@raiquora/trip/flight-search";
 
 export type ViewerAgentJourneyPlan = TripJourneyPlan;
 
@@ -16,9 +20,15 @@ export interface ViewerAgentRichResponse {
 export type ViewerAgentAccommodation = TripAccommodation;
 export type ViewerAgentTravelPlan = TravelPlan;
 
+export interface ViewerAgentExternalData {
+  weather?: ExternalTravelInformation<WeatherForecast>;
+  places?: ExternalTravelInformation<PlaceMediaSearchResult>;
+  flights?: ExternalTravelInformation<FlightSearchResult>;
+}
 export interface ViewerAgentTravelResponse {
   text: string;
   travelPlan: ViewerAgentTravelPlan;
+  external?: ViewerAgentExternalData;
 }
 
 export interface ViewerAgentConversationResponse {
@@ -26,10 +36,15 @@ export interface ViewerAgentConversationResponse {
   conversation: ConversationGuidance;
 }
 export interface ViewerAgentTripPlanUpdateResponse { text: string; tripPlanUpdate: TripPlanUpdateProposal; }
+export interface ViewerAgentExternalResponse {
+  text: string;
+  external: ViewerAgentExternalData;
+}
 
 export type ViewerAgentResponse =
   | string
   | ViewerAgentRichResponse
   | ViewerAgentTravelResponse
   | ViewerAgentConversationResponse
-  | ViewerAgentTripPlanUpdateResponse;
+  | ViewerAgentTripPlanUpdateResponse
+  | ViewerAgentExternalResponse;

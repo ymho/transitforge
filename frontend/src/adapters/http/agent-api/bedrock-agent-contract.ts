@@ -43,6 +43,21 @@ export interface AccommodationSearchResponse {
     imageUrl?: string;
   }>;
 }
+export interface WeatherForecastSearchResponse {
+  forecast: import("@raiquora/trip/external-travel-information").ExternalTravelInformation<
+    import("@raiquora/trip/weather-forecast").WeatherForecast
+  >;
+}
+export interface PlaceMediaSearchResponse {
+  result: import("@raiquora/trip/external-travel-information").ExternalTravelInformation<
+    import("@raiquora/trip/place-media").PlaceMediaSearchResult
+  >;
+}
+export interface FlightSearchResponse {
+  flights: import("@raiquora/trip/external-travel-information").ExternalTravelInformation<
+    import("@raiquora/trip/flight-search").FlightSearchResult
+  >;
+}
 export type RepresentativeTimetableKind = "weekday" | "weekend_holiday";
 export type RepresentativeTimetableSearchMode =
   | "active"

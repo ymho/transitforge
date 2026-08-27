@@ -26,6 +26,19 @@ export default defineConfig({
   build: {
     outDir: "../dist",
     emptyOutDir: true,
+    // Mapbox is isolated from the initial application chunk and guarded by the
+    // explicit per-family budget in tools/check_bundle_budget.mjs.
+    chunkSizeWarningLimit: 1_900,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/mapbox-gl")) return "mapbox";
+          if (id.includes("node_modules/three")) return "three";
+          if (id.includes("node_modules/zod")) return "validation";
+          return undefined;
+        },
+      },
+    },
   },
   plugins: [
     {

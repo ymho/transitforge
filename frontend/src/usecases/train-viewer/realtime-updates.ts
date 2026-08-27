@@ -91,7 +91,7 @@ export function configureTrainDelayUpdates(
       apply: (snapshot) => {
         if (snapshot.failedSources.length > 0) {
           console.warn(
-            "[TransitForge] 遅延スナップショットが不完全なためシミュレーション表示を維持します。",
+            "[Raiquora] 遅延スナップショットが不完全なためシミュレーション表示を維持します。",
             {
               collectedAt: snapshot.collectedAt,
               failedSources: snapshot.failedSources,

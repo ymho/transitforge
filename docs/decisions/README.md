@@ -57,3 +57,5 @@
 - [0036 Domain Logicを実行境界ごとに一意に所有する](0036-own-domain-logic-by-execution-boundary.md)
 - [0037 TypeScript workspaceと共有Domain moduleへ段階移行する](0037-adopt-typescript-workspaces-and-shared-domain-modules.md)
 - [0038 本番Agent実行を共通Runtimeへ一本化する](0038-use-one-production-agent-runtime.md)
+- [0039 Amadeus Self-Serviceで航空便候補を検索する](0039-use-amadeus-self-service-for-flight-offers.md)
+- [0040 Open-MeteoとWikimediaで旅行文脈を補う](0040-use-open-meteo-and-wikimedia-for-travel-context.md)

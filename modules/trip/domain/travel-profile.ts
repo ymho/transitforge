@@ -34,7 +34,11 @@ export interface TripContext {
   maximumTravelMinutes?: number | null;
   avoidances?: string[];
   carAvailable?: boolean;
+  adventureIntensity?: 0 | 1 | 2 | 3;
+  avoidedRisks?: AdventureRisk[];
 }
+
+export type AdventureRisk = "illegal" | "uncontrolled-violence" | "unverified-border" | "night-isolation" | "transport-stranding" | "weather-exposure";
 
 export function travelStyleSummary(profile: UserProfile): string {
   const favorites = (Object.entries(profile.preferences) as Array<[TravelPreference, number]>)

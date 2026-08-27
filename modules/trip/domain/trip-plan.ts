@@ -42,7 +42,7 @@ export interface SightseeingPlanItem extends TripPlanItemBase {
   type: "sightseeing";
   place: {
     name: string;
-    provider: "manual" | "mapbox";
+    provider: "manual" | "mapbox" | "wikipedia";
     placeId?: string;
     coordinate?: [number, number];
   };

@@ -13,6 +13,9 @@ import type {
   TrainDelayAnalysisResponse,
   TrainDelaySnapshotAnalysis,
   TrainDelayStat,
+  WeatherForecastSearchResponse,
+  PlaceMediaSearchResponse,
+  FlightSearchResponse,
 } from "./bedrock-agent-contract";
 import {
   journeySearchContractVersion,
@@ -45,6 +48,44 @@ export function isAccommodationSearchResponse(value: unknown): value is Accommod
       (item.bookingUrl === undefined || typeof item.bookingUrl === "string") &&
       (item.areaName === undefined || typeof item.areaName === "string") &&
       (item.imageUrl === undefined || typeof item.imageUrl === "string"));
+}
+
+export function isWeatherForecastSearchResponse(value: unknown): value is WeatherForecastSearchResponse {
+  if (!isRecord(value) || !isRecord(value.forecast)) return false;
+  const forecast = value.forecast;
+  if (!["available", "unavailable", "unknown"].includes(String(forecast.status)) ||
+    !["fresh", "stale", "unknown"].includes(String(forecast.freshness)) ||
+    !Array.isArray(forecast.evidence) || forecast.evidence.length > 24) return false;
+  if (forecast.status !== "available") return forecast.data === undefined;
+  const data = forecast.data;
+  return isRecord(data) && typeof data.locationName === "string" &&
+    typeof data.latitude === "number" && typeof data.longitude === "number" &&
+    typeof data.timezone === "string" && typeof data.alertsAvailable === "boolean" && Array.isArray(data.hourly) && data.hourly.length <= 168 &&
+    Array.isArray(data.daily) && data.daily.length <= 16;
+}
+
+export function isPlaceMediaSearchResponse(value: unknown): value is PlaceMediaSearchResponse {
+  if (!isRecord(value) || !isRecord(value.result)) return false;
+  const result = value.result;
+  if (!["available", "unavailable", "unknown"].includes(String(result.status)) ||
+    !["fresh", "stale", "unknown"].includes(String(result.freshness)) ||
+    !Array.isArray(result.evidence) || result.evidence.length > 24) return false;
+  if (result.status !== "available") return result.data === undefined;
+  return isRecord(result.data) && Array.isArray(result.data.places) && result.data.places.length <= 8 &&
+    result.data.places.every((place) => isRecord(place) && typeof place.providerPlaceId === "string" &&
+      typeof place.name === "string" && typeof place.sourceUrl === "string" &&
+      (place.latitude === undefined || typeof place.latitude === "number") &&
+      (place.longitude === undefined || typeof place.longitude === "number") &&
+      (place.image === undefined || isRecord(place.image) && typeof place.image.url === "string" &&
+        typeof place.image.attribution === "string"));
+}
+
+export function isFlightSearchResponse(value: unknown): value is FlightSearchResponse {
+  if (!isRecord(value) || !isRecord(value.flights)) return false;
+  const flights = value.flights;
+  if (!["available", "unavailable", "unknown"].includes(String(flights.status)) || !Array.isArray(flights.evidence)) return false;
+  if (flights.status !== "available") return flights.data === undefined;
+  return isRecord(flights.data) && Array.isArray(flights.data.offers) && flights.data.offers.length <= 10 && flights.data.offers.every((offer) => isRecord(offer) && typeof offer.providerOfferId === "string" && Array.isArray(offer.segments) && offer.segments.length > 0);
 }
 
 export function isDailyCongestionPeakResponse(value: unknown): value is DailyCongestionPeakResponse {

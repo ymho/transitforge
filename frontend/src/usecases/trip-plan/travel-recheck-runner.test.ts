@@ -1,0 +1,3 @@
+import { describe, expect, it, vi } from "vitest";
+import { runDueTravelRechecks } from "./travel-recheck-runner";
+describe("runDueTravelRechecks", () => { it("records an unavailable refresh without presenting stale data as current", async () => { const record = vi.fn(); const notices = await runDueTravelRechecks({ due: () => [{ request: { id: "r", tripPlanId: "t", kind: "place-hours", entityId: "神社", scheduledAt: "2026-08-27T00:00:00Z", timeZone: "Asia/Tokyo", createdAt: "2026-08-26T00:00:00Z", expiresAt: "2026-08-28T00:00:00Z" }, attempts: 0 }], record }, { weather: vi.fn() }, new Date("2026-08-27T01:00:00Z")); expect(record).toHaveBeenCalledWith("r", expect.objectContaining({ status: "unavailable" })); expect(notices[0]).toContain("古い情報を最新として扱っていません"); }); });
