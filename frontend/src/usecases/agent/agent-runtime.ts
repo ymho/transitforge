@@ -4,6 +4,7 @@ import { DefaultAgentProblemFramer, type AgentProblemFramer } from "./problem-fr
 import { DefaultAgentPlanner, type AgentPlanner } from "./agent-planner";
 import {
   DefaultAgentResponseGenerator,
+  hasOnlyInternalReasoning,
   type AgentResponseGenerator,
 } from "./agent-response-generator";
 import { AgentToolExecutor } from "./agent-tool-executor";
@@ -120,6 +121,22 @@ export class MultiStepAgentRuntime {
         return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "missing_tool_call");
       }
       if (modelResponse.stopReason !== "tool_calls") {
+        if (hasOnlyInternalReasoning(modelResponse)) {
+          messages.push({
+            role: "user",
+            content: [{
+              type: "text",
+              text: "内部推論は表示せず 必要なToolを実行するか 利用者向けの質問または回答だけを返してください",
+            }],
+          });
+          iterations += 1;
+          trace.replanDecided(
+            true,
+            "内部推論だけの応答を破棄して利用者向け応答を再要求する",
+            plan.steps,
+          );
+          continue;
+        }
         let generated;
         try {
           generated = this.responseGenerator.fromModel(modelResponse, evidence);

@@ -9,5 +9,6 @@ describe("agentSystemPrompt", () => {
     expect(agentSystemPrompt).toContain("プロフィールと現在の旅程にある条件を聞き直さず");
     expect(agentSystemPrompt).toContain("propose_trip_updateで確認可能な変更案");
     expect(agentSystemPrompt).toContain("日帰りが明示された旅行はplan_day_trip");
+    expect(agentSystemPrompt).toContain("内部推論タグや内部メモを利用者向け回答へ出さない");
   });
 });
