@@ -74,6 +74,12 @@ export function routeTimeFromPrompt(prompt: string): number | undefined {
     );
   }
 
+  if (/(?:早朝|朝一番)(?:に|から|出発|発|ごろ)/u.test(normalizedPrompt)) return 6 * 60;
+  if (/(?:朝|午前中)(?:に|から|出発|発|ごろ)/u.test(normalizedPrompt)) return 8 * 60;
+  if (/(?:昼|正午)(?:に|から|出発|発|ごろ)/u.test(normalizedPrompt)) return 12 * 60;
+  if (/(?:夕方)(?:に|から|出発|発|ごろ)/u.test(normalizedPrompt)) return 17 * 60;
+  if (/(?:夜|晩)(?:に|から|出発|発|ごろ)/u.test(normalizedPrompt)) return 19 * 60;
+
   return undefined;
 }
 

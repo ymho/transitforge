@@ -11,6 +11,8 @@ describe("agentSystemPrompt", () => {
     expect(agentSystemPrompt).toContain("日帰りが明示された旅行はplan_day_trip");
     expect(agentSystemPrompt).toContain("内部推論タグや内部メモを利用者向け回答へ出さない");
     expect(agentSystemPrompt).toContain("現時点の推奨案を先に示して");
+    expect(agentSystemPrompt).toContain("Toolの失敗や入力不備");
+    expect(agentSystemPrompt).toContain("利用者に教えてくださいと逆に質問しない");
     expect(agentSystemPrompt).toContain("私ならそうする理由");
     expect(agentSystemPrompt).toContain("裸のYes No質問にせず");
     expect(agentSystemPrompt).toContain("地図SDKの操作説明");
