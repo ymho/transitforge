@@ -46,6 +46,7 @@ APIやBedrockを使わず旅程を確認する場合は`npm run dev -- --host 0.
 - Panelを開閉して地図操作と重ならない
 - 文字とIconのContrastがday nightで維持される
 - 横スクロールする宿候補と縦スクロールする旅程が操作できる
+- 会話入力の候補チップは短い選択肢を中央へ並べ 画面幅を超える場合も文字を潰さず横スクロールできる
 - Focus Ringと44px相当の操作領域が失われていない
 - `prefers-reduced-motion`で不要なAnimationが停止する
 
