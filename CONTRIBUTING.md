@@ -26,7 +26,7 @@ chore/development-environment
 句読点は意味の区切りに必要な場合だけ使う
 
 ```text
-🎉 TransitForgeの初期構成を作成
+🎉 Raiquoraの初期構成を作成
 🔖 v1.0.0を公開
 ✨ 駅ドメインモデルを追加
 🐛 深夜帯の時刻表示を修正

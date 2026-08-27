@@ -116,7 +116,7 @@ npm run eval:agent -- --case cancelled-service
 npm run eval:agent:strategies
 ```
 
-Agent Benchmarkは35件を収録し 曖昧要求 運休 遅延 制約 情報不足 複数Tool
+Agent Benchmarkは38件を収録し 曖昧要求 運休 遅延 制約 情報不足 複数Tool
 Viewer Actionのカテゴリ別に6指標を出す。失敗したcase IDは`--case`で単独再実行できる
 戦略実験はsingle pass 結果駆動再計画 常時Reflectionの品質と相対コストを比較する
 

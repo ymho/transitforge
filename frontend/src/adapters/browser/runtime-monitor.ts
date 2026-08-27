@@ -24,7 +24,7 @@ export function createRuntimeMonitor(
     const now = environment.now();
     if (now < nextLogTimestamp) return;
     nextLogTimestamp = now + logIntervalMilliseconds;
-    environment.debug("[TransitForge] runtime metrics", {
+    environment.debug("[Raiquora] runtime metrics", {
       ...metrics.getSnapshot(),
       usedJsHeap: formatHeapUsage(environment.heapBytes()),
     });
