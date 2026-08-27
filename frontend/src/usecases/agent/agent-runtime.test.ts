@@ -177,6 +177,31 @@ describe("MultiStepAgentRuntime", () => {
     expect(output.status).toBe("limit_reached");
     expect(output.response).not.toContain("途中までの回答");
   });
+
+  it("retries when the model returns only internal reasoning", async () => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const requests: AgentModelRequest[] = [];
+    const model = sequenceModel([
+      textResponse("<thinking>次に日付を質問する</thinking>"),
+      textResponse("旅行の日付を教えてください"),
+    ], requests);
+    const runtime = new MultiStepAgentRuntime({ model, tools, toolExecutor });
+
+    const output = await runtime.run(request("2泊"));
+
+    expect(output.status).toBe("completed");
+    expect(output.response).toBe("旅行の日付を教えてください");
+    expect(output.response).not.toContain("thinking");
+    expect(model.generate).toHaveBeenCalledTimes(2);
+    expect(requests[1]?.messages.at(-1)).toMatchObject({
+      role: "user",
+      content: [{ type: "text", text: expect.stringContaining("内部推論") }],
+    });
+    expect(output.trace.events).toContainEqual(expect.objectContaining({
+      type: "replan_decided",
+      reason: "内部推論だけの応答を破棄して利用者向け応答を再要求する",
+    }));
+  });
 });
 
 function toolSetup(executionOrder: string[]) {

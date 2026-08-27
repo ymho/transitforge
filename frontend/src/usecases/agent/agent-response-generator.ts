@@ -29,7 +29,7 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
     const text = response.message.content
       .filter((content): content is { type: "text"; text: string } =>
         content.type === "text")
-      .map(({ text }) => text.trim())
+      .map(({ text }) => withoutInternalReasoning(text).trim())
       .filter(Boolean)
       .join("\n");
     return {
@@ -50,4 +50,16 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
   groundingFailure(): string {
     return "確認できた根拠だけでは回答できません";
   }
+}
+
+export function hasOnlyInternalReasoning(response: AgentModelResponse): boolean {
+  const textBlocks = response.message.content.filter(
+    (content): content is { type: "text"; text: string } => content.type === "text",
+  );
+  return textBlocks.length > 0 && textBlocks.every(({ text }) =>
+    text.trim().length > 0 && withoutInternalReasoning(text).trim().length === 0);
+}
+
+function withoutInternalReasoning(value: string): string {
+  return value.replace(/<(thinking|analysis)>[\s\S]*?<\/\1>/giu, "");
 }
