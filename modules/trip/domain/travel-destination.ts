@@ -5,12 +5,19 @@ export interface TravelDestination {
   accommodationDestination: string;
   accessStation: string;
   interests: TravelPreference[];
+  extendedStayDestinations?: string[];
 }
 
 const travelDestinations: TravelDestination[] = [
   { name: "出雲大社", accommodationDestination: "出雲", accessStation: "出雲市", interests: ["history", "nature"] },
   { name: "城崎温泉", accommodationDestination: "城崎温泉", accessStation: "城崎温泉", interests: ["onsen", "food"] },
-  { name: "宮島", accommodationDestination: "宮島", accessStation: "宮島口", interests: ["history", "sea", "nature"] },
+  {
+    name: "宮島",
+    accommodationDestination: "宮島",
+    accessStation: "宮島口",
+    interests: ["history", "sea", "nature"],
+    extendedStayDestinations: ["広島", "倉敷美観地区"],
+  },
   { name: "倉敷美観地区", accommodationDestination: "倉敷", accessStation: "倉敷", interests: ["history", "cityWalk", "art"] },
   { name: "奈良公園", accommodationDestination: "奈良", accessStation: "奈良", interests: ["history", "animals", "nature"] },
   { name: "大山", accommodationDestination: "米子", accessStation: "米子", interests: ["mountain", "nature"] },
@@ -33,6 +40,10 @@ export function recommendedTravelDestinations(profile?: UserProfile, limit = 3):
 export function travelDestinationAccess(destination: string): TravelDestination | undefined {
   const normalized = normalizeDestination(destination);
   return travelDestinations.find((candidate) => normalized.includes(normalizeDestination(candidate.name)));
+}
+
+export function extendedStayDestinations(destination: string): string[] {
+  return travelDestinationAccess(destination)?.extendedStayDestinations ?? [];
 }
 
 function normalizeDestination(value: string): string {
