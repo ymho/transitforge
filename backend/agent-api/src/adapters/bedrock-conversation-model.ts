@@ -42,7 +42,7 @@ export class BedrockConversationModel implements ConversationModel {
             toolSpec: {
               name: definition.name,
               description: definition.description,
-              inputSchema: { json: definition.inputSchema },
+              inputSchema: { json: novaToolInputSchema(definition.inputSchema) },
             },
           })),
         },
@@ -59,6 +59,20 @@ export class BedrockConversationModel implements ConversationModel {
       Math.round(this.now() - startedAt),
     );
   }
+}
+
+function novaToolInputSchema(inputSchema: JsonObject): JsonObject {
+  const properties = isRecord(inputSchema.properties)
+    ? inputSchema.properties
+    : {};
+  const required = Array.isArray(inputSchema.required)
+    ? inputSchema.required.filter((value): value is string => typeof value === "string")
+    : undefined;
+  return {
+    type: "object",
+    properties,
+    ...(required === undefined ? {} : { required }),
+  };
 }
 
 function normalizedResponse(
