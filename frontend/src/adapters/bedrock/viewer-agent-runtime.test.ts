@@ -1515,6 +1515,49 @@ describe("Bedrock viewer agent", () => {
     expect(result.text).toContain("日帰り旅行");
   });
 
+  it("proposes a clear day-trip change without asking for confirmation again", async () => {
+    const searchDirectRoutes = vi.fn()
+      .mockResolvedValueOnce({ originStation: "京都", results: [] })
+      .mockResolvedValueOnce({ originStation: "宮島口", results: [] });
+    const searchAccommodations = vi.fn();
+    const converse = vi.fn<BedrockAgentConverse>(async () => ({
+      message: { role: "assistant", content: [{ toolUse: {
+        toolUseId: "day-trip-update", name: "plan_day_trip", input: {
+          destination: "宮島", date: "2026-08-28",
+        },
+      } }] },
+      stopReason: "tool_use",
+    }));
+
+    const result = await runViewerAgentRuntime(
+      "やっぱり8月28日の日帰りに変更して",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setWeather: vi.fn(),
+        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
+        searchAccommodations, getTripPlan: () => tripPlanWithRailReturn(),
+        getUserProfile: () => ({
+          home: { station: "京都", carAvailable: false },
+          travelStyle: { transferTolerance: 0.5 },
+          transport: { maxTypicalTravelMinutes: null },
+        } as unknown as UserProfile),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(converse).toHaveBeenCalledTimes(1);
+    expect(searchAccommodations).not.toHaveBeenCalled();
+    expect(typeof result).not.toBe("string");
+    if (typeof result === "string" || !("tripPlanUpdate" in result)) {
+      throw new Error("日帰りへの変更案がありません。");
+    }
+    expect(result.text).toContain("日帰り旅行へ組み直しました");
+    expect(result.text).not.toContain("よろしいですか");
+    expect(result.tripPlanUpdate.summary).toContain("日帰り旅行へ変更");
+  });
+
   it("passes a bounded accommodation contract to the conversation model", async () => {
     const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
       const accommodation = tools?.find(({ name }) => name === "search_accommodations");
