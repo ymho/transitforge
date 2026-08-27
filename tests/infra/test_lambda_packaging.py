@@ -15,7 +15,7 @@ class LambdaPackagingTest(unittest.TestCase):
 
         self.assertEqual(manifest["runtime"], "nodejs22.x")
         self.assertEqual(manifest["handler"], "index.handler")
-        self.assertEqual(manifest["files"], ["index.mjs"])
+        self.assertEqual(manifest["files"], ["index.cjs"])
         self.assertTrue(bundle.is_file())
         self.assertLess(bundle.stat().st_size, 20 * 1024 * 1024)
 

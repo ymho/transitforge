@@ -243,6 +243,7 @@ Label `area: ai` `type: reliability` Milestone `会話体験と改善ループ` 
 - AI通信は本文と`x-transitforge-request-id`由来のメタデータを組で返す。最新IDをモジュール共有状態へ保存せず 応答ごとに会話履歴へ渡す
 - Agent Runtimeが選べるTool名 説明 入力schemaは各モデル呼び出しでBackendへ渡す。宿泊検索は行き先 チェックイン日 チェックアウト日を必須とし 日付形式 人数 件数をschemaでも制約する
 - 共通Tool ContractのJSON SchemaはBedrock AdapterでAmazon Nova向けへ変換し 最上位を`type` `properties` `required`だけに限定する。モデル固有の制約をDomain Toolへ漏らさない
+- Agent API LambdaはAWS SDKのCommonJS依存を含む単一`.cjs` bundleとして配布し CIでNode.jsによる実読み込みとhandler exportを確認する
 - 列車選択と追跡を起動処理から分離する
 - Lambdaの入力契約 DynamoDB集計 経路探索を入口ハンドラーから分離する
 - 再生状態は時刻変更から独立して管理する
