@@ -52,7 +52,59 @@ describe("createJourneySearchHandlers", () => {
   it("formats a service date in local calendar time", () => {
     expect(formatServiceDate(new Date(2026, 7, 5))).toBe("2026-08-05");
   });
+
+  it("widens balanced searches only when a smaller transfer depth has no route", async () => {
+    const search = vi.fn()
+      .mockResolvedValueOnce(journeyResponse(1, []))
+      .mockResolvedValueOnce(journeyResponse(2, [{
+        departureTimeMinutes: 600,
+        arrivalTimeMinutes: 720,
+        transferCount: 2,
+        legs: [],
+      }]));
+    const handlers = createJourneySearchHandlers({
+      trains,
+      getDisplayTrains: () => trains,
+      stationLineCatalog: catalog,
+      getDisplayedServiceDateStart: () => new Date(2026, 7, 27),
+      currentCoordinate: vi.fn(),
+      journeySearchService: { search } as unknown as JourneySearchService,
+      linePresentation: {
+        colorForStations: () => ({ color: "#000", lineName: "テスト線" }),
+      },
+    });
+
+    await handlers.backendSearchRoutes({
+      originStation: "大阪",
+      destinationStation: "宮島口",
+      departureTimeMinutes: 480,
+      maxTransfers: 3,
+      rankingPreference: "balanced",
+    });
+
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(search).toHaveBeenNthCalledWith(1, expect.objectContaining({ maxTransfers: 1 }));
+    expect(search).toHaveBeenNthCalledWith(2, expect.objectContaining({ maxTransfers: 2 }));
+  });
 });
+
+function journeyResponse(
+  maxTransfers: 1 | 2,
+  journeys: Array<Record<string, unknown>>,
+): Record<string, unknown> {
+  return {
+    serviceDate: "2026-08-27",
+    originStation: "大阪",
+    destinationStation: "宮島口",
+    searchTimeMinutes: 480,
+    totalMatchCount: journeys.length,
+    transferPace: "standard",
+    rankingPreference: "balanced",
+    maxTransfers,
+    matches: [],
+    journeys,
+  };
+}
 
 function train(
   serviceUid: string,

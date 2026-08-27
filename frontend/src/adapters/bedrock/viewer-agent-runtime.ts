@@ -63,6 +63,11 @@ import {
   type ConversationExpectedInput,
   type ConversationGuidance,
 } from "../../domain/conversation-guidance";
+import {
+  mergeAuthoritativeTripContext,
+  quickReplyMatchesExpectedInput,
+  travelConversationFacts,
+} from "../../domain/travel-conversation-context";
 import type { TripContext, UserProfile } from "@raiquora/trip/travel-profile";
 import {
   tripPlanPatchesFromTravelPlan,
@@ -300,7 +305,13 @@ export async function runViewerAgentRuntime(
     terminalToolResult: (toolName) => terminalToolNames.has(toolName)
       ? "構造化した案内を準備しました。"
       : undefined,
-    limits: { maxIterations: 6, maxModelCalls: 7, maxToolCalls: 12 },
+    limits: {
+      maxIterations: 6,
+      maxModelCalls: 7,
+      maxToolCalls: 12,
+      // 広域グラフ検索はモデル呼び出しより長くなるため全体上限に余裕を持たせる
+      maxExecutionMs: 45_000,
+    },
   });
   const runtimeResult = await runtime.run({
     executionId: crypto.randomUUID(),
@@ -578,6 +589,7 @@ function viewerToolInputSchema(
             destinationWish: { type: "string" },
             startDate: { type: "string" },
             endDate: { type: "string" },
+            stayNights: { type: "integer", minimum: 0, maximum: 30 },
             pace: { type: "number", minimum: 0, maximum: 1 },
             maximumTravelMinutes: { type: ["number", "null"] },
             carAvailable: { type: "boolean" },
@@ -881,7 +893,11 @@ async function executeViewerToolAdapter(
     return { updated: true };
   }
   if (name === "ask_follow_up") {
-    const guidance = conversationGuidanceFromToolInput(input);
+    const guidance = conversationGuidanceFromToolInput(
+      input,
+      originalPrompt,
+      currentDate(dependencies),
+    );
     conversationState.response = guidance;
     return { accepted: true, ...guidance };
   }
@@ -992,6 +1008,23 @@ async function executeViewerToolAdapter(
   }
 
   if (name === "search_direct_routes") {
+    const travelFacts = travelConversationFacts(
+      originalPrompt,
+      currentDate(dependencies),
+    );
+    if (
+      featureFromPrompt(originalPrompt) === "travel_planning" &&
+      (!travelFacts.hasExplicitDate || !travelFacts.hasExplicitStayLength)
+    ) {
+      const guidance = missingTravelScheduleGuidance(
+        originalPrompt,
+        input,
+        travelFacts.context,
+        dependencies.getUserProfile?.(),
+      );
+      conversationState.response = guidance;
+      return { searchDeferred: true, missing: guidance.expectedInput };
+    }
     const promptRequest = directRouteRequestFromPrompt(
       originalPrompt,
       dependencies.trains,
@@ -1005,7 +1038,8 @@ async function executeViewerToolAdapter(
       explicitOriginStationFromPrompt(originalPrompt, input.originStation) ??
       dependencies.getUserProfile?.()?.home.station;
     const requestedDestination =
-      promptRequest?.destinationStation ?? input.destinationStation;
+      promptRequest?.destinationStation ?? input.destinationStation ??
+      travelFacts.context.destinationWish;
     const destinationStation = typeof requestedDestination === "string"
       ? travelDestinationAccess(requestedDestination)?.accessStation ??
         requestedDestination
@@ -1181,7 +1215,28 @@ async function executeViewerToolAdapter(
   }
 
   if (name === "search_accommodations") {
-    const { destination, checkInDate, checkOutDate } = input;
+    const travelFacts = travelConversationFacts(
+      originalPrompt,
+      currentDate(dependencies),
+    );
+    const destination = travelFacts.context.destinationWish ?? input.destination;
+    if (
+      !travelFacts.hasExplicitDate ||
+      !travelFacts.hasExplicitStayLength ||
+      !travelFacts.context.startDate ||
+      !travelFacts.context.endDate
+    ) {
+      const guidance = missingTravelScheduleGuidance(
+        originalPrompt,
+        input,
+        travelFacts.context,
+        dependencies.getUserProfile?.(),
+      );
+      conversationState.response = guidance;
+      return { searchDeferred: true, missing: guidance.expectedInput };
+    }
+    const checkInDate = travelFacts.context.startDate;
+    const checkOutDate = travelFacts.context.endDate;
     if (
       typeof destination !== "string" || destination.trim().length === 0 ||
       typeof checkInDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(checkInDate) ||
@@ -1206,35 +1261,50 @@ async function executeViewerToolAdapter(
       destination: travelDestination?.accommodationDestination ?? destination.trim(), checkInDate, checkOutDate,
       adults: Math.max(1, Math.min(10, adults)), limit: Math.max(1, Math.min(5, requestedLimit)),
     });
-    if (isStayTravelRequest(originalPrompt) && dependencies.searchDirectRoutes) {
+    if (dependencies.searchDirectRoutes) {
       const destinationStation = travelDestination?.accessStation ??
         stationForTravelDestination(destination, dependencies.trains);
       if (destinationStation) {
         const preferences = dependencies.getJourneySearchPreferences?.() ??
           defaultJourneySearchPreferences;
         const profileOriginStation = dependencies.getUserProfile?.()?.home.station;
-        const outboundResult = await dependencies.searchDirectRoutes({
+        const outboundRequest = {
           ...(profileOriginStation ? { originStation: profileOriginStation } : {}),
           destinationStation,
           departureTimeMinutes: 8 * 60,
           departureDate: checkInDate,
           serviceDate: checkInDate,
           ...preferences,
-        });
+        };
+        const [outboundResult, parallelReturningResult] = profileOriginStation
+          ? await Promise.all([
+              dependencies.searchDirectRoutes(outboundRequest),
+              dependencies.searchDirectRoutes({
+                originStation: destinationStation,
+                destinationStation: profileOriginStation,
+                departureTimeMinutes: 10 * 60,
+                departureDate: checkOutDate,
+                serviceDate: checkOutDate,
+                ...preferences,
+              }),
+            ])
+          : [await dependencies.searchDirectRoutes(outboundRequest), undefined];
         const outbound = journeyPlanFromSearchResponse(outboundResult, {
           destinationStation,
           departureDate: checkInDate,
           searchTimeMinutes: 8 * 60,
           preferences,
         });
-        const returningResult = await dependencies.searchDirectRoutes({
-          originStation: destinationStation,
-          destinationStation: outbound.originStation,
-          departureTimeMinutes: 10 * 60,
-          departureDate: checkOutDate,
-          serviceDate: checkOutDate,
-          ...preferences,
-        });
+        const returningResult = parallelReturningResult === undefined
+          ? await dependencies.searchDirectRoutes({
+              originStation: destinationStation,
+              destinationStation: outbound.originStation,
+              departureTimeMinutes: 10 * 60,
+              departureDate: checkOutDate,
+              serviceDate: checkOutDate,
+              ...preferences,
+            })
+          : parallelReturningResult;
         travelState.response = {
           destination: destination.trim(),
           adults: Math.max(1, Math.min(10, adults)),
@@ -1665,22 +1735,44 @@ function conversationResponseText(
 
 function conversationGuidanceFromToolInput(
   input: Record<string, unknown>,
+  originalPrompt: string,
+  now: Date,
 ): ConversationGuidance {
   const question = typeof input.question === "string" ? input.question : "";
   if (!question.trim()) {
     throw new Error("次の質問が必要です。");
   }
-  const expectedInput = isConversationExpectedInput(input.expectedInput)
+  const requestedExpectedInput = isConversationExpectedInput(input.expectedInput)
     ? input.expectedInput
     : "free-text";
-  const quickReplies = Array.isArray(input.quickReplies)
+  const candidateContext = tripContextFromToolInput(input.tripContext);
+  const tripContext = mergeAuthoritativeTripContext(
+    candidateContext,
+    originalPrompt,
+    now,
+  );
+  const facts = travelConversationFacts(originalPrompt, now);
+  const expectedInput = featureFromPrompt(originalPrompt) === "travel_planning" &&
+      !facts.hasExplicitDate
+    ? "departure-date"
+    : featureFromPrompt(originalPrompt) === "travel_planning" &&
+        !facts.hasExplicitStayLength
+      ? "stay-length"
+      : requestedExpectedInput;
+  const quickReplies = (Array.isArray(input.quickReplies)
     ? input.quickReplies.flatMap((value) => {
       if (!value || typeof value !== "object") return [];
       const reply = value as Record<string, unknown>;
       if (typeof reply.label !== "string" || typeof reply.value !== "string") return [];
       return [{ label: reply.label, value: reply.value }];
     })
-    : [];
+    : []).filter(({ value }) => quickReplyMatchesExpectedInput(value, expectedInput));
+  const normalizedQuestion = expectedInput === "departure-date" &&
+      /(?:泊|滞在日数)/u.test(question)
+    ? "いつ出発しますか？"
+    : expectedInput === "stay-length" && /(?:出発日|いつ.*出発)/u.test(question)
+      ? "何泊にしますか？"
+      : question;
   return normalizedConversationGuidance({
     ...(typeof input.recommendation === "string" && input.recommendation.trim()
       ? { recommendation: input.recommendation.trim().slice(0, 800) }
@@ -1688,10 +1780,56 @@ function conversationGuidanceFromToolInput(
     ...(typeof input.reason === "string" && input.reason.trim()
       ? { reason: input.reason.trim().slice(0, 240) }
       : {}),
-    question,
+    question: normalizedQuestion,
     expectedInput,
     quickReplies,
-    tripContext: tripContextFromToolInput(input.tripContext),
+    tripContext,
+  });
+}
+
+function missingTravelScheduleGuidance(
+  prompt: string,
+  input: Record<string, unknown>,
+  knownContext: TripContext,
+  profile?: UserProfile,
+): ConversationGuidance {
+  const requestedDestination = knownContext.destinationWish ??
+    (typeof input.destination === "string" ? input.destination.trim() : undefined) ??
+    (typeof input.destinationStation === "string"
+      ? input.destinationStation.trim()
+      : undefined);
+  const destination = travelDestinationAccess(prompt)?.name ??
+    travelDestinationAccess(requestedDestination ?? "")?.name ??
+    requestedDestination ?? "行き先";
+  const context = { ...knownContext, destinationWish: destination };
+  const active = (profile?.travelStyle.pace ?? context.pace ?? 0.5) >= 0.7;
+  const recommendation = `${destination}なら、まずは1泊を基準にして、${
+    active ? "見どころをいくつか巡りつつ" : "予定を詰め込みすぎず"
+  }現地らしさを楽しめる形から考えるのがおすすめです。`;
+  if (!context.startDate) {
+    return normalizedConversationGuidance({
+      recommendation,
+      reason: "日付が決まれば、実際の列車と宿泊候補を同じ日程で確認できます。",
+      question: "いつ出発しますか？",
+      expectedInput: "departure-date",
+      quickReplies: [
+        { label: "今日", value: "今日" },
+        { label: "明日", value: "明日" },
+      ],
+      tripContext: context,
+    });
+  }
+  return normalizedConversationGuidance({
+    recommendation,
+    reason: "滞在日数が決まれば、帰りの経路と宿泊日を揃えて確認できます。",
+    question: "何泊にしますか？",
+    expectedInput: "stay-length",
+    quickReplies: [
+      { label: "日帰り", value: "日帰り" },
+      { label: "1泊", value: "1泊" },
+      { label: "2泊", value: "2泊" },
+    ],
+    tripContext: context,
   });
 }
 
@@ -1709,6 +1847,9 @@ function tripContextFromToolInput(value: unknown): TripContext {
     ...(stringValue("destinationWish") ? { destinationWish: stringValue("destinationWish") } : {}),
     ...(stringValue("startDate") ? { startDate: stringValue("startDate") } : {}),
     ...(stringValue("endDate") ? { endDate: stringValue("endDate") } : {}),
+    ...(boundedInteger(input.stayNights, 0, 30) === undefined
+      ? {}
+      : { stayNights: boundedInteger(input.stayNights, 0, 30) }),
     ...(typeof input.pace === "number" && input.pace >= 0 && input.pace <= 1
       ? { pace: input.pace }
       : {}),
