@@ -1809,6 +1809,7 @@ describe("Bedrock viewer agent", () => {
     expect(result.conversation.quickReplies).toEqual([]);
     expect(result.text).toContain("日程未定なら");
     expect(result.text).toContain("1泊にして");
+    expect(result.text).not.toContain("構造化した案内を準備しました");
   });
 
   it("defers route search for a destination-only trip instead of exposing a terminal placeholder", async () => {
@@ -1942,6 +1943,8 @@ describe("Bedrock viewer agent", () => {
         considerations: ["歩く時間を短めにする"],
       },
     });
+    expect(result.text).toBe("駅から宿までレンタカー移動を追加");
+    expect(result.text).not.toContain("構造化した案内を準備しました");
     vi.unstubAllGlobals();
   });
 
