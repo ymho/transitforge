@@ -219,7 +219,7 @@ Composition Rootやremote transportは別の運用判断として追加する。
 - Agent Tool定義は名前のallowlistを正本とし 件数上限を別の固定値で重ねない。拒否ログにはpayloadを含めず検証理由とrequest IDだけを残す
 - モデルが`thinking`や`analysis`の内部推論だけを返した場合は画面へ出さず 同じ実行上限内で利用者向け応答を一度再要求する
 - 利用者入力をHTMLとして描画しない
-- 会話は保存しない。ただし利用者が応答の評価を送信した場合だけ、評価時点までの会話本文と関連リクエストIDを非公開のフィードバック保存先へ90日間保存する
+- 会話は端末内のSessionへ保存する。利用者が応答の評価を送信した場合だけ、スポットなどの外部情報を含む評価時点までの会話本文と関連リクエストIDを非公開のフィードバック保存先へ90日間保存する
 - 評価と不具合調査用Agent Traceは会話全文を含めず 最大100 event 24KiBに制限して非公開S3へ30日間保存する
 - TraceはブラウザとLambdaの両方で秘密値と現在地座標を除去し task ID execution ID request IDで追跡する
 - AI API応答ヘッダーのx-transitforge-request-idと構造化ログのrequestIdを対応付ける

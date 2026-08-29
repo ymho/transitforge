@@ -183,13 +183,26 @@ export function configureAiGuidePanel(
     const send = (comment?: string, status?: HTMLElement) => {
       setFeedbackControlsDisabled(message, true);
       if (status) status.textContent = "送信中";
-      const feedback = buildConversationFeedback(
-        conversationSessionId,
-        historyRepository.list(conversationSessionId),
-        message.dataset.messageId!,
-        rating,
-        comment,
-      );
+      let feedback: ConversationFeedback;
+      try {
+        feedback = buildConversationFeedback(
+          conversationSessionId,
+          historyRepository.list(conversationSessionId),
+          message.dataset.messageId!,
+          rating,
+          comment,
+        );
+      } catch {
+        setFeedbackControlsDisabled(message, false);
+        const errorMessage = "この回答を評価できませんでした。会話を開き直してもう一度お試しください";
+        if (status) {
+          status.textContent = errorMessage;
+        } else {
+          message.querySelector(".conversation-feedback")
+            ?.append(feedbackStatus(errorMessage));
+        }
+        return;
+      }
       void submitFeedback(feedback)
         .then(() => {
           target.dataset.feedbackStored = "true";
