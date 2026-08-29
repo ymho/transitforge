@@ -158,7 +158,8 @@ function isViewerAgentResponse(value: unknown): value is ViewerAgentResponse {
   if (typeof value === "string") return true;
   if (!isRecord(value) || typeof value.text !== "string") return false;
   return "journeyPlan" in value || "travelPlan" in value ||
-    "conversation" in value || "tripPlanUpdate" in value;
+    "conversation" in value || "tripPlanUpdate" in value ||
+    "external" in value;
 }
 
 function responseText(response: ViewerAgentResponse): string {

@@ -43,4 +43,30 @@ describe("buildConversationFeedback", () => {
       "session-1", messages, "missing", "bad",
     )).toThrow("評価対象");
   });
+
+  it("builds feedback from a restored place response", () => {
+    const feedback = buildConversationFeedback(
+      "session-place",
+      [{
+        messageId: "place-answer",
+        role: "assistant",
+        response: {
+          text: "宮島周辺の観光スポットを見つけました",
+          external: {},
+        },
+        requestId: "request-place",
+      }],
+      "place-answer",
+      "good",
+    );
+
+    expect(feedback).toMatchObject({
+      targetMessageId: "place-answer",
+      requestIds: ["request-place"],
+      conversation: [{
+        messageId: "place-answer",
+        text: "宮島周辺の観光スポットを見つけました",
+      }],
+    });
+  });
 });

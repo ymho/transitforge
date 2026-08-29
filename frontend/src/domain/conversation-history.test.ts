@@ -95,4 +95,27 @@ describe("conversation history", () => {
       requestId: "request-123",
     });
   });
+
+  it("restores an external place response for feedback", () => {
+    const storage = memoryStorage();
+    appendConversationHistory(storage, "session-a", {
+      messageId: "place-answer",
+      role: "assistant",
+      response: {
+        text: "観光スポットを3件見つけました",
+        external: {},
+      },
+      requestId: "request-place",
+    });
+
+    expect(loadConversationHistory(storage, "session-a")).toEqual([{
+      messageId: "place-answer",
+      role: "assistant",
+      response: {
+        text: "観光スポットを3件見つけました",
+        external: {},
+      },
+      requestId: "request-place",
+    }]);
+  });
 });
