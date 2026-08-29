@@ -15,6 +15,9 @@ export interface ViewerElements {
   playbackSpeedOptions: HTMLFieldSetElement;
   playbackSpeedButtons: HTMLButtonElement[];
   mapTools: HTMLElement;
+  mapPlaceExplorer: HTMLElement;
+  mapPlaceExplorerList: HTMLElement;
+  closeMapPlaceExplorer: HTMLButtonElement;
   weatherButtons: HTMLButtonElement[];
   weatherMenuToggle: HTMLButtonElement;
   weatherOptions: HTMLFieldSetElement;
@@ -74,6 +77,9 @@ export function loadViewerElements(root: ParentNode): ViewerElements {
     playbackSpeedOptions: required(root, "#playback-speed-options"),
     playbackSpeedButtons: requiredAll(root, "[data-playback-speed]", 1),
     mapTools: required(root, "#map-tools"),
+    mapPlaceExplorer: required(root, "#map-place-explorer"),
+    mapPlaceExplorerList: required(root, "#map-place-explorer-list"),
+    closeMapPlaceExplorer: required(root, "#close-map-place-explorer"),
     weatherButtons: requiredAll(root, "[data-weather]", 4, 4),
     weatherMenuToggle: required(root, "#weather-menu-toggle"),
     weatherOptions: required(root, "#weather-options"),

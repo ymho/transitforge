@@ -9,7 +9,6 @@ export function renderExternalTravelInformation(
   const container = document.createElement("section");
   container.className = "external-travel-cards";
   appendWeather(container, response.external.weather, onWeather);
-  appendPlaces(container, response.external.places);
   appendFlights(container, response.external.flights);
   return container;
 }
@@ -48,42 +47,6 @@ function appendWeather(
   }
   group.append(evidenceCaption(weather));
   container.append(group);
-}
-
-function appendPlaces(
-  container: HTMLElement,
-  places: ViewerAgentExternalResponse["external"]["places"],
-): void {
-  if (places?.status !== "available" || !places.data) return;
-  const list = document.createElement("div");
-  list.className = "external-place-list";
-  for (const place of places.data.places) {
-    const card = document.createElement("article");
-    card.dataset.placeId = place.providerPlaceId;
-    if (place.image?.hotlinkAllowed) {
-      const image = document.createElement("img");
-      image.src = place.image.url;
-      image.alt = place.name;
-      image.loading = "lazy";
-      card.append(image);
-    }
-    const name = document.createElement("strong");
-    name.textContent = place.name;
-    card.append(name);
-    if (place.summary) {
-      const summary = document.createElement("p");
-      summary.textContent = place.summary;
-      card.append(summary);
-    }
-    if (place.image) {
-      const credit = document.createElement("small");
-      credit.textContent = place.image.attribution;
-      card.append(credit);
-    }
-    list.append(card);
-  }
-  list.append(evidenceCaption(places));
-  container.append(list);
 }
 
 function appendFlights(

@@ -2,35 +2,56 @@ import mapboxgl from "mapbox-gl";
 import type { PlaceMedia } from "@raiquora/trip/place-media";
 
 const sourceId = "verified-travel-places";
-const placesByMap = new WeakMap<mapboxgl.Map, Map<string, PlaceMedia>>();
+const clusterLayerId = `${sourceId}-clusters`;
+const pointLayerId = `${sourceId}-points`;
 
-export function showVerifiedPlaces(
+export interface VerifiedPlaceLayerController {
+  show(places: readonly PlaceMedia[]): void;
+  focus(providerPlaceId: string): void;
+  clear(): void;
+}
+
+/** 検証済みの外部スポットだけをMapboxへ渡すAdapter */
+export function createVerifiedPlaceLayer(
   map: mapboxgl.Map,
-  places: readonly PlaceMedia[],
-  consult: (place: PlaceMedia) => void,
-): void {
-  const valid = places.filter((place) => Number.isFinite(place.latitude) && Number.isFinite(place.longitude));
-  placesByMap.set(map, new Map(valid.map((place) => [place.providerPlaceId, place])));
-  const data = { type: "FeatureCollection" as const, features: valid.map((place) => ({
-    type: "Feature" as const, id: place.providerPlaceId,
-    geometry: { type: "Point" as const, coordinates: [place.longitude!, place.latitude!] },
-    properties: { providerPlaceId: place.providerPlaceId, name: place.name },
-  })) };
-  const source = map.getSource(sourceId) as mapboxgl.GeoJSONSource | undefined;
-  if (source) source.setData(data);
-  else {
-    map.addSource(sourceId, { type: "geojson", data, cluster: true, clusterRadius: 42 });
-    map.addLayer({ id: `${sourceId}-clusters`, type: "circle", source: sourceId, filter: ["has", "point_count"], paint: { "circle-color": "#2589ff", "circle-radius": ["step", ["get", "point_count"], 18, 10, 24], "circle-stroke-color": "rgba(255,255,255,.8)", "circle-stroke-width": 2 } });
-    map.addLayer({ id: `${sourceId}-points`, type: "circle", source: sourceId, filter: ["!", ["has", "point_count"]], paint: { "circle-color": "#2589ff", "circle-radius": 8, "circle-stroke-color": "#fff", "circle-stroke-width": 2 } });
-    map.on("click", `${sourceId}-points`, (event) => {
+  onSelected: (place: PlaceMedia) => void,
+): VerifiedPlaceLayerController {
+  let placesById = new Map<string, PlaceMedia>();
+  let selectedId: string | undefined;
+  let handlersAttached = false;
+
+  const ensureLayer = () => {
+    if (!map.getSource(sourceId)) {
+      map.addSource(sourceId, { type: "geojson", data: featureCollection([]), cluster: true, clusterRadius: 42 });
+    }
+    if (!map.getLayer(clusterLayerId)) {
+      map.addLayer({ id: clusterLayerId, type: "circle", source: sourceId, filter: ["has", "point_count"], paint: {
+        "circle-color": "#2589ff",
+        "circle-radius": ["step", ["get", "point_count"], 18, 10, 24],
+        "circle-stroke-color": "rgba(255,255,255,.8)",
+        "circle-stroke-width": 2,
+      } });
+    }
+    if (!map.getLayer(pointLayerId)) {
+      map.addLayer({ id: pointLayerId, type: "circle", source: sourceId, filter: ["!", ["has", "point_count"]], paint: {
+        "circle-color": ["case", ["boolean", ["feature-state", "selected"], false], "#ffffff", "#2589ff"],
+        "circle-radius": ["case", ["boolean", ["feature-state", "selected"], false], 12, 8],
+        "circle-stroke-color": ["case", ["boolean", ["feature-state", "selected"], false], "#2589ff", "#ffffff"],
+        "circle-stroke-width": 3,
+      } });
+    }
+    if (handlersAttached) return;
+    handlersAttached = true;
+    map.on("click", pointLayerId, (event) => {
       const id = event.features?.[0]?.properties?.providerPlaceId;
-      const place = typeof id === "string" ? placesByMap.get(map)?.get(id) : undefined;
+      const place = typeof id === "string" ? placesById.get(id) : undefined;
       if (!place) return;
-      new mapboxgl.Popup({ closeButton: true, maxWidth: "280px" }).setLngLat([place.longitude!, place.latitude!]).setDOMContent(placePopup(place, consult)).addTo(map);
+      select(id, false);
+      onSelected(place);
     });
-    map.on("mouseenter", `${sourceId}-points`, () => { map.getCanvas().style.cursor = "pointer"; });
-    map.on("mouseleave", `${sourceId}-points`, () => { map.getCanvas().style.cursor = ""; });
-    map.on("click", `${sourceId}-clusters`, (event) => {
+    map.on("mouseenter", pointLayerId, () => { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseleave", pointLayerId, () => { map.getCanvas().style.cursor = ""; });
+    map.on("click", clusterLayerId, (event) => {
       const feature = event.features?.[0];
       const clusterId = feature?.properties?.cluster_id;
       if (typeof clusterId !== "number" || feature?.geometry.type !== "Point") return;
@@ -39,19 +60,50 @@ export function showVerifiedPlaces(
         if (!error && zoom !== null) map.easeTo({ center, zoom });
       });
     });
-  }
-  if (valid.length > 0) {
-    const bounds = valid.reduce((current, place) => current.extend([place.longitude!, place.latitude!]), new mapboxgl.LngLatBounds([valid[0]!.longitude!, valid[0]!.latitude!], [valid[0]!.longitude!, valid[0]!.latitude!]));
-    map.fitBounds(bounds, { padding: 80, maxZoom: 13, duration: 700 });
-  }
+  };
+
+  const select = (providerPlaceId: string, moveMap: boolean) => {
+    const place = placesById.get(providerPlaceId);
+    if (!place || place.longitude === undefined || place.latitude === undefined) return;
+    if (selectedId) map.setFeatureState({ source: sourceId, id: selectedId }, { selected: false });
+    selectedId = providerPlaceId;
+    map.setFeatureState({ source: sourceId, id: providerPlaceId }, { selected: true });
+    if (moveMap) map.easeTo({ center: [place.longitude, place.latitude], zoom: Math.max(map.getZoom(), 14), duration: 700 });
+  };
+
+  return {
+    show(places) {
+      const valid = places.filter(hasCoordinates);
+      placesById = new Map(valid.map((place) => [place.providerPlaceId, place]));
+      selectedId = undefined;
+      ensureLayer();
+      (map.getSource(sourceId) as mapboxgl.GeoJSONSource).setData(featureCollection(valid));
+      if (valid.length === 0) return;
+      const first = valid[0]!;
+      const bounds = valid.reduce(
+        (current, place) => current.extend([place.longitude!, place.latitude!]),
+        new mapboxgl.LngLatBounds([first.longitude!, first.latitude!], [first.longitude!, first.latitude!]),
+      );
+      map.fitBounds(bounds, { padding: 80, maxZoom: 13, duration: 700 });
+    },
+    focus(providerPlaceId) { select(providerPlaceId, true); },
+    clear() {
+      placesById.clear();
+      selectedId = undefined;
+      (map.getSource(sourceId) as mapboxgl.GeoJSONSource | undefined)?.setData(featureCollection([]));
+    },
+  };
 }
 
-function placePopup(place: PlaceMedia, consult: (place: PlaceMedia) => void): HTMLElement {
-  const card = document.createElement("article"); card.className = "map-place-card";
-  if (place.image?.hotlinkAllowed) { const image = document.createElement("img"); image.src = place.image.url; image.alt = place.name; image.loading = "lazy"; card.append(image); }
-  const name = document.createElement("strong"); name.textContent = place.name; card.append(name);
-  if (place.summary) { const summary = document.createElement("p"); summary.textContent = place.summary; card.append(summary); }
-  const action = document.createElement("button"); action.type = "button"; action.textContent = "ここへ行く相談"; action.addEventListener("click", () => consult(place)); card.append(action);
-  const attribution = document.createElement("small"); attribution.textContent = place.image?.attribution ?? "Wikipedia contributors"; card.append(attribution);
-  return card;
+function hasCoordinates(place: PlaceMedia): boolean {
+  return Number.isFinite(place.latitude) && Number.isFinite(place.longitude);
+}
+
+function featureCollection(places: readonly PlaceMedia[]) {
+  return { type: "FeatureCollection" as const, features: places.map((place) => ({
+    type: "Feature" as const,
+    id: place.providerPlaceId,
+    geometry: { type: "Point" as const, coordinates: [place.longitude!, place.latitude!] },
+    properties: { providerPlaceId: place.providerPlaceId, name: place.name },
+  })) };
 }

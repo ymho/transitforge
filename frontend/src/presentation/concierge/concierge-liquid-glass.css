@@ -353,14 +353,9 @@
 }
 
 .external-travel-cards { display: grid; gap: .8rem; margin-top: .8rem; }
-.external-weather, .external-place-list, .external-flight-list { display: grid; gap: .55rem; }
-.external-weather-days, .external-place-list { display: flex; gap: .65rem; overflow-x: auto; padding: .15rem .05rem .45rem; scroll-snap-type: x proximity; }
+.external-weather, .external-flight-list { display: grid; gap: .55rem; }
+.external-weather-days { display: flex; gap: .65rem; overflow-x: auto; padding: .15rem .05rem .45rem; scroll-snap-type: x proximity; }
 .external-weather-days article { display: grid; flex: 0 0 6.5rem; gap: .25rem; padding: .7rem; border: 1px solid var(--glass-border-subtle); border-radius: 1rem; background: var(--glass-surface); scroll-snap-align: start; }
 .external-weather-days span, .external-evidence-caption { color: var(--glass-muted); font-size: .68rem; }
-.external-place-list article { display: grid; flex: 0 0 14rem; gap: .45rem; overflow: hidden; border: 1px solid var(--glass-border-subtle); border-radius: 1rem; background: var(--glass-surface); scroll-snap-align: start; }
-.external-place-list article > :not(img) { margin-inline: .7rem; }
-.external-place-list article > :last-child { margin-bottom: .7rem; }
-.external-place-list img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
-.external-place-list p { display: -webkit-box; margin-block: 0; overflow: hidden; color: var(--glass-muted); font-size: .72rem; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 .external-flight-list article { padding: .7rem .8rem; border: 1px solid var(--glass-border-subtle); border-radius: .9rem; background: var(--glass-surface); }
 .external-weather-map-action { justify-self: start; padding: .45rem .75rem; border: 1px solid var(--glass-border-subtle); border-radius: 999px; color: var(--glass-accent-strong); background: var(--glass-surface); font: inherit; font-size: .7rem; font-weight: 700; }

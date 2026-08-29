@@ -4,7 +4,10 @@ import { browserPollingEnvironment } from "../adapters/browser/polling-controlle
 import { currentBrowserCoordinate } from "../adapters/browser/current-coordinate";
 import { createRuntimeMonitor, nextBrowserFrame } from "../adapters/browser/runtime-monitor";
 import { applyWeather } from "../adapters/mapbox/map-weather";
-import { showVerifiedPlaces } from "../adapters/mapbox/place-media-layer";
+import {
+  createVerifiedPlaceLayer,
+  type VerifiedPlaceLayerController,
+} from "../adapters/mapbox/place-media-layer";
 import { BrowserTravelRecheckRepository } from "../adapters/browser/travel-recheck-repository";
 import { runDueTravelRechecks } from "../usecases/trip-plan/travel-recheck-runner";
 import {
@@ -131,6 +134,10 @@ import {
   renderDisplayMode,
 } from "../presentation/train-viewer/map-controls";
 import { createLoadingScreen } from "../presentation/shared/loading-screen";
+import {
+  configureMapPlaceExplorer,
+  type MapPlaceExplorerController,
+} from "../presentation/place-explorer/map-place-explorer";
 import { MapboxThreeTrainLayer } from "../presentation/train-viewer/rendering/mapbox-three-train-layer";
 import { RuntimeMetrics } from "../observability/runtime-metrics";
 import { configureTravelProfile } from "../presentation/concierge/travel-profile-panel";
@@ -192,6 +199,9 @@ const {
   playbackSpeedOptions,
   playbackSpeedButtons,
   mapTools,
+  mapPlaceExplorer,
+  mapPlaceExplorerList,
+  closeMapPlaceExplorer,
   weatherButtons,
   weatherMenuToggle,
   weatherOptions,
@@ -293,7 +303,9 @@ updateConciergeIdentity(true);
 document.addEventListener(travelProfileChangedEvent, () =>
   updateConciergeIdentity(true));
 let aiGuideController: ReturnType<typeof configureAiGuidePanel>;
-let viewerMap: mapboxgl.Map | undefined;
+let verifiedPlaceLayer: VerifiedPlaceLayerController | undefined;
+let mapPlaceExplorerController: MapPlaceExplorerController | undefined;
+let pendingVerifiedPlaces: import("@raiquora/trip/place-media").PlaceMedia[] = [];
 let applyForecastWeather: ((forecast: import("@raiquora/trip/weather-forecast").WeatherForecast) => void) | undefined;
 const tripPreviewEnabled = import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get("trip-preview") === "1";
@@ -356,7 +368,16 @@ aiGuideController = configureAiGuidePanel(
       });
       conversationSessionRepository.save(activeConversationSession);
     },
-    onPlaces: (places) => viewerMap && showVerifiedPlaces(viewerMap, places, (place) => aiGuideController.ask(`${place.name}を旅程へ追加したい`)),
+    onPlaces: (places) => {
+      pendingVerifiedPlaces = [...places];
+      if (places.length === 0) {
+        mapPlaceExplorerController?.clear();
+        verifiedPlaceLayer?.clear();
+        return;
+      }
+      verifiedPlaceLayer?.show(places);
+      mapPlaceExplorerController?.show(places);
+    },
     onWeather: (forecast) => applyForecastWeather?.(forecast),
     onTripPlanUpdate: (proposal) => {
       tripPlanController.apply(proposal.patches);
@@ -464,7 +485,23 @@ if (!token) {
     bearing: -18,
     antialias: true,
   });
-  viewerMap = map;
+  verifiedPlaceLayer = createVerifiedPlaceLayer(map, (place) =>
+    mapPlaceExplorerController?.select(place.providerPlaceId, false));
+  mapPlaceExplorerController = configureMapPlaceExplorer({
+    panel: mapPlaceExplorer,
+    list: mapPlaceExplorerList,
+    close: closeMapPlaceExplorer,
+    focusPlace: (providerPlaceId) => verifiedPlaceLayer?.focus(providerPlaceId),
+    consult: (place) => aiGuideController.ask(`${place.name}を旅程へ追加したい`),
+    clearPlaces: () => {
+      pendingVerifiedPlaces = [];
+      verifiedPlaceLayer?.clear();
+    },
+  });
+  if (pendingVerifiedPlaces.length > 0) {
+    verifiedPlaceLayer.show(pendingVerifiedPlaces);
+    mapPlaceExplorerController.show(pendingVerifiedPlaces);
+  }
 
   map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }));
   const geolocateControl = new mapboxgl.GeolocateControl({

@@ -350,6 +350,7 @@ export function configureAiGuidePanel(
 
   const controller: AiGuidePanelController = {
     switchSession(nextConversationSessionId) {
+      elements.onPlaces?.([]);
       conversationSessionId = nextConversationSessionId;
       activeConversation = undefined;
       activeTripContext = undefined;
@@ -560,12 +561,13 @@ function resolveAssistantMessage(
     text.textContent = visibleAssistantText(response.text);
     item.append(text);
     if (response.external) {
-      item.append(renderExternalTravelInformation({ text: response.text, external: response.external }, onWeather));
+      appendExternalCards(item, renderExternalTravelInformation({ text: response.text, external: response.external }, onWeather));
       if (response.external.places?.status === "available" && response.external.places.data) onPlaces?.(response.external.places.data.places);
     }
     onTravelPlan?.(response.travelPlan);
   } else if ("external" in response) {
-    item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response.text)), renderExternalTravelInformation(response, onWeather));
+    item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response.text)));
+    appendExternalCards(item, renderExternalTravelInformation(response, onWeather));
     if (response.external.places?.status === "available" && response.external.places.data) onPlaces?.(response.external.places.data.places);
   } else {
     item.classList.add("ai-guide-message-journey");
@@ -577,6 +579,10 @@ function resolveAssistantMessage(
   }
   appendConversationFeedback(item);
   item.scrollIntoView({ block: "nearest" });
+}
+
+function appendExternalCards(parent: HTMLElement, cards: HTMLElement): void {
+  if (cards.childElementCount > 0) parent.append(cards);
 }
 
 function tripPlanPatchLabel(patch: import("@raiquora/trip/trip-plan").TripPlanPatch): string {
