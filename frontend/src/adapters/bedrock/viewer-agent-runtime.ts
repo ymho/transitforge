@@ -302,9 +302,15 @@ export async function runViewerAgentRuntime(
     problemFramer: viewerProblemFramer(prompt, dependencies),
     viewerActionHandler,
     toolViewerActions,
-    terminalToolResult: (toolName) => terminalToolNames.has(toolName)
-      ? "構造化した案内を準備しました。"
-      : undefined,
+    terminalToolResult: (toolName) => viewerTerminalResponseText(
+      toolName,
+      toolState,
+      travelState,
+      conversationState,
+      tripPlanUpdateState,
+      dependencies.getTripPlan?.(),
+      dependencies.getUserProfile?.(),
+    ),
     limits: {
       maxIterations: 6,
       maxModelCalls: 7,
@@ -1585,6 +1591,35 @@ function travelResponseText(
     text: `${formatCalendarDate(plan.checkInDate)}から${formatCalendarDate(plan.checkOutDate)}までの${plan.destination}旅行です。${advisory}${stayAdvisory}行きと帰りの経路、宿泊候補をまとめました。`,
     travelPlan: plan,
   };
+}
+
+function viewerTerminalResponseText(
+  toolName: string,
+  directRouteState: DirectRouteToolState,
+  travelState: TravelToolState,
+  conversationState: ConversationToolState,
+  tripPlanUpdateState: TripPlanUpdateToolState,
+  currentPlan?: TripPlan,
+  profile?: UserProfile,
+): string | undefined {
+  if (!terminalToolNames.has(toolName)) return undefined;
+
+  const travelResponse = travelResponseText(travelState, currentPlan, profile);
+  if (travelResponse) return travelResponse.text;
+
+  const conversationResponse = conversationResponseText(conversationState);
+  if (typeof conversationResponse !== "string" && conversationResponse) {
+    return conversationResponse.text;
+  }
+
+  if (tripPlanUpdateState.proposal) {
+    return tripPlanUpdateState.proposal.summary;
+  }
+
+  const directRouteResponse = directRouteResponseText(directRouteState);
+  return typeof directRouteResponse === "string"
+    ? directRouteResponse
+    : directRouteResponse?.text;
 }
 
 function extendedStayAdvisory(plan: ViewerAgentTravelPlan): string {

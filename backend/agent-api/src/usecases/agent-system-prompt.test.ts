@@ -13,6 +13,7 @@ describe("agentSystemPrompt", () => {
     expect(agentSystemPrompt).toContain("現時点の推奨案を先に示して");
     expect(agentSystemPrompt).toContain("一度に一つの条件だけを質問");
     expect(agentSystemPrompt).toContain("Toolの失敗や入力不備");
+    expect(agentSystemPrompt).toContain("内部処理の完了だけを回答にせず");
     expect(agentSystemPrompt).toContain("利用者に教えてくださいと逆に質問しない");
     expect(agentSystemPrompt).toContain("私ならそうする理由");
     expect(agentSystemPrompt).toContain("裸のYes No質問にせず");
