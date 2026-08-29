@@ -1,0 +1,106 @@
+.map-place-explorer {
+  position: absolute;
+  z-index: 5;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  display: grid;
+  width: min(48rem, calc(100vw - 2.5rem));
+  gap: .55rem;
+  padding: .75rem;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 1.35rem;
+  color: var(--glass-text);
+  background: var(--glass-surface);
+  box-shadow: 0 .8rem 2.8rem rgb(0 0 0 / 18%);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  animation: sheet-rise-in 260ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.map-place-explorer[hidden] { display: none; }
+.map-place-explorer > header { display: flex; min-height: 2rem; align-items: center; justify-content: space-between; padding-inline: .25rem; }
+.map-place-explorer > header strong { font-size: .78rem; }
+
+#close-map-place-explorer {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: var(--glass-muted);
+  background: var(--glass-surface-muted);
+  font: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.map-place-explorer-list {
+  display: flex;
+  gap: .65rem;
+  padding: .1rem .15rem .35rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+
+.map-place-option {
+  display: grid;
+  flex: 0 0 min(17rem, 78vw);
+  overflow: hidden;
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: 1rem;
+  background: var(--glass-surface-strong);
+  scroll-snap-align: center;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.map-place-option[data-selected] {
+  border-color: var(--glass-accent-strong);
+  background: var(--glass-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--glass-accent-strong);
+  transform: translateY(-2px);
+}
+
+.map-place-option-focus {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  min-height: 5rem;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-place-option-focus:not(:has(img)) { grid-template-columns: minmax(0, 1fr); }
+.map-place-option-focus:hover { background: var(--glass-surface-muted); }
+.map-place-option-focus:focus-visible { outline: 2px solid var(--glass-accent-strong); outline-offset: -2px; }
+.map-place-option-focus img { width: 5rem; height: 100%; min-height: 5rem; object-fit: cover; }
+.map-place-option-focus > span { display: grid; align-content: center; gap: .25rem; padding: .7rem .75rem; }
+.map-place-option-focus strong { overflow: hidden; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
+.map-place-option-focus small { display: -webkit-box; overflow: hidden; color: var(--glass-muted); font-size: .68rem; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+
+.map-place-option footer { display: flex; min-height: 2.4rem; align-items: center; justify-content: space-between; gap: .5rem; padding: .4rem .55rem; border-top: 1px solid var(--glass-border-subtle); }
+.map-place-option footer a { overflow: hidden; color: var(--glass-muted); font-size: .6rem; text-overflow: ellipsis; white-space: nowrap; }
+.map-place-option footer button { flex: 0 0 auto; min-height: 1.8rem; padding: .3rem .65rem; border: 1px solid var(--glass-border); border-radius: 999px; color: var(--glass-accent-strong); background: var(--glass-surface); font: inherit; font-size: .64rem; font-weight: 700; cursor: pointer; }
+
+@media (min-width: 52rem) {
+  #app:has(.ai-guide-panel:not([hidden])) .map-place-explorer { left: min(42rem, calc(100vw - 20rem)); width: auto; }
+}
+
+@media (max-width: 42rem) {
+  .map-place-explorer { right: .65rem; bottom: 5.4rem; width: calc(100vw - 1.3rem); padding: .65rem; border-radius: 1.2rem; }
+  .map-place-explorer > header strong { font-size: .74rem; }
+  .map-place-option { flex-basis: min(15rem, 76vw); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-place-explorer, .map-place-option { animation: none; transition: none; }
+  .map-place-explorer-list { scroll-behavior: auto; }
+}

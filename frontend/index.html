@@ -17,6 +17,13 @@
         </div>
       </section>
       <div id="map" aria-label="Raiquora 3D map"></div>
+      <aside id="map-place-explorer" class="map-place-explorer" aria-label="観光スポット候補" hidden>
+        <header>
+          <strong>地図で見つけたスポット</strong>
+          <button id="close-map-place-explorer" type="button" aria-label="スポット候補を閉じる">×</button>
+        </header>
+        <div id="map-place-explorer-list" class="map-place-explorer-list" role="list"></div>
+      </aside>
       <section id="control-panel" class="hud" aria-label="表示日時パネル">
         <div id="date-time-panel" class="time-control">
           <label class="date-time-display" aria-label="表示日時" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false">

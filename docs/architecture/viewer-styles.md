@@ -13,6 +13,7 @@
 | `presentation/styles/legacy-*.css` | 複数Featureへまたがる移行中のtokenと上書き |
 | `presentation/concierge/*.css` | 会話 プロフィール 経路候補 |
 | `presentation/trip-plan/*.css` | 旅程PanelとCard |
+| `presentation/place-explorer/*.css` | 地図上の観光候補CardとLiquid Glass Panel |
 | `presentation/train-viewer/*.css` | 列車詳細と時刻表 |
 | `presentation/shared/loading-screen*.css` | 起動中と失敗時の表示 |
 
@@ -40,12 +41,14 @@ APIやBedrockを使わず旅程を確認する場合は`npm run dev -- --host 0.
 | 1440 x 900 | day night | Concierge 経路候補 旅程Panel |
 | 390 x 844 | day night | Bottom Sheet 入力欄 日時Picker |
 | 390 x 844 | day night | プロフィール初回表示 旅程Card |
+| 390 x 844 | day night | 観光候補の横スクロール Cardと地図Pin選択 |
 
 次を確認する
 
 - Panelを開閉して地図操作と重ならない
 - 文字とIconのContrastがday nightで維持される
 - 横スクロールする宿候補と縦スクロールする旅程が操作できる
+- 観光候補はCard選択でPinへ移動し Pin選択で対応Cardが画面内へ移動する
 - 会話入力の候補チップは短い選択肢を中央へ並べ 画面幅を超える場合も文字を潰さず横スクロールできる
 - Focus Ringと44px相当の操作領域が失われていない
 - `prefers-reduced-motion`で不要なAnimationが停止する
