@@ -15,6 +15,7 @@ import {
 import type { ViewerAgentAccommodation } from "../../domain/viewer-agent-response";
 
 export interface TripPlanPanelController {
+  switchSession(conversationSessionId: string): void;
   show(plan: TripPlan): void;
   showPreview(plan: TripPlan): void;
   apply(patches: TripPlanPatch[]): void;
@@ -27,10 +28,11 @@ export function configureTripPlanPanel(
   content: HTMLElement,
   close: HTMLButtonElement,
   toggle: HTMLButtonElement,
-  conversationSessionId: string,
+  initialConversationSessionId: string,
   beginChat: (prompt: string) => void,
   storage: Storage,
 ): TripPlanPanelController {
+  let conversationSessionId = initialConversationSessionId;
   let plan = migrateLegacyTripPlan(storage, conversationSessionId) ??
     loadTripPlan(storage, conversationSessionId);
   let persistChanges = true;
@@ -77,6 +79,14 @@ export function configureTripPlanPanel(
   };
 
   const controller: TripPlanPanelController = {
+    switchSession(nextConversationSessionId) {
+      conversationSessionId = nextConversationSessionId;
+      plan = migrateLegacyTripPlan(storage, conversationSessionId) ??
+        loadTripPlan(storage, conversationSessionId);
+      persistChanges = true;
+      collapsedItems.clear();
+      render();
+    },
     show(next) {
       plan = next;
       persistChanges = true;

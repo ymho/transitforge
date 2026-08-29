@@ -80,6 +80,7 @@ export type AiGuidePromptHandler = (
 ) => Promise<ViewerAgentResponse>;
 
 export interface AiGuidePanelController {
+  switchSession(conversationSessionId: string): void;
   openLandmarkJourney(name: string, type?: string): void;
   open(): void;
   ask(prompt: string): void;
@@ -110,6 +111,7 @@ export function configureAiGuidePanel(
     submitFeedback,
     historyRepository,
   } = elements;
+  let conversationSessionId = elements.conversationSessionId;
   const savedPreferences = loadJourneySearchPreferences(storage);
   transferPace.value = savedPreferences.transferPace;
   rankingPreference.value = savedPreferences.rankingPreference;
@@ -182,8 +184,8 @@ export function configureAiGuidePanel(
       setFeedbackControlsDisabled(message, true);
       if (status) status.textContent = "送信中";
       const feedback = buildConversationFeedback(
-        elements.conversationSessionId,
-        historyRepository.list(elements.conversationSessionId),
+        conversationSessionId,
+        historyRepository.list(conversationSessionId),
         message.dataset.messageId!,
         rating,
         comment,
@@ -215,19 +217,7 @@ export function configureAiGuidePanel(
 
   let activeConversation: ConversationGuidance | undefined;
   let activeTripContext: TripContext | undefined;
-  const restoredHistory = historyRepository.list(elements.conversationSessionId);
-  let hasConversationHistory = restoredHistory.length > 0;
-  for (const entry of restoredHistory) {
-    if (entry.role === "user") {
-      appendMessage(messages, "user", entry.text, entry.messageId);
-    } else {
-      const restored = appendPendingMessage(messages, entry.messageId);
-      resolveAssistantMessage(restored, entry.response, undefined, elements.onTripPlanUpdate, elements.onPlaces, elements.onWeather);
-      if (typeof entry.response !== "string" && "travelPlan" in entry.response) {
-        activeTripContext = tripContextFromTravelPlan(entry.response.travelPlan);
-      }
-    }
-  }
+  let hasConversationHistory = false;
   const setContextChoices = (guidance?: ConversationGuidance) => {
     contextChoices.replaceChildren();
     const choices = guidance?.quickReplies ?? [];
@@ -251,8 +241,9 @@ export function configureAiGuidePanel(
       elements.onFirstPrompt?.(prompt);
       hasConversationHistory = true;
     }
+    const requestedSessionId = conversationSessionId;
     const userMessage = historyRepository.append(
-      elements.conversationSessionId,
+      requestedSessionId,
       { role: "user", text: prompt },
     );
     appendMessage(messages, "user", prompt, userMessage.messageId);
@@ -268,6 +259,15 @@ export function configureAiGuidePanel(
       requestId = metadata.requestId;
     })
       .then((response) => {
+        const assistantMessage = historyRepository.append(
+          requestedSessionId,
+          {
+            role: "assistant",
+            response,
+            ...(requestId ? { requestId } : {}),
+          },
+        );
+        if (conversationSessionId !== requestedSessionId) return;
         const guidance = typeof response === "string" || !("conversation" in response)
           ? undefined
           : response.conversation;
@@ -282,27 +282,21 @@ export function configureAiGuidePanel(
           input.placeholder = "列車、行き先、旅の相談を入力";
         }
         resolveAssistantMessage(pendingMessage, response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces, elements.onWeather);
-        const assistantMessage = historyRepository.append(
-          elements.conversationSessionId,
-          {
-            role: "assistant",
-            response,
-            ...(requestId ? { requestId } : {}),
-          },
-        );
         pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
       .catch(() => {
         const errorResponse = "案内を開始できませんでした。時間をおいてもう一度お試しください。";
-        resolveAssistantMessage(pendingMessage, errorResponse);
-        const assistantMessage = historyRepository.append(elements.conversationSessionId, {
+        const assistantMessage = historyRepository.append(requestedSessionId, {
           role: "assistant",
           response: errorResponse,
           ...(requestId ? { requestId } : {}),
         });
+        if (conversationSessionId !== requestedSessionId) return;
+        resolveAssistantMessage(pendingMessage, errorResponse);
         pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
       .finally(() => {
+        if (conversationSessionId !== requestedSessionId) return;
         input.disabled = false;
         submit.disabled = false;
         submit.ariaLabel = "送信";
@@ -342,6 +336,43 @@ export function configureAiGuidePanel(
   };
 
   const controller: AiGuidePanelController = {
+    switchSession(nextConversationSessionId) {
+      conversationSessionId = nextConversationSessionId;
+      activeConversation = undefined;
+      activeTripContext = undefined;
+      hasShownConciergeIntro = false;
+      input.value = "";
+      input.disabled = false;
+      input.placeholder = "列車、行き先、旅の相談を入力";
+      submit.disabled = false;
+      submit.ariaLabel = "送信";
+      delete submit.dataset.submitting;
+      messages.replaceChildren();
+      const restoredHistory = historyRepository.list(conversationSessionId);
+      hasConversationHistory = restoredHistory.length > 0;
+      for (const entry of restoredHistory) {
+        if (entry.role === "user") {
+          appendMessage(messages, "user", entry.text, entry.messageId);
+          continue;
+        }
+        const restored = appendPendingMessage(messages, entry.messageId);
+        resolveAssistantMessage(restored, entry.response);
+        activeConversation = typeof entry.response !== "string" && "conversation" in entry.response
+          ? entry.response.conversation
+          : undefined;
+        if (activeConversation) activeTripContext = activeConversation.tripContext;
+        if (typeof entry.response !== "string" && "travelPlan" in entry.response) {
+          activeTripContext = tripContextFromTravelPlan(entry.response.travelPlan);
+        }
+      }
+      setContextChoices(activeConversation);
+      input.placeholder = activeConversation
+        ? inputPlaceholderForConversation(activeConversation)
+        : "列車、行き先、旅の相談を入力";
+      if (restoredHistory.length === 0 && toggle.ariaExpanded === "true") {
+        showConciergeIntro();
+      }
+    },
     openLandmarkJourney(name) {
       setOpen(true);
       showConciergeIntro();
@@ -354,6 +385,7 @@ export function configureAiGuidePanel(
     ask(prompt) { setOpen(true); sendPrompt(prompt); },
     notify(text) { const message = appendPendingMessage(messages); resolveAssistantMessage(message, text); },
   };
+  controller.switchSession(conversationSessionId);
   return controller;
 }
 

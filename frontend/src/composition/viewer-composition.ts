@@ -159,6 +159,7 @@ import {
 } from "../adapters/browser/conversation-session-repository";
 import { LocalConversationHistoryRepository } from "../adapters/browser/conversation-history-repository";
 import { recentConversationContext } from "../domain/conversation-history";
+import { createConversationSessionSwitcher } from "../usecases/concierge/conversation-session-switcher";
 import { createJourneySearchHandlers } from "../usecases/journey/create-journey-search-handlers";
 
 export function startViewer(): void {
@@ -259,7 +260,7 @@ const conversationSessionRepository = new LocalConversationSessionRepository(
 );
 const conversationHistoryRepository = new LocalConversationHistoryRepository(localStorage);
 const travelRecheckRepository = new BrowserTravelRecheckRepository(localStorage);
-const activeConversationSession = conversationSessionRepository.active() ??
+let activeConversationSession = conversationSessionRepository.active() ??
   conversationSessionRepository.create();
 const updateConciergeIdentity = (resetGreeting = false) => {
   activeConcierge = selectConciergeForUserProfile(loadUserProfile(localStorage));
@@ -375,6 +376,21 @@ aiGuideController = configureAiGuidePanel(
       onResponseMetadata,
     ),
 );
+const conversationSessionSwitcher = createConversationSessionSwitcher({
+  repository: conversationSessionRepository,
+  conversation: aiGuideController,
+  tripPlan: tripPlanController,
+  onActivated: (session) => {
+    activeConversationSession = session;
+    updateConciergeIdentity();
+  },
+});
+conversationSessionRepository.subscribe(() => {
+  const activeSession = conversationSessionRepository.active();
+  if (activeSession && activeSession.id !== activeConversationSession.id) {
+    conversationSessionSwitcher.activate(activeSession.id);
+  }
+});
 void runDueTravelRechecks(travelRecheckRepository, {
   weather: (location) => searchWeatherForecast({ location }),
   flights: (originAirportCode, destinationAirportCode, departureDate) => searchFlights({ originAirportCode, destinationAirportCode, departureDate }),
@@ -392,7 +408,11 @@ configureConversationHistoryPanel({
   empty: conversationHistoryEmpty,
   storage: localStorage,
   repository: conversationSessionRepository,
-  onSessionSelected: () => window.location.reload(),
+  onSessionSelected: (sessionId) => {
+    if (sessionId !== activeConversationSession.id) {
+      conversationSessionSwitcher.activate(sessionId);
+    }
+  },
 });
 configureTravelProfile(document, localStorage, () => aiGuideController.open());
 if (tripPreviewEnabled) {

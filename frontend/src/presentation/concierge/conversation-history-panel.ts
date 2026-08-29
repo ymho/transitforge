@@ -51,12 +51,14 @@ export function configureConversationHistoryPanel(
       item,
       () => {
         repository.select(item.id);
+        dialog.close();
         onSessionSelected(item.id);
       },
       () => {
         if (!confirmDelete(item.title)) return;
         const next = repository.delete(item.id);
         if (item.active) {
+          dialog.close();
           onSessionSelected(next.id);
           return;
         }
@@ -68,6 +70,7 @@ export function configureConversationHistoryPanel(
 
   newConversation.addEventListener("click", () => {
     const session = repository.create();
+    dialog.close();
     onSessionSelected(session.id);
   });
   toggle.addEventListener("click", () => {
