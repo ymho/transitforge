@@ -282,14 +282,25 @@ export async function runViewerAgentRuntime(
   const needsTravelInspiration = isIncompleteNewTravelConsultation &&
     travelFacts.context.planningStage !== "planning";
   const isTripPlanAddition = Boolean(currentTripPlan) && isTripPlanAdditionRequest(prompt);
+  const isPlaceDiscoveryConsultation = Boolean(currentTripPlan) &&
+    isPlaceDiscoveryRequest(prompt);
   const allowedToolNames = isTripPlanAddition
     ? new Set<string>(["propose_trip_update", "ask_follow_up"])
+    : isPlaceDiscoveryConsultation
+      ? new Set<string>([
+        "ask_follow_up",
+        ...(dependencies.searchPlaceMedia ? ["search_place_media", "resolve_place_candidates"] : []),
+        ...(dependencies.searchWeb ? ["search_web"] : []),
+        ...(dependencies.readWebPages ? ["read_web_pages"] : []),
+      ])
     : needsTravelInspiration
       ? new Set<string>([
         "remember_travel_preference",
         "update_conversation_session",
         "ask_follow_up",
-        ...(dependencies.searchPlaceMedia ? ["search_place_media"] : []),
+        ...(dependencies.searchPlaceMedia ? ["search_place_media", "resolve_place_candidates"] : []),
+        ...(dependencies.searchWeb ? ["search_web"] : []),
+        ...(dependencies.readWebPages ? ["read_web_pages"] : []),
       ])
       : isIncompleteNewTravelConsultation
       ? new Set<string>([
@@ -351,6 +362,51 @@ export async function runViewerAgentRuntime(
           instruction: "追加する場所が分かる場合はpropose_trip_updateで観光予定の変更案を作ってください。場所が分からない場合だけask_follow_upで一つ確認してください",
         };
       }
+      if (isPlaceDiscoveryConsultation) {
+        const currentAnswer = continuedConversationAnswer(prompt);
+        const destination = currentTripPlan?.destination ?? travelFacts.context.destinationWish ?? "目的地";
+        if (dependencies.searchWeb && !attemptedTools.has("search_web")) {
+          return {
+            accepted: false,
+            reason: "現在の旅程を保ったまま具体的な周辺施設を発見する",
+            instruction: `search_webで「${destination} ${currentAnswer} 公式 観光」を検索してください`,
+          };
+        }
+        const discoveryUrls = externalState.webSearch?.status === "available"
+          ? externalState.webSearch.data?.results.slice(0, 3).map(({ url }) => url) ?? []
+          : [];
+        if (
+          dependencies.readWebPages && discoveryUrls.length > 0 &&
+          !attemptedTools.has("read_web_pages")
+        ) {
+          return {
+            accepted: false,
+            reason: "自治体名や一般概念ではなく実在する施設を本文から確認する",
+            instruction: `read_web_pagesで次のURLを確認してください: ${discoveryUrls.join(" ")}`,
+          };
+        }
+        if (
+          dependencies.searchPlaceMedia && externalState.webPages?.status === "available" &&
+          !attemptedTools.has("resolve_place_candidates")
+        ) {
+          return {
+            accepted: false,
+            reason: "Web本文で確認した固有の施設だけを地図上の地点へ照合する",
+            instruction: "read_web_pagesの本文から利用者の希望に合う固有施設名を最大6件抽出し sourceUrlとともにresolve_place_candidatesへ渡してください 自治体名 交通手段 施設種別は候補にしないでください",
+          };
+        }
+        if (
+          !dependencies.searchWeb && dependencies.searchPlaceMedia &&
+          !attemptedTools.has("search_place_media")
+        ) {
+          return {
+            accepted: false,
+            reason: "具体的な周辺施設を地図上で確認する",
+            instruction: `search_place_mediaで「${destination} ${currentAnswer}」を検索してください`,
+          };
+        }
+        return { accepted: true };
+      }
       if (
         needsTravelInspiration &&
         dependencies.searchPlaceMedia &&
@@ -362,14 +418,53 @@ export async function runViewerAgentRuntime(
           instruction: "search_place_mediaで利用者が指定した目的地そのものの写真と位置を確認してください",
         };
       }
+      if (
+        needsTravelInspiration &&
+        dependencies.searchWeb &&
+        !attemptedTools.has("search_web")
+      ) {
+        const destination = travelConsultationDestination(prompt, travelFacts.context) ?? "目的地";
+        return {
+          accepted: false,
+          reason: "写真だけでなく場所の特徴と周辺の過ごし方を根拠付きで紹介する",
+          instruction: `search_webで「${destination} 見どころ 口コミ 周辺 観光」を検索してください`,
+        };
+      }
+      const inspirationUrls = externalState.webSearch?.status === "available"
+        ? externalState.webSearch.data?.results.slice(0, 3).map(({ url }) => url) ?? []
+        : [];
+      if (
+        needsTravelInspiration &&
+        dependencies.readWebPages &&
+        inspirationUrls.length > 0 &&
+        !attemptedTools.has("read_web_pages")
+      ) {
+        return {
+          accepted: false,
+          reason: "検索結果の見出しだけでなく複数の情報源の本文を確認する",
+          instruction: `read_web_pagesで次のURLを確認してください: ${inspirationUrls.join(" ")}`,
+        };
+      }
+      if (
+        needsTravelInspiration &&
+        dependencies.searchPlaceMedia &&
+        externalState.webPages?.status === "available" &&
+        !attemptedTools.has("resolve_place_candidates")
+      ) {
+        return {
+          accepted: false,
+          reason: "目的地の見どころ 雰囲気 実用情報を地図詳細へ渡す",
+          instruction: "read_web_pagesで確認した目的地と周辺の固有施設をresolve_place_candidatesへ渡してください overview highlights atmosphere tips nearbyを情報源とプロフィールに基づいて整理し 未確認の評価 営業時間 料金は作らないでください",
+        };
+      }
       if (isIncompleteNewTravelConsultation && !conversationState.response) {
         return {
           accepted: false,
           reason: needsTravelInspiration
-            ? "写真を見た後に旅程を考えたいか確認する"
+            ? "場所の特徴と利用者との相性を紹介した後に旅程を考えたいか確認する"
             : "新しい旅行相談で不足する条件を一つだけ確認する",
           instruction: needsTravelInspiration
-            ? "ask_follow_upで日程を聞かず この場所を軸に旅を考えるか確認してください"
+            ? "ask_follow_upで日程を聞かず 場所の特徴 訪問者が評価する点 プロフィールとの相性 周辺候補を根拠の範囲で自然に紹介し この場所を軸に旅を考えるか確認してください"
             : "調査Toolを増やさずask_follow_upで出発日または滞在日数のうち不足する一条件だけを確認してください",
         };
       }
@@ -409,8 +504,8 @@ export async function runViewerAgentRuntime(
       return { accepted: true };
     },
     limits: {
-      maxIterations: 6,
-      maxModelCalls: 7,
+      maxIterations: isPlaceDiscoveryConsultation ? 8 : 6,
+      maxModelCalls: isPlaceDiscoveryConsultation ? 9 : 7,
       maxToolCalls: 12,
       // 広域グラフ検索はモデル呼び出しより長くなるため全体上限に余裕を持たせる
       maxExecutionMs: 45_000,
@@ -883,6 +978,16 @@ function isTripPlanAdditionRequest(prompt: string): boolean {
     /.{1,80}(?:を|も)(?:旅程|予定|プラン)(?:へ|に)(?:追加|入れ)/u.test(normalized);
 }
 
+function continuedConversationAnswer(prompt: string): string {
+  return prompt.match(/利用者の今回の回答:\s*([^\n]+)/u)?.[1]?.trim() ?? prompt.trim();
+}
+
+function isPlaceDiscoveryRequest(prompt: string): boolean {
+  const answer = continuedConversationAnswer(prompt).normalize("NFKC").replace(/[\s　]+/gu, "");
+  return /(?:他に|ほかに|周辺|近く).*(?:観光|スポット|見どころ|立寄|施設|場所)/u.test(answer) ||
+    /(?:酒蔵|酒造|蔵元|醸造所|日本酒|温泉|美術館|博物館|神社|寺|庭園|市場|商店街|カフェ|体験).*(?:ない|ある|探|見|行き|寄り|候補|おすすめ)/u.test(answer);
+}
+
 function isTravelDestinationConsultation(prompt: string, context: TripContext): boolean {
   return travelConsultationDestination(prompt, context) !== undefined;
 }
@@ -1071,6 +1176,32 @@ async function executeViewerToolAdapter(
       !attemptedTools.has("search_place_media")
     ) {
       throw new Error("日程を聞く前にsearch_place_mediaで目的地の写真を確認してください。");
+    }
+    if (
+      featureFromPrompt(originalPrompt) === "travel_planning" &&
+      isTravelDestinationConsultation(originalPrompt, travelFacts.context) &&
+      travelFacts.context.planningStage !== "planning" &&
+      dependencies.searchWeb && !attemptedTools.has("search_web")
+    ) {
+      throw new Error("場所を紹介する前にsearch_webで見どころと周辺情報を確認してください。");
+    }
+    if (
+      featureFromPrompt(originalPrompt) === "travel_planning" &&
+      isTravelDestinationConsultation(originalPrompt, travelFacts.context) &&
+      travelFacts.context.planningStage !== "planning" &&
+      dependencies.readWebPages && externalState.webSearch?.status === "available" &&
+      !attemptedTools.has("read_web_pages")
+    ) {
+      throw new Error("場所を紹介する前にread_web_pagesで情報源の本文を確認してください。");
+    }
+    if (
+      featureFromPrompt(originalPrompt) === "travel_planning" &&
+      isTravelDestinationConsultation(originalPrompt, travelFacts.context) &&
+      travelFacts.context.planningStage !== "planning" &&
+      dependencies.searchPlaceMedia && externalState.webPages?.status === "available" &&
+      !attemptedTools.has("resolve_place_candidates")
+    ) {
+      throw new Error("場所を紹介する前にresolve_place_candidatesで詳細と地点を照合してください。");
     }
     if (
       featureFromPrompt(originalPrompt) === "travel_planning" &&

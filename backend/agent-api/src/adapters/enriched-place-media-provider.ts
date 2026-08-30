@@ -24,7 +24,7 @@ export class EnrichedPlaceMediaProvider implements PlaceMediaProvider {
     }
 
     const enrichmentResults = await Promise.all(primary.data.places.slice(0, 4).map((place) =>
-      this.enrichment.search({ query: place.name, limit: 3 }),
+      this.enrichment.search({ query: place.name, limit: 3, ...(query.detail ? { detail: true } : {}) }),
     ));
     const usedEvidence: ExternalSourceEvidence[] = [];
     const places = primary.data.places.map((place, index) => {
@@ -43,15 +43,24 @@ export class EnrichedPlaceMediaProvider implements PlaceMediaProvider {
 }
 
 function enrichPlace(primary: PlaceMedia, enrichment: PlaceMedia): PlaceMedia {
+  const images = uniqueImages([
+    ...(primary.images ?? (primary.image ? [primary.image] : [])),
+    ...(enrichment.images ?? (enrichment.image ? [enrichment.image] : [])),
+  ]);
   return {
     ...primary,
     ...(primary.summary || !enrichment.summary ? {} : { summary: enrichment.summary }),
     ...(primary.image || !enrichment.image ? {} : { image: enrichment.image }),
+    ...(images.length ? { images } : {}),
     sources: uniqueSources([
       ...(primary.sources ?? []),
       { provider: "wikipedia", label: "Wikipedia", url: enrichment.sourceUrl, role: "description" as const },
     ]),
   };
+}
+
+function uniqueImages(images: NonNullable<PlaceMedia["images"]>): NonNullable<PlaceMedia["images"]> {
+  return [...new Map(images.map((image) => [image.url, image])).values()].slice(0, 8);
 }
 
 function uniqueSources(sources: NonNullable<PlaceMedia["sources"]>): NonNullable<PlaceMedia["sources"]> {

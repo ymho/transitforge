@@ -38,6 +38,31 @@ describe("AI guide trip conversation state", () => {
       tripContext: next,
     });
   });
+
+  it("keeps a completed travel plan in planning state for later consultation", () => {
+    const route = {
+      originStation: "向日町",
+      destinationStation: "出雲市",
+      journeys: [],
+    };
+    expect(nextTripConversationState(undefined, {
+      text: "旅程を作りました",
+      travelPlan: {
+        destination: "出雲大社",
+        checkInDate: "2026-08-31",
+        checkOutDate: "2026-09-02",
+        outbound: route,
+        returning: { ...route, originStation: "出雲市", destinationStation: "向日町" },
+        accommodations: [],
+      },
+    }).tripContext).toEqual({
+      planningStage: "planning",
+      destinationWish: "出雲大社",
+      startDate: "2026-08-31",
+      endDate: "2026-09-02",
+      stayNights: 2,
+    });
+  });
 });
 
 describe("AI guide journey preferences", () => {

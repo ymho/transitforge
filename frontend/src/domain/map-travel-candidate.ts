@@ -49,7 +49,7 @@ export function mapPlaceCandidates(places: readonly PlaceMedia[]): MapPlaceCandi
       name: place.name,
       latitude: place.latitude,
       longitude: place.longitude,
-      ...(place.image?.hotlinkAllowed === true ? { imageUrl: place.image.url } : {}),
+      ...(primaryPlaceImage(place) ? { imageUrl: primaryPlaceImage(place)!.url } : {}),
       ...(place.address ? { address: place.address } : {}),
       ...(place.summary ? { summary: place.summary } : {}),
       ...(place.categories ? { categories: place.categories } : {}),
@@ -57,6 +57,44 @@ export function mapPlaceCandidates(places: readonly PlaceMedia[]): MapPlaceCandi
       value: place,
     }];
   });
+}
+
+export function mergeMapPlaceDetailCandidate(
+  candidate: MapPlaceCandidate,
+  detail: PlaceMedia,
+): MapPlaceCandidate {
+  const images = uniquePlaceImages([
+    ...(candidate.value.images ?? (candidate.value.image ? [candidate.value.image] : [])),
+    ...(detail.images ?? (detail.image ? [detail.image] : [])),
+  ]);
+  const value: PlaceMedia = {
+    ...candidate.value,
+    ...detail,
+    providerPlaceId: candidate.value.providerPlaceId,
+    name: candidate.value.name,
+    ...(candidate.value.detail ? { detail: candidate.value.detail } : {}),
+    ...(images.length ? { image: images[0], images } : {}),
+    sources: [...new Map([
+      ...(candidate.value.sources ?? []),
+      ...(detail.sources ?? []),
+    ].map((source) => [`${source.provider}:${source.url}`, source])).values()],
+  };
+  return {
+    ...candidate,
+    ...(primaryPlaceImage(value) ? { imageUrl: primaryPlaceImage(value)!.url } : {}),
+    ...(value.summary ? { summary: value.summary } : {}),
+    ...(value.address ? { address: value.address } : {}),
+    value,
+  };
+}
+
+function primaryPlaceImage(place: PlaceMedia): PlaceMedia["image"] | undefined {
+  return place.images?.find(({ hotlinkAllowed }) => hotlinkAllowed === true) ??
+    (place.image?.hotlinkAllowed === true ? place.image : undefined);
+}
+
+function uniquePlaceImages(images: NonNullable<PlaceMedia["images"]>): NonNullable<PlaceMedia["images"]> {
+  return [...new Map(images.map((image) => [image.url, image])).values()].slice(0, 8);
 }
 
 export function mapAccommodationCandidates(

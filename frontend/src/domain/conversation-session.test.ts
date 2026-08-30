@@ -58,6 +58,42 @@ describe("conversation session", () => {
     expect(summary.length).toBeLessThanOrEqual(1_100);
   });
 
+  it("retains outbound and return directions in the compact trip context", () => {
+    const session = {
+      id: "s",
+      title: "会話",
+      scope: "trip" as const,
+      summary: "長い相談".repeat(200),
+      resolvedTopics: [],
+      pendingTopics: [],
+      createdAt: "",
+      updatedAt: "",
+    };
+    const route = (originStation: string, destinationStation: string) => ({
+      originStation,
+      destinationStation,
+      departureDate: "2026-08-31",
+      journeys: [],
+    });
+    const summary = conversationContextSummary(undefined, {
+      version: 1,
+      id: "trip-1",
+      title: "出雲の旅",
+      destination: "出雲大社",
+      items: [
+        { id: "outbound", type: "movement", mode: "rail", route: route("向日町", "出雲市") },
+        { id: "return", type: "movement", mode: "rail", route: route("出雲市", "向日町") },
+      ],
+      updatedAt: "2026-08-30T00:00:00Z",
+    }, session, []);
+    const parsed = JSON.parse(summary) as { tripPlan: { items: Array<{ from: string; to: string }> } };
+
+    expect(parsed.tripPlan.items).toEqual([
+      expect.objectContaining({ from: "向日町", to: "出雲市" }),
+      expect.objectContaining({ from: "出雲市", to: "向日町" }),
+    ]);
+  });
+
   it("keeps recent sessions and restores the active session", () => {
     const storage = memoryStorage();
     const first = { id: "first", title: "最初", scope: "general" as const, summary: "", resolvedTopics: [], pendingTopics: [], createdAt: "2026-08-23", updatedAt: "2026-08-23" };

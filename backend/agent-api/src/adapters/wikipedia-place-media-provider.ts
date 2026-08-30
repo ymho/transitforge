@@ -27,6 +27,9 @@ export class WikipediaPlaceMediaProvider implements PlaceMediaProvider {
       const pages = wikipediaPages(value).slice(0, limit);
       if (pages.length === 0) return failedExternalInformation({ code: "invalid_request", message: "確認できる観光地情報が見つかりません", retryable: false });
       const imageMetadata = await this.imageMetadata(pages.flatMap((page) => page.pageImage ? [page.pageImage] : []));
+      const galleries = query.detail
+        ? await Promise.all(pages.slice(0, 3).map((page) => this.imageGallery(page.title)))
+        : [];
       const places = pages.map((page): PlaceMedia => ({
         providerPlaceId: String(page.pageId),
         name: page.title,
@@ -38,6 +41,14 @@ export class WikipediaPlaceMediaProvider implements PlaceMediaProvider {
         ...(page.pageImage && imageMetadata.get(page.pageImage)
           ? { image: imageMetadata.get(page.pageImage)! }
           : page.thumbnail ? { image: { url: page.thumbnail.url, width: page.thumbnail.width, height: page.thumbnail.height, attribution: "Wikipedia contributors / Wikimedia Commons", hotlinkAllowed: true } } : {}),
+        ...(query.detail
+          ? { images: uniqueImages([
+              ...(page.pageImage && imageMetadata.get(page.pageImage)
+                ? [imageMetadata.get(page.pageImage)!]
+                : []),
+              ...(galleries[pages.indexOf(page)] ?? []),
+            ]) }
+          : {}),
       }));
       const retrievedAt = this.now();
       return availableExternalInformation({ places }, [{
@@ -90,6 +101,24 @@ export class WikipediaPlaceMediaProvider implements PlaceMediaProvider {
     }
     return result;
   }
+
+  private async imageGallery(query: string): Promise<NonNullable<PlaceMedia["images"]>> {
+    try {
+      const params = new URLSearchParams({
+        action: "query", format: "json", formatversion: "2", origin: "*",
+        generator: "search", gsrsearch: query, gsrnamespace: "6", gsrlimit: "8",
+        prop: "imageinfo", iiprop: "url|extmetadata|mime", iiurlwidth: "960",
+      });
+      const response = await this.http.fetch(
+        `https://commons.wikimedia.org/w/api.php?${params}`,
+        { headers: { Accept: "application/json", "Api-User-Agent": "Raiquora/1.0" } },
+      );
+      if (!response.ok) return [];
+      return imagesFromImageInfo(await response.json()).slice(0, 6);
+    } catch {
+      return [];
+    }
+  }
 }
 
 interface WikipediaPage { pageId: number; title: string; fullUrl: string; extract?: string; latitude?: number; longitude?: number; pageImage?: string; thumbnail?: { url: string; width?: number; height?: number } }
@@ -117,5 +146,33 @@ function wikipediaPages(value: unknown): WikipediaPage[] {
 
 function metadataValue(value: unknown): string | undefined { return isRecord(value) && typeof value.value === "string" ? value.value : undefined; }
 function stripHtml(value: string): string { return value.replace(/<[^>]+>/gu, " ").replace(/&[^;]+;/gu, " ").replace(/\s+/gu, " ").trim().slice(0, 240); }
+function imagesFromImageInfo(value: unknown): NonNullable<PlaceMedia["images"]> {
+  if (!isRecord(value) || !isRecord(value.query) || !Array.isArray(value.query.pages)) return [];
+  return value.query.pages.flatMap((raw) => {
+    if (!isRecord(raw) || !Array.isArray(raw.imageinfo) || !isRecord(raw.imageinfo[0])) return [];
+    const info = raw.imageinfo[0];
+    const mime = typeof info.mime === "string" ? info.mime : "";
+    if (!/^image\/(?:jpeg|png|webp)$/u.test(mime)) return [];
+    const url = typeof info.thumburl === "string" ? info.thumburl : typeof info.url === "string" ? info.url : undefined;
+    if (!url) return [];
+    const metadata = isRecord(info.extmetadata) ? info.extmetadata : {};
+    const creator = metadataValue(metadata.Artist);
+    const license = metadataValue(metadata.LicenseShortName);
+    const credit = metadataValue(metadata.Credit);
+    return [{
+      url,
+      ...(number(info.thumbwidth) ? { width: info.thumbwidth } : {}),
+      ...(number(info.thumbheight) ? { height: info.thumbheight } : {}),
+      ...(creator ? { creator: stripHtml(creator) } : {}),
+      ...(license ? { license: stripHtml(license) } : {}),
+      attribution: [credit, creator, license].flatMap((item) => item ? [stripHtml(item)] : []).join(" / ") || "Wikimedia Commons",
+      hotlinkAllowed: true as const,
+      ...(typeof info.descriptionurl === "string" ? { descriptionUrl: info.descriptionurl } : {}),
+    }];
+  });
+}
+function uniqueImages(images: NonNullable<PlaceMedia["images"]>): NonNullable<PlaceMedia["images"]> {
+  return [...new Map(images.map((image) => [image.url, image])).values()].slice(0, 6);
+}
 function number(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value); }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }

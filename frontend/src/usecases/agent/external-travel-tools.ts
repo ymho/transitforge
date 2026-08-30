@@ -1,6 +1,6 @@
 import type { ExternalTravelInformation } from "@raiquora/trip/external-travel-information";
 import { availableExternalInformation } from "@raiquora/trip/external-travel-information";
-import type { PlaceMediaSearchResult } from "@raiquora/trip/place-media";
+import type { PlaceMedia, PlaceMediaSearchResult } from "@raiquora/trip/place-media";
 import type { TravelRecheckKind, TravelRecheckRequest } from "@raiquora/trip/travel-recheck";
 import type { TripPlan } from "@raiquora/trip/trip-plan";
 import type { WeatherForecast } from "@raiquora/trip/weather-forecast";
@@ -221,7 +221,15 @@ export function externalTravelToolInputSchema(name: ExternalTravelToolName): Age
           maxItems: 6,
           items: {
             type: "object",
-            properties: { name: { type: "string" }, sourceUrl: { type: "string" } },
+            properties: {
+              name: { type: "string" },
+              sourceUrl: { type: "string" },
+              overview: { type: "string", description: "場所の概要と今回のプロフィールに合う理由。確認済み事実と推奨を区別する" },
+              highlights: { type: "array", maxItems: 6, items: { type: "string" } },
+              atmosphere: { type: "string", description: "現地の雰囲気。情報源で確認できる範囲に限定する" },
+              tips: { type: "array", maxItems: 6, items: { type: "string" } },
+              nearby: { type: "array", maxItems: 6, items: { type: "string" } },
+            },
             required: ["name", "sourceUrl"],
             additionalProperties: false,
           },
@@ -357,8 +365,15 @@ export async function executeExternalTravelTool(
       const name = text(item.name).slice(0, 120);
       const sourceUrl = text(item.sourceUrl).slice(0, 2_000);
       const page = knownPages.get(sourceUrl);
-      if (!name || !page || !normalizedIncludes(`${page.title ?? ""} ${page.text}`, name)) return [];
-      return [{ name, sourceUrl, sourceLabel: page.title ?? page.publisher ?? new URL(sourceUrl).hostname }];
+      if (!isSpecificPlaceCandidateName(name) || !page ||
+          !normalizedIncludes(`${page.title ?? ""} ${page.text}`, name)) return [];
+      const detail = placeEditorialDetail(item);
+      return [{
+        name,
+        sourceUrl,
+        sourceLabel: page.title ?? page.publisher ?? new URL(sourceUrl).hostname,
+        ...(detail ? { detail } : {}),
+      }];
     }).slice(0, 6) : [];
     if (candidates.length === 0) throw new Error("Webページで確認できる施設候補がありません。");
     const outputs = await Promise.all(candidates.map(({ name }) => dependencies.searchPlaceMedia!({ query: name, limit: 3 })));
@@ -369,7 +384,11 @@ export async function executeExternalTravelTool(
       const place = output.result.data.places.find((item) => isRecord(item) && typeof item.name === "string" && samePlaceName(item.name, candidate.name));
       if (!isRecord(place)) return [];
       const existingSources = Array.isArray(place.sources) ? place.sources.filter(isRecord) : [];
-      return [{ ...place, sources: [...existingSources, { provider: "web", label: candidate.sourceLabel, url: candidate.sourceUrl, role: "discovery" }] }];
+      return [{
+        ...place,
+        ...(candidate.detail ? { detail: candidate.detail } : {}),
+        sources: [...existingSources, { provider: "web", label: candidate.sourceLabel, url: candidate.sourceUrl, role: "discovery" }],
+      }];
     });
     const evidence = [
       ...state.webPages.evidence,
@@ -445,6 +464,31 @@ function restaurantRequirements(value: unknown): RestaurantRequirements | undefi
   return entries.length > 0 ? Object.fromEntries(entries) as RestaurantRequirements : undefined;
 }
 
+function placeEditorialDetail(value: Record<string, unknown>): PlaceMedia["detail"] | undefined {
+  const overview = boundedText(value.overview, 1_200);
+  const atmosphere = boundedText(value.atmosphere, 600);
+  const list = (input: unknown, limit: number) => Array.isArray(input)
+    ? input.flatMap((item) => boundedText(item, 240) ? [boundedText(item, 240)!] : []).slice(0, limit)
+    : [];
+  const highlights = list(value.highlights, 6);
+  const tips = list(value.tips, 6);
+  const nearby = list(value.nearby, 6);
+  if (!overview && !atmosphere && highlights.length === 0 && tips.length === 0 && nearby.length === 0) {
+    return undefined;
+  }
+  return {
+    ...(overview ? { overview } : {}),
+    ...(highlights.length ? { highlights } : {}),
+    ...(atmosphere ? { atmosphere } : {}),
+    ...(tips.length ? { tips } : {}),
+    ...(nearby.length ? { nearby } : {}),
+  };
+}
+
+function boundedText(value: unknown, maximum: number): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, maximum) : undefined;
+}
+
 function groundPoint(value: unknown, dependencies: ExternalTravelToolDependencies, state: ExternalTravelToolState): GroundAccessPoint | undefined {
   if (!isRecord(value) || typeof value.kind !== "string") return undefined;
   const id = text(value.id).slice(0, 160);
@@ -477,6 +521,16 @@ function samePlaceName(left: string, right: string): boolean {
 
 function normalizePlaceName(value: string): string {
   return value.normalize("NFKC").toLocaleLowerCase("ja").replace(/[\s・･,，.。()（）「」『』]/gu, "");
+}
+
+export function isSpecificPlaceCandidateName(value: string): boolean {
+  const normalized = value.normalize("NFKC").trim();
+  if (!normalized || normalized.length > 120) return false;
+  if (/^(?:日本|島根県|出雲地方|観光地|観光スポット|定期観光バス|路線バス|バス|鉄道|駅)$/u.test(normalized)) {
+    return false;
+  }
+  if (/^.{1,10}(?:都|道|府|県|市|町|村)$/u.test(normalized)) return false;
+  return true;
 }
 
 function uniquePlaces(places: Array<Record<string, unknown>>): Array<Record<string, unknown>> {

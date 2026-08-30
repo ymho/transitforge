@@ -27,7 +27,7 @@ export function travelConversationFacts(
   );
   const promptNights = explicitStayNights(prompt);
   const stayNights = answerNights ?? previous.stayNights ?? promptNights;
-  const answerTimes = explicitTravelTimes(answer);
+  const answerTimes = explicitTravelTimes(answer, prompt);
   const promptTimes = explicitTravelTimes(prompt);
   const outboundDepartureTimeMinutes = answerTimes.outboundDepartureTimeMinutes ??
     previous.outboundDepartureTimeMinutes ?? promptTimes.outboundDepartureTimeMinutes;
@@ -113,7 +113,7 @@ export function quickReplyMatchesExpectedInput(
 
 export function hasExplicitReturnArrivalTime(prompt: string): boolean {
   const answer = continuedAnswer(prompt) ?? prompt;
-  return explicitTravelTimes(answer).returnArrivalTimeMinutes !== undefined;
+  return explicitTravelTimes(answer, prompt).returnArrivalTimeMinutes !== undefined;
 }
 
 function embeddedTripContext(prompt: string): TripContext {
@@ -181,15 +181,17 @@ function explicitStayNights(value: string): number | undefined {
   return boundedNights(Number(normalized.match(/(\d{1,2})泊/u)?.[1]));
 }
 
-function explicitTravelTimes(value: string): Pick<TripContext,
+function explicitTravelTimes(value: string, conversation = value): Pick<TripContext,
   "outboundDepartureTimeMinutes" | "returnArrivalTimeMinutes"> {
   const normalized = value.normalize("NFKC").replace(/\s+/gu, "");
   const clock = "(?:(朝|午前|昼|午後|夕方|夜)(?:の)?)?(\\d{1,2})(?::(\\d{1,2})|時(?:(\\d{1,2})分)?)";
-  const returnArrivalTimeMinutes = clockBefore(
+  const directReturnArrivalTimeMinutes = clockBefore(
     normalized,
     clock,
     /^(?:には?|までに?)?(?:家|自宅)?(?:に)?(?:着|到着|ついて|帰って|帰宅)/u,
   );
+  const returnArrivalTimeMinutes = directReturnArrivalTimeMinutes ??
+    contextualReturnArrivalTime(normalized, conversation, clock);
   const outboundDepartureTimeMinutes = clockBefore(
     normalized,
     clock,
@@ -201,19 +203,39 @@ function explicitTravelTimes(value: string): Pick<TripContext,
   };
 }
 
+function contextualReturnArrivalTime(
+  answer: string,
+  conversation: string,
+  clock: string,
+): number | undefined {
+  const context = conversation.normalize("NFKC");
+  if (!/直前の質問:[^\n]*(?:帰り|帰路|帰宅|家|自宅|到着希望時刻)/u.test(context)) {
+    return undefined;
+  }
+  if (!/(?:到着|着く|着き|帰宅|帰る)/u.test(answer)) return undefined;
+  const match = answer.match(new RegExp(clock, "u"));
+  if (!match) return undefined;
+  return clockMatchMinutes(match);
+}
+
+function clockMatchMinutes(match: RegExpMatchArray): number | undefined {
+  const hour = Number(match[2]);
+  const minute = Number(match[3] ?? match[4] ?? 0);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 29 ||
+      !Number.isInteger(minute) || minute < 0 || minute > 59) return undefined;
+  const period = match[1];
+  const adjustedHour = (period === "午後" || period === "夕方" || period === "夜") &&
+      hour < 12 ? hour + 12 : period === "朝" && hour === 12 ? 0 : hour;
+  return adjustedHour * 60 + minute;
+}
+
 function clockBefore(value: string, pattern: string, suffix: RegExp): number | undefined {
   const matches = value.matchAll(new RegExp(pattern, "gu"));
   for (const match of matches) {
     const end = (match.index ?? 0) + match[0].length;
     if (!suffix.test(value.slice(end, end + 18))) continue;
-    const hour = Number(match[2]);
-    const minute = Number(match[3] ?? match[4] ?? 0);
-    if (!Number.isInteger(hour) || hour < 0 || hour > 29 ||
-        !Number.isInteger(minute) || minute < 0 || minute > 59) continue;
-    const period = match[1];
-    const adjustedHour = (period === "午後" || period === "夕方" || period === "夜") &&
-        hour < 12 ? hour + 12 : period === "朝" && hour === 12 ? 0 : hour;
-    return adjustedHour * 60 + minute;
+    const minutes = clockMatchMinutes(match);
+    if (minutes !== undefined) return minutes;
   }
   return undefined;
 }

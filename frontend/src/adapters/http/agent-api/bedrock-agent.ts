@@ -183,7 +183,7 @@ export async function searchWeatherGrid(
 }
 
 export async function searchPlaceMedia(
-  request: { query: string; latitude?: number; longitude?: number; radiusMeters?: number; limit?: number },
+  request: { query: string; latitude?: number; longitude?: number; radiusMeters?: number; limit?: number; detail?: boolean },
   fetcher: typeof fetch = fetch,
 ): Promise<PlaceMediaSearchResponse> {
   return postAgentBody(

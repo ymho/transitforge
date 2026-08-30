@@ -114,8 +114,29 @@ export function isPlaceMediaSearchResponse(value: unknown): value is PlaceMediaS
           typeof source.label === "string" && typeof source.url === "string")) &&
       (place.latitude === undefined || typeof place.latitude === "number") &&
       (place.longitude === undefined || typeof place.longitude === "number") &&
+      (place.reviewAverage === undefined || isCoordinate(place.reviewAverage, 0, 5)) &&
+      (place.reviewCount === undefined || typeof place.reviewCount === "number" &&
+        Number.isInteger(place.reviewCount) && place.reviewCount >= 0) &&
       (place.image === undefined || isRecord(place.image) && typeof place.image.url === "string" &&
-        typeof place.image.attribution === "string"));
+        typeof place.image.attribution === "string") &&
+      (place.images === undefined || Array.isArray(place.images) && place.images.length <= 8 &&
+        place.images.every((image) => isRecord(image) && typeof image.url === "string" &&
+          typeof image.attribution === "string")) &&
+      (place.detail === undefined || isRecord(place.detail) &&
+        (place.detail.overview === undefined || isBoundedString(place.detail.overview, 1_200)) &&
+        optionalBoundedStringArray(place.detail.highlights, 6, 240) &&
+        (place.detail.atmosphere === undefined || isBoundedString(place.detail.atmosphere, 600)) &&
+        optionalBoundedStringArray(place.detail.tips, 6, 240) &&
+        optionalBoundedStringArray(place.detail.nearby, 6, 160)));
+}
+
+function optionalBoundedStringArray(
+  value: unknown,
+  maximumItems: number,
+  maximumLength: number,
+): boolean {
+  return value === undefined || Array.isArray(value) && value.length <= maximumItems &&
+    value.every((item) => isBoundedString(item, maximumLength));
 }
 
 export function isTravelAlertSearchResponse(value: unknown): value is TravelAlertSearchResponse {

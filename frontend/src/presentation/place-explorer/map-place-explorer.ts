@@ -9,6 +9,7 @@ export interface MapPlaceCardModel {
   sourceUrl: string;
   sources: NonNullable<PlaceMedia["sources"]>;
   image?: { url: string; attribution: string };
+  images: Array<{ url: string; attribution: string }>;
   openingHours?: string;
   categories: string[];
   kind: MapTravelCandidate["kind"];
@@ -17,6 +18,7 @@ export interface MapPlaceCardModel {
   priceLabel?: string;
   availabilityLabel?: string;
   budget?: string;
+  detail?: PlaceMedia["detail"];
 }
 
 export interface MapPlaceExplorerController {
@@ -46,9 +48,20 @@ export function mapTravelCandidateCardModels(candidates: readonly MapTravelCandi
   return candidates.map((candidate) => {
     const place = candidate.kind === "place" ? candidate.value : undefined;
     const sourceUrl = candidate.sourceUrl ?? "https://example.invalid/";
-    const reviewLabel = candidate.kind === "accommodation" && candidate.reviewAverage !== undefined
-      ? `★ ${candidate.reviewAverage.toFixed(1)}${candidate.reviewCount !== undefined ? `（${candidate.reviewCount.toLocaleString("ja-JP")}件）` : ""}`
+    const reviewAverage = candidate.kind === "accommodation"
+      ? candidate.reviewAverage
+      : place?.reviewAverage;
+    const reviewCount = candidate.kind === "accommodation"
+      ? candidate.reviewCount
+      : place?.reviewCount;
+    const reviewLabel = reviewAverage !== undefined
+      ? `★ ${reviewAverage.toFixed(1)}${reviewCount !== undefined ? `（${reviewCount.toLocaleString("ja-JP")}件）` : ""}`
       : undefined;
+    const images = place
+      ? (place.images ?? (place.image ? [place.image] : []))
+          .filter(({ hotlinkAllowed }) => hotlinkAllowed === true)
+          .map(({ url, attribution }) => ({ url, attribution }))
+      : candidate.imageUrl ? [{ url: candidate.imageUrl, attribution: "提供画像" }] : [];
     return {
       id: candidate.id,
       kind: candidate.kind,
@@ -58,6 +71,7 @@ export function mapTravelCandidateCardModels(candidates: readonly MapTravelCandi
       sourceUrl,
       sources: place?.sources ?? [{ provider: "source", label: "情報源", url: sourceUrl, role: "identity" }],
       categories: candidate.categories ?? [],
+      images,
       primaryLabel: candidate.kind === "accommodation" ? "この宿を選ぶ" : "旅程を相談",
       ...(candidate.kind === "restaurant" && candidate.openingHours ? { openingHours: candidate.openingHours } : {}),
       ...(place?.openingHoursStatus === "available" && place.openingHours ? { openingHours: place.openingHours } : {}),
@@ -66,6 +80,7 @@ export function mapTravelCandidateCardModels(candidates: readonly MapTravelCandi
       ...(candidate.kind === "accommodation" && candidate.priceLabel ? { priceLabel: candidate.priceLabel } : {}),
       ...(candidate.kind === "accommodation" && candidate.availabilityLabel ? { availabilityLabel: candidate.availabilityLabel } : {}),
       ...(candidate.kind === "restaurant" && candidate.budget ? { budget: candidate.budget } : {}),
+      ...(place?.detail ? { detail: place.detail } : {}),
     };
   });
 }
@@ -80,8 +95,10 @@ export function configureMapPlaceExplorer(options: {
   focusPlace: (providerPlaceId: string) => void;
   choose: (candidate: MapTravelCandidate) => void;
   clearPlaces?: () => void;
+  loadDetail?: (candidate: MapTravelCandidate) => Promise<MapTravelCandidate>;
 }): MapPlaceExplorerController {
   let candidatesById = new Map<string, MapTravelCandidate>();
+  let detailRequest = 0;
 
   const select = (providerPlaceId: string, focusMap = true) => {
     const card = Array.from(options.list.querySelectorAll<HTMLElement>("[data-place-id]"))
@@ -94,17 +111,34 @@ export function configureMapPlaceExplorer(options: {
     card.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
     if (focusMap) options.focusPlace(providerPlaceId);
     const candidate = candidatesById.get(providerPlaceId);
-    if (candidate) showPlaceDetail(candidate);
+    if (candidate) void showPlaceDetail(candidate);
   };
 
-  const showPlaceDetail = (candidate: MapTravelCandidate) => {
+  const showPlaceDetail = async (candidate: MapTravelCandidate) => {
     const model = mapTravelCandidateCardModels([candidate])[0];
     if (!model) return;
     options.detailContent.replaceChildren(renderPlaceDetail(model, () => options.choose(candidate)));
     options.detail.hidden = false;
+    if (!options.loadDetail || candidate.kind !== "place") return;
+    const request = ++detailRequest;
+    options.detail.dataset.loading = "true";
+    try {
+      const detailed = await options.loadDetail(candidate);
+      if (request !== detailRequest || options.detail.hidden) return;
+      candidatesById.set(candidate.id, detailed);
+      const detailedModel = mapTravelCandidateCardModels([detailed])[0];
+      if (detailedModel) {
+        options.detailContent.replaceChildren(
+          renderPlaceDetail(detailedModel, () => options.choose(detailed)),
+        );
+      }
+    } finally {
+      if (request === detailRequest) delete options.detail.dataset.loading;
+    }
   };
 
   const closeDetail = () => {
+    detailRequest += 1;
     options.detail.hidden = true;
     options.detailContent.replaceChildren();
   };
@@ -156,15 +190,8 @@ function renderPlaceDetail(
   const article = document.createElement("article");
   article.className = "map-place-detail-article";
 
-  if (place.image) {
-    const figure = document.createElement("figure");
-    const image = document.createElement("img");
-    image.src = place.image.url;
-    image.alt = `${place.name}の写真`;
-    const credit = document.createElement("figcaption");
-    credit.textContent = place.image.attribution;
-    figure.append(image, credit);
-    article.append(figure);
+  if (place.images.length > 0) {
+    article.append(renderPlaceGallery(place));
   }
 
   const body = document.createElement("div");
@@ -184,20 +211,22 @@ function renderPlaceDetail(
     body.append(categories);
   }
 
-  if (place.openingHours) {
-    const openingHours = document.createElement("p");
-    openingHours.className = "map-place-detail-hours";
-    openingHours.textContent = place.openingHours;
-    body.append(openingHours);
-  }
-
-  if (place.reviewLabel || place.priceLabel || place.availabilityLabel || place.budget) {
+  if (place.openingHours || place.reviewLabel || place.priceLabel || place.availabilityLabel || place.budget) {
     const facts = document.createElement("ul");
     facts.className = "map-place-detail-facts";
-    for (const fact of [place.reviewLabel, place.priceLabel, place.availabilityLabel, place.budget]) {
+    for (const [label, fact] of [
+      ["評価", place.reviewLabel],
+      ["営業時間", place.openingHours],
+      ["料金", place.priceLabel ?? place.budget],
+      ["空き状況", place.availabilityLabel],
+    ] as const) {
       if (!fact) continue;
       const item = document.createElement("li");
-      item.textContent = fact;
+      const caption = document.createElement("small");
+      caption.textContent = label;
+      const value = document.createElement("strong");
+      value.textContent = fact;
+      item.append(caption, value);
       facts.append(item);
     }
     body.append(facts);
@@ -210,12 +239,18 @@ function renderPlaceDetail(
     body.append(address);
   }
 
-  if (place.summary) {
+  const overview = place.detail?.overview ?? place.summary;
+  if (overview) {
     const summary = document.createElement("p");
     summary.className = "map-place-detail-summary";
-    summary.textContent = place.summary;
+    summary.textContent = overview;
     body.append(summary);
   }
+
+  appendDetailSection(body, "見どころ", place.detail?.highlights);
+  appendDetailSection(body, "雰囲気", place.detail?.atmosphere ? [place.detail.atmosphere] : undefined);
+  appendDetailSection(body, "知っておくと便利", place.detail?.tips);
+  appendDetailSection(body, "周辺で立ち寄れる場所", place.detail?.nearby);
 
   const actions = document.createElement("div");
   actions.className = "map-place-detail-actions";
@@ -237,6 +272,69 @@ function renderPlaceDetail(
   body.append(actions);
   article.append(body);
   return article;
+}
+
+function renderPlaceGallery(place: MapPlaceCardModel): HTMLElement {
+  const gallery = document.createElement("div");
+  gallery.className = "map-place-detail-gallery";
+  const track = document.createElement("div");
+  track.className = "map-place-detail-gallery-track";
+  const dots = document.createElement("div");
+  dots.className = "map-place-detail-gallery-dots";
+  const figures: HTMLElement[] = [];
+  for (const [index, item] of place.images.slice(0, 6).entries()) {
+    const figure = document.createElement("figure");
+    const image = document.createElement("img");
+    image.src = item.url;
+    image.alt = `${place.name}の写真 ${index + 1}`;
+    image.loading = index === 0 ? "eager" : "lazy";
+    const credit = document.createElement("figcaption");
+    credit.textContent = item.attribution;
+    figure.append(image, credit);
+    figures.push(figure);
+    track.append(figure);
+    const dot = document.createElement("button");
+    dot.type = "button";
+    dot.ariaLabel = `${index + 1}枚目の写真を表示`;
+    dot.toggleAttribute("data-active", index === 0);
+    dot.addEventListener("click", () => figure.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" }));
+    dots.append(dot);
+  }
+  track.addEventListener("scroll", () => {
+    const index = Math.max(0, Math.min(figures.length - 1, Math.round(track.scrollLeft / Math.max(1, track.clientWidth))));
+    for (const [dotIndex, dot] of Array.from(dots.children).entries()) {
+      dot.toggleAttribute("data-active", dotIndex === index);
+    }
+  }, { passive: true });
+  gallery.append(track, dots);
+  return gallery;
+}
+
+function appendDetailSection(
+  container: HTMLElement,
+  headingText: string,
+  values?: readonly string[],
+): void {
+  const items = values?.filter(Boolean).slice(0, 6) ?? [];
+  if (items.length === 0) return;
+  const section = document.createElement("section");
+  section.className = "map-place-detail-section";
+  const heading = document.createElement("h3");
+  heading.textContent = headingText;
+  if (items.length === 1) {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = items[0]!;
+    section.append(heading, paragraph);
+  } else {
+    const list = document.createElement("ul");
+    for (const value of items) {
+      const item = document.createElement("li");
+      item.textContent = value;
+      list.append(item);
+    }
+    section.append(heading, list);
+  }
+  container.append(section);
 }
 
 function renderPlaceCard(

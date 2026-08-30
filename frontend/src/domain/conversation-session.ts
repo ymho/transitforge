@@ -162,7 +162,11 @@ export function conversationContextSummary(
       pace: profile.travelStyle.pace,
       maxTravelMinutes: profile.transport.maxTypicalTravelMinutes,
     } : undefined,
-    tripPlan: plan ? { id: plan.id, destination: plan.destination } : undefined,
+    tripPlan: plan ? {
+      id: plan.id,
+      destination: plan.destination,
+      items: plan.items.slice(0, 8).map(compactTripPlanItem),
+    } : undefined,
     session: {
       id: session.id,
       scope: session.scope,
