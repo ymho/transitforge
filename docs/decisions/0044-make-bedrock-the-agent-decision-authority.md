@@ -90,9 +90,10 @@ ADR 0031の結果駆動replanを維持する。Tool結果を同じ会話へ返�
 
 ## 段階移行
 
-最初の変更ではContext contract Planner縮小 Prompt原則化 主要Tool descriptor Decision Traceを導入する。
-既存正常系を守るため Viewer Adapterの一部のTool公開範囲と`finalResponsePolicy`は一時的に残す。
-これらはBenchmarkで不要な質問 Tool call grounding latencyを比較しながら後続変更で縮小する。
+最初の変更ではContext contract Planner縮小 Prompt原則化 主要Tool descriptor Decision Traceを導入した。
+後続の[ADR 0045](0045-expose-tools-by-capability-availability.md)で Viewer Adapterの旅行ケース別
+Tool公開制限と業務順序を強制する`finalResponsePolicy`を削除した。Tool公開はAdapter 現在旅程
+side effect Portの利用可能性だけで決める。
 
 モデル二層化もこの変更では行わない。単一modelのbaselineを維持し model routingは品質とコストを
 同じEvalで比較できるようになってから判断する。

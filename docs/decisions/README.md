@@ -63,3 +63,4 @@
 - [0042 Web検索とページ読解をboundedなToolへ分離する](0042-use-bounded-web-research-tools.md)
 - [0043 防災 駅から先の移動 食事を独立した旅行Toolにする](0043-use-official-safety-mapbox-access-and-restaurant-tools.md)
 - [0044 BedrockをAgentの意思決定主体にする](0044-make-bedrock-the-agent-decision-authority.md)
+- [0045 Tool公開を業務ケースではなく能力の利用可能性で決める](0045-expose-tools-by-capability-availability.md)
