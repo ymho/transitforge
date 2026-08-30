@@ -165,7 +165,10 @@ import {
   LocalConversationSessionRepository,
 } from "../adapters/browser/conversation-session-repository";
 import { LocalConversationHistoryRepository } from "../adapters/browser/conversation-history-repository";
-import { recentConversationContext } from "../domain/conversation-history";
+import {
+  latestJourneyPlanFromHistory,
+  recentConversationContext,
+} from "../domain/conversation-history";
 import { createConversationSessionSwitcher } from "../usecases/concierge/conversation-session-switcher";
 import { createJourneySearchHandlers } from "../usecases/journey/create-journey-search-handlers";
 
@@ -934,6 +937,7 @@ if (!token) {
           if (!execution.ok) throw new Error(execution.reason);
         };
         let previousJourneyPlan: ViewerAgentJourneyPlan | undefined;
+        let previousJourneySessionId: string | undefined;
         let pendingJourneyLegChange: PendingJourneyLegChange | undefined;
         let pendingJourneyGuidance: JourneyNavigationGuidance | undefined;
         const localAiGuidePromptHandler = createLocalViewerAgent({
@@ -960,6 +964,14 @@ if (!token) {
           onResponseMetadata,
         ) => {
           try {
+            if (previousJourneySessionId !== activeConversationSession.id) {
+              previousJourneySessionId = activeConversationSession.id;
+              previousJourneyPlan = latestJourneyPlanFromHistory(
+                conversationHistoryRepository.list(activeConversationSession.id),
+              );
+              pendingJourneyLegChange = undefined;
+              pendingJourneyGuidance = undefined;
+            }
             const requestedGuidance = journeyNavigationGuidanceFromPrompt(
               prompt,
               trainIndex.trains,

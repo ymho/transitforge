@@ -334,12 +334,15 @@ UIはこの契約を共通入力として描画するだけで 会話パター�
 ### `ConversationHistoryEntry`
 
 - 定義: `frontend/src/domain/conversation-history.ts`
-- 保存先: LocalStorage `transitforge.concierge-history.v2`
+- 保存先: LocalStorage `transitforge.concierge-history.v3`
 
 コンシェルジュ画面に表示した利用者の発話と構造化されたAI応答を会話セッションごとに最大50件保存する。
 再読み込み後も表示を復元し 同じセッションの直近3件だけを短いテキストへ変換してBedrockの文脈に使う。
 別の相談の全履歴を無条件に混ぜない。
 AI応答には取得できた`x-transitforge-request-id`も保存し 再読み込み後の明示的なフィードバックへ紐付ける。
+経路検索の追質問では 同じ会話セッションに保存された最新の構造化`journeyPlan`を復元する。
+出発駅 到着駅 日付 時刻 乗換条件と列車制約を維持し 利用者が変更した条件だけを重ねる。
+会話を切り替えた場合は 別セッションの経路や未確定の列車変更を引き継がない。
 
 ### `ConversationSession` `TravelMemory`
 

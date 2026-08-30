@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   appendConversationHistory,
+  latestJourneyPlanFromHistory,
   conversationHistoryStorageKey,
   loadConversationHistory,
   recentConversationContext,
@@ -117,5 +118,34 @@ describe("conversation history", () => {
       },
       requestId: "request-place",
     }]);
+  });
+
+  it("restores the latest journey result with its search constraints", () => {
+    const first = {
+      originStation: "京都",
+      destinationStation: "岡山",
+      searchTimeMinutes: 480,
+      journeys: [],
+    };
+    const latest = {
+      originStation: "京都",
+      destinationStation: "出雲市",
+      searchTimeMinutes: 540,
+      excludedServiceTypes: ["新幹線"],
+      journeys: [],
+    };
+
+    expect(latestJourneyPlanFromHistory([
+      { messageId: "m-1", role: "assistant", response: { text: "最初の経路", journeyPlan: first } },
+      { messageId: "m-2", role: "user", text: "新幹線を使わない" },
+      { messageId: "m-3", role: "assistant", response: { text: "変更後の経路", journeyPlan: latest } },
+    ])).toEqual(latest);
+  });
+
+  it("does not mistake a travel plan or prose for the active journey result", () => {
+    expect(latestJourneyPlanFromHistory([
+      { messageId: "m-1", role: "assistant", response: "案内しました" },
+      { messageId: "m-2", role: "user", text: "続けて" },
+    ])).toBeUndefined();
   });
 });
