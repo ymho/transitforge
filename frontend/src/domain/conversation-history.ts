@@ -1,4 +1,7 @@
-import type { ViewerAgentResponse } from "./viewer-agent-response";
+import type {
+  ViewerAgentJourneyPlan,
+  ViewerAgentResponse,
+} from "./viewer-agent-response";
 
 export const conversationHistoryStorageKey = "transitforge.concierge-history.v3";
 const previousConversationHistoryStorageKey = "transitforge.concierge-history.v2";
@@ -80,6 +83,18 @@ export function recentConversationContext(
   return JSON.stringify(recent.map((entry) => entry.role === "user"
     ? { role: entry.role, text: entry.text.slice(0, 120) }
     : { role: entry.role, text: responseText(entry.response).slice(0, 120) }));
+}
+
+/** Restore the last deterministic journey result for follow-up questions. */
+export function latestJourneyPlanFromHistory(
+  entries: readonly ConversationHistoryEntry[],
+): ViewerAgentJourneyPlan | undefined {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (entry?.role !== "assistant" || typeof entry.response === "string") continue;
+    if ("journeyPlan" in entry.response) return entry.response.journeyPlan;
+  }
+  return undefined;
 }
 
 function readStoredHistory(
