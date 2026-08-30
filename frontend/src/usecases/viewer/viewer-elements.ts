@@ -21,9 +21,6 @@ export interface ViewerElements {
   mapPlaceExplorer: HTMLElement;
   mapPlaceExplorerList: HTMLElement;
   closeMapPlaceExplorer: HTMLButtonElement;
-  weatherButtons: HTMLButtonElement[];
-  weatherMenuToggle: HTMLButtonElement;
-  weatherOptions: HTMLFieldSetElement;
   congestionToggle: HTMLButtonElement;
   destinationArcsToggle: HTMLButtonElement;
   digitalTwinModeToggle: HTMLButtonElement;
@@ -95,9 +92,6 @@ export function loadViewerElements(root: ParentNode): ViewerElements {
     mapPlaceExplorer: required(root, "#map-place-explorer"),
     mapPlaceExplorerList: required(root, "#map-place-explorer-list"),
     closeMapPlaceExplorer: required(root, "#close-map-place-explorer"),
-    weatherButtons: requiredAll(root, "[data-weather]", 4, 4),
-    weatherMenuToggle: required(root, "#weather-menu-toggle"),
-    weatherOptions: required(root, "#weather-options"),
     congestionToggle: required(root, "#congestion-toggle"),
     destinationArcsToggle: required(root, "#destination-arcs-toggle"),
     digitalTwinModeToggle: required(root, "#digital-twin-mode-toggle"),

@@ -1,5 +1,3 @@
-import type { WeatherMode } from "../../domain/weather";
-
 export type ViewerAgentLayer = "congestion" | "destination_arcs";
 
 export type ViewerAgentAction =
@@ -22,10 +20,6 @@ export type ViewerAgentAction =
   | {
       type: "show_evidence";
       evidenceIds: string[];
-    }
-  | {
-      type: "set_weather";
-      weather: WeatherMode;
     }
   | {
       type: "set_layer_visibility";
@@ -90,20 +84,6 @@ export function parseViewerAgentActions(value: unknown): ViewerAgentAction[] {
           isIdentifierList(action.evidenceIds, 1, 10)
         ) {
           return { type: action.type, evidenceIds: [...action.evidenceIds] };
-        }
-        break;
-      case "set_weather":
-        if (
-          hasOnlyFields(action, ["type", "weather"]) &&
-          (action.weather === "clear" ||
-            action.weather === "cloudy" ||
-            action.weather === "rain" ||
-            action.weather === "snow")
-        ) {
-          return {
-            type: action.type,
-            weather: action.weather,
-          };
         }
         break;
       case "set_layer_visibility":

@@ -68,9 +68,9 @@ export function configureTrainSelection(
     hideSheet(elements.details, () => {
       elements.coupledTabs.hidden = true;
       elements.coupledTabs.replaceChildren();
+      elements.onEndFocus?.();
     });
     timetableRenderSignature = "";
-    elements.onEndFocus?.();
   };
 
   const effectiveTrain = (train: Train): Train => {

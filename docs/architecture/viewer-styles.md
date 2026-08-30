@@ -31,7 +31,10 @@ import順による上書きが必要な場合は`viewer.css`ではなく所有�
 
 ## 表示比較
 
-APIやBedrockを使わず旅程を確認する場合は`npm run dev -- --host 0.0.0.0`で起動し `?trip-preview=1`を付ける
+APIやBedrockを使わず旅程を確認する場合は
+`npm run dev --workspace @raiquora/frontend -- --host 0.0.0.0`で起動し `?trip-preview=1`を付ける
+局地天気の表示を確認する場合は`?weather-preview=mixed`を付ける
+大阪付近を東西へ約1km動かすごとに晴れ 曇り 雨が切り替わるため BackendなしでMapboxの降雨とFog表現を比較できる
 
 変更前後で次の状態を同じViewportで比較する
 

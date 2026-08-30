@@ -36,7 +36,6 @@ describe("local viewer agent", () => {
       getRouteTime: () => 1_388,
       setRouteTime,
       focusTrain,
-      setWeather: vi.fn(),
       setLayerVisibility: vi.fn(),
       searchDirectRoutes,
       maximumRouteTime: 1_800,
@@ -76,7 +75,6 @@ describe("local viewer agent", () => {
       getRouteTime: () => 1_388,
       setRouteTime: vi.fn(),
       focusTrain: vi.fn(() => false),
-      setWeather: vi.fn(),
       setLayerVisibility: vi.fn(),
       searchDirectRoutes,
       maximumRouteTime: 1_800,
@@ -102,7 +100,6 @@ describe("local viewer agent", () => {
       getRouteTime: () => 1_388,
       setRouteTime: vi.fn(),
       focusTrain: vi.fn(() => false),
-      setWeather: vi.fn(),
       setLayerVisibility: vi.fn(),
       searchDirectRoutes,
       getPendingJourneyGuidance: () => ({

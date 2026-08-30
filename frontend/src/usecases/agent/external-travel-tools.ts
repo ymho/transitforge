@@ -57,7 +57,7 @@ export function hasExternalTravelInformation(state: ExternalTravelToolState): bo
 
 export function externalTravelToolDescription(name: ExternalTravelToolName): string {
   return {
-    search_weather_forecast: "目的地の時間別と週間天気予報をEvidence付きで検索します。Viewerの演出だけを変えるset_weatherとは別です",
+    search_weather_forecast: "目的地の時間別と週間天気予報をEvidence付きで検索します",
     search_place_media: "観光地と写真を出典 利用条件 座標付きで検索します。未確認の地点を推測して作りません",
     search_flights: "空港コード 日付 直行便条件で航空便候補をEvidence付きで検索します。価格や販売可否がない場合は不明のまま返します。日本側空港への移動はsearch_direct_routesで別に検証します",
     schedule_trip_recheck: "利用者が明示的に依頼した場合だけ 現在の旅程の天気 運行 航空便 営業情報を指定日時に再確認する予定を端末へ保存します",

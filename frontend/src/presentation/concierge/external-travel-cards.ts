@@ -1,14 +1,12 @@
 import type { ExternalTravelInformation } from "@raiquora/trip/external-travel-information";
-import type { WeatherForecast } from "@raiquora/trip/weather-forecast";
 import type { ViewerAgentExternalResponse } from "../../domain/viewer-agent-response";
 
 export function renderExternalTravelInformation(
   response: ViewerAgentExternalResponse,
-  onWeather?: (forecast: WeatherForecast) => void,
 ): HTMLElement {
   const container = document.createElement("section");
   container.className = "external-travel-cards";
-  appendWeather(container, response.external.weather, onWeather);
+  appendWeather(container, response.external.weather);
   appendFlights(container, response.external.flights);
   return container;
 }
@@ -16,7 +14,6 @@ export function renderExternalTravelInformation(
 function appendWeather(
   container: HTMLElement,
   weather: ViewerAgentExternalResponse["external"]["weather"],
-  onWeather?: (forecast: WeatherForecast) => void,
 ): void {
   if (weather?.status !== "available" || !weather.data) return;
   const group = document.createElement("div");
@@ -37,14 +34,6 @@ function appendWeather(
     days.append(card);
   }
   group.append(heading, days);
-  if (onWeather) {
-    const action = document.createElement("button");
-    action.type = "button";
-    action.className = "external-weather-map-action";
-    action.textContent = "この天気を地図へ反映";
-    action.addEventListener("click", () => onWeather(weather.data!));
-    group.append(action);
-  }
   group.append(evidenceCaption(weather));
   container.append(group);
 }

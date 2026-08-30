@@ -10,6 +10,7 @@ import type {
   TrainDelayAnalysisResponse,
   TravelCandidateSearchResponse,
   WeatherForecastSearchResponse,
+  WeatherGridSearchResponse,
   PlaceMediaSearchResponse,
   FlightSearchResponse,
 } from "./bedrock-agent-contract";
@@ -22,6 +23,7 @@ import {
   isTrainDelayAnalysisResponse,
   isTravelCandidateSearchResponse,
   isWeatherForecastSearchResponse,
+  isWeatherGridSearchResponse,
   isPlaceMediaSearchResponse,
   isFlightSearchResponse,
 } from "./bedrock-agent-validation";
@@ -150,6 +152,23 @@ export async function searchWeatherForecast(
     "天気予報を検索できません",
     "天気予報",
     isWeatherForecastSearchResponse,
+    fetcher,
+    true,
+  );
+}
+
+export async function searchWeatherGrid(
+  request: {
+    points: import("@raiquora/trip/weather-grid").WeatherGridPoint[];
+    targetTime?: string;
+  },
+  fetcher: typeof fetch = fetch,
+): Promise<WeatherGridSearchResponse> {
+  return postAgentBody(
+    { operation: "weather_grid_search", ...request },
+    "局地天気を取得できません",
+    "局地天気",
+    isWeatherGridSearchResponse,
     fetcher,
     true,
   );

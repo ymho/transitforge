@@ -6,6 +6,7 @@ import {
   queryDailyCongestionPeak,
   queryTrainDelayAnalysis,
   searchRepresentativeTimetable,
+  searchWeatherGrid,
   searchTravelCandidates,
   submitAgentTrace,
   sha256Hex,
@@ -13,6 +14,36 @@ import {
 } from "./bedrock-agent";
 
 describe("Bedrock agent client", () => {
+  it("requests a bounded local weather grid", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      weatherGrid: {
+        status: "available",
+        freshness: "fresh",
+        evidence: [],
+        data: { cells: [{
+          id: "0-0",
+          latitude: 34.7,
+          longitude: 135.5,
+          observedAt: "2026-08-30T14:00",
+          mode: "rain",
+          precipitationMillimeters: 1.2,
+          cloudCoverPercent: 80,
+          weatherCode: 61,
+        }] },
+      },
+    }), { status: 200 }));
+
+    const result = await searchWeatherGrid({
+      points: [{ id: "0-0", latitude: 34.7, longitude: 135.5 }],
+    }, fetcher);
+
+    expect(result.weatherGrid.data?.cells[0]?.mode).toBe("rain");
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toMatchObject({
+      operation: "weather_grid_search",
+      points: [{ id: "0-0", latitude: 34.7, longitude: 135.5 }],
+    });
+  });
+
   it("submits a bounded Agent Trace and keeps the storage request ID", async () => {
     const fetcher = vi.fn<typeof fetch>(async () => new Response(
       JSON.stringify({ traceId: "trace-1", eventCount: 1 }),

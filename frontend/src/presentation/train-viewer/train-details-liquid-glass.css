@@ -18,6 +18,10 @@
   pointer-events: auto;
 }
 
+.train-details[hidden] {
+  display: none;
+}
+
 @keyframes sheet-rise-in {
   from {
     opacity: 0;
@@ -304,4 +308,3 @@
   color: var(--glass-delay);
   font-weight: 750;
 }
-

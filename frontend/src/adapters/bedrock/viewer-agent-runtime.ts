@@ -9,7 +9,6 @@ import type {
 import type { Train } from "@raiquora/train/train";
 import type { CongestionAnalysisForAgent } from "../../domain/congestion-analysis";
 import type { DelayAnalysisForAgent } from "../../domain/delay-analysis";
-import type { WeatherMode } from "../../domain/weather";
 import {
   defaultJourneySearchPreferences,
   journeySearchPreferencesFromPrompt,
@@ -126,7 +125,6 @@ export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDepend
   getRouteTime: () => number;
   setRouteTime: (routeTimeMinutes: number) => void;
   focusTrain: (serviceUid: string) => boolean;
-  setWeather: (weather: WeatherMode) => void;
   setLayerVisibility: (layer: ViewerAgentLayer, visible: boolean) => void;
   queryDailyCongestionAnalysis: (
     serviceDate: string,
@@ -272,6 +270,10 @@ export async function runViewerAgentRuntime(
   const conversationState: ConversationToolState = {};
   const tripPlanUpdateState: TripPlanUpdateToolState = {};
   const externalState: ExternalTravelToolState = {};
+  const attemptedTools = new Set<string>();
+  const travelFacts = travelConversationFacts(prompt, currentDate(dependencies));
+  const hasCompleteTravelSchedule = featureFromPrompt(prompt) === "travel_planning" &&
+    travelFacts.hasExplicitDate && travelFacts.hasExplicitStayLength;
   const tools = viewerToolRegistry({
     prompt,
     dependencies,
@@ -282,6 +284,7 @@ export async function runViewerAgentRuntime(
     conversationState,
     tripPlanUpdateState,
     externalState,
+    attemptedTools,
   });
   const evidenceMappers = viewerEvidenceMappers();
   const toolViewerActions = viewerToolActionMappers();
@@ -292,7 +295,6 @@ export async function runViewerAgentRuntime(
       highlightRoute: () => false,
       compareJourneys: () => false,
       showEvidence: () => false,
-      setWeather: dependencies.setWeather,
       setLayerVisibility: dependencies.setLayerVisibility,
     }, dependencies.maximumRouteTime),
   );
@@ -309,9 +311,37 @@ export async function runViewerAgentRuntime(
       travelState,
       conversationState,
       tripPlanUpdateState,
+      externalState,
+      dependencies.searchPlaceMedia !== undefined,
+      attemptedTools,
       dependencies.getTripPlan?.(),
       dependencies.getUserProfile?.(),
     ),
+    finalResponsePolicy: () => {
+      if (!hasCompleteTravelSchedule || dependencies.getTripPlan?.()) {
+        return { accepted: true };
+      }
+      if (!travelState.response) {
+        return {
+          accepted: false,
+          reason: "確定した旅行条件を決定論的な旅行検索で検証する",
+          instruction: travelFacts.context.stayNights === 0
+            ? "出発日と日帰り条件は確定済みです。同じ条件を聞き直さず plan_day_trip を実行してください"
+            : "出発日と泊数は確定済みです。同じ条件を聞き直さず search_accommodations を実行してください",
+        };
+      }
+      if (
+        dependencies.searchPlaceMedia &&
+        !attemptedTools.has("search_place_media")
+      ) {
+        return {
+          accepted: false,
+          reason: "観光候補の写真と位置を外部情報で確認する",
+          instruction: "観光候補を文章で推測せず search_place_media で目的地周辺の写真と位置を確認してください",
+        };
+      }
+      return { accepted: true };
+    },
     limits: {
       maxIterations: 6,
       maxModelCalls: 7,
@@ -362,6 +392,7 @@ interface ViewerToolContext {
   conversationState: ConversationToolState;
   tripPlanUpdateState: TripPlanUpdateToolState;
   externalState: ExternalTravelToolState;
+  attemptedTools: Set<string>;
 }
 
 const viewerToolNames = [
@@ -381,7 +412,6 @@ const viewerToolNames = [
   "plan_day_trip",
   "search_trip_route_update",
   "search_representative_timetable",
-  "set_weather",
   "set_layer_visibility",
 ] as const;
 
@@ -390,6 +420,7 @@ const terminalToolNames = new Set<string>([
   "ask_follow_up",
   "search_direct_routes",
   "search_accommodations",
+  "search_place_media",
   "plan_day_trip",
   "search_trip_route_update",
 ]);
@@ -416,6 +447,7 @@ function viewerTool(
         : invalidAgentToolInput("Tool入力はオブジェクトで指定してください");
     },
     async execute(input) {
+      context.attemptedTools.add(name);
       try {
         return successfulAgentToolResult(await executeViewerToolAdapter(
           name,
@@ -461,7 +493,6 @@ function viewerToolDescription(name: typeof viewerToolNames[number]): string {
     plan_day_trip: "宿泊施設を検索せず 指定日の行きと帰りの鉄道経路を組み合わせて日帰り旅程を作ります",
     search_trip_route_update: "現在の旅程にある行きまたは帰りの鉄道移動を再検索します。出発を遅らせる変更と途中駅への立寄りに使います",
     search_representative_timetable: "平日または土休日の代表ダイヤを検索します",
-    set_weather: "Viewerの天気表現を変更します",
     set_layer_visibility: "Viewerの混雑またはアーチ表示を変更します",
   };
   return descriptions[name];
@@ -703,10 +734,6 @@ function viewerToolActionMappers(): ToolViewerActionRegistry {
       ? [{ type: "focus_train", serviceUid: leg.serviceUid }]
       : [];
   });
-  registry.register("set_weather", (output) =>
-    isRecord(output) && ["clear", "cloudy", "rain", "snow"].includes(String(output.weather))
-      ? [{ type: "set_weather", weather: output.weather as WeatherMode }]
-      : []);
   registry.register("set_layer_visibility", (output) =>
     isRecord(output) &&
       (output.layer === "congestion" || output.layer === "destination_arcs") &&
@@ -904,6 +931,22 @@ async function executeViewerToolAdapter(
     return { updated: true };
   }
   if (name === "ask_follow_up") {
+    const travelFacts = travelConversationFacts(
+      originalPrompt,
+      currentDate(dependencies),
+    );
+    if (
+      featureFromPrompt(originalPrompt) === "travel_planning" &&
+      travelFacts.hasExplicitDate &&
+      travelFacts.hasExplicitStayLength &&
+      !dependencies.getTripPlan?.()
+    ) {
+      throw new Error(
+        travelFacts.context.stayNights === 0
+          ? "出発日と日帰り条件は確定済みです。plan_day_tripを実行してください。"
+          : "出発日と泊数は確定済みです。search_accommodationsを実行してください。",
+      );
+    }
     const guidance = conversationGuidanceFromToolInput(
       input,
       originalPrompt,
@@ -1505,16 +1548,6 @@ async function executeViewerToolAdapter(
     });
   }
 
-  if (name === "set_weather") {
-    const [action] = parseViewerAgentActions([
-      { type: "set_weather", weather: input.weather },
-    ]);
-    if (!action || action.type !== "set_weather") {
-      throw new Error("天気を変更できません。");
-    }
-    return { weather: action.weather };
-  }
-
   if (name === "set_layer_visibility") {
     const [action] = parseViewerAgentActions([
       {
@@ -1604,13 +1637,25 @@ function viewerTerminalResponseText(
   travelState: TravelToolState,
   conversationState: ConversationToolState,
   tripPlanUpdateState: TripPlanUpdateToolState,
+  externalState: ExternalTravelToolState,
+  requirePlaceMedia: boolean,
+  attemptedTools: ReadonlySet<string>,
   currentPlan?: TripPlan,
   profile?: UserProfile,
 ): string | undefined {
   if (!terminalToolNames.has(toolName)) return undefined;
 
   const travelResponse = travelResponseText(travelState, currentPlan, profile);
-  if (travelResponse) return travelResponse.text;
+  if (travelResponse) {
+    if (
+      requirePlaceMedia &&
+      !externalState.places &&
+      !attemptedTools.has("search_place_media")
+    ) {
+      return undefined;
+    }
+    return travelResponse.text;
+  }
 
   const conversationResponse = conversationResponseText(conversationState);
   if (typeof conversationResponse !== "string" && conversationResponse) {

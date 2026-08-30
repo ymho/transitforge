@@ -58,6 +58,18 @@ export function mergeAuthoritativeTripContext(
   return merged;
 }
 
+/** Apply explicit facts from one user answer before asking the model. */
+export function tripContextAfterUserAnswer(
+  current: TripContext,
+  answer: string,
+  now = new Date(),
+): TripContext {
+  return travelConversationFacts([
+    `現在の旅行条件: ${JSON.stringify(current)}`,
+    `利用者の今回の回答: ${answer}`,
+  ].join("\n"), now).context;
+}
+
 export function quickReplyMatchesExpectedInput(
   value: string,
   expectedInput: "departure-date" | "stay-length" | "traveler-count" | "free-text",

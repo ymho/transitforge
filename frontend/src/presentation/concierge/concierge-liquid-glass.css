@@ -358,4 +358,3 @@
 .external-weather-days article { display: grid; flex: 0 0 6.5rem; gap: .25rem; padding: .7rem; border: 1px solid var(--glass-border-subtle); border-radius: 1rem; background: var(--glass-surface); scroll-snap-align: start; }
 .external-weather-days span, .external-evidence-caption { color: var(--glass-muted); font-size: .68rem; }
 .external-flight-list article { padding: .7rem .8rem; border: 1px solid var(--glass-border-subtle); border-radius: .9rem; background: var(--glass-surface); }
-.external-weather-map-action { justify-self: start; padding: .45rem .75rem; border: 1px solid var(--glass-border-subtle); border-radius: 999px; color: var(--glass-accent-strong); background: var(--glass-surface); font: inherit; font-size: .7rem; font-weight: 700; }

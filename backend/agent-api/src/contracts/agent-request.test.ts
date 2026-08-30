@@ -93,11 +93,11 @@ describe("Agent API request contract", () => {
       inputSchema: { type: "object", properties: {} },
     }));
 
-    expect(definitions).toHaveLength(28);
+    expect(definitions).toHaveLength(27);
     expect(definitions.some(({ name }) => name === "schedule_trip_recheck"))
       .toBe(true);
     expect(validatedToolDefinitions({ toolDefinitions: definitions }))
-      .toHaveLength(28);
+      .toHaveLength(27);
   });
 });
 
