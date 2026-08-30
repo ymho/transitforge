@@ -60,7 +60,7 @@ export function validateViewerAction(
     }
     return { ok: true, effect: "reversible" };
   }
-  if (action.type === "set_weather" || action.type === "set_layer_visibility") {
+  if (action.type === "set_layer_visibility") {
     return { ok: true, effect: "reversible" };
   }
   if (action.type === "focus_train" && !scope.hasTrain(action.serviceUid)) {

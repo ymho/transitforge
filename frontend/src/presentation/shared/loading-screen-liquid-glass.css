@@ -98,14 +98,12 @@
 
   .map-tools > button,
   .playback-speed-menu > button,
-  .weather-menu > button,
   .mapboxgl-ctrl-group button {
     width: 2.25rem;
     height: 2.25rem;
   }
 
-  .playback-speed-menu,
-  .weather-menu {
+  .playback-speed-menu {
     width: 2.25rem;
   }
 
@@ -119,8 +117,7 @@
     line-height: 2.25rem;
   }
 
-  .playback-speed-controls,
-  .weather-controls {
+  .playback-speed-controls {
     right: calc(100% + 0.45rem);
     max-width: calc(100vw - 4.5rem);
     overflow-x: auto;

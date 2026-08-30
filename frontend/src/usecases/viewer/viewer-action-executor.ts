@@ -1,5 +1,4 @@
 import type { AgentTraceRecorder } from "../agent/agent-trace";
-import type { WeatherMode } from "../../domain/weather";
 import {
   parseViewerAgentActions,
   type ViewerAgentLayer,
@@ -18,7 +17,6 @@ export interface ViewerActionPorts {
   highlightRoute: (journeyId: string) => boolean;
   compareJourneys: (journeyIds: string[]) => boolean;
   showEvidence: (evidenceIds: string[]) => boolean;
-  setWeather?: (weather: WeatherMode) => void;
   setLayerVisibility?: (layer: ViewerAgentLayer, visible: boolean) => void;
 }
 
@@ -108,10 +106,6 @@ export class ViewerActionExecutor {
         return this.ports.compareJourneys(action.journeyIds);
       case "show_evidence":
         return this.ports.showEvidence(action.evidenceIds);
-      case "set_weather":
-        if (!this.ports.setWeather) return false;
-        this.ports.setWeather(action.weather);
-        return true;
       case "set_layer_visibility":
         if (!this.ports.setLayerVisibility) return false;
         this.ports.setLayerVisibility(action.layer, action.visible);

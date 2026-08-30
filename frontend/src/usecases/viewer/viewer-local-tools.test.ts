@@ -191,19 +191,14 @@ describe("viewer agent local tools", () => {
     expect(response.matches).toEqual([]);
   });
 
-  it("recognizes reversible map controls in the local fallback", () => {
-    expect(localViewerControlActionsFromPrompt("雨にして")).toEqual([
-      { type: "set_weather", weather: "rain" },
-    ]);
-    expect(localViewerControlActionsFromPrompt("雲を表示して")).toEqual([
-      { type: "set_weather", weather: "cloudy" },
-    ]);
+  it("recognizes only user-controllable map layers in the local fallback", () => {
+    expect(localViewerControlActionsFromPrompt("雨にして")).toEqual([]);
+    expect(localViewerControlActionsFromPrompt("雲を表示して")).toEqual([]);
     expect(
       localViewerControlActionsFromPrompt(
         "雨にして目的地アーチを表示して",
       ),
     ).toEqual([
-      { type: "set_weather", weather: "rain" },
       {
         type: "set_layer_visibility",
         layer: "destination_arcs",

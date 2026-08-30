@@ -202,6 +202,40 @@ describe("MultiStepAgentRuntime", () => {
       reason: "内部推論だけの応答を破棄して利用者向け応答を再要求する",
     }));
   });
+
+  it("replans when a feature policy rejects an unverified final response", async () => {
+    const executionOrder: string[] = [];
+    const { tools, toolExecutor } = toolSetup(executionOrder);
+    const requests: AgentModelRequest[] = [];
+    const model = sequenceModel([
+      textResponse("確認せずに作った候補です"),
+      toolCallResponse([{ id: "verified", name: "first_tool", input: { value: "出雲" } }]),
+      textResponse("確認済みの候補です"),
+    ], requests);
+    const runtime = new MultiStepAgentRuntime({
+      model,
+      tools,
+      toolExecutor,
+      finalResponsePolicy: (_response, _request) => ({
+        accepted: executionOrder.length > 0,
+        reason: "旅行候補をToolで検証する",
+        instruction: "旅行候補をToolで検索してください",
+      }),
+    });
+
+    const output = await runtime.run(request("出雲へ旅行したい"));
+
+    expect(output.response).toBe("確認済みの候補です");
+    expect(executionOrder).toEqual(["first_tool"]);
+    expect(requests[1]?.messages.at(-1)).toEqual({
+      role: "user",
+      content: [{ type: "text", text: "旅行候補をToolで検索してください" }],
+    });
+    expect(output.trace.events).toContainEqual(expect.objectContaining({
+      type: "replan_decided",
+      reason: "旅行候補をToolで検証する",
+    }));
+  });
 });
 
 function toolSetup(executionOrder: string[]) {

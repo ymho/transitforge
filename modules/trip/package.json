@@ -13,6 +13,7 @@
     "./trip-plan": "./domain/trip-plan.ts",
     "./external-travel-information": "./domain/external-travel-information.ts",
     "./weather-forecast": "./domain/weather-forecast.ts",
+    "./weather-grid": "./domain/weather-grid.ts",
     "./place-media": "./domain/place-media.ts",
     "./flight-search": "./domain/flight-search.ts",
     "./adventure-safety": "./domain/adventure-safety.ts",

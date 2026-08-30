@@ -61,9 +61,7 @@ body,
 
 .map-tools > button,
 .playback-speed-menu > button,
-.playback-speed-controls button,
-.weather-menu > button,
-.weather-controls button {
+.playback-speed-controls button {
   display: block;
   width: 32px;
   height: 32px;
@@ -85,20 +83,17 @@ body,
 
 .map-tools button:hover:not(:disabled),
 .playback-speed-controls button:hover:not(:disabled),
-.weather-controls button:hover:not(:disabled),
 .playback-speed-menu > button:hover:not(:disabled) {
   background-color: #eeeeee;
 }
 
 .map-tools > button[aria-pressed="true"],
-.playback-speed-controls button[aria-pressed="true"],
-.weather-controls button[aria-pressed="true"] {
+.playback-speed-controls button[aria-pressed="true"] {
   color: #4264fb;
 }
 
 .map-tools button:disabled,
-.playback-speed-controls button:disabled,
-.weather-controls button:disabled {
+.playback-speed-controls button:disabled {
   cursor: not-allowed;
   opacity: 0.25;
 }
@@ -108,8 +103,7 @@ body,
 }
 
 .map-tools button:focus-visible,
-.playback-speed-controls button:focus-visible,
-.weather-controls button:focus-visible {
+.playback-speed-controls button:focus-visible {
   box-shadow: 0 0 2px 2px #0096ff;
 }
 
@@ -129,13 +123,11 @@ body,
   fill: currentcolor;
 }
 
-.playback-speed-menu,
-.weather-menu {
+.playback-speed-menu {
   position: relative;
 }
 
-.playback-speed-controls,
-.weather-controls {
+.playback-speed-controls {
   position: absolute;
   top: 0;
   right: calc(100% + 10px);
@@ -150,13 +142,11 @@ body,
   box-shadow: 0 0 0 2px rgb(0 0 0 / 10%);
 }
 
-.playback-speed-controls[hidden],
-.weather-controls[hidden] {
+.playback-speed-controls[hidden] {
   display: none;
 }
 
-.playback-speed-controls button,
-.weather-controls button {
+.playback-speed-controls button {
   border-right: 1px solid #dddddd;
 }
 
@@ -164,8 +154,7 @@ body,
   width: 48px;
 }
 
-.playback-speed-controls button:last-child,
-.weather-controls button:last-child {
+.playback-speed-controls button:last-child {
   border-right: 0;
 }
 

@@ -5,6 +5,7 @@ import { browserPollingEnvironment } from "../adapters/browser/polling-controlle
 import { currentBrowserCoordinate } from "../adapters/browser/current-coordinate";
 import { createRuntimeMonitor, nextBrowserFrame } from "../adapters/browser/runtime-monitor";
 import { applyWeather } from "../adapters/mapbox/map-weather";
+import { createLocalWeatherLayer } from "../adapters/mapbox/local-weather-layer";
 import {
   createVerifiedPlaceLayer,
   type VerifiedPlaceLayerController,
@@ -32,6 +33,7 @@ import {
   queryTrainDelayAnalysis,
   searchAccommodations,
   searchWeatherForecast,
+  searchWeatherGrid,
   searchPlaceMedia,
   searchFlights,
   searchRepresentativeTimetable,
@@ -118,6 +120,7 @@ import {
   configureTrainCongestionUpdates,
   configureTrainDelayUpdates,
 } from "../usecases/train-viewer/realtime-updates";
+import { configureLocalWeatherUpdates } from "../usecases/train-viewer/local-weather-updates";
 import {
   configureDateTimeInput,
   maximumRouteTimeFor,
@@ -130,7 +133,6 @@ import {
 } from "../presentation/train-viewer/playback-controls";
 import {
   configureDestinationArcs,
-  configureWeather,
   renderDisplayMode,
 } from "../presentation/train-viewer/map-controls";
 import { createLoadingScreen } from "../presentation/shared/loading-screen";
@@ -213,9 +215,6 @@ const {
   mapPlaceExplorer,
   mapPlaceExplorerList,
   closeMapPlaceExplorer,
-  weatherButtons,
-  weatherMenuToggle,
-  weatherOptions,
   congestionToggle,
   destinationArcsToggle,
   digitalTwinModeToggle,
@@ -328,9 +327,10 @@ let aiGuideController: ReturnType<typeof configureAiGuidePanel>;
 let verifiedPlaceLayer: VerifiedPlaceLayerController | undefined;
 let mapPlaceExplorerController: MapPlaceExplorerController | undefined;
 let pendingVerifiedPlaces: import("@raiquora/trip/place-media").PlaceMedia[] = [];
-let applyForecastWeather: ((forecast: import("@raiquora/trip/weather-forecast").WeatherForecast) => void) | undefined;
 const tripPreviewEnabled = import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get("trip-preview") === "1";
+const weatherPreviewEnabled = import.meta.env.DEV &&
+  new URLSearchParams(window.location.search).get("weather-preview") === "mixed";
 const tripPlanController = configureTripPlanPanel(
   tripPlanPanel,
   tripPlanContent,
@@ -492,7 +492,6 @@ aiGuideController = configureAiGuidePanel(
       mapPlaceExplorerController?.show(places);
       contextWorkspaceController.show("map");
     },
-    onWeather: (forecast) => applyForecastWeather?.(forecast),
     persistent: () => true,
     onTripPlanUpdate: (proposal) => {
       tripPlanController.apply(proposal.patches);
@@ -692,21 +691,12 @@ if (!token) {
     configureLandmarkJourneyInteraction(map, aiGuideController.openLandmarkJourney);
     let applyWeatherToTrains: (mode: WeatherMode) => void = () => undefined;
     let activeWeatherMode: WeatherMode = "clear";
-    const selectWeather = configureWeather(
-      map,
-      weatherButtons,
-      weatherMenuToggle,
-      weatherOptions,
-      (mode) => {
-        activeWeatherMode = mode;
-        applyWeatherToTrains(mode);
-      },
-      applyWeather,
-    );
-    applyForecastWeather = (forecast) => {
-      const code = forecast.hourly[0]?.weatherCode ?? forecast.daily[0]?.weatherCode ?? 0;
-      selectWeather(code >= 51 ? "rain" : code >= 1 ? "cloudy" : "clear");
+    const applyAutomaticWeather = (mode: WeatherMode) => {
+      activeWeatherMode = mode;
+      applyWeather(map, mode);
+      applyWeatherToTrains(mode);
     };
+    applyAutomaticWeather("clear");
     runtimeMonitor.start();
     let activeLightPreset: LightPreset | undefined;
 
@@ -859,6 +849,21 @@ if (!token) {
         let displayedPositions: TrainPosition[] = [];
         let latestDelaySnapshot: TrainDelaySnapshot | undefined;
         let digitalTwinModeRequested = true;
+        const localWeatherLayer = createLocalWeatherLayer(map, applyAutomaticWeather);
+        const localizedWeatherSearch = weatherPreviewEnabled
+          ? (await import("../dev/weather-grid-preview")).searchWeatherGridPreview
+          : searchWeatherGrid;
+        const localWeatherUpdates = configureLocalWeatherUpdates(
+          map,
+          localWeatherLayer,
+          localizedWeatherSearch,
+          () => digitalTwinModeRequested
+            ? undefined
+            : dateForOperatingRouteTime(
+                displayedServiceDateStart,
+                Number(displayTime.value),
+              ),
+        );
         let playbackControls: PlaybackUiController | undefined;
         let aliasedOperationsSource: ReadonlyMap<string, TrainOperation> | undefined;
         let aliasedOperations: ReadonlyMap<string, TrainOperation> | undefined;
@@ -1032,15 +1037,20 @@ if (!token) {
         disposeDataUpdates = () => {
           congestionUpdates.dispose();
           disposeDelayUpdates();
+          localWeatherUpdates.dispose();
         };
 
-        displayTime.addEventListener("input", () => updateTrains());
+        displayTime.addEventListener("input", () => {
+          updateTrains();
+          localWeatherUpdates.scheduleRefresh();
+        });
         digitalTwinModeToggle.addEventListener("click", () => {
           if (digitalTwinModeToggle.disabled) {
             return;
           }
           digitalTwinModeRequested = digitalTwinModeToggle.ariaPressed !== "true";
           updateTrains();
+          localWeatherUpdates.scheduleRefresh();
         });
         configureDateTimeInput(
           dateTimeInput,
@@ -1077,7 +1087,6 @@ if (!token) {
           highlightRoute: () => false,
           compareJourneys: () => false,
           showEvidence: () => false,
-          setWeather: selectWeather,
           setLayerVisibility,
         }, maximumRouteTime);
         const setViewerDisplayTime = (routeTimeMinutes: number) => {
@@ -1099,7 +1108,6 @@ if (!token) {
           getRouteTime: () => Number(displayTime.value),
           setRouteTime: setViewerDisplayTime,
           focusTrain: selection.focusTrain,
-          setWeather: selectWeather,
           setLayerVisibility,
           searchDirectRoutes: localSearchRoutes,
           getPendingJourneyGuidance: () => pendingJourneyGuidance,
@@ -1222,7 +1230,6 @@ if (!token) {
                 getRouteTime: () => Number(displayTime.value),
                 setRouteTime: setViewerDisplayTime,
                 focusTrain: selection.focusTrain,
-                setWeather: selectWeather,
                 setLayerVisibility,
                 queryDailyCongestionAnalysis: async (serviceDate) =>
                   congestionAnalysisForAgent(

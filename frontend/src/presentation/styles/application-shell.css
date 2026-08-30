@@ -86,14 +86,15 @@
   #app[data-mobile-context-open="true"][data-context-view="journey-details"] .train-details {
     position: fixed;
     z-index: 10;
-    inset: 60dvh 0 0;
-    width: 100%;
-    height: 40dvh;
-    max-height: 40dvh;
+    inset: auto 0.5rem 0.5rem;
+    width: min(32rem, calc(100% - 1rem));
+    height: auto;
+    max-height: min(38dvh, 25rem);
+    margin: 0 auto;
     overflow-y: auto;
-    border: 0;
-    border-top: 1px solid var(--glass-border-subtle);
-    border-radius: 0;
+    border: 1px solid var(--glass-border-subtle);
+    border-radius: 1.25rem;
+    box-shadow: 0 1rem 3rem rgb(15 23 42 / 18%);
   }
 
   #app[data-mobile-context-open="true"] .map-place-explorer {
@@ -260,33 +261,41 @@
     box-shadow: none;
   }
 
-  #app[data-context-view="trip-plan"],
-  #app[data-context-view="journey-details"] {
+  #app[data-context-view="trip-plan"] {
     grid-template-rows: minmax(14rem, 0.42fr) minmax(20rem, 0.58fr);
   }
 
   #app[data-context-view="journey-details"] {
-    grid-template-rows: minmax(0, 0.62fr) minmax(14rem, 0.38fr);
+    grid-template-rows: minmax(0, 1fr);
   }
 
-  #app[data-context-view="trip-plan"] #map,
-  #app[data-context-view="journey-details"] #map {
+  #app[data-context-view="trip-plan"] #map {
     grid-row: 1;
     min-height: 0;
     border-bottom: 1px solid var(--glass-border-subtle);
   }
 
-  #app[data-context-view="journey-details"] .train-details {
-    justify-self: center;
-    width: min(50rem, calc(100% - 2rem));
+  #app[data-context-view="journey-details"] #map {
+    grid-row: 1;
     min-height: 0;
-    margin: 0.8rem auto 0;
-    padding: 1rem 1.1rem 0;
+    border-bottom: 0;
+  }
+
+  #app[data-context-view="journey-details"] .train-details {
+    z-index: 8;
+    grid-row: 1;
+    align-self: end;
+    justify-self: center;
+    width: min(36rem, calc(100% - 2rem));
+    height: auto;
+    max-height: min(42dvh, 28rem);
+    min-height: 0;
+    margin: 0 auto 1rem;
+    padding: 0.9rem 1rem 1rem;
     overflow-y: auto;
     border: 1px solid var(--glass-border-subtle);
-    border-bottom: 0;
-    border-radius: 1.25rem 1.25rem 0 0;
-    box-shadow: 0 -0.35rem 1.5rem rgb(15 23 42 / 7%);
+    border-radius: 1.25rem;
+    box-shadow: 0 1rem 3rem rgb(15 23 42 / 18%);
   }
 
   #app[data-context-view="trip-plan"] .map-place-explorer,

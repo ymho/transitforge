@@ -20,7 +20,7 @@ Viewerへ反映できる操作を列挙型の`ViewerAgentAction`に限定する
 - `set_display_time`
 - `compare_journeys`
 - `show_evidence`
-- 既存の`set_weather`と`set_layer_visibility`
+- 既存の`set_layer_visibility`
 
 列車 経路 Evidenceを対象にするActionは Applicationが同じAgent実行のTool結果から
 `ViewerActionTaskScope`へ登録したIDだけを許可する

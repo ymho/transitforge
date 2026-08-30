@@ -215,6 +215,8 @@ RuntimeはProvider固有形式を扱わず 既定で反復4回 model call 5回 T
 導入中は機能単位の`AgentRuntimeRolloutRouter`で比較した。現在の本番モデル実行は
 `MultiStepAgentRuntime`へ一本化し Bedrock AdapterはProvider DTOとTool Adapterを組成する。
 Toolが提案したViewer Actionも共通Runtime内でEvidence scopeを検証してから適用する。
+機能固有の`finalResponsePolicy`は 未検証の文章回答を完了扱いにせず Tool実行へ再計画させる。
+PolicyはDomain計算を代替せず 必要なEvidenceが揃ったかだけを判定する。
 判断記録は[ADR 0038](../decisions/0038-use-one-production-agent-runtime.md)を参照する。
 
 最初のE2Eシナリオは当日遅延を含む経路検索から候補比較を行い Evidence付き回答と
@@ -331,7 +333,8 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 UIはこの契約を共通入力として描画するだけで 会話パターンごとの日付入力や宿泊数入力を持たない。
 `ConversationSubmission`は利用者の回答と直前のガイダンスを結び 次のAI呼び出しへ渡す。
 構造化旅程ができた後は 同じ会話セッションの`TripContext`を追質問間で保持する。
-応答に新しい`TripContext`が含まれる場合だけ更新し 経路表示や旅程更新など別形式の応答では消去しない。
+出発日や泊数など明示的な利用者回答はモデルの応答を待たず既存Contextへ統合する。
+応答に新しい`TripContext`が含まれる場合は正本として統合し 経路表示や旅程更新など別形式の応答では消去しない。
 
 ### `ConversationHistoryEntry`
 
@@ -499,6 +502,7 @@ S3書込失敗は成功として扱わず request ID付き503と構造化ログ�
 状態`available` `unavailable` `unknown`と鮮度`fresh` `stale` `unknown`を分け Source Evidenceへprovider source URL 取得時刻 有効期限 attribution confidenceを保持する
 
 - `WeatherForecast`: 時間別 日別予報と地点 タイムゾーン
+- `WeatherGridSnapshot`: Viewer表示範囲を最大9セルへ分けた現在または指定日時の天候 降水量 雲量
 - `FlightSearchResult`: 航空便区間 販売可否 空席 価格。不明な値は生成しない
 - `PlaceMediaSearchResult`: Place ID 名称 座標 写真 利用条件 attribution
 
@@ -509,6 +513,9 @@ Agentから利用する外部旅行Toolは`search_weather_forecast` `search_plac
 `schedule_trip_recheck`をProvider非依存のApplication契約として定義する。Bedrock Adapterはこの契約を
 共通Tool Registryへ組み込み 外部情報の構造化状態は会話カード 地図 旅程へ同じEntity IDのまま投影する。
 カードの描画はApplication Toolから分離し Provider障害時も`unavailable`や`unknown`を表示契約へ残す。
+局地天気の`weather_grid_search`はAgentの推論を介さずViewerがBackendへ問い合わせる。
+Backendは日本全国の固定地点とズームに応じた表示範囲の複数座標を一括検索する。
+Viewerは地図中心に最も近い結果をMapboxのRain Snow Fogへ自動反映し 利用者やAgentによる上書きを許可しない。
 
 航空便と空港アクセス鉄道は1つの推測結果へ混ぜない。Agentは航空便Toolで空港と時刻を確認し
 `airportRailAccess`で対応駅が既知の場合だけ既存Journey Toolを続けて実行する。対応駅がない場合は

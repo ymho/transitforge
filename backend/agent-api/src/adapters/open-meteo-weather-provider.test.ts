@@ -17,4 +17,28 @@ describe("OpenMeteoWeatherProvider", () => {
     expect(result.evidence[0]).toEqual(expect.objectContaining({ provider: "open-meteo", confidence: "provider-forecast" }));
     expect(fetch.mock.calls[1]?.[0]).toContain("timezone=Asia%2FHong_Kong");
   });
+
+  it("retrieves current conditions for multiple viewer cells in one request", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify([
+      { current: { time: "2026-08-30T14:00", precipitation: 2.4, weather_code: 61, cloud_cover: 90 } },
+      { current: { time: "2026-08-30T14:00", precipitation: 0, weather_code: 2, cloud_cover: 70 } },
+    ]), { status: 200 }));
+    const provider = new OpenMeteoWeatherProvider(
+      { fetch },
+      () => new Date("2026-08-30T05:00:00Z"),
+    );
+
+    const result = await provider.searchGrid({ points: [
+      { id: "0-0", latitude: 34.7, longitude: 135.5 },
+      { id: "0-1", latitude: 35.0, longitude: 135.8 },
+    ] });
+
+    expect(result.data?.cells.map(({ id, mode }) => ({ id, mode }))).toEqual([
+      { id: "0-0", mode: "rain" },
+      { id: "0-1", mode: "cloudy" },
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0]?.[0]).toContain("latitude=34.7%2C35");
+    expect(fetch.mock.calls[0]?.[0]).toContain("current=precipitation%2Cweather_code%2Ccloud_cover");
+  });
 });

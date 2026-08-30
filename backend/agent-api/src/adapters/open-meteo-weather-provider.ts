@@ -8,13 +8,21 @@ import type {
   WeatherForecastProvider,
   WeatherForecastQuery,
 } from "@raiquora/trip/weather-forecast";
+import {
+  localWeatherMode,
+  type WeatherCellObservation,
+  type WeatherGridProvider,
+  type WeatherGridQuery,
+  type WeatherGridSnapshot,
+} from "@raiquora/trip/weather-grid";
 
 interface FetchPort {
   fetch(input: string, init?: RequestInit): Promise<Response>;
 }
 
-export class OpenMeteoWeatherProvider implements WeatherForecastProvider {
+export class OpenMeteoWeatherProvider implements WeatherForecastProvider, WeatherGridProvider {
   private readonly cache = new Map<string, { expiresAt: number; value: ExternalTravelInformation<WeatherForecast> }>();
+  private readonly gridCache = new Map<string, { expiresAt: number; value: ExternalTravelInformation<WeatherGridSnapshot> }>();
   constructor(
     private readonly http: FetchPort,
     private readonly now: () => Date = () => new Date(),
@@ -52,6 +60,67 @@ export class OpenMeteoWeatherProvider implements WeatherForecastProvider {
       return result;
     } catch {
       return failedExternalInformation({ code: "unavailable", message: "天気予報を取得できません", retryable: true });
+    }
+  }
+
+  async searchGrid(query: WeatherGridQuery): Promise<ExternalTravelInformation<WeatherGridSnapshot>> {
+    if (
+      query.points.length < 1 ||
+      query.points.length > 64 ||
+      query.points.some((point) =>
+        !point.id.trim() || point.id.length > 40 ||
+        !number(point.latitude) || point.latitude < -90 || point.latitude > 90 ||
+        !number(point.longitude) || point.longitude < -180 || point.longitude > 180) ||
+      query.targetTime !== undefined && !validGridTargetTime(query.targetTime, this.now())
+    ) {
+      return failedExternalInformation({
+        code: "invalid_request",
+        message: "気象範囲または日時が予報対象外です",
+        retryable: false,
+      });
+    }
+    const cacheKey = JSON.stringify(query);
+    const cached = this.gridCache.get(cacheKey);
+    if (cached && cached.expiresAt > this.now().getTime()) return cached.value;
+    try {
+      const retrievedAt = this.now();
+      const url = weatherGridUrl(query);
+      const response = await this.http.fetch(url, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (!response.ok) return providerHttpFailure<WeatherGridSnapshot>(response.status);
+      const value: unknown = await response.json();
+      const cells = weatherGridCells(value, query);
+      if (cells.length !== query.points.length) {
+        return failedExternalInformation({
+          code: "invalid_response",
+          message: "局地天気の形式が不正です",
+          retryable: true,
+        });
+      }
+      const result = availableExternalInformation({ cells }, [{
+        id: `weather-grid:open-meteo:${retrievedAt.toISOString()}`,
+        kind: "weather",
+        provider: "open-meteo",
+        sourceId: "weather-grid",
+        sourceUrl: url,
+        retrievedAt: retrievedAt.toISOString(),
+        validUntil: new Date(retrievedAt.getTime() + 15 * 60_000).toISOString(),
+        attribution: "Weather data by Open-Meteo.com",
+        confidence: query.targetTime ? "provider-forecast" : "observed",
+      }], retrievedAt);
+      this.gridCache.set(cacheKey, {
+        expiresAt: retrievedAt.getTime() + 10 * 60_000,
+        value: result,
+      });
+      return result;
+    } catch {
+      return failedExternalInformation({
+        code: "unavailable",
+        message: "局地天気を取得できません",
+        retryable: true,
+      });
     }
   }
 
@@ -110,6 +179,91 @@ function weatherForecast(value: unknown, place: GeocodedPlace): WeatherForecast 
   return { locationName: place.name, latitude: place.latitude, longitude: place.longitude, timezone: typeof value.timezone === "string" ? value.timezone : place.timezone, hourly, daily, alertsAvailable: false };
 }
 
+function weatherGridUrl(query: WeatherGridQuery): string {
+  const params = new URLSearchParams({
+    latitude: query.points.map(({ latitude }) => latitude).join(","),
+    longitude: query.points.map(({ longitude }) => longitude).join(","),
+    timezone: "Asia/Tokyo",
+  });
+  if (query.targetTime) {
+    const date = japaneseDate(query.targetTime);
+    params.set("hourly", "precipitation,weather_code,cloud_cover");
+    params.set("start_date", date);
+    params.set("end_date", date);
+  } else {
+    params.set("current", "precipitation,weather_code,cloud_cover");
+  }
+  return `https://api.open-meteo.com/v1/forecast?${params}`;
+}
+
+function weatherGridCells(
+  value: unknown,
+  query: WeatherGridQuery,
+): WeatherCellObservation[] {
+  const responses = Array.isArray(value) ? value : [value];
+  return query.points.flatMap((point, index) => {
+    const response = responses[index];
+    if (!isRecord(response)) return [];
+    const sample = query.targetTime
+      ? hourlyGridSample(response.hourly, query.targetTime)
+      : currentGridSample(response.current);
+    if (!sample) return [];
+    return [{
+      ...point,
+      observedAt: sample.time,
+      mode: localWeatherMode(
+        sample.weatherCode,
+        sample.precipitationMillimeters,
+        sample.cloudCoverPercent,
+      ),
+      precipitationMillimeters: sample.precipitationMillimeters,
+      cloudCoverPercent: sample.cloudCoverPercent,
+      weatherCode: sample.weatherCode,
+    }];
+  });
+}
+
+interface WeatherGridSample {
+  time: string;
+  precipitationMillimeters: number;
+  cloudCoverPercent: number;
+  weatherCode: number;
+}
+
+function currentGridSample(value: unknown): WeatherGridSample | undefined {
+  if (!isRecord(value) || typeof value.time !== "string" ||
+    !number(value.precipitation) || !number(value.cloud_cover) ||
+    !number(value.weather_code)) return undefined;
+  return {
+    time: value.time,
+    precipitationMillimeters: value.precipitation,
+    cloudCoverPercent: value.cloud_cover,
+    weatherCode: value.weather_code,
+  };
+}
+
+function hourlyGridSample(value: unknown, targetTime: string): WeatherGridSample | undefined {
+  if (!isRecord(value)) return undefined;
+  const rows = parallelRows([
+    value.time,
+    value.precipitation,
+    value.cloud_cover,
+    value.weather_code,
+  ], 48);
+  const target = Date.parse(targetTime);
+  const samples = rows.flatMap(([time, precipitation, cloudCover, weatherCode]) =>
+    typeof time === "string" && number(precipitation) && number(cloudCover) && number(weatherCode)
+      ? [{
+          time,
+          distance: Math.abs(Date.parse(`${time}+09:00`) - target),
+          precipitationMillimeters: precipitation,
+          cloudCoverPercent: cloudCover,
+          weatherCode,
+        }]
+      : []);
+  return samples.sort((left, right) => left.distance - right.distance)[0];
+}
+
 function parallelRows(values: unknown[], maximum: number): unknown[][] {
   if (values.some((value) => !Array.isArray(value))) return [];
   const arrays = values as unknown[][];
@@ -117,10 +271,26 @@ function parallelRows(values: unknown[], maximum: number): unknown[][] {
   return Array.from({ length }, (_, index) => arrays.map((value) => value[index]));
 }
 
-function providerHttpFailure(status: number): ExternalTravelInformation<WeatherForecast> {
+function providerHttpFailure<T>(status: number): ExternalTravelInformation<T> {
   if (status === 429) return failedExternalInformation({ code: "rate_limited", message: "天気Providerの利用上限に達しました", retryable: true });
   if (status === 401 || status === 403) return failedExternalInformation({ code: "unauthorized", message: "天気Providerを利用できません", retryable: false });
   return failedExternalInformation({ code: "unavailable", message: `天気Providerが応答しませんでした (${status})`, retryable: status >= 500 });
+}
+
+function validGridTargetTime(value: string, now: Date): boolean {
+  const target = Date.parse(value);
+  return Number.isFinite(target) &&
+    target >= now.getTime() - 60 * 60_000 &&
+    target <= now.getTime() + 16 * 24 * 60 * 60_000;
+}
+
+function japaneseDate(value: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
 }
 
 function isoDate(value: string | undefined): boolean { return /^\d{4}-\d{2}-\d{2}$/u.test(value ?? ""); }

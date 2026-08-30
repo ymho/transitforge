@@ -29,7 +29,6 @@ import type {
 } from "../../domain/viewer-agent-response";
 import type { TripContext } from "@raiquora/trip/travel-profile";
 import type { PlaceMediaSearchResult } from "@raiquora/trip/place-media";
-import type { WeatherForecast } from "@raiquora/trip/weather-forecast";
 import { hideSheet, showSheet } from "../shared/sheet-transition";
 import { renderAssistantMarkdown, visibleAssistantText } from "./assistant-markdown";
 import {
@@ -37,6 +36,7 @@ import {
   saveJourneySearchPreferences,
 } from "./journey-preferences-storage";
 import { renderExternalTravelInformation } from "./external-travel-cards";
+import { tripContextAfterUserAnswer } from "../../domain/travel-conversation-context";
 
 export { visibleAssistantText } from "./assistant-markdown";
 export { loadJourneySearchPreferences } from "./journey-preferences-storage";
@@ -69,7 +69,6 @@ export interface AiGuidePanelElements {
   onTravelPlan?: (plan: ViewerAgentTravelPlan) => void;
   onTripPlanUpdate?: (proposal: import("@raiquora/trip/trip-plan").TripPlanUpdateProposal) => void;
   onPlaces?: (places: PlaceMediaSearchResult["places"]) => void;
-  onWeather?: (forecast: WeatherForecast) => void;
   persistent?: () => boolean;
 }
 
@@ -299,7 +298,7 @@ export function configureAiGuidePanel(
         } else {
           input.placeholder = "列車、行き先、旅の相談を入力";
         }
-        resolveAssistantMessage(pendingMessage, response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces, elements.onWeather);
+        resolveAssistantMessage(pendingMessage, response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces);
         pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
       .catch(() => {
@@ -331,7 +330,14 @@ export function configureAiGuidePanel(
       quickReplies: [],
       tripContext: activeTripContext,
     });
-    const conversation = guidance === undefined ? undefined : { answer: prompt, guidance };
+    const updatedGuidance = guidance === undefined ? undefined : {
+      ...guidance,
+      tripContext: tripContextAfterUserAnswer(guidance.tripContext, prompt),
+    };
+    if (updatedGuidance) activeTripContext = updatedGuidance.tripContext;
+    const conversation = updatedGuidance === undefined
+      ? undefined
+      : { answer: prompt, guidance: updatedGuidance };
     activeConversation = undefined;
     setContextChoices();
     sendPrompt(prompt, conversation);
@@ -372,6 +378,19 @@ export function configureAiGuidePanel(
       for (const entry of restoredHistory) {
         if (entry.role === "user") {
           appendMessage(messages, "user", entry.text, entry.messageId);
+          const restoredGuidance = activeConversation as ConversationGuidance | undefined;
+          if (restoredGuidance) {
+            activeTripContext = tripContextAfterUserAnswer(
+              restoredGuidance.tripContext,
+              entry.text,
+            );
+            activeConversation = {
+              ...restoredGuidance,
+              tripContext: activeTripContext,
+            };
+          } else if (activeTripContext) {
+            activeTripContext = tripContextAfterUserAnswer(activeTripContext, entry.text);
+          }
           continue;
         }
         const restored = appendPendingMessage(messages, entry.messageId);
@@ -552,7 +571,6 @@ function resolveAssistantMessage(
   onTravelPlan?: (plan: ViewerAgentTravelPlan) => void,
   onTripPlanUpdate?: (proposal: import("@raiquora/trip/trip-plan").TripPlanUpdateProposal) => void,
   onPlaces?: (places: PlaceMediaSearchResult["places"]) => void,
-  onWeather?: (forecast: WeatherForecast) => void,
 ): void {
   item.classList.remove("ai-guide-message-pending");
   item.removeAttribute("aria-label");
@@ -588,13 +606,13 @@ function resolveAssistantMessage(
     text.textContent = visibleAssistantText(response.text);
     item.append(text);
     if (response.external) {
-      appendExternalCards(item, renderExternalTravelInformation({ text: response.text, external: response.external }, onWeather));
+      appendExternalCards(item, renderExternalTravelInformation({ text: response.text, external: response.external }));
       if (response.external.places?.status === "available" && response.external.places.data) onPlaces?.(response.external.places.data.places);
     }
     onTravelPlan?.(response.travelPlan);
   } else if ("external" in response) {
     item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response.text)));
-    appendExternalCards(item, renderExternalTravelInformation(response, onWeather));
+    appendExternalCards(item, renderExternalTravelInformation(response));
     if (response.external.places?.status === "available" && response.external.places.data) onPlaces?.(response.external.places.data.places);
   } else {
     item.classList.add("ai-guide-message-journey");

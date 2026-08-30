@@ -14,6 +14,7 @@ import type {
   TrainDelaySnapshotAnalysis,
   TrainDelayStat,
   WeatherForecastSearchResponse,
+  WeatherGridSearchResponse,
   PlaceMediaSearchResponse,
   FlightSearchResponse,
 } from "./bedrock-agent-contract";
@@ -62,6 +63,29 @@ export function isWeatherForecastSearchResponse(value: unknown): value is Weathe
     typeof data.latitude === "number" && typeof data.longitude === "number" &&
     typeof data.timezone === "string" && typeof data.alertsAvailable === "boolean" && Array.isArray(data.hourly) && data.hourly.length <= 168 &&
     Array.isArray(data.daily) && data.daily.length <= 16;
+}
+
+export function isWeatherGridSearchResponse(value: unknown): value is WeatherGridSearchResponse {
+  if (!isRecord(value) || !isRecord(value.weatherGrid)) return false;
+  const grid = value.weatherGrid;
+  if (!weatherInformationEnvelope(grid)) return false;
+  if (grid.status !== "available") return grid.data === undefined;
+  return isRecord(grid.data) && Array.isArray(grid.data.cells) &&
+    grid.data.cells.length <= 9 && grid.data.cells.every((cell) =>
+      isRecord(cell) && typeof cell.id === "string" &&
+      isCoordinate(cell.latitude, -90, 90) &&
+      isCoordinate(cell.longitude, -180, 180) &&
+      typeof cell.observedAt === "string" &&
+      ["clear", "cloudy", "rain", "snow"].includes(String(cell.mode)) &&
+      isNonNegativeNumber(cell.precipitationMillimeters) &&
+      isCoordinate(cell.cloudCoverPercent, 0, 100) &&
+      isNonNegativeNumber(cell.weatherCode));
+}
+
+function weatherInformationEnvelope(value: Record<string, unknown>): boolean {
+  return ["available", "unavailable", "unknown"].includes(String(value.status)) &&
+    ["fresh", "stale", "unknown"].includes(String(value.freshness)) &&
+    Array.isArray(value.evidence) && value.evidence.length <= 24;
 }
 
 export function isPlaceMediaSearchResponse(value: unknown): value is PlaceMediaSearchResponse {
@@ -250,6 +274,7 @@ function isContentBlock(value: unknown): value is BedrockAgentContentBlock {
 }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null; }
 function isNonNegativeNumber(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value) && value >= 0; }
+function isCoordinate(value: unknown, minimum: number, maximum: number): value is number { return typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum; }
 function isNonNegativeInteger(value: unknown): value is number { return isNonNegativeNumber(value) && Number.isInteger(value); }
 function isHour(value: unknown): value is number { return isNonNegativeInteger(value) && value <= 23; }
 function isNullableNonNegativeNumber(value: unknown): value is number | null { return value === null || isNonNegativeNumber(value); }

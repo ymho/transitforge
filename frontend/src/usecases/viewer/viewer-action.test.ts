@@ -11,7 +11,6 @@ describe("viewer agent action", () => {
         { type: "highlight_route", journeyId: "journey-a" },
         { type: "compare_journeys", journeyIds: ["journey-a", "journey-b"] },
         { type: "show_evidence", evidenceIds: ["evidence-a"] },
-        { type: "set_weather", weather: "cloudy" },
         {
           type: "set_layer_visibility",
           layer: "destination_arcs",
@@ -24,7 +23,6 @@ describe("viewer agent action", () => {
       { type: "highlight_route", journeyId: "journey-a" },
       { type: "compare_journeys", journeyIds: ["journey-a", "journey-b"] },
       { type: "show_evidence", evidenceIds: ["evidence-a"] },
-      { type: "set_weather", weather: "cloudy" },
       {
         type: "set_layer_visibility",
         layer: "destination_arcs",
@@ -48,7 +46,7 @@ describe("viewer agent action", () => {
       { type: "compare_journeys", journeyIds: ["journey-a", "journey-a"] },
     ])).toThrow("1 件目");
     expect(() => parseViewerAgentActions([
-      { type: "set_weather", weather: "rain", command: "unsafe" },
+      { type: "set_weather", weather: "rain" },
     ])).toThrow("1 件目");
   });
 });

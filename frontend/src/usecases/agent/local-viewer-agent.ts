@@ -6,7 +6,6 @@ import {
   mergeJourneyNavigationGuidance,
   type JourneyNavigationGuidance,
 } from "../../domain/journey-navigation-intent";
-import type { WeatherMode } from "../../domain/weather";
 import { operatingDayStartMinutes } from "../../domain/playback";
 import { formatJapaneseServiceTime } from "@raiquora/train/route-time";
 import type { TrainPosition } from "../../domain/train-position";
@@ -27,7 +26,6 @@ export interface LocalViewerAgentDependencies {
   getRouteTime: () => number;
   setRouteTime: (routeTimeMinutes: number) => void;
   focusTrain: (serviceUid: string) => boolean;
-  setWeather: (weather: WeatherMode) => void;
   setLayerVisibility: (layer: ViewerAgentLayer, visible: boolean) => void;
   searchDirectRoutes: DirectRouteSearchHandler;
   getPendingJourneyGuidance?: () => JourneyNavigationGuidance | undefined;
@@ -104,16 +102,7 @@ function applyControlActions(
 ): string[] {
   const responseParts: string[] = [];
   for (const action of localViewerControlActionsFromPrompt(prompt)) {
-    if (action.type === "set_weather") {
-      dependencies.setWeather(action.weather);
-      const weatherLabel = {
-        clear: "晴れ",
-        cloudy: "曇り",
-        rain: "雨",
-        snow: "雪",
-      }[action.weather];
-      responseParts.push(`天気を${weatherLabel}に設定しました。`);
-    } else if (action.type === "set_layer_visibility") {
+    if (action.type === "set_layer_visibility") {
       dependencies.setLayerVisibility(action.layer, action.visible);
       const layerLabel =
         action.layer === "congestion" ? "混雑棒" : "目的地アーチ";

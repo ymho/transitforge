@@ -8,9 +8,7 @@ describe("loadViewerElements", () => {
     const root = {
       querySelector: () => element,
       querySelectorAll: (selector: string) =>
-        selector === "[data-weather]"
-          ? [element, element, element, element]
-          : selector === "[data-context-view]"
+        selector === "[data-context-view]"
           ? [element, element, element]
           : [element],
     } as unknown as ParentNode;
@@ -18,7 +16,6 @@ describe("loadViewerElements", () => {
     const result = loadViewerElements(root);
 
     expect(result.app).toBe(element);
-    expect(result.weatherButtons).toHaveLength(4);
     expect(result.playbackSpeedButtons).toHaveLength(1);
   });
 
@@ -26,9 +23,7 @@ describe("loadViewerElements", () => {
     const root = {
       querySelector: (selector: string) => selector === "#map-status" ? null : {},
       querySelectorAll: (selector: string) =>
-        selector === "[data-weather]"
-          ? [{}, {}, {}, {}]
-          : selector === "[data-context-view]"
+        selector === "[data-context-view]"
           ? [{}, {}, {}]
           : [{}],
     } as unknown as ParentNode;

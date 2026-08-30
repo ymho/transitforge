@@ -34,7 +34,7 @@ flowchart LR
 | 混雑分析 | 業務日付の日次ピーク 時間別傾向 路線別 列車別を集計 |
 | 遅延分析 | 最新状況 日次ピーク 時間別傾向 列車別を集計 |
 | 旅行相談の追加質問 | 次の質問 選択肢 TripContext を構造化して返し ブラウザは共通UIで回答を受け取る |
-| 画面操作 | 時刻 列車フォーカス 天候 可視化レイヤーを変更 |
+| 画面操作 | 時刻 列車フォーカス 可視化レイヤーを変更 |
 
 ## 経路検索
 
@@ -82,6 +82,9 @@ flowchart LR
 追加質問は一度に一条件とし `expectedInput` とクイックリプライを同じ種類に揃える。利用者が
 質問より先に泊数を答えた場合も `stayNights` として保持し 後から決まった出発日と結合する。
 利用者が明示していない日付をモデルが補っても 宿泊検索の入力には採用しない。
+出発日と泊数が揃った後は同じ条件の追加質問を拒否し 宿泊旅行または日帰りの決定論的な検索へ進む。
+観光候補を含む旅行提案では `search_place_media` が利用可能なら写真と位置を検索し
+未検証のスポット一覧だけで完了しない。写真検索に失敗しても検証済みの鉄道経路と宿泊候補は保持する。
 
 | 利用者の表現 | 検索契約 | 適用範囲 |
 | --- | --- | --- |
@@ -120,7 +123,6 @@ npm run test:journey-scenarios
 | --- | --- |
 | `set_display_time` | 表示時刻を変更 |
 | `focus_train` | 列車を選択して追跡 |
-| `set_weather` | 天候を変更 |
 | `set_layer_visibility` | 混雑棒と行き先アーチを切り替え |
 | `highlight_route` | 同じタスクで検索した経路を強調表示 |
 | `compare_journeys` | 同じタスクで検索した2〜3経路を比較表示 |
@@ -129,7 +131,7 @@ npm run test:journey-scenarios
 未知の操作 余分な引数 無効な時刻 未知のレイヤーを実行前に拒否する。
 `ViewerActionTaskScope`はAgent実行IDごとに検証済みの列車 経路 Evidenceを保持し
 `focus_train` `highlight_route` `compare_journeys` `show_evidence`はscope内のEntityだけを受け付ける。
-別のAgent実行のscopeは利用できない。操作は時刻 天候 レイヤーの可逆な変更または
+別のAgent実行のscopeは利用できない。操作は時刻 レイヤーの可逆な変更または
 フォーカス 強調 比較 Evidenceの表示だけに限定し 任意DOM JavaScript 外部書き込みを許可しない。
 提案 適用 拒否と拒否理由は同じ実行のStructured Agent Traceへ記録する。
 

@@ -28,7 +28,6 @@ export const allowedToolNames = new Set([
   "update_conversation_session",
   "propose_trip_update",
   "focus_train",
-  "set_weather",
   "set_layer_visibility",
   "search_journeys",
   "inspect_train",

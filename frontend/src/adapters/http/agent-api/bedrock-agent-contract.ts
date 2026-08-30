@@ -48,6 +48,11 @@ export interface WeatherForecastSearchResponse {
     import("@raiquora/trip/weather-forecast").WeatherForecast
   >;
 }
+export interface WeatherGridSearchResponse {
+  weatherGrid: import("@raiquora/trip/external-travel-information").ExternalTravelInformation<
+    import("@raiquora/trip/weather-grid").WeatherGridSnapshot
+  >;
+}
 export interface PlaceMediaSearchResponse {
   result: import("@raiquora/trip/external-travel-information").ExternalTravelInformation<
     import("@raiquora/trip/place-media").PlaceMediaSearchResult

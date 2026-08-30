@@ -45,10 +45,6 @@
         <symbol id="icon-pause" viewBox="0 0 20 20"><path d="M6.5 5h2.25v10H6.5zm4.75 0h2.25v10h-2.25z" /></symbol>
         <symbol id="icon-clock" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M10 6v4l3 2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></symbol>
         <symbol id="icon-calendar" viewBox="0 0 20 20"><rect x="3" y="4.5" width="14" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 2.8v3.4m7-3.4v3.4M3 8h14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/><path d="M6.4 11h.1m3.4 0h.1m3.4 0h.1M6.4 14h.1m3.4 0h.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></symbol>
-        <symbol id="icon-sun" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M15.3 4.7l-1.4 1.4M6.1 13.9l-1.4 1.4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/></symbol>
-        <symbol id="icon-cloud" viewBox="0 0 20 20"><path d="M5.2 14.5a3.2 3.2 0 0 1-.3-6.4A5.1 5.1 0 0 1 14.7 7a3.8 3.8 0 0 1 .2 7.5z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.6"/></symbol>
-        <symbol id="icon-rain" viewBox="0 0 20 20"><path d="M5.2 11.8a3 3 0 0 1-.3-6 5.1 5.1 0 0 1 9.8-1.1 3.6 3.6 0 0 1 .2 7.1zM6.5 14l-1 2.5M10.5 14l-1 2.5M14.5 14l-1 2.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></symbol>
-        <symbol id="icon-snow" viewBox="0 0 20 20"><path d="M10 3v14M4 6.5l12 7M4 13.5l12-7M7.8 4.3 10 5.6l2.2-1.3M7.8 15.7 10 14.4l2.2 1.3M4.1 9l2.2.1.1-2.3M15.9 11l-2.2-.1-.1 2.3M4.1 11l2.2-.1.1 2.3M15.9 9l-2.2.1-.1-2.3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.25"/></symbol>
         <symbol id="icon-congestion" viewBox="0 0 20 20"><path d="M4.5 15.5v-3h2v3zm4.5 0V9h2v6.5zm4.5 0V5h2v10.5z"/><path d="M3.5 16.5h13" fill="none" stroke="currentColor" stroke-linecap="round"/></symbol>
         <symbol id="icon-arc" viewBox="0 0 20 20"><path d="M3.5 14.5c2.5-7.5 10.5-7.5 13 0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7"/><circle cx="3.5" cy="14.5" r="1.25"/><circle cx="16.5" cy="14.5" r="1.25"/></symbol>
         <symbol id="icon-route" viewBox="0 0 20 20"><circle cx="4.25" cy="14.75" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="15.75" cy="5.25" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6.2 14.4c4.8-.7 2.7-7.5 7.55-8.7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6"/><path d="m11.8 4.7 2.1.9-1.3 1.85" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35"/></symbol>
@@ -82,15 +78,6 @@
         </div>
         <button id="congestion-toggle" type="button" aria-label="混雑表示" title="混雑表示" aria-pressed="true" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-congestion" /></svg></button>
         <button id="destination-arcs-toggle" type="button" aria-label="行先アーチ" title="行先アーチ" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-arc" /></svg></button>
-        <div class="weather-menu">
-          <button id="weather-menu-toggle" type="button" aria-label="天気を選択" title="天気を選択" aria-expanded="false" aria-controls="weather-options" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-sun" /></svg></button>
-          <fieldset id="weather-options" class="weather-controls" aria-label="天気の選択" hidden>
-            <button type="button" data-weather="clear" aria-label="晴れ" title="晴れ" aria-pressed="true" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-sun" /></svg></button>
-            <button type="button" data-weather="cloudy" aria-label="曇り" title="曇り" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-cloud" /></svg></button>
-            <button type="button" data-weather="rain" aria-label="雨" title="雨" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-rain" /></svg></button>
-            <button type="button" data-weather="snow" aria-label="雪" title="雪" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-snow" /></svg></button>
-          </fieldset>
-        </div>
       </nav>
       <button
         id="ai-guide-toggle"

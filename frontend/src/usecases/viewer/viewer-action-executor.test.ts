@@ -150,7 +150,6 @@ function fixturePorts() {
     highlightRoute: vi.fn(() => true),
     compareJourneys: vi.fn(() => true),
     showEvidence: vi.fn(() => true),
-    setWeather: vi.fn(),
     setLayerVisibility: vi.fn(),
   };
 }

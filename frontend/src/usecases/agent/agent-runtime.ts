@@ -1,5 +1,10 @@
 import { AgentTraceRecorder } from "./agent-trace";
-import type { AgentModelContent, AgentModelMessage, AgentModelProvider } from "./model-provider";
+import type {
+  AgentModelContent,
+  AgentModelMessage,
+  AgentModelProvider,
+  AgentModelResponse,
+} from "./model-provider";
 import { DefaultAgentProblemFramer, type AgentProblemFramer } from "./problem-framing";
 import { DefaultAgentPlanner, type AgentPlanner } from "./agent-planner";
 import {
@@ -33,6 +38,10 @@ export interface AgentRuntimeDependencies {
   viewerActionHandler?: AgentViewerActionHandler;
   toolViewerActions?: ToolViewerActionRegistry;
   terminalToolResult?: (toolName: string, output: unknown) => string | undefined;
+  finalResponsePolicy?: (
+    response: AgentModelResponse,
+    request: AgentRuntimeRequest,
+  ) => { accepted: boolean; reason?: string; instruction?: string };
   limits?: Partial<AgentRuntimeLimits>;
   now?: () => Date;
 }
@@ -133,6 +142,27 @@ export class MultiStepAgentRuntime {
           trace.replanDecided(
             true,
             "内部推論だけの応答を破棄して利用者向け応答を再要求する",
+            plan.steps,
+          );
+          continue;
+        }
+        const finalResponseDecision = this.dependencies.finalResponsePolicy?.(
+          modelResponse,
+          request,
+        );
+        if (finalResponseDecision && !finalResponseDecision.accepted) {
+          messages.push({
+            role: "user",
+            content: [{
+              type: "text",
+              text: finalResponseDecision.instruction ??
+                "必要なToolで事実を確認してから利用者へ回答してください",
+            }],
+          });
+          iterations += 1;
+          trace.replanDecided(
+            true,
+            finalResponseDecision.reason ?? "最終回答に必要な事実をToolで確認する",
             plan.steps,
           );
           continue;

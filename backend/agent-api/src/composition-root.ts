@@ -20,6 +20,7 @@ import { createJourneySearchOperation } from "./usecases/journey-search.js";
 import { createCongestionAnalysisOperation, createCongestionPeakOperation, createDelayAnalysisOperation } from "./usecases/operation-analysis.js";
 import { createRepresentativeTimetableOperation } from "./usecases/representative-timetable.js";
 import { createWeatherForecastOperation } from "./usecases/weather-forecast.js";
+import { createWeatherGridOperation } from "./usecases/weather-grid.js";
 import { createPlaceMediaSearchOperation } from "./usecases/place-media-search.js";
 import { createFlightSearchOperation } from "./usecases/flight-search.js";
 
@@ -61,6 +62,7 @@ export function createAgentApplication(environment: RuntimeEnvironment = process
     ["train_delay_analysis", createDelayAnalysisOperation(summary, required(environment, "DELAY_SUMMARY_TABLE"))],
     ["travel_accommodation_search", createAccommodationSearchOperation(accommodation)],
     ["weather_forecast_search", createWeatherForecastOperation(weather)],
+    ["weather_grid_search", createWeatherGridOperation(weather)],
     ["place_media_search", createPlaceMediaSearchOperation(places)],
     ["flight_search", createFlightSearchOperation(flights)],
   ]);

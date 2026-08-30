@@ -326,7 +326,6 @@
 
 .map-tools > button,
 .playback-speed-menu > button,
-.weather-menu > button,
 .mapboxgl-ctrl-group button {
   box-sizing: border-box;
   display: grid;
@@ -356,7 +355,6 @@
 
 .map-tools button:hover:not(:disabled),
 .playback-speed-menu > button:hover:not(:disabled),
-.weather-menu > button:hover:not(:disabled),
 .mapboxgl-ctrl-group button:hover:not(:disabled) {
   color: var(--glass-text);
   background: var(--glass-surface-muted) !important;
@@ -365,16 +363,14 @@
 
 .map-tools > button[aria-pressed="true"],
 .map-tools div > button[aria-pressed="true"],
-.playback-speed-controls button[aria-pressed="true"],
-.weather-controls button[aria-pressed="true"] {
+.playback-speed-controls button[aria-pressed="true"] {
   color: #ffffff;
   background: var(--glass-accent) !important;
   box-shadow: 0 0.35rem 1rem rgb(0 150 246 / 28%);
 }
 
 .map-tools button:disabled,
-.playback-speed-controls button:disabled,
-.weather-controls button:disabled {
+.playback-speed-controls button:disabled {
   opacity: 0.28;
   transform: none;
 }
@@ -385,8 +381,7 @@
   margin: 0;
 }
 
-.playback-speed-menu,
-.weather-menu {
+.playback-speed-menu {
   display: grid;
   width: 2.25rem;
   justify-items: center;
@@ -397,8 +392,7 @@
   font: 590 0.68rem/2.25rem -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-.playback-speed-controls,
-.weather-controls {
+.playback-speed-controls {
   top: 50%;
   right: calc(100% + 0.7rem);
   gap: 0.25rem;
@@ -412,8 +406,7 @@
   transform: translateY(-50%);
 }
 
-.playback-speed-controls button,
-.weather-controls button {
+.playback-speed-controls button {
   width: 2.5rem;
   height: 2.5rem;
   border: 0;
