@@ -70,6 +70,7 @@ export interface AiGuidePanelElements {
   onTripPlanUpdate?: (proposal: import("@raiquora/trip/trip-plan").TripPlanUpdateProposal) => void;
   onPlaces?: (places: PlaceMediaSearchResult["places"]) => void;
   onWeather?: (forecast: WeatherForecast) => void;
+  persistent?: () => boolean;
 }
 
 export type AiGuidePromptHandler = (
@@ -141,6 +142,10 @@ export function configureAiGuidePanel(
   }
 
   const setOpen = (open: boolean) => {
+    if (!open && elements.persistent?.()) {
+      if (shouldFocusAiGuideInputOnOpen()) input.focus();
+      return;
+    }
     toggle.ariaExpanded = String(open);
     if (open) {
       showSheet(panel);

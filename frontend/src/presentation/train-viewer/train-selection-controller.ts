@@ -24,6 +24,8 @@ export interface TrainSelectionElements {
   delay: HTMLElement;
   stops: HTMLOListElement;
   coupledTabs: HTMLElement;
+  onFocus?: (serviceUid: string) => void;
+  onEndFocus?: () => void;
 }
 
 export interface TrainSelectionController {
@@ -68,6 +70,7 @@ export function configureTrainSelection(
       elements.coupledTabs.replaceChildren();
     });
     timetableRenderSignature = "";
+    elements.onEndFocus?.();
   };
 
   const effectiveTrain = (train: Train): Train => {
@@ -276,6 +279,7 @@ export function configureTrainSelection(
     focusSession.start(train.service_uid);
     trainLayer.setFocusedServiceUid(train.service_uid);
     renderCoupledTrainTabs(train.service_uid);
+    elements.onFocus?.(train.service_uid);
   };
 
   map.on("click", "train-hit-targets", (event) => {

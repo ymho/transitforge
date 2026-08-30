@@ -13,6 +13,7 @@ export interface ConversationHistoryPanelElements {
   repository: ConversationSessionRepository;
   onSessionSelected: (sessionId: string) => void;
   confirmDelete?: (title: string) => boolean;
+  persistentMediaQuery?: MediaQueryList;
 }
 
 export interface ConversationHistoryListItem {
@@ -39,6 +40,8 @@ export function configureConversationHistoryPanel(
   } = elements;
   const confirmDelete = elements.confirmDelete ?? ((title) =>
     window.confirm(`「${title}」を削除しますか？`));
+  const persistentMediaQuery = elements.persistentMediaQuery;
+  const isPersistent = () => persistentMediaQuery?.matches === true;
 
   const render = () => {
     const activeId = repository.active()?.id;
@@ -51,14 +54,14 @@ export function configureConversationHistoryPanel(
       item,
       () => {
         repository.select(item.id);
-        dialog.close();
+        if (!isPersistent()) dialog.close();
         onSessionSelected(item.id);
       },
       () => {
         if (!confirmDelete(item.title)) return;
         const next = repository.delete(item.id);
         if (item.active) {
-          dialog.close();
+          if (!isPersistent()) dialog.close();
           onSessionSelected(next.id);
           return;
         }
@@ -70,20 +73,41 @@ export function configureConversationHistoryPanel(
 
   newConversation.addEventListener("click", () => {
     const session = repository.create();
-    dialog.close();
+    if (!isPersistent()) dialog.close();
     onSessionSelected(session.id);
   });
   toggle.addEventListener("click", () => {
     render();
+    if (isPersistent()) {
+      list.querySelector<HTMLButtonElement>("[aria-current='true']")?.focus();
+      return;
+    }
     dialog.showModal();
     list.querySelector<HTMLButtonElement>("[aria-current='true']")?.focus();
   });
-  close.addEventListener("click", () => dialog.close());
-  dialog.addEventListener("close", () => toggle.focus());
+  close.addEventListener("click", () => {
+    if (!isPersistent()) dialog.close();
+  });
+  dialog.addEventListener("close", () => {
+    if (!isPersistent()) toggle.focus();
+  });
   const unsubscribe = repository.subscribe(() => {
     if (dialog.open) render();
   });
-  return unsubscribe;
+  const syncPersistentState = () => {
+    if (isPersistent()) {
+      render();
+      if (!dialog.open) dialog.show();
+    } else if (dialog.open) {
+      dialog.close();
+    }
+  };
+  persistentMediaQuery?.addEventListener("change", syncPersistentState);
+  syncPersistentState();
+  return () => {
+    unsubscribe();
+    persistentMediaQuery?.removeEventListener("change", syncPersistentState);
+  };
 }
 
 export function conversationHistoryListItems(

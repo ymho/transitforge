@@ -4,6 +4,8 @@ export interface ViewerElements {
   loadingScreenMessage: HTMLElement;
   loadingScreenRetry: HTMLButtonElement;
   status: HTMLParagraphElement;
+  contextWorkspaceTabs: HTMLElement;
+  contextWorkspaceButtons: HTMLButtonElement[];
   displayTime: HTMLInputElement;
   dateTimeInput: HTMLInputElement;
   dateTimeDate: HTMLElement;
@@ -66,6 +68,8 @@ export function loadViewerElements(root: ParentNode): ViewerElements {
     loadingScreenMessage: required(root, "#loading-screen-message"),
     loadingScreenRetry: required(root, "#loading-screen-retry"),
     status: required(root, "#map-status"),
+    contextWorkspaceTabs: required(root, "#context-workspace-tabs"),
+    contextWorkspaceButtons: requiredAll(root, "[data-context-view]", 3, 3),
     displayTime: required(root, "#display-time"),
     dateTimeInput: required(root, "#date-time-input"),
     dateTimeDate: required(root, "#date-time-date"),
