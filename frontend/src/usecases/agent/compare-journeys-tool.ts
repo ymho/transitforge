@@ -34,6 +34,14 @@ export function createCompareJourneysTool(
   return {
     name: "compare_journeys",
     description: "同じタスク内で検索済みの鉄道経路を時刻 乗換 遅延 制約で比較します",
+    decisionSupport: {
+      capability: "同じ実行内の検証済み経路だけを決定論的な指標で比較する",
+      suitableCases: ["検索済み候補の時刻、乗換、遅延、制約適合を比較する"],
+      unsuitableCases: ["未検索の経路を作る", "利用者の嗜好から最終推薦を決める"],
+      returnedEvidence: "検証済み経路IDに紐付く比較指標と制約評価",
+      limitations: ["同じexecutionIdのsearchResultIdだけを受け付ける"],
+      responsibilityBoundary: "比較値の算出はTool、trade-offの解釈と推薦はAgentが担う",
+    },
     inputSchema: {
       type: "object",
       properties: {

@@ -5,6 +5,7 @@ import type {
   AgentToolInputResult,
   AgentToolResult,
 } from "./tool-contract";
+import { modelToolDescription } from "./tool-contract";
 
 type RegisteredAgentTool = AgentTool<unknown, unknown>;
 
@@ -40,10 +41,10 @@ export class AgentToolRegistry {
   }
 
   descriptors(): AgentToolDescriptor[] {
-    return [...this.tools.values()].map(({ name, description, inputSchema }) => ({
-      name,
-      description,
-      inputSchema,
+    return [...this.tools.values()].map((tool) => ({
+      name: tool.name,
+      description: modelToolDescription(tool),
+      inputSchema: tool.inputSchema,
     }));
   }
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { UserProfile } from "@raiquora/trip/travel-profile";
 import type { TripPlan } from "@raiquora/trip/trip-plan";
-import { agentContextText, createAgentContextSnapshot } from "./agent-context-snapshot";
+import { createAgentContextSnapshot } from "./agent-context-snapshot";
 
 const profile: UserProfile = {
   version: 2,
@@ -64,9 +64,5 @@ describe("agent context snapshot", () => {
     expect(encoded).not.toContain("updatedAt");
     expect(encoded).not.toContain("coordinate");
     expect(encoded).not.toContain("bookingUrl");
-  });
-
-  it("returns no model context when neither profile nor trip exists", () => {
-    expect(agentContextText(createAgentContextSnapshot())).toBeUndefined();
   });
 });

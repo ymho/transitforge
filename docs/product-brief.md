@@ -10,6 +10,8 @@ Raiquoraは実在する路線と時刻表から計画上の列車運行を3D地�
 
 LLMは曖昧な要求の理解とToolのオーケストレーションを担い 時刻表 経路 遅延 混雑の判断は
 決定論的なDomain Logicを正とする。AWSリソース名と保存キーの`transitforge`は互換性のため維持する
+Bedrockは構造化された会話 旅程 Profile 制約とTool能力から次の調査 質問 比較 推薦を判断し
+ApplicationはEvidence Grounding Viewer Action Safetyと実行上限を決定論的に検証する
 
 ## 利用者
 

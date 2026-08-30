@@ -45,6 +45,26 @@ const echoTool = (
 });
 
 describe("AgentToolRegistry", () => {
+  it("compiles decision support into the model-facing capability description", () => {
+    const registry = new AgentToolRegistry();
+    registry.register({
+      ...echoTool(),
+      decisionSupport: {
+        capability: "検証済みの経路を検索する",
+        suitableCases: ["駅間移動"],
+        unsuitableCases: ["宿泊検索"],
+        returnedEvidence: "時刻表Evidence",
+        freshness: "指定日ダイヤ",
+        limitations: ["運賃は対象外"],
+        responsibilityBoundary: "経路計算はTool、推薦はAgent",
+      },
+    });
+
+    expect(registry.descriptors()[0]?.description).toContain("能力: 検証済みの経路");
+    expect(registry.descriptors()[0]?.description).toContain("適さない: 宿泊検索");
+    expect(registry.descriptors()[0]?.description).toContain("境界: 経路計算はTool");
+    expect(registry.descriptors()[0]?.description.length).toBeLessThanOrEqual(500);
+  });
   const context = { executionId: "execution-1" };
 
   it("executes a registered tool only after validating its input", async () => {

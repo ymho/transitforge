@@ -60,6 +60,15 @@ export function createSearchJourneysTool(
   return {
     name: "search_journeys",
     description: "自前の時刻表と当日の運行情報を使って鉄道経路を検索します",
+    decisionSupport: {
+      capability: "日付別時刻表と利用可能な当日運行情報を正本として駅間経路を検索する",
+      suitableCases: ["出発駅、到着駅、日付、出発時刻が確定した鉄道移動"],
+      unsuitableCases: ["観光地の魅力、駅から先の徒歩、宿泊、鉄道運賃"],
+      returnedEvidence: "列車、発着時刻、乗換、遅延、制約適合を含む検証済み経路",
+      freshness: "指定日ダイヤ。当日付近だけ利用可能な最新運行情報を反映する",
+      limitations: ["乗換3回まで", "料金を返さない", "入力駅を推測しない"],
+      responsibilityBoundary: "経路成立性と時刻計算はTool、候補比較と推薦はAgentが担う",
+    },
     inputSchema: {
       type: "object",
       properties: {

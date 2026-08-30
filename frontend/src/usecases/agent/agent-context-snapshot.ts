@@ -55,14 +55,6 @@ export function createAgentContextSnapshot(
   };
 }
 
-export function agentContextText(snapshot: AgentContextSnapshot): string | undefined {
-  if (!snapshot.profile && !snapshot.trip) return undefined;
-  return [
-    "利用者が端末内で許可した会話文脈です。既知の内容は聞き直さず 今回の依頼が優先です。",
-    JSON.stringify(snapshot),
-  ].join("\n");
-}
-
 function profileSnapshot(profile: UserProfile): NonNullable<AgentContextSnapshot["profile"]> {
   const partial = profile as Partial<UserProfile>;
   const travelStyle = partial.travelStyle as Partial<UserProfile["travelStyle"]> | undefined;

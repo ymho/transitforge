@@ -2,33 +2,35 @@ import type {
   AgentProblemFrame,
   AgentRuntimeRequest,
 } from "./runtime-contract";
+import type { AgentToolDescriptor } from "./tool-contract";
+import {
+  agentDecisionContextText,
+  buildAgentDecisionContext,
+} from "./agent-decision-context";
 
 export interface AgentProblemFramer {
-  frame(request: AgentRuntimeRequest): AgentProblemFrame;
+  frame(
+    request: AgentRuntimeRequest,
+    availableTools: AgentToolDescriptor[],
+  ): AgentProblemFrame;
 }
 
 export class DefaultAgentProblemFramer implements AgentProblemFramer {
-  frame(request: AgentRuntimeRequest): AgentProblemFrame {
-    const objective = request.userRequest.trim();
+  frame(
+    request: AgentRuntimeRequest,
+    availableTools: AgentToolDescriptor[],
+  ): AgentProblemFrame {
+    const userRequest = request.userRequest.trim();
+    const decisionContext = buildAgentDecisionContext(request, availableTools);
     return {
       feature: request.feature,
-      normalizedIntent: intentFor(request.feature),
-      objective,
-      constraints: {},
-      missingInformation: objective ? [] : ["user_request"],
+      normalizedIntent: "bedrock_decision_required",
+      objective: agentDecisionContextText(decisionContext),
+      constraints: Object.fromEntries(decisionContext.knownHardConstraints.map(
+        ({ key, value }) => [key, value],
+      )),
+      missingInformation: userRequest ? [] : ["user_request"],
+      decisionContext,
     };
-  }
-}
-
-function intentFor(feature: AgentRuntimeRequest["feature"]): string {
-  switch (feature) {
-    case "journey_planning":
-      return "plan_journey";
-    case "train_guidance":
-      return "guide_train";
-    case "operational_analysis":
-      return "analyze_operation";
-    case "travel_planning":
-      return "plan_travel";
   }
 }
