@@ -1,10 +1,13 @@
 export type ExternalTravelInformationKind =
   | "weather"
-  | "flight"
   | "place"
   | "media"
   | "accommodation"
-  | "event";
+  | "event"
+  | "safety-alert"
+  | "ground-access"
+  | "restaurant"
+  | "web";
 
 export type ExternalInformationStatus = "available" | "unavailable" | "unknown";
 export type ExternalInformationFreshness = "fresh" | "stale" | "unknown";

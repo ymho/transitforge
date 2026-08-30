@@ -236,13 +236,26 @@
     position: relative;
     inset: auto;
     align-self: end;
+    justify-self: stretch;
+    grid-area: context;
+    grid-row: 1;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    margin: 0;
+  }
+
+  .map-place-detail {
+    position: relative;
+    inset: auto;
+    z-index: 9;
+    align-self: stretch;
     justify-self: end;
     grid-area: context;
     grid-row: 1;
-    width: min(40rem, calc(100% - 2rem));
-    min-width: 0;
-    max-width: calc(100% - 2rem);
-    margin: 0 1rem 1rem;
+    width: min(25rem, calc(100% - 2rem));
+    max-height: calc(100% - 2rem);
+    margin: 1rem;
   }
 
   .trip-plan-panel {

@@ -21,6 +21,9 @@ export interface ViewerElements {
   mapPlaceExplorer: HTMLElement;
   mapPlaceExplorerList: HTMLElement;
   closeMapPlaceExplorer: HTMLButtonElement;
+  mapPlaceDetail: HTMLElement;
+  mapPlaceDetailContent: HTMLElement;
+  closeMapPlaceDetail: HTMLButtonElement;
   congestionToggle: HTMLButtonElement;
   destinationArcsToggle: HTMLButtonElement;
   digitalTwinModeToggle: HTMLButtonElement;
@@ -92,6 +95,9 @@ export function loadViewerElements(root: ParentNode): ViewerElements {
     mapPlaceExplorer: required(root, "#map-place-explorer"),
     mapPlaceExplorerList: required(root, "#map-place-explorer-list"),
     closeMapPlaceExplorer: required(root, "#close-map-place-explorer"),
+    mapPlaceDetail: required(root, "#map-place-detail"),
+    mapPlaceDetailContent: required(root, "#map-place-detail-content"),
+    closeMapPlaceDetail: required(root, "#close-map-place-detail"),
     congestionToggle: required(root, "#congestion-toggle"),
     destinationArcsToggle: required(root, "#destination-arcs-toggle"),
     digitalTwinModeToggle: required(root, "#digital-twin-mode-toggle"),

@@ -29,6 +29,10 @@
         </header>
         <div id="map-place-explorer-list" class="map-place-explorer-list" role="list"></div>
       </aside>
+      <aside id="map-place-detail" class="map-place-detail" aria-label="観光スポット詳細" hidden>
+        <button id="close-map-place-detail" type="button" aria-label="スポット詳細を閉じる">×</button>
+        <div id="map-place-detail-content" class="map-place-detail-content"></div>
+      </aside>
       <section id="control-panel" class="hud" aria-label="表示日時パネル">
         <div id="date-time-panel" class="time-control">
           <label class="date-time-display" aria-label="表示日時" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false">
@@ -63,7 +67,7 @@
         <symbol id="icon-digital-twin" viewBox="0 0 20 20"><path d="m10 2.7 6.4 3.4-6.4 3.4-6.4-3.4zM3.6 10l6.4 3.4 6.4-3.4M3.6 13.9l6.4 3.4 6.4-3.4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.55"/></symbol>
       </svg>
       <nav id="map-tools" class="map-tools mapboxgl-ctrl mapboxgl-ctrl-group" aria-label="地図操作">
-        <button id="digital-twin-mode-toggle" type="button" aria-label="現在運行状況へ切り替え" title="現在運行状況" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-digital-twin" /></svg></button>
+        <button id="digital-twin-mode-toggle" type="button" aria-label="リアルタイム運行状況へ切り替え" title="リアルタイム運行状況" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-digital-twin" /></svg></button>
         <button id="current-time-button" type="button" aria-label="現在時刻へ移動" title="現在時刻へ移動" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-clock" /></svg></button>
         <button id="play-toggle" type="button" aria-label="再生" title="再生" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-play" /></svg></button>
         <div class="playback-speed-menu">
@@ -94,8 +98,8 @@
         <span class="conversation-sidebar-rail-brand" title="Raiquora" aria-label="Raiquora"><svg aria-hidden="true"><use href="#icon-ai-sparkles" /></svg></span>
         <button id="rail-new-conversation" type="button" aria-label="新しい会話" title="新しい会話"><svg aria-hidden="true"><use href="#icon-new-conversation" /></svg></button>
         <button id="rail-conversation-history" type="button" aria-label="会話履歴を表示" title="会話履歴を表示"><svg aria-hidden="true"><use href="#icon-conversation-history" /></svg></button>
-        <button id="rail-realtime-map" type="button" aria-label="列車運行状況" title="列車運行状況"><svg aria-hidden="true"><use href="#icon-digital-twin" /></svg></button>
-        <button id="rail-date-time-mode" type="button" aria-label="日時指定モード" title="日時指定モード"><svg aria-hidden="true"><use href="#icon-calendar" /></svg></button>
+        <button id="rail-realtime-map" type="button" aria-label="リアルタイム運行状況" title="リアルタイム運行状況"><svg aria-hidden="true"><use href="#icon-digital-twin" /></svg></button>
+        <button id="rail-date-time-mode" type="button" aria-label="日時指定シミュレーター" title="日時指定シミュレーター"><svg aria-hidden="true"><use href="#icon-calendar" /></svg></button>
         <button id="rail-travel-profile" class="conversation-sidebar-rail-profile" type="button" aria-label="ゲストユーザの設定" title="設定"><span class="sidebar-account-avatar" aria-hidden="true">ゲ</span></button>
       </nav>
       <aside id="ai-guide-panel" class="ai-guide-panel" aria-label="コンシェルジュ" hidden>
@@ -141,8 +145,8 @@
           </header>
           <button id="new-conversation" type="button"><svg aria-hidden="true"><use href="#icon-new-conversation" /></svg><span>新しい会話</span></button>
           <nav class="conversation-sidebar-tools" aria-label="地図モード">
-            <button id="sidebar-realtime-map" type="button"><svg aria-hidden="true"><use href="#icon-digital-twin" /></svg><span>列車運行状況</span></button>
-            <button id="sidebar-date-time-mode" type="button"><svg aria-hidden="true"><use href="#icon-calendar" /></svg><span>日時指定モード</span></button>
+            <button id="sidebar-realtime-map" type="button"><svg aria-hidden="true"><use href="#icon-digital-twin" /></svg><span>リアルタイム運行状況</span></button>
+            <button id="sidebar-date-time-mode" type="button"><svg aria-hidden="true"><use href="#icon-calendar" /></svg><span>日時指定シミュレーター</span></button>
           </nav>
           <p id="conversation-history-empty" class="conversation-history-empty" hidden>過去の会話はまだありません</p>
           <ol id="conversation-history-list" class="conversation-history-list"></ol>
@@ -192,11 +196,12 @@
             <section data-settings-view="services" hidden>
               <header><h3>外部サービス</h3><p>Raiquoraが案内と表示のために利用するサービスです</p></header>
               <ul class="external-service-list">
-                <li><strong>Mapbox</strong><span>地図・地形・施設表示</span><a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noreferrer">地図の帰属表示</a></li>
+                <li><strong>Mapbox</strong><span>地図・地形・施設表示・徒歩と車の移動</span><a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noreferrer">地図の帰属表示</a></li>
                 <li><strong>OpenStreetMap contributors</strong><span>地図データ</span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">著作権とライセンス</a></li>
                 <li><strong>Open-Meteo</strong><span>天気予報</span><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">提供元</a></li>
+                <li><strong>気象庁</strong><span>警報・防災情報</span><a href="https://xml.kishou.go.jp/" target="_blank" rel="noreferrer">気象庁防災情報XML</a></li>
+                <li><strong>ホットペッパーグルメ Webサービス</strong><span>飲食店候補</span><a href="https://webservice.recruit.co.jp/" target="_blank" rel="noreferrer" title="ホットペッパーグルメ Webサービス"><img src="https://webservice.recruit.co.jp/banner/hotpepper-s.gif" width="135" height="17" border="0" alt="ホットペッパーグルメ Webサービス" title="ホットペッパーグルメ Webサービス" /></a></li>
                 <li><strong>Wikipedia / Wikimedia Commons</strong><span>観光情報・画像</span><a href="https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use" target="_blank" rel="noreferrer">利用条件</a></li>
-                <li><strong>Amadeus Self-Service APIs</strong><span>航空便候補</span></li>
                 <li id="settings-accommodation-provider" hidden>
                   <strong id="settings-accommodation-provider-name"></strong>
                   <span>宿泊施設候補</span>

@@ -13,7 +13,7 @@ import { renderAgentEvaluationMarkdown } from "./evaluation-report";
 const fixtures = fileURLToPath(new URL("../../../../../tests/fixtures/", import.meta.url));
 
 describe("Agent Evaluation Framework", () => {
-  it("evaluates 39 reproducible cases and reuses known journey scenarios", () => {
+  it("evaluates 42 reproducible cases and reuses known journey scenarios", () => {
     const dataset = parseAgentEvaluationDataset(readJson("agent-eval-cases.json"));
     const observations = parseAgentEvaluationObservations(
       readJson("agent-eval-observations.json"),
@@ -21,12 +21,12 @@ describe("Agent Evaluation Framework", () => {
     const journeyScenarios = readJson("journey-search-scenarios.json") as Array<{ id: string }>;
     const journeyScenarioIds = new Set(journeyScenarios.map(({ id }) => id));
 
-    expect(dataset.cases).toHaveLength(39);
+    expect(dataset.cases).toHaveLength(42);
     expect(dataset.cases.every(({ journeyScenarioId }) =>
       journeyScenarioId === undefined || journeyScenarioIds.has(journeyScenarioId))).toBe(true);
 
     const report = evaluateAgentDataset(dataset, observations);
-    expect(report.passedCaseCount).toBe(39);
+    expect(report.passedCaseCount).toBe(42);
     expect(report.metrics).toEqual({
       toolSelectionAccuracy: 1,
       constraintSatisfaction: 1,
@@ -52,7 +52,7 @@ describe("Agent Evaluation Framework", () => {
       metrics.taskCompletion === 1 &&
       metrics.viewerActionValidity === 1)).toBe(true);
     const markdown = renderAgentEvaluationMarkdown(report);
-    expect(markdown).toContain("Cases: 39/39 passed");
+    expect(markdown).toContain("Cases: 42/42 passed");
     expect(markdown).toContain("Tool Selection Accuracy: 100.0%");
     expect(markdown).toContain("| cancellation |");
   });

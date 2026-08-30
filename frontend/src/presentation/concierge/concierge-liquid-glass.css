@@ -353,8 +353,9 @@
 }
 
 .external-travel-cards { display: grid; gap: .8rem; margin-top: .8rem; }
-.external-weather, .external-flight-list { display: grid; gap: .55rem; }
+.external-alert-list,.external-restaurant-list{display:grid;gap:.6rem}.external-alert-list article,.external-ground-access,.external-restaurant-cards article{border:1px solid rgba(15,23,42,.1);border-radius:1rem;background:rgba(255,255,255,.72);padding:.75rem}.external-alert-list article[data-severity="warning"],.external-alert-list article[data-severity="emergency"]{border-color:#dc2626}.external-alert-list p{margin:.35rem 0}.external-restaurant-cards{display:flex;gap:.7rem;overflow-x:auto;padding:.15rem}.external-restaurant-cards article{display:grid;flex:0 0 min(18rem,78vw);gap:.35rem}.external-restaurant-cards img{width:100%;height:8rem;object-fit:cover;border-radius:.7rem}.external-restaurant-cards a,.external-alert-list a{color:#1677d2}.external-restaurant-cards button{width:fit-content;min-height:2.15rem;padding:.45rem .75rem;border:1px solid rgb(22 119 210 / 18%);border-radius:999px;color:#1677d2;background:rgb(255 255 255 / 72%);font:inherit;font-size:.7rem;font-weight:700;cursor:pointer}.external-restaurant-cards button:hover{background:rgb(22 119 210 / 10%)}
+.external-weather { display: grid; gap: .55rem; }
+.external-restaurant-features{display:flex;flex-wrap:wrap;gap:.25rem}.external-restaurant-features span{padding:.2rem .45rem;border-radius:999px;color:#31516f;background:rgb(22 119 210 / 9%);font-size:.62rem}.external-restaurant-credit{display:block;width:fit-content;line-height:0}.external-restaurant-credit img{width:135px;height:17px;border:0}
 .external-weather-days { display: flex; gap: .65rem; overflow-x: auto; padding: .15rem .05rem .45rem; scroll-snap-type: x proximity; }
 .external-weather-days article { display: grid; flex: 0 0 6.5rem; gap: .25rem; padding: .7rem; border: 1px solid var(--glass-border-subtle); border-radius: 1rem; background: var(--glass-surface); scroll-snap-align: start; }
 .external-weather-days span, .external-evidence-caption { color: var(--glass-muted); font-size: .68rem; }
-.external-flight-list article { padding: .7rem .8rem; border: 1px solid var(--glass-border-subtle); border-radius: .9rem; background: var(--glass-surface); }

@@ -52,12 +52,15 @@ Agentは推論とToolのオーケストレーションを担当し 鉄道の計�
 
 外部旅行情報も同じ依存方向を使う。`usecases/agent/external-travel-tools.ts`がProvider非依存の
 Tool契約 入力検証 実行結果の収集 Evidence変換を所有し `adapters/bedrock`はモデル形式との変換だけを行う。
-天気と航空の会話内カードは`presentation/concierge/external-travel-cards.ts`へ閉じる。
+天気などの外部旅行情報カードは`presentation/concierge/external-travel-cards.ts`へ閉じる。
 観光候補は`presentation/place-explorer`がカードを所有し `adapters/mapbox/place-media-layer.ts`が
 同じPlace IDを地図へ投影する。チャット本体は外部Providerの応答構造やMapbox操作を解釈しない。
 
-Backendでは宿泊 航空 天気 Placeを別々のPortとAdapterとして組成する。同じSecrets Manager JSONを
-互換性のため共有する場合も 宿泊と航空のCredentials Repositoryは分け 一方の必須項目を他方へ要求しない。
+Backendでは宿泊 天気 Placeを別々のPortとAdapterとして組成する。同じSecrets Manager JSONを
+互換性のため共有する場合も 宿泊 Mapbox SearchのCredentials Repositoryは分け
+一方の必須項目を他方へ要求しない。PlaceはMapbox POIを地点の正本とし Wikipediaは説明と画像を補完する。
+Web検索とページ読解も別PortとAdapterとして組成し Agent RuntimeやDomainへ検索ベンダー
+HTML DNS Secrets Managerの具体型を漏らさない。Webで発見した候補はPlace検索へ名称を渡して照合する。
 
 ## 契約の所有者
 
@@ -85,7 +88,7 @@ style再読込時は前回の定期更新を破棄してから新しい購読を
 Viewer UIは`presentation`の機能別ディレクトリに置く
 
 - `presentation/concierge`: 会話 プロフィール Landmark操作
-- `presentation/concierge/external-travel-cards.ts`: 天気と航空のEvidence付き会話内表示
+- `presentation/concierge/external-travel-cards.ts`: 外部旅行情報のEvidence付き会話内表示
 - `presentation/place-explorer`: 検証済みPlaceの地図下部カードと選択状態
 - `presentation/trip-plan`: 旅程表示と編集提案
 - `presentation/train-viewer`: 列車選択 詳細 時刻表 Three.js描画

@@ -23,7 +23,7 @@ describe("Agent Evaluation profiles", () => {
     expect(smoke.caseCount).toBe(12);
     expect(smoke.selectedTag).toBe("smoke");
     expect(smoke.passed).toBe(true);
-    expect(full.caseCount).toBe(39);
+    expect(full.caseCount).toBe(42);
     expect(full.selectedTag).toBeUndefined();
     expect(full.passed).toBe(true);
   });
