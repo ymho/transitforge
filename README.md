@@ -121,6 +121,7 @@ npm run test:journey-scenarios
 npm run eval:agent
 npm run eval:agent:smoke
 npm run eval:agent:full
+npm run eval:agent:decision:live -- --profile smoke --model-class default
 npm run eval:agent -- --case cancelled-service
 npm run eval:agent:strategies
 ```
@@ -128,6 +129,26 @@ npm run eval:agent:strategies
 Agent Benchmarkは42件を収録し 曖昧要求 運休 遅延 制約 情報不足 複数Tool
 Viewer Actionのカテゴリ別に6指標を出す。失敗したcase IDは`--case`で単独再実行できる
 戦略実験はsingle pass 結果駆動再計画 常時Reflectionの品質と相対コストを比較する
+
+通常の`eval:agent`は再現可能な保存済みObservationを採点し CIの回帰検知に使う。
+`eval:agent:decision:live`は本番と同じSystem Prompt Tool capability contract
+`MultiStepAgentRuntime`からBedrockを実際に呼び、意思決定の単一model baselineを測る。
+Live Evalは課金とAWS認証を伴うためCIでは実行せず、結果を`/tmp/raiquora-live-agent-eval`へ保存する。
+`--profile full`と`--model-class default|lightweight|decision`を同じdatasetで実行してから
+model routing比較へ渡す。
+
+```bash
+aws sso login --profile <aws-profile>
+AWS_PROFILE=<aws-profile> AWS_REGION=ap-northeast-1 \
+  npm run eval:agent:decision:live -- \
+  --profile full --model-class default --strategy single-default
+
+npm run eval:agent:model-routing:build -- \
+  --strategy single-default \
+  --report /tmp/raiquora-live-agent-eval/single-default/agent-eval-report.json \
+  --traces /tmp/raiquora-live-agent-eval/single-default/agent-eval-traces.json \
+  --output /tmp/raiquora-live-agent-eval/single-default/run.json
+```
 
 経路検索のシナリオだけを確認する場合は次を実行する
 

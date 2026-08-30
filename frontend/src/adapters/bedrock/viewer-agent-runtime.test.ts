@@ -11,6 +11,7 @@ import type {
 import {
   currentServiceDateInJapan,
   runViewerAgentRuntime,
+  viewerAgentToolDescriptors,
   type BedrockAgentConverse,
 } from "./viewer-agent-runtime";
 
@@ -37,6 +38,23 @@ const position: TrainPosition = {
 };
 
 describe("Bedrock viewer agent", () => {
+  it("exposes the production capability contract for Live Eval", () => {
+    const descriptors = viewerAgentToolDescriptors([
+      "search_place_media",
+      "ask_follow_up",
+      "plan_day_trip",
+    ]);
+
+    expect(descriptors.map(({ name }) => name)).toEqual([
+      "search_place_media",
+      "ask_follow_up",
+      "plan_day_trip",
+    ]);
+    expect(descriptors[0]?.description).toContain("Evidence:");
+    expect(descriptors[1]?.description).toContain("既知条件");
+    expect(descriptors[2]?.inputSchema.required).toEqual(["destination", "date", "stayNights"]);
+  });
+
   it("extracts a Bedrock decision summary and never displays the marker", async () => {
     const storedTraces: import("../../usecases/agent/agent-trace").AgentTrace[] = [];
     const storeAgentTrace = vi.fn(async (
@@ -1557,7 +1575,7 @@ describe("Bedrock viewer agent", () => {
       expect(tools?.some(({ name }) => name === "search_accommodations")).toBe(true);
       expect(tools?.some(({ name }) => name === "search_weather_forecast")).toBe(false);
       expect(tools?.find(({ name }) => name === "plan_day_trip")?.inputSchema)
-        .toMatchObject({ required: ["destination", "date"] });
+        .toMatchObject({ required: ["destination", "date", "stayNights"] });
       expect(tools?.find(({ name }) => name === "search_direct_routes")?.inputSchema)
         .toMatchObject({
           required: ["destinationStation"],
@@ -1574,7 +1592,7 @@ describe("Bedrock viewer agent", () => {
       return {
         message: { role: "assistant", content: [{ toolUse: {
           toolUseId: "day-trip", name: "plan_day_trip", input: {
-            destination: "宮島", date: "2026-08-28",
+            destination: "宮島", date: "2026-08-28", stayNights: 0,
           },
         } }] },
         stopReason: "tool_use",
@@ -1645,6 +1663,7 @@ describe("Bedrock viewer agent", () => {
         input: {
           destination: "奈良公園",
           date: "2026-08-31",
+          stayNights: 0,
           returnDepartureTimeMinutes: 21 * 60,
         },
       } }] },
@@ -1687,7 +1706,7 @@ describe("Bedrock viewer agent", () => {
     const converse = vi.fn<BedrockAgentConverse>(async () => ({
       message: { role: "assistant", content: [{ toolUse: {
         toolUseId: "day-trip-update", name: "plan_day_trip", input: {
-          destination: "宮島", date: "2026-08-28",
+          destination: "宮島", date: "2026-08-28", stayNights: 0,
         },
       } }] },
       stopReason: "tool_use",
