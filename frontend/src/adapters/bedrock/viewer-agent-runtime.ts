@@ -84,10 +84,12 @@ import { ToolViewerActionRegistry } from "../../usecases/agent/tool-viewer-actio
 import {
   failedAgentToolResult,
   invalidAgentToolInput,
+  modelToolDescription,
   successfulAgentToolResult,
   validAgentToolInput,
   type AgentTool,
   type AgentToolDecisionSupport,
+  type AgentToolDescriptor,
   type AgentToolInputSchema,
 } from "../../usecases/agent/tool-contract";
 import type {
@@ -487,7 +489,7 @@ interface ViewerToolContext {
   externalState: ExternalTravelToolState;
 }
 
-const viewerToolNames = [
+export const viewerAgentToolNames = [
   "propose_trip_update",
   "remember_travel_preference",
   "update_conversation_session",
@@ -507,6 +509,26 @@ const viewerToolNames = [
   "set_layer_visibility",
 ] as const;
 
+export type ViewerAgentToolName = typeof viewerAgentToolNames[number];
+
+/**
+ * Live Evalなど、実行Adapterを起動せずに本番と同じ能力contractを使う入口。
+ * Toolの可用性は呼び出し側が明示し、Domain実行結果のfixtureとは分離する。
+ */
+export function viewerAgentToolDescriptors(
+  names: readonly ViewerAgentToolName[] = viewerAgentToolNames,
+): AgentToolDescriptor[] {
+  return names.map((name) => {
+    const descriptor: AgentToolDescriptor = {
+      name,
+      description: viewerToolDescription(name),
+      decisionSupport: viewerToolDecisionSupport(name),
+      inputSchema: viewerToolInputSchema(name),
+    };
+    return { ...descriptor, description: modelToolDescription(descriptor) };
+  });
+}
+
 const terminalToolNames = new Set<string>([
   "propose_trip_update",
   "ask_follow_up",
@@ -519,7 +541,7 @@ const terminalToolNames = new Set<string>([
 
 function viewerToolRegistry(context: ViewerToolContext): AgentToolRegistry {
   const registry = new AgentToolRegistry();
-  for (const name of viewerToolNames) {
+  for (const name of viewerAgentToolNames) {
     if (!viewerToolIsAvailable(name, context.dependencies)) continue;
     registry.register(viewerTool(name, context));
   }
@@ -527,7 +549,7 @@ function viewerToolRegistry(context: ViewerToolContext): AgentToolRegistry {
 }
 
 function viewerToolIsAvailable(
-  name: typeof viewerToolNames[number],
+  name: ViewerAgentToolName,
   dependencies: ViewerAgentRuntimeDependencies,
 ): boolean {
   const currentTrip = dependencies.getTripPlan?.();
@@ -572,7 +594,7 @@ function viewerToolIsAvailable(
 }
 
 function viewerTool(
-  name: typeof viewerToolNames[number],
+  name: ViewerAgentToolName,
   context: ViewerToolContext,
 ): AgentTool<Record<string, unknown>, unknown> {
   return {
@@ -614,7 +636,7 @@ function viewerTool(
 }
 
 function viewerToolDecisionSupport(
-  name: typeof viewerToolNames[number],
+  name: ViewerAgentToolName,
 ): AgentToolDecisionSupport {
   const capability = viewerToolDescription(name);
   const common = {
@@ -644,10 +666,14 @@ function viewerToolDecisionSupport(
   if (name === "plan_day_trip") {
     return {
       ...common,
-      suitableCases: ["日帰りと日付が確定し、往路と帰路を同じ制約で組む"],
-      unsuitableCases: ["1泊以上", "日付が未確定", "宿だけを探す"],
+      suitableCases: ["TripContextでstay_nights=0と日付が確定し、往路と帰路を同じ制約で組む"],
+      unsuitableCases: ["泊数が未確定", "1泊以上", "日付が未確定", "宿だけを探す"],
       returnedEvidence: "決定論的に検索した往路と帰路の鉄道経路",
-      limitations: ["帰宅時刻は帰路の到着期限として入力する", "宿泊候補を返さない"],
+      limitations: [
+        "出発時刻と帰宅時刻は任意で 未指定でもToolの既定時刻で仮案を検索できる",
+        "帰宅時刻は帰路の到着期限として入力する",
+        "宿泊候補を返さない",
+      ],
     };
   }
   if (name === "search_trip_route_update") {
@@ -746,9 +772,9 @@ function externalTravelDecisionSupport(
   return { ...common, ...support[name] };
 }
 
-function viewerToolDescription(name: typeof viewerToolNames[number]): string {
+function viewerToolDescription(name: ViewerAgentToolName): string {
   if (isExternalTravelToolName(name)) return externalTravelToolDescription(name);
-  const descriptions: Record<Exclude<typeof viewerToolNames[number], typeof externalTravelToolNames[number]>, string> = {
+  const descriptions: Record<Exclude<ViewerAgentToolName, typeof externalTravelToolNames[number]>, string> = {
     propose_trip_update: "現在の旅程に対する観光 移動 滞在 条件の変更案を構造化します。利用者が変更を依頼し内容が明確なら追加確認せず使います",
     remember_travel_preference: "高確信の継続的な旅行の好みを端末内へ記憶します",
     update_conversation_session: "現在の会話Sessionの要約と話題を更新します",
@@ -770,7 +796,7 @@ function viewerToolDescription(name: typeof viewerToolNames[number]): string {
 }
 
 function viewerToolInputSchema(
-  name: typeof viewerToolNames[number],
+  name: ViewerAgentToolName,
 ): AgentToolInputSchema {
   if (isExternalTravelToolName(name)) return externalTravelToolInputSchema(name);
   if (name === "search_accommodations") {
@@ -814,6 +840,11 @@ function viewerToolInputSchema(
           pattern: "^\\d{4}-\\d{2}-\\d{2}$",
           description: "日帰り旅行の日付。YYYY-MM-DD形式",
         },
+        stayNights: {
+          type: "integer",
+          enum: [0],
+          description: "既知TripContextの日帰り条件。未確定の泊数を0と推測しない",
+        },
         outboundTimeMinutes: { type: "integer", minimum: 0, maximum: 1_800 },
         returnDepartureTimeMinutes: {
           type: "integer", minimum: 0, maximum: 1_800,
@@ -824,7 +855,7 @@ function viewerToolInputSchema(
           description: "自宅側の駅へ到着したい期限。帰宅時刻や帰着時刻が指定された場合に使う",
         },
       },
-      required: ["destination", "date"],
+      required: ["destination", "date", "stayNights"],
       additionalProperties: false,
     };
   }
@@ -1059,7 +1090,7 @@ function travelConsultationDestination(
   return match?.[1]?.trim();
 }
 
-class ConverseModelProvider implements AgentModelProvider {
+export class ConverseModelProvider implements AgentModelProvider {
   constructor(private readonly converse: BedrockAgentConverse) {}
 
   async generate(request: AgentModelRequest): Promise<AgentModelResponse> {
@@ -1671,7 +1702,12 @@ async function executeViewerToolAdapter(
       ? input.destination.trim()
       : "";
     const date = typeof input.date === "string" ? input.date : "";
+    const authoritativeStayNights = travelConversationFacts(
+      originalPrompt,
+      currentDate(dependencies),
+    ).context.stayNights;
     if (!destination || !/^\d{4}-\d{2}-\d{2}$/u.test(date) ||
+      input.stayNights !== 0 || authoritativeStayNights !== 0 ||
       !dependencies.searchDirectRoutes) {
       throw new Error("日帰り旅行の検索条件が不正です。");
     }
