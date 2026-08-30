@@ -334,7 +334,9 @@ export async function runViewerAgentRuntime(
   const conversationContext = dependencies.getConversationContext?.();
   const runtimeResult = await runtime.run({
     executionId: crypto.randomUUID(),
-    feature: featureFromPrompt(prompt),
+    // この入口は常にコンシェルジュUIである。発話内容を正規表現で
+    // feature分類すると、その分類がBedrockより前のintent routerになる。
+    feature: "concierge",
     userRequest: continuedConversationAnswer(prompt),
     context: {
       ...(dependencies.conciergeInstruction
@@ -1059,24 +1061,8 @@ function viewerToolActionMappers(): ToolViewerActionRegistry {
   return registry;
 }
 
-function featureFromPrompt(prompt: string): "journey_planning" | "train_guidance" | "operational_analysis" | "travel_planning" {
-  const normalized = prompt.normalize("NFKC");
-  if (/(?:旅行|観光|宿泊|\d+泊|ホテル|旅館)/u.test(normalized)) return "travel_planning";
-  if (
-    /(?:大社|神社|寺|公園|温泉|城|庭園|美術館|博物館|水族館|動物園|島|海岸|高原)(?:へ|に)(?:行きたい|行く|行こう)/u.test(normalized) ||
-    /(?:島根|鳥取|四国|山陰|山陽|九州|沖縄|北海道|東北|北陸|瀬戸内)(?:へ|に)(?:行きたい|行く|行こう)/u.test(normalized)
-  ) return "travel_planning";
-  if (/(?:遅延|遅れ|混雑|ピーク)/u.test(normalized)) return "operational_analysis";
-  if (/(?:から.+(?:へ|まで)|経路|乗換|行きたい)/u.test(normalized)) return "journey_planning";
-  return "train_guidance";
-}
-
 function continuedConversationAnswer(prompt: string): string {
   return prompt.match(/利用者の今回の回答:\s*([^\n]+)/u)?.[1]?.trim() ?? prompt.trim();
-}
-
-function isTravelDestinationConsultation(prompt: string, context: TripContext): boolean {
-  return travelConsultationDestination(prompt, context) !== undefined;
 }
 
 function travelConsultationDestination(
@@ -1382,26 +1368,17 @@ async function executeViewerToolAdapter(
       originalPrompt,
       currentDate(dependencies),
     );
-    if (
-      featureFromPrompt(originalPrompt) === "travel_planning" &&
-      (!travelFacts.hasExplicitDate || !travelFacts.hasExplicitStayLength)
-    ) {
-      const guidance = missingTravelScheduleGuidance(
-        originalPrompt,
-        input,
-        travelFacts.context,
-        dependencies.getUserProfile?.(),
-      );
-      conversationState.response = guidance;
-      return { searchDeferred: true, missing: guidance.expectedInput };
-    }
     const promptRequest = directRouteRequestFromPrompt(
       originalPrompt,
       dependencies.trains,
     );
-    if (isStayTravelRequest(originalPrompt)) {
+    if (
+      !promptRequest &&
+      travelFacts.context.planningStage === "planning" &&
+      (!travelFacts.hasExplicitDate || !travelFacts.hasExplicitStayLength)
+    ) {
       throw new Error(
-        "宿泊を伴う旅行相談では、まずsearch_accommodationsで行き先と宿泊日を検索してください。観光地は駅名として経路検索しません。",
+        "旅行計画の経路検索には確定した出発日と滞在日数が必要です。既知Contextを確認し、不足条件があれば再計画してください。",
       );
     }
     const originStation = promptRequest?.originStation ??
@@ -1596,14 +1573,9 @@ async function executeViewerToolAdapter(
       !travelFacts.context.startDate ||
       !travelFacts.context.endDate
     ) {
-      const guidance = missingTravelScheduleGuidance(
-        originalPrompt,
-        input,
-        travelFacts.context,
-        dependencies.getUserProfile?.(),
+      throw new Error(
+        "宿泊検索には確定した出発日と滞在日数が必要です。既知Contextを確認し、不足条件があれば再計画してください。",
       );
-      conversationState.response = guidance;
-      return { searchDeferred: true, missing: guidance.expectedInput };
     }
     const checkInDate = travelFacts.context.startDate;
     const checkOutDate = travelFacts.context.endDate;
@@ -2199,22 +2171,8 @@ function conversationGuidanceFromToolInput(
     ? { ...mergedTripContext, destinationWish: requestedDestination }
     : mergedTripContext;
   const facts = travelConversationFacts(originalPrompt, now);
-  const needsPlanningIntent = featureFromPrompt(originalPrompt) === "travel_planning" &&
-    isTravelDestinationConsultation(originalPrompt, tripContext) &&
-    tripContext.planningStage !== "planning" &&
-    !facts.hasExplicitDate && !facts.hasExplicitStayLength;
-  const effectiveTripContext: TripContext = needsPlanningIntent
-    ? { ...tripContext, planningStage: "inspiration" }
-    : tripContext;
-  const expectedInput = needsPlanningIntent
-    ? "planning-intent"
-    : featureFromPrompt(originalPrompt) === "travel_planning" &&
-      !facts.hasExplicitDate
-    ? "departure-date"
-    : featureFromPrompt(originalPrompt) === "travel_planning" &&
-        !facts.hasExplicitStayLength
-      ? "stay-length"
-      : requestedExpectedInput;
+  assertFollowUpIsUnresolved(requestedExpectedInput, tripContext, facts);
+  const expectedInput = requestedExpectedInput;
   const requestedQuickReplies = (Array.isArray(input.quickReplies)
     ? input.quickReplies.flatMap((value) => {
       if (!value || typeof value !== "object") return [];
@@ -2248,66 +2206,22 @@ function conversationGuidanceFromToolInput(
     question: normalizedQuestion,
     expectedInput,
     quickReplies,
-    tripContext: effectiveTripContext,
+    tripContext,
   });
 }
 
-function missingTravelScheduleGuidance(
-  prompt: string,
-  input: Record<string, unknown>,
-  knownContext: TripContext,
-  profile?: UserProfile,
-): ConversationGuidance {
-  const requestedDestination = knownContext.destinationWish ??
-    (typeof input.destination === "string" ? input.destination.trim() : undefined) ??
-    (typeof input.destinationStation === "string"
-      ? input.destinationStation.trim()
-      : undefined);
-  const destination = travelDestinationAccess(prompt)?.name ??
-    travelDestinationAccess(requestedDestination ?? "")?.name ??
-    requestedDestination ?? "行き先";
-  const context = { ...knownContext, destinationWish: destination };
-  const active = (profile?.travelStyle.pace ?? context.pace ?? 0.5) >= 0.7;
-  const recommendation = `${destination}なら、まずは1泊を基準にして、${
-    active ? "見どころをいくつか巡りつつ" : "予定を詰め込みすぎず"
-  }現地らしさを楽しめる形から考えるのがおすすめです。`;
-  if (context.planningStage !== "planning") {
-    return normalizedConversationGuidance({
-      recommendation: `${destination}の写真と雰囲気を見ながら、まず行ってみたいと思えるか確かめてみましょう。`,
-      question: "この場所を軸に旅を考えてみますか？",
-      expectedInput: "planning-intent",
-      quickReplies: [
-        { label: "旅程を考える", value: "旅程を考えたい" },
-        { label: "もう少し見たい", value: "もう少し見たい" },
-      ],
-      tripContext: { ...context, planningStage: "inspiration" },
-    });
+function assertFollowUpIsUnresolved(
+  expectedInput: ConversationExpectedInput,
+  tripContext: TripContext,
+  facts: ReturnType<typeof travelConversationFacts>,
+): void {
+  const alreadyKnown =
+    (expectedInput === "planning-intent" && tripContext.planningStage === "planning") ||
+    (expectedInput === "departure-date" && facts.hasExplicitDate) ||
+    (expectedInput === "stay-length" && facts.hasExplicitStayLength);
+  if (alreadyKnown) {
+    throw new Error(`既知条件 ${expectedInput} は聞き直せません。別の行動を選択してください。`);
   }
-  if (!context.startDate) {
-    return normalizedConversationGuidance({
-      recommendation,
-      reason: "日付が決まれば、実際の列車と宿泊候補を同じ日程で確認できます。",
-      question: "いつ出発しますか？",
-      expectedInput: "departure-date",
-      quickReplies: [
-        { label: "今日", value: "今日" },
-        { label: "明日", value: "明日" },
-      ],
-      tripContext: context,
-    });
-  }
-  return normalizedConversationGuidance({
-    recommendation,
-    reason: "滞在日数が決まれば、帰りの経路と宿泊日を揃えて確認できます。",
-    question: "何泊にしますか？",
-    expectedInput: "stay-length",
-    quickReplies: [
-      { label: "日帰り", value: "日帰り" },
-      { label: "1泊", value: "1泊" },
-      { label: "2泊", value: "2泊" },
-    ],
-    tripContext: context,
-  });
 }
 
 function isConversationExpectedInput(value: unknown): value is ConversationExpectedInput {
@@ -2344,12 +2258,6 @@ function tripContextFromToolInput(value: unknown): TripContext {
       : {}),
     ...(typeof input.carAvailable === "boolean" ? { carAvailable: input.carAvailable } : {}),
   };
-}
-
-function isStayTravelRequest(prompt: string): boolean {
-  const normalized = prompt.normalize("NFKC").replace(/\s+/gu, "");
-  return !normalized.includes("日帰り") &&
-    /(?:\d+泊|泊まり|宿泊|ホテル|旅館)/u.test(normalized);
 }
 
 function stationForTravelDestination(
