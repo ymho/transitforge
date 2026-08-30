@@ -6,6 +6,7 @@ export interface ViewerElements {
   status: HTMLParagraphElement;
   contextWorkspaceTabs: HTMLElement;
   contextWorkspaceButtons: HTMLButtonElement[];
+  closeContextWorkspace: HTMLButtonElement;
   displayTime: HTMLInputElement;
   dateTimeInput: HTMLInputElement;
   dateTimeDate: HTMLElement;
@@ -70,6 +71,7 @@ export function loadViewerElements(root: ParentNode): ViewerElements {
     status: required(root, "#map-status"),
     contextWorkspaceTabs: required(root, "#context-workspace-tabs"),
     contextWorkspaceButtons: requiredAll(root, "[data-context-view]", 3, 3),
+    closeContextWorkspace: required(root, "#close-context-workspace"),
     displayTime: required(root, "#display-time"),
     dateTimeInput: required(root, "#date-time-input"),
     dateTimeDate: required(root, "#date-time-date"),

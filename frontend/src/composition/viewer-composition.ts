@@ -174,6 +174,7 @@ import { createJourneySearchHandlers } from "../usecases/journey/create-journey-
 import { BrowserContextWorkspaceRepository } from "../adapters/browser/context-workspace-repository";
 import { createContextWorkspaceController } from "../usecases/context-workspace/context-workspace-controller";
 import type { ContextViewKind } from "../domain/context-workspace";
+import { createMobileContextNavigation } from "../presentation/concierge/mobile-context-navigation";
 
 export function startViewer(): void {
 
@@ -196,6 +197,7 @@ const {
   status,
   contextWorkspaceTabs,
   contextWorkspaceButtons,
+  closeContextWorkspace,
   displayTime,
   dateTimeInput,
   dateTimeDate,
@@ -327,10 +329,18 @@ const tripPlanController = configureTripPlanPanel(
   localStorage,
 );
 const desktopChatShell = window.matchMedia("(min-width: 72rem)");
+const mobileChatShell = window.matchMedia("(max-width: 71.999rem)");
 const contextWorkspaceController = createContextWorkspaceController(
   activeConversationSession.id,
   new BrowserContextWorkspaceRepository(localStorage),
 );
+const mobileContextNavigation = createMobileContextNavigation({
+  app,
+  messages: aiGuideMessages,
+  input: aiGuideInput,
+  showContext: (view) => contextWorkspaceController.show(view),
+  restoreFocus: () => window.matchMedia("(pointer: fine)").matches,
+});
 const applyContextWorkspaceState = () => {
   const state = contextWorkspaceController.current();
   app.dataset.contextView = state.view;
@@ -355,12 +365,17 @@ contextWorkspaceController.subscribe(applyContextWorkspaceState);
 for (const button of contextWorkspaceButtons) {
   button.addEventListener("click", () => {
     const view = button.dataset.contextView as ContextViewKind;
-    contextWorkspaceController.show(view);
+    if (mobileChatShell.matches) mobileContextNavigation.open(view);
+    else contextWorkspaceController.show(view);
   });
 }
+closeContextWorkspace.addEventListener("click", () => {
+  mobileContextNavigation.close();
+});
 contextWorkspaceTabs.hidden = false;
 closeTripPlan.addEventListener("click", () => {
-  contextWorkspaceController.show("map");
+  if (mobileChatShell.matches) mobileContextNavigation.close();
+  else contextWorkspaceController.show("map");
 });
 const sessionTripPlan = loadTripPlan(localStorage, activeConversationSession.id);
 if (sessionTripPlan && activeConversationSession.tripPlanId !== sessionTripPlan.id) {
@@ -428,7 +443,7 @@ aiGuideController = configureAiGuidePanel(
       contextWorkspaceController.show("map");
     },
     onWeather: (forecast) => applyForecastWeather?.(forecast),
-    persistent: () => desktopChatShell.matches,
+    persistent: () => true,
     onTripPlanUpdate: (proposal) => {
       tripPlanController.apply(proposal.patches);
       Object.assign(activeConversationSession, {
@@ -494,10 +509,7 @@ configureConversationHistoryPanel({
   },
   persistentMediaQuery: desktopChatShell,
 });
-if (desktopChatShell.matches) aiGuideController.open();
-desktopChatShell.addEventListener("change", ({ matches }) => {
-  if (matches) aiGuideController.open();
-});
+aiGuideController.open();
 applyContextWorkspaceState();
 configureTravelProfile(document, localStorage, () => aiGuideController.open());
 if (tripPreviewEnabled) {
@@ -765,12 +777,20 @@ if (!token) {
             stops: selectedTrainStops,
             coupledTabs: trainDetailTabs,
             onFocus: (serviceUid) => {
-              contextWorkspaceController.show("journey-details", {
+              const focused = contextWorkspaceController.show("journey-details", {
                 kind: "journey",
                 id: serviceUid,
               });
+              if (focused && mobileChatShell.matches) {
+                app.dataset.mobileContextOpen = "true";
+                app.dataset.mobileContextView = "journey-details";
+              }
             },
             onEndFocus: () => {
+              if (mobileChatShell.matches && mobileContextNavigation.isOpen()) {
+                mobileContextNavigation.close();
+                return;
+              }
               if (contextWorkspaceController.current().view === "journey-details") {
                 contextWorkspaceController.show("map");
               }
