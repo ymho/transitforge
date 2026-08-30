@@ -4,15 +4,51 @@ import type { ViewerAgentExternalResponse } from "../../domain/viewer-agent-resp
 
 export function renderExternalTravelInformation(
   response: ViewerAgentExternalResponse,
-  options: { onRestaurantConsult?: (restaurant: RestaurantCandidate) => void } = {},
+  options: {
+    onRestaurantConsult?: (restaurant: RestaurantCandidate) => void;
+    includePlaceInspiration?: boolean;
+    includeRestaurants?: boolean;
+  } = {},
 ): HTMLElement {
   const container = document.createElement("section");
   container.className = "external-travel-cards";
+  if (options.includePlaceInspiration) appendPlaceInspiration(container, response.external.places);
   appendWeather(container, response.external.weather);
   appendAlerts(container, response.external.alerts);
   appendGroundAccess(container, response.external.groundAccess);
-  appendRestaurants(container, response.external.restaurants, options.onRestaurantConsult);
+  if (options.includeRestaurants !== false) {
+    appendRestaurants(container, response.external.restaurants, options.onRestaurantConsult);
+  }
   return container;
+}
+
+function appendPlaceInspiration(
+  container: HTMLElement,
+  places: ViewerAgentExternalResponse["external"]["places"],
+): void {
+  if (places?.status !== "available" || !places.data) return;
+  const candidates = places.data.places.filter((place) =>
+    place.image?.hotlinkAllowed === true
+  ).slice(0, 4);
+  if (candidates.length === 0) return;
+  const gallery = document.createElement("section");
+  gallery.className = "external-place-inspiration";
+  for (const place of candidates) {
+    const figure = document.createElement("figure");
+    const image = document.createElement("img");
+    image.src = place.image!.url;
+    image.alt = place.name;
+    image.loading = "lazy";
+    const caption = document.createElement("figcaption");
+    const name = document.createElement("strong");
+    name.textContent = place.name;
+    const credit = document.createElement("small");
+    credit.textContent = place.image!.attribution;
+    caption.append(name, credit);
+    figure.append(image, caption);
+    gallery.append(figure);
+  }
+  container.append(gallery);
 }
 
 function appendAlerts(container: HTMLElement, alerts: ViewerAgentExternalResponse["external"]["alerts"]): void {

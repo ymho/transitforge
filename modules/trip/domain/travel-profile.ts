@@ -25,6 +25,7 @@ export interface UserProfile {
 }
 
 export interface TripContext {
+  planningStage?: "inspiration" | "planning";
   destinationWish?: string;
   startDate?: string;
   endDate?: string;

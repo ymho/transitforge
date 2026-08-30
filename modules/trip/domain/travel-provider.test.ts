@@ -13,6 +13,7 @@ describe("createAccommodationOffering", () => {
       kind: "accommodation", provider: "travel-provider", providerItemId: "42", name: "駅前の宿",
       checkInDate: "2026-08-17", checkOutDate: "2026-08-18", bookingUrl: "https://booking.example/42",
       areaName: "出雲市", imageUrl: "https://images.example/42.jpg",
+      availability: "unknown",
     });
   });
 

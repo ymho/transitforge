@@ -1,4 +1,5 @@
 import type { PlaceMedia } from "@raiquora/trip/place-media";
+import type { MapTravelCandidate } from "../../domain/map-travel-candidate";
 
 export interface MapPlaceCardModel {
   id: string;
@@ -10,32 +11,63 @@ export interface MapPlaceCardModel {
   image?: { url: string; attribution: string };
   openingHours?: string;
   categories: string[];
+  kind: MapTravelCandidate["kind"];
+  primaryLabel: string;
+  reviewLabel?: string;
+  priceLabel?: string;
+  availabilityLabel?: string;
+  budget?: string;
 }
 
 export interface MapPlaceExplorerController {
-  show(places: readonly PlaceMedia[]): void;
+  show(candidates: readonly MapTravelCandidate[]): void;
   select(providerPlaceId: string, focusMap?: boolean): void;
   clear(): void;
 }
 
 export function mapPlaceCardModels(places: readonly PlaceMedia[]): MapPlaceCardModel[] {
-  return places
-    .filter((place) => Number.isFinite(place.latitude) && Number.isFinite(place.longitude))
-    .map((place) => ({
+  return mapTravelCandidateCardModels(places.flatMap((place) =>
+    Number.isFinite(place.latitude) && Number.isFinite(place.longitude) ? [{
+      kind: "place" as const,
       id: place.providerPlaceId,
       name: place.name,
+      latitude: place.latitude!,
+      longitude: place.longitude!,
       ...(place.address ? { address: place.address } : {}),
       ...(place.summary ? { summary: place.summary } : {}),
+      ...(place.categories ? { categories: place.categories } : {}),
+      ...(place.image?.hotlinkAllowed === true ? { imageUrl: place.image.url } : {}),
       sourceUrl: place.sourceUrl,
-      sources: place.sources ?? [{ provider: "source", label: "情報源", url: place.sourceUrl, role: "identity" }],
-      categories: place.categories ?? [],
-      ...(place.openingHoursStatus === "available" && place.openingHours
-        ? { openingHours: place.openingHours }
-        : {}),
-      ...(place.image?.hotlinkAllowed === true
-        ? { image: { url: place.image.url, attribution: place.image.attribution } }
-        : {}),
-    }));
+      value: place,
+    }] : []));
+}
+
+export function mapTravelCandidateCardModels(candidates: readonly MapTravelCandidate[]): MapPlaceCardModel[] {
+  return candidates.map((candidate) => {
+    const place = candidate.kind === "place" ? candidate.value : undefined;
+    const sourceUrl = candidate.sourceUrl ?? "https://example.invalid/";
+    const reviewLabel = candidate.kind === "accommodation" && candidate.reviewAverage !== undefined
+      ? `★ ${candidate.reviewAverage.toFixed(1)}${candidate.reviewCount !== undefined ? `（${candidate.reviewCount.toLocaleString("ja-JP")}件）` : ""}`
+      : undefined;
+    return {
+      id: candidate.id,
+      kind: candidate.kind,
+      name: candidate.name,
+      ...(candidate.address ? { address: candidate.address } : {}),
+      ...(candidate.summary ? { summary: candidate.summary } : {}),
+      sourceUrl,
+      sources: place?.sources ?? [{ provider: "source", label: "情報源", url: sourceUrl, role: "identity" }],
+      categories: candidate.categories ?? [],
+      primaryLabel: candidate.kind === "accommodation" ? "この宿を選ぶ" : "旅程を相談",
+      ...(candidate.kind === "restaurant" && candidate.openingHours ? { openingHours: candidate.openingHours } : {}),
+      ...(place?.openingHoursStatus === "available" && place.openingHours ? { openingHours: place.openingHours } : {}),
+      ...(candidate.imageUrl ? { image: { url: candidate.imageUrl, attribution: place?.image?.attribution ?? "提供画像" } } : {}),
+      ...(reviewLabel ? { reviewLabel } : {}),
+      ...(candidate.kind === "accommodation" && candidate.priceLabel ? { priceLabel: candidate.priceLabel } : {}),
+      ...(candidate.kind === "accommodation" && candidate.availabilityLabel ? { availabilityLabel: candidate.availabilityLabel } : {}),
+      ...(candidate.kind === "restaurant" && candidate.budget ? { budget: candidate.budget } : {}),
+    };
+  });
 }
 
 export function configureMapPlaceExplorer(options: {
@@ -46,10 +78,10 @@ export function configureMapPlaceExplorer(options: {
   detailContent: HTMLElement;
   closeDetail: HTMLButtonElement;
   focusPlace: (providerPlaceId: string) => void;
-  consult: (place: PlaceMedia) => void;
+  choose: (candidate: MapTravelCandidate) => void;
   clearPlaces?: () => void;
 }): MapPlaceExplorerController {
-  let placesById = new Map<string, PlaceMedia>();
+  let candidatesById = new Map<string, MapTravelCandidate>();
 
   const select = (providerPlaceId: string, focusMap = true) => {
     const card = Array.from(options.list.querySelectorAll<HTMLElement>("[data-place-id]"))
@@ -61,14 +93,14 @@ export function configureMapPlaceExplorer(options: {
     }
     card.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
     if (focusMap) options.focusPlace(providerPlaceId);
-    const place = placesById.get(providerPlaceId);
-    if (place) showPlaceDetail(place);
+    const candidate = candidatesById.get(providerPlaceId);
+    if (candidate) showPlaceDetail(candidate);
   };
 
-  const showPlaceDetail = (place: PlaceMedia) => {
-    const model = mapPlaceCardModels([place])[0];
+  const showPlaceDetail = (candidate: MapTravelCandidate) => {
+    const model = mapTravelCandidateCardModels([candidate])[0];
     if (!model) return;
-    options.detailContent.replaceChildren(renderPlaceDetail(model, () => options.consult(place)));
+    options.detailContent.replaceChildren(renderPlaceDetail(model, () => options.choose(candidate)));
     options.detail.hidden = false;
   };
 
@@ -78,7 +110,7 @@ export function configureMapPlaceExplorer(options: {
   };
 
   const reset = () => {
-    placesById.clear();
+    candidatesById.clear();
     options.list.replaceChildren();
     options.panel.hidden = true;
     closeDetail();
@@ -93,14 +125,21 @@ export function configureMapPlaceExplorer(options: {
   options.closeDetail.addEventListener("click", closeDetail);
 
   return {
-    show(places) {
+    show(candidates) {
       reset();
-      const models = mapPlaceCardModels(places);
-      placesById = new Map(places.map((place) => [place.providerPlaceId, place]));
+      const models = mapTravelCandidateCardModels(candidates);
+      const heading = options.panel.querySelector("header strong");
+      if (heading) {
+        const kind = candidates[0]?.kind;
+        heading.textContent = kind === "accommodation"
+          ? "宿泊先候補"
+          : kind === "restaurant" ? "食事候補" : "地図で見つけたスポット";
+      }
+      candidatesById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
       for (const model of models) {
         options.list.append(renderPlaceCard(model, () => select(model.id), () => {
-          const place = placesById.get(model.id);
-          if (place) options.consult(place);
+          const candidate = candidatesById.get(model.id);
+          if (candidate) options.choose(candidate);
         }));
       }
       options.panel.hidden = models.length === 0;
@@ -152,6 +191,18 @@ function renderPlaceDetail(
     body.append(openingHours);
   }
 
+  if (place.reviewLabel || place.priceLabel || place.availabilityLabel || place.budget) {
+    const facts = document.createElement("ul");
+    facts.className = "map-place-detail-facts";
+    for (const fact of [place.reviewLabel, place.priceLabel, place.availabilityLabel, place.budget]) {
+      if (!fact) continue;
+      const item = document.createElement("li");
+      item.textContent = fact;
+      facts.append(item);
+    }
+    body.append(facts);
+  }
+
   if (place.address) {
     const address = document.createElement("p");
     address.className = "map-place-detail-address";
@@ -180,7 +231,7 @@ function renderPlaceDetail(
   }
   const addToTrip = document.createElement("button");
   addToTrip.type = "button";
-  addToTrip.textContent = "旅程を相談";
+  addToTrip.textContent = place.primaryLabel;
   addToTrip.addEventListener("click", consult);
   actions.append(sources, addToTrip);
   body.append(actions);
@@ -218,6 +269,13 @@ function renderPlaceCard(
     summary.textContent = place.summary;
     copy.append(summary);
   }
+  const facts = [place.reviewLabel, place.priceLabel, place.availabilityLabel, place.budget].filter(Boolean);
+  if (facts.length > 0) {
+    const metadata = document.createElement("small");
+    metadata.className = "map-place-option-facts";
+    metadata.textContent = facts.join("・");
+    copy.append(metadata);
+  }
   focus.append(copy);
   focus.addEventListener("click", select);
 
@@ -229,7 +287,7 @@ function renderPlaceCard(
   source.textContent = place.image?.attribution ?? "情報源";
   const action = document.createElement("button");
   action.type = "button";
-  action.textContent = "旅程を相談";
+  action.textContent = place.primaryLabel;
   action.addEventListener("click", consult);
   footer.append(source, action);
   card.append(focus, footer);

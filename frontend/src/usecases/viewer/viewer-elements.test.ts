@@ -7,10 +7,7 @@ describe("loadViewerElements", () => {
     const element = {} as Element;
     const root = {
       querySelector: () => element,
-      querySelectorAll: (selector: string) =>
-        selector === "[data-context-view]"
-          ? [element, element, element]
-          : [element],
+      querySelectorAll: () => [element],
     } as unknown as ParentNode;
 
     const result = loadViewerElements(root);
@@ -22,10 +19,7 @@ describe("loadViewerElements", () => {
   it("不足している要素をselector付きで報告する", () => {
     const root = {
       querySelector: (selector: string) => selector === "#map-status" ? null : {},
-      querySelectorAll: (selector: string) =>
-        selector === "[data-context-view]"
-          ? [{}, {}, {}]
-          : [{}],
+      querySelectorAll: () => [{}],
     } as unknown as ParentNode;
 
     expect(() => loadViewerElements(root)).toThrow("#map-status");

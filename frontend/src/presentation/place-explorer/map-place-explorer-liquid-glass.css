@@ -1,10 +1,11 @@
 .map-place-explorer {
   position: absolute;
   z-index: 5;
+  left: 1.25rem;
   right: 1.25rem;
   bottom: 1.25rem;
   display: grid;
-  width: min(48rem, calc(100vw - 2.5rem));
+  width: auto;
   gap: .55rem;
   padding: .75rem;
   overflow: hidden;
@@ -85,6 +86,7 @@
 .map-place-option-focus > span { display: grid; align-content: center; gap: .25rem; padding: .7rem .75rem; }
 .map-place-option-focus strong { overflow: hidden; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
 .map-place-option-focus small { display: -webkit-box; overflow: hidden; color: var(--glass-muted); font-size: .68rem; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.map-place-option-focus .map-place-option-facts { display: block; color: var(--glass-text); font-weight: 700; -webkit-line-clamp: 1; }
 
 .map-place-option footer { display: flex; min-height: 2.4rem; align-items: center; justify-content: space-between; gap: .5rem; padding: .4rem .55rem; border-top: 1px solid var(--glass-border-subtle); }
 .map-place-option footer a { overflow: hidden; color: var(--glass-muted); font-size: .6rem; text-overflow: ellipsis; white-space: nowrap; }
@@ -142,6 +144,8 @@
 .map-place-detail-hours { margin: 0; padding: .75rem 0; border-block: 1px solid var(--glass-border-subtle); font-size: .78rem; font-weight: 700; }
 .map-place-detail-address { margin: 0; color: var(--glass-muted); font-size: .76rem; line-height: 1.55; }
 .map-place-detail-summary { margin: 0; color: var(--glass-text); font-size: .82rem; line-height: 1.75; }
+.map-place-detail-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; margin: 0; padding: 0; list-style: none; }
+.map-place-detail-facts li { padding: .65rem .75rem; border: 1px solid var(--glass-border-subtle); border-radius: .85rem; background: var(--glass-surface); font-size: .74rem; font-weight: 700; }
 .map-place-detail-sources { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
 .map-place-detail-sources a { color: var(--glass-accent); font-size: .7rem; font-weight: 700; }
 .map-place-detail-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
@@ -150,7 +154,7 @@
 .map-place-detail-actions button { border-color: var(--glass-accent-strong); color: #fff; background: var(--glass-accent); }
 
 @media (max-width: 42rem) {
-  .map-place-explorer { right: .65rem; bottom: 5.4rem; width: calc(100vw - 1.3rem); padding: .65rem; border-radius: 1.2rem; }
+  .map-place-explorer { right: .65rem; bottom: 5.4rem; left: .65rem; width: auto; padding: .65rem; border-radius: 1.2rem; }
   .map-place-explorer > header strong { font-size: .74rem; }
   .map-place-option { flex-basis: min(15rem, 76vw); }
   .map-place-detail { inset: 0; width: 100%; max-height: 100dvh; border: 0; border-radius: 0; }

@@ -50,7 +50,15 @@ export function isAccommodationSearchResponse(value: unknown): value is Accommod
       typeof item.checkOutDate === "string" &&
       (item.bookingUrl === undefined || typeof item.bookingUrl === "string") &&
       (item.areaName === undefined || typeof item.areaName === "string") &&
-      (item.imageUrl === undefined || typeof item.imageUrl === "string"));
+      (item.imageUrl === undefined || typeof item.imageUrl === "string") &&
+      (item.address === undefined || typeof item.address === "string") &&
+      (item.latitude === undefined || isCoordinate(item.latitude, -90, 90)) &&
+      (item.longitude === undefined || isCoordinate(item.longitude, -180, 180)) &&
+      (item.reviewAverage === undefined || isCoordinate(item.reviewAverage, 0, 5)) &&
+      (item.reviewCount === undefined || isNonNegativeInteger(item.reviewCount)) &&
+      (item.price === undefined || isRecord(item.price) && isNonNegativeInteger(item.price.amount) && item.price.currency === "JPY") &&
+      (item.priceBasis === undefined || item.priceBasis === "reference-minimum" || item.priceBasis === "selected-dates") &&
+      (item.availability === undefined || item.availability === "available" || item.availability === "unknown"));
 }
 
 export function isWeatherForecastSearchResponse(value: unknown): value is WeatherForecastSearchResponse {

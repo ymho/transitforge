@@ -20,7 +20,7 @@ describe("travel conversation context", () => {
     ].join("\n"), now);
 
     expect(facts).toEqual({
-      context: { destinationWish: "宮島", stayNights: 1 },
+      context: { destinationWish: "宮島", planningStage: "planning", stayNights: 1 },
       hasExplicitDate: false,
       hasExplicitStayLength: true,
     });
@@ -57,9 +57,19 @@ describe("travel conversation context", () => {
   });
 
   it("keeps quick replies aligned with the expected answer", () => {
+    expect(quickReplyMatchesExpectedInput("旅程を考えたい", "planning-intent")).toBe(true);
+    expect(quickReplyMatchesExpectedInput("明日", "planning-intent")).toBe(false);
     expect(quickReplyMatchesExpectedInput("1泊", "departure-date")).toBe(false);
     expect(quickReplyMatchesExpectedInput("明日", "departure-date")).toBe(true);
     expect(quickReplyMatchesExpectedInput("1泊", "stay-length")).toBe(true);
+  });
+
+  it("moves from inspiration to planning only after the user opts in", () => {
+    const context = { destinationWish: "出雲大社", planningStage: "inspiration" } as const;
+    expect(tripContextAfterUserAnswer(context, "もう少し見たい", now).planningStage)
+      .toBe("inspiration");
+    expect(tripContextAfterUserAnswer(context, "旅程を考えたい", now).planningStage)
+      .toBe("planning");
   });
 
   it("treats an outbound and home-arrival window as a day trip", () => {
@@ -103,9 +113,11 @@ describe("tripContextAfterUserAnswer", () => {
   it("keeps the departure date while recording a later stay-length answer", () => {
     expect(tripContextAfterUserAnswer({
       destinationWish: "出雲大社",
+      planningStage: "planning",
       startDate: "2026-08-31",
     }, "1泊", new Date("2026-08-30T13:00:00+09:00"))).toEqual({
       destinationWish: "出雲大社",
+      planningStage: "planning",
       startDate: "2026-08-31",
       endDate: "2026-09-01",
       stayNights: 1,

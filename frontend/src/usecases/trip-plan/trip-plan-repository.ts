@@ -210,7 +210,18 @@ function isAccommodation(value: unknown): value is TripAccommodation {
     isDateString(value.checkInDate) && isDateString(value.checkOutDate) &&
     optionalBoundedString(value.bookingUrl, 2_000) &&
     optionalBoundedString(value.areaName, 200) &&
-    optionalBoundedString(value.imageUrl, 2_000);
+    optionalBoundedString(value.imageUrl, 2_000) &&
+    optionalBoundedString(value.provider, 100) &&
+    optionalBoundedString(value.providerItemId, 200) &&
+    optionalBoundedString(value.address, 500) &&
+    (value.latitude === undefined || typeof value.latitude === "number" && Number.isFinite(value.latitude) && value.latitude >= -90 && value.latitude <= 90) &&
+    (value.longitude === undefined || typeof value.longitude === "number" && Number.isFinite(value.longitude) && value.longitude >= -180 && value.longitude <= 180) &&
+    (value.reviewAverage === undefined || typeof value.reviewAverage === "number" && value.reviewAverage >= 0 && value.reviewAverage <= 5) &&
+    (value.reviewCount === undefined || isWholeNumber(value.reviewCount, 0, Number.MAX_SAFE_INTEGER)) &&
+    (value.availability === undefined || value.availability === "available" || value.availability === "unknown") &&
+    (value.price === undefined || isRecord(value.price) &&
+      isWholeNumber(value.price.amount, 0, Number.MAX_SAFE_INTEGER) && value.price.currency === "JPY" &&
+      (value.price.basis === "reference-minimum" || value.price.basis === "selected-dates"));
 }
 
 function isCoordinate(value: unknown): value is [number, number] {
