@@ -1478,11 +1478,7 @@ describe("Bedrock viewer agent", () => {
             checkInDate: "2026-08-31",
             checkOutDate: "2026-09-01",
           },
-        } }] },
-        stopReason: "tool_use",
-      })
-      .mockResolvedValueOnce({
-        message: { role: "assistant", content: [{ toolUse: {
+        } }, { toolUse: {
           toolUseId: "places",
           name: "search_place_media",
           input: { query: "出雲大社 周辺 観光", limit: 5 },
@@ -1528,9 +1524,9 @@ describe("Bedrock viewer agent", () => {
       .mockResolvedValueOnce({ originStation: "宮島口", results: [] });
     const searchAccommodations = vi.fn();
     const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
-      expect(tools).toHaveLength(25);
-      expect(tools?.some(({ name }) => name === "schedule_trip_recheck"))
-        .toBe(true);
+      expect(tools?.some(({ name }) => name === "plan_day_trip")).toBe(true);
+      expect(tools?.some(({ name }) => name === "search_accommodations")).toBe(true);
+      expect(tools?.some(({ name }) => name === "search_weather_forecast")).toBe(false);
       expect(tools?.find(({ name }) => name === "plan_day_trip")?.inputSchema)
         .toMatchObject({ required: ["destination", "date"] });
       expect(tools?.find(({ name }) => name === "search_direct_routes")?.inputSchema)
@@ -1969,14 +1965,12 @@ describe("Bedrock viewer agent", () => {
     expect(result.conversation.question).toBe("日帰りですか？ それとも何泊しますか？");
   });
 
-  it("limits a destination-only trip to an inspiration follow-up", async () => {
+  it("lets the model choose an inspiration follow-up from available capabilities", async () => {
     const searchDirectRoutes = vi.fn();
     const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
-      expect(tools?.map(({ name }) => name)).toEqual([
-        "remember_travel_preference",
-        "update_conversation_session",
-        "ask_follow_up",
-      ]);
+      expect(tools?.some(({ name }) => name === "ask_follow_up")).toBe(true);
+      expect(tools?.some(({ name }) => name === "search_direct_routes")).toBe(true);
+      expect(tools?.some(({ name }) => name === "search_accommodations")).toBe(false);
       return {
       message: { role: "assistant", content: [{ toolUse: {
         toolUseId: "follow-up",
@@ -2190,7 +2184,7 @@ describe("Bedrock viewer agent", () => {
   it("does not search accommodations with dates invented outside the conversation", async () => {
     const searchAccommodations = vi.fn();
     const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
-      expect(tools?.some(({ name }) => name === "search_accommodations")).toBe(false);
+      expect(tools?.some(({ name }) => name === "search_accommodations")).toBe(true);
       return {
       message: { role: "assistant", content: [{ toolUse: {
         toolUseId: "inspiration",
@@ -2292,13 +2286,12 @@ describe("Bedrock viewer agent", () => {
     vi.unstubAllGlobals();
   });
 
-  it("limits an explicit sightseeing addition to trip-plan update tools", async () => {
+  it("lets the model select a trip-plan update without hiding other available tools", async () => {
     const searchDirectRoutes = vi.fn();
     const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
-      expect(tools?.map(({ name }) => name)).toEqual([
-        "propose_trip_update",
-        "ask_follow_up",
-      ]);
+      expect(tools?.some(({ name }) => name === "propose_trip_update")).toBe(true);
+      expect(tools?.some(({ name }) => name === "ask_follow_up")).toBe(true);
+      expect(tools?.some(({ name }) => name === "search_direct_routes")).toBe(true);
       return {
         message: { role: "assistant", content: [{ toolUse: {
           toolUseId: "add-sightseeing",
@@ -2407,10 +2400,6 @@ describe("Bedrock viewer agent", () => {
       }],
     }));
     const converse = vi.fn<BedrockAgentConverse>()
-      .mockResolvedValueOnce({
-        message: { role: "assistant", content: [{ text: "奈良での過ごし方を提案します" }] },
-        stopReason: "end_turn",
-      })
       .mockResolvedValueOnce({
         message: { role: "assistant", content: [{ toolUse: {
           toolUseId: "return-by-home-time",
@@ -2623,10 +2612,12 @@ describe("Bedrock viewer agent", () => {
       searchWeb, readWebPages, searchPlaceMedia, maximumRouteTime: 1_800,
     }, converse);
 
-    expect(converse.mock.calls[0]?.[1]?.map(({ name }) => name)).toEqual([
+    const availableTools = converse.mock.calls[0]?.[1]?.map(({ name }) => name) ?? [];
+    expect(availableTools).toEqual(expect.arrayContaining([
       "ask_follow_up", "search_place_media", "search_web", "read_web_pages",
-      "resolve_place_candidates",
-    ]);
+      "resolve_place_candidates", "propose_trip_update",
+    ]));
+    expect(availableTools).not.toContain("search_direct_routes");
     expect(searchWeb).toHaveBeenCalledOnce();
     expect(readWebPages).toHaveBeenCalledOnce();
     expect(searchPlaceMedia).toHaveBeenCalledWith({ query: "旭日酒造", limit: 3 });
