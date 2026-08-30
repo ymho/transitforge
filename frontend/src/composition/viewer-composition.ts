@@ -171,6 +171,9 @@ import {
 } from "../domain/conversation-history";
 import { createConversationSessionSwitcher } from "../usecases/concierge/conversation-session-switcher";
 import { createJourneySearchHandlers } from "../usecases/journey/create-journey-search-handlers";
+import { BrowserContextWorkspaceRepository } from "../adapters/browser/context-workspace-repository";
+import { createContextWorkspaceController } from "../usecases/context-workspace/context-workspace-controller";
+import type { ContextViewKind } from "../domain/context-workspace";
 
 export function startViewer(): void {
 
@@ -191,6 +194,8 @@ const {
   loadingScreenMessage,
   loadingScreenRetry,
   status,
+  contextWorkspaceTabs,
+  contextWorkspaceButtons,
   displayTime,
   dateTimeInput,
   dateTimeDate,
@@ -321,6 +326,42 @@ const tripPlanController = configureTripPlanPanel(
   (prompt) => aiGuideController.ask(prompt),
   localStorage,
 );
+const desktopChatShell = window.matchMedia("(min-width: 72rem)");
+const contextWorkspaceController = createContextWorkspaceController(
+  activeConversationSession.id,
+  new BrowserContextWorkspaceRepository(localStorage),
+);
+const applyContextWorkspaceState = () => {
+  const state = contextWorkspaceController.current();
+  app.dataset.contextView = state.view;
+  const currentTripPlan = loadTripPlan(localStorage, state.conversationSessionId);
+  for (const button of contextWorkspaceButtons) {
+    const view = button.dataset.contextView as ContextViewKind;
+    button.ariaPressed = String(view === state.view);
+    if (view === "trip-plan") button.disabled = currentTripPlan === undefined;
+    if (view === "journey-details") {
+      button.disabled = state.entity?.kind !== "journey";
+    }
+  }
+  if (state.view === "trip-plan" && currentTripPlan) {
+    if (!trainDetails.hidden) closeTrainDetails.click();
+    tripPlanController.open();
+    return;
+  }
+  if (!tripPlanPanel.hidden) tripPlanPanel.hidden = true;
+  if (state.view === "map" && !trainDetails.hidden) closeTrainDetails.click();
+};
+contextWorkspaceController.subscribe(applyContextWorkspaceState);
+for (const button of contextWorkspaceButtons) {
+  button.addEventListener("click", () => {
+    const view = button.dataset.contextView as ContextViewKind;
+    contextWorkspaceController.show(view);
+  });
+}
+contextWorkspaceTabs.hidden = false;
+closeTripPlan.addEventListener("click", () => {
+  contextWorkspaceController.show("map");
+});
 const sessionTripPlan = loadTripPlan(localStorage, activeConversationSession.id);
 if (sessionTripPlan && activeConversationSession.tripPlanId !== sessionTripPlan.id) {
   Object.assign(activeConversationSession, {
@@ -370,6 +411,10 @@ aiGuideController = configureAiGuidePanel(
         updatedAt: new Date().toISOString(),
       });
       conversationSessionRepository.save(activeConversationSession);
+      contextWorkspaceController.show("trip-plan", {
+        kind: "trip-plan",
+        id: tripPlan.id,
+      });
     },
     onPlaces: (places) => {
       pendingVerifiedPlaces = [...places];
@@ -380,8 +425,10 @@ aiGuideController = configureAiGuidePanel(
       }
       verifiedPlaceLayer?.show(places);
       mapPlaceExplorerController?.show(places);
+      contextWorkspaceController.show("map");
     },
     onWeather: (forecast) => applyForecastWeather?.(forecast),
+    persistent: () => desktopChatShell.matches,
     onTripPlanUpdate: (proposal) => {
       tripPlanController.apply(proposal.patches);
       Object.assign(activeConversationSession, {
@@ -390,6 +437,13 @@ aiGuideController = configureAiGuidePanel(
         updatedAt: new Date().toISOString(),
       });
       conversationSessionRepository.save(activeConversationSession);
+      const currentPlan = loadTripPlan(localStorage, activeConversationSession.id);
+      if (currentPlan) {
+        contextWorkspaceController.show("trip-plan", {
+          kind: "trip-plan",
+          id: currentPlan.id,
+        });
+      }
     },
   },
   (prompt, preferences, conversation, onResponseMetadata) =>
@@ -404,9 +458,10 @@ const conversationSessionSwitcher = createConversationSessionSwitcher({
   repository: conversationSessionRepository,
   conversation: aiGuideController,
   tripPlan: tripPlanController,
-  onActivated: (session) => {
-    activeConversationSession = session;
-    updateConciergeIdentity();
+    onActivated: (session) => {
+      activeConversationSession = session;
+      updateConciergeIdentity();
+      contextWorkspaceController.activateSession(session.id);
   },
 });
 conversationSessionRepository.subscribe(() => {
@@ -437,7 +492,13 @@ configureConversationHistoryPanel({
       conversationSessionSwitcher.activate(sessionId);
     }
   },
+  persistentMediaQuery: desktopChatShell,
 });
+if (desktopChatShell.matches) aiGuideController.open();
+desktopChatShell.addEventListener("change", ({ matches }) => {
+  if (matches) aiGuideController.open();
+});
+applyContextWorkspaceState();
 configureTravelProfile(document, localStorage, () => aiGuideController.open());
 if (tripPreviewEnabled) {
   loadingScreen.complete();
@@ -703,6 +764,17 @@ if (!token) {
             delay: selectedTrainDelay,
             stops: selectedTrainStops,
             coupledTabs: trainDetailTabs,
+            onFocus: (serviceUid) => {
+              contextWorkspaceController.show("journey-details", {
+                kind: "journey",
+                id: serviceUid,
+              });
+            },
+            onEndFocus: () => {
+              if (contextWorkspaceController.current().view === "journey-details") {
+                contextWorkspaceController.show("map");
+              }
+            },
           },
         );
         let displayedPositions: TrainPosition[] = [];

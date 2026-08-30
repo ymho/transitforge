@@ -1,0 +1,142 @@
+.context-workspace-tabs {
+  position: absolute;
+  z-index: 7;
+  top: 1rem;
+  left: 50%;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.3rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--glass-surface);
+  box-shadow: 0 0.6rem 1.8rem var(--glass-shadow);
+  backdrop-filter: var(--glass-backdrop);
+  transform: translateX(-50%);
+}
+
+.context-workspace-tabs button {
+  min-height: 2.2rem;
+  padding: 0.4rem 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  color: var(--glass-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.context-workspace-tabs button[aria-pressed="true"] {
+  color: var(--glass-accent-strong);
+  background: var(--glass-accent-soft);
+}
+
+.context-workspace-tabs button:disabled { opacity: 0.42; cursor: not-allowed; }
+
+@media (min-width: 72rem) {
+  #app {
+    display: grid;
+    grid-template-columns: 17rem minmax(30rem, 1.25fr) minmax(24rem, 0.9fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0.75rem;
+    padding: 0.75rem;
+    overflow: hidden;
+    background: #08111d;
+  }
+
+  #map {
+    position: relative;
+    grid-column: 3;
+    grid-row: 1;
+    min-width: 0;
+    border: 1px solid var(--glass-border-subtle);
+    border-radius: 1.5rem;
+    box-shadow: 0 0.8rem 2.5rem var(--glass-shadow);
+  }
+
+  .ai-guide-panel {
+    position: relative;
+    inset: auto;
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+    height: auto;
+    max-height: none;
+    border-radius: 1.5rem;
+    animation: none;
+  }
+
+  .ai-guide-panel[hidden] { display: grid; }
+  .ai-guide-toggle,
+  #close-ai-guide,
+  #conversation-history-toggle { display: none; }
+
+  .conversation-history-dialog {
+    position: relative;
+    inset: auto;
+    grid-column: 1;
+    grid-row: 1;
+    width: auto;
+    max-width: none;
+    height: auto;
+    max-height: none;
+    margin: 0;
+    border-radius: 1.5rem;
+    animation: none;
+  }
+
+  .conversation-history-dialog::backdrop { display: none; }
+  .conversation-history-dialog > section { max-height: none; height: 100%; }
+  #close-conversation-history { display: none; }
+
+  .context-workspace-tabs {
+    position: relative;
+    top: 0.75rem;
+    left: auto;
+    align-self: start;
+    justify-self: center;
+    grid-column: 3;
+    grid-row: 1;
+    transform: none;
+  }
+
+  .hud {
+    position: relative;
+    top: 0.75rem;
+    left: 0.75rem;
+    align-self: start;
+    justify-self: start;
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .map-place-explorer {
+    position: relative;
+    inset: auto 0.75rem 0.75rem;
+    align-self: end;
+    grid-column: 3;
+    grid-row: 1;
+    width: auto;
+    margin: 0 0.75rem;
+  }
+
+  .trip-plan-panel,
+  .train-details {
+    position: relative;
+    inset: auto;
+    align-self: stretch;
+    grid-column: 3;
+    grid-row: 1;
+    width: auto;
+    max-width: none;
+    height: auto;
+    max-height: none;
+    margin: 3.8rem 0.5rem 0.5rem;
+    border-radius: 1.25rem;
+  }
+
+  .map-tool-symbols,
+  .travel-profile-dialog,
+  .journey-settings-dialog { position: fixed; }
+}

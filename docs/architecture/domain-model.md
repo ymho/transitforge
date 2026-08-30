@@ -374,6 +374,8 @@ Repositoryは作成 選択 改名 削除を提供し 最終更新が新しい20�
 コンテキスト領域へ表示するかを表す。表示対象Entityは会話Sessionに紐付き ViewとEntity種別の
 組合せを検証する。画面の表示切替はこの状態だけを変更し Mapbox 会話 旅程のインスタンスを作り直さない。
 最大20会話分を端末に保存し 会話Sessionを戻したときに直前の表示を復元する。
+Desktopでは左を会話履歴 中央をコンシェルジュ 右をコンテキスト領域とする。
+DOMとControllerは表示切替の前後で維持し CSS Grid上の配置と`ContextWorkspaceState`だけを変更する。
 
 ### `TripPlan` `TripPlanItem` `TripPlanPatch`
 

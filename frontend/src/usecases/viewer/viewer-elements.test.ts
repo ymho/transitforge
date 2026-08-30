@@ -10,6 +10,8 @@ describe("loadViewerElements", () => {
       querySelectorAll: (selector: string) =>
         selector === "[data-weather]"
           ? [element, element, element, element]
+          : selector === "[data-context-view]"
+          ? [element, element, element]
           : [element],
     } as unknown as ParentNode;
 
@@ -24,7 +26,11 @@ describe("loadViewerElements", () => {
     const root = {
       querySelector: (selector: string) => selector === "#map-status" ? null : {},
       querySelectorAll: (selector: string) =>
-        selector === "[data-weather]" ? [{}, {}, {}, {}] : [{}],
+        selector === "[data-weather]"
+          ? [{}, {}, {}, {}]
+          : selector === "[data-context-view]"
+          ? [{}, {}, {}]
+          : [{}],
     } as unknown as ParentNode;
 
     expect(() => loadViewerElements(root)).toThrow("#map-status");
