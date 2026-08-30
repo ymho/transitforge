@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { JsonObject } from "../contracts/agent-request.js";
-import { BedrockConversationModel } from "./bedrock-conversation-model.js";
+import {
+  BedrockConversationModel,
+  validateBedrockModelId,
+} from "./bedrock-conversation-model.js";
 
 describe("BedrockConversationModel", () => {
   it("keeps provider DTOs inside the adapter and normalizes metadata", async () => {
@@ -75,5 +78,41 @@ describe("BedrockConversationModel", () => {
       timeoutMs: 1,
     });
     await expect(timeout.converse({ messages: [] })).rejects.toThrow("timed out");
+  });
+
+  it("selects configured model classes and falls back to the default model", async () => {
+    const selectedModelIds: unknown[] = [];
+    const converse = vi.fn(async (input: JsonObject) => {
+      selectedModelIds.push(input.modelId);
+      return {
+      output: { message: { role: "assistant", content: [{ text: "ok" }] } },
+      stopReason: "end_turn",
+      };
+    });
+    const model = new BedrockConversationModel({ converse }, {
+      modelId: "provider.default-v1:0",
+      lightweightModelId: "provider.light-v1:0",
+      decisionModelId: "provider.decision-v1:0",
+      systemPrompt: "system",
+    });
+
+    await model.converse({ messages: [], modelClass: "lightweight" });
+    await model.converse({ messages: [], modelClass: "decision" });
+    await model.converse({ messages: [], modelClass: "default" });
+
+    expect(selectedModelIds).toEqual([
+      "provider.light-v1:0",
+      "provider.decision-v1:0",
+      "provider.default-v1:0",
+    ]);
+  });
+
+  it("validates Bedrock model IDs without fixing the vendor", () => {
+    expect(validateBedrockModelId("anthropic.claude-3-5-sonnet-v2:0"))
+      .toBe("anthropic.claude-3-5-sonnet-v2:0");
+    expect(validateBedrockModelId("amazon.nova-lite-v1:0"))
+      .toBe("amazon.nova-lite-v1:0");
+    expect(() => validateBedrockModelId("model id\nINJECT"))
+      .toThrow("invalid");
   });
 });

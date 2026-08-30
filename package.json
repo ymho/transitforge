@@ -22,7 +22,9 @@
     "eval:agent": "node --import tsx tools/run_agent_evaluation.ts",
     "eval:agent:smoke": "npm run eval:agent -- --profile smoke",
     "eval:agent:full": "npm run eval:agent -- --profile full",
-    "eval:agent:strategies": "node --import tsx tools/run_agent_strategy_experiment.ts"
+    "eval:agent:strategies": "node --import tsx tools/run_agent_strategy_experiment.ts",
+    "eval:agent:model-routing:build": "node --import tsx tools/build_agent_model_routing_run.ts",
+    "eval:agent:model-routing": "node --import tsx tools/compare_agent_model_routing.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.12"

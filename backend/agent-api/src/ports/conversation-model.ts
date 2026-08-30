@@ -2,10 +2,12 @@ import type {
   AgentMessage,
   AgentToolDefinition,
 } from "../contracts/agent-request.js";
+import type { ConversationModelClass } from "../contracts/model-class.js";
 
 export interface ConversationModelRequest {
   messages: AgentMessage[];
   tools?: AgentToolDefinition[];
+  modelClass?: ConversationModelClass;
 }
 
 export interface ConversationModelUsage {

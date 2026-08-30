@@ -1,6 +1,7 @@
 import { AgentTraceRecorder } from "./agent-trace";
 import type {
   AgentModelContent,
+  AgentModelClass,
   AgentModelMessage,
   AgentModelProvider,
   AgentModelResponse,
@@ -32,6 +33,8 @@ import { ToolViewerActionRegistry } from "./tool-viewer-action-registry";
 
 export interface AgentRuntimeDependencies {
   model: AgentModelProvider;
+  /** Evaluationまたは明示設定用。本番は未指定の単一modelを維持する。 */
+  modelClass?: AgentModelClass;
   tools: AgentToolRegistry;
   toolExecutor: AgentToolExecutor;
   problemFramer?: AgentProblemFramer;
@@ -107,6 +110,9 @@ export class MultiStepAgentRuntime {
         this.dependencies.model.generate({
           messages,
           tools: this.dependencies.tools.descriptors(),
+          ...(this.dependencies.modelClass === undefined
+            ? {}
+            : { modelClass: this.dependencies.modelClass }),
         }),
         remainingMs,
       );

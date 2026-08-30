@@ -283,7 +283,9 @@ Label `area: ai` `type: reliability` Milestone `会話体験と改善ループ` 
 - クライアント契約 通信 レスポンス検証を別モジュールに分ける
 - AI通信は本文と`x-transitforge-request-id`由来のメタデータを組で返す。最新IDをモジュール共有状態へ保存せず 応答ごとに会話履歴へ渡す
 - Agent Runtimeが選べるTool名 説明 入力schemaは各モデル呼び出しでBackendへ渡す。宿泊検索は行き先 チェックイン日 チェックアウト日を必須とし 日付形式 人数 件数をschemaでも制約する
-- 共通Tool ContractのJSON SchemaはBedrock AdapterでAmazon Nova向けへ変換し 最上位を`type` `properties` `required`だけに限定する。モデル固有の制約をDomain Toolへ漏らさない
+- 共通Tool ContractのJSON SchemaはBedrock AdapterでConverse APIが受け取れる形へ変換し 最上位を`type` `properties` `required`だけに限定する。モデル固有の制約をDomain Toolへ漏らさない
+- Applicationのmodel classは`default` `lightweight` `decision`だけとし Bedrock model IDを漏らさない。未指定またはclass別model未設定時は`MODEL_ID`へフォールバックする。本番RuntimeはBenchmarkで品質または明確なコスト改善を確認するまでclassを指定せず 単一modelを維持する
+- model routing比較では各caseのTraceと同じ実行のEval reportから `npm run eval:agent:model-routing:build -- --strategy <name> --report <report.json> --traces <traces.json> --output <run.json>`で`agent-model-routing-run-v1`を作る。単一modelと候補routingのrunを `npm run eval:agent:model-routing -- --baseline <single.json> --candidate <routing.json>`で比較する。出力の`productionRoutingRecommended`は同じdatasetとcase数 品質維持 model/tool call非増加 10%以上の実測latencyまたはtoken改善を同時に要求する
 - Agent API LambdaはAWS SDKのCommonJS依存を含む単一`.cjs` bundleとして配布し CIでNode.jsによる実読み込みとhandler exportを確認する
 - 列車選択と追跡を起動処理から分離する
 - Lambdaの入力契約 DynamoDB集計 経路探索を入口ハンドラーから分離する

@@ -40,6 +40,7 @@ import type {
   JourneySearchService,
 } from "@raiquora/journey/journey-search-service";
 import type { AgentToolDescriptor } from "../../../usecases/agent/tool-contract";
+import type { AgentModelClass } from "../../../usecases/agent/model-provider";
 import type { AgentTrace } from "../../../usecases/agent/agent-trace";
 import type { ConversationFeedbackV2 } from "../../../usecases/concierge/conversation-feedback";
 import {
@@ -114,9 +115,14 @@ export async function invokeBedrockAgent(
   messages: BedrockAgentMessage[],
   fetcher: typeof fetch = fetch,
   tools?: AgentToolDescriptor[],
+  modelClass?: AgentModelClass,
 ): Promise<AgentApiResult<BedrockAgentResponse>> {
   return postAgent(
-    { messages, ...(tools === undefined ? {} : { toolDefinitions: tools }) },
+    {
+      messages,
+      ...(tools === undefined ? {} : { toolDefinitions: tools }),
+      ...(modelClass === undefined ? {} : { modelClass }),
+    },
     "AI案内APIを利用できません",
     "AI案内",
     isBedrockAgentResponse,

@@ -1,6 +1,10 @@
 import { Buffer } from "node:buffer";
 
 import type { LambdaHttpEvent } from "./http.js";
+import {
+  conversationModelClasses,
+  type ConversationModelClass,
+} from "./model-class.js";
 
 export const agentRequestContractVersion = "agent-api-request-v1";
 export const maximumBodyBytes = 32 * 1_024;
@@ -75,6 +79,16 @@ export interface AgentToolDefinition {
   name: string;
   description: string;
   inputSchema: JsonObject & { type: "object"; properties: JsonObject };
+}
+
+export function validatedModelClass(value: JsonObject): ConversationModelClass | undefined {
+  const modelClass = value.modelClass;
+  if (modelClass === undefined) return undefined;
+  if (typeof modelClass === "string" &&
+    conversationModelClasses.includes(modelClass as ConversationModelClass)) {
+    return modelClass as ConversationModelClass;
+  }
+  throw new RequestError(400, "modelClassが許可されていません。");
 }
 
 export function requestValue(event: LambdaHttpEvent): JsonObject {

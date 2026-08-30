@@ -190,6 +190,7 @@ export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDepend
 export type BedrockAgentConverse = (
   messages: BedrockAgentMessage[],
   tools?: import("../../usecases/agent/tool-contract").AgentToolDescriptor[],
+  modelClass?: import("../../usecases/agent/model-provider").AgentModelClass,
 ) => Promise<BedrockAgentResponse>;
 
 interface DirectRouteToolMatch {
@@ -1065,6 +1066,7 @@ class ConverseModelProvider implements AgentModelProvider {
     const response = await this.converse(
       request.messages.map(toBedrockMessage),
       request.tools,
+      request.modelClass,
     );
     const convertedMessage = fromBedrockMessage(response.message);
     const decision = extractAgentDecisionSummary(convertedMessage.content.flatMap((content) =>

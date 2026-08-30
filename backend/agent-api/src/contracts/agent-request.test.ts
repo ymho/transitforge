@@ -8,6 +8,7 @@ import {
   RequestError,
   requestValue,
   validatedMessages,
+  validatedModelClass,
   validatedToolDefinitions,
 } from "./agent-request.js";
 
@@ -98,6 +99,14 @@ describe("Agent API request contract", () => {
       .toBe(true);
     expect(validatedToolDefinitions({ toolDefinitions: definitions }))
       .toHaveLength(32);
+  });
+
+  it("accepts only provider-independent model classes", () => {
+    expect(validatedModelClass({})).toBeUndefined();
+    expect(validatedModelClass({ modelClass: "lightweight" })).toBe("lightweight");
+    expect(validatedModelClass({ modelClass: "decision" })).toBe("decision");
+    expect(() => validatedModelClass({ modelClass: "amazon.nova-lite-v1:0" }))
+      .toThrow(RequestError);
   });
 });
 

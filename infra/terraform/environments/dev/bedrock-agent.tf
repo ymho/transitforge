@@ -1,5 +1,10 @@
 locals {
   bedrock_agent_function_name = "${var.project_name}-${var.environment}-bedrock-agent"
+  bedrock_model_ids = toset(compact([
+    var.bedrock_model_id,
+    var.bedrock_lightweight_model_id,
+    var.bedrock_decision_model_id,
+  ]))
   bedrock_agent_package = jsondecode(
     file("${path.module}/../../../packaging/agent-api.json")
   )
@@ -74,9 +79,11 @@ resource "aws_s3_bucket_lifecycle_configuration" "conversation_feedback" {
 
 data "aws_iam_policy_document" "bedrock_agent" {
   statement {
-    sid       = "InvokeSelectedModel"
-    actions   = ["bedrock:InvokeModel"]
-    resources = ["arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"]
+    sid     = "InvokeSelectedModel"
+    actions = ["bedrock:InvokeModel"]
+    resources = [for model_id in local.bedrock_model_ids :
+      "arn:aws:bedrock:${var.aws_region}::foundation-model/${model_id}"
+    ]
   }
   statement {
     sid     = "WritePrivateAgentRecords"
@@ -155,6 +162,8 @@ resource "aws_lambda_function" "bedrock_agent" {
   environment {
     variables = {
       MODEL_ID                     = var.bedrock_model_id
+      LIGHTWEIGHT_MODEL_ID         = var.bedrock_lightweight_model_id
+      DECISION_MODEL_ID            = var.bedrock_decision_model_id
       SUMMARY_TABLE                = aws_dynamodb_table.train_congestion_summary.name
       DELAY_SUMMARY_TABLE          = aws_dynamodb_table.train_delay_summary.name
       AI_TIMETABLE_BUCKET          = "${local.resource_prefix}-data-builder-source"

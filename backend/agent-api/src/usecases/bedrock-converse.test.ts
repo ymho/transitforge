@@ -27,4 +27,18 @@ describe("bedrock converse operation", () => {
     ]);
     expect(JSON.stringify(log.mock.calls)).not.toContain("京都へ");
   });
+
+  it("passes a provider-independent model class to the model port", async () => {
+    const converse = vi.fn(async () => ({
+      message: { role: "assistant" as const, content: [{ text: "案内します" }] },
+      stopReason: "end_turn" as const,
+      metadata: { modelId: "model-1", latencyMs: 25 },
+    }));
+    const operation = createBedrockConverseOperation({ converse });
+    const messages = [{ role: "user" as const, content: [{ text: "京都へ" }] }];
+
+    await operation({ messages, modelClass: "decision" }, { requestId: "request-1" });
+
+    expect(converse).toHaveBeenCalledWith({ messages, modelClass: "decision" });
+  });
 });

@@ -20,6 +20,7 @@ export class BedrockModelProvider implements AgentModelProvider {
       request.messages.map(toBedrockMessage),
       this.fetcher,
       request.tools,
+      request.modelClass,
     );
     return {
       message: fromBedrockMessage(result.body.message),

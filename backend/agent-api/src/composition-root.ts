@@ -67,8 +67,12 @@ export function createAgentApplication(environment: RuntimeEnvironment = process
   const groundAccess = new MapboxGroundAccessProvider({ fetch: globalThis.fetch }, mapboxCredentials);
   const restaurantCredentials = new SecretsManagerHotPepperCredentials(secrets, secretArn);
   const restaurants = new HotPepperRestaurantProvider({ fetch: globalThis.fetch }, restaurantCredentials);
+  const lightweightModelId = optional(environment, "LIGHTWEIGHT_MODEL_ID");
+  const decisionModelId = optional(environment, "DECISION_MODEL_ID");
   const model = new BedrockConversationModel(new AwsBedrockConverseClient(), {
     modelId: environment.MODEL_ID ?? "amazon.nova-lite-v1:0",
+    ...(lightweightModelId === undefined ? {} : { lightweightModelId }),
+    ...(decisionModelId === undefined ? {} : { decisionModelId }),
     systemPrompt: agentSystemPrompt,
   });
   const operations = new Map([
@@ -96,4 +100,9 @@ function required(environment: RuntimeEnvironment, name: string): string {
   const value = environment[name];
   if (!value) throw new Error(`${name} is required`);
   return value;
+}
+
+function optional(environment: RuntimeEnvironment, name: string): string | undefined {
+  const value = environment[name]?.trim();
+  return value ? value : undefined;
 }
