@@ -363,6 +363,18 @@ Repositoryは作成 選択 改名 削除を提供し 最終更新が新しい20�
 `TravelMemory`は会話から得た継続的な好みである。一回限りの`TripContext`と分離し 高確度の記憶だけを
 別セッションのAI文脈へ渡す。現在の明示的な依頼と`UserProfile`を上書きしない。
 
+### `ContextWorkspaceState`
+
+- 定義: `frontend/src/domain/context-workspace.ts`
+- Controller: `frontend/src/usecases/context-workspace/context-workspace-controller.ts`
+- Browser Adapter: `frontend/src/adapters/browser/context-workspace-repository.ts`
+- 保存先: LocalStorage `raiquora.context-workspaces.v1`
+
+会話を主画面として 地図 `map` 旅程 `trip-plan` 経路詳細 `journey-details`のどれを
+コンテキスト領域へ表示するかを表す。表示対象Entityは会話Sessionに紐付き ViewとEntity種別の
+組合せを検証する。画面の表示切替はこの状態だけを変更し Mapbox 会話 旅程のインスタンスを作り直さない。
+最大20会話分を端末に保存し 会話Sessionを戻したときに直前の表示を復元する。
+
 ### `TripPlan` `TripPlanItem` `TripPlanPatch`
 
 - 定義: `modules/trip/domain/trip-plan.ts`
