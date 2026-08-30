@@ -301,7 +301,7 @@ function liveCase(input: {
     evaluation: {
       id: input.id,
       name: input.name,
-      feature: "travel_planning",
+      feature: "concierge",
       userRequest: input.userRequest,
       tags: input.tags,
       expected: {

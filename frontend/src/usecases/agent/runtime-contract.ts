@@ -6,6 +6,7 @@ import type {
 } from "./agent-decision-context";
 
 export type AgentRuntimeFeature =
+  | "concierge"
   | "journey_planning"
   | "train_guidance"
   | "operational_analysis"

@@ -95,6 +95,11 @@ ADR 0031の結果駆動replanを維持する。Tool結果を同じ会話へ返�
 Tool公開制限と業務順序を強制する`finalResponsePolicy`を削除した。Tool公開はAdapter 現在旅程
 side effect Portの利用可能性だけで決める。
 
+さらにコンシェルジュ入口の`feature`は発話の正規表現分類ではなくUI contextの`concierge`を
+使用する。追加質問の種類はAdapterが別の質問へ置換せずBedrockが選択し、既知条件の聞き直しは
+一般的なTool precondition違反として結果駆動replanへ返す。駅間が明示された経路など
+deterministicに確定できる入力は引き続きTool入力の正本として扱う。
+
 モデル二層化もこの変更では行わない。単一modelのbaselineを維持し model routingは品質とコストを
 同じEvalで比較できるようになってから判断する。
 

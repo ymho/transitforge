@@ -9,6 +9,7 @@ import {
 } from "./evaluation-contract";
 
 const knownFeatures = new Set([
+  "concierge",
   "journey_planning",
   "train_guidance",
   "operational_analysis",

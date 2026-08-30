@@ -1939,13 +1939,16 @@ describe("Bedrock viewer agent", () => {
         toolUseId: "follow-up", name: "ask_follow_up", input: {
           recommendation: "大阪方面からなら1泊にして、出雲大社と稲佐の浜をゆっくり巡るのがおすすめです。",
           reason: "出発日が分かると実際のダイヤと宿泊日を揃えて比較できます。日程未定なら混雑を避けやすい候補日から考えられます。",
-          question: "いつ出発しますか？また、何泊くらいで行きたいですか？",
-          expectedInput: "departure-date",
+          question: "この場所を軸に旅を考えてみますか？",
+          expectedInput: "planning-intent",
           quickReplies: [
             { label: "1泊", value: "1泊" },
             { label: "2泊", value: "2泊" },
           ],
-          tripContext: { destinationWish: "出雲大社" },
+          tripContext: {
+            destinationWish: "出雲大社",
+            planningStage: "inspiration",
+          },
         },
       } }] },
       stopReason: "tool_use",
@@ -1980,14 +1983,14 @@ describe("Bedrock viewer agent", () => {
     expect(result.text).not.toContain("構造化した案内を準備しました");
   });
 
-  it("asks whether the trip is day-only or overnight instead of asking arbitrary stay hours", async () => {
+  it("keeps the stay-length follow-up selected by Bedrock", async () => {
     const converse = vi.fn().mockResolvedValue({
       message: { role: "assistant", content: [{ toolUse: {
         toolUseId: "stay-kind", name: "ask_follow_up", input: {
           recommendation: "奈良公園への日帰り旅行を提案します。",
           reason: "日帰り旅行の詳細を確認するため",
-          question: "奈良公園で何時間ほど滞在したいですか？",
-          expectedInput: "free-text",
+          question: "日帰りですか？ それとも何泊しますか？",
+          expectedInput: "stay-length",
           quickReplies: [],
           tripContext: { destinationWish: "奈良公園", startDate: "2026-08-31" },
         },
@@ -2013,6 +2016,68 @@ describe("Bedrock viewer agent", () => {
     expect(result.conversation.question).toBe("日帰りですか？ それとも何泊しますか？");
   });
 
+  it("returns a known-condition follow-up failure to Bedrock and lets it replan", async () => {
+    const converse = vi.fn<BedrockAgentConverse>()
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "known-date",
+          name: "ask_follow_up",
+          input: {
+            question: "いつ出発しますか？",
+            expectedInput: "departure-date",
+            quickReplies: [],
+            tripContext: {
+              destinationWish: "出雲大社",
+              startDate: "2026-08-31",
+              planningStage: "planning",
+            },
+          },
+        } }] },
+        stopReason: "tool_use",
+      })
+      .mockImplementationOnce(async (messages) => {
+        const toolResult = messages.flatMap(({ content }) => content)
+          .find((content) => "toolResult" in content);
+        expect(toolResult && "toolResult" in toolResult
+          ? toolResult.toolResult.status
+          : undefined).toBe("error");
+        return {
+          message: { role: "assistant", content: [{ toolUse: {
+            toolUseId: "missing-stay",
+            name: "ask_follow_up",
+            input: {
+              question: "日帰りですか？ それとも何泊しますか？",
+              expectedInput: "stay-length",
+              quickReplies: [],
+              tripContext: {
+                destinationWish: "出雲大社",
+                startDate: "2026-08-31",
+                planningStage: "planning",
+              },
+            },
+          } }] },
+          stopReason: "tool_use",
+        };
+      });
+
+    const result = await runViewerAgentRuntime([
+      '現在の旅行条件: {"destinationWish":"出雲大社","startDate":"2026-08-31","planningStage":"planning"}',
+      "利用者の今回の回答: 旅程を考えたい",
+    ].join("\n"), {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+      getCurrentDate: () => new Date("2026-08-30T15:00:00+09:00"),
+      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      maximumRouteTime: 1_800,
+    }, converse);
+
+    if (typeof result === "string" || !("conversation" in result)) {
+      throw new Error("再計画後の追加質問がありません。");
+    }
+    expect(result.conversation.expectedInput).toBe("stay-length");
+    expect(converse).toHaveBeenCalledTimes(2);
+  });
+
   it("lets the model choose an inspiration follow-up from available capabilities", async () => {
     const searchDirectRoutes = vi.fn();
     const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
@@ -2026,10 +2091,16 @@ describe("Bedrock viewer agent", () => {
         input: {
           recommendation: "出雲大社と稲佐の浜を組み合わせるなら1泊がおすすめです。",
           reason: "実際の列車と宿泊日を同じ日程で確認できます。",
-          question: "いつ出発しますか？",
-          expectedInput: "departure-date",
-          quickReplies: [{ label: "明日", value: "明日" }],
-          tripContext: { destinationWish: "出雲大社" },
+          question: "この場所を軸に旅を考えてみますか？",
+          expectedInput: "planning-intent",
+          quickReplies: [
+            { label: "旅程を考える", value: "旅程を考えたい" },
+            { label: "もう少し見たい", value: "もう少し見たい" },
+          ],
+          tripContext: {
+            destinationWish: "出雲大社",
+            planningStage: "inspiration",
+          },
         },
       } }] },
       stopReason: "tool_use",
