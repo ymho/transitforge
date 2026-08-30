@@ -69,6 +69,7 @@ export function configureConversationHistoryPanel(
       },
     )));
     empty.hidden = items.length !== 0;
+    list.hidden = items.length === 0;
   };
 
   newConversation.addEventListener("click", () => {
@@ -79,16 +80,27 @@ export function configureConversationHistoryPanel(
   toggle.addEventListener("click", () => {
     render();
     if (isPersistent()) {
-      list.querySelector<HTMLButtonElement>("[aria-current='true']")?.focus();
+      if (dialog.open) {
+        dialog.close();
+      } else {
+        dialog.show();
+        list.querySelector<HTMLButtonElement>("[aria-current='true']")?.focus();
+      }
+      toggle.ariaExpanded = String(dialog.open);
       return;
     }
     dialog.showModal();
+    toggle.ariaExpanded = "true";
     list.querySelector<HTMLButtonElement>("[aria-current='true']")?.focus();
   });
   close.addEventListener("click", () => {
-    if (!isPersistent()) dialog.close();
+    dialog.close();
+  });
+  dialog.addEventListener("click", (event) => {
+    if (!isPersistent() && event.target === dialog) dialog.close();
   });
   dialog.addEventListener("close", () => {
+    toggle.ariaExpanded = "false";
     if (!isPersistent()) toggle.focus();
   });
   const unsubscribe = repository.subscribe(() => {
@@ -98,8 +110,11 @@ export function configureConversationHistoryPanel(
     if (isPersistent()) {
       render();
       if (!dialog.open) dialog.show();
+      toggle.ariaExpanded = "true";
     } else if (dialog.open) {
       dialog.close();
+    } else {
+      toggle.ariaExpanded = "false";
     }
   };
   persistentMediaQuery?.addEventListener("change", syncPersistentState);
@@ -179,7 +194,7 @@ function historyRow(
   deleteButton.type = "button";
   deleteButton.className = "conversation-history-delete";
   deleteButton.ariaLabel = `${item.title}を削除`;
-  deleteButton.textContent = "削除";
+  deleteButton.textContent = "…";
   deleteButton.addEventListener("click", remove);
   row.append(open, deleteButton);
   return row;

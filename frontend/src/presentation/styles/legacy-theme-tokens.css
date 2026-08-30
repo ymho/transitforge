@@ -1,4 +1,4 @@
-#app[data-ui-color-mode="day"] {
+#app {
   --ui-loading-bg: #f2f4f6;
   --ui-surface: rgb(255 255 255 / 96%);
   --ui-surface-solid: #ffffff;
@@ -15,22 +15,3 @@
   --ui-accent: #4264fb;
   --ui-accent-soft: rgb(66 100 251 / 10%);
 }
-
-#app[data-ui-color-mode="night"] {
-  --ui-loading-bg: #10161d;
-  --ui-surface: rgb(18 24 30 / 97%);
-  --ui-surface-solid: #11171d;
-  --ui-surface-muted: #252d35;
-  --ui-text: #f3f5f7;
-  --ui-muted: #9da8b3;
-  --ui-border: rgb(255 255 255 / 14%);
-  --ui-hover: rgb(255 255 255 / 8%);
-  --ui-shadow: rgb(0 0 0 / 32%);
-  --ui-action-bg: #e4e8eb;
-  --ui-action-text: #11171d;
-  --ui-user-bg: #3a4652;
-  --ui-user-text: #ffffff;
-  --ui-accent: #6f8cff;
-  --ui-accent-soft: rgb(111 140 255 / 12%);
-}
-

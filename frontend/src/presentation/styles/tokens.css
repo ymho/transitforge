@@ -1,5 +1,5 @@
 /* Figma TransitForge UI Researchを正本にした最終UIレイヤー */
-#app[data-ui-color-mode="day"] {
+#app {
   --glass-canvas: #f4f7fb;
   --glass-surface: rgb(250 250 250 / 70%);
   --glass-surface-strong: rgb(255 255 255 / 65%);
@@ -16,25 +16,6 @@
   --glass-delay: #a63b00;
   --glass-shadow: rgb(37 55 78 / 18%);
   --glass-backdrop: blur(28px) saturate(150%);
-}
-
-#app[data-ui-color-mode="night"] {
-  --glass-canvas: #070c13;
-  --glass-surface: rgb(28 28 30 / 72%);
-  --glass-surface-strong: rgb(44 44 46 / 78%);
-  --glass-surface-muted: rgb(120 120 128 / 24%);
-  --glass-surface-dark: rgb(5 9 15 / 92%);
-  --glass-border: rgb(255 255 255 / 18%);
-  --glass-border-subtle: rgb(255 255 255 / 10%);
-  --glass-text: #f0f5fb;
-  --glass-muted: #a5b5cc;
-  --glass-accent: #18a7ff;
-  --glass-accent-strong: #70c8ff;
-  --glass-accent-soft: rgb(24 167 255 / 16%);
-  --glass-danger: #ff6677;
-  --glass-delay: #ffb15c;
-  --glass-shadow: rgb(0 0 0 / 42%);
-  --glass-backdrop: blur(30px) saturate(145%);
 }
 
 #app {
@@ -59,4 +40,3 @@ summary:focus-visible {
   outline: 3px solid rgb(0 150 246 / 34%);
   outline-offset: 2px;
 }
-

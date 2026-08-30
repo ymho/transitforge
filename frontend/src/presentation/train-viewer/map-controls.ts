@@ -13,6 +13,8 @@ export interface DisplayModeElements {
   dateTimeInput: HTMLInputElement;
   currentTimeButton: HTMLButtonElement;
   toggle: HTMLButtonElement;
+  realtimeModeButtons?: HTMLButtonElement[];
+  dateTimeModeButtons?: HTMLButtonElement[];
 }
 
 export function renderDisplayMode(
@@ -33,15 +35,21 @@ export function renderDisplayMode(
   elements.currentTimeButton.hidden = digitalTwinMode;
   elements.toggle.disabled = !realtimeAvailable;
   elements.toggle.ariaPressed = String(digitalTwinMode);
+  for (const button of elements.realtimeModeButtons ?? []) {
+    button.ariaPressed = String(digitalTwinMode);
+  }
+  for (const button of elements.dateTimeModeButtons ?? []) {
+    button.ariaPressed = String(!digitalTwinMode);
+  }
   if (!realtimeAvailable) {
-    elements.toggle.ariaLabel = "リアルタイム情報がないためシミュレーションモード";
-    elements.toggle.title = "リアルタイム情報がないためシミュレーションモード";
+    elements.toggle.ariaLabel = "リアルタイム情報がないため日時指定モード";
+    elements.toggle.title = "リアルタイム情報がないため日時指定モード";
   } else if (digitalTwinMode) {
-    elements.toggle.ariaLabel = "デジタルツインモードを終了";
-    elements.toggle.title = "デジタルツインモード: オン";
+    elements.toggle.ariaLabel = "日時指定モードへ切り替え";
+    elements.toggle.title = "現在運行状況";
   } else {
-    elements.toggle.ariaLabel = "デジタルツインモードを開始";
-    elements.toggle.title = "デジタルツインモード: オフ";
+    elements.toggle.ariaLabel = "現在運行状況へ切り替え";
+    elements.toggle.title = "日時指定モード";
   }
 }
 

@@ -1,11 +1,4 @@
 export type LightPreset = "dawn" | "day" | "dusk" | "night";
-export type UiColorMode = "day" | "night";
-
-export function uiColorModeForLightPreset(lightPreset: LightPreset): UiColorMode {
-  return lightPreset === "dawn" || lightPreset === "day"
-    ? "day"
-    : "night";
-}
 
 export function lightPresetForRouteTime(
   routeTimeMinutes: number,

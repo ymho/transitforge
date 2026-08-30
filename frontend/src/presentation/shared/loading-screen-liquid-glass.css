@@ -1,45 +1,40 @@
 /* 読み込み中も完成後と同じ素材感にする */
 .loading-screen {
-  color: #f0f5fb;
-  background: #070c13;
+  color: var(--glass-text);
+  background: var(--glass-canvas);
 }
 
 .loading-screen-content {
   width: min(25rem, calc(100vw - 3rem));
   padding: 1.5rem;
-  border: 1px solid rgb(255 255 255 / 14%);
+  border: 1px solid var(--glass-border);
   border-radius: 1.5rem;
-  background: rgb(18 25 34 / 76%);
-  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 34%);
+  background: var(--glass-surface-strong);
+  box-shadow: 0 1.5rem 4rem var(--glass-shadow);
   backdrop-filter: blur(24px);
 }
 
-.loading-screen-brand {
-  color: #f0f5fb;
-  font: 590 1.1rem/1.2 -apple-system, BlinkMacSystemFont, sans-serif;
-}
-
 .loading-screen-message {
-  color: #a5b5cc;
+  color: var(--glass-muted);
 }
 
 .loading-screen-progress {
   height: 0.25rem;
   border-radius: 999px;
-  background: rgb(255 255 255 / 10%);
+  background: var(--glass-surface-muted);
 }
 
 .loading-screen-progress span {
   border-radius: inherit;
-  background: #18a7ff;
-  box-shadow: 0 0 1rem rgb(24 167 255 / 42%);
+  background: var(--glass-accent);
+  box-shadow: 0 0 1rem rgb(0 150 246 / 32%);
 }
 
 .loading-screen-retry {
-  border-color: rgb(255 255 255 / 16%);
+  border-color: var(--glass-border-subtle);
   border-radius: 0.85rem;
-  color: #ffffff;
-  background: rgb(255 255 255 / 8%);
+  color: var(--glass-text);
+  background: var(--glass-surface-muted);
 }
 
 @media (max-width: 720px) {
