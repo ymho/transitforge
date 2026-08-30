@@ -1591,6 +1591,69 @@ describe("Bedrock viewer agent", () => {
     expect(result.text).toContain("日帰り旅行");
   });
 
+  it("treats the requested home time as the return arrival deadline", async () => {
+    const searchDirectRoutes = vi.fn()
+      .mockResolvedValueOnce({
+        originStation: "向日町",
+        results: [],
+        journeys: [{
+          departureTimeMinutes: 9 * 60,
+          arrivalTimeMinutes: 10 * 60,
+          transferCount: 0,
+          legs: [],
+        }],
+      })
+      .mockResolvedValueOnce({
+        originStation: "奈良",
+        results: [],
+        journeys: [{
+          departureTimeMinutes: 19 * 60,
+          arrivalTimeMinutes: 20 * 60 + 30,
+          transferCount: 0,
+          legs: [],
+        }],
+      });
+    const converse = vi.fn<BedrockAgentConverse>(async () => ({
+      message: { role: "assistant", content: [{ toolUse: {
+        toolUseId: "nara-day-trip",
+        name: "plan_day_trip",
+        input: {
+          destination: "奈良公園",
+          date: "2026-08-31",
+          returnDepartureTimeMinutes: 21 * 60,
+        },
+      } }] },
+      stopReason: "tool_use",
+    }));
+
+    await runViewerAgentRuntime(
+      "8月31日に奈良公園へ 朝9:00に出て 夜の21:00には家についていたい",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 900,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+        searchDirectRoutes,
+        getUserProfile: () => ({
+          home: { station: "向日町", carAvailable: false },
+          travelStyle: { transferTolerance: 0.5 },
+          transport: { maxTypicalTravelMinutes: null },
+        } as unknown as UserProfile),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(searchDirectRoutes).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      departureTimeMinutes: 9 * 60,
+    }));
+    expect(searchDirectRoutes).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      originStation: "奈良",
+      destinationStation: "向日町",
+      arrivalTimeLimitMinutes: 21 * 60,
+      rankingPreference: "latest-departure",
+    }));
+  });
+
   it("proposes a clear day-trip change without asking for confirmation again", async () => {
     const searchDirectRoutes = vi.fn()
       .mockResolvedValueOnce({ originStation: "京都", results: [] })
@@ -1872,6 +1935,39 @@ describe("Bedrock viewer agent", () => {
     expect(result.text).not.toContain("構造化した案内を準備しました");
   });
 
+  it("asks whether the trip is day-only or overnight instead of asking arbitrary stay hours", async () => {
+    const converse = vi.fn().mockResolvedValue({
+      message: { role: "assistant", content: [{ toolUse: {
+        toolUseId: "stay-kind", name: "ask_follow_up", input: {
+          recommendation: "奈良公園への日帰り旅行を提案します。",
+          reason: "日帰り旅行の詳細を確認するため",
+          question: "奈良公園で何時間ほど滞在したいですか？",
+          expectedInput: "free-text",
+          quickReplies: [],
+          tripContext: { destinationWish: "奈良公園", startDate: "2026-08-31" },
+        },
+      } }] },
+      stopReason: "tool_use",
+    });
+
+    const result = await runViewerAgentRuntime([
+      '現在の旅行条件: {"destinationWish":"奈良公園"}',
+      "利用者の今回の回答: 明日",
+    ].join("\n"), {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+      getCurrentDate: () => new Date("2026-08-30T15:00:00+09:00"),
+      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      maximumRouteTime: 1_800,
+    }, converse);
+
+    if (typeof result === "string" || !("conversation" in result)) {
+      throw new Error("旅行相談の追加質問がありません。");
+    }
+    expect(result.conversation.expectedInput).toBe("stay-length");
+    expect(result.conversation.question).toBe("日帰りですか？ それとも何泊しますか？");
+  });
+
   it("defers route search for a destination-only trip instead of exposing a terminal placeholder", async () => {
     const searchDirectRoutes = vi.fn();
     const converse = vi.fn().mockResolvedValue({
@@ -2041,6 +2137,56 @@ describe("Bedrock viewer agent", () => {
     }
     expect(result.tripPlanUpdate.patches).toHaveLength(1);
     expect(result.tripPlanUpdate.summary).toContain("帰りの出発");
+  });
+
+  it("re-searches an existing return route by its home-arrival deadline", async () => {
+    const searchDirectRoutes = vi.fn(async () => ({
+      originStation: "倉敷",
+      results: [],
+      journeys: [{
+        departureTimeMinutes: 19 * 60,
+        arrivalTimeMinutes: 20 * 60 + 45,
+        transferCount: 1,
+        legs: [],
+      }],
+    }));
+    const converse = vi.fn<BedrockAgentConverse>()
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ text: "奈良での過ごし方を提案します" }] },
+        stopReason: "end_turn",
+      })
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "return-by-home-time",
+          name: "search_trip_route_update",
+          input: { target: "return", arrivalTimeLimitMinutes: 21 * 60 },
+        } }] },
+        stopReason: "tool_use",
+      });
+
+    const result = await runViewerAgentRuntime(
+      "夜の21:00には家についていたいです",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(),
+        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+        queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
+        getTripPlan: () => tripPlanWithRailReturn(),
+        maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(searchDirectRoutes).toHaveBeenCalledWith(expect.objectContaining({
+      originStation: "倉敷",
+      destinationStation: "摂津富田",
+      arrivalTimeLimitMinutes: 21 * 60,
+      rankingPreference: "latest-departure",
+    }));
+    if (typeof result === "string" || !("tripPlanUpdate" in result)) {
+      throw new Error("帰宅期限を反映した旅程変更案がありません。");
+    }
+    expect(result.tripPlanUpdate.summary).toContain("21時00分までに到着");
   });
 
   it("splits a rail movement around a requested stopover", async () => {

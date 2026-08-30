@@ -373,13 +373,13 @@ Repositoryは作成 選択 改名 削除を提供し 最終更新が新しい20�
 - Browser Adapter: `frontend/src/adapters/browser/context-workspace-repository.ts`
 - 保存先: LocalStorage `raiquora.context-workspaces.v1`
 
-会話を主画面として 地図 `map` 旅程 `trip-plan` 経路詳細 `journey-details`のどれを
-コンテキスト領域へ表示するかを表す。表示対象Entityは会話Sessionに紐付き ViewとEntity種別の
+会話を起点として 地図 `map` 旅程 `trip-plan` 経路詳細 `journey-details`のどれを
+前面にするかを表す。表示対象Entityは会話Sessionに紐付き ViewとEntity種別の
 組合せを検証する。画面の表示切替はこの状態だけを変更し Mapbox 会話 旅程のインスタンスを作り直さない。
 最大20会話分を端末に保存し 会話Sessionを戻したときに直前の表示を復元する。
-Desktopでは左を折りたためる会話履歴 中央をコンシェルジュ 右をコンテキスト領域とし
+Desktopでは左を折りたためる会話履歴 中央を会話または旅程 右を地図とし
 独立したパネルではなく境界線で分かれた1つの連続画面として扱う。
-旅程または経路詳細は地図と排他的に切り替えず Desktopの右領域を上下に分けて同時表示する。
+旅程は中央で会話と切り替え 地図の広さを維持する。経路詳細は地図下部へ小型パネルとして重ねる。
 DOMとControllerは表示切替の前後で維持し CSS Grid上の配置と`ContextWorkspaceState`だけを変更する。
 Mobileでは会話を通常画面とし 地図 旅程 経路詳細を同じDOM上の全面コンテキストとして表示する。
 戻る操作では会話の入力値とスクロール位置を復元し ページ全体や各表示Controllerを再初期化しない。

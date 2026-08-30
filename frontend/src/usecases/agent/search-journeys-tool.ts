@@ -45,6 +45,7 @@ const allowedInputFields = new Set([
   "originStation",
   "destinationStation",
   "departureTimeMinutes",
+  "arrivalTimeLimitMinutes",
   "limit",
   "maxTransfers",
   "transferPace",
@@ -66,6 +67,7 @@ export function createSearchJourneysTool(
         originStation: { type: "string" },
         destinationStation: { type: "string" },
         departureTimeMinutes: { type: "number", minimum: 0, maximum: 2_880 },
+        arrivalTimeLimitMinutes: { type: "number", minimum: 0, maximum: 2_880 },
         limit: { type: "integer", minimum: 1, maximum: maximumJourneyToolResults },
         maxTransfers: { type: "integer", minimum: 0, maximum: 3 },
         transferPace: { type: "string", enum: [...transferPaces] },
@@ -148,6 +150,14 @@ function parseJourneySearchInput(
     value.departureTimeMinutes > 2_880
   ) {
     return invalidAgentToolInput("departureTimeMinutesが範囲外です");
+  }
+  if (value.arrivalTimeLimitMinutes !== undefined && (
+    typeof value.arrivalTimeLimitMinutes !== "number" ||
+    !Number.isFinite(value.arrivalTimeLimitMinutes) ||
+    value.arrivalTimeLimitMinutes < value.departureTimeMinutes ||
+    value.arrivalTimeLimitMinutes > 2_880
+  )) {
+    return invalidAgentToolInput("arrivalTimeLimitMinutesが範囲外です");
   }
   if (!isOptionalInteger(value.limit, 1, maximumJourneyToolResults)) {
     return invalidAgentToolInput(`limitは1から${maximumJourneyToolResults}で指定してください`);

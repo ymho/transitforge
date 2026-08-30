@@ -22,6 +22,12 @@ export function travelConversationFacts(
   const answerNights = explicitStayNights(answer);
   const promptNights = explicitStayNights(prompt);
   const stayNights = answerNights ?? previous.stayNights ?? promptNights;
+  const answerTimes = explicitTravelTimes(answer);
+  const promptTimes = explicitTravelTimes(prompt);
+  const outboundDepartureTimeMinutes = answerTimes.outboundDepartureTimeMinutes ??
+    previous.outboundDepartureTimeMinutes ?? promptTimes.outboundDepartureTimeMinutes;
+  const returnArrivalTimeMinutes = answerTimes.returnArrivalTimeMinutes ??
+    previous.returnArrivalTimeMinutes ?? promptTimes.returnArrivalTimeMinutes;
   const previousEndDate = validIsoDateText(previous.endDate)
     ? previous.endDate
     : undefined;
@@ -34,6 +40,10 @@ export function travelConversationFacts(
       ...(startDate ? { startDate } : {}),
       ...(endDate ? { endDate } : {}),
       ...(stayNights === undefined ? {} : { stayNights }),
+      ...(outboundDepartureTimeMinutes === undefined
+        ? {}
+        : { outboundDepartureTimeMinutes }),
+      ...(returnArrivalTimeMinutes === undefined ? {} : { returnArrivalTimeMinutes }),
     },
     hasExplicitDate: Boolean(answerDate || previous.startDate || promptDate),
     hasExplicitStayLength: stayNights !== undefined || Boolean(previousEndDate),
@@ -54,6 +64,12 @@ export function mergeAuthoritativeTripContext(
   if (!facts.hasExplicitStayLength) {
     delete merged.stayNights;
     delete merged.endDate;
+  }
+  if (facts.context.outboundDepartureTimeMinutes === undefined) {
+    delete merged.outboundDepartureTimeMinutes;
+  }
+  if (facts.context.returnArrivalTimeMinutes === undefined) {
+    delete merged.returnArrivalTimeMinutes;
   }
   return merged;
 }
@@ -86,6 +102,11 @@ export function quickReplyMatchesExpectedInput(
   return /\d+\s*(?:人|名)/u.test(normalized);
 }
 
+export function hasExplicitReturnArrivalTime(prompt: string): boolean {
+  const answer = continuedAnswer(prompt) ?? prompt;
+  return explicitTravelTimes(answer).returnArrivalTimeMinutes !== undefined;
+}
+
 function embeddedTripContext(prompt: string): TripContext {
   const match = prompt.match(/現在の旅行条件:\s*(\{[^\n]*\})/u);
   if (!match) return {};
@@ -100,6 +121,12 @@ function embeddedTripContext(prompt: string): TripContext {
       ...(boundedNights(input.stayNights) === undefined
         ? {}
         : { stayNights: boundedNights(input.stayNights) }),
+      ...(boundedMinutes(input.outboundDepartureTimeMinutes) === undefined
+        ? {}
+        : { outboundDepartureTimeMinutes: boundedMinutes(input.outboundDepartureTimeMinutes) }),
+      ...(boundedMinutes(input.returnArrivalTimeMinutes) === undefined
+        ? {}
+        : { returnArrivalTimeMinutes: boundedMinutes(input.returnArrivalTimeMinutes) }),
       ...(typeof input.pace === "number" && input.pace >= 0 && input.pace <= 1
         ? { pace: input.pace }
         : {}),
@@ -122,11 +149,57 @@ function continuedAnswer(prompt: string): string | undefined {
 function explicitStayNights(value: string): number | undefined {
   const normalized = value.normalize("NFKC");
   if (normalized.includes("日帰り")) return 0;
+  const times = explicitTravelTimes(normalized);
+  if (times.outboundDepartureTimeMinutes !== undefined &&
+      times.returnArrivalTimeMinutes !== undefined) return 0;
   return boundedNights(Number(normalized.match(/(\d{1,2})泊/u)?.[1]));
+}
+
+function explicitTravelTimes(value: string): Pick<TripContext,
+  "outboundDepartureTimeMinutes" | "returnArrivalTimeMinutes"> {
+  const normalized = value.normalize("NFKC").replace(/\s+/gu, "");
+  const clock = "(?:(朝|午前|昼|午後|夕方|夜)(?:の)?)?(\\d{1,2})(?::(\\d{1,2})|時(?:(\\d{1,2})分)?)";
+  const returnArrivalTimeMinutes = clockBefore(
+    normalized,
+    clock,
+    /^(?:には?|までに?)?(?:家|自宅)?(?:に)?(?:着|到着|ついて|帰って|帰宅)/u,
+  );
+  const outboundDepartureTimeMinutes = clockBefore(
+    normalized,
+    clock,
+    /^(?:には?|から)?(?:家を)?(?:出発|出て|出る)/u,
+  );
+  return {
+    ...(returnArrivalTimeMinutes === undefined ? {} : { returnArrivalTimeMinutes }),
+    ...(outboundDepartureTimeMinutes === undefined ? {} : { outboundDepartureTimeMinutes }),
+  };
+}
+
+function clockBefore(value: string, pattern: string, suffix: RegExp): number | undefined {
+  const matches = value.matchAll(new RegExp(pattern, "gu"));
+  for (const match of matches) {
+    const end = (match.index ?? 0) + match[0].length;
+    if (!suffix.test(value.slice(end, end + 18))) continue;
+    const hour = Number(match[2]);
+    const minute = Number(match[3] ?? match[4] ?? 0);
+    if (!Number.isInteger(hour) || hour < 0 || hour > 29 ||
+        !Number.isInteger(minute) || minute < 0 || minute > 59) continue;
+    const period = match[1];
+    const adjustedHour = (period === "午後" || period === "夕方" || period === "夜") &&
+        hour < 12 ? hour + 12 : period === "朝" && hour === 12 ? 0 : hour;
+    return adjustedHour * 60 + minute;
+  }
+  return undefined;
 }
 
 function boundedNights(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 30
+    ? value
+    : undefined;
+}
+
+function boundedMinutes(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 1_800
     ? value
     : undefined;
 }

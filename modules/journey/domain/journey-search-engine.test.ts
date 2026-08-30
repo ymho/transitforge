@@ -50,6 +50,39 @@ describe("journey search scenario parity", () => {
     expect(changed.journeys).toEqual([]);
     expect(changed.trace.realtimeActiveServicesRejected).toBeGreaterThan(0);
   });
+
+  it("selects the latest departure that arrives by the requested deadline", () => {
+    const scenario: Scenario = {
+      id: "arrival-deadline",
+      request: {
+        serviceDate: "2026-08-31",
+        originStation: "奈良",
+        destinationStation: "向日町",
+        departureTimeMinutes: 9 * 60,
+        arrivalTimeLimitMinutes: 21 * 60,
+        rankingPreference: "latest-departure",
+        maxTransfers: 0,
+      },
+      services: [
+        { id: "within", trainNumber: "1M", stops: [
+          { station: "奈良", departure: 19 * 60 },
+          { station: "向日町", arrival: 20 * 60 + 30 },
+        ] },
+        { id: "too-late", trainNumber: "2M", stops: [
+          { station: "奈良", departure: 20 * 60 + 15 },
+          { station: "向日町", arrival: 21 * 60 + 20 },
+        ] },
+      ],
+      expect: {},
+    };
+
+    const result = searchJourneyIndex(scenario.request, { index: directIndex(scenario) });
+    expect(result.journeys).toHaveLength(1);
+    expect(result.journeys[0]).toMatchObject({
+      departureTimeMinutes: 19 * 60,
+      arrivalTimeMinutes: 20 * 60 + 30,
+    });
+  });
 });
 
 function directIndex(scenario: Scenario) {

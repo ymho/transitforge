@@ -234,21 +234,23 @@
 
   .map-place-explorer {
     position: relative;
-    inset: auto 0 0;
+    inset: auto;
     align-self: end;
+    justify-self: end;
     grid-area: context;
     grid-row: 1;
-    width: auto;
-    margin: 0;
+    width: min(40rem, calc(100% - 2rem));
+    min-width: 0;
+    max-width: calc(100% - 2rem);
+    margin: 0 1rem 1rem;
   }
 
-  .trip-plan-panel,
-  .train-details {
+  .trip-plan-panel {
     position: relative;
     inset: auto;
     align-self: stretch;
-    grid-area: context;
-    grid-row: 2;
+    grid-area: conversation;
+    grid-row: 1 / -1;
     width: auto;
     max-width: none;
     height: auto;
@@ -256,23 +258,29 @@
     margin: 0;
     padding-top: 0;
     border: 0;
-    border-left: 0;
     border-radius: 0;
     box-shadow: none;
+    background: #ffffff;
   }
 
-  #app[data-context-view="trip-plan"] {
-    grid-template-rows: minmax(14rem, 0.42fr) minmax(20rem, 0.58fr);
+  #app[data-context-view="trip-plan"] .ai-guide-panel {
+    display: none;
   }
 
-  #app[data-context-view="journey-details"] {
-    grid-template-rows: minmax(0, 1fr);
-  }
-
-  #app[data-context-view="trip-plan"] #map {
-    grid-row: 1;
-    min-height: 0;
-    border-bottom: 1px solid var(--glass-border-subtle);
+  .train-details {
+    position: relative;
+    inset: auto;
+    align-self: stretch;
+    grid-area: context;
+    width: auto;
+    max-width: none;
+    height: auto;
+    max-height: none;
+    margin: 0;
+    padding-top: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   #app[data-context-view="journey-details"] #map {
@@ -298,7 +306,6 @@
     box-shadow: 0 1rem 3rem rgb(15 23 42 / 18%);
   }
 
-  #app[data-context-view="trip-plan"] .map-place-explorer,
   #app[data-context-view="journey-details"] .map-place-explorer {
     grid-row: 1;
   }

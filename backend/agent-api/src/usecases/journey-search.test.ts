@@ -17,6 +17,25 @@ describe("journey search usecase", () => {
   it("validates bounded constraints before reading storage", () => {
     expect(() => validatedJourneyRequest({ contractVersion: "journey-search-v1", serviceDate: "2026-08-28", originStation: "A", destinationStation: "D", departureTimeMinutes: 590, requiredTrainNames: ["a", "b", "c", "d", "e"] })).toThrow("多すぎます");
   });
+
+  it("accepts an arrival deadline after the departure time", () => {
+    expect(validatedJourneyRequest({
+      contractVersion: "journey-search-v1",
+      serviceDate: "2026-08-28",
+      originStation: "A",
+      destinationStation: "D",
+      departureTimeMinutes: 590,
+      arrivalTimeLimitMinutes: 700,
+    })).toMatchObject({ arrivalTimeLimitMinutes: 700 });
+    expect(() => validatedJourneyRequest({
+      contractVersion: "journey-search-v1",
+      serviceDate: "2026-08-28",
+      originStation: "A",
+      destinationStation: "D",
+      departureTimeMinutes: 700,
+      arrivalTimeLimitMinutes: 590,
+    })).toThrow("arrivalTimeLimitMinutes");
+  });
 });
 
 function directIndex() {

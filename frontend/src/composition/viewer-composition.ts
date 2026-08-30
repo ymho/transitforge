@@ -331,20 +331,23 @@ const tripPreviewEnabled = import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get("trip-preview") === "1";
 const weatherPreviewEnabled = import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get("weather-preview") === "mixed";
+const desktopChatShell = window.matchMedia("(min-width: 72rem)");
+const mobileChatShell = window.matchMedia("(max-width: 71.999rem)");
+const contextWorkspaceController = createContextWorkspaceController(
+  activeConversationSession.id,
+  new BrowserContextWorkspaceRepository(localStorage),
+);
 const tripPlanController = configureTripPlanPanel(
   tripPlanPanel,
   tripPlanContent,
   closeTripPlan,
   tripPlanToggle,
   activeConversationSession.id,
-  (prompt) => aiGuideController.ask(prompt),
+  (prompt) => {
+    contextWorkspaceController.show("map");
+    aiGuideController.ask(prompt);
+  },
   localStorage,
-);
-const desktopChatShell = window.matchMedia("(min-width: 72rem)");
-const mobileChatShell = window.matchMedia("(max-width: 71.999rem)");
-const contextWorkspaceController = createContextWorkspaceController(
-  activeConversationSession.id,
-  new BrowserContextWorkspaceRepository(localStorage),
 );
 let resizeContextMap: () => void = () => undefined;
 const scheduleContextMapResize = () => {
@@ -405,6 +408,17 @@ for (const button of contextWorkspaceButtons) {
     else contextWorkspaceController.show(view);
   });
 }
+tripPlanToggle.addEventListener("click", () => {
+  const currentTripPlan = loadTripPlan(
+    localStorage,
+    contextWorkspaceController.current().conversationSessionId,
+  );
+  if (!currentTripPlan) return;
+  contextWorkspaceController.show("trip-plan", {
+    kind: "trip-plan",
+    id: currentTripPlan.id,
+  });
+});
 closeContextWorkspace.addEventListener("click", () => {
   if (app.dataset.mapFocusMode === "true") {
     delete app.dataset.mapFocusMode;

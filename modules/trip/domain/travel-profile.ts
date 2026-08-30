@@ -29,6 +29,8 @@ export interface TripContext {
   startDate?: string;
   endDate?: string;
   stayNights?: number;
+  outboundDepartureTimeMinutes?: number;
+  returnArrivalTimeMinutes?: number;
   companions?: TravelCompanion[];
   interests?: Partial<Record<TravelPreference, number>>;
   pace?: number;

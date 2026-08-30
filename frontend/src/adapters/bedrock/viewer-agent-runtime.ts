@@ -63,6 +63,7 @@ import {
   type ConversationGuidance,
 } from "../../domain/conversation-guidance";
 import {
+  hasExplicitReturnArrivalTime,
   mergeAuthoritativeTripContext,
   quickReplyMatchesExpectedInput,
   travelConversationFacts,
@@ -318,6 +319,17 @@ export async function runViewerAgentRuntime(
       dependencies.getUserProfile?.(),
     ),
     finalResponsePolicy: () => {
+      if (
+        dependencies.getTripPlan?.() &&
+        hasExplicitReturnArrivalTime(prompt) &&
+        !tripPlanUpdateState.proposal
+      ) {
+        return {
+          accepted: false,
+          reason: "利用者が指定した帰宅時刻を既存旅程へ反映する",
+          instruction: `search_trip_route_updateをtarget=return arrivalTimeLimitMinutes=${travelFacts.context.returnArrivalTimeMinutes}で実行してください`,
+        };
+      }
       if (!hasCompleteTravelSchedule || dependencies.getTripPlan?.()) {
         return { accepted: true };
       }
@@ -544,7 +556,14 @@ function viewerToolInputSchema(
           description: "日帰り旅行の日付。YYYY-MM-DD形式",
         },
         outboundTimeMinutes: { type: "integer", minimum: 0, maximum: 1_800 },
-        returnTimeMinutes: { type: "integer", minimum: 0, maximum: 1_800 },
+        returnDepartureTimeMinutes: {
+          type: "integer", minimum: 0, maximum: 1_800,
+          description: "帰路を出発したい時刻。帰宅期限ではなく出発希望が明示された場合だけ指定する",
+        },
+        returnArrivalTimeMinutes: {
+          type: "integer", minimum: 0, maximum: 1_800,
+          description: "自宅側の駅へ到着したい期限。帰宅時刻や帰着時刻が指定された場合に使う",
+        },
       },
       required: ["destination", "date"],
       additionalProperties: false,
@@ -556,6 +575,10 @@ function viewerToolInputSchema(
       properties: {
         target: { type: "string", enum: ["outbound", "return"] },
         departureTimeMinutes: { type: "integer", minimum: 0, maximum: 1_800 },
+        arrivalTimeLimitMinutes: {
+          type: "integer", minimum: 0, maximum: 1_800,
+          description: "到着駅へ着きたい期限。帰宅時刻の変更ではdepartureTimeMinutesではなくこちらを使う",
+        },
         stopoverStation: { type: "string" },
       },
       required: ["target"],
@@ -628,6 +651,8 @@ function viewerToolInputSchema(
             startDate: { type: "string" },
             endDate: { type: "string" },
             stayNights: { type: "integer", minimum: 0, maximum: 30 },
+            outboundDepartureTimeMinutes: { type: "integer", minimum: 0, maximum: 1_800 },
+            returnArrivalTimeMinutes: { type: "integer", minimum: 0, maximum: 1_800 },
             pace: { type: "number", minimum: 0, maximum: 1 },
             maximumTravelMinutes: { type: ["number", "null"] },
             carAvailable: { type: "boolean" },
@@ -1398,10 +1423,19 @@ async function executeViewerToolAdapter(
     const preferences = dependencies.getJourneySearchPreferences?.() ??
       defaultJourneySearchPreferences;
     const originStation = dependencies.getUserProfile?.()?.home.station;
-    const outboundTime = boundedInteger(input.outboundTimeMinutes, 0, 1_800) ??
-      8 * 60;
-    const returnTime = boundedInteger(input.returnTimeMinutes, 0, 1_800) ??
-      17 * 60;
+    const requestedTimes = travelConversationFacts(
+      originalPrompt,
+      currentDate(dependencies),
+    ).context;
+    const outboundTime = requestedTimes.outboundDepartureTimeMinutes ??
+      boundedInteger(input.outboundTimeMinutes, 0, 1_800) ?? 8 * 60;
+    const returnArrivalTime = requestedTimes.returnArrivalTimeMinutes ??
+      boundedInteger(input.returnArrivalTimeMinutes, 0, 1_800);
+    const returnDepartureTime = boundedInteger(
+      input.returnDepartureTimeMinutes,
+      0,
+      1_800,
+    ) ?? 17 * 60;
     const outboundResult = await dependencies.searchDirectRoutes({
       ...(originStation ? { originStation } : {}),
       destinationStation,
@@ -1416,14 +1450,31 @@ async function executeViewerToolAdapter(
       searchTimeMinutes: outboundTime,
       preferences,
     });
+    const outboundArrivalTime = outbound.journeys[0]?.arrivalTimeMinutes;
+    const returnSearchTime = returnArrivalTime === undefined
+      ? returnDepartureTime
+      : Math.max(
+          outboundArrivalTime === undefined ? 0 : outboundArrivalTime + 60,
+          returnArrivalTime - 12 * 60,
+        );
     const returningResult = await dependencies.searchDirectRoutes({
       originStation: destinationStation,
       destinationStation: outbound.originStation,
-      departureTimeMinutes: returnTime,
+      departureTimeMinutes: returnSearchTime,
+      ...(returnArrivalTime === undefined
+        ? {}
+        : { arrivalTimeLimitMinutes: returnArrivalTime }),
       departureDate: date,
       serviceDate: date,
       ...preferences,
+      ...(returnArrivalTime === undefined
+        ? {}
+        : { rankingPreference: "latest-departure" as const }),
     });
+    if (returnArrivalTime !== undefined &&
+        !(returningResult.journeys?.length || returningResult.results.length)) {
+      throw new Error(`${formatJapaneseRouteClockTime(returnArrivalTime)}までに帰着する経路が見つかりません。`);
+    }
     travelState.response = {
       destination,
       dayTrip: true,
@@ -1434,8 +1485,10 @@ async function executeViewerToolAdapter(
         originStation: destinationStation,
         destinationStation: outbound.originStation,
         departureDate: date,
-        searchTimeMinutes: returnTime,
-        preferences,
+        searchTimeMinutes: returnSearchTime,
+        preferences: returnArrivalTime === undefined
+          ? preferences
+          : { ...preferences, rankingPreference: "latest-departure" },
       }),
       accommodations: [],
     };
@@ -1460,8 +1513,13 @@ async function executeViewerToolAdapter(
       defaultJourneySearchPreferences;
     const currentDeparture = route.journeys[0]?.departureTimeMinutes ??
       route.searchTimeMinutes ?? 8 * 60;
-    const departureTime = boundedInteger(input.departureTimeMinutes, 0, 1_800) ??
-      currentDeparture;
+    const requestedArrivalTime = target === "return"
+      ? travelConversationFacts(originalPrompt, currentDate(dependencies)).context
+          .returnArrivalTimeMinutes ?? boundedInteger(input.arrivalTimeLimitMinutes, 0, 1_800)
+      : undefined;
+    const departureTime = requestedArrivalTime === undefined
+      ? boundedInteger(input.departureTimeMinutes, 0, 1_800) ?? currentDeparture
+      : Math.max(0, requestedArrivalTime - 12 * 60);
     const stopover = typeof input.stopoverStation === "string" &&
       input.stopoverStation.trim() ? input.stopoverStation.trim() : undefined;
     const firstDestination = stopover ?? route.destinationStation;
@@ -1469,16 +1527,28 @@ async function executeViewerToolAdapter(
       originStation: route.originStation,
       destinationStation: firstDestination,
       departureTimeMinutes: departureTime,
+      ...(requestedArrivalTime === undefined
+        ? {}
+        : { arrivalTimeLimitMinutes: requestedArrivalTime }),
       departureDate,
       serviceDate: departureDate,
       ...preferences,
+      ...(requestedArrivalTime === undefined
+        ? {}
+        : { rankingPreference: "latest-departure" as const }),
     });
+    if (requestedArrivalTime !== undefined &&
+        !(firstResult.journeys?.length || firstResult.results.length)) {
+      throw new Error(`${formatJapaneseRouteClockTime(requestedArrivalTime)}までに到着する帰路が見つかりません。`);
+    }
     const firstPlan = journeyPlanFromSearchResponse(firstResult, {
       originStation: route.originStation,
       destinationStation: firstDestination,
       departureDate,
       searchTimeMinutes: departureTime,
-      preferences,
+      preferences: requestedArrivalTime === undefined
+        ? preferences
+        : { ...preferences, rankingPreference: "latest-departure" },
     });
     const patches: TripPlanPatch[] = [{
       type: "replace",
@@ -1515,7 +1585,9 @@ async function executeViewerToolAdapter(
     }
     const summary = stopover
       ? `${target === "return" ? "帰り" : "行き"}に${stopover}への立寄りを追加`
-      : `${target === "return" ? "帰り" : "行き"}の出発を${formatJapaneseRouteClockTime(departureTime)}以降へ変更`;
+      : requestedArrivalTime !== undefined
+        ? `${formatJapaneseRouteClockTime(requestedArrivalTime)}までに到着する帰りへ変更`
+        : `${target === "return" ? "帰り" : "行き"}の出発を${formatJapaneseRouteClockTime(departureTime)}以降へ変更`;
     tripPlanUpdateState.proposal = { summary, patches };
     return { proposed: true, summary };
   }
@@ -1852,11 +1924,10 @@ function conversationGuidanceFromToolInput(
       return [{ label: reply.label, value: reply.value }];
     })
     : []).filter(({ value }) => quickReplyMatchesExpectedInput(value, expectedInput));
-  const normalizedQuestion = expectedInput === "departure-date" &&
-      /(?:泊|滞在日数)/u.test(question)
+  const normalizedQuestion = expectedInput === "departure-date"
     ? "いつ出発しますか？"
-    : expectedInput === "stay-length" && /(?:出発日|いつ.*出発)/u.test(question)
-      ? "何泊にしますか？"
+    : expectedInput === "stay-length"
+      ? "日帰りですか？ それとも何泊しますか？"
       : question;
   return normalizedConversationGuidance({
     ...(typeof input.recommendation === "string" && input.recommendation.trim()
@@ -1935,6 +2006,12 @@ function tripContextFromToolInput(value: unknown): TripContext {
     ...(boundedInteger(input.stayNights, 0, 30) === undefined
       ? {}
       : { stayNights: boundedInteger(input.stayNights, 0, 30) }),
+    ...(boundedInteger(input.outboundDepartureTimeMinutes, 0, 1_800) === undefined
+      ? {}
+      : { outboundDepartureTimeMinutes: boundedInteger(input.outboundDepartureTimeMinutes, 0, 1_800) }),
+    ...(boundedInteger(input.returnArrivalTimeMinutes, 0, 1_800) === undefined
+      ? {}
+      : { returnArrivalTimeMinutes: boundedInteger(input.returnArrivalTimeMinutes, 0, 1_800) }),
     ...(typeof input.pace === "number" && input.pace >= 0 && input.pace <= 1
       ? { pace: input.pace }
       : {}),

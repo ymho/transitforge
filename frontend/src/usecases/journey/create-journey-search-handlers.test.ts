@@ -49,6 +49,30 @@ describe("createJourneySearchHandlers", () => {
     expect(currentCoordinate).not.toHaveBeenCalled();
   });
 
+  it("keeps only local routes arriving by the deadline", async () => {
+    const handlers = createJourneySearchHandlers({
+      trains,
+      getDisplayTrains: () => trains,
+      stationLineCatalog: catalog,
+      getDisplayedServiceDateStart: () => new Date(2026, 7, 27),
+      currentCoordinate: vi.fn(),
+      journeySearchService: { search: vi.fn() } as unknown as JourneySearchService,
+      linePresentation: {
+        colorForStations: () => ({ color: "#000", lineName: "テスト線" }),
+      },
+    });
+
+    const result = await handlers.localSearchRoutes({
+      originStation: "大阪",
+      destinationStation: "京都",
+      departureTimeMinutes: 590,
+      arrivalTimeLimitMinutes: 635,
+      rankingPreference: "latest-departure",
+    });
+
+    expect(result.results.map(({ train }) => train.service_uid)).toEqual(["limited"]);
+  });
+
   it("formats a service date in local calendar time", () => {
     expect(formatServiceDate(new Date(2026, 7, 5))).toBe("2026-08-05");
   });

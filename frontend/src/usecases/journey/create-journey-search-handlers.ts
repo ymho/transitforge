@@ -101,6 +101,22 @@ export function createJourneySearchHandlers(
         hasRequiredName &&
         [...requiredTrainNumbers].every((value) => train.train_no === value);
     };
+    const results = searchDirectRoutes(
+      dependencies.getDisplayTrains().filter((train) =>
+        !excluded(train) && required(train) &&
+        (allowedServiceTypes.size === 0 || allowedServiceTypes.has(train.service_type))
+      ),
+      originStation,
+      request.destinationStation,
+      request.departureTimeMinutes,
+      Number.MAX_SAFE_INTEGER,
+    ).filter((route) => request.arrivalTimeLimitMinutes === undefined ||
+      route.arrivalTimeMinutes <= request.arrivalTimeLimitMinutes);
+    if (request.rankingPreference === "latest-departure") {
+      results.sort((left, right) =>
+        right.departureTimeMinutes - left.departureTimeMinutes ||
+        left.arrivalTimeMinutes - right.arrivalTimeMinutes);
+    }
     return {
       originStation,
       ...(excludedServiceTypes.size ? { excludedServiceTypes: [...excludedServiceTypes] } : {}),
@@ -112,15 +128,7 @@ export function createJourneySearchHandlers(
       ...(requiredTrainNumbers.size ? { requiredTrainNumbers: [...requiredTrainNumbers] } : {}),
       ...(allowedServiceTypes.size ? { allowedServiceTypes: [...allowedServiceTypes] } : {}),
       ...(distanceMeters === undefined ? {} : { distanceMeters }),
-      results: searchDirectRoutes(
-        dependencies.getDisplayTrains().filter((train) =>
-          !excluded(train) && required(train) &&
-          (allowedServiceTypes.size === 0 || allowedServiceTypes.has(train.service_type))
-        ),
-        originStation,
-        request.destinationStation,
-        request.departureTimeMinutes,
-      ),
+      results: results.slice(0, 3),
     };
   };
 
@@ -133,6 +141,7 @@ export function createJourneySearchHandlers(
       originStation,
       destinationStation: request.destinationStation,
       departureTimeMinutes: request.departureTimeMinutes,
+      arrivalTimeLimitMinutes: request.arrivalTimeLimitMinutes,
       limit: 3,
       maxTransfers: request.maxTransfers ?? 3,
       transferPace: request.transferPace,

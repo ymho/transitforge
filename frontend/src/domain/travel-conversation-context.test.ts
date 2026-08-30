@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  hasExplicitReturnArrivalTime,
   mergeAuthoritativeTripContext,
   quickReplyMatchesExpectedInput,
   tripContextAfterUserAnswer,
@@ -47,10 +48,54 @@ describe("travel conversation context", () => {
     }, "出雲大社へ旅行したい", now)).toEqual({ destinationWish: "出雲大社" });
   });
 
+  it("drops model-proposed travel times that the user never supplied", () => {
+    expect(mergeAuthoritativeTripContext({
+      destinationWish: "奈良公園",
+      outboundDepartureTimeMinutes: 8 * 60,
+      returnArrivalTimeMinutes: 21 * 60,
+    }, "奈良公園へ旅行したい", now)).toEqual({ destinationWish: "奈良公園" });
+  });
+
   it("keeps quick replies aligned with the expected answer", () => {
     expect(quickReplyMatchesExpectedInput("1泊", "departure-date")).toBe(false);
     expect(quickReplyMatchesExpectedInput("明日", "departure-date")).toBe(true);
     expect(quickReplyMatchesExpectedInput("1泊", "stay-length")).toBe(true);
+  });
+
+  it("treats an outbound and home-arrival window as a day trip", () => {
+    const facts = travelConversationFacts([
+      '現在の旅行条件: {"destinationWish":"奈良公園","startDate":"2026-08-31"}',
+      "利用者の今回の回答: 朝9:00に出て、夜の21:00には帰ってきたい",
+    ].join("\n"), now);
+
+    expect(facts.context).toMatchObject({
+      stayNights: 0,
+      outboundDepartureTimeMinutes: 9 * 60,
+      returnArrivalTimeMinutes: 21 * 60,
+    });
+    expect(facts.hasExplicitStayLength).toBe(true);
+  });
+
+  it("retains a clarified home-arrival deadline", () => {
+    expect(tripContextAfterUserAnswer({
+      destinationWish: "奈良公園",
+      startDate: "2026-08-31",
+      endDate: "2026-08-31",
+      stayNights: 0,
+    }, "夜の21:00には家についていたい", now)).toMatchObject({
+      returnArrivalTimeMinutes: 21 * 60,
+    });
+  });
+
+  it("distinguishes a new return deadline from a retained one", () => {
+    expect(hasExplicitReturnArrivalTime([
+      '現在の旅行条件: {"returnArrivalTimeMinutes":1260}',
+      "利用者の今回の回答: 夜の21:00には家についていたい",
+    ].join("\n"))).toBe(true);
+    expect(hasExplicitReturnArrivalTime([
+      '現在の旅行条件: {"returnArrivalTimeMinutes":1260}',
+      "利用者の今回の回答: 奈良公園では何ができますか",
+    ].join("\n"))).toBe(false);
   });
 });
 

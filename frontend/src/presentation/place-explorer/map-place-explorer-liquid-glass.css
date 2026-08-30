@@ -90,10 +90,6 @@
 .map-place-option footer a { overflow: hidden; color: var(--glass-muted); font-size: .6rem; text-overflow: ellipsis; white-space: nowrap; }
 .map-place-option footer button { flex: 0 0 auto; min-height: 1.8rem; padding: .3rem .65rem; border: 1px solid var(--glass-border); border-radius: 999px; color: var(--glass-accent-strong); background: var(--glass-surface); font: inherit; font-size: .64rem; font-weight: 700; cursor: pointer; }
 
-@media (min-width: 52rem) {
-  #app:has(.ai-guide-panel:not([hidden])) .map-place-explorer { left: min(42rem, calc(100vw - 20rem)); width: auto; }
-}
-
 @media (max-width: 42rem) {
   .map-place-explorer { right: .65rem; bottom: 5.4rem; width: calc(100vw - 1.3rem); padding: .65rem; border-radius: 1.2rem; }
   .map-place-explorer > header strong { font-size: .74rem; }
