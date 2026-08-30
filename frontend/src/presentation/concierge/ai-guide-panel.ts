@@ -1,7 +1,5 @@
 import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
 import { formatRouteClockTime } from "@raiquora/train/route-time";
-import type { UserProfile } from "@raiquora/trip/travel-profile";
-import { loadUserProfile } from "../../usecases/trip-profile/user-profile-repository";
 import type {
   ConversationGuidance,
   ConversationSubmission,
@@ -13,7 +11,6 @@ import {
   buildConversationFeedback,
   type ConversationFeedbackV2,
 } from "../../usecases/concierge/conversation-feedback";
-import { recommendedTravelDestinations } from "@raiquora/trip/travel-destination";
 import {
   defaultJourneySearchPreferences,
   isJourneyRankingPreference,
@@ -159,7 +156,6 @@ export function configureAiGuidePanel(
   toggle.addEventListener("click", () => {
     const open = toggle.ariaExpanded !== "true";
     setOpen(open);
-    if (open) showConciergeIntro();
   });
   close.addEventListener("click", () => setOpen(false));
   panel.addEventListener("keydown", (event) => {
@@ -348,24 +344,12 @@ export function configureAiGuidePanel(
     submitPrompt(input.value.trim());
   });
 
-  let hasShownConciergeIntro = false;
-  const showConciergeIntro = () => {
-    if (hasShownConciergeIntro || messages.querySelector(".ai-guide-message") !== null) return;
-    appendConciergeIntroCards(
-      messages,
-      loadUserProfile(storage),
-      (destination) => controller.openLandmarkJourney(destination),
-    );
-    hasShownConciergeIntro = true;
-  };
-
   const controller: AiGuidePanelController = {
     switchSession(nextConversationSessionId) {
       elements.onPlaces?.([]);
       conversationSessionId = nextConversationSessionId;
       activeConversation = undefined;
       activeTripContext = undefined;
-      hasShownConciergeIntro = false;
       input.value = "";
       input.disabled = false;
       input.placeholder = "列車、行き先、旅の相談を入力";
@@ -407,18 +391,13 @@ export function configureAiGuidePanel(
       input.placeholder = activeConversation
         ? inputPlaceholderForConversation(activeConversation)
         : "列車、行き先、旅の相談を入力";
-      if (restoredHistory.length === 0 && toggle.ariaExpanded === "true") {
-        showConciergeIntro();
-      }
     },
     openLandmarkJourney(name) {
       setOpen(true);
-      showConciergeIntro();
       sendPrompt(`${name}へ旅行したい`);
     },
     open() {
       setOpen(true);
-      showConciergeIntro();
     },
     ask(prompt) { setOpen(true); sendPrompt(prompt); },
     notify(text) { const message = appendPendingMessage(messages); resolveAssistantMessage(message, text); },
@@ -464,57 +443,6 @@ function inputPlaceholderForConversation(guidance: ConversationGuidance): string
     case "traveler-count": return "例: 大人2人、子ども1人";
     default: return "自由に入力できます";
   }
-}
-
-function appendConciergeIntroCards(
-  messages: HTMLOListElement,
-  profile?: UserProfile,
-  selectDestination?: (destination: string) => void,
-): void {
-  const item = document.createElement("li");
-  // おすすめは会話履歴ではなく入力前の補助コンテンツとして扱う。
-  item.className = "concierge-intro";
-  item.setAttribute("aria-label", "おすすめの行き先");
-  const title = document.createElement("p");
-  title.textContent = "あなたが興味がありそうなスポット";
-  const cards = document.createElement("div");
-  cards.className = "concierge-intro-cards";
-  for (const destination of recommendedTravelDestinations(profile)) {
-    const card = document.createElement("button");
-    card.type = "button";
-    const iconElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    iconElement.classList.add("concierge-intro-card-icon");
-    iconElement.setAttribute("aria-hidden", "true");
-    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-    use.setAttribute("href", "#icon-ai-sparkles");
-    iconElement.append(use);
-    const copy = document.createElement("span");
-    copy.className = "concierge-intro-card-copy";
-    const heading = document.createElement("strong");
-    heading.textContent = destination.name;
-    const caption = document.createElement("small");
-    caption.textContent = `${destination.interests.slice(0, 2).map(travelPreferenceLabel).join("・")}を楽しむ旅`;
-    copy.append(heading, caption);
-    card.append(iconElement, copy);
-    card.addEventListener("click", () => {
-      for (const candidate of cards.querySelectorAll<HTMLButtonElement>("button")) {
-        candidate.disabled = true;
-      }
-      item.classList.add("is-resolved");
-      selectDestination?.(destination.name);
-    });
-    cards.append(card);
-  }
-  item.append(title, cards);
-  messages.append(item);
-}
-
-function travelPreferenceLabel(value: string): string {
-  return {
-    sea: "海", mountain: "山", nature: "自然", onsen: "温泉", food: "食",
-    railway: "鉄道", history: "歴史", cityWalk: "街歩き", animals: "動物",
-    art: "アート", themePark: "テーマパーク", shopping: "買い物",
-  }[value] ?? "旅";
 }
 
 export function shouldFocusAiGuideInputOnOpen(

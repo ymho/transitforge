@@ -124,46 +124,6 @@
 .journey-settings-dialog h2 { margin: 0; font-size: 1rem; }
 .journey-settings-dialog header button { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; border: 0; border-radius: 50%; color: var(--glass-muted); background: rgb(120 120 128 / 16%); font-size: 1.1rem; }
 
-.concierge-intro {
-  width: 100%;
-  max-width: 100%;
-  padding: 0.3rem;
-  border: 0;
-  background: transparent;
-}
-
-.concierge-intro > p {
-  margin: 0.15rem 0.35rem 0.7rem;
-  color: var(--glass-text);
-  font-size: 0.88rem;
-  font-weight: 700;
-}
-
-.concierge-intro-cards {
-  display: grid;
-  gap: 0.55rem;
-}
-
-.concierge-intro-cards button {
-  display: grid;
-  grid-template-columns: 2.5rem minmax(0, 1fr);
-  align-items: center;
-  gap: 0.65rem;
-  width: 100%;
-  padding: 0.85rem 0.9rem;
-  border: 1px solid var(--glass-border-subtle);
-  border-radius: 1rem;
-  color: var(--glass-text);
-  background: var(--glass-surface-muted);
-  text-align: left;
-}
-
-.concierge-intro-card-icon { width: 2.5rem; height: 2.5rem; padding: .6rem; border-radius: .85rem; color: var(--glass-accent-strong); background: var(--glass-accent-soft); }
-.concierge-intro-card-copy { display: grid; gap: .2rem; }
-.concierge-intro-cards button strong { font-size: 0.8rem; }
-.concierge-intro-cards button small { color: var(--glass-muted); font-size: 0.68rem; }
-.concierge-intro-cards button:hover { border-color: var(--glass-accent); background: var(--glass-accent-soft); }
-
 .journey-settings-dialog label,
 .journey-settings-dialog small {
   color: var(--glass-muted);
@@ -230,14 +190,6 @@
 }
 
 .ai-guide-context-choices button:hover { background: var(--glass-accent-soft); color: var(--glass-accent-strong); }
-
-.concierge-intro.is-resolved .concierge-intro-cards {
-  opacity: .48;
-}
-
-.concierge-intro-cards button:disabled {
-  cursor: default;
-}
 
 .ai-guide-form input {
   min-height: 3.25rem;

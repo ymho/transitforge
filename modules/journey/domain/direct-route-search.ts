@@ -79,6 +79,7 @@ export type DirectRouteSearchHandler = (request: {
   originStation?: string;
   destinationStation: string;
   departureTimeMinutes: number;
+  arrivalTimeLimitMinutes?: number;
   serviceDate?: string;
   departureDate?: string;
   transferPace?: TransferPace;

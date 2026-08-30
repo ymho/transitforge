@@ -8,6 +8,7 @@ export interface JourneySearchRequest {
   originStation: string;
   destinationStation: string;
   departureTimeMinutes: number;
+  arrivalTimeLimitMinutes?: number;
   limit?: number;
   maxTransfers?: 0 | 1 | 2 | 3;
   transferPace?: TransferPace;

@@ -48,7 +48,11 @@ export function searchJourneyIndex(request: JourneySearchRequest, input: Journey
   const context: SearchContext = { request: normalizedRequest, servicesByStation, stationTransferMinutes, defaultTransferMinutes, delays: delayInfo, labels: new Map(), reachableStationsByLeg: reachableStations(realtimeServices, request.destinationStation, normalizedRequest.maxTransfers + 1), trace };
   const found: JourneySearchResponse["journeys"] = [];
   explore(context, normalizeStation(request.originStation), request.departureTimeMinutes, [], new Set(), found);
-  const journeys = pareto(found.filter((journey) => requirementsSatisfied(journey.legs, normalizedRequest))).sort((a, b) => compareJourney(a, b, normalizedRequest)).slice(0, normalizedRequest.limit);
+  const journeys = pareto(found.filter((journey) =>
+    requirementsSatisfied(journey.legs, normalizedRequest) &&
+    (normalizedRequest.arrivalTimeLimitMinutes === undefined ||
+      journey.arrivalTimeMinutes <= normalizedRequest.arrivalTimeLimitMinutes)
+  )).sort((a, b) => compareJourney(a, b, normalizedRequest)).slice(0, normalizedRequest.limit);
   trace.selectedJourneys = journeys.map((journey) => ({ departureTimeMinutes: journey.departureTimeMinutes, arrivalTimeMinutes: journey.arrivalTimeMinutes, transferCount: journey.transferCount, transferStations: journey.legs.slice(0, -1).map(({ destinationStation }) => destinationStation), transferWaitMinutes: journey.legs.slice(0, -1).map((leg, index) => journey.legs[index + 1]!.departureTimeMinutes - leg.arrivalTimeMinutes), trips: journey.legs.map(({ serviceUid }) => serviceUid) }));
   const direct = journeys.filter(({ transferCount, legs }) => transferCount === 0 && legs.length === 1).map(({ legs }) => ({ ...legs[0]!, source: "transitforge" as const, discoverySource: strategy === "direct-service-index" ? "direct-service-index" as const : "timetable-graph" as const, sourceReference: strategy }));
   return { serviceDate: request.serviceDate, originStation: request.originStation, destinationStation: request.destinationStation, searchTimeMinutes: request.departureTimeMinutes, totalMatchCount: journeys.length, transferPace: normalizedRequest.transferPace, rankingPreference: normalizedRequest.rankingPreference, maxTransfers: normalizedRequest.maxTransfers, ...responseConstraints(normalizedRequest), matches: direct, journeys, trace };

@@ -33,6 +33,7 @@ export function validatedJourneyRequest(value: JsonObject): JourneySearchRequest
   if (typeof value.serviceDate !== "string") throw new RequestError(400, "serviceDateが必要です。");
   if (!isValidServiceDate(value.serviceDate)) throw new RequestError(400, "serviceDateが実在する日付ではありません。");
   if (typeof value.departureTimeMinutes !== "number" || !Number.isFinite(value.departureTimeMinutes) || value.departureTimeMinutes < 0 || value.departureTimeMinutes > 2_880) throw new RequestError(400, "departureTimeMinutesが不正です。");
+  if (value.arrivalTimeLimitMinutes !== undefined && (typeof value.arrivalTimeLimitMinutes !== "number" || !Number.isFinite(value.arrivalTimeLimitMinutes) || value.arrivalTimeLimitMinutes < 0 || value.arrivalTimeLimitMinutes > 2_880 || value.arrivalTimeLimitMinutes < value.departureTimeMinutes)) throw new RequestError(400, "arrivalTimeLimitMinutesが不正です。");
   const limit = value.limit ?? 3; if (!Number.isInteger(limit) || (limit as number) < 1 || (limit as number) > 5) throw new RequestError(400, "limitは1から5にしてください。");
   const maxTransfers = value.maxTransfers ?? 3; if (!Number.isInteger(maxTransfers) || (maxTransfers as number) < 0 || (maxTransfers as number) > 3) throw new RequestError(400, "maxTransfersは0から3にしてください。");
   const transferPace = value.transferPace ?? "standard"; if (transferPace !== "hurried" && transferPace !== "standard" && transferPace !== "relaxed") throw new RequestError(400, "transferPaceが不正です。");
@@ -40,7 +41,7 @@ export function validatedJourneyRequest(value: JsonObject): JourneySearchRequest
   const constraints = Object.fromEntries(constraintNames.map((name) => [name, constraintList(value[name])]));
   if (["requiredServiceTypes", "requiredTrainNames", "requiredTrainNumbers"].reduce((sum, name) => sum + (constraints[name] as string[]).length, 0) > 4) throw new RequestError(400, "利用したい列車条件が多すぎます。");
   if (value.includeTrace !== undefined && typeof value.includeTrace !== "boolean") throw new RequestError(400, "includeTraceが不正です。");
-  return { serviceDate: value.serviceDate, originStation, destinationStation, departureTimeMinutes: value.departureTimeMinutes, limit: limit as number, maxTransfers: maxTransfers as 0 | 1 | 2 | 3, transferPace, rankingPreference, ...constraints };
+  return { serviceDate: value.serviceDate, originStation, destinationStation, departureTimeMinutes: value.departureTimeMinutes, ...(typeof value.arrivalTimeLimitMinutes === "number" ? { arrivalTimeLimitMinutes: value.arrivalTimeLimitMinutes } : {}), limit: limit as number, maxTransfers: maxTransfers as 0 | 1 | 2 | 3, transferPace, rankingPreference, ...constraints };
 }
 
 async function currentRealtime(repository: JourneyDataRepository, request: JourneySearchRequest, now: Date): Promise<{ operations?: Record<string, JourneyOperation>; routeTime?: number; metadata: JsonObject }> {

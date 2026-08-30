@@ -18,8 +18,7 @@ export function renderConciergeIdentity(
   elements.role.textContent = concierge.presentation.role;
   if (
     resetGreeting &&
-    elements.messages.childElementCount === 1 &&
-    !elements.messages.firstElementChild?.classList.contains("concierge-intro")
+    elements.messages.childElementCount === 1
   ) {
     const firstMessage = elements.messages.firstElementChild;
     if (firstMessage instanceof HTMLElement) {
