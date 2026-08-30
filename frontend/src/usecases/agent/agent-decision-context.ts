@@ -6,13 +6,15 @@ export type AgentContextValue = string | number | boolean | null;
 export interface AgentKnownConstraint {
   key: string;
   value: AgentContextValue;
-  source: "user" | "conversation" | "trip_context" | "current_trip" | "ui";
+  source: "user" | "conversation" | "trip_context" | "current_trip" | "ui" |
+    "agent_interpretation";
 }
 
 export interface AgentKnownPreference {
   key: string;
   value: AgentContextValue;
-  source: "user" | "conversation" | "travel_profile" | "trip_context";
+  source: "user" | "conversation" | "travel_profile" | "trip_context" |
+    "agent_interpretation";
 }
 
 export interface AgentConversationContext {

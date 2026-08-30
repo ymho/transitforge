@@ -37,6 +37,35 @@ const position: TrainPosition = {
 };
 
 describe("Bedrock viewer agent", () => {
+  it("extracts a Bedrock decision summary and never displays the marker", async () => {
+    const storedTraces: import("../../usecases/agent/agent-trace").AgentTrace[] = [];
+    const storeAgentTrace = vi.fn(async (
+      trace: import("../../usecases/agent/agent-trace").AgentTrace,
+    ) => { storedTraces.push(trace); });
+    const converse: BedrockAgentConverse = async () => ({
+      message: { role: "assistant", content: [{
+        text: '<decision_summary>{"interpretedGoal":"次の確認事項を案内する","hardConstraints":[],"softPreferences":[],"selectedAction":"answer","unresolvedFacts":[],"reasonCodes":["no_factual_claim_required"]}</decision_summary>日程が決まっていれば教えてください。',
+      }] },
+      stopReason: "end_turn",
+    });
+    const result = await runViewerAgentRuntime("次に何を確認すればよい？", {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      storeAgentTrace, maximumRouteTime: 1_800,
+    }, converse);
+
+    expect(result).toBe("日程が決まっていれば教えてください。");
+    expect(String(result)).not.toContain("decision_summary");
+    expect(storedTraces[0]?.events).toContainEqual(
+      expect.objectContaining({
+        type: "decision_recorded",
+        interpretedGoal: "次の確認事項を案内する",
+        reasonCodes: ["no_factual_claim_required"],
+      }),
+    );
+  });
+
   it("changes time, searches at that time, and focuses only a search result", async () => {
     let routeTime = 1_000;
     const focusTrain = vi.fn(() => true);

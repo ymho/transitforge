@@ -71,11 +71,13 @@ function parseExpectation(value: Record<string, unknown>, index: number): AgentE
   if (!hasOnlyKeys(value, [
     "toolSequence", "constraints", "status", "minimumGroundedClaimRate",
     "maximumUnsupportedClaimRate", "allowedViewerActions", "requiredViewerActions",
+    "decision",
   ]) || !stringList(value.toolSequence, 8) || !isConstraintRecord(value.constraints) ||
     !knownStatuses.has(String(value.status)) ||
     !rate(value.minimumGroundedClaimRate) || !rate(value.maximumUnsupportedClaimRate) ||
     !stringList(value.allowedViewerActions, 10) ||
-    !stringList(value.requiredViewerActions, 10)) {
+    !stringList(value.requiredViewerActions, 10) ||
+    value.decision !== undefined && !validDecisionExpectation(value.decision)) {
     throw new Error(`Agent Eval case ${index + 1}件目の期待値が不正です`);
   }
   const allowed = new Set(value.allowedViewerActions);
@@ -90,19 +92,29 @@ function parseExpectation(value: Record<string, unknown>, index: number): AgentE
     maximumUnsupportedClaimRate: value.maximumUnsupportedClaimRate,
     allowedViewerActions: [...value.allowedViewerActions],
     requiredViewerActions: [...value.requiredViewerActions],
+    ...(value.decision === undefined ? {} : {
+      decision: {
+        requiredHardConstraintKeys: [...value.decision.requiredHardConstraintKeys],
+        forbiddenUnresolvedFacts: [...value.decision.forbiddenUnresolvedFacts],
+      },
+    }),
   };
 }
 
 function parseObservation(value: unknown, index: number): AgentEvaluationObservation {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     "caseId", "toolSequence", "normalizedConstraints", "status", "claimStatuses",
-    "viewerActions",
+    "viewerActions", "decisionHardConstraintKeys", "decisionUnresolvedFacts",
   ]) || !identifier(value.caseId) || !stringList(value.toolSequence, 8) ||
     !isRecord(value.normalizedConstraints) || !knownStatuses.has(String(value.status)) ||
     !Array.isArray(value.claimStatuses) || value.claimStatuses.length > 20 ||
     value.claimStatuses.some((status) =>
       status !== "supported" && status !== "unsupported" && status !== "unknown") ||
-    !Array.isArray(value.viewerActions) || value.viewerActions.length > 10) {
+    !Array.isArray(value.viewerActions) || value.viewerActions.length > 10 ||
+    value.decisionHardConstraintKeys !== undefined &&
+      !stringList(value.decisionHardConstraintKeys, 20) ||
+    value.decisionUnresolvedFacts !== undefined &&
+      !stringList(value.decisionUnresolvedFacts, 20)) {
     throw new Error(`Agent Eval observation ${index + 1}件目が不正です`);
   }
   const viewerActions: AgentEvaluationObservation["viewerActions"] =
@@ -121,7 +133,22 @@ function parseObservation(value: unknown, index: number): AgentEvaluationObserva
     status: value.status as AgentEvaluationObservation["status"],
     claimStatuses: [...value.claimStatuses],
     viewerActions,
+    ...(value.decisionHardConstraintKeys === undefined
+      ? {}
+      : { decisionHardConstraintKeys: [...value.decisionHardConstraintKeys] }),
+    ...(value.decisionUnresolvedFacts === undefined
+      ? {}
+      : { decisionUnresolvedFacts: [...value.decisionUnresolvedFacts] }),
   };
+}
+
+function validDecisionExpectation(
+  value: unknown,
+): value is NonNullable<AgentEvaluationExpectation["decision"]> {
+  return isRecord(value) && hasOnlyKeys(value, [
+    "requiredHardConstraintKeys", "forbiddenUnresolvedFacts",
+  ]) && stringList(value.requiredHardConstraintKeys, 20) &&
+    stringList(value.forbiddenUnresolvedFacts, 20);
 }
 
 function isConstraintRecord(value: unknown): value is Record<string, string | number | boolean | string[]> {

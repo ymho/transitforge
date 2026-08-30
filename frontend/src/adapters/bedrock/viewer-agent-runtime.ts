@@ -102,6 +102,7 @@ import type {
   AgentKnownConstraint,
   AgentKnownPreference,
 } from "../../usecases/agent/agent-decision-context";
+import { extractAgentDecisionSummary } from "../../usecases/agent/agent-decision-summary";
 import { ViewerActionExecutor } from "../../usecases/viewer/viewer-action-executor";
 import { EvidenceScopedViewerActionHandler } from "../../usecases/agent/viewer-action-handler";
 import type { Evidence } from "../../usecases/agent/evidence-model";
@@ -1065,8 +1066,18 @@ class ConverseModelProvider implements AgentModelProvider {
       request.messages.map(toBedrockMessage),
       request.tools,
     );
+    const convertedMessage = fromBedrockMessage(response.message);
+    const decision = extractAgentDecisionSummary(convertedMessage.content.flatMap((content) =>
+      content.type === "text" ? [content.text] : []));
+    let textIndex = 0;
+    const message = {
+      ...convertedMessage,
+      content: convertedMessage.content.map((content) => content.type === "text"
+        ? { ...content, text: decision.textBlocks[textIndex++] ?? "" }
+        : content),
+    };
     return {
-      message: fromBedrockMessage(response.message),
+      message,
       stopReason: response.stopReason === "tool_use"
         ? "tool_calls"
         : response.stopReason === "max_tokens" ? "max_tokens" : "completed",
@@ -1076,6 +1087,8 @@ class ConverseModelProvider implements AgentModelProvider {
         latencyMs: response.metadata?.latencyMs,
         usage: response.metadata?.usage,
       },
+      decisionSummaryStatus: decision.status,
+      ...(decision.summary ? { decisionSummary: decision.summary } : {}),
     };
   }
 }

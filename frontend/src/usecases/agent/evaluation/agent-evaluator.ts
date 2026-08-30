@@ -17,6 +17,7 @@ export function observeAgentRuntimeResult(
   const toolSequence = result.trace.events
     .filter((event) => event.type === "tool_called")
     .map((event) => event.type === "tool_called" ? event.toolName : "");
+  const decisions = result.trace.events.filter((event) => event.type === "decision_recorded");
   return {
     caseId,
     toolSequence,
@@ -30,6 +31,13 @@ export function observeAgentRuntimeResult(
       actionType,
       status,
     })),
+    decisionHardConstraintKeys: unique(decisions.flatMap((event) =>
+      event.type === "decision_recorded" && Array.isArray(event.hardConstraints.value)
+        ? event.hardConstraints.value.flatMap((item) =>
+          isRecord(item) && typeof item.key === "string" ? [item.key] : [])
+        : [])),
+    decisionUnresolvedFacts: unique(decisions.flatMap((event) =>
+      event.type === "decision_recorded" ? event.unresolvedFacts : [])),
   };
 }
 
@@ -105,9 +113,13 @@ function evaluateCase(
   }
   const expected = testCase.expected;
   const toolSelectionAccuracy = equalLists(observation.toolSequence, expected.toolSequence) ? 1 : 0;
-  const constraintSatisfaction = matchingConstraintRate(
+  const normalizedConstraintSatisfaction = matchingConstraintRate(
     observation.normalizedConstraints,
     expected.constraints,
+  );
+  const constraintSatisfaction = Math.min(
+    normalizedConstraintSatisfaction,
+    decisionExpectationRate(observation, expected.decision),
   );
   const supported = observation.claimStatuses.filter((status) => status === "supported").length;
   const unsupported = observation.claimStatuses.filter((status) => status === "unsupported").length;
@@ -170,6 +182,20 @@ function equivalent(actual: unknown, expected: string | number | boolean | strin
   return Array.isArray(actual) && equalLists(actual, expected);
 }
 
+function decisionExpectationRate(
+  observation: AgentEvaluationObservation,
+  expected: AgentEvaluationCase["expected"]["decision"],
+): number {
+  if (!expected) return 1;
+  const hard = new Set(observation.decisionHardConstraintKeys ?? []);
+  const unresolved = new Set(observation.decisionUnresolvedFacts ?? []);
+  const checks = [
+    ...expected.requiredHardConstraintKeys.map((key) => hard.has(key)),
+    ...expected.forbiddenUnresolvedFacts.map((key) => !unresolved.has(key)),
+  ];
+  return checks.length === 0 ? 1 : checks.filter(Boolean).length / checks.length;
+}
+
 function equalLists(left: unknown[], right: unknown[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
@@ -180,6 +206,10 @@ function average(
     "taskCompletion" | "viewerActionValidity",
 ): number {
   return cases.reduce((sum, item) => sum + item.metrics[metric], 0) / cases.length;
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)];
 }
 
 function failedMissingObservation(testCase: AgentEvaluationCase): AgentEvaluationCaseResult {
