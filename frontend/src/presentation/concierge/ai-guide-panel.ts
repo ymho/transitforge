@@ -281,13 +281,13 @@ export function configureAiGuidePanel(
           },
         );
         if (conversationSessionId !== requestedSessionId) return;
-        const guidance = typeof response === "string" || !("conversation" in response)
-          ? undefined
-          : response.conversation;
+        const nextState = nextTripConversationState(
+          activeTripContext,
+          response,
+        );
+        const guidance = nextState.guidance;
         activeConversation = guidance;
-        activeTripContext = typeof response !== "string" && "travelPlan" in response
-          ? tripContextFromTravelPlan(response.travelPlan)
-          : guidance?.tripContext;
+        activeTripContext = nextState.tripContext;
         setContextChoices(guidance);
         if (guidance) {
           input.placeholder = inputPlaceholderForConversation(guidance);
@@ -401,6 +401,28 @@ export function configureAiGuidePanel(
   };
   controller.switchSession(conversationSessionId);
   return controller;
+}
+
+export function nextTripConversationState(
+  currentTripContext: TripContext | undefined,
+  response: ViewerAgentResponse,
+): {
+  guidance?: ConversationGuidance;
+  tripContext?: TripContext;
+} {
+  const guidance = typeof response === "string" || !("conversation" in response)
+    ? undefined
+    : response.conversation;
+  if (typeof response !== "string" && "travelPlan" in response) {
+    return {
+      guidance,
+      tripContext: tripContextFromTravelPlan(response.travelPlan),
+    };
+  }
+  return {
+    guidance,
+    tripContext: guidance?.tripContext ?? currentTripContext,
+  };
 }
 
 function tripContextFromTravelPlan(plan: ViewerAgentTravelPlan): TripContext {

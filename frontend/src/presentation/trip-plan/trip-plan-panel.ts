@@ -2,6 +2,7 @@ import type { JourneyRouteLeg } from "@raiquora/journey/direct-route-search";
 import {
   applyTripPlanPatches,
   selectTripPlanAccommodation,
+  validateTripPlanPatches,
   type MovementMode,
   type TripPlan,
   type TripPlanItem,
@@ -100,6 +101,7 @@ export function configureTripPlanPanel(
     },
     apply(patches) {
       if (!plan) return;
+      if (!validateTripPlanPatches(plan, patches).valid) return;
       plan = applyTripPlanPatches(plan, patches);
       if (persistChanges) saveTripPlan(storage, conversationSessionId, plan);
       open();

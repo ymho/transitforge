@@ -71,6 +71,7 @@ import {
 import type { TripContext, UserProfile } from "@raiquora/trip/travel-profile";
 import {
   tripPlanPatchesFromTravelPlan,
+  validateTripPlanPatches,
   type MovementMode,
   type TripPlan,
   type TripPlanPatch,
@@ -870,6 +871,10 @@ async function executeViewerToolAdapter(
     if (!current || !summary) throw new Error("変更する旅程がありません。");
     const patches = tripPlanPatchesFromToolInput(input.patches, current);
     if (patches.length === 0) throw new Error("旅程の変更内容がありません。");
+    const validation = validateTripPlanPatches(current, patches);
+    if (!validation.valid) {
+      throw new Error(validation.reason ?? "旅程の変更対象を確認できません。");
+    }
     tripPlanUpdateState.proposal = { summary, patches };
     return { proposed: true, summary };
   }

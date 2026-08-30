@@ -20,10 +20,10 @@ describe("Agent Evaluation profiles", () => {
 
     const smoke = runAgentEvaluationProfile(dataset, observations, "smoke");
     const full = runAgentEvaluationProfile(dataset, observations, "full");
-    expect(smoke.caseCount).toBe(11);
+    expect(smoke.caseCount).toBe(12);
     expect(smoke.selectedTag).toBe("smoke");
     expect(smoke.passed).toBe(true);
-    expect(full.caseCount).toBe(38);
+    expect(full.caseCount).toBe(39);
     expect(full.selectedTag).toBeUndefined();
     expect(full.passed).toBe(true);
   });

@@ -3,10 +3,42 @@ import { describe, expect, it } from "vitest";
 import {
   loadJourneySearchPreferences,
   journeyDelayLabel,
+  nextTripConversationState,
   normalizedFeedbackComment,
   shouldFocusAiGuideInputOnOpen,
   visibleAssistantText,
 } from "./ai-guide-panel";
+
+describe("AI guide trip conversation state", () => {
+  it("keeps the current trip context across a trip plan update response", () => {
+    const current = {
+      destinationWish: "宮島",
+      startDate: "2026-08-31",
+      nights: 1,
+    };
+
+    expect(nextTripConversationState(current, {
+      text: "帰りの経路を変更します",
+      tripPlanUpdate: { summary: "帰りを変更", patches: [] },
+    })).toEqual({ guidance: undefined, tripContext: current });
+  });
+
+  it("updates only the trip context supplied by a follow-up question", () => {
+    const next = { destinationWish: "宮島", startDate: "2026-09-01", nights: 2 };
+    expect(nextTripConversationState({ destinationWish: "宮島" }, {
+      text: "日程を確認します",
+      conversation: {
+        question: "何泊しますか",
+        expectedInput: "stay-length",
+        quickReplies: [],
+        tripContext: next,
+      },
+    })).toEqual({
+      guidance: expect.objectContaining({ tripContext: next }),
+      tripContext: next,
+    });
+  });
+});
 
 describe("AI guide journey preferences", () => {
   it("loads valid preferences and ignores invalid saved values", () => {
