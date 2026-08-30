@@ -21,6 +21,13 @@ export interface AccommodationOffering extends TravelOffering {
   checkOutDate: string;
   areaName?: string;
   imageUrl?: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  reviewAverage?: number;
+  reviewCount?: number;
+  priceBasis?: "reference-minimum" | "selected-dates";
+  availability?: "available" | "unknown";
 }
 
 export interface ExperienceOffering extends TravelOffering {

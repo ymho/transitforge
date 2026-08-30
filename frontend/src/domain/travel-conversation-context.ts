@@ -20,6 +20,11 @@ export function travelConversationFacts(
   const promptDate = explicitCalendarDate(prompt, now);
   const startDate = answerDate ?? previous.startDate ?? promptDate;
   const answerNights = explicitStayNights(answer);
+  const planningStage = nextPlanningStage(
+    previous.planningStage,
+    answer,
+    answerDate !== undefined || answerNights !== undefined,
+  );
   const promptNights = explicitStayNights(prompt);
   const stayNights = answerNights ?? previous.stayNights ?? promptNights;
   const answerTimes = explicitTravelTimes(answer);
@@ -37,6 +42,7 @@ export function travelConversationFacts(
   return {
     context: {
       ...previous,
+      ...(planningStage ? { planningStage } : {}),
       ...(startDate ? { startDate } : {}),
       ...(endDate ? { endDate } : {}),
       ...(stayNights === undefined ? {} : { stayNights }),
@@ -88,10 +94,13 @@ export function tripContextAfterUserAnswer(
 
 export function quickReplyMatchesExpectedInput(
   value: string,
-  expectedInput: "departure-date" | "stay-length" | "traveler-count" | "free-text",
+  expectedInput: "planning-intent" | "departure-date" | "stay-length" | "traveler-count" | "free-text",
 ): boolean {
   if (expectedInput === "free-text") return true;
   const normalized = value.normalize("NFKC").trim();
+  if (expectedInput === "planning-intent") {
+    return /^(?:旅程を考えたい|この場所で考える|旅にしたい|もう少し見たい)$/u.test(normalized);
+  }
   if (expectedInput === "departure-date") {
     return /^(?:今日|本日|明日|明後日|今週末|来週|別の日|other)$/u.test(normalized) ||
       /^\d{1,4}(?:年|[\/-])\d{1,2}(?:(?:月|[\/-])\d{1,2}日?)?$/u.test(normalized);
@@ -115,6 +124,9 @@ function embeddedTripContext(prompt: string): TripContext {
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
     const input = value as Record<string, unknown>;
     return {
+      ...(input.planningStage === "inspiration" || input.planningStage === "planning"
+        ? { planningStage: input.planningStage }
+        : {}),
       ...(text(input.destinationWish) ? { destinationWish: text(input.destinationWish) } : {}),
       ...(validIsoDateText(input.startDate) ? { startDate: input.startDate } : {}),
       ...(validIsoDateText(input.endDate) ? { endDate: input.endDate } : {}),
@@ -140,6 +152,20 @@ function embeddedTripContext(prompt: string): TripContext {
   } catch {
     return {};
   }
+}
+
+function nextPlanningStage(
+  previous: TripContext["planningStage"],
+  answer: string,
+  hasExplicitTravelCondition: boolean,
+): TripContext["planningStage"] {
+  if (previous === "planning") return previous;
+  if (hasExplicitTravelCondition) return "planning";
+  if (previous !== "inspiration") return previous;
+  const normalized = answer.normalize("NFKC").replace(/[\s　]+/gu, "");
+  return /(?:旅程|プラン|旅行)(?:を|に)?(?:考え|作り|組み|したい)|(?:この場所|ここ)(?:で|を軸に)(?:考え|旅に)/u.test(normalized)
+    ? "planning"
+    : previous;
 }
 
 function continuedAnswer(prompt: string): string | undefined {

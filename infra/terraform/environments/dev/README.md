@@ -60,11 +60,16 @@ Terraform apply後に`/transitforge/dev/travel-provider`が作成されるため
   "application_id": "旅行提供者アプリID",
   "access_key": "旅行提供者アクセスキー",
   "hotel_search_url": "旅行提供者の宿泊検索API URL",
+  "vacant_hotel_search_url": "旅行提供者の日付別空室検索API URL（任意）",
   "mapbox_search_access_token": "Mapbox Search Box API用アクセストークン（任意）",
   "brave_search_api_key": "Brave Search API Key（任意）",
   "hot_pepper_api_key": "飲食店検索API Key（任意）"
 }
 ```
+
+`vacant_hotel_search_url`を設定すると 宿泊候補の施設番号をまとめて日付と大人人数付きで再照会し
+確認できた候補だけを空室ありとして扱う。未設定または空室照会に失敗した場合は
+通常検索の参考最安料金だけを保持し 空室未確認として表示する。
 
 `hot_pepper_api_key`を省略した場合は飲食店検索だけが利用不可になる。気象庁防災情報はキー不要で
 Mapbox Navigationは既存の`mapbox_search_access_token`を共有する

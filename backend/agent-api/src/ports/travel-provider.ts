@@ -9,6 +9,7 @@ export interface TravelProviderCredentials {
   applicationId: string;
   accessKey: string;
   hotelSearchUrl: string;
+  vacantHotelSearchUrl?: string;
   affiliateId?: string;
 }
 

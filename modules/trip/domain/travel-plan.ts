@@ -25,12 +25,25 @@ export interface TripJourneyPlan {
 }
 
 export interface TripAccommodation {
+  provider?: string;
+  providerItemId?: string;
   name: string;
   checkInDate: string;
   checkOutDate: string;
   bookingUrl?: string;
   areaName?: string;
   imageUrl?: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  reviewAverage?: number;
+  reviewCount?: number;
+  price?: {
+    amount: number;
+    currency: "JPY";
+    basis: "reference-minimum" | "selected-dates";
+  };
+  availability?: "available" | "unknown";
 }
 
 export interface TravelPlan {

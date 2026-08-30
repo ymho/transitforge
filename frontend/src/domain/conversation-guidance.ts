@@ -7,6 +7,7 @@ import type { TripContext } from "@raiquora/trip/travel-profile";
  * renders the question and returns the selected or typed answer.
  */
 export type ConversationExpectedInput =
+  | "planning-intent"
   | "departure-date"
   | "stay-length"
   | "traveler-count"

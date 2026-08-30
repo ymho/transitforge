@@ -70,6 +70,7 @@ export interface AiGuidePanelElements {
   onPlaces?: (places: PlaceMediaSearchResult["places"]) => void;
   onGroundAccess?: (access: GroundAccessRoute | GroundAccessMatrix | GroundAccessArea) => void;
   onRestaurantConsult?: (restaurant: RestaurantCandidate) => void;
+  onRestaurants?: (restaurants: readonly RestaurantCandidate[]) => void;
   persistent?: () => boolean;
 }
 
@@ -298,7 +299,7 @@ export function configureAiGuidePanel(
         } else {
           input.placeholder = "列車、行き先、旅の相談を入力";
         }
-        resolveAssistantMessage(pendingMessage, response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult);
+        resolveAssistantMessage(pendingMessage, response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants);
         pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
       .catch(() => {
@@ -382,7 +383,7 @@ export function configureAiGuidePanel(
           continue;
         }
         const restored = appendPendingMessage(messages, entry.messageId);
-        resolveAssistantMessage(restored, entry.response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult);
+        resolveAssistantMessage(restored, entry.response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants);
         activeConversation = typeof entry.response !== "string" && "conversation" in entry.response
           ? entry.response.conversation
           : undefined;
@@ -505,6 +506,7 @@ function resolveAssistantMessage(
   onPlaces?: (places: PlaceMediaSearchResult["places"]) => void,
   onGroundAccess?: (access: GroundAccessRoute | GroundAccessMatrix | GroundAccessArea) => void,
   onRestaurantConsult?: (restaurant: RestaurantCandidate) => void,
+  onRestaurants?: (restaurants: readonly RestaurantCandidate[]) => void,
 ): void {
   item.classList.remove("ai-guide-message-pending");
   item.removeAttribute("aria-label");
@@ -512,6 +514,18 @@ function resolveAssistantMessage(
     item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response)));
   } else if ("conversation" in response) {
     item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response.text)));
+    if (response.external) {
+      appendExternalCards(item, renderExternalTravelInformation(
+        { text: response.text, external: response.external },
+        { onRestaurantConsult, includePlaceInspiration: true, includeRestaurants: !onRestaurants },
+      ));
+      if (response.external.places?.status === "available" && response.external.places.data) {
+        onPlaces?.(response.external.places.data.places);
+      }
+      if (response.external.restaurants?.status === "available" && response.external.restaurants.data) {
+        onRestaurants?.(response.external.restaurants.data.restaurants);
+      }
+    }
   } else if ("tripPlanUpdate" in response) {
     item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response.text)));
     const changes = document.createElement("ul");
@@ -542,16 +556,18 @@ function resolveAssistantMessage(
     if (response.external) {
       appendExternalCards(item, renderExternalTravelInformation(
         { text: response.text, external: response.external },
-        { onRestaurantConsult },
+        { onRestaurantConsult, includeRestaurants: !onRestaurants },
       ));
       if (response.external.places?.status === "available" && response.external.places.data) onPlaces?.(response.external.places.data.places);
+      if (response.external.restaurants?.status === "available" && response.external.restaurants.data) onRestaurants?.(response.external.restaurants.data.restaurants);
       if (response.external.groundAccess?.status === "available" && response.external.groundAccess.data) onGroundAccess?.(response.external.groundAccess.data);
     }
     onTravelPlan?.(response.travelPlan);
   } else if ("external" in response) {
     item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response.text)));
-    appendExternalCards(item, renderExternalTravelInformation(response, { onRestaurantConsult }));
+    appendExternalCards(item, renderExternalTravelInformation(response, { onRestaurantConsult, includeRestaurants: !onRestaurants }));
     if (response.external.places?.status === "available" && response.external.places.data) onPlaces?.(response.external.places.data.places);
+    if (response.external.restaurants?.status === "available" && response.external.restaurants.data) onRestaurants?.(response.external.restaurants.data.restaurants);
     if (response.external.groundAccess?.status === "available" && response.external.groundAccess.data) onGroundAccess?.(response.external.groundAccess.data);
   } else {
     item.classList.add("ai-guide-message-journey");

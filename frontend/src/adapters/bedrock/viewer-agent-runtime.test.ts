@@ -1889,7 +1889,7 @@ describe("Bedrock viewer agent", () => {
     }));
   });
 
-  it("returns a structured follow-up question without a presentation-specific branch", async () => {
+  it("asks whether to plan the trip before asking for dates", async () => {
     const converse = vi.fn().mockResolvedValue({
       message: { role: "assistant", content: [{ toolUse: {
         toolUseId: "follow-up", name: "ask_follow_up", input: {
@@ -1924,13 +1924,14 @@ describe("Bedrock viewer agent", () => {
     }
     expect(result.conversation).toMatchObject({
       recommendation: expect.stringContaining("稲佐の浜"),
-      reason: expect.stringContaining("実際のダイヤ"),
-      expectedInput: "departure-date",
-      tripContext: { destinationWish: "出雲大社" },
+      expectedInput: "planning-intent",
+      tripContext: { destinationWish: "出雲大社", planningStage: "inspiration" },
     });
-    expect(result.conversation.question).toBe("いつ出発しますか？");
-    expect(result.conversation.quickReplies).toEqual([]);
-    expect(result.text).toContain("日程未定なら");
+    expect(result.conversation.question).toBe("この場所を軸に旅を考えてみますか？");
+    expect(result.conversation.quickReplies).toEqual([
+      { label: "旅程を考える", value: "旅程を考えたい" },
+      { label: "もう少し見たい", value: "もう少し見たい" },
+    ]);
     expect(result.text).toContain("1泊にして");
     expect(result.text).not.toContain("構造化した案内を準備しました");
   });
@@ -1968,15 +1969,29 @@ describe("Bedrock viewer agent", () => {
     expect(result.conversation.question).toBe("日帰りですか？ それとも何泊しますか？");
   });
 
-  it("defers route search for a destination-only trip instead of exposing a terminal placeholder", async () => {
+  it("limits a destination-only trip to an inspiration follow-up", async () => {
     const searchDirectRoutes = vi.fn();
-    const converse = vi.fn().mockResolvedValue({
+    const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
+      expect(tools?.map(({ name }) => name)).toEqual([
+        "remember_travel_preference",
+        "update_conversation_session",
+        "ask_follow_up",
+      ]);
+      return {
       message: { role: "assistant", content: [{ toolUse: {
-        toolUseId: "premature-route",
-        name: "search_direct_routes",
-        input: {},
+        toolUseId: "follow-up",
+        name: "ask_follow_up",
+        input: {
+          recommendation: "出雲大社と稲佐の浜を組み合わせるなら1泊がおすすめです。",
+          reason: "実際の列車と宿泊日を同じ日程で確認できます。",
+          question: "いつ出発しますか？",
+          expectedInput: "departure-date",
+          quickReplies: [{ label: "明日", value: "明日" }],
+          tripContext: { destinationWish: "出雲大社" },
+        },
       } }] },
       stopReason: "tool_use",
+      };
     });
 
     const result = await runViewerAgentRuntime(
@@ -1998,25 +2013,104 @@ describe("Bedrock viewer agent", () => {
     }
     expect(result.text).not.toContain("構造化した案内");
     expect(result.conversation).toMatchObject({
-      expectedInput: "departure-date",
-      question: "いつ出発しますか？",
-      tripContext: { destinationWish: "出雲大社" },
+      expectedInput: "planning-intent",
+      question: "この場所を軸に旅を考えてみますか？",
+      tripContext: { destinationWish: "出雲大社", planningStage: "inspiration" },
     });
+    expect(converse).toHaveBeenCalledOnce();
+  });
+
+  it("returns destination photos before asking whether to build an itinerary", async () => {
+    const searchPlaceMedia = vi.fn(async () => ({
+      result: {
+        status: "available" as const,
+        freshness: "fresh" as const,
+        retrievedAt: "2026-08-30T04:00:00.000Z",
+        data: { places: [{
+          providerPlaceId: "izumo-taisha",
+          name: "出雲大社",
+          latitude: 35.4019,
+          longitude: 132.6855,
+          sourceUrl: "https://example.com/izumo-taisha",
+          openingHoursStatus: "unknown" as const,
+          image: {
+            url: "https://example.com/izumo.jpg",
+            attribution: "Example",
+            hotlinkAllowed: true as const,
+          },
+        }] },
+        evidence: [],
+      },
+    }));
+    const converse = vi.fn<BedrockAgentConverse>()
+      .mockImplementationOnce(async (_messages, tools) => {
+        expect(tools?.map(({ name }) => name)).toEqual(expect.arrayContaining([
+          "search_place_media",
+          "ask_follow_up",
+        ]));
+        expect(tools?.some(({ name }) => name === "search_accommodations")).toBe(false);
+        return {
+          message: { role: "assistant", content: [{ toolUse: {
+            toolUseId: "photo",
+            name: "search_place_media",
+            input: { query: "出雲大社 周辺 観光", limit: 4 },
+          } }] },
+          stopReason: "tool_use",
+        };
+      })
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "intent",
+          name: "ask_follow_up",
+          input: {
+            recommendation: "まずは出雲大社の空気感から見てみましょう。",
+            question: "この場所を軸に旅を考えてみますか？",
+            expectedInput: "planning-intent",
+            quickReplies: [
+              { label: "旅程を考える", value: "旅程を考えたい" },
+              { label: "もう少し見たい", value: "もう少し見たい" },
+            ],
+            tripContext: { planningStage: "inspiration" },
+          },
+        } }] },
+        stopReason: "tool_use",
+      });
+
+    const result = await runViewerAgentRuntime("出雲大社に行きたい", {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      searchPlaceMedia, maximumRouteTime: 1_800,
+    }, converse);
+
+    expect(searchPlaceMedia).toHaveBeenCalledWith({ query: "出雲大社", limit: 4 });
+    if (typeof result === "string" || !("conversation" in result)) {
+      throw new Error("写真付きの旅行相談がありません。");
+    }
+    expect(result.conversation.expectedInput).toBe("planning-intent");
+    expect(result.conversation.tripContext.destinationWish).toBe("出雲大社");
+    expect(result.external?.places?.data?.places[0]?.image?.url)
+      .toBe("https://example.com/izumo.jpg");
   });
 
   it("does not search accommodations with dates invented outside the conversation", async () => {
     const searchAccommodations = vi.fn();
-    const converse = vi.fn().mockResolvedValue({
+    const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
+      expect(tools?.some(({ name }) => name === "search_accommodations")).toBe(false);
+      return {
       message: { role: "assistant", content: [{ toolUse: {
-        toolUseId: "premature-stay",
-        name: "search_accommodations",
+        toolUseId: "inspiration",
+        name: "ask_follow_up",
         input: {
-          destination: "出雲大社",
-          checkInDate: "2026-08-28",
-          checkOutDate: "2026-08-29",
+          recommendation: "まずは出雲大社の雰囲気から見てみましょう。",
+          question: "旅程を考えてみますか？",
+          expectedInput: "planning-intent",
+          quickReplies: [{ label: "旅程を考える", value: "旅程を考えたい" }],
+          tripContext: { destinationWish: "出雲大社", planningStage: "inspiration" },
         },
       } }] },
       stopReason: "tool_use",
+      };
     });
 
     const result = await runViewerAgentRuntime(
@@ -2036,7 +2130,7 @@ describe("Bedrock viewer agent", () => {
     if (typeof result === "string" || !("conversation" in result)) {
       throw new Error("旅行相談の追加質問がありません。");
     }
-    expect(result.conversation.expectedInput).toBe("departure-date");
+    expect(result.conversation.expectedInput).toBe("planning-intent");
     expect(result.conversation.tripContext).not.toHaveProperty("startDate");
   });
 
@@ -2102,6 +2196,74 @@ describe("Bedrock viewer agent", () => {
     expect(result.text).toBe("駅から宿までレンタカー移動を追加");
     expect(result.text).not.toContain("構造化した案内を準備しました");
     vi.unstubAllGlobals();
+  });
+
+  it("limits an explicit sightseeing addition to trip-plan update tools", async () => {
+    const searchDirectRoutes = vi.fn();
+    const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
+      expect(tools?.map(({ name }) => name)).toEqual([
+        "propose_trip_update",
+        "ask_follow_up",
+      ]);
+      return {
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "add-sightseeing",
+          name: "propose_trip_update",
+          input: {
+            summary: "出雲大社を観光予定へ追加",
+            patches: [{
+              type: "addSightseeing",
+              name: "出雲大社",
+              afterId: "outbound",
+              date: "2026-09-01",
+            }],
+          },
+        } }] },
+        stopReason: "tool_use",
+      };
+    });
+
+    const result = await runViewerAgentRuntime(
+      "出雲大社を旅程へ追加したい",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+        searchDirectRoutes, maximumRouteTime: 1_800,
+        getTripPlan: () => ({
+          version: 1, id: "trip", title: "出雲の旅", destination: "出雲",
+          updatedAt: "2026-08-30", items: [
+            { id: "outbound", type: "movement", mode: "rail", route: {
+              originStation: "向日町", destinationStation: "出雲市",
+              journeys: [],
+            } },
+            { id: "return", type: "movement", mode: "rail", route: {
+              originStation: "出雲市", destinationStation: "向日町",
+              journeys: [],
+            } },
+          ],
+        }),
+      },
+      converse,
+    );
+
+    expect(searchDirectRoutes).not.toHaveBeenCalled();
+    expect(typeof result).not.toBe("string");
+    if (typeof result === "string" || !("tripPlanUpdate" in result)) {
+      throw new Error("旅程変更案がありません。");
+    }
+    expect(result.tripPlanUpdate).toMatchObject({
+      summary: "出雲大社を観光予定へ追加",
+      patches: [{
+        type: "add",
+        item: {
+          type: "sightseeing",
+          place: { name: "出雲大社", provider: "manual" },
+          date: "2026-09-01",
+        },
+        afterId: "outbound",
+      }],
+    });
   });
 
   it("re-searches only the return route at a later departure time", async () => {

@@ -18,8 +18,18 @@ export class SecretsManagerTravelProviderCredentials implements TravelProviderCr
     const accessKey = required(value.access_key, "access_key");
     const hotelSearchUrl = required(value.hotel_search_url, "hotel_search_url");
     assertHttpsUrl(hotelSearchUrl);
+    const vacantHotelSearchUrl = value.vacant_hotel_search_url === undefined
+      ? undefined
+      : required(value.vacant_hotel_search_url, "vacant_hotel_search_url");
+    if (vacantHotelSearchUrl) assertHttpsUrl(vacantHotelSearchUrl, "vacant_hotel_search_url");
     const affiliateId = value.affiliate_id === undefined ? undefined : required(value.affiliate_id, "affiliate_id");
-    return { applicationId, accessKey, hotelSearchUrl, ...(affiliateId ? { affiliateId } : {}) };
+    return {
+      applicationId,
+      accessKey,
+      hotelSearchUrl,
+      ...(vacantHotelSearchUrl ? { vacantHotelSearchUrl } : {}),
+      ...(affiliateId ? { affiliateId } : {}),
+    };
   }
 }
 

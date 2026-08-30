@@ -322,6 +322,8 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 
 今回の行き先 希望日 泊数 興味 同行者 移動条件などを表す。一回限りの「海に行きたい」はここへ入り
 普段の「山が好き」は`UserProfile`へ入る。両者を混在させない。
+`planningStage`は写真と雰囲気を見る`inspiration`と 具体的な日程を組む`planning`を区別する。
+目的地だけの相談では前者から始め 利用者が旅程化を望むか日程を明示した後にだけ後者へ進む。
 
 ### `ConversationGuidance` `ConversationSubmission`
 
@@ -406,7 +408,8 @@ Mobileでは会話を通常画面とし 地図 旅程 経路詳細を同じDOM�
 画面では各項目を独立したカードとして表示する。鉄道移動は保持している経路から発着時刻 列車
 行き先 路線 乗換待ち時間 遅延を描画し 自由文から経路情報を補完しない。
 カードの開閉状態とカード間の追加導線は画面状態であり`TripPlan`へ保存しない。追加導線は前後の
-`TripPlanItem`を自然文の相談へ変換し AIが提案した`TripPlanPatch`だけを確認後に反映する。
+`TripPlanItem`を自然文の相談へ変換する。希望が曖昧な場合は会話で一問だけ確認し 検索済みの宿泊
+観光 食事候補を地図で比較する。AIが提案した`TripPlanPatch`だけを確認後に反映する。
 
 既存旅程の変更は`TripPlanPatch`の追加 置換 削除 並べ替え メタデータ変更として提案する。
 AI応答だけでは保存せず 利用者が画面で反映を選んだ後に適用する。日程と鉄道経路の変更は
@@ -438,7 +441,17 @@ AI応答からUIへ渡す経路表示用モデルである。`JourneyRouteResult
 - Viewer応答alias: `frontend/src/domain/viewer-agent-response.ts`
 - 内容: 行きの経路 帰りの経路 日帰り区分 宿泊候補
 
-旅行の鉄道運賃は含めない。宿泊候補の空室と日付別料金は正本データがない限り保持も表示もしない。
+旅行の鉄道運賃は含めない。宿泊候補は座標 総合評価 評価件数 画像を保持できる。料金は通常検索の
+`reference-minimum`と日付別空室検索の`selected-dates`を区別し 日付別照会で確認できた候補だけ
+`availability: available`として保持する。正本データがない値は保持も表示もしない。
+
+### `MapTravelCandidate`
+
+- 定義: `frontend/src/domain/map-travel-candidate.ts`
+
+Viewerに閉じた宿泊 観光 食事の共通地図表示契約である。Provider固有の検索結果をこの判別共用体へ
+変換し 同じピン カード 詳細シートで比較する。宿泊選択は現在の会話UUIDの`TripPlan`へ反映し
+観光と食事は追加位置や時間を会話で確認してから`TripPlanPatch`を作る。
 
 ### `ViewerAgentResponse`
 

@@ -182,8 +182,14 @@ import { createConversationSessionSwitcher } from "../usecases/concierge/convers
 import { createJourneySearchHandlers } from "../usecases/journey/create-journey-search-handlers";
 import { BrowserContextWorkspaceRepository } from "../adapters/browser/context-workspace-repository";
 import { createContextWorkspaceController } from "../usecases/context-workspace/context-workspace-controller";
-import type { ContextViewKind } from "../domain/context-workspace";
 import { createMobileContextNavigation } from "../presentation/concierge/mobile-context-navigation";
+import {
+  mapAccommodationCandidates,
+  mapCandidateAsPlaceMedia,
+  mapPlaceCandidates,
+  mapRestaurantCandidates,
+  type MapTravelCandidate,
+} from "../domain/map-travel-candidate";
 
 export function startViewer(): void {
 
@@ -205,7 +211,6 @@ const {
   loadingScreenRetry,
   status,
   contextWorkspaceTabs,
-  contextWorkspaceButtons,
   closeContextWorkspace,
   displayTime,
   dateTimeInput,
@@ -336,7 +341,7 @@ let aiGuideController: ReturnType<typeof configureAiGuidePanel>;
 let verifiedPlaceLayer: VerifiedPlaceLayerController | undefined;
 let mapPlaceExplorerController: MapPlaceExplorerController | undefined;
 let groundAccessLayer: GroundAccessLayerController | undefined;
-let pendingVerifiedPlaces: import("@raiquora/trip/place-media").PlaceMedia[] = [];
+let pendingMapCandidates: MapTravelCandidate[] = [];
 const tripPreviewEnabled = import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get("trip-preview") === "1";
 const weatherPreviewEnabled = import.meta.env.DEV &&
@@ -358,6 +363,19 @@ const tripPlanController = configureTripPlanPanel(
     aiGuideController.ask(prompt);
   },
   localStorage,
+  (accommodations, stay) => {
+    const candidates = mapAccommodationCandidates(accommodations);
+    if (candidates.length === 0) {
+      aiGuideController.ask(
+        `${stay.checkInDate}から${stay.checkOutDate}までの${stay.destination}の宿泊先を、地図で比較できる座標付き候補として探したい`,
+      );
+      return;
+    }
+    pendingMapCandidates = candidates;
+    verifiedPlaceLayer?.show(candidates.map(mapCandidateAsPlaceMedia));
+    mapPlaceExplorerController?.show(candidates);
+    contextWorkspaceController.show("map");
+  },
 );
 let resizeContextMap: () => void = () => undefined;
 const scheduleContextMapResize = () => {
@@ -392,14 +410,6 @@ const applyContextWorkspaceState = () => {
   if (state.view !== "map") delete app.dataset.mapFocusMode;
   app.dataset.contextView = state.view;
   const currentTripPlan = loadTripPlan(localStorage, state.conversationSessionId);
-  for (const button of contextWorkspaceButtons) {
-    const view = button.dataset.contextView as ContextViewKind;
-    button.ariaPressed = String(view === state.view);
-    if (view === "trip-plan") button.disabled = currentTripPlan === undefined;
-    if (view === "journey-details") {
-      button.disabled = state.entity?.kind !== "journey";
-    }
-  }
   if (state.view === "trip-plan" && currentTripPlan) {
     if (!trainDetails.hidden) closeTrainDetails.click();
     tripPlanController.open();
@@ -411,13 +421,6 @@ const applyContextWorkspaceState = () => {
   scheduleContextMapResize();
 };
 contextWorkspaceController.subscribe(applyContextWorkspaceState);
-for (const button of contextWorkspaceButtons) {
-  button.addEventListener("click", () => {
-    const view = button.dataset.contextView as ContextViewKind;
-    if (mobileChatShell.matches) mobileContextNavigation.open(view);
-    else contextWorkspaceController.show(view);
-  });
-}
 tripPlanToggle.addEventListener("click", () => {
   const currentTripPlan = loadTripPlan(
     localStorage,
@@ -506,14 +509,15 @@ aiGuideController = configureAiGuidePanel(
       });
     },
     onPlaces: (places) => {
-      pendingVerifiedPlaces = [...places];
-      if (places.length === 0) {
+      const candidates = mapPlaceCandidates(places);
+      pendingMapCandidates = candidates;
+      if (candidates.length === 0) {
         mapPlaceExplorerController?.clear();
         verifiedPlaceLayer?.clear();
         return;
       }
-      verifiedPlaceLayer?.show(places);
-      mapPlaceExplorerController?.show(places);
+      verifiedPlaceLayer?.show(candidates.map(mapCandidateAsPlaceMedia));
+      mapPlaceExplorerController?.show(candidates);
       contextWorkspaceController.show("map");
     },
     onGroundAccess: (access) => {
@@ -522,6 +526,14 @@ aiGuideController = configureAiGuidePanel(
     },
     onRestaurantConsult: (restaurant) => {
       aiGuideController.ask(`${restaurant.name}を食事候補として旅程に入れたい`);
+    },
+    onRestaurants: (restaurants) => {
+      const candidates = mapRestaurantCandidates(restaurants);
+      pendingMapCandidates = candidates;
+      if (candidates.length === 0) return;
+      verifiedPlaceLayer?.show(candidates.map(mapCandidateAsPlaceMedia));
+      mapPlaceExplorerController?.show(candidates);
+      contextWorkspaceController.show("map");
     },
     persistent: () => true,
     onTripPlanUpdate: (proposal) => {
@@ -660,15 +672,24 @@ if (!token) {
     detailContent: mapPlaceDetailContent,
     closeDetail: closeMapPlaceDetail,
     focusPlace: (providerPlaceId) => verifiedPlaceLayer?.focus(providerPlaceId),
-    consult: (place) => aiGuideController.ask(`${place.name}を旅程へ追加したい`),
+    choose: (candidate) => {
+      if (candidate.kind === "accommodation") {
+        tripPlanController.selectAccommodation(candidate.value);
+        contextWorkspaceController.show("trip-plan");
+        return;
+      }
+      aiGuideController.ask(candidate.kind === "restaurant"
+        ? `${candidate.name}を食事候補として旅程に入れたい`
+        : `${candidate.name}を旅程へ追加したい`);
+    },
     clearPlaces: () => {
-      pendingVerifiedPlaces = [];
+      pendingMapCandidates = [];
       verifiedPlaceLayer?.clear();
     },
   });
-  if (pendingVerifiedPlaces.length > 0) {
-    verifiedPlaceLayer.show(pendingVerifiedPlaces);
-    mapPlaceExplorerController.show(pendingVerifiedPlaces);
+  if (pendingMapCandidates.length > 0) {
+    verifiedPlaceLayer.show(pendingMapCandidates.map(mapCandidateAsPlaceMedia));
+    mapPlaceExplorerController.show(pendingMapCandidates);
   }
 
   map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }));

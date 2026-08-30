@@ -41,6 +41,14 @@ export interface AccommodationSearchResponse {
     bookingUrl?: string;
     areaName?: string;
     imageUrl?: string;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+    reviewAverage?: number;
+    reviewCount?: number;
+    price?: { amount: number; currency: "JPY" };
+    priceBasis?: "reference-minimum" | "selected-dates";
+    availability?: "available" | "unknown";
   }>;
 }
 export interface WeatherForecastSearchResponse {

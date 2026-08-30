@@ -273,8 +273,33 @@ export async function runViewerAgentRuntime(
   const externalState: ExternalTravelToolState = {};
   const attemptedTools = new Set<string>();
   const travelFacts = travelConversationFacts(prompt, currentDate(dependencies));
+  const currentTripPlan = dependencies.getTripPlan?.();
   const hasCompleteTravelSchedule = featureFromPrompt(prompt) === "travel_planning" &&
     travelFacts.hasExplicitDate && travelFacts.hasExplicitStayLength;
+  const isIncompleteNewTravelConsultation = featureFromPrompt(prompt) === "travel_planning" &&
+    isTravelDestinationConsultation(prompt, travelFacts.context) &&
+    !currentTripPlan && !hasCompleteTravelSchedule;
+  const needsTravelInspiration = isIncompleteNewTravelConsultation &&
+    travelFacts.context.planningStage !== "planning";
+  const isTripPlanAddition = Boolean(currentTripPlan) && isTripPlanAdditionRequest(prompt);
+  const allowedToolNames = isTripPlanAddition
+    ? new Set<string>(["propose_trip_update", "ask_follow_up"])
+    : needsTravelInspiration
+      ? new Set<string>([
+        "remember_travel_preference",
+        "update_conversation_session",
+        "ask_follow_up",
+        ...(dependencies.searchPlaceMedia ? ["search_place_media"] : []),
+      ])
+      : isIncompleteNewTravelConsultation
+      ? new Set<string>([
+        "remember_travel_preference",
+        "update_conversation_session",
+        "ask_follow_up",
+        "search_direct_routes",
+        "search_accommodations",
+      ])
+      : undefined;
   const tools = viewerToolRegistry({
     prompt,
     dependencies,
@@ -286,7 +311,7 @@ export async function runViewerAgentRuntime(
     tripPlanUpdateState,
     externalState,
     attemptedTools,
-  });
+  }, allowedToolNames);
   const evidenceMappers = viewerEvidenceMappers();
   const toolViewerActions = viewerToolActionMappers();
   const viewerActionHandler = new EvidenceScopedViewerActionHandler(
@@ -315,12 +340,41 @@ export async function runViewerAgentRuntime(
       externalState,
       dependencies.searchPlaceMedia !== undefined,
       attemptedTools,
-      dependencies.getTripPlan?.(),
+      currentTripPlan,
       dependencies.getUserProfile?.(),
     ),
     finalResponsePolicy: () => {
+      if (isTripPlanAddition && !tripPlanUpdateState.proposal) {
+        return {
+          accepted: false,
+          reason: "明示された観光地を現在の旅程へ追加する",
+          instruction: "追加する場所が分かる場合はpropose_trip_updateで観光予定の変更案を作ってください。場所が分からない場合だけask_follow_upで一つ確認してください",
+        };
+      }
       if (
-        dependencies.getTripPlan?.() &&
+        needsTravelInspiration &&
+        dependencies.searchPlaceMedia &&
+        !attemptedTools.has("search_place_media")
+      ) {
+        return {
+          accepted: false,
+          reason: "目的地を旅程条件より先に写真で紹介する",
+          instruction: "search_place_mediaで利用者が指定した目的地そのものの写真と位置を確認してください",
+        };
+      }
+      if (isIncompleteNewTravelConsultation && !conversationState.response) {
+        return {
+          accepted: false,
+          reason: needsTravelInspiration
+            ? "写真を見た後に旅程を考えたいか確認する"
+            : "新しい旅行相談で不足する条件を一つだけ確認する",
+          instruction: needsTravelInspiration
+            ? "ask_follow_upで日程を聞かず この場所を軸に旅を考えるか確認してください"
+            : "調査Toolを増やさずask_follow_upで出発日または滞在日数のうち不足する一条件だけを確認してください",
+        };
+      }
+      if (
+        currentTripPlan &&
         hasExplicitReturnArrivalTime(prompt) &&
         !tripPlanUpdateState.proposal
       ) {
@@ -330,7 +384,7 @@ export async function runViewerAgentRuntime(
           instruction: `search_trip_route_updateをtarget=return arrivalTimeLimitMinutes=${travelFacts.context.returnArrivalTimeMinutes}で実行してください`,
         };
       }
-      if (!hasCompleteTravelSchedule || dependencies.getTripPlan?.()) {
+      if (!hasCompleteTravelSchedule || currentTripPlan) {
         return { accepted: true };
       }
       if (!travelState.response) {
@@ -371,7 +425,7 @@ export async function runViewerAgentRuntime(
 
   const travelResponse = travelResponseText(
     travelState,
-    dependencies.getTripPlan?.(),
+    currentTripPlan,
     dependencies.getUserProfile?.(),
   );
   if (travelResponse !== undefined) {
@@ -381,7 +435,11 @@ export async function runViewerAgentRuntime(
     return travelResponse;
   }
   const conversationResponse = conversationResponseText(conversationState);
-  if (conversationResponse !== undefined) return conversationResponse;
+  if (conversationResponse !== undefined) {
+    return hasExternalTravelInformation(externalState) && typeof conversationResponse !== "string"
+      ? { ...conversationResponse, external: externalState }
+      : conversationResponse;
+  }
   if (tripPlanUpdateState.proposal) {
     return {
       text: tripPlanUpdateState.proposal.summary,
@@ -437,9 +495,13 @@ const terminalToolNames = new Set<string>([
   "search_trip_route_update",
 ]);
 
-function viewerToolRegistry(context: ViewerToolContext): AgentToolRegistry {
+function viewerToolRegistry(
+  context: ViewerToolContext,
+  allowedToolNames?: ReadonlySet<string>,
+): AgentToolRegistry {
   const registry = new AgentToolRegistry();
   for (const name of viewerToolNames) {
+    if (allowedToolNames && !allowedToolNames.has(name)) continue;
     registry.register(viewerTool(name, context));
   }
   return registry;
@@ -473,6 +535,7 @@ function viewerTool(
           context.conversationState,
           context.tripPlanUpdateState,
           context.externalState,
+          context.attemptedTools,
         ));
       } catch (error) {
         return failedAgentToolResult({
@@ -628,7 +691,7 @@ function viewerToolInputSchema(
         question: { type: "string" },
         expectedInput: {
           type: "string",
-          enum: ["departure-date", "stay-length", "traveler-count", "free-text"],
+          enum: ["planning-intent", "departure-date", "stay-length", "traveler-count", "free-text"],
         },
         quickReplies: {
           type: "array",
@@ -647,6 +710,7 @@ function viewerToolInputSchema(
           type: "object",
           description: "既に判明している今回の旅行条件。質問していない条件も失わず引き継ぐ",
           properties: {
+            planningStage: { type: "string", enum: ["inspiration", "planning"] },
             destinationWish: { type: "string" },
             startDate: { type: "string" },
             endDate: { type: "string" },
@@ -803,9 +867,35 @@ function viewerProblemFramer(
 function featureFromPrompt(prompt: string): "journey_planning" | "train_guidance" | "operational_analysis" | "travel_planning" {
   const normalized = prompt.normalize("NFKC");
   if (/(?:旅行|観光|宿泊|\d+泊|ホテル|旅館)/u.test(normalized)) return "travel_planning";
+  if (
+    /(?:大社|神社|寺|公園|温泉|城|庭園|美術館|博物館|水族館|動物園|島|海岸|高原)(?:へ|に)(?:行きたい|行く|行こう)/u.test(normalized) ||
+    /(?:島根|鳥取|四国|山陰|山陽|九州|沖縄|北海道|東北|北陸|瀬戸内)(?:へ|に)(?:行きたい|行く|行こう)/u.test(normalized)
+  ) return "travel_planning";
   if (/(?:遅延|遅れ|混雑|ピーク)/u.test(normalized)) return "operational_analysis";
   if (/(?:から.+(?:へ|まで)|経路|乗換|行きたい)/u.test(normalized)) return "journey_planning";
   return "train_guidance";
+}
+
+function isTripPlanAdditionRequest(prompt: string): boolean {
+  const currentAnswer = prompt.match(/利用者の今回の回答:\s*([^\n]+)/u)?.[1] ?? prompt;
+  const normalized = currentAnswer.normalize("NFKC").replace(/[\s　]+/gu, "");
+  return /(?:旅程|予定|プラン)(?:へ|に).{0,80}(?:追加|入れ)/u.test(normalized) ||
+    /.{1,80}(?:を|も)(?:旅程|予定|プラン)(?:へ|に)(?:追加|入れ)/u.test(normalized);
+}
+
+function isTravelDestinationConsultation(prompt: string, context: TripContext): boolean {
+  return travelConsultationDestination(prompt, context) !== undefined;
+}
+
+function travelConsultationDestination(
+  prompt: string,
+  context: TripContext,
+): string | undefined {
+  if (context.destinationWish) return context.destinationWish;
+  const currentAnswer = prompt.match(/利用者の今回の回答:\s*([^\n]+)/u)?.[1] ?? prompt;
+  const normalized = currentAnswer.normalize("NFKC").replace(/[\s　]+/gu, " ").trim();
+  const match = normalized.match(/(?:^|[、。])(.{1,80}?)(?:へ|に)(?:旅行|観光|遊び|行きたい|行く|行こう)/u);
+  return match?.[1]?.trim();
 }
 
 class ConverseModelProvider implements AgentModelProvider {
@@ -913,8 +1003,21 @@ async function executeViewerToolAdapter(
   conversationState: ConversationToolState,
   tripPlanUpdateState: TripPlanUpdateToolState,
   externalState: ExternalTravelToolState,
+  attemptedTools: ReadonlySet<string>,
 ): Promise<unknown> {
   if (isExternalTravelToolName(name)) {
+    if (name === "search_place_media") {
+      const facts = travelConversationFacts(originalPrompt, currentDate(dependencies));
+      const destination = travelConsultationDestination(originalPrompt, facts.context);
+      if (destination && facts.context.planningStage !== "planning") {
+        return executeExternalTravelTool(
+          name,
+          { ...input, query: destination },
+          dependencies,
+          externalState,
+        );
+      }
+    }
     return executeExternalTravelTool(name, input, dependencies, externalState);
   }
   if (name === "propose_trip_update") {
@@ -960,6 +1063,15 @@ async function executeViewerToolAdapter(
       originalPrompt,
       currentDate(dependencies),
     );
+    if (
+      featureFromPrompt(originalPrompt) === "travel_planning" &&
+      isTravelDestinationConsultation(originalPrompt, travelFacts.context) &&
+      travelFacts.context.planningStage !== "planning" &&
+      dependencies.searchPlaceMedia &&
+      !attemptedTools.has("search_place_media")
+    ) {
+      throw new Error("日程を聞く前にsearch_place_mediaで目的地の写真を確認してください。");
+    }
     if (
       featureFromPrompt(originalPrompt) === "travel_planning" &&
       travelFacts.hasExplicitDate &&
@@ -1903,20 +2015,33 @@ function conversationGuidanceFromToolInput(
     ? input.expectedInput
     : "free-text";
   const candidateContext = tripContextFromToolInput(input.tripContext);
-  const tripContext = mergeAuthoritativeTripContext(
+  const mergedTripContext = mergeAuthoritativeTripContext(
     candidateContext,
     originalPrompt,
     now,
   );
+  const requestedDestination = travelConsultationDestination(originalPrompt, mergedTripContext);
+  const tripContext: TripContext = requestedDestination && !mergedTripContext.destinationWish
+    ? { ...mergedTripContext, destinationWish: requestedDestination }
+    : mergedTripContext;
   const facts = travelConversationFacts(originalPrompt, now);
-  const expectedInput = featureFromPrompt(originalPrompt) === "travel_planning" &&
+  const needsPlanningIntent = featureFromPrompt(originalPrompt) === "travel_planning" &&
+    isTravelDestinationConsultation(originalPrompt, tripContext) &&
+    tripContext.planningStage !== "planning" &&
+    !facts.hasExplicitDate && !facts.hasExplicitStayLength;
+  const effectiveTripContext: TripContext = needsPlanningIntent
+    ? { ...tripContext, planningStage: "inspiration" }
+    : tripContext;
+  const expectedInput = needsPlanningIntent
+    ? "planning-intent"
+    : featureFromPrompt(originalPrompt) === "travel_planning" &&
       !facts.hasExplicitDate
     ? "departure-date"
     : featureFromPrompt(originalPrompt) === "travel_planning" &&
         !facts.hasExplicitStayLength
       ? "stay-length"
       : requestedExpectedInput;
-  const quickReplies = (Array.isArray(input.quickReplies)
+  const requestedQuickReplies = (Array.isArray(input.quickReplies)
     ? input.quickReplies.flatMap((value) => {
       if (!value || typeof value !== "object") return [];
       const reply = value as Record<string, unknown>;
@@ -1924,7 +2049,17 @@ function conversationGuidanceFromToolInput(
       return [{ label: reply.label, value: reply.value }];
     })
     : []).filter(({ value }) => quickReplyMatchesExpectedInput(value, expectedInput));
-  const normalizedQuestion = expectedInput === "departure-date"
+  const quickReplies = requestedQuickReplies.length > 0
+    ? requestedQuickReplies
+    : expectedInput === "planning-intent"
+      ? [
+        { label: "旅程を考える", value: "旅程を考えたい" },
+        { label: "もう少し見たい", value: "もう少し見たい" },
+      ]
+      : [];
+  const normalizedQuestion = expectedInput === "planning-intent"
+    ? "この場所を軸に旅を考えてみますか？"
+    : expectedInput === "departure-date"
     ? "いつ出発しますか？"
     : expectedInput === "stay-length"
       ? "日帰りですか？ それとも何泊しますか？"
@@ -1939,7 +2074,7 @@ function conversationGuidanceFromToolInput(
     question: normalizedQuestion,
     expectedInput,
     quickReplies,
-    tripContext,
+    tripContext: effectiveTripContext,
   });
 }
 
@@ -1962,6 +2097,18 @@ function missingTravelScheduleGuidance(
   const recommendation = `${destination}なら、まずは1泊を基準にして、${
     active ? "見どころをいくつか巡りつつ" : "予定を詰め込みすぎず"
   }現地らしさを楽しめる形から考えるのがおすすめです。`;
+  if (context.planningStage !== "planning") {
+    return normalizedConversationGuidance({
+      recommendation: `${destination}の写真と雰囲気を見ながら、まず行ってみたいと思えるか確かめてみましょう。`,
+      question: "この場所を軸に旅を考えてみますか？",
+      expectedInput: "planning-intent",
+      quickReplies: [
+        { label: "旅程を考える", value: "旅程を考えたい" },
+        { label: "もう少し見たい", value: "もう少し見たい" },
+      ],
+      tripContext: { ...context, planningStage: "inspiration" },
+    });
+  }
   if (!context.startDate) {
     return normalizedConversationGuidance({
       recommendation,
@@ -1990,7 +2137,7 @@ function missingTravelScheduleGuidance(
 }
 
 function isConversationExpectedInput(value: unknown): value is ConversationExpectedInput {
-  return value === "departure-date" || value === "stay-length" ||
+  return value === "planning-intent" || value === "departure-date" || value === "stay-length" ||
     value === "traveler-count" || value === "free-text";
 }
 
@@ -2000,6 +2147,9 @@ function tripContextFromToolInput(value: unknown): TripContext {
   const stringValue = (key: string) =>
     typeof input[key] === "string" && input[key].trim() ? input[key].trim() : undefined;
   return {
+    ...(input.planningStage === "inspiration" || input.planningStage === "planning"
+      ? { planningStage: input.planningStage }
+      : {}),
     ...(stringValue("destinationWish") ? { destinationWish: stringValue("destinationWish") } : {}),
     ...(stringValue("startDate") ? { startDate: stringValue("startDate") } : {}),
     ...(stringValue("endDate") ? { endDate: stringValue("endDate") } : {}),
@@ -2089,6 +2239,26 @@ function accommodationValues(value: unknown): ViewerAgentTravelPlan["accommodati
         : {}),
       ...(typeof accommodation.imageUrl === "string"
         ? { imageUrl: accommodation.imageUrl }
+        : {}),
+      ...(typeof accommodation.provider === "string" ? { provider: accommodation.provider } : {}),
+      ...(typeof accommodation.providerItemId === "string" ? { providerItemId: accommodation.providerItemId } : {}),
+      ...(typeof accommodation.address === "string" ? { address: accommodation.address } : {}),
+      ...(typeof accommodation.latitude === "number" ? { latitude: accommodation.latitude } : {}),
+      ...(typeof accommodation.longitude === "number" ? { longitude: accommodation.longitude } : {}),
+      ...(typeof accommodation.reviewAverage === "number" ? { reviewAverage: accommodation.reviewAverage } : {}),
+      ...(typeof accommodation.reviewCount === "number" ? { reviewCount: accommodation.reviewCount } : {}),
+      ...(accommodation.price && typeof accommodation.price === "object" &&
+        typeof accommodation.price.amount === "number" && accommodation.price.currency === "JPY"
+        ? {
+            price: {
+              amount: accommodation.price.amount,
+              currency: "JPY" as const,
+              basis: accommodation.priceBasis === "selected-dates" ? "selected-dates" as const : "reference-minimum" as const,
+            },
+          }
+        : {}),
+      ...(accommodation.availability === "available" || accommodation.availability === "unknown"
+        ? { availability: accommodation.availability }
         : {}),
     }];
   });

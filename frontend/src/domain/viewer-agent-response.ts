@@ -41,6 +41,7 @@ export interface ViewerAgentTravelResponse {
 export interface ViewerAgentConversationResponse {
   text: string;
   conversation: ConversationGuidance;
+  external?: ViewerAgentExternalData;
 }
 export interface ViewerAgentTripPlanUpdateResponse { text: string; tripPlanUpdate: TripPlanUpdateProposal; }
 export interface ViewerAgentExternalResponse {
