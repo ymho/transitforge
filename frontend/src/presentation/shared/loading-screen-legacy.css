@@ -8,13 +8,6 @@
   text-align: left;
 }
 
-.loading-screen-brand {
-  margin: 0 0 0.75rem;
-  color: #f4f6f8;
-  font: 600 1rem/1.2 system-ui, sans-serif;
-  letter-spacing: 0.02em;
-}
-
 .loading-screen-message {
   margin: 0 0 1rem;
   color: #9da8b3;
@@ -45,4 +38,3 @@
   background: transparent;
   box-shadow: none;
 }
-

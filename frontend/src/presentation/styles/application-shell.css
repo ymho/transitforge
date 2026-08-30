@@ -34,6 +34,8 @@
 
 .context-workspace-tabs button:disabled { opacity: 0.42; cursor: not-allowed; }
 #close-context-workspace { display: none; }
+#app[data-map-focus-mode="true"] .context-workspace-tabs > :not(#close-context-workspace) { display: none; }
+#app[data-map-focus-mode="true"] #close-context-workspace { display: block; }
 
 @media (max-width: 71.999rem) {
   .ai-guide-toggle,
@@ -70,8 +72,7 @@
     bottom: auto;
   }
 
-  #app[data-mobile-context-open="true"] .trip-plan-panel,
-  #app[data-mobile-context-open="true"] .train-details {
+  #app[data-mobile-context-open="true"] .trip-plan-panel {
     position: fixed;
     z-index: 10;
     inset: 0;
@@ -82,67 +83,132 @@
     border-radius: 0;
   }
 
+  #app[data-mobile-context-open="true"][data-context-view="journey-details"] .train-details {
+    position: fixed;
+    z-index: 10;
+    inset: 60dvh 0 0;
+    width: 100%;
+    height: 40dvh;
+    max-height: 40dvh;
+    overflow-y: auto;
+    border: 0;
+    border-top: 1px solid var(--glass-border-subtle);
+    border-radius: 0;
+  }
+
   #app[data-mobile-context-open="true"] .map-place-explorer {
     z-index: 10;
     bottom: 1rem;
+  }
+
+  .loading-screen {
+    position: absolute;
+    z-index: 8;
   }
 }
 
 @media (min-width: 72rem) {
   #app {
     display: grid;
-    grid-template-columns: 17rem minmax(30rem, 1.25fr) minmax(24rem, 0.9fr);
+    grid-template-columns: 15.5rem minmax(25rem, 0.82fr) minmax(27rem, 1.18fr);
+    grid-template-areas: "history conversation context";
     grid-template-rows: minmax(0, 1fr);
-    gap: 0.75rem;
-    padding: 0.75rem;
+    gap: 0;
+    padding: 0;
     overflow: hidden;
-    background: #08111d;
+    background: var(--glass-canvas);
+  }
+
+  #app:not(:has(.conversation-history-dialog[open])) {
+    grid-template-columns: 3.75rem minmax(25rem, 0.82fr) minmax(27rem, 1.18fr);
+    grid-template-areas: "rail conversation context";
+  }
+
+  #app:not(:has(.conversation-history-dialog[open])) .conversation-sidebar-rail {
+    display: flex;
+    grid-area: rail;
+    grid-row: 1 / -1;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.75rem 0.4rem;
+    background: #f7f7f7;
+  }
+
+  #app[data-map-focus-mode="true"],
+  #app[data-map-focus-mode="true"]:not(:has(.conversation-history-dialog[open])) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "context";
+  }
+
+  #app[data-map-focus-mode="true"] .conversation-history-dialog,
+  #app[data-map-focus-mode="true"] .conversation-sidebar-rail,
+  #app[data-map-focus-mode="true"]:not(:has(.conversation-history-dialog[open])) .conversation-sidebar-rail,
+  #app[data-map-focus-mode="true"] .ai-guide-panel {
+    display: none;
   }
 
   #map {
     position: relative;
-    grid-column: 3;
-    grid-row: 1;
+    grid-area: context;
+    grid-row: 1 / -1;
     min-width: 0;
-    border: 1px solid var(--glass-border-subtle);
-    border-radius: 1.5rem;
-    box-shadow: 0 0.8rem 2.5rem var(--glass-shadow);
+    border: 0;
+    border-left: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .ai-guide-panel {
     position: relative;
     inset: auto;
-    grid-column: 2;
-    grid-row: 1;
+    grid-area: conversation;
+    grid-row: 1 / -1;
     width: auto;
     height: auto;
     max-height: none;
-    border-radius: 1.5rem;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: #ffffff;
     animation: none;
   }
 
   .ai-guide-panel[hidden] { display: grid; }
   .ai-guide-toggle,
-  #close-ai-guide,
+  #close-ai-guide { display: none; }
   #conversation-history-toggle { display: none; }
 
   .conversation-history-dialog {
     position: relative;
     inset: auto;
-    grid-column: 1;
-    grid-row: 1;
+    grid-area: history;
+    grid-row: 1 / -1;
     width: auto;
     max-width: none;
     height: auto;
     max-height: none;
     margin: 0;
-    border-radius: 1.5rem;
+    border: 0;
+    border-right: 1px solid var(--glass-border-subtle);
+    border-radius: 0;
+    box-shadow: none;
     animation: none;
   }
 
   .conversation-history-dialog::backdrop { display: none; }
   .conversation-history-dialog > section { max-height: none; height: 100%; }
-  #close-conversation-history { display: none; }
+  #close-conversation-history { display: grid; }
+
+  .loading-screen {
+    position: relative;
+    z-index: 20;
+    inset: auto;
+    grid-area: context;
+    grid-row: 1 / -1;
+    width: auto;
+    height: auto;
+  }
 
   .context-workspace-tabs {
     position: relative;
@@ -150,7 +216,7 @@
     left: auto;
     align-self: start;
     justify-self: center;
-    grid-column: 3;
+    grid-area: context;
     grid-row: 1;
     transform: none;
   }
@@ -161,18 +227,18 @@
     left: 0.75rem;
     align-self: start;
     justify-self: start;
-    grid-column: 3;
+    grid-area: context;
     grid-row: 1;
   }
 
   .map-place-explorer {
     position: relative;
-    inset: auto 0.75rem 0.75rem;
+    inset: auto 0 0;
     align-self: end;
-    grid-column: 3;
+    grid-area: context;
     grid-row: 1;
     width: auto;
-    margin: 0 0.75rem;
+    margin: 0;
   }
 
   .trip-plan-panel,
@@ -180,14 +246,52 @@
     position: relative;
     inset: auto;
     align-self: stretch;
-    grid-column: 3;
-    grid-row: 1;
+    grid-area: context;
+    grid-row: 2;
     width: auto;
     max-width: none;
     height: auto;
     max-height: none;
-    margin: 3.8rem 0.5rem 0.5rem;
-    border-radius: 1.25rem;
+    margin: 0;
+    padding-top: 0;
+    border: 0;
+    border-left: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  #app[data-context-view="trip-plan"],
+  #app[data-context-view="journey-details"] {
+    grid-template-rows: minmax(14rem, 0.42fr) minmax(20rem, 0.58fr);
+  }
+
+  #app[data-context-view="journey-details"] {
+    grid-template-rows: minmax(0, 0.62fr) minmax(14rem, 0.38fr);
+  }
+
+  #app[data-context-view="trip-plan"] #map,
+  #app[data-context-view="journey-details"] #map {
+    grid-row: 1;
+    min-height: 0;
+    border-bottom: 1px solid var(--glass-border-subtle);
+  }
+
+  #app[data-context-view="journey-details"] .train-details {
+    justify-self: center;
+    width: min(50rem, calc(100% - 2rem));
+    min-height: 0;
+    margin: 0.8rem auto 0;
+    padding: 1rem 1.1rem 0;
+    overflow-y: auto;
+    border: 1px solid var(--glass-border-subtle);
+    border-bottom: 0;
+    border-radius: 1.25rem 1.25rem 0 0;
+    box-shadow: 0 -0.35rem 1.5rem rgb(15 23 42 / 7%);
+  }
+
+  #app[data-context-view="trip-plan"] .map-place-explorer,
+  #app[data-context-view="journey-details"] .map-place-explorer {
+    grid-row: 1;
   }
 
   .map-tool-symbols,

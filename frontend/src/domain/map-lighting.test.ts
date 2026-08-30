@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { lightPresetForRouteTime, uiColorModeForLightPreset } from "./map-lighting";
+import { lightPresetForRouteTime } from "./map-lighting";
 
 describe("map lighting", () => {
   it("selects all four Mapbox presets from fixed time ranges", () => {
@@ -12,13 +12,6 @@ describe("map lighting", () => {
     expect(lightPresetForRouteTime(16 * 60)).toBe("dusk");
     expect(lightPresetForRouteTime(19 * 60 + 59)).toBe("dusk");
     expect(lightPresetForRouteTime(20 * 60)).toBe("night");
-  });
-
-  it("maps dawn and day to the day UI, and dusk and night to the night UI", () => {
-    expect(uiColorModeForLightPreset("dawn")).toBe("day");
-    expect(uiColorModeForLightPreset("day")).toBe("day");
-    expect(uiColorModeForLightPreset("dusk")).toBe("night");
-    expect(uiColorModeForLightPreset("night")).toBe("night");
   });
 
   it("treats times after midnight as the following day", () => {

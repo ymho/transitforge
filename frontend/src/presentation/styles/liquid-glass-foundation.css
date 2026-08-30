@@ -363,11 +363,6 @@
   transform: scale(1.04);
 }
 
-/* Mapboxの標準アイコンは背景SVGなので、テーマに合わせて明度を反転する */
-#app[data-ui-color-mode="night"] .mapboxgl-ctrl-group .mapboxgl-ctrl-icon {
-  filter: invert(1) brightness(1.35);
-}
-
 .map-tools > button[aria-pressed="true"],
 .map-tools div > button[aria-pressed="true"],
 .playback-speed-controls button[aria-pressed="true"],
@@ -433,4 +428,3 @@
   padding: 0 0.7rem;
   font: 590 0.68rem/2.5rem -apple-system, BlinkMacSystemFont, sans-serif;
 }
-

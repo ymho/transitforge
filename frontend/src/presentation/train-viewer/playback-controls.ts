@@ -88,7 +88,7 @@ export function configurePlayback(
       }
       playToggle.disabled = enabled;
       playToggle.title = enabled
-        ? "デジタルツインモードでは常時再生"
+        ? "現在運行状況では常時再生"
         : controller.isPlaying() ? "一時停止" : "再生";
       playToggle.ariaLabel = playToggle.title;
       speedControls.setEnabled(!enabled);

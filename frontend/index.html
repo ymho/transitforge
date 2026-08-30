@@ -3,14 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#08111d" />
+    <meta name="theme-color" content="#f4f7fb" />
     <title>Raiquora — Agentic Transit Intelligence</title>
   </head>
   <body>
-    <main id="app" data-loading-state="loading" data-ui-color-mode="day" data-display-mode="simulation" aria-busy="true">
+    <main id="app" data-loading-state="loading" data-display-mode="simulation" aria-busy="true">
       <section id="loading-screen" class="loading-screen" role="status" aria-live="polite" aria-atomic="true">
         <div class="loading-screen-content">
-          <p class="loading-screen-brand">Raiquora</p>
           <p id="loading-screen-message" class="loading-screen-message">地図を読み込んでいます。</p>
           <div class="loading-screen-progress" aria-hidden="true"><span></span></div>
           <button id="loading-screen-retry" class="loading-screen-retry" type="button" hidden>再読み込み</button>
@@ -18,7 +17,7 @@
       </section>
       <div id="map" aria-label="Raiquora 3D map"></div>
       <nav id="context-workspace-tabs" class="context-workspace-tabs" aria-label="コンテキスト表示">
-        <button id="close-context-workspace" type="button">会話</button>
+        <button id="close-context-workspace" type="button" aria-label="会話に戻る">会話に戻る</button>
         <button type="button" data-context-view="map" aria-pressed="true">地図</button>
         <button type="button" data-context-view="trip-plan" aria-pressed="false" disabled>旅程</button>
         <button type="button" data-context-view="journey-details" aria-pressed="false" disabled>経路</button>
@@ -45,6 +44,7 @@
         <symbol id="icon-play" viewBox="0 0 20 20"><path d="M7 5.5 15 10l-8 4.5z" /></symbol>
         <symbol id="icon-pause" viewBox="0 0 20 20"><path d="M6.5 5h2.25v10H6.5zm4.75 0h2.25v10h-2.25z" /></symbol>
         <symbol id="icon-clock" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M10 6v4l3 2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></symbol>
+        <symbol id="icon-calendar" viewBox="0 0 20 20"><rect x="3" y="4.5" width="14" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 2.8v3.4m7-3.4v3.4M3 8h14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/><path d="M6.4 11h.1m3.4 0h.1m3.4 0h.1M6.4 14h.1m3.4 0h.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></symbol>
         <symbol id="icon-sun" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M15.3 4.7l-1.4 1.4M6.1 13.9l-1.4 1.4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/></symbol>
         <symbol id="icon-cloud" viewBox="0 0 20 20"><path d="M5.2 14.5a3.2 3.2 0 0 1-.3-6.4A5.1 5.1 0 0 1 14.7 7a3.8 3.8 0 0 1 .2 7.5z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.6"/></symbol>
         <symbol id="icon-rain" viewBox="0 0 20 20"><path d="M5.2 11.8a3 3 0 0 1-.3-6 5.1 5.1 0 0 1 9.8-1.1 3.6 3.6 0 0 1 .2 7.1zM6.5 14l-1 2.5M10.5 14l-1 2.5M14.5 14l-1 2.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></symbol>
@@ -56,6 +56,8 @@
         <symbol id="icon-user" viewBox="0 0 20 20"><circle cx="10" cy="7" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4.3 17c.7-3 2.6-4.5 5.7-4.5s5 1.5 5.7 4.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/></symbol>
         <symbol id="icon-new-conversation" viewBox="0 0 20 20"><path d="M4 4.5h8.5a2 2 0 0 1 2 2V11a2 2 0 0 1-2 2H8l-3.5 2v-2H4a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/><path d="M15.5 2.5v5M13 5h5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/></symbol>
         <symbol id="icon-conversation-history" viewBox="0 0 20 20"><path d="M4 5.5h12M4 10h12M4 14.5h8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6"/><circle cx="2" cy="5.5" r=".75"/><circle cx="2" cy="10" r=".75"/><circle cx="2" cy="14.5" r=".75"/></symbol>
+        <symbol id="icon-sidebar" viewBox="0 0 20 20"><rect x="2.5" y="3" width="15" height="14" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7.2 3v14" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+        <symbol id="icon-settings" viewBox="0 0 20 20"><path d="M8.2 2.9h3.6l.55 2a6.4 6.4 0 0 1 1.15.66l2-.53 1.8 3.12-1.45 1.48v1.34l1.45 1.48-1.8 3.12-2-.53a6.4 6.4 0 0 1-1.15.66l-.55 2H8.2l-.55-2a6.4 6.4 0 0 1-1.15-.66l-2 .53-1.8-3.12 1.45-1.48V9.63L2.7 8.15 4.5 5.03l2 .53a6.4 6.4 0 0 1 1.15-.66z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.3"/><circle cx="10" cy="10.3" r="2.25" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
         <symbol id="icon-ai-station" viewBox="0 0 20 20"><path d="M3.25 5.5h9.5a2 2 0 0 1 2 2v4.25a2 2 0 0 1-2 2H8l-3.5 2v-2H3.25a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.45"/><path d="M15.6 1.8v3.4M13.9 3.5h3.4M11.1 8.2l.45 1.05 1.05.45-1.05.45-.45 1.05-.45-1.05-1.05-.45 1.05-.45z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.15"/></symbol>
         <symbol id="icon-ai-sparkles" viewBox="0 0 20 20"><path d="M9.2 2.3c.55 3.8 2.7 5.95 6.5 6.5-3.8.55-5.95 2.7-6.5 6.5-.55-3.8-2.7-5.95-6.5-6.5 3.8-.55 5.95-2.7 6.5-6.5Z"/><path d="M15.6 1.8c.15 1.25.85 1.95 2.1 2.1-1.25.15-1.95.85-2.1 2.1-.15-1.25-.85-1.95-2.1-2.1 1.25-.15 1.95-.85 2.1-2.1ZM15.7 13.2c.18 1.5 1.05 2.37 2.55 2.55-1.5.18-2.37 1.05-2.55 2.55-.18-1.5-1.05-2.37-2.55-2.55 1.5-.18 2.37-1.05 2.55-2.55Z"/></symbol>
         <symbol id="icon-send" viewBox="0 0 20 20"><path d="m3 4 14 6-14 6 2.5-6z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"/><path d="M5.5 10H13" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6"/></symbol>
@@ -65,7 +67,7 @@
         <symbol id="icon-digital-twin" viewBox="0 0 20 20"><path d="m10 2.7 6.4 3.4-6.4 3.4-6.4-3.4zM3.6 10l6.4 3.4 6.4-3.4M3.6 13.9l6.4 3.4 6.4-3.4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.55"/></symbol>
       </svg>
       <nav id="map-tools" class="map-tools mapboxgl-ctrl mapboxgl-ctrl-group" aria-label="地図操作">
-        <button id="digital-twin-mode-toggle" type="button" aria-label="デジタルツインモード" title="デジタルツインモード" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-digital-twin" /></svg></button>
+        <button id="digital-twin-mode-toggle" type="button" aria-label="現在運行状況へ切り替え" title="現在運行状況" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-digital-twin" /></svg></button>
         <button id="current-time-button" type="button" aria-label="現在時刻へ移動" title="現在時刻へ移動" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-clock" /></svg></button>
         <button id="play-toggle" type="button" aria-label="再生" title="再生" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-play" /></svg></button>
         <div class="playback-speed-menu">
@@ -101,6 +103,14 @@
       >
         <svg class="guide-toggle-icon ai-guide-button-icon" aria-hidden="true"><use href="#icon-ai-sparkles" /></svg>
       </button>
+      <nav id="conversation-sidebar-rail" class="conversation-sidebar-rail" aria-label="会話操作">
+        <span class="conversation-sidebar-rail-brand" title="Raiquora" aria-label="Raiquora"><svg aria-hidden="true"><use href="#icon-ai-sparkles" /></svg></span>
+        <button id="rail-new-conversation" type="button" aria-label="新しい会話" title="新しい会話"><svg aria-hidden="true"><use href="#icon-new-conversation" /></svg></button>
+        <button id="rail-conversation-history" type="button" aria-label="会話履歴を表示" title="会話履歴を表示"><svg aria-hidden="true"><use href="#icon-conversation-history" /></svg></button>
+        <button id="rail-realtime-map" type="button" aria-label="列車運行状況" title="列車運行状況"><svg aria-hidden="true"><use href="#icon-digital-twin" /></svg></button>
+        <button id="rail-date-time-mode" type="button" aria-label="日時指定モード" title="日時指定モード"><svg aria-hidden="true"><use href="#icon-calendar" /></svg></button>
+        <button id="rail-travel-profile" class="conversation-sidebar-rail-profile" type="button" aria-label="ゲストユーザの設定" title="設定"><span class="sidebar-account-avatar" aria-hidden="true">ゲ</span></button>
+      </nav>
       <aside id="ai-guide-panel" class="ai-guide-panel" aria-label="コンシェルジュ" hidden>
         <span class="sheet-grabber" aria-hidden="true"></span>
         <header>
@@ -112,11 +122,10 @@
             </div>
           </div>
           <div class="guide-panel-actions">
-            <button id="new-conversation" type="button" aria-label="新しい会話" title="新しい会話"><svg aria-hidden="true"><use href="#icon-new-conversation" /></svg></button>
-            <button id="conversation-history-toggle" type="button" aria-label="会話履歴" title="会話履歴"><svg aria-hidden="true"><use href="#icon-conversation-history" /></svg></button>
+            <button id="conversation-history-toggle" type="button" aria-label="会話履歴を表示" title="会話履歴を表示" aria-controls="conversation-history-dialog" aria-expanded="true"><svg aria-hidden="true"><use href="#icon-sidebar" /></svg></button>
             <button id="trip-plan-toggle" type="button" aria-label="旅程" title="旅程" hidden><svg aria-hidden="true"><use href="#icon-route" /></svg></button>
-            <button id="journey-settings-toggle" type="button" aria-label="経路設定" title="経路設定" aria-controls="journey-settings-panel"><svg aria-hidden="true"><use href="#icon-train" /></svg></button>
-            <button id="travel-profile-toggle" type="button" aria-label="プロフィール" title="プロフィール"><svg aria-hidden="true"><use href="#icon-user" /></svg></button>
+            <button id="journey-settings-toggle" type="button" aria-label="経路設定" title="経路設定" aria-controls="journey-settings-panel" hidden><svg aria-hidden="true"><use href="#icon-train" /></svg></button>
+            <button id="travel-profile-toggle" type="button" aria-label="プロフィール" title="プロフィール" hidden><svg aria-hidden="true"><use href="#icon-user" /></svg></button>
             <button id="close-ai-guide" type="button" aria-label="コンシェルジュを閉じる">×</button>
           </div>
         </header>
@@ -140,11 +149,21 @@
       <dialog id="conversation-history-dialog" class="conversation-history-dialog" aria-labelledby="conversation-history-title">
         <section>
           <header>
-            <div><h2 id="conversation-history-title">会話履歴</h2><small>端末に保存した最近の会話</small></div>
-            <button id="close-conversation-history" type="button" aria-label="会話履歴を閉じる">×</button>
+            <h2 id="conversation-history-title">Raiquora</h2>
+            <button id="close-conversation-history" type="button" aria-label="会話履歴を折りたたむ" title="会話履歴を折りたたむ"><svg aria-hidden="true"><use href="#icon-sidebar" /></svg></button>
           </header>
+          <button id="new-conversation" type="button"><svg aria-hidden="true"><use href="#icon-new-conversation" /></svg><span>新しい会話</span></button>
+          <nav class="conversation-sidebar-tools" aria-label="地図モード">
+            <button id="sidebar-realtime-map" type="button"><svg aria-hidden="true"><use href="#icon-digital-twin" /></svg><span>列車運行状況</span></button>
+            <button id="sidebar-date-time-mode" type="button"><svg aria-hidden="true"><use href="#icon-calendar" /></svg><span>日時指定モード</span></button>
+          </nav>
           <p id="conversation-history-empty" class="conversation-history-empty" hidden>過去の会話はまだありません</p>
           <ol id="conversation-history-list" class="conversation-history-list"></ol>
+          <button id="sidebar-account-settings" class="sidebar-account-settings" type="button" aria-label="ゲストユーザの設定を開く">
+            <span class="sidebar-account-avatar" aria-hidden="true">ゲ</span>
+            <span><strong>ゲストユーザ</strong><small>端末内プロフィール</small></span>
+            <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg>
+          </button>
         </section>
       </dialog>
       <aside id="trip-plan-panel" class="trip-plan-panel" aria-label="旅程" hidden>
@@ -158,6 +177,51 @@
           <label><span>乗換ペース</span><select id="journey-transfer-pace"><option value="hurried">急ぐ</option><option value="standard" selected>普通</option><option value="relaxed">ゆっくり</option></select></label>
           <label><span>経路の優先</span><select id="journey-ranking-preference"><option value="balanced" selected>バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label>
           <small>最大3回の乗換まで検索</small>
+        </section>
+      </dialog>
+      <dialog id="application-settings-dialog" class="application-settings-dialog" aria-labelledby="application-settings-title">
+        <section class="application-settings-shell">
+          <header>
+            <div><small>ゲストユーザ</small><h2 id="application-settings-title">設定</h2></div>
+            <button id="close-application-settings" type="button" aria-label="設定を閉じる">×</button>
+          </header>
+          <nav class="application-settings-navigation" aria-label="設定項目">
+            <button type="button" data-settings-tab="profile" aria-pressed="true"><svg aria-hidden="true"><use href="#icon-user" /></svg>プロフィール</button>
+            <button type="button" data-settings-tab="journey" aria-pressed="false"><svg aria-hidden="true"><use href="#icon-train" /></svg>経路検索</button>
+            <button type="button" data-settings-tab="services" aria-pressed="false"><svg aria-hidden="true"><use href="#icon-settings" /></svg>外部サービス</button>
+          </nav>
+          <div class="application-settings-content">
+            <section data-settings-view="profile">
+              <header><h3>プロフィール</h3><p>旅の好みや普段の出発地を端末内に保存します</p></header>
+              <div class="settings-account-card"><span class="sidebar-account-avatar" aria-hidden="true">ゲ</span><span><strong>ゲストユーザ</strong><small>サインインなし</small></span></div>
+              <button id="settings-edit-travel-profile" class="settings-primary-action" type="button">旅行プロフィールを再設定</button>
+            </section>
+            <section data-settings-view="journey" hidden>
+              <header><h3>経路検索</h3><p>コンシェルジュが経路を比較するときの既定条件です</p></header>
+              <label><span>乗換ペース</span><select id="settings-journey-transfer-pace"><option value="hurried">急ぐ</option><option value="standard">普通</option><option value="relaxed">ゆっくり</option></select></label>
+              <label><span>経路の優先</span><select id="settings-journey-ranking-preference"><option value="balanced">バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label>
+              <small>最大3回の乗換まで検索します</small>
+            </section>
+            <section data-settings-view="services" hidden>
+              <header><h3>外部サービス</h3><p>Raiquoraが案内と表示のために利用するサービスです</p></header>
+              <ul class="external-service-list">
+                <li><strong>Mapbox</strong><span>地図・地形・施設表示</span><a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noreferrer">地図の帰属表示</a></li>
+                <li><strong>OpenStreetMap contributors</strong><span>地図データ</span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">著作権とライセンス</a></li>
+                <li><strong>Open-Meteo</strong><span>天気予報</span><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">提供元</a></li>
+                <li><strong>Wikipedia / Wikimedia Commons</strong><span>観光情報・画像</span><a href="https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use" target="_blank" rel="noreferrer">利用条件</a></li>
+                <li><strong>Amadeus Self-Service APIs</strong><span>航空便候補</span></li>
+                <li id="settings-accommodation-provider" hidden>
+                  <strong id="settings-accommodation-provider-name"></strong>
+                  <span>宿泊施設候補</span>
+                  <a id="settings-accommodation-provider-credit-link" target="_blank" rel="noreferrer">
+                    <img id="settings-accommodation-provider-credit-image" width="311" height="30" alt="" />
+                  </a>
+                </li>
+                <li><strong>Amazon Bedrock</strong><span>コンシェルジュの言語モデル</span></li>
+              </ul>
+              <p class="external-service-note">写真など個別の著作物には、表示箇所で提供者とライセンスを併記します。地図の帰属表示は地図画面にも常時表示されます。</p>
+            </section>
+          </div>
         </section>
       </dialog>
       <aside id="train-details" class="train-details" aria-live="polite" hidden>

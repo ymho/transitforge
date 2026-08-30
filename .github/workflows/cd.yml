@@ -66,6 +66,10 @@ jobs:
         run: npm run build
         env:
           VITE_MAPBOX_ACCESS_TOKEN: ${{ secrets.VITE_MAPBOX_ACCESS_TOKEN }}
+          VITE_ACCOMMODATION_PROVIDER_DISPLAY_NAME: ${{ vars.ACCOMMODATION_PROVIDER_DISPLAY_NAME }}
+          VITE_ACCOMMODATION_PROVIDER_CREDIT_URL: ${{ vars.ACCOMMODATION_PROVIDER_CREDIT_URL }}
+          VITE_ACCOMMODATION_PROVIDER_CREDIT_IMAGE_URL: ${{ vars.ACCOMMODATION_PROVIDER_CREDIT_IMAGE_URL }}
+          VITE_ACCOMMODATION_PROVIDER_CREDIT_ALT: ${{ vars.ACCOMMODATION_PROVIDER_CREDIT_ALT }}
 
       - name: Validate Lambda package
         run: npm run lambda:check --workspace @raiquora/agent-api

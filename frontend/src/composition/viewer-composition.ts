@@ -1,4 +1,5 @@
 import mapboxgl from "mapbox-gl";
+import { accommodationProviderAttributionFromEnvironment } from "../adapters/browser/accommodation-provider-attribution";
 import { browserDigitalTwinClockEnvironment } from "../adapters/browser/digital-twin-clock-environment";
 import { browserPollingEnvironment } from "../adapters/browser/polling-controller";
 import { currentBrowserCoordinate } from "../adapters/browser/current-coordinate";
@@ -64,7 +65,6 @@ import {
 } from "../domain/display-date-time";
 import {
   lightPresetForRouteTime,
-  uiColorModeForLightPreset,
   type LightPreset,
 } from "../domain/map-lighting";
 import type { WeatherMode } from "../domain/weather";
@@ -152,6 +152,7 @@ import {
 import { promptWithConversationContext } from "../domain/conversation-guidance";
 import { renderConciergeIdentity } from "../presentation/concierge/concierge-identity";
 import { configureConversationHistoryPanel } from "../presentation/concierge/conversation-history-panel";
+import { configureApplicationSettingsPanel } from "../presentation/settings/application-settings-panel";
 import { configureTripPlanPanel } from "../presentation/trip-plan/trip-plan-panel";
 import { tripPlanFromTravelPlan } from "@raiquora/trip/trip-plan";
 import { loadTripPlan } from "../usecases/trip-plan/trip-plan-repository";
@@ -228,6 +229,13 @@ const {
   conciergeAvatar,
   conciergeName,
   conciergeRole,
+  railNewConversation,
+  railConversationHistory,
+  railRealtimeMap,
+  railDateTimeMode,
+  sidebarRealtimeMap,
+  sidebarDateTimeMode,
+  travelProfileToggle,
   newConversation,
   conversationHistoryToggle,
   conversationHistoryDialog,
@@ -268,8 +276,12 @@ const loadingScreen = createLoadingScreen({
 });
 loadingScreenRetry.addEventListener("click", () => window.location.reload());
 
-let handleAiGuidePrompt: AiGuidePromptHandler = async () =>
-  "列車データを読み込んでいます。準備が整ってからもう一度お試しください。";
+let resolveAiGuidePromptHandler: (handler: AiGuidePromptHandler) => void = () => undefined;
+const aiGuidePromptHandlerReady = new Promise<AiGuidePromptHandler>((resolve) => {
+  resolveAiGuidePromptHandler = resolve;
+});
+let handleAiGuidePrompt: AiGuidePromptHandler = (...args) =>
+  aiGuidePromptHandlerReady.then((handler) => handler(...args));
 let findJourneyLegAlternatives: JourneyLegAlternativeSearch = async () => [];
 let activeConcierge = selectConciergeForUserProfile(
   loadUserProfile(localStorage),
@@ -334,6 +346,27 @@ const contextWorkspaceController = createContextWorkspaceController(
   activeConversationSession.id,
   new BrowserContextWorkspaceRepository(localStorage),
 );
+let resizeContextMap: () => void = () => undefined;
+const scheduleContextMapResize = () => {
+  requestAnimationFrame(() => resizeContextMap());
+};
+type SidebarMapMode = "realtime" | "date-time";
+let pendingSidebarMapMode: SidebarMapMode | undefined;
+let applySidebarMapMode: (mode: SidebarMapMode) => void = () => undefined;
+const focusMapWorkspace = () => {
+  contextWorkspaceController.show("map");
+  app.dataset.mapFocusMode = "true";
+  if (mobileChatShell.matches) {
+    if (conversationHistoryDialog.open) conversationHistoryDialog.close();
+    mobileContextNavigation.open("map");
+  }
+  scheduleContextMapResize();
+};
+const selectSidebarMapMode = (mode: SidebarMapMode) => {
+  pendingSidebarMapMode = mode;
+  focusMapWorkspace();
+  applySidebarMapMode(mode);
+};
 const mobileContextNavigation = createMobileContextNavigation({
   app,
   messages: aiGuideMessages,
@@ -343,6 +376,7 @@ const mobileContextNavigation = createMobileContextNavigation({
 });
 const applyContextWorkspaceState = () => {
   const state = contextWorkspaceController.current();
+  if (state.view !== "map") delete app.dataset.mapFocusMode;
   app.dataset.contextView = state.view;
   const currentTripPlan = loadTripPlan(localStorage, state.conversationSessionId);
   for (const button of contextWorkspaceButtons) {
@@ -356,10 +390,12 @@ const applyContextWorkspaceState = () => {
   if (state.view === "trip-plan" && currentTripPlan) {
     if (!trainDetails.hidden) closeTrainDetails.click();
     tripPlanController.open();
+    scheduleContextMapResize();
     return;
   }
   if (!tripPlanPanel.hidden) tripPlanPanel.hidden = true;
   if (state.view === "map" && !trainDetails.hidden) closeTrainDetails.click();
+  scheduleContextMapResize();
 };
 contextWorkspaceController.subscribe(applyContextWorkspaceState);
 for (const button of contextWorkspaceButtons) {
@@ -370,9 +406,23 @@ for (const button of contextWorkspaceButtons) {
   });
 }
 closeContextWorkspace.addEventListener("click", () => {
+  if (app.dataset.mapFocusMode === "true") {
+    delete app.dataset.mapFocusMode;
+    if (mobileChatShell.matches) mobileContextNavigation.close();
+    scheduleContextMapResize();
+    return;
+  }
   mobileContextNavigation.close();
 });
 contextWorkspaceTabs.hidden = false;
+conversationHistoryToggle.addEventListener("click", scheduleContextMapResize);
+closeConversationHistory.addEventListener("click", scheduleContextMapResize);
+railNewConversation.addEventListener("click", () => newConversation.click());
+railConversationHistory.addEventListener("click", () => conversationHistoryToggle.click());
+railRealtimeMap.addEventListener("click", () => selectSidebarMapMode("realtime"));
+sidebarRealtimeMap.addEventListener("click", () => selectSidebarMapMode("realtime"));
+railDateTimeMode.addEventListener("click", () => selectSidebarMapMode("date-time"));
+sidebarDateTimeMode.addEventListener("click", () => selectSidebarMapMode("date-time"));
 closeTripPlan.addEventListener("click", () => {
   if (mobileChatShell.matches) mobileContextNavigation.close();
   else contextWorkspaceController.show("map");
@@ -509,6 +559,13 @@ configureConversationHistoryPanel({
   },
   persistentMediaQuery: desktopChatShell,
 });
+configureApplicationSettingsPanel(document, {
+  travelProfileToggle,
+  transferPace: journeyTransferPace,
+  rankingPreference: journeyRankingPreference,
+  conversationHistoryDialog,
+  accommodationProviderAttribution: accommodationProviderAttributionFromEnvironment(import.meta.env),
+});
 aiGuideController.open();
 applyContextWorkspaceState();
 configureTravelProfile(document, localStorage, () => aiGuideController.open());
@@ -522,9 +579,6 @@ if (tripPreviewEnabled) {
 const initialDateTime = new Date();
 let displayedServiceDateStart = operatingServiceDateStart(initialDateTime);
 const initialRouteTime = currentRouteTime(initialDateTime);
-app.dataset.uiColorMode = uiColorModeForLightPreset(
-  lightPresetForRouteTime(initialRouteTime),
-);
 displayTime.value = String(initialRouteTime);
 renderDisplayDateTime(dateTimeDisplayElements, initialDateTime);
 
@@ -533,6 +587,10 @@ if (!token) {
     "Mapbox公開トークンがありません。.env.localにVITE_MAPBOX_ACCESS_TOKENを設定してください。";
   status.textContent = missingTokenMessage;
   loadingScreen.fail(missingTokenMessage);
+  const unavailablePromptHandler: AiGuidePromptHandler = async () =>
+    "地図と列車データを読み込めないため、現在は案内を開始できません。";
+  handleAiGuidePrompt = unavailablePromptHandler;
+  resolveAiGuidePromptHandler(unavailablePromptHandler);
 } else {
   mapboxgl.accessToken = token;
 
@@ -561,6 +619,7 @@ if (!token) {
     bearing: -18,
     antialias: true,
   });
+  resizeContextMap = () => map.resize();
   verifiedPlaceLayer = createVerifiedPlaceLayer(map, (place) =>
     mapPlaceExplorerController?.select(place.providerPlaceId, false));
   mapPlaceExplorerController = configureMapPlaceExplorer({
@@ -846,6 +905,8 @@ if (!token) {
               dateTimeInput,
               currentTimeButton,
               toggle: digitalTwinModeToggle,
+              realtimeModeButtons: [sidebarRealtimeMap, railRealtimeMap],
+              dateTimeModeButtons: [sidebarDateTimeMode, railDateTimeMode],
             },
             realtimeOperations !== undefined,
             modeState.mode,
@@ -910,7 +971,6 @@ if (!token) {
           const lightPreset = lightPresetForRouteTime(routeTime);
           if (lightPreset !== activeLightPreset) {
             map.setConfigProperty("basemap", "lightPreset", lightPreset);
-            app.dataset.uiColorMode = uiColorModeForLightPreset(lightPreset);
             activeLightPreset = lightPreset;
           }
           const updateStartedAt = performance.now();
@@ -1264,14 +1324,39 @@ if (!token) {
           playbackSpeedControls,
           browserDigitalTwinClockEnvironment(),
         );
+        applySidebarMapMode = (mode) => {
+          if (mode === "realtime") {
+            const now = new Date();
+            digitalTwinModeRequested = true;
+            displayedServiceDateStart = operatingServiceDateStart(now);
+            displayTime.value = String(currentRouteTime(now));
+            displayTime.dispatchEvent(new Event("input", { bubbles: true }));
+            return;
+          }
+          digitalTwinModeRequested = false;
+          updateTrains();
+          requestAnimationFrame(() => {
+            dateTimeInput.closest<HTMLElement>(".date-time-display")?.click();
+          });
+        };
+        if (pendingSidebarMapMode) {
+          const pendingMode = pendingSidebarMapMode;
+          pendingSidebarMapMode = undefined;
+          applySidebarMapMode(pendingMode);
+        }
         updateTrains();
         await nextBrowserFrame();
+        resolveAiGuidePromptHandler(handleAiGuidePrompt);
         loadingScreen.complete();
     } catch (error) {
       const message = error instanceof Error ? error.message : "不明なエラーです。";
       status.hidden = false;
       status.textContent = `入力を読み込めませんでした: ${message}`;
       loadingScreen.fail(`入力を読み込めませんでした: ${message}`);
+      const unavailablePromptHandler: AiGuidePromptHandler = async () =>
+        "地図と列車データの読み込みに失敗したため、現在は案内を開始できません。";
+      handleAiGuidePrompt = unavailablePromptHandler;
+      resolveAiGuidePromptHandler(unavailablePromptHandler);
     }
   });
 

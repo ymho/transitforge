@@ -43,6 +43,10 @@ terraform plan
 | Variable | `DATA_BUILDER_GITHUB_OIDC_SUBJECT` | owner IDとrepository IDを含むdata-builderのimmutable subject |
 | Variable | `CLOUDFLARE_FRONT_DOOR_ENABLED` | 独自ドメイン用CloudFrontの段階導入フラグ |
 | Variable | `LEGACY_CLOUDFRONT_REDIRECT_ENABLED` | 既存CloudFront URLのリダイレクト切替フラグ |
+| Variable | `ACCOMMODATION_PROVIDER_DISPLAY_NAME` | 設定画面へ表示する宿泊提供者名 |
+| Variable | `ACCOMMODATION_PROVIDER_CREDIT_URL` | 宿泊提供者のクレジットリンク |
+| Variable | `ACCOMMODATION_PROVIDER_CREDIT_IMAGE_URL` | 宿泊提供者のクレジット画像 |
+| Variable | `ACCOMMODATION_PROVIDER_CREDIT_ALT` | クレジット画像の代替テキスト |
 | Secret | `BASIC_AUTH_CREDENTIALS_SHA256` | 開発環境の認証情報ハッシュ |
 | Secret | `VITE_MAPBOX_ACCESS_TOKEN` | Mapbox公開トークン |
 

@@ -20,7 +20,7 @@ function elements() {
 afterEach(() => vi.useRealTimers());
 
 describe("loading screen", () => {
-  it("keeps the viewer covered until loading completes", () => {
+  it("keeps the map loading state until loading completes", () => {
     vi.useFakeTimers();
     const view = elements();
     const loading = createLoadingScreen(view);
@@ -39,7 +39,7 @@ describe("loading screen", () => {
     expect(loading.isComplete()).toBe(true);
   });
 
-  it("shows an actionable error without revealing the viewer", () => {
+  it("shows an actionable map loading error", () => {
     const view = elements();
     const loading = createLoadingScreen(view);
 

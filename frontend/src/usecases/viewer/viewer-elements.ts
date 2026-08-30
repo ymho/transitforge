@@ -37,6 +37,15 @@ export interface ViewerElements {
   conciergeAvatar: HTMLImageElement;
   conciergeName: HTMLElement;
   conciergeRole: HTMLElement;
+  conversationSidebarRail: HTMLElement;
+  railNewConversation: HTMLButtonElement;
+  railConversationHistory: HTMLButtonElement;
+  railRealtimeMap: HTMLButtonElement;
+  railDateTimeMode: HTMLButtonElement;
+  railTravelProfile: HTMLButtonElement;
+  sidebarRealtimeMap: HTMLButtonElement;
+  sidebarDateTimeMode: HTMLButtonElement;
+  travelProfileToggle: HTMLButtonElement;
   newConversation: HTMLButtonElement;
   conversationHistoryToggle: HTMLButtonElement;
   conversationHistoryDialog: HTMLDialogElement;
@@ -102,6 +111,15 @@ export function loadViewerElements(root: ParentNode): ViewerElements {
     conciergeAvatar: required(root, "#concierge-avatar"),
     conciergeName: required(root, "#concierge-name"),
     conciergeRole: required(root, "#concierge-role"),
+    conversationSidebarRail: required(root, "#conversation-sidebar-rail"),
+    railNewConversation: required(root, "#rail-new-conversation"),
+    railConversationHistory: required(root, "#rail-conversation-history"),
+    railRealtimeMap: required(root, "#rail-realtime-map"),
+    railDateTimeMode: required(root, "#rail-date-time-mode"),
+    railTravelProfile: required(root, "#rail-travel-profile"),
+    sidebarRealtimeMap: required(root, "#sidebar-realtime-map"),
+    sidebarDateTimeMode: required(root, "#sidebar-date-time-mode"),
+    travelProfileToggle: required(root, "#travel-profile-toggle"),
     newConversation: required(root, "#new-conversation"),
     conversationHistoryToggle: required(root, "#conversation-history-toggle"),
     conversationHistoryDialog: required(root, "#conversation-history-dialog"),
