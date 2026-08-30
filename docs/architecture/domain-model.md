@@ -376,6 +376,8 @@ Repositoryは作成 選択 改名 削除を提供し 最終更新が新しい20�
 最大20会話分を端末に保存し 会話Sessionを戻したときに直前の表示を復元する。
 Desktopでは左を会話履歴 中央をコンシェルジュ 右をコンテキスト領域とする。
 DOMとControllerは表示切替の前後で維持し CSS Grid上の配置と`ContextWorkspaceState`だけを変更する。
+Mobileでは会話を通常画面とし 地図 旅程 経路詳細を同じDOM上の全面コンテキストとして表示する。
+戻る操作では会話の入力値とスクロール位置を復元し ページ全体や各表示Controllerを再初期化しない。
 
 ### `TripPlan` `TripPlanItem` `TripPlanPatch`
 

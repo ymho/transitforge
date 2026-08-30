@@ -33,6 +33,60 @@
 }
 
 .context-workspace-tabs button:disabled { opacity: 0.42; cursor: not-allowed; }
+#close-context-workspace { display: none; }
+
+@media (max-width: 71.999rem) {
+  .ai-guide-toggle,
+  #close-ai-guide { display: none; }
+
+  .ai-guide-panel,
+  .ai-guide-panel[hidden] {
+    position: fixed;
+    z-index: 9;
+    inset: 0;
+    display: grid;
+    width: 100%;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    animation: none;
+  }
+
+  .context-workspace-tabs {
+    position: fixed;
+    z-index: 11;
+    top: auto;
+    bottom: 5.25rem;
+    max-width: calc(100vw - 1.5rem);
+  }
+
+  #app[data-mobile-context-open="true"] .ai-guide-panel { display: none; }
+  #app[data-mobile-context-open="true"] #close-context-workspace { display: block; }
+  #app:not([data-mobile-context-open="true"]) #close-context-workspace { display: none; }
+
+  #app[data-mobile-context-open="true"] .context-workspace-tabs {
+    top: 0.75rem;
+    bottom: auto;
+  }
+
+  #app[data-mobile-context-open="true"] .trip-plan-panel,
+  #app[data-mobile-context-open="true"] .train-details {
+    position: fixed;
+    z-index: 10;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  #app[data-mobile-context-open="true"] .map-place-explorer {
+    z-index: 10;
+    bottom: 1rem;
+  }
+}
 
 @media (min-width: 72rem) {
   #app {
