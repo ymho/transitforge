@@ -4,6 +4,7 @@ import {
   executeExternalTravelTool,
   externalTravelEvidence,
   hasExternalTravelInformation,
+  isSpecificPlaceCandidateName,
   type ExternalTravelToolState,
 } from "./external-travel-tools";
 
@@ -100,8 +101,26 @@ describe("external travel tools", () => {
       data: { places: [{ providerPlaceId: "mapbox.kamotsuru", name: "賀茂鶴酒造", latitude: 34, longitude: 132, sourceUrl: "https://www.mapbox.com/", openingHoursStatus: "unknown" }] },
       evidence: [{ id: "mapbox", kind: "place", provider: "mapbox", sourceUrl: "https://www.mapbox.com/", retrievedAt: "2026-08-30T00:00:00Z", confidence: "observed" }],
     } }));
-    const output = await executeExternalTravelTool("resolve_place_candidates", { candidates: [{ name: "賀茂鶴酒造", sourceUrl: "https://tourism.example/" }] }, { searchPlaceMedia }, state);
+    const output = await executeExternalTravelTool("resolve_place_candidates", { candidates: [{
+      name: "賀茂鶴酒造",
+      sourceUrl: "https://tourism.example/",
+      overview: "酒蔵通りを歩きながら地域の酒造文化を知ることができます。",
+      highlights: ["見学可能な醸造施設"],
+      atmosphere: "白壁の酒蔵が続く落ち着いた通りです。",
+      tips: ["見学時間は公式サイトで確認してください。"],
+      nearby: ["西条酒蔵通り"],
+    }] }, { searchPlaceMedia }, state);
     expect(searchPlaceMedia).toHaveBeenCalledWith({ query: "賀茂鶴酒造", limit: 3 });
     expect((output as { result: { data: { places: Array<{ sources: unknown[] }> } } }).result.data.places[0]?.sources).toEqual(expect.arrayContaining([expect.objectContaining({ provider: "web" })]));
+    expect((output as { result: { data: { places: Array<{ detail: { atmosphere: string } }> } } })
+      .result.data.places[0]?.detail.atmosphere).toContain("白壁");
+  });
+
+  it("自治体名や交通の一般概念をスポット候補にしない", () => {
+    expect(isSpecificPlaceCandidateName("出雲市")).toBe(false);
+    expect(isSpecificPlaceCandidateName("島根県")).toBe(false);
+    expect(isSpecificPlaceCandidateName("定期観光バス")).toBe(false);
+    expect(isSpecificPlaceCandidateName("旭日酒造")).toBe(true);
+    expect(isSpecificPlaceCandidateName("島根ワイナリー")).toBe(true);
   });
 });

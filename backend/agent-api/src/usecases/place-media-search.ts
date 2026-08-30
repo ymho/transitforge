@@ -7,7 +7,7 @@ export function createPlaceMediaSearchOperation(provider: PlaceMediaProvider): A
     const latitude = finite(request.latitude);
     const longitude = finite(request.longitude);
     if (!query || query.length > 100 || (latitude === undefined) !== (longitude === undefined)) return { statusCode: 400, body: { message: "観光地の検索条件が不正です" } };
-    const result = await provider.search({ query, ...(latitude === undefined ? {} : { latitude, longitude }), ...(finite(request.radiusMeters) ? { radiusMeters: request.radiusMeters as number } : {}), ...(finite(request.limit) ? { limit: request.limit as number } : {}) });
+    const result = await provider.search({ query, ...(latitude === undefined ? {} : { latitude, longitude }), ...(finite(request.radiusMeters) ? { radiusMeters: request.radiusMeters as number } : {}), ...(finite(request.limit) ? { limit: request.limit as number } : {}), ...(request.detail === true ? { detail: true } : {}) });
     return { body: { result } };
   };
 }

@@ -107,6 +107,21 @@ describe("travel conversation context", () => {
       "利用者の今回の回答: 奈良公園では何ができますか",
     ].join("\n"))).toBe(false);
   });
+
+  it("uses the preceding return-arrival question to understand a short time answer", () => {
+    const prompt = [
+      '現在の旅行条件: {"destinationWish":"出雲大社","planningStage":"planning","startDate":"2026-08-31","endDate":"2026-09-02","stayNights":2}',
+      "直前の質問: 帰りの向日町駅への到着希望時刻を教えてください",
+      "利用者の今回の回答: 到着は21:0ゴロにしたい",
+    ].join("\n");
+
+    expect(travelConversationFacts(prompt, now).context).toMatchObject({
+      destinationWish: "出雲大社",
+      stayNights: 2,
+      returnArrivalTimeMinutes: 21 * 60,
+    });
+    expect(hasExplicitReturnArrivalTime(prompt)).toBe(true);
+  });
 });
 
 describe("tripContextAfterUserAnswer", () => {

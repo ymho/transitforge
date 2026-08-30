@@ -186,6 +186,7 @@ import { createMobileContextNavigation } from "../presentation/concierge/mobile-
 import {
   mapAccommodationCandidates,
   mapCandidateAsPlaceMedia,
+  mergeMapPlaceDetailCandidate,
   mapPlaceCandidates,
   mapRestaurantCandidates,
   type MapTravelCandidate,
@@ -672,6 +673,21 @@ if (!token) {
     detailContent: mapPlaceDetailContent,
     closeDetail: closeMapPlaceDetail,
     focusPlace: (providerPlaceId) => verifiedPlaceLayer?.focus(providerPlaceId),
+    loadDetail: async (candidate) => {
+      if (candidate.kind !== "place") return candidate;
+      const response = await searchPlaceMedia({
+        query: candidate.name,
+        latitude: candidate.latitude,
+        longitude: candidate.longitude,
+        radiusMeters: 1_000,
+        limit: 1,
+        detail: true,
+      });
+      const detail = response.result.status === "available"
+        ? response.result.data?.places[0]
+        : undefined;
+      return detail ? mergeMapPlaceDetailCandidate(candidate, detail) : candidate;
+    },
     choose: (candidate) => {
       if (candidate.kind === "accommodation") {
         tripPlanController.selectAccommodation(candidate.value);

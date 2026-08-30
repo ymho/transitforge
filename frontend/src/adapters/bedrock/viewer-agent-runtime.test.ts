@@ -2042,10 +2042,45 @@ describe("Bedrock viewer agent", () => {
         evidence: [],
       },
     }));
+    const searchWeb = vi.fn(async () => ({
+      webSearch: {
+        status: "available" as const,
+        freshness: "fresh" as const,
+        retrievedAt: "2026-08-30T04:00:00.000Z",
+        data: {
+          query: "出雲大社 見どころ 口コミ 周辺 観光",
+          results: [{
+            id: "official",
+            title: "出雲大社と周辺の案内",
+            url: "https://example.com/guide",
+            description: "参拝と稲佐の浜を組み合わせられます。",
+          }],
+        },
+        evidence: [],
+      },
+    }));
+    const readWebPages = vi.fn(async () => ({
+      webPages: {
+        status: "available" as const,
+        freshness: "fresh" as const,
+        retrievedAt: "2026-08-30T04:00:00.000Z",
+        data: { pages: [{
+          url: "https://example.com/guide",
+          title: "出雲大社と周辺の案内",
+          text: "境内の参拝に加えて稲佐の浜や神門通りを巡れます。",
+          contentType: "html" as const,
+          truncated: false,
+          untrustedExternalContent: true as const,
+        }] },
+        evidence: [],
+      },
+    }));
     const converse = vi.fn<BedrockAgentConverse>()
       .mockImplementationOnce(async (_messages, tools) => {
         expect(tools?.map(({ name }) => name)).toEqual(expect.arrayContaining([
           "search_place_media",
+          "search_web",
+          "read_web_pages",
           "ask_follow_up",
         ]));
         expect(tools?.some(({ name }) => name === "search_accommodations")).toBe(false);
@@ -2060,10 +2095,44 @@ describe("Bedrock viewer agent", () => {
       })
       .mockResolvedValueOnce({
         message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "web-search",
+          name: "search_web",
+          input: { query: "出雲大社 見どころ 口コミ 周辺 観光", limit: 4 },
+        } }] },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "web-pages",
+          name: "read_web_pages",
+          input: { urls: ["https://example.com/guide"] },
+        } }] },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "place-detail",
+          name: "resolve_place_candidates",
+          input: {
+            candidates: [{
+              name: "出雲大社",
+              sourceUrl: "https://example.com/guide",
+              overview: "歴史や自然が好きな人には、参拝と周辺散策を一緒に楽しめる点が合いそうです。",
+              highlights: ["境内の参拝", "稲佐の浜とのつながり"],
+              atmosphere: "境内と周辺を歩きながら土地の物語を感じられます。",
+              tips: ["神門通りと組み合わせると回りやすいです。"],
+              nearby: ["稲佐の浜", "神門通り"],
+            }],
+          },
+        } }] },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
           toolUseId: "intent",
           name: "ask_follow_up",
           input: {
-            recommendation: "まずは出雲大社の空気感から見てみましょう。",
+            recommendation: "出雲大社は参拝だけでなく、歴史が好きなら稲佐の浜や神門通りまでつなげて歩くと土地の物語を感じやすい場所です。訪れた人が評価する点として、境内の空気感と周辺散策を一緒に楽しめることが紹介されています。",
             question: "この場所を軸に旅を考えてみますか？",
             expectedInput: "planning-intent",
             quickReplies: [
@@ -2080,17 +2149,42 @@ describe("Bedrock viewer agent", () => {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
       setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
-      searchPlaceMedia, maximumRouteTime: 1_800,
+      searchPlaceMedia, searchWeb, readWebPages,
+      getUserProfile: () => ({
+        version: 2,
+        home: { station: "向日町", carAvailable: false },
+        companions: { usual: ["solo"], children: [] },
+        travelStyle: {
+          pace: 0.4, novelty: 0.5,
+          crowdTolerance: 0.4, walkingTolerance: 0.6,
+          transferTolerance: 0.5, earlyMorningTolerance: 0.3,
+          lateNightTolerance: 0.4, drivingTolerance: 0.3,
+          busTolerance: 0.5,
+        },
+        preferences: {
+          sea: 0.3, mountain: 0.3, nature: 0.8, onsen: 0.3,
+          food: 0.3, railway: 0.3, history: 0.8, cityWalk: 0.3,
+          animals: 0.3, art: 0.3, themePark: 0.3, shopping: 0.3,
+        },
+        transport: { maxTypicalTravelMinutes: 240 },
+        updatedAt: "2026-08-30T00:00:00.000Z",
+      }),
+      maximumRouteTime: 1_800,
     }, converse);
 
     expect(searchPlaceMedia).toHaveBeenCalledWith({ query: "出雲大社", limit: 4 });
+    expect(searchWeb).toHaveBeenCalledOnce();
+    expect(readWebPages).toHaveBeenCalledWith({ urls: ["https://example.com/guide"] });
     if (typeof result === "string" || !("conversation" in result)) {
       throw new Error("写真付きの旅行相談がありません。");
     }
     expect(result.conversation.expectedInput).toBe("planning-intent");
+    expect(result.text).toContain("歴史が好きなら");
     expect(result.conversation.tripContext.destinationWish).toBe("出雲大社");
     expect(result.external?.places?.data?.places[0]?.image?.url)
       .toBe("https://example.com/izumo.jpg");
+    expect(result.external?.places?.data?.places[0]?.detail?.nearby)
+      .toEqual(["稲佐の浜", "神門通り"]);
   });
 
   it("does not search accommodations with dates invented outside the conversation", async () => {
@@ -2469,6 +2563,79 @@ describe("Bedrock viewer agent", () => {
     expect(firstPrompt).toContain("倉敷→摂津富田");
     expect(firstPrompt).not.toContain("updatedAt");
     expect(firstPrompt).not.toContain('"id":"trip"');
+  });
+
+  it("discovers a requested facility type without abandoning the current trip", async () => {
+    const searchWeb = vi.fn(async () => ({ webSearch: {
+      status: "available" as const, freshness: "fresh" as const, evidence: [],
+      data: { query: "出雲大社 酒蔵", results: [{
+        id: "brewery-guide", title: "出雲の酒蔵案内",
+        url: "https://tourism.example/izumo-sake",
+        description: "旭日酒造の見学情報",
+      }] },
+    } }));
+    const readWebPages = vi.fn(async () => ({ webPages: {
+      status: "available" as const, freshness: "fresh" as const, evidence: [],
+      data: { pages: [{
+        url: "https://tourism.example/izumo-sake",
+        title: "出雲の酒蔵案内", text: "旭日酒造では地酒を扱っています。",
+        contentType: "html" as const, truncated: false,
+        untrustedExternalContent: true as const,
+      }] },
+    } }));
+    const searchPlaceMedia = vi.fn(async () => ({ result: {
+      status: "available" as const, freshness: "fresh" as const, evidence: [],
+      data: { places: [{
+        providerPlaceId: "mapbox.asahi",
+        name: "旭日酒造", latitude: 35.36, longitude: 132.75,
+        sourceUrl: "https://www.mapbox.com/", openingHoursStatus: "unknown" as const,
+      }] },
+    } }));
+    const converse = vi.fn<BedrockAgentConverse>()
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "web", name: "search_web",
+          input: { query: "出雲大社 酒蔵 公式 観光", limit: 4 },
+        } }] }, stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "pages", name: "read_web_pages",
+          input: { urls: ["https://tourism.example/izumo-sake"] },
+        } }] }, stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "resolve", name: "resolve_place_candidates",
+          input: { candidates: [{ name: "旭日酒造", sourceUrl: "https://tourism.example/izumo-sake" }] },
+        } }] }, stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ text: "出雲の旅程を保ったまま、旭日酒造を候補として地図に表示しました。" }] },
+        stopReason: "end_turn",
+      });
+
+    const result = await runViewerAgentRuntime("酒蔵などはない？", {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      getTripPlan: () => ({ ...tripPlanWithRailReturn(), destination: "出雲大社" }),
+      searchWeb, readWebPages, searchPlaceMedia, maximumRouteTime: 1_800,
+    }, converse);
+
+    expect(converse.mock.calls[0]?.[1]?.map(({ name }) => name)).toEqual([
+      "ask_follow_up", "search_place_media", "search_web", "read_web_pages",
+      "resolve_place_candidates",
+    ]);
+    expect(searchWeb).toHaveBeenCalledOnce();
+    expect(readWebPages).toHaveBeenCalledOnce();
+    expect(searchPlaceMedia).toHaveBeenCalledWith({ query: "旭日酒造", limit: 3 });
+    expect(typeof result).not.toBe("string");
+    if (typeof result !== "string" && "external" in result) {
+      expect(result.external?.places?.data?.places[0]?.name).toBe("旭日酒造");
+    } else {
+      throw new Error("外部スポット情報がありません。");
+    }
   });
 });
 

@@ -4,6 +4,8 @@ import type { PlaceMedia } from "@raiquora/trip/place-media";
 const sourceId = "verified-travel-places";
 const clusterLayerId = `${sourceId}-clusters`;
 const pointLayerId = `${sourceId}-points`;
+const placeCameraPitch = 52;
+const placeCameraBearing = -18;
 
 export interface VerifiedPlaceLayerController {
   show(places: readonly PlaceMedia[]): void;
@@ -68,7 +70,15 @@ export function createVerifiedPlaceLayer(
     if (selectedId) map.setFeatureState({ source: sourceId, id: selectedId }, { selected: false });
     selectedId = providerPlaceId;
     map.setFeatureState({ source: sourceId, id: providerPlaceId }, { selected: true });
-    if (moveMap) map.easeTo({ center: [place.longitude, place.latitude], zoom: Math.max(map.getZoom(), 14), duration: 700 });
+    if (moveMap) {
+      map.easeTo({
+        center: [place.longitude, place.latitude],
+        zoom: Math.max(map.getZoom(), 14),
+        pitch: placeCameraPitch,
+        bearing: placeCameraBearing,
+        duration: 700,
+      });
+    }
   };
 
   return {
@@ -77,6 +87,7 @@ export function createVerifiedPlaceLayer(
       placesById = new Map(valid.map((place) => [place.providerPlaceId, place]));
       selectedId = undefined;
       ensureLayer();
+      setBasemapLandmarksVisible(map, valid.length === 0);
       (map.getSource(sourceId) as mapboxgl.GeoJSONSource).setData(featureCollection(valid));
       if (valid.length === 0) return;
       const first = valid[0]!;
@@ -84,15 +95,27 @@ export function createVerifiedPlaceLayer(
         (current, place) => current.extend([place.longitude!, place.latitude!]),
         new mapboxgl.LngLatBounds([first.longitude!, first.latitude!], [first.longitude!, first.latitude!]),
       );
-      map.fitBounds(bounds, { padding: 80, maxZoom: 13, duration: 700 });
+      map.fitBounds(bounds, {
+        padding: 80,
+        maxZoom: 13,
+        pitch: placeCameraPitch,
+        bearing: placeCameraBearing,
+        duration: 700,
+      });
     },
     focus(providerPlaceId) { select(providerPlaceId, true); },
     clear() {
       placesById.clear();
       selectedId = undefined;
       (map.getSource(sourceId) as mapboxgl.GeoJSONSource | undefined)?.setData(featureCollection([]));
+      setBasemapLandmarksVisible(map, true);
     },
   };
+}
+
+function setBasemapLandmarksVisible(map: mapboxgl.Map, visible: boolean): void {
+  map.setConfigProperty("basemap", "showLandmarkIcons", visible);
+  map.setConfigProperty("basemap", "showLandmarkIconLabels", visible);
 }
 
 function hasCoordinates(place: PlaceMedia): boolean {

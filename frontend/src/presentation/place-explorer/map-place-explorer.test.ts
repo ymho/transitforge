@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { PlaceMedia } from "@raiquora/trip/place-media";
 import { mapPlaceCardModels } from "./map-place-explorer";
-import { mapAccommodationCandidates, mapRestaurantCandidates } from "../../domain/map-travel-candidate";
+import {
+  mapAccommodationCandidates,
+  mapPlaceCandidates,
+  mapRestaurantCandidates,
+  mergeMapPlaceDetailCandidate,
+} from "../../domain/map-travel-candidate";
 import { mapTravelCandidateCardModels } from "./map-place-explorer";
 
 const place = (overrides: Partial<PlaceMedia> = {}): PlaceMedia => ({
@@ -95,5 +100,51 @@ describe("map place card models", () => {
   it("keeps a provider-confirmed address for details", () => {
     expect(mapPlaceCardModels([place({ address: "島根県出雲市大社町" })])[0]?.address)
       .toBe("島根県出雲市大社町");
+  });
+
+  it("keeps multiple licensed images and researched editorial sections", () => {
+    const images = [
+      { url: "https://example.com/1.jpg", attribution: "作者1", hotlinkAllowed: true as const },
+      { url: "https://example.com/2.jpg", attribution: "作者2", hotlinkAllowed: true as const },
+      { url: "https://example.com/3.jpg", attribution: "不明", hotlinkAllowed: "unknown" as const },
+    ];
+    const model = mapPlaceCardModels([place({
+      images,
+      reviewAverage: 4.4,
+      reviewCount: 321,
+      detail: {
+        overview: "海岸の景観と灯台の歴史を一緒に楽しめます。",
+        highlights: ["展望台", "石造灯台"],
+        atmosphere: "日本海を見渡せる開放的な場所です。",
+        tips: ["風が強い日は歩きやすい服装が便利です。"],
+        nearby: ["日御碕神社"],
+      },
+    })])[0];
+
+    expect(model?.images).toEqual([
+      { url: images[0].url, attribution: "作者1" },
+      { url: images[1].url, attribution: "作者2" },
+    ]);
+    expect(model?.reviewLabel).toBe("★ 4.4（321件）");
+    expect(model?.detail?.highlights).toEqual(["展望台", "石造灯台"]);
+  });
+
+  it("adds a freshly loaded gallery without dropping the researched summary", () => {
+    const candidate = mapPlaceCandidates([place({
+      detail: { overview: "プロフィールに合う紹介です。" },
+    })])[0]!;
+    const merged = mergeMapPlaceDetailCandidate(candidate, place({
+      providerPlaceId: "refetched-id",
+      images: [{
+        url: "https://example.com/gallery.jpg",
+        attribution: "Wikimedia Commons",
+        hotlinkAllowed: true,
+      }],
+    }));
+
+    expect(merged.id).toBe("place-1");
+    expect(merged.value.providerPlaceId).toBe("place-1");
+    expect(merged.value.detail?.overview).toBe("プロフィールに合う紹介です。");
+    expect(merged.value.images).toHaveLength(1);
   });
 });

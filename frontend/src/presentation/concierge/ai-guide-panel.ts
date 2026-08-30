@@ -404,7 +404,7 @@ export function configureAiGuidePanel(
     open() {
       setOpen(true);
     },
-    ask(prompt) { setOpen(true); sendPrompt(prompt); },
+    ask(prompt) { setOpen(true); submitPrompt(prompt); },
     notify(text) { const message = appendPendingMessage(messages); resolveAssistantMessage(message, text); },
   };
   controller.switchSession(conversationSessionId);
@@ -434,10 +434,16 @@ export function nextTripConversationState(
 }
 
 function tripContextFromTravelPlan(plan: ViewerAgentTravelPlan): TripContext {
+  const stayNights = Math.max(0, Math.round(
+    (Date.parse(`${plan.checkOutDate}T00:00:00Z`) -
+      Date.parse(`${plan.checkInDate}T00:00:00Z`)) / 86_400_000,
+  ));
   return {
+    planningStage: "planning",
     destinationWish: plan.destination,
     startDate: plan.checkInDate,
     endDate: plan.checkOutDate,
+    stayNights: plan.dayTrip ? 0 : stayNights,
   };
 }
 

@@ -9,6 +9,27 @@ export interface PlaceMediaQuery {
   categories?: string[];
   availableFrom?: string;
   availableUntil?: string;
+  detail?: boolean;
+}
+
+export interface PlaceMediaImage {
+  url: string;
+  width?: number;
+  height?: number;
+  creator?: string;
+  license?: string;
+  attribution: string;
+  descriptionUrl?: string;
+  displayUntil?: string;
+  hotlinkAllowed: boolean | "unknown";
+}
+
+export interface PlaceEditorialDetail {
+  overview?: string;
+  highlights?: string[];
+  atmosphere?: string;
+  tips?: string[];
+  nearby?: string[];
 }
 
 export interface PlaceMedia {
@@ -28,17 +49,11 @@ export interface PlaceMedia {
   }>;
   openingHours?: string;
   openingHoursStatus: "available" | "unknown";
-  image?: {
-    url: string;
-    width?: number;
-    height?: number;
-    creator?: string;
-    license?: string;
-    attribution: string;
-    descriptionUrl?: string;
-    displayUntil?: string;
-    hotlinkAllowed: boolean | "unknown";
-  };
+  reviewAverage?: number;
+  reviewCount?: number;
+  detail?: PlaceEditorialDetail;
+  image?: PlaceMediaImage;
+  images?: PlaceMediaImage[];
 }
 
 export interface PlaceMediaSearchResult { places: PlaceMedia[] }
