@@ -5,7 +5,7 @@ import { renderDisplayMode } from "./map-controls";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("renderDisplayMode", () => {
-  it("現在運行状況をサイドバーにも反映する", () => {
+  it("リアルタイム運行状況をサイドバーにも反映する", () => {
     vi.stubGlobal("document", { querySelector: () => null });
     const realtime = button();
     const dateTime = button();
@@ -19,7 +19,7 @@ describe("renderDisplayMode", () => {
     expect(elements.dateTimeInput.disabled).toBe(true);
   });
 
-  it("リアルタイム情報がなければ日時指定モードを示す", () => {
+  it("リアルタイム情報がなければ日時指定シミュレーターを示す", () => {
     vi.stubGlobal("document", { querySelector: () => null });
     const realtime = button();
     const dateTime = button();
@@ -30,7 +30,7 @@ describe("renderDisplayMode", () => {
     expect(realtime.ariaPressed).toBe("false");
     expect(dateTime.ariaPressed).toBe("true");
     expect(elements.toggle.disabled).toBe(true);
-    expect(elements.toggle.title).toContain("日時指定モード");
+    expect(elements.toggle.title).toContain("日時指定シミュレーター");
   });
 });
 

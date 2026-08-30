@@ -16,7 +16,9 @@ import type {
   WeatherForecastSearchResponse,
   WeatherGridSearchResponse,
   PlaceMediaSearchResponse,
-  FlightSearchResponse,
+  TravelAlertSearchResponse,
+  GroundAccessSearchResponse,
+  RestaurantSearchResponse,
 } from "./bedrock-agent-contract";
 import {
   journeySearchContractVersion,
@@ -98,18 +100,73 @@ export function isPlaceMediaSearchResponse(value: unknown): value is PlaceMediaS
   return isRecord(result.data) && Array.isArray(result.data.places) && result.data.places.length <= 8 &&
     result.data.places.every((place) => isRecord(place) && typeof place.providerPlaceId === "string" &&
       typeof place.name === "string" && typeof place.sourceUrl === "string" &&
+      (place.address === undefined || typeof place.address === "string") &&
+      (place.sources === undefined || Array.isArray(place.sources) && place.sources.length <= 12 &&
+        place.sources.every((source) => isRecord(source) && typeof source.provider === "string" &&
+          typeof source.label === "string" && typeof source.url === "string")) &&
       (place.latitude === undefined || typeof place.latitude === "number") &&
       (place.longitude === undefined || typeof place.longitude === "number") &&
       (place.image === undefined || isRecord(place.image) && typeof place.image.url === "string" &&
         typeof place.image.attribution === "string"));
 }
 
-export function isFlightSearchResponse(value: unknown): value is FlightSearchResponse {
-  if (!isRecord(value) || !isRecord(value.flights)) return false;
-  const flights = value.flights;
-  if (!["available", "unavailable", "unknown"].includes(String(flights.status)) || !Array.isArray(flights.evidence)) return false;
-  if (flights.status !== "available") return flights.data === undefined;
-  return isRecord(flights.data) && Array.isArray(flights.data.offers) && flights.data.offers.length <= 10 && flights.data.offers.every((offer) => isRecord(offer) && typeof offer.providerOfferId === "string" && Array.isArray(offer.segments) && offer.segments.length > 0);
+export function isTravelAlertSearchResponse(value: unknown): value is TravelAlertSearchResponse {
+  if (!isRecord(value) || !isRecord(value.alerts)) return false;
+  const information = value.alerts;
+  if (!externalInformationEnvelope(information)) return false;
+  if (information.status !== "available") return information.data === undefined;
+  return isRecord(information.data) && typeof information.data.area === "string" &&
+    Array.isArray(information.data.alerts) && information.data.alerts.length <= 12 &&
+    information.data.alerts.every((alert) => isRecord(alert) &&
+      typeof alert.providerAlertId === "string" && typeof alert.title === "string" &&
+      typeof alert.summary === "string" && typeof alert.issuedAt === "string" &&
+      typeof alert.sourceUrl === "string" &&
+      ["warning", "weather-information", "typhoon", "earthquake", "tsunami", "volcano", "other"].includes(String(alert.category)) &&
+      ["information", "advisory", "warning", "emergency", "unknown"].includes(String(alert.severity)));
+}
+
+export function isGroundAccessSearchResponse(value: unknown): value is GroundAccessSearchResponse {
+  if (!isRecord(value) || !isRecord(value.groundAccess) || !externalInformationEnvelope(value.groundAccess)) return false;
+  const information = value.groundAccess;
+  if (information.status !== "available") return information.data === undefined;
+  if (!isRecord(information.data) || !isRecord(information.data.origin) || !["walking", "driving", "cycling"].includes(String(information.data.mode))) return false;
+  if (isRecord(information.data.destination)) return isNonNegativeNumber(information.data.durationMinutes) && isNonNegativeNumber(information.data.distanceMeters) && Array.isArray(information.data.geometry) && information.data.geometry.length <= 2_000;
+  if (Array.isArray(information.data.entries)) return information.data.entries.length <= 9;
+  return isNonNegativeNumber(information.data.minutes) && Array.isArray(information.data.polygons) && information.data.polygons.length <= 8;
+}
+
+export function isRestaurantSearchResponse(value: unknown): value is RestaurantSearchResponse {
+  if (!isRecord(value) || !isRecord(value.restaurants) || !externalInformationEnvelope(value.restaurants)) return false;
+  const information = value.restaurants;
+  if (information.status !== "available") return information.data === undefined;
+  return isRecord(information.data) && isBoundedString(information.data.area, 100) && Array.isArray(information.data.restaurants) && information.data.restaurants.length <= 10 && information.data.restaurants.every((restaurant) => isRecord(restaurant) && isBoundedString(restaurant.providerRestaurantId, 160) && isBoundedString(restaurant.name, 120) && isBoundedString(restaurant.detailUrl, 2_000) && isOptionalBoundedString(restaurant.address, 240) && isOptionalBoundedString(restaurant.genre, 80) && isOptionalBoundedString(restaurant.budget, 100) && isOptionalBoundedString(restaurant.averageBudget, 120) && isOptionalBoundedString(restaurant.openingHours, 240) && isOptionalBoundedString(restaurant.regularHoliday, 160) && isOptionalBoundedString(restaurant.stationName, 100) && isOptionalBoundedString(restaurant.access, 240) && isOptionalBoundedString(restaurant.imageUrl, 2_000) && (restaurant.latitude === undefined || isCoordinate(restaurant.latitude, -90, 90)) && (restaurant.longitude === undefined || isCoordinate(restaurant.longitude, -180, 180)) && (restaurant.features === undefined || Array.isArray(restaurant.features) && restaurant.features.length <= 8 && restaurant.features.every((feature) => isBoundedString(feature, 40))));
+}
+
+export function isWebSearchResponse(value: unknown): value is import("./bedrock-agent-contract").WebSearchResponse {
+  if (!isRecord(value) || !isRecord(value.webSearch)) return false;
+  const information = value.webSearch;
+  if (!externalInformationEnvelope(information)) return false;
+  if (information.status !== "available") return information.data === undefined;
+  return isRecord(information.data) && typeof information.data.query === "string" &&
+    Array.isArray(information.data.results) && information.data.results.length <= 8 &&
+    information.data.results.every((result) => isRecord(result) && typeof result.id === "string" &&
+      typeof result.title === "string" && typeof result.url === "string");
+}
+
+export function isWebPageReadResponse(value: unknown): value is import("./bedrock-agent-contract").WebPageReadResponse {
+  if (!isRecord(value) || !isRecord(value.webPages)) return false;
+  const information = value.webPages;
+  if (!externalInformationEnvelope(information)) return false;
+  if (information.status !== "available") return information.data === undefined;
+  return isRecord(information.data) && Array.isArray(information.data.pages) && information.data.pages.length <= 4 &&
+    information.data.pages.every((page) => isRecord(page) && typeof page.url === "string" &&
+      typeof page.text === "string" && page.text.length <= 6_000 && page.untrustedExternalContent === true);
+}
+
+function externalInformationEnvelope(value: Record<string, unknown>): boolean {
+  return ["available", "unavailable", "unknown"].includes(String(value.status)) &&
+    ["fresh", "stale", "unknown"].includes(String(value.freshness)) &&
+    Array.isArray(value.evidence) && value.evidence.length <= 24;
 }
 
 export function isDailyCongestionPeakResponse(value: unknown): value is DailyCongestionPeakResponse {
@@ -275,6 +332,8 @@ function isContentBlock(value: unknown): value is BedrockAgentContentBlock {
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null; }
 function isNonNegativeNumber(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value) && value >= 0; }
 function isCoordinate(value: unknown, minimum: number, maximum: number): value is number { return typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum; }
+function isBoundedString(value: unknown, maximum: number): value is string { return typeof value === "string" && value.length <= maximum; }
+function isOptionalBoundedString(value: unknown, maximum: number): boolean { return value === undefined || isBoundedString(value, maximum); }
 function isNonNegativeInteger(value: unknown): value is number { return isNonNegativeNumber(value) && Number.isInteger(value); }
 function isHour(value: unknown): value is number { return isNonNegativeInteger(value) && value <= 23; }
 function isNullableNonNegativeNumber(value: unknown): value is number | null { return value === null || isNonNegativeNumber(value); }

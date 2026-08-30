@@ -60,15 +60,20 @@ Terraform apply後に`/transitforge/dev/travel-provider`が作成されるため
   "application_id": "旅行提供者アプリID",
   "access_key": "旅行提供者アクセスキー",
   "hotel_search_url": "旅行提供者の宿泊検索API URL",
-  "amadeus_client_id": "航空便ProviderのClient ID（任意）",
-  "amadeus_client_secret": "航空便ProviderのClient Secret（任意）"
+  "mapbox_search_access_token": "Mapbox Search Box API用アクセストークン（任意）",
+  "brave_search_api_key": "Brave Search API Key（任意）",
+  "hot_pepper_api_key": "飲食店検索API Key（任意）"
 }
 ```
 
-`affiliate_id`は予約リンクの計測が必要な場合だけ指定する。航空便検索を使わない場合は`amadeus_*`も省略する。値はTerraform stateやGitHubへ保存せず AI Lambdaだけが実行時に取得する。
-宿泊と航空は保存先を共有していても別のCredentials Repositoryで読み込む。航空項目の未設定は
-宿泊検索を停止せず 航空便Toolだけを`unavailable`として扱う。
+`hot_pepper_api_key`を省略した場合は飲食店検索だけが利用不可になる。気象庁防災情報はキー不要で
+Mapbox Navigationは既存の`mapbox_search_access_token`を共有する
 
+`affiliate_id`は予約リンクの計測が必要な場合だけ指定する。Mapbox Searchを使わない場合は
+`mapbox_search_access_token`を省略できる。
+Mapbox Search未設定時はWikipedia検索へフォールバックする。値はTerraform stateやGitHubへ保存せず AI Lambdaだけが実行時に取得する。
+Web検索を使わない場合は`brave_search_api_key`を省略できる。Google Custom Search JSON APIは
+新規利用を受け付けていないため Web検索はベンダー非依存のPortへBrave Search Adapterを接続する。
 Raiquora自身のOIDC対象リポジトリはGitHub Actionsの`github.repository`から渡す
 必須VariableはAWS認証より前に検証し 未設定ならapplyを開始しない
 

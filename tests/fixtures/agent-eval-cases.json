@@ -473,14 +473,6 @@
       "expected": { "toolSequence": ["search_direct_routes", "search_accommodations", "search_weather_forecast", "search_place_media"], "constraints": { "useProfile": true }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["highlight_route", "show_evidence"], "requiredViewerActions": ["show_evidence"] }
     },
     {
-      "id": "travel-research-overseas",
-      "name": "航空 鉄道 天気 Placeを組み合わせて海外一泊旅行を調査する",
-      "feature": "travel_planning",
-      "userRequest": "明日の夜から香港へ一泊したい",
-      "tags": ["multi-tool", "travel", "flight", "weather", "place", "grounding"],
-      "expected": { "toolSequence": ["search_flights", "search_direct_routes", "search_weather_forecast", "search_place_media"], "constraints": { "nonStop": true }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["highlight_route", "show_evidence"], "requiredViewerActions": ["show_evidence"] }
-    },
-    {
       "id": "current-trip-date-update",
       "name": "現在の旅行を保ったまま出発日だけ変更する",
       "feature": "travel_planning",
@@ -495,6 +487,38 @@
       "userRequest": "香港でなんか危ない楽しみ方ない？",
       "tags": ["travel", "safety", "information-gap", "grounding"],
       "expected": { "toolSequence": ["search_place_media"], "constraints": { "adventureIntensity": 2, "requiresCurrentEvidenceForBorderCrossing": true }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["show_evidence"], "requiredViewerActions": ["show_evidence"] }
+    },
+    {
+      "id": "web-place-research",
+      "name": "複数Web情報から施設を発見してMapbox POIへ照合する",
+      "feature": "travel_planning",
+      "userRequest": "西条で見学できる酒蔵を複数の情報源から調べて地図で見たい",
+      "tags": ["multi-tool", "travel", "place", "grounding"],
+      "expected": { "toolSequence": ["search_web", "read_web_pages", "resolve_place_candidates"], "constraints": { "placeType": "酒蔵", "requiresResolvedPoi": true }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["show_evidence"], "requiredViewerActions": ["show_evidence"] }
+    },
+    {
+      "id": "travel-safety-alert",
+      "name": "旅行先の公式防災情報を確認する",
+      "feature": "travel_planning",
+      "userRequest": "明日の島根旅行に警報や防災上の注意はある？",
+      "tags": ["travel", "safety", "grounding"],
+      "expected": { "toolSequence": ["search_travel_alerts"], "constraints": { "area": "島根県" }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["show_evidence"], "requiredViewerActions": ["show_evidence"] }
+    },
+    {
+      "id": "station-last-mile",
+      "name": "駅から観光地までの徒歩移動を確認する",
+      "feature": "travel_planning",
+      "userRequest": "出雲市駅から出雲大社までは歩ける？",
+      "tags": ["multi-tool", "travel", "place", "grounding"],
+      "expected": { "toolSequence": ["search_place_media", "search_ground_access"], "constraints": { "mode": "walking", "verifiedEndpoints": true }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["show_evidence"], "requiredViewerActions": ["show_evidence"] }
+    },
+    {
+      "id": "restaurant-near-place",
+      "name": "観光地周辺の食事候補を検索する",
+      "feature": "travel_planning",
+      "userRequest": "出雲大社の近くで昼に出雲そばを食べたい",
+      "tags": ["multi-tool", "travel", "place", "grounding"],
+      "expected": { "toolSequence": ["search_place_media", "search_restaurants", "search_ground_access"], "constraints": { "keyword": "出雲そば", "verifiedEndpoints": true }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["show_evidence"], "requiredViewerActions": ["show_evidence"] }
     }
   ]
 }

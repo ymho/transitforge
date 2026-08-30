@@ -22,6 +22,9 @@ Mapboxの天候表現は画面全体へ適用されるため 同一画面内の�
 画像は恒久保存せず URL creator license attribution description URLを一緒に保持する
 表示時はattributionを省略せず Providerが利用条件を返さない画像は表示対象にしない
 
+観光地の地点ID 座標 カテゴリに関するこの判断は[ADR 0041](0041-use-mapbox-poi-as-place-identity.md)で置き換えた
+WikipediaとWikimedia Commonsは一致した地点の説明と画像の補完として維持する
+
 ## 理由
 
 両APIは公開仕様があり Provider固有応答をDomain Contractへ正規化できる

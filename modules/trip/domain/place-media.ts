@@ -15,10 +15,17 @@ export interface PlaceMedia {
   providerPlaceId: string;
   name: string;
   categories?: string[];
+  address?: string;
   summary?: string;
   latitude?: number;
   longitude?: number;
   sourceUrl: string;
+  sources?: Array<{
+    provider: string;
+    label: string;
+    url: string;
+    role: "identity" | "description" | "discovery";
+  }>;
   openingHours?: string;
   openingHoursStatus: "available" | "unknown";
   image?: {

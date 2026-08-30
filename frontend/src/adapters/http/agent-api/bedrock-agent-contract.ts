@@ -58,9 +58,31 @@ export interface PlaceMediaSearchResponse {
     import("@raiquora/trip/place-media").PlaceMediaSearchResult
   >;
 }
-export interface FlightSearchResponse {
-  flights: import("@raiquora/trip/external-travel-information").ExternalTravelInformation<
-    import("@raiquora/trip/flight-search").FlightSearchResult
+export interface TravelAlertSearchResponse {
+  alerts: import("@raiquora/trip/external-travel-information").ExternalTravelInformation<
+    import("@raiquora/trip/travel-alert").TravelAlertSearchResult
+  >;
+}
+export interface GroundAccessSearchResponse {
+  groundAccess: import("@raiquora/trip/external-travel-information").ExternalTravelInformation<
+    | import("@raiquora/trip/ground-access").GroundAccessRoute
+    | import("@raiquora/trip/ground-access").GroundAccessMatrix
+    | import("@raiquora/trip/ground-access").GroundAccessArea
+  >;
+}
+export interface RestaurantSearchResponse {
+  restaurants: import("@raiquora/trip/external-travel-information").ExternalTravelInformation<
+    import("@raiquora/trip/restaurant-search").RestaurantSearchResult
+  >;
+}
+export interface WebSearchResponse {
+  webSearch: import("@raiquora/trip/external-travel-information").ExternalTravelInformation<
+    import("@raiquora/trip/web-research").WebSearchResult
+  >;
+}
+export interface WebPageReadResponse {
+  webPages: import("@raiquora/trip/external-travel-information").ExternalTravelInformation<
+    import("@raiquora/trip/web-research").WebPageReadResult
   >;
 }
 export type RepresentativeTimetableKind = "weekday" | "weekend_holiday";

@@ -40,14 +40,14 @@ export function renderDisplayMode(
     button.ariaPressed = String(!digitalTwinMode);
   }
   if (!realtimeAvailable) {
-    elements.toggle.ariaLabel = "リアルタイム情報がないため日時指定モード";
-    elements.toggle.title = "リアルタイム情報がないため日時指定モード";
+    elements.toggle.ariaLabel = "リアルタイム情報がないため日時指定シミュレーター";
+    elements.toggle.title = "リアルタイム情報がないため日時指定シミュレーター";
   } else if (digitalTwinMode) {
-    elements.toggle.ariaLabel = "日時指定モードへ切り替え";
-    elements.toggle.title = "現在運行状況";
+    elements.toggle.ariaLabel = "日時指定シミュレーターへ切り替え";
+    elements.toggle.title = "リアルタイム運行状況";
   } else {
-    elements.toggle.ariaLabel = "現在運行状況へ切り替え";
-    elements.toggle.title = "日時指定モード";
+    elements.toggle.ariaLabel = "リアルタイム運行状況へ切り替え";
+    elements.toggle.title = "日時指定シミュレーター";
   }
 }
 

@@ -26,6 +26,8 @@ import type {
 } from "../../domain/viewer-agent-response";
 import type { TripContext } from "@raiquora/trip/travel-profile";
 import type { PlaceMediaSearchResult } from "@raiquora/trip/place-media";
+import type { GroundAccessArea, GroundAccessMatrix, GroundAccessRoute } from "@raiquora/trip/ground-access";
+import type { RestaurantCandidate } from "@raiquora/trip/restaurant-search";
 import { hideSheet, showSheet } from "../shared/sheet-transition";
 import { renderAssistantMarkdown, visibleAssistantText } from "./assistant-markdown";
 import {
@@ -66,6 +68,8 @@ export interface AiGuidePanelElements {
   onTravelPlan?: (plan: ViewerAgentTravelPlan) => void;
   onTripPlanUpdate?: (proposal: import("@raiquora/trip/trip-plan").TripPlanUpdateProposal) => void;
   onPlaces?: (places: PlaceMediaSearchResult["places"]) => void;
+  onGroundAccess?: (access: GroundAccessRoute | GroundAccessMatrix | GroundAccessArea) => void;
+  onRestaurantConsult?: (restaurant: RestaurantCandidate) => void;
   persistent?: () => boolean;
 }
 
@@ -294,7 +298,7 @@ export function configureAiGuidePanel(
         } else {
           input.placeholder = "列車、行き先、旅の相談を入力";
         }
-        resolveAssistantMessage(pendingMessage, response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces);
+        resolveAssistantMessage(pendingMessage, response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult);
         pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
       .catch(() => {
@@ -378,7 +382,7 @@ export function configureAiGuidePanel(
           continue;
         }
         const restored = appendPendingMessage(messages, entry.messageId);
-        resolveAssistantMessage(restored, entry.response);
+        resolveAssistantMessage(restored, entry.response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult);
         activeConversation = typeof entry.response !== "string" && "conversation" in entry.response
           ? entry.response.conversation
           : undefined;
@@ -499,6 +503,8 @@ function resolveAssistantMessage(
   onTravelPlan?: (plan: ViewerAgentTravelPlan) => void,
   onTripPlanUpdate?: (proposal: import("@raiquora/trip/trip-plan").TripPlanUpdateProposal) => void,
   onPlaces?: (places: PlaceMediaSearchResult["places"]) => void,
+  onGroundAccess?: (access: GroundAccessRoute | GroundAccessMatrix | GroundAccessArea) => void,
+  onRestaurantConsult?: (restaurant: RestaurantCandidate) => void,
 ): void {
   item.classList.remove("ai-guide-message-pending");
   item.removeAttribute("aria-label");
@@ -534,14 +540,19 @@ function resolveAssistantMessage(
     text.textContent = visibleAssistantText(response.text);
     item.append(text);
     if (response.external) {
-      appendExternalCards(item, renderExternalTravelInformation({ text: response.text, external: response.external }));
+      appendExternalCards(item, renderExternalTravelInformation(
+        { text: response.text, external: response.external },
+        { onRestaurantConsult },
+      ));
       if (response.external.places?.status === "available" && response.external.places.data) onPlaces?.(response.external.places.data.places);
+      if (response.external.groundAccess?.status === "available" && response.external.groundAccess.data) onGroundAccess?.(response.external.groundAccess.data);
     }
     onTravelPlan?.(response.travelPlan);
   } else if ("external" in response) {
     item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response.text)));
-    appendExternalCards(item, renderExternalTravelInformation(response));
+    appendExternalCards(item, renderExternalTravelInformation(response, { onRestaurantConsult }));
     if (response.external.places?.status === "available" && response.external.places.data) onPlaces?.(response.external.places.data.places);
+    if (response.external.groundAccess?.status === "available" && response.external.groundAccess.data) onGroundAccess?.(response.external.groundAccess.data);
   } else {
     item.classList.add("ai-guide-message-journey");
     item.replaceChildren();

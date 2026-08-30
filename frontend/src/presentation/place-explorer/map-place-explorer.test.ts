@@ -25,4 +25,20 @@ describe("map place card models", () => {
     expect(mapPlaceCardModels([place({ image })])[0]?.image).toEqual({ url: image.url, attribution: image.attribution });
     expect(mapPlaceCardModels([place({ image: { ...image, hotlinkAllowed: "unknown" } })])[0]?.image).toBeUndefined();
   });
+
+  it("keeps only verified categories and available opening hours for details", () => {
+    const model = mapPlaceCardModels([place({
+      categories: ["歴史", "自然"],
+      openingHours: "9:00〜17:00",
+      openingHoursStatus: "available",
+    })])[0];
+    expect(model?.categories).toEqual(["歴史", "自然"]);
+    expect(model?.openingHours).toBe("9:00〜17:00");
+    expect(mapPlaceCardModels([place({ openingHours: "9:00〜17:00" })])[0]?.openingHours).toBeUndefined();
+  });
+
+  it("keeps a provider-confirmed address for details", () => {
+    expect(mapPlaceCardModels([place({ address: "島根県出雲市大社町" })])[0]?.address)
+      .toBe("島根県出雲市大社町");
+  });
 });

@@ -53,10 +53,10 @@ export function configureTrainCongestionUpdates(
     const visible = available && requested;
     toggle.disabled = !available;
     toggle.ariaPressed = String(visible);
-    toggle.title = available ? "混雑表示" : "現在運行状況で利用可能";
+    toggle.title = available ? "混雑表示" : "リアルタイム運行状況で利用可能";
     toggle.ariaLabel = available
       ? "混雑表示"
-      : "混雑表示は現在運行状況で利用可能";
+      : "混雑表示はリアルタイム運行状況で利用可能";
     trainLayer.setCongestionVisible(visible);
     poller.setEnabled(visible);
   };

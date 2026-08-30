@@ -35,6 +35,9 @@ flowchart LR
 | 遅延分析 | 最新状況 日次ピーク 時間別傾向 列車別を集計 |
 | 旅行相談の追加質問 | 次の質問 選択肢 TripContext を構造化して返し ブラウザは共通UIで回答を受け取る |
 | 画面操作 | 時刻 列車フォーカス 可視化レイヤーを変更 |
+| 防災情報 | 気象庁の公式フィードから旅行先に現在発表中の情報を検索 |
+| 駅から先の移動 | 検証済み駅とPlace間の徒歩 車 自転車経路を検索 |
+| 飲食店検索 | 地域 ジャンル 位置から食事候補を検索 |
 
 ## 経路検索
 
@@ -86,6 +89,9 @@ flowchart LR
 出発日と泊数が揃った後は同じ条件の追加質問を拒否し 宿泊旅行または日帰りの決定論的な検索へ進む。
 観光候補を含む旅行提案では `search_place_media` が利用可能なら写真と位置を検索し
 未検証のスポット一覧だけで完了しない。写真検索に失敗しても検証済みの鉄道経路と宿泊候補は保持する。
+地点ID 座標 カテゴリはMapbox SearchのPOIを正とし Wikipediaは名称が一致した地点の説明と画像だけを補完する。
+酒蔵のように呼び方が複数ある施設は決定的な検索語展開を行い Mapbox Place IDで重複を除く。
+市 県 一般記事をPOIとして表示せず Mapboxで同定できないWeb上の候補へ座標を推測しない。
 
 | 利用者の表現 | 検索契約 | 適用範囲 |
 | --- | --- | --- |
@@ -154,7 +160,7 @@ npx vitest run frontend/src/usecases/agent/grounded-journey-agent.e2e.test.ts
 
 ## Agent Evaluation
 
-35ケースの再現可能なobservationを評価し JSONとMarkdown reportを生成する。
+42ケースの再現可能なobservationを評価し JSONとMarkdown reportを生成する。
 
 ```bash
 npm run eval:agent

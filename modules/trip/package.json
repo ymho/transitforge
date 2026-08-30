@@ -15,7 +15,10 @@
     "./weather-forecast": "./domain/weather-forecast.ts",
     "./weather-grid": "./domain/weather-grid.ts",
     "./place-media": "./domain/place-media.ts",
-    "./flight-search": "./domain/flight-search.ts",
+    "./web-research": "./domain/web-research.ts",
+    "./travel-alert": "./domain/travel-alert.ts",
+    "./ground-access": "./domain/ground-access.ts",
+    "./restaurant-search": "./domain/restaurant-search.ts",
     "./adventure-safety": "./domain/adventure-safety.ts",
     "./travel-recheck": "./domain/travel-recheck.ts",
     "./airport-access": "./domain/airport-access.ts"

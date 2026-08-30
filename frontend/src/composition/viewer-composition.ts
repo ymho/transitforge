@@ -6,6 +6,7 @@ import { currentBrowserCoordinate } from "../adapters/browser/current-coordinate
 import { createRuntimeMonitor, nextBrowserFrame } from "../adapters/browser/runtime-monitor";
 import { applyWeather } from "../adapters/mapbox/map-weather";
 import { createLocalWeatherLayer } from "../adapters/mapbox/local-weather-layer";
+import { createGroundAccessLayer, type GroundAccessLayerController } from "../adapters/mapbox/ground-access-layer";
 import {
   createVerifiedPlaceLayer,
   type VerifiedPlaceLayerController,
@@ -35,7 +36,11 @@ import {
   searchWeatherForecast,
   searchWeatherGrid,
   searchPlaceMedia,
-  searchFlights,
+  searchTravelAlerts,
+  searchGroundAccess,
+  searchRestaurants,
+  searchWeb,
+  readWebPages,
   searchRepresentativeTimetable,
   journeySearchService,
   submitConversationFeedback,
@@ -95,6 +100,7 @@ import {
   PathGeometryIndex,
 } from "../domain/train-position";
 import type { TrainPosition } from "../domain/train-position";
+import { normalizeStationName } from "@raiquora/train/station-name";
 import {
   type ViewerAgentLayer,
 } from "../usecases/viewer/viewer-action";
@@ -215,6 +221,9 @@ const {
   mapPlaceExplorer,
   mapPlaceExplorerList,
   closeMapPlaceExplorer,
+  mapPlaceDetail,
+  mapPlaceDetailContent,
+  closeMapPlaceDetail,
   congestionToggle,
   destinationArcsToggle,
   digitalTwinModeToggle,
@@ -326,6 +335,7 @@ document.addEventListener(travelProfileChangedEvent, () =>
 let aiGuideController: ReturnType<typeof configureAiGuidePanel>;
 let verifiedPlaceLayer: VerifiedPlaceLayerController | undefined;
 let mapPlaceExplorerController: MapPlaceExplorerController | undefined;
+let groundAccessLayer: GroundAccessLayerController | undefined;
 let pendingVerifiedPlaces: import("@raiquora/trip/place-media").PlaceMedia[] = [];
 const tripPreviewEnabled = import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get("trip-preview") === "1";
@@ -506,6 +516,13 @@ aiGuideController = configureAiGuidePanel(
       mapPlaceExplorerController?.show(places);
       contextWorkspaceController.show("map");
     },
+    onGroundAccess: (access) => {
+      groundAccessLayer?.show(access);
+      contextWorkspaceController.show("map");
+    },
+    onRestaurantConsult: (restaurant) => {
+      aiGuideController.ask(`${restaurant.name}を食事候補として旅程に入れたい`);
+    },
     persistent: () => true,
     onTripPlanUpdate: (proposal) => {
       tripPlanController.apply(proposal.patches);
@@ -550,7 +567,6 @@ conversationSessionRepository.subscribe(() => {
 });
 void runDueTravelRechecks(travelRecheckRepository, {
   weather: (location) => searchWeatherForecast({ location }),
-  flights: (originAirportCode, destinationAirportCode, departureDate) => searchFlights({ originAirportCode, destinationAirportCode, departureDate }),
   railOperation: async (serviceDate) => ({
     data: await queryTrainDelayAnalysis(serviceDate),
     evidence: [{ id: `rail-operation:${serviceDate}`, kind: "event", provider: "raiquora-operation-snapshot", retrievedAt: new Date().toISOString(), attribution: "Raiquora operation snapshot", confidence: "observed" }],
@@ -633,12 +649,16 @@ if (!token) {
     antialias: true,
   });
   resizeContextMap = () => map.resize();
+  groundAccessLayer = createGroundAccessLayer(map);
   verifiedPlaceLayer = createVerifiedPlaceLayer(map, (place) =>
     mapPlaceExplorerController?.select(place.providerPlaceId, false));
   mapPlaceExplorerController = configureMapPlaceExplorer({
     panel: mapPlaceExplorer,
     list: mapPlaceExplorerList,
     close: closeMapPlaceExplorer,
+    detail: mapPlaceDetail,
+    detailContent: mapPlaceDetailContent,
+    closeDetail: closeMapPlaceDetail,
     focusPlace: (providerPlaceId) => verifiedPlaceLayer?.focus(providerPlaceId),
     consult: (place) => aiGuideController.ask(`${place.name}を旅程へ追加したい`),
     clearPlaces: () => {
@@ -1261,7 +1281,22 @@ if (!token) {
                 searchAccommodations,
                 searchWeatherForecast,
                 searchPlaceMedia,
-                searchFlights,
+                searchTravelAlerts,
+                searchGroundAccess,
+                searchRestaurants,
+                resolveStationGroundPoint: (stationName) => {
+                  const normalized = normalizeStationName(stationName);
+                  const station = stationLineCatalog.lines.flatMap((line) => line.stations)
+                    .find((candidate) => normalizeStationName(candidate.name) === normalized);
+                  return station ? {
+                    entityId: `station:${normalized}`,
+                    name: station.name,
+                    longitude: station.coordinate[0],
+                    latitude: station.coordinate[1],
+                  } : undefined;
+                },
+                searchWeb,
+                readWebPages,
                 scheduleTravelRecheck: (request) => travelRecheckRepository.schedule(request),
                 getJourneySearchPreferences: () => preferences,
                 getPreviousJourneyPlan: () => previousJourneyPlan,

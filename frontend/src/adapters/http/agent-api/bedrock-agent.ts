@@ -12,7 +12,11 @@ import type {
   WeatherForecastSearchResponse,
   WeatherGridSearchResponse,
   PlaceMediaSearchResponse,
-  FlightSearchResponse,
+  TravelAlertSearchResponse,
+  GroundAccessSearchResponse,
+  RestaurantSearchResponse,
+  WebSearchResponse,
+  WebPageReadResponse,
 } from "./bedrock-agent-contract";
 import {
   isBedrockAgentResponse,
@@ -25,7 +29,11 @@ import {
   isWeatherForecastSearchResponse,
   isWeatherGridSearchResponse,
   isPlaceMediaSearchResponse,
-  isFlightSearchResponse,
+  isTravelAlertSearchResponse,
+  isGroundAccessSearchResponse,
+  isRestaurantSearchResponse,
+  isWebSearchResponse,
+  isWebPageReadResponse,
 } from "./bedrock-agent-validation";
 import type {
   JourneySearchRequest,
@@ -188,11 +196,52 @@ export async function searchPlaceMedia(
   );
 }
 
-export async function searchFlights(
-  request: { originAirportCode: string; destinationAirportCode: string; departureDate: string; adults?: number; nonStop?: boolean; limit?: number },
+export async function searchTravelAlerts(
+  request: { area: string; categories?: import("@raiquora/trip/travel-alert").TravelAlertCategory[]; limit?: number },
   fetcher: typeof fetch = fetch,
-): Promise<FlightSearchResponse> {
-  return postAgentBody({ operation: "flight_search", ...request }, "航空便を検索できません", "航空便", isFlightSearchResponse, fetcher, true);
+): Promise<TravelAlertSearchResponse> {
+  return postAgentBody(
+    { operation: "travel_alert_search", ...request },
+    "防災情報を取得できません",
+    "防災情報",
+    isTravelAlertSearchResponse,
+    fetcher,
+    true,
+  );
+}
+
+export async function searchGroundAccess(
+  request: {
+    action: "route" | "matrix" | "isochrone";
+    mode: import("@raiquora/trip/ground-access").GroundAccessMode;
+    origin: import("@raiquora/trip/ground-access").GroundAccessPoint;
+    destinations?: import("@raiquora/trip/ground-access").GroundAccessPoint[];
+    minutes?: number;
+  },
+  fetcher: typeof fetch = fetch,
+): Promise<GroundAccessSearchResponse> {
+  return postAgentBody({ operation: "ground_access_search", ...request }, "駅から先の移動を検索できません", "徒歩と車の移動", isGroundAccessSearchResponse, fetcher, true);
+}
+
+export async function searchRestaurants(
+  request: { area: string; keyword?: string; latitude?: number; longitude?: number; range?: 1 | 2 | 3 | 4 | 5; requirements?: import("@raiquora/trip/restaurant-search").RestaurantRequirements; limit?: number },
+  fetcher: typeof fetch = fetch,
+): Promise<RestaurantSearchResponse> {
+  return postAgentBody({ operation: "restaurant_search", ...request }, "飲食店候補を検索できません", "飲食店候補", isRestaurantSearchResponse, fetcher, true);
+}
+
+export async function searchWeb(
+  request: { query: string; freshness?: "day" | "week" | "month" | "year"; domains?: string[]; limit?: number },
+  fetcher: typeof fetch = fetch,
+): Promise<WebSearchResponse> {
+  return postAgentBody({ operation: "web_search", ...request }, "Web情報を検索できません", "Web検索", isWebSearchResponse, fetcher, true);
+}
+
+export async function readWebPages(
+  request: { urls: string[] },
+  fetcher: typeof fetch = fetch,
+): Promise<WebPageReadResponse> {
+  return postAgentBody({ operation: "web_page_read", ...request }, "Webページを確認できません", "Webページ", isWebPageReadResponse, fetcher, true);
 }
 
 export async function searchRepresentativeTimetable(

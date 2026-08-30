@@ -1528,7 +1528,7 @@ describe("Bedrock viewer agent", () => {
       .mockResolvedValueOnce({ originStation: "宮島口", results: [] });
     const searchAccommodations = vi.fn();
     const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
-      expect(tools).toHaveLength(20);
+      expect(tools).toHaveLength(25);
       expect(tools?.some(({ name }) => name === "schedule_trip_recheck"))
         .toBe(true);
       expect(tools?.find(({ name }) => name === "plan_day_trip")?.inputSchema)

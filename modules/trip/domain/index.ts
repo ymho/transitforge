@@ -7,7 +7,6 @@ export * from "./trip-plan";
 export * from "./external-travel-information";
 export * from "./weather-forecast";
 export * from "./place-media";
-export * from "./flight-search";
 export * from "./adventure-safety";
 export * from "./travel-recheck";
 export * from "./airport-access";
