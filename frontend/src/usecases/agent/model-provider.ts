@@ -1,4 +1,5 @@
 import type { AgentToolDescriptor } from "./tool-contract";
+import type { AgentDecisionSummary } from "./agent-decision-summary";
 
 export type AgentModelContent =
   | { type: "text"; text: string }
@@ -43,6 +44,8 @@ export interface AgentModelResponse {
   message: AgentModelMessage;
   stopReason: "completed" | "tool_calls" | "max_tokens";
   metadata: AgentModelMetadata;
+  decisionSummaryStatus?: "valid" | "missing" | "invalid";
+  decisionSummary?: AgentDecisionSummary;
 }
 
 export interface AgentModelProvider {

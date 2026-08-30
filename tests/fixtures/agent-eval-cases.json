@@ -11,6 +11,7 @@
       "expected": {
         "toolSequence": ["search_journeys"],
         "constraints": { "maxTransfers": 0 },
+        "decision": { "requiredHardConstraintKeys": ["max_transfers"], "forbiddenUnresolvedFacts": ["max_transfers"] },
         "status": "completed",
         "minimumGroundedClaimRate": 1,
         "maximumUnsupportedClaimRate": 0,
@@ -478,7 +479,7 @@
       "feature": "travel_planning",
       "userRequest": "この宮島旅行はそのままで 出発日だけ9月1日に変えて",
       "tags": ["smoke", "travel", "constraint"],
-      "expected": { "toolSequence": ["propose_trip_update"], "constraints": { "destination": "宮島", "startDate": "2026-09-01", "preserveUnspecifiedConditions": true }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": [], "requiredViewerActions": [] }
+      "expected": { "toolSequence": ["propose_trip_update"], "constraints": { "destination": "宮島", "startDate": "2026-09-01", "preserveUnspecifiedConditions": true }, "decision": { "requiredHardConstraintKeys": ["destination", "start_date"], "forbiddenUnresolvedFacts": ["destination", "start_date"] }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": [], "requiredViewerActions": [] }
     },
     {
       "id": "adventure-safe-alternative",

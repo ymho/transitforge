@@ -23,6 +23,8 @@ import {
   type AgentRuntimeLimits,
 } from "./runtime-policies";
 import type { AgentRuntimeRequest, AgentRuntimeResult } from "./runtime-contract";
+import type { AgentDecisionSummary } from "./agent-decision-summary";
+import type { AgentDecisionTrace } from "./agent-trace";
 import { AgentToolRegistry } from "./tool-registry";
 import type { AgentViewerActionHandler } from "./viewer-action-handler";
 import type { AgentViewerActionOutcome } from "./runtime-contract";
@@ -129,16 +131,14 @@ export class MultiStepAgentRuntime {
       );
       if (calls.length > 0) {
         for (const call of calls) {
-          trace.decisionRecorded({
-            interpretedGoal: problem.decisionContext.userRequest,
-            hardConstraints: problem.decisionContext.knownHardConstraints,
-            softPreferences: problem.decisionContext.knownSoftPreferences,
-            selectedAction: call.name === "ask_follow_up" ? "ask_user" : "use_tool",
-            selectedTool: call.name,
-            unresolvedFacts: [],
-            reasonCodes: [iterations > 0 ? "result_driven_replan" : "initial_capability_selection"],
-            ...(iterations > 0 ? { replanReason: "tool_result_received" } : {}),
-          });
+          trace.decisionRecorded(decisionForToolCall(
+            modelResponse,
+            call.name,
+            problem.decisionContext.userRequest,
+            problem.decisionContext.knownHardConstraints,
+            problem.decisionContext.knownSoftPreferences,
+            iterations,
+          ));
         }
       }
       if (modelResponse.stopReason === "tool_calls" && calls.length === 0) {
@@ -197,15 +197,14 @@ export class MultiStepAgentRuntime {
         } catch {
           return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_response_format");
         }
-        trace.decisionRecorded({
-          interpretedGoal: problem.decisionContext.userRequest,
-          hardConstraints: problem.decisionContext.knownHardConstraints,
-          softPreferences: problem.decisionContext.knownSoftPreferences,
-          selectedAction: "answer",
-          unresolvedFacts: [],
-          reasonCodes: [evidence.length > 0 ? "evidence_sufficient" : "no_factual_claim_required"],
-          ...(iterations > 0 ? { replanReason: "tool_results_assessed" } : {}),
-        });
+        trace.decisionRecorded(decisionForAnswer(
+          modelResponse,
+          problem.decisionContext.userRequest,
+          problem.decisionContext.knownHardConstraints,
+          problem.decisionContext.knownSoftPreferences,
+          evidence.length > 0,
+          iterations,
+        ));
         const grounding = validateEvidenceAndClaims(evidence, generated.claims);
         if (
           !grounding.valid ||
@@ -362,6 +361,76 @@ function result(
 
 function elapsed(startedAt: number, now: () => Date): number {
   return Math.max(0, now().getTime() - startedAt);
+}
+
+function decisionForToolCall(
+  response: AgentModelResponse,
+  toolName: string,
+  fallbackGoal: string,
+  fallbackHardConstraints: AgentDecisionTrace["hardConstraints"],
+  fallbackSoftPreferences: AgentDecisionTrace["softPreferences"],
+  iterations: number,
+): AgentDecisionTrace {
+  const expectedAction = toolName === "ask_follow_up" ? "ask_user" : "use_tool";
+  const summary = response.decisionSummary;
+  if (summary && summary.selectedAction === expectedAction &&
+    summary.selectedTool === toolName) {
+    return traceDecision(summary);
+  }
+  return {
+    interpretedGoal: fallbackGoal,
+    hardConstraints: fallbackHardConstraints,
+    softPreferences: fallbackSoftPreferences,
+    selectedAction: expectedAction,
+    selectedTool: toolName,
+    unresolvedFacts: [],
+    reasonCodes: [response.decisionSummaryStatus === "invalid"
+      ? "decision_summary_invalid"
+      : iterations > 0 ? "result_driven_replan" : "initial_capability_selection"],
+    ...(iterations > 0 ? { replanReason: "tool_result_received" } : {}),
+  };
+}
+
+function decisionForAnswer(
+  response: AgentModelResponse,
+  fallbackGoal: string,
+  fallbackHardConstraints: AgentDecisionTrace["hardConstraints"],
+  fallbackSoftPreferences: AgentDecisionTrace["softPreferences"],
+  hasEvidence: boolean,
+  iterations: number,
+): AgentDecisionTrace {
+  const summary = response.decisionSummary;
+  if (summary?.selectedAction === "answer" && summary.selectedTool === undefined) {
+    return traceDecision(summary);
+  }
+  return {
+    interpretedGoal: fallbackGoal,
+    hardConstraints: fallbackHardConstraints,
+    softPreferences: fallbackSoftPreferences,
+    selectedAction: "answer",
+    unresolvedFacts: [],
+    reasonCodes: [response.decisionSummaryStatus === "invalid"
+      ? "decision_summary_invalid"
+      : hasEvidence ? "evidence_sufficient" : "no_factual_claim_required"],
+    ...(iterations > 0 ? { replanReason: "tool_results_assessed" } : {}),
+  };
+}
+
+function traceDecision(summary: AgentDecisionSummary): AgentDecisionTrace {
+  return {
+    interpretedGoal: summary.interpretedGoal,
+    hardConstraints: summary.hardConstraints.map(({ key, value }) => ({
+      key, value, source: "agent_interpretation",
+    })),
+    softPreferences: summary.softPreferences.map(({ key, value }) => ({
+      key, value, source: "agent_interpretation",
+    })),
+    selectedAction: summary.selectedAction,
+    ...(summary.selectedTool ? { selectedTool: summary.selectedTool } : {}),
+    unresolvedFacts: summary.unresolvedFacts,
+    reasonCodes: summary.reasonCodes,
+    ...(summary.replanReason ? { replanReason: summary.replanReason } : {}),
+  };
 }
 
 type ModelDeadlineResult<T> =

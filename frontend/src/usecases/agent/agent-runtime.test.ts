@@ -106,6 +106,60 @@ describe("MultiStepAgentRuntime", () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
+  it("records a validated model decision summary without an extra model call", async () => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const response = toolCallResponse([
+      { id: "call-a", name: "first_tool", input: { value: "京都" } },
+    ]);
+    response.decisionSummaryStatus = "valid";
+    response.decisionSummary = {
+      interpretedGoal: "京都から出雲へ移動する",
+      hardConstraints: [{ key: "origin", value: "京都" }],
+      softPreferences: [{ key: "pace", value: "slow" }],
+      selectedAction: "use_tool",
+      selectedTool: "first_tool",
+      unresolvedFacts: ["destination_station"],
+      reasonCodes: ["constraint_applied", "evidence_required"],
+    };
+    const model = sequenceModel([response, textResponse("候補です")]);
+    const runtime = new MultiStepAgentRuntime({ model, tools, toolExecutor });
+
+    const output = await runtime.run(request("京都から出雲へ"));
+
+    expect(model.generate).toHaveBeenCalledTimes(2);
+    expect(output.trace.events).toContainEqual(expect.objectContaining({
+      type: "decision_recorded",
+      interpretedGoal: "京都から出雲へ移動する",
+      selectedTool: "first_tool",
+      unresolvedFacts: ["destination_station"],
+      reasonCodes: ["constraint_applied", "evidence_required"],
+      hardConstraints: expect.objectContaining({
+        value: [{ key: "origin", value: "京都", source: "agent_interpretation" }],
+      }),
+    }));
+  });
+
+  it("falls back to observable decisions when a decision summary is invalid", async () => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const response = toolCallResponse([
+      { id: "call-a", name: "first_tool", input: { value: "京都" } },
+    ]);
+    response.decisionSummaryStatus = "invalid";
+    const runtime = new MultiStepAgentRuntime({
+      model: sequenceModel([response, textResponse("候補です")]),
+      tools,
+      toolExecutor,
+    });
+
+    const output = await runtime.run(request("京都から出雲へ"));
+
+    expect(output.trace.events).toContainEqual(expect.objectContaining({
+      type: "decision_recorded",
+      selectedTool: "first_tool",
+      reasonCodes: ["decision_summary_invalid"],
+    }));
+  });
+
   it("stops before executing tools when the tool count limit would be exceeded", async () => {
     const executionOrder: string[] = [];
     const { tools, toolExecutor } = toolSetup(executionOrder);

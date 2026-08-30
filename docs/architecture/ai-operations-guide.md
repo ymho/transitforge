@@ -11,6 +11,10 @@ Bedrockは構造化されたAgent Contextから利用者のgoal hard constraint 
 外部Provider Evidence Claim Viewer Action safety privacyは決定論的コードを正本とする。
 
 責務の詳細と段階移行は[ADR 0044](../decisions/0044-make-bedrock-the-agent-decision-authority.md)を参照する。
+Agentの判断はChain-of-Thoughtを保存せず closedなreason codeとboundedな
+Decision SummaryだけをTraceへ記録する。欠落または不正なSummaryは実際に観測したTool Useと
+回答から安全に補い Evidenceとしては扱わない。詳細は
+[ADR 0046](../decisions/0046-record-bounded-agent-decision-summaries.md)を参照する。
 
 ```mermaid
 flowchart LR

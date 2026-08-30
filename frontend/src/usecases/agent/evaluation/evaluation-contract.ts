@@ -38,6 +38,10 @@ export interface AgentEvaluationExpectation {
   maximumUnsupportedClaimRate: number;
   allowedViewerActions: string[];
   requiredViewerActions: string[];
+  decision?: {
+    requiredHardConstraintKeys: string[];
+    forbiddenUnresolvedFacts: string[];
+  };
 }
 
 export interface AgentEvaluationObservationSet {
@@ -55,6 +59,8 @@ export interface AgentEvaluationObservation {
     actionType: string;
     status: "applied" | "rejected";
   }>;
+  decisionHardConstraintKeys?: string[];
+  decisionUnresolvedFacts?: string[];
 }
 
 export interface AgentEvaluationCaseResult {

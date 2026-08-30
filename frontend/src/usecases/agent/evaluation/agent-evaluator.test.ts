@@ -57,6 +57,23 @@ describe("Agent Evaluation Framework", () => {
     expect(markdown).toContain("| cancellation |");
   });
 
+  it("fails when the externalized decision omits a known hard constraint", () => {
+    const dataset = parseAgentEvaluationDataset(readJson("agent-eval-cases.json"));
+    const observations = parseAgentEvaluationObservations(
+      readJson("agent-eval-observations.json"),
+    );
+    const direct = observations.observations.find(({ caseId }) => caseId === "direct-standard");
+    if (!direct) throw new Error("direct-standard observation is missing");
+    direct.decisionHardConstraintKeys = [];
+    direct.decisionUnresolvedFacts = ["max_transfers"];
+
+    const report = evaluateAgentDataset(dataset, observations);
+    const failed = report.cases.find(({ id }) => id === "direct-standard");
+    expect(failed?.passed).toBe(false);
+    expect(failed?.metrics.constraintSatisfaction).toBe(0);
+    expect(failed?.failures).toContain("正規化された制約が不足している");
+  });
+
   it("detects tool constraint claim completion and Viewer regressions objectively", () => {
     const dataset = parseAgentEvaluationDataset(readJson("agent-eval-cases.json"));
     const observations = parseAgentEvaluationObservations(
@@ -126,6 +143,8 @@ describe("Agent Evaluation Framework", () => {
       status: "completed",
       claimStatuses: ["supported"],
       viewerActions: [{ actionType: "show_evidence", status: "applied" }],
+      decisionHardConstraintKeys: [],
+      decisionUnresolvedFacts: [],
     });
   });
 });
