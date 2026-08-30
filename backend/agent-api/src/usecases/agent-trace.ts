@@ -20,6 +20,7 @@ const eventFields = {
   task_started: [["userRequest"], []],
   intent_normalized: [["intent", "constraints"], []],
   plan_created: [["steps"], []],
+  decision_recorded: [["interpretedGoal", "hardConstraints", "softPreferences", "selectedAction", "unresolvedFacts", "reasonCodes"], ["selectedTool", "replanReason"]],
   tool_called: [["toolCallId", "toolName", "input"], []],
   tool_completed: [["toolCallId", "toolName", "outcome", "result"], ["latencyMs", "errorCode", "retryable"]],
   evidence_collected: [["evidenceIds", "categories", "sourceTypes"], []],
@@ -30,10 +31,10 @@ const eventFields = {
   task_completed: [["status"], ["latencyMs", "reason"]],
 } as const;
 
-const stringFields = new Set(["userRequest", "intent", "toolCallId", "toolName", "errorCode", "provider", "requestId", "model", "reason", "response", "actionType", "targetEntityId"]);
-const stringListFields = new Set(["steps", "evidenceIds", "categories", "sourceTypes", "claimIds"]);
+const stringFields = new Set(["userRequest", "intent", "interpretedGoal", "selectedTool", "replanReason", "toolCallId", "toolName", "errorCode", "provider", "requestId", "model", "reason", "response", "actionType", "targetEntityId"]);
+const stringListFields = new Set(["steps", "unresolvedFacts", "reasonCodes", "evidenceIds", "categories", "sourceTypes", "claimIds"]);
 const countFields = new Set(["sequence", "latencyMs", "inputTokens", "outputTokens", "totalTokens"]);
-const payloadFields = new Set(["constraints", "input", "result"]);
+const payloadFields = new Set(["constraints", "hardConstraints", "softPreferences", "input", "result"]);
 
 export interface TraceOperationOptions {
   bucket: string;
@@ -174,6 +175,7 @@ function validatedEventField(key: string, value: unknown, eventType: string, pos
     return value;
   }
   if (key === "outcome" && (value === "success" || value === "error")) return value;
+  if (key === "selectedAction" && (value === "use_tool" || value === "ask_user" || value === "answer")) return value;
   if (key === "status") {
     const allowed = eventType === "viewer_action"
       ? new Set(["proposed", "applied", "rejected"])

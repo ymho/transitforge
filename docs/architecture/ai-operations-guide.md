@@ -5,6 +5,13 @@
 コンシェルジュは自然文を検索条件と安全な画面操作へ変換する
 モデルへ列車データ全体やブラウザ操作権限を渡さない
 
+Bedrockは構造化されたAgent Contextから利用者のgoal hard constraint soft preferenceを解釈し
+必要なEvidence 追加質問 Tool 候補比較 最終推薦を判断する。Applicationは自然言語の業務フローを
+別ルールエンジンとして再実装せず Context構築とboundedな実行を担う。時刻表 経路 運行情報
+外部Provider Evidence Claim Viewer Action safety privacyは決定論的コードを正本とする。
+
+責務の詳細と段階移行は[ADR 0044](../decisions/0044-make-bedrock-the-agent-decision-authority.md)を参照する。
+
 ```mermaid
 flowchart LR
   U[利用者] --> C[ブラウザ]

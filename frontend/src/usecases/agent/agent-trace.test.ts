@@ -11,6 +11,15 @@ describe("AgentTraceRecorder", () => {
     recorder.taskStarted("京都から出雲市へ行きたい");
     recorder.intentNormalized("journey_search", { origin: "京都", destination: "出雲市" });
     recorder.planCreated(["経路を検索する", "候補を比較する"]);
+    recorder.decisionRecorded({
+      interpretedGoal: "出雲市へ移動する",
+      hardConstraints: [{ key: "arrival", value: "16:30", source: "user" }],
+      softPreferences: [{ key: "pace", value: "relaxed", source: "travel_profile" }],
+      selectedAction: "use_tool",
+      selectedTool: "search_journeys",
+      unresolvedFacts: ["経路"],
+      reasonCodes: ["evidence_required"],
+    });
     recorder.toolCalled("call-1", "search_journeys", { origin: "京都" });
     recorder.toolCompleted("call-1", "search_journeys", {
       ok: true,
@@ -40,6 +49,7 @@ describe("AgentTraceRecorder", () => {
       "task_started",
       "intent_normalized",
       "plan_created",
+      "decision_recorded",
       "tool_called",
       "tool_completed",
       "evidence_collected",
@@ -51,16 +61,17 @@ describe("AgentTraceRecorder", () => {
       "task_completed",
     ]);
     expect(trace.events.map(({ sequence }) => sequence)).toEqual(
-      Array.from({ length: 12 }, (_, index) => index + 1),
+      Array.from({ length: 13 }, (_, index) => index + 1),
     );
     expect(trace.events.every(({ occurredAt }) =>
       occurredAt === "2026-08-25T09:00:00.000Z")).toBe(true);
-    expect(trace.events[4]).toMatchObject({ latencyMs: 12, outcome: "success" });
-    expect(trace.events[7]).toMatchObject({
+    expect(trace.events[5]).toMatchObject({ latencyMs: 12, outcome: "success" });
+    expect(trace.events[8]).toMatchObject({
       provider: "bedrock",
       requestId: "request-1",
       totalTokens: 15,
     });
+    expect(JSON.stringify(trace)).not.toContain("Chain-of-Thought");
   });
 
   it("redacts secrets and exact location coordinates before storing payloads", () => {

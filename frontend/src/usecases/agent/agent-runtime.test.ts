@@ -67,6 +67,8 @@ describe("MultiStepAgentRuntime", () => {
       "intent_normalized",
       "plan_created",
       "model_completed",
+      "decision_recorded",
+      "decision_recorded",
       "tool_called",
       "tool_completed",
       "evidence_collected",
@@ -75,9 +77,17 @@ describe("MultiStepAgentRuntime", () => {
       "evidence_collected",
       "replan_decided",
       "model_completed",
+      "decision_recorded",
       "response_generated",
       "task_completed",
     ]);
+    expect(output.trace.events).toContainEqual(expect.objectContaining({
+      type: "decision_recorded",
+      interpretedGoal: "京都から出雲市へ行きたい",
+      selectedAction: "use_tool",
+      selectedTool: "first_tool",
+      reasonCodes: ["initial_capability_selection"],
+    }));
   });
 
   it("returns a follow-up without calling the model when problem framing finds missing data", async () => {

@@ -51,6 +51,39 @@ describe("agent trace parity", () => {
     expect(stored).toContain("京都");
   });
 
+  it("stores externalizable decision outcomes without internal reasoning", async () => {
+    const value = submission();
+    value.trace.events = [{
+      type: "decision_recorded",
+      sequence: 1,
+      occurredAt: "2026-08-25T09:00:00Z",
+      interpretedGoal: "16:30までに大阪へ戻れる日帰り先を決める",
+      hardConstraints: {
+        byteLength: 80,
+        truncated: false,
+        value: [{ key: "return_deadline", value: "16:30", source: "user" }],
+      },
+      softPreferences: {
+        byteLength: 70,
+        truncated: false,
+        value: [{ key: "interest", value: "自然", source: "travel_profile" }],
+      },
+      selectedAction: "use_tool",
+      selectedTool: "search_journeys",
+      unresolvedFacts: ["到達可能な候補"],
+      reasonCodes: ["evidence_required"],
+      replanReason: "tool_result_received",
+    }];
+    const storage = new RecordingStorage();
+
+    await storeAgentTrace(value, { bucket: "private-bucket", storage }, fixedNow, "trace-1");
+
+    const stored = new TextDecoder().decode(storage.values[0]?.body);
+    expect(stored).toContain("decision_recorded");
+    expect(stored).toContain("search_journeys");
+    expect(stored).not.toContain("Chain-of-Thought");
+  });
+
   it("returns bounded storage failures and logs identifiers only", async () => {
     const log = vi.fn();
     const operation = createAgentTraceOperation({

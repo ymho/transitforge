@@ -1,6 +1,10 @@
 import type { Evidence } from "./evidence-model";
 import type { AgentModelMetadata } from "./model-provider";
 import type { AgentToolResult } from "./tool-contract";
+import type {
+  AgentKnownConstraint,
+  AgentKnownPreference,
+} from "./agent-decision-context";
 
 export type AgentTraceStatus = "completed" | "failed" | "cancelled";
 
@@ -8,6 +12,17 @@ export interface TracePayloadSummary {
   byteLength: number;
   truncated: boolean;
   value: unknown;
+}
+
+export interface AgentDecisionTrace {
+  interpretedGoal: string;
+  hardConstraints: AgentKnownConstraint[];
+  softPreferences: AgentKnownPreference[];
+  selectedAction: "use_tool" | "ask_user" | "answer";
+  selectedTool?: string;
+  unresolvedFacts: string[];
+  reasonCodes: string[];
+  replanReason?: string;
 }
 
 interface AgentTraceEventBase {
@@ -28,6 +43,17 @@ export type AgentTraceEvent =
   | (AgentTraceEventBase & {
       type: "plan_created";
       steps: string[];
+    })
+  | (AgentTraceEventBase & {
+      type: "decision_recorded";
+      interpretedGoal: string;
+      hardConstraints: TracePayloadSummary;
+      softPreferences: TracePayloadSummary;
+      selectedAction: AgentDecisionTrace["selectedAction"];
+      selectedTool?: string;
+      unresolvedFacts: string[];
+      reasonCodes: string[];
+      replanReason?: string;
     })
   | (AgentTraceEventBase & {
       type: "tool_called";
@@ -157,6 +183,20 @@ export class AgentTraceRecorder {
 
   planCreated(steps: string[]): void {
     this.append({ type: "plan_created", steps: this.texts(steps) });
+  }
+
+  decisionRecorded(decision: AgentDecisionTrace): void {
+    this.append({
+      type: "decision_recorded",
+      interpretedGoal: this.text(decision.interpretedGoal),
+      hardConstraints: this.payload(decision.hardConstraints.slice(0, 8)),
+      softPreferences: this.payload(decision.softPreferences.slice(0, 8)),
+      selectedAction: decision.selectedAction,
+      ...(decision.selectedTool ? { selectedTool: this.text(decision.selectedTool) } : {}),
+      unresolvedFacts: this.texts(decision.unresolvedFacts),
+      reasonCodes: this.texts(decision.reasonCodes),
+      ...(decision.replanReason ? { replanReason: this.text(decision.replanReason) } : {}),
+    });
   }
 
   toolCalled(toolCallId: string, toolName: string, input: unknown): void {

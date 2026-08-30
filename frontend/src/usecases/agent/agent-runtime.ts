@@ -69,9 +69,10 @@ export class MultiStepAgentRuntime {
     const evidence: Evidence[] = [];
     trace.taskStarted(request.userRequest);
 
-    const problem = this.problemFramer.frame(request);
+    const availableTools = this.dependencies.tools.descriptors();
+    const problem = this.problemFramer.frame(request, availableTools);
     trace.intentNormalized(problem.normalizedIntent, problem.constraints);
-    const plan = this.planner.createPlan(problem, this.dependencies.tools.descriptors());
+    const plan = this.planner.createPlan(problem, availableTools);
     trace.planCreated(plan.steps);
 
     if (problem.missingInformation.length > 0) {
@@ -126,6 +127,20 @@ export class MultiStepAgentRuntime {
         (content): content is Extract<AgentModelContent, { type: "tool_call" }> =>
           content.type === "tool_call",
       );
+      if (calls.length > 0) {
+        for (const call of calls) {
+          trace.decisionRecorded({
+            interpretedGoal: problem.decisionContext.userRequest,
+            hardConstraints: problem.decisionContext.knownHardConstraints,
+            softPreferences: problem.decisionContext.knownSoftPreferences,
+            selectedAction: call.name === "ask_follow_up" ? "ask_user" : "use_tool",
+            selectedTool: call.name,
+            unresolvedFacts: [],
+            reasonCodes: [iterations > 0 ? "result_driven_replan" : "initial_capability_selection"],
+            ...(iterations > 0 ? { replanReason: "tool_result_received" } : {}),
+          });
+        }
+      }
       if (modelResponse.stopReason === "tool_calls" && calls.length === 0) {
         return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "missing_tool_call");
       }
@@ -151,6 +166,15 @@ export class MultiStepAgentRuntime {
           request,
         );
         if (finalResponseDecision && !finalResponseDecision.accepted) {
+          trace.decisionRecorded({
+            interpretedGoal: problem.decisionContext.userRequest,
+            hardConstraints: problem.decisionContext.knownHardConstraints,
+            softPreferences: problem.decisionContext.knownSoftPreferences,
+            selectedAction: "answer",
+            unresolvedFacts: [],
+            reasonCodes: ["deterministic_policy_rejected_answer"],
+            replanReason: finalResponseDecision.reason ?? "grounding_required",
+          });
           messages.push({
             role: "user",
             content: [{
@@ -173,6 +197,15 @@ export class MultiStepAgentRuntime {
         } catch {
           return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_response_format");
         }
+        trace.decisionRecorded({
+          interpretedGoal: problem.decisionContext.userRequest,
+          hardConstraints: problem.decisionContext.knownHardConstraints,
+          softPreferences: problem.decisionContext.knownSoftPreferences,
+          selectedAction: "answer",
+          unresolvedFacts: [],
+          reasonCodes: [evidence.length > 0 ? "evidence_sufficient" : "no_factual_claim_required"],
+          ...(iterations > 0 ? { replanReason: "tool_results_assessed" } : {}),
+        });
         const grounding = validateEvidenceAndClaims(evidence, generated.claims);
         if (
           !grounding.valid ||

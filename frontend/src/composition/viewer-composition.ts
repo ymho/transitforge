@@ -165,8 +165,6 @@ import { configureTripPlanPanel } from "../presentation/trip-plan/trip-plan-pane
 import { tripPlanFromTravelPlan } from "@raiquora/trip/trip-plan";
 import { loadTripPlan } from "../usecases/trip-plan/trip-plan-repository";
 import {
-  conversationContextSummary,
-  loadTravelMemories,
   rememberTravelPreference,
 } from "../domain/conversation-session";
 import {
@@ -321,20 +319,21 @@ const updateConciergeIdentity = (resetGreeting = false) => {
     resetGreeting,
   );
 };
-const currentConciergeInstruction = (prompt: string) => [
+const currentConciergeInstruction = () => [
   buildConciergePrompt(activeConcierge).slice(0, 450),
   "この文脈は明示希望を上書きしない。既知の条件を聞き直さず、推測に確信がないときだけ短く確認する。遠い移動や多い乗換はプロフィールの許容度と照合し、懸念と代替案を先に示す。",
-  `利用者と旅行の現在の文脈:\n${conversationContextSummary(
-    loadUserProfile(localStorage),
-    loadTripPlan(localStorage, activeConversationSession.id),
-    activeConversationSession,
-    loadTravelMemories(localStorage),
-  )}`,
-  `現在のセッションの直近の会話:\n${recentConversationContext(
-    conversationHistoryRepository.list(activeConversationSession.id),
-    prompt,
-  )}`,
-].join("\n\n").slice(0, 2_350);
+].join("\n\n").slice(0, 800);
+const currentAgentConversationContext = (prompt: string) => ({
+  summary: activeConversationSession.summary,
+  resolvedTopics: activeConversationSession.resolvedTopics,
+  pendingTopics: activeConversationSession.pendingTopics,
+  relevantMessages: [
+    recentConversationContext(
+      conversationHistoryRepository.list(activeConversationSession.id),
+      prompt,
+    ),
+  ],
+});
 updateConciergeIdentity(true);
 document.addEventListener(travelProfileChangedEvent, () =>
   updateConciergeIdentity(true));
@@ -1338,7 +1337,8 @@ if (!token) {
                 getJourneySearchPreferences: () => preferences,
                 getPreviousJourneyPlan: () => previousJourneyPlan,
                 getPendingJourneyGuidance: () => pendingJourneyGuidance,
-                conciergeInstruction: currentConciergeInstruction(prompt),
+                conciergeInstruction: currentConciergeInstruction(),
+                getConversationContext: () => currentAgentConversationContext(prompt),
                 rememberTravelPreference: (statement, confidence) =>
                   rememberTravelPreference(
                     localStorage,
