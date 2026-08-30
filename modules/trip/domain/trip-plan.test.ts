@@ -4,8 +4,24 @@ import {
   applyTripPlanPatches,
   tripPlanFromTravelPlan,
   tripPlanPatchesFromTravelPlan,
+  validateTripPlanPatches,
   type TripPlan,
 } from "./trip-plan";
+
+it("rejects update proposals that lose item references or ordering", () => {
+  expect(validateTripPlanPatches(plan, [{
+    type: "move",
+    itemId: "a",
+    afterId: "missing",
+  }])).toEqual({
+    valid: false,
+    reason: "移動先 missing が見つかりません",
+  });
+  expect(validateTripPlanPatches(plan, [{
+    type: "remove",
+    itemId: "missing",
+  }]).valid).toBe(false);
+});
 
 const plan = {
   version: 1,

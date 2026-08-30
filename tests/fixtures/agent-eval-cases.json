@@ -481,6 +481,14 @@
       "expected": { "toolSequence": ["search_flights", "search_direct_routes", "search_weather_forecast", "search_place_media"], "constraints": { "nonStop": true }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": ["highlight_route", "show_evidence"], "requiredViewerActions": ["show_evidence"] }
     },
     {
+      "id": "current-trip-date-update",
+      "name": "現在の旅行を保ったまま出発日だけ変更する",
+      "feature": "travel_planning",
+      "userRequest": "この宮島旅行はそのままで 出発日だけ9月1日に変えて",
+      "tags": ["smoke", "travel", "constraint"],
+      "expected": { "toolSequence": ["propose_trip_update"], "constraints": { "destination": "宮島", "startDate": "2026-09-01", "preserveUnspecifiedConditions": true }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0, "allowedViewerActions": [], "requiredViewerActions": [] }
+    },
+    {
       "id": "adventure-safe-alternative",
       "name": "危険を煽らずEvidenceが必要な条件と安全な代替案を示す",
       "feature": "travel_planning",

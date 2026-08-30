@@ -79,6 +79,48 @@ export type TripPlanPatch =
       conditions?: TripPlanConditions;
     };
 
+export interface TripPlanPatchValidation {
+  valid: boolean;
+  reason?: string;
+}
+
+/** Validate item references before a proposed update reaches persisted state. */
+export function validateTripPlanPatches(
+  plan: TripPlan,
+  patches: readonly TripPlanPatch[],
+): TripPlanPatchValidation {
+  const itemIds = new Set(plan.items.map(({ id }) => id));
+  for (const patch of patches) {
+    if (patch.type === "metadata") continue;
+    if (patch.type === "add") {
+      if (itemIds.has(patch.item.id)) {
+        return { valid: false, reason: `旅程項目 ${patch.item.id} は既に存在します` };
+      }
+      if (patch.afterId && !itemIds.has(patch.afterId)) {
+        return { valid: false, reason: `挿入位置 ${patch.afterId} が見つかりません` };
+      }
+      itemIds.add(patch.item.id);
+      continue;
+    }
+    if (!itemIds.has(patch.itemId)) {
+      return { valid: false, reason: `更新対象 ${patch.itemId} が見つかりません` };
+    }
+    if (patch.type === "remove") {
+      itemIds.delete(patch.itemId);
+      continue;
+    }
+    if (patch.type === "move") {
+      if (patch.itemId === patch.afterId) {
+        return { valid: false, reason: "同じ旅程項目の後ろへ移動できません" };
+      }
+      if (patch.afterId && !itemIds.has(patch.afterId)) {
+        return { valid: false, reason: `移動先 ${patch.afterId} が見つかりません` };
+      }
+    }
+  }
+  return { valid: true };
+}
+
 export function applyTripPlanPatches(
   plan: TripPlan,
   patches: TripPlanPatch[],

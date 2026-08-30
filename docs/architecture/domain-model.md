@@ -330,6 +330,8 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 `TripContext`を持つ。
 UIはこの契約を共通入力として描画するだけで 会話パターンごとの日付入力や宿泊数入力を持たない。
 `ConversationSubmission`は利用者の回答と直前のガイダンスを結び 次のAI呼び出しへ渡す。
+構造化旅程ができた後は 同じ会話セッションの`TripContext`を追質問間で保持する。
+応答に新しい`TripContext`が含まれる場合だけ更新し 経路表示や旅程更新など別形式の応答では消去しない。
 
 ### `ConversationHistoryEntry`
 

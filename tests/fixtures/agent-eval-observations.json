@@ -38,6 +38,7 @@
     { "caseId": "unobserved-delay-day", "toolSequence": ["analyze_delay"], "normalizedConstraints": { "serviceDate": "2026-08-26" }, "status": "completed", "claimStatuses": ["unknown"], "viewerActions": [] },
     { "caseId": "travel-research-domestic", "toolSequence": ["search_direct_routes", "search_accommodations", "search_weather_forecast", "search_place_media"], "normalizedConstraints": { "useProfile": true }, "status": "completed", "claimStatuses": ["supported", "supported", "supported"], "viewerActions": [{ "actionType": "show_evidence", "status": "applied" }] },
     { "caseId": "travel-research-overseas", "toolSequence": ["search_flights", "search_direct_routes", "search_weather_forecast", "search_place_media"], "normalizedConstraints": { "nonStop": true }, "status": "completed", "claimStatuses": ["supported", "supported", "supported"], "viewerActions": [{ "actionType": "show_evidence", "status": "applied" }] },
+    { "caseId": "current-trip-date-update", "toolSequence": ["propose_trip_update"], "normalizedConstraints": { "destination": "宮島", "startDate": "2026-09-01", "preserveUnspecifiedConditions": true }, "status": "completed", "claimStatuses": ["supported"], "viewerActions": [] },
     { "caseId": "adventure-safe-alternative", "toolSequence": ["search_place_media"], "normalizedConstraints": { "adventureIntensity": 2, "requiresCurrentEvidenceForBorderCrossing": true }, "status": "completed", "claimStatuses": ["supported"], "viewerActions": [{ "actionType": "show_evidence", "status": "applied" }] }
   ]
 }
