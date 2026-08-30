@@ -1,6 +1,8 @@
 import type { AgentToolDescriptor } from "./tool-contract";
 import type { AgentDecisionSummary } from "./agent-decision-summary";
 
+export type AgentModelClass = "default" | "lightweight" | "decision";
+
 export type AgentModelContent =
   | { type: "text"; text: string }
   | {
@@ -24,6 +26,7 @@ export interface AgentModelMessage {
 export interface AgentModelRequest {
   messages: AgentModelMessage[];
   tools?: AgentToolDescriptor[];
+  modelClass?: AgentModelClass;
 }
 
 export interface AgentModelUsage {

@@ -106,6 +106,21 @@ describe("MultiStepAgentRuntime", () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
+  it("passes an explicitly configured model class without adding routing heuristics", async () => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const requests: AgentModelRequest[] = [];
+    const runtime = new MultiStepAgentRuntime({
+      model: sequenceModel([textResponse("案内します")], requests),
+      modelClass: "decision",
+      tools,
+      toolExecutor,
+    });
+
+    await runtime.run(request("相談したい"));
+
+    expect(requests[0]?.modelClass).toBe("decision");
+  });
+
   it("records a validated model decision summary without an extra model call", async () => {
     const { tools, toolExecutor } = toolSetup([]);
     const response = toolCallResponse([

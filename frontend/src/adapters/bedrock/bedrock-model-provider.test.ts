@@ -7,6 +7,7 @@ describe("Bedrock model provider adapter", () => {
     const fetcher = vi.fn<typeof fetch>(async (_url, init) => {
       const request = JSON.parse(String(init?.body));
       expect(request).toMatchObject({
+        modelClass: "decision",
         messages: [{
           role: "user",
           content: [{ text: "京都から大阪まで" }],
@@ -38,6 +39,7 @@ describe("Bedrock model provider adapter", () => {
     const provider = new BedrockModelProvider(fetcher);
 
     const result = await provider.generate({
+      modelClass: "decision",
       messages: [{
         role: "user",
         content: [{ type: "text", text: "京都から大阪まで" }],

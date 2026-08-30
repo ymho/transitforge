@@ -13,6 +13,8 @@ export interface BedrockConverseInvoker {
 
 export interface BedrockConversationOptions {
   modelId: string;
+  lightweightModelId?: string;
+  decisionModelId?: string;
   systemPrompt: string;
   timeoutMs?: number;
   now?: () => number;
@@ -26,14 +28,22 @@ export class BedrockConversationModel implements ConversationModel {
     private readonly client: BedrockConverseInvoker,
     private readonly options: BedrockConversationOptions,
   ) {
+    for (const modelId of [
+      options.modelId,
+      options.lightweightModelId,
+      options.decisionModelId,
+    ]) {
+      if (modelId !== undefined) validateBedrockModelId(modelId);
+    }
     this.timeoutMs = options.timeoutMs ?? 55_000;
     this.now = options.now ?? (() => performance.now());
   }
 
   async converse(request: ConversationModelRequest): Promise<ConversationModelResponse> {
     const startedAt = this.now();
+    const modelId = selectedModelId(this.options, request.modelClass);
     const providerRequest: JsonObject = {
-      modelId: this.options.modelId,
+      modelId,
       system: [{ text: this.options.systemPrompt }],
       messages: request.messages,
       ...(request.tools === undefined ? {} : {
@@ -42,7 +52,7 @@ export class BedrockConversationModel implements ConversationModel {
             toolSpec: {
               name: definition.name,
               description: definition.description,
-              inputSchema: { json: novaToolInputSchema(definition.inputSchema) },
+              inputSchema: { json: bedrockToolInputSchema(definition.inputSchema) },
             },
           })),
         },
@@ -55,13 +65,13 @@ export class BedrockConversationModel implements ConversationModel {
     );
     return normalizedResponse(
       providerResponse,
-      this.options.modelId,
+      modelId,
       Math.round(this.now() - startedAt),
     );
   }
 }
 
-function novaToolInputSchema(inputSchema: JsonObject): JsonObject {
+function bedrockToolInputSchema(inputSchema: JsonObject): JsonObject {
   const properties = isRecord(inputSchema.properties)
     ? inputSchema.properties
     : {};
@@ -73,6 +83,24 @@ function novaToolInputSchema(inputSchema: JsonObject): JsonObject {
     properties,
     ...(required === undefined ? {} : { required }),
   };
+}
+
+const bedrockModelIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/u;
+
+export function validateBedrockModelId(modelId: string): string {
+  if (!bedrockModelIdPattern.test(modelId)) {
+    throw new Error("Bedrock model ID is invalid");
+  }
+  return modelId;
+}
+
+function selectedModelId(
+  options: BedrockConversationOptions,
+  modelClass: ConversationModelRequest["modelClass"],
+): string {
+  if (modelClass === "lightweight") return options.lightweightModelId ?? options.modelId;
+  if (modelClass === "decision") return options.decisionModelId ?? options.modelId;
+  return options.modelId;
 }
 
 function normalizedResponse(

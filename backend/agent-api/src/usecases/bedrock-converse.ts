@@ -14,6 +14,9 @@ export function createBedrockConverseOperation(
       ...(request.toolDefinitions === undefined ? {} : {
         tools: request.toolDefinitions as AgentToolDefinition[],
       }),
+      ...(request.modelClass === undefined ? {} : {
+        modelClass: request.modelClass as import("../contracts/model-class.js").ConversationModelClass,
+      }),
     });
     log("bedrock_converse_completed", {
       requestId: context.requestId,

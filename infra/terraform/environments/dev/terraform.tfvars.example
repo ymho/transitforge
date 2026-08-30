@@ -2,6 +2,11 @@ aws_region   = "ap-northeast-1"
 project_name = "transitforge"
 environment  = "dev"
 
+# 既定では単一modelを使う。比較評価時だけ任意のmodel classを設定する。
+# bedrock_model_id             = "amazon.nova-lite-v1:0"
+# bedrock_lightweight_model_id = ""
+# bedrock_decision_model_id    = ""
+
 github_repository                = "example/transitforge"
 data_builder_github_oidc_subject = "repo:example@12345/transitforge-data-builder@67890:environment:dev"
 

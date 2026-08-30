@@ -1,6 +1,7 @@
 import {
   type JsonObject,
   validatedMessages,
+  validatedModelClass,
   validatedToolDefinitions,
 } from "../contracts/agent-request.js";
 import type {
@@ -44,6 +45,9 @@ export class AgentApplication {
       ...(request.toolDefinitions === undefined
         ? {}
         : { toolDefinitions: validatedToolDefinitions(request) }),
+      ...(request.modelClass === undefined
+        ? {}
+        : { modelClass: validatedModelClass(request) }),
     };
     const result = await operation(operationRequest, { requestId });
     this.log("agent_request_completed", {

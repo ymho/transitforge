@@ -83,13 +83,41 @@ variable "mtls_ca_bundle_key" {
 }
 
 variable "bedrock_model_id" {
-  description = "AI駅員がConverse APIで使用するAmazon BedrockモデルID。"
+  description = "Raiquoraが既定でConverse APIに使用するAmazon Bedrock基盤モデルID。"
   type        = string
   default     = "amazon.nova-lite-v1:0"
 
   validation {
-    condition     = can(regex("^amazon\\.nova-[a-z0-9.-]+:[0-9]+$", var.bedrock_model_id))
-    error_message = "bedrock_model_idにはAmazon Novaの基盤モデルIDを指定してください。"
+    condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$", var.bedrock_model_id))
+    error_message = "bedrock_model_idには安全なAmazon Bedrock基盤モデルIDを指定してください。"
+  }
+}
+
+variable "bedrock_lightweight_model_id" {
+  description = "比較評価用の軽量model ID。空文字では既定modelへフォールバックする。"
+  type        = string
+  default     = ""
+
+  validation {
+    condition = var.bedrock_lightweight_model_id == "" || can(regex(
+      "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$",
+      var.bedrock_lightweight_model_id,
+    ))
+    error_message = "bedrock_lightweight_model_idには安全な基盤モデルIDまたは空文字を指定してください。"
+  }
+}
+
+variable "bedrock_decision_model_id" {
+  description = "比較評価用の意思決定model ID。空文字では既定modelへフォールバックする。"
+  type        = string
+  default     = ""
+
+  validation {
+    condition = var.bedrock_decision_model_id == "" || can(regex(
+      "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$",
+      var.bedrock_decision_model_id,
+    ))
+    error_message = "bedrock_decision_model_idには安全な基盤モデルIDまたは空文字を指定してください。"
   }
 }
 
