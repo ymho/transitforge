@@ -833,9 +833,12 @@ function viewerToolDecisionSupport(
   if (name === "search_accommodations") {
     return {
       ...common,
-      suitableCases: ["宿泊日と宿泊地が分かる旅行で宿を比較する", "宿泊地や日程を変更する"],
+      suitableCases: [
+        "宿泊日と宿泊地が分かる新しい旅行で、宿泊候補と行き帰りの鉄道経路を同じ日程で組み立てる",
+        "現在旅程の宿泊地や日程を変更し、宿泊候補と往復経路を組み直す",
+      ],
       unsuitableCases: ["日帰り旅行", "観光候補だけの相談", "鉄道区間だけの変更"],
-      returnedEvidence: "Providerが返した宿名、日程、評価、既知料金、空室確認状態",
+      returnedEvidence: "Providerが返した宿名、日程、評価、既知料金、空室確認状態と、決定論的に検索した往復鉄道経路",
       freshness: "照会時点。日付別空室が未確認ならavailabilityはunknown",
       limitations: [
         "出発時刻や具体的な宿名は必須入力ではなく 利用者へ事前に尋ねない",
@@ -876,6 +879,7 @@ function viewerToolDecisionSupport(
         "ContextやTool結果に既にある条件",
         "Toolの既定値で仮案を示せる任意入力",
         "利用者が明示した列車や種別の利用・回避希望について理由や再確認を求める",
+        "利用者が現在旅程の往路 復路 帰着期限 途中立寄りの変更を明示している場合に 変更意思を再確認する",
         "検索Toolが発見 比較する宿 店 観光地 列車などの候補名",
         "早朝 ゆっくりなど既にsoft preferenceとして使える希望の数値化",
         "必要な事実を利用可能なToolで確認できる場合",
@@ -883,6 +887,7 @@ function viewerToolDecisionSupport(
       returnedEvidence: "なし。質問と既知TripContextを構造化してUIへ返す",
       limitations: [
         "一度に一条件だけ尋ねる",
+        "startDateとstayNightsが両方未確定なら 共通の検索基準になるdeparture-dateを先に尋ね stay-lengthを同じ質問へ混ぜない",
         "質問前に選択予定ToolのrequiredInputsを確認する",
         "既知条件をtripContextから落とさない",
       ],
@@ -996,7 +1001,7 @@ function viewerToolDescription(name: ViewerAgentToolName): string {
     focus_train: "同じタスクで検索済みの列車へViewerを移動します",
     query_daily_congestion_analysis: "指定業務日付の観測済み混雑を分析します",
     query_train_delay_analysis: "指定業務日付の観測済み遅延を分析します",
-    search_accommodations: "新しい宿泊旅行 日程変更 宿泊地変更 宿の再検索で指定日程の宿泊候補を検索します。観光相談 人数やペースだけの変更 経路の部分変更には使いません",
+    search_accommodations: "新しい宿泊旅行 日程変更 宿泊地変更 宿の再検索で、指定日程の宿泊候補と行き帰りの鉄道経路をまとめて組み立てます。観光相談 人数やペースだけの変更 経路の部分変更には使いません",
     plan_day_trip: "宿泊施設を検索せず 指定日の行きと帰りの鉄道経路を組み合わせて日帰り旅程を作ります",
     search_trip_route_update: "現在の旅程にある行きまたは帰りの鉄道移動を再検索します。出発を遅らせる変更と途中駅への立寄りに使います",
     search_representative_timetable: "平日または土休日の代表ダイヤを検索します",
@@ -1270,8 +1275,13 @@ function unresolvedFollowUpInputs(
 ): ConversationExpectedInput[] {
   const tripContext = context.tripContext;
   if (tripContext?.planningStage === "inspiration") return ["planning-intent"];
+  if (tripContext?.planningStage === "planning") {
+    if (!tripContext.startDate) return ["departure-date"];
+    if (typeof tripContext.stayNights !== "number") return ["stay-length"];
+    return ["traveler-count", "free-text"];
+  }
   const unresolved: ConversationExpectedInput[] = [];
-  if (tripContext?.planningStage !== "planning") unresolved.push("planning-intent");
+  unresolved.push("planning-intent");
   if (!tripContext?.startDate) unresolved.push("departure-date");
   if (typeof tripContext?.stayNights !== "number") unresolved.push("stay-length");
   return unresolved.length > 0 ? unresolved : ["traveler-count", "free-text"];

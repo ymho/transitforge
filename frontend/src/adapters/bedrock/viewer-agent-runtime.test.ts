@@ -57,8 +57,11 @@ describe("Bedrock viewer agent", () => {
     expect(descriptors[0]?.description).toContain("具体的な固有地名がない気分や嗜好");
     expect(descriptors[0]?.description).toContain("検索対象の固有地名または施設名");
     expect(descriptors[1]?.description).toContain("検索Toolが発見 比較する宿");
+    expect(descriptors[1]?.description).toContain("departure-dateを先に尋ね");
+    expect(descriptors[1]?.description).toContain("変更意思を再確認");
     expect(descriptors[1]?.inputSchema.required).toEqual(["question", "expectedInput"]);
     expect(descriptors[2]?.description).toContain("宿名を先に決めさせない");
+    expect(descriptors[2]?.description).toContain("行き帰りの鉄道経路");
     expect(descriptors[3]?.inputSchema.required).toEqual(["destination", "date", "stayNights"]);
   });
 
@@ -101,6 +104,15 @@ describe("Bedrock viewer agent", () => {
     });
     expect(descriptor?.inputSchema.properties.expectedInput).toMatchObject({
       enum: ["planning-intent", "departure-date", "stay-length"],
+    });
+  });
+
+  it("offers only the departure date when planning date and stay length are both unknown", () => {
+    const [descriptor] = viewerAgentToolDescriptors(["ask_follow_up"], {
+      tripContext: { planningStage: "planning", destinationWish: "出雲大社" },
+    });
+    expect(descriptor?.inputSchema.properties.expectedInput).toMatchObject({
+      enum: ["departure-date"],
     });
   });
 
