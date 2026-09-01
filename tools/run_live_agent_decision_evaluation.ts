@@ -6,11 +6,13 @@ import { BedrockConversationModel } from "../backend/agent-api/src/adapters/bedr
 import { agentSystemPrompt } from "../backend/agent-api/src/usecases/agent-system-prompt";
 import {
   ConverseModelProvider,
+  validateViewerAgentToolPreconditions,
   viewerAgentToolDescriptors,
   type BedrockAgentConverse,
   type ViewerAgentToolName,
 } from "../frontend/src/adapters/bedrock/viewer-agent-runtime";
 import { AgentToolExecutor } from "../frontend/src/usecases/agent/agent-tool-executor";
+import { validateAgentToolInput } from "../frontend/src/usecases/agent/agent-tool-input-validator";
 import { MultiStepAgentRuntime } from "../frontend/src/usecases/agent/agent-runtime";
 import type { AgentRuntimeContextInput } from "../frontend/src/usecases/agent/agent-decision-context";
 import { observeAgentRuntimeResult, evaluateAgentDataset } from "../frontend/src/usecases/agent/evaluation/agent-evaluator";
@@ -20,11 +22,14 @@ import type {
   AgentEvaluationObservation,
 } from "../frontend/src/usecases/agent/evaluation/evaluation-contract";
 import { renderAgentEvaluationMarkdown } from "../frontend/src/usecases/agent/evaluation/evaluation-report";
+import {
+  renderAgentEvaluationStabilityMarkdown,
+  summarizeAgentEvaluationStability,
+} from "../frontend/src/usecases/agent/evaluation/evaluation-stability";
 import type { AgentModelClass } from "../frontend/src/usecases/agent/model-provider";
 import {
   failedAgentToolResult,
   successfulAgentToolResult,
-  validAgentToolInput,
   type AgentTool,
 } from "../frontend/src/usecases/agent/tool-contract";
 import { ToolEvidenceRegistry } from "../frontend/src/usecases/agent/tool-evidence-registry";
@@ -45,6 +50,7 @@ if (profile !== "smoke" && profile !== "full") {
   throw new Error("--profileはsmokeまたはfullで指定してください");
 }
 const strategy = argument("--strategy") ?? `single-${modelClass}`;
+const repetitions = positiveIntegerArgument("--repetitions", 1, 10);
 const outputDirectory = resolve(
   argument("--output-dir") ?? `/tmp/raiquora-live-agent-eval/${strategy}`,
 );
@@ -82,73 +88,100 @@ const converse: BedrockAgentConverse = async (messages, tools, requestedClass) =
   }
 };
 
-const observations: AgentEvaluationObservation[] = [];
+const observationsByAttempt: AgentEvaluationObservation[][] = [];
 const traces = [];
-for (const item of cases) {
-  const registry = evaluationToolRegistry(
-    item.availableTools,
-    item.toolOutcomes,
-    item.expectedToolInputs,
-  );
-  const runtime = new MultiStepAgentRuntime({
-    model: new ConverseModelProvider(converse),
-    modelClass,
-    tools: registry,
-    toolExecutor: new AgentToolExecutor(registry, new ToolEvidenceRegistry()),
-    // 既定は初期能力選択だけを測る。Multi-step caseだけは事実を含まない
-    // version付きfixture結果を返し、指定した最終Toolまで結果駆動replanを測る。
-    terminalToolResult: (toolName) => (item.terminalTools ?? item.availableTools)
-      .includes(toolName as ViewerAgentToolName)
-      ? `Live Evalで${toolName}の選択を確認しました`
-      : undefined,
-    limits: { maxIterations: 2, maxModelCalls: 2, maxToolCalls: 2, maxExecutionMs: 60_000 },
-  });
-  const result = await runtime.run({
-    executionId: `live-eval-${item.evaluation.id}-${crypto.randomUUID()}`,
-    feature: item.evaluation.feature,
-    userRequest: item.evaluation.userRequest,
-    context: item.context,
-  });
-  observations.push(observeAgentRuntimeResult(item.evaluation.id, result));
-  traces.push(result.trace);
+for (let attempt = 1; attempt <= repetitions; attempt += 1) {
+  const observations: AgentEvaluationObservation[] = [];
+  for (const item of cases) {
+    const registry = evaluationToolRegistry(
+      item.availableTools,
+      item.toolOutcomes,
+      item.expectedToolInputs,
+      item.context,
+    );
+    const runtime = new MultiStepAgentRuntime({
+      model: new ConverseModelProvider(converse),
+      modelClass,
+      tools: registry,
+      toolExecutor: new AgentToolExecutor(registry, new ToolEvidenceRegistry()),
+      // 既定は初期能力選択だけを測る。Multi-step caseだけは事実を含まない
+      // version付きfixture結果を返し、指定した最終Toolまで結果駆動replanを測る。
+      terminalToolResult: (toolName) => (item.terminalTools ?? item.availableTools)
+        .includes(toolName as ViewerAgentToolName)
+        ? `Live Evalで${toolName}の選択を確認しました`
+        : undefined,
+      limits: { maxIterations: 2, maxModelCalls: 2, maxToolCalls: 2, maxExecutionMs: 60_000 },
+    });
+    const result = await runtime.run({
+      executionId: `live-eval-${item.evaluation.id}-attempt-${attempt}-${crypto.randomUUID()}`,
+      feature: item.evaluation.feature,
+      userRequest: item.evaluation.userRequest,
+      context: item.context,
+    });
+    observations.push(observeAgentRuntimeResult(item.evaluation.id, result));
+    traces.push(result.trace);
+  }
+  observationsByAttempt.push(observations);
 }
 
 const dataset: AgentEvaluationDataset = {
   schemaVersion: "agent-eval-dataset-v1",
   cases: cases.map(({ evaluation }) => evaluation),
 };
-const report = evaluateAgentDataset(dataset, {
+const reports = observationsByAttempt.map((observations) => evaluateAgentDataset(dataset, {
   schemaVersion: "agent-eval-observations-v1",
   observations,
+}));
+const stability = summarizeAgentEvaluationStability(reports);
+// 従来reportは互換性を保ちつつ、1回でも失敗したcaseを代表観測にして
+// passedCaseCountを「全反復で安定したcase数」と一致させる。
+const stableObservations = cases.map(({ evaluation }, caseIndex) => {
+  const failedAttempt = reports.findIndex((report) => !report.cases[caseIndex]?.passed);
+  return observationsByAttempt[failedAttempt < 0 ? 0 : failedAttempt]![caseIndex]!;
+});
+const report = evaluateAgentDataset(dataset, {
+  schemaVersion: "agent-eval-observations-v1",
+  observations: stableObservations,
 });
 await mkdir(outputDirectory, { recursive: true });
 await Promise.all([
   writeFile(`${outputDirectory}/agent-eval-report.json`, `${JSON.stringify(report, null, 2)}\n`),
   writeFile(`${outputDirectory}/agent-eval-report.md`, renderAgentEvaluationMarkdown(report)),
+  writeFile(`${outputDirectory}/agent-eval-stability.json`, `${JSON.stringify(stability, null, 2)}\n`),
+  writeFile(`${outputDirectory}/agent-eval-stability.md`, renderAgentEvaluationStabilityMarkdown(stability)),
   writeFile(`${outputDirectory}/agent-eval-traces.json`, `${JSON.stringify(traces, null, 2)}\n`),
 ]);
 console.log(
-  `Live Agent Decision Eval (${strategy}): ${report.passedCaseCount}/${report.caseCount} passed ` +
+  `Live Agent Decision Eval (${strategy}, ${repetitions}x): ` +
+  `${stability.stableCaseCount}/${stability.caseCount} stable ` +
   `(${outputDirectory})`,
 );
 if (modelFailures.length > 0) {
   console.error(`Bedrock failures: ${[...new Set(modelFailures)].join(" / ")}`);
 }
-if (report.passedCaseCount !== report.caseCount) process.exitCode = 1;
+if (stability.stableCaseCount !== stability.caseCount) process.exitCode = 1;
 
 function evaluationToolRegistry(
   names: ViewerAgentToolName[],
   outcomes: LiveDecisionCase["toolOutcomes"],
   expectedInputs: LiveDecisionCase["expectedToolInputs"],
+  context: AgentRuntimeContextInput,
 ): AgentToolRegistry {
   const registry = new AgentToolRegistry();
   for (const descriptor of viewerAgentToolDescriptors(names)) {
     const tool: AgentTool<Record<string, unknown>, Record<string, unknown>> = {
       ...descriptor,
       parseInput(value) {
-        return isRecord(value)
-          ? validAgentToolInput(value)
-          : { ok: false, error: { code: "invalid_input", message: "object required", retryable: false } };
+        const parsed = validateAgentToolInput(descriptor.inputSchema, value);
+        if (!parsed.ok) return parsed;
+        const preconditionFailure = validateViewerAgentToolPreconditions(
+          descriptor.name as ViewerAgentToolName,
+          parsed.input,
+          { tripContext: context.tripContext },
+        );
+        return preconditionFailure
+          ? { ok: false, error: { code: "invalid_input", message: preconditionFailure, retryable: false } }
+          : parsed;
       },
       async execute(input) {
         const expected = expectedInputs?.[descriptor.name];
@@ -241,6 +274,9 @@ function liveDecisionCases(): LiveDecisionCase[] {
         knownHardConstraints: [{ key: "destination", value: "出雲大社", source: "trip_context" }],
       },
       availableTools: ["ask_follow_up", "search_place_media", "search_accommodations", "plan_day_trip"],
+      expectedToolInputs: {
+        ask_follow_up: { expectedInput: "departure-date" },
+      },
     }),
     liveCase({
       id: "known-date-missing-stay",
@@ -262,6 +298,9 @@ function liveDecisionCases(): LiveDecisionCase[] {
         ],
       },
       availableTools: ["ask_follow_up", "search_accommodations", "plan_day_trip"],
+      expectedToolInputs: {
+        ask_follow_up: { expectedInput: "stay-length" },
+      },
     }),
     liveCase({
       id: "known-overnight-schedule",
@@ -476,6 +515,16 @@ function parseModelClass(value: string): AgentModelClass {
 function argument(name: string): string | undefined {
   const index = process.argv.indexOf(name);
   return index < 0 ? undefined : process.argv[index + 1];
+}
+
+function positiveIntegerArgument(name: string, fallback: number, maximum: number): number {
+  const raw = argument(name);
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1 || value > maximum) {
+    throw new Error(`${name}は1から${maximum}の整数で指定してください`);
+  }
+  return value;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

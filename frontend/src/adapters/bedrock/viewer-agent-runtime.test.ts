@@ -11,6 +11,7 @@ import type {
 import {
   currentServiceDateInJapan,
   runViewerAgentRuntime,
+  validateViewerAgentToolPreconditions,
   viewerAgentToolDescriptors,
   type BedrockAgentConverse,
 } from "./viewer-agent-runtime";
@@ -54,8 +55,31 @@ describe("Bedrock viewer agent", () => {
     ]);
     expect(descriptors[0]?.description).toContain("Evidence:");
     expect(descriptors[1]?.description).toContain("検索Toolが発見 比較する宿");
+    expect(descriptors[1]?.inputSchema.required).toEqual(["question", "expectedInput"]);
     expect(descriptors[2]?.description).toContain("宿名を先に決めさせない");
     expect(descriptors[3]?.inputSchema.required).toEqual(["destination", "date", "stayNights"]);
+  });
+
+  it("shares context hard preconditions with Live Eval without selecting a Tool", () => {
+    expect(validateViewerAgentToolPreconditions(
+      "plan_day_trip",
+      { destination: "出雲大社", date: "2026-08-31", stayNights: 0 },
+      { tripContext: { planningStage: "planning", destinationWish: "出雲大社" } },
+    )).toContain("日帰りが確定していない");
+    expect(validateViewerAgentToolPreconditions(
+      "ask_follow_up",
+      { expectedInput: "departure-date" },
+      { tripContext: { startDate: "2026-08-31" } },
+    )).toContain("既知条件 departure-date");
+    expect(validateViewerAgentToolPreconditions(
+      "search_accommodations",
+      { checkInDate: "2026-08-31", checkOutDate: "2026-09-02" },
+      {
+        tripContext: {
+          startDate: "2026-08-31", endDate: "2026-09-02", stayNights: 2,
+        },
+      },
+    )).toBeUndefined();
   });
 
   it("extracts a Bedrock decision summary and never displays the marker", async () => {
@@ -1714,6 +1738,7 @@ describe("Bedrock viewer agent", () => {
           travelStyle: { transferTolerance: 0.5 },
           transport: { maxTypicalTravelMinutes: null },
         } as unknown as UserProfile),
+        getCurrentDate: () => new Date("2026-08-27T12:00:00+09:00"),
         maximumRouteTime: 1_800,
       },
       converse,
@@ -1784,6 +1809,7 @@ describe("Bedrock viewer agent", () => {
           travelStyle: { transferTolerance: 0.5 },
           transport: { maxTypicalTravelMinutes: null },
         } as unknown as UserProfile),
+        getCurrentDate: () => new Date("2026-08-27T12:00:00+09:00"),
         maximumRouteTime: 1_800,
       },
       converse,
@@ -1822,6 +1848,7 @@ describe("Bedrock viewer agent", () => {
         setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
         searchAccommodations, getTripPlan: () => tripPlanWithRailReturn(),
+        getCurrentDate: () => new Date("2026-08-27T12:00:00+09:00"),
         getUserProfile: () => ({
           home: { station: "京都", carAvailable: false },
           travelStyle: { transferTolerance: 0.5 },
@@ -1907,6 +1934,7 @@ describe("Bedrock viewer agent", () => {
         setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
         searchAccommodations: vi.fn(async () => ({ accommodations: [] })),
+        getCurrentDate: () => new Date("2026-08-27T12:00:00+09:00"),
         getUserProfile: () => ({
           home: { station: "京都", carAvailable: false },
           travelStyle: { transferTolerance: 0.5 },

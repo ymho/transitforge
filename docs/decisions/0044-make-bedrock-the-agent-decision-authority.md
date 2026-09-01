@@ -124,6 +124,12 @@ Haikuは平均model latency 3.2秒、Sonnetは6.0秒で、Novaの1.3秒より遅
 単純な物理modelの格上げや常時二層化では品質を改善できないため採用しない。失敗caseは削らず、
 同一datasetで全領域の品質改善を確認できた変更だけを採用する。
 
+同日のIssue #320では、単発結果を安定性と誤認しないようLive Evalへ最大10回の反復集約を追加した。
+さらに本番と評価でTool入力schemaと日帰り・宿泊・既知質問のhard preconditionを共有したところ、
+Nova LiteのSmoke 3反復は全回成功2/6、各回の全件成功0/3だった。単発評価では見えなかった
+揺らぎに加え、泊数未確定を日帰りと推測する偽陽性も検出した。contract変更前のmodel比較値を
+新しいbaselineへ混在させず、候補modelは同じ反復数と新しいpreconditionで再評価する。
+
 ## 既存ADRとの関係
 
 - ADR 0021のTool境界を能力contractへ拡張し Domain Logicをモデルへ移さない

@@ -90,15 +90,14 @@ import { ToolEvidenceRegistry } from "../../usecases/agent/tool-evidence-registr
 import { ToolViewerActionRegistry } from "../../usecases/agent/tool-viewer-action-registry";
 import {
   failedAgentToolResult,
-  invalidAgentToolInput,
   modelToolDescription,
   successfulAgentToolResult,
-  validAgentToolInput,
   type AgentTool,
   type AgentToolDecisionSupport,
   type AgentToolDescriptor,
   type AgentToolInputSchema,
 } from "../../usecases/agent/tool-contract";
+import { validateAgentToolInput } from "../../usecases/agent/agent-tool-input-validator";
 import type {
   AgentModelContent,
   AgentModelMessage,
@@ -611,6 +610,48 @@ export function viewerAgentToolDescriptors(
   });
 }
 
+export interface ViewerAgentToolPreconditionContext {
+  tripContext?: TripContext;
+}
+
+/**
+ * Contextにある確定条件をモデル入力で上書きさせないための実行前検証。
+ * Tool選択は行わず、本番AdapterとLive Evalが同じhard preconditionを使う。
+ */
+export function validateViewerAgentToolPreconditions(
+  name: ViewerAgentToolName,
+  input: Record<string, unknown>,
+  context: ViewerAgentToolPreconditionContext,
+): string | undefined {
+  const trip = context.tripContext;
+  if (name === "plan_day_trip") {
+    if (trip?.stayNights !== 0) {
+      return "日帰りが確定していないためplan_day_tripは実行できません。";
+    }
+    if (trip.startDate && input.date !== trip.startDate) {
+      return "plan_day_tripの日付が確定済みTripContextと一致しません。";
+    }
+  }
+  if (name === "search_accommodations") {
+    if (typeof trip?.stayNights !== "number" || trip.stayNights < 1 ||
+      !trip.startDate || !trip.endDate) {
+      return "宿泊日程が確定していないためsearch_accommodationsは実行できません。";
+    }
+    if (input.checkInDate !== trip.startDate || input.checkOutDate !== trip.endDate) {
+      return "宿泊検索の日付が確定済みTripContextと一致しません。";
+    }
+  }
+  if (name === "ask_follow_up") {
+    const expectedInput = input.expectedInput;
+    const known =
+      (expectedInput === "planning-intent" && trip?.planningStage === "planning") ||
+      (expectedInput === "departure-date" && Boolean(trip?.startDate)) ||
+      (expectedInput === "stay-length" && typeof trip?.stayNights === "number");
+    if (known) return `既知条件 ${String(expectedInput)} は聞き直せません。`;
+  }
+  return undefined;
+}
+
 const terminalToolNames = new Set<string>([
   "propose_trip_update",
   "ask_follow_up",
@@ -690,9 +731,21 @@ function viewerTool(
     decisionSupport: viewerToolDecisionSupport(name),
     inputSchema: viewerToolInputSchema(name),
     parseInput(value) {
-      return isRecord(value)
-        ? validAgentToolInput(value)
-        : invalidAgentToolInput("Tool入力はオブジェクトで指定してください");
+      const parsed = validateAgentToolInput(viewerToolInputSchema(name), value);
+      if (!parsed.ok) return parsed;
+      const preconditionFailure = validateViewerAgentToolPreconditions(
+        name,
+        parsed.input,
+        {
+          tripContext: travelConversationFacts(
+            context.prompt,
+            currentDate(context.dependencies),
+          ).context,
+        },
+      );
+      return preconditionFailure
+        ? { ok: false, error: { code: "invalid_input", message: preconditionFailure, retryable: false } }
+        : parsed;
     },
     async execute(input) {
       try {
@@ -810,6 +863,7 @@ function viewerToolDecisionSupport(
   if (name === "ask_follow_up") {
     return {
       ...common,
+      responsibilityBoundary: "利用者への追加質問を構造化してUIへ返す唯一の能力。質問が必要なら回答textだけで直接尋ねず、このToolを使う。入力検証はTool、何を一つ尋ねるかの判断はAgentが担う",
       suitableCases: ["選択予定Toolの必須入力のうち 利用者にしか確定できない条件が一つ不足する"],
       unsuitableCases: [
         "ContextやTool結果に既にある条件",
@@ -1131,9 +1185,13 @@ function viewerToolInputSchema(
           type: "string",
           description: "この確認が必要な理由。経路や旅程の既知事実に基づき 利点と負担を短く説明する",
         },
-        question: { type: "string" },
+        question: {
+          type: "string",
+          description: "未解決の必須条件を一つだけ尋ねる短い質問。複数条件を同じ質問へ含めない",
+        },
         expectedInput: {
           type: "string",
+          description: "質問する一条件。planning-intentはまだ旅程化を望むか未確認の場合だけ、departure-dateはstartDateが未確定の場合だけ、stay-lengthはstayNightsが未確定の場合だけ使う。既知Contextにある条件や明示済み希望の理由には使わない",
           enum: ["planning-intent", "departure-date", "stay-length", "traveler-count", "free-text"],
         },
         quickReplies: {
@@ -1167,7 +1225,7 @@ function viewerToolInputSchema(
           additionalProperties: false,
         },
       },
-      required: ["question", "expectedInput", "quickReplies", "tripContext"],
+      required: ["question", "expectedInput"],
       additionalProperties: false,
     };
   }
