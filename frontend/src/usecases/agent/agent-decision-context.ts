@@ -51,6 +51,7 @@ export interface AgentRuntimeContextInput {
   tripContext?: Record<string, AgentContextValue | AgentContextValue[]>;
   travelProfile?: Record<string, unknown>;
   currentTrip?: Record<string, unknown>;
+  currentJourney?: Record<string, unknown>;
   verifiedFacts?: AgentVerifiedFactSummary[];
   knownHardConstraints?: AgentKnownConstraint[];
   knownSoftPreferences?: AgentKnownPreference[];
@@ -71,6 +72,7 @@ export interface AgentDecisionContext {
   tripContext?: Record<string, AgentContextValue | AgentContextValue[]>;
   travelProfile?: Record<string, unknown>;
   currentTrip?: Record<string, unknown>;
+  currentJourney?: Record<string, unknown>;
   verifiedFacts: AgentVerifiedFactSummary[];
   knownHardConstraints: AgentKnownConstraint[];
   knownSoftPreferences: AgentKnownPreference[];
@@ -106,6 +108,9 @@ export function buildAgentDecisionContext(
     ...(input?.tripContext ? { tripContext: boundedRecord(input.tripContext, 20) } : {}),
     ...(input?.travelProfile ? { travelProfile: boundedUnknownRecord(input.travelProfile) } : {}),
     ...(input?.currentTrip ? { currentTrip: boundedUnknownRecord(input.currentTrip) } : {}),
+    ...(input?.currentJourney
+      ? { currentJourney: boundedUnknownRecord(input.currentJourney, 6) }
+      : {}),
     verifiedFacts: (input?.verifiedFacts ?? []).slice(0, 20).map((fact) => ({
       evidenceId: bounded(fact.evidenceId, 160),
       category: bounded(fact.category, 80),
@@ -149,6 +154,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
       tripContext: context.tripContext,
       travelProfile: context.travelProfile,
       currentTrip: compactCurrentTrip(context.currentTrip),
+      currentJourney: compactCurrentJourney(context.currentJourney, 2),
       knownHardConstraints: context.knownHardConstraints,
       knownSoftPreferences: context.knownSoftPreferences,
       availableTools: context.availableTools.map(({ name }) => name),
@@ -160,6 +166,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     tripContext: context.tripContext,
     travelProfile: context.travelProfile,
     currentTrip: compactCurrentTrip(context.currentTrip, 4),
+    currentJourney: compactCurrentJourney(context.currentJourney),
     knownHardConstraints: context.knownHardConstraints.slice(0, 12),
     knownSoftPreferences: context.knownSoftPreferences.slice(0, 12),
     availableTools: context.availableTools.slice(0, 16).map(({ name }) => name),
@@ -173,6 +180,26 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     "既知条件は聞き直さず、Tool結果は事実として扱い、推測で補完しないでください。",
     `<agent_context>${boundedContext}</agent_context>`,
   ].join("\n");
+}
+
+function compactCurrentJourney(
+  value: Record<string, unknown> | undefined,
+  maximumJourneys = 1,
+): Record<string, unknown> | undefined {
+  if (!value) return undefined;
+  return {
+    ...(value.contextKind ? { contextKind: value.contextKind } : {}),
+    ...(value.originStation ? { originStation: value.originStation } : {}),
+    ...(value.destinationStation ? { destinationStation: value.destinationStation } : {}),
+    ...(value.departureDate ? { departureDate: value.departureDate } : {}),
+    ...(value.serviceDate ? { serviceDate: value.serviceDate } : {}),
+    ...(Array.isArray(value.journeys)
+      ? { journeys: value.journeys.slice(0, maximumJourneys) }
+      : {}),
+    ...(Array.isArray(value.pendingAlternatives)
+      ? { pendingAlternatives: value.pendingAlternatives.slice(0, 3) }
+      : {}),
+  };
 }
 
 function compactCurrentTrip(
@@ -231,21 +258,29 @@ function boundedRecord(
   ]));
 }
 
-function boundedUnknownRecord(value: Record<string, unknown>): Record<string, unknown> {
-  return boundedUnknown(value, 0) as Record<string, unknown>;
+function boundedUnknownRecord(
+  value: Record<string, unknown>,
+  maximumDepth = 4,
+): Record<string, unknown> {
+  return boundedUnknown(value, 0, maximumDepth) as Record<string, unknown>;
 }
 
-function boundedUnknown(value: unknown, depth: number): unknown {
-  if (depth >= 4) return "[depth-limited]";
+function boundedUnknown(value: unknown, depth: number, maximumDepth: number): unknown {
+  if (depth >= maximumDepth) return "[depth-limited]";
   if (typeof value === "string") return bounded(value, 300);
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "boolean" || value === null) return value;
-  if (Array.isArray(value)) return value.slice(0, 20).map((item) => boundedUnknown(item, depth + 1));
+  if (Array.isArray(value)) {
+    return value.slice(0, 20).map((item) => boundedUnknown(item, depth + 1, maximumDepth));
+  }
   if (!value || typeof value !== "object") return null;
   return Object.fromEntries(Object.entries(value as Record<string, unknown>)
     .filter(([key]) => !/(?:token|secret|password|credential|api[_-]?key|latitude|longitude|coordinates?)/iu.test(key))
     .slice(0, 30)
-    .map(([key, item]) => [bounded(key, 80), boundedUnknown(item, depth + 1)]));
+    .map(([key, item]) => [
+      bounded(key, 80),
+      boundedUnknown(item, depth + 1, maximumDepth),
+    ]));
 }
 
 function boundedValue(value: AgentContextValue): AgentContextValue {

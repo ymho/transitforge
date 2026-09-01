@@ -94,11 +94,11 @@ describe("Agent API request contract", () => {
       inputSchema: { type: "object", properties: {} },
     }));
 
-    expect(definitions).toHaveLength(32);
+    expect(definitions).toHaveLength(allowedToolNames.size);
     expect(definitions.some(({ name }) => name === "schedule_trip_recheck"))
       .toBe(true);
     expect(validatedToolDefinitions({ toolDefinitions: definitions }))
-      .toHaveLength(32);
+      .toHaveLength(allowedToolNames.size);
   });
 
   it("accepts only provider-independent model classes", () => {

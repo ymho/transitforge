@@ -75,14 +75,16 @@ export function recentConversationContext(
   entries: ConversationHistoryEntry[],
   currentPrompt?: string,
 ): string {
-  const recent = entries.slice(-3);
+  // Bedrock receives this as bounded structured conversation context. Keep enough
+  // turns to preserve a travel decision without sending the whole local history.
+  const recent = entries.slice(-7);
   const last = recent.at(-1);
   if (currentPrompt && last?.role === "user" && last.text === currentPrompt) {
     recent.pop();
   }
   return JSON.stringify(recent.map((entry) => entry.role === "user"
-    ? { role: entry.role, text: entry.text.slice(0, 120) }
-    : { role: entry.role, text: responseText(entry.response).slice(0, 120) }));
+    ? { role: entry.role, text: entry.text.slice(0, 240) }
+    : { role: entry.role, text: responseText(entry.response).slice(0, 240) }));
 }
 
 /** Restore the last deterministic journey result for follow-up questions. */

@@ -22,6 +22,7 @@ import type {
 import { renderAgentEvaluationMarkdown } from "../frontend/src/usecases/agent/evaluation/evaluation-report";
 import type { AgentModelClass } from "../frontend/src/usecases/agent/model-provider";
 import {
+  failedAgentToolResult,
   successfulAgentToolResult,
   validAgentToolInput,
   type AgentTool,
@@ -33,6 +34,9 @@ interface LiveDecisionCase {
   evaluation: AgentEvaluationCase;
   context: AgentRuntimeContextInput;
   availableTools: ViewerAgentToolName[];
+  toolOutcomes?: Partial<Record<ViewerAgentToolName, Record<string, unknown>>>;
+  expectedToolInputs?: Partial<Record<ViewerAgentToolName, Record<string, unknown>>>;
+  terminalTools?: ViewerAgentToolName[];
 }
 
 const modelClass = parseModelClass(argument("--model-class") ?? "default");
@@ -81,15 +85,22 @@ const converse: BedrockAgentConverse = async (messages, tools, requestedClass) =
 const observations: AgentEvaluationObservation[] = [];
 const traces = [];
 for (const item of cases) {
-  const registry = evaluationToolRegistry(item.availableTools);
+  const registry = evaluationToolRegistry(
+    item.availableTools,
+    item.toolOutcomes,
+    item.expectedToolInputs,
+  );
   const runtime = new MultiStepAgentRuntime({
     model: new ConverseModelProvider(converse),
     modelClass,
     tools: registry,
     toolExecutor: new AgentToolExecutor(registry, new ToolEvidenceRegistry()),
-    // この評価は最初の能力選択だけを測る。Domain結果後の再計画はRuntimeの
-    // integration testと別のLive Evalで扱い、架空の事実をモデルへ返さない。
-    terminalToolResult: (toolName) => `Live Evalで${toolName}の選択を確認しました`,
+    // 既定は初期能力選択だけを測る。Multi-step caseだけは事実を含まない
+    // version付きfixture結果を返し、指定した最終Toolまで結果駆動replanを測る。
+    terminalToolResult: (toolName) => (item.terminalTools ?? item.availableTools)
+      .includes(toolName as ViewerAgentToolName)
+      ? `Live Evalで${toolName}の選択を確認しました`
+      : undefined,
     limits: { maxIterations: 2, maxModelCalls: 2, maxToolCalls: 2, maxExecutionMs: 60_000 },
   });
   const result = await runtime.run({
@@ -125,7 +136,11 @@ if (modelFailures.length > 0) {
 }
 if (report.passedCaseCount !== report.caseCount) process.exitCode = 1;
 
-function evaluationToolRegistry(names: ViewerAgentToolName[]): AgentToolRegistry {
+function evaluationToolRegistry(
+  names: ViewerAgentToolName[],
+  outcomes: LiveDecisionCase["toolOutcomes"],
+  expectedInputs: LiveDecisionCase["expectedToolInputs"],
+): AgentToolRegistry {
   const registry = new AgentToolRegistry();
   for (const descriptor of viewerAgentToolDescriptors(names)) {
     const tool: AgentTool<Record<string, unknown>, Record<string, unknown>> = {
@@ -136,7 +151,16 @@ function evaluationToolRegistry(names: ViewerAgentToolName[]): AgentToolRegistry
           : { ok: false, error: { code: "invalid_input", message: "object required", retryable: false } };
       },
       async execute(input) {
-        return successfulAgentToolResult({
+        const expected = expectedInputs?.[descriptor.name];
+        if (expected && !Object.entries(expected).every(([key, value]) =>
+          JSON.stringify(input[key]) === JSON.stringify(value))) {
+          return failedAgentToolResult({
+            code: "invalid_input",
+            message: "Live Evalで期待する構造化入力と一致しません",
+            retryable: false,
+          });
+        }
+        return successfulAgentToolResult(outcomes?.[descriptor.name] ?? {
           evaluatedTool: descriptor.name,
           acceptedInputKeys: Object.keys(input).sort(),
         });
@@ -158,6 +182,32 @@ function liveDecisionCases(): LiveDecisionCase[] {
     pace: 0.4,
     favoriteInterests: ["history", "nature"],
     avoidances: ["crowds"],
+  };
+  const currentJourney = {
+    contextKind: "previous_verified_journey",
+    originStation: "京都",
+    destinationStation: "出雲市",
+    departureDate: "2026-08-31",
+    journeys: [{
+      departureTimeMinutes: 480,
+      arrivalTimeMinutes: 720,
+      transferCount: 1,
+      legs: [{
+        serviceUid: "fixture:nozomi-99", trainNumber: "99A", serviceType: "新幹線",
+        trainName: "のぞみ99号", originStation: "京都", destinationStation: "岡山",
+        departureTimeMinutes: 480, arrivalTimeMinutes: 540,
+        stops: [
+          { stationName: "京都", departureTimeMinutes: 480 },
+          { stationName: "新大阪", departureTimeMinutes: 495 },
+          { stationName: "新神戸", departureTimeMinutes: 510 },
+          { stationName: "岡山", arrivalTimeMinutes: 540 },
+        ],
+      }, {
+        serviceUid: "fixture:yakumo-5", trainNumber: "1005M", serviceType: "特急",
+        trainName: "やくも5号", originStation: "岡山", destinationStation: "出雲市",
+        departureTimeMinutes: 553, arrivalTimeMinutes: 720,
+      }],
+    }],
   };
   return [
     liveCase({
@@ -283,6 +333,94 @@ function liveDecisionCases(): LiveDecisionCase[] {
       },
       availableTools: ["ask_follow_up", "search_trip_route_update", "propose_trip_update"],
     }),
+    liveCase({
+      id: "mood-first-discovery",
+      name: "気分だけの相談では目的地を決め打ちせず候補を検索する",
+      userRequest: "リラックスできる場所に行きたい",
+      tags: ["ambiguous-request"],
+      expectedTool: "search_web",
+      constraints: {},
+      requiredHardConstraintKeys: [],
+      context: { featureContext, travelProfile: profile },
+      availableTools: ["search_web", "search_place_media", "ask_follow_up"],
+    }),
+    liveCase({
+      id: "previous-journey-stops",
+      name: "直前経路の途中駅は経路照会能力を選ぶ",
+      userRequest: "京都から岡山までに停車する駅は？",
+      tags: ["smoke", "constraint"],
+      expectedTool: "inspect_previous_journey",
+      constraints: {},
+      requiredHardConstraintKeys: [],
+      context: { featureContext, currentJourney },
+      availableTools: ["inspect_previous_journey", "search_direct_routes", "ask_follow_up"],
+      expectedToolInputs: {
+        inspect_previous_journey: {
+          action: "inspect_stops", journeyIndex: 0, legIndex: 0,
+        },
+      },
+    }),
+    liveCase({
+      id: "previous-journey-constraint",
+      name: "直前経路の新幹線回避は同一区間の再検索能力を選ぶ",
+      userRequest: "新幹線を使いたくない",
+      tags: ["smoke", "constraint"],
+      expectedTool: "revise_previous_journey",
+      constraints: {},
+      requiredHardConstraintKeys: [],
+      context: { featureContext, currentJourney },
+      availableTools: ["revise_previous_journey", "search_direct_routes", "ask_follow_up"],
+      expectedToolInputs: {
+        revise_previous_journey: {
+          action: "revise_constraints", excludedServiceTypes: ["新幹線"],
+        },
+      },
+    }),
+    liveCase({
+      id: "pending-alternative-confirmation",
+      name: "提示済みの代替列車は聞き直さず選択を反映する",
+      userRequest: "1番に変更して",
+      tags: ["constraint"],
+      expectedTool: "revise_previous_journey",
+      constraints: {},
+      requiredHardConstraintKeys: [],
+      context: {
+        featureContext,
+        currentJourney: {
+          ...currentJourney,
+          pendingAlternatives: [{
+            alternativeIndex: 0, trainNumber: "101A", serviceType: "新幹線",
+            trainName: "のぞみ101号", originStation: "京都", destinationStation: "岡山",
+            departureTimeMinutes: 510, arrivalTimeMinutes: 570,
+          }],
+        },
+      },
+      availableTools: ["revise_previous_journey", "ask_follow_up"],
+      expectedToolInputs: {
+        revise_previous_journey: {
+          action: "apply_alternative", alternativeIndex: 0,
+        },
+      },
+    }),
+    liveCase({
+      id: "place-search-result-driven-replan",
+      name: "地点検索が空なら固定ReflectionなしでWeb発見へ再計画する",
+      userRequest: "西条の賀茂鶴酒造の写真と場所を見たい",
+      tags: ["smoke", "multi-tool", "information-gap"],
+      expectedTools: ["search_place_media", "search_web"],
+      constraints: {},
+      requiredHardConstraintKeys: [],
+      context: { featureContext, travelProfile: profile },
+      availableTools: ["search_place_media", "search_web", "ask_follow_up"],
+      toolOutcomes: {
+        search_place_media: {
+          schemaVersion: "live-eval-tool-outcome-v1",
+          matchCount: 0,
+          limitation: "検証可能な一致地点がありません",
+        },
+      },
+      terminalTools: ["search_web"],
+    }),
   ];
 }
 
@@ -291,11 +429,15 @@ function liveCase(input: {
   name: string;
   userRequest: string;
   tags: string[];
-  expectedTool: ViewerAgentToolName;
+  expectedTool?: ViewerAgentToolName;
+  expectedTools?: ViewerAgentToolName[];
   constraints: Record<string, string | number | boolean | string[]>;
   requiredHardConstraintKeys: string[];
   context: AgentRuntimeContextInput;
   availableTools: ViewerAgentToolName[];
+  toolOutcomes?: LiveDecisionCase["toolOutcomes"];
+  expectedToolInputs?: LiveDecisionCase["expectedToolInputs"];
+  terminalTools?: ViewerAgentToolName[];
 }): LiveDecisionCase {
   return {
     evaluation: {
@@ -305,7 +447,7 @@ function liveCase(input: {
       userRequest: input.userRequest,
       tags: input.tags,
       expected: {
-        toolSequence: [input.expectedTool],
+        toolSequence: input.expectedTools ?? (input.expectedTool ? [input.expectedTool] : []),
         constraints: input.constraints,
         status: "completed",
         minimumGroundedClaimRate: 0,
@@ -320,6 +462,9 @@ function liveCase(input: {
     },
     context: input.context,
     availableTools: input.availableTools,
+    ...(input.toolOutcomes ? { toolOutcomes: input.toolOutcomes } : {}),
+    ...(input.expectedToolInputs ? { expectedToolInputs: input.expectedToolInputs } : {}),
+    ...(input.terminalTools ? { terminalTools: input.terminalTools } : {}),
   };
 }
 
@@ -343,5 +488,8 @@ function safeFailure(error: unknown): string {
   const status = isRecord(error.$metadata) && typeof error.$metadata.httpStatusCode === "number"
     ? `:${error.$metadata.httpStatusCode}`
     : "";
-  return `${name}${status}`;
+  const message = typeof error.message === "string"
+    ? error.message.replace(/\s+/gu, " ").slice(0, 240)
+    : "";
+  return `${name}${status}${message ? ` ${message}` : ""}`;
 }

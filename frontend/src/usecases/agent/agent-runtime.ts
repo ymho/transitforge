@@ -6,8 +6,10 @@ import type {
   AgentModelProvider,
   AgentModelResponse,
 } from "./model-provider";
-import { DefaultAgentProblemFramer, type AgentProblemFramer } from "./problem-framing";
-import { DefaultAgentPlanner, type AgentPlanner } from "./agent-planner";
+import {
+  agentDecisionContextText,
+  buildAgentDecisionContext,
+} from "./agent-decision-context";
 import {
   DefaultAgentResponseGenerator,
   hasOnlyInternalReasoning,
@@ -37,8 +39,6 @@ export interface AgentRuntimeDependencies {
   modelClass?: AgentModelClass;
   tools: AgentToolRegistry;
   toolExecutor: AgentToolExecutor;
-  problemFramer?: AgentProblemFramer;
-  planner?: AgentPlanner;
   responseGenerator?: AgentResponseGenerator;
   viewerActionHandler?: AgentViewerActionHandler;
   toolViewerActions?: ToolViewerActionRegistry;
@@ -52,15 +52,11 @@ export interface AgentRuntimeDependencies {
 }
 
 export class MultiStepAgentRuntime {
-  private readonly problemFramer: AgentProblemFramer;
-  private readonly planner: AgentPlanner;
   private readonly responseGenerator: AgentResponseGenerator;
   private readonly limits: AgentRuntimeLimits;
   private readonly now: () => Date;
 
   constructor(private readonly dependencies: AgentRuntimeDependencies) {
-    this.problemFramer = dependencies.problemFramer ?? new DefaultAgentProblemFramer();
-    this.planner = dependencies.planner ?? new DefaultAgentPlanner();
     this.responseGenerator = dependencies.responseGenerator ??
       new DefaultAgentResponseGenerator();
     this.limits = validateAgentRuntimeLimits(dependencies.limits);
@@ -75,13 +71,18 @@ export class MultiStepAgentRuntime {
     trace.taskStarted(request.userRequest);
 
     const availableTools = this.dependencies.tools.descriptors();
-    const problem = this.problemFramer.frame(request, availableTools);
-    trace.intentNormalized(problem.normalizedIntent, problem.constraints);
-    const plan = this.planner.createPlan(problem, availableTools);
-    trace.planCreated(plan.steps);
+    const decisionContext = buildAgentDecisionContext(request, availableTools);
+    trace.intentNormalized(
+      "bedrock_decision_required",
+      Object.fromEntries(decisionContext.knownHardConstraints.map(
+        ({ key, value }) => [key, value],
+      )),
+    );
+    const decisionBoundary = agentDecisionBoundary(availableTools.length > 0);
+    trace.planCreated(decisionBoundary);
 
-    if (problem.missingInformation.length > 0) {
-      const response = this.responseGenerator.followUp(problem);
+    if (!decisionContext.userRequest) {
+      const response = this.responseGenerator.followUp(["user_request"]);
       trace.responseGenerated(response);
       trace.taskCompleted("completed", elapsed(startedAt, this.now));
       return result("follow_up", response, evidence, [], [], trace);
@@ -89,7 +90,7 @@ export class MultiStepAgentRuntime {
 
     const messages: AgentModelMessage[] = [{
       role: "user",
-      content: [{ type: "text", text: problem.objective }],
+      content: [{ type: "text", text: agentDecisionContextText(decisionContext) }],
     }];
     let modelCalls = 0;
     let toolCalls = 0;
@@ -140,9 +141,9 @@ export class MultiStepAgentRuntime {
           trace.decisionRecorded(decisionForToolCall(
             modelResponse,
             call.name,
-            problem.decisionContext.userRequest,
-            problem.decisionContext.knownHardConstraints,
-            problem.decisionContext.knownSoftPreferences,
+            decisionContext.userRequest,
+            decisionContext.knownHardConstraints,
+            decisionContext.knownSoftPreferences,
             iterations,
           ));
         }
@@ -163,7 +164,7 @@ export class MultiStepAgentRuntime {
           trace.replanDecided(
             true,
             "内部推論だけの応答を破棄して利用者向け応答を再要求する",
-            plan.steps,
+            decisionBoundary,
           );
           continue;
         }
@@ -173,9 +174,9 @@ export class MultiStepAgentRuntime {
         );
         if (finalResponseDecision && !finalResponseDecision.accepted) {
           trace.decisionRecorded({
-            interpretedGoal: problem.decisionContext.userRequest,
-            hardConstraints: problem.decisionContext.knownHardConstraints,
-            softPreferences: problem.decisionContext.knownSoftPreferences,
+            interpretedGoal: decisionContext.userRequest,
+            hardConstraints: decisionContext.knownHardConstraints,
+            softPreferences: decisionContext.knownSoftPreferences,
             selectedAction: "answer",
             unresolvedFacts: [],
             reasonCodes: ["deterministic_policy_rejected_answer"],
@@ -193,7 +194,7 @@ export class MultiStepAgentRuntime {
           trace.replanDecided(
             true,
             finalResponseDecision.reason ?? "最終回答に必要な事実をToolで確認する",
-            plan.steps,
+            decisionBoundary,
           );
           continue;
         }
@@ -205,9 +206,9 @@ export class MultiStepAgentRuntime {
         }
         trace.decisionRecorded(decisionForAnswer(
           modelResponse,
-          problem.decisionContext.userRequest,
-          problem.decisionContext.knownHardConstraints,
-          problem.decisionContext.knownSoftPreferences,
+          decisionContext.userRequest,
+          decisionContext.knownHardConstraints,
+          decisionContext.knownSoftPreferences,
           evidence.length > 0,
           iterations,
         ));
@@ -317,7 +318,7 @@ export class MultiStepAgentRuntime {
         );
       }
       iterations += 1;
-      trace.replanDecided(true, "Tool結果を受けて次の手順を判断する", plan.steps);
+      trace.replanDecided(true, "Tool結果を受けて次の手順を判断する", decisionBoundary);
     }
   }
 
@@ -345,6 +346,16 @@ export class MultiStepAgentRuntime {
     trace.taskCompleted("failed", elapsed(startedAt, this.now), reason);
     return result("failed", response, evidence, [], viewerActions, trace);
   }
+}
+
+function agentDecisionBoundary(hasTools: boolean): string[] {
+  return [
+    "構造化Contextから目的 制約 嗜好 未解決事項をBedrockが判断する",
+    hasTools
+      ? "Bedrockが能力contractから次のTool 質問 回答を選択する"
+      : "Bedrockが既知Contextだけで質問または回答を選択する",
+    "決定論的なEvidence Policyと安全制約で結果を検証する",
+  ];
 }
 
 function result(

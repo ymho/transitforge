@@ -49,22 +49,9 @@ import {
 import { loadTrainIndex } from "../adapters/http/viewer-input/train-index";
 import type { TrainDelaySnapshot, TrainOperation } from "@raiquora/operation/operation";
 import {
-  alternativeProposalResponse,
-  appliedAlternativeResponse,
-  applyJourneyLegAlternative,
-  intermediateStopsResponse,
-  journeyChatFollowUpIntent,
   type JourneyLegAlternativeSearch,
   type PendingJourneyLegChange,
 } from "../domain/journey-chat-follow-up";
-import {
-  journeyNavigationGuidanceFromPrompt,
-  journeyNavigationGuidanceResponse,
-  mergeJourneyNavigationGuidance,
-  unsupportedJourneyExperienceFromPrompt,
-  unsupportedJourneyExperienceResponse,
-  type JourneyNavigationGuidance,
-} from "../domain/journey-navigation-intent";
 import {
   dateForOperatingRouteTime,
   operatingServiceDateStart,
@@ -111,9 +98,6 @@ import { loadViewerElements } from "../usecases/viewer/viewer-elements";
 import { resolveViewerDisplayMode } from "../domain/viewer-display-mode";
 import { runViewerAgentRuntime } from "../adapters/bedrock/viewer-agent-runtime";
 import { createLocalViewerAgent } from "../usecases/agent/local-viewer-agent";
-import {
-  directRouteRequestFromPrompt,
-} from "../usecases/viewer/viewer-local-tools";
 import type { ViewerAgentJourneyPlan } from "../domain/viewer-agent-response";
 import {
   configureAiGuidePanel,
@@ -157,7 +141,6 @@ import {
   loadUserProfile,
   travelProfileChangedEvent,
 } from "../usecases/trip-profile/user-profile-repository";
-import { promptWithConversationContext } from "../domain/conversation-guidance";
 import { renderConciergeIdentity } from "../presentation/concierge/concierge-identity";
 import { configureConversationHistoryPanel } from "../presentation/concierge/conversation-history-panel";
 import { configureApplicationSettingsPanel } from "../presentation/settings/application-settings-panel";
@@ -555,9 +538,9 @@ aiGuideController = configureAiGuidePanel(
   },
   (prompt, preferences, conversation, onResponseMetadata) =>
     handleAiGuidePrompt(
-      promptWithConversationContext(prompt, conversation),
+      prompt,
       preferences,
-      undefined,
+      conversation,
       onResponseMetadata,
     ),
 );
@@ -1170,7 +1153,6 @@ if (!token) {
         let previousJourneyPlan: ViewerAgentJourneyPlan | undefined;
         let previousJourneySessionId: string | undefined;
         let pendingJourneyLegChange: PendingJourneyLegChange | undefined;
-        let pendingJourneyGuidance: JourneyNavigationGuidance | undefined;
         const localAiGuidePromptHandler = createLocalViewerAgent({
           trains: trainIndex.trains,
           getTrains: () => displayTrains,
@@ -1180,7 +1162,6 @@ if (!token) {
           focusTrain: selection.focusTrain,
           setLayerVisibility,
           searchDirectRoutes: localSearchRoutes,
-          getPendingJourneyGuidance: () => pendingJourneyGuidance,
           formatTrainTitle: (train) => {
             const title = trainTitleFor(train);
             return `${title.main}${title.suffix ?? ""}`;
@@ -1190,7 +1171,7 @@ if (!token) {
         handleAiGuidePrompt = async (
           prompt,
           preferences,
-          _conversation,
+          conversation,
           onResponseMetadata,
         ) => {
           try {
@@ -1200,95 +1181,6 @@ if (!token) {
                 conversationHistoryRepository.list(activeConversationSession.id),
               );
               pendingJourneyLegChange = undefined;
-              pendingJourneyGuidance = undefined;
-            }
-            const requestedGuidance = journeyNavigationGuidanceFromPrompt(
-              prompt,
-              trainIndex.trains,
-            );
-            const routeRequest = directRouteRequestFromPrompt(
-              prompt,
-              trainIndex.trains,
-            );
-            const unsupportedExperience =
-              unsupportedJourneyExperienceFromPrompt(prompt);
-            if (unsupportedExperience) {
-              return unsupportedJourneyExperienceResponse(
-                unsupportedExperience,
-              );
-            }
-            if (requestedGuidance && !routeRequest && !previousJourneyPlan) {
-              pendingJourneyGuidance = mergeJourneyNavigationGuidance(
-                pendingJourneyGuidance,
-                requestedGuidance,
-              );
-              return journeyNavigationGuidanceResponse(
-                pendingJourneyGuidance,
-              );
-            }
-            const followUp = journeyChatFollowUpIntent(
-              prompt,
-              previousJourneyPlan,
-              pendingJourneyLegChange,
-            );
-            if (followUp?.type === "intermediate-stops" && previousJourneyPlan) {
-              return intermediateStopsResponse(
-                previousJourneyPlan,
-                followUp.journeyIndex,
-                followUp.legIndex,
-              );
-            }
-            if (followUp?.type === "alternative" && previousJourneyPlan) {
-              const journey = previousJourneyPlan.journeys[followUp.journeyIndex];
-              const leg = journey?.legs[followUp.legIndex];
-              const endLeg = journey?.legs[followUp.endLegIndex];
-              if (journey && leg && endLeg) {
-                let alternatives = await findJourneyLegAlternatives({
-                  plan: previousJourneyPlan,
-                  journey,
-                  startLegIndex: followUp.legIndex,
-                  endLegIndex: followUp.endLegIndex,
-                  requiredServiceTypes: followUp.requiredServiceTypes,
-                });
-                if (followUp.preferLaterDeparture) {
-                  alternatives = alternatives.filter(
-                    (candidate) =>
-                      candidate.departureTimeMinutes > leg.departureTimeMinutes,
-                  );
-                }
-                alternatives = alternatives.slice(0, 3);
-                pendingJourneyLegChange = alternatives.length > 0
-                  ? {
-                      plan: previousJourneyPlan,
-                      journeyIndex: followUp.journeyIndex,
-                      legIndex: followUp.legIndex,
-                      endLegIndex: followUp.endLegIndex,
-                      alternatives,
-                    }
-                  : undefined;
-                return alternativeProposalResponse(
-                  { ...leg, destinationStation: endLeg.destinationStation },
-                  alternatives,
-                );
-              }
-            }
-            if (
-              followUp?.type === "confirm-alternative" &&
-              pendingJourneyLegChange
-            ) {
-              const pending = pendingJourneyLegChange;
-              previousJourneyPlan = applyJourneyLegAlternative(
-                pending,
-                followUp.alternativeIndex,
-              );
-              pendingJourneyLegChange = undefined;
-              return {
-                text: appliedAlternativeResponse(
-                  pending,
-                  followUp.alternativeIndex,
-                ),
-                journeyPlan: previousJourneyPlan,
-              };
             }
             const runtimeRequestIds: string[] = [];
             const response = await runViewerAgentRuntime(
@@ -1336,9 +1228,14 @@ if (!token) {
                 scheduleTravelRecheck: (request) => travelRecheckRepository.schedule(request),
                 getJourneySearchPreferences: () => preferences,
                 getPreviousJourneyPlan: () => previousJourneyPlan,
-                getPendingJourneyGuidance: () => pendingJourneyGuidance,
+                findJourneyLegAlternatives,
+                getPendingJourneyLegChange: () => pendingJourneyLegChange,
+                setPendingJourneyLegChange: (pending) => {
+                  pendingJourneyLegChange = pending;
+                },
                 conciergeInstruction: currentConciergeInstruction(),
                 getConversationContext: () => currentAgentConversationContext(prompt),
+                getTripContext: () => conversation?.guidance.tripContext,
                 rememberTravelPreference: (statement, confidence) =>
                   rememberTravelPreference(
                     localStorage,
@@ -1378,15 +1275,11 @@ if (!token) {
             if (typeof response !== "string" && "journeyPlan" in response) {
               previousJourneyPlan = response.journeyPlan;
               pendingJourneyLegChange = undefined;
-              pendingJourneyGuidance = undefined;
             }
             return response;
           } catch (error) {
             if (import.meta.env.DEV) {
               const localResponse = await localAiGuidePromptHandler(prompt);
-              if (directRouteRequestFromPrompt(prompt, trainIndex.trains)) {
-                pendingJourneyGuidance = undefined;
-              }
               return localResponse;
             }
             throw error;

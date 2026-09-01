@@ -50,15 +50,17 @@ Application RuntimeはContext構築 Tool実行 Evidence Policy 安全制約と�
 ### Context
 
 `AgentDecisionContext`はuser request feature UI context 関連会話 TripContext Travel Profile
-現在旅程 検証済み事実 既知hard constraint 既知soft preference 過去Tool結果 利用可能能力を
+現在旅程 直前の検証済み経路 検証済み事実 既知hard constraint 既知soft preference 過去Tool結果 利用可能能力を
 別フィールドで扱う。現在地座標 秘密値 内部ID 大量履歴を含めない。
 
-`ProblemFramer`は自然言語分類器を拡張せず このContextをboundedに構築してモデルへ渡す。
+`AgentDecisionContext`のBuilderがContextをboundedに構築してモデルへ渡す。
+独立した`ProblemFramer`は自然言語分類も実行判断も担わない薄い中継になったため削除する。
 deterministicに確定した条件だけをknown constraintへ入れ 意味解釈はBedrockに委ねる。
 
 ### PlannerとPrompt
 
-`AgentPlanner`は固定業務フローを作らず Traceで実行境界を説明するsummaryに縮小する。
+独立した`AgentPlanner`も実行の正本ではなく定型Traceを返すだけになったため削除する。
+RuntimeはBedrockと決定論的Policyの責任境界だけをTraceへ記録し 実際の行動順序はTool Useを正本とする。
 System Promptはsafety privacy grounding 会話原則 Viewer Action境界を正本とし
 個別Toolの適用条件は能力contractへ移す。
 
@@ -91,6 +93,8 @@ ADR 0031の結果駆動replanを維持する。Tool結果を同じ会話へ返�
 ## 段階移行
 
 最初の変更ではContext contract Planner縮小 Prompt原則化 主要Tool descriptor Decision Traceを導入した。
+後続整理で中継だけになったProblemFramerとPlannerを削除し 利用者の生の入力とTripContextを
+別フィールドでRuntimeへ渡すようにした。会話UIはContextを自然言語promptへ埋め込まない。
 後続の[ADR 0045](0045-expose-tools-by-capability-availability.md)で Viewer Adapterの旅行ケース別
 Tool公開制限と業務順序を強制する`finalResponsePolicy`を削除した。Tool公開はAdapter 現在旅程
 side effect Portの利用可能性だけで決める。
@@ -100,8 +104,25 @@ side effect Portの利用可能性だけで決める。
 一般的なTool precondition違反として結果駆動replanへ返す。駅間が明示された経路など
 deterministicに確定できる入力は引き続きTool入力の正本として扱う。
 
-モデル二層化もこの変更では行わない。単一modelのbaselineを維持し model routingは品質とコストを
-同じEvalで比較できるようになってから判断する。
+直前の経路に関する列車照会と利用・回避条件は、Bedrockより前の文字列分岐で回答せず、
+boundedな`currentJourney`と`inspect_previous_journey` `revise_previous_journey`能力として渡す。経路Toolは
+モデルが構造化した列車種別・列車名・乗換条件も受け取り、値を検証して決定論的に検索する。
+運賃・座席希望や経路条件だけの発話へ固定文を返していたComposition分岐も廃止し、
+回答・質問・Tool選択をBedrockへ委ねる。途中駅照会、区間の代替候補検索、提示済み候補の
+確定も同じ能力の構造化actionへ統合する。Compositionは直前旅程と提示中候補の会話単位state、
+Domain Portの接続だけを担い、発話の文字列から操作を選ばない。候補列車はTool結果のEvidenceへ
+変換し、モデルが選択した事実と決定論的な検索結果を追跡できるようにする。
+
+常時二層のmodel callは行わない。コンシェルジュRuntimeは文字列ルーターを追加せず`decision`
+capability classを要求し 設定がなければ既定modelへフォールバックする。物理modelの格上げは
+同じLive Evalで品質とコストを比較してから環境設定で行う。
+
+2026-09-02にLive EvalをFull 11件、Smoke 6件へ拡張した。既定Nova LiteはSmoke 3/6、
+Full 4/11だった。JP Claude Haiku 4.5とJP Claude Sonnet 4.5もSmoke 3/6で、Novaが通す
+旅行開始ケースとClaudeが通す直前経路・結果駆動replanケースが補完関係になった。
+Haikuは平均model latency 3.2秒、Sonnetは6.0秒で、Novaの1.3秒より遅くtokenも増えた。
+単純な物理modelの格上げや常時二層化では品質を改善できないため採用しない。失敗caseは削らず、
+同一datasetで全領域の品質改善を確認できた変更だけを採用する。
 
 ## 既存ADRとの関係
 

@@ -24,6 +24,10 @@ Provider非依存のオーケストレーション境界が必要になる
 - `agent-response-generator`: follow-up 最終応答 失敗時応答
 - `agent-runtime`: 上記を接続するProvider非依存loop
 
+後続のADR 0044でBedrockを意思決定の正本にした後 `problem-framing`と`agent-planner`は
+中継だけになったため削除した。現在は構造化Context BuilderとBedrock Tool Useがこれらの責務を
+置き換え bounded loop Evidence Policy Traceの決定は維持する。
+
 Tool結果はassistantのTool call IDと対応するuserのTool resultとして次のmodel callへ返す
 Toolは同じAgent実行内で順序付きに実行し EvidenceはID重複を除いて上限件数まで保持する
 Provider失敗 max token timeout 契約にないTool callを成功応答として扱わない

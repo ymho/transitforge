@@ -1,9 +1,6 @@
 import type { AssessedEvidenceClaim, Evidence } from "./evidence-model";
 import type { AgentTrace } from "./agent-trace";
-import type {
-  AgentDecisionContext,
-  AgentRuntimeContextInput,
-} from "./agent-decision-context";
+import type { AgentRuntimeContextInput } from "./agent-decision-context";
 
 export type AgentRuntimeFeature =
   | "concierge"
@@ -17,19 +14,6 @@ export interface AgentRuntimeRequest {
   feature: AgentRuntimeFeature;
   userRequest: string;
   context?: AgentRuntimeContextInput;
-}
-
-export interface AgentProblemFrame {
-  feature: AgentRuntimeFeature;
-  normalizedIntent: string;
-  objective: string;
-  constraints: Record<string, unknown>;
-  missingInformation: string[];
-  decisionContext: AgentDecisionContext;
-}
-
-export interface AgentPlan {
-  steps: string[];
 }
 
 export type AgentRuntimeStatus =

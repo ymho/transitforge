@@ -1,6 +1,5 @@
 import type { Evidence, EvidenceClaim } from "./evidence-model";
 import type { AgentModelResponse } from "./model-provider";
-import type { AgentProblemFrame } from "./runtime-contract";
 import type { ViewerAgentAction } from "../viewer/viewer-action";
 
 export interface AgentGeneratedResponse {
@@ -10,7 +9,7 @@ export interface AgentGeneratedResponse {
 }
 
 export interface AgentResponseGenerator {
-  followUp(problem: AgentProblemFrame): string;
+  followUp(missingInformation: string[]): string;
   fromModel(response: AgentModelResponse, evidence: Evidence[]): AgentGeneratedResponse;
   limitReached(): string;
   failure(): string;
@@ -18,11 +17,11 @@ export interface AgentResponseGenerator {
 }
 
 export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
-  followUp(problem: AgentProblemFrame): string {
-    if (problem.missingInformation.includes("user_request")) {
+  followUp(missingInformation: string[]): string {
+    if (missingInformation.includes("user_request")) {
       return "調べたいことや実現したいことを教えてください";
     }
-    return `確認したいことがあります: ${problem.missingInformation.join(" ")}`;
+    return `確認したいことがあります: ${missingInformation.join(" ")}`;
   }
 
   fromModel(response: AgentModelResponse, _evidence: Evidence[]): AgentGeneratedResponse {

@@ -17,20 +17,6 @@ export interface JourneyNavigationGuidance {
   maxTransfers?: 0 | 1 | 2 | 3;
 }
 
-export type UnsupportedJourneyExperience =
-  | "fare"
-  | "seat";
-
-const defaultGuidance: JourneyNavigationGuidance = {
-  excludedServiceTypes: [],
-  excludedTrainNames: [],
-  excludedTrainNumbers: [],
-  requiredServiceTypes: [],
-  requiredTrainNames: [],
-  requiredTrainNumbers: [],
-  allowedServiceTypes: [],
-};
-
 const standardServiceTypes = [
   "関空快速・紀州路快速",
   "区間新快速",
@@ -194,67 +180,6 @@ export function hasJourneyNavigationGuidance(
     guidance.rankingPreference ||
     guidance.maxTransfers !== undefined
   ));
-}
-
-export function journeyNavigationGuidanceResponse(
-  guidance: JourneyNavigationGuidance,
-): string {
-  const labels = journeyNavigationGuidanceLabels(guidance);
-  return `${labels.join("・")}の希望を覚えました。出発駅と到着駅を教えてください。`;
-}
-
-export function journeyNavigationGuidanceLabels(
-  guidance: JourneyNavigationGuidance,
-): string[] {
-  return unique([
-    ...guidance.excludedServiceTypes.map((value) => `${value}を使わない`),
-    ...guidance.excludedTrainNames.map((value) => `${value}を使わない`),
-    ...guidance.excludedTrainNumbers.map((value) => `${value}を使わない`),
-    ...guidance.requiredServiceTypes.map((value) => `${value}を利用`),
-    ...guidance.requiredTrainNames.map((value) => `${value}を利用`),
-    ...guidance.requiredTrainNumbers.map((value) => `${value}を利用`),
-    ...(guidance.allowedServiceTypes.length
-      ? [`${guidance.allowedServiceTypes.join("・")}だけ`]
-      : []),
-    ...(guidance.maxTransfers === 0 ? ["乗換なし"] : []),
-    ...(guidance.maxTransfers && guidance.maxTransfers > 0
-      ? [`乗換${guidance.maxTransfers}回まで`]
-      : []),
-    ...(guidance.transferPace === "relaxed" ? ["乗換はゆっくり"] : []),
-    ...(guidance.transferPace === "hurried" ? ["乗換は急ぐ"] : []),
-    ...(guidance.rankingPreference === "earliest-arrival"
-      ? ["早く着く"]
-      : []),
-    ...(guidance.rankingPreference === "latest-departure"
-      ? ["遅く出る"]
-      : []),
-    ...(guidance.rankingPreference === "fewest-transfers"
-      ? ["乗換少なめ"]
-      : []),
-  ]);
-}
-
-export function emptyJourneyNavigationGuidance(): JourneyNavigationGuidance {
-  return { ...defaultGuidance };
-}
-
-export function unsupportedJourneyExperienceFromPrompt(
-  prompt: string,
-): UnsupportedJourneyExperience | undefined {
-  const normalized = normalize(prompt);
-  if (/安く|最安|運賃|料金/u.test(normalized)) return "fare";
-  if (/指定席|自由席|グリーン車|座席/u.test(normalized)) return "seat";
-  return undefined;
-}
-
-export function unsupportedJourneyExperienceResponse(
-  experience: UnsupportedJourneyExperience,
-): string {
-  const unavailable = {
-    fare: "運賃と料金の比較",
-    seat: "座席設備と空席の比較",
-  }[experience];
-  return `${unavailable}はまだ検索条件へ反映できません。現在は乗りたい列車や種別 鈍行限定 乗換回数 出発時刻と到着時刻を指定できます。`;
 }
 
 function matchingTrainNames(prompt: string, trains: Train[]): string[] {

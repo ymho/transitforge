@@ -12,6 +12,8 @@ LLMは曖昧な要求の理解とToolのオーケストレーションを担い 
 決定論的なDomain Logicを正とする。AWSリソース名と保存キーの`transitforge`は互換性のため維持する
 Bedrockは構造化された会話 旅程 Profile 制約とTool能力から次の調査 質問 比較 推薦を判断し
 ApplicationはEvidence Grounding Viewer Action Safetyと実行上限を決定論的に検証する
+会話UIは利用者の入力を加工した自然言語フローへ変換せず 生の入力とboundedなTripContext
+関連会話 Profile 現在旅程を別フィールドとして単一の意思決定Runtimeへ渡す
 
 ## 利用者
 

@@ -28,6 +28,16 @@ describe("AgentDecisionContext", () => {
           latitude: 35.0123,
           apiKey: "secret-value",
         },
+        currentJourney: {
+          contextKind: "previous_verified_journey",
+          originStation: "向日町",
+          destinationStation: "出雲市",
+          journeys: [{ legs: [{
+            trainName: "やくも5号",
+            originStation: "岡山",
+            destinationStation: "出雲市",
+          }] }],
+        },
         knownHardConstraints: [{
           key: "return_arrival_deadline_minutes",
           value: 990,
@@ -52,6 +62,11 @@ describe("AgentDecisionContext", () => {
     expect(context.userRequest).toContain("16:30");
     expect(context.knownHardConstraints).toHaveLength(1);
     expect(context.knownSoftPreferences).toHaveLength(1);
+    expect(context.currentJourney).toEqual(expect.objectContaining({
+      contextKind: "previous_verified_journey",
+      destinationStation: "出雲市",
+    }));
+    expect(JSON.stringify(context.currentJourney)).toContain("やくも5号");
     expect(context.availableTools[0]).toEqual(expect.objectContaining({
       name: "search_journeys",
       requiredInputs: ["originStation", "destinationStation"],
@@ -61,6 +76,8 @@ describe("AgentDecisionContext", () => {
     expect(serialized).not.toContain("secret-value");
     const prompt = agentDecisionContextText(context);
     expect(prompt).toContain("<agent_context>");
+    expect(prompt).toContain('"contextKind":"previous_verified_journey"');
+    expect(prompt).toContain("やくも5号");
     expect(prompt.length).toBeLessThanOrEqual(4_000);
   });
 });
