@@ -402,7 +402,10 @@ export async function runViewerAgentRuntime(
       tripPlanUpdate: tripPlanUpdateState.proposal,
     };
   }
-  if (hasExternalTravelInformation(externalState)) {
+  // Toolを途中まで実行できても、Agent全体が失敗した場合は候補をUIへ公開しない。
+  // 会話が「案内失敗」なのに、未採用の地点だけが地図へ残ると、利用者には
+  // その地点が推薦結果に見えてしまう。
+  if (runtimeResult.status === "completed" && hasExternalTravelInformation(externalState)) {
     return { text: runtimeResult.response, external: externalState };
   }
   return directRouteResponseText(toolState) ?? runtimeResult.response;
@@ -909,11 +912,20 @@ function externalTravelDecisionSupport(
   } satisfies AgentToolDecisionSupport;
   const support: Partial<Record<typeof externalTravelToolNames[number], Omit<AgentToolDecisionSupport, "capability" | "responsibilityBoundary">>> = {
     search_place_media: {
-      suitableCases: ["観光地や施設の位置、写真、Provider由来の基本情報を確認する", "目的地だけの相談で日程を尋ねる前に現地の雰囲気を紹介する"],
-      unsuitableCases: ["鉄道経路、Webだけに存在する未照合施設を確定する"],
+      suitableCases: [
+        "利用者または既知Contextに具体的な固有地名や施設名があり、その位置、写真、Provider由来の基本情報を確認する",
+        "具体的な目的地だけの相談で日程を尋ねる前に現地の雰囲気を紹介する",
+      ],
+      unsuitableCases: [
+        "リラックスしたい 自然を感じたいなど、具体的な固有地名がない気分や嗜好から行き先候補を発見する",
+        "鉄道経路、Webだけに存在する未照合施設を確定する",
+      ],
       returnedEvidence: "Mapbox Place ID、座標、写真と出典、取得できた施設属性",
       freshness: "検索時点。写真と説明の出典を保持する",
-      limitations: ["未取得の評価、営業時間、料金を推測しない"],
+      limitations: [
+        "queryには気分や一般的な旅行希望ではなく、検索対象の固有地名または施設名を指定する",
+        "未取得の評価、営業時間、料金を推測しない",
+      ],
     },
     search_web: {
       suitableCases: [

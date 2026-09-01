@@ -54,6 +54,8 @@ describe("Bedrock viewer agent", () => {
       "plan_day_trip",
     ]);
     expect(descriptors[0]?.description).toContain("Evidence:");
+    expect(descriptors[0]?.description).toContain("具体的な固有地名がない気分や嗜好");
+    expect(descriptors[0]?.description).toContain("検索対象の固有地名または施設名");
     expect(descriptors[1]?.description).toContain("検索Toolが発見 比較する宿");
     expect(descriptors[1]?.inputSchema.required).toEqual(["question", "expectedInput"]);
     expect(descriptors[2]?.description).toContain("宿名を先に決めさせない");
@@ -159,6 +161,45 @@ describe("Bedrock viewer agent", () => {
     }, converse);
 
     expect(converse).toHaveBeenCalledOnce();
+  });
+
+  it("does not expose an unadopted place when the agent fails after place search", async () => {
+    const searchPlaceMedia = vi.fn(async () => ({
+      result: {
+        status: "available" as const,
+        freshness: "fresh" as const,
+        retrievedAt: "2026-09-02T00:00:00.000Z",
+        data: { places: [{
+          providerPlaceId: "ibiza",
+          name: "イビサ島",
+          latitude: 38.98,
+          longitude: 1.43,
+          sourceUrl: "https://example.com/ibiza",
+          openingHoursStatus: "unknown" as const,
+        }] },
+        evidence: [],
+      },
+    }));
+    const converse = vi.fn<BedrockAgentConverse>()
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "place",
+          name: "search_place_media",
+          input: { query: "リラックスできる観光", limit: 4 },
+        } }] },
+        stopReason: "tool_use",
+      })
+      .mockRejectedValueOnce(new Error("model unavailable"));
+
+    const result = await runViewerAgentRuntime("リラックスできる観光したい", {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      searchPlaceMedia, maximumRouteTime: 1_800,
+    }, converse);
+
+    expect(searchPlaceMedia).toHaveBeenCalledOnce();
+    expect(result).toBe("案内を完了できませんでした。時間をおいてもう一度お試しください");
   });
 
   it("changes time, searches at that time, and focuses only a search result", async () => {
