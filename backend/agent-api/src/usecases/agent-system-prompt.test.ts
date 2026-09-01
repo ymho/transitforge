@@ -8,9 +8,13 @@ describe("agentSystemPrompt", () => {
     expect(agentSystemPrompt).toContain("既知の条件を聞き直さず");
     expect(agentSystemPrompt).toContain("一度に一つ短く確認");
     expect(agentSystemPrompt).toContain("Toolの能力 適するケース 適さないケース");
-    expect(agentSystemPrompt).toContain("Tool結果を受け取るたびに");
-    expect(agentSystemPrompt).toContain("Tool失敗時は別の能力");
-    expect(agentSystemPrompt).toContain("内部処理の完了だけを回答にしない");
+    expect(agentSystemPrompt).toContain("Tool結果ごとに");
+    expect(agentSystemPrompt).toContain("検索Toolが発見できる候補");
+    expect(agentSystemPrompt).toContain("幅を持つ希望はsoft preference");
+    expect(agentSystemPrompt).toContain("場所の性質や気分を固有の目的地と決めつけず");
+    expect(agentSystemPrompt).toContain("currentJourneyやcurrentTripに検証済み対象");
+    expect(agentSystemPrompt).toContain("Tool失敗時は別能力");
+    expect(agentSystemPrompt).toContain("内部処理の完了だけを回答にせず");
     expect(agentSystemPrompt).toContain("利用者へ逆質問しない");
     expect(agentSystemPrompt).toContain("私ならそうする理由");
     expect(agentSystemPrompt).toContain("地図SDKの操作説明");

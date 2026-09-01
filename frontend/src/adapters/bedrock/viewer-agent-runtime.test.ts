@@ -42,17 +42,20 @@ describe("Bedrock viewer agent", () => {
     const descriptors = viewerAgentToolDescriptors([
       "search_place_media",
       "ask_follow_up",
+      "search_accommodations",
       "plan_day_trip",
     ]);
 
     expect(descriptors.map(({ name }) => name)).toEqual([
       "search_place_media",
       "ask_follow_up",
+      "search_accommodations",
       "plan_day_trip",
     ]);
     expect(descriptors[0]?.description).toContain("Evidence:");
-    expect(descriptors[1]?.description).toContain("既知条件");
-    expect(descriptors[2]?.inputSchema.required).toEqual(["destination", "date", "stayNights"]);
+    expect(descriptors[1]?.description).toContain("検索Toolが発見 比較する宿");
+    expect(descriptors[2]?.description).toContain("宿名を先に決めさせない");
+    expect(descriptors[3]?.inputSchema.required).toEqual(["destination", "date", "stayNights"]);
   });
 
   it("extracts a Bedrock decision summary and never displays the marker", async () => {
@@ -82,6 +85,36 @@ describe("Bedrock viewer agent", () => {
         reasonCodes: ["no_factual_claim_required"],
       }),
     );
+  });
+
+  it("passes the raw user turn and TripContext as separate structured context", async () => {
+    const converse = vi.fn<BedrockAgentConverse>(async (messages, _tools, modelClass) => {
+      expect(modelClass).toBe("decision");
+      const contextText = messages[0]?.content.find((block) => "text" in block);
+      expect(contextText && "text" in contextText ? contextText.text : "")
+        .toContain('"userRequest":"もう少し静かな候補がいい"');
+      expect(contextText && "text" in contextText ? contextText.text : "")
+        .toContain('"destinationWish":"城崎温泉"');
+      expect(contextText && "text" in contextText ? contextText.text : "")
+        .not.toContain("利用者の今回の回答");
+      return {
+        message: { role: "assistant", content: [{ text: "静かに過ごせる候補を探します。" }] },
+        stopReason: "end_turn",
+      };
+    });
+
+    await runViewerAgentRuntime("もう少し静かな候補がいい", {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      getTripContext: () => ({
+        planningStage: "inspiration",
+        destinationWish: "城崎温泉",
+      }),
+      maximumRouteTime: 1_800,
+    }, converse);
+
+    expect(converse).toHaveBeenCalledOnce();
   });
 
   it("changes time, searches at that time, and focuses only a search result", async () => {
@@ -1002,8 +1035,10 @@ describe("Bedrock viewer agent", () => {
     ).toBe(11);
   });
 
-  it("answers a train-name follow-up from the previous journey without another model call", async () => {
-    const converse = vi.fn();
+  it("lets the model inspect a train from the previous verified journey", async () => {
+    const converse = previousJourneyToolConverse({
+      action: "inspect_train", journeyIndex: 0, legIndex: 1,
+    });
     const result = await runViewerAgentRuntime(
       "特急やくもは？",
       {
@@ -1055,7 +1090,75 @@ describe("Bedrock viewer agent", () => {
     const rich = requireRichResponse(result);
     expect(rich.text).toContain("岡山駅を9時13分に発車する特急 やくも5号");
     expect(rich.journeyPlan.destinationStation).toBe("出雲市");
-    expect(converse).not.toHaveBeenCalled();
+    expect(converse).toHaveBeenCalledOnce();
+    const firstMessage = converse.mock.calls[0]?.[0][0]?.content
+      .find((block) => "text" in block);
+    expect(firstMessage && "text" in firstMessage ? firstMessage.text : "")
+      .toContain('"destinationStation":"出雲市"');
+  });
+
+  it("lets the model inspect intermediate stops from the previous journey", async () => {
+    const plan = previousJourneyWithStops();
+    const result = await runViewerAgentRuntime(
+      "新大阪から岡山までに停車する駅は？",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 480,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+        getPreviousJourneyPlan: () => plan, maximumRouteTime: 1_800,
+      },
+      previousJourneyToolConverse({
+        action: "inspect_stops", journeyIndex: 0, legIndex: 0,
+      }),
+    );
+
+    expect(typeof result === "string" ? result : result.text).toContain("08:13 新神戸駅");
+  });
+
+  it("lets the model propose and apply a verified alternative journey leg", async () => {
+    let plan = previousJourneyWithStops();
+    let pending: import("../../domain/journey-chat-follow-up").PendingJourneyLegChange | undefined;
+    const alternative = {
+      ...plan.journeys[0]!.legs[0]!,
+      serviceUid: "later-nozomi",
+      trainNumber: "101A",
+      trainName: "のぞみ101号",
+      departureTimeMinutes: 510,
+      arrivalTimeMinutes: 570,
+    };
+    const dependencies = {
+      trains: [train], getPositions: () => [], getRouteTime: () => 480,
+      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      getPreviousJourneyPlan: () => plan,
+      findJourneyLegAlternatives: vi.fn(async () => [alternative]),
+      getPendingJourneyLegChange: () => pending,
+      setPendingJourneyLegChange: (
+        value: import("../../domain/journey-chat-follow-up").PendingJourneyLegChange | undefined,
+      ) => { pending = value; },
+      maximumRouteTime: 1_800,
+    };
+    const proposal = await runViewerAgentRuntime(
+      "新大阪から岡山まで、もう少し遅い列車にしたい",
+      dependencies,
+      previousJourneyToolConverse({
+        action: "find_alternatives", journeyIndex: 0, legIndex: 0,
+        endLegIndex: 0, preferLaterDeparture: true,
+      }),
+    );
+    expect(typeof proposal === "string" ? proposal : proposal.text)
+      .toContain("まだ経路は変更していません");
+    expect(pending?.alternatives[0]?.serviceUid).toBe("later-nozomi");
+
+    const applied = await runViewerAgentRuntime(
+      "1番に変更して",
+      dependencies,
+      previousJourneyToolConverse({ action: "apply_alternative", alternativeIndex: 0 }),
+    );
+    const rich = requireRichResponse(applied);
+    plan = rich.journeyPlan;
+    expect(plan.journeys[0]?.legs[0]?.serviceUid).toBe("later-nozomi");
+    expect(pending).toBeUndefined();
   });
 
   it("applies a named-train wish remembered before the route request", async () => {
@@ -1092,6 +1195,8 @@ describe("Bedrock viewer agent", () => {
                 originStation: "大阪",
                 destinationStation: "京都",
                 departureTimeMinutes: 1_070,
+                excludedServiceTypes: ["新幹線"],
+                requiredTrainNames: ["はるか"],
               },
             },
           }],
@@ -1118,15 +1223,6 @@ describe("Bedrock viewer agent", () => {
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         searchDirectRoutes,
-        getPendingJourneyGuidance: () => ({
-          excludedServiceTypes: ["新幹線"],
-          excludedTrainNames: [],
-          excludedTrainNumbers: [],
-          requiredServiceTypes: [],
-          requiredTrainNames: ["はるか"],
-          requiredTrainNumbers: [],
-          allowedServiceTypes: [],
-        }),
         maximumRouteTime: 1_800,
       },
       converse,
@@ -1143,7 +1239,9 @@ describe("Bedrock viewer agent", () => {
   });
 
   it("reruns the previous journey without Shinkansen from a follow-up", async () => {
-    const converse = vi.fn();
+    const converse = previousJourneyToolConverse({
+      action: "revise_constraints", excludedServiceTypes: ["新幹線"],
+    });
     const focusTrain = vi.fn(() => true);
     const searchDirectRoutes = vi.fn(async () => ({
       serviceDate: "2026-08-15",
@@ -1250,11 +1348,13 @@ describe("Bedrock viewer agent", () => {
       expect.objectContaining({ serviceType: "新幹線" }),
     );
     expect(focusTrain).toHaveBeenCalledWith("rapid-takatsuki-yasu");
-    expect(converse).not.toHaveBeenCalled();
+    expect(converse).toHaveBeenCalledOnce();
   });
 
   it("carries previous exclusions into a named-train follow-up", async () => {
-    const converse = vi.fn();
+    const converse = previousJourneyToolConverse({
+      action: "revise_constraints", excludedTrainNames: ["やくも"],
+    });
     const searchDirectRoutes = vi.fn(async () => ({
       originStation: "岡山",
       results: [],
@@ -1326,7 +1426,7 @@ describe("Bedrock viewer agent", () => {
     const rich = requireRichResponse(result);
     expect(rich.journeyPlan.excludedServiceTypes).toEqual(["新幹線"]);
     expect(rich.journeyPlan.excludedTrainNames).toEqual(["やくも"]);
-    expect(converse).not.toHaveBeenCalled();
+    expect(converse).toHaveBeenCalledOnce();
   });
 
   it("reruns the previous route to include a requested named train", async () => {
@@ -1339,7 +1439,9 @@ describe("Bedrock viewer agent", () => {
       origin_station: "岡山",
       destination_station: "出雲市",
     };
-    const converse = vi.fn();
+    const converse = previousJourneyToolConverse({
+      action: "revise_constraints", requiredTrainNames: ["やくも"],
+    });
     const searchDirectRoutes = vi.fn(async () => ({
       originStation: "京都",
       requiredTrainNames: ["やくも"],
@@ -1410,7 +1512,7 @@ describe("Bedrock viewer agent", () => {
     const rich = requireRichResponse(result);
     expect(rich.text).toContain("やくもを利用する条件");
     expect(rich.journeyPlan.requiredTrainNames).toEqual(["やくも"]);
-    expect(converse).not.toHaveBeenCalled();
+    expect(converse).toHaveBeenCalledOnce();
   });
 
   it("combines an overnight trip with outbound and return rail routes", async () => {
@@ -1934,7 +2036,31 @@ describe("Bedrock viewer agent", () => {
   });
 
   it("asks whether to plan the trip before asking for dates", async () => {
-    const converse = vi.fn().mockResolvedValue({
+    const searchPlaceMedia = vi.fn(async () => ({
+      result: {
+        status: "available" as const,
+        freshness: "fresh" as const,
+        retrievedAt: "2026-08-30T04:00:00.000Z",
+        data: { places: [{
+          providerPlaceId: "izumo-taisha",
+          name: "出雲大社",
+          latitude: 35.4019,
+          longitude: 132.6855,
+          sourceUrl: "https://example.com/izumo-taisha",
+          openingHoursStatus: "unknown" as const,
+        }] },
+        evidence: [],
+      },
+    }));
+    const converse = vi.fn()
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "place", name: "search_place_media",
+          input: { query: "出雲大社", limit: 4 },
+        } }] },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
       message: { role: "assistant", content: [{ toolUse: {
         toolUseId: "follow-up", name: "ask_follow_up", input: {
           recommendation: "大阪方面からなら1泊にして、出雲大社と稲佐の浜をゆっくり巡るのがおすすめです。",
@@ -1952,7 +2078,7 @@ describe("Bedrock viewer agent", () => {
         },
       } }] },
       stopReason: "tool_use",
-    });
+      });
 
     const result = await runViewerAgentRuntime(
       "出雲大社へ旅行したい",
@@ -1960,7 +2086,7 @@ describe("Bedrock viewer agent", () => {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
         setRouteTime: vi.fn(), focusTrain: vi.fn(),
         setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
-        queryTrainDelayAnalysis: vi.fn(), maximumRouteTime: 1_800,
+        queryTrainDelayAnalysis: vi.fn(), searchPlaceMedia, maximumRouteTime: 1_800,
       },
       converse,
     );
@@ -1981,6 +2107,104 @@ describe("Bedrock viewer agent", () => {
     ]);
     expect(result.text).toContain("1泊にして");
     expect(result.text).not.toContain("構造化した案内を準備しました");
+    expect(searchPlaceMedia).toHaveBeenCalledWith({ query: "出雲大社", limit: 4 });
+  });
+
+  it("discovers a concrete destination before planning from a vague travel mood", async () => {
+    const searchPlaceMedia = vi.fn(async () => ({
+      result: {
+        status: "available" as const,
+        freshness: "fresh" as const,
+        retrievedAt: "2026-09-01T04:00:00.000Z",
+        data: { places: [{
+          providerPlaceId: "kinosaki-onsen",
+          name: "城崎温泉",
+          latitude: 35.6244,
+          longitude: 134.8132,
+          sourceUrl: "https://example.com/kinosaki-onsen",
+          openingHoursStatus: "unknown" as const,
+        }] },
+        evidence: [],
+      },
+    }));
+    const converse = vi.fn<BedrockAgentConverse>()
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "premature-planning",
+          name: "ask_follow_up",
+          input: {
+            question: "この場所を軸に旅を考えてみますか？",
+            expectedInput: "planning-intent",
+            quickReplies: [
+              { label: "旅程を考える", value: "旅程を考えたい" },
+              { label: "もう少し見たい", value: "もう少し見たい" },
+            ],
+            tripContext: {
+              destinationWish: "リラックスできる場所",
+              planningStage: "inspiration",
+            },
+          },
+        } }] },
+        stopReason: "tool_use",
+      })
+      .mockImplementationOnce(async (messages) => {
+        const failedFollowUp = messages.flatMap(({ content }) => content)
+          .find((content) => "toolResult" in content);
+        expect(failedFollowUp && "toolResult" in failedFollowUp
+          ? failedFollowUp.toolResult.status
+          : undefined).toBe("error");
+        return {
+          message: { role: "assistant", content: [{ toolUse: {
+            toolUseId: "destination-discovery",
+            name: "search_place_media",
+            input: { query: "静かに過ごせる温泉 自然 関西", limit: 4 },
+          } }] },
+          stopReason: "tool_use",
+        };
+      })
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "verified-planning",
+          name: "ask_follow_up",
+          input: {
+            recommendation: "城崎温泉なら、外湯めぐりの合間に休みながら過ごせます。",
+            question: "城崎温泉を軸に旅を考えてみますか？",
+            expectedInput: "planning-intent",
+            quickReplies: [
+              { label: "旅程を考える", value: "旅程を考えたい" },
+              { label: "ほかも見る", value: "ほかも見たい" },
+            ],
+            tripContext: {
+              destinationWish: "城崎温泉",
+              planningStage: "inspiration",
+            },
+          },
+        } }] },
+        stopReason: "tool_use",
+      });
+
+    const result = await runViewerAgentRuntime(
+      "リラックスできる場所に行きたい",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+        queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+        searchPlaceMedia, maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(searchPlaceMedia).toHaveBeenCalledWith({
+      query: "静かに過ごせる温泉 自然 関西",
+      limit: 4,
+    });
+    if (typeof result === "string" || !("conversation" in result)) {
+      throw new Error("具体的な候補を伴う旅行相談がありません。");
+    }
+    expect(result.conversation.question).toBe("城崎温泉を軸に旅を考えてみますか？");
+    expect(result.conversation.recommendation).toContain("城崎温泉");
+    expect(result.conversation.tripContext.destinationWish).toBe("城崎温泉");
+    expect(converse).toHaveBeenCalledTimes(3);
   });
 
   it("keeps the stay-length follow-up selected by Bedrock", async () => {
@@ -2078,13 +2302,106 @@ describe("Bedrock viewer agent", () => {
     expect(converse).toHaveBeenCalledTimes(2);
   });
 
+  it("replans from an optional departure-time question to accommodation search", async () => {
+    const searchAccommodations = vi.fn(async () => ({ accommodations: [] }));
+    const converse = vi.fn<BedrockAgentConverse>()
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "optional-time",
+          name: "ask_follow_up",
+          input: {
+            question: "明日の何時頃に出発しますか？",
+            expectedInput: "planning-intent",
+            quickReplies: [
+              { label: "6:00", value: "6:00" },
+              { label: "7:00", value: "7:00" },
+            ],
+            tripContext: {
+              planningStage: "planning",
+              destinationWish: "出雲大社",
+              startDate: "2026-08-31",
+              endDate: "2026-09-01",
+              stayNights: 1,
+            },
+          },
+        } }] },
+        stopReason: "tool_use",
+      })
+      .mockImplementationOnce(async (messages) => {
+        const toolResult = messages.flatMap(({ content }) => content)
+          .find((content) => "toolResult" in content);
+        expect(toolResult && "toolResult" in toolResult
+          ? toolResult.toolResult.status
+          : undefined).toBe("error");
+        return {
+          message: { role: "assistant", content: [{ toolUse: {
+            toolUseId: "stay-search",
+            name: "search_accommodations",
+            input: {
+              destination: "出雲大社",
+              checkInDate: "2026-08-31",
+              checkOutDate: "2026-09-01",
+            },
+          } }] },
+          stopReason: "tool_use",
+        };
+      })
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ text: "宿泊候補を確認しました。" }] },
+        stopReason: "end_turn",
+      });
+
+    await runViewerAgentRuntime([
+      '現在の旅行条件: {"planningStage":"planning","destinationWish":"出雲大社","startDate":"2026-08-31","endDate":"2026-09-01","stayNights":1}',
+      "利用者の今回の回答: 早朝で1泊",
+    ].join("\n"), {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+      getCurrentDate: () => new Date("2026-08-30T15:00:00+09:00"),
+      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      searchAccommodations, maximumRouteTime: 1_800,
+    }, converse);
+
+    expect(searchAccommodations).toHaveBeenCalledWith(expect.objectContaining({
+      destination: "出雲",
+      checkInDate: "2026-08-31",
+      checkOutDate: "2026-09-01",
+    }));
+    expect(converse).toHaveBeenCalledTimes(3);
+  });
+
   it("lets the model choose an inspiration follow-up from available capabilities", async () => {
     const searchDirectRoutes = vi.fn();
-    const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
+    const searchPlaceMedia = vi.fn(async () => ({
+      result: {
+        status: "available" as const,
+        freshness: "fresh" as const,
+        retrievedAt: "2026-08-30T04:00:00.000Z",
+        data: { places: [{
+          providerPlaceId: "izumo-taisha",
+          name: "出雲大社",
+          latitude: 35.4019,
+          longitude: 132.6855,
+          sourceUrl: "https://example.com/izumo-taisha",
+          openingHoursStatus: "unknown" as const,
+        }] },
+        evidence: [],
+      },
+    }));
+    const converse = vi.fn<BedrockAgentConverse>()
+      .mockImplementationOnce(async (_messages, tools) => {
       expect(tools?.some(({ name }) => name === "ask_follow_up")).toBe(true);
       expect(tools?.some(({ name }) => name === "search_direct_routes")).toBe(true);
       expect(tools?.some(({ name }) => name === "search_accommodations")).toBe(false);
       return {
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "place", name: "search_place_media",
+          input: { query: "出雲大社", limit: 4 },
+        } }] },
+        stopReason: "tool_use",
+      };
+      })
+      .mockResolvedValueOnce({
       message: { role: "assistant", content: [{ toolUse: {
         toolUseId: "follow-up",
         name: "ask_follow_up",
@@ -2104,8 +2421,7 @@ describe("Bedrock viewer agent", () => {
         },
       } }] },
       stopReason: "tool_use",
-      };
-    });
+      });
 
     const result = await runViewerAgentRuntime(
       "出雲大社へ旅行したい",
@@ -2113,7 +2429,7 @@ describe("Bedrock viewer agent", () => {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
         setRouteTime: vi.fn(), focusTrain: vi.fn(),
         setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
-        queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
+        queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes, searchPlaceMedia,
         maximumRouteTime: 1_800,
       },
       converse,
@@ -2130,7 +2446,7 @@ describe("Bedrock viewer agent", () => {
       question: "この場所を軸に旅を考えてみますか？",
       tripContext: { destinationWish: "出雲大社", planningStage: "inspiration" },
     });
-    expect(converse).toHaveBeenCalledOnce();
+    expect(converse).toHaveBeenCalledTimes(2);
   });
 
   it("returns destination photos before asking whether to build an itinerary", async () => {
@@ -2252,7 +2568,7 @@ describe("Bedrock viewer agent", () => {
               { label: "旅程を考える", value: "旅程を考えたい" },
               { label: "もう少し見たい", value: "もう少し見たい" },
             ],
-            tripContext: { planningStage: "inspiration" },
+            tripContext: { destinationWish: "出雲大社", planningStage: "inspiration" },
           },
         } }] },
         stopReason: "tool_use",
@@ -2285,7 +2601,9 @@ describe("Bedrock viewer agent", () => {
       maximumRouteTime: 1_800,
     }, converse);
 
-    expect(searchPlaceMedia).toHaveBeenCalledWith({ query: "出雲大社", limit: 4 });
+    expect(searchPlaceMedia).toHaveBeenNthCalledWith(1, {
+      query: "出雲大社 周辺 観光", limit: 4,
+    });
     expect(searchWeb).toHaveBeenCalledOnce();
     expect(readWebPages).toHaveBeenCalledWith({ urls: ["https://example.com/guide"] });
     if (typeof result === "string" || !("conversation" in result)) {
@@ -2302,9 +2620,34 @@ describe("Bedrock viewer agent", () => {
 
   it("does not search accommodations with dates invented outside the conversation", async () => {
     const searchAccommodations = vi.fn();
-    const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
+    const searchPlaceMedia = vi.fn(async () => ({
+      result: {
+        status: "available" as const,
+        freshness: "fresh" as const,
+        retrievedAt: "2026-08-30T04:00:00.000Z",
+        data: { places: [{
+          providerPlaceId: "izumo-taisha",
+          name: "出雲大社",
+          latitude: 35.4019,
+          longitude: 132.6855,
+          sourceUrl: "https://example.com/izumo-taisha",
+          openingHoursStatus: "unknown" as const,
+        }] },
+        evidence: [],
+      },
+    }));
+    const converse = vi.fn<BedrockAgentConverse>()
+      .mockImplementationOnce(async (_messages, tools) => {
       expect(tools?.some(({ name }) => name === "search_accommodations")).toBe(true);
       return {
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "place", name: "search_place_media",
+          input: { query: "出雲大社", limit: 4 },
+        } }] },
+        stopReason: "tool_use",
+      };
+      })
+      .mockResolvedValueOnce({
       message: { role: "assistant", content: [{ toolUse: {
         toolUseId: "inspiration",
         name: "ask_follow_up",
@@ -2317,8 +2660,7 @@ describe("Bedrock viewer agent", () => {
         },
       } }] },
       stopReason: "tool_use",
-      };
-    });
+      });
 
     const result = await runViewerAgentRuntime(
       "出雲大社へ旅行したい",
@@ -2326,7 +2668,7 @@ describe("Bedrock viewer agent", () => {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
         setRouteTime: vi.fn(), focusTrain: vi.fn(),
         setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
-        queryTrainDelayAnalysis: vi.fn(), searchAccommodations,
+        queryTrainDelayAnalysis: vi.fn(), searchAccommodations, searchPlaceMedia,
         maximumRouteTime: 1_800,
       },
       converse,
@@ -2748,6 +3090,58 @@ describe("Bedrock viewer agent", () => {
     }
   });
 });
+
+function previousJourneyToolConverse(input: Record<string, unknown>) {
+  const name = input.action === "inspect_train" || input.action === "inspect_stops"
+    ? "inspect_previous_journey"
+    : "revise_previous_journey";
+  return vi.fn<BedrockAgentConverse>(async () => ({
+    message: {
+      role: "assistant",
+      content: [{
+        toolUse: {
+          toolUseId: "previous-journey",
+          name,
+          input,
+        },
+      }],
+    },
+    stopReason: "tool_use",
+  }));
+}
+
+function previousJourneyWithStops(): import("../../domain/viewer-agent-response").ViewerAgentJourneyPlan {
+  return {
+    departureDate: "2026-08-15",
+    serviceDate: "2026-08-15",
+    originStation: "新大阪",
+    destinationStation: "岡山",
+    transferPace: "standard",
+    rankingPreference: "balanced",
+    maxTransfers: 3,
+    searchTimeMinutes: 480,
+    journeys: [{
+      departureTimeMinutes: 480,
+      arrivalTimeMinutes: 540,
+      transferCount: 0,
+      legs: [{
+        serviceUid: "nozomi-99",
+        trainNumber: "99A",
+        serviceType: "新幹線",
+        trainName: "のぞみ99号",
+        originStation: "新大阪",
+        destinationStation: "岡山",
+        departureTimeMinutes: 480,
+        arrivalTimeMinutes: 540,
+        stops: [
+          { stationName: "新大阪", departureTimeMinutes: 480 },
+          { stationName: "新神戸", arrivalTimeMinutes: 492, departureTimeMinutes: 493 },
+          { stationName: "岡山", arrivalTimeMinutes: 540 },
+        ],
+      }],
+    }],
+  };
+}
 
 function requireRichResponse(result: ViewerAgentResponse): ViewerAgentRichResponse {
   if (typeof result === "string" || !("journeyPlan" in result)) {

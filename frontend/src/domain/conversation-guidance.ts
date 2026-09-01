@@ -50,19 +50,3 @@ export function normalizedConversationGuidance(
       .slice(0, 5),
   };
 }
-
-/** Keep the contextual instruction out of the UI while preserving the user's answer. */
-export function promptWithConversationContext(
-  prompt: string,
-  submission?: ConversationSubmission,
-): string {
-  if (!submission) return prompt;
-  const guidance = normalizedConversationGuidance(submission.guidance);
-  return [
-    "旅行相談の会話を継続しています。",
-    `現在の旅行条件: ${JSON.stringify(guidance.tripContext)}`,
-    `直前の質問: ${guidance.question}`,
-    `回答の種類: ${guidance.expectedInput}`,
-    `利用者の今回の回答: ${prompt}`,
-  ].join("\n");
-}

@@ -27,7 +27,14 @@ import type {
   ViewerAgentTravelResponse,
   ViewerAgentTripPlanUpdateResponse,
 } from "../../domain/viewer-agent-response";
-import { journeyChatFollowUpIntent } from "../../domain/journey-chat-follow-up";
+import {
+  alternativeProposalResponse,
+  appliedAlternativeResponse,
+  applyJourneyLegAlternative,
+  intermediateStopsResponse,
+  type JourneyLegAlternativeSearch,
+  type PendingJourneyLegChange,
+} from "../../domain/journey-chat-follow-up";
 import {
   journeyNavigationGuidanceFromPrompt,
   mergeJourneyNavigationGuidance,
@@ -174,9 +181,12 @@ export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDepend
   getCurrentDate?: () => Date;
   getJourneySearchPreferences?: () => JourneySearchPreferences;
   getPreviousJourneyPlan?: () => ViewerAgentJourneyPlan | undefined;
-  getPendingJourneyGuidance?: () => JourneyNavigationGuidance | undefined;
+  findJourneyLegAlternatives?: JourneyLegAlternativeSearch;
+  getPendingJourneyLegChange?: () => PendingJourneyLegChange | undefined;
+  setPendingJourneyLegChange?: (pending: PendingJourneyLegChange | undefined) => void;
   conciergeInstruction?: string;
   getConversationContext?: () => AgentConversationContext | undefined;
+  getTripContext?: () => TripContext | undefined;
   rememberTravelPreference?: (statement: string, confidence: "low" | "high") => void;
   updateConversationSession?: (update: {
     scope?: ConversationScope;
@@ -253,36 +263,31 @@ interface ConversationToolState {
 interface TripPlanUpdateToolState {
   proposal?: TripPlanUpdateProposal;
 }
+interface PreviousJourneyToolState {
+  response?: ViewerAgentResponse;
+}
 export async function runViewerAgentRuntime(
   prompt: string,
   dependencies: ViewerAgentRuntimeDependencies,
   converse: BedrockAgentConverse,
 ): Promise<ViewerAgentResponse> {
-  const constraintResponse = await journeyConstraintFollowUpResponse(
-    prompt,
-    dependencies,
+  const userRequest = prompt.trim();
+  const deterministicPrompt = promptWithKnownTripContext(
+    userRequest,
+    dependencies.getTripContext?.(),
   );
-  if (constraintResponse !== undefined) {
-    return constraintResponse;
-  }
-  const followUpResponse = journeyTrainFollowUpResponse(
-    prompt,
-    dependencies.getPreviousJourneyPlan?.(),
-  );
-  if (followUpResponse) {
-    return followUpResponse;
-  }
   const searchableServiceUids = new Set<string>();
   const directRouteServiceUids = new Set<string>();
   const toolState: DirectRouteToolState = { searched: false };
   const travelState: TravelToolState = {};
   const conversationState: ConversationToolState = {};
   const tripPlanUpdateState: TripPlanUpdateToolState = {};
+  const previousJourneyState: PreviousJourneyToolState = {};
   const externalState: ExternalTravelToolState = {};
-  const travelFacts = travelConversationFacts(prompt, currentDate(dependencies));
+  const travelFacts = travelConversationFacts(deterministicPrompt, currentDate(dependencies));
   const currentTripPlan = dependencies.getTripPlan?.();
   const tools = viewerToolRegistry({
-    prompt,
+    prompt: deterministicPrompt,
     dependencies,
     searchableServiceUids,
     directRouteServiceUids,
@@ -290,6 +295,7 @@ export async function runViewerAgentRuntime(
     travelState,
     conversationState,
     tripPlanUpdateState,
+    previousJourneyState,
     externalState,
   });
   const evidenceMappers = viewerEvidenceMappers();
@@ -306,6 +312,7 @@ export async function runViewerAgentRuntime(
   );
   const runtime = new MultiStepAgentRuntime({
     model: new ConverseModelProvider(converse),
+    modelClass: "decision",
     tools,
     toolExecutor: new AgentToolExecutor(tools, evidenceMappers),
     viewerActionHandler,
@@ -316,6 +323,7 @@ export async function runViewerAgentRuntime(
       travelState,
       conversationState,
       tripPlanUpdateState,
+      previousJourneyState,
       currentTripPlan,
       dependencies.getUserProfile?.(),
     ),
@@ -332,12 +340,16 @@ export async function runViewerAgentRuntime(
     currentTripPlan,
   );
   const conversationContext = dependencies.getConversationContext?.();
+  const currentJourney = previousJourneyDecisionContext(
+    dependencies.getPreviousJourneyPlan?.(),
+    dependencies.getPendingJourneyLegChange?.(),
+  );
   const runtimeResult = await runtime.run({
     executionId: crypto.randomUUID(),
     // この入口は常にコンシェルジュUIである。発話内容を正規表現で
     // feature分類すると、その分類がBedrockより前のintent routerになる。
     feature: "concierge",
-    userRequest: continuedConversationAnswer(prompt),
+    userRequest,
     context: {
       ...(dependencies.conciergeInstruction
         ? { personaInstruction: dependencies.conciergeInstruction }
@@ -353,6 +365,7 @@ export async function runViewerAgentRuntime(
       tripContext: decisionTripContext(travelFacts.context),
       ...(contextSnapshot.profile ? { travelProfile: contextSnapshot.profile } : {}),
       ...(contextSnapshot.trip ? { currentTrip: contextSnapshot.trip } : {}),
+      ...(currentJourney ? { currentJourney } : {}),
       knownHardConstraints: decisionHardConstraints(travelFacts.context, currentTripPlan),
       knownSoftPreferences: decisionSoftPreferences(
         travelFacts.context,
@@ -361,6 +374,10 @@ export async function runViewerAgentRuntime(
     },
   });
   await dependencies.storeAgentTrace?.(runtimeResult.trace).catch(() => undefined);
+
+  if (previousJourneyState.response !== undefined) {
+    return previousJourneyState.response;
+  }
 
   const travelResponse = travelResponseText(
     travelState,
@@ -416,6 +433,66 @@ function decisionTripContext(
     ...(context.adventureIntensity === undefined
       ? {}
       : { adventureIntensity: context.adventureIntensity }),
+  };
+}
+
+function previousJourneyDecisionContext(
+  plan: ViewerAgentJourneyPlan | undefined,
+  pending: PendingJourneyLegChange | undefined,
+): Record<string, unknown> | undefined {
+  if (!plan) return undefined;
+  return {
+    contextKind: "previous_verified_journey",
+    originStation: plan.originStation,
+    destinationStation: plan.destinationStation,
+    ...(plan.departureDate ? { departureDate: plan.departureDate } : {}),
+    ...(plan.serviceDate ? { serviceDate: plan.serviceDate } : {}),
+    searchTimeMinutes: plan.searchTimeMinutes,
+    transferPace: plan.transferPace,
+    rankingPreference: plan.rankingPreference,
+    maxTransfers: plan.maxTransfers,
+    ...(plan.excludedServiceTypes?.length
+      ? { excludedServiceTypes: plan.excludedServiceTypes.slice(0, 8) }
+      : {}),
+    ...(plan.excludedTrainNames?.length
+      ? { excludedTrainNames: plan.excludedTrainNames.slice(0, 8) }
+      : {}),
+    ...(plan.requiredServiceTypes?.length
+      ? { requiredServiceTypes: plan.requiredServiceTypes.slice(0, 8) }
+      : {}),
+    ...(plan.requiredTrainNames?.length
+      ? { requiredTrainNames: plan.requiredTrainNames.slice(0, 8) }
+      : {}),
+    journeys: plan.journeys.slice(0, 2).map((journey) => ({
+      departureTimeMinutes: journey.departureTimeMinutes,
+      arrivalTimeMinutes: journey.arrivalTimeMinutes,
+      transferCount: journey.transferCount,
+      legs: journey.legs.slice(0, 8).map((leg) => ({
+        serviceUid: leg.serviceUid,
+        trainNumber: leg.trainNumber,
+        serviceType: leg.serviceType,
+        trainName: leg.trainName,
+        originStation: leg.originStation,
+        destinationStation: leg.destinationStation,
+        departureTimeMinutes: leg.departureTimeMinutes,
+        arrivalTimeMinutes: leg.arrivalTimeMinutes,
+        ...(leg.stops?.length ? { stops: leg.stops.slice(0, 20) } : {}),
+      })),
+    })),
+    ...(pending?.alternatives.length
+      ? {
+          pendingAlternatives: pending.alternatives.slice(0, 3).map((leg, index) => ({
+            alternativeIndex: index,
+            trainNumber: leg.trainNumber,
+            serviceType: leg.serviceType,
+            trainName: leg.trainName,
+            originStation: leg.originStation,
+            destinationStation: leg.destinationStation,
+            departureTimeMinutes: leg.departureTimeMinutes,
+            arrivalTimeMinutes: leg.arrivalTimeMinutes,
+          })),
+        }
+      : {}),
   };
 }
 
@@ -488,6 +565,7 @@ interface ViewerToolContext {
   travelState: TravelToolState;
   conversationState: ConversationToolState;
   tripPlanUpdateState: TripPlanUpdateToolState;
+  previousJourneyState: PreviousJourneyToolState;
   externalState: ExternalTravelToolState;
 }
 
@@ -496,6 +574,8 @@ export const viewerAgentToolNames = [
   "remember_travel_preference",
   "update_conversation_session",
   "ask_follow_up",
+  "inspect_previous_journey",
+  "revise_previous_journey",
   "set_display_time",
   "search_trains",
   "search_train_arrivals",
@@ -539,6 +619,8 @@ const terminalToolNames = new Set<string>([
   "search_place_media",
   "plan_day_trip",
   "search_trip_route_update",
+  "inspect_previous_journey",
+  "revise_previous_journey",
 ]);
 
 function viewerToolRegistry(context: ViewerToolContext): AgentToolRegistry {
@@ -562,6 +644,9 @@ function viewerToolIsAvailable(
       return dependencies.rememberTravelPreference !== undefined;
     case "update_conversation_session":
       return dependencies.updateConversationSession !== undefined;
+    case "inspect_previous_journey":
+    case "revise_previous_journey":
+      return dependencies.getPreviousJourneyPlan?.() !== undefined;
     case "search_direct_routes":
     case "plan_day_trip":
       return dependencies.searchDirectRoutes !== undefined;
@@ -622,6 +707,7 @@ function viewerTool(
           context.travelState,
           context.conversationState,
           context.tripPlanUpdateState,
+          context.previousJourneyState,
           context.externalState,
         ));
       } catch (error) {
@@ -649,10 +735,39 @@ function viewerToolDecisionSupport(
     return {
       ...common,
       suitableCases: ["駅間の経路成立性、発着時刻、乗換、列車を確認する"],
-      unsuitableCases: ["観光地の魅力、宿泊、駅から先の徒歩経路を調べる"],
+      unsuitableCases: [
+        "観光地の魅力、宿泊、駅から先の徒歩経路を調べる",
+        "currentJourneyにある直前経路の途中駅確認、利用・回避条件、区間変更",
+      ],
       returnedEvidence: "日付別時刻表と利用可能な当日運行情報に基づく鉄道経路",
       freshness: "指定日ダイヤ。当日付近だけ最新運行情報を反映する",
       limitations: ["鉄道運賃を返さない", "観光地名ではなくアクセス駅が必要"],
+    };
+  }
+  if (name === "inspect_previous_journey") {
+    return {
+      ...common,
+      suitableCases: ["currentJourneyにある直前経路の列車名、区間、途中駅を確認する"],
+      unsuitableCases: ["新しい駅間経路の検索", "列車条件や区間の変更", "宿泊先の変更"],
+      returnedEvidence: "直前の検証済み経路と対象区間の列車情報",
+      limitations: ["currentJourneyに存在するjourneyIndexとlegIndexだけを指定する"],
+    };
+  }
+  if (name === "revise_previous_journey") {
+    return {
+      ...common,
+      suitableCases: [
+        "利用者がcurrentJourneyについて列車種別や列車名を使う・避ける希望を明示したら、確認を挟まず変更候補を再検索する",
+        "currentJourneyの区間を別列車へ変える候補を検索する",
+        "pendingAlternativesから利用者が選んだ候補を反映する",
+      ],
+      unsuitableCases: ["新しい駅間経路の検索", "途中駅を読むだけの照会", "宿泊先の変更"],
+      returnedEvidence: "同じ区間と日付を維持して決定論的に再検索した鉄道経路と代替列車",
+      limitations: [
+        "currentJourneyがある場合だけ利用できる",
+        "revise_constraintsとfind_alternativesは候補を返すだけで旅程を確定変更しない",
+        "候補の確定はpendingAlternativesから利用者が選択した後だけ行う",
+      ],
     };
   }
   if (name === "search_accommodations") {
@@ -662,7 +777,12 @@ function viewerToolDecisionSupport(
       unsuitableCases: ["日帰り旅行", "観光候補だけの相談", "鉄道区間だけの変更"],
       returnedEvidence: "Providerが返した宿名、日程、評価、既知料金、空室確認状態",
       freshness: "照会時点。日付別空室が未確認ならavailabilityはunknown",
-      limitations: ["空室や価格を推測しない", "利用者が選ぶ前に旅程へ確定しない"],
+      limitations: [
+        "出発時刻や具体的な宿名は必須入力ではなく 利用者へ事前に尋ねない",
+        "宿候補はこのToolで発見するため 利用者に宿名を先に決めさせない",
+        "空室や価格を推測しない",
+        "利用者が選ぶ前に旅程へ確定しない",
+      ],
     };
   }
   if (name === "plan_day_trip") {
@@ -690,10 +810,21 @@ function viewerToolDecisionSupport(
   if (name === "ask_follow_up") {
     return {
       ...common,
-      suitableCases: ["利用者にしか確定できず、次の判断に不可欠な条件が一つ不足する"],
-      unsuitableCases: ["ContextやTool結果に既にある条件", "仮案を先に示せる軽微な不足", "必要な事実を利用可能なToolで確認できる場合"],
+      suitableCases: ["選択予定Toolの必須入力のうち 利用者にしか確定できない条件が一つ不足する"],
+      unsuitableCases: [
+        "ContextやTool結果に既にある条件",
+        "Toolの既定値で仮案を示せる任意入力",
+        "利用者が明示した列車や種別の利用・回避希望について理由や再確認を求める",
+        "検索Toolが発見 比較する宿 店 観光地 列車などの候補名",
+        "早朝 ゆっくりなど既にsoft preferenceとして使える希望の数値化",
+        "必要な事実を利用可能なToolで確認できる場合",
+      ],
       returnedEvidence: "なし。質問と既知TripContextを構造化してUIへ返す",
-      limitations: ["一度に一条件だけ尋ねる", "既知条件をtripContextから落とさない"],
+      limitations: [
+        "一度に一条件だけ尋ねる",
+        "質問前に選択予定ToolのrequiredInputsを確認する",
+        "既知条件をtripContextから落とさない",
+      ],
     };
   }
   if (name === "propose_trip_update") {
@@ -727,7 +858,12 @@ function externalTravelDecisionSupport(
       limitations: ["未取得の評価、営業時間、料金を推測しない"],
     },
     search_web: {
-      suitableCases: ["候補施設や最新情報の発見に公開Web検索が必要", "写真だけでは分からない見どころや実用情報の情報源を発見する"],
+      suitableCases: [
+        "気分 嗜好 移動負担から具体的な行き先候補を発見する",
+        "候補施設や最新情報の発見に公開Web検索が必要",
+        "写真だけでは分からない見どころや実用情報の情報源を発見する",
+        "地点検索が0件でも利用者が地域と施設名を明示しており、公開情報から表記や公式情報を再発見できる",
+      ],
       unsuitableCases: ["鉄道事実、地点座標の確定、検索結果snippetだけでの断定"],
       returnedEvidence: "検索結果タイトル、URL、snippet",
       freshness: "検索時点。ただし掲載内容の更新日は情報源による",
@@ -781,6 +917,8 @@ function viewerToolDescription(name: ViewerAgentToolName): string {
     remember_travel_preference: "高確信の継続的な旅行の好みを端末内へ記憶します",
     update_conversation_session: "現在の会話Sessionの要約と話題を更新します",
     ask_follow_up: "旅行相談で本当に不足している今回固有の条件だけを構造化して質問します。プロフィールと現在の旅程にある条件は聞き直しません。負担条件を尋ねる場合は理由と代替案を添えます",
+    inspect_previous_journey: "currentJourneyにある直前の検証済み経路について、対象列車または途中駅を確認します",
+    revise_previous_journey: "currentJourneyに対する明示済みの利用・回避条件で、確認を挟まず変更候補を再検索します。区間の代替候補の提示と、選択済み候補の確定も扱います",
     set_display_time: "Viewerの計画ダイヤ表示時刻を変更します",
     search_trains: "現在表示中の列車を決定論的に検索します",
     search_train_arrivals: "指定駅へ指定時刻ごろ到着する列車を検索します",
@@ -900,8 +1038,84 @@ function viewerToolInputSchema(
           maximum: 1_800,
           description: "出発時刻。0時からの分数。未指定なら利用者の表現またはViewer時刻から決定する",
         },
+        excludedServiceTypes: { type: "array", maxItems: 8, items: { type: "string" } },
+        excludedTrainNames: { type: "array", maxItems: 8, items: { type: "string" } },
+        excludedTrainNumbers: { type: "array", maxItems: 8, items: { type: "string" } },
+        requiredServiceTypes: { type: "array", maxItems: 8, items: { type: "string" } },
+        requiredTrainNames: { type: "array", maxItems: 8, items: { type: "string" } },
+        requiredTrainNumbers: { type: "array", maxItems: 8, items: { type: "string" } },
+        allowedServiceTypes: { type: "array", maxItems: 8, items: { type: "string" } },
+        transferPace: { type: "string", enum: ["relaxed", "standard", "hurried"] },
+        rankingPreference: {
+          type: "string",
+          enum: ["balanced", "earliest-arrival", "latest-departure", "fewest-transfers"],
+        },
+        maxTransfers: { type: "integer", minimum: 0, maximum: 3 },
       },
       required: ["destinationStation"],
+      additionalProperties: false,
+    };
+  }
+  if (name === "inspect_previous_journey") {
+    return {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          description: "列車名や利用区間だけを確認する場合はinspect_train、途中停車駅の一覧を確認する場合はinspect_stops",
+          enum: ["inspect_train", "inspect_stops"],
+        },
+        journeyIndex: { type: "integer", minimum: 0, maximum: 2 },
+        legIndex: { type: "integer", minimum: 0, maximum: 12 },
+      },
+      required: ["action", "journeyIndex", "legIndex"],
+      additionalProperties: false,
+    };
+  }
+  if (name === "revise_previous_journey") {
+    return {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          description: "currentJourneyへ行う変更。利用・回避条件はrevise_constraints、別列車の提示はfind_alternatives、提示済み候補の確定はapply_alternative",
+          enum: [
+            "revise_constraints", "find_alternatives", "apply_alternative",
+          ],
+        },
+        journeyIndex: {
+          type: "integer", minimum: 0, maximum: 2,
+          description: "currentJourney.journeysの0始まりindex。省略時は0",
+        },
+        legIndex: {
+          type: "integer", minimum: 0, maximum: 12,
+          description: "対象区間の0始まりindex。省略時は0",
+        },
+        endLegIndex: {
+          type: "integer", minimum: 0, maximum: 12,
+          description: "複数区間をまとめて変更する場合の末尾index",
+        },
+        alternativeIndex: {
+          type: "integer", minimum: 0, maximum: 2,
+          description: "currentJourney.pendingAlternativesから利用者が選んだ0始まりindex",
+        },
+        preferLaterDeparture: { type: "boolean" },
+        excludedServiceTypes: { type: "array", maxItems: 8, items: { type: "string" } },
+        excludedTrainNames: { type: "array", maxItems: 8, items: { type: "string" } },
+        excludedTrainNumbers: { type: "array", maxItems: 8, items: { type: "string" } },
+        excludedServiceUids: { type: "array", maxItems: 8, items: { type: "string" } },
+        requiredServiceTypes: { type: "array", maxItems: 8, items: { type: "string" } },
+        requiredTrainNames: { type: "array", maxItems: 8, items: { type: "string" } },
+        requiredTrainNumbers: { type: "array", maxItems: 8, items: { type: "string" } },
+        allowedServiceTypes: { type: "array", maxItems: 8, items: { type: "string" } },
+        transferPace: { type: "string", enum: ["relaxed", "standard", "hurried"] },
+        rankingPreference: {
+          type: "string",
+          enum: ["balanced", "earliest-arrival", "latest-departure", "fewest-transfers"],
+        },
+        maxTransfers: { type: "integer", minimum: 0, maximum: 3 },
+      },
+      required: ["action"],
       additionalProperties: false,
     };
   }
@@ -979,12 +1193,55 @@ function viewerToolInputSchema(
 function viewerEvidenceMappers(): ToolEvidenceRegistry {
   const registry = new ToolEvidenceRegistry();
   registry.register("search_direct_routes", routeEvidence);
+  registry.register("inspect_previous_journey", previousJourneyEvidence);
+  registry.register("revise_previous_journey", previousJourneyEvidence);
   registry.register("search_trains", trainSearchEvidence);
   registry.register("search_train_arrivals", trainSearchEvidence);
   for (const name of externalTravelToolNames) {
     if (name !== "schedule_trip_recheck") registry.register(name, externalTravelEvidence);
   }
   return registry;
+}
+
+function previousJourneyEvidence(
+  output: unknown,
+  context: { retrievedAt: string },
+): Evidence[] {
+  const journeyEvidence = routeEvidence(output, context);
+  if (!isRecord(output) || !Array.isArray(output.alternatives)) return journeyEvidence;
+  const alternativeEvidence = output.alternatives.slice(0, 3).flatMap((alternative, index) => {
+    if (!isRecord(alternative) || typeof alternative.serviceUid !== "string") return [];
+    return [{
+      id: `journey-alternative:${encodeURIComponent(alternative.serviceUid)}:${index}`,
+      category: "journey" as const,
+      knowledgeKind: "derived_value" as const,
+      subject: `直前経路の代替列車候補${index + 1}`,
+      facts: {
+        serviceUid: alternative.serviceUid,
+        serviceType: typeof alternative.serviceType === "string" ? alternative.serviceType : null,
+        trainName: typeof alternative.trainName === "string" ? alternative.trainName : null,
+        trainNumber: typeof alternative.trainNumber === "string" ? alternative.trainNumber : null,
+        originStation: typeof alternative.originStation === "string" ? alternative.originStation : null,
+        destinationStation: typeof alternative.destinationStation === "string"
+          ? alternative.destinationStation
+          : null,
+        departureTimeMinutes: typeof alternative.departureTimeMinutes === "number"
+          ? alternative.departureTimeMinutes
+          : null,
+        arrivalTimeMinutes: typeof alternative.arrivalTimeMinutes === "number"
+          ? alternative.arrivalTimeMinutes
+          : null,
+      },
+      references: [{
+        sourceType: "timetable-graph" as const,
+        sourceRef: alternative.serviceUid,
+        retrievedAt: context.retrievedAt,
+        freshness: "scheduled" as const,
+        summary: "直前経路の対象区間について自前の時刻表から検索した代替列車",
+      }],
+    }];
+  });
+  return [...journeyEvidence, ...alternativeEvidence];
 }
 
 function routeEvidence(output: unknown, context: { retrievedAt: string }): Evidence[] {
@@ -1061,19 +1318,12 @@ function viewerToolActionMappers(): ToolViewerActionRegistry {
   return registry;
 }
 
-function continuedConversationAnswer(prompt: string): string {
-  return prompt.match(/利用者の今回の回答:\s*([^\n]+)/u)?.[1]?.trim() ?? prompt.trim();
-}
-
-function travelConsultationDestination(
-  prompt: string,
-  context: TripContext,
-): string | undefined {
-  if (context.destinationWish) return context.destinationWish;
-  const currentAnswer = prompt.match(/利用者の今回の回答:\s*([^\n]+)/u)?.[1] ?? prompt;
-  const normalized = currentAnswer.normalize("NFKC").replace(/[\s　]+/gu, " ").trim();
-  const match = normalized.match(/(?:^|[、。])(.{1,80}?)(?:へ|に)(?:旅行|観光|遊び|行きたい|行く|行こう)/u);
-  return match?.[1]?.trim();
+function promptWithKnownTripContext(prompt: string, context: TripContext | undefined): string {
+  if (!context || Object.keys(context).length === 0) return prompt;
+  return [
+    `現在の旅行条件: ${JSON.stringify(context)}`,
+    `利用者の今回の回答: ${prompt}`,
+  ].join("\n");
 }
 
 export class ConverseModelProvider implements AgentModelProvider {
@@ -1152,32 +1402,86 @@ function fromBedrockContent(content: BedrockAgentContentBlock): AgentModelConten
   };
 }
 
-function journeyTrainFollowUpResponse(
-  prompt: string,
-  plan: ViewerAgentJourneyPlan | undefined,
+function journeyTrainResponse(
+  plan: ViewerAgentJourneyPlan,
+  journeyIndex: number,
+  legIndex: number,
 ): ViewerAgentResponse | undefined {
-  if (!plan) {
-    return undefined;
+  const leg = plan.journeys[journeyIndex]?.legs[legIndex];
+  if (!leg) return undefined;
+  const serviceLabel = [leg.serviceType, leg.trainName || leg.trainNumber]
+    .filter(Boolean)
+    .join(" ");
+  return {
+    text: `直前の候補${journeyIndex + 1}では${formatStationLabel(leg.originStation)}を${formatJapaneseRouteClockTime(leg.departureTimeMinutes)}に発車する${serviceLabel}を利用し ${formatStationLabel(leg.destinationStation)}へ向かいます。`,
+    journeyPlan: plan,
+  };
+}
+
+async function previousJourneyToolResponse(
+  input: Record<string, unknown>,
+  dependencies: ViewerAgentRuntimeDependencies,
+): Promise<ViewerAgentResponse | undefined> {
+  const plan = dependencies.getPreviousJourneyPlan?.();
+  if (!plan || typeof input.action !== "string") return undefined;
+  const journeyIndex = boundedInteger(input.journeyIndex, 0, 2) ?? 0;
+  const legIndex = boundedInteger(input.legIndex, 0, 12) ?? 0;
+  if (input.action === "inspect_train") {
+    return journeyTrainResponse(plan, journeyIndex, legIndex);
   }
-  const normalizedPrompt = prompt.normalize("NFKC").replace(/\s+/gu, "");
-  for (const [journeyIndex, journey] of plan.journeys.entries()) {
-    for (const leg of journey.legs) {
-      const trainName = leg.trainName.trim();
-      const baseTrainName = trainName.replace(/\d+号$/u, "");
-      const keys = [leg.trainNumber, trainName, baseTrainName]
-        .map((value) => value.normalize("NFKC").replace(/\s+/gu, ""))
-        .filter((value) => value.length >= 2);
-      if (!keys.some((value) => normalizedPrompt.includes(value))) {
-        continue;
-      }
-      const serviceLabel = [leg.serviceType, trainName || leg.trainNumber]
-        .filter(Boolean)
-        .join(" ");
-      return {
-        text: `直前の候補${journeyIndex + 1}では${formatStationLabel(leg.originStation)}を${formatJapaneseRouteClockTime(leg.departureTimeMinutes)}に発車する${serviceLabel}を利用し ${formatStationLabel(leg.destinationStation)}へ向かいます。`,
-        journeyPlan: plan,
-      };
+  if (input.action === "inspect_stops") {
+    if (!plan.journeys[journeyIndex]?.legs[legIndex]) return undefined;
+    return {
+      text: intermediateStopsResponse(plan, journeyIndex, legIndex),
+      journeyPlan: plan,
+    };
+  }
+  if (input.action === "revise_constraints") {
+    return journeyConstraintFollowUpResponse(input, dependencies);
+  }
+  if (input.action === "find_alternatives") {
+    const journey = plan.journeys[journeyIndex];
+    const leg = journey?.legs[legIndex];
+    const endLegIndex = boundedInteger(input.endLegIndex, legIndex, 12) ?? legIndex;
+    const endLeg = journey?.legs[endLegIndex];
+    if (!journey || !leg || !endLeg || !dependencies.findJourneyLegAlternatives) {
+      return undefined;
     }
+    let alternatives = await dependencies.findJourneyLegAlternatives({
+      plan,
+      journey,
+      startLegIndex: legIndex,
+      endLegIndex,
+      requiredServiceTypes: stringListFromToolInput(input.requiredServiceTypes),
+    });
+    if (input.preferLaterDeparture === true) {
+      alternatives = alternatives.filter((candidate) =>
+        candidate.departureTimeMinutes > leg.departureTimeMinutes);
+    }
+    alternatives = alternatives.slice(0, 3);
+    dependencies.setPendingJourneyLegChange?.(alternatives.length > 0
+      ? { plan, journeyIndex, legIndex, endLegIndex, alternatives }
+      : undefined);
+    return {
+      text: alternativeProposalResponse(
+        { ...leg, destinationStation: endLeg.destinationStation },
+        alternatives,
+      ),
+      journeyPlan: plan,
+    };
+  }
+  if (input.action === "apply_alternative") {
+    const pending = dependencies.getPendingJourneyLegChange?.();
+    const alternativeIndex = boundedInteger(input.alternativeIndex, 0, 2);
+    if (!pending || alternativeIndex === undefined || !pending.alternatives[alternativeIndex]) {
+      return undefined;
+    }
+    const journeyPlan = applyJourneyLegAlternative(pending, alternativeIndex);
+    dependencies.setPendingJourneyLegChange?.(undefined);
+    return {
+      text: appliedAlternativeResponse(pending, alternativeIndex),
+      journeyPlan,
+    };
   }
   return undefined;
 }
@@ -1193,22 +1497,25 @@ async function executeViewerToolAdapter(
   travelState: TravelToolState,
   conversationState: ConversationToolState,
   tripPlanUpdateState: TripPlanUpdateToolState,
+  previousJourneyState: PreviousJourneyToolState,
   externalState: ExternalTravelToolState,
 ): Promise<unknown> {
   if (isExternalTravelToolName(name)) {
-    if (name === "search_place_media") {
-      const facts = travelConversationFacts(originalPrompt, currentDate(dependencies));
-      const destination = travelConsultationDestination(originalPrompt, facts.context);
-      if (destination && facts.context.planningStage !== "planning") {
-        return executeExternalTravelTool(
-          name,
-          { ...input, query: destination },
-          dependencies,
-          externalState,
-        );
-      }
-    }
     return executeExternalTravelTool(name, input, dependencies, externalState);
+  }
+  if (name === "inspect_previous_journey" || name === "revise_previous_journey") {
+    const response = await previousJourneyToolResponse(input, dependencies);
+    if (response === undefined) {
+      throw new Error("直前の経路へ適用できる操作または対象を確認できませんでした。");
+    }
+    previousJourneyState.response = response;
+    if (typeof response !== "string" && "journeyPlan" in response) {
+      const pending = dependencies.getPendingJourneyLegChange?.();
+      return pending?.alternatives.length
+        ? { ...response.journeyPlan, alternatives: pending.alternatives }
+        : response.journeyPlan;
+    }
+    return { handled: true };
   }
   if (name === "propose_trip_update") {
     const current = dependencies.getTripPlan?.();
@@ -1253,6 +1560,7 @@ async function executeViewerToolAdapter(
       input,
       originalPrompt,
       currentDate(dependencies),
+      externalState,
     );
     conversationState.response = guidance;
     return { accepted: true, ...guidance };
@@ -1420,8 +1728,8 @@ async function executeViewerToolAdapter(
           )
         : undefined);
     const guidance = mergeJourneyNavigationGuidance(
-      dependencies.getPendingJourneyGuidance?.(),
       journeyNavigationGuidanceFromPrompt(originalPrompt, dependencies.trains),
+      journeyNavigationGuidanceFromToolInput(input),
     );
     const defaultPreferences = dependencies.getJourneySearchPreferences?.() ??
       defaultJourneySearchPreferences;
@@ -1977,10 +2285,17 @@ function viewerTerminalResponseText(
   travelState: TravelToolState,
   conversationState: ConversationToolState,
   tripPlanUpdateState: TripPlanUpdateToolState,
+  previousJourneyState: PreviousJourneyToolState,
   currentPlan?: TripPlan,
   profile?: UserProfile,
 ): string | undefined {
   if (!terminalToolNames.has(toolName)) return undefined;
+
+  if (previousJourneyState.response !== undefined) {
+    return typeof previousJourneyState.response === "string"
+      ? previousJourneyState.response
+      : previousJourneyState.response.text;
+  }
 
   const travelResponse = travelResponseText(travelState, currentPlan, profile);
   if (travelResponse) {
@@ -2152,6 +2467,7 @@ function conversationGuidanceFromToolInput(
   input: Record<string, unknown>,
   originalPrompt: string,
   now: Date,
+  externalState: ExternalTravelToolState,
 ): ConversationGuidance {
   const question = typeof input.question === "string" ? input.question : "";
   if (!question.trim()) {
@@ -2166,12 +2482,9 @@ function conversationGuidanceFromToolInput(
     originalPrompt,
     now,
   );
-  const requestedDestination = travelConsultationDestination(originalPrompt, mergedTripContext);
-  const tripContext: TripContext = requestedDestination && !mergedTripContext.destinationWish
-    ? { ...mergedTripContext, destinationWish: requestedDestination }
-    : mergedTripContext;
+  const tripContext = mergedTripContext;
   const facts = travelConversationFacts(originalPrompt, now);
-  assertFollowUpIsUnresolved(requestedExpectedInput, tripContext, facts);
+  assertFollowUpIsUnresolved(requestedExpectedInput, tripContext, facts, externalState);
   const expectedInput = requestedExpectedInput;
   const requestedQuickReplies = (Array.isArray(input.quickReplies)
     ? input.quickReplies.flatMap((value) => {
@@ -2189,13 +2502,6 @@ function conversationGuidanceFromToolInput(
         { label: "もう少し見たい", value: "もう少し見たい" },
       ]
       : [];
-  const normalizedQuestion = expectedInput === "planning-intent"
-    ? "この場所を軸に旅を考えてみますか？"
-    : expectedInput === "departure-date"
-    ? "いつ出発しますか？"
-    : expectedInput === "stay-length"
-      ? "日帰りですか？ それとも何泊しますか？"
-      : question;
   return normalizedConversationGuidance({
     ...(typeof input.recommendation === "string" && input.recommendation.trim()
       ? { recommendation: input.recommendation.trim().slice(0, 800) }
@@ -2203,7 +2509,7 @@ function conversationGuidanceFromToolInput(
     ...(typeof input.reason === "string" && input.reason.trim()
       ? { reason: input.reason.trim().slice(0, 240) }
       : {}),
-    question: normalizedQuestion,
+    question,
     expectedInput,
     quickReplies,
     tripContext,
@@ -2214,6 +2520,7 @@ function assertFollowUpIsUnresolved(
   expectedInput: ConversationExpectedInput,
   tripContext: TripContext,
   facts: ReturnType<typeof travelConversationFacts>,
+  externalState: ExternalTravelToolState,
 ): void {
   const alreadyKnown =
     (expectedInput === "planning-intent" && tripContext.planningStage === "planning") ||
@@ -2222,6 +2529,27 @@ function assertFollowUpIsUnresolved(
   if (alreadyKnown) {
     throw new Error(`既知条件 ${expectedInput} は聞き直せません。別の行動を選択してください。`);
   }
+  if (expectedInput === "planning-intent" &&
+      !hasVerifiedPlanningDestination(tripContext, externalState)) {
+    throw new Error(
+      "旅程化の確認には具体的な目的地のPlace Evidenceが必要です。希望条件から候補を検索してください。",
+    );
+  }
+}
+
+function hasVerifiedPlanningDestination(
+  tripContext: TripContext,
+  externalState: ExternalTravelToolState,
+): boolean {
+  const destination = normalizedPlaceName(tripContext.destinationWish);
+  if (!destination || externalState.places?.status !== "available") return false;
+  return externalState.places.data?.places.some((place) =>
+    normalizedPlaceName(place.name) === destination) ?? false;
+}
+
+function normalizedPlaceName(value: string | undefined): string {
+  return value?.normalize("NFKC").toLocaleLowerCase("ja-JP")
+    .replace(/[\s　・･,，.。]/gu, "") ?? "";
 }
 
 function isConversationExpectedInput(value: unknown): value is ConversationExpectedInput {
@@ -2423,28 +2751,15 @@ function directRouteResponseText(
 }
 
 async function journeyConstraintFollowUpResponse(
-  prompt: string,
+  input: Record<string, unknown>,
   dependencies: ViewerAgentRuntimeDependencies,
 ): Promise<ViewerAgentResponse | undefined> {
   const plan = dependencies.getPreviousJourneyPlan?.();
-  const exclusionIntent = journeyChatFollowUpIntent(prompt, plan);
-  const parsedGuidance = journeyNavigationGuidanceFromPrompt(
-    prompt,
-    dependencies.trains,
-  );
-  const requestedGuidance = exclusionIntent?.type === "exclude-trains" &&
-      parsedGuidance
-    ? {
-      ...parsedGuidance,
-      excludedServiceTypes: [],
-      excludedTrainNames: [],
-      excludedTrainNumbers: [],
-    }
-    : parsedGuidance;
+  const requestedGuidance = journeyNavigationGuidanceFromToolInput(input);
   if (
     !plan ||
     !dependencies.searchDirectRoutes ||
-    (exclusionIntent?.type !== "exclude-trains" && !requestedGuidance)
+    !requestedGuidance
   ) {
     return undefined;
   }
@@ -2462,30 +2777,19 @@ async function journeyConstraintFollowUpResponse(
   }, requestedGuidance);
   const excludedServiceTypes = uniqueStrings([
     ...guidance.excludedServiceTypes,
-    ...(exclusionIntent?.type === "exclude-trains"
-      ? exclusionIntent.exclusions.serviceTypes
-      : []),
   ]).filter((value) =>
     !guidance.requiredServiceTypes.includes(value) &&
     !guidance.allowedServiceTypes.includes(value)
   );
   const excludedTrainNames = uniqueStrings([
     ...guidance.excludedTrainNames,
-    ...(exclusionIntent?.type === "exclude-trains"
-      ? exclusionIntent.exclusions.trainNames
-      : []),
   ]).filter((value) => !guidance.requiredTrainNames.includes(value));
   const excludedTrainNumbers = uniqueStrings([
     ...guidance.excludedTrainNumbers,
-    ...(exclusionIntent?.type === "exclude-trains"
-      ? exclusionIntent.exclusions.trainNumbers
-      : []),
   ]).filter((value) => !guidance.requiredTrainNumbers.includes(value));
   const excludedServiceUids = uniqueStrings([
     ...(plan.excludedServiceUids ?? []),
-    ...(exclusionIntent?.type === "exclude-trains"
-      ? exclusionIntent.exclusions.serviceUids
-      : []),
+    ...stringListFromToolInput(input.excludedServiceUids),
   ]);
   const searchTimeMinutes =
     plan.searchTimeMinutes ??
@@ -2563,6 +2867,52 @@ function supportedMaximumTransfers(value: number | undefined): 0 | 1 | 2 | 3 {
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
+}
+
+function journeyNavigationGuidanceFromToolInput(
+  input: Record<string, unknown>,
+): JourneyNavigationGuidance | undefined {
+  const transferPace = input.transferPace === "relaxed" ||
+      input.transferPace === "standard" || input.transferPace === "hurried"
+    ? input.transferPace
+    : undefined;
+  const rankingPreference = input.rankingPreference === "balanced" ||
+      input.rankingPreference === "earliest-arrival" ||
+      input.rankingPreference === "latest-departure" ||
+      input.rankingPreference === "fewest-transfers"
+    ? input.rankingPreference
+    : undefined;
+  const maxTransfers = supportedMaximumTransfersFromTool(input.maxTransfers);
+  const guidance: JourneyNavigationGuidance = {
+    excludedServiceTypes: stringListFromToolInput(input.excludedServiceTypes),
+    excludedTrainNames: stringListFromToolInput(input.excludedTrainNames),
+    excludedTrainNumbers: stringListFromToolInput(input.excludedTrainNumbers),
+    requiredServiceTypes: stringListFromToolInput(input.requiredServiceTypes),
+    requiredTrainNames: stringListFromToolInput(input.requiredTrainNames),
+    requiredTrainNumbers: stringListFromToolInput(input.requiredTrainNumbers),
+    allowedServiceTypes: stringListFromToolInput(input.allowedServiceTypes),
+    ...(transferPace ? { transferPace } : {}),
+    ...(rankingPreference ? { rankingPreference } : {}),
+    ...(maxTransfers === undefined ? {} : { maxTransfers }),
+  };
+  return Object.values(guidance).some((value) =>
+    Array.isArray(value) ? value.length > 0 : value !== undefined)
+    ? guidance
+    : undefined;
+}
+
+function stringListFromToolInput(value: unknown): string[] {
+  return Array.isArray(value)
+    ? uniqueStrings(value.flatMap((item) =>
+        typeof item === "string" && item.trim() ? [item.trim().slice(0, 80)] : []))
+        .slice(0, 8)
+    : [];
+}
+
+function supportedMaximumTransfersFromTool(value: unknown): 0 | 1 | 2 | 3 | undefined {
+  return value === 0 || value === 1 || value === 2 || value === 3
+    ? value
+    : undefined;
 }
 
 function journeysFromSearchResponse(

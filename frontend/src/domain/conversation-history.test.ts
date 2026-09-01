@@ -5,6 +5,7 @@ import {
   conversationHistoryStorageKey,
   loadConversationHistory,
   recentConversationContext,
+  type ConversationHistoryEntry,
 } from "./conversation-history";
 
 function memoryStorage(initial: Record<string, string> = {}) {
@@ -81,6 +82,21 @@ describe("conversation history", () => {
     expect(context).toContain("出雲へ行きたい");
     expect(context).toContain("いつ出発しますか");
     expect(context).not.toContain("明日");
+  });
+
+  it("keeps the relevant multi-turn decision context", () => {
+    const entries: ConversationHistoryEntry[] = Array.from({ length: 9 }, (_, index) => ({
+      messageId: `m-${index + 1}`,
+      role: "user" as const,
+      text: `条件${index + 1}`,
+    }));
+
+    const context = recentConversationContext(entries);
+
+    expect(context).not.toContain("条件1");
+    expect(context).not.toContain("条件2");
+    expect(context).toContain("条件3");
+    expect(context).toContain("条件9");
   });
 
   it("preserves the API request id with an assistant response", () => {

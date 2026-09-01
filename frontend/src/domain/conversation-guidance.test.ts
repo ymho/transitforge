@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   normalizedConversationGuidance,
-  promptWithConversationContext,
 } from "./conversation-guidance";
 
 describe("conversation guidance", () => {
@@ -27,16 +26,4 @@ describe("conversation guidance", () => {
     expect(result.quickReplies[0]).toEqual({ label: "日帰り", value: "日帰り" });
   });
 
-  it("adds prior question and TripContext only for a continued consultation", () => {
-    expect(promptWithConversationContext("明日")).toBe("明日");
-    expect(promptWithConversationContext("明日", {
-      answer: "明日",
-      guidance: {
-        question: "いつ出発しますか？",
-        expectedInput: "departure-date",
-        quickReplies: [],
-        tripContext: { destinationWish: "出雲大社" },
-      },
-    })).toContain('"destinationWish":"出雲大社"');
-  });
 });

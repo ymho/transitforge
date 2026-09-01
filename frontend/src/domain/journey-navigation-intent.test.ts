@@ -4,7 +4,6 @@ import type { Train } from "@raiquora/train/train";
 import {
   journeyNavigationGuidanceFromPrompt,
   mergeJourneyNavigationGuidance,
-  unsupportedJourneyExperienceFromPrompt,
 } from "./journey-navigation-intent";
 
 const trains: Train[] = [
@@ -119,17 +118,6 @@ describe("journey navigation intent", () => {
       excludedServiceTypes: ["特急"],
       requiredServiceTypes: [],
     });
-  });
-
-  it("recognizes fare and seat wishes that are outside the search scope", () => {
-    expect(unsupportedJourneyExperienceFromPrompt("できるだけ安く行きたい"))
-      .toBe("fare");
-    expect(unsupportedJourneyExperienceFromPrompt("指定席に座りたい"))
-      .toBe("seat");
-    expect(unsupportedJourneyExperienceFromPrompt("明日出雲で1泊したい"))
-      .toBeUndefined();
-    expect(unsupportedJourneyExperienceFromPrompt("観光もしたい"))
-      .toBeUndefined();
   });
 });
 

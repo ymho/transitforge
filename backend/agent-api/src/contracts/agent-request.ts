@@ -32,6 +32,8 @@ export const allowedToolNames = new Set([
   "schedule_trip_recheck",
   "plan_day_trip",
   "search_trip_route_update",
+  "inspect_previous_journey",
+  "revise_previous_journey",
   "ask_follow_up",
   "remember_travel_preference",
   "update_conversation_session",
