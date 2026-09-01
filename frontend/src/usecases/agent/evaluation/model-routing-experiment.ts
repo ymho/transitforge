@@ -6,6 +6,8 @@ export interface AgentModelRoutingRun {
   strategy: string;
   datasetSchemaVersion: string;
   caseCount: number;
+  /** 省略された旧artifactは1として扱う。runtime値は全反復の合計。 */
+  repetitions?: number;
   passedCaseCount: number;
   quality: AgentEvaluationReport["metrics"];
   runtime: {
@@ -37,9 +39,11 @@ export function createAgentModelRoutingRun(
   report: AgentEvaluationReport,
   traces: AgentTrace[],
 ): AgentModelRoutingRun {
-  if (!strategy.trim() || traces.length !== report.caseCount) {
-    throw new Error("model routing runには同じBenchmarkのcaseごとのTraceが必要です");
+  if (!strategy.trim() || report.caseCount < 1 || traces.length < report.caseCount ||
+    traces.length % report.caseCount !== 0) {
+    throw new Error("model routing runには同じBenchmarkを同じ回数反復したcaseごとのTraceが必要です");
   }
+  const repetitions = traces.length / report.caseCount;
   const modelEvents = traces.flatMap(({ events }) =>
     events.filter((event) => event.type === "model_completed"));
   const toolEvents = traces.flatMap(({ events }) =>
@@ -49,6 +53,7 @@ export function createAgentModelRoutingRun(
     strategy,
     datasetSchemaVersion: report.datasetSchemaVersion,
     caseCount: report.caseCount,
+    repetitions,
     passedCaseCount: report.passedCaseCount,
     quality: report.metrics,
     runtime: {
@@ -69,7 +74,8 @@ export function compareAgentModelRouting(
   candidate: AgentModelRoutingRun,
 ): AgentModelRoutingComparison {
   const sameBenchmark = baseline.datasetSchemaVersion === candidate.datasetSchemaVersion &&
-    baseline.caseCount === candidate.caseCount;
+    baseline.caseCount === candidate.caseCount &&
+    (baseline.repetitions ?? 1) === (candidate.repetitions ?? 1);
   const qualityMaintained = sameBenchmark &&
     candidate.passedCaseCount >= baseline.passedCaseCount &&
     candidate.quality.toolSelectionAccuracy >= baseline.quality.toolSelectionAccuracy &&
@@ -112,6 +118,7 @@ export function parseAgentModelRoutingRun(value: unknown): AgentModelRoutingRun 
     typeof value.strategy !== "string" || !value.strategy.trim() ||
     typeof value.datasetSchemaVersion !== "string" ||
     !integer(value.caseCount) || !integer(value.passedCaseCount) ||
+    (value.repetitions !== undefined && !positiveInteger(value.repetitions)) ||
     value.passedCaseCount > value.caseCount || !quality(value.quality) ||
     !runtime(value.runtime)) {
     throw new Error("model routing runの形式が不正です");
@@ -154,6 +161,10 @@ function nullableUnit(value: unknown): value is number | null {
 
 function integer(value: unknown): value is number {
   return Number.isInteger(value) && Number(value) >= 0;
+}
+
+function positiveInteger(value: unknown): value is number {
+  return Number.isInteger(value) && Number(value) >= 1;
 }
 
 function nonNegative(value: unknown): value is number {

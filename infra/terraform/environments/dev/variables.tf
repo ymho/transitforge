@@ -108,9 +108,9 @@ variable "bedrock_lightweight_model_id" {
 }
 
 variable "bedrock_decision_model_id" {
-  description = "比較評価用の意思決定model ID。空文字では既定modelへフォールバックする。"
+  description = "既存旅程判断と結果駆動再計画に使う意思決定modelまたはinference profile ID。空文字では既定modelへフォールバックする。"
   type        = string
-  default     = ""
+  default     = "jp.amazon.nova-2-lite-v1:0"
 
   validation {
     condition = var.bedrock_decision_model_id == "" || can(regex(

@@ -8,6 +8,7 @@ describe("agentSystemPrompt", () => {
     expect(agentSystemPrompt).toContain("既知の条件を聞き直さず");
     expect(agentSystemPrompt).toContain("一度に一つ短く確認");
     expect(agentSystemPrompt).toContain("Toolの能力 適するケース 適さないケース");
+    expect(agentSystemPrompt).toContain("検索 質問 変更を回答textだけで代替せず");
     expect(agentSystemPrompt).toContain("Tool結果ごとに");
     expect(agentSystemPrompt).toContain("検索Toolが発見できる候補");
     expect(agentSystemPrompt).toContain("幅を持つ希望はsoft preference");

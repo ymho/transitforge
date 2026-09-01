@@ -32,11 +32,11 @@ terraform plan
 継続的なapplyはGitHub Actionsから行う
 ローカルapplyは初期構築または障害復旧に限定する
 
-Bedrockは`bedrock_model_id`の単一model設定が既定である。比較評価時だけ
-`bedrock_lightweight_model_id`と`bedrock_decision_model_id`を設定でき 未設定classは既定modelへ
-フォールバックする。model IDはTerraformとBedrock Adapterの両方で検証し Applicationへは
-provider非依存の`default` `lightweight` `decision`だけを公開する。評価結果なしに本番routingを
-有効化しない。
+Bedrockは`bedrock_model_id`を通常の初期判断に使い `bedrock_decision_model_id`を
+検証済みcurrentJourneyの判断とTool結果後の再計画に使う。`bedrock_lightweight_model_id`は
+比較評価用とし 未設定classは既定modelへフォールバックする。modelまたはInference Profile IDは
+TerraformとBedrock Adapterの両方で検証し Applicationへはprovider非依存の`default`
+`lightweight` `decision`だけを公開する。routingの実測と採用判断はADR 0047 0048を参照する。
 
 ## GitHub Environment
 

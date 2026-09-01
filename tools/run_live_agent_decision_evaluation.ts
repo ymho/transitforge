@@ -27,6 +27,7 @@ import {
   summarizeAgentEvaluationStability,
 } from "../frontend/src/usecases/agent/evaluation/evaluation-stability";
 import type { AgentModelClass } from "../frontend/src/usecases/agent/model-provider";
+import { structuredModelClassPolicy } from "../frontend/src/usecases/agent/structured-model-class-policy";
 import {
   failedAgentToolResult,
   successfulAgentToolResult,
@@ -45,6 +46,10 @@ interface LiveDecisionCase {
 }
 
 const modelClass = parseModelClass(argument("--model-class") ?? "default");
+const modelRouting = argument("--model-routing") ?? "single";
+if (modelRouting !== "single" && modelRouting !== "structured-decision") {
+  throw new Error("--model-routingはsingleまたはstructured-decisionで指定してください");
+}
 const profile = argument("--profile") ?? "smoke";
 if (profile !== "smoke" && profile !== "full") {
   throw new Error("--profileはsmokeまたはfullで指定してください");
@@ -101,7 +106,9 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
     );
     const runtime = new MultiStepAgentRuntime({
       model: new ConverseModelProvider(converse),
-      modelClass,
+      ...(modelRouting === "structured-decision"
+        ? { modelClassPolicy: structuredModelClassPolicy }
+        : { modelClass }),
       tools: registry,
       toolExecutor: new AgentToolExecutor(registry, new ToolEvidenceRegistry()),
       // 既定は初期能力選択だけを測る。Multi-step caseだけは事実を含まない
@@ -168,7 +175,9 @@ function evaluationToolRegistry(
   context: AgentRuntimeContextInput,
 ): AgentToolRegistry {
   const registry = new AgentToolRegistry();
-  for (const descriptor of viewerAgentToolDescriptors(names)) {
+  for (const descriptor of viewerAgentToolDescriptors(names, {
+    tripContext: context.tripContext,
+  })) {
     const tool: AgentTool<Record<string, unknown>, Record<string, unknown>> = {
       ...descriptor,
       parseInput(value) {

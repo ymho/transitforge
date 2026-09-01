@@ -85,6 +85,7 @@ import {
 import type { ConversationScope } from "../../domain/conversation-session";
 import { MultiStepAgentRuntime } from "../../usecases/agent/agent-runtime";
 import { AgentToolRegistry } from "../../usecases/agent/tool-registry";
+import { structuredModelClassPolicy } from "../../usecases/agent/structured-model-class-policy";
 import { AgentToolExecutor } from "../../usecases/agent/agent-tool-executor";
 import { ToolEvidenceRegistry } from "../../usecases/agent/tool-evidence-registry";
 import { ToolViewerActionRegistry } from "../../usecases/agent/tool-viewer-action-registry";
@@ -311,7 +312,7 @@ export async function runViewerAgentRuntime(
   );
   const runtime = new MultiStepAgentRuntime({
     model: new ConverseModelProvider(converse),
-    modelClass: "decision",
+    modelClassPolicy: structuredModelClassPolicy,
     tools,
     toolExecutor: new AgentToolExecutor(tools, evidenceMappers),
     viewerActionHandler,
@@ -598,13 +599,14 @@ export type ViewerAgentToolName = typeof viewerAgentToolNames[number];
  */
 export function viewerAgentToolDescriptors(
   names: readonly ViewerAgentToolName[] = viewerAgentToolNames,
+  context: ViewerAgentToolPreconditionContext = {},
 ): AgentToolDescriptor[] {
   return names.map((name) => {
     const descriptor: AgentToolDescriptor = {
       name,
       description: viewerToolDescription(name),
       decisionSupport: viewerToolDecisionSupport(name),
-      inputSchema: viewerToolInputSchema(name),
+      inputSchema: viewerToolInputSchema(name, context),
     };
     return { ...descriptor, description: modelToolDescription(descriptor) };
   });
@@ -725,23 +727,25 @@ function viewerTool(
   name: ViewerAgentToolName,
   context: ViewerToolContext,
 ): AgentTool<Record<string, unknown>, unknown> {
+  const preconditionContext = {
+    tripContext: travelConversationFacts(
+      context.prompt,
+      currentDate(context.dependencies),
+    ).context,
+  };
+  const inputSchema = viewerToolInputSchema(name, preconditionContext);
   return {
     name,
     description: viewerToolDescription(name),
     decisionSupport: viewerToolDecisionSupport(name),
-    inputSchema: viewerToolInputSchema(name),
+    inputSchema,
     parseInput(value) {
-      const parsed = validateAgentToolInput(viewerToolInputSchema(name), value);
+      const parsed = validateAgentToolInput(inputSchema, value);
       if (!parsed.ok) return parsed;
       const preconditionFailure = validateViewerAgentToolPreconditions(
         name,
         parsed.input,
-        {
-          tripContext: travelConversationFacts(
-            context.prompt,
-            currentDate(context.dependencies),
-          ).context,
-        },
+        preconditionContext,
       );
       return preconditionFailure
         ? { ok: false, error: { code: "invalid_input", message: preconditionFailure, retryable: false } }
@@ -991,6 +995,7 @@ function viewerToolDescription(name: ViewerAgentToolName): string {
 
 function viewerToolInputSchema(
   name: ViewerAgentToolName,
+  context: ViewerAgentToolPreconditionContext = {},
 ): AgentToolInputSchema {
   if (isExternalTravelToolName(name)) return externalTravelToolInputSchema(name);
   if (name === "search_accommodations") {
@@ -1192,7 +1197,7 @@ function viewerToolInputSchema(
         expectedInput: {
           type: "string",
           description: "質問する一条件。planning-intentはまだ旅程化を望むか未確認の場合だけ、departure-dateはstartDateが未確定の場合だけ、stay-lengthはstayNightsが未確定の場合だけ使う。既知Contextにある条件や明示済み希望の理由には使わない",
-          enum: ["planning-intent", "departure-date", "stay-length", "traveler-count", "free-text"],
+          enum: unresolvedFollowUpInputs(context),
         },
         quickReplies: {
           type: "array",
@@ -1246,6 +1251,18 @@ function viewerToolInputSchema(
     };
   }
   return { type: "object", properties: {}, additionalProperties: true };
+}
+
+function unresolvedFollowUpInputs(
+  context: ViewerAgentToolPreconditionContext,
+): ConversationExpectedInput[] {
+  const tripContext = context.tripContext;
+  if (tripContext?.planningStage === "inspiration") return ["planning-intent"];
+  const unresolved: ConversationExpectedInput[] = [];
+  if (tripContext?.planningStage !== "planning") unresolved.push("planning-intent");
+  if (!tripContext?.startDate) unresolved.push("departure-date");
+  if (typeof tripContext?.stayNights !== "number") unresolved.push("stay-length");
+  return unresolved.length > 0 ? unresolved : ["traveler-count", "free-text"];
 }
 
 function viewerEvidenceMappers(): ToolEvidenceRegistry {

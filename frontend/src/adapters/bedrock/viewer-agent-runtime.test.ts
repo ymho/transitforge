@@ -82,6 +82,26 @@ describe("Bedrock viewer agent", () => {
     )).toBeUndefined();
   });
 
+  it("removes already-known follow-up kinds from the model-visible schema", () => {
+    const [descriptor] = viewerAgentToolDescriptors(["ask_follow_up"], {
+      tripContext: {
+        planningStage: "planning", destinationWish: "出雲大社", startDate: "2026-08-31",
+      },
+    });
+    expect(descriptor?.inputSchema.properties.expectedInput).toMatchObject({
+      enum: ["stay-length"],
+    });
+  });
+
+  it("leaves planning-stage interpretation to the model when it is not known", () => {
+    const [descriptor] = viewerAgentToolDescriptors(["ask_follow_up"], {
+      tripContext: { destinationWish: "出雲大社" },
+    });
+    expect(descriptor?.inputSchema.properties.expectedInput).toMatchObject({
+      enum: ["planning-intent", "departure-date", "stay-length"],
+    });
+  });
+
   it("extracts a Bedrock decision summary and never displays the marker", async () => {
     const storedTraces: import("../../usecases/agent/agent-trace").AgentTrace[] = [];
     const storeAgentTrace = vi.fn(async (
@@ -113,7 +133,7 @@ describe("Bedrock viewer agent", () => {
 
   it("passes the raw user turn and TripContext as separate structured context", async () => {
     const converse = vi.fn<BedrockAgentConverse>(async (messages, _tools, modelClass) => {
-      expect(modelClass).toBe("decision");
+      expect(modelClass).toBeUndefined();
       const contextText = messages[0]?.content.find((block) => "text" in block);
       expect(contextText && "text" in contextText ? contextText.text : "")
         .toContain('"userRequest":"もう少し静かな候補がいい"');
