@@ -85,20 +85,20 @@ import {
 import type { ConversationScope } from "../../domain/conversation-session";
 import { MultiStepAgentRuntime } from "../../usecases/agent/agent-runtime";
 import { AgentToolRegistry } from "../../usecases/agent/tool-registry";
+import { structuredModelClassPolicy } from "../../usecases/agent/structured-model-class-policy";
 import { AgentToolExecutor } from "../../usecases/agent/agent-tool-executor";
 import { ToolEvidenceRegistry } from "../../usecases/agent/tool-evidence-registry";
 import { ToolViewerActionRegistry } from "../../usecases/agent/tool-viewer-action-registry";
 import {
   failedAgentToolResult,
-  invalidAgentToolInput,
   modelToolDescription,
   successfulAgentToolResult,
-  validAgentToolInput,
   type AgentTool,
   type AgentToolDecisionSupport,
   type AgentToolDescriptor,
   type AgentToolInputSchema,
 } from "../../usecases/agent/tool-contract";
+import { validateAgentToolInput } from "../../usecases/agent/agent-tool-input-validator";
 import type {
   AgentModelContent,
   AgentModelMessage,
@@ -312,7 +312,7 @@ export async function runViewerAgentRuntime(
   );
   const runtime = new MultiStepAgentRuntime({
     model: new ConverseModelProvider(converse),
-    modelClass: "decision",
+    modelClassPolicy: structuredModelClassPolicy,
     tools,
     toolExecutor: new AgentToolExecutor(tools, evidenceMappers),
     viewerActionHandler,
@@ -402,7 +402,10 @@ export async function runViewerAgentRuntime(
       tripPlanUpdate: tripPlanUpdateState.proposal,
     };
   }
-  if (hasExternalTravelInformation(externalState)) {
+  // Toolを途中まで実行できても、Agent全体が失敗した場合は候補をUIへ公開しない。
+  // 会話が「案内失敗」なのに、未採用の地点だけが地図へ残ると、利用者には
+  // その地点が推薦結果に見えてしまう。
+  if (runtimeResult.status === "completed" && hasExternalTravelInformation(externalState)) {
     return { text: runtimeResult.response, external: externalState };
   }
   return directRouteResponseText(toolState) ?? runtimeResult.response;
@@ -599,16 +602,59 @@ export type ViewerAgentToolName = typeof viewerAgentToolNames[number];
  */
 export function viewerAgentToolDescriptors(
   names: readonly ViewerAgentToolName[] = viewerAgentToolNames,
+  context: ViewerAgentToolPreconditionContext = {},
 ): AgentToolDescriptor[] {
   return names.map((name) => {
     const descriptor: AgentToolDescriptor = {
       name,
       description: viewerToolDescription(name),
       decisionSupport: viewerToolDecisionSupport(name),
-      inputSchema: viewerToolInputSchema(name),
+      inputSchema: viewerToolInputSchema(name, context),
     };
     return { ...descriptor, description: modelToolDescription(descriptor) };
   });
+}
+
+export interface ViewerAgentToolPreconditionContext {
+  tripContext?: TripContext;
+}
+
+/**
+ * Contextにある確定条件をモデル入力で上書きさせないための実行前検証。
+ * Tool選択は行わず、本番AdapterとLive Evalが同じhard preconditionを使う。
+ */
+export function validateViewerAgentToolPreconditions(
+  name: ViewerAgentToolName,
+  input: Record<string, unknown>,
+  context: ViewerAgentToolPreconditionContext,
+): string | undefined {
+  const trip = context.tripContext;
+  if (name === "plan_day_trip") {
+    if (trip?.stayNights !== 0) {
+      return "日帰りが確定していないためplan_day_tripは実行できません。";
+    }
+    if (trip.startDate && input.date !== trip.startDate) {
+      return "plan_day_tripの日付が確定済みTripContextと一致しません。";
+    }
+  }
+  if (name === "search_accommodations") {
+    if (typeof trip?.stayNights !== "number" || trip.stayNights < 1 ||
+      !trip.startDate || !trip.endDate) {
+      return "宿泊日程が確定していないためsearch_accommodationsは実行できません。";
+    }
+    if (input.checkInDate !== trip.startDate || input.checkOutDate !== trip.endDate) {
+      return "宿泊検索の日付が確定済みTripContextと一致しません。";
+    }
+  }
+  if (name === "ask_follow_up") {
+    const expectedInput = input.expectedInput;
+    const known =
+      (expectedInput === "planning-intent" && trip?.planningStage === "planning") ||
+      (expectedInput === "departure-date" && Boolean(trip?.startDate)) ||
+      (expectedInput === "stay-length" && typeof trip?.stayNights === "number");
+    if (known) return `既知条件 ${String(expectedInput)} は聞き直せません。`;
+  }
+  return undefined;
 }
 
 const terminalToolNames = new Set<string>([
@@ -684,15 +730,29 @@ function viewerTool(
   name: ViewerAgentToolName,
   context: ViewerToolContext,
 ): AgentTool<Record<string, unknown>, unknown> {
+  const preconditionContext = {
+    tripContext: travelConversationFacts(
+      context.prompt,
+      currentDate(context.dependencies),
+    ).context,
+  };
+  const inputSchema = viewerToolInputSchema(name, preconditionContext);
   return {
     name,
     description: viewerToolDescription(name),
     decisionSupport: viewerToolDecisionSupport(name),
-    inputSchema: viewerToolInputSchema(name),
+    inputSchema,
     parseInput(value) {
-      return isRecord(value)
-        ? validAgentToolInput(value)
-        : invalidAgentToolInput("Tool入力はオブジェクトで指定してください");
+      const parsed = validateAgentToolInput(inputSchema, value);
+      if (!parsed.ok) return parsed;
+      const preconditionFailure = validateViewerAgentToolPreconditions(
+        name,
+        parsed.input,
+        preconditionContext,
+      );
+      return preconditionFailure
+        ? { ok: false, error: { code: "invalid_input", message: preconditionFailure, retryable: false } }
+        : parsed;
     },
     async execute(input) {
       try {
@@ -773,9 +833,12 @@ function viewerToolDecisionSupport(
   if (name === "search_accommodations") {
     return {
       ...common,
-      suitableCases: ["宿泊日と宿泊地が分かる旅行で宿を比較する", "宿泊地や日程を変更する"],
+      suitableCases: [
+        "宿泊日と宿泊地が分かる新しい旅行で、宿泊候補と行き帰りの鉄道経路を同じ日程で組み立てる",
+        "現在旅程の宿泊地や日程を変更し、宿泊候補と往復経路を組み直す",
+      ],
       unsuitableCases: ["日帰り旅行", "観光候補だけの相談", "鉄道区間だけの変更"],
-      returnedEvidence: "Providerが返した宿名、日程、評価、既知料金、空室確認状態",
+      returnedEvidence: "Providerが返した宿名、日程、評価、既知料金、空室確認状態と、決定論的に検索した往復鉄道経路",
       freshness: "照会時点。日付別空室が未確認ならavailabilityはunknown",
       limitations: [
         "出発時刻や具体的な宿名は必須入力ではなく 利用者へ事前に尋ねない",
@@ -810,11 +873,13 @@ function viewerToolDecisionSupport(
   if (name === "ask_follow_up") {
     return {
       ...common,
+      responsibilityBoundary: "利用者への追加質問を構造化してUIへ返す唯一の能力。質問が必要なら回答textだけで直接尋ねず、このToolを使う。入力検証はTool、何を一つ尋ねるかの判断はAgentが担う",
       suitableCases: ["選択予定Toolの必須入力のうち 利用者にしか確定できない条件が一つ不足する"],
       unsuitableCases: [
         "ContextやTool結果に既にある条件",
         "Toolの既定値で仮案を示せる任意入力",
         "利用者が明示した列車や種別の利用・回避希望について理由や再確認を求める",
+        "利用者が現在旅程の往路 復路 帰着期限 途中立寄りの変更を明示している場合に 変更意思を再確認する",
         "検索Toolが発見 比較する宿 店 観光地 列車などの候補名",
         "早朝 ゆっくりなど既にsoft preferenceとして使える希望の数値化",
         "必要な事実を利用可能なToolで確認できる場合",
@@ -822,6 +887,7 @@ function viewerToolDecisionSupport(
       returnedEvidence: "なし。質問と既知TripContextを構造化してUIへ返す",
       limitations: [
         "一度に一条件だけ尋ねる",
+        "startDateとstayNightsが両方未確定なら 共通の検索基準になるdeparture-dateを先に尋ね stay-lengthを同じ質問へ混ぜない",
         "質問前に選択予定ToolのrequiredInputsを確認する",
         "既知条件をtripContextから落とさない",
       ],
@@ -851,11 +917,20 @@ function externalTravelDecisionSupport(
   } satisfies AgentToolDecisionSupport;
   const support: Partial<Record<typeof externalTravelToolNames[number], Omit<AgentToolDecisionSupport, "capability" | "responsibilityBoundary">>> = {
     search_place_media: {
-      suitableCases: ["観光地や施設の位置、写真、Provider由来の基本情報を確認する", "目的地だけの相談で日程を尋ねる前に現地の雰囲気を紹介する"],
-      unsuitableCases: ["鉄道経路、Webだけに存在する未照合施設を確定する"],
+      suitableCases: [
+        "利用者または既知Contextに具体的な固有地名や施設名があり、その位置、写真、Provider由来の基本情報を確認する",
+        "具体的な目的地だけの相談で日程を尋ねる前に現地の雰囲気を紹介する",
+      ],
+      unsuitableCases: [
+        "リラックスしたい 自然を感じたいなど、具体的な固有地名がない気分や嗜好から行き先候補を発見する",
+        "鉄道経路、Webだけに存在する未照合施設を確定する",
+      ],
       returnedEvidence: "Mapbox Place ID、座標、写真と出典、取得できた施設属性",
       freshness: "検索時点。写真と説明の出典を保持する",
-      limitations: ["未取得の評価、営業時間、料金を推測しない"],
+      limitations: [
+        "queryには気分や一般的な旅行希望ではなく、検索対象の固有地名または施設名を指定する",
+        "未取得の評価、営業時間、料金を推測しない",
+      ],
     },
     search_web: {
       suitableCases: [
@@ -926,7 +1001,7 @@ function viewerToolDescription(name: ViewerAgentToolName): string {
     focus_train: "同じタスクで検索済みの列車へViewerを移動します",
     query_daily_congestion_analysis: "指定業務日付の観測済み混雑を分析します",
     query_train_delay_analysis: "指定業務日付の観測済み遅延を分析します",
-    search_accommodations: "新しい宿泊旅行 日程変更 宿泊地変更 宿の再検索で指定日程の宿泊候補を検索します。観光相談 人数やペースだけの変更 経路の部分変更には使いません",
+    search_accommodations: "新しい宿泊旅行 日程変更 宿泊地変更 宿の再検索で、指定日程の宿泊候補と行き帰りの鉄道経路をまとめて組み立てます。観光相談 人数やペースだけの変更 経路の部分変更には使いません",
     plan_day_trip: "宿泊施設を検索せず 指定日の行きと帰りの鉄道経路を組み合わせて日帰り旅程を作ります",
     search_trip_route_update: "現在の旅程にある行きまたは帰りの鉄道移動を再検索します。出発を遅らせる変更と途中駅への立寄りに使います",
     search_representative_timetable: "平日または土休日の代表ダイヤを検索します",
@@ -937,6 +1012,7 @@ function viewerToolDescription(name: ViewerAgentToolName): string {
 
 function viewerToolInputSchema(
   name: ViewerAgentToolName,
+  context: ViewerAgentToolPreconditionContext = {},
 ): AgentToolInputSchema {
   if (isExternalTravelToolName(name)) return externalTravelToolInputSchema(name);
   if (name === "search_accommodations") {
@@ -1131,10 +1207,14 @@ function viewerToolInputSchema(
           type: "string",
           description: "この確認が必要な理由。経路や旅程の既知事実に基づき 利点と負担を短く説明する",
         },
-        question: { type: "string" },
+        question: {
+          type: "string",
+          description: "未解決の必須条件を一つだけ尋ねる短い質問。複数条件を同じ質問へ含めない",
+        },
         expectedInput: {
           type: "string",
-          enum: ["planning-intent", "departure-date", "stay-length", "traveler-count", "free-text"],
+          description: "質問する一条件。planning-intentはまだ旅程化を望むか未確認の場合だけ、departure-dateはstartDateが未確定の場合だけ、stay-lengthはstayNightsが未確定の場合だけ使う。既知Contextにある条件や明示済み希望の理由には使わない",
+          enum: unresolvedFollowUpInputs(context),
         },
         quickReplies: {
           type: "array",
@@ -1167,7 +1247,7 @@ function viewerToolInputSchema(
           additionalProperties: false,
         },
       },
-      required: ["question", "expectedInput", "quickReplies", "tripContext"],
+      required: ["question", "expectedInput"],
       additionalProperties: false,
     };
   }
@@ -1188,6 +1268,23 @@ function viewerToolInputSchema(
     };
   }
   return { type: "object", properties: {}, additionalProperties: true };
+}
+
+function unresolvedFollowUpInputs(
+  context: ViewerAgentToolPreconditionContext,
+): ConversationExpectedInput[] {
+  const tripContext = context.tripContext;
+  if (tripContext?.planningStage === "inspiration") return ["planning-intent"];
+  if (tripContext?.planningStage === "planning") {
+    if (!tripContext.startDate) return ["departure-date"];
+    if (typeof tripContext.stayNights !== "number") return ["stay-length"];
+    return ["traveler-count", "free-text"];
+  }
+  const unresolved: ConversationExpectedInput[] = [];
+  unresolved.push("planning-intent");
+  if (!tripContext?.startDate) unresolved.push("departure-date");
+  if (typeof tripContext?.stayNights !== "number") unresolved.push("stay-length");
+  return unresolved.length > 0 ? unresolved : ["traveler-count", "free-text"];
 }
 
 function viewerEvidenceMappers(): ToolEvidenceRegistry {

@@ -5,6 +5,19 @@ locals {
     var.bedrock_lightweight_model_id,
     var.bedrock_decision_model_id,
   ]))
+  bedrock_inference_profile_ids = toset([
+    for model_id in local.bedrock_model_ids : model_id
+    if startswith(model_id, "jp.") || startswith(model_id, "apac.") ||
+    startswith(model_id, "global.")
+  ])
+  bedrock_foundation_model_ids = setsubtract(
+    local.bedrock_model_ids,
+    local.bedrock_inference_profile_ids,
+  )
+  bedrock_inference_profile_model_ids = toset([
+    for profile_id in local.bedrock_inference_profile_ids :
+    replace(profile_id, "/^[^.]+\\./", "")
+  ])
   bedrock_agent_package = jsondecode(
     file("${path.module}/../../../packaging/agent-api.json")
   )
@@ -81,9 +94,17 @@ data "aws_iam_policy_document" "bedrock_agent" {
   statement {
     sid     = "InvokeSelectedModel"
     actions = ["bedrock:InvokeModel"]
-    resources = [for model_id in local.bedrock_model_ids :
-      "arn:aws:bedrock:${var.aws_region}::foundation-model/${model_id}"
-    ]
+    resources = concat(
+      [for model_id in local.bedrock_foundation_model_ids :
+        "arn:aws:bedrock:${var.aws_region}::foundation-model/${model_id}"
+      ],
+      [for profile_id in local.bedrock_inference_profile_ids :
+        "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:inference-profile/${profile_id}"
+      ],
+      [for model_id in local.bedrock_inference_profile_model_ids :
+        "arn:aws:bedrock:*::foundation-model/${model_id}"
+      ],
+    )
   }
   statement {
     sid     = "WritePrivateAgentRecords"

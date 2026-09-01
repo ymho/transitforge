@@ -11,6 +11,7 @@ import type {
 import {
   currentServiceDateInJapan,
   runViewerAgentRuntime,
+  validateViewerAgentToolPreconditions,
   viewerAgentToolDescriptors,
   type BedrockAgentConverse,
 } from "./viewer-agent-runtime";
@@ -53,9 +54,66 @@ describe("Bedrock viewer agent", () => {
       "plan_day_trip",
     ]);
     expect(descriptors[0]?.description).toContain("Evidence:");
+    expect(descriptors[0]?.description).toContain("具体的な固有地名がない気分や嗜好");
+    expect(descriptors[0]?.description).toContain("検索対象の固有地名または施設名");
     expect(descriptors[1]?.description).toContain("検索Toolが発見 比較する宿");
+    expect(descriptors[1]?.description).toContain("departure-dateを先に尋ね");
+    expect(descriptors[1]?.description).toContain("変更意思を再確認");
+    expect(descriptors[1]?.inputSchema.required).toEqual(["question", "expectedInput"]);
     expect(descriptors[2]?.description).toContain("宿名を先に決めさせない");
+    expect(descriptors[2]?.description).toContain("行き帰りの鉄道経路");
     expect(descriptors[3]?.inputSchema.required).toEqual(["destination", "date", "stayNights"]);
+  });
+
+  it("shares context hard preconditions with Live Eval without selecting a Tool", () => {
+    expect(validateViewerAgentToolPreconditions(
+      "plan_day_trip",
+      { destination: "出雲大社", date: "2026-08-31", stayNights: 0 },
+      { tripContext: { planningStage: "planning", destinationWish: "出雲大社" } },
+    )).toContain("日帰りが確定していない");
+    expect(validateViewerAgentToolPreconditions(
+      "ask_follow_up",
+      { expectedInput: "departure-date" },
+      { tripContext: { startDate: "2026-08-31" } },
+    )).toContain("既知条件 departure-date");
+    expect(validateViewerAgentToolPreconditions(
+      "search_accommodations",
+      { checkInDate: "2026-08-31", checkOutDate: "2026-09-02" },
+      {
+        tripContext: {
+          startDate: "2026-08-31", endDate: "2026-09-02", stayNights: 2,
+        },
+      },
+    )).toBeUndefined();
+  });
+
+  it("removes already-known follow-up kinds from the model-visible schema", () => {
+    const [descriptor] = viewerAgentToolDescriptors(["ask_follow_up"], {
+      tripContext: {
+        planningStage: "planning", destinationWish: "出雲大社", startDate: "2026-08-31",
+      },
+    });
+    expect(descriptor?.inputSchema.properties.expectedInput).toMatchObject({
+      enum: ["stay-length"],
+    });
+  });
+
+  it("leaves planning-stage interpretation to the model when it is not known", () => {
+    const [descriptor] = viewerAgentToolDescriptors(["ask_follow_up"], {
+      tripContext: { destinationWish: "出雲大社" },
+    });
+    expect(descriptor?.inputSchema.properties.expectedInput).toMatchObject({
+      enum: ["planning-intent", "departure-date", "stay-length"],
+    });
+  });
+
+  it("offers only the departure date when planning date and stay length are both unknown", () => {
+    const [descriptor] = viewerAgentToolDescriptors(["ask_follow_up"], {
+      tripContext: { planningStage: "planning", destinationWish: "出雲大社" },
+    });
+    expect(descriptor?.inputSchema.properties.expectedInput).toMatchObject({
+      enum: ["departure-date"],
+    });
   });
 
   it("extracts a Bedrock decision summary and never displays the marker", async () => {
@@ -89,7 +147,7 @@ describe("Bedrock viewer agent", () => {
 
   it("passes the raw user turn and TripContext as separate structured context", async () => {
     const converse = vi.fn<BedrockAgentConverse>(async (messages, _tools, modelClass) => {
-      expect(modelClass).toBe("decision");
+      expect(modelClass).toBeUndefined();
       const contextText = messages[0]?.content.find((block) => "text" in block);
       expect(contextText && "text" in contextText ? contextText.text : "")
         .toContain('"userRequest":"もう少し静かな候補がいい"');
@@ -115,6 +173,45 @@ describe("Bedrock viewer agent", () => {
     }, converse);
 
     expect(converse).toHaveBeenCalledOnce();
+  });
+
+  it("does not expose an unadopted place when the agent fails after place search", async () => {
+    const searchPlaceMedia = vi.fn(async () => ({
+      result: {
+        status: "available" as const,
+        freshness: "fresh" as const,
+        retrievedAt: "2026-09-02T00:00:00.000Z",
+        data: { places: [{
+          providerPlaceId: "ibiza",
+          name: "イビサ島",
+          latitude: 38.98,
+          longitude: 1.43,
+          sourceUrl: "https://example.com/ibiza",
+          openingHoursStatus: "unknown" as const,
+        }] },
+        evidence: [],
+      },
+    }));
+    const converse = vi.fn<BedrockAgentConverse>()
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "place",
+          name: "search_place_media",
+          input: { query: "リラックスできる観光", limit: 4 },
+        } }] },
+        stopReason: "tool_use",
+      })
+      .mockRejectedValueOnce(new Error("model unavailable"));
+
+    const result = await runViewerAgentRuntime("リラックスできる観光したい", {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      searchPlaceMedia, maximumRouteTime: 1_800,
+    }, converse);
+
+    expect(searchPlaceMedia).toHaveBeenCalledOnce();
+    expect(result).toBe("案内を完了できませんでした。時間をおいてもう一度お試しください");
   });
 
   it("changes time, searches at that time, and focuses only a search result", async () => {
@@ -1714,6 +1811,7 @@ describe("Bedrock viewer agent", () => {
           travelStyle: { transferTolerance: 0.5 },
           transport: { maxTypicalTravelMinutes: null },
         } as unknown as UserProfile),
+        getCurrentDate: () => new Date("2026-08-27T12:00:00+09:00"),
         maximumRouteTime: 1_800,
       },
       converse,
@@ -1784,6 +1882,7 @@ describe("Bedrock viewer agent", () => {
           travelStyle: { transferTolerance: 0.5 },
           transport: { maxTypicalTravelMinutes: null },
         } as unknown as UserProfile),
+        getCurrentDate: () => new Date("2026-08-27T12:00:00+09:00"),
         maximumRouteTime: 1_800,
       },
       converse,
@@ -1822,6 +1921,7 @@ describe("Bedrock viewer agent", () => {
         setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
         searchAccommodations, getTripPlan: () => tripPlanWithRailReturn(),
+        getCurrentDate: () => new Date("2026-08-27T12:00:00+09:00"),
         getUserProfile: () => ({
           home: { station: "京都", carAvailable: false },
           travelStyle: { transferTolerance: 0.5 },
@@ -1907,6 +2007,7 @@ describe("Bedrock viewer agent", () => {
         setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
         searchAccommodations: vi.fn(async () => ({ accommodations: [] })),
+        getCurrentDate: () => new Date("2026-08-27T12:00:00+09:00"),
         getUserProfile: () => ({
           home: { station: "京都", carAvailable: false },
           travelStyle: { transferTolerance: 0.5 },

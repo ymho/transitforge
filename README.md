@@ -122,6 +122,7 @@ npm run eval:agent
 npm run eval:agent:smoke
 npm run eval:agent:full
 npm run eval:agent:decision:live -- --profile smoke --model-class default
+npm run eval:agent:decision:live -- --profile smoke --model-class default --repetitions 3
 npm run eval:agent -- --case cancelled-service
 npm run eval:agent:strategies
 ```
@@ -135,7 +136,8 @@ Viewer Actionのカテゴリ別に6指標を出す。失敗したcase IDは`--ca
 `MultiStepAgentRuntime`からBedrockを実際に呼び、意思決定の単一model baselineを測る。
 Live Evalは課金とAWS認証を伴うためCIでは実行せず、結果を`/tmp/raiquora-live-agent-eval`へ保存する。
 `--profile full`と`--model-class default|lightweight|decision`を同じdatasetで実行してから
-model routing比較へ渡す。
+model routing比較へ渡す。モデルの非決定性を確認するときは`--repetitions 2..10`を指定し、
+`agent-eval-stability.json`でcaseごとの成功率と全反復で成功したcase数を確認する。
 
 ```bash
 aws sso login --profile <aws-profile>

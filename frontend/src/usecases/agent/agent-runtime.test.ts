@@ -121,6 +121,29 @@ describe("MultiStepAgentRuntime", () => {
     expect(requests[0]?.modelClass).toBe("decision");
   });
 
+  it("selects a model class per structured runtime phase without another model call", async () => {
+    const executionOrder: string[] = [];
+    const { tools, toolExecutor } = toolSetup(executionOrder);
+    const requests: AgentModelRequest[] = [];
+    const runtime = new MultiStepAgentRuntime({
+      model: sequenceModel([
+        toolCallResponse([{ id: "call-a", name: "first_tool", input: { value: "京都" } }]),
+        textResponse("確認しました"),
+      ], requests),
+      modelClassPolicy: ({ phase }) => phase === "result_driven_replan"
+        ? "decision"
+        : undefined,
+      tools,
+      toolExecutor,
+    });
+
+    await runtime.run(request("京都を確認して"));
+
+    expect(requests).toHaveLength(2);
+    expect(requests[0]?.modelClass).toBeUndefined();
+    expect(requests[1]?.modelClass).toBe("decision");
+  });
+
   it("records a validated model decision summary without an extra model call", async () => {
     const { tools, toolExecutor } = toolSetup([]);
     const response = toolCallResponse([

@@ -35,8 +35,10 @@ import { ToolViewerActionRegistry } from "./tool-viewer-action-registry";
 
 export interface AgentRuntimeDependencies {
   model: AgentModelProvider;
-  /** Evaluationまたは明示設定用。本番は未指定の単一modelを維持する。 */
+  /** Evaluationや全呼出を同じclassへ固定する明示設定用。 */
   modelClass?: AgentModelClass;
+  /** 自然文を分類せず、実行phaseと構造化Contextだけでmodel classを選ぶ。 */
+  modelClassPolicy?: AgentModelClassPolicy;
   tools: AgentToolRegistry;
   toolExecutor: AgentToolExecutor;
   responseGenerator?: AgentResponseGenerator;
@@ -50,6 +52,15 @@ export interface AgentRuntimeDependencies {
   limits?: Partial<AgentRuntimeLimits>;
   now?: () => Date;
 }
+
+export interface AgentModelClassPolicyInput {
+  request: AgentRuntimeRequest;
+  phase: "initial" | "result_driven_replan";
+}
+
+export type AgentModelClassPolicy = (
+  input: AgentModelClassPolicyInput,
+) => AgentModelClass | undefined;
 
 export class MultiStepAgentRuntime {
   private readonly responseGenerator: AgentResponseGenerator;
@@ -95,6 +106,7 @@ export class MultiStepAgentRuntime {
     let modelCalls = 0;
     let toolCalls = 0;
     let iterations = 0;
+    let hasToolResults = false;
     const toolViewerActionOutcomes: AgentViewerActionOutcome[] = [];
 
     while (true) {
@@ -107,13 +119,17 @@ export class MultiStepAgentRuntime {
       }
 
       const remainingMs = Math.max(1, deadline - this.now().getTime());
+      const selectedModelClass = this.dependencies.modelClassPolicy?.({
+        request,
+        phase: hasToolResults ? "result_driven_replan" : "initial",
+      }) ?? this.dependencies.modelClass;
       const modelOutcome = await modelBeforeDeadline(
         this.dependencies.model.generate({
           messages,
           tools: this.dependencies.tools.descriptors(),
-          ...(this.dependencies.modelClass === undefined
+          ...(selectedModelClass === undefined
             ? {}
-            : { modelClass: this.dependencies.modelClass }),
+            : { modelClass: selectedModelClass }),
         }),
         remainingMs,
       );
@@ -305,6 +321,7 @@ export class MultiStepAgentRuntime {
         });
       }
       messages.push({ role: "user", content: toolResults });
+      hasToolResults = true;
       if (terminalResponse !== undefined) {
         trace.responseGenerated(terminalResponse);
         trace.taskCompleted("completed", elapsed(startedAt, this.now));

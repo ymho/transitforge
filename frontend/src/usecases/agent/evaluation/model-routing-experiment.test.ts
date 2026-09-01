@@ -12,6 +12,7 @@ const baseline: AgentModelRoutingRun = {
   strategy: "single-model",
   datasetSchemaVersion: "agent-eval-dataset-v1",
   caseCount: 42,
+  repetitions: 1,
   passedCaseCount: 42,
   quality: {
     toolSelectionAccuracy: 1,
@@ -84,5 +85,34 @@ describe("Agent model routing experiment", () => {
       modelCalls: 1,
       toolCalls: 1,
     });
+    expect(createAgentModelRoutingRun("single-model", report, [trace]).repetitions).toBe(1);
+  });
+
+  it("aggregates repeated benchmark traces and records the repetition count", () => {
+    const report = {
+      schemaVersion: "agent-eval-report-v2" as const,
+      datasetSchemaVersion: "agent-eval-dataset-v1" as const,
+      caseCount: 1,
+      passedCaseCount: 1,
+      metrics: baseline.quality,
+      categories: [],
+      cases: [],
+    };
+    const trace = {
+      executionId: "case-1",
+      droppedEventCount: 0,
+      events: [{
+        type: "model_completed" as const, sequence: 1,
+        occurredAt: "2026-08-30T00:00:00Z", provider: "bedrock",
+        latencyMs: 100, inputTokens: 10, outputTokens: 2,
+      }],
+    };
+
+    const run = createAgentModelRoutingRun("repeated", report, [trace, {
+      ...trace, executionId: "case-1-repeat-2",
+    }]);
+
+    expect(run.repetitions).toBe(2);
+    expect(run.runtime).toMatchObject({ totalLatencyMs: 200, modelCalls: 2 });
   });
 });

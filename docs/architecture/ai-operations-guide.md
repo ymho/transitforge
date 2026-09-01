@@ -90,16 +90,24 @@ flowchart LR
 旅行相談では `ask_follow_up` を使い 出発日 宿泊数 人数などの不足条件を確認する。画面側は
 質問の種類を判断せず 構造化された質問と候補を描画する。回答時は保持済みの `TripContext` と
 直前の質問をモデルへ渡す。普段の好みである `UserProfile` と 今回限りの `TripContext` は混在させない。
+具体的な固有地名がなく「リラックスしたい」「自然を感じたい」のような気分だけが分かる段階では
+`search_place_media`へ気分の文章を渡さない。Bedrockはプロフィールを含むContextから
+`search_web`で具体的な行き先候補を発見し、本文確認とPOI照合を経てから地図へ表示する。
 目的地だけが分かる段階は `TripContext.planningStage=inspiration` とし `search_place_media` で
 指定場所または地域の写真と位置を確認する。Web検索が利用できる場合は複数の情報源を読んで
 場所の特徴 訪問者が評価する点 周辺候補も集める。プロフィールとの相性は推奨として事実と区別する。
 この段階では日程を聞かず 旅程を考えたいか確認する。
 利用者が望んだら `planningStage=planning` へ進め 宿や正確な経路の検索に必要な日程だけを確認する。
 Tool失敗は利用者向け文面へ転載せず 入力の再解決か別Toolで回復する。
+Agent実行全体が失敗した場合、途中のTool結果は未採用候補としてUIへ公開しない。
+会話が失敗を示す一方で地図だけが途中候補を推薦済みのように表示する状態を作らない。
 構造化Toolの完了を示す内部文言だけを返さず 提案 検索結果 または次の確認質問へ変換する。
 スポット名を鉄道経路へ渡す場合は `travelDestinationAccess` でアクセス駅へ正規化する。
 追加質問は一度に一条件とし `expectedInput` とクイックリプライを同じ種類に揃える。利用者が
 質問より先に泊数を答えた場合も `stayNights` として保持し 後から決まった出発日と結合する。
+出発日と泊数がともに未確定なら、日帰りと宿泊のどちらの検索にも共通する出発日を先に尋ねる。
+現在旅程の往路 復路 帰着期限 途中立寄りを利用者が明示的に変更した場合、変更意思を聞き直さず
+検証済み旅程を対象とする変更検索へ進む。
 Toolは機能名や旅行ケース別の分岐で隠さず 実装済みAdapter 現在旅程 side effect境界から
 実行可能な能力だけを公開する。Bedrockは構造化Contextとdescriptorから 写真 Web調査 追加質問
 旅程検索 変更案のどれが必要かを選ぶ。Applicationは検索順序を強制せず 不正入力 未検証Evidence
@@ -283,12 +291,17 @@ Label `area: ai` `type: reliability` Milestone `会話体験と改善ループ` 
 - クライアント契約 通信 レスポンス検証を別モジュールに分ける
 - AI通信は本文と`x-transitforge-request-id`由来のメタデータを組で返す。最新IDをモジュール共有状態へ保存せず 応答ごとに会話履歴へ渡す
 - Agent Runtimeが選べるTool名 説明 入力schemaは各モデル呼び出しでBackendへ渡す。宿泊検索は行き先 チェックイン日 チェックアウト日を必須とし 日付形式 人数 件数をschemaでも制約する
+- 公開したTool入力schemaの必須値 型 enum 範囲 配列件数 未知propertyは、Viewer AdapterとLive Evalが同じ決定論的validatorで検証する。モデルがschemaに従うことを前提に実行せず、意味上の前提条件は各Domain Tool Adapterで引き続き検証する
 - 共通Tool ContractのJSON SchemaはBedrock AdapterでConverse APIが受け取れる形へ変換し 最上位を`type` `properties` `required`だけに限定する。モデル固有の制約をDomain Toolへ漏らさない
-- Applicationのmodel classは`default` `lightweight` `decision`だけとし Bedrock model IDを漏らさない。未指定またはclass別model未設定時は`MODEL_ID`へフォールバックする。本番RuntimeはBenchmarkで品質または明確なコスト改善を確認するまでclassを指定せず 単一modelを維持する
+- Applicationのmodel classは`default` `lightweight` `decision`だけとし Bedrock model IDを漏らさない。未指定またはclass別model未設定時は`MODEL_ID`へフォールバックする。本番Runtimeは発話を分類せず 候補発見、日付と泊数が揃った旅行計画、検証済み`currentTrip`または`currentJourney`がある判断、Tool結果後の再計画で`decision`を使う。不足条件の確認は`default`を使う
 - CIの`eval:agent`は固定Observationを決定的に採点する。モデル判断の実測は`npm run eval:agent:decision:live -- --profile smoke --model-class default`で行い、本番と同じSystem Prompt Viewer Tool capability contract `MultiStepAgentRuntime`を使う。AWS認証と課金を伴うため手動または定期実行とし、出力はGit管理外の`/tmp/raiquora-live-agent-eval`へ保存する
 - Live EvalはFull 11件、うちSmoke 6件を持つ。目的地の着想、既知条件を聞き直さない質問、日帰り・宿泊、復路変更、曖昧な気分、直前経路の途中駅・制約変更・代替確定を評価する。通常caseは初期能力選択を測り、結果駆動replan caseだけは事実を含まないversion付きTool結果を返して2回目の能力選択まで測る。評価用Tool結果を旅行事実の代用にはしない
 - Live Evalは非0終了も測定結果として保存する。2026-09-02 baselineはNova Lite Smoke 3/6、Full 4/11であり、決定論的Evalの成功とモデル判断品質を混同しない。失敗caseを通すために発話routerを追加したり期待値を緩めたりせず、descriptor、Context、model候補を同じcaseで比較する
+- Live Evalの`--repetitions`は1から10までとし、各反復を独立したAgent実行として評価する。従来の`agent-eval-report`は一度でも失敗したcaseを失敗として保持し、`agent-eval-stability`は反復ごとの全件成功率とcase単位の成功率を別に出す。単発成功を安定した改善とみなさない
+- 2026-09-02の本番相当precondition適用後のNova Lite Smoke 3反復は、目的地写真と直前経路の途中駅だけが全回成功し、stable 2/6、complete attempt 0/3だった。失敗は泊数未確定時の先行検索、直前経路の制約変更、地点検索0件後のWeb再計画に残る。これをIssue #320の反復baselineとし、改善は同じcontractと反復数で比較する
 - model routing比較では各caseのTraceと同じ実行のEval reportから `npm run eval:agent:model-routing:build -- --strategy <name> --report <report.json> --traces <traces.json> --output <run.json>`で`agent-model-routing-run-v1`を作る。単一modelと候補routingのrunを `npm run eval:agent:model-routing -- --baseline <single.json> --candidate <routing.json>`で比較する。出力の`productionRoutingRecommended`は同じdatasetとcase数 品質維持 model/tool call非増加 10%以上の実測latencyまたはtoken改善を同時に要求する
+- 反復Live Evalからmodel routing artifactを作る場合は全反復のTraceを渡す。artifactは反復数と全反復のruntime合計を保持し 異なる反復数のrunを同一Benchmarkとして比較しない
+- Issue #320のSmoke 6件3反復では Nova Lite単体4/6から 構造化phase routing6/6へ改善し complete attempt 3/3 model/tool call増加なし latency 11.2%減 token 1.2%増だった。Toolの実責務と質問入力契約を整えた最終候補はFull 11件3反復でstable 11/11 complete attempt 3/3だった。採用判断はADR 0048を参照する
 - Agent API LambdaはAWS SDKのCommonJS依存を含む単一`.cjs` bundleとして配布し CIでNode.jsによる実読み込みとhandler exportを確認する
 - 列車選択と追跡を起動処理から分離する
 - Lambdaの入力契約 DynamoDB集計 経路探索を入口ハンドラーから分離する
