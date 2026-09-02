@@ -5,7 +5,6 @@ import type { TrainPosition } from "../../domain/train-position";
 import {
   directRouteRequestFromPrompt,
   formatStationLabel,
-  localViewerControlActionsFromPrompt,
   routeCalendarDateFromPrompt,
   routeTimeFromPrompt,
   searchActiveTrainsFromPrompt,
@@ -191,21 +190,6 @@ describe("viewer agent local tools", () => {
     expect(response.matches).toEqual([]);
   });
 
-  it("recognizes only user-controllable map layers in the local fallback", () => {
-    expect(localViewerControlActionsFromPrompt("雨にして")).toEqual([]);
-    expect(localViewerControlActionsFromPrompt("雲を表示して")).toEqual([]);
-    expect(
-      localViewerControlActionsFromPrompt(
-        "雨にして目的地アーチを表示して",
-      ),
-    ).toEqual([
-      {
-        type: "set_layer_visibility",
-        layer: "destination_arcs",
-        visible: true,
-      },
-    ]);
-  });
 });
 
 function train(

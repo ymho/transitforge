@@ -65,6 +65,16 @@ describe("Bedrock viewer agent", () => {
     expect(descriptors[3]?.inputSchema.required).toEqual(["destination", "date", "stayNights"]);
   });
 
+  it("does not expose direct Viewer operation Tools", () => {
+    const names = viewerAgentToolDescriptors().map(({ name }) => name);
+
+    expect(names).not.toContain("set_display_time");
+    expect(names).not.toContain("focus_train");
+    expect(names).not.toContain("set_layer_visibility");
+    expect(names).toContain("search_direct_routes");
+    expect(names).toContain("search_weather_forecast");
+  });
+
   it("shares context hard preconditions with Live Eval without selecting a Tool", () => {
     expect(validateViewerAgentToolPreconditions(
       "plan_day_trip",
@@ -136,7 +146,7 @@ describe("Bedrock viewer agent", () => {
       });
     const result = await runViewerAgentRuntime("次に何を確認すればよい？", {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
       storeAgentTrace, maximumRouteTime: 1_800,
     }, converse);
@@ -192,7 +202,7 @@ describe("Bedrock viewer agent", () => {
 
     const result = await runViewerAgentRuntime("リラックスできる観光したい", {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
       getUserProfile: () => ({
         home: { station: "向日町", carAvailable: false },
@@ -226,7 +236,7 @@ describe("Bedrock viewer agent", () => {
 
     await runViewerAgentRuntime("もう少し静かな候補がいい", {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
       getTripContext: () => ({
         planningStage: "inspiration",
@@ -268,199 +278,13 @@ describe("Bedrock viewer agent", () => {
 
     const result = await runViewerAgentRuntime("リラックスできる観光したい", {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
       searchPlaceMedia, maximumRouteTime: 1_800,
     }, converse);
 
     expect(searchPlaceMedia).toHaveBeenCalledOnce();
     expect(result).toBe("案内を完了できませんでした。時間をおいてもう一度お試しください");
-  });
-
-  it("changes time, searches at that time, and focuses only a search result", async () => {
-    let routeTime = 1_000;
-    const focusTrain = vi.fn(() => true);
-    const storeAgentTrace = vi.fn(async (
-      _trace: import("../../usecases/agent/agent-trace").AgentTrace,
-    ) => undefined);
-    const converse = vi
-      .fn()
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [
-            {
-              toolUse: {
-                toolUseId: "time",
-                name: "set_display_time",
-                // モデルが暗算を誤っても、元の「18時20分」を優先する。
-                input: { routeTimeMinutes: 1_080 },
-              },
-            },
-          ],
-        },
-        stopReason: "tool_use",
-      })
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [
-            {
-              toolUse: {
-                toolUseId: "search",
-                name: "search_trains",
-                input: { query: "京都へ向かう特急" },
-              },
-            },
-          ],
-        },
-        stopReason: "tool_use",
-      })
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [
-            {
-              toolUse: {
-                toolUseId: "focus",
-                name: "focus_train",
-                input: { serviceUid: "service-1" },
-              },
-            },
-          ],
-        },
-        stopReason: "tool_use",
-      })
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [{ text: "18時20分のはるか16号へ移動しました。" }],
-        },
-        stopReason: "end_turn",
-      });
-
-    const result = await runViewerAgentRuntime(
-      "18時20分に京都へ向かう特急を見せて",
-      {
-        trains: [train],
-        getPositions: () => [position],
-        getRouteTime: () => routeTime,
-        getCurrentDate: () => new Date("2026-08-14T12:00:00+09:00"),
-        setRouteTime: (value) => {
-          routeTime = value;
-        },
-        focusTrain,
-        setLayerVisibility: vi.fn(),
-        queryDailyCongestionAnalysis: vi.fn(),
-        queryTrainDelayAnalysis: vi.fn(),
-        storeAgentTrace,
-        maximumRouteTime: 1_800,
-      },
-      converse,
-    );
-
-    expect(routeTime).toBe(1_100);
-    expect(focusTrain).toHaveBeenCalledWith("service-1");
-    expect(result).toContain("はるか16号");
-    expect(storeAgentTrace).toHaveBeenCalledOnce();
-    expect(storeAgentTrace.mock.calls[0]?.[0].events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: "tool_called", toolName: "search_trains" }),
-      expect.objectContaining({ type: "viewer_action", status: "applied" }),
-    ]));
-    const thirdRequest = converse.mock.calls[2]?.[0];
-    expect(JSON.stringify(thirdRequest)).toContain('"serviceUid":"service-1"');
-  });
-
-  it("treats a model-requested early-morning time as the previous operating day", async () => {
-    const setRouteTime = vi.fn();
-    const converse = vi
-      .fn()
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [
-            {
-              toolUse: {
-                toolUseId: "time",
-                name: "set_display_time",
-                input: { routeTimeMinutes: 30 },
-              },
-            },
-          ],
-        },
-        stopReason: "tool_use",
-      })
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [{ text: "表示時刻を24時30分に変更しました。" }],
-        },
-        stopReason: "end_turn",
-      });
-
-    await runViewerAgentRuntime(
-      "深夜の時間にして",
-      {
-        trains: [train],
-        getPositions: () => [position],
-        getRouteTime: () => 1_000,
-        setRouteTime,
-        focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(),
-        queryDailyCongestionAnalysis: vi.fn(),
-        queryTrainDelayAnalysis: vi.fn(),
-        maximumRouteTime: 1_800,
-      },
-      converse,
-    );
-
-    expect(setRouteTime).toHaveBeenCalledWith(1_470);
-  });
-
-  it("does not focus a service identifier that was not returned by search", async () => {
-    const focusTrain = vi.fn(() => true);
-    const converse = vi
-      .fn()
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [
-            {
-              toolUse: {
-                toolUseId: "focus",
-                name: "focus_train",
-                input: { serviceUid: "invented" },
-              },
-            },
-          ],
-        },
-        stopReason: "tool_use",
-      })
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [{ text: "列車を選択できませんでした。" }],
-        },
-        stopReason: "end_turn",
-      });
-
-    await runViewerAgentRuntime(
-      "列車を見せて",
-      {
-        trains: [train],
-        getPositions: () => [position],
-        getRouteTime: () => 1_100,
-        setRouteTime: vi.fn(),
-        focusTrain,
-        setLayerVisibility: vi.fn(),
-        queryDailyCongestionAnalysis: vi.fn(),
-        queryTrainDelayAnalysis: vi.fn(),
-        maximumRouteTime: 1_800,
-      },
-      converse,
-    );
-
-    expect(focusTrain).not.toHaveBeenCalled();
   });
 
   it("queries the saved daily congestion peak requested by Bedrock", async () => {
@@ -512,9 +336,6 @@ describe("Bedrock viewer agent", () => {
         trains: [train],
         getPositions: () => [position],
         getRouteTime: () => 1_100,
-        setRouteTime: vi.fn(),
-        focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(),
         queryDailyCongestionAnalysis: queryDailyAnalysis,
         queryTrainDelayAnalysis: vi.fn(),
         maximumRouteTime: 1_800,
@@ -578,9 +399,6 @@ describe("Bedrock viewer agent", () => {
         trains: [train],
         getPositions: () => [position],
         getRouteTime: () => 1_100,
-        setRouteTime: vi.fn(),
-        focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(),
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis,
         maximumRouteTime: 1_800,
@@ -593,7 +411,6 @@ describe("Bedrock viewer agent", () => {
   });
 
   it("searches arrivals in a 30 minute window without changing display time", async () => {
-    const setRouteTime = vi.fn();
     const converse = vi
       .fn()
       .mockResolvedValueOnce({
@@ -628,9 +445,6 @@ describe("Bedrock viewer agent", () => {
         trains: [train],
         getPositions: () => [position],
         getRouteTime: () => 1_000,
-        setRouteTime,
-        focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(),
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         maximumRouteTime: 1_800,
@@ -638,7 +452,6 @@ describe("Bedrock viewer agent", () => {
       converse,
     );
 
-    expect(setRouteTime).not.toHaveBeenCalled();
     expect(result).toContain("はるか16号");
     expect(JSON.stringify(converse.mock.calls[1]?.[0])).toContain(
       '"arrivalTimeMinutes":1120',
@@ -646,56 +459,6 @@ describe("Bedrock viewer agent", () => {
     expect(JSON.stringify(converse.mock.calls[1]?.[0])).toContain(
       '"windowMinutes":30',
     );
-  });
-
-  it("changes optional map layers without exposing manual weather", async () => {
-    const setLayerVisibility = vi.fn();
-    const converse = vi
-      .fn()
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [
-            {
-              toolUse: {
-                toolUseId: "layer",
-                name: "set_layer_visibility",
-                input: { layer: "destination_arcs", visible: true },
-              },
-            },
-          ],
-        },
-        stopReason: "tool_use",
-      })
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [{ text: "目的地アーチを表示しました。" }],
-        },
-        stopReason: "end_turn",
-      });
-
-    const result = await runViewerAgentRuntime(
-      "目的地アーチを表示して",
-      {
-        trains: [train],
-        getPositions: () => [position],
-        getRouteTime: () => 1_100,
-        setRouteTime: vi.fn(),
-        focusTrain: vi.fn(),
-        setLayerVisibility,
-        queryDailyCongestionAnalysis: vi.fn(),
-        queryTrainDelayAnalysis: vi.fn(),
-        maximumRouteTime: 1_800,
-      },
-      converse,
-    );
-
-    expect(setLayerVisibility).toHaveBeenCalledWith(
-      "destination_arcs",
-      true,
-    );
-    expect(result).toContain("目的地アーチ");
   });
 
   it("uses the 4:00 JST operating-day boundary for the current service date", () => {
@@ -761,9 +524,6 @@ describe("Bedrock viewer agent", () => {
         trains: [train],
         getPositions: () => [position],
         getRouteTime: () => 600,
-        setRouteTime: vi.fn(),
-        focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(),
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         searchRepresentativeTimetable,
@@ -781,9 +541,8 @@ describe("Bedrock viewer agent", () => {
     });
   });
 
-  it("searches a destination from the browser-selected nearest station and focuses it", async () => {
-    let routeTime = 1_388;
-    const focusTrain = vi.fn(() => true);
+  it("searches a destination without moving or focusing the map", async () => {
+    const routeTime = 1_388;
     const searchDirectRoutes = vi.fn(async () => ({
       originStation: "大阪",
       distanceMeters: 420,
@@ -795,70 +554,30 @@ describe("Bedrock viewer agent", () => {
         arrivalTimeMinutes: 1_425,
       }],
     }));
-    const converse = vi
-      .fn()
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [{
-            toolUse: {
-              toolUseId: "route",
-              name: "search_direct_routes",
-              // モデルが現在時刻を誤っても、ブラウザの表示時刻を検索に使う。
-              input: {
-                destinationStation: "京都",
-                departureTimeMinutes: 833,
-                originStation: "&quot;現在地から最寄り駅&quot;",
-              },
+    const converse = vi.fn().mockResolvedValueOnce({
+      message: {
+        role: "assistant",
+        content: [{
+          toolUse: {
+            toolUseId: "route",
+            name: "search_direct_routes",
+            input: {
+              destinationStation: "京都",
+              departureTimeMinutes: 833,
+              originStation: "&quot;現在地から最寄り駅&quot;",
             },
-          }],
-        },
-        stopReason: "tool_use",
-      })
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [{
-            toolUse: {
-              toolUseId: "time",
-              name: "set_display_time",
-              // 経路検索後の時刻変更要求は、モデルの値にかかわらず無視する。
-              input: { routeTimeMinutes: 833 },
-            },
-          }],
-        },
-        stopReason: "tool_use",
-      })
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [{
-            toolUse: {
-              toolUseId: "focus",
-              name: "focus_train",
-              input: { serviceUid: train.service_uid },
-            },
-          }],
-        },
-        stopReason: "tool_use",
-      })
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [{ text: "最寄りの大阪駅から京都駅までご案内します。" }],
-        },
-        stopReason: "end_turn",
-      });
+          },
+        }],
+      },
+      stopReason: "tool_use",
+    });
 
-    await runViewerAgentRuntime(
+    const result = await runViewerAgentRuntime(
       "京都に行きたい",
       {
         trains: [train],
         getPositions: () => [position],
         getRouteTime: () => routeTime,
-        setRouteTime: (value) => { routeTime = value; },
-        focusTrain,
-        setLayerVisibility: vi.fn(),
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         searchDirectRoutes,
@@ -868,18 +587,15 @@ describe("Bedrock viewer agent", () => {
       converse,
     );
 
-    expect(searchDirectRoutes).toHaveBeenCalledWith({
+    expect(searchDirectRoutes).toHaveBeenCalledWith(expect.objectContaining({
       destinationStation: "京都",
       departureTimeMinutes: 1_388,
       departureDate: "2026-08-14",
       serviceDate: "2026-08-14",
-      transferPace: "standard",
-      rankingPreference: "balanced",
-      maxTransfers: 3,
-    });
+    }));
     expect(routeTime).toBe(1_388);
-    expect(focusTrain).toHaveBeenCalledWith(train.service_uid);
-    expect(converse).toHaveBeenCalledTimes(1);
+    expect(requireRichResponse(result).text).not.toContain("フォーカス");
+    expect(converse).toHaveBeenCalledOnce();
   });
 
   it("formats after-midnight direct-route times without model arithmetic", async () => {
@@ -930,9 +646,6 @@ describe("Bedrock viewer agent", () => {
         getPositions: () => [],
         getRouteTime: () => 1_463,
         getCurrentDate: () => new Date("2026-08-14T00:23:00+09:00"),
-        setRouteTime: vi.fn(),
-        focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(),
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         searchDirectRoutes,
@@ -1008,9 +721,6 @@ describe("Bedrock viewer agent", () => {
         getPositions: () => [],
         getRouteTime: () => 1_463,
         getCurrentDate: () => new Date("2026-08-14T00:23:00+09:00"),
-        setRouteTime: vi.fn(),
-        focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(),
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         searchDirectRoutes,
@@ -1075,9 +785,6 @@ describe("Bedrock viewer agent", () => {
         getTrains: () => [],
         getPositions: () => [],
         getRouteTime: () => 742,
-        setRouteTime: vi.fn(),
-        focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(),
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         searchDirectRoutes,
@@ -1161,9 +868,6 @@ describe("Bedrock viewer agent", () => {
         trains: [train],
         getPositions: () => [],
         getRouteTime: () => 600,
-        setRouteTime: vi.fn(),
-        focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(),
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         searchDirectRoutes,
@@ -1205,9 +909,6 @@ describe("Bedrock viewer agent", () => {
         trains: [train],
         getPositions: () => [],
         getRouteTime: () => 420,
-        setRouteTime: vi.fn(),
-        focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(),
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         getPreviousJourneyPlan: () => ({
@@ -1263,7 +964,7 @@ describe("Bedrock viewer agent", () => {
       "新大阪から岡山までに停車する駅は？",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 480,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
         queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
         getPreviousJourneyPlan: () => plan, maximumRouteTime: 1_800,
       },
@@ -1288,7 +989,7 @@ describe("Bedrock viewer agent", () => {
     };
     const dependencies = {
       trains: [train], getPositions: () => [], getRouteTime: () => 480,
-      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
       getPreviousJourneyPlan: () => plan,
       findJourneyLegAlternatives: vi.fn(async () => [alternative]),
@@ -1377,9 +1078,6 @@ describe("Bedrock viewer agent", () => {
         trains: [train],
         getPositions: () => [],
         getRouteTime: () => 1_070,
-        setRouteTime: vi.fn(),
-        focusTrain: vi.fn(() => true),
-        setLayerVisibility: vi.fn(),
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         searchDirectRoutes,
@@ -1402,7 +1100,6 @@ describe("Bedrock viewer agent", () => {
     const converse = previousJourneyToolConverse({
       action: "revise_constraints", excludedServiceTypes: ["新幹線"],
     });
-    const focusTrain = vi.fn(() => true);
     const searchDirectRoutes = vi.fn(async () => ({
       serviceDate: "2026-08-15",
       departureDate: "2026-08-15",
@@ -1444,9 +1141,6 @@ describe("Bedrock viewer agent", () => {
         trains: [train],
         getPositions: () => [],
         getRouteTime: () => 900,
-        setRouteTime: vi.fn(),
-        focusTrain,
-        setLayerVisibility: vi.fn(),
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         searchDirectRoutes,
@@ -1507,7 +1201,7 @@ describe("Bedrock viewer agent", () => {
     expect(rich.journeyPlan.journeys[0]?.legs).not.toContainEqual(
       expect.objectContaining({ serviceType: "新幹線" }),
     );
-    expect(focusTrain).toHaveBeenCalledWith("rapid-takatsuki-yasu");
+    expect(rich.text).not.toContain("フォーカス");
     expect(converse).toHaveBeenCalledOnce();
   });
 
@@ -1540,9 +1234,6 @@ describe("Bedrock viewer agent", () => {
         trains: [train],
         getPositions: () => [],
         getRouteTime: () => 600,
-        setRouteTime: vi.fn(),
-        focusTrain: vi.fn(() => true),
-        setLayerVisibility: vi.fn(),
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         searchDirectRoutes,
@@ -1637,9 +1328,6 @@ describe("Bedrock viewer agent", () => {
         trains: [train, yakumoTrain],
         getPositions: () => [],
         getRouteTime: () => 470,
-        setRouteTime: vi.fn(),
-        focusTrain: vi.fn(() => true),
-        setLayerVisibility: vi.fn(),
         queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         searchDirectRoutes,
@@ -1707,8 +1395,8 @@ describe("Bedrock viewer agent", () => {
       {
         trains: [izumoTrain], getPositions: () => [], getRouteTime: () => 1_200,
         getCurrentDate: () => new Date("2026-08-16T21:00:00+09:00"),
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
         searchAccommodations: vi.fn(async () => ({ accommodations: [{
           name: "出雲の宿", checkInDate: "2026-08-17", checkOutDate: "2026-08-18",
@@ -1800,8 +1488,8 @@ describe("Bedrock viewer agent", () => {
       {
         trains: [izumoTrain], getPositions: () => [], getRouteTime: () => 1_200,
         getCurrentDate: () => new Date("2026-08-30T13:00:00+09:00"),
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
         searchAccommodations: vi.fn(async () => ({ accommodations: [] })),
         searchPlaceMedia,
@@ -1865,8 +1553,8 @@ describe("Bedrock viewer agent", () => {
       "8月28日に宮島へ日帰りで行きたい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
         searchAccommodations,
         getUserProfile: () => ({
@@ -1937,7 +1625,7 @@ describe("Bedrock viewer agent", () => {
       "8月31日に奈良公園へ 朝9:00に出て 夜の21:00には家についていたい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 900,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
         queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
         searchDirectRoutes,
         getUserProfile: () => ({
@@ -1980,8 +1668,8 @@ describe("Bedrock viewer agent", () => {
       "やっぱり8月28日の日帰りに変更して",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
         searchAccommodations, getTripPlan: () => tripPlanWithRailReturn(),
         getCurrentDate: () => new Date("2026-08-27T12:00:00+09:00"),
@@ -2035,8 +1723,8 @@ describe("Bedrock viewer agent", () => {
       "明日から宮島へ1泊したい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(),
         searchAccommodations: vi.fn(async () => ({ accommodations: [] })),
         maximumRouteTime: 1_800,
@@ -2066,8 +1754,8 @@ describe("Bedrock viewer agent", () => {
       "8月28日から宮島へ3泊したい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
         searchAccommodations: vi.fn(async () => ({ accommodations: [] })),
         getCurrentDate: () => new Date("2026-08-27T12:00:00+09:00"),
@@ -2114,8 +1802,8 @@ describe("Bedrock viewer agent", () => {
       {
         trains: [izumoTrain], getPositions: () => [], getRouteTime: () => 1_200,
         getCurrentDate: () => new Date("2026-08-16T21:00:00+09:00"),
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes, searchAccommodations,
         maximumRouteTime: 1_800,
       },
@@ -2163,8 +1851,8 @@ describe("Bedrock viewer agent", () => {
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
         getCurrentDate: () => new Date("2026-08-27T14:00:00+09:00"),
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
         getUserProfile: () => ({
           version: 2,
@@ -2248,8 +1936,8 @@ describe("Bedrock viewer agent", () => {
       "出雲大社へ旅行したい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchPlaceMedia, maximumRouteTime: 1_800,
       },
       converse,
@@ -2327,7 +2015,7 @@ describe("Bedrock viewer agent", () => {
 
     const result = await runViewerAgentRuntime("リラックスした旅行がしたい", {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
       searchWeb,
       getUserProfile: () => ({
@@ -2397,7 +2085,7 @@ describe("Bedrock viewer agent", () => {
 
     await runViewerAgentRuntime("決めていないです", {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
       searchWeb,
       getTripContext: () => ({ planningStage: "planning", destinationWish: "海辺" }),
@@ -2491,7 +2179,7 @@ describe("Bedrock viewer agent", () => {
       "リラックスできる場所に行きたい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
         queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
         searchPlaceMedia, maximumRouteTime: 1_800,
       },
@@ -2534,7 +2222,7 @@ describe("Bedrock viewer agent", () => {
 
     const result = await runViewerAgentRuntime("リラックスできる観光したい", {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
       searchWeb,
       getUserProfile: () => ({
@@ -2586,7 +2274,7 @@ describe("Bedrock viewer agent", () => {
 
     const result = await runViewerAgentRuntime("リラックスできる観光したい", {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
       searchWeb, maximumRouteTime: 1_800,
     }, converse);
@@ -2621,7 +2309,7 @@ describe("Bedrock viewer agent", () => {
     ].join("\n"), {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
       getCurrentDate: () => new Date("2026-08-30T15:00:00+09:00"),
-      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
       maximumRouteTime: 1_800,
     }, converse);
@@ -2683,7 +2371,7 @@ describe("Bedrock viewer agent", () => {
     ].join("\n"), {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
       getCurrentDate: () => new Date("2026-08-30T15:00:00+09:00"),
-      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
       maximumRouteTime: 1_800,
     }, converse);
@@ -2750,7 +2438,7 @@ describe("Bedrock viewer agent", () => {
     ].join("\n"), {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
       getCurrentDate: () => new Date("2026-08-30T15:00:00+09:00"),
-      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
       searchAccommodations, maximumRouteTime: 1_800,
     }, converse);
@@ -2820,8 +2508,8 @@ describe("Bedrock viewer agent", () => {
       "出雲大社へ旅行したい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes, searchPlaceMedia,
         maximumRouteTime: 1_800,
       },
@@ -2969,7 +2657,7 @@ describe("Bedrock viewer agent", () => {
 
     const result = await runViewerAgentRuntime("出雲大社に行きたい", {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
       searchPlaceMedia, searchWeb, readWebPages,
       getUserProfile: () => ({
@@ -3059,8 +2747,8 @@ describe("Bedrock viewer agent", () => {
       "出雲大社へ旅行したい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchAccommodations, searchPlaceMedia,
         maximumRouteTime: 1_800,
       },
@@ -3105,8 +2793,8 @@ describe("Bedrock viewer agent", () => {
       "駅からレンタカーを借りたい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), maximumRouteTime: 1_800,
         getTripPlan: () => ({
           version: 1, id: "trip", title: "出雲の旅", destination: "出雲",
@@ -3168,7 +2856,7 @@ describe("Bedrock viewer agent", () => {
       "出雲大社を旅程へ追加したい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
         queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
         searchDirectRoutes, maximumRouteTime: 1_800,
         getTripPlan: () => ({
@@ -3223,8 +2911,8 @@ describe("Bedrock viewer agent", () => {
       "倉敷から摂津富田までの帰りを18時まで後ろ倒しにしたい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
         getTripPlan: () => tripPlanWithRailReturn(),
         maximumRouteTime: 1_800,
@@ -3267,8 +2955,8 @@ describe("Bedrock viewer agent", () => {
       "夜の21:00には家についていたいです",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
         getTripPlan: () => tripPlanWithRailReturn(),
         maximumRouteTime: 1_800,
@@ -3310,8 +2998,8 @@ describe("Bedrock viewer agent", () => {
       "帰りの途中で岡山に寄りたい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
         getTripPlan: () => tripPlanWithRailReturn(),
         maximumRouteTime: 1_800,
@@ -3352,8 +3040,8 @@ describe("Bedrock viewer agent", () => {
       "旅行ではいつも早朝を避けたい",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), maximumRouteTime: 1_800,
         rememberTravelPreference: remember,
         updateConversationSession: update,
@@ -3375,8 +3063,8 @@ describe("Bedrock viewer agent", () => {
       "現在の旅程を教えて",
       {
         trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-        setRouteTime: vi.fn(), focusTrain: vi.fn(),
-        setLayerVisibility: vi.fn(), queryDailyCongestionAnalysis: vi.fn(),
+
+        queryDailyCongestionAnalysis: vi.fn(),
         queryTrainDelayAnalysis: vi.fn(), maximumRouteTime: 1_800,
         getUserProfile: () => ({
           version: 2,
@@ -3460,7 +3148,7 @@ describe("Bedrock viewer agent", () => {
 
     const result = await runViewerAgentRuntime("酒蔵などはない？", {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
-      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
       getTripPlan: () => ({ ...tripPlanWithRailReturn(), destination: "出雲大社" }),
       searchWeb, readWebPages, searchPlaceMedia, maximumRouteTime: 1_800,

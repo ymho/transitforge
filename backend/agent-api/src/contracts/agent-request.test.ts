@@ -125,6 +125,9 @@ describe("Agent API request contract", () => {
     expect(definitions).toHaveLength(allowedToolNames.size);
     expect(definitions.some(({ name }) => name === "schedule_trip_recheck"))
       .toBe(true);
+    expect(allowedToolNames.has("set_display_time")).toBe(false);
+    expect(allowedToolNames.has("focus_train")).toBe(false);
+    expect(allowedToolNames.has("set_layer_visibility")).toBe(false);
     expect(validatedToolDefinitions({ toolDefinitions: definitions }))
       .toHaveLength(allowedToolNames.size);
   });

@@ -219,7 +219,7 @@ RuntimeはProvider固有形式を扱わず 既定で反復4回 model call 5回 T
 
 導入中は機能単位の`AgentRuntimeRolloutRouter`で比較した。現在の本番モデル実行は
 `MultiStepAgentRuntime`へ一本化し Bedrock AdapterはProvider DTOとTool Adapterを組成する。
-Toolが提案したViewer Actionも共通Runtime内でEvidence scopeを検証してから適用する。
+検索結果に結び付くViewer Actionは共通Runtime内でEvidence scopeを検証してから適用する。
 機能固有の`finalResponsePolicy`は 未検証の文章回答を完了扱いにせず Tool実行へ再計画させる。
 PolicyはDomain計算を代替せず 必要なEvidenceが揃ったかだけを判定する。
 判断記録は[ADR 0038](../decisions/0038-use-one-production-agent-runtime.md)を参照する。
@@ -235,14 +235,14 @@ Tool順序 ClaimのGrounding Viewer Actionのtask scopeとTraceを同じテス�
 - Executor: `frontend/src/usecases/viewer/viewer-action-executor.ts`
 - 判断記録: [ADR 0024](../decisions/0024-restrict-viewer-actions-to-task-scope.md)
 
-Agentが提案できる操作を`focus_train` `highlight_route` `set_display_time`
-`compare_journeys` `show_evidence`などの列挙型へ限定する。列車 経路 Evidenceを対象にする
-操作は同じ`executionId`のTool結果からApplicationがtask scopeへ登録したEntityだけを許可する。
-時刻は生成済みダイヤの最大時刻以内とし 未知Action 余分なfield 別taskのEntityをPort実行前に拒否する。
+Viewer Actionは列挙型として検証し、経路とEvidenceを対象にする操作は同じ`executionId`の
+Tool結果からApplicationがtask scopeへ登録したEntityだけを許可する。現在Agentへ公開するのは
+検索結果に結び付く`highlight_route` `compare_journeys` `show_evidence`であり、直接表示を変える
+`focus_train` `set_display_time` `set_layer_visibility`は公開しない。
 
-ExecutorはDOMやMapboxを直接参照せず表示用Portだけを呼び出す。操作は可逆な表示設定または
-表示だけの効果に限定し 提案 適用 拒否をTraceへ記録する。従来`main.ts`にあった時刻Actionの
-解釈と実行もExecutorへ移し Viewer起動処理にはPortの接続だけを残す。
+ExecutorはDOMやMapboxを直接参照せず表示用Portだけを呼び出す。汎用契約は検索結果表示と
+既存の互換性検証のため維持し 未知Action 余分なfield 別taskのEntityをPort実行前に拒否する。
+手動の表示時刻 列車選択 レイヤー切替はViewer UIが所有する。
 
 ### Agent Evaluation
 
