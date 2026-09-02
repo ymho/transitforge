@@ -1263,8 +1263,8 @@ if (!token) {
                 },
                 maximumRouteTime,
               },
-              async (messages, tools) => {
-                const result = await invokeBedrockAgent(messages, fetch, tools);
+              async (messages, tools, modelClass) => {
+                const result = await invokeBedrockAgent(messages, fetch, tools, modelClass);
                 onResponseMetadata?.(result.metadata);
                 if (result.metadata.requestId) {
                   runtimeRequestIds.push(result.metadata.requestId);

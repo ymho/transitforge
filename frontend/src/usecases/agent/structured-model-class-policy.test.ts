@@ -20,6 +20,16 @@ describe("structuredModelClassPolicy", () => {
     })).toBe("decision");
   });
 
+  it("treats an empty TripContext as destination discovery", () => {
+    expect(structuredModelClassPolicy({
+      request: {
+        executionId: "1", feature: "concierge", userRequest: "リラックスできる観光したい",
+        context: { travelProfile: { pace: 0.2 }, tripContext: {} },
+      },
+      phase: "initial",
+    })).toBe("decision");
+  });
+
   it("uses decision class for structured destination inspiration", () => {
     expect(structuredModelClassPolicy({
       request: {

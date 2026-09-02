@@ -389,7 +389,9 @@ function liveDecisionCases(): LiveDecisionCase[] {
       expectedTool: "search_web",
       constraints: {},
       requiredHardConstraintKeys: [],
-      context: { featureContext, travelProfile: profile },
+      // Viewerは会話開始直後に空のTripContextを渡すことがある。
+      // 空objectでも目的地未定の探索として扱えることを本番モデルで測る。
+      context: { featureContext, travelProfile: profile, tripContext: {} },
       availableTools: ["search_web", "search_place_media", "ask_follow_up"],
     }),
     liveCase({

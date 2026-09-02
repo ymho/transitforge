@@ -1438,9 +1438,17 @@ export class ConverseModelProvider implements AgentModelProvider {
     let textIndex = 0;
     const message = {
       ...convertedMessage,
-      content: convertedMessage.content.map((content) => content.type === "text"
-        ? { ...content, text: decision.textBlocks[textIndex++] ?? "" }
-        : content),
+      // Decision Summaryだけだったtext blockは、除去後に空文字となる。
+      // 空のtext blockはBedrock Converseの入力として不正なので、次のreplanへ残さない。
+      content: convertedMessage.content.reduce<AgentModelContent[]>((blocks, content) => {
+        if (content.type !== "text") {
+          blocks.push(content);
+          return blocks;
+        }
+        const text = decision.textBlocks[textIndex++] ?? "";
+        if (text.length > 0) blocks.push({ ...content, text });
+        return blocks;
+      }, []),
     };
     return {
       message,
