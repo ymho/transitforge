@@ -63,6 +63,18 @@ describe("AI guide trip conversation state", () => {
       stayNights: 2,
     });
   });
+
+  it("keeps a model-interpreted distance preference across ordinary responses", () => {
+    const tripContext = {
+      planningStage: "inspiration" as const,
+      destinationWish: "城崎温泉",
+      relativeDistancePreference: "farther" as const,
+    };
+    expect(nextTripConversationState(undefined, {
+      text: "もう少し遠い候補を探しました",
+      tripContext,
+    })).toEqual({ guidance: undefined, tripContext });
+  });
 });
 
 describe("AI guide journey preferences", () => {

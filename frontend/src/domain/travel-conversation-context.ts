@@ -152,6 +152,9 @@ function embeddedTripContext(prompt: string): TripContext {
       ...(typeof input.maximumTravelMinutes === "number" || input.maximumTravelMinutes === null
         ? { maximumTravelMinutes: input.maximumTravelMinutes as number | null }
         : {}),
+      ...(input.relativeDistancePreference === "nearer" || input.relativeDistancePreference === "farther"
+        ? { relativeDistancePreference: input.relativeDistancePreference }
+        : {}),
       ...(typeof input.carAvailable === "boolean"
         ? { carAvailable: input.carAvailable }
         : {}),

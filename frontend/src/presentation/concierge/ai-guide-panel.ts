@@ -392,9 +392,14 @@ export function configureAiGuidePanel(
         activeConversation = typeof entry.response !== "string" && "conversation" in entry.response
           ? entry.response.conversation
           : undefined;
-        if (activeConversation) activeTripContext = activeConversation.tripContext;
+        if (typeof entry.response !== "string" && "tripContext" in entry.response) {
+          activeTripContext = entry.response.tripContext;
+        } else if (activeConversation) activeTripContext = activeConversation.tripContext;
         if (typeof entry.response !== "string" && "travelPlan" in entry.response) {
-          activeTripContext = tripContextFromTravelPlan(entry.response.travelPlan);
+          activeTripContext = {
+            ...activeTripContext,
+            ...tripContextFromTravelPlan(entry.response.travelPlan),
+          };
         }
       }
       setContextChoices(activeConversation);
@@ -426,15 +431,25 @@ export function nextTripConversationState(
   const guidance = typeof response === "string" || !("conversation" in response)
     ? undefined
     : response.conversation;
+  const responseTripContext = typeof response === "string" || !("tripContext" in response)
+    ? undefined
+    : response.tripContext;
   if (typeof response !== "string" && "travelPlan" in response) {
     return {
-      guidance,
-      tripContext: tripContextFromTravelPlan(response.travelPlan),
+      guidance: guidance && responseTripContext
+        ? { ...guidance, tripContext: responseTripContext }
+        : guidance,
+      tripContext: {
+        ...responseTripContext,
+        ...tripContextFromTravelPlan(response.travelPlan),
+      },
     };
   }
   return {
-    guidance,
-    tripContext: guidance?.tripContext ?? currentTripContext,
+    guidance: guidance && responseTripContext
+      ? { ...guidance, tripContext: responseTripContext }
+      : guidance,
+    tripContext: responseTripContext ?? guidance?.tripContext ?? currentTripContext,
   };
 }
 
@@ -580,6 +595,8 @@ function resolveAssistantMessage(
     if (response.external.places?.status === "available" && response.external.places.data) onPlaces?.(response.external.places.data.places);
     if (response.external.restaurants?.status === "available" && response.external.restaurants.data) onRestaurants?.(response.external.restaurants.data.restaurants);
     if (response.external.groundAccess?.status === "available" && response.external.groundAccess.data) onGroundAccess?.(response.external.groundAccess.data);
+  } else if ("tripContext" in response) {
+    item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response.text)));
   } else {
     item.classList.add("ai-guide-message-journey");
     item.replaceChildren();

@@ -11,6 +11,7 @@ import type {
 import {
   currentServiceDateInJapan,
   runViewerAgentRuntime,
+  tripContextFromDecisionTrace,
   validateViewerAgentToolPreconditions,
   viewerAgentToolDescriptors,
   type BedrockAgentConverse,
@@ -39,6 +40,38 @@ const position: TrainPosition = {
 };
 
 describe("Bedrock viewer agent", () => {
+  it("Bedrockが解釈した相対距離の希望だけをTripContextへ反映する", () => {
+    const update = tripContextFromDecisionTrace(
+      { planningStage: "inspiration", destinationWish: "城崎温泉" },
+      {
+        executionId: "decision-distance",
+        droppedEventCount: 0,
+        events: [{
+          type: "decision_recorded",
+          sequence: 1,
+          occurredAt: "2026-09-03T00:00:00.000Z",
+          interpretedGoal: "直前候補より遠い旅行先を探す",
+          hardConstraints: { byteLength: 2, truncated: false, value: [] },
+          softPreferences: {
+            byteLength: 80,
+            truncated: false,
+            value: [{ key: "relative_distance", value: "farther", source: "agent_interpretation" }],
+          },
+          selectedAction: "use_tool",
+          selectedTool: "search_web",
+          unresolvedFacts: [],
+          reasonCodes: ["preference_considered"],
+        }],
+      },
+    );
+
+    expect(update).toEqual({
+      planningStage: "inspiration",
+      destinationWish: "城崎温泉",
+      relativeDistancePreference: "farther",
+    });
+  });
+
   it("exposes the production capability contract for Live Eval", () => {
     const descriptors = viewerAgentToolDescriptors([
       "search_place_media",
@@ -68,6 +101,8 @@ describe("Bedrock viewer agent", () => {
     expect(descriptors[3]?.inputSchema.required).toEqual(["destination", "date", "stayNights"]);
     expect(descriptors[4]?.description).toContain("リフレッシュしたい");
     expect(descriptors[4]?.description).toContain("登録済みの場所");
+    expect(descriptors[4]?.description).toContain("relative_distance=farther");
+    expect(descriptors[1]?.description).toContain("午前 移動 到着後 帰路");
   });
 
   it("does not expose direct Viewer operation Tools", () => {
@@ -116,6 +151,17 @@ describe("Bedrock viewer agent", () => {
     expect(descriptor?.inputSchema.properties.expectedInput).toMatchObject({
       enum: ["stay-length"],
     });
+  });
+
+  it("does not expose itinerary execution tools until their hard date conditions are known", () => {
+    expect(viewerAgentToolDescriptors(
+      ["ask_follow_up", "plan_day_trip", "search_accommodations"],
+      { tripContext: { planningStage: "planning", destinationWish: "出雲大社" } },
+    ).map(({ name }) => name)).toEqual(["ask_follow_up"]);
+    expect(viewerAgentToolDescriptors(
+      ["ask_follow_up", "plan_day_trip", "search_accommodations"],
+      { tripContext: { startDate: "2026-09-05", stayNights: 0 } },
+    ).map(({ name }) => name)).toEqual(["ask_follow_up", "plan_day_trip"]);
   });
 
   it("keeps an unstarted consultation in inspiration confirmation", () => {
@@ -1532,7 +1578,7 @@ describe("Bedrock viewer agent", () => {
     const searchAccommodations = vi.fn();
     const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
       expect(tools?.some(({ name }) => name === "plan_day_trip")).toBe(true);
-      expect(tools?.some(({ name }) => name === "search_accommodations")).toBe(true);
+      expect(tools?.some(({ name }) => name === "search_accommodations")).toBe(false);
       expect(tools?.some(({ name }) => name === "search_weather_forecast")).toBe(false);
       expect(tools?.find(({ name }) => name === "plan_day_trip")?.inputSchema)
         .toMatchObject({ required: ["destination", "date", "stayNights"] });
@@ -2764,7 +2810,7 @@ describe("Bedrock viewer agent", () => {
     }));
     const converse = vi.fn<BedrockAgentConverse>()
       .mockImplementationOnce(async (_messages, tools) => {
-      expect(tools?.some(({ name }) => name === "search_accommodations")).toBe(true);
+      expect(tools?.some(({ name }) => name === "search_accommodations")).toBe(false);
       return {
         message: { role: "assistant", content: [{ toolUse: {
           toolUseId: "place", name: "search_place_media",

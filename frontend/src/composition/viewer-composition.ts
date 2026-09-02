@@ -1209,6 +1209,8 @@ if (!token) {
                 conciergeInstruction: currentConciergeInstruction(),
                 getConversationContext: () => currentAgentConversationContext(prompt),
                 getTripContext: () => conversation?.guidance.tripContext,
+                getVerifiedPlaces: () => pendingMapCandidates.flatMap((candidate) =>
+                  candidate.kind === "place" ? [candidate.value] : []),
                 rememberTravelPreference: (statement, confidence) =>
                   rememberTravelPreference(
                     localStorage,
