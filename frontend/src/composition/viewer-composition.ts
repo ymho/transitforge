@@ -64,6 +64,7 @@ import {
 import type { WeatherMode } from "../domain/weather";
 import { dominantLineColorsByPathId } from "../domain/path-line-colors";
 import { currentRouteTime } from "../domain/playback";
+import { TrainFocusReturnContextSession } from "../domain/train-focus-return-context";
 import { congestionAnalysisForAgent } from "../domain/congestion-analysis";
 import { delayAnalysisForAgent } from "../domain/delay-analysis";
 import {
@@ -858,6 +859,7 @@ if (!token) {
             "circle-stroke-opacity": 0,
           },
         });
+        const trainFocusReturnContext = new TrainFocusReturnContextSession();
         const selection = configureTrainSelection(
           map,
           trainIndex.trains,
@@ -873,6 +875,10 @@ if (!token) {
             stops: selectedTrainStops,
             coupledTabs: trainDetailTabs,
             onFocus: (serviceUid) => {
+              trainFocusReturnContext.start(
+                contextWorkspaceController.current(),
+                mobileContextNavigation.isOpen(),
+              );
               const focused = contextWorkspaceController.show("journey-details", {
                 kind: "journey",
                 id: serviceUid,
@@ -883,12 +889,15 @@ if (!token) {
               }
             },
             onEndFocus: () => {
-              if (mobileChatShell.matches && mobileContextNavigation.isOpen()) {
+              const returnContext = trainFocusReturnContext.end();
+              if (!returnContext) return;
+              const { workspace, mobileContextOpen } = returnContext;
+              contextWorkspaceController.show(workspace.view, workspace.entity);
+              if (!mobileChatShell.matches) return;
+              if (mobileContextOpen) {
+                mobileContextNavigation.open(workspace.view);
+              } else if (mobileContextNavigation.isOpen()) {
                 mobileContextNavigation.close();
-                return;
-              }
-              if (contextWorkspaceController.current().view === "journey-details") {
-                contextWorkspaceController.show("map");
               }
             },
           },
