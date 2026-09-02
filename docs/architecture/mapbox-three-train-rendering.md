@@ -112,3 +112,10 @@ flowchart LR
   データ反映に専念する。
 - 動作確認: `npm run dev` で起動し、列車が表示される場所をズーム・回転・再生して確認する。
 - 自動確認: `npm test` と `npm run build`
+
+## Mapbox styleと会話履歴の復元
+
+会話履歴から復元されるスポット候補は Mapbox styleの読み込みより先に利用可能になることがある。
+スポット表示Adapterは候補を端末内で保持し、`style.load`後にSourceとLayerを追加する。
+読み込み前に複数の候補集合を受け取った場合は、最後に受け取った集合だけを描画する。
+これによりページ再読み込み時もstyle未準備のMapbox APIを呼び出さない。
