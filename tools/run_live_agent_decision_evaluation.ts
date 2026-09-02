@@ -269,6 +269,29 @@ function liveDecisionCases(): LiveDecisionCase[] {
       availableTools: ["search_place_media", "ask_follow_up", "search_accommodations", "plan_day_trip"],
     }),
     liveCase({
+      id: "feedback-empty-place-result-bounded-answer",
+      name: "候補検索が空でも案内不能にせず確認範囲と次の一手を返す",
+      userRequest: "静かに過ごせる観光先を探したい",
+      tags: ["smoke", "ambiguous-request", "feedback-regression"],
+      expectedTool: "search_place_media",
+      constraints: {},
+      requiredHardConstraintKeys: [],
+      context: {
+        featureContext,
+        travelProfile: profile,
+        tripContext: { planningStage: "inspiration" },
+      },
+      availableTools: ["search_place_media"],
+      toolOutcomes: {
+        search_place_media: {
+          schemaVersion: "live-eval-tool-outcome-v1",
+          matchCount: 0,
+          limitation: "検証可能な一致地点がありません",
+        },
+      },
+      terminalTools: [],
+    }),
+    liveCase({
       id: "planning-missing-date",
       name: "旅程化を希望した後に不足する出発日だけを尋ねる",
       userRequest: "旅程を考えたい",

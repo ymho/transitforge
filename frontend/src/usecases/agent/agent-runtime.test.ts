@@ -284,6 +284,76 @@ describe("MultiStepAgentRuntime", () => {
     }));
   });
 
+  it("does not execute the same Tool input twice and uses the next call for a final answer", async () => {
+    const executionOrder: string[] = [];
+    const { tools, toolExecutor } = toolSetup(executionOrder);
+    const requests: AgentModelRequest[] = [];
+    const duplicateCall = { value: "静かな温泉" };
+    const runtime = new MultiStepAgentRuntime({
+      model: sequenceModel([
+        toolCallResponse([{ id: "search-1", name: "first_tool", input: duplicateCall }]),
+        toolCallResponse([{
+          id: "search-duplicate",
+          name: "first_tool",
+          input: { value: "静かな温泉" },
+        }]),
+        textResponse("確認できた候補を案内します"),
+      ], requests),
+      tools,
+      toolExecutor,
+      limits: { maxIterations: 5, maxModelCalls: 6 },
+    });
+
+    const output = await runtime.run(request("静かな温泉を探して"));
+
+    expect(output.status).toBe("completed");
+    expect(output.response).toBe("確認できた候補を案内します");
+    expect(executionOrder).toEqual(["first_tool"]);
+    expect(requests).toHaveLength(3);
+    expect(requests[2]?.tools).toEqual([]);
+    expect(requests[2]?.messages.at(-1)).toMatchObject({
+      role: "user",
+      content: expect.arrayContaining([
+        { type: "text", text: expect.stringContaining("最終回答フェーズ") },
+      ]),
+    });
+    expect(output.trace.events).toContainEqual(expect.objectContaining({
+      type: "tool_completed",
+      toolCallId: "search-duplicate",
+      outcome: "error",
+      errorCode: "invalid_input",
+      retryable: false,
+    }));
+    expect(output.trace.events).toContainEqual(expect.objectContaining({
+      type: "replan_decided",
+      reason: "同一入力のTool再実行を止めて確認済み結果から最終回答する",
+    }));
+  });
+
+  it("reserves the last iteration for an evidence-bounded final answer", async () => {
+    const executionOrder: string[] = [];
+    const { tools, toolExecutor } = toolSetup(executionOrder);
+    const requests: AgentModelRequest[] = [];
+    const runtime = new MultiStepAgentRuntime({
+      model: sequenceModel([
+        toolCallResponse([{ id: "search-1", name: "first_tool", input: { value: "候補" } }]),
+        toolCallResponse([{ id: "search-2", name: "second_tool", input: { value: "詳細" } }]),
+        textResponse("確認できた範囲と不足情報を案内します"),
+      ], requests),
+      tools,
+      toolExecutor,
+      limits: { maxIterations: 3, maxModelCalls: 4 },
+    });
+
+    const output = await runtime.run(request("候補の詳細を調べて"));
+
+    expect(output.status).toBe("completed");
+    expect(output.response).toBe("確認できた範囲と不足情報を案内します");
+    expect(executionOrder).toEqual(["first_tool", "second_tool"]);
+    expect(requests).toHaveLength(3);
+    expect(requests[2]?.tools).toEqual([]);
+  });
+
   it("bounds iterations model calls and collected evidence", async () => {
     const { tools, toolExecutor } = toolSetup([]);
     const model = sequenceModel([
