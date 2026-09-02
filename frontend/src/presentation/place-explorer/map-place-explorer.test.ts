@@ -82,7 +82,11 @@ describe("map place card models", () => {
 
   it("uses an image only when hotlinking is explicitly allowed", () => {
     const image = { url: "https://example.com/image.jpg", attribution: "Example", hotlinkAllowed: true as const };
-    expect(mapPlaceCardModels([place({ image })])[0]?.image).toEqual({ url: image.url, attribution: image.attribution });
+    expect(mapPlaceCardModels([place({ image })])[0]?.image).toEqual({
+      url: image.url,
+      attribution: image.attribution,
+      sourcePageUrl: "https://example.com/place-1",
+    });
     expect(mapPlaceCardModels([place({ image: { ...image, hotlinkAllowed: "unknown" } })])[0]?.image).toBeUndefined();
   });
 
@@ -104,7 +108,7 @@ describe("map place card models", () => {
 
   it("keeps multiple licensed images and researched editorial sections", () => {
     const images = [
-      { url: "https://example.com/1.jpg", attribution: "作者1", hotlinkAllowed: true as const },
+      { url: "https://example.com/1.jpg", attribution: "作者1", descriptionUrl: "https://photos.example.com/1", license: "CC BY-SA 4.0", hotlinkAllowed: true as const },
       { url: "https://example.com/2.jpg", attribution: "作者2", hotlinkAllowed: true as const },
       { url: "https://example.com/3.jpg", attribution: "不明", hotlinkAllowed: "unknown" as const },
     ];
@@ -122,8 +126,8 @@ describe("map place card models", () => {
     })])[0];
 
     expect(model?.images).toEqual([
-      { url: images[0].url, attribution: "作者1" },
-      { url: images[1].url, attribution: "作者2" },
+      { url: images[0].url, attribution: "作者1", sourcePageUrl: "https://photos.example.com/1", license: "CC BY-SA 4.0" },
+      { url: images[1].url, attribution: "作者2", sourcePageUrl: "https://example.com/place-1" },
     ]);
     expect(model?.reviewLabel).toBe("★ 4.4（321件）");
     expect(model?.detail?.highlights).toEqual(["展望台", "石造灯台"]);
