@@ -13,6 +13,8 @@ export interface DisplayModeElements {
   toggle: HTMLButtonElement;
   realtimeModeButtons?: HTMLButtonElement[];
   dateTimeModeButtons?: HTMLButtonElement[];
+  simulationOnlyControls?: HTMLElement[];
+  realtimeOnlyControls?: HTMLElement[];
 }
 
 export function renderDisplayMode(
@@ -31,6 +33,14 @@ export function renderDisplayMode(
     if (display) display.ariaExpanded = "false";
   }
   elements.currentTimeButton.hidden = digitalTwinMode;
+  for (const control of elements.simulationOnlyControls ?? []) {
+    control.hidden = digitalTwinMode;
+    control.setAttribute("aria-hidden", String(digitalTwinMode));
+  }
+  for (const control of elements.realtimeOnlyControls ?? []) {
+    control.hidden = !digitalTwinMode;
+    control.setAttribute("aria-hidden", String(!digitalTwinMode));
+  }
   elements.toggle.disabled = !realtimeAvailable;
   elements.toggle.ariaPressed = String(digitalTwinMode);
   for (const button of elements.realtimeModeButtons ?? []) {
