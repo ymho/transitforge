@@ -18,9 +18,12 @@ export function createVerifiedPlaceLayer(
   map: mapboxgl.Map,
   onSelected: (place: PlaceMedia) => void,
 ): VerifiedPlaceLayerController {
+  let visiblePlaces: PlaceMedia[] = [];
   let placesById = new Map<string, PlaceMedia>();
   let selectedId: string | undefined;
   let handlersAttached = false;
+  let renderRequested = false;
+  let fitRequested = false;
 
   const ensureLayer = () => {
     if (!map.getSource(sourceId)) {
@@ -64,12 +67,40 @@ export function createVerifiedPlaceLayer(
     });
   };
 
+  const render = () => {
+    if (!renderRequested || !map.isStyleLoaded()) return;
+    ensureLayer();
+    setBasemapLandmarksVisible(map, visiblePlaces.length === 0);
+    (map.getSource(sourceId) as mapboxgl.GeoJSONSource).setData(featureCollection(visiblePlaces));
+    if (selectedId) {
+      map.setFeatureState({ source: sourceId, id: selectedId }, { selected: true });
+    }
+    if (!fitRequested || visiblePlaces.length === 0) return;
+    fitRequested = false;
+    const first = visiblePlaces[0]!;
+    const bounds = visiblePlaces.reduce(
+      (current, place) => current.extend([place.longitude!, place.latitude!]),
+      new mapboxgl.LngLatBounds([first.longitude!, first.latitude!], [first.longitude!, first.latitude!]),
+    );
+    map.fitBounds(bounds, {
+      padding: 80,
+      maxZoom: 13,
+      pitch: placeCameraPitch,
+      bearing: placeCameraBearing,
+      duration: 700,
+    });
+  };
+
   const select = (providerPlaceId: string, moveMap: boolean) => {
     const place = placesById.get(providerPlaceId);
     if (!place || place.longitude === undefined || place.latitude === undefined) return;
-    if (selectedId) map.setFeatureState({ source: sourceId, id: selectedId }, { selected: false });
+    if (selectedId && map.isStyleLoaded() && map.getSource(sourceId)) {
+      map.setFeatureState({ source: sourceId, id: selectedId }, { selected: false });
+    }
     selectedId = providerPlaceId;
-    map.setFeatureState({ source: sourceId, id: providerPlaceId }, { selected: true });
+    if (map.isStyleLoaded() && map.getSource(sourceId)) {
+      map.setFeatureState({ source: sourceId, id: providerPlaceId }, { selected: true });
+    }
     if (moveMap) {
       map.easeTo({
         center: [place.longitude, place.latitude],
@@ -81,34 +112,26 @@ export function createVerifiedPlaceLayer(
     }
   };
 
+  map.on("style.load", render);
+
   return {
     show(places) {
       const valid = places.filter(hasCoordinates);
+      visiblePlaces = valid;
       placesById = new Map(valid.map((place) => [place.providerPlaceId, place]));
       selectedId = undefined;
-      ensureLayer();
-      setBasemapLandmarksVisible(map, valid.length === 0);
-      (map.getSource(sourceId) as mapboxgl.GeoJSONSource).setData(featureCollection(valid));
-      if (valid.length === 0) return;
-      const first = valid[0]!;
-      const bounds = valid.reduce(
-        (current, place) => current.extend([place.longitude!, place.latitude!]),
-        new mapboxgl.LngLatBounds([first.longitude!, first.latitude!], [first.longitude!, first.latitude!]),
-      );
-      map.fitBounds(bounds, {
-        padding: 80,
-        maxZoom: 13,
-        pitch: placeCameraPitch,
-        bearing: placeCameraBearing,
-        duration: 700,
-      });
+      renderRequested = true;
+      fitRequested = valid.length > 0;
+      render();
     },
     focus(providerPlaceId) { select(providerPlaceId, true); },
     clear() {
+      visiblePlaces = [];
       placesById.clear();
       selectedId = undefined;
-      (map.getSource(sourceId) as mapboxgl.GeoJSONSource | undefined)?.setData(featureCollection([]));
-      setBasemapLandmarksVisible(map, true);
+      renderRequested = true;
+      fitRequested = false;
+      render();
     },
   };
 }
