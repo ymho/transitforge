@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   allowedToolNames,
   maximumBodyBytes,
+  maximumToolResultJsonCharacters,
   RequestError,
   requestValue,
   validatedMessages,
@@ -75,6 +76,27 @@ describe("Agent API request contract", () => {
     expect(() => validatedMessages({
       messages: [{ role: "user", content: [{ text: "a".repeat(4_001) }] }],
     })).toThrow(RequestError);
+  });
+
+  it("accepts a bounded multi-page web research result", () => {
+    const toolResult = (text: string) => ({
+      messages: [{
+        role: "user",
+        content: [{
+          toolResult: {
+            toolUseId: "web-pages",
+            status: "success",
+            content: [{ json: { webPages: { text } } }],
+          },
+        }],
+      }],
+    });
+
+    expect(validatedMessages(toolResult("a".repeat(384_000))))
+      .toHaveLength(1);
+    expect(() => validatedMessages(toolResult(
+      "a".repeat(maximumToolResultJsonCharacters),
+    ))).toThrow(RequestError);
   });
 
   it("accepts allowlisted unique provider-independent tools", () => {
