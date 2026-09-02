@@ -29,6 +29,22 @@
 #app[data-map-focus-mode="true"] .context-workspace-tabs { display: flex; }
 
 @media (max-width: 71.999rem) {
+  .conversation-sidebar-rail {
+    position: fixed;
+    z-index: 10;
+    inset: 0 auto 0 0;
+    display: flex;
+    width: 3.5rem;
+    height: 100dvh;
+    box-sizing: border-box;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.45rem;
+    padding: max(0.75rem, env(safe-area-inset-top)) 0.4rem max(0.75rem, env(safe-area-inset-bottom));
+    border-right: 1px solid var(--glass-border-subtle);
+    background: #f7f7f7;
+  }
+
   .ai-guide-toggle,
   #close-ai-guide { display: none; }
 
@@ -36,9 +52,9 @@
   .ai-guide-panel[hidden] {
     position: fixed;
     z-index: 9;
-    inset: 0;
+    inset: 0 0 0 3.5rem;
     display: grid;
-    width: 100%;
+    width: calc(100% - 3.5rem);
     height: 100dvh;
     max-height: none;
     border: 0;
@@ -57,6 +73,7 @@
     max-width: calc(100vw - 1.5rem);
   }
 
+  #app[data-mobile-context-open="true"] .conversation-sidebar-rail,
   #app[data-mobile-context-open="true"] .ai-guide-panel { display: none; }
   #app[data-map-focus-mode="true"] .context-workspace-tabs {
     top: 0.75rem;
