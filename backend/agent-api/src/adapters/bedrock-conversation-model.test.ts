@@ -65,12 +65,78 @@ describe("BedrockConversationModel", () => {
     });
   });
 
+  it("records the exact provider request and failure diagnostic", async () => {
+    const providerError = Object.assign(new Error("messages are invalid"), {
+      name: "ValidationException",
+      $metadata: { httpStatusCode: 400, requestId: "provider-request-1" },
+      $retryable: {},
+    });
+    const record = vi.fn(async () => undefined);
+    const model = new BedrockConversationModel({
+      converse: async () => Promise.reject(providerError),
+    }, {
+      modelId: "model-1",
+      systemPrompt: "system prompt",
+      traceRecorder: { record },
+    });
+
+    await expect(model.converse({
+      messages: [{ role: "user", content: [{ text: "海へ行きたい" }] }],
+      modelClass: "decision",
+      trace: { modelCallId: "execution-1:model:1", apiRequestId: "api-request-1" },
+    })).rejects.toBe(providerError);
+
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({
+      modelCallId: "execution-1:model:1",
+      apiRequestId: "api-request-1",
+      providerRequest: {
+        modelId: "model-1",
+        system: [{ text: "system prompt" }],
+        messages: [{ role: "user", content: [{ text: "海へ行きたい" }] }],
+        inferenceConfig: { maxTokens: 500, temperature: 0 },
+      },
+      outcome: {
+        status: "failed",
+        error: {
+          name: "ValidationException",
+          message: "messages are invalid",
+          statusCode: 400,
+          providerRequestId: "provider-request-1",
+          retryable: false,
+        },
+      },
+    }));
+  });
+
+  it("does not fail a successful model call when trace storage fails", async () => {
+    const log = vi.fn();
+    const model = new BedrockConversationModel({ converse: async () => ({
+      output: { message: { role: "assistant", content: [{ text: "案内します" }] } },
+      stopReason: "end_turn",
+    }) }, {
+      modelId: "model-1",
+      systemPrompt: "system",
+      traceRecorder: { record: async () => Promise.reject(new Error("S3 unavailable")) },
+      log,
+    });
+
+    await expect(model.converse({
+      messages: [{ role: "user", content: [{ text: "案内して" }] }],
+      trace: { modelCallId: "execution-1:model:1", apiRequestId: "api-request-1" },
+    })).resolves.toMatchObject({ stopReason: "end_turn" });
+    expect(log).toHaveBeenCalledWith("agent_model_call_trace_store_failed", {
+      modelCallId: "execution-1:model:1",
+      requestId: "api-request-1",
+      outcome: "completed",
+    });
+  });
+
   it("rejects unexpected provider output and enforces the adapter timeout", async () => {
     const invalid = new BedrockConversationModel({ converse: async () => ({ stopReason: "end_turn" }) }, {
       modelId: "model-1",
       systemPrompt: "system",
     });
-    await expect(invalid.converse({ messages: [] })).rejects.toThrow("unexpected response");
+    await expect(invalid.converse({ messages: [] })).rejects.toThrow("missing output.message");
 
     const timeout = new BedrockConversationModel({ converse: () => new Promise(() => undefined) }, {
       modelId: "model-1",

@@ -9,6 +9,7 @@ import {
   RequestError,
   requestValue,
   validatedMessages,
+  validatedModelCallId,
   validatedModelClass,
   validatedToolDefinitions,
 } from "./agent-request.js";
@@ -137,6 +138,14 @@ describe("Agent API request contract", () => {
     expect(validatedModelClass({ modelClass: "lightweight" })).toBe("lightweight");
     expect(validatedModelClass({ modelClass: "decision" })).toBe("decision");
     expect(() => validatedModelClass({ modelClass: "amazon.nova-lite-v1:0" }))
+      .toThrow(RequestError);
+  });
+
+  it("accepts only bounded model call identifiers", () => {
+    expect(validatedModelCallId({})).toBeUndefined();
+    expect(validatedModelCallId({ modelCallId: "model-call:1" }))
+      .toBe("model-call:1");
+    expect(() => validatedModelCallId({ modelCallId: "invalid/id" }))
       .toThrow(RequestError);
   });
 });

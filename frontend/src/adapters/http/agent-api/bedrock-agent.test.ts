@@ -143,10 +143,14 @@ describe("Bedrock agent client", () => {
       fetcher,
       undefined,
       "decision",
+      "execution-1:model:1",
     );
 
     const [, init] = fetcher.mock.calls[0] ?? [];
-    expect(JSON.parse(String(init?.body))).toMatchObject({ modelClass: "decision" });
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      modelClass: "decision",
+      modelCallId: "execution-1:model:1",
+    });
   });
 
   it("sends the payload hash required by a CloudFront Lambda origin", async () => {

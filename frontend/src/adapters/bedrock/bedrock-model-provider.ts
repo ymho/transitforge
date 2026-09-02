@@ -21,6 +21,7 @@ export class BedrockModelProvider implements AgentModelProvider {
       this.fetcher,
       request.tools,
       request.modelClass,
+      request.modelCallId,
     );
     return {
       message: fromBedrockMessage(result.body.message),

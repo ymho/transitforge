@@ -125,27 +125,38 @@ export class MultiStepAgentRuntime {
         request,
         phase: hasToolResults ? "result_driven_replan" : "initial",
       }) ?? this.dependencies.modelClass;
+      const modelCallId = crypto.randomUUID();
+      const modelTools = this.dependencies.tools.descriptors().filter(
+        ({ name }) => !unavailableToolNames.has(name),
+      );
+      const modelRequest = {
+        messages,
+        tools: modelTools,
+        modelCallId,
+        ...(selectedModelClass === undefined
+          ? {}
+          : { modelClass: selectedModelClass }),
+      } satisfies import("./model-provider").AgentModelRequest;
+      trace.modelStarted(modelCallId, {
+        ...(selectedModelClass === undefined ? {} : { modelClass: selectedModelClass }),
+        messageCount: messages.length,
+        toolNames: modelTools.map(({ name }) => name),
+      });
       const modelOutcome = await modelBeforeDeadline(
-        this.dependencies.model.generate({
-          messages,
-          tools: this.dependencies.tools.descriptors().filter(
-            ({ name }) => !unavailableToolNames.has(name),
-          ),
-          ...(selectedModelClass === undefined
-            ? {}
-            : { modelClass: selectedModelClass }),
-        }),
+        this.dependencies.model.generate(modelRequest),
         remainingMs,
       );
       if (modelOutcome.kind === "timeout") {
+        trace.modelFailed(modelCallId, "runtime_timeout");
         return this.limitResult(trace, evidence, toolViewerActionOutcomes, startedAt);
       }
       if (modelOutcome.kind === "error") {
+        trace.modelFailed(modelCallId, "provider_error");
         return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "model_call_failed");
       }
       const modelResponse = modelOutcome.value;
       modelCalls += 1;
-      trace.modelCompleted(modelResponse.metadata);
+      trace.modelCompleted(modelResponse.metadata, modelCallId);
       messages.push(modelResponse.message);
 
       if (modelResponse.stopReason === "max_tokens") {

@@ -116,12 +116,14 @@ export async function invokeBedrockAgent(
   fetcher: typeof fetch = fetch,
   tools?: AgentToolDescriptor[],
   modelClass?: AgentModelClass,
+  modelCallId?: string,
 ): Promise<AgentApiResult<BedrockAgentResponse>> {
   return postAgent(
     {
       messages,
       ...(tools === undefined ? {} : { toolDefinitions: tools }),
       ...(modelClass === undefined ? {} : { modelClass }),
+      ...(modelCallId === undefined ? {} : { modelCallId }),
     },
     "AI案内APIを利用できません",
     "AI案内",

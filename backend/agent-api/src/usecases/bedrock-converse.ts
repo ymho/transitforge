@@ -17,6 +17,12 @@ export function createBedrockConverseOperation(
       ...(request.modelClass === undefined ? {} : {
         modelClass: request.modelClass as import("../contracts/model-class.js").ConversationModelClass,
       }),
+      trace: {
+        modelCallId: typeof request.modelCallId === "string"
+          ? request.modelCallId
+          : context.requestId,
+        apiRequestId: context.requestId,
+      },
     });
     log("bedrock_converse_completed", {
       requestId: context.requestId,

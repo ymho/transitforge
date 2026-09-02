@@ -8,6 +8,10 @@ export interface ConversationModelRequest {
   messages: AgentMessage[];
   tools?: AgentToolDefinition[];
   modelClass?: ConversationModelClass;
+  trace?: {
+    modelCallId: string;
+    apiRequestId: string;
+  };
 }
 
 export interface ConversationModelUsage {

@@ -195,6 +195,7 @@ export type BedrockAgentConverse = (
   messages: BedrockAgentMessage[],
   tools?: import("../../usecases/agent/tool-contract").AgentToolDescriptor[],
   modelClass?: import("../../usecases/agent/model-provider").AgentModelClass,
+  modelCallId?: string,
 ) => Promise<BedrockAgentResponse>;
 
 interface DirectRouteToolMatch {
@@ -1374,6 +1375,7 @@ export class ConverseModelProvider implements AgentModelProvider {
       request.messages.map(toBedrockMessage),
       request.tools,
       request.modelClass,
+      request.modelCallId,
     );
     const convertedMessage = fromBedrockMessage(response.message);
     const decision = extractAgentDecisionSummary(convertedMessage.content.flatMap((content) =>

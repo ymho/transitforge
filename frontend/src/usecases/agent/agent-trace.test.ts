@@ -27,6 +27,11 @@ describe("AgentTraceRecorder", () => {
     }, 12);
     recorder.evidenceCollected([fixtureEvidence]);
     recorder.replanDecided(false, "必要な経路が得られた");
+    recorder.modelStarted("execution-1:model:1", {
+      modelClass: "decision",
+      messageCount: 1,
+      toolNames: ["search_journeys"],
+    });
     recorder.modelCompleted({
       provider: "bedrock",
       requestId: "request-1",
@@ -54,6 +59,7 @@ describe("AgentTraceRecorder", () => {
       "tool_completed",
       "evidence_collected",
       "replan_decided",
+      "model_started",
       "model_completed",
       "response_generated",
       "viewer_action",
@@ -61,12 +67,12 @@ describe("AgentTraceRecorder", () => {
       "task_completed",
     ]);
     expect(trace.events.map(({ sequence }) => sequence)).toEqual(
-      Array.from({ length: 13 }, (_, index) => index + 1),
+      Array.from({ length: 14 }, (_, index) => index + 1),
     );
     expect(trace.events.every(({ occurredAt }) =>
       occurredAt === "2026-08-25T09:00:00.000Z")).toBe(true);
     expect(trace.events[5]).toMatchObject({ latencyMs: 12, outcome: "success" });
-    expect(trace.events[8]).toMatchObject({
+    expect(trace.events[9]).toMatchObject({
       provider: "bedrock",
       requestId: "request-1",
       totalTokens: 15,

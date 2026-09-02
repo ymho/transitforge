@@ -511,9 +511,22 @@ Goodは1操作で送信し Badだけ対象回答の直下でコメント付き �
 
 `taskId` `executionId` 関連するAPI `requestIds`と最大100件のeventを保存する。
 本文は24KiBを上限とし Lambdaでevent schema 順序 field型を再検証する。
-秘密値 Authorization cookieと現在地座標はブラウザ側のRecorderに加え
-保存直前にも除去する。生のTool payload 会話全文 例外詳細は保存しない。
+`model_started`は`modelCallId` message数 Tool名 model classを持ち、同じIDの
+モデル呼び出しTraceと対応付ける。秘密値 Authorization cookieと現在地座標は
+ブラウザ側のRecorderに加え保存直前にも除去する。
 S3書込失敗は成功として扱わず request ID付き503と構造化ログを返す。
+
+### `agent-model-call-trace-v1`
+
+- Server実装: `backend/agent-api/src/usecases/model-call-trace.ts`
+- 保存先: private S3 `agent-traces/model-calls/YYYY/MM/DD/<modelCallId>/<apiRequestId>.json`
+- 保持期間: 30日
+- 1件の上限: 3MiB
+
+Bedrock Adapterが実際に送るmodel ID System Prompt message Tool定義 inference設定を
+呼び出し単位で保存する。成功時はstop reason token latency、失敗時は例外名 message
+HTTP status Provider request ID retryableを保存する。認証情報と正確な現在地座標は除去する。
+上限超過時は入力本文の代わりにbyte数とSHA-256を保存する。S3保存失敗はAgent結果を変更しない。
 
 ## 外部旅行情報と再確認
 

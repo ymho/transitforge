@@ -27,6 +27,7 @@ export interface AgentModelRequest {
   messages: AgentModelMessage[];
   tools?: AgentToolDescriptor[];
   modelClass?: AgentModelClass;
+  modelCallId?: string;
 }
 
 export interface AgentModelUsage {
