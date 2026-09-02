@@ -9,11 +9,9 @@ import {
 import { operatingDayStartMinutes } from "../../domain/playback";
 import { formatJapaneseServiceTime } from "@raiquora/train/route-time";
 import type { TrainPosition } from "../../domain/train-position";
-import type { ViewerAgentLayer } from "../viewer/viewer-action";
 import {
   directRouteRequestFromPrompt,
   formatStationLabel,
-  localViewerControlActionsFromPrompt,
   routeTimeFromPrompt,
   searchActiveTrainsFromPrompt,
   searchTrainArrivalsFromPrompt,
@@ -24,9 +22,6 @@ export interface LocalViewerAgentDependencies {
   getTrains?: () => Train[];
   getPositions: () => TrainPosition[];
   getRouteTime: () => number;
-  setRouteTime: (routeTimeMinutes: number) => void;
-  focusTrain: (serviceUid: string) => boolean;
-  setLayerVisibility: (layer: ViewerAgentLayer, visible: boolean) => void;
   searchDirectRoutes: DirectRouteSearchHandler;
   getPendingJourneyGuidance?: () => JourneyNavigationGuidance | undefined;
   formatTrainTitle?: (train: Train) => string;
@@ -37,7 +32,7 @@ export function createLocalViewerAgent(
   dependencies: LocalViewerAgentDependencies,
 ): (prompt: string) => Promise<string> {
   return async (prompt) => {
-    const responseParts = applyControlActions(prompt, dependencies);
+    const responseParts: string[] = [];
     const arrivalResponse = arrivalSearchResponse(prompt, dependencies);
     if (arrivalResponse !== undefined) {
       return [...responseParts, arrivalResponse].join("\n");
@@ -52,16 +47,10 @@ export function createLocalViewerAgent(
     }
 
     const requestedRouteTime = routeTimeFromPrompt(prompt);
-    if (requestedRouteTime !== undefined) {
-      const routeTime = Math.min(
-        requestedRouteTime,
-        dependencies.maximumRouteTime,
-      );
-      dependencies.setRouteTime(routeTime);
-      responseParts.push(`表示時刻を${formatJapaneseServiceTime(routeTime)}に変更しました。`);
-    }
-
-    const routeTime = dependencies.getRouteTime();
+    const routeTime = Math.min(
+      requestedRouteTime ?? dependencies.getRouteTime(),
+      dependencies.maximumRouteTime,
+    );
     const search = searchActiveTrainsFromPrompt(
       prompt,
       currentTrains(dependencies),
@@ -75,13 +64,8 @@ export function createLocalViewerAgent(
           `${formatJapaneseServiceTime(routeTime)}に運行中の条件に合う列車は見つかりませんでした。`,
         );
       } else {
-        const focused = dependencies.focusTrain(first.train.service_uid);
         const fullTitle = formatTrainTitle(first.train, dependencies);
-        responseParts.push(
-          focused
-            ? `${fullTitle}を選択し、列車の位置へ移動しました。`
-            : `${fullTitle}は見つかりましたが、現在位置へ移動できませんでした。`,
-        );
+        responseParts.push(`${fullTitle}が見つかりました。`);
         if (search.totalMatchCount > 1) {
           responseParts.push(
             `条件に合う列車はほかに${search.totalMatchCount - 1}件あります。`,
@@ -94,24 +78,6 @@ export function createLocalViewerAgent(
       ? responseParts.join("\n")
       : "時刻、駅名、列車種別、列車名、列車番号を含めて依頼してください。例:「18時30分に京都へ向かう特急を見せて」";
   };
-}
-
-function applyControlActions(
-  prompt: string,
-  dependencies: LocalViewerAgentDependencies,
-): string[] {
-  const responseParts: string[] = [];
-  for (const action of localViewerControlActionsFromPrompt(prompt)) {
-    if (action.type === "set_layer_visibility") {
-      dependencies.setLayerVisibility(action.layer, action.visible);
-      const layerLabel =
-        action.layer === "congestion" ? "混雑棒" : "目的地アーチ";
-      responseParts.push(
-        `${layerLabel}を${action.visible ? "表示" : "非表示に"}しました。`,
-      );
-    }
-  }
-  return responseParts;
 }
 
 function arrivalSearchResponse(
@@ -200,14 +166,10 @@ async function directRouteSearchResponse(
     if (!first) {
       return `${formatJapaneseServiceTime(departureTimeMinutes)}以降に${formatStationLabel(response.originStation)}から${formatStationLabel(request.destinationStation)}へ直通する列車は見つかりませんでした。`;
     }
-    const focused = dependencies.focusTrain(first.train.service_uid);
     const routes = response.results.map((route, index) => {
       return `${index + 1}. ${formatJapaneseServiceTime(route.departureTimeMinutes)} ${route.originStation}発 → ${formatJapaneseServiceTime(route.arrivalTimeMinutes)} ${route.destinationStation}着 ${formatTrainTitle(route.train, dependencies)}`;
     });
-    const focusMessage = focused
-      ? "先頭の列車の現在位置を選択しました。"
-      : "先頭の列車はまだ運行開始前のため、経路のみ案内します。";
-    return `${formatStationLabel(response.originStation)}から${formatStationLabel(request.destinationStation)}への直通列車です。${focusMessage}\n${routes.join("\n")}`;
+    return `${formatStationLabel(response.originStation)}から${formatStationLabel(request.destinationStation)}への直通列車です。\n${routes.join("\n")}`;
   } catch (error) {
     return error instanceof Error
       ? error.message

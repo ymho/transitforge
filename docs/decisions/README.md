@@ -67,3 +67,4 @@
 - [0046 内部思考ではなくboundedなAgent Decision Summaryを記録する](0046-record-bounded-agent-decision-summaries.md)
 - [0047 provider非依存のmodel routingを同一Benchmarkで評価してから本番化する](0047-evaluate-provider-independent-model-routing-before-production.md)
 - [0048 構造化されたAgent phaseだけをdecision modelへ送る](0048-route-structured-agent-phases-to-decision-model.md)
+- [0049 AIによる直接Viewer操作を一旦停止する](0049-pause-direct-ai-viewer-operations.md)

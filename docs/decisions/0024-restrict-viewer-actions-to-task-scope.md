@@ -1,7 +1,8 @@
 # ADR 0024: Viewer Actionを同一Agentタスクの検証済みEntityへ限定する
 
-- ステータス: Accepted
+- ステータス: Accepted（直接Viewer操作の公開はADR 0049で停止）
 - 日付: 2026-08-25
+- 関連: ADR 0049
 
 ## 背景
 
@@ -42,4 +43,4 @@ Executorは提案 適用 拒否と安全な拒否理由をStructured Agent Trace
 - 未知Action 余分なfield 範囲外時刻をPort実行前に拒否すること
 - 未検証または別taskの列車 経路 Evidenceを拒否すること
 - Port失敗の内部情報をTraceへ残さないこと
-- 既存の時刻 天候 レイヤーAction契約を維持すること
+- 直接Viewer操作の履歴契約は維持するが Agentへ公開しないこと

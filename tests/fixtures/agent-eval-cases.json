@@ -287,7 +287,7 @@
         "status": "completed",
         "minimumGroundedClaimRate": 1,
         "maximumUnsupportedClaimRate": 0,
-        "allowedViewerActions": ["highlight_route", "show_evidence", "set_display_time"],
+        "allowedViewerActions": ["highlight_route", "show_evidence"],
         "requiredViewerActions": ["highlight_route"]
       }
     },
@@ -304,7 +304,7 @@
         "status": "completed",
         "minimumGroundedClaimRate": 1,
         "maximumUnsupportedClaimRate": 0,
-        "allowedViewerActions": ["highlight_route", "show_evidence", "compare_journeys", "set_display_time"],
+        "allowedViewerActions": ["highlight_route", "show_evidence", "compare_journeys"],
         "requiredViewerActions": ["show_evidence"]
       }
     },

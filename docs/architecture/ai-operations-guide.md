@@ -2,7 +2,7 @@
 
 ## 目的
 
-コンシェルジュは自然文を検索条件と安全な画面操作へ変換する
+コンシェルジュは自然文を検証可能な検索条件と構造化された案内へ変換する
 モデルへ列車データ全体やブラウザ操作権限を渡さない
 
 Bedrockは構造化されたAgent Contextから利用者のgoal hard constraint soft preferenceを解釈し
@@ -25,10 +25,10 @@ flowchart LR
   T --> V[入力検証]
   V --> J[時刻表と遅延による検索]
   V --> H[混雑と遅延の集計]
-  V --> O[検証済み画面操作]
   J --> A
   H --> A
-  O --> C
+  A --> R[構造化された検索結果]
+  R --> C
 ```
 
 開発サーバーでAI APIへ接続できない場合だけローカル解析へフォールバックする
@@ -45,7 +45,7 @@ flowchart LR
 | 混雑分析 | 業務日付の日次ピーク 時間別傾向 路線別 列車別を集計 |
 | 遅延分析 | 最新状況 日次ピーク 時間別傾向 列車別を集計 |
 | 旅行相談の追加質問 | 次の質問 選択肢 TripContext を構造化して返し ブラウザは共通UIで回答を受け取る |
-| 画面操作 | 時刻 列車フォーカス 可視化レイヤーを変更 |
+| 検索結果表示 | 検証済み経路の強調 比較 Evidence表示を構造化して返す |
 | 防災情報 | 気象庁の公式フィードから旅行先に現在発表中の情報を検索 |
 | 駅から先の移動 | 検証済み駅とPlace間の徒歩 車 自転車経路を検索 |
 | 飲食店検索 | 地域 ジャンル 位置から食事候補を検索 |
@@ -161,23 +161,24 @@ npm run test:journey-scenarios
 
 通常のTypeScriptテストでも全シナリオを実行するため CIへの追加設定は不要
 
-## 許可する画面操作
+## 検索結果表示とViewer Action境界
 
 | 操作 | 用途 |
 | --- | --- |
-| `set_display_time` | 表示時刻を変更 |
-| `focus_train` | 列車を選択して追跡 |
-| `set_layer_visibility` | 混雑棒と行き先アーチを切り替え |
 | `highlight_route` | 同じタスクで検索した経路を強調表示 |
 | `compare_journeys` | 同じタスクで検索した2〜3経路を比較表示 |
 | `show_evidence` | 応答が参照するEvidenceを表示 |
 
-未知の操作 余分な引数 無効な時刻 未知のレイヤーを実行前に拒否する。
-`ViewerActionTaskScope`はAgent実行IDごとに検証済みの列車 経路 Evidenceを保持し
-`focus_train` `highlight_route` `compare_journeys` `show_evidence`はscope内のEntityだけを受け付ける。
-別のAgent実行のscopeは利用できない。操作は時刻 レイヤーの可逆な変更または
-フォーカス 強調 比較 Evidenceの表示だけに限定し 任意DOM JavaScript 外部書き込みを許可しない。
-提案 適用 拒否と拒否理由は同じ実行のStructured Agent Traceへ記録する。
+会話からの`set_display_time` `focus_train` `set_layer_visibility`は本番Toolと開発用
+フォールバックのどちらにも公開しない。経路検索や既存経路の再検索も列車を自動選択しない。
+表示時刻 列車選択 可視化レイヤーは利用者がViewer UIから手動で操作する。天気検索は
+旅行判断のEvidenceを得る読み取り専用Toolであり 地図の天候表現を変更しない。
+
+汎用のViewer Action契約と安全Policyは 検索結果に結び付いた強調 比較 Evidence表示と
+既存の互換性検証のため残す。`ViewerActionTaskScope`はAgent実行IDごとに検証済みの
+経路とEvidenceを保持し scope内のEntityだけを受け付ける。別実行のscope 任意DOM
+JavaScript 外部書き込みは許可しない。提案 適用 拒否と拒否理由は同じ実行の
+Structured Agent Traceへ記録する。
 
 ## Grounded End-to-End確認
 

@@ -17,7 +17,6 @@ const maximumContentBlocks = 12;
 const maximumTextCharacters = 4_000;
 
 export const allowedToolNames = new Set([
-  "set_display_time",
   "search_trains",
   "query_daily_congestion_analysis",
   "search_direct_routes",
@@ -42,8 +41,6 @@ export const allowedToolNames = new Set([
   "remember_travel_preference",
   "update_conversation_session",
   "propose_trip_update",
-  "focus_train",
-  "set_layer_visibility",
   "search_journeys",
   "inspect_train",
   "inspect_station",

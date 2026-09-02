@@ -18,8 +18,6 @@ const train: Train = {
 
 describe("local viewer agent", () => {
   it("searches direct routes at the current time without moving the clock", async () => {
-    const setRouteTime = vi.fn();
-    const focusTrain = vi.fn(() => false);
     const searchDirectRoutes = vi.fn(async () => ({
       originStation: "向日町",
       results: [{
@@ -34,9 +32,6 @@ describe("local viewer agent", () => {
       trains: [train],
       getPositions: () => [],
       getRouteTime: () => 1_388,
-      setRouteTime,
-      focusTrain,
-      setLayerVisibility: vi.fn(),
       searchDirectRoutes,
       maximumRouteTime: 1_800,
     });
@@ -48,11 +43,9 @@ describe("local viewer agent", () => {
       destinationStation: "京都",
       departureTimeMinutes: 1_388,
     });
-    expect(setRouteTime).not.toHaveBeenCalled();
-    expect(focusTrain).toHaveBeenCalledWith("direct");
     expect(response).toContain("23時15分 向日町発");
     expect(response).toContain("23時23分 京都着");
-    expect(response).toContain("経路のみ案内します");
+    expect(response).not.toContain("現在位置");
   });
 
   it("uses the latest operation trains when interpreting a destination", async () => {
@@ -73,9 +66,6 @@ describe("local viewer agent", () => {
       getTrains: () => [liveTrain],
       getPositions: () => [],
       getRouteTime: () => 1_388,
-      setRouteTime: vi.fn(),
-      focusTrain: vi.fn(() => false),
-      setLayerVisibility: vi.fn(),
       searchDirectRoutes,
       maximumRouteTime: 1_800,
     });
@@ -98,9 +88,6 @@ describe("local viewer agent", () => {
       trains: [train],
       getPositions: () => [],
       getRouteTime: () => 1_388,
-      setRouteTime: vi.fn(),
-      focusTrain: vi.fn(() => false),
-      setLayerVisibility: vi.fn(),
       searchDirectRoutes,
       getPendingJourneyGuidance: () => ({
         excludedServiceTypes: [],

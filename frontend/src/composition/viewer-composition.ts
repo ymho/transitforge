@@ -88,12 +88,6 @@ import {
 } from "../domain/train-position";
 import type { TrainPosition } from "../domain/train-position";
 import { normalizeStationName } from "@raiquora/train/station-name";
-import {
-  type ViewerAgentLayer,
-} from "../usecases/viewer/viewer-action";
-import { AgentTraceRecorder } from "../usecases/agent/agent-trace";
-import { ViewerActionExecutor } from "../usecases/viewer/viewer-action-executor";
-import { ViewerActionTaskScope } from "../usecases/viewer/viewer-action-policy";
 import { loadViewerElements } from "../usecases/viewer/viewer-elements";
 import { resolveViewerDisplayMode } from "../domain/viewer-display-mode";
 import { runViewerAgentRuntime } from "../adapters/bedrock/viewer-agent-runtime";
@@ -842,7 +836,7 @@ if (!token) {
         };
         applyWeatherToTrains(activeWeatherMode);
         map.addLayer(threeTrainLayer);
-        const destinationArcs = configureDestinationArcs(
+        configureDestinationArcs(
           threeTrainLayer,
           destinationArcsToggle,
         );
@@ -1118,38 +1112,6 @@ if (!token) {
             displayTime.dispatchEvent(new Event("input", { bubbles: true }));
           },
         );
-        const setLayerVisibility = (
-          layer: ViewerAgentLayer,
-          visible: boolean,
-        ) => {
-          if (layer === "congestion") {
-            congestionUpdates.setEnabled(visible);
-          } else {
-            destinationArcs.setEnabled(visible);
-          }
-        };
-        const viewerControlExecutionId = "viewer-control-session";
-        const viewerControlScope = new ViewerActionTaskScope(viewerControlExecutionId);
-        const viewerControlTrace = new AgentTraceRecorder(viewerControlExecutionId);
-        const viewerActionExecutor = new ViewerActionExecutor({
-          setDisplayTime: (routeTimeMinutes) => {
-            displayTime.value = String(routeTimeMinutes);
-            displayTime.dispatchEvent(new Event("input", { bubbles: true }));
-          },
-          focusTrain: selection.focusTrain,
-          highlightRoute: () => false,
-          compareJourneys: () => false,
-          showEvidence: () => false,
-          setLayerVisibility,
-        }, maximumRouteTime);
-        const setViewerDisplayTime = (routeTimeMinutes: number) => {
-          const execution = viewerActionExecutor.execute(
-            { type: "set_display_time", routeTimeMinutes },
-            viewerControlScope,
-            viewerControlTrace,
-          );
-          if (!execution.ok) throw new Error(execution.reason);
-        };
         let previousJourneyPlan: ViewerAgentJourneyPlan | undefined;
         let previousJourneySessionId: string | undefined;
         let pendingJourneyLegChange: PendingJourneyLegChange | undefined;
@@ -1158,9 +1120,6 @@ if (!token) {
           getTrains: () => displayTrains,
           getPositions: () => displayedPositions,
           getRouteTime: () => Number(displayTime.value),
-          setRouteTime: setViewerDisplayTime,
-          focusTrain: selection.focusTrain,
-          setLayerVisibility,
           searchDirectRoutes: localSearchRoutes,
           formatTrainTitle: (train) => {
             const title = trainTitleFor(train);
@@ -1190,9 +1149,6 @@ if (!token) {
                 getTrains: () => displayTrains,
                 getPositions: () => displayedPositions,
                 getRouteTime: () => Number(displayTime.value),
-                setRouteTime: setViewerDisplayTime,
-                focusTrain: selection.focusTrain,
-                setLayerVisibility,
                 queryDailyCongestionAnalysis: async (serviceDate) =>
                   congestionAnalysisForAgent(
                     await queryDailyCongestionAnalysis(serviceDate),

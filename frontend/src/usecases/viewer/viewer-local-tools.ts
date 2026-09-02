@@ -1,6 +1,5 @@
 import type { Train } from "@raiquora/train/train";
 import type { TrainPosition } from "../../domain/train-position";
-import type { ViewerAgentAction } from "./viewer-action";
 import { operatingDayRouteTime } from "../../domain/playback";
 import { normalizeStationName } from "@raiquora/train/station-name";
 
@@ -468,36 +467,6 @@ export function searchTrainArrivalsFromPrompt(
   };
 }
 
-export function localViewerControlActionsFromPrompt(
-  prompt: string,
-): ViewerAgentAction[] {
-  const normalizedPrompt = normalize(prompt);
-  const actions: ViewerAgentAction[] = [];
-
-  const visible = requestedLayerVisibility(normalizedPrompt);
-  if (visible !== undefined && normalizedPrompt.includes("混雑")) {
-    actions.push({
-      type: "set_layer_visibility",
-      layer: "congestion",
-      visible,
-    });
-  }
-  if (
-    visible !== undefined &&
-    (normalizedPrompt.includes("目的地アーチ") ||
-      normalizedPrompt.includes("行先アーチ") ||
-      normalizedPrompt.includes("行き先アーチ"))
-  ) {
-    actions.push({
-      type: "set_layer_visibility",
-      layer: "destination_arcs",
-      visible,
-    });
-  }
-
-  return actions;
-}
-
 function scoreTrain(
   train: Train,
   stationNames: Set<string>,
@@ -592,28 +561,6 @@ function isArrivalPrompt(normalizedPrompt: string): boolean {
     normalizedPrompt.includes("着け") ||
     normalizedPrompt.includes("につく")
   );
-}
-
-function requestedLayerVisibility(
-  normalizedPrompt: string,
-): boolean | undefined {
-  if (
-    normalizedPrompt.includes("非表示") ||
-    normalizedPrompt.includes("消して") ||
-    normalizedPrompt.includes("隠して") ||
-    normalizedPrompt.includes("オフ")
-  ) {
-    return false;
-  }
-  if (
-    normalizedPrompt.includes("表示") ||
-    normalizedPrompt.includes("見せて") ||
-    normalizedPrompt.includes("出して") ||
-    normalizedPrompt.includes("オン")
-  ) {
-    return true;
-  }
-  return undefined;
 }
 
 function validRouteTime(

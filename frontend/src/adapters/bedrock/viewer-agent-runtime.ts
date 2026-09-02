@@ -16,7 +16,6 @@ import {
   type JourneySearchPreferences,
   type TransferPace,
 } from "@raiquora/journey/journey-search-preferences";
-import { operatingDayRouteTime } from "../../domain/playback";
 import { formatJapaneseRouteClockTime } from "@raiquora/train/route-time";
 import { normalizeStationName } from "@raiquora/train/station-name";
 import type { TrainPosition } from "../../domain/train-position";
@@ -44,10 +43,6 @@ import {
   directRouteDepartureTime,
   type DirectRouteSearchResponse,
 } from "@raiquora/journey/direct-route-search";
-import {
-  parseViewerAgentActions,
-  type ViewerAgentLayer,
-} from "../../usecases/viewer/viewer-action";
 import {
   arrivalSearchWindowMinutes,
   currentCalendarDateInJapan,
@@ -90,7 +85,6 @@ import { AgentToolRegistry } from "../../usecases/agent/tool-registry";
 import { structuredModelClassPolicy } from "../../usecases/agent/structured-model-class-policy";
 import { AgentToolExecutor } from "../../usecases/agent/agent-tool-executor";
 import { ToolEvidenceRegistry } from "../../usecases/agent/tool-evidence-registry";
-import { ToolViewerActionRegistry } from "../../usecases/agent/tool-viewer-action-registry";
 import {
   failedAgentToolResult,
   modelToolDescription,
@@ -114,8 +108,6 @@ import type {
   AgentKnownPreference,
 } from "../../usecases/agent/agent-decision-context";
 import { extractAgentDecisionSummary } from "../../usecases/agent/agent-decision-summary";
-import { ViewerActionExecutor } from "../../usecases/viewer/viewer-action-executor";
-import { EvidenceScopedViewerActionHandler } from "../../usecases/agent/viewer-action-handler";
 import type { Evidence } from "../../usecases/agent/evidence-model";
 import type { AgentTrace } from "../../usecases/agent/agent-trace";
 import {
@@ -140,9 +132,6 @@ export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDepend
   getTrains?: () => Train[];
   getPositions: () => TrainPosition[];
   getRouteTime: () => number;
-  setRouteTime: (routeTimeMinutes: number) => void;
-  focusTrain: (serviceUid: string) => boolean;
-  setLayerVisibility: (layer: ViewerAgentLayer, visible: boolean) => void;
   queryDailyCongestionAnalysis: (
     serviceDate: string,
   ) => Promise<CongestionAnalysisForAgent>;
@@ -228,8 +217,6 @@ interface DirectRouteToolMatch {
 }
 
 interface DirectRouteToolState {
-  searched: boolean;
-  focusedServiceUid?: string;
   response?: {
     serviceDate?: string;
     departureDate?: string;
@@ -279,9 +266,7 @@ export async function runViewerAgentRuntime(
     userRequest,
     dependencies.getTripContext?.(),
   );
-  const searchableServiceUids = new Set<string>();
-  const directRouteServiceUids = new Set<string>();
-  const toolState: DirectRouteToolState = { searched: false };
+  const toolState: DirectRouteToolState = {};
   const travelState: TravelToolState = {};
   const conversationState: ConversationToolState = {};
   const tripPlanUpdateState: TripPlanUpdateToolState = {};
@@ -293,8 +278,6 @@ export async function runViewerAgentRuntime(
   const tools = viewerToolRegistry({
     prompt: deterministicPrompt,
     dependencies,
-    searchableServiceUids,
-    directRouteServiceUids,
     toolState,
     travelState,
     conversationState,
@@ -303,24 +286,11 @@ export async function runViewerAgentRuntime(
     externalState,
   });
   const evidenceMappers = viewerEvidenceMappers();
-  const toolViewerActions = viewerToolActionMappers();
-  const viewerActionHandler = new EvidenceScopedViewerActionHandler(
-    new ViewerActionExecutor({
-      setDisplayTime: dependencies.setRouteTime,
-      focusTrain: dependencies.focusTrain,
-      highlightRoute: () => false,
-      compareJourneys: () => false,
-      showEvidence: () => false,
-      setLayerVisibility: dependencies.setLayerVisibility,
-    }, dependencies.maximumRouteTime),
-  );
   const runtime = new MultiStepAgentRuntime({
     model: new ConverseModelProvider(converse),
     modelClassPolicy: structuredModelClassPolicy,
     tools,
     toolExecutor: new AgentToolExecutor(tools, evidenceMappers),
-    viewerActionHandler,
-    toolViewerActions,
     terminalToolResult: (toolName) => viewerTerminalResponseText(
       toolName,
       toolState,
@@ -570,8 +540,6 @@ function decisionSoftPreferences(
 interface ViewerToolContext {
   prompt: string;
   dependencies: ViewerAgentRuntimeDependencies;
-  searchableServiceUids: Set<string>;
-  directRouteServiceUids: Set<string>;
   toolState: DirectRouteToolState;
   travelState: TravelToolState;
   conversationState: ConversationToolState;
@@ -587,11 +555,9 @@ export const viewerAgentToolNames = [
   "ask_follow_up",
   "inspect_previous_journey",
   "revise_previous_journey",
-  "set_display_time",
   "search_trains",
   "search_train_arrivals",
   "search_direct_routes",
-  "focus_train",
   "query_daily_congestion_analysis",
   "query_train_delay_analysis",
   "search_accommodations",
@@ -599,7 +565,6 @@ export const viewerAgentToolNames = [
   "plan_day_trip",
   "search_trip_route_update",
   "search_representative_timetable",
-  "set_layer_visibility",
 ] as const;
 
 export type ViewerAgentToolName = typeof viewerAgentToolNames[number];
@@ -769,8 +734,6 @@ function viewerTool(
           input,
           context.prompt,
           context.dependencies,
-          context.searchableServiceUids,
-          context.directRouteServiceUids,
           context.toolState,
           context.travelState,
           context.conversationState,
@@ -1006,18 +969,15 @@ function viewerToolDescription(name: ViewerAgentToolName): string {
     ask_follow_up: "旅行相談で検索後も本当に不足している今回固有の必須条件だけを構造化して質問します。プロフィールから候補を探せる嗜好は聞かず、自由入力より短い選択肢を優先し、同じ質問を繰り返しません",
     inspect_previous_journey: "currentJourneyにある直前の検証済み経路について、対象列車または途中駅を確認します",
     revise_previous_journey: "currentJourneyに対する明示済みの利用・回避条件で、確認を挟まず変更候補を再検索します。区間の代替候補の提示と、選択済み候補の確定も扱います",
-    set_display_time: "Viewerの計画ダイヤ表示時刻を変更します",
     search_trains: "現在表示中の列車を決定論的に検索します",
     search_train_arrivals: "指定駅へ指定時刻ごろ到着する列車を検索します",
     search_direct_routes: "自前の時刻表と運行情報で駅間の乗換を含む経路を検索します。観光地はそのアクセス駅を指定します",
-    focus_train: "同じタスクで検索済みの列車へViewerを移動します",
     query_daily_congestion_analysis: "指定業務日付の観測済み混雑を分析します",
     query_train_delay_analysis: "指定業務日付の観測済み遅延を分析します",
     search_accommodations: "新しい宿泊旅行 日程変更 宿泊地変更 宿の再検索で、指定日程の宿泊候補と行き帰りの鉄道経路をまとめて組み立てます。観光相談 人数やペースだけの変更 経路の部分変更には使いません",
     plan_day_trip: "宿泊施設を検索せず 指定日の行きと帰りの鉄道経路を組み合わせて日帰り旅程を作ります",
     search_trip_route_update: "現在の旅程にある行きまたは帰りの鉄道移動を再検索します。出発を遅らせる変更と途中駅への立寄りに使います",
     search_representative_timetable: "平日または土休日の代表ダイヤを検索します",
-    set_layer_visibility: "Viewerの混雑またはアーチ表示を変更します",
   };
   return descriptions[name];
 }
@@ -1396,35 +1356,6 @@ function trainSearchEvidence(output: unknown, context: { retrievedAt: string }):
   });
 }
 
-function viewerToolActionMappers(): ToolViewerActionRegistry {
-  const registry = new ToolViewerActionRegistry();
-  registry.register("set_display_time", (output) =>
-    isRecord(output) && typeof output.routeTimeMinutes === "number"
-      ? [{ type: "set_display_time", routeTimeMinutes: output.routeTimeMinutes }]
-      : []);
-  registry.register("focus_train", (output) =>
-    isRecord(output) && typeof output.serviceUid === "string"
-      ? [{ type: "focus_train", serviceUid: output.serviceUid }]
-      : []);
-  registry.register("search_direct_routes", (output) => {
-    if (!isRecord(output) || !Array.isArray(output.journeys)) return [];
-    const journey = output.journeys[0];
-    const leg = isRecord(journey) && Array.isArray(journey.legs)
-      ? journey.legs[0]
-      : undefined;
-    return isRecord(leg) && typeof leg.serviceUid === "string"
-      ? [{ type: "focus_train", serviceUid: leg.serviceUid }]
-      : [];
-  });
-  registry.register("set_layer_visibility", (output) =>
-    isRecord(output) &&
-      (output.layer === "congestion" || output.layer === "destination_arcs") &&
-      typeof output.visible === "boolean"
-      ? [{ type: "set_layer_visibility", layer: output.layer, visible: output.visible }]
-      : []);
-  return registry;
-}
-
 function promptWithKnownTripContext(prompt: string, context: TripContext | undefined): string {
   if (!context || Object.keys(context).length === 0) return prompt;
   return [
@@ -1606,8 +1537,6 @@ async function executeViewerToolAdapter(
   input: Record<string, unknown>,
   originalPrompt: string,
   dependencies: ViewerAgentRuntimeDependencies,
-  searchableServiceUids: Set<string>,
-  directRouteServiceUids: Set<string>,
   toolState: DirectRouteToolState,
   travelState: TravelToolState,
   conversationState: ConversationToolState,
@@ -1682,35 +1611,6 @@ async function executeViewerToolAdapter(
     conversationState.response = guidance;
     return { accepted: true, ...guidance };
   }
-  if (name === "set_display_time") {
-    const requestedTime = input.routeTimeMinutes;
-    if (typeof requestedTime !== "number" || !Number.isFinite(requestedTime)) {
-      throw new Error("表示時刻が不正です。");
-    }
-    if (toolState.searched) {
-      return {
-        routeTimeMinutes: dependencies.getRouteTime(),
-        changed: false,
-        reason: "経路検索では表示時刻を変更しません。",
-      };
-    }
-    const deterministicPromptTime = routeTimeFromPrompt(originalPrompt);
-    const routeTimeMinutes = Math.min(
-      Math.round(
-        deterministicPromptTime ?? operatingDayRouteTime(requestedTime),
-      ),
-      dependencies.maximumRouteTime,
-    );
-    const [action] = parseViewerAgentActions([
-      { type: "set_display_time", routeTimeMinutes },
-    ]);
-    if (!action || action.type !== "set_display_time") {
-      throw new Error("表示時刻を変更できません。");
-    }
-    searchableServiceUids.clear();
-    return { routeTimeMinutes: action.routeTimeMinutes };
-  }
-
   if (name === "search_trains") {
     const query = input.query;
     if (typeof query !== "string" || query.trim().length === 0) {
@@ -1728,9 +1628,6 @@ async function executeViewerToolAdapter(
       dependencies.getRouteTime(),
       limit,
     );
-    for (const { train } of search.matches) {
-      searchableServiceUids.add(train.service_uid);
-    }
     return {
       hasSearchTerms: search.hasSearchTerms,
       totalMatchCount: search.totalMatchCount,
@@ -1768,9 +1665,6 @@ async function executeViewerToolAdapter(
       arrivalSearchWindowMinutes,
       targetTimeMinutes,
     );
-    for (const { train } of search.matches) {
-      searchableServiceUids.add(train.service_uid);
-    }
     return {
       windowMinutes: search.windowMinutes,
       targetTimeMinutes: search.targetTimeMinutes,
@@ -1886,14 +1780,7 @@ async function executeViewerToolAdapter(
         ? { excludedTrainNumbers: guidance.excludedTrainNumbers }
         : {}),
     });
-    toolState.searched = true;
-    directRouteServiceUids.clear();
     const journeys = journeysFromSearchResponse(response);
-    for (const journey of journeys) {
-      for (const leg of journey.legs) {
-        directRouteServiceUids.add(leg.serviceUid);
-      }
-    }
     const result = {
       serviceDate: response.serviceDate ?? routeDate?.serviceDate,
       departureDate: response.departureDate ?? routeDate?.departureDate,
@@ -1933,35 +1820,7 @@ async function executeViewerToolAdapter(
       journeys,
     };
     toolState.response = result;
-    const firstServiceUid = journeys[0]?.legs[0]?.serviceUid;
-    if (firstServiceUid) {
-      toolState.focusedServiceUid = firstServiceUid;
-    }
     return result;
-  }
-
-  if (name === "focus_train") {
-    const serviceUid = input.serviceUid;
-    if (
-      typeof serviceUid !== "string" ||
-      (!searchableServiceUids.has(serviceUid) &&
-        !directRouteServiceUids.has(serviceUid))
-    ) {
-      throw new Error("検索結果に含まれない列車は選択できません。");
-    }
-    const [action] = parseViewerAgentActions([
-      { type: "focus_train", serviceUid },
-    ]);
-    if (
-      !action ||
-      action.type !== "focus_train"
-    ) {
-      throw new Error("列車の現在位置へ移動できませんでした。");
-    }
-    if (directRouteServiceUids.has(serviceUid)) {
-      toolState.focusedServiceUid = serviceUid;
-    }
-    return { serviceUid, focused: true };
   }
 
   if (name === "query_daily_congestion_analysis") {
@@ -2311,20 +2170,6 @@ async function executeViewerToolAdapter(
       ...(targetTimeMinutes === undefined ? {} : { targetTimeMinutes }),
       limit: Math.max(1, Math.min(5, requestedLimit)),
     });
-  }
-
-  if (name === "set_layer_visibility") {
-    const [action] = parseViewerAgentActions([
-      {
-        type: "set_layer_visibility",
-        layer: input.layer,
-        visible: input.visible,
-      },
-    ]);
-    if (!action || action.type !== "set_layer_visibility") {
-      throw new Error("表示レイヤーを変更できません。");
-    }
-    return { layer: action.layer, visible: action.visible };
   }
 
   throw new Error("許可されていないツールです。");
@@ -2881,16 +2726,11 @@ function directRouteResponseText(
   if (response.journeys.length === 0) {
     return `${exclusionLabel}${requirementLabel}${formatJapaneseRouteClockTime(response.searchTimeMinutes)}以降に${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}へ行く経路は見つかりませんでした。`;
   }
-  const first = response.journeys[0]?.legs[0];
-  const focusMessage =
-    first && state.focusedServiceUid === first.serviceUid
-      ? "先頭の列車にフォーカスしました。"
-      : "先頭の列車はまだ表示時刻に運行していないため、経路のみ案内します。";
   const dateLabel = response.departureDate
     ? `${formatCalendarDate(response.departureDate)}の`
     : "";
   return {
-    text: `${exclusionLabel}${requirementLabel}${dateLabel}${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}への経路候補です。${focusMessage}`,
+    text: `${exclusionLabel}${requirementLabel}${dateLabel}${formatStationLabel(response.originStation)}から${formatStationLabel(response.destinationStation)}への経路候補です。`,
     journeyPlan: {
       ...(response.departureDate ? { departureDate: response.departureDate } : {}),
       ...(response.serviceDate ? { serviceDate: response.serviceDate } : {}),
@@ -3002,7 +2842,6 @@ async function journeyConstraintFollowUpResponse(
   });
   const journeys = journeysFromSearchResponse(response);
   const state: DirectRouteToolState = {
-    searched: true,
     response: {
       serviceDate: response.serviceDate ?? plan.serviceDate,
       departureDate: response.departureDate ?? plan.departureDate,
@@ -3031,10 +2870,6 @@ async function journeyConstraintFollowUpResponse(
       journeys,
     },
   };
-  const firstServiceUid = journeys[0]?.legs[0]?.serviceUid;
-  if (firstServiceUid && dependencies.focusTrain(firstServiceUid)) {
-    state.focusedServiceUid = firstServiceUid;
-  }
   return directRouteResponseText(state);
 }
 
