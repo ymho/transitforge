@@ -274,6 +274,8 @@ Composition Rootやremote transportは別の運用判断として追加する。
 - Agent API本文は2MiB 会話は16 message 各Tool結果は512,000文字を上限とする。外部Providerの完全結果はUIと決定論的処理へ保持し モデルへはboundedなObservationだけを渡す
 - Agent Tool定義は名前のallowlistを正本とし 件数上限を別の固定値で重ねない。拒否ログにはpayloadを含めず検証理由とrequest IDだけを残す
 - モデルが`thinking`や`analysis`の内部推論だけを返した場合は画面へ出さず 同じ実行上限内で利用者向け応答を一度再要求する
+- 同じAgent実行内の同一Tool入力は外部APIへ再送せず、成功済みなら確認済み結果から最終回答へ移る。再試行不可エラーなら結果を再利用してTool除外ポリシーへ渡す
+- 再計画上限の直前はToolなしの最終回答フェーズを予約し、収集済みEvidence、不足情報、次の一手を説明する。Evidence validationと全runtime上限はこのフェーズでも維持する
 - 利用者入力をHTMLとして描画しない
 - 会話は端末内のSessionへ保存する。利用者が応答の評価を送信した場合だけ、スポットなどの外部情報を含む評価時点までの会話本文と関連リクエストIDを非公開のフィードバック保存先へ90日間保存する
 - 実行全体のAgent Traceは最大100 event 1MiBに制限し、task ID execution ID request ID modelCallIdで追跡する
@@ -313,7 +315,7 @@ Label `area: ai` `type: reliability` Milestone `会話体験と改善ループ` 
 - 共通Tool ContractのJSON SchemaはBedrock AdapterでConverse APIが受け取れる形へ変換し 最上位を`type` `properties` `required`だけに限定する。モデル固有の制約をDomain Toolへ漏らさない
 - Applicationのmodel classは`default` `lightweight` `decision`だけとし Bedrock model IDを漏らさない。未指定またはclass別model未設定時は`MODEL_ID`へフォールバックする。本番Runtimeは発話を分類せず 候補発見、日付と泊数が揃った旅行計画、検証済み`currentTrip`または`currentJourney`がある判断、Tool結果後の再計画で`decision`を使う。不足条件の確認は`default`を使う
 - CIの`eval:agent`は固定Observationを決定的に採点する。モデル判断の実測は`npm run eval:agent:decision:live -- --profile smoke --model-class default`で行い、本番と同じSystem Prompt Viewer Tool capability contract `MultiStepAgentRuntime`を使う。AWS認証と課金を伴うため手動または定期実行とし、出力はGit管理外の`/tmp/raiquora-live-agent-eval`へ保存する
-- Live EvalはFull 11件、うちSmoke 6件を持つ。目的地の着想、既知条件を聞き直さない質問、日帰り・宿泊、復路変更、曖昧な気分、直前経路の途中駅・制約変更・代替確定を評価する。通常caseは初期能力選択を測り、結果駆動replan caseだけは事実を含まないversion付きTool結果を返して2回目の能力選択まで測る。評価用Tool結果を旅行事実の代用にはしない
+- Live Evalは目的地の着想、既知条件を聞き直さない質問、日帰り・宿泊、復路変更、曖昧な気分、直前経路の途中駅・制約変更・代替確定、検索結果が空の場合の着地を評価する。通常caseは初期能力選択を測り、結果駆動replan caseだけは事実を含まないversion付きTool結果を返して2回目の能力選択まで測る。評価用Tool結果を旅行事実の代用にはしない
 - Live Evalは非0終了も測定結果として保存する。2026-09-02 baselineはNova Lite Smoke 3/6、Full 4/11であり、決定論的Evalの成功とモデル判断品質を混同しない。失敗caseを通すために発話routerを追加したり期待値を緩めたりせず、descriptor、Context、model候補を同じcaseで比較する
 - Live Evalの`--repetitions`は1から10までとし、各反復を独立したAgent実行として評価する。従来の`agent-eval-report`は一度でも失敗したcaseを失敗として保持し、`agent-eval-stability`は反復ごとの全件成功率とcase単位の成功率を別に出す。単発成功を安定した改善とみなさない
 - 2026-09-02の本番相当precondition適用後のNova Lite Smoke 3反復は、目的地写真と直前経路の途中駅だけが全回成功し、stable 2/6、complete attempt 0/3だった。失敗は泊数未確定時の先行検索、直前経路の制約変更、地点検索0件後のWeb再計画に残る。これをIssue #320の反復baselineとし、改善は同じcontractと反復数で比較する

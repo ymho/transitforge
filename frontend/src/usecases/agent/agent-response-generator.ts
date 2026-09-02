@@ -11,7 +11,7 @@ export interface AgentGeneratedResponse {
 export interface AgentResponseGenerator {
   followUp(missingInformation: string[]): string;
   fromModel(response: AgentModelResponse, evidence: Evidence[]): AgentGeneratedResponse;
-  limitReached(): string;
+  limitReached(hasEvidence?: boolean): string;
   failure(): string;
   groundingFailure(): string;
 }
@@ -38,8 +38,10 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
     };
   }
 
-  limitReached(): string {
-    return "安全な実行上限に達したため案内を完了できませんでした";
+  limitReached(hasEvidence = false): string {
+    return hasEvidence
+      ? "確認できた情報だけでは結論を確定できませんでした。これまでの条件は保持しています。優先したい条件を一つ教えていただければ、そこから続けます。"
+      : "今回は必要な情報を確認しきれませんでした。これまでの条件は保持しています。別の候補を探すか、条件を一つ変えて続けられます。";
   }
 
   failure(): string {

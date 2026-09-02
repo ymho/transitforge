@@ -15,7 +15,7 @@ import {
   hasOnlyInternalReasoning,
   type AgentResponseGenerator,
 } from "./agent-response-generator";
-import { AgentToolExecutor } from "./agent-tool-executor";
+import { AgentToolExecutor, type AgentToolExecution } from "./agent-tool-executor";
 import {
   validateEvidenceAndClaims,
   type AssessedEvidenceClaim,
@@ -32,6 +32,7 @@ import { AgentToolRegistry } from "./tool-registry";
 import type { AgentViewerActionHandler } from "./viewer-action-handler";
 import type { AgentViewerActionOutcome } from "./runtime-contract";
 import { ToolViewerActionRegistry } from "./tool-viewer-action-registry";
+import { failedAgentToolResult } from "./tool-contract";
 
 export interface AgentRuntimeDependencies {
   model: AgentModelProvider;
@@ -110,6 +111,8 @@ export class MultiStepAgentRuntime {
     const toolViewerActionOutcomes: AgentViewerActionOutcome[] = [];
     const nonRetryableFailureCounts = new Map<string, number>();
     const unavailableToolNames = new Set<string>();
+    const executedToolCalls = new Map<string, AgentToolExecution>();
+    let finalizeAfterToolResult = false;
 
     while (true) {
       if (
@@ -126,11 +129,33 @@ export class MultiStepAgentRuntime {
         phase: hasToolResults ? "result_driven_replan" : "initial",
       }) ?? this.dependencies.modelClass;
       const modelCallId = crypto.randomUUID();
-      const modelTools = this.dependencies.tools.descriptors().filter(
-        ({ name }) => !unavailableToolNames.has(name),
+      const finalResponseRequired = hasToolResults && (
+        finalizeAfterToolResult ||
+        iterations >= this.limits.maxIterations - 1 ||
+        modelCalls >= this.limits.maxModelCalls - 1 ||
+        toolCalls >= this.limits.maxToolCalls
       );
+      const modelTools = finalResponseRequired
+        ? []
+        : this.dependencies.tools.descriptors().filter(
+          ({ name }) => !unavailableToolNames.has(name),
+        );
+      const modelMessages: AgentModelMessage[] = finalResponseRequired
+        ? [...messages, {
+          role: "user",
+          content: [{
+            type: "text",
+            text: [
+              "これがこの実行での最終回答フェーズです。Toolは追加実行できません。",
+              "確認済みのTool結果だけを根拠に、現時点で分かることを利用者向けに簡潔にまとめてください。",
+              "根拠が不足する場合は推測せず、不足している情報と利用者が次にできることを説明してください。",
+              "既に会話Contextにある条件を聞き直さず、同じ質問や回答を繰り返さないでください。",
+            ].join(" "),
+          }],
+        }]
+        : messages;
       const modelRequest = {
-        messages,
+        messages: modelMessages,
         tools: modelTools,
         modelCallId,
         ...(selectedModelClass === undefined
@@ -213,6 +238,14 @@ export class MultiStepAgentRuntime {
             reasonCodes: ["deterministic_policy_rejected_answer"],
             replanReason: finalResponseDecision.reason ?? "grounding_required",
           });
+          if (finalResponseRequired) {
+            return this.limitResult(
+              trace,
+              evidence,
+              toolViewerActionOutcomes,
+              startedAt,
+            );
+          }
           messages.push({
             role: "user",
             content: [{
@@ -289,7 +322,45 @@ export class MultiStepAgentRuntime {
       const toolResults: AgentModelContent[] = [];
       let terminalResponse: string | undefined;
       const newlyUnavailableToolNames = new Set<string>();
+      let duplicateToolCallDetected = false;
       for (const call of calls) {
+        const signature = toolCallSignature(call.name, call.input);
+        const previousExecution = executedToolCalls.get(signature);
+        if (previousExecution) {
+          const duplicateResult = previousExecution.result.ok
+            ? failedAgentToolResult({
+              code: "invalid_input",
+              message: "同じToolと入力は既に実行済みです。直前の結果を使って回答してください。",
+              retryable: false,
+            })
+            : previousExecution.result;
+          trace.toolCalled(call.toolCallId, call.name, call.input);
+          trace.toolCompleted(call.toolCallId, call.name, duplicateResult, 0);
+          toolCalls += 1;
+          if (duplicateResult.ok) continue;
+          if (previousExecution.result.ok) {
+            duplicateToolCallDetected = true;
+          } else if (!duplicateResult.error.retryable) {
+            const failureKey = nonRetryableFailureKey(
+              call.name,
+              duplicateResult.error.code,
+              duplicateResult.error.message,
+            );
+            const failureCount = (nonRetryableFailureCounts.get(failureKey) ?? 0) + 1;
+            nonRetryableFailureCounts.set(failureKey, failureCount);
+            if (failureCount >= 2 && !unavailableToolNames.has(call.name)) {
+              unavailableToolNames.add(call.name);
+              newlyUnavailableToolNames.add(call.name);
+            }
+          }
+          toolResults.push({
+            type: "tool_result",
+            toolCallId: call.toolCallId,
+            status: "error",
+            output: { error: duplicateResult.error },
+          });
+          continue;
+        }
         const execution = await this.dependencies.toolExecutor.execute({
           executionId: request.executionId,
           toolCallId: call.toolCallId,
@@ -297,6 +368,7 @@ export class MultiStepAgentRuntime {
           toolInput: call.input,
           timeoutMs: Math.max(1, deadline - this.now().getTime()),
         }, trace);
+        executedToolCalls.set(signature, execution);
         toolCalls += 1;
         const availableSlots = this.limits.maxEvidence - evidence.length;
         if (execution.evidence.length > 0 && availableSlots > 0) {
@@ -359,6 +431,7 @@ export class MultiStepAgentRuntime {
         ],
       });
       hasToolResults = true;
+      finalizeAfterToolResult ||= duplicateToolCallDetected;
       if (terminalResponse !== undefined) {
         trace.responseGenerated(terminalResponse);
         trace.taskCompleted("completed", elapsed(startedAt, this.now));
@@ -374,7 +447,9 @@ export class MultiStepAgentRuntime {
       iterations += 1;
       trace.replanDecided(
         true,
-        newlyUnavailableToolNames.size > 0
+        duplicateToolCallDetected
+          ? "同一入力のTool再実行を止めて確認済み結果から最終回答する"
+          : newlyUnavailableToolNames.size > 0
           ? "同じ再試行不可エラーを繰り返したToolを除外して再計画する"
           : "Tool結果を受けて次の手順を判断する",
         decisionBoundary,
@@ -388,7 +463,7 @@ export class MultiStepAgentRuntime {
     viewerActions: AgentViewerActionOutcome[],
     startedAt: number,
   ): AgentRuntimeResult {
-    const response = this.responseGenerator.limitReached();
+    const response = this.responseGenerator.limitReached(evidence.length > 0);
     trace.responseGenerated(response);
     trace.taskCompleted("failed", elapsed(startedAt, this.now), "runtime_limit_reached");
     return result("limit_reached", response, evidence, [], viewerActions, trace);
@@ -406,6 +481,24 @@ export class MultiStepAgentRuntime {
     trace.taskCompleted("failed", elapsed(startedAt, this.now), reason);
     return result("failed", response, evidence, [], viewerActions, trace);
   }
+}
+
+function toolCallSignature(
+  toolName: string,
+  input: Record<string, unknown>,
+): string {
+  return `${toolName}:${canonicalJson(input)}`;
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`);
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "undefined";
 }
 
 function agentDecisionBoundary(hasTools: boolean): string[] {

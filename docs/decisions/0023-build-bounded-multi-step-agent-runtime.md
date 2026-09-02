@@ -32,6 +32,14 @@ Tool結果はassistantのTool call IDと対応するuserのTool resultとして�
 Toolは同じAgent実行内で順序付きに実行し EvidenceはID重複を除いて上限件数まで保持する
 Provider失敗 max token timeout 契約にないTool callを成功応答として扱わない
 
+同一実行内でTool名と正規化した入力が一致する呼び出しは再実行しない。成功済み入力の
+再要求は重複エラーとしてモデルへ返し、確認済み結果から最終回答させる。再試行不可エラーの
+重複は同じ結果を再利用して既存のTool除外ポリシーへ渡すため、外部APIを無意味に再実行しない。
+
+通常の再計画枠を使い切る直前は、最後のmodel callからToolを外して最終回答フェーズにする。
+モデルは収集済みEvidenceだけを根拠に、分かる範囲と不足情報、次に可能な行動を説明する。
+この回復処理でもEvidence validationとmodel call、Tool call、実行時間の上限は緩和しない。
+
 新Runtimeの有効化は`AgentRuntimeRolloutRouter`で機能単位に行う
 未指定の機能は既存loopへ渡し 現段階では`src/main.ts`を一括置換しない
 
@@ -46,5 +54,6 @@ Provider失敗 max token timeout 契約にないTool callを成功応答とし�
 
 - 2つ以上のToolを順序どおり実行して結果をmodelへ返せること
 - model call Tool call 反復 実行時間 Evidenceの各上限で停止すること
+- 同じTool入力を再実行せず 上限直前に確認済み情報から回答へ着地できること
 - 不足情報はToolを呼ばずfollow-upになること
 - 機能単位で新旧handlerを切り替えられること
