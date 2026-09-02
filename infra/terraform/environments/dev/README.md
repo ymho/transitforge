@@ -15,6 +15,9 @@
 
 data-builderのECS ECR 入力S3 Schedulerはdata-builderリポジトリが管理する
 
+NATインスタンスは`t4g.nano`を既定とし 初回bootstrap前に512MiBのswapを作成する。
+swapは`/etc/fstab`へ登録し 再起動後もNAT転送serviceとともに復旧する。
+
 ## 初期化
 
 先に`../../bootstrap`でTerraform state用バケットを作成する
