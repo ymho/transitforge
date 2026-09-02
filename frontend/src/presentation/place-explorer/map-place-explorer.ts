@@ -1,5 +1,6 @@
 import type { PlaceMedia } from "@raiquora/trip/place-media";
 import type { MapTravelCandidate } from "../../domain/map-travel-candidate";
+import { createPhotoSourceDisclosure, type PhotoSourceDisclosureModel } from "../shared/photo-source-disclosure";
 
 export interface MapPlaceCardModel {
   id: string;
@@ -8,8 +9,8 @@ export interface MapPlaceCardModel {
   summary?: string;
   sourceUrl: string;
   sources: NonNullable<PlaceMedia["sources"]>;
-  image?: { url: string; attribution: string };
-  images: Array<{ url: string; attribution: string }>;
+  image?: PhotoSourceDisclosureModel;
+  images: PhotoSourceDisclosureModel[];
   openingHours?: string;
   categories: string[];
   kind: MapTravelCandidate["kind"];
@@ -60,8 +61,13 @@ export function mapTravelCandidateCardModels(candidates: readonly MapTravelCandi
     const images = place
       ? (place.images ?? (place.image ? [place.image] : []))
           .filter(({ hotlinkAllowed }) => hotlinkAllowed === true)
-          .map(({ url, attribution }) => ({ url, attribution }))
-      : candidate.imageUrl ? [{ url: candidate.imageUrl, attribution: "提供画像" }] : [];
+          .map(({ url, attribution, descriptionUrl, license }) => ({
+            url,
+            attribution,
+            sourcePageUrl: descriptionUrl ?? place.sourceUrl,
+            ...(license ? { license } : {}),
+          }))
+      : candidate.imageUrl ? [{ url: candidate.imageUrl, attribution: "提供画像", sourcePageUrl: candidate.sourceUrl }] : [];
     return {
       id: candidate.id,
       kind: candidate.kind,
@@ -75,7 +81,12 @@ export function mapTravelCandidateCardModels(candidates: readonly MapTravelCandi
       primaryLabel: candidate.kind === "accommodation" ? "この宿を選ぶ" : "旅程を相談",
       ...(candidate.kind === "restaurant" && candidate.openingHours ? { openingHours: candidate.openingHours } : {}),
       ...(place?.openingHoursStatus === "available" && place.openingHours ? { openingHours: place.openingHours } : {}),
-      ...(candidate.imageUrl ? { image: { url: candidate.imageUrl, attribution: place?.image?.attribution ?? "提供画像" } } : {}),
+      ...(candidate.imageUrl ? { image: {
+        url: candidate.imageUrl,
+        attribution: place?.image?.attribution ?? "提供画像",
+        sourcePageUrl: place?.image?.descriptionUrl ?? candidate.sourceUrl,
+        ...(place?.image?.license ? { license: place.image.license } : {}),
+      } } : {}),
       ...(reviewLabel ? { reviewLabel } : {}),
       ...(candidate.kind === "accommodation" && candidate.priceLabel ? { priceLabel: candidate.priceLabel } : {}),
       ...(candidate.kind === "accommodation" && candidate.availabilityLabel ? { availabilityLabel: candidate.availabilityLabel } : {}),
@@ -288,9 +299,10 @@ function renderPlaceGallery(place: MapPlaceCardModel): HTMLElement {
     image.src = item.url;
     image.alt = `${place.name}の写真 ${index + 1}`;
     image.loading = index === 0 ? "eager" : "lazy";
-    const credit = document.createElement("figcaption");
-    credit.textContent = item.attribution;
-    figure.append(image, credit);
+    figure.append(
+      image,
+      createPhotoSourceDisclosure(item, `${place.name}の写真 ${index + 1}`),
+    );
     figures.push(figure);
     track.append(figure);
     const dot = document.createElement("button");

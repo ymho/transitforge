@@ -1,6 +1,7 @@
 import type { ExternalTravelInformation } from "@raiquora/trip/external-travel-information";
 import type { RestaurantCandidate } from "@raiquora/trip/restaurant-search";
 import type { ViewerAgentExternalResponse } from "../../domain/viewer-agent-response";
+import { createPhotoSourceDisclosure } from "../shared/photo-source-disclosure";
 
 export function renderExternalTravelInformation(
   response: ViewerAgentExternalResponse,
@@ -30,30 +31,38 @@ function appendPlaceInspiration(
   if (!inspiration) return;
   const gallery = document.createElement("section");
   gallery.className = "external-place-inspiration";
-  const source = document.createElement("a");
-  source.href = inspiration.sourcePageUrl;
-  source.target = "_blank";
-  source.rel = "noopener noreferrer";
-  source.ariaLabel = `${inspiration.placeName}の写真掲載元を開く`;
   const image = document.createElement("img");
   image.src = inspiration.imageUrl;
   image.alt = inspiration.placeName;
   image.loading = "lazy";
-  source.append(image);
-  gallery.append(source);
+  gallery.append(
+    image,
+    createPhotoSourceDisclosure({
+      url: inspiration.imageUrl,
+      sourcePageUrl: inspiration.sourcePageUrl,
+      attribution: inspiration.attribution,
+      ...(inspiration.license ? { license: inspiration.license } : {}),
+    }, `${inspiration.placeName}の写真`),
+  );
   container.append(gallery);
 }
 
 export function placeInspirationImage(
   places: ViewerAgentExternalResponse["external"]["places"],
-): { placeName: string; imageUrl: string; sourcePageUrl: string } | undefined {
+): { placeName: string; imageUrl: string; sourcePageUrl: string; attribution: string; license?: string } | undefined {
   if (places?.status !== "available" || !places.data) return undefined;
   for (const place of places.data.places) {
     if (place.image?.hotlinkAllowed !== true) continue;
     const imageUrl = publicHttpsUrl(place.image.url);
     const sourcePageUrl = publicHttpsUrl(place.image.descriptionUrl);
     if (!imageUrl || !sourcePageUrl) continue;
-    return { placeName: place.name, imageUrl, sourcePageUrl };
+    return {
+      placeName: place.name,
+      imageUrl,
+      sourcePageUrl,
+      attribution: place.image.attribution,
+      ...(place.image.license ? { license: place.image.license } : {}),
+    };
   }
   return undefined;
 }

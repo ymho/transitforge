@@ -33,6 +33,7 @@ describe("placeInspirationImage", () => {
       placeName: "出雲大社",
       imageUrl: "https://imgs.search.brave.com/izumo.jpg",
       sourcePageUrl: "https://travel.example/izumo-taisha",
+      attribution: "travel.example",
     });
   });
 
