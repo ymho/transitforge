@@ -7,7 +7,10 @@ import {
 } from "./model-class.js";
 
 export const agentRequestContractVersion = "agent-api-request-v1";
-export const maximumBodyBytes = 32 * 1_024;
+// Multi-step research can legitimately include several bounded 8,000-character
+// Tool observations. Keep a hard transport guard while leaving enough room for
+// the model context, tool definitions, and result-driven replanning.
+export const maximumBodyBytes = 96 * 1_024;
 const maximumMessages = 16;
 const maximumContentBlocks = 12;
 const maximumTextCharacters = 4_000;

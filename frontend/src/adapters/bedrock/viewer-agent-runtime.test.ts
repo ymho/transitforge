@@ -2404,6 +2404,54 @@ describe("Bedrock viewer agent", () => {
     expect(JSON.stringify(result)).not.toContain("伊勢志摩");
   });
 
+  it("passes a bounded web-search observation to Bedrock while retaining the full external result", async () => {
+    const longText = "静かな温泉と自然を楽しめる観光情報".repeat(500);
+    const results = Array.from({ length: 8 }, (_, index) => ({
+      id: `web-${index + 1}`,
+      title: `候補${index + 1}`,
+      url: `https://tourism.example/place-${index + 1}`,
+      description: longText,
+      extraSnippets: [longText, longText],
+    }));
+    const searchWeb = vi.fn(async () => ({ webSearch: {
+      status: "available" as const,
+      freshness: "fresh" as const,
+      data: { query: "静かに過ごせる温泉 自然 関西", results },
+      evidence: [{
+        id: "web-search:brave:12345678:2026-09-02T00:00:00.000Z",
+        kind: "web", provider: "brave-search", sourceUrl: "https://search.brave.com/",
+        retrievedAt: "2026-09-02T00:00:00.000Z", confidence: "observed",
+      }],
+    } }));
+    const converse = vi.fn<BedrockAgentConverse>()
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "web", name: "search_web",
+          input: { query: "静かに過ごせる温泉 自然 関西", limit: 8 },
+        } }] },
+        stopReason: "tool_use",
+      })
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ text: "候補を比較して、静かに過ごせる場所を提案します。" }] },
+        stopReason: "end_turn",
+      });
+
+    const result = await runViewerAgentRuntime("リラックスできる観光したい", {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      searchWeb, maximumRouteTime: 1_800,
+    }, converse);
+
+    const secondRequest = JSON.stringify(converse.mock.calls[1]?.[0]);
+    expect(new TextEncoder().encode(secondRequest).byteLength).toBeLessThan(32 * 1_024);
+    expect(secondRequest).not.toContain(longText);
+    expect(typeof result).not.toBe("string");
+    if (typeof result !== "string" && "external" in result) {
+      expect(result.external?.webSearch?.data?.results).toHaveLength(8);
+    }
+  });
+
   it("keeps the stay-length follow-up selected by Bedrock", async () => {
     const converse = vi.fn().mockResolvedValue({
       message: { role: "assistant", content: [{ toolUse: {

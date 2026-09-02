@@ -20,6 +20,9 @@ describe("BraveWebSearchProvider", () => {
     expect(url.searchParams.get("search_lang")).toBe("jp");
     expect(requestedToken).toBe("secret-key");
     expect(result.data?.results[0]).toMatchObject({ title: "西条酒蔵通り", url: "https://tourism.example/saijo", extraSnippets: ["見学情報"] });
+    expect(result.evidence[0]?.id).toMatch(/^web-search:brave:[a-f0-9]{8}:2026-08-30T00:00:00\.000Z$/u);
+    expect(result.evidence[0]?.id.length).toBeLessThanOrEqual(128);
+    expect(result.evidence[0]?.id).not.toContain("西条");
     expect(JSON.stringify(result)).not.toContain("secret-key");
   });
 });

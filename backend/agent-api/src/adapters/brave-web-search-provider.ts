@@ -33,7 +33,7 @@ export class BraveWebSearchProvider implements WebSearchProvider {
       if (results.length === 0) return failedExternalInformation({ code: "invalid_request", message: "確認できるWeb情報が見つかりません", retryable: false });
       const retrievedAt = this.now();
       return availableExternalInformation({ query: text, results }, [{
-        id: `web-search:brave:${encodeURIComponent(text)}:${retrievedAt.toISOString()}`,
+        id: `web-search:brave:${stableQueryHash(text)}:${retrievedAt.toISOString()}`,
         kind: "web",
         provider: "brave-search",
         sourceUrl: "https://search.brave.com/",
@@ -92,5 +92,13 @@ function safePublicHttpsUrl(value: unknown): string | undefined {
 }
 function clean(value: unknown, limit: number): string {
   return typeof value === "string" ? value.normalize("NFKC").replace(/<[^>]*>/gu, " ").replace(/\s+/gu, " ").trim().slice(0, limit) : "";
+}
+function stableQueryHash(value: string): string {
+  let hash = 0x811c9dc5;
+  for (const character of value) {
+    hash ^= character.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
