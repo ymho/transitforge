@@ -360,3 +360,20 @@
 .external-weather-days { display: flex; gap: .65rem; overflow-x: auto; padding: .15rem .05rem .45rem; scroll-snap-type: x proximity; }
 .external-weather-days article { display: grid; flex: 0 0 6.5rem; gap: .25rem; padding: .7rem; border: 1px solid var(--glass-border-subtle); border-radius: 1rem; background: var(--glass-surface); scroll-snap-align: start; }
 .external-weather-days span, .external-evidence-caption { color: var(--glass-muted); font-size: .68rem; }
+
+.ai-guide-message-assistant h2,
+.ai-guide-message-assistant h3,
+.ai-guide-message-assistant h4,
+.ai-guide-message-assistant h5,
+.ai-guide-message-assistant h6 { margin: 1rem 0 0.45rem; line-height: 1.35; }
+.ai-guide-message-assistant h2 { font-size: 1.15rem; }
+.ai-guide-message-assistant h3 { font-size: 1.05rem; }
+.ai-guide-message-assistant blockquote { margin: 0.75rem 0; padding: 0.25rem 0 0.25rem 0.8rem; border-left: 3px solid var(--glass-accent); color: var(--glass-muted); }
+.ai-guide-message-assistant code { padding: 0.1em 0.3em; border-radius: 0.35rem; background: var(--glass-surface-muted); font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.88em; }
+.ai-guide-message-assistant pre { max-width: 100%; margin: 0.75rem 0; padding: 0.8rem; overflow: auto; border: 1px solid var(--glass-border-subtle); border-radius: 0.75rem; background: var(--glass-surface-muted); }
+.ai-guide-message-assistant pre code { padding: 0; background: transparent; }
+.ai-guide-message-assistant hr { margin: 1rem 0; border: 0; border-top: 1px solid var(--glass-border-subtle); }
+.assistant-markdown-table-scroll { max-width: 100%; margin: 0.75rem 0; overflow-x: auto; }
+.assistant-markdown-table-scroll table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.assistant-markdown-table-scroll th,
+.assistant-markdown-table-scroll td { padding: 0.45rem 0.55rem; border: 1px solid var(--glass-border-subtle); text-align: left; }
