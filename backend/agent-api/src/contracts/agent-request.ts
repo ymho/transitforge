@@ -7,10 +7,11 @@ import {
 } from "./model-class.js";
 
 export const agentRequestContractVersion = "agent-api-request-v1";
-// Multi-step research can legitimately include several bounded 8,000-character
-// Tool observations. Keep a hard transport guard while leaving enough room for
-// the model context, tool definitions, and result-driven replanning.
-export const maximumBodyBytes = 96 * 1_024;
+// Multi-step research can legitimately include several bounded Tool observations.
+// Keep a hard transport guard while leaving enough room for the model context,
+// tool definitions, and result-driven replanning.
+export const maximumBodyBytes = 2 * 1_024 * 1_024;
+export const maximumToolResultJsonCharacters = 512_000;
 const maximumMessages = 16;
 const maximumContentBlocks = 12;
 const maximumTextCharacters = 4_000;
@@ -247,7 +248,7 @@ function validToolResultContent(value: unknown): value is [{ json: unknown }] {
   ) return false;
   try {
     const encoded = JSON.stringify(value[0].json);
-    return encoded !== undefined && encoded.length <= 8_000;
+    return encoded !== undefined && encoded.length <= maximumToolResultJsonCharacters;
   } catch {
     return false;
   }

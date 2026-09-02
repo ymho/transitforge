@@ -256,7 +256,7 @@ Composition Rootやremote transportは別の運用判断として追加する。
 - 日帰りは宿泊検索を使わず往復経路だけを検索する。既存旅程の行き帰りの時刻変更と途中立寄りは対象の鉄道移動だけを再検索して確認可能なPatchを作る
 - 3泊以上の宿泊候補は全泊を同じ地域で過ごす検索結果であることを明示し 登録済みの周辺候補があれば滞在先を分ける相談を案内する。複数地域への分割は利用者の同意なく確定しない
 - 未観測時間をゼロとして扱わない
-- Agent API本文は96KiB 会話は16 message 各Tool結果は8,000文字を上限とする。外部Providerの完全結果はUIと決定論的処理へ保持し モデルへはboundedなObservationだけを渡す
+- Agent API本文は2MiB 会話は16 message 各Tool結果は512,000文字を上限とする。外部Providerの完全結果はUIと決定論的処理へ保持し モデルへはboundedなObservationだけを渡す
 - Agent Tool定義は名前のallowlistを正本とし 件数上限を別の固定値で重ねない。拒否ログにはpayloadを含めず検証理由とrequest IDだけを残す
 - モデルが`thinking`や`analysis`の内部推論だけを返した場合は画面へ出さず 同じ実行上限内で利用者向け応答を一度再要求する
 - 利用者入力をHTMLとして描画しない
