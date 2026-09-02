@@ -16,10 +16,12 @@ AI Lambdaは通常 固定されない送信元IPで外部へ接続する。ア�
 - NATインスタンスへElastic IPを1つ割り当て 提供者の許可リストへ登録する
 - NATインスタンスは外部からの受信を許可せず LambdaからのHTTPS転送だけを許可する
 - 個人開発のdev環境では単一AZで運用し 冗長化しない
+- dev環境のNATインスタンスは`t4g.nano`を既定とし bootstrap前に512MiBの永続swapを作成する
 - マネージドNAT GatewayとCloudflareの固定出口IPは採用しない
 
 ## 影響
 
 - 提供者はElastic IPだけを許可すればよい
 - Elastic IPと小型EC2の継続費用と NATインスタンスの保守責任が発生する
+- swapはbootstrap時のパッケージ導入に必要なメモリを補い 再起動後も有効化する
 - NATインスタンス障害時はAI Lambdaの外部通信が停止するが 列車表示と時刻表検索には影響しない

@@ -142,6 +142,19 @@ resource "aws_instance" "ai_nat" {
     #!/bin/bash
     # Bootstrap profile: ${var.ai_nat_instance_type}
     set -euo pipefail
+    swap_file=/swapfile
+    if [ ! -f "$swap_file" ]; then
+      fallocate -l 512M "$swap_file" || dd if=/dev/zero of="$swap_file" bs=1M count=512 status=none
+      chmod 0600 "$swap_file"
+      mkswap "$swap_file"
+    else
+      chmod 0600 "$swap_file"
+    fi
+    if ! swapon --show=NAME --noheadings | grep -Fxq "$swap_file"; then
+      swapon "$swap_file" || { mkswap "$swap_file"; swapon "$swap_file"; }
+    fi
+    grep -Fqx "$swap_file none swap sw 0 0" /etc/fstab || \
+      echo "$swap_file none swap sw 0 0" >>/etc/fstab
     dnf install -y iptables-nft
     cat >/usr/local/sbin/transitforge-nat <<'EOF'
     #!/bin/bash
