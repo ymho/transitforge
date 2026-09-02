@@ -2363,6 +2363,47 @@ describe("Bedrock viewer agent", () => {
     expect(converse).toHaveBeenCalledTimes(3);
   });
 
+  it("does not invent destination candidates when web discovery is unavailable", async () => {
+    const searchWeb = vi.fn(async () => ({
+      webSearch: {
+        status: "unavailable" as const,
+        freshness: "unknown" as const,
+        evidence: [],
+        failure: {
+          code: "unauthorized" as const,
+          message: "Web検索の認証情報が設定されていません",
+          retryable: false,
+        },
+      },
+    }));
+    const converse = vi.fn<BedrockAgentConverse>().mockResolvedValueOnce({
+      message: { role: "assistant", content: [{ toolUse: {
+        toolUseId: "web", name: "search_web",
+        input: { query: "静かに過ごせる温泉 自然 関西", limit: 8 },
+      } }] },
+      stopReason: "tool_use",
+    });
+
+    const result = await runViewerAgentRuntime("リラックスできる観光したい", {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      searchWeb,
+      getUserProfile: () => ({
+        home: { station: "向日町", carAvailable: false },
+        travelStyle: { pace: 0.2 },
+        transport: { maxTypicalTravelMinutes: 120 },
+      } as unknown as UserProfile),
+      maximumRouteTime: 1_800,
+    }, converse);
+
+    expect(searchWeb).toHaveBeenCalledOnce();
+    expect(converse).toHaveBeenCalledOnce();
+    expect(typeof result === "string" ? result : result.text)
+      .toContain("根拠を確認できない候補は案内せず");
+    expect(JSON.stringify(result)).not.toContain("伊勢志摩");
+  });
+
   it("keeps the stay-length follow-up selected by Bedrock", async () => {
     const converse = vi.fn().mockResolvedValue({
       message: { role: "assistant", content: [{ toolUse: {
