@@ -466,7 +466,11 @@ export async function executeExternalTravelTool(
       ...state.webPages.evidence,
       ...outputs.flatMap((output) => isRecord(output) && isRecord(output.result) && Array.isArray(output.result.evidence) ? output.result.evidence : []),
     ] as ExternalTravelInformation<PlaceMediaSearchResult>["evidence"];
-    const result = availableExternalInformation<PlaceMediaSearchResult>({ places: uniquePlaces(places) as unknown as PlaceMediaSearchResult["places"] }, evidence);
+    const resolvedPlaces = uniquePlaces(places) as unknown as PlaceMediaSearchResult["places"];
+    if (resolvedPlaces.length === 0) {
+      throw new Error("施設候補を地点として確認できませんでした。別の候補を調べてください。");
+    }
+    const result = availableExternalInformation<PlaceMediaSearchResult>({ places: resolvedPlaces }, evidence);
     state.places = result;
     return { result };
   }

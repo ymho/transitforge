@@ -103,6 +103,9 @@ quick replyを優先し 同じ質問を繰り返さない。モデルが回答�
 `ask_follow_up` または候補探索へ再計画する。Applicationは旅行語句ごとの分岐ではなく
 質問段階 既知条件 直前質問との重複だけを共通ポリシーとして検証する。
 利用者が望んだら `planningStage=planning` へ進め 宿や正確な経路の検索に必要な日程だけを確認する。
+`search_direct_routes`は利用者が駅間経路を明示した場合、または具体的な旅行先を選んで
+`planningStage=planning`へ進んだ場合だけ公開する。プロフィールの自宅駅だけを根拠に
+気分や行き先候補の探索を自宅駅周辺の経路検索へ置き換えない。
 Tool失敗は利用者向け文面へ転載せず 入力の再解決か別Toolで回復する。
 同一実行で同じToolが同じcodeとmessageの再試行不可エラーを返した場合は 一度だけ入力修正を許す。
 2回目も同じエラーなら当該Toolをその実行の能力一覧から除外し 別Toolまたは回答へ再計画する。
@@ -271,6 +274,7 @@ Composition Rootやremote transportは別の運用判断として追加する。
 - 利用者入力をHTMLとして描画しない
 - 会話は端末内のSessionへ保存する。利用者が応答の評価を送信した場合だけ、スポットなどの外部情報を含む評価時点までの会話本文と関連リクエストIDを非公開のフィードバック保存先へ90日間保存する
 - 実行全体のAgent Traceは最大100 event 24KiBに制限し、task ID execution ID request ID modelCallIdで追跡する
+- 実行Traceの各文字列は省略記号を含め512文字以内とし、ブラウザとLambdaのschema上限を一致させる
 - Bedrock呼び出し単位のTraceは、Lambdaが実際に送るmodel ID System Prompt message Tool定義 inference設定を最大3MiBで同じ非公開S3へ保存する。成功時はstop reason token latency、失敗時は例外名 HTTP status Provider request ID retryableを対応付ける
 - どちらのTraceも30日間でS3 Lifecycleにより期限切れとなる。削除用のアプリ内バッチやLambdaは持たない
 - TraceはブラウザとLambdaの両方で秘密値と正確な現在地座標を除去し、CloudWatchログへモデル入出力を含めない

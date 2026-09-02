@@ -117,6 +117,16 @@ describe("agent trace parity", () => {
     });
   });
 
+  it("accepts event strings at the 512 character boundary", async () => {
+    const value = submission();
+    value.trace.events = [traceEvent(1, "長".repeat(512))];
+
+    await expect(store(value)).resolves.toEqual({ traceId: "trace-1", eventCount: 1 });
+
+    value.trace.events = [traceEvent(1, "長".repeat(513))];
+    await expect(store(value)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
   it("returns bounded storage failures and logs identifiers only", async () => {
     const log = vi.fn();
     const operation = createAgentTraceOperation({

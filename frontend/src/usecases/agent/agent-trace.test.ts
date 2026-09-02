@@ -154,6 +154,17 @@ describe("AgentTraceRecorder", () => {
       }),
     ]);
   });
+
+  it("keeps truncated event strings within the server contract", () => {
+    const recorder = new AgentTraceRecorder("execution-5", { now: fixedNow });
+    recorder.responseGenerated("長".repeat(600));
+
+    const [event] = recorder.snapshot().events;
+    expect(event).toMatchObject({ type: "response_generated" });
+    if (event?.type !== "response_generated") throw new Error("応答Traceがありません");
+    expect(event.response).toHaveLength(512);
+    expect(event.response.endsWith("…")).toBe(true);
+  });
 });
 
 describe("summarizeTracePayload", () => {

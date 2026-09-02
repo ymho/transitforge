@@ -433,9 +433,9 @@ function sanitizeText(value: string, maxCharacters: number): string {
   const redacted = value
     .replace(BEARER_VALUE, "Bearer [redacted]")
     .replace(KEY_VALUE_SECRET, "$1[redacted]");
-  return redacted.length <= maxCharacters
-    ? redacted
-    : `${redacted.slice(0, maxCharacters)}…`;
+  if (redacted.length <= maxCharacters) return redacted;
+  if (maxCharacters < 1) return "";
+  return `${redacted.slice(0, maxCharacters - 1)}…`;
 }
 
 function safeStringify(value: unknown): string {
