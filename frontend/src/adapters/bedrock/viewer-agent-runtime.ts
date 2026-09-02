@@ -591,6 +591,7 @@ export function viewerAgentToolDescriptors(
 
 export interface ViewerAgentToolPreconditionContext {
   tripContext?: TripContext;
+  directRouteSearchGrounded?: boolean;
 }
 
 /**
@@ -620,6 +621,9 @@ export function validateViewerAgentToolPreconditions(
       return "宿泊検索の日付が確定済みTripContextと一致しません。";
     }
   }
+  if (name === "search_direct_routes" && context.directRouteSearchGrounded === false) {
+    return "利用者が駅間経路を求めておらず、確定した旅行先もないためsearch_direct_routesは実行できません。候補探索を続けてください。";
+  }
   if (name === "ask_follow_up") {
     const expectedInput = input.expectedInput;
     const known =
@@ -645,9 +649,10 @@ const terminalToolNames = new Set<string>([
 
 function viewerToolRegistry(context: ViewerToolContext): AgentToolRegistry {
   const registry = new AgentToolRegistry();
+  const preconditionContext = viewerToolPreconditionContext(context);
   for (const name of viewerAgentToolNames) {
-    if (!viewerToolIsAvailable(name, context.dependencies)) continue;
-    registry.register(viewerTool(name, context));
+    if (!viewerToolIsAvailable(name, context.dependencies, preconditionContext)) continue;
+    registry.register(viewerTool(name, context, preconditionContext));
   }
   return registry;
 }
@@ -655,6 +660,7 @@ function viewerToolRegistry(context: ViewerToolContext): AgentToolRegistry {
 function viewerToolIsAvailable(
   name: ViewerAgentToolName,
   dependencies: ViewerAgentRuntimeDependencies,
+  preconditions: ViewerAgentToolPreconditionContext,
 ): boolean {
   const currentTrip = dependencies.getTripPlan?.();
   switch (name) {
@@ -668,6 +674,8 @@ function viewerToolIsAvailable(
     case "revise_previous_journey":
       return dependencies.getPreviousJourneyPlan?.() !== undefined;
     case "search_direct_routes":
+      return dependencies.searchDirectRoutes !== undefined &&
+        preconditions.directRouteSearchGrounded !== false;
     case "plan_day_trip":
       return dependencies.searchDirectRoutes !== undefined;
     case "search_trip_route_update":
@@ -703,13 +711,8 @@ function viewerToolIsAvailable(
 function viewerTool(
   name: ViewerAgentToolName,
   context: ViewerToolContext,
+  preconditionContext: ViewerAgentToolPreconditionContext,
 ): AgentTool<Record<string, unknown>, unknown> {
-  const preconditionContext = {
-    tripContext: travelConversationFacts(
-      context.prompt,
-      currentDate(context.dependencies),
-    ).context,
-  };
   const inputSchema = viewerToolInputSchema(name, preconditionContext);
   return {
     name,
@@ -752,6 +755,29 @@ function viewerTool(
         });
       }
     },
+  };
+}
+
+function viewerToolPreconditionContext(
+  context: ViewerToolContext,
+): ViewerAgentToolPreconditionContext {
+  const tripContext = travelConversationFacts(
+    context.prompt,
+    currentDate(context.dependencies),
+  ).context;
+  const explicitRoute = directRouteRequestFromPrompt(
+    context.prompt,
+    context.dependencies.trains,
+  );
+  const hasConcreteDestination = (
+    typeof tripContext.destinationWish === "string" &&
+    tripContext.destinationWish.trim().length > 0
+  ) || travelDestinationAccess(context.prompt) !== undefined;
+  return {
+    tripContext,
+    directRouteSearchGrounded: explicitRoute !== undefined || (
+      tripContext.planningStage === "planning" && hasConcreteDestination
+    ),
   };
 }
 

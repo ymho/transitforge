@@ -510,7 +510,7 @@ Goodは1操作で送信し Badだけ対象回答の直下でコメント付き �
 - 判断記録: [ADR 0025](../decisions/0025-store-bounded-agent-traces-privately.md)
 
 `taskId` `executionId` 関連するAPI `requestIds`と最大100件のeventを保存する。
-本文は24KiBを上限とし Lambdaでevent schema 順序 field型を再検証する。
+本文は24KiB、各文字列は省略記号を含め512文字を上限とし Lambdaでevent schema 順序 field型を再検証する。
 `model_started`は`modelCallId` message数 Tool名 model classを持ち、同じIDの
 モデル呼び出しTraceと対応付ける。秘密値 Authorization cookieと現在地座標は
 ブラウザ側のRecorderに加え保存直前にも除去する。

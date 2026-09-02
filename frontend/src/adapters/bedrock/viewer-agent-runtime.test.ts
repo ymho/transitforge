@@ -100,6 +100,11 @@ describe("Bedrock viewer agent", () => {
         },
       },
     )).toBeUndefined();
+    expect(validateViewerAgentToolPreconditions(
+      "search_direct_routes",
+      { originStation: "向日町", destinationStation: "京都" },
+      { tripContext: {}, directRouteSearchGrounded: false },
+    )).toContain("駅間経路を求めておらず");
   });
 
   it("removes already-known follow-up kinds from the model-visible schema", () => {
@@ -2204,6 +2209,40 @@ describe("Bedrock viewer agent", () => {
     expect(converse).toHaveBeenCalledTimes(3);
   });
 
+  it("does not let an unrelated direct-route call end a vague travel consultation", async () => {
+    const searchDirectRoutes = vi.fn(async () => ({
+      originStation: "向日町",
+      results: [{
+        train,
+        originStation: "向日町",
+        destinationStation: "京都",
+        departureTimeMinutes: 1_200,
+        arrivalTimeMinutes: 1_215,
+      }],
+    }));
+    const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
+      expect(tools?.map(({ name }) => name)).not.toContain("search_direct_routes");
+      return {
+        message: { role: "assistant", content: [{ text: "プロフィールに合う旅行先候補を探し直します。" }] },
+        stopReason: "end_turn",
+      };
+    });
+
+    const result = await runViewerAgentRuntime(
+      "リフレッシュできる旅行をしたい",
+      {
+        trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+        queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+        searchDirectRoutes, maximumRouteTime: 1_800,
+      },
+      converse,
+    );
+
+    expect(searchDirectRoutes).not.toHaveBeenCalled();
+    expect(result).toBe("プロフィールに合う旅行先候補を探し直します。");
+    expect(converse).toHaveBeenCalledOnce();
+  });
+
   it("does not invent destination candidates when web discovery is unavailable", async () => {
     const searchWeb = vi.fn(async () => ({
       webSearch: {
@@ -2477,7 +2516,7 @@ describe("Bedrock viewer agent", () => {
     const converse = vi.fn<BedrockAgentConverse>()
       .mockImplementationOnce(async (_messages, tools) => {
       expect(tools?.some(({ name }) => name === "ask_follow_up")).toBe(true);
-      expect(tools?.some(({ name }) => name === "search_direct_routes")).toBe(true);
+      expect(tools?.some(({ name }) => name === "search_direct_routes")).toBe(false);
       expect(tools?.some(({ name }) => name === "search_accommodations")).toBe(false);
       return {
         message: { role: "assistant", content: [{ toolUse: {
@@ -2838,7 +2877,7 @@ describe("Bedrock viewer agent", () => {
     const converse = vi.fn<BedrockAgentConverse>(async (_messages, tools) => {
       expect(tools?.some(({ name }) => name === "propose_trip_update")).toBe(true);
       expect(tools?.some(({ name }) => name === "ask_follow_up")).toBe(true);
-      expect(tools?.some(({ name }) => name === "search_direct_routes")).toBe(true);
+      expect(tools?.some(({ name }) => name === "search_direct_routes")).toBe(false);
       return {
         message: { role: "assistant", content: [{ toolUse: {
           toolUseId: "add-sightseeing",

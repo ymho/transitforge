@@ -146,6 +146,25 @@ describe("external travel tools", () => {
       .result.data.places[0]?.detail.atmosphere).toContain("白壁");
   });
 
+  it("Mapbox POIへ照合できない候補を成功として公開しない", async () => {
+    const state: ExternalTravelToolState = {
+      webPages: {
+        status: "available", freshness: "fresh",
+        data: { pages: [{ url: "https://tourism.example/", title: "静かな温泉", text: "静かな温泉で休めます", contentType: "html", truncated: false, untrustedExternalContent: true }] },
+        evidence: [],
+      },
+    };
+    const searchPlaceMedia = vi.fn(async () => ({ result: {
+      status: "available", freshness: "fresh", evidence: [],
+      data: { places: [{ providerPlaceId: "mapbox.other", name: "別の施設", latitude: 34, longitude: 132, sourceUrl: "https://www.mapbox.com/", openingHoursStatus: "unknown" }] },
+    } }));
+
+    await expect(executeExternalTravelTool("resolve_place_candidates", {
+      candidates: [{ name: "静かな温泉", sourceUrl: "https://tourism.example/" }],
+    }, { searchPlaceMedia }, state)).rejects.toThrow("地点として確認できませんでした");
+    expect(state.places).toBeUndefined();
+  });
+
   it("自治体名や交通の一般概念をスポット候補にしない", () => {
     expect(isSpecificPlaceCandidateName("出雲市")).toBe(false);
     expect(isSpecificPlaceCandidateName("島根県")).toBe(false);
