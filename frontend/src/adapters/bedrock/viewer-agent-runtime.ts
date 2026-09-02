@@ -122,6 +122,7 @@ import {
 } from "../../usecases/agent/agent-context-snapshot";
 import {
   executeExternalTravelTool,
+  compactExternalTravelToolObservation,
   externalTravelEvidence,
   externalTravelToolDescription,
   externalTravelToolInputSchema,
@@ -1607,7 +1608,8 @@ async function executeViewerToolAdapter(
   externalState: ExternalTravelToolState,
 ): Promise<unknown> {
   if (isExternalTravelToolName(name)) {
-    return executeExternalTravelTool(name, input, dependencies, externalState);
+    const output = await executeExternalTravelTool(name, input, dependencies, externalState);
+    return compactExternalTravelToolObservation(name, output);
   }
   if (name === "inspect_previous_journey" || name === "revise_previous_journey") {
     const response = await previousJourneyToolResponse(input, dependencies);

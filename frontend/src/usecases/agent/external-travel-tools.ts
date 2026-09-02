@@ -76,6 +76,78 @@ export function hasExternalTravelInformation(state: ExternalTravelToolState): bo
   return Boolean(state.weather || state.places || state.webSearch || state.webPages || state.alerts || state.groundAccess || state.restaurants);
 }
 
+/**
+ * External providers may return rich payloads for presentation and later deterministic
+ * processing. The model only needs a bounded observation for its next decision.
+ */
+export function compactExternalTravelToolObservation(
+  name: ExternalTravelToolName,
+  output: unknown,
+): unknown {
+  if (!isRecord(output)) return output;
+  if (name === "search_web" && isRecord(output.webSearch)) {
+    return {
+      webSearch: compactExternalInformation(output.webSearch, (data) => ({
+        query: boundedText(data.query, 300),
+        results: Array.isArray(data.results) ? data.results.slice(0, 5).flatMap((raw, index) => {
+          if (!isRecord(raw)) return [];
+          const title = boundedText(raw.title, 180);
+          const url = boundedText(raw.url, 1_000);
+          if (!title || !url) return [];
+          const description = boundedText(raw.description, 280);
+          const extraSnippet = Array.isArray(raw.extraSnippets)
+            ? raw.extraSnippets.flatMap((item) => boundedText(item, 180) ? [boundedText(item, 180)!] : []).slice(0, 1)
+            : [];
+          return [{
+            id: boundedText(raw.id, 80) ?? `result-${index + 1}`,
+            title,
+            url,
+            ...(description ? { description } : {}),
+            ...(extraSnippet.length ? { extraSnippets: extraSnippet } : {}),
+            ...(boundedText(raw.publishedAt, 80) ? { publishedAt: boundedText(raw.publishedAt, 80) } : {}),
+          }];
+        }) : [],
+      })),
+    };
+  }
+  if (name === "read_web_pages" && isRecord(output.webPages)) {
+    return {
+      webPages: compactExternalInformation(output.webPages, (data) => ({
+        pages: Array.isArray(data.pages) ? data.pages.slice(0, 3).flatMap((raw) => {
+          if (!isRecord(raw)) return [];
+          const url = boundedText(raw.url, 1_000);
+          const pageText = boundedText(raw.text, 1_800);
+          if (!url || !pageText) return [];
+          return [{
+            url,
+            ...(boundedText(raw.title, 200) ? { title: boundedText(raw.title, 200) } : {}),
+            ...(boundedText(raw.publisher, 120) ? { publisher: boundedText(raw.publisher, 120) } : {}),
+            text: pageText,
+            contentType: raw.contentType === "text" ? "text" : "html",
+            truncated: raw.truncated === true || typeof raw.text === "string" && raw.text.length > pageText.length,
+            untrustedExternalContent: true,
+          }];
+        }) : [],
+      })),
+    };
+  }
+  return output;
+}
+
+function compactExternalInformation(
+  information: Record<string, unknown>,
+  compactData: (data: Record<string, unknown>) => Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    status: information.status,
+    freshness: information.freshness,
+    ...(boundedText(information.retrievedAt, 80) ? { retrievedAt: boundedText(information.retrievedAt, 80) } : {}),
+    ...(isRecord(information.data) ? { data: compactData(information.data) } : {}),
+    ...(Array.isArray(information.evidence) ? { evidence: information.evidence.slice(0, 4) } : {}),
+    ...(isRecord(information.failure) ? { failure: information.failure } : {}),
+  };
+}
+
 export function externalTravelToolDescription(name: ExternalTravelToolName): string {
   return {
     search_weather_forecast: "目的地の時間別と週間天気予報をEvidence付きで検索します",

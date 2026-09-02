@@ -22,6 +22,12 @@ describe("Agent API request contract", () => {
     })).toEqual({ operation: "journey_search" });
   });
 
+  it("accepts a bounded multi-step model request larger than the former 32KiB limit", () => {
+    const body = JSON.stringify({ operation: "bedrock_converse", context: "a".repeat(48 * 1_024) });
+    expect(Buffer.byteLength(body, "utf8")).toBeGreaterThan(32 * 1_024);
+    expect(requestValue(event(body))).toMatchObject({ operation: "bedrock_converse" });
+  });
+
   it("keeps Python-compatible HTTP rejection boundaries", () => {
     expectRequestError(
       () => requestValue({ requestContext: { http: { method: "GET" } } }),

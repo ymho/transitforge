@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { availableExternalInformation } from "@raiquora/trip/external-travel-information";
 import {
   executeExternalTravelTool,
+  compactExternalTravelToolObservation,
   externalTravelEvidence,
   hasExternalTravelInformation,
   isSpecificPlaceCandidateName,
@@ -60,6 +61,35 @@ describe("external travel tools", () => {
     await executeExternalTravelTool("read_web_pages", { urls: ["https://example.com"] }, { readWebPages: async () => ({ webPages }) }, state);
     expect(state.webSearch).toBe(webSearch);
     expect(state.webPages).toBe(webPages);
+  });
+
+  it("完全なWeb結果を状態に保持しつつモデル向けObservationをboundedにする", async () => {
+    const longText = "詳しい観光情報".repeat(500);
+    const results = Array.from({ length: 8 }, (_, index) => ({
+      id: `result-${index}`,
+      title: `候補${index}`,
+      url: `https://example.com/${index}`,
+      description: longText,
+      extraSnippets: [longText, longText],
+    }));
+    const webSearch = {
+      status: "available", freshness: "fresh",
+      data: { query: "静かに過ごせる場所", results },
+      evidence: [{ id: "web-search:brave:12345678:2026-09-02T00:00:00.000Z", provider: "brave-search" }],
+    };
+    const state: ExternalTravelToolState = {};
+    const fullOutput = await executeExternalTravelTool(
+      "search_web", { query: "静かに過ごせる場所" }, { searchWeb: async () => ({ webSearch }) }, state,
+    );
+    const observation = compactExternalTravelToolObservation("search_web", fullOutput) as {
+      webSearch: { data: { results: Array<{ description: string; extraSnippets: string[] }> } };
+    };
+
+    expect(state.webSearch?.data?.results).toHaveLength(8);
+    expect(observation.webSearch.data.results).toHaveLength(5);
+    expect(observation.webSearch.data.results[0]?.description.length).toBeLessThanOrEqual(280);
+    expect(observation.webSearch.data.results[0]?.extraSnippets).toHaveLength(1);
+    expect(new TextEncoder().encode(JSON.stringify(observation)).byteLength).toBeLessThan(8 * 1_024);
   });
 
   it("気象庁の防災情報を地域指定で検索する", async () => {
