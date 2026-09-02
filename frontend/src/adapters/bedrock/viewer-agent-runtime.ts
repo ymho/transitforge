@@ -64,6 +64,8 @@ import {
   travelDestinationAccess,
 } from "@raiquora/trip/travel-destination";
 import {
+  conversationQuestionWasAsked,
+  conversationTextIsQuestion,
   normalizedConversationGuidance,
   type ConversationExpectedInput,
   type ConversationGuidance,
@@ -285,6 +287,7 @@ export async function runViewerAgentRuntime(
   const tripPlanUpdateState: TripPlanUpdateToolState = {};
   const previousJourneyState: PreviousJourneyToolState = {};
   const externalState: ExternalTravelToolState = {};
+  const conversationContext = dependencies.getConversationContext?.();
   const travelFacts = travelConversationFacts(deterministicPrompt, currentDate(dependencies));
   const currentTripPlan = dependencies.getTripPlan?.();
   const tools = viewerToolRegistry({
@@ -329,6 +332,10 @@ export async function runViewerAgentRuntime(
       currentTripPlan,
       dependencies.getUserProfile?.(),
     ),
+    finalResponsePolicy: (response) => viewerFinalResponsePolicy(
+      response,
+      recentAssistantConversationTexts(conversationContext),
+    ),
     limits: {
       maxIterations: 8,
       maxModelCalls: 9,
@@ -341,7 +348,6 @@ export async function runViewerAgentRuntime(
     dependencies.getUserProfile?.(),
     currentTripPlan,
   );
-  const conversationContext = dependencies.getConversationContext?.();
   const currentJourney = previousJourneyDecisionContext(
     dependencies.getPreviousJourneyPlan?.(),
     dependencies.getPendingJourneyLegChange?.(),
@@ -878,6 +884,8 @@ function viewerToolDecisionSupport(
       responsibilityBoundary: "利用者への追加質問を構造化してUIへ返す唯一の能力。質問が必要なら回答textだけで直接尋ねず、このToolを使う。入力検証はTool、何を一つ尋ねるかの判断はAgentが担う",
       suitableCases: ["選択予定Toolの必須入力のうち 利用者にしか確定できない条件が一つ不足する"],
       unsuitableCases: [
+        "プロフィールの好みと利用可能な検索Toolから候補を先に提示できる場合",
+        "具体的な候補をまだ提示していないinspiration段階の日付 泊数 自由入力の好み",
         "ContextやTool結果に既にある条件",
         "Toolの既定値で仮案を示せる任意入力",
         "利用者が明示した列車や種別の利用・回避希望について理由や再確認を求める",
@@ -888,8 +896,10 @@ function viewerToolDecisionSupport(
       ],
       returnedEvidence: "なし。質問と既知TripContextを構造化してUIへ返す",
       limitations: [
+        "質問回数を最小化し 自由入力より2択から5択のquick replyを優先する",
+        "具体候補をEvidence付きで提示した後は planning-intentを はい いいえ で確認する",
         "一度に一条件だけ尋ねる",
-        "startDateとstayNightsが両方未確定なら 共通の検索基準になるdeparture-dateを先に尋ね stay-lengthを同じ質問へ混ぜない",
+        "planning段階でstartDateとstayNightsが両方未確定なら departure-dateを先に尋ね stay-lengthを同じ質問へ混ぜない",
         "質問前に選択予定ToolのrequiredInputsを確認する",
         "既知条件をtripContextから落とさない",
       ],
@@ -936,7 +946,7 @@ function externalTravelDecisionSupport(
     },
     search_web: {
       suitableCases: [
-        "気分 嗜好 移動負担から具体的な行き先候補を発見する",
+        "今回の気分とUserProfileの普段の好み 移動負担から、追加質問より先に具体的な行き先候補を発見する",
         "候補施設や最新情報の発見に公開Web検索が必要",
         "写真だけでは分からない見どころや実用情報の情報源を発見する",
         "地点検索が0件でも利用者が地域と施設名を明示しており、公開情報から表記や公式情報を再発見できる",
@@ -993,7 +1003,7 @@ function viewerToolDescription(name: ViewerAgentToolName): string {
     propose_trip_update: "現在の旅程に対する観光 移動 滞在 条件の変更案を構造化します。利用者が変更を依頼し内容が明確なら追加確認せず使います",
     remember_travel_preference: "高確信の継続的な旅行の好みを端末内へ記憶します",
     update_conversation_session: "現在の会話Sessionの要約と話題を更新します",
-    ask_follow_up: "旅行相談で本当に不足している今回固有の条件だけを構造化して質問します。プロフィールと現在の旅程にある条件は聞き直しません。負担条件を尋ねる場合は理由と代替案を添えます",
+    ask_follow_up: "旅行相談で検索後も本当に不足している今回固有の必須条件だけを構造化して質問します。プロフィールから候補を探せる嗜好は聞かず、自由入力より短い選択肢を優先し、同じ質問を繰り返しません",
     inspect_previous_journey: "currentJourneyにある直前の検証済み経路について、対象列車または途中駅を確認します",
     revise_previous_journey: "currentJourneyに対する明示済みの利用・回避条件で、確認を挟まず変更候補を再検索します。区間の代替候補の提示と、選択済み候補の確定も扱います",
     set_display_time: "Viewerの計画ダイヤ表示時刻を変更します",
@@ -1211,7 +1221,7 @@ function viewerToolInputSchema(
         },
         question: {
           type: "string",
-          description: "未解決の必須条件を一つだけ尋ねる短い質問。複数条件を同じ質問へ含めない",
+          description: "検索後も未解決の必須条件を一つだけ尋ねる短い質問。プロフィールで補える嗜好を尋ねず、複数条件を同じ質問へ含めない",
         },
         expectedInput: {
           type: "string",
@@ -1282,11 +1292,9 @@ function unresolvedFollowUpInputs(
     if (typeof tripContext.stayNights !== "number") return ["stay-length"];
     return ["traveler-count", "free-text"];
   }
-  const unresolved: ConversationExpectedInput[] = [];
-  unresolved.push("planning-intent");
-  if (!tripContext?.startDate) unresolved.push("departure-date");
-  if (typeof tripContext?.stayNights !== "number") unresolved.push("stay-length");
-  return unresolved.length > 0 ? unresolved : ["traveler-count", "free-text"];
+  // 旅行の段階がまだ決まっていない間は、プロフィールと検索Toolから
+  // 具体候補を先に提示する。日付や泊数は旅程化の同意後にだけ尋ねる。
+  return ["planning-intent"];
 }
 
 function viewerEvidenceMappers(): ToolEvidenceRegistry {
@@ -1669,6 +1677,7 @@ async function executeViewerToolAdapter(
       originalPrompt,
       currentDate(dependencies),
       externalState,
+      recentAssistantConversationTexts(dependencies.getConversationContext?.()),
     );
     conversationState.response = guidance;
     return { accepted: true, ...guidance };
@@ -2565,6 +2574,45 @@ function isConversationScope(value: unknown): value is ConversationScope {
     value === "route";
 }
 
+function viewerFinalResponsePolicy(
+  response: AgentModelResponse,
+  recentAssistantMessages: readonly string[],
+): { accepted: boolean; reason?: string; instruction?: string } {
+  const text = response.message.content.flatMap((content) =>
+    content.type === "text" ? [content.text] : []).join("\n");
+  if (!conversationTextIsQuestion(text)) return { accepted: true };
+  const repeated = conversationQuestionWasAsked(text, recentAssistantMessages);
+  return {
+    accepted: false,
+    reason: repeated ? "同じ質問の繰り返しを拒否する" : "直接質問を構造化質問へ戻す",
+    instruction: [
+      "利用者へ直接質問せず、質問が本当に必要な場合だけask_follow_upを使ってください。",
+      "UserProfileと会話Contextで補える好みは聞かず、利用可能な検索Toolで具体候補を先に提示してください。",
+      "候補提示後の確認は、はい・いいえで答えられる短いquick replyを付けてください。",
+    ].join(" "),
+  };
+}
+
+function recentAssistantConversationTexts(
+  context: AgentConversationContext | undefined,
+): string[] {
+  return (context?.relevantMessages ?? []).flatMap((serialized) => {
+    try {
+      const entries: unknown = JSON.parse(serialized);
+      if (!Array.isArray(entries)) return [];
+      return entries.flatMap((entry) => {
+        if (!entry || typeof entry !== "object") return [];
+        const value = entry as Record<string, unknown>;
+        return value.role === "assistant" && typeof value.text === "string"
+          ? [value.text]
+          : [];
+      });
+    } catch {
+      return [];
+    }
+  }).slice(-8);
+}
+
 function conversationResponseText(
   state: ConversationToolState,
 ): ViewerAgentResponse | undefined {
@@ -2586,6 +2634,7 @@ function conversationGuidanceFromToolInput(
   originalPrompt: string,
   now: Date,
   externalState: ExternalTravelToolState,
+  recentAssistantMessages: readonly string[],
 ): ConversationGuidance {
   const question = typeof input.question === "string" ? input.question : "";
   if (!question.trim()) {
@@ -2602,7 +2651,14 @@ function conversationGuidanceFromToolInput(
   );
   const tripContext = mergedTripContext;
   const facts = travelConversationFacts(originalPrompt, now);
-  assertFollowUpIsUnresolved(requestedExpectedInput, tripContext, facts, externalState);
+  assertFollowUpIsUnresolved(
+    question,
+    requestedExpectedInput,
+    tripContext,
+    facts,
+    externalState,
+    recentAssistantMessages,
+  );
   const expectedInput = requestedExpectedInput;
   const requestedQuickReplies = (Array.isArray(input.quickReplies)
     ? input.quickReplies.flatMap((value) => {
@@ -2616,8 +2672,8 @@ function conversationGuidanceFromToolInput(
     ? requestedQuickReplies
     : expectedInput === "planning-intent"
       ? [
-        { label: "旅程を考える", value: "旅程を考えたい" },
-        { label: "もう少し見たい", value: "もう少し見たい" },
+        { label: "はい", value: "旅程を考えたい" },
+        { label: "いいえ", value: "もう少し見たい" },
       ]
       : [];
   return normalizedConversationGuidance({
@@ -2635,10 +2691,12 @@ function conversationGuidanceFromToolInput(
 }
 
 function assertFollowUpIsUnresolved(
+  question: string,
   expectedInput: ConversationExpectedInput,
   tripContext: TripContext,
   facts: ReturnType<typeof travelConversationFacts>,
   externalState: ExternalTravelToolState,
+  recentAssistantMessages: readonly string[],
 ): void {
   const alreadyKnown =
     (expectedInput === "planning-intent" && tripContext.planningStage === "planning") ||
@@ -2646,6 +2704,9 @@ function assertFollowUpIsUnresolved(
     (expectedInput === "stay-length" && facts.hasExplicitStayLength);
   if (alreadyKnown) {
     throw new Error(`既知条件 ${expectedInput} は聞き直せません。別の行動を選択してください。`);
+  }
+  if (conversationQuestionWasAsked(question, recentAssistantMessages)) {
+    throw new Error("同じ質問は繰り返せません。プロフィールと会話Contextを使って候補を提示してください。");
   }
   if (expectedInput === "planning-intent" &&
       !hasVerifiedPlanningDestination(tripContext, externalState)) {

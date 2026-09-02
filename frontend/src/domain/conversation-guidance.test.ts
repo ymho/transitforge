@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  conversationQuestionWasAsked,
+  conversationTextIsQuestion,
   normalizedConversationGuidance,
 } from "./conversation-guidance";
 
@@ -24,6 +26,19 @@ describe("conversation guidance", () => {
     expect(result.recommendation).toBe("まずは1泊で考えるのがおすすめです。");
     expect(result.quickReplies).toHaveLength(5);
     expect(result.quickReplies[0]).toEqual({ label: "日帰り", value: "日帰り" });
+  });
+
+  it("detects direct and repeated questions without travel-specific branching", () => {
+    expect(conversationTextIsQuestion("具体的な地域は決まっていますか？")).toBe(true);
+    expect(conversationTextIsQuestion("海辺を静かに歩ける候補を探します。")).toBe(false);
+    expect(conversationQuestionWasAsked(
+      "具体的な地域は決まっていますか?",
+      ["候補を考えます。\n\n具体的な地域は決まっていますか？"],
+    )).toBe(true);
+    expect(conversationQuestionWasAsked(
+      "この場所を軸に旅を考えますか？",
+      ["海辺で過ごせる候補を調べます。"],
+    )).toBe(false);
   });
 
 });

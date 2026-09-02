@@ -50,3 +50,24 @@ export function normalizedConversationGuidance(
       .slice(0, 5),
   };
 }
+
+export function conversationTextIsQuestion(value: string): boolean {
+  const normalized = value.normalize("NFKC").trim();
+  if (!normalized) return false;
+  return /[?？]\s*$/u.test(normalized) ||
+    /(?:教えて|選んで|答えて)(?:ください|もらえますか)|(?:ですか|ますか)\s*[。.]?$/u.test(normalized);
+}
+
+export function conversationQuestionWasAsked(
+  question: string,
+  recentAssistantMessages: readonly string[],
+): boolean {
+  const target = comparableQuestion(question);
+  return target.length >= 6 && recentAssistantMessages.some((message) =>
+    comparableQuestion(message).includes(target));
+}
+
+function comparableQuestion(value: string): string {
+  return value.normalize("NFKC").toLocaleLowerCase("ja-JP")
+    .replace(/[\s　、,。.!！?？・･「」『』（）()]/gu, "");
+}
