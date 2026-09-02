@@ -6,6 +6,10 @@ import type {
   ConversationModelResponse,
   ConversationModelUsage,
 } from "../ports/conversation-model.js";
+import type {
+  ModelCallFailureDiagnostic,
+  ModelCallTraceRecorder,
+} from "../ports/model-call-trace.js";
 
 export interface BedrockConverseInvoker {
   converse(input: JsonObject): Promise<unknown>;
@@ -16,6 +20,8 @@ export interface BedrockConversationOptions {
   lightweightModelId?: string;
   decisionModelId?: string;
   systemPrompt: string;
+  traceRecorder?: ModelCallTraceRecorder;
+  log?: (event: string, fields: Record<string, unknown>) => void;
   timeoutMs?: number;
   now?: () => number;
 }
@@ -23,6 +29,7 @@ export interface BedrockConversationOptions {
 export class BedrockConversationModel implements ConversationModel {
   private readonly timeoutMs: number;
   private readonly now: () => number;
+  private readonly log: (event: string, fields: Record<string, unknown>) => void;
 
   constructor(
     private readonly client: BedrockConverseInvoker,
@@ -37,6 +44,7 @@ export class BedrockConversationModel implements ConversationModel {
     }
     this.timeoutMs = options.timeoutMs ?? 55_000;
     this.now = options.now ?? (() => performance.now());
+    this.log = options.log ?? (() => undefined);
   }
 
   async converse(request: ConversationModelRequest): Promise<ConversationModelResponse> {
@@ -59,15 +67,57 @@ export class BedrockConversationModel implements ConversationModel {
       }),
       inferenceConfig: { maxTokens: 500, temperature: 0 },
     };
-    const providerResponse = await withTimeout(
-      this.client.converse(providerRequest),
-      this.timeoutMs,
-    );
-    return normalizedResponse(
-      providerResponse,
-      modelId,
-      Math.round(this.now() - startedAt),
-    );
+    const startedAtIso = new Date().toISOString();
+    try {
+      const providerResponse = await withTimeout(
+        this.client.converse(providerRequest),
+        this.timeoutMs,
+      );
+      const response = normalizedResponse(
+        providerResponse,
+        modelId,
+        Math.round(this.now() - startedAt),
+      );
+      await this.recordTrace(request, providerRequest, startedAtIso, {
+        status: "completed",
+        stopReason: response.stopReason,
+        modelId: response.metadata.modelId,
+        latencyMs: response.metadata.latencyMs,
+        ...(response.metadata.usage === undefined ? {} : { usage: response.metadata.usage }),
+      });
+      return response;
+    } catch (error) {
+      await this.recordTrace(request, providerRequest, startedAtIso, {
+        status: "failed",
+        error: modelCallFailureDiagnostic(error),
+      });
+      throw error;
+    }
+  }
+
+  private async recordTrace(
+    request: ConversationModelRequest,
+    providerRequest: JsonObject,
+    startedAt: string,
+    outcome: Parameters<ModelCallTraceRecorder["record"]>[0]["outcome"],
+  ): Promise<void> {
+    if (!request.trace || !this.options.traceRecorder) return;
+    try {
+      await this.options.traceRecorder.record({
+        modelCallId: request.trace.modelCallId,
+        apiRequestId: request.trace.apiRequestId,
+        startedAt,
+        completedAt: new Date().toISOString(),
+        providerRequest,
+        outcome,
+      });
+    } catch {
+      this.log("agent_model_call_trace_store_failed", {
+        modelCallId: request.trace.modelCallId,
+        requestId: request.trace.apiRequestId,
+        outcome: outcome.status,
+      });
+    }
   }
 }
 
@@ -109,14 +159,14 @@ function normalizedResponse(
   measuredLatencyMs: number,
 ): ConversationModelResponse {
   if (!isRecord(value) || !isRecord(value.output) || !isRecord(value.output.message)) {
-    throw new Error("Bedrock returned an unexpected response");
+    throw new Error("Bedrock response is missing output.message");
   }
   if (value.stopReason !== "end_turn" && value.stopReason !== "tool_use" && value.stopReason !== "max_tokens") {
-    throw new Error("Bedrock returned an unexpected response");
+    throw new Error(`Bedrock returned unsupported stopReason: ${String(value.stopReason)}`);
   }
   const message = validatedMessages({ messages: [value.output.message] })[0];
   if (!message || message.role !== "assistant") {
-    throw new Error("Bedrock returned an unexpected response");
+    throw new Error("Bedrock response contains an invalid assistant message");
   }
   const providerLatency = isRecord(value.metrics) && nonNegativeNumber(value.metrics.latencyMs)
     ? Math.round(value.metrics.latencyMs)
@@ -130,6 +180,27 @@ function normalizedResponse(
       latencyMs: providerLatency,
       ...(usage === undefined ? {} : { usage }),
     },
+  };
+}
+
+function modelCallFailureDiagnostic(error: unknown): ModelCallFailureDiagnostic {
+  if (!isRecord(error)) {
+    return { name: "UnknownError", message: String(error) };
+  }
+  const metadata = isRecord(error.$metadata) ? error.$metadata : undefined;
+  const retryable = isRecord(error.$retryable)
+    ? Object.keys(error.$retryable).length > 0
+    : undefined;
+  return {
+    name: typeof error.name === "string" ? error.name : "Error",
+    message: typeof error.message === "string" ? error.message : "Unknown model call failure",
+    ...(nonNegativeNumber(metadata?.httpStatusCode)
+      ? { statusCode: Math.trunc(metadata.httpStatusCode) }
+      : {}),
+    ...(typeof metadata?.requestId === "string"
+      ? { providerRequestId: metadata.requestId }
+      : {}),
+    ...(retryable === undefined ? {} : { retryable }),
   };
 }
 

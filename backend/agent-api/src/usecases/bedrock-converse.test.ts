@@ -15,7 +15,10 @@ describe("bedrock converse operation", () => {
 
     const result = await operation({ messages }, { requestId: "request-1" });
 
-    expect(converse).toHaveBeenCalledWith({ messages });
+    expect(converse).toHaveBeenCalledWith({
+      messages,
+      trace: { modelCallId: "request-1", apiRequestId: "request-1" },
+    });
     expect(result.body).toEqual({
       message: { role: "assistant", content: [{ text: "案内します" }] },
       stopReason: "end_turn",
@@ -37,8 +40,16 @@ describe("bedrock converse operation", () => {
     const operation = createBedrockConverseOperation({ converse });
     const messages = [{ role: "user" as const, content: [{ text: "京都へ" }] }];
 
-    await operation({ messages, modelClass: "decision" }, { requestId: "request-1" });
+    await operation({
+      messages,
+      modelClass: "decision",
+      modelCallId: "execution-1:model:1",
+    }, { requestId: "request-1" });
 
-    expect(converse).toHaveBeenCalledWith({ messages, modelClass: "decision" });
+    expect(converse).toHaveBeenCalledWith({
+      messages,
+      modelClass: "decision",
+      trace: { modelCallId: "execution-1:model:1", apiRequestId: "request-1" },
+    });
   });
 });

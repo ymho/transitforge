@@ -46,6 +46,8 @@ describe("MultiStepAgentRuntime", () => {
       "second_tool:出雲市",
     ]);
     expect(requests).toHaveLength(2);
+    expect(requests.every(({ modelCallId }) => typeof modelCallId === "string")).toBe(true);
+    expect(requests[0]?.modelCallId).not.toBe(requests[1]?.modelCallId);
     expect(requests[1].messages.at(-1)).toEqual({
       role: "user",
       content: [
@@ -67,6 +69,7 @@ describe("MultiStepAgentRuntime", () => {
       "task_started",
       "intent_normalized",
       "plan_created",
+      "model_started",
       "model_completed",
       "decision_recorded",
       "decision_recorded",
@@ -77,6 +80,7 @@ describe("MultiStepAgentRuntime", () => {
       "tool_completed",
       "evidence_collected",
       "replan_decided",
+      "model_started",
       "model_completed",
       "decision_recorded",
       "response_generated",
@@ -318,6 +322,18 @@ describe("MultiStepAgentRuntime", () => {
     const timeout = await timedOut.run(request("検索して"));
 
     expect(failure.status).toBe("failed");
+    const startedModelCall = failure.trace.events.find((event) =>
+      event.type === "model_started");
+    const failedModelCall = failure.trace.events.find((event) =>
+      event.type === "model_failed");
+    expect(startedModelCall).toMatchObject({ type: "model_started" });
+    expect(failedModelCall).toMatchObject({
+      type: "model_failed",
+      modelCallId: startedModelCall && "modelCallId" in startedModelCall
+        ? startedModelCall.modelCallId
+        : undefined,
+      reason: "provider_error",
+    });
     expect(JSON.stringify(failure.trace)).not.toContain("provider secret");
     expect(timeout.status).toBe("limit_reached");
   });

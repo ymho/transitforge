@@ -84,7 +84,20 @@ export type AgentTraceEvent =
       steps: string[];
     })
   | (AgentTraceEventBase & {
+      type: "model_started";
+      modelCallId: string;
+      modelClass?: string;
+      messageCount: number;
+      toolNames: string[];
+    })
+  | (AgentTraceEventBase & {
+      type: "model_failed";
+      modelCallId: string;
+      reason: string;
+    })
+  | (AgentTraceEventBase & {
       type: "model_completed";
+      modelCallId?: string;
       provider: string;
       requestId?: string;
       model?: string;
@@ -256,9 +269,31 @@ export class AgentTraceRecorder {
     });
   }
 
-  modelCompleted(metadata: AgentModelMetadata): void {
+  modelStarted(
+    modelCallId: string,
+    input: { modelClass?: string; messageCount: number; toolNames: string[] },
+  ): void {
+    this.append({
+      type: "model_started",
+      modelCallId: this.text(modelCallId),
+      ...(input.modelClass ? { modelClass: this.text(input.modelClass) } : {}),
+      messageCount: input.messageCount,
+      toolNames: unique(this.texts(input.toolNames)),
+    });
+  }
+
+  modelFailed(modelCallId: string, reason: string): void {
+    this.append({
+      type: "model_failed",
+      modelCallId: this.text(modelCallId),
+      reason: this.text(reason),
+    });
+  }
+
+  modelCompleted(metadata: AgentModelMetadata, modelCallId?: string): void {
     this.append({
       type: "model_completed",
+      ...(modelCallId ? { modelCallId: this.text(modelCallId) } : {}),
       provider: this.text(metadata.provider),
       ...(metadata.requestId ? { requestId: this.text(metadata.requestId) } : {}),
       ...(metadata.model ? { model: this.text(metadata.model) } : {}),

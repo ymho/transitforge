@@ -25,15 +25,17 @@ const eventFields = {
   tool_completed: [["toolCallId", "toolName", "outcome", "result"], ["latencyMs", "errorCode", "retryable"]],
   evidence_collected: [["evidenceIds", "categories", "sourceTypes"], []],
   replan_decided: [["changed", "reason", "steps"], []],
-  model_completed: [["provider"], ["requestId", "model", "latencyMs", "inputTokens", "outputTokens", "totalTokens"]],
+  model_started: [["modelCallId", "messageCount", "toolNames"], ["modelClass"]],
+  model_failed: [["modelCallId", "reason"], []],
+  model_completed: [["provider"], ["modelCallId", "requestId", "model", "latencyMs", "inputTokens", "outputTokens", "totalTokens"]],
   response_generated: [["response", "claimIds"], []],
   viewer_action: [["actionType", "status"], ["targetEntityId", "reason"]],
   task_completed: [["status"], ["latencyMs", "reason"]],
 } as const;
 
-const stringFields = new Set(["userRequest", "intent", "interpretedGoal", "selectedTool", "replanReason", "toolCallId", "toolName", "errorCode", "provider", "requestId", "model", "reason", "response", "actionType", "targetEntityId"]);
-const stringListFields = new Set(["steps", "unresolvedFacts", "reasonCodes", "evidenceIds", "categories", "sourceTypes", "claimIds"]);
-const countFields = new Set(["sequence", "latencyMs", "inputTokens", "outputTokens", "totalTokens"]);
+const stringFields = new Set(["userRequest", "intent", "interpretedGoal", "selectedTool", "replanReason", "toolCallId", "toolName", "errorCode", "modelCallId", "modelClass", "provider", "requestId", "model", "reason", "response", "actionType", "targetEntityId"]);
+const stringListFields = new Set(["steps", "unresolvedFacts", "reasonCodes", "evidenceIds", "categories", "sourceTypes", "claimIds", "toolNames"]);
+const countFields = new Set(["sequence", "messageCount", "latencyMs", "inputTokens", "outputTokens", "totalTokens"]);
 const payloadFields = new Set(["constraints", "hardConstraints", "softPreferences", "input", "result"]);
 
 export interface TraceOperationOptions {

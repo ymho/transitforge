@@ -23,6 +23,7 @@ import { AgentApplication } from "./usecases/agent-application.js";
 import { agentSystemPrompt } from "./usecases/agent-system-prompt.js";
 import { createAgentTraceOperation } from "./usecases/agent-trace.js";
 import { createBedrockConverseOperation } from "./usecases/bedrock-converse.js";
+import { StoredModelCallTraceRecorder } from "./usecases/model-call-trace.js";
 import { createConversationFeedbackOperation } from "./usecases/conversation-feedback.js";
 import { createJourneySearchOperation } from "./usecases/journey-search.js";
 import { createCongestionAnalysisOperation, createCongestionPeakOperation, createDelayAnalysisOperation } from "./usecases/operation-analysis.js";
@@ -69,15 +70,23 @@ export function createAgentApplication(environment: RuntimeEnvironment = process
   const restaurants = new HotPepperRestaurantProvider({ fetch: globalThis.fetch }, restaurantCredentials);
   const lightweightModelId = optional(environment, "LIGHTWEIGHT_MODEL_ID");
   const decisionModelId = optional(environment, "DECISION_MODEL_ID");
+  const traceBucket = required(environment, "AGENT_TRACE_BUCKET");
+  const modelCallTraceRecorder = new StoredModelCallTraceRecorder({
+    bucket: traceBucket,
+    storage,
+    log,
+  });
   const model = new BedrockConversationModel(new AwsBedrockConverseClient(), {
     modelId: environment.MODEL_ID ?? "amazon.nova-lite-v1:0",
     ...(lightweightModelId === undefined ? {} : { lightweightModelId }),
     ...(decisionModelId === undefined ? {} : { decisionModelId }),
     systemPrompt: agentSystemPrompt,
+    traceRecorder: modelCallTraceRecorder,
+    log,
   });
   const operations = new Map([
     ["conversation_feedback", createConversationFeedbackOperation({ bucket: required(environment, "CONVERSATION_FEEDBACK_BUCKET"), storage, log })],
-    ["agent_trace", createAgentTraceOperation({ bucket: required(environment, "AGENT_TRACE_BUCKET"), storage, log })],
+    ["agent_trace", createAgentTraceOperation({ bucket: traceBucket, storage, log })],
     ["representative_timetable_search", createRepresentativeTimetableOperation(representativeTimetable)],
     ["journey_search", createJourneySearchOperation(journey, { log })],
     ["daily_congestion_analysis", createCongestionAnalysisOperation(summary, required(environment, "SUMMARY_TABLE"))],

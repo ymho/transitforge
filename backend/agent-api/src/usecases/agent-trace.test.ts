@@ -84,6 +84,39 @@ describe("agent trace parity", () => {
     expect(stored).not.toContain("Chain-of-Thought");
   });
 
+  it("validates model call linkage events", async () => {
+    const value = submission();
+    value.trace.events = [{
+      type: "model_started",
+      sequence: 1,
+      occurredAt: "2026-09-02T08:19:42Z",
+      modelCallId: "model-call-1",
+      modelClass: "decision",
+      messageCount: 7,
+      toolNames: ["search_web", "read_web_pages"],
+    }, {
+      type: "model_failed",
+      sequence: 2,
+      occurredAt: "2026-09-02T08:19:45Z",
+      modelCallId: "model-call-1",
+      reason: "provider_error",
+    }];
+    const storage = new RecordingStorage();
+
+    await storeAgentTrace(value, { bucket: "private-bucket", storage }, fixedNow, "trace-1");
+
+    expect(storedJson(storage)).toMatchObject({
+      trace: { events: [{
+        type: "model_started",
+        modelCallId: "model-call-1",
+        messageCount: 7,
+      }, {
+        type: "model_failed",
+        modelCallId: "model-call-1",
+      }] },
+    });
+  });
+
   it("returns bounded storage failures and logs identifiers only", async () => {
     const log = vi.fn();
     const operation = createAgentTraceOperation({

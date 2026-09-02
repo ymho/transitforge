@@ -15,6 +15,7 @@ export const maximumToolResultJsonCharacters = 512_000;
 const maximumMessages = 16;
 const maximumContentBlocks = 12;
 const maximumTextCharacters = 4_000;
+const modelCallIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 
 export const allowedToolNames = new Set([
   "search_trains",
@@ -92,6 +93,14 @@ export function validatedModelClass(value: JsonObject): ConversationModelClass |
     return modelClass as ConversationModelClass;
   }
   throw new RequestError(400, "modelClassが許可されていません。");
+}
+
+export function validatedModelCallId(value: JsonObject): string | undefined {
+  if (value.modelCallId === undefined) return undefined;
+  if (typeof value.modelCallId === "string" && modelCallIdPattern.test(value.modelCallId)) {
+    return value.modelCallId;
+  }
+  throw new RequestError(400, "modelCallIdが不正です。");
 }
 
 export function requestValue(event: LambdaHttpEvent): JsonObject {

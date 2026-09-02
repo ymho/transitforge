@@ -270,8 +270,10 @@ Composition Rootやremote transportは別の運用判断として追加する。
 - モデルが`thinking`や`analysis`の内部推論だけを返した場合は画面へ出さず 同じ実行上限内で利用者向け応答を一度再要求する
 - 利用者入力をHTMLとして描画しない
 - 会話は端末内のSessionへ保存する。利用者が応答の評価を送信した場合だけ、スポットなどの外部情報を含む評価時点までの会話本文と関連リクエストIDを非公開のフィードバック保存先へ90日間保存する
-- 評価と不具合調査用Agent Traceは会話全文を含めず 最大100 event 24KiBに制限して非公開S3へ30日間保存する
-- TraceはブラウザとLambdaの両方で秘密値と現在地座標を除去し task ID execution ID request IDで追跡する
+- 実行全体のAgent Traceは最大100 event 24KiBに制限し、task ID execution ID request ID modelCallIdで追跡する
+- Bedrock呼び出し単位のTraceは、Lambdaが実際に送るmodel ID System Prompt message Tool定義 inference設定を最大3MiBで同じ非公開S3へ保存する。成功時はstop reason token latency、失敗時は例外名 HTTP status Provider request ID retryableを対応付ける
+- どちらのTraceも30日間でS3 Lifecycleにより期限切れとなる。削除用のアプリ内バッチやLambdaは持たない
+- TraceはブラウザとLambdaの両方で秘密値と正確な現在地座標を除去し、CloudWatchログへモデル入出力を含めない
 - AI API応答ヘッダーのx-transitforge-request-idと構造化ログのrequestIdを対応付ける
 - 外部書き込みや破壊的操作を追加しない
 
