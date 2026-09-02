@@ -13,21 +13,26 @@ export class EnrichedPlaceMediaProvider implements PlaceMediaProvider {
     private readonly primary: PlaceMediaProvider,
     private readonly enrichment: PlaceMediaProvider,
     private readonly now: () => Date = () => new Date(),
+    private readonly identityFallback?: PlaceMediaProvider,
   ) {}
 
   async search(query: PlaceMediaQuery): Promise<ExternalTravelInformation<PlaceMediaSearchResult>> {
-    const primary = await this.primary.search(query);
-    if (!primary.data?.places.length) {
-      return primary.failure?.code === "unauthorized"
-        ? this.enrichment.search(query)
-        : primary;
-    }
+    const requestedLimit = Math.max(1, Math.min(8, Math.round(query.limit ?? 5)));
+    const primaryResult = await this.primary.search(query);
+    const useIdentityFallback = !primaryResult.data?.places.length
+      && primaryResult.failure?.code === "unauthorized"
+      && this.identityFallback !== undefined;
+    const primary = useIdentityFallback
+      ? identityOnly(await this.identityFallback!.search({ ...query, limit: 8 }))
+      : primaryResult;
+    if (!primary.data?.places.length) return primary;
 
-    const enrichmentResults = await Promise.all(primary.data.places.slice(0, 4).map((place) =>
+    const rankedPlaces = rankPlaces(primary.data.places, query.query).slice(0, requestedLimit);
+    const enrichmentResults = await Promise.all(rankedPlaces.slice(0, 4).map((place) =>
       this.enrichment.search({ query: place.name, limit: 3, ...(query.detail ? { detail: true } : {}) }),
     ));
     const usedEvidence: ExternalSourceEvidence[] = [];
-    const places = primary.data.places.map((place, index) => {
+    const places = rankedPlaces.map((place, index) => {
       const enrichment = enrichmentResults[index];
       const match = enrichment?.data?.places.find((candidate) => samePlaceName(place.name, candidate.name));
       if (!match || !enrichment) return place;
@@ -42,19 +47,41 @@ export class EnrichedPlaceMediaProvider implements PlaceMediaProvider {
   }
 }
 
+function identityOnly(
+  information: ExternalTravelInformation<PlaceMediaSearchResult>,
+): ExternalTravelInformation<PlaceMediaSearchResult> {
+  if (!information.data) return information;
+  return {
+    ...information,
+    data: {
+      places: information.data.places.map((place) => ({
+        ...place,
+        summary: undefined,
+        detail: undefined,
+        image: undefined,
+        images: undefined,
+      })),
+    },
+  };
+}
+
 function enrichPlace(primary: PlaceMedia, enrichment: PlaceMedia): PlaceMedia {
-  const images = uniqueImages([
-    ...(primary.images ?? (primary.image ? [primary.image] : [])),
-    ...(enrichment.images ?? (enrichment.image ? [enrichment.image] : [])),
-  ]);
+  const enrichmentImages = enrichment.images ?? (enrichment.image ? [enrichment.image] : []);
+  const primaryImages = primary.images ?? (primary.image ? [primary.image] : []);
+  const images = uniqueImages(enrichmentImages.length ? enrichmentImages : primaryImages);
   return {
     ...primary,
     ...(primary.summary || !enrichment.summary ? {} : { summary: enrichment.summary }),
-    ...(primary.image || !enrichment.image ? {} : { image: enrichment.image }),
+    ...((enrichment.image ?? primary.image) ? { image: enrichment.image ?? primary.image } : {}),
     ...(images.length ? { images } : {}),
     sources: uniqueSources([
       ...(primary.sources ?? []),
-      { provider: "wikipedia", label: "Wikipedia", url: enrichment.sourceUrl, role: "description" as const },
+      ...(enrichment.sources ?? [{
+        provider: "external-media",
+        label: enrichment.image?.attribution ?? "Web",
+        url: enrichment.sourceUrl,
+        role: "discovery" as const,
+      }]),
     ]),
   };
 }
@@ -74,6 +101,21 @@ function samePlaceName(left: string, right: string): boolean {
     Math.min(normalizedLeft.length, normalizedRight.length) >= 4 &&
     (normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft))
   );
+}
+
+function rankPlaces(places: PlaceMedia[], query: string): PlaceMedia[] {
+  const normalizedQuery = normalizeName(query);
+  return places.map((place, index) => ({ place, index, score: nameMatchScore(place.name, normalizedQuery) }))
+    .sort((left, right) => left.score - right.score || left.index - right.index)
+    .map(({ place }) => place);
+}
+
+function nameMatchScore(name: string, normalizedQuery: string): number {
+  const normalizedName = normalizeName(name);
+  if (normalizedName === normalizedQuery) return 0;
+  if (normalizedName.includes(normalizedQuery)) return 1;
+  if (normalizedQuery.includes(normalizedName)) return 2;
+  return 3;
 }
 
 function normalizeName(value: string): string {

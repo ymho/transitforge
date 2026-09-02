@@ -28,6 +28,7 @@ for (const name of [
 ]) {
   process.env[name] ??= `lambda-package-check-${name.toLowerCase()}`;
 }
+process.env.VIEWER_ORIGIN ??= "https://viewer.example.com";
 const loaded = await import(pathToFileURL(bundle).href);
 if (typeof loaded.handler !== "function") {
   throw new Error("Lambda bundleをNode.jsで読み込めません");

@@ -9,6 +9,7 @@ describe("createAgentApplication", () => {
       AI_TIMETABLE_BUCKET: "timetable", AI_TIMETABLE_PREFIX: "ai-timetable", PLANNING_TIMETABLE_PREFIX: "timetable",
       TRAFFIC_SNAPSHOT_BUCKET: "traffic", TRAFFIC_SNAPSHOT_KEY: "api/traffic/delays.json",
       TRAVEL_PROVIDER_SECRET_ARN: "arn:secret", CONVERSATION_FEEDBACK_BUCKET: "feedback", AGENT_TRACE_BUCKET: "trace",
+      VIEWER_ORIGIN: "https://app.ohmyki.com",
     })).toBeInstanceOf(Object);
   });
 

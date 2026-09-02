@@ -15,9 +15,14 @@
 上書きしない。Mapboxを利用できない環境では既存機能を失わないためWikipediaへフォールバックするが
 本番の地図候補はMapbox Searchの設定を標準とする
 
+Wikipediaによる写真補完とfallback結果の説明表示は
+[ADR 0050](0050-use-web-image-search-for-place-photos.md)で置き換えた
+
 Mapbox Search用Tokenは既存の旅行Provider用Secrets Managerへ任意項目として保存し
 専用Credentials Repositoryで読む。他の旅行Providerの認証項目をMapboxへ要求せず
 TokenやTokenを含むリクエストURLをEvidence Trace ログへ保存しない
+Viewerと同じURL制限付き公開Tokenを共有する場合 BackendのMapbox通信は正規Viewer URLを`Referer`に設定する
+この通信方針は共通Mapbox HTTP Adapterへ集約する
 
 ## 理由
 
