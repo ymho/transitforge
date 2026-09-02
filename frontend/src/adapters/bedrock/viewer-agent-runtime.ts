@@ -183,6 +183,7 @@ export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDepend
   conciergeInstruction?: string;
   getConversationContext?: () => AgentConversationContext | undefined;
   getTripContext?: () => TripContext | undefined;
+  getVerifiedPlaces?: () => readonly PlaceMedia[];
   rememberTravelPreference?: (statement: string, confidence: "low" | "high") => void;
   updateConversationSession?: (update: {
     scope?: ConversationScope;
@@ -327,6 +328,7 @@ export async function runViewerAgentRuntime(
     dependencies.getPreviousJourneyPlan?.(),
     dependencies.getPendingJourneyLegChange?.(),
   );
+  const verifiedPlaces = dependencies.getVerifiedPlaces?.().slice(0, 8) ?? [];
   const runtimeResult = await runtime.run({
     executionId: crypto.randomUUID(),
     // この入口は常にコンシェルジュUIである。発話内容を正規表現で
@@ -349,6 +351,12 @@ export async function runViewerAgentRuntime(
       ...(contextSnapshot.profile ? { travelProfile: contextSnapshot.profile } : {}),
       ...(contextSnapshot.trip ? { currentTrip: contextSnapshot.trip } : {}),
       ...(currentJourney ? { currentJourney } : {}),
+      verifiedFacts: verifiedPlaces.map((place) => ({
+        evidenceId: `place:${place.providerPlaceId}`,
+        category: "place",
+        subject: place.name,
+        summary: [place.name, place.address, place.summary].filter(Boolean).join(" — ").slice(0, 300),
+      })),
       knownHardConstraints: decisionHardConstraints(travelFacts.context, currentTripPlan),
       knownSoftPreferences: decisionSoftPreferences(
         travelFacts.context,
@@ -357,9 +365,13 @@ export async function runViewerAgentRuntime(
     },
   });
   await dependencies.storeAgentTrace?.(runtimeResult.trace).catch(() => undefined);
+  const tripContextUpdate = tripContextFromDecisionTrace(
+    travelFacts.context,
+    runtimeResult.trace,
+  );
 
   if (previousJourneyState.response !== undefined) {
-    return previousJourneyState.response;
+    return withTripContext(previousJourneyState.response, tripContextUpdate);
   }
 
   const travelResponse = travelResponseText(
@@ -369,29 +381,76 @@ export async function runViewerAgentRuntime(
   );
   if (travelResponse !== undefined) {
     if (hasExternalTravelInformation(externalState) && "travelPlan" in travelResponse) {
-      return { ...travelResponse, external: externalState };
+      return withTripContext({ ...travelResponse, external: externalState }, tripContextUpdate);
     }
-    return travelResponse;
+    return withTripContext(travelResponse, tripContextUpdate);
   }
   const conversationResponse = conversationResponseText(conversationState);
   if (conversationResponse !== undefined) {
-    return hasExternalTravelInformation(externalState) && typeof conversationResponse !== "string"
+    const response = hasExternalTravelInformation(externalState) && typeof conversationResponse !== "string"
       ? { ...conversationResponse, external: externalState }
       : conversationResponse;
+    return withTripContext(response, tripContextUpdate);
   }
   if (tripPlanUpdateState.proposal) {
-    return {
+    return withTripContext({
       text: tripPlanUpdateState.proposal.summary,
       tripPlanUpdate: tripPlanUpdateState.proposal,
-    };
+    }, tripContextUpdate);
   }
   // Toolを途中まで実行できても、Agent全体が失敗した場合は候補をUIへ公開しない。
   // 会話が「案内失敗」なのに、未採用の地点だけが地図へ残ると、利用者には
   // その地点が推薦結果に見えてしまう。
   if (runtimeResult.status === "completed" && hasExternalTravelInformation(externalState)) {
-    return { text: runtimeResult.response, external: externalState };
+    return withTripContext(
+      { text: runtimeResult.response, external: externalState },
+      tripContextUpdate,
+    );
   }
-  return directRouteResponseText(toolState) ?? runtimeResult.response;
+  return withTripContext(
+    directRouteResponseText(toolState) ?? runtimeResult.response,
+    tripContextUpdate,
+  );
+}
+
+export function tripContextFromDecisionTrace(
+  current: TripContext,
+  trace: AgentTrace,
+): TripContext | undefined {
+  for (let index = trace.events.length - 1; index >= 0; index -= 1) {
+    const event = trace.events[index];
+    if (event?.type !== "decision_recorded") continue;
+    const values = Array.isArray(event.softPreferences.value)
+      ? event.softPreferences.value
+      : [];
+    for (const item of values) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      const preference = item as Record<string, unknown>;
+      if (preference.key !== "relative_distance" && preference.key !== "distance_preference") {
+        continue;
+      }
+      if (preference.value !== "nearer" && preference.value !== "farther") continue;
+      if (current.relativeDistancePreference === preference.value) return undefined;
+      return { ...current, relativeDistancePreference: preference.value };
+    }
+  }
+  return undefined;
+}
+
+function withTripContext(
+  response: ViewerAgentResponse,
+  tripContext: TripContext | undefined,
+): ViewerAgentResponse {
+  if (!tripContext) return response;
+  if (typeof response === "string") return { text: response, tripContext };
+  if ("conversation" in response) {
+    return {
+      ...response,
+      tripContext,
+      conversation: { ...response.conversation, tripContext },
+    };
+  }
+  return { ...response, tripContext };
 }
 
 function decisionTripContext(
@@ -411,9 +470,12 @@ function decisionTripContext(
       : { returnArrivalTimeMinutes: context.returnArrivalTimeMinutes }),
     ...(context.companions?.length ? { companions: context.companions } : {}),
     ...(context.pace === undefined ? {} : { pace: context.pace }),
-    ...(context.maximumTravelMinutes === undefined
+      ...(context.maximumTravelMinutes === undefined
       ? {}
       : { maximumTravelMinutes: context.maximumTravelMinutes }),
+    ...(context.relativeDistancePreference
+      ? { relativeDistancePreference: context.relativeDistancePreference }
+      : {}),
     ...(context.avoidances?.length ? { avoidances: context.avoidances } : {}),
     ...(context.carAvailable === undefined ? {} : { carAvailable: context.carAvailable }),
     ...(context.adventureIntensity === undefined
@@ -524,6 +586,7 @@ function decisionSoftPreferences(
   };
   add("pace", context.pace, "trip_context");
   add("maximum_travel_minutes", context.maximumTravelMinutes, "trip_context");
+  add("relative_distance", context.relativeDistancePreference, "trip_context");
   add("car_available", context.carAvailable, "trip_context");
   for (const avoidance of context.avoidances ?? []) {
     add("avoid", avoidance, "trip_context");
@@ -582,7 +645,8 @@ export function viewerAgentToolDescriptors(
   names: readonly ViewerAgentToolName[] = viewerAgentToolNames,
   context: ViewerAgentToolPreconditionContext = {},
 ): AgentToolDescriptor[] {
-  return names.map((name) => {
+  return names.filter((name) => context.tripContext === undefined ||
+    viewerToolMeetsTripPreconditions(name, context.tripContext)).map((name) => {
     const descriptor: AgentToolDescriptor = {
       name,
       description: viewerToolDescription(name),
@@ -591,6 +655,20 @@ export function viewerAgentToolDescriptors(
     };
     return { ...descriptor, description: modelToolDescription(descriptor) };
   });
+}
+
+function viewerToolMeetsTripPreconditions(
+  name: ViewerAgentToolName,
+  tripContext: TripContext,
+): boolean {
+  if (name === "plan_day_trip") {
+    return tripContext.stayNights === 0 && Boolean(tripContext.startDate);
+  }
+  if (name === "search_accommodations") {
+    return typeof tripContext.stayNights === "number" && tripContext.stayNights >= 1 &&
+      Boolean(tripContext.startDate) && Boolean(tripContext.endDate);
+  }
+  return true;
 }
 
 export interface ViewerAgentToolPreconditionContext {
@@ -682,11 +760,13 @@ function viewerToolIsAvailable(
       return dependencies.searchDirectRoutes !== undefined &&
         preconditions.directRouteSearchGrounded !== false;
     case "plan_day_trip":
-      return dependencies.searchDirectRoutes !== undefined;
+      return dependencies.searchDirectRoutes !== undefined &&
+        viewerToolMeetsTripPreconditions(name, preconditions.tripContext ?? {});
     case "search_trip_route_update":
       return currentTrip !== undefined && dependencies.searchDirectRoutes !== undefined;
     case "search_accommodations":
-      return dependencies.searchAccommodations !== undefined;
+      return dependencies.searchAccommodations !== undefined &&
+        viewerToolMeetsTripPreconditions(name, preconditions.tripContext ?? {});
     case "search_representative_timetable":
       return dependencies.searchRepresentativeTimetable !== undefined;
     case "search_weather_forecast":
@@ -879,14 +959,15 @@ function viewerToolDecisionSupport(
       responsibilityBoundary: "利用者への追加質問を構造化してUIへ返す唯一の能力。質問が必要なら回答textだけで直接尋ねず、このToolを使う。入力検証はTool、何を一つ尋ねるかの判断はAgentが担う",
       suitableCases: ["選択予定Toolの必須入力のうち 利用者にしか確定できない条件が一つ不足する"],
       unsuitableCases: [
-        "プロフィールの好みと利用可能な検索Toolから候補を先に提示できる場合",
         "具体的な候補をまだ提示していないinspiration段階の日付 泊数 自由入力の好み",
+        "検索Toolが発見 比較する宿 店 観光地 列車などの候補名",
+        "利用者が現在旅程の往路 復路 帰着期限 途中立寄りの変更を明示している場合に 変更意思を再確認する",
+        "planningStage=inspirationで プロフィールの出発地と移動許容を踏まえた午前 移動 到着後 帰路の全体像や 日帰りと宿泊の比較をまだ示していない",
+        "プロフィールの好みと利用可能な検索Toolから候補を先に提示できる場合",
         "planning-intentを使って候補の目的地を利用者に決めさせる",
         "ContextやTool結果に既にある条件",
         "Toolの既定値で仮案を示せる任意入力",
         "利用者が明示した列車や種別の利用・回避希望について理由や再確認を求める",
-        "利用者が現在旅程の往路 復路 帰着期限 途中立寄りの変更を明示している場合に 変更意思を再確認する",
-        "検索Toolが発見 比較する宿 店 観光地 列車などの候補名",
         "早朝 ゆっくりなど既にsoft preferenceとして使える希望の数値化",
         "必要な事実を利用可能なToolで確認できる場合",
       ],
@@ -932,6 +1013,7 @@ function externalTravelDecisionSupport(
       ],
       unsuitableCases: [
         "リラックスしたい 自然を感じたいなど、具体的な固有地名がない気分や嗜好から行き先候補を発見する",
+        "同じ目的地がverifiedFactsにあり 位置や写真を再取得する必要がない",
         "鉄道経路、Webだけに存在する未照合施設を確定する",
       ],
       returnedEvidence: "Mapbox Place ID、座標、写真と出典、取得できた施設属性",
@@ -943,6 +1025,7 @@ function externalTravelDecisionSupport(
     },
     search_web: {
       suitableCases: [
+        "もっと遠く 近くという相対希望を プロフィールの出発地と直前候補を基準に再探索し decision summaryへ relative_distance=farther または nearer として残す",
         "リフレッシュしたい 癒やされたいなどの今回の気分と UserProfileの好み 登録済みの場所 移動負担から、追加質問より先に具体的な行き先候補を発見する",
         "目的地未定の相談で 地域 温泉地 自然エリア 具体施設を区別しながら複数候補を比較する",
         "候補施設や最新情報の発見に公開Web検索が必要",
@@ -1006,7 +1089,7 @@ function viewerToolDescription(name: ViewerAgentToolName): string {
     propose_trip_update: "現在の旅程に対する観光 移動 滞在 条件の変更案を構造化します。利用者が変更を依頼し内容が明確なら追加確認せず使います",
     remember_travel_preference: "高確信の継続的な旅行の好みを端末内へ記憶します",
     update_conversation_session: "現在の会話Sessionの要約と話題を更新します",
-    ask_follow_up: "旅行相談で候補検索後も本当に不足している今回固有の必須条件だけを構造化して質問します。プロフィールから候補を探せる嗜好や場所は聞かず、planning-intentで目的地を尋ねず、自由入力より短い選択肢を優先し、同じ質問を繰り返しません",
+    ask_follow_up: "利用者にしか確定できない必須条件を1件だけ構造化して質問します。候補提示や既知条件の聞き直しには使わず、planning-intentで目的地を尋ねず短い選択肢を返します",
     inspect_previous_journey: "currentJourneyにある直前の検証済み経路について、対象列車または途中駅を確認します",
     revise_previous_journey: "currentJourneyに対する明示済みの利用・回避条件で、確認を挟まず変更候補を再検索します。区間の代替候補の提示と、選択済み候補の確定も扱います",
     search_trains: "現在表示中の列車を決定論的に検索します",
@@ -1254,6 +1337,7 @@ function viewerToolInputSchema(
             returnArrivalTimeMinutes: { type: "integer", minimum: 0, maximum: 1_800 },
             pace: { type: "number", minimum: 0, maximum: 1 },
             maximumTravelMinutes: { type: ["number", "null"] },
+            relativeDistancePreference: { type: "string", enum: ["nearer", "farther"] },
             carAvailable: { type: "boolean" },
           },
           additionalProperties: false,
@@ -2716,6 +2800,9 @@ function tripContextFromToolInput(value: unknown): TripContext {
       : {}),
     ...(typeof input.maximumTravelMinutes === "number" || input.maximumTravelMinutes === null
       ? { maximumTravelMinutes: input.maximumTravelMinutes as number | null }
+      : {}),
+    ...(input.relativeDistancePreference === "nearer" || input.relativeDistancePreference === "farther"
+      ? { relativeDistancePreference: input.relativeDistancePreference }
       : {}),
     ...(typeof input.carAvailable === "boolean" ? { carAvailable: input.carAvailable } : {}),
   };

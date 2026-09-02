@@ -36,6 +36,7 @@ export interface TripContext {
   interests?: Partial<Record<TravelPreference, number>>;
   pace?: number;
   maximumTravelMinutes?: number | null;
+  relativeDistancePreference?: "nearer" | "farther";
   avoidances?: string[];
   carAvailable?: boolean;
   adventureIntensity?: 0 | 1 | 2 | 3;

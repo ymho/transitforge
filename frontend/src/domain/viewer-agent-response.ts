@@ -12,6 +12,7 @@ import type { WebPageReadResult, WebSearchResult } from "@raiquora/trip/web-rese
 import type { TravelAlertSearchResult } from "@raiquora/trip/travel-alert";
 import type { GroundAccessArea, GroundAccessMatrix, GroundAccessRoute } from "@raiquora/trip/ground-access";
 import type { RestaurantSearchResult } from "@raiquora/trip/restaurant-search";
+import type { TripContext } from "@raiquora/trip/travel-profile";
 
 export type ViewerAgentJourneyPlan = TripJourneyPlan;
 
@@ -47,6 +48,12 @@ export interface ViewerAgentTripPlanUpdateResponse { text: string; tripPlanUpdat
 export interface ViewerAgentExternalResponse {
   text: string;
   external: ViewerAgentExternalData;
+  tripContext?: TripContext;
+}
+
+export interface ViewerAgentContextResponse {
+  text: string;
+  tripContext: TripContext;
 }
 
 export type ViewerAgentResponse =
@@ -55,4 +62,5 @@ export type ViewerAgentResponse =
   | ViewerAgentTravelResponse
   | ViewerAgentConversationResponse
   | ViewerAgentTripPlanUpdateResponse
-  | ViewerAgentExternalResponse;
+  | ViewerAgentExternalResponse
+  | ViewerAgentContextResponse;

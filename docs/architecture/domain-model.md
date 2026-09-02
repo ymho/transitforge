@@ -328,6 +328,9 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 今回の行き先 希望日 泊数 興味 同行者 移動条件などを表す。一回限りの「海に行きたい」はここへ入り
 普段の「山が好き」は`UserProfile`へ入る。両者を混在させない。
 `planningStage`は写真と雰囲気を見る`inspiration`と 具体的な日程を組む`planning`を区別する。
+`relativeDistancePreference`は、Bedrockが直前候補に対する「もっと近く／遠く」を
+`nearer`または`farther`として解釈した場合だけ保持する。Applicationは発話を分類せず、
+Decision Traceの外部化可能な判断結果をTripContextへ写して次ターンへ引き継ぐ。
 目的地だけの相談では前者から始め 利用者が旅程化を望むか日程を明示した後にだけ後者へ進む。
 
 ### `ConversationGuidance` `ConversationSubmission`
