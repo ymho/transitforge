@@ -128,6 +128,27 @@ describe("Bedrock agent client", () => {
     expect(result.metadata.requestId).toBe("request-123");
     expect(result.body.stopReason).toBe("end_turn");
   });
+
+  it("sends the provider-neutral model class selected by the runtime", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(
+      JSON.stringify({
+        message: { role: "assistant", content: [{ text: "候補を探します" }] },
+        stopReason: "end_turn",
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    ));
+
+    await invokeBedrockAgent(
+      [{ role: "user", content: [{ text: "リラックスできる観光したい" }] }],
+      fetcher,
+      undefined,
+      "decision",
+    );
+
+    const [, init] = fetcher.mock.calls[0] ?? [];
+    expect(JSON.parse(String(init?.body))).toMatchObject({ modelClass: "decision" });
+  });
+
   it("sends the payload hash required by a CloudFront Lambda origin", async () => {
     const bedrockResponse: BedrockAgentResponse = {
       message: {

@@ -145,6 +145,61 @@ describe("Bedrock viewer agent", () => {
     );
   });
 
+  it("does not resend a decision-summary-only text block during replan", async () => {
+    const searchPlaceMedia = vi.fn(async () => ({
+      result: {
+        status: "available" as const,
+        freshness: "fresh" as const,
+        retrievedAt: "2026-09-02T00:00:00.000Z",
+        data: { places: [{
+          providerPlaceId: "kinosaki-onsen",
+          name: "城崎温泉",
+          latitude: 35.6244,
+          longitude: 134.8132,
+          sourceUrl: "https://example.com/kinosaki-onsen",
+          openingHoursStatus: "unknown" as const,
+        }] },
+        evidence: [],
+      },
+    }));
+    const converse = vi.fn<BedrockAgentConverse>()
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [
+          { text: '<decision_summary>{"interpretedGoal":"静かな温泉地を探す","hardConstraints":[],"softPreferences":[{"key":"pace","value":"slow"}],"selectedAction":"use_tool","selectedTool":"search_place_media","unresolvedFacts":[],"reasonCodes":["evidence_required"]}</decision_summary>' },
+          { toolUse: {
+            toolUseId: "place", name: "search_place_media",
+            input: { query: "関西 静かな温泉", limit: 4 },
+          } },
+        ] },
+        stopReason: "tool_use",
+      })
+      .mockImplementationOnce(async (messages) => {
+        expect(messages.flatMap(({ content }) => content).some((content) =>
+          "text" in content && content.text.length === 0)).toBe(false);
+        return {
+          message: { role: "assistant", content: [{ text: "城崎温泉なら外湯を巡りながら休めます。" }] },
+          stopReason: "end_turn",
+        };
+      });
+
+    const result = await runViewerAgentRuntime("リラックスできる観光したい", {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      getUserProfile: () => ({
+        home: { station: "向日町", carAvailable: false },
+        travelStyle: { pace: 0.2 },
+        transport: { maxTypicalTravelMinutes: 120 },
+      } as unknown as UserProfile),
+      searchPlaceMedia, maximumRouteTime: 1_800,
+    }, converse);
+
+    expect(result).not.toBe("案内を完了できませんでした。時間をおいてもう一度お試しください");
+    expect(searchPlaceMedia).toHaveBeenCalledOnce();
+    expect(converse).toHaveBeenCalledTimes(2);
+    expect(converse.mock.calls[0]?.[2]).toBe("decision");
+  });
+
   it("passes the raw user turn and TripContext as separate structured context", async () => {
     const converse = vi.fn<BedrockAgentConverse>(async (messages, _tools, modelClass) => {
       expect(modelClass).toBeUndefined();
