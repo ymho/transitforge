@@ -17,6 +17,8 @@ describe("renderDisplayMode", () => {
     expect(realtime.ariaPressed).toBe("true");
     expect(dateTime.ariaPressed).toBe("false");
     expect(elements.dateTimeInput.disabled).toBe(true);
+    expect(elements.simulationOnlyControls?.every((control) => control.hidden)).toBe(true);
+    expect(elements.realtimeOnlyControls?.every((control) => !control.hidden)).toBe(true);
   });
 
   it("リアルタイム情報がなければ日時指定シミュレーターを示す", () => {
@@ -31,6 +33,8 @@ describe("renderDisplayMode", () => {
     expect(dateTime.ariaPressed).toBe("true");
     expect(elements.toggle.disabled).toBe(true);
     expect(elements.toggle.title).toContain("日時指定シミュレーター");
+    expect(elements.simulationOnlyControls?.every((control) => !control.hidden)).toBe(true);
+    expect(elements.realtimeOnlyControls?.every((control) => control.hidden)).toBe(true);
   });
 });
 
@@ -43,13 +47,19 @@ function displayModeElements(
     disabled: false,
     closest: () => display,
   } as unknown as HTMLInputElement;
+  const currentTimeButton = button();
+  const toggle = button();
+  const simulationOnlyControls = [toggle, currentTimeButton, button(), button(), button()];
+  const realtimeOnlyControls = [button()];
   return {
     app: { dataset: {} } as HTMLElement,
     dateTimeInput,
-    currentTimeButton: button(),
-    toggle: button(),
+    currentTimeButton,
+    toggle,
     realtimeModeButtons: [realtime],
     dateTimeModeButtons: [dateTime],
+    simulationOnlyControls,
+    realtimeOnlyControls,
   };
 }
 
@@ -60,5 +70,8 @@ function button(): HTMLButtonElement {
     ariaPressed: "false",
     ariaLabel: "",
     title: "",
+    setAttribute(name: string, value: string) {
+      if (name === "aria-hidden") this.ariaHidden = value;
+    },
   } as HTMLButtonElement;
 }
