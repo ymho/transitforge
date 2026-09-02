@@ -57,7 +57,7 @@ describe("Bedrock viewer agent", () => {
     expect(descriptors[0]?.description).toContain("具体的な固有地名がない気分や嗜好");
     expect(descriptors[0]?.description).toContain("検索対象の固有地名または施設名");
     expect(descriptors[1]?.description).toContain("検索Toolが発見 比較する宿");
-    expect(descriptors[1]?.description).toContain("departure-dateを先に尋ね");
+    expect(descriptors[1]?.description).toContain("inspiration段階の日付 泊数");
     expect(descriptors[1]?.description).toContain("変更意思を再確認");
     expect(descriptors[1]?.inputSchema.required).toEqual(["question", "expectedInput"]);
     expect(descriptors[2]?.description).toContain("宿名を先に決めさせない");
@@ -98,12 +98,12 @@ describe("Bedrock viewer agent", () => {
     });
   });
 
-  it("leaves planning-stage interpretation to the model when it is not known", () => {
+  it("keeps an unstarted consultation in inspiration confirmation", () => {
     const [descriptor] = viewerAgentToolDescriptors(["ask_follow_up"], {
       tripContext: { destinationWish: "出雲大社" },
     });
     expect(descriptor?.inputSchema.properties.expectedInput).toMatchObject({
-      enum: ["planning-intent", "departure-date", "stay-length"],
+      enum: ["planning-intent"],
     });
   });
 
@@ -121,12 +121,19 @@ describe("Bedrock viewer agent", () => {
     const storeAgentTrace = vi.fn(async (
       trace: import("../../usecases/agent/agent-trace").AgentTrace,
     ) => { storedTraces.push(trace); });
-    const converse: BedrockAgentConverse = async () => ({
-      message: { role: "assistant", content: [{
-        text: '<decision_summary>{"interpretedGoal":"次の確認事項を案内する","hardConstraints":[],"softPreferences":[],"selectedAction":"answer","unresolvedFacts":[],"reasonCodes":["no_factual_claim_required"]}</decision_summary>日程が決まっていれば教えてください。',
-      }] },
-      stopReason: "end_turn",
-    });
+    const converse = vi.fn<BedrockAgentConverse>()
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{
+          text: '<decision_summary>{"interpretedGoal":"次の確認事項を案内する","hardConstraints":[],"softPreferences":[],"selectedAction":"answer","unresolvedFacts":[],"reasonCodes":["no_factual_claim_required"]}</decision_summary>日程が決まっていれば教えてください。',
+        }] },
+        stopReason: "end_turn",
+      })
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{
+          text: '<decision_summary>{"interpretedGoal":"候補を先に案内する","hardConstraints":[],"softPreferences":[],"selectedAction":"answer","unresolvedFacts":[],"reasonCodes":["no_factual_claim_required"]}</decision_summary>プロフィールを使って候補を先に探します。',
+        }] },
+        stopReason: "end_turn",
+      });
     const result = await runViewerAgentRuntime("次に何を確認すればよい？", {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
       setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
@@ -134,12 +141,13 @@ describe("Bedrock viewer agent", () => {
       storeAgentTrace, maximumRouteTime: 1_800,
     }, converse);
 
-    expect(result).toBe("日程が決まっていれば教えてください。");
+    expect(result).toBe("プロフィールを使って候補を先に探します。");
+    expect(converse).toHaveBeenCalledTimes(2);
     expect(String(result)).not.toContain("decision_summary");
     expect(storedTraces[0]?.events).toContainEqual(
       expect.objectContaining({
         type: "decision_recorded",
-        interpretedGoal: "次の確認事項を案内する",
+        interpretedGoal: "候補を先に案内する",
         reasonCodes: ["no_factual_claim_required"],
       }),
     );
@@ -2258,12 +2266,152 @@ describe("Bedrock viewer agent", () => {
     });
     expect(result.conversation.question).toBe("この場所を軸に旅を考えてみますか？");
     expect(result.conversation.quickReplies).toEqual([
-      { label: "旅程を考える", value: "旅程を考えたい" },
-      { label: "もう少し見たい", value: "もう少し見たい" },
+      { label: "はい", value: "旅程を考えたい" },
+      { label: "いいえ", value: "もう少し見たい" },
     ]);
     expect(result.text).toContain("1泊にして");
     expect(result.text).not.toContain("構造化した案内を準備しました");
     expect(searchPlaceMedia).toHaveBeenCalledWith({ query: "出雲大社", limit: 4 });
+  });
+
+  it("uses the travel profile to discover candidates before asking for dates", async () => {
+    const searchWeb = vi.fn(async () => ({
+      webSearch: {
+        status: "unavailable" as const,
+        freshness: "unknown" as const,
+        evidence: [],
+        failure: {
+          code: "unauthorized" as const,
+          message: "Web検索を利用できません",
+          retryable: false,
+        },
+      },
+    }));
+    const converse = vi.fn<BedrockAgentConverse>()
+      .mockImplementationOnce(async (messages, tools) => {
+        const contextText = messages[0]?.content.find((content) => "text" in content);
+        expect(contextText && "text" in contextText ? contextText.text : "")
+          .toContain('"favoriteInterests":["海","自然"]');
+        expect(tools?.find(({ name }) => name === "ask_follow_up")?.inputSchema)
+          .toMatchObject({ properties: { expectedInput: { enum: ["planning-intent"] } } });
+        return {
+          message: { role: "assistant", content: [{ toolUse: {
+            toolUseId: "premature-date",
+            name: "ask_follow_up",
+            input: {
+              question: "いつ出発しますか？",
+              expectedInput: "departure-date",
+              quickReplies: [
+                { label: "今週末", value: "今週末" },
+                { label: "来週", value: "来週" },
+              ],
+            },
+          } }] },
+          stopReason: "tool_use",
+        };
+      })
+      .mockImplementationOnce(async (messages) => {
+        const failed = messages.flatMap(({ content }) => content)
+          .find((content) => "toolResult" in content);
+        expect(failed && "toolResult" in failed ? failed.toolResult.status : undefined)
+          .toBe("error");
+        return {
+          message: { role: "assistant", content: [{ toolUse: {
+            toolUseId: "profile-discovery",
+            name: "search_web",
+            input: { query: "静かな海辺 自然 散歩 関西", limit: 6 },
+          } }] },
+          stopReason: "tool_use",
+        };
+      });
+
+    const result = await runViewerAgentRuntime("リラックスした旅行がしたい", {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      searchWeb,
+      getUserProfile: () => ({
+        home: { carAvailable: false },
+        companions: { usual: [], children: [] },
+        travelStyle: { pace: 0.2 },
+        preferences: { sea: 1, nature: 0.9 },
+        transport: { maxTypicalTravelMinutes: 120 },
+      } as unknown as UserProfile),
+      maximumRouteTime: 1_800,
+    }, converse);
+
+    expect(searchWeb).toHaveBeenCalledWith({
+      query: "静かな海辺 自然 散歩 関西",
+      limit: 6,
+    });
+    expect(typeof result === "string" ? result : result.text)
+      .toContain("根拠を確認できない候補は案内せず");
+    expect(converse).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects a repeated follow-up and replans with a search Tool", async () => {
+    const searchWeb = vi.fn(async () => ({
+      webSearch: {
+        status: "unavailable" as const,
+        freshness: "unknown" as const,
+        evidence: [],
+        failure: {
+          code: "unauthorized" as const,
+          message: "Web検索を利用できません",
+          retryable: false,
+        },
+      },
+    }));
+    const converse = vi.fn<BedrockAgentConverse>()
+      .mockResolvedValueOnce({
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "same-date",
+          name: "ask_follow_up",
+          input: {
+            question: "いつ出発しますか?",
+            expectedInput: "departure-date",
+            quickReplies: [
+              { label: "今週末", value: "今週末" },
+              { label: "来週", value: "来週" },
+            ],
+            tripContext: { planningStage: "planning", destinationWish: "海辺" },
+          },
+        } }] },
+        stopReason: "tool_use",
+      })
+      .mockImplementationOnce(async (messages) => {
+        const failed = messages.flatMap(({ content }) => content)
+          .find((content) => "toolResult" in content);
+        expect(failed && "toolResult" in failed ? failed.toolResult.status : undefined)
+          .toBe("error");
+        expect(JSON.stringify(failed)).toContain("同じ質問は繰り返せません");
+        return {
+          message: { role: "assistant", content: [{ toolUse: {
+            toolUseId: "alternative",
+            name: "search_web",
+            input: { query: "海辺 散歩 候補", limit: 4 },
+          } }] },
+          stopReason: "tool_use",
+        };
+      });
+
+    await runViewerAgentRuntime("決めていないです", {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
+      setRouteTime: vi.fn(), focusTrain: vi.fn(), setLayerVisibility: vi.fn(),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      searchWeb,
+      getTripContext: () => ({ planningStage: "planning", destinationWish: "海辺" }),
+      getConversationContext: () => ({
+        relevantMessages: [JSON.stringify([
+          { role: "user", text: "海辺を歩きたい" },
+          { role: "assistant", text: "いつ出発しますか？" },
+        ])],
+      }),
+      maximumRouteTime: 1_800,
+    }, converse);
+
+    expect(searchWeb).toHaveBeenCalledOnce();
+    expect(converse).toHaveBeenCalledTimes(2);
   });
 
   it("discovers a concrete destination before planning from a vague travel mood", async () => {
