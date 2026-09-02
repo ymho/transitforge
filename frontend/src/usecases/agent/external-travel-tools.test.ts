@@ -167,6 +167,7 @@ describe("external travel tools", () => {
 
   it("自治体名や交通の一般概念をスポット候補にしない", () => {
     expect(isSpecificPlaceCandidateName("出雲市")).toBe(false);
+    expect(isSpecificPlaceCandidateName("江東区")).toBe(false);
     expect(isSpecificPlaceCandidateName("島根県")).toBe(false);
     expect(isSpecificPlaceCandidateName("定期観光バス")).toBe(false);
     expect(isSpecificPlaceCandidateName("旭日酒造")).toBe(true);

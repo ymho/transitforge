@@ -193,6 +193,7 @@ resource "aws_lambda_function" "bedrock_agent" {
       TRAFFIC_SNAPSHOT_BUCKET      = aws_s3_bucket.website.id
       TRAFFIC_SNAPSHOT_KEY         = "api/traffic/delays.json"
       TRAVEL_PROVIDER_SECRET_ARN   = aws_secretsmanager_secret.travel_provider.arn
+      VIEWER_ORIGIN                = "https://${var.viewer_domain_name}"
       CONVERSATION_FEEDBACK_BUCKET = aws_s3_bucket.conversation_feedback.id
       AGENT_TRACE_BUCKET           = aws_s3_bucket.conversation_feedback.id
     }

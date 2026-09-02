@@ -624,7 +624,7 @@ export function isSpecificPlaceCandidateName(value: string): boolean {
   if (/^(?:日本|島根県|出雲地方|観光|観光地|観光スポット|旅行|レジャー|定期観光バス|路線バス|バス|鉄道|駅)$/u.test(normalized)) {
     return false;
   }
-  if (/^.{1,10}(?:都|道|府|県|市|町|村)$/u.test(normalized)) return false;
+  if (/^.{1,10}(?:都|道|府|県|市|区|町|村)$/u.test(normalized)) return false;
   return true;
 }
 

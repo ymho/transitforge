@@ -82,11 +82,13 @@ Terraform apply後に`/transitforge/dev/travel-provider`が作成されるため
 
 `hot_pepper_api_key`を省略した場合は飲食店検索だけが利用不可になる。気象庁防災情報はキー不要で
 Mapbox Navigationは既存の`mapbox_search_access_token`を共有する
+Mapboxへのサーバー通信はURL制限付き公開トークンを地図表示と共有できるよう
+`viewer_domain_name`から生成した正規Viewer URLを`Referer`として一元付与する。
 
 `affiliate_id`は予約リンクの計測が必要な場合だけ指定する。Mapbox Searchを使わない場合は
 `mapbox_search_access_token`を省略できる。
-Mapbox Search未設定時はWikipedia検索へフォールバックする。値はTerraform stateやGitHubへ保存せず AI Lambdaだけが実行時に取得する。
-Web検索を使わない場合は`brave_search_api_key`を省略できる。Google Custom Search JSON APIは
+Mapbox Search未設定時はWikipediaを地点同定だけのfallbackに使い Wikipediaの写真と説明は会話へ表示しない。値はTerraform stateやGitHubへ保存せず AI Lambdaだけが実行時に取得する。
+`brave_search_api_key`はWeb検索と画像検索で共有し、省略した場合はこれらの検索を利用できない。Google Custom Search JSON APIは
 新規利用を受け付けていないため Web検索はベンダー非依存のPortへBrave Search Adapterを接続する。
 Raiquora自身のOIDC対象リポジトリはGitHub Actionsの`github.repository`から渡す
 必須VariableはAWS認証より前に検証し 未設定ならapplyを開始しない

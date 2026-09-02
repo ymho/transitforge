@@ -26,29 +26,46 @@ function appendPlaceInspiration(
   container: HTMLElement,
   places: ViewerAgentExternalResponse["external"]["places"],
 ): void {
-  if (places?.status !== "available" || !places.data) return;
-  const candidates = places.data.places.filter((place) =>
-    place.image?.hotlinkAllowed === true
-  ).slice(0, 4);
-  if (candidates.length === 0) return;
+  const inspiration = placeInspirationImage(places);
+  if (!inspiration) return;
   const gallery = document.createElement("section");
   gallery.className = "external-place-inspiration";
-  for (const place of candidates) {
-    const figure = document.createElement("figure");
-    const image = document.createElement("img");
-    image.src = place.image!.url;
-    image.alt = place.name;
-    image.loading = "lazy";
-    const caption = document.createElement("figcaption");
-    const name = document.createElement("strong");
-    name.textContent = place.name;
-    const credit = document.createElement("small");
-    credit.textContent = place.image!.attribution;
-    caption.append(name, credit);
-    figure.append(image, caption);
-    gallery.append(figure);
-  }
+  const source = document.createElement("a");
+  source.href = inspiration.sourcePageUrl;
+  source.target = "_blank";
+  source.rel = "noopener noreferrer";
+  source.ariaLabel = `${inspiration.placeName}の写真掲載元を開く`;
+  const image = document.createElement("img");
+  image.src = inspiration.imageUrl;
+  image.alt = inspiration.placeName;
+  image.loading = "lazy";
+  source.append(image);
+  gallery.append(source);
   container.append(gallery);
+}
+
+export function placeInspirationImage(
+  places: ViewerAgentExternalResponse["external"]["places"],
+): { placeName: string; imageUrl: string; sourcePageUrl: string } | undefined {
+  if (places?.status !== "available" || !places.data) return undefined;
+  for (const place of places.data.places) {
+    if (place.image?.hotlinkAllowed !== true) continue;
+    const imageUrl = publicHttpsUrl(place.image.url);
+    const sourcePageUrl = publicHttpsUrl(place.image.descriptionUrl);
+    if (!imageUrl || !sourcePageUrl) continue;
+    return { placeName: place.name, imageUrl, sourcePageUrl };
+  }
+  return undefined;
+}
+
+function publicHttpsUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function appendAlerts(container: HTMLElement, alerts: ViewerAgentExternalResponse["external"]["alerts"]): void {

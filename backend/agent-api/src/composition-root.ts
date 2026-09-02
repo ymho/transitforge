@@ -3,6 +3,7 @@ import { OpenMeteoWeatherProvider } from "./adapters/open-meteo-weather-provider
 import { WikipediaPlaceMediaProvider } from "./adapters/wikipedia-place-media-provider.js";
 import { EnrichedPlaceMediaProvider } from "./adapters/enriched-place-media-provider.js";
 import { MapboxPlaceMediaProvider } from "./adapters/mapbox-place-media-provider.js";
+import { BraveImagePlaceMediaProvider } from "./adapters/brave-image-place-media-provider.js";
 import { AwsBedrockConverseClient, AwsDynamoDbQueryClient, AwsS3Client, AwsSecretsManagerClient } from "./adapters/aws-sdk-clients.js";
 import { BedrockConversationModel } from "./adapters/bedrock-conversation-model.js";
 import { DynamoDbOperationSummaryRepository } from "./adapters/dynamodb-operation-summary.js";
@@ -16,6 +17,7 @@ import { BraveWebSearchProvider } from "./adapters/brave-web-search-provider.js"
 import { SafeWebPageReader } from "./adapters/safe-web-page-reader.js";
 import { JmaTravelAlertProvider } from "./adapters/jma-travel-alert-provider.js";
 import { MapboxGroundAccessProvider } from "./adapters/mapbox-ground-access-provider.js";
+import { createMapboxHttpClient } from "./adapters/mapbox-http-client.js";
 import { HotPepperRestaurantProvider } from "./adapters/hot-pepper-restaurant-provider.js";
 import { SecretsManagerHotPepperCredentials } from "./adapters/secrets-manager-hot-pepper-credentials.js";
 import { createAccommodationSearchOperation } from "./usecases/accommodation-search.js";
@@ -59,13 +61,18 @@ export function createAgentApplication(environment: RuntimeEnvironment = process
   const weather = new OpenMeteoWeatherProvider({ fetch: globalThis.fetch });
   const wikipediaPlaces = new WikipediaPlaceMediaProvider({ fetch: globalThis.fetch });
   const mapboxCredentials = new SecretsManagerMapboxSearchCredentials(secrets, secretArn);
-  const mapboxPlaces = new MapboxPlaceMediaProvider({ fetch: globalThis.fetch }, mapboxCredentials);
-  const places = new EnrichedPlaceMediaProvider(mapboxPlaces, wikipediaPlaces);
+  const mapboxHttp = createMapboxHttpClient(
+    { fetch: globalThis.fetch },
+    required(environment, "VIEWER_ORIGIN"),
+  );
+  const mapboxPlaces = new MapboxPlaceMediaProvider(mapboxHttp, mapboxCredentials);
   const webSearchCredentials = new SecretsManagerBraveSearchCredentials(secrets, secretArn);
+  const webImages = new BraveImagePlaceMediaProvider({ fetch: globalThis.fetch }, webSearchCredentials);
+  const places = new EnrichedPlaceMediaProvider(mapboxPlaces, webImages, () => new Date(), wikipediaPlaces);
   const webSearch = new BraveWebSearchProvider({ fetch: globalThis.fetch }, webSearchCredentials);
   const webPageReader = new SafeWebPageReader({ fetch: globalThis.fetch });
   const travelAlerts = new JmaTravelAlertProvider({ fetch: globalThis.fetch });
-  const groundAccess = new MapboxGroundAccessProvider({ fetch: globalThis.fetch }, mapboxCredentials);
+  const groundAccess = new MapboxGroundAccessProvider(mapboxHttp, mapboxCredentials);
   const restaurantCredentials = new SecretsManagerHotPepperCredentials(secrets, secretArn);
   const restaurants = new HotPepperRestaurantProvider({ fetch: globalThis.fetch }, restaurantCredentials);
   const lightweightModelId = optional(environment, "LIGHTWEIGHT_MODEL_ID");

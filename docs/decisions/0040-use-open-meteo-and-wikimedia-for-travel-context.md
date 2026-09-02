@@ -25,6 +25,8 @@ Mapboxの天候表現は画面全体へ適用されるため 同一画面内の�
 観光地の地点ID 座標 カテゴリに関するこの判断は[ADR 0041](0041-use-mapbox-poi-as-place-identity.md)で置き換えた
 WikipediaとWikimedia Commonsは一致した地点の説明と画像の補完として維持する
 
+観光写真の補完は[ADR 0050](0050-use-web-image-search-for-place-photos.md)で置き換えた
+
 ## 理由
 
 両APIは公開仕様があり Provider固有応答をDomain Contractへ正規化できる
