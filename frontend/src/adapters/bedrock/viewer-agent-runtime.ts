@@ -61,6 +61,8 @@ import {
 import {
   conversationQuestionWasAsked,
   conversationTextIsQuestion,
+  isConversationExpectedInput,
+  maximumConversationQuickReplies,
   normalizedConversationGuidance,
   type ConversationExpectedInput,
   type ConversationGuidance,
@@ -71,6 +73,7 @@ import {
   travelConversationFacts,
 } from "../../domain/travel-conversation-context";
 import type { TripContext, UserProfile } from "@raiquora/trip/travel-profile";
+import type { PlaceMedia } from "@raiquora/trip/place-media";
 import {
   tripPlanPatchesFromTravelPlan,
   validateTripPlanPatches,
@@ -123,6 +126,7 @@ import {
   externalTravelToolNames,
   hasExternalTravelInformation,
   isExternalTravelToolName,
+  type ExternalTravelToolName,
   type ExternalTravelToolDependencies,
   type ExternalTravelToolState,
 } from "../../usecases/agent/external-travel-tools";
@@ -641,6 +645,7 @@ const terminalToolNames = new Set<string>([
   "search_direct_routes",
   "search_accommodations",
   "search_place_media",
+  "resolve_place_candidates",
   "plan_day_trip",
   "search_trip_route_update",
   "inspect_previous_journey",
@@ -1219,7 +1224,7 @@ function viewerToolInputSchema(
         },
         quickReplies: {
           type: "array",
-          maxItems: 5,
+          maxItems: maximumConversationQuickReplies,
           items: {
             type: "object",
             properties: {
@@ -1576,6 +1581,12 @@ async function executeViewerToolAdapter(
 ): Promise<unknown> {
   if (isExternalTravelToolName(name)) {
     const output = await executeExternalTravelTool(name, input, dependencies, externalState);
+    const guidance = externalConversationGuidanceProjectors[name]?.(
+      externalState,
+      dependencies.getTripContext?.(),
+      dependencies.getTripPlan?.(),
+    );
+    if (guidance) conversationState.response = guidance;
     return compactExternalTravelToolObservation(name, output);
   }
   if (name === "inspect_previous_journey" || name === "revise_previous_journey") {
@@ -2314,9 +2325,76 @@ function viewerTerminalResponseText(
   }
 
   const directRouteResponse = directRouteResponseText(directRouteState);
-  return typeof directRouteResponse === "string"
+  const routeText = typeof directRouteResponse === "string"
     ? directRouteResponse
     : directRouteResponse?.text;
+  return routeText ?? externalTerminalResponseProjectors[toolName]?.(externalState);
+}
+
+type ExternalConversationGuidanceProjector = (
+  state: ExternalTravelToolState,
+  tripContext: TripContext | undefined,
+  currentPlan: TripPlan | undefined,
+) => ConversationGuidance | undefined;
+
+const externalConversationGuidanceProjectors: Partial<
+  Record<ExternalTravelToolName, ExternalConversationGuidanceProjector>
+> = {
+  resolve_place_candidates: (state, tripContext, currentPlan) =>
+    currentPlan || tripContext?.planningStage === "planning"
+      ? undefined
+      : resolvedPlaceConversationGuidance(state, tripContext),
+};
+
+const externalTerminalResponseProjectors: Record<
+  string,
+  (state: ExternalTravelToolState) => string | undefined
+> = {
+  resolve_place_candidates: resolvedPlaceSummary,
+};
+
+function resolvedPlaceConversationGuidance(
+  state: ExternalTravelToolState,
+  tripContext: TripContext | undefined,
+): ConversationGuidance | undefined {
+  const place = preferredResolvedPlace(state);
+  if (!place) return undefined;
+  const detail = place.detail;
+  const recommendation = [
+    `まずは${place.name}がおすすめです。`,
+    detail?.overview ?? place.summary,
+    detail?.atmosphere,
+    detail?.highlights?.slice(0, 2).join("、"),
+  ].filter((value): value is string => Boolean(value)).join("\n\n");
+  return normalizedConversationGuidance({
+    recommendation,
+    reason: "Webの説明を具体的な地点と照合できた候補です。",
+    question: `${place.name}を軸に旅を考えますか？`,
+    expectedInput: "planning-intent",
+    quickReplies: [
+      { label: "はい", value: "旅程を考えたい" },
+      { label: "いいえ", value: "もう少し見たい" },
+    ],
+    tripContext: {
+      ...tripContext,
+      planningStage: "inspiration",
+      destinationWish: place.name,
+    },
+  });
+}
+
+function preferredResolvedPlace(state: ExternalTravelToolState): PlaceMedia | undefined {
+  const places = state.places?.status === "available" ? state.places.data?.places : undefined;
+  return places?.find((place) => place.image?.hotlinkAllowed === true) ?? places?.[0];
+}
+
+function resolvedPlaceSummary(state: ExternalTravelToolState): string | undefined {
+  const names = state.places?.status === "available"
+    ? state.places.data?.places.slice(0, 3).map((place) => place.name) ?? []
+    : [];
+  return names.length > 0
+    ? `${names.join("、")}を、確認できた具体的な候補として表示しました。`
+    : undefined;
 }
 
 function extendedStayAdvisory(plan: ViewerAgentTravelPlan): string {
@@ -2604,11 +2682,6 @@ function hasVerifiedPlanningDestination(
 function normalizedPlaceName(value: string | undefined): string {
   return value?.normalize("NFKC").toLocaleLowerCase("ja-JP")
     .replace(/[\s　・･,，.。]/gu, "") ?? "";
-}
-
-function isConversationExpectedInput(value: unknown): value is ConversationExpectedInput {
-  return value === "planning-intent" || value === "departure-date" || value === "stay-length" ||
-    value === "traveler-count" || value === "free-text";
 }
 
 function tripContextFromToolInput(value: unknown): TripContext {

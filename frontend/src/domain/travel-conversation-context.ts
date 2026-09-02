@@ -1,4 +1,8 @@
 import type { TripContext } from "@raiquora/trip/travel-profile";
+import {
+  isConversationExpectedInput,
+  type ConversationExpectedInput,
+} from "./conversation-guidance";
 
 export interface TravelConversationFacts {
   context: TripContext;
@@ -16,10 +20,11 @@ export function travelConversationFacts(
 ): TravelConversationFacts {
   const previous = embeddedTripContext(prompt);
   const answer = continuedAnswer(prompt) ?? prompt;
+  const expectedInput = embeddedExpectedInput(prompt);
   const answerDate = explicitCalendarDate(answer, now);
   const promptDate = explicitCalendarDate(prompt, now);
   const startDate = answerDate ?? previous.startDate ?? promptDate;
-  const answerNights = explicitStayNights(answer);
+  const answerNights = explicitStayNights(answer, expectedInput);
   const planningStage = nextPlanningStage(
     previous.planningStage,
     answer,
@@ -84,10 +89,12 @@ export function mergeAuthoritativeTripContext(
 export function tripContextAfterUserAnswer(
   current: TripContext,
   answer: string,
+  expectedInput?: ConversationExpectedInput,
   now = new Date(),
 ): TripContext {
   return travelConversationFacts([
     `現在の旅行条件: ${JSON.stringify(current)}`,
+    ...(expectedInput ? [`回答の種類: ${expectedInput}`] : []),
     `利用者の今回の回答: ${answer}`,
   ].join("\n"), now).context;
 }
@@ -172,9 +179,18 @@ function continuedAnswer(prompt: string): string | undefined {
   return prompt.match(/利用者の今回の回答:\s*([^\n]+)/u)?.[1]?.trim();
 }
 
-function explicitStayNights(value: string): number | undefined {
+function embeddedExpectedInput(prompt: string): ConversationExpectedInput | undefined {
+  const value = prompt.match(/回答の種類:\s*([^\n]+)/u)?.[1]?.trim();
+  return isConversationExpectedInput(value) ? value : undefined;
+}
+
+function explicitStayNights(
+  value: string,
+  expectedInput?: ConversationExpectedInput,
+): number | undefined {
   const normalized = value.normalize("NFKC");
   if (normalized.includes("日帰り")) return 0;
+  if (expectedInput === "stay-length" && /^\s*1日(?:間)?\s*$/u.test(normalized)) return 0;
   const times = explicitTravelTimes(normalized);
   if (times.outboundDepartureTimeMinutes !== undefined &&
       times.returnArrivalTimeMinutes !== undefined) return 0;

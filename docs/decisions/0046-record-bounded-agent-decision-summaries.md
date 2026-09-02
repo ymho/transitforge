@@ -35,7 +35,7 @@ Evidence validation Claim validation Viewer Action policy runtime上限 timeout�
 
 - 既知hard constraintの保持や解消済み事項の聞き直しをEvalで判定できる
 - providerの独自推論形式へApplicationが依存しない
-- Traceの24KiB上限と秘密情報除去を維持できる
+- Traceの1MiB上限と秘密情報除去を維持できる
 - summary欠落時も既存モデルと後方互換に動作する
 - reason code追加時はcontract Prompt Evalを同時に更新する必要がある
 

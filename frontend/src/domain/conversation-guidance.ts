@@ -1,17 +1,20 @@
 import type { TripContext } from "@raiquora/trip/travel-profile";
 
+export const conversationExpectedInputs = [
+  "planning-intent",
+  "departure-date",
+  "stay-length",
+  "traveler-count",
+  "free-text",
+] as const;
+
 /**
  * A small, UI-neutral contract for one turn in a travel consultation.
  *
  * The assistant owns which question comes next. The presentation layer only
  * renders the question and returns the selected or typed answer.
  */
-export type ConversationExpectedInput =
-  | "planning-intent"
-  | "departure-date"
-  | "stay-length"
-  | "traveler-count"
-  | "free-text";
+export type ConversationExpectedInput = typeof conversationExpectedInputs[number];
 
 export interface ConversationQuickReply {
   label: string;
@@ -32,6 +35,16 @@ export interface ConversationSubmission {
   guidance: ConversationGuidance;
 }
 
+export const maximumConversationQuickReplies = 3;
+
+const conversationExpectedInputSet = new Set<string>(conversationExpectedInputs);
+
+export function isConversationExpectedInput(
+  value: unknown,
+): value is ConversationExpectedInput {
+  return typeof value === "string" && conversationExpectedInputSet.has(value);
+}
+
 export function normalizedConversationGuidance(
   guidance: ConversationGuidance,
 ): ConversationGuidance {
@@ -47,7 +60,7 @@ export function normalizedConversationGuidance(
       .filter((reply) => reply.label.length > 0 && reply.value.length > 0)
       .filter((reply, index, replies) =>
         replies.findIndex((candidate) => candidate.value === reply.value) === index)
-      .slice(0, 5),
+      .slice(0, maximumConversationQuickReplies),
   };
 }
 

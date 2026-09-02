@@ -19,16 +19,39 @@ describe("agent trace parity", () => {
     });
   });
 
-  it("rejects unknown events ordering and oversized trace", async () => {
+  it("rejects unknown event ordering and accepts traces above the former 24 KiB limit", async () => {
     const unknown = submission();
     unknown.trace.events = [{ type: "run_javascript", sequence: 1, occurredAt: "2026-08-25T09:00:00Z" }];
     await expect(store(unknown)).rejects.toMatchObject({ statusCode: 400 });
     const reversed = submission();
     reversed.trace.events = [traceEvent(2, "first"), traceEvent(1, "second")];
     await expect(store(reversed)).rejects.toMatchObject({ statusCode: 400 });
-    const huge = submission();
-    huge.trace.events = Array.from({ length: 70 }, (_, index) => traceEvent(index + 1, "x".repeat(500)));
-    await expect(store(huge)).rejects.toMatchObject({ statusCode: 413 });
+    const formerOversized = submission();
+    formerOversized.trace.events = Array.from({ length: 70 }, (_, index) => traceEvent(index + 1, "x".repeat(500)));
+    await expect(store(formerOversized)).resolves.toEqual({ traceId: "trace-1", eventCount: 70 });
+  });
+
+  it("rejects a trace above the 1 MiB storage boundary", async () => {
+    const value = submission();
+    const leaf = "x".repeat(512);
+    const nestedPayload = Array.from({ length: 20 }, () =>
+      Array.from({ length: 20 }, () =>
+        Array.from({ length: 20 }, () => leaf)));
+    value.trace.events = [{
+      type: "tool_completed",
+      sequence: 1,
+      occurredAt: "2026-08-25T09:00:00Z",
+      toolCallId: "tool-1",
+      toolName: "search_web",
+      outcome: "success",
+      result: {
+        byteLength: 4 * 1_024 * 1_024,
+        truncated: false,
+        value: nestedPayload,
+      },
+    }];
+
+    await expect(store(value)).rejects.toMatchObject({ statusCode: 413 });
   });
 
   it("redacts secrets and current coordinates before storage", async () => {

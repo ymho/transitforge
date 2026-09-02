@@ -350,7 +350,8 @@ export async function executeExternalTravelTool(
     if (!query || !dependencies.searchPlaceMedia || (latitude === undefined) !== (longitude === undefined)) {
       throw new Error("観光地の検索条件が不正です。");
     }
-    const output = await dependencies.searchPlaceMedia({ query, ...(latitude === undefined ? {} : { latitude, longitude }), ...(radiusMeters === undefined ? {} : { radiusMeters }), ...(limit === undefined ? {} : { limit }) });
+    const providerOutput = await dependencies.searchPlaceMedia({ query, ...(latitude === undefined ? {} : { latitude, longitude }), ...(radiusMeters === undefined ? {} : { radiusMeters }), ...(limit === undefined ? {} : { limit }) });
+    const output = specificPlaceSearchOutput(providerOutput);
     if (isRecord(output) && isRecord(output.result)) state.places = output.result as unknown as ExternalTravelInformation<PlaceMediaSearchResult>;
     return output;
   }
@@ -599,10 +600,28 @@ function normalizePlaceName(value: string): string {
   return value.normalize("NFKC").toLocaleLowerCase("ja").replace(/[\s・･,，.。()（）「」『』]/gu, "");
 }
 
+function specificPlaceSearchOutput(output: unknown): unknown {
+  if (!isRecord(output) || !isRecord(output.result) ||
+      output.result.status !== "available" || !isRecord(output.result.data) ||
+      !Array.isArray(output.result.data.places)) {
+    return output;
+  }
+  const places = output.result.data.places.filter((place) =>
+    isRecord(place) && typeof place.name === "string" &&
+    isSpecificPlaceCandidateName(place.name));
+  if (places.length === 0) {
+    throw new Error("具体的な施設または地点を確認できませんでした。別の候補を調べてください。");
+  }
+  return {
+    ...output,
+    result: { ...output.result, data: { ...output.result.data, places } },
+  };
+}
+
 export function isSpecificPlaceCandidateName(value: string): boolean {
   const normalized = value.normalize("NFKC").trim();
   if (!normalized || normalized.length > 120) return false;
-  if (/^(?:日本|島根県|出雲地方|観光地|観光スポット|定期観光バス|路線バス|バス|鉄道|駅)$/u.test(normalized)) {
+  if (/^(?:日本|島根県|出雲地方|観光|観光地|観光スポット|旅行|レジャー|定期観光バス|路線バス|バス|鉄道|駅)$/u.test(normalized)) {
     return false;
   }
   if (/^.{1,10}(?:都|道|府|県|市|町|村)$/u.test(normalized)) return false;

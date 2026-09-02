@@ -18,7 +18,9 @@ Lambdaだけの書込経路を備えている
 モデル呼び出し単位の`agent-model-call-trace-v1`を保存する
 新しいS3バケットは作らない
 
-- 実行Traceはevent 100件 本文24KiBまでとし task ID execution ID API request IDを保存する
+- 実行Traceはevent 100件 本文1MiBまでとし task ID execution ID API request IDを保存する
+- 1MiBはAgent API本文2MiBの範囲内で、複数Tool実行の要約を欠落させず
+  request metadataの余白を残す境界とする
 - 各モデル呼び出しの直前にクライアントが`modelCallId`を発行し、実行Traceの
   `model_started` `model_completed` `model_failed`と対応付ける
 - LambdaがBedrockへ渡す最終的なmodel ID System Prompt message Tool定義 inference設定を
@@ -36,13 +38,14 @@ Lambdaだけの書込経路を備えている
 ## 影響
 
 - request IDとtask IDから実行過程を短期間追跡できる
+- 従来の24KiBを超える複数Tool実行も集約Traceで確認できる
 - 500を含むモデル呼び出し失敗でも、Bedrockが検証した実際の入力とProvider診断を確認できる
 - System Prompt 会話 Profile Tool結果などの入力本文を短期間保持するため、非公開化
   server-side encryption サニタイズ 3MiB上限 30日削除を一体の境界として維持する必要がある
 - モデル呼び出しごとにS3 PutObjectの待ち時間と保存費用が加わる
 - 既存バケットを再利用するため追加のバケット費用とresource移行がない
 - Traceの長期分析やIssue自動生成は別の仕組みが必要になる
-- 実行Traceのサイズ超過 schema違反 保存失敗はTraceを欠落させるが通常のAgent回答とは分離できる
+- 実行Traceの1MiB超過 schema違反 保存失敗はTraceを欠落させるが通常のAgent回答とは分離できる
 
 ## 確認
 

@@ -172,4 +172,41 @@ describe("external travel tools", () => {
     expect(isSpecificPlaceCandidateName("旭日酒造")).toBe(true);
     expect(isSpecificPlaceCandidateName("島根ワイナリー")).toBe(true);
   });
+
+  it("汎用的な地点検索結果から自治体と一般概念を除外する", async () => {
+    const state: ExternalTravelToolState = {};
+    const output = await executeExternalTravelTool(
+      "search_place_media",
+      { query: "金沢 観光" },
+      { searchPlaceMedia: async () => ({ result: {
+        status: "available", freshness: "fresh", evidence: [],
+        data: { places: [
+          { providerPlaceId: "mapbox.city", name: "金沢市" },
+          { providerPlaceId: "mapbox.concept", name: "観光" },
+          {
+            providerPlaceId: "mapbox.garden",
+            name: "兼六園",
+            sourceUrl: "https://www.mapbox.com/",
+            openingHoursStatus: "unknown",
+          },
+        ] },
+      } }) },
+      state,
+    ) as { result: { data: { places: Array<{ name: string }> } } };
+
+    expect(output.result.data.places.map(({ name }) => name)).toEqual(["兼六園"]);
+    expect(state.places?.data?.places.map(({ name }) => name)).toEqual(["兼六園"]);
+  });
+
+  it("具体地点のない汎用的な地点検索結果を公開しない", async () => {
+    await expect(executeExternalTravelTool(
+      "search_place_media",
+      { query: "金沢" },
+      { searchPlaceMedia: async () => ({ result: {
+        status: "available", freshness: "fresh", evidence: [],
+        data: { places: [{ providerPlaceId: "mapbox.city", name: "金沢市" }] },
+      } }) },
+      {},
+    )).rejects.toThrow("具体的な施設または地点を確認できませんでした");
+  });
 });

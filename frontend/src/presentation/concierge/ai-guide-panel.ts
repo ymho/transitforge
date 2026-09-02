@@ -333,7 +333,11 @@ export function configureAiGuidePanel(
     });
     const updatedGuidance = guidance === undefined ? undefined : {
       ...guidance,
-      tripContext: tripContextAfterUserAnswer(guidance.tripContext, prompt),
+      tripContext: tripContextAfterUserAnswer(
+        guidance.tripContext,
+        prompt,
+        guidance.expectedInput,
+      ),
     };
     if (updatedGuidance) activeTripContext = updatedGuidance.tripContext;
     const conversation = updatedGuidance === undefined
@@ -372,6 +376,7 @@ export function configureAiGuidePanel(
             activeTripContext = tripContextAfterUserAnswer(
               restoredGuidance.tripContext,
               entry.text,
+              restoredGuidance.expectedInput,
             );
             activeConversation = {
               ...restoredGuidance,
