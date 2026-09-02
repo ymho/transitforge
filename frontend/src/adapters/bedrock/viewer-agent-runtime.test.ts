@@ -2735,7 +2735,8 @@ describe("Bedrock viewer agent", () => {
       throw new Error("写真付きの旅行相談がありません。");
     }
     expect(result.conversation.expectedInput).toBe("planning-intent");
-    expect(result.text).toContain("歴史が好きなら");
+    expect(result.text).toContain("歴史や自然が好きな人には");
+    expect(converse).toHaveBeenCalledTimes(4);
     expect(result.conversation.tripContext.destinationWish).toBe("出雲大社");
     expect(result.external?.places?.data?.places[0]?.image?.url)
       .toBe("https://example.com/izumo.jpg");

@@ -5,7 +5,7 @@ import type { AgentOperation } from "../ports/agent-operation.js";
 import type { PrivateObjectStorage } from "../ports/private-object-storage.js";
 
 const maximumEvents = 100;
-const maximumPayloadBytes = 24 * 1_024;
+const maximumPayloadBytes = 1 * 1_024 * 1_024;
 const maximumRequestIds = 10;
 const maximumTextCharacters = 512;
 const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;

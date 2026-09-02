@@ -66,9 +66,9 @@ describe("travel conversation context", () => {
 
   it("moves from inspiration to planning only after the user opts in", () => {
     const context = { destinationWish: "出雲大社", planningStage: "inspiration" } as const;
-    expect(tripContextAfterUserAnswer(context, "もう少し見たい", now).planningStage)
+    expect(tripContextAfterUserAnswer(context, "もう少し見たい", undefined, now).planningStage)
       .toBe("inspiration");
-    expect(tripContextAfterUserAnswer(context, "旅程を考えたい", now).planningStage)
+    expect(tripContextAfterUserAnswer(context, "旅程を考えたい", undefined, now).planningStage)
       .toBe("planning");
   });
 
@@ -92,7 +92,7 @@ describe("travel conversation context", () => {
       startDate: "2026-08-31",
       endDate: "2026-08-31",
       stayNights: 0,
-    }, "夜の21:00には家についていたい", now)).toMatchObject({
+    }, "夜の21:00には家についていたい", undefined, now)).toMatchObject({
       returnArrivalTimeMinutes: 21 * 60,
     });
   });
@@ -130,7 +130,7 @@ describe("tripContextAfterUserAnswer", () => {
       destinationWish: "出雲大社",
       planningStage: "planning",
       startDate: "2026-08-31",
-    }, "1泊", new Date("2026-08-30T13:00:00+09:00"))).toEqual({
+    }, "1泊", "stay-length", new Date("2026-08-30T13:00:00+09:00"))).toEqual({
       destinationWish: "出雲大社",
       planningStage: "planning",
       startDate: "2026-08-31",
@@ -147,5 +147,14 @@ describe("tripContextAfterUserAnswer", () => {
       stayNights: 1,
     };
     expect(tripContextAfterUserAnswer(current, "はい、お願いします")).toEqual(current);
+  });
+
+  it("treats one day as a day trip only for a stay-length answer", () => {
+    const current = { destinationWish: "十和田湖", planningStage: "planning" } as const;
+    expect(tripContextAfterUserAnswer(current, "1日", "stay-length", now)).toMatchObject({
+      stayNights: 0,
+    });
+    expect(tripContextAfterUserAnswer(current, "1日", "free-text", now).stayNights)
+      .toBeUndefined();
   });
 });
