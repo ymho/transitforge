@@ -17,6 +17,9 @@ describe("renderDisplayMode", () => {
     expect(realtime.ariaPressed).toBe("true");
     expect(dateTime.ariaPressed).toBe("false");
     expect(elements.dateTimeInput.disabled).toBe(true);
+    const display = elements.dateTimeInput.closest(".date-time-display");
+    expect(display?.getAttribute("role")).toBe("group");
+    expect(display?.getAttribute("tabindex")).toBe("-1");
     expect(elements.simulationOnlyControls?.every((control) => control.hidden)).toBe(true);
     expect(elements.realtimeOnlyControls?.every((control) => !control.hidden)).toBe(true);
   });
@@ -33,6 +36,9 @@ describe("renderDisplayMode", () => {
     expect(dateTime.ariaPressed).toBe("true");
     expect(elements.toggle.disabled).toBe(true);
     expect(elements.toggle.title).toContain("日時指定シミュレーター");
+    const display = elements.dateTimeInput.closest(".date-time-display");
+    expect(display?.getAttribute("role")).toBe("button");
+    expect(display?.getAttribute("tabindex")).toBe("0");
     expect(elements.simulationOnlyControls?.every((control) => !control.hidden)).toBe(true);
     expect(elements.realtimeOnlyControls?.every((control) => control.hidden)).toBe(true);
   });
@@ -42,7 +48,13 @@ function displayModeElements(
   realtime: HTMLButtonElement,
   dateTime: HTMLButtonElement,
 ) {
-  const display = { setAttribute: vi.fn(), ariaExpanded: "false" } as unknown as HTMLElement;
+  const attributes = new Map<string, string>();
+  const display = {
+    setAttribute: (name: string, value: string) => attributes.set(name, value),
+    removeAttribute: (name: string) => attributes.delete(name),
+    getAttribute: (name: string) => attributes.get(name) ?? null,
+    ariaExpanded: "false",
+  } as unknown as HTMLElement;
   const dateTimeInput = {
     disabled: false,
     closest: () => display,

@@ -27,6 +27,12 @@ export function renderDisplayMode(
   elements.dateTimeInput.disabled = digitalTwinMode;
   const display = elements.dateTimeInput.closest<HTMLElement>(".date-time-display");
   display?.setAttribute("aria-disabled", String(digitalTwinMode));
+  if (display) {
+    display.setAttribute("role", digitalTwinMode ? "group" : "button");
+    display.setAttribute("tabindex", digitalTwinMode ? "-1" : "0");
+    if (digitalTwinMode) display.removeAttribute("aria-haspopup");
+    else display.setAttribute("aria-haspopup", "dialog");
+  }
   if (digitalTwinMode) {
     const picker = document.querySelector<HTMLElement>("#date-time-picker");
     if (picker) picker.hidden = true;

@@ -76,8 +76,29 @@
 }
 
 #app[data-display-mode="digital-twin"] .hud {
+  width: min(8.75rem, calc(100vw - 5.25rem));
+  padding: 0.3rem 0.4rem;
   border-color: rgb(0 156 181 / 48%);
   box-shadow: 0 4px 14px var(--ui-shadow), 0 0 0 1px rgb(0 156 181 / 12%);
+}
+
+#app[data-display-mode="digital-twin"] .date-time-display {
+  grid-template-columns: 1fr;
+  gap: 0.12rem;
+  min-height: 0;
+  padding: 0.25rem 0.3rem;
+  cursor: default;
+  pointer-events: none;
+}
+
+#app[data-display-mode="digital-twin"] .date-time-clock {
+  grid-row: 1;
+  font-size: 0.95rem;
+}
+
+#app[data-display-mode="digital-twin"] .date-time-date {
+  grid-row: 2;
+  font-size: 0.58rem;
 }
 
 #digital-twin-mode-toggle[aria-pressed="true"] {
@@ -105,6 +126,14 @@
   .date-time-date {
     grid-row: 2;
     font-size: 0.68rem;
+  }
+
+  #app[data-display-mode="digital-twin"] .hud {
+    width: min(7.75rem, calc(100vw - 5.25rem));
+  }
+
+  #app[data-display-mode="digital-twin"] .date-time-clock {
+    font-size: 0.9rem;
   }
 
 }
