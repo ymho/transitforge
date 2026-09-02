@@ -849,6 +849,7 @@ function viewerToolDecisionSupport(
       unsuitableCases: [
         "プロフィールの好みと利用可能な検索Toolから候補を先に提示できる場合",
         "具体的な候補をまだ提示していないinspiration段階の日付 泊数 自由入力の好み",
+        "planning-intentを使って候補の目的地を利用者に決めさせる",
         "ContextやTool結果に既にある条件",
         "Toolの既定値で仮案を示せる任意入力",
         "利用者が明示した列車や種別の利用・回避希望について理由や再確認を求める",
@@ -861,6 +862,7 @@ function viewerToolDecisionSupport(
       limitations: [
         "質問回数を最小化し 自由入力より2択から5択のquick replyを優先する",
         "具体候補をEvidence付きで提示した後は planning-intentを はい いいえ で確認する",
+        "planning-intentは具体候補への旅程化確認だけに使い 目的地名の回答を求めない",
         "一度に一条件だけ尋ねる",
         "planning段階でstartDateとstayNightsが両方未確定なら departure-dateを先に尋ね stay-lengthを同じ質問へ混ぜない",
         "質問前に選択予定ToolのrequiredInputsを確認する",
@@ -909,7 +911,7 @@ function externalTravelDecisionSupport(
     },
     search_web: {
       suitableCases: [
-        "今回の気分とUserProfileの普段の好み 移動負担から、追加質問より先に具体的な行き先候補を発見する",
+        "リフレッシュしたい 癒やされたいなどの今回の気分と UserProfileの好み 登録済みの場所 移動負担から、追加質問より先に具体的な行き先候補を発見する",
         "候補施設や最新情報の発見に公開Web検索が必要",
         "写真だけでは分からない見どころや実用情報の情報源を発見する",
         "地点検索が0件でも利用者が地域と施設名を明示しており、公開情報から表記や公式情報を再発見できる",
@@ -966,7 +968,7 @@ function viewerToolDescription(name: ViewerAgentToolName): string {
     propose_trip_update: "現在の旅程に対する観光 移動 滞在 条件の変更案を構造化します。利用者が変更を依頼し内容が明確なら追加確認せず使います",
     remember_travel_preference: "高確信の継続的な旅行の好みを端末内へ記憶します",
     update_conversation_session: "現在の会話Sessionの要約と話題を更新します",
-    ask_follow_up: "旅行相談で検索後も本当に不足している今回固有の必須条件だけを構造化して質問します。プロフィールから候補を探せる嗜好は聞かず、自由入力より短い選択肢を優先し、同じ質問を繰り返しません",
+    ask_follow_up: "旅行相談で候補検索後も本当に不足している今回固有の必須条件だけを構造化して質問します。プロフィールから候補を探せる嗜好や場所は聞かず、planning-intentで目的地を尋ねず、自由入力より短い選択肢を優先し、同じ質問を繰り返しません",
     inspect_previous_journey: "currentJourneyにある直前の検証済み経路について、対象列車または途中駅を確認します",
     revise_previous_journey: "currentJourneyに対する明示済みの利用・回避条件で、確認を挟まず変更候補を再検索します。区間の代替候補の提示と、選択済み候補の確定も扱います",
     search_trains: "現在表示中の列車を決定論的に検索します",

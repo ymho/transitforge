@@ -45,6 +45,7 @@ describe("Bedrock viewer agent", () => {
       "ask_follow_up",
       "search_accommodations",
       "plan_day_trip",
+      "search_web",
     ]);
 
     expect(descriptors.map(({ name }) => name)).toEqual([
@@ -52,6 +53,7 @@ describe("Bedrock viewer agent", () => {
       "ask_follow_up",
       "search_accommodations",
       "plan_day_trip",
+      "search_web",
     ]);
     expect(descriptors[0]?.description).toContain("Evidence:");
     expect(descriptors[0]?.description).toContain("具体的な固有地名がない気分や嗜好");
@@ -59,10 +61,13 @@ describe("Bedrock viewer agent", () => {
     expect(descriptors[1]?.description).toContain("検索Toolが発見 比較する宿");
     expect(descriptors[1]?.description).toContain("inspiration段階の日付 泊数");
     expect(descriptors[1]?.description).toContain("変更意思を再確認");
+    expect(descriptors[1]?.description).toContain("planning-intentで目的地を尋ねず");
     expect(descriptors[1]?.inputSchema.required).toEqual(["question", "expectedInput"]);
     expect(descriptors[2]?.description).toContain("宿名を先に決めさせない");
     expect(descriptors[2]?.description).toContain("行き帰りの鉄道経路");
     expect(descriptors[3]?.inputSchema.required).toEqual(["destination", "date", "stayNights"]);
+    expect(descriptors[4]?.description).toContain("リフレッシュしたい");
+    expect(descriptors[4]?.description).toContain("登録済みの場所");
   });
 
   it("does not expose direct Viewer operation Tools", () => {

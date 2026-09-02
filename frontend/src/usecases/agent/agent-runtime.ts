@@ -108,6 +108,8 @@ export class MultiStepAgentRuntime {
     let iterations = 0;
     let hasToolResults = false;
     const toolViewerActionOutcomes: AgentViewerActionOutcome[] = [];
+    const nonRetryableFailureCounts = new Map<string, number>();
+    const unavailableToolNames = new Set<string>();
 
     while (true) {
       if (
@@ -126,7 +128,9 @@ export class MultiStepAgentRuntime {
       const modelOutcome = await modelBeforeDeadline(
         this.dependencies.model.generate({
           messages,
-          tools: this.dependencies.tools.descriptors(),
+          tools: this.dependencies.tools.descriptors().filter(
+            ({ name }) => !unavailableToolNames.has(name),
+          ),
           ...(selectedModelClass === undefined
             ? {}
             : { modelClass: selectedModelClass }),
@@ -273,6 +277,7 @@ export class MultiStepAgentRuntime {
 
       const toolResults: AgentModelContent[] = [];
       let terminalResponse: string | undefined;
+      const newlyUnavailableToolNames = new Set<string>();
       for (const call of calls) {
         const execution = await this.dependencies.toolExecutor.execute({
           executionId: request.executionId,
@@ -310,6 +315,18 @@ export class MultiStepAgentRuntime {
             call.name,
             execution.result.output,
           );
+        } else if (!execution.result.error.retryable) {
+          const failureKey = nonRetryableFailureKey(
+            call.name,
+            execution.result.error.code,
+            execution.result.error.message,
+          );
+          const failureCount = (nonRetryableFailureCounts.get(failureKey) ?? 0) + 1;
+          nonRetryableFailureCounts.set(failureKey, failureCount);
+          if (failureCount >= 2 && !unavailableToolNames.has(call.name)) {
+            unavailableToolNames.add(call.name);
+            newlyUnavailableToolNames.add(call.name);
+          }
         }
         toolResults.push({
           type: "tool_result",
@@ -320,7 +337,16 @@ export class MultiStepAgentRuntime {
             : { error: execution.result.error },
         });
       }
-      messages.push({ role: "user", content: toolResults });
+      messages.push({
+        role: "user",
+        content: [
+          ...toolResults,
+          ...(newlyUnavailableToolNames.size === 0 ? [] : [{
+            type: "text" as const,
+            text: "同じ再試行不可エラーを繰り返したToolはこの実行では利用できません。別のToolまたは利用者向け回答を選択してください",
+          }]),
+        ],
+      });
       hasToolResults = true;
       if (terminalResponse !== undefined) {
         trace.responseGenerated(terminalResponse);
@@ -335,7 +361,13 @@ export class MultiStepAgentRuntime {
         );
       }
       iterations += 1;
-      trace.replanDecided(true, "Tool結果を受けて次の手順を判断する", decisionBoundary);
+      trace.replanDecided(
+        true,
+        newlyUnavailableToolNames.size > 0
+          ? "同じ再試行不可エラーを繰り返したToolを除外して再計画する"
+          : "Tool結果を受けて次の手順を判断する",
+        decisionBoundary,
+      );
     }
   }
 
@@ -395,6 +427,14 @@ function result(
 
 function elapsed(startedAt: number, now: () => Date): number {
   return Math.max(0, now().getTime() - startedAt);
+}
+
+function nonRetryableFailureKey(
+  toolName: string,
+  code: string,
+  message: string,
+): string {
+  return JSON.stringify([toolName, code, message]);
 }
 
 function decisionForToolCall(
