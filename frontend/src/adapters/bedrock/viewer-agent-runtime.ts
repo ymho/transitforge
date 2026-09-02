@@ -324,6 +324,7 @@ export async function runViewerAgentRuntime(
       conversationState,
       tripPlanUpdateState,
       previousJourneyState,
+      externalState,
       currentTripPlan,
       dependencies.getUserProfile?.(),
     ),
@@ -2391,9 +2392,19 @@ function viewerTerminalResponseText(
   conversationState: ConversationToolState,
   tripPlanUpdateState: TripPlanUpdateToolState,
   previousJourneyState: PreviousJourneyToolState,
+  externalState: ExternalTravelToolState,
   currentPlan?: TripPlan,
   profile?: UserProfile,
 ): string | undefined {
+  const webSearchFailure = externalState.webSearch?.failure;
+  if (
+    toolName === "search_web" &&
+    externalState.webSearch?.status !== "available" &&
+    webSearchFailure !== undefined &&
+    !webSearchFailure.retryable
+  ) {
+    return "現在、旅行先候補を確認する検索サービスを利用できません。根拠を確認できない候補は案内せず、検索が利用可能になってから改めて提案します。";
+  }
   if (!terminalToolNames.has(toolName)) return undefined;
 
   if (previousJourneyState.response !== undefined) {
