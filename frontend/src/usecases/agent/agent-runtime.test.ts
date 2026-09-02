@@ -9,6 +9,7 @@ import type {
   AgentModelResponse,
 } from "./model-provider";
 import {
+  invalidAgentToolInput,
   successfulAgentToolResult,
   validAgentToolInput,
   type AgentTool,
@@ -220,6 +221,63 @@ describe("MultiStepAgentRuntime", () => {
       status: "failed",
       reason: "runtime_limit_reached",
     });
+  });
+
+  it("stops offering a tool after the same non-retryable failure repeats", async () => {
+    const executionOrder: string[] = [];
+    const { tools, toolExecutor } = toolSetup(executionOrder);
+    const blockedExecute = vi.fn(async () =>
+      successfulAgentToolResult({ recovered: false }));
+    tools.register({
+      name: "blocked_tool",
+      description: "前提不足では実行できないTool",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      },
+      parseInput: () => invalidAgentToolInput("具体的な候補のEvidenceが必要です。"),
+      execute: blockedExecute,
+    });
+    const requests: AgentModelRequest[] = [];
+    const model = sequenceModel([
+      toolCallResponse([{ id: "blocked-1", name: "blocked_tool", input: {} }]),
+      toolCallResponse([{ id: "blocked-2", name: "blocked_tool", input: {} }]),
+      toolCallResponse([{
+        id: "recovery",
+        name: "second_tool",
+        input: { value: "候補を探索" },
+      }]),
+      textResponse("候補を確認しました"),
+    ], requests);
+    const runtime = new MultiStepAgentRuntime({
+      model,
+      tools,
+      toolExecutor,
+      limits: { maxIterations: 6, maxModelCalls: 7 },
+    });
+
+    const output = await runtime.run(request("リフレッシュした旅行をしたい"));
+
+    expect(output.status).toBe("completed");
+    expect(output.response).toBe("候補を確認しました");
+    expect(blockedExecute).not.toHaveBeenCalled();
+    expect(executionOrder).toEqual(["second_tool"]);
+    expect(requests[0]?.tools?.map(({ name }) => name)).toContain("blocked_tool");
+    expect(requests[1]?.tools?.map(({ name }) => name)).toContain("blocked_tool");
+    expect(requests[2]?.tools?.map(({ name }) => name)).not.toContain("blocked_tool");
+    expect(requests[2]?.tools?.map(({ name }) => name)).toContain("second_tool");
+    expect(requests[3]?.tools?.map(({ name }) => name)).not.toContain("blocked_tool");
+    expect(requests[2]?.messages.at(-1)).toMatchObject({
+      role: "user",
+      content: expect.arrayContaining([
+        { type: "text", text: expect.stringContaining("別のTool") },
+      ]),
+    });
+    expect(output.trace.events).toContainEqual(expect.objectContaining({
+      type: "replan_decided",
+      reason: "同じ再試行不可エラーを繰り返したToolを除外して再計画する",
+    }));
   });
 
   it("bounds iterations model calls and collected evidence", async () => {
