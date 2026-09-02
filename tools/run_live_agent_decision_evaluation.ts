@@ -385,13 +385,32 @@ function liveDecisionCases(): LiveDecisionCase[] {
       id: "mood-first-discovery",
       name: "気分だけの相談では目的地を決め打ちせず候補を検索する",
       userRequest: "リラックスできる場所に行きたい",
-      tags: ["ambiguous-request"],
+      tags: ["smoke", "ambiguous-request", "destination-discovery"],
       expectedTool: "search_web",
       constraints: {},
       requiredHardConstraintKeys: [],
       // Viewerは会話開始直後に空のTripContextを渡すことがある。
       // 空objectでも目的地未定の探索として扱えることを本番モデルで測る。
       context: { featureContext, travelProfile: profile, tripContext: {} },
+      availableTools: ["search_web", "search_place_media", "ask_follow_up"],
+    }),
+    liveCase({
+      id: "experience-first-discovery",
+      name: "自然を感じたい相談では日程質問や単一POI検索より先に地域候補を調べる",
+      userRequest: "静かな海や自然を感じられるところでのんびりしたい",
+      tags: ["smoke", "ambiguous-request", "destination-discovery", "profile"],
+      expectedTool: "search_web",
+      constraints: {},
+      requiredHardConstraintKeys: [],
+      context: {
+        featureContext,
+        travelProfile: profile,
+        tripContext: { planningStage: "inspiration" },
+        knownSoftPreferences: [
+          { key: "pace", value: "relaxed", source: "travel_profile" },
+          { key: "avoid_crowds", value: true, source: "travel_profile" },
+        ],
+      },
       availableTools: ["search_web", "search_place_media", "ask_follow_up"],
     }),
     liveCase({
