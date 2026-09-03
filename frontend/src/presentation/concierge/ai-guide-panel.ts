@@ -36,6 +36,7 @@ import {
 } from "./journey-preferences-storage";
 import { renderExternalTravelInformation } from "./external-travel-cards";
 import { tripContextAfterUserAnswer } from "../../domain/travel-conversation-context";
+import { typewriteText } from "../shared/typewriter-text";
 
 export { visibleAssistantText } from "./assistant-markdown";
 export { loadJourneySearchPreferences } from "./journey-preferences-storage";
@@ -388,7 +389,7 @@ export function configureAiGuidePanel(
           continue;
         }
         const restored = appendPendingMessage(messages, entry.messageId);
-        resolveAssistantMessage(restored, entry.response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants);
+        resolveAssistantMessage(restored, entry.response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants, false);
         activeConversation = typeof entry.response !== "string" && "conversation" in entry.response
           ? entry.response.conversation
           : undefined;
@@ -533,13 +534,14 @@ function resolveAssistantMessage(
   onGroundAccess?: (access: GroundAccessRoute | GroundAccessMatrix | GroundAccessArea) => void,
   onRestaurantConsult?: (restaurant: RestaurantCandidate) => void,
   onRestaurants?: (restaurants: readonly RestaurantCandidate[]) => void,
+  animate = true,
 ): void {
   item.classList.remove("ai-guide-message-pending");
   item.removeAttribute("aria-label");
   if (typeof response === "string") {
-    item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response)));
+    renderAssistantCopy(item, visibleAssistantText(response), animate);
   } else if ("conversation" in response) {
-    item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response.text)));
+    renderAssistantCopy(item, visibleAssistantText(response.text), animate);
     if (response.external) {
       appendExternalCards(item, renderExternalTravelInformation(
         { text: response.text, external: response.external },
@@ -553,7 +555,7 @@ function resolveAssistantMessage(
       }
     }
   } else if ("tripPlanUpdate" in response) {
-    item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response.text)));
+    renderAssistantCopy(item, visibleAssistantText(response.text), animate);
     const changes = document.createElement("ul");
     changes.className = "trip-plan-update-changes";
     for (const patch of response.tripPlanUpdate.patches) {
@@ -579,6 +581,7 @@ function resolveAssistantMessage(
     text.className = "journey-plan-intro";
     text.textContent = visibleAssistantText(response.text);
     item.append(text);
+    if (animate) typewriteText(text);
     if (response.external) {
       appendExternalCards(item, renderExternalTravelInformation(
         { text: response.text, external: response.external },
@@ -590,13 +593,13 @@ function resolveAssistantMessage(
     }
     onTravelPlan?.(response.travelPlan);
   } else if ("external" in response) {
-    item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response.text)));
+    renderAssistantCopy(item, visibleAssistantText(response.text), animate);
     appendExternalCards(item, renderExternalTravelInformation(response, { onRestaurantConsult, includeRestaurants: !onRestaurants }));
     if (response.external.places?.status === "available" && response.external.places.data) onPlaces?.(response.external.places.data.places);
     if (response.external.restaurants?.status === "available" && response.external.restaurants.data) onRestaurants?.(response.external.restaurants.data.restaurants);
     if (response.external.groundAccess?.status === "available" && response.external.groundAccess.data) onGroundAccess?.(response.external.groundAccess.data);
   } else if ("tripContext" in response) {
-    item.replaceChildren(renderAssistantMarkdown(visibleAssistantText(response.text)));
+    renderAssistantCopy(item, visibleAssistantText(response.text), animate);
   } else {
     item.classList.add("ai-guide-message-journey");
     item.replaceChildren();
@@ -604,9 +607,18 @@ function resolveAssistantMessage(
     text.className = "journey-plan-intro";
     text.textContent = visibleAssistantText(response.text);
     item.append(text, renderJourneyPlan(response.journeyPlan));
+    if (animate) typewriteText(text);
   }
   appendConversationFeedback(item);
   item.scrollIntoView({ block: "nearest" });
+}
+
+function renderAssistantCopy(item: HTMLElement, text: string, animate: boolean): void {
+  const copy = document.createElement("div");
+  copy.className = "ai-guide-message-copy";
+  copy.append(renderAssistantMarkdown(text));
+  item.replaceChildren(copy);
+  if (animate) typewriteText(copy);
 }
 
 function appendExternalCards(parent: HTMLElement, cards: HTMLElement): void {

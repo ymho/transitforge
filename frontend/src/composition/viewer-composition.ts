@@ -36,6 +36,7 @@ import {
   searchWeatherForecast,
   searchWeatherGrid,
   searchPlaceMedia,
+  researchPlaceDetail,
   searchTravelAlerts,
   searchGroundAccess,
   searchRestaurants,
@@ -658,13 +659,10 @@ if (!token) {
     focusPlace: (providerPlaceId) => verifiedPlaceLayer?.focus(providerPlaceId),
     loadDetail: async (candidate) => {
       if (candidate.kind !== "place") return candidate;
-      const response = await searchPlaceMedia({
+      const response = await researchPlaceDetail({
         query: candidate.name,
         latitude: candidate.latitude,
         longitude: candidate.longitude,
-        radiusMeters: 1_000,
-        limit: 1,
-        detail: true,
       });
       const detail = response.result.status === "available"
         ? response.result.data?.places[0]
@@ -759,15 +757,12 @@ if (!token) {
           duration: 850,
         });
       }
-      void searchPlaceMedia({
+      void researchPlaceDetail({
         query: landmark.name,
         ...(landmarkCoordinate ? {
           latitude: landmarkCoordinate[1],
           longitude: landmarkCoordinate[0],
-          radiusMeters: 800,
         } : {}),
-        limit: 1,
-        detail: true,
       }).then((response) => {
         if (request !== landmarkDetailRequest || response.result.status !== "available") return;
         const candidates = mapPlaceCandidates(response.result.data?.places ?? []);

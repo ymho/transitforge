@@ -204,6 +204,20 @@ export async function searchPlaceMedia(
   );
 }
 
+export async function researchPlaceDetail(
+  request: { query: string; latitude?: number; longitude?: number },
+  fetcher: typeof fetch = fetch,
+): Promise<PlaceMediaSearchResponse> {
+  return postAgentBody(
+    { operation: "place_detail_research", ...request },
+    "観光地の詳しい情報を調べられません",
+    "観光地の詳細",
+    isPlaceMediaSearchResponse,
+    fetcher,
+    true,
+  );
+}
+
 export async function searchTravelAlerts(
   request: { area: string; categories?: import("@raiquora/trip/travel-alert").TravelAlertCategory[]; limit?: number },
   fetcher: typeof fetch = fetch,
