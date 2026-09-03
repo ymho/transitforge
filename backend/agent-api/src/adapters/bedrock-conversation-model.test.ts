@@ -7,6 +7,25 @@ import {
 } from "./bedrock-conversation-model.js";
 
 describe("BedrockConversationModel", () => {
+  it("omits Bedrock toolConfig when no tools are available", async () => {
+    const converse = vi.fn(async (_input: JsonObject) => ({
+      output: { message: { role: "assistant", content: [{ text: "案内します" }] } },
+      stopReason: "end_turn",
+    }));
+    const model = new BedrockConversationModel({ converse }, {
+      modelId: "amazon.nova-lite-v1:0",
+      systemPrompt: "system",
+    });
+
+    await model.converse({
+      messages: [{ role: "user", content: [{ text: "案内して" }] }],
+      tools: [],
+    });
+
+    expect(converse).toHaveBeenCalledOnce();
+    expect(converse.mock.calls[0]?.[0]).not.toHaveProperty("toolConfig");
+  });
+
   it("keeps provider DTOs inside the adapter and normalizes metadata", async () => {
     const converse = vi.fn(async (_input: JsonObject) => ({
       output: {

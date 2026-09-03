@@ -9,6 +9,7 @@ import type {
   ViewerAgentRichResponse,
 } from "../../domain/viewer-agent-response";
 import {
+  ConverseModelProvider,
   currentServiceDateInJapan,
   runViewerAgentRuntime,
   tripContextFromDecisionTrace,
@@ -40,6 +41,26 @@ const position: TrainPosition = {
 };
 
 describe("Bedrock viewer agent", () => {
+  it("does not send an empty tool list during the final response phase", async () => {
+    const converse = vi.fn(async () => ({
+      message: { role: "assistant" as const, content: [{ text: "案内します" }] },
+      stopReason: "end_turn" as const,
+    }));
+    const provider = new ConverseModelProvider(converse);
+
+    await provider.generate({
+      messages: [{ role: "user", content: [{ type: "text", text: "案内して" }] }],
+      tools: [],
+    });
+
+    expect(converse).toHaveBeenCalledWith(
+      expect.any(Array),
+      undefined,
+      undefined,
+      undefined,
+    );
+  });
+
   it("Bedrockが解釈した相対距離の希望だけをTripContextへ反映する", () => {
     const update = tripContextFromDecisionTrace(
       { planningStage: "inspiration", destinationWish: "城崎温泉" },
@@ -126,6 +147,11 @@ describe("Bedrock viewer agent", () => {
       { expectedInput: "departure-date" },
       { tripContext: { startDate: "2026-08-31" } },
     )).toContain("既知条件 departure-date");
+    expect(validateViewerAgentToolPreconditions(
+      "ask_follow_up",
+      { expectedInput: "free-text", question: "出発地を教えていただけますか？" },
+      { tripContext: {}, defaultOriginStation: "向日町駅" },
+    )).toContain("プロフィールに登録済みの出発地");
     expect(validateViewerAgentToolPreconditions(
       "search_accommodations",
       { checkInDate: "2026-08-31", checkOutDate: "2026-09-02" },
@@ -283,6 +309,8 @@ describe("Bedrock viewer agent", () => {
       expect(contextText && "text" in contextText ? contextText.text : "")
         .toContain('"destinationWish":"城崎温泉"');
       expect(contextText && "text" in contextText ? contextText.text : "")
+        .toContain('"usual_origin_station","value":"向日町駅"');
+      expect(contextText && "text" in contextText ? contextText.text : "")
         .not.toContain("利用者の今回の回答");
       return {
         message: { role: "assistant", content: [{ text: "静かに過ごせる候補を探します。" }] },
@@ -298,6 +326,9 @@ describe("Bedrock viewer agent", () => {
         planningStage: "inspiration",
         destinationWish: "城崎温泉",
       }),
+      getUserProfile: () => ({
+        home: { station: "向日町駅", carAvailable: false },
+      } as unknown as UserProfile),
       maximumRouteTime: 1_800,
     }, converse);
 

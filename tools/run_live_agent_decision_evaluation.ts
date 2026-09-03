@@ -273,7 +273,7 @@ function liveDecisionCases(): LiveDecisionCase[] {
       name: "候補検索が空でも案内不能にせず確認範囲と次の一手を返す",
       userRequest: "静かに過ごせる観光先を探したい",
       tags: ["smoke", "ambiguous-request", "feedback-regression"],
-      expectedTool: "search_place_media",
+      expectedTool: "search_web",
       constraints: {},
       requiredHardConstraintKeys: [],
       context: {
@@ -281,9 +281,9 @@ function liveDecisionCases(): LiveDecisionCase[] {
         travelProfile: profile,
         tripContext: { planningStage: "inspiration" },
       },
-      availableTools: ["search_place_media"],
+      availableTools: ["search_web"],
       toolOutcomes: {
-        search_place_media: {
+        search_web: {
           schemaVersion: "live-eval-tool-outcome-v1",
           matchCount: 0,
           limitation: "検証可能な一致地点がありません",
@@ -420,7 +420,14 @@ function liveDecisionCases(): LiveDecisionCase[] {
       requiredHardConstraintKeys: [],
       // Viewerは会話開始直後に空のTripContextを渡すことがある。
       // 空objectでも目的地未定の探索として扱えることを本番モデルで測る。
-      context: { featureContext, travelProfile: profile, tripContext: {} },
+      context: {
+        featureContext,
+        travelProfile: profile,
+        tripContext: {},
+        knownSoftPreferences: [{
+          key: "usual_origin_station", value: "向日町", source: "travel_profile",
+        }],
+      },
       availableTools: ["search_web", "search_place_media", "ask_follow_up"],
     }),
     liveCase({
