@@ -78,7 +78,8 @@ export function mapTravelCandidateCardModels(candidates: readonly MapTravelCandi
       sources: place?.sources ?? [{ provider: "source", label: "情報源", url: sourceUrl, role: "identity" }],
       categories: candidate.categories ?? [],
       images,
-      primaryLabel: candidate.kind === "accommodation" ? "この宿を選ぶ" : "旅程を相談",
+      primaryLabel: candidate.kind === "accommodation" ? "この宿を選ぶ" :
+        candidate.kind === "place" ? "旅程を考える" : "旅程を相談",
       ...(candidate.kind === "restaurant" && candidate.openingHours ? { openingHours: candidate.openingHours } : {}),
       ...(place?.openingHoursStatus === "available" && place.openingHours ? { openingHours: place.openingHours } : {}),
       ...(candidate.imageUrl ? { image: {
@@ -182,10 +183,7 @@ export function configureMapPlaceExplorer(options: {
       }
       candidatesById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
       for (const model of models) {
-        options.list.append(renderPlaceCard(model, () => select(model.id), () => {
-          const candidate = candidatesById.get(model.id);
-          if (candidate) options.choose(candidate);
-        }));
+        options.list.append(renderPlaceCard(model, () => select(model.id)));
       }
       options.panel.hidden = models.length === 0;
     },
@@ -258,8 +256,12 @@ function renderPlaceDetail(
     body.append(summary);
   }
 
-  appendDetailSection(body, "見どころ", place.detail?.highlights);
-  appendDetailSection(body, "雰囲気", place.detail?.atmosphere ? [place.detail.atmosphere] : undefined);
+  appendDetailSection(
+    body,
+    place.reviewLabel ? "口コミで評価されている点" : "見どころ",
+    place.detail?.highlights,
+  );
+  appendDetailSection(body, "現地の雰囲気", place.detail?.atmosphere ? [place.detail.atmosphere] : undefined);
   appendDetailSection(body, "知っておくと便利", place.detail?.tips);
   appendDetailSection(body, "周辺で立ち寄れる場所", place.detail?.nearby);
 
@@ -352,7 +354,6 @@ function appendDetailSection(
 function renderPlaceCard(
   place: MapPlaceCardModel,
   select: () => void,
-  consult: () => void,
 ): HTMLElement {
   const card = document.createElement("article");
   card.className = "map-place-option";
@@ -395,11 +396,7 @@ function renderPlaceCard(
   source.target = "_blank";
   source.rel = "noreferrer noopener";
   source.textContent = place.image?.attribution ?? "情報源";
-  const action = document.createElement("button");
-  action.type = "button";
-  action.textContent = place.primaryLabel;
-  action.addEventListener("click", consult);
-  footer.append(source, action);
+  footer.append(source);
   card.append(focus, footer);
   return card;
 }

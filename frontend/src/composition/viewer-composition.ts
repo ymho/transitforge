@@ -320,6 +320,7 @@ let verifiedPlaceLayer: VerifiedPlaceLayerController | undefined;
 let mapPlaceExplorerController: MapPlaceExplorerController | undefined;
 let groundAccessLayer: GroundAccessLayerController | undefined;
 let pendingMapCandidates: MapTravelCandidate[] = [];
+let landmarkDetailRequest = 0;
 const tripPreviewEnabled = import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get("trip-preview") === "1";
 const weatherPreviewEnabled = import.meta.env.DEV &&
@@ -383,6 +384,11 @@ const mobileContextNavigation = createMobileContextNavigation({
   showContext: (view) => contextWorkspaceController.show(view),
   restoreFocus: () => window.matchMedia("(pointer: fine)").matches,
 });
+const returnToConversation = () => {
+  delete app.dataset.mapFocusMode;
+  if (mobileContextNavigation.isOpen()) mobileContextNavigation.close();
+  scheduleContextMapResize();
+};
 const applyContextWorkspaceState = () => {
   const state = contextWorkspaceController.current();
   if (state.view !== "map") delete app.dataset.mapFocusMode;
@@ -671,9 +677,11 @@ if (!token) {
         contextWorkspaceController.show("trip-plan");
         return;
       }
+      closeMapPlaceDetail.click();
       aiGuideController.ask(candidate.kind === "restaurant"
         ? `${candidate.name}を食事候補として旅程に入れたい`
-        : `${candidate.name}を旅程へ追加したい`);
+        : `${candidate.name}を軸に旅程を考えたい`);
+      returnToConversation();
     },
     clearPlaces: () => {
       pendingMapCandidates = [];
@@ -736,7 +744,46 @@ if (!token) {
     map.setConfigProperty("basemap", "showTransitLabels", false);
     map.setConfigProperty("basemap", "showLandmarkIcons", true);
     map.setConfigProperty("basemap", "showLandmarkIconLabels", true);
-    configureLandmarkJourneyInteraction(map, aiGuideController.openLandmarkJourney);
+    configureLandmarkJourneyInteraction(map, (landmark) => {
+      const request = ++landmarkDetailRequest;
+      const landmarkCoordinate: [number, number] | undefined = landmark.longitude !== undefined &&
+        landmark.latitude !== undefined
+        ? [landmark.longitude, landmark.latitude]
+        : undefined;
+      if (landmarkCoordinate) {
+        map.easeTo({
+          center: landmarkCoordinate,
+          zoom: Math.max(map.getZoom(), 17.6),
+          pitch: 68,
+          bearing: -24,
+          duration: 850,
+        });
+      }
+      void searchPlaceMedia({
+        query: landmark.name,
+        ...(landmarkCoordinate ? {
+          latitude: landmarkCoordinate[1],
+          longitude: landmarkCoordinate[0],
+          radiusMeters: 800,
+        } : {}),
+        limit: 1,
+        detail: true,
+      }).then((response) => {
+        if (request !== landmarkDetailRequest || response.result.status !== "available") return;
+        const candidates = mapPlaceCandidates(response.result.data?.places ?? []);
+        if (candidates.length === 0) return;
+        pendingMapCandidates = candidates;
+        verifiedPlaceLayer?.show(candidates.map(mapCandidateAsPlaceMedia));
+        mapPlaceExplorerController?.show(candidates);
+        mapPlaceExplorerController?.select(candidates[0]!.id, true);
+        contextWorkspaceController.show("map", { kind: "place", id: candidates[0]!.id });
+      }).catch(() => {
+        if (request === landmarkDetailRequest) {
+          status.textContent = "スポットの詳細を取得できませんでした。";
+          status.hidden = false;
+        }
+      });
+    });
     let applyWeatherToTrains: (mode: WeatherMode) => void = () => undefined;
     let activeWeatherMode: WeatherMode = "clear";
     const applyAutomaticWeather = (mode: WeatherMode) => {
