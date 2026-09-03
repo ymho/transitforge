@@ -33,6 +33,10 @@ import { createRepresentativeTimetableOperation } from "./usecases/representativ
 import { createWeatherForecastOperation } from "./usecases/weather-forecast.js";
 import { createWeatherGridOperation } from "./usecases/weather-grid.js";
 import { createPlaceMediaSearchOperation } from "./usecases/place-media-search.js";
+import {
+  createPlaceDetailResearchOperation,
+  placeDetailResearchSystemPrompt,
+} from "./usecases/place-detail-research.js";
 import { createWebPageReadOperation, createWebSearchOperation } from "./usecases/web-research.js";
 import { createTravelAlertSearchOperation } from "./usecases/travel-alert-search.js";
 import { createGroundAccessSearchOperation } from "./usecases/ground-access-search.js";
@@ -83,12 +87,19 @@ export function createAgentApplication(environment: RuntimeEnvironment = process
     storage,
     log,
   });
-  const model = new BedrockConversationModel(new AwsBedrockConverseClient(), {
+  const bedrock = new AwsBedrockConverseClient();
+  const model = new BedrockConversationModel(bedrock, {
     modelId: environment.MODEL_ID ?? "amazon.nova-lite-v1:0",
     ...(lightweightModelId === undefined ? {} : { lightweightModelId }),
     ...(decisionModelId === undefined ? {} : { decisionModelId }),
     systemPrompt: agentSystemPrompt,
     traceRecorder: modelCallTraceRecorder,
+    log,
+  });
+  const placeDetailSummarizer = new BedrockConversationModel(bedrock, {
+    modelId: environment.MODEL_ID ?? "amazon.nova-lite-v1:0",
+    ...(decisionModelId === undefined ? {} : { decisionModelId }),
+    systemPrompt: placeDetailResearchSystemPrompt,
     log,
   });
   const operations = new Map([
@@ -103,6 +114,12 @@ export function createAgentApplication(environment: RuntimeEnvironment = process
     ["weather_forecast_search", createWeatherForecastOperation(weather)],
     ["weather_grid_search", createWeatherGridOperation(weather)],
     ["place_media_search", createPlaceMediaSearchOperation(places)],
+    ["place_detail_research", createPlaceDetailResearchOperation({
+      places,
+      webSearch,
+      webPageReader,
+      summarizer: placeDetailSummarizer,
+    })],
     ["web_search", createWebSearchOperation(webSearch)],
     ["web_page_read", createWebPageReadOperation(webPageReader)],
     ["travel_alert_search", createTravelAlertSearchOperation(travelAlerts)],

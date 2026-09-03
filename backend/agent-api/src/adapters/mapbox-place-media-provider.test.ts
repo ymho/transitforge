@@ -16,7 +16,12 @@ describe("MapboxPlaceMediaProvider", () => {
             full_address: "広島県東広島市西条本町",
             poi_category: ["酒蔵", "醸造所"],
             coordinates: { latitude: 34.431, longitude: 132.743 },
-            metadata: { website: "https://brewery.example/", open_hours: { display_text: "10:00〜17:00" } },
+            metadata: {
+              website: "https://brewery.example/",
+              open_hours: { display_text: "10:00〜17:00" },
+              rating: 4.3,
+              review_count: 128,
+            },
           },
         },
         {
@@ -52,11 +57,32 @@ describe("MapboxPlaceMediaProvider", () => {
       providerPlaceId: "poi.brewery",
       name: "西条酒造",
       categories: ["酒蔵", "醸造所"],
+      officialWebsiteUrl: "https://brewery.example/",
       openingHours: "10:00〜17:00",
+      reviewAverage: 4.3,
+      reviewCount: 128,
       latitude: 34.431,
       longitude: 132.743,
     })]);
     expect(result.evidence[0]).toMatchObject({ provider: "mapbox", attribution: "© Mapbox" });
+  });
+
+  it("集約サイトを公式サイトとして公開しない", async () => {
+    const provider = new MapboxPlaceMediaProvider(
+      { fetch: async () => new Response(JSON.stringify({ features: [{
+        properties: {
+          mapbox_id: "poi.landmark",
+          feature_type: "poi",
+          name: "通天閣",
+          coordinates: { latitude: 34.652, longitude: 135.506 },
+          metadata: { website: "https://www.tripadvisor.jp/example" },
+        },
+      }] }), { status: 200 }) },
+      { load: async () => ({ accessToken: "pk.test" }) },
+    );
+
+    expect((await provider.search({ query: "通天閣" })).data?.places[0]?.officialWebsiteUrl)
+      .toBeUndefined();
   });
 
   it("酒蔵検索は具体的な同義語へ展開する", () => {

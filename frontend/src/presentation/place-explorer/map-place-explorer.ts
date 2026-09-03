@@ -1,6 +1,7 @@
 import type { PlaceMedia } from "@raiquora/trip/place-media";
 import type { MapTravelCandidate } from "../../domain/map-travel-candidate";
 import { createPhotoSourceDisclosure, type PhotoSourceDisclosureModel } from "../shared/photo-source-disclosure";
+import { typewriteText } from "../shared/typewriter-text";
 
 export interface MapPlaceCardModel {
   id: string;
@@ -8,6 +9,7 @@ export interface MapPlaceCardModel {
   address?: string;
   summary?: string;
   sourceUrl: string;
+  officialWebsiteUrl?: string;
   sources: NonNullable<PlaceMedia["sources"]>;
   image?: PhotoSourceDisclosureModel;
   images: PhotoSourceDisclosureModel[];
@@ -75,6 +77,7 @@ export function mapTravelCandidateCardModels(candidates: readonly MapTravelCandi
       ...(candidate.address ? { address: candidate.address } : {}),
       ...(candidate.summary ? { summary: candidate.summary } : {}),
       sourceUrl,
+      ...(place?.officialWebsiteUrl ? { officialWebsiteUrl: place.officialWebsiteUrl } : {}),
       sources: place?.sources ?? [{ provider: "source", label: "情報源", url: sourceUrl, role: "identity" }],
       categories: candidate.categories ?? [],
       images,
@@ -223,19 +226,23 @@ function renderPlaceDetail(
   if (place.openingHours || place.reviewLabel || place.priceLabel || place.availabilityLabel || place.budget) {
     const facts = document.createElement("ul");
     facts.className = "map-place-detail-facts";
-    for (const [label, fact] of [
-      ["評価", place.reviewLabel],
-      ["営業時間", place.openingHours],
-      ["料金", place.priceLabel ?? place.budget],
-      ["空き状況", place.availabilityLabel],
+    for (const [icon, label, fact] of [
+      ["★", "評価", place.reviewLabel],
+      ["◷", "営業時間", place.openingHours],
+      ["¥", "料金", place.priceLabel ?? place.budget],
+      ["○", "空き状況", place.availabilityLabel],
     ] as const) {
       if (!fact) continue;
       const item = document.createElement("li");
+      const symbol = document.createElement("span");
+      symbol.className = "map-place-detail-fact-icon";
+      symbol.ariaHidden = "true";
+      symbol.textContent = icon;
       const caption = document.createElement("small");
       caption.textContent = label;
       const value = document.createElement("strong");
-      value.textContent = fact;
-      item.append(caption, value);
+      value.textContent = label === "評価" ? fact.replace(/^★\s*/u, "") : fact;
+      item.append(symbol, caption, value);
       facts.append(item);
     }
     body.append(facts);
@@ -248,40 +255,50 @@ function renderPlaceDetail(
     body.append(address);
   }
 
+  const editorial = document.createElement("div");
+  editorial.className = "map-place-detail-editorial";
   const overview = place.detail?.overview ?? place.summary;
   if (overview) {
     const summary = document.createElement("p");
     summary.className = "map-place-detail-summary";
     summary.textContent = overview;
-    body.append(summary);
+    editorial.append(summary);
   }
 
   appendDetailSection(
-    body,
+    editorial,
     place.reviewLabel ? "口コミで評価されている点" : "見どころ",
     place.detail?.highlights,
   );
-  appendDetailSection(body, "現地の雰囲気", place.detail?.atmosphere ? [place.detail.atmosphere] : undefined);
-  appendDetailSection(body, "知っておくと便利", place.detail?.tips);
-  appendDetailSection(body, "周辺で立ち寄れる場所", place.detail?.nearby);
+  appendDetailSection(editorial, "現地の雰囲気", place.detail?.atmosphere ? [place.detail.atmosphere] : undefined);
+  appendDetailSection(editorial, "知っておくと便利", place.detail?.tips);
+  appendDetailSection(editorial, "周辺で立ち寄れる場所", place.detail?.nearby);
+  if (editorial.childElementCount === 0) {
+    const unavailable = document.createElement("p");
+    unavailable.className = "map-place-detail-summary";
+    unavailable.textContent = "詳しい解説は現在確認できませんでした。";
+    editorial.append(unavailable);
+  }
+  if (editorial.childElementCount > 0) {
+    body.append(editorial);
+    requestAnimationFrame(() => typewriteText(editorial));
+  }
 
   const actions = document.createElement("div");
   actions.className = "map-place-detail-actions";
-  const sources = document.createElement("div");
-  sources.className = "map-place-detail-sources";
-  for (const item of place.sources) {
-    const source = document.createElement("a");
-    source.href = item.url;
-    source.target = "_blank";
-    source.rel = "noreferrer noopener";
-    source.textContent = item.label;
-    sources.append(source);
+  if (place.officialWebsiteUrl) {
+    const official = document.createElement("a");
+    official.href = place.officialWebsiteUrl;
+    official.target = "_blank";
+    official.rel = "noreferrer noopener";
+    official.textContent = "公式サイト";
+    actions.append(official);
   }
   const addToTrip = document.createElement("button");
   addToTrip.type = "button";
   addToTrip.textContent = place.primaryLabel;
   addToTrip.addEventListener("click", consult);
-  actions.append(sources, addToTrip);
+  actions.append(addToTrip);
   body.append(actions);
   article.append(body);
   return article;
@@ -390,13 +407,6 @@ function renderPlaceCard(
   focus.append(copy);
   focus.addEventListener("click", select);
 
-  const footer = document.createElement("footer");
-  const source = document.createElement("a");
-  source.href = place.sourceUrl;
-  source.target = "_blank";
-  source.rel = "noreferrer noopener";
-  source.textContent = place.image?.attribution ?? "情報源";
-  footer.append(source);
-  card.append(focus, footer);
+  card.append(focus);
   return card;
 }

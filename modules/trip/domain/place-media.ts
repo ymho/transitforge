@@ -41,6 +41,8 @@ export interface PlaceMedia {
   latitude?: number;
   longitude?: number;
   sourceUrl: string;
+  /** Provider metadata or Web research has identified this as the venue's own site. */
+  officialWebsiteUrl?: string;
   sources?: Array<{
     provider: string;
     label: string;

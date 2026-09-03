@@ -108,6 +108,7 @@ export function isPlaceMediaSearchResponse(value: unknown): value is PlaceMediaS
   return isRecord(result.data) && Array.isArray(result.data.places) && result.data.places.length <= 8 &&
     result.data.places.every((place) => isRecord(place) && typeof place.providerPlaceId === "string" &&
       typeof place.name === "string" && typeof place.sourceUrl === "string" &&
+      (place.officialWebsiteUrl === undefined || isSafeHttpsUrl(place.officialWebsiteUrl)) &&
       (place.address === undefined || typeof place.address === "string") &&
       (place.sources === undefined || Array.isArray(place.sources) && place.sources.length <= 12 &&
         place.sources.every((source) => isRecord(source) && typeof source.provider === "string" &&
@@ -362,6 +363,15 @@ function isRecord(value: unknown): value is Record<string, unknown> { return typ
 function isNonNegativeNumber(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value) && value >= 0; }
 function isCoordinate(value: unknown, minimum: number, maximum: number): value is number { return typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum; }
 function isBoundedString(value: unknown, maximum: number): value is string { return typeof value === "string" && value.length <= maximum; }
+function isSafeHttpsUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 2_048) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
 function isOptionalBoundedString(value: unknown, maximum: number): boolean { return value === undefined || isBoundedString(value, maximum); }
 function isNonNegativeInteger(value: unknown): value is number { return isNonNegativeNumber(value) && Number.isInteger(value); }
 function isHour(value: unknown): value is number { return isNonNegativeInteger(value) && value <= 23; }

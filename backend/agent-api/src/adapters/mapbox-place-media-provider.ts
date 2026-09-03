@@ -10,6 +10,7 @@ import type {
   PlaceMediaSearchResult,
 } from "@raiquora/trip/place-media";
 import type { MapboxSearchCredentialsRepository } from "../ports/mapbox-search-credentials.js";
+import { likelyOfficialWebsiteUrl } from "@raiquora/trip/official-website";
 
 interface FetchPort {
   fetch(input: string, init?: RequestInit): Promise<Response>;
@@ -147,9 +148,11 @@ function mapboxPlaces(value: unknown): PlaceMedia[] {
     const coordinate = coordinates(properties, raw.geometry);
     if (!id || !name || !coordinate) return [];
     const metadata = isRecord(properties.metadata) ? properties.metadata : {};
-    const website = safeHttpsUrl(metadata.website);
+    const website = likelyOfficialWebsiteUrl(metadata.website);
     const categories = stringArray(properties.poi_category);
     const openingHours = openingHoursText(metadata.open_hours);
+    const reviewAverage = boundedRating(metadata.rating);
+    const reviewCount = nonNegativeInteger(metadata.review_count);
     return [{
       providerPlaceId: id,
       name: name.slice(0, 120),
@@ -157,9 +160,12 @@ function mapboxPlaces(value: unknown): PlaceMedia[] {
       ...(text(properties.full_address) ? { address: text(properties.full_address).slice(0, 240) } : {}),
       latitude: coordinate.latitude,
       longitude: coordinate.longitude,
-      sourceUrl: website ?? "https://www.mapbox.com/",
+      sourceUrl: "https://www.mapbox.com/",
+      ...(website ? { officialWebsiteUrl: website } : {}),
       sources: [{ provider: "mapbox", label: "Mapbox", url: "https://www.mapbox.com/", role: "identity" }],
       ...(openingHours ? { openingHours, openingHoursStatus: "available" as const } : { openingHoursStatus: "unknown" as const }),
+      ...(reviewAverage === undefined ? {} : { reviewAverage }),
+      ...(reviewCount === undefined ? {} : { reviewCount }),
     }];
   });
 }
@@ -196,14 +202,12 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
-function safeHttpsUrl(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password ? url.toString() : undefined;
-  } catch {
-    return undefined;
-  }
+function boundedRating(value: unknown): number | undefined {
+  return finite(value) && value >= 0 && value <= 5 ? value : undefined;
+}
+
+function nonNegativeInteger(value: unknown): number | undefined {
+  return finite(value) && Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
 function text(value: unknown): string {
