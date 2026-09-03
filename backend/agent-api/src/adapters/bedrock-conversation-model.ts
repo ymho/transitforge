@@ -54,7 +54,7 @@ export class BedrockConversationModel implements ConversationModel {
       modelId,
       system: [{ text: this.options.systemPrompt }],
       messages: request.messages,
-      ...(request.tools === undefined ? {} : {
+      ...(!request.tools?.length ? {} : {
         toolConfig: {
           tools: request.tools.map((definition) => ({
             toolSpec: {

@@ -592,6 +592,7 @@ function decisionSoftPreferences(
     add("avoid", avoidance, "trip_context");
   }
   if (profile) {
+    add("usual_origin_station", profile.home?.station, "travel_profile");
     add("usual_pace", profile.pace, "travel_profile");
     add("typical_travel_minutes", profile.typicalTravelMinutes, "travel_profile");
     add("usual_car_available", profile.home?.carAvailable, "travel_profile");
@@ -674,6 +675,7 @@ function viewerToolMeetsTripPreconditions(
 export interface ViewerAgentToolPreconditionContext {
   tripContext?: TripContext;
   directRouteSearchGrounded?: boolean;
+  defaultOriginStation?: string;
 }
 
 /**
@@ -713,6 +715,13 @@ export function validateViewerAgentToolPreconditions(
       (expectedInput === "departure-date" && Boolean(trip?.startDate)) ||
       (expectedInput === "stay-length" && typeof trip?.stayNights === "number");
     if (known) return `既知条件 ${String(expectedInput)} は聞き直せません。`;
+    if (
+      context.defaultOriginStation &&
+      typeof input.question === "string" &&
+      conversationQuestionRequestsOrigin(input.question)
+    ) {
+      return "プロフィールに登録済みの出発地は聞き直せません。";
+    }
   }
   return undefined;
 }
@@ -860,6 +869,7 @@ function viewerToolPreconditionContext(
   ) || travelDestinationAccess(context.prompt) !== undefined;
   return {
     tripContext,
+    defaultOriginStation: context.dependencies.getUserProfile?.()?.home.station,
     directRouteSearchGrounded: explicitRoute !== undefined || (
       tripContext.planningStage === "planning" && hasConcreteDestination
     ),
@@ -1494,7 +1504,7 @@ export class ConverseModelProvider implements AgentModelProvider {
   async generate(request: AgentModelRequest): Promise<AgentModelResponse> {
     const response = await this.converse(
       request.messages.map(toBedrockMessage),
-      request.tools,
+      request.tools && request.tools.length > 0 ? request.tools : undefined,
       request.modelClass,
       request.modelCallId,
     );
@@ -1738,6 +1748,7 @@ async function executeViewerToolAdapter(
       currentDate(dependencies),
       externalState,
       recentAssistantConversationTexts(dependencies.getConversationContext?.()),
+      dependencies.getUserProfile?.()?.home.station,
     );
     conversationState.response = guidance;
     return { accepted: true, ...guidance };
@@ -2678,6 +2689,7 @@ function conversationGuidanceFromToolInput(
   now: Date,
   externalState: ExternalTravelToolState,
   recentAssistantMessages: readonly string[],
+  defaultOriginStation?: string,
 ): ConversationGuidance {
   const question = typeof input.question === "string" ? input.question : "";
   if (!question.trim()) {
@@ -2701,6 +2713,7 @@ function conversationGuidanceFromToolInput(
     facts,
     externalState,
     recentAssistantMessages,
+    defaultOriginStation,
   );
   const expectedInput = requestedExpectedInput;
   const requestedQuickReplies = (Array.isArray(input.quickReplies)
@@ -2740,6 +2753,7 @@ function assertFollowUpIsUnresolved(
   facts: ReturnType<typeof travelConversationFacts>,
   externalState: ExternalTravelToolState,
   recentAssistantMessages: readonly string[],
+  defaultOriginStation?: string,
 ): void {
   const alreadyKnown =
     (expectedInput === "planning-intent" && tripContext.planningStage === "planning") ||
@@ -2747,6 +2761,11 @@ function assertFollowUpIsUnresolved(
     (expectedInput === "stay-length" && facts.hasExplicitStayLength);
   if (alreadyKnown) {
     throw new Error(`既知条件 ${expectedInput} は聞き直せません。別の行動を選択してください。`);
+  }
+  if (defaultOriginStation && conversationQuestionRequestsOrigin(question)) {
+    throw new Error(
+      "プロフィールに登録済みの出発地は聞き直せません。今回だけ変更する場合は利用者の明示を待ってください。",
+    );
   }
   if (conversationQuestionWasAsked(question, recentAssistantMessages)) {
     throw new Error("同じ質問は繰り返せません。プロフィールと会話Contextを使って候補を提示してください。");
@@ -2757,6 +2776,11 @@ function assertFollowUpIsUnresolved(
       "旅程化の確認には具体的な目的地のPlace Evidenceが必要です。希望条件から候補を検索してください。",
     );
   }
+}
+
+function conversationQuestionRequestsOrigin(value: string): boolean {
+  const normalized = value.normalize("NFKC").replace(/[\s　]/gu, "");
+  return /(?:出発地|出発駅|どこから).*(?:教えて|どこ|ですか|ますか)/u.test(normalized);
 }
 
 function hasVerifiedPlanningDestination(

@@ -1,20 +1,44 @@
 import type { Map } from "mapbox-gl";
 
+export interface MapLandmarkSelection {
+  name: string;
+  longitude?: number;
+  latitude?: number;
+}
+
 export function configureLandmarkJourneyInteraction(
   map: Pick<Map, "addInteraction">,
-  openLandmarkJourney: (name: string, type?: string) => void,
+  openLandmarkDetail: (selection: MapLandmarkSelection) => void,
 ): void {
   map.addInteraction("transitforge-landmark-journey", {
     type: "click",
     target: { featuresetId: "landmark-icons", importId: "basemap" },
     handler: ({ feature }) => {
-      const properties = feature?.properties;
-      if (!properties) return;
-      const name = landmarkProperty(properties, "name");
-      if (!name) return;
-      openLandmarkJourney(name);
+      const selection = mapLandmarkSelection(feature);
+      if (selection) openLandmarkDetail(selection);
     },
   });
+}
+
+export function mapLandmarkSelection(feature: {
+  properties?: Record<string, unknown>;
+  geometry?: { type?: string; coordinates?: unknown };
+} | undefined): MapLandmarkSelection | undefined {
+  const name = feature?.properties
+    ? landmarkProperty(feature.properties, "name")
+    : undefined;
+  if (!name) return undefined;
+  const coordinates = feature?.geometry?.type === "Point" &&
+    Array.isArray(feature.geometry.coordinates)
+    ? feature.geometry.coordinates
+    : undefined;
+  const longitude = coordinates?.[0];
+  const latitude = coordinates?.[1];
+  return {
+    name,
+    ...(typeof longitude === "number" && Number.isFinite(longitude) ? { longitude } : {}),
+    ...(typeof latitude === "number" && Number.isFinite(latitude) ? { latitude } : {}),
+  };
 }
 
 function landmarkProperty(

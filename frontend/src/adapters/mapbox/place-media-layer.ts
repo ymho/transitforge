@@ -4,8 +4,9 @@ import type { PlaceMedia } from "@raiquora/trip/place-media";
 const sourceId = "verified-travel-places";
 const clusterLayerId = `${sourceId}-clusters`;
 const pointLayerId = `${sourceId}-points`;
-const placeCameraPitch = 52;
-const placeCameraBearing = -18;
+const placeCameraPitch = 68;
+const placeCameraBearing = -24;
+const placeDetailZoom = 17.6;
 
 export interface VerifiedPlaceLayerController {
   show(places: readonly PlaceMedia[]): void;
@@ -104,7 +105,7 @@ export function createVerifiedPlaceLayer(
     if (moveMap) {
       map.easeTo({
         center: [place.longitude, place.latitude],
-        zoom: Math.max(map.getZoom(), 14),
+        zoom: Math.max(map.getZoom(), placeDetailZoom),
         pitch: placeCameraPitch,
         bearing: placeCameraBearing,
         duration: 700,

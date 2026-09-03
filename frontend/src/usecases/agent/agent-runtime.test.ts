@@ -310,7 +310,10 @@ describe("MultiStepAgentRuntime", () => {
     expect(output.response).toBe("確認できた候補を案内します");
     expect(executionOrder).toEqual(["first_tool"]);
     expect(requests).toHaveLength(3);
-    expect(requests[2]?.tools).toEqual([]);
+    expect(requests[2]?.tools?.map(({ name }) => name)).toEqual([
+      "first_tool",
+      "second_tool",
+    ]);
     expect(requests[2]?.messages.at(-1)).toMatchObject({
       role: "user",
       content: expect.arrayContaining([
@@ -351,7 +354,30 @@ describe("MultiStepAgentRuntime", () => {
     expect(output.response).toBe("確認できた範囲と不足情報を案内します");
     expect(executionOrder).toEqual(["first_tool", "second_tool"]);
     expect(requests).toHaveLength(3);
-    expect(requests[2]?.tools).toEqual([]);
+    expect(requests[2]?.tools?.map(({ name }) => name)).toEqual([
+      "first_tool",
+      "second_tool",
+    ]);
+  });
+
+  it("does not execute another Tool requested during the final response phase", async () => {
+    const executionOrder: string[] = [];
+    const { tools, toolExecutor } = toolSetup(executionOrder);
+    const runtime = new MultiStepAgentRuntime({
+      model: sequenceModel([
+        toolCallResponse([{ id: "search-1", name: "first_tool", input: { value: "候補" } }]),
+        toolCallResponse([{ id: "search-2", name: "second_tool", input: { value: "詳細" } }]),
+        toolCallResponse([{ id: "search-3", name: "first_tool", input: { value: "追加" } }]),
+      ]),
+      tools,
+      toolExecutor,
+      limits: { maxIterations: 3, maxModelCalls: 4 },
+    });
+
+    const output = await runtime.run(request("候補の詳細を調べて"));
+
+    expect(output.status).toBe("limit_reached");
+    expect(executionOrder).toEqual(["first_tool", "second_tool"]);
   });
 
   it("bounds iterations model calls and collected evidence", async () => {

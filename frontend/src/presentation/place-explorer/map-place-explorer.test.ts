@@ -80,6 +80,10 @@ describe("map place card models", () => {
     ])).toHaveLength(1);
   });
 
+  it("opens trip planning from the place detail rather than the candidate strip", () => {
+    expect(mapPlaceCardModels([place()])[0]?.primaryLabel).toBe("旅程を考える");
+  });
+
   it("uses an image only when hotlinking is explicitly allowed", () => {
     const image = { url: "https://example.com/image.jpg", attribution: "Example", hotlinkAllowed: true as const };
     expect(mapPlaceCardModels([place({ image })])[0]?.image).toEqual({

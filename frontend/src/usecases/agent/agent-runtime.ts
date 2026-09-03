@@ -135,11 +135,13 @@ export class MultiStepAgentRuntime {
         modelCalls >= this.limits.maxModelCalls - 1 ||
         toolCalls >= this.limits.maxToolCalls
       );
-      const modelTools = finalResponseRequired
-        ? []
-        : this.dependencies.tools.descriptors().filter(
-          ({ name }) => !unavailableToolNames.has(name),
-        );
+      // Bedrock requires toolConfig whenever the conversation history contains
+      // toolUse/toolResult blocks. Keep the same capability contract attached
+      // during finalization. The explicit instruction guides the model, while
+      // the guard below deterministically rejects any further Tool execution.
+      const modelTools = this.dependencies.tools.descriptors().filter(
+        ({ name }) => !unavailableToolNames.has(name),
+      );
       const modelMessages: AgentModelMessage[] = finalResponseRequired
         ? [...messages, {
           role: "user",
@@ -192,6 +194,9 @@ export class MultiStepAgentRuntime {
         (content): content is Extract<AgentModelContent, { type: "tool_call" }> =>
           content.type === "tool_call",
       );
+      if (finalResponseRequired && calls.length > 0) {
+        return this.limitResult(trace, evidence, toolViewerActionOutcomes, startedAt);
+      }
       if (calls.length > 0) {
         for (const call of calls) {
           trace.decisionRecorded(decisionForToolCall(
