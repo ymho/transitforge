@@ -2650,7 +2650,9 @@ function viewerFinalResponsePolicy(
 function recentAssistantConversationTexts(
   context: AgentConversationContext | undefined,
 ): string[] {
-  return (context?.relevantMessages ?? []).flatMap((serialized) => {
+  const structured = (context?.messages ?? [])
+    .filter(({ role }) => role === "assistant").map(({ text }) => text);
+  const legacy = (context?.relevantMessages ?? []).flatMap((serialized) => {
     try {
       const entries: unknown = JSON.parse(serialized);
       if (!Array.isArray(entries)) return [];
@@ -2664,7 +2666,8 @@ function recentAssistantConversationTexts(
     } catch {
       return [];
     }
-  }).slice(-8);
+  });
+  return [...structured, ...legacy].slice(-8);
 }
 
 function conversationResponseText(

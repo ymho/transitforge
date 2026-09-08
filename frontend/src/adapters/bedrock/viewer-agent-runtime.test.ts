@@ -2124,7 +2124,7 @@ describe("Bedrock viewer agent", () => {
     expect(converse).toHaveBeenCalledTimes(2);
   });
 
-  it("rejects a repeated follow-up and replans with a search Tool", async () => {
+  it.each(["structured", "legacy"])("rejects a repeated follow-up with %s history and replans with a search Tool", async (format) => {
     const searchWeb = vi.fn(async () => ({
       webSearch: {
         status: "unavailable" as const,
@@ -2176,7 +2176,12 @@ describe("Bedrock viewer agent", () => {
       queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
       searchWeb,
       getTripContext: () => ({ planningStage: "planning", destinationWish: "海辺" }),
-      getConversationContext: () => ({
+      getConversationContext: () => format === "structured" ? ({
+        messages: [
+          { role: "user", text: "海辺を歩きたい" },
+          { role: "assistant", text: "いつ出発しますか？" },
+        ],
+      }) : ({
         relevantMessages: [JSON.stringify([
           { role: "user", text: "海辺を歩きたい" },
           { role: "assistant", text: "いつ出発しますか？" },

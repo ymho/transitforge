@@ -7,6 +7,22 @@ import {
 } from "./bedrock-conversation-model.js";
 
 describe("BedrockConversationModel", () => {
+  it("allows a measured output budget while retaining provider limits", async () => {
+    const converse = vi.fn(async (_input: JsonObject) => ({
+      output: { message: { role: "assistant", content: [{ text: "候補の比較と理由".repeat(700) }] } },
+      stopReason: "end_turn",
+    }));
+    const model = new BedrockConversationModel({ converse }, {
+      modelId: "amazon.nova-lite-v1:0", systemPrompt: "system", maxOutputTokens: 4_096,
+    });
+    const result = await model.converse({ messages: [{ role: "user", content: [{ text: "候補を比較して" }] }] });
+    expect(result.stopReason).toBe("end_turn");
+    expect(converse.mock.calls[0]?.[0].inferenceConfig).toEqual({ maxTokens: 4_096, temperature: 0 });
+    expect(() => new BedrockConversationModel({ converse }, {
+      modelId: "model", systemPrompt: "system", maxOutputTokens: 5_001,
+    })).toThrow("maxOutputTokens");
+  });
+
   it("omits Bedrock toolConfig when no tools are available", async () => {
     const converse = vi.fn(async (_input: JsonObject) => ({
       output: { message: { role: "assistant", content: [{ text: "案内します" }] } },
@@ -71,7 +87,7 @@ describe("BedrockConversationModel", () => {
           required: ["originStation"],
         } },
       } }] },
-      inferenceConfig: { maxTokens: 500, temperature: 0 },
+      inferenceConfig: { maxTokens: 4_096, temperature: 0 },
     });
     expect(result).toEqual({
       message: { role: "assistant", content: [{ toolUse: { toolUseId: "tool-1", name: "search_journeys", input: { originStation: "京都" } } }] },
@@ -112,7 +128,7 @@ describe("BedrockConversationModel", () => {
         modelId: "model-1",
         system: [{ text: "system prompt" }],
         messages: [{ role: "user", content: [{ text: "海へ行きたい" }] }],
-        inferenceConfig: { maxTokens: 500, temperature: 0 },
+        inferenceConfig: { maxTokens: 4_096, temperature: 0 },
       },
       outcome: {
         status: "failed",

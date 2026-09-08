@@ -6,6 +6,45 @@ import {
 } from "./agent-decision-context";
 
 describe("AgentDecisionContext", () => {
+  it("retains the question and answer after a long recommendation instead of slicing conversation JSON", () => {
+    const previous = [
+      { role: "user", text: "静かな場所で休みたい" },
+      { role: "assistant", text: "候補の見どころと比較です。".repeat(70) },
+      { role: "user", text: "近いところがよい" },
+      { role: "assistant", text: "日程はいつですか?" },
+      { role: "user", text: "来週金曜日から1泊" },
+    ];
+    const context = buildAgentDecisionContext({
+      executionId: "conversation-test", feature: "concierge", userRequest: "お願いします",
+      context: { conversation: { relevantMessages: [JSON.stringify(previous)] } },
+    }, []);
+    const serialized = agentDecisionContextText(context);
+    const parsed = JSON.parse(serialized.match(/<agent_context>([\s\S]*)<\/agent_context>/u)![1]!);
+    expect(parsed.conversation.messages).toEqual(previous);
+    expect(parsed.conversation.relevantMessages).toEqual([]);
+  });
+
+  it("preserves recent conversation even when a large journey must be compacted", () => {
+    const context = buildAgentDecisionContext({
+      executionId: "large-conversation", feature: "concierge", userRequest: "その条件でお願いします",
+      context: {
+        conversation: { messages: [
+          { role: "assistant", text: "帰宅時刻は何時を希望しますか？" },
+          { role: "user", text: "21時には自宅へ着きたい" },
+        ] },
+        personaInstruction: "穏やかな口調で案内する",
+        currentJourney: { journeys: Array.from({ length: 20 }, () => ({
+          legs: Array.from({ length: 20 }, () => ({ description: "経路の詳細".repeat(60) })),
+        })) },
+      },
+    }, []);
+    const prompt = agentDecisionContextText(context);
+    const serialized = prompt.match(/<agent_context>([\s\S]*)<\/agent_context>/u)![1]!;
+    expect(serialized.length).toBeLessThanOrEqual(24_000);
+    expect(JSON.parse(serialized).conversation.messages.at(-1).text).toBe("21時には自宅へ着きたい");
+    expect(prompt).toContain("穏やかな口調で案内する");
+  });
+
   it("gives Bedrock bounded structured context without exact location or secrets", () => {
     const context = buildAgentDecisionContext({
       executionId: "execution-1",

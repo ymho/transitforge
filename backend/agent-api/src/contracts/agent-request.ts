@@ -14,7 +14,9 @@ export const maximumBodyBytes = 2 * 1_024 * 1_024;
 export const maximumToolResultJsonCharacters = 512_000;
 const maximumMessages = 16;
 const maximumContentBlocks = 12;
-const maximumTextCharacters = 4_000;
+// The structured conversation includes several turns, current trip, and profile.
+// Keep this above the context builder's 24K budget and allow complete model output.
+export const maximumTextCharacters = 32_000;
 const modelCallIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 
 export const allowedToolNames = new Set([

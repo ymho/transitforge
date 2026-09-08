@@ -85,7 +85,7 @@ describe("conversation history", () => {
   });
 
   it("keeps the relevant multi-turn decision context", () => {
-    const entries: ConversationHistoryEntry[] = Array.from({ length: 9 }, (_, index) => ({
+    const entries: ConversationHistoryEntry[] = Array.from({ length: 15 }, (_, index) => ({
       messageId: `m-${index + 1}`,
       role: "user" as const,
       text: `条件${index + 1}`,
@@ -93,10 +93,10 @@ describe("conversation history", () => {
 
     const context = recentConversationContext(entries);
 
-    expect(context).not.toContain("条件1");
-    expect(context).not.toContain("条件2");
-    expect(context).toContain("条件3");
-    expect(context).toContain("条件9");
+    const messages = JSON.parse(context);
+    expect(messages).toHaveLength(12);
+    expect(messages[0].text).toBe("条件4");
+    expect(messages.at(-1).text).toBe("条件15");
   });
 
   it("preserves the API request id with an assistant response", () => {
