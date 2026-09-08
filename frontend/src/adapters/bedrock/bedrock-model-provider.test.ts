@@ -4,6 +4,7 @@ import { BedrockModelProvider } from "./bedrock-model-provider";
 
 describe("Bedrock model provider adapter", () => {
   it("converts provider-independent messages tools and metadata", async () => {
+    const description = "能力と制約の説明。".repeat(300) + "境界: 事実はToolで検証する";
     const fetcher = vi.fn<typeof fetch>(async (_url, init) => {
       const request = JSON.parse(String(init?.body));
       expect(request).toMatchObject({
@@ -14,6 +15,7 @@ describe("Bedrock model provider adapter", () => {
         }],
         toolDefinitions: [{
           name: "search_journeys",
+          description,
           inputSchema: { type: "object" },
         }],
       });
@@ -46,7 +48,7 @@ describe("Bedrock model provider adapter", () => {
       }],
       tools: [{
         name: "search_journeys",
-        description: "経路を検索する",
+        description,
         inputSchema: {
           type: "object",
           properties: { originStation: { type: "string" } },

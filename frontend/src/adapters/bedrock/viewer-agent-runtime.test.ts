@@ -41,6 +41,32 @@ const position: TrainPosition = {
 };
 
 describe("Bedrock viewer agent", () => {
+  it.each([false, true])("uses a verified provisional origin without replacing a known profile: %s", async (knownProfile) => {
+    const searchDirectRoutes = vi.fn(async () => ({
+      originStation: knownProfile ? "関西空港" : "大阪",
+      results: [{ train, originStation: knownProfile ? "関西空港" : "大阪", destinationStation: "京都", departureTimeMinutes: 1080, arrivalTimeMinutes: 1120 }],
+    }));
+    const converse = vi.fn<BedrockAgentConverse>(async () => ({
+      message: { role: "assistant", content: [{ toolUse: {
+        toolUseId: "regional-example", name: "search_direct_routes",
+        input: { provisionalOriginStation: "大阪駅", destinationStation: "京都", departureDate: "2026-09-10", departureTimeMinutes: 1080 },
+      } }] }, stopReason: "tool_use",
+    }));
+    const response = await runViewerAgentRuntime("駅は分からないので現地からの移動案を作って", {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1080, maximumRouteTime: 1800,
+      getCurrentDate: () => new Date("2026-09-09T10:00:00+09:00"),
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(), searchDirectRoutes,
+      getTripContext: () => ({ destinationWish: "京都", startDate: "2026-09-10", stayNights: 0, planningStage: "planning" }),
+      ...(knownProfile ? { getUserProfile: () => ({ home: { station: "関西空港", carAvailable: false } } as UserProfile) } : {}),
+    }, converse);
+    expect(searchDirectRoutes).toHaveBeenCalledWith(expect.objectContaining({ originStation: knownProfile ? "関西空港" : "大阪" }));
+    expect(response).toMatchObject({ journeyPlan: { originStation: knownProfile ? "関西空港" : "大阪" } });
+    if (typeof response === "string" || !("journeyPlan" in response)) throw new Error("Expected a route proposal");
+    expect(response.journeyPlan.originIsProvisional).toBe(knownProfile ? undefined : true);
+    expect(response.text.includes("仮案")).toBe(!knownProfile);
+    expect(response.text.includes("ご自宅からこの駅までの移動は含みません")).toBe(!knownProfile);
+  });
+
   it("does not send an empty tool list during the final response phase", async () => {
     const converse = vi.fn(async () => ({
       message: { role: "assistant" as const, content: [{ text: "案内します" }] },
@@ -123,7 +149,15 @@ describe("Bedrock viewer agent", () => {
     expect(descriptors[4]?.description).toContain("リフレッシュしたい");
     expect(descriptors[4]?.description).toContain("登録済みの場所");
     expect(descriptors[4]?.description).toContain("relative_distance=farther");
+    expect(descriptors[4]?.description).toContain("地域不一致なら");
+    expect(descriptors[4]?.description).toContain("移動負担は未確認なら不明");
+    expect(descriptors[4]?.description).toContain("境界:");
     expect(descriptors[1]?.description).toContain("午前 移動 到着後 帰路");
+    expect(descriptors[1]?.description).toContain("境界:");
+    for (const descriptor of viewerAgentToolDescriptors()) {
+      expect(descriptor.description).toContain("境界:");
+      expect(descriptor.description.length).toBeLessThanOrEqual(16_000);
+    }
   });
 
   it("does not expose direct Viewer operation Tools", () => {

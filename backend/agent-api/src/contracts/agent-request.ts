@@ -12,6 +12,10 @@ export const agentRequestContractVersion = "agent-api-request-v1";
 // tool definitions, and result-driven replanning.
 export const maximumBodyBytes = 2 * 1_024 * 1_024;
 export const maximumToolResultJsonCharacters = 512_000;
+// Application transport guards, not Bedrock's context window (which uses tokens).
+// Never silently truncate capability/safety instructions to fit these guards.
+export const maximumToolDescriptionCharacters = 16_000;
+export const maximumTotalToolDescriptionCharacters = 64_000;
 const maximumMessages = 16;
 const maximumContentBlocks = 12;
 // The structured conversation includes several turns, current trip, and profile.
@@ -157,6 +161,7 @@ export function validatedToolDefinitions(
     throw new RequestError(400, "toolDefinitionsの件数が不正です。");
   }
   const names = new Set<string>();
+  let totalDescriptionCharacters = 0;
   return definitions.map((definition) => {
     if (!isRecord(definition)) {
       throw new RequestError(400, "toolDefinitionの形式が不正です。");
@@ -168,12 +173,16 @@ export function validatedToolDefinitions(
       names.has(name) ||
       typeof description !== "string" ||
       description.length < 1 ||
-      description.length > 500 ||
       !isRecord(inputSchema) ||
       inputSchema.type !== "object" ||
       !isRecord(inputSchema.properties)
     ) {
       throw new RequestError(400, "toolDefinitionが許可されていません。");
+    }
+    totalDescriptionCharacters += description.length;
+    if (description.length > maximumToolDescriptionCharacters ||
+        totalDescriptionCharacters > maximumTotalToolDescriptionCharacters) {
+      throw new RequestError(413, "Tool説明が許容サイズを超えています。説明は切り詰めず送信を中止しました。");
     }
     names.add(name);
     return {

@@ -111,7 +111,7 @@ export class MultiStepAgentRuntime {
     const toolViewerActionOutcomes: AgentViewerActionOutcome[] = [];
     const nonRetryableFailureCounts = new Map<string, number>();
     const unavailableToolNames = new Set<string>();
-    const executedToolCalls = new Map<string, AgentToolExecution>();
+    const executedToolCalls = new Map<string, AgentToolExecution & { toolName: string }>();
     let finalizeAfterToolResult = false;
 
     while (true) {
@@ -373,8 +373,30 @@ export class MultiStepAgentRuntime {
           toolInput: call.input,
           timeoutMs: Math.max(1, deadline - this.now().getTime()),
         }, trace);
-        executedToolCalls.set(signature, execution);
+        executedToolCalls.set(signature, { ...execution, toolName: call.name });
         toolCalls += 1;
+        if (execution.result.ok) {
+          // Context-dependent failures are not permanent. Let the model retry
+          // them after a successful Tool has added information/changed task state.
+          // Successful executions and permanent failures remain deduplicated.
+          for (const [key, prior] of executedToolCalls) {
+            if (prior.result.ok || prior.result.error.code !== "precondition_failed") continue;
+            executedToolCalls.delete(key);
+            const toolName = prior.toolName;
+            nonRetryableFailureCounts.delete(nonRetryableFailureKey(
+              toolName, prior.result.error.code, prior.result.error.message,
+            ));
+            const stillBlocked = [...executedToolCalls.values()].some((cached) =>
+              cached.toolName === toolName && !cached.result.ok &&
+              (nonRetryableFailureCounts.get(nonRetryableFailureKey(
+                toolName, cached.result.error.code, cached.result.error.message,
+              )) ?? 0) >= 2);
+            if (!stillBlocked) {
+              unavailableToolNames.delete(toolName);
+              newlyUnavailableToolNames.delete(toolName);
+            }
+          }
+        }
         const availableSlots = this.limits.maxEvidence - evidence.length;
         if (execution.evidence.length > 0 && availableSlots > 0) {
           const existingEvidenceIds = new Set(evidence.map(({ id }) => id));

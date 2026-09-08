@@ -3,9 +3,16 @@ import { describe, expect, it } from "vitest";
 import { structuredModelClassPolicy } from "./structured-model-class-policy";
 
 describe("structuredModelClassPolicy", () => {
-  it("keeps an initial request on the default model", () => {
+  it("uses decision class for an unframed concierge request even without a profile", () => {
     expect(structuredModelClassPolicy({
       request: { executionId: "1", feature: "concierge", userRequest: "旅行したい" },
+      phase: "initial",
+    })).toBe("decision");
+  });
+
+  it("does not promote an unframed non-concierge request", () => {
+    expect(structuredModelClassPolicy({
+      request: { executionId: "1", feature: "train_guidance", userRequest: "列車を見たい" },
       phase: "initial",
     })).toBeUndefined();
   });
@@ -40,6 +47,14 @@ describe("structuredModelClassPolicy", () => {
         },
       },
       phase: "initial",
+    })).toBe("decision");
+  });
+
+  it("does not downgrade structured discovery just because a profile is absent", () => {
+    expect(structuredModelClassPolicy({
+      request: { executionId: "1", feature: "concierge", userRequest: "地域から相談したい",
+        context: { tripContext: { planningStage: "inspiration" } },
+      }, phase: "initial",
     })).toBe("decision");
   });
 
@@ -94,5 +109,15 @@ describe("structuredModelClassPolicy", () => {
       request: { executionId: "1", feature: "concierge", userRequest: "候補を探して" },
       phase: "result_driven_replan",
     })).toBe("decision");
+  });
+
+  it("does not change incomplete planning routing solely because place facts are available", () => {
+    expect(structuredModelClassPolicy({
+      request: { executionId: "1", feature: "concierge", userRequest: "旅程を考えたい", context: {
+        tripContext: { planningStage: "planning", destinationWish: "確認済み地点" },
+        verifiedFacts: [{ evidenceId: "place:verified", category: "place", subject: "確認済み地点", summary: "所在地を確認済み" }],
+      } },
+      phase: "initial",
+    })).toBeUndefined();
   });
 });

@@ -1,5 +1,6 @@
 export type AgentToolErrorCode =
   | "invalid_input"
+  | "precondition_failed"
   | "unknown_tool"
   | "not_found"
   | "ambiguous_entity"
@@ -9,6 +10,11 @@ export interface AgentToolError {
   code: AgentToolErrorCode;
   message: string;
   retryable: boolean;
+}
+
+/** The same input may become valid after another Tool changes task context. */
+export class AgentToolPreconditionError extends Error {
+  override name = "AgentToolPreconditionError";
 }
 
 export type AgentToolResult<TOutput> =
@@ -58,7 +64,7 @@ export interface AgentTool<TInput, TOutput> extends AgentToolDescriptor {
 
 export function modelToolDescription(tool: AgentToolDescriptor): string {
   const support = tool.decisionSupport;
-  if (!support) return tool.description.slice(0, 500);
+  if (!support) return tool.description;
   const sections = [
     `能力: ${support.capability}`,
     support.suitableCases?.length ? `適する: ${support.suitableCases.join(" / ")}` : "",
@@ -68,7 +74,9 @@ export function modelToolDescription(tool: AgentToolDescriptor): string {
     support.limitations?.length ? `制約: ${support.limitations.join(" / ")}` : "",
     `境界: ${support.responsibilityBoundary}`,
   ].filter(Boolean);
-  return sections.join("。").slice(0, 500);
+  // These are authored capability contracts, not untrusted Tool observations.
+  // Preserve the responsibility boundary at the end; transport validates size.
+  return sections.join("。");
 }
 
 export function validAgentToolInput<TInput>(

@@ -24,6 +24,7 @@ export interface AgentContextSnapshot {
 
 export interface AgentTripScheduleItem {
   type: TripPlanItem["type"];
+  originIsProvisional?: boolean;
   summary: string;
   date?: string;
   departureTimeMinutes?: number;
@@ -134,6 +135,7 @@ function scheduleItem(item: TripPlanItem): AgentTripScheduleItem {
   const journey = item.route.journeys[0];
   return {
     type: item.type,
+    ...(item.route.originIsProvisional ? { originIsProvisional: true } : {}),
     summary: `${bounded(item.route.originStation, 80) ?? "出発駅"}→${bounded(item.route.destinationStation, 80) ?? "到着駅"}（鉄道${journey ? ` 乗換${journey.transferCount}回` : ""}）`,
     date: item.route.departureDate,
     ...(journey ? {

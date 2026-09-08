@@ -32,6 +32,8 @@ export interface AgentEvaluationCase {
 
 export interface AgentEvaluationExpectation {
   toolSequence: string[];
+  /** Optional, explicitly approved complete sequences; never a wildcard or prefix. */
+  alternativeToolSequences?: string[][];
   constraints: Record<string, string | number | boolean | string[]>;
   status: AgentRuntimeStatus;
   minimumGroundedClaimRate: number;

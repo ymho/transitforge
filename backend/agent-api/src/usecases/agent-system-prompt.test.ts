@@ -6,6 +6,10 @@ describe("agentSystemPrompt", () => {
   it("keeps decision principles while delegating capability selection to descriptors", () => {
     expect(agentSystemPrompt).toContain("goal hard constraint soft preference");
     expect(agentSystemPrompt).toContain("既知の条件を聞き直さず");
+    expect(agentSystemPrompt).toContain("正確な名称や駅名 時刻を知らなくても相談できます");
+    expect(agentSystemPrompt).toContain("仮定を利用者の確定条件や永続的な好みとして保存しない");
+    expect(agentSystemPrompt).toContain("目的地近くの起点を自宅扱いせず");
+    expect(agentSystemPrompt).not.toContain("Contextや発話にない必須値を推測しない");
     expect(agentSystemPrompt).toContain("一度に一つ短く確認");
     expect(agentSystemPrompt).toContain("Toolの能力 適するケース 適さないケース");
     expect(agentSystemPrompt).toContain("検索 質問 変更を回答textだけで代替せず");

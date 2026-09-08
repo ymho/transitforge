@@ -35,6 +35,7 @@ decision classへ送ることで安定した。
 - `concierge`の候補発見段階は、具体的な目的地の有無にかかわらず、発話本文を分類せず
   構造化された`planningStage=inspiration`または未作成の`tripContext`から`decision` classを使う
 - `planningStage=planning`で日付と泊数が揃った旅行計画は`decision` classを使う
+- Issue #368では`planningStage=inspiration`または未作成・空の`tripContext`なのにProfile欠損だけでdefaultへ落ちていた条件を修正する。既存の候補発見phaseの境界をProfileの有無から独立させるもので、自然言語分類や新しいmodel ID、追加model callは導入しない。未登録ユーザーの初回相談もdecision classの費用・遅延になる
 - 検証済み`currentTrip`または`currentJourney`がある照会と変更は`decision` classを使う
 - 日付または泊数が不足する条件確認は`default` classを使う
 - Tool結果を受けた結果駆動再計画は`decision` classを使う
@@ -56,6 +57,11 @@ decision classへ送ることで安定した。
 - 曖昧な気分からの発見はFull Benchmarkへ残し、初回発見全体の品質とコストを継続評価する
 
 ## 確認
+
+2026-09-09の拡張20ケースによる反復測定と既知の限界は
+[旅行調査の統合検証](../architecture/travel-research-integration-verification.md)を参照する。
+検証済みの事実がある入力を一律decisionへ送る案も比較したが、出発日の確認が退行したため採用しない。
+今回の修正は既存の候補発見phaseと実装の整合を直すものであり、モデルの全面的な格上げや性能改善を主張しない。
 
 - `npm test`
 - `npm run build`

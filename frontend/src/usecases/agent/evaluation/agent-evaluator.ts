@@ -112,7 +112,8 @@ function evaluateCase(
     return failedMissingObservation(testCase);
   }
   const expected = testCase.expected;
-  const toolSelectionAccuracy = equalLists(observation.toolSequence, expected.toolSequence) ? 1 : 0;
+  const toolSelectionAccuracy = [expected.toolSequence, ...(expected.alternativeToolSequences ?? [])]
+    .some((sequence) => equalLists(observation.toolSequence, sequence)) ? 1 : 0;
   const normalizedConstraintSatisfaction = matchingConstraintRate(
     observation.normalizedConstraints,
     expected.constraints,

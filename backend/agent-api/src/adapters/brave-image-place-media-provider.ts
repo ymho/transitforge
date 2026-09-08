@@ -10,6 +10,7 @@ import type {
   PlaceMediaSearchResult,
 } from "@raiquora/trip/place-media";
 import type { BraveSearchCredentialsRepository } from "../ports/brave-search-credentials.js";
+import { isSuitablePlacePhoto } from "./place-photo-selection.js";
 
 interface FetchPort {
   fetch(input: string, init?: RequestInit): Promise<Response>;
@@ -133,6 +134,16 @@ function webImages(value: unknown): WebImage[] {
     const source = clean(raw.source, 160) || new URL(sourcePageUrl).hostname;
     const width = positiveInteger(raw.thumbnail.width);
     const height = positiveInteger(raw.thumbnail.height);
+    const properties = isRecord(raw.properties) ? raw.properties : {};
+    const originalWidth = positiveInteger(properties.width);
+    const originalHeight = positiveInteger(properties.height);
+    if (!isSuitablePlacePhoto({
+      title: clean(raw.title, 500),
+      originalImageUrl: typeof properties.url === "string" ? properties.url : imageUrl,
+      ...(originalWidth !== undefined && originalHeight !== undefined
+        ? { width: originalWidth, height: originalHeight }
+        : { width, height }),
+    })) return [];
     return [{
       imageUrl,
       sourcePageUrl,

@@ -10,6 +10,7 @@ import type { GroundAccessArea, GroundAccessMatrix, GroundAccessMode, GroundAcce
 import type { RestaurantRequirements, RestaurantSearchResult } from "@raiquora/trip/restaurant-search";
 import type { Evidence } from "./evidence-model";
 import type { AgentToolInputSchema } from "./tool-contract";
+import { AgentToolPreconditionError } from "./tool-contract";
 
 export const externalTravelToolNames = [
   "search_weather_forecast",
@@ -151,7 +152,7 @@ function compactExternalInformation(
 export function externalTravelToolDescription(name: ExternalTravelToolName): string {
   return {
     search_weather_forecast: "目的地の時間別と週間天気予報をEvidence付きで検索します",
-    search_place_media: "名前が分かっている具体的な観光地やエリアを、写真 出典 座標付きの地図候補として検索します。気分だけから行き先を発見する検索ではありません",
+    search_place_media: "具体的な固有地点の未取得の写真・位置・施設属性を調べます。地点の紹介用であり、紹介済みの場所の旅程作成や日付・泊数の確認はできません。気分からの行き先発見ではなく、写真や地点情報が必要な場合に使います",
     search_travel_alerts: "旅行先について直近に発表された気象警報 台風 地震 津波 火山情報を気象庁の公式Evidence付きで確認します。都道府県などの地域名を指定します",
     search_ground_access: "検索済みの駅とMapbox Placeの間を徒歩 車 自転車で移動する経路 所要時間比較 到達圏を検索します。鉄道経路には使いません",
     search_restaurants: "旅行先 駅 宿 観光地の周辺からジャンルや希望に合う飲食店候補を検索します。子ども可 禁煙 バリアフリー 駐車場 個室 カード ランチ 深夜営業を必要な場合だけ絞り込めます。営業時間や予算はProviderにある場合だけ返します",
@@ -167,9 +168,9 @@ export function externalTravelToolInputSchema(name: ExternalTravelToolName): Age
     return {
       type: "object",
       properties: {
-        location: { type: "string", description: "天気を確認する都市 地域 観光地" },
-        startDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
-        endDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+        location: { type: "string", description: "所在地を確認済みの市区町村名。例: 京都市。市と行政区の連結表記は市単位へ正規化するが、施設名・番地・都道府県付き住所から所在地は推測しない。所在地不明なら公開情報で確認する" },
+        startDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Requested forecast date, NOT the reference date. For 明日/tomorrow copy featureContext.relativeDates.tomorrow; for 明後日 copy relativeDates.dayAfterTomorrow. 暦日計算済みの参照値から利用者の対象日を選ぶ。省略時は今後7日間" },
+        endDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "予報対象の終了日。startDateのみの場合はその1日だけを照会する" },
       },
       required: ["location"],
       additionalProperties: false,
@@ -266,7 +267,7 @@ export function externalTravelToolInputSchema(name: ExternalTravelToolName): Age
     return {
       type: "object",
       properties: {
-        query: { type: "string", description: "地域 施設種別 知りたい条件を含む具体的な検索語" },
+        query: { type: "string", description: "地域・施設種別・知りたい条件を含む検索語。出発駅の表記だけでなく所在地も確認し、別地域や似た地名の結果なら所在地を含め再探索する" },
         freshness: { type: "string", enum: ["day", "week", "month", "year"] },
         domains: { type: "array", maxItems: 5, items: { type: "string" } },
         limit: { type: "integer", minimum: 1, maximum: 8 },
@@ -431,7 +432,8 @@ export async function executeExternalTravelTool(
     return output;
   }
   if (name === "resolve_place_candidates") {
-    if (!dependencies.searchPlaceMedia || !state.webPages?.data?.pages) throw new Error("先にWebページを確認してください。");
+    if (!dependencies.searchPlaceMedia) throw new Error("地点検索を利用できません。");
+    if (!state.webPages?.data?.pages?.length) throw new AgentToolPreconditionError("先にWebページを確認してください。本文の取得後に同じ候補を再照合できます。");
     const knownPages = new Map(state.webPages.data.pages.map((page) => [page.url, page]));
     const candidates = Array.isArray(input.candidates) ? input.candidates.flatMap((item) => {
       if (!isRecord(item)) return [];

@@ -6,6 +6,38 @@ import {
 } from "./agent-decision-context";
 
 describe("AgentDecisionContext", () => {
+  it.each([
+    ["2026-08-30", "2026-08-31", "2026-09-01"],
+    ["2028-02-28", "2028-02-29", "2028-03-01"],
+    ["2026-12-31", "2027-01-01", "2027-01-02"],
+  ])("derives calendar references without selecting a travel date: %s", (today, tomorrow, dayAfterTomorrow) => {
+    const context = buildAgentDecisionContext({ executionId: "date-reference", feature: "concierge", userRequest: "旅行したい",
+      context: { featureContext: { calendarDate: today }, tripContext: { planningStage: "inspiration" } },
+    }, []);
+    expect(context.featureContext.relativeDates).toEqual({ today, tomorrow, dayAfterTomorrow });
+    expect(context.tripContext?.startDate).toBeUndefined();
+    expect(context.knownHardConstraints).toEqual([]);
+    expect(agentDecisionContextText(context)).toContain(`"tomorrow":"${tomorrow}"`);
+  });
+
+  it.each([undefined, "2026-02-30", "9999-12-31"])("does not fabricate references for an invalid or overflowing date: %s", (calendarDate) => {
+    const context = buildAgentDecisionContext({ executionId: "date-reference", feature: "concierge", userRequest: "旅行したい",
+      context: { featureContext: { calendarDate } },
+    }, []);
+    expect(context.featureContext.relativeDates).toBeUndefined();
+  });
+
+  it("retains the full capability contract without duplicating descriptions in prompt context", () => {
+    const description = "能力の説明".repeat(500) + "境界: 未確認情報を断定しない";
+    const context = buildAgentDecisionContext({
+      executionId: "long-tool-description", feature: "concierge", userRequest: "旅を相談したい",
+    }, [{ name: "search_web", description, inputSchema: { type: "object", properties: {}, required: ["query"] } }]);
+    expect(context.availableTools[0]?.description).toBe(description);
+    const prompt = agentDecisionContextText(context);
+    expect(prompt).toContain("search_web");
+    expect(prompt).not.toContain("能力の説明");
+  });
+
   it("retains the question and answer after a long recommendation instead of slicing conversation JSON", () => {
     const previous = [
       { role: "user", text: "静かな場所で休みたい" },

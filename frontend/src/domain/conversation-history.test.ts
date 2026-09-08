@@ -17,6 +17,16 @@ function memoryStorage(initial: Record<string, string> = {}) {
 }
 
 describe("conversation history", () => {
+  it("preserves the provisional origin marker with the conversation route", () => {
+    const storage = memoryStorage();
+    const entry = { messageId: "regional-example", role: "assistant" as const, response: {
+      text: "現地の駅を起点とした仮案です", journeyPlan: {
+        originStation: "神戸", originIsProvisional: true, destinationStation: "大阪", journeys: [],
+      },
+    } };
+    appendConversationHistory(storage, "session", entry);
+    expect(loadConversationHistory(storage, "session")).toEqual([entry]);
+  });
   it("keeps histories separate by conversation session", () => {
     const storage = memoryStorage();
     appendConversationHistory(storage, "session-a", { messageId: "a-1", role: "user", text: "出雲へ行きたい" });
