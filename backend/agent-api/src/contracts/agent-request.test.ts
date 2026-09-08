@@ -6,6 +6,8 @@ import {
   allowedToolNames,
   maximumBodyBytes,
   maximumToolResultJsonCharacters,
+  maximumToolDescriptionCharacters,
+  maximumTotalToolDescriptionCharacters,
   RequestError,
   requestValue,
   validatedMessages,
@@ -134,6 +136,23 @@ describe("Agent API request contract", () => {
     expect(allowedToolNames.has("set_layer_visibility")).toBe(false);
     expect(validatedToolDefinitions({ toolDefinitions: definitions }))
       .toHaveLength(allowedToolNames.size);
+  });
+
+  it("accepts complete descriptions up to 16000 characters without truncation", () => {
+    const description = "あ".repeat(maximumToolDescriptionCharacters - 5) + "境界を保持";
+    const tool = { name: "search_journeys", description, inputSchema: { type: "object", properties: {} } };
+    expect(validatedToolDefinitions({ toolDefinitions: [tool] })?.[0]?.description).toBe(description);
+    expectRequestError(() => validatedToolDefinitions({ toolDefinitions: [{ ...tool, description: description + "あ" }] }), 413);
+  });
+
+  it("rejects excessive total descriptions rather than losing any tool instructions", () => {
+    const definitions = [...allowedToolNames].slice(0, maximumTotalToolDescriptionCharacters / maximumToolDescriptionCharacters)
+      .map((name) => ({ name, description: "あ".repeat(maximumToolDescriptionCharacters), inputSchema: { type: "object", properties: {} } }));
+    expect(validatedToolDefinitions({ toolDefinitions: definitions })).toEqual(definitions);
+    expectRequestError(() => validatedToolDefinitions({ toolDefinitions: [
+      ...definitions,
+      { name: "search_weather_forecast", description: "あ", inputSchema: { type: "object", properties: {} } },
+    ] }), 413);
   });
 
   it("accepts only provider-independent model classes", () => {

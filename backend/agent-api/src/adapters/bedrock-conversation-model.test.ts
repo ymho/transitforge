@@ -1,12 +1,28 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { JsonObject } from "../contracts/agent-request.js";
+import { validatedToolDefinitions } from "../contracts/agent-request.js";
 import {
   BedrockConversationModel,
   validateBedrockModelId,
 } from "./bedrock-conversation-model.js";
 
 describe("BedrockConversationModel", () => {
+  it("relays long validated descriptions to Converse without losing trailing constraints", async () => {
+    const description = "能力と適用条件の説明。".repeat(500) + "境界: 未確認情報を断定しない";
+    const converse = vi.fn(async (_input: JsonObject) => ({
+      output: { message: { role: "assistant", content: [{ text: "確認します" }] } }, stopReason: "end_turn",
+    }));
+    const model = new BedrockConversationModel({ converse }, { modelId: "amazon.nova-lite-v1:0", systemPrompt: "system" });
+    await model.converse({
+      messages: [{ role: "user", content: [{ text: "旅行を相談したい" }] }],
+      tools: validatedToolDefinitions({ toolDefinitions: [{
+        name: "search_journeys", description, inputSchema: { type: "object", properties: {} },
+      }] }),
+    });
+    expect(converse.mock.calls[0]?.[0]).toMatchObject({ toolConfig: { tools: [{ toolSpec: { description } }] } });
+  });
+
   it("allows a measured output budget while retaining provider limits", async () => {
     const converse = vi.fn(async (_input: JsonObject) => ({
       output: { message: { role: "assistant", content: [{ text: "候補の比較と理由".repeat(700) }] } },

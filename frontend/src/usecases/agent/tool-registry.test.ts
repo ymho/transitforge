@@ -63,7 +63,26 @@ describe("AgentToolRegistry", () => {
     expect(registry.descriptors()[0]?.description).toContain("能力: 検証済みの経路");
     expect(registry.descriptors()[0]?.description).toContain("適さない: 宿泊検索");
     expect(registry.descriptors()[0]?.description).toContain("境界: 経路計算はTool");
-    expect(registry.descriptors()[0]?.description.length).toBeLessThanOrEqual(500);
+    expect(registry.descriptors()[0]?.description).toMatch(/境界: 経路計算はTool、推薦はAgent$/u);
+  });
+  it("preserves long capability contracts through their final responsibility boundary", () => {
+    const registry = new AgentToolRegistry();
+    const capability = "検証済みのデータから比較する。".repeat(150);
+    registry.register({
+      ...echoTool(),
+      decisionSupport: {
+        capability,
+        limitations: ["取得できない事実を推測しない"],
+        responsibilityBoundary: "事実計算はTool、選択はAgent",
+      },
+    });
+    const description = registry.descriptors()[0]!.description;
+    expect(description.length).toBeGreaterThan(500);
+    expect(description).toBe(`能力: ${capability}。制約: 取得できない事実を推測しない。境界: 事実計算はTool、選択はAgent`);
+
+    const plainRegistry = new AgentToolRegistry();
+    plainRegistry.register({ ...echoTool(), description });
+    expect(plainRegistry.descriptors()[0]?.description).toBe(description);
   });
   const context = { executionId: "execution-1" };
 

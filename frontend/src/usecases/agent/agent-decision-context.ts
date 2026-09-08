@@ -131,7 +131,7 @@ export function buildAgentDecisionContext(
       })),
     availableTools: tools.slice(0, 40).map((tool) => ({
       name: tool.name,
-      description: bounded(tool.description, 500),
+      description: tool.description,
       requiredInputs: [...(tool.inputSchema.required ?? [])].slice(0, 20),
     })),
   };
