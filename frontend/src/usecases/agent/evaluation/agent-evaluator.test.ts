@@ -13,6 +13,30 @@ import { renderAgentEvaluationMarkdown } from "./evaluation-report";
 const fixtures = fileURLToPath(new URL("../../../../../tests/fixtures/", import.meta.url));
 
 describe("Agent Evaluation Framework", () => {
+  it("accepts only explicitly approved complete alternative Tool sequences", () => {
+    const raw = readJson("agent-eval-cases.json") as { cases: Array<{ expected: Record<string, unknown> }> };
+    raw.cases[0]!.expected.alternativeToolSequences = [["search_web", "search_web"]];
+    const dataset = parseAgentEvaluationDataset(raw);
+    const observations = parseAgentEvaluationObservations(readJson("agent-eval-observations.json"));
+    observations.observations[0]!.toolSequence = ["search_web", "search_web"];
+    expect(evaluateAgentDataset(dataset, observations).cases[0]!.passed).toBe(true);
+    for (const sequence of [["search_web"], ["search_web", "search_web", "search_web"], ["search_web", "ask_follow_up"]]) {
+      observations.observations[0]!.toolSequence = sequence;
+      expect(evaluateAgentDataset(dataset, observations).cases[0]!.passed).toBe(false);
+    }
+    observations.observations[0]!.toolSequence = ["search_web", "search_web"];
+    observations.observations[0]!.claimStatuses = ["unsupported"];
+    expect(evaluateAgentDataset(dataset, observations).cases[0]!.passed).toBe(false);
+  });
+
+  it.each(["search_web", [[null]], Array.from({ length: 5 }, () => ["search_web"]), [Array(9).fill("search_web")]])(
+    "rejects malformed or unbounded alternative sequences: %j", (alternativeToolSequences) => {
+      const raw = readJson("agent-eval-cases.json") as { cases: Array<{ expected: Record<string, unknown> }> };
+      raw.cases[0]!.expected.alternativeToolSequences = alternativeToolSequences;
+      expect(() => parseAgentEvaluationDataset(raw)).toThrow();
+    },
+  );
+
   it("evaluates 42 reproducible cases and reuses known journey scenarios", () => {
     const dataset = parseAgentEvaluationDataset(readJson("agent-eval-cases.json"));
     const observations = parseAgentEvaluationObservations(

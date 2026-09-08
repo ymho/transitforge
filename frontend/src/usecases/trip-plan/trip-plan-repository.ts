@@ -197,6 +197,7 @@ function isTripPlanItem(value: unknown): value is TripPlanItem {
 
 function isJourneyPlan(value: unknown): value is TripJourneyPlan {
   return isRecord(value) && isBoundedString(value.originStation, 100) &&
+    (value.originIsProvisional === undefined || typeof value.originIsProvisional === "boolean") &&
     isBoundedString(value.destinationStation, 100) && Array.isArray(value.journeys);
 }
 

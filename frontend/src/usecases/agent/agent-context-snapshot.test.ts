@@ -49,6 +49,15 @@ const trip: TripPlan = {
 };
 
 describe("agent context snapshot", () => {
+  it("keeps a provisional starting point distinct from the profile", () => {
+    const snapshot = createAgentContextSnapshot(profile, {
+      ...trip, items: [{ id: "example", type: "movement", mode: "rail", route: {
+        originStation: "神戸", originIsProvisional: true, destinationStation: "大阪", journeys: [],
+      } }],
+    });
+    expect(snapshot.profile?.home?.station).toBe("向日町駅");
+    expect(snapshot.trip?.schedule[0]?.originIsProvisional).toBe(true);
+  });
   it("projects only a bounded operational subset of profile and trip", () => {
     const snapshot = createAgentContextSnapshot(profile, trip);
     const encoded = JSON.stringify(snapshot);

@@ -10,6 +10,7 @@ import type {
 } from "./model-provider";
 import {
   invalidAgentToolInput,
+  failedAgentToolResult,
   successfulAgentToolResult,
   validAgentToolInput,
   type AgentTool,
@@ -18,6 +19,69 @@ import { ToolEvidenceRegistry } from "./tool-evidence-registry";
 import { AgentToolRegistry } from "./tool-registry";
 
 describe("MultiStepAgentRuntime", () => {
+  it.each(["precondition_failed", "execution_failed"] as const)("re-evaluates only context-dependent failures after progress: %s", async (code) => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const execute = vi.fn(async () => execute.mock.calls.length === 1
+      ? failedAgentToolResult({ code, message: "必要な資料がありません", retryable: false })
+      : successfulAgentToolResult({ matched: true }));
+    tools.register({
+      name: "resolve_candidate", description: "確認済み資料から照合する",
+      inputSchema: { type: "object", properties: {} },
+      parseInput: () => validAgentToolInput({}), execute,
+    });
+    const requests: AgentModelRequest[] = [];
+    const runtime = new MultiStepAgentRuntime({ tools, toolExecutor, limits: { maxIterations: 6, maxModelCalls: 6 }, model: sequenceModel([
+      toolCallResponse([{ id: "before", name: "resolve_candidate", input: {} }]),
+      toolCallResponse([{ id: "source", name: "first_tool", input: { value: "公開資料" } }]),
+      toolCallResponse([{ id: "after", name: "resolve_candidate", input: {} }]),
+      textResponse("取得できた資料をもとに回答します"),
+    ], requests) });
+    const output = await runtime.run(request("資料を調べて候補を確認して"));
+    expect(execute).toHaveBeenCalledTimes(code === "precondition_failed" ? 2 : 1);
+    expect(output.trace.events).toContainEqual(expect.objectContaining({
+      type: "tool_completed", toolCallId: "after", outcome: code === "precondition_failed" ? "success" : "error",
+    }));
+  });
+
+  it("does not repeat a precondition failure while task context is unchanged", async () => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const execute = vi.fn(async () => failedAgentToolResult({ code: "precondition_failed", message: "先に資料が必要", retryable: false }));
+    tools.register({ name: "resolve_candidate", description: "照合", inputSchema: { type: "object", properties: {} }, parseInput: () => validAgentToolInput({}), execute });
+    const runtime = new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([
+      toolCallResponse([{ id: "first", name: "resolve_candidate", input: {} }]),
+      toolCallResponse([{ id: "duplicate", name: "resolve_candidate", input: {} }]),
+      textResponse("資料が足りません"),
+    ]) });
+    await runtime.run(request("確認して"));
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it("does not unblock a permanent failure on the same tool when another precondition recovers", async () => {
+    const { tools, toolExecutor } = toolSetup([]);
+    tools.register({
+      name: "resolve_candidate", description: "照合", inputSchema: { type: "object", properties: {} },
+      parseInput: (input) => validAgentToolInput(input as Record<string, unknown>),
+      execute: async (input) => failedAgentToolResult({
+        code: input.mode === "missing" ? "precondition_failed" : "execution_failed",
+        message: input.mode === "missing" ? "資料不足" : "アクセス拒否", retryable: false,
+      }),
+    });
+    const requests: AgentModelRequest[] = [];
+    const runtime = new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([
+      toolCallResponse([
+        { id: "missing", name: "resolve_candidate", input: { mode: "missing" } },
+        { id: "denied", name: "resolve_candidate", input: { mode: "denied" } },
+        { id: "denied-again", name: "resolve_candidate", input: { mode: "denied" } },
+      ]),
+      toolCallResponse([{ id: "source", name: "first_tool", input: { value: "公開資料" } }]),
+      textResponse("確認できない情報があります"),
+    ], requests) });
+    await runtime.run(request("資料を確認して"));
+    expect(requests).toHaveLength(3);
+    expect(requests[2]?.tools).toBeDefined();
+    expect(requests[2]?.tools?.map(({ name }) => name)).not.toContain("resolve_candidate");
+  });
+
   it("executes multiple domain tools in order and gives their results back to the model", async () => {
     const executionOrder: string[] = [];
     const { tools, toolExecutor } = toolSetup(executionOrder);

@@ -68,6 +68,22 @@ Tool capability contractは能力 適するケース 適さないケース 返�
 責任境界を記述し Bedrock向けdescriptionへboundedに変換する。入力parserとDomain実装は引き続き
 実行可否と事実計算の正本である。
 
+2026-09-09にTool説明の500文字切り詰めを廃止した。意味のある適用条件や末尾の責務境界を
+文字数に合わせて落とさず、descriptionの全文をConverseへ渡す。Context内の能力一覧も全文を保持するが、
+モデル向けContext JSONには説明を重複させない。API入力の異常な肥大化は1 Tool 16,000文字・
+合計64,000文字で拒否する。超過時は暗黙の切り詰めではなく413エラーとする。
+
+500文字は従来のApplication側の制限であり、[Bedrock ToolSpecification](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent_ToolSpecification.html)
+にその上限はない。文字数による保護とモデルごとのtoken windowは異なるため、会話・Tool結果・
+schema・System Prompt・出力枠を含む全体の余裕は実測usageで評価する。上限まで説明を水増ししない。
+上限撤廃時の全24 Tool説明は合計5,845文字、最長490文字だった。上限撤廃だけでは送信内容を
+変更せず、その後のIssue #365〜#368で説明を充実させた。説明の長さ自体を品質の指標とはしない。
+
+同Issueでは施設の住所から所在地を選ぶ判断はモデルに残し、市＋行政区表記から市単位の
+天気検索への正規化はProvider Adapterで行う。Context Builderは表示暦日からtoday / tomorrow /
+dayAfterTomorrowの参照値を計算するだけで、発話を分類したり旅行日を確定したりしない。
+モデルへ精密な暦日計算やProvider固有の表記制約まで押し付けず、意味解釈と事実処理の境界を保つ。
+
 ### Decision Trace
 
 内部Chain-of-Thoughtは要求 保存 表示しない。Traceには観測可能な判断結果だけを記録する。
@@ -84,6 +100,17 @@ Tool capability contractは能力 適するケース 適さないケース 返�
 初期段階では実際に選択されたToolまたは回答から観測できるDecisionを記録する。
 モデル固有の内部推論を復元しない。将来モデルが外部化可能なDecision Summaryを返す場合も
 別schemaで検証し Traceへ保存する。
+
+### 事実と変更可能な前提（Issue #368）
+
+「事実を作らない」は「利用者に全ての正確な入力を要求する」という意味ではない。
+名称の照合や候補の調査はAgentが引き受け、利用者の選択が必要な条件と分離する。
+明示した仮案では希望地域内の代表駅などを起点として検討できる。モデルが選ぶ仮起点は
+決定論的に時刻表内の駅と照合し、本人の出発駅・自宅・最寄り駅と断定しない。
+`provisionalOriginStation`入力と`originIsProvisional`出力で区別し、UIで適用範囲を明示する。
+既知の出発駅は優先し、仮起点をProfileや確定hard constraintへ昇格させない。
+未知の駅、安全上の条件、未確定の旅行日付・泊数に関する既存の検証は維持する。
+仮起点を地域別の分岐で自動選択するPlannerは追加せず、調査・提案・追加質問の判断はBedrockが担う。
 
 ### Replan
 

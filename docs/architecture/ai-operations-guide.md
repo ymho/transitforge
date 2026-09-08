@@ -208,6 +208,14 @@ npx vitest run frontend/src/usecases/agent/grounded-journey-agent.e2e.test.ts
 
 ## Agent Evaluation
 
+Tool選択は原則として期待する完全な順序と照合する。結果駆動の再調査など、同じ目的を満たす
+複数の実行順序が正当なケースだけは`expected.alternativeToolSequences`に完全な別順序を宣言できる。
+上限は4パターン・各8呼び出しで、prefix・wildcardや任意回数の再試行は許可しない。
+完了状態、制約、Claim、Viewer Actionの採点は別途維持する。空検索のLiveケースは
+1回の検索後に不明を回答する場合と、1回だけ再検索してから回答する場合を区別せず認める。
+期待値変更前の失敗結果を消さず、旧採点との成功率の直接比較はしない。
+2026-09-09の検証は[旅行調査の統合検証](travel-research-integration-verification.md)を参照する。
+
 42ケースの再現可能なobservationを評価し JSONとMarkdown reportを生成する。
 
 ```bash
@@ -276,7 +284,7 @@ Composition Rootやremote transportは別の運用判断として追加する。
 - Agent API本文は2MiB 会話は16 message 各Tool結果は512,000文字を上限とする。外部Providerの完全結果はUIと決定論的処理へ保持し モデルへはboundedなObservationだけを渡す
 - Agent Tool定義は名前のallowlistを正本とし 件数上限を別の固定値で重ねない。拒否ログにはpayloadを含めず検証理由とrequest IDだけを残す
 - モデルが`thinking`や`analysis`の内部推論だけを返した場合は画面へ出さず 同じ実行上限内で利用者向け応答を一度再要求する
-- 同じAgent実行内の同一Tool入力は外部APIへ再送せず、成功済みなら確認済み結果から最終回答へ移る。再試行不可エラーなら結果を再利用してTool除外ポリシーへ渡す
+- 同じAgent実行内の同一Tool入力は外部APIへ再送せず、成功済みなら確認済み結果から最終回答へ移る。再試行不可エラーなら結果を再利用してTool除外ポリシーへ渡す。ただし、`precondition_failed`だけは別Toolの成功後にキャッシュと当該失敗回数を解除し、モデルによる再評価を許す。恒久的なエラーの除外は解除しない（ADR 0031、Issue #367）
 - 再計画上限の直前はToolなしの最終回答フェーズを予約し、収集済みEvidence、不足情報、次の一手を説明する。Evidence validationと全runtime上限はこのフェーズでも維持する
 - 利用者入力をHTMLとして描画しない
 - 会話は端末内のSessionへ保存する。利用者が応答の評価を送信した場合だけ、スポットなどの外部情報を含む評価時点までの会話本文と関連リクエストIDを非公開のフィードバック保存先へ90日間保存する
@@ -316,12 +324,19 @@ Label `area: ai` `type: reliability` Milestone `会話体験と改善ループ` 
 - クライアント契約 通信 レスポンス検証を別モジュールに分ける
 - AI通信は本文と`x-transitforge-request-id`由来のメタデータを組で返す。最新IDをモジュール共有状態へ保存せず 応答ごとに会話履歴へ渡す
 - Agent Runtimeが選べるTool名 説明 入力schemaは各モデル呼び出しでBackendへ渡す。宿泊検索は行き先 チェックイン日 チェックアウト日を必須とし 日付形式 人数 件数をschemaでも制約する
+- 天気検索の地点は確認済み所在地の市区町村名とする。「市＋行政区」の表記はProvider Adapterで市単位へ正規化し、市の予報として返す。施設名から所在地を推測しない。日付なしは7日間、開始日のみは指定日1日、終了日のみは現地の今日から終了日までとし、日付指定と`forecast_days`を併用しない。存在しない日付・逆転した期間・現地の今日から15日後を超える日は予報として補完しない
+- Contextの`featureContext.relativeDates`は表示暦日を基準にtoday / tomorrow / dayAfterTomorrowを決定論的に計算する。どれを使うかはモデルが利用者の入力から選ぶ。旅行日の確定値やhard constraintには追加しない。月末・年末・閏年を暦日として処理し、無効な基準日には参照値を作らない
+- 正確な施設名や駅名を知らない相談は、地域や手掛かりを使った検索から始める。検索で分かることを質問へ置換しない。駅間検索の`provisionalOriginStation`は未確定の起点の例で、収録駅と照合してから使う。結果の`originIsProvisional`を会話と現在旅程へ保持し、自宅からの移動を含まないと表示する。Profileや明示駅は上書きしない
+- Web検索の能力説明には出発地と候補の地域照合、所在地が不明な場合の確認、地域不一致時の再探索、未確認の移動負担を断定しないことを含める。能力説明は末尾の責務境界まで全文を渡す。所在地をコードで推測するrouterや距離別の固定Plannerは追加しない
+- Tool説明の500文字切り詰めは廃止した。APIの入力保護は1 Tool 16,000文字・全Tool合計64,000文字とし、超過は説明を欠落させず413で明示的に拒否する。これはモデルのtoken上限ではない。Tool一覧の説明は`toolConfig`だけへ送り、ContextのJSONには名前と必須入力だけを載せて重複を避ける。会話・Tool結果・schema・System Prompt・出力枠も別途tokenを消費するため、説明枠内であることをモデル全体の上限内という保証には使わない
 - 公開したTool入力schemaの必須値 型 enum 範囲 配列件数 未知propertyは、Viewer AdapterとLive Evalが同じ決定論的validatorで検証する。モデルがschemaに従うことを前提に実行せず、意味上の前提条件は各Domain Tool Adapterで引き続き検証する
 - 共通Tool ContractのJSON SchemaはBedrock AdapterでConverse APIが受け取れる形へ変換し 最上位を`type` `properties` `required`だけに限定する。モデル固有の制約をDomain Toolへ漏らさない
 - Applicationのmodel classは`default` `lightweight` `decision`だけとし Bedrock model IDを漏らさない。未指定またはclass別model未設定時は`MODEL_ID`へフォールバックする。本番Runtimeは発話を分類せず 候補発見、日付と泊数が揃った旅行計画、検証済み`currentTrip`または`currentJourney`がある判断、Tool結果後の再計画で`decision`を使う。不足条件の確認は`default`を使う
 - CIの`eval:agent`は固定Observationを決定的に採点する。モデル判断の実測は`npm run eval:agent:decision:live -- --profile smoke --model-class default`で行い、本番と同じSystem Prompt Viewer Tool capability contract `MultiStepAgentRuntime`を使う。AWS認証と課金を伴うため手動または定期実行とし、出力はGit管理外の`/tmp/raiquora-live-agent-eval`へ保存する
 - Live Evalは目的地の着想、既知条件を聞き直さない質問、日帰り・宿泊、復路変更、曖昧な気分、直前経路の途中駅・制約変更・代替確定、検索結果が空の場合の着地を評価する。通常caseは初期能力選択を測り、結果駆動replan caseだけは事実を含まないversion付きTool結果を返して2回目の能力選択まで測る。評価用Tool結果を旅行事実の代用にはしない
 - Live Evalは非0終了も測定結果として保存する。2026-09-02 baselineはNova Lite Smoke 3/6、Full 4/11であり、決定論的Evalの成功とモデル判断品質を混同しない。失敗caseを通すために発話routerを追加したり期待値を緩めたりせず、descriptor、Context、model候補を同じcaseで比較する
+- 天気・地域不一致の実API再現と反復評価は[天気と候補調査の監査](weather-place-research-audit.md)を参照する。新規地域不一致caseだけは本文fixtureと再検索を評価するため最大4 model calls・90秒を許す。本番limitは変更しない。入力の期待値は実行後のTraceで採点し、判定結果をモデルへ与えない
+- 正確な駅名を要求しない仮案と調査の境界、追加3ケースの反復結果と残課題は[仮案による旅行相談の監査](provisional-planning-audit.md)を参照する。仮起点の存在確認と地理的適切さを区別し、未確認の最寄り駅とは表示しない
 - Live Evalの`--repetitions`は1から10までとし、各反復を独立したAgent実行として評価する。従来の`agent-eval-report`は一度でも失敗したcaseを失敗として保持し、`agent-eval-stability`は反復ごとの全件成功率とcase単位の成功率を別に出す。単発成功を安定した改善とみなさない
 - 2026-09-02の本番相当precondition適用後のNova Lite Smoke 3反復は、目的地写真と直前経路の途中駅だけが全回成功し、stable 2/6、complete attempt 0/3だった。失敗は泊数未確定時の先行検索、直前経路の制約変更、地点検索0件後のWeb再計画に残る。これをIssue #320の反復baselineとし、改善は同じcontractと反復数で比較する
 - model routing比較では各caseのTraceと同じ実行のEval reportから `npm run eval:agent:model-routing:build -- --strategy <name> --report <report.json> --traces <traces.json> --output <run.json>`で`agent-model-routing-run-v1`を作る。単一modelと候補routingのrunを `npm run eval:agent:model-routing -- --baseline <single.json> --candidate <routing.json>`で比較する。出力の`productionRoutingRecommended`は同じdatasetとcase数 品質維持 model/tool call非増加 10%以上の実測latencyまたはtoken改善を同時に要求する

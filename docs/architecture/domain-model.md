@@ -100,6 +100,11 @@
 検索条件と候補を1つにまとめる応答である。日付 `departureDate`と業務日付 `serviceDate`は別の値として
 保持する。除外 必須 種別限定の条件は検索後の表示処理ではなく検索契約として保持する。
 
+会話・旅程側の`TripJourneyPlan`（`modules/trip/domain/travel-plan.ts`）には任意の
+`originIsProvisional`を持てる。trueは現地の駅を例として使った検索であり、本人の出発地や自宅を
+意味しない。時刻表による経路の事実性とは別のメタデータで、会話履歴・旅程保存・Agent Contextへ
+引き継ぐ。未指定は従来互換とし、既知の出発地があるときは仮起点で置き換えない。
+
 ### `JourneySearchService` `search_journeys`
 
 - ドメイン契約: `modules/journey/domain/journey-search-service.ts`

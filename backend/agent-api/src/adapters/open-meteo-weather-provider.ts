@@ -15,6 +15,7 @@ import {
   type WeatherGridQuery,
   type WeatherGridSnapshot,
 } from "@raiquora/trip/weather-grid";
+import { weatherGeocodingLocation } from "./weather-geocoding-location.js";
 
 interface FetchPort {
   fetch(input: string, init?: RequestInit): Promise<Response>;
@@ -29,17 +30,31 @@ export class OpenMeteoWeatherProvider implements WeatherForecastProvider, Weathe
   ) {}
 
   async search(query: WeatherForecastQuery): Promise<ExternalTravelInformation<WeatherForecast>> {
-    const location = query.location.normalize("NFKC").trim().slice(0, 100);
+    const location = weatherGeocodingLocation(query.location).slice(0, 100);
     if (!location) return failedExternalInformation({ code: "invalid_request", message: "場所が必要です", retryable: false });
-    if (outsideForecastRange(query.startDate, this.now()) || outsideForecastRange(query.endDate, this.now())) return failedExternalInformation({ code: "invalid_request", message: "指定日は予報期間外のため判断できません", retryable: false });
+    if (query.startDate !== undefined && !isoDate(query.startDate) ||
+      query.endDate !== undefined && !isoDate(query.endDate) ||
+      query.startDate && query.endDate && query.startDate > query.endDate) {
+      return failedExternalInformation({ code: "invalid_request", message: "予報の日付または期間が不正です", retryable: false });
+    }
     const cacheKey = JSON.stringify({ location, startDate: query.startDate, endDate: query.endDate });
     const cached = this.cache.get(cacheKey);
     if (cached && cached.expiresAt > this.now().getTime()) return cached.value;
     try {
       const place = await this.geocode(location);
-      if (!place) return failedExternalInformation({ code: "invalid_request", message: `${location}の位置を確認できません`, retryable: false });
+      if (!place) return failedExternalInformation({ code: "invalid_request", message: `${location}の位置を確認できません。施設名や都道府県付き住所ではなく、所在地の市区町村名で照会してください。所在地が不明な場合は先に公開情報で確認してください`, retryable: false });
       const retrievedAt = this.now();
-      const url = forecastUrl(place, query);
+      const timeZone = place.timezone === "auto" ? "UTC" : place.timezone;
+      const today = dateInTimeZone(retrievedAt, timeZone);
+      const datedQuery = query.startDate || query.endDate ? {
+        ...query,
+        startDate: query.startDate ?? today,
+        endDate: query.endDate ?? query.startDate,
+      } : query;
+      if (outsideForecastRange(datedQuery.startDate, today) || outsideForecastRange(datedQuery.endDate, today)) {
+        return failedExternalInformation({ code: "invalid_request", message: "指定日は予報期間外のため判断できません。現地の今日から15日後までが照会対象です", retryable: false });
+      }
+      const url = forecastUrl(place, datedQuery);
       const response = await this.http.fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8_000) });
       if (!response.ok) return providerHttpFailure(response.status);
       const value: unknown = await response.json();
@@ -152,12 +167,15 @@ function forecastUrl(place: GeocodedPlace, query: WeatherForecastQuery): string 
     latitude: String(place.latitude),
     longitude: String(place.longitude),
     timezone: place.timezone,
-    forecast_days: "7",
     hourly: "temperature_2m,precipitation_probability,precipitation,weather_code",
     daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum",
   });
-  if (isoDate(query.startDate)) params.set("start_date", query.startDate!);
-  if (isoDate(query.endDate)) params.set("end_date", query.endDate!);
+  if (query.startDate && query.endDate) {
+    params.set("start_date", query.startDate);
+    params.set("end_date", query.endDate);
+  } else {
+    params.set("forecast_days", "7");
+  }
   return `https://api.open-meteo.com/v1/forecast?${params}`;
 }
 
@@ -165,7 +183,7 @@ function weatherForecast(value: unknown, place: GeocodedPlace): WeatherForecast 
   if (!isRecord(value) || !isRecord(value.hourly) || !isRecord(value.daily)) return undefined;
   const h = value.hourly;
   const d = value.daily;
-  const hourly = parallelRows([h.time, h.temperature_2m, h.precipitation_probability, h.precipitation, h.weather_code], 168)
+  const hourly = parallelRows([h.time, h.temperature_2m, h.precipitation_probability, h.precipitation, h.weather_code], 384)
     .flatMap(([time, temperature, probability, precipitation, code]) =>
       typeof time === "string" && number(temperature) && number(probability) && number(precipitation) && number(code)
         ? [{ time, temperatureCelsius: temperature, precipitationProbabilityPercent: probability, precipitationMillimeters: precipitation, weatherCode: code }]
@@ -272,6 +290,7 @@ function parallelRows(values: unknown[], maximum: number): unknown[][] {
 }
 
 function providerHttpFailure<T>(status: number): ExternalTravelInformation<T> {
+  if (status === 400) return failedExternalInformation({ code: "invalid_request", message: "天気Providerが指定条件を受け付けませんでした。日付と都市を確認し、同じ条件を繰り返さず、確認できない予報は不明として案内してください", retryable: false });
   if (status === 429) return failedExternalInformation({ code: "rate_limited", message: "天気Providerの利用上限に達しました", retryable: true });
   if (status === 401 || status === 403) return failedExternalInformation({ code: "unauthorized", message: "天気Providerを利用できません", retryable: false });
   return failedExternalInformation({ code: "unavailable", message: `天気Providerが応答しませんでした (${status})`, retryable: status >= 500 });
@@ -293,7 +312,18 @@ function japaneseDate(value: string): string {
   }).format(new Date(value));
 }
 
-function isoDate(value: string | undefined): boolean { return /^\d{4}-\d{2}-\d{2}$/u.test(value ?? ""); }
-function outsideForecastRange(value: string | undefined, now: Date): boolean { if (!isoDate(value)) return false; const date = Date.parse(`${value}T00:00:00Z`); const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()); return date < today || date > today + 15 * 24 * 60 * 60_000; }
+function isoDate(value: string | undefined): boolean {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const timestamp = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value;
+}
+function dateInTimeZone(now: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}
+function outsideForecastRange(value: string | undefined, today: string): boolean {
+  if (!value) return false;
+  const days = (Date.parse(`${value}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000;
+  return days < 0 || days > 15;
+}
 function number(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value); }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }

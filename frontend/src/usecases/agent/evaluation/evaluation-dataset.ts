@@ -72,12 +72,13 @@ function parseExpectation(value: Record<string, unknown>, index: number): AgentE
   if (!hasOnlyKeys(value, [
     "toolSequence", "constraints", "status", "minimumGroundedClaimRate",
     "maximumUnsupportedClaimRate", "allowedViewerActions", "requiredViewerActions",
-    "decision",
+    "decision", "alternativeToolSequences",
   ]) || !stringList(value.toolSequence, 8) || !isConstraintRecord(value.constraints) ||
     !knownStatuses.has(String(value.status)) ||
     !rate(value.minimumGroundedClaimRate) || !rate(value.maximumUnsupportedClaimRate) ||
     !stringList(value.allowedViewerActions, 10) ||
     !stringList(value.requiredViewerActions, 10) ||
+    value.alternativeToolSequences !== undefined && !validAlternativeSequences(value.alternativeToolSequences) ||
     value.decision !== undefined && !validDecisionExpectation(value.decision)) {
     throw new Error(`Agent Eval case ${index + 1}件目の期待値が不正です`);
   }
@@ -87,6 +88,9 @@ function parseExpectation(value: Record<string, unknown>, index: number): AgentE
   }
   return {
     toolSequence: [...value.toolSequence],
+    ...(value.alternativeToolSequences === undefined ? {} : {
+      alternativeToolSequences: value.alternativeToolSequences.map((sequence) => [...sequence]),
+    }),
     constraints: structuredClone(value.constraints),
     status: value.status as AgentEvaluationExpectation["status"],
     minimumGroundedClaimRate: value.minimumGroundedClaimRate,
@@ -141,6 +145,11 @@ function parseObservation(value: unknown, index: number): AgentEvaluationObserva
       ? {}
       : { decisionUnresolvedFacts: [...value.decisionUnresolvedFacts] }),
   };
+}
+
+function validAlternativeSequences(value: unknown): value is string[][] {
+  return Array.isArray(value) && value.length <= 4 &&
+    value.every((sequence) => stringList(sequence, 8));
 }
 
 function validDecisionExpectation(

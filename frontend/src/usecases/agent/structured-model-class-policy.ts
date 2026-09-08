@@ -20,10 +20,10 @@ function requiresTravelDecision(
   if (request.feature !== "concierge") return false;
   const tripContext = context?.tripContext;
   const hasTripContext = tripContext !== undefined && Object.keys(tripContext).length > 0;
-  const needsDiscovery = context?.travelProfile !== undefined &&
-    context.currentTrip === undefined &&
-    context.currentJourney === undefined &&
-    (!hasTripContext || tripContext?.planningStage === "inspiration");
+  const needsDiscovery = context?.currentTrip === undefined &&
+    context?.currentJourney === undefined &&
+    (tripContext?.planningStage === "inspiration" ||
+      !hasTripContext);
   const readyToPlan = tripContext?.planningStage === "planning" &&
     typeof tripContext.startDate === "string" &&
     typeof tripContext.stayNights === "number";

@@ -8,6 +8,15 @@ import {
 } from "./trip-plan-repository";
 const plan = { version: 1, id: "p", title: "旅", destination: "出雲", updatedAt: "", items: [{ id: "a", type: "sightseeing", place: { name: "出雲大社", provider: "manual" } }] } as TripPlan;
 
+it("preserves a provisional regional origin without converting it to a home location", () => {
+  const storage = memoryStorage();
+  const draft: TripPlan = { ...plan, items: [{ id: "movement", type: "movement", mode: "rail", route: {
+    originStation: "神戸", originIsProvisional: true, destinationStation: "大阪", journeys: [],
+  } }] };
+  saveTripPlan(storage, "session", draft);
+  expect(loadTripPlan(storage, "session")?.items).toEqual(draft.items);
+});
+
 function memoryStorage(initial: Record<string, string> = {}) {
   const values = new Map(Object.entries(initial));
   return {

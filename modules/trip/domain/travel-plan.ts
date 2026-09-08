@@ -8,6 +8,8 @@ export interface TripJourneyPlan {
   departureDate?: string;
   serviceDate?: string;
   originStation: string;
+  /** A regional example starting point, not the user's confirmed departure/home. */
+  originIsProvisional?: boolean;
   destinationStation: string;
   transferPace?: TransferPace;
   rankingPreference?: JourneyRankingPreference;

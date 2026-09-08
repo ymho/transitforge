@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { AwsBedrockConverseClient } from "../backend/agent-api/src/adapters/aws-sdk-clients";
 import { BedrockConversationModel } from "../backend/agent-api/src/adapters/bedrock-conversation-model";
 import { agentSystemPrompt } from "../backend/agent-api/src/usecases/agent-system-prompt";
+import { weatherGeocodingLocation } from "../backend/agent-api/src/adapters/weather-geocoding-location";
 import {
   ConverseModelProvider,
   validateViewerAgentToolPreconditions,
@@ -43,6 +44,9 @@ interface LiveDecisionCase {
   toolOutcomes?: Partial<Record<ViewerAgentToolName, Record<string, unknown>>>;
   expectedToolInputs?: Partial<Record<ViewerAgentToolName, Record<string, unknown>>>;
   terminalTools?: ViewerAgentToolName[];
+  terminalAfterCalls?: number;
+  maxModelCalls?: number;
+  toolInputChecks?: Array<{ toolName: ViewerAgentToolName; callIndex: number; field: string; pattern: string; allowMissing?: boolean; normalization?: "weather-municipality" }>;
 }
 
 const modelClass = parseModelClass(argument("--model-class") ?? "default");
@@ -100,6 +104,7 @@ const traces = [];
 for (let attempt = 1; attempt <= repetitions; attempt += 1) {
   const observations: AgentEvaluationObservation[] = [];
   for (const item of cases) {
+    let completedToolCalls = 0;
     const registry = evaluationToolRegistry(
       item.availableTools,
       item.toolOutcomes,
@@ -115,13 +120,13 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
       toolExecutor: new AgentToolExecutor(registry, new ToolEvidenceRegistry()),
       // 既定は初期能力選択だけを測る。Multi-step caseだけは事実を含まない
       // version付きfixture結果を返し、指定した最終Toolまで結果駆動replanを測る。
-      terminalToolResult: (toolName) => (item.terminalTools ?? item.availableTools)
-        .includes(toolName as ViewerAgentToolName)
+      terminalToolResult: (toolName) => ++completedToolCalls >= (item.terminalAfterCalls ?? 1) &&
+        (item.terminalTools ?? item.availableTools).includes(toolName as ViewerAgentToolName)
         ? `Live Evalで${toolName}の選択を確認しました`
         : undefined,
       // Reserve a final-answer call after the two Tool steps evaluated by replan cases.
       // A two-call budget forces finalization before the second Tool can be selected.
-      limits: { maxIterations: 3, maxModelCalls: 3, maxToolCalls: 3, maxExecutionMs: 60_000 },
+      limits: { maxIterations: item.maxModelCalls ?? 3, maxModelCalls: item.maxModelCalls ?? 3, maxToolCalls: item.maxModelCalls ?? 3, maxExecutionMs: item.maxModelCalls ? 90_000 : 60_000 },
     });
     const result = await runtime.run({
       executionId: `live-eval-${item.evaluation.id}-attempt-${attempt}-${crypto.randomUUID()}`,
@@ -129,7 +134,18 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
       userRequest: item.evaluation.userRequest,
       context: item.context,
     });
-    observations.push(observeAgentRuntimeResult(item.evaluation.id, result));
+    const observation = observeAgentRuntimeResult(item.evaluation.id, result);
+    for (const [index, check] of (item.toolInputChecks ?? []).entries()) {
+      const call = result.trace.events.filter((event) => event.type === "tool_called" && event.toolName === check.toolName)[check.callIndex];
+      const rawValue = call?.type === "tool_called" && isRecord(call.input.value) ? call.input.value[check.field] : undefined;
+      // Evaluate the same effective city-level input the production adapter uses.
+      // Keep the original input in Trace; never feed a grading failure to the model.
+      const value = check.normalization === "weather-municipality" && typeof rawValue === "string"
+        ? weatherGeocodingLocation(rawValue) : rawValue;
+      observation.normalizedConstraints[`tool_input_check_${index}`] = call !== undefined &&
+        (value === undefined && check.allowMissing === true || typeof value === "string" && new RegExp(check.pattern, "u").test(value));
+    }
+    observations.push(observation);
     traces.push(result.trace);
   }
   observationsByAttempt.push(observations);
@@ -258,6 +274,75 @@ function liveDecisionCases(): LiveDecisionCase[] {
   };
   return [
     liveCase({
+      id: "regional-request-without-exact-origin",
+      name: "地域だけの相談を正確な出発地の質問で止めない",
+      userRequest: "大阪市で半日、景色のいい所をのんびり歩きたい。細かい場所はまだ決めていません",
+      tags: ["feedback-regression", "provisional-planning"],
+      expectedTool: "search_web", constraints: {}, requiredHardConstraintKeys: [],
+      context: { featureContext, tripContext: { planningStage: "inspiration" } },
+      availableTools: ["search_web", "search_place_media", "ask_follow_up"],
+      toolInputChecks: [{ toolName: "search_web", callIndex: 0, field: "query", pattern: "大阪" }],
+    }),
+    liveCase({
+      id: "approximate-place-description-discovery",
+      name: "正確な施設名を利用者に答えさせず手掛かりから検索する",
+      userRequest: "名前が思い出せないのですが、神戸の海辺にある赤い塔を見たいです。どんな所ですか",
+      tags: ["feedback-regression", "provisional-planning"],
+      expectedTool: "search_web", constraints: {}, requiredHardConstraintKeys: [],
+      context: { featureContext },
+      availableTools: ["search_web", "ask_follow_up"],
+      toolInputChecks: [{ toolName: "search_web", callIndex: 0, field: "query", pattern: "神戸" }],
+    }),
+    liveCase({
+      id: "regional-provisional-origin-route",
+      name: "未確定の出発駅を現地の仮起点として明示して経路を調べる",
+      userRequest: "駅名は分かりません。神戸市内の代表的な駅を仮の起点にして、明日の朝9時から大阪までの経路を見たいです",
+      tags: ["feedback-regression", "provisional-planning"],
+      expectedTool: "search_direct_routes", constraints: {}, requiredHardConstraintKeys: [],
+      context: { featureContext, tripContext: { planningStage: "planning", destinationWish: "大阪", startDate: "2026-08-31", stayNights: 0 },
+        verifiedFacts: [{ evidenceId: "fixture:station", category: "station", subject: "神戸・大阪", summary: "時刻表に神戸駅、三ノ宮駅、大阪駅を収録。神戸駅と三ノ宮駅は神戸市内の駅。" }],
+      },
+      availableTools: ["search_direct_routes", "search_web", "ask_follow_up"],
+      toolInputChecks: [{ toolName: "search_direct_routes", callIndex: 0, field: "provisionalOriginStation", pattern: "神戸|三ノ宮|三宮|元町" }],
+    }),
+    liveCase({
+      id: "nearby-search-geographic-mismatch",
+      name: "近場検索に別地域が混ざったら地域を照合して再探索する",
+      userRequest: "向日町駅から近場で、のんびり海や自然を感じる旅がしたい",
+      tags: ["multi-tool", "feedback-regression", "geographic-relevance"],
+      expectedTools: ["search_web", "read_web_pages", "search_web"],
+      constraints: {}, requiredHardConstraintKeys: [],
+      context: { featureContext, travelProfile: { ...profile, home: { ...profile.home, area: "京都府向日市" } }, tripContext: { planningStage: "inspiration" } },
+      availableTools: ["search_web", "read_web_pages", "resolve_place_candidates", "search_place_media", "ask_follow_up"],
+      toolOutcomes: { search_web: { webSearch: { status: "available", freshness: "fresh", data: {
+        query: "近場の海と自然",
+        results: [{ title: "宮崎県日向市の海と自然", url: "https://example.com/miyazaki-hyuga", description: "宮崎県日向市にある海岸の散策スポットを紹介する。" }],
+      }, evidence: [] } }, read_web_pages: { webPages: { status: "available", freshness: "fresh", data: {
+        pages: [{ url: "https://example.com/miyazaki-hyuga", title: "宮崎県日向市の海と自然", text: "この記事が紹介する場所はいずれも九州の宮崎県日向市にあります。京都府向日市の紹介ではありません。", contentType: "html", truncated: false, untrustedExternalContent: true }],
+      }, evidence: [] } } },
+      // Search, optional source inspection, and re-search need a fourth call reserved for finalization.
+      maxModelCalls: 4, terminalAfterCalls: 2, terminalTools: ["search_web"],
+      toolInputChecks: [{ toolName: "search_web", callIndex: 1, field: "query", pattern: "京都|関西|向日市" }],
+    }),
+    liveCase({
+      id: "facility-weather-verified-city",
+      name: "施設の天気は確認済み所在地の都市名で照会する",
+      userRequest: "明日の二条城の天気を知りたい",
+      tags: ["information-gap", "feedback-regression", "weather"],
+      expectedTool: "search_weather_forecast", constraints: {}, requiredHardConstraintKeys: [],
+      context: { featureContext, tripContext: { planningStage: "planning", destinationWish: "二条城" },
+        verifiedFacts: [{ evidenceId: "fixture:nijo", category: "place", subject: "二条城", summary: "所在地は京都府京都市中京区。" }],
+      },
+      availableTools: ["search_weather_forecast", "search_web", "search_place_media", "ask_follow_up"],
+      // Score inputs after execution; do not turn an evaluator's expected answer
+      // into a fake Provider error. Omitting dates is a valid seven-day forecast.
+      toolInputChecks: [
+        { toolName: "search_weather_forecast", callIndex: 0, field: "location", pattern: "^京都市$", normalization: "weather-municipality" },
+        { toolName: "search_weather_forecast", callIndex: 0, field: "startDate", pattern: "^2026-08-31$", allowMissing: true },
+        { toolName: "search_weather_forecast", callIndex: 0, field: "endDate", pattern: "^2026-08-31$", allowMissing: true },
+      ],
+    }),
+    liveCase({
       id: "destination-inspiration-first",
       name: "目的地だけなら日程質問より先に場所のEvidenceを調べる",
       userRequest: "出雲大社に行きたい",
@@ -279,6 +364,9 @@ function liveDecisionCases(): LiveDecisionCase[] {
       userRequest: "静かに過ごせる観光先を探したい",
       tags: ["smoke", "ambiguous-request", "feedback-regression"],
       expectedTool: "search_web",
+      // A bounded result-driven re-query is legitimate; do not prescribe a single
+      // fixed plan. More than one re-query or any other Tool still fails.
+      alternativeToolSequences: [["search_web", "search_web"]],
       constraints: {},
       requiredHardConstraintKeys: [],
       context: {
@@ -584,6 +672,7 @@ function liveCase(input: {
   tags: string[];
   expectedTool?: ViewerAgentToolName;
   expectedTools?: ViewerAgentToolName[];
+  alternativeToolSequences?: ViewerAgentToolName[][];
   constraints: Record<string, string | number | boolean | string[]>;
   requiredHardConstraintKeys: string[];
   context: AgentRuntimeContextInput;
@@ -591,6 +680,9 @@ function liveCase(input: {
   toolOutcomes?: LiveDecisionCase["toolOutcomes"];
   expectedToolInputs?: LiveDecisionCase["expectedToolInputs"];
   terminalTools?: ViewerAgentToolName[];
+  terminalAfterCalls?: LiveDecisionCase["terminalAfterCalls"];
+  maxModelCalls?: LiveDecisionCase["maxModelCalls"];
+  toolInputChecks?: LiveDecisionCase["toolInputChecks"];
 }): LiveDecisionCase {
   return {
     evaluation: {
@@ -601,7 +693,8 @@ function liveCase(input: {
       tags: input.tags,
       expected: {
         toolSequence: input.expectedTools ?? (input.expectedTool ? [input.expectedTool] : []),
-        constraints: input.constraints,
+        ...(input.alternativeToolSequences ? { alternativeToolSequences: input.alternativeToolSequences } : {}),
+        constraints: { ...input.constraints, ...Object.fromEntries((input.toolInputChecks ?? []).map((_, index) => [`tool_input_check_${index}`, true])) },
         status: "completed",
         minimumGroundedClaimRate: 0,
         maximumUnsupportedClaimRate: 0,
@@ -618,6 +711,9 @@ function liveCase(input: {
     ...(input.toolOutcomes ? { toolOutcomes: input.toolOutcomes } : {}),
     ...(input.expectedToolInputs ? { expectedToolInputs: input.expectedToolInputs } : {}),
     ...(input.terminalTools ? { terminalTools: input.terminalTools } : {}),
+    ...(input.terminalAfterCalls ? { terminalAfterCalls: input.terminalAfterCalls } : {}),
+    ...(input.maxModelCalls ? { maxModelCalls: input.maxModelCalls } : {}),
+    ...(input.toolInputChecks ? { toolInputChecks: input.toolInputChecks } : {}),
   };
 }
 

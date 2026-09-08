@@ -31,6 +31,8 @@ export interface AgentFeatureContext {
   displayTimeMinutes?: number;
   calendarDate?: string;
   serviceDate?: string;
+  /** Calendar arithmetic only; these references are not selected travel dates. */
+  relativeDates?: { today: string; tomorrow: string; dayAfterTomorrow: string };
 }
 
 export interface AgentVerifiedFactSummary {
@@ -97,7 +99,8 @@ export function buildAgentDecisionContext(
         ? { displayTimeMinutes: input.featureContext.displayTimeMinutes }
         : {}),
       ...(date(input?.featureContext?.calendarDate)
-        ? { calendarDate: input?.featureContext?.calendarDate }
+        ? { calendarDate: input?.featureContext?.calendarDate,
+            ...calendarDateReferences(input?.featureContext?.calendarDate) }
         : {}),
       ...(date(input?.featureContext?.serviceDate)
         ? { serviceDate: input?.featureContext?.serviceDate }
@@ -350,4 +353,13 @@ function finite(value: number | undefined): value is number {
 
 function date(value: string | undefined): boolean {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/u.test(value);
+}
+
+function calendarDateReferences(value: string | undefined): Pick<AgentFeatureContext, "relativeDates"> {
+  if (!date(value)) return {};
+  const timestamp = Date.parse(`${value}T00:00:00Z`);
+  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== value) return {};
+  const dates = [0, 1, 2].map((days) => new Date(timestamp + days * 86_400_000).toISOString().split("T")[0]!);
+  if (!dates.every((item) => date(item))) return {};
+  return { relativeDates: { today: dates[0]!, tomorrow: dates[1]!, dayAfterTomorrow: dates[2]! } };
 }
