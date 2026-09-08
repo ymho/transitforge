@@ -310,6 +310,9 @@ Label `area: ai` `type: reliability` Milestone `会話体験と改善ループ` 
 
 ## 実装の分離
 
+- 会話履歴は直近12件をrole/textの配列として渡し、各発言を最大1,600文字に制限する。JSON全体を単一文字列として500文字で切らない。旧形式は配列へ復元してから発言単位で制限する
+- Agent ContextのJSON上限は24,000文字とし、圧縮時にも直近の応答を残す。Backendの会話text上限は32,000文字、HTTP body全体の上限は従来どおり2 MiBとする。入力と出力のtokens数とは別の境界である
+- Bedrockの出力上限は4,096 tokensとする。Decision Summaryと利用者向け回答が同じ出力枠を使うため、短い枠で途中終了させない。model routing、実行回数、timeout、EvidenceとViewer Actionの検証は変更しない。調査と評価結果は[会話品質監査](conversation-quality-audit.md)を参照する
 - クライアント契約 通信 レスポンス検証を別モジュールに分ける
 - AI通信は本文と`x-transitforge-request-id`由来のメタデータを組で返す。最新IDをモジュール共有状態へ保存せず 応答ごとに会話履歴へ渡す
 - Agent Runtimeが選べるTool名 説明 入力schemaは各モデル呼び出しでBackendへ渡す。宿泊検索は行き先 チェックイン日 チェックアウト日を必須とし 日付形式 人数 件数をschemaでも制約する

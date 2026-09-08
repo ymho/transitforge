@@ -56,6 +56,7 @@ if (profile !== "smoke" && profile !== "full") {
 }
 const strategy = argument("--strategy") ?? `single-${modelClass}`;
 const repetitions = positiveIntegerArgument("--repetitions", 1, 10);
+const maxOutputTokens = positiveIntegerArgument("--max-output-tokens", 4_096, 5_000);
 const outputDirectory = resolve(
   argument("--output-dir") ?? `/tmp/raiquora-live-agent-eval/${strategy}`,
 );
@@ -65,6 +66,7 @@ const cases = liveDecisionCases().filter(({ evaluation }) =>
   (selectedCase === undefined || evaluation.id === selectedCase));
 if (cases.length === 0) throw new Error("対象となるLive Eval caseがありません");
 const model = new BedrockConversationModel(new AwsBedrockConverseClient(), {
+  maxOutputTokens,
   modelId: process.env.MODEL_ID?.trim() || "amazon.nova-lite-v1:0",
   ...(process.env.LIGHTWEIGHT_MODEL_ID?.trim()
     ? { lightweightModelId: process.env.LIGHTWEIGHT_MODEL_ID.trim() }
@@ -117,7 +119,9 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
         .includes(toolName as ViewerAgentToolName)
         ? `Live Evalで${toolName}の選択を確認しました`
         : undefined,
-      limits: { maxIterations: 2, maxModelCalls: 2, maxToolCalls: 2, maxExecutionMs: 60_000 },
+      // Reserve a final-answer call after the two Tool steps evaluated by replan cases.
+      // A two-call budget forces finalization before the second Tool can be selected.
+      limits: { maxIterations: 3, maxModelCalls: 3, maxToolCalls: 3, maxExecutionMs: 60_000 },
     });
     const result = await runtime.run({
       executionId: `live-eval-${item.evaluation.id}-attempt-${attempt}-${crypto.randomUUID()}`,
@@ -160,6 +164,7 @@ await Promise.all([
 ]);
 console.log(
   `Live Agent Decision Eval (${strategy}, ${repetitions}x): ` +
+  `output budget=${maxOutputTokens}, ` +
   `${stability.stableCaseCount}/${stability.caseCount} stable ` +
   `(${outputDirectory})`,
 );
@@ -469,6 +474,28 @@ function liveDecisionCases(): LiveDecisionCase[] {
         },
       },
       availableTools: ["search_web", "search_place_media", "ask_follow_up"],
+    }),
+    liveCase({
+      id: "long-conversation-candidate-reference",
+      name: "長い候補説明の後でも2番目という参照から写真を検索する",
+      userRequest: "2番目の写真を見たい",
+      tags: ["conversation", "feedback-regression"],
+      expectedTool: "search_place_media",
+      constraints: {},
+      requiredHardConstraintKeys: [],
+      context: {
+        featureContext,
+        travelProfile: profile,
+        tripContext: { planningStage: "inspiration" },
+        conversation: { messages: [
+          { role: "user", text: "落ち着いて過ごせる海辺の候補をいくつか比較したい" },
+          { role: "assistant", text: "移動の負担や現地の過ごし方も含めて考えましょう。".repeat(30) },
+          { role: "user", text: "候補を教えて" },
+          { role: "assistant", text: "比較する候補は、1. 天橋立、2. 伊根の舟屋、3. 竹野海岸です。気になる場所はありますか?" },
+        ] },
+      },
+      availableTools: ["search_place_media", "search_web", "ask_follow_up"],
+      expectedToolInputs: { search_place_media: { query: "伊根の舟屋" } },
     }),
     liveCase({
       id: "previous-journey-stops",

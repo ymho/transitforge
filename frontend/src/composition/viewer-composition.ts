@@ -153,7 +153,7 @@ import {
 import { LocalConversationHistoryRepository } from "../adapters/browser/conversation-history-repository";
 import {
   latestJourneyPlanFromHistory,
-  recentConversationContext,
+  recentConversationMessages,
 } from "../domain/conversation-history";
 import { createConversationSessionSwitcher } from "../usecases/concierge/conversation-session-switcher";
 import { createJourneySearchHandlers } from "../usecases/journey/create-journey-search-handlers";
@@ -306,12 +306,10 @@ const currentAgentConversationContext = (prompt: string) => ({
   summary: activeConversationSession.summary,
   resolvedTopics: activeConversationSession.resolvedTopics,
   pendingTopics: activeConversationSession.pendingTopics,
-  relevantMessages: [
-    recentConversationContext(
-      conversationHistoryRepository.list(activeConversationSession.id),
-      prompt,
-    ),
-  ],
+  messages: recentConversationMessages(
+    conversationHistoryRepository.list(activeConversationSession.id),
+    prompt,
+  ),
 });
 updateConciergeIdentity(true);
 document.addEventListener(travelProfileChangedEvent, () =>

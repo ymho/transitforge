@@ -17,6 +17,7 @@ export interface BedrockConverseInvoker {
 
 export interface BedrockConversationOptions {
   modelId: string;
+  maxOutputTokens?: number;
   lightweightModelId?: string;
   decisionModelId?: string;
   systemPrompt: string;
@@ -35,6 +36,10 @@ export class BedrockConversationModel implements ConversationModel {
     private readonly client: BedrockConverseInvoker,
     private readonly options: BedrockConversationOptions,
   ) {
+    if (options.maxOutputTokens !== undefined &&
+      (!Number.isInteger(options.maxOutputTokens) || options.maxOutputTokens < 1 || options.maxOutputTokens > 5_000)) {
+      throw new Error("maxOutputTokens must be an integer between 1 and 5000");
+    }
     for (const modelId of [
       options.modelId,
       options.lightweightModelId,
@@ -65,7 +70,7 @@ export class BedrockConversationModel implements ConversationModel {
           })),
         },
       }),
-      inferenceConfig: { maxTokens: 500, temperature: 0 },
+      inferenceConfig: { maxTokens: this.options.maxOutputTokens ?? 4_096, temperature: 0 },
     };
     const startedAtIso = new Date().toISOString();
     try {

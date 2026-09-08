@@ -19,6 +19,8 @@ export interface AgentKnownPreference {
 
 export interface AgentConversationContext {
   summary?: string;
+  messages?: Array<{ role: "user" | "assistant"; text: string }>;
+  /** Legacy notes; serialized conversations are decoded before bounding. */
   relevantMessages?: string[];
   resolvedTopics?: string[];
   pendingTopics?: string[];
@@ -80,7 +82,7 @@ export interface AgentDecisionContext {
   availableTools: AgentAvailableCapability[];
 }
 
-const maximumContextTextLength = 3_600;
+const maximumContextTextLength = 24_000;
 
 export function buildAgentDecisionContext(
   request: AgentRuntimeRequest,
@@ -146,8 +148,10 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
   const compact = JSON.stringify({
       userRequest: context.userRequest,
       featureContext: context.featureContext,
+      personaInstruction: context.personaInstruction,
       conversation: context.conversation ? {
         summary: context.conversation.summary,
+        messages: context.conversation.messages?.slice(-8),
         relevantMessages: context.conversation.relevantMessages?.slice(-2),
         pendingTopics: context.conversation.pendingTopics,
       } : undefined,
@@ -163,6 +167,11 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
   const core = JSON.stringify({
     userRequest: context.userRequest.slice(0, 1_000),
     featureContext: context.featureContext,
+    personaInstruction: context.personaInstruction,
+    conversation: context.conversation ? {
+      ...context.conversation,
+      messages: context.conversation.messages?.slice(-4),
+    } : undefined,
     tripContext: context.tripContext,
     travelProfile: context.travelProfile,
     currentTrip: compactCurrentTrip(context.currentTrip, 4),
@@ -172,9 +181,24 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     availableTools: context.availableTools.slice(0, 16).map(({ name }) => name),
     contextTruncated: true,
   });
-  const boundedContext = serialized.length <= maximumContextTextLength
-    ? serialized
-    : compact.length <= maximumContextTextLength ? compact : core;
+  const minimal = JSON.stringify({
+    userRequest: context.userRequest,
+    featureContext: context.featureContext,
+    personaInstruction: context.personaInstruction,
+    conversation: context.conversation ? {
+      summary: context.conversation.summary,
+      messages: context.conversation.messages?.slice(-4).map(({ role, text }) => ({ role, text: text.slice(0, 800) })),
+      pendingTopics: context.conversation.pendingTopics,
+    } : undefined,
+    tripContext: context.tripContext ? Object.fromEntries(Object.entries(context.tripContext).slice(0, 20)
+      .map(([key, value]) => [key, Array.isArray(value) ? value.slice(0, 3) : value])) : undefined,
+    knownHardConstraints: context.knownHardConstraints.slice(0, 12),
+    knownSoftPreferences: context.knownSoftPreferences.slice(0, 6),
+    contextTruncated: true,
+  });
+  const boundedContext = [serialized, compact, core, minimal]
+    .find((value) => value.length <= maximumContextTextLength);
+  if (!boundedContext) throw new Error("Agent context exceeds the bounded message budget");
   return [
     "次の構造化Contextを使って利用者の目的と制約を解釈し、必要なEvidenceを得る能力を選択してください。",
     "既知条件は聞き直さず、Tool結果は事実として扱い、推測で補完しないでください。",
@@ -222,9 +246,26 @@ function compactCurrentTrip(
 }
 
 function conversation(value: AgentConversationContext): AgentConversationContext {
+  const messages = [...(value.messages ?? [])];
+  const notes: string[] = [];
+  for (const note of value.relevantMessages ?? []) {
+    try {
+      const entries: unknown = JSON.parse(note);
+      if (Array.isArray(entries)) {
+        for (const entry of entries) {
+          if (entry && (entry.role === "user" || entry.role === "assistant") && typeof entry.text === "string") {
+            messages.push({ role: entry.role, text: entry.text });
+          }
+        }
+        continue;
+      }
+    } catch { /* Plain legacy notes do not require JSON. */ }
+    notes.push(note);
+  }
   return {
     ...(text(value.summary, 800) ? { summary: text(value.summary, 800) } : {}),
-    relevantMessages: texts(value.relevantMessages, 8, 500),
+    messages: messages.slice(-12).map(({ role, text: content }) => ({ role, text: bounded(content, 1_600) })),
+    relevantMessages: texts(notes, 8, 500),
     resolvedTopics: texts(value.resolvedTopics, 12, 120),
     pendingTopics: texts(value.pendingTopics, 12, 120),
   };

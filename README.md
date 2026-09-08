@@ -138,6 +138,9 @@ Live Evalは課金とAWS認証を伴うためCIでは実行せず、結果を`/t
 `--profile full`と`--model-class default|lightweight|decision`を同じdatasetで実行してから
 model routing比較へ渡す。モデルの非決定性を確認するときは`--repetitions 2..10`を指定し、
 `agent-eval-stability.json`でcaseごとの成功率と全反復で成功したcase数を確認する。
+Live Evalの出力上限は本番と同じ4,096 tokensで、比較実験では`--max-output-tokens 500`のように
+指定できる。これは生成量の上限であり、常にその量の出力を要求するものではない。
+会話Contextの保持と評価の限界は[会話品質監査](docs/architecture/conversation-quality-audit.md)を参照する。
 
 ```bash
 aws sso login --profile <aws-profile>

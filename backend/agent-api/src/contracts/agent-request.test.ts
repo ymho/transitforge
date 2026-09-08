@@ -74,8 +74,11 @@ describe("Agent API request contract", () => {
       ],
     });
     expect(messages).toHaveLength(2);
+    expect(validatedMessages({
+      messages: [{ role: "user", content: [{ text: "既知の会話と旅程".repeat(2_000) }] }],
+    })).toHaveLength(1);
     expect(() => validatedMessages({
-      messages: [{ role: "user", content: [{ text: "a".repeat(4_001) }] }],
+      messages: [{ role: "user", content: [{ text: "a".repeat(32_001) }] }],
     })).toThrow(RequestError);
   });
 
