@@ -3,6 +3,7 @@ import type {
   AgentEvaluationReport,
   AgentEvaluationRunReport,
 } from "./evaluation-contract";
+import { renderTravelProgressMarkdown } from "./travel-progress-evaluation";
 
 export function renderAgentEvaluationMarkdown(report: AgentEvaluationReport): string {
   const lines = [
@@ -20,7 +21,7 @@ export function renderAgentEvaluationMarkdown(report: AgentEvaluationReport): st
     "",
     ...renderCaseTable(report),
   ];
-  return `${lines.join("\n")}\n`;
+  return `${lines.join("\n")}\n${report.travelProgress ? renderTravelProgressMarkdown(report.travelProgress) : ""}`;
 }
 
 export function renderAgentEvaluationRunMarkdown(
@@ -61,7 +62,7 @@ export function renderAgentEvaluationRunMarkdown(
     "",
     ...renderCaseTable(report),
   );
-  return `${lines.join("\n")}\n`;
+  return `${lines.join("\n")}\n${report.travelProgress ? renderTravelProgressMarkdown(report.travelProgress) : ""}`;
 }
 
 function renderCategoryTable(report: AgentEvaluationReport): string[] {

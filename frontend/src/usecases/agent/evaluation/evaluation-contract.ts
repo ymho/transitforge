@@ -1,6 +1,8 @@
 import type { AgentRuntimeFeature, AgentRuntimeStatus } from "../runtime-contract";
+import type { TravelProgressReport, TravelProgressScenario } from "./travel-progress-evaluation";
 
 export const agentEvaluationDatasetSchemaVersion = "agent-eval-dataset-v1";
+export const travelProgressDatasetSchemaVersion = "agent-eval-dataset-v2";
 export const agentEvaluationObservationSchemaVersion = "agent-eval-observations-v1";
 
 export const agentEvaluationCategories = [
@@ -16,8 +18,9 @@ export const agentEvaluationCategories = [
 export type AgentEvaluationCategory = typeof agentEvaluationCategories[number];
 
 export interface AgentEvaluationDataset {
-  schemaVersion: typeof agentEvaluationDatasetSchemaVersion;
+  schemaVersion: typeof agentEvaluationDatasetSchemaVersion | typeof travelProgressDatasetSchemaVersion;
   cases: AgentEvaluationCase[];
+  travelProgressScenarios?: TravelProgressScenario[];
 }
 
 export interface AgentEvaluationCase {
@@ -81,8 +84,8 @@ export interface AgentEvaluationCaseResult {
 }
 
 export interface AgentEvaluationReport {
-  schemaVersion: "agent-eval-report-v2";
-  datasetSchemaVersion: typeof agentEvaluationDatasetSchemaVersion;
+  schemaVersion: "agent-eval-report-v3";
+  datasetSchemaVersion: AgentEvaluationDataset["schemaVersion"];
   caseCount: number;
   passedCaseCount: number;
   metrics: {
@@ -95,6 +98,8 @@ export interface AgentEvaluationReport {
   };
   categories: AgentEvaluationCategoryReport[];
   cases: AgentEvaluationCaseResult[];
+  /** Additive multi-response evaluation; never replaces the six grounding/safety metrics. */
+  travelProgress?: TravelProgressReport[];
 }
 
 export interface AgentEvaluationCategoryReport {

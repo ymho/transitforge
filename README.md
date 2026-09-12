@@ -134,6 +134,12 @@ Viewer Actionのカテゴリ別に6指標を出す。失敗したcase IDは`--ca
 戦略実験はsingle pass 結果駆動再計画 常時Reflectionの品質と相対コストを比較する
 
 通常の`eval:agent`は再現可能な保存済みObservationを採点し CIの回帰検知に使う。
+さらに本番Runtimeを通すscripted Ask + Progress（A〜G）と、複数応答の
+[Trip Progress評価](docs/architecture/trip-progress-evaluation.md)（A〜J）を追加実行する。
+TTFC/TTFI・候補選択→draft・質問のみの連続数は構造化された表示成果物から測る。
+SmokeはTrip Progress A/C/G、FullはA〜J。保存済み観測42件の6指標は維持する。
+実モデルで複数応答を測る場合は、既存AWS認証を更新後に
+`npm run eval:agent:decision:live -- --suite trip-progress --profile full`を実行する。
 `eval:agent:decision:live`は本番と同じSystem Prompt Tool capability contract
 `MultiStepAgentRuntime`からBedrockを実際に呼び、意思決定の単一model baselineを測る。
 Live Evalは課金とAWS認証を伴うためCIでは実行せず、結果を`/tmp/raiquora-live-agent-eval`へ保存する。

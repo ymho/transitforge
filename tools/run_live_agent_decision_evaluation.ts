@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { AwsBedrockConverseClient } from "../backend/agent-api/src/adapters/aws-sdk-clients";
@@ -40,6 +40,9 @@ import { createAgentContextSnapshot } from "../frontend/src/usecases/agent/agent
 import { createTrip } from "../modules/trip/domain/trip";
 import type { TripRequest } from "../modules/trip/domain/trip-request";
 import { progressCaseIds, runAskProgressCase } from "../frontend/src/adapters/bedrock/ask-progress-scenarios.fixture";
+import { runTravelProgressScenario } from "../frontend/src/adapters/bedrock/travel-progress-scenarios.fixture";
+import { renderTravelProgressMarkdown } from "../frontend/src/usecases/agent/evaluation/travel-progress-evaluation";
+import { parseAgentEvaluationDataset } from "../frontend/src/usecases/agent/evaluation/evaluation-dataset";
 
 interface LiveDecisionCase {
   evaluation: AgentEvaluationCase;
@@ -70,10 +73,11 @@ const outputDirectory = resolve(
 );
 const selectedCase = argument("--case");
 const progressSuite = argument("--suite") === "ask-progress";
+const tripProgressSuite = argument("--suite") === "trip-progress";
 const cases = liveDecisionCases().filter(({ evaluation }) =>
   (profile === "full" || evaluation.tags.includes("smoke")) &&
   (selectedCase === undefined || evaluation.id === selectedCase));
-if (cases.length === 0 && !progressSuite) throw new Error("対象となるLive Eval caseがありません");
+if (cases.length === 0 && !progressSuite && !tripProgressSuite) throw new Error("対象となるLive Eval caseがありません");
 const model = new BedrockConversationModel(new AwsBedrockConverseClient(), {
   maxOutputTokens,
   modelId: process.env.MODEL_ID?.trim() || "amazon.nova-lite-v1:0",
@@ -105,6 +109,33 @@ const converse: BedrockAgentConverse = async (messages, tools, requestedClass) =
 };
 
 const observationsByAttempt: AgentEvaluationObservation[][] = [];
+if (tripProgressSuite) {
+  const dataset = parseAgentEvaluationDataset(JSON.parse(await readFile(new URL("../tests/fixtures/agent-eval-cases.json", import.meta.url), "utf8")));
+  const scenarios = (dataset.travelProgressScenarios ?? []).filter((s) => selectedCase ? selectedCase === s.id : profile === "full" || s.tags.includes("smoke"));
+  if (!scenarios.length) throw new Error("Unknown Trip Progress case");
+  const results = [];
+  for (let attempt = 1; attempt <= repetitions; attempt++) {
+    for (const scenario of scenarios) {
+      // Same production Runtime and synthetic provider fixtures as scripted evaluation.
+      // The real model receives history and Request; only public structured observations are reported.
+      results.push({ ...await runTravelProgressScenario(scenario, converse), attempt });
+      console.log(`Trip Progress live: ${scenario.id}, attempt ${attempt}`);
+      if (modelFailures.length) break;
+    }
+    if (modelFailures.length) break;
+  }
+  await mkdir(outputDirectory, { recursive: true });
+  await writeFile(`${outputDirectory}/trip-progress-live.json`, JSON.stringify({
+    results, modelFailures: modelFailures.length, incomplete: modelFailures.length > 0,
+    plannedCases: scenarios.map((s) => s.id), repetitions,
+  }, null, 2) + "\n");
+  await writeFile(`${outputDirectory}/trip-progress-live.md`, renderTravelProgressMarkdown(results) +
+    (modelFailures.length ? "\n実モデル呼出し失敗により評価は未完了。認証/Providerの状態を確認して再実行する。\n" : ""));
+  console.log(`Trip Progress live: ${results.filter((r) => r.passed).length}/${results.length} within thresholds (${outputDirectory})`);
+  // Fine turn differences warn, not mandatory CI. Provider failures are an incomplete run, not success.
+  if (modelFailures.length) console.error(modelFailures.join("\n"));
+  process.exit(modelFailures.length || results.some((r) => r.contractFailures.length) ? 1 : 0);
+}
 if (progressSuite) {
   const ids = progressCaseIds.filter((id) => selectedCase ? selectedCase === id : profile === "full" || id === "A-vague" || id === "G-consecutive");
   if (!ids.length) throw new Error("Unknown Ask + Progress case");

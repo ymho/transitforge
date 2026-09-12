@@ -1,0 +1,114 @@
+import { applyTripProposal, type Trip } from "@raiquora/trip/trip";
+import { evaluateTripHardConstraints } from "@raiquora/trip/trip-constraint-evaluation";
+import { proposeCandidateSelection } from "../../usecases/trip-plan/select-trip-candidate";
+import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
+import type { AgentTrace } from "../../usecases/agent/agent-trace";
+import { evaluateTravelProgress, type TravelProgressScenario, type TravelProgressTurn } from "../../usecases/agent/evaluation/travel-progress-evaluation";
+import { askProgressFixture, modelAnswer, modelTool, modelTools, progressQuestion, progressSource, type ProgressCaseId } from "./ask-progress-scenarios.fixture";
+import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent-runtime";
+import type { BedrockAgentResponse } from "../http/agent-api/bedrock-agent";
+
+const fixtureBases: Record<string, ProgressCaseId> = {
+  "A-vague": "A-vague", "B-known-region": "B-known-region", "C-candidate": "C-candidate",
+  "D-known-request": "D-known-request", "E-past": "E-past", "F-hard-unknown": "F-hard-unknown",
+  "G-consecutive": "G-consecutive", "H-day-trip": "C-candidate", "I-multi-day": "C-candidate", "J-refinement": "C-candidate",
+};
+
+/** Synthetic conversations through the production registry, policies, evidence and presenter.
+ * Scripts replace only the model/provider IO; no new production planner or writer.
+ * H/I/J start with the existing verified-candidate seam, not an invented V2 item-creation Tool.
+ */
+export async function runTravelProgressScenario(definition: TravelProgressScenario, live?: BedrockAgentConverse) {
+  const id = definition.id;
+  if (!Object.hasOwn(fixtureBases, id)) throw new Error("Unknown trip progress scenario");
+  const scenario = { ...definition, base: fixtureBases[id]! };
+  const fixture = askProgressFixture(scenario.base);
+  const selectionFixture = askProgressFixture("C-candidate");
+  const selection = selectionFixture.base.candidateSelection!;
+  const record = structuredClone((await selection.port.resolve("candidate-a"))!);
+  const timetables = structuredClone(await selection.port.loadTimetables(record.rail!));
+  // Authored dates/station identities agree with the synthetic request, never a real timetable.
+  record.rail!.legReferences.forEach((ref) => { ref.serviceDate = "2026-09-21"; });
+  timetables.forEach((input) => { input.index.service_date = "2026-09-21"; });
+  record.candidate.accommodations = [{ kind: "accommodation", provider: "fixture", providerItemId: "hotel-a", name: "評価用の森の宿A",
+    checkInDate: "2026-09-21", checkOutDate: "2026-09-24", availability: "unknown" }];
+  record.accommodation = { provider: "fixture", providerItemId: "hotel-a", storageAllowed: true,
+    placeRetention: { origin: "provider", provider: "fixture", storage: "permitted", allowedFields: ["ref", "name", "sources", "capturedAt"] },
+    source: { id: "hotel-evidence", kind: "accommodation", provider: "fixture", sourceId: "hotel-a", retrievedAt: "2026-09-12T07:55:00Z", confidence: "observed" } };
+  const port = { resolve: async (candidateId: string) => candidateId === record.candidate.id ? record : undefined,
+    loadTimetables: async () => timetables };
+  let trip: Trip = scenario.base === "E-past" ? fixture.trip : { ...fixture.trip, items: selectionFixture.trip.items };
+  if (id === "H-day-trip") trip = { ...trip, items: trip.items.filter((i) => i.type === "transport") };
+  const adoption = (candidateId = "candidate-a") => modelTools(modelTool("propose_candidate_selection", { candidateId, itemId: "outbound" }));
+  if (id === "J-refinement") {
+    trip = { ...applyTripProposal(trip, await proposeCandidateSelection(trip,
+      { taskId: "task-a", candidateId: "candidate-a", itemId: "outbound" }, port, "2026-09-12T08:00:00Z")), planningState: "itinerary_refinement" };
+    record.candidate.id = "candidate-b"; record.rail!.candidateId = "candidate-b";
+    record.rail!.verifiedJourneyRef = "task-a/search-2/result-1";
+    record.rail!.journey.legs[0]!.trainNumber = "9M";
+    record.candidate.journey = structuredClone(record.rail!.journey);
+    timetables[0]!.index.trains[0]!.train_no = "9M";
+    timetables[0]!.contentDigest = "sha256:fixture-b";
+    record.rail!.legReferences.forEach((ref) => { ref.contentDigest = "sha256:fixture-b"; });
+  }
+  const original = structuredClone(trip);
+  const research = [...fixture.scripts];
+  if (!["C-candidate", "E-past"].includes(scenario.base)) {
+    // Keep #425's grounded Web decision and add a genuine typed visible candidate result.
+    research.splice(research.length - 1, 0, modelTools(modelTool("search_place_media", { query: "評価用の森の温泉郷", limit: 2 })));
+  }
+  const plan: Array<{ prompt: string; scripts: BedrockAgentResponse[]; selection?: boolean; chooseVisible?: boolean }> = [];
+  if (id === "G-consecutive") plan.push({ prompt: "自然を楽しむ旅行をしたい", scripts: [modelTools(modelTool("ask_follow_up", progressQuestion))] });
+  plan.push({ prompt: scenario.userRequest,
+    scripts: id === "I-multi-day" ? [modelTools(
+      modelTool("propose_candidate_selection", { candidateId: "candidate-a", itemId: "outbound" }, "rail"),
+      modelTool("propose_candidate_selection", { candidateId: "candidate-a", itemId: "stay", accommodation: { provider: "fixture", providerItemId: "hotel-a" } }, "hotel"))] :
+      id === "J-refinement" ? [adoption("candidate-b")] : research,
+    selection: scenario.base === "C-candidate" });
+  if (id === "B-known-region" || id === "D-known-request") {
+    plan.push({ prompt: "提示された候補Aを選びます。具体的な旅程を見たい", scripts: [adoption()], chooseVisible: true });
+  }
+  const turns: TravelProgressTurn[] = [];
+  const history: Array<{ role: "user" | "assistant"; text: string }> = [];
+  const invariantFailures: string[] = [];
+  let repeatedKnownConditionQuestions = 0;
+  for (const step of plan) {
+    let observation: AgentTurnObservation | undefined, trace: AgentTrace | undefined;
+    let calls = 0;
+    const selected = step.selection || step.chooseVisible && turns.some((t) => t.observation?.progress.some((p) => p.kind === "candidates"));
+    const prompt = step.chooseVisible && !selected ? "具体的な候補と旅程のたたき台を見たい" : step.prompt;
+    const response = await runViewerAgentRuntime(prompt, { ...fixture.base,
+      previousAssistantTurn: turns.at(-1)?.observation?.outcome,
+      getConversationContext: () => ({ messages: [...history] }),
+      getCurrentTrip: () => trip,
+      getTravelCandidates: () => [{ id: record.candidate.id, targetItemId: "outbound", label: "評価用候補A/Bの検証済み移動", verified: true,
+        accommodation: { provider: "fixture", providerItemId: "hotel-a", targetItemId: "stay" } }],
+      candidateSelection: { taskId: "task-a", port },
+      searchPlaceMedia: async () => ({ result: { status: "available", freshness: "fresh", evidence: [{ ...progressSource, kind: "place" }],
+        data: { places: [{ providerPlaceId: "candidate-a", name: "候補A・評価用の森の温泉郷", summary: "森林の散策路と温泉を楽しめる架空地域", sourceUrl: "https://example.com/nature", openingHoursStatus: "unknown" }] } } }),
+      onTurnObservation: (value) => { observation = value; }, storeAgentTrace: async (value) => { trace = value; },
+    }, async (...args) => live ? (calls++, live(...args)) : step.scripts[calls++] ?? modelAnswer("検証した内容を案として提示します。"));
+    turns.push({ observation, trace, delivered: true, ...(selected ? { candidateSelected: { targetItemId: "outbound" } } : {}), modelCalls: calls });
+    history.push({ role: "user", text: prompt }, { role: "assistant", text: typeof response === "string" ? response : response.text });
+    const preview = typeof response !== "string" && "tripUpdateProposal" in response ? applyTripProposal(trip, response.tripUpdateProposal) : trip;
+    if (id === "I-multi-day" && !preview.items.some((i) => i.type === "stay" && i.selection.status === "selected")) invariantFailures.push("multi-day: selected stay preview missing");
+    if (id === "J-refinement" && (preview.planningState !== "itinerary_refinement" || JSON.stringify(preview.items) === JSON.stringify(trip.items))) invariantFailures.push("refinement: concrete replacement missing");
+    if (id === "E-past" && (JSON.stringify(preview.request) !== JSON.stringify(original.request) || observation?.progress.length)) invariantFailures.push("past: changed request or false progress");
+    if (id === "F-hard-unknown" && (!evaluateTripHardConstraints(preview).some((c) => c.constraintId === "return-deadline" && c.status === "unknown") || observation?.outcome !== "ask_and_progress")) invariantFailures.push("hard unknown: lost unknown condition or ask_and_progress");
+    const successful = new Set(trace?.events.flatMap((e) => e.type === "tool_completed" && e.outcome === "success" ? [e.toolCallId] : []));
+    for (const event of trace?.events ?? []) {
+      if (event.type !== "tool_called" || event.toolName !== "ask_follow_up" || !successful.has(event.toolCallId)) continue;
+      const input = event.input.value as Record<string, unknown> | undefined;
+      if (scenario.base !== "A-vague" && input && (["origin", "dates"].includes(String(input.requestedRequirement)) || input.expectedInput === "departure-date")) repeatedKnownConditionQuestions++;
+    }
+    if (JSON.stringify(trip) !== JSON.stringify(original)) invariantFailures.push("source Trip was mutated");
+  }
+  const report = evaluateTravelProgress(id, turns, scenario.thresholds, live ? "live" : "scripted");
+  report.repeatedKnownConditionQuestions = repeatedKnownConditionQuestions;
+  if (repeatedKnownConditionQuestions) invariantFailures.push("repeated known Request condition");
+  report.contractFailures = [...new Set(invariantFailures)];
+  report.failures.push(...report.contractFailures);
+  if (report.failures.length && !report.failureReasons.length) report.failureReasons.push("unknown");
+  report.passed = report.failures.length === 0;
+  return report;
+}

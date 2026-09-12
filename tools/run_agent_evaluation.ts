@@ -10,8 +10,9 @@ import {
   runAgentEvaluationProfile,
   selectAgentEvaluationCase,
 } from "../frontend/src/usecases/agent/evaluation/evaluation-run";
-import type { AgentEvaluationProfile } from "../frontend/src/usecases/agent/evaluation/evaluation-contract";
+import type { AgentEvaluationProfile, AgentEvaluationRunReport } from "../frontend/src/usecases/agent/evaluation/evaluation-contract";
 import { progressCaseIds, runAskProgressCase } from "../frontend/src/adapters/bedrock/ask-progress-scenarios.fixture";
+import { runTravelProgressScenario } from "../frontend/src/adapters/bedrock/travel-progress-scenarios.fixture";
 
 const root = resolve(import.meta.dirname, "..");
 const outputDirectory = resolve(argument("--output-dir") ?? "/tmp/transitforge-agent-eval");
@@ -29,7 +30,7 @@ const selectedCaseId = argument("--case");
 const selection = selectedCaseId === undefined
   ? { dataset: parsedDataset, observations: parsedObservations }
   : selectAgentEvaluationCase(parsedDataset, parsedObservations, selectedCaseId);
-const report = {
+const report: AgentEvaluationRunReport = {
   ...runAgentEvaluationProfile(selection.dataset, selection.observations, profile),
   ...(selectedCaseId === undefined ? {} : { selectedCaseId }),
 };
@@ -43,6 +44,11 @@ for (const id of progressCases) {
     toolCalls: result.trace?.events.filter((e) => e.type === "tool_called").length });
 }
 if (askProgress.some((item) => item.failures.length)) report.passed = false;
+report.travelProgress = [];
+for (const scenario of selectedCaseId ? [] : (parsedDataset.travelProgressScenarios ?? []).filter((s) => profile === "full" || s.tags.includes("smoke"))) {
+  report.travelProgress.push(await runTravelProgressScenario(scenario));
+}
+if (report.travelProgress.some((r) => !r.passed)) report.passed = false;
 await mkdir(outputDirectory, { recursive: true });
 await Promise.all([
   writeFile(
@@ -63,6 +69,7 @@ console.log(
   `(${outputDirectory})`,
 );
 console.log(`Ask + Progress (production runtime / scripted model): ${askProgress.filter((c) => !c.failures.length).length}/${askProgress.length} passed`);
+console.log(`Trip Progress (response-level / scripted): ${report.travelProgress.filter((c) => c.passed).length}/${report.travelProgress.length} passed`);
 if (!report.passed) process.exitCode = 1;
 
 function argument(name: string): string | undefined {
