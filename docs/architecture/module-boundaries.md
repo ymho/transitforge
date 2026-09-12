@@ -14,7 +14,6 @@ Issue #203で採用した次期構成と段階移行は[ADR 0037](../decisions/0
 frontend/src/
   domain/          鉄道 運行 経路 旅行のモデルと決定論的な規則
   usecases/        Agent Viewer 旅程のユースケースとPort
-  features/        Concierge設定など画面へ渡す機能固有データ
   adapters/        Browser HTTP Bedrock Mapbox Storageの実装
   presentation/    機能別View CSS Mapbox Three.js描画
   composition/     外部実装 View Usecaseの依存組成

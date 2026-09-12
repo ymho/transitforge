@@ -57,5 +57,6 @@ npm run eval:agent:full
 terraform fmt -check -recursive infra/terraform
 ```
 
-大容量の追跡対象はコンシェルジュ画像だけであり asset検査の対象とする。
+監査当時の大容量の追跡対象はコンシェルジュ画像だけであり asset検査の対象だった。
+2026-09-12の[ADR 0051](../decisions/0051-retire-concierge-personas.md)で画像と専用検査を廃止した。
 生成したViewer Lambda bundle Terraform成果物 report secret credentialは追跡しない。

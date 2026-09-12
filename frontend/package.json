@@ -5,9 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run assets:check && tsc --noEmit && vite build",
-    "test": "TMPDIR=/tmp vitest run --root .. frontend/src modules",
-    "assets:check": "node --import tsx ../tools/check_concierge_assets.ts"
+    "build": "tsc --noEmit && vite build",
+    "test": "TMPDIR=/tmp vitest run --root .. frontend/src modules"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

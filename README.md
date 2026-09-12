@@ -18,7 +18,7 @@ Agentic Transit Intelligence
 - 天候と時間帯に応じた表示
 - 気象庁の公式防災情報と駅から目的地までの徒歩 車移動 飲食店候補
 - コンシェルジュによる列車検索 到着検索 直通または乗換3回までの経路検索
-- 旅行プロフィールに応じたコンシェルジュの選定 アバター表示 口調の切り替え
+- 旅行プロフィールの出発地 同行者 好みに基づく個別の旅行提案
 - UUIDで分けた会話セッションと端末内の旅程 継続的な好みの保存
 - 新しい会話の開始と端末内に保存した過去の会話へのページ再読み込みを伴わない切り替え
 - チャットと分離した移動 滞在 観光の旅程編集
@@ -84,7 +84,6 @@ modules/journey/     経路条件 候補 比較 直通検索の共有Domain
 modules/trip/        旅行候補 費用 Profile TripContext 旅程の共有Domain
 frontend/src/domain/          Viewerと端末内状態に閉じた決定論的な契約と計算
 frontend/src/usecases/        ユースケースと外部境界のPort
-frontend/src/features/        Concierge設定など画面へ渡す機能固有データ
 frontend/src/adapters/        ブラウザ HTTP Mapbox Bedrockへの接続
 frontend/src/presentation/    画面機能ごとのView CSS Three.js描画
 frontend/src/composition/     Viewerの依存組成
@@ -112,7 +111,6 @@ TypeScriptのテストは対象モジュールの隣へ置く。repository保守
 ```bash
 npm run architecture:check
 npm run workspace:check
-npm run assets:check
 npm test
 npm run build
 python3 -m unittest discover -s tests -v
