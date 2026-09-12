@@ -169,7 +169,6 @@
 .map-place-detail-section p,
 .map-place-detail-section ul { margin: 0; color: var(--glass-text); font-size: .8rem; line-height: 1.75; }
 .map-place-detail-section ul { display: grid; gap: .4rem; padding-left: 1.15rem; }
-.map-place-detail[data-loading]::after { position: sticky; bottom: .75rem; left: 50%; z-index: 3; display: block; width: max-content; margin: 0 auto .75rem; padding: .45rem .75rem; border: 1px solid var(--glass-border); border-radius: 999px; color: var(--glass-muted); background: var(--glass-surface-strong); box-shadow: 0 .4rem 1rem rgb(15 23 42 / 12%); content: "詳細を調べています…"; font-size: .68rem; font-weight: 700; backdrop-filter: var(--glass-backdrop); }
 .map-place-detail-sources { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
 .map-place-detail-sources a { color: var(--glass-accent); font-size: .7rem; font-weight: 700; }
 .map-place-detail-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }

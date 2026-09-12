@@ -26,6 +26,12 @@ export interface MapPlaceCardModel {
 
 export interface MapPlaceExplorerController {
   show(candidates: readonly MapTravelCandidate[]): void;
+  showPending(options: {
+    name: string;
+    choose: () => void;
+    load: () => Promise<readonly MapTravelCandidate[]>;
+    onLoaded: (candidates: readonly MapTravelCandidate[]) => void;
+  }): void;
   select(providerPlaceId: string, focusMap?: boolean): void;
   clear(): void;
 }
@@ -114,6 +120,8 @@ export function configureMapPlaceExplorer(options: {
 }): MapPlaceExplorerController {
   let candidatesById = new Map<string, MapTravelCandidate>();
   let detailRequest = 0;
+  const loadedDetails = new Set<string>();
+  const inFlightDetails = new Map<string, Promise<MapTravelCandidate>>();
 
   const select = (providerPlaceId: string, focusMap = true) => {
     const card = Array.from(options.list.querySelectorAll<HTMLElement>("[data-place-id]"))
@@ -130,16 +138,24 @@ export function configureMapPlaceExplorer(options: {
   };
 
   const showPlaceDetail = async (candidate: MapTravelCandidate) => {
+    const request = ++detailRequest;
     const model = mapTravelCandidateCardModels([candidate])[0];
     if (!model) return;
-    options.detailContent.replaceChildren(renderPlaceDetail(model, () => options.choose(candidate)));
+    const needsDetail = !!options.loadDetail && candidate.kind === "place" && !loadedDetails.has(candidate.id);
+    options.detailContent.replaceChildren(renderPlaceDetail(model, () => options.choose(candidate), needsDetail));
     options.detail.hidden = false;
-    if (!options.loadDetail || candidate.kind !== "place") return;
-    const request = ++detailRequest;
-    options.detail.dataset.loading = "true";
+    options.detail.setAttribute("aria-busy", String(needsDetail));
+    if (!needsDetail) return;
+    let pending: Promise<MapTravelCandidate> | undefined;
     try {
-      const detailed = await options.loadDetail(candidate);
+      pending = inFlightDetails.get(candidate.id);
+      if (!pending) {
+        pending = options.loadDetail!(candidate);
+        inFlightDetails.set(candidate.id, pending);
+      }
+      const detailed = await pending;
       if (request !== detailRequest || options.detail.hidden) return;
+      loadedDetails.add(candidate.id);
       candidatesById.set(candidate.id, detailed);
       const detailedModel = mapTravelCandidateCardModels([detailed])[0];
       if (detailedModel) {
@@ -147,19 +163,27 @@ export function configureMapPlaceExplorer(options: {
           renderPlaceDetail(detailedModel, () => options.choose(detailed)),
         );
       }
+    } catch {
+      if (request === detailRequest && !options.detail.hidden) {
+        options.detailContent.replaceChildren(renderPlaceDetail(model, () => options.choose(candidate)));
+      }
     } finally {
-      if (request === detailRequest) delete options.detail.dataset.loading;
+      if (pending && inFlightDetails.get(candidate.id) === pending) inFlightDetails.delete(candidate.id);
+      if (request === detailRequest) options.detail.setAttribute("aria-busy", "false");
     }
   };
 
   const closeDetail = () => {
     detailRequest += 1;
     options.detail.hidden = true;
+    options.detail.setAttribute("aria-busy", "false");
     options.detailContent.replaceChildren();
   };
 
   const reset = () => {
     candidatesById.clear();
+    loadedDetails.clear();
+    inFlightDetails.clear();
     options.list.replaceChildren();
     options.panel.hidden = true;
     closeDetail();
@@ -173,22 +197,52 @@ export function configureMapPlaceExplorer(options: {
   options.close.addEventListener("click", clear);
   options.closeDetail.addEventListener("click", closeDetail);
 
+  const show = (candidates: readonly MapTravelCandidate[]) => {
+    reset();
+    const models = mapTravelCandidateCardModels(candidates);
+    const heading = options.panel.querySelector("header strong");
+    if (heading) {
+      const kind = candidates[0]?.kind;
+      heading.textContent = kind === "accommodation"
+        ? "宿泊先候補"
+        : kind === "restaurant" ? "食事候補" : "地図で見つけたスポット";
+    }
+    candidatesById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+    for (const model of models) {
+      options.list.append(renderPlaceCard(model, () => select(model.id)));
+    }
+    options.panel.hidden = models.length === 0;
+  };
+
   return {
-    show(candidates) {
+    show,
+    showPending(pending) {
       reset();
-      const models = mapTravelCandidateCardModels(candidates);
-      const heading = options.panel.querySelector("header strong");
-      if (heading) {
-        const kind = candidates[0]?.kind;
-        heading.textContent = kind === "accommodation"
-          ? "宿泊先候補"
-          : kind === "restaurant" ? "食事候補" : "地図で見つけたスポット";
-      }
-      candidatesById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
-      for (const model of models) {
-        options.list.append(renderPlaceCard(model, () => select(model.id)));
-      }
-      options.panel.hidden = models.length === 0;
+      options.clearPlaces?.();
+      const request = ++detailRequest;
+      // This preview is UI-only: it does not invent a Provider Place ID or Evidence.
+      const preview = { name: pending.name, images: [], categories: [], primaryLabel: "旅程を考える" };
+      options.detailContent.replaceChildren(renderPlaceDetail(preview, pending.choose, true));
+      options.detail.hidden = false;
+      options.detail.setAttribute("aria-busy", "true");
+      void Promise.resolve().then(() => request === detailRequest ? pending.load() : []).then((candidates) => {
+        if (request !== detailRequest || options.detail.hidden) return;
+        if (candidates.length === 0) {
+          options.detailContent.replaceChildren(renderPlaceDetail(preview, pending.choose));
+          return;
+        }
+        show(candidates);
+        // The initial request already researched these candidates; selection must not repeat it.
+        candidates.forEach((candidate) => loadedDetails.add(candidate.id));
+        pending.onLoaded(candidates);
+        select(candidates[0]!.id, false);
+      }).catch(() => {
+        if (request === detailRequest && !options.detail.hidden) {
+          options.detailContent.replaceChildren(renderPlaceDetail(preview, pending.choose));
+        }
+      }).finally(() => {
+        if (request === detailRequest) options.detail.setAttribute("aria-busy", "false");
+      });
     },
     select,
     clear,
@@ -196,8 +250,9 @@ export function configureMapPlaceExplorer(options: {
 }
 
 function renderPlaceDetail(
-  place: MapPlaceCardModel,
+  place: Omit<MapPlaceCardModel, "id" | "sourceUrl" | "sources" | "image" | "kind">,
   consult: () => void,
+  pending = false,
 ): HTMLElement {
   const article = document.createElement("article");
   article.className = "map-place-detail-article";
@@ -273,7 +328,7 @@ function renderPlaceDetail(
   appendDetailSection(editorial, "現地の雰囲気", place.detail?.atmosphere ? [place.detail.atmosphere] : undefined);
   appendDetailSection(editorial, "知っておくと便利", place.detail?.tips);
   appendDetailSection(editorial, "周辺で立ち寄れる場所", place.detail?.nearby);
-  if (editorial.childElementCount === 0) {
+  if (editorial.childElementCount === 0 && !pending) {
     const unavailable = document.createElement("p");
     unavailable.className = "map-place-detail-summary";
     unavailable.textContent = "詳しい解説は現在確認できませんでした。";
@@ -281,7 +336,7 @@ function renderPlaceDetail(
   }
   if (editorial.childElementCount > 0) {
     body.append(editorial);
-    requestAnimationFrame(() => typewriteText(editorial));
+    typewriteText(editorial);
   }
 
   const actions = document.createElement("div");
@@ -304,7 +359,7 @@ function renderPlaceDetail(
   return article;
 }
 
-function renderPlaceGallery(place: MapPlaceCardModel): HTMLElement {
+function renderPlaceGallery(place: Pick<MapPlaceCardModel, "images" | "name">): HTMLElement {
   const gallery = document.createElement("div");
   gallery.className = "map-place-detail-gallery";
   const track = document.createElement("div");

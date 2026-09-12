@@ -64,7 +64,7 @@ function displayModeElements(
   const simulationOnlyControls = [toggle, currentTimeButton, button(), button(), button()];
   const realtimeOnlyControls = [button()];
   return {
-    app: { dataset: {} } as HTMLElement,
+    app: { dataset: { mapFocusMode: "true" } } as unknown as HTMLElement,
     dateTimeInput,
     currentTimeButton,
     toggle,

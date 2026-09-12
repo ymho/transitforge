@@ -49,12 +49,7 @@ export function renderDisplayMode(
   }
   elements.toggle.disabled = !realtimeAvailable;
   elements.toggle.ariaPressed = String(digitalTwinMode);
-  for (const button of elements.realtimeModeButtons ?? []) {
-    button.ariaPressed = String(digitalTwinMode);
-  }
-  for (const button of elements.dateTimeModeButtons ?? []) {
-    button.ariaPressed = String(!digitalTwinMode);
-  }
+  renderSidebarMapModeSelection(elements);
   if (!realtimeAvailable) {
     elements.toggle.ariaLabel = "リアルタイム情報がないため日時指定シミュレーター";
     elements.toggle.title = "リアルタイム情報がないため日時指定シミュレーター";
@@ -65,6 +60,27 @@ export function renderDisplayMode(
     elements.toggle.ariaLabel = "リアルタイム運行状況へ切り替え";
     elements.toggle.title = "日時指定シミュレーター";
   }
+}
+
+type SidebarMapModeElements = Pick<DisplayModeElements, "app" | "realtimeModeButtons" | "dateTimeModeButtons">;
+
+/** Navigation selection is independent of the map's background data mode. */
+export function renderSidebarMapModeSelection(elements: SidebarMapModeElements): void {
+  const fullscreenMap = elements.app.dataset.mapFocusMode === "true";
+  for (const button of elements.realtimeModeButtons ?? []) {
+    button.ariaPressed = String(fullscreenMap && elements.app.dataset.displayMode === "digital-twin");
+  }
+  for (const button of elements.dateTimeModeButtons ?? []) {
+    button.ariaPressed = String(fullscreenMap && elements.app.dataset.displayMode === "simulation");
+  }
+}
+
+export function configureSidebarMapModeSelection(elements: SidebarMapModeElements): () => void {
+  const render = () => renderSidebarMapModeSelection(elements);
+  const observer = new MutationObserver(render);
+  observer.observe(elements.app, { attributes: true, attributeFilter: ["data-map-focus-mode", "data-display-mode"] });
+  render();
+  return () => observer.disconnect();
 }
 
 export function configureDestinationArcs(
