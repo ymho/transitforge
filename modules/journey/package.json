@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./transfer-time": "./domain/transfer-time.ts",
     ".": "./domain/index.ts",
     "./direct-route-search": "./domain/direct-route-search.ts",
     "./journey-comparison-service": "./domain/journey-comparison-service.ts",

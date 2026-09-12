@@ -1,4 +1,5 @@
 import type { JourneySearchLeg, JourneySearchRequest, JourneySearchResponse } from "./journey-search-service";
+import { requiredTransferMinutes } from "./transfer-time";
 
 export interface JourneyOperation { delayMinutes: number; destination: string; sources: string[]; }
 export interface JourneySearchRuntimeInput { index: Record<string, unknown>; delays?: Record<string, number>; operations?: Record<string, JourneyOperation>; realtimeRouteTime?: number; }
@@ -190,7 +191,7 @@ function delaysFor(services: SearchService[], legacy: Record<string, number>, op
 }
 
 function operationFor(service: SearchService, operations: Record<string, JourneyOperation>): JourneyOperation | undefined { return operations[service.trainNumber] ?? (service.serviceType.includes("関空快速") && service.trainNumber.endsWith("M") && operations[service.trainNumber.slice(0, -1)]?.sources.includes("osakaloop") ? operations[service.trainNumber.slice(0, -1)] : undefined); }
-function transferMinutes(station: string, context: SearchContext): number { const rule = Object.entries(context.stationTransferMinutes).find(([name]) => normalizeStation(name) === normalizeStation(station)); const base = rule?.[1] ?? context.defaultTransferMinutes; const result = context.request.transferPace === "hurried" ? Math.max(2, Math.round(base * .7 * 10) / 10) : context.request.transferPace === "relaxed" ? Math.max(2, base + 5) : Math.max(2, base); if (rule) context.trace.stationTransferRulesUsed[station] = result; return result; }
+function transferMinutes(station: string, context: SearchContext): number { const rule = Object.entries(context.stationTransferMinutes).find(([name]) => normalizeStation(name) === normalizeStation(station)); const base = rule?.[1] ?? context.defaultTransferMinutes; const result = requiredTransferMinutes(base, context.request.transferPace); if (rule) context.trace.stationTransferRulesUsed[station] = result; return result; }
 function excluded(service: SearchService, request: JourneySearchRequest): boolean { return (request.excludedServiceTypes ?? []).some((v) => equal(service.serviceType, v)) || (request.excludedTrainNames ?? []).some((v) => trainNameMatches(service.trainName, v)) || (request.excludedTrainNumbers ?? []).some((v) => equal(service.trainNumber, v)) || (request.excludedServiceUids ?? []).some((v) => equal(service.serviceUid, v)); }
 function allowed(service: SearchService, request: JourneySearchRequest): boolean { return !request.allowedServiceTypes?.length || request.allowedServiceTypes.some((v) => equal(service.serviceType, v)); }
 function requirementsSatisfied(legs: JourneySearchLeg[], request: JourneySearchRequest): boolean { return (request.requiredServiceTypes ?? []).every((v) => legs.some((leg) => equal(leg.serviceType, v))) && (request.requiredTrainNames ?? []).every((v) => legs.some((leg) => trainNameMatches(leg.trainName, v))) && (request.requiredTrainNumbers ?? []).every((v) => legs.some((leg) => equal(leg.trainNumber, v))); }

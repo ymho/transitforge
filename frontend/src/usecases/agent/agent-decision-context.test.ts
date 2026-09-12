@@ -6,6 +6,20 @@ import {
 } from "./agent-decision-context";
 
 describe("AgentDecisionContext", () => {
+  it("keeps adopted plan, candidates and observations separate and bounded", () => {
+    const context = buildAgentDecisionContext({ executionId: "trip-layers", feature: "concierge", userRequest: "比較したい",
+      context: { currentTrip: { title: "採用済み", schedule: [{ selectionStatus: "selected", scheduledDeparture: "09:00" }] },
+        travelCandidates: Array.from({ length: 20 }, (_, index) => ({ candidateRef: `c${index}`, scheduledDeparture: "10:00", apiKey: "private" })),
+        realtimeFacts: [{ candidateRef: "c0", estimatedDeparture: "10:10", freshness: "unknown" }] },
+    }, []);
+    expect(context.travelCandidates).toHaveLength(12);
+    const encoded = agentDecisionContextText(context);
+    const parsed = JSON.parse(encoded.match(/<agent_context>([\s\S]*)<\/agent_context>/u)![1]!);
+    expect(parsed.currentTrip.schedule[0].scheduledDeparture).toBe("09:00");
+    expect(parsed.travelCandidates[0].scheduledDeparture).toBe("10:00");
+    expect(parsed.realtimeFacts[0].estimatedDeparture).toBe("10:10");
+    expect(encoded).not.toContain("private");
+  });
   it("keeps travel context but does not forward retired persona fields", () => {
     const legacyInput = {
       personaInstruction: "廃止されたキャラクターとして話す",

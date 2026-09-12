@@ -1,8 +1,11 @@
 import type { UserProfile } from "@raiquora/trip/travel-profile";
 import { travelPreferenceLabels } from "@raiquora/trip/travel-profile";
 import type { TripPlan, TripPlanItem } from "@raiquora/trip/trip-plan";
+import type { Trip } from "@raiquora/trip/trip";
 
 export interface AgentContextSnapshot {
+  travelCandidates?: Record<string, unknown>[];
+  realtimeFacts?: Record<string, unknown>[];
   profile?: {
     home?: { station?: string; area?: string; carAvailable: boolean };
     companions: string[];
@@ -23,7 +26,8 @@ export interface AgentContextSnapshot {
 }
 
 export interface AgentTripScheduleItem {
-  type: TripPlanItem["type"];
+  type: TripPlanItem["type"] | "transport";
+  selectionStatus?: "selected" | "unresolved" | "unselected";
   originIsProvisional?: boolean;
   summary: string;
   date?: string;
@@ -48,11 +52,12 @@ const childAgeLabels: Record<string, string> = {
 
 export function createAgentContextSnapshot(
   profile?: UserProfile,
-  trip?: TripPlan,
+  trip?: TripPlan | Trip,
 ): AgentContextSnapshot {
   return {
     ...(profile ? { profile: profileSnapshot(profile) } : {}),
-    ...(trip ? { trip: tripSnapshot(trip) } : {}),
+    ...(trip ? "schemaVersion" in trip ? { trip: selectedTripSnapshot(trip) }
+      : { trip: tripSnapshot(trip), ...legacyCandidateSnapshot(trip) } : {}),
   };
 }
 
@@ -132,17 +137,53 @@ function scheduleItem(item: TripPlanItem): AgentTripScheduleItem {
       date: item.date,
     };
   }
-  const journey = item.route.journeys[0];
   return {
     type: item.type,
+    selectionStatus: "unresolved",
     ...(item.route.originIsProvisional ? { originIsProvisional: true } : {}),
-    summary: `${bounded(item.route.originStation, 80) ?? "出発駅"}→${bounded(item.route.destinationStation, 80) ?? "到着駅"}（鉄道${journey ? ` 乗換${journey.transferCount}回` : ""}）`,
+    summary: `${bounded(item.route.originStation, 80) ?? "出発駅"}→${bounded(item.route.destinationStation, 80) ?? "到着駅"}（鉄道・経路未採用）`,
     date: item.route.departureDate,
-    ...(journey ? {
-      departureTimeMinutes: journey.departureTimeMinutes,
-      arrivalTimeMinutes: journey.arrivalTimeMinutes,
-    } : {}),
   };
+}
+
+function legacyCandidateSnapshot(trip: TripPlan): Pick<AgentContextSnapshot, "travelCandidates" | "realtimeFacts"> {
+  const travelCandidates: Record<string, unknown>[] = [];
+  const realtimeFacts: Record<string, unknown>[] = [];
+  trip.items.slice(0, 24).forEach((item, index) => {
+    const itemRef = `legacy-item-${index + 1}`;
+    if (item.type === "movement" && item.mode === "rail") {
+      item.route.journeys.slice(0, 3).forEach((journey, candidateIndex) => {
+        const candidateRef = `${itemRef}-route-${candidateIndex + 1}`;
+        travelCandidates.push({ itemRef, candidateRef, kind: "rail", selectionStatus: "not-adopted",
+          originStation: bounded(item.route.originStation, 80), destinationStation: bounded(item.route.destinationStation, 80),
+          serviceDate: item.route.serviceDate, transferCount: journey.transferCount,
+          // Legacy aggregate times can be realtime-adjusted: never project them as planned schedule.
+          scheduledDepartureTimeMinutes: journey.legs[0]?.scheduledDepartureTimeMinutes,
+          scheduledArrivalTimeMinutes: journey.legs.at(-1)?.scheduledArrivalTimeMinutes });
+        realtimeFacts.push({ candidateRef, kind: "search-time-estimate", freshness: "unknown",
+          departureTimeMinutes: journey.departureTimeMinutes, arrivalTimeMinutes: journey.arrivalTimeMinutes });
+      });
+    } else if (item.type === "stay") {
+      item.options?.slice(0, 5).forEach((option, candidateIndex) => travelCandidates.push({
+        itemRef, candidateRef: `${itemRef}-stay-${candidateIndex + 1}`, kind: "stay",
+        name: bounded(option.name, 100), checkInDate: option.checkInDate, checkOutDate: option.checkOutDate,
+      }));
+    }
+  });
+  return { travelCandidates, realtimeFacts };
+}
+
+function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["trip"]> {
+  return { title: bounded(trip.title, 100) ?? "現在の旅程", destination: "未設定", considerations: [],
+    schedule: trip.items.slice(0, 24).map((item) => {
+      if (item.type === "stay") return { type: "stay", selectionStatus: item.selection.status,
+        summary: bounded(item.selection.status === "selected" ? item.selection.accommodation.place.name : item.title, 100) ?? "宿泊" };
+      if (item.detail.status === "unresolved") return { type: "transport", summary: bounded(item.title, 100) ?? "移動", selectionStatus: "unresolved" };
+      const journey = item.detail.journey;
+      return { type: "transport", selectionStatus: "selected",
+        summary: `${bounded(journey.legs[0]!.origin.name, 80)}→${bounded(journey.legs.at(-1)!.destination.name, 80)}（計画 ${journey.legs[0]!.scheduledDeparture.at} → ${journey.legs.at(-1)!.scheduledArrival.at}）`,
+        date: journey.serviceDate };
+    }) };
 }
 
 function bounded(value: string | undefined, maximum: number): string | undefined {

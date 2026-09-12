@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import type { UserProfile } from "@raiquora/trip/travel-profile";
 import type { TripPlan } from "@raiquora/trip/trip-plan";
 import { createAgentContextSnapshot } from "./agent-context-snapshot";
+import { createTrip } from "@raiquora/trip/trip";
+import { selectRailJourney } from "@raiquora/trip/selected-rail-journey";
+import { railSelectionFixture } from "../../../../modules/trip/domain/selected-rail-journey.fixture";
 
 const profile: UserProfile = {
   version: 2,
@@ -49,6 +52,18 @@ const trip: TripPlan = {
 };
 
 describe("agent context snapshot", () => {
+  it("projects V2 adopted schedule without search results or realtime fields", () => {
+    const { candidate, inputs, selectedAt } = railSelectionFixture();
+    const current = createTrip("11111111-1111-4111-8111-111111111111", "選択済み旅", selectedAt, [{
+      id: "selected", type: "transport", title: "移動", detail: { status: "selected", mode: "rail", journey: selectRailJourney(candidate, inputs, selectedAt) },
+    }]);
+    const snapshot = createAgentContextSnapshot(undefined, current);
+    expect(snapshot.trip?.schedule[0]).toMatchObject({ selectionStatus: "selected", date: "2026-09-13" });
+    expect(snapshot.trip?.schedule[0]?.summary).toContain("2026-09-13T00:00:00.000Z");
+    expect(snapshot.travelCandidates).toBeUndefined();
+    expect(snapshot.realtimeFacts).toBeUndefined();
+    expect(JSON.stringify(snapshot)).not.toContain("delay");
+  });
   it("keeps a provisional starting point distinct from the profile", () => {
     const snapshot = createAgentContextSnapshot(profile, {
       ...trip, items: [{ id: "example", type: "movement", mode: "rail", route: {
@@ -64,14 +79,16 @@ describe("agent context snapshot", () => {
     expect(snapshot.profile?.home?.station).toBe("向日町駅");
     expect(snapshot.profile?.favoriteInterests).toEqual(["自然", "歴史", "海", "温泉", "食"]);
     expect(snapshot.trip?.schedule[0]).toEqual(expect.objectContaining({
-      summary: "向日町→出雲市（鉄道 乗換2回）",
-      departureTimeMinutes: 480,
-      arrivalTimeMinutes: 720,
+      summary: "向日町→出雲市（鉄道・経路未採用）",
+      selectionStatus: "unresolved",
     }));
     expect(encoded).not.toContain("private-trip-id");
     expect(encoded).not.toContain("private-item-id");
     expect(encoded).not.toContain("updatedAt");
     expect(encoded).not.toContain("coordinate");
     expect(encoded).not.toContain("bookingUrl");
+    expect(snapshot.trip?.schedule[0]?.departureTimeMinutes).toBeUndefined();
+    expect(snapshot.travelCandidates?.[0]).toMatchObject({ kind: "rail", selectionStatus: "not-adopted" });
+    expect(snapshot.realtimeFacts?.[0]).toMatchObject({ kind: "search-time-estimate", freshness: "unknown", departureTimeMinutes: 480 });
   });
 });

@@ -11,6 +11,11 @@ const journey: JourneyRouteResult = {
 };
 
 describe("travel candidate", () => {
+  it("allows discovery before a rail journey has been found", () => {
+    const candidate = createTravelCandidate({ id: "discovery" });
+    expect(candidate.journey).toBeUndefined();
+    expect(candidate.accommodations).toEqual([]);
+  });
   it("宿泊と体験だけを旅行費用へ合計し 鉄道運賃を含めない", () => {
     const candidate = createTravelCandidate({
       id: "kyoto-izumo-20260816",

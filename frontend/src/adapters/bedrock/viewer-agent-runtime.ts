@@ -349,6 +349,8 @@ export async function runViewerAgentRuntime(
       tripContext: decisionTripContext(travelFacts.context),
       ...(contextSnapshot.profile ? { travelProfile: contextSnapshot.profile } : {}),
       ...(contextSnapshot.trip ? { currentTrip: contextSnapshot.trip } : {}),
+      travelCandidates: contextSnapshot.travelCandidates,
+      realtimeFacts: contextSnapshot.realtimeFacts,
       ...(currentJourney ? { currentJourney } : {}),
       verifiedFacts: verifiedPlaces.map((place) => ({
         evidenceId: `place:${place.providerPlaceId}`,
