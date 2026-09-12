@@ -92,6 +92,7 @@ import { effectiveTripConstraints } from "@raiquora/trip/trip-request";
 import { evaluateTripHardConstraints } from "@raiquora/trip/trip-constraint-evaluation";
 import { applyTripProposal, type Trip } from "@raiquora/trip/trip";
 import { activityPreview } from "../../usecases/trip-plan/activity-preview";
+import { transportPreview } from "../../usecases/trip-plan/transport-preview";
 import { tripPartyView } from "../../usecases/trip-plan/trip-party-presentation";
 import { assessTripTime } from "@raiquora/trip/trip-temporal";
 import { AgentToolRegistry } from "../../usecases/agent/tool-registry";
@@ -329,10 +330,8 @@ export async function runViewerAgentRuntime(
       const preview = applyTripProposal(currentTrip, progressState.proposal);
       responseText = [responseText, progressState.proposal.summary,
         tripPartyView(preview)?.text,
-        ...progressState.proposal.patches.flatMap((p) => p.type !== "replace" && p.type !== "add" ? [] : p.item.type === "activity" ? [activityPreview(p.item)] : [
+        ...progressState.proposal.patches.flatMap((p) => p.type !== "replace" && p.type !== "add" ? [] : p.item.type === "activity" ? [activityPreview(p.item)] : p.item.type === "transport" ? [transportPreview(p.item)] : [
           `${p.item.title}（${p.item.schedule.type === "unscheduled" ? "時間未定" : p.item.schedule.type === "day" ? p.item.schedule.date : "計画時刻あり"}）`,
-          ...(p.item.type === "transport" && p.item.detail.status === "selected" ? p.item.detail.journey.legs.map((leg) =>
-            `${leg.origin.name} → ${leg.destination.name}：${leg.scheduledDeparture.at} 発 → ${leg.scheduledArrival.at} 着（${leg.trainNumber}・計画時刻）`) : []),
           ...(p.item.type === "stay" && p.item.selection.status === "selected" ? [p.item.selection.accommodation.place.name] : []),
         ]),
         ...preview.request.assumptions.filter((a) => a.status === "unconfirmed").map((a) => `⚠ 仮置き: ${a.text}`),

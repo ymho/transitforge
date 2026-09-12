@@ -52,6 +52,18 @@ function evaluate(requirement: TripRequirement, items: readonly ItineraryItem[])
       for (const item of items) {
         if (item.type !== "transport") continue;
         if (item.detail.status !== "selected") { missing = true; continue; }
+        if (item.detail.mode !== "rail") {
+          const arrival = requirement.type === "arrive_by";
+          const place = arrival ? item.detail.destination : item.detail.origin;
+          if (!place.ref || place.ref.provider === "manual" || (!place.ref.providerPlaceId && !place.ref.canonicalKey)) {
+            missing = true; continue; // Cannot exclude this unknown endpoint from the requested place.
+          }
+          if (samePlaceIdentity(place.ref, requirement.place.ref)) {
+            const instant = item.schedule.type === "fixed" ? (arrival ? item.schedule.endAt : item.schedule.startAt) : undefined;
+            if (instant) times.push(Date.parse(instant.at)); else missing = true;
+          }
+          continue;
+        }
         for (const leg of item.detail.journey.legs) {
           const arrival = requirement.type === "arrive_by";
           if (samePlaceIdentity((arrival ? leg.destination : leg.origin).ref, requirement.place.ref)) {
@@ -66,26 +78,30 @@ function evaluate(requirement: TripRequirement, items: readonly ItineraryItem[])
     case "mobility": {
       const movements = items.filter((item) => item.type === "transport");
       if (!movements.length) return "unknown";
-      return combine(movements.map((item) => {
+      const required: ConstraintEvaluationStatus = requirement.requiredModes === undefined ? "satisfied" :
+        requirement.requiredModes.every((mode) => movements.some((item) => item.detail.status === "selected" && item.detail.mode === mode)) ? "satisfied" :
+          movements.some((item) => item.detail.status === "unresolved") ? "unknown" : "violated";
+      return combine([required, ...movements.map((item) => {
         if (item.detail.status !== "selected") return "unknown";
-        const journey = item.detail.journey;
-        const minutes = (Date.parse(journey.legs.at(-1)!.scheduledArrival.at) - Date.parse(journey.legs[0]!.scheduledDeparture.at)) / 60_000;
+        const journey = item.detail.mode === "rail" ? item.detail.journey : undefined;
+        const minutes = item.schedule.type === "fixed" && item.schedule.endAt ?
+          (Date.parse(item.schedule.endAt.at) - Date.parse(item.schedule.startAt.at)) / 60_000 : undefined;
         return combine(Object.entries(requirement).filter(([key, value]) => key !== "type" && value !== undefined).map(([key]) => {
           switch (key as keyof MobilityRequirement) {
-            case "maxTransfers": return journey.transfers.length <= requirement.maxTransfers! ? "satisfied" : "violated";
-            case "maxTravelMinutes": return minutes <= requirement.maxTravelMinutes! ? "satisfied" : "violated";
-            case "modes": return requirement.modes!.includes("rail") ? "satisfied" : "violated";
-            case "excludedModes": return requirement.excludedModes!.includes("rail") ? "violated" : "satisfied";
-            case "requiredModes": return requirement.requiredModes!.every((mode) => mode === "rail") ? "satisfied" : "violated";
-            case "excludedServiceUids": return journey.legs.some((leg) => requirement.excludedServiceUids!.includes(leg.serviceUid)) ? "violated" : "satisfied";
-            case "excludedTrainNumbers": return journey.legs.some((leg) => requirement.excludedTrainNumbers!.includes(leg.trainNumber)) ? "violated" : "satisfied";
-            case "requiredTrainNumbers": return requirement.requiredTrainNumbers!.every((number) => journey.legs.some((leg) => leg.trainNumber === number)) ? "satisfied" : "violated";
-            case "transferPace": return journey.provenance.transferPace === requirement.transferPace ? "satisfied" : "unknown";
+            case "maxTransfers": return !journey ? "unknown" : journey.transfers.length <= requirement.maxTransfers! ? "satisfied" : "violated";
+            case "maxTravelMinutes": return minutes === undefined ? "unknown" : minutes <= requirement.maxTravelMinutes! ? "satisfied" : "violated";
+            case "modes": return requirement.modes!.includes(item.detail.mode!) ? "satisfied" : "violated";
+            case "excludedModes": return requirement.excludedModes!.includes(item.detail.mode!) ? "violated" : "satisfied";
+            case "requiredModes": return required;
+            case "excludedServiceUids": return !journey ? "unknown" : journey.legs.some((leg) => requirement.excludedServiceUids!.includes(leg.serviceUid)) ? "violated" : "satisfied";
+            case "excludedTrainNumbers": return !journey ? "unknown" : journey.legs.some((leg) => requirement.excludedTrainNumbers!.includes(leg.trainNumber)) ? "violated" : "satisfied";
+            case "requiredTrainNumbers": return !journey ? "unknown" : requirement.requiredTrainNumbers!.every((number) => journey.legs.some((leg) => leg.trainNumber === number)) ? "satisfied" : "violated";
+            case "transferPace": return journey?.provenance.transferPace === requirement.transferPace ? "satisfied" : "unknown";
             // Ranking, car availability, names/service types are not established by this snapshot.
             default: return "unknown";
           }
         }));
-      }));
+      })]);
     }
     // Natural-language experiences and unimplemented fact comparisons must never count as proven.
     default: return "unknown";

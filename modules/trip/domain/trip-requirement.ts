@@ -4,13 +4,13 @@ import { validatePlaceSnapshot, type PlaceSnapshot } from "./place-snapshot";
 import { validateTimeZone, validateZonedInstant, type LocalDate, type ZonedInstant } from "./itinerary-schedule";
 import { exactKeys, validDate } from "./snapshot-validation";
 import { travelPreferenceLabels, type TravelPreference, type TripContext } from "./travel-profile";
-import type { MovementMode } from "./trip-plan";
+import { transportModes, type TransportMode } from "./transport-detail";
 
 export interface DateRange { readonly earliest: LocalDate; readonly latest: LocalDate; }
 export const railRequirementFields = ["excludedServiceTypes", "excludedTrainNames", "excludedTrainNumbers", "excludedServiceUids",
   "requiredServiceTypes", "requiredTrainNames", "requiredTrainNumbers", "allowedServiceTypes"] as const;
 export type MobilityRequirement = { readonly type: "mobility"; readonly maxTravelMinutes?: number;
-  readonly modes?: readonly MovementMode[]; readonly excludedModes?: readonly MovementMode[]; readonly requiredModes?: readonly MovementMode[];
+  readonly modes?: readonly TransportMode[]; readonly excludedModes?: readonly TransportMode[]; readonly requiredModes?: readonly TransportMode[];
   readonly carAvailable?: boolean } & Readonly<Partial<JourneySearchPreferences>> &
   Readonly<Pick<JourneySearchRequest, typeof railRequirementFields[number]>>;
 
@@ -65,7 +65,7 @@ export function validateTripRequirement(value: TripRequirement): void {
       for (const field of railRequirementFields) if (value[field] !== undefined) stringList(value[field]!);
       for (const modes of [value.modes, value.excludedModes, value.requiredModes]) if (modes !== undefined) {
         stringList(modes);
-        if (modes.some((mode) => !["rail", "rental-car", "car", "bus", "walk", "other"].includes(mode))) throw new Error("Invalid transport mode");
+        if (modes.some((mode) => !transportModes.includes(mode))) throw new Error("Invalid transport mode");
       }
       if (value.requiredModes?.some((mode) => value.excludedModes?.includes(mode) || (value.modes !== undefined && !value.modes.includes(mode)))) throw new Error("Conflicting transport modes");
       return;

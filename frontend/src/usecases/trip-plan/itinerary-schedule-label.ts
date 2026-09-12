@@ -1,7 +1,7 @@
 import { validateItinerarySchedule, type ItinerarySchedule, type ZonedInstant } from "@raiquora/trip/itinerary-schedule";
 
 /** Shared response projection, independent of today's date, browser timezone, DOM and legacy UI. */
-export function itineraryScheduleLabel(schedule: ItinerarySchedule): string {
+export function itineraryScheduleLabel(schedule: ItinerarySchedule, includeStartDate = false): string {
   validateItinerarySchedule(schedule);
   if (schedule.type === "unscheduled") return "時間未定";
   if (schedule.type === "day") {
@@ -11,7 +11,7 @@ export function itineraryScheduleLabel(schedule: ItinerarySchedule): string {
   }
   const start = schedule.type === "fixed" ? schedule.startAt : schedule.earliestStart;
   const end = schedule.type === "fixed" ? schedule.endAt : schedule.latestEnd;
-  const showDates = end !== undefined && start.at.slice(0, 10) !== end.at.slice(0, 10);
+  const showDates = includeStartDate || end !== undefined && start.at.slice(0, 10) !== end.at.slice(0, 10);
   const showYear = end !== undefined && start.at.slice(0, 4) !== end.at.slice(0, 4);
   const endpoint = (instant: ZonedInstant): string => `${showDates ? `${dayLabel(instant.at.slice(0, 10), showYear)} ` : ""}${instant.at.slice(11, 16)}`;
   const span = `${endpoint(start)}${end ? `〜${endpoint(end)}` : "（終了時刻未定）"}`;

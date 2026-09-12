@@ -6,6 +6,8 @@ import { proposeTripRequestUpdate } from "../trip-plan/update-trip-request";
 import { proposeManualActivity, proposeActivitySelection, type ActivitySelectionPort, type ActivityPlacement } from "../trip-plan/propose-trip-activity";
 import { activityCategories, type ActivityCategory } from "@raiquora/trip/trip";
 import type { ItinerarySchedule } from "@raiquora/trip/itinerary-schedule";
+import { nonRailTransportModes, type NonRailTransportMode } from "@raiquora/trip/transport-detail";
+import { proposeManualTransport, proposeTransportSelection, type TransportSelectionPort } from "../trip-plan/propose-trip-transport";
 import { AgentToolRegistry } from "./tool-registry";
 import { validateAgentToolInput } from "./agent-tool-input-validator";
 import { successfulAgentToolResult, failedAgentToolResult, type AgentToolDescriptor } from "./tool-contract";
@@ -14,6 +16,7 @@ export interface TripProgressDependencies {
   getCurrentTrip?: () => Trip | undefined;
   candidateSelection?: { taskId: string; port: CandidateSelectionPort };
   activitySelection?: { taskId: string; port: ActivitySelectionPort };
+  transportSelection?: { taskId: string; port: TransportSelectionPort };
 }
 export interface TripProgressOutput {
   proposal?: TripUpdateProposal;
@@ -32,6 +35,20 @@ const activityScheduleSchema = { type: "object", description: "既存ItinerarySc
     earliestStart: zonedInstantSchema, latestEnd: zonedInstantSchema, durationMinutes: { type: "integer", minimum: 0 },
     date: { type: "string" }, endDate: { type: "string" }, timeZone: { type: "string" } }, required: ["type"], additionalProperties: false };
 export const tripProgressDescriptors: AgentToolDescriptor[] = [
+  {
+    name: "propose_manual_transport",
+    description: "タクシー・徒歩・航空・フェリー等の手入力の移動予定を同じTripへadd/replaceする案。便未定や時刻未定でもmodeと両端の名称を保ち、day/window/unscheduledで質問と併用できる。Provider検索結果の採用や鉄道の検証には使わない。Provider ID・Evidence・保持許諾は入力不可。selectedは旅程へ採用する予定の意味で予約済みではない。仮定は既存propose_request_assumptionsで併記できる。scheduleが時刻の唯一の正本。新規itemIdはadd、既存ID変更はreplace、afterIdはaddのみ。previewだけで保存しない。",
+    inputSchema: { type: "object", properties: { ...activityPlacementProperties, mode: { type: "string", enum: [...nonRailTransportModes] },
+      title: { type: "string", minLength: 1, maxLength: 200 }, origin: { type: "string", minLength: 1, maxLength: 200 },
+      destination: { type: "string", minLength: 1, maxLength: 200 }, schedule: activityScheduleSchema },
+    required: ["itemId", "operation", "title", "mode", "origin", "destination", "schedule"], additionalProperties: false },
+  },
+  {
+    name: "propose_transport_selection",
+    description: "提示済みの非鉄道候補IDを解決して移動予定へ採用する案。モデルは候補IDと配置だけを指定し、便・Provider ID・Evidence・許諾・scheduleを供給しない。ApplicationがTrip/task/期限/同定/保存権限を検証し、採用可能な場所と計画日程だけをpreviewする。曖昧/未検証/保持不可候補は拒否する。価格・空席・予約URL・遅延は保存しない。採用は予約ではない。新規はadd、他候補への変更は同itemIdのreplace。",
+    inputSchema: { type: "object", properties: { ...activityPlacementProperties, candidateId: { type: "string", minLength: 1, maxLength: 160 } },
+      required: ["itemId", "operation", "candidateId"], additionalProperties: false },
+  },
   {
     name: "propose_manual_activity",
     description: "手入力の食事・観光・自由時間等の予定を同じTripへadd/replaceする案を作る。未配置でも提案でき、質問と併用可能。categoryは予定の意味分類。Provider事実・施設・予約の証明には使わず、検索済み施設は候補採用能力を使う。place/Evidence/保持許諾を受け取らない。新規は新itemIdとadd、既存変更は同itemIdとreplace。afterIdはaddでのみ既存予定の直後を指定、省略時は末尾。仮定は既存propose_request_assumptionsでmodel/unconfirmedとして併記できる。Domainが日時とPatchを検証し、previewのみで保存しない。",
@@ -86,6 +103,7 @@ export function registerTripProgressTools(registry: AgentToolRegistry, dependenc
     if (descriptor.name !== "present_travel_progress" && !dependencies.getCurrentTrip?.()) continue;
     if (descriptor.name === "propose_candidate_selection" && !dependencies.candidateSelection) continue;
     if (descriptor.name === "propose_activity_selection" && !dependencies.activitySelection) continue;
+    if (descriptor.name === "propose_transport_selection" && !dependencies.transportSelection) continue;
     registry.register<Record<string, unknown>, unknown>({ ...descriptor,
       parseInput: (value) => validateAgentToolInput(descriptor.inputSchema, value),
       async execute(input) {
@@ -108,7 +126,15 @@ export function registerTripProgressTools(registry: AgentToolRegistry, dependenc
           // This is a validated preview, never another persistent Trip state.
           const trip = state.proposal ? applyTripProposal(originalTrip, state.proposal) : originalTrip;
           let proposal: TripUpdateProposal;
-          if (descriptor.name === "propose_manual_activity" || descriptor.name === "propose_activity_selection") {
+          if (descriptor.name === "propose_manual_transport" || descriptor.name === "propose_transport_selection") {
+            const placement: ActivityPlacement = { itemId: input.itemId as string, operation: input.operation as ActivityPlacement["operation"],
+              ...(input.afterId !== undefined ? { afterId: input.afterId as string } : {}) };
+            if (descriptor.name === "propose_manual_transport") proposal = proposeManualTransport(trip, placement,
+              { title: input.title as string, mode: input.mode as NonRailTransportMode, origin: input.origin as string,
+                destination: input.destination as string, schedule: input.schedule as ItinerarySchedule });
+            else proposal = await proposeTransportSelection(trip, placement, { candidateId: input.candidateId as string,
+              taskId: dependencies.transportSelection!.taskId }, dependencies.transportSelection!.port, now().toISOString());
+          } else if (descriptor.name === "propose_manual_activity" || descriptor.name === "propose_activity_selection") {
             const placement: ActivityPlacement = { itemId: input.itemId as string, operation: input.operation as ActivityPlacement["operation"],
               ...(input.afterId !== undefined ? { afterId: input.afterId as string } : {}) };
             if (descriptor.name === "propose_manual_activity") proposal = proposeManualActivity(trip, placement,

@@ -8,6 +8,7 @@ import type { TripRequest, TripConstraint, PlanAssumption } from "./trip-request
 import { travelPreferenceLabels, type TravelPreference, type AdventureRisk } from "./travel-profile";
 import type { PlanningState } from "./trip-state";
 import { validateTripParty, validatePartyComposition, type TripParty } from "./trip-party";
+import type { TransportDetail } from "./transport-detail";
 
 export interface TripMigrationWarning {
   itemId?: string;
@@ -65,10 +66,25 @@ export function convertLegacyTripPlan(plan: TripPlan, identity: { tripId: string
     }
     if (item.type === "movement") {
       const rail = item.mode === "rail";
+      let detail: TransportDetail = { status: "unresolved" };
+      if (rail) {
+        detail = { mode: "rail", status: "unresolved" };
+        warnings.push({ itemId: item.id, code: "rail-selection-unverified", ownerIssue: 385 });
+      } else if (["rental-car", "car", "bus", "walk", "other"].includes(item.mode) && nonemptyText(item.origin) && nonemptyText(item.destination)) {
+        detail = { status: "selected", mode: item.mode,
+          origin: createPlaceSnapshot({ name: item.origin, sources: [] }, { origin: "manual" }),
+          destination: createPlaceSnapshot({ name: item.destination, sources: [] }, { origin: "manual" }), provenance: { type: "manual" } };
+      } else {
+        warnings.push({ itemId: item.id, code: "transport-mode-deferred", ownerIssue: 413 });
+        deferredItemIds.push(item.id);
+      }
+      if (!rail && (item.note !== undefined || Object.keys(item).some((key) => !["id", "type", "mode", "origin", "destination", "date", "note"].includes(key)))) {
+        warnings.push({ itemId: item.id, field: "note/extra", code: "transport-mode-deferred", ownerIssue: 413 });
+        if (!deferredItemIds.includes(item.id)) deferredItemIds.push(item.id);
+      }
       items.push({ id: item.id, title: rail ? `${item.route.originStation} → ${item.route.destinationStation}`
         : `${item.origin} → ${item.destination}`, type: "transport", schedule,
-        detail: rail ? { mode: "rail", status: "unresolved" } : { status: "unresolved" } });
-      warnings.push({ itemId: item.id, code: rail ? "rail-selection-unverified" : "transport-mode-deferred", ownerIssue: rail ? 385 : 413 });
+        detail });
     } else if (item.type === "stay") {
       items.push({ id: item.id, title: item.destination, type: "stay", schedule, selection: { status: "unselected" } });
       // Even an explicit legacy accommodation has no trustworthy captured/selection provenance yet.

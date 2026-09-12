@@ -42,6 +42,10 @@ export interface AgentTripScheduleItem {
   category?: import("@raiquora/trip/trip").ActivityCategory;
   placeName?: string;
   selectionStatus?: "selected" | "unresolved" | "unselected";
+  mode?: import("@raiquora/trip/transport-detail").TransportMode;
+  origin?: string;
+  destination?: string;
+  provenanceType?: "manual" | "provider" | "verified_timetable";
   originIsProvisional?: boolean;
   summary: string;
   date?: string;
@@ -200,9 +204,13 @@ function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["tri
         ...(item.place ? { placeName: bounded(item.place.name, 100) } : {}) };
       if (item.type === "stay") return { itemId: item.id, type: "stay", schedule, selectionStatus: item.selection.status,
         summary: bounded(item.selection.status === "selected" ? item.selection.accommodation.place.name : item.title, 100) ?? "宿泊" };
-      if (item.detail.status === "unresolved") return { itemId: item.id, type: "transport", schedule, summary: bounded(item.title, 100) ?? "移動", selectionStatus: "unresolved" };
+      if (item.detail.status === "unresolved") return { itemId: item.id, type: "transport", schedule, mode: item.detail.mode, summary: bounded(item.title, 100) ?? "移動", selectionStatus: "unresolved" };
+      if (item.detail.mode !== "rail") return { itemId: item.id, type: "transport", schedule, mode: item.detail.mode,
+        origin: item.detail.origin.name, destination: item.detail.destination.name, provenanceType: item.detail.provenance.type,
+        selectionStatus: "selected", summary: bounded(item.title, 100) ?? "移動" };
       const journey = item.detail.journey;
-      return { itemId: item.id, type: "transport", schedule, selectionStatus: "selected",
+      return { itemId: item.id, type: "transport", schedule, selectionStatus: "selected", mode: "rail", provenanceType: "verified_timetable",
+        origin: journey.legs[0]!.origin.name, destination: journey.legs.at(-1)!.destination.name,
         summary: `${bounded(journey.legs[0]!.origin.name, 80)}→${bounded(journey.legs.at(-1)!.destination.name, 80)}（計画 ${journey.legs[0]!.scheduledDeparture.at} → ${journey.legs.at(-1)!.scheduledArrival.at}）`,
         date: journey.serviceDate };
     }) };

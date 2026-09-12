@@ -4,7 +4,8 @@ import type { ExternalSourceEvidence } from "@raiquora/trip/external-travel-info
 import { createPlaceSnapshot, type PlaceSnapshot, type PlaceSnapshotRetention } from "@raiquora/trip/place-snapshot";
 import { validInstant, exactKeys } from "@raiquora/trip/selected-rail-journey";
 import { validateItinerarySchedule, type ItinerarySchedule } from "@raiquora/trip/itinerary-schedule";
-import { applyTripProposal, type Trip, type TripUpdateProposal, type ActivityCategory, type ActivityItineraryItem } from "@raiquora/trip/trip";
+import { type Trip, type TripUpdateProposal, type ActivityCategory } from "@raiquora/trip/trip";
+import { proposeItineraryItem as proposalFor, type ItineraryPlacement } from "./itinerary-proposal";
 
 /** Ephemeral trusted lookup, not an Offering/Trip repository. Resolver owns matching (#377),
  * provider evidence and field-specific retention. A model cannot supply this record. */
@@ -21,21 +22,7 @@ export interface ActivitySelectionPort {
   /** More than one matching record is ambiguous, never implicitly take the first. */
   resolve(candidateId: string): Promise<readonly ResolvedActivityCandidate[]>;
 }
-export type ActivityPlacement = { itemId: string; afterId?: string; operation: "add" | "replace" };
-
-function proposalFor(trip: Trip, item: ActivityItineraryItem, placement: ActivityPlacement): TripUpdateProposal {
-  exactKeys(placement, ["itemId", "afterId", "operation"]);
-  if (!["add", "replace"].includes(placement.operation) || placement.operation === "replace" && placement.afterId !== undefined) {
-    throw new Error("Invalid activity placement");
-  }
-  const proposal: TripUpdateProposal = { tripId: trip.id, summary: `${item.title}を旅程へ${placement.operation === "add" ? "追加" : "変更"}する案`, patches: [
-    placement.operation === "add" ? { type: "add", item, ...(placement.afterId !== undefined ? { afterId: placement.afterId } : {}) }
-      : { type: "replace", itemId: placement.itemId, item },
-    { type: "planning", state: trip.planningState === "itinerary_draft" || trip.planningState === "itinerary_refinement" ? "itinerary_refinement" : "itinerary_draft" },
-  ] };
-  applyTripProposal(trip, proposal);
-  return structuredClone(proposal);
-}
+export type ActivityPlacement = ItineraryPlacement;
 
 /** User-authored plan intention, not a claim that a venue/booking exists. Provider-backed
  * places must use the ID-resolving entry below; the model-facing manual Tool has no Place input. */

@@ -1,5 +1,6 @@
 import type { ExternalSourceEvidence } from "./external-travel-information";
-import { exactKeys, validDate, validInstant, projectRailSchedule, type SelectedRailJourney } from "./selected-rail-journey";
+import { exactKeys, validDate, validInstant, projectRailSchedule } from "./selected-rail-journey";
+import { transportModes, validateNonRailTransport, type TransportDetail } from "./transport-detail";
 import { validatePlaceSnapshot, type PlaceSnapshot } from "./place-snapshot";
 import { validateItinerarySchedule, projectStaySchedule, sameZonedInstant, type ItinerarySchedule } from "./itinerary-schedule";
 import { validateTripRequest, validatePartyAssumptionTransition, type TripRequest } from "./trip-request";
@@ -23,9 +24,7 @@ export interface Trip {
 interface ItineraryItemBase { readonly id: string; readonly title: string; readonly schedule: ItinerarySchedule; }
 export interface TransportItineraryItem extends ItineraryItemBase {
   readonly type: "transport";
-  readonly detail:
-    | { readonly status: "unresolved"; readonly mode?: "rail" }
-    | { readonly status: "selected"; readonly mode: "rail"; readonly journey: SelectedRailJourney };
+  readonly detail: TransportDetail;
 }
 export interface StayItineraryItem extends ItineraryItemBase {
   readonly type: "stay";
@@ -92,7 +91,9 @@ function validateItem(item: ItineraryItem): void {
       if (item.schedule.type !== "fixed" || !item.schedule.endAt ||
           !sameZonedInstant(item.schedule.startAt, projected.startAt) ||
           !sameZonedInstant(item.schedule.endAt, projected.endAt!)) throw new Error("Rail schedule differs from adopted timetable");
-    } else if (item.detail.status === "unresolved" && (item.detail.mode === undefined || item.detail.mode === "rail")) {
+    } else if (item.detail.status === "selected") {
+      validateNonRailTransport(item.detail);
+    } else if (item.detail.status === "unresolved" && (item.detail.mode === undefined || transportModes.includes(item.detail.mode))) {
       exactKeys(item.detail, ["status", "mode"]);
     } else throw new Error("Invalid transport selection");
   } else if (item.type === "stay") {

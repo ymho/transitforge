@@ -107,7 +107,7 @@ export function createPlaceSnapshot(input: PlaceSnapshot, retention: PlaceSnapsh
 }
 
 const sourceFields = ["id", "kind", "provider", "sourceId", "sourceUrl", "retrievedAt", "observedAt", "validFrom", "validUntil", "attribution", "confidence"] as const;
-function validatePlaceSource(source: ExternalSourceEvidence): void {
+export function validatePlaceSource(source: ExternalSourceEvidence): void {
   exactKeys(source, sourceFields);
   if (!nonempty(source.id) || !nonempty(source.provider) || source.provider === "manual" ||
       !["place", "timetable", "accommodation", "restaurant", "event", "web"].includes(source.kind) ||
@@ -123,7 +123,7 @@ function validatePlaceSource(source: ExternalSourceEvidence): void {
   for (const at of [source.observedAt, source.validFrom, source.validUntil]) if (at !== undefined && !validInstant(at)) throw new Error("Invalid source timestamp");
 }
 
-function copyPlaceSource(source: ExternalSourceEvidence): ExternalSourceEvidence {
+export function copyPlaceSource(source: ExternalSourceEvidence): ExternalSourceEvidence {
   return {
     id: source.id, kind: source.kind, provider: source.provider, retrievedAt: source.retrievedAt, confidence: source.confidence,
     ...(source.sourceId !== undefined ? { sourceId: source.sourceId } : {}),

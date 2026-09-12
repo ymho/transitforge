@@ -112,6 +112,10 @@ Reservation/Money、CAS/永続化、全面UIの責務は後続へ残し、writer
 Profile・legacy・モデル仮置きと今回ユーザー人数を分離し、未知年齢を保持する。モデル由来のsource=assumptionは
 既存constraintと同じ相互参照を使う。Provider別の年齢必須条件はAdapter、writer/CASは後続のままとする。
 
+#413の[Transport導入記録](../architecture/trip-transport.md)では、同じtransportを非鉄道へ広げる。
+manualはselected予定＋manual provenance、Provider採用はID解決・許諾・durable Evidenceの検証を経る。
+両端はdetail内（railはlegs）に保持し、時刻は共通schedule。本文の計画/観測/予約分離とwriter gateは維持する。
+
 `npm test`、`npm run build`、`npm run architecture:check`、`npm run workspace:check`を実行する。
 後続PRのmigration/invalid/retry/partial failure/backward compatibility試験は
 詳細契約の適合ケース表に割り当てる。#415のACは設計として自己レビューし、#415だけを閉じるPRにする。
