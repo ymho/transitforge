@@ -2,6 +2,9 @@
 
 #382/#415・ADR 0052を正本とする。PR #429の#413までの契約を再利用し、#400だけを実装する。
 
+以下は#400時点の導入記録。#412で同じSnapshotへoptional observedPriceと明示的な価格保持許諾を追加した。
+現在の価格契約・Context・previewは[Money導入記録](trip-money.md)を参照する。他のvolatile値とwriter gateは維持する。
+
 ## 現行棚卸しと変更
 
 | 対象 | 現状 → #400 |

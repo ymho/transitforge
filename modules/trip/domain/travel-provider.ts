@@ -1,4 +1,5 @@
 import type { AccommodationOffering } from "./travel-candidate.js";
+import { copyPriceObservation, type PriceObservation } from "./money";
 
 export interface TravelProviderSearch {
   destination: string;
@@ -19,9 +20,8 @@ export interface AccommodationProviderResult {
   longitude?: number;
   reviewAverage?: number;
   reviewCount?: number;
-  minimumCharge?: number;
+  price?: PriceObservation;
   availability?: "available" | "unknown";
-  priceBasis?: "reference-minimum" | "selected-dates";
 }
 
 export function createAccommodationOffering(
@@ -47,12 +47,7 @@ export function createAccommodationOffering(
     ...coordinate("longitude", result.longitude, -180, 180),
     ...boundedNumber("reviewAverage", result.reviewAverage, 0, 5),
     ...boundedInteger("reviewCount", result.reviewCount, 0),
-    ...(Number.isSafeInteger(result.minimumCharge) && result.minimumCharge! >= 0
-      ? {
-          price: { amount: result.minimumCharge!, currency: "JPY" as const },
-          priceBasis: result.priceBasis ?? (result.availability === "available" ? "selected-dates" as const : "reference-minimum" as const),
-        }
-      : {}),
+    ...(result.price === undefined ? {} : { price: copyPriceObservation(result.price) }),
     availability: result.availability ?? "unknown",
   };
 }

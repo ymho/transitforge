@@ -27,6 +27,7 @@ const fixtureBases: Record<string, ProgressCaseId> = {
   "M-known-party": "C-candidate", "N-unknown-child-age": "C-candidate",
   "O-taxi": "C-candidate", "P-air-provisional": "C-candidate",
   "Q-accommodation": "C-candidate", "R-accommodation-change": "C-candidate",
+  "S-eur-accommodation": "C-candidate",
 };
 
 /** Synthetic conversations through the production registry, policies, evidence and presenter.
@@ -55,9 +56,14 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
   const port = { resolve: async (candidateId: string) => candidateId === record.candidate.id ? record : undefined,
     loadTimetables: async () => timetables };
   let trip: Trip = scenario.base === "E-past" ? fixture.trip : { ...fixture.trip, items: selectionFixture.trip.items };
-  const accommodationCase = id === "Q-accommodation" || id === "R-accommodation-change";
+  const accommodationCase = id === "Q-accommodation" || id === "R-accommodation-change" || id === "S-eur-accommodation";
   if (accommodationCase) {
     Object.assign(record, accommodationSelectionFixture(trip.id));
+    if (id === "S-eur-accommodation") {
+      record.accommodation!.priceRetention = "permitted";
+      record.candidate.accommodations[0]!.price = { price: { currency: "EUR", amountMinor: 12000 },
+        observedAt: "2026-09-12T07:55:00Z", basis: "selected-dates" };
+    }
     if (id === "R-accommodation-change") {
       trip = applyTripProposal(trip, await proposeCandidateSelection(trip,
         { candidateId: record.candidate.id, itemId: "stay", taskId: "task-a", accommodation: { provider: "fixture", providerItemId: "hotel-a" } }, port, "2026-09-12T08:00:00Z"));
@@ -130,6 +136,7 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
       getCurrentTrip: () => trip,
       ...(partyCase ? { getUserProfile: () => structuredClone(usualFamily) } : {}),
       getTravelCandidates: () => [{ id: record.candidate.id, targetItemId: accommodationCase ? "stay" : "outbound", label: accommodationCase ? record.accommodation!.place.name : "評価用候補A/Bの検証済み移動", verified: true,
+        ...(id === "S-eur-accommodation" ? { price: record.candidate.accommodations[0]!.price, priceSemantics: "candidate-observation-not-current-price" } : {}),
         accommodation: { provider: "fixture", providerItemId: record.accommodation!.providerItemId, targetItemId: "stay" } },
         ...(id === "K-food" ? [{ id: activity.candidateId, targetItemId: "meal", label: "評価用の森の食堂・検証済みの食事候補", kind: "restaurant" }] : [])],
       candidateSelection: { taskId: "task-a", port },
@@ -148,8 +155,17 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
           stay.selection.accommodation.providerItemId !== record.accommodation!.providerItemId ||
           !text.includes("2026-09-22 チェックイン") || !text.includes("2026-09-24 チェックアウト") ||
           !observation?.progress.some((p) => p.kind === "itinerary" && p.refs.includes("stay"))) invariantFailures.push("accommodation: snapshot/date preview/progress missing");
-      if (JSON.stringify(stay).match(/price|availability|bookingUrl|image|review|options|candidates|reservation/) ||
-          /12000|12,000|空室あり|予約済み/u.test(text)) invariantFailures.push("accommodation: volatile facts leaked");
+      if (JSON.stringify(stay).match(/availability|bookingUrl|image|review|options|candidates|reservation/) ||
+          /空室あり|予約済み/u.test(text)) invariantFailures.push("accommodation: volatile facts leaked");
+      if (id === "S-eur-accommodation") {
+        if (stay?.type !== "stay" || stay.selection.status !== "selected" ||
+            stay.selection.accommodation.observedPrice?.price.currency !== "EUR" ||
+            stay.selection.accommodation.observedPrice.price.amountMinor !== 12000 ||
+            stay.selection.accommodation.observedPrice.observedAt !== "2026-09-12T07:55:00Z" ||
+            stay.selection.accommodation.observedPrice.basis !== "selected-dates" ||
+            !text.includes("選択時の参考価格: EUR 120.00") || !text.includes("2026-09-12T07:55:00Z") || text.includes("JPY"))
+          invariantFailures.push("money: original currency/timestamp/observed preview lost");
+      } else if (/price/.test(JSON.stringify(stay)) || /12000|12,000/u.test(text)) invariantFailures.push("accommodation: unpermitted price leaked");
       if (preview.items.length !== original.items.length || JSON.stringify(preview.items.filter((i) => i.id !== "stay")) !== JSON.stringify(original.items.filter((i) => i.id !== "stay"))) invariantFailures.push("accommodation: unrelated items changed");
       if (typeof response === "string" || !("tripUpdateProposal" in response) || !response.tripUpdateProposal.patches.some((p) => p.type === "replace" && p.itemId === "stay")) invariantFailures.push("accommodation: explicit replacement missing");
     }

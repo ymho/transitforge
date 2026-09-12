@@ -3,6 +3,12 @@ import { describe, expect, it } from "vitest";
 import { HttpAccommodationProvider } from "./http-accommodation-provider.js";
 
 describe("HttpAccommodationProvider", () => {
+  it.each([-1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, "1200"])("omits unsafe/non-integer numeric provider price %s without losing lodging", async (hotelMinCharge) => {
+    const provider = new HttpAccommodationProvider({ async fetch() { return { ok: true, async json() { return { hotels: [[{ hotelBasicInfo: { hotelNo: 1, hotelName: "宿", hotelMinCharge } }]] }; } }; } },
+      { async load() { return { applicationId: "fixture", accessKey: "fixture", hotelSearchUrl: "https://example.com/search" }; } });
+    const result = await provider.search({ destination: "京都", checkInDate: "2026-09-22", checkOutDate: "2026-09-23", adults: 1, limit: 1 });
+    expect(result).toHaveLength(1); expect(result[0]!.price).toBeUndefined();
+  });
   it("Provider fixtureを地図表示と参考価格を含む共通契約へ変換する", async () => {
     let requestedUrl = "";
     let requestedHeaders: Record<string, string> = {};
@@ -11,9 +17,9 @@ describe("HttpAccommodationProvider", () => {
         requestedUrl = url; requestedHeaders = init.headers;
         return { ok: true, async json() { return { hotels: [[{ hotelBasicInfo: { hotelNo: 42, hotelName: "駅前の宿", hotelInformationUrl: "https://booking.example/42", hotelImageUrl: "https://images.example/42.jpg", address1: "島根県", address2: "出雲市駅前", latitude: 35.36, longitude: 132.75, reviewAverage: 4.2, reviewCount: 120, hotelMinCharge: 8800 } }]] }; } };
       },
-    }, { async load() { return { applicationId: "app", accessKey: "secret", hotelSearchUrl: "https://provider.example/search" }; } });
+    }, { async load() { return { applicationId: "app", accessKey: "secret", hotelSearchUrl: "https://provider.example/search" }; } }, () => "2026-09-12T08:00:00Z");
     const results = await provider.search({ destination: "出雲市", checkInDate: "2026-08-17", checkOutDate: "2026-08-18", adults: 1, limit: 3 });
-    expect(results).toEqual([{ kind: "accommodation", provider: "travel-provider", providerItemId: "42", name: "駅前の宿", checkInDate: "2026-08-17", checkOutDate: "2026-08-18", bookingUrl: "https://booking.example/42", areaName: "島根県", imageUrl: "https://images.example/42.jpg", address: "島根県出雲市駅前", latitude: 35.36, longitude: 132.75, reviewAverage: 4.2, reviewCount: 120, price: { amount: 8800, currency: "JPY" }, priceBasis: "reference-minimum", availability: "unknown" }]);
+    expect(results).toEqual([{ kind: "accommodation", provider: "travel-provider", providerItemId: "42", name: "駅前の宿", checkInDate: "2026-08-17", checkOutDate: "2026-08-18", bookingUrl: "https://booking.example/42", areaName: "島根県", imageUrl: "https://images.example/42.jpg", address: "島根県出雲市駅前", latitude: 35.36, longitude: 132.75, reviewAverage: 4.2, reviewCount: 120, price: { price: { amountMinor: 8800, currency: "JPY" }, observedAt: "2026-09-12T08:00:00Z", basis: "reference-minimum" }, availability: "unknown" }]);
     expect(requestedHeaders.accessKey).toBe("secret");
     expect(requestedUrl).toContain("applicationId=app");
     expect(requestedUrl).toContain("keyword=%E5%87%BA%E9%9B%B2%E5%B8%82");
@@ -55,8 +61,7 @@ describe("HttpAccommodationProvider", () => {
     expect(results[0]).toMatchObject({
       providerItemId: "42",
       availability: "available",
-      price: { amount: 12_000, currency: "JPY" },
-      priceBasis: "selected-dates",
+      price: { price: { amountMinor: 12_000, currency: "JPY" }, observedAt: expect.any(String), basis: "selected-dates" },
     });
     expect(requestedUrls[1]).toContain("hotelNo=42");
     expect(requestedUrls[1]).toContain("checkinDate=2026-09-01");

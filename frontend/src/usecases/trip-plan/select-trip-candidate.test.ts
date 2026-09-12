@@ -81,7 +81,7 @@ describe("candidate adoption boundary", () => {
   it("adopts a single permitted hotel into the specified stay, without copying prices or options", async () => {
     const { trip, port, record, selectedAt } = setup();
     const offering = { kind: "accommodation" as const, provider: "fixture", providerItemId: "hotel-a", name: "宿A",
-      checkInDate: "2026-09-13", checkOutDate: "2026-09-14", price: { amount: 9999, currency: "JPY" as const }, availability: "available" as const,
+      checkInDate: "2026-09-13", checkOutDate: "2026-09-14", price: { price: { amountMinor: 9999, currency: "JPY" as const }, observedAt: "2026-09-12T07:55:00Z" }, availability: "available" as const,
       address: "未許諾の住所", latitude: 35, longitude: 135, imageUrl: "https://example.com/image.jpg" };
     record.candidate.accommodations = [offering, { ...offering, providerItemId: "hotel-b", name: "宿B" }];
     record.accommodation = { provider: "fixture", providerItemId: "hotel-a", storageAllowed: true,

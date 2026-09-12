@@ -1,3 +1,5 @@
+import { isPriceObservation } from "@raiquora/trip/money";
+import { legacyAccommodationPrice } from "../legacy-money";
 import type {
   BedrockAgentContentBlock,
   BedrockAgentMessage,
@@ -2970,6 +2972,7 @@ function accommodationValues(value: unknown): ViewerAgentTravelPlan["accommodati
       typeof accommodation.name !== "string" ||
       typeof accommodation.checkInDate !== "string" ||
       typeof accommodation.checkOutDate !== "string") return [];
+    const legacyPrice = isPriceObservation(accommodation.price) ? legacyAccommodationPrice(accommodation.price) : undefined;
     return [{
       name: accommodation.name,
       checkInDate: accommodation.checkInDate,
@@ -2990,16 +2993,7 @@ function accommodationValues(value: unknown): ViewerAgentTravelPlan["accommodati
       ...(typeof accommodation.longitude === "number" ? { longitude: accommodation.longitude } : {}),
       ...(typeof accommodation.reviewAverage === "number" ? { reviewAverage: accommodation.reviewAverage } : {}),
       ...(typeof accommodation.reviewCount === "number" ? { reviewCount: accommodation.reviewCount } : {}),
-      ...(accommodation.price && typeof accommodation.price === "object" &&
-        typeof accommodation.price.amount === "number" && accommodation.price.currency === "JPY"
-        ? {
-            price: {
-              amount: accommodation.price.amount,
-              currency: "JPY" as const,
-              basis: accommodation.priceBasis === "selected-dates" ? "selected-dates" as const : "reference-minimum" as const,
-            },
-          }
-        : {}),
+      ...(legacyPrice ? { price: legacyPrice } : {}),
       ...(accommodation.availability === "available" || accommodation.availability === "unknown"
         ? { availability: accommodation.availability }
         : {}),

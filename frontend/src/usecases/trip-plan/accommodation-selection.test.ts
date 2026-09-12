@@ -3,6 +3,7 @@ import { createTrip, applyTripProposal, type StayItineraryItem } from "@raiquora
 import { accommodationSelectionFixture } from "./accommodation-selection.fixture";
 import { proposeCandidateSelection, confirmCandidateSelection, type CandidateSelectionRequest } from "./select-trip-candidate";
 import { accommodationPreview } from "./accommodation-preview";
+import { validateAccommodationSnapshot } from "@raiquora/trip/accommodation-snapshot";
 
 const at = "2026-09-12T08:00:00Z";
 function setup() {
@@ -13,6 +14,35 @@ function setup() {
   return { trip, record, request, port };
 }
 describe("accommodation adoption boundary", () => {
+  it("retains permitted EUR observation, keeps preview exact and never calls it current price", async () => {
+    const f = setup(); f.record.accommodation!.priceRetention = "permitted";
+    f.record.candidate.accommodations[0]!.price = { price: { currency: "EUR", amountMinor: 12000 }, observedAt: "2026-09-12T07:55:00Z", basis: "selected-dates" };
+    const before = structuredClone(f.record);
+    const next = applyTripProposal(f.trip, await proposeCandidateSelection(f.trip, f.request, f.port, at));
+    const stay = next.items[0] as StayItineraryItem;
+    expect(stay).toMatchObject({ selection: { accommodation: { observedPrice: before.candidate.accommodations[0]!.price } } });
+    const preview = accommodationPreview(stay);
+    expect(preview).toContain("選択時の参考価格: EUR 120.00"); expect(preview).toContain("2026-09-12T07:55:00Z");
+    expect(preview).not.toMatch(/現在価格|JPY|空室あり/); expect(f.record).toEqual(before);
+    if (stay.selection.status !== "selected") throw new Error("Missing stay");
+    const snapshot = stay.selection.accommodation;
+    for (const observedAt of ["invalid", "2026-09-12T08:01:00Z", "2026-09-12T07:56:00Z"]) {
+      expect(() => validateAccommodationSnapshot({ ...snapshot, observedPrice: { ...before.candidate.accommodations[0]!.price!, observedAt } })).toThrow();
+    }
+  });
+  it.each([undefined, "unknown", "forbidden"] as const)("adopts lodging but not price when retention is %s", async (permission) => {
+    const f = setup(); f.record.accommodation!.priceRetention = permission;
+    const next = applyTripProposal(f.trip, await proposeCandidateSelection(f.trip, f.request, f.port, at));
+    expect(next.items[0]).toMatchObject({ selection: { status: "selected" } });
+    expect(JSON.stringify(next)).not.toContain("observedPrice");
+  });
+  it.each([undefined, "invalid", "2026-09-12T08:01:00Z", "2026-09-12T07:56:00Z"])("omits unverified price timestamp %s without losing lodging", async (observedAt) => {
+    const f = setup(); f.record.accommodation!.priceRetention = "permitted";
+    Object.assign(f.record.candidate.accommodations[0]!.price!, { observedAt });
+    const next = applyTripProposal(f.trip, await proposeCandidateSelection(f.trip, f.request, f.port, at));
+    expect(next.items[0]).toMatchObject({ selection: { status: "selected" } });
+    expect(JSON.stringify(next)).not.toContain("observedPrice");
+  });
   it("allowlists product and separately resolved facility, dates and source only", async () => {
     const f = setup(); const before = structuredClone(f.record);
     Object.assign(f.record.candidate.accommodations[0]!, { raw: { secret: "discard" }, reservationReference: "discard", currentPrice: 555 });

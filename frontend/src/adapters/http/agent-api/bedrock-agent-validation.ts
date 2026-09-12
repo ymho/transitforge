@@ -1,3 +1,4 @@
+import { isPriceObservation } from "@raiquora/trip/money";
 import type {
   BedrockAgentContentBlock,
   BedrockAgentMessage,
@@ -56,8 +57,8 @@ export function isAccommodationSearchResponse(value: unknown): value is Accommod
       (item.longitude === undefined || isCoordinate(item.longitude, -180, 180)) &&
       (item.reviewAverage === undefined || isCoordinate(item.reviewAverage, 0, 5)) &&
       (item.reviewCount === undefined || isNonNegativeInteger(item.reviewCount)) &&
-      (item.price === undefined || isRecord(item.price) && isNonNegativeInteger(item.price.amount) && item.price.currency === "JPY") &&
-      (item.priceBasis === undefined || item.priceBasis === "reference-minimum" || item.priceBasis === "selected-dates") &&
+      (item.price === undefined || isPriceObservation(item.price)) &&
+      item.priceBasis === undefined &&
       (item.availability === undefined || item.availability === "available" || item.availability === "unknown"));
 }
 

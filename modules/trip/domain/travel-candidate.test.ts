@@ -27,7 +27,7 @@ describe("travel candidate", () => {
         name: "出雲の宿",
         checkInDate: "2026-08-16",
         checkOutDate: "2026-08-17",
-        price: { amount: 12_000, currency: "JPY" },
+        price: { price: { amountMinor: 12_000, currency: "JPY" }, observedAt: "2026-08-15T00:00:00Z" },
       }],
       experiences: [{
         kind: "experience",
@@ -35,15 +35,12 @@ describe("travel candidate", () => {
         providerItemId: "experience-1",
         name: "街歩き",
         startDate: "2026-08-17",
-        price: { amount: 2_500, currency: "JPY" },
+        price: { price: { amountMinor: 2_500, currency: "JPY" }, observedAt: "2026-08-15T00:00:00Z" },
       }],
     });
 
     expect(candidate.expenseSummary).toEqual({
-      currency: "JPY",
-      accommodationAmount: 12_000,
-      experienceAmount: 2_500,
-      knownTotalAmount: 14_500,
+      totals: [{ currency: "JPY", amountMinor: 14_500 }],
       pricedItemCount: 2,
       hasUnpricedItems: false,
       excludesRailFare: true,
@@ -65,7 +62,7 @@ describe("travel candidate", () => {
     });
 
     expect(candidate.expenseSummary).toMatchObject({
-      knownTotalAmount: 0,
+      totals: [],
       pricedItemCount: 0,
       hasUnpricedItems: true,
       excludesRailFare: true,
@@ -82,8 +79,8 @@ describe("travel candidate", () => {
         providerItemId: "experience-1",
         name: "体験",
         startDate: "2026-08-17",
-        price: { amount, currency: "JPY" },
+        price: { price: { amountMinor: amount, currency: "JPY" }, observedAt: "2026-08-15T00:00:00Z" },
       }],
-    })).toThrow("旅行費用は0以上の整数円で指定してください。");
+    })).toThrow("Invalid Money");
   });
 });

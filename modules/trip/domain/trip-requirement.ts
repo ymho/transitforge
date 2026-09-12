@@ -5,6 +5,7 @@ import { validateTimeZone, validateZonedInstant, type LocalDate, type ZonedInsta
 import { exactKeys, validDate } from "./snapshot-validation";
 import { travelPreferenceLabels, type TravelPreference, type TripContext } from "./travel-profile";
 import { transportModes, type TransportMode } from "./transport-detail";
+import { validateMoney, type Money } from "./money";
 
 export interface DateRange { readonly earliest: LocalDate; readonly latest: LocalDate; }
 export const railRequirementFields = ["excludedServiceTypes", "excludedTrainNames", "excludedTrainNumbers", "excludedServiceUids",
@@ -14,8 +15,9 @@ export type MobilityRequirement = { readonly type: "mobility"; readonly maxTrave
   readonly carAvailable?: boolean } & Readonly<Partial<JourneySearchPreferences>> &
   Readonly<Pick<JourneySearchRequest, typeof railRequirementFields[number]>>;
 
-/** Requested conditions, never adopted itinerary or an unrestricted JSON DSL. Money/party remain #412/#411. */
+/** Requested conditions, never adopted itinerary or an unrestricted JSON DSL. */
 export type TripRequirement =
+  | { readonly type: "budget"; readonly limit: Money; readonly basis: "trip" | "per-person" }
   | { readonly type: "origin"; readonly place: PlaceSnapshot }
   | { readonly type: "destinations"; readonly places: readonly PlaceSnapshot[]; readonly order: "fixed" | "flexible" }
   | { readonly type: "dates"; readonly start: DateRange; readonly end?: DateRange; readonly timeZone?: string }
@@ -35,6 +37,9 @@ export function validateDateRange(range: DateRange): void {
 export function validateTripRequirement(value: TripRequirement): void {
   if (!value || typeof value !== "object") throw new Error("Invalid requirement");
   switch (value.type) {
+    case "budget":
+      exactKeys(value, ["type", "limit", "basis"]); validateMoney(value.limit);
+      if (!["trip", "per-person"].includes(value.basis)) throw new Error("Invalid budget basis"); return;
     case "origin": exactKeys(value, ["type", "place"]); validatePlaceSnapshot(value.place); return;
     case "destinations":
       exactKeys(value, ["type", "places", "order"]);
@@ -84,7 +89,7 @@ export function validateTripRequirement(value: TripRequirement): void {
       exactKeys(value, ["type", "intensity", "avoidedRisks"]);
       if (![0, 1, 2, 3].includes(value.intensity) || !Array.isArray(value.avoidedRisks) || value.avoidedRisks.some((risk) =>
         !["illegal", "uncontrolled-violence", "unverified-border", "night-isolation", "transport-stranding", "weather-exposure"].includes(risk))) throw new Error("Invalid adventure requirement"); return;
-    default: throw new Error("Unknown or deferred requirement (Money belongs to #412)");
+    default: throw new Error("Unknown requirement");
   }
 }
 function stringList(value: readonly string[]): void {

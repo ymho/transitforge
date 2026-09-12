@@ -34,6 +34,8 @@ export interface AgentContextSnapshot {
 }
 
 export interface AgentTripScheduleItem {
+  observedPrice?: import("@raiquora/trip/money").PriceObservation;
+  priceSemantics?: "retained-selection-observation-not-current-price";
   /** Stable V2 reference for item-scoped constraints and assumption effects; absent for legacy. */
   itemId?: string;
   /** V2 preserves precision/flexibility; absent for legacy items, never inferred as fixed. */
@@ -206,6 +208,10 @@ function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["tri
       if (item.type === "stay") {
         const place = item.selection.status === "selected" ? item.selection.accommodation.place : item.selection.place;
         return { itemId: item.id, type: "stay", schedule, selectionStatus: item.selection.status,
+          ...(item.selection.status === "selected" && item.selection.accommodation.observedPrice ? {
+            observedPrice: structuredClone(item.selection.accommodation.observedPrice),
+            priceSemantics: "retained-selection-observation-not-current-price",
+          } : {}),
           summary: bounded(place?.name ?? item.title, 100) ?? "宿泊",
           ...(place ? { placeName: bounded(place.name, 100), area: bounded(place.area, 100) } : {}) };
       }

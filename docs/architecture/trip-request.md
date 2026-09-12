@@ -44,7 +44,7 @@ trip/item scope、typed `TripRequirement`を持つ。item scopeは実在IDを参
 自由JSON DSL、unknown field、raw Provider値、無効日付/zone/Place、非有限数を拒否する。
 Provider Placeの保存可否は引き続き信頼されたAdapterと`createPlaceSnapshot`の保持allowlistが所有する。
 `validateTripRequest`の構造validationやモデルのsource宣言だけでは保存許諾/Evidenceが成立しない。
-Moneyは#412が最終型を追加するまでbudget discriminatorを拒否する。暫定金額型を作らない。
+#412でbudget discriminatorを同じMoney（limit）とbasis: trip/per-personで導入した。費用網羅性がないため評価はunknownを維持し、予算内と認定しない。[Money導入記録](trip-money.md)を参照する。
 
 ## 仮定、Profile、原子的な変更
 
@@ -156,7 +156,7 @@ npm run eval:agent:decision:live -- --profile full --case trip-v2-rejected-assum
 | Issue | 残す責務 |
 | --- | --- |
 | #383（状態導入済み） / #384 | [状態導入記録](trip-state.md)。Ask + Progress、意味解釈から確認可能なRequest Proposalへの本番接続は#384 |
-| #411（導入済み） / #412 | [TripParty](trip-party.md)を同じRequestへ統合。Money/budgetは#412 |
+| #411 / #412（導入済み） | [TripParty](trip-party.md)と[Money/budget上限](trip-money.md)を同じRequestへ統合。費用網羅性は後続 |
 | #402 / #406 | 全Trip成立性、全候補Assessment、natural-language条件の追加Evidence評価 |
 | #388 / #389 | server保存/認可/import、revision/CAS/mutationId、writer切替時の旧Context producer廃止 |
 | #390 | 同じProposal境界を使うDOM、未確認/競合/評価結果の本格表示 |

@@ -46,8 +46,7 @@ export interface AccommodationSearchResponse {
     longitude?: number;
     reviewAverage?: number;
     reviewCount?: number;
-    price?: { amount: number; currency: "JPY" };
-    priceBasis?: "reference-minimum" | "selected-dates";
+    price?: import("@raiquora/trip/money").PriceObservation;
     availability?: "available" | "unknown";
   }>;
 }

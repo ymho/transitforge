@@ -7,7 +7,8 @@ export interface HttpClient {
 }
 
 export class HttpAccommodationProvider implements AccommodationProvider {
-  constructor(private readonly http: HttpClient, private readonly credentials: TravelProviderCredentialsRepository) {}
+  constructor(private readonly http: HttpClient, private readonly credentials: TravelProviderCredentialsRepository,
+    private readonly now: () => string = () => new Date().toISOString()) {}
 
   async search(request: TravelProviderSearch): Promise<readonly AccommodationOffering[]> {
     const credentials = await this.credentials.load();
@@ -25,7 +26,8 @@ export class HttpAccommodationProvider implements AccommodationProvider {
     try {
       const response = await this.http.fetch(url.toString(), { headers: { accessKey: credentials.accessKey, Accept: "application/json" }, signal: controller.signal });
       if (!response.ok) throw new Error("provider response was not successful");
-      const discovered = providerResults(await response.json(), request.limit);
+      const body = await response.json();
+      const discovered = providerResults(body, request.limit, this.now());
       const available = credentials.vacantHotelSearchUrl
         ? await this.confirmAvailability(credentials, request, discovered)
         : undefined;
@@ -63,7 +65,8 @@ export class HttpAccommodationProvider implements AccommodationProvider {
         signal: controller.signal,
       });
       if (!response.ok) return undefined;
-      return providerResults(await response.json(), request.limit, true);
+      const body = await response.json();
+      return providerResults(body, request.limit, this.now(), true);
     } catch {
       return undefined;
     } finally {
@@ -72,7 +75,7 @@ export class HttpAccommodationProvider implements AccommodationProvider {
   }
 }
 
-function providerResults(value: unknown, limit: number, availabilityConfirmed = false): AccommodationProviderResult[] {
+function providerResults(value: unknown, limit: number, observedAt: string, availabilityConfirmed = false): AccommodationProviderResult[] {
   if (!isRecord(value)) throw new Error("宿泊提供者の応答を読み取れません。");
   if (!Array.isArray(value.hotels)) return [];
   return value.hotels.slice(0, limit).flatMap((hotel) => {
@@ -86,7 +89,10 @@ function providerResults(value: unknown, limit: number, availabilityConfirmed = 
       ...stringField("imageUrl", basic.hotelImageUrl), ...stringField("address", address),
       ...numberField("latitude", basic.latitude), ...numberField("longitude", basic.longitude),
       ...numberField("reviewAverage", basic.reviewAverage), ...integerField("reviewCount", basic.reviewCount),
-      ...integerField("minimumCharge", basic.hotelMinCharge),
+      // This endpoint returns integer JPY only. Observation is response receipt, not a provider update time.
+      ...(Number.isSafeInteger(basic.hotelMinCharge) && (basic.hotelMinCharge as number) >= 0
+        ? { price: { price: { amountMinor: basic.hotelMinCharge as number, currency: "JPY" as const }, observedAt,
+          basis: availabilityConfirmed ? "selected-dates" as const : "reference-minimum" as const } } : {}),
       availability: availabilityConfirmed ? "available" as const : "unknown" as const }];
   });
 }

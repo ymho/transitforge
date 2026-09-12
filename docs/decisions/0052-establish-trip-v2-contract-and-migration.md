@@ -121,5 +121,10 @@ manualはselected予定＋manual provenance、Provider採用はID解決・許諾
 商品identityと施設Place identityを別に解決し、保持許諾・出所・採用時点を検証する。価格・空室・画像・review・予約導線は
 Offering側に留め、Money/Reservationは後続へ残す。legacyの証拠不足を捏造せず、writer gateも解除しない。
 
+#412の[Money導入記録](../architecture/trip-money.md)では、同じOffering/Trip/Requestへ原通貨Moneyと観測を導入する。
+公式リストから確認した6通貨のminor unitを固定し、未対応通貨を拒否する。曖昧だった観測日時は必須とし、
+日時不明のlegacy価格はPriceObservationへ昇格させない。保持根拠は既存Snapshot.sourcesを再利用する。
+価格の明示許諾と時系列を検証し、別通貨を合算せず、FX/予算内保証/本番writerを追加しない。
+
 後続PRのmigration/invalid/retry/partial failure/backward compatibility試験は
 詳細契約の適合ケース表に割り当てる。#415のACは設計として自己レビューし、#415だけを閉じるPRにする。

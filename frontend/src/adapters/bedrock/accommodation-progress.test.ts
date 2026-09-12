@@ -18,6 +18,23 @@ function setup() {
   return { ...f, base, record };
 }
 describe("selected accommodation through Runtime and rendered progress", () => {
+  it("keeps EUR selection observation separate from JPY candidate observation in Context and delivered preview", async () => {
+    const f = setup(); f.record.accommodation!.priceRetention = "permitted";
+    const price = { price: { currency: "EUR" as const, amountMinor: 12000 }, observedAt: "2026-09-12T07:55:00Z", basis: "selected-dates" as const };
+    f.record.candidate.accommodations[0]!.price = price;
+    const response = await runViewerAgentRuntime("このEURの宿にします", f.base, async () => modelTools(modelTool("propose_candidate_selection", choose)));
+    if (typeof response === "string" || !("tripUpdateProposal" in response)) throw new Error("Missing preview");
+    const li = document.createElement("li"); li.scrollIntoView = vi.fn();
+    resolveAssistantMessage(li, response, undefined, undefined, undefined, undefined, undefined, undefined, false);
+    expect(li.textContent).toContain("選択時の参考価格: EUR 120.00"); expect(li.textContent).toContain(price.observedAt);
+    const preview = applyTripProposal(f.trip, response.tripUpdateProposal); let context = "";
+    await runViewerAgentRuntime("比較したい", { ...f.base, getCurrentTrip: () => preview,
+      getTravelCandidates: () => [{ candidateId: "other", price: { ...price, price: { currency: "JPY", amountMinor: 20000 } } }] }, async (messages) => {
+      context = JSON.stringify(messages[0]); return modelAnswer("原通貨で比較します。");
+    });
+    for (const text of ["currentTrip", "observedPrice", "retained-selection-observation-not-current-price", "EUR", "12000", "observedAt", "selected-dates", "travelCandidates", "JPY", "20000"]) expect(context).toContain(text);
+    expect(f.trip.items[1]).toMatchObject({ selection: { status: "unselected" } });
+  });
   it("shows the facility and both dates together with a question, without booking/price claims or writes", async () => {
     const f = setup(); let calls = 0, observation: AgentTurnObservation | undefined;
     const response = await runViewerAgentRuntime("この宿にします", { ...f.base, onTurnObservation: (o) => { observation = o; } }, async () => calls++ === 0 ? modelTools(
