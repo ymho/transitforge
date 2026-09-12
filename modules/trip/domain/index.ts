@@ -5,6 +5,7 @@ export * from "./travel-profile";
 export * from "./travel-provider";
 export * from "./trip-plan";
 export * from "./trip";
+export * from "./place-snapshot";
 export * from "./selected-rail-journey";
 export * from "./legacy-trip-converter";
 export * from "./external-travel-information";

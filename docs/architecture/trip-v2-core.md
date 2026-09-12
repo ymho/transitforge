@@ -4,6 +4,8 @@
 [ADR 0052](../decisions/0052-establish-trip-v2-contract-and-migration.md)、[最終契約](trip-lifecycle.md)。
 本書は最終契約を変更せず、main `845f17d`から#385で実装した部分と未導入部分を区別する。
 
+#414によるPlaceの統合・利用箇所・保存許諾・legacy部分変換は[Place導入記録](trip-place-snapshot.md)を参照する。
+
 ## 現行モデル・利用箇所の棚卸し
 
 | 型 / 利用箇所 | 現在の意味 / #385での扱い |
@@ -29,8 +31,8 @@
 - transport.detailは未検証unresolved、またはrail selected + SelectedRailJourney。
 - stay.selectionはunselected、または選択済み1宿。宿は最終契約の最小部分（名前、採用日時、宿泊日、出所）のみ。
   AccommodationOffering/TripAccommodationを埋め込まず、第三の恒久宿型も追加しない。
-  #400/#414がこのselection内の契約を拡張し、価格・空室・画像等はその時点で扱う。
-- 未実装のrequest/state/schedule/place/activity/party等を正常なdefaultで埋めない。
+  #414でplaceを共通PlaceSnapshotへ統合した。#400がこのselection内の宿契約を拡張し、価格・空室・画像等はその時点で扱う。
+- 未実装のrequest/state/schedule/activity/party等を正常なdefaultで埋めない。
   別名の暫定Tripや別のItinerary正本を増やさない。
 - `TripPatch` / `TripUpdateProposal`は今回必要な既存itemのreplaceだけを持つ最小契約。
   `applyTripProposal`は全件検証し、失敗時に元Tripを変えない。存在しない対象、ID変更、異なるitem種別は拒否。
@@ -47,7 +49,7 @@
 保存fieldはserviceDate、selectedAt、legs（id/serviceDate/serviceUid/trainNumber/駅名/停車順/
 scheduled発着instant）、transfers（leg参照/必要時間）、provenance（検索参照/検証時刻/
 明示したsource Evidence/各legの入力sourceId・serviceDate・digest/validator version/transferPace）だけ。
-駅は既存時刻表の名前とstop indexを使う最小部分で、PlaceRefの別体系を作らない。
+駅は#414のPlaceSnapshotで時刻表の名前と出所を保持する。station IDを名前から発明せず、stop indexとの照合を維持する。
 全体発着地/時刻は最初・最後のlegから取得でき、独立した重複値を保存しない。
 
 - sourceId + contentDigest + serviceDateで入力を解決し、serviceUid + trainNumber + stop index + 駅名 + scheduled値を照合する。
@@ -96,6 +98,7 @@ V2生成日時を注入する。同じ入力/引数で同じ出力。旧IDをUUI
 - stayはoptionsをコピーしない。旧accommodationも現時点ではprovenance/許諾を移行できないため
   unselected + #400警告にし、旧rawから#400が同じ入口のmappingを拡張する。
 - manual移動はmode未解決 + #413警告。sightseeingは型を先取りせずdeferredItemIds + #410警告。
+  #414で同じconverterに観光Placeの許諾付き変換を追加した。Activity未導入中はplaceMappingsとして返すが別保存形式にはしない。
   日付は#386、条件等は#387の移行保留。元item ID/順序は原本に残り、変換できたitemのID/相対順序も維持。
 - 原本を変更せず、`requiresLegacyRetention: true`とwarningsを常に返す。これは完成したimportではない。
   未実装fieldやdeferred itemがある状態で旧rawを削除してはいけない。元データはログ/Trip内へコピーしない。
@@ -125,7 +128,7 @@ live評価は設定済みAWSセッション期限切れで未実施。保存済�
 | #403 | 多都市、legacy/UIの対象stay選択導線と表示要約 |
 | #410 | Activity、deferred sightseeing IDの復元 |
 | #411 / #412 | party、原通貨Money、宿/体験の価格観測 |
-| #413 / #414 | 非鉄道transport、PlaceRef/PlaceSnapshot、Provider保持条件 |
+| #413 | 非鉄道transport。PlaceRef/PlaceSnapshotの基礎とfield保持境界は#414で導入済み |
 | #388 / #389 | server認可/保存/取込、全Proposal/UIのrevision/CAS/冪等性、writer切替。新しいDomain converterは作らない |
 | #390 | 同じTrip/Proposalを扱うUI。legacy表示を採用証拠にする移行は禁止 |
 

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./place-snapshot": "./domain/place-snapshot.ts",
     "./trip": "./domain/trip.ts",
     "./selected-rail-journey": "./domain/selected-rail-journey.ts",
     "./legacy-trip-converter": "./domain/legacy-trip-converter.ts",

@@ -329,7 +329,7 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 | TripRequest | 今回のtyped hard/soft条件、出所、PlanAssumption、TripParty | #387 / #411 |
 | ItineraryItem | transport/stay/activity、fixed/window/day/unscheduled、選択済みSnapshot | #385 / #386 / #410 / #413 |
 | SelectedRailJourney | serviceDate/安定した列車識別子・区間・scheduled時刻・乗換・採用元provenance。生のJourneyRouteResultや遅延等は保存しない | #385 / #386 |
-| Place / Money | Provider非依存identity・保存許諾付きSnapshot、原通貨の整数minor unit | #414 / #412 |
+| Place / Money | Provider非依存identity・保存許諾付きSnapshot（[Place導入記録](trip-place-snapshot.md)）、原通貨の整数minor unit | Place基礎は#414で導入、Moneyは#412 |
 | Candidate / Offering | 比較前の外部候補。採用済みTripとは別 | #385 / #400 / #406 |
 | Reservation | 予約状態を所有する別aggregate。宿選択はbookedではない | #398 |
 | TripWatch / TripImpact | Trip revisionと外部観測に紐づく派生索引・影響 | #393 / #394 / #407 / #408 |

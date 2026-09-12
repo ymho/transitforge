@@ -68,16 +68,24 @@ describe("candidate adoption boundary", () => {
   it("adopts a single permitted hotel into the specified stay, without copying prices or options", async () => {
     const { trip, port, record, selectedAt } = setup();
     const offering = { kind: "accommodation" as const, provider: "fixture", providerItemId: "hotel-a", name: "宿A",
-      checkInDate: "2026-09-13", checkOutDate: "2026-09-14", price: { amount: 9999, currency: "JPY" as const }, availability: "available" as const };
+      checkInDate: "2026-09-13", checkOutDate: "2026-09-14", price: { amount: 9999, currency: "JPY" as const }, availability: "available" as const,
+      address: "未許諾の住所", latitude: 35, longitude: 135, imageUrl: "https://example.com/image.jpg" };
     record.candidate.accommodations = [offering, { ...offering, providerItemId: "hotel-b", name: "宿B" }];
     record.accommodation = { provider: "fixture", providerItemId: "hotel-a", storageAllowed: true,
+      placeRetention: { origin: "provider", provider: "fixture", storage: "permitted", allowedFields: ["ref", "name", "sources", "capturedAt"] },
       source: { id: "hotel-evidence", kind: "accommodation", provider: "fixture", sourceId: "hotel-a", retrievedAt: "2026-09-12T07:55:00Z", confidence: "observed" } };
     const request = { candidateId: record.candidate.id, itemId: "stay", taskId: "task-a", accommodation: { provider: "fixture", providerItemId: "hotel-a" } };
     const proposal = await proposeCandidateSelection(trip, request, port, selectedAt);
     const result = applyTripProposal(trip, proposal);
     expect(result.items[1]).toMatchObject({ selection: { status: "selected", accommodation: { place: { name: "宿A" } } } });
+    expect(result.items[1]).toMatchObject({ selection: { accommodation: { place: {
+      ref: { provider: "fixture", providerPlaceId: "hotel-a" }, capturedAt: "2026-09-12T07:55:00Z",
+      sources: [{ sourceId: "hotel-a", provider: "fixture" }],
+    } } } });
     expect(result.items[2]).toEqual(trip.items[2]);
-    expect(JSON.stringify(result)).not.toMatch(/price|availability|options|宿B/);
+    expect(JSON.stringify(result)).not.toMatch(/price|availability|options|宿B|address|coordinate|imageUrl/);
+    record.accommodation.placeRetention = { origin: "manual" };
+    await expect(proposeCandidateSelection(trip, request, port, selectedAt)).rejects.toThrow(/manual/);
     record.accommodation.storageAllowed = false;
     await expect(proposeCandidateSelection(trip, request, port, selectedAt)).rejects.toThrow(/permission/);
   });

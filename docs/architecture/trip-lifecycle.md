@@ -394,6 +394,10 @@ Provider由来の値を`manual`へ付け替えるだけの回避は禁止。保�
 再同定が必要と記録する。既存LocalStorageの原本は無言で消さず、取込不可fieldを報告する。
 保持条件・attribution・鮮度はAdapterが検証してからSnapshotに渡す。#414/#400が実装を所有する。
 
+#414で同じ`PlaceRef`/`PlaceSnapshot`と許可リスト変換を導入した。
+実装済み範囲とlegacyの部分変換・Activityへの引継ぎは[Place導入記録](trip-place-snapshot.md)を参照する。
+Providerの保存許諾は型のvalidityとは別であり、検索結果やモデル提供のpermissionを信用しない。
+
 ### Offeringと採用時Snapshot (#400)
 
 `AccommodationOffering`は外部検索の現在候補、`AccommodationSnapshot`は採用した当時の記録。
