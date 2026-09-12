@@ -2,8 +2,12 @@
 
 この文書はRaiquoraが扱う主要なデータモデルの案内である。
 
-型とスキーマの実装を正本とし この文書は責務 保存先 生成元 結合キーを説明する。型を変更するときは
+稼働中の型とスキーマの実装について、この文書は責務 保存先 生成元 結合キーを説明する。型を変更するときは
 対応する実装 テスト この文書を同時に見直す。ER図が必要な範囲だけ 将来`domain-model.dbml`を補助資料として追加する。
+
+旅行機能の**移行先の正本設計**は #382/#415 と [Trip V2契約](trip-lifecycle.md)を優先する。
+以下のTravelPlan/TripPlan/TripContext・LocalStorageの説明は現行legacy実装であり、
+将来も二重正本や会話への従属を維持する方針ではない。#415でruntimeや保存形式は変更していない。
 
 計算の正本と実行境界は[Domainの所有権](domain-ownership.md)を参照する。
 
@@ -314,6 +318,33 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 
 ## 旅行相談
 
+### Trip V2（採用済み設計・段階実装予定）
+
+将来の正本は`Trip`である。`TravelPlan`は検索結果の応答束、`TripPlan`は現行編集モデルであり、
+後続#385以降でTripへ移行する。`TripRequest`はTripの子value objectで、旧TripContextと並行保存しない。
+
+| 概念 | 正本・責務 | 実装担当 |
+| --- | --- | --- |
+| Trip | id/schemaVersion/revision、title/summary、request、採用済みitems、planning/lifecycle | #385 / #383 / #389 |
+| TripRequest | 今回のtyped hard/soft条件、出所、PlanAssumption、TripParty | #387 / #411 |
+| ItineraryItem | transport/stay/activity、fixed/window/day/unscheduled、選択済みSnapshot | #385 / #386 / #410 / #413 |
+| SelectedRailJourney | serviceDate/安定した列車識別子・区間・scheduled時刻・乗換・採用元provenance。生のJourneyRouteResultや遅延等は保存しない | #385 / #386 |
+| Place / Money | Provider非依存identity・保存許諾付きSnapshot、原通貨の整数minor unit | #414 / #412 |
+| Candidate / Offering | 比較前の外部候補。採用済みTripとは別 | #385 / #400 / #406 |
+| Reservation | 予約状態を所有する別aggregate。宿選択はbookedではない | #398 |
+| TripWatch / TripImpact | Trip revisionと外部観測に紐づく派生索引・影響 | #393 / #394 / #407 / #408 |
+| Hazard / Notification | 外部の公的事実とユーザーへの配信状態を分離 | #401 / #395 |
+| ConversationSession.tripId | 1会話に任意1Trip参照、複数会話から同じTrip。会話削除はTripを削除しない | #388 |
+
+正本型の骨格、aggregate図、invariant、DTO/Domain境界、LocalStorage→server取込の手順と
+各fieldのmigration担当は[Trip V2契約](trip-lifecycle.md)へ集約する。
+Domain schemaVersion 2、wire `trip-api-v1`、Adapter storageVersion、編集revisionは別概念である。
+新しいV2 writerは変換と#388/#389の安全な保存・競合対策が揃ってから有効化する。
+
+鉄道は検索結果`JourneyRouteResult`、Tripの計画専用`SelectedRailJourney`、現在の
+TrainOperation/TravelEventとTripImpactを分離する。既存検索結果の型を保存型として流用せず、
+scheduled事実だけを明示変換する。現在の遅延や補正済み時刻は表示時に外部観測と関連付ける。
+
 ### `UserProfile`
 
 - 定義: `modules/trip/domain/travel-profile.ts`
@@ -326,6 +357,9 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 旅行検索で出発駅が明示されていないときは`home.station`を普段の出発駅として使う。
 
 ### `TripContext`
+
+現行legacy契約。移行後は[TripRequest](trip-lifecycle.md#3-trip--triprequestの最終形)と
+Trip.planningStateへ分離し、AgentDecisionや履歴のContextを永続正本として再利用しない。
 
 - 定義: `modules/trip/domain/travel-profile.ts`
 - 保持範囲: 現在の旅行相談
@@ -366,6 +400,8 @@ AI応答には取得できた`x-transitforge-request-id`も保存し 再読み�
 
 ### `ConversationSession` `TravelMemory`
 
+以下は現行の会話削除cascadeを含む。#388でTrip ID参照へ移行し、Trip削除を会話から独立させる。
+
 - 定義: `frontend/src/domain/conversation-session.ts`
 - Repository Port: `frontend/src/usecases/concierge/conversation-session-repository.ts`
 - Browser Adapter: `frontend/src/adapters/browser/conversation-session-repository.ts`
@@ -402,6 +438,9 @@ Mobileでは会話を通常画面とし 左側の会話操作レールから地�
 
 ### `TripPlan` `TripPlanItem` `TripPlanPatch`
 
+以下は現行legacyの保存・UI契約であり、V2の最終仕様ではない。
+Patchの確認可能な差分更新は維持し、候補分離・validation・revisionを段階導入する。
+
 - 定義: `modules/trip/domain/trip-plan.ts`
 - Repository: `frontend/src/usecases/trip-plan/trip-plan-repository.ts`
 - 保存先: LocalStorage `transitforge.trip-plans.v2`
@@ -434,6 +473,9 @@ AI応答だけでは保存せず 利用者が画面で反映を選んだ後に�
 ## AIと旅行候補の応答
 
 ### `TravelCandidate` `TravelExpenseSummary`
+
+以下は現行の鉄道・JPY限定契約。#385/#413/#412で候補の種類と通貨を一般化する。
+鉄道運賃の非推測と不明価格の明示は引き継ぐ。
 
 - 定義: `modules/trip/domain/travel-candidate.ts`
 

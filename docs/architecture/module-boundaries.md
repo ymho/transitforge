@@ -5,6 +5,11 @@
 コードを技術ではなく責務から探せる状態にし 変更理由の異なるモジュールを分離する
 この文書は現在の構成とimport方向の正本である
 
+Trip V2の移行先契約と責務分担は [Tripライフサイクル](trip-lifecycle.md)（#382/#415）を参照する。
+Trip/TripRequest/Itineraryのpure契約は`modules/trip/domain`、BackendのTripRepository portは
+既存規則に従い`backend/agent-api/src/ports`、CRUD/取込は`usecases`、DB/Browser/HTTPは各Adapterへ置く。
+本設計採用だけでは新しいpackageやRepository実装を追加せず、旧型とV2を二重正本にしない。
+
 Issue #203で採用した次期構成と段階移行は[ADR 0037](../decisions/0037-adopt-typescript-workspaces-and-shared-domain-modules.md)と
 [TypeScript構成移行台帳](typescript-migration-inventory.md)を参照する。この文書は現在稼働している境界を説明する。
 

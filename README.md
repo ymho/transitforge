@@ -106,6 +106,10 @@ TypeScriptのテストは対象モジュールの隣へ置く。repository保守
 計算の正本は[Domainの所有権](docs/architecture/domain-ownership.md)
 移行結果は[TypeScript構成再編の完了監査](docs/architecture/typescript-reorganization-audit.md)を参照する
 
+旅行機能の次期設計は #382/#415 を親方針とした [Trip V2契約とmigration計画](docs/architecture/trip-lifecycle.md)
+を参照する。現行のTravelPlan/TripPlan/TripContextから、会話と独立したTripへ段階移行する設計であり、
+サーバ保存・予約・旅行中通知が実装済みという意味ではない。
+
 ## 確認コマンド
 
 ```bash

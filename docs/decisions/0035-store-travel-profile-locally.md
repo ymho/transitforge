@@ -3,6 +3,9 @@
 - ステータス: Accepted
 - 日付: 2026-08-16
 
+今回条件のTripContext正本は[ADR 0052](0052-establish-trip-v2-contract-and-migration.md)の
+TripRequestへ移行する設計を採用した（#387で実装）。Profileの端末保存とprivacy境界は維持する。
+
 ## 背景
 
 曖昧な旅行相談に答えるには 普段の出発地や同行者 好みを参照できる必要がある。一方で
