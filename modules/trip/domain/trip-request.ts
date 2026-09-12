@@ -63,6 +63,7 @@ export function validateTripRequest(request: TripRequest, items: readonly Itiner
         exactKeys(ref, ["type", "itemId", "field"]);
         const item = items.find(({ id }) => id === ref.itemId);
         if (!item || !["schedule", "place", "selection"].includes(ref.field)) throw new Error("Missing assumption item/field");
+        if (item.type === "activity" && ref.field === "selection") throw new Error("Activity assumption must affect schedule or place");
         if (a.status === "rejected" && !unresolvedField(item, ref.field)) throw new Error("Rejected assumption still supports an item; resolve it atomically");
       } else if (ref.type === "party") {
         exactKeys(ref, ["type"]);
@@ -77,7 +78,7 @@ function uniqueIds(values: readonly { id: string }[]): void {
 function unresolvedField(item: ItineraryItem, field: "schedule" | "place" | "selection"): boolean {
   if (field === "schedule") return item.schedule.type === "unscheduled";
   if (item.type === "transport") return item.detail.status === "unresolved";
-  if (item.type === "activity") return item.place === undefined;
+  if (item.type === "activity") return field === "place" && item.place === undefined;
   return item.selection.status === "unselected" && (field !== "place" || item.selection.place === undefined);
 }
 

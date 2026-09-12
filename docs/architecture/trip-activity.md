@@ -28,6 +28,11 @@ fixed/window/day/unscheduledは#386の型とvalidationだけを使い、日付�
 午後を14時固定、終了不明を0分としない。予約成立や訪問済みを推測しない。
 placeは#414のPlaceSnapshotのみ。Provider rawや候補配列を入れるfieldはない。
 
+PlanAssumptionのitem参照は種別に対して検証する。Activityはschedule/placeのみ許可し、
+selection参照は場所の有無や仮定の確認状態にかかわらず拒否する。
+却下したplace仮定はplace未設定、schedule仮定はunscheduledの場合のみ保持できる。
+stay/transportの既存selection仮定の意味は変更しない。
+
 `TripPatch`へ`{type: add, item, afterId?}`を追加した。
 省略は末尾、指定は存在するIDの直後。空文字/未知ID/自己参照/重複IDは拒否する。
 同じ列の先行addを後続add/replaceが参照できる。ローカルの作業配列で全件と最終Tripを
@@ -119,6 +124,12 @@ scriptedのK/Lは各TTFI=1、model call=2 / tool call=1である。常時Reflect
 検証結果: 全TypeScriptテスト、Frontend/Backend build、architecture/workspace、Bundle budget、
 Python 13件、Lambda package checkが成功。Smokeは既存12 + Ask 2 + Trip Progress 4、
 Fullは既存42 + Ask 7 + Trip Progress 12が成功した。
+
+PR #427レビュー修正ではPlanAssumption × Activityに限定し、item field適用性の16テストを追加した。
+Activity selectionの全status拒否、place有無、schedule全4精度、stay/transport、
+不正参照を含むProposalの原本不変を確認した。再実行はTypeScript計1,272件、build、
+architecture/workspace、Smoke/Fullすべて成功。Agent Runtimeは変更せず、Liveは再実行していない。
+上記AWS認証期限切れによる未実施記録は維持する。
 
 本番LocalStorage writer、server保存、dual-write、Conversation削除は変更していない。
 V2の保存/認可/取込は#388、全更新のrevision/CASは#389、UI全面移行は#390。
