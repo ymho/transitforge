@@ -1,5 +1,7 @@
 import type { AgentToolDescriptor } from "./tool-contract";
 import type { AgentRuntimeFeature, AgentRuntimeRequest } from "./runtime-contract";
+import { parseAgentDecisionSummary, type AgentDecisionSummary } from "./agent-decision-summary";
+import { effectiveTripConstraints, type TripRequest } from "@raiquora/trip/trip-request";
 
 export type AgentContextValue = string | number | boolean | null;
 
@@ -49,13 +51,15 @@ export interface AgentToolOutcomeSummary {
 }
 
 export interface AgentRuntimeContextInput {
+  /** Current execution's external decision result, never promoted into Trip.request. */
+  currentTurnDecision?: AgentDecisionSummary;
   travelCandidates?: Record<string, unknown>[];
   realtimeFacts?: Record<string, unknown>[];
   featureContext?: Omit<AgentFeatureContext, "feature">;
   conversation?: AgentConversationContext;
   tripContext?: Record<string, AgentContextValue | AgentContextValue[]>;
   travelProfile?: Record<string, unknown>;
-  currentTrip?: Record<string, unknown>;
+  currentTrip?: Record<string, unknown> & { request?: TripRequest };
   currentJourney?: Record<string, unknown>;
   verifiedFacts?: AgentVerifiedFactSummary[];
   knownHardConstraints?: AgentKnownConstraint[];
@@ -70,6 +74,11 @@ export interface AgentAvailableCapability {
 }
 
 export interface AgentDecisionContext {
+  persistedTripRequest?: unknown;
+  tripHardConstraints?: unknown;
+  tripSoftPreferences?: unknown;
+  unconfirmedAssumptions?: unknown;
+  currentTurnDecision?: AgentDecisionSummary;
   travelCandidates?: Record<string, unknown>[];
   realtimeFacts?: Record<string, unknown>[];
   userRequest: string;
@@ -93,7 +102,22 @@ export function buildAgentDecisionContext(
   tools: AgentToolDescriptor[],
 ): AgentDecisionContext {
   const input = request.context;
+  const tripRequest = input?.currentTrip?.request;
+  const hasTripRequest = tripRequest !== undefined;
+  const effective = tripRequest ? effectiveTripConstraints(tripRequest) : [];
+  const currentTrip = input?.currentTrip ? Object.fromEntries(Object.entries(input.currentTrip).filter(([key]) =>
+    !["request", "effectiveHardConstraints", "effectiveSoftPreferences", "unconfirmedAssumptions"].includes(key))) : undefined;
+  const decision = parseAgentDecisionSummary(input?.currentTurnDecision);
   return {
+    ...(hasTripRequest ? {
+      // Preserve complete typed constraints/links, not the generic key/value legacy interpretation.
+      // Privacy is still enforced; an oversized request fails the message budget rather than losing conditions.
+      persistedTripRequest: privateRequestProjection(tripRequest),
+      tripHardConstraints: privateRequestProjection(effective.filter((c) => c.strength === "hard")),
+      tripSoftPreferences: privateRequestProjection(effective.filter((c) => c.strength === "soft")),
+      unconfirmedAssumptions: privateRequestProjection(tripRequest!.assumptions.filter((a) => a.status === "unconfirmed")),
+    } : {}),
+    ...(decision ? { currentTurnDecision: structuredClone(decision) } : {}),
     userRequest: bounded(request.userRequest, 1_500),
     ...(input?.travelCandidates ? { travelCandidates: input.travelCandidates.slice(0, 12).map((value) => boundedUnknownRecord(value)) } : {}),
     ...(input?.realtimeFacts ? { realtimeFacts: input.realtimeFacts.slice(0, 12).map((value) => boundedUnknownRecord(value)) } : {}),
@@ -111,10 +135,10 @@ export function buildAgentDecisionContext(
         : {}),
     },
     ...(input?.conversation ? { conversation: conversation(input.conversation) } : {}),
-    ...(input?.tripContext ? { tripContext: boundedRecord(input.tripContext, 20) } : {}),
+    ...(!hasTripRequest && input?.tripContext ? { tripContext: boundedRecord(input.tripContext, 20) } : {}),
     ...(input?.travelProfile ? { travelProfile: boundedUnknownRecord(input.travelProfile) } : {}),
     // Trip -> schedule[] -> item.schedule -> ZonedInstant -> at/timeZone needs six levels.
-    ...(input?.currentTrip ? { currentTrip: boundedUnknownRecord(input.currentTrip, 6) } : {}),
+    ...(currentTrip ? { currentTrip: boundedUnknownRecord(currentTrip, 6) } : {}),
     ...(input?.currentJourney
       ? { currentJourney: boundedUnknownRecord(input.currentJourney, 6) }
       : {}),
@@ -124,9 +148,9 @@ export function buildAgentDecisionContext(
       subject: bounded(fact.subject, 160),
       summary: bounded(fact.summary, 300),
     })),
-    knownHardConstraints: (input?.knownHardConstraints ?? []).slice(0, 20)
+    knownHardConstraints: (input?.knownHardConstraints ?? []).filter((c) => !hasTripRequest || ["user", "ui"].includes(c.source)).slice(0, 20)
       .map(constraint),
-    knownSoftPreferences: (input?.knownSoftPreferences ?? []).slice(0, 20)
+    knownSoftPreferences: (input?.knownSoftPreferences ?? []).filter((c) => !hasTripRequest || c.source === "user").slice(0, 20)
       .map(preference),
     previousToolOutcomes: (input?.previousToolOutcomes ?? []).slice(-12)
       .map((outcome) => ({
@@ -143,6 +167,13 @@ export function buildAgentDecisionContext(
 }
 
 export function agentDecisionContextText(context: AgentDecisionContext): string {
+  const requestFields = {
+    persistedTripRequest: context.persistedTripRequest,
+    tripHardConstraints: context.tripHardConstraints,
+    tripSoftPreferences: context.tripSoftPreferences,
+    unconfirmedAssumptions: context.unconfirmedAssumptions,
+    currentTurnDecision: context.currentTurnDecision,
+  };
   const serialized = JSON.stringify({
     ...context,
     availableTools: context.availableTools.map(({ name, requiredInputs }) => ({
@@ -151,6 +182,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     })),
   });
   const compact = JSON.stringify({
+      ...requestFields,
       userRequest: context.userRequest,
       featureContext: context.featureContext,
       conversation: context.conversation ? {
@@ -171,6 +203,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
       contextTruncated: true,
     });
   const core = JSON.stringify({
+    ...requestFields,
     userRequest: context.userRequest.slice(0, 1_000),
     featureContext: context.featureContext,
     conversation: context.conversation ? {
@@ -189,6 +222,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     contextTruncated: true,
   });
   const minimal = JSON.stringify({
+    ...requestFields,
     userRequest: context.userRequest,
     featureContext: context.featureContext,
     conversation: context.conversation ? {
@@ -198,6 +232,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     } : undefined,
     tripContext: context.tripContext ? Object.fromEntries(Object.entries(context.tripContext).slice(0, 20)
       .map(([key, value]) => [key, Array.isArray(value) ? value.slice(0, 3) : value])) : undefined,
+    ...(context.persistedTripRequest !== undefined ? { travelProfile: context.travelProfile } : {}),
     knownHardConstraints: context.knownHardConstraints.slice(0, 12),
     knownSoftPreferences: context.knownSoftPreferences.slice(0, 6),
     contextTruncated: true,
@@ -209,8 +244,18 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     "次の構造化Contextを使って利用者の目的と制約を解釈し、必要なEvidenceを得る能力を選択してください。",
     "既知条件は聞き直さず、Tool結果は事実として扱い、推測で補完しないでください。",
     "currentTripは計画、travelCandidatesとcurrentJourneyは比較・照会中の検索結果、realtimeFactsは検索時点の観測です。候補の先頭や現在の見込時刻を採用済み計画にしないでください。",
+    ...(context.persistedTripRequest !== undefined ? ["persistedTripRequestだけが今回条件の正本です。tripHardConstraints/ tripSoftPreferencesは有効条件の読み取り投影で、強さと仮定の確認状態は別です。unconfirmedAssumptionsは仮置きとして説明し、却下済みの条件は使わないでください。travelProfileは普段の嗜好、currentTurnDecisionは今回の解釈です。解釈や履歴で正本を上書きせず、変更はProposalとして提案してください。"] : []),
     `<agent_context>${boundedContext}</agent_context>`,
   ].join("\n");
+}
+
+/** Read-only projection of a validated V2 request. IDs/ranges/affects must survive compaction. */
+function privateRequestProjection(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(privateRequestProjection);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).filter(([key]) =>
+    !/(?:token|secret|password|credential|api[_-]?key|latitude|longitude|coordinates?)/iu.test(key))
+    .map(([key, field]) => [key, privateRequestProjection(field)]));
 }
 
 function compactCurrentJourney(

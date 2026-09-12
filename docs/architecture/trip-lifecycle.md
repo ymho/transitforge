@@ -151,6 +151,9 @@ IDは会話や目的地から再計算しない。全item IDはTrip内で一意�
 
 ### 要求の型と意味 (#387)
 
+#387で導入したコード、legacy field棚卸し、仮定確認と評価の最小境界、未導入責務は
+[Request導入記録](trip-request.md)を参照する。Money/partyと本番writerは未有効であり、以下は最終契約を示す。
+
 同じ出発地/日付等を`TripRequest.origin`と`constraints`の両方へ保存しない。
 次の`requirement.type`によるunionを1つ定義し、検索条件はそこからderiveする。
 

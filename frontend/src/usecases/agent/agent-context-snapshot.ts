@@ -3,6 +3,7 @@ import { travelPreferenceLabels } from "@raiquora/trip/travel-profile";
 import type { TripPlan, TripPlanItem } from "@raiquora/trip/trip-plan";
 import { validateTrip, type Trip } from "@raiquora/trip/trip";
 import type { ItinerarySchedule } from "@raiquora/trip/itinerary-schedule";
+import type { TripRequest } from "@raiquora/trip/trip-request";
 
 export interface AgentContextSnapshot {
   travelCandidates?: Record<string, unknown>[];
@@ -17,6 +18,8 @@ export interface AgentContextSnapshot {
     avoidances: string[];
   };
   trip?: {
+    /** V2 projections only; neither a repository nor writable AgentDecision state. */
+    request?: TripRequest;
     title: string;
     destination: string;
     adults?: number;
@@ -27,6 +30,8 @@ export interface AgentContextSnapshot {
 }
 
 export interface AgentTripScheduleItem {
+  /** Stable V2 reference for item-scoped constraints and assumption effects; absent for legacy. */
+  itemId?: string;
   /** V2 preserves precision/flexibility; absent for legacy items, never inferred as fixed. */
   schedule?: ItinerarySchedule;
   type: TripPlanItem["type"] | "transport";
@@ -179,13 +184,14 @@ function legacyCandidateSnapshot(trip: TripPlan): Pick<AgentContextSnapshot, "tr
 function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["trip"]> {
   validateTrip(trip);
   return { title: bounded(trip.title, 100) ?? "現在の旅程", destination: "未設定", considerations: [],
+    request: structuredClone(trip.request),
     schedule: trip.items.slice(0, 24).map((item) => {
       const schedule = structuredClone(item.schedule);
-      if (item.type === "stay") return { type: "stay", schedule, selectionStatus: item.selection.status,
+      if (item.type === "stay") return { itemId: item.id, type: "stay", schedule, selectionStatus: item.selection.status,
         summary: bounded(item.selection.status === "selected" ? item.selection.accommodation.place.name : item.title, 100) ?? "宿泊" };
-      if (item.detail.status === "unresolved") return { type: "transport", schedule, summary: bounded(item.title, 100) ?? "移動", selectionStatus: "unresolved" };
+      if (item.detail.status === "unresolved") return { itemId: item.id, type: "transport", schedule, summary: bounded(item.title, 100) ?? "移動", selectionStatus: "unresolved" };
       const journey = item.detail.journey;
-      return { type: "transport", schedule, selectionStatus: "selected",
+      return { itemId: item.id, type: "transport", schedule, selectionStatus: "selected",
         summary: `${bounded(journey.legs[0]!.origin.name, 80)}→${bounded(journey.legs.at(-1)!.destination.name, 80)}（計画 ${journey.legs[0]!.scheduledDeparture.at} → ${journey.legs.at(-1)!.scheduledArrival.at}）`,
         date: journey.serviceDate };
     }) };

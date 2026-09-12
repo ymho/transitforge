@@ -6,6 +6,7 @@
 
 #414によるPlaceの統合・利用箇所・保存許諾・legacy部分変換は[Place導入記録](trip-place-snapshot.md)を参照する。
 #386による共通schedule・日時validation・Context/表示projectionは[Schedule導入記録](trip-schedule.md)を参照する。
+#387による同じTripのRequest・仮定・legacy mapping・評価境界は[Request導入記録](trip-request.md)を参照する。
 
 ## 現行モデル・利用箇所の棚卸し
 
@@ -34,9 +35,10 @@
   AccommodationOffering/TripAccommodationを埋め込まず、第三の恒久宿型も追加しない。
   #414でplaceを共通PlaceSnapshotへ統合した。#400がこのselection内の宿契約を拡張し、価格・空室・画像等はその時点で扱う。
 - #386で全itemへ共通scheduleを追加した。不明時刻は明示`unscheduled`、rail/stayは計画事実のprojectionを検証する。
-- 未実装のrequest/state/activity/party等を正常なdefaultで埋めない。
+- #387でrequest（constraints/assumptions、任意goal）を追加した。空Requestは条件未把握であって日帰り等のdefaultではない。
+- 未実装のstate/activity/party等を正常なdefaultで埋めない。
   別名の暫定Tripや別のItinerary正本を増やさない。
-- `TripPatch` / `TripUpdateProposal`は今回必要な既存itemのreplaceだけを持つ最小契約。
+- `TripPatch` / `TripUpdateProposal`は既存itemのreplaceと、#387で追加したrequest patchを持つ最小契約。
   `applyTripProposal`は全件検証し、失敗時に元Tripを変えない。存在しない対象、ID変更、異なるitem種別は拒否。
   **これはメモリ上の確認可能な変更であり、revision/updatedAtを増やす本番writerではない。**
   #389が同じ契約へ他操作、baseRevision、mutationIdと更新時刻/CASを追加する。
@@ -103,7 +105,8 @@ V2生成日時を注入する。同じ入力/引数で同じ出力。旧IDをUUI
 - manual移動はmode未解決 + #413警告。sightseeingは型を先取りせずdeferredItemIds + #410警告。
   #414で同じconverterに観光Placeの許諾付き変換を追加した。Activity未導入中はplaceMappingsとして返すが別保存形式にはしない。
   #386で日付はday/宿泊day spanへ移し、同じplaceMappingsにscheduleも返す。不正日付は警告とunscheduled。
-  条件等は#387の移行保留。元item ID/順序は原本に残り、変換できたitemのID/相対順序も維持。
+  #387で同じ入口に旧TripContext/conditionsのRequest mappingを追加した。出所/必須度はlegacy+未確認で保持し、
+  曖昧な時刻・比較対象は警告にする。元item ID/順序は原本に残り、変換できたitemのID/相対順序も維持。
 - 原本を変更せず、`requiresLegacyRetention: true`とwarningsを常に返す。これは完成したimportではない。
   未実装fieldやdeferred itemがある状態で旧rawを削除してはいけない。元データはログ/Trip内へコピーしない。
 - **LocalStorageの現行正本/writer、会話削除、server Repositoryは変更しない。dual-writeもない。**
@@ -113,7 +116,8 @@ V2生成日時を注入する。同じ入力/引数で同じ出力。旧IDをUUI
 `currentTrip`は採用計画（legacy railは未採用明示）。`travelCandidates`は比較候補、`realtimeFacts`は
 検索時点見込を含む外部情報として分離する。旧応答に観測日時がないためfreshness=unknownと明示する。
 `currentJourney`は従来どおり直前検索の照会/比較Contextであり採用Tripではない。
-Contextは既存privacy filter/件数/深さ上限を通す。Tool数・呼出し上限・Provider・LLM判断権限は変えない。
+Contextは既存privacy filter/件数/深さ上限を通す。#387のRequest投影はID/条件/仮定の参照を切り捨てず、
+全体Context予算に収まらなければ明示失敗にする。Tool数・呼出し上限・Provider・LLM判断権限は変えない。
 
 Domain/境界テストはdelay/extra field排除、provenance欠落、別日/同駅再訪、日跨ぎ、複数leg、
 遅延前提乗換、再検証、原子的replace、期限/所属/保存許諾、確認前後の不変、legacy決定性を扱う。
@@ -126,7 +130,7 @@ live評価は設定済みAWSセッション期限切れで未実施。保存済�
 | Issue | 同じTrip/同じconverterへ追加する責務 |
 | --- | --- |
 | #383 | planning/lifecycle、実行状態。現時点ではフィールド自体を追加していない |
-| #387 | TripRequest/constraints/PlanAssumption、条件競合、Profileと今回条件の区別 |
+| #387（導入済み） | TripRequest/constraints/PlanAssumption、最小評価、Profileと今回条件の区別。[Request導入記録](trip-request.md)参照 |
 | #400 | 宿snapshot/Offeringの最終整理、旧選択済み宿・許諾・観測のmapping |
 | #403 | 多都市、legacy/UIの対象stay選択導線と表示要約 |
 | #410 | Activity、deferred sightseeing IDの復元 |

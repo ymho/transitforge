@@ -2,6 +2,7 @@ import type { ExternalSourceEvidence } from "./external-travel-information";
 import { exactKeys, validDate, validInstant, projectRailSchedule, type SelectedRailJourney } from "./selected-rail-journey";
 import { validatePlaceSnapshot, type PlaceSnapshot } from "./place-snapshot";
 import { validateItinerarySchedule, projectStaySchedule, sameZonedInstant, type ItinerarySchedule } from "./itinerary-schedule";
+import { validateTripRequest, type TripRequest } from "./trip-request";
 
 /** The single Trip V2 aggregate. Deferred fields are absent, not default-completed. Writer remains gated. */
 export interface Trip {
@@ -9,6 +10,7 @@ export interface Trip {
   readonly schemaVersion: 2;
   readonly revision: number;
   readonly title: string;
+  readonly request: TripRequest;
   readonly items: readonly ItineraryItem[];
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -38,27 +40,29 @@ export interface StayItineraryItem extends ItineraryItemBase {
 export type ItineraryItem = TransportItineraryItem | StayItineraryItem;
 
 /** Minimal candidate-adoption patch. #389 extends this same contract with revisions and other operations. */
-export type TripPatch = { readonly type: "replace"; readonly itemId: string; readonly item: ItineraryItem };
+export type TripPatch = { readonly type: "replace"; readonly itemId: string; readonly item: ItineraryItem }
+  | { readonly type: "request"; readonly request: TripRequest };
 export interface TripUpdateProposal {
   readonly tripId: string;
   readonly summary: string;
   readonly patches: readonly TripPatch[];
 }
 
-export function createTrip(id: string, title: string, createdAt: string, items: readonly ItineraryItem[] = []): Trip {
-  const trip: Trip = { id, title, schemaVersion: 2, revision: 0, createdAt, updatedAt: createdAt, items };
+export function createTrip(id: string, title: string, createdAt: string, items: readonly ItineraryItem[] = [], request: TripRequest = { constraints: [], assumptions: [] }): Trip {
+  const trip: Trip = { id, title, schemaVersion: 2, revision: 0, createdAt, updatedAt: createdAt, items, request };
   validateTrip(trip);
   return structuredClone(trip);
 }
 
 export function validateTrip(trip: Trip): void {
-  exactKeys(trip, ["id", "title", "schemaVersion", "revision", "createdAt", "updatedAt", "items"]);
+  exactKeys(trip, ["id", "title", "schemaVersion", "revision", "createdAt", "updatedAt", "items", "request"]);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(trip.id) ||
       trip.schemaVersion !== 2 || !Number.isSafeInteger(trip.revision) || trip.revision < 0 ||
       typeof trip.title !== "string" || !validInstant(trip.createdAt) || !validInstant(trip.updatedAt) ||
       Date.parse(trip.updatedAt) < Date.parse(trip.createdAt) ||
       new Set(trip.items.map(({ id }) => id)).size !== trip.items.length) throw new Error("Invalid Trip");
   trip.items.forEach(validateItem);
+  validateTripRequest(trip.request, trip.items);
 }
 
 function validateItem(item: ItineraryItem): void {
@@ -107,7 +111,13 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal): Tri
   exactKeys(proposal, ["tripId", "summary", "patches"]);
   if (proposal.tripId !== trip.id) throw new Error("Proposal belongs to another Trip");
   const items = [...trip.items];
+  let request = trip.request;
   for (const patch of proposal.patches) {
+    if (patch.type === "request") {
+      exactKeys(patch, ["type", "request"]);
+      request = patch.request;
+      continue; // Cross-references are validated against the final items, not a partial patch state.
+    }
     exactKeys(patch, ["type", "itemId", "item"]);
     const index = items.findIndex(({ id }) => id === patch.itemId);
     if (patch.type !== "replace" || index < 0 || patch.item.id !== patch.itemId) throw new Error("Replacement requires an existing stable item ID");
@@ -117,7 +127,7 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal): Tri
   }
   // Validation completes before returning any change. #389 will own revision/updatedAt mutation.
   const result: Trip = { id: trip.id, schemaVersion: 2, revision: trip.revision, title: trip.title,
-    createdAt: trip.createdAt, updatedAt: trip.updatedAt, items };
+    createdAt: trip.createdAt, updatedAt: trip.updatedAt, items, request };
   validateTrip(result);
   return structuredClone(result);
 }

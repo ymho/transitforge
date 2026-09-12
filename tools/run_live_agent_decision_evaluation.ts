@@ -36,6 +36,9 @@ import {
 } from "../frontend/src/usecases/agent/tool-contract";
 import { ToolEvidenceRegistry } from "../frontend/src/usecases/agent/tool-evidence-registry";
 import { AgentToolRegistry } from "../frontend/src/usecases/agent/tool-registry";
+import { createAgentContextSnapshot } from "../frontend/src/usecases/agent/agent-context-snapshot";
+import { createTrip } from "../modules/trip/domain/trip";
+import type { TripRequest } from "../modules/trip/domain/trip-request";
 
 interface LiveDecisionCase {
   evaluation: AgentEvaluationCase;
@@ -235,6 +238,15 @@ function evaluationToolRegistry(
 }
 
 function liveDecisionCases(): LiveDecisionCase[] {
+  const v2Request: TripRequest = {
+    constraints: [
+      { id: "destination", strength: "hard", source: "user", scope: { type: "trip" }, requirement: { type: "destinations", places: [{ name: "京都市", sources: [] }], order: "fixed" } },
+      { id: "dates", strength: "hard", source: "user", scope: { type: "trip" }, requirement: { type: "dates", start: { earliest: "2026-09-21", latest: "2026-09-21" } } },
+      { id: "old-destination", strength: "hard", source: "assumption", assumptionId: "rejected", scope: { type: "trip" }, requirement: { type: "destinations", places: [{ name: "那覇市", sources: [] }], order: "fixed" } },
+    ],
+    assumptions: [{ id: "rejected", text: "那覇を仮の行き先としていた", status: "rejected", source: "model", affects: [{ type: "constraint", constraintId: "old-destination" }] }],
+  };
+  const v2Trip = createAgentContextSnapshot(undefined, createTrip("11111111-1111-4111-8111-111111111111", "旅行", "2026-09-12T08:00:00Z", [], v2Request)).trip;
   const featureContext = {
     calendarDate: "2026-08-30",
     serviceDate: "2026-08-30",
@@ -273,6 +285,30 @@ function liveDecisionCases(): LiveDecisionCase[] {
     }],
   };
   return [
+    liveCase({
+      id: "trip-v2-known-request-weather",
+      name: "V2の既知旅行先・日程を使い、legacy日程を再利用/再質問しない",
+      userRequest: "この旅行先の旅行日の天気を調べてください",
+      tags: ["constraint", "trip-v2", "known-condition"], expectedTool: "search_weather_forecast",
+      constraints: {}, requiredHardConstraintKeys: [],
+      context: { currentTrip: v2Trip, featureContext: { calendarDate: "2026-09-20", serviceDate: "2026-09-20" },
+        tripContext: { destinationWish: "那覇市", startDate: "2020-01-01" } },
+      availableTools: ["search_weather_forecast", "ask_follow_up"],
+      toolInputChecks: [
+        { toolName: "search_weather_forecast", callIndex: 0, field: "location", pattern: "^京都市$", normalization: "weather-municipality" },
+        { toolName: "search_weather_forecast", callIndex: 0, field: "startDate", pattern: "^2026-09-21$" },
+      ],
+    }),
+    liveCase({
+      id: "trip-v2-rejected-assumption-search",
+      name: "却下した行き先や普段の嗜好より今回の行き先を検索に使う",
+      userRequest: "今回の行き先の静かな散策スポットをWeb検索してください",
+      tags: ["constraint", "trip-v2", "assumption"], expectedTool: "search_web",
+      constraints: {}, requiredHardConstraintKeys: [],
+      context: { currentTrip: v2Trip, travelProfile: { favoriteInterests: ["沖縄の海"] } },
+      availableTools: ["search_web", "ask_follow_up"],
+      toolInputChecks: [{ toolName: "search_web", callIndex: 0, field: "query", pattern: "^(?!.*(?:那覇|沖縄)).*京都" }],
+    }),
     liveCase({
       id: "regional-request-without-exact-origin",
       name: "地域だけの相談を正確な出発地の質問で止めない",
