@@ -3,12 +3,17 @@ import { isSightseeingPlaceProvider, type TripPlan } from "./trip-plan";
 import { createPlaceSnapshot, validatePlaceCoordinate, type PlaceSnapshot, type PlaceSnapshotRetention } from "./place-snapshot";
 import type { ExternalSourceEvidence } from "./external-travel-information";
 import { projectStaySchedule, validateItinerarySchedule, type ItinerarySchedule } from "./itinerary-schedule";
+import { validateTripRequirement, nonemptyText, type TripRequirement } from "./trip-requirement";
+import type { TripRequest, TripConstraint, PlanAssumption } from "./trip-request";
+import { travelPreferenceLabels, type TravelPreference, type AdventureRisk } from "./travel-profile";
 
 export interface TripMigrationWarning {
   itemId?: string;
+  field?: string;
   code: "rail-selection-unverified" | "stay-snapshot-deferred" | "schedule-invalid" |
     "transport-mode-deferred" | "activity-deferred" | "request-state-deferred" |
-    "place-retention-unconfirmed" | "place-coordinate-invalid" | "place-fields-not-retained" | "place-invalid";
+    "place-retention-unconfirmed" | "place-coordinate-invalid" | "place-fields-not-retained" | "place-invalid" |
+    "request-field-invalid" | "request-field-deferred";
   ownerIssue: number;
 }
 export interface TripMigrationResult {
@@ -23,6 +28,8 @@ export interface TripMigrationResult {
 
 /** Adapter-reviewed legacy provenance/retention, keyed by existing item ID. Absent means unknown. */
 export interface LegacyTripMigrationOptions {
+  /** Raw legacy input, not normalized/clamped by the old reader and not a second V2 request store. */
+  tripContext?: unknown;
   placeRetentionByItemId?: Readonly<Record<string, {
     retention: PlaceSnapshotRetention;
     sources: readonly ExternalSourceEvidence[];
@@ -36,7 +43,7 @@ export function convertLegacyTripPlan(plan: TripPlan, identity: { tripId: string
       plan.items.some((item) => !item.id) || new Set(plan.items.map(({ id }) => id)).size !== plan.items.length) {
     throw new Error("Invalid or unsupported legacy TripPlan");
   }
-  const warnings: TripMigrationWarning[] = [{ code: "request-state-deferred", ownerIssue: 387 }];
+  const warnings: TripMigrationWarning[] = [];
   const deferredItemIds: string[] = [];
   const items: ItineraryItem[] = [];
   const placeMappings: TripMigrationResult["placeMappings"] = [];
@@ -104,6 +111,97 @@ export function convertLegacyTripPlan(plan: TripPlan, identity: { tripId: string
       } catch { warnings.push({ itemId: item.id, code: "place-invalid", ownerIssue: 414 }); }
     } else throw new Error("Unknown legacy item type");
   }
-  return { trip: createTrip(identity.tripId, plan.title, identity.createdAt, items),
+  const request = mapLegacyRequest(plan, options.tripContext, warnings);
+  return { trip: createTrip(identity.tripId, plan.title, identity.createdAt, items, request),
     warnings, deferredItemIds, placeMappings, requiresLegacyRetention: true };
 }
+
+/** Field mapping within the single converter. Legacy carries neither reliable authorship nor strength. */
+function mapLegacyRequest(plan: TripPlan, raw: unknown, warnings: TripMigrationWarning[]): TripRequest {
+  const constraints: TripConstraint[] = [];
+  const assumptions: PlanAssumption[] = [];
+  const warning = (field: string, ownerIssue = 387, invalid = false): void => {
+    warnings.push({ code: invalid ? "request-field-invalid" : "request-field-deferred", field, ownerIssue });
+  };
+  const note = (field: string, text: string): void => {
+    assumptions.push({ id: `legacy-assumption:${field}`, text, status: "unconfirmed", source: "legacy", affects: [] });
+  };
+  const add = (field: string, requirement: TripRequirement): void => {
+    try { validateTripRequirement(requirement); }
+    catch { warning(field, 387, true); return; }
+    const id = `legacy-constraint:${field}`;
+    const assumptionId = `legacy-assumption:${field}`;
+    constraints.push({ id, scope: { type: "trip" }, source: "legacy", strength: "soft", assumptionId, requirement });
+    assumptions.push({ id: assumptionId, text: `以前の旅行条件（${field}）。値は保持していますが、出所と必須度は未確認です。`,
+      status: "unconfirmed", source: "legacy", affects: [{ type: "constraint", constraintId: id }] });
+  };
+  if (plan.conditions !== undefined) {
+    if (!isRecord(plan.conditions)) warning("conditions", 387, true);
+    else {
+      if (Array.isArray(plan.conditions.considerations)) plan.conditions.considerations.forEach((text, index) => {
+        if (nonemptyText(text)) note(`conditions.considerations.${index}`, text);
+        else warning(`conditions.considerations.${index}`, 387, true);
+      });
+      else warning("conditions.considerations", 387, true);
+      for (const field of Object.keys(plan.conditions)) if (field !== "considerations") warning(`conditions.${field}`, field === "adults" || field === "children" ? 411 : 387);
+    }
+  }
+  if (raw === undefined) return { constraints, assumptions };
+  if (!isRecord(raw)) { warning("tripContext", 387, true); return { constraints, assumptions }; }
+  if (raw.startDate !== undefined) {
+    const start = { earliest: raw.startDate as string, latest: raw.startDate as string };
+    const requirement: TripRequirement = { type: "dates", start };
+    if (raw.endDate !== undefined) {
+      const combined: TripRequirement = { ...requirement, end: { earliest: raw.endDate as string, latest: raw.endDate as string } };
+      try { validateTripRequirement(combined); add("dates", combined); }
+      catch { add("startDate", requirement); warning("endDate", 387, true); }
+    } else add("startDate", requirement);
+  } else if (raw.endDate !== undefined) warning("endDate");
+  for (const [field, value] of Object.entries(raw).sort(([a], [b]) => a.localeCompare(b))) {
+    if (value === undefined) continue;
+    switch (field) {
+      case "destinationWish":
+        // A requested name, not a verified provider entity or an adopted destination.
+        if (nonemptyText(value)) add(field, { type: "destinations", places: [{ name: value, sources: [] }], order: "flexible" });
+        else warning(field, 387, true);
+        break;
+      case "startDate": case "endDate": break; // Combined above, independent of object key order.
+      case "stayNights": add(field, { type: "duration", unit: "nights", minimum: value as number, maximum: value as number }); break;
+      case "pace": add(field, { type: "pace", value: value as number }); break;
+      case "maximumTravelMinutes":
+        if (value !== null) add(field, { type: "mobility", maxTravelMinutes: value as number }); // null explicitly means no known limit.
+        break;
+      case "carAvailable": add(field, { type: "mobility", carAvailable: value as boolean }); break;
+      case "interests":
+        if (!isRecord(value)) { warning(field, 387, true); break; }
+        Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).forEach(([preference, weight]) => {
+          if (!Object.hasOwn(travelPreferenceLabels, preference) || typeof weight !== "number") { warning(`${field}.${preference}`, 387, true); return; }
+          add(`${field}.${preference}`, { type: "experience", intent: "prefer", preference: preference as TravelPreference,
+            text: travelPreferenceLabels[preference as TravelPreference], weight: weight as number });
+        });
+        break;
+      case "avoidances":
+        if (!Array.isArray(value)) { warning(field, 387, true); break; }
+        value.forEach((text, index) => add(`${field}.${index}`, { type: "experience", intent: "avoid", text })); break;
+      case "adventureIntensity":
+        add(field, { type: "adventure", intensity: value as 0 | 1 | 2 | 3,
+          avoidedRisks: (raw.avoidedRisks === undefined ? [] : raw.avoidedRisks) as AdventureRisk[] }); break;
+      case "avoidedRisks": if (raw.adventureIntensity === undefined) warning(field); break;
+      case "planningStage": warning(field, 383); break;
+      case "companions": warning(field, 411); break;
+      case "outboundDepartureTimeMinutes": case "returnArrivalTimeMinutes":
+        warning(field); // No reliable place identity + zone + civil date. Never fabricate a ZonedInstant.
+        if (Number.isSafeInteger(value) && (value as number) >= 0) note(field, `以前の時刻条件 ${field}: ${value}分。日付・場所・タイムゾーンは未確認です。`);
+        else warning(field, 387, true);
+        break;
+      case "relativeDistancePreference":
+        warning(field); // Compared candidate IDs are absent from legacy data.
+        if (value === "nearer" || value === "farther") note(field, `以前の距離の希望: ${value === "nearer" ? "近め" : "遠め"}。比較対象は未確認です。`);
+        else warning(field, 387, true);
+        break;
+      default: warning(field); // Retain original outside Trip; do not silently interpret unknown fields.
+    }
+  }
+  return { constraints: constraints.sort((a, b) => a.id.localeCompare(b.id)), assumptions: assumptions.sort((a, b) => a.id.localeCompare(b.id)) };
+}
+function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }

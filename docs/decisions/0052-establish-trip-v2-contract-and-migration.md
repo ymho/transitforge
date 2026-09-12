@@ -93,6 +93,8 @@ V2へ変わったという記述にはしない。#368/#380の残務は既に#38
 #414の同じPlace型への統合と保存制約・legacy変換は[Place導入記録](../architecture/trip-place-snapshot.md)を参照する。
 #386の共通schedule、ZonedInstant、鉄道/宿泊projection、既存converter拡張は
 [Schedule導入記録](../architecture/trip-schedule.md)を参照する。本番writerのgateは解除しない。
+#387の同じTrip.request、仮定/出所、最小評価、Agent投影と旧条件の部分変換は
+[Request導入記録](../architecture/trip-request.md)を参照する。別Request RepositoryやTripContextへのdual-writeは追加しない。
 
 #415は設計変更だけなので本番モデル・Tool・migrationは実行しない。
 `npm test`、`npm run build`、`npm run architecture:check`、`npm run workspace:check`を実行する。
