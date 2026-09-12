@@ -38,11 +38,18 @@ export interface StayPlanItem extends TripPlanItemBase {
   checkOutDate: string;
   destination: string;
 }
+const sightseeingPlaceProviders = ["manual", "mapbox", "wikipedia"] as const;
+export type SightseeingPlaceProvider = typeof sightseeingPlaceProviders[number];
+
+export function isSightseeingPlaceProvider(value: unknown): value is SightseeingPlaceProvider {
+  return sightseeingPlaceProviders.some((provider) => provider === value);
+}
+
 export interface SightseeingPlanItem extends TripPlanItemBase {
   type: "sightseeing";
   place: {
     name: string;
-    provider: "manual" | "mapbox" | "wikipedia";
+    provider: SightseeingPlaceProvider;
     placeId?: string;
     coordinate?: [number, number];
   };

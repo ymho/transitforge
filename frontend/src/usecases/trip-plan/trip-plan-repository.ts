@@ -4,6 +4,7 @@ import type {
   TripPlanConditions,
   TripPlanItem,
 } from "@raiquora/trip/trip-plan";
+import { isSightseeingPlaceProvider } from "@raiquora/trip/trip-plan";
 import type {
   TripAccommodation,
   TripJourneyPlan,
@@ -187,7 +188,7 @@ function isTripPlanItem(value: unknown): value is TripPlanItem {
   }
   if (value.type === "sightseeing") {
     return isRecord(value.place) && isBoundedString(value.place.name, 100) &&
-      (value.place.provider === "manual" || value.place.provider === "mapbox") &&
+      isSightseeingPlaceProvider(value.place.provider) &&
       (value.place.placeId === undefined || isBoundedString(value.place.placeId, 200)) &&
       (value.place.coordinate === undefined || isCoordinate(value.place.coordinate)) &&
       (value.date === undefined || isDateString(value.date));

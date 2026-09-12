@@ -2,11 +2,23 @@ import { expect, it } from "vitest";
 
 import {
   applyTripPlanPatches,
+  isSightseeingPlaceProvider,
   tripPlanFromTravelPlan,
   tripPlanPatchesFromTravelPlan,
   validateTripPlanPatches,
   type TripPlan,
 } from "./trip-plan";
+
+it.each(["manual", "mapbox", "wikipedia"])("accepts sightseeing provider %s", (provider) => {
+  expect(isSightseeingPlaceProvider(provider)).toBe(true);
+});
+
+it.each(["unknown", "Wikipedia", "", null, undefined, 1, {}, ["wikipedia"]])(
+  "rejects unknown or malformed sightseeing provider %j",
+  (provider) => {
+    expect(isSightseeingPlaceProvider(provider)).toBe(false);
+  },
+);
 
 it("rejects update proposals that lose item references or ordering", () => {
   expect(validateTripPlanPatches(plan, [{
