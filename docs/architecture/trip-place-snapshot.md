@@ -79,10 +79,11 @@ Wikipedia/宿/レストランも検索で取得できたという理由だけで
 | ID/座標のfield保持許諾なし | 許可された名前・出所等のみ + `place-fields-not-retained`。取得済み値を黙って移行完了扱いしない |
 | 未知provider/空ID/不正出所等 | placeなし + `place-invalid`。他itemの移行を妨げない |
 
-Activityは#410なので、観光Placeは戻り値`placeMappings: [{ itemId, place?, schedule }]`へ返す。
+#414時点では、観光Placeを戻り値`placeMappings: [{ itemId, place?, schedule }]`へ返す。
 scheduleは#386が追加した同じItineraryScheduleであり、別Activity保存型ではない。
 これは**同じconverter内の未完了field mappingの結果**であり、Trip内の候補配列でも独立Repository/保存形式でもない。
-#410はこの変換処理を同じ入口内のActivity.placeへ接続する。placeがない場合もdeferredItemIdsと警告を残す。
+#410でこの変換処理を同じ入口内のActivity.placeへ接続した。placeがない/部分変換の場合はdeferredItemIdsと警告を残す。
+詳細は[Activity導入記録](trip-activity.md)を参照する。event Evidenceも同じ保存出所validatorで検証する。
 別converterを再実装したり、移行結果を第2のPlace正本として保存しない。
 旧raw削除・取込完了扱い・V2 writer・dual-write・会話削除変更は一切有効化しない。
 

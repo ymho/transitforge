@@ -119,7 +119,7 @@ export function evaluateTravelProgress(id: string, turns: readonly TravelProgres
       if (event.type === "task_completed" && event.reason === "runtime_limit_reached") reasons.add("runtime_limit");
       if (event.type === "tool_completed" && event.outcome === "error") {
         reasons.add("tool_failure");
-        if (event.toolName === "propose_candidate_selection" || event.toolName === "propose_request_assumptions") reasons.add("proposal_rejected");
+        if (["propose_candidate_selection", "propose_request_assumptions", "propose_manual_activity", "propose_activity_selection"].includes(event.toolName)) reasons.add("proposal_rejected");
       }
     }
   }

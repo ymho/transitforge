@@ -17,6 +17,12 @@ const item: TransportItineraryItem = { id: "outbound", title: "往路", type: "t
 const kinds = (value: Parameters<typeof observeViewerTurn>[0]) => observeViewerTurn(value, []).progress.map((p) => p.kind);
 
 describe("shared visible milestone classification", () => {
+  it.each(["add", "replace"] as const)("counts visible %s Activity with no Place as itinerary", (type) => {
+    const activity = { id: "free", type: "activity" as const, title: "自由時間", category: "free-time" as const, schedule: { type: "unscheduled" as const } };
+    const patch = type === "add" ? { type, item: activity } : { type, itemId: activity.id, item: activity };
+    expect(kinds({ text: "自由時間（時間未定）", tripUpdateProposal: { tripId: "trip", summary: "追加案", patches: [patch] } })).toEqual(["trip_proposal", "itinerary"]);
+    expect(kinds("Activity Tool completed")).toEqual([]);
+  });
   it("counts dated legacy movements and V2 selected item previews as itinerary, not just state", () => {
     expect(kinds({ text: "", travelPlan })).toEqual(["itinerary"]);
     const tripUpdateProposal: TripUpdateProposal = { tripId: "trip", summary: "採用案", patches: [{ type: "replace", itemId: item.id, item }] };

@@ -38,7 +38,9 @@ export interface AgentTripScheduleItem {
   itemId?: string;
   /** V2 preserves precision/flexibility; absent for legacy items, never inferred as fixed. */
   schedule?: ItinerarySchedule;
-  type: TripPlanItem["type"] | "transport";
+  type: TripPlanItem["type"] | "transport" | "activity";
+  category?: import("@raiquora/trip/trip").ActivityCategory;
+  placeName?: string;
   selectionStatus?: "selected" | "unresolved" | "unselected";
   originIsProvisional?: boolean;
   summary: string;
@@ -193,6 +195,9 @@ function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["tri
     scheduleTruncated: trip.items.length > 24,
     schedule: trip.items.slice(0, 24).map((item) => {
       const schedule = structuredClone(item.schedule);
+      if (item.type === "activity") return { itemId: item.id, type: "activity", schedule,
+        category: item.category, summary: bounded(item.title, 100)!,
+        ...(item.place ? { placeName: bounded(item.place.name, 100) } : {}) };
       if (item.type === "stay") return { itemId: item.id, type: "stay", schedule, selectionStatus: item.selection.status,
         summary: bounded(item.selection.status === "selected" ? item.selection.accommodation.place.name : item.title, 100) ?? "宿泊" };
       if (item.detail.status === "unresolved") return { itemId: item.id, type: "transport", schedule, summary: bounded(item.title, 100) ?? "移動", selectionStatus: "unresolved" };

@@ -91,6 +91,7 @@ import type { AgentTurnObservation, AgentTurnOutcome, AskOnlyException } from ".
 import { effectiveTripConstraints } from "@raiquora/trip/trip-request";
 import { evaluateTripHardConstraints } from "@raiquora/trip/trip-constraint-evaluation";
 import { applyTripProposal, type Trip } from "@raiquora/trip/trip";
+import { activityPreview } from "../../usecases/trip-plan/activity-preview";
 import { assessTripTime } from "@raiquora/trip/trip-temporal";
 import { AgentToolRegistry } from "../../usecases/agent/tool-registry";
 import { structuredModelClassPolicy } from "../../usecases/agent/structured-model-class-policy";
@@ -326,7 +327,7 @@ export async function runViewerAgentRuntime(
     if (progressState.proposal && currentTrip) {
       const preview = applyTripProposal(currentTrip, progressState.proposal);
       responseText = [responseText, progressState.proposal.summary,
-        ...progressState.proposal.patches.flatMap((p) => p.type !== "replace" ? [] : [
+        ...progressState.proposal.patches.flatMap((p) => p.type !== "replace" && p.type !== "add" ? [] : p.item.type === "activity" ? [activityPreview(p.item)] : [
           `${p.item.title}（${p.item.schedule.type === "unscheduled" ? "時間未定" : p.item.schedule.type === "day" ? p.item.schedule.date : "計画時刻あり"}）`,
           ...(p.item.type === "transport" && p.item.detail.status === "selected" ? p.item.detail.journey.legs.map((leg) =>
             `${leg.origin.name} → ${leg.destination.name}：${leg.scheduledDeparture.at} 発 → ${leg.scheduledArrival.at} 着（${leg.trainNumber}・計画時刻）`) : []),

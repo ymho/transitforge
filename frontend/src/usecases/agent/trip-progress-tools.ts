@@ -3,6 +3,9 @@ import { applyTripProposal } from "@raiquora/trip/trip";
 import { validateTripRequest, type TripRequest } from "@raiquora/trip/trip-request";
 import { proposeCandidateSelection, type CandidateSelectionPort } from "../trip-plan/select-trip-candidate";
 import { proposeTripRequestUpdate } from "../trip-plan/update-trip-request";
+import { proposeManualActivity, proposeActivitySelection, type ActivitySelectionPort, type ActivityPlacement } from "../trip-plan/propose-trip-activity";
+import { activityCategories, type ActivityCategory } from "@raiquora/trip/trip";
+import type { ItinerarySchedule } from "@raiquora/trip/itinerary-schedule";
 import { AgentToolRegistry } from "./tool-registry";
 import { validateAgentToolInput } from "./agent-tool-input-validator";
 import { successfulAgentToolResult, failedAgentToolResult, type AgentToolDescriptor } from "./tool-contract";
@@ -10,6 +13,7 @@ import { successfulAgentToolResult, failedAgentToolResult, type AgentToolDescrip
 export interface TripProgressDependencies {
   getCurrentTrip?: () => Trip | undefined;
   candidateSelection?: { taskId: string; port: CandidateSelectionPort };
+  activitySelection?: { taskId: string; port: ActivitySelectionPort };
 }
 export interface TripProgressOutput {
   proposal?: TripUpdateProposal;
@@ -17,7 +21,31 @@ export interface TripProgressOutput {
   decision?: { text: string; findings: string[]; sources: Array<{ url: string; evidenceId: string }> };
 }
 
+const activityPlacementProperties = {
+  itemId: { type: "string", minLength: 1, maxLength: 160 },
+  operation: { type: "string", enum: ["add", "replace"] },
+  afterId: { type: "string", minLength: 1, maxLength: 160 },
+};
+const zonedInstantSchema = { type: "object", properties: { at: { type: "string" }, timeZone: { type: "string" } }, required: ["at", "timeZone"], additionalProperties: false };
+const activityScheduleSchema = { type: "object", description: "既存ItinerarySchedule。type=fixedはstartAt/endAt?、windowはearliestStart/latestEnd/durationMinutes?、dayはdate/timeZone?/endDate?、unscheduledはtypeのみ。atは秒とoffset付きISO、timeZoneはIANA。異なるvariantのfieldは拒否する。曖昧な日時を固定しない。",
+  properties: { type: { type: "string", enum: ["fixed", "window", "day", "unscheduled"] }, startAt: zonedInstantSchema, endAt: zonedInstantSchema,
+    earliestStart: zonedInstantSchema, latestEnd: zonedInstantSchema, durationMinutes: { type: "integer", minimum: 0 },
+    date: { type: "string" }, endDate: { type: "string" }, timeZone: { type: "string" } }, required: ["type"], additionalProperties: false };
 export const tripProgressDescriptors: AgentToolDescriptor[] = [
+  {
+    name: "propose_manual_activity",
+    description: "手入力の食事・観光・自由時間等の予定を同じTripへadd/replaceする案を作る。未配置でも提案でき、質問と併用可能。categoryは予定の意味分類。Provider事実・施設・予約の証明には使わず、検索済み施設は候補採用能力を使う。place/Evidence/保持許諾を受け取らない。新規は新itemIdとadd、既存変更は同itemIdとreplace。afterIdはaddでのみ既存予定の直後を指定、省略時は末尾。仮定は既存propose_request_assumptionsでmodel/unconfirmedとして併記できる。Domainが日時とPatchを検証し、previewのみで保存しない。",
+    inputSchema: { type: "object", properties: { ...activityPlacementProperties,
+      title: { type: "string", minLength: 1, maxLength: 200 }, category: { type: "string", enum: [...activityCategories] }, schedule: activityScheduleSchema },
+    required: ["itemId", "operation", "title", "category", "schedule"], additionalProperties: false },
+  },
+  {
+    name: "propose_activity_selection",
+    description: "提示済みのrestaurant/experience候補IDを解決してActivityとして採用する案を作る。検索結果本体やProvider ID、Evidence、保持許諾は入力しない。Applicationが同Trip/task/期限/同定/出所/保存権限を照合し、許可された名称・場所・日程だけをpreviewする。食事はfood、体験はexperience。価格・空席・予約・写真は保存しない。schedule省略時はrestaurantがunscheduled、体験は保持許可された提供日をdayにする。別候補へ変更するときは既存itemIdのreplace。未検証/期限切れ/保存許諾不明は拒否する。",
+    inputSchema: { type: "object", properties: { ...activityPlacementProperties,
+      candidateId: { type: "string", minLength: 1, maxLength: 160 }, schedule: activityScheduleSchema },
+    required: ["itemId", "operation", "candidateId"], additionalProperties: false },
+  },
   {
     name: "propose_candidate_selection",
     description: "提示済みcandidate IDを対象itemへ採用するTrip V2変更案を作る。採用済み1件とdraft化を提案し、保存はしない。候補本体・経路・Evidenceは入力しない。時刻や宿泊先の再質問ではなく既存候補を使える場合に適する。期限切れ/別task/未検証候補は拒否する。",
@@ -51,6 +79,7 @@ export function registerTripProgressTools(registry: AgentToolRegistry, dependenc
   for (const descriptor of tripProgressDescriptors) {
     if (descriptor.name !== "present_travel_progress" && !dependencies.getCurrentTrip?.()) continue;
     if (descriptor.name === "propose_candidate_selection" && !dependencies.candidateSelection) continue;
+    if (descriptor.name === "propose_activity_selection" && !dependencies.activitySelection) continue;
     registry.register<Record<string, unknown>, unknown>({ ...descriptor,
       parseInput: (value) => validateAgentToolInput(descriptor.inputSchema, value),
       async execute(input) {
@@ -67,10 +96,21 @@ export function registerTripProgressTools(registry: AgentToolRegistry, dependenc
               sources: resolved.map((source) => ({ url: source!.url, evidenceId: source!.evidenceId })) };
             return successfulAgentToolResult({ presented: state.decision });
           }
-          const trip = dependencies.getCurrentTrip?.();
-          if (!trip) throw new Error("Current Trip is unavailable");
+          const originalTrip = dependencies.getCurrentTrip?.();
+          if (!originalTrip) throw new Error("Current Trip is unavailable");
+          // Later Tools in this execution can refer to earlier proposed additions/assumptions.
+          // This is a validated preview, never another persistent Trip state.
+          const trip = state.proposal ? applyTripProposal(originalTrip, state.proposal) : originalTrip;
           let proposal: TripUpdateProposal;
-          if (descriptor.name === "propose_candidate_selection") {
+          if (descriptor.name === "propose_manual_activity" || descriptor.name === "propose_activity_selection") {
+            const placement: ActivityPlacement = { itemId: input.itemId as string, operation: input.operation as ActivityPlacement["operation"],
+              ...(input.afterId !== undefined ? { afterId: input.afterId as string } : {}) };
+            if (descriptor.name === "propose_manual_activity") proposal = proposeManualActivity(trip, placement,
+              { title: input.title as string, category: input.category as ActivityCategory, schedule: input.schedule as ItinerarySchedule });
+            else proposal = await proposeActivitySelection(trip, placement, { candidateId: input.candidateId as string,
+              taskId: dependencies.activitySelection!.taskId, ...(input.schedule !== undefined ? { schedule: input.schedule as ItinerarySchedule } : {}) },
+            dependencies.activitySelection!.port, now().toISOString());
+          } else if (descriptor.name === "propose_candidate_selection") {
             const selection = dependencies.candidateSelection!;
             proposal = await proposeCandidateSelection(trip, {
               candidateId: input.candidateId as string, itemId: input.itemId as string, taskId: selection.taskId,
@@ -81,7 +121,7 @@ export function registerTripProgressTools(registry: AgentToolRegistry, dependenc
             proposal = proposeTripRequestUpdate(trip, input.request as TripRequest, "model");
           }
           if (state.proposal) proposal = { ...proposal, patches: [...state.proposal.patches, ...proposal.patches] };
-          const preview = applyTripProposal(trip, proposal);
+          const preview = applyTripProposal(originalTrip, proposal);
           state.proposal = proposal;
           return successfulAgentToolResult({ proposal, previewPlanningState: preview.planningState,
             assumptions: preview.request.assumptions.filter((a) => a.status === "unconfirmed") });

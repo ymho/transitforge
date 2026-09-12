@@ -23,7 +23,7 @@ export interface TripMigrationResult {
   /** No raw provider data is embedded in Trip. Adapter must retain the original record. */
   requiresLegacyRetention: true;
   deferredItemIds: string[];
-  /** Converted value objects for deferred Activity mapping (#410), not another persistent Place store. */
+  /** Diagnostic field mappings used by Activity conversion; not another persistent Place store. */
   placeMappings: Array<{ itemId: string; place?: PlaceSnapshot; schedule: ItinerarySchedule }>;
 }
 
@@ -73,8 +73,10 @@ export function convertLegacyTripPlan(plan: TripPlan, identity: { tripId: string
       // Even an explicit legacy accommodation has no trustworthy captured/selection provenance yet.
       warnings.push({ itemId: item.id, code: "stay-snapshot-deferred", ownerIssue: 400 });
     } else if (item.type === "sightseeing") {
-      deferredItemIds.push(item.id);
-      warnings.push({ itemId: item.id, code: "activity-deferred", ownerIssue: 410 });
+      if (Object.keys(item).some((key) => !["id", "type", "place", "date"].includes(key)) ||
+          Object.keys(item.place).some((key) => !["name", "provider", "placeId", "coordinate"].includes(key))) {
+        warnings.push({ itemId: item.id, code: "activity-deferred", ownerIssue: 410 });
+      }
       const mapping: TripMigrationResult["placeMappings"][number] = { itemId: item.id, schedule };
       placeMappings.push(mapping);
       const original = item.place;
@@ -112,6 +114,21 @@ export function convertLegacyTripPlan(plan: TripPlan, identity: { tripId: string
       } catch { warnings.push({ itemId: item.id, code: "place-invalid", ownerIssue: 414 }); }
     } else throw new Error("Unknown legacy item type");
   }
+  // Reuse the mappings above even after a partial failure. Never retain a restricted provider name
+  // in title as a way around Place retention. Original order and IDs survive partial conversion.
+  for (const mapping of placeMappings) {
+    items.push({ id: mapping.itemId, type: "activity", category: "sightseeing",
+      title: mapping.place?.name ?? "観光（場所の移行未完了）", schedule: mapping.schedule,
+      ...(mapping.place ? { place: mapping.place } : {}) });
+    if (!mapping.place || warnings.some((warning) => warning.itemId === mapping.itemId)) {
+      deferredItemIds.push(mapping.itemId);
+      if (!warnings.some((warning) => warning.itemId === mapping.itemId && warning.code === "activity-deferred")) {
+        warnings.push({ itemId: mapping.itemId, code: "activity-deferred", ownerIssue: 410 });
+      }
+    }
+  }
+  const order = new Map(plan.items.map((item, index) => [item.id, index]));
+  items.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
   const request = mapLegacyRequest(plan, options.tripContext, warnings);
   const stage = isRecord(options.tripContext) ? options.tripContext.planningStage : undefined;
   let planningState: PlanningState = "inspiration";

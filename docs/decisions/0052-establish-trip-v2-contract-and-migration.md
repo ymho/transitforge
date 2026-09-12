@@ -103,6 +103,10 @@ completedは今は明示確認のみ。時刻だけで実績を生成せず、wr
 production Agent Runtimeへ接続する。回答outcomeは一時的観測であり、Trip/Conversationの新しい進行正本ではない。
 LLMがTool/質問/推薦を選び、既存Domain検証・Evidence・Viewer Action・実行上限を維持する。writer gateは解除しない。
 
+#410の[Activity導入記録](../architecture/trip-activity.md)では、同じItineraryItemへactivity、同じPatchへaddを追加する。
+Place/schedule/PlanAssumption/VisibleProgressを再利用し、Provider候補の採用と原子的previewを検証する。
+Reservation/Money、CAS/永続化、全面UIの責務は後続へ残し、writer gateは解除しない。
+
 #415は設計変更だけなので本番モデル・Tool・migrationは実行しない。
 `npm test`、`npm run build`、`npm run architecture:check`、`npm run workspace:check`を実行する。
 後続PRのmigration/invalid/retry/partial failure/backward compatibility試験は

@@ -110,7 +110,7 @@ const sourceFields = ["id", "kind", "provider", "sourceId", "sourceUrl", "retrie
 function validatePlaceSource(source: ExternalSourceEvidence): void {
   exactKeys(source, sourceFields);
   if (!nonempty(source.id) || !nonempty(source.provider) || source.provider === "manual" ||
-      !["place", "timetable", "accommodation", "restaurant", "web"].includes(source.kind) ||
+      !["place", "timetable", "accommodation", "restaurant", "event", "web"].includes(source.kind) ||
       !["observed", "provider-schedule", "unknown"].includes(source.confidence) ||
       !validInstant(source.retrievedAt) || (!nonempty(source.sourceId) && !nonempty(source.sourceUrl))) throw new Error("Invalid durable place source");
   if (source.sourceId !== undefined && !nonempty(source.sourceId)) throw new Error("Invalid place source identity");

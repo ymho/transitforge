@@ -24,9 +24,10 @@ export function observeViewerTurn(response: ViewerAgentResponse, evidence: Evide
       if (refs.length) progress.push({ kind: "itinerary", refs });
     }
     if ("tripUpdateProposal" in response) {
-      const refs = response.tripUpdateProposal.patches.flatMap((p) => p.type === "replace" && p.item.id &&
+      const refs = response.tripUpdateProposal.patches.flatMap((p) => (p.type === "replace" || p.type === "add") && p.item.id &&
         (p.item.type === "transport" ? p.item.detail.status === "selected" && p.item.detail.journey.legs.length > 0 :
-          p.item.selection.status === "selected" && Boolean(p.item.selection.accommodation.place.name)) ? [p.itemId] : []);
+          p.item.type === "activity" ? Boolean(p.item.title.trim()) :
+          p.item.selection.status === "selected" && Boolean(p.item.selection.accommodation.place.name)) ? [p.item.id] : []);
       if (refs.length) progress.push({ kind: "trip_proposal", refs }, { kind: "itinerary", refs });
     }
     if ("progressSources" in response && response.progressSources?.length) {
