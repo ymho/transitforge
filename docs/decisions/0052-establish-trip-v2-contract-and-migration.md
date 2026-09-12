@@ -117,5 +117,9 @@ manualはselected予定＋manual provenance、Provider採用はID解決・許諾
 両端はdetail内（railはlegs）に保持し、時刻は共通schedule。本文の計画/観測/予約分離とwriter gateは維持する。
 
 `npm test`、`npm run build`、`npm run architecture:check`、`npm run workspace:check`を実行する。
+#400の[宿泊Snapshot導入記録](../architecture/trip-accommodation.md)では、同じselected stayをAccommodationSnapshotへ統合する。
+商品identityと施設Place identityを別に解決し、保持許諾・出所・採用時点を検証する。価格・空室・画像・review・予約導線は
+Offering側に留め、Money/Reservationは後続へ残す。legacyの証拠不足を捏造せず、writer gateも解除しない。
+
 後続PRのmigration/invalid/retry/partial failure/backward compatibility試験は
 詳細契約の適合ケース表に割り当てる。#415のACは設計として自己レビューし、#415だけを閉じるPRにする。

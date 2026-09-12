@@ -44,7 +44,7 @@ describe("Trip schedule invariant", () => {
     expect(schedule.endAt!.at).toBe("2026-09-14T01:20:00.000+09:00");
   });
   it("keeps selected stay dates authoritative, including an explicit place zone", () => {
-    const accommodation = { place: { name: "宿", timeZone: "Europe/Vienna", sources: [] }, selectedAt: at,
+    const accommodation = { provider: "fixture", providerItemId: "hotel", place: { name: "宿", timeZone: "Europe/Vienna", sources: [] }, selectedAt: at,
       checkInDate: "2026-09-22", checkOutDate: "2026-09-24", sources: [
         { id: "hotel", kind: "accommodation" as const, provider: "fixture", sourceId: "hotel", retrievedAt: at, confidence: "observed" as const },
       ] };

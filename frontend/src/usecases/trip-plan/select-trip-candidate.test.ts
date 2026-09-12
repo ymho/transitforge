@@ -85,6 +85,8 @@ describe("candidate adoption boundary", () => {
       address: "未許諾の住所", latitude: 35, longitude: 135, imageUrl: "https://example.com/image.jpg" };
     record.candidate.accommodations = [offering, { ...offering, providerItemId: "hotel-b", name: "宿B" }];
     record.accommodation = { provider: "fixture", providerItemId: "hotel-a", storageAllowed: true,
+      place: { name: "宿A", ref: { provider: "fixture", providerPlaceId: "hotel-a" }, capturedAt: "2026-09-12T07:55:00Z",
+        sources: [{ id: "hotel-evidence", kind: "accommodation", provider: "fixture", sourceId: "hotel-a", retrievedAt: "2026-09-12T07:55:00Z", confidence: "observed" }] },
       placeRetention: { origin: "provider", provider: "fixture", storage: "permitted", allowedFields: ["ref", "name", "sources", "capturedAt"] },
       source: { id: "hotel-evidence", kind: "accommodation", provider: "fixture", sourceId: "hotel-a", retrievedAt: "2026-09-12T07:55:00Z", confidence: "observed" } };
     const request = { candidateId: record.candidate.id, itemId: "stay", taskId: "task-a", accommodation: { provider: "fixture", providerItemId: "hotel-a" } };

@@ -86,9 +86,13 @@ export function convertLegacyTripPlan(plan: TripPlan, identity: { tripId: string
         : `${item.origin} → ${item.destination}`, type: "transport", schedule,
         detail });
     } else if (item.type === "stay") {
-      items.push({ id: item.id, title: item.destination, type: "stay", schedule, selection: { status: "unselected" } });
+      // destination is the legacy itinerary's intended area, not an Offering's facility details.
+      const place = nonemptyText(item.destination) ? createPlaceSnapshot({ name: item.destination, sources: [] }, { origin: "manual" }) : undefined;
+      items.push({ id: item.id, title: item.destination || "宿泊", type: "stay", schedule,
+        selection: { status: "unselected", ...(place ? { place } : {}) } });
       // Even an explicit legacy accommodation has no trustworthy captured/selection provenance yet.
       warnings.push({ itemId: item.id, code: "stay-snapshot-deferred", ownerIssue: 400 });
+      deferredItemIds.push(item.id);
     } else if (item.type === "sightseeing") {
       if (Object.keys(item).some((key) => !["id", "type", "place", "date"].includes(key)) ||
           Object.keys(item.place).some((key) => !["name", "provider", "placeId", "coordinate"].includes(key))) {

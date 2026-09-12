@@ -41,6 +41,7 @@ export interface AgentTripScheduleItem {
   type: TripPlanItem["type"] | "transport" | "activity";
   category?: import("@raiquora/trip/trip").ActivityCategory;
   placeName?: string;
+  area?: string;
   selectionStatus?: "selected" | "unresolved" | "unselected";
   mode?: import("@raiquora/trip/transport-detail").TransportMode;
   origin?: string;
@@ -202,8 +203,12 @@ function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["tri
       if (item.type === "activity") return { itemId: item.id, type: "activity", schedule,
         category: item.category, summary: bounded(item.title, 100)!,
         ...(item.place ? { placeName: bounded(item.place.name, 100) } : {}) };
-      if (item.type === "stay") return { itemId: item.id, type: "stay", schedule, selectionStatus: item.selection.status,
-        summary: bounded(item.selection.status === "selected" ? item.selection.accommodation.place.name : item.title, 100) ?? "宿泊" };
+      if (item.type === "stay") {
+        const place = item.selection.status === "selected" ? item.selection.accommodation.place : item.selection.place;
+        return { itemId: item.id, type: "stay", schedule, selectionStatus: item.selection.status,
+          summary: bounded(place?.name ?? item.title, 100) ?? "宿泊",
+          ...(place ? { placeName: bounded(place.name, 100), area: bounded(place.area, 100) } : {}) };
+      }
       if (item.detail.status === "unresolved") return { itemId: item.id, type: "transport", schedule, mode: item.detail.mode, summary: bounded(item.title, 100) ?? "移動", selectionStatus: "unresolved" };
       if (item.detail.mode !== "rail") return { itemId: item.id, type: "transport", schedule, mode: item.detail.mode,
         origin: item.detail.origin.name, destination: item.detail.destination.name, provenanceType: item.detail.provenance.type,

@@ -44,7 +44,7 @@ describe("PlanAssumption item field applicability", () => {
     expect(() => requestTrip(request, [stay])).not.toThrow();
     expect(() => requestTrip(request, [{ ...stay, selection: { status: "unselected", place } }])).not.toThrow();
     const selected: StayItineraryItem = { ...stay, schedule: { type: "day", date: "2026-09-13", endDate: "2026-09-14" },
-      selection: { status: "selected", accommodation: { place, selectedAt: "2026-09-12T08:00:00Z", checkInDate: "2026-09-13", checkOutDate: "2026-09-14",
+      selection: { status: "selected", accommodation: { provider: "synthetic", providerItemId: "hotel", place, selectedAt: "2026-09-12T08:00:00Z", checkInDate: "2026-09-13", checkOutDate: "2026-09-14",
         sources: [{ id: "hotel-source", kind: "accommodation", provider: "synthetic", sourceId: "hotel", retrievedAt: "2026-09-12T07:00:00Z", confidence: "observed" }] } } };
     const validate = () => requestTrip(request, [selected]);
     if (status === "rejected") expect(validate).toThrow("Rejected assumption still supports an item");

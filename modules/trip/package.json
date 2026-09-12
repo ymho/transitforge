@@ -6,6 +6,7 @@
   "exports": {
     "./trip-party": "./domain/trip-party.ts",
     "./transport-detail": "./domain/transport-detail.ts",
+    "./accommodation-snapshot": "./domain/accommodation-snapshot.ts",
     "./trip-state": "./domain/trip-state.ts",
     "./trip-temporal": "./domain/trip-temporal.ts",
     "./trip-constraint-evaluation": "./domain/trip-constraint-evaluation.ts",

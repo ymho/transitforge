@@ -15,6 +15,7 @@ export interface TravelOffering {
   bookingUrl?: string;
 }
 
+/** Volatile comparison result. Price/availability/booking/media are not persisted Trip facts. */
 export interface AccommodationOffering extends TravelOffering {
   kind: "accommodation";
   checkInDate: string;

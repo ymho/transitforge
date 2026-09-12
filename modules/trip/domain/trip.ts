@@ -1,5 +1,5 @@
-import type { ExternalSourceEvidence } from "./external-travel-information";
-import { exactKeys, validDate, validInstant, projectRailSchedule } from "./selected-rail-journey";
+import { validateAccommodationSnapshot, type AccommodationSnapshot } from "./accommodation-snapshot";
+import { exactKeys, validInstant, projectRailSchedule } from "./selected-rail-journey";
 import { transportModes, validateNonRailTransport, type TransportDetail } from "./transport-detail";
 import { validatePlaceSnapshot, type PlaceSnapshot } from "./place-snapshot";
 import { validateItinerarySchedule, projectStaySchedule, sameZonedInstant, type ItinerarySchedule } from "./itinerary-schedule";
@@ -30,15 +30,7 @@ export interface StayItineraryItem extends ItineraryItemBase {
   readonly type: "stay";
   readonly selection:
     | { readonly status: "unselected"; readonly place?: PlaceSnapshot }
-    | { readonly status: "selected"; readonly accommodation: {
-      // Minimal slice of #415's final accommodation contract, not another Offering type.
-      // #400 adds accommodation identity/observation fields here, #412 owns Money.
-      readonly place: PlaceSnapshot;
-      readonly selectedAt: string;
-      readonly checkInDate: string;
-      readonly checkOutDate: string;
-      readonly sources: readonly ExternalSourceEvidence[];
-    } };
+    | { readonly status: "selected"; readonly accommodation: AccommodationSnapshot };
 }
 export const activityCategories = ["sightseeing", "food", "experience", "event", "shopping", "relaxation", "free-time", "other"] as const;
 export type ActivityCategory = typeof activityCategories[number];
@@ -106,19 +98,10 @@ function validateItem(item: ItineraryItem): void {
     if (item.selection.status !== "selected") throw new Error("Invalid stay selection");
     exactKeys(item.selection, ["status", "accommodation"]);
     const stay = item.selection.accommodation;
-    exactKeys(stay, ["place", "selectedAt", "checkInDate", "checkOutDate", "sources"]);
-    validatePlaceSnapshot(stay.place);
+    validateAccommodationSnapshot(stay);
     const projected = projectStaySchedule(stay.checkInDate, stay.checkOutDate, stay.place.timeZone);
     if (item.schedule.type !== "day" || item.schedule.date !== projected.date ||
         item.schedule.endDate !== projected.endDate || item.schedule.timeZone !== projected.timeZone) throw new Error("Stay schedule differs from adopted stay dates");
-    if (!stay.place.name || !validInstant(stay.selectedAt) || !validDate(stay.checkInDate) ||
-        !validDate(stay.checkOutDate) || stay.checkInDate >= stay.checkOutDate || !stay.sources.length) throw new Error("Invalid adopted accommodation");
-    stay.sources.forEach((source) => {
-      exactKeys(source, ["id", "kind", "provider", "sourceId", "retrievedAt", "confidence"]);
-      if (!source.id || source.kind !== "accommodation" || !source.provider || !source.sourceId ||
-          !validInstant(source.retrievedAt) || source.confidence !== "observed" ||
-          Date.parse(source.retrievedAt) > Date.parse(stay.selectedAt)) throw new Error("Invalid accommodation source");
-    });
   } else if (item.type === "activity") {
     exactKeys(item, ["id", "title", "type", "category", "place", "schedule"]);
     if (!item.title.trim() || !activityCategories.includes(item.category)) throw new Error("Invalid activity");
