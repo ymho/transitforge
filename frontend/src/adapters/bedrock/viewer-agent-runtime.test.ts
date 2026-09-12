@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Train } from "@raiquora/train/train";
 import type { TrainPosition } from "../../domain/train-position";
 import type { UserProfile } from "@raiquora/trip/travel-profile";
-import type { TripPlan } from "@raiquora/trip/trip-plan";
+import { applyTripPlanPatches, validateTripPlanPatches, type TripPlan } from "@raiquora/trip/trip-plan";
 import type {
   ViewerAgentResponse,
   ViewerAgentRichResponse,
@@ -1813,6 +1813,8 @@ describe("Bedrock viewer agent", () => {
     expect(result.text).toContain("日帰り旅行へ組み直しました");
     expect(result.text).not.toContain("よろしいですか");
     expect(result.tripPlanUpdate.summary).toContain("日帰り旅行へ変更");
+    expect(validateTripPlanPatches(tripPlanWithRailReturn(), result.tripPlanUpdate.patches).valid).toBe(true);
+    expect(() => applyTripPlanPatches(tripPlanWithRailReturn(), result.tripPlanUpdate.patches)).not.toThrow();
   });
 
   it("passes a bounded accommodation contract to the conversation model", async () => {
@@ -2923,6 +2925,42 @@ describe("Bedrock viewer agent", () => {
     }
     expect(result.conversation.expectedInput).toBe("planning-intent");
     expect(result.conversation.tripContext).not.toHaveProperty("startDate");
+  });
+
+  it.each([
+    { type: "remove", itemId: "missing" },
+    { type: "move", itemId: "outbound", afterId: "missing" },
+    { type: "addSightseeing", name: "散策", afterId: "missing" },
+    { type: "addMovement", mode: "walk", origin: "駅", destination: "宿", afterId: "missing" },
+    { type: "unknown-operation" },
+    { type: "move", itemId: "outbound", afterId: 123 },
+    null,
+  ].map((invalid): { invalidPatches: unknown[] } => ({ invalidPatches: [invalid] })).concat([
+    { invalidPatches: Array.from({ length: 12 }, () => ({ type: "metadata", title: "切り捨てない" })) },
+  ]))("rejects the whole Agent proposal with invalid operations %j", async ({ invalidPatches }) => {
+    const current = tripPlanWithRailReturn();
+    const before = structuredClone(current);
+    let calls = 0;
+    const converse = vi.fn<BedrockAgentConverse>(async (messages) => {
+      if (calls++ === 0) return {
+        message: { role: "assistant", content: [{ toolUse: {
+          toolUseId: "invalid-update", name: "propose_trip_update", input: {
+            summary: "変更案", patches: [{ type: "metadata", title: "部分適用しない" }, ...invalidPatches],
+          },
+        } }] }, stopReason: "tool_use",
+      };
+      const failed = messages.flatMap(({ content }) => content).find((content) => "toolResult" in content);
+      expect(failed && "toolResult" in failed ? failed.toolResult.status : undefined).toBe("error");
+      return { message: { role: "assistant", content: [{ text: "変更は適用していません。" }] }, stopReason: "end_turn" };
+    });
+    const result = await runViewerAgentRuntime("旅程を変更して", {
+      trains: [train], getPositions: () => [], getRouteTime: () => 1200,
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(),
+      maximumRouteTime: 1800, getTripPlan: () => current,
+    }, converse);
+    expect(converse).toHaveBeenCalledTimes(2);
+    expect(typeof result === "object" && "tripPlanUpdate" in result).toBe(false);
+    expect(current).toEqual(before);
   });
 
   it("returns a confirmable proposal for a rental-car movement", async () => {

@@ -97,13 +97,16 @@ export function validateTripPlanPatches(
   patches: readonly TripPlanPatch[],
 ): TripPlanPatchValidation {
   const itemIds = new Set(plan.items.map(({ id }) => id));
+  if (itemIds.size !== plan.items.length) {
+    return { valid: false, reason: "旅程項目のIDが重複しています" };
+  }
   for (const patch of patches) {
     if (patch.type === "metadata") continue;
     if (patch.type === "add") {
       if (itemIds.has(patch.item.id)) {
         return { valid: false, reason: `旅程項目 ${patch.item.id} は既に存在します` };
       }
-      if (patch.afterId && !itemIds.has(patch.afterId)) {
+      if (patch.afterId !== undefined && !itemIds.has(patch.afterId)) {
         return { valid: false, reason: `挿入位置 ${patch.afterId} が見つかりません` };
       }
       itemIds.add(patch.item.id);
@@ -120,7 +123,7 @@ export function validateTripPlanPatches(
       if (patch.itemId === patch.afterId) {
         return { valid: false, reason: "同じ旅程項目の後ろへ移動できません" };
       }
-      if (patch.afterId && !itemIds.has(patch.afterId)) {
+      if (patch.afterId !== undefined && !itemIds.has(patch.afterId)) {
         return { valid: false, reason: `移動先 ${patch.afterId} が見つかりません` };
       }
     }
@@ -130,37 +133,37 @@ export function validateTripPlanPatches(
 
 export function applyTripPlanPatches(
   plan: TripPlan,
-  patches: TripPlanPatch[],
+  patches: readonly TripPlanPatch[],
   now = new Date(),
 ): TripPlan {
+  // Validate the entire ordered sequence before constructing any next state.
+  const validation = validateTripPlanPatches(plan, patches);
+  if (!validation.valid) throw new Error(validation.reason ?? "旅程の変更内容が不正です");
   let items = [...plan.items];
   let title = plan.title;
   let destination = plan.destination;
   let conditions = plan.conditions;
   for (const patch of patches) {
-    if (patch.type === "add" && !items.some((item) => item.id === patch.item.id)) {
-      const afterIndex = patch.afterId
+    if (patch.type === "add") {
+      const afterIndex = patch.afterId !== undefined
         ? items.findIndex((item) => item.id === patch.afterId)
         : -1;
       items.splice(afterIndex >= 0 ? afterIndex + 1 : items.length, 0, patch.item);
     }
     if (patch.type === "replace") {
       const index = items.findIndex((item) => item.id === patch.itemId);
-      if (index >= 0) items[index] = { ...patch.item, id: patch.itemId };
-      else items.push({ ...patch.item, id: patch.itemId });
+      items[index] = { ...patch.item, id: patch.itemId };
     }
     if (patch.type === "remove") {
       items = items.filter((item) => item.id !== patch.itemId);
     }
-    if (patch.type === "move" && patch.itemId !== patch.afterId) {
+    if (patch.type === "move") {
       const index = items.findIndex((item) => item.id === patch.itemId);
-      if (index >= 0) {
-        const [item] = items.splice(index, 1);
-        const afterIndex = patch.afterId
-          ? items.findIndex((candidate) => candidate.id === patch.afterId)
-          : -1;
-        items.splice(afterIndex >= 0 ? afterIndex + 1 : items.length, 0, item);
-      }
+      const [item] = items.splice(index, 1);
+      const afterIndex = patch.afterId !== undefined
+        ? items.findIndex((candidate) => candidate.id === patch.afterId)
+        : -1;
+      items.splice(afterIndex >= 0 ? afterIndex + 1 : items.length, 0, item);
     }
     if (patch.type === "metadata") {
       title = patch.title ?? title;
@@ -209,38 +212,32 @@ export function tripPlanFromTravelPlan(
   };
 }
 
-export function tripPlanPatchesFromTravelPlan(value: TravelPlan): TripPlanPatch[] {
+export function tripPlanPatchesFromTravelPlan(value: TravelPlan, current: TripPlan): TripPlanPatch[] {
+  const itemIds = new Set(current.items.map(({ id }) => id));
+  const sectionPatch = (item: TripPlanItem, afterId?: string): TripPlanPatch =>
+    itemIds.has(item.id)
+      ? { type: "replace", itemId: item.id, item }
+      : { type: "add", item, ...(afterId === undefined ? {} : { afterId }) };
   return [
     {
       type: "metadata",
       title: titleForTravelPlan(value),
       destination: value.destination,
     },
-    {
-      type: "replace",
-      itemId: "outbound",
-      item: { id: "outbound", type: "movement", mode: "rail", route: value.outbound },
-    },
-    ...(value.dayTrip ? [{
+    sectionPatch({ id: "outbound", type: "movement", mode: "rail", route: value.outbound }),
+    ...(value.dayTrip ? (itemIds.has("stay") ? [{
       type: "remove" as const,
       itemId: "stay",
-    }] : [{
-      type: "replace",
-      itemId: "stay",
-      item: {
+    }] : []) : [sectionPatch({
         id: "stay",
         type: "stay",
         destination: value.destination,
         checkInDate: value.checkInDate,
         checkOutDate: value.checkOutDate,
         options: value.accommodations,
-      },
-    } as const]),
-    {
-      type: "replace",
-      itemId: "return",
-      item: { id: "return", type: "movement", mode: "rail", route: value.returning },
-    },
+      }, "outbound")]),
+    sectionPatch({ id: "return", type: "movement", mode: "rail", route: value.returning },
+      value.dayTrip ? "outbound" : "stay"),
   ];
 }
 
