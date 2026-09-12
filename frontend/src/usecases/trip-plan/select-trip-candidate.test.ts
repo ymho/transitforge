@@ -7,9 +7,9 @@ import { confirmCandidateSelection, proposeCandidateSelection, type CandidateSel
 function setup() {
   const fixture = railSelectionFixture();
   const trip = createTrip("11111111-1111-4111-8111-111111111111", "旅", fixture.selectedAt, [
-    { id: "outbound", title: "往路", type: "transport", detail: { mode: "rail", status: "unresolved" } },
-    { id: "stay", title: "宿泊", type: "stay", selection: { status: "unselected" } },
-    { id: "another-stay", title: "別の宿泊", type: "stay", selection: { status: "unselected" } },
+    { id: "outbound", title: "往路", type: "transport", schedule: { type: "unscheduled" }, detail: { mode: "rail", status: "unresolved" } },
+    { id: "stay", title: "宿泊", type: "stay", schedule: { type: "unscheduled" }, selection: { status: "unselected" } },
+    { id: "another-stay", title: "別の宿泊", type: "stay", schedule: { type: "unscheduled" }, selection: { status: "unselected" } },
   ]);
   const record: NonNullable<Awaited<ReturnType<CandidateSelectionPort["resolve"]>>> = {
     candidate: createTravelCandidate({ id: fixture.candidate.candidateId, journey: fixture.candidate.journey }),
@@ -93,7 +93,7 @@ describe("candidate adoption boundary", () => {
   it("rejects the whole patch list and unknown fields; cannot upsert or rename an item", () => {
     const { trip } = setup(); const before = structuredClone(trip);
     for (const itemId of ["missing", "wrong-id"]) expect(() => applyTripProposal(trip, { tripId: trip.id, summary: "invalid", patches: [
-      { type: "replace", itemId: "stay", item: { id: "stay", title: "changed", type: "stay", selection: { status: "unselected" } } },
+      { type: "replace", itemId: "stay", item: { id: "stay", title: "changed", type: "stay", schedule: { type: "unscheduled" }, selection: { status: "unselected" } } },
       { type: "replace", itemId, item: trip.items[0]! },
     ] })).toThrow();
     expect(trip).toEqual(before);

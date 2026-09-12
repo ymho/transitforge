@@ -1,7 +1,8 @@
 import type { UserProfile } from "@raiquora/trip/travel-profile";
 import { travelPreferenceLabels } from "@raiquora/trip/travel-profile";
 import type { TripPlan, TripPlanItem } from "@raiquora/trip/trip-plan";
-import type { Trip } from "@raiquora/trip/trip";
+import { validateTrip, type Trip } from "@raiquora/trip/trip";
+import type { ItinerarySchedule } from "@raiquora/trip/itinerary-schedule";
 
 export interface AgentContextSnapshot {
   travelCandidates?: Record<string, unknown>[];
@@ -26,6 +27,8 @@ export interface AgentContextSnapshot {
 }
 
 export interface AgentTripScheduleItem {
+  /** V2 preserves precision/flexibility; absent for legacy items, never inferred as fixed. */
+  schedule?: ItinerarySchedule;
   type: TripPlanItem["type"] | "transport";
   selectionStatus?: "selected" | "unresolved" | "unselected";
   originIsProvisional?: boolean;
@@ -174,13 +177,15 @@ function legacyCandidateSnapshot(trip: TripPlan): Pick<AgentContextSnapshot, "tr
 }
 
 function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["trip"]> {
+  validateTrip(trip);
   return { title: bounded(trip.title, 100) ?? "現在の旅程", destination: "未設定", considerations: [],
     schedule: trip.items.slice(0, 24).map((item) => {
-      if (item.type === "stay") return { type: "stay", selectionStatus: item.selection.status,
+      const schedule = structuredClone(item.schedule);
+      if (item.type === "stay") return { type: "stay", schedule, selectionStatus: item.selection.status,
         summary: bounded(item.selection.status === "selected" ? item.selection.accommodation.place.name : item.title, 100) ?? "宿泊" };
-      if (item.detail.status === "unresolved") return { type: "transport", summary: bounded(item.title, 100) ?? "移動", selectionStatus: "unresolved" };
+      if (item.detail.status === "unresolved") return { type: "transport", schedule, summary: bounded(item.title, 100) ?? "移動", selectionStatus: "unresolved" };
       const journey = item.detail.journey;
-      return { type: "transport", selectionStatus: "selected",
+      return { type: "transport", schedule, selectionStatus: "selected",
         summary: `${bounded(journey.legs[0]!.origin.name, 80)}→${bounded(journey.legs.at(-1)!.destination.name, 80)}（計画 ${journey.legs[0]!.scheduledDeparture.at} → ${journey.legs.at(-1)!.scheduledArrival.at}）`,
         date: journey.serviceDate };
     }) };

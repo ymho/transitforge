@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./itinerary-schedule": "./domain/itinerary-schedule.ts",
     "./place-snapshot": "./domain/place-snapshot.ts",
     "./trip": "./domain/trip.ts",
     "./selected-rail-journey": "./domain/selected-rail-journey.ts",

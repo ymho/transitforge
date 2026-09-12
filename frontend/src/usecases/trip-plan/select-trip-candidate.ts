@@ -1,7 +1,8 @@
 import type { TravelCandidate } from "@raiquora/trip/travel-candidate";
 import type { ExternalSourceEvidence } from "@raiquora/trip/external-travel-information";
 import { createPlaceSnapshot, type PlaceSnapshotRetention } from "@raiquora/trip/place-snapshot";
-import { selectRailJourney, validInstant, type RailTimetableInput, type VerifiedRailCandidate } from "@raiquora/trip/selected-rail-journey";
+import { selectRailJourney, projectRailSchedule, validInstant, type RailTimetableInput, type VerifiedRailCandidate } from "@raiquora/trip/selected-rail-journey";
+import { projectStaySchedule } from "@raiquora/trip/itinerary-schedule";
 import { applyTripProposal, type Trip, type TripUpdateProposal, type ItineraryItem } from "@raiquora/trip/trip";
 
 /** Task-local lookup metadata. This is not a new candidate model or persistent Repository. */
@@ -43,7 +44,7 @@ export async function proposeCandidateSelection(
       throw new Error("Candidate has no verified rail selection");
     }
     const journey = selectRailJourney(resolved.rail, await port.loadTimetables(resolved.rail), selectedAt);
-    item = { id: target.id, title: target.title, type: "transport", detail: { mode: "rail", status: "selected", journey } };
+    item = { id: target.id, title: target.title, type: "transport", schedule: projectRailSchedule(journey), detail: { mode: "rail", status: "selected", journey } };
   } else {
     const key = request.accommodation;
     const permission = resolved.accommodation;
@@ -55,7 +56,7 @@ export async function proposeCandidateSelection(
     const offering = offerings[0]!;
     const source = permission.source;
     if (source.provider !== offering.provider || source.sourceId !== offering.providerItemId) throw new Error("Accommodation evidence does not match");
-    item = { id: target.id, title: target.title, type: "stay", selection: { status: "selected", accommodation: {
+    item = { id: target.id, title: target.title, type: "stay", schedule: projectStaySchedule(offering.checkInDate, offering.checkOutDate), selection: { status: "selected", accommodation: {
       place: createPlaceSnapshot({
         ref: { provider: offering.provider, providerPlaceId: offering.providerItemId }, name: offering.name,
         ...(offering.address !== undefined ? { address: offering.address } : {}),

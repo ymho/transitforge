@@ -2,10 +2,11 @@ import { createTrip, type ItineraryItem, type Trip } from "./trip";
 import { isSightseeingPlaceProvider, type TripPlan } from "./trip-plan";
 import { createPlaceSnapshot, validatePlaceCoordinate, type PlaceSnapshot, type PlaceSnapshotRetention } from "./place-snapshot";
 import type { ExternalSourceEvidence } from "./external-travel-information";
+import { projectStaySchedule, validateItinerarySchedule, type ItinerarySchedule } from "./itinerary-schedule";
 
 export interface TripMigrationWarning {
   itemId?: string;
-  code: "rail-selection-unverified" | "stay-snapshot-deferred" | "schedule-deferred" |
+  code: "rail-selection-unverified" | "stay-snapshot-deferred" | "schedule-invalid" |
     "transport-mode-deferred" | "activity-deferred" | "request-state-deferred" |
     "place-retention-unconfirmed" | "place-coordinate-invalid" | "place-fields-not-retained" | "place-invalid";
   ownerIssue: number;
@@ -17,7 +18,7 @@ export interface TripMigrationResult {
   requiresLegacyRetention: true;
   deferredItemIds: string[];
   /** Converted value objects for deferred Activity mapping (#410), not another persistent Place store. */
-  placeMappings: Array<{ itemId: string; place?: PlaceSnapshot }>;
+  placeMappings: Array<{ itemId: string; place?: PlaceSnapshot; schedule: ItinerarySchedule }>;
 }
 
 /** Adapter-reviewed legacy provenance/retention, keyed by existing item ID. Absent means unknown. */
@@ -40,21 +41,33 @@ export function convertLegacyTripPlan(plan: TripPlan, identity: { tripId: string
   const items: ItineraryItem[] = [];
   const placeMappings: TripMigrationResult["placeMappings"] = [];
   for (const item of plan.items) {
-    warnings.push({ itemId: item.id, code: "schedule-deferred", ownerIssue: 386 });
+    let schedule: ItinerarySchedule = { type: "unscheduled" };
+    try {
+      if (item.type === "stay") schedule = projectStaySchedule(item.checkInDate, item.checkOutDate);
+      else {
+        // departureDate is a civil date; serviceDate is not (04:00 boundary). No selected rail proof exists here.
+        const date = item.type === "movement" && item.mode === "rail" ? item.route.departureDate : item.date;
+        if (date !== undefined) schedule = { type: "day", date };
+      }
+      validateItinerarySchedule(schedule);
+    } catch {
+      schedule = { type: "unscheduled" };
+      warnings.push({ itemId: item.id, code: "schedule-invalid", ownerIssue: 386 });
+    }
     if (item.type === "movement") {
       const rail = item.mode === "rail";
       items.push({ id: item.id, title: rail ? `${item.route.originStation} → ${item.route.destinationStation}`
-        : `${item.origin} → ${item.destination}`, type: "transport",
+        : `${item.origin} → ${item.destination}`, type: "transport", schedule,
         detail: rail ? { mode: "rail", status: "unresolved" } : { status: "unresolved" } });
       warnings.push({ itemId: item.id, code: rail ? "rail-selection-unverified" : "transport-mode-deferred", ownerIssue: rail ? 385 : 413 });
     } else if (item.type === "stay") {
-      items.push({ id: item.id, title: item.destination, type: "stay", selection: { status: "unselected" } });
+      items.push({ id: item.id, title: item.destination, type: "stay", schedule, selection: { status: "unselected" } });
       // Even an explicit legacy accommodation has no trustworthy captured/selection provenance yet.
       warnings.push({ itemId: item.id, code: "stay-snapshot-deferred", ownerIssue: 400 });
     } else if (item.type === "sightseeing") {
       deferredItemIds.push(item.id);
       warnings.push({ itemId: item.id, code: "activity-deferred", ownerIssue: 410 });
-      const mapping: TripMigrationResult["placeMappings"][number] = { itemId: item.id };
+      const mapping: TripMigrationResult["placeMappings"][number] = { itemId: item.id, schedule };
       placeMappings.push(mapping);
       const original = item.place;
       const reviewed = options.placeRetentionByItemId?.[item.id];

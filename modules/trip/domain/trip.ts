@@ -1,6 +1,7 @@
 import type { ExternalSourceEvidence } from "./external-travel-information";
-import { exactKeys, validDate, validInstant, validateSelectedRailJourney, type SelectedRailJourney } from "./selected-rail-journey";
+import { exactKeys, validDate, validInstant, projectRailSchedule, type SelectedRailJourney } from "./selected-rail-journey";
 import { validatePlaceSnapshot, type PlaceSnapshot } from "./place-snapshot";
+import { validateItinerarySchedule, projectStaySchedule, sameZonedInstant, type ItinerarySchedule } from "./itinerary-schedule";
 
 /** The single Trip V2 aggregate. Deferred fields are absent, not default-completed. Writer remains gated. */
 export interface Trip {
@@ -13,7 +14,7 @@ export interface Trip {
   readonly updatedAt: string;
 }
 
-interface ItineraryItemBase { readonly id: string; readonly title: string; }
+interface ItineraryItemBase { readonly id: string; readonly title: string; readonly schedule: ItinerarySchedule; }
 export interface TransportItineraryItem extends ItineraryItemBase {
   readonly type: "transport";
   readonly detail:
@@ -62,16 +63,20 @@ export function validateTrip(trip: Trip): void {
 
 function validateItem(item: ItineraryItem): void {
   if (!item.id || typeof item.title !== "string") throw new Error("Invalid itinerary identity");
+  validateItinerarySchedule(item.schedule);
   if (item.type === "transport") {
-    exactKeys(item, ["id", "title", "type", "detail"]);
+    exactKeys(item, ["id", "title", "type", "detail", "schedule"]);
     if (item.detail.status === "selected" && item.detail.mode === "rail") {
       exactKeys(item.detail, ["status", "mode", "journey"]);
-      validateSelectedRailJourney(item.detail.journey);
+      const projected = projectRailSchedule(item.detail.journey);
+      if (item.schedule.type !== "fixed" || !item.schedule.endAt ||
+          !sameZonedInstant(item.schedule.startAt, projected.startAt) ||
+          !sameZonedInstant(item.schedule.endAt, projected.endAt!)) throw new Error("Rail schedule differs from adopted timetable");
     } else if (item.detail.status === "unresolved" && (item.detail.mode === undefined || item.detail.mode === "rail")) {
       exactKeys(item.detail, ["status", "mode"]);
     } else throw new Error("Invalid transport selection");
   } else if (item.type === "stay") {
-    exactKeys(item, ["id", "title", "type", "selection"]);
+    exactKeys(item, ["id", "title", "type", "selection", "schedule"]);
     if (item.selection.status === "unselected") {
       exactKeys(item.selection, ["status", "place"]);
       if (item.selection.place !== undefined) validatePlaceSnapshot(item.selection.place);
@@ -82,6 +87,9 @@ function validateItem(item: ItineraryItem): void {
     const stay = item.selection.accommodation;
     exactKeys(stay, ["place", "selectedAt", "checkInDate", "checkOutDate", "sources"]);
     validatePlaceSnapshot(stay.place);
+    const projected = projectStaySchedule(stay.checkInDate, stay.checkOutDate, stay.place.timeZone);
+    if (item.schedule.type !== "day" || item.schedule.date !== projected.date ||
+        item.schedule.endDate !== projected.endDate || item.schedule.timeZone !== projected.timeZone) throw new Error("Stay schedule differs from adopted stay dates");
     if (!stay.place.name || !validInstant(stay.selectedAt) || !validDate(stay.checkInDate) ||
         !validDate(stay.checkOutDate) || stay.checkInDate >= stay.checkOutDate || !stay.sources.length) throw new Error("Invalid adopted accommodation");
     stay.sources.forEach((source) => {

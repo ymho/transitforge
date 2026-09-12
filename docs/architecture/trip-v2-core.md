@@ -5,6 +5,7 @@
 本書は最終契約を変更せず、main `845f17d`から#385で実装した部分と未導入部分を区別する。
 
 #414によるPlaceの統合・利用箇所・保存許諾・legacy部分変換は[Place導入記録](trip-place-snapshot.md)を参照する。
+#386による共通schedule・日時validation・Context/表示projectionは[Schedule導入記録](trip-schedule.md)を参照する。
 
 ## 現行モデル・利用箇所の棚卸し
 
@@ -32,7 +33,8 @@
 - stay.selectionはunselected、または選択済み1宿。宿は最終契約の最小部分（名前、採用日時、宿泊日、出所）のみ。
   AccommodationOffering/TripAccommodationを埋め込まず、第三の恒久宿型も追加しない。
   #414でplaceを共通PlaceSnapshotへ統合した。#400がこのselection内の宿契約を拡張し、価格・空室・画像等はその時点で扱う。
-- 未実装のrequest/state/schedule/activity/party等を正常なdefaultで埋めない。
+- #386で全itemへ共通scheduleを追加した。不明時刻は明示`unscheduled`、rail/stayは計画事実のprojectionを検証する。
+- 未実装のrequest/state/activity/party等を正常なdefaultで埋めない。
   別名の暫定Tripや別のItinerary正本を増やさない。
 - `TripPatch` / `TripUpdateProposal`は今回必要な既存itemのreplaceだけを持つ最小契約。
   `applyTripProposal`は全件検証し、失敗時に元Tripを変えない。存在しない対象、ID変更、異なるitem種別は拒否。
@@ -63,7 +65,8 @@ scheduled発着instant）、transfers（leg参照/必要時間）、provenance�
 - `requiredTransferMinutes`を既存探索engineから共通関数に抽出。同じpace/駅ルールで計画上の接続を再検証し、
   遅延がある時だけ成立する接続を拒否する。新しい探索器・Plannerはない。
 - 業務日+24時超minutesを日付を失わずoffset付きinstantへ変換。現在の鉄道入力のAsia/Tokyoに限定。
-  一般Schedule/DST/他modeの時刻契約は#386の責務で、独立した一般scheduleモデルを作らない。
+  #386で共有ZonedInstantと日時validationへ統合した。鉄道instantは同じ瞬間の`+09:00`表記へ揃え、
+  zone/offsetの一致を必須とした。計画分や4時境界は変更しない。
 - 生のJourneyRouteResult、delay/status、補正時刻、混雑、現在位置、unknown field、raw、取得URLをコピーしない。
   legs/provenanceもallowlistで新規構築。Trip/Patch検証でも未定義キーを拒否する。
 - `revalidateSelectedRailJourney`は入力の欠落/digest/時刻/乗換規則/validator変更を検出する。
@@ -99,7 +102,8 @@ V2生成日時を注入する。同じ入力/引数で同じ出力。旧IDをUUI
   unselected + #400警告にし、旧rawから#400が同じ入口のmappingを拡張する。
 - manual移動はmode未解決 + #413警告。sightseeingは型を先取りせずdeferredItemIds + #410警告。
   #414で同じconverterに観光Placeの許諾付き変換を追加した。Activity未導入中はplaceMappingsとして返すが別保存形式にはしない。
-  日付は#386、条件等は#387の移行保留。元item ID/順序は原本に残り、変換できたitemのID/相対順序も維持。
+  #386で日付はday/宿泊day spanへ移し、同じplaceMappingsにscheduleも返す。不正日付は警告とunscheduled。
+  条件等は#387の移行保留。元item ID/順序は原本に残り、変換できたitemのID/相対順序も維持。
 - 原本を変更せず、`requiresLegacyRetention: true`とwarningsを常に返す。これは完成したimportではない。
   未実装fieldやdeferred itemがある状態で旧rawを削除してはいけない。元データはログ/Trip内へコピーしない。
 - **LocalStorageの現行正本/writer、会話削除、server Repositoryは変更しない。dual-writeもない。**
@@ -122,7 +126,6 @@ live評価は設定済みAWSセッション期限切れで未実施。保存済�
 | Issue | 同じTrip/同じconverterへ追加する責務 |
 | --- | --- |
 | #383 | planning/lifecycle、実行状態。現時点ではフィールド自体を追加していない |
-| #386 | Schedule/ZonedInstant/暦日時/DSTの一般契約、日付mapping |
 | #387 | TripRequest/constraints/PlanAssumption、条件競合、Profileと今回条件の区別 |
 | #400 | 宿snapshot/Offeringの最終整理、旧選択済み宿・許諾・観測のmapping |
 | #403 | 多都市、legacy/UIの対象stay選択導線と表示要約 |
