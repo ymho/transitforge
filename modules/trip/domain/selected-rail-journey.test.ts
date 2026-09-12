@@ -1,8 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { railSelectionFixture } from "./selected-rail-journey.fixture";
 import { revalidateSelectedRailJourney, selectRailJourney, validateSelectedRailJourney } from "./selected-rail-journey";
+import { validatePlaceSnapshot } from "./place-snapshot";
 
 describe("SelectedRailJourney", () => {
+  it("uses sourced PlaceSnapshots without fabricated station IDs and preserves later revalidation", () => {
+    const { candidate, inputs, selectedAt } = railSelectionFixture();
+    const snapshot = selectRailJourney(candidate, inputs, selectedAt);
+    const before = structuredClone(snapshot);
+    for (const leg of snapshot.legs) for (const place of [leg.origin, leg.destination]) {
+      expect(() => validatePlaceSnapshot(place)).not.toThrow();
+      expect(place.ref).toBeUndefined();
+      expect(place.sources[0]!.sourceId).toBe(inputs[0]!.sourceId);
+      expect(place.capturedAt).toBe(inputs[0]!.evidence.retrievedAt);
+    }
+    inputs[0]!.evidence.retrievedAt = "2026-09-14T08:00:00Z";
+    expect(revalidateSelectedRailJourney(snapshot, inputs)).toBe(true);
+    expect(snapshot).toEqual(before);
+    Object.assign(snapshot.legs[0]!.origin, { raw: { delayMinutes: 10 } });
+    expect(() => validateSelectedRailJourney(snapshot)).toThrow(/Unknown field/);
+    expect(revalidateSelectedRailJourney(snapshot, inputs)).toBe(false);
+  });
   it("adopts only scheduled facts, with source/day/stop identity for every leg", () => {
     const { candidate, inputs, selectedAt } = railSelectionFixture();
     Object.assign(candidate.journey, { status: "delayed", congestion: 9, unknown: "must-not-leak" });

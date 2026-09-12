@@ -4,17 +4,20 @@ import { requiredTransferMinutes } from "@raiquora/journey/transfer-time";
 import { normalizeStationName } from "@raiquora/train/station-name";
 import type { TrainIndex } from "@raiquora/train/train";
 import type { ExternalSourceEvidence } from "./external-travel-information";
+import { createPlaceSnapshot, validatePlaceSnapshot, type PlaceSnapshot } from "./place-snapshot";
+import { exactKeys, validDate, validInstant } from "./snapshot-validation";
+export { exactKeys, validDate, validInstant } from "./snapshot-validation";
 
 export const railValidationPolicyVersion = "scheduled-rail-v1";
 
-/** Plan facts only. Place and general schedule value objects are extended in #414/#386. */
+/** Plan facts only. General schedule value objects are extended in #386. */
 export interface ScheduledRailLeg {
   readonly id: string;
   readonly serviceDate: string;
   readonly serviceUid: string;
   readonly trainNumber: string;
-  readonly origin: { readonly name: string };
-  readonly destination: { readonly name: string };
+  readonly origin: PlaceSnapshot;
+  readonly destination: PlaceSnapshot;
   readonly originStopIndex: number;
   readonly destinationStopIndex: number;
   readonly scheduledDeparture: { readonly at: string; readonly timeZone: "Asia/Tokyo" };
@@ -115,7 +118,9 @@ export function selectRailJourney(
     timetableInputs.push({ sourceId: input.sourceId, serviceDate: ref.serviceDate, contentDigest: input.contentDigest });
     const result: ScheduledRailLeg = {
       id: `leg-${index + 1}`, serviceDate: ref.serviceDate, serviceUid: leg.serviceUid,
-      trainNumber: leg.trainNumber, origin: { name: origin.station_name }, destination: { name: destination.station_name },
+      trainNumber: leg.trainNumber,
+      origin: scheduledStationPlace(origin.station_name, sources[index]!),
+      destination: scheduledStationPlace(destination.station_name, sources[index]!),
       originStopIndex: ref.originStopIndex, destinationStopIndex: ref.destinationStopIndex,
       scheduledDeparture: scheduledInstant(ref.serviceDate, origin.route_time_minutes),
       scheduledArrival: scheduledInstant(ref.serviceDate, destination.route_time_minutes),
@@ -151,7 +156,7 @@ export function validateSelectedRailJourney(value: SelectedRailJourney): void {
   }
   value.legs.forEach((leg, index) => {
     exactKeys(leg, ["id", "serviceDate", "serviceUid", "trainNumber", "origin", "destination", "originStopIndex", "destinationStopIndex", "scheduledDeparture", "scheduledArrival"]);
-    exactKeys(leg.origin, ["name"]); exactKeys(leg.destination, ["name"]);
+    validatePlaceSnapshot(leg.origin); validatePlaceSnapshot(leg.destination);
     exactKeys(leg.scheduledDeparture, ["at", "timeZone"]); exactKeys(leg.scheduledArrival, ["at", "timeZone"]);
     const source = p.timetableInputs[index]!;
     const evidence = p.sources[index]!;
@@ -221,13 +226,10 @@ function scheduledInstant(serviceDate: string, minutes: number): ScheduledRailLe
   const date = new Date(Date.parse(`${serviceDate}T00:00:00+09:00`) + minutes * 60_000);
   return { at: date.toISOString(), timeZone: "Asia/Tokyo" };
 }
-export function validDate(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/u.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
-}
-export function validInstant(value: string): boolean {
-  return typeof value === "string" && validDate(value.slice(0, 10)) &&
-    /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u.test(value) && Number.isFinite(Date.parse(value));
-}
-export function exactKeys(value: object, allowed: readonly string[]): void {
-  if (!value || typeof value !== "object" || Object.keys(value).some((key) => !allowed.includes(key))) throw new Error("Unknown field in Trip snapshot");
+function scheduledStationPlace(name: string, source: ExternalSourceEvidence): PlaceSnapshot {
+  // The existing versioned timetable already permits retaining station names and this evidence.
+  // No stable station provider ID exists in TrainIndex: do not fabricate one from the name.
+  return createPlaceSnapshot({ name, capturedAt: source.retrievedAt, sources: [source] }, {
+    origin: "provider", provider: source.provider, storage: "permitted", allowedFields: ["name", "capturedAt", "sources"],
+  });
 }

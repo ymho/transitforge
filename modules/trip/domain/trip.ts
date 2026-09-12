@@ -1,5 +1,6 @@
 import type { ExternalSourceEvidence } from "./external-travel-information";
 import { exactKeys, validDate, validInstant, validateSelectedRailJourney, type SelectedRailJourney } from "./selected-rail-journey";
+import { validatePlaceSnapshot, type PlaceSnapshot } from "./place-snapshot";
 
 /** The single Trip V2 aggregate. Deferred fields are absent, not default-completed. Writer remains gated. */
 export interface Trip {
@@ -22,11 +23,11 @@ export interface TransportItineraryItem extends ItineraryItemBase {
 export interface StayItineraryItem extends ItineraryItemBase {
   readonly type: "stay";
   readonly selection:
-    | { readonly status: "unselected" }
+    | { readonly status: "unselected"; readonly place?: PlaceSnapshot }
     | { readonly status: "selected"; readonly accommodation: {
       // Minimal slice of #415's final accommodation contract, not another Offering type.
-      // #400/#414 add identity/observation/place fields here, #412 owns Money.
-      readonly place: { readonly name: string };
+      // #400 adds accommodation identity/observation fields here, #412 owns Money.
+      readonly place: PlaceSnapshot;
       readonly selectedAt: string;
       readonly checkInDate: string;
       readonly checkOutDate: string;
@@ -71,12 +72,16 @@ function validateItem(item: ItineraryItem): void {
     } else throw new Error("Invalid transport selection");
   } else if (item.type === "stay") {
     exactKeys(item, ["id", "title", "type", "selection"]);
-    if (item.selection.status === "unselected") { exactKeys(item.selection, ["status"]); return; }
+    if (item.selection.status === "unselected") {
+      exactKeys(item.selection, ["status", "place"]);
+      if (item.selection.place !== undefined) validatePlaceSnapshot(item.selection.place);
+      return;
+    }
     if (item.selection.status !== "selected") throw new Error("Invalid stay selection");
     exactKeys(item.selection, ["status", "accommodation"]);
     const stay = item.selection.accommodation;
     exactKeys(stay, ["place", "selectedAt", "checkInDate", "checkOutDate", "sources"]);
-    exactKeys(stay.place, ["name"]);
+    validatePlaceSnapshot(stay.place);
     if (!stay.place.name || !validInstant(stay.selectedAt) || !validDate(stay.checkInDate) ||
         !validDate(stay.checkOutDate) || stay.checkInDate >= stay.checkOutDate || !stay.sources.length) throw new Error("Invalid adopted accommodation");
     stay.sources.forEach((source) => {

@@ -1,5 +1,6 @@
 import type { TravelCandidate } from "@raiquora/trip/travel-candidate";
 import type { ExternalSourceEvidence } from "@raiquora/trip/external-travel-information";
+import { createPlaceSnapshot, type PlaceSnapshotRetention } from "@raiquora/trip/place-snapshot";
 import { selectRailJourney, validInstant, type RailTimetableInput, type VerifiedRailCandidate } from "@raiquora/trip/selected-rail-journey";
 import { applyTripProposal, type Trip, type TripUpdateProposal, type ItineraryItem } from "@raiquora/trip/trip";
 
@@ -12,7 +13,8 @@ export interface CandidateSelectionPort {
     validUntil: string;
     rail?: VerifiedRailCandidate;
     /** Adapter-reviewed storage permission and evidence; an Offering alone is not permission. */
-    accommodation?: { provider: string; providerItemId: string; storageAllowed: boolean; source: ExternalSourceEvidence };
+    accommodation?: { provider: string; providerItemId: string; storageAllowed: boolean;
+      placeRetention: PlaceSnapshotRetention; source: ExternalSourceEvidence };
   } | undefined>;
   loadTimetables(rail: VerifiedRailCandidate): Promise<readonly RailTimetableInput[]>;
 }
@@ -54,7 +56,15 @@ export async function proposeCandidateSelection(
     const source = permission.source;
     if (source.provider !== offering.provider || source.sourceId !== offering.providerItemId) throw new Error("Accommodation evidence does not match");
     item = { id: target.id, title: target.title, type: "stay", selection: { status: "selected", accommodation: {
-      place: { name: offering.name }, checkInDate: offering.checkInDate, checkOutDate: offering.checkOutDate, selectedAt,
+      place: createPlaceSnapshot({
+        ref: { provider: offering.provider, providerPlaceId: offering.providerItemId }, name: offering.name,
+        ...(offering.address !== undefined ? { address: offering.address } : {}),
+        ...(offering.areaName !== undefined ? { area: offering.areaName } : {}),
+        ...(offering.longitude !== undefined && offering.latitude !== undefined
+          ? { coordinate: { longitude: offering.longitude, latitude: offering.latitude } } : {}),
+        capturedAt: source.retrievedAt, sources: [source],
+      }, permission.placeRetention),
+      checkInDate: offering.checkInDate, checkOutDate: offering.checkOutDate, selectedAt,
       sources: [{ id: source.id, kind: source.kind, provider: source.provider, sourceId: source.sourceId,
         retrievedAt: source.retrievedAt, confidence: source.confidence }],
     } } };

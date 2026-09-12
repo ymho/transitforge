@@ -13,6 +13,16 @@ describe("minimal Trip V2", () => {
     item.title = "changed";
     expect(trip.items[0]!.title).toBe("宿");
   });
+  it("can keep an unresolved manual place in Trip without treating it as a selected hotel", () => {
+    const place = { name: "海辺の宿", sources: [] };
+    const item = { id: "stay", type: "stay" as const, title: "宿", selection: { status: "unselected" as const, place } };
+    const trip = createTrip(id, "旅", at, [item]);
+    expect(trip.items[0]).toEqual(item);
+    place.name = "変更";
+    expect(trip.items[0]).toMatchObject({ selection: { status: "unselected", place: { name: "海辺の宿" } } });
+    Object.assign(place, { raw: true });
+    expect(() => createTrip(id, "旅", at, [item])).toThrow();
+  });
   it.each([
     { id: "session-not-a-uuid" }, { schemaVersion: 3 }, { revision: -1 }, { revision: 0.5 },
     { createdAt: "2026-02-30T00:00:00Z" }, { updatedAt: "2025-01-01T00:00:00Z" }, { journeys: [] },

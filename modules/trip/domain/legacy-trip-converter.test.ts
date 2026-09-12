@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { convertLegacyTripPlan } from "./legacy-trip-converter";
+import { convertLegacyTripPlan, type LegacyTripMigrationOptions } from "./legacy-trip-converter";
 import type { TripPlan } from "./trip-plan";
 import { railSelectionFixture } from "./selected-rail-journey.fixture";
 
@@ -14,6 +14,74 @@ function legacy(): TripPlan {
   ] };
 }
 describe("single legacy converter", () => {
+  it.each(["wikipedia", "mapbox", "manual"] as const)("maps a retainable legacy %s place through the same converter", (provider) => {
+    const plan: TripPlan = { ...legacy(), items: [{ id: "place", type: "sightseeing", place: {
+      name: "見所", provider, ...(provider !== "manual" ? { placeId: "opaque:001" } : {}), coordinate: [135, 35],
+    } }] };
+    // Synthetic permission fixture; no claim that real Search Box data permits retention.
+    const options: LegacyTripMigrationOptions = provider === "manual" ? {} : { placeRetentionByItemId: { place: {
+      retention: { origin: "provider", provider, storage: "permitted", allowedFields: ["ref", "name", "coordinate", "sources"] },
+      sources: [{ id: "legacy-evidence", kind: "place", provider, sourceId: "opaque:001", retrievedAt: "2025-01-01T00:00:00Z", confidence: "unknown" }],
+    } } };
+    const before = structuredClone({ plan, options });
+    const result = convertLegacyTripPlan(plan, identity, options);
+    expect(result.placeMappings).toEqual([{ itemId: "place", place: {
+      ref: { provider, ...(provider !== "manual" ? { providerPlaceId: "opaque:001" } : {}) }, name: "見所",
+      coordinate: { longitude: 135, latitude: 35 }, sources: options.placeRetentionByItemId?.place?.sources ?? [],
+    } }]);
+    expect(result.trip.items).toEqual([]); // Activity ownership stays #410.
+    expect(result.deferredItemIds).toEqual(["place"]);
+    expect(result).toEqual(convertLegacyTripPlan(plan, identity, options));
+    expect({ plan, options }).toEqual(before);
+    expect(result.placeMappings[0]!.place).not.toHaveProperty("capturedAt");
+  });
+  it.each(["mapbox", "wikipedia"] as const)("retains the original %s record instead of laundering unconfirmed provider data into manual", (provider) => {
+    const plan: TripPlan = { ...legacy(), items: [{ id: "place", type: "sightseeing", place: { name: "Provider name", provider, placeId: "opaque", coordinate: [135, 35] } }] };
+    const before = structuredClone(plan);
+    const result = convertLegacyTripPlan(plan, identity);
+    expect(result.placeMappings).toEqual([{ itemId: "place" }]);
+    expect(result.warnings).toContainEqual({ itemId: "place", code: "place-retention-unconfirmed", ownerIssue: 414 });
+    expect(JSON.stringify(result)).not.toMatch(/Provider name|opaque|135/);
+    expect(plan).toEqual(before);
+    const denied = convertLegacyTripPlan(plan, identity, { placeRetentionByItemId: { place: {
+      retention: { origin: "provider", provider, storage: "temporary", allowedFields: ["ref", "name", "sources"] }, sources: [],
+    } } });
+    expect(denied.placeMappings).toEqual([{ itemId: "place" }]);
+  });
+  it("preserves a name-only manual place without fabricating missing values", () => {
+    const plan: TripPlan = { ...legacy(), items: [{ id: "manual", type: "sightseeing", place: { provider: "manual", name: "広場" } }] };
+    expect(convertLegacyTripPlan(plan, identity).placeMappings).toEqual([{ itemId: "manual", place: { ref: { provider: "manual" }, name: "広場", sources: [] } }]);
+  });
+  it("reports field restrictions instead of silently losing a provider ID or coordinate", () => {
+    const plan: TripPlan = { ...legacy(), items: [{ id: "place", type: "sightseeing", place: {
+      name: "施設", provider: "wikipedia", placeId: "opaque", coordinate: [135, 35],
+    } }] };
+    Object.assign(plan.items[0]!, { raw: "excluded" });
+    const result = convertLegacyTripPlan(plan, identity, { placeRetentionByItemId: { place: {
+      retention: { origin: "provider", provider: "wikipedia", storage: "permitted", allowedFields: ["name", "sources"] },
+      sources: [{ id: "source", kind: "place", provider: "wikipedia", sourceId: "reviewed-catalog", retrievedAt: "2025-01-01T00:00:00Z", confidence: "unknown" }],
+    } } });
+    expect(result.placeMappings[0]!.place).toMatchObject({ name: "施設", sources: [{ confidence: "unknown" }] });
+    expect(result.placeMappings[0]!.place).not.toHaveProperty("ref");
+    expect(result.placeMappings[0]!.place).not.toHaveProperty("coordinate");
+    expect(JSON.stringify(result)).not.toContain("excluded");
+    expect(result.warnings).toContainEqual({ itemId: "place", code: "place-fields-not-retained", ownerIssue: 414 });
+  });
+  it.each([[999, 999], [NaN, 35], [135, Infinity], [35], [135, 35, 0]].map((coordinate) => ({ coordinate })))("quarantines invalid legacy coordinates $coordinate without clamping or dropping the whole plan", ({ coordinate }) => {
+    const plan: TripPlan = { ...legacy(), items: [{ id: "manual", type: "sightseeing", place: { provider: "manual", name: "広場", coordinate: coordinate as [number, number] } }] };
+    const before = structuredClone(plan);
+    const result = convertLegacyTripPlan(plan, identity);
+    expect(result.placeMappings[0]!.place).toEqual({ ref: { provider: "manual" }, name: "広場", sources: [] });
+    expect(result.warnings).toContainEqual({ itemId: "manual", code: "place-coordinate-invalid", ownerIssue: 414 });
+    expect(plan).toEqual(before);
+  });
+  it("reports invalid provider/identity without affecting other legacy items", () => {
+    const plan = legacy();
+    Object.assign(plan.items[2]!, { place: { provider: "unknown", name: "施設" } });
+    const result = convertLegacyTripPlan(plan, identity);
+    expect(result.trip.items).toHaveLength(3);
+    expect(result.warnings).toContainEqual({ itemId: "sight", code: "place-invalid", ownerIssue: 414 });
+  });
   it("is deterministic, retains IDs and reports deferred mappings without copying candidates", () => {
     const plan = legacy(); const before = structuredClone(plan);
     const result = convertLegacyTripPlan(plan, identity);
