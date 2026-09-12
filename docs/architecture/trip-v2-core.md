@@ -40,7 +40,7 @@
 - #387でrequest（constraints/assumptions、任意goal）を追加した。空Requestは条件未把握であって日帰り等のdefaultではない。
 - #383でplanningState/lifecycleStateを追加した。初期inspiration/pre_tripは日程確定や将来予定の証明ではない。
 - #410でactivityと必要最小限のaddを追加した。場所なし・日時未定を許し、候補採用は許諾を確認する。
-- 未実装のparty等を正常なdefaultで埋めない。
+- #411導入後も未知のpartyを正常なdefaultで埋めず、未設定または明示仮定として扱う。
   別名の暫定Tripや別のItinerary正本を増やさない。
 - `TripPatch` / `TripUpdateProposal`は既存itemのreplaceと、#387で追加したrequest patchを持つ最小契約。
   #383でplanning/lifecycle patchを追加し、候補採用とdraft化を同じ原子的Proposalで扱う。
@@ -139,7 +139,7 @@ live評価は設定済みAWSセッション期限切れで未実施。保存済�
 | #400 | 宿snapshot/Offeringの最終整理、旧選択済み宿・許諾・観測のmapping |
 | #403 | 多都市、legacy/UIの対象stay選択導線と表示要約 |
 | #410（導入済み） | Activity、add、deferred sightseeingの部分/完全変換。[Activity導入記録](trip-activity.md)参照 |
-| #411 / #412 | party、原通貨Money、宿/体験の価格観測 |
+| #411（導入済み） / #412 | [TripParty](trip-party.md)。原通貨Money、宿/体験の価格観測は#412 |
 | #413 | 非鉄道transport。PlaceRef/PlaceSnapshotの基礎とfield保持境界は#414で導入済み |
 | #388 / #389 | server認可/保存/取込、全Proposal/UIのrevision/CAS/冪等性、writer切替。新しいDomain converterは作らない |
 | #390 | 同じTrip/Proposalを扱うUI。legacy表示を採用証拠にする移行は禁止 |

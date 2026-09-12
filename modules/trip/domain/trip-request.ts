@@ -1,4 +1,5 @@
 import type { ItineraryItem } from "./trip";
+import { validateTripParty, samePartyValue, type TripParty } from "./trip-party";
 import { exactKeys } from "./snapshot-validation";
 import { nonemptyText, validateTripRequirement, type TripRequirement } from "./trip-requirement";
 export type { TripRequirement } from "./trip-requirement";
@@ -7,7 +8,7 @@ export interface TripRequest {
   readonly goal?: string;
   readonly constraints: readonly TripConstraint[];
   readonly assumptions: readonly PlanAssumption[];
-  // party is added here by #411, not represented by a parallel placeholder.
+  readonly party?: TripParty;
 }
 export interface TripConstraint {
   readonly id: string;
@@ -31,9 +32,18 @@ export interface PlanAssumption {
 
 /** Request plus its aggregate references are validated together, not in a separate repository. */
 export function validateTripRequest(request: TripRequest, items: readonly ItineraryItem[]): void {
-  exactKeys(request, ["goal", "constraints", "assumptions"]);
+  exactKeys(request, ["goal", "constraints", "assumptions", "party"]);
   if ((request.goal !== undefined && !nonemptyText(request.goal)) || !Array.isArray(request.constraints) || !Array.isArray(request.assumptions)) throw new Error("Invalid Trip request");
   uniqueIds(request.constraints); uniqueIds(request.assumptions);
+  if (request.party !== undefined) {
+    validateTripParty(request.party);
+    const party = request.party;
+    if (party.assumptionId !== undefined) {
+      const a = request.assumptions.find(({ id }) => id === party.assumptionId);
+      if (!a || a.status === "rejected" || !a.affects.some((ref: PlanAssumption["affects"][number]) => ref.type === "party") ||
+          a.source !== (party.source === "assumption" ? "model" : party.source)) throw new Error("Invalid party assumption link");
+    }
+  }
   for (const c of request.constraints) {
     exactKeys(c, ["id", "strength", "source", "assumptionId", "scope", "requirement"]);
     if (!["hard", "soft"].includes(c.strength) || !["user", "profile", "assumption", "legacy"].includes(c.source)) throw new Error("Invalid constraint source/strength");
@@ -67,9 +77,20 @@ export function validateTripRequest(request: TripRequest, items: readonly Itiner
         if (a.status === "rejected" && !unresolvedField(item, ref.field)) throw new Error("Rejected assumption still supports an item; resolve it atomically");
       } else if (ref.type === "party") {
         exactKeys(ref, ["type"]);
-        if (a.status === "confirmed") throw new Error("Party confirmation belongs to #411");
+        if (a.status === "confirmed" && request.party?.assumptionId !== a.id) throw new Error("Party confirmation requires its current value");
+        if (a.status === "unconfirmed" && request.party && request.party.assumptionId !== a.id) throw new Error("Party assumption does not support current party");
       } else throw new Error("Unknown assumption effect");
     }
+  }
+}
+
+/** Compare final Request to original; rejection cannot keep the rejected value under a new label. */
+export function validatePartyAssumptionTransition(before: TripRequest, after: TripRequest): void {
+  for (const a of before.assumptions) {
+    if (a.status !== "unconfirmed" || before.party?.assumptionId !== a.id) continue;
+    const next = after.assumptions.find(({ id }) => id === a.id);
+    if (next?.status === "confirmed" && JSON.stringify(before.party) !== JSON.stringify(after.party)) throw new Error("Confirm must retain the same party");
+    if (next?.status === "rejected" && after.party && samePartyValue(before.party, after.party)) throw new Error("Rejected party must be removed or replaced");
   }
 }
 function uniqueIds(values: readonly { id: string }[]): void {

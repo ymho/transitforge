@@ -155,7 +155,7 @@ IDは会話や目的地から再計算しない。全item IDはTrip内で一意�
 ### 要求の型と意味 (#387)
 
 #387で導入したコード、legacy field棚卸し、仮定確認と評価の最小境界、未導入責務は
-[Request導入記録](trip-request.md)を参照する。Money/partyと本番writerは未有効であり、以下は最終契約を示す。
+[Request導入記録](trip-request.md)を参照する。partyは#411で導入済み。Moneyと本番writerは未有効であり、以下は最終契約を示す。
 
 同じ出発地/日付等を`TripRequest.origin`と`constraints`の両方へ保存しない。
 次の`requirement.type`によるunionを1つ定義し、検索条件はそこからderiveする。
@@ -191,12 +191,17 @@ kind/valueを無制限の`unknown`や自由なJSON pathで保存しない。
 
 `TripRequest.party`だけに今回の同行者を置く。
 `adults: number`、`children: Array<{ ageGroup?: ChildAgeGroup; age?: number }>`、
-任意`composition: TravelCompanion[]`、`source: user | profile | legacy`、
+任意`composition: TravelCompanion[]`、`source: user | profile | legacy | assumption`、
 任意`assumptionId`を持つ。人数は非負整数・合計1以上。不明ならparty自体を未設定にする。
 年齢不明の子は`{}`で保持でき、0歳や幼児へ推定しない。Profileからの未確認採用にはassumptionを付ける。
 人数の一部だけ判明した場合も未確認分を確定人数と見なさず仮定を明示する。
 Provider固有の年齢区分変換はAdapterに閉じ、必要な時だけモデルが追加質問する。
 参加者のアカウント権限`TripParticipant` (#399)とは別概念である。
+
+#411の[TripParty導入記録](trip-party.md)で、同じ型・Request・仮定・converterを実装した。
+`source=assumption`は既存constraintと同じくmodel/unconfirmedへのリンクを表し、ユーザー確定事実ではない。
+Profile/legacy/assumptionは相互参照するassumptionId必須。却下後のpartyは元仮定を参照できず、
+同じProposalで削除または別値へ置換する。名前や生年月日、Provider年齢区分は保持しない。
 
 ## 4. 計画・旅行実行の状態 (#383)
 

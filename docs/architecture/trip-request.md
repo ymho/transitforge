@@ -22,7 +22,7 @@ Domainは`modules/trip/domain`、Proposal生成は`frontend/src/usecases/trip-pl
 ## 正本とtyped requirement
 
 `Trip.request: TripRequest`は必須。新規の空Requestは「条件なし/未把握」であり、日帰り・人数・日付等を補完しない。
-`goal?`、`constraints[]`、`assumptions[]`だけを導入する。`party`は#411が同じ型へ追加する。
+`goal?`、`constraints[]`、`assumptions[]`を導入した。#411で同じ型へoptional `party`を追加した（[TripParty](trip-party.md)）。
 schemaVersionは2のまま、revision/updatedAt更新は#389のwriterまで行わない。
 V2の本番データはまだないため、旧データ移行は既存legacy converter経由に限定する。
 
@@ -67,7 +67,7 @@ Moneyは#412が最終型を追加するまでbudget discriminatorを拒否する
   未確認→確認/却下、同じ結果の再送は冪等。確定後の反対操作は新たな明示Request変更を必要とする。
   itemのschedule/place/selectionへ影響する仮定の却下は、対応fieldの未解決化を明示replaceとして同時に要求する。
   自動でitemを消したり時刻を変えたりしない。代替の採用は別の明示Proposalで行う。
-  影響していないitemのrepairは拒否する。party確認は#411まで未対応であり黙って成功させない。
+  影響していないitemのrepairは拒否する。partyは#411で同じ境界へ統合し、参照先の値の確認、却下時の明示削除/置換を検証する。
 - `applyTripProposal`に同じrequest patchを追加。最終Requestと全itemをまとめてvalidateし、
   不正なら何も返さず元Tripを変更しない。ID・schemaVersion・revision・createdAtは保持する。
   Requestとscheduleが異なること自体はRequestを破棄する理由ではない。評価で不一致を示し、再計画へ渡す。
@@ -83,7 +83,7 @@ Moneyは#412が最終型を追加するまでbudget discriminatorを拒否する
 | startDate / endDate | Request.dates range | 有効なexactのみ両端同日。過去年を変えない。不正endは警告して有効startを維持 |
 | stayNights | Request.duration | 非負整数のexact。欠落は0にしない |
 | outboundDepartureTimeMinutes / returnArrivalTimeMinutes | Request.depart_after / arrive_by | legacyには信頼できる場所・civil date・zoneの組合せがないため今回は仮定文と警告。instantを捏造しない |
-| companions | TripRequest.party | #411へ警告、普段のProfile.companionsと区別 |
+| companions | TripRequest.party.composition | #411で明示人数と安全に結合。人数なし/矛盾はlegacy未確認メモと警告、Profileと混ぜない |
 | interests | Request.experience prefer | 既存TravelPreference + 有効weightを保持。普段の値はProfile.preferencesに残る |
 | avoidances | Request.experience avoid | 非空文字列。自由文なので充足の機械的証明はunknown |
 | pace | Request.pace | 0〜1。普段のProfile.travelStyle.paceは別のまま |
@@ -103,7 +103,7 @@ V2移行後はTripContextへの今回条件の書込と旧履歴による正本�
 旧readerで日付補正/clamp/defaultを加える前の構造化legacy値を受け取り、自然言語は再parseしない。
 意味が明らかな値もsource=legacy、soft + unconfirmed assumptionとして移す。softは出所不明値を
 必須条件として強制しないための初期取扱いであり、元ユーザーがsoftと言った証拠ではない。仮定文に必須度未確認を明記する。
-`conditions.considerations`は意味を推測しないunconfirmed legacy assumption、adults/childrenは#411へ残す。
+`conditions.considerations`は意味を推測しないunconfirmed legacy assumption、adults/childrenは#411のparty mappingへ接続する。
 不正/未知fieldはfield単位のwarning。新しいmigration日時をselectedAtや要求時刻に利用しない。
 同じ入力/引数は同じ出力、原本不変、`requiresLegacyRetention: true`。欠落/不正値を補正せず原本を保全する。
 Profile由来かuser由来か復元できない値は、その事実をlegacyとして残す。
@@ -155,7 +155,7 @@ npm run eval:agent:decision:live -- --profile full --case trip-v2-rejected-assum
 | Issue | 残す責務 |
 | --- | --- |
 | #383（状態導入済み） / #384 | [状態導入記録](trip-state.md)。Ask + Progress、意味解釈から確認可能なRequest Proposalへの本番接続は#384 |
-| #411 / #412 | 同じRequestのTripParty、Money/budget、該当affects/legacy mappingの最終化 |
+| #411（導入済み） / #412 | [TripParty](trip-party.md)を同じRequestへ統合。Money/budgetは#412 |
 | #402 / #406 | 全Trip成立性、全候補Assessment、natural-language条件の追加Evidence評価 |
 | #388 / #389 | server保存/認可/import、revision/CAS/mutationId、writer切替時の旧Context producer廃止 |
 | #390 | 同じProposal境界を使うDOM、未確認/競合/評価結果の本格表示 |

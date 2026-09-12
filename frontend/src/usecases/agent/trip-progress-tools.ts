@@ -60,6 +60,12 @@ export const tripProgressDescriptors: AgentToolDescriptor[] = [
     inputSchema: { type: "object", properties: { request: { type: "object", properties: {
       goal: { type: "string" }, constraints: { type: "array", maxItems: 40, items: { type: "object" } },
       assumptions: { type: "array", maxItems: 40, items: { type: "object" } },
+      party: { type: "object", description: "今回のTripParty。未知の子の年齢は省略。新規仮置きはsource=assumption、assumptionIdでmodel/unconfirmed/affects:[{type:'party'}]を参照。既知partyは書き換えず引き継ぐ。人数はcompositionから推定しない。",
+        properties: { adults: { type: "integer", minimum: 0 }, children: { type: "array", items: { type: "object", properties: {
+          age: { type: "integer", minimum: 0 }, ageGroup: { type: "string", enum: ["baby", "preschool", "elementary", "teen"] },
+        }, additionalProperties: false } }, composition: { type: "array", items: { type: "string", enum: ["solo", "partner", "friends", "children", "family"] } },
+        source: { type: "string", enum: ["user", "profile", "legacy", "assumption"] }, assumptionId: { type: "string" } },
+        required: ["adults", "children", "source"], additionalProperties: false },
     }, required: ["constraints", "assumptions"], additionalProperties: false } }, required: ["request"], additionalProperties: false },
   },
   {

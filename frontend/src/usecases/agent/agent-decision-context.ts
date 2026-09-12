@@ -253,6 +253,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
   return [
     "次の構造化Contextを使って利用者の目的と制約を解釈し、必要なEvidenceを得る能力を選択してください。",
     "既知条件は聞き直さず、Tool結果は事実として扱い、推測で補完しないでください。",
+    "persistedTripRequest.partyは今回の同行者です。party.assumptionIdに対応するunconfirmedAssumptionsは仮置きで、travelProfile.companionsは普段の傾向です。混ぜず、今回の明示partyを優先し、既知人数を聞き直さないでください。子どものage/ageGroup不明でも候補や仮旅程を提案できます。具体的なProvider操作がexact ageを要求した時だけ年齢を確認し、可能なProgressも併記してください。Profileの区分から人数や年齢を捏造しないでください。",
     "previousAssistantTurnは一時的な回答観測でTripのstateではありません。質問が必要でも可能なら同じturnで具体候補・比較・Proposalを示してください。連続ask_onlyは原則不可ですが、安全・未確認hard条件・本当に不足するTool必須入力は構造化例外として扱えます。内部Tool実行だけを進展と呼ばず、候補選択後は検証済みsnapshotからProposalを作り、時刻不明はunscheduled/day/windowのまま扱えます。",
     "過去Tripの振り返りと新しい旅行相談を区別し、保存Requestの年や条件を新しい旅行の希望へ無言で流用しないでください。未確認hard条件の成立を仮定せず、可能な進展と要確認事項を分けてください。",
     "期待成果物の目安は、inspiration/candidate_discoveryなら方向性・候補、candidate_selectionなら比較材料、itinerary_draft/itinerary_refinementなら具体的な変更案です。readyでは不要な確認を増やさず、in_tripでは既存Tripを前提にしてください。これはToolの固定割当や状態遷移の強制ではありません。",
