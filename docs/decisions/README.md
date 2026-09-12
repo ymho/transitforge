@@ -69,3 +69,4 @@
 - [0048 構造化されたAgent phaseだけをdecision modelへ送る](0048-route-structured-agent-phases-to-decision-model.md)
 - [0049 AIによる直接Viewer操作を一旦停止する](0049-pause-direct-ai-viewer-operations.md)
 - [0050 観光写真をWeb画像検索で補う](0050-use-web-image-search-for-place-photos.md)
+- [0051 コンシェルジュのキャラクター機能を廃止する](0051-retire-concierge-personas.md)

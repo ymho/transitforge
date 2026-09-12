@@ -182,7 +182,6 @@ export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDepend
   findJourneyLegAlternatives?: JourneyLegAlternativeSearch;
   getPendingJourneyLegChange?: () => PendingJourneyLegChange | undefined;
   setPendingJourneyLegChange?: (pending: PendingJourneyLegChange | undefined) => void;
-  conciergeInstruction?: string;
   getConversationContext?: () => AgentConversationContext | undefined;
   getTripContext?: () => TripContext | undefined;
   getVerifiedPlaces?: () => readonly PlaceMedia[];
@@ -339,9 +338,6 @@ export async function runViewerAgentRuntime(
     feature: "concierge",
     userRequest,
     context: {
-      ...(dependencies.conciergeInstruction
-        ? { personaInstruction: dependencies.conciergeInstruction }
-        : {}),
       featureContext: {
         displayTimeMinutes: dependencies.getRouteTime(),
         calendarDate: currentCalendarDateInJapan(currentDate(dependencies)),

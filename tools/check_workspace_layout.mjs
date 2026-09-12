@@ -52,7 +52,6 @@ for (const requiredPath of [
   "frontend/src/main.ts",
   "frontend/src/composition/viewer-composition.ts",
   "frontend/src/usecases",
-  "frontend/public",
   "frontend/src/presentation/concierge",
   "frontend/src/presentation/trip-plan",
   "frontend/src/presentation/train-viewer/rendering",

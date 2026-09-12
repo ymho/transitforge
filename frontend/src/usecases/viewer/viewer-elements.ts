@@ -33,9 +33,6 @@ export interface ViewerElements {
   aiGuideForm: HTMLFormElement;
   aiGuideInput: HTMLInputElement;
   aiGuideSubmit: HTMLButtonElement;
-  conciergeAvatar: HTMLImageElement;
-  conciergeName: HTMLElement;
-  conciergeRole: HTMLElement;
   conversationSidebarRail: HTMLElement;
   railNewConversation: HTMLButtonElement;
   railConversationHistory: HTMLButtonElement;
@@ -106,9 +103,6 @@ export function loadViewerElements(root: ParentNode): ViewerElements {
     aiGuideForm: required(root, "#ai-guide-form"),
     aiGuideInput: required(root, "#ai-guide-input"),
     aiGuideSubmit: required(root, "#ai-guide-submit"),
-    conciergeAvatar: required(root, "#concierge-avatar"),
-    conciergeName: required(root, "#concierge-name"),
-    conciergeRole: required(root, "#concierge-role"),
     conversationSidebarRail: required(root, "#conversation-sidebar-rail"),
     railNewConversation: required(root, "#rail-new-conversation"),
     railConversationHistory: required(root, "#rail-conversation-history"),

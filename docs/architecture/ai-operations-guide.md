@@ -5,6 +5,11 @@
 コンシェルジュは自然文を検証可能な検索条件と構造化された案内へ変換する
 モデルへ列車データ全体やブラウザ操作権限を渡さない
 
+案内役の表示名は「コンシェルジュ」に統一し、キャラクター選定・アバター・人格や語尾の
+専用Promptは使用しない。個別の提案には引き続き旅行プロフィールと会話・旅程の構造化Contextを
+使う。旧`personaInstruction`はContextへ投影せず、会話履歴内の過去の名前は書き換えない。
+廃止範囲は[ADR 0051](../decisions/0051-retire-concierge-personas.md)を参照する。
+
 Bedrockは構造化されたAgent Contextから利用者のgoal hard constraint soft preferenceを解釈し
 必要なEvidence 追加質問 Tool 候補比較 最終推薦を判断する。Applicationは自然言語の業務フローを
 別ルールエンジンとして再実装せず Context構築とboundedな実行を担う。時刻表 経路 運行情報

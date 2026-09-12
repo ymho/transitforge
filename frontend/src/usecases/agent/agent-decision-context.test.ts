@@ -6,6 +6,24 @@ import {
 } from "./agent-decision-context";
 
 describe("AgentDecisionContext", () => {
+  it("keeps travel context but does not forward retired persona fields", () => {
+    const legacyInput = {
+      personaInstruction: "廃止されたキャラクターとして話す",
+      travelProfile: { home: { station: "京都駅" }, favoriteInterests: ["歴史"] },
+      tripContext: { startDate: "2026-09-20", stayNights: 1 },
+      conversation: { messages: [{ role: "user" as const, text: "1泊で行きたい" }] },
+    };
+    const context = buildAgentDecisionContext({ executionId: "no-persona", feature: "concierge",
+      userRequest: "お願いします", context: legacyInput,
+    }, []);
+    const prompt = agentDecisionContextText(context);
+    expect(prompt).toContain("京都駅");
+    expect(prompt).toContain("歴史");
+    expect(prompt).toContain("2026-09-20");
+    expect(prompt).toContain("1泊で行きたい");
+    expect(prompt).not.toContain("personaInstruction");
+    expect(prompt).not.toContain("廃止されたキャラクター");
+  });
   it.each([
     ["2026-08-30", "2026-08-31", "2026-09-01"],
     ["2028-02-28", "2028-02-29", "2028-03-01"],
@@ -64,7 +82,6 @@ describe("AgentDecisionContext", () => {
           { role: "assistant", text: "帰宅時刻は何時を希望しますか？" },
           { role: "user", text: "21時には自宅へ着きたい" },
         ] },
-        personaInstruction: "穏やかな口調で案内する",
         currentJourney: { journeys: Array.from({ length: 20 }, () => ({
           legs: Array.from({ length: 20 }, () => ({ description: "経路の詳細".repeat(60) })),
         })) },
@@ -74,7 +91,7 @@ describe("AgentDecisionContext", () => {
     const serialized = prompt.match(/<agent_context>([\s\S]*)<\/agent_context>/u)![1]!;
     expect(serialized.length).toBeLessThanOrEqual(24_000);
     expect(JSON.parse(serialized).conversation.messages.at(-1).text).toBe("21時には自宅へ着きたい");
-    expect(prompt).toContain("穏やかな口調で案内する");
+    expect(prompt).not.toContain("personaInstruction");
   });
 
   it("gives Bedrock bounded structured context without exact location or secrets", () => {

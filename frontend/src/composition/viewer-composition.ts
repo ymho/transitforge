@@ -130,15 +130,7 @@ import {
 import { MapboxThreeTrainLayer } from "../presentation/train-viewer/rendering/mapbox-three-train-layer";
 import { RuntimeMetrics } from "../observability/runtime-metrics";
 import { configureTravelProfile } from "../presentation/concierge/travel-profile-panel";
-import {
-  buildConciergePrompt,
-  selectConciergeForUserProfile,
-} from "../features/concierge";
-import {
-  loadUserProfile,
-  travelProfileChangedEvent,
-} from "../usecases/trip-profile/user-profile-repository";
-import { renderConciergeIdentity } from "../presentation/concierge/concierge-identity";
+import { loadUserProfile } from "../usecases/trip-profile/user-profile-repository";
 import { configureConversationHistoryPanel } from "../presentation/concierge/conversation-history-panel";
 import { configureApplicationSettingsPanel } from "../presentation/settings/application-settings-panel";
 import { configureTripPlanPanel } from "../presentation/trip-plan/trip-plan-panel";
@@ -218,9 +210,6 @@ const {
   aiGuideForm,
   aiGuideInput,
   aiGuideSubmit,
-  conciergeAvatar,
-  conciergeName,
-  conciergeRole,
   railNewConversation,
   railConversationHistory,
   railRealtimeMap,
@@ -275,9 +264,6 @@ const aiGuidePromptHandlerReady = new Promise<AiGuidePromptHandler>((resolve) =>
 let handleAiGuidePrompt: AiGuidePromptHandler = (...args) =>
   aiGuidePromptHandlerReady.then((handler) => handler(...args));
 let findJourneyLegAlternatives: JourneyLegAlternativeSearch = async () => [];
-let activeConcierge = selectConciergeForUserProfile(
-  loadUserProfile(localStorage),
-);
 const conversationSessionRepository = new LocalConversationSessionRepository(
   localStorage,
   browserConversationSessionStorageEvents(),
@@ -286,23 +272,6 @@ const conversationHistoryRepository = new LocalConversationHistoryRepository(loc
 const travelRecheckRepository = new BrowserTravelRecheckRepository(localStorage);
 let activeConversationSession = conversationSessionRepository.active() ??
   conversationSessionRepository.create();
-const updateConciergeIdentity = (resetGreeting = false) => {
-  activeConcierge = selectConciergeForUserProfile(loadUserProfile(localStorage));
-  renderConciergeIdentity(
-    {
-      avatar: conciergeAvatar,
-      name: conciergeName,
-      role: conciergeRole,
-      messages: aiGuideMessages,
-    },
-    activeConcierge,
-    resetGreeting,
-  );
-};
-const currentConciergeInstruction = () => [
-  buildConciergePrompt(activeConcierge).slice(0, 450),
-  "この文脈は明示希望を上書きしない。既知の条件を聞き直さず、推測に確信がないときだけ短く確認する。遠い移動や多い乗換はプロフィールの許容度と照合し、懸念と代替案を先に示す。",
-].join("\n\n").slice(0, 800);
 const currentAgentConversationContext = (prompt: string) => ({
   summary: activeConversationSession.summary,
   resolvedTopics: activeConversationSession.resolvedTopics,
@@ -312,9 +281,6 @@ const currentAgentConversationContext = (prompt: string) => ({
     prompt,
   ),
 });
-updateConciergeIdentity(true);
-document.addEventListener(travelProfileChangedEvent, () =>
-  updateConciergeIdentity(true));
 let aiGuideController: ReturnType<typeof configureAiGuidePanel>;
 let verifiedPlaceLayer: VerifiedPlaceLayerController | undefined;
 let mapPlaceExplorerController: MapPlaceExplorerController | undefined;
@@ -557,7 +523,6 @@ const conversationSessionSwitcher = createConversationSessionSwitcher({
       returnToConversation();
       mapPlaceExplorerController?.clear();
       activeConversationSession = session;
-      updateConciergeIdentity();
       contextWorkspaceController.activateSession(session.id);
   },
 });
@@ -1253,7 +1218,6 @@ if (!token) {
                 setPendingJourneyLegChange: (pending) => {
                   pendingJourneyLegChange = pending;
                 },
-                conciergeInstruction: currentConciergeInstruction(),
                 getConversationContext: () => currentAgentConversationContext(prompt),
                 getTripContext: () => conversation?.guidance.tripContext,
                 getVerifiedPlaces: () => pendingMapCandidates.flatMap((candidate) =>

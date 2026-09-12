@@ -49,7 +49,6 @@ export interface AgentToolOutcomeSummary {
 }
 
 export interface AgentRuntimeContextInput {
-  personaInstruction?: string;
   featureContext?: Omit<AgentFeatureContext, "feature">;
   conversation?: AgentConversationContext;
   tripContext?: Record<string, AgentContextValue | AgentContextValue[]>;
@@ -71,7 +70,6 @@ export interface AgentAvailableCapability {
 export interface AgentDecisionContext {
   userRequest: string;
   featureContext: AgentFeatureContext;
-  personaInstruction?: string;
   conversation?: AgentConversationContext;
   tripContext?: Record<string, AgentContextValue | AgentContextValue[]>;
   travelProfile?: Record<string, unknown>;
@@ -106,9 +104,6 @@ export function buildAgentDecisionContext(
         ? { serviceDate: input?.featureContext?.serviceDate }
         : {}),
     },
-    ...(text(input?.personaInstruction, 800)
-      ? { personaInstruction: text(input?.personaInstruction, 800) }
-      : {}),
     ...(input?.conversation ? { conversation: conversation(input.conversation) } : {}),
     ...(input?.tripContext ? { tripContext: boundedRecord(input.tripContext, 20) } : {}),
     ...(input?.travelProfile ? { travelProfile: boundedUnknownRecord(input.travelProfile) } : {}),
@@ -151,7 +146,6 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
   const compact = JSON.stringify({
       userRequest: context.userRequest,
       featureContext: context.featureContext,
-      personaInstruction: context.personaInstruction,
       conversation: context.conversation ? {
         summary: context.conversation.summary,
         messages: context.conversation.messages?.slice(-8),
@@ -170,7 +164,6 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
   const core = JSON.stringify({
     userRequest: context.userRequest.slice(0, 1_000),
     featureContext: context.featureContext,
-    personaInstruction: context.personaInstruction,
     conversation: context.conversation ? {
       ...context.conversation,
       messages: context.conversation.messages?.slice(-4),
@@ -187,7 +180,6 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
   const minimal = JSON.stringify({
     userRequest: context.userRequest,
     featureContext: context.featureContext,
-    personaInstruction: context.personaInstruction,
     conversation: context.conversation ? {
       summary: context.conversation.summary,
       messages: context.conversation.messages?.slice(-4).map(({ role, text }) => ({ role, text: text.slice(0, 800) })),
