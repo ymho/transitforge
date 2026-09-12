@@ -2,6 +2,18 @@
   "schemaVersion": "agent-eval-dataset-v2",
   "travelProgressScenarios": [
     {
+      "id": "M-known-party", "name": "既知の夫婦2人を聞き直さず具体案を提示する",
+      "userRequest": "今回の夫婦2人の条件で、自由時間を旅程に追加してください。普段の家族旅行の人数は使わないで",
+      "tags": ["trip-progress", "known-party"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
+      "id": "N-unknown-child-age", "name": "子どもの年齢不明でも仮旅程へ進める",
+      "userRequest": "大人2人と子ども1人、年齢はまだ確認できません。予約ではなく、自由時間を含む仮旅程を見たい",
+      "tags": ["smoke", "trip-progress", "unknown-child-age"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
       "id": "A-vague", "name": "曖昧な旅行希望から候補を提示する",
       "userRequest": "9月下旬に夫婦で3泊くらい。自然があってリラックスしたい",
       "tags": ["smoke", "trip-progress", "ambiguous-request"],

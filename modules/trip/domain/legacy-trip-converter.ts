@@ -7,6 +7,7 @@ import { validateTripRequirement, nonemptyText, type TripRequirement } from "./t
 import type { TripRequest, TripConstraint, PlanAssumption } from "./trip-request";
 import { travelPreferenceLabels, type TravelPreference, type AdventureRisk } from "./travel-profile";
 import type { PlanningState } from "./trip-state";
+import { validateTripParty, validatePartyComposition, type TripParty } from "./trip-party";
 
 export interface TripMigrationWarning {
   itemId?: string;
@@ -146,6 +147,7 @@ export function convertLegacyTripPlan(plan: TripPlan, identity: { tripId: string
 function mapLegacyRequest(plan: TripPlan, raw: unknown, warnings: TripMigrationWarning[]): TripRequest {
   const constraints: TripConstraint[] = [];
   const assumptions: PlanAssumption[] = [];
+  let party: TripParty | undefined;
   const warning = (field: string, ownerIssue = 387, invalid = false): void => {
     warnings.push({ code: invalid ? "request-field-invalid" : "request-field-deferred", field, ownerIssue });
   };
@@ -169,11 +171,25 @@ function mapLegacyRequest(plan: TripPlan, raw: unknown, warnings: TripMigrationW
         else warning(`conditions.considerations.${index}`, 387, true);
       });
       else warning("conditions.considerations", 387, true);
-      for (const field of Object.keys(plan.conditions)) if (field !== "considerations") warning(`conditions.${field}`, field === "adults" || field === "children" ? 411 : 387);
+      for (const field of Object.keys(plan.conditions)) if (!["considerations", "adults", "children"].includes(field)) warning(`conditions.${field}`);
+      const { adults, children } = plan.conditions;
+      // Only this legacy count-to-array allocation is bounded, not the Domain party size.
+      if (!Number.isSafeInteger(adults) || adults < 0 || (children !== undefined && (!Number.isSafeInteger(children) || children < 0))) warning("conditions.party", 411, true);
+      else if (children > 10_000) warning("conditions.children", 411); // Retain raw; do not allocate untrusted enormous arrays.
+      else {
+        const assumptionId = "legacy-assumption:party";
+        const value: TripParty = { adults, children: Array.from({ length: children ?? 0 }, () => ({})), source: "legacy", assumptionId };
+        try {
+          validateTripParty(value); party = value;
+          assumptions.push({ id: assumptionId, source: "legacy", status: "unconfirmed", affects: [{ type: "party" }],
+            text: children === undefined ? "以前の大人人数を保持。子ども人数の記録がなく、子どもなしは仮置きです。" : "以前の人数を保持。出所・子どもの年齢は未確認です。" });
+          if (children === undefined) warning("conditions.children", 411);
+        } catch { warning("conditions.party", 411, true); }
+      }
     }
   }
-  if (raw === undefined) return { constraints, assumptions };
-  if (!isRecord(raw)) { warning("tripContext", 387, true); return { constraints, assumptions }; }
+  if (raw === undefined) return { constraints, assumptions, ...(party ? { party } : {}) };
+  if (!isRecord(raw)) { warning("tripContext", 387, true); return { constraints, assumptions, ...(party ? { party } : {}) }; }
   if (raw.startDate !== undefined) {
     const start = { earliest: raw.startDate as string, latest: raw.startDate as string };
     const requirement: TripRequirement = { type: "dates", start };
@@ -214,7 +230,22 @@ function mapLegacyRequest(plan: TripPlan, raw: unknown, warnings: TripMigrationW
           avoidedRisks: (raw.avoidedRisks === undefined ? [] : raw.avoidedRisks) as AdventureRisk[] }); break;
       case "avoidedRisks": if (raw.adventureIntensity === undefined) warning(field); break;
       case "planningStage": break; // Trip state mapping above, never Request.
-      case "companions": warning(field, 411); break;
+      case "companions": {
+        try {
+          validatePartyComposition(value as NonNullable<TripParty["composition"]>);
+          if (party) {
+            const combined = { ...party, composition: value as NonNullable<TripParty["composition"]> };
+            validateTripParty(combined); party = combined;
+          } else {
+            note(field, `以前の同行者区分: ${(value as string[]).join(", ")}。人数不明のため今回の人数へは変換していません。`);
+            warning(field, 411);
+          }
+        } catch {
+          warning(field, 411, true);
+          if (Array.isArray(value)) note(field, "以前の同行者区分は不正または人数と矛盾するため未反映です。原本の確認が必要です。");
+        }
+        break;
+      }
       case "outboundDepartureTimeMinutes": case "returnArrivalTimeMinutes":
         warning(field); // No reliable place identity + zone + civil date. Never fabricate a ZonedInstant.
         if (Number.isSafeInteger(value) && (value as number) >= 0) note(field, `以前の時刻条件 ${field}: ${value}分。日付・場所・タイムゾーンは未確認です。`);
@@ -228,6 +259,6 @@ function mapLegacyRequest(plan: TripPlan, raw: unknown, warnings: TripMigrationW
       default: warning(field); // Retain original outside Trip; do not silently interpret unknown fields.
     }
   }
-  return { constraints: constraints.sort((a, b) => a.id.localeCompare(b.id)), assumptions: assumptions.sort((a, b) => a.id.localeCompare(b.id)) };
+  return { constraints: constraints.sort((a, b) => a.id.localeCompare(b.id)), assumptions: assumptions.sort((a, b) => a.id.localeCompare(b.id)), ...(party ? { party } : {}) };
 }
 function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }

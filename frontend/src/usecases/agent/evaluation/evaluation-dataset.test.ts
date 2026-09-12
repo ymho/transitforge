@@ -5,11 +5,11 @@ import { parseAgentEvaluationDataset } from "./evaluation-dataset";
 const fixture = () => JSON.parse(readFileSync(new URL("../../../../../tests/fixtures/agent-eval-cases.json", import.meta.url), "utf8"));
 
 describe("multi-turn dataset v2", () => {
-  it("keeps the 42 six-metric cases and A–J, adding Activity K/L", () => {
+  it("keeps the 42 six-metric cases and A–L, adding party M/N", () => {
     const data = parseAgentEvaluationDataset(fixture());
     expect(data.cases).toHaveLength(42);
-    expect(data.travelProgressScenarios).toHaveLength(12);
-    expect(data.travelProgressScenarios?.filter((c) => c.tags.includes("smoke")).map((c) => c.id)).toEqual(["A-vague", "C-candidate", "G-consecutive", "K-food"]);
+    expect(data.travelProgressScenarios).toHaveLength(14);
+    expect(data.travelProgressScenarios?.filter((c) => c.tags.includes("smoke")).map((c) => c.id)).toEqual(["N-unknown-child-age", "A-vague", "C-candidate", "G-consecutive", "K-food"]);
   });
   it("reads legacy v1 without dropping or inventing observations", () => {
     const raw = fixture(); delete raw.travelProgressScenarios; raw.schemaVersion = "agent-eval-dataset-v1";

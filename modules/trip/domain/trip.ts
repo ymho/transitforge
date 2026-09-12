@@ -2,7 +2,7 @@ import type { ExternalSourceEvidence } from "./external-travel-information";
 import { exactKeys, validDate, validInstant, projectRailSchedule, type SelectedRailJourney } from "./selected-rail-journey";
 import { validatePlaceSnapshot, type PlaceSnapshot } from "./place-snapshot";
 import { validateItinerarySchedule, projectStaySchedule, sameZonedInstant, type ItinerarySchedule } from "./itinerary-schedule";
-import { validateTripRequest, type TripRequest } from "./trip-request";
+import { validateTripRequest, validatePartyAssumptionTransition, type TripRequest } from "./trip-request";
 import { validatePlanningState, validateTripState, type PlanningState, type LifecycleState } from "./trip-state";
 import { assessTripTime, type TripClock } from "./trip-temporal";
 
@@ -178,6 +178,7 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
     createdAt: trip.createdAt, updatedAt: trip.updatedAt, items, request, planningState,
     lifecycleState: lifecyclePatch?.state ?? trip.lifecycleState };
   validateTrip(result);
+  validatePartyAssumptionTransition(trip.request, result.request);
   // Confirmation is supplied separately by Application, never trusted from a model's patch body.
   if (lifecyclePatch?.basis === "user_confirmation" && authority.confirmedLifecycle !== lifecyclePatch.state) {
     throw new Error("Explicit user lifecycle confirmation required");

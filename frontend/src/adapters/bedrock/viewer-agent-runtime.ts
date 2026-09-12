@@ -92,6 +92,7 @@ import { effectiveTripConstraints } from "@raiquora/trip/trip-request";
 import { evaluateTripHardConstraints } from "@raiquora/trip/trip-constraint-evaluation";
 import { applyTripProposal, type Trip } from "@raiquora/trip/trip";
 import { activityPreview } from "../../usecases/trip-plan/activity-preview";
+import { tripPartyView } from "../../usecases/trip-plan/trip-party-presentation";
 import { assessTripTime } from "@raiquora/trip/trip-temporal";
 import { AgentToolRegistry } from "../../usecases/agent/tool-registry";
 import { structuredModelClassPolicy } from "../../usecases/agent/structured-model-class-policy";
@@ -327,6 +328,7 @@ export async function runViewerAgentRuntime(
     if (progressState.proposal && currentTrip) {
       const preview = applyTripProposal(currentTrip, progressState.proposal);
       responseText = [responseText, progressState.proposal.summary,
+        tripPartyView(preview)?.text,
         ...progressState.proposal.patches.flatMap((p) => p.type !== "replace" && p.type !== "add" ? [] : p.item.type === "activity" ? [activityPreview(p.item)] : [
           `${p.item.title}（${p.item.schedule.type === "unscheduled" ? "時間未定" : p.item.schedule.type === "day" ? p.item.schedule.date : "計画時刻あり"}）`,
           ...(p.item.type === "transport" && p.item.detail.status === "selected" ? p.item.detail.journey.legs.map((leg) =>
@@ -738,6 +740,11 @@ export function validateViewerAgentToolPreconditions(
   if (name === "ask_follow_up") {
     if (context.currentTrip) {
       const requested = input.requestedRequirement ?? (input.expectedInput === "departure-date" ? "dates" : input.expectedInput === "stay-length" ? "duration" : undefined);
+      const party = context.currentTrip.request.party;
+      if (party && (!party.assumptionId || context.currentTrip.request.assumptions.find((a) => a.id === party.assumptionId)?.status === "confirmed") &&
+          (requested === "party" || requested === "child-age" && party.children.every((c) => c.age !== undefined))) {
+        return "persisted Trip.request.partyに既知の条件があります。人数・年齢を聞き直さず、それを使って前進してください。";
+      }
       if (requested && effectiveTripConstraints(context.currentTrip.request).some((c) => c.requirement.type === requested &&
           (!c.assumptionId || context.currentTrip!.request.assumptions.find((a) => a.id === c.assumptionId)?.status === "confirmed"))) {
         return "persisted Trip.requestに既知の条件があります。確認済み条件を聞き直さず、それを使って前進してください。";
@@ -1358,7 +1365,7 @@ function viewerToolInputSchema(
     return {
       type: "object",
       properties: {
-        requestedRequirement: { type: "string", enum: ["origin", "dates", "duration", "destinations", "depart_after", "arrive_by", "mobility", "experience", "pace"], description: "質問対象のTripRequest requirement。既知条件は聞き直さない" },
+        requestedRequirement: { type: "string", enum: ["origin", "dates", "duration", "destinations", "depart_after", "arrive_by", "mobility", "experience", "pace", "party", "child-age"], description: "質問対象のTripRequest requirementまたはparty/child-age。既知条件は聞き直さず、不明年齢だけで候補探索を止めない" },
         askOnlyException: { type: "object", properties: {
           reason: { type: "string", enum: ["safety", "hard_constraint_unknown", "tool_input_missing"] },
           missingFact: { type: "string", minLength: 1, maxLength: 160 },

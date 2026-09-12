@@ -2,11 +2,17 @@ import { applyTripProposal, type Trip, type TripUpdateProposal, type TripPatch }
 import { type TripRequest, type PlanAssumption, type TripConstraint } from "@raiquora/trip/trip-request";
 import { travelPreferenceLabels, type UserProfile, type TravelPreference } from "@raiquora/trip/travel-profile";
 import type { PlaceSnapshot } from "@raiquora/trip/place-snapshot";
+import type { TripParty } from "@raiquora/trip/trip-party";
 
 /** Model output is only a proposal. New model interpretations must be linked, unconfirmed assumptions. */
 export function proposeTripRequestUpdate(trip: Trip, request: TripRequest, actor: "user" | "model"): TripUpdateProposal {
   if (actor !== "user" && actor !== "model") throw new Error("Unknown request actor");
   if (actor === "model") {
+    if (JSON.stringify(request.party) !== JSON.stringify(trip.request.party)) {
+      if (trip.request.party) throw new Error("Model cannot rewrite known party");
+      const a = request.assumptions.find((a) => a.id === request.party?.assumptionId);
+      if (request.party?.source !== "assumption" || a?.source !== "model" || a.status !== "unconfirmed") throw new Error("Model party must be an unconfirmed assumption");
+    }
     for (const c of trip.request.constraints) {
       if (!request.constraints.some((next) => JSON.stringify(c) === JSON.stringify(next))) throw new Error("Model cannot rewrite existing constraints");
     }
@@ -34,14 +40,45 @@ export function proposeTripRequestUpdate(trip: Trip, request: TripRequest, actor
 
 /** User-initiated action; linked items requiring repair must be supplied as explicit replacement previews. */
 export function proposeAssumptionDecision(trip: Trip, assumptionId: string, status: "confirmed" | "rejected",
-  repairs: readonly Extract<TripPatch, { type: "replace" }>[] = []): TripUpdateProposal {
+  repairs: readonly Extract<TripPatch, { type: "replace" }>[] = [],
+  partyRepair?: { type: "remove" } | { type: "replace"; party: TripParty }): TripUpdateProposal {
   if (status !== "confirmed" && status !== "rejected") throw new Error("Invalid assumption decision");
+  if (partyRepair && partyRepair.type !== "remove" && partyRepair.type !== "replace") throw new Error("Invalid party repair");
   const current = trip.request.assumptions.find(({ id }) => id === assumptionId);
   if (!current || (current.status !== "unconfirmed" && current.status !== status)) throw new Error("Assumption is missing or already resolved differently");
   if (repairs.some((patch) => !current.affects.some((ref) => ref.type === "item" && ref.itemId === patch.itemId))) throw new Error("Unrelated assumption repair");
-  const request: TripRequest = { ...trip.request, assumptions: trip.request.assumptions.map((a) => a.id === assumptionId ? { ...a, status } : a) };
+  if (partyRepair && (status !== "rejected" || !current.affects.some((ref) => ref.type === "party"))) throw new Error("Unrelated party repair");
+  if (partyRepair?.type === "replace" && (partyRepair.party.source !== "user" || partyRepair.party.assumptionId !== undefined)) throw new Error("Replacement party requires explicit user values");
+  if (partyRepair && current.status === status) {
+    const target = partyRepair.type === "remove" ? undefined : partyRepair.party;
+    if (JSON.stringify(target) !== JSON.stringify(trip.request.party)) throw new Error("Retry cannot change resolved party");
+  }
+  const request: TripRequest = { ...trip.request,
+    ...(partyRepair ? { party: partyRepair.type === "remove" ? undefined : partyRepair.party } : {}),
+    assumptions: trip.request.assumptions.map((a) => a.id === assumptionId ? { ...a, status } : a) };
   // Constraint references and their original source/strength remain: status controls applicability.
   return checkedProposal(trip, status === "confirmed" ? "仮定を確認" : "仮定を却下", [{ type: "request", request }, ...repairs]);
+}
+
+/** Trusted user action, not a model actor flag. Prior profile hypotheses cannot override this trip. */
+export function proposeUserParty(trip: Trip, party: Omit<TripParty, "source" | "assumptionId">): TripUpdateProposal {
+  const request: TripRequest = { ...trip.request, party: { ...party, source: "user" }, assumptions: trip.request.assumptions.map((a) => {
+    if (!a.affects.some((ref) => ref.type === "party") || a.status === "rejected") return a;
+    // Confirmation history remains; the old hypothesis no longer supports the replacement.
+    return { ...a, ...(a.status === "unconfirmed" && a.affects.every((ref) => ref.type === "party") ? { status: "rejected" as const } : {}),
+      affects: a.affects.filter((ref) => ref.type !== "party") };
+  }) };
+  return proposeTripRequestUpdate(trip, request, "user");
+}
+
+/** Counts are explicitly supplied; profile companion labels never imply adult counts. */
+export function proposeProfileParty(trip: Trip, profile: UserProfile, adults: number, assumptionId: string): TripUpdateProposal {
+  if (trip.request.party) throw new Error("Profile cannot override this trip's known party");
+  const party: TripParty = { adults, children: profile.companions.children.map(({ ageGroup }) => ({ ageGroup })),
+    composition: [...profile.companions.usual], source: "profile", assumptionId };
+  return checkedProposal(trip, "普段の同行傾向を仮置き", [{ type: "request", request: { ...trip.request, party,
+    assumptions: [...trip.request.assumptions, { id: assumptionId, text: "普段の同行傾向を今回も使う仮定（人数・年齢区分は要確認）", source: "profile", status: "unconfirmed", affects: [{ type: "party" }] }],
+  } }]);
 }
 
 /** Select individual profile facts, never copy the profile as this trip's request. */

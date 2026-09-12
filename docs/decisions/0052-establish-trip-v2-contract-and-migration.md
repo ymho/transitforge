@@ -108,6 +108,10 @@ Place/schedule/PlanAssumption/VisibleProgressを再利用し、Provider候補の
 Reservation/Money、CAS/永続化、全面UIの責務は後続へ残し、writer gateは解除しない。
 
 #415は設計変更だけなので本番モデル・Tool・migrationは実行しない。
+#411の[TripParty導入記録](../architecture/trip-party.md)では、同じTrip.request.partyと既存PlanAssumptionを統合した。
+Profile・legacy・モデル仮置きと今回ユーザー人数を分離し、未知年齢を保持する。モデル由来のsource=assumptionは
+既存constraintと同じ相互参照を使う。Provider別の年齢必須条件はAdapter、writer/CASは後続のままとする。
+
 `npm test`、`npm run build`、`npm run architecture:check`、`npm run workspace:check`を実行する。
 後続PRのmigration/invalid/retry/partial failure/backward compatibility試験は
 詳細契約の適合ケース表に割り当てる。#415のACは設計として自己レビューし、#415だけを閉じるPRにする。

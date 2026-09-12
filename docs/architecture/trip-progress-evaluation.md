@@ -137,8 +137,8 @@ npm run eval:agent:decision:live -- --suite trip-progress --case C-candidate --o
 ```
 
 - Unit: turnの1-based計算、選択別集計、hidden/空/状態のみの負例、例外と欠測、27通りの短いsequence invariantをhard gate。
-- Smoke: 保存済み12ケースの6指標＋従来A/G＋Trip Progress A/C/G/Kをhard gate。
-- Full: 保存済み42ケース＋従来A〜G＋Trip Progress A〜Lをhard gate。実モデル品質を証明するものではない。
+- Smoke: 保存済み12ケースの6指標＋従来A/G＋Trip Progress A/C/G/K/Nをhard gate。
+- Full: 保存済み42ケース＋従来A〜G＋Trip Progress A〜Nをhard gate。M/Nは#411の既知party/年齢不明の進展を検証する。実モデル品質を証明するものではない。
 - Live: 同じproduction registry/presenterとsynthetic Providerを使い、実モデルが自由にToolを選ぶ。
   閾値の微差はWARN、Domain/fixture契約違反はfail、認証/Provider失敗は未完了の非0終了。
   自由選択なのでGで最初から進展する場合もあり、raw askOnlyTurnsから実際のカバレッジを確認する。

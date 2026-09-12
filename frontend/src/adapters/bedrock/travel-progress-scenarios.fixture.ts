@@ -8,12 +8,22 @@ import { askProgressFixture, modelAnswer, modelTool, modelTools, progressQuestio
 import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent-runtime";
 import type { BedrockAgentResponse } from "../http/agent-api/bedrock-agent";
 import { activityCandidateFixture } from "../../usecases/trip-plan/activity-selection.fixture";
+import { travelPreferenceLabels, type UserProfile } from "@raiquora/trip/travel-profile";
+
+const usualFamily: UserProfile = {
+  version: 2, home: { carAvailable: false }, companions: { usual: ["family"], children: [{ ageGroup: "preschool" }, { ageGroup: "elementary" }] },
+  travelStyle: { pace: 0.5, novelty: 0.5, crowdTolerance: 0.5, walkingTolerance: 0.5, transferTolerance: 0.5,
+    earlyMorningTolerance: 0.5, lateNightTolerance: 0.5, drivingTolerance: 0.5, busTolerance: 0.5 },
+  preferences: Object.fromEntries(Object.keys(travelPreferenceLabels).map((key) => [key, 0.5])) as UserProfile["preferences"],
+  transport: { maxTypicalTravelMinutes: null }, updatedAt: "2026-09-12T08:00:00Z",
+};
 
 const fixtureBases: Record<string, ProgressCaseId> = {
   "A-vague": "A-vague", "B-known-region": "B-known-region", "C-candidate": "C-candidate",
   "D-known-request": "D-known-request", "E-past": "E-past", "F-hard-unknown": "F-hard-unknown",
   "G-consecutive": "G-consecutive", "H-day-trip": "C-candidate", "I-multi-day": "C-candidate", "J-refinement": "C-candidate",
   "K-food": "C-candidate", "L-free-time": "C-candidate",
+  "M-known-party": "C-candidate", "N-unknown-child-age": "C-candidate",
 };
 
 /** Synthetic conversations through the production registry, policies, evidence and presenter.
@@ -41,6 +51,9 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
     loadTimetables: async () => timetables };
   let trip: Trip = scenario.base === "E-past" ? fixture.trip : { ...fixture.trip, items: selectionFixture.trip.items };
   if (id === "H-day-trip") trip = { ...trip, items: trip.items.filter((i) => i.type === "transport") };
+  const partyCase = id === "M-known-party" || id === "N-unknown-child-age";
+  if (partyCase) trip = { ...trip, request: { ...trip.request, party: { adults: 2, children: id === "N-unknown-child-age" ? [{}] : [],
+    composition: id === "M-known-party" ? ["partner"] : ["family"], source: "user" } } };
   const adoption = (candidateId = "candidate-a") => modelTools(modelTool("propose_candidate_selection", { candidateId, itemId: "outbound" }));
   if (["J-refinement", "K-food", "L-free-time"].includes(id)) {
     trip = { ...applyTripProposal(trip, await proposeCandidateSelection(trip,
@@ -65,7 +78,10 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
   const plan: Array<{ prompt: string; scripts: BedrockAgentResponse[]; selection?: boolean; chooseVisible?: boolean }> = [];
   if (id === "G-consecutive") plan.push({ prompt: "自然を楽しむ旅行をしたい", scripts: [modelTools(modelTool("ask_follow_up", progressQuestion))] });
   plan.push({ prompt: scenario.userRequest,
-    scripts: id === "K-food" ? [modelTools(modelTool("propose_activity_selection", { candidateId: "activity-a", operation: "add", itemId: "meal",
+    scripts: partyCase ? [
+      ...(id === "M-known-party" ? [modelTools(modelTool("ask_follow_up", { question: "何人ですか", expectedInput: "free-text", requestedRequirement: "party" }))] : []),
+      modelTools(modelTool("propose_manual_activity", { itemId: "free", operation: "add", title: "自由時間", category: "free-time", schedule: { type: "unscheduled" } })),
+    ] : id === "K-food" ? [modelTools(modelTool("propose_activity_selection", { candidateId: "activity-a", operation: "add", itemId: "meal",
       schedule: { type: "day", date: "2026-09-22" } }))] : id === "L-free-time" ? [modelTools(modelTool("propose_manual_activity", {
         itemId: "free", operation: "add", title: "自由時間", category: "free-time", schedule: { type: "window",
           earliestStart: { at: "2026-09-22T14:00:00+09:00", timeZone: "Asia/Tokyo" },
@@ -74,7 +90,7 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
       modelTool("propose_candidate_selection", { candidateId: "candidate-a", itemId: "outbound" }, "rail"),
       modelTool("propose_candidate_selection", { candidateId: "candidate-a", itemId: "stay", accommodation: { provider: "fixture", providerItemId: "hotel-a" } }, "hotel"))] :
       id === "J-refinement" ? [adoption("candidate-b")] : research,
-    selection: scenario.base === "C-candidate" && id !== "L-free-time" });
+    selection: scenario.base === "C-candidate" && id !== "L-free-time" && !partyCase });
   if (id === "B-known-region" || id === "D-known-request") {
     plan.push({ prompt: "提示された候補Aを選びます。具体的な旅程を見たい", scripts: [adoption()], chooseVisible: true });
   }
@@ -91,6 +107,7 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
       previousAssistantTurn: turns.at(-1)?.observation?.outcome,
       getConversationContext: () => ({ messages: [...history] }),
       getCurrentTrip: () => trip,
+      ...(partyCase ? { getUserProfile: () => structuredClone(usualFamily) } : {}),
       getTravelCandidates: () => [{ id: record.candidate.id, targetItemId: "outbound", label: "評価用候補A/Bの検証済み移動", verified: true,
         accommodation: { provider: "fixture", providerItemId: "hotel-a", targetItemId: "stay" } },
         ...(id === "K-food" ? [{ id: activity.candidateId, targetItemId: "meal", label: "評価用の森の食堂・検証済みの食事候補", kind: "restaurant" }] : [])],
@@ -103,6 +120,10 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
     turns.push({ observation, trace, delivered: true, ...(selected ? { candidateSelected: { targetItemId: id === "K-food" ? "meal" : "outbound" } } : {}), modelCalls: calls });
     history.push({ role: "user", text: prompt }, { role: "assistant", text: typeof response === "string" ? response : response.text });
     const preview = typeof response !== "string" && "tripUpdateProposal" in response ? applyTripProposal(trip, response.tripUpdateProposal) : trip;
+    if (partyCase) {
+      if (JSON.stringify(preview.request.party) !== JSON.stringify(original.request.party)) invariantFailures.push("party: known party changed or age fabricated");
+      if (observation?.outcome !== "progress" || !preview.items.some((i) => i.type === "activity")) invariantFailures.push("party: unnecessary question or no draft");
+    }
     if (id === "K-food" || id === "L-free-time") {
       const added = preview.items.find((i) => i.id === (id === "K-food" ? "meal" : "free"));
       const patches = typeof response !== "string" && "tripUpdateProposal" in response ? response.tripUpdateProposal.patches : [];
@@ -122,6 +143,7 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
       if (event.type !== "tool_called" || event.toolName !== "ask_follow_up" || !successful.has(event.toolCallId)) continue;
       const input = event.input.value as Record<string, unknown> | undefined;
       if (scenario.base !== "A-vague" && input && (["origin", "dates"].includes(String(input.requestedRequirement)) || input.expectedInput === "departure-date")) repeatedKnownConditionQuestions++;
+      if (partyCase && input?.requestedRequirement === "party") repeatedKnownConditionQuestions++;
     }
     if (JSON.stringify(trip) !== JSON.stringify(original)) invariantFailures.push("source Trip was mutated");
   }

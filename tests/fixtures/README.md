@@ -17,7 +17,7 @@ Trip Progressの複数turnシナリオ定義（相談文・閾値・tag）は`ag
 colocateする`frontend/src/adapters/bedrock/travel-progress-scenarios.fixture.ts`に置く。
 #384のA〜G fixtureと`modules/trip/domain/selected-rail-journey.fixture.ts`を再利用し、
 架空の地点・宿・時刻表だけを与える。実Providerの録音・本番会話・画像は含めない。
-SmokeはA/C/G、FullはA〜J。JSON/Markdownの同じ指標を出力し、詳細定義は
+SmokeはA/C/G/K/N、FullはA〜N（K/LはActivity、M/NはTripParty）。JSON/Markdownの同じ指標を出力し、詳細定義は
 [Trip Progress評価](../../docs/architecture/trip-progress-evaluation.md)を参照する。
 
 ## 経路検索シナリオ

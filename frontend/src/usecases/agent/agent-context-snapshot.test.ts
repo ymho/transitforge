@@ -8,6 +8,7 @@ import { selectRailJourney, projectRailSchedule } from "@raiquora/trip/selected-
 import type { ItinerarySchedule } from "@raiquora/trip/itinerary-schedule";
 import { buildAgentDecisionContext, agentDecisionContextText } from "./agent-decision-context";
 import { railSelectionFixture } from "../../../../modules/trip/domain/selected-rail-journey.fixture";
+import { partyRequest } from "../../../../modules/trip/domain/trip-party.fixture";
 
 const profile: UserProfile = {
   version: 2,
@@ -54,6 +55,23 @@ const trip: TripPlan = {
 };
 
 describe("agent context snapshot", () => {
+  it("keeps persisted party, linked assumptions and usual profile separate even after compression", () => {
+    const request = partyRequest();
+    const current = createTrip("11111111-1111-4111-8111-111111111111", "旅", "2026-09-12T08:00:00Z", [], request);
+    const snapshot = createAgentContextSnapshot(profile, current);
+    expect(snapshot.trip?.request?.party).toEqual(request.party);
+    expect(snapshot.profile?.companions).toEqual(["パートナー", "子ども"]);
+    expect(snapshot.profile?.childAgeGroups).toEqual(["小学生"]);
+    expect(snapshot.trip).not.toHaveProperty("adults");
+    const context = buildAgentDecisionContext({ executionId: "party-context", feature: "concierge", userRequest: "この条件で",
+      context: { currentTrip: { ...snapshot.trip!, schedule: Array.from({ length: 80 }, () => ({ description: "詳細".repeat(200) })) }, travelProfile: snapshot.profile } }, []);
+    const parsed = JSON.parse(agentDecisionContextText(context).match(/<agent_context>([\s\S]*)<\/agent_context>/u)![1]!);
+    expect(parsed.persistedTripRequest.party).toEqual(request.party);
+    expect(parsed.unconfirmedAssumptions).toEqual(request.assumptions);
+    expect(parsed.travelProfile.childAgeGroups).toEqual(["小学生"]);
+    expect(parsed.persistedTripRequest.party.children).toEqual([{}]);
+    expect(createAgentContextSnapshot(profile, createTrip(current.id, "新しい旅", current.createdAt)).trip?.request?.party).toBeUndefined();
+  });
   it("projects V2 adopted schedule without search results or realtime fields", () => {
     const { candidate, inputs, selectedAt } = railSelectionFixture();
     const journey = selectRailJourney(candidate, inputs, selectedAt);

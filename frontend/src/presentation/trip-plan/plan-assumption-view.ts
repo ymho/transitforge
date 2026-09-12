@@ -8,8 +8,8 @@ export function planAssumptionViews(trip: Trip) {
     id: a.id, source: a.source, status: a.status,
     text: `${a.status === "unconfirmed" ? "⚠ 仮置き" : a.status === "confirmed" ? "確認済み" : "却下済み"}: ${a.text}`,
     actions: a.status === "unconfirmed" ? [
-      // Party state is not implemented yet (#411); never advertise an operation that cannot validate.
-      ...(!a.affects.some((ref) => ref.type === "party") ? [{ assumptionId: a.id, status: "confirmed" as const, label: "この前提で進める" }] : []),
+      ...(!a.affects.some((ref) => ref.type === "party") || trip.request.party?.assumptionId === a.id
+        ? [{ assumptionId: a.id, status: "confirmed" as const, label: "この前提で進める" }] : []),
       { assumptionId: a.id, status: "rejected" as const, label: "この前提を使わない" },
     ] : [],
   }));
