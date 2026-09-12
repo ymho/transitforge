@@ -369,6 +369,25 @@ describe("Bedrock viewer agent", () => {
     expect(converse).toHaveBeenCalledOnce();
   });
 
+  it("sends legacy route candidates outside the adopted Trip without extra model calls", async () => {
+    const converse = vi.fn<BedrockAgentConverse>(async (messages) => {
+      const block = messages[0]?.content.find((value) => "text" in value);
+      const text = block && "text" in block ? block.text : "";
+      const context = JSON.parse(text.match(/<agent_context>([\s\S]*)<\/agent_context>/u)![1]!);
+      expect(context.currentTrip.schedule.filter((item: { type: string }) => item.type === "movement")
+        .every((item: { selectionStatus: string; departureTimeMinutes?: number }) => item.selectionStatus === "unresolved" && item.departureTimeMinutes === undefined)).toBe(true);
+      expect(context.travelCandidates.length).toBeGreaterThan(0);
+      expect(context.realtimeFacts[0].freshness).toBe("unknown");
+      return { message: { role: "assistant", content: [{ text: "候補を比較できます。" }] }, stopReason: "end_turn" };
+    });
+    await runViewerAgentRuntime("経路候補を比較したい", {
+      trains: [train], getPositions: () => [], getRouteTime: () => 600,
+      queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(), maximumRouteTime: 1800,
+      getTripPlan: tripPlanWithRailReturn,
+    }, converse);
+    expect(converse).toHaveBeenCalledOnce();
+  });
+
   it("does not expose an unadopted place when the agent fails after place search", async () => {
     const searchPlaceMedia = vi.fn(async () => ({
       result: {

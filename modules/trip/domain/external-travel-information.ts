@@ -1,4 +1,5 @@
 export type ExternalTravelInformationKind =
+  | "timetable"
   | "weather"
   | "place"
   | "media"

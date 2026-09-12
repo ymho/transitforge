@@ -49,6 +49,8 @@ export interface AgentToolOutcomeSummary {
 }
 
 export interface AgentRuntimeContextInput {
+  travelCandidates?: Record<string, unknown>[];
+  realtimeFacts?: Record<string, unknown>[];
   featureContext?: Omit<AgentFeatureContext, "feature">;
   conversation?: AgentConversationContext;
   tripContext?: Record<string, AgentContextValue | AgentContextValue[]>;
@@ -68,6 +70,8 @@ export interface AgentAvailableCapability {
 }
 
 export interface AgentDecisionContext {
+  travelCandidates?: Record<string, unknown>[];
+  realtimeFacts?: Record<string, unknown>[];
   userRequest: string;
   featureContext: AgentFeatureContext;
   conversation?: AgentConversationContext;
@@ -91,6 +95,8 @@ export function buildAgentDecisionContext(
   const input = request.context;
   return {
     userRequest: bounded(request.userRequest, 1_500),
+    ...(input?.travelCandidates ? { travelCandidates: input.travelCandidates.slice(0, 12).map((value) => boundedUnknownRecord(value)) } : {}),
+    ...(input?.realtimeFacts ? { realtimeFacts: input.realtimeFacts.slice(0, 12).map((value) => boundedUnknownRecord(value)) } : {}),
     featureContext: {
       feature: request.feature,
       ...(finite(input?.featureContext?.displayTimeMinutes)
@@ -155,6 +161,8 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
       tripContext: context.tripContext,
       travelProfile: context.travelProfile,
       currentTrip: compactCurrentTrip(context.currentTrip),
+      travelCandidates: context.travelCandidates?.slice(0, 4),
+      realtimeFacts: context.realtimeFacts?.slice(0, 4),
       currentJourney: compactCurrentJourney(context.currentJourney, 2),
       knownHardConstraints: context.knownHardConstraints,
       knownSoftPreferences: context.knownSoftPreferences,
@@ -171,6 +179,8 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     tripContext: context.tripContext,
     travelProfile: context.travelProfile,
     currentTrip: compactCurrentTrip(context.currentTrip, 4),
+    travelCandidates: context.travelCandidates?.slice(0, 2),
+    realtimeFacts: context.realtimeFacts?.slice(0, 2),
     currentJourney: compactCurrentJourney(context.currentJourney),
     knownHardConstraints: context.knownHardConstraints.slice(0, 12),
     knownSoftPreferences: context.knownSoftPreferences.slice(0, 12),
@@ -197,6 +207,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
   return [
     "次の構造化Contextを使って利用者の目的と制約を解釈し、必要なEvidenceを得る能力を選択してください。",
     "既知条件は聞き直さず、Tool結果は事実として扱い、推測で補完しないでください。",
+    "currentTripは計画、travelCandidatesとcurrentJourneyは比較・照会中の検索結果、realtimeFactsは検索時点の観測です。候補の先頭や現在の見込時刻を採用済み計画にしないでください。",
     `<agent_context>${boundedContext}</agent_context>`,
   ].join("\n");
 }

@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./trip": "./domain/trip.ts",
+    "./selected-rail-journey": "./domain/selected-rail-journey.ts",
+    "./legacy-trip-converter": "./domain/legacy-trip-converter.ts",
     ".": "./domain/index.ts",
     "./travel-candidate": "./domain/travel-candidate.ts",
     "./travel-destination": "./domain/travel-destination.ts",
@@ -25,6 +28,7 @@
     "./airport-access": "./domain/airport-access.ts"
   },
   "dependencies": {
+    "@raiquora/train": "*",
     "@raiquora/journey": "*"
   }
 }

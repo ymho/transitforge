@@ -48,7 +48,8 @@ export interface TravelExpenseSummary {
 
 export interface TravelCandidate {
   id: string;
-  journey: JourneyRouteResult;
+  /** Comparison result, never an adopted Trip item. Discovery need not have a rail route yet. */
+  journey?: JourneyRouteResult;
   accommodations: readonly AccommodationOffering[];
   experiences: readonly ExperienceOffering[];
   expenseSummary: TravelExpenseSummary;
@@ -56,7 +57,7 @@ export interface TravelCandidate {
 
 export interface TravelCandidateInput {
   id: string;
-  journey: JourneyRouteResult;
+  journey?: JourneyRouteResult;
   accommodations?: readonly AccommodationOffering[];
   experiences?: readonly ExperienceOffering[];
 }

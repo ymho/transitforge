@@ -9,6 +9,10 @@
 `modules/trip/domain`へ段階実装し、別のTrip V2、Planner、平行した要求モデルを作らない。
 以下の型の骨格は文書内の設計記法であり、import可能な未使用の型を先行公開しない。
 
+#385では同じ契約の最小コアをコードへ導入した。実装済みfield、legacy読書き維持、未完成の
+converterとwriter gateの状態は[Trip V2コア導入](trip-v2-core.md)を参照する。
+以下は引き続き最終契約であり、全field・全migrationの完了を意味しない。
+
 ## 1. 現行実装 → 決定 → 実装担当
 
 監査基準はmain `31a6517`。Issue本文の例ではなく次の実コードを確認した。

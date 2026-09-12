@@ -88,6 +88,9 @@ V2へ変わったという記述にはしない。#368/#380の残務は既に#38
 
 ## 検証
 
+#385の段階実装と検証は[コア導入記録](../architecture/trip-v2-core.md)を参照する。
+最終契約は変更せず、Trip型と採用境界の導入を本番writer切替とは分離している。
+
 #415は設計変更だけなので本番モデル・Tool・migrationは実行しない。
 `npm test`、`npm run build`、`npm run architecture:check`、`npm run workspace:check`を実行する。
 後続PRのmigration/invalid/retry/partial failure/backward compatibility試験は
