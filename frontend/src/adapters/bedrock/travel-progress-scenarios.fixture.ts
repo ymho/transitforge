@@ -24,6 +24,7 @@ const fixtureBases: Record<string, ProgressCaseId> = {
   "G-consecutive": "G-consecutive", "H-day-trip": "C-candidate", "I-multi-day": "C-candidate", "J-refinement": "C-candidate",
   "K-food": "C-candidate", "L-free-time": "C-candidate",
   "M-known-party": "C-candidate", "N-unknown-child-age": "C-candidate",
+  "O-taxi": "C-candidate", "P-air-provisional": "C-candidate",
 };
 
 /** Synthetic conversations through the production registry, policies, evidence and presenter.
@@ -52,6 +53,7 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
   let trip: Trip = scenario.base === "E-past" ? fixture.trip : { ...fixture.trip, items: selectionFixture.trip.items };
   if (id === "H-day-trip") trip = { ...trip, items: trip.items.filter((i) => i.type === "transport") };
   const partyCase = id === "M-known-party" || id === "N-unknown-child-age";
+  const transportCase = id === "O-taxi" || id === "P-air-provisional";
   if (partyCase) trip = { ...trip, request: { ...trip.request, party: { adults: 2, children: id === "N-unknown-child-age" ? [{}] : [],
     composition: id === "M-known-party" ? ["partner"] : ["family"], source: "user" } } };
   const adoption = (candidateId = "candidate-a") => modelTools(modelTool("propose_candidate_selection", { candidateId, itemId: "outbound" }));
@@ -78,7 +80,11 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
   const plan: Array<{ prompt: string; scripts: BedrockAgentResponse[]; selection?: boolean; chooseVisible?: boolean }> = [];
   if (id === "G-consecutive") plan.push({ prompt: "自然を楽しむ旅行をしたい", scripts: [modelTools(modelTool("ask_follow_up", progressQuestion))] });
   plan.push({ prompt: scenario.userRequest,
-    scripts: partyCase ? [
+    scripts: transportCase ? [modelTools(modelTool("propose_manual_transport", {
+      itemId: "transfer", operation: "add", title: id === "O-taxi" ? "ホテルから空港へ" : "東京から札幌へ",
+      mode: id === "O-taxi" ? "taxi" : "air", origin: id === "O-taxi" ? "ホテル" : "東京", destination: id === "O-taxi" ? "空港" : "札幌",
+      schedule: id === "O-taxi" ? { type: "day", date: "2026-09-22" } : { type: "unscheduled" },
+    }))] : partyCase ? [
       ...(id === "M-known-party" ? [modelTools(modelTool("ask_follow_up", { question: "何人ですか", expectedInput: "free-text", requestedRequirement: "party" }))] : []),
       modelTools(modelTool("propose_manual_activity", { itemId: "free", operation: "add", title: "自由時間", category: "free-time", schedule: { type: "unscheduled" } })),
     ] : id === "K-food" ? [modelTools(modelTool("propose_activity_selection", { candidateId: "activity-a", operation: "add", itemId: "meal",
@@ -90,7 +96,7 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
       modelTool("propose_candidate_selection", { candidateId: "candidate-a", itemId: "outbound" }, "rail"),
       modelTool("propose_candidate_selection", { candidateId: "candidate-a", itemId: "stay", accommodation: { provider: "fixture", providerItemId: "hotel-a" } }, "hotel"))] :
       id === "J-refinement" ? [adoption("candidate-b")] : research,
-    selection: scenario.base === "C-candidate" && id !== "L-free-time" && !partyCase });
+    selection: scenario.base === "C-candidate" && id !== "L-free-time" && !partyCase && !transportCase });
   if (id === "B-known-region" || id === "D-known-request") {
     plan.push({ prompt: "提示された候補Aを選びます。具体的な旅程を見たい", scripts: [adoption()], chooseVisible: true });
   }
@@ -120,6 +126,14 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
     turns.push({ observation, trace, delivered: true, ...(selected ? { candidateSelected: { targetItemId: id === "K-food" ? "meal" : "outbound" } } : {}), modelCalls: calls });
     history.push({ role: "user", text: prompt }, { role: "assistant", text: typeof response === "string" ? response : response.text });
     const preview = typeof response !== "string" && "tripUpdateProposal" in response ? applyTripProposal(trip, response.tripUpdateProposal) : trip;
+    if (transportCase) {
+      const added = preview.items.find((i) => i.id === "transfer");
+      if (added?.type !== "transport" || added.detail.status !== "selected" || added.detail.mode !== (id === "O-taxi" ? "taxi" : "air") ||
+          added.detail.provenance.type !== "manual" ||
+          added.detail.origin.name !== (id === "O-taxi" ? "ホテル" : "東京") || added.detail.destination.name !== (id === "O-taxi" ? "空港" : "札幌") ||
+          added.schedule.type !== (id === "O-taxi" ? "day" : "unscheduled") || observation?.outcome !== "progress") invariantFailures.push("transport: mode/endpoints/schedule/progress lost");
+      if (JSON.stringify(preview.items.filter((i) => i.id !== "transfer")) !== JSON.stringify(original.items)) invariantFailures.push("transport: changed existing items");
+    }
     if (partyCase) {
       if (JSON.stringify(preview.request.party) !== JSON.stringify(original.request.party)) invariantFailures.push("party: known party changed or age fabricated");
       if (observation?.outcome !== "progress" || !preview.items.some((i) => i.type === "activity")) invariantFailures.push("party: unnecessary question or no draft");

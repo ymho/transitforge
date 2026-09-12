@@ -32,7 +32,7 @@
 順序付きitemsを持つ。item IDは非空かつ一意。生成関数にUUID/時刻を注入し、会話IDや目的地から作らない。
 操作ではIDを変更できない。Domain型はreadonlyで、生成/適用結果は入力とオブジェクト参照を共有しない。
 
-- transport.detailは未検証unresolved、またはrail selected + SelectedRailJourney。
+- transport.detailは未検証unresolved、rail selected + SelectedRailJourney、または#413の非鉄道selected + manual/provider provenance。
 - stay.selectionはunselected、または選択済み1宿。宿は最終契約の最小部分（名前、採用日時、宿泊日、出所）のみ。
   AccommodationOffering/TripAccommodationを埋め込まず、第三の恒久宿型も追加しない。
   #414でplaceを共通PlaceSnapshotへ統合した。#400がこのselection内の宿契約を拡張し、価格・空室・画像等はその時点で扱う。
@@ -107,7 +107,7 @@ V2生成日時を注入する。同じ入力/引数で同じ出力。旧IDをUUI
 - legacy railは1件/複数を問わずunresolved。先頭候補、delay値、移行日時で採用の証拠を補わない。
 - stayはoptionsをコピーしない。旧accommodationも現時点ではprovenance/許諾を移行できないため
   unselected + #400警告にし、旧rawから#400が同じ入口のmappingを拡張する。
-- manual移動はmode未解決 + #413警告。#410でsightseeingをActivityへ接続した。
+- #413でlegacy manual移動を同mode・両端名称のmanual計画へ接続した。不正値/noteは警告と原本保持。#410でsightseeingをActivityへ接続した。
   #414の同じconverterのPlace許諾付きmappingを使い、完全変換時だけdeferredを解消する。部分変換は警告と原本保持を残す。
   #386で日付はday/宿泊day spanへ移し、同じplaceMappingsにscheduleも返す。不正日付は警告とunscheduled。
   #387で同じ入口に旧TripContext/conditionsのRequest mappingを追加した。出所/必須度はlegacy+未確認で保持し、
@@ -140,7 +140,7 @@ live評価は設定済みAWSセッション期限切れで未実施。保存済�
 | #403 | 多都市、legacy/UIの対象stay選択導線と表示要約 |
 | #410（導入済み） | Activity、add、deferred sightseeingの部分/完全変換。[Activity導入記録](trip-activity.md)参照 |
 | #411（導入済み） / #412 | [TripParty](trip-party.md)。原通貨Money、宿/体験の価格観測は#412 |
-| #413 | 非鉄道transport。PlaceRef/PlaceSnapshotの基礎とfield保持境界は#414で導入済み |
+| #413 | [非鉄道transport](trip-transport.md)導入済み。外部API全面接続・料金・予約・リアルタイム監視は未有効 |
 | #388 / #389 | server認可/保存/取込、全Proposal/UIのrevision/CAS/冪等性、writer切替。新しいDomain converterは作らない |
 | #390 | 同じTrip/Proposalを扱うUI。legacy表示を採用証拠にする移行は禁止 |
 

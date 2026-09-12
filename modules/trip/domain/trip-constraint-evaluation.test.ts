@@ -31,7 +31,7 @@ describe("minimal hard constraint evaluation", () => {
   });
   it("compares arrival/departure instants with verified place identity, not just a matching name", () => {
     const item = requestRailItem();
-    if (item.detail.status !== "selected") throw new Error("fixture");
+    if (item.detail.status !== "selected" || item.detail.mode !== "rail") throw new Error("fixture");
     const first = item.detail.journey.legs[0]!;
     const last = item.detail.journey.legs.at(-1)!;
     // A provider-resolved identity fixture; production timetable name-only snapshots remain unknown.

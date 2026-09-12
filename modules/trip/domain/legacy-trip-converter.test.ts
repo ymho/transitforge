@@ -143,12 +143,12 @@ describe("single legacy converter", () => {
     expect(plan).toEqual(before);
     expect(result.trip).toMatchObject({ id: identity.tripId, schemaVersion: 2, revision: 0,
       items: [{ id: "rail", detail: { mode: "rail", status: "unresolved" } },
-        { id: "hotel", selection: { status: "unselected" } }, { id: "sight", type: "activity", category: "sightseeing" }, { id: "walk", detail: { status: "unresolved" } }] });
+        { id: "hotel", selection: { status: "unselected" } }, { id: "sight", type: "activity", category: "sightseeing" }, { id: "walk", detail: { status: "selected", mode: "walk", provenance: { type: "manual" } } }] });
     expect(result.deferredItemIds).toEqual(["sight"]);
     expect(result.requiresLegacyRetention).toBe(true);
     for (const field of ["journeys", "options", "delay", "selectedAt", "verifiedAt"]) expect(JSON.stringify(result.trip)).not.toContain(`"${field}`);
     expect(result.trip.request).toEqual({ constraints: [], assumptions: [] });
-    expect(result.warnings.map(({ ownerIssue }) => ownerIssue)).toEqual(expect.arrayContaining([385, 400, 410, 413]));
+    expect(result.warnings.map(({ ownerIssue }) => ownerIssue)).toEqual(expect.arrayContaining([385, 400, 410]));
   });
   it("does not adopt even one legacy journey or an explicit hotel without snapshot provenance", () => {
     const plan = legacy();

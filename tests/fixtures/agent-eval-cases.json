@@ -2,6 +2,18 @@
   "schemaVersion": "agent-eval-dataset-v2",
   "travelProgressScenarios": [
     {
+      "id": "O-taxi", "name": "ホテルから空港へのタクシー移動を仮旅程へ追加する",
+      "userRequest": "22日はホテルから空港へタクシーで移動したい。時刻はまだ決めず、移動を旅程に追加して",
+      "tags": ["smoke", "trip-progress", "transport"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
+      "id": "P-air-provisional", "name": "便未定の航空移動をotherへ潰さず仮旅程へ追加する",
+      "userRequest": "東京から札幌へ飛行機で行く予定です。便と日時は未定のまま、航空移動を旅程に追加して",
+      "tags": ["trip-progress", "transport"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
       "id": "M-known-party", "name": "既知の夫婦2人を聞き直さず具体案を提示する",
       "userRequest": "今回の夫婦2人の条件で、自由時間を旅程に追加してください。普段の家族旅行の人数は使わないで",
       "tags": ["trip-progress", "known-party"],

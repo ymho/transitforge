@@ -168,7 +168,7 @@ IDは会話や目的地から再計算しない。全item IDはTrip内で一意�
 | `duration` | `unit: nights \| days`、`minimum`、`maximum` | 0泊は日帰り、泊数不明は0にしない。daysは1以上、nightsは0以上の整数 |
 | `depart_after` / `arrive_by` | `at: ZonedInstant`、`place: PlaceSnapshot` | いつどこを出る/どこへ戻るか。帰宅と駅到着の不足区間はunknown |
 | `budget` | `limit: Money`、`basis: trip \| per-person` | 取得していない費用を含む総額保証ではない |
-| `mobility` | 任意`maxTravelMinutes`、`maxTransfers`、`modes: MovementMode[]`、`carAvailable`、`transferPace`、`rankingPreference`、既存列車除外/必須条件 | 既存Journey契約を再利用。発着区間scopeを保持 |
+| `mobility` | 任意`maxTravelMinutes`、`maxTransfers`、`modes/excludedModes/requiredModes: TransportMode[]`、`carAvailable`、`transferPace`、`rankingPreference`、既存列車除外/必須条件 | V2のTransportModeと既存Journey契約を再利用。発着区間scopeを保持 |
 | `experience` | `intent: prefer \| must \| avoid`、`text`、任意の既存`TravelPreference`、任意`weight` | 希望・must/avoid。文章条件を機械的に証明できなければunknown |
 | `pace` | 0〜1の`value` | 普段のProfile値と今回希望を分離 |
 | `relative_distance` | `direction: nearer \| farther`、`comparedCandidateIds: string[]` | 比較対象のない「遠く」を絶対距離に変えない |
@@ -249,9 +249,7 @@ type ItineraryItem = TransportItineraryItem | StayItineraryItem | ActivityItiner
 
 interface TransportItineraryItem extends ItineraryItemBase {
   type: "transport";
-  origin: PlaceSnapshot;
-  destination: PlaceSnapshot;
-  detail: TransportDetail; // mode + selected/manual/unresolvedの判別共用体
+  detail: TransportDetail; // mode + selected/unresolved。両端はdetail（railはlegs）から投影
 }
 type StayItineraryItem = ItineraryItemBase & {
   type: "stay";
@@ -279,11 +277,15 @@ interface ActivityItineraryItem extends ItineraryItemBase {
 ### TransportDetail (#385 / #413)
 
 `mode`は `rail | air | bus | ferry | car | rental-car | taxi | ride-hail | walk | bicycle | other`。
-全modeは`status: unresolved`または`manual`を取れる。manualは任意noteと時刻の利用者入力を持つが、
-検証済み経路とは呼ばない。railのselected detailは
+全modeは`status: unresolved`を取れる。#413の非鉄道manualは`status: selected` + `provenance.type: manual`で
+「採用した予定」と「Provider検証」を区別する。時刻はitem.scheduleのみ、検証済み経路とは呼ばない。railのselected detailは
 `{ mode: "rail"; status: "selected"; journey: SelectedRailJourney }`とする。
 このstatusは採用状態であり運行状態ではない。modeごとのselected detailは独立unionとし、
 airへ列車番号やrailへ空港固有フィールドを混ぜない。air/ferry等の未連携Providerはmanualで扱える。
+非鉄道selectedはmode、origin/destinationのPlaceSnapshot、manual/providerのprovenanceだけを持つ。
+Provider採用は保存許諾を確認したidentity/selectedAt/durable sourcesを保持する。selectedは予約済みを意味しない。
+詳細・候補ID採用・legacy noteのdeferred方針は[Transport導入記録](trip-transport.md)を参照する。
+railのmanual selectedは作らず、未検証の鉄道は従来どおりunresolvedにする。
 航空API追加/旧Amadeus復活は#413の前提ではない。
 
 鉄道の時刻と識別子は既存Journey/Train Domainを再利用する。選択時には検索実行と候補IDを

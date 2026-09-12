@@ -116,10 +116,11 @@ Trip/items/Requestを先にvalidateし、評価そのものは更新しない。
 
 - datesは採用順の先頭開始/末尾終了とrangeを比較。windowが要求範囲に跨るとunknown、完全に範囲外はviolated。
   日付だけのscheduleのzoneを補完しない。指定zoneへ変換可能なinstantだけ暦日変換する。
-- arrive_by/depart_afterはPlaceRefで同定できたrail endpointのscheduled instantだけ比較する。
+- arrive_by/depart_afterはPlaceRefで同定できたrail endpointのscheduled instant、または#413の非鉄道fixed endpointを比較する。
   名前だけの自宅・駅、未採用移動、最後の徒歩等が未確認ならunknown。現行の名前のみの鉄道駅snapshotも
   別地点identityが確認できなければunknownであり、駅名一致だけの同一視はしない。
-- maxTransfers/maxTravelMinutesは選択済みrailの計画値。Trip scopeは各移動に適用し、往復合計とはしない。
+- maxTransfersは選択済みrailのみ、非鉄道はunknown。maxTravelMinutesはfixedの開始/終了が揃う移動の計画値。Trip scopeは各移動に適用し、往復合計とはしない。
+  #413でmobilityをTransportModeへ統合した。requiredModesはscope内の移動全体で確認し、非鉄道に対するrail固有条件はunknownとする。
   item scopeはその移動だけ。遅延は計算しない。mode/列車番号/UIDの必須・除外は保持済み事実だけで比較する。
 - serviceType/trainName、未解決の交通手段、自然言語experience、相対距離、車の利用可能性等、
   現snapshotが証明しないものはunknown。transferPaceが異なる場合も再検証なしに成功としない。
