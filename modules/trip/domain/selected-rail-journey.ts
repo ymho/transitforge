@@ -6,11 +6,12 @@ import type { TrainIndex } from "@raiquora/train/train";
 import type { ExternalSourceEvidence } from "./external-travel-information";
 import { createPlaceSnapshot, validatePlaceSnapshot, type PlaceSnapshot } from "./place-snapshot";
 import { exactKeys, validDate, validInstant } from "./snapshot-validation";
+import { railScheduledInstant as scheduledInstant, validateZonedInstant, type ZonedInstant, type ItinerarySchedule } from "./itinerary-schedule";
 export { exactKeys, validDate, validInstant } from "./snapshot-validation";
 
 export const railValidationPolicyVersion = "scheduled-rail-v1";
 
-/** Plan facts only. General schedule value objects are extended in #386. */
+/** Plan facts only, using the shared schedule instant contract. */
 export interface ScheduledRailLeg {
   readonly id: string;
   readonly serviceDate: string;
@@ -20,8 +21,8 @@ export interface ScheduledRailLeg {
   readonly destination: PlaceSnapshot;
   readonly originStopIndex: number;
   readonly destinationStopIndex: number;
-  readonly scheduledDeparture: { readonly at: string; readonly timeZone: "Asia/Tokyo" };
-  readonly scheduledArrival: { readonly at: string; readonly timeZone: "Asia/Tokyo" };
+  readonly scheduledDeparture: ZonedInstant;
+  readonly scheduledArrival: ZonedInstant;
 }
 
 export interface SelectedRailJourney {
@@ -158,6 +159,7 @@ export function validateSelectedRailJourney(value: SelectedRailJourney): void {
     exactKeys(leg, ["id", "serviceDate", "serviceUid", "trainNumber", "origin", "destination", "originStopIndex", "destinationStopIndex", "scheduledDeparture", "scheduledArrival"]);
     validatePlaceSnapshot(leg.origin); validatePlaceSnapshot(leg.destination);
     exactKeys(leg.scheduledDeparture, ["at", "timeZone"]); exactKeys(leg.scheduledArrival, ["at", "timeZone"]);
+    validateZonedInstant(leg.scheduledDeparture); validateZonedInstant(leg.scheduledArrival);
     const source = p.timetableInputs[index]!;
     const evidence = p.sources[index]!;
     exactKeys(source, ["sourceId", "serviceDate", "contentDigest"]);
@@ -220,11 +222,11 @@ export function revalidateSelectedRailJourney(value: SelectedRailJourney, inputs
   } catch { return false; }
 }
 
-function scheduledInstant(serviceDate: string, minutes: number): ScheduledRailLeg["scheduledDeparture"] {
-  if (!validDate(serviceDate) || !Number.isSafeInteger(minutes) || minutes < 0) throw new Error("Invalid service date/time");
-  // Preserve service-day minutes > 1440. General timezone/schedule contract belongs to #386.
-  const date = new Date(Date.parse(`${serviceDate}T00:00:00+09:00`) + minutes * 60_000);
-  return { at: date.toISOString(), timeZone: "Asia/Tokyo" };
+/** Only adopted, validated scheduled facts can define a rail item's fixed schedule. */
+export function projectRailSchedule(journey: SelectedRailJourney): Extract<ItinerarySchedule, { type: "fixed" }> {
+  validateSelectedRailJourney(journey);
+  return { type: "fixed", startAt: { at: journey.legs[0]!.scheduledDeparture.at, timeZone: journey.legs[0]!.scheduledDeparture.timeZone },
+    endAt: { at: journey.legs.at(-1)!.scheduledArrival.at, timeZone: journey.legs.at(-1)!.scheduledArrival.timeZone } };
 }
 function scheduledStationPlace(name: string, source: ExternalSourceEvidence): PlaceSnapshot {
   // The existing versioned timetable already permits retaining station names and this evidence.

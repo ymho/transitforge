@@ -28,8 +28,8 @@ describe("SelectedRailJourney", () => {
     Object.assign(inputs[0]!.evidence, { delayMinutes: 10, raw: { secret: "must-not-leak" } });
     const before = structuredClone({ candidate, inputs });
     const snapshot = selectRailJourney(candidate, inputs, selectedAt);
-    expect(snapshot.legs[0]!.scheduledDeparture).toEqual({ at: "2026-09-13T00:00:00.000Z", timeZone: "Asia/Tokyo" }); // 09:00 JST, not 09:10
-    expect(snapshot.legs[1]!.scheduledArrival.at).toBe("2026-09-13T01:40:00.000Z");
+    expect(snapshot.legs[0]!.scheduledDeparture).toEqual({ at: "2026-09-13T09:00:00.000+09:00", timeZone: "Asia/Tokyo" }); // 09:00 JST, not 09:10
+    expect(snapshot.legs[1]!.scheduledArrival.at).toBe("2026-09-13T10:40:00.000+09:00");
     expect(snapshot.transfers).toEqual([{ fromLegId: "leg-1", toLegId: "leg-2", minimumTransferMinutes: 5 }]);
     expect(snapshot.provenance.timetableInputs).toHaveLength(2);
     for (const field of ["delayMinutes", "delayStatus", "status", "congestion", "currentPosition", "unknown", "must-not-leak"]) expect(JSON.stringify(snapshot)).not.toContain(field);
@@ -79,7 +79,7 @@ describe("SelectedRailJourney", () => {
     candidate.journey.legs[0]!.scheduledDepartureTimeMinutes = 1_430;
     candidate.journey.legs[0]!.scheduledArrivalTimeMinutes = 1_460;
     const snapshot = selectRailJourney(candidate, [...inputs, second], selectedAt);
-    expect(snapshot.legs[0]!.scheduledArrival.at).toBe("2026-09-13T15:20:00.000Z"); // Sep14 00:20 JST
+    expect(snapshot.legs[0]!.scheduledArrival.at).toBe("2026-09-14T00:20:00.000+09:00");
     expect(snapshot.legs[1]!.serviceDate).toBe("2026-09-14");
     expect(revalidateSelectedRailJourney(snapshot, [...inputs, second])).toBe(true);
   });

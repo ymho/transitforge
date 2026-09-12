@@ -4,7 +4,9 @@ import type { UserProfile } from "@raiquora/trip/travel-profile";
 import type { TripPlan } from "@raiquora/trip/trip-plan";
 import { createAgentContextSnapshot } from "./agent-context-snapshot";
 import { createTrip } from "@raiquora/trip/trip";
-import { selectRailJourney } from "@raiquora/trip/selected-rail-journey";
+import { selectRailJourney, projectRailSchedule } from "@raiquora/trip/selected-rail-journey";
+import type { ItinerarySchedule } from "@raiquora/trip/itinerary-schedule";
+import { buildAgentDecisionContext, agentDecisionContextText } from "./agent-decision-context";
 import { railSelectionFixture } from "../../../../modules/trip/domain/selected-rail-journey.fixture";
 
 const profile: UserProfile = {
@@ -54,15 +56,34 @@ const trip: TripPlan = {
 describe("agent context snapshot", () => {
   it("projects V2 adopted schedule without search results or realtime fields", () => {
     const { candidate, inputs, selectedAt } = railSelectionFixture();
+    const journey = selectRailJourney(candidate, inputs, selectedAt);
     const current = createTrip("11111111-1111-4111-8111-111111111111", "選択済み旅", selectedAt, [{
-      id: "selected", type: "transport", title: "移動", detail: { status: "selected", mode: "rail", journey: selectRailJourney(candidate, inputs, selectedAt) },
+      id: "selected", type: "transport", title: "移動", schedule: projectRailSchedule(journey), detail: { status: "selected", mode: "rail", journey },
     }]);
     const snapshot = createAgentContextSnapshot(undefined, current);
     expect(snapshot.trip?.schedule[0]).toMatchObject({ selectionStatus: "selected", date: "2026-09-13" });
-    expect(snapshot.trip?.schedule[0]?.summary).toContain("2026-09-13T00:00:00.000Z");
+    expect(snapshot.trip?.schedule[0]?.summary).toContain("2026-09-13T09:00:00.000+09:00");
     expect(snapshot.travelCandidates).toBeUndefined();
     expect(snapshot.realtimeFacts).toBeUndefined();
     expect(JSON.stringify(snapshot)).not.toContain("delay");
+  });
+  it("preserves all schedule variants through the bounded model context without shared references", () => {
+    const start = { at: "2026-09-22T14:00:00+02:00", timeZone: "Europe/Vienna" };
+    const end = { at: "2026-09-22T18:00:00+02:00", timeZone: "Europe/Vienna" };
+    const schedules: ItinerarySchedule[] = [
+      { type: "fixed", startAt: start },
+      { type: "window", earliestStart: start, latestEnd: end, durationMinutes: 90 },
+      { type: "day", date: "2026-09-22" }, { type: "unscheduled" },
+    ];
+    const current = createTrip("11111111-1111-4111-8111-111111111111", "旅", "2026-09-12T08:00:00Z",
+      schedules.map((schedule, index) => ({ id: `item-${index}`, title: "未採用移動", type: "transport", schedule, detail: { status: "unresolved" } })));
+    const snapshot = createAgentContextSnapshot(undefined, current);
+    const decision = buildAgentDecisionContext({ executionId: "schedule", feature: "concierge", userRequest: "旅程を比較",
+      context: { currentTrip: { ...snapshot.trip! } } }, []);
+    const parsed = JSON.parse(agentDecisionContextText(decision).match(/<agent_context>([\s\S]*)<\/agent_context>/u)![1]!);
+    expect(parsed.currentTrip.schedule.map((item: { schedule: ItinerarySchedule }) => item.schedule)).toEqual(schedules);
+    expect(snapshot.trip!.schedule[0]!.schedule).not.toBe(current.items[0]!.schedule);
+    expect(parsed.currentTrip.schedule[2].schedule).not.toHaveProperty("timeZone");
   });
   it("keeps a provisional starting point distinct from the profile", () => {
     const snapshot = createAgentContextSnapshot(profile, {

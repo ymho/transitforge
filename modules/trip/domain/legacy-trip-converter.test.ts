@@ -14,6 +14,47 @@ function legacy(): TripPlan {
   ] };
 }
 describe("single legacy converter", () => {
+  it("maps legacy calendar dates without inventing fixed times, zones or Activity", () => {
+    const plan = legacy();
+    const sight = plan.items[2]!;
+    const walk = plan.items[3]!;
+    if (sight.type === "sightseeing") sight.date = "2020-09-22";
+    if (walk.type === "movement" && walk.mode !== "rail") walk.date = "2026-09-22";
+    const before = structuredClone(plan);
+    const result = convertLegacyTripPlan(plan, identity);
+    expect(result.trip.items.map(({ schedule }) => schedule)).toEqual([
+      { type: "unscheduled" }, { type: "day", date: "2026-09-13", endDate: "2026-09-14" }, { type: "day", date: "2026-09-22" },
+    ]);
+    // Even when provider Place cannot be retained, the user's date is independently recoverable.
+    expect(result.placeMappings).toEqual([{ itemId: "sight", schedule: { type: "day", date: "2020-09-22" } }]);
+    expect(result.trip.items).toHaveLength(3);
+    expect(result).toEqual(convertLegacyTripPlan(plan, identity));
+    expect(plan).toEqual(before);
+  });
+  it("preserves a rail civil date but never treats serviceDate or a candidate time as adopted", () => {
+    const plan = legacy();
+    if (plan.items[0]!.type === "movement" && plan.items[0].mode === "rail") {
+      plan.items[0].route.serviceDate = "2026-09-21";
+      expect(convertLegacyTripPlan(plan, identity).trip.items[0]!.schedule).toEqual({ type: "unscheduled" });
+      plan.items[0].route.departureDate = "2026-09-22";
+      expect(convertLegacyTripPlan(plan, identity).trip.items[0]!.schedule).toEqual({ type: "day", date: "2026-09-22" });
+    }
+  });
+  it.each(["2026-02-30", "", "tomorrow"])("quarantines invalid legacy schedule %s without correcting it", (date) => {
+    const plan = legacy();
+    for (const item of plan.items) {
+      if (item.type === "stay") item.checkOutDate = date;
+      else if (item.type === "movement" && item.mode === "rail") item.route.departureDate = date;
+      else item.date = date;
+    }
+    const before = structuredClone(plan);
+    const result = convertLegacyTripPlan(plan, identity);
+    expect(result.trip.items.every(({ schedule }) => schedule.type === "unscheduled")).toBe(true);
+    expect(result.placeMappings[0]!.schedule).toEqual({ type: "unscheduled" });
+    expect(result.warnings.filter(({ code }) => code === "schedule-invalid")).toHaveLength(4);
+    expect(result.requiresLegacyRetention).toBe(true);
+    expect(plan).toEqual(before);
+  });
   it.each(["wikipedia", "mapbox", "manual"] as const)("maps a retainable legacy %s place through the same converter", (provider) => {
     const plan: TripPlan = { ...legacy(), items: [{ id: "place", type: "sightseeing", place: {
       name: "見所", provider, ...(provider !== "manual" ? { placeId: "opaque:001" } : {}), coordinate: [135, 35],
@@ -25,7 +66,7 @@ describe("single legacy converter", () => {
     } } };
     const before = structuredClone({ plan, options });
     const result = convertLegacyTripPlan(plan, identity, options);
-    expect(result.placeMappings).toEqual([{ itemId: "place", place: {
+    expect(result.placeMappings).toEqual([{ itemId: "place", schedule: { type: "unscheduled" }, place: {
       ref: { provider, ...(provider !== "manual" ? { providerPlaceId: "opaque:001" } : {}) }, name: "見所",
       coordinate: { longitude: 135, latitude: 35 }, sources: options.placeRetentionByItemId?.place?.sources ?? [],
     } }]);
@@ -39,18 +80,18 @@ describe("single legacy converter", () => {
     const plan: TripPlan = { ...legacy(), items: [{ id: "place", type: "sightseeing", place: { name: "Provider name", provider, placeId: "opaque", coordinate: [135, 35] } }] };
     const before = structuredClone(plan);
     const result = convertLegacyTripPlan(plan, identity);
-    expect(result.placeMappings).toEqual([{ itemId: "place" }]);
+    expect(result.placeMappings).toEqual([{ itemId: "place", schedule: { type: "unscheduled" } }]);
     expect(result.warnings).toContainEqual({ itemId: "place", code: "place-retention-unconfirmed", ownerIssue: 414 });
     expect(JSON.stringify(result)).not.toMatch(/Provider name|opaque|135/);
     expect(plan).toEqual(before);
     const denied = convertLegacyTripPlan(plan, identity, { placeRetentionByItemId: { place: {
       retention: { origin: "provider", provider, storage: "temporary", allowedFields: ["ref", "name", "sources"] }, sources: [],
     } } });
-    expect(denied.placeMappings).toEqual([{ itemId: "place" }]);
+    expect(denied.placeMappings).toEqual([{ itemId: "place", schedule: { type: "unscheduled" } }]);
   });
   it("preserves a name-only manual place without fabricating missing values", () => {
     const plan: TripPlan = { ...legacy(), items: [{ id: "manual", type: "sightseeing", place: { provider: "manual", name: "広場" } }] };
-    expect(convertLegacyTripPlan(plan, identity).placeMappings).toEqual([{ itemId: "manual", place: { ref: { provider: "manual" }, name: "広場", sources: [] } }]);
+    expect(convertLegacyTripPlan(plan, identity).placeMappings).toEqual([{ itemId: "manual", schedule: { type: "unscheduled" }, place: { ref: { provider: "manual" }, name: "広場", sources: [] } }]);
   });
   it("reports field restrictions instead of silently losing a provider ID or coordinate", () => {
     const plan: TripPlan = { ...legacy(), items: [{ id: "place", type: "sightseeing", place: {
@@ -92,8 +133,8 @@ describe("single legacy converter", () => {
         { id: "hotel", selection: { status: "unselected" } }, { id: "walk", detail: { status: "unresolved" } }] });
     expect(result.deferredItemIds).toEqual(["sight"]);
     expect(result.requiresLegacyRetention).toBe(true);
-    for (const field of ["journeys", "options", "delay", "selectedAt", "verifiedAt", "planningState", "request", "schedule"]) expect(JSON.stringify(result.trip)).not.toContain(`"${field}`);
-    expect(result.warnings.map(({ ownerIssue }) => ownerIssue)).toEqual(expect.arrayContaining([385, 386, 387, 400, 410, 413]));
+    for (const field of ["journeys", "options", "delay", "selectedAt", "verifiedAt", "planningState", "request"]) expect(JSON.stringify(result.trip)).not.toContain(`"${field}`);
+    expect(result.warnings.map(({ ownerIssue }) => ownerIssue)).toEqual(expect.arrayContaining([385, 387, 400, 410, 413]));
   });
   it("does not adopt even one legacy journey or an explicit hotel without snapshot provenance", () => {
     const plan = legacy();

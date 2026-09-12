@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
+import { browserGlobalReference } from "./browser_global_reference.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const sourceRoot = resolve(repositoryRoot, "frontend/src");
@@ -111,11 +112,11 @@ for (const absolutePath of sourceFiles(sourceRoot)) {
     }
   }
 
-  if (layer === "domain" && /\b(?:window|document|localStorage)\b/.test(content)) {
+  if (layer === "domain" && browserGlobalReference(content) >= 0) {
     recordOrAllow({
       source,
       kind: "browser-globals",
-      line: lineNumber(content, content.search(/\b(?:window|document|localStorage)\b/)),
+      line: lineNumber(content, browserGlobalReference(content)),
       message: "domainからbrowser globalへの依存は禁止されています",
     });
   }
@@ -138,11 +139,11 @@ for (const absolutePath of sharedDomainFiles(modulesRoot)) {
       });
     }
   }
-  if (/\b(?:window|document|localStorage)\b/.test(content)) {
+  if (browserGlobalReference(content) >= 0) {
     violations.push({
       source,
       kind: "shared-domain-browser-globals",
-      line: lineNumber(content, content.search(/\b(?:window|document|localStorage)\b/)),
+      line: lineNumber(content, browserGlobalReference(content)),
       message: "shared Domainからbrowser globalへの依存は禁止されています",
     });
   }

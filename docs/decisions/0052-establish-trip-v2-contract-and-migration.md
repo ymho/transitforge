@@ -91,6 +91,8 @@ V2へ変わったという記述にはしない。#368/#380の残務は既に#38
 #385の段階実装と検証は[コア導入記録](../architecture/trip-v2-core.md)を参照する。
 最終契約は変更せず、Trip型と採用境界の導入を本番writer切替とは分離している。
 #414の同じPlace型への統合と保存制約・legacy変換は[Place導入記録](../architecture/trip-place-snapshot.md)を参照する。
+#386の共通schedule、ZonedInstant、鉄道/宿泊projection、既存converter拡張は
+[Schedule導入記録](../architecture/trip-schedule.md)を参照する。本番writerのgateは解除しない。
 
 #415は設計変更だけなので本番モデル・Tool・migrationは実行しない。
 `npm test`、`npm run build`、`npm run architecture:check`、`npm run workspace:check`を実行する。

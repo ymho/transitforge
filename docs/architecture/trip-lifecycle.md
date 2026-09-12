@@ -361,8 +361,8 @@ interface ScheduledRailTransfer {
 
 | type | フィールド | 検証・意味 |
 | --- | --- | --- |
-| fixed | `startAt`、任意`endAt`、`timeZone`（終了地域が異なれば`endTimeZone`も） | offset付きinstant。end >= start。終了未取得なら重複判定の一部はunknown |
-| window | `earliestStart`、`latestEnd`、任意`durationMinutes`、`timeZone` | latestEndは終了期限。幅がduration以上。曖昧な午後を勝手に固定14時へ変換しない |
+| fixed | `startAt: ZonedInstant`、任意`endAt: ZonedInstant` | 各endpointにoffset/zone。end >= start。終了未取得なら重複判定の一部はunknown |
+| window | `earliestStart: ZonedInstant`、`latestEnd: ZonedInstant`、任意`durationMinutes` | latestEndは終了期限。幅がduration以上。曖昧な午後を勝手に固定14時へ変換しない |
 | day | `date`、任意`endDate`、任意`timeZone` | 日付のみ、endDateはexclusive。宿の連泊はcheck-out dateまで。未取得zoneは推測しない |
 | unscheduled | 追加の時刻なし | 未配置。0時・今日をデフォルトにしない |
 
@@ -375,6 +375,11 @@ durationは非負の有限整数。空き時間計算にend不明を0分とし�
 9/22 00:20（Asia/Tokyo）であり、単なる`minutes % 1440`で日付を落とさない。
 4時境界・日付別時刻表の既存契約を変更しない。timezone/offset整合、日跨ぎ、DSTの不存在・
 重複ローカル時刻は#386のvalidation対象。曖昧なローカル時刻を無条件に特定instantへ補完しない。
+
+#386で同じ`ItineraryItem.schedule`に実装した。詳細と移行の制限は[Schedule導入記録](trip-schedule.md)を参照する。
+`at`の現地時刻・offsetは指定IANA zoneと一致させる。`Z`はUTC offsetとして検証し、
+Tokyoの壁時計時刻との組合せを許可しない。異なる終了地域は`endAt.timeZone`で表し、
+top-levelの並行`timeZone`/`endTimeZone`をfixed/windowへ追加しない。
 
 ## 6. Place / Offering / Snapshot / Reservation
 

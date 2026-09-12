@@ -113,7 +113,8 @@ export function buildAgentDecisionContext(
     ...(input?.conversation ? { conversation: conversation(input.conversation) } : {}),
     ...(input?.tripContext ? { tripContext: boundedRecord(input.tripContext, 20) } : {}),
     ...(input?.travelProfile ? { travelProfile: boundedUnknownRecord(input.travelProfile) } : {}),
-    ...(input?.currentTrip ? { currentTrip: boundedUnknownRecord(input.currentTrip) } : {}),
+    // Trip -> schedule[] -> item.schedule -> ZonedInstant -> at/timeZone needs six levels.
+    ...(input?.currentTrip ? { currentTrip: boundedUnknownRecord(input.currentTrip, 6) } : {}),
     ...(input?.currentJourney
       ? { currentJourney: boundedUnknownRecord(input.currentJourney, 6) }
       : {}),
