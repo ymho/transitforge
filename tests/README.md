@@ -13,6 +13,11 @@
 
 複数層を通すシナリオでも 可能な限り公開Portから実行し 内部実装へ依存しない
 
+DOMの読み順・非同期画面更新・MutationObserverを検証するPresentationテストは、
+先頭に`// @vitest-environment happy-dom`を指定する。Happy DOMはFrontendの開発依存だけに置き、
+手作りのDOMモックでは確認しにくい要素の表示・イベント・属性の退行を再現する。
+外部通信や実Mapboxは使用しない。画素配置・実端末の描画速度を保証するブラウザE2Eとは区別する。
+
 ## Python
 
 Pythonは`tests/infra`と`tests/repository_tools`の独立した保守tool検証だけに使う

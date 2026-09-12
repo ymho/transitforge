@@ -120,6 +120,7 @@ import {
 import {
   configureDestinationArcs,
   renderDisplayMode,
+  configureSidebarMapModeSelection,
 } from "../presentation/train-viewer/map-controls";
 import { createLoadingScreen } from "../presentation/shared/loading-screen";
 import {
@@ -319,7 +320,6 @@ let verifiedPlaceLayer: VerifiedPlaceLayerController | undefined;
 let mapPlaceExplorerController: MapPlaceExplorerController | undefined;
 let groundAccessLayer: GroundAccessLayerController | undefined;
 let pendingMapCandidates: MapTravelCandidate[] = [];
-let landmarkDetailRequest = 0;
 const tripPreviewEnabled = import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get("trip-preview") === "1";
 const weatherPreviewEnabled = import.meta.env.DEV &&
@@ -362,6 +362,11 @@ const scheduleContextMapResize = () => {
 type SidebarMapMode = "realtime" | "date-time";
 let pendingSidebarMapMode: SidebarMapMode | undefined;
 let applySidebarMapMode: (mode: SidebarMapMode) => void = () => undefined;
+configureSidebarMapModeSelection({
+  app,
+  realtimeModeButtons: [sidebarRealtimeMap, railRealtimeMap],
+  dateTimeModeButtons: [sidebarDateTimeMode, railDateTimeMode],
+});
 const focusMapWorkspace = () => {
   contextWorkspaceController.show("map");
   app.dataset.mapFocusMode = "true";
@@ -549,6 +554,8 @@ const conversationSessionSwitcher = createConversationSessionSwitcher({
   conversation: aiGuideController,
   tripPlan: tripPlanController,
     onActivated: (session) => {
+      returnToConversation();
+      mapPlaceExplorerController?.clear();
       activeConversationSession = session;
       updateConciergeIdentity();
       contextWorkspaceController.activateSession(session.id);
@@ -577,6 +584,7 @@ configureConversationHistoryPanel({
   storage: localStorage,
   repository: conversationSessionRepository,
   onSessionSelected: (sessionId) => {
+    returnToConversation();
     if (sessionId !== activeConversationSession.id) {
       conversationSessionSwitcher.activate(sessionId);
     }
@@ -741,7 +749,6 @@ if (!token) {
     map.setConfigProperty("basemap", "showLandmarkIcons", true);
     map.setConfigProperty("basemap", "showLandmarkIconLabels", true);
     configureLandmarkJourneyInteraction(map, (landmark) => {
-      const request = ++landmarkDetailRequest;
       const landmarkCoordinate: [number, number] | undefined = landmark.longitude !== undefined &&
         landmark.latitude !== undefined
         ? [landmark.longitude, landmark.latitude]
@@ -755,26 +762,26 @@ if (!token) {
           duration: 850,
         });
       }
-      void researchPlaceDetail({
-        query: landmark.name,
-        ...(landmarkCoordinate ? {
-          latitude: landmarkCoordinate[1],
-          longitude: landmarkCoordinate[0],
-        } : {}),
-      }).then((response) => {
-        if (request !== landmarkDetailRequest || response.result.status !== "available") return;
-        const candidates = mapPlaceCandidates(response.result.data?.places ?? []);
-        if (candidates.length === 0) return;
-        pendingMapCandidates = candidates;
-        verifiedPlaceLayer?.show(candidates.map(mapCandidateAsPlaceMedia));
-        mapPlaceExplorerController?.show(candidates);
-        mapPlaceExplorerController?.select(candidates[0]!.id, true);
-        contextWorkspaceController.show("map", { kind: "place", id: candidates[0]!.id });
-      }).catch(() => {
-        if (request === landmarkDetailRequest) {
-          status.textContent = "スポットの詳細を取得できませんでした。";
-          status.hidden = false;
-        }
+      mapPlaceExplorerController?.showPending({
+        name: landmark.name,
+        choose: () => {
+          closeMapPlaceDetail.click();
+          aiGuideController.ask(`${landmark.name}を軸に旅程を考えたい`);
+          returnToConversation();
+        },
+        load: async () => {
+          const response = await researchPlaceDetail({
+            query: landmark.name,
+            ...(landmarkCoordinate ? { latitude: landmarkCoordinate[1], longitude: landmarkCoordinate[0] } : {}),
+          });
+          return response.result.status === "available" ? mapPlaceCandidates(response.result.data?.places ?? []) : [];
+        },
+        onLoaded: (candidates) => {
+          pendingMapCandidates = [...candidates];
+          verifiedPlaceLayer?.show(candidates.map(mapCandidateAsPlaceMedia));
+          verifiedPlaceLayer?.focus(candidates[0]!.id);
+          contextWorkspaceController.show("map", { kind: "place", id: candidates[0]!.id });
+        },
       });
     });
     let applyWeatherToTrains: (mode: WeatherMode) => void = () => undefined;
