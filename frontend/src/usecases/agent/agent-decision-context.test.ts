@@ -6,6 +6,20 @@ import {
 } from "./agent-decision-context";
 
 describe("AgentDecisionContext", () => {
+  it("preserves turn, past-time assessment and unknown hard conditions when compacting", () => {
+    const context = buildAgentDecisionContext({ executionId: "compact-progress", feature: "concierge", userRequest: "以前の旅",
+      context: { previousAssistantTurn: "ask_only", currentTrip: { planningState: "candidate_selection", lifecycleState: "pre_trip",
+        request: { constraints: [], assumptions: [] }, temporalAssessment: { position: "past", date: "2025-09-22" },
+        hardConstraintEvaluation: [{ constraintId: "deadline", status: "unknown" }],
+        schedule: Array.from({ length: 80 }, () => ({ description: "詳細".repeat(200) })),
+      }, currentJourney: { legs: Array.from({ length: 20 }, () => ({ description: "詳細".repeat(200) })) } },
+    }, []);
+    const parsed = JSON.parse(agentDecisionContextText(context).match(/<agent_context>([\s\S]*)<\/agent_context>/u)![1]!);
+    expect(parsed.previousAssistantTurn).toBe("ask_only");
+    expect(parsed.currentTrip.temporalAssessment).toMatchObject({ position: "past", date: "2025-09-22" });
+    expect(parsed.currentTrip.hardConstraintEvaluation).toEqual([{ constraintId: "deadline", status: "unknown" }]);
+    expect(parsed.persistedTripRequest).toEqual({ constraints: [], assumptions: [] });
+  });
   it("keeps adopted plan, candidates and observations separate and bounded", () => {
     const context = buildAgentDecisionContext({ executionId: "trip-layers", feature: "concierge", userRequest: "比較したい",
       context: { currentTrip: { title: "採用済み", schedule: [{ selectionStatus: "selected", scheduledDeparture: "09:00" }] },

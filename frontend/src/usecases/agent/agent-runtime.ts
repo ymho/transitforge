@@ -33,6 +33,7 @@ import type { AgentViewerActionHandler } from "./viewer-action-handler";
 import type { AgentViewerActionOutcome } from "./runtime-contract";
 import { ToolViewerActionRegistry } from "./tool-viewer-action-registry";
 import { failedAgentToolResult } from "./tool-contract";
+import { acceptsAgentTurn, askProgressRepairInstruction, type AgentTurnObservation } from "./agent-turn-outcome";
 
 export interface AgentRuntimeDependencies {
   model: AgentModelProvider;
@@ -46,6 +47,8 @@ export interface AgentRuntimeDependencies {
   viewerActionHandler?: AgentViewerActionHandler;
   toolViewerActions?: ToolViewerActionRegistry;
   terminalToolResult?: (toolName: string, output: unknown) => string | undefined;
+  /** Final presentation boundary, shared by terminal Tools and model answers. No tool routing. */
+  prepareResponse?: (text: string, evidence: Evidence[], fromModel: boolean, asksUser?: boolean) => { text: string; observation: AgentTurnObservation };
   finalResponsePolicy?: (
     response: AgentModelResponse,
     request: AgentRuntimeRequest,
@@ -303,21 +306,30 @@ export class MultiStepAgentRuntime {
             trace,
           );
         }
+        const prepared = this.dependencies.prepareResponse?.(generated.text, evidence, true, modelResponse.decisionSummary?.selectedAction === "ask_user");
+        if (prepared) {
+          const accepted = acceptsAgentTurn(request.context?.previousAssistantTurn, prepared.observation);
+          trace.turnObserved(prepared.observation, accepted);
+          if (!accepted) {
+            messages.push({ role: "user", content: [{ type: "text", text: askProgressRepairInstruction }] });
+            iterations += 1;
+            trace.replanDecided(true, "consecutive_ask_only", decisionBoundary);
+            continue;
+          }
+        }
         const responseViewerActions = this.dependencies.viewerActionHandler?.apply(
-          generated.viewerActions,
-          evidence,
-          request,
-          trace,
+          generated.viewerActions, evidence, request, trace,
         ) ?? [];
-        trace.responseGenerated(generated.text, grounding.claims.map(({ id }) => id));
+        trace.responseGenerated(prepared?.text ?? generated.text, grounding.claims.map(({ id }) => id));
         trace.taskCompleted("completed", elapsed(startedAt, this.now));
         return result(
           "completed",
-          generated.text,
+          prepared?.text ?? generated.text,
           evidence,
           grounding.claims,
           [...toolViewerActionOutcomes, ...responseViewerActions],
           trace,
+          prepared?.observation,
         );
       }
       if (toolCalls + calls.length > this.limits.maxToolCalls) {
@@ -460,6 +472,18 @@ export class MultiStepAgentRuntime {
       hasToolResults = true;
       finalizeAfterToolResult ||= duplicateToolCallDetected;
       if (terminalResponse !== undefined) {
+        const prepared = this.dependencies.prepareResponse?.(terminalResponse, evidence, false);
+        if (prepared) {
+          const accepted = acceptsAgentTurn(request.context?.previousAssistantTurn, prepared.observation);
+          trace.turnObserved(prepared.observation, accepted);
+          if (!accepted) {
+            messages.push({ role: "user", content: [{ type: "text", text: askProgressRepairInstruction }] });
+            iterations += 1;
+            trace.replanDecided(true, "consecutive_ask_only", decisionBoundary);
+            continue;
+          }
+          terminalResponse = prepared.text;
+        }
         trace.responseGenerated(terminalResponse);
         trace.taskCompleted("completed", elapsed(startedAt, this.now));
         return result(
@@ -469,6 +493,7 @@ export class MultiStepAgentRuntime {
           [],
           toolViewerActionOutcomes,
           trace,
+          prepared?.observation,
         );
       }
       iterations += 1;
@@ -545,8 +570,10 @@ function result(
   claims: AssessedEvidenceClaim[],
   viewerActions: AgentViewerActionOutcome[],
   trace: AgentTraceRecorder,
+  turnObservation?: AgentTurnObservation,
 ): AgentRuntimeResult {
   return {
+    ...(status === "completed" && turnObservation ? { turnObservation } : {}),
     status,
     response,
     evidence: [...evidence],
@@ -605,7 +632,7 @@ function decisionForAnswer(
   iterations: number,
 ): AgentDecisionTrace {
   const summary = response.decisionSummary;
-  if (summary?.selectedAction === "answer" && summary.selectedTool === undefined) {
+  if (summary?.selectedAction === "ask_user" || summary?.selectedAction === "answer" && summary.selectedTool === undefined) {
     return traceDecision(summary);
   }
   return {

@@ -4,6 +4,8 @@
 本契約の担当は [#415](https://github.com/ymho/transitforge/issues/415)、判断記録は
 [ADR 0052](../decisions/0052-establish-trip-v2-contract-and-migration.md)とする。
 
+#384の回答観測・Runtimeへの接続・評価・writer gateの実装記録は[Ask + Progress](ask-progress.md)を参照する。
+
 **これは採用する最終契約であり、V2が稼働済みという記述ではない。** #415では文書だけを変更する。
 現在稼働している型・保存処理は下表のlegacy実装である。後続Issueは本契約を同じ
 `modules/trip/domain`へ段階実装し、別のTrip V2、Planner、平行した要求モデルを作らない。

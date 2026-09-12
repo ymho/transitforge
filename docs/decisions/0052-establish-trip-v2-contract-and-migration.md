@@ -99,6 +99,10 @@ V2へ変わったという記述にはしない。#368/#380の残務は既に#38
 [状態導入記録](../architecture/trip-state.md)を参照する。状態をTool routerにせず、ready認定は#402まで拒否し、
 completedは今は明示確認のみ。時刻だけで実績を生成せず、writer gateも解除しない。
 
+#384の[Ask + Progress導入記録](../architecture/ask-progress.md)では、同じTripの読み取りと既存Proposalを
+production Agent Runtimeへ接続する。回答outcomeは一時的観測であり、Trip/Conversationの新しい進行正本ではない。
+LLMがTool/質問/推薦を選び、既存Domain検証・Evidence・Viewer Action・実行上限を維持する。writer gateは解除しない。
+
 #415は設計変更だけなので本番モデル・Tool・migrationは実行しない。
 `npm test`、`npm run build`、`npm run architecture:check`、`npm run workspace:check`を実行する。
 後続PRのmigration/invalid/retry/partial failure/backward compatibility試験は

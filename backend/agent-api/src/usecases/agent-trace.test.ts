@@ -4,6 +4,18 @@ import type { PrivateObject, PrivateObjectStorage } from "../ports/private-objec
 import { createAgentTraceOperation, storeAgentTrace } from "./agent-trace.js";
 
 describe("agent trace parity", () => {
+  it("stores bounded turn observations and rejects thought payloads or inconsistent progress", async () => {
+    const value = submission();
+    const observation = { outcome: "ask_only", progress: [], exception: { reason: "safety", missingFact: "token=private-token" } };
+    value.trace.events = [{ type: "turn_observed", sequence: 1, occurredAt: "2026-09-12T08:00:00Z", accepted: true, observation }];
+    const storage = new RecordingStorage();
+    await storeAgentTrace(value, { bucket: "private-bucket", storage }, fixedNow, "trace-1");
+    expect(new TextDecoder().decode(storage.values[0]?.body)).not.toContain("private-token");
+    value.trace.events[0]!.observation = { ...observation, thinking: "private reasoning" };
+    await expect(store(value)).rejects.toMatchObject({ statusCode: 400 });
+    value.trace.events[0]!.observation = { outcome: "progress", progress: [] };
+    await expect(store(value)).rejects.toMatchObject({ statusCode: 400 });
+  });
   it("stores validated trace under the existing S3 prefix", async () => {
     const storage = new RecordingStorage();
     const result = await storeAgentTrace(submission(), { bucket: "private-bucket", storage }, fixedNow, "trace-1");
