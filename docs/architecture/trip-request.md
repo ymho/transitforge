@@ -78,7 +78,7 @@ Moneyは#412が最終型を追加するまでbudget discriminatorを拒否する
 
 | legacy field | V2正本 / 保持する意味 | 今回のmapping / 未確認時 |
 | --- | --- | --- |
-| planningStage | Tripのplanning/lifecycle state | #383へ警告。Requestへ入れない、固定Tool順序にしない |
+| planningStage | Tripのplanning/lifecycle state | #383で同じconverterからTrip.planningStateへ移行。Requestへ入れない、固定Tool順序にしない |
 | destinationWish | Request.destinations requirement | 名前だけの未検証希望、sources=[]。採用itemやverified Placeにしない |
 | startDate / endDate | Request.dates range | 有効なexactのみ両端同日。過去年を変えない。不正endは警告して有効startを維持 |
 | stayNights | Request.duration | 非負整数のexact。欠落は0にしない |
@@ -154,7 +154,7 @@ npm run eval:agent:decision:live -- --profile full --case trip-v2-rejected-assum
 
 | Issue | 残す責務 |
 | --- | --- |
-| #383 / #384 | 同じTripの状態、Ask + Progress、意味解釈から確認可能なRequest Proposalへの本番接続 |
+| #383（状態導入済み） / #384 | [状態導入記録](trip-state.md)。Ask + Progress、意味解釈から確認可能なRequest Proposalへの本番接続は#384 |
 | #411 / #412 | 同じRequestのTripParty、Money/budget、該当affects/legacy mappingの最終化 |
 | #402 / #406 | 全Trip成立性、全候補Assessment、natural-language条件の追加Evidence評価 |
 | #388 / #389 | server保存/認可/import、revision/CAS/mutationId、writer切替時の旧Context producer廃止 |

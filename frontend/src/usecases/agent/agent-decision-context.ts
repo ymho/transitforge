@@ -107,6 +107,10 @@ export function buildAgentDecisionContext(
   const effective = tripRequest ? effectiveTripConstraints(tripRequest) : [];
   const currentTrip = input?.currentTrip ? Object.fromEntries(Object.entries(input.currentTrip).filter(([key]) =>
     !["request", "effectiveHardConstraints", "effectiveSoftPreferences", "unconfirmedAssumptions"].includes(key))) : undefined;
+  const projectedTrip = currentTrip ? boundedUnknownRecord(currentTrip, 6) : undefined;
+  if (projectedTrip && Array.isArray(currentTrip?.schedule) && Array.isArray(projectedTrip.schedule)) {
+    projectedTrip.scheduleTruncated = currentTrip.scheduleTruncated === true || currentTrip.schedule.length > projectedTrip.schedule.length;
+  }
   const decision = parseAgentDecisionSummary(input?.currentTurnDecision);
   return {
     ...(hasTripRequest ? {
@@ -138,7 +142,7 @@ export function buildAgentDecisionContext(
     ...(!hasTripRequest && input?.tripContext ? { tripContext: boundedRecord(input.tripContext, 20) } : {}),
     ...(input?.travelProfile ? { travelProfile: boundedUnknownRecord(input.travelProfile) } : {}),
     // Trip -> schedule[] -> item.schedule -> ZonedInstant -> at/timeZone needs six levels.
-    ...(currentTrip ? { currentTrip: boundedUnknownRecord(currentTrip, 6) } : {}),
+    ...(projectedTrip ? { currentTrip: projectedTrip } : {}),
     ...(input?.currentJourney
       ? { currentJourney: boundedUnknownRecord(input.currentJourney, 6) }
       : {}),
@@ -233,6 +237,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     tripContext: context.tripContext ? Object.fromEntries(Object.entries(context.tripContext).slice(0, 20)
       .map(([key, value]) => [key, Array.isArray(value) ? value.slice(0, 3) : value])) : undefined,
     ...(context.persistedTripRequest !== undefined ? { travelProfile: context.travelProfile } : {}),
+    currentTrip: compactCurrentTrip(context.currentTrip, 4),
     knownHardConstraints: context.knownHardConstraints.slice(0, 12),
     knownSoftPreferences: context.knownSoftPreferences.slice(0, 6),
     contextTruncated: true,
@@ -244,6 +249,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     "次の構造化Contextを使って利用者の目的と制約を解釈し、必要なEvidenceを得る能力を選択してください。",
     "既知条件は聞き直さず、Tool結果は事実として扱い、推測で補完しないでください。",
     "currentTripは計画、travelCandidatesとcurrentJourneyは比較・照会中の検索結果、realtimeFactsは検索時点の観測です。候補の先頭や現在の見込時刻を採用済み計画にしないでください。",
+    "currentTrip.planningState/lifecycleStateはTripの現在地であり、Tool選択や質問順を固定しません。persistedTripRequestは希望・条件、currentTurnDecisionは今回の判断で、状態とは別です。pre_tripだけで将来の旅行とは断定せず、採用済みscheduleの年・精度を保ち、過去日程を今年や翌年に補正しないでください。旅行日・実行状態をViewerの表示日時から推測せず、scheduleTruncatedの場合は全旅行期間を断定しないでください。状態変更はProposalにしてください。",
     ...(context.persistedTripRequest !== undefined ? ["persistedTripRequestだけが今回条件の正本です。tripHardConstraints/ tripSoftPreferencesは有効条件の読み取り投影で、強さと仮定の確認状態は別です。unconfirmedAssumptionsは仮置きとして説明し、却下済みの条件は使わないでください。travelProfileは普段の嗜好、currentTurnDecisionは今回の解釈です。解釈や履歴で正本を上書きせず、変更はProposalとして提案してください。"] : []),
     `<agent_context>${boundedContext}</agent_context>`,
   ].join("\n");
@@ -285,6 +291,8 @@ function compactCurrentTrip(
   if (!value) return undefined;
   return {
     ...(value.title ? { title: value.title } : {}),
+    ...(value.planningState ? { planningState: value.planningState } : {}),
+    ...(value.lifecycleState ? { lifecycleState: value.lifecycleState } : {}),
     ...(value.destination ? { destination: value.destination } : {}),
     ...(value.adults !== undefined ? { adults: value.adults } : {}),
     ...(value.children !== undefined ? { children: value.children } : {}),
@@ -292,7 +300,7 @@ function compactCurrentTrip(
       ? { considerations: value.considerations.slice(0, 6) }
       : {}),
     ...(Array.isArray(value.schedule)
-      ? { schedule: value.schedule.slice(0, maximumScheduleItems) }
+      ? { schedule: value.schedule.slice(0, maximumScheduleItems), scheduleTruncated: value.schedule.length > maximumScheduleItems || value.scheduleTruncated === true }
       : {}),
   };
 }

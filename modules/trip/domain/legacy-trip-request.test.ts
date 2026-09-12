@@ -26,7 +26,7 @@ describe("legacy request mapping at the single converter", () => {
     expect(result.trip.request.assumptions.every((a) => a.source === "legacy" && a.status === "unconfirmed")).toBe(true);
     expect(result.trip.request.assumptions).toContainEqual(expect.objectContaining({ text: "ゆっくり巡りたい", affects: [] }));
     expect(result.warnings).toContainEqual({ field: "companions", code: "request-field-deferred", ownerIssue: 411 });
-    expect(result.warnings).toContainEqual({ field: "planningStage", code: "request-field-deferred", ownerIssue: 383 });
+    expect(result.trip.planningState).toBe("candidate_discovery");
     expect(result.trip.request.constraints.some((c) => ["arrive_by", "depart_after", "relative_distance"].includes(c.requirement.type))).toBe(false);
     expect(result.requiresLegacyRetention).toBe(true);
     expect(result).toEqual(convertLegacyTripPlan(plan, identity, { tripContext: context }));

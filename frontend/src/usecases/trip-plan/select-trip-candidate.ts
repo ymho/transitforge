@@ -71,7 +71,8 @@ export async function proposeCandidateSelection(
     } } };
   }
   const proposal: TripUpdateProposal = { tripId: trip.id, summary: `${target.title}の候補を採用`,
-    patches: [{ type: "replace", itemId: target.id, item }] };
+    patches: [{ type: "replace", itemId: target.id, item },
+      { type: "planning", state: trip.planningState === "itinerary_refinement" ? "itinerary_refinement" : "itinerary_draft" }] };
   applyTripProposal(trip, proposal); // Validate only. No state/storage change before explicit confirmation.
   return proposal;
 }

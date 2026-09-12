@@ -133,7 +133,7 @@ describe("single legacy converter", () => {
         { id: "hotel", selection: { status: "unselected" } }, { id: "walk", detail: { status: "unresolved" } }] });
     expect(result.deferredItemIds).toEqual(["sight"]);
     expect(result.requiresLegacyRetention).toBe(true);
-    for (const field of ["journeys", "options", "delay", "selectedAt", "verifiedAt", "planningState"]) expect(JSON.stringify(result.trip)).not.toContain(`"${field}`);
+    for (const field of ["journeys", "options", "delay", "selectedAt", "verifiedAt"]) expect(JSON.stringify(result.trip)).not.toContain(`"${field}`);
     expect(result.trip.request).toEqual({ constraints: [], assumptions: [] });
     expect(result.warnings.map(({ ownerIssue }) => ownerIssue)).toEqual(expect.arrayContaining([385, 400, 410, 413]));
   });

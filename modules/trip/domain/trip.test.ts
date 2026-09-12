@@ -4,8 +4,8 @@ import { createTrip, validateTrip, type Trip } from "./trip";
 const id = "11111111-1111-4111-8111-111111111111";
 const at = "2026-09-12T08:00:00Z";
 describe("minimal Trip V2", () => {
-  it("creates an empty plan without inventing lifecycle, constraints or schedules", () => {
-    expect(createTrip(id, "旅", at)).toEqual({ id, title: "旅", schemaVersion: 2, revision: 0, createdAt: at, updatedAt: at, items: [], request: { constraints: [], assumptions: [] } });
+  it("creates an inspiration/pre-trip plan without inventing constraints or schedules", () => {
+    expect(createTrip(id, "旅", at)).toEqual({ id, title: "旅", schemaVersion: 2, revision: 0, createdAt: at, updatedAt: at, items: [], request: { constraints: [], assumptions: [] }, planningState: "inspiration", lifecycleState: "pre_trip" });
   });
   it("does not retain caller-owned item references", () => {
     const item = { id: "stay", title: "宿", type: "stay" as const, schedule: { type: "unscheduled" as const }, selection: { status: "unselected" as const } };
