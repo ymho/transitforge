@@ -18,6 +18,8 @@
 
 V2 writer未導入のため、現在稼働するlegacy会話の全進行が本PRだけで変わるわけではない。
 #384は本状態とTripRequestを使用し、conversationPhase/planningStep/askProgressStateを別正本にしない。
+#384で追加したproduction Runtimeの読取Port・注入ClockのContext評価・回答観測は
+[Ask + Progress](ask-progress.md)を参照する。Repository/writer切替とlifecycleの自動書込は依然として未有効である。
 
 ## 同じTripの2軸
 

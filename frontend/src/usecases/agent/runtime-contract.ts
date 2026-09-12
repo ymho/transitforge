@@ -1,6 +1,7 @@
 import type { AssessedEvidenceClaim, Evidence } from "./evidence-model";
 import type { AgentTrace } from "./agent-trace";
 import type { AgentRuntimeContextInput } from "./agent-decision-context";
+import type { AgentTurnObservation } from "./agent-turn-outcome";
 
 export type AgentRuntimeFeature =
   | "concierge"
@@ -30,6 +31,7 @@ export interface AgentViewerActionOutcome {
 }
 
 export interface AgentRuntimeResult {
+  turnObservation?: AgentTurnObservation;
   status: AgentRuntimeStatus;
   response: string;
   evidence: Evidence[];

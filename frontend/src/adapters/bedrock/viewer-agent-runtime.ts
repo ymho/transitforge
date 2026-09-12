@@ -85,6 +85,13 @@ import {
 } from "@raiquora/trip/trip-plan";
 import type { ConversationScope } from "../../domain/conversation-session";
 import { MultiStepAgentRuntime } from "../../usecases/agent/agent-runtime";
+import { observeViewerTurn } from "../../usecases/agent/viewer-turn-progress";
+import { registerTripProgressTools, type TripProgressDependencies, type TripProgressOutput } from "../../usecases/agent/trip-progress-tools";
+import type { AgentTurnObservation, AgentTurnOutcome, AskOnlyException } from "../../usecases/agent/agent-turn-outcome";
+import { effectiveTripConstraints } from "@raiquora/trip/trip-request";
+import { evaluateTripHardConstraints } from "@raiquora/trip/trip-constraint-evaluation";
+import { applyTripProposal, type Trip } from "@raiquora/trip/trip";
+import { assessTripTime } from "@raiquora/trip/trip-temporal";
 import { AgentToolRegistry } from "../../usecases/agent/tool-registry";
 import { structuredModelClassPolicy } from "../../usecases/agent/structured-model-class-policy";
 import { AgentToolExecutor } from "../../usecases/agent/agent-tool-executor";
@@ -133,7 +140,10 @@ import {
   type ExternalTravelToolState,
 } from "../../usecases/agent/external-travel-tools";
 
-export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDependencies {
+export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDependencies, TripProgressDependencies {
+  previousAssistantTurn?: AgentTurnOutcome;
+  onTurnObservation?: (observation: AgentTurnObservation) => void;
+  getTravelCandidates?: () => Record<string, unknown>[];
   trains: Train[];
   getTrains?: () => Train[];
   getPositions: () => TrainPosition[];
@@ -257,6 +267,8 @@ interface TravelToolState {
 
 interface ConversationToolState {
   response?: ConversationGuidance;
+  exception?: AskOnlyException;
+  missingToolInputs?: Array<{ toolName: string; inputName: string }>;
 }
 interface TripPlanUpdateToolState {
   proposal?: TripPlanUpdateProposal;
@@ -270,7 +282,8 @@ export async function runViewerAgentRuntime(
   converse: BedrockAgentConverse,
 ): Promise<ViewerAgentResponse> {
   const userRequest = prompt.trim();
-  const deterministicPrompt = promptWithKnownTripContext(
+  const currentTrip = dependencies.getCurrentTrip?.();
+  const deterministicPrompt = currentTrip ? userRequest : promptWithKnownTripContext(
     userRequest,
     dependencies.getTripContext?.(),
   );
@@ -280,6 +293,8 @@ export async function runViewerAgentRuntime(
   const tripPlanUpdateState: TripPlanUpdateToolState = {};
   const previousJourneyState: PreviousJourneyToolState = {};
   const externalState: ExternalTravelToolState = {};
+  const progressState: TripProgressOutput = {};
+  let presentedResponse: ViewerAgentResponse | undefined;
   const conversationContext = dependencies.getConversationContext?.();
   const travelFacts = travelConversationFacts(deterministicPrompt, currentDate(dependencies));
   const currentTripPlan = dependencies.getTripPlan?.();
@@ -293,13 +308,56 @@ export async function runViewerAgentRuntime(
     previousJourneyState,
     externalState,
   });
+  registerTripProgressTools(tools, dependencies, progressState, () => currentDate(dependencies), () =>
+    externalState.webPages?.status === "available" ? (externalState.webPages.data?.pages ?? []).flatMap((page) => {
+      const source = externalState.webPages?.evidence.find((e) => e.sourceUrl === page.url);
+      return source && page.text.trim() ? [{ url: page.url, evidenceId: source.id, text: page.text }] : [];
+    }) : []);
+  const prepareResponse = (text: string, evidence: Evidence[], fromModel: boolean, asksUser = false) => {
+    const previous = previousJourneyState.response;
+    const travel = travelResponseText(travelState, currentTripPlan, dependencies.getUserProfile?.());
+    const route = directRouteResponseText(toolState);
+    const conversation = conversationResponseText(conversationState);
+    const base = previous ?? travel ?? (tripPlanUpdateState.proposal
+      ? { text: tripPlanUpdateState.proposal.summary, tripPlanUpdate: tripPlanUpdateState.proposal } : route) ?? conversation;
+    let responseText = fromModel ? text : typeof base === "string" ? base : base?.text ?? text;
+    if (progressState.decision) responseText = progressState.decision.text + "\n\n" + progressState.decision.sources
+      .map(({ url }, i) => `> ${progressState.decision!.findings[i]}\n\n[情報源${i + 1}](${url})`).join("\n\n");
+    if (progressState.proposal && currentTrip) {
+      const preview = applyTripProposal(currentTrip, progressState.proposal);
+      responseText = [responseText, progressState.proposal.summary,
+        ...progressState.proposal.patches.flatMap((p) => p.type !== "replace" ? [] : [
+          `${p.item.title}（${p.item.schedule.type === "unscheduled" ? "時間未定" : p.item.schedule.type === "day" ? p.item.schedule.date : "計画時刻あり"}）`,
+          ...(p.item.type === "transport" && p.item.detail.status === "selected" ? p.item.detail.journey.legs.map((leg) =>
+            `${leg.origin.name} → ${leg.destination.name}：${leg.scheduledDeparture.at} 発 → ${leg.scheduledArrival.at} 着（${leg.trainNumber}・計画時刻）`) : []),
+          ...(p.item.type === "stay" && p.item.selection.status === "selected" ? [p.item.selection.accommodation.place.name] : []),
+        ]),
+        ...preview.request.assumptions.filter((a) => a.status === "unconfirmed").map((a) => `⚠ 仮置き: ${a.text}`),
+        ...(evaluateTripHardConstraints(preview).some((c) => c.status !== "satisfied") ? ["未確認または未充足の必須条件があります。この案の成立はまだ確定していません。"] : []),
+      ].filter(Boolean).join("\n\n");
+    }
+    // Research/proposal and a question are one public response, not mutually exclusive branches.
+    const question = conversationState.response?.question;
+    if (question && !responseText.includes(question)) responseText += `\n\n${question}`;
+    const hasRich = base !== undefined && typeof base !== "string" || hasExternalTravelInformation(externalState) || progressState.proposal || progressState.decision;
+    presentedResponse = hasRich ? {
+      ...(typeof base === "object" ? base : {}), text: responseText,
+      ...(question ? { conversation: conversationState.response! } : {}),
+      ...(hasExternalTravelInformation(externalState) ? { external: externalState } : {}),
+      ...(progressState.proposal ? { tripUpdateProposal: progressState.proposal } : {}),
+      ...(progressState.decision ? { progressSources: progressState.decision.sources } : {}),
+    } as ViewerAgentResponse : responseText;
+    return { text: responseText, observation: observeViewerTurn(presentedResponse, evidence, conversationState.exception, asksUser) };
+  };
   const evidenceMappers = viewerEvidenceMappers();
   const runtime = new MultiStepAgentRuntime({
     model: new ConverseModelProvider(converse),
     modelClassPolicy: structuredModelClassPolicy,
     tools,
     toolExecutor: new AgentToolExecutor(tools, evidenceMappers),
-    terminalToolResult: (toolName) => viewerTerminalResponseText(
+    prepareResponse,
+    terminalToolResult: (toolName) => toolName === "present_travel_progress" ? progressState.decision?.text
+      : toolName === "propose_candidate_selection" ? progressState.proposal?.summary : viewerTerminalResponseText(
       toolName,
       toolState,
       travelState,
@@ -313,6 +371,7 @@ export async function runViewerAgentRuntime(
     finalResponsePolicy: (response) => viewerFinalResponsePolicy(
       response,
       recentAssistantConversationTexts(conversationContext),
+      conversationState.response !== undefined,
     ),
     limits: {
       maxIterations: 8,
@@ -324,7 +383,7 @@ export async function runViewerAgentRuntime(
   });
   const contextSnapshot = createAgentContextSnapshot(
     dependencies.getUserProfile?.(),
-    currentTripPlan,
+    currentTrip ?? currentTripPlan,
   );
   const currentJourney = previousJourneyDecisionContext(
     dependencies.getPreviousJourneyPlan?.(),
@@ -338,6 +397,7 @@ export async function runViewerAgentRuntime(
     feature: "concierge",
     userRequest,
     context: {
+      previousAssistantTurn: dependencies.previousAssistantTurn,
       featureContext: {
         displayTimeMinutes: dependencies.getRouteTime(),
         calendarDate: currentCalendarDateInJapan(currentDate(dependencies)),
@@ -348,8 +408,10 @@ export async function runViewerAgentRuntime(
         : {}),
       tripContext: decisionTripContext(travelFacts.context),
       ...(contextSnapshot.profile ? { travelProfile: contextSnapshot.profile } : {}),
-      ...(contextSnapshot.trip ? { currentTrip: contextSnapshot.trip } : {}),
-      travelCandidates: contextSnapshot.travelCandidates,
+      ...(contextSnapshot.trip ? { currentTrip: { ...contextSnapshot.trip,
+        ...(currentTrip ? { temporalAssessment: assessTripTime(currentTrip, { now: () => currentDate(dependencies) }),
+          hardConstraintEvaluation: evaluateTripHardConstraints(currentTrip) } : {}) } } : {}),
+      travelCandidates: dependencies.getTravelCandidates?.() ?? contextSnapshot.travelCandidates,
       realtimeFacts: contextSnapshot.realtimeFacts,
       ...(currentJourney ? { currentJourney } : {}),
       verifiedFacts: verifiedPlaces.map((place) => ({
@@ -366,52 +428,13 @@ export async function runViewerAgentRuntime(
     },
   });
   await dependencies.storeAgentTrace?.(runtimeResult.trace).catch(() => undefined);
-  const tripContextUpdate = tripContextFromDecisionTrace(
-    travelFacts.context,
-    runtimeResult.trace,
-  );
-
-  if (previousJourneyState.response !== undefined) {
-    return withTripContext(previousJourneyState.response, tripContextUpdate);
+  if (runtimeResult.status === "completed" && presentedResponse !== undefined) {
+    if (runtimeResult.turnObservation) dependencies.onTurnObservation?.(runtimeResult.turnObservation);
+    // V2 Request is not projected back into legacy TripContext or persisted here.
+    return currentTrip ? presentedResponse : withTripContext(presentedResponse, tripContextFromDecisionTrace(travelFacts.context, runtimeResult.trace));
   }
-
-  const travelResponse = travelResponseText(
-    travelState,
-    currentTripPlan,
-    dependencies.getUserProfile?.(),
-  );
-  if (travelResponse !== undefined) {
-    if (hasExternalTravelInformation(externalState) && "travelPlan" in travelResponse) {
-      return withTripContext({ ...travelResponse, external: externalState }, tripContextUpdate);
-    }
-    return withTripContext(travelResponse, tripContextUpdate);
-  }
-  const conversationResponse = conversationResponseText(conversationState);
-  if (conversationResponse !== undefined) {
-    const response = hasExternalTravelInformation(externalState) && typeof conversationResponse !== "string"
-      ? { ...conversationResponse, external: externalState }
-      : conversationResponse;
-    return withTripContext(response, tripContextUpdate);
-  }
-  if (tripPlanUpdateState.proposal) {
-    return withTripContext({
-      text: tripPlanUpdateState.proposal.summary,
-      tripPlanUpdate: tripPlanUpdateState.proposal,
-    }, tripContextUpdate);
-  }
-  // Toolを途中まで実行できても、Agent全体が失敗した場合は候補をUIへ公開しない。
-  // 会話が「案内失敗」なのに、未採用の地点だけが地図へ残ると、利用者には
-  // その地点が推薦結果に見えてしまう。
-  if (runtimeResult.status === "completed" && hasExternalTravelInformation(externalState)) {
-    return withTripContext(
-      { text: runtimeResult.response, external: externalState },
-      tripContextUpdate,
-    );
-  }
-  return withTripContext(
-    directRouteResponseText(toolState) ?? runtimeResult.response,
-    tripContextUpdate,
-  );
+  // Rejected/failed partial responses must not bypass the runtime's output policy.
+  return runtimeResult.response;
 }
 
 export function tripContextFromDecisionTrace(
@@ -675,6 +698,7 @@ function viewerToolMeetsTripPreconditions(
 }
 
 export interface ViewerAgentToolPreconditionContext {
+  currentTrip?: Trip;
   tripContext?: TripContext;
   directRouteSearchGrounded?: boolean;
   defaultOriginStation?: string;
@@ -711,6 +735,14 @@ export function validateViewerAgentToolPreconditions(
     return "利用者が駅間経路を求めておらず、確定した旅行先もないためsearch_direct_routesは実行できません。候補探索を続けてください。";
   }
   if (name === "ask_follow_up") {
+    if (context.currentTrip) {
+      const requested = input.requestedRequirement ?? (input.expectedInput === "departure-date" ? "dates" : input.expectedInput === "stay-length" ? "duration" : undefined);
+      if (requested && effectiveTripConstraints(context.currentTrip.request).some((c) => c.requirement.type === requested &&
+          (!c.assumptionId || context.currentTrip!.request.assumptions.find((a) => a.id === c.assumptionId)?.status === "confirmed"))) {
+        return "persisted Trip.requestに既知の条件があります。確認済み条件を聞き直さず、それを使って前進してください。";
+      }
+      return undefined;
+    }
     const expectedInput = input.expectedInput;
     const known =
       (expectedInput === "planning-intent" && trip?.planningStage === "planning") ||
@@ -817,6 +849,13 @@ function viewerTool(
     inputSchema,
     parseInput(value) {
       const parsed = validateAgentToolInput(inputSchema, value);
+      // Observe actual missing required inputs, never invent an exception from a tool name alone.
+      context.conversationState.missingToolInputs = [
+        ...(context.conversationState.missingToolInputs ?? []).filter((m) => m.toolName !== name),
+        ...(!parsed.ok && typeof value === "object" && value !== null
+          ? (inputSchema.required ?? []).filter((key) => !(key in value))
+              .map((inputName) => ({ toolName: name, inputName })) : []),
+      ];
       if (!parsed.ok) return parsed;
       const preconditionFailure = validateViewerAgentToolPreconditions(
         name,
@@ -857,6 +896,8 @@ function viewerTool(
 function viewerToolPreconditionContext(
   context: ViewerToolContext,
 ): ViewerAgentToolPreconditionContext {
+  const currentTrip = context.dependencies.getCurrentTrip?.();
+  if (currentTrip) return { currentTrip, directRouteSearchGrounded: true };
   const tripContext = travelConversationFacts(
     context.prompt,
     currentDate(context.dependencies),
@@ -1316,6 +1357,13 @@ function viewerToolInputSchema(
     return {
       type: "object",
       properties: {
+        requestedRequirement: { type: "string", enum: ["origin", "dates", "duration", "destinations", "depart_after", "arrive_by", "mobility", "experience", "pace"], description: "質問対象のTripRequest requirement。既知条件は聞き直さない" },
+        askOnlyException: { type: "object", properties: {
+          reason: { type: "string", enum: ["safety", "hard_constraint_unknown", "tool_input_missing"] },
+          missingFact: { type: "string", minLength: 1, maxLength: 160 },
+          constraintId: { type: "string", maxLength: 160 }, toolName: { type: "string", maxLength: 80 }, inputName: { type: "string", maxLength: 80 },
+        }, required: ["reason", "missingFact"], additionalProperties: false,
+        description: "連続質問を優先する例外。安全は未確認事項、hardは未充足のconstraint ID、Tool入力不足は実在するToolと必須fieldを示す。予算など任意質問を例外にしない" },
         recommendation: {
           type: "string",
           description: "条件が不足していても先に示せる仮の旅行案。目的地相談ではプロフィールを踏まえた方向性を短く提案する",
@@ -1391,6 +1439,7 @@ function viewerToolInputSchema(
 function unresolvedFollowUpInputs(
   context: ViewerAgentToolPreconditionContext,
 ): ConversationExpectedInput[] {
+  if (context.currentTrip) return ["planning-intent", "departure-date", "stay-length", "traveler-count", "free-text"];
   const tripContext = context.tripContext;
   if (tripContext?.planningStage === "inspiration") return ["planning-intent"];
   if (tripContext?.planningStage === "planning") {
@@ -1754,6 +1803,17 @@ async function executeViewerToolAdapter(
     return { updated: true };
   }
   if (name === "ask_follow_up") {
+    const currentTrip = dependencies.getCurrentTrip?.();
+    const exception = input.askOnlyException as AskOnlyException | undefined;
+    if (exception?.reason === "hard_constraint_unknown" && (!currentTrip ||
+      !evaluateTripHardConstraints(currentTrip).some((c) => c.constraintId === exception.constraintId && c.status === "unknown"))) {
+      throw new Error("未確認hard constraintを確認できません。");
+    }
+    if (exception?.reason === "tool_input_missing") {
+      if (!conversationState.missingToolInputs?.some((m) => m.toolName === exception.toolName && m.inputName === exception.inputName)) {
+        throw new Error("この実行でTool境界が検出した必須入力の不足だけを例外にできます。安全条件や未確認hard条件とは区別してください。");
+      }
+    }
     const guidance = conversationGuidanceFromToolInput(
       input,
       originalPrompt,
@@ -1761,8 +1821,10 @@ async function executeViewerToolAdapter(
       externalState,
       recentAssistantConversationTexts(dependencies.getConversationContext?.()),
       dependencies.getUserProfile?.()?.home.station,
+      currentTrip,
     );
     conversationState.response = guidance;
+    conversationState.exception = exception;
     return { accepted: true, ...guidance };
   }
   if (name === "search_trains") {
@@ -2647,7 +2709,9 @@ function isConversationScope(value: unknown): value is ConversationScope {
 function viewerFinalResponsePolicy(
   response: AgentModelResponse,
   recentAssistantMessages: readonly string[],
+  hasStructuredQuestion = false,
 ): { accepted: boolean; reason?: string; instruction?: string } {
+  if (hasStructuredQuestion) return { accepted: true };
   const text = response.message.content.flatMap((content) =>
     content.type === "text" ? [content.text] : []).join("\n");
   if (!conversationTextIsQuestion(text)) return { accepted: true };
@@ -2709,6 +2773,7 @@ function conversationGuidanceFromToolInput(
   externalState: ExternalTravelToolState,
   recentAssistantMessages: readonly string[],
   defaultOriginStation?: string,
+  currentTrip?: Trip,
 ): ConversationGuidance {
   const question = typeof input.question === "string" ? input.question : "";
   if (!question.trim()) {
@@ -2718,14 +2783,14 @@ function conversationGuidanceFromToolInput(
     ? input.expectedInput
     : "free-text";
   const candidateContext = tripContextFromToolInput(input.tripContext);
-  const mergedTripContext = mergeAuthoritativeTripContext(
+  const mergedTripContext = currentTrip ? {} : mergeAuthoritativeTripContext(
     candidateContext,
     originalPrompt,
     now,
   );
   const tripContext = mergedTripContext;
   const facts = travelConversationFacts(originalPrompt, now);
-  assertFollowUpIsUnresolved(
+  if (!currentTrip) assertFollowUpIsUnresolved(
     question,
     requestedExpectedInput,
     tripContext,

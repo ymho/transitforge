@@ -1,4 +1,5 @@
 import type { Evidence } from "./evidence-model";
+import type { AgentTurnObservation } from "./agent-turn-outcome";
 import type { AgentModelMetadata } from "./model-provider";
 import type { AgentToolResult } from "./tool-contract";
 import type {
@@ -31,6 +32,7 @@ interface AgentTraceEventBase {
 }
 
 export type AgentTraceEvent =
+  | (AgentTraceEventBase & { type: "turn_observed"; observation: AgentTurnObservation; accepted: boolean })
   | (AgentTraceEventBase & {
       type: "task_started";
       userRequest: string;
@@ -160,6 +162,21 @@ const BEARER_VALUE = /bearer\s+[a-z0-9._~+/=-]+/giu;
 const KEY_VALUE_SECRET = /((?:api[_-]?key|token|password|secret)\s*[:=]\s*)[^\s,;]+/giu;
 
 export class AgentTraceRecorder {
+  turnObserved(observation: AgentTurnObservation, accepted: boolean): void {
+    this.append({ type: "turn_observed", observation: {
+      outcome: observation.outcome,
+      progress: observation.progress.slice(0, 12).map((p) => ({ kind: p.kind, refs: this.texts(p.refs) })),
+      ...(observation.exception ? { exception: { reason: observation.exception.reason,
+        // Same precise-location redaction as the server trace boundary; no private reasoning.
+        missingFact: this.text(observation.exception.missingFact)
+          .replace(/(?<!\d)-?\d{1,2}\.\d+\s*[,/]\s*-?\d{1,3}\.\d+(?!\d)/gu, "[location-redacted]")
+          .replace(/(?:緯度|経度|latitude|longitude)\s*[:=]?\s*-?\d{1,3}(?:\.\d+)?/giu, "[location-redacted]"),
+        ...(observation.exception.constraintId ? { constraintId: this.text(observation.exception.constraintId) } : {}),
+        ...(observation.exception.toolName ? { toolName: this.text(observation.exception.toolName) } : {}),
+        ...(observation.exception.inputName ? { inputName: this.text(observation.exception.inputName) } : {}),
+      } } : {}),
+    }, accepted });
+  }
   private readonly events: AgentTraceEvent[] = [];
   private readonly options: Required<AgentTraceRecorderOptions>;
   private nextSequence = 1;

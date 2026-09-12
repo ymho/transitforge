@@ -93,6 +93,7 @@ import { normalizeStationName } from "@raiquora/train/station-name";
 import { loadViewerElements } from "../usecases/viewer/viewer-elements";
 import { resolveViewerDisplayMode } from "../domain/viewer-display-mode";
 import { runViewerAgentRuntime } from "../adapters/bedrock/viewer-agent-runtime";
+import { createAgentTurnObservationStore } from "../usecases/agent/agent-turn-outcome";
 import { createLocalViewerAgent } from "../usecases/agent/local-viewer-agent";
 import type { ViewerAgentJourneyPlan } from "../domain/viewer-agent-response";
 import {
@@ -269,6 +270,7 @@ const conversationSessionRepository = new LocalConversationSessionRepository(
   browserConversationSessionStorageEvents(),
 );
 const conversationHistoryRepository = new LocalConversationHistoryRepository(localStorage);
+const agentTurnObservations = createAgentTurnObservationStore();
 const travelRecheckRepository = new BrowserTravelRecheckRepository(localStorage);
 let activeConversationSession = conversationSessionRepository.active() ??
   conversationSessionRepository.create();
@@ -1171,9 +1173,12 @@ if (!token) {
               pendingJourneyLegChange = undefined;
             }
             const runtimeRequestIds: string[] = [];
+            const executionSessionId = activeConversationSession.id;
             const response = await runViewerAgentRuntime(
               prompt,
               {
+                previousAssistantTurn: agentTurnObservations.get(executionSessionId),
+                onTurnObservation: (observation) => agentTurnObservations.record(executionSessionId, observation),
                 trains: trainIndex.trains,
                 getTrains: () => displayTrains,
                 getPositions: () => displayedPositions,

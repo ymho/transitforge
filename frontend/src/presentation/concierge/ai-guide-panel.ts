@@ -525,7 +525,7 @@ function appendPendingMessage(
   return item;
 }
 
-function resolveAssistantMessage(
+export function resolveAssistantMessage(
   item: HTMLLIElement,
   response: ViewerAgentResponse,
   onTravelPlan?: (plan: ViewerAgentTravelPlan) => void,
@@ -540,20 +540,6 @@ function resolveAssistantMessage(
   item.removeAttribute("aria-label");
   if (typeof response === "string") {
     renderAssistantCopy(item, visibleAssistantText(response), animate);
-  } else if ("conversation" in response) {
-    renderAssistantCopy(item, visibleAssistantText(response.text), animate);
-    if (response.external) {
-      appendExternalCards(item, renderExternalTravelInformation(
-        { text: response.text, external: response.external },
-        { onRestaurantConsult, includePlaceInspiration: true, includeRestaurants: !onRestaurants },
-      ));
-      if (response.external.places?.status === "available" && response.external.places.data) {
-        onPlaces?.(response.external.places.data.places);
-      }
-      if (response.external.restaurants?.status === "available" && response.external.restaurants.data) {
-        onRestaurants?.(response.external.restaurants.data.restaurants);
-      }
-    }
   } else if ("tripPlanUpdate" in response) {
     renderAssistantCopy(item, visibleAssistantText(response.text), animate);
     const changes = document.createElement("ul");
@@ -582,25 +568,8 @@ function resolveAssistantMessage(
     text.textContent = visibleAssistantText(response.text);
     item.append(text);
     if (animate) typewriteText(text);
-    if (response.external) {
-      appendExternalCards(item, renderExternalTravelInformation(
-        { text: response.text, external: response.external },
-        { onRestaurantConsult, includeRestaurants: !onRestaurants },
-      ));
-      if (response.external.places?.status === "available" && response.external.places.data) onPlaces?.(response.external.places.data.places);
-      if (response.external.restaurants?.status === "available" && response.external.restaurants.data) onRestaurants?.(response.external.restaurants.data.restaurants);
-      if (response.external.groundAccess?.status === "available" && response.external.groundAccess.data) onGroundAccess?.(response.external.groundAccess.data);
-    }
     onTravelPlan?.(response.travelPlan);
-  } else if ("external" in response) {
-    renderAssistantCopy(item, visibleAssistantText(response.text), animate);
-    appendExternalCards(item, renderExternalTravelInformation(response, { onRestaurantConsult, includeRestaurants: !onRestaurants }));
-    if (response.external.places?.status === "available" && response.external.places.data) onPlaces?.(response.external.places.data.places);
-    if (response.external.restaurants?.status === "available" && response.external.restaurants.data) onRestaurants?.(response.external.restaurants.data.restaurants);
-    if (response.external.groundAccess?.status === "available" && response.external.groundAccess.data) onGroundAccess?.(response.external.groundAccess.data);
-  } else if ("tripContext" in response) {
-    renderAssistantCopy(item, visibleAssistantText(response.text), animate);
-  } else {
+  } else if ("journeyPlan" in response) {
     item.classList.add("ai-guide-message-journey");
     item.replaceChildren();
     const text = document.createElement("p");
@@ -608,6 +577,19 @@ function resolveAssistantMessage(
     text.textContent = visibleAssistantText(response.text);
     item.append(text, renderJourneyPlan(response.journeyPlan));
     if (animate) typewriteText(text);
+  } else {
+    // V2 is a preview only until the #388/#389 writer gate. Never invoke the legacy apply callback.
+    renderAssistantCopy(item, visibleAssistantText(response.text), animate);
+  }
+  // A question is metadata on the same turn, not a branch that hides its artifacts.
+  if (typeof response !== "string" && "external" in response && response.external) {
+    appendExternalCards(item, renderExternalTravelInformation(
+      { text: response.text, external: response.external },
+      { onRestaurantConsult, includePlaceInspiration: "conversation" in response, includeRestaurants: !onRestaurants },
+    ));
+    if (response.external.places?.status === "available" && response.external.places.data) onPlaces?.(response.external.places.data.places);
+    if (response.external.restaurants?.status === "available" && response.external.restaurants.data) onRestaurants?.(response.external.restaurants.data.restaurants);
+    if (response.external.groundAccess?.status === "available" && response.external.groundAccess.data) onGroundAccess?.(response.external.groundAccess.data);
   }
   appendConversationFeedback(item);
   item.scrollIntoView({ block: "nearest" });

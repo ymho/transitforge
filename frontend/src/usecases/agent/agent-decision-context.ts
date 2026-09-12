@@ -2,6 +2,7 @@ import type { AgentToolDescriptor } from "./tool-contract";
 import type { AgentRuntimeFeature, AgentRuntimeRequest } from "./runtime-contract";
 import { parseAgentDecisionSummary, type AgentDecisionSummary } from "./agent-decision-summary";
 import { effectiveTripConstraints, type TripRequest } from "@raiquora/trip/trip-request";
+import type { AgentTurnOutcome } from "./agent-turn-outcome";
 
 export type AgentContextValue = string | number | boolean | null;
 
@@ -51,6 +52,7 @@ export interface AgentToolOutcomeSummary {
 }
 
 export interface AgentRuntimeContextInput {
+  previousAssistantTurn?: AgentTurnOutcome;
   /** Current execution's external decision result, never promoted into Trip.request. */
   currentTurnDecision?: AgentDecisionSummary;
   travelCandidates?: Record<string, unknown>[];
@@ -74,6 +76,7 @@ export interface AgentAvailableCapability {
 }
 
 export interface AgentDecisionContext {
+  previousAssistantTurn?: AgentTurnOutcome;
   persistedTripRequest?: unknown;
   tripHardConstraints?: unknown;
   tripSoftPreferences?: unknown;
@@ -113,6 +116,7 @@ export function buildAgentDecisionContext(
   }
   const decision = parseAgentDecisionSummary(input?.currentTurnDecision);
   return {
+    ...(input?.previousAssistantTurn ? { previousAssistantTurn: input.previousAssistantTurn } : {}),
     ...(hasTripRequest ? {
       // Preserve complete typed constraints/links, not the generic key/value legacy interpretation.
       // Privacy is still enforced; an oversized request fails the message budget rather than losing conditions.
@@ -172,6 +176,7 @@ export function buildAgentDecisionContext(
 
 export function agentDecisionContextText(context: AgentDecisionContext): string {
   const requestFields = {
+    previousAssistantTurn: context.previousAssistantTurn,
     persistedTripRequest: context.persistedTripRequest,
     tripHardConstraints: context.tripHardConstraints,
     tripSoftPreferences: context.tripSoftPreferences,
@@ -248,6 +253,9 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
   return [
     "次の構造化Contextを使って利用者の目的と制約を解釈し、必要なEvidenceを得る能力を選択してください。",
     "既知条件は聞き直さず、Tool結果は事実として扱い、推測で補完しないでください。",
+    "previousAssistantTurnは一時的な回答観測でTripのstateではありません。質問が必要でも可能なら同じturnで具体候補・比較・Proposalを示してください。連続ask_onlyは原則不可ですが、安全・未確認hard条件・本当に不足するTool必須入力は構造化例外として扱えます。内部Tool実行だけを進展と呼ばず、候補選択後は検証済みsnapshotからProposalを作り、時刻不明はunscheduled/day/windowのまま扱えます。",
+    "過去Tripの振り返りと新しい旅行相談を区別し、保存Requestの年や条件を新しい旅行の希望へ無言で流用しないでください。未確認hard条件の成立を仮定せず、可能な進展と要確認事項を分けてください。",
+    "期待成果物の目安は、inspiration/candidate_discoveryなら方向性・候補、candidate_selectionなら比較材料、itinerary_draft/itinerary_refinementなら具体的な変更案です。readyでは不要な確認を増やさず、in_tripでは既存Tripを前提にしてください。これはToolの固定割当や状態遷移の強制ではありません。",
     "currentTripは計画、travelCandidatesとcurrentJourneyは比較・照会中の検索結果、realtimeFactsは検索時点の観測です。候補の先頭や現在の見込時刻を採用済み計画にしないでください。",
     "currentTrip.planningState/lifecycleStateはTripの現在地であり、Tool選択や質問順を固定しません。persistedTripRequestは希望・条件、currentTurnDecisionは今回の判断で、状態とは別です。pre_tripだけで将来の旅行とは断定せず、採用済みscheduleの年・精度を保ち、過去日程を今年や翌年に補正しないでください。旅行日・実行状態をViewerの表示日時から推測せず、scheduleTruncatedの場合は全旅行期間を断定しないでください。状態変更はProposalにしてください。",
     ...(context.persistedTripRequest !== undefined ? ["persistedTripRequestだけが今回条件の正本です。tripHardConstraints/ tripSoftPreferencesは有効条件の読み取り投影で、強さと仮定の確認状態は別です。unconfirmedAssumptionsは仮置きとして説明し、却下済みの条件は使わないでください。travelProfileは普段の嗜好、currentTurnDecisionは今回の解釈です。解釈や履歴で正本を上書きせず、変更はProposalとして提案してください。"] : []),
@@ -293,6 +301,8 @@ function compactCurrentTrip(
     ...(value.title ? { title: value.title } : {}),
     ...(value.planningState ? { planningState: value.planningState } : {}),
     ...(value.lifecycleState ? { lifecycleState: value.lifecycleState } : {}),
+    ...(value.temporalAssessment ? { temporalAssessment: value.temporalAssessment } : {}),
+    ...(value.hardConstraintEvaluation ? { hardConstraintEvaluation: value.hardConstraintEvaluation } : {}),
     ...(value.destination ? { destination: value.destination } : {}),
     ...(value.adults !== undefined ? { adults: value.adults } : {}),
     ...(value.children !== undefined ? { children: value.children } : {}),

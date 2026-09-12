@@ -29,6 +29,7 @@ const eventFields = {
   model_failed: [["modelCallId", "reason"], []],
   model_completed: [["provider"], ["modelCallId", "requestId", "model", "latencyMs", "inputTokens", "outputTokens", "totalTokens"]],
   response_generated: [["response", "claimIds"], []],
+  turn_observed: [["observation", "accepted"], []],
   viewer_action: [["actionType", "status"], ["targetEntityId", "reason"]],
   task_completed: [["status"], ["latencyMs", "reason"]],
 } as const;
@@ -172,7 +173,8 @@ function validatedEventField(key: string, value: unknown, eventType: string, pos
     return value;
   }
   if (payloadFields.has(key)) return validatedPayload(value, position);
-  if (key === "changed" || key === "retryable") {
+  if (key === "observation") return validatedTurnObservation(value);
+  if (key === "changed" || key === "retryable" || key === "accepted") {
     if (typeof value !== "boolean") throw invalid();
     return value;
   }
@@ -185,6 +187,32 @@ function validatedEventField(key: string, value: unknown, eventType: string, pos
     if (allowed.has(value as string)) return value;
   }
   throw invalid();
+}
+
+function validatedTurnObservation(value: unknown): JsonObject {
+  const invalid = () => new RequestError(400, "Agent turn observationが不正です。");
+  if (!isRecord(value) || !sameKeys(value, ["outcome", "progress", ...(value.exception === undefined ? [] : ["exception"])]) ||
+      !["ask_only", "ask_and_progress", "progress", "answer"].includes(String(value.outcome)) ||
+      !Array.isArray(value.progress) || value.progress.length > 12) throw invalid();
+  const progress = value.progress.map((p) => {
+    if (!isRecord(p) || !sameKeys(p, ["kind", "refs"]) ||
+        !["candidates", "comparison", "trip_proposal", "itinerary", "grounded_decision"].includes(String(p.kind)) ||
+        !Array.isArray(p.refs) || !p.refs.length || p.refs.length > 20 ||
+        !p.refs.every((ref) => typeof ref === "string" && ref.length > 0 && ref.length <= 512)) throw invalid();
+    return { kind: p.kind, refs: (p.refs as string[]).map(sanitizeString) };
+  });
+  if ((value.outcome === "progress" || value.outcome === "ask_and_progress") !== (progress.length > 0)) throw invalid();
+  let exception: JsonObject | undefined;
+  if (value.exception !== undefined) {
+    const e = value.exception;
+    if (!isRecord(e) || !["ask_only", "ask_and_progress"].includes(String(value.outcome)) ||
+        !["safety", "hard_constraint_unknown", "tool_input_missing"].includes(String(e.reason)) ||
+        typeof e.missingFact !== "string" || !e.missingFact ||
+        Object.keys(e).some((key) => !["reason", "missingFact", "constraintId", "toolName", "inputName"].includes(key)) ||
+        Object.values(e).some((v) => typeof v !== "string" || !v || v.length > 512)) throw invalid();
+    exception = Object.fromEntries(Object.entries(e).map(([k, v]) => [k, sanitizeString(v as string)]));
+  }
+  return { outcome: value.outcome, progress, ...(exception ? { exception } : {}) };
 }
 
 function validatedPayload(value: unknown, position: number): JsonObject {

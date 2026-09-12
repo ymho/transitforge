@@ -39,6 +39,7 @@ import { AgentToolRegistry } from "../frontend/src/usecases/agent/tool-registry"
 import { createAgentContextSnapshot } from "../frontend/src/usecases/agent/agent-context-snapshot";
 import { createTrip } from "../modules/trip/domain/trip";
 import type { TripRequest } from "../modules/trip/domain/trip-request";
+import { progressCaseIds, runAskProgressCase } from "../frontend/src/adapters/bedrock/ask-progress-scenarios.fixture";
 
 interface LiveDecisionCase {
   evaluation: AgentEvaluationCase;
@@ -68,10 +69,11 @@ const outputDirectory = resolve(
   argument("--output-dir") ?? `/tmp/raiquora-live-agent-eval/${strategy}`,
 );
 const selectedCase = argument("--case");
+const progressSuite = argument("--suite") === "ask-progress";
 const cases = liveDecisionCases().filter(({ evaluation }) =>
   (profile === "full" || evaluation.tags.includes("smoke")) &&
   (selectedCase === undefined || evaluation.id === selectedCase));
-if (cases.length === 0) throw new Error("対象となるLive Eval caseがありません");
+if (cases.length === 0 && !progressSuite) throw new Error("対象となるLive Eval caseがありません");
 const model = new BedrockConversationModel(new AwsBedrockConverseClient(), {
   maxOutputTokens,
   modelId: process.env.MODEL_ID?.trim() || "amazon.nova-lite-v1:0",
@@ -103,6 +105,24 @@ const converse: BedrockAgentConverse = async (messages, tools, requestedClass) =
 };
 
 const observationsByAttempt: AgentEvaluationObservation[][] = [];
+if (progressSuite) {
+  const ids = progressCaseIds.filter((id) => selectedCase ? selectedCase === id : profile === "full" || id === "A-vague" || id === "G-consecutive");
+  if (!ids.length) throw new Error("Unknown Ask + Progress case");
+  const results = [];
+  for (let attempt = 1; attempt <= repetitions; attempt += 1) {
+    for (const id of ids) {
+      // Real production registry/presenter/policy, not the tool-selection-only terminal shortcut below.
+      const result = await runAskProgressCase(id, converse);
+      results.push({ id, attempt, observation: result.observation, failures: result.failures, modelCalls: result.calls,
+        response: result.response, trace: result.trace });
+    }
+  }
+  await mkdir(outputDirectory, { recursive: true });
+  await writeFile(`${outputDirectory}/ask-progress-live.json`, JSON.stringify({ results, modelFailures }, null, 2));
+  console.log(`Ask + Progress live: ${results.filter((r) => !r.failures.length).length}/${results.length} passed (${outputDirectory})`);
+  if (modelFailures.length) console.error(modelFailures.join("\n"));
+  process.exit(results.some((r) => r.failures.length) || modelFailures.length ? 1 : 0);
+}
 const traces = [];
 for (let attempt = 1; attempt <= repetitions; attempt += 1) {
   const observations: AgentEvaluationObservation[] = [];
