@@ -19,6 +19,7 @@
 | `modules/trip/domain/travel-plan.ts`: `TravelPlan`は往復検索と宿泊候補の応答束。`TripJourneyPlan.journeys[]`を含む | 検索/比較の入力に限定し、最終的に新規生成を廃止。Tripではない | #385 |
 | `modules/trip/domain/trip-plan.ts`: `TripPlan.version: 1`、採用宿と`options`、経路配列が混在 | 将来の唯一の編集正本は`Trip`。`TravelPlan`でも旧`TripPlan`でもない | #385 / #389 |
 | `trip-plan-panel.ts`と`agent-context-snapshot.ts`は`journeys[0]`を表示 | 先頭表示をユーザーの採用証拠としない。選択済み経路1件と未選択placeholderを区別 | #385 |
+| `JourneyRouteResult.legs`はdelay値・補正済み時刻も含み得る | 検索結果を直接保存せず、計画専用`SelectedRailJourney`へ明示変換する | #385 |
 | `selectTripPlanAccommodation`は全stayへ同じ宿を反映する | 選択対象item IDを指定する。多都市の他の宿を変更しない | #385 / #403 |
 | `modules/trip/domain/travel-profile.ts`: `TripContext`に今回条件と`planningStage`が同居 | 今回要求は`Trip.request`、状態は`Trip`、Profileは別リソース | #383 / #387 / #411 |
 | `frontend/src/domain/travel-conversation-context.ts`: 発話・埋込文から日付/泊数/状態を解釈するlegacy helper | 新しい発話routerへ発展させない。意味解釈はBedrock、日付・時刻検証はDomain | #383 / #387 / #384 |
@@ -49,13 +50,17 @@ ConversationSession[*] ── tripId? ──┘
                             ├─ planningState / lifecycleState
                             ├─ title / summary metadata
                             └─ items: ItineraryItem[] (採用済み、順序付き)
-                                 ├─ transport (選択済み1経路、または未確定)
+                                 ├─ transport (計画専用SelectedRailJourney等、または未確定)
                                  ├─ stay (選択済み1宿、または未確定)
                                  └─ activity (食事/観光/体験/自由時間等)
 
 Provider result → Offering → TravelCandidate (比較用、Tripとは別)
                          選択 → Proposal → 検証/確認 → SnapshotをTripへ採用
 Reservation[*] ── tripId + item ID ── Trip (予約は別aggregate)
+verified JourneyRouteResult (検索結果、realtimeを含み得る)
+  └─ 計画事実だけを検証・変換 → SelectedRailJourney (Trip内の採用時snapshot)
+                                └─ serviceDate + serviceUid等で外部観測と照合
+TrainOperation / TravelEvent (現在状態) ── Trip revisionと照合 → TripImpact
 Trip → TripWatch (revision付き派生索引)
 外部観測 → TravelEvent → TripImpact (Trip revision + 外部根拠)
                                     └→ Notification → Delivery
@@ -257,8 +262,9 @@ interface ActivityItineraryItem extends ItineraryItemBase {
 
 `mode`は `rail | air | bus | ferry | car | rental-car | taxi | ride-hail | walk | bicycle | other`。
 全modeは`status: unresolved`または`manual`を取れる。manualは任意noteと時刻の利用者入力を持つが、
-検証済み経路とは呼ばない。railの`selected`は検索済みの**1件の`JourneyRouteResult`**、
-serviceDate、選択時刻、検証情報を持つ。modeごとのselected detailは独立unionとし、
+検証済み経路とは呼ばない。railのselected detailは
+`{ mode: "rail"; status: "selected"; journey: SelectedRailJourney }`とする。
+このstatusは採用状態であり運行状態ではない。modeごとのselected detailは独立unionとし、
 airへ列車番号やrailへ空港固有フィールドを混ぜない。air/ferry等の未連携Providerはmanualで扱える。
 航空API追加/旧Amadeus復活は#413の前提ではない。
 
@@ -266,10 +272,84 @@ airへ列車番号やrailへ空港固有フィールドを混ぜない。air/fer
 Applicationで解決し、LLMが送った経路本体を採用しない。永続recordの型が合うだけでもverifiedにしない。
 再読込/再使用時は必要な日付の時刻表と照合する。旧経路の証明が不足すれば未検証を明示して再検索する。
 
-`JourneyRouteResult`は現在delay適用値も含む。保存する計画はscheduled時刻から純粋に投影し、
-現在delay値/statusはTripへ新規永続化しない。scheduled時刻が欠け、delay適用有無が不明なlegacy値を
-推測で引き戻さない。原本を移行記録に残し、再検索まで未検証として表示する。
-再投影には既存の時刻処理を再利用し、新しい探索器を作らない。
+### 選択済み鉄道経路: SelectedRailJourney (#385)
+
+**Tripに生の`JourneyRouteResult`を永続化しない。** 次の3層を区別する。
+
+| 層 | 契約・所有者 | 含める情報 |
+| --- | --- | --- |
+| 検索結果 | `JourneyRouteResult`、Journey検索/Tool境界 | 比較候補と検索時の遅延反映情報。Trip保存型ではない |
+| 採用済み計画 | `SelectedRailJourney`、Trip内のvalue object | 採用した列車・区間・scheduled時刻・乗換・検証元だけ |
+| 現在の観測・影響 | `TrainOperation` / `TravelEvent` / `TripImpact` | 現在の遅延・運休・推定発着・乗換影響。Trip revisionと計画snapshotへ関連付ける |
+
+以下は文書内の最小契約であり、実装は#385が`modules/trip/domain`へ置く。
+既存Journey/Trainの識別子・時刻計算・乗換validationは再利用するが、検索応答型のalias、
+`extends JourneyRouteResult`、`Omit`による除外型にはしない。保存可能なfieldを独立して列挙する。
+
+```ts
+interface SelectedRailJourney {
+  serviceDate: LocalDate;          // 最初のlegの業務日付
+  selectedAt: string;             // 採用日時、ISO8601-offset-instant
+  legs: ScheduledRailLeg[];       // 1件以上、乗車順
+  transfers: ScheduledRailTransfer[];
+  provenance: {
+    verifiedJourneyRef: string;   // 採用元候補を監査できる参照、単独では検証証拠にしない
+    verifiedAt: string;           // 採用前に計画事実を検証した日時
+    sources: ExternalSourceEvidence[];
+    timetableInputs: Array<{
+      sourceId: string;           // 時刻表の論理的な出所（秘密の取得URLではない）
+      serviceDate: LocalDate;
+      contentDigest: string;      // 照合した不変入力を識別するdigest
+    }>;
+    validationPolicyVersion: string;
+    transferPace: TransferPace;   // 採用時の乗換検証条件
+  };
+}
+interface ScheduledRailLeg {
+  id: string;                     // snapshot内で一意
+  serviceDate: LocalDate;         // 日跨ぎ/別業務日の列車を区別
+  serviceUid: string;
+  trainNumber: string;            // 表示/照合補助、番号だけで列車を結合しない
+  origin: PlaceSnapshot;
+  destination: PlaceSnapshot;
+  originStopIndex: number;        // 出所時刻表の停車順で同駅再訪を区別
+  destinationStopIndex: number;
+  scheduledDeparture: ZonedInstant;
+  scheduledArrival: ZonedInstant;
+}
+interface ScheduledRailTransfer {
+  fromLegId: string;
+  toLegId: string;
+  minimumTransferMinutes: number; // 採用時にDomainが検証した計画上の必要時間
+}
+```
+
+- 全体のorigin/destinationとscheduled departure/arrivalは最初/最後のlegから、乗換地点は
+  前leg.destinationと次leg.originから得る。総所要時間・待ち時間・乗換数はscheduled値からderiveし、
+  検索結果の補正済み集計をコピーしない。itemのorigin/destination/scheduleはこのprojectionと一致させる。
+- `serviceDate + serviceUid`と時刻表出所・停車順で照合する。trainNumberや名前だけで再同定しない。
+  provenanceはApplicationがverified candidateと入力データから付け、LLM提供値を信用しない。
+  runtime Evidence IDのみで完結せず、検索実行内の候補参照が失効しても時刻表と選択区間を再検証できる。
+- Domain変換はverified結果と出所時刻表からscheduled事実を照合して明示構築する。
+  JSON化前の型指定や型assertionだけでは余分なfieldを落とせないため、spread/丸ごとコピーは禁止。
+  Domain境界・API/保存DTOも同じallowlistを守り、未知fieldをTripへそのまま通さない。
+- `delayMinutes`、`delayStatus`、`delaySampleCount`、`delayBasis`、realtime status、実測/推定の
+  発着時刻・行先変更・現在位置・混雑は、legs、provenance、埋込raw payloadのいずれにも保存しない。
+  scheduled値に補正済みの`departureTimeMinutes` / `arrivalTimeMinutes`を名前だけ替えて入れない。
+  経由停車駅を後でsnapshotへ追加する場合もscheduled事実のみを明示した別fieldとする。
+- 全legの出所・scheduled値・連続性とtransfersを検証する。遅延があって初めて成立する乗換を
+  「計画上成立」として採用しない。採用時の検証は将来の運行や乗換を保証しない。
+- 再読込・運行監視時は対象日の時刻表digest/識別子/停車順/時刻と現行のvalidation条件を再照合する。
+  欠落・変更・失効の再検証結果や現在の影響は外部の評価/Impactで返す。採用snapshotを無言で更新せず、
+  計画の変更は確認付きProposalとTrip revision更新を経る。独立Snapshot Repositoryは作らない。
+- legacyの選択時刻・provenance・scheduled事実が不足すれば`selected`を偽造しない。
+  原本を端末内の移行記録として保全し、Tripではunresolvedとして再検証・再採用を求める。
+  delayを引き算してscheduled値を復元したり、移行日時を過去のselectedAt/verifiedAtにしない。
+
+例えば計画09:00発に遅延10分がある場合、Tripにはscheduled 09:00だけを保存する。
+現在の見込09:10と遅延10分は外部観測、乗換への影響はTripImpactであり、表示時に関連付ける。
+#385はこの変換/保存境界と適合試験を所有し、#386は暦日時変換、#393/#394は外部観測との照合を担う。
+新しい探索器や運行状態の別正本は作らない。
 
 ### Schedule (#386)
 
@@ -489,7 +569,7 @@ Domainの拡張は依存順にmainへ入れられるが、**全変換が揃う�
 | TripPlan / TripPlanItem | Trip / ItineraryItem、旧idはmapping、item ID/順序は維持 | #385、writer切替は#388/#389 |
 | TripPlan.version / store.version | Trip.schemaVersion=2、revision=0。store v2とは別 | #389、骨格の予約は#385 |
 | TripJourneyPlan.journeys | 明示選択の証拠がある1件だけselected。複数/選択不明は候補へ退避+unresolved。先頭を自動採用しない | #385。旧1件も検証情報不十分なら再検証 |
-| Journeyのdelay付加値 | 計画scheduled時刻を投影。外部観測は別状態。不明なら原本保全+未検証 | #385、#386の暦日時変換と#393以降の観測へ接続 |
+| JourneyRouteResult / Journeyのdelay付加値 | 明示選択・計画検証の証拠が揃うものだけSelectedRailJourneyへallowlist変換。生の検索結果は保存禁止。不足は原本保全+unresolved | #385、#386の暦日時変換と#393以降の観測へ接続 |
 | Stay.options / accommodation | optionsは候補キャッシュ/移行記録へ、明示accommodationだけSnapshot | #385で分離、#400で変換完了 |
 | TripAccommodation | AccommodationSnapshot、selectedAt/observedAt不明を捏造しない | #400 |
 | TripContext.planningStage | Trip.planningState、legacy inspirationはinspiration。planning+itemsはdraft、itemsなしはdiscovery。readyや訪問済みを推定しない | #383 |
@@ -539,6 +619,8 @@ Domainの拡張は依存順にmainへ入れられるが、**全変換が揃う�
 | invalid | 重複item ID、未知schema/type、壊れたJSON、無効暦日、不正座標/価格/人数、不正Patch列 | #405と各value object担当 |
 | temporal | 4時境界、24:20、日跨ぎ、DST、時刻不明、過去Trip、シミュレーター時計非適用 | #383/#386 |
 | unknown | 存在しない時刻表、古い運行/天候、選択時刻不明、子の年齢不明、保存許諾不明 | #385/#400/#411/#414/#402 |
+| rail snapshot | 検索結果に遅延/status/補正時刻/未知fieldがあっても保存DTOへ混入しない。計画09:00/予測09:10の分離、delay前提の乗換拒否、provenance欠落はunresolved | #385 |
+| rail revalidation | 別業務日の同serviceUid、同駅再訪、時刻表digest変更/欠落、validator変更を検出。再観測でTrip snapshot/revisionは変更しない | #385/#386/#393/#394 |
 | duplicate/retry | 同じimport/同じupdate二重送信、同ID別payload、古いbaseRevision、応答消失 | #388/#389 |
 | partial failure | 1件不正でも他Tripは取込可、server成功local失敗、quota、offline、認証切れ、別tab旧書込 | #388 |
 | compatibility | 旧会話は表示可能、V2の採用状態を旧応答で上書きしない、V2 writer後に旧形式書込しない | #385/#387/#388 |

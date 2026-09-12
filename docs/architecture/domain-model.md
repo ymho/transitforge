@@ -328,6 +328,7 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 | Trip | id/schemaVersion/revision、title/summary、request、採用済みitems、planning/lifecycle | #385 / #383 / #389 |
 | TripRequest | 今回のtyped hard/soft条件、出所、PlanAssumption、TripParty | #387 / #411 |
 | ItineraryItem | transport/stay/activity、fixed/window/day/unscheduled、選択済みSnapshot | #385 / #386 / #410 / #413 |
+| SelectedRailJourney | serviceDate/安定した列車識別子・区間・scheduled時刻・乗換・採用元provenance。生のJourneyRouteResultや遅延等は保存しない | #385 / #386 |
 | Place / Money | Provider非依存identity・保存許諾付きSnapshot、原通貨の整数minor unit | #414 / #412 |
 | Candidate / Offering | 比較前の外部候補。採用済みTripとは別 | #385 / #400 / #406 |
 | Reservation | 予約状態を所有する別aggregate。宿選択はbookedではない | #398 |
@@ -339,6 +340,10 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 各fieldのmigration担当は[Trip V2契約](trip-lifecycle.md)へ集約する。
 Domain schemaVersion 2、wire `trip-api-v1`、Adapter storageVersion、編集revisionは別概念である。
 新しいV2 writerは変換と#388/#389の安全な保存・競合対策が揃ってから有効化する。
+
+鉄道は検索結果`JourneyRouteResult`、Tripの計画専用`SelectedRailJourney`、現在の
+TrainOperation/TravelEventとTripImpactを分離する。既存検索結果の型を保存型として流用せず、
+scheduled事実だけを明示変換する。現在の遅延や補正済み時刻は表示時に外部観測と関連付ける。
 
 ### `UserProfile`
 

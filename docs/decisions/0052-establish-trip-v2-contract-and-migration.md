@@ -32,6 +32,13 @@ Tripの永続状態の所有者を分けたまま、各PRが向かう最終契�
 - planningStateとlifecycleStateはTripが所有する。状態は現在地を表し、Tool/質問順を固定しない。
 - ItineraryはTrip.itemsの採用済み予定。候補集合、予約、外部観測、影響、通知を分離する。
 - 時刻・経路・乗換・制約validationは既存のshared Domain計算を再利用する。
+- 鉄道は「検索結果`JourneyRouteResult` → 採用時の計画専用`SelectedRailJourney` →
+  別管理の`TrainOperation` / `TravelEvent` / `TripImpact`」の3層とする。
+  TripにはserviceDate・serviceUid・列車番号・区間・scheduled時刻・乗換・verifiedな出所と
+  再検証情報だけを明示変換して保存する。生の検索結果やそのalias/除外型を保存型にしない。
+  遅延・現在status・補正済み発着時刻はprovenance内も含め保存禁止とする。
+  #385が独立value objectとallowlist変換・保存境界を実装し、#386の時刻計算を再利用する。
+  #393/#394の観測・影響は計画へ関連付けるだけで、再観測によるTripの無言の上書きをしない。
 - Provider Offeringと採用Snapshotは意味が異なる。予約状態は別aggregateとする。
 - Trip IDは会話IDと独立する。会話はtripId参照、会話削除はTrip削除を伴わない。
 - Domain schemaVersion、編集revision、wire version、DB storageVersionは意味を分ける。
@@ -71,6 +78,8 @@ V2へ変わったという記述にはしない。#368/#380の残務は既に#38
   #388/#389の境界で安全なCRUDとProposal対応を調整し、無防備な中間releaseを禁止する。
 - 旧データに採用経路・観測日時・条件の出所がない場合、完全な復元は証明できない。
   原本保全と要確認を返し、先頭候補の自動採用や移行時刻の偽装で穴を埋めない。
+  scheduled値やprovenance不足の旧経路はunresolvedとし、遅延の引き算で計画を捏造しない。
+  遅延時だけ成立する接続は、計画snapshotとして採用する前にscheduled時刻で検証する。
 - Providerの保存許諾が不明な値をserverへ移せない。#414/#400は再取得/利用者入力を含む
   部分移行の説明と試験を持つ。名前をmanualへ付け替えて制約を回避しない。
 - 認証方式そのものは#415で追加しない。#388は信頼できる所有者識別がなければ公開をgateする。
