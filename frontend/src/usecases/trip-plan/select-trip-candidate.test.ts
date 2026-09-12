@@ -21,6 +21,16 @@ function setup() {
 }
 
 describe("candidate adoption boundary", () => {
+  it("adopts from candidate_selection into draft, preserving refinement and independent lifecycle", async () => {
+    const { trip, request, port, selectedAt } = setup();
+    const selection = { ...trip, planningState: "candidate_selection" as const };
+    const selected = applyTripProposal(selection, await proposeCandidateSelection(selection, request, port, selectedAt));
+    expect(selected.planningState).toBe("itinerary_draft");
+    const refining = { ...selected, planningState: "itinerary_refinement" as const, lifecycleState: "in_trip" as const };
+    const updated = applyTripProposal(refining, await proposeCandidateSelection(refining, request, port, selectedAt));
+    expect(updated.planningState).toBe("itinerary_refinement");
+    expect(updated.lifecycleState).toBe("in_trip");
+  });
   it("rechecks at confirmation and never applies expired or replaced candidate facts", async () => {
     const { trip, request, port, selectedAt, record } = setup();
     const proposal = await proposeCandidateSelection(trip, request, port, selectedAt);
@@ -36,9 +46,12 @@ describe("candidate adoption boundary", () => {
     const before = structuredClone(trip);
     const proposal = await proposeCandidateSelection(trip, request, port, selectedAt);
     expect(trip).toEqual(before);
-    expect(proposal.patches).toHaveLength(1);
+    expect(proposal.patches).toHaveLength(2);
+    expect(proposal.patches[1]).toEqual({ type: "planning", state: "itinerary_draft" });
     expect(proposal.patches[0]).toMatchObject({ type: "replace", itemId: "outbound", item: { id: "outbound", detail: { status: "selected" } } });
     const adopted = applyTripProposal(trip, proposal);
+    expect(adopted.planningState).toBe("itinerary_draft");
+    expect(trip.planningState).toBe("inspiration");
     expect(adopted.items).toHaveLength(3);
     expect(adopted.id).toBe(trip.id);
     expect(JSON.stringify(adopted)).not.toMatch(/journeys|options|delayMinutes/);

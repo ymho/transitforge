@@ -4,6 +4,7 @@ import type { TripPlan, TripPlanItem } from "@raiquora/trip/trip-plan";
 import { validateTrip, type Trip } from "@raiquora/trip/trip";
 import type { ItinerarySchedule } from "@raiquora/trip/itinerary-schedule";
 import type { TripRequest } from "@raiquora/trip/trip-request";
+import type { PlanningState, LifecycleState } from "@raiquora/trip/trip-state";
 
 export interface AgentContextSnapshot {
   travelCandidates?: Record<string, unknown>[];
@@ -20,6 +21,9 @@ export interface AgentContextSnapshot {
   trip?: {
     /** V2 projections only; neither a repository nor writable AgentDecision state. */
     request?: TripRequest;
+    planningState?: PlanningState;
+    lifecycleState?: LifecycleState;
+    scheduleTruncated?: boolean;
     title: string;
     destination: string;
     adults?: number;
@@ -185,6 +189,8 @@ function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["tri
   validateTrip(trip);
   return { title: bounded(trip.title, 100) ?? "現在の旅程", destination: "未設定", considerations: [],
     request: structuredClone(trip.request),
+    planningState: trip.planningState, lifecycleState: trip.lifecycleState,
+    scheduleTruncated: trip.items.length > 24,
     schedule: trip.items.slice(0, 24).map((item) => {
       const schedule = structuredClone(item.schedule);
       if (item.type === "stay") return { itemId: item.id, type: "stay", schedule, selectionStatus: item.selection.status,

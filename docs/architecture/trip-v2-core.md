@@ -7,6 +7,7 @@
 #414によるPlaceの統合・利用箇所・保存許諾・legacy部分変換は[Place導入記録](trip-place-snapshot.md)を参照する。
 #386による共通schedule・日時validation・Context/表示projectionは[Schedule導入記録](trip-schedule.md)を参照する。
 #387による同じTripのRequest・仮定・legacy mapping・評価境界は[Request導入記録](trip-request.md)を参照する。
+#383による同じTripの計画/旅行状態・注入Clock・Proposal・legacy mappingは[状態導入記録](trip-state.md)を参照する。
 
 ## 現行モデル・利用箇所の棚卸し
 
@@ -36,9 +37,11 @@
   #414でplaceを共通PlaceSnapshotへ統合した。#400がこのselection内の宿契約を拡張し、価格・空室・画像等はその時点で扱う。
 - #386で全itemへ共通scheduleを追加した。不明時刻は明示`unscheduled`、rail/stayは計画事実のprojectionを検証する。
 - #387でrequest（constraints/assumptions、任意goal）を追加した。空Requestは条件未把握であって日帰り等のdefaultではない。
-- 未実装のstate/activity/party等を正常なdefaultで埋めない。
+- #383でplanningState/lifecycleStateを追加した。初期inspiration/pre_tripは日程確定や将来予定の証明ではない。
+- 未実装のactivity/party等を正常なdefaultで埋めない。
   別名の暫定Tripや別のItinerary正本を増やさない。
 - `TripPatch` / `TripUpdateProposal`は既存itemのreplaceと、#387で追加したrequest patchを持つ最小契約。
+  #383でplanning/lifecycle patchを追加し、候補採用とdraft化を同じ原子的Proposalで扱う。
   `applyTripProposal`は全件検証し、失敗時に元Tripを変えない。存在しない対象、ID変更、異なるitem種別は拒否。
   **これはメモリ上の確認可能な変更であり、revision/updatedAtを増やす本番writerではない。**
   #389が同じ契約へ他操作、baseRevision、mutationIdと更新時刻/CASを追加する。
@@ -87,7 +90,7 @@ scheduled発着instant）、transfers（leg参照/必要時間）、provenance�
 1. UI/AIはcandidate ID、対象item ID、task ID（宿ならProvider内の候補ID）だけ渡す。
 2. 注入Portがtask-localな既存TravelCandidateと検証情報を解決。期限/所属Trip/task/ID/重複を確認する。
 3. railは時刻表をロードして上記変換。宿はAdapterの保存許諾と候補に一致したEvidenceが必須。
-4. 1件の明示replace Proposalを作る。提案だけではTripを変更しない。
+4. 1件の明示replaceとplanning patch（#383）のProposalを作る。提案だけではTripを変更しない。
 5. `confirmCandidateSelection`で明示確認時に再取得・再検証する。プレビュー後に内容が変われば再確認へ戻す。
    selectedAtは実際の確認日時。候補A→Bもreplaceで、他itemや未選択候補を混ぜない。
 
@@ -129,7 +132,7 @@ live評価は設定済みAWSセッション期限切れで未実施。保存済�
 
 | Issue | 同じTrip/同じconverterへ追加する責務 |
 | --- | --- |
-| #383 | planning/lifecycle、実行状態。現時点ではフィールド自体を追加していない |
+| #383（導入済み） | planning/lifecycle・時刻派生評価・状態Proposal。[状態導入記録](trip-state.md)参照。item実績や自動完了は未導入 |
 | #387（導入済み） | TripRequest/constraints/PlanAssumption、最小評価、Profileと今回条件の区別。[Request導入記録](trip-request.md)参照 |
 | #400 | 宿snapshot/Offeringの最終整理、旧選択済み宿・許諾・観測のmapping |
 | #403 | 多都市、legacy/UIの対象stay選択導線と表示要約 |

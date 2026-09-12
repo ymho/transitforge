@@ -197,6 +197,9 @@ Provider固有の年齢区分変換はAdapterに閉じ、必要な時だけモ�
 
 ## 4. 計画・旅行実行の状態 (#383)
 
+#383の導入範囲・Clock評価の精度・確認境界・legacy mappingは[状態導入記録](trip-state.md)を参照する。
+現段階のready認定は#402まで拒否し、completedは明示確認のみとする。writer gateは解除しない。
+
 planningStateとlifecycleStateは**Tripにのみ保存**する。TripRequest、ConversationSession、
 AgentDecision、Viewer時計へ複写して独立更新しない。
 

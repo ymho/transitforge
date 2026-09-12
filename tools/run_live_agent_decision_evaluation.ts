@@ -285,6 +285,19 @@ function liveDecisionCases(): LiveDecisionCase[] {
     }],
   };
   return [
+    ...(["search_web", "search_weather_forecast"] as const).map((tool) => liveCase({
+      id: `trip-v2-state-free-${tool}`,
+      name: `同じcandidate_discoveryでも要求に沿って${tool}を選ぶ`,
+      userRequest: tool === "search_web" ? "今回の行き先の静かな散策スポットをWeb検索してください" : "この旅行先の旅行日の天気を調べてください",
+      tags: ["trip-v2", "planning-state", "tool-selection"], expectedTool: tool,
+      constraints: {}, requiredHardConstraintKeys: [],
+      context: { currentTrip: { ...v2Trip, planningState: "candidate_discovery", lifecycleState: "pre_trip" },
+        featureContext: { calendarDate: "2026-09-20", serviceDate: "2026-09-20" } },
+      availableTools: ["search_web", "search_weather_forecast", "ask_follow_up"],
+      toolInputChecks: tool === "search_web"
+        ? [{ toolName: tool, callIndex: 0, field: "query", pattern: "京都" }]
+        : [{ toolName: tool, callIndex: 0, field: "startDate", pattern: "^2026-09-21$" }],
+    })),
     liveCase({
       id: "trip-v2-known-request-weather",
       name: "V2の既知旅行先・日程を使い、legacy日程を再利用/再質問しない",

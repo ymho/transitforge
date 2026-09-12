@@ -6,6 +6,7 @@ import { projectStaySchedule, validateItinerarySchedule, type ItinerarySchedule 
 import { validateTripRequirement, nonemptyText, type TripRequirement } from "./trip-requirement";
 import type { TripRequest, TripConstraint, PlanAssumption } from "./trip-request";
 import { travelPreferenceLabels, type TravelPreference, type AdventureRisk } from "./travel-profile";
+import type { PlanningState } from "./trip-state";
 
 export interface TripMigrationWarning {
   itemId?: string;
@@ -13,7 +14,7 @@ export interface TripMigrationWarning {
   code: "rail-selection-unverified" | "stay-snapshot-deferred" | "schedule-invalid" |
     "transport-mode-deferred" | "activity-deferred" | "request-state-deferred" |
     "place-retention-unconfirmed" | "place-coordinate-invalid" | "place-fields-not-retained" | "place-invalid" |
-    "request-field-invalid" | "request-field-deferred";
+    "request-field-invalid" | "request-field-deferred" | "planning-state-unresolved" | "lifecycle-unverified";
   ownerIssue: number;
 }
 export interface TripMigrationResult {
@@ -112,7 +113,15 @@ export function convertLegacyTripPlan(plan: TripPlan, identity: { tripId: string
     } else throw new Error("Unknown legacy item type");
   }
   const request = mapLegacyRequest(plan, options.tripContext, warnings);
-  return { trip: createTrip(identity.tripId, plan.title, identity.createdAt, items, request),
+  const stage = isRecord(options.tripContext) ? options.tripContext.planningStage : undefined;
+  let planningState: PlanningState = "inspiration";
+  if (stage === "planning") planningState = items.length ? "itinerary_draft" : "candidate_discovery";
+  else if (stage !== "inspiration") {
+    // Missing/corrupt stage does not prove a current planning intention.
+    warnings.push({ field: "planningStage", code: "planning-state-unresolved", ownerIssue: 383 });
+  }
+  warnings.push({ field: "lifecycleState", code: "lifecycle-unverified", ownerIssue: 383 });
+  return { trip: createTrip(identity.tripId, plan.title, identity.createdAt, items, request, planningState),
     warnings, deferredItemIds, placeMappings, requiresLegacyRetention: true };
 }
 
@@ -187,7 +196,7 @@ function mapLegacyRequest(plan: TripPlan, raw: unknown, warnings: TripMigrationW
         add(field, { type: "adventure", intensity: value as 0 | 1 | 2 | 3,
           avoidedRisks: (raw.avoidedRisks === undefined ? [] : raw.avoidedRisks) as AdventureRisk[] }); break;
       case "avoidedRisks": if (raw.adventureIntensity === undefined) warning(field); break;
-      case "planningStage": warning(field, 383); break;
+      case "planningStage": break; // Trip state mapping above, never Request.
       case "companions": warning(field, 411); break;
       case "outboundDepartureTimeMinutes": case "returnArrivalTimeMinutes":
         warning(field); // No reliable place identity + zone + civil date. Never fabricate a ZonedInstant.
