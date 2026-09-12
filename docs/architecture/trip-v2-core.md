@@ -33,9 +33,9 @@
 操作ではIDを変更できない。Domain型はreadonlyで、生成/適用結果は入力とオブジェクト参照を共有しない。
 
 - transport.detailは未検証unresolved、rail selected + SelectedRailJourney、または#413の非鉄道selected + manual/provider provenance。
-- stay.selectionはunselected、または選択済み1宿。宿は最終契約の最小部分（名前、採用日時、宿泊日、出所）のみ。
-  AccommodationOffering/TripAccommodationを埋め込まず、第三の恒久宿型も追加しない。
-  #414でplaceを共通PlaceSnapshotへ統合した。#400がこのselection内の宿契約を拡張し、価格・空室・画像等はその時点で扱う。
+- stay.selectionはunselected、または選択済み1宿。#400でinlineを同一のAccommodationSnapshotへ統合した。
+  商品identity・共通PlaceSnapshot・採用日時・宿泊日・durable出所だけを保持する。
+  AccommodationOffering/TripAccommodation、価格・空室・画像・review・予約状態は埋め込まない。
 - #386で全itemへ共通scheduleを追加した。不明時刻は明示`unscheduled`、rail/stayは計画事実のprojectionを検証する。
 - #387でrequest（constraints/assumptions、任意goal）を追加した。空Requestは条件未把握であって日帰り等のdefaultではない。
 - #383でplanningState/lifecycleStateを追加した。初期inspiration/pre_tripは日程確定や将来予定の証明ではない。
@@ -106,7 +106,7 @@ V2生成日時を注入する。同じ入力/引数で同じ出力。旧IDをUUI
 
 - legacy railは1件/複数を問わずunresolved。先頭候補、delay値、移行日時で採用の証拠を補わない。
 - stayはoptionsをコピーしない。旧accommodationも現時点ではprovenance/許諾を移行できないため
-  unselected + #400警告にし、旧rawから#400が同じ入口のmappingを拡張する。
+  unselected + #400警告/deferredにする。同じ入口で利用者の目的地名だけを未選択placeへ保持し、Provider施設情報をmanualへ偽装しない。
 - #413でlegacy manual移動を同mode・両端名称のmanual計画へ接続した。不正値/noteは警告と原本保持。#410でsightseeingをActivityへ接続した。
   #414の同じconverterのPlace許諾付きmappingを使い、完全変換時だけdeferredを解消する。部分変換は警告と原本保持を残す。
   #386で日付はday/宿泊day spanへ移し、同じplaceMappingsにscheduleも返す。不正日付は警告とunscheduled。
@@ -136,7 +136,7 @@ live評価は設定済みAWSセッション期限切れで未実施。保存済�
 | --- | --- |
 | #383（導入済み） | planning/lifecycle・時刻派生評価・状態Proposal。[状態導入記録](trip-state.md)参照。item実績や自動完了は未導入 |
 | #387（導入済み） | TripRequest/constraints/PlanAssumption、最小評価、Profileと今回条件の区別。[Request導入記録](trip-request.md)参照 |
-| #400 | 宿snapshot/Offeringの最終整理、旧選択済み宿・許諾・観測のmapping |
+| #400（導入済み） | [宿泊Snapshot](trip-accommodation.md)。商品とPlace identityの分離、許諾・採用時検証、保守的legacy mapping |
 | #403 | 多都市、legacy/UIの対象stay選択導線と表示要約 |
 | #410（導入済み） | Activity、add、deferred sightseeingの部分/完全変換。[Activity導入記録](trip-activity.md)参照 |
 | #411（導入済み） / #412 | [TripParty](trip-party.md)。原通貨Money、宿/体験の価格観測は#412 |

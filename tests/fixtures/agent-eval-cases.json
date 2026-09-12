@@ -2,6 +2,18 @@
   "schemaVersion": "agent-eval-dataset-v2",
   "travelProgressScenarios": [
     {
+      "id": "Q-accommodation", "name": "候補宿を採用してcheck-in/outのpreviewを返す",
+      "userRequest": "候補candidate-aの宿A（fixture/hotel-a）をstayへ採用して、チェックイン・アウトも見せて。予約するわけではありません",
+      "tags": ["smoke", "trip-progress", "accommodation"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
+      "id": "R-accommodation-change", "name": "採用済みの宿Aを宿Bのsnapshotへ明示replaceする",
+      "userRequest": "stayの宿Aを候補candidate-bの宿B（fixture/hotel-b）へ変更してください。候補を増やすのではなく置き換えて",
+      "tags": ["trip-progress", "accommodation"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
       "id": "O-taxi", "name": "ホテルから空港へのタクシー移動を仮旅程へ追加する",
       "userRequest": "22日はホテルから空港へタクシーで移動したい。時刻はまだ決めず、移動を旅程に追加して",
       "tags": ["smoke", "trip-progress", "transport"],

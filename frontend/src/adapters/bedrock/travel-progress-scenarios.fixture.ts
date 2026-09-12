@@ -8,6 +8,7 @@ import { askProgressFixture, modelAnswer, modelTool, modelTools, progressQuestio
 import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent-runtime";
 import type { BedrockAgentResponse } from "../http/agent-api/bedrock-agent";
 import { activityCandidateFixture } from "../../usecases/trip-plan/activity-selection.fixture";
+import { accommodationSelectionFixture } from "../../usecases/trip-plan/accommodation-selection.fixture";
 import { travelPreferenceLabels, type UserProfile } from "@raiquora/trip/travel-profile";
 
 const usualFamily: UserProfile = {
@@ -25,6 +26,7 @@ const fixtureBases: Record<string, ProgressCaseId> = {
   "K-food": "C-candidate", "L-free-time": "C-candidate",
   "M-known-party": "C-candidate", "N-unknown-child-age": "C-candidate",
   "O-taxi": "C-candidate", "P-air-provisional": "C-candidate",
+  "Q-accommodation": "C-candidate", "R-accommodation-change": "C-candidate",
 };
 
 /** Synthetic conversations through the production registry, policies, evidence and presenter.
@@ -46,11 +48,22 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
   record.candidate.accommodations = [{ kind: "accommodation", provider: "fixture", providerItemId: "hotel-a", name: "評価用の森の宿A",
     checkInDate: "2026-09-21", checkOutDate: "2026-09-24", availability: "unknown" }];
   record.accommodation = { provider: "fixture", providerItemId: "hotel-a", storageAllowed: true,
+    place: { name: "評価用の森の宿A", ref: { provider: "fixture", providerPlaceId: "hotel-a" }, capturedAt: "2026-09-12T07:55:00Z",
+      sources: [{ id: "hotel-evidence", kind: "accommodation", provider: "fixture", sourceId: "hotel-a", retrievedAt: "2026-09-12T07:55:00Z", confidence: "observed" }] },
     placeRetention: { origin: "provider", provider: "fixture", storage: "permitted", allowedFields: ["ref", "name", "sources", "capturedAt"] },
     source: { id: "hotel-evidence", kind: "accommodation", provider: "fixture", sourceId: "hotel-a", retrievedAt: "2026-09-12T07:55:00Z", confidence: "observed" } };
   const port = { resolve: async (candidateId: string) => candidateId === record.candidate.id ? record : undefined,
     loadTimetables: async () => timetables };
   let trip: Trip = scenario.base === "E-past" ? fixture.trip : { ...fixture.trip, items: selectionFixture.trip.items };
+  const accommodationCase = id === "Q-accommodation" || id === "R-accommodation-change";
+  if (accommodationCase) {
+    Object.assign(record, accommodationSelectionFixture(trip.id));
+    if (id === "R-accommodation-change") {
+      trip = applyTripProposal(trip, await proposeCandidateSelection(trip,
+        { candidateId: record.candidate.id, itemId: "stay", taskId: "task-a", accommodation: { provider: "fixture", providerItemId: "hotel-a" } }, port, "2026-09-12T08:00:00Z"));
+      Object.assign(record, accommodationSelectionFixture(trip.id, "hotel-b", "評価用の宿B")); record.candidate.id = "candidate-b";
+    }
+  }
   if (id === "H-day-trip") trip = { ...trip, items: trip.items.filter((i) => i.type === "transport") };
   const partyCase = id === "M-known-party" || id === "N-unknown-child-age";
   const transportCase = id === "O-taxi" || id === "P-air-provisional";
@@ -80,7 +93,9 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
   const plan: Array<{ prompt: string; scripts: BedrockAgentResponse[]; selection?: boolean; chooseVisible?: boolean }> = [];
   if (id === "G-consecutive") plan.push({ prompt: "自然を楽しむ旅行をしたい", scripts: [modelTools(modelTool("ask_follow_up", progressQuestion))] });
   plan.push({ prompt: scenario.userRequest,
-    scripts: transportCase ? [modelTools(modelTool("propose_manual_transport", {
+    scripts: accommodationCase ? [modelTools(modelTool("propose_candidate_selection", {
+      candidateId: record.candidate.id, itemId: "stay", accommodation: { provider: "fixture", providerItemId: record.accommodation!.providerItemId },
+    }))] : transportCase ? [modelTools(modelTool("propose_manual_transport", {
       itemId: "transfer", operation: "add", title: id === "O-taxi" ? "ホテルから空港へ" : "東京から札幌へ",
       mode: id === "O-taxi" ? "taxi" : "air", origin: id === "O-taxi" ? "ホテル" : "東京", destination: id === "O-taxi" ? "空港" : "札幌",
       schedule: id === "O-taxi" ? { type: "day", date: "2026-09-22" } : { type: "unscheduled" },
@@ -114,8 +129,8 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
       getConversationContext: () => ({ messages: [...history] }),
       getCurrentTrip: () => trip,
       ...(partyCase ? { getUserProfile: () => structuredClone(usualFamily) } : {}),
-      getTravelCandidates: () => [{ id: record.candidate.id, targetItemId: "outbound", label: "評価用候補A/Bの検証済み移動", verified: true,
-        accommodation: { provider: "fixture", providerItemId: "hotel-a", targetItemId: "stay" } },
+      getTravelCandidates: () => [{ id: record.candidate.id, targetItemId: accommodationCase ? "stay" : "outbound", label: accommodationCase ? record.accommodation!.place.name : "評価用候補A/Bの検証済み移動", verified: true,
+        accommodation: { provider: "fixture", providerItemId: record.accommodation!.providerItemId, targetItemId: "stay" } },
         ...(id === "K-food" ? [{ id: activity.candidateId, targetItemId: "meal", label: "評価用の森の食堂・検証済みの食事候補", kind: "restaurant" }] : [])],
       candidateSelection: { taskId: "task-a", port },
       activitySelection: { taskId: "task-a", port: { resolve: async (candidateId) => candidateId === activity.candidateId ? [activity] : [] } },
@@ -123,9 +138,21 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
         data: { places: [{ providerPlaceId: "candidate-a", name: "候補A・評価用の森の温泉郷", summary: "森林の散策路と温泉を楽しめる架空地域", sourceUrl: "https://example.com/nature", openingHoursStatus: "unknown" }] } } }),
       onTurnObservation: (value) => { observation = value; }, storeAgentTrace: async (value) => { trace = value; },
     }, async (...args) => live ? (calls++, live(...args)) : step.scripts[calls++] ?? modelAnswer("検証した内容を案として提示します。"));
-    turns.push({ observation, trace, delivered: true, ...(selected ? { candidateSelected: { targetItemId: id === "K-food" ? "meal" : "outbound" } } : {}), modelCalls: calls });
+    turns.push({ observation, trace, delivered: true, ...(selected ? { candidateSelected: { targetItemId: accommodationCase ? "stay" : id === "K-food" ? "meal" : "outbound" } } : {}), modelCalls: calls });
     history.push({ role: "user", text: prompt }, { role: "assistant", text: typeof response === "string" ? response : response.text });
     const preview = typeof response !== "string" && "tripUpdateProposal" in response ? applyTripProposal(trip, response.tripUpdateProposal) : trip;
+    if (accommodationCase) {
+      const stay = preview.items.find((i) => i.id === "stay");
+      const text = typeof response === "string" ? response : response.text;
+      if (stay?.type !== "stay" || stay.selection.status !== "selected" ||
+          stay.selection.accommodation.providerItemId !== record.accommodation!.providerItemId ||
+          !text.includes("2026-09-22 チェックイン") || !text.includes("2026-09-24 チェックアウト") ||
+          !observation?.progress.some((p) => p.kind === "itinerary" && p.refs.includes("stay"))) invariantFailures.push("accommodation: snapshot/date preview/progress missing");
+      if (JSON.stringify(stay).match(/price|availability|bookingUrl|image|review|options|candidates|reservation/) ||
+          /12000|12,000|空室あり|予約済み/u.test(text)) invariantFailures.push("accommodation: volatile facts leaked");
+      if (preview.items.length !== original.items.length || JSON.stringify(preview.items.filter((i) => i.id !== "stay")) !== JSON.stringify(original.items.filter((i) => i.id !== "stay"))) invariantFailures.push("accommodation: unrelated items changed");
+      if (typeof response === "string" || !("tripUpdateProposal" in response) || !response.tripUpdateProposal.patches.some((p) => p.type === "replace" && p.itemId === "stay")) invariantFailures.push("accommodation: explicit replacement missing");
+    }
     if (transportCase) {
       const added = preview.items.find((i) => i.id === "transfer");
       if (added?.type !== "transport" || added.detail.status !== "selected" || added.detail.mode !== (id === "O-taxi" ? "taxi" : "air") ||

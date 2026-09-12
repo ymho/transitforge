@@ -144,7 +144,7 @@ describe("single legacy converter", () => {
     expect(result.trip).toMatchObject({ id: identity.tripId, schemaVersion: 2, revision: 0,
       items: [{ id: "rail", detail: { mode: "rail", status: "unresolved" } },
         { id: "hotel", selection: { status: "unselected" } }, { id: "sight", type: "activity", category: "sightseeing" }, { id: "walk", detail: { status: "selected", mode: "walk", provenance: { type: "manual" } } }] });
-    expect(result.deferredItemIds).toEqual(["sight"]);
+    expect(result.deferredItemIds).toEqual(["hotel", "sight"]);
     expect(result.requiresLegacyRetention).toBe(true);
     for (const field of ["journeys", "options", "delay", "selectedAt", "verifiedAt"]) expect(JSON.stringify(result.trip)).not.toContain(`"${field}`);
     expect(result.trip.request).toEqual({ constraints: [], assumptions: [] });

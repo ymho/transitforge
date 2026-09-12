@@ -26,6 +26,7 @@ export interface TripJourneyPlan {
   journeys: JourneyRouteResult[];
 }
 
+/** Legacy reader/writer contract only. New Trip V2 adopts AccommodationSnapshot, never this DTO. */
 export interface TripAccommodation {
   provider?: string;
   providerItemId?: string;

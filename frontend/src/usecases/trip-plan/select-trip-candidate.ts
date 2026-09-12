@@ -1,7 +1,6 @@
 import type { TravelCandidate } from "@raiquora/trip/travel-candidate";
-import type { ExternalSourceEvidence } from "@raiquora/trip/external-travel-information";
-import { createPlaceSnapshot, type PlaceSnapshotRetention } from "@raiquora/trip/place-snapshot";
-import { selectRailJourney, projectRailSchedule, validInstant, type RailTimetableInput, type VerifiedRailCandidate } from "@raiquora/trip/selected-rail-journey";
+import { selectAccommodation, type AccommodationSelectionEvidence } from "./select-accommodation";
+import { selectRailJourney, projectRailSchedule, validInstant, exactKeys, type RailTimetableInput, type VerifiedRailCandidate } from "@raiquora/trip/selected-rail-journey";
 import { projectStaySchedule } from "@raiquora/trip/itinerary-schedule";
 import { applyTripProposal, type Trip, type TripUpdateProposal, type ItineraryItem } from "@raiquora/trip/trip";
 
@@ -14,8 +13,7 @@ export interface CandidateSelectionPort {
     validUntil: string;
     rail?: VerifiedRailCandidate;
     /** Adapter-reviewed storage permission and evidence; an Offering alone is not permission. */
-    accommodation?: { provider: string; providerItemId: string; storageAllowed: boolean;
-      placeRetention: PlaceSnapshotRetention; source: ExternalSourceEvidence };
+    accommodation?: AccommodationSelectionEvidence;
   } | undefined>;
   loadTimetables(rail: VerifiedRailCandidate): Promise<readonly RailTimetableInput[]>;
 }
@@ -31,6 +29,9 @@ export interface CandidateSelectionRequest {
 export async function proposeCandidateSelection(
   trip: Trip, request: CandidateSelectionRequest, port: CandidateSelectionPort, selectedAt: string,
 ): Promise<TripUpdateProposal> {
+  exactKeys(request, ["candidateId", "itemId", "taskId", "accommodation"]);
+  if ([request.candidateId, request.itemId, request.taskId].some((id) => typeof id !== "string" || !id.trim())) throw new Error("Selection IDs required");
+  if (request.accommodation) exactKeys(request.accommodation, ["provider", "providerItemId"]);
   const target = trip.items.find(({ id }) => id === request.itemId);
   if (!target) throw new Error("Unknown target item");
   const resolved = await port.resolve(request.candidateId);
@@ -54,23 +55,13 @@ export async function proposeCandidateSelection(
     const offerings = resolved.candidate.accommodations.filter((value) => value.provider === key.provider && value.providerItemId === key.providerItemId);
     if (offerings.length !== 1) throw new Error("Accommodation identity is missing or ambiguous");
     const offering = offerings[0]!;
-    const source = permission.source;
-    if (source.provider !== offering.provider || source.sourceId !== offering.providerItemId) throw new Error("Accommodation evidence does not match");
-    item = { id: target.id, title: target.title, type: "stay", schedule: projectStaySchedule(offering.checkInDate, offering.checkOutDate), selection: { status: "selected", accommodation: {
-      place: createPlaceSnapshot({
-        ref: { provider: offering.provider, providerPlaceId: offering.providerItemId }, name: offering.name,
-        ...(offering.address !== undefined ? { address: offering.address } : {}),
-        ...(offering.areaName !== undefined ? { area: offering.areaName } : {}),
-        ...(offering.longitude !== undefined && offering.latitude !== undefined
-          ? { coordinate: { longitude: offering.longitude, latitude: offering.latitude } } : {}),
-        capturedAt: source.retrievedAt, sources: [source],
-      }, permission.placeRetention),
-      checkInDate: offering.checkInDate, checkOutDate: offering.checkOutDate, selectedAt,
-      sources: [{ id: source.id, kind: source.kind, provider: source.provider, sourceId: source.sourceId,
-        retrievedAt: source.retrievedAt, confidence: source.confidence }],
-    } } };
+    const accommodation = selectAccommodation(offering, permission, selectedAt);
+    // Neutral item label; the selected facility's name belongs only to the snapshot.
+    item = { id: target.id, title: "宿泊", type: "stay",
+      schedule: projectStaySchedule(accommodation.checkInDate, accommodation.checkOutDate, accommodation.place.timeZone),
+      selection: { status: "selected", accommodation } };
   } else throw new Error("Use the activity adoption boundary for this item");
-  const proposal: TripUpdateProposal = { tripId: trip.id, summary: `${target.title}の候補を採用`,
+  const proposal: TripUpdateProposal = { tripId: trip.id, summary: `${item.title}の候補を採用`,
     patches: [{ type: "replace", itemId: target.id, item },
       { type: "planning", state: trip.planningState === "itinerary_refinement" ? "itinerary_refinement" : "itinerary_draft" }] };
   applyTripProposal(trip, proposal); // Validate only. No state/storage change before explicit confirmation.

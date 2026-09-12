@@ -254,8 +254,7 @@ interface TransportItineraryItem extends ItineraryItemBase {
 type StayItineraryItem = ItineraryItemBase & {
   type: "stay";
   selection:
-    | { status: "unselected"; place?: PlaceSnapshot;
-        checkInDate?: string; checkOutDate?: string }
+    | { status: "unselected"; place?: PlaceSnapshot }
     | { status: "selected"; accommodation: AccommodationSnapshot };
 };
 interface ActivityItineraryItem extends ItineraryItemBase {
@@ -421,23 +420,30 @@ Providerの保存許諾は型のvalidityとは別であり、検索結果やモ�
 
 ### Offeringと採用時Snapshot (#400)
 
-`AccommodationOffering`は外部検索の現在候補、`AccommodationSnapshot`は採用した当時の記録。
-共通の値オブジェクト（PlaceSnapshot、Money、source reference）を再利用し、
-`TripAccommodation`を第3の同等型として残さない。Snapshotは以下を持つ。
+`AccommodationOffering`は外部検索の現在候補、`AccommodationSnapshot`は採用した当時の計画記録。
+#400で同じselected stayのinline sliceを`modules/trip/domain/accommodation-snapshot.ts`へ統合した。
+共通PlaceSnapshotとExternalSourceEvidenceを再利用し、`TripAccommodation`はlegacy reader/writerに限定する。
+Snapshotは以下のfieldだけを持つ。Moneyは#412、Reservationは#398であり、本契約へ暫定値を加えない。
 
 | 項目 | 内容 |
 | --- | --- |
-| 識別 | `provider`/`providerItemId`（取得・保存可能な場合）、`place: PlaceSnapshot` |
-| 採用 | `selectedAt`（新しい選択では必須、legacy不明は省略+移行警告）、`checkInDate`/`checkOutDate` |
-| 価格 | 任意`priceObservation: PriceObservation` |
-| 空室 | 任意`availabilityObservation`（statusとobservedAt、対象日・人数条件、Evidence） |
-| 根拠 | `sources: ExternalSourceEvidence[]`。runtime Evidence IDだけでは保存しない |
-| 導線 | 保存許諾・安全なURLを満たす任意`bookingUrl`/画像参照。Agentへ原則送信しない |
+| 識別 | 必須`provider`/`providerItemId`は宿泊商品identity。必須`place: PlaceSnapshot`の施設identityとは別 |
+| 採用 | 必須`selectedAt`、`checkInDate`/`checkOutDate`（実在日付、checkIn < checkOut） |
+| 根拠 | 必須の非空`sources: ExternalSourceEvidence[]`。accommodation/observed、Providerとdurable sourceIdが商品identityに一致 |
+
+`source.retrievedAt <= selectedAt <= candidate.validUntil`と、出所の有効期間がある場合はその範囲を採用時に検証する。
+価格・空室・bookingUrl・画像・review・予約状態/reference・rawをSnapshotへ保存しない。
+#412が必要なら同じ型へ価格観測を追加する。現在の空室を恒久的な事実にしない。
 
 新しい選択では純粋なOffering→Snapshot変換へ選択日時と許可された値を渡す。
 検索時点が不明ならunknownのまま。`selectedAt`やmigration実行日時を`observedAt`へ偽装しない。
 Provider再検索は別Observationを返し、選択Snapshotを無言で更新しない。
-Snapshotの空室/価格は現在値を保証しない。予約リンクのクリックや宿の採用をbookedにしない。
+Offeringの空室/価格は検索時の観測であり、採用後の現在値を保証しない。宿の採用をbooked/not-bookedにしない。
+宿の採用はcandidate ID→同Trip/task/期限→一意なOffering→商品Evidence/保持許諾→
+別途解決した施設Place/保持許諾→allowlist Snapshot→Proposalとする。施設IDを商品IDから生成しない。
+titleは中立な「宿泊」、宿名の正本はSnapshot.place.name。check-in/outから共通scheduleのday spanを投影する。
+legacyは証拠不足のためaccommodationの有無によらずunselected＋warning/deferredとし、採用時刻を捏造しない。
+導入範囲・preview・Context・試験は[宿泊Snapshot導入記録](trip-accommodation.md)を参照する。
 `ExperienceSnapshot` (#410)も同じ選択時点・Place・価格・出典を使い、固有情報を失わずActivityへ投影する。
 現在の#410実装はActivityのtitle/schedule/PlaceSnapshot（durable出典付き）までとし、
 独立したExperienceSnapshot/価格観測/予約状態は先行追加しない。保持できない固有情報は候補側に残す。
@@ -460,7 +466,7 @@ rate時点・sourceを別projectionへ置く。鉄道運賃を取得/推定し�
 `status: unknown | not-booked | not-required | booked | cancelled`、
 必要なら`confirmationStatus: unknown | confirmed | change-required`、Provider参照、
 任意bookedAt/予約時刻/予約管理URLを持つ。1itemに複数Reservation可。予約照合情報はprivateに保持する。
-bookingUrlはOffering/Snapshotでは「予約先」、Reservationでは「既存予約管理」の意味で区別する。
+bookingUrlはOfferingでは「予約先」、Reservationでは「既存予約管理」の意味で区別する。#400のSnapshotには保存しない。
 
 未登録Reservationはunknownでありnot-bookedを推測しない。既存宿選択からbookedを作らない。
 item削除/置換では予約を消さず、関連維持・detach・変更必要を確認する。ホテルを別施設へ置換した時に
@@ -601,8 +607,8 @@ Domainの拡張は依存順にmainへ入れられるが、**全変換が揃う�
 | TripPlan.version / store.version | Trip.schemaVersion=2、revision=0。store v2とは別 | #389、骨格の予約は#385 |
 | TripJourneyPlan.journeys | 明示選択の証拠がある1件だけselected。複数/選択不明は候補へ退避+unresolved。先頭を自動採用しない | #385。旧1件も検証情報不十分なら再検証 |
 | JourneyRouteResult / Journeyのdelay付加値 | 明示選択・計画検証の証拠が揃うものだけSelectedRailJourneyへallowlist変換。生の検索結果は保存禁止。不足は原本保全+unresolved | #385、#386の暦日時変換と#393以降の観測へ接続 |
-| Stay.options / accommodation | optionsは候補キャッシュ/移行記録へ、明示accommodationだけSnapshot | #385で分離、#400で変換完了 |
-| TripAccommodation | AccommodationSnapshot、selectedAt/observedAt不明を捏造しない | #400 |
+| Stay.options / accommodation | optionsをTripへコピーしない。明示accommodationも証拠不足ならunselected＋warning/deferred。旧原本を保持 | #385で分離、#400で契約完成 |
+| TripAccommodation | 自動selected化なし。利用者の目的地名と日程だけ未選択予定へ保持。宿名/住所等をmanualへ偽装しない | #400 |
 | TripContext.planningStage | Trip.planningState、legacy inspirationはinspiration。planning+itemsはdraft、itemsなしはdiscovery。readyや訪問済みを推定しない | #383 |
 | TripContext.destinationWish/startDate/endDate/stayNights/時刻/興味/回避/交通条件 | TripRequestのtyped constraint。出所不明はlegacy+未確認assumption、Profileを本人の確定発言にしない | #387 |
 | TripContext.pace/relativeDistancePreference/adventureIntensity/avoidedRisks | 同じTripRequestへ。相対比較の対象不明は未解決。安全制約は維持 | #387 |
