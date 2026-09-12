@@ -2373,7 +2373,7 @@ function travelResponseText(
         text: `${formatCalendarDate(plan.checkInDate)}の${plan.destination}日帰り旅行へ組み直しました。${advisory}変更内容を確認してください。`,
         tripPlanUpdate: {
           summary: `${formatCalendarDate(plan.checkInDate)}の${plan.destination}日帰り旅行へ変更`,
-          patches: tripPlanPatchesFromTravelPlan(plan),
+          patches: tripPlanPatchesFromTravelPlan(plan, currentPlan),
         },
       };
     }
@@ -2387,7 +2387,7 @@ function travelResponseText(
       text: `${formatCalendarDate(plan.checkInDate)}から${formatCalendarDate(plan.checkOutDate)}へ日程と経路を組み直しました。${advisory}${stayAdvisory}変更内容を確認してください。`,
       tripPlanUpdate: {
         summary: `${formatCalendarDate(plan.checkInDate)}から${formatCalendarDate(plan.checkOutDate)}の日程へ変更`,
-        patches: tripPlanPatchesFromTravelPlan(plan),
+        patches: tripPlanPatchesFromTravelPlan(plan, currentPlan),
       },
     };
   }
@@ -2554,10 +2554,14 @@ function travelBurdenAdvisory(
 }
 
 function tripPlanPatchesFromToolInput(value: unknown, current: TripPlan): TripPlanPatch[] {
-  if (!Array.isArray(value)) return [];
-  return value.slice(0, 12).flatMap((raw): TripPlanPatch[] => {
+  if (!Array.isArray(value) || value.length > 12) throw new Error("旅程の変更列が不正です。");
+  const patches = value.flatMap((raw): TripPlanPatch[] => {
     if (!raw || typeof raw !== "object") return [];
     const patch = raw as Record<string, unknown>;
+    if (patch.afterId !== undefined && (typeof patch.afterId !== "string" || !patch.afterId)) {
+      throw new Error("旅程の挿入位置が不正です。");
+    }
+    const afterId = typeof patch.afterId === "string" ? patch.afterId : undefined;
     if (patch.type === "metadata") {
       const title = typeof patch.title === "string" ? patch.title.trim().slice(0, 80) : undefined;
       const destination = typeof patch.destination === "string" ? patch.destination.trim().slice(0, 80) : undefined;
@@ -2584,23 +2588,17 @@ function tripPlanPatchesFromToolInput(value: unknown, current: TripPlan): TripPl
         ...(conditions ? { conditions } : {}),
       }] : [];
     }
-    const itemId = typeof patch.itemId === "string" && current.items.some((item) => item.id === patch.itemId) ? patch.itemId : undefined;
+    const itemId = typeof patch.itemId === "string" ? patch.itemId : undefined;
     if (patch.type === "remove" && itemId) return [{ type: "remove", itemId }];
     if (patch.type === "move" && itemId) {
-      const afterId = typeof patch.afterId === "string" && current.items.some((item) => item.id === patch.afterId) ? patch.afterId : undefined;
       return [{ type: "move", itemId, ...(afterId ? { afterId } : {}) }];
     }
     if (patch.type === "addSightseeing" && typeof patch.name === "string" && patch.name.trim()) {
-      const afterId = typeof patch.afterId === "string" && current.items.some((item) => item.id === patch.afterId) ? patch.afterId : undefined;
       return [{ type: "add", item: { id: `sightseeing-${crypto.randomUUID()}`, type: "sightseeing", place: { name: patch.name.trim().slice(0, 100), provider: "manual" }, ...(typeof patch.date === "string" ? { date: patch.date.slice(0, 10) } : {}) }, ...(afterId ? { afterId } : {}) }];
     }
     if (patch.type === "addMovement" && isManualMovementMode(patch.mode) &&
       typeof patch.origin === "string" && patch.origin.trim() &&
       typeof patch.destination === "string" && patch.destination.trim()) {
-      const afterId = typeof patch.afterId === "string" &&
-        current.items.some((item) => item.id === patch.afterId)
-        ? patch.afterId
-        : undefined;
       return [{
         type: "add",
         item: {
@@ -2619,6 +2617,8 @@ function tripPlanPatchesFromToolInput(value: unknown, current: TripPlan): TripPl
     }
     return [];
   });
+  if (patches.length !== value.length) throw new Error("旅程の変更列に不正な操作があります。");
+  return patches;
 }
 
 function boundedInteger(
