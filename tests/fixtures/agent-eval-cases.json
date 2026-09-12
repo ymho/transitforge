@@ -60,6 +60,18 @@
       "userRequest": "今の往路を候補Bに変更して。別の旅行は始めない",
       "tags": ["trip-progress", "refinement"],
       "thresholds": { "ttfi": 2, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
+      "id": "K-food", "name": "検証済みの食事候補を既存Tripへ追加する",
+      "userRequest": "候補activity-aの食堂を9月22日の夕食に追加して。新しいitem IDはmealにして",
+      "tags": ["smoke", "trip-progress", "activity", "refinement"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
+      "id": "L-free-time", "name": "場所なしwindowの自由時間を質問せず提案する",
+      "userRequest": "9月22日14時から16時の2時間は自由時間にして。場所は決めない。日本時間で、新しいitem IDはfreeにして",
+      "tags": ["trip-progress", "activity", "flexible-schedule"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
     }
   ],
   "cases": [

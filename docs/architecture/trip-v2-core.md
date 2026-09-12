@@ -8,6 +8,7 @@
 #386による共通schedule・日時validation・Context/表示projectionは[Schedule導入記録](trip-schedule.md)を参照する。
 #387による同じTripのRequest・仮定・legacy mapping・評価境界は[Request導入記録](trip-request.md)を参照する。
 #383による同じTripの計画/旅行状態・注入Clock・Proposal・legacy mappingは[状態導入記録](trip-state.md)を参照する。
+#410による同じunionのActivity・add・候補採用・legacy mappingは[Activity導入記録](trip-activity.md)を参照する。
 
 ## 現行モデル・利用箇所の棚卸し
 
@@ -38,7 +39,8 @@
 - #386で全itemへ共通scheduleを追加した。不明時刻は明示`unscheduled`、rail/stayは計画事実のprojectionを検証する。
 - #387でrequest（constraints/assumptions、任意goal）を追加した。空Requestは条件未把握であって日帰り等のdefaultではない。
 - #383でplanningState/lifecycleStateを追加した。初期inspiration/pre_tripは日程確定や将来予定の証明ではない。
-- 未実装のactivity/party等を正常なdefaultで埋めない。
+- #410でactivityと必要最小限のaddを追加した。場所なし・日時未定を許し、候補採用は許諾を確認する。
+- 未実装のparty等を正常なdefaultで埋めない。
   別名の暫定Tripや別のItinerary正本を増やさない。
 - `TripPatch` / `TripUpdateProposal`は既存itemのreplaceと、#387で追加したrequest patchを持つ最小契約。
   #383でplanning/lifecycle patchを追加し、候補採用とdraft化を同じ原子的Proposalで扱う。
@@ -105,8 +107,8 @@ V2生成日時を注入する。同じ入力/引数で同じ出力。旧IDをUUI
 - legacy railは1件/複数を問わずunresolved。先頭候補、delay値、移行日時で採用の証拠を補わない。
 - stayはoptionsをコピーしない。旧accommodationも現時点ではprovenance/許諾を移行できないため
   unselected + #400警告にし、旧rawから#400が同じ入口のmappingを拡張する。
-- manual移動はmode未解決 + #413警告。sightseeingは型を先取りせずdeferredItemIds + #410警告。
-  #414で同じconverterに観光Placeの許諾付き変換を追加した。Activity未導入中はplaceMappingsとして返すが別保存形式にはしない。
+- manual移動はmode未解決 + #413警告。#410でsightseeingをActivityへ接続した。
+  #414の同じconverterのPlace許諾付きmappingを使い、完全変換時だけdeferredを解消する。部分変換は警告と原本保持を残す。
   #386で日付はday/宿泊day spanへ移し、同じplaceMappingsにscheduleも返す。不正日付は警告とunscheduled。
   #387で同じ入口に旧TripContext/conditionsのRequest mappingを追加した。出所/必須度はlegacy+未確認で保持し、
   曖昧な時刻・比較対象は警告にする。元item ID/順序は原本に残り、変換できたitemのID/相対順序も維持。
@@ -136,7 +138,7 @@ live評価は設定済みAWSセッション期限切れで未実施。保存済�
 | #387（導入済み） | TripRequest/constraints/PlanAssumption、最小評価、Profileと今回条件の区別。[Request導入記録](trip-request.md)参照 |
 | #400 | 宿snapshot/Offeringの最終整理、旧選択済み宿・許諾・観測のmapping |
 | #403 | 多都市、legacy/UIの対象stay選択導線と表示要約 |
-| #410 | Activity、deferred sightseeing IDの復元 |
+| #410（導入済み） | Activity、add、deferred sightseeingの部分/完全変換。[Activity導入記録](trip-activity.md)参照 |
 | #411 / #412 | party、原通貨Money、宿/体験の価格観測 |
 | #413 | 非鉄道transport。PlaceRef/PlaceSnapshotの基礎とfield保持境界は#414で導入済み |
 | #388 / #389 | server認可/保存/取込、全Proposal/UIのrevision/CAS/冪等性、writer切替。新しいDomain converterは作らない |

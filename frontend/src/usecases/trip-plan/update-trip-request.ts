@@ -79,6 +79,7 @@ function requirementPlaces(requirement: TripConstraint["requirement"]): readonly
 }
 function adoptedPlaces(trip: Trip): readonly PlaceSnapshot[] {
   return [...trip.request.constraints.flatMap((c) => [...requirementPlaces(c.requirement)]), ...trip.items.flatMap((item) => {
+    if (item.type === "activity") return item.place ? [item.place] : [];
     if (item.type === "stay") return item.selection.status === "selected" ? [item.selection.accommodation.place] : item.selection.place ? [item.selection.place] : [];
     return item.detail.status === "selected" ? item.detail.journey.legs.flatMap((leg) => [leg.origin, leg.destination]) : [];
   })];

@@ -5,6 +5,7 @@
 [ADR 0052](../decisions/0052-establish-trip-v2-contract-and-migration.md)とする。
 
 #384の回答観測・Runtimeへの接続・評価・writer gateの実装記録は[Ask + Progress](ask-progress.md)を参照する。
+#410のActivity/add/候補採用と部分migrationは[Activity導入記録](trip-activity.md)を参照する。
 
 **これは採用する最終契約であり、V2が稼働済みという記述ではない。** #415では文書だけを変更する。
 現在稼働している型・保存処理は下表のlegacy実装である。後続Issueは本契約を同じ
@@ -431,6 +432,8 @@ Providerの保存許諾は型のvalidityとは別であり、検索結果やモ�
 Provider再検索は別Observationを返し、選択Snapshotを無言で更新しない。
 Snapshotの空室/価格は現在値を保証しない。予約リンクのクリックや宿の採用をbookedにしない。
 `ExperienceSnapshot` (#410)も同じ選択時点・Place・価格・出典を使い、固有情報を失わずActivityへ投影する。
+現在の#410実装はActivityのtitle/schedule/PlaceSnapshot（durable出典付き）までとし、
+独立したExperienceSnapshot/価格観測/予約状態は先行追加しない。保持できない固有情報は候補側に残す。
 全Provider共通の巨大Offering階層を新設しない。食事はRestaurant検索結果を同じPlace境界で採用する。
 
 ### Money (#412)

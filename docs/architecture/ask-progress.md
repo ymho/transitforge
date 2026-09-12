@@ -62,6 +62,10 @@ Traceにはaccepted/rejected、outcome、成果物の識別参照、短い例外
 | propose_candidate_selection | candidate ID/item ID → 既存CandidateSelectionPort → verified snapshot → proposeCandidateSelection → 同じTripUpdateProposal。別task/期限切れ/未検証を拒否し、採用＋itinerary_draftを原子的に提案する |
 | propose_request_assumptions | 同じTripRequestをvalidateしproposeTripRequestUpdate(..., model)へ渡す。既存条件や確認状態を上書きしない。仮定はmodel/unconfirmedのまま |
 | present_travel_progress | 当該実行でread_web_pagesが取得した本文・Evidenceと短い引用を照合し、推薦判断＋比較材料＋参照リンクを提示する。未読URL・架空引用・Evidence欠落は拒否する |
+| propose_manual_activity (#410) | 予定の意図/category/schedule → 同じActivity add/replace Proposal。Provider Place/許諾の自己申告を受け取らない |
+| propose_activity_selection (#410) | opaqueな候補ID → 信頼したActivitySelectionPort → 同定/出所/保持許諾 → retainableなActivity preview |
+
+#410のActivity詳細は[導入記録](trip-activity.md)を参照する。後続Toolは同じ実行の検証済みpreviewを参照できるが、保存はしない。
 
 引用は最大4件、1引用10〜100文字、同一URL合計100文字以内とする。モデルのsummaryは推薦判断であり、
 コードが全文の意味的正しさを証明する仕組みではない。既存Evidence/Claim validationを維持し、

@@ -11,7 +11,7 @@ Trip field、Provider、writerは追加しない。意思決定は引き続き�
 - 今回は既存`AgentTurnObservation`を集計するpure evaluatorとA〜Jの会話fixtureを追加する。
   System Prompt、Tool descriptor、検索、Trip生成・保存は変えない。
 - #388/#389のwriter gate、#390の採用UI、in-trip #396、ready #402は後続のまま。
-  V2 `add`は未導入なので今回のV2シナリオは既存の`replace`でpreviewを作る。
+  #391時点のV2シナリオは既存の`replace`でpreviewを作る。#410で同じdetectorへActivity add/replaceを追加した。
 
 ## 指標とturn counting
 
@@ -52,6 +52,8 @@ selection→draftを達成する（無関係なitemの更新では不可）。�
 - V2 replaceはselected railの非空legs、またはselected accommodationの場所を持つものを
   trip_proposal+itineraryとする。Domain validationを通過したpreviewが前提であり再検証器を作らない。
   unresolved placeholder、planning/request/assumptionだけでは不可。
+- #410のActivity add/replaceはtitle/category/scheduleと任意placeを公開previewしたときitineraryとする。
+  場所なし自由時間も可。内部Tool成功だけ、hidden/未公開失敗結果は数えない。
 - `progressSources`は検証済みEvidence参照を持つgrounded_decision。単なる文章・引用数から
   具体候補名や複数方向性を推測してTTFCへ昇格させない。
 
@@ -87,6 +89,8 @@ H/I/Jはverified candidate解決Portと既存対象itemが既にある条件の�
 | H | 具体的な日帰り先/日程/検証済み候補 | TTFI <=2（scriptedは1） |
 | I | 複数日、移動と宿を同じ応答で採用提案 | TTFI <=2、selected stay必須 |
 | J | 既存itemのrefinement、候補Bへreplace | TTFI <=2、具体変更、refinement維持 |
+| K (#410) | 既存Tripへverified食事候補をadd | TTFI <=1、refinement、既存item不変 |
+| L (#410) | 場所なしwindow自由時間をadd | TTFI <=1、質問なし、fake Place/fixedなし |
 
 選択直後の応答は1 turn以内のdraftが必要。普通の質問のみならfail。
 safety/hard_constraint_unknown/tool_input_missingはraw指標から消さず、turn番号とreasonを別集計する。
@@ -133,8 +137,8 @@ npm run eval:agent:decision:live -- --suite trip-progress --case C-candidate --o
 ```
 
 - Unit: turnの1-based計算、選択別集計、hidden/空/状態のみの負例、例外と欠測、27通りの短いsequence invariantをhard gate。
-- Smoke: 保存済み12ケースの6指標＋従来A/G＋Trip Progress A/C/Gをhard gate。
-- Full: 保存済み42ケース＋従来A〜G＋Trip Progress A〜Jをhard gate。実モデル品質を証明するものではない。
+- Smoke: 保存済み12ケースの6指標＋従来A/G＋Trip Progress A/C/G/Kをhard gate。
+- Full: 保存済み42ケース＋従来A〜G＋Trip Progress A〜Lをhard gate。実モデル品質を証明するものではない。
 - Live: 同じproduction registry/presenterとsynthetic Providerを使い、実モデルが自由にToolを選ぶ。
   閾値の微差はWARN、Domain/fixture契約違反はfail、認証/Provider失敗は未完了の非0終了。
   自由選択なのでGで最初から進展する場合もあり、raw askOnlyTurnsから実際のカバレッジを確認する。

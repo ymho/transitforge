@@ -41,10 +41,18 @@ export interface StayItineraryItem extends ItineraryItemBase {
       readonly sources: readonly ExternalSourceEvidence[];
     } };
 }
-export type ItineraryItem = TransportItineraryItem | StayItineraryItem;
+export const activityCategories = ["sightseeing", "food", "experience", "event", "shopping", "relaxation", "free-time", "other"] as const;
+export type ActivityCategory = typeof activityCategories[number];
+export interface ActivityItineraryItem extends ItineraryItemBase {
+  readonly type: "activity";
+  readonly category: ActivityCategory;
+  readonly place?: PlaceSnapshot;
+}
+export type ItineraryItem = TransportItineraryItem | StayItineraryItem | ActivityItineraryItem;
 
 /** Minimal candidate-adoption patch. #389 extends this same contract with revisions and other operations. */
 export type TripPatch = { readonly type: "replace"; readonly itemId: string; readonly item: ItineraryItem }
+  | { readonly type: "add"; readonly item: ItineraryItem; readonly afterId?: string }
   | { readonly type: "request"; readonly request: TripRequest }
   | { readonly type: "planning"; readonly state: PlanningState }
   | { readonly type: "lifecycle"; readonly state: LifecycleState; readonly basis: "schedule" | "user_confirmation" };
@@ -74,7 +82,7 @@ export function validateTrip(trip: Trip): void {
 }
 
 function validateItem(item: ItineraryItem): void {
-  if (!item.id || typeof item.title !== "string") throw new Error("Invalid itinerary identity");
+  if (typeof item.id !== "string" || !item.id.trim() || typeof item.title !== "string") throw new Error("Invalid itinerary identity");
   validateItinerarySchedule(item.schedule);
   if (item.type === "transport") {
     exactKeys(item, ["id", "title", "type", "detail", "schedule"]);
@@ -110,6 +118,10 @@ function validateItem(item: ItineraryItem): void {
           !validInstant(source.retrievedAt) || source.confidence !== "observed" ||
           Date.parse(source.retrievedAt) > Date.parse(stay.selectedAt)) throw new Error("Invalid accommodation source");
     });
+  } else if (item.type === "activity") {
+    exactKeys(item, ["id", "title", "type", "category", "place", "schedule"]);
+    if (!item.title.trim() || !activityCategories.includes(item.category)) throw new Error("Invalid activity");
+    if (item.place !== undefined) validatePlaceSnapshot(item.place);
   } else throw new Error("Unsupported itinerary type");
 }
 
@@ -124,6 +136,15 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
   let planningState = trip.planningState;
   let lifecyclePatch: Extract<TripPatch, { type: "lifecycle" }> | undefined;
   for (const patch of proposal.patches) {
+    if (patch.type === "add") {
+      exactKeys(patch, ["type", "item", "afterId"]);
+      validateItem(patch.item);
+      if (items.some(({ id }) => id === patch.item.id)) throw new Error("Duplicate itinerary item ID");
+      const after = patch.afterId === undefined ? items.length - 1 : items.findIndex(({ id }) => id === patch.afterId);
+      if (patch.afterId !== undefined && (typeof patch.afterId !== "string" || !patch.afterId.trim() || after < 0)) throw new Error("Unknown insertion reference");
+      items.splice(after + 1, 0, patch.item);
+      continue;
+    }
     if (patch.type === "planning") {
       exactKeys(patch, ["type", "state"]);
       validatePlanningState(patch.state);

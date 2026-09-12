@@ -7,11 +7,13 @@ import { evaluateTravelProgress, type TravelProgressScenario, type TravelProgres
 import { askProgressFixture, modelAnswer, modelTool, modelTools, progressQuestion, progressSource, type ProgressCaseId } from "./ask-progress-scenarios.fixture";
 import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent-runtime";
 import type { BedrockAgentResponse } from "../http/agent-api/bedrock-agent";
+import { activityCandidateFixture } from "../../usecases/trip-plan/activity-selection.fixture";
 
 const fixtureBases: Record<string, ProgressCaseId> = {
   "A-vague": "A-vague", "B-known-region": "B-known-region", "C-candidate": "C-candidate",
   "D-known-request": "D-known-request", "E-past": "E-past", "F-hard-unknown": "F-hard-unknown",
   "G-consecutive": "G-consecutive", "H-day-trip": "C-candidate", "I-multi-day": "C-candidate", "J-refinement": "C-candidate",
+  "K-food": "C-candidate", "L-free-time": "C-candidate",
 };
 
 /** Synthetic conversations through the production registry, policies, evidence and presenter.
@@ -40,9 +42,11 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
   let trip: Trip = scenario.base === "E-past" ? fixture.trip : { ...fixture.trip, items: selectionFixture.trip.items };
   if (id === "H-day-trip") trip = { ...trip, items: trip.items.filter((i) => i.type === "transport") };
   const adoption = (candidateId = "candidate-a") => modelTools(modelTool("propose_candidate_selection", { candidateId, itemId: "outbound" }));
-  if (id === "J-refinement") {
+  if (["J-refinement", "K-food", "L-free-time"].includes(id)) {
     trip = { ...applyTripProposal(trip, await proposeCandidateSelection(trip,
       { taskId: "task-a", candidateId: "candidate-a", itemId: "outbound" }, port, "2026-09-12T08:00:00Z")), planningState: "itinerary_refinement" };
+  }
+  if (id === "J-refinement") {
     record.candidate.id = "candidate-b"; record.rail!.candidateId = "candidate-b";
     record.rail!.verifiedJourneyRef = "task-a/search-2/result-1";
     record.rail!.journey.legs[0]!.trainNumber = "9M";
@@ -52,6 +56,7 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
     record.rail!.legReferences.forEach((ref) => { ref.contentDigest = "sha256:fixture-b"; });
   }
   const original = structuredClone(trip);
+  const activity = activityCandidateFixture(trip.id);
   const research = [...fixture.scripts];
   if (!["C-candidate", "E-past"].includes(scenario.base)) {
     // Keep #425's grounded Web decision and add a genuine typed visible candidate result.
@@ -60,11 +65,16 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
   const plan: Array<{ prompt: string; scripts: BedrockAgentResponse[]; selection?: boolean; chooseVisible?: boolean }> = [];
   if (id === "G-consecutive") plan.push({ prompt: "自然を楽しむ旅行をしたい", scripts: [modelTools(modelTool("ask_follow_up", progressQuestion))] });
   plan.push({ prompt: scenario.userRequest,
-    scripts: id === "I-multi-day" ? [modelTools(
+    scripts: id === "K-food" ? [modelTools(modelTool("propose_activity_selection", { candidateId: "activity-a", operation: "add", itemId: "meal",
+      schedule: { type: "day", date: "2026-09-22" } }))] : id === "L-free-time" ? [modelTools(modelTool("propose_manual_activity", {
+        itemId: "free", operation: "add", title: "自由時間", category: "free-time", schedule: { type: "window",
+          earliestStart: { at: "2026-09-22T14:00:00+09:00", timeZone: "Asia/Tokyo" },
+          latestEnd: { at: "2026-09-22T16:00:00+09:00", timeZone: "Asia/Tokyo" }, durationMinutes: 120 },
+      }))] : id === "I-multi-day" ? [modelTools(
       modelTool("propose_candidate_selection", { candidateId: "candidate-a", itemId: "outbound" }, "rail"),
       modelTool("propose_candidate_selection", { candidateId: "candidate-a", itemId: "stay", accommodation: { provider: "fixture", providerItemId: "hotel-a" } }, "hotel"))] :
       id === "J-refinement" ? [adoption("candidate-b")] : research,
-    selection: scenario.base === "C-candidate" });
+    selection: scenario.base === "C-candidate" && id !== "L-free-time" });
   if (id === "B-known-region" || id === "D-known-request") {
     plan.push({ prompt: "提示された候補Aを選びます。具体的な旅程を見たい", scripts: [adoption()], chooseVisible: true });
   }
@@ -82,15 +92,27 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
       getConversationContext: () => ({ messages: [...history] }),
       getCurrentTrip: () => trip,
       getTravelCandidates: () => [{ id: record.candidate.id, targetItemId: "outbound", label: "評価用候補A/Bの検証済み移動", verified: true,
-        accommodation: { provider: "fixture", providerItemId: "hotel-a", targetItemId: "stay" } }],
+        accommodation: { provider: "fixture", providerItemId: "hotel-a", targetItemId: "stay" } },
+        ...(id === "K-food" ? [{ id: activity.candidateId, targetItemId: "meal", label: "評価用の森の食堂・検証済みの食事候補", kind: "restaurant" }] : [])],
       candidateSelection: { taskId: "task-a", port },
+      activitySelection: { taskId: "task-a", port: { resolve: async (candidateId) => candidateId === activity.candidateId ? [activity] : [] } },
       searchPlaceMedia: async () => ({ result: { status: "available", freshness: "fresh", evidence: [{ ...progressSource, kind: "place" }],
         data: { places: [{ providerPlaceId: "candidate-a", name: "候補A・評価用の森の温泉郷", summary: "森林の散策路と温泉を楽しめる架空地域", sourceUrl: "https://example.com/nature", openingHoursStatus: "unknown" }] } } }),
       onTurnObservation: (value) => { observation = value; }, storeAgentTrace: async (value) => { trace = value; },
     }, async (...args) => live ? (calls++, live(...args)) : step.scripts[calls++] ?? modelAnswer("検証した内容を案として提示します。"));
-    turns.push({ observation, trace, delivered: true, ...(selected ? { candidateSelected: { targetItemId: "outbound" } } : {}), modelCalls: calls });
+    turns.push({ observation, trace, delivered: true, ...(selected ? { candidateSelected: { targetItemId: id === "K-food" ? "meal" : "outbound" } } : {}), modelCalls: calls });
     history.push({ role: "user", text: prompt }, { role: "assistant", text: typeof response === "string" ? response : response.text });
     const preview = typeof response !== "string" && "tripUpdateProposal" in response ? applyTripProposal(trip, response.tripUpdateProposal) : trip;
+    if (id === "K-food" || id === "L-free-time") {
+      const added = preview.items.find((i) => i.id === (id === "K-food" ? "meal" : "free"));
+      const patches = typeof response !== "string" && "tripUpdateProposal" in response ? response.tripUpdateProposal.patches : [];
+      if (!added || added.type !== "activity" || !patches.some((p) => p.type === "add" && p.item.id === added.id) ||
+          preview.planningState !== "itinerary_refinement") invariantFailures.push("activity: add/refinement preview missing");
+      if (id === "K-food" && (added?.type !== "activity" || added.category !== "food" || added.place?.ref?.providerPlaceId !== "restaurant-a")) invariantFailures.push("food: resolved place missing");
+      if (id === "L-free-time" && (added?.type !== "activity" || added.category !== "free-time" || added.place !== undefined ||
+          added.schedule.type !== "window" || added.schedule.durationMinutes !== 120 || observation?.outcome !== "progress")) invariantFailures.push("free-time: fake place/fixed time or unnecessary question");
+      if (JSON.stringify(preview.items.filter((i) => i.id !== added?.id)) !== JSON.stringify(original.items)) invariantFailures.push("activity: changed existing items");
+    }
     if (id === "I-multi-day" && !preview.items.some((i) => i.type === "stay" && i.selection.status === "selected")) invariantFailures.push("multi-day: selected stay preview missing");
     if (id === "J-refinement" && (preview.planningState !== "itinerary_refinement" || JSON.stringify(preview.items) === JSON.stringify(trip.items))) invariantFailures.push("refinement: concrete replacement missing");
     if (id === "E-past" && (JSON.stringify(preview.request) !== JSON.stringify(original.request) || observation?.progress.length)) invariantFailures.push("past: changed request or false progress");

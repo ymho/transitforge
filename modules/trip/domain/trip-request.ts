@@ -77,6 +77,7 @@ function uniqueIds(values: readonly { id: string }[]): void {
 function unresolvedField(item: ItineraryItem, field: "schedule" | "place" | "selection"): boolean {
   if (field === "schedule") return item.schedule.type === "unscheduled";
   if (item.type === "transport") return item.detail.status === "unresolved";
+  if (item.type === "activity") return item.place === undefined;
   return item.selection.status === "unselected" && (field !== "place" || item.selection.place === undefined);
 }
 

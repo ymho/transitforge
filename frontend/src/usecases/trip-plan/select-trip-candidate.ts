@@ -45,7 +45,7 @@ export async function proposeCandidateSelection(
     }
     const journey = selectRailJourney(resolved.rail, await port.loadTimetables(resolved.rail), selectedAt);
     item = { id: target.id, title: target.title, type: "transport", schedule: projectRailSchedule(journey), detail: { mode: "rail", status: "selected", journey } };
-  } else {
+  } else if (target.type === "stay") {
     const key = request.accommodation;
     const permission = resolved.accommodation;
     if (!key || !permission?.storageAllowed || permission.provider !== key.provider || permission.providerItemId !== key.providerItemId) {
@@ -69,7 +69,7 @@ export async function proposeCandidateSelection(
       sources: [{ id: source.id, kind: source.kind, provider: source.provider, sourceId: source.sourceId,
         retrievedAt: source.retrievedAt, confidence: source.confidence }],
     } } };
-  }
+  } else throw new Error("Use the activity adoption boundary for this item");
   const proposal: TripUpdateProposal = { tripId: trip.id, summary: `${target.title}の候補を採用`,
     patches: [{ type: "replace", itemId: target.id, item },
       { type: "planning", state: trip.planningState === "itinerary_refinement" ? "itinerary_refinement" : "itinerary_draft" }] };
