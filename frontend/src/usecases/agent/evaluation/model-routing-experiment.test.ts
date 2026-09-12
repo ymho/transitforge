@@ -61,7 +61,7 @@ describe("Agent model routing experiment", () => {
 
   it("aggregates latency tokens and call counts from bounded traces", () => {
     const report = {
-      schemaVersion: "agent-eval-report-v2" as const,
+      schemaVersion: "agent-eval-report-v3" as const,
       datasetSchemaVersion: "agent-eval-dataset-v1" as const,
       caseCount: 1,
       passedCaseCount: 1,
@@ -90,7 +90,7 @@ describe("Agent model routing experiment", () => {
 
   it("aggregates repeated benchmark traces and records the repetition count", () => {
     const report = {
-      schemaVersion: "agent-eval-report-v2" as const,
+      schemaVersion: "agent-eval-report-v3" as const,
       datasetSchemaVersion: "agent-eval-dataset-v1" as const,
       caseCount: 1,
       passedCaseCount: 1,

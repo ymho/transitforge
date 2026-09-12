@@ -51,7 +51,7 @@ function report(passed: boolean[]): AgentEvaluationReport {
     failures: value ? [] : ["failed"],
   }));
   return {
-    schemaVersion: "agent-eval-report-v2",
+    schemaVersion: "agent-eval-report-v3",
     datasetSchemaVersion: "agent-eval-dataset-v1",
     caseCount: cases.length,
     passedCaseCount: cases.filter(({ passed: value }) => value).length,

@@ -1,5 +1,6 @@
 import {
   agentEvaluationDatasetSchemaVersion,
+  travelProgressDatasetSchemaVersion,
   agentEvaluationObservationSchemaVersion,
   type AgentEvaluationCase,
   type AgentEvaluationDataset,
@@ -7,6 +8,7 @@ import {
   type AgentEvaluationObservation,
   type AgentEvaluationObservationSet,
 } from "./evaluation-contract";
+import type { TravelProgressScenario } from "./travel-progress-evaluation";
 
 const knownFeatures = new Set([
   "concierge",
@@ -18,8 +20,9 @@ const knownFeatures = new Set([
 const knownStatuses = new Set(["completed", "follow_up", "limit_reached", "failed"]);
 
 export function parseAgentEvaluationDataset(value: unknown): AgentEvaluationDataset {
-  if (!isRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "cases"]) ||
-    value.schemaVersion !== agentEvaluationDatasetSchemaVersion) {
+  if (!isRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "cases", "travelProgressScenarios"]) ||
+    (value.schemaVersion !== agentEvaluationDatasetSchemaVersion && value.schemaVersion !== travelProgressDatasetSchemaVersion) ||
+    (value.schemaVersion === agentEvaluationDatasetSchemaVersion && value.travelProgressScenarios !== undefined)) {
     throw new Error("Agent Eval datasetのschemaVersionが不正です");
   }
   if (!Array.isArray(value.cases) || value.cases.length === 0 || value.cases.length > 100) {
@@ -27,7 +30,27 @@ export function parseAgentEvaluationDataset(value: unknown): AgentEvaluationData
   }
   const cases = value.cases.map(parseCase);
   ensureUnique(cases.map(({ id }) => id), "Agent Eval case ID");
-  return { schemaVersion: agentEvaluationDatasetSchemaVersion, cases };
+  const travelProgressScenarios = value.schemaVersion === travelProgressDatasetSchemaVersion ? parseTravelProgressScenarios(value.travelProgressScenarios) : undefined;
+  ensureUnique([...cases.map(({ id }) => id), ...(travelProgressScenarios ?? []).map(({ id }) => id)], "Agent Eval case ID");
+  return { schemaVersion: value.schemaVersion, cases, ...(travelProgressScenarios ? { travelProgressScenarios } : {}) };
+}
+
+function parseTravelProgressScenarios(value: unknown): TravelProgressScenario[] {
+  if (!Array.isArray(value) || !value.length || value.length > 50) throw new Error("Trip Progress scenarios must contain 1..50 cases");
+  return value.map((s) => {
+    if (!isRecord(s) || !hasOnlyKeys(s, ["id", "name", "userRequest", "tags", "thresholds"]) ||
+        !identifier(s.id) || !text(s.name, 160) || !text(s.userRequest, 1000) || !stringList(s.tags, 12) ||
+        !isRecord(s.thresholds) || !hasOnlyKeys(s.thresholds, ["ttfc", "ttfi", "selectionToDraft", "maximumOrdinaryAskOnlyStreak"])) throw new Error("Invalid Trip Progress scenario");
+    const t = s.thresholds;
+    const limit = (n: unknown) => typeof n === "number" && Number.isSafeInteger(n) && n >= 1 && n <= 20;
+    if (!limit(t.selectionToDraft) || typeof t.maximumOrdinaryAskOnlyStreak !== "number" ||
+        !Number.isSafeInteger(t.maximumOrdinaryAskOnlyStreak) || t.maximumOrdinaryAskOnlyStreak < 0 || t.maximumOrdinaryAskOnlyStreak > 20 ||
+        (t.ttfc !== undefined && !limit(t.ttfc)) || (t.ttfi !== undefined && !limit(t.ttfi))) throw new Error("Invalid Trip Progress thresholds");
+    return { id: s.id, name: s.name, userRequest: s.userRequest, tags: [...s.tags], thresholds: {
+      selectionToDraft: t.selectionToDraft as number, maximumOrdinaryAskOnlyStreak: t.maximumOrdinaryAskOnlyStreak,
+      ...(t.ttfc === undefined ? {} : { ttfc: t.ttfc as number }), ...(t.ttfi === undefined ? {} : { ttfi: t.ttfi as number }),
+    } };
+  });
 }
 
 export function parseAgentEvaluationObservations(

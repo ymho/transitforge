@@ -56,7 +56,7 @@ export function evaluateAgentDataset(
     evaluateCase(testCase, byCase.get(testCase.id)));
   const metrics = aggregateMetrics(cases, observationSet.observations);
   return {
-    schemaVersion: "agent-eval-report-v2",
+    schemaVersion: "agent-eval-report-v3",
     datasetSchemaVersion: dataset.schemaVersion,
     caseCount: cases.length,
     passedCaseCount: cases.filter(({ passed }) => passed).length,

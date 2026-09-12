@@ -1,5 +1,67 @@
 {
-  "schemaVersion": "agent-eval-dataset-v1",
+  "schemaVersion": "agent-eval-dataset-v2",
+  "travelProgressScenarios": [
+    {
+      "id": "A-vague", "name": "曖昧な旅行希望から候補を提示する",
+      "userRequest": "9月下旬に夫婦で3泊くらい。自然があってリラックスしたい",
+      "tags": ["smoke", "trip-progress", "ambiguous-request"],
+      "thresholds": { "ttfc": 3, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
+      "id": "B-known-region", "name": "十分な条件から候補比較を経て旅程を提示する",
+      "userRequest": "京都発、9/21〜24頃、自然、ゆっくりしたい",
+      "tags": ["trip-progress", "known-conditions"],
+      "thresholds": { "ttfc": 2, "ttfi": 2, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
+      "id": "C-candidate", "name": "候補を選んだ次の応答でdraftを提示する",
+      "userRequest": "候補Aを選びます。出発時間は任せるので旅程を作って",
+      "tags": ["smoke", "trip-progress", "candidate-selection"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
+      "id": "D-known-request", "name": "Trip.requestの既知条件を聞き直さず旅程へ進む",
+      "userRequest": "その条件で候補を見たい",
+      "tags": ["trip-progress", "known-conditions"],
+      "thresholds": { "ttfc": 2, "ttfi": 2, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
+      "id": "E-past", "name": "過去Tripを将来に補正せず振り返る",
+      "userRequest": "以前の旅を振り返りたい",
+      "tags": ["trip-progress", "past-trip"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
+      "id": "F-hard-unknown", "name": "未検証hard条件と質問理由を保ちながら候補を提示する",
+      "userRequest": "18時までに京都へ帰る条件は必須。可能な候補を先に見たい",
+      "tags": ["trip-progress", "hard-constraint"],
+      "thresholds": { "ttfc": 3, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
+      "id": "G-consecutive", "name": "質問のみの応答の次に利用者に見える進展を返す",
+      "userRequest": "まだ決めていません。いま出せる候補を見たい",
+      "tags": ["smoke", "trip-progress", "ask-only-streak"],
+      "thresholds": { "ttfc": 3, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
+      "id": "H-day-trip", "name": "具体的な日帰り相談で早期に移動案を提示する",
+      "userRequest": "9月21日、候補Aの場所へ日帰り。検証済みの移動を使って具体案を見たい",
+      "tags": ["trip-progress", "day-trip"],
+      "thresholds": { "ttfi": 2, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
+      "id": "I-multi-day", "name": "複数日の移動と宿を含むdraftを提示する",
+      "userRequest": "9月21〜24日、候補Aの移動と宿Aで、宿泊を含む旅程を作って",
+      "tags": ["trip-progress", "multi-day"],
+      "thresholds": { "ttfi": 2, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
+      "id": "J-refinement", "name": "既存Tripを新規相談に戻さず候補Bで具体化する",
+      "userRequest": "今の往路を候補Bに変更して。別の旅行は始めない",
+      "tags": ["trip-progress", "refinement"],
+      "thresholds": { "ttfi": 2, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    }
+  ],
   "cases": [
     {
       "id": "direct-standard",

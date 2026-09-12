@@ -125,7 +125,9 @@ npm run eval:agent:decision:live -- --suite ask-progress --profile full --output
 
 専用の常時model callは追加しない。scriptedのmodel/tool回数はA/B/F=3/4、C=1/1、D=4/5、E=1/0、G=4/4。
 拒否後の再判断には追加callが必要になる。実環境のlatency/成功率は認証復旧後に測る。
-TTFI/TTFCの本格計測・SLOは#391、in-trip専用Contextは#396、readyの成立性証明は#402へ残す。
+TTFI/TTFC・selection→draft・連続質問の評価は#391の[Trip Progress評価](trip-progress-evaluation.md)へ追加した。
+本書のA〜G単一応答チェックは維持する。複数応答のGでは実際に1回目ask_onlyを出してから2回目を測る。
+in-trip専用Contextは#396、readyの成立性証明は#402へ残す。
 
 ## Acceptance Criteria自己レビュー
 
