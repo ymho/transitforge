@@ -4,6 +4,10 @@
 
 採用
 
+Tripへ保存するPlace identity/Snapshotの次期契約は
+[ADR 0052](0052-establish-trip-v2-contract-and-migration.md)と#414を参照する。
+検索の地点同定とは分離し、本ADRの検索結果の恒久保存に関する制約は維持する。
+
 ## 決定
 
 観光候補の地点ID 名称 座標 カテゴリはMapbox Search Box APIのPOIを正本にする

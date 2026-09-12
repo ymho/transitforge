@@ -70,3 +70,4 @@
 - [0049 AIによる直接Viewer操作を一旦停止する](0049-pause-direct-ai-viewer-operations.md)
 - [0050 観光写真をWeb画像検索で補う](0050-use-web-image-search-for-place-photos.md)
 - [0051 コンシェルジュのキャラクター機能を廃止する](0051-retire-concierge-personas.md)
+- [0052 Trip V2の正本契約と段階migrationを確定する](0052-establish-trip-v2-contract-and-migration.md)
