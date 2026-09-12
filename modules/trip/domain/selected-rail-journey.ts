@@ -179,24 +179,39 @@ export function validateSelectedRailJourney(value: SelectedRailJourney): void {
   });
 }
 
-/** Revalidation reports changed/missing inputs without modifying the adopted snapshot. */
+/** Compare current timetable facts with an adoption record, without performing another selection. */
 export function revalidateSelectedRailJourney(value: SelectedRailJourney, inputs: readonly RailTimetableInput[]): boolean {
   try {
+    // The historical record must remain valid, including its original selection chronology.
     validateSelectedRailJourney(value);
-    const rebuilt = selectRailJourney({
-      candidateId: value.provenance.verifiedJourneyRef,
-      verifiedJourneyRef: value.provenance.verifiedJourneyRef, verifiedAt: value.provenance.verifiedAt,
-      transferPace: value.provenance.transferPace,
-      journey: { departureTimeMinutes: 0, arrivalTimeMinutes: 0, transferCount: value.transfers.length,
-        legs: value.legs.map((leg) => ({ serviceUid: leg.serviceUid, trainNumber: leg.trainNumber,
-          serviceType: "", trainName: "", originStation: leg.origin.name, destinationStation: leg.destination.name,
-          departureTimeMinutes: serviceMinutes(leg.serviceDate, leg.scheduledDeparture.at),
-          arrivalTimeMinutes: serviceMinutes(leg.serviceDate, leg.scheduledArrival.at) })) },
-      legReferences: value.legs.map((leg, index) => ({
-        ...value.provenance.timetableInputs[index]!, originStopIndex: leg.originStopIndex, destinationStopIndex: leg.destinationStopIndex,
-      })),
-    }, inputs, value.selectedAt);
-    return JSON.stringify(rebuilt.legs) === JSON.stringify(value.legs) && JSON.stringify(rebuilt.transfers) === JSON.stringify(value.transfers);
+    return value.legs.every((leg, index) => {
+      const ref = value.provenance.timetableInputs[index]!;
+      const matches = inputs.filter((input) => input.sourceId === ref.sourceId &&
+        input.contentDigest === ref.contentDigest && input.index.service_date === leg.serviceDate);
+      if (matches.length !== 1) return false;
+      const input = matches[0]!;
+      if (input.index.schema_version !== "train-index-v1") return false;
+      const evidence = input.evidence;
+      // A new retrieval is normally later than verifiedAt/selectedAt. Validate its source and
+      // timestamp shape, but never compare it to historical verification or rewrite that record.
+      if (!evidence.id || evidence.kind !== "timetable" || !evidence.provider ||
+          evidence.sourceId !== input.sourceId || evidence.confidence !== "provider-schedule" ||
+          !validInstant(evidence.retrievedAt)) return false;
+      const trains = input.index.trains.filter((train) => train.service_uid === leg.serviceUid);
+      if (trains.length !== 1 || trains[0]!.train_no !== leg.trainNumber) return false;
+      const origin = trains[0]!.stops[leg.originStopIndex];
+      const destination = trains[0]!.stops[leg.destinationStopIndex];
+      if (origin?.station_name !== leg.origin.name || destination?.station_name !== leg.destination.name ||
+          origin.event !== "発" || destination.event !== "着" ||
+          origin.route_time_minutes === undefined || destination.route_time_minutes === undefined ||
+          Date.parse(scheduledInstant(leg.serviceDate, origin.route_time_minutes).at) !== Date.parse(leg.scheduledDeparture.at) ||
+          Date.parse(scheduledInstant(leg.serviceDate, destination.route_time_minutes).at) !== Date.parse(leg.scheduledArrival.at)) return false;
+      if (index === 0) return true;
+      const stationRule = Object.entries(input.stationTransferMinutes).find(([name]) =>
+        normalizeStationName(name) === normalizeStationName(leg.origin.name));
+      return requiredTransferMinutes(stationRule?.[1] ?? input.defaultTransferMinutes, value.provenance.transferPace) ===
+        value.transfers[index - 1]!.minimumTransferMinutes;
+    });
   } catch { return false; }
 }
 
@@ -206,7 +221,6 @@ function scheduledInstant(serviceDate: string, minutes: number): ScheduledRailLe
   const date = new Date(Date.parse(`${serviceDate}T00:00:00+09:00`) + minutes * 60_000);
   return { at: date.toISOString(), timeZone: "Asia/Tokyo" };
 }
-function serviceMinutes(date: string, at: string): number { return (Date.parse(at) - Date.parse(`${date}T00:00:00+09:00`)) / 60_000; }
 export function validDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/u.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 }

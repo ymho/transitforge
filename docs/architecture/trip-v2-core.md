@@ -66,6 +66,9 @@ scheduled発着instant）、transfers（leg参照/必要時間）、provenance�
   legs/provenanceもallowlistで新規構築。Trip/Patch検証でも未定義キーを拒否する。
 - `revalidateSelectedRailJourney`は入力の欠落/digest/時刻/乗換規則/validator変更を検出する。
   再検証結果はbooleanでありsnapshotを上書きしない。UI向け詳細reason/影響評価は後続。
+  選択時validationとは独立して現在の時刻表を保存済み計画と直接照合する。後日再取得したEvidenceの
+  retrievedAtが元verifiedAtより新しいこと自体は不一致ではない。元snapshotの採用/検証時刻は保持し、
+  選択時の「Evidence取得→候補検証→採用」の順序制約も緩めない。
 
 計画09:00、遅延10分の場合はsnapshotに09:00を保持する。検索時の09:10は候補/観測側、
 将来の次予定への影響はTripImpact側。予定を再観測で無言更新しない。

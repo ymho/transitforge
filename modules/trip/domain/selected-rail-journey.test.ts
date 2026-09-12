@@ -73,14 +73,47 @@ describe("SelectedRailJourney", () => {
     expect(() => selectRailJourney(candidate, inputs, selectedAt)).toThrow(/scheduled/);
   });
 
-  it.each(["digest", "policy", "missing", "schedule", "transfer-rule"])("revalidation detects %s without mutating the snapshot", (change) => {
+  it("accepts a later retrieval of the same timetable without changing adoption timestamps or either input", () => {
+    const { candidate, inputs, selectedAt } = railSelectionFixture();
+    const snapshot = selectRailJourney(candidate, inputs, selectedAt);
+    const before = structuredClone(snapshot);
+    inputs[0]!.evidence.retrievedAt = "2026-09-14T08:00:00Z";
+    const refreshedInputs = structuredClone(inputs);
+    expect(revalidateSelectedRailJourney(snapshot, inputs)).toBe(true);
+    expect(snapshot).toEqual(before);
+    expect(snapshot.selectedAt).toBe(selectedAt);
+    expect(snapshot.provenance.verifiedAt).toBe(candidate.verifiedAt);
+    expect(inputs).toEqual(refreshedInputs);
+    // Selection is a different operation: its original strict chronology must still reject this.
+    expect(() => selectRailJourney(candidate, inputs, selectedAt)).toThrow(/provenance/);
+  });
+
+  it.each(["digest", "policy", "missing", "schedule", "arrival", "transfer-rule", "station-transfer-rule",
+    "service-date", "service-uid", "train-number", "stop-index", "station", "continuity", "transfer-pace",
+    "invalid-retrieved-at", "invalid-original-verification",
+  ])("revalidation detects %s even with later evidence, without mutating the snapshot", (change) => {
     const { candidate, inputs, selectedAt } = railSelectionFixture();
     const snapshot = selectRailJourney(candidate, inputs, selectedAt);
     if (change === "policy") Object.assign(snapshot.provenance, { validationPolicyVersion: "old-policy" });
+    if (change === "transfer-pace") Object.assign(snapshot.provenance, { transferPace: "relaxed" });
+    if (change === "invalid-original-verification") Object.assign(snapshot.provenance, { verifiedAt: "2026-09-14T07:00:00Z" });
+    if (change === "continuity") {
+      Object.assign(snapshot.legs[1]!.origin, { name: "D" });
+      inputs[0]!.index.trains[1]!.stops[0]!.station_name = "D";
+    }
     const before = structuredClone(snapshot);
+    inputs[0]!.evidence.retrievedAt = "2026-09-14T08:00:00Z";
     if (change === "digest") inputs[0]!.contentDigest = "new-digest";
     if (change === "schedule") inputs[0]!.index.trains[0]!.stops[0]!.route_time_minutes = 541;
+    if (change === "arrival") inputs[0]!.index.trains[1]!.stops[1]!.route_time_minutes = 641;
     if (change === "transfer-rule") inputs[0]!.defaultTransferMinutes = 11;
+    if (change === "station-transfer-rule") inputs[0]!.stationTransferMinutes = { B: 4 };
+    if (change === "service-date") inputs[0]!.index.service_date = "2026-09-14";
+    if (change === "service-uid") inputs[0]!.index.trains[0]!.service_uid = "other-service";
+    if (change === "train-number") inputs[0]!.index.trains[0]!.train_no = "other-number";
+    if (change === "stop-index") inputs[0]!.index.trains[0]!.stops.unshift({ station_name: "X", event: "発", route_time_minutes: 530 });
+    if (change === "station") inputs[0]!.index.trains[0]!.stops[1]!.station_name = "different-station";
+    if (change === "invalid-retrieved-at") inputs[0]!.evidence.retrievedAt = "unknown";
     expect(revalidateSelectedRailJourney(snapshot, change === "missing" ? [] : inputs)).toBe(false);
     expect(snapshot).toEqual(before);
   });
