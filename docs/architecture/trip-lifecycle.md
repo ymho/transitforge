@@ -653,7 +653,7 @@ API公開・本番import UI・writerは未有効である。
 | #410 / #411 / #413 / #414 / #403 / #400 / #412 | 上記の各value object/mapper/UI。隣の型を別名で複製しない |
 | #388 / #389 | Repository/API/取込/CASと全Proposalのrevision統合。#415はDTOやDBを実装しない |
 | #402 | feasibility、保存/ready時の検証、unknown/違反のreason code。schema validationと混同しない |
-| #398 / #392 / #399 | 予約aggregate、準備/進捗、参加者/共有認可。TripPartyはアクセス権ではない |
+| #398 / #392 / #399 | 予約aggregate、[派生Readinessと独立準備リスト](trip-readiness.md)、参加者/共有認可。TripPartyはアクセス権ではない |
 | #390 | 同じTripとProposalを表示・編集するUI。別のUI Trip正本を作らない |
 | #406 | 候補のAssessment、partial resultとEvidence。#366/#376と別検索/grounding基盤を作らない |
 | #393 / #407 | Watch/Event/Impact契約、TripChanged→Watch再生成の配送。Streams/outbox選定は#407 |

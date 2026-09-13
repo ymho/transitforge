@@ -8,9 +8,12 @@ import type { TripLoadState, TripSourceState } from "./server-trip-client";
 import { validateReservationFact, bookedReservationChanges, reservationChangeKey, type ReservationFact } from "@raiquora/trip/reservation";
 import { evaluateTripFeasibility, type TripFeasibilityFacts } from "@raiquora/trip/trip-feasibility";
 import { requireFeasibleTrip, requestsReady } from "@raiquora/trip/trip-ready";
+import { projectTripReadiness } from "@raiquora/trip/trip-readiness";
+import { createChecklistWorkspaceController, type ChecklistWorkspacePort } from "./checklist-workspace-controller";
 
 /** A read/preview host, not a Repository. No default writer, legacy conversion or dual write. */
 export interface TripWorkspaceSource {
+  checklist?: ChecklistWorkspacePort;
   sourceState?: Exclude<TripSourceState, "legacy-only">;
   getLoadState?(): TripLoadState;
   subscribe?(listener: () => void): () => void;
@@ -52,7 +55,15 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
   };
   const feasibilityInput = (trip: Trip): TripFeasibilityFacts => ({ tripId: trip.id, tripRevision: trip.revision,
     reservations: reservations(), external: state()?.source.getFeasibilityExternalFacts?.() });
+  const checklist = createChecklistWorkspaceController({ trip: current, port: () => state()?.source.checklist, session: () => sessionId, publish });
   return {
+    checklist,
+    readiness() {
+      const trip = current();
+      if (!trip) return undefined;
+      const facts = feasibilityInput(trip);
+      return projectTripReadiness(trip, evaluateTripFeasibility(trip, facts, now().toISOString()), facts.reservations, checklist.items());
+    },
     current,
     reservations,
     feasibility(proposed?: Trip) {
@@ -68,6 +79,7 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
     source: () => state()?.source,
     sessionId: () => sessionId,
     attach(id: string, source: TripWorkspaceSource) {
+      checklist.forget(id);
       const trip = source.getCurrentTrip();
       if (trip) validateTrip(trip);
       sessions.set(id, { source });

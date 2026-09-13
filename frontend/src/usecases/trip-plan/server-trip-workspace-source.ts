@@ -6,6 +6,9 @@ import { validateReservationFact, type ReservationFact } from "@raiquora/trip/re
 import type { ReservationReadClient } from "./reservation-reader";
 import { requireFeasibleTrip, requestsReady } from "@raiquora/trip/trip-ready";
 import type { TripFeasibilityFacts } from "@raiquora/trip/trip-feasibility";
+import { validateChecklistItems, type TripChecklistItem } from "@raiquora/trip/trip-checklist";
+import type { ChecklistReadClient, ChecklistWriteClient } from "./checklist-reader";
+import type { ChecklistCommand } from "@raiquora/trip/checklist-edit";
 
 /** Inject only from a reviewed authenticated host, never from model/wire capability flags.
  * validateConfirmation re-resolves candidates/evidence and verifies explicit user authority.
@@ -30,15 +33,17 @@ export function createReferencedTripSource(reference: { tripId?: string; tripSou
 
 /** Memory is a fetched read view, never a local writer/cache fallback. Preview cannot save. */
 export function createServerTripWorkspaceSource(tripId: string, client: Pick<ServerTripClient, "get">, writer?: ServerTripWriter,
-  reservationReader?: ReservationReadClient, getExternalFacts?: () => TripFeasibilityFacts["external"]): TripWorkspaceSource & { refresh(): Promise<void> } {
+  reservationReader?: ReservationReadClient, getExternalFacts?: () => TripFeasibilityFacts["external"],
+  preparation?: { reader: ChecklistReadClient; writer?: ChecklistWriteClient }): TripWorkspaceSource & { refresh(): Promise<void> } {
   let current: Trip | undefined, loadState: TripLoadState = "loading", generation = 0;
   let reservations: ReservationFact[] | undefined;
+  let checklist: TripChecklistItem[] | undefined, checklistSending = false;
   let pending: TripMutationRequest | undefined, sending = false, confirming = false;
   const listeners = new Set<() => void>();
   const publish = () => { for (const listener of listeners) listener(); };
   const refresh = async () => {
     const request = ++generation;
-    current = undefined; reservations = undefined; loadState = "loading"; publish();
+    current = undefined; reservations = undefined; checklist = undefined; loadState = "loading"; publish();
     try {
       const trip = await client.get(tripId);
       if (request !== generation) return;
@@ -49,6 +54,12 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
           const facts = await reservationReader.list(tripId); facts.forEach(validateReservationFact);
           if (request === generation) reservations = structuredClone(facts);
         } catch { if (request === generation) reservations = undefined; }
+      }
+      if (preparation) {
+        try {
+          const items = await preparation.reader.list(tripId); validateChecklistItems(tripId, items);
+          if (request === generation) checklist = structuredClone(items);
+        } catch { if (request === generation) checklist = undefined; }
       }
     } catch { if (request === generation) { current = undefined; loadState = "unavailable"; } }
     if (request === generation) publish();
@@ -69,6 +80,15 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
     } finally { sending = false; }
   };
   return { sourceState: "server-v2", confirmationPersistence: writer ? "server" : undefined,
+    ...(preparation ? { checklist: { getItems: () => current && checklist ? structuredClone(checklist) : undefined,
+      ...(preparation.writer ? { async write(command: ChecklistCommand) {
+        if (!current || checklistSending || !checklist) throw new Error("準備リストを再取得してください");
+        const commandTrip = command.operation === "confirm-suggestions" ? command.proposal.tripId : command.tripId;
+        if (commandTrip !== tripId) throw new Error("対象の旅行が異なります");
+        checklistSending = true;
+        try { await preparation.writer!.execute(structuredClone(command)); }
+        finally { checklistSending = false; await refresh(); } // Even uncertain writes must re-read, no blind retry.
+      } } : {}) } } : {}),
     ...(writer ? { async confirmProposal(proposal: TripUpdateProposal, confirmation?: { reservationChangeKey: string }) {
       if (pending || sending || confirming) throw new Error("前回の保存結果を再確認してください");
       confirming = true;

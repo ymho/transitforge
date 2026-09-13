@@ -14,6 +14,7 @@ import type { GroundAccessArea, GroundAccessMatrix, GroundAccessRoute } from "@r
 import type { RestaurantSearchResult } from "@raiquora/trip/restaurant-search";
 import type { TripContext } from "@raiquora/trip/travel-profile";
 import type { TripUpdateProposal } from "@raiquora/trip/trip";
+import type { ChecklistProposal } from "@raiquora/trip/trip-checklist";
 
 export type ViewerAgentJourneyPlan = TripJourneyPlan;
 
@@ -58,6 +59,7 @@ export interface ViewerAgentContextResponse {
 }
 
 export type ViewerAgentResponse =
+  | { text: string; checklistProposal: ChecklistProposal }
   | { text: string; tripUpdateProposal: TripUpdateProposal }
   | { text: string; progressSources: Array<{ url: string; evidenceId: string }> }
   | string

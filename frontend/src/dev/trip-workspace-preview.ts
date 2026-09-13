@@ -3,6 +3,8 @@ import { createTravelCandidate } from "@raiquora/trip/travel-candidate";
 import { assessTravelCandidate } from "@raiquora/trip/assess-travel-candidate";
 import type { TripWorkspaceSource } from "../usecases/trip-plan/trip-workspace-controller";
 import { reservationStatuses, type ReservationFact } from "@raiquora/trip/reservation";
+import { previewChecklistProposal, checklistExactKey, validateChecklistItems, type TripChecklistItem } from "@raiquora/trip/trip-checklist";
+import { editChecklistItem, validateChecklistCommand } from "@raiquora/trip/checklist-edit";
 
 /** Synthetic UI data, DEV-only. Not a current forecast, actual offering, migration or persistent Trip. */
 export function tripWorkspacePreviewSource(): TripWorkspaceSource {
@@ -31,7 +33,24 @@ export function tripWorkspacePreviewSource(): TripWorkspaceSource {
   const reservations: ReservationFact[] = items.map((item, index) => ({ reservationId: `39800000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
     revision: 0, itineraryItemId: item.id, kind: item.type === "stay" ? "accommodation" : item.type,
     status: reservationStatuses[index]! }));
+  let preparation: TripChecklistItem[] = [{ id: "39200000-0000-4000-8000-000000000001", tripId: trip.id, schemaVersion: 1,
+    revision: 0, category: "connectivity", title: "SIMを準備する（サンプル）", status: "open", source: "user", archived: false }];
   return { getCurrentTrip: () => trip,
+    checklist: { getItems: () => structuredClone(preparation), async write(command) {
+      validateChecklistCommand(command);
+      if ((command.operation === "confirm-suggestions" ? command.proposal.tripId : command.tripId) !== trip.id) throw new Error("Invalid preview Trip");
+      let next = [...preparation];
+      if (command.operation === "update") {
+        const before = next.find((i) => i.id === command.id); if (!before) throw new Error("Missing checklist item");
+        next = next.map((i) => i.id === command.id ? editChecklistItem(i, command) : i);
+      } else {
+        const details = command.operation === "add" ? [command.details] : previewChecklistProposal(command.proposal, next).suggestions;
+        for (const d of details) if (!next.some((i) => checklistExactKey(i) === checklistExactKey(d))) next.push({ ...d,
+          id: command.operation === "add" ? command.id : crypto.randomUUID(), tripId: trip.id, schemaVersion: 1, revision: 0,
+          status: "open", source: command.operation === "add" ? "user" : "model", archived: false });
+      }
+      validateChecklistItems(trip.id, next); preparation = next; // DEV-only in-memory demonstration, never LocalStorage.
+    } },
     getReservationFacts: () => reservations,
     getCandidates: () => [{ candidate, assessment: assessTravelCandidate(trip, candidate, { candidateId: candidate.id }, at) }],
     confirmProposal: async (proposal) => { trip = applyTripProposal(trip, proposal); },

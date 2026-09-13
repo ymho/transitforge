@@ -8,6 +8,9 @@ import type { TripPlanItem } from "@raiquora/trip/trip-plan";
 export function observeViewerTurn(response: ViewerAgentResponse, evidence: Evidence[], exception?: AskOnlyException, asksUser = false) {
   const progress: VisibleProgress[] = [];
   if (typeof response !== "string") {
+    if ("checklistProposal" in response && response.checklistProposal.suggestions.length) {
+      progress.push({ kind: "checklist_proposal", refs: [response.checklistProposal.tripId] });
+    }
     if ("journeyPlan" in response && concreteJourney(response.journeyPlan)) {
       progress.push({ kind: "comparison", refs: ["journeyPlan"] }, { kind: "candidates", refs: ["journeyPlan"] });
     }

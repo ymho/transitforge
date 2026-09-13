@@ -9,7 +9,7 @@ export interface AskOnlyException {
   inputName?: string;
 }
 export interface VisibleProgress {
-  kind: "candidates" | "comparison" | "trip_proposal" | "itinerary" | "grounded_decision";
+  kind: "candidates" | "comparison" | "trip_proposal" | "itinerary" | "grounded_decision" | "checklist_proposal";
   refs: string[];
 }
 export interface AgentTurnObservation {

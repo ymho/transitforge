@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./trip-checklist": "./domain/trip-checklist.ts",
+    "./checklist-edit": "./domain/checklist-edit.ts",
+    "./trip-readiness": "./domain/trip-readiness.ts",
     "./trip-feasibility": "./domain/trip-feasibility.ts",
     "./trip-feasibility-contract": "./domain/trip-feasibility-contract.ts",
     "./trip-ready": "./domain/trip-ready.ts",

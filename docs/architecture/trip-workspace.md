@@ -1,5 +1,8 @@
 # Trip V2 workspace（#390）
 
+#392で[次に決めることと独立した準備リスト](trip-readiness.md)を追加した。
+Planning/Bookingは派生表示、準備のみ別resourceへ保存する。公開writerは引き続きOFF。
+
 #402で[Trip全体の成立性表示](trip-feasibility.md)を追加した。成立/不成立/未確認と該当itemの理由を表示し、
 ready変更案は変更後の評価で確認を制限する。未知を成立と見なさず、保存済みplanningStateは自動変更しない。
 

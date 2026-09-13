@@ -7,6 +7,8 @@ import { renderWorkspaceCandidates } from "./trip-workspace-candidates";
 import { renderWorkspaceProposal } from "./trip-workspace-proposal";
 import { element, control } from "./trip-workspace-elements";
 import { renderTripFeasibility } from "./trip-feasibility-view";
+import { renderTripReadiness } from "./trip-readiness-view";
+import { renderTripChecklist } from "./trip-checklist-view";
 
 /** DOM and navigation only. The supplied source owns current Trip; legacy storage is never read here. */
 export function configureTripWorkspace(options: {
@@ -27,6 +29,8 @@ export function configureTripWorkspace(options: {
   const retry = control("旅程を再読み込み", () => { void controller.source()?.retry?.(); });
   const assumptions = element("section", "trip-workspace-assumptions");
   const feasibility = element("div");
+  const readiness = element("div"), checklist = element("div");
+  let checklistKey = "";
   const days = element("div", "trip-workspace-days"), proposal = element("div"), candidates = element("div");
   const add = element("form", "trip-workspace-add"); const addLabel = element("label", "", "追加する予定 "); const addTitle = element("input");
   addTitle.required = true; addTitle.maxLength = 200; addLabel.append(addTitle);
@@ -40,7 +44,7 @@ export function configureTripWorkspace(options: {
     } catch { report("追加する予定の名称と対象を確認してください。"); }
   });
   const consult = control("＋ 予定を相談して追加", () => chat("旅程に追加する予定を相談したい"));
-  panel.append(heading, status, retry, feasibility, assumptions, days, add, consult, proposal, candidates);
+  panel.append(heading, status, retry, feasibility, readiness, checklist, assumptions, days, add, consult, proposal, candidates);
   app.append(panel, nav);
   const views = new Map<string, { scroll: number; chatScroll: number; view: "chat" | "trip"; focus?: HTMLElement }>();
   const collapsed = new Map<string, boolean>();
@@ -94,6 +98,7 @@ export function configureTripWorkspace(options: {
       title.textContent = "旅程"; summary.textContent = "";
       report(controller.loadState() === "loading" ? "サーバから旅程を読み込んでいます。" : "旅程を取得できません。認証と接続、参照先の状態を確認して再試行してください。端末の旧旅程へは切り替えていません。");
       feasibility.replaceChildren(); assumptions.replaceChildren(); days.replaceChildren(); proposal.replaceChildren(); candidates.replaceChildren();
+      readiness.replaceChildren(); checklist.replaceChildren(); checklistKey = "";
       cards.clear(); groups.clear(); previousTripId = undefined; proposalKey = candidateKey = "";
       return;
     }
@@ -105,6 +110,13 @@ export function configureTripWorkspace(options: {
     const view = tripWorkspaceProjection(trip), scroll = panel.scrollTop;
     const evaluation = controller.feasibility()!;
     feasibility.replaceChildren(renderTripFeasibility(evaluation));
+    const prepared = controller.readiness()!;
+    readiness.replaceChildren(renderTripReadiness(prepared, trip, controller.focus));
+    const nextChecklistKey = JSON.stringify([controller.sessionId(), trip, prepared.reservations, prepared.preparation, controller.checklist.items(), controller.checklist.proposal(), controller.checklist.canWrite()]);
+    if (checklistKey !== nextChecklistKey) {
+      checklistKey = nextChecklistKey;
+      checklist.replaceChildren(renderTripChecklist({ controller: controller.checklist, trip, readiness: prepared, newId: () => crypto.randomUUID(), focus: controller.focus, ask: chat, report }));
+    }
     title.textContent = view.title; summary.textContent = `${view.state}\n今回の人数: ${view.party}\n${view.places}`;
     assumptions.replaceChildren(...view.assumptions.map((a) => element("p", "trip-workspace-assumption", `⚠ 仮置き（${a.target}）: ${a.text}`)));
     const ids = new Set<string>(), dates = new Set<string>();
