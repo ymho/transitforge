@@ -127,10 +127,10 @@ describe("external travel tools", () => {
     const alerts = availableExternalInformation({ area: "島根県", alerts: [] }, [{
       id: "jma-1", kind: "safety-alert", provider: "jma", sourceUrl: "https://www.data.jma.go.jp/", retrievedAt: "2026-08-30T00:00:00Z", confidence: "observed",
     }]);
-    const searchTravelAlerts = vi.fn(async () => ({ alerts }));
+    const searchHazardAlerts = vi.fn(async () => ({ alerts }));
     const state: ExternalTravelToolState = {};
-    const output = await executeExternalTravelTool("search_travel_alerts", { area: "島根県", categories: ["warning"] }, { searchTravelAlerts }, state);
-    expect(searchTravelAlerts).toHaveBeenCalledWith({ area: "島根県", categories: ["warning"] });
+    const output = await executeExternalTravelTool("search_travel_alerts", { area: "島根県", categories: ["warning"] }, { searchHazardAlerts }, state);
+    expect(searchHazardAlerts).toHaveBeenCalledWith({ area: "島根県", categories: ["warning"] });
     expect(state.alerts).toBe(alerts);
     expect(externalTravelEvidence(output, { retrievedAt: "2026-08-30T00:00:00Z" })[0]?.subject).toBe("島根県の防災情報");
   });

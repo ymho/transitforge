@@ -4,6 +4,10 @@
 
 採用
 
+#401で公的ハザードの内部契約を`HazardAlert`へ統一した。
+[公的ハザード契約](../architecture/hazard-alert.md)を参照する。Tool/API wireは維持し、
+TripImpact・Notification・Checklist自動保存とは分離する。本ADRのProvider/取得制限は維持する。
+
 ## 決定
 
 旅行計画に不足している安全情報 鉄道駅から目的地までの移動 食事候補を次のProviderへ接続する

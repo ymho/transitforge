@@ -162,3 +162,12 @@ AC impossible itinerary / AD reservation conflict / AE unknown factsは
 違反を説明だけで消せないこと、未確認を成立へ変換しないこと、予約private値をモデルへ渡さないことを確認する。
 SmokeのTrip Progressは15件、Fullは31件（A〜AE）。既存A〜ABのTTFC/TTFI等の閾値は変更しない。
 新3件もscripted IOによる契約回帰でありLive品質の測定ではない。
+
+## #392 / #401追加ケース（現在の件数）
+
+AF ready後の準備 / AG 予約未確認 / AH 準備提案の重複は[Readiness](trip-readiness.md)を検証する。
+AI 公的ハザード≠Trip影響は[HazardAlert](hazard-alert.md)を検証する。
+現在はSmokeのTrip Progress 19件、Full 35件（A〜AI）。上記各Issue時点の件数に追加したもので、
+既存A〜AHのthresholdは変更していない。新旅程生成を要求しないAF〜AIはTTFC/TTFI=nullのまま扱う。
+AIは公的severity/Evidence/検索範囲をモデルへ渡す一方、Trip・Feasibility・準備状態不変と
+通知等の別Actionが実行されないことをproduction Runtimeのscripted回帰として確認する。

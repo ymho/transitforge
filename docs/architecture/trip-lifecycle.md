@@ -641,7 +641,7 @@ API公開・本番import UI・writerは未有効である。
 | Session.tripPlanId / session削除cascade | tripIdへmapping、会話削除とTrip削除を分離 | #388 |
 | history内TripContext/TravelPlan/TripPlanUpdate | legacy DTOとして読み取りのみ、最新Tripを復元上書きしない | #387が要求、#385が応答、#388がreader整理 |
 | bookingUrl/availability | bookedの証拠ではない。新Reservationなしならunknown | #398 |
-| TravelAlert | HazardAlert（wire移行別）。Notificationへ転用しない | #401 |
+| TravelAlert | [HazardAlert](hazard-alert.md)へ内部移行済み。既存wireを維持しNotificationへ転用しない | #401 |
 | TravelRecheckRequest（端末内明示予約） | server recheck導入時も同意/対象/期限を確認し、未知対象を捨てず保留 | #409 |
 
 ### 後続機能の境界（#415には実装しない）

@@ -17,7 +17,7 @@ PR #432をmainへマージした`c33f6d9`を基点とする。新しい永続候
 | #411 TripParty | 検証済みProvider入力との一致/対応可否を独立評価 | 年齢の推測、空席・予約の認定はしない |
 | #412 Money / PriceObservation | 同じ原通貨観測・小計を使いcoverage/basisを明示 | 暗黙FX、未取得費用のゼロ扱い禁止 |
 | OpenMeteoWeatherProvider / WeatherForecast | 同じdaily予報とExternalSourceEvidenceをread-only入力にする | grid/天気生成は変更しない |
-| JmaTravelAlertProvider / TravelAlert | 取得済み警報の存在のみ評価。空feedでもunknown | canonical Hazard/影響/通知は#401 |
+| JmaHazardAlertProvider / HazardAlert (#401) | 取得済み警報の存在のみ評価。空feedでもunknown | Trip影響/通知は#393/#394/#395 |
 | CandidateSelectionPort | resolveの短命recordにoptional assessmentFactsを追加 | 新Repositoryなし。loadTimetablesを評価から呼ばない |
 | ExternalTravelToolState | 最新の結果だけを保持し候補との対応は保証しない | 最新weatherを全候補へ無条件に結び付けない |
 | Agent Tool registry / Evidence mapper | ID-onlyの任意評価Toolを追加、既存mapperへ接続 | 取得順・追加検索・Reflectionを強制しない |
@@ -107,8 +107,8 @@ retrievedAtとvalidUntilはsource別freshnessに保持する。assessedAtで観�
 - mixed: それ以外の既知WMO code。未知codeはunknown。
 
 暑熱・強風・歩行者個別の安全性まで「良好」と保証しない。好みとの最終trade-offはモデルが説明する。
-hazardは既存TravelAlertの情報ありならpresent、未取得・空feed・範囲の網羅性不明ならunknown。
-現在の注意情報が未来の旅行日にも有効とは断定しない。severityや地理的影響の正本再設計は#401。
+hazardは[HazardAlert](hazard-alert.md)の情報ありならpresent、未取得・空feed・範囲の網羅性不明ならunknown。
+現在の注意情報が未来の旅行日にも有効とは断定しない。公的severityを候補rejectやTripImpactへ直接変換しない。
 
 鮮度はfresh/stale/unknown/unavailable。現在評価に使うweather/alert/価格/ground結果は有効期限を確認し、
 古い値や鮮度不明を現在の良好情報として使わない。計画時刻表の検証と現在観測の鮮度は別。

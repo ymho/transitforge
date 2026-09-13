@@ -852,7 +852,7 @@ function viewerToolIsAvailable(
     case "search_place_media":
       return dependencies.searchPlaceMedia !== undefined;
     case "search_travel_alerts":
-      return dependencies.searchTravelAlerts !== undefined;
+      return dependencies.searchHazardAlerts !== undefined;
     case "search_ground_access":
       return dependencies.searchGroundAccess !== undefined;
     case "search_restaurants":
@@ -1156,10 +1156,14 @@ function externalTravelDecisionSupport(
       ],
     },
     search_travel_alerts: {
+      capability: "旅行先の公的な気象・災害情報を検索する（HazardAlert）",
       suitableCases: ["旅行先の警報、台風、地震、津波、火山情報が安全判断に必要"],
       unsuitableCases: ["一般の天気予報", "情報がないことを安全保証に使う"],
       returnedEvidence: "気象庁防災情報XMLに由来する発表情報",
       freshness: "照会時点の公式発表",
+      limitations: ["areaは検索範囲でありTrip itemとの地理的影響を証明しない。公的severityからTripImpact/Notification severityを直接決めない",
+        "空feed・未取得・staleは安全を保証しない。旅行への具体的影響が未評価なら未評価と説明する",
+        "検索はread-only。Trip変更・通知送信・準備リスト保存を行わない。準備案は別のChecklistProposalと利用者確認を経る"],
     },
     search_ground_access: {
       suitableCases: ["検証済み駅とPlace間の徒歩、車、自転車の負担を確認する"],

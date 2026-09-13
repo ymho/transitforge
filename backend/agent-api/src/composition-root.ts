@@ -15,7 +15,7 @@ import { SecretsManagerMapboxSearchCredentials } from "./adapters/secrets-manage
 import { SecretsManagerBraveSearchCredentials } from "./adapters/secrets-manager-brave-search-credentials.js";
 import { BraveWebSearchProvider } from "./adapters/brave-web-search-provider.js";
 import { SafeWebPageReader } from "./adapters/safe-web-page-reader.js";
-import { JmaTravelAlertProvider } from "./adapters/jma-travel-alert-provider.js";
+import { JmaHazardAlertProvider } from "./adapters/jma-hazard-alert-provider.js";
 import { MapboxGroundAccessProvider } from "./adapters/mapbox-ground-access-provider.js";
 import { createMapboxHttpClient } from "./adapters/mapbox-http-client.js";
 import { HotPepperRestaurantProvider } from "./adapters/hot-pepper-restaurant-provider.js";
@@ -38,7 +38,7 @@ import {
   placeDetailResearchSystemPrompt,
 } from "./usecases/place-detail-research.js";
 import { createWebPageReadOperation, createWebSearchOperation } from "./usecases/web-research.js";
-import { createTravelAlertSearchOperation } from "./usecases/travel-alert-search.js";
+import { createHazardAlertSearchOperation } from "./usecases/hazard-alert-search.js";
 import { createGroundAccessSearchOperation } from "./usecases/ground-access-search.js";
 import { createRestaurantSearchOperation } from "./usecases/restaurant-search.js";
 
@@ -75,7 +75,7 @@ export function createAgentApplication(environment: RuntimeEnvironment = process
   const places = new EnrichedPlaceMediaProvider(mapboxPlaces, webImages, () => new Date(), wikipediaPlaces);
   const webSearch = new BraveWebSearchProvider({ fetch: globalThis.fetch }, webSearchCredentials);
   const webPageReader = new SafeWebPageReader({ fetch: globalThis.fetch });
-  const travelAlerts = new JmaTravelAlertProvider({ fetch: globalThis.fetch });
+  const hazardAlerts = new JmaHazardAlertProvider({ fetch: globalThis.fetch });
   const groundAccess = new MapboxGroundAccessProvider(mapboxHttp, mapboxCredentials);
   const restaurantCredentials = new SecretsManagerHotPepperCredentials(secrets, secretArn);
   const restaurants = new HotPepperRestaurantProvider({ fetch: globalThis.fetch }, restaurantCredentials);
@@ -122,7 +122,7 @@ export function createAgentApplication(environment: RuntimeEnvironment = process
     })],
     ["web_search", createWebSearchOperation(webSearch)],
     ["web_page_read", createWebPageReadOperation(webPageReader)],
-    ["travel_alert_search", createTravelAlertSearchOperation(travelAlerts)],
+    ["travel_alert_search", createHazardAlertSearchOperation(hazardAlerts)],
     ["ground_access_search", createGroundAccessSearchOperation(groundAccess)],
     ["restaurant_search", createRestaurantSearchOperation(restaurants)],
   ]);

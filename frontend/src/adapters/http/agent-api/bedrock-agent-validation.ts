@@ -1,4 +1,5 @@
 import { isPriceObservation } from "@raiquora/trip/money";
+import { validateHazardAlertInformation } from "@raiquora/trip/hazard-alert";
 import type {
   BedrockAgentContentBlock,
   BedrockAgentMessage,
@@ -17,7 +18,7 @@ import type {
   WeatherForecastSearchResponse,
   WeatherGridSearchResponse,
   PlaceMediaSearchResponse,
-  TravelAlertSearchResponse,
+  HazardAlertSearchResponse,
   GroundAccessSearchResponse,
   RestaurantSearchResponse,
 } from "./bedrock-agent-contract";
@@ -141,19 +142,10 @@ function optionalBoundedStringArray(
     value.every((item) => isBoundedString(item, maximumLength));
 }
 
-export function isTravelAlertSearchResponse(value: unknown): value is TravelAlertSearchResponse {
-  if (!isRecord(value) || !isRecord(value.alerts)) return false;
-  const information = value.alerts;
-  if (!externalInformationEnvelope(information)) return false;
-  if (information.status !== "available") return information.data === undefined;
-  return isRecord(information.data) && typeof information.data.area === "string" &&
-    Array.isArray(information.data.alerts) && information.data.alerts.length <= 12 &&
-    information.data.alerts.every((alert) => isRecord(alert) &&
-      typeof alert.providerAlertId === "string" && typeof alert.title === "string" &&
-      typeof alert.summary === "string" && typeof alert.issuedAt === "string" &&
-      typeof alert.sourceUrl === "string" &&
-      ["warning", "weather-information", "typhoon", "earthquake", "tsunami", "volcano", "other"].includes(String(alert.category)) &&
-      ["information", "advisory", "warning", "emergency", "unknown"].includes(String(alert.severity)));
+export function isHazardAlertSearchResponse(value: unknown): value is HazardAlertSearchResponse {
+  if (!isRecord(value) || Object.keys(value).some((key) => key !== "alerts")) return false;
+  try { validateHazardAlertInformation(value.alerts); return true; }
+  catch { return false; }
 }
 
 export function isGroundAccessSearchResponse(value: unknown): value is GroundAccessSearchResponse {

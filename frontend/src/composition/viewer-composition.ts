@@ -37,7 +37,7 @@ import {
   searchWeatherGrid,
   searchPlaceMedia,
   researchPlaceDetail,
-  searchTravelAlerts,
+  searchHazardAlerts,
   searchGroundAccess,
   searchRestaurants,
   searchWeb,
@@ -1274,7 +1274,7 @@ if (!token) {
                 searchAccommodations,
                 searchWeatherForecast,
                 searchPlaceMedia,
-                searchTravelAlerts,
+                searchHazardAlerts,
                 searchGroundAccess,
                 searchRestaurants,
                 resolveStationGroundPoint: (stationName) => {

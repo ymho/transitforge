@@ -65,9 +65,9 @@ export interface PlaceMediaSearchResponse {
     import("@raiquora/trip/place-media").PlaceMediaSearchResult
   >;
 }
-export interface TravelAlertSearchResponse {
+export interface HazardAlertSearchResponse {
   alerts: import("@raiquora/trip/external-travel-information").ExternalTravelInformation<
-    import("@raiquora/trip/travel-alert").TravelAlertSearchResult
+    import("@raiquora/trip/hazard-alert").HazardAlertSearchResult
   >;
 }
 export interface GroundAccessSearchResponse {

@@ -17,6 +17,7 @@ import { runFocusedItemScenario } from "./focused-item-scenarios.fixture";
 import { runReservationProgressScenario } from "./reservation-progress-scenarios.fixture";
 import { feasibilityCaseIds, runFeasibilityProgressScenario } from "./feasibility-progress-scenarios.fixture";
 import { readinessCaseIds, runReadinessProgressScenario } from "./readiness-progress-scenarios.fixture";
+import { runHazardProgressScenario } from "./hazard-progress-scenario.fixture";
 
 const usualFamily: UserProfile = {
   version: 2, home: { carAvailable: false }, companions: { usual: ["family"], children: [{ ageGroup: "preschool" }, { ageGroup: "elementary" }] },
@@ -43,6 +44,7 @@ const fixtureBases: Record<string, ProgressCaseId> = {
  * H/I/J start with the existing verified-candidate seam, not an invented V2 item-creation Tool.
  */
 export async function runTravelProgressScenario(definition: TravelProgressScenario, live?: BedrockAgentConverse) {
+  if (definition.id === "AI-hazard-not-impact") return runHazardProgressScenario(definition, live);
   if (feasibilityCaseIds.includes(definition.id)) return runFeasibilityProgressScenario(definition, live);
   if (readinessCaseIds.includes(definition.id)) return runReadinessProgressScenario(definition, live);
   if (definition.id === "AB-booked-item") return runReservationProgressScenario(definition, live);
