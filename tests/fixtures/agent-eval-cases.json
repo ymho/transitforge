@@ -2,6 +2,18 @@
   "schemaVersion": "agent-eval-dataset-v2",
   "travelProgressScenarios": [
     {
+      "id": "T-multi-city-request", "name": "3地点の希望を保持した仮の周遊Proposal",
+      "userRequest": "Vienna→Salzburg→Zürichを回りたい。まず順番を保って移動の仮案を作って。手段・日時はまだ未検討です",
+      "tags": ["trip-progress", "multi-city"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
+      "id": "U-multi-city-trip", "name": "採用済み多都市Tripを保ったまま自由時間を提案",
+      "userRequest": "今のVienna→Salzburg→Zürichの計画はそのままで、最後に自由時間を追加して。場所や時間は決めなくてよいです",
+      "tags": ["smoke", "trip-progress", "multi-city"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
       "id": "S-eur-accommodation", "name": "EURの宿の採用時価格観測を原通貨でpreviewする",
       "userRequest": "候補candidate-aの宿（fixture/hotel-a）をstayへ採用して。EURの観測価格と観測日時も見せて。予約や為替換算は不要です",
       "tags": ["smoke", "trip-progress", "money"],

@@ -27,7 +27,7 @@ converterとwriter gateの状態は[Trip V2コア導入](trip-v2-core.md)を参�
 | `modules/trip/domain/trip-plan.ts`: `TripPlan.version: 1`、採用宿と`options`、経路配列が混在 | 将来の唯一の編集正本は`Trip`。`TravelPlan`でも旧`TripPlan`でもない | #385 / #389 |
 | `trip-plan-panel.ts`と`agent-context-snapshot.ts`は`journeys[0]`を表示 | 先頭表示をユーザーの採用証拠としない。選択済み経路1件と未選択placeholderを区別 | #385 |
 | `JourneyRouteResult.legs`はdelay値・補正済み時刻も含み得る | 検索結果を直接保存せず、計画専用`SelectedRailJourney`へ明示変換する | #385 |
-| `selectTripPlanAccommodation`は全stayへ同じ宿を反映する | 選択対象item IDを指定する。多都市の他の宿を変更しない | #385 / #403 |
+| `selectTripPlanAccommodation`は全stayへ同じ宿を反映する | 選択対象item IDを指定する。多都市の他の宿を変更しない | #385のV2採用境界 / #390のUI移行。#403は地点projection |
 | `modules/trip/domain/travel-profile.ts`: `TripContext`に今回条件と`planningStage`が同居 | 今回要求は`Trip.request`、状態は`Trip`、Profileは別リソース | #383 / #387 / #411 |
 | `frontend/src/domain/travel-conversation-context.ts`: 発話・埋込文から日付/泊数/状態を解釈するlegacy helper | 新しい発話routerへ発展させない。意味解釈はBedrock、日付・時刻検証はDomain | #383 / #387 / #384 |
 | `frontend/src/usecases/trip-plan/trip-plan-repository.ts`: `plansBySessionId`、20件上限、store `version: 2`とplan `version: 1` | Trip IDで独立保存。store番号をDomain schema番号と混同しない | #388 / #389 |
@@ -622,7 +622,7 @@ Domainの拡張は依存順にmainへ入れられるが、**全変換が揃う�
 | movement/MovementMode | transport/detail union。既存otherはother、勝手にairへ推測しない | #413 |
 | sightseeing / ExperienceOffering | activity:sightseeing / activity:experience。restaurant→food、自由時間はplaceなし | #410 |
 | place.name/provider/placeId/coordinate tuple | PlaceSnapshot/Ref。longitude/latitude明示、範囲外は拒否して原本保全 | #414。旧wikipedia復元の先行修正は#404 |
-| destination | summaryDestinationへ保存。訪問地/宿泊地projectionはitemsから | #403 |
+| destination | summaryDestinationへ表示補助として保存（1〜200文字、空白のみ不可）。不正なら警告と原本保持。Request/itemsは生成しない。訪問地/宿泊地projectionは採用済みitemsから | #403 |
 | TravelPrice.amount JPY | Money.amountMinor、JPY整数は同値。価格時点不明はunknown | #412 |
 | TripPlanPatch/UpdateProposal | TripPatch/TripUpdateProposal、既存操作を安全に継承、baseRevision/mutationIdを導入 | #405が適用の整合、#389がrevision |
 | plansBySessionId / legacy単一キー | 上記create-once import→tripIdでserver保存。旧raw/復旧mappingを保持 | #388 |

@@ -10,6 +10,8 @@ import type { BedrockAgentResponse } from "../http/agent-api/bedrock-agent";
 import { activityCandidateFixture } from "../../usecases/trip-plan/activity-selection.fixture";
 import { accommodationSelectionFixture } from "../../usecases/trip-plan/accommodation-selection.fixture";
 import { travelPreferenceLabels, type UserProfile } from "@raiquora/trip/travel-profile";
+import { multiCityTrip, resolvedPlace } from "../../../../modules/trip/domain/trip-places.fixture";
+import { projectTripPlaces } from "@raiquora/trip/trip-places";
 
 const usualFamily: UserProfile = {
   version: 2, home: { carAvailable: false }, companions: { usual: ["family"], children: [{ ageGroup: "preschool" }, { ageGroup: "elementary" }] },
@@ -28,6 +30,7 @@ const fixtureBases: Record<string, ProgressCaseId> = {
   "O-taxi": "C-candidate", "P-air-provisional": "C-candidate",
   "Q-accommodation": "C-candidate", "R-accommodation-change": "C-candidate",
   "S-eur-accommodation": "C-candidate",
+  "T-multi-city-request": "C-candidate", "U-multi-city-trip": "C-candidate",
 };
 
 /** Synthetic conversations through the production registry, policies, evidence and presenter.
@@ -73,6 +76,10 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
   if (id === "H-day-trip") trip = { ...trip, items: trip.items.filter((i) => i.type === "transport") };
   const partyCase = id === "M-known-party" || id === "N-unknown-child-age";
   const transportCase = id === "O-taxi" || id === "P-air-provisional";
+  const multiCityCase = id === "T-multi-city-request" || id === "U-multi-city-trip";
+  if (multiCityCase) trip = { ...multiCityTrip(), request: { constraints: [{ id: "cities", strength: "soft", source: "user", scope: { type: "trip" },
+    requirement: { type: "destinations", places: ["Vienna", "Salzburg", "Zürich"].map((name) => resolvedPlace(name)), order: "fixed" } }], assumptions: [] },
+    ...(id === "T-multi-city-request" ? { items: [], planningState: "inspiration" as const } : {}) };
   if (partyCase) trip = { ...trip, request: { ...trip.request, party: { adults: 2, children: id === "N-unknown-child-age" ? [{}] : [],
     composition: id === "M-known-party" ? ["partner"] : ["family"], source: "user" } } };
   const adoption = (candidateId = "candidate-a") => modelTools(modelTool("propose_candidate_selection", { candidateId, itemId: "outbound" }));
@@ -99,7 +106,11 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
   const plan: Array<{ prompt: string; scripts: BedrockAgentResponse[]; selection?: boolean; chooseVisible?: boolean }> = [];
   if (id === "G-consecutive") plan.push({ prompt: "自然を楽しむ旅行をしたい", scripts: [modelTools(modelTool("ask_follow_up", progressQuestion))] });
   plan.push({ prompt: scenario.userRequest,
-    scripts: accommodationCase ? [modelTools(modelTool("propose_candidate_selection", {
+    scripts: multiCityCase ? [id === "T-multi-city-request" ? modelTools(
+      modelTool("propose_manual_transport", { itemId: "leg1", operation: "add", title: "Vienna → Salzburg（手段・時刻未検討）", mode: "other", origin: "Vienna", destination: "Salzburg", schedule: { type: "unscheduled" } }, "first"),
+      modelTool("propose_manual_transport", { itemId: "leg2", operation: "add", afterId: "leg1", title: "Salzburg → Zürich（手段・時刻未検討）", mode: "other", origin: "Salzburg", destination: "Zürich", schedule: { type: "unscheduled" } }, "second"),
+    ) : modelTools(modelTool("propose_manual_activity", { itemId: "free", operation: "add", title: "自由時間", category: "free-time", schedule: { type: "unscheduled" } }))]
+    : accommodationCase ? [modelTools(modelTool("propose_candidate_selection", {
       candidateId: record.candidate.id, itemId: "stay", accommodation: { provider: "fixture", providerItemId: record.accommodation!.providerItemId },
     }))] : transportCase ? [modelTools(modelTool("propose_manual_transport", {
       itemId: "transfer", operation: "add", title: id === "O-taxi" ? "ホテルから空港へ" : "東京から札幌へ",
@@ -117,7 +128,7 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
       modelTool("propose_candidate_selection", { candidateId: "candidate-a", itemId: "outbound" }, "rail"),
       modelTool("propose_candidate_selection", { candidateId: "candidate-a", itemId: "stay", accommodation: { provider: "fixture", providerItemId: "hotel-a" } }, "hotel"))] :
       id === "J-refinement" ? [adoption("candidate-b")] : research,
-    selection: scenario.base === "C-candidate" && id !== "L-free-time" && !partyCase && !transportCase });
+    selection: scenario.base === "C-candidate" && id !== "L-free-time" && !partyCase && !transportCase && !multiCityCase });
   if (id === "B-known-region" || id === "D-known-request") {
     plan.push({ prompt: "提示された候補Aを選びます。具体的な旅程を見たい", scripts: [adoption()], chooseVisible: true });
   }
@@ -128,6 +139,7 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
   for (const step of plan) {
     let observation: AgentTurnObservation | undefined, trace: AgentTrace | undefined;
     let calls = 0;
+    let modelContext = "";
     const selected = step.selection || step.chooseVisible && turns.some((t) => t.observation?.progress.some((p) => p.kind === "candidates"));
     const prompt = step.chooseVisible && !selected ? "具体的な候補と旅程のたたき台を見たい" : step.prompt;
     const response = await runViewerAgentRuntime(prompt, { ...fixture.base,
@@ -135,7 +147,7 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
       getConversationContext: () => ({ messages: [...history] }),
       getCurrentTrip: () => trip,
       ...(partyCase ? { getUserProfile: () => structuredClone(usualFamily) } : {}),
-      getTravelCandidates: () => [{ id: record.candidate.id, targetItemId: accommodationCase ? "stay" : "outbound", label: accommodationCase ? record.accommodation!.place.name : "評価用候補A/Bの検証済み移動", verified: true,
+      getTravelCandidates: () => multiCityCase ? [] : [{ id: record.candidate.id, targetItemId: accommodationCase ? "stay" : "outbound", label: accommodationCase ? record.accommodation!.place.name : "評価用候補A/Bの検証済み移動", verified: true,
         ...(id === "S-eur-accommodation" ? { price: record.candidate.accommodations[0]!.price, priceSemantics: "candidate-observation-not-current-price" } : {}),
         accommodation: { provider: "fixture", providerItemId: record.accommodation!.providerItemId, targetItemId: "stay" } },
         ...(id === "K-food" ? [{ id: activity.candidateId, targetItemId: "meal", label: "評価用の森の食堂・検証済みの食事候補", kind: "restaurant" }] : [])],
@@ -144,10 +156,22 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
       searchPlaceMedia: async () => ({ result: { status: "available", freshness: "fresh", evidence: [{ ...progressSource, kind: "place" }],
         data: { places: [{ providerPlaceId: "candidate-a", name: "候補A・評価用の森の温泉郷", summary: "森林の散策路と温泉を楽しめる架空地域", sourceUrl: "https://example.com/nature", openingHoursStatus: "unknown" }] } } }),
       onTurnObservation: (value) => { observation = value; }, storeAgentTrace: async (value) => { trace = value; },
-    }, async (...args) => live ? (calls++, live(...args)) : step.scripts[calls++] ?? modelAnswer("検証した内容を案として提示します。"));
+    }, async (...args) => {
+      if (!modelContext) modelContext = JSON.stringify(args[0]);
+      return live ? (calls++, live(...args)) : step.scripts[calls++] ?? modelAnswer("検証した内容を案として提示します。");
+    });
     turns.push({ observation, trace, delivered: true, ...(selected ? { candidateSelected: { targetItemId: accommodationCase ? "stay" : id === "K-food" ? "meal" : "outbound" } } : {}), modelCalls: calls });
     history.push({ role: "user", text: prompt }, { role: "assistant", text: typeof response === "string" ? response : response.text });
     const preview = typeof response !== "string" && "tripUpdateProposal" in response ? applyTripProposal(trip, response.tripUpdateProposal) : trip;
+    if (multiCityCase) {
+      const places = projectTripPlaces(preview), names = places.visitedPlaces.map((p) => p.place.name);
+      for (const name of ["Vienna", "Salzburg", "Zürich"]) if (!names.includes(name) || !modelContext.includes(name)) invariantFailures.push("multi-city: lost requested/adopted place");
+      if (observation?.outcome !== "progress" || !observation.progress.some((p) => p.kind === "itinerary")) invariantFailures.push("multi-city: no delivered itinerary progress");
+      if (JSON.stringify(preview.request) !== JSON.stringify(original.request) || preview.summaryDestination !== original.summaryDestination) invariantFailures.push("multi-city: request/summary changed implicitly");
+      if (id === "T-multi-city-request" && JSON.stringify(names) !== JSON.stringify(["Vienna", "Salzburg", "Salzburg", "Zürich"])) invariantFailures.push("multi-city: lost item order");
+      if (id === "U-multi-city-trip" && (JSON.stringify(preview.items.filter((i) => i.id !== "free")) !== JSON.stringify(original.items) ||
+          places.overnightPlaces[0]?.place.name !== "Salzburgの宿" || !modelContext.includes("itineraryPlaces"))) invariantFailures.push("multi-city: lost existing plan/context/overnight");
+    }
     if (accommodationCase) {
       const stay = preview.items.find((i) => i.id === "stay");
       const text = typeof response === "string" ? response : response.text;
@@ -201,6 +225,7 @@ export async function runTravelProgressScenario(definition: TravelProgressScenar
       const input = event.input.value as Record<string, unknown> | undefined;
       if (scenario.base !== "A-vague" && input && (["origin", "dates"].includes(String(input.requestedRequirement)) || input.expectedInput === "departure-date")) repeatedKnownConditionQuestions++;
       if (partyCase && input?.requestedRequirement === "party") repeatedKnownConditionQuestions++;
+      if (multiCityCase && input?.requestedRequirement === "destinations") repeatedKnownConditionQuestions++;
     }
     if (JSON.stringify(trip) !== JSON.stringify(original)) invariantFailures.push("source Trip was mutated");
   }

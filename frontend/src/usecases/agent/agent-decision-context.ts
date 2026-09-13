@@ -114,6 +114,7 @@ export function buildAgentDecisionContext(
   if (projectedTrip && Array.isArray(currentTrip?.schedule) && Array.isArray(projectedTrip.schedule)) {
     projectedTrip.scheduleTruncated = currentTrip.scheduleTruncated === true || currentTrip.schedule.length > projectedTrip.schedule.length;
   }
+  if (projectedTrip && currentTrip?.itineraryPlaces) Object.assign(projectedTrip, compactTripPlaces(currentTrip, 20));
   const decision = parseAgentDecisionSummary(input?.currentTurnDecision);
   return {
     ...(input?.previousAssistantTurn ? { previousAssistantTurn: input.previousAssistantTurn } : {}),
@@ -305,6 +306,8 @@ function compactCurrentTrip(
     ...(value.temporalAssessment ? { temporalAssessment: value.temporalAssessment } : {}),
     ...(value.hardConstraintEvaluation ? { hardConstraintEvaluation: value.hardConstraintEvaluation } : {}),
     ...(value.destination ? { destination: value.destination } : {}),
+    ...(value.summaryDestination ? { summaryDestination: value.summaryDestination } : {}),
+    ...compactTripPlaces(value, maximumScheduleItems),
     ...(value.adults !== undefined ? { adults: value.adults } : {}),
     ...(value.children !== undefined ? { children: value.children } : {}),
     ...(Array.isArray(value.considerations)
@@ -314,6 +317,22 @@ function compactCurrentTrip(
       ? { schedule: value.schedule.slice(0, maximumScheduleItems), scheduleTruncated: value.schedule.length > maximumScheduleItems || value.scheduleTruncated === true }
       : {}),
   };
+}
+
+/** Keep occurrence order and opaque identities; a shortened list never becomes a destination. */
+function compactTripPlaces(value: Record<string, unknown>, limit: number): Record<string, unknown> {
+  if (!value.itineraryPlaces || typeof value.itineraryPlaces !== "object") return {};
+  let truncated = value.placesTruncated === true;
+  const lists = Object.fromEntries(["visitedPlaces", "overnightPlaces", "transportEndpoints"].map((key) => {
+    const entries = (value.itineraryPlaces as Record<string, unknown>)[key];
+    if (!Array.isArray(entries)) { truncated = true; return [key, []]; }
+    if (entries.length > limit) truncated = true;
+    // This is the already bounded, typed snapshot projection. As for persistedTripRequest,
+    // preserve identifiers rather than normalizing them into another valid-looking identity.
+    return [key, privateRequestProjection(entries.slice(0, limit))];
+  }));
+  return { itineraryPlaces: lists, placesTruncated: truncated,
+    ...(value.placeSemantics ? { placeSemantics: value.placeSemantics } : {}) };
 }
 
 function conversation(value: AgentConversationContext): AgentConversationContext {

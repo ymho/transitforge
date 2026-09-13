@@ -128,3 +128,8 @@ Offering側に留め、Money/Reservationは後続へ残す。legacyの証拠不�
 
 後続PRのmigration/invalid/retry/partial failure/backward compatibility試験は
 詳細契約の適合ケース表に割り当てる。#415のACは設計として自己レビューし、#415だけを閉じるPRにする。
+
+#403の[地点projection導入記録](../architecture/trip-places.md)では、同じTripへ表示専用summaryDestinationを追加した。
+希望destinations、採用済みitems由来の順序付き地点、表示要約を分離する。再訪を保持し、unique表示は既存Place identityだけを使う。
+legacy destinationはsummary以外へ昇格させず、V2 Contextの単一destination fallbackを撤去する。
+Tool/Plannerを追加せず、成立性・国都市推定・全面UI・本番writerは導入しない。

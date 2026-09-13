@@ -5,6 +5,7 @@ import { validateTrip, type Trip } from "@raiquora/trip/trip";
 import type { ItinerarySchedule } from "@raiquora/trip/itinerary-schedule";
 import type { TripRequest } from "@raiquora/trip/trip-request";
 import type { PlanningState, LifecycleState } from "@raiquora/trip/trip-state";
+import { agentTripPlaces, type AgentTripPlaces } from "./agent-trip-places";
 
 export interface AgentContextSnapshot {
   travelCandidates?: Record<string, unknown>[];
@@ -25,7 +26,12 @@ export interface AgentContextSnapshot {
     lifecycleState?: LifecycleState;
     scheduleTruncated?: boolean;
     title: string;
-    destination: string;
+    /** Legacy only; never synthesized for V2. */
+    destination?: string;
+    summaryDestination?: string;
+    itineraryPlaces?: AgentTripPlaces["itineraryPlaces"];
+    placesTruncated?: boolean;
+    placeSemantics?: string;
     adults?: number;
     children?: number;
     considerations: string[];
@@ -196,7 +202,9 @@ function legacyCandidateSnapshot(trip: TripPlan): Pick<AgentContextSnapshot, "tr
 
 function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["trip"]> {
   validateTrip(trip);
-  return { title: bounded(trip.title, 100) ?? "現在の旅程", destination: "未設定", considerations: [],
+  return { title: bounded(trip.title, 100) ?? "現在の旅程", considerations: [],
+    ...(trip.summaryDestination === undefined ? {} : { summaryDestination: trip.summaryDestination }),
+    ...agentTripPlaces(trip),
     request: structuredClone(trip.request),
     planningState: trip.planningState, lifecycleState: trip.lifecycleState,
     scheduleTruncated: trip.items.length > 24,
