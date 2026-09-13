@@ -1,4 +1,4 @@
-import { createTrip, type ItineraryItem, type Trip } from "./trip";
+import { createTrip, validateSummaryDestination, type ItineraryItem, type Trip } from "./trip";
 import { isSightseeingPlaceProvider, type TripPlan } from "./trip-plan";
 import { createPlaceSnapshot, validatePlaceCoordinate, type PlaceSnapshot, type PlaceSnapshotRetention } from "./place-snapshot";
 import type { ExternalSourceEvidence } from "./external-travel-information";
@@ -16,7 +16,7 @@ export interface TripMigrationWarning {
   code: "rail-selection-unverified" | "stay-snapshot-deferred" | "schedule-invalid" |
     "transport-mode-deferred" | "activity-deferred" | "request-state-deferred" |
     "place-retention-unconfirmed" | "place-coordinate-invalid" | "place-fields-not-retained" | "place-invalid" |
-    "request-field-invalid" | "request-field-deferred" | "planning-state-unresolved" | "lifecycle-unverified";
+    "request-field-invalid" | "request-field-deferred" | "planning-state-unresolved" | "lifecycle-unverified" | "summary-destination-invalid";
   ownerIssue: number;
 }
 export interface TripMigrationResult {
@@ -159,7 +159,10 @@ export function convertLegacyTripPlan(plan: TripPlan, identity: { tripId: string
     warnings.push({ field: "planningStage", code: "planning-state-unresolved", ownerIssue: 383 });
   }
   warnings.push({ field: "lifecycleState", code: "lifecycle-unverified", ownerIssue: 383 });
-  return { trip: createTrip(identity.tripId, plan.title, identity.createdAt, items, request, planningState),
+  let summaryDestination: string | undefined;
+  try { validateSummaryDestination(plan.destination); summaryDestination = plan.destination; }
+  catch { warnings.push({ field: "destination", code: "summary-destination-invalid", ownerIssue: 403 }); }
+  return { trip: createTrip(identity.tripId, plan.title, identity.createdAt, items, request, planningState, summaryDestination),
     warnings, deferredItemIds, placeMappings, requiresLegacyRetention: true };
 }
 

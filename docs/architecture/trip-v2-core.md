@@ -9,6 +9,7 @@
 #387による同じTripのRequest・仮定・legacy mapping・評価境界は[Request導入記録](trip-request.md)を参照する。
 #383による同じTripの計画/旅行状態・注入Clock・Proposal・legacy mappingは[状態導入記録](trip-state.md)を参照する。
 #410による同じunionのActivity・add・候補採用・legacy mappingは[Activity導入記録](trip-activity.md)を参照する。
+#403によるsummary、items由来の順序付き地点、legacy/Context/表示の3分離は[地点projection導入記録](trip-places.md)を参照する。
 
 ## 現行モデル・利用箇所の棚卸し
 
@@ -21,7 +22,7 @@
 | `trip-plan-repository.ts` / `conversation-session-repository.ts` | JSON reader、session別保存、会話削除連動。#385では変更しない。#388の原本保全・writer切替と一緒に置換 |
 | `viewer-agent-runtime.ts` | 往復生成・帰路開始時刻・区間再検索・stopover・説明でjourneysを読む。いずれもlegacy検索処理のまま。V2へ先頭経路を採用する経路は追加しない |
 | `search-journeys-tool.ts` / `compare-journeys-tool.ts` / `tool-result-evidence.ts` | 検証された検索・候補比較・Evidence生成のまま。運行事実をTripへ移さない |
-| `selectTripPlanAccommodation` / `tripPlanController.selectAccommodation` / composition | legacyでは全stayへ同じ宿を代入。#385の新しい採用境界では対象item ID必須で、他stayは変更しない。legacy導線の多都市対応は#403/#390へ残す |
+| `selectTripPlanAccommodation` / `tripPlanController.selectAccommodation` / composition | legacyでは全stayへ同じ宿を代入。#385の新しい採用境界では対象item ID必須で、他stayは変更しない。legacy導線のitem-ID UI移行は#390へ残す。#403はV2 read projectionのみ |
 | `MapTravelCandidate` | 地図カードの既存表示projection。新しい永続候補モデルにしない。V2ではcandidate IDを新usecaseへ渡す導線に移行する |
 | `agent-context-snapshot.ts` | 従来の先頭経路時刻を採用済みとして渡す処理を廃止。legacy railはunresolved、候補と検索時点見込は別field。V2 Tripのselected schedule projectionにも対応 |
 | `JourneyRouteResult` / `TrainOperation` | 前者は遅延も含む検索応答、後者は現在の遅延/行先等。どちらもV2保存型ではない |
@@ -137,7 +138,7 @@ live評価は設定済みAWSセッション期限切れで未実施。保存済�
 | #383（導入済み） | planning/lifecycle・時刻派生評価・状態Proposal。[状態導入記録](trip-state.md)参照。item実績や自動完了は未導入 |
 | #387（導入済み） | TripRequest/constraints/PlanAssumption、最小評価、Profileと今回条件の区別。[Request導入記録](trip-request.md)参照 |
 | #400（導入済み） | [宿泊Snapshot](trip-accommodation.md)。商品とPlace identityの分離、許諾・採用時検証、保守的legacy mapping |
-| #403 | 多都市、legacy/UIの対象stay選択導線と表示要約 |
+| #403（導入済み） | [表示要約と採用済み地点projection](trip-places.md)、同一converter、Context、pure UI helper。legacy選択UI移行は#390 |
 | #410（導入済み） | Activity、add、deferred sightseeingの部分/完全変換。[Activity導入記録](trip-activity.md)参照 |
 | #411 / #412（導入済み） | [TripParty](trip-party.md)、[原通貨Money](trip-money.md)、宿/体験の候補価格観測と許可された宿Snapshot価格。writerは未有効 |
 | #413 | [非鉄道transport](trip-transport.md)導入済み。外部API全面接続・料金・予約・リアルタイム監視は未有効 |

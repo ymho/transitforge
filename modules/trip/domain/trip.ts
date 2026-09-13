@@ -13,6 +13,8 @@ export interface Trip {
   readonly schemaVersion: 2;
   readonly revision: number;
   readonly title: string;
+  /** Display/search hint only. Never a place, requested destination or feasibility fact. */
+  readonly summaryDestination?: string;
   readonly request: TripRequest;
   readonly planningState: PlanningState;
   readonly lifecycleState: LifecycleState;
@@ -53,15 +55,20 @@ export interface TripUpdateProposal {
   readonly patches: readonly TripPatch[];
 }
 
-export function createTrip(id: string, title: string, createdAt: string, items: readonly ItineraryItem[] = [], request: TripRequest = { constraints: [], assumptions: [] }, planningState: PlanningState = "inspiration"): Trip {
+export function createTrip(id: string, title: string, createdAt: string, items: readonly ItineraryItem[] = [], request: TripRequest = { constraints: [], assumptions: [] }, planningState: PlanningState = "inspiration", summaryDestination?: string): Trip {
   const trip: Trip = { id, title, schemaVersion: 2, revision: 0, createdAt, updatedAt: createdAt, items, request,
-    planningState, lifecycleState: "pre_trip" };
+    planningState, lifecycleState: "pre_trip", ...(summaryDestination === undefined ? {} : { summaryDestination }) };
   validateTrip(trip);
   return structuredClone(trip);
 }
 
+export function validateSummaryDestination(value: string): void {
+  if (typeof value !== "string" || !value.trim() || value.length > 200) throw new Error("Invalid summary destination");
+}
+
 export function validateTrip(trip: Trip): void {
-  exactKeys(trip, ["id", "title", "schemaVersion", "revision", "createdAt", "updatedAt", "items", "request", "planningState", "lifecycleState"]);
+  exactKeys(trip, ["id", "title", "summaryDestination", "schemaVersion", "revision", "createdAt", "updatedAt", "items", "request", "planningState", "lifecycleState"]);
+  if (trip.summaryDestination !== undefined) validateSummaryDestination(trip.summaryDestination);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(trip.id) ||
       trip.schemaVersion !== 2 || !Number.isSafeInteger(trip.revision) || trip.revision < 0 ||
       typeof trip.title !== "string" || !validInstant(trip.createdAt) || !validInstant(trip.updatedAt) ||
@@ -159,6 +166,7 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
   }
   // Validation completes before returning any change. #389 will own revision/updatedAt mutation.
   const result: Trip = { id: trip.id, schemaVersion: 2, revision: trip.revision, title: trip.title,
+    ...(trip.summaryDestination === undefined ? {} : { summaryDestination: trip.summaryDestination }),
     createdAt: trip.createdAt, updatedAt: trip.updatedAt, items, request, planningState,
     lifecycleState: lifecyclePatch?.state ?? trip.lifecycleState };
   validateTrip(result);
