@@ -89,6 +89,9 @@ V2へ変わったという記述にはしない。#368/#380の残務は既に#38
 
 ## 検証
 
+#393の[監視境界](../architecture/trip-monitoring.md)はTripと外部観測・影響を分離したまま導入する。
+Watch保存/逆引き・再処理の判断は[ADR 0058](0058-separate-trip-monitoring-resources.md)。公開writer gateは解除しない。
+
 #385の段階実装と検証は[コア導入記録](../architecture/trip-v2-core.md)を参照する。
 最終契約は変更せず、Trip型と採用境界の導入を本番writer切替とは分離している。
 #414の同じPlace型への統合と保存制約・legacy変換は[Place導入記録](../architecture/trip-place-snapshot.md)を参照する。

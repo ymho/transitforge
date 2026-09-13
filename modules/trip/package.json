@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./trip-watch": "./domain/trip-watch.ts",
+    "./travel-event": "./domain/travel-event.ts",
+    "./travel-event-projection": "./domain/travel-event-projection.ts",
+    "./trip-impact": "./domain/trip-impact.ts",
     "./trip-checklist": "./domain/trip-checklist.ts",
     "./checklist-edit": "./domain/checklist-edit.ts",
     "./trip-readiness": "./domain/trip-readiness.ts",
@@ -50,6 +54,7 @@
     "./airport-access": "./domain/airport-access.ts"
   },
   "dependencies": {
+    "@raiquora/operation": "*",
     "@raiquora/train": "*",
     "@raiquora/journey": "*"
   }
