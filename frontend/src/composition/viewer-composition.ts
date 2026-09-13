@@ -136,6 +136,8 @@ import { configureConversationHistoryPanel } from "../presentation/concierge/con
 import { configureApplicationSettingsPanel } from "../presentation/settings/application-settings-panel";
 import { configureTripPlanPanel } from "../presentation/trip-plan/trip-plan-panel";
 import { createTripWorkspaceController } from "../usecases/trip-plan/trip-workspace-controller";
+import { createServerTripWorkspaceSource } from "../usecases/trip-plan/server-trip-workspace-source";
+import { HttpServerTripClient } from "../adapters/http/server-trip-client";
 import { configureTripWorkspace } from "../presentation/trip-plan/trip-workspace";
 import { tripPlanFromTravelPlan } from "@raiquora/trip/trip-plan";
 import { loadTripPlan } from "../usecases/trip-plan/trip-plan-repository";
@@ -301,6 +303,19 @@ const contextWorkspaceController = createContextWorkspaceController(
   new BrowserContextWorkspaceRepository(localStorage),
 );
 const tripWorkspaceController = createTripWorkspaceController(activeConversationSession.id);
+const serverTripClient = new HttpServerTripClient();
+const serverTripReferences = new Map<string, string | undefined>();
+const syncServerTripSource = (session: typeof activeConversationSession) => {
+  if (!session.tripId && session.tripSourceState !== "server-v2") return;
+  if (serverTripReferences.has(session.id) && serverTripReferences.get(session.id) === session.tripId) return;
+  serverTripReferences.set(session.id, session.tripId);
+  if (session.tripId) {
+    const source = createServerTripWorkspaceSource(session.tripId, serverTripClient);
+    tripWorkspaceController.attach(session.id, source);
+    void source.refresh();
+  } else tripWorkspaceController.attach(session.id, { sourceState: "server-v2", getCurrentTrip: () => undefined, getLoadState: () => "unavailable" });
+};
+syncServerTripSource(activeConversationSession);
 const tripPlanController = configureTripPlanPanel(
   tripPlanPanel,
   tripPlanContent,
@@ -325,6 +340,7 @@ const tripPlanController = configureTripPlanPanel(
     mapPlaceExplorerController?.show(candidates);
     contextWorkspaceController.show("map");
   },
+  () => !tripWorkspaceController.blocksLegacy(),
 );
 let resizeContextMap: () => void = () => undefined;
 const scheduleContextMapResize = () => {
@@ -368,7 +384,7 @@ const applyContextWorkspaceState = () => {
   const state = contextWorkspaceController.current();
   if (state.view !== "map") delete app.dataset.mapFocusMode;
   app.dataset.contextView = state.view;
-  if (tripWorkspaceController.current()) {
+  if (tripWorkspaceController.blocksLegacy()) {
     tripPlanPanel.hidden = true;
     tripPlanToggle.hidden = true;
     if (state.view !== "journey-details" && !trainDetails.hidden) closeTrainDetails.click();
@@ -457,7 +473,7 @@ aiGuideController = configureAiGuidePanel(
       if (renamed) Object.assign(activeConversationSession, renamed);
     },
     onTravelPlan: (plan) => {
-      if (tripWorkspaceController.current()) return; // V2 never falls back to the legacy writer.
+      if (tripWorkspaceController.blocksLegacy()) return; // Also blocked while loading/unavailable.
       const tripPlan = tripPlanFromTravelPlan(
         plan,
         new Date(),
@@ -504,7 +520,7 @@ aiGuideController = configureAiGuidePanel(
     },
     persistent: () => true,
     onTripPlanUpdate: (proposal) => {
-      if (tripWorkspaceController.current()) return;
+      if (tripWorkspaceController.blocksLegacy()) return;
       tripPlanController.apply(proposal.patches);
       Object.assign(activeConversationSession, {
         scope: "trip",
@@ -548,14 +564,19 @@ const conversationSessionSwitcher = createConversationSessionSwitcher({
       returnToConversation();
       mapPlaceExplorerController?.clear();
       activeConversationSession = session;
+      syncServerTripSource(session);
       tripWorkspaceController.activateSession(session.id);
       contextWorkspaceController.activateSession(session.id);
   },
 });
 conversationSessionRepository.subscribe(() => {
   const activeSession = conversationSessionRepository.active();
+  if (activeSession) syncServerTripSource(activeSession);
   if (activeSession && activeSession.id !== activeConversationSession.id) {
     conversationSessionSwitcher.activate(activeSession.id);
+  } else if (activeSession) {
+    // Keep the in-memory reference synchronized after attach/detach; later summaries must not restore an old tripId.
+    activeConversationSession = activeSession;
   }
 });
 void runDueTravelRechecks(travelRecheckRepository, {
@@ -677,7 +698,7 @@ if (!token) {
     },
     choose: (candidate) => {
       if (candidate.kind === "accommodation") {
-        if (tripWorkspaceController.current()) {
+        if (tripWorkspaceController.blocksLegacy()) {
           closeMapPlaceDetail.click();
           tripWorkspace.show("chat");
           aiGuideController.ask(`${candidate.name}を宿泊候補として相談したい（まだ採用していません）`);
@@ -1214,6 +1235,7 @@ if (!token) {
             const runtimeRequestIds: string[] = [];
             const executionSessionId = activeConversationSession.id;
             const workspaceSource = tripWorkspaceController.source();
+            if (workspaceSource && !workspaceSource.getCurrentTrip()) throw new Error("サーバの旅程を再取得してから相談を続けてください。");
             const uiFocus = tripWorkspaceController.uiFocus();
             const response = await runViewerAgentRuntime(
               prompt,
@@ -1288,7 +1310,7 @@ if (!token) {
                   });
                   conversationSessionRepository.save(activeConversationSession);
                 },
-                getTripPlan: () => workspaceSource?.getCurrentTrip() ? undefined : loadTripPlan(
+                getTripPlan: () => workspaceSource ? undefined : loadTripPlan(
                   localStorage,
                   activeConversationSession.id,
                 ),

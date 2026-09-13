@@ -115,6 +115,10 @@ TypeScriptのテストは対象モジュールの隣へ置く。repository保守
 を参照する。現行のTravelPlan/TripPlan/TripContextから、会話と独立したTripへ段階移行する設計であり、
 サーバ保存・予約・旅行中通知が実装済みという意味ではない。
 
+#388の[Trip server保存基盤](docs/architecture/trip-server-persistence.md)では、owner-scoped Repository、
+明示migration、server read/preview sourceを追加した。利用者認証が未導入のため公開Trip CRUDは閉じており、
+本番writer切替は認証境界と#389のCAS/冪等性統合後とする。
+
 ## 確認コマンド
 
 ```bash

@@ -131,6 +131,6 @@ it("moves the legacy single trip plan into the current conversation once", () =>
 
   expect(migrateLegacyTripPlan(storage, "current-session")).toEqual(plan);
   expect(loadTripPlan(storage, "current-session")).toEqual(plan);
-  expect(storage.getItem(tripPlanStorageKey)).toBeNull();
+  expect(storage.getItem(tripPlanStorageKey)).toBe(JSON.stringify(plan));
   expect(migrateLegacyTripPlan(storage, "another-session")).toBeUndefined();
 });

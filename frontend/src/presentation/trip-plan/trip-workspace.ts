@@ -21,7 +21,9 @@ export function configureTripWorkspace(options: {
   const status = element("p", "trip-workspace-status"); status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
   const report = (text: string) => { status.textContent = text; };
   const heading = element("header"); const title = element("h1"); const summary = element("p", "trip-workspace-copy");
-  heading.append(title, element("p", "trip-workspace-notice", "確認用の旅程です。この画面での変更は永続保存されません。"), summary);
+  const notice = element("p", "trip-workspace-notice");
+  heading.append(title, notice, summary);
+  const retry = control("旅程を再読み込み", () => { void controller.source()?.retry?.(); });
   const assumptions = element("section", "trip-workspace-assumptions");
   const days = element("div", "trip-workspace-days"), proposal = element("div"), candidates = element("div");
   const add = element("form", "trip-workspace-add"); const addLabel = element("label", "", "追加する予定 "); const addTitle = element("input");
@@ -35,7 +37,8 @@ export function configureTripWorkspace(options: {
       report("追加案を表示しました。現在の旅程はまだ変更していません。");
     } catch { report("追加する予定の名称と対象を確認してください。"); }
   });
-  panel.append(heading, status, assumptions, days, add, control("＋ 予定を相談して追加", () => chat("旅程に追加する予定を相談したい")), proposal, candidates);
+  const consult = control("＋ 予定を相談して追加", () => chat("旅程に追加する予定を相談したい"));
+  panel.append(heading, status, retry, assumptions, days, add, consult, proposal, candidates);
   app.append(panel, nav);
   const views = new Map<string, { scroll: number; chatScroll: number; view: "chat" | "trip"; focus?: HTMLElement }>();
   const collapsed = new Map<string, boolean>();
@@ -71,12 +74,25 @@ export function configureTripWorkspace(options: {
       activeSession = controller.sessionId(); previousTripId = undefined; report("");
     }
     const trip = controller.current();
-    panel.hidden = nav.hidden = !trip;
-    if (!trip) { delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; return; }
+    panel.hidden = nav.hidden = !controller.blocksLegacy();
+    if (!controller.blocksLegacy()) { delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; return; }
     app.dataset.tripWorkspace = "v2"; app.dataset.tripWorkspaceView = viewState().view;
     chatButton.setAttribute("aria-pressed", String(viewState().view === "chat"));
     tripButton.setAttribute("aria-pressed", String(viewState().view === "trip"));
     options.legacyPanel.hidden = true; options.legacyToggle.hidden = true;
+    const server = controller.source()?.sourceState === "server-v2";
+    notice.textContent = server ? "サーバの旅程を参照しています。変更案は確認用プレビューで、まだ保存できません。" : "確認用の旅程です。この画面での変更は永続保存されません。";
+    retry.hidden = !controller.source()?.retry;
+    retry.disabled = controller.loadState() === "loading";
+    add.hidden = consult.hidden = !trip;
+    if (!trip) {
+      title.textContent = "旅程"; summary.textContent = "";
+      report(controller.loadState() === "loading" ? "サーバから旅程を読み込んでいます。" : "旅程を取得できません。認証と接続、参照先の状態を確認して再試行してください。端末の旧旅程へは切り替えていません。");
+      assumptions.replaceChildren(); days.replaceChildren(); proposal.replaceChildren(); candidates.replaceChildren();
+      cards.clear(); groups.clear(); previousTripId = undefined; proposalKey = candidateKey = "";
+      return;
+    }
+    if (server) report("");
     if (previousTripId !== trip.id) {
       cards.clear(); groups.clear(); days.replaceChildren(); proposalKey = candidateKey = "";
       previousTripId = trip.id; panel.scrollTop = viewState().scroll;

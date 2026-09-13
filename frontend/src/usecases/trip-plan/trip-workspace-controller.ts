@@ -3,9 +3,14 @@ import type { TravelCandidate } from "@raiquora/trip/travel-candidate";
 import type { TravelCandidateAssessment } from "@raiquora/trip/travel-candidate-assessment";
 import { validateTravelCandidateAssessment } from "@raiquora/trip/validate-candidate-assessment";
 import { proposeCandidateSelection, type CandidateSelectionPort, type CandidateSelectionRequest } from "./select-trip-candidate";
+import type { TripLoadState, TripSourceState } from "./server-trip-client";
 
 /** A read/preview host, not a Repository. No default writer, legacy conversion or dual write. */
 export interface TripWorkspaceSource {
+  sourceState?: Exclude<TripSourceState, "legacy-only">;
+  getLoadState?(): TripLoadState;
+  subscribe?(listener: () => void): () => void;
+  retry?(): Promise<void>;
   getCurrentTrip(): Trip | undefined;
   getCandidates?(): readonly { candidate: TravelCandidate; assessment?: TravelCandidateAssessment }[];
   candidateSelection?: { taskId: string; port: CandidateSelectionPort };
@@ -15,6 +20,7 @@ export interface TripWorkspaceSource {
 export function createTripWorkspaceController(initialSessionId: string) {
   let sessionId = initialSessionId;
   const sessions = new Map<string, { source: TripWorkspaceSource; itemId?: string; proposal?: TripUpdateProposal; base?: string; confirming?: boolean }>();
+  const subscriptions = new Map<string, () => void>();
   const listeners = new Set<() => void>();
   const state = () => sessions.get(sessionId);
   const current = () => {
@@ -32,12 +38,17 @@ export function createTripWorkspaceController(initialSessionId: string) {
   };
   return {
     current,
+    blocksLegacy: () => !!state(),
+    loadState: () => state()?.source.getLoadState?.() ?? (current() ? "loaded" : "unavailable"),
     source: () => state()?.source,
     sessionId: () => sessionId,
     attach(id: string, source: TripWorkspaceSource) {
       const trip = source.getCurrentTrip();
       if (trip) validateTrip(trip);
       sessions.set(id, { source });
+      subscriptions.get(id)?.();
+      const unsubscribe = source.subscribe?.(() => { if (id === sessionId) publish(); });
+      if (unsubscribe) subscriptions.set(id, unsubscribe); else subscriptions.delete(id);
       if (id === sessionId) publish();
     },
     activateSession(id: string) { sessionId = id; publish(); },

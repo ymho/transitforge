@@ -52,6 +52,15 @@ class MemoryStorageEvents implements ConversationSessionStorageEvents {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("LocalConversationSessionRepository", () => {
+  it("round trips two references to one independent server Trip without deleting the other conversation", () => {
+    const storage = new MemoryStorage(), repository = new LocalConversationSessionRepository(storage);
+    const one = repository.create(), two = repository.create(), tripId = "11111111-1111-4111-8111-111111111111";
+    repository.save({ ...one, tripId }); repository.save({ ...two, tripId });
+    const restored = new LocalConversationSessionRepository(storage);
+    expect(restored.list().map((s) => s.tripId)).toEqual([tripId, tripId]);
+    restored.delete(one.id);
+    expect(restored.list()[0]).toMatchObject({ id: two.id, tripId, tripSourceState: "server-v2" });
+  });
   it("creates lists selects renames and reloads conversations", () => {
     let id = 0;
     vi.stubGlobal("crypto", { randomUUID: () => `session-${++id}` });
@@ -97,7 +106,7 @@ describe("LocalConversationSessionRepository", () => {
     expect(storage.getItem(conversationSessionStorageKey)).toContain('"version":3');
   });
 
-  it("deletes the conversation history request ids and trip plan together", () => {
+  it("deletes conversation history but preserves the independent trip migration original", () => {
     let id = 0;
     vi.stubGlobal("crypto", { randomUUID: () => `session-${++id}` });
     const storage = new MemoryStorage();
@@ -117,10 +126,10 @@ describe("LocalConversationSessionRepository", () => {
     expect(repository.list().some(({ id: sessionId }) => sessionId === target.id))
       .toBe(false);
     expect(loadConversationHistory(storage, target.id)).toEqual([]);
-    expect(loadTripPlan(storage, target.id)).toBeUndefined();
+    expect(loadTripPlan(storage, target.id)).toEqual(tripPlan());
   });
 
-  it("evicts the oldest conversation and its related data at the limit", () => {
+  it("evicts the oldest conversation without deleting its trip", () => {
     let id = 0;
     let minute = 0;
     vi.stubGlobal("crypto", { randomUUID: () => `session-${++id}` });
@@ -141,7 +150,7 @@ describe("LocalConversationSessionRepository", () => {
     expect(repository.list().some(({ id: sessionId }) => sessionId === oldest.id))
       .toBe(false);
     expect(loadConversationHistory(storage, oldest.id)).toEqual([]);
-    expect(loadTripPlan(storage, oldest.id)).toBeUndefined();
+    expect(loadTripPlan(storage, oldest.id)).toEqual(tripPlan());
   });
 
   it("notifies a tab when the v3 storage key changes", () => {

@@ -49,8 +49,9 @@ Tripの永続状態の所有者を分けたまま、各PRが向かう最終契�
   #385から実際の利用箇所とテストとともに同じmoduleへ実装する。
 - 旧reader互換と原本保全を伴う1つのlegacy→V2変換を作る。各fieldの移行担当を固定する。
   Domain移行後にserver移行用の別Domainモデルを作らない。
-- サーバAPIを無認可/無条件更新で先行公開しない。#388のCAS/取込primitiveと#389の
-  全Proposal・UIのrevision統合が揃ってからBrowserの正本writerを切り替える。
+- サーバAPIを無認可/無条件更新で先行公開しない。#388の認可/保存/取込基盤と#389の
+  CAS・冪等性・全Proposal/UI revision統合が揃ってからBrowserの正本writerを切り替える。
+  最新#388の指示に合わせた実装ownershipは[ADR 0053](0053-gate-owner-scoped-trip-persistence.md)を参照する。
 
 ## 既存判断との関係
 
