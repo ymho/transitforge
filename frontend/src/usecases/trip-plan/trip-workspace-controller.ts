@@ -1,4 +1,5 @@
-import { applyTripProposal, validateTrip, type Trip, type TripPatch, type TripUpdateProposal } from "@raiquora/trip/trip";
+import { applyTripProposal, validateTrip, TripRevisionConflict, type Trip, type TripPatch, type TripUpdateProposal } from "@raiquora/trip/trip";
+import { TripWriteRejected } from "./server-trip-client";
 import type { TravelCandidate } from "@raiquora/trip/travel-candidate";
 import type { TravelCandidateAssessment } from "@raiquora/trip/travel-candidate-assessment";
 import { validateTravelCandidateAssessment } from "@raiquora/trip/validate-candidate-assessment";
@@ -16,6 +17,7 @@ export interface TripWorkspaceSource {
   candidateSelection?: { taskId: string; port: CandidateSelectionPort };
   /** Explicit in-memory confirmation may be supplied by a host; candidate proposals need revalidation there. */
   confirmProposal?(proposal: TripUpdateProposal): Promise<void>;
+  confirmationPersistence?: "server";
 }
 export function createTripWorkspaceController(initialSessionId: string) {
   let sessionId = initialSessionId;
@@ -47,7 +49,11 @@ export function createTripWorkspaceController(initialSessionId: string) {
       if (trip) validateTrip(trip);
       sessions.set(id, { source });
       subscriptions.get(id)?.();
-      const unsubscribe = source.subscribe?.(() => { if (id === sessionId) publish(); });
+      const unsubscribe = source.subscribe?.(() => {
+        const s = sessions.get(id), latest = source.getCurrentTrip();
+        if (s?.proposal && latest && latest.revision !== s.proposal.baseRevision) { delete s.proposal; delete s.base; }
+        if (id === sessionId) publish();
+      });
       if (unsubscribe) subscriptions.set(id, unsubscribe); else subscriptions.delete(id);
       if (id === sessionId) publish();
     },
@@ -68,17 +74,28 @@ export function createTripWorkspaceController(initialSessionId: string) {
     propose(summary: string, patches: readonly TripPatch[]) {
       const trip = current();
       if (!trip) throw new Error("Current Trip unavailable");
-      preview({ tripId: trip.id, summary, patches });
+      preview({ tripId: trip.id, baseRevision: trip.revision, summary, patches });
     },
     dismiss() { const s = state(); if (s) { delete s.proposal; delete s.base; } publish(); },
     canConfirm() { return !!state()?.source.confirmProposal; },
     async confirm() {
       const s = state(), trip = current(), selectedSession = sessionId;
-      if (!s?.proposal || s.confirming || !s.source.confirmProposal || !trip || JSON.stringify(trip) !== s.base) throw new Error("旅程が変わったか、確認処理中です。変更案を確認し直してください。");
+      if (!s?.proposal || s.confirming || !s.source.confirmProposal || !trip) throw new Error("旅程が変わったか、確認処理中です。変更案を確認し直してください。");
+      if (trip.revision !== s.proposal.baseRevision || JSON.stringify(trip) !== s.base) {
+        delete s.proposal; delete s.base; publish();
+        throw new TripRevisionConflict();
+      }
       const shown = s.proposal;
       applyTripProposal(trip, shown);
       s.confirming = true;
       try { await s.source.confirmProposal(structuredClone(shown)); }
+      catch (error) {
+        if (error instanceof TripRevisionConflict || error instanceof TripWriteRejected) {
+          if (s.proposal === shown) { delete s.proposal; delete s.base; }
+          if (sessionId === selectedSession) publish();
+        }
+        throw error;
+      }
       finally { s.confirming = false; }
       // A delayed confirmation cannot clear another session or a newer proposal.
       if (s.proposal === shown) { delete s.proposal; delete s.base; }

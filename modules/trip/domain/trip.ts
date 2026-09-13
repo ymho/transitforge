@@ -43,7 +43,7 @@ export interface ActivityItineraryItem extends ItineraryItemBase {
 }
 export type ItineraryItem = TransportItineraryItem | StayItineraryItem | ActivityItineraryItem;
 
-/** Shared atomic proposal operations. #390 adds remove/move; #389 owns revision/CAS on this contract. */
+/** Shared atomic proposal operations; persistence CAS is outside this pure Domain. */
 export type TripPatch = { readonly type: "replace"; readonly itemId: string; readonly item: ItineraryItem }
   | { readonly type: "add"; readonly item: ItineraryItem; readonly afterId?: string }
   | { readonly type: "remove"; readonly itemId: string }
@@ -53,8 +53,14 @@ export type TripPatch = { readonly type: "replace"; readonly itemId: string; rea
   | { readonly type: "lifecycle"; readonly state: LifecycleState; readonly basis: "schedule" | "user_confirmation" };
 export interface TripUpdateProposal {
   readonly tripId: string;
+  readonly baseRevision: number;
   readonly summary: string;
   readonly patches: readonly TripPatch[];
+}
+
+/** A stale proposal must be reviewed again, never silently rebased. */
+export class TripRevisionConflict extends Error {
+  constructor() { super("旅程が更新されたため変更案を確認し直してください"); }
 }
 
 export function createTrip(id: string, title: string, createdAt: string, items: readonly ItineraryItem[] = [], request: TripRequest = { constraints: [], assumptions: [] }, planningState: PlanningState = "inspiration", summaryDestination?: string): Trip {
@@ -122,8 +128,11 @@ function validateItem(item: ItineraryItem): void {
 export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
   authority: { clock?: TripClock; confirmedLifecycle?: LifecycleState } = {}): Trip {
   validateTrip(trip);
-  exactKeys(proposal, ["tripId", "summary", "patches"]);
+  exactKeys(proposal, ["tripId", "baseRevision", "summary", "patches"]);
+  if (!Number.isSafeInteger(proposal.baseRevision) || proposal.baseRevision < 0 ||
+      typeof proposal.summary !== "string" || !Array.isArray(proposal.patches)) throw new Error("Invalid proposal");
   if (proposal.tripId !== trip.id) throw new Error("Proposal belongs to another Trip");
+  if (proposal.baseRevision !== trip.revision) throw new TripRevisionConflict();
   const items = [...trip.items];
   let request = trip.request;
   let planningState = trip.planningState;
@@ -182,7 +191,7 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
     if (patch.item.type !== items[index]!.type) throw new Error("Candidate kind differs from target item");
     items[index] = patch.item;
   }
-  // Validation completes before returning any change. #389 will own revision/updatedAt mutation.
+  // Preview keeps revision/updatedAt. Only a successful server CAS increments them.
   const result: Trip = { id: trip.id, schemaVersion: 2, revision: trip.revision, title: trip.title,
     ...(trip.summaryDestination === undefined ? {} : { summaryDestination: trip.summaryDestination }),
     createdAt: trip.createdAt, updatedAt: trip.updatedAt, items, request, planningState,

@@ -65,7 +65,7 @@ describe("PlanAssumption item field applicability", () => {
     const before = structuredClone(trip);
     const request = assumptionRequest(activity.id, "selection", "unconfirmed");
     expect(() => validateTripRequest(request, trip.items)).toThrow("Activity assumption must affect schedule or place");
-    expect(() => applyTripProposal(trip, { tripId: trip.id, summary: "仮置き", patches: [{ type: "request", request }] })).toThrow("Activity assumption must affect schedule or place");
+    expect(() => applyTripProposal(trip, { tripId: trip.id, baseRevision: trip.revision, summary: "仮置き", patches: [{ type: "request", request }] })).toThrow("Activity assumption must affect schedule or place");
     expect(trip).toEqual(before);
   });
 });

@@ -1,5 +1,5 @@
 import type { Trip } from "@raiquora/trip/trip";
-import { TripResourceError } from "../contracts/trip-api.js";
+import { TripResourceError, type TripMutation } from "../contracts/trip-api.js";
 
 /** Established by trusted server authentication, NOT HTTP body/headers or an Agent output. */
 export interface TripPrincipal { readonly subject: string }
@@ -12,8 +12,8 @@ export interface TripRepository {
   create(principal: TripPrincipal, trip: Trip): Promise<Trip>;
   get(principal: TripPrincipal, tripId: string): Promise<Trip | undefined>;
   list(principal: TripPrincipal, options?: { limit?: number; afterTripId?: string }): Promise<TripPage>;
-  /** Non-CAS foundation only. Not safe for concurrent editor writes until #389. */
-  replace(principal: TripPrincipal, trip: Trip): Promise<Trip>;
+  /** Calls the pure Application validator before any write; atomically commits Trip and retry receipt. */
+  applyMutation(principal: TripPrincipal, mutation: TripMutation, prepare: (current: Trip) => Trip): Promise<Trip>;
   archive(principal: TripPrincipal, tripId: string): Promise<void>;
 }
 /** Owner-scoped link index only; no conversation text, Trip ownership or reverse cascade. */

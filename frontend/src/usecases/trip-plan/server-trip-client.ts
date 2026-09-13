@@ -1,4 +1,8 @@
-import type { Trip } from "@raiquora/trip/trip";
+import type { Trip, TripUpdateProposal } from "@raiquora/trip/trip";
+
+export interface TripMutationRequest { tripId: string; baseRevision: number; mutationId: string; proposal: TripUpdateProposal }
+/** A definitive rejection, unlike a lost response whose mutation may already have committed. */
+export class TripWriteRejected extends Error {}
 
 /** Transport operation port, not a second Domain Repository. Owner is resolved server-side. */
 export interface ServerTripClient {

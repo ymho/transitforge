@@ -40,7 +40,7 @@ describe("adopted schedule temporal assessment", () => {
   it("treats exact end as past, never automatically completed", () => {
     const trip = tripFor(fixed("2026-09-13T00:00:00+09:00", "2026-09-13T00:30:00+09:00"));
     expect(assessTripTime(trip, clock)).toMatchObject({ position: "past" });
-    expect(() => applyTripProposal(trip, { tripId: trip.id, summary: "完了", patches: [{ type: "lifecycle", state: "completed", basis: "schedule" }] }, { clock })).toThrow();
+    expect(() => applyTripProposal(trip, { tripId: trip.id, baseRevision: trip.revision, summary: "完了", patches: [{ type: "lifecycle", state: "completed", basis: "schedule" }] }, { clock })).toThrow();
   });
   it("request dates alone are never trip-period evidence", () => {
     const trip = requestTrip({ constraints: [requestConstraint({ type: "dates", start: { earliest: "2026-09-12", latest: "2026-09-13" } })], assumptions: [] });

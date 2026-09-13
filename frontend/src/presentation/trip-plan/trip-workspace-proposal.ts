@@ -20,9 +20,10 @@ export function renderWorkspaceProposal(trip: Trip, proposal: TripUpdateProposal
   if (view.requestChanged) compare(view.beforeConditions, view.afterConditions);
   if (view.beforeState !== view.afterState) compare(view.beforeState, view.afterState);
   if (controller.canConfirm()) {
-    const confirm = control("確認して、この画面内に反映", () => {
+    const server = controller.source()?.confirmationPersistence === "server";
+    const confirm = control(server ? "確認して旅程を保存" : "確認して、この画面内に反映", () => {
       confirm.disabled = true;
-      void controller.confirm().then(() => report("この画面内に反映しました。永続保存はしていません。"))
+      void controller.confirm().then(() => report(server ? controller.loadState() === "loaded" ? "旅程を保存しました。" : "保存後の最新旅程を取得できません。再読み込みしてください。" : "この画面内に反映しました。永続保存はしていません。"))
         .catch((error: unknown) => { confirm.disabled = false; report(error instanceof Error ? error.message : "変更案を確認できませんでした"); });
     });
     section.append(confirm);

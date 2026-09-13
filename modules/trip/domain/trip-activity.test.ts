@@ -30,7 +30,7 @@ describe("Activity in the single Trip aggregate", () => {
   });
 });
 describe("V2 add atomic ordered semantics", () => {
-  const apply = (patches: TripPatch[]) => applyTripProposal(trip(), { tripId: trip().id, summary: "変更", patches });
+  const apply = (patches: TripPatch[]) => applyTripProposal(trip(), { tripId: trip().id, baseRevision: 0, summary: "変更", patches });
   it("appends or inserts after an existing ID; later add/replace can refer to earlier add", () => {
     const result = apply([{ type: "add", item: activity("b"), afterId: "a" }, { type: "add", item: activity("c"), afterId: "b" },
       { type: "replace", itemId: "b", item: { ...activity("b"), category: "food", title: "昼食" } }, { type: "add", item: activity("d") }]);
@@ -44,7 +44,7 @@ describe("V2 add atomic ordered semantics", () => {
   it("rejects duplicate and invalid middle patches without returning or mutating partial state", () => {
     const original = trip(); const before = structuredClone(original);
     for (const invalid of [{ type: "add", item: activity() }, { type: "replace", itemId: "missing", item: activity("missing") }] as TripPatch[]) {
-      expect(() => applyTripProposal(original, { tripId: original.id, summary: "invalid", patches: [
+      expect(() => applyTripProposal(original, { tripId: original.id, baseRevision: 0, summary: "invalid", patches: [
         { type: "add", item: activity("b") }, invalid, { type: "add", item: activity("c") },
       ] })).toThrow();
       expect(original).toEqual(before);

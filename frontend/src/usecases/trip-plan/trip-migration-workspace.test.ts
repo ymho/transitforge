@@ -13,7 +13,7 @@ describe("migration workspace ownership", () => {
     const conversations = { list: () => [session], save: vi.fn((next) => { session = next; return next; }) } as unknown as ConversationSessionRepository;
     const legacy = { version: 1 as const, id: "old", title: "移行", destination: "京都", updatedAt: "2026-09-01", items: [] };
     const options = { sessionId: session.id, authenticatedScope: "a", newIdentity: () => ({ tripId: "11111111-1111-4111-8111-111111111111", createdAt: "2026-09-13T01:00:00Z" }),
-      store: { readLegacy: () => ({ plan: legacy, original: JSON.stringify(legacy) }), attempt: () => attempt, retain: (_scope: string, _session: string, value: TripMigrationAttempt) => { attempt = value; }, marker: () => marker, mark: (_scope: string, _session: string, value: TripMigrationMarker) => { marker = value; } },
+      store: { exclusive: <T>(_scope: string, _session: string, work: () => Promise<T>) => work(), readLegacy: () => ({ plan: legacy, original: JSON.stringify(legacy) }), attempt: () => attempt, retain: (_scope: string, _session: string, value: TripMigrationAttempt) => { attempt = value; }, marker: () => marker, mark: (_scope: string, _session: string, value: TripMigrationMarker) => { marker = value; } },
       client: { get: async () => server, create: async (trip: Trip) => { expect(workspace.blocksLegacy()).toBe(true); expect(workspace.source()?.sourceState).toBe("migration-pending"); server = trip; return trip; }, attach: async () => {}, detach: async () => {} } };
     const result = await migrateTripWorkspace(options, workspace, conversations);
     expect(result.state).toBe("server-v2"); expect(workspace.current()).toEqual(server);

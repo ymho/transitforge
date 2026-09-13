@@ -81,7 +81,10 @@ export function configureTripWorkspace(options: {
     tripButton.setAttribute("aria-pressed", String(viewState().view === "trip"));
     options.legacyPanel.hidden = true; options.legacyToggle.hidden = true;
     const server = controller.source()?.sourceState === "server-v2";
-    notice.textContent = server ? "サーバの旅程を参照しています。変更案は確認用プレビューで、まだ保存できません。" : "確認用の旅程です。この画面での変更は永続保存されません。";
+    notice.textContent = controller.source()?.confirmationPersistence === "server" ? "変更案を確認するとサーバに保存します。競合した場合は最新の旅程で確認し直してください。"
+      : server ? "サーバの旅程を参照しています。変更案は確認用プレビューで、まだ保存できません。"
+      : controller.source()?.sourceState === "migration-pending" ? "旅程の移行は未完了です。元データは保持し、端末の旧旅程編集は停止しています。"
+      : "確認用の旅程です。この画面での変更は永続保存されません。";
     retry.hidden = !controller.source()?.retry;
     retry.disabled = controller.loadState() === "loading";
     add.hidden = consult.hidden = !trip;

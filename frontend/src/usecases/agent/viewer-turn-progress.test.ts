@@ -20,12 +20,12 @@ describe("shared visible milestone classification", () => {
   it.each(["add", "replace"] as const)("counts visible %s Activity with no Place as itinerary", (type) => {
     const activity = { id: "free", type: "activity" as const, title: "自由時間", category: "free-time" as const, schedule: { type: "unscheduled" as const } };
     const patch = type === "add" ? { type, item: activity } : { type, itemId: activity.id, item: activity };
-    expect(kinds({ text: "自由時間（時間未定）", tripUpdateProposal: { tripId: "trip", summary: "追加案", patches: [patch] } })).toEqual(["trip_proposal", "itinerary"]);
+    expect(kinds({ text: "自由時間（時間未定）", tripUpdateProposal: { tripId: "trip", baseRevision: 0, summary: "追加案", patches: [patch] } })).toEqual(["trip_proposal", "itinerary"]);
     expect(kinds("Activity Tool completed")).toEqual([]);
   });
   it("counts dated legacy movements and V2 selected item previews as itinerary, not just state", () => {
     expect(kinds({ text: "", travelPlan })).toEqual(["itinerary"]);
-    const tripUpdateProposal: TripUpdateProposal = { tripId: "trip", summary: "採用案", patches: [{ type: "replace", itemId: item.id, item }] };
+    const tripUpdateProposal: TripUpdateProposal = { tripId: "trip", baseRevision: 0, summary: "採用案", patches: [{ type: "replace", itemId: item.id, item }] };
     expect(kinds({ text: "", tripUpdateProposal })).toEqual(["trip_proposal", "itinerary"]);
     expect(kinds({ text: "", tripPlanUpdate: { summary: "追加案", patches: [{ type: "add", item: { type: "movement", mode: "rail", id: "leg", route } }] } })).toEqual(["trip_proposal", "itinerary"]);
   });
@@ -40,7 +40,7 @@ describe("shared visible milestone classification", () => {
       { type: "request", request: { constraints: [], assumptions: [] } },
       { type: "replace", itemId: "outbound", item: { ...item, schedule: { type: "unscheduled" }, detail: { status: "unresolved" } } },
     ];
-    for (const patch of patches) expect(kinds({ text: "旅程を作りました", tripUpdateProposal: { tripId: "trip", summary: "", patches: [patch] } })).toEqual([]);
+    for (const patch of patches) expect(kinds({ text: "旅程を作りました", tripUpdateProposal: { tripId: "trip", baseRevision: 0, summary: "", patches: [patch] } })).toEqual([]);
     expect(kinds({ text: "", tripPlanUpdate: { summary: "", patches: [{ type: "metadata", title: "itinerary_draft" }] } })).toEqual([]);
     expect(kinds("旅程を作りました。温泉方面がおすすめです。")).toEqual([]);
   });

@@ -1,5 +1,9 @@
 # Trip server resource foundation（#388）
 
+#389 で replace を CAS mutation に置換し、receipt / revision / import 排他 / reload gate を統合した。
+最新契約は [Trip concurrency](trip-concurrency.md)。以下の非 CAS/read-only 制約は #388 時点の導入記録であり、
+公開認証と本番 writer が未有効という gate は #389 後も維持する。
+
 親方針は #382/#415、正本は同じ `modules/trip/domain/trip.ts`。#388 は Repository/Application と
 明示 migration の基盤を実装する。**認証 Provider は未導入で、公開 CRUD と本番 writer は有効にしていない。**
 判断は [ADR 0053](../decisions/0053-gate-owner-scoped-trip-persistence.md)。#389 が CAS/冪等性を担当する。

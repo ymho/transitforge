@@ -21,7 +21,7 @@ describe("Trip display hint / ordered adopted places", () => {
   });
   it("preserves summary on item patches without geographic synchronization", () => {
     const trip = multiCityTrip();
-    const next = applyTripProposal(trip, { tripId: trip.id, summary: "追加", patches: [{ type: "add", item: placeActivity("new", { name: "Tokyo", sources: [] }) }] });
+    const next = applyTripProposal(trip, { tripId: trip.id, baseRevision: trip.revision, summary: "追加", patches: [{ type: "add", item: placeActivity("new", { name: "Tokyo", sources: [] }) }] });
     expect(next.summaryDestination).toBe(trip.summaryDestination);
     expect(next.request).toEqual(trip.request); expect(trip.items).toHaveLength(3);
   });

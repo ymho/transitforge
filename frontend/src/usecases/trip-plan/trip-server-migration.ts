@@ -8,6 +8,7 @@ export interface TripMigrationAttempt { tripId: string; createdAt: string; origi
 export interface TripMigrationMarker { tripId: string; verified: true }
 /** Local recovery metadata, owner/session scoped; never stores a second authoritative V2 Trip. */
 export interface TripMigrationStore {
+  exclusive<T>(scope: string, sessionId: string, work: () => Promise<T>): Promise<T>;
   readLegacy(sessionId: string): LegacyMigrationInput | undefined;
   attempt(scope: string, sessionId: string): TripMigrationAttempt | undefined;
   retain(scope: string, sessionId: string, attempt: TripMigrationAttempt): void;
@@ -18,14 +19,19 @@ export type TripMigrationOutcome = { state: TripSourceState; result?: TripMigrat
 
 /** Explicit, gated import foundation. Caller must obtain authenticated transport and user consent.
  * scope is a local authenticated-account namespace, NOT an authorization claim sent to the server.
- * #389 will add server idempotency/CAS; this protocol never retries a blind overwrite.
+ * Stable UUID create is idempotent; the same exclusive attempt/converter is reused after a lost response.
  */
 export async function migrateTripToServer(options: {
   sessionId: string; authenticatedScope?: string; store: TripMigrationStore; client: ServerTripClient;
   newIdentity(): { tripId: string; createdAt: string };
 }): Promise<TripMigrationOutcome> {
-  const { sessionId, store, client } = options, scope = options.authenticatedScope;
+  const { sessionId, store } = options, scope = options.authenticatedScope;
   if (!scope?.trim()) return { state: "legacy-only", error: "authentication-required" };
+  try { return await store.exclusive(scope, sessionId, () => importUnderLock(options, scope)); }
+  catch { return { state: "migration-pending", error: "unavailable" }; }
+}
+async function importUnderLock(options: Parameters<typeof migrateTripToServer>[0], scope: string): Promise<TripMigrationOutcome> {
+  const { sessionId, store, client } = options;
   let committed = false;
   let verifiedTripId: string | undefined;
   try {

@@ -64,7 +64,7 @@ export async function proposeCandidateSelection(
       schedule: projectStaySchedule(accommodation.checkInDate, accommodation.checkOutDate, accommodation.place.timeZone),
       selection: { status: "selected", accommodation } };
   } else throw new Error("Use the activity adoption boundary for this item");
-  const proposal: TripUpdateProposal = { tripId: trip.id, summary: `${item.title}の候補を採用`,
+  const proposal: TripUpdateProposal = { tripId: trip.id, baseRevision: trip.revision, summary: `${item.title}の候補を採用`,
     patches: [{ type: "replace", itemId: target.id, item },
       { type: "planning", state: trip.planningState === "itinerary_refinement" ? "itinerary_refinement" : "itinerary_draft" }] };
   applyTripProposal(trip, proposal); // Validate only. No state/storage change before explicit confirmation.
@@ -76,6 +76,7 @@ export async function confirmCandidateSelection(
   trip: Trip, request: CandidateSelectionRequest, shown: TripUpdateProposal,
   port: CandidateSelectionPort, confirmedAt: string,
 ): Promise<Trip> {
+  applyTripProposal(trip, shown); // Reject stale revisions before resolving the candidate again.
   const checked = await proposeCandidateSelection(trip, request, port, confirmedAt);
   // selectedAt is the confirmation time, not when the preview was prepared.
   // Any other changed fact needs a new preview/confirmation, never a silent candidate replacement.

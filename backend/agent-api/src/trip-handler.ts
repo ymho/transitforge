@@ -8,10 +8,11 @@ import type { TripApplication } from "./usecases/trip-application.js";
 export type TripPrincipalResolver = (event: LambdaHttpEvent) => Promise<TripPrincipal | undefined>;
 export function createTripApiHandler(application?: Pick<TripApplication, "execute">, options: {
   authenticate?: TripPrincipalResolver;
-  log?: (fields: { requestId: string; category: string }) => void;
+  log?: (fields: { requestId: string; category: string; operation: string }) => void;
 } = {}) {
   return async (event: LambdaHttpEvent, context?: LambdaContext) => {
     const requestId = context?.awsRequestId ?? randomUUID();
+    let operation = "unknown";
     try {
       if (!application || !options.authenticate) throw new TripResourceError("unavailable");
       const principal = await options.authenticate(event);
@@ -23,11 +24,13 @@ export function createTripApiHandler(application?: Pick<TripApplication, "execut
       if (Buffer.byteLength(body, "utf8") > tripApiLimits.bodyBytes) throw new TripResourceError("payload-too-large");
       let value: unknown;
       try { value = JSON.parse(body); } catch { throw new TripResourceError("invalid-input"); }
+      const requested = (value as { operation?: unknown } | null)?.operation;
+      if (typeof requested === "string" && ["create", "mutate", "get", "list", "archive", "attach", "detach", "reference"].includes(requested)) operation = requested;
       return jsonResponse(200, await application.execute(principal, value), requestId);
     } catch (error) {
       const code = error instanceof TripResourceError ? error.code : "unavailable";
-      const status = { unauthenticated: 401, "not-found": 404, "already-exists": 409, "invalid-input": 400, "payload-too-large": 413, unavailable: 501 }[code];
-      options.log?.({ requestId, category: code });
+      const status = { unauthenticated: 401, "not-found": 404, "already-exists": 409, conflict: 409, "mutation-reused": 409, "invalid-input": 400, "payload-too-large": 413, unavailable: 501 }[code];
+      options.log?.({ requestId, category: code, operation });
       return jsonResponse(status, { version: tripApiVersion, error: code }, requestId);
     }
   };

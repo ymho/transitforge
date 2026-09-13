@@ -4,6 +4,9 @@
 - 日付: 2026-09-13
 - 対象: #388、親 #382/#415、後続 #389
 
+#389 で非 CAS replace と retry の制約を [ADR 0054](0054-commit-trip-mutations-atomically.md) により更新した。
+以下は #388 導入時の記録。認証・公開 writer gate の決定は引き続き有効である。
+
 ## 背景と決定
 
 現行 Agent HTTP event は authenticated end-user principal を持たない。CloudFront/OAC/IAM 保護だけを

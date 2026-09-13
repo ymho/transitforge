@@ -4,6 +4,7 @@ import type { TripPlan } from "@raiquora/trip/trip-plan";
 import { convertLegacyTripPlan } from "@raiquora/trip/legacy-trip-converter";
 import { migrateTripToServer } from "../../usecases/trip-plan/trip-server-migration";
 import { BrowserTripMigrationStore } from "./trip-migration-storage";
+import { migrationLockFixture } from "./trip-migration-lock.fixture";
 import { tripPlanStoreStorageKey, tripPlanStorageKey } from "../../usecases/trip-plan/trip-plan-repository";
 
 const identity = { tripId: "11111111-1111-4111-8111-111111111111", createdAt: "2026-09-13T01:00:00Z" };
@@ -15,13 +16,30 @@ function fixture() {
   const original = JSON.stringify({ version: 2, plansBySessionId: { session: plan, invalid: { not: "a plan" } } });
   const values = new Map([[tripPlanStoreStorageKey, original]]);
   const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
-  const store = new BrowserTripMigrationStore(storage);
+  const locks = migrationLockFixture(), store = new BrowserTripMigrationStore(storage, locks);
   let server: Trip | undefined;
   const client = { get: vi.fn(async () => server ? structuredClone(server) : undefined), create: vi.fn(async (trip: Trip) => { server = structuredClone(trip); return structuredClone(trip); }), attach: vi.fn(async () => {}), detach: vi.fn(async () => {}) };
   const options = { sessionId: "session", authenticatedScope: "owner-A", store, client, newIdentity: vi.fn(() => identity) };
-  return { store, values, original, options, client, storage, setServer: (trip?: Trip) => { server = trip; } };
+  return { store, locks, values, original, options, client, storage, setServer: (trip?: Trip) => { server = trip; } };
 }
 describe("explicit legacy server migration", () => {
+  it("serializes tabs, recovers the same stable target and reloads pending attempts", async () => {
+    const f = fixture(); f.client.create.mockRejectedValueOnce(new Error("offline"));
+    expect((await migrateTripToServer(f.options)).state).toBe("migration-pending");
+    const tab = new BrowserTripMigrationStore(f.storage, f.locks);
+    const identityBefore = tab.attempt("owner-A", "session");
+    const result = await Promise.all([migrateTripToServer(f.options), migrateTripToServer({ ...f.options, store: tab })]);
+    expect(result.map((r) => r.state)).toEqual(["server-v2", "server-v2"]);
+    expect(tab.attempt("owner-A", "session")).toEqual(identityBefore);
+    expect(f.options.newIdentity).toHaveBeenCalledOnce();
+    expect(f.client.create).toHaveBeenCalledTimes(2); // failed attempt, then a single successful create
+    expect(f.values.get(tripPlanStoreStorageKey)).toBe(f.original);
+  });
+  it("fails closed without a cross-tab lock instead of risking competing imports", async () => {
+    const f = fixture(), store = new BrowserTripMigrationStore(f.storage, undefined);
+    expect((await migrateTripToServer({ ...f.options, store })).state).toBe("migration-pending");
+    expect(f.client.create).not.toHaveBeenCalled();
+  });
   it("reuses the converter, preserves deferred/warning raw records and never fabricates evidence/time", async () => {
     const f = fixture(), result = await migrateTripToServer(f.options);
     expect(result.state).toBe("server-v2");

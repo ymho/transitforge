@@ -21,6 +21,13 @@ function setup() {
 }
 
 describe("candidate adoption boundary", () => {
+  it("rejects a stale Trip revision even if the candidate/timetable are unchanged", async () => {
+    const f = setup(), current = { ...f.trip, revision: 5 };
+    const shown = await proposeCandidateSelection(current, f.request, f.port, f.selectedAt);
+    expect(shown.baseRevision).toBe(5);
+    await expect(confirmCandidateSelection({ ...current, revision: 6 }, f.request, shown, f.port, "2026-09-12T08:01:00Z")).rejects.toThrow("旅程が更新された");
+    expect(current.items[0]).toMatchObject({ detail: { status: "unresolved" } });
+  });
   it("adopts from candidate_selection into draft, preserving refinement and independent lifecycle", async () => {
     const { trip, request, port, selectedAt } = setup();
     const selection = { ...trip, planningState: "candidate_selection" as const };
@@ -107,11 +114,11 @@ describe("candidate adoption boundary", () => {
 
   it("rejects the whole patch list and unknown fields; cannot upsert or rename an item", () => {
     const { trip } = setup(); const before = structuredClone(trip);
-    for (const itemId of ["missing", "wrong-id"]) expect(() => applyTripProposal(trip, { tripId: trip.id, summary: "invalid", patches: [
+    for (const itemId of ["missing", "wrong-id"]) expect(() => applyTripProposal(trip, { tripId: trip.id, baseRevision: trip.revision, summary: "invalid", patches: [
       { type: "replace", itemId: "stay", item: { id: "stay", title: "changed", type: "stay", schedule: { type: "unscheduled" }, selection: { status: "unselected" } } },
       { type: "replace", itemId, item: trip.items[0]! },
     ] })).toThrow();
     expect(trip).toEqual(before);
-    expect(() => applyTripProposal({ ...trip, journeys: [] } as Trip, { tripId: trip.id, summary: "", patches: [] })).toThrow();
+    expect(() => applyTripProposal({ ...trip, journeys: [] } as Trip, { tripId: trip.id, baseRevision: trip.revision, summary: "", patches: [] })).toThrow();
   });
 });

@@ -30,7 +30,7 @@ describe("AccommodationSnapshot contract", () => {
     const a = { ...snapshot(), [key]: "not allowed" };
     expect(() => validateAccommodationSnapshot(a)).toThrow();
     const trip = createTrip(id, "旅", at, [item()]), before = structuredClone(trip);
-    expect(() => applyTripProposal(trip, { tripId: id, summary: "invalid", patches: [{ type: "replace", itemId: "stay", item: item(a) }] })).toThrow();
+    expect(() => applyTripProposal(trip, { tripId: id, baseRevision: 0, summary: "invalid", patches: [{ type: "replace", itemId: "stay", item: item(a) }] })).toThrow();
     expect(trip).toEqual(before);
   });
   it.each([
@@ -60,9 +60,9 @@ describe("AccommodationSnapshot contract", () => {
   it.each(["selection", "place", "schedule"] as const)("maintains rejected stay %s assumption atomically", (field) => {
     const trip = createTrip(id, "旅", at, [item()], { constraints: [], assumptions: [{ id: "a", text: "宿の仮案", source: "model", status: "unconfirmed", affects: [{ type: "item", itemId: "stay", field }] }] });
     const request = { ...trip.request, assumptions: trip.request.assumptions.map((a) => ({ ...a, status: "rejected" as const })) };
-    expect(() => applyTripProposal(trip, { tripId: id, summary: "reject", patches: [{ type: "request", request }] })).toThrow();
+    expect(() => applyTripProposal(trip, { tripId: id, baseRevision: 0, summary: "reject", patches: [{ type: "request", request }] })).toThrow();
     const reverted: StayItineraryItem = { id: "stay", title: "宿泊", type: "stay", schedule: { type: "unscheduled" }, selection: { status: "unselected" } };
-    const next = applyTripProposal(trip, { tripId: id, summary: "reject", patches: [{ type: "request", request }, { type: "replace", itemId: "stay", item: reverted }] });
+    const next = applyTripProposal(trip, { tripId: id, baseRevision: 0, summary: "reject", patches: [{ type: "request", request }, { type: "replace", itemId: "stay", item: reverted }] });
     expect(next.items[0]).toEqual(reverted); expect(trip.items[0]).toEqual(item());
   });
 });

@@ -18,7 +18,7 @@ describe("ephemeral turn observation", () => {
     expect(observeAgentTurn(true, [{ kind: "itinerary", refs: [] }]).outcome).toBe("ask_only");
   });
   it("does not count state-only patches or internal tool results as progress", () => {
-    expect(observeViewerTurn({ text: "整理しました", tripUpdateProposal: { tripId: "trip", summary: "変更", patches: [{ type: "planning", state: "candidate_discovery" }] } }, []).progress).toEqual([]);
+    expect(observeViewerTurn({ text: "整理しました", tripUpdateProposal: { tripId: "trip", baseRevision: 0, summary: "変更", patches: [{ type: "planning", state: "candidate_discovery" }] } }, []).progress).toEqual([]);
     expect(observeViewerTurn({ text: "検索しました", external: { webSearch: { status: "available", freshness: "fresh", evidence: [], data: { query: "x", results: [] } } } }, []).progress).toEqual([]);
     expect(observeViewerTurn({ text: "推薦", progressSources: [{ url: "https://example.com", evidenceId: "invented" }] }, []).progress).toEqual([]);
   });

@@ -26,7 +26,7 @@ describe("Trip schedule invariant", () => {
       { type: "fixed" as const, startAt: schedule.startAt },
       { ...schedule, startAt: { at: "2026-09-13T09:10:00+09:00", timeZone: "Asia/Tokyo" } },
     ]) {
-      expect(() => applyTripProposal(trip, { tripId: id, summary: "時刻変更", patches: [
+      expect(() => applyTripProposal(trip, { tripId: id, baseRevision: 0, summary: "時刻変更", patches: [
         { type: "replace", itemId: item.id, item: { ...item, schedule: changed } },
       ] })).toThrow();
     }
@@ -59,10 +59,10 @@ describe("Trip schedule invariant", () => {
     const trip = createTrip(id, "旅", at, [item]);
     const replacement = { ...item, schedule: { type: "day" as const, date: "2026-09-22" } };
     const patch = { type: "replace" as const, itemId: item.id, item: replacement };
-    const updated = applyTripProposal(trip, { tripId: id, summary: "日付指定", patches: [patch] });
+    const updated = applyTripProposal(trip, { tripId: id, baseRevision: 0, summary: "日付指定", patches: [patch] });
     expect(updated.items[0]!.schedule).toEqual(replacement.schedule);
     expect(updated.revision).toBe(0); expect(updated.updatedAt).toBe(at);
-    expect(() => applyTripProposal(trip, { tripId: id, summary: "不正", patches: [patch, { ...patch, item: { ...replacement, schedule: { type: "day", date: "2026-02-30" } } }] })).toThrow();
+    expect(() => applyTripProposal(trip, { tripId: id, baseRevision: 0, summary: "不正", patches: [patch, { ...patch, item: { ...replacement, schedule: { type: "day", date: "2026-02-30" } } }] })).toThrow();
     expect(trip.items[0]!.schedule).toEqual({ type: "unscheduled" });
   });
 });
