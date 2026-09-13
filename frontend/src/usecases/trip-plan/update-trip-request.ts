@@ -105,7 +105,7 @@ export function proposeProfilePreference(trip: Trip, profile: UserProfile,
   } }]);
 }
 function checkedProposal(trip: Trip, summary: string, patches: readonly TripPatch[]): TripUpdateProposal {
-  const proposal = { tripId: trip.id, summary, patches };
+  const proposal = { tripId: trip.id, baseRevision: trip.revision, summary, patches };
   applyTripProposal(trip, proposal); // Validation only; no persistence or mutation.
   return structuredClone(proposal);
 }

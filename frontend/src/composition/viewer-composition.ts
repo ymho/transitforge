@@ -136,7 +136,7 @@ import { configureConversationHistoryPanel } from "../presentation/concierge/con
 import { configureApplicationSettingsPanel } from "../presentation/settings/application-settings-panel";
 import { configureTripPlanPanel } from "../presentation/trip-plan/trip-plan-panel";
 import { createTripWorkspaceController } from "../usecases/trip-plan/trip-workspace-controller";
-import { createServerTripWorkspaceSource } from "../usecases/trip-plan/server-trip-workspace-source";
+import { createReferencedTripSource } from "../usecases/trip-plan/server-trip-workspace-source";
 import { HttpServerTripClient } from "../adapters/http/server-trip-client";
 import { configureTripWorkspace } from "../presentation/trip-plan/trip-workspace";
 import { tripPlanFromTravelPlan } from "@raiquora/trip/trip-plan";
@@ -304,16 +304,14 @@ const contextWorkspaceController = createContextWorkspaceController(
 );
 const tripWorkspaceController = createTripWorkspaceController(activeConversationSession.id);
 const serverTripClient = new HttpServerTripClient();
-const serverTripReferences = new Map<string, string | undefined>();
+const serverTripReferences = new Map<string, string>();
 const syncServerTripSource = (session: typeof activeConversationSession) => {
-  if (!session.tripId && session.tripSourceState !== "server-v2") return;
-  if (serverTripReferences.has(session.id) && serverTripReferences.get(session.id) === session.tripId) return;
-  serverTripReferences.set(session.id, session.tripId);
-  if (session.tripId) {
-    const source = createServerTripWorkspaceSource(session.tripId, serverTripClient);
-    tripWorkspaceController.attach(session.id, source);
-    void source.refresh();
-  } else tripWorkspaceController.attach(session.id, { sourceState: "server-v2", getCurrentTrip: () => undefined, getLoadState: () => "unavailable" });
+  if (!session.tripId && !session.tripSourceState) return;
+  const key = `${session.tripSourceState}:${session.tripId ?? ""}`;
+  if (serverTripReferences.get(session.id) === key) return;
+  serverTripReferences.set(session.id, key);
+  const source = createReferencedTripSource(session, serverTripClient);
+  if (source) tripWorkspaceController.attach(session.id, source);
 };
 syncServerTripSource(activeConversationSession);
 const tripPlanController = configureTripPlanPanel(

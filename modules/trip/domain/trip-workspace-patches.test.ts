@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyTripProposal, type Trip, type TripPatch } from "./trip";
 import { multiCityTrip } from "./trip-places.fixture";
 
-function apply(trip: Trip, patches: TripPatch[]) { return applyTripProposal(trip, { tripId: trip.id, summary: "編集案", patches }); }
+function apply(trip: Trip, patches: TripPatch[]) { return applyTripProposal(trip, { tripId: trip.id, baseRevision: trip.revision, summary: "編集案", patches }); }
 describe("workspace patches share atomic Trip invariants", () => {
   it("removes existing items and moves stable IDs in patch order", () => {
     const trip = multiCityTrip(), original = structuredClone(trip);

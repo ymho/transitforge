@@ -1,14 +1,17 @@
-import { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand, DeleteItemCommand, QueryCommand, type AttributeValue } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand, DeleteItemCommand, QueryCommand, TransactWriteItemsCommand, type AttributeValue } from "@aws-sdk/client-dynamodb";
 import type { Trip } from "@raiquora/trip/trip";
-import { boundedTrip, tripIdentifier, conversationIdentifier, TripResourceError } from "../contracts/trip-api.js";
+import { boundedTrip, tripIdentifier, conversationIdentifier, TripResourceError, validateMutation, type TripMutation } from "../contracts/trip-api.js";
+import { canonicalJson, mutationDigest, readReceipt } from "./trip-mutation-receipt.js";
+import type { TripClock } from "@raiquora/trip/trip-temporal";
 import { requireTripPrincipal, type TripPrincipal, type TripRepository, type TripConversationReferences } from "../ports/trip-repository.js";
 
-type Command = GetItemCommand | PutItemCommand | UpdateItemCommand | DeleteItemCommand | QueryCommand;
+type Command = GetItemCommand | PutItemCommand | UpdateItemCommand | DeleteItemCommand | QueryCommand | TransactWriteItemsCommand;
 type Result = { Item?: Record<string, AttributeValue>; Items?: Record<string, AttributeValue>[]; LastEvaluatedKey?: Record<string, AttributeValue> };
 export interface TripDynamoClient { send(command: Command): Promise<Result> }
 /** Storage v1 envelope; Trip is unchanged. Archive is storage visibility, not lifecycle completion. */
 export class DynamoDbTripRepository implements TripRepository, TripConversationReferences {
-  constructor(private readonly table: string, private readonly client: TripDynamoClient = new DynamoDBClient({})) {
+  constructor(private readonly table: string, private readonly client: TripDynamoClient = new DynamoDBClient({}),
+    private readonly clock: TripClock = { now: () => new Date() }) {
     if (!table) throw new TripResourceError("unavailable");
   }
   private owner(principal: TripPrincipal): string {
@@ -26,8 +29,17 @@ export class DynamoDbTripRepository implements TripRepository, TripConversationR
   async create(principal: TripPrincipal, input: Trip): Promise<Trip> {
     requireTripPrincipal(principal);
     const trip = boundedTrip(input), key = this.key(principal, trip.id);
-    await this.send(new PutItemCommand({ TableName: this.table, Item: { ...key, storageVersion: { N: "1" }, archived: { BOOL: false }, trip: { S: JSON.stringify(trip) } },
-      ConditionExpression: "attribute_not_exists(pk)" }), "already-exists");
+    if (trip.revision !== 0) throw new TripResourceError("invalid-input");
+    try {
+      await this.send(new PutItemCommand({ TableName: this.table, Item: { ...key, storageVersion: { N: "1" }, revision: { N: "0" }, archived: { BOOL: false }, trip: { S: JSON.stringify(trip) } },
+        ConditionExpression: "attribute_not_exists(pk)" }), "already-exists");
+    } catch (error) {
+      // Stable UUID is create/import's idempotency key. Never replace a different/archived record.
+      if (!(error instanceof TripResourceError) || error.code !== "already-exists") throw error;
+      const existing = await this.get(principal, trip.id);
+      if (!existing || canonicalJson(existing) !== canonicalJson(trip)) throw error;
+      return existing;
+    }
     return trip;
   }
   async get(principal: TripPrincipal, id: string): Promise<Trip | undefined> {
@@ -48,16 +60,45 @@ export class DynamoDbTripRepository implements TripRepository, TripConversationR
     if (nextAfterTripId) tripIdentifier(nextAfterTripId);
     return { trips, ...(nextAfterTripId ? { nextAfterTripId } : {}) };
   }
-  async replace(principal: TripPrincipal, input: Trip): Promise<Trip> {
+  async applyMutation(principal: TripPrincipal, mutation: TripMutation, prepare: (current: Trip) => Trip): Promise<Trip> {
     requireTripPrincipal(principal);
-    const trip = boundedTrip(input), key = this.key(principal, trip.id);
-    // Existence/archive/identity invariants only. Deliberately NOT revision CAS (#389).
-    const old = await this.get(principal, trip.id);
+    validateMutation(mutation);
+    mutation = structuredClone(mutation);
+    const key = this.key(principal, mutation.tripId);
+    const receiptKey = { pk: key.pk, sk: { S: `MUTATION#${mutation.mutationId}` } };
+    const receipt = async () => {
+      const { Item } = await this.send(new GetItemCommand({ TableName: this.table, Key: receiptKey, ConsistentRead: true }));
+      return Item ? readReceipt(Item, key.pk.S, mutation) : undefined;
+    };
+    // Owner visibility is checked even on retries; archived resources cannot be mutated/revealed.
+    const old = await this.get(principal, mutation.tripId);
     if (!old) throw new TripResourceError("not-found");
-    if (old.createdAt !== trip.createdAt) throw new TripResourceError("invalid-input");
-    await this.send(new UpdateItemCommand({ TableName: this.table, Key: key,
-      UpdateExpression: "SET trip = :trip", ConditionExpression: "attribute_exists(pk) AND archived = :active",
-      ExpressionAttributeValues: { ":trip": { S: JSON.stringify(trip) }, ":active": { BOOL: false } } }), "not-found");
+    const prior = await receipt();
+    if (prior) return prior;
+    if (old.revision !== mutation.baseRevision) throw new TripResourceError("conflict");
+    const preview = boundedTrip(prepare(structuredClone(old)));
+    if (preview.id !== old.id || preview.createdAt !== old.createdAt || preview.revision !== old.revision || preview.updatedAt !== old.updatedAt) throw new TripResourceError("invalid-input");
+    const trip = boundedTrip({ ...preview, revision: mutation.baseRevision + 1, updatedAt: this.clock.now().toISOString() });
+    if (Date.parse(trip.updatedAt) < Date.parse(old.updatedAt)) throw new TripResourceError("unavailable");
+    try {
+      await this.client.send(new TransactWriteItemsCommand({ TransactItems: [
+        { Update: { TableName: this.table, Key: key, UpdateExpression: "SET trip = :trip, revision = :next",
+          // Old #388 envelopes have no revision attribute: exact old JSON also provides atomic CAS.
+          ConditionExpression: "attribute_exists(pk) AND archived = :active AND (revision = :base OR (attribute_not_exists(revision) AND trip = :old))",
+          ExpressionAttributeValues: { ":trip": { S: JSON.stringify(trip) }, ":next": { N: String(trip.revision) },
+            ":base": { N: String(mutation.baseRevision) }, ":old": { S: JSON.stringify(old) }, ":active": { BOOL: false } } } },
+        { Put: { TableName: this.table, Item: { ...receiptKey, storageVersion: { N: "1" }, digest: { S: mutationDigest(mutation) }, trip: { S: JSON.stringify(trip) } },
+          ConditionExpression: "attribute_not_exists(pk)" } },
+      ] }));
+    } catch (error) {
+      // Handles duplicate concurrent requests AND a committed transaction whose response was lost.
+      if (!await this.get(principal, mutation.tripId)) throw new TripResourceError("not-found");
+      const committed = await receipt();
+      if (committed) return committed;
+      const reasons = (error as { CancellationReasons?: { Code?: string }[] })?.CancellationReasons;
+      if (reasons?.some((r) => r.Code === "ConditionalCheckFailed")) throw new TripResourceError("conflict");
+      throw new TripResourceError("unavailable");
+    }
     return trip;
   }
   async archive(principal: TripPrincipal, id: string): Promise<void> {
@@ -85,6 +126,7 @@ export class DynamoDbTripRepository implements TripRepository, TripConversationR
     if (item.pk?.S !== owner || item.storageVersion?.N !== "1" || typeof item.archived?.BOOL !== "boolean" || typeof item.trip?.S !== "string") throw new TripResourceError("unavailable");
     try {
       const trip = boundedTrip(JSON.parse(item.trip.S));
+      if (item.revision && item.revision.N !== String(trip.revision)) throw new Error();
       if (item.sk?.S !== `TRIP#${trip.id}` || id !== undefined && trip.id !== id) throw new Error();
       return item.archived.BOOL ? undefined : trip;
     } catch { throw new TripResourceError("unavailable"); }

@@ -117,7 +117,7 @@ TypeScriptのテストは対象モジュールの隣へ置く。repository保守
 
 #388の[Trip server保存基盤](docs/architecture/trip-server-persistence.md)では、owner-scoped Repository、
 明示migration、server read/preview sourceを追加した。利用者認証が未導入のため公開Trip CRUDは閉じており、
-本番writer切替は認証境界と#389のCAS/冪等性統合後とする。
+[#389 の CAS/冪等性](docs/architecture/trip-concurrency.md)は統合済み。本番writer切替は認証境界の導入・レビュー後とする。
 
 ## 確認コマンド
 

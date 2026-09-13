@@ -17,7 +17,7 @@ export interface ConversationSession {
   /** Independent server Trip reference. Never confers ownership or authorization. */
   tripId?: string;
   /** UI source ownership survives detach/network failures; not Trip planning/lifecycle state. */
-  tripSourceState?: "server-v2";
+  tripSourceState?: "server-v2" | "migration-pending";
   summary: string;
   resolvedTopics: string[];
   pendingTopics: string[];
@@ -260,7 +260,7 @@ export function parseConversationSession(value: unknown): ConversationSession | 
     return undefined;
   }
   if (value.tripId !== undefined && (typeof value.tripId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(value.tripId))) return undefined;
-  if (value.tripSourceState !== undefined && value.tripSourceState !== "server-v2") return undefined;
+  if (value.tripSourceState !== undefined && value.tripSourceState !== "server-v2" && value.tripSourceState !== "migration-pending") return undefined;
   const title = typeof value.title === "string" && value.title.trim()
     ? value.title.trim().slice(0, 80)
     : titleFromSummary(value.summary);
@@ -270,7 +270,7 @@ export function parseConversationSession(value: unknown): ConversationSession | 
     scope: value.scope,
     ...(value.tripPlanId ? { tripPlanId: value.tripPlanId } : {}),
     ...(value.tripId ? { tripId: value.tripId } : {}),
-    ...(value.tripId || value.tripSourceState ? { tripSourceState: "server-v2" as const } : {}),
+    ...(value.tripId || value.tripSourceState ? { tripSourceState: value.tripSourceState === "migration-pending" ? "migration-pending" as const : "server-v2" as const } : {}),
     summary: value.summary,
     resolvedTopics: [...value.resolvedTopics],
     pendingTopics: [...value.pendingTopics],

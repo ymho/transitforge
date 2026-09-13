@@ -160,7 +160,7 @@ V2 sourceがある場合はDesktopでTripとChatを並べ、Mobileは会話/旅�
 本番V2保存・legacy取込・revision/CASは#388/#389まで有効化しない。
 
 #388で[owner-scoped server保存基盤](architecture/trip-server-persistence.md)を導入した。
-公開認証AdapterはまだなくTrip CRUDは利用不可。本番writer/取込UIは#389と認証レビューまで閉じる。
+公開認証AdapterはまだなくTrip CRUDは利用不可。#389のCAS/冪等性は統合済みだが、本番writer/取込UIは認証レビューまで閉じる。
 server参照のWorkspaceは取得失敗時にlegacy writerへ戻らない。会話削除/evictionはTripと移行原本を消さない。
 
 ## 対象外

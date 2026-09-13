@@ -57,12 +57,12 @@ describe("Trip V2 workspace projections", () => {
     expect(view.party).toContain("大人2人"); expect(view.party).toContain("未確認");
     expect(view.assumptions).toEqual([{ id: "maybe", text: "午後を想定", target: "Zürichの日時" }]);
     const afterRequest = { ...trip.request, constraints: trip.request.constraints.map((c) => ({ ...c, requirement: { type: "destinations" as const, places: [{ name: "London", sources: [] }], order: "flexible" as const } })) };
-    const diff = tripProposalProjection(trip, { tripId: trip.id, summary: "希望先を変更", patches: [{ type: "request", request: afterRequest }] });
+    const diff = tripProposalProjection(trip, { tripId: trip.id, baseRevision: trip.revision, summary: "希望先を変更", patches: [{ type: "request", request: afterRequest }] });
     expect(diff.beforeConditions).toContain("Paris"); expect(diff.afterConditions).toContain("London"); expect(trip.request).not.toEqual(afterRequest);
   });
   it("shows before/after without changing adopted items", () => {
     const trip = multiCityTrip(), before = structuredClone(trip);
-    const view = tripProposalProjection(trip, { tripId: trip.id, summary: "削除案", patches: [{ type: "remove", itemId: "activity" }] });
+    const view = tripProposalProjection(trip, { tripId: trip.id, baseRevision: trip.revision, summary: "削除案", patches: [{ type: "remove", itemId: "activity" }] });
     expect(view.changes[0]?.before).toContain("Zürich"); expect(view.changes[0]?.after).toBe("この予定はありません"); expect(trip).toEqual(before);
   });
 });

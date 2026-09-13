@@ -3,7 +3,13 @@ import { parseTripPlan, tripPlanStorageKey, tripPlanStoreStorageKey } from "../.
 
 /** Never deletes the source keys or backups, including after success, detach or conversation eviction. */
 export class BrowserTripMigrationStore implements TripMigrationStore {
-  constructor(private readonly storage: Pick<Storage, "getItem" | "setItem">) {}
+  constructor(private readonly storage: Pick<Storage, "getItem" | "setItem">,
+    private readonly locks: Pick<LockManager, "request"> | undefined = globalThis.navigator?.locks) {}
+  async exclusive<T>(scope: string, sessionId: string, work: () => Promise<T>): Promise<T> {
+    // Fail closed without cross-tab exclusion; never substitute a process-local lock.
+    if (!this.locks) throw new Error("Exclusive import is unavailable");
+    return this.locks.request(this.key(scope, sessionId, "lock"), { mode: "exclusive" }, work);
+  }
   private key(scope: string, sessionId: string, kind: string): string {
     if (!scope.trim() || scope.length > 200 || !/^[A-Za-z0-9_-]{1,100}$/.test(sessionId)) throw new Error("Invalid migration scope");
     return `transitforge.trip-import.v1:${encodeURIComponent(scope)}:${sessionId}:${kind}`;

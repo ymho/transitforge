@@ -41,7 +41,7 @@ describe("TripParty aggregate contract", () => {
       const request = { ...trip.request, party: status === "rejected"
         ? { ...trip.request.party!, source: "user" as const, assumptionId: undefined }
         : { ...trip.request.party!, adults: 3 }, assumptions: trip.request.assumptions.map((a) => ({ ...a, status })) };
-      expect(() => applyTripProposal(trip, { tripId: trip.id, summary: "不正", patches: [{ type: "request", request }] })).toThrow();
+      expect(() => applyTripProposal(trip, { tripId: trip.id, baseRevision: trip.revision, summary: "不正", patches: [{ type: "request", request }] })).toThrow();
     }
     expect(trip).toEqual(before);
   });

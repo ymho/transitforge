@@ -4,7 +4,7 @@ import { validatePlanningState, type PlanningState } from "./trip-state";
 import { requestTrip, requestRailItem, requestConstraint } from "./trip-request.fixture";
 
 const tripWithItems = () => requestTrip(undefined, [requestRailItem()]);
-const apply = (trip: Trip, patches: TripPatch[]) => applyTripProposal(trip, { tripId: trip.id, summary: "状態の提案", patches });
+const apply = (trip: Trip, patches: TripPatch[]) => applyTripProposal(trip, { tripId: trip.id, baseRevision: trip.revision, summary: "状態の提案", patches });
 
 describe("Trip planning/lifecycle invariants", () => {
   it.each(["inspiration", "candidate_discovery", "candidate_selection", "itinerary_draft", "itinerary_refinement"] as PlanningState[])("supports %s without a mandatory phase sequence", (state) => {
@@ -44,7 +44,7 @@ describe("Trip planning/lifecycle invariants", () => {
   });
   it("requires a separate user confirmation; accepts completion without inventing item execution status", () => {
     const trip = tripWithItems();
-    const proposal = { tripId: trip.id, summary: "終了を確認", patches: [{ type: "lifecycle" as const, state: "completed" as const, basis: "user_confirmation" as const }] };
+    const proposal = { tripId: trip.id, baseRevision: trip.revision, summary: "終了を確認", patches: [{ type: "lifecycle" as const, state: "completed" as const, basis: "user_confirmation" as const }] };
     expect(() => applyTripProposal(trip, proposal, { confirmedLifecycle: "cancelled" })).toThrow();
     const completed = applyTripProposal(trip, proposal, { confirmedLifecycle: "completed" });
     expect(completed.lifecycleState).toBe("completed");
@@ -54,7 +54,7 @@ describe("Trip planning/lifecycle invariants", () => {
   });
   it.each(["cancelled", "completed"] as const)("does not revive terminal %s through a patch", (state) => {
     const trip = { ...tripWithItems(), lifecycleState: state };
-    expect(() => applyTripProposal(trip, { tripId: trip.id, summary: "復活", patches: [
+    expect(() => applyTripProposal(trip, { tripId: trip.id, baseRevision: trip.revision, summary: "復活", patches: [
       { type: "lifecycle", state: "pre_trip", basis: "user_confirmation" },
     ] }, { confirmedLifecycle: "pre_trip" })).toThrow(/revived/);
   });

@@ -1,8 +1,8 @@
-import { validateTrip, type Trip } from "@raiquora/trip/trip";
+import { validateTrip, type Trip, type TripUpdateProposal } from "@raiquora/trip/trip";
 
 export const tripApiVersion = "trip-api-v1";
 export const tripApiLimits = { bodyBytes: 256 * 1024, items: 100, constraints: 100, assumptions: 100, stringLength: 4096, arrayLength: 1000, depth: 32 } as const;
-export type TripErrorCode = "unauthenticated" | "not-found" | "already-exists" | "invalid-input" | "payload-too-large" | "unavailable";
+export type TripErrorCode = "unauthenticated" | "not-found" | "already-exists" | "invalid-input" | "payload-too-large" | "unavailable" | "conflict" | "mutation-reused";
 /** Constant categories only: never propagate SDK/Domain messages containing private data. */
 export class TripResourceError extends Error {
   constructor(readonly code: TripErrorCode) { super(code); }
@@ -34,11 +34,26 @@ function checkBounds(value: unknown, depth = 0): void {
   } else if (typeof value === "number" && !Number.isFinite(value)) throw new TripResourceError("invalid-input");
 }
 export type TripApiCommand =
-  | { version: typeof tripApiVersion; operation: "create" | "replace"; trip: Trip }
+  | { version: typeof tripApiVersion; operation: "create"; trip: Trip }
+  | ({ version: typeof tripApiVersion; operation: "mutate" } & TripMutation)
   | { version: typeof tripApiVersion; operation: "get" | "archive"; tripId: string }
   | { version: typeof tripApiVersion; operation: "list"; afterTripId?: string; limit?: number }
   | { version: typeof tripApiVersion; operation: "attach"; conversationId: string; tripId: string }
   | { version: typeof tripApiVersion; operation: "detach" | "reference"; conversationId: string };
+
+export interface TripMutation {
+  tripId: string;
+  baseRevision: number;
+  mutationId: string;
+  proposal: TripUpdateProposal;
+}
+export function validateMutation(value: TripMutation): void {
+  tripIdentifier(value.tripId); tripIdentifier(value.mutationId);
+  if (!Number.isSafeInteger(value.baseRevision) || value.baseRevision < 0 || value.baseRevision === Number.MAX_SAFE_INTEGER ||
+      value.proposal?.tripId !== value.tripId || value.proposal.baseRevision !== value.baseRevision) throw new TripResourceError("invalid-input");
+  checkBounds(value.proposal);
+  if (Buffer.byteLength(JSON.stringify(value), "utf8") > tripApiLimits.bodyBytes) throw new TripResourceError("payload-too-large");
+}
 
 export function parseTripCommand(value: unknown): TripApiCommand {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TripResourceError("invalid-input");
@@ -46,7 +61,8 @@ export function parseTripCommand(value: unknown): TripApiCommand {
   if (v.version !== tripApiVersion) throw new TripResourceError("invalid-input");
   let keys: string[];
   switch (v.operation) {
-    case "create": case "replace": keys = ["trip"]; boundedTrip(v.trip); break;
+    case "create": keys = ["trip"]; boundedTrip(v.trip); break;
+    case "mutate": keys = ["tripId", "baseRevision", "mutationId", "proposal"]; validateMutation(v as unknown as TripMutation); break;
     case "get": case "archive": keys = ["tripId"]; tripIdentifier(v.tripId); break;
     case "list":
       keys = ["limit", "afterTripId"];

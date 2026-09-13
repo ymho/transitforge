@@ -84,6 +84,12 @@ implements ConversationSessionRepository {
   save(session: ConversationSession): ConversationSession {
     const parsed = parseConversationSession(session);
     if (!parsed) throw new Error("会話Sessionが不正です");
+    const previous = this.read()?.sessions.find((s) => s.id === parsed.id);
+    // A stale chat summary from another tab cannot reopen a legacy writer.
+    if (previous?.tripSourceState && (!parsed.tripSourceState || previous.tripSourceState === "server-v2" && parsed.tripSourceState === "migration-pending")) {
+      parsed.tripSourceState = previous.tripSourceState;
+      if (previous.tripId) parsed.tripId = previous.tripId;
+    }
     this.persistWith(parsed, this.read()?.activeSessionId ?? parsed.id);
     return copySession(parsed);
   }

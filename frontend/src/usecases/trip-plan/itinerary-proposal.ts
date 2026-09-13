@@ -7,7 +7,7 @@ export function proposeItineraryItem(trip: Trip, item: ItineraryItem, placement:
   exactKeys(placement, ["itemId", "afterId", "operation"]);
   if (item.id !== placement.itemId || !["add", "replace"].includes(placement.operation) ||
       placement.operation === "replace" && placement.afterId !== undefined) throw new Error("Invalid itinerary placement");
-  const proposal: TripUpdateProposal = { tripId: trip.id, summary: `${item.title}を旅程へ${placement.operation === "add" ? "追加" : "変更"}する案`, patches: [
+  const proposal: TripUpdateProposal = { tripId: trip.id, baseRevision: trip.revision, summary: `${item.title}を旅程へ${placement.operation === "add" ? "追加" : "変更"}する案`, patches: [
     placement.operation === "add" ? { type: "add", item, ...(placement.afterId !== undefined ? { afterId: placement.afterId } : {}) }
       : { type: "replace", itemId: placement.itemId, item },
     { type: "planning", state: trip.planningState === "itinerary_draft" || trip.planningState === "itinerary_refinement" ? "itinerary_refinement" : "itinerary_draft" },

@@ -6,6 +6,7 @@
 
 #384の回答観測・Runtimeへの接続・評価・writer gateの実装記録は[Ask + Progress](ask-progress.md)を参照する。
 #410のActivity/add/候補採用と部分migrationは[Activity導入記録](trip-activity.md)を参照する。
+#389の既存revisionを使うCAS/Proposal/receipt/競合回復は[更新契約](trip-concurrency.md)を参照する。
 
 **これは採用する最終契約であり、V2が稼働済みという記述ではない。** #415では文書だけを変更する。
 現在稼働している型・保存処理は下表のlegacy実装である。後続Issueは本契約を同じ

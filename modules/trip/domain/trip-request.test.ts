@@ -89,9 +89,9 @@ describe("Trip.request contract", () => {
     const trip = requestTrip(undefined, [{ id: "item", type: "transport", title: "移動", detail: { status: "unresolved" }, schedule: { type: "day", date: "2026-09-22" } }]);
     const before = structuredClone(trip);
     const request = { constraints: [requestConstraint({ type: "dates", start: { earliest: "2026-09-25", latest: "2026-09-27" } })], assumptions: [] };
-    const next = applyTripProposal(trip, { tripId: trip.id, summary: "条件変更", patches: [{ type: "request", request }] });
+    const next = applyTripProposal(trip, { tripId: trip.id, baseRevision: trip.revision, summary: "条件変更", patches: [{ type: "request", request }] });
     expect(next.items).toEqual(trip.items);
-    expect(() => applyTripProposal(trip, { tripId: trip.id, summary: "不正", patches: [{ type: "request", request }, { type: "request", request: assumedRequest("legacy") as TripRequest }, { type: "replace", itemId: "absent", item: trip.items[0]! }] })).toThrow();
+    expect(() => applyTripProposal(trip, { tripId: trip.id, baseRevision: trip.revision, summary: "不正", patches: [{ type: "request", request }, { type: "request", request: assumedRequest("legacy") as TripRequest }, { type: "replace", itemId: "absent", item: trip.items[0]! }] })).toThrow();
     expect(trip).toEqual(before);
   });
   it("prioritizes explicit transport requirements over conflicting profile exclusions at the correct item scope", () => {

@@ -3,13 +3,19 @@ import { migrateTripToServer, type TripMigrationOutcome } from "./trip-server-mi
 import { createServerTripWorkspaceSource } from "./server-trip-workspace-source";
 import type { TripWorkspaceController } from "./trip-workspace-controller";
 
-/** Future consent/auth host seam. Intentionally not installed as a public import button before #389.
+/** Future consent/auth host seam. Intentionally not installed as a public import button without authentication.
  * The pending source freezes legacy writers, including on partial failures. Original bytes survive.
  */
 export async function migrateTripWorkspace(options: Parameters<typeof migrateTripToServer>[0],
   workspace: TripWorkspaceController, conversations: ConversationSessionRepository): Promise<TripMigrationOutcome> {
   if (!options.authenticatedScope?.trim()) return { state: "legacy-only", error: "authentication-required" };
   workspace.attach(options.sessionId, { sourceState: "migration-pending", getLoadState: () => "loading", getCurrentTrip: () => undefined });
+  // Durable gate BEFORE the first network write, including retries/another tab/reloads.
+  const initial = conversations.list().find((s) => s.id === options.sessionId);
+  if (!initial) return { state: "migration-pending", error: "legacy-missing" };
+  try {
+    if (initial.tripSourceState !== "server-v2") conversations.save({ ...initial, tripSourceState: "migration-pending" });
+  } catch { return { state: "migration-pending", error: "unavailable" }; }
   const result = await migrateTripToServer(options);
   if (result.state === "server-v2" && result.tripId) {
     const session = conversations.list().find((s) => s.id === options.sessionId);
