@@ -1,13 +1,19 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { parseAgentEvaluationDataset } from "../../usecases/agent/evaluation/evaluation-dataset";
-import { modelTools, modelTool } from "./ask-progress-scenarios.fixture";
+import { modelTools, modelTool, modelAnswer } from "./ask-progress-scenarios.fixture";
 import { runTravelProgressScenario } from "./travel-progress-scenarios.fixture";
 
 const travelProgressScenarios = parseAgentEvaluationDataset(JSON.parse(readFileSync(
   new URL("../../../../tests/fixtures/agent-eval-cases.json", import.meta.url), "utf8"))).travelProgressScenarios!;
 
 describe("Trip Progress through production runtime", () => {
+  it("fails an unsupported model claim that an impossible trip is ready", async () => {
+    const report = await runTravelProgressScenario(travelProgressScenarios.find((s) => s.id === "AC-impossible-itinerary")!, async () => modelAnswer("問題ありません。この旅程は準備完了です。"));
+    expect(report.passed).toBe(false);
+    expect(report.contractFailures).toContain("no reviewable correction proposal");
+    expect(report.contractFailures).not.toContain("invalid ready accepted");
+  });
   it.each(travelProgressScenarios)("measures $id", async (scenario) => {
     const { id } = scenario;
     const report = await runTravelProgressScenario(scenario);

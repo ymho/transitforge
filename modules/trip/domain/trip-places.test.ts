@@ -70,13 +70,14 @@ describe("Trip display hint / ordered adopted places", () => {
     expect(uniqueTripPlaces(ordered).map((p) => p.itemId)).toEqual(["a0", "a1", "a3", "a4", "a5", "a6", "a7"]);
     expect(ordered).toHaveLength(8);
   });
-  it("keeps requests, adopted places, and summaries independent; destination feasibility remains unknown", () => {
+  it("keeps requests, adopted places, and summaries independent; #402 evaluates only adopted visits", () => {
     const request = { constraints: [{ id: "wishes", strength: "hard" as const, source: "user" as const, scope: { type: "trip" as const },
       requirement: { type: "destinations" as const, order: "fixed" as const, places: [resolvedPlace("Vienna"), resolvedPlace("Salzburg")] } }], assumptions: [] };
     for (const items of [[], [placeActivity("a", resolvedPlace("Vienna"))]]) {
       const trip = createTrip(placesTripId, "旅", placesAt, items, request, undefined, "スイス");
       expect(projectTripPlaces(trip).visitedPlaces.map((p) => p.place.name)).toEqual(items.length ? ["Vienna"] : []);
-      expect(evaluateTripHardConstraints(trip)).toEqual([{ constraintId: "wishes", status: "unknown", reasonCode: "insufficient_planned_facts" }]);
+      expect(evaluateTripHardConstraints(trip)).toEqual([{ constraintId: "wishes", status: items.length ? "violated" : "unknown",
+        reasonCode: items.length ? "planned_facts" : "insufficient_planned_facts" }]);
     }
   });
 });

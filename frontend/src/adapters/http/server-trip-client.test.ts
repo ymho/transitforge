@@ -4,6 +4,12 @@ import { TripWriteRejected } from "../../usecases/trip-plan/server-trip-client";
 import { HttpServerTripClient } from "./server-trip-client";
 const trip = createTrip("11111111-1111-4111-8111-111111111111", "旅", "2026-09-13T01:00:00Z");
 describe("Trip HTTP client", () => {
+  it("does not label feasibility rejection as booking-change consent", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ version: "trip-api-v1", error: "feasibility-required" }), { status: 409 }));
+    const client = new HttpServerTripClient("/api/trips/v1", request);
+    await expect(client.mutate({ tripId: trip.id, baseRevision: 0, mutationId: "22222222-2222-4222-8222-222222222222",
+      proposal: { tripId: trip.id, baseRevision: 0, summary: "案", patches: [] } })).rejects.toThrow("成立性が未確認または不成立");
+  });
   it("sends revision/mutation contract and distinguishes conflict/reuse from network failure", async () => {
     const request = vi.fn<typeof fetch>(), client = new HttpServerTripClient("/api/trips/v1", request);
     const mutation = { tripId: trip.id, mutationId: "22222222-2222-4222-8222-222222222222", baseRevision: 0,

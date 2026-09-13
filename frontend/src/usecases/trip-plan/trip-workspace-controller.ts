@@ -6,6 +6,8 @@ import { validateTravelCandidateAssessment } from "@raiquora/trip/validate-candi
 import { proposeCandidateSelection, type CandidateSelectionPort, type CandidateSelectionRequest } from "./select-trip-candidate";
 import type { TripLoadState, TripSourceState } from "./server-trip-client";
 import { validateReservationFact, bookedReservationChanges, reservationChangeKey, type ReservationFact } from "@raiquora/trip/reservation";
+import { evaluateTripFeasibility, type TripFeasibilityFacts } from "@raiquora/trip/trip-feasibility";
+import { requireFeasibleTrip, requestsReady } from "@raiquora/trip/trip-ready";
 
 /** A read/preview host, not a Repository. No default writer, legacy conversion or dual write. */
 export interface TripWorkspaceSource {
@@ -16,13 +18,15 @@ export interface TripWorkspaceSource {
   getCurrentTrip(): Trip | undefined;
   /** undefined means not fetched/unavailable, not an empty set of bookings. */
   getReservationFacts?(): readonly ReservationFact[] | undefined;
+  /** Already acquired runtime observations; no fetch or model call implied by rendering. */
+  getFeasibilityExternalFacts?(): TripFeasibilityFacts["external"];
   getCandidates?(): readonly { candidate: TravelCandidate; assessment?: TravelCandidateAssessment }[];
   candidateSelection?: { taskId: string; port: CandidateSelectionPort };
   /** Explicit in-memory confirmation may be supplied by a host; candidate proposals need revalidation there. */
   confirmProposal?(proposal: TripUpdateProposal, confirmation?: { reservationChangeKey: string }): Promise<void>;
   confirmationPersistence?: "server";
 }
-export function createTripWorkspaceController(initialSessionId: string) {
+export function createTripWorkspaceController(initialSessionId: string, now: () => Date = () => new Date()) {
   let sessionId = initialSessionId;
   const sessions = new Map<string, { source: TripWorkspaceSource; itemId?: string; proposal?: TripUpdateProposal; base?: string; confirming?: boolean }>();
   const subscriptions = new Map<string, () => void>();
@@ -46,9 +50,15 @@ export function createTripWorkspaceController(initialSessionId: string) {
     s.proposal = structuredClone(proposal); s.base = JSON.stringify(trip);
     publish();
   };
+  const feasibilityInput = (trip: Trip): TripFeasibilityFacts => ({ tripId: trip.id, tripRevision: trip.revision,
+    reservations: reservations(), external: state()?.source.getFeasibilityExternalFacts?.() });
   return {
     current,
     reservations,
+    feasibility(proposed?: Trip) {
+      const trip = proposed ?? current();
+      return trip ? evaluateTripFeasibility(trip, feasibilityInput(trip), now().toISOString()) : undefined;
+    },
     reservationWarnings() {
       const proposal = state()?.proposal, facts = reservations();
       return proposal && facts ? bookedReservationChanges(proposal, facts) : [];
@@ -99,7 +109,8 @@ export function createTripWorkspaceController(initialSessionId: string) {
         throw new TripRevisionConflict();
       }
       const shown = s.proposal;
-      applyTripProposal(trip, shown);
+      const proposed = applyTripProposal(trip, shown);
+      if (requestsReady(shown)) requireFeasibleTrip(proposed, feasibilityInput(proposed), now().toISOString());
       const facts = reservations();
       if (facts && bookedReservationChanges(shown, facts).length && confirmation?.reservationChangeKey !== reservationChangeKey(shown, facts)) {
         throw new Error("予約済みの予定を変更します。予約は変更・取消されません。影響を確認してください。");

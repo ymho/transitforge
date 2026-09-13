@@ -17,10 +17,10 @@ export function validateLifecycleState(value: unknown): asserts value is Lifecyc
 export function validateTripState(trip: Pick<Trip, "planningState" | "lifecycleState" | "items">): void {
   validatePlanningState(trip.planningState);
   validateLifecycleState(trip.lifecycleState);
-  // #402 will supply the feasibility proof. No amount of items or model confidence is a substitute.
-  if (trip.planningState === "ready") throw new Error("Ready certification requires #402 feasibility validation");
+  // Persisted ready is planning intent, not current feasibility. Application gates certification;
+  // later observations must not make a valid stored Trip unreadable or rewrite its state.
   if ((trip.planningState === "itinerary_draft" || trip.planningState === "itinerary_refinement" ||
-      trip.lifecycleState === "in_trip" || trip.lifecycleState === "completed") && !trip.items.length) {
+      trip.planningState === "ready" || trip.lifecycleState === "in_trip" || trip.lifecycleState === "completed") && !trip.items.length) {
     throw new Error("Adopted itinerary items required for this state");
   }
 }

@@ -1241,6 +1241,7 @@ if (!token) {
                 previousAssistantTurn: agentTurnObservations.get(executionSessionId),
                 getCurrentTrip: () => workspaceSource?.getCurrentTrip(),
                 getReservationFacts: () => workspaceSource?.getReservationFacts?.(),
+                getFeasibilityExternalFacts: () => workspaceSource?.getFeasibilityExternalFacts?.(),
                 getUiFocus: () => uiFocus,
                 ...(workspaceSource ? {
                   getTravelCandidates: () => (workspaceSource.getCandidates?.() ?? []).map(({ candidate, assessment }) =>

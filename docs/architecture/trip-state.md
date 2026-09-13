@@ -32,10 +32,9 @@ createTripのplanningState引数で直接draftから作ることもできる。�
 draft/refinementは採用済みitemを1つ以上必要とする。未選択宿・未解決移動・unscheduledでもdraftを保存できる。
 in_trip/completedも空Tripでは認めない。旅行中のrefinementや方向性の見直しは可能。
 
-`ready`はenumとして定義するが、**#402の成立性証明がない今はDomain validationで認定を拒否**する。
-選択済み経路がある、予約がある、モデルが自信を示した等だけでは認定しない。
-hard違反・unknown・unconfirmedを無視する仮のfeasibility engineは追加しない。
-#402は既存hard constraint評価を再利用し、この同じvalidationへ証明を接続する。
+`ready`の認定は#402の[Trip Feasibility](trip-feasibility.md)をApplicationで検証する。
+選択済み経路がある、予約がある、モデルが自信を示した等だけでは認定しない。違反・unknownを拒否する。
+保存済みreadyは構造validationで読める。後で評価が変わってもplanningStateを自動変更しない。
 
 ## Proposal / 確認
 

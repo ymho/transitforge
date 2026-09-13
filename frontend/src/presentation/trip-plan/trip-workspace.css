@@ -8,6 +8,10 @@
 .trip-workspace h3 { font-size: 0.95rem; }
 .trip-workspace-copy { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
 .trip-workspace-notice { color: #655017; font-size: 0.85rem; }
+.trip-workspace-feasibility { border-left: 3px solid #a16f12; background: #fff6dc; padding: 0.75rem; margin-block: 0.8rem; font-size: 0.9rem; }
+.trip-workspace-feasibility[data-feasibility="infeasible"] { border-color: #b42318; background: #fff1ee; }
+.trip-workspace-feasibility[data-feasibility="feasible"] { border-color: #347050; background: #eef7f0; }
+.trip-workspace-feasibility-issue { color: #69490a; font-size: 0.85rem; }
 .trip-workspace-card, .trip-workspace-candidate, .trip-workspace-proposal {
   border: 1px solid #d8dee6; border-radius: 0.75rem; padding: 0.8rem; margin-block: 0.8rem;
 }

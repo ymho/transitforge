@@ -4,9 +4,11 @@ import { proposeItineraryItem } from "../../usecases/trip-plan/itinerary-proposa
 import { itineraryItemCopy, itineraryScheduleLabel, itemAssumptions } from "./trip-workspace-projection";
 import { element, control, option } from "./trip-workspace-elements";
 import { reservationStatusLabels } from "../../usecases/trip-plan/reservation-reader";
+import type { TripFeasibilityIssue } from "@raiquora/trip/trip-feasibility";
+import { feasibilityIssueText } from "./trip-feasibility-view";
 
 export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller: TripWorkspaceController,
-  options: { collapsed: boolean; collapse(value: boolean): void; chat(prompt: string): void; report(message: string): void }): HTMLElement {
+  options: { collapsed: boolean; collapse(value: boolean): void; chat(prompt: string): void; report(message: string): void }, issues: TripFeasibilityIssue[] = []): HTMLElement {
   const card = element("article", "trip-workspace-card"); card.dataset.itemId = item.id;
   const header = element("header");
   const focus = control(item.title, () => controller.focus(item.id));
@@ -21,6 +23,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   });
   expand.setAttribute("aria-expanded", String(!body.hidden)); expand.setAttribute("aria-controls", body.id);
   header.append(focus, expand); card.append(header, element("p", "", itineraryScheduleLabel(item.schedule, true)));
+  for (const issue of issues) card.append(element("p", "trip-workspace-feasibility-issue", `⚠ ${feasibilityIssueText(issue)}`));
   for (const r of controller.reservations()?.filter((r) => r.itineraryItemId === item.id) ?? []) {
     card.append(element("p", "trip-workspace-reservation", `予約記録: ${reservationStatusLabels[r.status]}`));
   }

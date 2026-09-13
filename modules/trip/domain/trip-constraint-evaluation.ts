@@ -3,6 +3,12 @@ import { effectiveTripConstraints } from "./trip-request";
 import type { DateRange, MobilityRequirement, TripRequirement } from "./trip-requirement";
 import { samePlaceIdentity } from "./place-snapshot";
 import type { ItinerarySchedule, ZonedInstant } from "./itinerary-schedule";
+import { projectTripPlaces } from "./trip-places";
+import type { PlaceSnapshot } from "./place-snapshot";
+import { addMoney, compareMoney, validateMoney, type Money } from "./money";
+
+/** Trusted, complete adopted-item costs, after external freshness/subject validation. */
+export interface TripConstraintFacts { costs?: readonly { itemId: string; total: Money }[] }
 
 export type ConstraintEvaluationStatus = "satisfied" | "violated" | "unknown";
 export interface TripConstraintEvaluation {
@@ -15,7 +21,7 @@ export interface TripConstraintEvaluation {
  * Trip-scoped mobility limits apply to each movement, not outbound + return summed together.
  * An empty result means no effective hard constraints, NOT a feasible/completed trip.
  */
-export function evaluateTripHardConstraints(trip: Trip): TripConstraintEvaluation[] {
+export function evaluateTripHardConstraints(trip: Trip, facts: TripConstraintFacts = {}): TripConstraintEvaluation[] {
   validateTrip(trip);
   return effectiveTripConstraints(trip.request).filter((c) => c.strength === "hard").map((c) => {
     if (c.assumptionId && trip.request.assumptions.find((a) => a.id === c.assumptionId)?.status === "unconfirmed") {
@@ -31,20 +37,70 @@ export function evaluateTripHardConstraints(trip: Trip): TripConstraintEvaluatio
       // Do not declare a user override violated by reapplying the profile globally (#402 owns composition).
       return { constraintId: c.id, status: "unknown", reasonCode: "insufficient_planned_facts" };
     }
-    const status = evaluate(c.requirement, items);
+    const status = evaluate(c.requirement, items, trip, facts);
     return { constraintId: c.id, status, reasonCode: status === "unknown" ? "insufficient_planned_facts" : "planned_facts" };
   });
 }
 
-function evaluate(requirement: TripRequirement, items: readonly ItineraryItem[]): ConstraintEvaluationStatus {
+function evaluate(requirement: TripRequirement, items: readonly ItineraryItem[], trip: Trip, facts: TripConstraintFacts): ConstraintEvaluationStatus {
   if (!items.length) return "unknown";
   switch (requirement.type) {
+    case "origin": case "destinations": {
+      const places = projectTripPlaces(trip).visitedPlaces.filter((p) => items.some((i) => i.id === p.itemId)).map((p) => p.place);
+      // Consecutive endpoint/activity representations are one visit, not proof of a return visit.
+      const visits = places.filter((p, index) => !index || !samePlaceIdentity(p.ref, places[index - 1]!.ref));
+      if (requirement.type === "origin") {
+        const origin = projectTripPlaces(trip).visitedPlaces.find((p) => p.itemId === items[0]!.id)?.place;
+        return origin ? identity(requirement.place, origin) : "unknown";
+      }
+      let cursor = 0;
+      const results = requirement.places.map((wanted) => {
+        const candidates = requirement.order === "fixed" ? visits.slice(cursor) : visits;
+        const found = candidates.findIndex((p) => samePlaceIdentity(wanted.ref, p.ref));
+        if (found >= 0) { if (requirement.order === "fixed") cursor += found + 1; return "satisfied" as const; }
+        const incomplete = items.some((i) => i.type === "transport" ? i.detail.status === "unresolved" :
+          i.type === "stay" ? i.selection.status === "unselected" : !i.place);
+        return incomplete || !visits.length || visits.some((p) => identity(wanted, p) === "unknown") ? "unknown" as const : "violated" as const;
+      });
+      return combine(results);
+    }
+    case "duration": {
+      const first = items[0]!.schedule, last = items.at(-1)!.schedule;
+      const zone = (s: ItinerarySchedule) => s.type === "fixed" ? s.startAt.timeZone : s.type === "window" ? s.earliestStart.timeZone : s.type === "day" ? s.timeZone : undefined;
+      const tz = zone(first);
+      if (!tz || !zone(last)) return "unknown";
+      const start = dateBounds(first, false, tz), end = dateBounds(last, true, tz);
+      if (!start || !end) return "unknown";
+      const adjustment = requirement.unit === "days" ? 1 : 0;
+      const min = (Date.parse(end[0]) - Date.parse(start[1])) / 86_400_000 + adjustment;
+      const max = (Date.parse(end[1]) - Date.parse(start[0])) / 86_400_000 + adjustment;
+      if (max < requirement.minimum || min > requirement.maximum) return "violated";
+      return min >= requirement.minimum && max <= requirement.maximum ? "satisfied" : "unknown";
+    }
+    case "budget": {
+      try {
+        const costs = items.map((item) => facts.costs?.filter((c) => c.itemId === item.id) ?? []);
+        // Even a selected stay's reference-minimum is not a complete trip/room/party price.
+        if (costs.some((entries) => entries.length !== 1)) return "unknown";
+        const amounts = costs.map((entries) => entries[0]!.total); amounts.forEach(validateMoney);
+        let total = amounts[0]!;
+        for (const amount of amounts.slice(1)) total = addMoney(total, amount);
+        let limit = requirement.limit;
+        if (requirement.basis === "per-person") {
+          const party = trip.request.party;
+          if (!party || party.assumptionId && trip.request.assumptions.find((a) => a.id === party.assumptionId)?.status !== "confirmed") return "unknown";
+          limit = { currency: limit.currency, amountMinor: limit.amountMinor * (party.adults + party.children.length) };
+          validateMoney(limit);
+        }
+        return compareMoney(total, limit) <= 0 ? "satisfied" : "violated";
+      } catch { return "unknown"; } // Mixed currency/overflow are not implicit FX/zero.
+    }
     case "dates": {
       // Item order is adopted itinerary order. Missing intermediate schedules can conceal a date conflict.
-      if (items.some((item) => item.schedule.type === "unscheduled")) return "unknown";
       const start = dateBounds(items[0]!.schedule, false, requirement.timeZone);
       const end = dateBounds(items.at(-1)!.schedule, true, requirement.timeZone);
-      return combine([withinRange(start, requirement.start), ...(requirement.end ? [withinRange(end, requirement.end)] : [])]);
+      return combine([withinRange(start, requirement.start), ...(requirement.end ? [withinRange(end, requirement.end)] : []),
+        ...(items.some((item) => item.schedule.type === "unscheduled") ? ["unknown" as const] : [])]);
     }
     case "arrive_by": case "depart_after": {
       const times: number[] = [];
@@ -71,9 +127,10 @@ function evaluate(requirement: TripRequirement, items: readonly ItineraryItem[])
           }
         }
       }
-      if (!times.length || missing) return "unknown"; // Name-only places do not prove identity.
-      return (requirement.type === "arrive_by" ? Math.max(...times) <= Date.parse(requirement.at.at)
-        : Math.min(...times) >= Date.parse(requirement.at.at)) ? "satisfied" : "violated";
+      if (!times.length) return "unknown";
+      const satisfied = requirement.type === "arrive_by" ? Math.max(...times) <= Date.parse(requirement.at.at)
+        : Math.min(...times) >= Date.parse(requirement.at.at);
+      return !satisfied ? "violated" : missing ? "unknown" : "satisfied";
     }
     case "mobility": {
       const movements = items.filter((item) => item.type === "transport");
@@ -106,6 +163,14 @@ function evaluate(requirement: TripRequirement, items: readonly ItineraryItem[])
     // Natural-language experiences and unimplemented fact comparisons must never count as proven.
     default: return "unknown";
   }
+}
+
+function identity(a: PlaceSnapshot, b: PlaceSnapshot): ConstraintEvaluationStatus {
+  if (samePlaceIdentity(a.ref, b.ref)) return "satisfied";
+  // Different providers/unknown identifiers cannot prove either equivalence or difference.
+  const x = a.ref, y = b.ref;
+  return x && y && x.provider !== "manual" && x.provider === y.provider &&
+    (x.providerPlaceId && y.providerPlaceId || x.canonicalKey && y.canonicalKey) ? "violated" : "unknown";
 }
 
 function combine(values: ConstraintEvaluationStatus[]): ConstraintEvaluationStatus {
