@@ -2,6 +2,7 @@ import { createTrip, applyTripProposal, type Trip, type ItineraryItem } from "@r
 import { createTravelCandidate } from "@raiquora/trip/travel-candidate";
 import { assessTravelCandidate } from "@raiquora/trip/assess-travel-candidate";
 import type { TripWorkspaceSource } from "../usecases/trip-plan/trip-workspace-controller";
+import { reservationStatuses, type ReservationFact } from "@raiquora/trip/reservation";
 
 /** Synthetic UI data, DEV-only. Not a current forecast, actual offering, migration or persistent Trip. */
 export function tripWorkspacePreviewSource(): TripWorkspaceSource {
@@ -27,7 +28,11 @@ export function tripWorkspacePreviewSource(): TripWorkspaceSource {
     ],
   }, "itinerary_refinement", "ウィーン・ザルツブルク");
   const candidate = createTravelCandidate({ id: "preview-candidate" });
+  const reservations: ReservationFact[] = items.map((item, index) => ({ reservationId: `39800000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+    revision: 0, itineraryItemId: item.id, kind: item.type === "stay" ? "accommodation" : item.type,
+    status: reservationStatuses[index]! }));
   return { getCurrentTrip: () => trip,
+    getReservationFacts: () => reservations,
     getCandidates: () => [{ candidate, assessment: assessTravelCandidate(trip, candidate, { candidateId: candidate.id }, at) }],
     confirmProposal: async (proposal) => { trip = applyTripProposal(trip, proposal); },
   };

@@ -73,3 +73,4 @@
 - [0052 Trip V2の正本契約と段階migrationを確定する](0052-establish-trip-v2-contract-and-migration.md)
 - [0053 owner-scoped Trip保存を認証・writer gateの内側に導入する](0053-gate-owner-scoped-trip-persistence.md)
 - [0054 Trip mutationをrevision CASとreceiptで原子的に保存する](0054-commit-trip-mutations-atomically.md)
+- [0055 ReservationをTripから独立した予約resourceにする](0055-separate-reservation-resource.md)

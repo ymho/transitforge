@@ -2,6 +2,8 @@ import { validateTrip, applyTripProposal, TripRevisionConflict, type Trip, type 
 import type { TripWorkspaceSource } from "./trip-workspace-controller";
 import type { ServerTripClient, TripLoadState } from "./server-trip-client";
 import { TripWriteRejected, type TripMutationRequest } from "./server-trip-client";
+import { validateReservationFact, type ReservationFact } from "@raiquora/trip/reservation";
+import type { ReservationReadClient } from "./reservation-reader";
 
 /** Inject only from a reviewed authenticated host, never from model/wire capability flags.
  * validateConfirmation re-resolves candidates/evidence and verifies explicit user authority.
@@ -9,7 +11,7 @@ import { TripWriteRejected, type TripMutationRequest } from "./server-trip-clien
 export interface ServerTripWriter {
   mutate(mutation: TripMutationRequest): Promise<Trip>;
   newMutationId(): string;
-  validateConfirmation(current: Trip, proposal: TripUpdateProposal): Promise<void>;
+  validateConfirmation(current: Trip, proposal: TripUpdateProposal, confirmation?: { reservationChangeKey: string }): Promise<void>;
 }
 
 /** Restores source ownership before any legacy reader/writer can be installed on reload. */
@@ -25,19 +27,27 @@ export function createReferencedTripSource(reference: { tripId?: string; tripSou
 }
 
 /** Memory is a fetched read view, never a local writer/cache fallback. Preview cannot save. */
-export function createServerTripWorkspaceSource(tripId: string, client: Pick<ServerTripClient, "get">, writer?: ServerTripWriter): TripWorkspaceSource & { refresh(): Promise<void> } {
+export function createServerTripWorkspaceSource(tripId: string, client: Pick<ServerTripClient, "get">, writer?: ServerTripWriter,
+  reservationReader?: ReservationReadClient): TripWorkspaceSource & { refresh(): Promise<void> } {
   let current: Trip | undefined, loadState: TripLoadState = "loading", generation = 0;
+  let reservations: ReservationFact[] | undefined;
   let pending: TripMutationRequest | undefined, sending = false, confirming = false;
   const listeners = new Set<() => void>();
   const publish = () => { for (const listener of listeners) listener(); };
   const refresh = async () => {
     const request = ++generation;
-    current = undefined; loadState = "loading"; publish();
+    current = undefined; reservations = undefined; loadState = "loading"; publish();
     try {
       const trip = await client.get(tripId);
       if (request !== generation) return;
       if (!trip || trip.id !== tripId) throw new Error("Trip unavailable");
       validateTrip(trip); current = structuredClone(trip); loadState = "loaded";
+      if (reservationReader) {
+        try {
+          const facts = await reservationReader.list(tripId); facts.forEach(validateReservationFact);
+          if (request === generation) reservations = structuredClone(facts);
+        } catch { if (request === generation) reservations = undefined; }
+      }
     } catch { if (request === generation) { current = undefined; loadState = "unavailable"; } }
     if (request === generation) publish();
   };
@@ -57,7 +67,7 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
     } finally { sending = false; }
   };
   return { sourceState: "server-v2", confirmationPersistence: writer ? "server" : undefined,
-    ...(writer ? { async confirmProposal(proposal: TripUpdateProposal) {
+    ...(writer ? { async confirmProposal(proposal: TripUpdateProposal, confirmation?: { reservationChangeKey: string }) {
       if (pending || sending || confirming) throw new Error("前回の保存結果を再確認してください");
       confirming = true;
       try {
@@ -67,13 +77,14 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
         if (!latest || latest.id !== tripId) { await refresh(); throw new TripWriteRejected("旅程を取得できません"); }
         try { applyTripProposal(latest, proposal); }
         catch (error) { await refresh(); throw error; }
-        await writer.validateConfirmation(structuredClone(latest), structuredClone(proposal));
+        await writer.validateConfirmation(structuredClone(latest), structuredClone(proposal), confirmation);
         const mutationId = writer.newMutationId();
         if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(mutationId)) throw new Error("Invalid mutation ID");
         pending = { tripId, baseRevision: proposal.baseRevision, mutationId, proposal: structuredClone(proposal) };
         await sendPending();
       } finally { confirming = false; }
     } } : {}), getLoadState: () => loadState, getCurrentTrip: () => current ? structuredClone(current) : undefined,
+    getReservationFacts: () => current && reservations ? structuredClone(reservations) : undefined,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); }, refresh,
     retry: async () => { if (pending) await sendPending(); else await refresh(); } };
 }

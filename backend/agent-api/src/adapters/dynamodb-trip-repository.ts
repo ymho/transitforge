@@ -60,7 +60,7 @@ export class DynamoDbTripRepository implements TripRepository, TripConversationR
     if (nextAfterTripId) tripIdentifier(nextAfterTripId);
     return { trips, ...(nextAfterTripId ? { nextAfterTripId } : {}) };
   }
-  async applyMutation(principal: TripPrincipal, mutation: TripMutation, prepare: (current: Trip) => Trip): Promise<Trip> {
+  async applyMutation(principal: TripPrincipal, mutation: TripMutation, prepare: (current: Trip) => Trip | Promise<Trip>): Promise<Trip> {
     requireTripPrincipal(principal);
     validateMutation(mutation);
     mutation = structuredClone(mutation);
@@ -76,7 +76,7 @@ export class DynamoDbTripRepository implements TripRepository, TripConversationR
     const prior = await receipt();
     if (prior) return prior;
     if (old.revision !== mutation.baseRevision) throw new TripResourceError("conflict");
-    const preview = boundedTrip(prepare(structuredClone(old)));
+    const preview = boundedTrip(await prepare(structuredClone(old)));
     if (preview.id !== old.id || preview.createdAt !== old.createdAt || preview.revision !== old.revision || preview.updatedAt !== old.updatedAt) throw new TripResourceError("invalid-input");
     const trip = boundedTrip({ ...preview, revision: mutation.baseRevision + 1, updatedAt: this.clock.now().toISOString() });
     if (Date.parse(trip.updatedAt) < Date.parse(old.updatedAt)) throw new TripResourceError("unavailable");

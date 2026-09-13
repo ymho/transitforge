@@ -17,6 +17,8 @@ describe("legacy accommodation does not prove adoption", () => {
       selection: { status: "unselected", place: { name: "京都", sources: [] } } });
     expect(JSON.stringify(result.trip)).not.toMatch(/Provider|hotel|price|availability|bookingUrl|imageUrl|coordinate|options|selectedAt/);
     expect(result.requiresLegacyRetention).toBe(true); expect(result.deferredItemIds).toContain("stay");
+    expect(result).not.toHaveProperty("reservations");
+    expect(JSON.stringify(result.trip)).not.toMatch(/booked|bookingReference|reservation/);
     expect(result.warnings).toContainEqual({ itemId: "stay", code: "stay-snapshot-deferred", ownerIssue: 400 });
     const invalid = structuredClone(plan); if (invalid.items[0]!.type === "stay") invalid.items[0].checkOutDate = "2026-02-30";
     expect(convertLegacyTripPlan(invalid, identity).trip.items[0]!.schedule.type).toBe("unscheduled");

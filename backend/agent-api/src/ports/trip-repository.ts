@@ -13,7 +13,7 @@ export interface TripRepository {
   get(principal: TripPrincipal, tripId: string): Promise<Trip | undefined>;
   list(principal: TripPrincipal, options?: { limit?: number; afterTripId?: string }): Promise<TripPage>;
   /** Calls the pure Application validator before any write; atomically commits Trip and retry receipt. */
-  applyMutation(principal: TripPrincipal, mutation: TripMutation, prepare: (current: Trip) => Trip): Promise<Trip>;
+  applyMutation(principal: TripPrincipal, mutation: TripMutation, prepare: (current: Trip) => Trip | Promise<Trip>): Promise<Trip>;
   archive(principal: TripPrincipal, tripId: string): Promise<void>;
 }
 /** Owner-scoped link index only; no conversation text, Trip ownership or reverse cascade. */

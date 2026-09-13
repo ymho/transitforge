@@ -13,7 +13,7 @@ const request = (number = 1, baseRevision = 5) => ({ version: "trip-api-v1", ope
   proposal: { tripId: id, baseRevision, summary: "予定を追加", patches: [{ type: "add", item: {
     id: `activity-${number}`, title: "散策", type: "activity", category: "free-time", schedule: { type: "unscheduled" },
   } }] } });
-const setup = () => { const f = tripDynamoFixture(); f.seed(initial); return { ...f, application: new TripApplication(f.repository, f.repository, f.clock) }; };
+const setup = () => { const f = tripDynamoFixture(); f.seed(initial); return { ...f, application: new TripApplication(f.repository, f.repository, f.clock, { facts: async () => [] }) }; };
 
 describe("atomic Trip mutation and idempotency", () => {
   it("keeps explicit lifecycle authority separate from model/HTTP proposal data", async () => {

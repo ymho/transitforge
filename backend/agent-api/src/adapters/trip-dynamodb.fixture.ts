@@ -30,13 +30,16 @@ export function tripDynamoFixture() {
       const i = command.input;
       expect(i.KeyConditionExpression).toBe("pk = :owner AND begins_with(sk, :prefix)");
       const pk = i.ExpressionAttributeValues![":owner"]!.S, after = i.ExclusiveStartKey?.sk?.S;
-      const items = [...records.values()].filter((r) => r.pk?.S === pk && r.sk?.S?.startsWith("TRIP#") && (!after || r.sk.S > after)).sort((a, b) => a.sk!.S!.localeCompare(b.sk!.S!));
+      const prefix = i.ExpressionAttributeValues![":prefix"]!.S!;
+      const items = [...records.values()].filter((r) => r.pk?.S === pk && r.sk?.S?.startsWith(prefix) && (!after || r.sk.S > after)).sort((a, b) => a.sk!.S!.localeCompare(b.sk!.S!));
       const page = items.slice(0, i.Limit);
       return { Items: structuredClone(page), ...(items.length > page.length ? { LastEvaluatedKey: { pk: page.at(-1)!.pk!, sk: page.at(-1)!.sk! } } : {}) };
     }
     if (command instanceof PutItemCommand) {
       const i = command.input, k = key(i.Item!);
-      if (i.ConditionExpression && records.has(k)) conditional();
+      if (i.ConditionExpression === "attribute_not_exists(pk)" && records.has(k)) conditional();
+      if (i.ConditionExpression === "attribute_exists(pk) AND revision = :base" &&
+        (!records.has(k) || records.get(k)!.revision?.N !== i.ExpressionAttributeValues![":base"]!.N)) conditional();
       records.set(k, structuredClone(i.Item!)); return {};
     }
     const i = command.input, k = key(i.Key!);

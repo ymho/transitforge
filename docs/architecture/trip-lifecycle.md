@@ -466,12 +466,15 @@ rate時点・sourceを別projectionへ置く。鉄道運賃を取得/推定し�
 
 ### Reservation (#398)
 
+#398の実装は[Reservation導入記録](trip-reservation.md)とADR 0055を参照する。独立resource、owner-scoped保存、
+独立CAS、予約済みitem保護、非private read projectionを追加した。公開認証/writerは未有効。
+
 独立aggregateとして`id`、`tripId`、任意`itineraryItemId`、`schemaVersion`、`revision`、
 `kind: transport | accommodation | activity | restaurant | other`、
 `status: unknown | not-booked | not-required | booked | cancelled`、
-必要なら`confirmationStatus: unknown | confirmed | change-required`、Provider参照、
-任意bookedAt/予約時刻/予約管理URLを持つ。1itemに複数Reservation可。予約照合情報はprivateに保持する。
-bookingUrlはOfferingでは「予約先」、Reservationでは「既存予約管理」の意味で区別する。#400のSnapshotには保存しない。
+Provider参照、任意bookedAt/予約固定時刻を持つ。1itemに複数Reservation可。予約照合情報はprivateに保持する。
+change-required/confirmationStatusは追加せず#402の派生評価へ残す。#398は予約管理URLを保持しない。
+bookingUrlはOfferingの「予約先」であり、SnapshotにもReservationにも自動コピーしない。
 
 未登録Reservationはunknownでありnot-bookedを推測しない。既存宿選択からbookedを作らない。
 item削除/置換では予約を消さず、関連維持・detach・変更必要を確認する。ホテルを別施設へ置換した時に

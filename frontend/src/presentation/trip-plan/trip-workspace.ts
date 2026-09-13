@@ -111,7 +111,7 @@ export function configureTripWorkspace(options: {
       if (days.children[[...dates].length - 1] !== group) days.insertBefore(group, days.children[[...dates].length - 1] ?? null);
       items.forEach((item, index) => {
         ids.add(item.id);
-        const key = JSON.stringify([item, itemAssumptions(trip, item.id)]);
+        const key = JSON.stringify([item, itemAssumptions(trip, item.id), controller.reservations()?.filter((r) => r.itineraryItemId === item.id)]);
         const collapseKey = `${activeSession}:${trip.id}:${item.id}`;
         let card = cards.get(item.id);
         if (card?.key !== key) {
@@ -128,7 +128,7 @@ export function configureTripWorkspace(options: {
     }
     for (const [id, card] of cards) if (!ids.has(id)) { card.node.remove(); cards.delete(id); }
     for (const [date, group] of groups) if (!dates.has(date)) { group.remove(); groups.delete(date); }
-    const shown = controller.proposal(), nextKey = JSON.stringify([trip, shown]);
+    const shown = controller.proposal(), nextKey = JSON.stringify([trip, shown, controller.reservations()]);
     if (proposalKey !== nextKey) {
       proposalKey = nextKey; proposal.replaceChildren();
       if (shown) {
