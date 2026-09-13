@@ -46,6 +46,9 @@ Provider Placeの保存可否は引き続き信頼されたAdapterと`createPlac
 `validateTripRequest`の構造validationやモデルのsource宣言だけでは保存許諾/Evidenceが成立しない。
 #412でbudget discriminatorを同じMoney（limit）とbasis: trip/per-personで導入した。費用網羅性がないため評価はunknownを維持し、予算内と認定しない。[Money導入記録](trip-money.md)を参照する。
 
+#402では同じhard evaluatorへ採用済みdestination/duration/originと、取得事実で完全な費用coverageが確認できる場合のbudget評価を追加した。
+取得していない価格を0円にせず、通常のsnapshot-only入力は引き続きunknown。[Trip Feasibility](trip-feasibility.md)を参照する。
+
 ## 仮定、Profile、原子的な変更
 
 - hard/softは強さ、confirmed/unconfirmed/rejectedは仮定の状態であり別軸。hardでも未確認にできる。

@@ -13,6 +13,7 @@ export class HttpServerTripClient implements ServerTripClient {
         const error = await response.json() as { version?: unknown; error?: unknown };
         if (error.version === "trip-api-v1" && error.error === "conflict") throw new TripRevisionConflict();
         if (error.version === "trip-api-v1" && error.error === "confirmation-required") throw new TripWriteRejected("予約済みの予定への影響を確認し、変更案を確認し直してください");
+        if (error.version === "trip-api-v1" && error.error === "feasibility-required") throw new TripWriteRejected("旅程の成立性が未確認または不成立のため、準備完了にはできません。最新の旅程と取得情報を確認してください");
         throw new TripWriteRejected("変更を保存できません。変更案を確認し直してください");
       }
       if (command.operation === "mutate" && [400, 401, 403, 404, 413].includes(response.status)) throw new TripWriteRejected("変更を保存できません。認証と変更内容を確認してください");

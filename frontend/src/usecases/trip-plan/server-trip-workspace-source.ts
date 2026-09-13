@@ -4,6 +4,8 @@ import type { ServerTripClient, TripLoadState } from "./server-trip-client";
 import { TripWriteRejected, type TripMutationRequest } from "./server-trip-client";
 import { validateReservationFact, type ReservationFact } from "@raiquora/trip/reservation";
 import type { ReservationReadClient } from "./reservation-reader";
+import { requireFeasibleTrip, requestsReady } from "@raiquora/trip/trip-ready";
+import type { TripFeasibilityFacts } from "@raiquora/trip/trip-feasibility";
 
 /** Inject only from a reviewed authenticated host, never from model/wire capability flags.
  * validateConfirmation re-resolves candidates/evidence and verifies explicit user authority.
@@ -28,7 +30,7 @@ export function createReferencedTripSource(reference: { tripId?: string; tripSou
 
 /** Memory is a fetched read view, never a local writer/cache fallback. Preview cannot save. */
 export function createServerTripWorkspaceSource(tripId: string, client: Pick<ServerTripClient, "get">, writer?: ServerTripWriter,
-  reservationReader?: ReservationReadClient): TripWorkspaceSource & { refresh(): Promise<void> } {
+  reservationReader?: ReservationReadClient, getExternalFacts?: () => TripFeasibilityFacts["external"]): TripWorkspaceSource & { refresh(): Promise<void> } {
   let current: Trip | undefined, loadState: TripLoadState = "loading", generation = 0;
   let reservations: ReservationFact[] | undefined;
   let pending: TripMutationRequest | undefined, sending = false, confirming = false;
@@ -75,7 +77,12 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
           ++generation; current = undefined; loadState = "unavailable"; publish(); throw error;
         });
         if (!latest || latest.id !== tripId) { await refresh(); throw new TripWriteRejected("旅程を取得できません"); }
-        try { applyTripProposal(latest, proposal); }
+        try {
+          const proposed = applyTripProposal(latest, proposal);
+          if (requestsReady(proposal)) requireFeasibleTrip(proposed, {
+            tripId, tripRevision: proposed.revision, reservations: await reservationReader?.list(tripId), external: getExternalFacts?.(),
+          }, new Date().toISOString());
+        }
         catch (error) { await refresh(); throw error; }
         await writer.validateConfirmation(structuredClone(latest), structuredClone(proposal), confirmation);
         const mutationId = writer.newMutationId();
@@ -85,6 +92,7 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
       } finally { confirming = false; }
     } } : {}), getLoadState: () => loadState, getCurrentTrip: () => current ? structuredClone(current) : undefined,
     getReservationFacts: () => current && reservations ? structuredClone(reservations) : undefined,
+    getFeasibilityExternalFacts: getExternalFacts,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); }, refresh,
     retry: async () => { if (pending) await sendPending(); else await refresh(); } };
 }

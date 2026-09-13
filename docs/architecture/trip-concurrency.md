@@ -1,5 +1,8 @@
 # Trip revision / mutation（#389）
 
+#402の[ready gate](trip-feasibility.md)はprepare内で実際の変更後Tripを評価する。
+古い評価の自己申告は受け付けず、最後の同じCAS/receiptを維持する。
+
 #398でprepareを非同期検証にも対応させ、[予約済み項目の変更保護](trip-reservation.md)を追加した。
 既存Trip CAS/receiptは維持し、Reservationは独立revisionで更新する。
 

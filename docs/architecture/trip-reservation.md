@@ -1,5 +1,8 @@
 # Reservation（#398）
 
+#402で[採用済みTripの成立性](trip-feasibility.md)へReservationFactを接続した。
+bookedの固定時刻矛盾、unknown、danglingは派生issueとし、予約・Tripへ自動修正を行わない。
+
 親方針は #382/#415、判断は ADR 0052/0053/0054 と [ADR 0055](../decisions/0055-separate-reservation-resource.md)。
 **公開認証・Trip/Reservation writer は引き続き OFF**。実予約 API は呼ばない。
 

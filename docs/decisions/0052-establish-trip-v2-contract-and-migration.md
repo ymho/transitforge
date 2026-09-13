@@ -97,7 +97,7 @@ V2へ変わったという記述にはしない。#368/#380の残務は既に#38
 #387の同じTrip.request、仮定/出所、最小評価、Agent投影と旧条件の部分変換は
 [Request導入記録](../architecture/trip-request.md)を参照する。別Request RepositoryやTripContextへのdual-writeは追加しない。
 #383の同じTripへのplanning/lifecycle、注入Clockによる精度別評価、確認Proposalとlegacy mappingは
-[状態導入記録](../architecture/trip-state.md)を参照する。状態をTool routerにせず、ready認定は#402まで拒否し、
+[状態導入記録](../architecture/trip-state.md)を参照する。状態をTool routerにせず、ready認定は#402の[派生成立性評価](../architecture/trip-feasibility.md)でApplicationが検証し、
 completedは今は明示確認のみ。時刻だけで実績を生成せず、writer gateも解除しない。
 
 #384の[Ask + Progress導入記録](../architecture/ask-progress.md)では、同じTripの読み取りと既存Proposalを

@@ -5,17 +5,31 @@ import type { TripClock } from "@raiquora/trip/trip-temporal";
 import type { LifecycleState } from "@raiquora/trip/trip-state";
 import { bookedReservationChanges, reservationChangeKey } from "@raiquora/trip/reservation";
 import type { ReservationReader } from "../ports/reservation-repository.js";
+import type { TripFeasibilityReader } from "../ports/trip-feasibility-reader.js";
+import { requireFeasibleTrip, requestsReady } from "@raiquora/trip/trip-ready";
+import type { Trip } from "@raiquora/trip/trip";
 
 export class TripApplication {
   constructor(private readonly trips: TripRepository, private readonly references: TripConversationReferences,
-    private readonly clock: TripClock = { now: () => new Date() }, private readonly reservations?: ReservationReader) {}
+    private readonly clock: TripClock = { now: () => new Date() }, private readonly reservations?: ReservationReader,
+    private readonly feasibility?: TripFeasibilityReader) {}
+  private async ready(principal: TripPrincipal, proposed: Trip): Promise<void> {
+    try {
+      const reservations = await this.reservations?.facts(principal, proposed.id);
+      const external = await this.feasibility?.external(principal, structuredClone(proposed));
+      requireFeasibleTrip(proposed, { tripId: proposed.id, tripRevision: proposed.revision, reservations, external }, this.clock.now().toISOString());
+    } catch { throw new TripResourceError("feasibility-required"); }
+  }
   async execute(principal: TripPrincipal | undefined, value: unknown,
     authority: { confirmedLifecycle?: LifecycleState; confirmedReservationChange?: string } = {}): Promise<Record<string, unknown>> {
     requireTripPrincipal(principal);
     const command = parseTripCommand(value);
     const version = tripApiVersion;
     switch (command.operation) {
-      case "create": return { version, trip: await this.trips.create(principal, command.trip) };
+      case "create": {
+        if (command.trip.planningState === "ready") await this.ready(principal, command.trip);
+        return { version, trip: await this.trips.create(principal, command.trip) };
+      }
       case "mutate": {
         const trip = await this.trips.applyMutation(principal, command, async (current) => {
           if (command.proposal.patches.some((p) => p.type === "remove" || p.type === "replace")) {
@@ -26,8 +40,11 @@ export class TripApplication {
                 authority.confirmedReservationChange !== reservationChangeKey(command.proposal, facts)) throw new TripResourceError("confirmation-required");
           }
           // Explicit confirmation is supplied by a trusted host, never read from the DTO/LLM.
-          try { return applyTripProposal(current, command.proposal, { clock: this.clock, ...authority }); }
+          let proposed: Trip;
+          try { proposed = applyTripProposal(current, command.proposal, { clock: this.clock, ...authority }); }
           catch (error) { throw new TripResourceError(error instanceof TripRevisionConflict ? "conflict" : "invalid-input"); }
+          if (requestsReady(command.proposal)) await this.ready(principal, proposed);
+          return proposed; // Repository commits this exact preview under baseRevision CAS, not a rebase.
         });
         return { version, trip, revision: trip.revision, mutationId: command.mutationId };
       }

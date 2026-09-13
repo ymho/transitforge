@@ -21,11 +21,12 @@ describe("Trip planning/lifecycle invariants", () => {
     expect(refined.lifecycleState).toBe("in_trip");
     expect(apply(refined, [{ type: "planning", state: "candidate_discovery" }]).planningState).toBe("candidate_discovery");
   });
-  it("recognizes ready but rejects certification until #402, even with selected scheduled items", () => {
+  it("reads persisted ready independently of derived feasibility; Application owns certification", () => {
     expect(() => validatePlanningState("ready")).not.toThrow();
-    for (const trip of [requestTrip(), tripWithItems(), requestTrip({ constraints: [requestConstraint({ type: "dates", start: { earliest: "2020-01-01", latest: "2020-01-01" } })], assumptions: [] }, [requestRailItem()])]) {
-      expect(() => apply(trip, [{ type: "planning", state: "ready" }])).toThrow(/feasibility/);
-      expect(() => validateTrip({ ...trip, planningState: "ready" })).toThrow();
+    expect(() => apply(requestTrip(), [{ type: "planning", state: "ready" }])).toThrow(/items/);
+    for (const trip of [tripWithItems(), requestTrip({ constraints: [requestConstraint({ type: "dates", start: { earliest: "2020-01-01", latest: "2020-01-01" } })], assumptions: [] }, [requestRailItem()])]) {
+      expect(apply(trip, [{ type: "planning", state: "ready" }]).planningState).toBe("ready");
+      expect(() => validateTrip({ ...trip, planningState: "ready" })).not.toThrow();
     }
   });
   it.each(["itinerary_draft", "itinerary_refinement"] as const)("requires adopted items for %s, but not finalized selections", (state) => {

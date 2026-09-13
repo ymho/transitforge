@@ -208,7 +208,8 @@ Profile/legacy/assumptionは相互参照するassumptionId必須。却下後のp
 ## 4. 計画・旅行実行の状態 (#383)
 
 #383の導入範囲・Clock評価の精度・確認境界・legacy mappingは[状態導入記録](trip-state.md)を参照する。
-現段階のready認定は#402まで拒否し、completedは明示確認のみとする。writer gateは解除しない。
+ready認定は#402の[Trip Feasibility](trip-feasibility.md)で変更後TripをApplicationが検証する。
+completedは明示確認のみとする。writer gateは解除しない。
 
 planningStateとlifecycleStateは**Tripにのみ保存**する。TripRequest、ConversationSession、
 AgentDecision、Viewer時計へ複写して独立更新しない。
@@ -225,7 +226,8 @@ AgentDecision、Viewer時計へ複写して独立更新しない。
 フェーズ順は固定しない。具体条件が揃えばdraftから始められ、旅行中のrefinementも可能。
 readyは予約済みを意味せず、draftの保存に全項目確定を要求しない。不正構造は保存不可だが、
 不足/外部情報unknownのdraftは保存できる。hard違反はreadyへ進めない。
-#402導入前はreadyの自動認定を有効化しない。
+#402ではissue code別policyでreadyを検証し、selected Stayのday精度等の情報的unknownは表示したまま許容する。readyは全件確認済みではない。保存済みreadyの読み取りは拒否せず、
+派生評価が後で変わってもplanningStateを自動変更しない。詳細はADR 0056を参照する。
 
 実時間は注入したClock、日付は対象item.scheduleのtimezoneを使う。Trip全体の開始/終了は
 itemsから導出し、地域・timezone・日程が不足すればunknownとする。Viewerのシミュレーター時計を使わない。

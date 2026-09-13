@@ -8,8 +8,8 @@ describe("multi-turn dataset v2", () => {
   it("keeps the 42 six-metric cases and A–U, adding candidate assessments V–Z", () => {
     const data = parseAgentEvaluationDataset(fixture());
     expect(data.cases).toHaveLength(42);
-    expect(data.travelProgressScenarios).toHaveLength(28);
-    expect(data.travelProgressScenarios?.filter((c) => c.tags.includes("smoke")).map((c) => c.id)).toEqual(["AB-booked-item", "AA-focused-item", "V-weather-comparison", "U-multi-city-trip", "S-eur-accommodation", "Q-accommodation", "O-taxi", "N-unknown-child-age", "A-vague", "C-candidate", "G-consecutive", "K-food"]);
+    expect(data.travelProgressScenarios).toHaveLength(31);
+    expect(data.travelProgressScenarios?.filter((c) => c.tags.includes("smoke")).map((c) => c.id)).toEqual(["AC-impossible-itinerary", "AD-reservation-conflict", "AE-unknown-facts", "AB-booked-item", "AA-focused-item", "V-weather-comparison", "U-multi-city-trip", "S-eur-accommodation", "Q-accommodation", "O-taxi", "N-unknown-child-age", "A-vague", "C-candidate", "G-consecutive", "K-food"]);
   });
   it("reads legacy v1 without dropping or inventing observations", () => {
     const raw = fixture(); delete raw.travelProgressScenarios; raw.schemaVersion = "agent-eval-dataset-v1";

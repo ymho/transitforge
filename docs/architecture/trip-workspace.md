@@ -1,5 +1,8 @@
 # Trip V2 workspace（#390）
 
+#402で[Trip全体の成立性表示](trip-feasibility.md)を追加した。成立/不成立/未確認と該当itemの理由を表示し、
+ready変更案は変更後の評価で確認を制限する。未知を成立と見なさず、保存済みplanningStateは自動変更しない。
+
 #398で[独立した予約記録のread表示と変更確認](trip-reservation.md)を追加した。
 通常カードは5状態だけを表示し予約番号を出さない。公開writerはOFF、DEV previewは合成データである。
 

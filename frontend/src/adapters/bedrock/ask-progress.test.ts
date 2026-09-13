@@ -23,7 +23,12 @@ describe("Ask + Progress production pipeline", () => {
       expect(result.contexts[0]).toContain('"earliest":"2025-09-22"');
       expect(result.trip.lifecycleState).toBe("pre_trip");
     }
-    if (id === "F-hard-unknown") expect(result.contexts[0]).toContain('"constraintId":"return-deadline","status":"unknown"');
+    if (id === "F-hard-unknown") {
+      const context = JSON.parse(result.contexts[0]!.match(/<agent_context>([\s\S]*)<\/agent_context>/u)![1]!);
+      expect(context.tripFeasibility.issues).toContainEqual(expect.objectContaining({
+        code: "hard_constraint_unknown", status: "unknown", constraintIds: ["return-deadline"],
+      }));
+    }
     if (id === "C-candidate") {
       if (typeof result.response === "string" || !("tripUpdateProposal" in result.response)) throw new Error("missing V2 proposal");
       const preview = applyTripProposal(result.trip, result.response.tripUpdateProposal);

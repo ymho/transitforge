@@ -1,5 +1,7 @@
 import { isPriceObservation } from "@raiquora/trip/money";
 import { reservationContext } from "../../usecases/agent/reservation-context";
+import { tripFeasibilityContext } from "../../usecases/agent/trip-feasibility-context";
+import { evaluateTripFeasibility, type TripFeasibilityFacts } from "@raiquora/trip/trip-feasibility";
 import { registerCandidateAssessmentTool, candidateAssessmentEvidence } from "../../usecases/agent/candidate-assessment-tool";
 import { legacyAccommodationPrice } from "../legacy-money";
 import type {
@@ -151,6 +153,7 @@ import {
 
 export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDependencies, TripProgressDependencies {
   getReservationFacts?: () => readonly import("@raiquora/trip/reservation").ReservationFact[] | undefined;
+  getFeasibilityExternalFacts?: () => TripFeasibilityFacts["external"];
   getUiFocus?: () => { itemId: string } | undefined;
   previousAssistantTurn?: AgentTurnOutcome;
   onTurnObservation?: (observation: AgentTurnObservation) => void;
@@ -399,6 +402,7 @@ export async function runViewerAgentRuntime(
     dependencies.getPendingJourneyLegChange?.(),
   );
   const verifiedPlaces = dependencies.getVerifiedPlaces?.().slice(0, 8) ?? [];
+  const reservationFacts = currentTrip ? dependencies.getReservationFacts?.() : undefined;
   const runtimeResult = await runtime.run({
     executionId: crypto.randomUUID(),
     // この入口は常にコンシェルジュUIである。発話内容を正規表現で
@@ -417,11 +421,14 @@ export async function runViewerAgentRuntime(
         ? { conversation: conversationContext }
         : {}),
       tripContext: decisionTripContext(travelFacts.context),
-      ...(currentTrip ? { reservations: reservationContext(dependencies.getReservationFacts?.(), focusedItem?.id) } : {}),
+      ...(currentTrip ? { reservations: reservationContext(reservationFacts, focusedItem?.id) } : {}),
+      ...(currentTrip ? { tripFeasibility: tripFeasibilityContext(evaluateTripFeasibility(currentTrip, {
+        tripId: currentTrip.id, tripRevision: currentTrip.revision, reservations: reservationFacts,
+        external: dependencies.getFeasibilityExternalFacts?.(),
+      }, currentDate(dependencies).toISOString()), focusedItem?.id) } : {}),
       ...(contextSnapshot.profile ? { travelProfile: contextSnapshot.profile } : {}),
       ...(contextSnapshot.trip ? { currentTrip: { ...contextSnapshot.trip,
-        ...(currentTrip ? { temporalAssessment: assessTripTime(currentTrip, { now: () => currentDate(dependencies) }),
-          hardConstraintEvaluation: evaluateTripHardConstraints(currentTrip) } : {}) } } : {}),
+        ...(currentTrip ? { temporalAssessment: assessTripTime(currentTrip, { now: () => currentDate(dependencies) }) } : {}) } } : {}),
       travelCandidates: dependencies.getTravelCandidates?.() ?? contextSnapshot.travelCandidates,
       realtimeFacts: contextSnapshot.realtimeFacts,
       ...(currentJourney ? { currentJourney } : {}),

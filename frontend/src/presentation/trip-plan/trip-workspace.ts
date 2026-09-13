@@ -6,6 +6,7 @@ import { renderWorkspaceCard, refreshMoveTargets } from "./trip-workspace-card";
 import { renderWorkspaceCandidates } from "./trip-workspace-candidates";
 import { renderWorkspaceProposal } from "./trip-workspace-proposal";
 import { element, control } from "./trip-workspace-elements";
+import { renderTripFeasibility } from "./trip-feasibility-view";
 
 /** DOM and navigation only. The supplied source owns current Trip; legacy storage is never read here. */
 export function configureTripWorkspace(options: {
@@ -25,6 +26,7 @@ export function configureTripWorkspace(options: {
   heading.append(title, notice, summary);
   const retry = control("旅程を再読み込み", () => { void controller.source()?.retry?.(); });
   const assumptions = element("section", "trip-workspace-assumptions");
+  const feasibility = element("div");
   const days = element("div", "trip-workspace-days"), proposal = element("div"), candidates = element("div");
   const add = element("form", "trip-workspace-add"); const addLabel = element("label", "", "追加する予定 "); const addTitle = element("input");
   addTitle.required = true; addTitle.maxLength = 200; addLabel.append(addTitle);
@@ -38,7 +40,7 @@ export function configureTripWorkspace(options: {
     } catch { report("追加する予定の名称と対象を確認してください。"); }
   });
   const consult = control("＋ 予定を相談して追加", () => chat("旅程に追加する予定を相談したい"));
-  panel.append(heading, status, retry, assumptions, days, add, consult, proposal, candidates);
+  panel.append(heading, status, retry, feasibility, assumptions, days, add, consult, proposal, candidates);
   app.append(panel, nav);
   const views = new Map<string, { scroll: number; chatScroll: number; view: "chat" | "trip"; focus?: HTMLElement }>();
   const collapsed = new Map<string, boolean>();
@@ -91,7 +93,7 @@ export function configureTripWorkspace(options: {
     if (!trip) {
       title.textContent = "旅程"; summary.textContent = "";
       report(controller.loadState() === "loading" ? "サーバから旅程を読み込んでいます。" : "旅程を取得できません。認証と接続、参照先の状態を確認して再試行してください。端末の旧旅程へは切り替えていません。");
-      assumptions.replaceChildren(); days.replaceChildren(); proposal.replaceChildren(); candidates.replaceChildren();
+      feasibility.replaceChildren(); assumptions.replaceChildren(); days.replaceChildren(); proposal.replaceChildren(); candidates.replaceChildren();
       cards.clear(); groups.clear(); previousTripId = undefined; proposalKey = candidateKey = "";
       return;
     }
@@ -101,6 +103,8 @@ export function configureTripWorkspace(options: {
       previousTripId = trip.id; panel.scrollTop = viewState().scroll;
     }
     const view = tripWorkspaceProjection(trip), scroll = panel.scrollTop;
+    const evaluation = controller.feasibility()!;
+    feasibility.replaceChildren(renderTripFeasibility(evaluation));
     title.textContent = view.title; summary.textContent = `${view.state}\n今回の人数: ${view.party}\n${view.places}`;
     assumptions.replaceChildren(...view.assumptions.map((a) => element("p", "trip-workspace-assumption", `⚠ 仮置き（${a.target}）: ${a.text}`)));
     const ids = new Set<string>(), dates = new Set<string>();
@@ -111,12 +115,12 @@ export function configureTripWorkspace(options: {
       if (days.children[[...dates].length - 1] !== group) days.insertBefore(group, days.children[[...dates].length - 1] ?? null);
       items.forEach((item, index) => {
         ids.add(item.id);
-        const key = JSON.stringify([item, itemAssumptions(trip, item.id), controller.reservations()?.filter((r) => r.itineraryItemId === item.id)]);
+        const key = JSON.stringify([item, itemAssumptions(trip, item.id), controller.reservations()?.filter((r) => r.itineraryItemId === item.id), evaluation.issues.filter((i) => i.itemIds.includes(item.id))]);
         const collapseKey = `${activeSession}:${trip.id}:${item.id}`;
         let card = cards.get(item.id);
         if (card?.key !== key) {
           const node = renderWorkspaceCard(trip, item, controller, { collapsed: collapsed.get(collapseKey) ?? false,
-            collapse: (value) => collapsed.set(collapseKey, value), chat, report });
+            collapse: (value) => collapsed.set(collapseKey, value), chat, report }, evaluation.issues.filter((i) => i.itemIds.includes(item.id)));
           if (card) card.node.replaceWith(node);
           card = { node, key }; cards.set(item.id, card);
         }
@@ -128,7 +132,7 @@ export function configureTripWorkspace(options: {
     }
     for (const [id, card] of cards) if (!ids.has(id)) { card.node.remove(); cards.delete(id); }
     for (const [date, group] of groups) if (!dates.has(date)) { group.remove(); groups.delete(date); }
-    const shown = controller.proposal(), nextKey = JSON.stringify([trip, shown, controller.reservations()]);
+    const shown = controller.proposal(), nextKey = JSON.stringify([trip, shown, controller.reservations(), evaluation.issues]);
     if (proposalKey !== nextKey) {
       proposalKey = nextKey; proposal.replaceChildren();
       if (shown) {

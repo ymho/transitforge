@@ -2,6 +2,24 @@
   "schemaVersion": "agent-eval-dataset-v2",
   "travelProgressScenarios": [
     {
+      "id": "AC-impossible-itinerary", "name": "時間が重なる採用旅程を不成立として変更案を出す",
+      "userRequest": "この旅程で回れる？重なる予定があれば変更案を見せて",
+      "tags": ["smoke", "trip-progress", "feasibility"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
+      "id": "AD-reservation-conflict", "name": "予約の固定日時との不一致を説明し修正案を出す",
+      "userRequest": "予約時間と予定は合っている？合わなければ予定の変更案を出して",
+      "tags": ["smoke", "trip-progress", "feasibility", "reservation"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
+      "id": "AE-unknown-facts", "name": "日時・予約未確認を成立と断定せず日付の仮案を出す",
+      "userRequest": "この旅程は成立する？まだ日時未定だけど9月14日を仮案にして",
+      "tags": ["smoke", "trip-progress", "feasibility"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
       "id": "AB-booked-item", "name": "予約済みActivityの変更案を明示確認し予約番号を渡さない",
       "userRequest": "この予約済みの予定を短くしたい。変更案と予約への影響を確認したい",
       "tags": ["smoke", "trip-progress", "reservation"],

@@ -74,3 +74,4 @@
 - [0053 owner-scoped Trip保存を認証・writer gateの内側に導入する](0053-gate-owner-scoped-trip-persistence.md)
 - [0054 Trip mutationをrevision CASとreceiptで原子的に保存する](0054-commit-trip-mutations-atomically.md)
 - [0055 ReservationをTripから独立した予約resourceにする](0055-separate-reservation-resource.md)
+- [0056 採用済みTripの成立性を派生評価しready確定を検証する](0056-evaluate-adopted-trip-feasibility.md)

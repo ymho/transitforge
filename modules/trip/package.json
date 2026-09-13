@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./trip-feasibility": "./domain/trip-feasibility.ts",
+    "./trip-feasibility-contract": "./domain/trip-feasibility-contract.ts",
+    "./trip-ready": "./domain/trip-ready.ts",
     "./reservation": "./domain/reservation.ts",
     "./travel-candidate-assessment": "./domain/travel-candidate-assessment.ts",
     "./assess-travel-candidate": "./domain/assess-travel-candidate.ts",

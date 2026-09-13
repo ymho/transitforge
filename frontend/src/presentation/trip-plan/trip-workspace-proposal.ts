@@ -3,6 +3,9 @@ import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-work
 import { tripProposalProjection } from "./trip-workspace-projection";
 import { element, control } from "./trip-workspace-elements";
 import { reservationChangeKey } from "@raiquora/trip/reservation";
+import { applyTripProposal } from "@raiquora/trip/trip";
+import { requestsReady, hasReadyBlockers, TripNotFeasible } from "@raiquora/trip/trip-ready";
+import { renderTripFeasibility } from "./trip-feasibility-view";
 
 export function renderWorkspaceProposal(trip: Trip, proposal: TripUpdateProposal, controller: TripWorkspaceController,
   report: (text: string) => void): HTMLElement {
@@ -21,6 +24,13 @@ export function renderWorkspaceProposal(trip: Trip, proposal: TripUpdateProposal
   if (view.requestChanged) compare(view.beforeConditions, view.afterConditions);
   if (view.beforeState !== view.afterState) compare(view.beforeState, view.afterState);
   const warnings = controller.reservationWarnings();
+  const feasibility = controller.feasibility(applyTripProposal(trip, proposal));
+  const readyBlocked = requestsReady(proposal) && (!feasibility || hasReadyBlockers(feasibility));
+  if (requestsReady(proposal) && feasibility) {
+    section.append(renderTripFeasibility(feasibility));
+    if (readyBlocked) section.append(element("p", "", "準備完了を阻害する未確認事項または不成立の条件があるため、準備完了にはできません。変更案や下書きは引き続き相談できます。"));
+    else if (feasibility.status === "unknown") section.append(element("p", "", "準備完了にできますが、表示された未確認事項は残ります。すべて確認済みという意味ではありません。"));
+  }
   const consent = element("input"); consent.type = "checkbox";
   const key = reservationChangeKey(proposal, controller.reservations() ?? []);
   if (warnings.length) {
@@ -33,10 +43,10 @@ export function renderWorkspaceProposal(trip: Trip, proposal: TripUpdateProposal
     const confirm = control(server ? "確認して旅程を保存" : "確認して、この画面内に反映", () => {
       confirm.disabled = true;
       void controller.confirm(warnings.length && consent.checked ? { reservationChangeKey: key } : undefined).then(() => report(server ? controller.loadState() === "loaded" ? "旅程を保存しました。" : "保存後の最新旅程を取得できません。再読み込みしてください。" : "この画面内に反映しました。永続保存はしていません。"))
-        .catch((error: unknown) => { confirm.disabled = false; report(error instanceof Error ? error.message : "変更案を確認できませんでした"); });
+        .catch((error: unknown) => { confirm.disabled = false; report(error instanceof TripNotFeasible ? "最新情報では旅程が不成立または未確認です。成立性の表示と変更案を確認し直してください。" : error instanceof Error ? error.message : "変更案を確認できませんでした"); });
     });
-    confirm.disabled = warnings.length > 0;
-    consent.addEventListener("change", () => { confirm.disabled = !consent.checked; });
+    confirm.disabled = readyBlocked || warnings.length > 0;
+    consent.addEventListener("change", () => { confirm.disabled = readyBlocked || !consent.checked; });
     section.append(confirm);
   } else section.append(element("p", "", "確認用プレビューです。保存機能はまだ有効ではありません。"));
   section.append(control("変更案を閉じる", () => controller.dismiss()));

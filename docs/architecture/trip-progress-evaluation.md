@@ -154,3 +154,11 @@ A〜Zに加えてAA（選択中Activityの調整）をSmoke/Fullへ追加した�
 2026-09-12および2026-09-13の確認では`aws sts get-caller-identity`が`Your session has expired`で失敗した。
 Live未実施。既存方式で再認証後、上記コマンドでTTFC/TTFI、selection→draft、streak、Progress Rate、
 理由、model/tool calls、既存latencyを確認する。認証方式変更やキー抽出は行っていない。
+
+## #402追加ケース
+
+AC impossible itinerary / AD reservation conflict / AE unknown factsは
+`feasibility-progress-scenarios.fixture.ts`から本番Runtime・Context・Tool/Proposal・Controller ready gateを検証する。
+違反を説明だけで消せないこと、未確認を成立へ変換しないこと、予約private値をモデルへ渡さないことを確認する。
+SmokeのTrip Progressは15件、Fullは31件（A〜AE）。既存A〜ABのTTFC/TTFI等の閾値は変更しない。
+新3件もscripted IOによる契約回帰でありLive品質の測定ではない。
