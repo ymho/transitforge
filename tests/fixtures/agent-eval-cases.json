@@ -2,6 +2,12 @@
   "schemaVersion": "agent-eval-dataset-v2",
   "travelProgressScenarios": [
     {
+      "id": "AI-hazard-not-impact", "name": "公的ハザードとTrip影響・通知を混同しない",
+      "userRequest": "旅行先の大阪府に警報があるか確認して。公的な発表と旅行への影響を分けて教えて",
+      "tags": ["smoke", "trip-progress", "hazard"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
       "id": "AF-preparation-after-ready", "name": "readyと未完了の旅行前準備を分離する",
       "userRequest": "旅程は決まりました。SIMのほかに準備することを提案して",
       "tags": ["smoke", "trip-progress", "readiness"],

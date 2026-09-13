@@ -9,7 +9,7 @@ import type { ExternalTravelInformation } from "@raiquora/trip/external-travel-i
 import type { WeatherForecast } from "@raiquora/trip/weather-forecast";
 import type { PlaceMediaSearchResult } from "@raiquora/trip/place-media";
 import type { WebPageReadResult, WebSearchResult } from "@raiquora/trip/web-research";
-import type { TravelAlertSearchResult } from "@raiquora/trip/travel-alert";
+import type { HazardAlertSearchResult } from "@raiquora/trip/hazard-alert";
 import type { GroundAccessArea, GroundAccessMatrix, GroundAccessRoute } from "@raiquora/trip/ground-access";
 import type { RestaurantSearchResult } from "@raiquora/trip/restaurant-search";
 import type { TripContext } from "@raiquora/trip/travel-profile";
@@ -31,7 +31,7 @@ export interface ViewerAgentExternalData {
   places?: ExternalTravelInformation<PlaceMediaSearchResult>;
   webSearch?: ExternalTravelInformation<WebSearchResult>;
   webPages?: ExternalTravelInformation<WebPageReadResult>;
-  alerts?: ExternalTravelInformation<TravelAlertSearchResult>;
+  alerts?: ExternalTravelInformation<HazardAlertSearchResult>;
   groundAccess?: ExternalTravelInformation<GroundAccessRoute | GroundAccessMatrix | GroundAccessArea>;
   restaurants?: ExternalTravelInformation<RestaurantSearchResult>;
 }

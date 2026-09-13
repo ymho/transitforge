@@ -1,8 +1,9 @@
 import type { CandidateAssessmentFacts, TravelCandidateAssessment } from "./travel-candidate-assessment";
 import { samePlaceIdentity, validatePlaceRef, type PlaceSnapshot } from "./place-snapshot";
-import { validDate, validInstant } from "./snapshot-validation";
+import { validDate } from "./snapshot-validation";
 import type { CandidateFactReader } from "./candidate-assessment-input";
 import { validateTimeZone } from "./itinerary-schedule";
+import { validateHazardAlertSearchResult } from "./hazard-alert";
 
 /** Weather thresholds are a transparent comparison indicator, never a forecast or safety verdict. */
 export function assessCandidateEnvironment(facts: CandidateAssessmentFacts, places: readonly PlaceSnapshot[], reader: CandidateFactReader,
@@ -50,10 +51,9 @@ export function assessCandidateEnvironment(facts: CandidateAssessmentFacts, plac
     try {
       validatePlaceRef(h.place);
       const read = reader.read("hazard", h.result, ["safety-alert"], (data) => {
-        if (!Array.isArray(data.alerts)) throw new Error("Invalid alerts");
+        validateHazardAlertSearchResult(data);
         for (const alert of data.alerts) {
-          if (!alert.providerAlertId || !validInstant(alert.issuedAt) || Date.parse(alert.issuedAt) > Date.parse(reader.now) ||
-              !["information", "advisory", "warning", "emergency", "unknown"].includes(alert.severity)) throw new Error("Invalid alert");
+          if (Date.parse(alert.issuedAt) > Date.parse(reader.now)) throw new Error("Future hazard observation");
         }
       }, true);
       hazard.evidenceIds = read.evidenceIds;
@@ -61,7 +61,7 @@ export function assessCandidateEnvironment(facts: CandidateAssessmentFacts, plac
       else if (read.reason) hazard.reasonCodes = [read.reason];
       else if (!places.some((place) => samePlaceIdentity(place.ref, h.place))) hazard.reasonCodes = ["identity-unresolved"];
       else if (read.data!.alerts.length) { hazard.status = "present"; hazard.reasonCodes = ["hazard-present"]; }
-      // Empty JMA feeds do not establish exhaustive hazard absence. #401 owns future coverage semantics.
+      // Empty JMA feeds do not establish exhaustive hazard absence or geographic coverage.
     } catch { hazard.reasonCodes = ["invalid-facts"]; }
   }
   return { weather, hazard };

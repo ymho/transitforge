@@ -5,7 +5,8 @@ import type { TravelRecheckKind, TravelRecheckRequest } from "@raiquora/trip/tra
 import type { TripPlan } from "@raiquora/trip/trip-plan";
 import type { WeatherForecast } from "@raiquora/trip/weather-forecast";
 import type { WebPageReadResult, WebSearchResult } from "@raiquora/trip/web-research";
-import type { TravelAlertCategory, TravelAlertSearchResult } from "@raiquora/trip/travel-alert";
+import type { HazardAlertCategory, HazardAlertSearchResult } from "@raiquora/trip/hazard-alert";
+import { hazardAlertCategories, parseHazardAlertQuery, validateHazardAlertInformation } from "@raiquora/trip/hazard-alert";
 import type { GroundAccessArea, GroundAccessMatrix, GroundAccessMode, GroundAccessPoint, GroundAccessRoute } from "@raiquora/trip/ground-access";
 import type { RestaurantRequirements, RestaurantSearchResult } from "@raiquora/trip/restaurant-search";
 import type { Evidence } from "./evidence-model";
@@ -31,7 +32,7 @@ export interface ExternalTravelToolState {
   places?: ExternalTravelInformation<PlaceMediaSearchResult>;
   webSearch?: ExternalTravelInformation<WebSearchResult>;
   webPages?: ExternalTravelInformation<WebPageReadResult>;
-  alerts?: ExternalTravelInformation<TravelAlertSearchResult>;
+  alerts?: ExternalTravelInformation<HazardAlertSearchResult>;
   groundAccess?: ExternalTravelInformation<GroundAccessRoute | GroundAccessMatrix | GroundAccessArea>;
   restaurants?: ExternalTravelInformation<RestaurantSearchResult>;
 }
@@ -49,9 +50,9 @@ export interface ExternalTravelToolDependencies {
     radiusMeters?: number;
     limit?: number;
   }) => Promise<unknown>;
-  searchTravelAlerts?: (request: {
+  searchHazardAlerts?: (request: {
     area: string;
-    categories?: TravelAlertCategory[];
+    categories?: HazardAlertCategory[];
     limit?: number;
   }) => Promise<unknown>;
   searchGroundAccess?: (request: {
@@ -86,6 +87,22 @@ export function compactExternalTravelToolObservation(
   output: unknown,
 ): unknown {
   if (!isRecord(output)) return output;
+  if (name === "search_travel_alerts") {
+    validateHazardAlertInformation(output.alerts);
+    const information = output.alerts;
+    return { alerts: {
+      status: information.status, freshness: information.freshness,
+      ...(information.data ? { data: { area: information.data.area, alerts: information.data.alerts.map((alert) => ({
+        category: alert.category, severity: alert.severity, title: alert.title, summary: alert.summary, issuedAt: alert.issuedAt,
+      })) } } : {}),
+      evidence: information.evidence.map((source) => ({ id: source.id, kind: source.kind, provider: source.provider,
+        ...(source.sourceId ? { sourceId: source.sourceId } : {}), ...(source.sourceUrl ? { sourceUrl: source.sourceUrl } : {}),
+        retrievedAt: source.retrievedAt, ...(source.observedAt ? { observedAt: source.observedAt } : {}),
+        ...(source.validFrom ? { validFrom: source.validFrom } : {}), ...(source.validUntil ? { validUntil: source.validUntil } : {}),
+        ...(source.attribution ? { attribution: source.attribution } : {}), confidence: source.confidence })),
+      ...(information.failure ? { failure: { code: information.failure.code, retryable: information.failure.retryable } } : {}),
+    } };
+  }
   if (name === "search_web" && isRecord(output.webSearch)) {
     return {
       webSearch: compactExternalInformation(output.webSearch, (data) => ({
@@ -153,7 +170,7 @@ export function externalTravelToolDescription(name: ExternalTravelToolName): str
   return {
     search_weather_forecast: "目的地の時間別と週間天気予報をEvidence付きで検索します",
     search_place_media: "具体的な固有地点の未取得の写真・位置・施設属性を調べます。地点の紹介用であり、紹介済みの場所の旅程作成や日付・泊数の確認はできません。気分からの行き先発見ではなく、写真や地点情報が必要な場合に使います",
-    search_travel_alerts: "旅行先について直近に発表された気象警報 台風 地震 津波 火山情報を気象庁の公式Evidence付きで確認します。都道府県などの地域名を指定します",
+    search_travel_alerts: "旅行先の公的な気象・災害情報を検索する。地域名を指定し、直近の警報・台風・地震・津波・火山の発表を公式Evidence付きで確認する。公的severityはTripImpactや通知severityではない。旅行への具体的影響は未評価なら断定しない。情報なし・未取得は安全の保証ではない",
     search_ground_access: "検索済みの駅とMapbox Placeの間を徒歩 車 自転車で移動する経路 所要時間比較 到達圏を検索します。鉄道経路には使いません",
     search_restaurants: "旅行先 駅 宿 観光地の周辺からジャンルや希望に合う飲食店候補を検索します。子ども可 禁煙 バリアフリー 駐車場 個室 カード ランチ 深夜営業を必要な場合だけ絞り込めます。営業時間や予算はProviderにある場合だけ返します",
     search_web: "目的地未定の気分や体験希望から地域 温泉地 自然エリア 具体施設を広く発見し、または観光施設の最新情報と公式情報をWebから検索して、URLと抜粋をEvidence付きで返します。検索結果だけで地点や営業情報を確定しません",
@@ -198,7 +215,7 @@ export function externalTravelToolInputSchema(name: ExternalTravelToolName): Age
         categories: {
           type: "array",
           maxItems: 7,
-          items: { type: "string", enum: ["warning", "weather-information", "typhoon", "earthquake", "tsunami", "volcano", "other"] },
+          items: { type: "string", enum: [...hazardAlertCategories] },
         },
         limit: { type: "integer", minimum: 1, maximum: 12 },
       },
@@ -357,15 +374,16 @@ export async function executeExternalTravelTool(
     return output;
   }
   if (name === "search_travel_alerts") {
-    const area = text(input.area).slice(0, 80);
-    const allowedCategories: TravelAlertCategory[] = ["warning", "weather-information", "typhoon", "earthquake", "tsunami", "volcano", "other"];
-    const categories = Array.isArray(input.categories)
-      ? input.categories.flatMap((item) => typeof item === "string" && allowedCategories.includes(item as TravelAlertCategory) ? [item as TravelAlertCategory] : []).slice(0, 7)
-      : undefined;
-    const limit = finiteNumber(input.limit);
-    if (!area || !dependencies.searchTravelAlerts) throw new Error("防災情報の検索条件が不正です。");
-    const output = await dependencies.searchTravelAlerts({ area, ...(categories?.length ? { categories } : {}), ...(limit === undefined ? {} : { limit }) });
-    if (isRecord(output) && isRecord(output.alerts)) state.alerts = output.alerts as unknown as ExternalTravelInformation<TravelAlertSearchResult>;
+    const query = parseHazardAlertQuery(input);
+    if (!dependencies.searchHazardAlerts) throw new Error("防災情報の検索条件が不正です。");
+    // A failed new lookup must not present the previous area's alert as its result.
+    state.alerts = undefined;
+    const output = await dependencies.searchHazardAlerts(query);
+    if (!isRecord(output) || Object.keys(output).some((key) => key !== "alerts")) throw new Error("Invalid hazard response");
+    validateHazardAlertInformation(output.alerts);
+    if (output.alerts.data && (output.alerts.data.area !== query.area || output.alerts.data.alerts.length > (query.limit ?? 8) ||
+        query.categories?.length && output.alerts.data.alerts.some((alert) => !query.categories!.includes(alert.category)))) throw new Error("Mismatched hazard scope");
+    state.alerts = output.alerts;
     return output;
   }
   if (name === "search_ground_access") {

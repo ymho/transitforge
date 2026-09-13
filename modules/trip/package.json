@@ -42,7 +42,7 @@
     "./place-media": "./domain/place-media.ts",
     "./official-website": "./domain/official-website.ts",
     "./web-research": "./domain/web-research.ts",
-    "./travel-alert": "./domain/travel-alert.ts",
+    "./hazard-alert": "./domain/hazard-alert.ts",
     "./ground-access": "./domain/ground-access.ts",
     "./restaurant-search": "./domain/restaurant-search.ts",
     "./adventure-safety": "./domain/adventure-safety.ts",

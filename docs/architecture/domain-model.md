@@ -586,7 +586,7 @@ HTTP status Provider request ID retryableを保存する。認証情報と正確
 - `WeatherForecast`: 時間別 日別予報と地点 タイムゾーン
 - `WeatherGridSnapshot`: Viewer表示範囲を最大9セルへ分けた現在または指定日時の天候 降水量 雲量
 - `PlaceMediaSearchResult`: Place ID 名称 座標 写真 利用条件 attribution
-- `TravelAlertSearchResult`: 地域について気象庁から直近に発表された警報 台風 地震 津波 火山情報
+- `HazardAlertSearchResult`: 地域について気象庁から直近に発表された公的な警報 台風 地震 津波 火山情報。[契約と境界](hazard-alert.md)を参照。Trip影響・通知ではない
 - `RestaurantRequirements`: 子ども可 禁煙 バリアフリー 駐車場など今回必要な飲食店条件
 - `RestaurantSearchResult`: Providerが確認した飲食店の写真 営業時間 予算 定休日 設備と地点
 - `GroundAccessRoute` `GroundAccessMatrix` `GroundAccessArea`: 検証済み駅とPlace間の徒歩 車 自転車移動

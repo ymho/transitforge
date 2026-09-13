@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { hazardInformation } from "./hazard-alert.fixture";
 import { assessTravelCandidate } from "./assess-travel-candidate";
 import { validateTravelCandidateAssessment } from "./validate-candidate-assessment";
 import { assessmentAt, candidateAssessmentFixture, forecastFixture, assessedInformation, assessmentSource } from "./candidate-assessment.fixture";
@@ -69,6 +70,30 @@ describe("candidate comparison is a pure Evidence-derived view, not adoption", (
     const a = evaluate(f); expect(a.weather.status).toBe(kind === "unavailable" ? "unavailable" : "unknown");
     expect(a.relevance.status).toBe("fit"); expect(a.price.status).toBe("known"); expect(a.partial).toBe(true);
     if (kind === "stale") expect(a.freshness.find((v) => v.evidenceId === "weather-candidate-a")?.status).toBe("stale");
+  });
+  it("public hazard severity never becomes candidate rejection; unavailable/unknown/empty are not safe", () => {
+    const f = candidateAssessmentFixture();
+    const baseline = evaluate(f);
+    const result = hazardInformation();
+    result.evidence[0]!.validUntil = "2026-09-13T00:00:00Z";
+    // Fixture assessment time is 08:00; maintain identity binding from resolved candidate.
+    f.facts.hazard = { place: f.destination.ref!, result };
+    for (const severity of ["information", "advisory", "warning", "emergency", "unknown"] as const) {
+      result.data!.alerts[0]!.severity = severity;
+      const assessment = evaluate(f);
+      expect(assessment.hazard.status).toBe("present");
+      expect(assessment.hardConstraints).toEqual(baseline.hardConstraints);
+      expect(assessment.constraintStatus).toBe(baseline.constraintStatus);
+    }
+    for (const status of ["unknown", "unavailable"] as const) {
+      f.facts.hazard.result = { status, freshness: "unknown", evidence: [] };
+      expect(evaluate(f).hazard.status).toBe(status);
+    }
+    f.facts.hazard.result = { ...result, data: { area: "大阪府", alerts: [] } };
+    expect(evaluate(f).hazard.status).toBe("unknown");
+    f.facts.hazard.result = result;
+    Object.assign(result.data!.alerts[0]!, { raw: "must not leak" });
+    expect(evaluate(f).hazard.reasonCodes).toContain("invalid-facts");
   });
   it("empty/unacquired alerts are unknown; acquired warnings are present", () => {
     const f = candidateAssessmentFixture(); expect(evaluate(f).hazard.status).toBe("unknown");

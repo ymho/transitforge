@@ -4,7 +4,7 @@ import type { Money, PriceObservation } from "./money";
 import type { PlaceRef, PlaceSnapshot } from "./place-snapshot";
 import type { RailTimetableInput, VerifiedRailCandidate } from "./selected-rail-journey";
 import type { TransportMode } from "./transport-detail";
-import type { TravelAlertSearchResult } from "./travel-alert";
+import type { HazardAlertSearchResult } from "./hazard-alert";
 import type { WeatherForecast } from "./weather-forecast";
 
 export type ConstraintStatus = "satisfied" | "violated" | "unknown";
@@ -66,7 +66,7 @@ export interface CandidateAssessmentFacts {
   rail?: { candidate: VerifiedRailCandidate; inputs: readonly RailTimetableInput[] };
   groundAccess?: ExternalTravelInformation<GroundAccessRoute>;
   weather?: { target: { place: PlaceRef; startDate: string; endDate: string }; result: ExternalTravelInformation<WeatherForecast> };
-  hazard?: { place: PlaceRef; result: ExternalTravelInformation<TravelAlertSearchResult> };
+  hazard?: { place: PlaceRef; result: ExternalTravelInformation<HazardAlertSearchResult> };
   prices?: ExternalTravelInformation<{
     items: { provider: string; providerItemId: string; observation: PriceObservation }[];
     /** Complete for this candidate/scope only, never a proof of whole-Trip feasibility. */

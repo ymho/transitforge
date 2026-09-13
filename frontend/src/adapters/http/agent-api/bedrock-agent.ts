@@ -12,7 +12,7 @@ import type {
   WeatherForecastSearchResponse,
   WeatherGridSearchResponse,
   PlaceMediaSearchResponse,
-  TravelAlertSearchResponse,
+  HazardAlertSearchResponse,
   GroundAccessSearchResponse,
   RestaurantSearchResponse,
   WebSearchResponse,
@@ -29,7 +29,7 @@ import {
   isWeatherForecastSearchResponse,
   isWeatherGridSearchResponse,
   isPlaceMediaSearchResponse,
-  isTravelAlertSearchResponse,
+  isHazardAlertSearchResponse,
   isGroundAccessSearchResponse,
   isRestaurantSearchResponse,
   isWebSearchResponse,
@@ -218,15 +218,15 @@ export async function researchPlaceDetail(
   );
 }
 
-export async function searchTravelAlerts(
-  request: { area: string; categories?: import("@raiquora/trip/travel-alert").TravelAlertCategory[]; limit?: number },
+export async function searchHazardAlerts(
+  request: { area: string; categories?: import("@raiquora/trip/hazard-alert").HazardAlertCategory[]; limit?: number },
   fetcher: typeof fetch = fetch,
-): Promise<TravelAlertSearchResponse> {
+): Promise<HazardAlertSearchResponse> {
   return postAgentBody(
     { operation: "travel_alert_search", ...request },
     "防災情報を取得できません",
     "防災情報",
-    isTravelAlertSearchResponse,
+    isHazardAlertSearchResponse,
     fetcher,
     true,
   );
