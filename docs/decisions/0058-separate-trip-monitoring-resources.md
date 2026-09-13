@@ -47,5 +47,7 @@ Trip tableに限定したConditionCheckItem権限を追加する。PutItem権限
 公開writerはOFF。既存main LambdaへWatch handlerや認証の仮実装を配線しない。
 
 #407がStreams/outboxと確実なsync起動・retry/DLQを選定する。本PRは配送を実装済みとしない。
+後続#407で[ADR 0059](0059-deliver-trip-changes-with-a-transactional-outbox.md)のtransactional outboxを採用した。
+#393のprojection/diff/reconcileは変更せず、配送を追加する。
 #394/#408が決定論的Impact評価、#395が通知・episode/dedupe・配送、#396/#397が旅行中Context/replanを担う。
 契約・制限・試験は[Trip monitoring](../architecture/trip-monitoring.md)を参照する。

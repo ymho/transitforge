@@ -8,6 +8,7 @@
 #410のActivity/add/候補採用と部分migrationは[Activity導入記録](trip-activity.md)を参照する。
 #389の既存revisionを使うCAS/Proposal/receipt/競合回復は[更新契約](trip-concurrency.md)を参照する。
 #393の独立Watch・Event・Impact、owner逆引きと差分reconcileは[監視境界](trip-monitoring.md)を参照する。
+#407のTrip永続更新→Watch同期は[transactional outbox配送](trip-changed-delivery.md)を参照する。
 Tripの計画・予約・Feasibilityを変更せず、自動配送/実Impact評価/通知は後続Issueに残す。
 
 **これは採用する最終契約であり、V2が稼働済みという記述ではない。** #415では文書だけを変更する。

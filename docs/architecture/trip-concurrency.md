@@ -1,5 +1,8 @@
 # Trip revision / mutation（#389）
 
+#407は同じCAS/receipt transactionへ[TripChanged outbox](trip-changed-delivery.md)を追加する。
+create/archiveもsignalと原子的に保存する。revision/Proposal/公開gateの意味は維持する。
+
 #402の[ready gate](trip-feasibility.md)はprepare内で実際の変更後Tripを評価する。
 古い評価の自己申告は受け付けず、最後の同じCAS/receiptを維持する。
 

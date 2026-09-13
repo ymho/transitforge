@@ -4,6 +4,7 @@ import { boundedTrip, tripIdentifier, conversationIdentifier, TripResourceError,
 import { canonicalJson, mutationDigest, readReceipt } from "./trip-mutation-receipt.js";
 import type { TripClock } from "@raiquora/trip/trip-temporal";
 import { requireTripPrincipal, type TripPrincipal, type TripRepository, type TripConversationReferences } from "../ports/trip-repository.js";
+import { tripChangedPut } from "./trip-changed-record.js";
 
 type Command = GetItemCommand | PutItemCommand | UpdateItemCommand | DeleteItemCommand | QueryCommand | TransactWriteItemsCommand;
 type Result = { Item?: Record<string, AttributeValue>; Items?: Record<string, AttributeValue>[]; LastEvaluatedKey?: Record<string, AttributeValue> };
@@ -31,13 +32,16 @@ export class DynamoDbTripRepository implements TripRepository, TripConversationR
     const trip = boundedTrip(input), key = this.key(principal, trip.id);
     if (trip.revision !== 0) throw new TripResourceError("invalid-input");
     try {
-      await this.send(new PutItemCommand({ TableName: this.table, Item: { ...key, storageVersion: { N: "1" }, revision: { N: "0" }, archived: { BOOL: false }, trip: { S: JSON.stringify(trip) } },
-        ConditionExpression: "attribute_not_exists(pk)" }), "already-exists");
+      await this.client.send(new TransactWriteItemsCommand({ TransactItems: [
+        { Put: { TableName: this.table, Item: { ...key, storageVersion: { N: "1" }, revision: { N: "0" }, archived: { BOOL: false }, trip: { S: JSON.stringify(trip) } }, ConditionExpression: "attribute_not_exists(pk)" } },
+        tripChangedPut(this.table, key.pk.S, trip.id, 0, "created", this.clock.now().toISOString()),
+      ] }));
     } catch (error) {
       // Stable UUID is create/import's idempotency key. Never replace a different/archived record.
-      if (!(error instanceof TripResourceError) || error.code !== "already-exists") throw error;
       const existing = await this.get(principal, trip.id);
-      if (!existing || canonicalJson(existing) !== canonicalJson(trip)) throw error;
+      const reasons = (error as { CancellationReasons?: { Code?: string }[] })?.CancellationReasons;
+      if (!existing) throw new TripResourceError(reasons?.[0]?.Code === "ConditionalCheckFailed" ? "already-exists" : "unavailable");
+      if (canonicalJson(existing) !== canonicalJson(trip)) throw new TripResourceError("already-exists");
       return existing;
     }
     return trip;
@@ -89,6 +93,7 @@ export class DynamoDbTripRepository implements TripRepository, TripConversationR
             ":base": { N: String(mutation.baseRevision) }, ":old": { S: JSON.stringify(old) }, ":active": { BOOL: false } } } },
         { Put: { TableName: this.table, Item: { ...receiptKey, storageVersion: { N: "1" }, digest: { S: mutationDigest(mutation) }, trip: { S: JSON.stringify(trip) } },
           ConditionExpression: "attribute_not_exists(pk)" } },
+        tripChangedPut(this.table, key.pk.S, trip.id, trip.revision, "mutated", trip.updatedAt),
       ] }));
     } catch (error) {
       // Handles duplicate concurrent requests AND a committed transaction whose response was lost.
@@ -102,9 +107,21 @@ export class DynamoDbTripRepository implements TripRepository, TripConversationR
     return trip;
   }
   async archive(principal: TripPrincipal, id: string): Promise<void> {
-    await this.send(new UpdateItemCommand({ TableName: this.table, Key: this.key(principal, id),
-      UpdateExpression: "SET archived = :archived", ConditionExpression: "attribute_exists(pk) AND archived = :active",
-      ExpressionAttributeValues: { ":archived": { BOOL: true }, ":active": { BOOL: false } } }), "not-found");
+    const key = this.key(principal, id), trip = await this.get(principal, id);
+    if (!trip) throw new TripResourceError("not-found");
+    try {
+      await this.client.send(new TransactWriteItemsCommand({ TransactItems: [
+        { Update: { TableName: this.table, Key: key, UpdateExpression: "SET archived = :archived",
+          ConditionExpression: "attribute_exists(pk) AND archived = :active AND trip = :old",
+          ExpressionAttributeValues: { ":archived": { BOOL: true }, ":active": { BOOL: false }, ":old": { S: JSON.stringify(trip) } } } },
+        tripChangedPut(this.table, key.pk.S, id, trip.revision, "archived", this.clock.now().toISOString()),
+      ] }));
+    } catch (error) {
+      // A later retry is not-found, as before. A concurrent edit must not archive a different revision.
+      if (!await this.get(principal, id)) throw new TripResourceError("not-found");
+      const reasons = (error as { CancellationReasons?: { Code?: string }[] })?.CancellationReasons;
+      throw new TripResourceError(reasons?.some((r) => r.Code === "ConditionalCheckFailed") ? "conflict" : "unavailable");
+    }
   }
   async attach(principal: TripPrincipal, conversationId: string, tripId: string): Promise<void> {
     const key = this.linkKey(principal, conversationId);

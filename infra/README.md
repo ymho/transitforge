@@ -59,3 +59,10 @@ credential tfstate tfvarsの内容をIssue PR logへ貼らない
 認証Adapter未導入のためpublic Trip handlerは利用不可。内部組成はtable名を明示し、全操作にtrusted principalを渡す。
 通常UIのwriter有効化は#389と認証レビュー後。詳細は[Trip保存基盤](../docs/architecture/trip-server-persistence.md)。
 PITRは再生成できない計画の回復性を優先し、保存量に応じた費用を許容する。TTLで自動削除しない。
+
+## TripChanged内部配送（#407）
+
+`trip-changed.tf`はoutbox用sparse GSI、専用Lambda、1分の配送timer、起動失敗SQS DLQ、IAM、alarmを定義する。
+Trip変更本体のretry/deadは同じDynamoDB内に期限なしで保持する。公開worker endpointは追加しない。
+通常buildが`packaging/trip-changed.json`の別bundleを生成する。
+運用・redriveと#394/#409への境界は[TripChanged配送](../docs/architecture/trip-changed-delivery.md)を参照する。

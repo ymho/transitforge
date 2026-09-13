@@ -13,16 +13,28 @@ export function tripDynamoFixture() {
     commands.push(command);
     if (command instanceof TransactWriteItemsCommand) {
       faults.beforeTransaction?.(); faults.beforeTransaction = undefined;
-      const [update, put] = command.input.TransactItems!;
-      const u = update!.Update!, p = put!.Put!, r = records.get(key(u.Key!)), v = u.ExpressionAttributeValues!;
-      expect(u.ConditionExpression).toBe("attribute_exists(pk) AND archived = :active AND (revision = :base OR (attribute_not_exists(revision) AND trip = :old))");
-      expect(u.UpdateExpression).toBe("SET trip = :trip, revision = :next");
-      expect(p.ConditionExpression).toBe("attribute_not_exists(pk)");
-      const valid = !!r && r.archived?.BOOL === false && (r.revision?.N === v[":base"]!.N || !r.revision && r.trip?.S === v[":old"]!.S);
-      if (!valid || records.has(key(p.Item!))) throw Object.assign(new Error("cancelled-private-data"), { name: "TransactionCanceledException",
-        CancellationReasons: [{ Code: valid ? "None" : "ConditionalCheckFailed" }, { Code: records.has(key(p.Item!)) ? "ConditionalCheckFailed" : "None" }] });
-      r.trip = structuredClone(v[":trip"]!); r.revision = structuredClone(v[":next"]!);
-      records.set(key(p.Item!), structuredClone(p.Item!));
+      const actions = command.input.TransactItems!;
+      const valid = actions.map((a) => {
+        if (a.Put) { expect(a.Put.ConditionExpression).toBe("attribute_not_exists(pk)"); return !records.has(key(a.Put.Item!)); }
+        const u = a.Update!, r = records.get(key(u.Key!)), v = u.ExpressionAttributeValues!;
+        if (u.UpdateExpression === "SET archived = :archived") {
+          expect(u.ConditionExpression).toBe("attribute_exists(pk) AND archived = :active AND trip = :old");
+          return !!r && r.archived?.BOOL === false && r.trip?.S === v[":old"]!.S;
+        }
+        expect(u.ConditionExpression).toBe("attribute_exists(pk) AND archived = :active AND (revision = :base OR (attribute_not_exists(revision) AND trip = :old))");
+        expect(u.UpdateExpression).toBe("SET trip = :trip, revision = :next");
+        return !!r && r.archived?.BOOL === false && (r.revision?.N === v[":base"]!.N || !r.revision && r.trip?.S === v[":old"]!.S);
+      });
+      if (valid.some((v) => !v)) throw Object.assign(new Error("cancelled-private-data"), { name: "TransactionCanceledException",
+        CancellationReasons: valid.map((v) => ({ Code: v ? "None" : "ConditionalCheckFailed" })) });
+      for (const a of actions) {
+        if (a.Put) records.set(key(a.Put.Item!), structuredClone(a.Put.Item!));
+        else {
+          const u = a.Update!, r = records.get(key(u.Key!))!, v = u.ExpressionAttributeValues!;
+          if (u.UpdateExpression === "SET archived = :archived") r.archived = structuredClone(v[":archived"]!);
+          else { r.trip = structuredClone(v[":trip"]!); r.revision = structuredClone(v[":next"]!); }
+        }
+      }
       if (faults.lostResponse) { faults.lostResponse = false; throw new Error("response lost"); }
       return {};
     }
