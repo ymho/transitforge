@@ -32,3 +32,6 @@ import は Web Locks と先行保存した pending marker で同じ端末のタ�
 trusted host の確認 seam のみ実装する。#399/#402 を先取りしない。
 
 実装契約と適合試験は [Trip concurrency](../architecture/trip-concurrency.md) を参照する。
+
+#407は同じmutation transactionへ最小TripChanged outbox Putを追加する（[ADR 0059](0059-deliver-trip-changes-with-a-transactional-outbox.md)）。
+create/archiveもsignalと原子的に保存する。Trip JSON/Domain revisionと既存receiptの意味は変更しない。

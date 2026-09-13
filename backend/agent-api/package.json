@@ -13,9 +13,10 @@
     "@raiquora/trip": "*"
   },
   "scripts": {
-    "build": "npm run typecheck && npm run bundle:lambda",
+    "build": "npm run typecheck && npm run bundle:lambda && npm run bundle:trip-changed",
     "typecheck": "tsc --noEmit",
     "bundle:lambda": "esbuild src/lambda.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/lambda/index.cjs",
+    "bundle:trip-changed": "esbuild src/trip-changed-lambda.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/trip-changed/index.cjs",
     "lambda:check": "node ../../tools/check_lambda_package.mjs",
     "test": "TMPDIR=/tmp vitest run --root ../.. backend/agent-api/src"
   },

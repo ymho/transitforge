@@ -1,11 +1,8 @@
 import type { Trip } from "@raiquora/trip/trip";
-import { TripResourceError, type TripMutation } from "../contracts/trip-api.js";
+import type { TripMutation } from "../contracts/trip-api.js";
+import type { TripPrincipal } from "../contracts/trip-principal.js";
+export { requireTripPrincipal, type TripPrincipal } from "../contracts/trip-principal.js";
 
-/** Established by trusted server authentication, NOT HTTP body/headers or an Agent output. */
-export interface TripPrincipal { readonly subject: string }
-export function requireTripPrincipal(principal: TripPrincipal | undefined): asserts principal is TripPrincipal {
-  if (!principal || typeof principal.subject !== "string" || !principal.subject.trim() || principal.subject.length > 200 || /[\u0000-\u001f\u007f]/.test(principal.subject)) throw new TripResourceError("unauthenticated");
-}
 export interface TripPage { trips: Trip[]; nextAfterTripId?: string }
 /** Internal workers must also resolve an owner and use this same port. No scan/global lookup. */
 export interface TripRepository {

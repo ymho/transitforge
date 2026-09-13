@@ -18,6 +18,21 @@ resource "aws_dynamodb_table" "trips" {
     name = "watchSubject"
     type = "S"
   }
+  attribute {
+    name = "outboxShard"
+    type = "S"
+  }
+  attribute {
+    name = "availableAt"
+    type = "N"
+  }
+  # Durable delivery queue + dead-letter partitions; no Trip/private payload in the index.
+  global_secondary_index {
+    name            = "trip-changed-due"
+    hash_key        = "outboxShard"
+    range_key       = "availableAt"
+    projection_type = "KEYS_ONLY"
+  }
   # Sparse index: active watches only. Partition is a digest of owner + exact dated subject.
   global_secondary_index {
     name            = "watch-subject"

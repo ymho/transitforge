@@ -3,6 +3,9 @@
 親方針は#382/#415・ADR 0052。実装判断は[ADR 0058](../decisions/0058-separate-trip-monitoring-resources.md)。
 本書は既存Tripを利用する監視境界であり、新しいTrip/Planner/Realtime正本を定義するものではない。
 
+本書の#393導入時に未実装だったdurable triggerは、#407の[TripChanged配送](trip-changed-delivery.md)で追加した。
+以下の「未導入」は#393単体の範囲を示す。外部Event fanout/Impact実評価/利用者通知は引き続き後続責務。
+
 ## 現行 → 今回 → 後続
 
 | 現行の正本・不足 | #393で追加する境界 | 残す責務 |
