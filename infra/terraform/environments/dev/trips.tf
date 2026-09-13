@@ -14,6 +14,17 @@ resource "aws_dynamodb_table" "trips" {
     name = "sk"
     type = "S"
   }
+  attribute {
+    name = "watchSubject"
+    type = "S"
+  }
+  # Sparse index: active watches only. Partition is a digest of owner + exact dated subject.
+  global_secondary_index {
+    name            = "watch-subject"
+    hash_key        = "watchSubject"
+    range_key       = "sk"
+    projection_type = "KEYS_ONLY"
+  }
   server_side_encryption {
     enabled = true
   }
@@ -25,10 +36,16 @@ resource "aws_dynamodb_table" "trips" {
 # Internal access only; owner scoping is mandatory in TripRepository. No Scan or wildcard ARN.
 data "aws_iam_policy_document" "trip_storage" {
   statement {
+    sid       = "OwnerScopedWatchLookup"
+    actions   = ["dynamodb:Query"]
+    resources = ["${aws_dynamodb_table.trips.arn}/index/watch-subject"]
+  }
+  statement {
     sid = "OwnerScopedTripStorage"
     actions = [
       "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem",
       "dynamodb:DeleteItem", "dynamodb:Query",
+      "dynamodb:ConditionCheckItem",
     ]
     resources = [aws_dynamodb_table.trips.arn]
   }

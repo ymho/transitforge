@@ -4,6 +4,9 @@ import { DynamoDbReservationRepository } from "./adapters/dynamodb-reservation-r
 import { ReservationApplication } from "./usecases/reservation-application.js";
 import { ChecklistApplication } from "./usecases/checklist-application.js";
 import { DynamoDbChecklistRepository } from "./adapters/dynamodb-checklist-repository.js";
+import { DynamoDbTripWatchRepository } from "./adapters/dynamodb-trip-watch-repository.js";
+import { TripWatchApplication, TripWatchWorker } from "./usecases/trip-watch-application.js";
+import type { TripImpactEvaluator, WatchScopeResolver } from "./ports/trip-impact-evaluator.js";
 
 /** IAM/internal worker composition only. Every operation still requires an explicit trusted owner. */
 export function createInternalTripApplication(table: string): TripApplication {
@@ -22,4 +25,12 @@ export function createInternalChecklistApplication(table: string): ChecklistAppl
   const trips = new DynamoDbTripRepository(table);
   return new ChecklistApplication(trips, new DynamoDbChecklistRepository(table),
     new ReservationApplication(trips, new DynamoDbReservationRepository(table)));
+}
+
+/** Trusted owner-scoped worker seam only; #407 owns durable triggers, #394 owns the evaluator. */
+export function createInternalTripWatch(table: string, evaluator: TripImpactEvaluator, scopes?: WatchScopeResolver) {
+  const trips = new DynamoDbTripRepository(table), watches = new DynamoDbTripWatchRepository(table);
+  return { application: new TripWatchApplication(trips, watches, scopes),
+    worker: new TripWatchWorker(trips, watches, evaluator,
+      new ReservationApplication(trips, new DynamoDbReservationRepository(table))) };
 }

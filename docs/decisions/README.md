@@ -76,3 +76,4 @@
 - [0055 ReservationをTripから独立した予約resourceにする](0055-separate-reservation-resource.md)
 - [0056 採用済みTripの成立性を派生評価しready確定を検証する](0056-evaluate-adopted-trip-feasibility.md)
 - [0057 派生Readinessと独立した旅行前準備を分離する](0057-separate-readiness-and-preparation.md)
+- [0058 Tripの計画と監視・外部イベント・影響を分離する](0058-separate-trip-monitoring-resources.md)

@@ -129,6 +129,9 @@ TypeScriptのテストは対象モジュールの隣へ置く。repository保守
 
 ## 確認コマンド
 
+[#393 の Trip monitoring](docs/architecture/trip-monitoring.md)は採用済み計画から独立したWatch、
+外部Event、revision付きImpactの内部境界を提供する。自動監視worker・Impact実評価・通知はまだ有効ではない。
+
 ```bash
 npm run architecture:check
 npm run workspace:check

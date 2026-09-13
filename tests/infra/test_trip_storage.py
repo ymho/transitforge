@@ -47,6 +47,21 @@ class TripStorageContractTest(unittest.TestCase):
         for forbidden in ["ScanCommand", "DeleteItemCommand", "console.", "TRIP#", "RESERVATION#"]:
             self.assertNotIn(forbidden, adapter)
 
+    def test_watch_index_and_worker_remain_owner_scoped_and_private(self):
+        source = (ROOT / "infra/terraform/environments/dev/trips.tf").read_text()
+        self.assertIn('name            = "watch-subject"', source)
+        self.assertIn('hash_key        = "watchSubject"', source)
+        self.assertIn('${aws_dynamodb_table.trips.arn}/index/watch-subject', source)
+        self.assertIn('"dynamodb:ConditionCheckItem"', source)
+        adapter = (ROOT / "backend/agent-api/src/adapters/dynamodb-trip-watch-repository.ts").read_text()
+        for required in ["OWNER#${principal.subject}", "WATCH#", "WATCH_STATE#", "ConditionCheck", "ConsistentRead: true"]:
+            self.assertIn(required, adapter)
+        self.assertNotIn("ScanCommand", adapter)
+        self.assertNotIn("DeleteItemCommand", adapter)
+        entrypoint = (ROOT / "backend/agent-api/src/lambda.ts").read_text()
+        self.assertNotIn("createInternalTripWatch", entrypoint)
+        self.assertNotIn("TripWatchWorker", entrypoint)
+
 
 if __name__ == "__main__":
     unittest.main()
