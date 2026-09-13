@@ -43,9 +43,11 @@ export interface ActivityItineraryItem extends ItineraryItemBase {
 }
 export type ItineraryItem = TransportItineraryItem | StayItineraryItem | ActivityItineraryItem;
 
-/** Minimal candidate-adoption patch. #389 extends this same contract with revisions and other operations. */
+/** Shared atomic proposal operations. #390 adds remove/move; #389 owns revision/CAS on this contract. */
 export type TripPatch = { readonly type: "replace"; readonly itemId: string; readonly item: ItineraryItem }
   | { readonly type: "add"; readonly item: ItineraryItem; readonly afterId?: string }
+  | { readonly type: "remove"; readonly itemId: string }
+  | { readonly type: "move"; readonly itemId: string; readonly afterId?: string }
   | { readonly type: "request"; readonly request: TripRequest }
   | { readonly type: "planning"; readonly state: PlanningState }
   | { readonly type: "lifecycle"; readonly state: LifecycleState; readonly basis: "schedule" | "user_confirmation" };
@@ -127,6 +129,22 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
   let planningState = trip.planningState;
   let lifecyclePatch: Extract<TripPatch, { type: "lifecycle" }> | undefined;
   for (const patch of proposal.patches) {
+    if (patch.type === "remove" || patch.type === "move") {
+      exactKeys(patch, patch.type === "remove" ? ["type", "itemId"] : ["type", "itemId", "afterId"]);
+      const index = items.findIndex(({ id }) => id === patch.itemId);
+      if (index < 0) throw new Error("Unknown itinerary item");
+      if (patch.type === "remove") items.splice(index, 1);
+      else {
+        if (patch.afterId !== undefined && (patch.afterId === patch.itemId || !items.some(({ id }) => id === patch.afterId))) {
+          throw new Error("Invalid move reference");
+        }
+        const [item] = items.splice(index, 1);
+        // Omitted afterId means the beginning; references resolve against ordered patches.
+        const after = patch.afterId === undefined ? -1 : items.findIndex(({ id }) => id === patch.afterId);
+        items.splice(after + 1, 0, item!);
+      }
+      continue; // Request/assumption references are checked against the final aggregate below.
+    }
     if (patch.type === "add") {
       exactKeys(patch, ["type", "item", "afterId"]);
       validateItem(patch.item);

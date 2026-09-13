@@ -1,7 +1,7 @@
 import type { UserProfile } from "@raiquora/trip/travel-profile";
 import { travelPreferenceLabels } from "@raiquora/trip/travel-profile";
 import type { TripPlan, TripPlanItem } from "@raiquora/trip/trip-plan";
-import { validateTrip, type Trip } from "@raiquora/trip/trip";
+import { validateTrip, type Trip, type ItineraryItem } from "@raiquora/trip/trip";
 import type { ItinerarySchedule } from "@raiquora/trip/itinerary-schedule";
 import type { TripRequest } from "@raiquora/trip/trip-request";
 import type { PlanningState, LifecycleState } from "@raiquora/trip/trip-state";
@@ -208,7 +208,11 @@ function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["tri
     request: structuredClone(trip.request),
     planningState: trip.planningState, lifecycleState: trip.lifecycleState,
     scheduleTruncated: trip.items.length > 24,
-    schedule: trip.items.slice(0, 24).map((item) => {
+    schedule: trip.items.slice(0, 24).map(selectedTripItemSnapshot) };
+}
+
+/** Same allowlisted item projection for the full itinerary and ephemeral focused-item context. */
+export function selectedTripItemSnapshot(item: ItineraryItem): AgentTripScheduleItem {
       const schedule = structuredClone(item.schedule);
       if (item.type === "activity") return { itemId: item.id, type: "activity", schedule,
         category: item.category, summary: bounded(item.title, 100)!,
@@ -232,7 +236,6 @@ function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["tri
         origin: journey.legs[0]!.origin.name, destination: journey.legs.at(-1)!.destination.name,
         summary: `${bounded(journey.legs[0]!.origin.name, 80)}→${bounded(journey.legs.at(-1)!.destination.name, 80)}（計画 ${journey.legs[0]!.scheduledDeparture.at} → ${journey.legs.at(-1)!.scheduledArrival.at}）`,
         date: journey.serviceDate };
-    }) };
 }
 
 function bounded(value: string | undefined, maximum: number): string | undefined {

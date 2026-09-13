@@ -1,0 +1,78 @@
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { applyTripProposal, createTrip } from "@raiquora/trip/trip";
+import { multiCityTrip, placeActivity, placesAt, placesTripId } from "../../../../modules/trip/domain/trip-places.fixture";
+import { tripWorkspacePreviewSource } from "../../dev/trip-workspace-preview";
+import { createTripWorkspaceController, type TripWorkspaceSource } from "../../usecases/trip-plan/trip-workspace-controller";
+import { configureTripWorkspace } from "./trip-workspace";
+
+function setup(source?: TripWorkspaceSource) {
+  const app = document.createElement("main"); app.id = "app"; document.body.append(app);
+  const chat = document.createElement("section"); chat.id = "chat";
+  const messages = document.createElement("ol"), input = document.createElement("input"); chat.append(messages, input);
+  const legacyPanel = document.createElement("section"), legacyToggle = document.createElement("button"); app.append(chat, legacyPanel, legacyToggle);
+  const controller = createTripWorkspaceController("one"), ask = vi.fn(), showContext = vi.fn(), returnToConversation = vi.fn();
+  if (source) controller.attach("one", source);
+  const ui = configureTripWorkspace({ app, chat, messages, input, legacyPanel, legacyToggle, controller, ask, showContext, returnToConversation, showMap: vi.fn(), nextItemId: () => "new-free" });
+  return { app, chat, messages, input, controller, ui, ask, legacyPanel, legacyToggle, showContext };
+}
+function button(root: ParentNode, text: string) { return [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === text)!; }
+afterEach(() => document.body.replaceChildren());
+
+describe("Trip workspace DOM and mobile navigation", () => {
+  it("leaves the legacy UI alone when no V2 source exists; empty Trip is supported", () => {
+    const f = setup(); expect(f.ui.panel.hidden).toBe(true); expect(f.app.dataset.tripWorkspace).toBeUndefined(); expect(f.legacyPanel.hidden).toBe(false);
+    f.controller.attach("one", { getCurrentTrip: () => createTrip(placesTripId, "空の旅程", placesAt) });
+    expect(f.ui.panel.hidden).toBe(false); expect(f.legacyPanel.hidden).toBe(true); expect(f.ui.panel.textContent).toContain("空の旅程");
+    expect(f.ui.panel.querySelectorAll(".trip-workspace-card")).toHaveLength(0);
+  });
+  it("preserves input, session, both scroll positions, focus, collapse and proposal through chat/trip/chat", () => {
+    const f = setup({ getCurrentTrip: multiCityTrip }); f.input.value = "編集中の文章"; f.messages.scrollTop = 240; f.input.focus();
+    f.controller.focus("activity"); f.controller.propose("順序変更", [{ type: "move", itemId: "activity" }]);
+    button(f.ui.nav, "旅程").click(); f.ui.panel.scrollTop = 330;
+    const card = f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')!;
+    button(card, "閉じる").click(); expect(button(card, "開く").getAttribute("aria-expanded")).toBe("false");
+    button(f.ui.nav, "会話").click();
+    expect(f.input.value).toBe("編集中の文章"); expect(document.activeElement).toBe(f.input); expect(f.messages.scrollTop).toBe(240);
+    expect(f.controller.sessionId()).toBe("one"); expect(f.controller.uiFocus()?.itemId).toBe("activity"); expect(f.controller.proposal()?.summary).toBe("順序変更");
+    button(f.ui.nav, "旅程").click(); expect(f.ui.panel.scrollTop).toBe(330); expect(button(card, "開く")).toBeDefined();
+    expect(button(f.ui.nav, "旅程").getAttribute("aria-pressed")).toBe("true");
+    expect(f.app.contains(f.chat)).toBe(true); expect(f.ui.panel.querySelectorAll(".trip-workspace-diff")).toHaveLength(1);
+  });
+  it("direct edits only preview, then update one card at explicit in-memory confirmation", async () => {
+    let trip = multiCityTrip(); const f = setup({ getCurrentTrip: () => trip, confirmProposal: async (p) => { trip = applyTripProposal(trip, p); } });
+    const oldHotel = f.ui.panel.querySelector('[data-item-id="hotel"]');
+    const activity = f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')!;
+    button(activity, "名称を変更").click(); const editor = activity.querySelector<HTMLFormElement>("form")!, input = editor.querySelector("input")!;
+    expect(document.activeElement).toBe(input); input.value = "ゆっくり散策"; editor.dispatchEvent(new Event("submit", { cancelable: true }));
+    expect(trip.items[2]?.title).toBe("Zürich"); expect(f.ui.panel.textContent).toContain("変更後");
+    button(f.ui.panel, "確認して、この画面内に反映").click(); await vi.waitFor(() => expect(trip.items[2]?.title).toBe("ゆっくり散策"));
+    expect(f.ui.panel.querySelector('[data-item-id="hotel"]')).toBe(oldHotel);
+    expect(oldHotel?.querySelector('option[value="activity"]')?.textContent).toContain("ゆっくり散策");
+    await vi.waitFor(() => expect(f.ui.panel.querySelector('[role="status"]')?.textContent).toContain("永続保存はしていません"));
+  });
+  it("add/remove/move use the shared proposal path and consultation sends intent with focus", () => {
+    const trip = multiCityTrip(), f = setup({ getCurrentTrip: () => trip });
+    const form = f.ui.panel.querySelector<HTMLFormElement>(".trip-workspace-add")!; form.querySelector("input")!.value = "休憩";
+    form.dispatchEvent(new Event("submit", { cancelable: true })); expect(f.controller.proposal()?.patches[0]).toMatchObject({ type: "add", item: { id: "new-free" } });
+    const activity = f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')!;
+    button(activity, "削除案").click(); expect(f.controller.proposal()?.patches).toEqual([{ type: "remove", itemId: "activity" }]);
+    activity.querySelector<HTMLSelectElement>("select")!.value = ""; button(activity, "移動案").click();
+    expect(f.controller.proposal()?.patches).toEqual([{ type: "move", itemId: "activity" }]);
+    button(activity, "相談する").click(); expect(f.ask).toHaveBeenCalledWith("この予定を相談したい"); expect(f.controller.uiFocus()).toEqual({ itemId: "activity" });
+    expect(f.app.dataset.tripWorkspaceView).toBe("chat"); expect(trip.items).toHaveLength(3);
+  });
+  it("keeps candidate assessment outside adopted cards; unknown is not fine weather or zero price", () => {
+    const f = setup(tripWorkspacePreviewSource()); const before = structuredClone(f.controller.current());
+    const candidates = f.ui.panel.querySelector(".trip-workspace-candidates")!;
+    expect(candidates.textContent).toContain("未採用"); expect(candidates.textContent).toContain("0円ではありません"); expect(candidates.textContent).toContain("旅行全体の評価ではありません");
+    expect(candidates.closest(".trip-workspace-card")).toBeNull(); expect(f.ui.panel.textContent).toContain("EUR 120.00");
+    expect(f.ui.panel.textContent).toContain("今回の人数"); expect(f.controller.current()).toEqual(before);
+  });
+  it("session change drops neither proposals nor selection; another Trip does not receive them", () => {
+    const f = setup({ getCurrentTrip: multiCityTrip }); f.controller.focus("activity"); f.controller.propose("削除", [{ type: "remove", itemId: "activity" }]);
+    f.controller.attach("two", { getCurrentTrip: () => createTrip("22222222-2222-4222-8222-222222222222", "別の旅", placesAt, [placeActivity("other")]) });
+    f.controller.activateSession("two"); expect(f.ui.panel.textContent).not.toContain("変更案（まだ反映"); expect(f.controller.uiFocus()).toBeUndefined();
+    f.controller.activateSession("one"); expect(f.ui.panel.textContent).toContain("変更案（まだ反映"); expect(f.controller.uiFocus()?.itemId).toBe("activity");
+  });
+});

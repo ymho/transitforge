@@ -144,6 +144,13 @@ npm run eval:agent:decision:live -- --suite trip-progress --case C-candidate --o
   自由選択なのでGで最初から進展する場合もあり、raw askOnlyTurnsから実際のカバレッジを確認する。
   独立した既存Tool selection/grounding/safety評価を置き換えない。
 
-2026-09-12の確認では`aws sts get-caller-identity`が`Your session has expired`で失敗した。
+## #390 focused-item追加
+
+A〜Zに加えてAA（選択中Activityの調整）をSmoke/Fullへ追加した。TTFI=1、通常ask-only streak=0、
+選択IDの具体的Proposal、他item/採用済みPlace/Request不変を検証する。既存thresholdは変更していない。
+現行件数はSmokeのTrip Progress 11、Full 27。V〜Zは#406の候補比較、AAはUI focus境界を評価する。
+詳細と再実行コマンドは[Trip workspace](trip-workspace.md)参照。
+
+2026-09-12および2026-09-13の確認では`aws sts get-caller-identity`が`Your session has expired`で失敗した。
 Live未実施。既存方式で再認証後、上記コマンドでTTFC/TTFI、selection→draft、streak、Progress Rate、
 理由、model/tool calls、既存latencyを確認する。認証方式変更やキー抽出は行っていない。

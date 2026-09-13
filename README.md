@@ -55,6 +55,11 @@ npm run dev
 LocalStorageの旅程は上書きしない。滞在カードの「地図で宿泊先を選ぶ」から 評価 参考料金
 空室状況を含む固定候補を地図上で確認できる
 
+Trip V2のread/proposal workspaceは`http://localhost:5173/?trip-workspace-preview=1`で確認する。
+DesktopはTripとChatを並べ、Mobileは会話/旅程で切り替える。APIなしのsyntheticデータであり、
+変更案の確認はメモリ内のみ。V2保存やlegacy migrationはまだ有効ではない。
+責務と確認方法は[Trip workspace](docs/architecture/trip-workspace.md)を参照する。
+
 局地天気の見た目だけを外部APIなしで確認する場合は
 `http://localhost:5173/?weather-preview=mixed`を開く
 大阪付近を東西へ約1km動かすごとに 晴れ 曇り 雨が切り替わる固定データをMapboxのネイティブ表現で表示する

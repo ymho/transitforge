@@ -68,6 +68,7 @@ export interface AiGuidePanelElements {
   onFirstPrompt?: (prompt: string) => void;
   onTravelPlan?: (plan: ViewerAgentTravelPlan) => void;
   onTripPlanUpdate?: (proposal: import("@raiquora/trip/trip-plan").TripPlanUpdateProposal) => void;
+  onTripUpdateProposal?: (proposal: import("@raiquora/trip/trip").TripUpdateProposal) => void;
   onPlaces?: (places: PlaceMediaSearchResult["places"]) => void;
   onGroundAccess?: (access: GroundAccessRoute | GroundAccessMatrix | GroundAccessArea) => void;
   onRestaurantConsult?: (restaurant: RestaurantCandidate) => void;
@@ -301,6 +302,8 @@ export function configureAiGuidePanel(
           input.placeholder = "列車、行き先、旅の相談を入力";
         }
         resolveAssistantMessage(pendingMessage, response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants);
+        // Only a newly delivered V2 proposal opens the preview. Restoring history never reapplies it.
+        if (typeof response !== "string" && "tripUpdateProposal" in response) elements.onTripUpdateProposal?.(response.tripUpdateProposal);
         pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
       .catch(() => {
