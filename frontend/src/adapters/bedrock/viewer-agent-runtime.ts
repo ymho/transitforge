@@ -131,6 +131,7 @@ import type { Evidence } from "../../usecases/agent/evidence-model";
 import type { AgentTrace } from "../../usecases/agent/agent-trace";
 import {
   createAgentContextSnapshot,
+  selectedTripItemSnapshot,
   type AgentContextSnapshot,
 } from "../../usecases/agent/agent-context-snapshot";
 import {
@@ -148,6 +149,7 @@ import {
 } from "../../usecases/agent/external-travel-tools";
 
 export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDependencies, TripProgressDependencies {
+  getUiFocus?: () => { itemId: string } | undefined;
   previousAssistantTurn?: AgentTurnOutcome;
   onTurnObservation?: (observation: AgentTurnObservation) => void;
   getTravelCandidates?: () => Record<string, unknown>[];
@@ -290,6 +292,7 @@ export async function runViewerAgentRuntime(
 ): Promise<ViewerAgentResponse> {
   const userRequest = prompt.trim();
   const currentTrip = dependencies.getCurrentTrip?.();
+  const focusedItem = currentTrip?.items.find((item) => item.id === dependencies.getUiFocus?.()?.itemId);
   const deterministicPrompt = currentTrip ? userRequest : promptWithKnownTripContext(
     userRequest,
     dependencies.getTripContext?.(),
@@ -403,6 +406,7 @@ export async function runViewerAgentRuntime(
     context: {
       previousAssistantTurn: dependencies.previousAssistantTurn,
       featureContext: {
+        ...(focusedItem ? { uiFocus: { itemId: focusedItem.id, item: selectedTripItemSnapshot(focusedItem) } } : {}),
         displayTimeMinutes: dependencies.getRouteTime(),
         calendarDate: currentCalendarDateInJapan(currentDate(dependencies)),
         serviceDate: currentServiceDateInJapan(currentDate(dependencies)),

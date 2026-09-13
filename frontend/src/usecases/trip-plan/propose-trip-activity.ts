@@ -29,7 +29,11 @@ export type ActivityPlacement = ItineraryPlacement;
 export function proposeManualActivity(trip: Trip, placement: ActivityPlacement,
   input: { title: string; category: ActivityCategory; schedule: ItinerarySchedule; place?: PlaceSnapshot }): TripUpdateProposal {
   exactKeys(input, ["title", "category", "schedule", "place"]);
-  const place = input.place ? createPlaceSnapshot(input.place, { origin: "manual" }) : undefined;
+  const existing = placement.operation === "replace" ? trip.items.find((item) => item.id === placement.itemId) : undefined;
+  // Omitted place on a refinement is not an instruction to discard a retained selection.
+  // This reuses the already validated snapshot; it does not relabel provider data as manual.
+  const place = input.place ? createPlaceSnapshot(input.place, { origin: "manual" }) :
+    existing?.type === "activity" ? existing.place : undefined;
   if (input.place) exactKeys(input.place, ["ref", "name", "address", "coordinate", "area", "timeZone", "capturedAt", "sources"]);
   return proposalFor(trip, { id: placement.itemId, type: "activity", title: input.title, category: input.category,
     schedule: input.schedule, ...(place ? { place } : {}) }, placement);

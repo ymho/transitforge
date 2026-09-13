@@ -4,6 +4,7 @@ import { parseAgentDecisionSummary, type AgentDecisionSummary } from "./agent-de
 import { effectiveTripConstraints, type TripRequest } from "@raiquora/trip/trip-request";
 import type { AgentTurnOutcome } from "./agent-turn-outcome";
 import { candidateAssessmentContext } from "./candidate-assessment-context";
+import type { AgentTripScheduleItem } from "./agent-context-snapshot";
 
 export type AgentContextValue = string | number | boolean | null;
 
@@ -32,6 +33,8 @@ export interface AgentConversationContext {
 
 export interface AgentFeatureContext {
   feature: AgentRuntimeFeature;
+  /** Ephemeral interaction reference, not a Trip field or planning state. */
+  uiFocus?: { itemId: string; item: AgentTripScheduleItem };
   displayTimeMinutes?: number;
   calendarDate?: string;
   serviceDate?: string;
@@ -134,6 +137,9 @@ export function buildAgentDecisionContext(
     ...(input?.realtimeFacts ? { realtimeFacts: input.realtimeFacts.slice(0, 12).map((value) => boundedUnknownRecord(value)) } : {}),
     featureContext: {
       feature: request.feature,
+      ...(input?.featureContext?.uiFocus && hasTripRequest &&
+        input.featureContext.uiFocus.itemId === input.featureContext.uiFocus.item.itemId
+        ? { uiFocus: privateRequestProjection(input.featureContext.uiFocus) as AgentFeatureContext["uiFocus"] } : {}),
       ...(finite(input?.featureContext?.displayTimeMinutes)
         ? { displayTimeMinutes: input.featureContext.displayTimeMinutes }
         : {}),
@@ -261,6 +267,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     "過去Tripの振り返りと新しい旅行相談を区別し、保存Requestの年や条件を新しい旅行の希望へ無言で流用しないでください。未確認hard条件の成立を仮定せず、可能な進展と要確認事項を分けてください。",
     "期待成果物の目安は、inspiration/candidate_discoveryなら方向性・候補、candidate_selectionなら比較材料、itinerary_draft/itinerary_refinementなら具体的な変更案です。readyでは不要な確認を増やさず、in_tripでは既存Tripを前提にしてください。これはToolの固定割当や状態遷移の強制ではありません。",
     "currentTripは計画、travelCandidatesとcurrentJourneyは比較・照会中の検索結果、realtimeFactsは検索時点の観測です。候補の先頭や現在の見込時刻を採用済み計画にしないでください。",
+    "featureContext.uiFocusは利用者が画面で選択した予定の一時的な参照です。「ここ」などの相談では同じitemIdの最新itemを参照し、変更は具体的なProposalにしてください。focus自体はTripの状態でも変更の承認でもなく、他の予定を変更する指示ではありません。",
     "currentTrip.planningState/lifecycleStateはTripの現在地であり、Tool選択や質問順を固定しません。persistedTripRequestは希望・条件、currentTurnDecisionは今回の判断で、状態とは別です。pre_tripだけで将来の旅行とは断定せず、採用済みscheduleの年・精度を保ち、過去日程を今年や翌年に補正しないでください。旅行日・実行状態をViewerの表示日時から推測せず、scheduleTruncatedの場合は全旅行期間を断定しないでください。状態変更はProposalにしてください。",
     ...(context.persistedTripRequest !== undefined ? ["persistedTripRequestだけが今回条件の正本です。tripHardConstraints/ tripSoftPreferencesは有効条件の読み取り投影で、強さと仮定の確認状態は別です。unconfirmedAssumptionsは仮置きとして説明し、却下済みの条件は使わないでください。travelProfileは普段の嗜好、currentTurnDecisionは今回の解釈です。解釈や履歴で正本を上書きせず、変更はProposalとして提案してください。"] : []),
     `<agent_context>${boundedContext}</agent_context>`,

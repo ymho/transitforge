@@ -154,6 +154,11 @@ viewer-input/
 - 旅程カード間の追加は会話で希望を一問ずつ確認してから 観光 食事 宿の候補を地図へ表示する
 - プロフィールの許容移動時間を超える候補は除外せず 負担と調整可能な条件を先に案内する
 
+Trip V2のUIは[read/proposal workspace](architecture/trip-workspace.md)へ分離した。
+V2 sourceがある場合はDesktopでTripとChatを並べ、Mobileは会話/旅程を切り替える。
+候補と採用済み計画、仮置き条件、変更案を区別する。現時点では開発用sourceによる確認であり、
+本番V2保存・legacy取込・revision/CASは#388/#389まで有効化しない。
+
 ## 対象外
 
 - viewer inputと元GeoJSONの編集や再配布

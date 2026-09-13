@@ -135,6 +135,8 @@ import { loadUserProfile } from "../usecases/trip-profile/user-profile-repositor
 import { configureConversationHistoryPanel } from "../presentation/concierge/conversation-history-panel";
 import { configureApplicationSettingsPanel } from "../presentation/settings/application-settings-panel";
 import { configureTripPlanPanel } from "../presentation/trip-plan/trip-plan-panel";
+import { createTripWorkspaceController } from "../usecases/trip-plan/trip-workspace-controller";
+import { configureTripWorkspace } from "../presentation/trip-plan/trip-workspace";
 import { tripPlanFromTravelPlan } from "@raiquora/trip/trip-plan";
 import { loadTripPlan } from "../usecases/trip-plan/trip-plan-repository";
 import {
@@ -298,6 +300,7 @@ const contextWorkspaceController = createContextWorkspaceController(
   activeConversationSession.id,
   new BrowserContextWorkspaceRepository(localStorage),
 );
+const tripWorkspaceController = createTripWorkspaceController(activeConversationSession.id);
 const tripPlanController = configureTripPlanPanel(
   tripPlanPanel,
   tripPlanContent,
@@ -365,6 +368,13 @@ const applyContextWorkspaceState = () => {
   const state = contextWorkspaceController.current();
   if (state.view !== "map") delete app.dataset.mapFocusMode;
   app.dataset.contextView = state.view;
+  if (tripWorkspaceController.current()) {
+    tripPlanPanel.hidden = true;
+    tripPlanToggle.hidden = true;
+    if (state.view !== "journey-details" && !trainDetails.hidden) closeTrainDetails.click();
+    scheduleContextMapResize();
+    return;
+  }
   const currentTripPlan = loadTripPlan(localStorage, state.conversationSessionId);
   if (state.view === "trip-plan" && currentTripPlan) {
     if (!trainDetails.hidden) closeTrainDetails.click();
@@ -447,6 +457,7 @@ aiGuideController = configureAiGuidePanel(
       if (renamed) Object.assign(activeConversationSession, renamed);
     },
     onTravelPlan: (plan) => {
+      if (tripWorkspaceController.current()) return; // V2 never falls back to the legacy writer.
       const tripPlan = tripPlanFromTravelPlan(
         plan,
         new Date(),
@@ -493,6 +504,7 @@ aiGuideController = configureAiGuidePanel(
     },
     persistent: () => true,
     onTripPlanUpdate: (proposal) => {
+      if (tripWorkspaceController.current()) return;
       tripPlanController.apply(proposal.patches);
       Object.assign(activeConversationSession, {
         scope: "trip",
@@ -508,6 +520,11 @@ aiGuideController = configureAiGuidePanel(
         });
       }
     },
+    onTripUpdateProposal: (proposal) => {
+      if (!tripWorkspaceController.current()) return;
+      try { tripWorkspaceController.preview(proposal); }
+      catch { tripWorkspace.report("変更案を現在の旅程に適用できません。会話で確認し直してください。"); }
+    },
   },
   (prompt, preferences, conversation, onResponseMetadata) =>
     handleAiGuidePrompt(
@@ -517,6 +534,12 @@ aiGuideController = configureAiGuidePanel(
       onResponseMetadata,
     ),
 );
+const tripWorkspace = configureTripWorkspace({
+  app, chat: aiGuidePanel, messages: aiGuideMessages, input: aiGuideInput,
+  legacyPanel: tripPlanPanel, legacyToggle: tripPlanToggle, controller: tripWorkspaceController,
+  showContext: (view) => contextWorkspaceController.show(view), returnToConversation,
+  showMap: focusMapWorkspace, ask: (prompt) => aiGuideController.ask(prompt), nextItemId: () => crypto.randomUUID(),
+});
 const conversationSessionSwitcher = createConversationSessionSwitcher({
   repository: conversationSessionRepository,
   conversation: aiGuideController,
@@ -525,6 +548,7 @@ const conversationSessionSwitcher = createConversationSessionSwitcher({
       returnToConversation();
       mapPlaceExplorerController?.clear();
       activeConversationSession = session;
+      tripWorkspaceController.activateSession(session.id);
       contextWorkspaceController.activateSession(session.id);
   },
 });
@@ -568,6 +592,15 @@ configureApplicationSettingsPanel(document, {
 aiGuideController.open();
 applyContextWorkspaceState();
 configureTravelProfile(document, localStorage, () => aiGuideController.open());
+if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip-workspace-preview") === "1") {
+  if (!token) mapTools.hidden = true;
+  loadingScreen.complete();
+  document.querySelector<HTMLDialogElement>("#travel-profile-dialog")?.close();
+  void import("../dev/trip-workspace-preview").then(({ tripWorkspacePreviewSource }) => {
+    tripWorkspaceController.attach(activeConversationSession.id, tripWorkspacePreviewSource());
+    tripWorkspace.show("trip");
+  });
+}
 if (tripPreviewEnabled) {
   loadingScreen.complete();
   document.querySelector<HTMLDialogElement>("#travel-profile-dialog")?.close();
@@ -644,6 +677,12 @@ if (!token) {
     },
     choose: (candidate) => {
       if (candidate.kind === "accommodation") {
+        if (tripWorkspaceController.current()) {
+          closeMapPlaceDetail.click();
+          tripWorkspace.show("chat");
+          aiGuideController.ask(`${candidate.name}を宿泊候補として相談したい（まだ採用していません）`);
+          return;
+        }
         tripPlanController.selectAccommodation(candidate.value);
         contextWorkspaceController.show("trip-plan");
         return;
@@ -1174,10 +1213,19 @@ if (!token) {
             }
             const runtimeRequestIds: string[] = [];
             const executionSessionId = activeConversationSession.id;
+            const workspaceSource = tripWorkspaceController.source();
+            const uiFocus = tripWorkspaceController.uiFocus();
             const response = await runViewerAgentRuntime(
               prompt,
               {
                 previousAssistantTurn: agentTurnObservations.get(executionSessionId),
+                getCurrentTrip: () => workspaceSource?.getCurrentTrip(),
+                getUiFocus: () => uiFocus,
+                ...(workspaceSource ? {
+                  getTravelCandidates: () => (workspaceSource.getCandidates?.() ?? []).map(({ candidate, assessment }) =>
+                    assessment ? { candidate: { id: candidate.id }, assessment } : { id: candidate.id }),
+                  candidateSelection: workspaceSource.candidateSelection,
+                } : {}),
                 onTurnObservation: (observation) => agentTurnObservations.record(executionSessionId, observation),
                 trains: trainIndex.trains,
                 getTrains: () => displayTrains,
@@ -1240,7 +1288,7 @@ if (!token) {
                   });
                   conversationSessionRepository.save(activeConversationSession);
                 },
-                getTripPlan: () => loadTripPlan(
+                getTripPlan: () => workspaceSource?.getCurrentTrip() ? undefined : loadTripPlan(
                   localStorage,
                   activeConversationSession.id,
                 ),

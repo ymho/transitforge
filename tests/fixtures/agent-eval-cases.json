@@ -2,6 +2,12 @@
   "schemaVersion": "agent-eval-dataset-v2",
   "travelProgressScenarios": [
     {
+      "id": "AA-focused-item", "name": "選択中Activityをゆっくりに調整し他都市の予定を保持",
+      "userRequest": "ここをもう少しゆっくりにしたい",
+      "tags": ["smoke", "trip-progress", "ui-focus"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
       "id": "V-weather-comparison", "name": "取得済み予報で候補A/Bを比較",
       "userRequest": "candidate-aとcandidate-bの取得済みの根拠を評価して天気を比較して。採用や追加検索はまだ不要です",
       "tags": ["smoke", "trip-progress", "assessment"],
