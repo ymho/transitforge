@@ -35,7 +35,7 @@ export interface TripWatchWorkerResult {
   impacts: TripImpact[];
   skipped: { tripId: string; reason: "trip_unavailable" | "watch_stale" | "trip_changed" }[];
 }
-/** No queue/notification implementation. Subject fanout is owner-scoped; trusted host chooses owners.
+/** No queue/notification implementation. Internal subject routing (#394) derives owners from storage.
  * A stale watch is skipped (then reconciled by #407), never silently applied to a newer revision.
  */
 export class TripWatchWorker {

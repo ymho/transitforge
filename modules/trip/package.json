@@ -8,6 +8,7 @@
     "./travel-event": "./domain/travel-event.ts",
     "./travel-event-projection": "./domain/travel-event-projection.ts",
     "./trip-impact": "./domain/trip-impact.ts",
+    "./rail-trip-impact": "./domain/rail-trip-impact.ts",
     "./trip-checklist": "./domain/trip-checklist.ts",
     "./checklist-edit": "./domain/checklist-edit.ts",
     "./trip-readiness": "./domain/trip-readiness.ts",

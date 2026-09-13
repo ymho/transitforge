@@ -64,3 +64,6 @@ subject→認可されたowner/Trip routing索引、維持/CAS、鮮度、replay
 「どこかでownerを列挙する」前提では完了としない。#408の地理/天候評価、#395の利用者通知も未実装のまま。
 
 実装・運用・試験は[TripChanged配送](../architecture/trip-changed-delivery.md)を参照する。
+
+後続#394で[ADR 0060](0060-evaluate-rail-impact-through-internal-subject-routing.md)の内部rail subject GSIと
+Impact評価・保存seamを導入した。outboxとは分離し、定期的な新鮮な観測の再投入は#409に残す。

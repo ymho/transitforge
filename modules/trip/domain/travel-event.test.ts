@@ -85,7 +85,7 @@ describe("provider-independent TravelEvent seams", () => {
 describe("TripImpact contract, not evaluation algorithm", () => {
   it("requires valid Trip revision, event and affected item, rejects notification/public severity", () => {
     const trip = watchTrip(), event = railTravelEvent(subject, index(), snapshot(), [railSource], now);
-    const input: Omit<TripImpact, "id"> = { tripId: trip.id, tripRevision: 0, eventId: event.id, status: "unknown", severity: "informational", affectedItemIds: ["rail"], reasonCodes: ["external_data_unknown"], evaluatedAt: now };
+    const input: Omit<TripImpact, "id"> = { tripId: trip.id, tripRevision: 0, eventId: event.id, policyVersion: "synthetic-v1", facts: [], status: "unknown", severity: "informational", affectedItemIds: ["rail"], reasonCodes: ["external_data_unknown"], evaluatedAt: now };
     const impact = { ...input, id: tripImpactId(input) };
     expect(isCurrentTripImpact(impact, trip, event)).toBe(true);
     expect(isCurrentTripImpact(impact, { ...trip, revision: 1 }, event)).toBe(false);

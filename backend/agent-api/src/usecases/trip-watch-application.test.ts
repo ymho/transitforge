@@ -14,7 +14,7 @@ function setup() {
   const application = new TripWatchApplication(f.repository, f.watches, scopes);
   const evaluate = vi.fn<TripImpactEvaluator["evaluate"]>(async (input) => {
     const impact: Omit<TripImpact, "id"> = { tripId: input.trip.id, tripRevision: input.trip.revision, eventId: input.event.id,
-      status: "unknown", severity: "informational", affectedItemIds: input.watches.map((w) => w.itineraryItemId), reasonCodes: ["external_data_unknown"], evaluatedAt: input.evaluatedAt };
+      policyVersion: "synthetic-v1", facts: [], status: "unknown", severity: "informational", affectedItemIds: input.watches.map((w) => w.itineraryItemId), reasonCodes: ["external_data_unknown"], evaluatedAt: input.evaluatedAt };
     return { ...impact, id: tripImpactId(impact) };
   });
   const facts = vi.fn(async () => []);

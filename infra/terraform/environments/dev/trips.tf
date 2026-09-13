@@ -19,6 +19,17 @@ resource "aws_dynamodb_table" "trips" {
     type = "S"
   }
   attribute {
+    name = "railSubject"
+    type = "S"
+  }
+  # Internal-only cross-owner routing hints, active dated rail watches only.
+  global_secondary_index {
+    name            = "rail-watch-routing"
+    hash_key        = "railSubject"
+    range_key       = "sk"
+    projection_type = "KEYS_ONLY"
+  }
+  attribute {
     name = "outboxShard"
     type = "S"
   }
