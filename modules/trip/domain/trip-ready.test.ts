@@ -12,7 +12,8 @@ describe("ready policy independent of overall unknown", () => {
     const { trip, facts, stay } = feasibilityStayTrip(), original = structuredClone(trip);
     const evaluation = requireFeasibleTrip(trip, facts, now);
     expect(evaluation.status).toBe("unknown"); expect(hasReadyBlockers(evaluation)).toBe(false);
-    expect(evaluation.issues.map((i) => i.code)).toEqual(["stay_time_precision", "stay_movement_time_precision", "stay_movement_time_precision"]);
+    expect(facts.external!.some((f) => f.data?.type === "visit")).toBe(false);
+    expect(evaluation.issues.map((i) => i.code)).toEqual(["stay_time_precision", "stay_visit_unchecked", "stay_movement_time_precision", "stay_movement_time_precision"]);
     const ready = applyTripProposal(trip, { tripId: trip.id, baseRevision: trip.revision, summary: "ready", patches: [{ type: "planning", state: "ready" }] });
     expect(requireFeasibleTrip(ready, facts, now).status).toBe("unknown");
     expect(ready.items[1]!.schedule).toEqual(stay.schedule); expect(trip).toEqual(original);
@@ -23,6 +24,7 @@ describe("ready policy independent of overall unknown", () => {
     const { trip, facts } = feasibilityStayTrip(); const ready: Trip = { ...trip, planningState: "ready" }, original = structuredClone(ready);
     const booking = reservationFact(reservationFixture({ itineraryItemId: "hotel" }));
     const result = requireFeasibleTrip(ready, { ...facts, reservations: [booking] }, now);
+    expect(facts.external!.some((f) => f.data?.type === "visit")).toBe(false);
     expect(result.status).toBe("unknown"); expect(result.issues.some((i) => i.code === "stay_reservation_time_precision")).toBe(true);
     expect(ready).toEqual(original); expect(() => validateTrip(ready)).not.toThrow();
     expect(() => requireFeasibleTrip(ready, { ...facts, reservations: [{ ...booking, startsAt: at(18, "2026-09-24") }] }, now)).toThrow();
@@ -55,5 +57,39 @@ describe("ready policy independent of overall unknown", () => {
     const collision = requestTrip(undefined, [item, feasibilityActivity("next", 12, 13)]);
     expect(() => requireFeasibleTrip(collision, feasibilityFacts(collision), now)).toThrow();
     expect(() => requireFeasibleTrip(feasibilityTrip(), undefined, now)).toThrow();
+  });
+  it("blocks a fresh unavailable hotel fact even with an adopted hotel and no other blockers", () => {
+    const { trip, facts, stay } = feasibilityStayTrip();
+    const input = { ...facts, external: [...facts.external!, feasibilityObservation({ type: "visit", item: stay, available: false, reservationRequired: false })] };
+    const result = evaluateTripFeasibility(trip, input, now);
+    expect(result.status).toBe("infeasible");
+    expect(result.issues.some((i) => i.code === "visit_unavailable" && blocksReady(i))).toBe(true);
+    expect(() => requireFeasibleTrip(trip, input, now)).toThrow();
+  });
+  it.each(["not-booked", "unknown"] as const)("checks fresh hotel reservation requirements against %s", (status) => {
+    const { trip, facts, stay } = feasibilityStayTrip();
+    const input = { ...facts, reservations: [reservationFact(reservationFixture({ itineraryItemId: stay.id, status }))],
+      external: [...facts.external!, feasibilityObservation({ type: "visit", item: stay, available: true, reservationRequired: true })] };
+    const result = evaluateTripFeasibility(trip, input, now);
+    expect(result.issues).toContainEqual(expect.objectContaining({ code: "reservation_required", status: status === "not-booked" ? "violated" : "unknown" }));
+    expect(() => requireFeasibleTrip(trip, input, now)).toThrow();
+  });
+  it("keeps stale, expired, unavailable and invalid hotel observations blocking rather than silently dropping them", () => {
+    const { trip, facts, stay } = feasibilityStayTrip();
+    const visit = feasibilityObservation({ type: "visit", item: stay, available: true, reservationRequired: false });
+    for (const observation of [{ ...visit, freshness: "stale" as const }, { ...visit, status: "unavailable" as const },
+      { ...visit, evidence: [{ ...visit.evidence[0]!, validUntil: "2026-09-12T01:00:00Z" }] },
+      { ...visit, evidence: [] }]) {
+      const input = { ...facts, external: [...facts.external!, observation] };
+      const result = evaluateTripFeasibility(trip, input, now);
+      expect(result.status).toBe("unknown"); expect(result.issues.some((i) => i.code === "visit_unknown" && blocksReady(i))).toBe(true);
+      expect(() => requireFeasibleTrip(trip, input, now)).toThrow();
+    }
+  });
+  it("keeps general Activity visit absence blocking", () => {
+    const item = { ...feasibilityActivity(), category: "sightseeing" as const }, trip = requestTrip(undefined, [item]);
+    const evaluation = evaluateTripFeasibility(trip, feasibilityFacts(trip), now);
+    expect(evaluation.issues.some((i) => i.code === "visit_unknown" && blocksReady(i))).toBe(true);
+    expect(() => requireFeasibleTrip(trip, feasibilityFacts(trip), now)).toThrow();
   });
 });

@@ -31,5 +31,6 @@ it("does not turn a ready overnight Trip's informational unknown into proof of f
     context: { currentTrip: ready, tripFeasibility: tripFeasibilityContext(evaluateTripFeasibility(ready, facts, feasibilityNow)) } }, []);
   expect(context.tripFeasibility?.status).toBe("unknown");
   expect(context.tripFeasibility?.issues.map((i) => i.code)).toContain("stay_time_precision");
+  expect(context.tripFeasibility?.issues).toContainEqual(expect.objectContaining({ code: "stay_visit_unchecked", status: "unknown", itemIds: ["hotel"] }));
   expect(agentDecisionContextText(context)).toContain("readyは全事実の確認済みを意味せず");
 });

@@ -12,7 +12,7 @@ export type TripFeasibilityCode =
   | "reservations_unknown" | "reservation_unknown" | "reservation_time_unknown"
   | "reservation_conflict" | "reservation_dangling" | "reservation_required"
   | "stay_time_precision" | "stay_movement_time_precision" | "stay_reservation_time_precision"
-  | "window_time_precision";
+  | "window_time_precision" | "stay_visit_unchecked";
 export interface TripFeasibilityIssue {
   code: TripFeasibilityCode;
   severity: "info" | "warning" | "error";

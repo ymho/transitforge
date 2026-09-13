@@ -15,6 +15,7 @@ const labels: Record<TripFeasibilityCode, string> = {
   reservation_conflict: "予約の固定日時と予定が一致しません", reservation_dangling: "予約に対応する予定が旅程にありません",
   reservation_required: "予約が必要ですが、予約済みの記録を確認できていません",
   stay_time_precision: "宿泊日程は確定していますが、チェックイン・アウトの正確な時刻は未確認です",
+  stay_visit_unchecked: "採用済みの宿泊先の営業・利用条件は未取得です。利用可能と確認済みという意味ではありません",
   stay_movement_time_precision: "宿泊前後の移動は日付順を確認していますが、正確な時刻の余裕は未確認です",
   stay_reservation_time_precision: "宿泊予約の正確な利用時刻と旅程の照合は未確認です",
   window_time_precision: "所要時間と時間帯はありますが、正確な開始時刻は未確定です",

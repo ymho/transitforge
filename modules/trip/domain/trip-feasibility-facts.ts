@@ -9,9 +9,10 @@ export interface ReadFeasibilityFact { data: TripFeasibilityFact; evidenceIds: s
 /** Input validation is fail-closed, per observation. Failure/raw Provider text never escapes. */
 export function readFeasibilityFacts(trip: Trip, input: TripFeasibilityFacts | undefined, now: string) {
   const facts: ReadFeasibilityFact[] = [];
+  const visitObservationItemIds = new Set<string>();
   let invalid = false;
   if (!validInstant(now)) throw new Error("Invalid feasibility time");
-  if (!input) return { facts, reservations: undefined, invalid };
+  if (!input) return { facts, reservations: undefined, invalid, visitObservationItemIds };
   try {
     exactKeys(input, ["tripId", "tripRevision", "reservations", "external"]);
     if (input.tripId !== trip.id || input.tripRevision !== trip.revision) throw new Error("Stale feasibility facts");
@@ -21,10 +22,15 @@ export function readFeasibilityFacts(trip: Trip, input: TripFeasibilityFacts | u
       if (new Set(input.reservations.map((r) => r.reservationId)).size !== input.reservations.length) throw new Error("Duplicate reservation");
     }
     if (input.external !== undefined && !Array.isArray(input.external)) throw new Error("Invalid external facts");
-  } catch { return { facts, reservations: undefined, invalid: true }; }
+  } catch { return { facts, reservations: undefined, invalid: true, visitObservationItemIds }; }
   const sources = new Map<string, string>();
   for (const observation of input.external ?? []) {
     try {
+      // A supplied but unusable visit observation must not be mistaken for no visit lookup.
+      // This marker can only retain a blocker, never certify availability or waive validation.
+      if (observation?.data?.type === "visit" && typeof observation.data.item?.id === "string") {
+        visitObservationItemIds.add(observation.data.item.id);
+      }
       exactKeys(observation, ["status", "freshness", "data", "evidence", "failure"]);
       if (!["available", "unavailable", "unknown"].includes(observation.status) ||
           !["fresh", "stale", "unknown"].includes(observation.freshness) || !Array.isArray(observation.evidence)) throw new Error("Invalid external observation");
@@ -48,7 +54,7 @@ export function readFeasibilityFacts(trip: Trip, input: TripFeasibilityFacts | u
       if (fresh) facts.push({ data, evidenceIds: observation.evidence.map((s: ExternalSourceEvidence) => s.id) });
     } catch { invalid = true; }
   }
-  return { facts, reservations: input.reservations, invalid };
+  return { facts, reservations: input.reservations, invalid, visitObservationItemIds };
 }
 
 function validateFact(fact: TripFeasibilityFact, trip: Trip): void {

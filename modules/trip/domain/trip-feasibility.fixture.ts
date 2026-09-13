@@ -17,7 +17,7 @@ export const feasibilityObservation = (data: TripFeasibilityFact): ExternalTrave
     confidence: "observed", retrievedAt: "2026-09-12T00:00:00Z", validUntil: "2026-10-01T00:00:00Z" }],
 });
 
-/** Ordinary selected overnight plan; exact hotel hours are deliberately absent. */
+/** Ordinary selected overnight plan; hotel hours and availability/opening facts are absent. */
 export function feasibilityStayTrip() {
   const original = placeStay("hotel", "宿");
   if (original.selection.status !== "selected") throw new Error("fixture");
@@ -31,7 +31,6 @@ export function feasibilityStayTrip() {
   const trip = requestTrip(undefined, [before, stay, after]);
   const facts: TripFeasibilityFacts = { ...feasibilityFacts(trip), external: [
     ...[before, after].map((item) => feasibilityObservation({ type: "transport", item, minimumMinutes: 60 })),
-    feasibilityObservation({ type: "visit", item: stay, available: true, reservationRequired: false }),
     feasibilityObservation({ type: "movement", beforeItem: before, afterItem: stay, minimumMinutes: 30 }),
     feasibilityObservation({ type: "movement", beforeItem: stay, afterItem: after, minimumMinutes: 30 }),
   ] };

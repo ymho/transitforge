@@ -13,7 +13,7 @@ export type { TripFeasibilityFacts, TripFeasibilityEvaluation, TripFeasibilityIs
  */
 export function evaluateTripFeasibility(trip: Trip, input: TripFeasibilityFacts | undefined, evaluatedAt: string): TripFeasibilityEvaluation {
   validateTrip(trip);
-  const { facts, reservations, invalid } = readFeasibilityFacts(trip, input, evaluatedAt);
+  const { facts, reservations, invalid, visitObservationItemIds } = readFeasibilityFacts(trip, input, evaluatedAt);
   const issues: TripFeasibilityIssue[] = [];
   const issue = (code: TripFeasibilityCode, itemIds: string[], status: "violated" | "unknown" = "unknown",
     extra: Partial<Pick<TripFeasibilityIssue, "reservationIds" | "constraintIds" | "evidenceIds" | "details">> = {}) => {
@@ -48,7 +48,7 @@ export function evaluateTripFeasibility(trip: Trip, input: TripFeasibilityFacts 
       // Unplaced free time is not a claim about a facility's opening hours or admission.
       if (item.type === "stay" || item.category !== "free-time") {
         const visits = facts.filter((f) => f.data.type === "visit" && f.data.item.id === item.id);
-        if (!visits.length) issue("visit_unknown", [item.id]);
+        if (!visits.length) issue(isSelectedStay(item) && !visitObservationItemIds.has(item.id) ? "stay_visit_unchecked" : "visit_unknown", [item.id]);
         for (const f of visits) {
           if (f.data.type !== "visit") continue;
           if (!f.data.available) issue("visit_unavailable", [item.id], "violated", { evidenceIds: f.evidenceIds });

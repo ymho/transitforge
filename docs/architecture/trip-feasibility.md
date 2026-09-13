@@ -101,11 +101,15 @@ Backendの`TripFeasibilityReader.external(principal, proposedTrip)`、Workspace�
 | non-blocking code | 許可する意味（unknownは残す） |
 | --- | --- |
 | stay_time_precision | 採用済みStayの正当なday span。固定時刻へ変更しない |
+| stay_visit_unchecked | selected Stayの営業・利用条件factが未取得。利用可能・予約不要の証明ではない |
 | stay_movement_time_precision | 取得済み移動factと日付順に矛盾がなく、不足するのがStayの正確な時刻だけ |
 | stay_reservation_time_precision | booked Stayの日付に矛盾がなく、正確な利用時刻の照合ができない |
 | window_time_precision | 所要時間のあるbounded windowの未配置だけ。配置衝突のschedule_window_possibleは別にblocking |
 
 route未取得、unresolved transport、hard unknown、予約取得失敗・予約必須のunknown、外部fact不正等は引き続きblocking。
+selected Stayに別途availability/opening取得を必須とはしない。fresh visit factがあれば利用不可・予約必須を通常どおり検証する。
+対象Stayのvisit observationが存在するがstale/失効/unavailable等で使えない場合は、未取得とは区別し`visit_unknown`をblockingのまま残す。
+一般Activityや未選択Stayの`visit_unknown` policyは変えない。
 `hasReadyBlockers`/`requireFeasibleTrip`は完全な新規評価へpolicyを適用する。Agentの省略Contextは認定に使わない。
 
 - Controllerとserver sourceは実際のpost-Proposal previewを評価する。外部から渡された評価を証明として採用しない。
@@ -143,6 +147,7 @@ LLMは説明と変更案、Tool選択を担当する。自動ready/修正や違�
 | booked整合/矛盾、不十分schedule、5状態、dangling/private | trip-feasibility.test.ts |
 | ready未確認/違反拒否、同revision変更後評価、stale、CAS race/retry | Backend trip-feasibility.test.ts、Workspace test |
 | selected Stayをdayのままready認定、時間捏造なし、日付順、blocking unknownの維持 | trip-ready.test.ts、trip-feasibility-stay.test.ts、Backend/Workspace/Agent Context test |
+| selected Stayのvisit未取得・bookedでもready可能、取得済み不可/予約必須/失効は阻害 | trip-ready.test.ts、visit factを持たない共通宿泊fixtureによるBackend/Workspace/Agent回帰 |
 | UI全体/該当item、unknown非green、確認不能 | presentation/trip-feasibility.test.ts |
 | Agent非private、圧縮、モデルで違反消去不可 | Context test、AC/AD/AE Runtime Eval |
 

@@ -53,6 +53,7 @@ it("permits overnight ready while visibly retaining unknown, using the same Appl
   const section = renderWorkspaceProposal(trip, controller.proposal()!, controller, vi.fn());
   expect(section.querySelector("[data-feasibility]")?.getAttribute("data-feasibility")).toBe("unknown");
   expect(section.textContent).toContain("すべて確認済みという意味ではありません");
+  expect(section.textContent).toContain("採用済みの宿泊先の営業・利用条件は未取得です");
   expect([...section.querySelectorAll("button")].find((b) => b.textContent!.startsWith("確認して"))!.disabled).toBe(false);
   await controller.confirm(); expect(writer).toHaveBeenCalledOnce();
 });

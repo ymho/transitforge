@@ -8,13 +8,14 @@ export class TripNotFeasible extends Error {
 export function requestsReady(proposal: TripUpdateProposal): boolean {
   return proposal.patches.filter((p) => p.type === "planning").at(-1)?.state === "ready";
 }
-/** Readiness is not proof that all facts are known. Only explicitly informational precision
+/** Readiness is not proof that all facts are known. Only explicitly informational
  * codes are exempt; missing routes, hard facts and reservation requirements remain blockers.
  * Applied to complete, freshly derived results, never the Agent's truncated projection.
  */
 export function blocksReady(issue: TripFeasibilityIssue): boolean {
   if (issue.status === "violated") return true;
   switch (issue.code) {
+    case "stay_visit_unchecked":
     case "stay_time_precision":
     case "stay_movement_time_precision":
     case "stay_reservation_time_precision":
