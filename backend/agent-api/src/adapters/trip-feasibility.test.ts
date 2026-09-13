@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { TripApplication } from "../usecases/trip-application.js";
 import { tripDynamoFixture } from "./trip-dynamodb.fixture.js";
-import { feasibilityTrip, feasibilityActivity, feasibilityInstant } from "../../../../modules/trip/domain/trip-feasibility.fixture";
+import { feasibilityTrip, feasibilityActivity, feasibilityInstant, feasibilityStayTrip } from "../../../../modules/trip/domain/trip-feasibility.fixture";
 import { reservationFact } from "@raiquora/trip/reservation";
 import { reservationFixture } from "../../../../modules/trip/domain/reservation.fixture";
 import type { Trip } from "@raiquora/trip/trip";
@@ -61,4 +61,15 @@ it("returns a distinct feasibility error without exposing booking data in HTTP o
   const result = await handler({ requestContext: { http: { method: "POST" } }, body: JSON.stringify(ready()) }, { awsRequestId: "feasibility" });
   expect(result.statusCode).toBe(409); expect(JSON.parse(result.body)).toMatchObject({ error: "feasibility-required" });
   expect(JSON.stringify([result, logs])).not.toMatch(/PRIVATE|bookingReference|startsAt/);
+});
+it("commits selected-stay ready with non-blocking precision and preserves day snapshot through CAS", async () => {
+  const f = tripDynamoFixture(), overnight = feasibilityStayTrip();
+  const trip = { ...overnight.trip, revision: 5 }; f.seed(trip);
+  const app = new TripApplication(f.repository, f.repository, f.clock, { facts: async () => [] },
+    { external: async () => overnight.facts.external });
+  const result = await app.execute(owner, ready());
+  expect(result).toMatchObject({ revision: 6, trip: { planningState: "ready", items: trip.items } });
+  expect((result.trip as Trip).items[1]!.schedule).toEqual(overnight.stay.schedule);
+  const read = new TripApplication(f.repository, f.repository, f.clock);
+  expect(await read.execute(owner, { version: "trip-api-v1", operation: "get", tripId: trip.id })).toMatchObject({ trip: { planningState: "ready" } });
 });

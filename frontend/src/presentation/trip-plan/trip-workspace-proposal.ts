@@ -4,7 +4,7 @@ import { tripProposalProjection } from "./trip-workspace-projection";
 import { element, control } from "./trip-workspace-elements";
 import { reservationChangeKey } from "@raiquora/trip/reservation";
 import { applyTripProposal } from "@raiquora/trip/trip";
-import { requestsReady, TripNotFeasible } from "@raiquora/trip/trip-ready";
+import { requestsReady, hasReadyBlockers, TripNotFeasible } from "@raiquora/trip/trip-ready";
 import { renderTripFeasibility } from "./trip-feasibility-view";
 
 export function renderWorkspaceProposal(trip: Trip, proposal: TripUpdateProposal, controller: TripWorkspaceController,
@@ -25,10 +25,11 @@ export function renderWorkspaceProposal(trip: Trip, proposal: TripUpdateProposal
   if (view.beforeState !== view.afterState) compare(view.beforeState, view.afterState);
   const warnings = controller.reservationWarnings();
   const feasibility = controller.feasibility(applyTripProposal(trip, proposal));
-  const readyBlocked = requestsReady(proposal) && feasibility?.status !== "feasible";
+  const readyBlocked = requestsReady(proposal) && (!feasibility || hasReadyBlockers(feasibility));
   if (requestsReady(proposal) && feasibility) {
     section.append(renderTripFeasibility(feasibility));
-    if (readyBlocked) section.append(element("p", "", "未確認事項または不成立の条件があるため、準備完了にはできません。変更案や下書きは引き続き相談できます。"));
+    if (readyBlocked) section.append(element("p", "", "準備完了を阻害する未確認事項または不成立の条件があるため、準備完了にはできません。変更案や下書きは引き続き相談できます。"));
+    else if (feasibility.status === "unknown") section.append(element("p", "", "準備完了にできますが、表示された未確認事項は残ります。すべて確認済みという意味ではありません。"));
   }
   const consent = element("input"); consent.type = "checkbox";
   const key = reservationChangeKey(proposal, controller.reservations() ?? []);

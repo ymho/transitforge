@@ -33,7 +33,8 @@ draft/refinementは採用済みitemを1つ以上必要とする。未選択宿�
 in_trip/completedも空Tripでは認めない。旅行中のrefinementや方向性の見直しは可能。
 
 `ready`の認定は#402の[Trip Feasibility](trip-feasibility.md)をApplicationで検証する。
-選択済み経路がある、予約がある、モデルが自信を示した等だけでは認定しない。違反・unknownを拒否する。
+選択済み経路がある、予約がある、モデルが自信を示した等だけでは認定しない。違反とready-blocking unknownを拒否する。
+selected Stayの正当なday精度等は未確認を表示したままreadyを許可する。readyは全事実確認済みを意味しない。
 保存済みreadyは構造validationで読める。後で評価が変わってもplanningStateを自動変更しない。
 
 ## Proposal / 確認

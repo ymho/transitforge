@@ -33,7 +33,7 @@ issueはcode、severity、violated/unknown、itemIds、必要に応じreservatio
 - 採用順を保った全pairを調べ、間に未定itemがあっても既知の衝突を見逃さない。
 - window + durationは最早終了と最遅開始を計算する。どの配置でも前itemの終了が次開始に間に合わなければ違反。
   全ての配置で両立すればpairはsatisfied、配置次第ならpossible。後者はcode `schedule_window_possible`。
-  window自身は未配置なので全体readyにはならない。duration不明ならunknown。探索optimizerではない。
+  window自身の未配置はunknownのまま。所要時間のあるbounded windowの精度だけならreadyを妨げないが、配置次第で衝突するpairはreadyを阻害する。duration不明はblocking unknown。探索optimizerではない。
 - day/unscheduledは時間衝突を断定せずunknown。ブラウザtimezoneや00:00を補わない。
 - 連続itemのend place→start placeを比較する。同じ`PlaceRef`を#414で同定できる場合だけ移動不要。
   名前一致・手入力名・別Providerの同名は同一視しない。別地点のActivity間を0分にしない。
@@ -44,6 +44,9 @@ issueはcode、severity、violated/unknown、itemIds、必要に応じreservatio
 - 非rail採用は便の運行/所要時間を必ずしも証明しない。取得済みのduration factがなければ未検証。
 - selected Stayは既存check-in/out→day spanのinvariantを保つ。時刻を捏造せず時間レベルはunknown。
   宿泊中のActivityがあるだけで衝突と断定しない。日付の明確な矛盾は既存snapshot/schedule validationとhard dates/durationで検証する。
+  前予定からの到達日がcheckout日を越える、後予定への出発日がcheck-in日より前になる場合は、採用順の日付矛盾として違反。
+  予定内の宿泊中の外出を拒否しないため、Stayをcheck-in日からcheckout日までの占有時間として扱わない。
+  比較はStayの明示timezoneを使う。zone欠落・相手の時刻欠落はblocking unknown。
 
 ## Hard constraints / Money
 
@@ -66,7 +69,8 @@ per-personは確定した今回partyがある場合だけ、同通貨の上限�
 ReservationFact以外を受け付けず、private/raw fieldは拒否し評価へコピーしない。
 bookedのstartsAt/endsAtがlinked fixed itemの同じ端点と異なる場合は`reservation_conflict`。
 予約の固定された開催区間とitemの区間を一致させる保守的な契約であり、到着猶予/途中退場は推測しない。
-day/window/unscheduled/終了不明/予約時刻なしは`reservation_time_unknown`。
+通常のday/window/unscheduled/終了不明/予約時刻なしは`reservation_time_unknown`。
+selected Stayでは明示timezone上の予約開始/終了日がcheck-in/out日と異なれば違反。矛盾がなければ時刻精度の未確認を`stay_reservation_time_precision`として残す。予約必須・取得失敗・unknown statusは別のblocking issueであり、この精度許容では消さない。
 unknown statusは未確認、cancelled/not-required/not-bookedはbookedとして扱わない。
 予約必須の取得factと明示not-bookedだけが揃えばviolation。記録なし・unknownを現実の未予約と断定せず予約確認requiredをunknownとして返す。
 dangling linkは該当ID付きissue。unlinked bookedもunknown。自動link/delete/cancelはしない。
@@ -90,8 +94,20 @@ Backendの`TripFeasibilityReader.external(principal, proposedTrip)`、Workspace�
 
 ## ready / revision / failure
 
-- `requestsReady`の明示planning Patchだけを認定対象とする。初期policyはinfeasibleも全unknownも拒否。
+- `requestsReady`の明示planning Patchだけを認定対象とする。overall statusとは別の`blocksReady`をUI/Applicationで共有する。
   UIは該当理由を表示し、checkboxやモデルの説明で解除できない。通常draft/修正は可能。
+  全violationと、以下の明示例外以外のunknownはblockingとする。新しいcodeもデフォルトでblocking。
+
+| non-blocking code | 許可する意味（unknownは残す） |
+| --- | --- |
+| stay_time_precision | 採用済みStayの正当なday span。固定時刻へ変更しない |
+| stay_movement_time_precision | 取得済み移動factと日付順に矛盾がなく、不足するのがStayの正確な時刻だけ |
+| stay_reservation_time_precision | booked Stayの日付に矛盾がなく、正確な利用時刻の照合ができない |
+| window_time_precision | 所要時間のあるbounded windowの未配置だけ。配置衝突のschedule_window_possibleは別にblocking |
+
+route未取得、unresolved transport、hard unknown、予約取得失敗・予約必須のunknown、外部fact不正等は引き続きblocking。
+`hasReadyBlockers`/`requireFeasibleTrip`は完全な新規評価へpolicyを適用する。Agentの省略Contextは認定に使わない。
+
 - Controllerとserver sourceは実際のpost-Proposal previewを評価する。外部から渡された評価を証明として採用しない。
 - Backendはowner取得→既存Proposal apply→取得済みfact read→同じDomain評価→CAS/receipt。
   previewはbaseRevisionを維持する。CASが成功した時だけrevisionが+1になり、次回評価は新revisionを使う。
@@ -106,6 +122,7 @@ Backendの`TripFeasibilityReader.external(principal, proposedTrip)`、Workspace�
 
 Workspace全体へ「成立性: 成立 / 不成立 / 未確認」、各itemへ関連issueを表示する。
 未確認はamberで、文字でも明示する。ready変更案では**変更後**の評価を表示して確認を制限する。
+non-blocking unknownのみなら確認を許可し、「準備完了でもすべて確認済みではない」とUI/Agentへ明示する。
 評価をTripやSessionへ保存しない。sourceから都度再評価し、別会話や古い取得結果へfallbackしない。
 Agentへはtop-level `tripFeasibility`だけをbounded projectionする。個別のhard評価の別コピーはRuntimeの
 currentTripから除き、異なる費用coverageで矛盾する二重評価を出さない。既存Context readerは旧field互換を維持する。
@@ -125,6 +142,7 @@ LLMは説明と変更案、Tool選択を担当する。自動ready/修正や違�
 | 費用coverage、異通貨、未取得 | trip-feasibility-constraints.test.ts |
 | booked整合/矛盾、不十分schedule、5状態、dangling/private | trip-feasibility.test.ts |
 | ready未確認/違反拒否、同revision変更後評価、stale、CAS race/retry | Backend trip-feasibility.test.ts、Workspace test |
+| selected Stayをdayのままready認定、時間捏造なし、日付順、blocking unknownの維持 | trip-ready.test.ts、trip-feasibility-stay.test.ts、Backend/Workspace/Agent Context test |
 | UI全体/該当item、unknown非green、確認不能 | presentation/trip-feasibility.test.ts |
 | Agent非private、圧縮、モデルで違反消去不可 | Context test、AC/AD/AE Runtime Eval |
 

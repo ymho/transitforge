@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { evaluateTripFeasibility } from "@raiquora/trip/trip-feasibility";
-import { feasibilityTrip, feasibilityNow, feasibilityFacts } from "../../../../modules/trip/domain/trip-feasibility.fixture";
+import { feasibilityTrip, feasibilityNow, feasibilityFacts, feasibilityStayTrip } from "../../../../modules/trip/domain/trip-feasibility.fixture";
 import { tripFeasibilityContext } from "./trip-feasibility-context";
 import { buildAgentDecisionContext, agentDecisionContextText } from "./agent-decision-context";
 
@@ -23,4 +23,13 @@ it("never projects arbitrary private data or hides a violation by truncation", (
   expect(result).toMatchObject({ status: "infeasible", truncated: true, totalIssueCount: 31 });
   expect(result.issues[0]!.code).toBe("reservation_conflict");
   expect(JSON.stringify(result)).not.toMatch(/PRIVATE|bookingReference/);
+});
+it("does not turn a ready overnight Trip's informational unknown into proof of feasibility", () => {
+  const { trip, facts } = feasibilityStayTrip();
+  const ready = { ...trip, planningState: "ready" as const };
+  const context = buildAgentDecisionContext({ executionId: "stay", feature: "concierge", userRequest: "準備完了？",
+    context: { currentTrip: ready, tripFeasibility: tripFeasibilityContext(evaluateTripFeasibility(ready, facts, feasibilityNow)) } }, []);
+  expect(context.tripFeasibility?.status).toBe("unknown");
+  expect(context.tripFeasibility?.issues.map((i) => i.code)).toContain("stay_time_precision");
+  expect(agentDecisionContextText(context)).toContain("readyは全事実の確認済みを意味せず");
 });

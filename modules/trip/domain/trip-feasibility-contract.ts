@@ -10,7 +10,9 @@ export type TripFeasibilityCode =
   | "stay_unselected" | "visit_unknown" | "visit_unavailable" | "external_facts_invalid"
   | "hard_constraint_violated" | "hard_constraint_unknown" | "assumption_unconfirmed"
   | "reservations_unknown" | "reservation_unknown" | "reservation_time_unknown"
-  | "reservation_conflict" | "reservation_dangling" | "reservation_required";
+  | "reservation_conflict" | "reservation_dangling" | "reservation_required"
+  | "stay_time_precision" | "stay_movement_time_precision" | "stay_reservation_time_precision"
+  | "window_time_precision";
 export interface TripFeasibilityIssue {
   code: TripFeasibilityCode;
   severity: "info" | "warning" | "error";

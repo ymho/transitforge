@@ -16,7 +16,7 @@
 - Schedule/Place/SelectedRailJourney/Money/effective constraintsを再利用し、Rail transferを再実装しない。
 - 予約は独立ReservationReaderの`ReservationFact`のみ。外部事実は取得済みEvidence付き、採用itemへ結び付いた短命なinput。
 - Applicationで変更後のTripを評価する。既存CASでその内容だけを保存し、評価の自己申告やrevisionだけの証明を受理しない。
-- 初期ready policyは全unknownを拒否する。既存readyの読み取りとdraft/修正は拒否せず、状態を自動変更しない。
+- ready policyをoverall statusと分離する。`blocksReady`は違反と必要事実の欠落を拒否し、selected Stayの正当なday精度、取得済み移動のStay前後の時刻精度、宿泊予約の日付整合後の時刻精度、衝突未解決でないbounded window精度だけを許容する。unknownの表示・評価は消さない。
 - Domain構造validationからready一律禁止を外す。構造的に正しいreadyの読み取りと、今回readyを認定する操作を分離する。
 - Agent/UIは同じ派生結果を説明する。新Tool/固定質問順/外部API必須pipeline/model callは追加しない。
 
@@ -24,7 +24,8 @@
 
 - Candidateをそのまま評価: 採用済み順序・予約・current revisionが失われる。
 - Tripへ評価を永続化: 取得情報の失効とrevision変更で二重の正本になる。
-- unknownを許可してready: 今回は未検証の時刻・移動・予約を成立と誤認するリスクが高い。
+- 全unknownを拒否してready: selected Stayが必ずdayというinvariantと組み合わせると、宿泊旅行が永久にreadyになれない。
+- 全unknownを許可してready: route未取得、hard constraint未確認、予約必須の未確認まで素通りする。
 - 保存readyをschemaで拒否: 後から情報不足になった旅行を読み込めず修正もできない。
 
 ## 制約と後続

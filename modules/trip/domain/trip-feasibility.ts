@@ -3,6 +3,7 @@ import { samePlaceIdentity, type PlaceSnapshot } from "./place-snapshot";
 import { evaluateTripHardConstraints } from "./trip-constraint-evaluation";
 import { readFeasibilityFacts } from "./trip-feasibility-facts";
 import { orderedScheduleRelation } from "./trip-feasibility-schedule";
+import { isSelectedStay, stayDateRelation, stayReservationDateConflict } from "./trip-feasibility-stay";
 import type { TripFeasibilityFacts, TripFeasibilityEvaluation, TripFeasibilityIssue, TripFeasibilityCode } from "./trip-feasibility-contract";
 export type { TripFeasibilityFacts, TripFeasibilityEvaluation, TripFeasibilityIssue } from "./trip-feasibility-contract";
 
@@ -22,7 +23,11 @@ export function evaluateTripFeasibility(trip: Trip, input: TripFeasibilityFacts 
   if (invalid) issue("external_facts_invalid", []);
   if (reservations === undefined) issue("reservations_unknown", []);
   for (const item of trip.items) {
-    if (item.schedule.type !== "fixed" || !item.schedule.endAt) issue("schedule_unknown", [item.id], "unknown", { details: { precision: item.schedule.type } });
+    if (item.schedule.type !== "fixed" || !item.schedule.endAt) {
+      const code = isSelectedStay(item) ? "stay_time_precision" :
+        item.schedule.type === "window" && item.schedule.durationMinutes !== undefined ? "window_time_precision" : "schedule_unknown";
+      issue(code, [item.id], "unknown", { details: { precision: item.schedule.type } });
+    }
     if (item.type === "transport") {
       if (item.detail.status === "unresolved") issue("transport_unresolved", [item.id]);
       else if (item.detail.mode !== "rail") {
@@ -62,7 +67,7 @@ export function evaluateTripFeasibility(trip: Trip, input: TripFeasibilityFacts 
   for (let i = 0; i < trip.items.length; i++) for (let j = i + 1; j < trip.items.length; j++) {
     const a = trip.items[i]!, b = trip.items[j]!;
     const relation = orderedScheduleRelation(a.schedule, b.schedule);
-    if (relation === "violated") issue("schedule_overlap", [a.id, b.id], "violated");
+    if (relation === "violated" || stayDateRelation(a, b) === "violated") issue("schedule_overlap", [a.id, b.id], "violated");
     else if (relation === "possible") issue("schedule_window_possible", [a.id, b.id]);
   }
   for (let i = 1; i < trip.items.length; i++) {
@@ -74,8 +79,10 @@ export function evaluateTripFeasibility(trip: Trip, input: TripFeasibilityFacts 
     for (const route of routes) {
       if (route.data.type !== "movement") continue;
       const relation = orderedScheduleRelation(a.schedule, b.schedule, route.data.minimumMinutes);
-      if (relation !== "satisfied") issue(relation === "violated" ? "movement_insufficient" : "movement_unknown", [a.id, b.id],
-        relation === "violated" ? "violated" : "unknown", { evidenceIds: route.evidenceIds, details: { minimumMinutes: route.data.minimumMinutes } });
+      const stayRelation = stayDateRelation(a, b, route.data.minimumMinutes);
+      const violated = relation === "violated" || stayRelation === "violated";
+      if (relation !== "satisfied") issue(violated ? "movement_insufficient" : stayRelation === "precision" ? "stay_movement_time_precision" : "movement_unknown", [a.id, b.id],
+        violated ? "violated" : "unknown", { evidenceIds: route.evidenceIds, details: { minimumMinutes: route.data.minimumMinutes } });
     }
   }
   for (const r of reservations ?? []) {
@@ -89,6 +96,11 @@ export function evaluateTripFeasibility(trip: Trip, input: TripFeasibilityFacts 
     if (r.status === "unknown") { issue("reservation_unknown", [item.id], "unknown", extra); continue; }
     if (r.status !== "booked") continue;
     const s = item.schedule;
+    if (isSelectedStay(item) && s.type === "day" && s.timeZone) {
+      const conflict = stayReservationDateConflict(item, r.startsAt, r.endsAt);
+      issue(conflict ? "reservation_conflict" : "stay_reservation_time_precision", [item.id], conflict ? "violated" : "unknown", extra);
+      continue;
+    }
     if (s.type !== "fixed" || !s.endAt || !r.startsAt && !r.endsAt) {
       issue("reservation_time_unknown", [item.id], "unknown", extra); continue;
     }

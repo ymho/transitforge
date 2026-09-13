@@ -226,7 +226,7 @@ AgentDecision、Viewer時計へ複写して独立更新しない。
 フェーズ順は固定しない。具体条件が揃えばdraftから始められ、旅行中のrefinementも可能。
 readyは予約済みを意味せず、draftの保存に全項目確定を要求しない。不正構造は保存不可だが、
 不足/外部情報unknownのdraftは保存できる。hard違反はreadyへ進めない。
-#402の初期policyではunknownもready認定を拒否する。保存済みreadyの読み取りは拒否せず、
+#402ではissue code別policyでreadyを検証し、selected Stayのday精度等の情報的unknownは表示したまま許容する。readyは全件確認済みではない。保存済みreadyの読み取りは拒否せず、
 派生評価が後で変わってもplanningStateを自動変更しない。詳細はADR 0056を参照する。
 
 実時間は注入したClock、日付は対象item.scheduleのtimezoneを使う。Trip全体の開始/終了は

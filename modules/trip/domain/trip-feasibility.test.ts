@@ -84,7 +84,7 @@ describe("whole adopted Trip feasibility", () => {
     const stay = placeStay("stay", "宿"), trip = requestTrip(undefined, [stay]);
     const before = structuredClone(trip);
     const result = evaluate(trip);
-    expect(result.status).toBe("unknown"); expect(result.issues).toContainEqual(expect.objectContaining({ code: "schedule_unknown", details: { precision: "day" } }));
+    expect(result.status).toBe("unknown"); expect(result.issues).toContainEqual(expect.objectContaining({ code: "stay_time_precision", details: { precision: "day" } }));
     expect(JSON.stringify(result)).not.toContain("15:00"); expect(trip).toEqual(before);
     expect(() => evaluate({ ...trip, items: [{ ...stay, schedule: { type: "day", date: "2026-09-23", endDate: "2026-09-24" } }] })).toThrow();
     const impossible = requestTrip({ constraints: [requestConstraint({ type: "dates", start: { earliest: "2026-09-25", latest: "2026-09-25" } })], assumptions: [] }, [stay]);

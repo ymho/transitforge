@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { expect, it, vi } from "vitest";
-import { feasibilityTrip, feasibilityNow, feasibilityActivity } from "../../../../modules/trip/domain/trip-feasibility.fixture";
+import { feasibilityTrip, feasibilityNow, feasibilityActivity, feasibilityStayTrip } from "../../../../modules/trip/domain/trip-feasibility.fixture";
 import { requestTrip } from "../../../../modules/trip/domain/trip-request.fixture";
 import { createTripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import { renderTripFeasibility } from "./trip-feasibility-view";
@@ -43,4 +43,16 @@ it("recomputes the proposed content, refuses stale preview and allows known feas
   controller.propose("完了", [{ type: "planning", state: "ready" }]); trip = { ...trip, revision: 6 };
   await expect(controller.confirm()).rejects.toThrow(); expect(writer).toHaveBeenCalledOnce();
   expect(controller.feasibility()?.tripRevision).toBe(6);
+});
+it("permits overnight ready while visibly retaining unknown, using the same Application policy", async () => {
+  const { trip, facts } = feasibilityStayTrip(), writer = vi.fn(async () => {});
+  const controller = createTripWorkspaceController("s", () => new Date(feasibilityNow));
+  controller.attach("s", { getCurrentTrip: () => trip, getReservationFacts: () => facts.reservations,
+    getFeasibilityExternalFacts: () => facts.external, confirmProposal: writer });
+  controller.propose("準備完了", [{ type: "planning", state: "ready" }]);
+  const section = renderWorkspaceProposal(trip, controller.proposal()!, controller, vi.fn());
+  expect(section.querySelector("[data-feasibility]")?.getAttribute("data-feasibility")).toBe("unknown");
+  expect(section.textContent).toContain("すべて確認済みという意味ではありません");
+  expect([...section.querySelectorAll("button")].find((b) => b.textContent!.startsWith("確認して"))!.disabled).toBe(false);
+  await controller.confirm(); expect(writer).toHaveBeenCalledOnce();
 });
