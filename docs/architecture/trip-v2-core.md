@@ -139,7 +139,7 @@ live評価は設定済みAWSセッション期限切れで未実施。保存済�
 | #400（導入済み） | [宿泊Snapshot](trip-accommodation.md)。商品とPlace identityの分離、許諾・採用時検証、保守的legacy mapping |
 | #403 | 多都市、legacy/UIの対象stay選択導線と表示要約 |
 | #410（導入済み） | Activity、add、deferred sightseeingの部分/完全変換。[Activity導入記録](trip-activity.md)参照 |
-| #411（導入済み） / #412 | [TripParty](trip-party.md)。原通貨Money、宿/体験の価格観測は#412 |
+| #411 / #412（導入済み） | [TripParty](trip-party.md)、[原通貨Money](trip-money.md)、宿/体験の候補価格観測と許可された宿Snapshot価格。writerは未有効 |
 | #413 | [非鉄道transport](trip-transport.md)導入済み。外部API全面接続・料金・予約・リアルタイム監視は未有効 |
 | #388 / #389 | server認可/保存/取込、全Proposal/UIのrevision/CAS/冪等性、writer切替。新しいDomain converterは作らない |
 | #390 | 同じTrip/Proposalを扱うUI。legacy表示を採用証拠にする移行は禁止 |

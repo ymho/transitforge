@@ -1,17 +1,13 @@
 import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
+import { addMoney, validatePriceObservation, type Money, type PriceObservation } from "./money";
 
 export type TravelCostCategory = "accommodation" | "experience";
-
-export interface TravelPrice {
-  amount: number;
-  currency: "JPY";
-}
 
 export interface TravelOffering {
   provider: string;
   providerItemId: string;
   name: string;
-  price?: TravelPrice;
+  price?: PriceObservation;
   bookingUrl?: string;
 }
 
@@ -27,7 +23,6 @@ export interface AccommodationOffering extends TravelOffering {
   longitude?: number;
   reviewAverage?: number;
   reviewCount?: number;
-  priceBasis?: "reference-minimum" | "selected-dates";
   availability?: "available" | "unknown";
 }
 
@@ -38,10 +33,8 @@ export interface ExperienceOffering extends TravelOffering {
 }
 
 export interface TravelExpenseSummary {
-  currency: "JPY";
-  accommodationAmount: number;
-  experienceAmount: number;
-  knownTotalAmount: number;
+  /** Observed subtotals of supplied offerings, not guaranteed current/final trip cost. */
+  totals: readonly Money[];
   pricedItemCount: number;
   hasUnpricedItems: boolean;
   excludesRailFare: true;
@@ -84,40 +77,19 @@ export function travelExpenseSummary(
   accommodations: readonly AccommodationOffering[],
   experiences: readonly ExperienceOffering[],
 ): TravelExpenseSummary {
-  const accommodation = summarizeOfferings(accommodations);
-  const experience = summarizeOfferings(experiences);
-
-  return {
-    currency: "JPY",
-    accommodationAmount: accommodation.amount,
-    experienceAmount: experience.amount,
-    knownTotalAmount: accommodation.amount + experience.amount,
-    pricedItemCount: accommodation.pricedItemCount + experience.pricedItemCount,
-    hasUnpricedItems: accommodation.hasUnpricedItems || experience.hasUnpricedItems,
-    excludesRailFare: true,
-  };
-}
-
-function summarizeOfferings(offerings: readonly TravelOffering[]): {
-  amount: number;
-  pricedItemCount: number;
-  hasUnpricedItems: boolean;
-} {
-  let amount = 0;
+  const totals = new Map<string, Money>();
   let pricedItemCount = 0;
   let hasUnpricedItems = false;
-
-  for (const offering of offerings) {
+  for (const offering of [...accommodations, ...experiences]) {
     if (!offering.price) {
       hasUnpricedItems = true;
       continue;
     }
-    if (!Number.isSafeInteger(offering.price.amount) || offering.price.amount < 0) {
-      throw new Error("旅行費用は0以上の整数円で指定してください。");
-    }
-    amount += offering.price.amount;
+    validatePriceObservation(offering.price);
+    const money = offering.price.price;
+    totals.set(money.currency, addMoney(totals.get(money.currency) ?? { currency: money.currency, amountMinor: 0 }, money));
     pricedItemCount += 1;
   }
 
-  return { amount, pricedItemCount, hasUnpricedItems };
+  return { totals: [...totals.values()].sort((a, b) => a.currency.localeCompare(b.currency)), pricedItemCount, hasUnpricedItems, excludesRailFare: true };
 }

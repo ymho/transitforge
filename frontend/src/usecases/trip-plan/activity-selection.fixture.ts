@@ -12,5 +12,5 @@ export function activityCandidateFixture(tripId: string, kind: "restaurant" | "e
   return kind === "restaurant" ? { ...common, kind, result: { providerRestaurantId: "restaurant-a", name: "評価用の森の食堂",
     detailUrl: "https://example.com/restaurant", imageUrl: "https://example.com/image", genre: "PROVIDER_G01", budget: "2000円", openingHours: "毎日" } }
     : { ...common, kind, result: { kind: "experience", provider: "fixture", providerItemId: "experience-a", name: "評価用の森の料理体験",
-      startDate: "2026-09-22", price: { amount: 1000, currency: "JPY" }, bookingUrl: "https://example.com/booking" } };
+      startDate: "2026-09-22", price: { price: { amountMinor: 1000, currency: "JPY" }, observedAt: "2026-09-12T07:55:00Z" }, bookingUrl: "https://example.com/booking" } };
 }

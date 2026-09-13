@@ -65,7 +65,7 @@ export const tripProgressDescriptors: AgentToolDescriptor[] = [
   },
   {
     name: "propose_candidate_selection",
-    description: "提示済みcandidate IDを対象itemへ採用するTrip V2変更案を作る。採用済み1件とdraft化を提案し、保存はしない。候補本体・経路・Evidence・許諾は入力しない。宿は候補のopaque provider/providerItemIdをselectorに使い、Applicationが商品と施設を別々に解決し、出所・期限・保存許諾を検証する。宿名とcheck-in/outを同じ応答へpreviewでき、質問と併用可能。selectedは採用であって予約済みでも空室確保でもない。価格・空室・画像・review・booking URLをTripへ保存しない。別の宿への変更は同じitemIdのreplace。既存候補を使える場合は宿泊先の再質問は不要。期限切れ/別task/未検証候補は拒否する。",
+    description: "提示済みcandidate IDを対象itemへ採用するTrip V2変更案を作る。採用済み1件とdraft化を提案し、保存はしない。候補本体・経路・Evidence・許諾は入力しない。宿は候補のopaque provider/providerItemIdをselectorに使い、Applicationが商品と施設を別々に解決し、出所・期限・保存許諾を検証する。宿名とcheck-in/outを同じ応答へpreviewでき、質問と併用可能。selectedは採用であって予約済みでも空室確保でもない。許可された価格観測のみobservedPriceへ保持できる。候補のpriceは検索時観測、TripのobservedPriceは採用時の参考価格であり現在価格ではない。原通貨・observedAt・basisを保ち、暗黙換算しない。空室・画像・review・booking URLは保存しない。別の宿への変更は同じitemIdのreplace。既存候補を使える場合は宿泊先の再質問は不要。期限切れ/別task/未検証候補は拒否する。",
     inputSchema: { type: "object", properties: {
       candidateId: { type: "string", minLength: 1, maxLength: 160 }, itemId: { type: "string", minLength: 1, maxLength: 160 },
       accommodation: { type: "object", properties: { provider: { type: "string" }, providerItemId: { type: "string" } }, required: ["provider", "providerItemId"], additionalProperties: false },

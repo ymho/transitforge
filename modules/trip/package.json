@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./money": "./domain/money.ts",
     "./trip-party": "./domain/trip-party.ts",
     "./transport-detail": "./domain/transport-detail.ts",
     "./accommodation-snapshot": "./domain/accommodation-snapshot.ts",

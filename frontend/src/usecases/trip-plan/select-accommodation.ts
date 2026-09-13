@@ -1,4 +1,5 @@
 import type { AccommodationOffering } from "@raiquora/trip/travel-candidate";
+import { isPriceObservation, copyPriceObservation } from "@raiquora/trip/money";
 import type { ExternalSourceEvidence } from "@raiquora/trip/external-travel-information";
 import { createPlaceSnapshot, copyPlaceSource, validatePlaceSource, type PlaceSnapshot, type PlaceSnapshotRetention } from "@raiquora/trip/place-snapshot";
 import { validateAccommodationSnapshot, type AccommodationSnapshot } from "@raiquora/trip/accommodation-snapshot";
@@ -9,6 +10,8 @@ export interface AccommodationSelectionEvidence {
   providerItemId: string;
   /** Permission to retain product identity, stay dates and durable source, not volatile data. */
   storageAllowed: boolean;
+  /** Trusted permission bound to this product's quoted price; never accepted from model input. */
+  priceRetention?: "permitted" | "forbidden" | "unknown";
   /** Facility identity is resolved independently of the product ID. No name-based matching here. */
   place: PlaceSnapshot;
   placeRetention: PlaceSnapshotRetention;
@@ -36,7 +39,11 @@ export function selectAccommodation(offering: AccommodationOffering, proof: Acco
   }
   const snapshot: AccommodationSnapshot = { provider: offering.provider, providerItemId: offering.providerItemId,
     place, selectedAt, checkInDate: offering.checkInDate, checkOutDate: offering.checkOutDate,
-    sources: [copyPlaceSource(proof.source)] };
+    sources: [copyPlaceSource(proof.source)],
+    ...(proof.priceRetention === "permitted" && isPriceObservation(offering.price) &&
+      Date.parse(offering.price.observedAt) <= Date.parse(proof.source.retrievedAt) &&
+      Date.parse(offering.price.observedAt) <= Date.parse(selectedAt)
+      ? { observedPrice: copyPriceObservation(offering.price) } : {}) };
   validateAccommodationSnapshot(snapshot);
   return snapshot;
 }

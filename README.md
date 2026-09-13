@@ -135,9 +135,9 @@ Viewer Actionのカテゴリ別に6指標を出す。失敗したcase IDは`--ca
 
 通常の`eval:agent`は再現可能な保存済みObservationを採点し CIの回帰検知に使う。
 さらに本番Runtimeを通すscripted Ask + Progress（A〜G）と、複数応答の
-[Trip Progress評価](docs/architecture/trip-progress-evaluation.md)（A〜R）を追加実行する。
+[Trip Progress評価](docs/architecture/trip-progress-evaluation.md)（A〜S）を追加実行する。
 TTFC/TTFI・候補選択→draft・質問のみの連続数は構造化された表示成果物から測る。
-SmokeはTrip Progress A/C/G/K/N/O/Q、FullはA〜R。K/LはActivity、M/Nは[TripParty](docs/architecture/trip-party.md)、O/Pは[Transport](docs/architecture/trip-transport.md)、Q/Rは[宿泊Snapshot](docs/architecture/trip-accommodation.md)の回帰評価。保存済み観測42件の6指標は維持する。
+SmokeはTrip Progress A/C/G/K/N/O/Q/S、FullはA〜S。K/LはActivity、M/Nは[TripParty](docs/architecture/trip-party.md)、O/Pは[Transport](docs/architecture/trip-transport.md)、Q/Rは[宿泊Snapshot](docs/architecture/trip-accommodation.md)の回帰評価。保存済み観測42件の6指標は維持する。 #412のSはEUR宿泊の原通貨・観測日時・参考価格previewを検証する。
 実モデルで複数応答を測る場合は、既存AWS認証を更新後に
 `npm run eval:agent:decision:live -- --suite trip-progress --profile full`を実行する。
 `eval:agent:decision:live`は本番と同じSystem Prompt Tool capability contract

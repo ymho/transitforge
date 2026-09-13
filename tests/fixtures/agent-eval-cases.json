@@ -2,6 +2,12 @@
   "schemaVersion": "agent-eval-dataset-v2",
   "travelProgressScenarios": [
     {
+      "id": "S-eur-accommodation", "name": "EURの宿の採用時価格観測を原通貨でpreviewする",
+      "userRequest": "候補candidate-aの宿（fixture/hotel-a）をstayへ採用して。EURの観測価格と観測日時も見せて。予約や為替換算は不要です",
+      "tags": ["smoke", "trip-progress", "money"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 1 }
+    },
+    {
       "id": "Q-accommodation", "name": "候補宿を採用してcheck-in/outのpreviewを返す",
       "userRequest": "候補candidate-aの宿A（fixture/hotel-a）をstayへ採用して、チェックイン・アウトも見せて。予約するわけではありません",
       "tags": ["smoke", "trip-progress", "accommodation"],

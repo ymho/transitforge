@@ -2,6 +2,7 @@ import type { ExternalSourceEvidence } from "./external-travel-information";
 import { validatePlaceSnapshot, validatePlaceSource, type PlaceSnapshot } from "./place-snapshot";
 import { validDate, validInstant, exactKeys } from "./snapshot-validation";
 import { projectStaySchedule, type LocalDate } from "./itinerary-schedule";
+import { validatePriceObservation, type PriceObservation } from "./money";
 
 /** Adopted accommodation product, not a search Offering, current availability or Reservation. */
 export interface AccommodationSnapshot {
@@ -12,6 +13,8 @@ export interface AccommodationSnapshot {
   readonly checkInDate: LocalDate;
   readonly checkOutDate: LocalDate;
   readonly sources: readonly ExternalSourceEvidence[];
+  /** Retained selection-time observation, not current availability, payable total or booking price. */
+  readonly observedPrice?: PriceObservation;
 }
 
 /** Selection-time chronology, never a claim that an observation remains current afterwards. */
@@ -28,7 +31,7 @@ export function validateAccommodationSource(source: ExternalSourceEvidence, prov
 }
 
 export function validateAccommodationSnapshot(value: AccommodationSnapshot): void {
-  exactKeys(value, ["provider", "providerItemId", "place", "selectedAt", "checkInDate", "checkOutDate", "sources"]);
+  exactKeys(value, ["provider", "providerItemId", "place", "selectedAt", "checkInDate", "checkOutDate", "sources", "observedPrice"]);
   if (typeof value.provider !== "string" || !value.provider.trim() || value.provider === "manual" ||
       typeof value.providerItemId !== "string" || !value.providerItemId.trim() || !validInstant(value.selectedAt) ||
       !validDate(value.checkInDate) || !validDate(value.checkOutDate) || value.checkInDate >= value.checkOutDate ||
@@ -36,6 +39,12 @@ export function validateAccommodationSnapshot(value: AccommodationSnapshot): voi
   validatePlaceSnapshot(value.place);
   projectStaySchedule(value.checkInDate, value.checkOutDate, value.place.timeZone);
   value.sources.forEach((source) => validateAccommodationSource(source, value.provider, value.providerItemId, value.selectedAt));
+  if (value.observedPrice !== undefined) {
+    validatePriceObservation(value.observedPrice);
+    // A retained price must have been observed by a retained product source's retrieval time.
+    if (Date.parse(value.observedPrice.observedAt) > Date.parse(value.selectedAt) ||
+        !value.sources.some((source) => Date.parse(value.observedPrice!.observedAt) <= Date.parse(source.retrievedAt))) throw new Error("Invalid retained price chronology");
+  }
   if (value.place.capturedAt !== undefined && Date.parse(value.place.capturedAt) > Date.parse(value.selectedAt) ||
       value.place.sources.some((source) => Date.parse(source.retrievedAt) > Date.parse(value.selectedAt))) {
     throw new Error("Accommodation place is newer than selection");

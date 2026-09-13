@@ -155,7 +155,7 @@ IDは会話や目的地から再計算しない。全item IDはTrip内で一意�
 ### 要求の型と意味 (#387)
 
 #387で導入したコード、legacy field棚卸し、仮定確認と評価の最小境界、未導入責務は
-[Request導入記録](trip-request.md)を参照する。partyは#411で導入済み。Moneyと本番writerは未有効であり、以下は最終契約を示す。
+[Request導入記録](trip-request.md)を参照する。partyは#411、Money/budget上限は#412で導入済み。本番writerは未有効であり、以下は最終契約を示す。
 
 同じ出発地/日付等を`TripRequest.origin`と`constraints`の両方へ保存しない。
 次の`requirement.type`によるunionを1つ定義し、検索条件はそこからderiveする。
@@ -423,17 +423,18 @@ Providerの保存許諾は型のvalidityとは別であり、検索結果やモ�
 `AccommodationOffering`は外部検索の現在候補、`AccommodationSnapshot`は採用した当時の計画記録。
 #400で同じselected stayのinline sliceを`modules/trip/domain/accommodation-snapshot.ts`へ統合した。
 共通PlaceSnapshotとExternalSourceEvidenceを再利用し、`TripAccommodation`はlegacy reader/writerに限定する。
-Snapshotは以下のfieldだけを持つ。Moneyは#412、Reservationは#398であり、本契約へ暫定値を加えない。
+Snapshotは以下のfieldだけを持つ。#412の価格観測を同じ型へ追加し、Reservationは#398へ残す。
 
 | 項目 | 内容 |
 | --- | --- |
 | 識別 | 必須`provider`/`providerItemId`は宿泊商品identity。必須`place: PlaceSnapshot`の施設identityとは別 |
 | 採用 | 必須`selectedAt`、`checkInDate`/`checkOutDate`（実在日付、checkIn < checkOut） |
 | 根拠 | 必須の非空`sources: ExternalSourceEvidence[]`。accommodation/observed、Providerとdurable sourceIdが商品identityに一致 |
+| 参考価格 | optional `observedPrice: PriceObservation`。価格の明示保持許諾と観測時系列を検証した場合のみ |
 
 `source.retrievedAt <= selectedAt <= candidate.validUntil`と、出所の有効期間がある場合はその範囲を採用時に検証する。
-価格・空室・bookingUrl・画像・review・予約状態/reference・rawをSnapshotへ保存しない。
-#412が必要なら同じ型へ価格観測を追加する。現在の空室を恒久的な事実にしない。
+生の価格・空室・bookingUrl・画像・review・予約状態/reference・rawをSnapshotへ保存しない。
+#412は許可された価格観測のみ保持する。現在価格/空室を恒久的な事実にしない。
 
 新しい選択では純粋なOffering→Snapshot変換へ選択日時と許可された値を渡す。
 検索時点が不明ならunknownのまま。`selectedAt`やmigration実行日時を`observedAt`へ偽装しない。
@@ -451,13 +452,15 @@ legacyは証拠不足のためaccommodationの有無によらずunselected＋war
 
 ### Money (#412)
 
-`Money = { amountMinor: number; currency: string }`。amountMinorは非負safe integer、通貨は
-検証済みISO 4217 code。JPYは1円=1、EURは1ユーロ=100。対応するminor unit情報を使い、
+`Money = { amountMinor: number; currency: CurrencyCode }`。amountMinorは非負safe integer、通貨は
+ISO 4217公式リストに基づく対応6通貨（JPY/EUR/CHF/USD/GBP/KWD）。JPYは1円=1、EURは1ユーロ=100。対応するminor unit情報を使い、
 小数のbinary floatを乗算して丸める移行はしない。sumもsafe integer超過を拒否する。
-`PriceObservation = { price: Money; basis: reference-minimum | selected-dates;
-observedAt?: string; sources: ExternalSourceEvidence[] }`。観測日時不明はunknown。
+`PriceObservation = { price: Money; observedAt: string; basis?: reference-minimum | selected-dates }`。
+#412では観測日時を必須に具体化し、日時不明なら観測自体を作らずlegacy原値を保全する。
+保持根拠はAccommodationSnapshotの既存sourcesとtrusted resolverを再利用する。
 元通貨別subtotalを返し、JPY+EURを合計しない。為替表示を追加する場合だけ、原額・換算額・rate・
 rate時点・sourceを別projectionへ置く。鉄道運賃を取得/推定して合計しない既存方針は維持する。
+採用時価格はobservedAt <= source.retrievedAt <= selectedAtで検証する。実装と互換性の詳細は[Money導入記録](trip-money.md)を参照する。
 
 ### Reservation (#398)
 
