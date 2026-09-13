@@ -88,6 +88,9 @@ scheduled発着instant）、transfers（leg参照/必要時間）、provenance�
 
 ## Candidate選択のApplication境界
 
+候補比較は[取得済み事実のAssessment (#406)](candidate-assessment.md)を使う。採用とは別のpure計算で、
+同じCandidateSelectionPortの取得済みrecordを読む。評価から選択や時刻表再取得を起動しない。
+
 `frontend/src/usecases/trip-plan/select-trip-candidate.ts`:
 
 1. UI/AIはcandidate ID、対象item ID、task ID（宿ならProvider内の候補ID）だけ渡す。

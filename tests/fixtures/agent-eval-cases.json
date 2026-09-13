@@ -2,6 +2,36 @@
   "schemaVersion": "agent-eval-dataset-v2",
   "travelProgressScenarios": [
     {
+      "id": "V-weather-comparison", "name": "取得済み予報で候補A/Bを比較",
+      "userRequest": "candidate-aとcandidate-bの取得済みの根拠を評価して天気を比較して。採用や追加検索はまだ不要です",
+      "tags": ["smoke", "trip-progress", "assessment"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
+      "id": "W-weather-unavailable", "name": "予報失敗と範囲外を晴れ扱いしない",
+      "userRequest": "candidate-aとcandidate-bの取得済みの根拠を評価して。予報が取れない場合は未確認として比較して。採用や追加検索はまだ不要です",
+      "tags": ["trip-progress", "assessment"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
+      "id": "X-hazard", "name": "候補に結び付いた警報を保持",
+      "userRequest": "candidate-aとcandidate-bの取得済みの根拠を評価して、注意情報を比較して。採用や追加検索はまだ不要です",
+      "tags": ["trip-progress", "assessment"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
+      "id": "Y-geographic-mismatch", "name": "同名の別地域を適合候補にしない",
+      "userRequest": "candidate-aとcandidate-bの取得済みの根拠を評価して、希望地域と照合して。採用や追加検索はまだ不要です",
+      "tags": ["trip-progress", "assessment"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
+      "id": "Z-price-partial", "name": "異通貨と未確認費用を原通貨で比較",
+      "userRequest": "candidate-aとcandidate-bの取得済みの根拠を評価して、原通貨で料金を比較して。不明費用は不明とし、換算や採用や追加検索はまだ不要です",
+      "tags": ["trip-progress", "assessment"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
       "id": "T-multi-city-request", "name": "3地点の希望を保持した仮の周遊Proposal",
       "userRequest": "Vienna→Salzburg→Zürichを回りたい。まず順番を保って移動の仮案を作って。手段・日時はまだ未検討です",
       "tags": ["trip-progress", "multi-city"],

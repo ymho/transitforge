@@ -1,4 +1,5 @@
 import { isPriceObservation } from "@raiquora/trip/money";
+import { registerCandidateAssessmentTool, candidateAssessmentEvidence } from "../../usecases/agent/candidate-assessment-tool";
 import { legacyAccommodationPrice } from "../legacy-money";
 import type {
   BedrockAgentContentBlock,
@@ -314,6 +315,7 @@ export async function runViewerAgentRuntime(
     previousJourneyState,
     externalState,
   });
+  registerCandidateAssessmentTool(tools, dependencies, () => currentDate(dependencies));
   registerTripProgressTools(tools, dependencies, progressState, () => currentDate(dependencies), () =>
     externalState.webPages?.status === "available" ? (externalState.webPages.data?.pages ?? []).flatMap((page) => {
       const source = externalState.webPages?.evidence.find((e) => e.sourceUrl === page.url);
@@ -1461,6 +1463,7 @@ function unresolvedFollowUpInputs(
 
 function viewerEvidenceMappers(): ToolEvidenceRegistry {
   const registry = new ToolEvidenceRegistry();
+  registry.register("assess_travel_candidate", candidateAssessmentEvidence);
   registry.register("search_direct_routes", routeEvidence);
   registry.register("inspect_previous_journey", previousJourneyEvidence);
   registry.register("revise_previous_journey", previousJourneyEvidence);
