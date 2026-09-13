@@ -36,6 +36,17 @@ class TripStorageContractTest(unittest.TestCase):
         self.assertNotIn("console.", adapter)
         self.assertIn("attribute_exists(pk) AND revision = :base", adapter)
 
+    def test_checklist_is_independent_internal_and_uses_atomic_owner_cas(self):
+        entrypoint = (ROOT / "backend/agent-api/src/lambda.ts").read_text()
+        self.assertNotIn("createInternalChecklistApplication", entrypoint)
+        self.assertNotIn("DynamoDbChecklistRepository", entrypoint)
+        adapter = (ROOT / "backend/agent-api/src/adapters/dynamodb-checklist-repository.ts").read_text()
+        for expected in ["OWNER#${principal.subject}", "CHECKLIST#${tripId}", "CHECKLIST_STATE#${tripId}",
+                         "TransactWriteItemsCommand", "attribute_exists(pk) AND revision = :base"]:
+            self.assertIn(expected, adapter)
+        for forbidden in ["ScanCommand", "DeleteItemCommand", "console.", "TRIP#", "RESERVATION#"]:
+            self.assertNotIn(forbidden, adapter)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -539,6 +539,10 @@ aiGuideController = configureAiGuidePanel(
       try { tripWorkspaceController.preview(proposal); }
       catch { tripWorkspace.report("変更案を現在の旅程に適用できません。会話で確認し直してください。"); }
     },
+    onChecklistProposal: (proposal) => {
+      try { tripWorkspaceController.checklist.preview(proposal); }
+      catch { tripWorkspace.report("準備リストの追加案を表示できません。最新のリストを確認してください。"); }
+    },
   },
   (prompt, preferences, conversation, onResponseMetadata) =>
     handleAiGuidePrompt(
@@ -1241,6 +1245,7 @@ if (!token) {
                 previousAssistantTurn: agentTurnObservations.get(executionSessionId),
                 getCurrentTrip: () => workspaceSource?.getCurrentTrip(),
                 getReservationFacts: () => workspaceSource?.getReservationFacts?.(),
+                getChecklistItems: () => workspaceSource?.checklist?.getItems(),
                 getFeasibilityExternalFacts: () => workspaceSource?.getFeasibilityExternalFacts?.(),
                 getUiFocus: () => uiFocus,
                 ...(workspaceSource ? {

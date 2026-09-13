@@ -7,6 +7,7 @@ import { candidateAssessmentContext } from "./candidate-assessment-context";
 import type { AgentTripScheduleItem } from "./agent-context-snapshot";
 import { reservationContext, type AgentReservationContext } from "./reservation-context";
 import { tripFeasibilityContext, type AgentTripFeasibilityContext } from "./trip-feasibility-context";
+import { boundTripReadinessContext, type AgentTripReadinessContext } from "./trip-readiness-context";
 
 export type AgentContextValue = string | number | boolean | null;
 
@@ -58,6 +59,7 @@ export interface AgentToolOutcomeSummary {
 }
 
 export interface AgentRuntimeContextInput {
+  tripReadiness?: AgentTripReadinessContext;
   tripFeasibility?: AgentTripFeasibilityContext;
   reservations?: AgentReservationContext;
   previousAssistantTurn?: AgentTurnOutcome;
@@ -84,6 +86,7 @@ export interface AgentAvailableCapability {
 }
 
 export interface AgentDecisionContext {
+  tripReadiness?: AgentTripReadinessContext;
   tripFeasibility?: AgentTripFeasibilityContext;
   reservations?: AgentReservationContext;
   previousAssistantTurn?: AgentTurnOutcome;
@@ -130,6 +133,7 @@ export function buildAgentDecisionContext(
     ? reservationContext(input.reservations.status === "available" ? input.reservations.facts : undefined)
     : undefined;
   return {
+    ...(input?.tripReadiness ? { tripReadiness: boundTripReadinessContext(input.tripReadiness) } : {}),
     ...(input?.tripFeasibility ? { tripFeasibility: { ...tripFeasibilityContext(input.tripFeasibility),
       truncated: input.tripFeasibility.truncated, totalIssueCount: input.tripFeasibility.totalIssueCount } } : {}),
     ...(reservations ? { reservations: { ...reservations,
@@ -227,6 +231,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
       currentTrip: compactCurrentTrip(context.currentTrip),
       reservations: context.reservations,
       tripFeasibility: context.tripFeasibility,
+      tripReadiness: context.tripReadiness,
       travelCandidates: context.travelCandidates?.slice(0, 4),
       realtimeFacts: context.realtimeFacts?.slice(0, 4),
       currentJourney: compactCurrentJourney(context.currentJourney, 2),
@@ -248,6 +253,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     currentTrip: compactCurrentTrip(context.currentTrip, 4),
     reservations: context.reservations,
     tripFeasibility: context.tripFeasibility,
+    tripReadiness: context.tripReadiness,
     travelCandidates: context.travelCandidates?.slice(0, 2),
     realtimeFacts: context.realtimeFacts?.slice(0, 2),
     currentJourney: compactCurrentJourney(context.currentJourney),
@@ -271,6 +277,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     currentTrip: compactCurrentTrip(context.currentTrip, 4),
     reservations: context.reservations,
     tripFeasibility: context.tripFeasibility,
+    tripReadiness: context.tripReadiness,
     knownHardConstraints: context.knownHardConstraints.slice(0, 12),
     knownSoftPreferences: context.knownSoftPreferences.slice(0, 6),
     contextTruncated: true,
@@ -288,6 +295,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     "currentTripは計画、travelCandidatesとcurrentJourneyは比較・照会中の検索結果、realtimeFactsは検索時点の観測です。候補の先頭や現在の見込時刻を採用済み計画にしないでください。",
     "reservationsはTripの採用状態とは別の予約記録です。bookedの予定の削除・置換には影響を説明して明示確認を求めてください。変更案は予約取消・変更の実行ではありません。予約がunknown・truncatedなら未掲載の予約がないと断定せず、selectedやbooking URLから予約済み・未予約を推測しないでください。",
     "tripFeasibilityは採用済みTripをコードで検証した派生結果です。infeasibleの違反を説明だけで消さず、unknownを成立・問題なしと断定しないでください。readyは全事実の確認済みを意味せず、宿泊の正確な時刻等の未確認は残る場合があります。issueの対象を説明し変更案を提案できますが、自動修正・readyの自己認定はできません。評価revisionと現在Tripを区別し、truncatedは未掲載の問題がないという意味ではありません。",
+    "tripReadinessはplanning/bookingの派生評価と独立した旅行前準備を分けます。準備openでもTripはreadyであり得ます。準備完了で成立性違反は消えません。unrecordedは予約未確認で未予約とは限らず、取得不可やtruncatedを問題なしとしないでください。準備の提案は未保存で、ユーザーの確認が必要です。",
     "featureContext.uiFocusは利用者が画面で選択した予定の一時的な参照です。「ここ」などの相談では同じitemIdの最新itemを参照し、変更は具体的なProposalにしてください。focus自体はTripの状態でも変更の承認でもなく、他の予定を変更する指示ではありません。",
     "currentTrip.planningState/lifecycleStateはTripの現在地であり、Tool選択や質問順を固定しません。persistedTripRequestは希望・条件、currentTurnDecisionは今回の判断で、状態とは別です。pre_tripだけで将来の旅行とは断定せず、採用済みscheduleの年・精度を保ち、過去日程を今年や翌年に補正しないでください。旅行日・実行状態をViewerの表示日時から推測せず、scheduleTruncatedの場合は全旅行期間を断定しないでください。状態変更はProposalにしてください。",
     ...(context.persistedTripRequest !== undefined ? ["persistedTripRequestだけが今回条件の正本です。tripHardConstraints/ tripSoftPreferencesは有効条件の読み取り投影で、強さと仮定の確認状態は別です。unconfirmedAssumptionsは仮置きとして説明し、却下済みの条件は使わないでください。travelProfileは普段の嗜好、currentTurnDecisionは今回の解釈です。解釈や履歴で正本を上書きせず、変更はProposalとして提案してください。"] : []),

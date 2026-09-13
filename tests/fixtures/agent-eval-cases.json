@@ -2,6 +2,24 @@
   "schemaVersion": "agent-eval-dataset-v2",
   "travelProgressScenarios": [
     {
+      "id": "AF-preparation-after-ready", "name": "readyと未完了の旅行前準備を分離する",
+      "userRequest": "旅程は決まりました。SIMのほかに準備することを提案して",
+      "tags": ["smoke", "trip-progress", "readiness"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
+      "id": "AG-booking-unknown", "name": "採用済みの宿を予約済みと推測しない",
+      "userRequest": "この宿の予約状況を確認したい。旅程に入っていれば予約済み？",
+      "tags": ["smoke", "trip-progress", "readiness"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
+      "id": "AH-repeated-checklist", "name": "同じ準備提案で完了項目を重複・復活させない",
+      "userRequest": "SIMを準備リストへ追加して。既にあったらそのままで",
+      "tags": ["smoke", "trip-progress", "readiness"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
       "id": "AC-impossible-itinerary", "name": "時間が重なる採用旅程を不成立として変更案を出す",
       "userRequest": "この旅程で回れる？重なる予定があれば変更案を見せて",
       "tags": ["smoke", "trip-progress", "feasibility"],

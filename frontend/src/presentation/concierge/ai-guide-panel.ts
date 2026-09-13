@@ -69,6 +69,7 @@ export interface AiGuidePanelElements {
   onTravelPlan?: (plan: ViewerAgentTravelPlan) => void;
   onTripPlanUpdate?: (proposal: import("@raiquora/trip/trip-plan").TripPlanUpdateProposal) => void;
   onTripUpdateProposal?: (proposal: import("@raiquora/trip/trip").TripUpdateProposal) => void;
+  onChecklistProposal?: (proposal: import("@raiquora/trip/trip-checklist").ChecklistProposal) => void;
   onPlaces?: (places: PlaceMediaSearchResult["places"]) => void;
   onGroundAccess?: (access: GroundAccessRoute | GroundAccessMatrix | GroundAccessArea) => void;
   onRestaurantConsult?: (restaurant: RestaurantCandidate) => void;
@@ -304,6 +305,7 @@ export function configureAiGuidePanel(
         resolveAssistantMessage(pendingMessage, response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants);
         // Only a newly delivered V2 proposal opens the preview. Restoring history never reapplies it.
         if (typeof response !== "string" && "tripUpdateProposal" in response) elements.onTripUpdateProposal?.(response.tripUpdateProposal);
+        if (typeof response !== "string" && "checklistProposal" in response) elements.onChecklistProposal?.(response.checklistProposal);
         pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
       .catch(() => {

@@ -1,6 +1,10 @@
 import { isPriceObservation } from "@raiquora/trip/money";
 import { reservationContext } from "../../usecases/agent/reservation-context";
 import { tripFeasibilityContext } from "../../usecases/agent/trip-feasibility-context";
+import { tripReadinessContext } from "../../usecases/agent/trip-readiness-context";
+import { projectTripReadiness } from "@raiquora/trip/trip-readiness";
+import { registerChecklistTool } from "../../usecases/agent/checklist-tools";
+import type { TripChecklistItem, ChecklistProposal } from "@raiquora/trip/trip-checklist";
 import { evaluateTripFeasibility, type TripFeasibilityFacts } from "@raiquora/trip/trip-feasibility";
 import { registerCandidateAssessmentTool, candidateAssessmentEvidence } from "../../usecases/agent/candidate-assessment-tool";
 import { legacyAccommodationPrice } from "../legacy-money";
@@ -154,6 +158,7 @@ import {
 export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDependencies, TripProgressDependencies {
   getReservationFacts?: () => readonly import("@raiquora/trip/reservation").ReservationFact[] | undefined;
   getFeasibilityExternalFacts?: () => TripFeasibilityFacts["external"];
+  getChecklistItems?: () => readonly TripChecklistItem[] | undefined;
   getUiFocus?: () => { itemId: string } | undefined;
   previousAssistantTurn?: AgentTurnOutcome;
   onTurnObservation?: (observation: AgentTurnObservation) => void;
@@ -309,6 +314,9 @@ export async function runViewerAgentRuntime(
   const previousJourneyState: PreviousJourneyToolState = {};
   const externalState: ExternalTravelToolState = {};
   const progressState: TripProgressOutput = {};
+  const checklistState: { proposal?: ChecklistProposal } = {};
+  const checklistItems = currentTrip ? dependencies.getChecklistItems?.() : undefined;
+  const reservationFacts = currentTrip ? dependencies.getReservationFacts?.() : undefined;
   let presentedResponse: ViewerAgentResponse | undefined;
   const conversationContext = dependencies.getConversationContext?.();
   const travelFacts = travelConversationFacts(deterministicPrompt, currentDate(dependencies));
@@ -324,6 +332,7 @@ export async function runViewerAgentRuntime(
     externalState,
   });
   registerCandidateAssessmentTool(tools, dependencies, () => currentDate(dependencies));
+  registerChecklistTool(tools, currentTrip, checklistItems, checklistState, reservationFacts?.map((r) => r.reservationId));
   registerTripProgressTools(tools, dependencies, progressState, () => currentDate(dependencies), () =>
     externalState.webPages?.status === "available" ? (externalState.webPages.data?.pages ?? []).flatMap((page) => {
       const source = externalState.webPages?.evidence.find((e) => e.sourceUrl === page.url);
@@ -350,13 +359,15 @@ export async function runViewerAgentRuntime(
     }
     // Research/proposal and a question are one public response, not mutually exclusive branches.
     const question = conversationState.response?.question;
+    if (checklistState.proposal) responseText += "\n\n旅行前の準備の追加案（未保存）:\n" + checklistState.proposal.suggestions.map((s) => `- ${s.title}`).join("\n") + "\n\n旅程の準備リストで確認してから追加できます。";
     if (question && !responseText.includes(question)) responseText += `\n\n${question}`;
-    const hasRich = base !== undefined && typeof base !== "string" || hasExternalTravelInformation(externalState) || progressState.proposal || progressState.decision;
+    const hasRich = base !== undefined && typeof base !== "string" || hasExternalTravelInformation(externalState) || progressState.proposal || progressState.decision || checklistState.proposal;
     presentedResponse = hasRich ? {
       ...(typeof base === "object" ? base : {}), text: responseText,
       ...(question ? { conversation: conversationState.response! } : {}),
       ...(hasExternalTravelInformation(externalState) ? { external: externalState } : {}),
       ...(progressState.proposal ? { tripUpdateProposal: progressState.proposal } : {}),
+      ...(checklistState.proposal ? { checklistProposal: checklistState.proposal } : {}),
       ...(progressState.decision ? { progressSources: progressState.decision.sources } : {}),
     } as ViewerAgentResponse : responseText;
     return { text: responseText, observation: observeViewerTurn(presentedResponse, evidence, conversationState.exception, asksUser) };
@@ -402,7 +413,10 @@ export async function runViewerAgentRuntime(
     dependencies.getPendingJourneyLegChange?.(),
   );
   const verifiedPlaces = dependencies.getVerifiedPlaces?.().slice(0, 8) ?? [];
-  const reservationFacts = currentTrip ? dependencies.getReservationFacts?.() : undefined;
+  const feasibility = currentTrip ? evaluateTripFeasibility(currentTrip, {
+    tripId: currentTrip.id, tripRevision: currentTrip.revision, reservations: reservationFacts,
+    external: dependencies.getFeasibilityExternalFacts?.(),
+  }, currentDate(dependencies).toISOString()) : undefined;
   const runtimeResult = await runtime.run({
     executionId: crypto.randomUUID(),
     // この入口は常にコンシェルジュUIである。発話内容を正規表現で
@@ -422,10 +436,8 @@ export async function runViewerAgentRuntime(
         : {}),
       tripContext: decisionTripContext(travelFacts.context),
       ...(currentTrip ? { reservations: reservationContext(reservationFacts, focusedItem?.id) } : {}),
-      ...(currentTrip ? { tripFeasibility: tripFeasibilityContext(evaluateTripFeasibility(currentTrip, {
-        tripId: currentTrip.id, tripRevision: currentTrip.revision, reservations: reservationFacts,
-        external: dependencies.getFeasibilityExternalFacts?.(),
-      }, currentDate(dependencies).toISOString()), focusedItem?.id) } : {}),
+      ...(currentTrip && feasibility ? { tripFeasibility: tripFeasibilityContext(feasibility, focusedItem?.id),
+        tripReadiness: tripReadinessContext(projectTripReadiness(currentTrip, feasibility, reservationFacts, checklistItems), checklistItems) } : {}),
       ...(contextSnapshot.profile ? { travelProfile: contextSnapshot.profile } : {}),
       ...(contextSnapshot.trip ? { currentTrip: { ...contextSnapshot.trip,
         ...(currentTrip ? { temporalAssessment: assessTripTime(currentTrip, { now: () => currentDate(dependencies) }) } : {}) } } : {}),

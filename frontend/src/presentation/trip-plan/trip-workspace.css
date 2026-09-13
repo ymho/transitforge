@@ -56,3 +56,20 @@
   #app[data-trip-workspace="v2"][data-trip-workspace-view="chat"] .trip-workspace { display: none; }
   .trip-workspace-diff { grid-template-columns: 1fr; }
 }
+.trip-workspace-readiness, .trip-workspace-checklist {
+  margin-block: 1rem;
+  padding: 1rem;
+  border: 1px solid #dce2e8;
+  border-radius: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.trip-workspace-checklist-item, .trip-workspace-checklist-proposal {
+  padding-block: 0.8rem;
+  border-top: 1px solid #dce2e8;
+}
+.trip-workspace-checklist-item > label { display: flex; align-items: center; gap: 0.5rem; }
+.trip-workspace-checklist input[type="checkbox"] { width: 1.2rem; height: 1.2rem; flex: 0 0 auto; }
+.trip-workspace-checklist-form { display: grid; gap: 0.5rem; margin-block: 0.75rem; }
+.trip-workspace-checklist-form label { display: grid; gap: 0.25rem; }
+.trip-workspace-checklist-form input, .trip-workspace-checklist-form select { width: 100%; min-width: 0; box-sizing: border-box; }
+.trip-workspace-checklist button, .trip-workspace-readiness button { margin: 0.25rem; min-height: 2.5rem; }
