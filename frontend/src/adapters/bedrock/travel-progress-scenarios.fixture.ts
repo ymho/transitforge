@@ -12,6 +12,7 @@ import { accommodationSelectionFixture } from "../../usecases/trip-plan/accommod
 import { travelPreferenceLabels, type UserProfile } from "@raiquora/trip/travel-profile";
 import { multiCityTrip, resolvedPlace } from "../../../../modules/trip/domain/trip-places.fixture";
 import { projectTripPlaces } from "@raiquora/trip/trip-places";
+import { candidateAssessmentCaseIds, runCandidateAssessmentScenario } from "./candidate-assessment-scenarios.fixture";
 
 const usualFamily: UserProfile = {
   version: 2, home: { carAvailable: false }, companions: { usual: ["family"], children: [{ ageGroup: "preschool" }, { ageGroup: "elementary" }] },
@@ -38,6 +39,7 @@ const fixtureBases: Record<string, ProgressCaseId> = {
  * H/I/J start with the existing verified-candidate seam, not an invented V2 item-creation Tool.
  */
 export async function runTravelProgressScenario(definition: TravelProgressScenario, live?: BedrockAgentConverse) {
+  if (candidateAssessmentCaseIds.includes(definition.id)) return runCandidateAssessmentScenario(definition, live);
   const id = definition.id;
   if (!Object.hasOwn(fixtureBases, id)) throw new Error("Unknown trip progress scenario");
   const scenario = { ...definition, base: fixtureBases[id]! };

@@ -1,3 +1,5 @@
+import { exactKeys, validInstant } from "./snapshot-validation";
+
 export type ExternalTravelInformationKind =
   | "timetable"
   | "weather"
@@ -25,6 +27,21 @@ export interface ExternalSourceEvidence {
   validUntil?: string;
   attribution?: string;
   confidence: "observed" | "provider-forecast" | "provider-schedule" | "unknown";
+}
+
+/** Runtime source validation; unlike durable Place sources this also permits forecasts/alerts. */
+export function validateExternalSourceEvidence(source: ExternalSourceEvidence): void {
+  exactKeys(source, ["id", "kind", "provider", "sourceId", "sourceUrl", "retrievedAt", "observedAt", "validFrom", "validUntil", "attribution", "confidence"]);
+  const text = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+  if (!text(source.id) || !text(source.provider) || source.provider === "manual" || !text(source.sourceId) && !text(source.sourceUrl) ||
+      !["timetable", "weather", "place", "media", "accommodation", "event", "safety-alert", "ground-access", "restaurant", "web"].includes(source.kind) ||
+      !["observed", "provider-forecast", "provider-schedule", "unknown"].includes(source.confidence) || !validInstant(source.retrievedAt)) throw new Error("Invalid external source");
+  for (const at of [source.observedAt, source.validFrom, source.validUntil]) if (at !== undefined && !validInstant(at)) throw new Error("Invalid source time");
+  if (source.validFrom && source.validUntil && Date.parse(source.validFrom) > Date.parse(source.validUntil)) throw new Error("Invalid source interval");
+  if (source.sourceUrl) {
+    const url = new URL(source.sourceUrl);
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) throw new Error("Unsafe assessment source URL");
+  }
 }
 
 export interface ExternalProviderFailure {

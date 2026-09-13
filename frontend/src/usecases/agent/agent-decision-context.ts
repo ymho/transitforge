@@ -3,6 +3,7 @@ import type { AgentRuntimeFeature, AgentRuntimeRequest } from "./runtime-contrac
 import { parseAgentDecisionSummary, type AgentDecisionSummary } from "./agent-decision-summary";
 import { effectiveTripConstraints, type TripRequest } from "@raiquora/trip/trip-request";
 import type { AgentTurnOutcome } from "./agent-turn-outcome";
+import { candidateAssessmentContext } from "./candidate-assessment-context";
 
 export type AgentContextValue = string | number | boolean | null;
 
@@ -128,7 +129,8 @@ export function buildAgentDecisionContext(
     } : {}),
     ...(decision ? { currentTurnDecision: structuredClone(decision) } : {}),
     userRequest: bounded(request.userRequest, 1_500),
-    ...(input?.travelCandidates ? { travelCandidates: input.travelCandidates.slice(0, 12).map((value) => boundedUnknownRecord(value)) } : {}),
+    ...(input?.travelCandidates ? { travelCandidates: input.travelCandidates.slice(0, 12).map((value) =>
+      value.assessment && value.candidate ? candidateAssessmentContext(value as Parameters<typeof candidateAssessmentContext>[0]) : boundedUnknownRecord(value)) } : {}),
     ...(input?.realtimeFacts ? { realtimeFacts: input.realtimeFacts.slice(0, 12).map((value) => boundedUnknownRecord(value)) } : {}),
     featureContext: {
       feature: request.feature,

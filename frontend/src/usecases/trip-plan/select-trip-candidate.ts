@@ -1,4 +1,5 @@
 import type { TravelCandidate } from "@raiquora/trip/travel-candidate";
+import type { CandidateAssessmentFacts } from "@raiquora/trip/travel-candidate-assessment";
 import { selectAccommodation, type AccommodationSelectionEvidence } from "./select-accommodation";
 import { selectRailJourney, projectRailSchedule, validInstant, exactKeys, type RailTimetableInput, type VerifiedRailCandidate } from "@raiquora/trip/selected-rail-journey";
 import { projectStaySchedule } from "@raiquora/trip/itinerary-schedule";
@@ -12,6 +13,8 @@ export interface CandidateSelectionPort {
     taskId: string;
     validUntil: string;
     rail?: VerifiedRailCandidate;
+    /** Already acquired, candidate-bound observations. Assessment never calls loadTimetables/search. */
+    assessmentFacts?: CandidateAssessmentFacts;
     /** Adapter-reviewed storage permission and evidence; an Offering alone is not permission. */
     accommodation?: AccommodationSelectionEvidence;
   } | undefined>;

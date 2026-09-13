@@ -483,6 +483,7 @@ Reservation更新とTrip更新は別revisionで、適用時は関連予約のrev
 verified rail journeyを必須にしない。宿/経路/体験の候補集合はTripの外で保持する。
 候補にはid、検索/提示時点、根拠、対象Trip/request revisionとの対応を持たせる。
 `TravelCandidateAssessment`は#406が所有し、地理適合・制約充足・移動負担・天候・不明を表す。
+実装は[候補Assessment](candidate-assessment.md)。取得済み事実のread-only評価であり、Tripへ保存しない。
 検索修正#366やClaim検証#376で別の候補モデルを作らない。
 
 採用は`candidate ID → Applicationが候補を解決 → TripUpdateProposal → 検証/確認 → TripPatch`。

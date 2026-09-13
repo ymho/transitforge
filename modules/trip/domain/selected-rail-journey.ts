@@ -73,8 +73,21 @@ export function selectRailJourney(
   inputs: readonly RailTimetableInput[],
   selectedAt: string,
 ): SelectedRailJourney {
+  if (!validInstant(selectedAt) || Date.parse(selectedAt) < Date.parse(candidate.verifiedAt)) {
+    throw new Error("Selection precedes candidate verification");
+  }
+  const facts = verifyRailCandidateSchedule(candidate, inputs);
+  const result = { ...facts, selectedAt };
+  validateSelectedRailJourney(result);
+  return result;
+}
+
+/** Read-only scheduled facts for comparison as well as adoption. No selection or realtime state. */
+export function verifyRailCandidateSchedule(
+  candidate: VerifiedRailCandidate,
+  inputs: readonly RailTimetableInput[],
+): Pick<SelectedRailJourney, "serviceDate" | "legs" | "transfers" | "provenance"> {
   if (!candidate.candidateId || !candidate.verifiedJourneyRef || !validInstant(candidate.verifiedAt) ||
-      !validInstant(selectedAt) || Date.parse(selectedAt) < Date.parse(candidate.verifiedAt) ||
       !isTransferPace(candidate.transferPace) || !candidate.journey.legs.length ||
       candidate.legReferences.length !== candidate.journey.legs.length) {
     throw new Error("Rail candidate verification is incomplete");
@@ -134,21 +147,27 @@ export function selectRailJourney(
     }
     return result;
   });
-  const result: SelectedRailJourney = {
-    serviceDate: legs[0]!.serviceDate, selectedAt, legs, transfers,
+  const result = {
+    serviceDate: legs[0]!.serviceDate, legs, transfers,
     provenance: { verifiedJourneyRef: candidate.verifiedJourneyRef, verifiedAt: candidate.verifiedAt,
       sources, timetableInputs, validationPolicyVersion: railValidationPolicyVersion, transferPace: candidate.transferPace },
   };
-  validateSelectedRailJourney(result);
+  validateScheduledRailFacts(result);
   return result;
 }
 
 /** Also called before applying a Trip patch. Unknown keys cannot become hidden storage. */
 export function validateSelectedRailJourney(value: SelectedRailJourney): void {
   exactKeys(value, ["serviceDate", "selectedAt", "legs", "transfers", "provenance"]);
+  if (!validInstant(value.selectedAt) || Date.parse(value.selectedAt) < Date.parse(value.provenance.verifiedAt)) throw new Error("Invalid selection chronology");
+  validateScheduledRailFacts(value);
+}
+
+/** Identical scheduled invariant for comparison and selection, without adoption metadata. */
+function validateScheduledRailFacts(value: Pick<SelectedRailJourney, "serviceDate" | "legs" | "transfers" | "provenance">): void {
   const p = value.provenance;
   exactKeys(p, ["verifiedJourneyRef", "verifiedAt", "sources", "timetableInputs", "validationPolicyVersion", "transferPace"]);
-  if (!validInstant(value.selectedAt) || !validInstant(p.verifiedAt) || Date.parse(value.selectedAt) < Date.parse(p.verifiedAt) ||
+  if (!validInstant(p.verifiedAt) ||
       !p.verifiedJourneyRef || p.validationPolicyVersion !== railValidationPolicyVersion || !isTransferPace(p.transferPace) ||
       !value.legs.length || value.transfers.length !== value.legs.length - 1 ||
       p.timetableInputs.length !== value.legs.length || p.sources.length !== value.legs.length ||
