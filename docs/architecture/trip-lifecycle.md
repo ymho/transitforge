@@ -89,8 +89,9 @@ Candidateは比較用の別モデル、Reservationは別aggregate、Watch/Impact
 
 既存Backendは`ports`が`usecases`から独立する規則なのでRepository portはそこへ置く。
 Browser向けの非同期操作PortはHTTP clientの境界であり、同名の別Domain Repositoryを増やさない。
-shared Application packageや新サービスは不要。現行trip-plan repository内のJSON reader/writerは
-#388でBrowser Adapterへ移し、純粋なlegacy変換はDomainへ切り出す。
+shared Application packageや新サービスは不要。純粋なlegacy変換はDomainの単一converterへ置く。
+#388の新規migration JSON/marker操作はBrowser Adapterへ置く。既存trip-plan repositoryのStorage注入helperは
+互換呼出し元を維持し、全面的なPort注入/Browser移設は本番writer移行時の互換整理へ残す。
 
 ## 3. Trip / TripRequestの最終形
 
@@ -530,11 +531,11 @@ createdAtはV2リソースの作成日時であり、legacyの作成日時を捏
 エラーはnot-found/forbidden/conflict/invalid-input/unsupported-version/unavailableを区別し、
 未認可時にTripの存在や本文を漏らさない。契約のsize/item上限は#388で設定・試験し、超過時に切り捨てない。
 
-**#388と#389のリリース境界:** #388のAPIは最初からexpectedRevision・mutationIdを予約し、
-conditional write/再送の安全な永続化primitiveを実装する。#389はそれを使う全Proposal/UI更新の
-baseRevision、競合復帰、schema移行時初期revision、競合/再送適合試験を完成する。
-サーバCRUD (#388)を無条件更新として先に公開して後から守ることはしない。
-BrowserのV2書込への切替は両Issue完了をgateとし、同じRepository/CAS実装を複製しない。
+**#388と#389のリリース境界（最新#388指示 / ADR 0053）:** #388はprincipal必須の保存/取込基盤、
+非CAS replaceとread/preview sourceまで。expectedRevision・baseRevision・mutationId・CAS・idempotencyは
+予約fieldも含め先行追加せず、#389が同じRepository/Proposalへ統合する。公開Trip routeは認証Adapter未導入のため閉じる。
+BrowserのV2書込への切替は認証境界と両Issue完了をgateとし、無条件更新を先に公開しない。
+現段階の契約・容量上限・原本保持・ACは[server保存基盤](trip-server-persistence.md)を参照する。
 
 1ConversationSessionは`tripId?`を最大1つ参照し、1Tripは0〜複数Conversationから参照できる。
 別の旅を話すならdetach/attachまたは新規会話を明示する。会話内の古い応答は履歴のsnapshotであり、
@@ -561,8 +562,8 @@ Domainの拡張は依存順にmainへ入れられるが、**全変換が揃う�
 3. **変換完成 (#383/#387/#411/#414/#386/#413/#410/#403/#400/#412)**:
    下表の担当が同一converterへfield mappingを追加。#400の価格最終形は#412と結合する。
    pure fixtureでlegacy・不正・unknownを検証。UI/Evalは必要な担当PRで段階対応。
-4. **保存基盤 (#388 → #389)**: #388がTrip API/owner scope/取込台帳/CAS primitive、
-   #389が全更新のrevision/proposal/再送・競合処理を完成。server移行に別のDomain変換を作らない。
+4. **保存基盤 (#388 → #389)**: #388がTrip API/owner scope/取込回復metadata、
+   #389がCAS/idempotencyと全更新のrevision/proposal/再送・競合処理を完成。server移行に別のDomain変換を作らない。
 5. **ユーザー単位の切替 (#388のrollout)**: 移行内容を提示し認証された所有者として取込。
    下記の確認完了後だけそのTripの正本をserverへ切り替える。失敗Tripはlegacyのまま残る。
    V2 writerを開始したTripはold writerへ戻さない。会話削除cascadeを同時に停止する。
@@ -575,6 +576,10 @@ Domainの拡張は依存順にmainへ入れられるが、**全変換が揃う�
 #384は#387のassumption契約を使用する。#388/#389の境界を上記の安全なrollout gateで補う。
 
 ### LocalStorage取込プロトコル (#388)
+
+以下は#389まで含めた最終rollout契約。#388単独の実装は[server保存基盤](trip-server-persistence.md)の
+固定UUID/read-back/原本保持までで、import ID/digestによるserver create-onceや複数tabの保証は#389に残す。
+API公開・本番import UI・writerは未有効である。
 
 - 入力は単一`transitforge.trip-plan.v1`、`transitforge.trip-plans.v2`の各session record、
   session v1/v2/v3のID対応と必要な既存構造化TripContext。既存migrationを連続実行して元キーを

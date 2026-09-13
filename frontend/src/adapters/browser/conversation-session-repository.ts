@@ -8,7 +8,6 @@ import {
   type ConversationSession,
 } from "../../domain/conversation-session";
 import { deleteConversationHistory } from "../../domain/conversation-history";
-import { deleteTripPlan } from "../../usecases/trip-plan/trip-plan-repository";
 
 export const conversationSessionStorageKey = "transitforge.conversation-sessions.v3";
 export const maximumConversationSessions = 20;
@@ -165,7 +164,7 @@ implements ConversationSessionRepository {
 
   private cleanup(sessionId: string): void {
     deleteConversationHistory(this.storage, sessionId);
-    deleteTripPlan(this.storage, sessionId);
+    // Trip and retained migration originals outlive conversation deletion/eviction.
   }
 
   private notify(): void {

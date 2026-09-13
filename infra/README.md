@@ -51,3 +51,11 @@ CIとCDはいずれもLambda packageを事前検証する
 - Backend機能の回帰: `npm test`
 
 credential tfstate tfvarsの内容をIssue PR logへ貼らない
+
+## Trip保存基盤（#388）
+
+`environments/dev/trips.tf`は専用owner-scoped DynamoDB table（on-demand/暗号化/PITR/削除保護）と
+既存Lambda roleへのtable限定CRUD/Query権限を定義する。Scanや公開Trip routeは追加しない。
+認証Adapter未導入のためpublic Trip handlerは利用不可。内部組成はtable名を明示し、全操作にtrusted principalを渡す。
+通常UIのwriter有効化は#389と認証レビュー後。詳細は[Trip保存基盤](../docs/architecture/trip-server-persistence.md)。
+PITRは再生成できない計画の回復性を優先し、保存量に応じた費用を許容する。TTLで自動削除しない。

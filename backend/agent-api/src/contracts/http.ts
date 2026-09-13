@@ -1,4 +1,5 @@
 export interface LambdaHttpEvent {
+  rawPath?: string;
   requestContext?: { http?: { method?: string } };
   body?: string | null;
   isBase64Encoded?: boolean;

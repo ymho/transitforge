@@ -20,6 +20,10 @@ Provider matching/rankingやTool選択をUIで実装しない。
 
 ### Source gate
 
+#388で[server source基盤](trip-server-persistence.md)を追加した。以下は#390導入時の説明であり、
+現在はsource所有権を取得成功と分離する。server-v2のloading/unavailableでもlegacy writerを止め、
+retry可能な画面を出す。server sourceはread/preview専用でconfirmProposalを持たず、公開CRUD/writerは未有効。
+
 - V2 sourceなし: 従来のlegacy session reader/writer/UIをそのまま使う。
 - V2 Tripあり: V2 workspaceとAgent Contextを使い、legacy panel/share/applyは使わない。
 - V2の空Trip、候補だけを持つ空Trip、Proposal付きTripも同じ型で表示する。

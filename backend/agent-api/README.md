@@ -5,6 +5,12 @@ Node.jsで動作するAgent APIのBackend Application
 Lambda eventとHTTP応答 operation dispatch Domain Tool接続を所有する
 本番LambdaはこのworkspaceをbundleしたNode.js artifactを使用する
 
+Trip APIはAgent operationとは独立した `trip-api-v1` 契約を持つ。#388の内部Repositoryは
+trusted server principalを全操作に要求する。現在のdeploymentには利用者認証Adapterがないため、
+public Trip routeを追加せず、LambdaのTrip handlerも既定で501を返す。
+内部worker組成は `createInternalTripApplication(table)`、通常UIのwriter/CASは#389以降。
+詳細は[Trip server保存基盤](../../docs/architecture/trip-server-persistence.md)を参照する。
+
 ## 境界
 
 - `contracts`: Lambda event リクエスト HTTP応答のversioned contract

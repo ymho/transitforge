@@ -5,6 +5,7 @@ import { multiCityTrip, placeActivity, placesAt, placesTripId } from "../../../.
 import { tripWorkspacePreviewSource } from "../../dev/trip-workspace-preview";
 import { createTripWorkspaceController, type TripWorkspaceSource } from "../../usecases/trip-plan/trip-workspace-controller";
 import { configureTripWorkspace } from "./trip-workspace";
+import { createServerTripWorkspaceSource } from "../../usecases/trip-plan/server-trip-workspace-source";
 
 function setup(source?: TripWorkspaceSource) {
   const app = document.createElement("main"); app.id = "app"; document.body.append(app);
@@ -20,6 +21,25 @@ function button(root: ParentNode, text: string) { return [...root.querySelectorA
 afterEach(() => document.body.replaceChildren());
 
 describe("Trip workspace DOM and mobile navigation", () => {
+  it("keeps server ownership while loading/unavailable, retries and only previews changes", async () => {
+    const trip = multiCityTrip(), get = vi.fn(async () => trip);
+    const source = createServerTripWorkspaceSource(trip.id, { get });
+    const f = setup(source);
+    expect(f.ui.panel.hidden).toBe(false); expect(f.legacyPanel.hidden).toBe(true);
+    expect(f.ui.panel.textContent).toContain("読み込んでいます");
+    await source.refresh();
+    expect(f.ui.panel.textContent).toContain(trip.title);
+    expect(f.ui.panel.querySelector(".trip-workspace-notice")?.textContent).toContain("まだ保存できません");
+    f.controller.propose("削除案", [{ type: "remove", itemId: "activity" }]);
+    expect(f.controller.current()).toEqual(trip); expect(f.controller.canConfirm()).toBe(false);
+    expect(f.ui.panel.textContent).toContain("保存機能はまだ有効ではありません");
+    get.mockRejectedValueOnce(new Error("offline")); await source.refresh();
+    expect(f.controller.current()).toBeUndefined(); expect(f.controller.blocksLegacy()).toBe(true);
+    expect(f.legacyPanel.hidden).toBe(true); expect(f.ui.panel.textContent).toContain("旧旅程へは切り替えていません");
+    button(f.ui.panel, "旅程を再読み込み").click();
+    await vi.waitFor(() => expect(f.ui.panel.textContent).toContain(trip.title));
+    expect(f.controller.current()).toEqual(trip);
+  });
   it("leaves the legacy UI alone when no V2 source exists; empty Trip is supported", () => {
     const f = setup(); expect(f.ui.panel.hidden).toBe(true); expect(f.app.dataset.tripWorkspace).toBeUndefined(); expect(f.legacyPanel.hidden).toBe(false);
     f.controller.attach("one", { getCurrentTrip: () => createTrip(placesTripId, "空の旅程", placesAt) });

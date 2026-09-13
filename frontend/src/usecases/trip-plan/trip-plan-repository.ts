@@ -86,19 +86,22 @@ export function migrateLegacyTripPlan(
 ): TripPlan | undefined {
   const current = loadTripPlan(storage, conversationSessionId);
   if (current) return current;
+  // Retain the single-key original, but never attach it to each newly created conversation.
+  // An existing (even invalid) store needs explicit recovery, not an overwrite from the old key.
+  if (storage.getItem(tripPlanStoreStorageKey) !== null) return undefined;
   try {
     const raw = storage.getItem(tripPlanStorageKey);
     const legacy = raw ? parseTripPlan(JSON.parse(raw)) : undefined;
     if (!legacy) return undefined;
     saveTripPlan(storage, conversationSessionId, legacy);
-    storage.removeItem(tripPlanStorageKey);
+    // Retained for explicit #388 import/recovery. Conversation cleanup must not erase it.
     return legacy;
   } catch {
     return undefined;
   }
 }
 
-function parseTripPlan(value: unknown): TripPlan | undefined {
+export function parseTripPlan(value: unknown): TripPlan | undefined {
   if (!isRecord(value) || value.version !== 1 || !isBoundedString(value.id, 100) ||
     !isBoundedString(value.title, 100) || !isBoundedString(value.destination, 100) ||
     typeof value.updatedAt !== "string" || !Array.isArray(value.items)) {

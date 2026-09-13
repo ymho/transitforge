@@ -36,14 +36,16 @@ export function configureTripPlanPanel(
     accommodations: readonly ViewerAgentAccommodation[],
     stay: { destination: string; checkInDate: string; checkOutDate: string },
   ) => void,
+  legacyEnabled: () => boolean = () => true,
 ): TripPlanPanelController {
   let conversationSessionId = initialConversationSessionId;
-  let plan = migrateLegacyTripPlan(storage, conversationSessionId) ??
-    loadTripPlan(storage, conversationSessionId);
+  const read = () => legacyEnabled() ? migrateLegacyTripPlan(storage, conversationSessionId) ?? loadTripPlan(storage, conversationSessionId) : undefined;
+  let plan = read();
   let persistChanges = true;
   const collapsedItems = new Set<string>();
 
   const open = () => {
+    if (!legacyEnabled()) return;
     render();
     panel.hidden = false;
   };
@@ -53,6 +55,7 @@ export function configureTripPlanPanel(
   };
   const render = () => {
     content.replaceChildren();
+    if (!legacyEnabled()) { panel.hidden = toggle.hidden = true; return; }
     toggle.hidden = plan === undefined;
     if (!plan) {
       content.append(paragraph("旅行の相談をすると、ここに旅程が作られます。", "trip-plan-empty"));
@@ -86,13 +89,13 @@ export function configureTripPlanPanel(
   const controller: TripPlanPanelController = {
     switchSession(nextConversationSessionId) {
       conversationSessionId = nextConversationSessionId;
-      plan = migrateLegacyTripPlan(storage, conversationSessionId) ??
-        loadTripPlan(storage, conversationSessionId);
+      plan = read();
       persistChanges = true;
       collapsedItems.clear();
       render();
     },
     show(next) {
+      if (!legacyEnabled()) return;
       plan = next;
       persistChanges = true;
       saveTripPlan(storage, conversationSessionId, plan);
@@ -104,6 +107,7 @@ export function configureTripPlanPanel(
       open();
     },
     apply(patches) {
+      if (!legacyEnabled()) return;
       if (!plan) return;
       if (!validateTripPlanPatches(plan, patches).valid) return;
       plan = applyTripPlanPatches(plan, patches);
@@ -111,6 +115,7 @@ export function configureTripPlanPanel(
       open();
     },
     selectAccommodation(accommodation) {
+      if (!legacyEnabled()) return;
       if (!plan) return;
       plan = selectTripPlanAccommodation(plan, accommodation);
       if (persistChanges) saveTripPlan(storage, conversationSessionId, plan);

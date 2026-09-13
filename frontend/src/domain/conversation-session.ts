@@ -14,6 +14,10 @@ export interface ConversationSession {
   title: string;
   scope: ConversationScope;
   tripPlanId?: string;
+  /** Independent server Trip reference. Never confers ownership or authorization. */
+  tripId?: string;
+  /** UI source ownership survives detach/network failures; not Trip planning/lifecycle state. */
+  tripSourceState?: "server-v2";
   summary: string;
   resolvedTopics: string[];
   pendingTopics: string[];
@@ -255,6 +259,8 @@ export function parseConversationSession(value: unknown): ConversationSession | 
   if (value.tripPlanId !== undefined && !isSafeIdentifier(value.tripPlanId)) {
     return undefined;
   }
+  if (value.tripId !== undefined && (typeof value.tripId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(value.tripId))) return undefined;
+  if (value.tripSourceState !== undefined && value.tripSourceState !== "server-v2") return undefined;
   const title = typeof value.title === "string" && value.title.trim()
     ? value.title.trim().slice(0, 80)
     : titleFromSummary(value.summary);
@@ -263,6 +269,8 @@ export function parseConversationSession(value: unknown): ConversationSession | 
     title,
     scope: value.scope,
     ...(value.tripPlanId ? { tripPlanId: value.tripPlanId } : {}),
+    ...(value.tripId ? { tripId: value.tripId } : {}),
+    ...(value.tripId || value.tripSourceState ? { tripSourceState: "server-v2" as const } : {}),
     summary: value.summary,
     resolvedTopics: [...value.resolvedTopics],
     pendingTopics: [...value.pendingTopics],
