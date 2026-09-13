@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./reservation": "./domain/reservation.ts",
     "./travel-candidate-assessment": "./domain/travel-candidate-assessment.ts",
     "./assess-travel-candidate": "./domain/assess-travel-candidate.ts",
     "./validate-candidate-assessment": "./domain/validate-candidate-assessment.ts",

@@ -24,6 +24,18 @@ class TripStorageContractTest(unittest.TestCase):
         self.assertNotIn("createInternalTripApplication", source)
         self.assertNotIn("DynamoDbTripRepository", source)
 
+    def test_reservations_remain_internal_owner_scoped_without_delete(self):
+        entrypoint = (ROOT / "backend/agent-api/src/lambda.ts").read_text()
+        self.assertNotIn("createInternalReservationApplication", entrypoint)
+        self.assertNotIn("DynamoDbReservationRepository", entrypoint)
+        adapter = (ROOT / "backend/agent-api/src/adapters/dynamodb-reservation-repository.ts").read_text()
+        self.assertIn("OWNER#${principal.subject}", adapter)
+        self.assertIn("RESERVATION#${tripId}", adapter)
+        self.assertNotIn("ScanCommand", adapter)
+        self.assertNotIn("DeleteItemCommand", adapter)
+        self.assertNotIn("console.", adapter)
+        self.assertIn("attribute_exists(pk) AND revision = :base", adapter)
+
 
 if __name__ == "__main__":
     unittest.main()

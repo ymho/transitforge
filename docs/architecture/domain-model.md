@@ -331,7 +331,7 @@ Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。
 | SelectedRailJourney | serviceDate/安定した列車識別子・区間・scheduled時刻・乗換・採用元provenance。生のJourneyRouteResultや遅延等は保存しない | #385 / #386 |
 | Place / Money | Provider非依存identity・保存許諾付きSnapshot（[Place導入記録](trip-place-snapshot.md)）、原通貨の整数minor unit | Place基礎は#414で導入、Moneyは#412 |
 | Candidate / Offering | 比較前の外部候補。採用済みTripとは別 | #385 / #400 / #406 |
-| Reservation | 予約状態を所有する別aggregate。宿選択はbookedではない | #398 |
+| Reservation | 予約状態を所有する独立resource、独立revision/CAS・private detail・owner scope。宿選択はbookedではない。公開writer未有効 | [#398導入記録](trip-reservation.md) |
 | TripWatch / TripImpact | Trip revisionと外部観測に紐づく派生索引・影響 | #393 / #394 / #407 / #408 |
 | Hazard / Notification | 外部の公的事実とユーザーへの配信状態を分離 | #401 / #395 |
 | ConversationSession.tripId | 1会話に任意1Trip参照、複数会話から同じTrip。会話削除はTripを削除しない | #388 |

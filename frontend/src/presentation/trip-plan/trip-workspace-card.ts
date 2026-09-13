@@ -3,6 +3,7 @@ import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-work
 import { proposeItineraryItem } from "../../usecases/trip-plan/itinerary-proposal";
 import { itineraryItemCopy, itineraryScheduleLabel, itemAssumptions } from "./trip-workspace-projection";
 import { element, control, option } from "./trip-workspace-elements";
+import { reservationStatusLabels } from "../../usecases/trip-plan/reservation-reader";
 
 export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller: TripWorkspaceController,
   options: { collapsed: boolean; collapse(value: boolean): void; chat(prompt: string): void; report(message: string): void }): HTMLElement {
@@ -20,6 +21,9 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   });
   expand.setAttribute("aria-expanded", String(!body.hidden)); expand.setAttribute("aria-controls", body.id);
   header.append(focus, expand); card.append(header, element("p", "", itineraryScheduleLabel(item.schedule, true)));
+  for (const r of controller.reservations()?.filter((r) => r.itineraryItemId === item.id) ?? []) {
+    card.append(element("p", "trip-workspace-reservation", `予約記録: ${reservationStatusLabels[r.status]}`));
+  }
   for (const a of itemAssumptions(trip, item.id)) card.append(element("p", "trip-workspace-assumption", `⚠ ${a.field}の仮置き: ${a.text}`));
   body.append(element("p", "trip-workspace-copy", itineraryItemCopy(item)));
   const safe = (action: () => void) => { try { action(); } catch { options.report("この変更では条件・仮定との整合が取れません。会話で変更内容を相談してください。"); } };

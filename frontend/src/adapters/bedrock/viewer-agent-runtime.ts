@@ -1,4 +1,5 @@
 import { isPriceObservation } from "@raiquora/trip/money";
+import { reservationContext } from "../../usecases/agent/reservation-context";
 import { registerCandidateAssessmentTool, candidateAssessmentEvidence } from "../../usecases/agent/candidate-assessment-tool";
 import { legacyAccommodationPrice } from "../legacy-money";
 import type {
@@ -149,6 +150,7 @@ import {
 } from "../../usecases/agent/external-travel-tools";
 
 export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDependencies, TripProgressDependencies {
+  getReservationFacts?: () => readonly import("@raiquora/trip/reservation").ReservationFact[] | undefined;
   getUiFocus?: () => { itemId: string } | undefined;
   previousAssistantTurn?: AgentTurnOutcome;
   onTurnObservation?: (observation: AgentTurnObservation) => void;
@@ -415,6 +417,7 @@ export async function runViewerAgentRuntime(
         ? { conversation: conversationContext }
         : {}),
       tripContext: decisionTripContext(travelFacts.context),
+      ...(currentTrip ? { reservations: reservationContext(dependencies.getReservationFacts?.(), focusedItem?.id) } : {}),
       ...(contextSnapshot.profile ? { travelProfile: contextSnapshot.profile } : {}),
       ...(contextSnapshot.trip ? { currentTrip: { ...contextSnapshot.trip,
         ...(currentTrip ? { temporalAssessment: assessTripTime(currentTrip, { now: () => currentDate(dependencies) }),

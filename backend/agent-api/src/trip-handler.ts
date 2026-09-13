@@ -29,7 +29,7 @@ export function createTripApiHandler(application?: Pick<TripApplication, "execut
       return jsonResponse(200, await application.execute(principal, value), requestId);
     } catch (error) {
       const code = error instanceof TripResourceError ? error.code : "unavailable";
-      const status = { unauthenticated: 401, "not-found": 404, "already-exists": 409, conflict: 409, "mutation-reused": 409, "invalid-input": 400, "payload-too-large": 413, unavailable: 501 }[code];
+      const status = { unauthenticated: 401, "not-found": 404, "already-exists": 409, conflict: 409, "mutation-reused": 409, "confirmation-required": 409, "invalid-input": 400, "payload-too-large": 413, unavailable: 501 }[code];
       options.log?.({ requestId, category: code, operation });
       return jsonResponse(status, { version: tripApiVersion, error: code }, requestId);
     }

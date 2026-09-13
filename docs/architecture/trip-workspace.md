@@ -1,5 +1,8 @@
 # Trip V2 workspace（#390）
 
+#398で[独立した予約記録のread表示と変更確認](trip-reservation.md)を追加した。
+通常カードは5状態だけを表示し予約番号を出さない。公開writerはOFF、DEV previewは合成データである。
+
 親方針は#382/#415、契約は[ADR 0052](../decisions/0052-establish-trip-v2-contract-and-migration.md)と
 [Tripライフサイクル](trip-lifecycle.md)。Trip/Request/候補/Evidenceの別モデルは追加しない。
 

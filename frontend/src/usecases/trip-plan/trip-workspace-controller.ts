@@ -5,6 +5,7 @@ import type { TravelCandidateAssessment } from "@raiquora/trip/travel-candidate-
 import { validateTravelCandidateAssessment } from "@raiquora/trip/validate-candidate-assessment";
 import { proposeCandidateSelection, type CandidateSelectionPort, type CandidateSelectionRequest } from "./select-trip-candidate";
 import type { TripLoadState, TripSourceState } from "./server-trip-client";
+import { validateReservationFact, bookedReservationChanges, reservationChangeKey, type ReservationFact } from "@raiquora/trip/reservation";
 
 /** A read/preview host, not a Repository. No default writer, legacy conversion or dual write. */
 export interface TripWorkspaceSource {
@@ -13,10 +14,12 @@ export interface TripWorkspaceSource {
   subscribe?(listener: () => void): () => void;
   retry?(): Promise<void>;
   getCurrentTrip(): Trip | undefined;
+  /** undefined means not fetched/unavailable, not an empty set of bookings. */
+  getReservationFacts?(): readonly ReservationFact[] | undefined;
   getCandidates?(): readonly { candidate: TravelCandidate; assessment?: TravelCandidateAssessment }[];
   candidateSelection?: { taskId: string; port: CandidateSelectionPort };
   /** Explicit in-memory confirmation may be supplied by a host; candidate proposals need revalidation there. */
-  confirmProposal?(proposal: TripUpdateProposal): Promise<void>;
+  confirmProposal?(proposal: TripUpdateProposal, confirmation?: { reservationChangeKey: string }): Promise<void>;
   confirmationPersistence?: "server";
 }
 export function createTripWorkspaceController(initialSessionId: string) {
@@ -31,6 +34,11 @@ export function createTripWorkspaceController(initialSessionId: string) {
     return trip;
   };
   const publish = () => { for (const listener of listeners) listener(); };
+  const reservations = () => {
+    const facts = state()?.source.getReservationFacts?.();
+    facts?.forEach(validateReservationFact);
+    return facts === undefined ? undefined : structuredClone(facts);
+  };
   const preview = (proposal: TripUpdateProposal) => {
     const trip = current(), s = state();
     if (!trip || !s) throw new Error("Current Trip unavailable");
@@ -40,6 +48,11 @@ export function createTripWorkspaceController(initialSessionId: string) {
   };
   return {
     current,
+    reservations,
+    reservationWarnings() {
+      const proposal = state()?.proposal, facts = reservations();
+      return proposal && facts ? bookedReservationChanges(proposal, facts) : [];
+    },
     blocksLegacy: () => !!state(),
     loadState: () => state()?.source.getLoadState?.() ?? (current() ? "loaded" : "unavailable"),
     source: () => state()?.source,
@@ -78,7 +91,7 @@ export function createTripWorkspaceController(initialSessionId: string) {
     },
     dismiss() { const s = state(); if (s) { delete s.proposal; delete s.base; } publish(); },
     canConfirm() { return !!state()?.source.confirmProposal; },
-    async confirm() {
+    async confirm(confirmation?: { reservationChangeKey: string }) {
       const s = state(), trip = current(), selectedSession = sessionId;
       if (!s?.proposal || s.confirming || !s.source.confirmProposal || !trip) throw new Error("旅程が変わったか、確認処理中です。変更案を確認し直してください。");
       if (trip.revision !== s.proposal.baseRevision || JSON.stringify(trip) !== s.base) {
@@ -87,8 +100,12 @@ export function createTripWorkspaceController(initialSessionId: string) {
       }
       const shown = s.proposal;
       applyTripProposal(trip, shown);
+      const facts = reservations();
+      if (facts && bookedReservationChanges(shown, facts).length && confirmation?.reservationChangeKey !== reservationChangeKey(shown, facts)) {
+        throw new Error("予約済みの予定を変更します。予約は変更・取消されません。影響を確認してください。");
+      }
       s.confirming = true;
-      try { await s.source.confirmProposal(structuredClone(shown)); }
+      try { await s.source.confirmProposal(structuredClone(shown), confirmation); }
       catch (error) {
         if (error instanceof TripRevisionConflict || error instanceof TripWriteRejected) {
           if (s.proposal === shown) { delete s.proposal; delete s.base; }

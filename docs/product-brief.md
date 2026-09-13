@@ -163,6 +163,10 @@ V2 sourceがある場合はDesktopでTripとChatを並べ、Mobileは会話/旅�
 公開認証AdapterはまだなくTrip CRUDは利用不可。#389のCAS/冪等性は統合済みだが、本番writer/取込UIは認証レビューまで閉じる。
 server参照のWorkspaceは取得失敗時にlegacy writerへ戻らない。会話削除/evictionはTripと移行原本を消さない。
 
+#398の[Reservation](architecture/trip-reservation.md)はTripとは独立した予約状態を保持する。
+採用済み候補・予約URLだけから予約済みと推測しない。予約済みitemの削除・置換は明示確認を要求し、
+予約そのものの変更・取消は別操作とする。公開認証導入前は予約CRUDも無効であり、実予約APIは対象外とする。
+
 ## 対象外
 
 - viewer inputと元GeoJSONの編集や再配布

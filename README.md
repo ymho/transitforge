@@ -119,6 +119,10 @@ TypeScriptのテストは対象モジュールの隣へ置く。repository保守
 明示migration、server read/preview sourceを追加した。利用者認証が未導入のため公開Trip CRUDは閉じており、
 [#389 の CAS/冪等性](docs/architecture/trip-concurrency.md)は統合済み。本番writer切替は認証境界の導入・レビュー後とする。
 
+[#398 の Reservation](docs/architecture/trip-reservation.md)は採用済みTripとは独立した予約resourceとする。
+内部のowner-scoped保存・変更確認・Workspace/Agent向けprivate値を除いたread projectionを実装した。
+公開CRUDは認証gateの内側に閉じ、実予約・取消APIは実装しない。開発用Workspaceで5種類の予約状態を確認できる。
+
 ## 確認コマンド
 
 ```bash

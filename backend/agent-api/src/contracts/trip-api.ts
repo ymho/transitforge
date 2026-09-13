@@ -2,7 +2,7 @@ import { validateTrip, type Trip, type TripUpdateProposal } from "@raiquora/trip
 
 export const tripApiVersion = "trip-api-v1";
 export const tripApiLimits = { bodyBytes: 256 * 1024, items: 100, constraints: 100, assumptions: 100, stringLength: 4096, arrayLength: 1000, depth: 32 } as const;
-export type TripErrorCode = "unauthenticated" | "not-found" | "already-exists" | "invalid-input" | "payload-too-large" | "unavailable" | "conflict" | "mutation-reused";
+export type TripErrorCode = "unauthenticated" | "not-found" | "already-exists" | "invalid-input" | "payload-too-large" | "unavailable" | "conflict" | "mutation-reused" | "confirmation-required";
 /** Constant categories only: never propagate SDK/Domain messages containing private data. */
 export class TripResourceError extends Error {
   constructor(readonly code: TripErrorCode) { super(code); }

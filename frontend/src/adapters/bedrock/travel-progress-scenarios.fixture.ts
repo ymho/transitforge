@@ -14,6 +14,7 @@ import { multiCityTrip, resolvedPlace } from "../../../../modules/trip/domain/tr
 import { projectTripPlaces } from "@raiquora/trip/trip-places";
 import { candidateAssessmentCaseIds, runCandidateAssessmentScenario } from "./candidate-assessment-scenarios.fixture";
 import { runFocusedItemScenario } from "./focused-item-scenarios.fixture";
+import { runReservationProgressScenario } from "./reservation-progress-scenarios.fixture";
 
 const usualFamily: UserProfile = {
   version: 2, home: { carAvailable: false }, companions: { usual: ["family"], children: [{ ageGroup: "preschool" }, { ageGroup: "elementary" }] },
@@ -40,6 +41,7 @@ const fixtureBases: Record<string, ProgressCaseId> = {
  * H/I/J start with the existing verified-candidate seam, not an invented V2 item-creation Tool.
  */
 export async function runTravelProgressScenario(definition: TravelProgressScenario, live?: BedrockAgentConverse) {
+  if (definition.id === "AB-booked-item") return runReservationProgressScenario(definition, live);
   if (definition.id === "AA-focused-item") return runFocusedItemScenario(definition, live);
   if (candidateAssessmentCaseIds.includes(definition.id)) return runCandidateAssessmentScenario(definition, live);
   const id = definition.id;

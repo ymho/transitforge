@@ -2,6 +2,12 @@
   "schemaVersion": "agent-eval-dataset-v2",
   "travelProgressScenarios": [
     {
+      "id": "AB-booked-item", "name": "予約済みActivityの変更案を明示確認し予約番号を渡さない",
+      "userRequest": "この予約済みの予定を短くしたい。変更案と予約への影響を確認したい",
+      "tags": ["smoke", "trip-progress", "reservation"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
       "id": "AA-focused-item", "name": "選択中Activityをゆっくりに調整し他都市の予定を保持",
       "userRequest": "ここをもう少しゆっくりにしたい",
       "tags": ["smoke", "trip-progress", "ui-focus"],

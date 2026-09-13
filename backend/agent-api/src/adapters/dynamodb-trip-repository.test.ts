@@ -10,7 +10,7 @@ import type { TripMutation } from "../contracts/trip-api.js";
 const a = { subject: "owner-A" }, b = { subject: "owner-B" };
 const id = "11111111-1111-4111-8111-111111111111", other = "22222222-2222-4222-8222-222222222222";
 const trip = () => createTrip(id, "旅行", "2026-09-13T01:00:00Z");
-function fixture() { const f = tripDynamoFixture(); return { ...f, application: new TripApplication(f.repository, f.repository, f.clock) }; }
+function fixture() { const f = tripDynamoFixture(); return { ...f, application: new TripApplication(f.repository, f.repository, f.clock, { facts: async () => [] }) }; }
 const mutation = (tripId = id): TripMutation => ({ tripId, baseRevision: 0, mutationId: other, proposal: { tripId, baseRevision: 0, summary: "編集", patches: [] } });
 
 describe("owner-scoped Trip storage", () => {

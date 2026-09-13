@@ -1,5 +1,8 @@
 # Trip revision / mutation（#389）
 
+#398でprepareを非同期検証にも対応させ、[予約済み項目の変更保護](trip-reservation.md)を追加した。
+既存Trip CAS/receiptは維持し、Reservationは独立revisionで更新する。
+
 親方針は #382/#415、保存基盤は #388、UI は #390。同じ Trip / Proposal / Repository / converter を拡張する。
 判断は [ADR 0054](../decisions/0054-commit-trip-mutations-atomically.md)。**公開 writer は引き続き OFF**。
 
