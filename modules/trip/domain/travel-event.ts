@@ -2,6 +2,7 @@ import { exactKeys, validInstant } from "./snapshot-validation";
 import { validateExternalSourceEvidence, type ExternalSourceEvidence, type ExternalInformationFreshness } from "./external-travel-information";
 import { validateHazardAlert, hazardAlertCategories, type HazardAlert, type HazardAlertCategory } from "./hazard-alert";
 import { monitoringKey, monitoringText, validateWatchSubject, watchSubjectKey, type WatchSubject } from "./trip-watch";
+import { validateObservedWeatherFact, type ObservedWeatherFact } from "./weather-event-fact";
 
 interface EventObservation {
   readonly observedAt: string;
@@ -24,11 +25,7 @@ export type HazardEventFact = UnknownEventFact | {
   readonly queriedCategories: readonly HazardAlertCategory[];
   readonly alerts: readonly HazardAlert[];
 };
-export type WeatherEventFact = UnknownEventFact | {
-  readonly status: "observed";
-  readonly temperatureCelsius?: number;
-  readonly precipitationMillimetres?: number;
-};
+export type WeatherEventFact = UnknownEventFact | ObservedWeatherFact;
 export type TravelEvent = EventObservation & { readonly id: string } & (
   | { readonly kind: "rail-operation"; readonly subject: Extract<WatchSubject, { type: "rail-service" }>; readonly fact: RailEventFact }
   | { readonly kind: "hazard"; readonly subject: { readonly type: "hazard-area"; readonly area: string }; readonly fact: HazardEventFact }
@@ -39,6 +36,11 @@ export type TravelEvent = EventObservation & { readonly id: string } & (
  * #395 owns notification episodes/delivery dedupe; observations can refresh metadata for this identity.
  */
 export function travelEventId(event: Omit<TravelEvent, "id">): string {
+  if (event.kind === "weather" && event.fact.status === "observed") {
+    const f = event.fact as ObservedWeatherFact;
+    return monitoringKey(["weather-event-v2", watchSubjectKey(event.subject), event.freshness, f.precipitationPeriod, f.timezone, f.location, f.requestedRange,
+      f.forecast.map((h) => [h.at, h.temperatureCelsius, h.precipitationProbabilityPercent, h.precipitationMillimeters, h.weatherCode])]);
+  }
   return monitoringKey(["event-v1", event.kind, watchSubjectKey(event.subject), event.freshness, event.fact]);
 }
 export function validateTravelEvent(event: TravelEvent): void {
@@ -72,11 +74,7 @@ export function validateTravelEvent(event: TravelEvent): void {
           !hazard.queriedCategories.every((c) => hazardAlertCategories.includes(c))) throw new Error("Invalid hazard scope");
       hazard.alerts.forEach(validateHazardAlert);
     } else {
-      const weather = event.fact as Extract<WeatherEventFact, { status: "observed" }>;
-      exactKeys(weather, ["status", "temperatureCelsius", "precipitationMillimetres"]);
-      if (weather.temperatureCelsius === undefined && weather.precipitationMillimetres === undefined ||
-          weather.temperatureCelsius !== undefined && !Number.isFinite(weather.temperatureCelsius) ||
-          weather.precipitationMillimetres !== undefined && (!Number.isFinite(weather.precipitationMillimetres) || weather.precipitationMillimetres < 0)) throw new Error("Invalid weather fact");
+      validateObservedWeatherFact(event.fact as ObservedWeatherFact);
     }
   }
   if (event.id !== travelEventId(event)) throw new Error("Event identity mismatch");

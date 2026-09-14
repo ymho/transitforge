@@ -7,6 +7,9 @@ export interface WeatherForecastQuery {
 }
 
 export interface HourlyWeatherForecast {
+  /** Current provider wall-clock sample time in WeatherForecast.timezone.
+   * Temperature/weatherCode are instantaneous; precipitation fields cover the preceding hour.
+   */
   time: string;
   temperatureCelsius: number;
   precipitationProbabilityPercent: number;

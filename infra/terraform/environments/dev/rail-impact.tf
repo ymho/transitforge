@@ -1,4 +1,6 @@
 # IAM-invoked internal seam; no HTTP endpoint, Agent invocation grant, polling or per-Trip timer.
+# #408 shares this worker/index for rail/weather/hazard. Physical names are retained for migration safety.
+# Historical RailImpact metric namespace now covers every external fact kind; no payload/owner dimensions.
 locals {
   rail_impact_name    = "${local.resource_prefix}-rail-impact"
   rail_impact_package = jsondecode(file("${path.module}/../../../packaging/rail-impact.json"))
