@@ -2,8 +2,10 @@ import { exactKeys, validInstant } from "./snapshot-validation";
 import { monitoringKey, monitoringRevision, monitoringText } from "./trip-watch";
 import { validateTrip, type Trip } from "./trip";
 import { validateTravelEvent, type TravelEvent } from "./travel-event";
+import { validateTripImpactFact, type TripImpactFact } from "./trip-impact-fact";
+export type { TripImpactFact } from "./trip-impact-fact";
 
-export const tripImpactReasons = ["external_data_unknown", "rail_delay", "rail_cancelled", "destination_changed", "long_stop",
+export const tripImpactReasons = ["external_data_unknown", "rail_delay", "rail_cancelled", "destination_changed", "destination_unverified", "long_stop",
   "connection_risk", "appointment_risk", "hazard_exposure", "weather_exposure", "no_material_change"] as const;
 export type TripImpactReason = typeof tripImpactReasons[number];
 /** Derived result, not a Trip child, notification, public hazard severity or planned feasibility. */
@@ -12,6 +14,8 @@ export interface TripImpact {
   readonly tripId: string;
   readonly tripRevision: number;
   readonly eventId: string;
+  readonly policyVersion: string;
+  readonly facts: readonly TripImpactFact[];
   readonly status: "unknown" | "no-impact" | "impact";
   readonly severity: "informational" | "attention" | "action-required" | "critical";
   readonly affectedItemIds: readonly string[];
@@ -19,11 +23,18 @@ export interface TripImpact {
   readonly evaluatedAt: string;
 }
 export function tripImpactId(impact: Omit<TripImpact, "id">): string {
-  return monitoringKey(["impact-v1", impact.tripId, impact.tripRevision, impact.eventId, impact.status, impact.severity,
-    [...impact.affectedItemIds].sort(), [...impact.reasonCodes].sort()]);
+  return monitoringKey(["impact-v2", impact.tripId, impact.tripRevision, impact.eventId, impact.policyVersion, impact.status, impact.severity,
+    [...impact.affectedItemIds].sort(), [...impact.reasonCodes].sort(), impact.facts]);
 }
 export function validateTripImpact(impact: TripImpact): void {
-  exactKeys(impact, ["id", "tripId", "tripRevision", "eventId", "status", "severity", "affectedItemIds", "reasonCodes", "evaluatedAt"]);
+  exactKeys(impact, ["id", "tripId", "tripRevision", "eventId", "policyVersion", "facts", "status", "severity", "affectedItemIds", "reasonCodes", "evaluatedAt"]);
+  monitoringText(impact.policyVersion, 100);
+  if (!Array.isArray(impact.facts) || impact.facts.length > 2000) throw new Error("Invalid impact facts");
+  impact.facts.forEach((fact) => {
+    validateTripImpactFact(fact);
+    const ids = fact.type === "schedule-risk" ? [fact.fromItemId, fact.toItemId] : [fact.itemId];
+    if (ids.some((id) => !impact.affectedItemIds.includes(id))) throw new Error("Impact fact outside affected items");
+  });
   monitoringText(impact.tripId); monitoringText(impact.eventId, 24000); monitoringRevision(impact.tripRevision);
   if (!validInstant(impact.evaluatedAt) || !["unknown", "no-impact", "impact"].includes(impact.status) ||
       !["informational", "attention", "action-required", "critical"].includes(impact.severity) ||

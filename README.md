@@ -130,7 +130,9 @@ TypeScriptのテストは対象モジュールの隣へ置く。repository保守
 ## 確認コマンド
 
 [#393 の Trip monitoring](docs/architecture/trip-monitoring.md)は採用済み計画から独立したWatch、
-外部Event、revision付きImpactの内部境界を提供する。自動監視worker・Impact実評価・通知はまだ有効ではない。
+外部Event、revision付きImpactの内部境界を提供する。
+[#394 の鉄道Impact](docs/architecture/rail-trip-impact.md)は内部subject逆引き・決定論的評価・owner-scoped保存を追加する。
+IAM-onlyの内部呼出seamであり、自律的な再チェック・利用者通知・public writerはまだ有効ではない。
 
 ```bash
 npm run architecture:check

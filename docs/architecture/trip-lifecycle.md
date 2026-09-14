@@ -9,7 +9,8 @@
 #389の既存revisionを使うCAS/Proposal/receipt/競合回復は[更新契約](trip-concurrency.md)を参照する。
 #393の独立Watch・Event・Impact、owner逆引きと差分reconcileは[監視境界](trip-monitoring.md)を参照する。
 #407のTrip永続更新→Watch同期は[transactional outbox配送](trip-changed-delivery.md)を参照する。
-Tripの計画・予約・Feasibilityを変更せず、自動配送/実Impact評価/通知は後続Issueに残す。
+#394の[鉄道Impact評価・内部逆引き・保存](rail-trip-impact.md)はTripの計画・予約・Feasibilityを変更しない。
+通知と定期再検査は後続Issueに残す。
 
 **これは採用する最終契約であり、V2が稼働済みという記述ではない。** #415では文書だけを変更する。
 現在稼働している型・保存処理は下表のlegacy実装である。後続Issueは本契約を同じ

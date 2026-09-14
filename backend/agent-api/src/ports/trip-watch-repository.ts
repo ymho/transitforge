@@ -7,6 +7,8 @@ export interface TripWatchRead {
   readonly complete: boolean;
   readonly sourceTripRevision?: number;
   readonly records: readonly StoredTripWatch[];
+  /** Adapter-only migration metadata; not a Watch/Trip Domain field. Reconcile repairs existing rows. */
+  readonly routingRefreshIds?: readonly string[];
 }
 export interface TripWatchRepository {
   read(principal: TripPrincipal, tripId: string): Promise<TripWatchRead>;

@@ -4,7 +4,8 @@
 本書は既存Tripを利用する監視境界であり、新しいTrip/Planner/Realtime正本を定義するものではない。
 
 本書の#393導入時に未実装だったdurable triggerは、#407の[TripChanged配送](trip-changed-delivery.md)で追加した。
-以下の「未導入」は#393単体の範囲を示す。外部Event fanout/Impact実評価/利用者通知は引き続き後続責務。
+以下の「未導入」は#393単体の範囲を示す。#394で[内部rail fanout/Impact評価・保存](rail-trip-impact.md)を追加した。
+利用者通知・自律的な観測再投入は引き続き後続責務。
 
 ## 現行 → 今回 → 後続
 

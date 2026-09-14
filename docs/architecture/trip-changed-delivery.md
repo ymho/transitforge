@@ -124,6 +124,9 @@ Repositoryを通らないtable直書きはoutbox保証の範囲外。新しいwr
 
 ## #394 / #409へ残すruntime routing
 
+この節は#407導入時の残務を示す。#394で[rail subject routingとImpact評価・保存](rail-trip-impact.md)を導入した。
+outboxの再利用によるowner列挙は行わず、#409の定期的な観測再投入は引き続き別責務とする。
+
 watch-subjectはowner+subjectであり、共通運行Eventから全利用者へ検索する索引ではない。
 このoutbox indexをowner一覧として転用しない。
 後続はsubjectから認可されたowner/Tripへ逆引きする内部routing contractと索引を明示的に定め、
