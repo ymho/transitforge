@@ -29,14 +29,26 @@ class RailImpactContractTest(unittest.TestCase):
             self.assertNotIn(name, entrypoint)
         for source in (ROOT / "frontend/src").rglob("*.ts"):
             self.assertNotIn("rail-watch-routing", source.read_text())
-        router = (ROOT / "backend/agent-api/src/adapters/dynamodb-rail-impact-router.ts").read_text()
+        router = (ROOT / "backend/agent-api/src/adapters/dynamodb-trip-impact-router.ts").read_text()
         self.assertIn('railSubject = :subject', router)
         self.assertIn('watches.read(principal, tripId)', router)
         self.assertNotIn("ScanCommand", router)
-        app = (ROOT / "backend/agent-api/src/usecases/rail-impact-application.ts").read_text()
+        app = (ROOT / "backend/agent-api/src/usecases/trip-impact-application.ts").read_text()
         self.assertIn("this.worker.process(principal", app)
         self.assertIn("railTravelEvent(...input)", app)
         self.assertNotIn("console.", app)
+
+    def test_area_facts_reuse_internal_routing_and_store_without_new_scheduler(self):
+        composition = (ROOT / "backend/agent-api/src/rail-impact-composition-root.ts").read_text()
+        self.assertIn("DynamoDbTripImpactRepository", composition)
+        self.assertIn("DeterministicTripImpactEvaluator", composition)
+        application = (ROOT / "backend/agent-api/src/usecases/trip-impact-application.ts").read_text()
+        self.assertIn("weatherTravelEvent(...input)", application)
+        self.assertIn("hazardTravelEvent(...input)", application)
+        for forbidden in ["ChecklistApplication", "Notification", "Feasibility", "setInterval", "ScheduleCommand"]:
+            self.assertNotIn(forbidden, composition + application)
+        entrypoint = (ROOT / "backend/agent-api/src/lambda.ts").read_text()
+        self.assertNotIn("createInternalTripImpact", entrypoint)
 
     def test_separate_package_and_no_private_logs_or_notification_state(self):
         contract = json.loads((ROOT / "infra/packaging/rail-impact.json").read_text())

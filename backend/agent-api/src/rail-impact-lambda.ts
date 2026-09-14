@@ -1,5 +1,5 @@
 import { validateTravelEvent, type TravelEvent } from "@raiquora/trip/travel-event";
-import { createInternalRailImpact } from "./rail-impact-composition-root.js";
+import { createInternalTripImpact } from "./rail-impact-composition-root.js";
 import type { RailImpactMetrics } from "./usecases/rail-impact-application.js";
 
 const metrics: RailImpactMetrics = { record(name, value) {
@@ -11,9 +11,8 @@ export async function handler(input: unknown) {
   try {
     const event = input as TravelEvent;
     validateTravelEvent(event); // Owner/private/unknown fields rejected, no caller-selected routing.
-    if (event.kind !== "rail-operation") throw new Error();
     const table = process.env.TRIP_TABLE_NAME;
     if (!table) throw new Error();
-    return await createInternalRailImpact(table, metrics).process(event);
+    return await createInternalTripImpact(table, metrics).process(event);
   } catch { throw new Error("rail-impact-processing-failed"); }
 }

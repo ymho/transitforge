@@ -6,6 +6,9 @@
 
 ## 現状と選択
 
+#408の[ADR 0061](0061-evaluate-weather-hazard-impact-with-shared-routing.md)で同じ物理GSIと内部workerを
+weather/hazardへ拡張した。以下は#394導入時の記録であり、railの計算policyは維持する。
+
 #393の`watch-subject`はowner+subjectの索引であり、共通の運行Eventからownerを発見できない。
 #407のoutboxはTrip変更の配送専用で、運行Eventのfanoutやowner一覧ではない。
 

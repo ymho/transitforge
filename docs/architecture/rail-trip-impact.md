@@ -2,6 +2,9 @@
 
 親 #382/#415、契約ADR 0052/0058、判断 [ADR 0060](../decisions/0060-evaluate-rail-impact-through-internal-subject-routing.md)。
 
+#408でrouting/Applicationを[Weather/Hazardと共通化](weather-hazard-trip-impact.md)した。
+物理rail名は維持するが3種の内部Eventを扱う。rail評価policyそのものは変更しない。
+
 ## 現行 → 今回
 
 | 境界 | 再利用 | #394の追加 |
