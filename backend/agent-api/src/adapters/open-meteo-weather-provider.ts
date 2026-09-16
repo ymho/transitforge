@@ -16,6 +16,8 @@ import {
   type WeatherGridSnapshot,
 } from "@raiquora/trip/weather-grid";
 import { weatherGeocodingLocation } from "./weather-geocoding-location.js";
+import type { WeatherEventTarget } from "@raiquora/trip/weather-travel-event";
+import { validateWeatherScope } from "@raiquora/trip/weather-event-fact";
 
 interface FetchPort {
   fetch(input: string, init?: RequestInit): Promise<Response>;
@@ -28,6 +30,29 @@ export class OpenMeteoWeatherProvider implements WeatherForecastProvider, Weathe
     private readonly http: FetchPort,
     private readonly now: () => Date = () => new Date(),
   ) {}
+
+  /** Internal recheck path: trusted coordinates, no geocoding/name inference. Existing Agent search is unchanged. */
+  async searchTarget(target: WeatherEventTarget): Promise<ExternalTravelInformation<WeatherForecast>> {
+    validateWeatherScope({ timezone: target.timezone, location: target.location, requestedRange: { startDate: target.query.startDate, endDate: target.query.endDate } });
+    const now = this.now(), today = dateInTimeZone(now, target.timezone);
+    if (outsideForecastRange(target.query.startDate, today) || outsideForecastRange(target.query.endDate, today)) {
+      return failedExternalInformation({ code: "invalid_request", message: "forecast-horizon", retryable: false });
+    }
+    const place = { id: 0, ...target.location, timezone: target.timezone };
+    const url = forecastUrl(place, target.query);
+    try {
+      const response = await this.http.fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8_000) });
+      if (!response.ok) return providerHttpFailure(response.status);
+      const data = weatherForecast(await response.json(), place);
+      if (!data) return failedExternalInformation({ code: "invalid_response", message: "invalid-forecast", retryable: true });
+      return availableExternalInformation(data, [{ id: `weather:recheck:${target.subject.area}:${now.toISOString()}`, kind: "weather",
+        provider: "open-meteo", sourceId: target.subject.area, sourceUrl: "https://api.open-meteo.com/v1/forecast",
+        retrievedAt: now.toISOString(), validUntil: new Date(now.getTime() + 3_600_000).toISOString(),
+        attribution: "Weather data by Open-Meteo.com", confidence: "provider-forecast" }], now);
+    } catch (error) {
+      return failedExternalInformation({ code: ["TimeoutError", "AbortError"].includes((error as Error)?.name) ? "timeout" : "unavailable", message: "forecast-fetch-failed", retryable: true });
+    }
+  }
 
   async search(query: WeatherForecastQuery): Promise<ExternalTravelInformation<WeatherForecast>> {
     const location = weatherGeocodingLocation(query.location).slice(0, 100);

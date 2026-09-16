@@ -1,0 +1,6 @@
+{
+  "source": "backend/agent-api/dist/trip-recheck",
+  "runtime": "nodejs22.x",
+  "handler": "index.handler",
+  "files": ["index.cjs"]
+}

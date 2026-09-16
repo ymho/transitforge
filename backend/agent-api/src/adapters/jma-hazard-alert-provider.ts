@@ -22,6 +22,9 @@ const feedUrls = [
 ] as const;
 const maximumFeedBytes = 768 * 1_024;
 class InvalidJmaFeed extends Error {}
+class JmaFetchFailure extends Error {
+  constructor(readonly code: "rate_limited" | "unavailable") { super(code); }
+}
 
 export class JmaHazardAlertProvider implements HazardAlertProvider {
   private cached?: { expiresAt: number; entries: HazardAlert[]; evidenceRetrievedAt: string };
@@ -61,6 +64,8 @@ export class JmaHazardAlertProvider implements HazardAlertProvider {
       return information;
     } catch (error) {
       if (error instanceof InvalidJmaFeed) return failedExternalInformation({ code: "invalid_response", message: "気象庁の防災情報を確認できません", retryable: true });
+      if (error instanceof JmaFetchFailure) return failedExternalInformation({ code: error.code, message: "気象庁の取得を再試行する必要があります", retryable: true });
+      if (["TimeoutError", "AbortError"].includes((error as Error)?.name)) return failedExternalInformation({ code: "timeout", message: "気象庁の取得がタイムアウトしました", retryable: true });
       return failedExternalInformation({ code: "unavailable", message: "気象庁の防災情報を取得できません", retryable: true });
     }
   }
@@ -74,7 +79,7 @@ export class JmaHazardAlertProvider implements HazardAlertProvider {
     })));
     const entries: HazardAlert[] = [];
     for (const response of responses) {
-      if (!response.ok) throw new Error("JMA feed unavailable");
+      if (!response.ok) throw new JmaFetchFailure(response.status === 429 ? "rate_limited" : "unavailable");
       const contentLength = Number(response.headers.get("content-length"));
       if (Number.isFinite(contentLength) && contentLength > maximumFeedBytes) throw new Error("JMA feed too large");
       const xml = await response.text();
