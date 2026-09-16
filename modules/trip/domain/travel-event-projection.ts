@@ -1,7 +1,7 @@
 import type { TrainDelaySnapshot } from "@raiquora/operation/operation";
 import { isInOperatingDay } from "@raiquora/operation/operating-day";
 import { realtimeSnapshotToleranceMilliseconds } from "@raiquora/operation/train-operation-state";
-import type { TrainIndex } from "@raiquora/train/train";
+import type { TrainIndex, Train } from "@raiquora/train/train";
 import { parseHazardAlertQuery, validateHazardAlertInformation, type HazardAlertQuery, type HazardAlertSearchResult } from "./hazard-alert";
 import { externalInformationFreshness, type ExternalSourceEvidence, type ExternalTravelInformation } from "./external-travel-information";
 import { validInstant } from "./snapshot-validation";
@@ -36,7 +36,7 @@ export function hazardTravelEvent(query: HazardAlertQuery, result: ExternalTrave
  * Explicit cancellation can be supplied by a future validated operation adapter via RailEventFact.
  */
 export function railTravelEvent(subject: Extract<WatchSubject, { type: "rail-service" }>,
-  index: TrainIndex, snapshot: TrainDelaySnapshot | undefined, sources: readonly ExternalSourceEvidence[], now: string): TravelEvent {
+  index: Pick<TrainIndex, "service_date"> & { trains: readonly Pick<Train, "service_uid" | "train_no">[] }, snapshot: TrainDelaySnapshot | undefined, sources: readonly ExternalSourceEvidence[], now: string): TravelEvent {
   validateWatchSubject(subject);
   if (!validInstant(now)) throw new Error("Clock instant required");
   let fact: RailEventFact = { status: "unknown", reason: "identity-unresolved" };

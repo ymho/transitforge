@@ -2,6 +2,9 @@
 
 正本は#382/#415、判断と制約は[ADR 0061](../decisions/0061-evaluate-weather-hazard-impact-with-shared-routing.md)。
 
+後続#409で[共有再チェックruntime](trip-recheck-runtime.md)を追加した。以下の未配線事項は#408導入時の記録であり、
+Provider IO・trusted target・bounded replayの現在の運用境界はそちらを参照する。
+
 ## 現行 → 実装 → 後続
 
 | 境界 | #408の実装 | 残す責務 |

@@ -55,6 +55,7 @@
     "./restaurant-search": "./domain/restaurant-search.ts",
     "./adventure-safety": "./domain/adventure-safety.ts",
     "./travel-recheck": "./domain/travel-recheck.ts",
+    "./trip-recheck": "./domain/trip-recheck.ts",
     "./airport-access": "./domain/airport-access.ts"
   },
   "dependencies": {

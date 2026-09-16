@@ -63,7 +63,9 @@ bounded pageであって「全部同期済み」の証明ではない。backlog�
 3. event schema、eventId、owner PK一致を検証する。偽ownerは呼出前に隔離する。
 4. `TripWatchApplication.reconcile({subject}, tripId)`を呼ぶ。
    payloadのrevisionは観測用で、Watch生成に使用するTripは既存reconcileが最新GETする。
-5. 成功後だけversion付きdoneへ移す。失敗時はbackoff pending、8回でdeadへ移す。
+5. #409の[recheck投影](trip-recheck-runtime.md)も保存できた後だけversion付きdoneへ移す。
+   Watch同期を複製せず、その完了後にtaskのidempotent ensureを追加する。片方だけ成功した場合もoutboxをACKしない。
+   失敗時はbackoff pending、8回でdeadへ移す。
 
 rev5→6、6→5、同じevent、同じtickの再送でも最新Tripへreconcileする。
 #393のsourceTripRevision/Trip ConditionCheck/collection CASを利用し、旧eventから巻き戻さない。

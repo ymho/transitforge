@@ -4,6 +4,9 @@
 - 日付: 2026-09-15
 - Issue: #408、親 #382/#415、前提 #393/#394/#401
 
+後続#409で[ADR 0062](0062-schedule-trip-rechecks-with-shared-durable-due-work.md)の共有再チェックhostを追加した。
+以下は#408導入時点の判断であり、Event/Impactの正本境界は維持する。
+
 ## 現状と決定
 
 WeatherForecastにはhourlyの気温・降水確率・降水量・weatherCode、明示timezone、位置があるが、

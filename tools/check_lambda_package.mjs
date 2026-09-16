@@ -34,3 +34,13 @@ if (typeof loaded.handler !== "function") {
   throw new Error("Lambda bundleをNode.jsで読み込めません");
 }
 console.log(JSON.stringify({ runtime: manifest.runtime, handler: manifest.handler, files: manifest.files, bytes: metadata.size }));
+
+// #409's autonomous host is a separate deployment artifact, not part of the public Agent bundle.
+const recheck = JSON.parse(await readFile(resolve(root, "infra/packaging/trip-recheck.json"), "utf8"));
+if (recheck.runtime !== "nodejs22.x" || recheck.handler !== "index.handler" ||
+    JSON.stringify(recheck.files) !== '["index.cjs"]') throw new Error("Invalid recheck package contract");
+const recheckBundle = resolve(root, recheck.source, recheck.files[0]);
+const recheckMetadata = await stat(recheckBundle);
+if (!recheckMetadata.isFile() || recheckMetadata.size < 1 || recheckMetadata.size > 20 * 1_024 * 1_024 ||
+    typeof (await import(pathToFileURL(recheckBundle).href)).handler !== "function") throw new Error("Invalid recheck bundle");
+console.log(JSON.stringify({ package: "trip-recheck", runtime: recheck.runtime, bytes: recheckMetadata.size }));

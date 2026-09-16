@@ -69,9 +69,12 @@ resource "aws_lambda_function" "trip_changed" {
     variables = {
       TRIP_TABLE_NAME       = aws_dynamodb_table.trips.name
       TRIP_CHANGED_RULE_ARN = aws_cloudwatch_event_rule.trip_changed.arn
+      RECHECK_TABLE_NAME    = aws_dynamodb_table.trip_rechecks.name
+      RECHECK_TARGET_BUCKET = local.recheck_data_bucket
+      RECHECK_TARGET_KEY    = local.recheck_target_key
     }
   }
-  depends_on = [aws_iam_role_policy.trip_changed, aws_cloudwatch_log_group.trip_changed]
+  depends_on = [aws_iam_role_policy.trip_changed, aws_iam_role_policy.trip_changed_rechecks, aws_cloudwatch_log_group.trip_changed]
 }
 resource "aws_lambda_function_event_invoke_config" "trip_changed" {
   function_name                = aws_lambda_function.trip_changed.function_name
