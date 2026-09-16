@@ -70,9 +70,9 @@ resource "aws_lambda_function" "rail_impact" {
   memory_size                    = 512
   reserved_concurrent_executions = 2
   environment {
-    variables = { TRIP_TABLE_NAME = aws_dynamodb_table.trips.name }
+    variables = { TRIP_TABLE_NAME = aws_dynamodb_table.trips.name, NOTIFICATION_TABLE_NAME = aws_dynamodb_table.trip_notifications.name }
   }
-  depends_on = [aws_iam_role_policy.rail_impact, aws_cloudwatch_log_group.rail_impact]
+  depends_on = [aws_iam_role_policy.rail_impact, aws_cloudwatch_log_group.rail_impact, aws_iam_role_policy.impact_notification_signal]
 }
 # Internal host must use RequestResponse and inspect failed/replayRequired. No lossy async success receipt.
 resource "aws_cloudwatch_metric_alarm" "rail_impact_failure" {

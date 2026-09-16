@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./notification": "./domain/notification.ts",
+    "./notification-policy": "./domain/notification-policy.ts",
     "./trip-watch": "./domain/trip-watch.ts",
     "./travel-event": "./domain/travel-event.ts",
     "./travel-event-projection": "./domain/travel-event-projection.ts",

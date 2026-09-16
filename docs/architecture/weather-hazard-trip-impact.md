@@ -4,6 +4,7 @@
 
 後続#409で[共有再チェックruntime](trip-recheck-runtime.md)を追加した。以下の未配線事項は#408導入時の記録であり、
 Provider IO・trusted target・bounded replayの現在の運用境界はそちらを参照する。
+通知の最新観測選択・episode・配信は#395の[Notification runtime](notification-runtime.md)を参照する。Impactの意味やtyped factsは変更しない。
 
 ## 現行 → 実装 → 後続
 

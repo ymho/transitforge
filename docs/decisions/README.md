@@ -81,3 +81,4 @@
 - [0060 内部subject逆引きで鉄道観測をTripImpactへ評価する](0060-evaluate-rail-impact-through-internal-subject-routing.md)
 - [0061 共通subject routingで天気・警報のTrip暴露を評価する](0061-evaluate-weather-hazard-impact-with-shared-routing.md)
 - [0062 共有due-workでTrip再チェックを起動する](0062-schedule-trip-rechecks-with-shared-durable-due-work.md)
+- [0063 Impactから通知episodeと配信を分離する](0063-separate-notification-episodes-and-delivery.md)

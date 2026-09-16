@@ -1,0 +1,6 @@
+{
+  "source": "backend/agent-api/dist/notification",
+  "runtime": "nodejs22.x",
+  "handler": "index.handler",
+  "files": ["index.cjs"]
+}
