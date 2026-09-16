@@ -133,6 +133,8 @@ TypeScriptのテストは対象モジュールの隣へ置く。repository保守
 外部Event、revision付きImpactの内部境界を提供する。
 [#394 の鉄道Impact](docs/architecture/rail-trip-impact.md)は内部subject逆引き・決定論的評価・owner-scoped保存を追加する。
 IAM-onlyの内部呼出seamであり、自律的な再チェック・利用者通知・public writerはまだ有効ではない。
+[#408の天気・警報Impact](docs/architecture/weather-hazard-trip-impact.md)は同じ内部routing/保存を再利用し、
+trustedな地域と旅程の時間精度に基づき暴露と未確認事項を記録する。自動再取得・通知はまだ有効ではない。
 
 ```bash
 npm run architecture:check

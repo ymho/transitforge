@@ -10,6 +10,7 @@
 #393の独立Watch・Event・Impact、owner逆引きと差分reconcileは[監視境界](trip-monitoring.md)を参照する。
 #407のTrip永続更新→Watch同期は[transactional outbox配送](trip-changed-delivery.md)を参照する。
 #394の[鉄道Impact評価・内部逆引き・保存](rail-trip-impact.md)はTripの計画・予約・Feasibilityを変更しない。
+#408の[天気・警報Impact](weather-hazard-trip-impact.md)も同じWatch/Event/Impactを使い、trusted areaとscheduleを照合する。
 通知と定期再検査は後続Issueに残す。
 
 **これは採用する最終契約であり、V2が稼働済みという記述ではない。** #415では文書だけを変更する。

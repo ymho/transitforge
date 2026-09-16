@@ -10,6 +10,8 @@ import type { TripDynamoClient } from "./dynamodb-trip-repository.js";
 type Attributes = Record<string, AttributeValue>;
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 export const watchSubjectIndex = "watch-subject";
+// Historical physical names retained to avoid replacing a live routing index.
+// Canonical subjects contain their kind: rail, weather and hazard share this GSI.
 export const railWatchRoutingIndex = "rail-watch-routing";
 export const railWatchRoutingKey = (subject: WatchSubject) => digest(watchSubjectKey(subject));
 /** Bounded differential batches: 98 changes + collection CAS + saved-Trip ConditionCheck.
@@ -48,7 +50,7 @@ export class DynamoDbTripWatchRepository implements TripWatchRepository {
       if (raw.pk?.S !== owner || raw.sk?.S !== key.sk.S || raw.sourceTripRevision?.N !== String(watch.sourceTripRevision) ||
           (record.active ? raw.watchSubject?.S !== this.subjectKey(owner, watch.subject) : raw.watchSubject !== undefined)) throw new Error();
       // Missing attribute is a readable pre-#394 row. Present-but-wrong routing is corruption, not migration.
-      if (raw.railSubject !== undefined && (!record.active || watch.subject.type !== "rail-service" || raw.railSubject.S !== railWatchRoutingKey(watch.subject))) throw new Error();
+      if (raw.railSubject !== undefined && (!record.active || raw.railSubject.S !== railWatchRoutingKey(watch.subject))) throw new Error();
       return record;
     } catch { throw new TripResourceError("unavailable"); }
   }
@@ -60,7 +62,7 @@ export class DynamoDbTripWatchRepository implements TripWatchRepository {
         !before.version && records.length || new Set(records.map((r) => r.watch.id)).size !== records.length) throw new TripResourceError("conflict");
     if (records.some((r) => before.sourceTripRevision === undefined || r.watch.sourceTripRevision > before.sourceTripRevision ||
         before.complete && r.active && r.watch.sourceTripRevision !== before.sourceTripRevision)) throw new TripResourceError("unavailable");
-    const routingRefreshIds = records.filter((r, i) => r.active && r.watch.subject.type === "rail-service" && rows[i]!.railSubject === undefined).map((r) => r.watch.id);
+    const routingRefreshIds = records.filter((r, i) => r.active && rows[i]!.railSubject === undefined).map((r) => r.watch.id);
     return { ...before, records, ...(routingRefreshIds.length ? { routingRefreshIds } : {}) };
   }
   async find(principal: TripPrincipal, subject: WatchSubject): Promise<StoredTripWatch[]> {
@@ -125,7 +127,7 @@ export class DynamoDbTripWatchRepository implements TripWatchRepository {
           ...this.watchKey(owner, record), storageVersion: { N: "1" }, sourceTripRevision: { N: String(record.watch.sourceTripRevision) },
           active: { BOOL: record.active }, watch: { S: JSON.stringify(record.watch) },
           ...(record.active ? { watchSubject: { S: this.subjectKey(owner, record.watch.subject) } } : {}),
-          ...(record.active && record.watch.subject.type === "rail-service" ? { railSubject: { S: railWatchRoutingKey(record.watch.subject) } } : {}),
+          ...(record.active ? { railSubject: { S: railWatchRoutingKey(record.watch.subject) } } : {}),
         } } })),
       ] }));
     }

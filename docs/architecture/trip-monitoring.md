@@ -106,7 +106,8 @@ Event identityはkind+canonical subject+fact+freshness。観測/取得時刻とE
   queriedCategoriesとquery-limited coverageを持ち、0件でも「区域内に警報なし」を保証しない。
   source鮮度を観測時点で再確認し、未来の取得/発表やEvidence欠落はunknown。
   category/areaがqueryと違う結果は拒否。公的emergencyからTrip criticalへ変換しない。
-- Weather: 独立subjectとstrict fact contractのみ。実Provider変換・Tripへの雨の影響評価は#408。
+- Weather: #408の[hourly Event正規化・時間帯評価](weather-hazard-trip-impact.md)を追加した。
+  旧単点contractからbounded forecastへ統合し、同じ内部subject routing/Impact storeを再利用する。
 
 sourcesは既存ExternalSourceEvidenceであり別Evidenceモデルを増やさない。sourceEvidenceIdsとの一致を検証する。
 観測結果の保持可否や歴史Event storeのretentionは後続の保存設計で再確認する。

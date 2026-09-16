@@ -79,3 +79,4 @@
 - [0058 Tripの計画と監視・外部イベント・影響を分離する](0058-separate-trip-monitoring-resources.md)
 - [0059 Trip変更をtransactional outboxでWatchへ届ける](0059-deliver-trip-changes-with-a-transactional-outbox.md)
 - [0060 内部subject逆引きで鉄道観測をTripImpactへ評価する](0060-evaluate-rail-impact-through-internal-subject-routing.md)
+- [0061 共通subject routingで天気・警報のTrip暴露を評価する](0061-evaluate-weather-hazard-impact-with-shared-routing.md)
