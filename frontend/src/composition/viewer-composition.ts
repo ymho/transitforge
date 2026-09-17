@@ -1,4 +1,5 @@
 import mapboxgl from "mapbox-gl";
+import { HttpInTripContextClient } from "../adapters/http/in-trip-context-client";
 import { accommodationProviderAttributionFromEnvironment } from "../adapters/browser/accommodation-provider-attribution";
 import { browserDigitalTwinClockEnvironment } from "../adapters/browser/digital-twin-clock-environment";
 import { browserPollingEnvironment } from "../adapters/browser/polling-controller";
@@ -1261,6 +1262,7 @@ if (!token) {
               {
                 previousAssistantTurn: agentTurnObservations.get(executionSessionId),
                 getCurrentTrip: () => workspaceSource?.getCurrentTrip(),
+                inTripContextReader: new HttpInTripContextClient(),
                 getReservationFacts: () => workspaceSource?.getReservationFacts?.(),
                 getChecklistItems: () => workspaceSource?.checklist?.getItems(),
                 getFeasibilityExternalFacts: () => workspaceSource?.getFeasibilityExternalFacts?.(),

@@ -1,5 +1,6 @@
 import { isPriceObservation } from "@raiquora/trip/money";
 import { reservationContext } from "../../usecases/agent/reservation-context";
+import { loadInTripContext, type InTripContextReader } from "../../usecases/agent/in-trip-context";
 import { tripFeasibilityContext } from "../../usecases/agent/trip-feasibility-context";
 import { tripReadinessContext } from "../../usecases/agent/trip-readiness-context";
 import { projectTripReadiness } from "@raiquora/trip/trip-readiness";
@@ -157,6 +158,7 @@ import {
 
 export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDependencies, TripProgressDependencies {
   getReservationFacts?: () => readonly import("@raiquora/trip/reservation").ReservationFact[] | undefined;
+  inTripContextReader?: InTripContextReader;
   getFeasibilityExternalFacts?: () => TripFeasibilityFacts["external"];
   getChecklistItems?: () => readonly TripChecklistItem[] | undefined;
   getUiFocus?: () => { itemId: string } | undefined;
@@ -408,6 +410,14 @@ export async function runViewerAgentRuntime(
     dependencies.getUserProfile?.(),
     currentTrip ?? currentTripPlan,
   );
+  const inTrip = currentTrip ? await loadInTripContext(currentTrip, currentDate(dependencies), dependencies.inTripContextReader) : undefined;
+  contextSnapshot.inTrip = inTrip;
+  // Do not also send the full-history/first-24 planning projection alongside the bounded in-trip view.
+  if (inTrip && contextSnapshot.trip) {
+    contextSnapshot.trip.schedule = [];
+    contextSnapshot.trip.scheduleTruncated = currentTrip!.items.length > 0;
+    delete contextSnapshot.trip.itineraryPlaces;
+  }
   const currentJourney = previousJourneyDecisionContext(
     dependencies.getPreviousJourneyPlan?.(),
     dependencies.getPendingJourneyLegChange?.(),
@@ -424,6 +434,7 @@ export async function runViewerAgentRuntime(
     feature: "concierge",
     userRequest,
     context: {
+      ...(inTrip ? { inTrip } : {}),
       previousAssistantTurn: dependencies.previousAssistantTurn,
       featureContext: {
         ...(focusedItem ? { uiFocus: { itemId: focusedItem.id, item: selectedTripItemSnapshot(focusedItem) } } : {}),
@@ -435,15 +446,15 @@ export async function runViewerAgentRuntime(
         ? { conversation: conversationContext }
         : {}),
       tripContext: decisionTripContext(travelFacts.context),
-      ...(currentTrip ? { reservations: reservationContext(reservationFacts, focusedItem?.id) } : {}),
-      ...(currentTrip && feasibility ? { tripFeasibility: tripFeasibilityContext(feasibility, focusedItem?.id),
+      ...(currentTrip && !inTrip ? { reservations: reservationContext(reservationFacts, focusedItem?.id) } : {}),
+      ...(currentTrip && feasibility && !inTrip ? { tripFeasibility: tripFeasibilityContext(feasibility, focusedItem?.id),
         tripReadiness: tripReadinessContext(projectTripReadiness(currentTrip, feasibility, reservationFacts, checklistItems), checklistItems) } : {}),
       ...(contextSnapshot.profile ? { travelProfile: contextSnapshot.profile } : {}),
       ...(contextSnapshot.trip ? { currentTrip: { ...contextSnapshot.trip,
-        ...(currentTrip ? { temporalAssessment: assessTripTime(currentTrip, { now: () => currentDate(dependencies) }) } : {}) } } : {}),
+        ...(currentTrip && !inTrip ? { temporalAssessment: assessTripTime(currentTrip, { now: () => currentDate(dependencies) }) } : {}) } } : {}),
       travelCandidates: dependencies.getTravelCandidates?.() ?? contextSnapshot.travelCandidates,
       realtimeFacts: contextSnapshot.realtimeFacts,
-      ...(currentJourney ? { currentJourney } : {}),
+      ...(currentJourney && !inTrip ? { currentJourney } : {}),
       verifiedFacts: verifiedPlaces.map((place) => ({
         evidenceId: `place:${place.providerPlaceId}`,
         category: "place",

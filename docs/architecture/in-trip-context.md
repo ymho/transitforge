@@ -1,0 +1,74 @@
+# InTripContextSnapshot (#396)
+
+## 現行 → 変更 → 後続
+
+| 現行 | #396 | 変更しない責務 |
+| --- | --- | --- |
+| AgentへTripの先頭24予定 | in_tripだけ前1/現在2/次2/後続4/未確定2を切り出す | #397の再計画/変更 |
+| ImpactはID単位GET | 既存atomic最新観測pointerをTrip prefixで最大12件Query | #394/#408評価、#409再取得 |
+| 通知Centerのcurrency | 同じcurrencyで最大4件、内部IDは除去 | #395 policy/episode/delivery |
+| ReservationFact | 最大8件、失敗はunavailable | 予約正本/予約変更 |
+
+最終契約は#382/#415、判断は[ADR 0064](../decisions/0064-bound-in-trip-read-context.md)。
+
+## 契約・時刻・サイズ
+
+`modules/trip/domain/in-trip-context.ts`がread modelとpure projectionを所有する。
+Trip ID/revision/lifecycle、明示ZonedInstant、予定、Impact、通知、ReservationFact、environment source、location、truncationを持つ。
+currentは予定上の位置であって到着/乗車実績ではない。fixed終了不明はunknown、window内はpossible-current、
+dayはdate-current（宿泊checkout日exclusive）、timezone不明はunknown。DST/日跨ぎは既存schedule計算を共有する。
+同じ分類内では採用順を保ち、未来予定だけnext/upcomingへ入れる。unscheduledはuncertainへ残す。
+
+Placeは表示名のみ。鉄道は最大4legの番号/両端/計画発着だけ。生Journey/provenance/画像/raw payloadなし。
+最大6Impact×4typed facts。severity/connection-buffer等を計算し直さず、内部Impact/Event/予約/Provider alert IDを除く。
+不足はomitted/truncated、古いrevisionや期限切れはcurrent factsから除いてunknown。
+環境値はImpact内のbinding済みweather/hazard typed factsを参照し、別のraw環境配列を作らない。
+18,000文字上限。過大な入力は黙って安全条件を欠落させず失敗する。全体Agent予算24,000文字は維持する。
+
+## 読取・整合性
+
+`InTripContextApplication.read(principal, tripId)`でowner-scoped Trip GET→並列resource read→Trip再GET。
+通知と無関係なinformational/unknown ImpactもSIGNALから取得する。pointerの再読込で読み取り中の観測変更を検出する。
+全history Scanやglobal owner一覧のfilterはない。Notificationは最新subject episodeを参照し、過去通知一覧を投入しない。
+古いrevision/消えたitem/終端Trip/archiveはcurrent扱いしない。予約失敗は空の「予約なし」にしない。
+read自体は各独立resourceのpoint-in-time viewであり、複数tableを跨ぐserializableな実世界snapshotを保証するものではない。
+
+## 接続・公開gate
+
+`createInTripContextApplication`は既存Repositoryを組成する。認証済みhostは
+`createInTripContextHandler(application, authenticate)`へ渡す。公開Lambdaは引数なしで501。
+bodyはversion/tripIdのみ。owner/時計/位置/Impactをpublic bodyから受け取らない。
+現時点では新IAM権限・Terraform resourceを加えない。認証rollout時のread hostにはTrip/予約/ImpactのGet/Query、
+通知tableのGet/Queryのみを付与し、write/Scan/worker起動権限は与えない。
+
+Viewer→HttpInTripContextClient→Application read→loadInTripContext→既存Runtime Contextという配線。
+in_trip以外はfetchしない。サーバ取得不可なら保存済み予定だけで相談し、Impact/通知/予約はunavailableとする。
+通信失敗時の保存済み予定はtrip.currency=unconfirmedとし、最新版確認済みとはしない。
+別revisionや終端への変更を取得できた場合は旧Tripで回答せず、Workspaceの再取得を求める。
+別revisionのsnapshotをlocal Tripへrebaseしない。モデルへ固定Tool callを追加しない。
+公開認証が閉じている現環境ではサーバ最新事実の自動取得は利用不可であり、実運用済みとはしない。
+
+Locationはnot-requested/permission-denied/unavailable/availableを分離する。既定では取得しない。
+explicit consent・有効座標・5分以内の観測だけをrequest-localに利用可能。Trip/PlaceSnapshotへの保存なし。
+Context自体やowner/位置履歴を新しいログへ保存しない。
+
+## テストとEval
+
+Domain: fixed/重なり/window/day/unscheduled/日時不明/日跨ぎ/DST/上限/鮮度/旧revision/privacy/位置状態。
+Application/SDK: 旧envelope、通知生成前のImpact読取、currency、owner隔離、read失敗、並行編集、bounded consistent Query。
+HTTP: 501 gate、forged owner/extra fields拒否。Agent: 圧縮でsnapshot保持、余分なTool callなし。
+AJ〜AMはscriptedとliveの同一Runtime評価入口へ追加し、既存A〜AIのthresholdを変更しない。
+保存fixtureは実ユーザーの会話ではなくsyntheticであり、scripted成功と実モデル品質は区別する。
+
+テスト結果・Liveの可否はPRに記録する。#397・認証rollout・位置取得UI・履歴通知全件の投入は今回行わない。
+
+## Migration / 検証記録
+
+新table/index・Trip schema変更・LocalStorage書込・migrationはない。既存#395の観測pointerを読むだけで、
+old #388 envelopeも既存Trip readerを通す。pointerがまだないTripはunknown、過去履歴から現在情報を捏造しない。
+2026-09-17、Live AJを既存認証で試行したが `CredentialsProviderError: Your session has expired` で未実施。
+AK〜AMも同じ認証を必要とするため実モデル検証は保留。scripted成功をLive成功として扱わない。
+
+ローカル検証: Frontend/Domain 1,809件、Backend 438件、build、architecture/workspace、
+Smoke（12/12、Ask 2/2、Progress 23/23）、Full（42/42、Ask 7/7、Progress 39/39）、
+Python 32件、bundle/lambda、git diff --checkが成功。Terraform定義は変更していない。

@@ -8,6 +8,8 @@ import type { PlanningState, LifecycleState } from "@raiquora/trip/trip-state";
 import { agentTripPlaces, type AgentTripPlaces } from "./agent-trip-places";
 
 export interface AgentContextSnapshot {
+  /** Added by the read application only for lifecycle=in_trip, never persisted with Trip. */
+  inTrip?: import("@raiquora/trip/in-trip-context").InTripContextSnapshot;
   travelCandidates?: Record<string, unknown>[];
   realtimeFacts?: Record<string, unknown>[];
   profile?: {

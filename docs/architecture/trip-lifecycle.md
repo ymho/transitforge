@@ -701,3 +701,6 @@ checkerの成功だけを設計完了や認可保証とはしない。
 | LocalStorage→server順序が明確 | §8/§9のversion・取込・失敗/rollback・担当 | 設計として充足 |
 
 親#382と子Issueは未完了のまま残す。本設計PRのclosing対象は#415のみ。
+
+#396の[旅行中Context導入](in-trip-context.md)では、同じTripを変更せず現在/次予定・Impact・通知・予約を
+boundedに投影する。#397の再計画とは分離し、認証gateとplanned/realtimeの正本境界を維持する。

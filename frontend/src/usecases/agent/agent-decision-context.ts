@@ -1,4 +1,5 @@
 import type { AgentToolDescriptor } from "./tool-contract";
+import { validateInTripContext, type InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 import type { AgentRuntimeFeature, AgentRuntimeRequest } from "./runtime-contract";
 import { parseAgentDecisionSummary, type AgentDecisionSummary } from "./agent-decision-summary";
 import { effectiveTripConstraints, type TripRequest } from "@raiquora/trip/trip-request";
@@ -59,6 +60,7 @@ export interface AgentToolOutcomeSummary {
 }
 
 export interface AgentRuntimeContextInput {
+  inTrip?: InTripContextSnapshot;
   tripReadiness?: AgentTripReadinessContext;
   tripFeasibility?: AgentTripFeasibilityContext;
   reservations?: AgentReservationContext;
@@ -86,6 +88,7 @@ export interface AgentAvailableCapability {
 }
 
 export interface AgentDecisionContext {
+  inTrip?: InTripContextSnapshot;
   tripReadiness?: AgentTripReadinessContext;
   tripFeasibility?: AgentTripFeasibilityContext;
   reservations?: AgentReservationContext;
@@ -118,6 +121,7 @@ export function buildAgentDecisionContext(
   tools: AgentToolDescriptor[],
 ): AgentDecisionContext {
   const input = request.context;
+  if (input?.inTrip) validateInTripContext(input.inTrip);
   const tripRequest = input?.currentTrip?.request;
   const hasTripRequest = tripRequest !== undefined;
   const effective = tripRequest ? effectiveTripConstraints(tripRequest) : [];
@@ -133,6 +137,7 @@ export function buildAgentDecisionContext(
     ? reservationContext(input.reservations.status === "available" ? input.reservations.facts : undefined)
     : undefined;
   return {
+    ...(input?.inTrip ? { inTrip: structuredClone(input.inTrip) } : {}),
     ...(input?.tripReadiness ? { tripReadiness: boundTripReadinessContext(input.tripReadiness) } : {}),
     ...(input?.tripFeasibility ? { tripFeasibility: { ...tripFeasibilityContext(input.tripFeasibility),
       truncated: input.tripFeasibility.truncated, totalIssueCount: input.tripFeasibility.totalIssueCount } } : {}),
@@ -202,6 +207,7 @@ export function buildAgentDecisionContext(
 
 export function agentDecisionContextText(context: AgentDecisionContext): string {
   const requestFields = {
+    inTrip: context.inTrip,
     previousAssistantTurn: context.previousAssistantTurn,
     persistedTripRequest: context.persistedTripRequest,
     tripHardConstraints: context.tripHardConstraints,
@@ -288,6 +294,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
   return [
     "次の構造化Contextを使って利用者の目的と制約を解釈し、必要なEvidenceを得る能力を選択してください。",
     "既知条件は聞き直さず、Tool結果は事実として扱い、推測で補完しないでください。",
+    "inTripはApplicationが現在のTrip revisionと実時計から作った読み取り専用Contextです。予定上のcurrentは実際の現在地・乗車確認ではありません。possible-current/date-current/unknownの精度を保持し、Impact severity・乗換成立性・Notification currency・予約状態を再計算しないでください。unknown/unavailable/omitted/truncatedは問題なしではありません。locationがavailableでなければ現在地を断定せず、availableでも乗車・到着を推測しません。提示済み事実だけで答えられるなら追加Toolは不要です。短い質問にも次予定と既存Impactを使って説明し、確認済みの列車番号や条件を聞き直さないでください。自動Trip更新・予約変更・通知送信は行いません。",
     "persistedTripRequest.partyは今回の同行者です。party.assumptionIdに対応するunconfirmedAssumptionsは仮置きで、travelProfile.companionsは普段の傾向です。混ぜず、今回の明示partyを優先し、既知人数を聞き直さないでください。子どものage/ageGroup不明でも候補や仮旅程を提案できます。具体的なProvider操作がexact ageを要求した時だけ年齢を確認し、可能なProgressも併記してください。Profileの区分から人数や年齢を捏造しないでください。",
     "previousAssistantTurnは一時的な回答観測でTripのstateではありません。質問が必要でも可能なら同じturnで具体候補・比較・Proposalを示してください。連続ask_onlyは原則不可ですが、安全・未確認hard条件・本当に不足するTool必須入力は構造化例外として扱えます。内部Tool実行だけを進展と呼ばず、候補選択後は検証済みsnapshotからProposalを作り、時刻不明はunscheduled/day/windowのまま扱えます。",
     "過去Tripの振り返りと新しい旅行相談を区別し、保存Requestの年や条件を新しい旅行の希望へ無言で流用しないでください。未確認hard条件の成立を仮定せず、可能な進展と要確認事項を分けてください。",

@@ -41,6 +41,21 @@ export class DynamoDbNotificationRepository implements NotificationRepository {
     const o = this.parse<ImpactNotificationObservation>(row, "observation", validateNotificationObservation);
     if (o.tripId !== tripId || o.subjectKey !== subject) throw new TripResourceError("unavailable"); return o;
   }
+  /** Reuse the atomic Impact observation projection, including informational/unknown non-notifications.
+   * Base-table strongly consistent bounded prefix read: no owner enumeration, Scan or history fallback. */
+  async observations(p: TripPrincipal, tripId: string) {
+    tripIdentifier(tripId);
+    const result = await this.client.send(new QueryCommand({ TableName: this.table, ConsistentRead: true, Limit: 12,
+      KeyConditionExpression: "pk = :owner AND begins_with(sk, :prefix)",
+      ExpressionAttributeValues: { ":owner": { S: pk(p) }, ":prefix": { S: `SIGNAL#${tripId}#` } } }));
+    const observations = (result.Items ?? []).map((row) => {
+      if (row.pk?.S !== pk(p) || row.storageVersion?.N !== "1") throw new TripResourceError("unavailable");
+      const o = this.parse<ImpactNotificationObservation>(row, "observation", validateNotificationObservation);
+      if (o.tripId !== tripId || row.sk?.S !== signalKey(tripId, o.subjectKey)) throw new TripResourceError("unavailable");
+      return o;
+    });
+    return { observations, truncated: !!result.LastEvaluatedKey };
+  }
   async episode(p: TripPrincipal, tripId: string, revision: number, subject: string) {
     tripIdentifier(tripId); const row = await this.read(key(p, episodeKey(tripId, revision, subject)));
     if (!row) return undefined;

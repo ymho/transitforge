@@ -21,6 +21,7 @@
 
 ## 索引
 
+- [0064 旅行中の事実をbounded read contextへ投影する](0064-bound-in-trip-read-context.md)
 - [0001 Webベースの3D可視化にMapboxを使用する](0001-use-mapbox-for-web-3d-visualisation.md)
 - [0002 初期WebビューワーにViteとTypeScriptを使用する](0002-use-vite-and-typescript-for-the-initial-web-viewer.md)
 - [0003 開発時にローカルのビューワー入力を配信する](0003-serve-local-viewer-input-in-development.md)
