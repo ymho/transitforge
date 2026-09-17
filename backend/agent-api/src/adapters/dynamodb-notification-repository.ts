@@ -7,7 +7,7 @@ import type { NotificationDecision } from "@raiquora/trip/notification-policy";
 import { TripResourceError, tripIdentifier, boundedTrip } from "../contracts/trip-api.js";
 import { requireTripPrincipal, type TripPrincipal } from "../ports/trip-repository.js";
 import { notificationBackoff, notificationDeliveryPolicy, type NotificationRepository, type NotificationWork, type NotificationWorkKey, type NotificationDelivery } from "../ports/notification.js";
-import type { TripDynamoClient } from "./dynamodb-trip-repository.js";
+import { DynamoDbTripRepository, type TripDynamoClient } from "./dynamodb-trip-repository.js";
 import { signalKey, episodeKey, notificationShard } from "./notification-record.js";
 
 type Row = Record<string, AttributeValue>;
@@ -178,10 +178,15 @@ export class DynamoDbInAppDelivery implements NotificationDelivery {
     const repo = new DynamoDbNotificationRepository(this.table, this.tripTable, this.client);
     const o = await repo.observation(p, n.tripId, n.subjectKey), e = await repo.episode(p, n.tripId, n.tripRevision, n.subjectKey);
     if (!o || !e || !o.fresh || o.tripRevision !== n.tripRevision || o.impactId !== n.impactId || e.latestNotificationId !== n.id || e.latestImpactId !== n.impactId || Date.parse(o.expiresAt) <= this.now()) return "disabled";
+    const trip = await new DynamoDbTripRepository(this.tripTable, this.client).get(p, n.tripId);
+    if (!trip || trip.revision !== n.tripRevision) return "disabled";
     // Fence actual in-app delivery, not just the earlier decision. No network Push side effect.
+    // Match Trip mutation CAS: #388 envelopes require exact validated JSON, never revision absence alone.
+    // Preserve the repository's JSON.stringify format; sorting keys here would break stored JSON equality.
     await this.client.send(new TransactWriteItemsCommand({ TransactItems: [
       { ConditionCheck: { TableName: this.tripTable, Key: key(p, `TRIP#${n.tripId}`),
-        ConditionExpression: "attribute_exists(pk) AND archived = :active AND revision = :revision", ExpressionAttributeValues: { ":active": { BOOL: false }, ":revision": { N: String(n.tripRevision) } } } },
+        ConditionExpression: "attribute_exists(pk) AND archived = :active AND (revision = :revision OR (attribute_not_exists(revision) AND trip = :trip))",
+        ExpressionAttributeValues: { ":active": { BOOL: false }, ":revision": { N: String(n.tripRevision) }, ":trip": { S: JSON.stringify(trip) } } } },
       { ConditionCheck: { TableName: this.table, Key: key(p, signalKey(n.tripId, n.subjectKey)), ConditionExpression: "observation = :observation", ExpressionAttributeValues: { ":observation": { S: JSON.stringify(o) } } } },
       { ConditionCheck: { TableName: this.table, Key: key(p, episodeKey(n.tripId, n.tripRevision, n.subjectKey)), ConditionExpression: "resourceVersion = :version", ExpressionAttributeValues: { ":version": { N: String(e.version) } } } },
       { Update: { TableName: this.table, Key: key(p, `INBOX#${opaque(n.id)}`),

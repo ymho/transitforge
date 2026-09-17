@@ -66,6 +66,11 @@ hazard文面は適用範囲・有効期間が未確認であることを維持�
 decision commitは「Trip全文の一致ConditionCheck＋claim version＋episode CAS＋Notification初回Put＋delivery job Put」をatomicに行う。
 worker応答喪失でも作成済みNotification IDを再使用する。claimのlease更新中に新観測が来れば古いworkerのcommitは失敗する。
 送信前にも最新Trip/episode/観測を照合し、in-app receiptのtransactionでもTrip revision/archive、signal、episode versionをfenceする。
+delivery adapterはowner-scoped Repositoryでvalidation済みcurrent Tripを再取得する。旧#388 storage envelopeは
+トップレベルrevisionを持たないため、Trip mutationと同様に「revision一致、またはrevision属性なし＋exact current Trip JSON一致」を要求する。
+JSONは既存Repositoryと同じ`JSON.stringify`形式とし、キーの再ソート等で保存形式を変えない。revision属性がないだけでは許可しない。
+読み取り後のJSON変更やarchiveはtransactionで拒否し、受領証もsent状態も作らない。配信に伴うTripの書換え・migrationはない。
+今回の互換修正はdeliveryに限定し、すでにexact JSONを要求するImpact/decisionや既存mutationのCASを共通化のために弱めない。
 送信後の状態更新が失敗してもINBOXのdedupeKeyが受領済みを維持する。readとsentの競合はNotification CASで保護する。
 外部Push channelを将来追加する場合も同dedupeKeyを利用する。外部providerが冪等性を保証しない場合にexactly-onceを主張しない。
 
@@ -133,3 +138,7 @@ Agent/Prompt/Tool/Contextは不変。Smoke/Fullはscripted評価、Liveの追加
 Smoke（12/12 + Ask 2/2 + Progress 19/19）、Full（42/42 + Ask 7/7 + Progress 35/35）、Python 32件、
 Terraform fmt/validate、bundle/lambda、diff --checkが成功。Terraformはhash_keyの非推奨warningあり。
 実AWS apply/実端末Push/Live model追加評価は実施しない。GitHub CIはPRで別途確認する。
+
+PR #446互換性レビュー後の再検証: 旧#388 envelopeのend-to-end配信、同revisionでのJSON編集競合、
+old/newのarchive（読み取り前・transaction直前）を追加した。Frontend/Domain 1,782件、Backend 428件が成功。
+build・architecture/workspace・Smoke/Full・Python 32件・Terraform fmt/validate・bundle/lambda・diff --checkも再実行して成功した。

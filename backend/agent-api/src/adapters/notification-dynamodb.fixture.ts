@@ -22,7 +22,8 @@ export function notificationDynamoFixture() {
       case "workVersion = :base AND workState = :dead": return old?.workVersion?.N === v[":base"]?.N && old?.workState?.S === "dead";
       case "resourceVersion = :version": return old?.resourceVersion?.N === v[":version"]?.N;
       case "attribute_exists(pk) AND archived = :active AND trip = :trip": return !!old && old.archived?.BOOL === false && old.trip?.S === v[":trip"]?.S;
-      case "attribute_exists(pk) AND archived = :active AND revision = :revision": return !!old && old.archived?.BOOL === false && old.revision?.N === v[":revision"]?.N;
+      case "attribute_exists(pk) AND archived = :active AND (revision = :revision OR (attribute_not_exists(revision) AND trip = :trip))":
+        return !!old && old.archived?.BOOL === false && (old.revision?.N === v[":revision"]?.N || !old.revision && old.trip?.S === v[":trip"]?.S);
       case "attribute_not_exists(pk) OR impactId = :id": return !old || old.impactId?.S === v[":id"]?.S;
       case "attribute_not_exists(pk) OR dedupeKey = :dedupe": return !old || old.dedupeKey?.S === v[":dedupe"]?.S;
       case "observation = :observation": return old?.observation?.S === v[":observation"]?.S;

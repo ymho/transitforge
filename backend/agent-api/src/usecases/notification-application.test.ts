@@ -8,8 +8,8 @@ import { notificationHash } from "../adapters/notification-record.js";
 import type { NotificationDelivery } from "../ports/notification.js";
 
 const p = { subject: "owner-A" };
-async function setup(channel?: NotificationDelivery) {
-  const f = notificationDynamoFixture(), input = impactInput(6); f.setNow(impactNow); f.seed(input.trip);
+async function setup(channel?: NotificationDelivery, oldEnvelope = false) {
+  const f = notificationDynamoFixture(), input = impactInput(6); f.setNow(impactNow); f.seed(input.trip, p.subject, oldEnvelope);
   const metric = vi.fn(), worker = new NotificationWorker(f.notifications, f.repository, f.impacts, channel ?? f.channel, notificationHash, { record: metric }, f.clock);
   const app = new NotificationApplication(f.notifications, f.repository, f.clock);
   async function save(delay = 6, seconds = 0) {
@@ -28,6 +28,33 @@ describe("durable Notification pipeline", () => {
     await f.worker.poll(); expect((await f.app.list(p)).notifications[0]?.status).toBe("pending");
     await f.worker.poll(); expect((await f.app.list(p)).notifications[0]).toMatchObject({ status: "sent", currency: "current" });
     expect([...f.rows.values()].filter((r) => r.sk?.S?.startsWith("INBOX#"))).toHaveLength(1);
+  });
+  it("delivers through Impact, signal and decision for an old #388 Trip envelope", async () => {
+    const f = await setup(undefined, true);
+    const storedTrip = f.records.get(`OWNER#owner-A/TRIP#${f.input.trip.id}`)!;
+    expect(storedTrip).not.toHaveProperty("revision");
+    expect(storedTrip.storageVersion?.N).toBe("1");
+    await f.worker.poll();
+    expect((await f.app.list(p)).notifications[0]?.status).toBe("pending");
+    await f.worker.poll();
+    expect((await f.app.list(p)).notifications[0]?.status).toBe("sent");
+    expect([...f.rows.values()].filter((r) => r.sk?.S?.startsWith("INBOX#"))).toHaveLength(1);
+    // Delivery is read-only for Trip: do not migrate the envelope to make this test pass.
+    expect(f.records.get(`OWNER#owner-A/TRIP#${f.input.trip.id}`)).toEqual(storedTrip);
+    const delivery = f.commands.find((c) => c instanceof TransactWriteItemsCommand && c.input.TransactItems?.some((a) => a.Update?.Key?.sk?.S?.startsWith("INBOX#"))) as TransactWriteItemsCommand;
+    expect(delivery.input.TransactItems![0]!.ConditionCheck!.ExpressionAttributeValues![":trip"]?.S).toBe(storedTrip.trip?.S);
+    expect(f.metric).not.toHaveBeenCalledWith("Retry", 1);
+    expect(f.metric).not.toHaveBeenCalledWith("DLQ", 1);
+  });
+  it("fences an old envelope's exact Trip JSON against an edit during delivery", async () => {
+    const f = await setup(undefined, true); await f.worker.poll();
+    f.faults.beforeTransaction = () => f.seed({ ...f.input.trip, updatedAt: "2026-09-14T02:00:01.000Z" }, p.subject, true);
+    await f.worker.poll();
+    expect([...f.rows.values()].filter((r) => r.sk?.S?.startsWith("INBOX#"))).toHaveLength(0);
+    expect((await f.app.list(p)).notifications[0]?.status).toBe("pending");
+    expect([...f.rows.values()].find((r) => r.sk?.S?.startsWith("DELIVER#"))?.workState?.S).toBe("pending");
+    expect(f.metric).toHaveBeenCalledWith("Retry", 1);
+    expect(f.metric).not.toHaveBeenCalledWith("Sent", 1);
   });
   it("same Impact, Event recheck, concurrent worker and decision response lost create one notification", async () => {
     const f = await setup(); f.faults.lostResponse = true;
@@ -51,6 +78,25 @@ describe("durable Notification pipeline", () => {
     if (change === "archived") f.records.get(`OWNER#owner-A/TRIP#${f.input.trip.id}`)!.archived = { BOOL: true };
     else f.seed({ ...f.input.trip, revision: 1, ...(change !== "revision" ? { lifecycleState: change as "cancelled" | "completed" } : {}) });
     await f.worker.poll(); expect((await f.app.list(p)).notifications[0]).toMatchObject({ status: "suppressed", currency: "historical" });
+  });
+  it.each([false, true])("archived Trip envelope old=%s stops delivery", async (oldEnvelope) => {
+    const f = await setup(undefined, oldEnvelope); await f.worker.poll();
+    f.records.get(`OWNER#owner-A/TRIP#${f.input.trip.id}`)!.archived = { BOOL: true };
+    await f.worker.poll();
+    expect([...f.rows.values()].filter((r) => r.sk?.S?.startsWith("INBOX#"))).toHaveLength(0);
+    expect((await f.app.list(p)).notifications[0]?.status).toBe("suppressed");
+  });
+  it.each([false, true])("archive after delivery read is transactionally fenced for old=%s", async (oldEnvelope) => {
+    const f = await setup(undefined, oldEnvelope); await f.worker.poll();
+    f.faults.beforeTransaction = () => { f.records.get(`OWNER#owner-A/TRIP#${f.input.trip.id}`)!.archived = { BOOL: true }; };
+    await f.worker.poll();
+    expect([...f.rows.values()].filter((r) => r.sk?.S?.startsWith("INBOX#"))).toHaveLength(0);
+    expect((await f.app.list(p)).notifications[0]?.status).toBe("pending");
+    expect(f.metric).toHaveBeenCalledWith("Retry", 1);
+    // On retry the normal owner-scoped currentness check suppresses the archived resource.
+    f.setNow(Date.parse(impactNow) + 31000); await f.worker.poll();
+    expect((await f.app.list(p)).notifications[0]?.status).toBe("suppressed");
+    expect(f.metric).not.toHaveBeenCalledWith("Sent", 1);
   });
   it("Trip CAS races reject decision; in-app receipt is fenced against update after precheck", async () => {
     const f = await setup(); f.faults.beforeTransaction = () => f.seed({ ...f.input.trip, revision: 1 }); await f.worker.poll();

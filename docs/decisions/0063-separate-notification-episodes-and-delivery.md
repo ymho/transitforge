@@ -42,7 +42,7 @@ decision時はowner-scoped最新Tripと保存済みImpactを読み直す。通�
 
 通知作成と送信を分離する。in-app DeliveryはdedupeKey付きreceiptを冪等保存する。
 claim lease / attempt / backoff / dead partition / operator CAS redriveを持ち、応答消失でも通知を増やさない。
-送信直前にもTrip/episode/現在観測を確認し、古い警告を送らない。readはNotification自身のCASで更新する。
+送信直前にもTrip/episode/現在観測を確認し、古い警告を送らない。旧#388 Trip envelopeにはトップレベルrevisionがないため、配信時はowner-scopedで読み取った現行TripのJSON一致もtransaction内で確認する。readはNotification自身のCASで更新する。
 失敗でTrip/Impactをrollbackしない。permission未取得でもin-appは動き、monitoringの成功に影響しない。
 
 一覧はowner限定・bounded paging。現在警告、未確認、過去revision/解消履歴を区別し、opaque Trip/item IDで移動する。
