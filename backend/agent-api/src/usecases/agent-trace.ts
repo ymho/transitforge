@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { validInTripAnswerPlan } from "../../../../frontend/src/usecases/agent/in-trip-answer-plan.js";
 
 import { type JsonObject, RequestError } from "../contracts/agent-request.js";
 import type { AgentOperation } from "../ports/agent-operation.js";
@@ -20,7 +21,7 @@ const eventFields = {
   task_started: [["userRequest"], []],
   intent_normalized: [["intent", "constraints"], []],
   plan_created: [["steps"], []],
-  decision_recorded: [["interpretedGoal", "hardConstraints", "softPreferences", "selectedAction", "unresolvedFacts", "reasonCodes"], ["selectedTool", "replanReason", "usedEvidenceIds"]],
+  decision_recorded: [["interpretedGoal", "hardConstraints", "softPreferences", "selectedAction", "unresolvedFacts", "reasonCodes"], ["selectedTool", "replanReason", "usedEvidenceIds", "inTripAnswerPlan"]],
   tool_called: [["toolCallId", "toolName", "input"], []],
   tool_completed: [["toolCallId", "toolName", "outcome", "result"], ["latencyMs", "errorCode", "retryable"]],
   evidence_collected: [["evidenceIds", "categories", "sourceTypes"], []],
@@ -160,6 +161,10 @@ function validatedEvent(value: unknown, position: number): JsonObject {
 
 function validatedEventField(key: string, value: unknown, eventType: string, position: number): unknown {
   const invalid = () => new RequestError(400, `Agent Trace event ${position}件目の${key}が不正です。`);
+  if (key === "inTripAnswerPlan") {
+    if (!validInTripAnswerPlan(value)) throw invalid();
+    return { evidence: value.evidence.map((e) => ({ evidenceId: sanitizeString(e.evidenceId), presentation: e.presentation })) };
+  }
   if (stringFields.has(key)) {
     if (typeof value !== "string" || !value || value.length > maximumTextCharacters) throw invalid();
     return sanitizeString(value);

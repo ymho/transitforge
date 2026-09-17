@@ -1,4 +1,5 @@
 import type { AgentContextValue } from "./agent-decision-context";
+import { validInTripAnswerPlan, type InTripAnswerPlan } from "./in-trip-answer-plan";
 
 export const decisionSummaryStartTag = "<decision_summary>";
 export const decisionSummaryEndTag = "</decision_summary>";
@@ -35,6 +36,7 @@ export interface AgentDecisionSummaryValue {
 }
 
 export interface AgentDecisionSummary {
+  inTripAnswerPlan?: InTripAnswerPlan;
   interpretedGoal: string;
   hardConstraints: AgentDecisionSummaryValue[];
   softPreferences: AgentDecisionSummaryValue[];
@@ -89,7 +91,7 @@ export function extractAgentDecisionSummary(
 export function parseAgentDecisionSummary(value: unknown): AgentDecisionSummary | undefined {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     "interpretedGoal", "hardConstraints", "softPreferences", "selectedAction",
-    "selectedTool", "unresolvedFacts", "reasonCodes", "replanReason", "usedEvidenceIds",
+    "selectedTool", "unresolvedFacts", "reasonCodes", "replanReason", "usedEvidenceIds", "inTripAnswerPlan",
   ])) return undefined;
   if (!boundedText(value.interpretedGoal, 240) ||
     !decisionValues(value.hardConstraints, 12) ||
@@ -105,6 +107,7 @@ export function parseAgentDecisionSummary(value: unknown): AgentDecisionSummary 
   if (value.selectedAction === "use_tool" && value.selectedTool === undefined) return undefined;
   if (value.selectedAction === "answer" && value.selectedTool !== undefined) return undefined;
   if (value.usedEvidenceIds !== undefined && !validUsedEvidenceIds(value.usedEvidenceIds)) return undefined;
+  if (value.inTripAnswerPlan !== undefined && (!validInTripAnswerPlan(value.inTripAnswerPlan) || value.selectedAction !== "answer")) return undefined;
   return {
     interpretedGoal: value.interpretedGoal,
     hardConstraints: value.hardConstraints,
@@ -115,6 +118,7 @@ export function parseAgentDecisionSummary(value: unknown): AgentDecisionSummary 
     reasonCodes: value.reasonCodes,
     ...(value.replanReason ? { replanReason: value.replanReason } : {}),
     ...(value.usedEvidenceIds ? { usedEvidenceIds: [...value.usedEvidenceIds as string[]] } : {}),
+    ...(value.inTripAnswerPlan ? { inTripAnswerPlan: value.inTripAnswerPlan } : {}),
   } as AgentDecisionSummary;
 }
 

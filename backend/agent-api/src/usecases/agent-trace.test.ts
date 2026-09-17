@@ -4,6 +4,18 @@ import type { PrivateObject, PrivateObjectStorage } from "../ports/private-objec
 import { createAgentTraceOperation, storeAgentTrace } from "./agent-trace.js";
 
 describe("agent trace parity", () => {
+  it("stores only bounded InTrip answer references, not model-authored fact fields", async () => {
+    const value = submission();
+    value.trace.events = [{ type: "decision_recorded", sequence: 1, occurredAt: "2026-09-12T08:00:00Z",
+      interpretedGoal: "説明", hardConstraints: { byteLength: 2, truncated: false, value: [] }, softPreferences: { byteLength: 2, truncated: false, value: [] },
+      selectedAction: "answer", unresolvedFacts: [], reasonCodes: [], usedEvidenceIds: ["application:in-trip:location"],
+      inTripAnswerPlan: { evidence: [{ evidenceId: "application:in-trip:location", presentation: "location-permission" }] } }];
+    const storage = new RecordingStorage();
+    await storeAgentTrace(value, { bucket: "private-bucket", storage }, fixedNow, "trace-1");
+    expect(JSON.stringify(storedJson(storage))).toContain("location-permission");
+    value.trace.events[0]!.inTripAnswerPlan = { evidence: [{ evidenceId: "application:in-trip:location", presentation: "location-permission", boarding: true }] };
+    await expect(store(value)).rejects.toMatchObject({ statusCode: 400 });
+  });
   it.each([["e", "e"], Array.from({ length: 11 }, (_, i) => `e${i}`)])("rejects duplicate/oversized evidence use at the trace boundary", async (...ids) => {
     const value = submission();
     value.trace.events = [{ type: "decision_recorded", sequence: 1, occurredAt: "2026-09-12T08:00:00Z",

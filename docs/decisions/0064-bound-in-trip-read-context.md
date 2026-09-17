@@ -105,6 +105,29 @@ request-local入力だけavailableにでき、5分超・不正座標はunavailab
 AgentのContext圧縮でもinTripを丸ごと保持し、予算超過時に安全情報を黙って落とさない。
 planning側の全予定/場所履歴/旧経路の重複を除く。新しいmodel call、固定Tool chain、Traceへのsnapshot保存を追加しない。
 
+## In-trip回答の事実描画（PR #447 review）
+
+`selectedAction=answer`では`InTripAnswerPlan.evidence`を最大6件のID/presentation参照として受け取る。
+モデルは質問に関連するEvidenceの選択と順序を決める。事実の値、現在地、乗車状態を生成するfieldは持たない。
+Runtimeはstrictなshape、実在ID、usedEvidenceIdsの部分集合、Application sourceTypeとcoverageの整合を検証する。
+欠落・不一致は回答を採用せず、自由文や別のselectedActionへfallbackして通さない。
+計画、保存済みImpact、ReservationFact、位置権限、未確認範囲はAgent層のpure rendererが描画する。
+Impactのseverity/乗換成立性を再計算せず、保存された測定値・評価を表示し、実乗車の確認とは分離する。
+fixedの表示時刻は保存済みtimezoneを使い、window/day/unscheduledを固定時刻に昇格しない。
+既存Evidence/Claim validatorとViewer Action境界を通し、参照と表示結果をTraceへ記録する。
+TraceのAnswerPlanは最大6件の参照だけであり、内部思考や自由文の理由は追加しない。
+
+初期実装では、モデルの自由文をsuggestionというラベルだけで安全と見なせないため付加しない。
+モデルが選んだEvidenceの事実描画だけで回答する。自由文の事実再説明をPromptで禁止するだけの方式は採らない。
+新しいTool結果のカード表示・決定論的terminal responseは既存経路を維持する。
+新しいProvider事実をApplicationの保存済みImpactとして扱う変換は作らない。
+モデル、temperature、Tool公開範囲、Eval thresholdを変更しない。
+
+AOは独立してsynthetic Live reportにTool呼出順/結果コード（parse/precondition/execution共通の既存error code）と
+Decision Summary parse結果・selectedAction/selectedTool/unresolvedFactsを追加する。入力・出力payload・内部思考は記録しない。
+認証期限切れで今回の実行はモデルへ到達しておらず、Tool取り違えや入力エラーを原因と断定しない。
+認証更新後に実行結果を確認してからdescriptorを調整する。
+
 ## 残す責務
 
 #397の残り旅程Patch、完了保護、予約変更確認、#399の認可rolloutは別。Trip・Reservation・通知stateを更新しない。

@@ -9,6 +9,7 @@ import type { AgentTrace } from "../../usecases/agent/agent-trace";
 import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
 import { inTripApplicationEvidence } from "../../usecases/agent/in-trip-application-evidence";
 import type { EvidenceCoverage } from "../../usecases/agent/evidence-model";
+import type { InTripPresentation } from "../../usecases/agent/in-trip-answer-plan";
 
 export const inTripCaseIds = ["AJ-in-trip-next", "AK-in-trip-rail", "AL-in-trip-rain", "AM-in-trip-location-denied"];
 /** Same production runtime and optional live Converse; only storage/provider I/O uses synthetic fixtures. */
@@ -44,12 +45,19 @@ export async function runInTripProgressScenario(scenario: TravelProgressScenario
     return live ? live(...args) : modelAnswer(`<decision_summary>${JSON.stringify({ interpretedGoal: "旅行中の質問へ保存済み事実で答える",
       hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"],
       usedEvidenceIds: evidence.filter((e) => e.coverage?.some((c) => requiredCoverage[scenario.id]!.includes(c))).map((e) => e.id),
+      inTripAnswerPlan: { evidence: requiredCoverage[scenario.id]!.map((coverage) => ({
+        evidenceId: evidence.find((e) => e.coverage?.includes(coverage))!.id,
+        presentation: ({ "trip.next-item": "planned-itinerary", "rail.connection": "rail-impact", "weather.impact": "weather-impact",
+          "hazard.impact": "hazard-impact", "location.permission": "location-permission" } as Partial<Record<EvidenceCoverage, InTripPresentation>>)[coverage],
+      })) },
     })}</decision_summary>${answers[scenario.id]!}`);
   });
   const report = evaluateTravelProgress(scenario.id, [{ observation, trace, delivered: true, modelCalls: calls }], scenario.thresholds, live ? "live" : "scripted");
   const failures: string[] = [], text = typeof response === "string" ? response : response.text;
   const used = trace?.events.flatMap((e) => e.type === "decision_recorded" && e.selectedAction === "answer" ? e.usedEvidenceIds ?? [] : []) ?? [];
   for (const scope of requiredCoverage[scenario.id]!) if (!evidence.some((e) => e.coverage?.includes(scope) && used.includes(e.id))) failures.push(`answer did not use Evidence coverage ${scope}`);
+  const rendered = trace?.events.flatMap((e) => e.type === "decision_recorded" ? e.inTripAnswerPlan?.evidence ?? [] : []) ?? [];
+  for (const scope of requiredCoverage[scenario.id]!) if (!evidence.some((e) => e.coverage?.includes(scope) && rendered.some((r) => r.evidenceId === e.id))) failures.push(`answer did not render Evidence coverage ${scope}`);
   if (!sawContext) failures.push("in-trip snapshot missing from model context");
   if (!trace?.events.some((e) => e.type === "evidence_collected" && e.sourceTypes.includes("trip-state"))) failures.push("Application Evidence missing from runtime trace");
   if (!text?.trim() || /案内を完了できません|安全な実行上限/.test(text)) failures.push("response failed");
@@ -58,6 +66,7 @@ export async function runInTripProgressScenario(scenario: TravelProgressScenario
   if (report.toolCalls !== 0 || calls !== 1) failures.push("snapshot-sufficient question added unnecessary calls");
   if (scenario.id === "AK-in-trip-rail" && (!/遅[延れ]|乗換|接続/.test(text) || /列車番号を教え|問題ありません|大丈夫です/.test(text))) failures.push("rail impact ignored or unsafe assurance");
   if (scenario.id === "AK-in-trip-rail") {
+    if (!text.includes("6分") || !text.includes("乗車しているかは確認できていません")) failures.push("delay or actual boarding uncertainty omitted");
     const connection = snapshot.impacts.items.flatMap((i) => i.facts).find((f) => f.type === "connection-buffer");
     if (!connection || ![connection.projectedMinutes, connection.requiredMinutes].every((minutes) => text.includes(`${minutes}分`))) {
       failures.push("saved connection-buffer measurements not explained");
@@ -70,5 +79,5 @@ export async function runInTripProgressScenario(scenario: TravelProgressScenario
   if (report.ttfc !== null || report.ttfi !== null) failures.push("in-trip explanation mislabeled as new itinerary/candidate");
   report.contractFailures.push(...failures); report.failures.push(...failures); report.passed = report.failures.length === 0;
   // Synthetic fixture response only; never model reasoning or production conversation data.
-  return { ...report, answerForReview: text.slice(0, 2_000), usedEvidenceIds: [...new Set(used)] };
+  return { ...report, answerForReview: text.slice(0, 2_000), usedEvidenceIds: [...new Set(used)], renderedEvidence: rendered };
 }

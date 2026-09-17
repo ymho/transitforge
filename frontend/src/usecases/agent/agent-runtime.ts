@@ -29,6 +29,7 @@ import type { AgentRuntimeRequest, AgentRuntimeResult } from "./runtime-contract
 import type { AgentDecisionSummary } from "./agent-decision-summary";
 import { validUsedEvidenceIds } from "./agent-decision-summary";
 import { evidenceAwareTool } from "./evidence-tool-decision-support";
+import { renderInTripAnswer } from "./in-trip-answer-plan";
 import type { AgentDecisionTrace } from "./agent-trace";
 import { AgentToolRegistry } from "./tool-registry";
 import type { AgentViewerActionHandler } from "./viewer-action-handler";
@@ -196,7 +197,7 @@ export class MultiStepAgentRuntime {
         trace.modelFailed(modelCallId, "provider_error");
         return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "model_call_failed");
       }
-      const modelResponse = modelOutcome.value;
+      let modelResponse = modelOutcome.value;
       modelCalls += 1;
       trace.modelCompleted(modelResponse.metadata, modelCallId);
       const used = modelResponse.decisionSummary?.usedEvidenceIds ?? modelResponse.declaredEvidenceIds;
@@ -232,6 +233,19 @@ export class MultiStepAgentRuntime {
         return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "missing_tool_call");
       }
       if (modelResponse.stopReason !== "tool_calls") {
+        let inTripRendered: ReturnType<typeof renderInTripAnswer> | undefined;
+        // The in-trip factual channel accepts only structured references. Free prose cannot bypass
+        // this boundary through a missing/invalid Decision Summary or a forged ask_user action.
+        if (decisionContext.inTrip?.trip.lifecycleState === "in_trip") {
+          const summary = modelResponse.decisionSummary;
+          try {
+            if (summary?.selectedAction !== "answer" || !summary.inTripAnswerPlan) throw new Error("missing_plan");
+            inTripRendered = renderInTripAnswer(summary.inTripAnswerPlan, summary.usedEvidenceIds ?? [], evidence);
+            modelResponse = { ...modelResponse, message: { role: "assistant", content: [{ type: "text", text: inTripRendered.text }] } };
+          } catch {
+            return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_in_trip_answer_plan");
+          }
+        }
         if (hasOnlyInternalReasoning(modelResponse)) {
           messages.push({
             role: "user",
@@ -288,7 +302,7 @@ export class MultiStepAgentRuntime {
         }
         let generated;
         try {
-          generated = this.responseGenerator.fromModel(modelResponse, evidence);
+          generated = inTripRendered ?? this.responseGenerator.fromModel(modelResponse, evidence);
         } catch {
           return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_response_format");
         }
@@ -679,6 +693,7 @@ function traceDecision(summary: AgentDecisionSummary): AgentDecisionTrace {
     reasonCodes: summary.reasonCodes,
     ...(summary.replanReason ? { replanReason: summary.replanReason } : {}),
     ...(summary.usedEvidenceIds ? { usedEvidenceIds: [...summary.usedEvidenceIds] } : {}),
+    ...(summary.inTripAnswerPlan ? { inTripAnswerPlan: summary.inTripAnswerPlan } : {}),
   };
 }
 

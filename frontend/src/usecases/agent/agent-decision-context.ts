@@ -322,8 +322,8 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
   if (context.inTrip?.trip.lifecycleState === "in_trip") return [
     brief,
     `利用者の今回の質問: ${JSON.stringify(context.userRequest)}`,
-    "旅行中の回答契約: 質問へ直接答え、関連する採用済み予定の名称と時間精度を具体的に示してください。関連するcurrent Impactは保存済みの判定と根拠の測定値を対にして説明してください。比較に使われた見込み値と必要値があるなら両方を数値・単位付きで示し、再計算しないでください。unknown/unavailableは何が未確認かを説明できる状態で、質問必須ではありません。位置情報が利用不可ならその状態を明示し、現在地・乗車を推測しないでください。全項目を毎回列挙する固定テンプレートではなく、質問に関連するEvidenceだけを使ってください。",
-    "verified_evidenceはowner-scoped Applicationが検証した回答用のEvidenceで、Tool Evidenceと同様に根拠へ使えます。一般Context・Profile・会話要約・モデル解釈・未検証候補はEvidenceではありません。Decision SummaryのusedEvidenceIdsに使用した実在idを記載し、本文ではidを表示せず具体的な事実を説明してください。",
+    "旅行中のanswerではDecision SummaryへinTripAnswerPlan:{evidence:[{evidenceId:実在id,presentation:表示種別}]}を必ず含めてください。最大6件。usedEvidenceIdsの部分集合です。事実はApplication rendererが表示するため、自由文で同じ事実を言い換えず、回答に必要なEvidenceの選択と順序だけを決めてください。",
+    "AnswerPlanの対象はverified_evidenceのApplication Evidenceです。presentationはplanned-itinerary（trip.itinerary/next-item）、rail-impact（rail.impact/connection）、weather-impact（weather.impact）、hazard-impact（hazard.impact）、reservation（reservation.state）、location-permission（location.permission）、uncertainty（未確認範囲）です。質問に関連する複数の影響があるならそれぞれを参照してください。追加Toolの結果は既存の構造化カードで表示され、保存済みImpactへは昇格しません。",
     "Toolは新しい候補・異なる区間/時刻・最新観測など回答に必要な追加情報を調べるときに選んでください。既存Evidenceの説明だけで答えられるときは再取得せず回答してください。ユーザーの入力に答えるために不要な質問はしないでください。",
     "予定上のcurrentは実際の現在地・乗車確認ではありません。possible-current/date-current/unknownの精度を保持し、Impact severity・乗換成立性・Notification currency・予約状態を再計算しないでください。unknown/unavailable/omitted/truncatedは問題なしではありません。Trip・予約・通知を自動変更しないでください。",
     `<agent_context>${boundedContext}</agent_context>`,

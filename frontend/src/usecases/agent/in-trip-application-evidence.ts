@@ -54,7 +54,7 @@ export function inTripApplicationEvidence(snapshot: InTripContextSnapshot): Evid
 }
 
 /** Render saved measurements only; no transfer calculation, risk classification or recommendation. */
-function impactFactSummary(f: Record<string, unknown>): string {
+export function impactFactSummary(f: Record<string, unknown>): string {
   switch (f.type) {
     case "rail-delay": return `列車遅延${f.delayMinutes}分`;
     case "connection-buffer": return `乗換余裕:計画${f.scheduledMinutes}分/見込み${f.projectedMinutes}分/必要${f.requiredMinutes}分（${f.departureBasis}）`;

@@ -122,3 +122,30 @@ AN（予報未取得）とAP（最新警報）は2 model / 1 Toolで合格、AO�
 Toolは公開されたままで、追加調査の実行可否はscriptedでも検査する。Liveの代替経路選択品質は未達。
 途中の合格だけを採用せず、必要な検査を強化した結果をPRへ記録する。特定発話のproduction routerや自動計画変更はない。
 synthetic Live reportには監査用の公開回答（最大2,000文字）とusedEvidenceIdsだけを追加し、内部思考や本番会話を保存しない。
+## PR #447: structured factual presentationの追加レビュー
+
+`InTripAnswerPlan`はDecision Summary内の既存Evidence参照だけであり、モデルが新しい事実を書くschemaではない。
+最大6件、presentation/sourceType/coverage、実在ID、usedEvidenceIdsへの包含をRuntimeで検証する。
+不正・欠落時にモデル自由文を表示しない。一般planning回答にはこの制約を追加しない。
+実装は`frontend/src/usecases/agent/in-trip-answer-plan.ts`、既存Application Evidence mapper、Runtime/Traceへ閉じる。
+DomainのTrip/Impact再評価、Tool router、公開Tool削減は追加しない。
+
+Before: モデルがEvidenceを正しく選んでも、自由文で計画を実現在地や実乗車へ昇格できた。
+After: モデルはEvidenceの選択と順序、Applicationは事実本文を所有する。
+自由文のsuggestionは今回は付加しない。数字・現在地等を再説明する自由文を別名で通す抜け道を作らない。
+既存Tool結果の構造化カード・terminal responseは残す。保存済みImpactと新規Provider結果を混同しない。
+予定上のcurrentは実際の位置ではない。保存済みdelay/connection-bufferは単位付きでそのまま表示する。
+unknown、query-limited、位置未許可、表示省略を明示し、「安全」「営業確認済み」へ置き換えない。
+
+AJ〜AMは従来の検査に加え、実際のAnswerPlanと表示結果を検査する。モデル自由文の誤った乗車断定を
+Runtimeが拒否または描画から排除するテストを追加した。既存A〜AI、AN/AP、TTFI/TTFCは変更しない。
+AO診断はsynthetic fixtureに限定したTool順/結果コードと構造化意思決定だけで、raw入力や内部思考を含まない。
+
+今回のLive AO再実行は`transitforge-dev`のSSO Token expiredでモデル実行前に失敗した。
+これはAOのTool失敗とは分類しない。AJ〜APの新実装でのLive成功は未確認であり、Draftを維持する。
+前回の0/4、AN/AP成功、AO失敗という履歴を以下に残す。認証更新後に最新headで7ケースを再実行する。
+
+今回のローカル確認: frontend/domain 1,869件、backend 444件、build、architecture/workspace、
+Smoke（12/12・Ask 2/2・Progress 23/23）、Full（42/42・Ask 7/7・Progress 42/42）、
+Python 32件、Terraform fmt/validate（dev/bootstrap、既存deprecated警告のみ）、bundle/lambda、diff checkが成功。
+Scripted成功をLive合格とは扱わない。

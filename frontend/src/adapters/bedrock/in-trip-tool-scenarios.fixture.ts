@@ -7,6 +7,7 @@ import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent
 import { askProgressFixture, modelAnswer, modelTools, modelTool } from "./ask-progress-scenarios.fixture";
 import type { AgentTrace } from "../../usecases/agent/agent-trace";
 import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
+import { extractAgentDecisionSummary } from "../../usecases/agent/agent-decision-summary";
 import { evaluateTravelProgress, type TravelProgressScenario } from "../../usecases/agent/evaluation/travel-progress-evaluation";
 
 export const inTripToolCases = {
@@ -26,6 +27,7 @@ export async function runInTripToolScenario(scenario: TravelProgressScenario, li
     }] })!;
   }
   let trace: AgentTrace | undefined, observation: AgentTurnObservation | undefined, calls = 0;
+  const decisionDiagnostics: Record<string, unknown>[] = [];
   const before = JSON.stringify({ trip, snapshot });
   const response = await runViewerAgentRuntime(scenario.userRequest, {
     ...askProgressFixture("C-candidate").base, candidateSelection: undefined, getTravelCandidates: () => [],
@@ -37,8 +39,16 @@ export async function runInTripToolScenario(scenario: TravelProgressScenario, li
     storeAgentTrace: async (v) => { trace = v; }, onTurnObservation: (v) => { observation = v; },
   }, async (...args) => {
     calls++;
-    return live ? live(...args) : calls === 1 ? modelTools(modelTool(expected.tool, expected.input))
-      : modelAnswer("新しい情報の照会結果を確認しました。未確認の範囲を安全とは扱いません。旅程は変更していません。");
+    const output = live ? await live(...args) : calls === 1 ? modelTools(modelTool(expected.tool, expected.input))
+      : modelAnswer(`<decision_summary>${JSON.stringify({ interpretedGoal: "照会後の未確認範囲を説明する", hardConstraints: [], softPreferences: [],
+        selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"], usedEvidenceIds: ["application:in-trip:coverage"],
+        inTripAnswerPlan: { evidence: [{ evidenceId: "application:in-trip:coverage", presentation: "uncertainty" }] },
+      })}</decision_summary>`);
+    const decision = extractAgentDecisionSummary(output.message.content.flatMap((c) => "text" in c ? [c.text] : []));
+    decisionDiagnostics.push({ modelCall: calls, decisionParse: decision.status,
+      selectedAction: decision.summary?.selectedAction, selectedTool: decision.summary?.selectedTool,
+      unresolvedFacts: decision.summary?.unresolvedFacts });
+    return output;
   });
   const report = evaluateTravelProgress(scenario.id, [{ observation, trace, delivered: true, modelCalls: calls }], scenario.thresholds, live ? "live" : "scripted");
   const failures: string[] = [];
@@ -48,5 +58,13 @@ export async function runInTripToolScenario(scenario: TravelProgressScenario, li
   const text = typeof response === "string" ? response : response.text;
   if (!text.trim() || /案内を完了できません|安全な実行上限/.test(text)) failures.push("response failed");
   report.contractFailures.push(...failures); report.failures.push(...failures); report.passed = report.failures.length === 0;
-  return report;
+  // Synthetic fixture diagnostics only: no inputs, results, provider payloads or reasoning.
+  return { ...report, decisionDiagnostics, diagnostics: trace?.events.flatMap((e): Record<string, unknown>[] => {
+    if (e.type === "tool_called") return [{ sequence: e.sequence, toolName: e.toolName, phase: "called" }];
+    if (e.type === "tool_completed") return [{ sequence: e.sequence, toolName: e.toolName,
+      executionResult: e.outcome, parsePreconditionExecutionResultCode: e.errorCode ?? "success" }];
+    if (e.type === "decision_recorded") return [{ sequence: e.sequence, selectedAction: e.selectedAction,
+      selectedTool: e.selectedTool, unresolvedFacts: e.unresolvedFacts }];
+    return [];
+  }) };
 }

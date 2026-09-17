@@ -17,8 +17,25 @@ import {
 } from "./tool-contract";
 import { ToolEvidenceRegistry } from "./tool-evidence-registry";
 import { AgentToolRegistry } from "./tool-registry";
+import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.fixture";
+import { inTripApplicationEvidence } from "./in-trip-application-evidence";
 
 describe("MultiStepAgentRuntime", () => {
+  it.each(["valid", "missing", "mismatched", "subset"])("in-trip %s plan cannot publish model-authored facts", async (kind) => {
+    const { snapshot } = inTripFixture(), initialEvidence = inTripApplicationEvidence(snapshot);
+    const { tools, toolExecutor } = toolSetup([]), answer = textResponse("現在、列車で移動中です。乗換は問題ありません。秘密: RAW");
+    const e = initialEvidence.find((e) => e.coverage?.includes("rail.connection"))!;
+    answer.decisionSummary = { interpretedGoal: "接続を説明", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"],
+      usedEvidenceIds: kind === "subset" ? [] : [e.id], ...(kind === "missing" ? {} : { inTripAnswerPlan: { evidence: [{ evidenceId: e.id,
+        presentation: kind === "mismatched" ? "location-permission" : "rail-impact" }] } }) };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([answer]) }).run({ ...request("大丈夫？"), context: { inTrip: snapshot }, initialEvidence });
+    expect(output.status).toBe(kind === "valid" ? "completed" : "failed");
+    expect(JSON.stringify(output)).not.toContain("RAW");
+    if (kind === "valid") {
+      expect(output.response).toContain("見込み4分");
+      expect(output.trace.events.find((e) => e.type === "decision_recorded")).toMatchObject({ inTripAnswerPlan: answer.decisionSummary.inTripAnswerPlan });
+    }
+  });
   it("validates declared references independently of other invalid decision fields", async () => {
     const { tools, toolExecutor } = toolSetup([]), response = textResponse("unsafe answer");
     response.decisionSummaryStatus = "invalid"; response.declaredEvidenceIds = ["missing"];

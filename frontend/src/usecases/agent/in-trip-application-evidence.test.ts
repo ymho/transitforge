@@ -73,8 +73,8 @@ describe("InTrip Application Evidence", () => {
     expect(compressed.verifiedFacts.slice(0, initialEvidence.length)).toEqual(context.verifiedFacts.slice(0, initialEvidence.length).map((f) => ({ evidenceId: f.evidenceId, sourceType: f.sourceType })));
     expect(text).toContain("<verified_evidence>");
     expect(text.split(context.verifiedFacts[0]!.summary).length - 1).toBe(1);
-    expect(text).toContain("旅行中の回答契約");
-    expect(text).toContain("Tool Evidenceと同様に根拠"); expect(text).toContain("質問必須ではありません");
+    expect(text).toContain("inTripAnswerPlan");
+    expect(text).toContain("Application renderer"); expect(text).toContain("最大6件");
     expect(text.match(/<verified_evidence>([\s\S]*?)<\/verified_evidence>/u)![1]!.length + JSON.stringify(compressed).length).toBeLessThanOrEqual(24_000);
     expect(JSON.stringify(initialEvidence)).not.toMatch(/未検証の要約|未採用候補/);
   });
