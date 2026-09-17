@@ -19,6 +19,39 @@ import { ToolEvidenceRegistry } from "./tool-evidence-registry";
 import { AgentToolRegistry } from "./tool-registry";
 
 describe("MultiStepAgentRuntime", () => {
+  it("registers initial Evidence before the model, traces it and permits a Tool-free grounded answer", async () => {
+    const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
+    const initial = evidence("application:plan"); initial.references[0]!.sourceType = "trip-state";
+    const model = sequenceModel([textResponse("採用済みの次予定を説明します")], requests);
+    const runtime = new MultiStepAgentRuntime({ tools, toolExecutor, model });
+    const output = await runtime.run({ ...request("次は？"), initialEvidence: [initial] });
+    expect(output.evidence).toEqual([initial]); expect(output.status).toBe("completed");
+    expect(JSON.stringify(requests[0]!.messages)).toContain("application:plan");
+    expect(output.trace.events.findIndex((e) => e.type === "evidence_collected")).toBeLessThan(output.trace.events.findIndex((e) => e.type === "model_started"));
+    expect(output.trace.events.filter((e) => e.type === "tool_called")).toHaveLength(0);
+    expect(model.generate).toHaveBeenCalledOnce();
+  });
+  it("shares the twenty Evidence budget with Tools and retains Application Evidence at finalization", async () => {
+    const order: string[] = [], { tools, toolExecutor } = toolSetup(order), requests: AgentModelRequest[] = [];
+    const initialEvidence = Array.from({ length: 19 }, (_, i) => evidence(`app-${i}`));
+    const runtime = new MultiStepAgentRuntime({ tools, toolExecutor, limits: { maxToolCalls: 2 }, model: sequenceModel([
+      toolCallResponse([{ id: "a", name: "first_tool", input: { value: "one" } }, { id: "b", name: "second_tool", input: { value: "two" } }]),
+      textResponse("両方の根拠から回答します"),
+    ], requests) });
+    const output = await runtime.run({ ...request("追加情報を確認して"), initialEvidence });
+    expect(output.evidence).toHaveLength(20); expect(output.evidence.slice(0, 19)).toEqual(initialEvidence);
+    expect(output.evidence[19]!.id).toBe("first_tool:one"); expect(order).toEqual(["first_tool", "second_tool"]);
+    expect(JSON.stringify(requests[1]!.messages)).toContain("Application Evidence + 今回のTool Evidence");
+    expect(JSON.stringify(requests[1]!.messages)).toContain("app-0");
+  });
+  it.each(["duplicate", "no-reference", "empty-reference", "over-budget"])("rejects invalid initial Evidence before model use: %s", async (kind) => {
+    const { tools, toolExecutor } = toolSetup([]), value = evidence("app"), model = sequenceModel([textResponse("unexpected")]);
+    const initialEvidence = kind === "duplicate" ? [value, value] : kind === "no-reference" ? [{ ...value, references: [] }] :
+      kind === "empty-reference" ? [{ ...value, references: [{ ...value.references[0]!, sourceRef: "" }] }] :
+      Array.from({ length: 21 }, (_, i) => evidence(`app-${i}`));
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run({ ...request("確認"), initialEvidence });
+    expect(output.status).toBe("failed"); expect(output.evidence).toEqual([]); expect(model.generate).not.toHaveBeenCalled();
+  });
   it.each(["precondition_failed", "execution_failed"] as const)("re-evaluates only context-dependent failures after progress: %s", async (code) => {
     const { tools, toolExecutor } = toolSetup([]);
     const execute = vi.fn(async () => execute.mock.calls.length === 1

@@ -55,6 +55,26 @@ Notificationの既存最大12 subject読取は独立で、範囲不足をnotific
 
 ## LocationとAgent
 
+### Agent Evidenceの接続
+
+Agent EvidenceはTool EvidenceとApplication Evidenceを含む。Trip DomainへAgentのEvidence型は持ち込まない。
+`inTripApplicationEvidence`はowner-scoped readerの検証済みsnapshot（currency=current）のみからpureに生成する。
+current/nextの採用済み計画、最大6 Impact、関連する既知ReservationFact、location permission state、未確認範囲で最大10件。
+一般Context・Profile・会話要約・モデル解釈・候補・未確認のローカルfallbackをEvidenceへ昇格させない。
+計画はdeterministic_fact、保存済みImpactはderived_value、unknown Impact/不足範囲はunverified_informationとし、
+未確認を正常・安全に変換しない。時刻・遅延・乗換を再計算しない。予約private値、Impact ID、Provider raw、位置座標を含めない。
+sourceTypeはtrip-state/trip-impact/reservation-state/session-stateを使い、sourceRefは当該実行のsnapshot内参照とrevisionのみ。
+
+`AgentRuntimeRequest.initialEvidence`はtrusted Application専用入口。public request bodyやモデル出力から代入しない。
+Runtimeは開始時に既存Evidence/Claim validatorで重複ID・referenceを検証し、空sourceRef・上限超過も拒否する。
+検証後のcloneをevidence[]に登録してevidence_collectedを記録する。Traceは従来どおりID/category/sourceTypeだけで、本文や内部思考を保存しない。
+Tool EvidenceとmaxEvidence=20を共有し、Applicationの最大10件によりTool用の余地を残す。一般のTool利用可否は変えない。
+initialEvidenceのsummaryからverifiedFactsを作り、既存place summaryとID重複を除いて統合する。Applicationを先に最大20件へ収め、
+Context圧縮でもverifiedFactsを失わない。summaryに保存済みの予定・測定値を直接示し、指示だけで参照を要求しない。
+System PromptとTool後finalizationは両Evidenceを回答根拠とし、既にある根拠の再取得を必須としない。
+unknownは本人への質問必須ではなく未確認として説明可能。追加Toolは質問への回答に必要な場合に選べる。
+固定Tool順、発話regex、モデル固有分岐、Tool非表示、Claim validatorやEval閾値の緩和は導入しない。
+
 既定not-requested。現在のViewerは位置取得・送信を新設しない。explicit consentを伴う別hostの
 request-local入力だけavailableにでき、5分超・不正座標はunavailable。拒否/未取得を分ける。
 生座標の利用を有効化するUIは今回なく、既存「位置は端末外へ送らない」を変更しない。

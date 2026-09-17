@@ -84,6 +84,16 @@ export class MultiStepAgentRuntime {
     const trace = new AgentTraceRecorder(request.executionId, { now: this.now });
     const evidence: Evidence[] = [];
     trace.taskStarted(request.userRequest);
+    try {
+      const initial = request.initialEvidence ?? [];
+      if (!Array.isArray(initial) || initial.length > this.limits.maxEvidence ||
+          !validateEvidenceAndClaims(initial, []).valid || initial.some((e) => !e.id.trim() ||
+            e.references.some((r) => !r.sourceRef?.trim() || !r.summary?.trim()))) throw new Error("Invalid initial Evidence");
+      evidence.push(...structuredClone(initial));
+      if (evidence.length) trace.evidenceCollected(evidence);
+    } catch {
+      return this.failureResult(trace, evidence, [], startedAt, "invalid_initial_evidence");
+    }
 
     const availableTools = this.dependencies.tools.descriptors();
     const decisionContext = buildAgentDecisionContext(request, availableTools);
@@ -152,7 +162,7 @@ export class MultiStepAgentRuntime {
             type: "text",
             text: [
               "これがこの実行での最終回答フェーズです。Toolは追加実行できません。",
-              "確認済みのTool結果だけを根拠に、現時点で分かることを利用者向けに簡潔にまとめてください。",
+              "確認済みEvidence（Application Evidence + 今回のTool Evidence）を根拠に、現時点で分かることを利用者向けに簡潔にまとめてください。",
               "根拠が不足する場合は推測せず、不足している情報と利用者が次にできることを説明してください。",
               "既に会話Contextにある条件を聞き直さず、同じ質問や回答を繰り返さないでください。",
             ].join(" "),

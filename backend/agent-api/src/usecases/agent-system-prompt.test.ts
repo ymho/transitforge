@@ -3,6 +3,13 @@ import { describe, expect, it } from "vitest";
 import { agentSystemPrompt } from "./agent-system-prompt.js";
 
 describe("agentSystemPrompt", () => {
+  it("accepts Application Evidence without promoting general Context or requiring questions for unknowns", () => {
+    expect(agentSystemPrompt).toContain("ApplicationがverifiedFactsとして明示したEvidence");
+    expect(agentSystemPrompt).toContain("再確認のためだけにToolを呼ばず");
+    expect(agentSystemPrompt).toContain("未検証候補はEvidenceではありません");
+    expect(agentSystemPrompt).toContain("質問必須ではありません");
+    expect(agentSystemPrompt).not.toContain("Tool Evidenceだけ");
+  });
   it("keeps decision principles while delegating capability selection to descriptors", () => {
     expect(agentSystemPrompt).toContain("goal hard constraint soft preference");
     expect(agentSystemPrompt).toContain("既知の条件を聞き直さず");

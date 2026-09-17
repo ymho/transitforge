@@ -22,6 +22,10 @@ export type EvidenceSourceType =
   | "operating-day-summary"
   | "journey-comparison"
   | "external-source"
+  | "trip-state"
+  | "trip-impact"
+  | "reservation-state"
+  | "session-state"
   | "model";
 
 export type EvidenceFreshness =

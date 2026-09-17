@@ -60,6 +60,19 @@ Context自体やowner/位置履歴を新しいログへ保存しない。
 
 ## テストとEval
 
+### Application Evidence
+
+`frontend/src/usecases/agent/in-trip-application-evidence.ts`が検証済みread modelを最大10件のEvidenceへ投影する。
+DomainはEvidenceに依存しない。RuntimeのinitialEvidence入口で検証し、既存Tool分と20件枠を共有する。
+current/nextの計画、保存済みtyped Impact、関連ReservationFact、位置権限状態、未確認範囲を区別する。
+場所の実績や乗車を推測せず、位置座標・owner・永続Impact ID・予約番号・Provider rawを投影しない。
+取得失敗したunconfirmed fallbackはEvidenceにしない。unknown/unavailableは肯定的な事実に変換しない。
+EvidenceからverifiedFactsを作り、place summaryより優先して重複除去・件数制限し、圧縮でも保持する。
+詳細な責務とsource typeはADR 0064を参照する。
+Runtime開始時のtrace/validation、重複ID・referenceなし・予算超過拒否、Toolとの併存、pure mapperとprivate値除外、
+PromptのApplication Evidence契約を回帰テスト化した。AKは「遅延/接続」の語だけで合格とせず、保存済みの乗換余裕・必要時間の説明も検査する。
+既存A〜AIとTTFI/TTFC閾値、Tool availabilityは変更していない。
+
 Domain: fixed/重なり/window/day/unscheduled/日時不明/日跨ぎ/DST/上限/鮮度/旧revision/privacy/位置状態。
 Application/SDK: 旧envelope、通知生成前のImpact読取、currency、owner隔離、read失敗、並行編集、bounded consistent Query。
 hash順26番目のnext rail action-requiredの採用、関連度がseverityに優先すること、no-impactの混雑防止、
@@ -84,4 +97,13 @@ Python 32件、bundle/lambda、git diff --checkが成功。Terraform定義は変
 PR #447レビュー修正後: Frontend/Domain 1,811件、Backend 440件、上記Smoke/Full、build、
 architecture/workspace、Python 32件、bundle/lambda、git diff --checkを再実行して成功。
 Terraform fmt、bootstrap/dev validateも成功（既存hash_key等の非推奨警告のみ）。
-Live AJ〜AMはAWS認証更新待ちのままであり、Draftを維持する。
+この時点ではLive AJ〜AMはAWS認証更新待ちだった。
+
+Application Evidenceレビュー修正後: Frontend/Domain 1,822件、Backend 441件、上記Smoke/Full、
+build、architecture/workspace、Python 32件、bundle/lambda、Terraform fmt/validate、git diff --checkが成功。
+更新済みtransitforge-dev認証でLive AJ〜AMを再実行した。既定Nova Lite、4,096 output tokens、temperature=0、
+各1試行、既存閾値・Tool公開範囲のままで、最終結果は0/4。AJ/AMは1 model / 0 Toolだが説明不足、
+AKは3 model / 1 Tool、ALは5 model / 3 Toolで不要呼出しと説明不足が残る。
+初期Evidence登録・モデル入力への反映は検査済みであり、認証やEvidence未接続の問題とは区別する。
+AKでは保存済み乗換余裕4分・必要5分を回答する検査を追加し、単語一致だけの合格を避けた。
+実モデルの根拠利用・Tool判断は未達。scripted成功をLive成功とせず、PRはDraftを維持する。

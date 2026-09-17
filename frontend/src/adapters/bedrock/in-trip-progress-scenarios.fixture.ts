@@ -20,7 +20,7 @@ export async function runInTripProgressScenario(scenario: TravelProgressScenario
   if (scenario.id === "AM-in-trip-location-denied") snapshot = { ...snapshot, location: { status: "permission-denied" } };
   const answers: Record<string, string> = {
     "AJ-in-trip-next": "この後は11時から庭園の散策を予定しています。予定上の移動と実際の現在地は別です。列車の遅延に関する影響があるので、まず接続の注意点を確認するのがよさそうです。現在地は確認できていません。旅程は変更していません。",
-    "AK-in-trip-rail": "保存された鉄道予定には、列車の遅延による乗換余裕の不足が記録されています。このままで大丈夫とは断定できません。実際にどの列車に乗っているかは位置情報から推測せず、必要なら接続の選択肢を確認しましょう。旅程は変更していません。",
+    "AK-in-trip-rail": "保存された鉄道予定では、列車の遅延は6分、乗換余裕の見込みは4分、必要時間は5分です。このままで大丈夫とは断定できません。実際にどの列車に乗っているかは位置情報から推測せず、必要なら接続の選択肢を確認しましょう。旅程は変更していません。",
     "AL-in-trip-rain": "旅程に対応した雨の予報と警報の情報があります。ただし屋外で過ごすかや警報の適用範囲には未確認事項があり、この施設が危険とは断定できません。予定の時間幅を踏まえ、雨を避けて待つなどの選択肢を相談できます。中止や旅程の変更はまだしていません。",
     "AM-in-trip-location-denied": "現在地へのアクセスは許可されていないので、いまどこにいるかや乗車中かは分かりません。位置情報がなくても、保存された旅程と現在時刻、列車の遅延に関する影響をもとに、この後の予定を一緒に確認できます。",
   };
@@ -39,11 +39,18 @@ export async function runInTripProgressScenario(scenario: TravelProgressScenario
   const report = evaluateTravelProgress(scenario.id, [{ observation, trace, delivered: true, modelCalls: calls }], scenario.thresholds, live ? "live" : "scripted");
   const failures: string[] = [], text = typeof response === "string" ? response : response.text;
   if (!sawContext) failures.push("in-trip snapshot missing from model context");
+  if (!trace?.events.some((e) => e.type === "evidence_collected" && e.sourceTypes.includes("trip-state"))) failures.push("Application Evidence missing from runtime trace");
   if (!text?.trim() || /案内を完了できません|安全な実行上限/.test(text)) failures.push("response failed");
   if (JSON.stringify({ trip, snapshot }) !== before) failures.push("read-only context mutated Trip");
   if (scenario.id === "AJ-in-trip-next" && (!snapshot.itinerary.next.some((i) => i.itemId === "garden") || !/庭園/.test(text))) failures.push("next adopted itinerary not explained");
   if (report.toolCalls !== 0 || calls !== 1) failures.push("snapshot-sufficient question added unnecessary calls");
   if (scenario.id === "AK-in-trip-rail" && (!/遅[延れ]|乗換|接続/.test(text) || /列車番号を教え|問題ありません|大丈夫です/.test(text))) failures.push("rail impact ignored or unsafe assurance");
+  if (scenario.id === "AK-in-trip-rail") {
+    const connection = snapshot.impacts.items.flatMap((i) => i.facts).find((f) => f.type === "connection-buffer");
+    if (!connection || ![connection.projectedMinutes, connection.requiredMinutes].every((minutes) => text.includes(`${minutes}分`))) {
+      failures.push("saved connection-buffer measurements not explained");
+    }
+  }
   if (scenario.id === "AL-in-trip-rain" && (!/未確認|不明|断定|確認でき/.test(text) || /施設は危険|中止してください/.test(text))) failures.push("hazard uncertainty lost");
   if (scenario.id === "AM-in-trip-location-denied" && (!/現在地|位置情報/.test(text) || !/許可|分かりません|確認でき|未確認|不明/.test(text))) failures.push("location denied not acknowledged");
   if (/bookingReference|episodeId|dedupeKey|ownerSubject/.test(JSON.stringify({ response, trace }))) failures.push("private data exposed");

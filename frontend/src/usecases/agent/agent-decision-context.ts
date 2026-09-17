@@ -51,6 +51,9 @@ export interface AgentVerifiedFactSummary {
   category: string;
   subject: string;
   summary: string;
+  knowledgeKind?: import("./evidence-model").EvidenceKnowledgeKind;
+  sourceType?: import("./evidence-model").EvidenceSourceType;
+  freshness?: import("./evidence-model").EvidenceFreshness;
 }
 
 export interface AgentToolOutcomeSummary {
@@ -181,11 +184,19 @@ export function buildAgentDecisionContext(
     ...(input?.currentJourney
       ? { currentJourney: boundedUnknownRecord(input.currentJourney, 6) }
       : {}),
-    verifiedFacts: (input?.verifiedFacts ?? []).slice(0, 20).map((fact) => ({
+    verifiedFacts: [
+      ...(request.initialEvidence ?? []).map((e): AgentVerifiedFactSummary => ({ evidenceId: e.id, category: e.category, subject: e.subject,
+        summary: e.references.map((r) => r.summary).join(" "), knowledgeKind: e.knowledgeKind,
+        sourceType: e.references[0]?.sourceType, freshness: e.references[0]?.freshness })),
+      ...(input?.verifiedFacts ?? []),
+    ].filter((fact, index, values) => values.findIndex((v) => v.evidenceId === fact.evidenceId) === index).slice(0, 20).map((fact) => ({
       evidenceId: bounded(fact.evidenceId, 160),
       category: bounded(fact.category, 80),
       subject: bounded(fact.subject, 160),
       summary: bounded(fact.summary, 300),
+      ...(fact.knowledgeKind ? { knowledgeKind: fact.knowledgeKind } : {}),
+      ...(fact.sourceType ? { sourceType: fact.sourceType } : {}),
+      ...(fact.freshness ? { freshness: fact.freshness } : {}),
     })),
     knownHardConstraints: (input?.knownHardConstraints ?? []).filter((c) => !hasTripRequest || ["user", "ui"].includes(c.source)).slice(0, 20)
       .map(constraint),
@@ -208,6 +219,7 @@ export function buildAgentDecisionContext(
 export function agentDecisionContextText(context: AgentDecisionContext): string {
   const requestFields = {
     inTrip: context.inTrip,
+    verifiedFacts: context.verifiedFacts,
     previousAssistantTurn: context.previousAssistantTurn,
     persistedTripRequest: context.persistedTripRequest,
     tripHardConstraints: context.tripHardConstraints,
@@ -215,8 +227,11 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     unconfirmedAssumptions: context.unconfirmedAssumptions,
     currentTurnDecision: context.currentTurnDecision,
   };
+  const { verifiedFacts, ...contextFields } = context;
   const serialized = JSON.stringify({
-    ...context,
+    // Put available grounds before planning context; authority is explicit, not inferred from prose.
+    verifiedFacts,
+    ...contextFields,
     availableTools: context.availableTools.map(({ name, requiredInputs }) => ({
       name,
       requiredInputs,
@@ -292,8 +307,9 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     .find((value) => value.length <= maximumContextTextLength);
   if (!boundedContext) throw new Error("Agent context exceeds the bounded message budget");
   return [
-    "次の構造化Contextを使って利用者の目的と制約を解釈し、必要なEvidenceを得る能力を選択してください。",
+    "次の構造化Contextと利用可能なverifiedFactsから利用者の目的を理解し、回答・追加調査・確認質問のどれが必要か判断してください。Evidenceは既に存在する場合があります。",
     "既知条件は聞き直さず、Tool結果は事実として扱い、推測で補完しないでください。",
+    "inTripに対応するverifiedFactsはowner-scoped Applicationが検証したApplication Evidenceで、Tool Evidenceと同様に回答根拠として利用できます。一般Context・Profile・会話要約・モデル解釈・未検証候補はEvidenceではありません。unknown/unavailableはユーザーへの質問必須項目ではなく未確認として説明できる状態です。本人にしか決められない条件でなければask_follow_upへ逃げず、質問に答えるために不要な再取得はしません。",
     "inTripはApplicationが現在のTrip revisionと実時計から作った読み取り専用Contextです。予定上のcurrentは実際の現在地・乗車確認ではありません。possible-current/date-current/unknownの精度を保持し、Impact severity・乗換成立性・Notification currency・予約状態を再計算しないでください。unknown/unavailable/omitted/truncatedは問題なしではありません。locationがavailableでなければ現在地を断定せず、availableでも乗車・到着を推測しません。提示済み事実だけで答えられるなら追加Toolは不要です。短い質問にも次予定と既存Impactを使って説明し、確認済みの列車番号や条件を聞き直さないでください。自動Trip更新・予約変更・通知送信は行いません。",
     "persistedTripRequest.partyは今回の同行者です。party.assumptionIdに対応するunconfirmedAssumptionsは仮置きで、travelProfile.companionsは普段の傾向です。混ぜず、今回の明示partyを優先し、既知人数を聞き直さないでください。子どものage/ageGroup不明でも候補や仮旅程を提案できます。具体的なProvider操作がexact ageを要求した時だけ年齢を確認し、可能なProgressも併記してください。Profileの区分から人数や年齢を捏造しないでください。",
     "previousAssistantTurnは一時的な回答観測でTripのstateではありません。質問が必要でも可能なら同じturnで具体候補・比較・Proposalを示してください。連続ask_onlyは原則不可ですが、安全・未確認hard条件・本当に不足するTool必須入力は構造化例外として扱えます。内部Tool実行だけを進展と呼ばず、候補選択後は検証済みsnapshotからProposalを作り、時刻不明はunscheduled/day/windowのまま扱えます。",

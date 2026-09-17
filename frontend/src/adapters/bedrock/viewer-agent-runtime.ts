@@ -1,6 +1,7 @@
 import { isPriceObservation } from "@raiquora/trip/money";
 import { reservationContext } from "../../usecases/agent/reservation-context";
 import { loadInTripContext, type InTripContextReader } from "../../usecases/agent/in-trip-context";
+import { inTripApplicationEvidence } from "../../usecases/agent/in-trip-application-evidence";
 import { tripFeasibilityContext } from "../../usecases/agent/trip-feasibility-context";
 import { tripReadinessContext } from "../../usecases/agent/trip-readiness-context";
 import { projectTripReadiness } from "@raiquora/trip/trip-readiness";
@@ -433,6 +434,7 @@ export async function runViewerAgentRuntime(
     // feature分類すると、その分類がBedrockより前のintent routerになる。
     feature: "concierge",
     userRequest,
+    initialEvidence: inTrip ? inTripApplicationEvidence(inTrip) : [],
     context: {
       ...(inTrip ? { inTrip } : {}),
       previousAssistantTurn: dependencies.previousAssistantTurn,
