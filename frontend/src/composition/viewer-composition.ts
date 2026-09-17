@@ -138,6 +138,8 @@ import { configureTripPlanPanel } from "../presentation/trip-plan/trip-plan-pane
 import { createTripWorkspaceController } from "../usecases/trip-plan/trip-workspace-controller";
 import { createReferencedTripSource } from "../usecases/trip-plan/server-trip-workspace-source";
 import { HttpServerTripClient } from "../adapters/http/server-trip-client";
+import { HttpNotificationClient } from "../adapters/http/notification-client";
+import { configureNotificationCenter } from "../presentation/notifications/notification-center";
 import { configureTripWorkspace } from "../presentation/trip-plan/trip-workspace";
 import { tripPlanFromTravelPlan } from "@raiquora/trip/trip-plan";
 import { loadTripPlan } from "../usecases/trip-plan/trip-plan-repository";
@@ -612,6 +614,21 @@ configureApplicationSettingsPanel(document, {
   conversationHistoryDialog,
   accommodationProviderAttribution: accommodationProviderAttributionFromEnvironment(import.meta.env),
 });
+configureNotificationCenter({ root: document.body,
+  buttons: [document.getElementById("rail-notifications")!, document.getElementById("sidebar-notifications")!],
+  client: new HttpNotificationClient(), async navigate(tripId, itemId) {
+    const trip = await serverTripClient.get(tripId); if (!trip) throw new Error("Trip unavailable");
+    // Explicit navigation creates/reuses a reference, never a Trip or a second local Trip writer.
+    const existing = conversationSessionRepository.list().find((session) => session.tripId === tripId);
+    const session = existing ?? conversationSessionRepository.create("general", trip.title);
+    if (!existing) conversationSessionRepository.save({ ...session, tripId, tripSourceState: "server-v2" });
+    conversationSessionSwitcher.activate(session.id);
+    const source = tripWorkspaceController.source(); await source?.retry?.();
+    if (tripWorkspaceController.current()?.id !== tripId) throw new Error("Trip unavailable");
+    if (itemId && tripWorkspaceController.current()!.items.some((item) => item.id === itemId)) tripWorkspaceController.focus(itemId);
+    returnToConversation(); if (mobileChatShell.matches && conversationHistoryDialog.open) conversationHistoryDialog.close();
+    tripWorkspace.show("trip");
+  } });
 aiGuideController.open();
 applyContextWorkspaceState();
 configureTravelProfile(document, localStorage, () => aiGuideController.open());

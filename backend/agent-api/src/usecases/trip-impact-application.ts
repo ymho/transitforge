@@ -44,7 +44,7 @@ export class TripImpactApplication {
           // Re-read immediately before the adapter's atomic Trip ConditionCheck + independent Impact Put.
           const trip = await this.trips.get(principal, impact.tripId);
           if (!trip || trip.revision !== impact.tripRevision) throw new TripResourceError("conflict");
-          await this.impacts.save(principal, trip, impact);
+          await this.impacts.save(principal, trip, impact, event);
           this.metrics.record(impact.status === "unknown" ? "Unknown" : impact.status === "no-impact" ? "NoImpact" : "Impact", 1); saved++;
         } catch (error) {
           failed++; this.metrics.record(error instanceof TripResourceError && error.code === "conflict" ? "PersistenceConflict" : "PersistenceFailure", 1);

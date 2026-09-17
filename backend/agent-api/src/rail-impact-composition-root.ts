@@ -10,9 +10,11 @@ import { TripImpactApplication, type TripImpactMetrics } from "./usecases/trip-i
 
 /** Dedicated IAM/internal composition. Never imported into the Agent/public HTTP entrypoint. */
 export function createInternalTripImpact(table: string, metrics: TripImpactMetrics) {
+  const notificationTable = process.env.NOTIFICATION_TABLE_NAME;
+  if (!notificationTable) throw new Error("missing-internal-configuration");
   const trips = new DynamoDbTripRepository(table);
   const worker = new TripWatchWorker(trips, new DynamoDbTripWatchRepository(table), new DeterministicTripImpactEvaluator(),
     new ReservationApplication(trips, new DynamoDbReservationRepository(table)));
-  return new TripImpactApplication(new DynamoDbTripImpactRouter(table), worker, trips, new DynamoDbTripImpactRepository(table), metrics);
+  return new TripImpactApplication(new DynamoDbTripImpactRouter(table), worker, trips, new DynamoDbTripImpactRepository(table, undefined, notificationTable), metrics);
 }
 export const createInternalRailImpact = createInternalTripImpact;

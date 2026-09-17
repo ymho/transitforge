@@ -62,5 +62,6 @@ weather/hazardの精度・severityは#408のままで、取得成功≠安全・
 Domain時刻、Provider/collector normalization、SDK fakeの条件式/lease/CAS、実Watch/Impact Applicationを結合した
 遅延routing・revision競合・応答消失・backoff・DLQ/redriveを試験する。実AWSのIAM/Provider統合試験とは区別する。
 Agent/Tool/Prompt/Context変更なし。Smoke/Fullを維持し、Live追加なし。従来のAWS認証期限切れ未実施記録は維持する。
-Notification/Push/dedupeは#395、in-trip Contextは#396、AI再計画は#397。Checklist/Reservation/計画Feasibilityは変更しない。
-public writer gateも解除しない。Task/Watch/Impact以外へのwrite権限をworkerへ付与しない。
+Notification/dedupeは独立した[Notification runtime](notification-runtime.md)（#395）、in-trip Contextは#396、AI再計画は#397。Checklist/Reservation/計画Feasibilityは変更しない。
+public writer gateも解除しない。#395でImpact保存transactionに最新観測signalの更新のみ追加する。
+recheck workerはNotification/episode/read状態を変更せず、Pushも行わない。signal用IAMはUpdateItem・transaction内・属性allowlistに限定する。

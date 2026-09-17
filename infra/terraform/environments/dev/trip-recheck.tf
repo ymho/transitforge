@@ -141,6 +141,7 @@ resource "aws_lambda_function" "trip_recheck" {
     variables = {
       TRIP_TABLE_NAME           = aws_dynamodb_table.trips.name
       RECHECK_TABLE_NAME        = aws_dynamodb_table.trip_rechecks.name
+      NOTIFICATION_TABLE_NAME   = aws_dynamodb_table.trip_notifications.name
       RECHECK_RULE_ARN          = aws_cloudwatch_event_rule.trip_recheck.arn
       RECHECK_TARGET_BUCKET     = local.recheck_data_bucket
       RECHECK_TARGET_KEY        = local.recheck_target_key
@@ -150,7 +151,7 @@ resource "aws_lambda_function" "trip_recheck" {
       TRAFFIC_SNAPSHOT_KEY      = "api/traffic/delays.json"
     }
   }
-  depends_on = [aws_iam_role_policy.trip_recheck, aws_cloudwatch_log_group.trip_recheck]
+  depends_on = [aws_iam_role_policy.trip_recheck, aws_cloudwatch_log_group.trip_recheck, aws_iam_role_policy.impact_notification_signal]
 }
 resource "aws_lambda_function_event_invoke_config" "trip_recheck" {
   function_name                = aws_lambda_function.trip_recheck.function_name

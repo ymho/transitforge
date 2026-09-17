@@ -6,10 +6,12 @@ import { boundedTrip, TripResourceError, tripIdentifier } from "../contracts/tri
 import { requireTripPrincipal, type TripPrincipal } from "../contracts/trip-principal.js";
 import type { TripImpactRepository } from "../ports/rail-impact-routing.js";
 import { DynamoDbTripRepository, type TripDynamoClient } from "./dynamodb-trip-repository.js";
+import type { TravelEvent } from "@raiquora/trip/travel-event";
+import { notificationSignalWrite } from "./notification-record.js";
 
 /** Separate owner resource, indefinite retention. No notification state or Trip mutation. */
 export class DynamoDbTripImpactRepository implements TripImpactRepository {
-  constructor(private readonly table: string, private readonly client: TripDynamoClient = new DynamoDBClient({})) {
+  constructor(private readonly table: string, private readonly client: TripDynamoClient = new DynamoDBClient({}), private readonly notificationTable?: string) {
     if (!table) throw new TripResourceError("unavailable");
   }
   private key(principal: TripPrincipal, tripId: string, id: string) {
@@ -17,7 +19,7 @@ export class DynamoDbTripImpactRepository implements TripImpactRepository {
     if (typeof id !== "string" || !id || id.length > 250000) throw new TripResourceError("invalid-input");
     return { pk: { S: `OWNER#${principal.subject}` }, sk: { S: `IMPACT#${tripId}#${createHash("sha256").update(id).digest("hex")}` } };
   }
-  async save(principal: TripPrincipal, input: Trip, impact: TripImpact) {
+  async save(principal: TripPrincipal, input: Trip, impact: TripImpact, observation?: TravelEvent) {
     const trip = boundedTrip(input); validateTripImpact(impact);
     const key = this.key(principal, trip.id, impact.id);
     if (impact.tripId !== trip.id || impact.tripRevision !== trip.revision ||
@@ -25,6 +27,7 @@ export class DynamoDbTripImpactRepository implements TripImpactRepository {
     if (trip.lifecycleState === "cancelled" || trip.lifecycleState === "completed") throw new TripResourceError("conflict");
     const encoded = JSON.stringify(impact);
     if (Buffer.byteLength(encoded, "utf8") > 250000) throw new TripResourceError("payload-too-large");
+    if (this.notificationTable && !observation) throw new TripResourceError("invalid-input");
     try {
       await this.client.send(new TransactWriteItemsCommand({ TransactItems: [
         { ConditionCheck: { TableName: this.table, Key: { pk: key.pk, sk: { S: `TRIP#${trip.id}` } },
@@ -32,6 +35,7 @@ export class DynamoDbTripImpactRepository implements TripImpactRepository {
           ExpressionAttributeValues: { ":active": { BOOL: false }, ":trip": { S: JSON.stringify(trip) } } } },
         { Put: { TableName: this.table, Item: { ...key, storageVersion: { N: "1" }, impact: { S: encoded }, impactId: { S: impact.id } },
           ConditionExpression: "attribute_not_exists(pk) OR impactId = :id", ExpressionAttributeValues: { ":id": { S: impact.id } } } },
+        ...(this.notificationTable && observation ? [notificationSignalWrite(this.notificationTable, principal, impact, observation)] : []),
       ] }));
     } catch (error) {
       if ((error as { CancellationReasons?: { Code?: string }[] })?.CancellationReasons?.some((r) => r.Code === "ConditionalCheckFailed" || r.Code === "TransactionConflict")) throw new TripResourceError("conflict");

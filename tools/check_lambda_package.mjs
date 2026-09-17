@@ -44,3 +44,12 @@ const recheckMetadata = await stat(recheckBundle);
 if (!recheckMetadata.isFile() || recheckMetadata.size < 1 || recheckMetadata.size > 20 * 1_024 * 1_024 ||
     typeof (await import(pathToFileURL(recheckBundle).href)).handler !== "function") throw new Error("Invalid recheck bundle");
 console.log(JSON.stringify({ package: "trip-recheck", runtime: recheck.runtime, bytes: recheckMetadata.size }));
+
+const notification = JSON.parse(await readFile(resolve(root, "infra/packaging/notification.json"), "utf8"));
+if (notification.runtime !== "nodejs22.x" || notification.handler !== "index.handler" ||
+    JSON.stringify(notification.files) !== '["index.cjs"]') throw new Error("Invalid notification package contract");
+const notificationBundle = resolve(root, notification.source, notification.files[0]);
+const notificationMetadata = await stat(notificationBundle);
+if (!notificationMetadata.isFile() || notificationMetadata.size < 1 || notificationMetadata.size > 20 * 1_024 * 1_024 ||
+    typeof (await import(pathToFileURL(notificationBundle).href)).handler !== "function") throw new Error("Invalid notification bundle");
+console.log(JSON.stringify({ package: "notification", runtime: notification.runtime, bytes: notificationMetadata.size }));

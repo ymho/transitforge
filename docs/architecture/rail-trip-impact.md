@@ -4,6 +4,7 @@
 
 #408でrouting/Applicationを[Weather/Hazardと共通化](weather-hazard-trip-impact.md)した。
 物理rail名は維持するが3種の内部Eventを扱う。rail評価policyそのものは変更しない。
+通知への接続は#395の[Notification runtime](notification-runtime.md)で追加した。以下の「通知未接続」は#394導入時の記録である。
 
 ## 現行 → 今回
 
