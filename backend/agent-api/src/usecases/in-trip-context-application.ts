@@ -14,6 +14,21 @@ export class InTripContextApplication {
     private readonly impacts: Pick<TripImpactRepository, "read">, private readonly reservations: ReservationReader,
     private readonly notifications: Pick<NotificationApplication, "forSubjects">,
     private readonly clock: TripClock = { now: () => new Date() }) {}
+  /** Four 12-row pages per pass; the consistency re-read has the same hard bound. */
+  private async observationWindow(principal: TripPrincipal, tripId: string) {
+    const observations: Awaited<ReturnType<TripObservationReader["observations"]>>["observations"] = [];
+    let after: string | undefined;
+    const cursors = new Set<string>();
+    for (let pageIndex = 0; pageIndex < 4; pageIndex++) {
+      const page = await this.observations.observations(principal, tripId, after);
+      if (page.observations.length > 12 || page.truncated !== (page.after !== undefined)) throw new Error("Invalid bounded page");
+      observations.push(...page.observations);
+      if (!page.after) return { observations, truncated: false };
+      if (cursors.has(page.after)) throw new Error("Repeated observation cursor");
+      cursors.add(page.after); after = page.after;
+    }
+    return { observations, truncated: true, after };
+  }
   async read(principal: TripPrincipal, tripId: string) {
     requireTripPrincipal(principal); tripIdentifier(tripId);
     const trip = await this.trips.get(principal, tripId);
@@ -27,18 +42,22 @@ export class InTripContextApplication {
         catch { failures.push("reservations"); } })(),
       (async () => {
         try {
-          const page = await this.observations.observations(principal, tripId);
-          if (page.observations.length > 12) throw new Error("Unbounded read");
-          facts.impactTruncated = page.truncated; facts.notificationTruncated = page.truncated;
+          const page = await this.observationWindow(principal, tripId);
+          facts.impactTruncated = page.truncated;
           const current = page.observations.filter((o) => o.tripRevision === trip.revision && o.tripId === tripId);
+          // Notification's existing independent 12-subject bound is not an Impact selection policy.
+          facts.notificationTruncated = page.truncated || current.length > 12;
           await Promise.all([
             (async () => {
               try {
                 facts.impacts = [];
-                for (const o of current) {
-                  const stored = await this.impacts.read(principal, tripId, o.impactId);
-                  if (!stored?.matchesTripRevision) throw new Error("Unconfirmed impact");
-                  facts.impacts.push({ impact: stored.impact, observedAt: o.observedAt, expiresAt: o.expiresAt, fresh: o.fresh });
+                // Broader candidates must not become 48 serial network round trips or unbounded fan-out.
+                for (let offset = 0; offset < current.length; offset += 4) {
+                  facts.impacts.push(...await Promise.all(current.slice(offset, offset + 4).map(async (o) => {
+                    const stored = await this.impacts.read(principal, tripId, o.impactId);
+                    if (!stored?.matchesTripRevision) throw new Error("Unconfirmed impact");
+                    return { impact: stored.impact, observedAt: o.observedAt, expiresAt: o.expiresAt, fresh: o.fresh };
+                  })));
                 }
               } catch { facts.impacts = undefined; failures.push("impacts"); }
             })(),
@@ -46,7 +65,7 @@ export class InTripContextApplication {
               catch { failures.push("notifications"); } })(),
           ]);
           // Recheck after BOTH Impact and Notification reads; do not mix an older Impact with a newer warning.
-          const checked = await this.observations.observations(principal, tripId);
+          const checked = await this.observationWindow(principal, tripId);
           if (JSON.stringify(checked) !== JSON.stringify(page)) throw new Error("Observation changed");
         } catch { failures.push("impacts", "notifications"); }
       })(),

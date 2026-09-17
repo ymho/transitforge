@@ -5,7 +5,7 @@
 | 現行 | #396 | 変更しない責務 |
 | --- | --- | --- |
 | AgentへTripの先頭24予定 | in_tripだけ前1/現在2/次2/後続4/未確定2を切り出す | #397の再計画/変更 |
-| ImpactはID単位GET | 既存atomic最新観測pointerをTrip prefixで最大12件Query | #394/#408評価、#409再取得 |
+| ImpactはID単位GET | 既存atomic最新観測pointerをTrip prefixで最大4 pages / 48件取得、関連度で選別 | #394/#408評価、#409再取得 |
 | 通知Centerのcurrency | 同じcurrencyで最大4件、内部IDは除去 | #395 policy/episode/delivery |
 | ReservationFact | 最大8件、失敗はunavailable | 予約正本/予約変更 |
 
@@ -29,6 +29,12 @@ Placeは表示名のみ。鉄道は最大4legの番号/両端/計画発着だけ
 
 `InTripContextApplication.read(principal, tripId)`でowner-scoped Trip GET→並列resource read→Trip再GET。
 通知と無関係なinformational/unknown ImpactもSIGNALから取得する。pointerの再読込で読み取り中の観測変更を検出する。
+取得・確認はそれぞれ最大4 pages（各12件）、計最大8 Query。Impact候補GETは最大48件。続きがあれば
+truncated=trueとomittedの下限値（少なくとも1件）を残し、全件確認済みとはしない。
+no-impactを後順位とした上で、現在予定→次2予定→直近後続4予定→その他、severity、status、
+evaluatedAt/observedAtの新しい順、最後にstable IDの順で最大6件を選ぶ。
+現在予定のattentionは遠い予定のaction-requiredより優先する。事実・severityそのものは変更しない。
+Notificationの有無はImpact選別に無関係であり、未知情報も候補に残す。詳細はADR 0064を参照。
 全history Scanやglobal owner一覧のfilterはない。Notificationは最新subject episodeを参照し、過去通知一覧を投入しない。
 古いrevision/消えたitem/終端Trip/archiveはcurrent扱いしない。予約失敗は空の「予約なし」にしない。
 read自体は各独立resourceのpoint-in-time viewであり、複数tableを跨ぐserializableな実世界snapshotを保証するものではない。
@@ -56,6 +62,8 @@ Context自体やowner/位置履歴を新しいログへ保存しない。
 
 Domain: fixed/重なり/window/day/unscheduled/日時不明/日跨ぎ/DST/上限/鮮度/旧revision/privacy/位置状態。
 Application/SDK: 旧envelope、通知生成前のImpact読取、currency、owner隔離、read失敗、並行編集、bounded consistent Query。
+hash順26番目のnext rail action-requiredの採用、関連度がseverityに優先すること、no-impactの混雑防止、
+48件/4 pages上限と省略表示、cursor改ざん・循環拒否、18,000文字以内も回帰テストで固定する。
 HTTP: 501 gate、forged owner/extra fields拒否。Agent: 圧縮でsnapshot保持、余分なTool callなし。
 AJ〜AMはscriptedとliveの同一Runtime評価入口へ追加し、既存A〜AIのthresholdを変更しない。
 保存fixtureは実ユーザーの会話ではなくsyntheticであり、scripted成功と実モデル品質は区別する。
@@ -69,6 +77,11 @@ old #388 envelopeも既存Trip readerを通す。pointerがまだないTripはun
 2026-09-17、Live AJを既存認証で試行したが `CredentialsProviderError: Your session has expired` で未実施。
 AK〜AMも同じ認証を必要とするため実モデル検証は保留。scripted成功をLive成功として扱わない。
 
-ローカル検証: Frontend/Domain 1,809件、Backend 438件、build、architecture/workspace、
+初回ローカル検証: Frontend/Domain 1,809件、Backend 438件、build、architecture/workspace、
 Smoke（12/12、Ask 2/2、Progress 23/23）、Full（42/42、Ask 7/7、Progress 39/39）、
 Python 32件、bundle/lambda、git diff --checkが成功。Terraform定義は変更していない。
+
+PR #447レビュー修正後: Frontend/Domain 1,811件、Backend 440件、上記Smoke/Full、build、
+architecture/workspace、Python 32件、bundle/lambda、git diff --checkを再実行して成功。
+Terraform fmt、bootstrap/dev validateも成功（既存hash_key等の非推奨警告のみ）。
+Live AJ〜AMはAWS認証更新待ちのままであり、Draftを維持する。

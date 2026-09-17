@@ -3,7 +3,7 @@ import { buildInTripContext, contextLocation, validateInTripContext, type Contex
 import { inTripFixture } from "./in-trip-context.fixture";
 import { createTrip, type ItineraryItem } from "./trip";
 import type { ItinerarySchedule } from "./itinerary-schedule";
-import { tripImpactId } from "./trip-impact";
+import { tripImpactId, type TripImpact } from "./trip-impact";
 
 const at = (time: string, zone = "UTC") => ({ at: time, timeZone: zone });
 const now = at("2026-09-20T12:00:00Z");
@@ -13,6 +13,50 @@ function tripWith(schedules: ItinerarySchedule[]) {
     id: `item-${i}`, title: `予定${i}`, type: "activity", category: "free-time", schedule }))), lifecycleState: "in_trip" as const };
 }
 describe("bounded in-trip read model", () => {
+  it("ranks current then next then near upcoming before severity, without changing saved facts", () => {
+    const f = inTripFixture();
+    const trip = { ...f.trip, items: [...f.trip.items, ...Array.from({ length: 7 }, (_, index) => ({
+      ...f.trip.items[1]!, id: `future-${index}`,
+    }))] };
+    const candidate = (itemId: string, severity: TripImpact["severity"], status: TripImpact["status"] = "impact") => {
+      const impact = { ...f.impact, affectedItemIds: [itemId], facts: [], severity, status };
+      impact.id = tripImpactId(impact); return { ...f.facts.impacts![0]!, impact };
+    };
+    const current = candidate(trip.items[0]!.id, "attention"), next = candidate("garden", "attention"),
+      upcoming = candidate("future-1", "attention"), distant = candidate("future-6", "action-required");
+    const impacts = [distant, upcoming, next, current], before = JSON.stringify(impacts);
+    const result = buildInTripContext(trip, f.now, { impacts })!; validateInTripContext(result);
+    expect(result.impacts.items.map((i) => i.affectedItemIds[0])).toEqual([trip.items[0]!.id, "garden", "future-1", "future-6"]);
+    expect(JSON.stringify(impacts)).toBe(before);
+    expect(buildInTripContext(trip, f.now, { impacts: [...impacts].reverse() })).toEqual(result);
+  });
+  it("no-impact cannot crowd out risk or unknown; severity, status, freshness and ID break ties", () => {
+    const f = inTripFixture();
+    const candidate = (eventId: string, severity: TripImpact["severity"], status: TripImpact["status"], evaluatedAt = f.now.at, observedAt = evaluatedAt) => {
+      const impact = { ...f.impact, eventId, severity, status, evaluatedAt, facts: [] };
+      impact.id = tripImpactId(impact); return { ...f.facts.impacts![0]!, impact, observedAt };
+    };
+    const risks = [candidate("critical", "critical", "impact"), candidate("action", "action-required", "impact"),
+      candidate("attention", "attention", "impact"), candidate("info", "informational", "impact"),
+      candidate("unknown", "informational", "unknown"), candidate("older", "informational", "unknown", "2026-09-13T00:59:00Z")];
+    const all = [...Array.from({ length: 40 }, (_, i) => candidate(`clear-${i}`, "informational", "no-impact")), ...risks].reverse();
+    const result = buildInTripContext(f.trip, f.now, { impacts: all, impactTruncated: true })!; validateInTripContext(result);
+    expect(result.impacts.items.map((i) => [i.severity, i.status])).toEqual(risks.map(({ impact: i }) => [i.severity, i.status]));
+    expect(result.impacts.items[5]!.evaluatedAt).toBe("2026-09-13T00:59:00Z");
+    expect(result.impacts.omitted).toBe(41); expect(result.truncation.truncated).toBe(true);
+    expect(JSON.stringify(result).length).toBeLessThanOrEqual(18000);
+    const observedOlder = candidate("observed-old", "attention", "impact", f.now.at, "2026-09-13T00:58:00Z");
+    const tied = [candidate("tie-a", "attention", "impact"), candidate("tie-b", "attention", "impact")];
+    // Different reason codes expose the final stable ID order without leaking IDs into the Context.
+    tied[0]!.impact.reasonCodes = ["rail_delay"]; tied[1]!.impact.reasonCodes = ["connection_risk"];
+    tied.forEach((c) => { c.impact.id = tripImpactId(c.impact); });
+    const ordered = buildInTripContext(f.trip, f.now, { impacts: [observedOlder, ...tied] })!;
+    const expected = [...tied].sort((a, b) => a.impact.id < b.impact.id ? -1 : 1);
+    expect(ordered.impacts.items.slice(0, 2).map((i) => i.reasonCodes)).toEqual(expected.map((c) => c.impact.reasonCodes));
+    expect(ordered.impacts.items[2]!.observedAt).toBe(observedOlder.observedAt);
+    expect(buildInTripContext(f.trip, f.now, { impacts: [...tied].reverse().concat(observedOlder) })).toEqual(ordered);
+    expect(buildInTripContext(f.trip, f.now, { impacts: [], impactTruncated: true })!.impacts.omitted).toBeGreaterThan(0);
+  });
   it("classifies fixed current/overlap/previous/next, excludes past history and remains pure", () => {
     const trip = tripWith([fixed("2026-09-20T10:00:00Z", "2026-09-20T11:00:00Z"),
       fixed("2026-09-20T11:00:00Z", "2026-09-20T13:00:00Z"), fixed("2026-09-20T11:30:00Z", "2026-09-20T12:30:00Z"),

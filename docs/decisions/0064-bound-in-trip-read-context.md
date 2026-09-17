@@ -18,11 +18,33 @@ Adapterはbounded Query、モデルは説明・選択肢提案を担当する。
 3. #395で全Impact保存とatomicに更新されるSIGNALの最新観測pointerを再利用: 採用。
 
 SIGNALは通知可否と独立したowner+Trip+subject/chunkのlatest-observation projectionである。
-別の正本・index・dual-writeを追加しない。owner PK + SIGNAL#trip prefixへconsistent Queryを最大12件行い、
+別の正本・index・dual-writeを追加しない。owner PK + SIGNAL#trip prefixへconsistent Queryを1 page最大12件、
+最大4 pages / 48 observationsまで行い、
 参照Impactを取得する。Notification/episodeが0件でもImpactを読める。通知のworkStateを鮮度判定に使わない。
 最後に同じpointer集合とTripを再読込し、競合は取得不可/失敗とする。新鮮なall-clearへ変換しない。
-12件外や過去revisionのpointerにより範囲が不足した場合はtruncation/unknownを残す。
+整合性確認も同じ上限で再読込するため、1 requestでは最大8 Query（取得4 + 確認4）、Impact候補readは最大48件・同時4件。
+各Impact readは既存RepositoryによるTrip currentnessのGETも含む。無制限fan-outや48件の直列network待ちは作らない。
+cursorはsubject hashだけとし、owner/Trip keyはtrusted principalと対象Tripから組み立てる。繰り返すcursorや不正pageは失敗する。
+48件外に続きがある場合はtruncated=true、omittedに少なくとも1件を加える（残件数の下限であり全件数ではない）。
+過去revisionや期限切れ等で確認できない情報はunknownを残す。
 履歴からのbackfillは行わず、既存#409のfresh recheckが新しいpointerを生成する。
+
+## ContextへのImpact選択
+
+hash順は取得順であって重要度ではない。全取得候補のcurrentness/freshnessを検証した後、pure Domainで最大6件へ絞る。
+no-impactはimpact/unknownを押し出さないよう全体の後順位とする。それ以外は次の順で比較する。
+
+1. 現在予定（possible-current/date-currentも含む）→次2予定→直近後続4予定→その他への影響
+2. 保存済みseverity: critical → action-required → attention → informational
+3. 保存済みstatus: impact → unknown → no-impact
+4. evaluatedAt、observedAtの新しい順
+5. 最後だけstable Impact IDの辞書順（IDはContextへ送らない）
+
+例えば現在予定のattentionは、遠いfuture予定のaction-requiredより優先する。
+複数itemへ影響する場合は最も関連するitemで評価する。現在予定の関連度は表示枠2件に切る前の全予定から判定する。
+severity/乗換成立性を再計算せず、Notification有無やLLM判断を選別に使わない。
+Notificationの既存最大12 subject読取は独立で、範囲不足をnotificationTruncatedへ残す。
+最終6 Impact × 4 facts / 18,000文字は変更しない。取得上限外の全riskを網羅したとは扱わない。
 
 ## 通知・予約・認可
 

@@ -48,7 +48,8 @@ export interface InTripFacts {
 const text = (v: string) => v.slice(0, 120);
 const page = <T>(items: T[] | undefined, limit: number, unavailable: boolean, truncated = false): ContextPage<T> => ({
   status: unavailable ? "unavailable" : items === undefined ? "unknown" : "available", items: unavailable ? [] : (items ?? []).slice(0, limit),
-  truncated: truncated || (items?.length ?? 0) > limit, omitted: Math.max(0, (items?.length ?? 0) - limit),
+  // A continuation beyond the acquisition bound proves at least one omission, not its exact count.
+  truncated: truncated || (items?.length ?? 0) > limit, omitted: Math.max(0, (items?.length ?? 0) - limit) + Number(truncated),
 });
 export function contextLocation(location: ContextLocation | undefined, now: ZonedInstant): ContextLocation {
   if (!location) return { status: "not-requested" };
@@ -162,16 +163,27 @@ export function buildInTripContext(trip: Trip, now: ZonedInstant, facts: InTripF
   itinerary.omitted = all.length - [itinerary.previous, itinerary.current, itinerary.next, itinerary.upcoming, itinerary.uncertain].flat().length;
   const ids = new Set(trip.items.map((i) => i.id));
   let excluded = 0;
-  const impacts = facts.impacts?.flatMap(({ impact: i, observedAt, expiresAt, fresh }) => {
+  const relevance = new Map(all.map((i) => [i.itemId,
+    ["current", "possible-current", "date-current"].includes(i.position) ? 0 :
+      itinerary.next.some((n) => n.itemId === i.itemId) ? 1 : itinerary.upcoming.some((n) => n.itemId === i.itemId) ? 2 : 3]));
+  const severityRank = { critical: 0, "action-required": 1, attention: 2, informational: 3 };
+  const statusRank = { impact: 0, unknown: 1, "no-impact": 2 };
+  const candidates = facts.impacts?.flatMap(({ impact: i, observedAt, expiresAt, fresh }) => {
     validateTripImpact(i);
     if (i.tripId !== trip.id || i.tripRevision !== trip.revision || !i.affectedItemIds.every((id) => ids.has(id)) || !fresh ||
         !validInstant(observedAt) || !validInstant(expiresAt) || Date.parse(observedAt) > Date.parse(now.at) ||
         Date.parse(i.evaluatedAt) > Date.parse(now.at) || Date.parse(expiresAt) <= Date.parse(now.at)) { excluded++; return []; }
-    return [{ status: i.status, severity: i.severity, affectedItemIds: [...i.affectedItemIds].slice(0, 12), reasonCodes: [...i.reasonCodes],
-      evaluatedAt: i.evaluatedAt, observedAt, expiresAt, facts: i.facts.slice(0, 4).map(factProjection), truncated: i.facts.length > 4 || i.affectedItemIds.length > 12 }];
+    return [{ id: i.id, relevance: Math.min(3, ...i.affectedItemIds.map((id) => relevance.get(id) ?? 3)),
+      value: { status: i.status, severity: i.severity, affectedItemIds: [...i.affectedItemIds].slice(0, 12), reasonCodes: [...i.reasonCodes],
+        evaluatedAt: i.evaluatedAt, observedAt, expiresAt, facts: i.facts.slice(0, 4).map(factProjection), truncated: i.facts.length > 4 || i.affectedItemIds.length > 12 } }];
   });
-  // Preserve impactful and unknown results before no-impact. No new severity calculation.
-  impacts?.sort((a, b) => Number(a.status === "no-impact") - Number(b.status === "no-impact"));
+  // No-impact must not crowd out risk/unknown. Among the rest, itinerary relevance precedes severity.
+  // Use the saved severity/facts unchanged; internal identity is only the final deterministic tie-break.
+  candidates?.sort((a, b) => Number(a.value.status === "no-impact") - Number(b.value.status === "no-impact") ||
+    a.relevance - b.relevance || severityRank[a.value.severity] - severityRank[b.value.severity] ||
+    statusRank[a.value.status] - statusRank[b.value.status] || Date.parse(b.value.evaluatedAt) - Date.parse(a.value.evaluatedAt) ||
+    Date.parse(b.value.observedAt) - Date.parse(a.value.observedAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const impacts = candidates?.map((c) => c.value);
   const notifications = facts.notifications?.flatMap((n) => {
     validateNotificationView(n);
     if (n.tripId !== trip.id) return [];
