@@ -9,6 +9,9 @@ describe("agentSystemPrompt", () => {
     expect(agentSystemPrompt).toContain("未検証候補はEvidenceではありません");
     expect(agentSystemPrompt).toContain("質問必須ではありません");
     expect(agentSystemPrompt).not.toContain("Tool Evidenceだけ");
+    expect(agentSystemPrompt).toContain('"usedEvidenceIds":[]');
+    expect(agentSystemPrompt).toContain("最大10件、重複なし");
+    expect(agentSystemPrompt).toContain("キーごと省略");
   });
   it("keeps decision principles while delegating capability selection to descriptors", () => {
     expect(agentSystemPrompt).toContain("goal hard constraint soft preference");

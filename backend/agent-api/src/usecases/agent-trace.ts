@@ -20,7 +20,7 @@ const eventFields = {
   task_started: [["userRequest"], []],
   intent_normalized: [["intent", "constraints"], []],
   plan_created: [["steps"], []],
-  decision_recorded: [["interpretedGoal", "hardConstraints", "softPreferences", "selectedAction", "unresolvedFacts", "reasonCodes"], ["selectedTool", "replanReason"]],
+  decision_recorded: [["interpretedGoal", "hardConstraints", "softPreferences", "selectedAction", "unresolvedFacts", "reasonCodes"], ["selectedTool", "replanReason", "usedEvidenceIds"]],
   tool_called: [["toolCallId", "toolName", "input"], []],
   tool_completed: [["toolCallId", "toolName", "outcome", "result"], ["latencyMs", "errorCode", "retryable"]],
   evidence_collected: [["evidenceIds", "categories", "sourceTypes"], []],
@@ -35,7 +35,7 @@ const eventFields = {
 } as const;
 
 const stringFields = new Set(["userRequest", "intent", "interpretedGoal", "selectedTool", "replanReason", "toolCallId", "toolName", "errorCode", "modelCallId", "modelClass", "provider", "requestId", "model", "reason", "response", "actionType", "targetEntityId"]);
-const stringListFields = new Set(["steps", "unresolvedFacts", "reasonCodes", "evidenceIds", "categories", "sourceTypes", "claimIds", "toolNames"]);
+const stringListFields = new Set(["steps", "unresolvedFacts", "reasonCodes", "evidenceIds", "usedEvidenceIds", "categories", "sourceTypes", "claimIds", "toolNames"]);
 const countFields = new Set(["sequence", "messageCount", "latencyMs", "inputTokens", "outputTokens", "totalTokens"]);
 const payloadFields = new Set(["constraints", "hardConstraints", "softPreferences", "input", "result"]);
 
@@ -165,6 +165,7 @@ function validatedEventField(key: string, value: unknown, eventType: string, pos
     return sanitizeString(value);
   }
   if (stringListFields.has(key)) {
+    if (key === "usedEvidenceIds" && (!Array.isArray(value) || value.length > 10 || new Set(value).size !== value.length)) throw invalid();
     if (!Array.isArray(value) || value.length > 20 || !value.every((item) => typeof item === "string" && item.length > 0 && item.length <= 160)) throw invalid();
     return value.map(sanitizeString);
   }

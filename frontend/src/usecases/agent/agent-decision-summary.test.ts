@@ -3,6 +3,18 @@ import { describe, expect, it } from "vitest";
 import { extractAgentDecisionSummary } from "./agent-decision-summary";
 
 describe("Agent Decision Summary", () => {
+  it("retains declared IDs for runtime existence validation even if other summary fields are invalid", () => {
+    const value = { interpretedGoal: "説明", hardConstraints: [], softPreferences: [], selectedAction: "use_tool", unresolvedFacts: [], reasonCodes: [], usedEvidenceIds: ["missing"] };
+    expect(extractAgentDecisionSummary([`<decision_summary>${JSON.stringify(value)}</decision_summary>回答`])).toEqual({ status: "invalid", declaredEvidenceIds: ["missing"], textBlocks: ["回答"] });
+  });
+  it.each([["e", "e"], Array.from({ length: 11 }, (_, i) => `e${i}`), [""], [42]])("rejects invalid Evidence references %j", (...ids) => {
+    const value = { interpretedGoal: "説明", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: [], usedEvidenceIds: ids };
+    expect(extractAgentDecisionSummary([`<decision_summary>${JSON.stringify(value)}</decision_summary>回答`])).toMatchObject({ status: "invalid", invalidUsedEvidenceIds: true, textBlocks: ["回答"] });
+  });
+  it("keeps bounded evidence IDs only in the decision, not user text", () => {
+    const value = { interpretedGoal: "説明", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: [], usedEvidenceIds: ["application:in-trip:impacts/0"] };
+    expect(extractAgentDecisionSummary([`<decision_summary>${JSON.stringify(value)}</decision_summary>乗換余裕は4分です`])).toMatchObject({ status: "valid", summary: { usedEvidenceIds: value.usedEvidenceIds }, textBlocks: ["乗換余裕は4分です"] });
+  });
   it("extracts a bounded external decision and removes it from display text", () => {
     const result = extractAgentDecisionSummary([
       '<decision_summary>{"interpretedGoal":"出雲への宿泊旅行を組む","hardConstraints":[{"key":"stay_nights","value":1}],"softPreferences":[{"key":"pace","value":"slow"}],"selectedAction":"use_tool","selectedTool":"search_accommodations","unresolvedFacts":[],"reasonCodes":["constraint_applied","evidence_required"]}</decision_summary>宿を確認します。',

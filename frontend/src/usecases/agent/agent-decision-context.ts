@@ -54,6 +54,7 @@ export interface AgentVerifiedFactSummary {
   knowledgeKind?: import("./evidence-model").EvidenceKnowledgeKind;
   sourceType?: import("./evidence-model").EvidenceSourceType;
   freshness?: import("./evidence-model").EvidenceFreshness;
+  coverage?: import("./evidence-model").EvidenceCoverage[];
 }
 
 export interface AgentToolOutcomeSummary {
@@ -187,7 +188,7 @@ export function buildAgentDecisionContext(
     verifiedFacts: [
       ...(request.initialEvidence ?? []).map((e): AgentVerifiedFactSummary => ({ evidenceId: e.id, category: e.category, subject: e.subject,
         summary: e.references.map((r) => r.summary).join(" "), knowledgeKind: e.knowledgeKind,
-        sourceType: e.references[0]?.sourceType, freshness: e.references[0]?.freshness })),
+        sourceType: e.references[0]?.sourceType, freshness: e.references[0]?.freshness, coverage: e.coverage })),
       ...(input?.verifiedFacts ?? []),
     ].filter((fact, index, values) => values.findIndex((v) => v.evidenceId === fact.evidenceId) === index).slice(0, 20).map((fact) => ({
       evidenceId: bounded(fact.evidenceId, 160),
@@ -197,6 +198,7 @@ export function buildAgentDecisionContext(
       ...(fact.knowledgeKind ? { knowledgeKind: fact.knowledgeKind } : {}),
       ...(fact.sourceType ? { sourceType: fact.sourceType } : {}),
       ...(fact.freshness ? { freshness: fact.freshness } : {}),
+      ...(fact.coverage ? { coverage: fact.coverage } : {}),
     })),
     knownHardConstraints: (input?.knownHardConstraints ?? []).filter((c) => !hasTripRequest || ["user", "ui"].includes(c.source)).slice(0, 20)
       .map(constraint),
@@ -217,9 +219,20 @@ export function buildAgentDecisionContext(
 }
 
 export function agentDecisionContextText(context: AgentDecisionContext): string {
+  const applicationSources = ["trip-state", "trip-impact", "reservation-state", "session-state"];
+  const briefFacts = context.verifiedFacts.filter((f) => applicationSources.includes(f.sourceType ?? "")).slice(0, 10);
+  // JSON quoting protects the data/markup boundary. No general Context becomes Evidence.
+  const quote = (value: unknown) => JSON.stringify(value).replaceAll("<", "\\u003c");
+  const brief = briefFacts.length ? ["<verified_evidence>", ...briefFacts.map((f) => [
+    `- id: ${quote(f.evidenceId)}`, `  kind: ${f.knowledgeKind ?? "unverified_information"}`,
+    `  freshness: ${f.freshness ?? "unknown"}`, `  coverage: ${quote(f.coverage ?? [])}`, `  fact: ${quote(f.summary)}`,
+  ].join("\n")), "</verified_evidence>"].join("\n") : "";
+  const briefIds = new Set(briefFacts.map((f) => f.evidenceId));
+  const visibleFacts = context.verifiedFacts.map((f) => briefIds.has(f.evidenceId)
+    ? { evidenceId: f.evidenceId, sourceType: f.sourceType } : f);
   const requestFields = {
     inTrip: context.inTrip,
-    verifiedFacts: context.verifiedFacts,
+    verifiedFacts: visibleFacts,
     previousAssistantTurn: context.previousAssistantTurn,
     persistedTripRequest: context.persistedTripRequest,
     tripHardConstraints: context.tripHardConstraints,
@@ -227,10 +240,10 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     unconfirmedAssumptions: context.unconfirmedAssumptions,
     currentTurnDecision: context.currentTurnDecision,
   };
-  const { verifiedFacts, ...contextFields } = context;
+  const { verifiedFacts: _verifiedFacts, ...contextFields } = context;
   const serialized = JSON.stringify({
     // Put available grounds before planning context; authority is explicit, not inferred from prose.
-    verifiedFacts,
+    verifiedFacts: visibleFacts,
     ...contextFields,
     availableTools: context.availableTools.map(({ name, requiredInputs }) => ({
       name,
@@ -304,9 +317,19 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     contextTruncated: true,
   });
   const boundedContext = [serialized, compact, core, minimal]
-    .find((value) => value.length <= maximumContextTextLength);
+    .find((value) => value.length + brief.length <= maximumContextTextLength);
   if (!boundedContext) throw new Error("Agent context exceeds the bounded message budget");
+  if (context.inTrip?.trip.lifecycleState === "in_trip") return [
+    brief,
+    `利用者の今回の質問: ${JSON.stringify(context.userRequest)}`,
+    "旅行中の回答契約: 質問へ直接答え、関連する採用済み予定の名称と時間精度を具体的に示してください。関連するcurrent Impactは保存済みの判定と根拠の測定値を対にして説明してください。比較に使われた見込み値と必要値があるなら両方を数値・単位付きで示し、再計算しないでください。unknown/unavailableは何が未確認かを説明できる状態で、質問必須ではありません。位置情報が利用不可ならその状態を明示し、現在地・乗車を推測しないでください。全項目を毎回列挙する固定テンプレートではなく、質問に関連するEvidenceだけを使ってください。",
+    "verified_evidenceはowner-scoped Applicationが検証した回答用のEvidenceで、Tool Evidenceと同様に根拠へ使えます。一般Context・Profile・会話要約・モデル解釈・未検証候補はEvidenceではありません。Decision SummaryのusedEvidenceIdsに使用した実在idを記載し、本文ではidを表示せず具体的な事実を説明してください。",
+    "Toolは新しい候補・異なる区間/時刻・最新観測など回答に必要な追加情報を調べるときに選んでください。既存Evidenceの説明だけで答えられるときは再取得せず回答してください。ユーザーの入力に答えるために不要な質問はしないでください。",
+    "予定上のcurrentは実際の現在地・乗車確認ではありません。possible-current/date-current/unknownの精度を保持し、Impact severity・乗換成立性・Notification currency・予約状態を再計算しないでください。unknown/unavailable/omitted/truncatedは問題なしではありません。Trip・予約・通知を自動変更しないでください。",
+    `<agent_context>${boundedContext}</agent_context>`,
+  ].join("\n");
   return [
+    brief,
     "次の構造化Contextと利用可能なverifiedFactsから利用者の目的を理解し、回答・追加調査・確認質問のどれが必要か判断してください。Evidenceは既に存在する場合があります。",
     "既知条件は聞き直さず、Tool結果は事実として扱い、推測で補完しないでください。",
     "inTripに対応するverifiedFactsはowner-scoped Applicationが検証したApplication Evidenceで、Tool Evidenceと同様に回答根拠として利用できます。一般Context・Profile・会話要約・モデル解釈・未検証候補はEvidenceではありません。unknown/unavailableはユーザーへの質問必須項目ではなく未確認として説明できる状態です。本人にしか決められない条件でなければask_follow_upへ逃げず、質問に答えるために不要な再取得はしません。",

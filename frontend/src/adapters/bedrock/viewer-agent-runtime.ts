@@ -1652,6 +1652,8 @@ export class ConverseModelProvider implements AgentModelProvider {
         usage: response.metadata?.usage,
       },
       decisionSummaryStatus: decision.status,
+      ...(decision.invalidUsedEvidenceIds ? { invalidUsedEvidenceIds: true } : {}),
+      ...(decision.declaredEvidenceIds ? { declaredEvidenceIds: decision.declaredEvidenceIds } : {}),
       ...(decision.summary ? { decisionSummary: decision.summary } : {}),
     };
   }

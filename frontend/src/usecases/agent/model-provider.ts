@@ -50,6 +50,8 @@ export interface AgentModelResponse {
   metadata: AgentModelMetadata;
   decisionSummaryStatus?: "valid" | "missing" | "invalid";
   decisionSummary?: AgentDecisionSummary;
+  invalidUsedEvidenceIds?: boolean;
+  declaredEvidenceIds?: string[];
 }
 
 export interface AgentModelProvider {

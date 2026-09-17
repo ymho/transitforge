@@ -75,6 +75,30 @@ System PromptとTool後finalizationは両Evidenceを回答根拠とし、既に�
 unknownは本人への質問必須ではなく未確認として説明可能。追加Toolは質問への回答に必要な場合に選べる。
 固定Tool順、発話regex、モデル固有分岐、Tool非表示、Claim validatorやEval閾値の緩和は導入しない。
 
+### Evidenceを回答と能力選択へ表出する
+
+Application Evidenceのsummaryを最大10件の`verified_evidence` briefとしてContext先頭へ出す。
+同じsummaryをJSON側に複製せず、brief対象のverifiedFactsはID/sourceType参照とする。他のplace factsは従来どおり。
+briefも既存24,000文字のデータ予算に算入し、圧縮してもbriefとinTripは落とさない。一般Contextをbriefに含めない。
+Agent層のEvidenceCoverageは確認の対象範囲を表し、DomainやTool実行権限へは影響しない。
+itinerary/next-item/rail schedule、typed rail/connection/weather/hazard Impact、予約状態、位置権限を既存snapshotから分類する。
+severity/測定値は再評価しない。unknown/historicalのcoverageも鮮度付きで示し、最新確認済みとは扱わない。
+
+Runtimeは毎model callで既存descriptorへ`evidenceAwareTool`の能力重複説明を加える。
+名前別の対応表は能力の対象範囲のcontractであってintent routerではない。発話を読まず、Toolの公開数・schema・実行条件を変えない。
+保存済み事実/未確認範囲を説明するだけの再取得は不適、新しい代替案・別区間/日時・必要な最新観測は適する、とモデルへ示す。
+coverage欠落なら従来の説明を保持する。選択を決めるのは引き続きモデル。
+
+Application判定のin_tripだけ、計画作成用の長い補助指示に代えて短い回答契約を使う。
+質問への直接回答、関連予定、保存済み判定と測定値、未確認範囲、位置権限を必要に応じて説明する。
+全項目の固定テンプレートやケース固有文は作らない。System Promptの安全・grounding原則は共通のまま。
+
+Decision Summaryの任意`usedEvidenceIds`は最大10件、重複なし。宣言があればRuntimeが現在のevidence[]に実在することを検証し、
+不正なら回答/Tool実行前に拒否する。parserも件数・構造を検証し、不正な参照をsummary欠落へ格下げして通さない。
+有効な宣言だけdecision_recordedへ保存し、本文からは除く。これはモデルの外部化可能な自己申告であって根拠利用の証明ではない。
+EvalではID/coverageと実際の回答内容を両方検査する。従来のsummary未出力モデルの互換性は残し、AJ〜AMは使用宣言必須とする。
+Trace HTTP境界でも10件上限・重複を検証し、内部思考・owner・Provider rawを記録しない。
+
 既定not-requested。現在のViewerは位置取得・送信を新設しない。explicit consentを伴う別hostの
 request-local入力だけavailableにでき、5分超・不正座標はunavailable。拒否/未取得を分ける。
 生座標の利用を有効化するUIは今回なく、既存「位置は端末外へ送らない」を変更しない。

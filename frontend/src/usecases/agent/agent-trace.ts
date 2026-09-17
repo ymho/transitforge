@@ -16,6 +16,7 @@ export interface TracePayloadSummary {
 }
 
 export interface AgentDecisionTrace {
+  usedEvidenceIds?: string[];
   interpretedGoal: string;
   hardConstraints: AgentKnownConstraint[];
   softPreferences: AgentKnownPreference[];
@@ -48,6 +49,7 @@ export type AgentTraceEvent =
     })
   | (AgentTraceEventBase & {
       type: "decision_recorded";
+      usedEvidenceIds?: string[];
       interpretedGoal: string;
       hardConstraints: TracePayloadSummary;
       softPreferences: TracePayloadSummary;
@@ -224,6 +226,7 @@ export class AgentTraceRecorder {
       selectedAction: decision.selectedAction,
       ...(decision.selectedTool ? { selectedTool: this.text(decision.selectedTool) } : {}),
       unresolvedFacts: this.texts(decision.unresolvedFacts),
+      ...(decision.usedEvidenceIds ? { usedEvidenceIds: this.texts(decision.usedEvidenceIds.slice(0, 10)) } : {}),
       reasonCodes: this.texts(decision.reasonCodes),
       ...(decision.replanReason ? { replanReason: this.text(decision.replanReason) } : {}),
     });

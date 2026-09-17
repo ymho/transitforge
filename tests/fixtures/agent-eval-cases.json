@@ -2,6 +2,21 @@
   "schemaVersion": "agent-eval-dataset-v2",
   "travelProgressScenarios": [
     {
+      "id": "AN-in-trip-weather-needed", "name": "天気Evidenceなしの明日の予報照会",
+      "userRequest": "明日9月14日の大阪市の天気予報を具体的に調べてください", "tags": ["trip-progress", "in-trip"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
+      "id": "AO-in-trip-alternative-needed", "name": "既存rail Impactとは別の代替経路を照会",
+      "userRequest": "遅れている列車ではなく、京都から大阪へ10時以降の代替列車を検索して", "tags": ["trip-progress", "in-trip"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
+      "id": "AP-in-trip-alert-needed", "name": "古い警報ではなく最新を照会",
+      "userRequest": "大阪府の警報が未確認なので最新の警報を検索して教えて", "tags": ["trip-progress", "in-trip"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
       "id": "AJ-in-trip-next", "name": "旅行中の短い相談に現在・次予定を利用する",
       "userRequest": "この後どうしよう", "tags": ["smoke", "trip-progress", "in-trip"],
       "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }

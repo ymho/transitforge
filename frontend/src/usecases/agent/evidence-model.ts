@@ -44,6 +44,11 @@ export interface EvidenceReference {
 
 export type EvidenceFactValue = string | number | boolean | null | string[];
 
+/** Agent capability scope, not a Domain state or permission to suppress Tools. */
+export type EvidenceCoverage = "trip.itinerary" | "trip.next-item" | "rail.schedule" |
+  "rail.impact" | "rail.connection" | "weather.impact" | "hazard.impact" |
+  "reservation.state" | "location.permission";
+
 export interface Evidence {
   id: string;
   category: EvidenceCategory;
@@ -51,6 +56,7 @@ export interface Evidence {
   subject: string;
   facts: Record<string, EvidenceFactValue>;
   references: EvidenceReference[];
+  coverage?: EvidenceCoverage[];
 }
 
 export type ClaimKind = "fact" | "inference" | "unknown";

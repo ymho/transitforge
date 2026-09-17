@@ -7,6 +7,8 @@ import { askProgressFixture, modelAnswer } from "./ask-progress-scenarios.fixtur
 import { evaluateTravelProgress, type TravelProgressScenario } from "../../usecases/agent/evaluation/travel-progress-evaluation";
 import type { AgentTrace } from "../../usecases/agent/agent-trace";
 import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
+import { inTripApplicationEvidence } from "../../usecases/agent/in-trip-application-evidence";
+import type { EvidenceCoverage } from "../../usecases/agent/evidence-model";
 
 export const inTripCaseIds = ["AJ-in-trip-next", "AK-in-trip-rail", "AL-in-trip-rain", "AM-in-trip-location-denied"];
 /** Same production runtime and optional live Converse; only storage/provider I/O uses synthetic fixtures. */
@@ -25,6 +27,11 @@ export async function runInTripProgressScenario(scenario: TravelProgressScenario
     "AM-in-trip-location-denied": "現在地へのアクセスは許可されていないので、いまどこにいるかや乗車中かは分かりません。位置情報がなくても、保存された旅程と現在時刻、列車の遅延に関する影響をもとに、この後の予定を一緒に確認できます。",
   };
   const before = JSON.stringify({ trip, snapshot }); let calls = 0, trace: AgentTrace | undefined, observation: AgentTurnObservation | undefined;
+  const evidence = inTripApplicationEvidence(snapshot);
+  const requiredCoverage: Record<string, EvidenceCoverage[]> = {
+    "AJ-in-trip-next": ["trip.next-item"], "AK-in-trip-rail": ["rail.connection"],
+    "AL-in-trip-rain": ["weather.impact", "hazard.impact"], "AM-in-trip-location-denied": ["location.permission"],
+  };
   let sawContext = false;
   const response = await runViewerAgentRuntime(scenario.userRequest, { ...askProgressFixture("C-candidate").base,
     candidateSelection: undefined, getTravelCandidates: () => [], getCurrentTrip: () => trip,
@@ -34,10 +41,15 @@ export async function runInTripProgressScenario(scenario: TravelProgressScenario
     calls++;
     const text = args[0].flatMap((m) => m.content.flatMap((b) => "text" in b ? [b.text] : [])).join("\n");
     sawContext ||= text.includes('"inTrip"') && text.includes('"in-trip-v1"') && text.includes(snapshot.trip.id);
-    return live ? live(...args) : modelAnswer(answers[scenario.id]!);
+    return live ? live(...args) : modelAnswer(`<decision_summary>${JSON.stringify({ interpretedGoal: "旅行中の質問へ保存済み事実で答える",
+      hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"],
+      usedEvidenceIds: evidence.filter((e) => e.coverage?.some((c) => requiredCoverage[scenario.id]!.includes(c))).map((e) => e.id),
+    })}</decision_summary>${answers[scenario.id]!}`);
   });
   const report = evaluateTravelProgress(scenario.id, [{ observation, trace, delivered: true, modelCalls: calls }], scenario.thresholds, live ? "live" : "scripted");
   const failures: string[] = [], text = typeof response === "string" ? response : response.text;
+  const used = trace?.events.flatMap((e) => e.type === "decision_recorded" && e.selectedAction === "answer" ? e.usedEvidenceIds ?? [] : []) ?? [];
+  for (const scope of requiredCoverage[scenario.id]!) if (!evidence.some((e) => e.coverage?.includes(scope) && used.includes(e.id))) failures.push(`answer did not use Evidence coverage ${scope}`);
   if (!sawContext) failures.push("in-trip snapshot missing from model context");
   if (!trace?.events.some((e) => e.type === "evidence_collected" && e.sourceTypes.includes("trip-state"))) failures.push("Application Evidence missing from runtime trace");
   if (!text?.trim() || /案内を完了できません|安全な実行上限/.test(text)) failures.push("response failed");
@@ -53,8 +65,10 @@ export async function runInTripProgressScenario(scenario: TravelProgressScenario
   }
   if (scenario.id === "AL-in-trip-rain" && (!/未確認|不明|断定|確認でき/.test(text) || /施設は危険|中止してください/.test(text))) failures.push("hazard uncertainty lost");
   if (scenario.id === "AM-in-trip-location-denied" && (!/現在地|位置情報/.test(text) || !/許可|分かりません|確認でき|未確認|不明/.test(text))) failures.push("location denied not acknowledged");
+  if (snapshot.location.status !== "available" && /(?:現在|今)[、は]*(?:列車(?:の移動中|で移動中)です|乗車中です|屋外で)/.test(text)) failures.push("planned state promoted to actual location or boarding");
   if (/bookingReference|episodeId|dedupeKey|ownerSubject/.test(JSON.stringify({ response, trace }))) failures.push("private data exposed");
   if (report.ttfc !== null || report.ttfi !== null) failures.push("in-trip explanation mislabeled as new itinerary/candidate");
   report.contractFailures.push(...failures); report.failures.push(...failures); report.passed = report.failures.length === 0;
-  return report;
+  // Synthetic fixture response only; never model reasoning or production conversation data.
+  return { ...report, answerForReview: text.slice(0, 2_000), usedEvidenceIds: [...new Set(used)] };
 }

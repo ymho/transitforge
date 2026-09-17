@@ -27,6 +27,8 @@ import {
 } from "./runtime-policies";
 import type { AgentRuntimeRequest, AgentRuntimeResult } from "./runtime-contract";
 import type { AgentDecisionSummary } from "./agent-decision-summary";
+import { validUsedEvidenceIds } from "./agent-decision-summary";
+import { evidenceAwareTool } from "./evidence-tool-decision-support";
 import type { AgentDecisionTrace } from "./agent-trace";
 import { AgentToolRegistry } from "./tool-registry";
 import type { AgentViewerActionHandler } from "./viewer-action-handler";
@@ -154,7 +156,7 @@ export class MultiStepAgentRuntime {
       // the guard below deterministically rejects any further Tool execution.
       const modelTools = this.dependencies.tools.descriptors().filter(
         ({ name }) => !unavailableToolNames.has(name),
-      );
+      ).map((tool) => evidenceAwareTool(tool, evidence));
       const modelMessages: AgentModelMessage[] = finalResponseRequired
         ? [...messages, {
           role: "user",
@@ -197,6 +199,10 @@ export class MultiStepAgentRuntime {
       const modelResponse = modelOutcome.value;
       modelCalls += 1;
       trace.modelCompleted(modelResponse.metadata, modelCallId);
+      const used = modelResponse.decisionSummary?.usedEvidenceIds ?? modelResponse.declaredEvidenceIds;
+      if (modelResponse.invalidUsedEvidenceIds || used !== undefined && (!validUsedEvidenceIds(used) || used.some((id) => !evidence.some((e) => e.id === id)))) {
+        return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_used_evidence_ids");
+      }
       messages.push(modelResponse.message);
 
       if (modelResponse.stopReason === "max_tokens") {
@@ -672,6 +678,7 @@ function traceDecision(summary: AgentDecisionSummary): AgentDecisionTrace {
     unresolvedFacts: summary.unresolvedFacts,
     reasonCodes: summary.reasonCodes,
     ...(summary.replanReason ? { replanReason: summary.replanReason } : {}),
+    ...(summary.usedEvidenceIds ? { usedEvidenceIds: [...summary.usedEvidenceIds] } : {}),
   };
 }
 

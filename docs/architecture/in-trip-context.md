@@ -73,6 +73,13 @@ Runtime開始時のtrace/validation、重複ID・referenceなし・予算超過�
 PromptのApplication Evidence契約を回帰テスト化した。AKは「遅延/接続」の語だけで合格とせず、保存済みの乗換余裕・必要時間の説明も検査する。
 既存A〜AIとTTFI/TTFC閾値、Tool availabilityは変更していない。
 
+追加レビューでは最大10件のEvidence briefを先頭へ配置し、JSON内の同じsummaryをID参照へ置き換えた。
+brief + Contextの24,000文字予算は維持する。Agent層coverageと鮮度でTool descriptorの重複能力を説明するが、Toolは隠さない。
+in_tripでは計画作成用指示に代えて短い回答契約を適用する。Decision SummaryのusedEvidenceIdsは最大10件/重複禁止/実在検証し、
+Traceへだけ保存する。ID宣言は自己申告なので、AJ〜AMはID/coverageに加え回答本文も検査する。
+追加調査を抑制しすぎないよう、AN（天気未取得）、AO（代替列車）、AP（古い警報の最新照会）を同じRuntimeのscripted/live入口へ追加。
+元の42件の6指標評価とA〜AM、Smoke 23件、TTFI/TTFC閾値は不変。FullのTrip Progressだけ39→42件となる。
+
 Domain: fixed/重なり/window/day/unscheduled/日時不明/日跨ぎ/DST/上限/鮮度/旧revision/privacy/位置状態。
 Application/SDK: 旧envelope、通知生成前のImpact読取、currency、owner隔離、read失敗、並行編集、bounded consistent Query。
 hash順26番目のnext rail action-requiredの採用、関連度がseverityに優先すること、no-impactの混雑防止、
@@ -107,3 +114,11 @@ AKは3 model / 1 Tool、ALは5 model / 3 Toolで不要呼出しと説明不足�
 初期Evidence登録・モデル入力への反映は検査済みであり、認証やEvidence未接続の問題とは区別する。
 AKでは保存済み乗換余裕4分・必要5分を回答する検査を追加し、単語一致だけの合格を避けた。
 実モデルの根拠利用・Tool判断は未達。scripted成功をLive成功とせず、PRはDraftを維持する。
+
+2026-09-18、Evidence brief/coverage/usedEvidenceIdsのレビュー修正後に、同じモデル・温度・上限でAJ〜APを各1試行した。
+AJ〜AMは全件1 model / 0 Toolとなったが、本文監査で予定を実際の現在地/乗車として断定する例を検出した。
+この見逃しを回帰検査に追加した最終結果は0/4。AKは必要時間の説明、ALはhazard Evidenceの使用宣言も不足する。
+AN（予報未取得）とAP（最新警報）は2 model / 1 Toolで合格、AO（代替列車）は4 model / 2 Toolで不合格。
+Toolは公開されたままで、追加調査の実行可否はscriptedでも検査する。Liveの代替経路選択品質は未達。
+途中の合格だけを採用せず、必要な検査を強化した結果をPRへ記録する。特定発話のproduction routerや自動計画変更はない。
+synthetic Live reportには監査用の公開回答（最大2,000文字）とusedEvidenceIdsだけを追加し、内部思考や本番会話を保存しない。

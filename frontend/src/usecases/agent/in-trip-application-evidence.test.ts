@@ -13,9 +13,11 @@ describe("InTrip Application Evidence", () => {
     expect(validateEvidenceAndClaims(values, []).valid).toBe(true);
     const plan = values.find((e) => e.subject === "inTrip.itinerary")!;
     expect(plan.knowledgeKind).toBe("deterministic_fact"); expect(plan.facts.next).toContain("庭園");
+    expect(plan.coverage).toEqual(["trip.itinerary", "trip.next-item", "rail.schedule"]);
     expect(plan.references[0]!.summary).toContain("実際の現在地・乗車確認ではない");
     const impact = values.find((e) => e.references[0]!.sourceType === "trip-impact")!;
     expect(impact.knowledgeKind).toBe("derived_value");
+    expect(impact.coverage).toEqual(["rail.impact", "rail.connection"]);
     expect(JSON.parse(String(impact.facts.typedFacts))).toEqual(f.snapshot.impacts.items[0]!.facts);
     expect(impact.facts.typedFacts).toContain("connection-buffer");
     expect(JSON.stringify(f.snapshot)).toBe(before);
@@ -68,8 +70,17 @@ describe("InTrip Application Evidence", () => {
     expect(context.verifiedFacts.slice(0, initialEvidence.length).map((f) => f.evidenceId)).toEqual(initialEvidence.map((e) => e.id));
     expect(new Set(context.verifiedFacts.map((f) => f.evidenceId)).size).toBe(20);
     const text = agentDecisionContextText(context), compressed = JSON.parse(text.match(/<agent_context>([\s\S]*)<\/agent_context>/u)![1]!);
-    expect(compressed.verifiedFacts).toEqual(context.verifiedFacts);
-    expect(text).toContain("Tool Evidenceと同様に回答根拠"); expect(text).toContain("質問必須項目ではなく");
+    expect(compressed.verifiedFacts.slice(0, initialEvidence.length)).toEqual(context.verifiedFacts.slice(0, initialEvidence.length).map((f) => ({ evidenceId: f.evidenceId, sourceType: f.sourceType })));
+    expect(text).toContain("<verified_evidence>");
+    expect(text.split(context.verifiedFacts[0]!.summary).length - 1).toBe(1);
+    expect(text).toContain("旅行中の回答契約");
+    expect(text).toContain("Tool Evidenceと同様に根拠"); expect(text).toContain("質問必須ではありません");
+    expect(text.match(/<verified_evidence>([\s\S]*?)<\/verified_evidence>/u)![1]!.length + JSON.stringify(compressed).length).toBeLessThanOrEqual(24_000);
     expect(JSON.stringify(initialEvidence)).not.toMatch(/未検証の要約|未採用候補/);
+  });
+  it("does not add an in-trip answer mode or Evidence brief for unverified planning context", () => {
+    const context = buildAgentDecisionContext({ executionId: "planning", feature: "concierge", userRequest: "旅行したい", context: { travelProfile: { likes: "海" } } }, []);
+    const text = agentDecisionContextText(context);
+    expect(text).not.toContain("<verified_evidence>"); expect(text).not.toContain("旅行中の回答契約");
   });
 });
