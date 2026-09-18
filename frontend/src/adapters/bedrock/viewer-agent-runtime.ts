@@ -2633,13 +2633,13 @@ function travelBurdenAdvisory(
   const concerns: string[] = [];
   const maximum = profile.transport.maxTypicalTravelMinutes;
   const duration = journey.arrivalTimeMinutes - journey.departureTimeMinutes;
-  if (maximum !== null && duration > maximum + 30) {
+  if (maximum != null && duration > maximum + 30) {
     const hours = Math.floor(duration / 60);
     const minutes = duration % 60;
     const durationLabel = `${hours > 0 ? `${hours}時間` : ""}${minutes > 0 ? `${minutes}分` : ""}`;
     concerns.push(`行きの移動は${durationLabel}で、普段許容している移動時間より長め`);
   }
-  if (profile.travelStyle.transferTolerance <= 0.35 && journey.transferCount >= 2) {
+  if (profile.travelStyle.transferTolerance !== undefined && profile.travelStyle.transferTolerance <= 0.35 && journey.transferCount >= 2) {
     concerns.push(`乗換が${journey.transferCount}回あり、普段の好みより多め`);
   }
   return concerns.length === 0

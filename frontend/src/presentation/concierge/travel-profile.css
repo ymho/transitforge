@@ -1,0 +1,27 @@
+.travel-profile-dialog {
+  width: min(44rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem);
+  padding: 0; overflow-y: auto; border: 1px solid #d8dee6; border-radius: 1rem;
+  color: #172235; background: #fffefb; font-size: 1rem;
+}
+.travel-profile-dialog::backdrop { background: rgb(20 30 48 / 45%); }
+.profile-editor { padding: clamp(1rem, 3vw, 2rem); overflow-wrap: anywhere; }
+.profile-editor header { display: flex; gap: 1rem; align-items: center; justify-content: space-between; }
+.profile-editor h2 { margin: 0; font-size: 1.5rem; }
+.profile-editor p { line-height: 1.7; }
+.profile-editor fieldset { min-width: 0; border: 1px solid #d8dee6; padding: 1rem; margin-block: 1.25rem; }
+.profile-editor legend { font-weight: 700; padding-inline: .5rem; }
+.profile-editor label { display: grid; gap: .5rem; margin-block: .75rem; }
+.profile-editor input:not([type=checkbox]), .profile-editor select, .profile-editor textarea {
+  box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; font: inherit;
+  color: inherit; background: #fff; border: 1px solid #a3afbf; border-radius: .4rem; padding: .6rem;
+}
+.profile-editor button { min-height: 44px; padding: .65rem 1rem; font: inherit; color: #183459;
+  background: #f0f4f8; border: 1px solid #b5c1d0; border-radius: .5rem; cursor: pointer; }
+.profile-editor button[type=submit] { background: #245b99; color: #fff; }
+.profile-editor :focus-visible { outline: 3px solid #3674b8; outline-offset: 3px; }
+.profile-chips, .profile-editor-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-block: 1rem; }
+.profile-chips label, .profile-range label { display: flex; align-items: center; min-height: 44px; gap: .5rem; }
+.profile-chips label { border: 1px solid #c5cedb; border-radius: 2rem; padding: 0 .8rem; margin: 0; }
+.profile-editor input[type=checkbox] { width: 1.2rem; height: 1.2rem; flex-shrink: 0; }
+.profile-range { border-bottom: 1px solid #e6e9ee; padding-block: .5rem; }
+.profile-editor [hidden] { display: none; }
