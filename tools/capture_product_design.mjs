@@ -39,6 +39,9 @@ try {
     await app.locator('[data-primary="my"]').click();
     // Seed comparable preferences through real UI, not a second storage contract.
     await app.locator("[data-profile]").click();
+    await app.locator('[name="station"]').fill("京都");
+    await app.locator('[name="party"]').fill("2");
+    await app.locator('[name="budget"]').fill("バランス重視");
     await app.locator('[name="mode"]').selectOption("rail");
     await app.locator('[data-choice="pace"][data-value="0.2"]').click();
     await app.locator('[data-choice="interest-food"]').click();
