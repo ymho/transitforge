@@ -67,11 +67,34 @@ export interface EvidenceClaim {
   statement: string;
   kind: ClaimKind;
   evidenceIds: string[];
+  /** Exact typed facts being asserted. No natural-language inference or timetable calculation. */
+  binding?: { subject: string; facts: Record<string, EvidenceFactValue> };
 }
 
 export interface AssessedEvidenceClaim extends EvidenceClaim {
   groundingStatus: ClaimGroundingStatus;
   missingEvidenceIds: string[];
+}
+
+export function parseEvidenceClaim(value: unknown): EvidenceClaim | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const v = value as Record<string, unknown>;
+  if (Object.keys(v).some((key) => !["id", "statement", "kind", "evidenceIds", "binding"].includes(key)) ||
+      typeof v.id !== "string" || !v.id.trim() || v.id.length > 200 || typeof v.statement !== "string" ||
+      !v.statement.trim() || v.statement.length > 500 || !["fact", "inference", "unknown"].includes(String(v.kind)) ||
+      !Array.isArray(v.evidenceIds) || v.evidenceIds.length > 10 ||
+      !v.evidenceIds.every((id) => typeof id === "string" && id.length > 0 && id.length <= 200) || new Set(v.evidenceIds).size !== v.evidenceIds.length) return undefined;
+  if (v.binding !== undefined) {
+    if (!v.binding || typeof v.binding !== "object" || Array.isArray(v.binding)) return undefined;
+    const binding = v.binding as Record<string, unknown>;
+    if (Object.keys(binding).some((key) => !["subject", "facts"].includes(key)) || typeof binding.subject !== "string" ||
+        !binding.subject.trim() || binding.subject.length > 240 || !binding.facts || typeof binding.facts !== "object" || Array.isArray(binding.facts)) return undefined;
+    const facts = Object.entries(binding.facts);
+    if (!facts.length || facts.length > 12 || facts.some(([key, fact]) => key.length > 120 ||
+      !(fact === null || typeof fact === "boolean" || typeof fact === "number" && Number.isFinite(fact) ||
+        typeof fact === "string" && fact.length <= 500 || Array.isArray(fact) && fact.length <= 12 && fact.every((s) => typeof s === "string" && s.length <= 240)))) return undefined;
+  }
+  return v as unknown as EvidenceClaim;
 }
 
 export interface EvidenceValidationResult {
@@ -82,7 +105,8 @@ export interface EvidenceValidationResult {
       | "duplicate_claim_id"
       | "missing_evidence_reference"
       | "unsupported_fact_claim"
-      | "invalid_unknown_claim";
+      | "invalid_unknown_claim"
+      | "claim_fact_mismatch";
     targetId: string;
     message: string;
   }>;
@@ -145,6 +169,16 @@ export function validateEvidenceAndClaims(
       }
     } else {
       groundingStatus = "supported";
+    }
+    if (claim.binding && !claim.evidenceIds.some((id) => {
+      const source = evidence.find((item) => item.id === id);
+      return source?.knowledgeKind !== "unverified_information" && source?.knowledgeKind !== "model_interpretation" &&
+        source?.subject === claim.binding!.subject && Object.keys(claim.binding!.facts).length > 0 &&
+        Object.entries(claim.binding!.facts).every(([key, value]) =>
+          JSON.stringify(source.facts[key]) === JSON.stringify(value));
+    })) {
+      groundingStatus = "unsupported";
+      errors.push({ code: "claim_fact_mismatch", targetId: claim.id, message: "Claim subject / typed factsがEvidenceと一致しません" });
     }
     return { ...claim, groundingStatus, missingEvidenceIds };
   });

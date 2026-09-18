@@ -1,4 +1,5 @@
 import type { AgentContextValue } from "./agent-decision-context";
+import { parseEvidenceClaim, type EvidenceClaim } from "./evidence-model";
 import { validInTripAnswerPlan, type InTripAnswerPlan } from "./in-trip-answer-plan";
 
 export const decisionSummaryStartTag = "<decision_summary>";
@@ -36,6 +37,7 @@ export interface AgentDecisionSummaryValue {
 }
 
 export interface AgentDecisionSummary {
+  claims?: EvidenceClaim[];
   inTripAnswerPlan?: InTripAnswerPlan;
   interpretedGoal: string;
   hardConstraints: AgentDecisionSummaryValue[];
@@ -95,7 +97,7 @@ export function extractAgentDecisionSummary(
 export function parseAgentDecisionSummary(value: unknown): AgentDecisionSummary | undefined {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     "interpretedGoal", "hardConstraints", "softPreferences", "selectedAction",
-    "selectedTool", "unresolvedFacts", "reasonCodes", "replanReason", "usedEvidenceIds", "inTripAnswerPlan",
+    "selectedTool", "unresolvedFacts", "reasonCodes", "replanReason", "usedEvidenceIds", "inTripAnswerPlan", "claims",
   ])) return undefined;
   if (!boundedText(value.interpretedGoal, 240) ||
     !decisionValues(value.hardConstraints, 12) ||
@@ -112,7 +114,9 @@ export function parseAgentDecisionSummary(value: unknown): AgentDecisionSummary 
   if (value.selectedAction === "answer" && value.selectedTool !== undefined) return undefined;
   if (value.usedEvidenceIds !== undefined && !validUsedEvidenceIds(value.usedEvidenceIds)) return undefined;
   if (value.inTripAnswerPlan !== undefined && (!validInTripAnswerPlan(value.inTripAnswerPlan) || value.selectedAction !== "answer")) return undefined;
+  if (value.claims !== undefined && (!Array.isArray(value.claims) || value.claims.length > 6 || value.claims.some((claim) => !parseEvidenceClaim(claim)))) return undefined;
   return {
+    ...(Array.isArray(value.claims) ? { claims: value.claims.map((claim) => parseEvidenceClaim(claim)!) } : {}),
     interpretedGoal: value.interpretedGoal,
     hardConstraints: value.hardConstraints,
     softPreferences: value.softPreferences,

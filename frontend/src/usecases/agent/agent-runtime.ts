@@ -1,4 +1,5 @@
 import { AgentTraceRecorder } from "./agent-trace";
+import { invalidResponseContract, responseContractRepairInstruction } from "./response-contract";
 import type {
   AgentModelContent,
   AgentModelClass,
@@ -131,7 +132,7 @@ export class MultiStepAgentRuntime {
     const unavailableToolNames = new Set<string>();
     const executedToolCalls = new Map<string, AgentToolExecution & { toolName: string }>();
     let finalizeAfterToolResult = false;
-    let correctedInTripContract = false;
+    let correctedResponseContract = false;
 
     while (true) {
       if (
@@ -207,6 +208,17 @@ export class MultiStepAgentRuntime {
       if (modelResponse.invalidUsedEvidenceIds || used !== undefined && (!validUsedEvidenceIds(used) || used.some((id) => !evidence.some((e) => e.id === id)))) {
         return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_used_evidence_ids");
       }
+      const invalidContract = invalidResponseContract(modelResponse, (modelRequest.tools ?? []).map((tool) => tool.name));
+      if (invalidContract) {
+        if (!correctedResponseContract && !finalResponseRequired) {
+          correctedResponseContract = true;
+          messages.push({ role: "user", content: [{ type: "text", text: responseContractRepairInstruction }] });
+          iterations++;
+          trace.replanDecided(true, invalidContract, decisionBoundary);
+          continue;
+        }
+        return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_response_contract");
+      }
       messages.push(modelResponse.message);
 
       if (modelResponse.stopReason === "max_tokens") {
@@ -249,8 +261,8 @@ export class MultiStepAgentRuntime {
           } catch {
             // Result-driven wire-contract repair, not reflection or a Tool/intent router.
             // Never execute a tool encoded in prose or relax Evidence validation.
-            if (decisionContext.inTripReplanScope && !correctedInTripContract && !finalResponseRequired) {
-              correctedInTripContract = true;
+            if (!correctedResponseContract && !finalResponseRequired) {
+              correctedResponseContract = true;
               // The rejected response may contain only stripped decision metadata, i.e. no
               // valid Converse content. Do not replay it (or its reasoning) as assistant text.
               messages.pop();
@@ -264,6 +276,9 @@ export class MultiStepAgentRuntime {
           }
         }
         if (hasOnlyInternalReasoning(modelResponse)) {
+          messages.pop();
+          if (correctedResponseContract || finalResponseRequired) return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_response_contract");
+          correctedResponseContract = true;
           messages.push({
             role: "user",
             content: [{
@@ -321,6 +336,14 @@ export class MultiStepAgentRuntime {
         try {
           generated = inTripRendered ?? this.responseGenerator.fromModel(modelResponse, evidence);
         } catch {
+          if (!correctedResponseContract && !finalResponseRequired) {
+            correctedResponseContract = true;
+            messages.pop();
+            messages.push({ role: "user", content: [{ type: "text", text: responseContractRepairInstruction }] });
+            iterations++;
+            trace.replanDecided(true, "invalid_response_format", decisionBoundary);
+            continue;
+          }
           return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_response_format");
         }
         trace.decisionRecorded({ ...decisionForAnswer(
@@ -338,6 +361,14 @@ export class MultiStepAgentRuntime {
           grounding.claims.some(({ groundingStatus }) =>
             groundingStatus === "unsupported")
         ) {
+          if (!correctedResponseContract && !finalResponseRequired) {
+            correctedResponseContract = true;
+            messages.pop();
+            messages.push({ role: "user", content: [{ type: "text", text: responseContractRepairInstruction }] });
+            iterations++;
+            trace.replanDecided(true, "unsupported_claim", decisionBoundary);
+            continue;
+          }
           const response = this.responseGenerator.groundingFailure();
           trace.responseGenerated(response, grounding.claims.map(({ id }) => id));
           trace.taskCompleted(

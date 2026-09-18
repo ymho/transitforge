@@ -22,6 +22,29 @@ import { inTripApplicationEvidence } from "./in-trip-application-evidence";
 import { calculateInTripReplanScope, replanScopeContext } from "@raiquora/trip/in-trip-replan";
 
 describe("MultiStepAgentRuntime", () => {
+  it("repairs general Tool prose once without retaining its payload", async () => {
+    const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
+    const repaired = { ...textResponse("確認できません"), decisionSummary: {
+      interpretedGoal: "確認", hardConstraints: [], softPreferences: [], selectedAction: "answer" as const,
+      unresolvedFacts: [], reasonCodes: ["information_missing" as const],
+      claims: [{ id: "unknown", kind: "unknown" as const, statement: "未確認", evidenceIds: [] }],
+    } };
+    const model = sequenceModel([textResponse('<tool_call>{"private":"DO_NOT_REPLAY"}</tool_call>'), repaired], requests);
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run(request("調べて"));
+    expect(output.status).toBe("completed");
+    expect(model.generate).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(output)).not.toContain("DO_NOT_REPLAY");
+    expect(JSON.stringify(requests[1])).not.toContain("DO_NOT_REPLAY");
+  });
+  it("shares one repair budget across Tool prose and missing Claims", async () => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const model = sequenceModel([textResponse('<tool_call>{}</tool_call>'), textResponse("京都から大阪へ1分")]);
+    const result = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run(request("経路"));
+    expect(result.status).toBe("failed");
+    expect(model.generate).toHaveBeenCalledTimes(2);
+    expect(result.response).not.toContain("1分");
+    expect(result.trace.events.filter(e => e.type === "tool_called")).toHaveLength(0);
+  });
   it("ends on Application currentness failure without later batch Tools or silent replan", async () => {
     const tools = new AgentToolRegistry(), order: string[] = [];
     tools.register({ ...echoTool("first_tool", order), execute: async () => {

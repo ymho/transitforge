@@ -1,4 +1,4 @@
-import type { Evidence, EvidenceClaim } from "./evidence-model";
+import { parseEvidenceClaim, validateEvidenceAndClaims, type Evidence, type EvidenceClaim } from "./evidence-model";
 import type { AgentModelResponse } from "./model-provider";
 import type { ViewerAgentAction } from "../viewer/viewer-action";
 
@@ -24,16 +24,27 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
     return `確認したいことがあります: ${missingInformation.join(" ")}`;
   }
 
-  fromModel(response: AgentModelResponse, _evidence: Evidence[]): AgentGeneratedResponse {
+  fromModel(response: AgentModelResponse, evidence: Evidence[]): AgentGeneratedResponse {
     const text = response.message.content
       .filter((content): content is { type: "text"; text: string } =>
         content.type === "text")
       .map(({ text }) => withoutInternalReasoning(text).trim())
       .filter(Boolean)
       .join("\n");
+    const summary = response.decisionSummary;
+    const claims = summary?.claims ?? [];
+    const nonfactual = summary?.reasonCodes.includes("no_factual_claim_required") && claims.length === 0 &&
+      !(summary.usedEvidenceIds?.length);
+    if (!nonfactual && (!claims.length || claims.some((claim) => !parseEvidenceClaim(claim) ||
+      claim.kind !== "unknown" && !claim.binding) || !validateEvidenceAndClaims(evidence, claims).valid)) {
+      throw new Error("missing_or_invalid_answer_claim_contract");
+    }
+    // Facts are rendered from the validated binding. Free prose cannot append additional values.
+    const factualText = claims.map((claim) => claim.kind === "unknown" ? "必要な事実は確認できていません。" :
+      `${claim.binding!.subject}: ${Object.entries(claim.binding!.facts).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join("、") : String(value)}`).join(" / ")}`).join("\n");
     return {
-      text: text || "確認できる情報が不足しているため回答できません",
-      claims: [],
+      text: (nonfactual ? text : factualText) || "確認できる情報が不足しているため回答できません",
+      claims,
       viewerActions: [],
     };
   }

@@ -1,5 +1,5 @@
 import { parseViewerAgentActions } from "../viewer/viewer-action";
-import type { Evidence, EvidenceClaim } from "./evidence-model";
+import { parseEvidenceClaim, type Evidence, type EvidenceClaim } from "./evidence-model";
 import type { AgentModelResponse } from "./model-provider";
 import {
   DefaultAgentResponseGenerator,
@@ -44,32 +44,11 @@ export class StructuredAgentResponseGenerator extends DefaultAgentResponseGenera
 }
 
 function parseClaim(value: unknown, index: number): EvidenceClaim {
-  if (
-    !isRecord(value) ||
-    Object.keys(value).some((key) =>
-      key !== "id" && key !== "statement" && key !== "kind" && key !== "evidenceIds") ||
-    !isIdentifier(value.id) ||
-    typeof value.statement !== "string" ||
-    !value.statement.trim() ||
-    value.statement.length > 500 ||
-    (value.kind !== "fact" && value.kind !== "inference" && value.kind !== "unknown") ||
-    !Array.isArray(value.evidenceIds) ||
-    value.evidenceIds.length > 10 ||
-    !value.evidenceIds.every(isIdentifier) ||
-    new Set(value.evidenceIds).size !== value.evidenceIds.length
-  ) {
+  const claim = parseEvidenceClaim(value);
+  if (!claim) {
     throw new Error(`Agent応答Claim ${index + 1}件目が不正です`);
   }
-  return {
-    id: value.id,
-    statement: value.statement.trim(),
-    kind: value.kind,
-    evidenceIds: [...value.evidenceIds],
-  };
-}
-
-function isIdentifier(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0 && value.length <= 200;
+  return claim;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
