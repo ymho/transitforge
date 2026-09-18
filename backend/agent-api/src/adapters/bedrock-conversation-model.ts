@@ -108,7 +108,7 @@ export class BedrockConversationModel implements ConversationModel {
   ): Promise<void> {
     if (!request.trace || !this.options.traceRecorder) return;
     const privateProfile = JSON.stringify(request.messages).includes("consentedPreferenceNotes") ||
-      request.messages.some((message) => message.content.some((block) => typeof block.text === "string" && block.text.includes('"conversation":')));
+      request.messages.some((message) => message.content.some((block) => "text" in block && typeof block.text === "string" && block.text.includes('"conversation":')));
     try {
       await this.options.traceRecorder.record({
         modelCallId: request.trace.modelCallId,
