@@ -801,6 +801,15 @@ export function validateViewerAgentToolPreconditions(
     return "利用者が駅間経路を求めておらず、確定した旅行先もないためsearch_direct_routesは実行できません。候補探索を続けてください。";
   }
   if (name === "ask_follow_up") {
+    // The free-form question must not bypass a known origin just because the
+    // model omitted requestedRequirement. This validates an ask; it does not
+    // select a Tool or infer a new station.
+    if (typeof input.question === "string" && conversationQuestionRequestsOrigin(input.question) &&
+      (context.currentTrip && effectiveTripConstraints(context.currentTrip.request).some((c) =>
+        c.requirement.type === "origin" && (!c.assumptionId || context.currentTrip!.request.assumptions.find((a) => a.id === c.assumptionId)?.status === "confirmed")) ||
+        context.defaultOriginStation)) {
+      return "既知の出発地は聞き直せません。Tripの明示条件を優先し、未指定ならプロフィールの出発地を仮の起点として使って前進してください。";
+    }
     if (context.currentTrip) {
       const requested = input.requestedRequirement ?? (input.expectedInput === "departure-date" ? "dates" : input.expectedInput === "stay-length" ? "duration" : undefined);
       const party = context.currentTrip.request.party;

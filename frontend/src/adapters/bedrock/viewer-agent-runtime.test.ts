@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Train } from "@raiquora/train/train";
 import type { TrainPosition } from "../../domain/train-position";
 import type { UserProfile } from "@raiquora/trip/travel-profile";
+import { askProgressFixture } from "./ask-progress-scenarios.fixture";
 import { applyTripPlanPatches, validateTripPlanPatches, type TripPlan } from "@raiquora/trip/trip-plan";
 import type {
   ViewerAgentResponse,
@@ -198,7 +199,13 @@ describe("Bedrock viewer agent", () => {
       "ask_follow_up",
       { expectedInput: "free-text", question: "出発地を教えていただけますか？" },
       { tripContext: {}, defaultOriginStation: "向日町駅" },
-    )).toContain("プロフィールに登録済みの出発地");
+    )).toContain("既知の出発地");
+    const trip = askProgressFixture("C-candidate").trip;
+    expect(validateViewerAgentToolPreconditions(
+      "ask_follow_up",
+      { expectedInput: "free-text", question: "出発駅を教えていただけますか？" },
+      { currentTrip: trip, defaultOriginStation: "京都" },
+    )).toContain("既知の出発地");
     expect(validateViewerAgentToolPreconditions(
       "search_accommodations",
       { checkInDate: "2026-08-31", checkOutDate: "2026-09-02" },
