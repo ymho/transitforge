@@ -85,7 +85,7 @@ export class MultiStepAgentRuntime {
     const deadline = startedAt + this.limits.maxExecutionMs;
     const trace = new AgentTraceRecorder(request.executionId, { now: this.now,
       // History can quote previously opted-in notes even after consent removal.
-      omitContent: request.context?.travelProfile?.consentedPreferenceNotes !== undefined || request.context?.conversation !== undefined });
+      omitContent: request.omitTraceContent === true || request.context?.travelProfile?.consentedPreferenceNotes !== undefined || request.context?.conversation !== undefined });
     const evidence: Evidence[] = [];
     trace.taskStarted(request.userRequest);
     try {

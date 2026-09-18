@@ -16,12 +16,14 @@ export function createServerAgent(options: {
   additionalTools?: readonly ServerAgentToolBinding[];
   limits?: ServerAgentDependencies["limits"];
   newExecutionId?: () => string;
+  loadContext?: ServerAgentDependencies["loadContext"];
 }) {
   return createServerAgentApplication({
     newExecutionId: options.newExecutionId ?? randomUUID,
     createModel: scope => new ConversationModelProvider(options.model, scope.executionId),
     modelClassPolicy: structuredModelClassPolicy,
     limits: options.limits,
+    loadContext: options.loadContext,
     registerTools: (tools, evidence) => registerServerTools(tools, evidence, [
       { descriptor: weatherToolDescriptor, operation: createWeatherForecastOperation(options.weather), evidence: externalTravelEvidence },
       ...(options.additionalTools ?? []),

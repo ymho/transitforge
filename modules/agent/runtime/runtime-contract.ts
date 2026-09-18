@@ -15,6 +15,8 @@ export interface AgentRuntimeRequest {
   feature: AgentRuntimeFeature;
   userRequest: string;
   context?: AgentRuntimeContextInput;
+  /** Trusted host privacy policy, never model/transport input. Keeps diagnostic counts and timing. */
+  omitTraceContent?: boolean;
   /** Trusted Application boundary only, never general/model Context or public request body. */
   initialEvidence?: Evidence[];
 }

@@ -28,6 +28,8 @@ export interface AgentKnownPreference {
 }
 
 export interface AgentConversationContext {
+  title?: string;
+  scope?: "general" | "trip" | "place" | "route";
   summary?: string;
   messages?: Array<{ role: "user" | "assistant"; text: string }>;
   /** Legacy notes; serialized conversations are decoded before bounding. */
@@ -182,7 +184,7 @@ export function buildAgentDecisionContext(
         ? { serviceDate: input?.featureContext?.serviceDate }
         : {}),
     },
-    ...(input?.conversation ? { conversation: conversation(input.conversation) } : {}),
+    ...(input?.conversation ? { conversation: boundAgentConversationContext(input.conversation) } : {}),
     ...(!hasTripRequest && input?.tripContext ? { tripContext: boundedRecord(input.tripContext, 20) } : {}),
     ...(input?.travelProfile ? { travelProfile: boundedUnknownRecord(input.travelProfile) } : {}),
     // Trip -> schedule[] -> item.schedule -> ZonedInstant -> at/timeZone needs six levels.
@@ -264,10 +266,13 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
       userRequest: context.userRequest,
       featureContext: context.featureContext,
       conversation: context.conversation ? {
+        title: context.conversation.title,
+        scope: context.conversation.scope,
         summary: context.conversation.summary,
         messages: context.conversation.messages?.slice(-8),
         relevantMessages: context.conversation.relevantMessages?.slice(-2),
         pendingTopics: context.conversation.pendingTopics,
+        resolvedTopics: context.conversation.resolvedTopics,
       } : undefined,
       tripContext: context.tripContext,
       travelProfile: context.travelProfile,
@@ -310,9 +315,12 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     userRequest: context.userRequest,
     featureContext: context.featureContext,
     conversation: context.conversation ? {
+      title: context.conversation.title,
+      scope: context.conversation.scope,
       summary: context.conversation.summary,
       messages: context.conversation.messages?.slice(-4).map(({ role, text }) => ({ role, text: text.slice(0, 800) })),
       pendingTopics: context.conversation.pendingTopics,
+      resolvedTopics: context.conversation.resolvedTopics,
     } : undefined,
     tripContext: context.tripContext ? Object.fromEntries(Object.entries(context.tripContext).slice(0, 20)
       .map(([key, value]) => [key, Array.isArray(value) ? value.slice(0, 3) : value])) : undefined,
@@ -430,7 +438,8 @@ function compactTripPlaces(value: Record<string, unknown>, limit: number): Recor
     ...(value.placeSemantics ? { placeSemantics: value.placeSemantics } : {}) };
 }
 
-function conversation(value: AgentConversationContext): AgentConversationContext {
+/** Shared Browser/Server projection; callers may additionally cap their storage-read budget. */
+export function boundAgentConversationContext(value: AgentConversationContext): AgentConversationContext {
   const messages = [...(value.messages ?? [])];
   const notes: string[] = [];
   for (const note of value.relevantMessages ?? []) {
@@ -448,6 +457,8 @@ function conversation(value: AgentConversationContext): AgentConversationContext
     notes.push(note);
   }
   return {
+    ...(text(value.title, 160) ? { title: text(value.title, 160) } : {}),
+    ...(value.scope && ["general", "trip", "place", "route"].includes(value.scope) ? { scope: value.scope } : {}),
     ...(text(value.summary, 800) ? { summary: text(value.summary, 800) } : {}),
     messages: messages.slice(-12).map(({ role, text: content }) => ({ role, text: bounded(content, 1_600) })),
     relevantMessages: texts(notes, 8, 500),
