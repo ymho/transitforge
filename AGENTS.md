@@ -22,7 +22,7 @@
 
 - 共有する鉄道 運行 経路 旅行の決定論的な契約と計算は`modules/*/domain`
 - Viewerと端末内状態に閉じた契約と計算は`frontend/src/domain`
-- Agentの推論 Tool Evidence Trace Policyは`frontend/src/usecases/agent`
+- Provider非依存のAgent Runtime Tool Evidence Trace Policyは`modules/agent/runtime` Server実行入口は`backend/agent-api/src/usecases/agent` Browser固有のTool組成と表示接続だけを`frontend/src/usecases/agent`へ残す（#480でcutover）
 - ユースケースと外部境界のPortは`frontend/src/usecases`
 - 画面機能のView DOM操作 CSSは`frontend/src/presentation/<feature>`
 - ブラウザ HTTP Mapbox Bedrockなど外部技術への接続は`frontend/src/adapters`

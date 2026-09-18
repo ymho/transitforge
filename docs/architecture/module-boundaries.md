@@ -65,8 +65,9 @@ Browserのproduction組成とHTTP bridgeは#480まで残す。UI取得・表示�
 Agentは推論とToolのオーケストレーションを担当し 鉄道の計算はDomain Serviceへ委譲する
 正本と重複のルールは[Domainの所有権](domain-ownership.md)を参照する
 
-外部旅行情報も同じ依存方向を使う。`usecases/agent/external-travel-tools.ts`がProvider非依存の
-Browser Toolの入力検証と実行結果の収集を所有し、共有Evidence変換は`@raiquora/agent/external-travel-evidence`へ委譲する。`adapters/bedrock`はモデル形式との変換だけを行う。
+外部旅行情報も同じ依存方向を使う。`usecases/agent/external-travel-tools.ts`が
+Browser Toolの入力検証と実行結果の収集を所有する。共有Evidence変換は
+`@raiquora/agent/external-travel-evidence`へ委譲し、`adapters/bedrock`はモデル形式との変換を行う。
 天気などの外部旅行情報カードは`presentation/concierge/external-travel-cards.ts`へ閉じる。
 観光候補は`presentation/place-explorer`がカードを所有し `adapters/mapbox/place-media-layer.ts`が
 同じPlace IDを地図へ投影する。チャット本体は外部Providerの応答構造やMapbox操作を解釈しない。

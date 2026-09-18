@@ -52,7 +52,7 @@ HTTP eventを受けず、結果は`Promise<AgentRuntimeResult>`でEvidence/Claim
 weatherは既存WeatherForecastProvider、追加Toolはdescriptor/operation/Evidence mapperを登録する。
 固定IP Providerはoperation Portの実装側へ閉じる。
 
-呼出元が認証済み`TripPrincipal`を渡す。fake principalでoffline実行できるが、principalの形の
+呼出元が認証済み`TrustedPrincipal`を渡す。fake principalでoffline実行できるが、principalの形の
 検査だけでは認証にならない。会話/Tripの参照を永続状態から解決する処理は#479、
 公開transportは#462/#480へ残す。uiContextはboundedな参照であり、未取得のTrip状態や認可根拠にしない。
 今回は公開route・production compositionを切り替えない。
@@ -62,3 +62,5 @@ weatherは既存WeatherForecastProvider、追加Toolはdescriptor/operation/Evid
 npx vitest run modules/agent/runtime backend/agent-api/src/usecases/agent backend/agent-api/src/server-agent-composition.test.ts
 npm run typecheck --workspace @raiquora/agent-api
 ```
+
+`npm run test --workspace @raiquora/agent-api`は共有Runtime coreの隣接testも実行する。Frontend workspaceの全量testはこの範囲を除外し、root CIで重複実行しない。

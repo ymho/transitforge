@@ -1,3 +1,4 @@
+import type { TrustedPrincipal } from "../../contracts/trusted-principal.js";
 import { MultiStepAgentRuntime, type AgentModelClassPolicy } from "@raiquora/agent/agent-runtime";
 import type { AgentModelProvider } from "@raiquora/agent/model-provider";
 import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
@@ -5,11 +6,11 @@ import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
 import type { AgentRuntimeLimits } from "@raiquora/agent/runtime-policies";
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
-import { requireTripPrincipal, type TripPrincipal } from "../../contracts/trip-principal.js";
+import { requireTripPrincipal } from "../../contracts/trip-principal.js";
 
 /** Caller authenticates principal. References are not loaded or trusted as planning state. */
 export interface ServerAgentTurn {
-  principal: TripPrincipal;
+  principal: TrustedPrincipal;
   userRequest: string;
   conversationId?: string;
   tripId?: string;
@@ -34,7 +35,7 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
       if (value !== undefined && (typeof value !== "string" || !value.trim() || value.length > 200 || /[\u0000-\u001f\u007f]/u.test(value))) throw new Error("Invalid Agent reference");
     }
     const scope: ServerAgentScope = {
-      principal: { subject: input.principal.subject }, userRequest: input.userRequest,
+      principal: { subject: input.principal.subject, identity: { ...input.principal.identity }, scopes: [...input.principal.scopes] }, userRequest: input.userRequest,
       ...(input.conversationId ? { conversationId: input.conversationId } : {}),
       ...(input.tripId ? { tripId: input.tripId } : {}),
       ...(input.uiContext?.itemId ? { uiContext: { itemId: input.uiContext.itemId } } : {}),

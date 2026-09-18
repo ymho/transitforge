@@ -85,6 +85,7 @@
 - [0061 共通subject routingで天気・警報のTrip暴露を評価する](0061-evaluate-weather-hazard-impact-with-shared-routing.md)
 - [0062 共有due-workでTrip再チェックを起動する](0062-schedule-trip-rechecks-with-shared-durable-due-work.md)
 - [0063 Impactから通知episodeと配信を分離する](0063-separate-notification-episodes-and-delivery.md)
+- [0067 Cognito検証を共通trusted principal境界へ閉じる](0067-establish-trusted-principal-boundary.md)
 
 ## Wave 2Aによる部分廃止（#477）
 

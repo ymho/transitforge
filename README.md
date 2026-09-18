@@ -98,7 +98,8 @@ tests/               境界fixtureとrepository保守toolのPythonテスト
 tools/               検証 評価 再生成コマンド
 ```
 
-本番のコンシェルジュは`frontend/src/usecases/agent/agent-runtime.ts`を唯一のモデル実行入口とする。
+Agentの共通coreは`modules/agent/runtime/agent-runtime.ts`を唯一のモデル実行実装とする。
+Server Application入口を追加済みで、本番Browser組成からの切替は#480で行う。
 Bedrock接続は`frontend/src/adapters/bedrock/viewer-agent-runtime.ts`で共通Tool Evidence Traceへ適合する。
 Viewer ActionとLocalViewerAgentは#477で撤去済みで、DEVでもAPI障害をlocal fallbackで隠さない。
 
@@ -116,7 +117,7 @@ TypeScriptのテストは対象モジュールの隣へ置く。repository保守
 サーバ保存・予約・旅行中通知が実装済みという意味ではない。
 
 #388の[Trip server保存基盤](docs/architecture/trip-server-persistence.md)では、owner-scoped Repository、
-明示migration、server read/preview sourceを追加した。利用者認証が未導入のため公開Trip CRUDは閉じており、
+明示migration、server read/preview sourceを追加した。公開経路への認証接続は未実施のため公開Trip CRUDは閉じており、
 [#389 の CAS/冪等性](docs/architecture/trip-concurrency.md)は統合済み。本番writer切替は認証境界の導入・レビュー後とする。
 
 [#398 の Reservation](docs/architecture/trip-reservation.md)は採用済みTripとは独立した予約resourceとする。
@@ -241,6 +242,9 @@ python3 tools/measure_viewer_input.py \
 詳細は[プロダクト概要](docs/product-brief.md) [モジュール境界](docs/architecture/module-boundaries.md) [Domainの所有権](docs/architecture/domain-ownership.md) [標準データモデル](docs/architecture/domain-model.md) [コンシェルジュの境界](docs/architecture/ai-operations-guide.md) [Issue運用](.github/ISSUE_MANAGEMENT.md) [ADR](docs/decisions/README.md)を参照
 
 ## AWS
+
+Cognito Access Tokenから既存Tripのownerへ接続する[共通認証境界](docs/architecture/authentication-boundary.md)を
+Backendに用意している。公開APIへの接続、ログインUI、本番Trip writerはまだ有効化していない。
 
 静的ビューワー AI Lambda 混雑と遅延の保存基盤をTerraformで管理する
 継続的なデプロイはGitHub ActionsとOIDCを使用し 固定AWSアクセスキーを使わない

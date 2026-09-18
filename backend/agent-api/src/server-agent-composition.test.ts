@@ -22,7 +22,7 @@ it("runs the existing Bedrock adapter, backend weather operation and another reg
     additionalTools: [{ descriptor: { name: "search_web", description: "test additional capability", inputSchema: { type: "object", properties: {} } },
       operation: extra, evidence: () => [] }],
   });
-  const result = await app.runAgentTurn({ principal: { subject: "trusted-fake" }, userRequest: "京都の天気を調べて" });
+  const result = await app.runAgentTurn({ principal: { subject: "trusted-fake", identity: { issuer: "https://issuer.example.test", subject: "fake-sub" }, scopes: ["raiquora/user"] }, userRequest: "京都の天気を調べて" });
   expect(result.status, JSON.stringify(result.trace)).toBe("completed");
   expect(search).toHaveBeenCalledExactlyOnceWith({ location: "京都市" });
   expect(extra).toHaveBeenCalledOnce();

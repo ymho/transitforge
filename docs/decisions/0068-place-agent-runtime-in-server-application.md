@@ -22,8 +22,8 @@ Browserがmodel/tool往復を組成すると、Agentの実行と表示・端末�
 - `backend/agent-api/src/usecases/agent/server-agent.ts`の`runAgentTurn`をtransport非依存入口とする。
   trusted principal、生のuserRequest、conversation/trip参照、bounded UI参照を受けて
   `Promise<AgentRuntimeResult>`を返す。Registry/Executor/モデル会話はturnごとに作る。
-- principalは既存`TripPrincipal`契約を再利用する。形の検証は認証ではなく、呼出元がtrusted
-  principalを渡す。JWT/Cognitoと公開routeの接続は#451、会話/Profile読込は#479が所有する。
+- principalは最新mainの#484で導入された`TrustedPrincipal`契約を再利用する。形の検証は認証ではなく、呼出元がtrusted
+  principalを渡す。既存`authenticatedApplication`から接続可能とし、JWT/Cognitoと公開routeの接続は#451、会話/Profile読込は#479が所有する。
   userRequestは8,000文字、参照は各200文字以内。未知の入力キーをscopeへコピーしない。
   現段階ではUI itemIdは参照としてscopeにだけ保持し、認可済みTripを未読込のままモデルの
   planning stateへ昇格させない。既存coreのcontext builderはモデル入力をさらにboundedにする。
@@ -50,5 +50,5 @@ production品質のFull/Live評価は今回の完了条件に含めない。
 
 Server fake loopと既存Bedrock Adapter + weatherのoffline縦切り、複数Tool登録、Evidence/Claim、
 重複、失敗、timeout/limit、turn間分離を検証する。共有coreの隣接testを正本に移し、
-Browser境界のintegration testはBrowser側に残す。architecture checkはcoreのBrowser/Vendor依存と
+Browser境界のintegration testはBrowser側に残す。Backend workspace testがcoreも実行し、Frontend workspace testはcoreを除外して重複させない。architecture checkはcoreのBrowser/Vendor依存と
 BackendからFrontendへの依存を拒否する。

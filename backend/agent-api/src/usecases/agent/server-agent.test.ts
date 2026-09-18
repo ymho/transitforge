@@ -1,3 +1,5 @@
+import type { TrustedPrincipal } from "../../contracts/trusted-principal.js";
+import { authenticatedApplication } from "../authenticated-application.js";
 import { describe, expect, it, vi } from "vitest";
 import type { AgentModelRequest, AgentModelResponse } from "@raiquora/agent/model-provider";
 import { successfulAgentToolResult, validAgentToolInput } from "@raiquora/agent/tool-contract";
@@ -15,7 +17,8 @@ function setup(responses: AgentModelResponse[] = [call, final], maxExecutionMs =
   });
   return { app, requests, execute };
 }
-const input = { principal: { subject: "fake-principal" }, userRequest: "確認して" };
+const fakePrincipal = (subject: string): TrustedPrincipal => ({ subject, identity: { issuer: "https://issuer.example.test", subject }, scopes: ["raiquora/user"] });
+const input = { principal: fakePrincipal("fake-principal"), userRequest: "確認して" };
 
 describe("Server Agent Application without Browser APIs", () => {
   it("completes model -> tool -> result -> model -> final with an ordered trace", async () => {
@@ -44,7 +47,7 @@ describe("Server Agent Application without Browser APIs", () => {
   });
   it("validates principal and bounded input before constructing capabilities", async () => {
     const { app, execute, requests } = setup();
-    await expect(app.runAgentTurn({ ...input, principal: { subject: "" } })).rejects.toThrow();
+    await expect(app.runAgentTurn({ ...input, principal: fakePrincipal("") })).rejects.toThrow();
     await expect(app.runAgentTurn({ ...input, uiContext: { itemId: "a".repeat(201) } })).rejects.toThrow();
     await expect(app.runAgentTurn({ ...input, userRequest: "a".repeat(8001) })).rejects.toThrow();
     expect(execute).not.toHaveBeenCalled(); expect(requests).toEqual([]);
@@ -59,11 +62,24 @@ describe("Server Agent Application without Browser APIs", () => {
         tools.register({ name: "fake_tool", description: "fake", inputSchema: { type: "object", properties: {} },
           parseInput: validAgentToolInput, execute: async () => successfulAgentToolResult({ owner: scope.principal.subject }) });
       } });
-    const results = await Promise.all(["owner-a", "owner-b"].map(subject => app.runAgentTurn({ ...input, principal: { subject },
+    const results = await Promise.all(["owner-a", "owner-b"].map(subject => app.runAgentTurn({ ...input, principal: fakePrincipal(subject),
       uiContext: { itemId: "item-1", ownerId: "untrusted" } as { itemId: string } })));
     expect(results.map(result => result.status)).toEqual(["completed", "completed"]);
     expect(JSON.stringify(scopes)).not.toContain("untrusted");
     expect(JSON.stringify(results[0])).not.toContain("owner-b");
     expect(JSON.stringify(results[1])).not.toContain("owner-a");
   });
+});
+
+
+it("accepts the #451 authentication wrapper without trusting a body principal", async () => {
+  const { app, requests } = setup([final]);
+  const verify = vi.fn(async () => fakePrincipal("verified-owner"));
+  const execute = authenticatedApplication({ verify }, ["raiquora/user"],
+    (principal, command: Omit<typeof input, "principal"> & { principal?: unknown }) => app.runAgentTurn({ ...command, principal }));
+  await expect(execute(undefined, { userRequest: "hello" })).rejects.toThrow("unauthenticated");
+  expect(requests).toHaveLength(0);
+  expect((await execute("fake-token", { userRequest: "hello", principal: { subject: "forged" } })).status).toBe("completed");
+  expect(verify).toHaveBeenCalledExactlyOnceWith("fake-token");
+  expect(JSON.stringify(requests)).not.toMatch(/fake-token|forged|verified-owner/);
 });

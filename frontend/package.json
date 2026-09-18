@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "test": "TMPDIR=/tmp vitest run --root .. frontend/src modules"
+    "test": "TMPDIR=/tmp vitest run --root .. frontend/src modules --exclude '**/modules/agent/runtime/**'"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
