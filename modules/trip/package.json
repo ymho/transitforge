@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./trip-adoption": "./domain/trip-adoption.ts",
+    "./travel-coverage": "./domain/travel-coverage.ts",
     "./trip-sharing": "./domain/trip-sharing.ts",
     "./in-trip-replan": "./domain/in-trip-replan.ts",
     "./in-trip-context": "./domain/in-trip-context.ts",

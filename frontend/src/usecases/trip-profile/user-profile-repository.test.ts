@@ -6,6 +6,7 @@ import {
 import {
   deleteUserProfile,
   loadUserProfile,
+  readUserProfile,
   saveUserProfile,
   travelProfileStorageKey,
 } from "./user-profile-repository";
@@ -24,6 +25,23 @@ const draft = {
 };
 
 describe("travel profile", () => {
+  it("distinguishes denied, missing and corrupt reads without deleting the original", () => {
+    expect(readUserProfile({ getItem: () => { throw new Error("denied"); } })).toEqual({ status: "unavailable" });
+    const local = storage(); expect(readUserProfile(local)).toEqual({ status: "empty" });
+    local.setItem(travelProfileStorageKey, "broken"); expect(readUserProfile(local)).toEqual({ status: "invalid" });
+    expect(local.getItem(travelProfileStorageKey)).toBe("broken");
+  });
+  it("accepts optional hints and unknown fields without fabricated defaults", () => {
+    const local = storage(); const profile = saveUserProfile(local, { home: {}, companions: { usual: [], children: [], usualPartySize: 2 },
+      travelStyle: {}, preferences: {}, transport: { preferredMode: "rail" }, notes: { food: "野菜が好き" } });
+    expect(loadUserProfile(local)).toEqual(profile);
+    expect(profile.travelStyle.pace).toBeUndefined(); expect(profile.home.carAvailable).toBeUndefined();
+  });
+  it("rejects invalid weights before touching storage", () => {
+    const local = storage(); const saved = saveUserProfile(local, draft);
+    expect(() => saveUserProfile(local, { ...draft, travelStyle: { pace: NaN } })).toThrow();
+    expect(loadUserProfile(local)).toEqual(saved);
+  });
   it("stores a durable profile separately from each trip context", () => {
     const local = storage();
     const profile = saveUserProfile(local, draft, new Date("2026-08-16T00:00:00Z"));

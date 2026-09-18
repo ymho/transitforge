@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { agentSystemPrompt } from "./agent-system-prompt.js";
+import { extractAgentDecisionSummary } from "../../../../frontend/src/usecases/agent/agent-decision-summary.js";
 
 describe("agentSystemPrompt", () => {
   it("accepts Application Evidence without promoting general Context or requiring questions for unknowns", () => {
@@ -10,7 +11,9 @@ describe("agentSystemPrompt", () => {
     expect(agentSystemPrompt).toContain("質問必須ではありません");
     expect(agentSystemPrompt).not.toContain("Tool Evidenceだけ");
     expect(agentSystemPrompt).toContain('"usedEvidenceIds":[]');
-    expect(agentSystemPrompt).toContain('"inTripAnswerPlan":{"evidence":[]}');
+    const example = agentSystemPrompt.match(/<decision_summary>[\s\S]*?<\/decision_summary>/u)![0];
+    expect(extractAgentDecisionSummary([example]).status).toBe("valid");
+    expect(example).not.toContain("inTripAnswerPlan");
     expect(agentSystemPrompt).toContain("in_tripのanswerだけで必須");
     expect(agentSystemPrompt).toContain("最大10件、重複なし");
     expect(agentSystemPrompt).toContain("キーごと省略");

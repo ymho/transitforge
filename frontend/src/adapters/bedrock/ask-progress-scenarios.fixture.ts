@@ -6,6 +6,7 @@ import { railSelectionFixture } from "../../../../modules/trip/domain/selected-r
 import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
 import type { AgentTrace } from "../../usecases/agent/agent-trace";
 import type { BedrockAgentMessage, BedrockAgentResponse } from "../http/agent-api/bedrock-agent";
+import type { EvidenceClaim } from "../../usecases/agent/evidence-model";
 import { runViewerAgentRuntime, type BedrockAgentConverse, type ViewerAgentRuntimeDependencies } from "./viewer-agent-runtime";
 
 /** Authored synthetic facts; not a recording of a provider or a claim about a real destination. */
@@ -22,6 +23,14 @@ export function modelTool(name: string, input: Record<string, unknown>, id = nam
 }
 export function modelTools(...content: ReturnType<typeof modelTool>[]): BedrockAgentResponse {
   return { message: { role: "assistant", content }, stopReason: "tool_use" };
+}
+
+/** Scripted model selects only claims actually offered in the production wire contract. */
+export function modelGroundedAnswer(messages: BedrockAgentMessage[]): BedrockAgentResponse {
+  const instruction = messages.flatMap((m) => m.content.flatMap((c) => "text" in c && c.text.includes("利用可能Claim: ") ? [c.text] : [])).at(-1);
+  if (!instruction) throw new Error("Expected production grounding contract");
+  const claims = (JSON.parse(instruction.split("利用可能Claim: ")[1]!) as EvidenceClaim[]).slice(0, 2);
+  return modelAnswer(JSON.stringify({ text: claims.map((c) => c.statement).join("\n\n"), claims }));
 }
 export function modelAnswer(text: string): BedrockAgentResponse {
   return { message: { role: "assistant", content: [{ text }] }, stopReason: "end_turn" };
@@ -69,7 +78,7 @@ export function askProgressFixture(id: ProgressCaseId) {
     getCurrentDate: () => new Date(selectedAt), getCurrentTrip: () => trip,
     queryDailyCongestionAnalysis: async () => { throw new Error("No operation fixture"); },
     queryTrainDelayAnalysis: async () => { throw new Error("No delay fixture"); },
-    searchWeb: async () => ({ webSearch: { status: "available", freshness: "fresh", evidence: [progressSource], data: { query: "自然", results: [{ title: progressPage.title, url: progressPage.url, snippet: progressPage.text }] } } }),
+    searchWeb: async () => ({ webSearch: { status: "available", freshness: "fresh", evidence: [progressSource], data: { query: "自然", results: [{ title: progressPage.title, url: progressPage.url, description: progressPage.text }] } } }),
     readWebPages: async () => ({ webPages: { status: "available", freshness: "fresh", evidence: [progressSource], data: { pages: [progressPage] } } }),
     ...(id === "G-consecutive" ? { previousAssistantTurn: "ask_only" as const } : {}),
     ...(id === "C-candidate" ? {

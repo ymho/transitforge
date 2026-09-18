@@ -6,6 +6,7 @@ import type { RailTimetableInput, VerifiedRailCandidate } from "./selected-rail-
 import type { TransportMode } from "./transport-detail";
 import type { HazardAlertSearchResult } from "./hazard-alert";
 import type { WeatherForecast } from "./weather-forecast";
+import type { TravelCoverage } from "./travel-coverage";
 
 export type ConstraintStatus = "satisfied" | "violated" | "unknown";
 export const candidateReasonCodes = ["verified-match", "verified-mismatch", "missing-facts", "unconfirmed-assumption",
@@ -41,6 +42,7 @@ export interface CandidatePriceAssessment {
 }
 /** Derived, task-local view. Not a Trip field, persisted record, ranking score or model assertion. */
 export interface TravelCandidateAssessment {
+  serviceCoverage?: TravelCoverage;
   candidateId: string; assessedAt: string; constraintStatus: ConstraintStatus;
   hardConstraints: CandidateConstraintAssessment[]; softPreferences: CandidatePreferenceAssessment[];
   relevance: { status: "fit" | "questionable" | "unknown"; reasonCodes: CandidateReasonCode[]; evidenceIds: string[] };

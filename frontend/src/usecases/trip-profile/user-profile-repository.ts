@@ -21,13 +21,22 @@ interface RemovableProfileStorage {
 export function loadUserProfile(
   storage: ReadableProfileStorage,
 ): UserProfile | undefined {
-  const raw = storage.getItem(travelProfileStorageKey);
-  if (!raw) return undefined;
+  return readUserProfile(storage).profile;
+}
+
+/** Distinguish absence, corruption and browser denial. Never remove or overwrite a failed read. */
+export function readUserProfile(storage: ReadableProfileStorage): {
+  status: "available" | "empty" | "invalid" | "unavailable";
+  profile?: UserProfile;
+} {
+  let raw: string | null;
+  try { raw = storage.getItem(travelProfileStorageKey); } catch { return { status: "unavailable" }; }
+  if (!raw) return { status: "empty" };
   try {
     const value: unknown = JSON.parse(raw);
-    return isUserProfile(value) ? value : undefined;
+    return isUserProfile(value) ? { status: "available", profile: value } : { status: "invalid" };
   } catch {
-    return undefined;
+    return { status: "invalid" };
   }
 }
 
@@ -41,6 +50,7 @@ export function saveUserProfile(
     version: 2,
     updatedAt: now.toISOString(),
   };
+  if (!isUserProfile(saved)) throw new Error("Invalid travel profile");
   storage.setItem(travelProfileStorageKey, JSON.stringify(saved));
   return saved;
 }

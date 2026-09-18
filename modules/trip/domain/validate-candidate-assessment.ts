@@ -5,11 +5,13 @@ import { addMoney, validateMoney, validatePriceObservation, type Money } from ".
 import { transportModes } from "./transport-detail";
 import { candidateReasonCodes, type TravelCandidateAssessment } from "./travel-candidate-assessment";
 import { combineCandidateChecks } from "./candidate-constraint-assessment";
+import { validateTravelCoverage } from "./travel-coverage";
 
 /** Structural validation is not Evidence verification; only the Application assessor establishes facts. */
 export function validateTravelCandidateAssessment(a: TravelCandidateAssessment): void {
   exactKeys(a, ["candidateId", "assessedAt", "constraintStatus", "hardConstraints", "softPreferences", "relevance", "mobility",
-    "weather", "hazard", "price", "party", "freshness", "sources", "partial", "caveats"]);
+    "weather", "hazard", "price", "party", "freshness", "sources", "partial", "caveats", "serviceCoverage"]);
+  if (a.serviceCoverage) validateTravelCoverage(a.serviceCoverage);
   text(a.candidateId); if (!validInstant(a.assessedAt) || typeof a.partial !== "boolean") fail();
   const ids = new Set<string>();
   for (const source of a.sources) { validateExternalSourceEvidence(source); if (ids.has(source.id)) fail(); ids.add(source.id); }

@@ -1,0 +1,44 @@
+# 旅行プロフィールの互換編集（#457）
+
+会話Contextを含む後続turnも自由文Traceを保存しない。同意解除後でも履歴が以前のメモを
+引用し得るため、現在の送信同意だけでログ保存を再開しない。Model/Tool回数・latency・ID等の
+内容を含まない診断は維持する。会話表示のための履歴と診断Traceは別の保存境界である。
+
+## 正本・保存・未設定
+
+既存UserProfile v2、`transitforge.travel-profile.v2`、既存Repositoryを再利用する。
+home、companions、travelStyle、preferences、transportに対応する1つのフォームとし、モックの別Profileを作らない。
+未設定数値/車利用はfield省略とする。0やfalse、標準ペースへ変換しない。legacy null移動時間も維持する。
+旧v2の値は読込/編集/保存後もそのままで、schema移行・保存キー変更・原本削除はない。
+
+v6の専用編集画面で日本語チップを選ぶ。基本情報/旅のペース/興味・目的/宿泊・食事/配慮事項でまとめる。
+無操作時は.123等の旧重みも丸めない。選択した項目だけ代表値へ変換し、未設定は省略する。
+未設定fieldを別の既定値で上書きせず、表示しない子どもの年代も保持する。
+
+## 編集と失敗
+
+起動時にmodalを自動表示しない。未登録で相談可能。
+編集draftはclone、明示保存だけsetItemする。取消/Escape/ページ離脱時は未保存変更を案内する。
+削除は再確認する。quota・アクセス拒否を成功と表示しない。破損した保存原本は自動上書きしない。
+無効データは明示削除後に新規登録可能である。
+
+## Agent / Trip / privacy
+
+普段の人数はcompanions.usualPartySize、優先移動手段はtransport.preferredMode。
+AgentへはusualPartySizeHint/preferredTransportHintとしてbounded projectionを渡す。
+未設定ペース/車利用はContextでも未設定のまま。今回のTripRequest/明示入力を優先し、Profile保存でTrip A/Bを変更しない。
+予約の人数、今回のparty、hard constraintへ自動転記しない。
+
+notes.budget/lodging/food/avoidancesは各500文字以下の端末メモ。HTMLとして実行しない。
+aiNoteFieldsは利用者が明示保存した項目ごとのAI送信同意。旧メモに同意を付与しない。
+同意した項目だけconsentedPreferenceNotesへ各240文字/最大4項目を投影する。生Profileを送信しない。
+この投影は命令/HTMLではなく普段の希望で、現在の明示条件を優先する。送信同意は記録同意ではない。
+該当turnのAgent Traceは本文/Tool入出力/判断自由文を記録せず、モデル呼出しの保存Traceも会話全文を省略する。
+利用者が同意を解除しても端末メモは残し、以後のProfile投影から外す。
+Profile編集による端末間同期はない。#451の認証切替では端末Profileを別principalへ暗黙移譲せず、明示的な取込/継続確認を所有する。
+現時点で公開認証/保存gateは変更しない。
+
+## Wave接続
+
+#453のマイページは保存済み要約と既存toggleを使用する。編集/取消/削除はこの同じ機能へ接続する。
+#456は今回条件との明示的な適用を担当する。デザインモックの固定人数/予算は入力初期値にしない。

@@ -16,6 +16,9 @@ export class AgentToolExecutor {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
+  /** Application capability origin, independent of the model's no-fact declaration. */
+  collectsEvidence(toolName: string): boolean { return this.evidenceMappers.has(toolName); }
+
   async execute(
     input: {
       executionId: string;

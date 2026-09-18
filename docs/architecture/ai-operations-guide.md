@@ -139,9 +139,10 @@ Toolは機能名や旅行ケース別の分岐で隠さず 実装済みAdapter �
 `place_detail_research`はMapboxで地点を再同定してからWeb検索結果を最大6件 検索先本文を最大4件に制限し 専用の要約モデルへ未信頼な事実資料として渡す。要約に失敗した場合も検索結果の説明文だけをEvidence由来の概要として使用し Providerや資料にない説明を補わない。
 Web本文から作る見どころ 雰囲気 実用情報 周辺候補は出典を保持し 評価 営業時間 料金はProviderの値がある場合だけ表示する。地点詳細の外部リンクはMapboxのwebsite項目または名称が一致する公式検索結果から得た HTTPS の施設公式サイトに限定し 検索 口コミ 予約 SNS 素材配布サイトは除外する。
 地点ID 座標 カテゴリはMapbox SearchのPOIを正とし Wikipediaは名称が一致した地点の説明と画像だけを補完する。
-酒蔵のように呼び方が複数ある施設は決定的な検索語展開を行い Mapbox Place IDで重複を除く。
+検索Adapterは正規化した検索語を単一のProvider要求へ渡し 同一Mapbox Place IDの重複だけを除く。
+施設種別による固定同義語展開や地域名の抽出は行わない。再調査の要否と検索語は既存Agent Runtimeが判断する。
 市 県 一般記事をPOIとして表示せず Mapboxで同定できないWeb上の候補へ座標を推測しない。
-既存旅程で他の観光スポットや酒蔵などの施設種別を相談された場合は Contextの目的地と日程を維持し
+既存旅程への追加・変更相談では変更対象以外の条件を維持し
 BedrockがWeb検索 ページ確認 POI照合を選ぶ。自治体名 交通手段 施設種別そのものを候補から除外する
 検証はTool Adapterへ残す。
 
@@ -336,7 +337,7 @@ Label `area: ai` `type: reliability` Milestone `会話体験と改善ループ` 
 - Tool説明の500文字切り詰めは廃止した。APIの入力保護は1 Tool 16,000文字・全Tool合計64,000文字とし、超過は説明を欠落させず413で明示的に拒否する。これはモデルのtoken上限ではない。Tool一覧の説明は`toolConfig`だけへ送り、ContextのJSONには名前と必須入力だけを載せて重複を避ける。会話・Tool結果・schema・System Prompt・出力枠も別途tokenを消費するため、説明枠内であることをモデル全体の上限内という保証には使わない
 - 公開したTool入力schemaの必須値 型 enum 範囲 配列件数 未知propertyは、Viewer AdapterとLive Evalが同じ決定論的validatorで検証する。モデルがschemaに従うことを前提に実行せず、意味上の前提条件は各Domain Tool Adapterで引き続き検証する
 - 共通Tool ContractのJSON SchemaはBedrock AdapterでConverse APIが受け取れる形へ変換し 最上位を`type` `properties` `required`だけに限定する。モデル固有の制約をDomain Toolへ漏らさない
-- Applicationのmodel classは`default` `lightweight` `decision`だけとし Bedrock model IDを漏らさない。未指定またはclass別model未設定時は`MODEL_ID`へフォールバックする。本番Runtimeは発話を分類せず 候補発見、日付と泊数が揃った旅行計画、検証済み`currentTrip`または`currentJourney`がある判断、Tool結果後の再計画で`decision`を使う。不足条件の確認は`default`を使う
+- Applicationのmodel classは`default` `lightweight` `decision`だけとし Bedrock model IDを漏らさない。未指定またはclass別model未設定時は`MODEL_ID`へフォールバックする。本番Runtimeは発話を分類せず 候補発見、日付と泊数が揃った旅行計画、検証済み`currentTrip`または`currentJourney`がある判断、Tool結果後の再計画、および取得済み本文抜粋からの出典付き説明で`decision`を使う。後者はsourceExcerptがavailable/freshなEvidenceに限り、時刻表Evidenceを一律昇格しない。不足条件の確認は`default`を使う
 - CIの`eval:agent`は固定Observationを決定的に採点する。モデル判断の実測は`npm run eval:agent:decision:live -- --profile smoke --model-class default`で行い、本番と同じSystem Prompt Viewer Tool capability contract `MultiStepAgentRuntime`を使う。AWS認証と課金を伴うため手動または定期実行とし、出力はGit管理外の`/tmp/raiquora-live-agent-eval`へ保存する
 - Live Evalは目的地の着想、既知条件を聞き直さない質問、日帰り・宿泊、復路変更、曖昧な気分、直前経路の途中駅・制約変更・代替確定、検索結果が空の場合の着地を評価する。通常caseは初期能力選択を測り、結果駆動replan caseだけは事実を含まないversion付きTool結果を返して2回目の能力選択まで測る。評価用Tool結果を旅行事実の代用にはしない
 - Live Evalは非0終了も測定結果として保存する。2026-09-02 baselineはNova Lite Smoke 3/6、Full 4/11であり、決定論的Evalの成功とモデル判断品質を混同しない。失敗caseを通すために発話routerを追加したり期待値を緩めたりせず、descriptor、Context、model候補を同じcaseで比較する

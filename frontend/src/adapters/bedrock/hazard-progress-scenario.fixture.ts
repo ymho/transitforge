@@ -3,7 +3,7 @@ import { feasibilityStayTrip, feasibilityNow } from "../../../../modules/trip/do
 import { checklistItem } from "../../../../modules/trip/domain/trip-checklist.fixture";
 import { hazardAlert, hazardInformation } from "../../../../modules/trip/domain/hazard-alert.fixture";
 import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent-runtime";
-import { askProgressFixture, modelAnswer, modelTool, modelTools } from "./ask-progress-scenarios.fixture";
+import { askProgressFixture, modelGroundedAnswer, modelTool, modelTools } from "./ask-progress-scenarios.fixture";
 import { evaluateTravelProgress, type TravelProgressScenario } from "../../usecases/agent/evaluation/travel-progress-evaluation";
 import type { AgentTrace } from "../../usecases/agent/agent-trace";
 import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
@@ -34,7 +34,7 @@ export async function runHazardProgressScenario(scenario: TravelProgressScenario
     const call = calls++;
     if (live) return live(...args);
     if (!call) return modelTools(modelTool("search_travel_alerts", { area: "大阪府" }));
-    return modelAnswer("大阪府について公的な警報情報が発表されています。出典を確認してください。公的な重大度と今回の旅行への具体的影響は別です。Tripへの影響は未評価であり、旅程や準備リストの変更・通知送信はしていません。");
+    return modelGroundedAnswer(args[0]);
   });
   const report = evaluateTravelProgress(scenario.id, [{ observation, trace, delivered: true, modelCalls: calls }], scenario.thresholds, live ? "live" : "scripted");
   const failures: string[] = [];

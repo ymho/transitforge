@@ -3,10 +3,31 @@ import { candidateAssessmentFixture, assessmentAt } from "../../../../modules/tr
 import { assessTripCandidate } from "./assess-trip-candidate";
 import { candidateAssessmentContext } from "../agent/candidate-assessment-context";
 import { candidateAssessmentView } from "../../presentation/trip-plan/candidate-assessment-view";
-import { candidateAssessmentEvidence, candidateAssessmentDescriptor } from "../agent/candidate-assessment-tool";
+import { candidateAssessmentEvidence, candidateAssessmentDescriptor, registerCandidateAssessmentTool } from "../agent/candidate-assessment-tool";
+import { AgentToolRegistry } from "../agent/tool-registry";
 import { validateAgentToolInput } from "../agent/agent-tool-input-validator";
 import { validateEvidenceAndClaims } from "../agent/evidence-model";
 import { buildAgentDecisionContext, agentDecisionContextText } from "../agent/agent-decision-context";
+import { railSelectionFixture } from "../../../../modules/trip/domain/selected-rail-journey.fixture";
+import { createTravelCandidate } from "@raiquora/trip/travel-candidate";
+
+it("keeps verified candidate endpoints/date in comparison Evidence without promoting raw route observations", async () => {
+  const rail = railSelectionFixture(), f = candidateAssessmentFixture();
+  const candidate = createTravelCandidate({ id: rail.candidate.candidateId, journey: rail.candidate.journey });
+  const record = { candidate, tripId: f.trip.id, taskId: "task", validUntil: "2026-09-13T08:00:00Z",
+    assessmentFacts: { candidateId: candidate.id, rail: { candidate: rail.candidate, inputs: rail.inputs } } };
+  const pair = await assessTripCandidate(f.trip, { candidateId: candidate.id, taskId: "task" }, {
+    resolve: async () => record, loadTimetables: async () => [],
+  }, rail.selectedAt);
+  expect(pair.comparison).toEqual({ originStation: "A", destinationStation: "C", serviceDate: "2026-09-13" });
+  const evidence = candidateAssessmentEvidence({ ...candidateAssessmentContext(pair), assessmentEvidence: pair.assessment.sources });
+  expect(evidence[0]?.facts).toMatchObject({ originStation: "A", destinationStation: "C", serviceDate: "2026-09-13", plannedTravelMinutes: 100 });
+  expect(JSON.stringify(evidence)).not.toMatch(/delayMinutes|delayStatus|journey|bookingReference/);
+  const invalid = await assessTripCandidate(f.trip, { candidateId: candidate.id, taskId: "task" }, {
+    resolve: async () => ({ ...record, assessmentFacts: { ...record.assessmentFacts, rail: { candidate: rail.candidate, inputs: [] } } }), loadTimetables: async () => [],
+  }, rail.selectedAt);
+  expect(invalid.comparison).toBeUndefined();
+});
 
 it("uses acquired facts only, preserves inputs, and keeps partial candidates visible", async () => {
   const f = candidateAssessmentFixture();
@@ -46,4 +67,22 @@ it("IDs-only tool input rejects self-declared statuses; derived Evidence uses th
   const claim = { id: "comparison", statement: "予報の比較結果", kind: "fact" as const, evidenceIds: [evidence[0]!.id] };
   expect(validateEvidenceAndClaims(evidence, [claim]).valid).toBe(true);
   expect(validateEvidenceAndClaims(evidence, [{ ...claim, evidenceIds: ["invented"] }]).valid).toBe(false);
+});
+
+it("returns the admitted assessment Evidence ID alongside the tool result", async () => {
+  const f = candidateAssessmentFixture();
+  const registry = new AgentToolRegistry();
+  registerCandidateAssessmentTool(registry, {
+    getCurrentTrip: () => f.trip,
+    candidateSelection: { taskId: "task", port: {
+      resolve: async () => ({ candidate: f.candidate, tripId: f.trip.id, taskId: "task", validUntil: "2026-09-13T08:00:00Z", assessmentFacts: f.facts }),
+      loadTimetables: async () => [],
+    } },
+  }, () => new Date(assessmentAt));
+  const result = await registry.execute("assess_travel_candidate", { candidateId: f.candidate.id }, { executionId: "assessment" });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const output = result.output as { answerEvidenceId: string };
+  expect(output.answerEvidenceId).toBe(candidateAssessmentEvidence(output)[0]?.id);
+  expect(output.answerEvidenceId).toMatch(/^candidate-assessment:/u);
 });

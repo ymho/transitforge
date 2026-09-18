@@ -551,6 +551,7 @@ export function externalTravelEvidence(output: unknown, context: { retrievedAt: 
       knowledgeKind: "deterministic_fact" as const,
       subject: isRecord(information.data) && typeof information.data.locationName === "string" ? `${information.data.locationName}の天気予報` : isRecord(information.data) && typeof information.data.area === "string" ? `${information.data.area}の防災情報` : "外部旅行情報",
       facts: { provider: raw.provider, status: String(information.status ?? "unknown"), freshness: String(information.freshness ?? "unknown"),
+        ...sourceTextFacts(information, raw.sourceUrl),
         ...(resultKind ? { resultKind } : {}) },
       references: [{
         sourceType: "external-source" as const,
@@ -571,6 +572,23 @@ export function externalTravelEvidence(output: unknown, context: { retrievedAt: 
       retrievedAt: context.retrievedAt, freshness: "unknown", summary: "Toolの取得結果。外部事実の確認はできていない" }],
   });
   return evidence;
+}
+
+/** Bind prose to its own fetched source, never attach all pages to an unrelated Evidence ID. */
+function sourceTextFacts(information: Record<string, unknown>, sourceUrl: unknown): Record<string, string> {
+  if (information.status !== "available" || information.freshness !== "fresh" || typeof sourceUrl !== "string" || !isRecord(information.data)) return {};
+  try { if (!["https:", "http:"].includes(new URL(sourceUrl).protocol)) return {}; } catch { return {}; }
+  const data = information.data;
+  const page = Array.isArray(data.pages) ? data.pages.find((p) => isRecord(p) && p.url === sourceUrl) : undefined;
+  const place = Array.isArray(data.places) ? data.places.find((p) => isRecord(p) && p.sourceUrl === sourceUrl &&
+    (!isRecord(p.targetBinding) || p.targetBinding.status === "resolved")) : undefined;
+  const hit = Array.isArray(data.results) ? data.results.find((p) => isRecord(p) && p.url === sourceUrl) : undefined;
+  const value = isRecord(page) ? page : isRecord(place) ? place : isRecord(hit) ? hit : undefined;
+  if (!value) return {};
+  const excerpt = boundedText(value.text ?? value.summary ?? value.description ?? value.snippet, 1200);
+  if (!excerpt) return {};
+  return { sourceTitle: boundedText(value.title ?? value.name, 160) ?? "取得したページ", sourceExcerpt: excerpt,
+    sourceUrl, sourcePrecision: page ? "read-page" : place ? "place-description" : "search-snippet" };
 }
 
 function optionalDate(value: unknown): string | undefined {

@@ -1,0 +1,1246 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Transitforge AI-first Mock v2</title>
+<style>
+:root{
+  --ink:#102337;--navy:#0c2947;--navy2:#173e67;--blue:#146ac7;--blue-soft:#edf5fc;
+  --paper:#f6f6f1;--surface:#fff;--line:#dfe4e8;--muted:#687587;--soft:#eef1f3;
+  --ok:#1c7a59;--warn:#b96821;--danger:#c54852;
+  --shadow:0 14px 38px rgba(18,39,63,.10);--shadow-sm:0 6px 20px rgba(18,39,63,.07);
+  --sans:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP",system-ui,sans-serif;
+  --serif:"Yu Mincho","YuMincho","Hiragino Mincho ProN","Noto Serif JP",serif;
+  --brand:"Iowan Old Style","Baskerville","Times New Roman",serif;
+}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--paper);color:var(--ink);font-family:var(--sans)}
+button,input,textarea,select{font:inherit}button{cursor:pointer}.app{min-height:100vh}
+.topbar{height:70px;position:sticky;top:0;z-index:50;background:rgba(246,246,241,.96);backdrop-filter:blur(8px);
+  border-bottom:1px solid rgba(16,35,55,.09);display:flex;align-items:center;padding:0 28px;gap:24px}
+.brand{font-family:var(--brand);font-size:31px;font-weight:700;letter-spacing:-.03em;color:#0a243d}
+.scope{font-size:10px;color:#607080;border-left:1px solid #c9ced3;padding-left:16px;line-height:1.4}.scope b{display:block;color:var(--ink);font-size:11px;letter-spacing:.07em}
+.mainnav{display:flex;gap:5px;margin-left:auto}.navbtn{border:0;background:transparent;border-radius:12px;padding:9px 12px;font-size:12px;font-weight:800;color:#647181;display:flex;gap:6px;align-items:center}
+.navbtn:hover{background:#ecefea}.navbtn.active{background:#e5edf4;color:var(--navy)}.profileDot{width:34px;height:34px;border-radius:50%;background:linear-gradient(145deg,#ccdce8,#f1c5ac);border:2px solid #fff;box-shadow:0 0 0 1px #d5dce1}
+.content{max-width:1320px;margin:0 auto;padding:24px 26px 110px}.view{display:none;animation:fade .2s ease}.view.active{display:block}
+@keyframes fade{from{opacity:.4;transform:translateY(4px)}to{opacity:1;transform:none}}
+.eyebrow{font-size:11px;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:#738093}.display{font-family:var(--serif);letter-spacing:-.04em}
+.page-title{font-family:var(--serif);font-size:34px;margin:0}.subtle{color:var(--muted)}
+.hero{min-height:480px;border-radius:30px;background:#0e3153;position:relative;overflow:hidden;box-shadow:var(--shadow);display:grid;grid-template-columns:minmax(0,1.05fr) minmax(360px,.95fr)}
+.hero-copy{padding:46px 48px;color:#fff;display:flex;flex-direction:column;justify-content:center;z-index:2}.hero-copy .eyebrow{color:#b9d7ee}.hero h1{font-family:var(--serif);font-size:52px;line-height:1.14;margin:10px 0 14px}
+.hero-copy p{font-size:14px;line-height:1.8;color:#dbe8f3;max-width:540px}
+.hero-art{position:relative;min-height:480px;background:linear-gradient(165deg,#9bc6df 0%,#6f9fb9 42%,#dfc39b 100%)}
+.hero-art:before{content:"";position:absolute;inset:auto -8% -2% -20%;height:55%;background:#203f46;clip-path:polygon(0 72%,15% 50%,28% 65%,40% 33%,55% 59%,68% 28%,80% 57%,100% 26%,100% 100%,0 100%)}
+.hero-art:after{content:"";position:absolute;left:0;right:0;bottom:0;height:34%;background:linear-gradient(#365c6c,#1b3848)}
+.pagoda{position:absolute;z-index:3;right:22%;bottom:18%;width:126px;height:265px}.pagoda .body{position:absolute;left:54px;top:21px;width:18px;height:223px;background:#c66d50}.pagoda .spire{position:absolute;left:61px;top:-32px;width:4px;height:62px;background:#1e272b}
+.pagoda .roof{height:13px;background:#18232a;margin:27px auto 0;transform:skewX(-13deg);box-shadow:0 5px 0 #633a28}.pagoda .roof:nth-child(3){width:70px}.pagoda .roof:nth-child(4){width:90px}.pagoda .roof:nth-child(5){width:108px}.pagoda .roof:nth-child(6){width:120px}.pagoda .roof:nth-child(7){width:126px}
+.town{position:absolute;z-index:4;left:4%;right:0;bottom:2%;height:112px;display:flex;gap:6px;align-items:flex-end}.house{width:75px;height:70px;background:#2b2723;border-top:8px solid #14191d;box-shadow:inset 0 18px #5e4639}.house:nth-child(2n){height:88px;width:90px}.house:nth-child(3n){height:61px;width:68px}
+.ai-entry{background:#fff;border-radius:18px;padding:8px 8px 8px 16px;display:flex;gap:10px;align-items:center;margin-top:18px;max-width:680px;box-shadow:0 10px 30px rgba(0,0,0,.16)}.ai-entry .spark{color:var(--blue);font-size:18px}.ai-entry input{flex:1;border:0;outline:0;min-width:0;font-size:14px;color:var(--ink)}.ai-entry button{border:0;background:var(--navy);color:#fff;width:44px;height:44px;border-radius:14px;font-size:18px}
+.scope-note{font-size:10px!important;color:#c8d9e7!important;margin:7px 0 0!important}.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.chip{border:1px solid rgba(255,255,255,.34);background:rgba(10,32,51,.3);color:#fff;border-radius:999px;padding:7px 11px;font-size:11px}.chip:hover{background:rgba(255,255,255,.13)}
+.section{margin-top:32px}.section-head{display:flex;justify-content:space-between;align-items:end;margin-bottom:14px}.section-head h2{font-family:var(--serif);font-size:24px;margin:0}.linkbtn{border:0;background:transparent;color:var(--blue);font-size:11px;font-weight:900}
+.next-trip{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;background:#fff;border:1px solid var(--line);border-radius:22px;padding:22px;box-shadow:var(--shadow-sm)}
+.next-trip h3{font-family:var(--serif);font-size:24px;margin:4px 0 5px}.trip-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:#617080}.trip-meta span{background:#f2f4f5;border-radius:999px;padding:5px 8px}
+.trip-actions{display:flex;gap:8px;margin-top:17px;flex-wrap:wrap}.primary,.secondary,.ghost{border-radius:12px;padding:10px 13px;font-weight:900;font-size:11px}.primary{border:1px solid var(--navy);background:var(--navy);color:#fff}.secondary{border:1px solid #d7dfe5;background:#fff;color:#29445d}.ghost{border:0;background:#edf2f6;color:#2f516e}
+.next-trip-side{border-left:1px solid #e7eaed;padding-left:20px}.countdown{font-family:var(--serif);font-size:36px;line-height:1;color:var(--navy)}.countdown small{font-family:var(--sans);font-size:11px;color:#738092}.prep-list{margin:15px 0 0;padding:0;list-style:none;display:grid;gap:8px;font-size:11px;color:#526172}.prep-list li{display:flex;gap:8px}.prep-list li:before{content:"•";color:var(--blue)}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.journey-card{border:1px solid #dde3e7;border-radius:19px;background:#fff;overflow:hidden;box-shadow:var(--shadow-sm);transition:.17s;text-align:left;padding:0;color:inherit}.journey-card:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+.card-art{height:170px;position:relative;overflow:hidden}.miyajima{background:linear-gradient(#83b8d6 0 52%,#4f93a6 53% 74%,#d5bf87 75%)}.kurashiki{background:linear-gradient(#b9d6df 0 38%,#eef0dd 39% 64%,#648a77 65%)}.kinosaki{background:linear-gradient(#b1cad8 0 40%,#607a60 41% 58%,#c2b495 59%)}
+.torii{position:absolute;left:50%;top:49%;transform:translate(-50%,-50%);width:110px;height:105px}.torii:before,.torii:after{content:"";position:absolute;background:#dd4a32}.torii:before{left:18px;top:28px;width:74px;height:10px;box-shadow:0 -13px 0 4px #dd4a32}.torii:after{left:28px;top:38px;width:9px;height:67px;box-shadow:45px 0 #dd4a32}
+.canal{position:absolute;left:-10%;right:-10%;bottom:-20%;height:70%;background:#759a8d;transform:rotate(-6deg);border-top:5px solid #4b6b5e}.warehouse{position:absolute;bottom:42%;width:110px;height:55px;background:#f2efe4;border-top:10px solid #31383b}.warehouse.one{left:10%}.warehouse.two{right:8%;width:135px}.onsen-build{position:absolute;bottom:18%;left:12%;right:12%;height:48%;background:#e7ded0;border-top:16px solid #3f4646}
+.card-body{padding:16px}.card-title{font-weight:900;font-size:16px;margin-bottom:4px}.card-desc{font-size:11px;color:var(--muted);line-height:1.65;min-height:38px}.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.tag{font-size:9px;padding:4px 7px;border-radius:999px;background:#f0f3f5;color:#586675}
+.feature{margin-top:16px;background:#eaf2f8;border-radius:22px;padding:22px;display:grid;grid-template-columns:1.2fr .8fr;gap:24px;align-items:center}.feature h3{font-family:var(--serif);font-size:23px;margin:4px 0 7px}.feature p{font-size:11px;line-height:1.8;color:#5e6e7c}
+.train-illustration{height:110px;position:relative}.train-body{position:absolute;right:4%;top:31%;width:88%;height:47px;border-radius:28px 34px 15px 18px;background:linear-gradient(#f8fafb,#dbe3e8);border:2px solid #bcc6ce;box-shadow:inset 0 -10px #f0f2f3}.train-body:before{content:"";position:absolute;left:7%;right:15%;top:9px;height:13px;background:repeating-linear-gradient(90deg,#183a5b 0 28px,#dce3e8 28px 37px)}.train-body:after{content:"";position:absolute;left:4%;right:4%;bottom:8px;height:4px;background:#1d69b8}.rail{position:absolute;left:0;right:0;bottom:17px;height:3px;background:#4d5660;box-shadow:0 8px #90969b}
+
+/* chat */
+.chat-layout{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(310px,.75fr);gap:18px;min-height:730px}.chat-panel,.context-panel,.trips-shell,.profile-shell,.trip-detail-shell,.travel-shell{background:#fff;border:1px solid var(--line);border-radius:24px;box-shadow:var(--shadow-sm)}
+.chat-panel{display:flex;flex-direction:column;overflow:hidden;min-height:730px}.panel-head{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}.back{border:0;background:#f0f3f5;width:36px;height:36px;border-radius:12px;color:var(--ink);font-weight:900}.panel-head h2{font-family:var(--serif);font-size:21px;margin:0}.panel-head small{display:block;color:var(--muted);font-size:10px;margin-top:2px}
+.chat-context-bar{padding:9px 20px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;background:#f7f9fa;min-height:48px}.trip-chip{display:flex;align-items:center;gap:7px;background:#eaf2f8;color:#224b6f;border-radius:999px;padding:7px 10px;font-size:10px;font-weight:900}.trip-chip .dot{width:7px;height:7px;border-radius:50%;background:var(--blue)}.context-actions{margin-left:auto;display:flex;gap:6px}.context-actions button{border:1px solid #d9e1e7;background:#fff;border-radius:10px;padding:7px 9px;font-size:9px;color:#456079;font-weight:800}
+.messages{flex:1;padding:23px;overflow:auto;background:linear-gradient(#fff,#fbfbfa)}.msg{display:flex;gap:10px;margin:0 0 16px;max-width:760px}.msg.user{margin-left:auto;justify-content:flex-end}.avatar-ai{width:32px;height:32px;border-radius:50%;background:var(--navy);color:white;display:grid;place-items:center;flex:0 0 auto}.bubble{padding:12px 14px;border-radius:15px;background:#f2f4f5;font-size:12px;line-height:1.7;box-shadow:0 2px 8px rgba(20,38,58,.04)}.user .bubble{background:#e5f1fd;color:#153e66}
+.suggestion-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 18px 42px}.suggestion{border:1px solid #dfe4e8;border-radius:14px;background:#fff;padding:10px;text-align:left;color:inherit}.suggestion b{font-size:11px}.suggestion small{display:block;font-size:9px;color:#6a7886;line-height:1.5;margin-top:3px}
+.composer{padding:12px;border-top:1px solid var(--line);display:flex;gap:8px;background:#fff}.composer input{flex:1;border:1px solid #d9dfe4;border-radius:13px;padding:11px 13px;outline:0;font-size:12px}.composer input:focus{border-color:#80a9d0;box-shadow:0 0 0 3px #e6f0fa}.send{border:0;border-radius:13px;background:var(--navy);color:#fff;padding:0 17px;font-size:11px;font-weight:900}
+.context-panel{padding:22px;align-self:start;position:sticky;top:94px}.context-panel h3{font-family:var(--serif);font-size:18px;margin:4px 0 14px}.known{display:grid;gap:9px}.known-row{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #eef0f2;padding-bottom:8px;font-size:11px}.known-row span:first-child{color:var(--muted)}.scope-card{margin-top:15px;background:#f3f6f8;border-radius:14px;padding:13px;font-size:10px;color:#536273;line-height:1.65}.scope-card b{display:block;color:var(--ink);margin-bottom:4px}.mini-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}.mini-actions button{border:1px solid #d9e0e6;background:#fff;border-radius:999px;padding:6px 9px;font-size:9px;font-weight:800;color:#2f4f69}
+
+/* trips */
+.trips-shell{padding:24px}.trips-head{display:flex;justify-content:space-between;gap:15px;align-items:center;margin-bottom:20px}.trips-head p{font-size:11px;color:var(--muted);margin:4px 0 0}.trip-section-title{font-size:11px;color:#6c7886;font-weight:900;letter-spacing:.08em;margin:24px 0 10px}.trip-list{display:grid;gap:12px}.trip-row{border:1px solid #dfe4e8;border-radius:17px;background:#fff;padding:17px;display:grid;grid-template-columns:84px minmax(0,1fr) auto;gap:14px;align-items:center;transition:.17s}.trip-row:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm)}.trip-thumb{height:64px;border-radius:12px;position:relative;overflow:hidden}.trip-row h3{font-size:15px;margin:0 0 4px}.trip-row p{font-size:10px;color:#6a7886;margin:0;line-height:1.5}.trip-state{font-size:9px;font-weight:900;border-radius:999px;padding:5px 8px;background:#edf2f5;color:#4f6172;white-space:nowrap}.trip-state.next{background:#e6f4ed;color:#1b6c50}.trip-state.plan{background:#edf4fc;color:#28649c}.trip-state.past{background:#f0f0ef;color:#777}
+.trip-row-actions{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}.trip-row-actions button{border:1px solid #d9e0e6;background:#fff;border-radius:9px;padding:6px 8px;font-size:9px;font-weight:800;color:#34516b}.trip-row-actions .chat-from-trip{background:#edf5fc;border-color:#d3e6f8;color:#1e5f98}
+
+/* profile */
+.profile-shell{padding:24px}.profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.profile-card{border:1px solid #dfe4e8;border-radius:18px;padding:18px}.profile-card h3{font-family:var(--serif);font-size:17px;margin:0 0 10px}.profile-card p{font-size:11px;color:#697684;line-height:1.7}.preference-list{display:flex;gap:7px;flex-wrap:wrap}.preference-list span{background:#f0f3f5;border-radius:999px;padding:6px 9px;font-size:9px;color:#506171}
+
+/* detail */
+.trip-detail-shell{overflow:hidden}.trip-detail-hero{height:210px;position:relative;background:linear-gradient(165deg,#9ecbe0,#6b9eaf 60%,#315e6b)}.trip-detail-hero:after{content:"";position:absolute;inset:auto -10% -20% -10%;height:70%;background:#294f58;clip-path:polygon(0 72%,17% 52%,31% 62%,43% 30%,55% 59%,72% 24%,84% 54%,100% 32%,100% 100%,0 100%)}.trip-detail-hero .torii{z-index:3;left:75%;top:52%;transform:translate(-50%,-50%) scale(1.2)}
+.detail-copy{position:absolute;z-index:4;left:26px;bottom:24px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.35)}.detail-copy h1{font-family:var(--serif);font-size:29px;margin:3px 0}.detail-copy p{font-size:10px;margin:0;color:#edf6fb}
+.detail-main{padding:20px 24px 26px}.detail-top-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.tabs{display:flex;background:#f0f2f4;border-radius:13px;padding:4px;gap:4px}.tabs button{flex:1;border:0;background:transparent;border-radius:10px;padding:8px;color:#6c7784;font-size:10px;font-weight:900}.tabs button.active{background:#fff;color:var(--navy);box-shadow:0 2px 8px rgba(30,49,70,.08)}
+.days{display:flex;gap:7px;margin:16px 0}.day{border:1px solid #dfe4e8;background:#fff;border-radius:11px;padding:9px 13px;font-size:10px;color:#667383;font-weight:900}.day.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.itinerary{display:grid;grid-template-columns:72px 17px 1fr}.it-time{font-size:12px;font-weight:900;padding-top:12px}.it-line{position:relative}.it-line:before{content:"";position:absolute;left:8px;top:0;bottom:0;width:2px;background:#cdd8e2}.it-line:after{content:"";position:absolute;width:9px;height:9px;border-radius:50%;background:#fff;border:3px solid var(--blue);left:3px;top:13px}.it-item{padding:9px 0 15px}.it-card{border:1px solid #e0e5e9;border-radius:13px;padding:12px 13px;background:#fff;display:flex;align-items:center;gap:11px}.transport-icon{width:32px;height:32px;border-radius:9px;background:#e8f2fc;color:#1165b5;display:grid;place-items:center;font-size:16px;flex:0 0 auto}.it-card .grow{flex:1}.it-card strong{display:block;font-size:12px;margin-bottom:3px}.it-card small{font-size:9px;color:#6e7a87}.status-pill{font-size:8px;padding:5px 7px;border-radius:999px;background:#e5f6ef;color:#187354;font-weight:900}
+.detail-side-note{margin-top:15px;border-radius:15px;background:#f6f8f9;padding:13px;font-size:10px;line-height:1.7;color:#5d6c7a}.detail-side-note b{color:var(--ink)}
+.travel-entry{margin-top:14px;border:1px solid #d9e1e7;border-radius:16px;padding:14px;background:#fff;display:flex;justify-content:space-between;align-items:center;gap:10px}.travel-entry b{font-size:12px}.travel-entry small{display:block;color:#6a7886;font-size:9px;margin-top:3px}
+
+/* mobile condition sheet */
+.sheet-backdrop{display:none;position:fixed;inset:0;background:rgba(15,30,45,.34);z-index:80}.condition-sheet{position:fixed;z-index:81;left:50%;bottom:18px;transform:translateX(-50%) translateY(120%);width:min(520px,calc(100vw - 24px));background:#fff;border-radius:22px;padding:18px;box-shadow:0 18px 50px rgba(10,25,40,.24);transition:.22s}.condition-sheet.show{transform:translateX(-50%) translateY(0)}.sheet-backdrop.show{display:block}.sheet-handle{width:44px;height:4px;border-radius:999px;background:#d9dfe3;margin:-7px auto 14px}.condition-sheet h3{font-family:var(--serif);font-size:18px;margin:0 0 12px}.sheet-row{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #edf0f2;padding:9px 0;font-size:11px}.sheet-row span:first-child{color:#708090}
+
+/* travel */
+.travel-shell{overflow:hidden}.travel-grid{display:grid;grid-template-columns:minmax(325px,.65fr) minmax(0,1.35fr);min-height:700px}.travel-side{padding:22px;border-right:1px solid var(--line);display:flex;flex-direction:column}.travel-head{display:flex;justify-content:space-between;align-items:start}.travel-head h1{font-family:var(--serif);font-size:27px;margin:0}.close-travel{border:0;background:#f0f3f5;width:35px;height:35px;border-radius:11px;color:#41556a;font-weight:900}.next-card{margin-top:18px;border:1px solid #dde4e9;border-radius:17px;padding:17px;background:#fff}.next-label{display:flex;justify-content:space-between;color:#607080;font-size:10px;font-weight:900}.route{display:grid;grid-template-columns:50px 19px 1fr;margin-top:13px}.route .time{font-weight:900;font-size:16px}.route .line{position:relative}.route .line:before{content:"";position:absolute;left:8px;top:11px;bottom:-42px;width:2px;background:#193c63}.route .line:after{content:"";position:absolute;left:3px;top:4px;width:9px;height:9px;border:3px solid #193c63;background:#fff;border-radius:50%}.route+.route{margin-top:25px}.route:last-of-type .line:before{display:none}.route b{font-size:14px}.route small{display:block;color:var(--muted);font-size:9px;margin-top:4px}.alerts{display:flex;gap:7px;margin-top:14px}.alerts button{flex:1;border:0;border-radius:11px;background:#eff2f4;padding:9px;font-size:9px;color:#334c63;font-weight:900}.intrip-ai{margin-top:auto;background:#edf5fc;border-radius:17px;padding:15px}.intrip-ai b{font-family:var(--serif);font-size:15px}.intrip-ai p{font-size:9px;color:#627284;line-height:1.6;margin:5px 0 9px}.intrip-ai button{border:0;background:#fff;border-radius:9px;padding:7px 9px;font-size:9px;color:#284865;font-weight:900;margin:3px 3px 0 0}
+.map-pane{position:relative;background:#dbe9e2;overflow:hidden}.map-toolbar{position:absolute;z-index:12;top:16px;left:16px;display:flex;background:#fff;border:1px solid #d8dfe4;border-radius:11px;padding:4px;box-shadow:var(--shadow-sm)}.map-toolbar button{border:0;background:transparent;border-radius:8px;padding:7px 10px;font-size:9px;color:#687481;font-weight:900}.map-toolbar button.active{background:var(--navy);color:#fff}.map-note{position:absolute;z-index:12;top:16px;right:16px;background:rgba(255,255,255,.94);border:1px solid #d8dfe4;border-radius:11px;padding:8px 10px;font-size:8px;color:#667383;box-shadow:var(--shadow-sm)}
+.map-scene{position:absolute;inset:0;overflow:hidden;background:#dcebe1;transition:.35s}.map-scene.mode3d{transform:scale(1.06) perspective(950px) rotateX(13deg);transform-origin:center 70%;filter:saturate(.95)}.water{position:absolute;left:-12%;right:-12%;bottom:-12%;height:52%;background:#b9dbe7;transform:rotate(-4deg)}.island{position:absolute;background:#b7d4a8;border:2px solid #92bb88;border-radius:48% 52% 44% 56%/54% 47% 53% 46%;box-shadow:inset 0 0 0 7px rgba(255,255,255,.14)}.i1{width:220px;height:140px;left:5%;bottom:19%;transform:rotate(-14deg)}.i2{width:140px;height:86px;left:38%;bottom:15%;transform:rotate(8deg)}.i3{width:180px;height:110px;right:8%;bottom:25%;transform:rotate(-10deg)}.land{position:absolute;left:-8%;right:-8%;top:-8%;height:65%;background:#d8e5c9;clip-path:polygon(0 0,100% 0,100% 62%,88% 70%,74% 63%,62% 75%,48% 65%,36% 78%,23% 70%,8% 84%,0 73%)}.road{position:absolute;height:4px;background:#f7f4e9;border:1px solid #d4c7b5;border-radius:20px;transform-origin:left center}.r1{width:68%;left:8%;top:41%;transform:rotate(7deg)}.r2{width:48%;left:39%;top:29%;transform:rotate(-16deg)}.r3{width:38%;left:16%;top:23%;transform:rotate(19deg)}.route-line{position:absolute;left:14%;top:46%;width:68%;height:190px;border-top:5px solid #1667c8;border-right:5px solid #1667c8;border-radius:0 120px 0 0;transform:rotate(-7deg);z-index:5}.route-line:after{content:"";position:absolute;right:-8px;top:-8px;width:13px;height:13px;border-radius:50%;background:#fff;border:4px solid #1667c8}.station{position:absolute;z-index:7;font-size:9px;font-weight:900;color:#273d50;text-shadow:0 1px #fff,1px 0 #fff,-1px 0 #fff,0 -1px #fff}.st-h{left:14%;top:49%}.st-o{left:42%;top:42%}.st-k{left:71%;top:30%}.st-s{left:82%;top:24%}
+.train3d{position:absolute;z-index:10;left:44%;top:39%;width:118px;height:28px;transform:rotate(-7deg);transition:.35s}.train3d .nose{position:absolute;right:0;width:35px;height:28px;background:#f7fafc;border-radius:6px 24px 6px 5px;border:1px solid #b9c5cd}.train3d .cars{position:absolute;left:0;right:28px;height:28px;background:#f7fafc;border:1px solid #b9c5cd;border-radius:5px;box-shadow:inset 0 -6px #eef1f2}.train3d .cars:after{content:"";position:absolute;left:7px;right:5px;top:5px;height:7px;background:repeating-linear-gradient(90deg,#1f4d74 0 15px,#f7fafc 15px 20px)}.train3d .blue-line{position:absolute;left:3px;right:3px;bottom:5px;height:3px;background:#1667c8;z-index:2}.mode3d .train3d{transform:rotate(-7deg) translateY(-10px) scale(1.12);filter:drop-shadow(0 13px 9px rgba(20,35,48,.32))}.building{display:none;position:absolute;z-index:4;width:22px;height:22px;background:#d3cabd;box-shadow:5px -5px #b6aa9b}.mode3d .building{display:block}.b1{left:60%;top:36%}.b2{left:64%;top:40%}.b3{left:28%;top:35%}.b4{left:33%;top:39%}.b5{left:77%;top:34%}.train-pop{position:absolute;z-index:13;left:43%;top:30%;background:#fff;border-radius:11px;padding:9px 11px;box-shadow:var(--shadow-sm);font-size:9px;border:1px solid #d7e0e7}.train-pop b{display:block;color:#1161ac;font-size:10px}.weather{position:absolute;z-index:13;left:16px;bottom:16px;background:rgba(255,255,255,.94);border-radius:13px;padding:11px 13px;border:1px solid #d7e0e7;box-shadow:var(--shadow-sm);font-size:10px}.weather strong{font-size:19px;margin-left:5px}.assistant-toast{position:absolute;z-index:15;right:16px;bottom:16px;width:min(320px,45%);background:#fff;border:1px solid #d8e0e6;border-radius:15px;padding:13px;box-shadow:var(--shadow);display:none}.assistant-toast.show{display:block}.assistant-toast b{font-family:var(--serif);font-size:13px}.assistant-toast p{font-size:9px;color:#607080;line-height:1.6;margin:4px 0 0}
+
+.mobile-nav{display:none}.toast{position:fixed;z-index:100;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);opacity:0;background:#132b44;color:#fff;border-radius:999px;padding:10px 15px;font-size:10px;box-shadow:var(--shadow);transition:.2s;pointer-events:none}.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media(max-width:900px){
+  .topbar{height:60px;padding:0 15px}.brand{font-size:25px}.scope,.mainnav{display:none}.profileDot{margin-left:auto;width:30px;height:30px}
+  .content{padding:14px 14px 90px}.hero{display:block;min-height:650px;border-radius:24px}.hero-copy{position:relative;z-index:3;padding:29px 20px 22px;min-height:650px;justify-content:flex-end}.hero h1{font-size:40px}.hero-copy p{font-size:12px}.hero-art{position:absolute;inset:0;z-index:0;min-height:0;opacity:.72}.hero-art:after{height:58%;background:linear-gradient(transparent,#12324c 55%,#0e3153)}.pagoda{right:10%;bottom:35%;transform:scale(.82)}.town{bottom:20%}.ai-entry input{font-size:12px}
+  .next-trip{grid-template-columns:1fr}.next-trip-side{border-left:0;border-top:1px solid #e7eaed;padding-left:0;padding-top:16px}.cards{grid-template-columns:1fr}.card-art{height:145px}.feature{grid-template-columns:1fr}.chat-layout{grid-template-columns:1fr}.context-panel{display:none}.chat-panel{min-height:calc(100vh - 150px);border-radius:20px}.chat-context-bar{padding:8px 12px}.suggestion-strip{grid-template-columns:1fr;margin-left:42px}.trips-shell,.profile-shell,.trip-detail-shell,.travel-shell{border-radius:20px}.trip-row{grid-template-columns:68px 1fr}.trip-row>.trip-state{grid-column:2}.trip-thumb{height:56px}.profile-grid{grid-template-columns:1fr}.travel-grid{grid-template-columns:1fr}.travel-side{border-right:0;border-bottom:1px solid var(--line);min-height:405px}.map-pane{height:470px}.detail-main{padding:16px}.itinerary{grid-template-columns:58px 16px 1fr}
+  .mobile-nav{position:fixed;z-index:60;display:grid;grid-template-columns:repeat(4,1fr);left:10px;right:10px;bottom:10px;background:#fff;border:1px solid #dbe1e6;border-radius:18px;box-shadow:0 10px 35px rgba(15,35,55,.17);padding:5px}.mobile-nav button{border:0;background:transparent;border-radius:13px;padding:7px 2px;color:#74808d;font-size:9px;font-weight:900}.mobile-nav button span{display:block;font-size:15px;margin-bottom:2px}.mobile-nav button.active{background:#edf3f8;color:var(--navy)}
+}
+@media(max-width:560px){
+  .hero h1{font-size:34px}.hero-copy{padding:23px 17px 19px}.section{margin-top:24px}.section-head h2{font-size:21px}.messages{padding:18px 13px}.panel-head{padding:15px}.bubble{font-size:11px}.suggestion-strip{margin-left:0}.trip-chip{max-width:70%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.context-actions button{padding:6px 7px}.travel-side{padding:17px}.map-pane{height:420px}.map-note{display:none}
+}
+
+/* v3: editable trip conditions + explicit plan status */
+.context-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.context-panel-head h3{margin-bottom:4px}
+.context-help{font-size:9px;color:#7a8794;line-height:1.5;margin:0 0 12px}
+.condition-edit-row{
+  display:grid;grid-template-columns:74px minmax(0,1fr) 28px;gap:8px;align-items:center;
+  min-height:39px;border-bottom:1px solid #eef0f2;font-size:11px
+}
+.condition-edit-row .condition-key{color:var(--muted)}
+.condition-edit-row .condition-value{font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.condition-edit-row .condition-edit{
+  width:27px;height:27px;border:0;border-radius:8px;background:#f0f3f5;color:#496178;font-size:11px
+}
+.condition-edit-row .condition-editor{grid-column:2 / 4;display:flex;gap:6px;padding-bottom:8px}
+.condition-edit-row .condition-editor input{
+  min-width:0;flex:1;border:1px solid #cfd9e1;border-radius:9px;padding:7px 8px;font-size:10px;outline:0
+}
+.condition-edit-row .condition-editor button{
+  border:0;border-radius:8px;padding:0 9px;font-size:9px;font-weight:900
+}
+.condition-edit-row .condition-editor .save-condition{background:var(--navy);color:white}
+.condition-edit-row .condition-editor .cancel-condition{background:#eef1f3;color:#506171}
+.lifecycle-explainer{margin:0 0 18px;background:#f6f8f9;border:1px solid #e2e7ea;border-radius:15px;padding:12px 14px;font-size:10px;color:#5d6b78;line-height:1.65}
+.lifecycle-explainer b{color:var(--ink)}
+.trip-state.confirmed{background:#e8f4ee;color:#1d6c50}
+.trip-state.upcoming{background:#edf4fc;color:#28649c}
+.trip-state.intrip{background:#fff0d9;color:#8a5517}
+.trip-row-actions button:disabled{cursor:not-allowed;opacity:.45}
+.confirm-inline{background:#edf5fc!important;border-color:#d3e6f8!important;color:#1e5f98!important}
+
+/* v3: repaired trip-detail page */
+.trip-detail-shell{overflow:visible}
+.trip-detail-header{
+  border-radius:24px 24px 0 0;
+  min-height:150px;padding:28px;
+  display:flex;align-items:flex-end;justify-content:space-between;gap:20px;
+  background:
+    radial-gradient(circle at 82% 30%,rgba(255,255,255,.20),transparent 22%),
+    linear-gradient(145deg,#173e67,#315f7f 58%,#7899a3);
+  color:#fff;position:relative;overflow:hidden
+}
+.trip-detail-header:after{
+  content:"";position:absolute;right:-45px;bottom:-70px;width:330px;height:180px;
+  border-radius:50%;background:rgba(15,50,66,.38);transform:rotate(-8deg)
+}
+.trip-detail-heading{position:relative;z-index:2}
+.trip-detail-heading .eyebrow{color:#d9e9f5}
+.trip-detail-heading h1{font-family:var(--serif);font-size:32px;line-height:1.2;margin:5px 0 5px}
+.trip-detail-heading p{font-size:11px;color:#e6f0f5;margin:0}
+.detail-status-box{position:relative;z-index:2;min-width:220px;background:rgba(255,255,255,.93);color:var(--ink);border-radius:16px;padding:13px 14px;box-shadow:var(--shadow-sm)}
+.detail-status-box .status-label{font-size:9px;color:#71808e;font-weight:900;letter-spacing:.08em}
+.detail-status-box strong{display:block;font-size:14px;margin-top:3px}
+.detail-status-box small{display:block;font-size:9px;color:#657483;line-height:1.55;margin-top:4px}
+.detail-main{padding:18px 22px 24px}
+.detail-top-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.detail-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;margin-top:16px;align-items:start}
+.detail-primary{min-width:0}
+.detail-sidebar{display:grid;gap:11px;position:sticky;top:92px}
+.detail-card{border:1px solid #dfe5e9;border-radius:15px;background:#fff;padding:14px}
+.detail-card h3{font-family:var(--serif);font-size:15px;margin:0 0 5px}
+.detail-card p{font-size:9px;color:#687786;line-height:1.65;margin:0}
+.detail-card .primary,.detail-card .secondary,.detail-card .ghost{width:100%;margin-top:10px}
+.detail-plan-status{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.detail-plan-dot{width:9px;height:9px;border-radius:50%;background:#9aa6b0}
+.detail-plan-dot.confirmed{background:var(--ok)}
+.confirm-warning{font-size:9px;color:#8b5d2f;background:#fff5e8;border:1px solid #f1ddc2;border-radius:10px;padding:8px;margin-top:9px;line-height:1.55}
+.itinerary{overflow:hidden}
+.it-card{min-width:0}
+.it-card .grow{min-width:0}
+.it-card strong,.it-card small{overflow-wrap:anywhere}
+@media(max-width:900px){
+  .trip-detail-header{border-radius:20px 20px 0 0;padding:21px;min-height:145px;align-items:flex-start;flex-direction:column}
+  .trip-detail-heading h1{font-size:27px}
+  .detail-status-box{min-width:0;width:100%;padding:10px 12px}
+  .detail-layout{grid-template-columns:1fr;gap:14px}
+  .detail-sidebar{position:static;grid-row:1}
+  .detail-main{padding:15px}
+}
+
+
+/* v4: simplified trip detail, real tab content */
+.trip-detail-header{
+  min-height:132px;
+  padding:24px 26px;
+  align-items:flex-end;
+}
+.trip-detail-header:after{opacity:.75}
+.trip-detail-heading h1{font-size:31px}
+.trip-detail-badge{
+  position:relative;z-index:2;
+  align-self:flex-start;
+  background:rgba(255,255,255,.94);
+  color:#27506e;
+  border-radius:999px;
+  padding:7px 10px;
+  font-size:9px;
+  font-weight:900;
+  box-shadow:var(--shadow-sm)
+}
+.detail-main{padding:18px 22px 24px}
+.detail-top-actions{margin-bottom:12px}
+.detail-tabs{display:flex;background:#f0f2f4;border-radius:13px;padding:4px;gap:4px}
+.detail-tabs button{
+  flex:1;border:0;background:transparent;border-radius:10px;padding:9px 8px;
+  color:#6c7784;font-size:10px;font-weight:900
+}
+.detail-tabs button.active{background:#fff;color:var(--navy);box-shadow:0 2px 8px rgba(30,49,70,.08)}
+.detail-tab-panel{display:none;margin-top:17px}
+.detail-tab-panel.active{display:block}
+.detail-two-col{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+.summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.summary-card{
+  border:1px solid #dfe5e9;border-radius:15px;background:#fff;padding:14px;min-height:92px
+}
+.summary-card .label{font-size:9px;color:#748190;font-weight:900;letter-spacing:.05em}
+.summary-card .value{font-size:14px;font-weight:900;margin-top:5px}
+.summary-card .note{font-size:9px;color:#6b7885;line-height:1.55;margin-top:4px}
+.ai-summary{
+  margin-top:11px;border-radius:16px;background:#edf5fc;padding:14px 15px;
+  border:1px solid #d9e9f7
+}
+.ai-summary b{font-family:var(--serif);font-size:15px}
+.ai-summary p{font-size:10px;color:#53687c;line-height:1.7;margin:5px 0 0}
+.detail-side-actions{display:grid;gap:10px}
+.detail-side-actions .detail-card{padding:13px}
+.detail-side-actions .detail-card h3{font-size:14px}
+.compact-plan-state{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.compact-plan-state b{font-size:11px}
+.compact-plan-state .status-pill{font-size:8px}
+.cost-overview{display:grid;grid-template-columns:220px minmax(0,1fr);gap:18px;align-items:start}
+.cost-total{
+  border:1px solid #dfe5e9;border-radius:16px;background:#fff;padding:17px
+}
+.cost-total .label{font-size:9px;color:#748190;font-weight:900}
+.cost-total .amount{font-family:var(--serif);font-size:31px;margin-top:5px}
+.cost-total small{font-size:9px;color:#6b7885;line-height:1.5;display:block;margin-top:4px}
+.cost-list{display:grid;gap:9px}
+.cost-row{
+  display:grid;grid-template-columns:1fr auto;gap:10px;
+  border:1px solid #e1e6ea;border-radius:13px;background:#fff;padding:12px 13px
+}
+.cost-row strong{font-size:11px}
+.cost-row span{font-size:11px;font-weight:900}
+.cost-row small{grid-column:1 / -1;font-size:9px;color:#71808d}
+.cost-unknown{color:#8a5a20!important}
+.cost-note{margin-top:12px;font-size:9px;color:#667482;line-height:1.6}
+.trip-map{
+  position:relative;height:520px;border:1px solid #dfe5e9;border-radius:17px;overflow:hidden;
+  background:#dcebe1
+}
+.trip-map .map-scene{position:absolute;inset:0}
+.trip-map .route-line{left:11%;top:54%;width:72%;height:175px}
+.trip-map .st-h{left:12%;top:57%}.trip-map .st-o{left:43%;top:47%}.trip-map .st-k{left:70%;top:34%}.trip-map .st-s{left:82%;top:27%}
+.trip-stop{
+  position:absolute;z-index:10;width:18px;height:18px;border-radius:50%;
+  background:#fff;border:5px solid #146ac7;box-shadow:0 3px 10px rgba(20,60,95,.2)
+}
+.trip-stop.hiroshima{left:13%;top:55%}
+.trip-stop.miyajima{left:5%;top:72%;border-color:#d14b36}
+.trip-map-toolbar{
+  position:absolute;z-index:15;left:14px;top:14px;display:flex;gap:5px;background:#fff;
+  border:1px solid #d8dfe4;border-radius:11px;padding:4px;box-shadow:var(--shadow-sm)
+}
+.trip-map-toolbar button{
+  border:0;background:transparent;border-radius:8px;padding:7px 10px;font-size:9px;font-weight:900;color:#63717f
+}
+.trip-map-toolbar button.active{background:var(--navy);color:#fff}
+.trip-map-card{
+  position:absolute;z-index:15;right:14px;top:14px;width:220px;background:rgba(255,255,255,.96);
+  border:1px solid #d8dfe4;border-radius:13px;padding:12px;box-shadow:var(--shadow-sm)
+}
+.trip-map-card b{font-size:11px}
+.trip-map-card p{font-size:9px;color:#667482;line-height:1.55;margin:4px 0 0}
+.trip-map-cta{
+  position:absolute;z-index:15;right:14px;bottom:14px;border:0;background:var(--navy);color:#fff;
+  border-radius:11px;padding:9px 12px;font-size:9px;font-weight:900;box-shadow:var(--shadow-sm)
+}
+@media(max-width:900px){
+  .trip-detail-header{padding:20px;min-height:122px;display:flex;flex-direction:row;align-items:flex-end}
+  .trip-detail-heading h1{font-size:27px}
+  .trip-detail-badge{align-self:flex-start}
+  .detail-two-col,.cost-overview{grid-template-columns:1fr}
+  .summary-grid{grid-template-columns:1fr 1fr}
+  .trip-map{height:440px}
+  .trip-map-card{width:190px}
+}
+@media(max-width:560px){
+  .summary-grid{grid-template-columns:1fr}
+  .detail-tabs button{font-size:9px;padding:8px 4px}
+  .trip-map{height:390px}
+  .trip-map-card{left:12px;right:12px;top:auto;bottom:12px;width:auto}
+  .trip-map-cta{display:none}
+}
+
+
+/* v5: AI-estimated, user-editable costs */
+.cost-ai-banner{
+  display:flex;gap:10px;align-items:flex-start;margin-bottom:14px;padding:12px 14px;
+  border:1px solid #d6e6f5;border-radius:14px;background:#eef6fd;color:#365875
+}
+.cost-ai-banner .spark{font-size:16px;color:#146ac7;line-height:1}
+.cost-ai-banner b{display:block;font-size:11px;color:#234764}
+.cost-ai-banner p{margin:3px 0 0;font-size:9px;line-height:1.55;color:#5c7184}
+.cost-total .amount.editable-total{display:flex;align-items:baseline;gap:5px}
+.cost-total .amount.editable-total input{
+  width:150px;border:0;border-bottom:1px solid #cfd9e1;background:transparent;
+  font-family:var(--serif);font-size:30px;color:var(--ink);outline:0;padding:0 2px 2px
+}
+.cost-total .amount.editable-total input:focus{border-bottom-color:#146ac7}
+.cost-row.editable{
+  grid-template-columns:minmax(0,1fr) 125px auto;align-items:center
+}
+.cost-row.editable .cost-name{font-size:11px;font-weight:900}
+.cost-row.editable input{
+  width:100%;border:1px solid #d4dde4;border-radius:9px;padding:7px 8px;
+  font-size:10px;text-align:right;color:var(--ink);background:#fff;outline:0
+}
+.cost-row.editable input:focus{border-color:#77a4cd;box-shadow:0 0 0 3px #e7f0f8}
+.cost-row.editable .ai-badge{
+  border:0;background:#edf5fc;color:#1e649c;border-radius:8px;padding:7px 8px;
+  font-size:8px;font-weight:900
+}
+.cost-row.editable small{grid-column:1 / -1}
+.cost-foot-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.cost-foot-actions button{border-radius:10px;padding:8px 10px;font-size:9px;font-weight:900}
+.cost-save-note{font-size:9px;color:#6a7784;margin-top:8px;line-height:1.5}
+@media(max-width:560px){
+  .cost-row.editable{grid-template-columns:minmax(0,1fr) 102px auto}
+  .cost-total .amount.editable-total input{width:124px;font-size:27px}
+}
+
+
+/* v6: travel profile editor */
+.profile-card-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.profile-card-actions button{border-radius:10px;padding:8px 10px;font-size:9px;font-weight:900}
+.profile-edit-shell{
+  background:#fff;border:1px solid var(--line);border-radius:24px;box-shadow:var(--shadow-sm);overflow:hidden
+}
+.profile-edit-head{
+  padding:22px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px
+}
+.profile-edit-head h1{font-family:var(--serif);font-size:25px;margin:0}
+.profile-edit-head p{font-size:10px;color:#6b7885;margin:4px 0 0}
+.profile-form{padding:20px 24px 26px;display:grid;gap:18px}
+.form-section{border:1px solid #e0e5e9;border-radius:17px;padding:16px}
+.form-section h2{font-family:var(--serif);font-size:17px;margin:0 0 4px}
+.form-section>p{font-size:9px;color:#6d7a87;line-height:1.6;margin:0 0 13px}
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.field{display:grid;gap:5px}
+.field.full{grid-column:1 / -1}
+.field label{font-size:9px;color:#657382;font-weight:900}
+.field input,.field select,.field textarea{
+  width:100%;border:1px solid #d7dfe5;border-radius:10px;background:#fff;color:var(--ink);
+  padding:9px 10px;font-size:10px;outline:0
+}
+.field textarea{min-height:76px;resize:vertical;line-height:1.6}
+.field input:focus,.field select:focus,.field textarea:focus{
+  border-color:#78a5ce;box-shadow:0 0 0 3px #e7f0f8
+}
+.choice-group{display:flex;gap:7px;flex-wrap:wrap}
+.choice{
+  border:1px solid #d9e0e6;background:#fff;border-radius:999px;padding:7px 10px;
+  font-size:9px;color:#516273;font-weight:800
+}
+.choice.selected{background:#eaf3fb;border-color:#bcd7ee;color:#205b8e}
+.range-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+.range-row input[type="range"]{padding:0;border:0;box-shadow:none}
+.range-value{font-size:9px;font-weight:900;color:#3f566b;min-width:76px;text-align:right}
+.profile-form-actions{
+  position:sticky;bottom:0;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);
+  border-top:1px solid #e1e6ea;padding:12px 24px;display:flex;justify-content:flex-end;gap:8px
+}
+.profile-form-actions button{border-radius:11px;padding:10px 13px;font-size:10px;font-weight:900}
+.profile-scope-note{
+  background:#f2f6f9;border-radius:13px;padding:12px 13px;font-size:9px;color:#5e6e7c;line-height:1.65
+}
+.profile-scope-note b{color:var(--ink)}
+@media(max-width:700px){
+  .profile-edit-shell{border-radius:20px}
+  .profile-edit-head{padding:17px}
+  .profile-edit-head h1{font-size:22px}
+  .profile-form{padding:15px 14px 20px;gap:14px}
+  .form-section{padding:14px}
+  .form-grid{grid-template-columns:1fr}
+  .field.full{grid-column:auto}
+  .profile-form-actions{padding:10px 14px}
+}
+
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">Transitforge</div>
+    <div class="scope"><b>WEST JAPAN JOURNEYS</b>収録済み駅・時刻表エリアを中心に案内</div>
+    <nav class="mainnav">
+      <button class="navbtn active" data-view="home">⌕ 探す</button>
+      <button class="navbtn" data-view="chat">✦ 相談</button>
+      <button class="navbtn" data-view="trips">▣ 旅程</button>
+      <button class="navbtn" data-view="profile">● マイ</button>
+    </nav>
+    <div class="profileDot"></div>
+  </header>
+
+  <main class="content">
+    <!-- HOME -->
+    <section class="view active" id="home">
+      <div class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow">AIと見つける、西日本の旅</div>
+          <h1>どこへ<br>行きますか？</h1>
+          <p>行き先が決まっていなくても大丈夫。時刻表・列車・天気・旅の好みをつないで、AIが「行ける旅」を一緒に組み立てます。</p>
+          <div class="ai-entry"><span class="spark">✦</span><input id="homePrompt" placeholder="行きたい場所や、やりたいことを話してください" /><button id="homeSend">→</button></div>
+          <p class="scope-note">現在はTransitforgeに収録された西日本エリアを中心に提案します。</p>
+          <div class="chips">
+            <button class="chip quick-home">週末に2泊3日</button>
+            <button class="chip quick-home">温泉でゆっくり</button>
+            <button class="chip quick-home">瀬戸内を列車で</button>
+            <button class="chip quick-home">雨でも楽しめる旅</button>
+          </div>
+        </div>
+        <div class="hero-art">
+          <div class="pagoda"><div class="spire"></div><div class="body"></div><div class="roof"></div><div class="roof"></div><div class="roof"></div><div class="roof"></div><div class="roof"></div></div>
+          <div class="town"><i class="house"></i><i class="house"></i><i class="house"></i><i class="house"></i><i class="house"></i><i class="house"></i></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><h2>次の旅</h2><button class="linkbtn" data-view="trips">旅程をすべて見る →</button></div>
+        <div class="next-trip">
+          <div>
+            <div class="eyebrow">NEXT TRIP</div>
+            <h3>広島・宮島の旅</h3>
+            <div class="trip-meta"><span>10/11〜10/13</span><span>京都発</span><span>2名</span><span>2泊3日</span></div>
+            <div class="trip-actions">
+              <button class="primary open-trip" data-trip="hiroshima">旅程を見る</button>
+              <button class="secondary chat-from-trip" data-trip="hiroshima">AIに相談</button>
+              <button class="ghost start-travel" data-trip="hiroshima">旅行モードを開く</button>
+            </div>
+          </div>
+          <div class="next-trip-side">
+            <div class="countdown">23<small> 日後</small></div>
+            <ul class="prep-list"><li>指定席の確認</li><li>宮島の宿泊予約を確認</li><li>2日目の天気は旅行前に再確認</li></ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><h2>AIのおすすめプラン</h2><button class="linkbtn" data-view="chat">条件から相談する →</button></div>
+        <div class="cards">
+          <button class="journey-card open-trip" data-trip="hiroshima"><div class="card-art miyajima"><div class="torii"></div></div><div class="card-body"><div class="card-title">広島・宮島</div><div class="card-desc">世界遺産と瀬戸内の景色を、列車で無理なくめぐる2泊3日。</div><div class="tags"><span class="tag">歴史</span><span class="tag">絶景</span><span class="tag">グルメ</span></div></div></button>
+          <button class="journey-card start-new-chat" data-prompt="岡山・倉敷・尾道を2泊3日で、町歩き中心に旅したい"><div class="card-art kurashiki"><div class="canal"></div><div class="warehouse one"></div><div class="warehouse two"></div></div><div class="card-body"><div class="card-title">岡山・倉敷・尾道</div><div class="card-desc">町歩きとアート、瀬戸内のローカル線を楽しむ旅。</div><div class="tags"><span class="tag">まち歩き</span><span class="tag">アート</span><span class="tag">ローカル線</span></div></div></button>
+          <button class="journey-card open-trip" data-trip="kinosaki"><div class="card-art kinosaki"><div class="onsen-build"></div></div><div class="card-body"><div class="card-title">城崎温泉</div><div class="card-desc">特急で行って、外湯と温泉街を急がず味わう1泊2日。</div><div class="tags"><span class="tag">温泉</span><span class="tag">のんびり</span><span class="tag">特急</span></div></div></button>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div><div class="eyebrow">RAIL-FIRST TRAVEL</div><h3>平時はAI旅行計画。<br>旅行中だけ鉄道アプリへ。</h3><p>3D列車マップは常設の主役ではなく、旅程の理解や旅行中の列車追跡に使うビューとして残します。普段はAIと旅を組み立て、必要な時だけリアルタイム鉄道体験へ切り替えます。</p></div>
+        <div class="train-illustration"><div class="train-body"></div><div class="rail"></div></div>
+      </div>
+    </section>
+
+    <!-- CHAT -->
+    <section class="view" id="chat">
+      <div class="chat-layout">
+        <div class="chat-panel">
+          <div class="panel-head">
+            <button class="back" data-view="home">←</button>
+            <div><h2>AI旅の相談</h2><small id="chatSubtitle">新しい旅について相談中</small></div>
+          </div>
+          <div class="chat-context-bar">
+            <div class="trip-chip"><span class="dot"></span><span id="chatTripLabel">新しい旅を相談中</span></div>
+            <div class="context-actions"><button id="showConditions">この旅の条件</button><button id="viewBoundTrip" hidden>旅程を見る</button></div>
+          </div>
+          <div class="messages" id="messages">
+            <div class="msg"><div class="avatar-ai">✦</div><div class="bubble">どんな旅にしたいですか？ 行き先が決まっていなくても、日程や気分から一緒に考えられます。</div></div>
+          </div>
+          <div class="composer"><input id="chatInput" placeholder="希望を追加してください" /><button class="send" id="chatSend">送る</button></div>
+        </div>
+        <aside class="context-panel">
+          <div class="context-panel-head">
+            <div><div class="eyebrow">TRIP CONTEXT</div><h3>AIが把握している条件</h3></div>
+          </div>
+          <p class="context-help">PCではここから直接編集できます。変更後の条件は、この会話と編集中のTripに反映されます。</p>
+          <div class="known" id="desktopConditions"></div>
+          <div class="scope-card"><b>案内できる範囲</b>Transitforgeに収録された駅・列車・時刻表を中心に、旅程として成立する移動を組み立てます。</div>
+          <div class="mini-actions"><button>＋ 条件を追加</button></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- TRIPS LIST -->
+    <section class="view" id="trips">
+      <div class="trips-shell">
+        <div class="trips-head">
+          <div><div class="eyebrow">MY TRIPS</div><h1 class="page-title">旅程</h1><p>複数のTripを保存して、必要な旅だけAIと編集します。</p></div>
+          <button class="primary start-new-chat" data-prompt="">＋ 新しい旅を相談</button>
+        </div>
+        <div class="trip-section-title">次の旅</div>
+        <div class="trip-list">
+          <div class="trip-row">
+            <div class="trip-thumb miyajima"><div class="torii" style="transform:translate(-50%,-50%) scale(.45)"></div></div>
+            <div><h3>広島・宮島の旅</h3><p>10/11〜10/13 ・ 京都発 ・ 2名<br>旅程確定 / 予約確認中</p><div class="trip-row-actions"><button class="open-trip" data-trip="hiroshima">旅程を見る</button><button class="chat-from-trip" data-trip="hiroshima">AIに相談</button><button class="start-travel" data-trip="hiroshima">旅行モード</button></div></div>
+            <span class="trip-state next" data-state-for="hiroshima">次の旅</span>
+          </div>
+        </div>
+        <div class="trip-section-title">計画中</div>
+        <div class="trip-list">
+          <div class="trip-row">
+            <div class="trip-thumb kinosaki"><div class="onsen-build"></div></div>
+            <div><h3>城崎温泉</h3><p>11月ごろ ・ 日程未確定<br>候補を比較中</p><div class="trip-row-actions"><button class="open-trip" data-trip="kinosaki">旅程を見る</button><button class="chat-from-trip" data-trip="kinosaki">AIに相談</button></div></div>
+            <span class="trip-state plan" data-state-for="kinosaki">計画中</span>
+          </div>
+          <div class="trip-row">
+            <div class="trip-thumb kurashiki"><div class="canal"></div></div>
+            <div><h3>岡山・倉敷</h3><p>12/12〜12/13 ・ 2名<br>日程あり / 旅程は未確定</p><div class="trip-row-actions"><button class="open-trip" data-trip="okayama">旅程を見る</button><button class="chat-from-trip" data-trip="okayama">AIに相談</button><button class="confirm-inline" data-confirm-trip="okayama">旅程を確定</button></div></div>
+            <span class="trip-state plan" data-state-for="okayama">計画中</span>
+          </div>
+        </div>
+        <div class="trip-section-title">過去の旅</div>
+        <div class="trip-list">
+          <div class="trip-row">
+            <div class="trip-thumb" style="background:linear-gradient(#b9d0dc,#819c84)"></div>
+            <div><h3>山口・萩</h3><p>8/8〜8/10 ・ 旅行済み<br>旅程と移動履歴を保存</p><div class="trip-row-actions"><button>旅程を見る</button><button>似た旅を作る</button></div></div>
+            <span class="trip-state past">旅行済み</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROFILE -->
+    <section class="view" id="profile">
+      <div class="profile-shell">
+        <div class="eyebrow">MY TRANSITFORGE</div>
+        <h1 class="page-title">マイページ</h1>
+        <div class="profile-grid" style="margin-top:18px">
+          <div class="profile-card">
+            <h3>旅行プロフィール</h3>
+            <p>AIが新しい旅を提案するときに使う、継続的な好みです。特定Tripの条件とは別に管理します。</p>
+            <div class="preference-list" id="profileSummaryChips">
+              <span>列車移動が好き</span><span>朝はややゆっくり</span><span>食事重視</span><span>詰め込みすぎない</span>
+            </div>
+            <div class="profile-card-actions">
+              <button class="primary" id="openProfileEditor">旅行プロフィールを編集</button>
+            </div>
+          </div>
+          <div class="profile-card">
+            <h3>保存データ</h3>
+            <p>旅程 4件<br>会話セッション 7件<br>予約状態・準備リストなどをTrip単位で保持</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROFILE EDIT -->
+    <section class="view" id="profileEdit">
+      <div class="profile-edit-shell">
+        <div class="profile-edit-head">
+          <button class="back" data-view="profile">←</button>
+          <div>
+            <h1>旅行プロフィール</h1>
+            <p>新しい旅を相談したときの初期値としてAIが使います。Tripごとの条件がある場合は、そちらを優先します。</p>
+          </div>
+        </div>
+
+        <form class="profile-form" id="travelProfileForm" onsubmit="return false;">
+          <div class="profile-scope-note">
+            <b>旅行プロフィールとTrip条件は別物です。</b>
+            ここには「普段の好み」を保存します。たとえばプロフィールが「朝はゆっくり」でも、特定Tripで「始発で出たい」と伝えた場合はTrip条件を優先します。
+          </div>
+
+          <section class="form-section">
+            <h2>基本情報</h2>
+            <p>AIが旅行候補を考えるときのデフォルト値です。</p>
+            <div class="form-grid">
+              <div class="field">
+                <label for="profileOrigin">普段の出発地</label>
+                <input id="profileOrigin" placeholder="例：京都" />
+              </div>
+              <div class="field">
+                <label for="profileParty">よく旅行する人数</label>
+                <select id="profileParty">
+                  <option value="1">1名</option>
+                  <option value="2">2名</option>
+                  <option value="3">3名</option>
+                  <option value="4">4名</option>
+                  <option value="family">家族</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="profileTransport">移動の好み</label>
+                <select id="profileTransport">
+                  <option value="rail">列車を優先</option>
+                  <option value="balanced">列車中心・必要なら他交通</option>
+                  <option value="flexible">交通手段はこだわらない</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="profileBudget">予算感</label>
+                <select id="profileBudget">
+                  <option value="economy">なるべく抑えたい</option>
+                  <option value="balanced">バランス重視</option>
+                  <option value="comfort">快適さ優先</option>
+                  <option value="premium">価格より体験重視</option>
+                </select>
+              </div>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <h2>旅のペース</h2>
+            <p>詰め込み度合いや朝のスタート時間など、旅程の組み方に使います。</p>
+            <div class="form-grid">
+              <div class="field full">
+                <label>朝のスタート</label>
+                <div class="choice-group" data-choice-group="morning">
+                  <button type="button" class="choice" data-value="early">早朝から動ける</button>
+                  <button type="button" class="choice selected" data-value="normal">普通</button>
+                  <button type="button" class="choice" data-value="late">ゆっくり</button>
+                </div>
+              </div>
+              <div class="field full">
+                <label for="paceRange">1日の詰め込み度</label>
+                <div class="range-row">
+                  <input type="range" id="paceRange" min="1" max="5" step="1" value="2" />
+                  <span class="range-value" id="paceValue">ゆったり</span>
+                </div>
+              </div>
+              <div class="field full">
+                <label>乗換の好み</label>
+                <div class="choice-group" data-choice-group="transfer">
+                  <button type="button" class="choice selected" data-value="few">乗換少なめ</button>
+                  <button type="button" class="choice" data-value="balanced">バランス</button>
+                  <button type="button" class="choice" data-value="fast">速さ優先</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <h2>興味・目的</h2>
+            <p>複数選択できます。AIが候補地や滞在時間を決める参考にします。</p>
+            <div class="choice-group" data-multi-group="interests">
+              <button type="button" class="choice selected" data-value="food">グルメ</button>
+              <button type="button" class="choice selected" data-value="history">歴史</button>
+              <button type="button" class="choice selected" data-value="nature">自然・絶景</button>
+              <button type="button" class="choice" data-value="onsen">温泉</button>
+              <button type="button" class="choice" data-value="art">アート</button>
+              <button type="button" class="choice" data-value="rail">鉄道そのもの</button>
+              <button type="button" class="choice" data-value="walk">まち歩き</button>
+              <button type="button" class="choice" data-value="shopping">買い物</button>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <h2>宿泊・食事</h2>
+            <p>未設定でも問題ありません。必要なTripだけAIとの会話で上書きできます。</p>
+            <div class="form-grid">
+              <div class="field">
+                <label for="profileLodging">宿泊の好み</label>
+                <select id="profileLodging">
+                  <option value="any">こだわらない</option>
+                  <option value="hotel">ホテル</option>
+                  <option value="ryokan">旅館・温泉宿</option>
+                  <option value="business">価格重視</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="profileMeal">食事の重視度</label>
+                <select id="profileMeal">
+                  <option value="normal">普通</option>
+                  <option value="important">重視する</option>
+                  <option value="very">かなり重視する</option>
+                </select>
+              </div>
+              <div class="field full">
+                <label for="profileFoodNotes">食事の好み</label>
+                <textarea id="profileFoodNotes" placeholder="例：ご当地料理を食べたい。行列が長い店は避けたい。"></textarea>
+              </div>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <h2>避けたいこと・配慮してほしいこと</h2>
+            <p>長時間歩きたくない、混雑が苦手など、旅程全体に関わる条件を自由に書けます。</p>
+            <div class="field">
+              <label for="profileAvoid">AIへの常設メモ</label>
+              <textarea id="profileAvoid" placeholder="例：朝6時台の出発は避けたい。1日に乗換3回以上は避けたい。"></textarea>
+            </div>
+          </section>
+        </form>
+
+        <div class="profile-form-actions">
+          <button class="secondary" data-view="profile">キャンセル</button>
+          <button class="primary" id="saveTravelProfile">保存する</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRIP DETAIL -->
+    <section class="view" id="tripDetail">
+      <div class="trip-detail-shell">
+        <div class="trip-detail-header">
+          <div class="trip-detail-heading">
+            <div class="eyebrow">SAVED TRIP</div>
+            <h1 id="detailTitle">広島・宮島の旅</h1>
+            <p id="detailMeta">10/11〜10/13 ・ 京都発 ・ 2名</p>
+          </div>
+          <div class="trip-detail-badge" id="detailBadge">次の旅</div>
+        </div>
+
+        <div class="detail-main">
+          <div class="detail-top-actions">
+            <button class="secondary" data-view="trips">← 旅程一覧</button>
+            <button class="primary" id="detailChat">✦ この旅程をAIに相談</button>
+          </div>
+
+          <div class="detail-tabs">
+            <button class="active" data-detail-tab="overview">概要</button>
+            <button data-detail-tab="itinerary">旅程</button>
+            <button data-detail-tab="cost">費用</button>
+            <button data-detail-tab="map">地図</button>
+          </div>
+
+          <section class="detail-tab-panel active" id="detail-overview">
+            <div class="detail-two-col">
+              <div>
+                <div class="summary-grid">
+                  <div class="summary-card"><div class="label">日程</div><div class="value" id="overviewDates">10/11〜10/13</div><div class="note">2泊3日</div></div>
+                  <div class="summary-card"><div class="label">出発</div><div class="value" id="overviewOrigin">京都</div><div class="note">列車中心</div></div>
+                  <div class="summary-card"><div class="label">同行者</div><div class="value" id="overviewParty">2名</div><div class="note">大人2名</div></div>
+                  <div class="summary-card"><div class="label">旅のテーマ</div><div class="value" id="overviewTheme">歴史・絶景・グルメ</div><div class="note">朝はゆっくり</div></div>
+                </div>
+                <div class="ai-summary">
+                  <b>AIによる旅の要約</b>
+                  <p id="overviewSummary">京都から新幹線で広島へ。初日は広島市内、2日目は宮島を中心に過ごし、移動量を抑えながら歴史・景色・食事をバランスよく楽しむ旅です。</p>
+                </div>
+              </div>
+
+              <aside class="detail-side-actions">
+                <div class="detail-card">
+                  <div class="compact-plan-state"><b id="overviewPlanLabel">旅程確定済み</b><span class="status-pill" id="overviewStatusPill">確定済</span></div>
+                  <button class="primary" id="confirmTripButton">この旅程を確定</button>
+                  <div class="confirm-warning" id="confirmTripWarning" hidden>日程が未確定のため、先に旅行日を決める必要があります。</div>
+                </div>
+                <div class="detail-card">
+                  <h3>AIに相談</h3>
+                  <p>このTripを編集対象としてチャットを開きます。</p>
+                  <button class="secondary" id="detailChatSide">この旅程を相談する</button>
+                </div>
+                <div class="detail-card">
+                  <h3>旅行モード</h3>
+                  <p>地図・列車・次の移動をまとめて表示します。</p>
+                  <button class="ghost" id="detailTravel">旅行モードを開く</button>
+                </div>
+              </aside>
+            </div>
+          </section>
+
+          <section class="detail-tab-panel" id="detail-itinerary">
+            <div class="days"><button class="day active">1日目</button><button class="day">2日目</button><button class="day">3日目</button></div>
+            <div class="itinerary" id="detailItinerary"></div>
+          </section>
+
+          <section class="detail-tab-panel" id="detail-cost">
+            <div class="cost-ai-banner">
+              <div class="spark">✦</div>
+              <div>
+                <b>費用はすべてAI予測</b>
+                <p>予約サイトや決済情報とは連携せず、旅程・移動・宿泊条件から概算します。実際の金額が分かったら、各項目をユーザーが自由に上書きできます。</p>
+              </div>
+            </div>
+
+            <div class="cost-overview">
+              <div class="cost-total">
+                <div class="label">概算合計 / 2名</div>
+                <div class="amount editable-total">¥ <input id="costTotalInput" inputmode="numeric" aria-label="概算合計"></div>
+                <small>各項目の編集値から自動計算します。</small>
+              </div>
+              <div class="cost-list" id="costList"></div>
+            </div>
+
+            <div class="cost-foot-actions">
+              <button class="secondary" id="resetAiCost">AI予測に戻す</button>
+              <button class="primary" id="saveCostEdits">この金額を保存</button>
+            </div>
+            <div class="cost-save-note">このモックではブラウザ内だけに保持します。実装時はTripごとのユーザー編集値として保存する想定です。</div>
+          </section>
+
+          <section class="detail-tab-panel" id="detail-map">
+            <div class="trip-map">
+              <div class="trip-map-toolbar">
+                <button class="active" data-trip-map="route">旅程ルート</button>
+                <button data-trip-map="stops">立ち寄り</button>
+              </div>
+              <div class="map-scene" id="tripMapScene">
+                <div class="land"></div><div class="water"></div>
+                <div class="island i1"></div><div class="island i2"></div><div class="island i3"></div>
+                <div class="road r1"></div><div class="road r2"></div><div class="road r3"></div>
+                <div class="route-line"></div>
+                <div class="station st-h">広島</div><div class="station st-o">岡山</div><div class="station st-k">新大阪</div><div class="station st-s">京都</div>
+                <div class="trip-stop hiroshima"></div><div class="trip-stop miyajima"></div>
+              </div>
+              <div class="trip-map-card" id="tripMapCard">
+                <b>京都 → 広島 → 宮島</b>
+                <p>列車移動を主軸に、初日は広島市内、2日目は宮島を中心に回るルートです。</p>
+              </div>
+              <button class="trip-map-cta" id="openTravelFromMap">旅行モードで見る</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRAVEL MODE -->
+    <section class="view" id="travel">
+      <div class="travel-shell">
+        <div class="travel-grid">
+          <div class="travel-side">
+            <div class="travel-head"><div><div class="eyebrow">TRAVEL MODE</div><h1 id="travelTitle">広島・宮島の旅</h1></div><button class="close-travel" id="closeTravel">×</button></div>
+            <div class="next-card">
+              <div class="next-label"><span>次の移動</span><span>あと 12分</span></div>
+              <div class="route"><div class="time">11:00</div><div class="line"></div><div><b>広島駅</b><small>JR 山陽新幹線 のぞみ21号<br>新大阪方面・16号車</small></div></div>
+              <div class="route"><div class="time">12:37</div><div class="line"></div><div><b>新大阪駅</b><small>到着予定</small></div></div>
+              <div class="alerts"><button>🎫 きっぷを表示</button><button>ⓘ 運行情報</button></div>
+            </div>
+            <div class="intrip-ai"><b>移動中もAIに聞けます</b><p>いまのTrip・次の予定・列車の状況を前提に、必要なことだけ答えます。</p><button class="travel-ai" data-answer="このままなら乗換には余裕があります。新大阪到着後、約18分の乗換時間があります。">乗換に間に合う？</button><button class="travel-ai" data-answer="午後は雨の可能性があります。屋内を先に回し、夕方に屋外へ戻す案が安全です。">雨が降ったら？</button><button class="travel-ai" data-answer="広島駅では中央改札から新幹線口へ向かうと分かりやすいです。">ホームはどっち？</button></div>
+          </div>
+          <div class="map-pane">
+            <div class="map-toolbar"><button class="active" data-mapmode="2d">地図</button><button data-mapmode="3d">3D列車</button></div>
+            <div class="map-note">Mapbox Standard想定<br>3D列車はThree.jsレイヤー</div>
+            <div class="map-scene" id="mapScene">
+              <div class="land"></div><div class="water"></div><div class="island i1"></div><div class="island i2"></div><div class="island i3"></div><div class="road r1"></div><div class="road r2"></div><div class="road r3"></div><div class="route-line"></div>
+              <div class="station st-h">広島</div><div class="station st-o">岡山</div><div class="station st-k">新大阪</div><div class="station st-s">京都</div>
+              <div class="building b1"></div><div class="building b2"></div><div class="building b3"></div><div class="building b4"></div><div class="building b5"></div>
+              <div class="train3d"><div class="cars"></div><div class="nose"></div><div class="blue-line"></div></div>
+              <div class="train-pop"><b>のぞみ21号</b>時速 285 km/h</div>
+            </div>
+            <div class="weather">広島 <strong>22°</strong><br><span class="subtle">晴れ・降水確率10%</span></div>
+            <div class="assistant-toast" id="assistantToast"><b>AIから</b><p id="assistantToastText"></p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="mobile-nav">
+    <button class="active" data-view="home"><span>⌕</span>探す</button>
+    <button data-view="chat"><span>✦</span>相談</button>
+    <button data-view="trips"><span>▣</span>旅程</button>
+    <button data-view="profile"><span>●</span>マイ</button>
+  </nav>
+</div>
+
+<div class="sheet-backdrop" id="sheetBackdrop"></div>
+<div class="condition-sheet" id="conditionSheet">
+  <div class="sheet-handle"></div>
+  <h3>この旅の条件</h3>
+  <div id="mobileConditions"></div>
+  <div style="display:flex;gap:8px;margin-top:14px"><button class="secondary" id="closeConditions">閉じる</button><button class="primary">条件を編集</button></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $=(q,r=document)=>r.querySelector(q), $$=(q,r=document)=>[...r.querySelectorAll(q)];
+const MOCK_TODAY = new Date('2026-09-18T10:00:00+09:00');
+const trips={
+  hiroshima:{
+    id:'hiroshima',title:'広島・宮島の旅',meta:'10/11〜10/13 ・ 京都発 ・ 2名',
+    planStatus:'confirmed',startDate:'2026-10-11',endDate:'2026-10-13',
+    conditions:[['出発地','京都'],['日程','10/11〜10/13'],['同行者','2名'],['移動','列車中心'],['好み','自然・歴史・グルメ'],['ペース','朝はゆっくり']],
+    itinerary:[['08:12','🚄','京都駅 → 広島駅','山陽新幹線 のぞみ17号・約1時間40分'],['10:05','🍽','広島で早めの昼食','駅周辺でお好み焼き'],['12:10','⛩','平和記念公園・資料館','滞在 約2時間'],['15:05','🚆','広島 → 宮島口','JR山陽本線・約28分'],['16:00','♨','宮島でチェックイン','夕方の参道散策']]
+  },
+  kinosaki:{
+    id:'kinosaki',title:'城崎温泉',meta:'11月ごろ ・ 日程未確定 ・ 2名',
+    planStatus:'draft',startDate:null,endDate:null,
+    conditions:[['出発地','京都'],['日程','11月ごろ'],['同行者','2名'],['移動','特急中心'],['好み','温泉・のんびり'],['ペース','詰め込みすぎない']],
+    itinerary:[['09:25','🚆','京都駅 → 城崎温泉駅','特急きのさき'],['12:00','🍽','温泉街で昼食','但馬牛・海鮮候補'],['13:30','♨','外湯めぐり','ゆっくり3湯程度'],['16:00','🏨','旅館へチェックイン','夕食まで休憩']]
+  },
+  okayama:{
+    id:'okayama',title:'岡山・倉敷',meta:'12/12〜12/13 ・ 京都発 ・ 2名',
+    planStatus:'draft',startDate:'2026-12-12',endDate:'2026-12-13',
+    conditions:[['出発地','京都'],['日程','12/12〜12/13'],['同行者','2名'],['移動','列車中心'],['好み','まち歩き・アート'],['ペース','のんびり']],
+    itinerary:[['09:00','🚄','京都駅 → 岡山駅','山陽新幹線'],['11:00','🎨','岡山市内','後楽園・美術館候補'],['15:00','🚆','岡山 → 倉敷','JR山陽本線'],['16:00','🏘','倉敷美観地区','夕方の町歩き']]
+  }
+};
+let activeTripId='hiroshima', chatTripId=null, returnFromTravel='tripDetail';
+
+let travelProfile={
+  origin:'京都',
+  party:'2',
+  transport:'rail',
+  budget:'balanced',
+  morning:'late',
+  pace:2,
+  transfer:'few',
+  interests:['food','history','nature'],
+  lodging:'any',
+  meal:'important',
+  foodNotes:'ご当地料理を楽しみたい',
+  avoid:'朝6時台の出発は避けたい。詰め込みすぎない。'
+};
+
+
+const aiCostEstimates={
+  hiroshima:[
+    ['交通',42800,'新幹線・在来線・フェリーを含むAI予測'],
+    ['宿泊',40000,'2泊・2名を想定したAI予測'],
+    ['観光・入館',5600,'資料館・ロープウェー等を想定'],
+    ['食事',8000,'AIによる食事費の目安']
+  ],
+  kinosaki:[
+    ['交通',28000,'京都↔城崎温泉・特急を想定'],
+    ['宿泊',42000,'1泊2食・2名を想定したAI予測'],
+    ['外湯・観光',3000,'外湯券等を想定'],
+    ['食事',5000,'AIによる昼食・間食の目安']
+  ],
+  okayama:[
+    ['交通',30600,'京都↔岡山・倉敷を想定'],
+    ['宿泊',28000,'1泊・2名を想定したAI予測'],
+    ['観光・入館',4000,'庭園・美術館等を想定'],
+    ['食事',7000,'AIによる食事費の目安']
+  ]
+};
+const userCostOverrides={};
+
+let newTripConditions=[['出発地','未設定'],['日程','未設定'],['同行者','未設定'],['移動','列車中心'],['好み','会話から把握'],['ペース','未設定']];
+
+function dateOnly(value){ return value ? new Date(value+'T12:00:00+09:00') : null; }
+function confirmedFutureTrips(){
+  return Object.values(trips).filter(t=>t.planStatus==='confirmed' && t.startDate && dateOnly(t.startDate)>MOCK_TODAY)
+    .sort((a,b)=>dateOnly(a.startDate)-dateOnly(b.startDate));
+}
+function derivedPhase(id){
+  const t=trips[id];
+  if(!t) return 'planning';
+  const start=dateOnly(t.startDate), end=dateOnly(t.endDate);
+  if(end && end < MOCK_TODAY) return 'past';
+  if(start && end && start <= MOCK_TODAY && MOCK_TODAY <= end) return 'intrip';
+  if(t.planStatus!=='confirmed') return 'planning';
+  const next=confirmedFutureTrips()[0];
+  if(next && next.id===id) return 'next';
+  return 'upcoming';
+}
+function phaseLabel(id){
+  return ({planning:'計画中',next:'次の旅',upcoming:'予定あり',intrip:'旅行中',past:'旅行済み'})[derivedPhase(id)];
+}
+function refreshTripStateLabels(){
+  $$('[data-state-for]').forEach(el=>{
+    const id=el.dataset.stateFor, phase=derivedPhase(id);
+    el.textContent=phaseLabel(id);
+    el.className='trip-state '+(phase==='planning'?'plan':phase);
+  });
+  $$('[data-confirm-trip]').forEach(btn=>{
+    const t=trips[btn.dataset.confirmTrip];
+    btn.hidden=t.planStatus==='confirmed';
+  });
+}
+
+function showView(id){
+  $$('.view').forEach(v=>v.classList.toggle('active',v.id===id));
+  $$('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===id));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+$$('[data-view]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.view==='chat'&&!chatTripId) setupNewChat('');showView(b.dataset.view)}));
+
+
+const interestLabels={
+  food:'グルメ',history:'歴史',nature:'自然・絶景',onsen:'温泉',
+  art:'アート',rail:'鉄道そのもの',walk:'まち歩き',shopping:'買い物'
+};
+const morningLabels={early:'朝早め',normal:'朝は普通',late:'朝はゆっくり'};
+const paceLabels={1:'かなりゆったり',2:'ゆったり',3:'普通',4:'やや詰める',5:'しっかり回る'};
+const transportLabels={rail:'列車移動が好き',balanced:'列車中心',flexible:'交通手段は柔軟'};
+const budgetLabels={economy:'予算を抑えたい',balanced:'予算バランス重視',comfort:'快適さ優先',premium:'体験重視'};
+
+function renderTravelProfileSummary(){
+  const labels=[
+    transportLabels[travelProfile.transport],
+    morningLabels[travelProfile.morning],
+    ...(travelProfile.interests.slice(0,3).map(v=>interestLabels[v])),
+    paceLabels[travelProfile.pace]
+  ].filter(Boolean);
+  $('#profileSummaryChips').innerHTML=labels.map(x=>`<span>${x}</span>`).join('');
+}
+function populateTravelProfileForm(){
+  $('#profileOrigin').value=travelProfile.origin;
+  $('#profileParty').value=travelProfile.party;
+  $('#profileTransport').value=travelProfile.transport;
+  $('#profileBudget').value=travelProfile.budget;
+  $('#profileLodging').value=travelProfile.lodging;
+  $('#profileMeal').value=travelProfile.meal;
+  $('#profileFoodNotes').value=travelProfile.foodNotes;
+  $('#profileAvoid').value=travelProfile.avoid;
+  $('#paceRange').value=travelProfile.pace;
+  updatePaceLabel();
+
+  $$('[data-choice-group="morning"] .choice').forEach(b=>b.classList.toggle('selected',b.dataset.value===travelProfile.morning));
+  $$('[data-choice-group="transfer"] .choice').forEach(b=>b.classList.toggle('selected',b.dataset.value===travelProfile.transfer));
+  $$('[data-multi-group="interests"] .choice').forEach(b=>b.classList.toggle('selected',travelProfile.interests.includes(b.dataset.value)));
+}
+function updatePaceLabel(){
+  $('#paceValue').textContent=paceLabels[$('#paceRange').value] || '普通';
+}
+function selectedChoice(group){
+  return $(`[data-choice-group="${group}"] .choice.selected`)?.dataset.value;
+}
+function selectedInterests(){
+  return $$('[data-multi-group="interests"] .choice.selected').map(b=>b.dataset.value);
+}
+
+function currentConditions(){
+  return chatTripId ? trips[chatTripId].conditions : newTripConditions;
+}
+function renderConditions(){
+  const conds=currentConditions();
+  $('#desktopConditions').innerHTML=conds.map(([k,v],index)=>`
+    <div class="condition-edit-row" data-condition-index="${index}">
+      <span class="condition-key">${k}</span>
+      <span class="condition-value">${v}</span>
+      <button class="condition-edit" title="${k}を編集" data-edit-condition="${index}">✎</button>
+    </div>`).join('');
+  $('#mobileConditions').innerHTML=conds.map(([k,v])=>`<div class="sheet-row"><span>${k}</span><b>${v}</b></div>`).join('');
+  $$('[data-edit-condition]').forEach(btn=>btn.addEventListener('click',()=>beginConditionEdit(Number(btn.dataset.editCondition))));
+}
+function beginConditionEdit(index){
+  const row=$(`[data-condition-index="${index}"]`);
+  if(!row) return;
+  const conds=currentConditions(), [key,value]=conds[index];
+  row.innerHTML=`<span class="condition-key">${key}</span><div class="condition-editor"><input value="${value.replaceAll('"','&quot;')}" aria-label="${key}"><button class="save-condition">保存</button><button class="cancel-condition">取消</button></div>`;
+  const input=$('input',row); input.focus(); input.select();
+  $('.save-condition',row).addEventListener('click',()=>{
+    const next=input.value.trim()||'未設定';
+    conds[index][1]=next;
+    if(chatTripId && key==='日程') trips[chatTripId].meta=trips[chatTripId].meta.replace(/^[^・]+/,next);
+    renderConditions();
+    toast(`${key}を更新しました`);
+  });
+  $('.cancel-condition',row).addEventListener('click',renderConditions);
+}
+function resetMessages(){
+  $('#messages').innerHTML='<div class="msg"><div class="avatar-ai">✦</div><div class="bubble">どんな旅にしたいですか？ 行き先が決まっていなくても、日程や気分から一緒に考えられます。</div></div>';
+}
+function setupNewChat(prompt=''){
+  chatTripId=null; resetMessages(); $('#chatTripLabel').textContent='新しい旅を相談中'; $('#chatSubtitle').textContent='新しい旅について相談中'; $('#viewBoundTrip').hidden=true; renderConditions();
+  if(prompt){appendMessage(prompt,'user');setTimeout(()=>appendMessage('いいですね。収録済みの時刻表範囲で無理なく組める候補をいくつか出します。まずは日程と出発地を確認しながら詰めましょう。','ai'),250)}
+}
+function setupTripChat(id){
+  chatTripId=id; const t=trips[id]; resetMessages(); $('#chatTripLabel').textContent=t.title+' を編集中'; $('#chatSubtitle').textContent=t.title+'について相談中'; $('#viewBoundTrip').hidden=false; renderConditions();
+  appendMessage(`${t.title}について相談を続けます。現在の旅程と条件を前提に、変更案を出します。確定内容は勝手に書き換えず、反映前に差分を確認できます。`,'ai');
+}
+function appendMessage(text,who='user'){
+  const wrap=document.createElement('div');wrap.className='msg '+(who==='user'?'user':'');
+  if(who!=='user'){const a=document.createElement('div');a.className='avatar-ai';a.textContent='✦';wrap.append(a)}
+  const b=document.createElement('div');b.className='bubble';b.textContent=text;wrap.append(b);$('#messages').append(wrap);$('#messages').scrollTop=$('#messages').scrollHeight;
+}
+function chatReply(text){
+  if(chatTripId){
+    const t=trips[chatTripId];
+    if(text.includes('朝')||text.includes('ゆっくり')) return `${t.title}の現在旅程を対象に、朝を遅くする変更案を作れます。移動時刻と後続予定への影響を比較してから反映します。`;
+    if(text.includes('温泉')) return `${t.title}に温泉を追加できるか、既存の移動を崩さずに確認します。難しい場合は、別Tripとして組み直す案も出します。`;
+    return `${t.title}への変更として扱います。まず差分案を作り、あなたが「反映」を押すまでは元の旅程は変更しません。`;
+  }
+  if(text.includes('東京')||text.includes('北海道')) return 'その場所は現在の収録時刻表エリア外です。主要な列車移動としては提案せず、西日本の収録エリア内で近い雰囲気の候補を探します。';
+  return '了解しました。新しいTripとして条件を集めています。行き先・日程がある程度固まったら、複数候補を比較して旅程として保存できます。';
+}
+$('#chatSend').addEventListener('click',()=>{const i=$('#chatInput'),v=i.value.trim();if(!v)return;appendMessage(v,'user');i.value='';setTimeout(()=>appendMessage(chatReply(v),'ai'),300)});
+$('#chatInput').addEventListener('keydown',e=>{if(e.key==='Enter')$('#chatSend').click()});
+
+function openTrip(id){
+  activeTripId=id;
+  const t=trips[id], phase=derivedPhase(id);
+
+  $('#detailTitle').textContent=t.title;
+  $('#detailMeta').textContent=t.meta;
+  $('#detailBadge').textContent=phaseLabel(id);
+
+  const conditionMap=Object.fromEntries(t.conditions);
+  $('#overviewDates').textContent=conditionMap['日程'] || '未設定';
+  $('#overviewOrigin').textContent=conditionMap['出発地'] || '未設定';
+  $('#overviewParty').textContent=conditionMap['同行者'] || '未設定';
+  $('#overviewTheme').textContent=conditionMap['好み'] || '未設定';
+
+  const summaries={
+    hiroshima:'京都から新幹線で広島へ。初日は広島市内、2日目は宮島を中心に過ごし、移動量を抑えながら歴史・景色・食事をバランスよく楽しむ旅です。',
+    kinosaki:'京都から特急で城崎温泉へ。移動を増やさず、外湯・温泉街・食事に時間を使う、のんびりした滞在型の旅です。',
+    okayama:'京都から岡山へ移動し、岡山市内と倉敷を組み合わせる旅です。町歩きとアートを中心に、列車移動は短めに抑えています。'
+  };
+  $('#overviewSummary').textContent=summaries[id] || 'AIが旅程を要約します。';
+
+  const confirmed=t.planStatus==='confirmed';
+  $('#overviewPlanLabel').textContent=confirmed?'旅程確定済み':'計画中';
+  $('#overviewStatusPill').textContent=confirmed?'確定済':'編集中';
+  $('#overviewStatusPill').style.background=confirmed?'#e5f6ef':'#edf4fc';
+  $('#overviewStatusPill').style.color=confirmed?'#187354':'#28649c';
+
+  const canConfirm=!confirmed && !!t.startDate && !!t.endDate;
+  $('#confirmTripButton').hidden=confirmed;
+  $('#confirmTripButton').disabled=!canConfirm;
+  $('#confirmTripWarning').hidden=confirmed || canConfirm;
+
+  renderCostEditor(id);
+
+  $('#detailItinerary').innerHTML=t.itinerary.map(([time,icon,title,desc])=>`
+    <div class="it-time">${time}</div><div class="it-line"></div>
+    <div class="it-item"><div class="it-card"><div class="transport-icon">${icon}</div><div class="grow"><strong>${title}</strong><small>${desc}</small></div>${icon==='🚄'||icon==='🚆'?'<span class="status-pill">確認済</span>':''}</div></div>`).join('');
+
+  // default to overview every time a trip is opened
+  $$('[data-detail-tab]').forEach(b=>b.classList.toggle('active',b.dataset.detailTab==='overview'));
+  $$('.detail-tab-panel').forEach(p=>p.classList.toggle('active',p.id==='detail-overview'));
+  showView('tripDetail');
+}
+function confirmTrip(id){
+  const t=trips[id];
+  if(!t.startDate || !t.endDate){ toast('先に旅行日を確定してください'); return; }
+  t.planStatus='confirmed';
+  refreshTripStateLabels();
+  if(activeTripId===id) openTrip(id);
+  toast('旅程を確定しました');
+}
+$$('.open-trip').forEach(b=>b.addEventListener('click',()=>openTrip(b.dataset.trip)));
+$$('.chat-from-trip').forEach(b=>b.addEventListener('click',()=>{setupTripChat(b.dataset.trip);showView('chat')}));
+$$('.start-new-chat').forEach(b=>b.addEventListener('click',()=>{setupNewChat(b.dataset.prompt||'');showView('chat')}));
+$$('[data-confirm-trip]').forEach(b=>b.addEventListener('click',()=>confirmTrip(b.dataset.confirmTrip)));
+$('#detailChat').addEventListener('click',()=>{setupTripChat(activeTripId);showView('chat')});
+$('#detailChatSide').addEventListener('click',()=>{setupTripChat(activeTripId);showView('chat')});
+$('#confirmTripButton').addEventListener('click',()=>confirmTrip(activeTripId));
+$('#viewBoundTrip').addEventListener('click',()=>{if(chatTripId)openTrip(chatTripId)});
+
+function startTravel(id){activeTripId=id;returnFromTravel='tripDetail';$('#travelTitle').textContent=trips[id].title;showView('travel')}
+$$('.start-travel').forEach(b=>b.addEventListener('click',()=>startTravel(b.dataset.trip)));
+$('#detailTravel').addEventListener('click',()=>startTravel(activeTripId));
+$('#closeTravel').addEventListener('click',()=>openTrip(activeTripId));
+
+const homePrompt=$('#homePrompt');function startPrompt(text){if(text)homePrompt.value=text;setupNewChat(homePrompt.value.trim()||'週末に2泊3日で、西日本を列車で旅したい');showView('chat')}
+$('#homeSend').addEventListener('click',()=>startPrompt());homePrompt.addEventListener('keydown',e=>{if(e.key==='Enter')startPrompt()});$$('.quick-home').forEach(b=>b.addEventListener('click',()=>startPrompt(b.textContent)));
+
+$('#showConditions').addEventListener('click',()=>{$('#sheetBackdrop').classList.add('show');$('#conditionSheet').classList.add('show')});
+function closeSheet(){$('#sheetBackdrop').classList.remove('show');$('#conditionSheet').classList.remove('show')}
+$('#closeConditions').addEventListener('click',closeSheet);$('#sheetBackdrop').addEventListener('click',closeSheet);
+
+$$('[data-mapmode]').forEach(b=>b.addEventListener('click',()=>{$$('[data-mapmode]').forEach(x=>x.classList.toggle('active',x===b));$('#mapScene').classList.toggle('mode3d',b.dataset.mapmode==='3d')}));
+$$('.travel-ai').forEach(b=>b.addEventListener('click',()=>{$('#assistantToastText').textContent=b.dataset.answer;$('#assistantToast').classList.add('show');clearTimeout(window.__ait);window.__ait=setTimeout(()=>$('#assistantToast').classList.remove('show'),5200)}));
+
+function toast(text){const t=$('#toast');t.textContent=text;t.classList.add('show');clearTimeout(window.__tt);window.__tt=setTimeout(()=>t.classList.remove('show'),2200)}
+
+
+function cloneCostRows(rows){
+  return rows.map(([name,amount,note])=>[name,Number(amount)||0,note]);
+}
+function costRowsFor(id){
+  return cloneCostRows(userCostOverrides[id] || aiCostEstimates[id] || aiCostEstimates.hiroshima);
+}
+function renderCostEditor(id){
+  const rows=costRowsFor(id);
+  $('#costList').innerHTML=rows.map(([name,amount,note],index)=>`
+    <div class="cost-row editable" data-cost-index="${index}">
+      <div class="cost-name">${name}</div>
+      <input inputmode="numeric" value="${amount}" aria-label="${name}の費用">
+      <span class="ai-badge">${userCostOverrides[id]?'編集':'AI予測'}</span>
+      <small>${note}</small>
+    </div>`).join('');
+  $$('#costList input').forEach(input=>input.addEventListener('input',recalcCostTotal));
+  recalcCostTotal();
+}
+function recalcCostTotal(){
+  const total=$$('#costList input').reduce((sum,input)=>sum+(Number(input.value.replace(/[^0-9]/g,''))||0),0);
+  $('#costTotalInput').value=String(total);
+}
+function collectCostRows(){
+  const base=costRowsFor(activeTripId);
+  return $$('#costList .cost-row.editable').map((row,index)=>{
+    const input=$('input',row);
+    return [base[index][0],Number(input.value.replace(/[^0-9]/g,''))||0,base[index][2]];
+  });
+}
+
+$$('[data-detail-tab]').forEach(btn=>btn.addEventListener('click',()=>{
+  $$('[data-detail-tab]').forEach(x=>x.classList.toggle('active',x===btn));
+  $$('.detail-tab-panel').forEach(panel=>panel.classList.toggle('active',panel.id===`detail-${btn.dataset.detailTab}`));
+}));
+
+$$('[data-trip-map]').forEach(btn=>btn.addEventListener('click',()=>{
+  $$('[data-trip-map]').forEach(x=>x.classList.toggle('active',x===btn));
+  if(btn.dataset.tripMap==='stops'){
+    $('#tripMapCard').innerHTML='<b>主な立ち寄り</b><p>広島駅・平和記念公園・宮島口・宮島を表示しています。実装時はTrip itemsから地点を生成します。</p>';
+  }else{
+    $('#tripMapCard').innerHTML='<b>京都 → 広島 → 宮島</b><p>列車移動を主軸に、初日は広島市内、2日目は宮島を中心に回るルートです。</p>';
+  }
+}));
+$('#openTravelFromMap').addEventListener('click',()=>startTravel(activeTripId));
+
+$('#saveCostEdits').addEventListener('click',()=>{
+  userCostOverrides[activeTripId]=collectCostRows();
+  renderCostEditor(activeTripId);
+  toast('費用の編集内容を保存しました');
+});
+$('#resetAiCost').addEventListener('click',()=>{
+  delete userCostOverrides[activeTripId];
+  renderCostEditor(activeTripId);
+  toast('AI予測値に戻しました');
+});
+$('#costTotalInput').addEventListener('change',()=>{
+  recalcCostTotal();
+  toast('合計は各項目から自動計算します');
+});
+
+
+
+$('#openProfileEditor').addEventListener('click',()=>{
+  populateTravelProfileForm();
+  showView('profileEdit');
+});
+$$('[data-choice-group] .choice').forEach(btn=>btn.addEventListener('click',()=>{
+  const group=btn.closest('[data-choice-group]');
+  $$('.choice',group).forEach(x=>x.classList.toggle('selected',x===btn));
+}));
+$$('[data-multi-group] .choice').forEach(btn=>btn.addEventListener('click',()=>{
+  btn.classList.toggle('selected');
+}));
+$('#paceRange').addEventListener('input',updatePaceLabel);
+$('#saveTravelProfile').addEventListener('click',()=>{
+  travelProfile={
+    origin:$('#profileOrigin').value.trim()||'未設定',
+    party:$('#profileParty').value,
+    transport:$('#profileTransport').value,
+    budget:$('#profileBudget').value,
+    morning:selectedChoice('morning')||'normal',
+    pace:Number($('#paceRange').value),
+    transfer:selectedChoice('transfer')||'balanced',
+    interests:selectedInterests(),
+    lodging:$('#profileLodging').value,
+    meal:$('#profileMeal').value,
+    foodNotes:$('#profileFoodNotes').value.trim(),
+    avoid:$('#profileAvoid').value.trim()
+  };
+  renderTravelProfileSummary();
+  toast('旅行プロフィールを保存しました');
+  showView('profile');
+});
+renderTravelProfileSummary();
+
+renderConditions();
+refreshTripStateLabels();
+</script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 import type { Evidence, EvidenceClaim } from "./evidence-model";
 import type { AgentModelResponse } from "./model-provider";
 import type { ViewerAgentAction } from "../viewer/viewer-action";
+import { parseGroundedAnswer, presentGroundedEvidence, supportedAnswerClaims, sourceExplanation } from "./grounded-answer";
 
 export interface AgentGeneratedResponse {
   text: string;
@@ -10,7 +11,7 @@ export interface AgentGeneratedResponse {
 
 export interface AgentResponseGenerator {
   followUp(missingInformation: string[]): string;
-  fromModel(response: AgentModelResponse, evidence: Evidence[]): AgentGeneratedResponse;
+  fromModel(response: AgentModelResponse, evidence: Evidence[], origin?: "interaction" | "administrative" | "grounded", profile?: Record<string, unknown>): AgentGeneratedResponse;
   limitReached(hasEvidence?: boolean): string;
   failure(): string;
   groundingFailure(): string;
@@ -24,13 +25,42 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
     return `確認したいことがあります: ${missingInformation.join(" ")}`;
   }
 
-  fromModel(response: AgentModelResponse, _evidence: Evidence[]): AgentGeneratedResponse {
+  fromModel(response: AgentModelResponse, evidence: Evidence[], origin: "interaction" | "administrative" | "grounded" = "grounded", profile?: Record<string, unknown>): AgentGeneratedResponse {
     const text = response.message.content
       .filter((content): content is { type: "text"; text: string } =>
         content.type === "text")
       .map(({ text }) => withoutInternalReasoning(text).trim())
       .filter(Boolean)
       .join("\n");
+    if (origin === "grounded" || evidence.some((e) => Object.keys(e.facts).length > 0) || text.startsWith("{")) {
+      const ids = response.decisionSummary?.usedEvidenceIds ?? response.declaredEvidenceIds;
+      // A model may add a label/fence around the structured presentation. Only the
+      // validated JSON is rendered; surrounding prose never becomes a Claim.
+      const start = text.indexOf("{"), end = text.lastIndexOf("}");
+      if (start >= 0 && end >= start) {
+        const encoded = text.slice(start, end + 1);
+        let value: unknown;
+        try { value = JSON.parse(encoded); } catch { /* Existing strict fallback below. */ }
+        if (value && typeof value === "object" && "kind" in value && value.kind === "source-explanation") {
+          if (response.invalidUsedEvidenceIds) throw new Error("Invalid factual references");
+          return sourceExplanation(encoded, evidence, profile)!;
+        }
+      }
+      if (!text.startsWith("{") && !response.invalidUsedEvidenceIds && ids?.length) return presentGroundedEvidence(ids, evidence);
+      if (!text.startsWith("{") && !response.invalidUsedEvidenceIds && ids?.length === 0) {
+        // Explicitly selecting no factual support never licenses the model's prose.
+        // Preserve uncertainty with the existing unknown Claim contract instead.
+        const claims = supportedAnswerClaims([]);
+        return { text: claims[0]!.statement, claims, viewerActions: [] };
+      }
+      return sourceExplanation(text, evidence, profile) ?? parseGroundedAnswer(text, evidence);
+    }
+    // Output validation, not input intent routing: no first-turn lane may publish
+    // concrete transport measurements without a bound Claim. Native question and
+    // deterministic Tool presenters do not use this free-prose lane.
+    if (origin === "interaction" && /[0-9０-９一二三四五六七八九十百]+\s*(?:[:：][0-9０-９]{2}|分|時間|時|円|km|キロ|番線|号)/iu.test(text)) {
+      throw new Error("Unbound concrete value in interaction");
+    }
     return {
       text: text || "確認できる情報が不足しているため回答できません",
       claims: [],

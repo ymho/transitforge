@@ -4,6 +4,7 @@ import { createTrip } from "@raiquora/trip/trip";
 import { tripDynamoFixture } from "./trip-dynamodb.fixture.js";
 import { createTripApiHandler } from "../trip-handler.js";
 import { TripApplication } from "../usecases/trip-application.js";
+import { tripAdoptionConfirmationKey } from "@raiquora/trip/trip-adoption";
 
 const owner = { subject: "owner-A" }, otherOwner = { subject: "owner-B" };
 const id = "11111111-1111-4111-8111-111111111111";
@@ -16,6 +17,21 @@ const request = (number = 1, baseRevision = 5) => ({ version: "trip-api-v1", ope
 const setup = () => { const f = tripDynamoFixture(); f.seed(initial); return { ...f, application: new TripApplication(f.repository, f.repository, f.clock, { facts: async () => [] }) }; };
 
 describe("atomic Trip mutation and idempotency", () => {
+  it("commits explicit adoption through existing CAS/receipt without ready certification", async () => {
+    const f = setup();
+    const dated = { ...initial, items: [{ id: "activity", title: "散策", type: "activity" as const, category: "free-time" as const,
+      schedule: { type: "day" as const, date: "2026-09-20", timeZone: "Asia/Tokyo" } }] };
+    f.seed(dated);
+    const r = request(), proposal = { ...r.proposal, patches: [{ type: "adoption" as const, action: "confirm" as const }] };
+    const command = { ...r, proposal };
+    await expect(f.application.execute(owner, command)).rejects.toMatchObject({ code: "invalid-input" });
+    const authority = { confirmedAdoption: tripAdoptionConfirmationKey(proposal) };
+    const result = await f.application.execute(owner, command, authority);
+    expect(result).toMatchObject({ revision: 6, trip: { planningState: "inspiration", adoption: { confirmedAt: f.clock.now().toISOString() } } });
+    expect(await f.application.execute(owner, command, authority)).toEqual(result);
+    await expect(f.application.execute(owner, { ...command, mutationId: request(2).mutationId }, authority)).rejects.toMatchObject({ code: "conflict" });
+    await expect(f.application.execute(owner, { ...command, confirmedAdoption: authority.confirmedAdoption })).rejects.toMatchObject({ code: "invalid-input" });
+  });
   it("keeps explicit lifecycle authority separate from model/HTTP proposal data", async () => {
     const f = setup(), r = request(), body = { ...r, proposal: { ...r.proposal,
       patches: [{ type: "lifecycle", state: "cancelled", basis: "user_confirmation" }] } };

@@ -3,14 +3,14 @@ import type { TripFeasibilityEvaluation, TripFeasibilityIssue } from "@raiquora/
 import { element } from "./trip-workspace-elements";
 
 const labels: Record<TripFeasibilityCode, string> = {
-  empty_trip: "採用済みの予定がありません", schedule_unknown: "日時・所要時間が未確定です",
+  empty_trip: "これから予定を決めましょう", schedule_unknown: "予定の日時はこれから決められます",
   schedule_overlap: "予定の時間と順序が両立しません", schedule_window_possible: "時間帯の中で両立する配置を決める必要があります",
   movement_unknown: "予定間の移動を確認できていません", movement_insufficient: "移動に必要な時間が足りません",
   transport_unresolved: "移動手段・経路が未選択です", transport_unverified: "採用した移動の所要時間が未検証です",
   stay_unselected: "宿泊先が未選択です", visit_unknown: "訪問日時の営業・利用条件を確認できていません",
   visit_unavailable: "確認した利用条件では訪問できません", external_facts_invalid: "取得済み情報が古い計画または不正な形式のため使えません",
   hard_constraint_violated: "必須条件を満たしていません", hard_constraint_unknown: "必須条件の充足を確認できていません",
-  assumption_unconfirmed: "仮置きの条件が未確認です", reservations_unknown: "予約記録を取得できていません",
+  assumption_unconfirmed: "仮置きの条件が未確認です", reservations_unknown: "予約状況はまだ確認できていません",
   reservation_unknown: "予約状態が未確認です", reservation_time_unknown: "予約日時と予定を比較する情報が不足しています",
   reservation_conflict: "予約の固定日時と予定が一致しません", reservation_dangling: "予約に対応する予定が旅程にありません",
   reservation_required: "予約が必要ですが、予約済みの記録を確認できていません",
@@ -25,11 +25,16 @@ export function renderTripFeasibility(evaluation: TripFeasibilityEvaluation): HT
   const section = element("section", "trip-workspace-feasibility");
   section.dataset.feasibility = evaluation.status;
   section.setAttribute("aria-label", "旅程の成立性");
-  const label = { feasible: "成立", infeasible: "不成立", unknown: "未確認" }[evaluation.status];
-  section.append(element("h2", "", `成立性: ${label}`), element("p", "", `旅程 revision ${evaluation.tripRevision} の計画と取得済み情報による評価です。予約済み・実際の運行を保証するものではありません。`));
-  const evaluated = element("time", "", `評価時点: ${evaluation.evaluatedAt}`); evaluated.dateTime = evaluation.evaluatedAt; section.append(evaluated);
+  const label = { feasible: "確認した範囲で無理のない予定です", infeasible: "見直したい予定があります", unknown: "旅の確認ポイント" }[evaluation.status];
+  section.append(element("h2", "", label));
+  if (evaluation.status === "unknown") section.append(element("p", "", "まだ確認できていないことがあります。"));
   const list = element("ul");
   for (const issue of evaluation.issues) list.append(element("li", "", feasibilityIssueText(issue)));
   if (evaluation.issues.length) section.append(list);
+  const details = element("details", "trip-feasibility-details");
+  details.append(element("summary", "", "確認内容について"), element("p", "", "現在の計画と取得できた情報をもとにしています。予約の完了や当日の運行状況とは異なります。"));
+  const date = new Date(evaluation.evaluatedAt);
+  const evaluated = element("time", "", `最終確認: ${Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date) + "（日本時間）" : "日時不明"}`);
+  evaluated.dateTime = evaluation.evaluatedAt; details.append(evaluated); section.append(details);
   return section;
 }

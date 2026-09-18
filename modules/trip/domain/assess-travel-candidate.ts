@@ -10,6 +10,7 @@ import { assessCandidatePrice } from "./candidate-price-assessment";
 import type { CandidateAssessmentFacts, TravelCandidateAssessment } from "./travel-candidate-assessment";
 import { validateTravelCandidateAssessment } from "./validate-candidate-assessment";
 import { effectiveTripConstraints } from "./trip-request";
+import { assessTravelCoverage } from "./travel-coverage";
 
 /** Pure, read-only. No Tool execution, model inference, candidate pruning, proposal or persistence. */
 export function assessTravelCandidate(trip: Trip, candidate: TravelCandidate, facts: CandidateAssessmentFacts,
@@ -86,6 +87,7 @@ export function assessTravelCandidate(trip: Trip, candidate: TravelCandidate, fa
   });
   const environment = assessCandidateEnvironment(facts, places.data?.destinations ?? [], reader, expectedDates);
   const result: TravelCandidateAssessment = { candidateId: candidate.id, assessedAt: now, ...evaluated,
+    serviceCoverage: assessTravelCoverage(facts, now),
     mobility: proof.mobility, ...environment, price: proof.price, party,
     freshness: [...reader.freshness.values()], sources: [...reader.sources.values()], caveats: reader.caveats, partial: false };
   for (const constraint of result.hardConstraints) if (constraint.status !== "satisfied") {

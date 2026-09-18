@@ -23,7 +23,7 @@ export class TripApplication {
     } catch { throw new TripResourceError("feasibility-required"); }
   }
   async execute(principal: TripPrincipal | undefined, value: unknown,
-    authority: { confirmedLifecycle?: LifecycleState; confirmedReservationChange?: string;
+    authority: { confirmedLifecycle?: LifecycleState; confirmedAdoption?: string; confirmedReservationChange?: string;
       replanTargets?: InTripReplanTargets; confirmedReplan?: string } = {}): Promise<Record<string, unknown>> {
     requireTripPrincipal(principal);
     const command = parseTripCommand(value);
@@ -34,6 +34,7 @@ export class TripApplication {
     const version = tripApiVersion;
     switch (command.operation) {
       case "create": {
+        if (command.trip.adoption !== undefined) throw new TripResourceError("confirmation-required");
         if (command.trip.planningState === "ready") await this.ready(principal, command.trip);
         return { version, trip: await this.trips.create(principal, command.trip) };
       }

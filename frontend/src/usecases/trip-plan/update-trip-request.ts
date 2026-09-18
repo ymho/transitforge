@@ -87,12 +87,18 @@ export function proposeProfilePreference(trip: Trip, profile: UserProfile,
   ids: { constraintId: string; assumptionId?: string }): TripUpdateProposal {
   let requirement: TripConstraint["requirement"];
   switch (choice.field) {
-    case "pace": requirement = { type: "pace", value: profile.travelStyle.pace }; break;
-    case "carAvailable": requirement = { type: "mobility", carAvailable: profile.home.carAvailable }; break;
+    case "pace":
+      if (profile.travelStyle.pace === undefined) throw new Error("Profile pace is unknown");
+      requirement = { type: "pace", value: profile.travelStyle.pace }; break;
+    case "carAvailable":
+      if (profile.home.carAvailable === undefined) throw new Error("Profile car availability is unknown");
+      requirement = { type: "mobility", carAvailable: profile.home.carAvailable }; break;
     case "maxTravelMinutes":
-      if (profile.transport.maxTypicalTravelMinutes === null) throw new Error("Profile travel limit is unknown");
+      if (profile.transport.maxTypicalTravelMinutes == null) throw new Error("Profile travel limit is unknown");
       requirement = { type: "mobility", maxTravelMinutes: profile.transport.maxTypicalTravelMinutes }; break;
-    case "interest": requirement = { type: "experience", intent: "prefer", text: travelPreferenceLabels[choice.preference],
+    case "interest":
+      if (profile.preferences[choice.preference] === undefined) throw new Error("Profile interest is unknown");
+      requirement = { type: "experience", intent: "prefer", text: travelPreferenceLabels[choice.preference],
       preference: choice.preference, weight: profile.preferences[choice.preference] }; break;
     default: throw new Error("Unsupported profile field");
   }

@@ -55,6 +55,23 @@ const trip: TripPlan = {
 };
 
 describe("agent context snapshot", () => {
+  it("sends only explicitly consented fields, bounded independently of local storage", () => {
+    const source: UserProfile = { ...profile, notes: { budget: "budget-private", food: "好み".repeat(250), avoidances: "local-only" }, aiNoteFields: ["food"] };
+    const before = JSON.stringify(source);
+    expect(createAgentContextSnapshot(source).profile?.consentedPreferenceNotes).toEqual({ food: "好み".repeat(120) });
+    expect(JSON.stringify(createAgentContextSnapshot(source))).not.toContain("local-only");
+    expect(JSON.stringify(source)).toBe(before);
+    expect(createAgentContextSnapshot({ ...source, aiNoteFields: [] }).profile?.consentedPreferenceNotes).toBeUndefined();
+  });
+  it("preserves unset preferences and projects only non-authoritative hints, not raw notes", () => {
+    const partial: UserProfile = { version: 2, updatedAt: "2026-09-18T00:00:00Z", home: {},
+      companions: { usual: [], children: [], usualPartySize: 3 }, travelStyle: {}, preferences: {},
+      transport: { preferredMode: "rail" }, notes: { food: "private free text" } };
+    const snapshot = createAgentContextSnapshot(partial);
+    expect(snapshot.profile).toMatchObject({ usualPartySizeHint: 3, preferredTransportHint: "rail" });
+    expect(snapshot.profile?.pace).toBeUndefined(); expect(snapshot.profile?.home).toBeUndefined();
+    expect(snapshot.trip).toBeUndefined(); expect(JSON.stringify(snapshot)).not.toContain("private free text");
+  });
   it("keeps persisted party, linked assumptions and usual profile separate even after compression", () => {
     const request = partyRequest();
     const current = createTrip("11111111-1111-4111-8111-111111111111", "旅", "2026-09-12T08:00:00Z", [], request);

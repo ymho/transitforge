@@ -12,6 +12,20 @@ import {
 } from "./external-travel-tools";
 
 describe("external travel tools", () => {
+  it("binds bounded description only to its own fresh source, not unrelated pages or raw fields", () => {
+    const information = { status: "available", freshness: "fresh", evidence: [{ id: "page-1", provider: "web", sourceUrl: "https://example.org/one" }],
+      data: { pages: [{ url: "https://example.org/two", text: "他のページの記述" }, { url: "https://example.org/one", title: "町の案内", text: "白壁".repeat(1000), raw: "private" }] } };
+    const facts = externalTravelEvidence({ webPages: information }, { retrievedAt: "2026-09-18T00:00:00Z" })[0]!.facts;
+    expect(facts.sourceTitle).toBe("町の案内"); expect(String(facts.sourceExcerpt)).toHaveLength(1200);
+    expect(JSON.stringify(facts)).not.toMatch(/他のページ|private/);
+    expect(externalTravelEvidence({ webPages: { ...information, freshness: "stale" } }, { retrievedAt: "2026-09-18T00:00:00Z" })[0]!.facts.sourceExcerpt).toBeUndefined();
+    expect(externalTravelEvidence({ webPages: { ...information, data: { pages: [information.data.pages[0]] } } }, { retrievedAt: "2026-09-18T00:00:00Z" })[0]!.facts.sourceExcerpt).toBeUndefined();
+  });
+  it("does not turn mismatched place detail into a cited description", () => {
+    const information = { status: "available", freshness: "fresh", evidence: [{ id: "place-1", provider: "web", sourceUrl: "https://example.org/one" }],
+      data: { places: [{ sourceUrl: "https://example.org/one", name: "同名の別施設", summary: "混入させない", targetBinding: { status: "mismatch" } }] } };
+    expect(externalTravelEvidence({ result: information }, { retrievedAt: "2026-09-18T00:00:00Z" })[0]!.facts.sourceExcerpt).toBeUndefined();
+  });
   it("records missing acquisition as outcome only, not fabricated Provider facts", () => {
     const [e] = externalTravelEvidence({ forecast: { status: "available", freshness: "fresh", evidence: [], data: { temperature: 25 } } }, { retrievedAt: "2026-09-12T08:00:00Z" });
     expect(e?.facts).toEqual({ resultKind: "weather", status: "unconfirmed", freshness: "unknown" });

@@ -12,6 +12,20 @@
 
 評価レポートなどの派生物は`/tmp/transitforge-agent-eval`へ生成し Gitへ追加しない
 
+#376の一般回答は`frontend/src/adapters/bedrock/general-grounding-scenario.fixture.ts`で
+既存のsynthetic rail fixtureと本番Converse/Runtime/Default generatorを接続する。
+正常経路・架空所要時間・別日付の3ケースを反復し、非unknown Claimを分母にGrounded/Unsupported率を測る。
+実Providerデータや内部思考は録音しない。実行手順は
+[一般回答のGrounding](../../docs/architecture/general-answer-grounding.md)を参照する。
+
+## UI比較用の参照
+
+`ui/transitforge_ai_first_mock_v6.html` は利用者提供のv6デザイン参照（2026-09-18）。
+本番からimportせず、固定データ・JavaScriptは画面比較の参照ブラウザ内だけで実行する。
+`tools/capture_product_design.mjs` が同じChromium/viewportで本番共通UIの開発previewと比較する。
+画像は生成物としてGitへ入れず、CI / Testの手動 `visual_comparison` 入力でartifactを取得する。
+自動pixel合否ではない。画像・実装の操作・実データ境界を別々にレビューする。
+
 Trip Progressの複数turnシナリオ定義（相談文・閾値・tag）は`agent-eval-cases.json`の
 `travelProgressScenarios`に置く（dataset-v2、旧v1 reader互換）。実行用fixtureは本番Runtimeと
 colocateする`frontend/src/adapters/bedrock/travel-progress-scenarios.fixture.ts`に置く。

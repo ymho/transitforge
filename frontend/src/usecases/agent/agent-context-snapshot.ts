@@ -13,11 +13,15 @@ export interface AgentContextSnapshot {
   travelCandidates?: Record<string, unknown>[];
   realtimeFacts?: Record<string, unknown>[];
   profile?: {
-    home?: { station?: string; area?: string; carAvailable: boolean };
+    home?: { station?: string; area?: string; carAvailable?: boolean };
     companions: string[];
     childAgeGroups: string[];
     favoriteInterests: string[];
-    pace: "relaxed" | "balanced" | "active";
+    pace?: "relaxed" | "balanced" | "active";
+    usualPartySizeHint?: number;
+    preferredTransportHint?: UserProfile["transport"]["preferredMode"];
+    /** Untrusted preference data, explicit opt-in only; never persisted in Trace. */
+    consentedPreferenceNotes?: Partial<Record<"budget" | "lodging" | "food" | "avoidances", string>>;
     typicalTravelMinutes?: number;
     avoidances: string[];
   };
@@ -111,19 +115,25 @@ function profileSnapshot(profile: UserProfile): NonNullable<AgentContextSnapshot
   const home = {
     ...(bounded(homeProfile?.station, 80) ? { station: bounded(homeProfile?.station, 80) } : {}),
     ...(bounded(homeProfile?.area, 80) ? { area: bounded(homeProfile?.area, 80) } : {}),
-    carAvailable: homeProfile?.carAvailable === true,
+    ...(homeProfile?.carAvailable === undefined ? {} : { carAvailable: homeProfile.carAvailable }),
   };
   const pace = travelStyle?.pace;
   const maximumTravelMinutes = partial.transport?.maxTypicalTravelMinutes;
+  const consentedPreferenceNotes = Object.fromEntries((["budget", "lodging", "food", "avoidances"] as const)
+    .filter((key) => partial.aiNoteFields?.includes(key) && bounded(partial.notes?.[key], 240))
+    .map((key) => [key, bounded(partial.notes?.[key], 240)!]));
   return {
-    ...(home.station || home.area || home.carAvailable ? { home } : {}),
+    ...(Object.keys(consentedPreferenceNotes).length ? { consentedPreferenceNotes } : {}),
+    ...(home.station || home.area || home.carAvailable !== undefined ? { home } : {}),
     companions: partial.companions?.usual?.slice(0, 5).map((value) => companionLabels[value] ?? value) ?? [],
     childAgeGroups: partial.companions?.children?.slice(0, 6)
       .map(({ ageGroup }) => childAgeLabels[ageGroup] ?? ageGroup) ?? [],
     favoriteInterests,
-    pace: pace !== undefined && pace <= 0.35
+    ...(pace === undefined ? {} : { pace: pace <= 0.35
       ? "relaxed"
-      : pace !== undefined && pace >= 0.7 ? "active" : "balanced",
+      : pace >= 0.7 ? "active" : "balanced" }),
+    ...(partial.companions?.usualPartySize === undefined ? {} : { usualPartySizeHint: partial.companions.usualPartySize }),
+    ...(partial.transport?.preferredMode === undefined ? {} : { preferredTransportHint: partial.transport.preferredMode }),
     ...(maximumTravelMinutes === null || maximumTravelMinutes === undefined
       ? {}
       : { typicalTravelMinutes: Math.max(0, Math.min(1_440, Math.round(maximumTravelMinutes))) }),

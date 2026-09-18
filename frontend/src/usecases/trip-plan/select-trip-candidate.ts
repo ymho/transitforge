@@ -1,4 +1,5 @@
 import type { TravelCandidate } from "@raiquora/trip/travel-candidate";
+import { assessRailCoverage } from "@raiquora/trip/travel-coverage";
 import type { CandidateAssessmentFacts } from "@raiquora/trip/travel-candidate-assessment";
 import { selectAccommodation, type AccommodationSelectionEvidence } from "./select-accommodation";
 import { selectRailJourney, projectRailSchedule, validInstant, exactKeys, type RailTimetableInput, type VerifiedRailCandidate } from "@raiquora/trip/selected-rail-journey";
@@ -47,8 +48,14 @@ export async function proposeCandidateSelection(
         !resolved.candidate.journey || JSON.stringify(resolved.rail.journey) !== JSON.stringify(resolved.candidate.journey)) {
       throw new Error("Candidate has no verified rail selection");
     }
-    const journey = selectRailJourney(resolved.rail, await port.loadTimetables(resolved.rail), selectedAt);
-    item = { id: target.id, title: target.title, type: "transport", schedule: projectRailSchedule(journey), detail: { mode: "rail", status: "selected", journey } };
+    const inputs = await port.loadTimetables(resolved.rail);
+    const coverage = assessRailCoverage(resolved.rail, inputs, selectedAt);
+    if (coverage.status !== "supported") throw new Error(`Rail coverage is ${coverage.status}: ${coverage.reason}`);
+    const journey = selectRailJourney(resolved.rail, inputs, selectedAt);
+    // An unresolved slot's label may describe an earlier candidate. Never carry
+    // that label into a different selected journey's preview or saved item.
+    item = { id: target.id, title: target.detail.status === "unresolved" ? "鉄道移動" : target.title,
+      type: "transport", schedule: projectRailSchedule(journey), detail: { mode: "rail", status: "selected", journey } };
   } else if (target.type === "stay") {
     const key = request.accommodation;
     const permission = resolved.accommodation;

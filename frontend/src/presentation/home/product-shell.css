@@ -1,0 +1,144 @@
+/* Primary product layout replaces application-shell.css. Secondary feature DOM is retained. */
+#app[data-primary-view] {
+  --product-paper: #f6f6f1;
+  --product-ink: #102337;
+  --product-line: #dfe4e8;
+  --product-accent: #0c2947;
+  --product-radius: 1.25rem;
+  --product-control-radius: .75rem;
+  --glass-canvas: var(--product-paper);
+  --glass-surface: #fff;
+  --glass-surface-strong: #fff;
+  --glass-text: var(--product-ink);
+  --glass-muted: #53606b;
+  --glass-accent: var(--product-accent);
+  --glass-accent-strong: #24463e;
+  --glass-accent-soft: #e8efe9;
+  --glass-backdrop: none;
+  display: block;
+  position: relative;
+  height: 100dvh;
+  overflow: hidden;
+  padding: 0;
+  background: var(--product-paper);
+  color: var(--product-ink);
+  font-family: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui, sans-serif;
+}
+.product-shell { position: relative; z-index: 15; height: 100%; pointer-events: none; }
+.product-shell > * { pointer-events: auto; }
+.product-header { height: 5rem; padding: 0 1.75rem; display: flex; align-items: center; gap: 1.5rem; border-bottom: 1px solid var(--product-line); background: var(--product-paper); }
+.product-brand { color: inherit; text-decoration: none; font-family: "Iowan Old Style", Baskerville, "Times New Roman", serif; font-size: 2rem; font-weight: 700; letter-spacing: -.03em; }
+.product-header > span { font-size: .8rem; color: #53606b; }
+.product-nav { position: absolute; top: .75rem; right: 1.75rem; display: flex; gap: .3rem; }
+.product-nav a { min-width: 4.5rem; min-height: 3.5rem; display: flex; gap: .4rem; align-items: center; justify-content: center; padding: .5rem .8rem; border-radius: .75rem; color: #647181; text-decoration: none; font-size: .85rem; font-weight: 700; }
+.product-nav a[aria-current="page"] { background: #e5edf4; color: var(--product-accent); }
+.product-page { height: calc(100dvh - 5rem); overflow-y: auto; padding: 1.5rem max(1.625rem, calc((100vw - 79.25rem) / 2)) 4rem; line-height: 1.85; scroll-padding: 1rem; }
+.product-page[hidden], .product-map-back[hidden] { display: none; }
+.product-page h1 { margin: .5rem 0 1rem; font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif; font-size: clamp(1.8rem, 4vw, 3.2rem); line-height: 1.45; letter-spacing: .03em; }
+.product-page h2 { font-family: "Yu Mincho", "Hiragino Mincho ProN", serif; font-size: 1.5rem; margin-top: 0; }
+.product-page h3 { font-size: 1.1rem; margin: .35rem 0 .7rem; overflow-wrap: anywhere; }
+.product-page p { color: #53606b; }
+.home-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); min-height: 30rem; overflow: hidden; margin-bottom: 2rem; border-radius: 1.875rem; background: #0e3153; color: #fff; box-shadow: 0 14px 38px #12273f1a; }
+.home-hero-copy { padding: 2.875rem 3rem; display: flex; flex-direction: column; justify-content: center; position: relative; z-index: 2; min-width: 0; }
+.home-hero-copy > p { color: #dbe8f3; font-size: .875rem; line-height: 1.8; }
+.home-eyebrow { font-size: .75rem; font-weight: 800; letter-spacing: .13em; }
+.home-hero-copy > .home-eyebrow { color: #b9d7ee; font-size: .75rem; }
+.home-hero h1 { font-size: 3.25rem; line-height: 1.14; margin: .625rem 0 .875rem; }
+.home-prompt { background: white; border: 1px solid #d7dfe5; border-radius: 1.125rem; padding: .5rem .5rem .5rem 1rem; display: flex; align-items: center; gap: .625rem; box-shadow: 0 10px 30px #00000029; margin-top: 1.125rem; }
+.home-prompt > span { color: #146ac7; }
+.home-prompt textarea { flex: 1; min-width: 0; resize: vertical; border: 0; border-radius: var(--product-control-radius); padding: .5rem 0; color: var(--product-ink); background: white; font: inherit; font-size: .875rem; line-height: 1.7; min-height: 2.75rem; max-height: 10rem; }
+.product-page button, .product-map-back { min-height: 2.75rem; padding: .6rem 1rem; border: 1px solid var(--product-line); border-radius: var(--product-control-radius); background: white; color: var(--product-ink); cursor: pointer; font: inherit; font-size: .9rem; }
+.home-prompt button { flex: 0 0 2.75rem; padding: .5rem; background: var(--product-accent); border-color: var(--product-accent); color: #fff; }
+.home-examples { display: flex; gap: .5rem; flex-wrap: wrap; margin: 1rem 0 .4rem; }
+.home-examples button { font-size: .75rem; padding: .4rem .65rem; border-radius: 999px; border-color: #ffffff57; color: #fff; background: #0a20334d; }
+.home-hero small { color: #53606b; font-size: .75rem; }
+.home-next, .home-secondary, [data-home-live] > section { margin-top: 2rem; }
+.home-card { padding: 1.4rem; margin-block: .8rem; border: 1px solid var(--product-line); border-radius: var(--product-radius); background: white; box-shadow: 0 6px 20px #12273f06; }
+.home-trip-card { display: flex; align-items: center; gap: 1.4rem; }
+.home-trip-art { flex: 0 0 7rem; height: 7rem; display: grid; place-items: center; border-radius: var(--product-control-radius); background: linear-gradient(145deg, #e3edf4, #eff3eb); color: #3b6378; }
+.home-trip-art svg { width: 3.25rem; height: 3.25rem; }
+.home-trip-copy { min-width: 0; flex: 1; }
+.home-trip-copy > p { font-size: .85rem; }
+.home-trip-preparation { flex: 0 0 18.75rem; border-left: 1px solid var(--product-line); padding-left: 1.25rem; }
+.home-trip-preparation .home-trip-art { float: right; width: 3.5rem; height: 3.5rem; margin-left: .5rem; }
+.home-trip-preparation .home-trip-art svg { width: 2rem; height: 2rem; }
+.home-trip-preparation h4 { font-family: "Yu Mincho", serif; font-size: 1.25rem; margin: 0 0 .8rem; }
+.home-trip-preparation ul { padding-left: 1rem; font-size: .8rem; color: #53606b; display: grid; gap: .5rem; }
+.home-trip-copy h3 { font-family: "Yu Mincho", "Hiragino Mincho ProN", serif; font-size: 1.4rem; }
+.home-card small { color: #31584f; }
+.home-candidates { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.home-candidate { border: 1px solid var(--product-line); border-radius: 1.2rem; overflow: hidden; background: white; box-shadow: 0 6px 20px #12273f12; }
+.home-candidate > .travel-scenery { height: 10.625rem; }
+.home-candidate-copy { padding: 1rem; }
+.home-candidate-copy p { font-size: .85rem; }
+.home-tags { display: flex; gap: .4rem; flex-wrap: wrap; }
+.home-tags span { border-radius: 999px; background: #f0f3f5; padding: .3rem .5rem; color: #586675; font-size: .75rem; }
+.home-empty { display: grid; grid-template-columns: minmax(0, 1fr) 10rem; align-items: center; border: 1px solid var(--product-line); border-radius: 1.375rem; overflow: hidden; background: white; }
+.home-empty > p { margin: 0; padding: 1.4rem; }
+.home-empty .travel-scenery { align-self: stretch; min-height: 9rem; opacity: .65; }
+.home-rail-feature { display: grid; grid-template-columns: 1.2fr .8fr; gap: 1.5rem; align-items: center; padding: 1.375rem; background: #eaf2f8; border-radius: 1.375rem; }
+.home-rail-feature p { font-size: .85rem; }
+.my-shell { padding: 1.5rem; border: 1px solid var(--product-line); border-radius: 1.5rem; background: #fff; box-shadow: 0 6px 20px #12273f12; }
+.my-shell h1 { font-size: 2.125rem; }
+.my-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.my-grid .home-card { margin: 0; box-shadow: none; border-radius: 1.125rem; }
+.my-grid p { font-size: .875rem; }
+.my-grid h2 { font-size: 1.25rem; }
+.my-preferences { display: flex; flex-wrap: wrap; gap: .4rem; color: var(--product-muted); }
+.my-preferences span { padding: .3rem .6rem; border-radius: 999px; background: #f0f3f5; font-size: .8rem; }
+.my-actions { display: grid; gap: .5rem; }
+.my-actions button { display: flex; justify-content: space-between; text-align: left; }
+.my-grid [data-profile] { background: var(--product-accent); color: white; }
+.home-secondary button { margin: .25rem .4rem .25rem 0; }
+.product-page details { font-size: .85rem; margin-top: 1.2rem; }
+.product-page summary { cursor: pointer; min-height: 2.75rem; }
+.preview-notice { padding: .75rem; border: 1px solid #b88b2f; border-radius: var(--product-control-radius); background: #fff6dc; color: #69490a; }
+.product-shell :focus-visible { outline: 3px solid #426c8b; outline-offset: 3px; }
+#app[data-primary-view] .conversation-sidebar-rail, #app[data-primary-view] .ai-guide-toggle, #app[data-primary-view] #close-ai-guide, #app[data-primary-view] .context-workspace-tabs { display: none; }
+#app[data-primary-view]:not([data-primary-view="map"]) :is(#map, .hud, .map-place-explorer, .map-place-detail, .train-details, .loading-screen, #map-tools) { display: none; }
+#app[data-primary-view]:not([data-primary-view="chat"]) :is(.ai-guide-panel, .trip-plan-panel, .trip-workspace, .trip-workspace-navigation) { display: none; }
+#app[data-primary-view="chat"] .trip-workspace-navigation { position: absolute; z-index: 16; inset: 5rem 0 auto; }
+#app[data-primary-view="chat"] .trip-workspace { position: absolute; z-index: 10; inset: 8.5rem max(0px, calc((100vw - 60rem) / 2)) 0; }
+#app[data-primary-view="trip"] .trip-workspace:not([hidden]) { display: block; position: absolute; z-index: 10; inset: 5rem max(0px, calc((100vw - 60rem) / 2)) 0; }
+#app[data-primary-view="chat"][data-trip-workspace-view="chat"] .trip-workspace { display: none; }
+#app[data-primary-view="chat"] .trip-plan-panel:not([hidden]) { position: absolute; z-index: 14; inset: 5rem max(0px, calc((100vw - 54rem) / 2)) 0; width: auto; max-width: none; max-height: none; background: white; }
+#app[data-primary-view="map"] #map { top: 5rem; bottom: 0; height: auto; }
+#app[data-primary-view="map"] .hud { top: 9rem; }
+.product-map-back { position: absolute; z-index: 20; top: 5.7rem; left: 1rem; background: white; }
+#app[data-primary-view] dialog { backdrop-filter: none; background: white; }
+#app[data-primary-view] .conversation-history-dialog { position: fixed; inset: 0; width: min(30rem, calc(100vw - 2rem)); max-height: 85dvh; height: auto; margin: auto; border: 1px solid var(--product-line); border-radius: 1rem; }
+#app[data-primary-view] .conversation-history-dialog > section { max-height: 80dvh; }
+@media (max-width: 44rem) {
+  .product-header { height: 4rem; padding: 0 1.1rem; }
+  .product-nav { position: fixed; z-index: 20; inset: auto .625rem max(.625rem, env(safe-area-inset-bottom)); padding: .3rem; background: #fffffffa; border: 1px solid var(--product-line); border-radius: 1.125rem; box-shadow: 0 8px 28px #12273f1a; gap: 0; }
+  .product-nav a { flex: 1; flex-direction: column; gap: .1rem; min-width: 0; padding: .35rem; min-height: 3.2rem; font-size: .75rem; }
+  .product-page { height: calc(100dvh - 4rem); padding: .875rem .875rem 6rem; }
+  .home-hero { display: block; min-height: 40.625rem; border-radius: 1.5rem; }
+  .home-hero-copy { min-height: 40.625rem; padding: 1.8rem 1.25rem 1.375rem; justify-content: flex-end; }
+  .home-hero > .travel-scenery { position: absolute; inset: 0; opacity: .72; }
+  .home-hero > .travel-scenery:after { height: 65%; background: linear-gradient(transparent, #12324c 48%, #0e3153); z-index: 5; }
+  .home-hero .scenery-pagoda { right: 10%; bottom: 40%; transform: scale(.82); }
+  .home-hero .scenery-town { bottom: 25%; }
+  .home-trip-card { gap: .9rem; padding: 1rem; }
+  .home-trip-card:has(.home-trip-preparation) { flex-direction: column; align-items: stretch; }
+  .home-trip-preparation { flex-basis: auto; border-left: 0; border-top: 1px solid var(--product-line); padding: 1rem 0 0; }
+  .home-trip-art { flex-basis: 4rem; height: 5rem; }
+  .home-trip-art svg { width: 2.25rem; }
+  .home-trip-copy h3 { font-size: 1.15rem; }
+  .home-hero h1 { font-size: 2.5rem; }
+  .home-candidates, .my-grid, .home-rail-feature { grid-template-columns: 1fr; }
+  .home-candidate > .travel-scenery { height: 9.1rem; }
+  .home-empty { grid-template-columns: minmax(0, 1fr) 5rem; }
+  .my-shell { padding: 1rem; }
+  .home-examples { gap: .35rem; }
+  #app[data-primary-view="chat"] .trip-workspace-navigation { top: 4rem; flex-wrap: wrap; }
+  #app[data-primary-view="chat"] .trip-workspace { inset: 7.5rem 0 calc(3.8rem + env(safe-area-inset-bottom)); }
+  #app[data-primary-view="trip"] .trip-workspace:not([hidden]) { inset: 4rem 0 calc(3.8rem + env(safe-area-inset-bottom)); }
+  #app[data-primary-view="chat"] .trip-plan-panel:not([hidden]) { inset: 4rem 0 calc(3.8rem + env(safe-area-inset-bottom)); }
+  #app[data-primary-view="map"] #map { top: 4rem; bottom: calc(3.8rem + env(safe-area-inset-bottom)); }
+  #app[data-primary-view="map"] .hud { top: 8rem; }
+  .product-map-back { top: 4.6rem; }
+  #app[data-primary-view="map"] .map-place-explorer { bottom: 4.5rem; }
+  #app[data-primary-view="map"] .map-place-detail { max-height: calc(100dvh - 9rem); top: 4.5rem; bottom: auto; }
+}
+@media (prefers-reduced-motion: reduce) { .product-shell *, #app[data-primary-view] .ai-guide-panel { animation: none; transition: none; } }

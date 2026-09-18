@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import { modelGroundedAnswer } from "./ask-progress-scenarios.fixture";
 
 import type { Train } from "@raiquora/train/train";
 import type { TrainPosition } from "../../domain/train-position";
 import type { UserProfile } from "@raiquora/trip/travel-profile";
+import { askProgressFixture } from "./ask-progress-scenarios.fixture";
 import { applyTripPlanPatches, validateTripPlanPatches, type TripPlan } from "@raiquora/trip/trip-plan";
 import type {
   ViewerAgentResponse,
@@ -198,7 +200,13 @@ describe("Bedrock viewer agent", () => {
       "ask_follow_up",
       { expectedInput: "free-text", question: "出発地を教えていただけますか？" },
       { tripContext: {}, defaultOriginStation: "向日町駅" },
-    )).toContain("プロフィールに登録済みの出発地");
+    )).toContain("既知の出発地");
+    const trip = askProgressFixture("C-candidate").trip;
+    expect(validateViewerAgentToolPreconditions(
+      "ask_follow_up",
+      { expectedInput: "free-text", question: "出発駅を教えていただけますか？" },
+      { currentTrip: trip, defaultOriginStation: "京都" },
+    )).toContain("既知の出発地");
     expect(validateViewerAgentToolPreconditions(
       "search_accommodations",
       { checkInDate: "2026-08-31", checkOutDate: "2026-09-02" },
@@ -323,10 +331,7 @@ describe("Bedrock viewer agent", () => {
       .mockImplementationOnce(async (messages) => {
         expect(messages.flatMap(({ content }) => content).some((content) =>
           "text" in content && content.text.length === 0)).toBe(false);
-        return {
-          message: { role: "assistant", content: [{ text: "城崎温泉なら外湯を巡りながら休めます。" }] },
-          stopReason: "end_turn",
-        };
+        return modelGroundedAnswer(messages);
       });
 
     const result = await runViewerAgentRuntime("リラックスできる観光したい", {
@@ -584,13 +589,7 @@ describe("Bedrock viewer agent", () => {
         },
         stopReason: "tool_use",
       })
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [{ text: "18時40分着のはるか16号があります。" }],
-        },
-        stopReason: "end_turn",
-      });
+      .mockImplementationOnce(async (messages) => modelGroundedAnswer(messages));
 
     const result = await runViewerAgentRuntime(
       "18時30分ごろ京都に着く特急はありますか",
@@ -2461,10 +2460,7 @@ describe("Bedrock viewer agent", () => {
         } }] },
         stopReason: "tool_use",
       })
-      .mockResolvedValueOnce({
-        message: { role: "assistant", content: [{ text: "候補を比較して、静かに過ごせる場所を提案します。" }] },
-        stopReason: "end_turn",
-      });
+      .mockImplementationOnce(async (messages) => modelGroundedAnswer(messages));
 
     const result = await runViewerAgentRuntime("リラックスできる観光したい", {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
@@ -3377,10 +3373,7 @@ describe("Bedrock viewer agent", () => {
           input: { candidates: [{ name: "旭日酒造", sourceUrl: "https://tourism.example/izumo-sake" }] },
         } }] }, stopReason: "tool_use",
       })
-      .mockResolvedValueOnce({
-        message: { role: "assistant", content: [{ text: "出雲の旅程を保ったまま、旭日酒造を候補として地図に表示しました。" }] },
-        stopReason: "end_turn",
-      });
+      .mockImplementationOnce(async (messages) => modelGroundedAnswer(messages));
 
     const result = await runViewerAgentRuntime("酒蔵などはない？", {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,

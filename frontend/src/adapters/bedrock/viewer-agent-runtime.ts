@@ -801,6 +801,15 @@ export function validateViewerAgentToolPreconditions(
     return "利用者が駅間経路を求めておらず、確定した旅行先もないためsearch_direct_routesは実行できません。候補探索を続けてください。";
   }
   if (name === "ask_follow_up") {
+    // The free-form question must not bypass a known origin just because the
+    // model omitted requestedRequirement. This validates an ask; it does not
+    // select a Tool or infer a new station.
+    if (typeof input.question === "string" && conversationQuestionRequestsOrigin(input.question) &&
+      (context.currentTrip && effectiveTripConstraints(context.currentTrip.request).some((c) =>
+        c.requirement.type === "origin" && (!c.assumptionId || context.currentTrip!.request.assumptions.find((a) => a.id === c.assumptionId)?.status === "confirmed")) ||
+        context.defaultOriginStation)) {
+      return "既知の出発地は聞き直せません。Tripの明示条件を優先し、未指定ならプロフィールの出発地を仮の起点として使って前進してください。";
+    }
     if (context.currentTrip) {
       const requested = input.requestedRequirement ?? (input.expectedInput === "departure-date" ? "dates" : input.expectedInput === "stay-length" ? "duration" : undefined);
       const party = context.currentTrip.request.party;
@@ -1244,7 +1253,7 @@ function viewerToolDescription(name: ViewerAgentToolName): string {
     propose_trip_update: "現在の旅程に対する観光 移動 滞在 条件の変更案を構造化します。利用者が変更を依頼し内容が明確なら追加確認せず使います",
     remember_travel_preference: "高確信の継続的な旅行の好みを端末内へ記憶します",
     update_conversation_session: "現在の会話Sessionの要約と話題を更新します",
-    ask_follow_up: "利用者にしか確定できない必須条件を1件だけ構造化して質問します。候補提示や既知条件の聞き直しには使わず、planning-intentで目的地を尋ねず短い選択肢を返します",
+    ask_follow_up: "利用者にしか確定できない必須条件を1件だけ構造化して質問します。候補提示や既知条件の聞き直し、調べるという宣言、調査許可の再確認には使いません。既存候補ID/駅/日程はContextから利用できます。planning-intentで目的地を尋ねず短い選択肢を返します",
     inspect_previous_journey: "currentJourneyにある直前の検証済み経路について、対象列車または途中駅を確認します",
     revise_previous_journey: "currentJourneyに対する明示済みの利用・回避条件で、確認を挟まず変更候補を再検索します。区間の代替候補の提示と、選択済み候補の確定も扱います",
     search_trains: "現在表示中の列車を決定論的に検索します",
@@ -1636,7 +1645,12 @@ function trainSearchEvidence(output: unknown, context: { retrievedAt: string }):
       category: "train" as const,
       knowledgeKind: "deterministic_fact" as const,
       subject: String(match.trainNumber ?? match.serviceUid),
-      facts: { serviceUid: match.serviceUid },
+      facts: { serviceUid: match.serviceUid,
+        ...(typeof match.trainNumber === "string" ? { trainNumber: match.trainNumber } : {}),
+        ...(typeof match.trainName === "string" ? { trainName: match.trainName } : {}),
+        ...(typeof match.stationName === "string" ? { stationName: match.stationName } : {}),
+        ...(typeof match.arrivalTimeMinutes === "number" ? { arrivalTimeMinutes: match.arrivalTimeMinutes } : {}),
+      },
       references: [{
         sourceType: "timetable-index" as const,
         sourceRef: match.serviceUid,
@@ -2633,13 +2647,13 @@ function travelBurdenAdvisory(
   const concerns: string[] = [];
   const maximum = profile.transport.maxTypicalTravelMinutes;
   const duration = journey.arrivalTimeMinutes - journey.departureTimeMinutes;
-  if (maximum !== null && duration > maximum + 30) {
+  if (maximum != null && duration > maximum + 30) {
     const hours = Math.floor(duration / 60);
     const minutes = duration % 60;
     const durationLabel = `${hours > 0 ? `${hours}時間` : ""}${minutes > 0 ? `${minutes}分` : ""}`;
     concerns.push(`行きの移動は${durationLabel}で、普段許容している移動時間より長め`);
   }
-  if (profile.travelStyle.transferTolerance <= 0.35 && journey.transferCount >= 2) {
+  if (profile.travelStyle.transferTolerance !== undefined && profile.travelStyle.transferTolerance <= 0.35 && journey.transferCount >= 2) {
     concerns.push(`乗換が${journey.transferCount}回あり、普段の好みより多め`);
   }
   return concerns.length === 0

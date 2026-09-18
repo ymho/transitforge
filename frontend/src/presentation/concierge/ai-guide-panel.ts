@@ -75,6 +75,8 @@ export interface AiGuidePanelElements {
   onRestaurantConsult?: (restaurant: RestaurantCandidate) => void;
   onRestaurants?: (restaurants: readonly RestaurantCandidate[]) => void;
   persistent?: () => boolean;
+  /** Host-owned explicit Trip/revision binding; no title or message inference. */
+  responseContextKey?: () => string;
 }
 
 export type AiGuidePromptHandler = (
@@ -117,6 +119,19 @@ export function configureAiGuidePanel(
     historyRepository,
   } = elements;
   let conversationSessionId = elements.conversationSessionId;
+  // Tab-local, per-conversation draft only; not a Trip or server writer.
+  const draftKey = () => `raiquora:conversation-draft:${conversationSessionId}`;
+  const saveInputDraft = () => {
+    try {
+      const drafts = input.ownerDocument.defaultView?.sessionStorage;
+      if (input.value) drafts?.setItem(draftKey(), input.value.slice(0, 4000)); else drafts?.removeItem(draftKey());
+    } catch { /* Storage denial must not disable consultation. */ }
+  };
+  const restoreInputDraft = () => {
+    try { return input.ownerDocument.defaultView?.sessionStorage.getItem(draftKey())?.slice(0, 4000) ?? ""; }
+    catch { return ""; }
+  };
+  input.addEventListener("input", saveInputDraft);
   const savedPreferences = loadJourneySearchPreferences(storage);
   transferPace.value = savedPreferences.transferPace;
   rankingPreference.value = savedPreferences.rankingPreference;
@@ -263,12 +278,14 @@ export function configureAiGuidePanel(
       hasConversationHistory = true;
     }
     const requestedSessionId = conversationSessionId;
+    const requestedContextKey = elements.responseContextKey?.();
     const userMessage = historyRepository.append(
       requestedSessionId,
       { role: "user", text: prompt },
     );
     appendMessage(messages, "user", prompt, userMessage.messageId);
     input.value = "";
+    saveInputDraft();
     input.disabled = true;
     submit.disabled = true;
     submit.ariaLabel = "送信中";
@@ -280,6 +297,10 @@ export function configureAiGuidePanel(
       requestId = metadata.requestId;
     })
       .then((response) => {
+        if (requestedContextKey !== elements.responseContextKey?.()) {
+          if (conversationSessionId === requestedSessionId) pendingMessage.remove();
+          return;
+        }
         const assistantMessage = historyRepository.append(
           requestedSessionId,
           {
@@ -309,6 +330,10 @@ export function configureAiGuidePanel(
         pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
       .catch(() => {
+        if (requestedContextKey !== elements.responseContextKey?.()) {
+          if (conversationSessionId === requestedSessionId) pendingMessage.remove();
+          return;
+        }
         const errorResponse = "案内を開始できませんでした。時間をおいてもう一度お試しください。";
         const assistantMessage = historyRepository.append(requestedSessionId, {
           role: "assistant",
@@ -362,10 +387,11 @@ export function configureAiGuidePanel(
   const controller: AiGuidePanelController = {
     switchSession(nextConversationSessionId) {
       elements.onPlaces?.([]);
+      if (nextConversationSessionId !== conversationSessionId) saveInputDraft();
       conversationSessionId = nextConversationSessionId;
       activeConversation = undefined;
       activeTripContext = undefined;
-      input.value = "";
+      input.value = restoreInputDraft();
       input.disabled = false;
       input.placeholder = "列車、行き先、旅の相談を入力";
       submit.disabled = false;

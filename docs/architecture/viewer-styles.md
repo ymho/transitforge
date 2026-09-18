@@ -3,11 +3,14 @@
 ## 所有範囲
 
 `frontend/src/presentation/styles/viewer.css`を唯一の入口とし import順を明示する
-各ファイルの内容を連結した順序は整理前と同一に保つ
+featureの所有CSSを順に読み込む。#453では旧`application-shell.css`を廃止し、
+`presentation/home/product-shell.css`が4ナビ・primary route・地図subviewの配置を所有する。
+Trip Workspaceや会話・地図の内部componentは既存所有featureに残す。
 
 | パス | 責務 |
 | --- | --- |
 | `presentation/styles/map-layout.css` | 地図とHUDの基礎配置 |
+| `presentation/home/product-shell.css` | Home/4ナビ/不透明な製品面/primary routeと二次導線の配置 |
 | `presentation/styles/tokens.css` | day night共通の色 影 ぼかし Focus |
 | `presentation/styles/liquid-glass-foundation.css` | 時計と地図操作のLiquid Glass基盤 |
 | `presentation/styles/legacy-*.css` | 複数Featureへまたがる移行中のtokenと上書き |
@@ -70,3 +73,32 @@ APIやBedrockを使わず旅程を確認する場合は
 
 CSSだけの整理ではDOM classや見た目を変更しない
 意図したデザイン変更は別Issueとし 比較画像をPRへ添付する
+
+## AI-first shell (#453)
+
+- Consumer表示では通常cardの角丸20px/controlの角丸12pxを共通tokenとして使う。
+  v6と同じ階層を保ち、heroは30px、専用ページ枠は24px、選択chipはpillとする。
+  Homeの重複状態ラベルと相談例の技術的な注意書きは表示しない（入力例のaccessible labelは維持）。
+  写真を持たないTripには装飾アイコン、Homeにはv6由来のCSS風景を使う。
+  `travel-decoration`はaria-hiddenの純粋な装飾で、実景や調査済み地点の証拠ではない。
+- 成立性の計算とready判定は変更せず、表示のみ「旅の確認ポイント」等にする。
+  未確認/見直し事項は本文に残す。評価日時は日本時間の読みやすい形式で折りたたみ詳細へ置き、
+  revisionやISO日時を主画面へ露出しない。計画状態の内部enumもreadiness本文へ表示しない。
+
+- `home-read-model`は#450 `classifyTrips`と#452 CandidateAssessmentのcoverageを利用する読取projection。
+- 読取元は現在Conversationが参照する既存Trip Workspace source。一覧API・public writerは有効化しない。
+  全server Trip一覧は#454へ残す。未認証/読取不能は空の保存済みTrip一覧と同義にしない。
+- Home送信は既存ConversationSessionの新規相談へ渡す。Trip採用/変更は既存Proposal確認だけ。
+- 地図はsubview初回表示で起動する。初期の文章相談は同じAgent RuntimeとHTTP Toolを使用し、
+  Mapbox token/WebGL/列車描画データを待たない。現在地を起点として推定しない。
+- URLは4ナビ/地図subviewだけを保持し、Trip documentやowner/共有secretは保持しない。
+  入力下書きはタブ内sessionStorage（Home/Conversation ID単位）、読取不能でも操作を妨げない。
+- DEV専用`?home-preview=loading|empty|error|unauthenticated|data`で表示状態を再現できる。
+  dataは明示サンプルの読取専用Trip/候補を本番共通componentへ渡し、保存・予約・調査済み情報を捏造しない。
+  v6と同じブラウザの1440/390px比較は`tools/capture_product_design.mjs`で行う。
+  CI / Testのmanual `visual_comparison`入力で比較画像/HTMLをartifact化できる。deployは行わない。
+- Profileは#457の既存UserProfile v2 editorへ接続。設定・履歴・通知・列車地図は二次導線。
+- 大見出しのみシステム明朝fallback、本文はシステム日本語ゴシック。Webフォントの追加配信なし。
+  写真未取得時に架空のhero画像を入れず、出典付き既存Place表示は地図内に維持する。
+- モックの固定料金・固定天気・固定旅程・固定残日数はコピーしない。
+  費用予測#458、旅程詳細4タブ#459、旅行モード#460、認証#451は未実装として残す。

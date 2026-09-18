@@ -107,14 +107,22 @@ export class BedrockConversationModel implements ConversationModel {
     outcome: Parameters<ModelCallTraceRecorder["record"]>[0]["outcome"],
   ): Promise<void> {
     if (!request.trace || !this.options.traceRecorder) return;
+    const privateProfile = JSON.stringify(request.messages).includes("consentedPreferenceNotes") ||
+      request.messages.some((message) => message.content.some((block) => "text" in block && typeof block.text === "string" && block.text.includes('"conversation":')));
     try {
       await this.options.traceRecorder.record({
         modelCallId: request.trace.modelCallId,
         apiRequestId: request.trace.apiRequestId,
         startedAt,
         completedAt: new Date().toISOString(),
-        providerRequest,
-        outcome,
+        // Explicit consent to send Profile text to the model is not consent to retain it.
+        // Omit the whole conversation: later Tool inputs/results may quote that text too.
+        providerRequest: privateProfile
+          ? { ...providerRequest, messages: "[private-profile-content-omitted]" }
+          : providerRequest,
+        outcome: privateProfile && outcome.status === "failed"
+          ? { ...outcome, error: { ...outcome.error, message: "[private-profile-content-omitted]" } }
+          : outcome,
       });
     } catch {
       this.log("agent_model_call_trace_store_failed", {

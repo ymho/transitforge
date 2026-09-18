@@ -21,6 +21,20 @@ function setup() {
 }
 
 describe("candidate adoption boundary", () => {
+  it("does not present an unresolved slot's old candidate label as the newly selected candidate", async () => {
+    const { trip, request, port, selectedAt } = setup();
+    const named = { ...trip, items: trip.items.map((item) => item.id === "outbound" ? { ...item, title: "候補Aの移動" } : item) } as Trip;
+    const proposal = await proposeCandidateSelection(named, request, port, selectedAt);
+    expect(proposal.summary).toBe("鉄道移動の候補を採用");
+    expect(proposal.patches[0]).toMatchObject({ type: "replace", item: { title: "鉄道移動" } });
+  });
+  it("rechecks current coverage at confirmation instead of trusting an old supported candidate", async () => {
+    const f = setup();
+    const shown = await proposeCandidateSelection(f.trip, f.request, f.port, f.selectedAt);
+    f.inputs[0]!.index.station_line_catalog!.lines[0]!.stations.pop();
+    await expect(confirmCandidateSelection(f.trip, f.request, shown, f.port, "2026-09-12T08:01:00Z")).rejects.toThrow(/coverage/);
+    expect(f.trip.items[0]).toMatchObject({ detail: { status: "unresolved" } });
+  });
   it("rejects a stale Trip revision even if the candidate/timetable are unchanged", async () => {
     const f = setup(), current = { ...f.trip, revision: 5 };
     const shown = await proposeCandidateSelection(current, f.request, f.port, f.selectedAt);

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { supportedAnswerClaims } from "./grounded-answer";
 
 import { MultiStepAgentRuntime } from "./agent-runtime";
 import { AgentToolExecutor } from "./agent-tool-executor";
@@ -22,6 +23,15 @@ import { inTripApplicationEvidence } from "./in-trip-application-evidence";
 import { calculateInTripReplanScope, replanScopeContext } from "@raiquora/trip/in-trip-replan";
 
 describe("MultiStepAgentRuntime", () => {
+  it("keeps conversation-echoed preferences out of Trace after Profile consent is removed", async () => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const result = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([textResponse("earlier-private-preference")]) }).run({
+      ...request("続きを相談したい"), context: { conversation: { messages: [{ role: "assistant", text: "earlier-private-preference" }] } },
+    });
+    expect(result.response).toBe("earlier-private-preference");
+    expect(JSON.stringify(result.trace)).not.toContain("earlier-private-preference");
+    expect(result.trace.events.some((event) => event.type === "model_completed")).toBe(true);
+  });
   it.each(['<tool_call>{"private":"REJECTED"}</tool_call>', '{"name":"first_tool","input":{"value":"REJECTED"}}'])("repairs envelope to native Tool Use: %s", async (invalid) => {
     const order: string[] = [], requests: AgentModelRequest[] = [];
     const { tools, toolExecutor } = toolSetup(order);
@@ -41,6 +51,16 @@ describe("MultiStepAgentRuntime", () => {
     expect(model.generate).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(result)).not.toMatch(/REJECTED|PRIVATE_UNKNOWN_ID/);
     expect(JSON.stringify(requests[1])).not.toMatch(/REJECTED|PRIVATE_UNKNOWN_ID/);
+  });
+  it("gives repair only admitted Evidence IDs, not candidate IDs or invalid model IDs", async () => {
+    const requests: AgentModelRequest[] = [], { tools, toolExecutor } = toolSetup([]);
+    const invalid = { ...textResponse("候補を説明"), declaredEvidenceIds: ["candidate-b"] };
+    const initial = evidence("verified-source"); initial.references[0]!.sourceType = "trip-state";
+    await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([invalid, textResponse("確認できません")], requests) })
+      .run({ ...request("候補を説明"), initialEvidence: [initial] });
+    const repair = JSON.stringify(requests[1]);
+    expect(repair).toContain("verified-source");
+    expect(repair).not.toContain("candidate-b");
   });
   it.each(["answer", "ask_user", "native"])("normal %s needs no repair call", async (kind) => {
     const { tools, toolExecutor } = toolSetup([]);
@@ -164,7 +184,8 @@ describe("MultiStepAgentRuntime", () => {
   it("registers initial Evidence before the model, traces it and permits a Tool-free grounded answer", async () => {
     const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
     const initial = evidence("application:plan"); initial.references[0]!.sourceType = "trip-state";
-    const answer = textResponse("採用済みの次予定を説明します");
+    const claims = supportedAnswerClaims([initial]);
+    const answer = textResponse(JSON.stringify({ text: claims.map((c) => c.statement).join("\n\n"), claims }));
     answer.decisionSummary = { interpretedGoal: "次予定", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"], usedEvidenceIds: [initial.id] };
     const model = sequenceModel([answer], requests);
     const runtime = new MultiStepAgentRuntime({ tools, toolExecutor, model });
@@ -290,7 +311,7 @@ describe("MultiStepAgentRuntime", () => {
     expect(requests).toHaveLength(2);
     expect(requests.every(({ modelCallId }) => typeof modelCallId === "string")).toBe(true);
     expect(requests[0]?.modelCallId).not.toBe(requests[1]?.modelCallId);
-    expect(requests[1].messages.at(-1)).toEqual({
+    expect({ ...requests[1].messages.at(-1), content: requests[1].messages.at(-1)!.content.filter((c) => c.type === "tool_result") }).toEqual({
       role: "user",
       content: [
         {
