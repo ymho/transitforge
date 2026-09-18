@@ -43,7 +43,7 @@ export function registerCandidateAssessmentTool(registry: AgentToolRegistry, dep
 /** Same Evidence/Claim pipeline as other tools; no model-declared statuses accepted. */
 export function candidateAssessmentEvidence(output: unknown): Evidence[] {
   if (!output || typeof output !== "object") return [];
-  const value = output as { candidate?: { id: string }; assessment?: Omit<TravelCandidateAssessment, "sources"> & { sourceRefs?: unknown }; assessmentEvidence?: TravelCandidateAssessment["sources"] };
+  const value = output as { candidate?: { id: string }; comparison?: Record<string, unknown>; assessment?: Omit<TravelCandidateAssessment, "sources"> & { sourceRefs?: unknown }; assessmentEvidence?: TravelCandidateAssessment["sources"] };
   if (!value.assessment || !value.candidate || !value.assessmentEvidence) return [];
   const { sourceRefs: _, ...rest } = value.assessment;
   const assessment = { ...rest, sources: value.assessmentEvidence } as TravelCandidateAssessment;
@@ -52,6 +52,8 @@ export function candidateAssessmentEvidence(output: unknown): Evidence[] {
   return [{ id: `candidate-assessment:${encodeURIComponent(assessment.candidateId)}:${assessment.assessedAt}`,
     category: "external", knowledgeKind: "derived_value", subject: assessment.candidateId,
     facts: { candidateId: assessment.candidateId, constraintStatus: assessment.constraintStatus,
+      ...(assessment.mobility.status === "known" ? Object.fromEntries(["originStation", "destinationStation", "serviceDate"].flatMap((key) =>
+        typeof value.comparison?.[key] === "string" ? [[key, value.comparison[key].slice(0, 120)]] : [])) : {}),
       weather: assessment.weather.status, hazard: assessment.hazard.status, relevance: assessment.relevance.status,
       ...(assessment.serviceCoverage ? { serviceCoverage: assessment.serviceCoverage.status, coverageReason: assessment.serviceCoverage.reason } : {}),
       partial: assessment.partial, hardUnknown: assessment.hardConstraints.filter((c) => c.status === "unknown").map((c) => c.constraintId),

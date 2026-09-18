@@ -18,7 +18,7 @@ export function candidateAssessmentContext(value: { candidate: Pick<TravelCandid
   if (value.candidate.id !== a.candidateId) throw new Error("Candidate assessment identity mismatch");
   const { sources, ...assessment } = structuredClone(a);
   const identity = value.comparison ?? candidateIdentityContext(value.candidate);
-  const comparison = Object.fromEntries(["originStation", "destinationStation"].flatMap((key) =>
+  const comparison = Object.fromEntries(["originStation", "destinationStation", "serviceDate"].flatMap((key) =>
     typeof identity[key] === "string" ? [[key, identity[key].slice(0, 120)]] : []));
   return { candidate: { id: a.candidateId }, comparison: { ...comparison,
     names: Array.isArray(identity.names) ? identity.names.filter((v): v is string => typeof v === "string").slice(0, 4).map((v) => v.slice(0, 120)) : [] }, assessment: { ...assessment,
