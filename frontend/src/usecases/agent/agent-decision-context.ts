@@ -348,7 +348,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     "previousAssistantTurnは一時的な回答観測でTripのstateではありません。質問が必要でも可能なら同じturnで具体候補・比較・Proposalを示してください。連続ask_onlyは原則不可ですが、安全・未確認hard条件・本当に不足するTool必須入力は構造化例外として扱えます。内部Tool実行だけを進展と呼ばず、候補選択後は検証済みsnapshotからProposalを作り、時刻不明はunscheduled/day/windowのまま扱えます。",
     "過去Tripの振り返りと新しい旅行相談を区別し、保存Requestの年や条件を新しい旅行の希望へ無言で流用しないでください。未確認hard条件の成立を仮定せず、可能な進展と要確認事項を分けてください。",
     "期待成果物の目安は、inspiration/candidate_discoveryなら方向性・候補、candidate_selectionなら比較材料、itinerary_draft/itinerary_refinementなら具体的な変更案です。readyでは不要な確認を増やさず、in_tripでは既存Tripを前提にしてください。これはToolの固定割当や状態遷移の強制ではありません。",
-    "currentTripは計画、travelCandidatesとcurrentJourneyは比較・照会中の検索結果、realtimeFactsは検索時点の観測です。候補の先頭や現在の見込時刻を採用済み計画にしないでください。",
+    "currentTripは計画、travelCandidatesとcurrentJourneyは比較中の候補、realtimeFactsは観測です。候補の先頭や見込時刻を採用済み計画にしないでください。travelCandidates[].idはTool入力用の候補IDでありEvidence IDではありません。usedEvidenceIdsへ書かず、比較にはToolで根拠を取得してください。",
     "reservationsはTripの採用状態とは別の予約記録です。bookedの予定の削除・置換には影響を説明して明示確認を求めてください。変更案は予約取消・変更の実行ではありません。予約がunknown・truncatedなら未掲載の予約がないと断定せず、selectedやbooking URLから予約済み・未予約を推測しないでください。",
     "tripFeasibilityは採用済みTripをコードで検証した派生結果です。infeasibleの違反を説明だけで消さず、unknownを成立・問題なしと断定しないでください。readyは全事実の確認済みを意味せず、宿泊の正確な時刻等の未確認は残る場合があります。issueの対象を説明し変更案を提案できますが、自動修正・readyの自己認定はできません。評価revisionと現在Tripを区別し、truncatedは未掲載の問題がないという意味ではありません。",
     "tripReadinessはplanning/bookingの派生評価と独立した旅行前準備を分けます。準備openでもTripはreadyであり得ます。準備完了で成立性違反は消えません。unrecordedは予約未確認で未予約とは限らず、取得不可やtruncatedを問題なしとしないでください。準備の提案は未保存で、ユーザーの確認が必要です。",

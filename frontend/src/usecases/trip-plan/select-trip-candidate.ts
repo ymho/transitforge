@@ -52,7 +52,10 @@ export async function proposeCandidateSelection(
     const coverage = assessRailCoverage(resolved.rail, inputs, selectedAt);
     if (coverage.status !== "supported") throw new Error(`Rail coverage is ${coverage.status}: ${coverage.reason}`);
     const journey = selectRailJourney(resolved.rail, inputs, selectedAt);
-    item = { id: target.id, title: target.title, type: "transport", schedule: projectRailSchedule(journey), detail: { mode: "rail", status: "selected", journey } };
+    // An unresolved slot's label may describe an earlier candidate. Never carry
+    // that label into a different selected journey's preview or saved item.
+    item = { id: target.id, title: target.detail.status === "unresolved" ? "鉄道移動" : target.title,
+      type: "transport", schedule: projectRailSchedule(journey), detail: { mode: "rail", status: "selected", journey } };
   } else if (target.type === "stay") {
     const key = request.accommodation;
     const permission = resolved.accommodation;

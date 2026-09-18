@@ -3,7 +3,8 @@ import { candidateAssessmentFixture, assessmentAt } from "../../../../modules/tr
 import { assessTripCandidate } from "./assess-trip-candidate";
 import { candidateAssessmentContext } from "../agent/candidate-assessment-context";
 import { candidateAssessmentView } from "../../presentation/trip-plan/candidate-assessment-view";
-import { candidateAssessmentEvidence, candidateAssessmentDescriptor } from "../agent/candidate-assessment-tool";
+import { candidateAssessmentEvidence, candidateAssessmentDescriptor, registerCandidateAssessmentTool } from "../agent/candidate-assessment-tool";
+import { AgentToolRegistry } from "../agent/tool-registry";
 import { validateAgentToolInput } from "../agent/agent-tool-input-validator";
 import { validateEvidenceAndClaims } from "../agent/evidence-model";
 import { buildAgentDecisionContext, agentDecisionContextText } from "../agent/agent-decision-context";
@@ -66,4 +67,22 @@ it("IDs-only tool input rejects self-declared statuses; derived Evidence uses th
   const claim = { id: "comparison", statement: "予報の比較結果", kind: "fact" as const, evidenceIds: [evidence[0]!.id] };
   expect(validateEvidenceAndClaims(evidence, [claim]).valid).toBe(true);
   expect(validateEvidenceAndClaims(evidence, [{ ...claim, evidenceIds: ["invented"] }]).valid).toBe(false);
+});
+
+it("returns the admitted assessment Evidence ID alongside the tool result", async () => {
+  const f = candidateAssessmentFixture();
+  const registry = new AgentToolRegistry();
+  registerCandidateAssessmentTool(registry, {
+    getCurrentTrip: () => f.trip,
+    candidateSelection: { taskId: "task", port: {
+      resolve: async () => ({ candidate: f.candidate, tripId: f.trip.id, taskId: "task", validUntil: "2026-09-13T08:00:00Z", assessmentFacts: f.facts }),
+      loadTimetables: async () => [],
+    } },
+  }, () => new Date(assessmentAt));
+  const result = await registry.execute("assess_travel_candidate", { candidateId: f.candidate.id }, { executionId: "assessment" });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const output = result.output as { answerEvidenceId: string };
+  expect(output.answerEvidenceId).toBe(candidateAssessmentEvidence(output)[0]?.id);
+  expect(output.answerEvidenceId).toMatch(/^candidate-assessment:/u);
 });

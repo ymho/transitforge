@@ -42,6 +42,16 @@ describe("MultiStepAgentRuntime", () => {
     expect(JSON.stringify(result)).not.toMatch(/REJECTED|PRIVATE_UNKNOWN_ID/);
     expect(JSON.stringify(requests[1])).not.toMatch(/REJECTED|PRIVATE_UNKNOWN_ID/);
   });
+  it("gives repair only admitted Evidence IDs, not candidate IDs or invalid model IDs", async () => {
+    const requests: AgentModelRequest[] = [], { tools, toolExecutor } = toolSetup([]);
+    const invalid = { ...textResponse("候補を説明"), declaredEvidenceIds: ["candidate-b"] };
+    const initial = evidence("verified-source"); initial.references[0]!.sourceType = "trip-state";
+    await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([invalid, textResponse("確認できません")], requests) })
+      .run({ ...request("候補を説明"), initialEvidence: [initial] });
+    const repair = JSON.stringify(requests[1]);
+    expect(repair).toContain("verified-source");
+    expect(repair).not.toContain("candidate-b");
+  });
   it.each(["answer", "ask_user", "native"])("normal %s needs no repair call", async (kind) => {
     const { tools, toolExecutor } = toolSetup([]);
     const answer = kind === "native" ? toolCallResponse([{ id: "native", name: "first_tool", input: { value: "ok" } }]) : textResponse("ご希望を教えてください");
