@@ -1,0 +1,8 @@
+{
+  "source": "backend/agent-api/dist/agent-stream",
+  "handler": "index.handler",
+  "runtime": "nodejs22.x",
+  "files": [
+    "index.cjs"
+  ]
+}

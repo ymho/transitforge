@@ -130,3 +130,8 @@ npm run build
 ```
 
 新しいサービス Vendor SDK 状態管理方式を追加する場合は 先に責務と依存方向をADRへ記録する
+
+## Regional REST Streaming構成（#480 Phase A）
+
+ADR 0070の採用判断をdefault-offの環境構成へ接続した。
+[Streaming構成と後続gate](agent-streaming-production.md)にTerraform、Lambda組成、認証、監視とcutover前の残作業を記録する。
