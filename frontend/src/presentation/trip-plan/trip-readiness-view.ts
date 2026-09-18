@@ -8,7 +8,7 @@ import { reservationStatusLabels } from "../../usecases/trip-plan/reservation-re
 /** Derived issues deliberately have no checkboxes or manual complete action. */
 export function renderTripReadiness(readiness: TripReadiness, trip: Trip, focus: (id: string) => void): HTMLElement {
   const section = element("section", "trip-workspace-readiness"); section.setAttribute("aria-label", "次に決めること");
-  section.append(element("h2", "", "次に決めること"), element("p", "", `計画状態: ${trip.planningState}。準備リストの完了とは別です。`));
+  section.append(element("h2", "", "次に決めること"));
   for (const [title, issues] of [["旅程・条件", readiness.planning], ["予約", readiness.booking]] as const) {
     section.append(element("h3", "", title));
     const list = element("ul");

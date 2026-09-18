@@ -6,11 +6,15 @@ import { element, control, option } from "./trip-workspace-elements";
 import { reservationStatusLabels } from "../../usecases/trip-plan/reservation-reader";
 import type { TripFeasibilityIssue } from "@raiquora/trip/trip-feasibility";
 import { feasibilityIssueText } from "./trip-feasibility-view";
+import { travelIcon } from "../shared/travel-icon";
 
 export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller: TripWorkspaceController,
   options: { collapsed: boolean; collapse(value: boolean): void; chat(prompt: string): void; report(message: string): void }, issues: TripFeasibilityIssue[] = []): HTMLElement {
   const card = element("article", "trip-workspace-card"); card.dataset.itemId = item.id;
   const header = element("header");
+  const icon = element("span", "trip-workspace-item-icon");
+  icon.innerHTML = travelIcon(item.type === "transport" ? "transport" : item.type === "stay" ? "stay" : "activity");
+  icon.setAttribute("aria-hidden", "true");
   const focus = control(item.title, () => controller.focus(item.id));
   focus.className = "trip-workspace-item-focus";
   focus.setAttribute("aria-label", `${item.title}を相談対象にする`);
@@ -22,7 +26,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     expand.setAttribute("aria-expanded", String(!body.hidden)); options.collapse(body.hidden);
   });
   expand.setAttribute("aria-expanded", String(!body.hidden)); expand.setAttribute("aria-controls", body.id);
-  header.append(focus, expand); card.append(header, element("p", "", itineraryScheduleLabel(item.schedule, true)));
+  header.append(icon, focus, expand); card.append(header, element("p", "", itineraryScheduleLabel(item.schedule, true)));
   for (const issue of issues) card.append(element("p", "trip-workspace-feasibility-issue", `⚠ ${feasibilityIssueText(issue)}`));
   for (const r of controller.reservations()?.filter((r) => r.itineraryItemId === item.id) ?? []) {
     card.append(element("p", "trip-workspace-reservation", `予約記録: ${reservationStatusLabels[r.status]}`));
@@ -31,8 +35,8 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   body.append(element("p", "trip-workspace-copy", itineraryItemCopy(item)));
   const safe = (action: () => void) => { try { action(); } catch { options.report("この変更では条件・仮定との整合が取れません。会話で変更内容を相談してください。"); } };
   const actions = element("div", "trip-workspace-actions");
-  actions.append(control("相談する", () => { controller.focus(item.id); options.chat("この予定を相談したい"); }),
-    control("名称を変更", () => { editor.hidden = !editor.hidden; if (!editor.hidden) title.focus(); }),
+  const consult = control("相談する", () => { controller.focus(item.id); options.chat("この予定を相談したい"); });
+  actions.append(control("名称を変更", () => { editor.hidden = !editor.hidden; if (!editor.hidden) title.focus(); }),
     control("削除案", () => safe(() => controller.propose(`${item.title}を削除する案`, [{ type: "remove", itemId: item.id }]))));
   const moveLabel = element("label", "", "並べ替え ");
   const after = element("select", "trip-workspace-move-target"); after.append(option("先頭", ""));
@@ -50,7 +54,9 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   editor.addEventListener("submit", (event) => {
     event.preventDefault(); safe(() => controller.preview(proposeItineraryItem(controller.current()!, { ...item, title: title.value }, { itemId: item.id, operation: "replace" })));
   });
-  body.append(actions, editor); card.append(body); return card;
+  const editing = element("details", "trip-workspace-editing");
+  editing.append(element("summary", "", "予定を編集"), actions, editor);
+  body.append(consult, editing); card.append(body); return card;
 }
 
 /** Refresh sibling references without replacing the card, editor or keyboard focus. */

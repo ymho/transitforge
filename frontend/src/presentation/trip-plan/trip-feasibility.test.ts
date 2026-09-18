@@ -15,8 +15,13 @@ it.each(["feasible", "unknown", "infeasible"] as const)("shows %s as distinct Ja
   expect(evaluation.status).toBe(status);
   const section = renderTripFeasibility(evaluation);
   expect(section.dataset.feasibility).toBe(status);
-  expect(section.querySelector("h2")!.textContent).toBe(`成立性: ${{ feasible: "成立", infeasible: "不成立", unknown: "未確認" }[status]}`);
+  expect(section.querySelector("h2")!.textContent).toBe({ feasible: "確認した範囲で無理のない予定です", infeasible: "見直したい予定があります", unknown: "旅の確認ポイント" }[status]);
+  expect(section.textContent).not.toContain("revision");
+  expect(section.querySelector("details")!.open).toBe(false);
+  expect(section.querySelector("time")!.dateTime).toBe(evaluation.evaluatedAt);
+  expect(section.querySelector("time")!.textContent).not.toContain("T09:");
   const card = renderWorkspaceCard(trip, trip.items[0]!, controller, { collapsed: false, collapse: vi.fn(), chat: vi.fn(), report: vi.fn() }, evaluation.issues.filter((i) => i.itemIds.includes(trip.items[0]!.id)));
+  expect(card.querySelector('.trip-workspace-item-icon svg[aria-hidden="true"]')).not.toBeNull();
   if (status === "infeasible") expect(card.textContent).toContain("予定の時間と順序が両立しません");
 });
 it("blocks unknown ready at UI and Application confirmation, but not ordinary draft repairs", async () => {

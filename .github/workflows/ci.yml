@@ -6,6 +6,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      visual_comparison:
+        description: Capture v6 and implementation at 1440px and 390px (development preview only)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,6 +20,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  visual-comparison:
+    if: github.event_name == 'workflow_dispatch' && inputs.visual_comparison
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Install isolated browser verification tools
+        run: |
+          npm install --prefix /tmp/visual-tools --no-save playwright@1.63.0
+          /tmp/visual-tools/node_modules/.bin/playwright install --with-deps chromium
+      - name: Capture reference and implementation
+        env:
+          PLAYWRIGHT_MODULE: /tmp/visual-tools/node_modules/playwright/index.mjs
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5178 > /tmp/visual-vite.log 2>&1 &
+          node tools/capture_product_design.mjs .artifacts/product-design
+      - name: Upload visual comparison (not a deployment)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: product-design-${{ github.sha }}
+          path: .artifacts/product-design/
+          if-no-files-found: error
+          retention-days: 30
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
