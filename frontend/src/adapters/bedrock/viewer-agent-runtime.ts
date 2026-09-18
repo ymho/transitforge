@@ -153,7 +153,6 @@ import {
   externalTravelToolNames,
   hasExternalTravelInformation,
   isExternalTravelToolName,
-  type ExternalTravelToolName,
   type ExternalTravelToolDependencies,
   type ExternalTravelToolState,
 } from "../../usecases/agent/external-travel-tools";
