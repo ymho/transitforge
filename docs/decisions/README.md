@@ -87,6 +87,8 @@
 - [0063 Impactから通知episodeと配信を分離する](0063-separate-notification-episodes-and-delivery.md)
 - [0067 Cognito検証を共通trusted principal境界へ閉じる](0067-establish-trusted-principal-boundary.md)
 
+- [0069 SPA認証をCognito Managed LoginとPKCEへ接続する](0069-use-cognito-managed-login-for-spa.md)
+
 ## Wave 2Aによる部分廃止（#477）
 
 0023のrollout router、0024のViewer Action、0026のAction実行、0038のAction/Local Agent、

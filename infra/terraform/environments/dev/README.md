@@ -159,3 +159,27 @@ mainでは確認成功後にOIDCの一時認証情報でTerraformをapplyし 静
 - 固定AWSアクセスキーを使わない
 
 再集計コマンドはリポジトリルートの`tools/backfill_analytics.py --help`を参照
+
+## CognitoとSPA認証（#451第二段階）
+
+`cognito.tf`がEssentials User Pool、secretなしSPA Client、`raiquora/user` Resource Server、
+Managed Login v2と標準brandingを管理する。料金条件を確認してから通常のCDで適用する。
+callbackは`https://${viewer_domain_name}/index.html`、logoutは同originの`/`へ限定する。
+localhostを許可するdev環境だけ`cognito_local_development_enabled = true`を指定する。
+
+CDはapply後の`cognito_frontend_config`を`dist/auth-config.json`へ出力し、静的assetと一緒に配信する。
+これは公開設定でありsecret/tokenを含まない。issuer/client/scopeをGitHub VariablesやFrontendへ再定義しない。
+ローカル開発では適用済みdev stateから次の公開出力を取得する（ファイルはGit管理外）。
+
+```bash
+mkdir -p ../../../../frontend/public
+terraform output -json cognito_frontend_config > ../../../../frontend/public/auth-config.json
+```
+
+`cognito_api_auth_config`の`userPoolId`/`clientId`を#484のverifierへ、`requiredScopes`を共通認証Applicationへ
+渡すことを後続server wiringの契約とする。本段階ではLambda environment/handler/Runtimeを変更しない。
+ID TokenはAPIへ送らない。Basic認証とOAC、既存の公開writer gateも維持する。
+
+設定画面の「ログイン / 新規登録」から日本語Managed Loginへ進む。tokenは5分のタブsessionとし、
+期限切れ時は再ログインする。詳しい保存・logout保証と未実施の実環境試験は
+[ADR 0069](../../../../docs/decisions/0069-use-cognito-managed-login-for-spa.md)を参照する。

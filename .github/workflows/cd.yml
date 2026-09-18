@@ -113,6 +113,10 @@ jobs:
           echo "website_bucket=$(terraform output -raw website_bucket_name)" >> "$GITHUB_OUTPUT"
           echo "distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> "$GITHUB_OUTPUT"
 
+      - name: Generate public authentication configuration
+        working-directory: infra/terraform/environments/dev
+        run: terraform output -json cognito_frontend_config > ../../../../dist/auth-config.json
+
       - name: Deploy viewer assets
         run: |
           aws s3 sync dist "s3://${{ steps.terraform.outputs.website_bucket }}/" \
