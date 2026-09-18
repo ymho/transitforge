@@ -470,12 +470,16 @@ export async function executeExternalTravelTool(
     }).slice(0, 6) : [];
     if (candidates.length === 0) throw new Error("Webページで確認できる施設候補がありません。");
     const outputs = await Promise.all(candidates.map(({ name }) => dependencies.searchPlaceMedia!({ query: name, limit: 3 })));
+    const identityObservations: Array<{ name: string; status: "unresolved"; reason: "missing-source-binding" }> = [];
     const places = outputs.flatMap((output, index) => {
       if (!isRecord(output) || !isRecord(output.result) || !isRecord(output.result.data) || !Array.isArray(output.result.data.places)) return [];
       const candidate = candidates[index];
       if (!candidate) return [];
-      const place = output.result.data.places.find((item) => isRecord(item) && typeof item.name === "string" && samePlaceName(item.name, candidate.name));
-      if (!isRecord(place)) return [];
+      const place = output.result.data.places.find((item) => isRecord(item) && sameOfficialPlacePage(item.officialWebsiteUrl, candidate.sourceUrl));
+      if (!isRecord(place)) {
+        identityObservations.push({ name: candidate.name, status: "unresolved", reason: "missing-source-binding" });
+        return [];
+      }
       const existingSources = Array.isArray(place.sources) ? place.sources.filter(isRecord) : [];
       return [{
         ...place,
@@ -488,12 +492,9 @@ export async function executeExternalTravelTool(
       ...outputs.flatMap((output) => isRecord(output) && isRecord(output.result) && Array.isArray(output.result.evidence) ? output.result.evidence : []),
     ] as ExternalTravelInformation<PlaceMediaSearchResult>["evidence"];
     const resolvedPlaces = uniquePlaces(places) as unknown as PlaceMediaSearchResult["places"];
-    if (resolvedPlaces.length === 0) {
-      throw new Error("施設候補を地点として確認できませんでした。別の候補を調べてください。");
-    }
     const result = availableExternalInformation<PlaceMediaSearchResult>({ places: resolvedPlaces }, evidence);
     state.places = result;
-    return { result };
+    return { result, identityObservations };
   }
   const plan = dependencies.getTripPlan?.();
   const kinds: TravelRecheckKind[] = ["weather", "rail-operation", "place-hours"];
@@ -626,6 +627,16 @@ function samePlaceName(left: string, right: string): boolean {
   const a = normalizePlaceName(left);
   const b = normalizePlaceName(right);
   return a === b || Math.min(a.length, b.length) >= 4 && (a.includes(b) || b.includes(a));
+}
+
+/** Exact facility page binding, not same host/name/proximity. Provider metadata is already sanitized. */
+function sameOfficialPlacePage(left: unknown, right: string): boolean {
+  if (typeof left !== "string") return false;
+  try {
+    const a = new URL(left), b = new URL(right);
+    return a.protocol === "https:" && b.protocol === "https:" && !a.username && !b.username &&
+      !a.search && !b.search && a.pathname !== "/" && a.origin === b.origin && a.pathname === b.pathname;
+  } catch { return false; }
 }
 
 function normalizePlaceName(value: string): string {

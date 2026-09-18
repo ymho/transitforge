@@ -2736,6 +2736,7 @@ describe("Bedrock viewer agent", () => {
           latitude: 35.4019,
           longitude: 132.6855,
           sourceUrl: "https://example.com/izumo-taisha",
+          officialWebsiteUrl: "https://example.com/guide",
           openingHoursStatus: "unknown" as const,
           image: {
             url: "https://example.com/izumo.jpg",
@@ -3350,6 +3351,7 @@ describe("Bedrock viewer agent", () => {
       data: { places: [{
         providerPlaceId: "mapbox.asahi",
         name: "旭日酒造", latitude: 35.36, longitude: 132.75,
+        officialWebsiteUrl: "https://tourism.example/izumo-sake",
         sourceUrl: "https://www.mapbox.com/", openingHoursStatus: "unknown" as const,
       }] },
     } }));

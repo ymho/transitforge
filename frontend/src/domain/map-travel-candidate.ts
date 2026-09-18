@@ -42,6 +42,7 @@ export type MapTravelCandidate =
 
 export function mapPlaceCandidates(places: readonly PlaceMedia[]): MapPlaceCandidate[] {
   return places.flatMap((place) => {
+    if (place.identity && place.identity.status !== "resolved") return [];
     if (!isCoordinate(place.latitude, -90, 90) || !isCoordinate(place.longitude, -180, 180)) return [];
     return [{
       kind: "place",
@@ -63,6 +64,8 @@ export function mergeMapPlaceDetailCandidate(
   candidate: MapPlaceCandidate,
   detail: PlaceMedia,
 ): MapPlaceCandidate {
+  if (detail.providerPlaceId !== candidate.value.providerPlaceId ||
+      detail.identity && detail.identity.status !== "resolved") return candidate;
   const images = uniquePlaceImages([
     ...(candidate.value.images ?? (candidate.value.image ? [candidate.value.image] : [])),
     ...(detail.images ?? (detail.image ? [detail.image] : [])),

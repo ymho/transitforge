@@ -75,6 +75,13 @@ export function assessTravelCandidate(trip: Trip, candidate: TravelCandidate, fa
     }
   }
   const evaluated = assessCandidateConstraints(trip.request, proof, itemId);
+  if (facts.placeIdentity && facts.placeIdentity.status !== "resolved") {
+    evaluated.relevance = {
+      status: facts.placeIdentity.status === "mismatch" ? "questionable" : "unknown",
+      reasonCodes: [facts.placeIdentity.status === "mismatch" ? "identity-mismatch" : "identity-unresolved"],
+      evidenceIds: facts.placeIdentity.evidenceIds.filter((id) => reader.sources.has(id)).slice(0, 8),
+    };
+  }
   const expectedDates = dates.data ? [dates.data] : effectiveTripConstraints(trip.request, itemId).flatMap((c) => {
     if (c.scope.type === "item" && itemId === undefined || c.assumptionId && trip.request.assumptions.find((a) => a.id === c.assumptionId)?.status !== "confirmed") return [];
     return c.requirement.type === "dates" ? [{ startDate: c.requirement.start.earliest,

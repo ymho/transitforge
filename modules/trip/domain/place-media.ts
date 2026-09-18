@@ -1,4 +1,5 @@
 import type { ExternalTravelProviderPort } from "./external-travel-information";
+import { samePlaceIdentity, type PlaceRef } from "./place-snapshot";
 
 export interface PlaceMediaQuery {
   query: string;
@@ -33,6 +34,8 @@ export interface PlaceEditorialDetail {
 }
 
 export interface PlaceMedia {
+  /** Runtime-only identity observation; not permission to persist provider data. */
+  identity?: { status: "resolved" | "unresolved" | "mismatch"; reason: "stable-id" | "different-id" | "missing-binding" };
   providerPlaceId: string;
   name: string;
   categories?: string[];
@@ -68,12 +71,21 @@ export type PlaceMediaProvider = ExternalTravelProviderPort<
 export function mergePlaceMedia(places: readonly PlaceMedia[]): PlaceMedia[] {
   const merged = new Map<string, PlaceMedia>();
   for (const place of places) {
-    const coordinateKey = place.latitude === undefined || place.longitude === undefined ? "" : `:${place.latitude.toFixed(4)}:${place.longitude.toFixed(4)}`;
-    const key = `${place.providerPlaceId}${coordinateKey}`;
+    const key = JSON.stringify([place.sources?.find((s) => s.role === "identity")?.provider ?? place.sourceUrl, place.providerPlaceId]);
     const current = merged.get(key);
     merged.set(key, current ? { ...current, ...place, categories: [...new Set([...(current.categories ?? []), ...(place.categories ?? [])])] } : { ...place });
   }
   return [...merged.values()];
+}
+
+/** Names and proximity are discovery hints, never proof of target identity. */
+export function resolvePlaceMediaIdentity(place: PlaceMedia, target?: PlaceRef): NonNullable<PlaceMedia["identity"]> {
+  const provider = place.sources?.find((s) => s.role === "identity")?.provider;
+  if (!target || !provider || !place.providerPlaceId || target.provider !== provider || !target.providerPlaceId) {
+    return { status: "unresolved", reason: "missing-binding" };
+  }
+  const same = samePlaceIdentity(target, { provider, providerPlaceId: place.providerPlaceId });
+  return same ? { status: "resolved", reason: "stable-id" } : { status: "mismatch", reason: "different-id" };
 }
 
 export function placeMediaQueryForTrip(input: { destination: string; interests?: string[]; availableFrom?: string; availableUntil?: string; limit?: number }): PlaceMediaQuery {
