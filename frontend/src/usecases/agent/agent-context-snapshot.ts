@@ -20,6 +20,8 @@ export interface AgentContextSnapshot {
     pace?: "relaxed" | "balanced" | "active";
     usualPartySizeHint?: number;
     preferredTransportHint?: UserProfile["transport"]["preferredMode"];
+    /** Untrusted preference data, explicit opt-in only; never persisted in Trace. */
+    consentedPreferenceNotes?: Partial<Record<"budget" | "lodging" | "food" | "avoidances", string>>;
     typicalTravelMinutes?: number;
     avoidances: string[];
   };
@@ -117,7 +119,11 @@ function profileSnapshot(profile: UserProfile): NonNullable<AgentContextSnapshot
   };
   const pace = travelStyle?.pace;
   const maximumTravelMinutes = partial.transport?.maxTypicalTravelMinutes;
+  const consentedPreferenceNotes = Object.fromEntries((["budget", "lodging", "food", "avoidances"] as const)
+    .filter((key) => partial.aiNoteFields?.includes(key) && bounded(partial.notes?.[key], 240))
+    .map((key) => [key, bounded(partial.notes?.[key], 240)!]));
   return {
+    ...(Object.keys(consentedPreferenceNotes).length ? { consentedPreferenceNotes } : {}),
     ...(home.station || home.area || home.carAvailable !== undefined ? { home } : {}),
     companions: partial.companions?.usual?.slice(0, 5).map((value) => companionLabels[value] ?? value) ?? [],
     childAgeGroups: partial.companions?.children?.slice(0, 6)

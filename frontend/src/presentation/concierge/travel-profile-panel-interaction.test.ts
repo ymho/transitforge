@@ -5,7 +5,7 @@ import { loadUserProfile, saveUserProfile, travelProfileChangedEvent, travelProf
 
 beforeEach(() => {
   localStorage.clear();
-  document.body.innerHTML = '<button id="travel-profile-toggle"></button><dialog id="travel-profile-dialog"></dialog>';
+  document.body.innerHTML = '<button id="travel-profile-toggle"></button><section id="travel-profile-page" hidden></section>';
 });
 afterEach(() => { document.body.replaceChildren(); localStorage.clear(); vi.restoreAllMocks(); });
 function click(selector: string): void { const node = document.querySelector<HTMLButtonElement>(selector); expect(node, selector).not.toBeNull(); node!.click(); }
@@ -13,13 +13,13 @@ function input(name: string, value: string): void {
   const node = document.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
   node.value = value; node.dispatchEvent(new Event("input", { bubbles: true }));
 }
-function edit(): void { click("#travel-profile-toggle"); click("[data-edit]"); }
+function edit(): void { click("#travel-profile-toggle"); }
 
 it("does not require registration and lets an unregistered user start consulting", () => {
   const completed = vi.fn(); configureTravelProfile(document, localStorage, completed);
-  expect(document.querySelector<HTMLDialogElement>("dialog")!.open).toBe(false);
-  click("#travel-profile-toggle"); expect(document.body.textContent).toContain("設定せずに相談できます");
-  click("[data-start]"); expect(completed).toHaveBeenCalledOnce(); expect(loadUserProfile(localStorage)).toBeUndefined();
+  expect(document.querySelector<HTMLElement>("#travel-profile-page")!.hidden).toBe(true);
+  click("#travel-profile-toggle"); expect(document.body.textContent).toContain("今回の旅の条件を優先");
+  click("[data-close]"); expect(document.querySelector<HTMLElement>("#travel-profile-page")!.hidden).toBe(true); expect(loadUserProfile(localStorage)).toBeUndefined();
 });
 
 it("saves only explicit values, retaining unknown pace, transport and party", () => {
@@ -45,7 +45,7 @@ it("round-trips all legacy tolerances and weights, children and unlimited travel
 
 it("cancel/Escape retains the original and requests explicit discard for dirty edits", () => {
   configureTravelProfile(document, localStorage); edit(); input("station", "未保存の駅");
-  click("[data-close]"); expect(document.querySelector<HTMLDialogElement>("dialog")!.open).toBe(true);
+  click("[data-close]"); expect(document.querySelector<HTMLElement>("#travel-profile-page")!.hidden).toBe(false);
   expect(document.body.textContent).toContain("まだ保存されていません"); click("[data-discard]");
   expect(loadUserProfile(localStorage)).toBeUndefined();
   edit(); expect(document.querySelector<HTMLInputElement>('[name="station"]')!.value).toBe("");
@@ -70,4 +70,16 @@ it("stores free text literally without creating HTML or executable commands", ()
   configureTravelProfile(document, localStorage); edit(); input("food", '<img src=x onerror="alert(1)">');
   click('[type="submit"]'); click("[data-edit]"); expect(document.querySelector("img")).toBeNull();
   expect(document.querySelector<HTMLTextAreaElement>('[name="food"]')!.value).toContain("<img");
+});
+
+it("preserves old local notes without consent until a field is explicitly opted in and saved", () => {
+  saveUserProfile(localStorage, { home: {}, companions: { usual: [], children: [] }, travelStyle: { pace: .123 }, preferences: { sea: .717 }, transport: {}, notes: { food: "地元の料理" } });
+  configureTravelProfile(document, localStorage); edit();
+  expect(document.querySelector<HTMLInputElement>('[name="ai-note"][value="food"]')!.checked).toBe(false);
+  click('[data-choice="pace"][data-value="0.5"]');
+  click('[name="ai-note"][value="food"]'); click('[type="submit"]');
+  expect(loadUserProfile(localStorage)).toMatchObject({ travelStyle: { pace: .5 }, preferences: { sea: .717 }, aiNoteFields: ["food"] });
+  click('[data-edit]'); click('[name="ai-note"][value="food"]'); click('[type="submit"]');
+  expect(loadUserProfile(localStorage)!.aiNoteFields).toBeUndefined();
+  expect(loadUserProfile(localStorage)!.notes!.food).toBe("地元の料理");
 });

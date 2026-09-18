@@ -55,6 +55,14 @@ const trip: TripPlan = {
 };
 
 describe("agent context snapshot", () => {
+  it("sends only explicitly consented fields, bounded independently of local storage", () => {
+    const source: UserProfile = { ...profile, notes: { budget: "budget-private", food: "好み".repeat(250), avoidances: "local-only" }, aiNoteFields: ["food"] };
+    const before = JSON.stringify(source);
+    expect(createAgentContextSnapshot(source).profile?.consentedPreferenceNotes).toEqual({ food: "好み".repeat(120) });
+    expect(JSON.stringify(createAgentContextSnapshot(source))).not.toContain("local-only");
+    expect(JSON.stringify(source)).toBe(before);
+    expect(createAgentContextSnapshot({ ...source, aiNoteFields: [] }).profile?.consentedPreferenceNotes).toBeUndefined();
+  });
   it("preserves unset preferences and projects only non-authoritative hints, not raw notes", () => {
     const partial: UserProfile = { version: 2, updatedAt: "2026-09-18T00:00:00Z", home: {},
       companions: { usual: [], children: [], usualPartySize: 3 }, travelStyle: {}, preferences: {},

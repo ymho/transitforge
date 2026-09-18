@@ -146,6 +146,8 @@ export interface AgentTrace {
 }
 
 export interface AgentTraceRecorderOptions {
+  /** Model consent does not imply diagnostic-text consent. Keep only operational metadata. */
+  omitContent?: boolean;
   maxEvents?: number;
   maxPayloadCharacters?: number;
   maxStringCharacters?: number;
@@ -192,6 +194,7 @@ export class AgentTraceRecorder {
     options: AgentTraceRecorderOptions = {},
   ) {
     this.options = {
+      omitContent: options.omitContent ?? false,
       maxEvents: options.maxEvents ?? 200,
       maxPayloadCharacters: options.maxPayloadCharacters ?? 2_048,
       maxStringCharacters: options.maxStringCharacters ?? 512,
@@ -380,6 +383,7 @@ export class AgentTraceRecorder {
       this.droppedEventCount += 1;
       return;
     }
+    if (this.options.omitContent) event = contentFreeEvent(event);
     this.events.push({
       ...event,
       sequence: this.nextSequence,
@@ -398,6 +402,23 @@ export class AgentTraceRecorder {
 
   private texts(values: string[]): string[] {
     return values.slice(0, this.options.maxArrayItems).map((value) => this.text(value));
+  }
+}
+
+function contentFreeEvent(event: AgentTraceEventInput): AgentTraceEventInput {
+  const hidden: TracePayloadSummary = { byteLength: 0, truncated: true, value: "[private-profile-content-omitted]" };
+  switch (event.type) {
+    case "task_started": return { ...event, userRequest: "[private-profile-content-omitted]" };
+    case "intent_normalized": return { ...event, constraints: hidden };
+    case "decision_recorded": return { ...event, interpretedGoal: "[private-profile-content-omitted]", hardConstraints: hidden,
+      softPreferences: hidden, unresolvedFacts: [], reasonCodes: [], replanReason: undefined };
+    case "tool_called": return { ...event, input: hidden };
+    case "tool_completed": return { ...event, result: hidden };
+    case "response_generated": return { ...event, response: "[private-profile-content-omitted]" };
+    case "turn_observed": return { ...event, observation: { outcome: event.observation.outcome, progress: [] } };
+    case "replan_decided": return { ...event, reason: "[private-profile-content-omitted]", steps: [] };
+    case "viewer_action": return { ...event, reason: undefined };
+    default: return event;
   }
 }
 
