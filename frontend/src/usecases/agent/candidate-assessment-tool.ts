@@ -16,7 +16,7 @@ export const candidateAssessmentDescriptor: AgentToolDescriptor = {
   decisionSupport: { capability: "取得済みEvidenceに基づく候補比較。主観的な魅力scoreではない",
     suitableCases: ["候補の条件適合・不足根拠を比較する", "取得済み情報のpartialな評価を更新する", "希望候補が範囲外/未確認で、Contextにある別候補の移動根拠を比較して具体的な代案を説明する"],
     unsuitableCases: ["新しい場所の探索", "天気や警報の取得", "旅程の採用・保存"],
-    returnedEvidence: "候補ID別のderived_value、取得済みのExternalSourceEvidenceへの参照",
+    returnedEvidence: "候補ID別のderived_value。返却するanswerEvidenceIdだけが回答のusedEvidenceIds用ID。candidateIdとassessmentEvidence内のsource IDは回答用Evidence IDではない",
     freshness: "assessedAtは評価時刻。観測/取得/有効期限はsourceごとに別。古い値を現在値にしない",
     limitations: ["serviceCoverageは現行の収録カタログ・日付別時刻表・駅からのアクセスに基づく。supported以外を移動確認済みとしない。範囲外でも相談は継続でき、代案・追加調査はモデルが判断する",
       "候補IDが既知なら、利用者へ検索許可や候補の駅名を聞き直さず取得済み事実を読める。候補の評価・説明は採用操作ではない", "hardConstraintsのunknownは提示済み条件を候補が満たすか未検証という意味で、出発地や日付を利用者が未入力という意味ではない。条件値はpersistedTripRequestを参照する。検証に外部根拠が足りなければ追加調査か未確認の説明を選ぶ", "未結合/未取得の結果はunknown", "異通貨は暗黙換算しない", "全Trip成立性・予約は証明しない"],
@@ -33,7 +33,8 @@ export function registerCandidateAssessmentTool(registry: AgentToolRegistry, dep
           taskId: dependencies.candidateSelection!.taskId, ...(input.itemId ? { itemId: input.itemId as string } : {}) },
         dependencies.candidateSelection!.port, now().toISOString());
         return successfulAgentToolResult({ ...candidateAssessmentContext(result),
-          answerEvidenceId: candidateAssessmentEvidenceId(result.assessment), assessmentEvidence: result.assessment.sources });
+          ...(result.assessment.sources.length ? { answerEvidenceId: candidateAssessmentEvidenceId(result.assessment) } : {}),
+          assessmentEvidence: result.assessment.sources });
       } catch {
         return failedAgentToolResult({ code: "precondition_failed", message: "このtaskの候補ID・対象予定・期限を確認できません。", retryable: false });
       }
