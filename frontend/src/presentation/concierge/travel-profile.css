@@ -11,7 +11,7 @@
 .profile-editor fieldset { min-width: 0; border: 1px solid #e0e5e9; border-radius: 1.0625rem; padding: 1rem; margin: 0; }
 .profile-editor legend { font: 700 1.125rem/1.5 "Yu Mincho", "Hiragino Mincho ProN", serif; padding-inline: .4rem; }
 .profile-editor fieldset > p { color: #6d7a87; margin: 0 0 .8rem; }
-.profile-field-grid, .profile-interest-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.profile-field-grid, .profile-interest-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; align-items: start; }
 .profile-editor label { display: grid; gap: .35rem; margin-block: .5rem; color: #516273; font-weight: 600; }
 .profile-field-grid > label, .profile-field-grid > div > label:first-child { margin-block: 0; }
 .profile-editor input:not([type=checkbox]):not([type=hidden]), .profile-editor select, .profile-editor textarea { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; font: inherit; color: #102337; background: #fff; border: 1px solid #d7dfe5; border-radius: .625rem; padding: .6rem; }

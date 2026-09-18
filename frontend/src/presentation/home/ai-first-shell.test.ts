@@ -14,6 +14,12 @@ function setup(overrides: Partial<AiFirstShellPorts> = {}) {
   return { shell: configureAiFirstShell(document, document.querySelector("main")!, ports), ports };
 }
 const click = (selector: string) => document.querySelector<HTMLElement>(selector)!.click();
+it("shows real Profile choices as bounded chips, not fixed mock preferences", () => {
+  setup({ profile: () => ({ version: 2, home: {}, companions: { usual: [], children: [] }, travelStyle: { pace: .2 },
+    preferences: { food: .9, history: .9, sea: .1 }, transport: { preferredMode: "rail" }, updatedAt: "2026-09-18T00:00:00Z" }) });
+  expect([...document.querySelectorAll("[data-profile-summary] span")].map((e) => e.textContent)).toEqual(["列車を優先", "ゆったり", "食", "歴史"]);
+  expect(document.querySelector("[data-profile-summary]")!.textContent).not.toContain("海");
+});
 it("starts Home without initializing Map or requiring profile/authentication", () => {
   const { ports } = setup();
   expect(ports.openMap).not.toHaveBeenCalled(); expect(ports.newConsultation).not.toHaveBeenCalled();

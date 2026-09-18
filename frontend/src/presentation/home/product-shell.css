@@ -84,7 +84,8 @@
 .my-grid .home-card { margin: 0; box-shadow: none; border-radius: 1.125rem; }
 .my-grid p { font-size: .875rem; }
 .my-grid h2 { font-size: 1.25rem; }
-.my-preferences { padding: .75rem; border-radius: .8rem; background: #f0f3f5; }
+.my-preferences { display: flex; flex-wrap: wrap; gap: .4rem; color: var(--product-muted); }
+.my-preferences span { padding: .3rem .6rem; border-radius: 999px; background: #f0f3f5; font-size: .8rem; }
 .my-actions { display: grid; gap: .5rem; }
 .my-actions button { display: flex; justify-content: space-between; text-align: left; }
 .my-grid [data-profile] { background: var(--product-accent); color: white; }

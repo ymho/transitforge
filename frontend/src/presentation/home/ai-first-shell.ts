@@ -1,6 +1,6 @@
 import { homeReadModel, tripDisplayLabels, type HomeReadInput } from "../../usecases/trip-plan/home-read-model";
 import type { UserProfile } from "@raiquora/trip/travel-profile";
-import { travelStyleSummary } from "@raiquora/trip/travel-profile";
+import { travelStyleSummary, travelPreferenceLabels } from "@raiquora/trip/travel-profile";
 import { travelIcon } from "../shared/travel-icon";
 import { travelDecoration } from "./travel-decoration";
 import type { Trip } from "@raiquora/trip/trip";
@@ -74,7 +74,15 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
       <details><summary>対応範囲について</summary><p>収録駅・日付別時刻表と、駅からのアクセスを確認できる範囲をご案内します。未確認の場所も相談できます。</p></details></section>`;
     root.querySelector("[data-trip-list]")!.innerHTML = view.trips.length ? view.trips.map((row) => card(row.trip, tripDisplayLabels[row.group])).join("") : `<p role="status">${stateText}</p>`;
     try {
-      const profile = ports.profile(); root.querySelector("[data-profile-summary]")!.textContent = profile ? travelStyleSummary(profile) : "まだ設定していません。普段の好みを登録できます。";
+      const profile = ports.profile();
+      const summary = root.querySelector("[data-profile-summary]")!;
+      const tags = profile ? [
+        ...(profile.transport.preferredMode === "rail" ? ["列車を優先"] : []),
+        ...(profile.travelStyle.pace !== undefined ? [profile.travelStyle.pace <= .4 ? "ゆったり" : profile.travelStyle.pace >= .7 ? "いろいろ巡る" : "バランス"] : []),
+        ...Object.entries(profile.preferences).filter(([, value]) => value !== undefined && value >= .8).map(([key]) => travelPreferenceLabels[key as keyof typeof travelPreferenceLabels]),
+      ].slice(0, 6) : [];
+      if (tags.length) summary.innerHTML = tags.map((tag) => `<span>${esc(tag)}</span>`).join("");
+      else summary.textContent = profile ? travelStyleSummary(profile) : "まだ設定していません。普段の好みを登録できます。";
     } catch { root.querySelector("[data-profile-summary]")!.textContent = "プロフィールを読み出せません。相談は登録なしでも利用できます。"; }
     root.querySelectorAll<HTMLButtonElement>("[data-trip]").forEach((button) => button.addEventListener("click", () => {
       window.history.pushState({ tripId: button.dataset.trip! }, "", "#trip"); apply();
