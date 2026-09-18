@@ -45,6 +45,13 @@ const activityScheduleSchema = { type: "object", description: "既存ItinerarySc
 export const tripProgressDescriptors: AgentToolDescriptor[] = [
   {
     name: "propose_manual_transport",
+    decisionSupport: {
+      capability: "利用者が希望する手入力の非鉄道移動を未保存の変更案にする",
+      suitableCases: ["利用者が徒歩やタクシー等の予定を追加・変更したい", "手段と両端が分かり、時刻は未定の予定を仮置きしたい"],
+      unsuitableCases: ["取得済みの鉄道候補を比較・説明するだけの相談", "範囲外・未確認の鉄道候補を、利用者の希望にない車へ置き換えて成立扱いする", "Providerで確認した経路や所要時間の証明"],
+      returnedEvidence: "手入力の未保存Proposal。時刻表・道路・利用可能性を検証したEvidenceではない",
+      responsibilityBoundary: "候補比較と計画の変更は別操作。取得済み候補の比較根拠はassess_travel_candidate、鉄道候補の採用はpropose_candidate_selectionが担当する",
+    },
     description: "タクシー・徒歩・航空・フェリー等の手入力の移動予定を同じTripへadd/replaceする案。便未定や時刻未定でもmodeと両端の名称を保ち、day/window/unscheduledで質問と併用できる。Provider検索結果の採用や鉄道の検証には使わない。Provider ID・Evidence・保持許諾は入力不可。selectedは旅程へ採用する予定の意味で予約済みではない。仮定は既存propose_request_assumptionsで併記できる。scheduleが時刻の唯一の正本。新規itemIdはadd、既存ID変更はreplace、afterIdはaddのみ。previewだけで保存しない。",
     inputSchema: { type: "object", properties: { ...activityPlacementProperties, mode: { type: "string", enum: [...nonRailTransportModes] },
       title: { type: "string", minLength: 1, maxLength: 200 }, origin: { type: "string", minLength: 1, maxLength: 200 },
