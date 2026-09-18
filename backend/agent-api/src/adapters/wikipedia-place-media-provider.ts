@@ -37,6 +37,7 @@ export class WikipediaPlaceMediaProvider implements PlaceMediaProvider {
         ...(page.latitude === undefined ? {} : { latitude: page.latitude }),
         ...(page.longitude === undefined ? {} : { longitude: page.longitude }),
         sourceUrl: page.fullUrl,
+        sources: [{ provider: "wikipedia", label: "Wikipedia", url: page.fullUrl, role: "identity" }],
         openingHoursStatus: "unknown",
         ...(page.pageImage && imageMetadata.get(page.pageImage)
           ? { image: imageMetadata.get(page.pageImage)! }

@@ -1,6 +1,10 @@
 import type { ExternalTravelInformation } from "@raiquora/trip/external-travel-information";
 import { availableExternalInformation } from "@raiquora/trip/external-travel-information";
 import type { PlaceMedia, PlaceMediaSearchResult } from "@raiquora/trip/place-media";
+import { mergePlaceMedia, placeMediaRef, resolvePlaceTargetBinding, samePlaceSourcePage } from "@raiquora/trip/place-media";
+import { placeTargetRelevance } from "@raiquora/trip/assess-travel-candidate";
+import { assessCandidateConstraints } from "@raiquora/trip/candidate-constraint-assessment";
+import type { Trip } from "@raiquora/trip/trip";
 import type { TravelRecheckKind, TravelRecheckRequest } from "@raiquora/trip/travel-recheck";
 import type { TripPlan } from "@raiquora/trip/trip-plan";
 import type { WeatherForecast } from "@raiquora/trip/weather-forecast";
@@ -38,6 +42,7 @@ export interface ExternalTravelToolState {
 }
 
 export interface ExternalTravelToolDependencies {
+  getCurrentTrip?: () => Trip | undefined;
   searchWeatherForecast?: (request: {
     location: string;
     startDate?: string;
@@ -169,7 +174,7 @@ function compactExternalInformation(
 export function externalTravelToolDescription(name: ExternalTravelToolName): string {
   return {
     search_weather_forecast: "目的地の時間別と週間天気予報をEvidence付きで検索します",
-    search_place_media: "具体的な固有地点の未取得の写真・位置・施設属性を調べます。地点の紹介用であり、紹介済みの場所の旅程作成や日付・泊数の確認はできません。気分からの行き先発見ではなく、写真や地点情報が必要な場合に使います",
+    search_place_media: "施設候補の写真・位置・属性を調べます。discoveryのhitは候補自身であり、queryの特定対象や希望地域との一致を保証しません。特定施設の照合はmode=targetと取得済みtargetPlaceIdまたは読了sourceUrlを使い、targetBindingとAssessment relevanceを確認します。unresolved/mismatchは適合候補として推薦せず、別調査または未確認説明に進みます。日程作成用ではありません",
     search_travel_alerts: "旅行先の公的な気象・災害情報を検索する。地域名を指定し、直近の警報・台風・地震・津波・火山の発表を公式Evidence付きで確認する。公的severityはTripImpactや通知severityではない。旅行への具体的影響は未評価なら断定しない。情報なし・未取得は安全の保証ではない",
     search_ground_access: "検索済みの駅とMapbox Placeの間を徒歩 車 自転車で移動する経路 所要時間比較 到達圏を検索します。鉄道経路には使いません",
     search_restaurants: "旅行先 駅 宿 観光地の周辺からジャンルや希望に合う飲食店候補を検索します。子ども可 禁煙 バリアフリー 駐車場 個室 カード ランチ 深夜営業を必要な場合だけ絞り込めます。営業時間や予算はProviderにある場合だけ返します",
@@ -198,6 +203,9 @@ export function externalTravelToolInputSchema(name: ExternalTravelToolName): Age
       type: "object",
       properties: {
         query: { type: "string", description: "観光地 店舗 エリアの検索語" },
+        mode: { type: "string", enum: ["discovery", "target"], description: "候補発見か、特定の対象への照合か。省略時discoveryで対象一致は未確認" },
+        targetPlaceId: { type: "string", description: "既に取得済みの対象Place ID。名前から生成しない" },
+        sourceUrl: { type: "string", description: "既にread_web_pagesで読んだ対象の公式ページ" },
         latitude: { type: "number", minimum: -90, maximum: 90 },
         longitude: { type: "number", minimum: -180, maximum: 180 },
         radiusMeters: { type: "integer", minimum: 100, maximum: 10_000 },
@@ -369,7 +377,11 @@ export async function executeExternalTravelTool(
       throw new Error("観光地の検索条件が不正です。");
     }
     const providerOutput = await dependencies.searchPlaceMedia({ query, ...(latitude === undefined ? {} : { latitude, longitude }), ...(radiusMeters === undefined ? {} : { radiusMeters }), ...(limit === undefined ? {} : { limit }) });
-    const output = specificPlaceSearchOutput(providerOutput);
+    const discovered = specificPlaceSearchOutput(providerOutput);
+    const targets = state.places?.data?.places.filter(p => p.providerPlaceId === input.targetPlaceId) ?? [];
+    const target = targets.length === 1 ? targets[0] : undefined;
+    const source = state.webPages?.data?.pages.find(p => p.url === input.sourceUrl)?.url;
+    const output = bindPlaceSearchOutput(discovered, input.mode === "target", target, source, dependencies.getCurrentTrip?.());
     if (isRecord(output) && isRecord(output.result)) state.places = output.result as unknown as ExternalTravelInformation<PlaceMediaSearchResult>;
     return output;
   }
@@ -412,7 +424,7 @@ export async function executeExternalTravelTool(
     const output = await dependencies.searchRestaurants({ area, ...(keyword ? { keyword } : {}), ...(center ? { latitude: center.latitude, longitude: center.longitude } : {}), ...(range ? { range } : {}), ...(requirements ? { requirements } : {}), ...(limit === undefined ? {} : { limit }) });
     if (isRecord(output) && isRecord(output.restaurants)) state.restaurants = output.restaurants as unknown as ExternalTravelInformation<RestaurantSearchResult>;
     if (dependencies.searchPlaceMedia && state.restaurants?.status === "available" && state.restaurants.data) {
-      const candidates = state.restaurants.data.restaurants.slice(0, 6);
+      const candidates = state.restaurants.data.restaurants.filter(r => r.mapboxPlaceId).slice(0, 6);
       const resolved = await Promise.all(candidates.map((restaurant) => dependencies.searchPlaceMedia!({
         query: restaurant.name,
         ...(restaurant.latitude === undefined || restaurant.longitude === undefined ? {} : { latitude: restaurant.latitude, longitude: restaurant.longitude, radiusMeters: 1_000 }),
@@ -421,7 +433,9 @@ export async function executeExternalTravelTool(
       const places = resolved.flatMap((candidateOutput, index) => {
         const restaurant = candidates[index];
         if (!restaurant || !isRecord(candidateOutput) || !isRecord(candidateOutput.result) || !isRecord(candidateOutput.result.data) || !Array.isArray(candidateOutput.result.data.places)) return [];
-        return candidateOutput.result.data.places.filter((place) => isRecord(place) && typeof place.name === "string" && samePlaceName(place.name, restaurant.name)).slice(0, 1);
+        return candidateOutput.result.data.places.filter((place) => isRecord(place) &&
+          typeof restaurant.mapboxPlaceId === "string" && place.providerPlaceId === restaurant.mapboxPlaceId &&
+          resolvePlaceTargetBinding(place as unknown as PlaceMedia, { provider: "mapbox", providerPlaceId: restaurant.mapboxPlaceId }).status === "resolved").slice(0, 1);
       });
       if (places.length > 0) {
         const evidence = resolved.flatMap((candidateOutput) => isRecord(candidateOutput) && isRecord(candidateOutput.result) && Array.isArray(candidateOutput.result.evidence) ? candidateOutput.result.evidence : []) as ExternalTravelInformation<PlaceMediaSearchResult>["evidence"];
@@ -470,15 +484,21 @@ export async function executeExternalTravelTool(
     }).slice(0, 6) : [];
     if (candidates.length === 0) throw new Error("Webページで確認できる施設候補がありません。");
     const outputs = await Promise.all(candidates.map(({ name }) => dependencies.searchPlaceMedia!({ query: name, limit: 3 })));
+    const identityObservations: Array<{ name: string; status: "unresolved"; reason: "missing-source-binding" }> = [];
     const places = outputs.flatMap((output, index) => {
       if (!isRecord(output) || !isRecord(output.result) || !isRecord(output.result.data) || !Array.isArray(output.result.data.places)) return [];
       const candidate = candidates[index];
       if (!candidate) return [];
-      const place = output.result.data.places.find((item) => isRecord(item) && typeof item.name === "string" && samePlaceName(item.name, candidate.name));
-      if (!isRecord(place)) return [];
+      const matches = uniquePlaces(output.result.data.places.filter((item): item is Record<string, unknown> => isRecord(item) && samePlaceSourcePage(item.officialWebsiteUrl, candidate.sourceUrl)));
+      const place = matches.length === 1 ? matches[0] : undefined;
+      if (!isRecord(place)) {
+        identityObservations.push({ name: candidate.name, status: "unresolved", reason: "missing-source-binding" });
+        return [];
+      }
       const existingSources = Array.isArray(place.sources) ? place.sources.filter(isRecord) : [];
       return [{
         ...place,
+        targetBinding: { status: "resolved", reason: "source-binding" },
         ...(candidate.detail ? { detail: candidate.detail } : {}),
         sources: [...existingSources, { provider: "web", label: candidate.sourceLabel, url: candidate.sourceUrl, role: "discovery" }],
       }];
@@ -488,12 +508,12 @@ export async function executeExternalTravelTool(
       ...outputs.flatMap((output) => isRecord(output) && isRecord(output.result) && Array.isArray(output.result.evidence) ? output.result.evidence : []),
     ] as ExternalTravelInformation<PlaceMediaSearchResult>["evidence"];
     const resolvedPlaces = uniquePlaces(places) as unknown as PlaceMediaSearchResult["places"];
-    if (resolvedPlaces.length === 0) {
-      throw new Error("施設候補を地点として確認できませんでした。別の候補を調べてください。");
-    }
     const result = availableExternalInformation<PlaceMediaSearchResult>({ places: resolvedPlaces }, evidence);
     state.places = result;
-    return { result };
+    return { result, targetObservations: identityObservations,
+      candidateAssessments: [...resolvedPlaces.map(p => ({ candidateId: p.providerPlaceId,
+        relevance: placeSearchRelevance(p, dependencies.getCurrentTrip?.(), evidence.map(e => e.id)) })),
+        ...identityObservations.map(p => ({ name: p.name, relevance: placeTargetRelevance("unresolved", []) }))] };
   }
   const plan = dependencies.getTripPlan?.();
   const kinds: TravelRecheckKind[] = ["weather", "rail-operation", "place-hours"];
@@ -622,10 +642,38 @@ function normalizedIncludes(source: string, target: string): boolean {
   return normalizePlaceName(source).includes(normalizePlaceName(target));
 }
 
-function samePlaceName(left: string, right: string): boolean {
-  const a = normalizePlaceName(left);
-  const b = normalizePlaceName(right);
-  return a === b || Math.min(a.length, b.length) >= 4 && (a.includes(b) || b.includes(a));
+function bindPlaceSearchOutput(output: unknown, isTarget: boolean, target?: PlaceMedia, source?: string, trip?: Trip): unknown {
+  if (!isRecord(output) || !isRecord(output.result) || !isRecord(output.result.data) || !Array.isArray(output.result.data.places)) return output;
+  const discovered = mergePlaceMedia(output.result.data.places as PlaceMedia[]);
+  const sourceMatches = source ? discovered.filter(p => samePlaceSourcePage(p.officialWebsiteUrl, source)) : [];
+  const places = discovered.map(place => {
+    if (!isTarget) return place;
+    const binding = sourceMatches.length === 1 && sourceMatches[0] === place
+      ? { status: "resolved" as const, reason: "source-binding" as const }
+      : resolvePlaceTargetBinding(place, target && placeMediaRef(target));
+    return { ...place, targetBinding: binding };
+  });
+  const evidenceIds = Array.isArray(output.result.evidence) ? output.result.evidence.flatMap(e => isRecord(e) && typeof e.id === "string" ? [e.id] : []).slice(0, 8) : [];
+  const assessments = places.map(p => ({ candidateId: p.providerPlaceId, name: p.name,
+    relevance: placeSearchRelevance(p, trip, evidenceIds) }));
+  return { ...output, searchPurpose: isTarget ? "target" : "discovery", candidateAssessments: assessments,
+    targetObservations: places.filter(p => p.targetBinding && p.targetBinding.status !== "resolved").map(p => ({
+      name: p.name, candidateId: p.providerPlaceId, ...p.targetBinding })),
+    result: { ...output.result, data: { ...output.result.data,
+      places: places.filter(p => !p.targetBinding || p.targetBinding.status === "resolved") } } };
+}
+
+function placeSearchRelevance(place: PlaceMedia, trip?: Trip, evidenceIds: string[] = []) {
+  const binding = placeTargetRelevance(place.targetBinding?.status ?? "unresolved", evidenceIds);
+  if (!trip || place.targetBinding && place.targetBinding.status !== "resolved") return binding;
+  // Ephemeral identity-only projection. No provider response is persisted, no region is
+  // inferred from names/coordinates, and one POI is not a complete destination coverage.
+  return assessCandidateConstraints(trip.request, {
+    places: { destinations: [{ name: place.name, ref: placeMediaRef(place), sources: [] }], complete: false, evidenceIds },
+    mobility: { status: "unknown", evidenceIds: [] },
+    price: { status: "unknown", observations: [], subtotals: [], comparability: "unknown", coverage: "partial",
+      unpricedItemCount: 0, reasonCodes: ["missing-facts"], evidenceIds: [] },
+  }).relevance;
 }
 
 function normalizePlaceName(value: string): string {
@@ -656,12 +704,13 @@ export function isSpecificPlaceCandidateName(value: string): boolean {
   if (/^(?:日本|島根県|出雲地方|観光|観光地|観光スポット|旅行|レジャー|定期観光バス|路線バス|バス|鉄道|駅)$/u.test(normalized)) {
     return false;
   }
-  if (/^.{1,10}(?:都|道|府|県|市|区|町|村)$/u.test(normalized)) return false;
+  // A named historic district is a visitable area, not an administrative ward.
+  if (!normalized.endsWith("地区") && /^.{1,10}(?:都|道|府|県|市|区|町|村)$/u.test(normalized)) return false;
   return true;
 }
 
 function uniquePlaces(places: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  return [...new Map(places.flatMap((place) => typeof place.providerPlaceId === "string" ? [[place.providerPlaceId, place] as const] : [])).values()];
+  return mergePlaceMedia(places as unknown as PlaceMedia[]) as unknown as Array<Record<string, unknown>>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

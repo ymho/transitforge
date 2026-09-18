@@ -13,6 +13,11 @@ function constraint(f: ReturnType<typeof candidateAssessmentFixture>, requiremen
     { id: "extra", strength, source: "user", scope: { type: "trip" }, requirement }] } };
 }
 describe("candidate comparison is a pure Evidence-derived view, not adoption", () => {
+  it.each(["unresolved", "mismatch"] as const)("target binding %s never becomes regional fit", (status) => {
+    const f = candidateAssessmentFixture();
+    f.facts.placeTargetBinding = { status, evidenceIds: f.facts.places!.evidence.map(e => e.id) };
+    expect(evaluate(f).relevance.status).toBe(status === "mismatch" ? "questionable" : "unknown");
+  });
   it("retains hard/soft/unknown independently and never mutates input", () => {
     const f = candidateAssessmentFixture(); constraint(f, { type: "pace", value: 0.2 }, "soft");
     const original = structuredClone(f), a = evaluate(f);

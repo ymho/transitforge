@@ -728,6 +728,9 @@ if (!token) {
       if (candidate.kind !== "place") return candidate;
       const response = await researchPlaceDetail({
         query: candidate.name,
+        targetRef: candidate.value.sources?.find(source => source.role === "identity")
+          ? { provider: candidate.value.sources.find(source => source.role === "identity")!.provider, providerPlaceId: candidate.id }
+          : undefined,
         latitude: candidate.latitude,
         longitude: candidate.longitude,
       });
@@ -839,6 +842,7 @@ if (!token) {
         load: async () => {
           const response = await researchPlaceDetail({
             query: landmark.name,
+            ...(landmark.providerPlaceId ? { targetRef: { provider: "mapbox", providerPlaceId: landmark.providerPlaceId } } : {}),
             ...(landmarkCoordinate ? { latitude: landmarkCoordinate[1], longitude: landmarkCoordinate[0] } : {}),
           });
           return response.result.status === "available" ? mapPlaceCandidates(response.result.data?.places ?? []) : [];

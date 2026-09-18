@@ -2736,6 +2736,7 @@ describe("Bedrock viewer agent", () => {
           latitude: 35.4019,
           longitude: 132.6855,
           sourceUrl: "https://example.com/izumo-taisha",
+          officialWebsiteUrl: "https://example.com/guide",
           openingHoursStatus: "unknown" as const,
           image: {
             url: "https://example.com/izumo.jpg",
@@ -2885,8 +2886,11 @@ describe("Bedrock viewer agent", () => {
       throw new Error("写真付きの旅行相談がありません。");
     }
     expect(result.conversation.expectedInput).toBe("planning-intent");
-    expect(result.text).toContain("歴史や自然が好きな人には");
-    expect(converse).toHaveBeenCalledTimes(4);
+    // Entity resolution is not a recommendation. The fifth model decision consumes
+    // its Assessment and explicitly chooses the follow-up, rather than an app template.
+    expect(result.text).toContain("歴史が好きなら稲佐の浜や神門通り");
+    expect(converse).toHaveBeenCalledTimes(5);
+    expect(JSON.stringify(converse.mock.calls[4]?.[0])).toContain("candidateAssessments");
     expect(result.conversation.tripContext.destinationWish).toBe("出雲大社");
     expect(result.external?.places?.data?.places[0]?.image?.url)
       .toBe("https://example.com/izumo.jpg");
@@ -3350,6 +3354,7 @@ describe("Bedrock viewer agent", () => {
       data: { places: [{
         providerPlaceId: "mapbox.asahi",
         name: "旭日酒造", latitude: 35.36, longitude: 132.75,
+        officialWebsiteUrl: "https://tourism.example/izumo-sake",
         sourceUrl: "https://www.mapbox.com/", openingHoursStatus: "unknown" as const,
       }] },
     } }));
