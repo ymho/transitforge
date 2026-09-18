@@ -19,6 +19,19 @@ export class NotificationApplication {
   async read(principal: TripPrincipal, id: string, version: number) {
     requireTripPrincipal(principal); await this.repository.markRead(principal, id, version, this.clock.now().toISOString());
   }
+  /** Bounded subject references, not filtering a global owner page (which could omit this Trip). */
+  async forSubjects(principal: TripPrincipal, tripId: string, revision: number, subjects: readonly string[]) {
+    requireTripPrincipal(principal);
+    const views = [];
+    for (const subject of [...new Set(subjects)].slice(0, 12)) {
+      const e = await this.repository.episode(principal, tripId, revision, subject);
+      if (!e?.latestNotificationId) continue;
+      const n = await this.repository.get(principal, e.latestNotificationId);
+      if (!n || n.tripId !== tripId || n.tripRevision !== revision || n.subjectKey !== subject) throw new TripResourceError("unavailable");
+      views.push(notificationView(n, await this.currency(principal, n)));
+    }
+    return views;
+  }
   async current(principal: TripPrincipal, n: TripNotification): Promise<boolean> {
     const trip = await this.trips.get(principal, n.tripId);
     if (!matches(trip, n)) return false;

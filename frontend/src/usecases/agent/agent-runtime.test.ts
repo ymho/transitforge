@@ -17,8 +17,101 @@ import {
 } from "./tool-contract";
 import { ToolEvidenceRegistry } from "./tool-evidence-registry";
 import { AgentToolRegistry } from "./tool-registry";
+import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.fixture";
+import { inTripApplicationEvidence } from "./in-trip-application-evidence";
 
 describe("MultiStepAgentRuntime", () => {
+  it("returns only admitted Tool Evidence presentation references to the next model call", async () => {
+    const { tools } = toolSetup([]), requests: AgentModelRequest[] = [], evidenceMappers = new ToolEvidenceRegistry();
+    const toolExecutor = new AgentToolExecutor(tools, evidenceMappers);
+    const toolEvidence = { ...evidence("tool-outcome"), knowledgeKind: "deterministic_fact" as const,
+      facts: { resultKind: "weather", status: "unconfirmed", freshness: "unknown" },
+      references: [{ ...evidence("ref").references[0]!, sourceType: "external-source" as const }] };
+    evidenceMappers.register("first_tool", () => [toolEvidence]);
+    const answer = textResponse("model fact must not appear");
+    answer.decisionSummary = { interpretedGoal: "取得結果", hardConstraints: [], softPreferences: [], selectedAction: "answer",
+      unresolvedFacts: [], reasonCodes: [], usedEvidenceIds: [toolEvidence.id],
+      inTripAnswerPlan: { evidence: [{ evidenceId: toolEvidence.id, presentation: "external-result" }] } };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([
+      toolCallResponse([{ id: "call", name: "first_tool", input: { value: "one" } }]), answer,
+    ], requests) }).run({ ...request("最新天気"), context: { inTrip: inTripFixture().snapshot } });
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("最新情報は確認できていません");
+    expect(JSON.stringify(requests[1]!.messages)).toContain('\\"presentations\\":[\\"external-result\\"]');
+    expect(output.response).not.toContain("model fact");
+  });
+  it.each(["valid", "invalid-metadata", "invalid-metadata-subset", "invalid-metadata-missing", "missing", "mismatched", "subset"])("in-trip %s plan cannot publish model-authored facts", async (kind) => {
+    const { snapshot } = inTripFixture(), initialEvidence = inTripApplicationEvidence(snapshot);
+    const { tools, toolExecutor } = toolSetup([]), answer = textResponse("現在、列車で移動中です。乗換は問題ありません。秘密: RAW");
+    const e = initialEvidence.find((e) => e.coverage?.includes("rail.connection"))!;
+    answer.decisionSummary = { interpretedGoal: "接続を説明", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"],
+      usedEvidenceIds: kind === "subset" ? [] : [e.id], ...(kind === "missing" ? {} : { inTripAnswerPlan: { evidence: [{ evidenceId: e.id,
+        presentation: kind === "mismatched" ? "location-permission" : "rail-impact" }] } }) };
+    if (kind.startsWith("invalid-metadata")) {
+      answer.declaredInTripAnswerPlan = answer.decisionSummary.inTripAnswerPlan;
+      answer.declaredEvidenceIds = kind.endsWith("subset") ? [] : [e.id];
+      if (kind.endsWith("missing")) answer.declaredInTripAnswerPlan!.evidence[0]!.evidenceId = "unknown";
+      delete answer.decisionSummary;
+      answer.decisionSummaryStatus = "invalid";
+    }
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([answer]) }).run({ ...request("大丈夫？"), context: { inTrip: snapshot }, initialEvidence });
+    expect(output.status).toBe(["valid", "invalid-metadata"].includes(kind) ? "completed" : "failed");
+    expect(JSON.stringify(output)).not.toContain("RAW");
+    if (kind === "valid") {
+      expect(output.response).toContain("見込み4分");
+      expect(output.trace.events.find((e) => e.type === "decision_recorded")).toMatchObject({ inTripAnswerPlan: answer.decisionSummary!.inTripAnswerPlan });
+    }
+  });
+  it("validates declared references independently of other invalid decision fields", async () => {
+    const { tools, toolExecutor } = toolSetup([]), response = textResponse("unsafe answer");
+    response.decisionSummaryStatus = "invalid"; response.declaredEvidenceIds = ["missing"];
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([response]) }).run(request("説明"));
+    expect(output.status).toBe("failed");
+    expect(output.trace.events.some((e) => e.type === "response_generated" && e.response.includes("unsafe answer"))).toBe(false);
+  });
+  it.each([["missing"], ["app", "app"], Array.from({ length: 11 }, () => "app")])("rejects invalid used Evidence before publishing an answer", async (...ids) => {
+    const { tools, toolExecutor } = toolSetup([]), response = textResponse("unsafe answer");
+    response.decisionSummary = { interpretedGoal: "説明", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: [], usedEvidenceIds: ids };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([response]) }).run({ ...request("説明して"), initialEvidence: [evidence("app")] });
+    expect(output.status).toBe("failed");
+    expect(output.trace.events.some((e) => e.type === "response_generated" && e.response.includes("unsafe answer"))).toBe(false);
+  });
+  it("registers initial Evidence before the model, traces it and permits a Tool-free grounded answer", async () => {
+    const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
+    const initial = evidence("application:plan"); initial.references[0]!.sourceType = "trip-state";
+    const answer = textResponse("採用済みの次予定を説明します");
+    answer.decisionSummary = { interpretedGoal: "次予定", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"], usedEvidenceIds: [initial.id] };
+    const model = sequenceModel([answer], requests);
+    const runtime = new MultiStepAgentRuntime({ tools, toolExecutor, model });
+    const output = await runtime.run({ ...request("次は？"), initialEvidence: [initial] });
+    expect(output.evidence).toEqual([initial]); expect(output.status).toBe("completed");
+    expect(JSON.stringify(requests[0]!.messages)).toContain("application:plan");
+    expect(output.trace.events.findIndex((e) => e.type === "evidence_collected")).toBeLessThan(output.trace.events.findIndex((e) => e.type === "model_started"));
+    expect(output.trace.events.filter((e) => e.type === "tool_called")).toHaveLength(0);
+    expect(model.generate).toHaveBeenCalledOnce();
+    expect(output.trace.events.find((e) => e.type === "decision_recorded")).toMatchObject({ usedEvidenceIds: [initial.id] });
+  });
+  it("shares the twenty Evidence budget with Tools and retains Application Evidence at finalization", async () => {
+    const order: string[] = [], { tools, toolExecutor } = toolSetup(order), requests: AgentModelRequest[] = [];
+    const initialEvidence = Array.from({ length: 19 }, (_, i) => evidence(`app-${i}`));
+    const runtime = new MultiStepAgentRuntime({ tools, toolExecutor, limits: { maxToolCalls: 2 }, model: sequenceModel([
+      toolCallResponse([{ id: "a", name: "first_tool", input: { value: "one" } }, { id: "b", name: "second_tool", input: { value: "two" } }]),
+      textResponse("両方の根拠から回答します"),
+    ], requests) });
+    const output = await runtime.run({ ...request("追加情報を確認して"), initialEvidence });
+    expect(output.evidence).toHaveLength(20); expect(output.evidence.slice(0, 19)).toEqual(initialEvidence);
+    expect(output.evidence[19]!.id).toBe("first_tool:one"); expect(order).toEqual(["first_tool", "second_tool"]);
+    expect(JSON.stringify(requests[1]!.messages)).toContain("Application Evidence + 今回のTool Evidence");
+    expect(JSON.stringify(requests[1]!.messages)).toContain("app-0");
+  });
+  it.each(["duplicate", "no-reference", "empty-reference", "over-budget"])("rejects invalid initial Evidence before model use: %s", async (kind) => {
+    const { tools, toolExecutor } = toolSetup([]), value = evidence("app"), model = sequenceModel([textResponse("unexpected")]);
+    const initialEvidence = kind === "duplicate" ? [value, value] : kind === "no-reference" ? [{ ...value, references: [] }] :
+      kind === "empty-reference" ? [{ ...value, references: [{ ...value.references[0]!, sourceRef: "" }] }] :
+      Array.from({ length: 21 }, (_, i) => evidence(`app-${i}`));
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run({ ...request("確認"), initialEvidence });
+    expect(output.status).toBe("failed"); expect(output.evidence).toEqual([]); expect(model.generate).not.toHaveBeenCalled();
+  });
   it.each(["precondition_failed", "execution_failed"] as const)("re-evaluates only context-dependent failures after progress: %s", async (code) => {
     const { tools, toolExecutor } = toolSetup([]);
     const execute = vi.fn(async () => execute.mock.calls.length === 1

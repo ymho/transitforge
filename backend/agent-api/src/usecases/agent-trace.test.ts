@@ -4,6 +4,25 @@ import type { PrivateObject, PrivateObjectStorage } from "../ports/private-objec
 import { createAgentTraceOperation, storeAgentTrace } from "./agent-trace.js";
 
 describe("agent trace parity", () => {
+  it("stores only bounded InTrip answer references, not model-authored fact fields", async () => {
+    const value = submission();
+    value.trace.events = [{ type: "decision_recorded", sequence: 1, occurredAt: "2026-09-12T08:00:00Z",
+      interpretedGoal: "説明", hardConstraints: { byteLength: 2, truncated: false, value: [] }, softPreferences: { byteLength: 2, truncated: false, value: [] },
+      selectedAction: "answer", unresolvedFacts: [], reasonCodes: [], usedEvidenceIds: ["application:in-trip:location"],
+      inTripAnswerPlan: { evidence: [{ evidenceId: "application:in-trip:location", presentation: "location-permission" }] } }];
+    const storage = new RecordingStorage();
+    await storeAgentTrace(value, { bucket: "private-bucket", storage }, fixedNow, "trace-1");
+    expect(JSON.stringify(storedJson(storage))).toContain("location-permission");
+    value.trace.events[0]!.inTripAnswerPlan = { evidence: [{ evidenceId: "application:in-trip:location", presentation: "location-permission", boarding: true }] };
+    await expect(store(value)).rejects.toMatchObject({ statusCode: 400 });
+  });
+  it.each([["e", "e"], Array.from({ length: 11 }, (_, i) => `e${i}`)])("rejects duplicate/oversized evidence use at the trace boundary", async (...ids) => {
+    const value = submission();
+    value.trace.events = [{ type: "decision_recorded", sequence: 1, occurredAt: "2026-09-12T08:00:00Z",
+      interpretedGoal: "説明", hardConstraints: { byteLength: 2, truncated: false, value: [] }, softPreferences: { byteLength: 2, truncated: false, value: [] },
+      selectedAction: "answer", unresolvedFacts: [], reasonCodes: [], usedEvidenceIds: ids }];
+    await expect(store(value)).rejects.toMatchObject({ statusCode: 400 });
+  });
   it("stores bounded turn observations and rejects thought payloads or inconsistent progress", async () => {
     const value = submission();
     const observation = { outcome: "ask_only", progress: [], exception: { reason: "safety", missingFact: "token=private-token" } };
@@ -108,6 +127,7 @@ describe("agent trace parity", () => {
       unresolvedFacts: ["到達可能な候補"],
       reasonCodes: ["evidence_required"],
       replanReason: "tool_result_received",
+      usedEvidenceIds: ["application:in-trip:impacts/0"],
     }];
     const storage = new RecordingStorage();
 
@@ -116,6 +136,7 @@ describe("agent trace parity", () => {
     const stored = new TextDecoder().decode(storage.values[0]?.body);
     expect(stored).toContain("decision_recorded");
     expect(stored).toContain("search_journeys");
+    expect(stored).toContain("application:in-trip:impacts/0");
     expect(stored).not.toContain("Chain-of-Thought");
   });
 

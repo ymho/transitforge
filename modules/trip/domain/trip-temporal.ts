@@ -33,7 +33,7 @@ export function assessTripTime(trip: Pick<Trip, "items" | "lifecycleState">, clo
   };
 }
 
-function positionAt(schedule: ItinerarySchedule, now: Date): TripTemporalPosition {
+export function positionAt(schedule: ItinerarySchedule, now: Date): TripTemporalPosition {
   const timestamp = now.getTime();
   switch (schedule.type) {
     case "unscheduled": return "unknown";

@@ -45,11 +45,14 @@ export interface AgentModelMetadata {
 }
 
 export interface AgentModelResponse {
+  declaredInTripAnswerPlan?: import("./in-trip-answer-plan").InTripAnswerPlan;
   message: AgentModelMessage;
   stopReason: "completed" | "tool_calls" | "max_tokens";
   metadata: AgentModelMetadata;
   decisionSummaryStatus?: "valid" | "missing" | "invalid";
   decisionSummary?: AgentDecisionSummary;
+  invalidUsedEvidenceIds?: boolean;
+  declaredEvidenceIds?: string[];
 }
 
 export interface AgentModelProvider {

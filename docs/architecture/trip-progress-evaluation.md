@@ -171,3 +171,7 @@ AI 公的ハザード≠Trip影響は[HazardAlert](hazard-alert.md)を検証す�
 既存A〜AHのthresholdは変更していない。新旅程生成を要求しないAF〜AIはTTFC/TTFI=nullのまま扱う。
 AIは公的severity/Evidence/検索範囲をモデルへ渡す一方、Trip・Feasibility・準備状態不変と
 通知等の別Actionが実行されないことをproduction Runtimeのscripted回帰として確認する。
+#396ではAJ〜AMを追加する。`in-trip-progress-scenarios.fixture.ts`は本番Runtimeへ保存済みImpactとbounded Contextを渡し、
+次予定・鉄道影響・雨/警報・位置拒否を検証する。十分なContextから1 model call / 0 Tool callで説明できること、
+既知列車の再質問・危険の過剰断定・自動変更・位置推定がないことを確認する。既存A〜AIのTTFI/TTFC thresholdは不変。
+同じfixtureを`--suite trip-progress --case AJ-in-trip-next`等でLive実行できる。

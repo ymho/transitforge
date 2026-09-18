@@ -1,5 +1,7 @@
 import { isPriceObservation } from "@raiquora/trip/money";
 import { reservationContext } from "../../usecases/agent/reservation-context";
+import { loadInTripContext, type InTripContextReader } from "../../usecases/agent/in-trip-context";
+import { inTripApplicationEvidence } from "../../usecases/agent/in-trip-application-evidence";
 import { tripFeasibilityContext } from "../../usecases/agent/trip-feasibility-context";
 import { tripReadinessContext } from "../../usecases/agent/trip-readiness-context";
 import { projectTripReadiness } from "@raiquora/trip/trip-readiness";
@@ -157,6 +159,7 @@ import {
 
 export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDependencies, TripProgressDependencies {
   getReservationFacts?: () => readonly import("@raiquora/trip/reservation").ReservationFact[] | undefined;
+  inTripContextReader?: InTripContextReader;
   getFeasibilityExternalFacts?: () => TripFeasibilityFacts["external"];
   getChecklistItems?: () => readonly TripChecklistItem[] | undefined;
   getUiFocus?: () => { itemId: string } | undefined;
@@ -408,6 +411,14 @@ export async function runViewerAgentRuntime(
     dependencies.getUserProfile?.(),
     currentTrip ?? currentTripPlan,
   );
+  const inTrip = currentTrip ? await loadInTripContext(currentTrip, currentDate(dependencies), dependencies.inTripContextReader) : undefined;
+  contextSnapshot.inTrip = inTrip;
+  // Do not also send the full-history/first-24 planning projection alongside the bounded in-trip view.
+  if (inTrip && contextSnapshot.trip) {
+    contextSnapshot.trip.schedule = [];
+    contextSnapshot.trip.scheduleTruncated = currentTrip!.items.length > 0;
+    delete contextSnapshot.trip.itineraryPlaces;
+  }
   const currentJourney = previousJourneyDecisionContext(
     dependencies.getPreviousJourneyPlan?.(),
     dependencies.getPendingJourneyLegChange?.(),
@@ -423,7 +434,9 @@ export async function runViewerAgentRuntime(
     // feature分類すると、その分類がBedrockより前のintent routerになる。
     feature: "concierge",
     userRequest,
+    initialEvidence: inTrip ? inTripApplicationEvidence(inTrip) : [],
     context: {
+      ...(inTrip ? { inTrip } : {}),
       previousAssistantTurn: dependencies.previousAssistantTurn,
       featureContext: {
         ...(focusedItem ? { uiFocus: { itemId: focusedItem.id, item: selectedTripItemSnapshot(focusedItem) } } : {}),
@@ -435,15 +448,15 @@ export async function runViewerAgentRuntime(
         ? { conversation: conversationContext }
         : {}),
       tripContext: decisionTripContext(travelFacts.context),
-      ...(currentTrip ? { reservations: reservationContext(reservationFacts, focusedItem?.id) } : {}),
-      ...(currentTrip && feasibility ? { tripFeasibility: tripFeasibilityContext(feasibility, focusedItem?.id),
+      ...(currentTrip && !inTrip ? { reservations: reservationContext(reservationFacts, focusedItem?.id) } : {}),
+      ...(currentTrip && feasibility && !inTrip ? { tripFeasibility: tripFeasibilityContext(feasibility, focusedItem?.id),
         tripReadiness: tripReadinessContext(projectTripReadiness(currentTrip, feasibility, reservationFacts, checklistItems), checklistItems) } : {}),
       ...(contextSnapshot.profile ? { travelProfile: contextSnapshot.profile } : {}),
       ...(contextSnapshot.trip ? { currentTrip: { ...contextSnapshot.trip,
-        ...(currentTrip ? { temporalAssessment: assessTripTime(currentTrip, { now: () => currentDate(dependencies) }) } : {}) } } : {}),
+        ...(currentTrip && !inTrip ? { temporalAssessment: assessTripTime(currentTrip, { now: () => currentDate(dependencies) }) } : {}) } } : {}),
       travelCandidates: dependencies.getTravelCandidates?.() ?? contextSnapshot.travelCandidates,
       realtimeFacts: contextSnapshot.realtimeFacts,
-      ...(currentJourney ? { currentJourney } : {}),
+      ...(currentJourney && !inTrip ? { currentJourney } : {}),
       verifiedFacts: verifiedPlaces.map((place) => ({
         evidenceId: `place:${place.providerPlaceId}`,
         category: "place",
@@ -962,17 +975,39 @@ function viewerToolDecisionSupport(
     capability,
     responsibilityBoundary: "入力検証と事実計算はToolが担い、候補を選ぶ判断と説明はAgentが担う",
   } satisfies AgentToolDecisionSupport;
+  if (name === "query_train_delay_analysis") {
+    return { ...common,
+      suitableCases: ["業務日全体または複数列車の観測済み遅延傾向を分析する"],
+      unsuitableCases: [
+        "採用済みTripの個別rail legについて、保存済みTripImpact / connection-buffer / rail-delayを説明する",
+        "このまま乗っていて大丈夫か、この乗換はどうか、などcurrent TripImpactで回答できる相談",
+        "新しい代替経路を探す（search_direct_routesの責務）",
+      ],
+      returnedEvidence: "業務日単位の観測遅延分析。個別TripのTripImpactや乗換成立性を再評価するものではない",
+      limitations: ["current Application Evidenceにrail.impact / rail.connectionがあり、質問がその保存済み影響の説明だけで成立する場合は再取得しない"],
+    };
+  }
+  if (name === "search_trains" || name === "search_train_arrivals") {
+    return { ...common,
+      suitableCases: [name === "search_trains" ? "現在表示中の列車を名前・番号などの条件で探す" : "指定駅へ到着する列車を到着時刻で探す"],
+      unsuitableCases: ["出発駅と到着駅を指定した駅間経路や代替経路の検索（search_direct_routesの責務）"],
+      returnedEvidence: "条件に合う列車。駅間の経路成立性や乗換経路を探すToolではない",
+    };
+  }
   if (name === "search_direct_routes") {
     return {
       ...common,
-      suitableCases: ["駅間の経路成立性、発着時刻、乗換、列車を確認する"],
+      suitableCases: ["駅間の経路成立性、発着時刻、乗換、列車を確認する",
+        "明示されたorigin/destinationの新しい経路・代替経路を検索する。in_tripでも採用済み区間とは異なる独立した駅間はこちら"],
       unsuitableCases: [
         "観光地の魅力、宿泊、駅から先の徒歩経路を調べる",
         "currentJourneyにある直前経路の途中駅確認、利用・回避条件、区間変更",
       ],
       returnedEvidence: "日付別時刻表と利用可能な当日運行情報に基づく鉄道経路",
       freshness: "指定日ダイヤ。当日付近だけ最新運行情報を反映する",
-      limitations: ["鉄道運賃を返さない", "観光地名ではなくアクセス駅が必要", "出発駅不明でも地域のアクセス駅をprovisionalOriginStationに指定できる。Toolが駅の実在を検証して仮案と表示する。自宅からの移動や総所要時間は未確認"],
+      limitations: ["鉄道運賃を返さない", "観光地名ではなくアクセス駅が必要",
+        "departureTimeMinutesは検索開始の下限。指定時刻以降の列車をToolが探すため、正確な列車発車時刻を利用者へ聞く必要はない",
+        "出発駅不明でも地域のアクセス駅をprovisionalOriginStationに指定できる。Toolが駅の実在を検証して仮案と表示する。自宅からの移動や総所要時間は未確認"],
     };
   }
   if (name === "inspect_previous_journey") {
@@ -1036,7 +1071,7 @@ function viewerToolDecisionSupport(
     return {
       ...common,
       suitableCases: ["現在旅程の往路または復路の時刻、帰着期限、途中立寄りを変える"],
-      unsuitableCases: ["新規旅行を作る", "宿や観光地だけを変更する"],
+      unsuitableCases: ["新規旅行を作る", "宿や観光地だけを変更する", "現在の採用済みTripとは別のorigin/destinationを明示した独立駅間検索"],
       returnedEvidence: "現在旅程の方向を維持して再検索した鉄道経路",
       limitations: ["対象はoutboundかreturnを明示する", "帰着期限と出発希望を混同しない"],
     };
@@ -1194,7 +1229,7 @@ function viewerToolDescription(name: ViewerAgentToolName): string {
     search_train_arrivals: "指定駅へ指定時刻ごろ到着する列車を検索します",
     search_direct_routes: "自前の時刻表と運行情報で駅間の乗換を含む経路を検索します。観光地はそのアクセス駅を指定します",
     query_daily_congestion_analysis: "指定業務日付の観測済み混雑を分析します",
-    query_train_delay_analysis: "指定業務日付の観測済み遅延を分析します",
+    query_train_delay_analysis: "業務日全体の観測済み遅延傾向を集計・分析する",
     search_accommodations: "新しい宿泊旅行 日程変更 宿泊地変更 宿の再検索で、指定日程の宿泊候補と行き帰りの鉄道経路をまとめて組み立てます。観光相談 人数やペースだけの変更 経路の部分変更には使いません",
     plan_day_trip: "宿泊施設を検索せず 指定日の行きと帰りの鉄道経路を組み合わせて日帰り旅程を作ります",
     search_trip_route_update: "現在の旅程にある行きまたは帰りの鉄道移動を再検索します。出発を遅らせる変更と途中駅への立寄りに使います",
@@ -1309,7 +1344,7 @@ function viewerToolInputSchema(
           type: "integer",
           minimum: 0,
           maximum: 1_800,
-          description: "出発時刻。0時からの分数。未指定なら利用者の表現またはViewer時刻から決定する",
+          description: "検索開始時刻の下限。0時からの分数（時×60+分。10時以降は600）。具体的な列車の発車時刻ではない。未指定なら利用者の表現またはViewer時刻から決定する",
         },
         excludedServiceTypes: { type: "array", maxItems: 8, items: { type: "string" } },
         excludedTrainNames: { type: "array", maxItems: 8, items: { type: "string" } },
@@ -1639,6 +1674,9 @@ export class ConverseModelProvider implements AgentModelProvider {
         usage: response.metadata?.usage,
       },
       decisionSummaryStatus: decision.status,
+      ...(decision.declaredInTripAnswerPlan ? { declaredInTripAnswerPlan: decision.declaredInTripAnswerPlan } : {}),
+      ...(decision.invalidUsedEvidenceIds ? { invalidUsedEvidenceIds: true } : {}),
+      ...(decision.declaredEvidenceIds ? { declaredEvidenceIds: decision.declaredEvidenceIds } : {}),
       ...(decision.summary ? { decisionSummary: decision.summary } : {}),
     };
   }

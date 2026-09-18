@@ -15,6 +15,8 @@ export interface AgentRuntimeRequest {
   feature: AgentRuntimeFeature;
   userRequest: string;
   context?: AgentRuntimeContextInput;
+  /** Trusted Application boundary only, never general/model Context or public request body. */
+  initialEvidence?: Evidence[];
 }
 
 export type AgentRuntimeStatus =

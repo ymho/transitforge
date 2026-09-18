@@ -161,7 +161,11 @@ Viewer Actionのカテゴリ別に6指標を出す。失敗したcase IDは`--ca
 さらに本番Runtimeを通すscripted Ask + Progress（A〜G）と、複数応答の
 [Trip Progress評価](docs/architecture/trip-progress-evaluation.md)（A〜AI）を追加実行する。
 TTFC/TTFI・候補選択→draft・質問のみの連続数は構造化された表示成果物から測る。
-SmokeはTrip Progress 19件、FullはA〜AIの35件。K/LはActivity、M/Nは[TripParty](docs/architecture/trip-party.md)、O/Pは[Transport](docs/architecture/trip-transport.md)、Q/Rは[宿泊Snapshot](docs/architecture/trip-accommodation.md)の回帰評価。保存済み観測42件の6指標は維持する。SはEUR宿泊価格、T/Uは多都市、V〜Zは候補Assessment、AAはUI focus、ABは予約変更、AC〜AEは[Trip成立性](docs/architecture/trip-feasibility.md)、AF〜AHは[準備リスト](docs/architecture/trip-readiness.md)、AIは[公的ハザードとTrip影響の分離](docs/architecture/hazard-alert.md)を検証する。
+SmokeはTrip Progress 23件、FullはA〜AMの39件。K/LはActivity、M/Nは[TripParty](docs/architecture/trip-party.md)、O/Pは[Transport](docs/architecture/trip-transport.md)、Q/Rは[宿泊Snapshot](docs/architecture/trip-accommodation.md)の回帰評価。保存済み観測42件の6指標は維持する。SはEUR宿泊価格、T/Uは多都市、V〜Zは候補Assessment、AAはUI focus、ABは予約変更、AC〜AEは[Trip成立性](docs/architecture/trip-feasibility.md)、AF〜AHは[準備リスト](docs/architecture/trip-readiness.md)、AIは[公的ハザードとTrip影響の分離](docs/architecture/hazard-alert.md)を検証する。
+#396の[旅行中Context](docs/architecture/in-trip-context.md)は、現在/次予定、保存済みImpact、通知currency、ReservationFactを
+bounded read modelに分け、AJ〜AM（次予定・鉄道影響・雨/警報・位置未許可）を同じ評価へ追加した。
+既存A〜AIのthresholdは変更しない。
+公開の最新事実読取は既存end-user認証gate（501）を維持する。
 実モデルで複数応答を測る場合は、既存AWS認証を更新後に
 `npm run eval:agent:decision:live -- --suite trip-progress --profile full`を実行する。
 `eval:agent:decision:live`は本番と同じSystem Prompt Tool capability contract

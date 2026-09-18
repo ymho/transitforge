@@ -18,6 +18,8 @@ import { runReservationProgressScenario } from "./reservation-progress-scenarios
 import { feasibilityCaseIds, runFeasibilityProgressScenario } from "./feasibility-progress-scenarios.fixture";
 import { readinessCaseIds, runReadinessProgressScenario } from "./readiness-progress-scenarios.fixture";
 import { runHazardProgressScenario } from "./hazard-progress-scenario.fixture";
+import { inTripCaseIds, runInTripProgressScenario } from "./in-trip-progress-scenarios.fixture";
+import { inTripToolCases, runInTripToolScenario } from "./in-trip-tool-scenarios.fixture";
 
 const usualFamily: UserProfile = {
   version: 2, home: { carAvailable: false }, companions: { usual: ["family"], children: [{ ageGroup: "preschool" }, { ageGroup: "elementary" }] },
@@ -44,6 +46,8 @@ const fixtureBases: Record<string, ProgressCaseId> = {
  * H/I/J start with the existing verified-candidate seam, not an invented V2 item-creation Tool.
  */
 export async function runTravelProgressScenario(definition: TravelProgressScenario, live?: BedrockAgentConverse) {
+  if (inTripCaseIds.includes(definition.id)) return runInTripProgressScenario(definition, live);
+  if (definition.id in inTripToolCases) return runInTripToolScenario(definition, live);
   if (definition.id === "AI-hazard-not-impact") return runHazardProgressScenario(definition, live);
   if (feasibilityCaseIds.includes(definition.id)) return runFeasibilityProgressScenario(definition, live);
   if (readinessCaseIds.includes(definition.id)) return runReadinessProgressScenario(definition, live);

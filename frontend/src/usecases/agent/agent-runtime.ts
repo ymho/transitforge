@@ -27,6 +27,9 @@ import {
 } from "./runtime-policies";
 import type { AgentRuntimeRequest, AgentRuntimeResult } from "./runtime-contract";
 import type { AgentDecisionSummary } from "./agent-decision-summary";
+import { validUsedEvidenceIds } from "./agent-decision-summary";
+import { evidenceAwareTool } from "./evidence-tool-decision-support";
+import { renderInTripAnswer, inTripToolPresentationReferences } from "./in-trip-answer-plan";
 import type { AgentDecisionTrace } from "./agent-trace";
 import { AgentToolRegistry } from "./tool-registry";
 import type { AgentViewerActionHandler } from "./viewer-action-handler";
@@ -84,6 +87,16 @@ export class MultiStepAgentRuntime {
     const trace = new AgentTraceRecorder(request.executionId, { now: this.now });
     const evidence: Evidence[] = [];
     trace.taskStarted(request.userRequest);
+    try {
+      const initial = request.initialEvidence ?? [];
+      if (!Array.isArray(initial) || initial.length > this.limits.maxEvidence ||
+          !validateEvidenceAndClaims(initial, []).valid || initial.some((e) => !e.id.trim() ||
+            e.references.some((r) => !r.sourceRef?.trim() || !r.summary?.trim()))) throw new Error("Invalid initial Evidence");
+      evidence.push(...structuredClone(initial));
+      if (evidence.length) trace.evidenceCollected(evidence);
+    } catch {
+      return this.failureResult(trace, evidence, [], startedAt, "invalid_initial_evidence");
+    }
 
     const availableTools = this.dependencies.tools.descriptors();
     const decisionContext = buildAgentDecisionContext(request, availableTools);
@@ -144,7 +157,7 @@ export class MultiStepAgentRuntime {
       // the guard below deterministically rejects any further Tool execution.
       const modelTools = this.dependencies.tools.descriptors().filter(
         ({ name }) => !unavailableToolNames.has(name),
-      );
+      ).map((tool) => evidenceAwareTool(tool, evidence));
       const modelMessages: AgentModelMessage[] = finalResponseRequired
         ? [...messages, {
           role: "user",
@@ -152,7 +165,7 @@ export class MultiStepAgentRuntime {
             type: "text",
             text: [
               "これがこの実行での最終回答フェーズです。Toolは追加実行できません。",
-              "確認済みのTool結果だけを根拠に、現時点で分かることを利用者向けに簡潔にまとめてください。",
+              "確認済みEvidence（Application Evidence + 今回のTool Evidence）を根拠に、現時点で分かることを利用者向けに簡潔にまとめてください。",
               "根拠が不足する場合は推測せず、不足している情報と利用者が次にできることを説明してください。",
               "既に会話Contextにある条件を聞き直さず、同じ質問や回答を繰り返さないでください。",
             ].join(" "),
@@ -184,9 +197,13 @@ export class MultiStepAgentRuntime {
         trace.modelFailed(modelCallId, "provider_error");
         return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "model_call_failed");
       }
-      const modelResponse = modelOutcome.value;
+      let modelResponse = modelOutcome.value;
       modelCalls += 1;
       trace.modelCompleted(modelResponse.metadata, modelCallId);
+      const used = modelResponse.decisionSummary?.usedEvidenceIds ?? modelResponse.declaredEvidenceIds;
+      if (modelResponse.invalidUsedEvidenceIds || used !== undefined && (!validUsedEvidenceIds(used) || used.some((id) => !evidence.some((e) => e.id === id)))) {
+        return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_used_evidence_ids");
+      }
       messages.push(modelResponse.message);
 
       if (modelResponse.stopReason === "max_tokens") {
@@ -216,6 +233,20 @@ export class MultiStepAgentRuntime {
         return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "missing_tool_call");
       }
       if (modelResponse.stopReason !== "tool_calls") {
+        let inTripRendered: ReturnType<typeof renderInTripAnswer> | undefined;
+        // The in-trip factual channel accepts only structured references. Free prose cannot bypass
+        // this boundary through a missing/invalid Decision Summary or a forged ask_user action.
+        if (decisionContext.inTrip?.trip.lifecycleState === "in_trip") {
+          const summary = modelResponse.decisionSummary;
+          try {
+            const plan = summary?.selectedAction === "answer" ? summary.inTripAnswerPlan : modelResponse.declaredInTripAnswerPlan;
+            if (!plan) throw new Error("missing_plan");
+            inTripRendered = renderInTripAnswer(plan, used ?? [], evidence);
+            modelResponse = { ...modelResponse, message: { role: "assistant", content: [{ type: "text", text: inTripRendered.text }] } };
+          } catch {
+            return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_in_trip_answer_plan");
+          }
+        }
         if (hasOnlyInternalReasoning(modelResponse)) {
           messages.push({
             role: "user",
@@ -272,18 +303,19 @@ export class MultiStepAgentRuntime {
         }
         let generated;
         try {
-          generated = this.responseGenerator.fromModel(modelResponse, evidence);
+          generated = inTripRendered ?? this.responseGenerator.fromModel(modelResponse, evidence);
         } catch {
           return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_response_format");
         }
-        trace.decisionRecorded(decisionForAnswer(
+        trace.decisionRecorded({ ...decisionForAnswer(
           modelResponse,
           decisionContext.userRequest,
           decisionContext.knownHardConstraints,
           decisionContext.knownSoftPreferences,
           evidence.length > 0,
           iterations,
-        ));
+        ), ...(inTripRendered ? { usedEvidenceIds: used ?? [], inTripAnswerPlan:
+          modelResponse.decisionSummary?.inTripAnswerPlan ?? modelResponse.declaredInTripAnswerPlan } : {}) });
         const grounding = validateEvidenceAndClaims(evidence, generated.claims);
         if (
           !grounding.valid ||
@@ -337,6 +369,7 @@ export class MultiStepAgentRuntime {
       }
 
       const toolResults: AgentModelContent[] = [];
+      const toolPresentationEvidence: Evidence[] = [];
       let terminalResponse: string | undefined;
       const newlyUnavailableToolNames = new Set<string>();
       let duplicateToolCallDetected = false;
@@ -416,6 +449,7 @@ export class MultiStepAgentRuntime {
             .filter(({ id }) => !existingEvidenceIds.has(id))
             .slice(0, availableSlots);
           evidence.push(...collected);
+          toolPresentationEvidence.push(...collected);
           if (collected.length > 0) trace.evidenceCollected(collected);
         }
         if (execution.result.ok && this.dependencies.viewerActionHandler) {
@@ -463,6 +497,10 @@ export class MultiStepAgentRuntime {
         role: "user",
         content: [
           ...toolResults,
+          ...(decisionContext.inTrip?.trip.lifecycleState === "in_trip" && toolPresentationEvidence.length ? [{
+            type: "text" as const,
+            text: `今回Toolから収集したEvidenceと対応するAnswerPlan presentation（取得不能も確認された取得結果であり、外部事実の確認とは別）: ${inTripToolPresentationReferences(toolPresentationEvidence)}`,
+          }] : []),
           ...(newlyUnavailableToolNames.size === 0 ? [] : [{
             type: "text" as const,
             text: "同じ再試行不可エラーを繰り返したToolはこの実行では利用できません。別のToolまたは利用者向け回答を選択してください",
@@ -662,6 +700,8 @@ function traceDecision(summary: AgentDecisionSummary): AgentDecisionTrace {
     unresolvedFacts: summary.unresolvedFacts,
     reasonCodes: summary.reasonCodes,
     ...(summary.replanReason ? { replanReason: summary.replanReason } : {}),
+    ...(summary.usedEvidenceIds ? { usedEvidenceIds: [...summary.usedEvidenceIds] } : {}),
+    ...(summary.inTripAnswerPlan ? { inTripAnswerPlan: summary.inTripAnswerPlan } : {}),
   };
 }
 

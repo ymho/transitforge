@@ -1,4 +1,5 @@
 import type { AgentToolDescriptor } from "./tool-contract";
+import { validateInTripContext, type InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 import type { AgentRuntimeFeature, AgentRuntimeRequest } from "./runtime-contract";
 import { parseAgentDecisionSummary, type AgentDecisionSummary } from "./agent-decision-summary";
 import { effectiveTripConstraints, type TripRequest } from "@raiquora/trip/trip-request";
@@ -8,6 +9,7 @@ import type { AgentTripScheduleItem } from "./agent-context-snapshot";
 import { reservationContext, type AgentReservationContext } from "./reservation-context";
 import { tripFeasibilityContext, type AgentTripFeasibilityContext } from "./trip-feasibility-context";
 import { boundTripReadinessContext, type AgentTripReadinessContext } from "./trip-readiness-context";
+import { inTripPresentations, supportsInTripPresentation, type InTripPresentation } from "./in-trip-answer-plan";
 
 export type AgentContextValue = string | number | boolean | null;
 
@@ -50,6 +52,11 @@ export interface AgentVerifiedFactSummary {
   category: string;
   subject: string;
   summary: string;
+  knowledgeKind?: import("./evidence-model").EvidenceKnowledgeKind;
+  sourceType?: import("./evidence-model").EvidenceSourceType;
+  freshness?: import("./evidence-model").EvidenceFreshness;
+  coverage?: import("./evidence-model").EvidenceCoverage[];
+  presentations?: InTripPresentation[];
 }
 
 export interface AgentToolOutcomeSummary {
@@ -59,6 +66,7 @@ export interface AgentToolOutcomeSummary {
 }
 
 export interface AgentRuntimeContextInput {
+  inTrip?: InTripContextSnapshot;
   tripReadiness?: AgentTripReadinessContext;
   tripFeasibility?: AgentTripFeasibilityContext;
   reservations?: AgentReservationContext;
@@ -86,6 +94,7 @@ export interface AgentAvailableCapability {
 }
 
 export interface AgentDecisionContext {
+  inTrip?: InTripContextSnapshot;
   tripReadiness?: AgentTripReadinessContext;
   tripFeasibility?: AgentTripFeasibilityContext;
   reservations?: AgentReservationContext;
@@ -118,6 +127,7 @@ export function buildAgentDecisionContext(
   tools: AgentToolDescriptor[],
 ): AgentDecisionContext {
   const input = request.context;
+  if (input?.inTrip) validateInTripContext(input.inTrip);
   const tripRequest = input?.currentTrip?.request;
   const hasTripRequest = tripRequest !== undefined;
   const effective = tripRequest ? effectiveTripConstraints(tripRequest) : [];
@@ -133,6 +143,7 @@ export function buildAgentDecisionContext(
     ? reservationContext(input.reservations.status === "available" ? input.reservations.facts : undefined)
     : undefined;
   return {
+    ...(input?.inTrip ? { inTrip: structuredClone(input.inTrip) } : {}),
     ...(input?.tripReadiness ? { tripReadiness: boundTripReadinessContext(input.tripReadiness) } : {}),
     ...(input?.tripFeasibility ? { tripFeasibility: { ...tripFeasibilityContext(input.tripFeasibility),
       truncated: input.tripFeasibility.truncated, totalIssueCount: input.tripFeasibility.totalIssueCount } } : {}),
@@ -176,11 +187,22 @@ export function buildAgentDecisionContext(
     ...(input?.currentJourney
       ? { currentJourney: boundedUnknownRecord(input.currentJourney, 6) }
       : {}),
-    verifiedFacts: (input?.verifiedFacts ?? []).slice(0, 20).map((fact) => ({
+    verifiedFacts: [
+      ...(request.initialEvidence ?? []).map((e): AgentVerifiedFactSummary => ({ evidenceId: e.id, category: e.category, subject: e.subject,
+        summary: e.references.map((r) => r.summary).join(" "), knowledgeKind: e.knowledgeKind,
+        sourceType: e.references[0]?.sourceType, freshness: e.references[0]?.freshness, coverage: e.coverage,
+        presentations: inTripPresentations.filter((p) => supportsInTripPresentation(e, p)) })),
+      ...(input?.verifiedFacts ?? []),
+    ].filter((fact, index, values) => values.findIndex((v) => v.evidenceId === fact.evidenceId) === index).slice(0, 20).map((fact) => ({
       evidenceId: bounded(fact.evidenceId, 160),
       category: bounded(fact.category, 80),
       subject: bounded(fact.subject, 160),
       summary: bounded(fact.summary, 300),
+      ...(fact.knowledgeKind ? { knowledgeKind: fact.knowledgeKind } : {}),
+      ...(fact.sourceType ? { sourceType: fact.sourceType } : {}),
+      ...(fact.freshness ? { freshness: fact.freshness } : {}),
+      ...(fact.coverage ? { coverage: fact.coverage } : {}),
+      ...(fact.presentations ? { presentations: fact.presentations } : {}),
     })),
     knownHardConstraints: (input?.knownHardConstraints ?? []).filter((c) => !hasTripRequest || ["user", "ui"].includes(c.source)).slice(0, 20)
       .map(constraint),
@@ -201,7 +223,21 @@ export function buildAgentDecisionContext(
 }
 
 export function agentDecisionContextText(context: AgentDecisionContext): string {
+  const applicationSources = ["trip-state", "trip-impact", "reservation-state", "session-state"];
+  const briefFacts = context.verifiedFacts.filter((f) => applicationSources.includes(f.sourceType ?? "")).slice(0, 10);
+  // JSON quoting protects the data/markup boundary. No general Context becomes Evidence.
+  const quote = (value: unknown) => JSON.stringify(value).replaceAll("<", "\\u003c");
+  const brief = briefFacts.length ? ["<verified_evidence>", ...briefFacts.map((f) => [
+    `- id: ${quote(f.evidenceId)}`, `  kind: ${f.knowledgeKind ?? "unverified_information"}`,
+    `  freshness: ${f.freshness ?? "unknown"}`, `  coverage: ${quote(f.coverage ?? [])}`, `  fact: ${quote(f.summary)}`,
+    `  presentations: ${quote(f.presentations ?? [])}`,
+  ].join("\n")), "</verified_evidence>"].join("\n") : "";
+  const briefIds = new Set(briefFacts.map((f) => f.evidenceId));
+  const visibleFacts = context.verifiedFacts.map((f) => briefIds.has(f.evidenceId)
+    ? { evidenceId: f.evidenceId, sourceType: f.sourceType } : f);
   const requestFields = {
+    inTrip: context.inTrip,
+    verifiedFacts: visibleFacts,
     previousAssistantTurn: context.previousAssistantTurn,
     persistedTripRequest: context.persistedTripRequest,
     tripHardConstraints: context.tripHardConstraints,
@@ -209,8 +245,11 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     unconfirmedAssumptions: context.unconfirmedAssumptions,
     currentTurnDecision: context.currentTurnDecision,
   };
+  const { verifiedFacts: _verifiedFacts, ...contextFields } = context;
   const serialized = JSON.stringify({
-    ...context,
+    // Put available grounds before planning context; authority is explicit, not inferred from prose.
+    verifiedFacts: visibleFacts,
+    ...contextFields,
     availableTools: context.availableTools.map(({ name, requiredInputs }) => ({
       name,
       requiredInputs,
@@ -283,11 +322,23 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     contextTruncated: true,
   });
   const boundedContext = [serialized, compact, core, minimal]
-    .find((value) => value.length <= maximumContextTextLength);
+    .find((value) => value.length + brief.length <= maximumContextTextLength);
   if (!boundedContext) throw new Error("Agent context exceeds the bounded message budget");
+  if (context.inTrip?.trip.lifecycleState === "in_trip") return [
+    brief,
+    `利用者の今回の質問: ${JSON.stringify(context.userRequest)}`,
+    "旅行中のanswerではDecision SummaryへinTripAnswerPlan:{evidence:[{evidenceId:実在id,presentation:表示種別}]}を必ず含めてください。最大6件。usedEvidenceIdsの部分集合です。事実はApplication rendererが表示するため、自由文で同じ事実を言い換えず、回答に必要なEvidenceの選択と順序だけを決めてください。",
+    "AnswerPlanの対象はverified_evidenceのApplication Evidence、またはToolが返すEvidenceです。presentationはplanned-itinerary（trip.itinerary/next-item）、rail-impact（rail.impact/connection）、environment-impact（environment Evidence内の保存済み天気・警報評価をまとめて表示）、reservation（reservation.state）、location-permission（location.permission）、uncertainty（未確認範囲）、external-result（external-sourceかつresultKind=weather/hazardの取得結果）です。追加Toolの天気・警報Evidenceはexternal-resultで参照し、既存の構造化カードで表示します。保存済みImpactへは昇格しません。",
+    "Toolは新しい候補・異なる区間/時刻・最新観測など回答に必要な追加情報を調べるときに選んでください。既存Evidenceの説明だけで答えられるときは再取得せず回答してください。ユーザーの入力に答えるために不要な質問はしないでください。",
+    "予定上のcurrentは実際の現在地・乗車確認ではありません。possible-current/date-current/unknownの精度を保持し、Impact severity・乗換成立性・Notification currency・予約状態を再計算しないでください。unknown/unavailable/omitted/truncatedは問題なしではありません。Trip・予約・通知を自動変更しないでください。",
+    `<agent_context>${boundedContext}</agent_context>`,
+  ].join("\n");
   return [
-    "次の構造化Contextを使って利用者の目的と制約を解釈し、必要なEvidenceを得る能力を選択してください。",
+    brief,
+    "次の構造化Contextと利用可能なverifiedFactsから利用者の目的を理解し、回答・追加調査・確認質問のどれが必要か判断してください。Evidenceは既に存在する場合があります。",
     "既知条件は聞き直さず、Tool結果は事実として扱い、推測で補完しないでください。",
+    "inTripに対応するverifiedFactsはowner-scoped Applicationが検証したApplication Evidenceで、Tool Evidenceと同様に回答根拠として利用できます。一般Context・Profile・会話要約・モデル解釈・未検証候補はEvidenceではありません。unknown/unavailableはユーザーへの質問必須項目ではなく未確認として説明できる状態です。本人にしか決められない条件でなければask_follow_upへ逃げず、質問に答えるために不要な再取得はしません。",
+    "inTripはApplicationが現在のTrip revisionと実時計から作った読み取り専用Contextです。予定上のcurrentは実際の現在地・乗車確認ではありません。possible-current/date-current/unknownの精度を保持し、Impact severity・乗換成立性・Notification currency・予約状態を再計算しないでください。unknown/unavailable/omitted/truncatedは問題なしではありません。locationがavailableでなければ現在地を断定せず、availableでも乗車・到着を推測しません。提示済み事実だけで答えられるなら追加Toolは不要です。短い質問にも次予定と既存Impactを使って説明し、確認済みの列車番号や条件を聞き直さないでください。自動Trip更新・予約変更・通知送信は行いません。",
     "persistedTripRequest.partyは今回の同行者です。party.assumptionIdに対応するunconfirmedAssumptionsは仮置きで、travelProfile.companionsは普段の傾向です。混ぜず、今回の明示partyを優先し、既知人数を聞き直さないでください。子どものage/ageGroup不明でも候補や仮旅程を提案できます。具体的なProvider操作がexact ageを要求した時だけ年齢を確認し、可能なProgressも併記してください。Profileの区分から人数や年齢を捏造しないでください。",
     "previousAssistantTurnは一時的な回答観測でTripのstateではありません。質問が必要でも可能なら同じturnで具体候補・比較・Proposalを示してください。連続ask_onlyは原則不可ですが、安全・未確認hard条件・本当に不足するTool必須入力は構造化例外として扱えます。内部Tool実行だけを進展と呼ばず、候補選択後は検証済みsnapshotからProposalを作り、時刻不明はunscheduled/day/windowのまま扱えます。",
     "過去Tripの振り返りと新しい旅行相談を区別し、保存Requestの年や条件を新しい旅行の希望へ無言で流用しないでください。未確認hard条件の成立を仮定せず、可能な進展と要確認事項を分けてください。",

@@ -1,4 +1,5 @@
 import type { AgentContextValue } from "./agent-decision-context";
+import { validInTripAnswerPlan, type InTripAnswerPlan } from "./in-trip-answer-plan";
 
 export const decisionSummaryStartTag = "<decision_summary>";
 export const decisionSummaryEndTag = "</decision_summary>";
@@ -35,6 +36,7 @@ export interface AgentDecisionSummaryValue {
 }
 
 export interface AgentDecisionSummary {
+  inTripAnswerPlan?: InTripAnswerPlan;
   interpretedGoal: string;
   hardConstraints: AgentDecisionSummaryValue[];
   softPreferences: AgentDecisionSummaryValue[];
@@ -43,9 +45,15 @@ export interface AgentDecisionSummary {
   unresolvedFacts: string[];
   reasonCodes: AgentDecisionReasonCode[];
   replanReason?: AgentReplanReasonCode;
+  usedEvidenceIds?: string[];
 }
 
 export interface ExtractedAgentDecisionSummary {
+  /** Independently valid answer references survive invalid optional decision metadata. */
+  declaredInTripAnswerPlan?: InTripAnswerPlan;
+  invalidUsedEvidenceIds?: boolean;
+  /** References still require runtime existence checking if other summary fields are invalid. */
+  declaredEvidenceIds?: string[];
   status: "valid" | "missing" | "invalid";
   summary?: AgentDecisionSummary;
   textBlocks: string[];
@@ -64,13 +72,21 @@ export function extractAgentDecisionSummary(
   if (matches.length !== 1) return { status: "invalid", textBlocks: cleaned };
   const encoded = matches[0]?.[1]?.trim() ?? "";
   if (!encoded || encoded.length > maximumSummaryCharacters) {
-    return { status: "invalid", textBlocks: cleaned };
+    return { status: "invalid", textBlocks: cleaned,
+      ...(encoded.includes('"usedEvidenceIds"') ? { invalidUsedEvidenceIds: true } : {}) };
   }
   try {
-    const summary = parseAgentDecisionSummary(JSON.parse(encoded));
+    const value = JSON.parse(encoded);
+    if (isRecord(value) && value.usedEvidenceIds !== undefined && !validUsedEvidenceIds(value.usedEvidenceIds)) {
+      return { status: "invalid", textBlocks: cleaned, invalidUsedEvidenceIds: true };
+    }
+    const summary = parseAgentDecisionSummary(value);
     return summary
       ? { status: "valid", summary, textBlocks: cleaned }
-      : { status: "invalid", textBlocks: cleaned };
+      : { status: "invalid", textBlocks: cleaned,
+        ...(isRecord(value) && value.selectedAction === "answer" && validInTripAnswerPlan(value.inTripAnswerPlan)
+          ? { declaredInTripAnswerPlan: value.inTripAnswerPlan } : {}),
+        ...(isRecord(value) && Array.isArray(value.usedEvidenceIds) ? { declaredEvidenceIds: [...value.usedEvidenceIds as string[]] } : {}) };
   } catch {
     return { status: "invalid", textBlocks: cleaned };
   }
@@ -79,7 +95,7 @@ export function extractAgentDecisionSummary(
 export function parseAgentDecisionSummary(value: unknown): AgentDecisionSummary | undefined {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     "interpretedGoal", "hardConstraints", "softPreferences", "selectedAction",
-    "selectedTool", "unresolvedFacts", "reasonCodes", "replanReason",
+    "selectedTool", "unresolvedFacts", "reasonCodes", "replanReason", "usedEvidenceIds", "inTripAnswerPlan",
   ])) return undefined;
   if (!boundedText(value.interpretedGoal, 240) ||
     !decisionValues(value.hardConstraints, 12) ||
@@ -94,6 +110,8 @@ export function parseAgentDecisionSummary(value: unknown): AgentDecisionSummary 
   }
   if (value.selectedAction === "use_tool" && value.selectedTool === undefined) return undefined;
   if (value.selectedAction === "answer" && value.selectedTool !== undefined) return undefined;
+  if (value.usedEvidenceIds !== undefined && !validUsedEvidenceIds(value.usedEvidenceIds)) return undefined;
+  if (value.inTripAnswerPlan !== undefined && (!validInTripAnswerPlan(value.inTripAnswerPlan) || value.selectedAction !== "answer")) return undefined;
   return {
     interpretedGoal: value.interpretedGoal,
     hardConstraints: value.hardConstraints,
@@ -103,7 +121,14 @@ export function parseAgentDecisionSummary(value: unknown): AgentDecisionSummary 
     unresolvedFacts: value.unresolvedFacts,
     reasonCodes: value.reasonCodes,
     ...(value.replanReason ? { replanReason: value.replanReason } : {}),
+    ...(value.usedEvidenceIds ? { usedEvidenceIds: [...value.usedEvidenceIds as string[]] } : {}),
+    ...(value.inTripAnswerPlan ? { inTripAnswerPlan: value.inTripAnswerPlan } : {}),
   } as AgentDecisionSummary;
+}
+
+export function validUsedEvidenceIds(value: unknown): value is string[] {
+  return Array.isArray(value) && value.length <= 10 && new Set(value).size === value.length &&
+    value.every((id) => typeof id === "string" && id.length > 0 && id.length <= 160 && id.trim() === id);
 }
 
 function decisionValues(value: unknown, maximum: number): value is AgentDecisionSummaryValue[] {

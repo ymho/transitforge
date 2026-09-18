@@ -22,6 +22,10 @@ export type EvidenceSourceType =
   | "operating-day-summary"
   | "journey-comparison"
   | "external-source"
+  | "trip-state"
+  | "trip-impact"
+  | "reservation-state"
+  | "session-state"
   | "model";
 
 export type EvidenceFreshness =
@@ -40,6 +44,11 @@ export interface EvidenceReference {
 
 export type EvidenceFactValue = string | number | boolean | null | string[];
 
+/** Agent capability scope, not a Domain state or permission to suppress Tools. */
+export type EvidenceCoverage = "trip.itinerary" | "trip.next-item" | "rail.schedule" |
+  "rail.impact" | "rail.connection" | "weather.impact" | "hazard.impact" |
+  "reservation.state" | "location.permission";
+
 export interface Evidence {
   id: string;
   category: EvidenceCategory;
@@ -47,6 +56,7 @@ export interface Evidence {
   subject: string;
   facts: Record<string, EvidenceFactValue>;
   references: EvidenceReference[];
+  coverage?: EvidenceCoverage[];
 }
 
 export type ClaimKind = "fact" | "inference" | "unknown";

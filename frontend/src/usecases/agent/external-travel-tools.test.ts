@@ -12,6 +12,13 @@ import {
 } from "./external-travel-tools";
 
 describe("external travel tools", () => {
+  it("records missing acquisition as outcome only, not fabricated Provider facts", () => {
+    const [e] = externalTravelEvidence({ forecast: { status: "available", freshness: "fresh", evidence: [], data: { temperature: 25 } } }, { retrievedAt: "2026-09-12T08:00:00Z" });
+    expect(e?.facts).toEqual({ resultKind: "weather", status: "unconfirmed", freshness: "unknown" });
+    expect(e?.references[0]?.sourceRef).toBe("application://external-result/v1/weather");
+    expect(e?.coverage).toBeUndefined();
+    expect(JSON.stringify(e)).not.toContain("temperature");
+  });
   it("本文未取得の前提不足は本文を取得してから同じ候補で復旧できる", async () => {
     const state: ExternalTravelToolState = {};
     const input = { candidates: [{ name: "賀茂鶴酒造", sourceUrl: "https://tourism.example/" }] };

@@ -1,4 +1,5 @@
 import type { Evidence } from "./evidence-model";
+import { validInTripAnswerPlan, type InTripAnswerPlan } from "./in-trip-answer-plan";
 import type { AgentTurnObservation } from "./agent-turn-outcome";
 import type { AgentModelMetadata } from "./model-provider";
 import type { AgentToolResult } from "./tool-contract";
@@ -16,6 +17,8 @@ export interface TracePayloadSummary {
 }
 
 export interface AgentDecisionTrace {
+  inTripAnswerPlan?: InTripAnswerPlan;
+  usedEvidenceIds?: string[];
   interpretedGoal: string;
   hardConstraints: AgentKnownConstraint[];
   softPreferences: AgentKnownPreference[];
@@ -48,6 +51,8 @@ export type AgentTraceEvent =
     })
   | (AgentTraceEventBase & {
       type: "decision_recorded";
+      inTripAnswerPlan?: InTripAnswerPlan;
+      usedEvidenceIds?: string[];
       interpretedGoal: string;
       hardConstraints: TracePayloadSummary;
       softPreferences: TracePayloadSummary;
@@ -224,6 +229,8 @@ export class AgentTraceRecorder {
       selectedAction: decision.selectedAction,
       ...(decision.selectedTool ? { selectedTool: this.text(decision.selectedTool) } : {}),
       unresolvedFacts: this.texts(decision.unresolvedFacts),
+      ...(decision.usedEvidenceIds ? { usedEvidenceIds: this.texts(decision.usedEvidenceIds.slice(0, 10)) } : {}),
+      ...(validInTripAnswerPlan(decision.inTripAnswerPlan) ? { inTripAnswerPlan: structuredClone(decision.inTripAnswerPlan) } : {}),
       reasonCodes: this.texts(decision.reasonCodes),
       ...(decision.replanReason ? { replanReason: this.text(decision.replanReason) } : {}),
     });
