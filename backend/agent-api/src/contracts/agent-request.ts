@@ -46,6 +46,7 @@ export const allowedToolNames = new Set([
   "revise_previous_journey",
   "ask_follow_up",
   "present_travel_progress",
+  "assess_travel_candidate",
   "propose_candidate_selection",
   "propose_itinerary_removal_or_move",
   "propose_manual_activity",

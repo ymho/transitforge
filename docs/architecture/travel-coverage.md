@@ -28,6 +28,7 @@ Domainのsnapshot validator、provenance、scheduled/realtime分離はそのま�
 宿・Activityのselectedは施設を選んだという意味で、交通確認や予約を含意しない。
 Tripのadoptionも利用意思であり、coverageやFeasibilityの認定を兼ねない。
 手入力の非鉄道移動Proposalは候補比較の代替ではない。Tool descriptorで、鉄道候補の比較だけの依頼や、未確認の鉄道を希望されていない車へ置き換える用途には不適と明示する。能力は非表示にせず、比較・変更の選択自体はモデルに残す。
+既存の`assess_travel_candidate`はFrontend登録だけでなく、Agent APIのTool定義・native toolUse応答の両境界で許可する。許可リストの漏れでモデルが選んだ比較を失敗させない。任意名のToolや自動適用能力は引き続き許可しない。
 
 ## UI / Agent
 
