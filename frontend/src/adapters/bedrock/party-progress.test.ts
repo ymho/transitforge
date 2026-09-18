@@ -4,7 +4,7 @@ import { askProgressFixture, modelTool, modelTools, modelAnswer } from "./ask-pr
 import { applyTripProposal } from "@raiquora/trip/trip";
 import { partyRequest } from "../../../../modules/trip/domain/trip-party.fixture";
 import { tripPartyProviderInput } from "../http/trip-party-input";
-import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
+import type { AgentTurnObservation } from "@raiquora/agent/agent-turn-outcome";
 
 const manual = { itemId: "break", operation: "add", title: "自由時間", category: "free-time", schedule: { type: "unscheduled" } };
 describe("party with the existing production Ask + Progress boundary", () => {

@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
-import { DefaultAgentResponseGenerator } from "./agent-response-generator";
-import { groundedAnswerInstruction, parseGroundedAnswer, supportedAnswerClaims, sourceExplanation } from "./grounded-answer";
-import type { Evidence } from "./evidence-model";
-import type { AgentModelResponse } from "./model-provider";
+import { DefaultAgentResponseGenerator } from "@raiquora/agent/agent-response-generator";
+import { groundedAnswerInstruction, parseGroundedAnswer, supportedAnswerClaims, sourceExplanation } from "@raiquora/agent/grounded-answer";
+import type { Evidence } from "@raiquora/agent/evidence-model";
+import type { AgentModelResponse } from "@raiquora/agent/model-provider";
 
 const e: Evidence = { id: "route-1", category: "journey", knowledgeKind: "derived_value", subject: "京都から大阪", facts: {
   originStation: "京都", destinationStation: "大阪", serviceDate: "2026-09-20", departureTimeMinutes: 600, arrivalTimeMinutes: 630, durationMinutes: 30, transferCount: 0, trainNumbers: ["123A"], includesDelay: false,

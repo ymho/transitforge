@@ -92,3 +92,5 @@
 0049の契約温存をretired/Supersededとした。0027のViewer Action採点も廃止した。
 各ADR冒頭に廃止範囲を記し、過去本文と有効なGrounding・Evidence・bounded loopの判断は保持する。
 Server Runtime・Stateの新構成は#478以降で決定する。
+
+- [ADR 0068: Agent Runtimeの実行責務をServer Applicationへ移す](0068-place-agent-runtime-in-server-application.md) — ADR 0038のBrowser組成を部分置換。bounded loop/Groundingは維持し、#480でcutoverする。

@@ -1,0 +1,12 @@
+{
+  "name": "@raiquora/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./runtime/*.ts"
+  },
+  "dependencies": {
+    "@raiquora/trip": "*"
+  }
+}

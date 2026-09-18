@@ -39,6 +39,17 @@ Node.js側ではAWS SDK型をAdapterより内側へ漏らさず handlerもApplic
 交通収集の正本はprivateなdata-builder側にあり 公開側へ複製しない
 Infrastructureの確認と障害調査は`infra/README.md`を正本とする
 
+## Agent Runtimeの配置
+
+[ADR 0068](../decisions/0068-place-agent-runtime-in-server-application.md)によりproduction Agentの
+最終所有者はBackendとする。`modules/agent/runtime`はProvider非依存のApplication coreを所有し、
+BrowserとServerが`@raiquora/agent/*`から同じloop/Evidence/Trace/response policyを参照する。
+BackendはFrontendをimportせず、coreはBrowser API、Vendor、HTTP eventへ依存しない。
+`backend/agent-api/src/usecases/agent`がtransport非依存turn入口とTool登録、
+`server-agent-composition.ts`が既存ConversationModelとweatherを接続する。
+固定IP ProviderはTool operation Portの先へ分離し、Runtime全体をVPCへ固定しない。
+Browserのproduction組成とHTTP bridgeは#480まで残す。UI取得・表示・端末状態はBrowserに置く。
+
 ## 依存方向
 
 | 呼び出し元 | 依存してよい対象 | 依存してはいけない対象 |
@@ -55,7 +66,7 @@ Agentは推論とToolのオーケストレーションを担当し 鉄道の計�
 正本と重複のルールは[Domainの所有権](domain-ownership.md)を参照する
 
 外部旅行情報も同じ依存方向を使う。`usecases/agent/external-travel-tools.ts`がProvider非依存の
-Tool契約 入力検証 実行結果の収集 Evidence変換を所有し `adapters/bedrock`はモデル形式との変換だけを行う。
+Browser Toolの入力検証と実行結果の収集を所有し、共有Evidence変換は`@raiquora/agent/external-travel-evidence`へ委譲する。`adapters/bedrock`はモデル形式との変換だけを行う。
 天気などの外部旅行情報カードは`presentation/concierge/external-travel-cards.ts`へ閉じる。
 観光候補は`presentation/place-explorer`がカードを所有し `adapters/mapbox/place-media-layer.ts`が
 同じPlace IDを地図へ投影する。チャット本体は外部Providerの応答構造やMapbox操作を解釈しない。

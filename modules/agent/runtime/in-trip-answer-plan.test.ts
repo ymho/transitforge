@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.fixture";
-import { inTripApplicationEvidence } from "./in-trip-application-evidence";
-import { renderInTripAnswer, validInTripAnswerPlan, inTripPresentations, supportsInTripPresentation, type InTripAnswerPlan } from "./in-trip-answer-plan";
-import { parseAgentDecisionSummary } from "./agent-decision-summary";
-import { externalTravelEvidence } from "./external-travel-tools";
-import { hazardInformation } from "../../../../modules/trip/domain/hazard-alert.fixture";
-import { areaInput, areaHazardEvent, areaNow } from "../../../../modules/trip/domain/area-trip-impact.fixture";
+import { inTripFixture } from "../../trip/domain/in-trip-context.fixture";
+import { inTripApplicationEvidence } from "@raiquora/agent/in-trip-application-evidence";
+import { renderInTripAnswer, validInTripAnswerPlan, inTripPresentations, supportsInTripPresentation, type InTripAnswerPlan } from "@raiquora/agent/in-trip-answer-plan";
+import { parseAgentDecisionSummary } from "@raiquora/agent/agent-decision-summary";
+import { externalTravelEvidence } from "./external-travel-evidence";
+import { hazardInformation } from "../../trip/domain/hazard-alert.fixture";
+import { areaInput, areaHazardEvent, areaNow } from "../../trip/domain/area-trip-impact.fixture";
 import { buildInTripContext } from "@raiquora/trip/in-trip-context";
 import { evaluateAreaTripImpact } from "@raiquora/trip/area-trip-impact";
 

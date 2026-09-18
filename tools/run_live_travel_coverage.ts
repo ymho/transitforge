@@ -8,7 +8,7 @@ import { askProgressFixture } from "../frontend/src/adapters/bedrock/ask-progres
 import { railSelectionFixture } from "../modules/trip/domain/selected-rail-journey.fixture";
 import { assessRailCoverage } from "../modules/trip/domain/travel-coverage";
 import { createTravelCandidate } from "../modules/trip/domain/travel-candidate";
-import type { AgentTrace } from "../frontend/src/usecases/agent/agent-trace";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
 import { coverageLiveInputs } from "../frontend/src/adapters/bedrock/coverage-live-input.fixture";
 
 /** Synthetic provider IO, real Domain coverage + Viewer Runtime + configured Bedrock model.

@@ -5,7 +5,7 @@ import { proposeAssumptionDecision } from "../../usecases/trip-plan/update-trip-
 import { planAssumptionViews } from "../../presentation/trip-plan/plan-assumption-view";
 import { progressCaseIds, runAskProgressCase, askProgressFixture, modelTools, modelTool, modelAnswer, progressQuestion, progressPage, progressQuote } from "./ask-progress-scenarios.fixture";
 import { runViewerAgentRuntime } from "./viewer-agent-runtime";
-import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
+import type { AgentTurnObservation } from "@raiquora/agent/agent-turn-outcome";
 
 describe("Ask + Progress production pipeline", () => {
   it.each(progressCaseIds)("evaluates acceptance %s with actual runtime and Domain boundaries", async (id) => {

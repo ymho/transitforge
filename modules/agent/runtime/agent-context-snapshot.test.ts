@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import type { UserProfile } from "@raiquora/trip/travel-profile";
 import type { TripPlan } from "@raiquora/trip/trip-plan";
-import { createAgentContextSnapshot } from "./agent-context-snapshot";
+import { createAgentContextSnapshot } from "@raiquora/agent/agent-context-snapshot";
 import { createTrip } from "@raiquora/trip/trip";
 import { selectRailJourney, projectRailSchedule } from "@raiquora/trip/selected-rail-journey";
 import type { ItinerarySchedule } from "@raiquora/trip/itinerary-schedule";
-import { buildAgentDecisionContext, agentDecisionContextText } from "./agent-decision-context";
-import { railSelectionFixture } from "../../../../modules/trip/domain/selected-rail-journey.fixture";
-import { partyRequest } from "../../../../modules/trip/domain/trip-party.fixture";
+import { buildAgentDecisionContext, agentDecisionContextText } from "@raiquora/agent/agent-decision-context";
+import { railSelectionFixture } from "../../trip/domain/selected-rail-journey.fixture";
+import { partyRequest } from "../../trip/domain/trip-party.fixture";
 
 const profile: UserProfile = {
   version: 2,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { availableExternalInformation } from "@raiquora/trip/external-travel-information";
-import { AgentToolPreconditionError } from "./tool-contract";
+import { AgentToolPreconditionError } from "@raiquora/agent/tool-contract";
 import {
   executeExternalTravelTool,
   compactExternalTravelToolObservation,

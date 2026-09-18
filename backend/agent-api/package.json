@@ -10,7 +10,8 @@
     "@aws-sdk/client-secrets-manager": "^3.1118.0",
     "@raiquora/journey": "*",
     "@raiquora/operation": "*",
-    "@raiquora/trip": "*"
+    "@raiquora/trip": "*",
+    "@raiquora/agent": "*"
   },
   "scripts": {
     "build": "npm run typecheck && npm run bundle:lambda && npm run bundle:trip-changed && npm run bundle:rail-impact && npm run bundle:trip-recheck && npm run bundle:notification",

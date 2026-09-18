@@ -11,7 +11,7 @@ import {
   type AgentExecutionContext,
   type AgentTool,
   type AgentToolInputResult,
-} from "./tool-contract";
+} from "@raiquora/agent/tool-contract";
 
 export const maximumComparedJourneys = 3;
 export const maximumJourneyComparisonPayloadBytes = 48 * 1_024;

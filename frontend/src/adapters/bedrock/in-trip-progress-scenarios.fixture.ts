@@ -5,11 +5,11 @@ import { areaInput, areaHazardEvent, areaNow } from "../../../../modules/trip/do
 import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent-runtime";
 import { askProgressFixture, modelAnswer } from "./ask-progress-scenarios.fixture";
 import { evaluateTravelProgress, type TravelProgressScenario } from "../../usecases/agent/evaluation/travel-progress-evaluation";
-import type { AgentTrace } from "../../usecases/agent/agent-trace";
-import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
-import { inTripApplicationEvidence } from "../../usecases/agent/in-trip-application-evidence";
-import type { EvidenceCoverage } from "../../usecases/agent/evidence-model";
-import type { InTripPresentation } from "../../usecases/agent/in-trip-answer-plan";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
+import type { AgentTurnObservation } from "@raiquora/agent/agent-turn-outcome";
+import { inTripApplicationEvidence } from "@raiquora/agent/in-trip-application-evidence";
+import type { EvidenceCoverage } from "@raiquora/agent/evidence-model";
+import type { InTripPresentation } from "@raiquora/agent/in-trip-answer-plan";
 
 export const inTripCaseIds = ["AJ-in-trip-next", "AK-in-trip-rail", "AL-in-trip-rain", "AM-in-trip-location-denied"];
 /** Same production runtime and optional live Converse; only storage/provider I/O uses synthetic fixtures. */

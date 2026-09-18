@@ -6,8 +6,8 @@ import { checklistItem } from "../../../../modules/trip/domain/trip-checklist.fi
 import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent-runtime";
 import { askProgressFixture, modelAnswer, modelTool, modelTools } from "./ask-progress-scenarios.fixture";
 import { evaluateTravelProgress, type TravelProgressScenario } from "../../usecases/agent/evaluation/travel-progress-evaluation";
-import type { AgentTrace } from "../../usecases/agent/agent-trace";
-import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
+import type { AgentTurnObservation } from "@raiquora/agent/agent-turn-outcome";
 import { createTripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 
 export const readinessCaseIds = ["AF-preparation-after-ready", "AG-booking-unknown", "AH-repeated-checklist"];

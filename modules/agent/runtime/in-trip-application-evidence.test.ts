@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.fixture";
-import { areaInput, areaHazardEvent, areaNow } from "../../../../modules/trip/domain/area-trip-impact.fixture";
+import { inTripFixture } from "../../trip/domain/in-trip-context.fixture";
+import { areaInput, areaHazardEvent, areaNow } from "../../trip/domain/area-trip-impact.fixture";
 import { evaluateAreaTripImpact } from "@raiquora/trip/area-trip-impact";
 import { buildInTripContext } from "@raiquora/trip/in-trip-context";
-import { inTripApplicationEvidence } from "./in-trip-application-evidence";
-import { validateEvidenceAndClaims } from "./evidence-model";
-import { buildAgentDecisionContext, agentDecisionContextText } from "./agent-decision-context";
+import { inTripApplicationEvidence } from "@raiquora/agent/in-trip-application-evidence";
+import { validateEvidenceAndClaims } from "@raiquora/agent/evidence-model";
+import { buildAgentDecisionContext, agentDecisionContextText } from "@raiquora/agent/agent-decision-context";
 
 describe("InTrip Application Evidence", () => {
   it("projects adopted next itinerary and saved rail typed facts, without recalculation or mutation", () => {

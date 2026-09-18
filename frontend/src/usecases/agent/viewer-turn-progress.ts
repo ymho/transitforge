@@ -1,6 +1,6 @@
 import type { ViewerAgentResponse } from "../../domain/viewer-agent-response";
-import type { Evidence } from "./evidence-model";
-import { observeAgentTurn, type AskOnlyException, type VisibleProgress } from "./agent-turn-outcome";
+import type { Evidence } from "@raiquora/agent/evidence-model";
+import { observeAgentTurn, type AskOnlyException, type VisibleProgress } from "@raiquora/agent/agent-turn-outcome";
 import type { TripJourneyPlan } from "@raiquora/trip/travel-plan";
 import type { TripPlanItem } from "@raiquora/trip/trip-plan";
 

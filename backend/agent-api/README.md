@@ -42,3 +42,23 @@ npm run build --workspace @raiquora/agent-api
 npm run test --workspace @raiquora/agent-api
 npm run lambda:check --workspace @raiquora/agent-api
 ```
+
+## Server Agent Application（Wave 2B）
+
+`createServerAgent({ model, weather, additionalTools? })`は`runAgentTurn({ principal,
+userRequest, conversationId?, tripId?, uiContext?: { itemId? } })`を返す。
+HTTP eventを受けず、結果は`Promise<AgentRuntimeResult>`でEvidence/Claim/Traceを含む。
+`model`へ既存`BedrockConversationModel`を渡すとTool往復を同一process内で完結する。
+weatherは既存WeatherForecastProvider、追加Toolはdescriptor/operation/Evidence mapperを登録する。
+固定IP Providerはoperation Portの実装側へ閉じる。
+
+呼出元が認証済み`TripPrincipal`を渡す。fake principalでoffline実行できるが、principalの形の
+検査だけでは認証にならない。会話/Tripの参照を永続状態から解決する処理は#479、
+公開transportは#462/#480へ残す。uiContextはboundedな参照であり、未取得のTrip状態や認可根拠にしない。
+今回は公開route・production compositionを切り替えない。
+共有coreの配置と移行先は[ADR 0068](../../docs/decisions/0068-place-agent-runtime-in-server-application.md)を参照する。
+
+```bash
+npx vitest run modules/agent/runtime backend/agent-api/src/usecases/agent backend/agent-api/src/server-agent-composition.test.ts
+npm run typecheck --workspace @raiquora/agent-api
+```

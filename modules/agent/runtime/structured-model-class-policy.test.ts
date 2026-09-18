@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { structuredModelClassPolicy } from "./structured-model-class-policy";
+import { structuredModelClassPolicy } from "@raiquora/agent/structured-model-class-policy";
 
 describe("structuredModelClassPolicy", () => {
   it("uses the decision model for already-read source explanation without routing on wording", () => {

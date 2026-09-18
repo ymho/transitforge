@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { reservationContext } from "./reservation-context";
+import { reservationContext } from "@raiquora/agent/reservation-context";
 import { reservationFixture } from "../../../../modules/trip/domain/reservation.fixture";
 import { reservationFact } from "@raiquora/trip/reservation";
-import { buildAgentDecisionContext, agentDecisionContextText } from "./agent-decision-context";
+import { buildAgentDecisionContext, agentDecisionContextText } from "@raiquora/agent/agent-decision-context";
 import { runReservationProgressScenario } from "../../adapters/bedrock/reservation-progress-scenarios.fixture";
 
 describe("reservation privacy and model context", () => {

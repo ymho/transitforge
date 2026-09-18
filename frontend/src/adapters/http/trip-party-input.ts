@@ -1,5 +1,5 @@
 import { validateTripParty, type TripParty } from "@raiquora/trip/trip-party";
-import type { AskOnlyException } from "../../usecases/agent/agent-turn-outcome";
+import type { AskOnlyException } from "@raiquora/agent/agent-turn-outcome";
 
 /** Adapter capability, supplied by the caller for the actual operation, never by the model. */
 export function tripPartyProviderInput(party: TripParty, operation: { toolName: string; requiresExactChildAges: boolean }):

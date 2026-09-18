@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { candidateIdentityContext } from "./candidate-assessment-context";
-import { railSelectionFixture } from "../../../../modules/trip/domain/selected-rail-journey.fixture";
+import { candidateIdentityContext } from "@raiquora/agent/candidate-assessment-context";
+import { railSelectionFixture } from "../../trip/domain/selected-rail-journey.fixture";
 import { createTravelCandidate } from "@raiquora/trip/travel-candidate";
 
 describe("candidate identity for coverage decisions", () => {

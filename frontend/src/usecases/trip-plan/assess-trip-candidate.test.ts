@@ -1,13 +1,13 @@
 import { expect, it, vi } from "vitest";
 import { candidateAssessmentFixture, assessmentAt } from "../../../../modules/trip/domain/candidate-assessment.fixture";
 import { assessTripCandidate } from "./assess-trip-candidate";
-import { candidateAssessmentContext } from "../agent/candidate-assessment-context";
+import { candidateAssessmentContext } from "@raiquora/agent/candidate-assessment-context";
 import { candidateAssessmentView } from "../../presentation/trip-plan/candidate-assessment-view";
 import { candidateAssessmentEvidence, candidateAssessmentDescriptor, registerCandidateAssessmentTool } from "../agent/candidate-assessment-tool";
-import { AgentToolRegistry } from "../agent/tool-registry";
-import { validateAgentToolInput } from "../agent/agent-tool-input-validator";
-import { validateEvidenceAndClaims } from "../agent/evidence-model";
-import { buildAgentDecisionContext, agentDecisionContextText } from "../agent/agent-decision-context";
+import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
+import { validateAgentToolInput } from "@raiquora/agent/agent-tool-input-validator";
+import { validateEvidenceAndClaims } from "@raiquora/agent/evidence-model";
+import { buildAgentDecisionContext, agentDecisionContextText } from "@raiquora/agent/agent-decision-context";
 import { railSelectionFixture } from "../../../../modules/trip/domain/selected-rail-journey.fixture";
 import { createTravelCandidate } from "@raiquora/trip/travel-candidate";
 
