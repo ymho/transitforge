@@ -130,3 +130,11 @@ npm run build
 ```
 
 新しいサービス Vendor SDK 状態管理方式を追加する場合は 先に責務と依存方向をADRへ記録する
+
+## 宿泊Providerの固定出口（#480 Phase B）
+
+[専用Provider境界](fixed-egress-provider.md)をdefault-offで追加した。
+Serverは既存AccommodationProvider PortをLambdaAccommodationProviderへ差し替えられる。
+宿泊入力検証はBackend contractsを共用し、Invoke DTO/HTTP検証/AWS SDKはadaptersへ閉じる。
+専用Lambdaだけが宿泊credentialsとHttpAccommodationProviderを所有し、Tool/Evidence/Stateは移さない。
+既存production組成は統合まで維持する。
