@@ -7,6 +7,7 @@
     "./*": "./runtime/*.ts"
   },
   "dependencies": {
-    "@raiquora/trip": "*"
+    "@raiquora/trip": "*",
+    "@raiquora/journey": "*"
   }
 }

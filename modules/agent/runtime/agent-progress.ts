@@ -2,5 +2,5 @@
 export type AgentTurnEvent =
   | { type: "progress"; phase: "running" }
   | { type: "final"; status: "completed" | "follow_up"; response: string }
-  | { type: "error"; code: "agent_failed" | "limit_reached" };
+  | { type: "error"; code: "agent_failed" | "limit_reached" | "turn_conflict" };
 export type AgentTurnEventSink = (event: AgentTurnEvent) => Promise<void>;

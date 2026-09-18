@@ -1,3 +1,6 @@
+import { representativeTimetableEvidence } from "@raiquora/agent/representative-timetable-evidence";
+import { representativeTimetableToolDescriptor } from "@raiquora/agent/representative-timetable-tool-descriptor";
+import { accommodationToolDescriptor } from "@raiquora/agent/accommodation-tool-descriptor";
 import { isPriceObservation } from "@raiquora/trip/money";
 import { reservationContext } from "@raiquora/agent/reservation-context";
 import { loadInTripContext, type InTripContextReader } from "../../usecases/agent/in-trip-context";
@@ -1264,7 +1267,7 @@ function viewerToolDescription(name: ViewerAgentToolName): string {
     search_accommodations: "新しい宿泊旅行 日程変更 宿泊地変更 宿の再検索で、指定日程の宿泊候補と行き帰りの鉄道経路をまとめて組み立てます。観光相談 人数やペースだけの変更 経路の部分変更には使いません",
     plan_day_trip: "宿泊施設を検索せず 指定日の行きと帰りの鉄道経路を組み合わせて日帰り旅程を作ります",
     search_trip_route_update: "現在の旅程にある行きまたは帰りの鉄道移動を再検索します。出発を遅らせる変更と途中駅への立寄りに使います",
-    search_representative_timetable: "平日または土休日の代表ダイヤを検索します",
+    search_representative_timetable: representativeTimetableToolDescriptor.description,
   };
   return descriptions[name];
 }
@@ -1273,38 +1276,9 @@ function viewerToolInputSchema(
   name: ViewerAgentToolName,
   context: ViewerAgentToolPreconditionContext = {},
 ): AgentToolInputSchema {
+  if (name === "search_representative_timetable") return representativeTimetableToolDescriptor.inputSchema;
   if (isExternalTravelToolName(name)) return externalTravelToolInputSchema(name);
-  if (name === "search_accommodations") {
-    return {
-      type: "object",
-      properties: {
-        destination: {
-          type: "string",
-          description: "宿泊する地域または観光地。現在の旅程を変更する場合も省略しない",
-        },
-        checkInDate: {
-          type: "string",
-          description: "チェックイン日。YYYY-MM-DD形式",
-          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
-        },
-        checkOutDate: {
-          type: "string",
-          description: "チェックアウト日。YYYY-MM-DD形式でcheckInDateより後",
-          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
-        },
-        adults: { type: "integer", minimum: 1, maximum: 10 },
-        children: { type: "integer", minimum: 0, maximum: 10 },
-        considerations: {
-          type: "array",
-          maxItems: 8,
-          items: { type: "string" },
-        },
-        limit: { type: "integer", minimum: 1, maximum: 5 },
-      },
-      required: ["destination", "checkInDate", "checkOutDate"],
-      additionalProperties: false,
-    };
-  }
+  if (name === "search_accommodations") return accommodationToolDescriptor.inputSchema;
   if (name === "plan_day_trip") {
     return {
       type: "object",
@@ -1561,6 +1535,7 @@ function viewerEvidenceMappers(): ToolEvidenceRegistry {
   const registry = new ToolEvidenceRegistry();
   registry.register("assess_travel_candidate", candidateAssessmentEvidence);
   registry.register("search_direct_routes", routeEvidence);
+  registry.register("search_representative_timetable", representativeTimetableEvidence);
   registry.register("inspect_previous_journey", previousJourneyEvidence);
   registry.register("revise_previous_journey", previousJourneyEvidence);
   registry.register("search_trains", trainSearchEvidence);

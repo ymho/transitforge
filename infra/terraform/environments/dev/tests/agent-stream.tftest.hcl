@@ -40,7 +40,18 @@ run "default_off" {
 }
 run "enabled_contract" {
   command = plan
-  variables { agent_stream_enabled = true }
+  variables {
+    agent_stream_enabled         = true
+    enable_fixed_egress_provider = true
+  }
+  assert {
+    condition     = aws_lambda_function.agent_stream["stream"].environment[0].variables.SERVER_STATE_TABLE_NAME == aws_dynamodb_table.server_state.name && aws_lambda_function.agent_stream["stream"].environment[0].variables.TRIP_TABLE_NAME == aws_dynamodb_table.trips.name
+    error_message = "The authenticated stateful composition must use the existing State and Trip tables."
+  }
+  assert {
+    condition     = !contains(keys(aws_lambda_function.agent_stream["stream"].environment[0].variables), "TRAVEL_PROVIDER_SECRET_ARN") && length(aws_iam_role_policy.agent_stream_provider_invoke) == 1 && length(aws_secretsmanager_secret.agent_stream_providers) == 1
+    error_message = "The Runtime must invoke the dedicated Provider and never receive the mixed Travel secret."
+  }
   assert {
     condition     = aws_api_gateway_integration.agent_stream_route["stream"].uri == aws_lambda_function.agent_stream["stream"].response_streaming_invoke_arn && aws_lambda_permission.agent_stream_gateway["stream"].source_arn == "arn:aws:execute-api:ap-northeast-1:123456789012:stream-api/dev/POST/api/agent-stream"
     error_message = "Use the streaming invoke ARN and exact API/stage/POST/path permission."
@@ -77,6 +88,7 @@ run "enabled_contract" {
 run "custom_domain_contract" {
   command = plan
   variables {
+    enable_fixed_egress_provider       = true
     agent_stream_enabled               = true
     cloudflare_front_door_enabled      = true
     legacy_cloudfront_redirect_enabled = true
@@ -101,4 +113,13 @@ run "custom_domain_default_off" {
     condition     = length(aws_lambda_function.agent_stream) == 0 && length(aws_api_gateway_rest_api.agent_stream) == 0 && length([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : b if b.path_pattern == "/api/agent-stream"]) == 0 && length([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : b if b.path_pattern == "/api/agent"]) == 1
     error_message = "The current custom-domain production topology must also remain default-off."
   }
+}
+
+run "stream_requires_provider" {
+  command = plan
+  variables {
+    agent_stream_enabled         = true
+    enable_fixed_egress_provider = false
+  }
+  expect_failures = [aws_lambda_function.agent_stream["stream"]]
 }

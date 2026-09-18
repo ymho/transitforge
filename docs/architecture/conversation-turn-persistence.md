@@ -115,3 +115,9 @@ npm run architecture:check
 backend workspaceがshared Agent core testも実行する。Agent decision logicは変更せず
 Smoke/Full/Live Eval、Browser recheck、root全量は省略する。root全量はGitHub CIへ委ねる。
 Terraform変更はないためfmt/validateは不要。format/lint専用コマンドは定義されていない。
+
+## #480 production経路への接続
+
+[cutover統合](server-agent-cutover.md)が既存ApplicationをStreaming入口から利用する。
+新規会話の空初期化後にbegin→load→run→complete→finalの順序を維持する。
+AWS未切替であり、Browser本文からStateを復元しない。

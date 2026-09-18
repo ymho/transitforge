@@ -1,3 +1,6 @@
+import { currentAuthentication } from "./auth-composition";
+import { createConversationStreamSession } from "../adapters/http/agent-stream/session";
+
 import { createAgentTurnObservationStore } from "../usecases/agent/agent-turn-observation-store";
 import mapboxgl from "mapbox-gl";
 import { candidateIdentityContext } from "@raiquora/agent/candidate-assessment-context";
@@ -280,11 +283,21 @@ const aiGuidePromptHandlerReady = new Promise<AiGuidePromptHandler>((resolve) =>
 let handleAiGuidePrompt: AiGuidePromptHandler = (...args) =>
   aiGuidePromptHandlerReady.then((handler) => handler(...args));
 let findJourneyLegAlternatives: JourneyLegAlternativeSearch = async () => [];
+const serverConversationValues = new Map<string, string>();
+const serverConversationStorage = {
+  getItem: (key: string) => serverConversationValues.get(key) ?? null,
+  setItem: (key: string, value: string) => { serverConversationValues.set(key, value); },
+  removeItem: (key: string) => { serverConversationValues.delete(key); },
+};
+
+// Short-lived #480 build gate. Remove after AWS validation and traffic cutover.
+const serverAgentEnabled = import.meta.env.VITE_SERVER_AGENT_ENABLED === "true";
+const conversationStorage = serverAgentEnabled ? serverConversationStorage : localStorage;
 const conversationSessionRepository = new LocalConversationSessionRepository(
-  localStorage,
-  browserConversationSessionStorageEvents(),
+  conversationStorage,
+  serverAgentEnabled ? undefined : browserConversationSessionStorageEvents(),
 );
-const conversationHistoryRepository = new LocalConversationHistoryRepository(localStorage);
+const conversationHistoryRepository = new LocalConversationHistoryRepository(conversationStorage);
 const agentTurnObservations = createAgentTurnObservationStore();
 const travelRecheckRepository = new BrowserTravelRecheckRepository(localStorage);
 let activeConversationSession = conversationSessionRepository.active() ??
@@ -313,6 +326,13 @@ const contextWorkspaceController = createContextWorkspaceController(
   new BrowserContextWorkspaceRepository(localStorage),
 );
 const tripWorkspaceController = createTripWorkspaceController(activeConversationSession.id);
+const serverAgentSession = serverAgentEnabled ? createConversationStreamSession({
+  auth: currentAuthentication(), references: () => ({ conversationId: activeConversationSession.id,
+    tripId: tripWorkspaceController.current()?.id, tripRevision: tripWorkspaceController.current()?.revision,
+    itemId: tripWorkspaceController.uiFocus()?.itemId }),
+}) : undefined;
+tripWorkspaceController.subscribe(() => serverAgentSession?.contextChanged());
+
 const serverTripClient = new HttpServerTripClient();
 const serverTripReferences = new Map<string, string>();
 const syncServerTripSource = (session: typeof activeConversationSession) => {
@@ -476,7 +496,7 @@ aiGuideController = configureAiGuidePanel(
     rankingPreference: journeyRankingPreference,
     storage: localStorage,
     historyRepository: conversationHistoryRepository,
-    submitFeedback: submitConversationFeedback,
+    submitFeedback: serverAgentEnabled ? undefined : submitConversationFeedback,
     onFirstPrompt: (prompt) => {
       if (activeConversationSession.title !== "新しい会話") return;
       const renamed = conversationSessionRepository.rename(
@@ -532,7 +552,7 @@ aiGuideController = configureAiGuidePanel(
       contextWorkspaceController.show("map");
     },
     persistent: () => true,
-    responseContextKey: () => JSON.stringify([activeConversationSession.id, tripWorkspaceController.current()?.id, tripWorkspaceController.current()?.revision]),
+    responseContextKey: () => JSON.stringify([serverAgentSession?.contextVersion(), activeConversationSession.id, tripWorkspaceController.current()?.id, tripWorkspaceController.current()?.revision]),
     onTripPlanUpdate: (proposal) => {
       if (tripWorkspaceController.blocksLegacy()) return;
       tripPlanController.apply(proposal.patches);
@@ -582,11 +602,21 @@ const conversationSessionSwitcher = createConversationSessionSwitcher({
       returnToConversation();
       mapPlaceExplorerController?.clear();
       activeConversationSession = session;
+      serverAgentSession?.contextChanged();
       syncServerTripSource(session);
       tripWorkspaceController.activateSession(session.id);
       contextWorkspaceController.activateSession(session.id);
   },
 });
+if (serverAgentSession) {
+  let initialAuthNotification = true;
+  currentAuthentication().subscribe(() => {
+    if (initialAuthNotification) { initialAuthNotification = false; return; }
+    serverConversationValues.clear();
+    const session = conversationSessionRepository.create();
+    conversationSessionSwitcher.activate(session.id);
+  });
+}
 conversationSessionRepository.subscribe(() => {
   const activeSession = conversationSessionRepository.active();
   if (activeSession) syncServerTripSource(activeSession);
@@ -699,6 +729,7 @@ handleAiGuidePrompt = async (
   conversation,
   onResponseMetadata,
 ) => {
+    if (serverAgentSession) return serverAgentSession.start(prompt).send();
     if (previousJourneySessionId !== activeConversationSession.id) {
       previousJourneySessionId = activeConversationSession.id;
       previousJourneyPlan = latestJourneyPlanFromHistory(

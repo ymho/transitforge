@@ -2,6 +2,18 @@ import type { Evidence } from "./evidence-model";
 
 export function externalTravelEvidence(output: unknown, context: { retrievedAt: string }): Evidence[] {
   if (!isRecord(output)) return [];
+  // Accommodation operation returns validated offerings rather than an ExternalTravelInformation envelope.
+  if (Array.isArray(output.accommodations)) return output.accommodations.slice(0, 5).flatMap(raw => {
+    if (!isRecord(raw) || raw.kind !== "accommodation" || typeof raw.provider !== "string" ||
+        typeof raw.providerItemId !== "string" || typeof raw.name !== "string") return [];
+    return [{ id: `accommodation:${encodeURIComponent(raw.provider)}:${encodeURIComponent(raw.providerItemId)}`,
+      category: "external" as const, knowledgeKind: "deterministic_fact" as const, subject: raw.name,
+      facts: { resultKind: "accommodation", name: raw.name, status: "available", freshness: "fresh", provider: raw.provider, providerItemId: raw.providerItemId, availability: raw.availability === "available" ? "available" : "unknown" },
+      references: [{ sourceType: "external-source" as const,
+        sourceRef: typeof raw.bookingUrl === "string" ? raw.bookingUrl : `${raw.provider}:${raw.providerItemId}`,
+        retrievedAt: context.retrievedAt, freshness: "current" as const, summary: "宿泊Providerで確認した候補。未確認の空室・料金を含まない" }],
+    }];
+  });
   const information = isRecord(output.forecast) ? output.forecast : isRecord(output.result) ? output.result : isRecord(output.webSearch) ? output.webSearch : isRecord(output.webPages) ? output.webPages : isRecord(output.alerts) ? output.alerts : isRecord(output.groundAccess) ? output.groundAccess : isRecord(output.restaurants) ? output.restaurants : undefined;
   if (!information || !Array.isArray(information.evidence)) return [];
   const resultKind = isRecord(output.forecast) ? "weather" : isRecord(output.alerts) ? "hazard" : undefined;

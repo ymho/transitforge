@@ -266,3 +266,9 @@ mainからの手動実行だけでdev環境を更新する。両者は別Workflo
 配信する。未設定のローカル環境では認証なしでViewerを起動できる。
 [認証境界](docs/architecture/authentication-boundary.md)と[SPA認証ADR](docs/decisions/0069-use-cognito-managed-login-for-spa.md)を参照する。
 API route保護と本番切替は後続段階であり、ログインUIの導入だけで全API保護済みとはしない。
+
+## Server Agent統合（#480）
+
+[cutover統合とTool inventory](docs/architecture/server-agent-cutover.md)を追加した。
+短命gate ONでは認証済みREST streamからサーバのConversation turn・Context・Tool・final保存へ接続する。
+Browser Agentへのfallbackはない。既定OFFでAWS未切替。実AWS検証と旧経路閉鎖は#480に残す。

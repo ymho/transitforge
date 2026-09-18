@@ -13,7 +13,7 @@ experiment rootは再現用として残し、本番rootから参照しない。P
 
 `agent_stream_enabled=false`が既定。新Lambda、REST API、権限、Log GroupとCloudFront origin/behaviorは
 作成されず、既存`/api/agent`とBrowserの設定は変わらない。tfvars exampleやCDで有効化しない。
-有効時も新しい`/api/agent-stream`だけを用意し、Browser compositionには接続しない。
+有効時は`/api/agent-stream`を用意する。後続の[統合](server-agent-cutover.md)でBrowser build gateから接続する。
 Lambda自身も`AGENT_STREAM_ENABLED`が文字列`true`でなければ503を返し、認証・model・Toolを呼ばない。
 
 このgateは#480後半の移行用であり、恒久的なdual runtime選択ではない。実AWS gate通過後に
@@ -55,7 +55,7 @@ CloudFrontのみの認証へ依存せず、直接URLは利用者認証の迂回�
 同じBackend入口責務として配置し、AWS固有stream/eventは`adapters/agent-stream/lambda.ts`へ閉じる。
 PoCのHTTP/auth/framing処理は`agent-stream-handler.ts`へ昇格し、PoC側は同じ正本を呼ぶ。
 
-現時点のentrypointは既存Bedrock model、system prompt、Server Agentとweather Toolの最小composition。
+Phase A時点のentrypointは既存Bedrock model、system prompt、Server Agentとweather Toolの最小composition。
 #479のContext Loader付きApplication factoryへ差し替える境界までを用意したもので、
 Conversation/Profile/Tripを独自読込しない。State/Secrets権限も付与しない。全Tool接続は未完了でcutover候補ではない。
 共通API auth middleware、Trip handler、server-agent.ts、Agent decision logicは変更しない。
@@ -108,3 +108,9 @@ Agent Smoke/Full/Live Eval、実Cognito利用者作成、実Bedrock長時間試�
 Application差替え、全Tool/State接続、fixed-IP Provider配置、35/90/180秒の実AWS E2E、
 認証拒否・直接URL・切断・account/Trip切替・rollback、Browser cutoverと旧URL閉鎖を行う。
 LocalStorageと既存Browser Agentの撤去、大規模README/product-brief整合は今回に含めない。#480はCloseしない。
+
+## 統合段階の更新
+
+[Server Agent cutover統合](server-agent-cutover.md)でstateful turnと必要なServer Toolsへ接続した。
+State/Trip read・non-travel Secret・IAM Provider Invokeを最小権限で追加する。
+BrowserはVITE_SERVER_AGENT_ENABLEDで明示選択し、default-offとAWS未切替を維持する。
