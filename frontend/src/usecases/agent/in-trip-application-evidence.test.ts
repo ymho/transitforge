@@ -29,8 +29,9 @@ describe("InTrip Application Evidence", () => {
       impacts: inputs.map((input) => ({ impact: evaluateAreaTripImpact({ ...input, trip }), observedAt: areaNow,
         expiresAt: "2026-09-12T09:00:00Z", fresh: true })) })!;
     const impacts = inTripApplicationEvidence(snapshot).filter((e) => e.references[0]!.sourceType === "trip-impact");
-    expect(impacts).toHaveLength(2);
-    expect(impacts.map((e) => JSON.parse(String(e.facts.typedFacts)))).toEqual(snapshot.impacts.items.map((i) => i.facts));
+    expect(impacts).toHaveLength(1);
+    expect(impacts[0]!.id).toBe("application:in-trip:environment");
+    expect(JSON.parse(String(impacts[0]!.facts.impacts)).map((i: { facts: unknown }) => i.facts)).toEqual(snapshot.impacts.items.map((i) => i.facts));
     expect(JSON.stringify(impacts)).toContain("uncertainty");
     expect(impacts.every((e) => e.references[0]!.summary.includes("未確認"))).toBe(true);
   });

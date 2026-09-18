@@ -2,7 +2,7 @@ import { validateInTripContext, type InTripContextSnapshot } from "@raiquora/tri
 import type { Evidence, EvidenceCoverage, EvidenceKnowledgeKind, EvidenceSourceType, EvidenceFreshness } from "./evidence-model";
 
 /** Pure Agent-layer projection of the validated owner-scoped read result, not arbitrary Context.
- * At most 10 entries: itinerary + six impacts + reservations + session + coverage.
+ * At most 10 entries: itinerary + up to six impacts (environment bundled) + reservations + session + coverage.
  * Source refs address this execution's snapshot, never owner/provider/private resource IDs. */
 export function inTripApplicationEvidence(snapshot: InTripContextSnapshot): Evidence[] {
   validateInTripContext(snapshot);
@@ -22,7 +22,20 @@ export function inTripApplicationEvidence(snapshot: InTripContextSnapshot): Evid
       plannedOnly: true, omitted: snapshot.itinerary.omitted }, "scheduled", ["trip.itinerary",
         ...(next.length ? ["trip.next-item" as const] : []),
         ...([...current, ...next].some((i) => i.rail?.length) ? ["rail.schedule" as const] : [])]);
+  const environment = snapshot.impacts.status === "unavailable" ? [] : snapshot.impacts.items.filter((impact) =>
+    impact.facts.some((f) => isEnvironmentFact(f)));
+  if (environment.length) {
+    const impacts = environment.map((impact) => ({ status: impact.status, severity: impact.severity,
+      affectedItemIds: [...impact.affectedItemIds], facts: structuredClone(impact.facts.filter((f) => isEnvironmentFact(f) || f.type === "uncertainty")),
+      evaluatedAt: impact.evaluatedAt, observedAt: impact.observedAt, expiresAt: impact.expiresAt, truncated: impact.truncated }));
+    const coverage = [...new Set(impacts.flatMap((i) => i.facts.flatMap(environmentCoverage)))];
+    const unknown = impacts.some((i) => i.status === "unknown");
+    add("environment", "trip-impact", unknown ? "unverified_information" : "derived_value",
+      `保存済みの${coverage.map((c) => c === "weather.impact" ? "天気" : "警報").join("・")}の影響評価をまとめて表示する。${impacts.map((i) => `${i.status}/${i.severity}:${i.facts.map(impactFactSummary).join("。")}`).join("。")}。未確認の適用範囲・有効期間を安全と解釈せず、実際の現在地や屋外状態は推測しない。`,
+      { impacts: JSON.stringify(impacts), truncated: snapshot.truncation.truncated }, unknown ? "unknown" : "current", coverage);
+  }
   if (snapshot.impacts.status !== "unavailable") snapshot.impacts.items.forEach((impact, index) => {
+    if (environment.includes(impact)) return;
     add(`impacts/${index}`, "trip-impact", impact.status === "unknown" ? "unverified_information" : "derived_value",
       `保存済みImpact[${index}]: ${impact.status}, ${impact.severity}（${{ critical: "重大な対応が必要", "action-required": "対応が必要", attention: "注意が必要", informational: "参考情報" }[impact.severity]}）。${impact.facts.map(impactFactSummary).join("。")}。未確認は安全を意味しない。数値・severityは保存済み判定であり再計算しない。`,
       { status: impact.status, severity: impact.severity, affectedItemIds: [...impact.affectedItemIds],
@@ -52,6 +65,14 @@ export function inTripApplicationEvidence(snapshot: InTripContextSnapshot): Evid
       truncated: snapshot.truncation.truncated }, "unknown");
   return evidence;
 }
+
+function environmentCoverage(f: Record<string, unknown>): EvidenceCoverage[] {
+  if (["weather-exposure", "weather-placement"].includes(String(f.type)) ||
+      f.type === "uncertainty" && String(f.reason).startsWith("weather_")) return ["weather.impact"];
+  if (f.type === "hazard-exposure" || f.type === "uncertainty" && String(f.reason).startsWith("hazard_")) return ["hazard.impact"];
+  return [];
+}
+function isEnvironmentFact(f: Record<string, unknown>): boolean { return environmentCoverage(f).length > 0; }
 
 /** Render saved measurements only; no transfer calculation, risk classification or recommendation. */
 export function impactFactSummary(f: Record<string, unknown>): string {

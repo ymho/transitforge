@@ -59,7 +59,7 @@ Notificationの既存最大12 subject読取は独立で、範囲不足をnotific
 
 Agent EvidenceはTool EvidenceとApplication Evidenceを含む。Trip DomainへAgentのEvidence型は持ち込まない。
 `inTripApplicationEvidence`はowner-scoped readerの検証済みsnapshot（currency=current）のみからpureに生成する。
-current/nextの採用済み計画、最大6 Impact、関連する既知ReservationFact、location permission state、未確認範囲で最大10件。
+current/nextの採用済み計画、最大6 Impact（天気・警報はbundleへ集約）、関連する既知ReservationFact、location permission state、未確認範囲で最大10件。
 一般Context・Profile・会話要約・モデル解釈・候補・未確認のローカルfallbackをEvidenceへ昇格させない。
 計画はdeterministic_fact、保存済みImpactはderived_value、unknown Impact/不足範囲はunverified_informationとし、
 未確認を正常・安全に変換しない。時刻・遅延・乗換を再計算しない。予約private値、Impact ID、Provider raw、位置座標を含めない。
@@ -137,7 +137,7 @@ Decision Summary parse結果・selectedAction/selectedTool/unresolvedFactsを追
 
 `external-result`はweather/hazardのexternal-source Evidenceの取得状態のみを表示する。
 取得失敗・Provider Evidence欠落時はApplicationが確認した取得結果を記録し、外部事実の確認を捏造しない。
-詳細は既存の構造化カードが担当する。これを`weather-impact`/`hazard-impact`として表示することは拒否する。
+詳細は既存の構造化カードが担当する。これを保存済みImpactの`environment-impact`として表示することは拒否する。
 外部結果をTripImpactへ昇格せず、未確認を安全へ変換しない。
 
 Decision Summaryの任意metadataが不正でも、`selectedAction=answer`に付属するstrictなAnswerPlanと
@@ -147,6 +147,24 @@ source/coverage、shapeの検証は一切省略しない。欠落・不正plan�
 AOの診断で、駅間経路ではなく表示中列車の検索を選び、必要な検索条件がないまま失敗するケースを確認した。
 列車index検索・到着列車検索と独立駅間検索のsuitable/unsuitableをdescriptorへ明記する。
 検索開始下限`departureTimeMinutes`と具体的列車の発車時刻を区別する。発話のregex分岐は追加しない。
+
+### AK / AL: 能力の境界と環境Impact bundle
+
+`query_train_delay_analysis`は業務日全体または複数列車の観測済み遅延傾向の分析とする。
+採用済み個別legのTripImpact/connection-buffer/rail-delay説明、current Impactで答えられる相談、
+独立した代替経路検索には不適とdescriptorで示す。Toolは公開し続け、通常の業務日分析の入力・実行は変えない。
+
+Agentのpure projectionで、InTripContext内の保存済み天気・警報Impactを一つの
+`application:in-trip:environment` Evidenceへ集約する。Domain stateや新しいImpact評価は追加しない。
+status/severity/affectedItemIds/時刻/facts/truncatedをallowlistで保持し、6 Impact × 4 factsの既存上限内とする。
+coverageは実在するweather/hazard facts・uncertainty codeから付与する。unknownを含むbundleは
+unverified_informationとし、Provider raw・providerAlertId等は入れない。
+
+回答用presentationは`environment-impact`だけとし、個別`weather-impact`/`hazard-impact`は廃止する。
+rendererは参照されたbundle内の全保存済み評価と未確認事項を表示する。天気だけ・警報だけの場合も実在するものだけ表示する。
+モデルにweatherとhazardの2件選択を要求しない。実現在地/屋外状態を推測せず、保存済み数値・severityは再計算しない。
+Tool今回取得の`external-result`とはsource contractとrendererを分離する。
+ALのEvalはweather/hazard両方の本文・適用範囲/有効期間の未確認表示を要求し、検査を緩めない。
 
 ## 残す責務
 

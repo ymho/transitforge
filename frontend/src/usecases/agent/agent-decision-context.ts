@@ -328,7 +328,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     brief,
     `利用者の今回の質問: ${JSON.stringify(context.userRequest)}`,
     "旅行中のanswerではDecision SummaryへinTripAnswerPlan:{evidence:[{evidenceId:実在id,presentation:表示種別}]}を必ず含めてください。最大6件。usedEvidenceIdsの部分集合です。事実はApplication rendererが表示するため、自由文で同じ事実を言い換えず、回答に必要なEvidenceの選択と順序だけを決めてください。",
-    "AnswerPlanの対象はverified_evidenceのApplication Evidence、またはToolが返すEvidenceです。presentationはplanned-itinerary（trip.itinerary/next-item）、rail-impact（rail.impact/connection）、weather-impact（weather.impact）、hazard-impact（hazard.impact）、reservation（reservation.state）、location-permission（location.permission）、uncertainty（未確認範囲）、external-result（external-sourceかつresultKind=weather/hazardの取得結果）です。質問に関連する複数の影響があるならそれぞれを参照してください。追加Toolの天気・警報Evidenceはexternal-resultで参照し、既存の構造化カードで表示します。保存済みImpactへは昇格しません。",
+    "AnswerPlanの対象はverified_evidenceのApplication Evidence、またはToolが返すEvidenceです。presentationはplanned-itinerary（trip.itinerary/next-item）、rail-impact（rail.impact/connection）、environment-impact（environment Evidence内の保存済み天気・警報評価をまとめて表示）、reservation（reservation.state）、location-permission（location.permission）、uncertainty（未確認範囲）、external-result（external-sourceかつresultKind=weather/hazardの取得結果）です。追加Toolの天気・警報Evidenceはexternal-resultで参照し、既存の構造化カードで表示します。保存済みImpactへは昇格しません。",
     "Toolは新しい候補・異なる区間/時刻・最新観測など回答に必要な追加情報を調べるときに選んでください。既存Evidenceの説明だけで答えられるときは再取得せず回答してください。ユーザーの入力に答えるために不要な質問はしないでください。",
     "予定上のcurrentは実際の現在地・乗車確認ではありません。possible-current/date-current/unknownの精度を保持し、Impact severity・乗換成立性・Notification currency・予約状態を再計算しないでください。unknown/unavailable/omitted/truncatedは問題なしではありません。Trip・予約・通知を自動変更しないでください。",
     `<agent_context>${boundedContext}</agent_context>`,

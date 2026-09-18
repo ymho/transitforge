@@ -39,7 +39,7 @@ HTML entity 地図SDKの操作説明 attribution 内部識別子 thinking analys
 
 各応答のtext block先頭に 外部化可能な判断結果を次の形式で1件だけ付けてください
 <decision_summary>{"interpretedGoal":"短い目的","hardConstraints":[],"softPreferences":[],"selectedAction":"answer","usedEvidenceIds":[],"inTripAnswerPlan":{"evidence":[]},"unresolvedFacts":[],"reasonCodes":["evidence_sufficient"]}</decision_summary>
-inTripAnswerPlanはin_tripのanswerだけで必須、他の応答ではキーごと省略します。evidence配列の各要素は{"evidenceId":"選択した実在ID","presentation":"対応する表示種別"}です。表示種別はplanned-itinerary / rail-impact / weather-impact / hazard-impact / reservation / location-permission / uncertainty / external-resultのいずれかです。1〜6件を選びusedEvidenceIdsの部分集合とし、Application rendererが事実本文を表示します。in_trip answerの自由文による事実説明は表示しません。
+inTripAnswerPlanはin_tripのanswerだけで必須、他の応答ではキーごと省略します。evidence配列の各要素は{"evidenceId":"選択した実在ID","presentation":"対応する表示種別"}です。表示種別はplanned-itinerary / rail-impact / environment-impact / reservation / location-permission / uncertainty / external-resultのいずれかです。1〜6件を選びusedEvidenceIdsの部分集合とし、Application rendererが事実本文を表示します。in_trip answerの自由文による事実説明は表示しません。
 これは形式例です。実際の判断に合わせて各値を設定し、事実を説明するanswerではusedEvidenceIdsを使った実在IDで埋めてください。use_tool/ask_userではselectedToolを実際のTool名にし、answerではselectedToolをnullや空文字で残さずキーごと省略してください。初回応答にreplanReasonは不要です
 selectedActionはuse_tool ask_user answerのいずれかとし answerではselectedToolを省略してください
 answerで事実を説明するときはusedEvidenceIdsへ実際に回答根拠に使ったEvidence IDを最大10件、重複なしで記載してください。verified_evidenceのidまたはToolから受け取った実在IDだけを使い、利用者向け本文には表示しないでください。use_toolでは既存Evidenceで不足する事項をunresolvedFactsに残してください。in_trip answerの事実部分はContextで指定したinTripAnswerPlanからApplication rendererが表示します。同じ事実を自由文で言い換える必要はありません。それ以外の回答では根拠と具体的な事実を説明してください

@@ -3,7 +3,7 @@ import type { AgentGeneratedResponse } from "./agent-response-generator";
 import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 import { impactFactSummary } from "./in-trip-application-evidence";
 
-export const inTripPresentations = ["planned-itinerary", "rail-impact", "weather-impact", "hazard-impact",
+export const inTripPresentations = ["planned-itinerary", "rail-impact", "environment-impact",
   "reservation", "location-permission", "uncertainty", "external-result"] as const;
 export type InTripPresentation = typeof inTripPresentations[number];
 export interface InTripAnswerPlan {
@@ -37,8 +37,7 @@ export function validInTripAnswerPlan(value: unknown): value is InTripAnswerPlan
 const contracts: Record<Exclude<InTripPresentation, "uncertainty" | "external-result">, { source: EvidenceSourceType; coverage: EvidenceCoverage[] }> = {
   "planned-itinerary": { source: "trip-state", coverage: ["trip.itinerary", "trip.next-item"] },
   "rail-impact": { source: "trip-impact", coverage: ["rail.impact", "rail.connection"] },
-  "weather-impact": { source: "trip-impact", coverage: ["weather.impact"] },
-  "hazard-impact": { source: "trip-impact", coverage: ["hazard.impact"] },
+  "environment-impact": { source: "trip-impact", coverage: ["weather.impact", "hazard.impact"] },
   reservation: { source: "reservation-state", coverage: ["reservation.state"] },
   "location-permission": { source: "session-state", coverage: ["location.permission"] },
 };
@@ -50,6 +49,9 @@ export function supportsInTripPresentation(e: Evidence, presentation: InTripPres
     ["weather", "hazard"].includes(String(e.facts.resultKind));
   if (!e.references.length || !e.references.every((r) => r.sourceRef.startsWith("application://in-trip/v1/"))) return false;
   if (e.knowledgeKind === "model_interpretation") return false;
+  if (e.coverage?.some((c) => c === "weather.impact" || c === "hazard.impact")) return presentation === "environment-impact" &&
+    e.references.every((r) => r.sourceType === "trip-impact" && r.sourceRef.endsWith("/environment")) && typeof e.facts.impacts === "string";
+  if (presentation === "environment-impact") return false;
   if (presentation === "uncertainty") return e.references.every((r) => ["trip-state", "trip-impact"].includes(r.sourceType)) &&
     (e.knowledgeKind === "unverified_information" || typeof e.facts.typedFacts === "string" &&
       array<Record<string, unknown>>(e.facts.typedFacts).some((f) => f.type === "uncertainty"));
@@ -78,6 +80,17 @@ export function renderInTripAnswer(plan: InTripAnswerPlan, used: string[], evide
 function render(e: Evidence, presentation: InTripPresentation): string {
   const f = e.facts;
   switch (presentation) {
+    case "environment-impact": {
+      const impacts = array<InTripContextSnapshot["impacts"]["items"][number]>(f.impacts);
+      return impacts.map((i) => {
+        const weather = i.facts.some((f) => ["weather-exposure", "weather-placement"].includes(String(f.type)) ||
+          f.type === "uncertainty" && String(f.reason).startsWith("weather_"));
+        const hazard = i.facts.some((f) => f.type === "hazard-exposure" || f.type === "uncertainty" && String(f.reason).startsWith("hazard_"));
+        return `${[...(weather ? ["天気"] : []), ...(hazard ? ["警報"] : [])].join("・")}の保存済み評価: ${severityLabel(i.severity)}（${plain(i.status)}）。\n` +
+          i.facts.map(impactFactSummary).join("。\n") + "。" + (i.truncated ? "表示件数の上限により省略された情報があります。" : "");
+      }).join("\n\n") + "\n実際の現在地や屋外にいるかは確認していません。未確認は安全を意味しません。" +
+        (f.truncated === true ? "未掲載・省略された情報があります。" : "");
+    }
     case "external-result": {
       const label = f.resultKind === "weather" ? "天気情報" : "防災情報";
       return (f.status === "available" && f.freshness === "fresh"
@@ -112,18 +125,18 @@ function render(e: Evidence, presentation: InTripPresentation): string {
         : `影響情報: ${plain(String(f.impacts))}、予約情報: ${plain(String(f.reservations))}。`) +
         "未確認・省略された情報を問題なしとは扱えません。";
     default: {
-      const allowed = presentation === "rail-impact" ? ["rail-delay", "connection-buffer", "schedule-risk", "rail-observation", "reservation-risk", "uncertainty"] :
-        presentation === "weather-impact" ? ["weather-exposure", "weather-placement", "uncertainty"] : ["hazard-exposure", "uncertainty"];
+      const allowed = ["rail-delay", "connection-buffer", "schedule-risk", "rail-observation", "reservation-risk", "uncertainty"];
       const facts = array<Record<string, unknown>>(f.typedFacts).filter((v) => allowed.includes(String(v.type)));
-      const severities: Record<string, string> = { critical: "重大な対応が必要", "action-required": "対応が必要", attention: "注意が必要", informational: "参考情報" };
-      const label = presentation === "rail-impact" ? "鉄道" : presentation === "weather-impact" ? "天気" : "警報";
-      const caveat = presentation === "rail-impact" ? "実際に現在その列車へ乗車しているかは確認できていません。" :
-        "実際の現在地や屋外にいるかは確認していません。地域の予報・警報から、この施設が危険とは断定できません。";
-      return `${label}の保存済み評価: ${severities[String(f.severity)] ?? "未確認"}（${plain(String(f.status))}）。\n` +
-        facts.map(impactFactSummary).join("。\n") + `。\n${caveat}未確認は安全を意味しません。` +
+      return `鉄道の保存済み評価: ${severityLabel(String(f.severity))}（${plain(String(f.status))}）。\n` +
+        facts.map(impactFactSummary).join("。\n") + "。\n実際に現在その列車へ乗車しているかは確認できていません。未確認は安全を意味しません。" +
         (f.truncated === true ? "表示件数の上限により省略された情報があります。" : "");
     }
   }
+}
+
+function severityLabel(value: string): string {
+  const labels: Record<string, string> = { critical: "重大な対応が必要", "action-required": "対応が必要", attention: "注意が必要", informational: "参考情報" };
+  return labels[value] ?? "未確認";
 }
 
 function scheduleLabel(s: InTripContextSnapshot["itinerary"]["current"][number]["schedule"]): string {

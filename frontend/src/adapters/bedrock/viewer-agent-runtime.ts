@@ -975,6 +975,18 @@ function viewerToolDecisionSupport(
     capability,
     responsibilityBoundary: "入力検証と事実計算はToolが担い、候補を選ぶ判断と説明はAgentが担う",
   } satisfies AgentToolDecisionSupport;
+  if (name === "query_train_delay_analysis") {
+    return { ...common,
+      suitableCases: ["業務日全体または複数列車の観測済み遅延傾向を分析する"],
+      unsuitableCases: [
+        "採用済みTripの個別rail legについて、保存済みTripImpact / connection-buffer / rail-delayを説明する",
+        "このまま乗っていて大丈夫か、この乗換はどうか、などcurrent TripImpactで回答できる相談",
+        "新しい代替経路を探す（search_direct_routesの責務）",
+      ],
+      returnedEvidence: "業務日単位の観測遅延分析。個別TripのTripImpactや乗換成立性を再評価するものではない",
+      limitations: ["current Application Evidenceにrail.impact / rail.connectionがあり、質問がその保存済み影響の説明だけで成立する場合は再取得しない"],
+    };
+  }
   if (name === "search_trains" || name === "search_train_arrivals") {
     return { ...common,
       suitableCases: [name === "search_trains" ? "現在表示中の列車を名前・番号などの条件で探す" : "指定駅へ到着する列車を到着時刻で探す"],
@@ -1217,7 +1229,7 @@ function viewerToolDescription(name: ViewerAgentToolName): string {
     search_train_arrivals: "指定駅へ指定時刻ごろ到着する列車を検索します",
     search_direct_routes: "自前の時刻表と運行情報で駅間の乗換を含む経路を検索します。観光地はそのアクセス駅を指定します",
     query_daily_congestion_analysis: "指定業務日付の観測済み混雑を分析します",
-    query_train_delay_analysis: "指定業務日付の観測済み遅延を分析します",
+    query_train_delay_analysis: "業務日全体の観測済み遅延傾向を集計・分析する",
     search_accommodations: "新しい宿泊旅行 日程変更 宿泊地変更 宿の再検索で、指定日程の宿泊候補と行き帰りの鉄道経路をまとめて組み立てます。観光相談 人数やペースだけの変更 経路の部分変更には使いません",
     plan_day_trip: "宿泊施設を検索せず 指定日の行きと帰りの鉄道経路を組み合わせて日帰り旅程を作ります",
     search_trip_route_update: "現在の旅程にある行きまたは帰りの鉄道移動を再検索します。出発を遅らせる変更と途中駅への立寄りに使います",

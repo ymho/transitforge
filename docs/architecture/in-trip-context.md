@@ -173,3 +173,18 @@ Liveレポート: `/tmp/447-contract-<case-id>/trip-progress-live.json`。診断
 今回のローカル確認: frontend/domain 1,877件、backend 444件、build、architecture/workspace、
 Smoke（12/12・Ask 2/2・Progress 23/23）、Full（42/42・Ask 7/7・Progress 42/42）、Python 32件、
 Terraform fmt/validate（dev/bootstrap、既存deprecated警告のみ）、bundle/lambda、diff checkが成功した。
+
+### AK / AL残件の契約修正
+
+遅延分析Toolは専用decision supportで業務日全体の観測分析と個別TripImpactの説明を区別する。
+分析Toolを非表示にせず、既存日別分析テストで実行可能性を維持する。代替経路は既存search_direct_routesの責務。
+
+天気・警報はAgent mapperで一つのenvironment Evidenceに集約し、回答用presentationを
+`environment-impact`に一本化した。Domainのread model、Trip、Impact、Provider取得処理は変えない。
+個別weather/hazard presentationはparser/Runtimeから廃止し、bundleの一部だけ選んで警報を落とす経路をなくす。
+`external-result`は今回Toolが取得した結果の表示として維持し、保存済みbundleとは混ぜない。
+
+weather+hazard/片方のみ、保存済み値との一致、pure projection、位置や危険の非推測、
+hazard適用範囲/有効期間のunknown保持、旧presentation拒否を回帰テスト化した。
+ALのEvalは両方の保存済み評価と未確認事項がrenderer本文にあることを追加検査する。
+最終Liveは同一headのAJ〜AP全件実行で判定し、過去の成功を合成しない。結果はPR #447に記録する。

@@ -45,11 +45,11 @@ export async function runInTripProgressScenario(scenario: TravelProgressScenario
     return live ? live(...args) : modelAnswer(`<decision_summary>${JSON.stringify({ interpretedGoal: "旅行中の質問へ保存済み事実で答える",
       hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"],
       usedEvidenceIds: evidence.filter((e) => e.coverage?.some((c) => requiredCoverage[scenario.id]!.includes(c))).map((e) => e.id),
-      inTripAnswerPlan: { evidence: requiredCoverage[scenario.id]!.map((coverage) => ({
+      inTripAnswerPlan: { evidence: [...new Map(requiredCoverage[scenario.id]!.map((coverage) => ({
         evidenceId: evidence.find((e) => e.coverage?.includes(coverage))!.id,
-        presentation: ({ "trip.next-item": "planned-itinerary", "rail.connection": "rail-impact", "weather.impact": "weather-impact",
-          "hazard.impact": "hazard-impact", "location.permission": "location-permission" } as Partial<Record<EvidenceCoverage, InTripPresentation>>)[coverage],
-      })) },
+        presentation: ({ "trip.next-item": "planned-itinerary", "rail.connection": "rail-impact", "weather.impact": "environment-impact",
+          "hazard.impact": "environment-impact", "location.permission": "location-permission" } as Partial<Record<EvidenceCoverage, InTripPresentation>>)[coverage],
+      })).map((selection) => [selection.evidenceId, selection])).values()] },
     })}</decision_summary>${answers[scenario.id]!}`);
   });
   const report = evaluateTravelProgress(scenario.id, [{ observation, trace, delivered: true, modelCalls: calls }], scenario.thresholds, live ? "live" : "scripted");
@@ -73,6 +73,7 @@ export async function runInTripProgressScenario(scenario: TravelProgressScenario
     }
   }
   if (scenario.id === "AL-in-trip-rain" && (!/未確認|不明|断定|確認でき/.test(text) || /施設は危険|中止してください/.test(text))) failures.push("hazard uncertainty lost");
+  if (scenario.id === "AL-in-trip-rain" && !["天気の保存済み評価", "警報の保存済み評価", "未確認:この施設への警報の正確な適用範囲", "警報の有効期間", "実際の現在地や屋外にいるかは確認していません"].every((value) => text.includes(value))) failures.push("saved environment bundle incomplete");
   if (scenario.id === "AM-in-trip-location-denied" && (!/現在地|位置情報/.test(text) || !/許可|分かりません|確認でき|未確認|不明/.test(text))) failures.push("location denied not acknowledged");
   if (snapshot.location.status !== "available" && /(?:現在|今)[、は]*(?:列車(?:の移動中|で移動中)です|乗車中です|屋外で)/.test(text)) failures.push("planned state promoted to actual location or boarding");
   if (/bookingReference|episodeId|dedupeKey|ownerSubject/.test(JSON.stringify({ response, trace }))) failures.push("private data exposed");

@@ -24,3 +24,17 @@ it("does not claim stale/unknown coverage is fresh and leaves absent scope uncha
   expect(evidenceAwareTool(weather, evidence).description).toContain("(unknown)");
   expect(evidenceAwareTool(weather, evidence).description).toContain("最新確認が必要");
 });
+it("separates daily observed delay analysis from individual Trip Impact and alternative routes", () => {
+  const evidence = inTripApplicationEvidence(inTripFixture().snapshot);
+  expect(evidence.some((e) => e.coverage?.includes("rail.connection"))).toBe(true);
+  const descriptor = viewerAgentToolDescriptors(["query_train_delay_analysis"])[0]!;
+  const adapted = evidenceAwareTool(descriptor, evidence);
+  expect(adapted.description).toContain("業務日全体または複数列車");
+  expect(adapted.description).toContain("保存済みTripImpact / connection-buffer / rail-delayを説明する");
+  expect(adapted.decisionSupport?.unsuitableCases).toContain("このまま乗っていて大丈夫か、この乗換はどうか、などcurrent TripImpactで回答できる相談");
+  expect(adapted.description).toContain("個別TripのTripImpactや乗換成立性を再評価するものではない");
+  expect(adapted.description).toContain("search_direct_routesの責務");
+  expect(adapted.description).toContain("再取得しない");
+  expect(adapted.inputSchema).toEqual(descriptor.inputSchema);
+  expect(viewerAgentToolDescriptors(["search_direct_routes"])[0]!.description).toContain("新しい経路・代替経路");
+});

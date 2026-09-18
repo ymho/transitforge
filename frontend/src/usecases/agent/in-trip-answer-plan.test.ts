@@ -1,21 +1,53 @@
 import { describe, expect, it } from "vitest";
 import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.fixture";
 import { inTripApplicationEvidence } from "./in-trip-application-evidence";
-import { renderInTripAnswer, validInTripAnswerPlan, type InTripAnswerPlan } from "./in-trip-answer-plan";
+import { renderInTripAnswer, validInTripAnswerPlan, inTripPresentations, supportsInTripPresentation, type InTripAnswerPlan } from "./in-trip-answer-plan";
 import { parseAgentDecisionSummary } from "./agent-decision-summary";
 import { externalTravelEvidence } from "./external-travel-tools";
 import { hazardInformation } from "../../../../modules/trip/domain/hazard-alert.fixture";
+import { areaInput, areaHazardEvent, areaNow } from "../../../../modules/trip/domain/area-trip-impact.fixture";
+import { buildInTripContext } from "@raiquora/trip/in-trip-context";
+import { evaluateAreaTripImpact } from "@raiquora/trip/area-trip-impact";
 
 describe("InTripAnswerPlan presentation boundary", () => {
   const values = () => inTripApplicationEvidence(inTripFixture().snapshot);
   const selection = (evidenceId: string, presentation: InTripAnswerPlan["evidence"][number]["presentation"]): InTripAnswerPlan => ({ evidence: [{ evidenceId, presentation }] });
+  it.each(["both", "weather", "hazard"])("renders all saved %s environment facts from one pure bounded Evidence", (kind) => {
+    const inputs = [areaInput(), areaInput(areaHazardEvent())].filter((_, i) => kind === "both" || i === (kind === "weather" ? 0 : 1));
+    const trip = { ...inputs[0]!.trip, lifecycleState: "in_trip" as const };
+    const snapshot = buildInTripContext(trip, { at: areaNow, timeZone: "UTC" }, { tripConfirmed: true,
+      impacts: inputs.map((input) => ({ impact: evaluateAreaTripImpact({ ...input, trip }), observedAt: areaNow,
+        expiresAt: "2026-09-12T09:00:00Z", fresh: true })) })!;
+    const before = JSON.stringify(snapshot), evidence = inTripApplicationEvidence(snapshot);
+    const bundle = evidence.filter((e) => e.references[0]?.sourceType === "trip-impact");
+    expect(bundle).toHaveLength(1);
+    const e = bundle[0]!, plan = selection(e.id, "environment-impact");
+    expect(new Set(e.coverage)).toEqual(new Set(kind === "both" ? ["weather.impact", "hazard.impact"] : [`${kind}.impact`]));
+    expect(inTripPresentations.filter((p) => supportsInTripPresentation(e, p))).toEqual(["environment-impact"]);
+    expect(e.knowledgeKind).toBe(snapshot.impacts.items.some((i) => i.status === "unknown") ? "unverified_information" : "derived_value");
+    expect(JSON.parse(String(e.facts.impacts))).toEqual(snapshot.impacts.items.map(({ reasonCodes: _reasonCodes, ...saved }) => saved));
+    const rendered = renderInTripAnswer(plan, [e.id], evidence);
+    expect(rendered.text.includes("天気の保存済み評価")).toBe(kind !== "hazard");
+    expect(rendered.text.includes("警報の保存済み評価")).toBe(kind !== "weather");
+    if (kind !== "weather") {
+      expect(rendered.text).toContain("未確認:この施設への警報の正確な適用範囲");
+      expect(rendered.text).toContain("未確認:警報の有効期間");
+    }
+    expect(rendered.text).toContain("実際の現在地や屋外にいるかは確認していません");
+    expect(rendered.text).not.toMatch(/今は屋外です|現在この施設にいます|この施設は危険です/);
+    expect(JSON.stringify(e)).not.toMatch(/providerAlertId|providerEventId|ownerSubject|longitude|latitude/);
+    for (const oldPresentation of ["weather-impact", "hazard-impact"])
+      expect(validInTripAnswerPlan({ evidence: [{ evidenceId: e.id, presentation: oldPresentation }] })).toBe(false);
+    expect(() => renderInTripAnswer(selection(e.id, "uncertainty"), [e.id], evidence)).toThrow();
+    expect(JSON.stringify(snapshot)).toBe(before);
+  });
   it("renders external acquisitions separately from saved Impact, including missing Provider evidence", () => {
     for (const output of [{ alerts: hazardInformation() }, { forecast: { status: "unavailable", freshness: "unknown", evidence: [] } }]) {
       const evidence = externalTravelEvidence(output, { retrievedAt: "2026-09-12T08:00:00Z" }), id = evidence[0]!.id;
       const rendered = renderInTripAnswer(selection(id, "external-result"), [id], evidence);
       expect(rendered.text).toContain("保存済みの旅程への影響評価とは別");
       expect(rendered.text).not.toContain("施設が危険");
-      expect(() => renderInTripAnswer(selection(id, "hazard-impact"), [id], evidence)).toThrow();
+      expect(() => renderInTripAnswer(selection(id, "environment-impact"), [id], evidence)).toThrow();
       if ("forecast" in output) expect(rendered.text).toContain("最新情報は確認できていません");
     }
   });
