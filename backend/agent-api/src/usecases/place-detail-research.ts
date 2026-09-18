@@ -1,6 +1,8 @@
 import { availableExternalInformation } from "@raiquora/trip/external-travel-information";
 import type { ExternalSourceEvidence } from "@raiquora/trip/external-travel-information";
 import type { PlaceEditorialDetail, PlaceMedia, PlaceMediaProvider } from "@raiquora/trip/place-media";
+import { resolvePlaceTargetBinding } from "@raiquora/trip/place-media";
+import { validatePlaceRef, type PlaceRef } from "@raiquora/trip/place-snapshot";
 import type { WebPageReader, WebSearchHit, WebSearchProvider } from "@raiquora/trip/web-research";
 import { likelyOfficialWebsiteUrl } from "@raiquora/trip/official-website";
 import type { AgentOperation } from "../ports/agent-operation.js";
@@ -24,17 +26,31 @@ export function createPlaceDetailResearchOperation(dependencies: {
     const query = text(request.query, 100);
     const latitude = finite(request.latitude);
     const longitude = finite(request.longitude);
+    const ref = request.targetRef;
+    if (ref !== undefined) {
+      try { validatePlaceRef(ref as PlaceRef); }
+      catch { return { statusCode: 400, body: { message: "地点参照が不正です" } }; }
+    }
+    const targetRef = ref && typeof ref === "object" && "provider" in ref && "providerPlaceId" in ref &&
+      typeof ref.provider === "string" && typeof ref.providerPlaceId === "string"
+      ? { provider: ref.provider, providerPlaceId: ref.providerPlaceId } : undefined;
     if (!query || (latitude === undefined) !== (longitude === undefined)) {
       return { statusCode: 400, body: { message: "観光地の詳細検索条件が不正です" } };
     }
     const placeResult = await dependencies.places.search({
       query,
       ...(latitude === undefined ? {} : { latitude, longitude, radiusMeters: 800 }),
-      limit: 1,
+      limit: 5,
       detail: true,
     });
-    const place = placeResult.data?.places[0];
-    if (!place) return { body: { result: placeResult } };
+    // A name/coordinate search may return a nearby store instead of the selected landmark.
+    const bound = (placeResult.data?.places ?? []).map(place => ({
+      ...place, targetBinding: resolvePlaceTargetBinding(place, targetRef),
+    }));
+    const place = bound.find(place => place.targetBinding.status === "resolved");
+    if (!place) return { body: { result: { ...placeResult,
+      ...(placeResult.data ? { data: { places: [] } } : {}),
+    }, targetObservations: bound.map(({ providerPlaceId, targetBinding }) => ({ providerPlaceId, ...targetBinding })) } };
 
     const webResult = await dependencies.webSearch.search({
       query: `"${place.name}" 公式 見どころ 営業時間 口コミ`,

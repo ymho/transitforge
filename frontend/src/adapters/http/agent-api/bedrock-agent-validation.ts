@@ -110,6 +110,9 @@ export function isPlaceMediaSearchResponse(value: unknown): value is PlaceMediaS
   return isRecord(result.data) && Array.isArray(result.data.places) && result.data.places.length <= 8 &&
     result.data.places.every((place) => isRecord(place) && typeof place.providerPlaceId === "string" &&
       typeof place.name === "string" && typeof place.sourceUrl === "string" &&
+      (place.targetBinding === undefined || isRecord(place.targetBinding) &&
+        ["resolved", "unresolved", "mismatch"].includes(String(place.targetBinding.status)) &&
+        ["stable-id", "different-id", "missing-binding", "source-binding"].includes(String(place.targetBinding.reason))) &&
       (place.officialWebsiteUrl === undefined || isSafeHttpsUrl(place.officialWebsiteUrl)) &&
       (place.address === undefined || typeof place.address === "string") &&
       (place.sources === undefined || Array.isArray(place.sources) && place.sources.length <= 12 &&

@@ -31,6 +31,15 @@ import順による上書きが必要な場合は`viewer.css`ではなく所有�
 
 ## 表示比較
 
+Place Explorerは詳細取得後に同じcandidate snapshotで詳細と一覧を更新する。
+詳細のprovider ID・identity provider・targetBindingを先に検証し、不一致/未解決なら既存candidateを変更しない。
+画像なしの更新も旧画像を復活させず反映する。解説・地点同定の出典は写真のiボタンと分ける。
+詳細は内容サイズとviewport上限を持ち、地図focusはpanelのscreen offsetを使う（座標は変更しない）。
+
+地図操作内の`hidden`は要素種別に関係なく`display: none !important`で維持する。
+再生速度のwrapperが`display: grid`でも、既存`renderDisplayMode`の非表示を上書きしない。
+mode stateや操作可否の正本はCSSへ移さない。
+
 APIやBedrockを使わず旅程を確認する場合は
 `npm run dev --workspace @raiquora/frontend -- --host 0.0.0.0`で起動し `?trip-preview=1`を付ける
 局地天気の表示を確認する場合は`?weather-preview=mixed`を付ける

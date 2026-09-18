@@ -10,6 +10,8 @@ import { proposeItineraryItem as proposalFor, type ItineraryPlacement } from "./
 /** Ephemeral trusted lookup, not an Offering/Trip repository. Resolver owns matching (#377),
  * provider evidence and field-specific retention. A model cannot supply this record. */
 export type ResolvedActivityCandidate = {
+  /** Optional only for discovery entities; target resolution must carry its binding outcome. */
+  targetBinding?: import("@raiquora/trip/place-media").PlaceMedia["targetBinding"];
   candidateId: string; tripId: string; taskId: string; validUntil: string;
   provider: string; providerItemId: string;
   source: ExternalSourceEvidence;
@@ -48,6 +50,7 @@ export async function proposeActivitySelection(trip: Trip, placement: ActivityPl
   const matches = await port.resolve(request.candidateId);
   if (matches.length !== 1) throw new Error("Activity candidate missing or ambiguous");
   const resolved = matches[0]!;
+  if (resolved.targetBinding && resolved.targetBinding.status !== "resolved") throw new Error("Activity target binding is unresolved or mismatched");
   const source = resolved.source;
   if (resolved.candidateId !== request.candidateId || resolved.tripId !== trip.id || resolved.taskId !== request.taskId ||
       !validInstant(selectedAt) || !validInstant(resolved.validUntil) || Date.parse(selectedAt) > Date.parse(resolved.validUntil) ||

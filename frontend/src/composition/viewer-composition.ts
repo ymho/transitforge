@@ -1,4 +1,5 @@
 import mapboxgl from "mapbox-gl";
+import { placeCameraOffset } from "../presentation/place-explorer/place-camera-offset";
 import { HttpInTripContextClient } from "../adapters/http/in-trip-context-client";
 import { accommodationProviderAttributionFromEnvironment } from "../adapters/browser/accommodation-provider-attribution";
 import { browserDigitalTwinClockEnvironment } from "../adapters/browser/digital-twin-clock-environment";
@@ -715,7 +716,10 @@ if (!token) {
   resizeContextMap = () => map.resize();
   groundAccessLayer = createGroundAccessLayer(map);
   verifiedPlaceLayer = createVerifiedPlaceLayer(map, (place) =>
-    mapPlaceExplorerController?.select(place.providerPlaceId, false));
+    mapPlaceExplorerController?.select(place.providerPlaceId, true), () => placeCameraOffset(
+      map.getContainer().getBoundingClientRect(),
+      [mapPlaceExplorer, mapPlaceDetail].filter((panel) => !panel.hidden).map((panel) => panel.getBoundingClientRect()),
+    ));
   mapPlaceExplorerController = configureMapPlaceExplorer({
     panel: mapPlaceExplorer,
     list: mapPlaceExplorerList,
@@ -728,6 +732,9 @@ if (!token) {
       if (candidate.kind !== "place") return candidate;
       const response = await researchPlaceDetail({
         query: candidate.name,
+        targetRef: candidate.value.sources?.find(source => source.role === "identity")
+          ? { provider: candidate.value.sources.find(source => source.role === "identity")!.provider, providerPlaceId: candidate.id }
+          : undefined,
         latitude: candidate.latitude,
         longitude: candidate.longitude,
       });
@@ -839,6 +846,7 @@ if (!token) {
         load: async () => {
           const response = await researchPlaceDetail({
             query: landmark.name,
+            ...(landmark.providerPlaceId ? { targetRef: { provider: "mapbox", providerPlaceId: landmark.providerPlaceId } } : {}),
             ...(landmarkCoordinate ? { latitude: landmarkCoordinate[1], longitude: landmarkCoordinate[0] } : {}),
           });
           return response.result.status === "available" ? mapPlaceCandidates(response.result.data?.places ?? []) : [];
