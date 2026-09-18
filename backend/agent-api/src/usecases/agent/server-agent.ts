@@ -6,9 +6,10 @@ import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
 import type { AgentRuntimeLimits } from "@raiquora/agent/runtime-policies";
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
+import type { AgentRuntimeContextInput } from "@raiquora/agent/agent-decision-context";
 import { requireTripPrincipal } from "../../contracts/trip-principal.js";
 
-/** Caller authenticates principal. References are not loaded or trusted as planning state. */
+/** Caller authenticates principal. Only an injected server loader may resolve references to state. */
 export interface ServerAgentTurn {
   principal: TrustedPrincipal;
   userRequest: string;
@@ -24,6 +25,8 @@ export interface ServerAgentDependencies {
   limits?: Partial<AgentRuntimeLimits>;
   modelClassPolicy?: AgentModelClassPolicy;
   now?: () => Date;
+  /** Trusted composition only; never supplied through the turn/request payload. */
+  loadContext?: (scope: ServerAgentScope) => Promise<AgentRuntimeContextInput>;
 }
 
 /** Transport-independent, per-turn composition; no shared mutable principal/tool/evidence state. */
@@ -41,12 +44,13 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
       ...(input.uiContext?.itemId ? { uiContext: { itemId: input.uiContext.itemId } } : {}),
       executionId: dependencies.newExecutionId(),
     };
+    const context = await dependencies.loadContext?.(scope);
     const tools = new AgentToolRegistry(), evidence = new ToolEvidenceRegistry();
     dependencies.registerTools(tools, evidence, scope);
-    // A UI reference is a hint only. Resolving it against authorized Trip State belongs to #479.
     return new MultiStepAgentRuntime({ model: dependencies.createModel(scope), tools,
       toolExecutor: new AgentToolExecutor(tools, evidence, dependencies.now),
       limits: dependencies.limits, now: dependencies.now, modelClassPolicy: dependencies.modelClassPolicy,
-    }).run({ executionId: scope.executionId, feature: "concierge", userRequest: scope.userRequest });
+    }).run({ executionId: scope.executionId, feature: "concierge", userRequest: scope.userRequest,
+      ...(context ? { context, omitTraceContent: true } : {}) });
   } };
 }

@@ -6,6 +6,24 @@ import {
 } from "@raiquora/agent/agent-decision-context";
 
 describe("AgentDecisionContext", () => {
+  it("bounds conversation metadata and preserves topics when compressing restored history", () => {
+    const context = buildAgentDecisionContext({ executionId: "restored", feature: "concierge", userRequest: "相談".repeat(750), context: {
+      conversation: { title: "題".repeat(200), scope: "trip", summary: "要約".repeat(2000),
+        messages: Array.from({ length: 30 }, (_, i) => ({ role: "user", text: `${i}:` + "履歴".repeat(1000) })),
+        resolvedTopics: Array.from({ length: 20 }, () => "済".repeat(200)), pendingTopics: Array.from({ length: 20 }, () => "未".repeat(200)),
+      },
+    } }, []);
+    expect(context.conversation?.title?.length).toBe(160);
+    expect(context.conversation?.summary?.length).toBe(800);
+    expect(context.conversation?.messages).toHaveLength(12);
+    const json = agentDecisionContextText(context).match(/<agent_context>([\s\S]*)<\/agent_context>/)![1];
+    const parsed = JSON.parse(json);
+    expect(parsed.contextTruncated).toBe(true);
+    expect(parsed.conversation.scope).toBe("trip");
+    expect(parsed.conversation.resolvedTopics).toHaveLength(12);
+    expect(parsed.conversation.pendingTopics).toHaveLength(12);
+    expect(json.length).toBeLessThanOrEqual(24_000);
+  });
   it("preserves turn, past-time assessment and unknown hard conditions when compacting", () => {
     const context = buildAgentDecisionContext({ executionId: "compact-progress", feature: "concierge", userRequest: "以前の旅",
       context: { previousAssistantTurn: "ask_only", currentTrip: { planningState: "candidate_selection", lifecycleState: "pre_trip",

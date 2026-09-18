@@ -1,10 +1,11 @@
-# Conversation / Profile Server保存基盤 — #479 Phase A
+# Conversation / Profile Server保存・Context復元 — #479 Phase A/B
 
 ## 範囲とownership
 
-本段階は **#479 Phase A / persistence foundation** である。
+保存境界は **#479 Phase A / persistence foundation** で導入した。
 `TrustedPrincipal → ConversationApplication / ProfileApplication → Repository → DynamoDB`
-を独立して導入する。HTTP/API Gateway、#478 Runtime、Context Loader、Browser compositionには接続しない。
+に加え、**Phase B**でServer Context Loaderから共有Runtimeへ読み取り専用で接続する。
+詳細は[Server Agent Context](server-agent-context.md)を参照する。HTTP/API GatewayとBrowser compositionには接続しない。
 既存Browser LocalStorageは引き続き現行の正本であり、本基盤とのdual-writeは行わない。
 
 [ADR 0067](../decisions/0067-establish-trusted-principal-boundary.md)の検証済みissuer + subから得た
@@ -22,7 +23,7 @@ Profileは`@raiquora/trip/travel-profile`のUserProfile v2とvalidatorを再利�
 新サービス/frameworkは追加しない。owner内の一覧・順序付き履歴・単一Profileというアクセスが
 既存DynamoDBで実現できるため採用する。PAY_PER_REQUEST、保存時暗号化、PITR、table削除保護を有効にする。
 既存Terraform fileは変更せず`server-state.tf`へtable、限定IAM policy、table名outputを置く。
-Lambda環境変数とproduction routeはPhase B以降で組成する。
+Lambda環境変数とproduction routeは#480のcutover以降で組成する。
 
 | Resource | PK | SK | 操作 |
 | --- | --- | --- | --- |
@@ -35,7 +36,7 @@ title/scope/summary/resolvedTopics/pendingTopics/optional tripIdを持つ。
 messageはuser/assistantのtext、server timestamp、1からの連番を持つ。履歴全文やベンダー固有レスポンス、
 Tool Trace、UI Stateをmetadataへ埋め込まない。Phase Aの本文契約はtextのみであり、
 既存ViewerAgentResponseを無変換で保存・復元できると主張しない。
-将来の構造化履歴/Context契約は#478との接続時に決定する。
+Phase Bは最近のtext履歴とsummary/topicsを復元する。Viewer固有の構造化応答の保存は後続とする。
 
 全Get/Queryはstrongly consistent。Scan、他ownerのglobal lookup、GSIは使わない。
 listはUUID順でmetadataだけを返す。更新日時順のUI一覧は本段階の契約に含めない。
@@ -44,7 +45,8 @@ PKを受け取らず必ず現在のprincipalから再構成する。別ownerのc
 DynamoDBの1 MB page境界もLastEvaluatedKeyで継続する。
 削除済みmetadataだけのpageは空配列とnextAfterになり得る。空配列だけを終了判定にしない。
 履歴取得は読取り前後にmetadataを確認し、途中のdeleteはnot-found、更新はconflictとする。
-複数page全体のsnapshotは保証せず、Context Loader側で必要な再読取り・件数上限を設ける。
+Phase BのContext LoaderはmessageCountから末尾12件へseekし、取得後のmetadata revision再確認で
+途中の変更をconflictにする。全文scanや更新中の暗黙再試行は行わない。
 
 ## 条件付き更新とサイズ
 
@@ -74,7 +76,7 @@ transactionで物理削除し、`{ complete: false }`なら同じprincipal/id/ex
 削除中のappendはmetadata CASで拒否され、削除済みIDの再createも拒否する。
 
 呼出し元はcomplete=trueまで継続する責務を持つ。Phase Aに公開delete endpointや背景workerはなく、
-中断後に自動再開するとは主張しない。中断時は非表示の本文がtableに残るため、Phase Bでtransportを
+中断後に自動再開するとは主張しない。中断時は非表示の本文がtableに残るため、#480でtransportを
 導入する際はdurableな削除継続（または削除完了を保証する実行境界）を組み合わせる。
 「非表示化成功」を「物理削除完了」と表示してはならない。
 
@@ -89,9 +91,10 @@ table削除保護はresource自体の破棄防止であり、利用者のitem削
 conversation.tripIdは独立Tripへの参照であり、ownershipや共有権限を与えない。
 Tripの存在/可視性は参照を辿る時に既存Trip Applicationで認可する。未存在・archive済み参照も自動修復しない。
 会話削除・参照解除はTripを削除しない。既存Trip table内のConversation reference indexも変更しない。
-Phase Bで参照の最終接続方針を決めるまで二重書込みをしない。
+Phase Bの読取ではConversation metadataのtripIdを使い、explicit tripIdと異なる場合はinvalid-inputにする。
+既存Trip reference indexとの二重書込みは行わない。
 Profile更新/削除は普段の希望だけを変更し、既存Trip、人数、予約、今回の制約を暗黙更新しない。
-このRepository/ApplicationはTrip writerやmutation portを依存として受け取らない。
+Context LoaderもTripRepositoryのgetだけを依存として受け取り、write-throughは行わない。
 
 ## Privacy / error contract
 
@@ -102,11 +105,12 @@ conflictは当該ownerのrevision競合のみを表す。validationはinvalid-in
 ownerの有無を確認する全table検索やforbidden/他ownerへの存在照会は行わない。
 
 生Profile、notes、会話本文/summary、tokenをログ・診断Traceへ出さない。
-保存同意とモデルへ渡す同意は別で、aiNoteFieldsは保存したまま尊重する。今回モデルへの送信は追加しない。
-将来のContext Loaderも既存bounded projectionを使い、保存した全文をそのままAgent/Traceへ送らない。
+保存同意とモデルへ渡す同意は別で、aiNoteFieldsは保存したまま尊重する。Phase BのContext Loaderは
+共有`createAgentContextSnapshot`を使い、同意したnotesだけを各240文字までモデルへ投影する。
+保存した全文をそのままAgent/Traceへ送らず、stateful組成ではRuntimeの内容Traceとraw model-call Traceを抑制する。
 本基盤は端末データの自動取込を行わず、別principalへの暗黙移譲もしない。
 
-## 検証とPhase B
+## 検証と後続cutover
 
 対象testはSDK command/transaction fakeで検証する。#484のローカル署名Access Tokenを実verifierで検証し、
 ApplicationからDynamoDB Adapterまで通したaccount isolationも含む。live AWS CRUDの代替とはしない。
@@ -120,9 +124,13 @@ terraform -chdir=infra/terraform/environments/dev fmt -check server-state.tf
 terraform -chdir=infra/terraform/environments/dev validate
 ```
 
-Phase Bへ残すもの:
+Phase BでServer Context Loaderと`MultiStepAgentRuntime`の接続を完了する。
+Browserから渡す将来の契約はIDs + user input + bounded UI hintであり、会話/Profile/Trip本文を要求しない。
+Server内部のstateful組成だけで動作し、production Browserの正本はまだ切り替えない。
 
-- #478 RuntimeとのContext Loader接続、必要な構造化履歴契約、boundedなConversation/Profile/Trip復元
+#480以降へ残すもの:
+
+- turn idempotency / retry設計とmessage write-through、必要な構造化応答の保存、summary更新方針
 - Browser切替、logout/account切替/別tab/遅着responseの破棄、transportと保存・削除継続の組成
 - LocalStorage正本停止。実利用者データ救済要否を明示確認し、必要なら明示import/read-backを設計する
 
