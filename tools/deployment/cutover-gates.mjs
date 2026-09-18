@@ -31,14 +31,16 @@ export function reviewCutoverPlan(plan, environment) {
     if (!Array.isArray(actions) || !actions.length || actions.some(a => !["no-op", "create", "read", "update", "delete"].includes(a))) {
       throw new Error("Invalid Terraform resource actions");
     }
+    if (typeof resource.address !== "string" || !/^[a-zA-Z0-9_.\[\]"-]+$/u.test(resource.address)) throw new Error("Invalid Terraform resource address");
     const stream = resource.name?.includes("agent_stream");
     const provider = resource.name?.includes("fixed_egress");
-    if ((stream || provider) && actions.includes("delete")) throw new Error("Cutover infrastructure deletion/replacement is prohibited in CD");
+    if ((stream || provider) && actions.includes("delete")) {
+      throw new Error(`Cutover infrastructure deletion/replacement is prohibited in CD: ${resource.address} (${actions.join("/")})`);
+    }
     if (before != null && ((stream && !gates.stream) || (provider && !gates.provider))) {
       throw new Error("Existing cutover infrastructure cannot be disabled by CD");
     }
     if (actions.every(a => a === "no-op")) continue;
-    if (typeof resource.address !== "string" || !/^[a-zA-Z0-9_.\[\]"-]+$/u.test(resource.address)) throw new Error("Invalid Terraform resource address");
     summary.push(`${actions.join("/")} ${resource.address}`);
   }
   return summary.join("\n") + "\n";
