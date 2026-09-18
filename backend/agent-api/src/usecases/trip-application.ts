@@ -8,7 +8,7 @@ import type { ReservationReader } from "../ports/reservation-repository.js";
 import type { TripFeasibilityReader } from "../ports/trip-feasibility-reader.js";
 import { requireFeasibleTrip, requestsReady } from "@raiquora/trip/trip-ready";
 import type { Trip } from "@raiquora/trip/trip";
-import { assertItineraryEditingAllowed, previewInTripReplan, type InTripReplanTargets } from "../../../../frontend/src/usecases/trip-plan/in-trip-replan.js";
+import { assertItineraryEditingAllowed, previewInTripReplan, type InTripReplanTargets } from "@raiquora/trip/in-trip-replan";
 
 export class TripApplication {
   constructor(private readonly trips: TripRepository, private readonly references: TripConversationReferences,

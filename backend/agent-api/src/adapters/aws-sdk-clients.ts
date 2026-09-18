@@ -1,4 +1,4 @@
-import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
+import { BedrockRuntimeClient, ConverseCommand, CountTokensCommand } from "@aws-sdk/client-bedrock-runtime";
 import { DynamoDBClient, QueryCommand } from "@aws-sdk/client-dynamodb";
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
@@ -9,6 +9,13 @@ export class AwsBedrockConverseClient {
   constructor(private readonly client = new BedrockRuntimeClient({})) {}
   async converse(input: JsonObject): Promise<unknown> {
     return this.client.send(new ConverseCommand(input as unknown as ConstructorParameters<typeof ConverseCommand>[0]));
+  }
+  /** Optional diagnostics; not called by the production inference path. */
+  async countTokens(input: JsonObject): Promise<number | undefined> {
+    const { modelId, messages, system, toolConfig } = input;
+    const request = { modelId, input: { converse: { messages, system, toolConfig } } };
+    const result = await this.client.send(new CountTokensCommand(request as unknown as ConstructorParameters<typeof CountTokensCommand>[0]));
+    return result.inputTokens;
   }
 }
 

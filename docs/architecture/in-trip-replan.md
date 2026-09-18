@@ -11,7 +11,7 @@
 | `registerTripProgressTools` のcandidate/activity/transport/request提案 | 全V2提案の共通出口でscopeを検証。削除/並べ替え能力を追加 | rail timetable/retention validationは既存採用入口 |
 | Workspace preview/confirm、server workspace source | before/after、保護理由、予約影響、成立性、明示確認 | public writerは引き続きgate、#399認証rollout |
 
-主要変更: `frontend/src/usecases/trip-plan/in-trip-replan.ts`、同controller/source、
+主要変更: `modules/trip/domain/in-trip-replan.ts`、frontendのtrip-plan controller/source、
 `frontend/src/usecases/agent/trip-progress-tools.ts` / `agent-decision-context.ts`、
 `frontend/src/adapters/bedrock/viewer-agent-runtime.ts`、`trip-workspace-proposal.ts`、
 `backend/agent-api/src/usecases/trip-application.ts`。各境界のテストとAQ〜AUを追加する。
@@ -19,9 +19,10 @@ Trip/DTO/schema/Storageにfieldを増やさず、migration・dual write・新Rep
 
 ## Application scope
 
-`calculateInTripReplanScope` は副作用のないApplication計算。既存Domainの `positionAt` と
+`calculateInTripReplanScope` は共有Domainの副作用のないpolicy計算。既存Domainの `positionAt` と
 `effectiveTripConstraints`、検証済みReservationFactを入力にする。UIとserverで同じ関数を使い、
-時計や予約取得を関数内で行わない。配置は既存のfrontend usecasesで、backendからも純粋関数だけを参照する。
+時計や予約取得を関数内で行わない。`@raiquora/trip/in-trip-replan` をfrontend/backend双方が参照し、
+server CASのauthorityからfrontendへの依存を作らない。
 
 - definitely pastは必ずimmutable。previousも同じ既存時刻判定なのでこの集合に含まれる。
 - 通常scopeは予定上current最大2件とnext最大2件。全remainingを暗黙許可しない。
@@ -38,6 +39,9 @@ Trip/DTO/schema/Storageにfieldを増やさず、migration・dual write・新Rep
 
 `InTripReplanScope` はrequest-localの導出結果であってDomain stateや別Plannerではない。
 Agentへのprojectionは最大12対象の理由/最大8mutableだけ。未掲載は許可しない。
+初期Contextにscopeを載せるのはhostの明示targetまたはUI focusがある場合だけで、通常の旅行中の説明・
+独立経路検索には注入しない。非注入でもProposal Toolの`previewInTripReplan`は必ずdefault current/nextを
+検証する。表示しないことは権限の緩和ではなく、保護対象には引き続き明示targetが必要。
 User intent/どの候補が良いか/追加検索/質問はBedrockが判断し、固定質問順や発話routerを追加しない。
 保護された対象の自然言語だけからの権限昇格はしない。必要な明示対象はWorkspaceで選択する。
 
@@ -73,6 +77,9 @@ revision conflictは通常の「別候補を試せる」Tool失敗と区別し�
 モデルがTool名を`selectedAction`へ書く不正応答は実行しない。in-trip scopeがある場合だけ
 一度まで構造化contractの訂正を要求でき、再び不正なら失敗する。常時reflectionは追加しない。
 訂正時にモデルの内部思考を履歴/traceへ保存せず、Evidence/Claim validationは維持する。
+Tool利用時のnative契約は明示scopeのContextに置き、全turnのSystem Promptへ重ねていた
+変更案の例示は削除する。施設候補の採用とremove/moveの責務は既存`decisionSupport`形式で
+区別する。Toolの公開集合・schema・モデル・temperature・検証境界は変更しない。
 
 ## 評価・残務
 

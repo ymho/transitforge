@@ -2,7 +2,7 @@ import { isPriceObservation } from "@raiquora/trip/money";
 import { reservationContext } from "../../usecases/agent/reservation-context";
 import { loadInTripContext, type InTripContextReader } from "../../usecases/agent/in-trip-context";
 import { inTripApplicationEvidence } from "../../usecases/agent/in-trip-application-evidence";
-import { calculateInTripReplanScope, previewInTripReplan, replanScopeContext } from "../../usecases/trip-plan/in-trip-replan";
+import { calculateInTripReplanScope, previewInTripReplan, replanScopeContext } from "@raiquora/trip/in-trip-replan";
 import { tripFeasibilityContext } from "../../usecases/agent/trip-feasibility-context";
 import { tripReadinessContext } from "../../usecases/agent/trip-readiness-context";
 import { projectTripReadiness } from "@raiquora/trip/trip-readiness";
@@ -456,7 +456,7 @@ export async function runViewerAgentRuntime(
     initialEvidence: inTrip ? inTripApplicationEvidence(inTrip) : [],
     context: {
       ...(inTrip ? { inTrip } : {}),
-      ...(currentTrip?.lifecycleState === "in_trip" ? { inTripReplanScope: replanScopeContext(calculateInTripReplanScope(currentTrip, {
+      ...(currentTrip?.lifecycleState === "in_trip" && replanTargets ? { inTripReplanScope: replanScopeContext(calculateInTripReplanScope(currentTrip, {
         now: currentDate(dependencies), reservations: reservationFacts, targets: replanTargets,
       })) } : {}),
       previousAssistantTurn: dependencies.previousAssistantTurn,

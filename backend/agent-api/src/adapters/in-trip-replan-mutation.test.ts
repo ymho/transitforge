@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createTrip, type Trip, type TripUpdateProposal } from "@raiquora/trip/trip";
 import { tripDynamoFixture } from "./trip-dynamodb.fixture.js";
 import { TripApplication } from "../usecases/trip-application.js";
-import { previewInTripReplan } from "../../../../frontend/src/usecases/trip-plan/in-trip-replan.js";
+import { previewInTripReplan } from "@raiquora/trip/in-trip-replan";
 
 const owner = { subject: "owner-A" }, id = "11111111-1111-4111-8111-111111111111";
 const now = new Date("2026-09-13T01:00:00Z");

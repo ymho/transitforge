@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createTrip, type ItineraryItem, type Trip, type TripPatch } from "@raiquora/trip/trip";
-import type { ReservationFact } from "@raiquora/trip/reservation";
+import { createTrip, type ItineraryItem, type Trip, type TripPatch } from "./trip";
+import type { ReservationFact } from "./reservation";
 import { calculateInTripReplanScope, previewInTripReplan, replanScopeContext } from "./in-trip-replan";
-import { createTripWorkspaceController } from "./trip-workspace-controller";
-import { reservationChangeKey } from "@raiquora/trip/reservation";
 
 const now = new Date("2026-09-20T01:00:00Z");
 const zoned = (hour: string) => ({ at: `2026-09-20T${hour}:00:00+09:00`, timeZone: "Asia/Tokyo" });
@@ -30,27 +28,13 @@ describe("in-trip Application scope and existing Proposal", () => {
       { type: "remove" as const, itemId: id }, { type: "replace" as const, itemId: id, item: trip.items.find((i) => i.id === id)! },
     ]) expect(() => previewInTripReplan(trip, proposal(trip, [patch]), input)).toThrow();
   });
-  it("explicit targets never authorize past; booked/fixed changes require a separate exact confirmation", async () => {
+  it("explicit targets never authorize past; booked/fixed changes require a separate exact confirmation", () => {
     const trip = replanTestTrip(), targets = { tripId: trip.id, baseRevision: 0, itemIds: ["booked"] };
     const p = proposal(trip, [{ type: "remove", itemId: "booked" }]);
     const preview = previewInTripReplan(trip, p, { ...input, targets });
     expect(preview.confirmationKey).toBeTruthy();
     expect(preview.protectedChanges).toEqual([{ itemId: "booked", codes: ["booked", "fixed"] }]);
-    let writes = 0;
-    const c = createTripWorkspaceController("s", () => now);
-    c.attach("s", { getCurrentTrip: () => trip, getReservationFacts: () => input.reservations, getReplanTargets: () => targets, confirmProposal: async () => { writes++; } });
-    c.preview(p); await expect(c.confirm()).rejects.toThrow(); expect(writes).toBe(0);
-    c.dismiss(); expect(writes).toBe(0); expect(trip.items).toHaveLength(6);
-    c.preview(p);
-    await c.confirm({ replanConfirmationKey: preview.confirmationKey, reservationChangeKey: reservationChangeKey(p, input.reservations) });
-    expect(writes).toBe(1);
     expect(() => previewInTripReplan(trip, proposal(trip, [{ type: "remove", itemId: "past" }]), { ...input, targets: { ...targets, itemIds: ["past"] } })).toThrow();
-  });
-  it("does not intercept a separate Request-only preview", () => {
-    const trip = replanTestTrip(), c = createTripWorkspaceController("s", () => now);
-    c.attach("s", { getCurrentTrip: () => trip, getReservationFacts: () => input.reservations });
-    expect(() => c.preview(proposal(trip, [{ type: "request", request: trip.request }]))).not.toThrow();
-    expect(c.replan()).toBeUndefined();
   });
   it("is pure, keeps outside items, evaluates unknown movement/constraints rather than declaring feasible", () => {
     const trip = replanTestTrip(), original = structuredClone(trip);

@@ -26,7 +26,7 @@ export async function runInTripToolScenario(scenario: TravelProgressScenario, li
       impact: evaluateAreaTripImpact({ ...area, trip }), fresh: false, observedAt: "2026-09-12T06:00:00Z", expiresAt: "2026-09-12T07:00:00Z",
     }] })!;
   }
-  let trace: AgentTrace | undefined, observation: AgentTurnObservation | undefined, calls = 0;
+  let trace: AgentTrace | undefined, observation: AgentTurnObservation | undefined, calls = 0, sawReplanScope = false;
   const decisionDiagnostics: Record<string, unknown>[] = [];
   const before = JSON.stringify({ trip, snapshot });
   const response = await runViewerAgentRuntime(scenario.userRequest, {
@@ -39,6 +39,7 @@ export async function runInTripToolScenario(scenario: TravelProgressScenario, li
     storeAgentTrace: async (v) => { trace = v; }, onTurnObservation: (v) => { observation = v; },
   }, async (...args) => {
     calls++;
+    sawReplanScope ||= args[0].some((m) => m.content.some((b) => "text" in b && b.text.includes('"inTripReplanScope":')));
     const output = live ? await live(...args) : calls === 1 ? modelTools(modelTool(expected.tool, expected.input))
       : modelAnswer(`<decision_summary>${JSON.stringify({ interpretedGoal: "照会後の未確認範囲を説明する", hardConstraints: [], softPreferences: [],
         selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"], usedEvidenceIds: ["application:in-trip:coverage"],
@@ -52,6 +53,8 @@ export async function runInTripToolScenario(scenario: TravelProgressScenario, li
   });
   const report = evaluateTravelProgress(scenario.id, [{ observation, trace, delivered: true, modelCalls: calls }], scenario.thresholds, live ? "live" : "scripted");
   const failures: string[] = [];
+  if (sawReplanScope) failures.push("replan scope injected without explicit host target");
+  if (trace?.events.some((e) => e.type === "tool_called" && e.toolName !== expected.tool)) failures.push("unnecessary Tool called");
   if (!trace?.events.some((e) => e.type === "tool_called" && e.toolName === expected.tool)) failures.push(`required Tool not called: ${expected.tool}`);
   if (!trace?.events.some((e) => e.type === "tool_completed" && e.toolName === expected.tool && e.outcome === "success")) failures.push(`required Tool did not execute successfully: ${expected.tool}`);
   if (JSON.stringify({ trip, snapshot }) !== before) failures.push("read-only Trip changed");

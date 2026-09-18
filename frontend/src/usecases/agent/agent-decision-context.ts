@@ -66,7 +66,7 @@ export interface AgentToolOutcomeSummary {
 }
 
 export interface AgentRuntimeContextInput {
-  inTripReplanScope?: ReturnType<typeof import("../trip-plan/in-trip-replan").replanScopeContext>;
+  inTripReplanScope?: ReturnType<typeof import("@raiquora/trip/in-trip-replan").replanScopeContext>;
   inTrip?: InTripContextSnapshot;
   tripReadiness?: AgentTripReadinessContext;
   tripFeasibility?: AgentTripFeasibilityContext;
@@ -331,11 +331,10 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
   if (context.inTrip?.trip.lifecycleState === "in_trip") return [
     brief,
     `利用者の今回の質問: ${JSON.stringify(context.userRequest)}`,
-    "応答方式は依頼に合わせて選択します。変更案の作成・候補の採用・追加調査にはnative toolUseを使います（selectedAction=use_tool、selectedTool=実際の能力名、inTripAnswerPlanは省略）。保存済み事実の説明だけならselectedAction=answerとし、以下のAnswerPlanを使います。Tool名をselectedActionに入れたtext応答は実行されません。",
+    ...(context.inTripReplanScope ? ["変更案を作る場合はselectedAction=use_tool、selectedTool=Tool名としてnative toolUseを呼び出します。この応答にinTripAnswerPlanは付けません。候補IDはTool入力であってEvidence IDではありません。AnswerPlanはanswer時の保存済み事実の表示だけに使い、Proposalの代わりにはなりません。"] : []),
     "旅行中のanswerではDecision SummaryへinTripAnswerPlan:{evidence:[{evidenceId:実在id,presentation:表示種別}]}を必ず含めてください。最大6件。usedEvidenceIdsの部分集合です。事実はApplication rendererが表示するため、自由文で同じ事実を言い換えず、回答に必要なEvidenceの選択と順序だけを決めてください。",
     "AnswerPlanの対象はverified_evidenceのApplication Evidence、またはToolが返すEvidenceです。presentationはplanned-itinerary（trip.itinerary/next-item）、rail-impact（rail.impact/connection）、environment-impact（environment Evidence内の保存済み天気・警報評価をまとめて表示）、reservation（reservation.state）、location-permission（location.permission）、uncertainty（未確認範囲）、external-result（external-sourceかつresultKind=weather/hazardの取得結果）です。追加Toolの天気・警報Evidenceはexternal-resultで参照し、既存の構造化カードで表示します。保存済みImpactへは昇格しません。",
     "Toolは新しい候補・異なる区間/時刻・最新観測など回答に必要な追加情報を調べるときに選んでください。既存Evidenceの説明だけで答えられるときは再取得せず回答してください。ユーザーの入力に答えるために不要な質問はしないでください。",
-    "利用者が旅程の変更案を求めた場合、inTripReplanScopeを参照して既存のProposal能力を選べます。AnswerPlanは事実説明専用で、PatchやProposalの代わりにはなりません。Proposalは未保存の案であり自動更新ではありません。過去・対象外は変更不可、保護対象は利用者が画面で明示した対象だけです。予約そのものは変更しません。",
     "予定上のcurrentは実際の現在地・乗車確認ではありません。possible-current/date-current/unknownの精度を保持し、Impact severity・乗換成立性・Notification currency・予約状態を再計算しないでください。unknown/unavailable/omitted/truncatedは問題なしではありません。Trip・予約・通知を自動変更しないでください。",
     `<agent_context>${boundedContext}</agent_context>`,
   ].join("\n");

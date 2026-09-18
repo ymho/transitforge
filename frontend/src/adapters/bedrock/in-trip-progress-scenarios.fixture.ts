@@ -33,7 +33,7 @@ export async function runInTripProgressScenario(scenario: TravelProgressScenario
     "AJ-in-trip-next": ["trip.next-item"], "AK-in-trip-rail": ["rail.connection"],
     "AL-in-trip-rain": ["weather.impact", "hazard.impact"], "AM-in-trip-location-denied": ["location.permission"],
   };
-  let sawContext = false;
+  let sawContext = false, sawReplanScope = false;
   const response = await runViewerAgentRuntime(scenario.userRequest, { ...askProgressFixture("C-candidate").base,
     candidateSelection: undefined, getTravelCandidates: () => [], getCurrentTrip: () => trip,
     getCurrentDate: () => new Date(snapshot.now.at), inTripContextReader: { read: async () => snapshot },
@@ -42,6 +42,7 @@ export async function runInTripProgressScenario(scenario: TravelProgressScenario
     calls++;
     const text = args[0].flatMap((m) => m.content.flatMap((b) => "text" in b ? [b.text] : [])).join("\n");
     sawContext ||= text.includes('"inTrip"') && text.includes('"in-trip-v1"') && text.includes(snapshot.trip.id);
+    sawReplanScope ||= text.includes('"inTripReplanScope":');
     return live ? live(...args) : modelAnswer(`<decision_summary>${JSON.stringify({ interpretedGoal: "旅行中の質問へ保存済み事実で答える",
       hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"],
       usedEvidenceIds: evidence.filter((e) => e.coverage?.some((c) => requiredCoverage[scenario.id]!.includes(c))).map((e) => e.id),
@@ -59,6 +60,7 @@ export async function runInTripProgressScenario(scenario: TravelProgressScenario
   const rendered = trace?.events.flatMap((e) => e.type === "decision_recorded" ? e.inTripAnswerPlan?.evidence ?? [] : []) ?? [];
   for (const scope of requiredCoverage[scenario.id]!) if (!evidence.some((e) => e.coverage?.includes(scope) && rendered.some((r) => r.evidenceId === e.id))) failures.push(`answer did not render Evidence coverage ${scope}`);
   if (!sawContext) failures.push("in-trip snapshot missing from model context");
+  if (sawReplanScope) failures.push("replan scope injected without explicit host target");
   if (!trace?.events.some((e) => e.type === "evidence_collected" && e.sourceTypes.includes("trip-state"))) failures.push("Application Evidence missing from runtime trace");
   if (!text?.trim() || /案内を完了できません|安全な実行上限/.test(text)) failures.push("response failed");
   if (JSON.stringify({ trip, snapshot }) !== before) failures.push("read-only context mutated Trip");

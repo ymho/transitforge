@@ -78,7 +78,36 @@ const cases = liveDecisionCases().filter(({ evaluation }) =>
   (profile === "full" || evaluation.tags.includes("smoke")) &&
   (selectedCase === undefined || evaluation.id === selectedCase));
 if (cases.length === 0 && !progressSuite && !tripProgressSuite) throw new Error("対象となるLive Eval caseがありません");
-const model = new BedrockConversationModel(new AwsBedrockConverseClient(), {
+// Only scalar request/response diagnostics, never provider payloads or model reasoning.
+const provider = new AwsBedrockConverseClient();
+const providerAttempts: Record<string, unknown>[] = [];
+let modelCallNumber = 0;
+const model = new BedrockConversationModel({ converse: async (input) => {
+  const specs = (input.toolConfig as { tools?: { toolSpec: { description: string } }[] } | undefined)?.tools ?? [];
+  const diagnostic: Record<string, unknown> = { modelCallNumber, toolCount: specs.length,
+    toolDescriptorCharacters: specs.reduce((n, s) => n + s.toolSpec.description.length, 0),
+    inputTokens: null, inputTokenSource: "unavailable", providerRetry: 0 };
+  const metadata = (value: unknown) => {
+    const v = value as { $metadata?: { httpStatusCode?: number; requestId?: string }; usage?: { inputTokens?: number } } | undefined;
+    if (Number.isFinite(v?.$metadata?.httpStatusCode)) diagnostic.httpStatus = v!.$metadata!.httpStatusCode;
+    if (typeof v?.$metadata?.requestId === "string" && /^[a-zA-Z0-9-]{1,128}$/.test(v.$metadata.requestId)) diagnostic.providerRequestId = v.$metadata.requestId;
+    if (Number.isFinite(v?.usage?.inputTokens)) { diagnostic.inputTokens = v!.usage!.inputTokens; diagnostic.inputTokenSource = "provider_usage"; }
+  };
+  try {
+    const value = await provider.converse(input); metadata(value);
+    diagnostic.status = "success"; return value;
+  } catch (error) {
+    metadata(error); diagnostic.status = "failure";
+    diagnostic.providerErrorName = error instanceof Error && /^[a-zA-Z0-9]+$/.test(error.name) ? error.name : "UnknownError";
+    if (process.argv.includes("--measure-input-tokens")) {
+      try {
+        const tokens = await provider.countTokens(input);
+        if (Number.isFinite(tokens)) { diagnostic.inputTokens = tokens; diagnostic.inputTokenSource = "CountTokens"; }
+      } catch { diagnostic.inputTokenSource = "CountTokens_unavailable"; }
+    }
+    throw error;
+  } finally { providerAttempts.push(diagnostic); }
+} }, {
   maxOutputTokens,
   modelId: process.env.MODEL_ID?.trim() || "amazon.nova-lite-v1:0",
   ...(process.env.LIGHTWEIGHT_MODEL_ID?.trim()
@@ -91,6 +120,7 @@ const model = new BedrockConversationModel(new AwsBedrockConverseClient(), {
 });
 const modelFailures: string[] = [];
 const converse: BedrockAgentConverse = async (messages, tools, requestedClass) => {
+  modelCallNumber++;
   try {
     const response = await model.converse({
       messages,
@@ -118,7 +148,8 @@ if (tripProgressSuite) {
     for (const scenario of scenarios) {
       // Same production Runtime and synthetic provider fixtures as scripted evaluation.
       // The real model receives history and Request; only public structured observations are reported.
-      results.push({ ...await runTravelProgressScenario(scenario, converse), attempt });
+      providerAttempts.length = 0; modelCallNumber = 0;
+      results.push({ ...await runTravelProgressScenario(scenario, converse), attempt, providerAttempts: [...providerAttempts] });
       console.log(`Trip Progress live: ${scenario.id}, attempt ${attempt}`);
       if (modelFailures.length) break;
     }

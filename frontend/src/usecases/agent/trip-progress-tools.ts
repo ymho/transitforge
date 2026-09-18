@@ -11,7 +11,7 @@ import { proposeManualTransport, proposeTransportSelection, type TransportSelect
 import { AgentToolRegistry } from "./tool-registry";
 import { validateAgentToolInput } from "./agent-tool-input-validator";
 import { successfulAgentToolResult, failedAgentToolResult, type AgentToolDescriptor } from "./tool-contract";
-import { assertItineraryEditingAllowed, previewInTripReplan, type InTripReplanTargets } from "../trip-plan/in-trip-replan";
+import { assertItineraryEditingAllowed, previewInTripReplan, type InTripReplanTargets } from "@raiquora/trip/in-trip-replan";
 import type { ReservationFact } from "@raiquora/trip/reservation";
 import type { TripFeasibilityFacts } from "@raiquora/trip/trip-feasibility";
 
@@ -66,7 +66,15 @@ export const tripProgressDescriptors: AgentToolDescriptor[] = [
   },
   {
     name: "propose_activity_selection",
-    description: "提示済みのrestaurant/experience候補IDを解決してActivityとして採用する案を作る。検索結果本体やProvider ID、Evidence、保持許諾は入力しない。Applicationが同Trip/task/期限/同定/出所/保存権限を照合し、許可された名称・場所・日程だけをpreviewする。食事はfood、体験はexperience。価格・空席・予約・写真は保存しない。schedule省略時はrestaurantがunscheduled、体験は保持許可された提供日をdayにする。別候補へ変更するときは既存itemIdのreplace。未検証/期限切れ/保存許諾不明は拒否する。",
+    description: "提示済みの食事店・体験候補を採用・置換する未保存Proposal。",
+    decisionSupport: {
+      capability: "提示済みrestaurant/experience候補を採用する未保存TripUpdateProposal",
+      suitableCases: ["既存予定を提示済み候補へ変更: candidateId=候補ID、itemId=既存予定ID、operation=replace", "新規予定として採用: operation=add"],
+      unsuitableCases: ["候補のない手入力予定", "予定を取りやめるだけ、並び替えるだけ"],
+      returnedEvidence: "候補解決・検証済みsnapshotを使ったProposal preview。まだ保存・予約しない",
+      limitations: ["候補IDだけで施設を解決するので名称や場所の再入力不要", "scheduleは任意。省略時は保存許諾済み提供日またはunscheduledで、時刻を推測しない"],
+      responsibilityBoundary: "ApplicationがTrip/task/期限/出所/保持許諾/scopeを検証。Provider raw・予約・価格・空席・画像は保存しない",
+    },
     inputSchema: { type: "object", properties: { ...activityPlacementProperties,
       candidateId: { type: "string", minLength: 1, maxLength: 160 }, schedule: activityScheduleSchema },
     required: ["itemId", "operation", "candidateId"], additionalProperties: false },
@@ -105,7 +113,13 @@ export const tripProgressDescriptors: AgentToolDescriptor[] = [
   // Append the new capability without changing the ordering of the existing selection contracts.
   {
     name: "propose_itinerary_removal_or_move",
-    description: "既存予定を取りやめるremove、または並び順だけを変えるmoveの未保存案。旅行中のinTripReplanScope.mutableItemIds内のみ。取りやめる対象が明確なら、同じ希望を確認し直さずpreviewできる。適用は後から利用者が確認する。別候補への置換replace、新しい予定add、代替列車の採用には使えない。鉄道/宿の別候補はpropose_candidate_selection、施設の別候補はpropose_activity_selection。過去・対象外は拒否。保護対象は画面で明示選択済みの場合だけ。予約の取消・保存はしない。summaryは変更意図のみ。",
+    description: "既存予定の取りやめ・並び替えだけの未保存Proposal。",
+    decisionSupport: {
+      capability: "予定をなくす(remove)、並び順だけを変える(move)未保存Proposal",
+      suitableCases: ["既存予定の取りやめ", "既存予定の並び替え"],
+      unsuitableCases: ["別候補への置き換え: 施設はpropose_activity_selection、鉄道/宿はpropose_candidate_selection", "新規予定追加"],
+      responsibilityBoundary: "Applicationが現在Tripの変更可能範囲を検証。保護対象にはhost明示targetが必要。予約取消・保存はしない",
+    },
     inputSchema: { type: "object", properties: { summary: { type: "string", minLength: 1, maxLength: 500 },
       patches: { type: "array", minItems: 1, maxItems: 8, items: { type: "object", properties: {
         type: { type: "string", enum: ["remove", "move"] }, itemId: { type: "string", minLength: 1, maxLength: 160 },

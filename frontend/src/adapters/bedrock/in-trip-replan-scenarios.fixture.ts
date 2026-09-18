@@ -8,7 +8,7 @@ import { evaluateAreaTripImpact } from "@raiquora/trip/area-trip-impact";
 import { activityCandidateFixture } from "../../usecases/trip-plan/activity-selection.fixture";
 import { accommodationSelectionFixture } from "../../usecases/trip-plan/accommodation-selection.fixture";
 import { proposeCandidateSelection } from "../../usecases/trip-plan/select-trip-candidate";
-import { previewInTripReplan } from "../../usecases/trip-plan/in-trip-replan";
+import { previewInTripReplan } from "@raiquora/trip/in-trip-replan";
 import { askProgressFixture, modelAnswer, modelTools, modelTool } from "./ask-progress-scenarios.fixture";
 import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent-runtime";
 import type { ReservationFact } from "@raiquora/trip/reservation";
@@ -60,6 +60,7 @@ export async function runInTripReplanScenario(scenario: TravelProgressScenario, 
     taskId: "task-a", validUntil: "2026-09-13T03:00:00Z", rail: rail.candidate };
   let calls = 0, trace: AgentTrace | undefined, observation: AgentTurnObservation | undefined, sawScope = false;
   const modelDiagnostics: Record<string, unknown>[] = [];
+  let contextCandidatesPresent = false;
   const before = JSON.stringify(trip);
   const output = await runViewerAgentRuntime(scenario.userRequest, { ...askProgressFixture("C-candidate").base,
     getCurrentTrip: () => trip, getCurrentDate: () => new Date(now.at), getReservationFacts: () => reservations,
@@ -72,6 +73,11 @@ export async function runInTripReplanScenario(scenario: TravelProgressScenario, 
   }, async (...args) => {
     calls++;
     sawScope ||= args[0].some((m) => m.content.some((b) => "text" in b && b.text.includes("inTripReplanScope")));
+    if (calls === 1) {
+      const contextText = args[0].flatMap((m) => m.content.flatMap((b) => "text" in b ? [b.text] : [])).join("\n");
+      const context = JSON.parse(contextText.match(/<agent_context>([\s\S]*?)<\/agent_context>/)?.[1] ?? "{}");
+      contextCandidatesPresent = Array.isArray(context.travelCandidates) && context.travelCandidates.some((c: { id?: string }) => c.id === (scenario.id === "AS-in-trip-indoor" ? "activity-a" : "candidate-b"));
+    }
     if (scenario.id === "AU-in-trip-stale" && calls === 1) trip = { ...trip, revision: trip.revision + 1 };
     if (live) {
       const answer = await live(...args);
@@ -87,7 +93,10 @@ export async function runInTripReplanScenario(scenario: TravelProgressScenario, 
         decisionShape, textTags: blocks.flatMap((b) => [...b.matchAll(/<([a-z_]+)>/g)].map((m) => m[1])),
         publishedProposalTools: args[1]?.filter((t) => t.name.startsWith("propose_")).map((t) => t.name),
         selectedAction: decision.summary?.selectedAction, selectedTool: decision.summary?.selectedTool,
-        toolNames: answer.message.content.flatMap((b) => "toolUse" in b ? [b.toolUse.name] : []) });
+        toolNames: answer.message.content.flatMap((b) => "toolUse" in b ? [b.toolUse.name] : []),
+        // Synthetic selection handles only; no free text/summary/provider payload/reasoning.
+        selectionInputs: answer.message.content.flatMap((b) => "toolUse" in b ? [Object.fromEntries(Object.entries(b.toolUse.input)
+          .filter(([key, value]) => ["candidateId", "itemId", "operation"].includes(key) && typeof value === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(value)))] : []) });
       return answer;
     }
     if (calls > 1) return modelAnswer(`<decision_summary>${JSON.stringify({ selectedAction: "answer", usedEvidenceIds: ["application:in-trip:coverage"],
@@ -101,6 +110,7 @@ export async function runInTripReplanScenario(scenario: TravelProgressScenario, 
   const text = typeof output === "string" ? output : output.text;
   const failures: string[] = [];
   if (!sawScope) failures.push("scope missing from model input");
+  if (["AR-in-trip-rail-alternative", "AS-in-trip-indoor"].includes(scenario.id) && !contextCandidatesPresent) failures.push("candidate handles missing from model input");
   if (scenario.id === "AU-in-trip-stale") {
     if (p) failures.push("stale turn silently rebased");
     if (!trace?.events.some((e) => e.type === "tool_completed" && e.outcome === "error")) failures.push("stale revision not exercised");

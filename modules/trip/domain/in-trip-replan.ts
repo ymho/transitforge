@@ -1,8 +1,8 @@
-import { applyTripProposal, validateTrip, TripRevisionConflict, type Trip, type TripUpdateProposal } from "@raiquora/trip/trip";
-import { positionAt } from "@raiquora/trip/trip-temporal";
-import { effectiveTripConstraints } from "@raiquora/trip/trip-request";
-import { validateReservationFact, type ReservationFact } from "@raiquora/trip/reservation";
-import { evaluateTripFeasibility, type TripFeasibilityFacts } from "@raiquora/trip/trip-feasibility";
+import { applyTripProposal, validateTrip, TripRevisionConflict, type Trip, type TripUpdateProposal } from "./trip";
+import { positionAt } from "./trip-temporal";
+import { effectiveTripConstraints } from "./trip-request";
+import { validateReservationFact, type ReservationFact } from "./reservation";
+import { evaluateTripFeasibility, type TripFeasibilityFacts } from "./trip-feasibility";
 
 /** Request-local authority supplied by the interaction host, never a Tool argument.
  * UI selection is an explicit target; model-selected IDs are only proposed patches. */
@@ -30,7 +30,7 @@ export function assertItineraryEditingAllowed(trip: Trip, proposal: TripUpdatePr
       proposal.patches.some((p) => ["add", "replace", "remove", "move"].includes(p.type))) throw new Error("終了・中止した旅行は再計画できません");
 }
 
-/** Pure Application policy over the existing schedule calculation, not an intent router.
+/** Shared pure policy over the existing schedule calculation, not an intent router.
  * Default scope is the current and next two adopted items, not the whole remainder.
  * Fixed appointments are conservatively important. Trip-wide hard constraints protect all items. */
 export function calculateInTripReplanScope(trip: Trip, input: InTripReplanInput): InTripReplanScope {

@@ -10,7 +10,7 @@ import { evaluateTripFeasibility, type TripFeasibilityFacts } from "@raiquora/tr
 import { requireFeasibleTrip, requestsReady } from "@raiquora/trip/trip-ready";
 import { projectTripReadiness } from "@raiquora/trip/trip-readiness";
 import { createChecklistWorkspaceController, type ChecklistWorkspacePort } from "./checklist-workspace-controller";
-import { assertItineraryEditingAllowed, previewInTripReplan, type InTripReplanTargets } from "./in-trip-replan";
+import { assertItineraryEditingAllowed, previewInTripReplan, type InTripReplanTargets } from "@raiquora/trip/in-trip-replan";
 
 export interface TripProposalConfirmation { reservationChangeKey?: string; replanConfirmationKey?: string; }
 

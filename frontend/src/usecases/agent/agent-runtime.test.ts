@@ -19,7 +19,7 @@ import { ToolEvidenceRegistry } from "./tool-evidence-registry";
 import { AgentToolRegistry } from "./tool-registry";
 import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.fixture";
 import { inTripApplicationEvidence } from "./in-trip-application-evidence";
-import { calculateInTripReplanScope, replanScopeContext } from "../trip-plan/in-trip-replan";
+import { calculateInTripReplanScope, replanScopeContext } from "@raiquora/trip/in-trip-replan";
 
 describe("MultiStepAgentRuntime", () => {
   it("ends on Application currentness failure without later batch Tools or silent replan", async () => {
