@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
 import { createTrip } from "@raiquora/trip/trip";
-import { createAgentContextSnapshot } from "./agent-context-snapshot";
-import { agentDecisionContextText, buildAgentDecisionContext } from "./agent-decision-context";
-import { multiCityTrip, placeActivity, resolvedPlace, placesTripId, placesAt } from "../../../../modules/trip/domain/trip-places.fixture";
+import { createAgentContextSnapshot } from "@raiquora/agent/agent-context-snapshot";
+import { agentDecisionContextText, buildAgentDecisionContext } from "@raiquora/agent/agent-decision-context";
+import { multiCityTrip, placeActivity, resolvedPlace, placesTripId, placesAt } from "../../trip/domain/trip-places.fixture";
 
 it("keeps requested, actual, summary, candidates and realtime separate in model context", () => {
   const base = multiCityTrip(), trip = { ...base, request: { constraints: [{ id: "wishes", strength: "soft" as const, source: "user" as const,

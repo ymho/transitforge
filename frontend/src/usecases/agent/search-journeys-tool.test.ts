@@ -11,7 +11,7 @@ import {
   maximumJourneyToolPayloadBytes,
   maximumJourneyToolResults,
 } from "./search-journeys-tool";
-import { AgentToolRegistry } from "./tool-registry";
+import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 
 const request: JourneySearchRequest = {
   serviceDate: "2026-08-25",

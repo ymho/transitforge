@@ -5,9 +5,9 @@ import { buildInTripContext } from "@raiquora/trip/in-trip-context";
 import { evaluateAreaTripImpact } from "@raiquora/trip/area-trip-impact";
 import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent-runtime";
 import { askProgressFixture, modelAnswer, modelTools, modelTool } from "./ask-progress-scenarios.fixture";
-import type { AgentTrace } from "../../usecases/agent/agent-trace";
-import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
-import { extractAgentDecisionSummary } from "../../usecases/agent/agent-decision-summary";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
+import type { AgentTurnObservation } from "@raiquora/agent/agent-turn-outcome";
+import { extractAgentDecisionSummary } from "@raiquora/agent/agent-decision-summary";
 import { evaluateTravelProgress, type TravelProgressScenario } from "../../usecases/agent/evaluation/travel-progress-evaluation";
 
 export const inTripToolCases = {

@@ -1,12 +1,12 @@
 import { ConverseModelProvider, type BedrockAgentConverse } from "./viewer-agent-runtime";
-import { MultiStepAgentRuntime } from "../../usecases/agent/agent-runtime";
-import { AgentToolRegistry } from "../../usecases/agent/tool-registry";
-import { ToolEvidenceRegistry } from "../../usecases/agent/tool-evidence-registry";
-import { AgentToolExecutor } from "../../usecases/agent/agent-tool-executor";
+import { MultiStepAgentRuntime } from "@raiquora/agent/agent-runtime";
+import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
+import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
+import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import { evidenceFromJourneySearch } from "../../usecases/agent/tool-result-evidence";
 import { railSelectionFixture } from "../../../../modules/trip/domain/selected-rail-journey.fixture";
 import { selectRailJourney } from "@raiquora/trip/selected-rail-journey";
-import { DefaultAgentResponseGenerator } from "../../usecases/agent/agent-response-generator";
+import { DefaultAgentResponseGenerator } from "@raiquora/agent/agent-response-generator";
 
 export const generalGroundingCases = ["verified-route", "fabricated-duration", "wrong-date"] as const;
 export type GeneralGroundingCase = typeof generalGroundingCases[number];

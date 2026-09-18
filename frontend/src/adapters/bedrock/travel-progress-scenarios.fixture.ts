@@ -1,8 +1,8 @@
 import { applyTripProposal, type Trip } from "@raiquora/trip/trip";
 import { evaluateTripHardConstraints } from "@raiquora/trip/trip-constraint-evaluation";
 import { proposeCandidateSelection } from "../../usecases/trip-plan/select-trip-candidate";
-import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
-import type { AgentTrace } from "../../usecases/agent/agent-trace";
+import type { AgentTurnObservation } from "@raiquora/agent/agent-turn-outcome";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
 import { evaluateTravelProgress, type TravelProgressScenario, type TravelProgressTurn } from "../../usecases/agent/evaluation/travel-progress-evaluation";
 import { askProgressFixture, modelAnswer, modelTool, modelTools, progressQuestion, progressSource, type ProgressCaseId } from "./ask-progress-scenarios.fixture";
 import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent-runtime";

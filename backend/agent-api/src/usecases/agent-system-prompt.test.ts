@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { agentSystemPrompt } from "./agent-system-prompt.js";
-import { extractAgentDecisionSummary } from "../../../../frontend/src/usecases/agent/agent-decision-summary.js";
+import { extractAgentDecisionSummary } from "@raiquora/agent/agent-decision-summary";
 
 describe("agentSystemPrompt", () => {
   it("accepts Application Evidence without promoting general Context or requiring questions for unknowns", () => {

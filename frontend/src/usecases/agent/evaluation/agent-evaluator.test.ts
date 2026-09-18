@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import type { AgentRuntimeResult } from "../runtime-contract";
+import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import { evaluateAgentDataset, observeAgentRuntimeResult } from "./agent-evaluator";
 import {
   parseAgentEvaluationDataset,

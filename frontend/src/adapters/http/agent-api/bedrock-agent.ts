@@ -39,9 +39,9 @@ import type {
   JourneySearchRequest,
   JourneySearchService,
 } from "@raiquora/journey/journey-search-service";
-import type { AgentToolDescriptor } from "../../../usecases/agent/tool-contract";
-import type { AgentModelClass } from "../../../usecases/agent/model-provider";
-import type { AgentTrace } from "../../../usecases/agent/agent-trace";
+import type { AgentToolDescriptor } from "@raiquora/agent/tool-contract";
+import type { AgentModelClass } from "@raiquora/agent/model-provider";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
 import type { ConversationFeedbackV2 } from "../../../usecases/concierge/conversation-feedback";
 import {
   journeySearchContractVersion,

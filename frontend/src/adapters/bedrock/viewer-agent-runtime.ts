@@ -1,10 +1,10 @@
 import { isPriceObservation } from "@raiquora/trip/money";
-import { reservationContext } from "../../usecases/agent/reservation-context";
+import { reservationContext } from "@raiquora/agent/reservation-context";
 import { loadInTripContext, type InTripContextReader } from "../../usecases/agent/in-trip-context";
-import { inTripApplicationEvidence } from "../../usecases/agent/in-trip-application-evidence";
+import { inTripApplicationEvidence } from "@raiquora/agent/in-trip-application-evidence";
 import { calculateInTripReplanScope, previewInTripReplan, replanScopeContext } from "@raiquora/trip/in-trip-replan";
-import { tripFeasibilityContext } from "../../usecases/agent/trip-feasibility-context";
-import { tripReadinessContext } from "../../usecases/agent/trip-readiness-context";
+import { tripFeasibilityContext } from "@raiquora/agent/trip-feasibility-context";
+import { tripReadinessContext } from "@raiquora/agent/trip-readiness-context";
 import { projectTripReadiness } from "@raiquora/trip/trip-readiness";
 import { registerChecklistTool } from "../../usecases/agent/checklist-tools";
 import type { TripChecklistItem, ChecklistProposal } from "@raiquora/trip/trip-checklist";
@@ -97,10 +97,10 @@ import {
   type TripPlanUpdateProposal,
 } from "@raiquora/trip/trip-plan";
 import type { ConversationScope } from "../../domain/conversation-session";
-import { MultiStepAgentRuntime } from "../../usecases/agent/agent-runtime";
+import { MultiStepAgentRuntime } from "@raiquora/agent/agent-runtime";
 import { observeViewerTurn } from "../../usecases/agent/viewer-turn-progress";
 import { registerTripProgressTools, type TripProgressDependencies, type TripProgressOutput } from "../../usecases/agent/trip-progress-tools";
-import type { AgentTurnObservation, AgentTurnOutcome, AskOnlyException } from "../../usecases/agent/agent-turn-outcome";
+import type { AgentTurnObservation, AgentTurnOutcome, AskOnlyException } from "@raiquora/agent/agent-turn-outcome";
 import { effectiveTripConstraints } from "@raiquora/trip/trip-request";
 import { evaluateTripHardConstraints } from "@raiquora/trip/trip-constraint-evaluation";
 import { applyTripProposal, type Trip } from "@raiquora/trip/trip";
@@ -109,10 +109,10 @@ import { transportPreview } from "../../usecases/trip-plan/transport-preview";
 import { accommodationPreview } from "../../usecases/trip-plan/accommodation-preview";
 import { tripPartyView } from "../../usecases/trip-plan/trip-party-presentation";
 import { assessTripTime } from "@raiquora/trip/trip-temporal";
-import { AgentToolRegistry } from "../../usecases/agent/tool-registry";
-import { structuredModelClassPolicy } from "../../usecases/agent/structured-model-class-policy";
-import { AgentToolExecutor } from "../../usecases/agent/agent-tool-executor";
-import { ToolEvidenceRegistry } from "../../usecases/agent/tool-evidence-registry";
+import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
+import { structuredModelClassPolicy } from "@raiquora/agent/structured-model-class-policy";
+import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
+import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
 import {
   AgentToolPreconditionError,
   failedAgentToolResult,
@@ -122,28 +122,28 @@ import {
   type AgentToolDecisionSupport,
   type AgentToolDescriptor,
   type AgentToolInputSchema,
-} from "../../usecases/agent/tool-contract";
-import { validateAgentToolInput } from "../../usecases/agent/agent-tool-input-validator";
+} from "@raiquora/agent/tool-contract";
+import { validateAgentToolInput } from "@raiquora/agent/agent-tool-input-validator";
 import type {
   AgentModelContent,
   AgentModelMessage,
   AgentModelProvider,
   AgentModelRequest,
   AgentModelResponse,
-} from "../../usecases/agent/model-provider";
+} from "@raiquora/agent/model-provider";
 import type {
   AgentConversationContext,
   AgentKnownConstraint,
   AgentKnownPreference,
-} from "../../usecases/agent/agent-decision-context";
-import { extractAgentDecisionSummary } from "../../usecases/agent/agent-decision-summary";
-import type { Evidence } from "../../usecases/agent/evidence-model";
-import type { AgentTrace } from "../../usecases/agent/agent-trace";
+} from "@raiquora/agent/agent-decision-context";
+import { withAgentDecisionSummary } from "@raiquora/agent/model-response";
+import type { Evidence } from "@raiquora/agent/evidence-model";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
 import {
   createAgentContextSnapshot,
   selectedTripItemSnapshot,
   type AgentContextSnapshot,
-} from "../../usecases/agent/agent-context-snapshot";
+} from "@raiquora/agent/agent-context-snapshot";
 import {
   executeExternalTravelTool,
   compactExternalTravelToolObservation,
@@ -232,8 +232,8 @@ export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDepend
 
 export type BedrockAgentConverse = (
   messages: BedrockAgentMessage[],
-  tools?: import("../../usecases/agent/tool-contract").AgentToolDescriptor[],
-  modelClass?: import("../../usecases/agent/model-provider").AgentModelClass,
+  tools?: import("@raiquora/agent/tool-contract").AgentToolDescriptor[],
+  modelClass?: import("@raiquora/agent/model-provider").AgentModelClass,
   modelCallId?: string,
 ) => Promise<BedrockAgentResponse>;
 
@@ -1681,25 +1681,8 @@ export class ConverseModelProvider implements AgentModelProvider {
       request.modelCallId,
     );
     const convertedMessage = fromBedrockMessage(response.message);
-    const decision = extractAgentDecisionSummary(convertedMessage.content.flatMap((content) =>
-      content.type === "text" ? [content.text] : []));
-    let textIndex = 0;
-    const message = {
-      ...convertedMessage,
-      // Decision Summaryだけだったtext blockは、除去後に空文字となる。
-      // 空のtext blockはBedrock Converseの入力として不正なので、次のreplanへ残さない。
-      content: convertedMessage.content.reduce<AgentModelContent[]>((blocks, content) => {
-        if (content.type !== "text") {
-          blocks.push(content);
-          return blocks;
-        }
-        const text = decision.textBlocks[textIndex++] ?? "";
-        if (text.length > 0) blocks.push({ ...content, text });
-        return blocks;
-      }, []),
-    };
-    return {
-      message,
+    return withAgentDecisionSummary({
+      message: convertedMessage,
       stopReason: response.stopReason === "tool_use"
         ? "tool_calls"
         : response.stopReason === "max_tokens" ? "max_tokens" : "completed",
@@ -1709,12 +1692,7 @@ export class ConverseModelProvider implements AgentModelProvider {
         latencyMs: response.metadata?.latencyMs,
         usage: response.metadata?.usage,
       },
-      decisionSummaryStatus: decision.status,
-      ...(decision.declaredInTripAnswerPlan ? { declaredInTripAnswerPlan: decision.declaredInTripAnswerPlan } : {}),
-      ...(decision.invalidUsedEvidenceIds ? { invalidUsedEvidenceIds: true } : {}),
-      ...(decision.declaredEvidenceIds ? { declaredEvidenceIds: decision.declaredEvidenceIds } : {}),
-      ...(decision.summary ? { decisionSummary: decision.summary } : {}),
-    };
+    });
   }
 }
 

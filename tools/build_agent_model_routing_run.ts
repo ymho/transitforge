@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import type { AgentTrace } from "../frontend/src/usecases/agent/agent-trace";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
 import type { AgentEvaluationReport } from "../frontend/src/usecases/agent/evaluation/evaluation-contract";
 import { createAgentModelRoutingRun } from "../frontend/src/usecases/agent/evaluation/model-routing-experiment";
 

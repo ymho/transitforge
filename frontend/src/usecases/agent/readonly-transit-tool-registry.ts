@@ -10,7 +10,7 @@ import {
   type OperationalAnalysisDependencies,
 } from "./operational-analysis-tools";
 import { createSearchJourneysTool } from "./search-journeys-tool";
-import { AgentToolRegistry } from "./tool-registry";
+import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 
 export const readonlyTransitToolNames = [
   "search_journeys",

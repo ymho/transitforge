@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.fixture";
 import { loadInTripContext, withInTripLocation } from "./in-trip-context";
-import { buildAgentDecisionContext, agentDecisionContextText } from "./agent-decision-context";
+import { buildAgentDecisionContext, agentDecisionContextText } from "@raiquora/agent/agent-decision-context";
 describe("in-trip Agent boundary", () => {
   it("loads only in_trip, validates revision and keeps reader failure explicit", async () => {
     const f = inTripFixture(), read = vi.fn(async () => f.snapshot);

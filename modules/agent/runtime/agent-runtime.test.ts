@@ -1,25 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
-import { supportedAnswerClaims } from "./grounded-answer";
+import { supportedAnswerClaims } from "@raiquora/agent/grounded-answer";
 
-import { MultiStepAgentRuntime } from "./agent-runtime";
-import { AgentToolExecutor } from "./agent-tool-executor";
-import type { Evidence } from "./evidence-model";
+import { MultiStepAgentRuntime } from "@raiquora/agent/agent-runtime";
+import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
+import type { Evidence } from "@raiquora/agent/evidence-model";
 import type {
   AgentModelProvider,
   AgentModelRequest,
   AgentModelResponse,
-} from "./model-provider";
+} from "@raiquora/agent/model-provider";
 import {
   invalidAgentToolInput,
   failedAgentToolResult,
   successfulAgentToolResult,
   validAgentToolInput,
   type AgentTool,
-} from "./tool-contract";
-import { ToolEvidenceRegistry } from "./tool-evidence-registry";
-import { AgentToolRegistry } from "./tool-registry";
-import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.fixture";
-import { inTripApplicationEvidence } from "./in-trip-application-evidence";
+} from "@raiquora/agent/tool-contract";
+import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
+import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
+import { inTripFixture } from "../../trip/domain/in-trip-context.fixture";
+import { inTripApplicationEvidence } from "@raiquora/agent/in-trip-application-evidence";
 import { calculateInTripReplanScope, replanScopeContext } from "@raiquora/trip/in-trip-replan";
 
 describe("MultiStepAgentRuntime", () => {

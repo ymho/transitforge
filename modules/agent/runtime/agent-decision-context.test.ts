@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   agentDecisionContextText,
   buildAgentDecisionContext,
-} from "./agent-decision-context";
+} from "@raiquora/agent/agent-decision-context";
 
 describe("AgentDecisionContext", () => {
   it("preserves turn, past-time assessment and unknown hard conditions when compacting", () => {

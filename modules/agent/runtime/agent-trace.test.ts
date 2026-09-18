@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { Evidence } from "./evidence-model";
-import { AgentTraceRecorder, summarizeTracePayload } from "./agent-trace";
+import type { Evidence } from "@raiquora/agent/evidence-model";
+import { AgentTraceRecorder, summarizeTracePayload } from "@raiquora/agent/agent-trace";
 
 const fixedNow = () => new Date("2026-08-25T09:00:00.000Z");
 

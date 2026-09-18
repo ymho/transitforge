@@ -1,12 +1,12 @@
 import { it, expect } from "vitest";
 import { registerChecklistTool, checklistDescriptor } from "./checklist-tools";
-import { AgentToolRegistry } from "./tool-registry";
+import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import type { ChecklistProposal } from "@raiquora/trip/trip-checklist";
 import { checklistItem } from "../../../../modules/trip/domain/trip-checklist.fixture";
 import { feasibilityTrip, feasibilityFacts, feasibilityNow } from "../../../../modules/trip/domain/trip-feasibility.fixture";
 import { evaluateTripFeasibility } from "@raiquora/trip/trip-feasibility";
 import { projectTripReadiness } from "@raiquora/trip/trip-readiness";
-import { tripReadinessContext, boundTripReadinessContext } from "./trip-readiness-context";
+import { tripReadinessContext, boundTripReadinessContext } from "@raiquora/agent/trip-readiness-context";
 import { observeViewerTurn } from "./viewer-turn-progress";
 
 it("only produces typed add previews; rejects status/derived completion/private fields; no default unavailable tool", async () => {

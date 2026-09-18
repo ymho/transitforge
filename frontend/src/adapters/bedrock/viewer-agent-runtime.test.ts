@@ -264,9 +264,9 @@ describe("Bedrock viewer agent", () => {
   });
 
   it("extracts a Bedrock decision summary and never displays the marker", async () => {
-    const storedTraces: import("../../usecases/agent/agent-trace").AgentTrace[] = [];
+    const storedTraces: import("@raiquora/agent/agent-trace").AgentTrace[] = [];
     const storeAgentTrace = vi.fn(async (
-      trace: import("../../usecases/agent/agent-trace").AgentTrace,
+      trace: import("@raiquora/agent/agent-trace").AgentTrace,
     ) => { storedTraces.push(trace); });
     const converse = vi.fn<BedrockAgentConverse>()
       .mockResolvedValueOnce({

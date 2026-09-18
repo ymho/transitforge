@@ -1,5 +1,6 @@
+import { createAgentTurnObservationStore } from "../usecases/agent/agent-turn-observation-store";
 import mapboxgl from "mapbox-gl";
-import { candidateIdentityContext } from "../usecases/agent/candidate-assessment-context";
+import { candidateIdentityContext } from "@raiquora/agent/candidate-assessment-context";
 import { placeCameraOffset } from "../presentation/place-explorer/place-camera-offset";
 import { HttpInTripContextClient } from "../adapters/http/in-trip-context-client";
 import { accommodationProviderAttributionFromEnvironment } from "../adapters/browser/accommodation-provider-attribution";
@@ -98,7 +99,7 @@ import { resolveViewerDisplayMode } from "../domain/viewer-display-mode";
 import type { ViewerAgentRuntimeDependencies } from "../adapters/bedrock/viewer-agent-runtime";
 import { configureAiFirstShell } from "../presentation/home/ai-first-shell";
 import { configureConsultationScreen } from "../presentation/home/consultation-screen";
-import { createAgentTurnObservationStore } from "../usecases/agent/agent-turn-outcome";
+
 import type { ViewerAgentJourneyPlan } from "../domain/viewer-agent-response";
 import {
   configureAiGuidePanel,

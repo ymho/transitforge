@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createTrip } from "@raiquora/trip/trip";
 import { placeActivity, placesAt, placesTripId } from "../../../../modules/trip/domain/trip-places.fixture";
-import { createAgentContextSnapshot, selectedTripItemSnapshot } from "../../usecases/agent/agent-context-snapshot";
-import { buildAgentDecisionContext, agentDecisionContextText } from "../../usecases/agent/agent-decision-context";
+import { createAgentContextSnapshot, selectedTripItemSnapshot } from "@raiquora/agent/agent-context-snapshot";
+import { buildAgentDecisionContext, agentDecisionContextText } from "@raiquora/agent/agent-decision-context";
 import { askProgressFixture, modelAnswer } from "./ask-progress-scenarios.fixture";
 import { runViewerAgentRuntime } from "./viewer-agent-runtime";
 import { runFocusedItemScenario } from "./focused-item-scenarios.fixture";

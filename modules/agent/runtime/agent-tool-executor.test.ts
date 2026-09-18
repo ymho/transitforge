@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { AgentToolExecutor } from "./agent-tool-executor";
-import { AgentTraceRecorder } from "./agent-trace";
-import { validAgentToolInput, type AgentTool } from "./tool-contract";
-import { ToolEvidenceRegistry } from "./tool-evidence-registry";
-import { AgentToolRegistry } from "./tool-registry";
+import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
+import { AgentTraceRecorder } from "@raiquora/agent/agent-trace";
+import { validAgentToolInput, type AgentTool } from "@raiquora/agent/tool-contract";
+import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
+import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 
 describe("AgentToolExecutor", () => {
   it("aborts and reports a tool that exceeds its bounded execution time", async () => {

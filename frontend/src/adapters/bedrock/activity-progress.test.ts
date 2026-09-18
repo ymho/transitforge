@@ -7,8 +7,8 @@ import { activityCandidateFixture } from "../../usecases/trip-plan/activity-sele
 import { resolveAssistantMessage } from "../../presentation/concierge/ai-guide-panel";
 import { observeViewerTurn } from "../../usecases/agent/viewer-turn-progress";
 import { evaluateTravelProgress } from "../../usecases/agent/evaluation/travel-progress-evaluation";
-import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
-import type { AgentTrace } from "../../usecases/agent/agent-trace";
+import type { AgentTurnObservation } from "@raiquora/agent/agent-turn-outcome";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
 
 const manual = { itemId: "break", operation: "add", title: "カフェ休憩", category: "food", schedule: { type: "day", date: "2026-09-22" } };
 describe("Activity through the single production runtime and presenter", () => {

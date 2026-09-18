@@ -6,7 +6,7 @@ import {
   readonlyTransitToolNames,
   type ReadonlyTransitToolName,
 } from "../../usecases/agent/readonly-transit-tool-registry";
-import type { AgentToolRegistry } from "../../usecases/agent/tool-registry";
+import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { agentToolInputSchemaToZod } from "./agent-tool-schema";
 
 const readonlyToolNameSet = new Set<string>(readonlyTransitToolNames);

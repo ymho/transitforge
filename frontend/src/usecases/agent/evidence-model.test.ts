@@ -5,7 +5,7 @@ import type { TrainInspection } from "../../domain/network-inspection-service";
 import {
   validateEvidenceAndClaims,
   type Evidence,
-} from "./evidence-model";
+} from "@raiquora/agent/evidence-model";
 import {
   evidenceFromCongestionAnalysis,
   evidenceFromDelayAnalysis,

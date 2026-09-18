@@ -149,11 +149,31 @@ for (const absolutePath of sharedDomainFiles(modulesRoot)) {
   }
 }
 
+const agentRuntimeRoot = resolve(modulesRoot, "agent/runtime");
+for (const absolutePath of sourceFiles(agentRuntimeRoot)) {
+  const content = readFileSync(absolutePath, "utf8");
+  for (const imported of importedSpecifiers(content)) {
+    const permitted = imported.specifier.startsWith(".")
+      ? resolve(dirname(absolutePath), imported.specifier).startsWith(agentRuntimeRoot + sep)
+      : /^@raiquora\/(agent|trip|journey|operation|train)\//u.test(imported.specifier);
+    if (!permitted) violations.push({ source: repositoryPath(absolutePath), kind: "agent-runtime-dependency",
+      line: lineNumber(content, imported.index), message: "Agent coreは共有契約以外のFrontend/Backend/Vendor実装へ依存できません" });
+  }
+  const browserReference = browserGlobalReference(content);
+  if (browserReference >= 0) violations.push({ source: repositoryPath(absolutePath), kind: "agent-runtime-browser-global",
+    line: lineNumber(content, browserReference), message: "Agent coreからBrowser APIへの依存は禁止されています" });
+}
+
 for (const absolutePath of sourceFiles(backendAgentApiRoot)) {
   const source = repositoryPath(absolutePath);
   const backendLayer = relative(backendAgentApiRoot, absolutePath).split(sep)[0];
   const content = readFileSync(absolutePath, "utf8");
   for (const imported of importedSpecifiers(content)) {
+    if (imported.specifier.startsWith("@raiquora/frontend") ||
+        imported.specifier.startsWith(".") && resolve(dirname(absolutePath), imported.specifier).startsWith(sourceRoot + sep)) {
+      violations.push({ source, kind: "backend-frontend-dependency", line: lineNumber(content, imported.index),
+        message: "BackendからFrontendへの依存は禁止されています" });
+    }
     if (backendLayer !== "adapters" && imported.specifier.startsWith("@aws-sdk/")) {
       violations.push({
         source,

@@ -1,11 +1,12 @@
+import { createAgentTurnObservationStore } from "./agent-turn-observation-store";
 import { describe, it, expect } from "vitest";
-import { observeAgentTurn, acceptsAgentTurn, createAgentTurnObservationStore } from "./agent-turn-outcome";
+import { observeAgentTurn, acceptsAgentTurn } from "@raiquora/agent/agent-turn-outcome";
 import { observeViewerTurn } from "./viewer-turn-progress";
-import { AgentTraceRecorder } from "./agent-trace";
-import { AgentToolRegistry } from "./tool-registry";
-import { AgentToolExecutor } from "./agent-tool-executor";
-import { ToolEvidenceRegistry } from "./tool-evidence-registry";
-import { MultiStepAgentRuntime } from "./agent-runtime";
+import { AgentTraceRecorder } from "@raiquora/agent/agent-trace";
+import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
+import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
+import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
+import { MultiStepAgentRuntime } from "@raiquora/agent/agent-runtime";
 
 describe("ephemeral turn observation", () => {
   it("derives four outcomes from artifacts, never punctuation or status prose", () => {

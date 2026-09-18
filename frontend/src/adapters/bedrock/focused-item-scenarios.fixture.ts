@@ -3,8 +3,8 @@ import { multiCityTrip } from "../../../../modules/trip/domain/trip-places.fixtu
 import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent-runtime";
 import { askProgressFixture, modelAnswer, modelTool, modelTools } from "./ask-progress-scenarios.fixture";
 import { evaluateTravelProgress, type TravelProgressScenario } from "../../usecases/agent/evaluation/travel-progress-evaluation";
-import type { AgentTrace } from "../../usecases/agent/agent-trace";
-import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
+import type { AgentTurnObservation } from "@raiquora/agent/agent-turn-outcome";
 
 /** AA exercises the production Context / registry / validated proposal path. No intent router. */
 export async function runFocusedItemScenario(scenario: TravelProgressScenario, live?: BedrockAgentConverse) {

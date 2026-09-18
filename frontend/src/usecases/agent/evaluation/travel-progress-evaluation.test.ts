@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { AgentTraceRecorder } from "../agent-trace";
-import { observeAgentTurn, type VisibleProgress, type AskOnlyException } from "../agent-turn-outcome";
+import { AgentTraceRecorder } from "@raiquora/agent/agent-trace";
+import { observeAgentTurn, type VisibleProgress, type AskOnlyException } from "@raiquora/agent/agent-turn-outcome";
 import { evaluateTravelProgress, renderTravelProgressMarkdown, type TravelProgressTurn } from "./travel-progress-evaluation";
 
 const limits = { ttfc: 2, ttfi: 2, selectionToDraft: 1, maximumOrdinaryAskOnlyStreak: 1 };

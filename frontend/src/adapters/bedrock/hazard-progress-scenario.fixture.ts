@@ -5,8 +5,8 @@ import { hazardAlert, hazardInformation } from "../../../../modules/trip/domain/
 import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent-runtime";
 import { askProgressFixture, modelGroundedAnswer, modelTool, modelTools } from "./ask-progress-scenarios.fixture";
 import { evaluateTravelProgress, type TravelProgressScenario } from "../../usecases/agent/evaluation/travel-progress-evaluation";
-import type { AgentTrace } from "../../usecases/agent/agent-trace";
-import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
+import type { AgentTurnObservation } from "@raiquora/agent/agent-turn-outcome";
 
 /** AI: scripted provider/model IO through the production registry, evidence, context and policies. */
 export async function runHazardProgressScenario(scenario: TravelProgressScenario, live?: BedrockAgentConverse) {

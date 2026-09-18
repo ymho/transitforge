@@ -12,7 +12,7 @@ import {
   createInspectTrainTool,
   maximumInspectionToolPayloadBytes,
 } from "./network-inspection-tools";
-import { AgentToolRegistry } from "./tool-registry";
+import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 
 const stationCatalog: StationLineCatalog = {
   schema_version: "station-line-catalog-v1",

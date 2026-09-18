@@ -6,11 +6,11 @@ import {
   successfulAgentToolResult,
   validAgentToolInput,
   type AgentTool,
-} from "./tool-contract";
+} from "@raiquora/agent/tool-contract";
 import {
   AgentToolRegistrationError,
   AgentToolRegistry,
-} from "./tool-registry";
+} from "@raiquora/agent/tool-registry";
 
 interface EchoInput {
   value: string;

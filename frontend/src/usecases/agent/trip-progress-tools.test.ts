@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { tripProgressDescriptors } from "./trip-progress-tools";
-import { modelToolDescription } from "./tool-contract";
-import { validateAgentToolInput } from "./agent-tool-input-validator";
+import { modelToolDescription } from "@raiquora/agent/tool-contract";
+import { validateAgentToolInput } from "@raiquora/agent/agent-tool-input-validator";
 
 it("keeps manual transport proposals distinct from verified candidate comparison", () => {
   const descriptor = tripProgressDescriptors.find((tool) => tool.name === "propose_manual_transport")!;
