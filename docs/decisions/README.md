@@ -97,3 +97,5 @@
 Server Runtime・Stateの新構成は#478以降で決定する。
 
 - [ADR 0068: Agent Runtimeの実行責務をServer Applicationへ移す](0068-place-agent-runtime-in-server-application.md) — ADR 0038のBrowser組成を部分置換。bounded loop/Groundingは維持し、#480でcutoverする。
+
+- [ADR 0070: Server Agentの通信にRegional REST progress streamingを採用する](0070-select-regional-rest-agent-streaming.md) — #462の設計判断。production切替は#480の実AWS検証gate通過後。
