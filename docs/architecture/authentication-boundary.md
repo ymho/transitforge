@@ -1,6 +1,6 @@
 # 共通認証境界（#451第一段階）
 
-最新main `110d39a` のコード・infra定義を棚卸しした。実AWS設定を確認した記録ではない。
+導入時のmain `110d39a` のコード・infra定義を棚卸しした。実AWS設定を確認した記録ではない。
 本段階はprincipal/verifier/Application境界のみ。公開handlerへの接続とwriter有効化は未実施。
 判断とsubjectの永続エンコードは[ADR 0067](../decisions/0067-establish-trusted-principal-boundary.md)。
 

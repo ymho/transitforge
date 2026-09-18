@@ -25,19 +25,11 @@ export type AgentRuntimeStatus =
   | "limit_reached"
   | "failed";
 
-export interface AgentViewerActionOutcome {
-  actionType: string;
-  status: "applied" | "rejected";
-  code?: string;
-  reason?: string;
-}
-
 export interface AgentRuntimeResult {
   turnObservation?: AgentTurnObservation;
   status: AgentRuntimeStatus;
   response: string;
   evidence: Evidence[];
   claims: AssessedEvidenceClaim[];
-  viewerActions: AgentViewerActionOutcome[];
   trace: AgentTrace;
 }

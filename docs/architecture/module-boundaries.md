@@ -71,7 +71,7 @@ HTML DNS Secrets Managerの具体型を漏らさない。Webで発見した候�
 - `Train` `TrainStop` `Journey` `Operation`はDomainが所有する
 - JSON HTTP Bedrock AWSイベントの形式はAdapterが所有する
 - Adapterは外部形式をDomain契約へ変換する
-- Viewer ActionはUsecase Portを通してPresentationとRenderingへ適用する
+- Agent → Viewer Actionは廃止し、検索結果は構造化応答として表示する。手動操作とViewer → Agentのbounded contextは維持する
 - `main.ts`とLambda handlerは実装を持たず依存を組み立てる
 
 ### Viewer起動の責務

@@ -86,3 +86,10 @@
 - [0062 共有due-workでTrip再チェックを起動する](0062-schedule-trip-rechecks-with-shared-durable-due-work.md)
 - [0063 Impactから通知episodeと配信を分離する](0063-separate-notification-episodes-and-delivery.md)
 - [0067 Cognito検証を共通trusted principal境界へ閉じる](0067-establish-trusted-principal-boundary.md)
+
+## Wave 2Aによる部分廃止（#477）
+
+0023のrollout router、0024のViewer Action、0026のAction実行、0038のAction/Local Agent、
+0049の契約温存をretired/Supersededとした。0027のViewer Action採点も廃止した。
+各ADR冒頭に廃止範囲を記し、過去本文と有効なGrounding・Evidence・bounded loopの判断は保持する。
+Server Runtime・Stateの新構成は#478以降で決定する。

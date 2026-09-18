@@ -6,7 +6,7 @@ Trip field、Provider、writerは追加しない。意思決定は引き続き�
 
 ## 現状 → 今回 → 後続
 
-- 従来の42ケースは保存済み観測から6指標を採点し、#425のA〜Gは本番Runtimeの1応答を検証する。
+- 従来の42ケースは保存済み観測から5指標を採点し、#425のA〜Gは本番Runtimeの1応答を検証する。
   相談開始からのturn数、選択後のdraft、複数応答の最大質問streakは計測していなかった。
 - 今回は既存`AgentTurnObservation`を集計するpure evaluatorとA〜Jの会話fixtureを追加する。
   System Prompt、Tool descriptor、検索、Trip生成・保存は変えない。
@@ -110,11 +110,11 @@ safety/hard_constraint_unknown/tool_input_missingはraw指標から消さず、t
 - candidate_only / candidate_not_selected: candidate表示済みだが旅程なし / さらに明示選択もなし。
 - no_visible_progress: 表示進展なし。unknown: 他の観測理由を確定できない失敗。
 
-既存の6指標を維持したままreportへ`travelProgress`を追加する。ADR 0027に従い外側は
-`agent-eval-report-v3`へ更新し、内側に`trip-progress-eval-v1`を持つ。
-`tests/fixtures/agent-eval-cases.json`はdataset-v2へ更新し、相談文・閾値・tagの
-`travelProgressScenarios`を追加する。従来42件のcasesは変更せず、v1 reader互換も維持する。
-observationsはv1のままで、A〜Jは保存済み成功観測を足すのではなく毎回Runtimeで実行する。
+既存の5指標を維持したままreportへ`travelProgress`を追加する。ADR 0027に従い外側は
+`agent-eval-report-v4`へ更新し、内側に`trip-progress-eval-v1`を持つ。
+`tests/fixtures/agent-eval-cases.json`はdataset-v3へ更新し、相談文・閾値・tagの
+`travelProgressScenarios`を追加する。従来42件のTool/制約/Grounding期待値は維持し、#477でViewer Action欄と旧reader互換だけを撤去した。
+observationsは#477でv2へ更新し、A〜Jは保存済み成功観測を足すのではなく毎回Runtimeで実行する。
 modelCallsは実呼出しカウンタ、toolCallsは欠落のないTrace、latencyは既存task_completed計測の合計。
 不足値はnull、Trace欠落はtraceIncomplete。scripted latencyはローカル処理時間でありBedrockのlatencyではない。
 
@@ -137,7 +137,7 @@ npm run eval:agent:decision:live -- --suite trip-progress --case C-candidate --o
 ```
 
 - Unit: turnの1-based計算、選択別集計、hidden/空/状態のみの負例、例外と欠測、27通りの短いsequence invariantをhard gate。
-- Smoke: 保存済み12ケースの6指標＋従来A/G＋Trip Progress A/C/G/K/N/O/Q/S/Uをhard gate。SはEUR宿泊価格、Uは採用済み多都市Tripを保持した進展を検証する。
+- Smoke: 保存済み12ケースの5指標＋従来A/G＋Trip Progress A/C/G/K/N/O/Q/S/Uをhard gate。SはEUR宿泊価格、Uは採用済み多都市Tripを保持した進展を検証する。
 - Full: 保存済み42ケース＋従来A〜G＋Trip Progress A〜Uをhard gate。M/Nは#411の既知party/年齢不明、O/Pは#413のタクシー/便未定航空、Q/Rは#400の宿採用/差し替え、SはEUR価格観測、T/Uは#403の希望/採用済み3都市の順序保持と進展を検証する。実モデル品質を証明するものではない。
 - Live: 同じproduction registry/presenterとsynthetic Providerを使い、実モデルが自由にToolを選ぶ。
   閾値の微差はWARN、Domain/fixture契約違反はfail、認証/Provider失敗は未完了の非0終了。

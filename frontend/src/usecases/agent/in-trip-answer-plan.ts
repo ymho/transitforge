@@ -72,7 +72,7 @@ export function renderInTripAnswer(plan: InTripAnswerPlan, used: string[], evide
     }
     return { evidence: e, text: render(e, selection.presentation) };
   });
-  return { text: blocks.map((b) => b.text).join("\n\n"), viewerActions: [],
+  return { text: blocks.map((b) => b.text).join("\n\n"),
     claims: blocks.map((b, i) => ({ id: `in-trip-presentation-${i}`, statement: b.text,
       kind: b.evidence.knowledgeKind === "unverified_information" ? "inference" : "fact", evidenceIds: [b.evidence.id] })) };
 }

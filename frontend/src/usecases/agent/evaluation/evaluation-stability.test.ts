@@ -46,13 +46,12 @@ function report(passed: boolean[]): AgentEvaluationReport {
       groundedClaimRate: null,
       unsupportedClaimRate: null,
       taskCompletion: 1,
-      viewerActionValidity: 1,
     },
     failures: value ? [] : ["failed"],
   }));
   return {
-    schemaVersion: "agent-eval-report-v3",
-    datasetSchemaVersion: "agent-eval-dataset-v1",
+    schemaVersion: "agent-eval-report-v4",
+    datasetSchemaVersion: "agent-eval-dataset-v3",
     caseCount: cases.length,
     passedCaseCount: cases.filter(({ passed: value }) => value).length,
     metrics: {
@@ -61,7 +60,6 @@ function report(passed: boolean[]): AgentEvaluationReport {
       groundedClaimRate: null,
       unsupportedClaimRate: null,
       taskCompletion: 1,
-      viewerActionValidity: 1,
     },
     categories: [],
     cases,

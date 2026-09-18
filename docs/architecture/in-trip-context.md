@@ -80,7 +80,7 @@ brief + Contextの24,000文字予算は維持する。Agent層coverageと鮮度�
 in_tripでは計画作成用指示に代えて短い回答契約を適用する。Decision SummaryのusedEvidenceIdsは最大10件/重複禁止/実在検証し、
 Traceへだけ保存する。ID宣言は自己申告なので、AJ〜AMはID/coverageに加え回答本文も検査する。
 追加調査を抑制しすぎないよう、AN（天気未取得）、AO（代替列車）、AP（古い警報の最新照会）を同じRuntimeのscripted/live入口へ追加。
-元の42件の6指標評価とA〜AM、Smoke 23件、TTFI/TTFC閾値は不変。FullのTrip Progressだけ39→42件となる。
+元の42件の5指標（#477でViewer Action採点のみ廃止）評価とA〜AM、Smoke 23件、TTFI/TTFC閾値は不変。FullのTrip Progressだけ39→42件となる。
 
 Domain: fixed/重なり/window/day/unscheduled/日時不明/日跨ぎ/DST/上限/鮮度/旧revision/privacy/位置状態。
 Application/SDK: 旧envelope、通知生成前のImpact読取、currency、owner隔離、read失敗、並行編集、bounded consistent Query。

@@ -27,10 +27,6 @@ export function observeAgentRuntimeResult(
       : {},
     status: result.status,
     claimStatuses: result.claims.map(({ groundingStatus }) => groundingStatus),
-    viewerActions: result.viewerActions.map(({ actionType, status }) => ({
-      actionType,
-      status,
-    })),
     decisionHardConstraintKeys: unique(decisions.flatMap((event) =>
       event.type === "decision_recorded" && Array.isArray(event.hardConstraints.value)
         ? event.hardConstraints.value.flatMap((item) =>
@@ -56,7 +52,7 @@ export function evaluateAgentDataset(
     evaluateCase(testCase, byCase.get(testCase.id)));
   const metrics = aggregateMetrics(cases, observationSet.observations);
   return {
-    schemaVersion: "agent-eval-report-v3",
+    schemaVersion: "agent-eval-report-v4",
     datasetSchemaVersion: dataset.schemaVersion,
     caseCount: cases.length,
     passedCaseCount: cases.filter(({ passed }) => passed).length,
@@ -100,7 +96,6 @@ function aggregateMetrics(
       ? null
       : claimCounts.unsupported / groundedDenominator,
     taskCompletion: average(cases, "taskCompletion"),
-    viewerActionValidity: average(cases, "viewerActionValidity"),
   };
 }
 
@@ -128,7 +123,6 @@ function evaluateCase(
   const groundedClaimRate = claimDenominator === 0 ? null : supported / claimDenominator;
   const unsupportedClaimRate = claimDenominator === 0 ? null : unsupported / claimDenominator;
   const taskCompletion = observation.status === expected.status ? 1 : 0;
-  const viewerActionValidity = validViewerActions(observation, testCase) ? 1 : 0;
   const failures: string[] = [];
   if (!toolSelectionAccuracy) failures.push("Tool選択順が期待と異なる");
   if (constraintSatisfaction < 1) failures.push("正規化された制約が不足している");
@@ -139,7 +133,6 @@ function evaluateCase(
     failures.push("Unsupported Claim Rateが上限超過");
   }
   if (!taskCompletion) failures.push("Task完了状態が期待と異なる");
-  if (!viewerActionValidity) failures.push("Viewer Actionが許可条件を満たさない");
   return {
     id: testCase.id,
     name: testCase.name,
@@ -150,23 +143,9 @@ function evaluateCase(
       groundedClaimRate,
       unsupportedClaimRate,
       taskCompletion,
-      viewerActionValidity,
     },
     failures,
   };
-}
-
-function validViewerActions(
-  observation: AgentEvaluationObservation,
-  testCase: AgentEvaluationCase,
-): boolean {
-  const allowed = new Set(testCase.expected.allowedViewerActions);
-  const applied = new Set(observation.viewerActions
-    .filter(({ status }) => status === "applied")
-    .map(({ actionType }) => actionType));
-  return observation.viewerActions.every(({ actionType, status }) =>
-    status === "applied" && allowed.has(actionType)) &&
-    testCase.expected.requiredViewerActions.every((action) => applied.has(action));
 }
 
 function matchingConstraintRate(
@@ -203,8 +182,7 @@ function equalLists(left: unknown[], right: unknown[]): boolean {
 
 function average(
   cases: AgentEvaluationCaseResult[],
-  metric: "toolSelectionAccuracy" | "constraintSatisfaction" |
-    "taskCompletion" | "viewerActionValidity",
+  metric: "toolSelectionAccuracy" | "constraintSatisfaction" | "taskCompletion",
 ): number {
   return cases.reduce((sum, item) => sum + item.metrics[metric], 0) / cases.length;
 }
@@ -224,7 +202,6 @@ function failedMissingObservation(testCase: AgentEvaluationCase): AgentEvaluatio
       groundedClaimRate: null,
       unsupportedClaimRate: null,
       taskCompletion: 0,
-      viewerActionValidity: 0,
     },
     failures: ["実行結果がありません"],
   };

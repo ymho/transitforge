@@ -513,7 +513,7 @@ Applicationは認可→入力検証→根拠/予約/対象revisionの検証→Do
 UIの明示操作とAI提案は同じ適用経路を使う。モデルは承認主体でも永続状態の正本でもない。
 Agent ContextはTrip/Request・比較候補・外部事実・Profile・判断結果を別fieldでboundedに投影する。
 永続IDをモデルへ必要以上に渡さず、操作対象はtask内のopaque参照からApplicationが解決する。
-現在のEvidence/Claim validation、Viewer Action policy、limits、timeoutを置換しない。
+現在のEvidence/Claim validation、limits、timeoutを置換しない。
 
 ## 8. 永続化・API・version・会話
 

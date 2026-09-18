@@ -63,7 +63,7 @@ describe("InTripAnswerPlan presentation boundary", () => {
     const evidence = values(), e = evidence.find((e) => e.coverage?.includes("rail.connection"))!, before = JSON.stringify(evidence);
     const result = renderInTripAnswer(selection(e.id, "rail-impact"), [e.id], evidence);
     for (const expected of ["遅延6分", "見込み4分", "必要5分", "対応が必要", "乗車しているかは確認できていません"]) expect(result.text).toContain(expected);
-    expect(result.viewerActions).toEqual([]); expect(result.claims[0]!.evidenceIds).toEqual([e.id]);
+    expect(result.claims[0]!.evidenceIds).toEqual([e.id]);
     expect(JSON.stringify(evidence)).toBe(before);
   });
   it("renders planned next time in its time zone, without asserting actual location", () => {

@@ -99,8 +99,8 @@ tools/               検証 評価 再生成コマンド
 ```
 
 本番のコンシェルジュは`frontend/src/usecases/agent/agent-runtime.ts`を唯一のモデル実行入口とする。
-Bedrock接続は`frontend/src/adapters/bedrock/viewer-agent-runtime.ts`で共通Tool Evidence Trace
-Viewer Actionへ適合し ローカル開発用Agentは`frontend/src/usecases/agent/local-viewer-agent.ts`へ分離する。
+Bedrock接続は`frontend/src/adapters/bedrock/viewer-agent-runtime.ts`で共通Tool Evidence Traceへ適合する。
+Viewer ActionとLocalViewerAgentは#477で撤去済みで、DEVでもAPI障害をlocal fallbackで隠さない。
 
 本番Agent Lambdaは`backend/agent-api`のNode.js bundleを使う
 TypeScriptのテストは対象モジュールの隣へ置く。repository保守toolとfixtureの更新方法は
@@ -116,7 +116,7 @@ TypeScriptのテストは対象モジュールの隣へ置く。repository保守
 サーバ保存・予約・旅行中通知が実装済みという意味ではない。
 
 #388の[Trip server保存基盤](docs/architecture/trip-server-persistence.md)では、owner-scoped Repository、
-明示migration、server read/preview sourceを追加した。利用者認証が未導入のため公開Trip CRUDは閉じており、
+明示migration、server read/preview sourceを追加した。公開経路への認証接続は未実施のため公開Trip CRUDは閉じており、
 [#389 の CAS/冪等性](docs/architecture/trip-concurrency.md)は統合済み。本番writer切替は認証境界の導入・レビュー後とする。
 
 [#398 の Reservation](docs/architecture/trip-reservation.md)は採用済みTripとは独立した予約resourceとする。
@@ -154,14 +154,14 @@ npm run eval:agent:strategies
 ```
 
 Agent Benchmarkは42件を収録し 曖昧要求 運休 遅延 制約 情報不足 複数Tool
-Viewer Actionのカテゴリ別に6指標を出す。失敗したcase IDは`--case`で単独再実行できる
+のカテゴリ別に5指標を出す。失敗したcase IDは`--case`で単独再実行できる
 戦略実験はsingle pass 結果駆動再計画 常時Reflectionの品質と相対コストを比較する
 
 通常の`eval:agent`は再現可能な保存済みObservationを採点し CIの回帰検知に使う。
 さらに本番Runtimeを通すscripted Ask + Progress（A〜G）と、複数応答の
 [Trip Progress評価](docs/architecture/trip-progress-evaluation.md)（A〜AI）を追加実行する。
 TTFC/TTFI・候補選択→draft・質問のみの連続数は構造化された表示成果物から測る。
-SmokeはTrip Progress 23件、FullはA〜AMの39件。K/LはActivity、M/Nは[TripParty](docs/architecture/trip-party.md)、O/Pは[Transport](docs/architecture/trip-transport.md)、Q/Rは[宿泊Snapshot](docs/architecture/trip-accommodation.md)の回帰評価。保存済み観測42件の6指標は維持する。SはEUR宿泊価格、T/Uは多都市、V〜Zは候補Assessment、AAはUI focus、ABは予約変更、AC〜AEは[Trip成立性](docs/architecture/trip-feasibility.md)、AF〜AHは[準備リスト](docs/architecture/trip-readiness.md)、AIは[公的ハザードとTrip影響の分離](docs/architecture/hazard-alert.md)を検証する。
+SmokeはTrip Progress 23件、FullはA〜AMの39件。K/LはActivity、M/Nは[TripParty](docs/architecture/trip-party.md)、O/Pは[Transport](docs/architecture/trip-transport.md)、Q/Rは[宿泊Snapshot](docs/architecture/trip-accommodation.md)の回帰評価。保存済み観測42件の5指標は維持する。SはEUR宿泊価格、T/Uは多都市、V〜Zは候補Assessment、AAはUI focus、ABは予約変更、AC〜AEは[Trip成立性](docs/architecture/trip-feasibility.md)、AF〜AHは[準備リスト](docs/architecture/trip-readiness.md)、AIは[公的ハザードとTrip影響の分離](docs/architecture/hazard-alert.md)を検証する。
 #396の[旅行中Context](docs/architecture/in-trip-context.md)は、現在/次予定、保存済みImpact、通知currency、ReservationFactを
 bounded read modelに分け、AJ〜AM（次予定・鉄道影響・雨/警報・位置未許可）を同じ評価へ追加した。
 既存A〜AIのthresholdは変更しない。

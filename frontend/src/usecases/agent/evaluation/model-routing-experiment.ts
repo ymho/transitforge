@@ -2,7 +2,7 @@ import type { AgentEvaluationReport } from "./evaluation-contract";
 import type { AgentTrace } from "../agent-trace";
 
 export interface AgentModelRoutingRun {
-  schemaVersion: "agent-model-routing-run-v1";
+  schemaVersion: "agent-model-routing-run-v2";
   strategy: string;
   datasetSchemaVersion: string;
   caseCount: number;
@@ -20,7 +20,7 @@ export interface AgentModelRoutingRun {
 }
 
 export interface AgentModelRoutingComparison {
-  schemaVersion: "agent-model-routing-comparison-v1";
+  schemaVersion: "agent-model-routing-comparison-v2";
   sameBenchmark: boolean;
   qualityMaintained: boolean;
   costImproved: boolean;
@@ -49,7 +49,7 @@ export function createAgentModelRoutingRun(
   const toolEvents = traces.flatMap(({ events }) =>
     events.filter((event) => event.type === "tool_called"));
   return {
-    schemaVersion: "agent-model-routing-run-v1",
+    schemaVersion: "agent-model-routing-run-v2",
     strategy,
     datasetSchemaVersion: report.datasetSchemaVersion,
     caseCount: report.caseCount,
@@ -82,8 +82,7 @@ export function compareAgentModelRouting(
     candidate.quality.constraintSatisfaction >= baseline.quality.constraintSatisfaction &&
     nullableAtLeast(candidate.quality.groundedClaimRate, baseline.quality.groundedClaimRate) &&
     nullableAtMost(candidate.quality.unsupportedClaimRate, baseline.quality.unsupportedClaimRate) &&
-    candidate.quality.taskCompletion >= baseline.quality.taskCompletion &&
-    candidate.quality.viewerActionValidity >= baseline.quality.viewerActionValidity;
+    candidate.quality.taskCompletion >= baseline.quality.taskCompletion;
   const changes = {
     latency: ratioChange(candidate.runtime.totalLatencyMs, baseline.runtime.totalLatencyMs),
     totalTokens: ratioChange(
@@ -103,7 +102,7 @@ export function compareAgentModelRouting(
   if (!qualityMaintained) reasons.push("Agent品質を維持できていない");
   if (!costImproved) reasons.push("latencyまたはtokenの明確な改善を確認できない");
   return {
-    schemaVersion: "agent-model-routing-comparison-v1",
+    schemaVersion: "agent-model-routing-comparison-v2",
     sameBenchmark,
     qualityMaintained,
     costImproved,
@@ -114,7 +113,7 @@ export function compareAgentModelRouting(
 }
 
 export function parseAgentModelRoutingRun(value: unknown): AgentModelRoutingRun {
-  if (!isRecord(value) || value.schemaVersion !== "agent-model-routing-run-v1" ||
+  if (!isRecord(value) || value.schemaVersion !== "agent-model-routing-run-v2" ||
     typeof value.strategy !== "string" || !value.strategy.trim() ||
     typeof value.datasetSchemaVersion !== "string" ||
     !integer(value.caseCount) || !integer(value.passedCaseCount) ||
@@ -130,7 +129,7 @@ function quality(value: unknown): value is AgentEvaluationReport["metrics"] {
   return isRecord(value) &&
     unit(value.toolSelectionAccuracy) && unit(value.constraintSatisfaction) &&
     nullableUnit(value.groundedClaimRate) && nullableUnit(value.unsupportedClaimRate) &&
-    unit(value.taskCompletion) && unit(value.viewerActionValidity);
+    unit(value.taskCompletion);
 }
 
 function runtime(value: unknown): value is AgentModelRoutingRun["runtime"] {

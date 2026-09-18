@@ -1,5 +1,8 @@
 # ADR 0038: 本番Agent実行を共通Runtimeへ一本化する
 
+> 2026-09-18 / [Wave 2A #477](https://github.com/ymho/transitforge/issues/477)（親方針 #476）: Viewer ActionおよびLocalViewerAgent/DEV fallbackの部分はretired。本番MultiStepAgentRuntimeとBedrock Adapterの組成は引き続き有効で、Server移行は後続Issueで行う。
+> 以下は決定当時の記録として保持する。
+
 - ステータス: Accepted
 - 日付: 2026-08-25
 - 置換: ADR 0033の移行中Viewer Agent配置

@@ -1,9 +1,8 @@
 import type { AgentRuntimeFeature, AgentRuntimeStatus } from "../runtime-contract";
 import type { TravelProgressReport, TravelProgressScenario } from "./travel-progress-evaluation";
 
-export const agentEvaluationDatasetSchemaVersion = "agent-eval-dataset-v1";
-export const travelProgressDatasetSchemaVersion = "agent-eval-dataset-v2";
-export const agentEvaluationObservationSchemaVersion = "agent-eval-observations-v1";
+export const agentEvaluationDatasetSchemaVersion = "agent-eval-dataset-v3";
+export const agentEvaluationObservationSchemaVersion = "agent-eval-observations-v2";
 
 export const agentEvaluationCategories = [
   "ambiguous-request",
@@ -12,13 +11,12 @@ export const agentEvaluationCategories = [
   "constraint",
   "information-gap",
   "multi-tool",
-  "viewer-action",
 ] as const;
 
 export type AgentEvaluationCategory = typeof agentEvaluationCategories[number];
 
 export interface AgentEvaluationDataset {
-  schemaVersion: typeof agentEvaluationDatasetSchemaVersion | typeof travelProgressDatasetSchemaVersion;
+  schemaVersion: typeof agentEvaluationDatasetSchemaVersion;
   cases: AgentEvaluationCase[];
   travelProgressScenarios?: TravelProgressScenario[];
 }
@@ -41,8 +39,6 @@ export interface AgentEvaluationExpectation {
   status: AgentRuntimeStatus;
   minimumGroundedClaimRate: number;
   maximumUnsupportedClaimRate: number;
-  allowedViewerActions: string[];
-  requiredViewerActions: string[];
   decision?: {
     requiredHardConstraintKeys: string[];
     forbiddenUnresolvedFacts: string[];
@@ -60,10 +56,6 @@ export interface AgentEvaluationObservation {
   normalizedConstraints: Record<string, unknown>;
   status: AgentRuntimeStatus;
   claimStatuses: Array<"supported" | "unsupported" | "unknown">;
-  viewerActions: Array<{
-    actionType: string;
-    status: "applied" | "rejected";
-  }>;
   decisionHardConstraintKeys?: string[];
   decisionUnresolvedFacts?: string[];
 }
@@ -78,13 +70,12 @@ export interface AgentEvaluationCaseResult {
     groundedClaimRate: number | null;
     unsupportedClaimRate: number | null;
     taskCompletion: number;
-    viewerActionValidity: number;
   };
   failures: string[];
 }
 
 export interface AgentEvaluationReport {
-  schemaVersion: "agent-eval-report-v3";
+  schemaVersion: "agent-eval-report-v4";
   datasetSchemaVersion: AgentEvaluationDataset["schemaVersion"];
   caseCount: number;
   passedCaseCount: number;
@@ -94,11 +85,10 @@ export interface AgentEvaluationReport {
     groundedClaimRate: number | null;
     unsupportedClaimRate: number | null;
     taskCompletion: number;
-    viewerActionValidity: number;
   };
   categories: AgentEvaluationCategoryReport[];
   cases: AgentEvaluationCaseResult[];
-  /** Additive multi-response evaluation; never replaces the six grounding/safety metrics. */
+  /** Additive multi-response evaluation; never replaces the five Tool/grounding/completion metrics. */
   travelProgress?: TravelProgressReport[];
 }
 

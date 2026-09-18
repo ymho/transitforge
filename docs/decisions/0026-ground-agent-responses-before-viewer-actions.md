@@ -1,5 +1,8 @@
 # ADR 0026: Agent応答をGroundingしてからViewer Actionを実行する
 
+> 2026-09-18 / [Wave 2A #477](https://github.com/ymho/transitforge/issues/477)（親方針 #476）: Viewer Actionと専用Structured response/E2Eの部分はretired。Evidence/ClaimのGrounding検証と検索結果の実行単位の境界は維持する。
+> 以下は決定当時の記録として保持する。
+
 ## 状態
 
 採用（直接Viewer操作の公開はADR 0049で停止）

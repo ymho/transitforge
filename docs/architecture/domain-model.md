@@ -186,10 +186,8 @@ Evidenceは`deterministic_fact` `derived_value` `model_interpretation`
 事実Claimは`unsupported`として検出する。情報不足はEvidenceを捏造せず`unknown` Claimとして表す。
 Grounding判定はモデルの自己申告ではなく`validateEvidenceAndClaims`が決定論的に行う。
 
-Grounded End-to-Endフローでは最終応答を本文 Claim Viewer Actionへ構造化する。
-Runtimeは全Claimを検証し unsupportedな事実が1件でもあれば本文を安全側の失敗応答へ置き換え
-Viewer Actionを実行しない。Grounding成功後のActionだけを同じ実行で収集したEvidenceから作る
-task scopeへ渡す。判断記録は[ADR 0026](../decisions/0026-ground-agent-responses-before-viewer-actions.md)を参照する。
+最終応答は本文とClaimを持ち、Runtimeは全Claimを検証する。unsupportedな事実が1件でもあれば
+本文を安全側の失敗応答へ置き換える。Viewer Actionは#477で撤去した。判断記録は[ADR 0026](../decisions/0026-ground-agent-responses-before-viewer-actions.md)を参照する。
 
 ### Structured Agent Trace
 
@@ -197,13 +195,12 @@ task scopeへ渡す。判断記録は[ADR 0026](../decisions/0026-ground-agent-r
 
 1回のAgent実行は`executionId`に紐づく順序付きeventとして記録する。eventは利用者の依頼
 正規化した意図 plan Tool呼び出しと結果 Evidence 再計画判断 モデルmetadata 応答
-Viewer Actionと完了状態を区別する。これにより会話文や巨大なTool結果を丸ごと保存せず
+完了状態を区別する。これにより会話文や巨大なTool結果を丸ごと保存せず
 後続のRuntimeとEvaluationが同じ実行過程を再現できる。
 
 Recorderは既定200件で追記を停止し 超過件数を`droppedEventCount`へ記録する。
 payloadは件数 深さ 文字数を制限して要約し 秘密値 Authorization cookie
-現在地の緯度経度を記録前に除去する。Tool errorのcodeと再試行可否 Viewer Actionの
-拒否理由は残すが 例外そのものやProviderへ送った未加工payloadは残さない。
+現在地の緯度経度を記録前に除去する。Tool errorのcodeと再試行可否は残すが 例外そのものやProviderへ送った未加工payloadは残さない。
 通常のTraceは実行中のメモリだけに保持し 自動的な全量保存と分析UIは対象外とする。
 
 評価と不具合調査へ利用するTraceだけは`agent_trace` operationで明示送信できる。
@@ -226,32 +223,14 @@ RuntimeはProvider固有形式を扱わず 既定で反復4回 model call 5回 T
 実行15秒 Evidence 20件を上限とする。複数Toolは順番に実行し 結果をTool call IDで
 次のmodel callへ返す。不足情報がある場合はToolを実行せずfollow-upを返す。
 
-導入中は機能単位の`AgentRuntimeRolloutRouter`で比較した。現在の本番モデル実行は
+旧rollout routerは#477で撤去した。現在の本番モデル実行は
 `MultiStepAgentRuntime`へ一本化し Bedrock AdapterはProvider DTOとTool Adapterを組成する。
-検索結果に結び付くViewer Actionは共通Runtime内でEvidence scopeを検証してから適用する。
 機能固有の`finalResponsePolicy`は 未検証の文章回答を完了扱いにせず Tool実行へ再計画させる。
 PolicyはDomain計算を代替せず 必要なEvidenceが揃ったかだけを判定する。
 判断記録は[ADR 0038](../decisions/0038-use-one-production-agent-runtime.md)を参照する。
 
-最初のE2Eシナリオは当日遅延を含む経路検索から候補比較を行い Evidence付き回答と
-検証済み経路の強調 Evidence表示までをoffline fixtureで通す。ProviderやS3へ接続せず
-Tool順序 ClaimのGrounding Viewer Actionのtask scopeとTraceを同じテストで確認する。
-
-### Viewer Action Policy
-
-- Action契約: `frontend/src/usecases/viewer/viewer-action.ts`
-- task scopeとPolicy: `frontend/src/usecases/viewer/viewer-action-policy.ts`
-- Executor: `frontend/src/usecases/viewer/viewer-action-executor.ts`
-- 判断記録: [ADR 0024](../decisions/0024-restrict-viewer-actions-to-task-scope.md)
-
-Viewer Actionは列挙型として検証し、経路とEvidenceを対象にする操作は同じ`executionId`の
-Tool結果からApplicationがtask scopeへ登録したEntityだけを許可する。現在Agentへ公開するのは
-検索結果に結び付く`highlight_route` `compare_journeys` `show_evidence`であり、直接表示を変える
-`focus_train` `set_display_time` `set_layer_visibility`は公開しない。
-
-ExecutorはDOMやMapboxを直接参照せず表示用Portだけを呼び出す。汎用契約は検索結果表示と
-既存の互換性検証のため維持し 未知Action 余分なfield 別taskのEntityをPort実行前に拒否する。
-手動の表示時刻 列車選択 レイヤー切替はViewer UIが所有する。
+Viewer Action専用E2E・Policy・Executorは#477で撤去した。検索・比較Tool、Evidence/Claim検証、
+本番Runtimeを通す一般回答Groundingテストを維持する。手動の表示時刻・列車選択・レイヤー切替はViewer UIが所有する。
 
 ### Agent Evaluation
 
@@ -261,15 +240,15 @@ ExecutorはDOMやMapboxを直接参照せず表示用Portだけを呼び出す�
 - 判断記録: [ADR 0027](../decisions/0027-evaluate-agent-quality-with-objective-metrics.md)
 
 version付きdatasetとProvider非依存のobservationを入力し Tool選択 制約充足 Grounded Claim
-Unsupported Claim Task完了 Viewer Actionの6指標をコードで判定する。Runtime結果は
-Structured Trace Claim Viewer Actionからobservationへ正規化する。35ケースのうち経路fixtureを
+Unsupported Claim Task完了の5指標をコードで判定する。Runtime結果は
+Structured Trace Claimからobservationへ正規化する。42ケースのうち経路fixtureを
 利用できるものは既存の
 journey search scenario IDを参照し 鉄道fixtureを重複定義しない。
 
 reportは機械処理用JSONとレビュー用Markdownを同じ結果から生成する。
 datasetにないobservationや不足するobservationは失敗として扱い 評価対象の取り違えを隠さない。
-曖昧要求 運休 遅延 制約 情報不足 複数Tool Viewer Actionを固定カテゴリとして
-全6指標をJSONとMarkdownへ出す。事実Claimが存在しない情報不足カテゴリではGroundedと
+曖昧要求 運休 遅延 制約 情報不足 複数Toolを固定カテゴリとして
+全5指標をJSONとMarkdownへ出す。事実Claimが存在しない情報不足カテゴリではGroundedと
 Unsupportedを`N/A`とし 0件を成功率100%として偽装しない。
 
 runnerの`--case`はcase IDでdatasetとobservationを同時に1件へ絞り込む。
@@ -290,7 +269,7 @@ latencyとtokenは固定Provider相当の決定論的コストモデルによる
 相対コストだけが増えたため本番Runtimeへ追加しない。
 
 Evaluation profileは`smoke`と`full`を持つ。Smokeはtagで選んだ軽量集合 Fullは全datasetを使う。
-run reportは6指標の実測値 閾値 判定とcase結果を含み case失敗または閾値未達で失敗する。
+run reportは5指標の実測値 閾値 判定とcase結果を含み case失敗または閾値未達で失敗する。
 CI分離の判断は[ADR 0029](../decisions/0029-separate-smoke-and-full-agent-evaluation.md)を参照する。
 
 ### Read-only MCP Adapter
