@@ -23,6 +23,11 @@ Environment変数は`AGENT_STREAM_ENABLED=true`、`FIXED_EGRESS_PROVIDER_ENABLED
 GitHub concurrencyは手元CLIや別repositoryをロックしない。Secrets Managerに条件付きPut/CASは
 ないため、preflightと書込み直前の再読取りの間の外部writer競合まで原子的には防止できない。
 
+AWS discoveryはidentity、Lambda topology、secret wiring、public ingress absence、API Gateway route、
+API Gateway streaming、CloudFront route、Lambda permission、IAM Provider invoke、Cognito OAuthの
+固定checkpointへ分割する。失敗したcheckpoint以降は実行せず、remote valueや例外本文を含めずに
+固定labelとPASS/FAIL/NOT RUNだけを表示する。
+
 ## Secret split
 
 入力は`/transitforge/dev/travel-provider`。旧Secretにはreadのみを行い、変更・削除しない。

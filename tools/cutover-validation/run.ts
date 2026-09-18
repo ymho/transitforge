@@ -24,7 +24,7 @@ async function main() {
       });
       return;
     }
-    config = await report.check("AWS ingress and configuration", () => discover(aws));
+    config = await report.check("AWS ingress and configuration", () => discover(aws, (label, action) => report.check(label, action)));
     if (mode === "all" || mode === "migrate-secrets") await report.check("secret migration", () => migrate(aws));
     await report.check("fixed-egress secret contract", async () => contract(await readSecret(aws, secretNames.travel), "travel"));
     await report.check("agent provider secret contract", async () => contract(await readSecret(aws, secretNames.agent), "agent"));

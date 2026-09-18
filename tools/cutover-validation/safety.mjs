@@ -8,6 +8,11 @@ export function requireCheck(condition) {
 // No exception, remote response, identifier, or caller-provided label reaches a log.
 export const labels = [
   "environment gates", "AWS ingress and configuration", "secret migration",
+  "AWS discovery / identity", "AWS discovery / Lambda topology", "AWS discovery / secret wiring",
+  "AWS discovery / public ingress absence", "AWS discovery / API Gateway route",
+  "AWS discovery / API Gateway streaming", "AWS discovery / CloudFront route",
+  "AWS discovery / Lambda permission", "AWS discovery / IAM Provider invoke",
+  "AWS discovery / Cognito OAuth",
   "fixed-egress secret contract", "agent provider secret contract", "provider live test",
   "temporary user setup", "PKCE User A", "PKCE User B", "unauthenticated rejection", "invalid token rejection",
   "simple real Bedrock turn", "accommodation Tool turn", "persisted turn",
