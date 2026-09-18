@@ -119,13 +119,6 @@ export type AgentTraceEvent =
       claimIds: string[];
     })
   | (AgentTraceEventBase & {
-      type: "viewer_action";
-      actionType: string;
-      status: "proposed" | "applied" | "rejected";
-      targetEntityId?: string;
-      reason?: string;
-    })
-  | (AgentTraceEventBase & {
       type: "task_completed";
       status: AgentTraceStatus;
       latencyMs?: number;
@@ -345,22 +338,6 @@ export class AgentTraceRecorder {
     });
   }
 
-  viewerAction(
-    actionType: string,
-    status: "proposed" | "applied" | "rejected",
-    details: { targetEntityId?: string; reason?: string } = {},
-  ): void {
-    this.append({
-      type: "viewer_action",
-      actionType: this.text(actionType),
-      status,
-      ...(details.targetEntityId
-        ? { targetEntityId: this.text(details.targetEntityId) }
-        : {}),
-      ...(details.reason ? { reason: this.text(details.reason) } : {}),
-    });
-  }
-
   taskCompleted(status: AgentTraceStatus, latencyMs?: number, reason?: string): void {
     this.append({
       type: "task_completed",
@@ -417,7 +394,6 @@ function contentFreeEvent(event: AgentTraceEventInput): AgentTraceEventInput {
     case "response_generated": return { ...event, response: "[private-profile-content-omitted]" };
     case "turn_observed": return { ...event, observation: { outcome: event.observation.outcome, progress: [] } };
     case "replan_decided": return { ...event, reason: "[private-profile-content-omitted]", steps: [] };
-    case "viewer_action": return { ...event, reason: undefined };
     default: return event;
   }
 }

@@ -1,5 +1,8 @@
 # ADR 0024: Viewer Actionを同一Agentタスクの検証済みEntityへ限定する
 
+> 2026-09-18 / [Wave 2A #477](https://github.com/ymho/transitforge/issues/477)（親方針 #476）: Viewer Action契約・task scope・Executorはretired。手動Viewer操作とViewer → Agentのbounded contextは維持する。
+> 以下は決定当時の記録として保持する。
+
 - ステータス: Accepted（直接Viewer操作の公開はADR 0049で停止）
 - 日付: 2026-08-25
 - 関連: ADR 0049

@@ -1,12 +1,10 @@
 import type { Evidence, EvidenceClaim } from "./evidence-model";
 import type { AgentModelResponse } from "./model-provider";
-import type { ViewerAgentAction } from "../viewer/viewer-action";
 import { parseGroundedAnswer, presentGroundedEvidence, supportedAnswerClaims, sourceExplanation } from "./grounded-answer";
 
 export interface AgentGeneratedResponse {
   text: string;
   claims: EvidenceClaim[];
-  viewerActions: ViewerAgentAction[];
 }
 
 export interface AgentResponseGenerator {
@@ -51,7 +49,7 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
         // Explicitly selecting no factual support never licenses the model's prose.
         // Preserve uncertainty with the existing unknown Claim contract instead.
         const claims = supportedAnswerClaims([]);
-        return { text: claims[0]!.statement, claims, viewerActions: [] };
+        return { text: claims[0]!.statement, claims };
       }
       return sourceExplanation(text, evidence, profile) ?? parseGroundedAnswer(text, evidence);
     }
@@ -64,7 +62,6 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
     return {
       text: text || "確認できる情報が不足しているため回答できません",
       claims: [],
-      viewerActions: [],
     };
   }
 

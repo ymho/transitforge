@@ -1,5 +1,8 @@
 # ADR 0049: AIによる直接Viewer操作を一旦停止する
 
+> 2026-09-18 / [Wave 2A #477](https://github.com/ymho/transitforge/issues/477)（親方針 #476）: 「停止するがViewer Action契約・互換検証は残す」の部分はSuperseded。Viewer Action一式を撤去した。Agentへ直接操作を公開しない方針、検索機能、手動Viewer操作は維持する。
+> 以下は決定当時の記録として保持する。
+
 - ステータス: Accepted
 - 日付: 2026-09-02
 - 関連: ADR 0024 0026 0044 0045 Issue #332

@@ -97,7 +97,7 @@ Adapter→UI依存を追加せず、ラベル計算を複製しない。全面UI
 既存`observeViewerTurn`は公開response中のActivity add/replaceをtrip_proposal + itineraryとして扱う。
 未公開・失敗で破棄したTool結果、状態のみの変更、単なる本文の完了報告はTTFIにならない。
 追加したKは既存Tripへfoodをaddしてrefinement、Lは場所なしwindow自由時間。
-A〜Jと従来6指標は維持し、SmokeへK、FullへK/Lを追加した。
+A〜Jと従来5指標（#477でViewer Action採点のみ廃止）は維持し、SmokeへK、FullへK/Lを追加した。
 
 ## 検証とwriter gate
 

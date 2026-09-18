@@ -72,7 +72,7 @@ export function parseGroundedAnswer(text: string, evidence: readonly Evidence[])
     return { ...matched, id: claim.id };
   });
   if (new Set(claims.map((c) => c.id)).size !== claims.length || value.text.trim() !== claims.map((c) => c.statement).join("\n\n")) throw new Error("Unbound response text");
-  return { text: value.text.trim(), claims, viewerActions: [] };
+  return { text: value.text.trim(), claims };
 }
 /** The existing decision-summary references select factual presentations. Model prose is not
  * displayed on this lane: Application constructs the claims and their exact bound values. */
@@ -81,7 +81,7 @@ export function presentGroundedEvidence(ids: readonly string[], evidence: readon
   const claims = ids.flatMap((id) => supportedAnswerClaims(evidence.filter((e) => e.id === id)));
   if (claims.length !== ids.length) throw new Error("Missing factual presentation");
   const bound = claims.map((claim, index) => ({ ...claim, id: `fact-${index}` }));
-  return { text: bound.map((c) => c.statement).join("\n\n"), claims: bound, viewerActions: [] };
+  return { text: bound.map((c) => c.statement).join("\n\n"), claims: bound };
 }
 export function groundedAnswerInstruction(evidence: readonly Evidence[], profile?: Record<string, unknown>): string {
   const claims = supportedAnswerClaims(evidence);
@@ -129,6 +129,6 @@ export function sourceExplanation(text: string, evidence: readonly Evidence[], p
       claims.push({ id: `recommendation-${claims.length}`, statement: `${preference}この特徴を持つ場所を候補としておすすめします。これは資料と好みをもとにした提案で、適合や営業状況の保証ではありません。`, kind: "inference", evidenceIds: [source.id] });
     }
   }
-  return { text: claims.map((c) => c.statement).join("\n\n"), claims, viewerActions: [] };
+  return { text: claims.map((c) => c.statement).join("\n\n"), claims };
 }
 function record(v: unknown): v is Record<string, unknown> { return typeof v === "object" && v !== null && !Array.isArray(v); }

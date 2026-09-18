@@ -31,11 +31,10 @@ const eventFields = {
   model_completed: [["provider"], ["modelCallId", "requestId", "model", "latencyMs", "inputTokens", "outputTokens", "totalTokens"]],
   response_generated: [["response", "claimIds"], []],
   turn_observed: [["observation", "accepted"], []],
-  viewer_action: [["actionType", "status"], ["targetEntityId", "reason"]],
   task_completed: [["status"], ["latencyMs", "reason"]],
 } as const;
 
-const stringFields = new Set(["userRequest", "intent", "interpretedGoal", "selectedTool", "replanReason", "toolCallId", "toolName", "errorCode", "modelCallId", "modelClass", "provider", "requestId", "model", "reason", "response", "actionType", "targetEntityId"]);
+const stringFields = new Set(["userRequest", "intent", "interpretedGoal", "selectedTool", "replanReason", "toolCallId", "toolName", "errorCode", "modelCallId", "modelClass", "provider", "requestId", "model", "reason", "response"]);
 const stringListFields = new Set(["steps", "unresolvedFacts", "reasonCodes", "evidenceIds", "usedEvidenceIds", "categories", "sourceTypes", "claimIds", "toolNames"]);
 const countFields = new Set(["sequence", "messageCount", "latencyMs", "inputTokens", "outputTokens", "totalTokens"]);
 const payloadFields = new Set(["constraints", "hardConstraints", "softPreferences", "input", "result"]);
@@ -154,12 +153,12 @@ function validatedEvent(value: unknown, position: number): JsonObject {
   }
   const result: JsonObject = { type: eventType, sequence: value.sequence, occurredAt: value.occurredAt };
   for (const key of [...required, ...optional]) {
-    if (key in value) result[key] = validatedEventField(key, value[key], eventType, position);
+    if (key in value) result[key] = validatedEventField(key, value[key], position);
   }
   return result;
 }
 
-function validatedEventField(key: string, value: unknown, eventType: string, position: number): unknown {
+function validatedEventField(key: string, value: unknown, position: number): unknown {
   const invalid = () => new RequestError(400, `Agent Trace event ${position}件目の${key}が不正です。`);
   if (key === "inTripAnswerPlan") {
     if (!validInTripAnswerPlan(value)) throw invalid();
@@ -187,9 +186,7 @@ function validatedEventField(key: string, value: unknown, eventType: string, pos
   if (key === "outcome" && (value === "success" || value === "error")) return value;
   if (key === "selectedAction" && (value === "use_tool" || value === "ask_user" || value === "answer")) return value;
   if (key === "status") {
-    const allowed = eventType === "viewer_action"
-      ? new Set(["proposed", "applied", "rejected"])
-      : new Set(["completed", "failed", "cancelled"]);
+    const allowed = new Set(["completed", "failed", "cancelled"]);
     if (allowed.has(value as string)) return value;
   }
   throw invalid();

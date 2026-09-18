@@ -1,5 +1,8 @@
 # ADR 0027: Agent品質を客観指標中心のdatasetで評価する
 
+> 2026-09-18 / [Wave 2A #477](https://github.com/ymho/transitforge/issues/477)（親方針 #476）: Viewer Action採点はretired。42ケースのTool/制約/Grounding/Unsupported Claim/完了の5指標は維持し、dataset v3・observation v2・report v4へ更新した。過去形式の互換readerは残さない。
+> 以下は決定当時の記録として保持する。
+
 ## 状態
 
 採用

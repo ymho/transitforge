@@ -13,7 +13,7 @@
 Bedrockは構造化されたAgent Contextから利用者のgoal hard constraint soft preferenceを解釈し
 必要なEvidence 追加質問 Tool 候補比較 最終推薦を判断する。Applicationは自然言語の業務フローを
 別ルールエンジンとして再実装せず Context構築とboundedな実行を担う。時刻表 経路 運行情報
-外部Provider Evidence Claim Viewer Action safety privacyは決定論的コードを正本とする。
+外部Provider Evidence Claim safety privacyは決定論的コードを正本とする。
 
 責務の詳細と段階移行は[ADR 0044](../decisions/0044-make-bedrock-the-agent-decision-authority.md)を参照する。
 Agentの判断はChain-of-Thoughtを保存せず closedなreason codeとboundedな
@@ -36,7 +36,7 @@ flowchart LR
   R --> C
 ```
 
-開発サーバーでAI APIへ接続できない場合だけローカル解析へフォールバックする
+DEVでもAI APIの失敗をそのまま扱い、ローカルAgentへフォールバックしない
 本番ではAPI失敗を成功として扱わず再試行案内を表示する
 
 ## 機能
@@ -177,47 +177,30 @@ npm run test:journey-scenarios
 
 通常のTypeScriptテストでも全シナリオを実行するため CIへの追加設定は不要
 
-## 検索結果表示とViewer Action境界
+## 検索結果表示と手動Viewer操作
 
-| 操作 | 用途 |
-| --- | --- |
-| `highlight_route` | 同じタスクで検索した経路を強調表示 |
-| `compare_journeys` | 同じタスクで検索した2〜3経路を比較表示 |
-| `show_evidence` | 応答が参照するEvidenceを表示 |
+Agent → Viewer Actionの契約・Policy・Executor・Traceは#477で撤去した。
+検索結果は既存の構造化応答から表示し、表示時刻・列車選択・レイヤーは利用者が手動で操作する。
+Viewer → Agentの`uiFocus`などbounded contextは維持し、認可根拠には使わない。
+天気検索は旅行判断のEvidenceを得る読み取り専用Toolであり、地図の天候表現を変更しない。
 
-会話からの`set_display_time` `focus_train` `set_layer_visibility`は本番Toolと開発用
-フォールバックのどちらにも公開しない。経路検索や既存経路の再検索も列車を自動選択しない。
-表示時刻 列車選択 可視化レイヤーは利用者がViewer UIから手動で操作する。天気検索は
-旅行判断のEvidenceを得る読み取り専用Toolであり 地図の天候表現を変更しない。
+## Grounding確認
 
-汎用のViewer Action契約と安全Policyは 検索結果に結び付いた強調 比較 Evidence表示と
-既存の互換性検証のため残す。`ViewerActionTaskScope`はAgent実行IDごとに検証済みの
-経路とEvidenceを保持し scope内のEntityだけを受け付ける。別実行のscope 任意DOM
-JavaScript 外部書き込みは許可しない。提案 適用 拒否と拒否理由は同じ実行の
-Structured Agent Traceへ記録する。
-
-## Grounded End-to-End確認
-
-最小シナリオは固定Providerとoffline経路fixtureを使い 次の順序を検証する。
-
-1. `search_journeys`で当日の遅延を含む候補を取得する
-2. 同一実行へ保存した`searchResultId`で`compare_journeys`を呼ぶ
-3. 比較結果を参照するClaimを決定論的にGroundingする
-4. Grounding成功後だけ`highlight_route`と`show_evidence`を実行する
+本番Provider Adapter・Runtime・Default response generatorを通す一般回答テストで、
+検証済み経路の回答と架空の所要時間・別日付の拒否を確認する。
 
 ```bash
-npx vitest run frontend/src/usecases/agent/grounded-journey-agent.e2e.test.ts
+npx vitest run frontend/src/adapters/bedrock/general-grounding-scenario.test.ts frontend/src/usecases/agent/grounded-answer.test.ts
 ```
 
-存在しないEvidence IDを参照する鉄道事実は失敗応答へ置き換え Viewerを操作しない。
-検索結果IDは同じ`executionId`からだけ解決でき 保持件数と実行件数に上限がある。
+検索結果IDの実行単位の境界と件数制限はJourney Toolのテストで維持する。
 
 ## Agent Evaluation
 
 Tool選択は原則として期待する完全な順序と照合する。結果駆動の再調査など、同じ目的を満たす
 複数の実行順序が正当なケースだけは`expected.alternativeToolSequences`に完全な別順序を宣言できる。
 上限は4パターン・各8呼び出しで、prefix・wildcardや任意回数の再試行は許可しない。
-完了状態、制約、Claim、Viewer Actionの採点は別途維持する。空検索のLiveケースは
+完了状態、制約、Claimの採点は別途維持する。空検索のLiveケースは
 1回の検索後に不明を回答する場合と、1回だけ再検索してから回答する場合を区別せず認める。
 期待値変更前の失敗結果を消さず、旧採点との成功率の直接比較はしない。
 2026-09-09の検証は[旅行調査の統合検証](travel-research-integration-verification.md)を参照する。
@@ -236,7 +219,7 @@ npm run eval:agent -- --case cancelled-service
 `agent-eval-report.json`と`agent-eval-report.md`の2ファイルで 失敗caseが1件でもあれば
 runnerは非0で終了する。
 
-datasetは入力 期待Tool順 正規化制約 完了状態 Grounding閾値 許可Viewer Actionを保持する。
+datasetは入力 期待Tool順 正規化制約 完了状態 Grounding閾値を保持する。
 observation fixtureは評価器の再現確認用であり 実Agentの評価では
 `observeAgentRuntimeResult`でRuntime結果から生成したobservationを使う。
 
@@ -246,9 +229,8 @@ observation fixtureは評価器の再現確認用であり 実Agentの評価で�
 現在の決定論的profileでは各指標の最低値を100% Unsupported Claim Rateの最大値を0%とする。
 通常のunit testとEvalは別Workflowであり 失敗箇所を別checkとして確認する。
 
-Full reportは曖昧要求 運休 遅延 制約 情報不足 複数Tool Viewer Actionについて
-Tool Selection Constraint Satisfaction Grounded Claim Unsupported Claim Task Completion
-Viewer Action Validityをカテゴリ別にも出す。失敗caseは表示されたIDを`--case`へ渡して
+Full reportは曖昧要求 運休 遅延 制約 情報不足 複数Toolについて
+Tool Selection Constraint Satisfaction Grounded Claim Unsupported Claim Task Completionをカテゴリ別にも出す。失敗caseは表示されたIDを`--case`へ渡して
 1件だけ再実行できる。運休 行き先変更 列車制約など既知不具合に対応するcaseは削除せず
 regressionとして維持する。
 
@@ -259,7 +241,7 @@ npm run eval:agent:strategies
 ```
 
 38件Benchmarkから8件を選び single pass 結果駆動再計画 常時Reflectionを同じ期待値で比較する。
-reportは完了case率と6指標に加え 1caseあたりのlatency model call Tool call tokenを出す。
+reportは完了case率と5指標に加え 1caseあたりのlatency model call Tool call tokenを出す。
 固定Provider相当の相対コストであり AWS料金や実modelの応答速度として解釈しない。
 
 現在は結果駆動再計画だけを採用し 常時Reflectionは無効である。常時Reflectionは品質を改善せず
@@ -326,7 +308,7 @@ Label `area: ai` `type: reliability` Milestone `会話体験と改善ループ` 
 
 - 会話履歴は直近12件をrole/textの配列として渡し、各発言を最大1,600文字に制限する。JSON全体を単一文字列として500文字で切らない。旧形式は配列へ復元してから発言単位で制限する
 - Agent ContextのJSON上限は24,000文字とし、圧縮時にも直近の応答を残す。Backendの会話text上限は32,000文字、HTTP body全体の上限は従来どおり2 MiBとする。入力と出力のtokens数とは別の境界である
-- Bedrockの出力上限は4,096 tokensとする。Decision Summaryと利用者向け回答が同じ出力枠を使うため、短い枠で途中終了させない。model routing、実行回数、timeout、EvidenceとViewer Actionの検証は変更しない。調査と評価結果は[会話品質監査](conversation-quality-audit.md)を参照する
+- Bedrockの出力上限は4,096 tokensとする。Decision Summaryと利用者向け回答が同じ出力枠を使うため、短い枠で途中終了させない。model routing、実行回数、timeout、Evidenceの検証は変更しない。調査と評価結果は[会話品質監査](conversation-quality-audit.md)を参照する
 - クライアント契約 通信 レスポンス検証を別モジュールに分ける
 - AI通信は本文と`x-transitforge-request-id`由来のメタデータを組で返す。最新IDをモジュール共有状態へ保存せず 応答ごとに会話履歴へ渡す
 - Agent Runtimeが選べるTool名 説明 入力schemaは各モデル呼び出しでBackendへ渡す。宿泊検索は行き先 チェックイン日 チェックアウト日を必須とし 日付形式 人数 件数をschemaでも制約する
@@ -345,7 +327,7 @@ Label `area: ai` `type: reliability` Milestone `会話体験と改善ループ` 
 - 正確な駅名を要求しない仮案と調査の境界、追加3ケースの反復結果と残課題は[仮案による旅行相談の監査](provisional-planning-audit.md)を参照する。仮起点の存在確認と地理的適切さを区別し、未確認の最寄り駅とは表示しない
 - Live Evalの`--repetitions`は1から10までとし、各反復を独立したAgent実行として評価する。従来の`agent-eval-report`は一度でも失敗したcaseを失敗として保持し、`agent-eval-stability`は反復ごとの全件成功率とcase単位の成功率を別に出す。単発成功を安定した改善とみなさない
 - 2026-09-02の本番相当precondition適用後のNova Lite Smoke 3反復は、目的地写真と直前経路の途中駅だけが全回成功し、stable 2/6、complete attempt 0/3だった。失敗は泊数未確定時の先行検索、直前経路の制約変更、地点検索0件後のWeb再計画に残る。これをIssue #320の反復baselineとし、改善は同じcontractと反復数で比較する
-- model routing比較では各caseのTraceと同じ実行のEval reportから `npm run eval:agent:model-routing:build -- --strategy <name> --report <report.json> --traces <traces.json> --output <run.json>`で`agent-model-routing-run-v1`を作る。単一modelと候補routingのrunを `npm run eval:agent:model-routing -- --baseline <single.json> --candidate <routing.json>`で比較する。出力の`productionRoutingRecommended`は同じdatasetとcase数 品質維持 model/tool call非増加 10%以上の実測latencyまたはtoken改善を同時に要求する
+- model routing比較では各caseのTraceと同じ実行のEval reportから `npm run eval:agent:model-routing:build -- --strategy <name> --report <report.json> --traces <traces.json> --output <run.json>`で`agent-model-routing-run-v2`を作る。単一modelと候補routingのrunを `npm run eval:agent:model-routing -- --baseline <single.json> --candidate <routing.json>`で比較する。出力の`productionRoutingRecommended`は同じdatasetとcase数 品質維持 model/tool call非増加 10%以上の実測latencyまたはtoken改善を同時に要求する
 - 反復Live Evalからmodel routing artifactを作る場合は全反復のTraceを渡す。artifactは反復数と全反復のruntime合計を保持し 異なる反復数のrunを同一Benchmarkとして比較しない
 - Issue #320のSmoke 6件3反復では Nova Lite単体4/6から 構造化phase routing6/6へ改善し complete attempt 3/3 model/tool call増加なし latency 11.2%減 token 1.2%増だった。Toolの実責務と質問入力契約を整えた最終候補はFull 11件3反復でstable 11/11 complete attempt 3/3だった。採用判断はADR 0048を参照する
 - Agent API LambdaはAWS SDKのCommonJS依存を含む単一`.cjs` bundleとして配布し CIでNode.jsによる実読み込みとhandler exportを確認する

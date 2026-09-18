@@ -14,7 +14,6 @@ export const defaultAgentEvaluationThresholds: AgentEvaluationThresholds = {
   groundedClaimRate: { operator: "minimum", value: 1 },
   unsupportedClaimRate: { operator: "maximum", value: 0 },
   taskCompletion: { operator: "minimum", value: 1 },
-  viewerActionValidity: { operator: "minimum", value: 1 },
 };
 
 export function runAgentEvaluationProfile(
