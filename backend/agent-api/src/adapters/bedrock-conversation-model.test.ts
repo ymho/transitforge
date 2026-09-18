@@ -1,5 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
+it("does not retain earlier Profile text echoed in conversation after consent removal", async () => {
+  const record = vi.fn(async () => undefined);
+  const converse = vi.fn(async () => ({ output: { message: { role: "assistant", content: [{ text: "回答" }] } }, stopReason: "end_turn" }));
+  const model = new BedrockConversationModel({ converse }, { modelId: "model-1", systemPrompt: "system", traceRecorder: { record } });
+  await model.converse({ messages: [{ role: "user", content: [{ text: `<agent_context>${JSON.stringify({ conversation: { messages: [{ role: "assistant", text: "earlier-private-preference" }] } })}</agent_context>` }] }],
+    trace: { modelCallId: "model-2", apiRequestId: "request-2" } });
+  expect(JSON.stringify(converse.mock.calls)).toContain("earlier-private-preference");
+  expect(JSON.stringify(record.mock.calls)).not.toContain("earlier-private-preference");
+});
+
 it("sends opted-in preferences to the model but omits conversation content from its Trace", async () => {
   const record = vi.fn(async () => undefined), log = vi.fn();
   const converse = vi.fn(async () => ({ output: { message: { role: "assistant", content: [{ text: "回答" }] } }, stopReason: "end_turn" }));

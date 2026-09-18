@@ -23,6 +23,15 @@ import { inTripApplicationEvidence } from "./in-trip-application-evidence";
 import { calculateInTripReplanScope, replanScopeContext } from "@raiquora/trip/in-trip-replan";
 
 describe("MultiStepAgentRuntime", () => {
+  it("keeps conversation-echoed preferences out of Trace after Profile consent is removed", async () => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const result = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([textResponse("earlier-private-preference")]) }).run({
+      ...request("続きを相談したい"), context: { conversation: { messages: [{ role: "assistant", text: "earlier-private-preference" }] } },
+    });
+    expect(result.response).toBe("earlier-private-preference");
+    expect(JSON.stringify(result.trace)).not.toContain("earlier-private-preference");
+    expect(result.trace.events.some((event) => event.type === "model_completed")).toBe(true);
+  });
   it.each(['<tool_call>{"private":"REJECTED"}</tool_call>', '{"name":"first_tool","input":{"value":"REJECTED"}}'])("repairs envelope to native Tool Use: %s", async (invalid) => {
     const order: string[] = [], requests: AgentModelRequest[] = [];
     const { tools, toolExecutor } = toolSetup(order);
