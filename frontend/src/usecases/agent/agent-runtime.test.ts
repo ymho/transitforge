@@ -19,8 +19,42 @@ import { ToolEvidenceRegistry } from "./tool-evidence-registry";
 import { AgentToolRegistry } from "./tool-registry";
 import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.fixture";
 import { inTripApplicationEvidence } from "./in-trip-application-evidence";
+import { calculateInTripReplanScope, replanScopeContext } from "../trip-plan/in-trip-replan";
 
 describe("MultiStepAgentRuntime", () => {
+  it("ends on Application currentness failure without later batch Tools or silent replan", async () => {
+    const tools = new AgentToolRegistry(), order: string[] = [];
+    tools.register({ ...echoTool("first_tool", order), execute: async () => {
+      order.push("first_tool");
+      return failedAgentToolResult({ code: "precondition_failed", message: "Trip revision changed", retryable: false });
+    } });
+    tools.register(echoTool("second_tool", order));
+    const model = sequenceModel([toolCallResponse([
+      { id: "a", name: "first_tool", input: { value: "one" } },
+      { id: "b", name: "second_tool", input: { value: "two" } },
+    ])]);
+    const result = await new MultiStepAgentRuntime({ tools, model,
+      toolExecutor: new AgentToolExecutor(tools, new ToolEvidenceRegistry()),
+      terminalToolFailure: () => "旅程が更新されたため、新しい変更案が必要です。保存していません。",
+    }).run(request("変更案"));
+    expect(result.status).toBe("completed");
+    expect(result.response).toContain("保存していません");
+    expect(order).toEqual(["first_tool"]);
+    expect(model.generate).toHaveBeenCalledTimes(1);
+  });
+  it("bounds replan wire repair to one retry, never executes prose-encoded Tool calls", async () => {
+    const f = inTripFixture(), { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
+    const invalid = textResponse('<tool_call>{"name":"first_tool","input":{"value":"unsafe"}}</tool_call>');
+    const model = sequenceModel([invalid, invalid], requests);
+    const result = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run({ ...request("変更案"),
+      context: { inTrip: f.snapshot, inTripReplanScope: replanScopeContext(calculateInTripReplanScope(f.trip, { now: new Date(f.now.at), reservations: [] })) },
+      initialEvidence: inTripApplicationEvidence(f.snapshot) });
+    expect(result.status).toBe("failed"); expect(model.generate).toHaveBeenCalledTimes(2);
+    expect(result.trace.events.filter((e) => e.type === "tool_called")).toEqual([]);
+    expect(result.trace.events.filter((e) => e.type === "replan_decided")).toHaveLength(1);
+    expect(JSON.stringify(result)).not.toContain("unsafe");
+    expect(requests[1]?.messages.at(-1)).toMatchObject({ role: "user" });
+  });
   it("returns only admitted Tool Evidence presentation references to the next model call", async () => {
     const { tools } = toolSetup([]), requests: AgentModelRequest[] = [], evidenceMappers = new ToolEvidenceRegistry();
     const toolExecutor = new AgentToolExecutor(tools, evidenceMappers);

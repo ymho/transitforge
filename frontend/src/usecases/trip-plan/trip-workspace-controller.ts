@@ -10,6 +10,9 @@ import { evaluateTripFeasibility, type TripFeasibilityFacts } from "@raiquora/tr
 import { requireFeasibleTrip, requestsReady } from "@raiquora/trip/trip-ready";
 import { projectTripReadiness } from "@raiquora/trip/trip-readiness";
 import { createChecklistWorkspaceController, type ChecklistWorkspacePort } from "./checklist-workspace-controller";
+import { assertItineraryEditingAllowed, previewInTripReplan, type InTripReplanTargets } from "./in-trip-replan";
+
+export interface TripProposalConfirmation { reservationChangeKey?: string; replanConfirmationKey?: string; }
 
 /** A read/preview host, not a Repository. No default writer, legacy conversion or dual write. */
 export interface TripWorkspaceSource {
@@ -23,10 +26,11 @@ export interface TripWorkspaceSource {
   getReservationFacts?(): readonly ReservationFact[] | undefined;
   /** Already acquired runtime observations; no fetch or model call implied by rendering. */
   getFeasibilityExternalFacts?(): TripFeasibilityFacts["external"];
+  getReplanTargets?(): InTripReplanTargets | undefined;
   getCandidates?(): readonly { candidate: TravelCandidate; assessment?: TravelCandidateAssessment }[];
   candidateSelection?: { taskId: string; port: CandidateSelectionPort };
   /** Explicit in-memory confirmation may be supplied by a host; candidate proposals need revalidation there. */
-  confirmProposal?(proposal: TripUpdateProposal, confirmation?: { reservationChangeKey: string }): Promise<void>;
+  confirmProposal?(proposal: TripUpdateProposal, confirmation?: TripProposalConfirmation): Promise<void>;
   confirmationPersistence?: "server";
 }
 export function createTripWorkspaceController(initialSessionId: string, now: () => Date = () => new Date()) {
@@ -50,14 +54,25 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
     const trip = current(), s = state();
     if (!trip || !s) throw new Error("Current Trip unavailable");
     applyTripProposal(trip, proposal);
+    assertItineraryEditingAllowed(trip, proposal);
+    if (trip.lifecycleState === "in_trip") replan(proposal);
     s.proposal = structuredClone(proposal); s.base = JSON.stringify(trip);
     publish();
   };
   const feasibilityInput = (trip: Trip): TripFeasibilityFacts => ({ tripId: trip.id, tripRevision: trip.revision,
     reservations: reservations(), external: state()?.source.getFeasibilityExternalFacts?.() });
+  const replan = (proposal = state()?.proposal) => {
+    const trip = current(), s = state();
+    if (!trip || !s || !proposal || trip.lifecycleState !== "in_trip" ||
+        !proposal.patches.some((p) => ["add", "replace", "remove", "move"].includes(p.type))) return undefined;
+    return previewInTripReplan(trip, proposal, { now: now(), reservations: reservations(),
+      external: s.source.getFeasibilityExternalFacts?.(), targets: s.source.getReplanTargets?.() ??
+        (s.itemId ? { tripId: trip.id, baseRevision: trip.revision, itemIds: [s.itemId] } : undefined) });
+  };
   const checklist = createChecklistWorkspaceController({ trip: current, port: () => state()?.source.checklist, session: () => sessionId, publish });
   return {
     checklist,
+    replan,
     readiness() {
       const trip = current();
       if (!trip) return undefined;
@@ -113,7 +128,7 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
     },
     dismiss() { const s = state(); if (s) { delete s.proposal; delete s.base; } publish(); },
     canConfirm() { return !!state()?.source.confirmProposal; },
-    async confirm(confirmation?: { reservationChangeKey: string }) {
+    async confirm(confirmation?: TripProposalConfirmation) {
       const s = state(), trip = current(), selectedSession = sessionId;
       if (!s?.proposal || s.confirming || !s.source.confirmProposal || !trip) throw new Error("旅程が変わったか、確認処理中です。変更案を確認し直してください。");
       if (trip.revision !== s.proposal.baseRevision || JSON.stringify(trip) !== s.base) {
@@ -122,6 +137,11 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
       }
       const shown = s.proposal;
       const proposed = applyTripProposal(trip, shown);
+      assertItineraryEditingAllowed(trip, shown);
+      const replanned = replan(shown);
+      if (replanned?.confirmationKey && confirmation?.replanConfirmationKey !== replanned.confirmationKey) {
+        throw new Error("固定予定・予約・必須条件への影響を明示確認してください。予約自体は変更しません。");
+      }
       if (requestsReady(shown)) requireFeasibleTrip(proposed, feasibilityInput(proposed), now().toISOString());
       const facts = reservations();
       if (facts && bookedReservationChanges(shown, facts).length && confirmation?.reservationChangeKey !== reservationChangeKey(shown, facts)) {

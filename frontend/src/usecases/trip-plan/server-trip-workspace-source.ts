@@ -1,5 +1,5 @@
 import { validateTrip, applyTripProposal, TripRevisionConflict, type Trip, type TripUpdateProposal } from "@raiquora/trip/trip";
-import type { TripWorkspaceSource } from "./trip-workspace-controller";
+import type { TripWorkspaceSource, TripProposalConfirmation } from "./trip-workspace-controller";
 import type { ServerTripClient, TripLoadState } from "./server-trip-client";
 import { TripWriteRejected, type TripMutationRequest } from "./server-trip-client";
 import { validateReservationFact, type ReservationFact } from "@raiquora/trip/reservation";
@@ -16,7 +16,7 @@ import type { ChecklistCommand } from "@raiquora/trip/checklist-edit";
 export interface ServerTripWriter {
   mutate(mutation: TripMutationRequest): Promise<Trip>;
   newMutationId(): string;
-  validateConfirmation(current: Trip, proposal: TripUpdateProposal, confirmation?: { reservationChangeKey: string }): Promise<void>;
+  validateConfirmation(current: Trip, proposal: TripUpdateProposal, confirmation?: TripProposalConfirmation): Promise<void>;
 }
 
 /** Restores source ownership before any legacy reader/writer can be installed on reload. */
@@ -89,7 +89,7 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
         try { await preparation.writer!.execute(structuredClone(command)); }
         finally { checklistSending = false; await refresh(); } // Even uncertain writes must re-read, no blind retry.
       } } : {}) } } : {}),
-    ...(writer ? { async confirmProposal(proposal: TripUpdateProposal, confirmation?: { reservationChangeKey: string }) {
+    ...(writer ? { async confirmProposal(proposal: TripUpdateProposal, confirmation?: TripProposalConfirmation) {
       if (pending || sending || confirming) throw new Error("前回の保存結果を再確認してください");
       confirming = true;
       try {

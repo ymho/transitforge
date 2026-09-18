@@ -8,6 +8,7 @@ import type { ReservationReader } from "../ports/reservation-repository.js";
 import type { TripFeasibilityReader } from "../ports/trip-feasibility-reader.js";
 import { requireFeasibleTrip, requestsReady } from "@raiquora/trip/trip-ready";
 import type { Trip } from "@raiquora/trip/trip";
+import { assertItineraryEditingAllowed, previewInTripReplan, type InTripReplanTargets } from "../../../../frontend/src/usecases/trip-plan/in-trip-replan.js";
 
 export class TripApplication {
   constructor(private readonly trips: TripRepository, private readonly references: TripConversationReferences,
@@ -21,7 +22,8 @@ export class TripApplication {
     } catch { throw new TripResourceError("feasibility-required"); }
   }
   async execute(principal: TripPrincipal | undefined, value: unknown,
-    authority: { confirmedLifecycle?: LifecycleState; confirmedReservationChange?: string } = {}): Promise<Record<string, unknown>> {
+    authority: { confirmedLifecycle?: LifecycleState; confirmedReservationChange?: string;
+      replanTargets?: InTripReplanTargets; confirmedReplan?: string } = {}): Promise<Record<string, unknown>> {
     requireTripPrincipal(principal);
     const command = parseTripCommand(value);
     const version = tripApiVersion;
@@ -32,6 +34,24 @@ export class TripApplication {
       }
       case "mutate": {
         const trip = await this.trips.applyMutation(principal, command, async (current) => {
+          try { assertItineraryEditingAllowed(current, command.proposal); }
+          catch { throw new TripResourceError("invalid-input"); }
+          if (current.lifecycleState === "in_trip" && command.proposal.patches.some((p) => ["add", "replace", "remove", "move"].includes(p.type))) {
+            const reservations = await this.reservations?.facts(principal, current.id);
+            try {
+              const preview = previewInTripReplan(current, command.proposal, { now: this.clock.now(), reservations,
+                targets: authority.replanTargets });
+              if (preview.confirmationKey && authority.confirmedReplan !== preview.confirmationKey) throw new TripResourceError("confirmation-required");
+              // Re-evaluate against the post-Proposal itinerary, not the old scopes of external movement facts.
+              await this.feasibility?.external(principal, preview.proposed).then((external) => {
+                // Preview truth (including unknown) is retained; saving a draft is not ready certification.
+                previewInTripReplan(current, command.proposal, { now: this.clock.now(), reservations, targets: authority.replanTargets, external });
+              });
+            } catch (error) {
+              if (error instanceof TripResourceError) throw error;
+              throw new TripResourceError(error instanceof TripRevisionConflict ? "conflict" : "invalid-input");
+            }
+          }
           if (command.proposal.patches.some((p) => p.type === "remove" || p.type === "replace")) {
             // A missing reader is unknown, not proof that no booking exists. Receipt retries skip preparation.
             if (!this.reservations) throw new TripResourceError("unavailable");

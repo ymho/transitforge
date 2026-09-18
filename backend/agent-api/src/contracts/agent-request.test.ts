@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
+import { tripProgressDescriptors } from "../../../../frontend/src/usecases/agent/trip-progress-tools.js";
 
 import {
   allowedToolNames,
@@ -17,6 +18,16 @@ import {
 } from "./agent-request.js";
 
 describe("Agent API request contract", () => {
+  it("admits existing V2 Proposal definitions and native toolUse, not arbitrary new tools or execution authority", () => {
+    const toolDefinitions = tripProgressDescriptors.map((d) => ({ name: d.name, description: d.description, inputSchema: d.inputSchema }));
+    expect(validatedToolDefinitions({ toolDefinitions })).toHaveLength(toolDefinitions.length);
+    for (const d of toolDefinitions) expect(validatedMessages({ messages: [{ role: "assistant", content: [{ toolUse: {
+      toolUseId: "proposal", name: d.name, input: {},
+    } }] }] })).toHaveLength(1);
+    expect(() => validatedMessages({ messages: [{ role: "assistant", content: [{ toolUse: {
+      toolUseId: "unsafe", name: "apply_trip_without_confirmation", input: {},
+    } }] }] })).toThrow();
+  });
   it("accepts plain and base64 encoded JSON objects", () => {
     const body = JSON.stringify({ operation: "journey_search" });
     expect(requestValue(event(body))).toEqual({ operation: "journey_search" });
