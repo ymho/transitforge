@@ -52,17 +52,31 @@ resource "aws_lambda_function" "agent_stream" {
   reserved_concurrent_executions = 1
   environment {
     variables = {
-      AGENT_STREAM_ENABLED = "true"
-      AGENT_STREAM_PATH    = local.agent_stream_path
-      COGNITO_USER_POOL_ID = aws_cognito_user_pool.users.id
-      COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.spa.id
-      MODEL_ID             = var.bedrock_model_id
-      LIGHTWEIGHT_MODEL_ID = var.bedrock_lightweight_model_id
-      DECISION_MODEL_ID    = var.bedrock_decision_model_id
+      SERVER_STATE_TABLE_NAME            = aws_dynamodb_table.server_state.name
+      TRIP_TABLE_NAME                    = aws_dynamodb_table.trips.name
+      FIXED_EGRESS_PROVIDER_FUNCTION_ARN = var.enable_fixed_egress_provider ? aws_lambda_function.fixed_egress_provider[0].arn : ""
+      AGENT_PROVIDER_SECRET_ARN          = aws_secretsmanager_secret.agent_stream_providers[each.key].arn
+      AI_TIMETABLE_BUCKET                = "${local.resource_prefix}-data-builder-source"
+      PLANNING_TIMETABLE_PREFIX          = "timetable"
+      TRAFFIC_SNAPSHOT_BUCKET            = aws_s3_bucket.website.id
+      VIEWER_ORIGIN                      = "https://${var.viewer_domain_name}"
+      AGENT_STREAM_ENABLED               = "true"
+      AGENT_STREAM_PATH                  = local.agent_stream_path
+      COGNITO_USER_POOL_ID               = aws_cognito_user_pool.users.id
+      COGNITO_CLIENT_ID                  = aws_cognito_user_pool_client.spa.id
+      MODEL_ID                           = var.bedrock_model_id
+      LIGHTWEIGHT_MODEL_ID               = var.bedrock_lightweight_model_id
+      DECISION_MODEL_ID                  = var.bedrock_decision_model_id
     }
   }
   depends_on = [aws_iam_role_policy.agent_stream_logs, aws_iam_role_policy.agent_stream_model]
-  # Deliberately no VPC, State/Secrets grants, Function URL or fixed-IP Provider implementation.
+  lifecycle {
+    precondition {
+      condition     = var.enable_fixed_egress_provider
+      error_message = "Stateful streaming requires the fixed-egress Provider boundary."
+    }
+  }
+  # No VPC, Function URL or Travel Provider credentials on the Agent Runtime.
 }
 resource "aws_api_gateway_rest_api" "agent_stream" {
   for_each = local.agent_stream_instances
@@ -194,4 +208,31 @@ resource "aws_api_gateway_account" "agent_stream" {
 output "agent_stream_route" {
   description = "Internal opt-in path; not published to Browser configuration."
   value       = var.agent_stream_enabled ? local.agent_stream_path : null
+}
+
+# Dedicated non-travel credentials only; values are provisioned separately, never in Terraform.
+resource "aws_secretsmanager_secret" "agent_stream_providers" {
+  for_each = local.agent_stream_instances
+  name     = "${local.agent_stream_name}-providers"
+}
+resource "aws_iam_role_policy" "agent_stream_state" {
+  for_each = local.agent_stream_instances
+  role     = aws_iam_role.agent_stream[each.key].id
+  policy   = data.aws_iam_policy_document.server_state_storage.json
+}
+resource "aws_iam_role_policy" "agent_stream_dependencies" {
+  for_each = local.agent_stream_instances
+  role     = aws_iam_role.agent_stream[each.key].id
+  policy = jsonencode({ Version = "2012-10-17", Statement = [
+    { Effect = "Allow", Action = ["dynamodb:GetItem"], Resource = aws_dynamodb_table.trips.arn },
+    { Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = aws_secretsmanager_secret.agent_stream_providers[each.key].arn },
+    { Effect = "Allow", Action = ["s3:GetObject"], Resource = ["arn:aws:s3:::${local.resource_prefix}-data-builder-source/timetable/*", "arn:aws:s3:::${local.resource_prefix}-data-builder-source/ai-timetable/*", "${aws_s3_bucket.website.arn}/api/traffic/delays.json"] }
+  ] })
+}
+resource "aws_iam_role_policy" "agent_stream_provider_invoke" {
+  for_each = var.enable_fixed_egress_provider ? local.agent_stream_instances : {}
+  role     = aws_iam_role.agent_stream[each.key].id
+  policy = jsonencode({ Version = "2012-10-17", Statement = [
+    { Effect = "Allow", Action = ["lambda:InvokeFunction"], Resource = aws_lambda_function.fixed_egress_provider[0].arn }
+  ] })
 }

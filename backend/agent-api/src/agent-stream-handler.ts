@@ -1,5 +1,7 @@
 import type { AgentTurnEventSink } from "@raiquora/agent/agent-progress";
 import type { ServerAgentTurn } from "./usecases/agent/server-agent.js";
+import type { ConversationTurnInput } from "./usecases/agent/conversation-turn.js";
+import { stateId } from "./contracts/server-state.js";
 import type { AccessTokenVerifier } from "./ports/access-token-verifier.js";
 import { authenticatedApplication } from "./usecases/authenticated-application.js";
 import { AuthenticationError } from "./contracts/trusted-principal.js";
@@ -9,7 +11,7 @@ export type { StreamRequest, StreamWriter } from "./ports/agent-stream-transport
 export type ObservedAgentRun = (input: ServerAgentTurn, emit: AgentTurnEventSink, runId: string) => Promise<void>;
 
 /** Shared POST transport boundary. Authorizer claims/body identity never establish the principal. */
-export function createAgentStreamHandler(options: { verifier: AccessTokenVerifier; run: ObservedAgentRun; newRunId: () => string; heartbeatMs?: number; path: string; enabled?: boolean; log?: (fields: StreamLog) => void }) {
+export function createAgentStreamHandler(options: { verifier: AccessTokenVerifier; run: ObservedAgentRun; newRunId: () => string; heartbeatMs?: number; path: string; enabled?: boolean; conversationTurns?: boolean; log?: (fields: StreamLog) => void }) {
   const authenticate = authenticatedApplication(options.verifier, ["raiquora/user"], async principal => principal);
   return async (request: StreamRequest, writer: StreamWriter): Promise<void> => {
     const began = Date.now();
@@ -49,7 +51,7 @@ export function createAgentStreamHandler(options: { verifier: AccessTokenVerifie
       const principal = await authenticate(authorization.slice(7), undefined);
       if (writer.signal.aborted) return;
       if (header(request, "content-type")?.split(";")[0].trim() !== "application/json") throw new InputError(415);
-      const input = parseInput(request);
+      const input = parseInput(request, options.conversationTurns);
       runId = requestId;
       writer.start(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store, no-transform", "x-content-type-options": "nosniff" });
       started = true;
@@ -65,7 +67,7 @@ export function createAgentStreamHandler(options: { verifier: AccessTokenVerifie
       if (!started) {
         const status = error instanceof AuthenticationError ? error.code === "forbidden" ? 403 : 401 : error instanceof InputError ? error.status : 500;
         log("rejected", status);
-        writer.start(status, { "content-type": "application/json", "cache-control": "no-store" });
+        writer.start(status, { "content-type": "application/json", "cache-control": "no-store", ...(status === 401 ? { "www-authenticate": "Bearer" } : {}) });
         await writer.write(JSON.stringify({ error: status === 401 ? "unauthenticated" : status === 403 ? "forbidden" : "request_failed" }));
       } else if (!terminal) {
         await emit({ type: "error", code: "agent_failed" });
@@ -88,17 +90,21 @@ function header(request: StreamRequest, name: string): string | undefined {
   if (multiValue !== undefined && value !== undefined && multiValue !== value) throw new InputError(400);
   return multiValue ?? value;
 }
-function parseInput(request: StreamRequest): Omit<ServerAgentTurn, "principal"> {
+function parseInput(request: StreamRequest, conversationTurns = false): Omit<ConversationTurnInput, "principal"> {
   if (request.isBase64Encoded || typeof request.body !== "string" || new TextEncoder().encode(request.body).length > 40_000) throw new InputError(400);
   let value: unknown;
   try { value = JSON.parse(request.body); } catch { throw new InputError(400); }
-  if (!record(value) || Object.keys(value).some(k => !["userRequest", "conversationId", "tripId", "uiContext"].includes(k)) ||
+  if (!record(value) || Object.keys(value).some(k => !["userRequest", "conversationId", "tripId", "uiContext", ...(conversationTurns ? ["turnId"] : [])].includes(k)) ||
       typeof value.userRequest !== "string" || !value.userRequest.trim() || value.userRequest.length > 8_000) throw new InputError(400);
   if (value.uiContext !== undefined && (!record(value.uiContext) || Object.keys(value.uiContext).some(k => k !== "itemId"))) throw new InputError(400);
   for (const ref of [value.conversationId, value.tripId, record(value.uiContext) ? value.uiContext.itemId : undefined]) {
     if (ref !== undefined && (typeof ref !== "string" || !ref.trim() || ref.length > 200 || /[\u0000-\u001f\u007f]/u.test(ref))) throw new InputError(400);
   }
-  return value as unknown as Omit<ServerAgentTurn, "principal">;
+  if (conversationTurns) {
+    try { stateId(value.conversationId); stateId(value.turnId); if (value.tripId !== undefined) stateId(value.tripId); }
+    catch { throw new InputError(400); }
+  }
+  return value as unknown as Omit<ConversationTurnInput, "principal">;
 }
 function record(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
 

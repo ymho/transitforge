@@ -42,6 +42,8 @@ function statementFor(e: Evidence): string | undefined {
         "候補比較であり、採用・予約・現在の安全を保証するものではありません。";
     }
     if (f.status !== "available" || f.freshness !== "fresh") return "外部情報は未確認、または鮮度を確認できていません。移動の成立・空き状況・天気や警報に問題がないとは判断できません。必要な情報を追加確認してください。";
+    if (f.resultKind === "accommodation" && typeof f.name === "string") return `宿泊候補「${plain(f.name)}」を確認しました。` +
+      (f.availability === "available" ? "検索時点で空室が確認されています。予約成立を保証しません。" : "空室は未確認です。予約前に提供者へ確認してください。");
     return "外部情報の取得結果があります。内容と出典を確認してください。検索結果があるだけでは、移動の成立・空き状況・今回の旅への影響を確認したことにはなりません。";
   }
   // These summaries originate in registered Application Tool adapters. No arbitrary model text

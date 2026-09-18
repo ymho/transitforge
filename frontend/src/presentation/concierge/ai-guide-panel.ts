@@ -64,7 +64,7 @@ export interface AiGuidePanelElements {
   rankingPreference: HTMLSelectElement;
   storage: Storage;
   historyRepository: ConversationHistoryRepository;
-  submitFeedback: (feedback: ConversationFeedback) => Promise<void>;
+  submitFeedback?: (feedback: ConversationFeedback) => Promise<void>;
   onFirstPrompt?: (prompt: string) => void;
   onTravelPlan?: (plan: ViewerAgentTravelPlan) => void;
   onTripPlanUpdate?: (proposal: import("@raiquora/trip/trip-plan").TripPlanUpdateProposal) => void;
@@ -119,6 +119,7 @@ export function configureAiGuidePanel(
     historyRepository,
   } = elements;
   let conversationSessionId = elements.conversationSessionId;
+  let requestGeneration = 0;
   // Tab-local, per-conversation draft only; not a Trip or server writer.
   const draftKey = () => `raiquora:conversation-draft:${conversationSessionId}`;
   const saveInputDraft = () => {
@@ -198,7 +199,7 @@ export function configureAiGuidePanel(
     const target = event.target instanceof Element
       ? event.target.closest<HTMLButtonElement>("[data-conversation-feedback]")
       : null;
-    if (!target || target.disabled) return;
+    if (!target || target.disabled || !submitFeedback) return;
     const rating = target.dataset.conversationFeedback;
     if (rating !== "good" && rating !== "bad") return;
     const message = target.closest<HTMLElement>(".ai-guide-message");
@@ -226,7 +227,7 @@ export function configureAiGuidePanel(
         }
         return;
       }
-      void submitFeedback(feedback)
+      void submitFeedback!(feedback)
         .then(() => {
           target.dataset.feedbackStored = "true";
           message.querySelector(".conversation-feedback-comment")?.remove();
@@ -277,6 +278,7 @@ export function configureAiGuidePanel(
       elements.onFirstPrompt?.(prompt);
       hasConversationHistory = true;
     }
+    const requestedGeneration = ++requestGeneration;
     const requestedSessionId = conversationSessionId;
     const requestedContextKey = elements.responseContextKey?.();
     const userMessage = historyRepository.append(
@@ -297,7 +299,7 @@ export function configureAiGuidePanel(
       requestId = metadata.requestId;
     })
       .then((response) => {
-        if (requestedContextKey !== elements.responseContextKey?.()) {
+        if (requestedGeneration !== requestGeneration || requestedContextKey !== elements.responseContextKey?.()) {
           if (conversationSessionId === requestedSessionId) pendingMessage.remove();
           return;
         }
@@ -327,10 +329,11 @@ export function configureAiGuidePanel(
         // Only a newly delivered V2 proposal opens the preview. Restoring history never reapplies it.
         if (typeof response !== "string" && "tripUpdateProposal" in response) elements.onTripUpdateProposal?.(response.tripUpdateProposal);
         if (typeof response !== "string" && "checklistProposal" in response) elements.onChecklistProposal?.(response.checklistProposal);
+        if (!submitFeedback) pendingMessage.querySelector(".conversation-feedback")?.remove();
         pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
       .catch(() => {
-        if (requestedContextKey !== elements.responseContextKey?.()) {
+        if (requestedGeneration !== requestGeneration || requestedContextKey !== elements.responseContextKey?.()) {
           if (conversationSessionId === requestedSessionId) pendingMessage.remove();
           return;
         }
@@ -342,10 +345,11 @@ export function configureAiGuidePanel(
         });
         if (conversationSessionId !== requestedSessionId) return;
         resolveAssistantMessage(pendingMessage, errorResponse);
+        if (!submitFeedback) pendingMessage.querySelector(".conversation-feedback")?.remove();
         pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
       .finally(() => {
-        if (conversationSessionId !== requestedSessionId) return;
+        if (requestedGeneration !== requestGeneration || conversationSessionId !== requestedSessionId) return;
         input.disabled = false;
         submit.disabled = false;
         submit.ariaLabel = "送信";
@@ -386,6 +390,7 @@ export function configureAiGuidePanel(
 
   const controller: AiGuidePanelController = {
     switchSession(nextConversationSessionId) {
+      requestGeneration++;
       elements.onPlaces?.([]);
       if (nextConversationSessionId !== conversationSessionId) saveInputDraft();
       conversationSessionId = nextConversationSessionId;
@@ -421,6 +426,7 @@ export function configureAiGuidePanel(
         }
         const restored = appendPendingMessage(messages, entry.messageId);
         resolveAssistantMessage(restored, entry.response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants, false);
+        if (!submitFeedback) restored.querySelector(".conversation-feedback")?.remove();
         activeConversation = typeof entry.response !== "string" && "conversation" in entry.response
           ? entry.response.conversation
           : undefined;

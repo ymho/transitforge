@@ -117,3 +117,9 @@ Terraform変更はないためfmt/validateも実行しない。
 
 Phase Cの内部組成だけは、保存済みuserSequenceの直前を履歴の上限に指定する。
 現在のuserRequestを履歴と重複させず、retry時の後続messageも含めない。既存の12件上限とrevision検証は維持する。
+
+## #480 production経路への接続
+
+[cutover統合](server-agent-cutover.md)が既存ApplicationをStreaming入口から利用する。
+新規会話の空初期化後にbegin→load→run→complete→finalの順序を維持する。
+AWS未切替であり、Browser本文からStateを復元しない。
