@@ -20,25 +20,67 @@ test("only explicit, consistent gates allow OFF, Provider preparation, stream pr
 test("cannot turn existing infrastructure off, delete it or replace it even with gates ON", () => {
   for (const name of ["agent_stream", "agent_stream_providers", "agent_stream_gateway_logs", "fixed_egress_provider", "fixed_egress_travel_provider", "invoke_fixed_egress_provider"]) {
     for (const actions of [["delete"], ["delete", "create"], ["create", "delete"]]) {
-      assert.throws(() => reviewCutoverPlan(plan([change(name, actions, {})], true, true), env("true", "true")), /deletion/);
+      assert.throws(() => reviewCutoverPlan(plan([change(name, actions, {})], true, true), env("true", "true")), /Cutover destructive plan detected|protected replacement detected/);
     }
     assert.throws(() => reviewCutoverPlan(plan([change(name, ["no-op"], {})]), env()), /cannot be disabled/);
   }
 });
-test("destructive cutover diagnostics contain only the validated address and actions", () => {
+test("destructive cutover diagnostics contain only validated addresses, actions and replacement attributes", () => {
   const input = plan([{
     mode: "managed",
     name: "agent_stream",
     address: 'aws_api_gateway_deployment.agent_stream["stream"]',
     change: {
       actions: ["create", "delete"],
-      before: { id: "arn:aws:execute-api:secret-before", secret: "DO_NOT_PRINT_BEFORE" },
-      after: { id: "arn:aws:execute-api:secret-after", secret: "DO_NOT_PRINT_AFTER" },
+      replace_paths: [["ami"]],
+      before: { id: "arn:aws:execute-api:secret-before", account_id: "123456789012", secret: "DO_NOT_PRINT_BEFORE" },
+      after: { id: "arn:aws:execute-api:secret-after", token: "DO_NOT_PRINT_TOKEN", secret: "DO_NOT_PRINT_AFTER" },
     },
   }], true, true);
   assert.throws(() => reviewCutoverPlan(input, env("true", "true")), error => {
-    assert.match(error.message, /aws_api_gateway_deployment\.agent_stream\["stream"\] \(create\/delete\)/u);
-    assert.doesNotMatch(error.message, /before|after|arn:|DO_NOT_PRINT/u);
+    assert.match(error.message, /aws_api_gateway_deployment\.agent_stream\["stream"\] \(create\/delete; replace_paths: ami\)/u);
+    assert.doesNotMatch(error.message, /before|after|arn:|123456789012|DO_NOT_PRINT|secret|token/u);
+    return true;
+  });
+});
+test("collects every fixed-egress replacement before rejecting the plan", () => {
+  const input = plan([
+    {
+      mode: "managed", type: "aws_instance", name: "ai_nat", address: "aws_instance.ai_nat",
+      change: { actions: ["delete", "create"], replace_paths: [["ami"]], before: { id: "PRIVATE_INSTANCE" }, after: { ami: "PRIVATE_AMI" } },
+    },
+    {
+      mode: "managed", type: "aws_eip_association", name: "ai_nat", address: "aws_eip_association.ai_nat",
+      change: { actions: ["delete", "create"], replace_paths: [["instance_id"]], before: { allocation_id: "PRIVATE_EIP" }, after: { instance_id: "PRIVATE_INSTANCE" } },
+    },
+  ], true, true);
+  assert.throws(() => reviewCutoverPlan(input, env("true", "true")), error => {
+    assert.match(error.message, /aws_instance\.ai_nat \(delete\/create; replace_paths: ami\)/u);
+    assert.match(error.message, /aws_eip_association\.ai_nat \(delete\/create; replace_paths: instance_id\)/u);
+    assert.doesNotMatch(error.message, /PRIVATE_AMI|PRIVATE_INSTANCE|PRIVATE_EIP|before|after/u);
+    return true;
+  });
+});
+test("fails closed when a protected replacement path cannot be safely rendered", () => {
+  for (const replacePaths of [[["PRIVATE_AMI"]], [["ami", "PRIVATE_TOKEN"]], ["PRIVATE_SECRET"], []]) {
+    const input = plan([{
+      mode: "managed", type: "aws_instance", name: "ai_nat", address: "aws_instance.ai_nat",
+      change: { actions: ["delete", "create"], replace_paths: replacePaths, before: { ami: "PRIVATE_AMI" }, after: { id: "PRIVATE_INSTANCE" } },
+    }], true, true);
+    assert.throws(() => reviewCutoverPlan(input, env("true", "true")), error => {
+      assert.equal(error.message, "protected replacement detected");
+      assert.doesNotMatch(error.message, /PRIVATE_AMI|PRIVATE_TOKEN|PRIVATE_SECRET|PRIVATE_INSTANCE/u);
+      return true;
+    });
+  }
+});
+test("fixed-egress route replacements remain prohibited", () => {
+  const route = {
+    mode: "managed", type: "aws_route", name: "ai_egress_private_internet", address: "aws_route.ai_egress_private_internet",
+    change: { actions: ["delete", "create"], replace_paths: [["network_interface_id"]] },
+  };
+  assert.throws(() => reviewCutoverPlan(plan([route], true, true), env("true", "true")), error => {
+    assert.match(error.message, /aws_route\.ai_egress_private_internet \(delete\/create; replace_paths: network_interface_id\)/u);
     return true;
   });
 });
@@ -55,13 +97,13 @@ test("allows only the exact agent stream API Gateway deployment rotation", () =>
     'Terraform plan: resource actions only; sensitive values omitted.\ncreate/delete aws_api_gateway_deployment.agent_stream["stream"]\n',
   );
   for (const actions of [["delete"], ["delete", "create"], ["create", "delete", "create"], ["create", "delete", "no-op"]]) {
-    assert.throws(() => reviewCutoverPlan(plan([{ ...deployment, change: { actions, before: {} } }], true, true), env("true", "true")), /deletion/);
+    assert.throws(() => reviewCutoverPlan(plan([{ ...deployment, change: { actions, before: {} } }], true, true), env("true", "true")), /Cutover destructive plan detected|protected replacement detected/);
   }
   for (const address of ['aws_api_gateway_deployment.agent_stream', 'aws_api_gateway_deployment.agent_stream["other"]', 'aws_lambda_function.agent_stream["stream"]']) {
-    assert.throws(() => reviewCutoverPlan(plan([{ ...deployment, address }], true, true), env("true", "true")), /deletion/);
+    assert.throws(() => reviewCutoverPlan(plan([{ ...deployment, address }], true, true), env("true", "true")), /Cutover destructive plan detected|protected replacement detected/);
   }
-  assert.throws(() => reviewCutoverPlan(plan([{ ...deployment, address: 'invalid address DO_NOT_PRINT' }], true, true), env("true", "true")), /^Error: Invalid Terraform resource address$/);
-  assert.throws(() => reviewCutoverPlan(plan([deployment], false, true), env("false", "true")), /deletion/);
+  assert.throws(() => reviewCutoverPlan(plan([{ ...deployment, address: 'invalid address DO_NOT_PRINT' }], true, true), env("true", "true")), /^Error: protected replacement detected$/);
+  assert.throws(() => reviewCutoverPlan(plan([deployment], false, true), env("false", "true")), /cannot be disabled/);
 });
 test("does not allow the same create/delete rotation for other cutover resources", () => {
   for (const resource of [
@@ -81,7 +123,7 @@ test("does not allow the same create/delete rotation for other cutover resources
     { type: "aws_lambda_function", name: "fixed_egress_provider", address: 'aws_lambda_function.fixed_egress_provider["0"]' },
   ]) {
     for (const actions of [["create", "delete"], ["delete"], ["delete", "create"]]) {
-      assert.throws(() => reviewCutoverPlan(plan([{ ...resource, mode: "managed", change: { actions, before: {} } }], true, true), env("true", "true")), /deletion/);
+      assert.throws(() => reviewCutoverPlan(plan([{ ...resource, mode: "managed", change: { actions, before: {} } }], true, true), env("true", "true")), /Cutover destructive plan detected|protected replacement detected/);
     }
   }
 });
@@ -93,7 +135,7 @@ test("malformed destructive addresses fail generically without exposing plan val
     change: { actions: ["delete"], before: { secret: "DO_NOT_PRINT" } },
   }], true, true);
   assert.throws(() => reviewCutoverPlan(input, env("true", "true")), error => {
-    assert.equal(error.message, "Invalid Terraform resource address");
+    assert.equal(error.message, "protected replacement detected");
     assert.doesNotMatch(error.message, /DO_NOT_PRINT|invalid address/u);
     return true;
   });
