@@ -88,6 +88,10 @@ run "enabled_contract" {
     condition     = aws_api_gateway_method_settings.agent_stream["stream"].settings[0].data_trace_enabled == false && aws_api_gateway_method_settings.agent_stream["stream"].settings[0].metrics_enabled && aws_api_gateway_method_settings.agent_stream["stream"].settings[0].logging_level == "OFF"
     error_message = "Metrics must not enable body/token execution logging."
   }
+  assert {
+    condition     = aws_iam_role.agent_stream_gateway_logs["stream"].assume_role_policy == jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Principal = { Service = "apigateway.amazonaws.com" }, Action = "sts:AssumeRole" }] }) && aws_iam_role_policy_attachment.agent_stream_gateway_logs["stream"].policy_arn == "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+    error_message = "The API Gateway account role must retain the API Gateway trust and AWS managed CloudWatch Logs policy."
+  }
 }
 run "custom_domain_contract" {
   command = plan
