@@ -1,4 +1,5 @@
 import mapboxgl from "mapbox-gl";
+import { placeCameraOffset } from "../presentation/place-explorer/place-camera-offset";
 import { HttpInTripContextClient } from "../adapters/http/in-trip-context-client";
 import { accommodationProviderAttributionFromEnvironment } from "../adapters/browser/accommodation-provider-attribution";
 import { browserDigitalTwinClockEnvironment } from "../adapters/browser/digital-twin-clock-environment";
@@ -715,7 +716,10 @@ if (!token) {
   resizeContextMap = () => map.resize();
   groundAccessLayer = createGroundAccessLayer(map);
   verifiedPlaceLayer = createVerifiedPlaceLayer(map, (place) =>
-    mapPlaceExplorerController?.select(place.providerPlaceId, false));
+    mapPlaceExplorerController?.select(place.providerPlaceId, true), () => placeCameraOffset(
+      map.getContainer().getBoundingClientRect(),
+      [mapPlaceExplorer, mapPlaceDetail].filter((panel) => !panel.hidden).map((panel) => panel.getBoundingClientRect()),
+    ));
   mapPlaceExplorerController = configureMapPlaceExplorer({
     panel: mapPlaceExplorer,
     list: mapPlaceExplorerList,

@@ -50,6 +50,27 @@ function mapFixture() {
 }
 
 describe("verified place map layer", () => {
+  it("hides failed target bindings and focuses only resolved places with the panel offset", () => {
+    const fixture = mapFixture();
+    const layer = createVerifiedPlaceLayer(fixture.map, vi.fn(), () => [-180, -90]);
+    layer.show([
+      { ...place("unresolved", "未解決", 135), targetBinding: { status: "unresolved", reason: "missing-binding" } },
+      { ...place("mismatch", "別施設", 136), targetBinding: { status: "mismatch", reason: "different-id" } },
+      { ...place("resolved", "対象施設", 137), targetBinding: { status: "resolved", reason: "stable-id" } },
+    ]);
+    fixture.loadStyle();
+    expect(fixture.source.setData).toHaveBeenLastCalledWith(expect.objectContaining({
+      features: [expect.objectContaining({ properties: { providerPlaceId: "resolved", name: "対象施設" } })],
+    }));
+    layer.focus("unresolved");
+    layer.focus("mismatch");
+    expect(fixture.map.easeTo).not.toHaveBeenCalled();
+    layer.focus("resolved");
+    expect(fixture.map.easeTo).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      center: [137, 35], offset: [-180, -90], zoom: 17.6, pitch: 68,
+    }));
+  });
+
   it("defers restored places until the Mapbox style is loaded", () => {
     const fixture = mapFixture();
     const layer = createVerifiedPlaceLayer(fixture.map, vi.fn());
