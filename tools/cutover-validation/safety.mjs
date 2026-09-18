@@ -37,9 +37,13 @@ export class Report {
 
 // CLI input uses an anonymous pipe, never shell interpolation, argv, files or inherited output.
 // AWS CLI retry is disabled: an ambiguous mutation is resolved by verification/cleanup.
-export function aws(service, operation, input = {}, { missing = false } = {}) {
+export function aws(service, operation, input, { missing = false } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn("aws", [service, operation, "--cli-input-json", "file:///dev/stdin", "--output", "json", "--no-cli-pager"], {
+    // Operations with no request input opt out of the shared stdin JSON path by
+    // passing input as undefined. An explicit empty object remains request input.
+    const noInput = input === undefined;
+    const args = [service, operation, ...(noInput ? [] : ["--cli-input-json", "file:///dev/stdin"]), "--output", "json", "--no-cli-pager"];
+    const child = spawn("aws", args, {
       stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, AWS_MAX_ATTEMPTS: "1", AWS_PAGER: "", AWS_CLI_AUTO_PROMPT: "off" },
     });
     let output = "", diagnostic = "", settled = false;
@@ -59,7 +63,7 @@ export function aws(service, operation, input = {}, { missing = false } = {}) {
       try { const value = output.trim() ? JSON.parse(output) : {}; settled = true; resolve(value); }
       catch { fail(); }
     });
-    child.stdin.end(JSON.stringify(input));
+    child.stdin.end(noInput ? undefined : JSON.stringify(input));
   });
 }
 

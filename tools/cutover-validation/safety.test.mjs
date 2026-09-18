@@ -36,6 +36,18 @@ test("CLI credentials use stdin and raw stderr is never forwarded or retained on
     assert.equal(await aws("synthetic", "operation", {}, { missing: true }), undefined);
   } finally { process.env.PATH = previous; rmSync(dir, { recursive: true, force: true }); }
 });
+test("wrapper distinguishes no-input from explicit JSON input without exposing diagnostics", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "cutover-sts-test-"));
+  const previous = process.env.PATH;
+  try {
+    writeFileSync(join(dir, "aws"), '#!/bin/sh\ninput=$(cat)\ncase "$1/$2" in\nsts/get-caller-identity)\n  [ "$#" = 5 ] && [ -z "$input" ] || exit 2\n  [ "$3" = "--output" ] && [ "$4" = "json" ] && [ "$5" = "--no-cli-pager" ] || exit 2\n  printf "%s" \'{"Account":"123456789012"}\'\n  ;;\nsynthetic/operation)\n  [ "$3" = "--cli-input-json" ] && [ "$4" = "file:///dev/stdin" ] || exit 2\n  [ "$5" = "--output" ] && [ "$6" = "json" ] && [ "$7" = "--no-cli-pager" ] || exit 2\n  case "$input" in \'{"Password":"SYNTHETIC_PASSWORD"}\'|\'{}\') printf "%s" \'{}\' ;; *) exit 2 ;; esac\n  ;;\n*) echo "SYNTHETIC_SECRET SYNTHETIC_TOKEN" >&2; exit 2 ;;\nesac\n', { mode: 0o700 });
+    process.env.PATH = `${dir}:${previous}`;
+    assert.deepEqual(await aws("sts", "get-caller-identity"), { Account: "123456789012" });
+    assert.deepEqual(await aws("synthetic", "operation", { Password: "SYNTHETIC_PASSWORD" }), {});
+    assert.deepEqual(await aws("synthetic", "operation", {}), {});
+    await assert.rejects(aws("synthetic", "unexpected"), /^Error: AWS operation failed$/u);
+  } finally { process.env.PATH = previous; rmSync(dir, { recursive: true, force: true }); }
+});
 test("workflow is manual-only, serializes with CD and limits session mutation permissions", () => {
   const workflow = readFileSync(new URL("../../.github/workflows/server-agent-cutover-validation.yml", import.meta.url), "utf8");
   assert.match(workflow, /on:\s+workflow_dispatch:/u);
