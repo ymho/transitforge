@@ -8,13 +8,13 @@ export interface PlacePhotoMetadata {
 
 /** Applies to discovered sightseeing photos, not accommodation-provider inventory. */
 export function isSuitablePlacePhoto(metadata: PlacePhotoMetadata): boolean {
-  const fileName = imageFileName(metadata.originalImageUrl);
+  const fileName = imagePath(metadata.originalImageUrl);
   const description = `${metadata.title ?? ""} ${fileName}`
     .normalize("NFKC")
     .replace(/([a-z])([A-Z])/gu, "$1 $2");
   // Do not reject ordinary article titles, signs in the scene, or routine photo correction.
   if (/(?:文字入[りれ]|テロップ|バナー|アイキャッチ|コラージュ|ポスター|チラシ|合成画像|イラスト|透かし入り)/u.test(description)) return false;
-  if (/(?:^|[^a-z])(?:banner|poster|flyer|collage|infographic|illustration|watermarked|logo|screenshot|ogp|ogimage|eyecatch)(?:[^a-z]|$)/iu.test(description)) return false;
+  if (/(?:^|[^a-z])(?:banners?|posters?|flyers?|collages?|infographic|illustration|watermarked|logo|screenshot|ogp|ogimage|eyecatch)(?:[^a-z]|$)/iu.test(description)) return false;
   if (/\b(?:text[\s_-]*overlay|with[\s_-]*text|social[\s_-]*card)\b/iu.test(description)) return false;
   if (/\.(?:svg|gif)(?:$)/iu.test(fileName)) return false;
 
@@ -28,10 +28,10 @@ export function isSuitablePlacePhoto(metadata: PlacePhotoMetadata): boolean {
   return true;
 }
 
-function imageFileName(value: string | undefined): string {
+function imagePath(value: string | undefined): string {
   if (!value) return "";
   try {
-    const fileName = new URL(value).pathname.split("/").at(-1) ?? "";
+    const fileName = new URL(value).pathname;
     try { return decodeURIComponent(fileName); } catch { return fileName; }
   } catch {
     return "";

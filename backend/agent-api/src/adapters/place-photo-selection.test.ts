@@ -31,6 +31,14 @@ describe("isSuitablePlacePhoto", () => {
     expect(isSuitablePlacePhoto({})).toBe(true);
     expect(isSuitablePlacePhoto({ originalImageUrl: "invalid", width: NaN, height: 0 })).toBe(true);
     expect(isSuitablePlacePhoto({ originalImageUrl: "https://photos.example/%ZZ.jpg" })).toBe(true);
-    expect(isSuitablePlacePhoto({ originalImageUrl: "https://photos.example/posters/photo.jpg" })).toBe(true);
+    expect(isSuitablePlacePhoto({ originalImageUrl: "https://photos.example/posters/photo.jpg" })).toBe(false);
+  });
+
+  it.each(["banners", "promoPoster", "social_card", "photo-collage", "%E3%83%90%E3%83%8A%E3%83%BC"])("checks parent path %s", (path) => {
+    expect(isSuitablePlacePhoto({ originalImageUrl: `https://images.example/${path}/photo.jpg` })).toBe(false);
+  });
+
+  it("does not inspect unrelated host/query metadata", () => {
+    expect(isSuitablePlacePhoto({ title: "Museum architecture", originalImageUrl: "https://poster.example/architecture/photo.jpg?article=poster" })).toBe(true);
   });
 });

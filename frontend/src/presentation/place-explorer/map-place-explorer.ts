@@ -132,9 +132,9 @@ export function configureMapPlaceExplorer(options: {
       candidate.setAttribute("aria-current", candidate === card ? "true" : "false");
     }
     card.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-    if (focusMap) options.focusPlace(providerPlaceId);
     const candidate = candidatesById.get(providerPlaceId);
     if (candidate) void showPlaceDetail(candidate);
+    if (focusMap) options.focusPlace(providerPlaceId);
   };
 
   const showPlaceDetail = async (candidate: MapTravelCandidate) => {
@@ -155,10 +155,19 @@ export function configureMapPlaceExplorer(options: {
       }
       const detailed = await pending;
       if (request !== detailRequest || options.detail.hidden) return;
+      if (detailed.id !== candidate.id || detailed.kind !== candidate.kind) return;
       loadedDetails.add(candidate.id);
       candidatesById.set(candidate.id, detailed);
       const detailedModel = mapTravelCandidateCardModels([detailed])[0];
       if (detailedModel) {
+        const oldCard = Array.from(options.list.querySelectorAll<HTMLElement>("[data-place-id]"))
+          .find((card) => card.dataset.placeId === candidate.id);
+        const updatedCard = renderPlaceCard(detailedModel, () => select(detailed.id));
+        updatedCard.toggleAttribute("data-selected", true);
+        updatedCard.setAttribute("aria-current", "true");
+        const restoreFocus = !!oldCard?.contains(document.activeElement);
+        oldCard?.replaceWith(updatedCard);
+        if (restoreFocus) updatedCard.querySelector("button")?.focus({ preventScroll: true });
         options.detailContent.replaceChildren(
           renderPlaceDetail(detailedModel, () => options.choose(detailed)),
         );
@@ -250,7 +259,7 @@ export function configureMapPlaceExplorer(options: {
 }
 
 function renderPlaceDetail(
-  place: Omit<MapPlaceCardModel, "id" | "sourceUrl" | "sources" | "image" | "kind">,
+  place: Omit<MapPlaceCardModel, "id" | "sourceUrl" | "sources" | "image" | "kind"> & Partial<Pick<MapPlaceCardModel, "sources">>,
   consult: () => void,
   pending = false,
 ): HTMLElement {
@@ -322,7 +331,7 @@ function renderPlaceDetail(
 
   appendDetailSection(
     editorial,
-    place.reviewLabel ? "口コミで評価されている点" : "見どころ",
+    "見どころ",
     place.detail?.highlights,
   );
   appendDetailSection(editorial, "現地の雰囲気", place.detail?.atmosphere ? [place.detail.atmosphere] : undefined);
@@ -338,6 +347,22 @@ function renderPlaceDetail(
     body.append(editorial);
     typewriteText(editorial);
   }
+
+  const sources = document.createElement("nav");
+  sources.className = "map-place-detail-sources";
+  sources.ariaLabel = "解説・地点同定の出典";
+  for (const source of (place.sources ?? []).filter((source) => source.role !== "discovery").slice(0, 6)) {
+    try {
+      const url = new URL(source.url);
+      if (url.protocol !== "https:" || url.username || url.password || /(^|\.)mapbox\.com$/u.test(url.hostname)) continue;
+      url.search = ""; url.hash = "";
+      const link = document.createElement("a");
+      link.href = url.href; link.target = "_blank"; link.rel = "noopener noreferrer";
+      link.textContent = `${source.role === "description" ? "解説" : "地点"}: ${source.label}`;
+      sources.append(link);
+    } catch { /* Invalid external URLs are not rendered. */ }
+  }
+  if (sources.childElementCount) body.append(sources);
 
   const actions = document.createElement("div");
   actions.className = "map-place-detail-actions";
@@ -447,6 +472,12 @@ function renderPlaceCard(
   const name = document.createElement("strong");
   name.textContent = place.name;
   copy.append(name);
+  if (place.address) {
+    const address = document.createElement("small");
+    address.className = "map-place-option-address";
+    address.textContent = place.address;
+    copy.append(address);
+  }
   if (place.summary) {
     const summary = document.createElement("small");
     summary.textContent = place.summary;

@@ -63,17 +63,14 @@ export function mergeMapPlaceDetailCandidate(
   candidate: MapPlaceCandidate,
   detail: PlaceMedia,
 ): MapPlaceCandidate {
-  const images = uniquePlaceImages([
-    ...(candidate.value.images ?? (candidate.value.image ? [candidate.value.image] : [])),
-    ...(detail.images ?? (detail.image ? [detail.image] : [])),
-  ]);
+  const images = uniquePlaceImages(detail.images ?? (detail.image ? [detail.image] : []));
   const value: PlaceMedia = {
     ...candidate.value,
     ...detail,
     providerPlaceId: candidate.value.providerPlaceId,
     name: candidate.value.name,
-    ...(candidate.value.detail ? { detail: candidate.value.detail } : {}),
-    ...(images.length ? { image: images[0], images } : {}),
+    image: images[0],
+    images,
     sources: [...new Map([
       ...(candidate.value.sources ?? []),
       ...(detail.sources ?? []),
@@ -81,8 +78,8 @@ export function mergeMapPlaceDetailCandidate(
   };
   return {
     ...candidate,
-    ...(primaryPlaceImage(value) ? { imageUrl: primaryPlaceImage(value)!.url } : {}),
-    ...(value.summary ? { summary: value.summary } : {}),
+    imageUrl: primaryPlaceImage(value)?.url,
+    summary: value.summary,
     ...(value.address ? { address: value.address } : {}),
     value,
   };

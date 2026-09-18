@@ -84,7 +84,8 @@
 .map-place-option-focus:focus-visible { outline: 2px solid var(--glass-accent-strong); outline-offset: -2px; }
 .map-place-option-focus img { width: 5rem; height: 100%; min-height: 5rem; object-fit: cover; }
 .map-place-option-focus > span { display: grid; align-content: center; gap: .25rem; padding: .7rem .75rem; }
-.map-place-option-focus strong { overflow: hidden; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
+.map-place-option-focus strong { overflow-wrap: anywhere; font-size: .82rem; white-space: normal; }
+.map-place-option-focus .map-place-option-address { display: block; overflow-wrap: anywhere; }
 .map-place-option-focus small { display: -webkit-box; overflow: hidden; color: var(--glass-muted); font-size: .68rem; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .map-place-option-focus .map-place-option-facts { display: block; color: var(--glass-text); font-weight: 700; -webkit-line-clamp: 1; }
 
@@ -97,8 +98,9 @@
   z-index: 9;
   top: 1rem;
   right: 1rem;
-  bottom: 1rem;
-  width: min(25rem, calc(100vw - 2rem));
+  bottom: auto;
+  max-height: calc(100% - 14rem);
+  width: min(23rem, calc(100% - 2rem));
   overflow: auto;
   border: 1px solid var(--glass-border);
   border-radius: 1.5rem;
@@ -133,7 +135,8 @@
   backdrop-filter: var(--glass-backdrop);
 }
 
-.map-place-detail-article { display: grid; min-height: 100%; }
+.map-place-detail-article { display: grid; }
+.map-place-detail-body { overflow-wrap: anywhere; min-width: 0; }
 .map-place-detail-gallery { position: relative; overflow: hidden; border-radius: 1.45rem 1.45rem 0 0; background: var(--glass-surface-muted); }
 .map-place-detail-gallery-track { display: flex; overflow-x: auto; scroll-behavior: smooth; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .map-place-detail-gallery-track::-webkit-scrollbar { display: none; }
@@ -181,7 +184,7 @@
   .map-place-explorer { right: .65rem; bottom: 5.4rem; left: .65rem; width: auto; padding: .65rem; border-radius: 1.2rem; }
   .map-place-explorer > header strong { font-size: .74rem; }
   .map-place-option { flex-basis: min(15rem, 76vw); }
-  .map-place-detail { inset: 0; width: 100%; max-height: 100dvh; border: 0; border-radius: 0; }
+  .map-place-detail { inset: auto 0 0; width: 100%; max-height: 65dvh; border: 0; border-radius: 1.2rem 1.2rem 0 0; }
   .map-place-detail-gallery { border-radius: 0; }
   .map-place-detail-gallery figure img { height: min(52dvh, 24rem); }
 }

@@ -18,6 +18,7 @@ export interface VerifiedPlaceLayerController {
 export function createVerifiedPlaceLayer(
   map: mapboxgl.Map,
   onSelected: (place: PlaceMedia) => void,
+  cameraOffset: () => [number, number] = () => [0, 0],
 ): VerifiedPlaceLayerController {
   let visiblePlaces: PlaceMedia[] = [];
   let placesById = new Map<string, PlaceMedia>();
@@ -105,6 +106,7 @@ export function createVerifiedPlaceLayer(
     if (moveMap) {
       map.easeTo({
         center: [place.longitude, place.latitude],
+        offset: cameraOffset(),
         zoom: Math.max(map.getZoom(), placeDetailZoom),
         pitch: placeCameraPitch,
         bearing: placeCameraBearing,
