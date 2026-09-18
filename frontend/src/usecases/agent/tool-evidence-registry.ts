@@ -12,6 +12,7 @@ export type ToolEvidenceMapper = (
 
 export class ToolEvidenceRegistry {
   private readonly mappers = new Map<string, ToolEvidenceMapper>();
+  has(toolName: string): boolean { return this.mappers.has(toolName); }
 
   register(toolName: string, mapper: ToolEvidenceMapper): void {
     if (this.mappers.has(toolName)) {

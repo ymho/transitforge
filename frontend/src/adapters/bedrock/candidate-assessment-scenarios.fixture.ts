@@ -1,7 +1,7 @@
 import { candidateAssessmentFixture, assessmentAt, assessedInformation, assessmentSource, forecastFixture } from "../../../../modules/trip/domain/candidate-assessment.fixture";
 import { resolvedPlace } from "../../../../modules/trip/domain/trip-places.fixture";
 import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent-runtime";
-import { askProgressFixture, modelAnswer, modelTool, modelTools } from "./ask-progress-scenarios.fixture";
+import { askProgressFixture, modelGroundedAnswer, modelTool, modelTools } from "./ask-progress-scenarios.fixture";
 import { evaluateTravelProgress, type TravelProgressScenario } from "../../usecases/agent/evaluation/travel-progress-evaluation";
 import type { AgentTrace } from "../../usecases/agent/agent-trace";
 import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
@@ -54,7 +54,7 @@ export async function runCandidateAssessmentScenario(scenario: TravelProgressSce
     const call = calls++;
     if (live) return live(...args);
     if (call === 0) return modelTools(...[a, b].map((v) => modelTool("assess_travel_candidate", { candidateId: v.candidate.id }, v.candidate.id)));
-    return modelAnswer("取得済みの比較根拠を確認しました。未確認の条件は未確認のまま扱い、追加調査してから決めましょう。");
+    return modelGroundedAnswer(args[0]);
   });
   const report = evaluateTravelProgress(scenario.id, [{ observation, trace, delivered: true, modelCalls: calls }], scenario.thresholds, live ? "live" : "scripted");
   const failures: string[] = [];

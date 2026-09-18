@@ -51,6 +51,11 @@ export function evidenceFromJourneySearch(
       knowledgeKind: "derived_value",
       subject: `${result.originStation}から${result.destinationStation}の経路候補${index + 1}`,
       facts: {
+        originStation: result.originStation,
+        destinationStation: result.destinationStation,
+        serviceDate: result.serviceDate,
+        trainNumbers: journey.legs.map(({ trainNumber }) => trainNumber),
+        includesDelay: journey.legs.some((leg) => leg.delayStatus !== undefined),
         departureTimeMinutes: journey.departureTimeMinutes,
         arrivalTimeMinutes: journey.arrivalTimeMinutes,
         durationMinutes: Math.max(0, journey.arrivalTimeMinutes - journey.departureTimeMinutes),

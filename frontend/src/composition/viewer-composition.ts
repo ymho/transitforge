@@ -94,7 +94,7 @@ import type { TrainPosition } from "../domain/train-position";
 import { normalizeStationName } from "@raiquora/train/station-name";
 import { loadViewerElements } from "../usecases/viewer/viewer-elements";
 import { resolveViewerDisplayMode } from "../domain/viewer-display-mode";
-import { runViewerAgentRuntime, type ViewerAgentRuntimeDependencies } from "../adapters/bedrock/viewer-agent-runtime";
+import type { ViewerAgentRuntimeDependencies } from "../adapters/bedrock/viewer-agent-runtime";
 import { configureAiFirstShell } from "../presentation/home/ai-first-shell";
 import { createAgentTurnObservationStore } from "../usecases/agent/agent-turn-outcome";
 import type { ViewerAgentJourneyPlan } from "../domain/viewer-agent-response";
@@ -707,6 +707,7 @@ handleAiGuidePrompt = async (
     const workspaceSource = tripWorkspaceController.source();
     if (workspaceSource && !workspaceSource.getCurrentTrip()) throw new Error("サーバの旅程を再取得してから相談を続けてください。");
     const uiFocus = tripWorkspaceController.uiFocus();
+    const { runViewerAgentRuntime } = await import("../adapters/bedrock/viewer-agent-runtime");
     const response = await runViewerAgentRuntime(
       prompt,
       {

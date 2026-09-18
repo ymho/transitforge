@@ -44,6 +44,7 @@ import { runTravelProgressScenario } from "../frontend/src/adapters/bedrock/trav
 import { renderTravelProgressMarkdown } from "../frontend/src/usecases/agent/evaluation/travel-progress-evaluation";
 import { parseAgentEvaluationDataset } from "../frontend/src/usecases/agent/evaluation/evaluation-dataset";
 import { runGeographicRelevance } from "../frontend/src/adapters/bedrock/geographic-relevance.fixture";
+import { generalGroundingCases, runGeneralGroundingScenario } from "../frontend/src/adapters/bedrock/general-grounding-scenario.fixture";
 
 interface LiveDecisionCase {
   evaluation: AgentEvaluationCase;
@@ -74,12 +75,13 @@ const outputDirectory = resolve(
 );
 const selectedCase = argument("--case");
 const geographicSuite = selectedCase === "nearby-search-geographic-mismatch";
+const groundingSuite = argument("--suite") === "general-grounding";
 const progressSuite = argument("--suite") === "ask-progress";
 const tripProgressSuite = argument("--suite") === "trip-progress";
 const cases = liveDecisionCases().filter(({ evaluation }) =>
   (profile === "full" || evaluation.tags.includes("smoke")) &&
   (selectedCase === undefined || evaluation.id === selectedCase));
-if (cases.length === 0 && !progressSuite && !tripProgressSuite && !geographicSuite) throw new Error("対象となるLive Eval caseがありません");
+if (cases.length === 0 && !progressSuite && !tripProgressSuite && !geographicSuite && !groundingSuite) throw new Error("対象となるLive Eval caseがありません");
 // Only scalar request/response diagnostics, never provider payloads or model reasoning.
 const provider = new AwsBedrockConverseClient();
 const providerAttempts: Record<string, unknown>[] = [];
@@ -141,6 +143,17 @@ const converse: BedrockAgentConverse = async (messages, tools, requestedClass) =
 };
 
 const observationsByAttempt: AgentEvaluationObservation[][] = [];
+if (groundingSuite) {
+  const results = [];
+  for (let attempt = 1; attempt <= repetitions; attempt++) for (const id of generalGroundingCases) results.push({ attempt, ...await runGeneralGroundingScenario(id, converse) });
+  const denominator = results.reduce((n, r) => n + r.factualClaims, 0);
+  const report = { results, providerAttempts, groundedClaimRate: denominator ? results.reduce((n, r) => n + r.supported, 0) / denominator : null,
+    unsupportedClaimRate: denominator ? results.reduce((n, r) => n + r.unsupported, 0) / denominator : null };
+  await mkdir(outputDirectory, { recursive: true });
+  await writeFile(`${outputDirectory}/general-grounding.json`, JSON.stringify(report, null, 2));
+  console.log(`General grounding: ${results.filter((r) => r.passed).length}/${results.length}; grounded=${report.groundedClaimRate}, unsupported=${report.unsupportedClaimRate} (${outputDirectory})`);
+  process.exit(results.some((r) => !r.passed) || !denominator ? 1 : 0);
+}
 if (geographicSuite) {
   const results = [];
   for (let attempt = 1; attempt <= repetitions; attempt++) {
