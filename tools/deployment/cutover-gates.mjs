@@ -34,11 +34,13 @@ export function reviewCutoverPlan(plan, environment) {
     if (typeof resource.address !== "string" || !/^[a-zA-Z0-9_.\[\]"-]+$/u.test(resource.address)) throw new Error("Invalid Terraform resource address");
     const stream = resource.name?.includes("agent_stream");
     const provider = resource.name?.includes("fixed_egress");
+    const fixedEgressNetwork = ["ai_egress", "ai_nat"].includes(resource.name);
     const isSafeAgentStreamDeploymentRotation = gates.stream &&
       resource.type === "aws_api_gateway_deployment" &&
       resource.name === "agent_stream" &&
+      resource.address === 'aws_api_gateway_deployment.agent_stream["stream"]' &&
       actions.length === 2 && actions[0] === "create" && actions[1] === "delete";
-    if ((stream || provider) && actions.includes("delete") && !isSafeAgentStreamDeploymentRotation) {
+    if ((stream || provider || fixedEgressNetwork) && actions.includes("delete") && !isSafeAgentStreamDeploymentRotation) {
       throw new Error(`Cutover infrastructure deletion/replacement is prohibited in CD: ${resource.address} (${actions.join("/")})`);
     }
     if (before != null && ((stream && !gates.stream) || (provider && !gates.provider))) {

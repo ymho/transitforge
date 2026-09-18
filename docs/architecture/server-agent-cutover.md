@@ -193,7 +193,13 @@ Browser ON/stream OFF、stream ON/Provider OFFを拒否する。Browser gateはb
 
 plan後の`tools/deployment/cutover-gates.mjs`は実planのgate値が検証済み入力と一致するか確認し、
 既存stream/Provider resourceがあるのに対応gateがfalseなら停止する。さらにcutover専用resourceの
-**deleteを含む全action（replaceを含む）をgate値によらず拒否**する。明示falseへの誤変更も防ぎ、
+**deleteを含むaction（replaceを含む）を原則拒否**する。固定送信元IPの共有基盤
+（`ai_egress` / `ai_nat`）も削除・replaceを拒否する。
+唯一の例外はstream gateがtrueで、typeが`aws_api_gateway_deployment`、nameが`agent_stream`、
+addressが`aws_api_gateway_deployment.agent_stream["stream"]`、actionsが厳密に`["create", "delete"]`の場合だけ。
+immutableな構成snapshotのcreate-before-destroyによる世代交代を許可する。delete-onlyや
+`["delete", "create"]`は拒否し、他のLambda/API/Secret/IAM等には例外を適用しない。
+summaryはこのrotationもaction/addressだけを表示し、値・ARN・before/afterは出さない。明示falseへの誤変更も防ぎ、
 部分作成済みのIAM/Secret等も検出する。通常CDに削除を許可するoverrideは置かない。
 resource移設・廃止や意図的なreplaceは別のレビュー対象とする。BrowserだけのOFFはinfraを保持できる。
 
