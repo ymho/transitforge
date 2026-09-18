@@ -69,7 +69,7 @@ export function askProgressFixture(id: ProgressCaseId) {
     getCurrentDate: () => new Date(selectedAt), getCurrentTrip: () => trip,
     queryDailyCongestionAnalysis: async () => { throw new Error("No operation fixture"); },
     queryTrainDelayAnalysis: async () => { throw new Error("No delay fixture"); },
-    searchWeb: async () => ({ webSearch: { status: "available", freshness: "fresh", evidence: [progressSource], data: { query: "自然", results: [{ title: progressPage.title, url: progressPage.url, snippet: progressPage.text }] } } }),
+    searchWeb: async () => ({ webSearch: { status: "available", freshness: "fresh", evidence: [progressSource], data: { query: "自然", results: [{ title: progressPage.title, url: progressPage.url, description: progressPage.text }] } } }),
     readWebPages: async () => ({ webPages: { status: "available", freshness: "fresh", evidence: [progressSource], data: { pages: [progressPage] } } }),
     ...(id === "G-consecutive" ? { previousAssistantTurn: "ask_only" as const } : {}),
     ...(id === "C-candidate" ? {
