@@ -25,6 +25,32 @@ test("cannot turn existing infrastructure off, delete it or replace it even with
     assert.throws(() => reviewCutoverPlan(plan([change(name, ["no-op"], {})]), env()), /cannot be disabled/);
   }
 });
+test("destructive diagnostics expose only a validated resource address and action names", () => {
+  const destructive = change("agent_stream", ["create", "delete"], { secret: "DO_NOT_PRINT_BEFORE" });
+  destructive.address = 'aws_api_gateway_deployment.agent_stream["stream"]';
+  destructive.change.after = { secret: "DO_NOT_PRINT_AFTER" };
+  assert.throws(
+    () => reviewCutoverPlan(plan([destructive], true, true), env("true", "true")),
+    error => {
+      assert.match(error.message, /aws_api_gateway_deployment\.agent_stream\["stream"\] \(create\/delete\)/);
+      assert.doesNotMatch(error.message, /DO_NOT_PRINT_(BEFORE|AFTER)/);
+      return true;
+    },
+  );
+
+  const malformed = {
+    ...destructive,
+    address: 'aws_api_gateway_deployment.agent_stream["stream"];secret=DO_NOT_PRINT_ADDRESS',
+  };
+  assert.throws(
+    () => reviewCutoverPlan(plan([malformed], true, true), env("true", "true")),
+    error => {
+      assert.equal(error.message, "Cutover infrastructure deletion/replacement is prohibited in CD");
+      assert.doesNotMatch(error.message, /DO_NOT_PRINT_ADDRESS/);
+      return true;
+    },
+  );
+});
 test("partial API Gateway logs policy migration keeps the inline policy and creates only the managed attachment", () => {
   const inlinePolicy = {
     mode: "managed",
