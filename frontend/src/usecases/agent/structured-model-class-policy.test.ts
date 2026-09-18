@@ -3,6 +3,17 @@ import { describe, expect, it } from "vitest";
 import { structuredModelClassPolicy } from "./structured-model-class-policy";
 
 describe("structuredModelClassPolicy", () => {
+  it("uses the decision model for already-read source explanation without routing on wording", () => {
+    expect(structuredModelClassPolicy({ request: { executionId: "source", feature: "journey_planning", userRequest: "比較",
+      initialEvidence: [{ id: "source-1", category: "external", knowledgeKind: "deterministic_fact", subject: "場所", facts: {
+        sourceExcerpt: "歴史ある町並み", status: "available", freshness: "fresh",
+      }, references: [] }] }, phase: "initial" })).toBe("decision");
+  });
+  it("does not promote timetable facts merely because Evidence exists", () => {
+    expect(structuredModelClassPolicy({ request: { executionId: "rail", feature: "journey_planning", userRequest: "確認",
+      initialEvidence: [{ id: "route-1", category: "journey", knowledgeKind: "derived_value", subject: "経路",
+        facts: { durationMinutes: 30 }, references: [] }] }, phase: "initial" })).toBeUndefined();
+  });
   it("uses decision class for an unframed concierge request even without a profile", () => {
     expect(structuredModelClassPolicy({
       request: { executionId: "1", feature: "concierge", userRequest: "旅行したい" },

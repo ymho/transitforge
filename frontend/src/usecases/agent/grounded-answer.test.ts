@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { DefaultAgentResponseGenerator } from "./agent-response-generator";
-import { parseGroundedAnswer, supportedAnswerClaims, sourceExplanation } from "./grounded-answer";
+import { groundedAnswerInstruction, parseGroundedAnswer, supportedAnswerClaims, sourceExplanation } from "./grounded-answer";
 import type { Evidence } from "./evidence-model";
 import type { AgentModelResponse } from "./model-provider";
 
@@ -48,6 +48,13 @@ it.each(["向日町から倉敷まで25分です", "10:00発、10:30着です", 
 const placeEvidence: Evidence = { id: "place-source", category: "external", knowledgeKind: "deterministic_fact", subject: "歴史の町",
   facts: { sourceTitle: "歴史の町", sourceExcerpt: "白壁の町並みを歩きながら歴史資料館を巡れます。川沿いに休憩所があります。", sourceUrl: "https://example.org/history", sourcePrecision: "read-page", status: "available", freshness: "fresh" },
   references: [{ sourceType: "external-source", sourceRef: "https://example.org/history", retrievedAt: "2026-09-18T00:00:00Z", freshness: "current", summary: "観光案内" }] };
+it("gives the model bounded, real preference choices without forwarding private notes as instructions", () => {
+  const instruction = groundedAnswerInstruction([placeEvidence], { favoriteInterests: ["歴史"],
+    consentedPreferenceNotes: { avoidances: "非公開の自由記述" } });
+  expect(instruction).toContain('"field":"favoriteInterests","value":"歴史"');
+  expect(instruction).toContain("推薦質問を資料の列挙だけで終えてはいけません");
+  expect(instruction).not.toContain("非公開の自由記述");
+});
 it("describes actual place features with attribution instead of a generic acquisition message", () => {
   const result = new DefaultAgentResponseGenerator().fromModel({ ...model(JSON.stringify({ kind: "source-explanation", sections: [{ evidenceId: placeEvidence.id,
     quote: String(placeEvidence.facts.sourceExcerpt), mode: "feature" }] })), declaredEvidenceIds: [placeEvidence.id] }, [placeEvidence]);
