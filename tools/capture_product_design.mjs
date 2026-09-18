@@ -51,6 +51,36 @@ try {
     await ref.locator("#openProfileEditor").click();
     await app.locator("[data-profile]").click();
     await capture("profile");
+    await app.locator("#travel-profile-page [data-close]").first().click();
+    const sampleChat = async () => {
+      // Visual-only synthetic messages in the actual production message-list node.
+      // No response handler, Trip, storage or Agent state is replaced.
+      await app.locator("#ai-guide-messages").evaluate((list) => {
+        list.replaceChildren();
+        for (const [role, message] of [["assistant", "どんな旅にしたいですか？ 行き先が決まっていなくても一緒に考えられます。"],
+          ["user", "歴史ある町で、ゆっくり歩ける旅にしたいです。"],
+          ["assistant", "町並みを楽しむ候補を比べられます。移動と営業状況は確認してから提案します。"]]) {
+          const item = document.createElement("li"); item.className = `ai-guide-message ai-guide-message-${role}`; item.textContent = message; list.append(item);
+        }
+        const candidate = document.createElement("li"); candidate.className = "ai-guide-message ai-guide-message-assistant";
+        candidate.innerHTML = '<strong>比較中の候補</strong><p>白壁の町 — 町歩きと歴史資料館</p><p>森の散策園 — 木陰の散策</p><small>いずれも開発用の表示例。移動・営業は未確認です。</small>';
+        list.append(candidate);
+      });
+    };
+    await ref.evaluate(() => { window.setupNewChat(); window.showView("chat"); });
+    await app.locator('[data-primary="chat"]').click();
+    await sampleChat();
+    await capture("chat-new");
+    await ref.evaluate(() => { window.setupTripChat("hiroshima"); window.showView("chat"); });
+    await app.locator('[data-primary="trips"]').click();
+    await app.locator('[data-page="trips"] [data-trip-chat]').first().click();
+    await sampleChat();
+    await capture("chat-trip");
+    if (width === 390) {
+      await ref.locator("#showConditions").click();
+      await app.locator(".consultation-conditions-toggle").click();
+      await capture("chat-trip-conditions");
+    }
     await ref.close(); await app.close();
   }
   const rows = captures.map(({ screen, width }) => `<h2>${screen} / ${width}px</h2><div class="pair"><figure><figcaption>v6</figcaption><img src="${screen}-${width}-v6.png"></figure><figure><figcaption>実装・開発preview</figcaption><img src="${screen}-${width}-implementation.png"></figure></div>`).join("\n");

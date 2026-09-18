@@ -17,6 +17,7 @@ export interface AiFirstShellPorts {
   newConsultation(prompt: string): void;
   openChat(): void;
   openTrip(id: string): void;
+  consultTrip?(id: string): void;
   openProfile(): void;
   openMap(mode: "realtime" | "simulation"): void;
   openHistory(): void;
@@ -87,6 +88,10 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     root.querySelectorAll<HTMLButtonElement>("[data-trip]").forEach((button) => button.addEventListener("click", () => {
       window.history.pushState({ tripId: button.dataset.trip! }, "", "#trip"); apply();
     }));
+    root.querySelectorAll<HTMLButtonElement>("[data-trip-chat]").forEach((button) => button.addEventListener("click", () => {
+      if (!view.trips.some((row) => row.trip.id === button.dataset.tripChat)) return;
+      ports.consultTrip?.(button.dataset.tripChat!); navigate("chat");
+    }));
     root.querySelectorAll<HTMLButtonElement>("[data-candidate]").forEach((button) => button.addEventListener("click", () => {
       const candidate = view.candidates.find((value) => value.id === button.dataset.candidate);
       if (!candidate) return;
@@ -137,6 +142,6 @@ function card(trip: Trip, group?: string, readiness?: TripReadiness, withPrepara
   const party = tripPartyView(trip)?.text;
   const preparation = readiness?.preparation.readState === "available"
     ? `準備リストの残り ${readiness.preparation.categories.reduce((n, c) => n + c.open, 0)}件` : "準備リストは、これから確認";
-  const booking = readiness?.reservations.readState === "available" ? "予約の記録は旅程で確認できます" : "予約状況はまだ確認できていません";
-  return `<article class="home-card home-trip-card"><div class="home-trip-copy">${group ? `<small>${esc(group)}</small>` : ""}<h3>${esc(trip.title)}</h3><div class="home-tags">${dates.slice(0, 2).map((date) => `<span>${esc(date)}</span>`).join("")}${party ? `<span>${esc(party)}</span>` : ""}</div><p>${trip.items.length}件の予定から、旅をゆっくり整えましょう。</p><button type="button" data-trip="${esc(trip.id)}">旅程を見る <span aria-hidden="true">→</span></button></div>${withPreparation ? `<aside class="home-trip-preparation"><div class="home-trip-art" aria-hidden="true">${travelIcon("trip")}</div><h4>出発までに</h4><ul><li>${preparation}</li><li>${booking}</li></ul></aside>` : `<div class="home-trip-art" aria-hidden="true">${travelIcon("trip")}</div>`}</article>`;
+const booking = readiness?.reservations.readState === "available" ? "予約の記録は旅程で確認できます" : "予約状況はまだ確認できていません";
+return `<article class="home-card home-trip-card"><div class="home-trip-copy">${group ? `<small>${esc(group)}</small>` : ""}<h3>${esc(trip.title)}</h3><div class="home-tags">${dates.slice(0, 2).map((date) => `<span>${esc(date)}</span>`).join("")}${party ? `<span>${esc(party)}</span>` : ""}</div><p>${trip.items.length}件の予定から、旅をゆっくり整えましょう。</p><button type="button" data-trip="${esc(trip.id)}">旅程を見る <span aria-hidden="true">→</span></button><button type="button" data-trip-chat="${esc(trip.id)}">AIに相談</button></div>${withPreparation ? `<aside class="home-trip-preparation"><div class="home-trip-art" aria-hidden="true">${travelIcon("trip")}</div><h4>出発までに</h4><ul><li>${preparation}</li><li>${booking}</li></ul></aside>` : `<div class="home-trip-art" aria-hidden="true">${travelIcon("trip")}</div>`}</article>`;
 }
