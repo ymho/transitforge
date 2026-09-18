@@ -9,6 +9,7 @@ import { AgentToolRegistry } from "../frontend/src/usecases/agent/tool-registry"
 import { ToolEvidenceRegistry } from "../frontend/src/usecases/agent/tool-evidence-registry";
 import { AgentToolExecutor } from "../frontend/src/usecases/agent/agent-tool-executor";
 import type { Evidence } from "../frontend/src/usecases/agent/evidence-model";
+import { extractAgentDecisionSummary } from "../frontend/src/usecases/agent/agent-decision-summary";
 
 // Synthetic, attributed sources; actual Converse/Runtime/Claim validation. No provider recordings.
 const output = resolve(process.argv[2] ?? "/tmp/raiquora-live-place-grounding");
@@ -38,7 +39,9 @@ for (const scenario of scenarios) {
       const text = result.message.content.flatMap((block) => typeof block.text === "string" ? [block.text] : []).join("\n");
       formats.push(text.includes('"source-explanation"') ? (text.includes("```") ? "fenced-source-selection" : "source-selection") : "other");
       const clean = text.replace(/<(thinking|analysis)>[\s\S]*?<\/\1>/giu, "").replace(/<decision_summary>[\s\S]*?<\/decision_summary>/gu, "").trim();
+      const decision = extractAgentDecisionSummary([text]);
       contractDiagnostics.push({ instructionPresent: JSON.stringify(messages).includes("資料説明の回答contract"),
+        summaryStatus: decision.status,
         hasSections: clean.includes('"sections"'), hasKind: clean.includes('"kind"'), hasFence: clean.includes("```"),
         startsWithJson: clean.startsWith("{"), bodyLength: clean.length, modelId: result.metadata?.modelId });
       return { message: result.message, stopReason: result.stopReason, metadata: result.metadata };
