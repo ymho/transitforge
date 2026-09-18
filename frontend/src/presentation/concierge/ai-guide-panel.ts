@@ -75,6 +75,8 @@ export interface AiGuidePanelElements {
   onRestaurantConsult?: (restaurant: RestaurantCandidate) => void;
   onRestaurants?: (restaurants: readonly RestaurantCandidate[]) => void;
   persistent?: () => boolean;
+  /** Host-owned explicit Trip/revision binding; no title or message inference. */
+  responseContextKey?: () => string;
 }
 
 export type AiGuidePromptHandler = (
@@ -276,6 +278,7 @@ export function configureAiGuidePanel(
       hasConversationHistory = true;
     }
     const requestedSessionId = conversationSessionId;
+    const requestedContextKey = elements.responseContextKey?.();
     const userMessage = historyRepository.append(
       requestedSessionId,
       { role: "user", text: prompt },
@@ -294,6 +297,10 @@ export function configureAiGuidePanel(
       requestId = metadata.requestId;
     })
       .then((response) => {
+        if (requestedContextKey !== elements.responseContextKey?.()) {
+          if (conversationSessionId === requestedSessionId) pendingMessage.remove();
+          return;
+        }
         const assistantMessage = historyRepository.append(
           requestedSessionId,
           {
@@ -323,6 +330,10 @@ export function configureAiGuidePanel(
         pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
       .catch(() => {
+        if (requestedContextKey !== elements.responseContextKey?.()) {
+          if (conversationSessionId === requestedSessionId) pendingMessage.remove();
+          return;
+        }
         const errorResponse = "案内を開始できませんでした。時間をおいてもう一度お試しください。";
         const assistantMessage = historyRepository.append(requestedSessionId, {
           role: "assistant",

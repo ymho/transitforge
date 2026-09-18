@@ -97,6 +97,7 @@ import { loadViewerElements } from "../usecases/viewer/viewer-elements";
 import { resolveViewerDisplayMode } from "../domain/viewer-display-mode";
 import type { ViewerAgentRuntimeDependencies } from "../adapters/bedrock/viewer-agent-runtime";
 import { configureAiFirstShell } from "../presentation/home/ai-first-shell";
+import { configureConsultationScreen } from "../presentation/home/consultation-screen";
 import { createAgentTurnObservationStore } from "../usecases/agent/agent-turn-outcome";
 import type { ViewerAgentJourneyPlan } from "../domain/viewer-agent-response";
 import {
@@ -530,6 +531,7 @@ aiGuideController = configureAiGuidePanel(
       contextWorkspaceController.show("map");
     },
     persistent: () => true,
+    responseContextKey: () => JSON.stringify([activeConversationSession.id, tripWorkspaceController.current()?.id, tripWorkspaceController.current()?.revision]),
     onTripPlanUpdate: (proposal) => {
       if (tripWorkspaceController.blocksLegacy()) return;
       tripPlanController.apply(proposal.patches);
@@ -706,6 +708,10 @@ handleAiGuidePrompt = async (
     const runtimeRequestIds: string[] = [];
     const executionSessionId = activeConversationSession.id;
     const workspaceSource = tripWorkspaceController.source();
+    const executionTripId = workspaceSource?.getCurrentTrip()?.id;
+    const executionRevision = workspaceSource?.getCurrentTrip()?.revision;
+    const isCurrentExecution = () => executionSessionId === activeConversationSession.id &&
+      executionTripId === tripWorkspaceController.current()?.id && executionRevision === tripWorkspaceController.current()?.revision;
     if (workspaceSource && !workspaceSource.getCurrentTrip()) throw new Error("サーバの旅程を再取得してから相談を続けてください。");
     const uiFocus = tripWorkspaceController.uiFocus();
     const { runViewerAgentRuntime } = await import("../adapters/bedrock/viewer-agent-runtime");
@@ -742,9 +748,9 @@ handleAiGuidePrompt = async (
         findJourneyLegAlternatives,
         getPendingJourneyLegChange: () => pendingJourneyLegChange,
         setPendingJourneyLegChange: (pending) => {
-          pendingJourneyLegChange = pending;
+          if (isCurrentExecution()) pendingJourneyLegChange = pending;
         },
-        getConversationContext: () => currentAgentConversationContext(prompt),
+        getConversationContext: (() => { const context = currentAgentConversationContext(prompt); return () => context; })(),
         getTripContext: () => conversation?.guidance.tripContext,
         getVerifiedPlaces: () => pendingMapCandidates.flatMap((candidate) =>
           candidate.kind === "place" ? [candidate.value] : []),
@@ -752,10 +758,11 @@ handleAiGuidePrompt = async (
           rememberTravelPreference(
             localStorage,
             statement,
-            activeConversationSession.id,
+            executionSessionId,
             confidence,
           ),
         updateConversationSession: (update) => {
+          if (!isCurrentExecution()) return;
           Object.assign(activeConversationSession, update, {
             updatedAt: new Date().toISOString(),
           });
@@ -763,12 +770,12 @@ handleAiGuidePrompt = async (
         },
         getTripPlan: () => workspaceSource ? undefined : loadTripPlan(
           localStorage,
-          activeConversationSession.id,
+            executionSessionId,
         ),
         getUserProfile: () => loadUserProfile(localStorage),
         storeAgentTrace: async (trace) => {
           await submitAgentTrace({
-            taskId: activeConversationSession.id,
+            taskId: executionSessionId,
             requestIds: runtimeRequestIds,
             trace,
           });
@@ -789,7 +796,7 @@ handleAiGuidePrompt = async (
         return result.body;
       },
     );
-    if (typeof response !== "string" && "journeyPlan" in response) {
+    if (isCurrentExecution() && typeof response !== "string" && "journeyPlan" in response) {
       previousJourneyPlan = response.journeyPlan;
       pendingJourneyLegChange = undefined;
     }
@@ -827,8 +834,9 @@ primaryShell = configureAiFirstShell(document, app, {
   profile: () => loadUserProfile(localStorage), subscribe: tripWorkspaceController.subscribe,
   retry: async () => { await tripWorkspaceController.source()?.retry?.(); },
   newConsultation: (prompt) => { newConversation.click(); aiGuideController.ask(prompt); },
-  openChat: () => { aiGuideController.open(); delete app.dataset.mapFocusMode; },
+  openChat: () => { aiGuideController.open(); if (tripWorkspaceController.current()) tripWorkspace.show("chat"); delete app.dataset.mapFocusMode; },
   openTrip: (id) => { if (tripWorkspaceController.current()?.id === id) tripWorkspace.show("trip"); },
+  consultTrip: (id) => { if (tripWorkspaceController.current()?.id !== id) throw new Error("Trip reference mismatch"); tripWorkspace.show("chat"); },
   openProfile: () => travelProfileToggle.click(),
   openMap: (mode) => { startMap(); selectSidebarMapMode(mode === "simulation" ? "date-time" : "realtime"); },
   openHistory: () => conversationHistoryToggle.click(),
@@ -837,6 +845,15 @@ primaryShell = configureAiFirstShell(document, app, {
   now: () => new Date(),
 });
 loadingScreen.complete();
+configureConsultationScreen(aiGuidePanel, aiGuideMessages, aiGuideForm, aiGuideInput, {
+  read: () => ({ sessionId: tripWorkspaceController.sessionId(), trip: tripWorkspaceController.current(),
+    unavailable: tripWorkspaceController.blocksLegacy() && !tripWorkspaceController.current(),
+    viewer: tripWorkspaceController.source()?.getRole?.() === "viewer" }),
+  profile: () => loadUserProfile(localStorage), subscribe: tripWorkspaceController.subscribe,
+  preview: (proposal) => { tripWorkspaceController.preview(proposal); tripWorkspace.show("trip"); },
+  showTrip: () => { const trip = tripWorkspaceController.current(); if (trip) { window.history.pushState({ tripId: trip.id }, "", "#trip"); window.dispatchEvent(new Event("popstate")); } },
+  newConversation: () => { newConversation.click(); aiGuideController.open(); },
+});
 if (import.meta.env.DEV && homePreview === "data") {
   void import("../dev/home-preview").then(({ homePreviewSource }) => tripWorkspaceController.attach(activeConversationSession.id, homePreviewSource()));
 }
