@@ -9,6 +9,7 @@ import { element, control } from "./trip-workspace-elements";
 import { renderTripFeasibility } from "./trip-feasibility-view";
 import { renderTripReadiness } from "./trip-readiness-view";
 import { renderTripChecklist } from "./trip-checklist-view";
+import { travelIcon } from "../shared/travel-icon";
 
 /** DOM and navigation only. The supplied source owns current Trip; legacy storage is never read here. */
 export function configureTripWorkspace(options: {
@@ -23,9 +24,10 @@ export function configureTripWorkspace(options: {
   const nav = element("nav", "trip-workspace-navigation"); nav.setAttribute("aria-label", "会話と旅程の切替"); nav.hidden = true;
   const status = element("p", "trip-workspace-status"); status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
   const report = (text: string) => { status.textContent = text; };
-  const heading = element("header"); const title = element("h1"); const summary = element("p", "trip-workspace-copy");
+  const heading = element("header", "trip-workspace-heading"); const title = element("h1"); const summary = element("p", "trip-workspace-copy");
+  const emblem = element("span", "trip-workspace-emblem"); emblem.innerHTML = travelIcon("trip"); emblem.setAttribute("aria-hidden", "true");
   const notice = element("p", "trip-workspace-notice");
-  heading.append(title, notice, summary);
+  heading.append(emblem, title, notice, summary);
   const retry = control("旅程を再読み込み", () => { void controller.source()?.retry?.(); });
   const assumptions = element("section", "trip-workspace-assumptions");
   const feasibility = element("div");
@@ -44,7 +46,7 @@ export function configureTripWorkspace(options: {
     } catch { report("追加する予定の名称と対象を確認してください。"); }
   });
   const consult = control("＋ 予定を相談して追加", () => chat("旅程に追加する予定を相談したい"));
-  panel.append(heading, status, retry, feasibility, readiness, checklist, assumptions, days, add, consult, proposal, candidates);
+  panel.append(heading, status, retry, days, feasibility, readiness, checklist, assumptions, add, consult, proposal, candidates);
   app.append(panel, nav);
   const views = new Map<string, { scroll: number; chatScroll: number; view: "chat" | "trip"; focus?: HTMLElement }>();
   const collapsed = new Map<string, boolean>();
@@ -118,7 +120,9 @@ export function configureTripWorkspace(options: {
       checklistKey = nextChecklistKey;
       checklist.replaceChildren(renderTripChecklist({ controller: controller.checklist, trip, readiness: prepared, newId: () => crypto.randomUUID(), focus: controller.focus, ask: chat, report }));
     }
-    title.textContent = view.title; summary.textContent = `${view.state}\n今回の人数: ${view.party}\n${view.places}`;
+    title.textContent = view.title;
+    const partyLabel = view.party.startsWith("今回の人数") ? view.party : `今回の人数: ${view.party}`;
+    summary.textContent = `${view.state}\n${partyLabel}\n${view.places}`;
     assumptions.replaceChildren(...view.assumptions.map((a) => element("p", "trip-workspace-assumption", `⚠ 仮置き（${a.target}）: ${a.text}`)));
     const ids = new Set<string>(), dates = new Set<string>();
     for (const [date, items] of view.days) {

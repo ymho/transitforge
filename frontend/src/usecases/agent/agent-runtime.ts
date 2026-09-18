@@ -88,7 +88,8 @@ export class MultiStepAgentRuntime {
   async run(request: AgentRuntimeRequest): Promise<AgentRuntimeResult> {
     const startedAt = this.now().getTime();
     const deadline = startedAt + this.limits.maxExecutionMs;
-    const trace = new AgentTraceRecorder(request.executionId, { now: this.now });
+    const trace = new AgentTraceRecorder(request.executionId, { now: this.now,
+      omitContent: request.context?.travelProfile?.consentedPreferenceNotes !== undefined });
     const evidence: Evidence[] = [];
     trace.taskStarted(request.userRequest);
     try {

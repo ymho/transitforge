@@ -23,6 +23,8 @@ export interface UserProfile {
   transport: { maxTypicalTravelMinutes?: number | null; preferredMode?: "rail" | "car" | "bus" | "walking" };
   /** Optional user-authored hints, never booking facts or executable instructions. */
   notes?: { budget?: string; lodging?: string; food?: string; avoidances?: string };
+  /** Explicit per-field permission for bounded model context, not permission to log the text. */
+  aiNoteFields?: Array<"budget" | "lodging" | "food" | "avoidances">;
   updatedAt: string;
 }
 
@@ -82,6 +84,9 @@ export function isUserProfile(value: unknown): value is UserProfile {
       Number.isFinite(profile.transport.maxTypicalTravelMinutes) && profile.transport.maxTypicalTravelMinutes >= 0) &&
     (profile.transport.preferredMode === undefined || ["rail", "car", "bus", "walking"].includes(String(profile.transport.preferredMode))) &&
     (profile.notes === undefined || isObject(profile.notes) && Object.values(profile.notes).every(optionalText)) &&
+    (profile.aiNoteFields === undefined || Array.isArray(profile.aiNoteFields) && profile.aiNoteFields.length <= 4 &&
+      new Set(profile.aiNoteFields).size === profile.aiNoteFields.length &&
+      profile.aiNoteFields.every((key) => ["budget", "lodging", "food", "avoidances"].includes(String(key)))) &&
     typeof profile.updatedAt === "string";
 }
 

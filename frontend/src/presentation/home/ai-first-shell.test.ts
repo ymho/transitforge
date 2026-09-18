@@ -17,6 +17,8 @@ const click = (selector: string) => document.querySelector<HTMLElement>(selector
 it("starts Home without initializing Map or requiring profile/authentication", () => {
   const { ports } = setup();
   expect(ports.openMap).not.toHaveBeenCalled(); expect(ports.newConsultation).not.toHaveBeenCalled();
+  expect(document.body.textContent).not.toContain("調査済みのおすすめではありません");
+  expect(document.querySelector('[aria-label="相談の入力例"]')).not.toBeNull();
   expect(document.querySelector("[data-home-live]")!.textContent).toContain("公開の旅程保存は準備中");
   click("[data-example]"); document.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
   expect(ports.newConsultation).toHaveBeenCalledWith("のんびりできる旅を考えたい");
@@ -58,6 +60,7 @@ it("all secondary actions use existing feature ports", () => {
 it("opens the actual Trip as a trips subview, not a selected chat tab", () => {
   const trip = createTrip("45300000-0000-4000-8000-000000000001", "旅程", "2026-09-18T00:00:00Z", []);
   const { ports } = setup({ read: () => ({ state: "available", trips: [trip], candidates: [] }) });
+  expect(document.querySelector('.home-trip-art svg[aria-hidden="true"]')).not.toBeNull();
   click('[data-primary="trips"]'); click("[data-trip]");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("trip");
   expect(document.querySelector('[data-primary="trips"]')!.getAttribute("aria-current")).toBe("page");

@@ -1,32 +1,47 @@
 .trip-workspace[hidden], .trip-workspace-navigation[hidden] { display: none; }
 .trip-workspace {
-  min-width: 0; min-height: 0; overflow-y: auto; padding: 1rem;
-  background: #fff; color: #17212e; box-sizing: border-box;
+  min-width: 0; min-height: 0; overflow-y: auto; padding: clamp(1.1rem, 3vw, 2.5rem);
+  background: #faf9f6; color: #243443; box-sizing: border-box;
 }
-.trip-workspace h1 { font-size: 1.35rem; }
+.trip-workspace h1 { font-family: "Yu Mincho", "Hiragino Mincho ProN", serif; font-size: clamp(1.5rem, 3vw, 2rem); line-height: 1.5; }
 .trip-workspace h2 { font-size: 1.05rem; }
 .trip-workspace h3 { font-size: 0.95rem; }
+.trip-workspace-heading { border-radius: var(--product-radius, 1.25rem); padding: 1.5rem; margin-bottom: 1.75rem; background: linear-gradient(125deg, #edf3f8, #f0f2eb); }
+.trip-workspace-heading h1 { margin: .8rem 0; }
+.trip-workspace-heading .trip-workspace-copy { font-size: .85rem; color: #536575; }
+.trip-workspace-emblem { display: block; width: 2rem; height: 2rem; color: #385c7c; }
+.trip-workspace-day > h2 { margin: 1.5rem 0 .5rem; color: #536575; font-variant-numeric: tabular-nums; }
 .trip-workspace-copy { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
 .trip-workspace-notice { color: #655017; font-size: 0.85rem; }
-.trip-workspace-feasibility { border-left: 3px solid #a16f12; background: #fff6dc; padding: 0.75rem; margin-block: 0.8rem; font-size: 0.9rem; }
+.trip-workspace-feasibility { border: 1px solid #e5dfce; border-radius: var(--product-radius, 1.25rem); background: #faf7ee; padding: 1.25rem; margin-block: 1.25rem; font-size: .9rem; line-height: 1.8; }
+.trip-workspace-feasibility h2 { margin: 0 0 .35rem; }
+.trip-workspace-feasibility p { margin: .4rem 0; color: #62665f; }
+.trip-workspace-feasibility ul { padding-left: 1.2rem; margin: .65rem 0; }
+.trip-feasibility-details { border-top: 1px solid #e5dfce; padding-top: .65rem; margin-top: .8rem; font-size: .8rem; color: #62665f; }
+.trip-feasibility-details summary { cursor: pointer; min-height: 2.75rem; display: list-item; align-content: center; }
 .trip-workspace-feasibility[data-feasibility="infeasible"] { border-color: #b42318; background: #fff1ee; }
 .trip-workspace-feasibility[data-feasibility="feasible"] { border-color: #347050; background: #eef7f0; }
 .trip-workspace-feasibility-issue { color: #69490a; font-size: 0.85rem; }
 .trip-workspace-card, .trip-workspace-candidate, .trip-workspace-proposal {
-  border: 1px solid #d8dee6; border-radius: 0.75rem; padding: 0.8rem; margin-block: 0.8rem;
+  border: 1px solid #dde3e7; border-radius: var(--product-radius, 1.25rem); padding: 1.25rem; margin-block: 1rem; background: #fff; box-shadow: 0 4px 18px #12273f05;
 }
 .trip-workspace-card.is-focused { outline: 2px solid #2563a6; outline-offset: -2px; }
-.trip-workspace-card > header { display: flex; align-items: start; justify-content: space-between; gap: 0.5rem; }
+.trip-workspace-card > header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.trip-workspace-item-icon { display: grid; place-items: center; flex: 0 0 2.75rem; height: 2.75rem; border-radius: var(--product-control-radius, .75rem); background: #edf3f8; color: #385c7c; }
+.trip-workspace-item-icon svg { width: 1.6rem; height: 1.6rem; }
+.trip-workspace .trip-workspace-item-focus { flex: 1; min-width: 0; text-align: left; border: 0; background: transparent; font-weight: 700; overflow-wrap: anywhere; }
 .trip-workspace button, .trip-workspace-navigation button {
   min-height: 2.75rem; padding: 0.45rem 0.65rem; cursor: pointer;
-  border: 1px solid #cdd6df; border-radius: 0.5rem; background: #f5f8fc; color: #17212e; font: inherit;
+  border: 1px solid #d9e0e6; border-radius: var(--product-control-radius, .75rem); background: #f5f8fc; color: #243443; font: inherit;
 }
 .trip-workspace button:disabled { cursor: default; opacity: 0.6; }
 .trip-workspace :focus-visible, .trip-workspace-navigation :focus-visible { outline: 3px solid #2563a6; outline-offset: 2px; }
-.trip-workspace input, .trip-workspace select { max-width: 100%; min-height: 2.75rem; box-sizing: border-box; font: inherit; }
+.trip-workspace input, .trip-workspace select { max-width: 100%; min-height: 2.75rem; box-sizing: border-box; font: inherit; border: 1px solid #d9e0e6; border-radius: var(--product-control-radius, .75rem); padding: .45rem .65rem; color: inherit; background: #fff; }
+.trip-workspace-editing { margin-top: 1rem; padding-top: .5rem; border-top: 1px solid #edf0f2; }
+.trip-workspace-editing summary { cursor: pointer; min-height: 2.75rem; align-content: center; font-size: .85rem; color: #536575; }
 .trip-workspace label { display: block; }
 .trip-workspace-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-.trip-workspace-assumption, .assessment-warning { background: #fff6dc; color: #69490a; padding: 0.5rem; border-left: 3px solid #a16f12; }
+.trip-workspace-assumption, .assessment-warning { background: #faf7ee; color: #69490a; padding: .75rem; border: 1px solid #e5dfce; border-radius: var(--product-control-radius, .75rem); }
 .trip-workspace-diff { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
 .trip-workspace-diff > div { min-width: 0; }
 .trip-workspace-navigation { display: flex; gap: 0.4rem; padding: 0.4rem; background: #fff; z-index: 12; }
@@ -60,7 +75,8 @@
   margin-block: 1rem;
   padding: 1rem;
   border: 1px solid #dce2e8;
-  border-radius: 0.75rem;
+  border-radius: var(--product-radius, 1.25rem);
+  background: #fff;
   overflow-wrap: anywhere;
 }
 .trip-workspace-checklist-item, .trip-workspace-checklist-proposal {
