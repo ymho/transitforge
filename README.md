@@ -242,6 +242,9 @@ python3 tools/measure_viewer_input.py \
 
 ## AWS
 
+Cognito Access Tokenから既存Tripのownerへ接続する[共通認証境界](docs/architecture/authentication-boundary.md)を
+Backendに用意している。公開APIへの接続、ログインUI、本番Trip writerはまだ有効化していない。
+
 静的ビューワー AI Lambda 混雑と遅延の保存基盤をTerraformで管理する
 継続的なデプロイはGitHub ActionsとOIDCを使用し 固定AWSアクセスキーを使わない
 

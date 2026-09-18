@@ -1,5 +1,9 @@
 # Trip server resource foundation（#388）
 
+#451第一段階で[共通trusted principal / Cognito verifier](authentication-boundary.md)を追加した。
+検証済みissuer + subを既存`TripPrincipal.subject`へ写す。以下のProvider未導入記述は導入時の記録である。
+公開HTTPへの認証接続・Cognitoリソース・本番writerは引き続き未有効。
+
 #389 で replace を CAS mutation に置換し、receipt / revision / import 排他 / reload gate を統合した。
 最新契約は [Trip concurrency](trip-concurrency.md)。以下の非 CAS/read-only 制約は #388 時点の導入記録であり、
 公開認証と本番 writer が未有効という gate は #389 後も維持する。
