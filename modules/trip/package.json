@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./in-trip-replan": "./domain/in-trip-replan.ts",
     "./in-trip-context": "./domain/in-trip-context.ts",
     "./notification": "./domain/notification.ts",
     "./notification-policy": "./domain/notification-policy.ts",

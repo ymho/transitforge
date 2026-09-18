@@ -10,6 +10,8 @@
 | ReservationFact | 最大8件、失敗はunavailable | 予約正本/予約変更 |
 
 最終契約は#382/#415、判断は[ADR 0064](../decisions/0064-bound-in-trip-read-context.md)。
+旅行中の変更案は[残り旅程の再計画](in-trip-replan.md)を参照。Context/AnswerPlanとは別に、
+既存TripUpdateProposalとApplicationのscope検証を使い、読み取り結果だけでTripを変更しない。
 
 ## 契約・時刻・サイズ
 

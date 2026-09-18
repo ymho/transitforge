@@ -2,6 +2,7 @@ import { isPriceObservation } from "@raiquora/trip/money";
 import { reservationContext } from "../../usecases/agent/reservation-context";
 import { loadInTripContext, type InTripContextReader } from "../../usecases/agent/in-trip-context";
 import { inTripApplicationEvidence } from "../../usecases/agent/in-trip-application-evidence";
+import { calculateInTripReplanScope, previewInTripReplan, replanScopeContext } from "@raiquora/trip/in-trip-replan";
 import { tripFeasibilityContext } from "../../usecases/agent/trip-feasibility-context";
 import { tripReadinessContext } from "../../usecases/agent/trip-readiness-context";
 import { projectTripReadiness } from "@raiquora/trip/trip-readiness";
@@ -336,7 +337,10 @@ export async function runViewerAgentRuntime(
   });
   registerCandidateAssessmentTool(tools, dependencies, () => currentDate(dependencies));
   registerChecklistTool(tools, currentTrip, checklistItems, checklistState, reservationFacts?.map((r) => r.reservationId));
-  registerTripProgressTools(tools, dependencies, progressState, () => currentDate(dependencies), () =>
+  const replanTargets = dependencies.getReplanTargets?.() ?? (currentTrip && focusedItem ? {
+    tripId: currentTrip.id, baseRevision: currentTrip.revision, itemIds: [focusedItem.id],
+  } : undefined);
+  registerTripProgressTools(tools, { ...dependencies, getReplanTargets: () => replanTargets }, progressState, () => currentDate(dependencies), () =>
     externalState.webPages?.status === "available" ? (externalState.webPages.data?.pages ?? []).flatMap((page) => {
       const source = externalState.webPages?.evidence.find((e) => e.sourceUrl === page.url);
       return source && page.text.trim() ? [{ url: page.url, evidenceId: source.id, text: page.text }] : [];
@@ -353,7 +357,18 @@ export async function runViewerAgentRuntime(
       .map(({ url }, i) => `> ${progressState.decision!.findings[i]}\n\n[情報源${i + 1}](${url})`).join("\n\n");
     if (progressState.proposal && currentTrip) {
       const preview = applyTripProposal(currentTrip, progressState.proposal);
+      const replan = currentTrip.lifecycleState === "in_trip" ? previewInTripReplan(currentTrip, progressState.proposal, {
+        now: currentDate(dependencies), reservations: reservationFacts, targets: replanTargets,
+        external: dependencies.getFeasibilityExternalFacts?.(),
+      }) : undefined;
       responseText = [responseText, progressState.proposal.summary,
+        ...(replan ? ["残り旅程の変更案です。まだ保存していません。予約の変更・取消は行いません。",
+          `変更対象: ${replan.changedItemIds.map((id) => currentTrip.items.find((i) => i.id === id)?.title ?? preview.items.find((i) => i.id === id)?.title ?? id).join("、")}`,
+          `変更しない予定: ${replan.keptItemIds.map((id) => currentTrip.items.find((i) => i.id === id)?.title).join("、")}`,
+          ...(replan.protectedChanges.length ? ["予約・固定時刻・必須条件に関わる変更は、適用前に影響の明示確認が必要です。"] : []),
+          `成立性: ${replan.feasibility.status}。${replan.feasibility.issues.length ? "未確認または不成立の事項があります。変更案の成立性表示を確認してください。" : "取得済みの根拠の範囲で検証しました。"}`,
+          "予定上の位置と実際の現在地・乗車は別です。現在地や実乗車は推測していません。",
+        ] : []),
         tripPartyView(preview)?.text,
         ...progressState.proposal.patches.flatMap((p) => p.type !== "replace" && p.type !== "add" ? [] : p.item.type === "activity" ? [activityPreview(p.item)] : p.item.type === "transport" ? [transportPreview(p.item)] : [accommodationPreview(p.item)]),
         ...preview.request.assumptions.filter((a) => a.status === "unconfirmed").map((a) => `⚠ 仮置き: ${a.text}`),
@@ -382,7 +397,11 @@ export async function runViewerAgentRuntime(
     tools,
     toolExecutor: new AgentToolExecutor(tools, evidenceMappers),
     prepareResponse,
+    terminalToolFailure: () => progressState.revisionConflict
+      ? "旅程が更新されたため、この変更案は作成・保存していません。最新の旅程を確認して、新しい変更案を作る必要があります。古い判断を自動で適用したり、予約を変更したりはしていません。"
+      : undefined,
     terminalToolResult: (toolName) => toolName === "present_travel_progress" ? progressState.decision?.text
+      : currentTrip?.lifecycleState === "in_trip" && progressState.proposal ? progressState.proposal.summary
       : toolName === "propose_candidate_selection" ? progressState.proposal?.summary : viewerTerminalResponseText(
       toolName,
       toolState,
@@ -437,6 +456,9 @@ export async function runViewerAgentRuntime(
     initialEvidence: inTrip ? inTripApplicationEvidence(inTrip) : [],
     context: {
       ...(inTrip ? { inTrip } : {}),
+      ...(currentTrip?.lifecycleState === "in_trip" && replanTargets ? { inTripReplanScope: replanScopeContext(calculateInTripReplanScope(currentTrip, {
+        now: currentDate(dependencies), reservations: reservationFacts, targets: replanTargets,
+      })) } : {}),
       previousAssistantTurn: dependencies.previousAssistantTurn,
       featureContext: {
         ...(focusedItem ? { uiFocus: { itemId: focusedItem.id, item: selectedTripItemSnapshot(focusedItem) } } : {}),

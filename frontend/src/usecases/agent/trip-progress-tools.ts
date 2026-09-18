@@ -1,5 +1,5 @@
 import type { Trip, TripUpdateProposal } from "@raiquora/trip/trip";
-import { applyTripProposal } from "@raiquora/trip/trip";
+import { applyTripProposal, TripRevisionConflict } from "@raiquora/trip/trip";
 import { validateTripRequest, type TripRequest } from "@raiquora/trip/trip-request";
 import { proposeCandidateSelection, type CandidateSelectionPort } from "../trip-plan/select-trip-candidate";
 import { proposeTripRequestUpdate } from "../trip-plan/update-trip-request";
@@ -11,15 +11,23 @@ import { proposeManualTransport, proposeTransportSelection, type TransportSelect
 import { AgentToolRegistry } from "./tool-registry";
 import { validateAgentToolInput } from "./agent-tool-input-validator";
 import { successfulAgentToolResult, failedAgentToolResult, type AgentToolDescriptor } from "./tool-contract";
+import { assertItineraryEditingAllowed, previewInTripReplan, type InTripReplanTargets } from "@raiquora/trip/in-trip-replan";
+import type { ReservationFact } from "@raiquora/trip/reservation";
+import type { TripFeasibilityFacts } from "@raiquora/trip/trip-feasibility";
 
 export interface TripProgressDependencies {
   getCurrentTrip?: () => Trip | undefined;
+  getReservationFacts?: () => readonly ReservationFact[] | undefined;
+  getFeasibilityExternalFacts?: () => TripFeasibilityFacts["external"];
+  getReplanTargets?: () => InTripReplanTargets | undefined;
   candidateSelection?: { taskId: string; port: CandidateSelectionPort };
   activitySelection?: { taskId: string; port: ActivitySelectionPort };
   transportSelection?: { taskId: string; port: TransportSelectionPort };
 }
 export interface TripProgressOutput {
   proposal?: TripUpdateProposal;
+  /** Execution's base Trip changed. No proposal from this execution remains applicable. */
+  revisionConflict?: true;
   /** Public recommendation with references resolved from pages read during this execution. */
   decision?: { text: string; findings: string[]; sources: Array<{ url: string; evidenceId: string }> };
 }
@@ -58,14 +66,22 @@ export const tripProgressDescriptors: AgentToolDescriptor[] = [
   },
   {
     name: "propose_activity_selection",
-    description: "提示済みのrestaurant/experience候補IDを解決してActivityとして採用する案を作る。検索結果本体やProvider ID、Evidence、保持許諾は入力しない。Applicationが同Trip/task/期限/同定/出所/保存権限を照合し、許可された名称・場所・日程だけをpreviewする。食事はfood、体験はexperience。価格・空席・予約・写真は保存しない。schedule省略時はrestaurantがunscheduled、体験は保持許可された提供日をdayにする。別候補へ変更するときは既存itemIdのreplace。未検証/期限切れ/保存許諾不明は拒否する。",
+    description: "提示済みの食事店・体験候補を採用・置換する未保存Proposal。",
+    decisionSupport: {
+      capability: "提示済みrestaurant/experience候補を採用する未保存TripUpdateProposal",
+      suitableCases: ["既存予定を提示済み候補へ変更: candidateId=候補ID、itemId=既存予定ID、operation=replace", "新規予定として採用: operation=add"],
+      unsuitableCases: ["候補のない手入力予定", "予定を取りやめるだけ、並び替えるだけ"],
+      returnedEvidence: "候補解決・検証済みsnapshotを使ったProposal preview。まだ保存・予約しない",
+      limitations: ["候補IDだけで施設を解決するので名称や場所の再入力不要", "scheduleは任意。省略時は保存許諾済み提供日またはunscheduledで、時刻を推測しない"],
+      responsibilityBoundary: "ApplicationがTrip/task/期限/出所/保持許諾/scopeを検証。Provider raw・予約・価格・空席・画像は保存しない",
+    },
     inputSchema: { type: "object", properties: { ...activityPlacementProperties,
       candidateId: { type: "string", minLength: 1, maxLength: 160 }, schedule: activityScheduleSchema },
     required: ["itemId", "operation", "candidateId"], additionalProperties: false },
   },
   {
     name: "propose_candidate_selection",
-    description: "提示済みcandidate IDを対象itemへ採用するTrip V2変更案を作る。採用済み1件とdraft化を提案し、保存はしない。候補本体・経路・Evidence・許諾は入力しない。宿は候補のopaque provider/providerItemIdをselectorに使い、Applicationが商品と施設を別々に解決し、出所・期限・保存許諾を検証する。宿名とcheck-in/outを同じ応答へpreviewでき、質問と併用可能。selectedは採用であって予約済みでも空室確保でもない。許可された価格観測のみobservedPriceへ保持できる。候補のpriceは検索時観測、TripのobservedPriceは採用時の参考価格であり現在価格ではない。原通貨・observedAt・basisを保ち、暗黙換算しない。空室・画像・review・booking URLは保存しない。別の宿への変更は同じitemIdのreplace。既存候補を使える場合は宿泊先の再質問は不要。期限切れ/別task/未検証候補は拒否する。",
+    description: "検証済み鉄道候補または宿泊候補をcandidateId/itemIdで採用する未保存のTrip変更案。現在Tripの鉄道区間を別列車候補に置き換えるときは、この能力で同じitemIdをreplaceする。Applicationが時刻表とprovenanceを検証しSelectedRailJourneyへ変換するため、モデルは列車・時刻を入力しない。独立した駅間代替をまだ探す必要があればsearch_direct_routes。提示済み候補の採用に再検索は不要。宿はopaque provider/providerItemIdで商品と施設を別々に解決し、出所・期限・保持許諾を検証する。selectedは計画への採用で、予約済み/空室確保ではない。許可された原通貨のobservedPriceのみ保持し、現在価格と混同せず暗黙換算しない。空室・画像・review・booking URLは保存しない。対象と希望候補が明確なら先にpreviewし、適用は別途利用者確認。過去・範囲外・期限切れ・別task・未検証候補は拒否。施設Activity候補はpropose_activity_selectionの責務。",
     inputSchema: { type: "object", properties: {
       candidateId: { type: "string", minLength: 1, maxLength: 160 }, itemId: { type: "string", minLength: 1, maxLength: 160 },
       accommodation: { type: "object", properties: { provider: { type: "string" }, providerItemId: { type: "string" } }, required: ["provider", "providerItemId"], additionalProperties: false },
@@ -94,12 +110,35 @@ export const tripProgressDescriptors: AgentToolDescriptor[] = [
       }, required: ["sourceUrl", "quote"], additionalProperties: false } } },
     required: ["summary", "findings"], additionalProperties: false },
   },
+  // Append the new capability without changing the ordering of the existing selection contracts.
+  {
+    name: "propose_itinerary_removal_or_move",
+    description: "既存予定の取りやめ・並び替えだけの未保存Proposal。",
+    decisionSupport: {
+      capability: "予定をなくす(remove)、並び順だけを変える(move)未保存Proposal",
+      suitableCases: ["既存予定の取りやめ", "既存予定の並び替え"],
+      unsuitableCases: ["別候補への置き換え: 施設はpropose_activity_selection、鉄道/宿はpropose_candidate_selection", "新規予定追加"],
+      responsibilityBoundary: "Applicationが現在Tripの変更可能範囲を検証。保護対象にはhost明示targetが必要。予約取消・保存はしない",
+    },
+    inputSchema: { type: "object", properties: { summary: { type: "string", minLength: 1, maxLength: 500 },
+      patches: { type: "array", minItems: 1, maxItems: 8, items: { type: "object", properties: {
+        type: { type: "string", enum: ["remove", "move"] }, itemId: { type: "string", minLength: 1, maxLength: 160 },
+        afterId: { type: "string", minLength: 1, maxLength: 160 },
+      }, required: ["type", "itemId"], additionalProperties: false } } }, required: ["summary", "patches"], additionalProperties: false },
+  },
 ];
 
 /** Application boundary: resolve identifiers, validate, expose previews. Never writes a Trip. */
 export function registerTripProgressTools(registry: AgentToolRegistry, dependencies: TripProgressDependencies,
   state: TripProgressOutput, now: () => Date, sources: () => Array<{ url: string; evidenceId: string; text: string }>): void {
+  const executionTrip = dependencies.getCurrentTrip?.();
+  const requireSameTrip = () => {
+    const latest = dependencies.getCurrentTrip?.();
+    if (!latest || latest.id !== executionTrip?.id || latest.revision !== executionTrip.revision) throw new TripRevisionConflict();
+    return latest;
+  };
   for (const descriptor of tripProgressDescriptors) {
+    if (descriptor.name === "propose_itinerary_removal_or_move" && dependencies.getCurrentTrip?.()?.lifecycleState !== "in_trip") continue;
     if (descriptor.name !== "present_travel_progress" && !dependencies.getCurrentTrip?.()) continue;
     if (descriptor.name === "propose_candidate_selection" && !dependencies.candidateSelection) continue;
     if (descriptor.name === "propose_activity_selection" && !dependencies.activitySelection) continue;
@@ -120,13 +159,16 @@ export function registerTripProgressTools(registry: AgentToolRegistry, dependenc
               sources: resolved.map((source) => ({ url: source!.url, evidenceId: source!.evidenceId })) };
             return successfulAgentToolResult({ presented: state.decision });
           }
-          const originalTrip = dependencies.getCurrentTrip?.();
+          const originalTrip = requireSameTrip();
           if (!originalTrip) throw new Error("Current Trip is unavailable");
           // Later Tools in this execution can refer to earlier proposed additions/assumptions.
           // This is a validated preview, never another persistent Trip state.
           const trip = state.proposal ? applyTripProposal(originalTrip, state.proposal) : originalTrip;
           let proposal: TripUpdateProposal;
-          if (descriptor.name === "propose_manual_transport" || descriptor.name === "propose_transport_selection") {
+          if (descriptor.name === "propose_itinerary_removal_or_move") {
+            proposal = { tripId: trip.id, baseRevision: trip.revision, summary: input.summary as string,
+              patches: [...input.patches as Extract<import("@raiquora/trip/trip").TripPatch, { type: "remove" | "move" }>[], { type: "planning", state: "itinerary_draft" }] };
+          } else if (descriptor.name === "propose_manual_transport" || descriptor.name === "propose_transport_selection") {
             const placement: ActivityPlacement = { itemId: input.itemId as string, operation: input.operation as ActivityPlacement["operation"],
               ...(input.afterId !== undefined ? { afterId: input.afterId as string } : {}) };
             if (descriptor.name === "propose_manual_transport") proposal = proposeManualTransport(trip, placement,
@@ -154,10 +196,24 @@ export function registerTripProgressTools(registry: AgentToolRegistry, dependenc
           }
           if (state.proposal) proposal = { ...proposal, patches: [...state.proposal.patches, ...proposal.patches] };
           const preview = applyTripProposal(originalTrip, proposal);
+          assertItineraryEditingAllowed(originalTrip, proposal);
+          requireSameTrip(); // Includes async candidate/evidence lookup races; never silently rebase.
+          const replan = originalTrip.lifecycleState === "in_trip" ? previewInTripReplan(originalTrip, proposal, {
+            now: now(), reservations: dependencies.getReservationFacts?.(), targets: dependencies.getReplanTargets?.(),
+            external: dependencies.getFeasibilityExternalFacts?.(),
+          }) : undefined;
           state.proposal = proposal;
           return successfulAgentToolResult({ proposal, previewPlanningState: preview.planningState,
+            ...(replan ? { replan: { keptItemIds: replan.keptItemIds, changedItemIds: replan.changedItemIds,
+              protectedChanges: replan.protectedChanges, feasibility: { status: replan.feasibility.status,
+                issues: replan.feasibility.issues.slice(0, 16).map((i) => ({ code: i.code, status: i.status, itemIds: i.itemIds })) },
+              confirmationRequired: !!replan.confirmationKey, reservationChanged: false } } : {}),
             assumptions: preview.request.assumptions.filter((a) => a.status === "unconfirmed") });
         } catch (error) {
+          if (error instanceof TripRevisionConflict) {
+            delete state.proposal;
+            state.revisionConflict = true;
+          }
           return failedAgentToolResult({ code: "precondition_failed", message: error instanceof Error ? error.message : "Invalid progress proposal", retryable: false });
         }
       },

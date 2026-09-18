@@ -2,6 +2,36 @@
   "schemaVersion": "agent-eval-dataset-v2",
   "travelProgressScenarios": [
     {
+      "id": "AQ-in-trip-fatigue", "name": "疲労による残り予定だけの変更案",
+      "userRequest": "疲れたのでホテルへ戻りたい。この後の庭園はやめる変更案を見せて。予約済みの予定と宿泊先はそのままで。",
+      "tags": ["trip-progress", "in-trip", "replan"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
+      "id": "AR-in-trip-rail-alternative", "name": "接続リスクを受け検証済み代替を同区間へ提案",
+      "userRequest": "接続が厳しいので、選択した移動区間を検証済みの代替候補Bへ変更する案を見せて。まだ保存しないで。",
+      "tags": ["trip-progress", "in-trip", "replan"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
+      "id": "AS-in-trip-indoor", "name": "保存済み環境Impactと屋内候補で残りだけ変更",
+      "userRequest": "雨なので選択中の予定を、提示済みの室内料理体験へ変更する案を見せて。警報の適用範囲は未確認のままにして。",
+      "tags": ["trip-progress", "in-trip", "replan"],
+      "thresholds": { "ttfi": 1, "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
+      "id": "AT-in-trip-booked-protection", "name": "固定予約を残して前後の希望対象だけ変更",
+      "userRequest": "予約済みの展示見学と宿は絶対に残して、その前の庭園だけ取りやめる案を見せて。",
+      "tags": ["trip-progress", "in-trip", "replan"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
+      "id": "AU-in-trip-stale", "name": "提案途中のrevision変更をsilent rebaseしない",
+      "userRequest": "選択中の庭園を取りやめる変更案を見せて。最新旅程が変わっていたら前の判断を勝手に適用しないで。",
+      "tags": ["trip-progress", "in-trip", "replan"],
+      "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }
+    },
+    {
       "id": "AN-in-trip-weather-needed", "name": "天気Evidenceなしの明日の予報照会",
       "userRequest": "明日9月14日の大阪市の天気予報を具体的に調べてください", "tags": ["trip-progress", "in-trip"],
       "thresholds": { "selectionToDraft": 1, "maximumOrdinaryAskOnlyStreak": 0 }

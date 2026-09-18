@@ -50,6 +50,8 @@ export interface AgentRuntimeDependencies {
   viewerActionHandler?: AgentViewerActionHandler;
   toolViewerActions?: ToolViewerActionRegistry;
   terminalToolResult?: (toolName: string, output: unknown) => string | undefined;
+  /** Application currentness/authority failure may end a stale execution without replanning. */
+  terminalToolFailure?: () => string | undefined;
   /** Final presentation boundary, shared by terminal Tools and model answers. No tool routing. */
   prepareResponse?: (text: string, evidence: Evidence[], fromModel: boolean, asksUser?: boolean) => { text: string; observation: AgentTurnObservation };
   finalResponsePolicy?: (
@@ -129,6 +131,7 @@ export class MultiStepAgentRuntime {
     const unavailableToolNames = new Set<string>();
     const executedToolCalls = new Map<string, AgentToolExecution & { toolName: string }>();
     let finalizeAfterToolResult = false;
+    let correctedInTripContract = false;
 
     while (true) {
       if (
@@ -244,6 +247,19 @@ export class MultiStepAgentRuntime {
             inTripRendered = renderInTripAnswer(plan, used ?? [], evidence);
             modelResponse = { ...modelResponse, message: { role: "assistant", content: [{ type: "text", text: inTripRendered.text }] } };
           } catch {
+            // Result-driven wire-contract repair, not reflection or a Tool/intent router.
+            // Never execute a tool encoded in prose or relax Evidence validation.
+            if (decisionContext.inTripReplanScope && !correctedInTripContract && !finalResponseRequired) {
+              correctedInTripContract = true;
+              // The rejected response may contain only stripped decision metadata, i.e. no
+              // valid Converse content. Do not replay it (or its reasoning) as assistant text.
+              messages.pop();
+              messages.push({ role: "user", content: [{ type: "text", text:
+                "応答の構造化contractが不正なため表示・実行していません。selectedActionはanswer/use_tool/ask_userのみです。Toolを選ぶ場合はselectedToolに名前を書くことに加え、Converseのnative toolUseで呼び出してください。回答の場合は実在Evidence IDと対応presentationからvalidなinTripAnswerPlanを返してください。変更案を説明textやAnswerPlan内のpatchで代用できません。利用者の依頼に必要な行動を再判断してください。" }] });
+              iterations++;
+              trace.replanDecided(true, "invalid_in_trip_response_contract", decisionBoundary);
+              continue;
+            }
             return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_in_trip_answer_plan");
           }
         }
@@ -374,6 +390,7 @@ export class MultiStepAgentRuntime {
       const newlyUnavailableToolNames = new Set<string>();
       let duplicateToolCallDetected = false;
       for (const call of calls) {
+        let applicationFailure: string | undefined;
         const signature = toolCallSignature(call.name, call.input);
         const previousExecution = executedToolCalls.get(signature);
         if (previousExecution) {
@@ -472,6 +489,9 @@ export class MultiStepAgentRuntime {
             execution.result.output,
           );
         } else if (!execution.result.error.retryable) {
+          applicationFailure = this.dependencies.terminalToolFailure?.();
+          // A conflict invalidates earlier successes from this execution as well.
+          if (applicationFailure !== undefined) terminalResponse = applicationFailure;
           const failureKey = nonRetryableFailureKey(
             call.name,
             execution.result.error.code,
@@ -492,6 +512,7 @@ export class MultiStepAgentRuntime {
             ? execution.result.output
             : { error: execution.result.error },
         });
+        if (applicationFailure !== undefined) break;
       }
       messages.push({
         role: "user",
