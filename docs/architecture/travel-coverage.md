@@ -6,6 +6,11 @@
 Home、Agentのcandidate assessment、rail採用は同じDomain invariantを使用する。
 新しいcoverage保存resource、地理的blacklist、Plannerはない。
 
+Live比較の「既知条件」fixtureは、syntheticな駅identity解決結果と日付Evidenceを明示する。
+名前だけのoriginや未証明のtimezone条件を、条件確認済みのケースへ混ぜない。
+`coverage-live-input.fixture.test.ts`でhard条件の成立と、根拠を除いた場合のunknownを両方確認する。
+これは評価入力の整合修正であり、本番の名前照合・identity推測やDomain validationを緩めるものではない。
+
 | 状態 | 意味 |
 | --- | --- |
 | supported | 読込済みの日付別経路・カタログが一致し、施設なら駅からのアクセスも確認できる |
