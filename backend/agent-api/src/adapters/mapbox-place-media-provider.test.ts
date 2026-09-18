@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { MapboxPlaceMediaProvider, placeSearchTerms } from "./mapbox-place-media-provider.js";
+import { MapboxPlaceMediaProvider } from "./mapbox-place-media-provider.js";
 
 describe("MapboxPlaceMediaProvider", () => {
   it("POIだけを日本語と近接条件で検索しMapbox IDで返す", async () => {
@@ -85,12 +85,58 @@ describe("MapboxPlaceMediaProvider", () => {
       .toBeUndefined();
   });
 
-  it("酒蔵検索は具体的な同義語へ展開する", () => {
-    expect(placeSearchTerms("西条 酒蔵")).toEqual([
-      "西条 酒蔵",
-      "西条 酒造",
-      "西条 日本酒 醸造所",
-    ]);
+  it.each([
+    { query: "西条 酒蔵" },
+    { query: "西条", categories: ["酒造", "蔵元", "日本酒", "醸造所"] },
+    { query: "酒蔵通り資料館" },
+    { query: "　ＡＢＣ美術館　" },
+  ])("施設名を削らず単一検索に渡す: $query", async (query) => {
+    const fetch = vi.fn(async (_input: string) => new Response(JSON.stringify({ features: [] })));
+    const provider = new MapboxPlaceMediaProvider({ fetch }, { load: async () => ({ accessToken: "pk.test" }) });
+    const result = await provider.search(query);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const url = new URL(fetch.mock.calls[0]![0]);
+    expect(url.searchParams.get("q")).toBe(query.query.normalize("NFKC").trim());
+    expect(result.data).toBeUndefined();
+    expect(result.failure?.code).toBe("invalid_request");
+  });
+
+  it("単一応答の同一IDだけを除去し同名別IDと出典を保持する", async () => {
+    const feature = (id: string, type = "poi") => ({ properties: {
+      mapbox_id: id, feature_type: type, name: "同名施設",
+      coordinates: { longitude: 135, latitude: 35 },
+    } });
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ features: [
+      feature("first"), feature("first"), feature("second"), feature("region", "region"),
+    ] })));
+    const provider = new MapboxPlaceMediaProvider({ fetch }, { load: async () => ({ accessToken: "pk.test" }) });
+    const result = await provider.search({ query: "同名施設", limit: 8 });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.data?.places.map((place) => place.providerPlaceId)).toEqual(["first", "second"]);
+    expect(result.evidence[0]?.provider).toBe("mapbox");
+    expect(JSON.stringify(result)).not.toContain("pk.test");
+  });
+
+  it.each([[401, "unauthorized"], [403, "unauthorized"], [429, "rate_limited"], [503, "unavailable"]])(
+    "外部失敗%sを追加検索や架空施設で隠さない", async (status, code) => {
+      const fetch = vi.fn(async () => new Response("", { status: Number(status) }));
+      const provider = new MapboxPlaceMediaProvider({ fetch }, { load: async () => ({ accessToken: "pk.secret" }) });
+      const result = await provider.search({ query: "酒蔵" });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(result.failure?.code).toBe(code);
+      expect(result.data).toBeUndefined();
+      expect(JSON.stringify(result)).not.toContain("pk.secret");
+    },
+  );
+
+  it("通信失敗をunavailableとし空白検索は実行しない", async () => {
+    const fetch = vi.fn(async () => { throw new Error("provider raw secret"); });
+    const provider = new MapboxPlaceMediaProvider({ fetch }, { load: async () => ({ accessToken: "pk.test" }) });
+    expect((await provider.search({ query: "　 " })).failure?.code).toBe("invalid_request");
+    expect(fetch).not.toHaveBeenCalled();
+    const result = await provider.search({ query: "美術館" });
+    expect(result.failure?.code).toBe("unavailable");
+    expect(JSON.stringify(result)).not.toContain("provider raw secret");
   });
 
   it("Tokenが未設定なら外部障害として扱い秘密値を要求結果へ含めない", async () => {
