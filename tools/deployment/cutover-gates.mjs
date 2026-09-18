@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url";
 
 const gateNames = ["TF_VAR_agent_stream_enabled", "TF_VAR_enable_fixed_egress_provider", "VITE_SERVER_AGENT_ENABLED"];
+const safeAddressPattern = /^[a-zA-Z0-9_.\[\]"-]+$/u;
 
 export function cutoverGates(environment) {
   const values = gateNames.map(name => {
@@ -33,12 +34,17 @@ export function reviewCutoverPlan(plan, environment) {
     }
     const stream = resource.name?.includes("agent_stream");
     const provider = resource.name?.includes("fixed_egress");
-    if ((stream || provider) && actions.includes("delete")) throw new Error("Cutover infrastructure deletion/replacement is prohibited in CD");
+    if ((stream || provider) && actions.includes("delete")) {
+      if (typeof resource.address !== "string" || !safeAddressPattern.test(resource.address)) {
+        throw new Error("Cutover infrastructure deletion/replacement is prohibited in CD");
+      }
+      throw new Error(`Cutover infrastructure deletion/replacement is prohibited in CD: ${resource.address} (${actions.join("/")})`);
+    }
     if (before != null && ((stream && !gates.stream) || (provider && !gates.provider))) {
       throw new Error("Existing cutover infrastructure cannot be disabled by CD");
     }
     if (actions.every(a => a === "no-op")) continue;
-    if (typeof resource.address !== "string" || !/^[a-zA-Z0-9_.\[\]"-]+$/u.test(resource.address)) throw new Error("Invalid Terraform resource address");
+    if (typeof resource.address !== "string" || !safeAddressPattern.test(resource.address)) throw new Error("Invalid Terraform resource address");
     summary.push(`${actions.join("/")} ${resource.address}`);
   }
   return summary.join("\n") + "\n";
@@ -55,7 +61,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.stdout.write(reviewCutoverPlan(plan, process.env));
     } else throw new Error("Expected inputs or plan mode");
   } catch (error) {
-    // Only our fixed validation messages: never print parser errors or plan contents.
+    // Validation messages may include only a validated Terraform resource address and action names.
     process.stderr.write(`Cutover guard rejected: ${error.message}\n`);
     process.exitCode = 1;
   }
