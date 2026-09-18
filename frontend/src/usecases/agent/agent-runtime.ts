@@ -205,10 +205,10 @@ export class MultiStepAgentRuntime {
       modelCalls += 1;
       trace.modelCompleted(modelResponse.metadata, modelCallId);
       const used = modelResponse.decisionSummary?.usedEvidenceIds ?? modelResponse.declaredEvidenceIds;
-      if (modelResponse.invalidUsedEvidenceIds || used !== undefined && (!validUsedEvidenceIds(used) || used.some((id) => !evidence.some((e) => e.id === id)))) {
-        return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_used_evidence_ids");
-      }
-      const invalidContract = invalidResponseContract(modelResponse, (modelRequest.tools ?? []).map((tool) => tool.name));
+      const invalidReferences = modelResponse.invalidUsedEvidenceIds || used !== undefined &&
+        (!validUsedEvidenceIds(used) || used.some((id) => !evidence.some((e) => e.id === id)));
+      const invalidContract = invalidReferences ? "invalid_used_evidence_ids" :
+        invalidResponseContract(modelResponse, (modelRequest.tools ?? []).map((tool) => tool.name));
       if (invalidContract) {
         if (!correctedResponseContract && !finalResponseRequired) {
           correctedResponseContract = true;
@@ -217,7 +217,8 @@ export class MultiStepAgentRuntime {
           trace.replanDecided(true, invalidContract, decisionBoundary);
           continue;
         }
-        return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt, "invalid_response_contract");
+        return this.failureResult(trace, evidence, toolViewerActionOutcomes, startedAt,
+          invalidReferences ? "invalid_used_evidence_ids" : "invalid_response_contract");
       }
       messages.push(modelResponse.message);
 
@@ -361,14 +362,6 @@ export class MultiStepAgentRuntime {
           grounding.claims.some(({ groundingStatus }) =>
             groundingStatus === "unsupported")
         ) {
-          if (!correctedResponseContract && !finalResponseRequired) {
-            correctedResponseContract = true;
-            messages.pop();
-            messages.push({ role: "user", content: [{ type: "text", text: responseContractRepairInstruction }] });
-            iterations++;
-            trace.replanDecided(true, "unsupported_claim", decisionBoundary);
-            continue;
-          }
           const response = this.responseGenerator.groundingFailure();
           trace.responseGenerated(response, grounding.claims.map(({ id }) => id));
           trace.taskCompleted(

@@ -29,4 +29,4 @@ export function invalidResponseContract(response: AgentModelResponse, toolNames:
   return undefined;
 }
 
-export const responseContractRepairInstruction = "直前の応答は出力contract違反のため表示・保存・実行していません。必要なToolはConverseのnative toolUseだけで呼び出してください。本文にTool XML/JSONを出さず、回答は実在Evidenceに基づく利用者向け応答contractで返してください。in-trip回答には有効なinTripAnswerPlanが必要です。";
+export const responseContractRepairInstruction = "直前の応答は出力contract違反のため表示・保存・実行していません。必要なToolはConverseのnative toolUseだけで呼び出してください。本文にTool XML/JSONを出さず、通常の利用者向け回答を返してください。usedEvidenceIdsには実際に提供済みのEvidence IDだけを指定し、未取得の参照は含めないでください。in-trip回答には有効なinTripAnswerPlanが必要です。";
