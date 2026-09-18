@@ -209,6 +209,8 @@ AWS applyせず確認する手順と#451/#479後の有効化条件は
 前2つをTerraformへ、最後をFrontend buildの`VITE_SERVER_AGENT_ENABLED`へ渡す。
 stream ONはProvider ONを、Browser ONはstream ONを必要とする。既存cutover resourceのOFF化・
 削除・replaceをplan guardで拒否するため、rollbackではinfra ONを保持してBrowserだけを戻す。
+例外はstream ON時の`aws_api_gateway_deployment.agent_stream["stream"]`の厳密な
+`["create", "delete"]`だけで、構成snapshotの安全な世代交代を許可する。
 旧revisionのCDはguardを持たないので再実行しない。
 
 手動`CD / Deploy`のmode既定は`plan`。本番の保護された認証入力でplanを作り、値を含まない

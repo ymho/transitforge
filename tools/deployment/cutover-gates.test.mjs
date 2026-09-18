@@ -48,23 +48,41 @@ test("allows only the exact agent stream API Gateway deployment rotation", () =>
     type: "aws_api_gateway_deployment",
     name: "agent_stream",
     address: 'aws_api_gateway_deployment.agent_stream["stream"]',
-    change: { actions: ["create", "delete"], before: { id: "old" }, after: { id: "new" } },
+    change: { actions: ["create", "delete"], before: { id: "arn:aws:execute-api:DO_NOT_PRINT_BEFORE" }, after: { secret_string: "DO_NOT_PRINT_AFTER" } },
   };
   assert.equal(
     reviewCutoverPlan(plan([deployment], true, true), env("true", "true")),
     'Terraform plan: resource actions only; sensitive values omitted.\ncreate/delete aws_api_gateway_deployment.agent_stream["stream"]\n',
   );
-  for (const actions of [["delete"], ["delete", "create"]]) {
+  for (const actions of [["delete"], ["delete", "create"], ["create", "delete", "create"], ["create", "delete", "no-op"]]) {
     assert.throws(() => reviewCutoverPlan(plan([{ ...deployment, change: { actions, before: {} } }], true, true), env("true", "true")), /deletion/);
   }
+  for (const address of ['aws_api_gateway_deployment.agent_stream', 'aws_api_gateway_deployment.agent_stream["other"]', 'aws_lambda_function.agent_stream["stream"]']) {
+    assert.throws(() => reviewCutoverPlan(plan([{ ...deployment, address }], true, true), env("true", "true")), /deletion/);
+  }
+  assert.throws(() => reviewCutoverPlan(plan([{ ...deployment, address: 'invalid address DO_NOT_PRINT' }], true, true), env("true", "true")), /^Error: Invalid Terraform resource address$/);
   assert.throws(() => reviewCutoverPlan(plan([deployment], false, true), env("false", "true")), /deletion/);
 });
 test("does not allow the same create/delete rotation for other cutover resources", () => {
   for (const resource of [
     { type: "aws_lambda_function", name: "agent_stream", address: 'aws_lambda_function.agent_stream["stream"]' },
+    ...[
+      ["aws_api_gateway_rest_api", "agent_stream"],
+      ["aws_api_gateway_deployment", "agent_stream_other"],
+      ["aws_secretsmanager_secret", "agent_stream_providers"],
+      ["aws_secretsmanager_secret", "fixed_egress_travel_provider"],
+      ["aws_iam_role", "agent_stream"],
+      ["aws_iam_role", "fixed_egress_provider"],
+      ["aws_vpc", "ai_egress"],
+      ["aws_eip", "ai_egress"],
+      ["aws_instance", "ai_nat"],
+      ["aws_eip_association", "ai_nat"],
+    ].map(([type, name]) => ({ type, name, address: `${type}.${name}` })),
     { type: "aws_lambda_function", name: "fixed_egress_provider", address: 'aws_lambda_function.fixed_egress_provider["0"]' },
   ]) {
-    assert.throws(() => reviewCutoverPlan(plan([{ ...resource, mode: "managed", change: { actions: ["create", "delete"], before: {} } }], true, true), env("true", "true")), /deletion/);
+    for (const actions of [["create", "delete"], ["delete"], ["delete", "create"]]) {
+      assert.throws(() => reviewCutoverPlan(plan([{ ...resource, mode: "managed", change: { actions, before: {} } }], true, true), env("true", "true")), /deletion/);
+    }
   }
 });
 test("malformed destructive addresses fail generically without exposing plan values", () => {
