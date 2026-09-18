@@ -86,8 +86,8 @@
         type="button"
         aria-controls="ai-guide-panel"
         aria-expanded="false"
-        aria-label="コンシェルジュを開く"
-        title="コンシェルジュ"
+        aria-label="旅の相談を開く"
+        title="旅の相談"
       >
         <svg class="guide-toggle-icon ai-guide-button-icon" aria-hidden="true"><use href="#icon-ai-sparkles" /></svg>
       </button>
@@ -100,12 +100,12 @@
         <button id="rail-date-time-mode" type="button" aria-label="日時指定シミュレーター" title="日時指定シミュレーター"><svg aria-hidden="true"><use href="#icon-calendar" /></svg></button>
         <button id="rail-travel-profile" class="conversation-sidebar-rail-profile" type="button" aria-label="ゲストユーザの設定" title="設定"><span class="sidebar-account-avatar" aria-hidden="true">ゲ</span></button>
       </nav>
-      <aside id="ai-guide-panel" class="ai-guide-panel" aria-label="コンシェルジュ" hidden>
+      <aside id="ai-guide-panel" class="ai-guide-panel" aria-label="旅の相談" hidden>
         <span class="sheet-grabber" aria-hidden="true"></span>
         <header>
           <div class="guide-panel-heading">
             <div class="guide-panel-copy">
-              <p>コンシェルジュ</p>
+              <p>旅の相談</p>
             </div>
           </div>
           <div class="guide-panel-actions">
@@ -113,7 +113,7 @@
             <button id="trip-plan-toggle" type="button" aria-label="旅程" title="旅程" hidden><svg aria-hidden="true"><use href="#icon-route" /></svg></button>
             <button id="journey-settings-toggle" type="button" aria-label="経路設定" title="経路設定" aria-controls="journey-settings-panel" hidden><svg aria-hidden="true"><use href="#icon-train" /></svg></button>
             <button id="travel-profile-toggle" type="button" aria-label="プロフィール" title="プロフィール" hidden><svg aria-hidden="true"><use href="#icon-user" /></svg></button>
-            <button id="close-ai-guide" type="button" aria-label="コンシェルジュを閉じる">×</button>
+            <button id="close-ai-guide" type="button" aria-label="旅の相談を閉じる">×</button>
           </div>
         </header>
         <ol id="ai-guide-messages" class="ai-guide-messages" aria-live="polite">
@@ -125,7 +125,7 @@
             type="text"
             maxlength="400"
             autocomplete="off"
-            aria-label="コンシェルジュへの依頼"
+            aria-label="旅行についての相談"
             placeholder="列車、行き先、旅の相談を入力"
           />
           <button id="ai-guide-submit" type="submit" aria-label="送信" title="送信">

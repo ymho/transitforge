@@ -117,6 +117,19 @@ export function configureAiGuidePanel(
     historyRepository,
   } = elements;
   let conversationSessionId = elements.conversationSessionId;
+  // Tab-local, per-conversation draft only; not a Trip or server writer.
+  const draftKey = () => `raiquora:conversation-draft:${conversationSessionId}`;
+  const saveInputDraft = () => {
+    try {
+      const drafts = input.ownerDocument.defaultView?.sessionStorage;
+      if (input.value) drafts?.setItem(draftKey(), input.value.slice(0, 4000)); else drafts?.removeItem(draftKey());
+    } catch { /* Storage denial must not disable consultation. */ }
+  };
+  const restoreInputDraft = () => {
+    try { return input.ownerDocument.defaultView?.sessionStorage.getItem(draftKey())?.slice(0, 4000) ?? ""; }
+    catch { return ""; }
+  };
+  input.addEventListener("input", saveInputDraft);
   const savedPreferences = loadJourneySearchPreferences(storage);
   transferPace.value = savedPreferences.transferPace;
   rankingPreference.value = savedPreferences.rankingPreference;
@@ -269,6 +282,7 @@ export function configureAiGuidePanel(
     );
     appendMessage(messages, "user", prompt, userMessage.messageId);
     input.value = "";
+    saveInputDraft();
     input.disabled = true;
     submit.disabled = true;
     submit.ariaLabel = "送信中";
@@ -362,10 +376,11 @@ export function configureAiGuidePanel(
   const controller: AiGuidePanelController = {
     switchSession(nextConversationSessionId) {
       elements.onPlaces?.([]);
+      if (nextConversationSessionId !== conversationSessionId) saveInputDraft();
       conversationSessionId = nextConversationSessionId;
       activeConversation = undefined;
       activeTripContext = undefined;
-      input.value = "";
+      input.value = restoreInputDraft();
       input.disabled = false;
       input.placeholder = "列車、行き先、旅の相談を入力";
       submit.disabled = false;

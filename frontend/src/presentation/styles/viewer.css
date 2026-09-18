@@ -26,6 +26,6 @@
 @import "../concierge/journey-liquid-glass.css";
 @import "../train-viewer/train-details-liquid-glass.css";
 @import "../shared/loading-screen-liquid-glass.css";
-@import "./application-shell.css";
 @import "../trip-plan/trip-workspace.css";
 @import "../notifications/notification-center.css";
+@import "../home/product-shell.css";

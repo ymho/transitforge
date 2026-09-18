@@ -94,9 +94,9 @@ import type { TrainPosition } from "../domain/train-position";
 import { normalizeStationName } from "@raiquora/train/station-name";
 import { loadViewerElements } from "../usecases/viewer/viewer-elements";
 import { resolveViewerDisplayMode } from "../domain/viewer-display-mode";
-import { runViewerAgentRuntime } from "../adapters/bedrock/viewer-agent-runtime";
+import { runViewerAgentRuntime, type ViewerAgentRuntimeDependencies } from "../adapters/bedrock/viewer-agent-runtime";
+import { configureAiFirstShell } from "../presentation/home/ai-first-shell";
 import { createAgentTurnObservationStore } from "../usecases/agent/agent-turn-outcome";
-import { createLocalViewerAgent } from "../usecases/agent/local-viewer-agent";
 import type { ViewerAgentJourneyPlan } from "../domain/viewer-agent-response";
 import {
   configureAiGuidePanel,
@@ -104,7 +104,6 @@ import {
 } from "../presentation/concierge/ai-guide-panel";
 import { configureLandmarkJourneyInteraction } from "../presentation/concierge/landmark-journey-interaction";
 import { configureTrainSelection } from "../presentation/train-viewer/train-selection-controller";
-import { trainTitleFor } from "../presentation/train-viewer/train-title";
 import {
   configureTrainCongestionUpdates,
   configureTrainDelayUpdates,
@@ -305,7 +304,6 @@ const tripPreviewEnabled = import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get("trip-preview") === "1";
 const weatherPreviewEnabled = import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get("weather-preview") === "mixed";
-const desktopChatShell = window.matchMedia("(min-width: 72rem)");
 const mobileChatShell = window.matchMedia("(max-width: 71.999rem)");
 const contextWorkspaceController = createContextWorkspaceController(
   activeConversationSession.id,
@@ -350,6 +348,8 @@ const tripPlanController = configureTripPlanPanel(
   () => !tripWorkspaceController.blocksLegacy(),
 );
 let resizeContextMap: () => void = () => undefined;
+let primaryShell: ReturnType<typeof configureAiFirstShell> | undefined;
+let startMap: () => void = () => undefined;
 const scheduleContextMapResize = () => {
   requestAnimationFrame(() => resizeContextMap());
 };
@@ -362,6 +362,8 @@ configureSidebarMapModeSelection({
   dateTimeModeButtons: [sidebarDateTimeMode, railDateTimeMode],
 });
 const focusMapWorkspace = () => {
+  if (app.dataset.primaryView !== "map") primaryShell?.showMap("realtime");
+  startMap();
   contextWorkspaceController.show("map");
   app.dataset.mapFocusMode = "true";
   if (mobileChatShell.matches) {
@@ -383,6 +385,7 @@ const mobileContextNavigation = createMobileContextNavigation({
   restoreFocus: () => window.matchMedia("(pointer: fine)").matches,
 });
 const returnToConversation = () => {
+  if (app.dataset.primaryView === "map") primaryShell?.navigate("chat");
   delete app.dataset.mapFocusMode;
   if (mobileContextNavigation.isOpen()) mobileContextNavigation.close();
   scheduleContextMapResize();
@@ -612,7 +615,6 @@ configureConversationHistoryPanel({
       conversationSessionSwitcher.activate(sessionId);
     }
   },
-  persistentMediaQuery: desktopChatShell,
 });
 configureApplicationSettingsPanel(document, {
   travelProfileToggle,
@@ -671,20 +673,178 @@ if (tripPreviewEnabled) {
 }
 
 const initialDateTime = new Date();
+let previousJourneyPlan: ViewerAgentJourneyPlan | undefined;
+let previousJourneySessionId: string | undefined;
+let pendingJourneyLegChange: PendingJourneyLegChange | undefined;
+const textSearch = createJourneySearchHandlers({
+  trains: [], getDisplayTrains: () => [], stationLineCatalog: emptyStationLineCatalog(),
+  getDisplayedServiceDateStart: () => operatingServiceDateStart(new Date()),
+  currentCoordinate: async () => { throw new Error("出発駅が未確認です。地図の現在地は推測しません。"); },
+  journeySearchService, linePresentation: { colorForStations: () => ({ color: "#64748b", lineName: "" }) },
+});
+let runtimeMapBindings: Pick<ViewerAgentRuntimeDependencies, "trains" | "getTrains" | "getPositions" | "getRouteTime" |
+  "queryDailyCongestionAnalysis" | "queryTrainDelayAnalysis" | "searchDirectRoutes" | "resolveStationGroundPoint" | "maximumRouteTime"> = {
+  trains: [], getTrains: () => [], getPositions: () => [], getRouteTime: () => currentRouteTime(new Date()),
+  queryDailyCongestionAnalysis: async (date) => congestionAnalysisForAgent(await queryDailyCongestionAnalysis(date), [], () => ""),
+  queryTrainDelayAnalysis: async (date) => delayAnalysisForAgent(await queryTrainDelayAnalysis(date), []),
+  searchDirectRoutes: textSearch.backendSearchRoutes, maximumRouteTime: 2880,
+};
+handleAiGuidePrompt = async (
+  prompt,
+  preferences,
+  conversation,
+  onResponseMetadata,
+) => {
+    if (previousJourneySessionId !== activeConversationSession.id) {
+      previousJourneySessionId = activeConversationSession.id;
+      previousJourneyPlan = latestJourneyPlanFromHistory(
+        conversationHistoryRepository.list(activeConversationSession.id),
+      );
+      pendingJourneyLegChange = undefined;
+    }
+    const runtimeRequestIds: string[] = [];
+    const executionSessionId = activeConversationSession.id;
+    const workspaceSource = tripWorkspaceController.source();
+    if (workspaceSource && !workspaceSource.getCurrentTrip()) throw new Error("サーバの旅程を再取得してから相談を続けてください。");
+    const uiFocus = tripWorkspaceController.uiFocus();
+    const response = await runViewerAgentRuntime(
+      prompt,
+      {
+        previousAssistantTurn: agentTurnObservations.get(executionSessionId),
+        getCurrentTrip: () => workspaceSource?.getCurrentTrip(),
+        getTripRole: () => workspaceSource?.getRole?.(),
+        inTripContextReader: new HttpInTripContextClient(),
+        getReservationFacts: () => workspaceSource?.getReservationFacts?.(),
+        getChecklistItems: () => workspaceSource?.checklist?.getItems(),
+        getFeasibilityExternalFacts: () => workspaceSource?.getFeasibilityExternalFacts?.(),
+        getUiFocus: () => uiFocus,
+        ...(workspaceSource ? {
+          getTravelCandidates: () => (workspaceSource.getCandidates?.() ?? []).map(({ candidate, assessment }) =>
+            assessment ? { candidate: { id: candidate.id }, assessment } : { id: candidate.id }),
+          candidateSelection: workspaceSource.candidateSelection,
+        } : {}),
+        onTurnObservation: (observation) => agentTurnObservations.record(executionSessionId, observation),
+        ...runtimeMapBindings,
+        searchRepresentativeTimetable,
+        searchAccommodations,
+        searchWeatherForecast,
+        searchPlaceMedia,
+        searchHazardAlerts,
+        searchGroundAccess,
+        searchRestaurants,
+        searchWeb,
+        readWebPages,
+        scheduleTravelRecheck: (request) => travelRecheckRepository.schedule(request),
+        getJourneySearchPreferences: () => preferences,
+        getPreviousJourneyPlan: () => previousJourneyPlan,
+        findJourneyLegAlternatives,
+        getPendingJourneyLegChange: () => pendingJourneyLegChange,
+        setPendingJourneyLegChange: (pending) => {
+          pendingJourneyLegChange = pending;
+        },
+        getConversationContext: () => currentAgentConversationContext(prompt),
+        getTripContext: () => conversation?.guidance.tripContext,
+        getVerifiedPlaces: () => pendingMapCandidates.flatMap((candidate) =>
+          candidate.kind === "place" ? [candidate.value] : []),
+        rememberTravelPreference: (statement, confidence) =>
+          rememberTravelPreference(
+            localStorage,
+            statement,
+            activeConversationSession.id,
+            confidence,
+          ),
+        updateConversationSession: (update) => {
+          Object.assign(activeConversationSession, update, {
+            updatedAt: new Date().toISOString(),
+          });
+          conversationSessionRepository.save(activeConversationSession);
+        },
+        getTripPlan: () => workspaceSource ? undefined : loadTripPlan(
+          localStorage,
+          activeConversationSession.id,
+        ),
+        getUserProfile: () => loadUserProfile(localStorage),
+        storeAgentTrace: async (trace) => {
+          await submitAgentTrace({
+            taskId: activeConversationSession.id,
+            requestIds: runtimeRequestIds,
+            trace,
+          });
+        },
+      },
+      async (messages, tools, modelClass, modelCallId) => {
+        const result = await invokeBedrockAgent(
+          messages,
+          fetch,
+          tools,
+          modelClass,
+          modelCallId,
+        );
+        onResponseMetadata?.(result.metadata);
+        if (result.metadata.requestId) {
+          runtimeRequestIds.push(result.metadata.requestId);
+        }
+        return result.body;
+      },
+    );
+    if (typeof response !== "string" && "journeyPlan" in response) {
+      previousJourneyPlan = response.journeyPlan;
+      pendingJourneyLegChange = undefined;
+    }
+    return response;
+};
+
+resolveAiGuidePromptHandler(handleAiGuidePrompt);
 let displayedServiceDateStart = operatingServiceDateStart(initialDateTime);
 const initialRouteTime = currentRouteTime(initialDateTime);
 displayTime.value = String(initialRouteTime);
 renderDisplayDateTime(dateTimeDisplayElements, initialDateTime);
 
+let mapStarted = false;
+const homePreview = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("home-preview") : null;
+startMap = () => {
+  if (mapStarted) return;
+  mapStarted = true;
+  try { initializeMap(); }
+  catch { status.hidden = false; status.textContent = "地図を起動できませんでした。相談は引き続き利用できます。"; }
+};
+primaryShell = configureAiFirstShell(document, app, {
+  read: () => {
+    const source = tripWorkspaceController.source(), trip = tripWorkspaceController.current();
+    const load = tripWorkspaceController.loadState();
+    return {
+      state: homePreview === "loading" ? "loading" : homePreview === "error" ? "unavailable" : homePreview === "empty" ? "available"
+        : !source ? "unauthenticated" : load === "loaded" ? "available" : load === "loading" ? "loading" : "unavailable",
+      trips: trip ? [trip] : [], readiness: tripWorkspaceController.readiness(),
+      candidates: tripWorkspaceController.candidates().map(({ candidate, assessment }) => ({
+        id: candidate.id, title: candidate.experiences[0]?.name ?? candidate.accommodations[0]?.name ?? "移動の候補", assessment,
+      })),
+      preview: !!homePreview || (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip-workspace-preview") === "1"),
+    };
+  },
+  profile: () => loadUserProfile(localStorage), subscribe: tripWorkspaceController.subscribe,
+  retry: async () => { await tripWorkspaceController.source()?.retry?.(); },
+  newConsultation: (prompt) => { newConversation.click(); aiGuideController.ask(prompt); },
+  openChat: () => { aiGuideController.open(); delete app.dataset.mapFocusMode; },
+  openTrip: (id) => { if (tripWorkspaceController.current()?.id === id) tripWorkspace.show("trip"); },
+  openProfile: () => travelProfileToggle.click(),
+  openMap: (mode) => { startMap(); selectSidebarMapMode(mode === "simulation" ? "date-time" : "realtime"); },
+  openHistory: () => conversationHistoryToggle.click(),
+  openSettings: () => document.getElementById("sidebar-account-settings")?.click(),
+  openNotifications: () => document.getElementById("sidebar-notifications")?.click(),
+  now: () => new Date(),
+});
+loadingScreen.complete();
+if (import.meta.env.DEV && homePreview === "data") {
+  void import("../dev/home-preview").then(({ homePreviewSource }) => tripWorkspaceController.attach(activeConversationSession.id, homePreviewSource()));
+}
+
+function initializeMap() {
 if (!token) {
   const missingTokenMessage =
     "Mapbox公開トークンがありません。.env.localにVITE_MAPBOX_ACCESS_TOKENを設定してください。";
   status.textContent = missingTokenMessage;
   loadingScreen.fail(missingTokenMessage);
-  const unavailablePromptHandler: AiGuidePromptHandler = async () =>
-    "地図と列車データを読み込めないため、現在は案内を開始できません。";
-  handleAiGuidePrompt = unavailablePromptHandler;
-  resolveAiGuidePromptHandler(unavailablePromptHandler);
 } else {
   mapboxgl.accessToken = token;
 
@@ -1203,7 +1363,6 @@ if (!token) {
         };
 
         const {
-          localSearchRoutes,
           backendSearchRoutes,
           findJourneyLegAlternatives: searchJourneyLegAlternatives,
         } = createJourneySearchHandlers({
@@ -1251,159 +1410,16 @@ if (!token) {
             displayTime.dispatchEvent(new Event("input", { bubbles: true }));
           },
         );
-        let previousJourneyPlan: ViewerAgentJourneyPlan | undefined;
-        let previousJourneySessionId: string | undefined;
-        let pendingJourneyLegChange: PendingJourneyLegChange | undefined;
-        const localAiGuidePromptHandler = createLocalViewerAgent({
-          trains: trainIndex.trains,
-          getTrains: () => displayTrains,
-          getPositions: () => displayedPositions,
-          getRouteTime: () => Number(displayTime.value),
-          searchDirectRoutes: localSearchRoutes,
-          formatTrainTitle: (train) => {
-            const title = trainTitleFor(train);
-            return `${title.main}${title.suffix ?? ""}`;
+        runtimeMapBindings = {
+          trains: trainIndex.trains, getTrains: () => displayTrains, getPositions: () => displayedPositions,
+          getRouteTime: () => Number(displayTime.value), maximumRouteTime, searchDirectRoutes: backendSearchRoutes,
+          queryDailyCongestionAnalysis: async (date) => congestionAnalysisForAgent(await queryDailyCongestionAnalysis(date), trainIndex.trains, (train) => lineColorIndex.colorFor(train).lineName),
+          queryTrainDelayAnalysis: async (date) => delayAnalysisForAgent(await queryTrainDelayAnalysis(date), trainIndex.trains),
+          resolveStationGroundPoint: (name) => {
+            const normalized = normalizeStationName(name);
+            const station = stationLineCatalog.lines.flatMap((line) => line.stations).find((s) => normalizeStationName(s.name) === normalized);
+            return station ? { entityId: `station:${normalized}`, name: station.name, longitude: station.coordinate[0], latitude: station.coordinate[1] } : undefined;
           },
-          maximumRouteTime,
-        });
-        handleAiGuidePrompt = async (
-          prompt,
-          preferences,
-          conversation,
-          onResponseMetadata,
-        ) => {
-          try {
-            if (previousJourneySessionId !== activeConversationSession.id) {
-              previousJourneySessionId = activeConversationSession.id;
-              previousJourneyPlan = latestJourneyPlanFromHistory(
-                conversationHistoryRepository.list(activeConversationSession.id),
-              );
-              pendingJourneyLegChange = undefined;
-            }
-            const runtimeRequestIds: string[] = [];
-            const executionSessionId = activeConversationSession.id;
-            const workspaceSource = tripWorkspaceController.source();
-            if (workspaceSource && !workspaceSource.getCurrentTrip()) throw new Error("サーバの旅程を再取得してから相談を続けてください。");
-            const uiFocus = tripWorkspaceController.uiFocus();
-            const response = await runViewerAgentRuntime(
-              prompt,
-              {
-                previousAssistantTurn: agentTurnObservations.get(executionSessionId),
-                getCurrentTrip: () => workspaceSource?.getCurrentTrip(),
-                getTripRole: () => workspaceSource?.getRole?.(),
-                inTripContextReader: new HttpInTripContextClient(),
-                getReservationFacts: () => workspaceSource?.getReservationFacts?.(),
-                getChecklistItems: () => workspaceSource?.checklist?.getItems(),
-                getFeasibilityExternalFacts: () => workspaceSource?.getFeasibilityExternalFacts?.(),
-                getUiFocus: () => uiFocus,
-                ...(workspaceSource ? {
-                  getTravelCandidates: () => (workspaceSource.getCandidates?.() ?? []).map(({ candidate, assessment }) =>
-                    assessment ? { candidate: { id: candidate.id }, assessment } : { id: candidate.id }),
-                  candidateSelection: workspaceSource.candidateSelection,
-                } : {}),
-                onTurnObservation: (observation) => agentTurnObservations.record(executionSessionId, observation),
-                trains: trainIndex.trains,
-                getTrains: () => displayTrains,
-                getPositions: () => displayedPositions,
-                getRouteTime: () => Number(displayTime.value),
-                queryDailyCongestionAnalysis: async (serviceDate) =>
-                  congestionAnalysisForAgent(
-                    await queryDailyCongestionAnalysis(serviceDate),
-                    trainIndex.trains,
-                    (train) => lineColorIndex.colorFor(train).lineName,
-                  ),
-                queryTrainDelayAnalysis: async (serviceDate) =>
-                  delayAnalysisForAgent(
-                    await queryTrainDelayAnalysis(serviceDate),
-                    trainIndex.trains,
-                  ),
-                searchRepresentativeTimetable,
-                searchDirectRoutes: backendSearchRoutes,
-                searchAccommodations,
-                searchWeatherForecast,
-                searchPlaceMedia,
-                searchHazardAlerts,
-                searchGroundAccess,
-                searchRestaurants,
-                resolveStationGroundPoint: (stationName) => {
-                  const normalized = normalizeStationName(stationName);
-                  const station = stationLineCatalog.lines.flatMap((line) => line.stations)
-                    .find((candidate) => normalizeStationName(candidate.name) === normalized);
-                  return station ? {
-                    entityId: `station:${normalized}`,
-                    name: station.name,
-                    longitude: station.coordinate[0],
-                    latitude: station.coordinate[1],
-                  } : undefined;
-                },
-                searchWeb,
-                readWebPages,
-                scheduleTravelRecheck: (request) => travelRecheckRepository.schedule(request),
-                getJourneySearchPreferences: () => preferences,
-                getPreviousJourneyPlan: () => previousJourneyPlan,
-                findJourneyLegAlternatives,
-                getPendingJourneyLegChange: () => pendingJourneyLegChange,
-                setPendingJourneyLegChange: (pending) => {
-                  pendingJourneyLegChange = pending;
-                },
-                getConversationContext: () => currentAgentConversationContext(prompt),
-                getTripContext: () => conversation?.guidance.tripContext,
-                getVerifiedPlaces: () => pendingMapCandidates.flatMap((candidate) =>
-                  candidate.kind === "place" ? [candidate.value] : []),
-                rememberTravelPreference: (statement, confidence) =>
-                  rememberTravelPreference(
-                    localStorage,
-                    statement,
-                    activeConversationSession.id,
-                    confidence,
-                  ),
-                updateConversationSession: (update) => {
-                  Object.assign(activeConversationSession, update, {
-                    updatedAt: new Date().toISOString(),
-                  });
-                  conversationSessionRepository.save(activeConversationSession);
-                },
-                getTripPlan: () => workspaceSource ? undefined : loadTripPlan(
-                  localStorage,
-                  activeConversationSession.id,
-                ),
-                getUserProfile: () => loadUserProfile(localStorage),
-                storeAgentTrace: async (trace) => {
-                  await submitAgentTrace({
-                    taskId: activeConversationSession.id,
-                    requestIds: runtimeRequestIds,
-                    trace,
-                  });
-                },
-                maximumRouteTime,
-              },
-              async (messages, tools, modelClass, modelCallId) => {
-                const result = await invokeBedrockAgent(
-                  messages,
-                  fetch,
-                  tools,
-                  modelClass,
-                  modelCallId,
-                );
-                onResponseMetadata?.(result.metadata);
-                if (result.metadata.requestId) {
-                  runtimeRequestIds.push(result.metadata.requestId);
-                }
-                return result.body;
-              },
-            );
-            if (typeof response !== "string" && "journeyPlan" in response) {
-              previousJourneyPlan = response.journeyPlan;
-              pendingJourneyLegChange = undefined;
-            }
-            return response;
-          } catch (error) {
-            if (import.meta.env.DEV) {
-              const localResponse = await localAiGuidePromptHandler(prompt);
-              return localResponse;
-            }
-            throw error;
-          }
         };
         displayTime.disabled = false;
         currentTimeButton.disabled = false;
@@ -1459,10 +1475,6 @@ if (!token) {
       status.hidden = false;
       status.textContent = `入力を読み込めませんでした: ${message}`;
       loadingScreen.fail(`入力を読み込めませんでした: ${message}`);
-      const unavailablePromptHandler: AiGuidePromptHandler = async () =>
-        "地図と列車データの読み込みに失敗したため、現在は案内を開始できません。";
-      handleAiGuidePrompt = unavailablePromptHandler;
-      resolveAiGuidePromptHandler(unavailablePromptHandler);
     }
   });
 
@@ -1481,4 +1493,5 @@ function emptyFeatureCollection() {
   return { type: "FeatureCollection" as const, features: [] };
 }
 
+}
 }
