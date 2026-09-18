@@ -32,7 +32,8 @@ export function registerCandidateAssessmentTool(registry: AgentToolRegistry, dep
         const result = await assessTripCandidate(dependencies.getCurrentTrip!()!, { candidateId: input.candidateId as string,
           taskId: dependencies.candidateSelection!.taskId, ...(input.itemId ? { itemId: input.itemId as string } : {}) },
         dependencies.candidateSelection!.port, now().toISOString());
-        return successfulAgentToolResult({ ...candidateAssessmentContext(result), assessmentEvidence: result.assessment.sources });
+        return successfulAgentToolResult({ ...candidateAssessmentContext(result),
+          answerEvidenceId: candidateAssessmentEvidenceId(result.assessment), assessmentEvidence: result.assessment.sources });
       } catch {
         return failedAgentToolResult({ code: "precondition_failed", message: "このtaskの候補ID・対象予定・期限を確認できません。", retryable: false });
       }
@@ -49,7 +50,7 @@ export function candidateAssessmentEvidence(output: unknown): Evidence[] {
   const assessment = { ...rest, sources: value.assessmentEvidence } as TravelCandidateAssessment;
   try { validateTravelCandidateAssessment(assessment); if (assessment.candidateId !== value.candidate.id) return []; } catch { return []; }
   if (!assessment.sources.length) return [];
-  return [{ id: `candidate-assessment:${encodeURIComponent(assessment.candidateId)}:${assessment.assessedAt}`,
+  return [{ id: candidateAssessmentEvidenceId(assessment),
     category: "external", knowledgeKind: "derived_value", subject: assessment.candidateId,
     facts: { candidateId: assessment.candidateId, constraintStatus: assessment.constraintStatus,
       ...(assessment.mobility.status === "known" ? Object.fromEntries(["originStation", "destinationStation", "serviceDate"].flatMap((key) =>
@@ -67,4 +68,8 @@ export function candidateAssessmentEvidence(output: unknown): Evidence[] {
         retrievedAt: source.retrievedAt, freshness: source.kind === "timetable" ? "scheduled" : freshness === "fresh" ? "current" : freshness === "stale" ? "historical" : "unknown",
         summary: `${source.kind}: ${source.provider} (${source.id})` };
     }) }];
+}
+
+function candidateAssessmentEvidenceId(assessment: Pick<TravelCandidateAssessment, "candidateId" | "assessedAt">): string {
+  return `candidate-assessment:${encodeURIComponent(assessment.candidateId)}:${assessment.assessedAt}`;
 }

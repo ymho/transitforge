@@ -15,7 +15,9 @@ import { coverageLiveInputs } from "../frontend/src/adapters/bedrock/coverage-li
  * No Trip writes, no provider payload/CoT recording; scenario output is synthetic only. */
 const output = resolve(process.argv[2] ?? "/tmp/raiquora-live-coverage");
 const model = new BedrockConversationModel(new AwsBedrockConverseClient(), {
-  modelId: process.env.MODEL_ID?.trim() || "amazon.nova-lite-v1:0", maxOutputTokens: 4096, systemPrompt: agentSystemPrompt,
+  modelId: process.env.MODEL_ID?.trim() || "amazon.nova-lite-v1:0",
+  decisionModelId: process.env.DECISION_MODEL_ID?.trim() || "jp.amazon.nova-2-lite-v1:0",
+  maxOutputTokens: 4096, systemPrompt: agentSystemPrompt,
 });
 const reports = [];
 for (const mode of ["outside-alternative", "unknown-research", "missing-then-answer"] as const) {
@@ -80,6 +82,10 @@ for (const mode of ["outside-alternative", "unknown-research", "missing-then-ans
   const proposal = typeof response !== "string" && "tripUpdateProposal" in response;
   reports.push({ mode, coverage: choices.map((v) => ({ candidateId: v.value.id, status: v.coverage.status })),
     modelCalls, researchCalls, providerFailures, tools: trace?.events.filter((e) => e.type === "tool_called").map((e) => e.toolName),
+    toolOutcomes: trace?.events.filter((e) => e.type === "tool_completed").map((e) => ({ name: e.toolName, outcome: e.outcome, errorCode: e.errorCode })),
+    terminalStatus: trace?.events.filter((e) => e.type === "task_completed").map((e) => ({ status: e.status, reason: e.reason })),
+    selectedCandidateIds: trace?.events.filter((e) => e.type === "tool_called" && e.toolName === "propose_candidate_selection")
+      .map((e) => e.input && typeof e.input === "object" && "value" in e.input && e.input.value && typeof e.input.value === "object" && "candidateId" in e.input.value ? e.input.value.candidateId : undefined),
     tripUnchanged: JSON.stringify(trip) === before, proposal, response, ...(firstResponse ? { firstResponse } : {}),
   });
 }
