@@ -16,7 +16,7 @@ describe("Ask + Progress production pipeline", () => {
       expect(result.observation?.outcome).toBe("ask_and_progress");
       expect(typeof result.response !== "string" && result.response.text).toContain("[情報源1](https://example.com/nature)");
     }
-    if (id === "D-known-request") expect(JSON.stringify(result.trace)).toContain("persisted Trip.request");
+    if (id === "D-known-request") expect(JSON.stringify(result.trace)).toContain("既知の出発地は聞き直せません");
     if (id === "G-consecutive") expect(result.trace?.events.some((e) => e.type === "turn_observed" && !e.accepted)).toBe(true);
     if (id === "E-past") {
       expect(result.contexts[0]).toContain('"position":"past"');
