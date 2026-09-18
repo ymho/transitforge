@@ -31,8 +31,12 @@ function statementFor(e: Evidence): string | undefined {
     }
     if (typeof f.candidateId === "string") {
       const status = f.constraintStatus === "satisfied" ? "確認した条件は成立しています" : f.constraintStatus === "violated" ? "成立しない条件があります" : "条件の成立に未確認事項があります";
-      return `取得済みの候補評価では、${status}。` +
+      const route = typeof f.originStation === "string" && typeof f.destinationStation === "string"
+        ? `${typeof f.serviceDate === "string" ? `${plain(f.serviceDate)}の` : ""}${plain(f.originStation)}から${plain(f.destinationStation)}への移動候補です。` : "";
+      return route + `取得済みの候補評価では、${status}。` +
         (typeof f.plannedTravelMinutes === "number" ? `確認済みの移動時間は${f.plannedTravelMinutes}分です。` : "移動時間はこの根拠では確認できません。") +
+        (typeof f.plannedTransfers === "number" ? `計画上の乗換は${f.plannedTransfers}回です。` : "") +
+        (f.serviceCoverage === "supported" ? "この移動は収録時刻表の対応範囲内です。" : f.serviceCoverage === "outside-coverage" ? "この移動は現在の対応範囲外です。" : "移動の対応範囲は未確認です。") +
         (Array.isArray(f.hardUnknown) && f.hardUnknown.length ? "必須条件に未確認事項があるため、成立扱いせず追加確認が必要です。" : "") +
         (Array.isArray(f.hardViolations) && f.hardViolations.length ? "必須条件への違反があるため、このまま採用できるとは案内できません。" : "") +
         "候補比較であり、採用・予約・現在の安全を保証するものではありません。";
