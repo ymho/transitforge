@@ -40,6 +40,10 @@ Web全文やProvider rawをそのままClaimへ昇格させない。詳細情報
 
 ## 検証
 
+ブラウザのAgent Runtimeは相談実行時に動的importする。追加した検証・描画処理を
+初期画面のbundleへ含めず、既存の容量上限を維持する。Backendの実行入口と
+モデル・Tool呼出回数は変更しない。
+
 本番ConverseModelProvider → MultiStepAgentRuntime → DefaultAgentResponseGenerator →
 validateEvidenceAndClaimsの合成fixtureを使う。Structured generatorだけのテストではない。
 正常経路、25分直通という架空数値の誘導、別日付への流用要求を含む。
