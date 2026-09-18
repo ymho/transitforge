@@ -39,7 +39,12 @@ export class Report {
 // AWS CLI retry is disabled: an ambiguous mutation is resolved by verification/cleanup.
 export function aws(service, operation, input = {}, { missing = false } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn("aws", [service, operation, "--cli-input-json", "file:///dev/stdin", "--output", "json", "--no-cli-pager"], {
+    // GetCallerIdentity has no request document. Supplying --cli-input-json makes the
+    // AWS CLI try to parse an empty stdin document before invoking STS, so this one
+    // explicitly allowlisted no-input operation must receive no input flag at all.
+    const noInput = service === "sts" && operation === "get-caller-identity" && input && Object.keys(input).length === 0;
+    const args = [service, operation, ...(noInput ? [] : ["--cli-input-json", "file:///dev/stdin"]), "--output", "json", "--no-cli-pager"];
+    const child = spawn("aws", args, {
       stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, AWS_MAX_ATTEMPTS: "1", AWS_PAGER: "", AWS_CLI_AUTO_PROMPT: "off" },
     });
     let output = "", diagnostic = "", settled = false;
@@ -59,7 +64,7 @@ export function aws(service, operation, input = {}, { missing = false } = {}) {
       try { const value = output.trim() ? JSON.parse(output) : {}; settled = true; resolve(value); }
       catch { fail(); }
     });
-    child.stdin.end(JSON.stringify(input));
+    child.stdin.end(noInput ? undefined : JSON.stringify(input));
   });
 }
 
