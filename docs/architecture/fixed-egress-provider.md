@@ -1,5 +1,8 @@
 # Fixed-egress Accommodation Provider（#480 Phase B）
 
+専用Secret分離と実Invokeは[手動cutover validation](server-agent-cutover-validation.md)を使う。
+旧mixed Secretを変更せず保持し、Browser gateをfalseのまま新経路だけを検証する。
+
 ## main監査と範囲
 
 基点は最新main `09956ed`（#490まで）。ADR 0019/0020/0068と既存Adapter、

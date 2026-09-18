@@ -74,6 +74,9 @@ jobs:
       - name: Test cutover deployment guards offline
         run: node --test tools/deployment/*.test.mjs
 
+      - name: Test cutover validation helpers offline
+        run: node --import tsx --test tools/cutover-validation/*.test.mjs tools/cutover-validation/*.test.ts
+
       - name: Run TypeScript tests
         run: npm test
 
