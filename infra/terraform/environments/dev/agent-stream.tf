@@ -4,6 +4,15 @@ variable "agent_stream_enabled" {
   type        = bool
   default     = false
 }
+variable "server_agent_max_execution_ms" {
+  description = "Server Agent business deadline, independent of transport. 120s recommended, at most 180s reserves 60s before Lambda timeout."
+  type        = number
+  default     = 120000
+  validation {
+    condition     = var.server_agent_max_execution_ms >= 1000 && var.server_agent_max_execution_ms <= 180000 && floor(var.server_agent_max_execution_ms) == var.server_agent_max_execution_ms
+    error_message = "Server Agent deadline must be an integer from 1000 to 180000 milliseconds."
+  }
+}
 locals {
   agent_stream_instances = var.agent_stream_enabled ? { stream = true } : {}
   agent_stream_name      = "${var.project_name}-${var.environment}-agent-stream"
@@ -60,6 +69,7 @@ resource "aws_lambda_function" "agent_stream" {
       PLANNING_TIMETABLE_PREFIX          = "timetable"
       TRAFFIC_SNAPSHOT_BUCKET            = aws_s3_bucket.website.id
       VIEWER_ORIGIN                      = "https://${var.viewer_domain_name}"
+      SERVER_AGENT_MAX_EXECUTION_MS      = tostring(var.server_agent_max_execution_ms)
       AGENT_STREAM_ENABLED               = "true"
       AGENT_STREAM_PATH                  = local.agent_stream_path
       COGNITO_USER_POOL_ID               = aws_cognito_user_pool.users.id

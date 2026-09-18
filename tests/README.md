@@ -39,3 +39,14 @@ npm run lambda:check
 npm run test:journey-scenarios
 npm run eval:agent:smoke
 ```
+
+CutoverのCD入力・破壊的plan拒否・plan-only条件はAWSなしで確認する。
+
+```bash
+node --test tools/deployment/*.test.mjs
+npm run test:agent-cutover:browser
+```
+
+Browser E2Eは`PLAYWRIGHT_MODULE`と必要に応じて`PLAYWRIGHT_EXECUTABLE_PATH`で
+repo外のPlaywright/Chromiumを指定する。401/403、空body/不完全JSON、final欠落、stream error、
+abort/世代変更を検査し、test HTTP serverの想定外例外もgate失敗として扱う。

@@ -1,6 +1,6 @@
 /** Local Chromium + real stream/turn/context/runtime/presentation. No AWS or paid model. */
 import { expect, it, vi } from "vitest";
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { build } from "esbuild";
 import { createProductionAgentStream } from "../../backend/agent-api/src/agent-stream-composition.js";
 import { createProductionConversationAgent } from "../../backend/agent-api/src/composition/production-conversation-agent.js";
@@ -68,14 +68,19 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
         else if(kind==="conversation")refs.conversationId=crypto.randomUUID();else if(kind==="trip")refs.tripId=crypto.randomUUID();else session.start("next");session.contextChanged(); },
       setToken:token=>{accessToken=token;}, send:()=>{window.action=session.start("京都の宿を調べたい");return window.action.send();}};
   `, loader: "ts" }, bundle: true, format: "esm", write: false });
-  const server = createServer(async (req, res) => {
+  const harnessErrors: unknown[] = [];
+  const serve = async (req: IncomingMessage, res: ServerResponse) => {
     if (req.url === "/") { res.setHeader("content-type", "text/html"); res.end('<!doctype html><script type="module" src="/browser.js"></script>'); return; }
     if (req.url === "/browser.js") { res.setHeader("content-type", "text/javascript"); res.end(bundle.outputFiles[0].text); return; }
     let body = ""; for await (const chunk of req) body += chunk;
-    bodies.push(JSON.parse(body));
     const controller = new AbortController(); res.on("close", () => { if (!res.writableFinished) controller.abort(); });
     await handle({ method: req.method, path: req.url, headers: req.headers as Record<string, string>, body }, {
-      signal: controller.signal, start: (status, headers) => { res.writeHead(status, headers); res.flushHeaders(); },
+      signal: controller.signal, start: (status, headers) => {
+        // Only inspect a body after the real handler has authenticated and validated it.
+        // Browser favicon requests and malformed/empty POSTs must reach its 404/400 contract.
+        if (status === 200) bodies.push(JSON.parse(body));
+        res.writeHead(status, headers); res.flushHeaders();
+      },
       write: async frame => {
         if (frame.includes('"type":"final"')) {
           expect([...state.records.values()].some(row => row.sk.S?.startsWith("TURN#") && row.payload.S?.includes("completed"))).toBe(true);
@@ -84,6 +89,15 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
         res.write(frame);
       }, end: async () => { res.end(); },
     });
+  };
+  const server = createServer((req, res) => {
+    // Node does not await async request listeners. Report unexpected failures to the test,
+    // while giving the client a bounded response (or a failed stream after headers).
+    void serve(req, res).catch(error => {
+      harnessErrors.push(error);
+      if (res.headersSent) res.destroy();
+      else { res.writeHead(500, { "content-type": "application/json" }); res.end('{"error":"request_failed"}'); }
+    });
   });
   await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
   const address = server.address(); if (!address || typeof address === "string") throw new Error("no address");
@@ -91,7 +105,22 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
   const url = `http://127.0.0.1:${address.port}`;
   const load = async () => { await page.goto(url); await page.waitForFunction(() => Boolean((window as any).test)); };
   try {
-    await load(); await page.evaluate(() => (window as any).test.ask());
+    await load();
+    const beforeInvalid = state.commands.length;
+    for (const [path, method, body, status] of [
+      ["/favicon.ico", "GET", undefined, 404],
+      ["/api/agent-stream", "POST", "", 400],
+      ["/api/agent-stream", "POST", '{"userRequest":', 400],
+    ] as const) {
+      const rejected = await page.evaluate(async ({ path, method, body, jwt }) => {
+        const response = await fetch(path, { method, body, headers: { "content-type": "application/json", Authorization: `Bearer ${jwt}` } });
+        return { status: response.status, body: await response.json() };
+      }, { path, method, body, jwt: token() });
+      expect(rejected).toEqual({ status, body: { error: "request_failed" } });
+    }
+    expect(state.commands).toHaveLength(beforeInvalid);
+    expect(modelCalls).not.toHaveBeenCalled();
+    await page.evaluate(() => (window as any).test.ask());
     await page.waitForFunction(() => document.querySelector("#messages")?.textContent?.includes("宿泊候補「宿」"));
     expect(modelCalls).toHaveBeenCalledTimes(2); expect(invoke).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(modelCalls.mock.calls)).toContain("server trip");
@@ -122,4 +151,5 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
     await load(); toolFailure = true;
     expect(await page.evaluate(() => (window as any).test.send().catch((e: Error) => e.message))).toBe("agent_failed");
   } finally { release?.(); await browser.close(); await new Promise<void>(resolve => server.close(() => resolve())); }
+  expect(harnessErrors).toEqual([]);
 }, 60_000);

@@ -71,6 +71,9 @@ jobs:
       - name: Check architecture boundaries
         run: npm run architecture:check
 
+      - name: Test cutover deployment guards offline
+        run: node --test tools/deployment/*.test.mjs
+
       - name: Run TypeScript tests
         run: npm test
 

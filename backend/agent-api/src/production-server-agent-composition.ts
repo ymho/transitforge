@@ -29,11 +29,13 @@ import { AwsBedrockConverseClient, AwsS3Client, AwsSecretsManagerClient } from "
 import { createProductionConversationAgent } from "./composition/production-conversation-agent.js";
 import { productionServerTools } from "./composition/production-server-tools.js";
 import { createFixedEgressAccommodationOperation } from "./composition/fixed-egress-accommodation.js";
+import { serverAgentDeadline } from "./composition/server-agent-deadline.js";
 import type { AgentOperation } from "./ports/agent-operation.js";
 
 /** Constructed only after authentication, once per request. No Travel credentials or raw trace sink. */
 export function createProductionServerAgent(executionId: string, environment: Readonly<Record<string, string | undefined>> = process.env) {
  const required = (key: string) => { const value = environment[key]; if (!value) throw new Error("Missing server configuration"); return value; };
+ const maxExecutionMs = serverAgentDeadline(environment);
  const s3 = new AwsS3Client();
  const journey = new S3JourneyDataRepository(s3, { indexBucket: required("AI_TIMETABLE_BUCKET"),
    indexPrefix: environment.PLANNING_TIMETABLE_PREFIX ?? "timetable", snapshotBucket: required("TRAFFIC_SNAPSHOT_BUCKET"),
@@ -54,6 +56,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
    return result.body;
  };
  return createProductionConversationAgent({
+   limits: { maxExecutionMs },
    stateTable: required("SERVER_STATE_TABLE_NAME"), tripTable: required("TRIP_TABLE_NAME"),
    newExecutionId: () => executionId, weather,
    model: new BedrockConversationModel(new AwsBedrockConverseClient(), {

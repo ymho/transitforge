@@ -142,3 +142,81 @@ fixed-egress Invoke fake → 保存 → stream → 既存Chat presentationを通
 Profileなし/Tripあり、completed retry、conflict、401/403、logout/account/conversation/trip/new turn、
 final欠落、Tool/stream errorを確認する。これはAWS/CDN経路・実Bedrock品質・画面全体のE2Eを代替しない。
 Live Eval、有料Bedrock、実AWS E2E、apply/deployは今回未実施とする。
+
+## Preflight blockerの修正と次のgate（#480）
+
+2026-09-19の`aws-cutover-preflight-480.md`を基点に、実AWSへ進む前のコード/CD blockerを修正した。
+AWS構成、Secret値、allowlist、GitHub Environmentの値、trafficはこの修正では変更しない。
+
+Browser cutover E2Eの失敗はtest HTTP serverがfavicon等の空bodyまで本番handlerより先に
+`JSON.parse`したためだった。本番handlerのroute/auth/input検証へそのまま渡し、HTTP200の
+検証済みrequestだけを検査用に記録する。未知routeは404、認証済みの空/不完全JSONは400の
+`request_failed`になる。Nodeのrequest callbackのPromiseは明示的に監視し、想定外の例外は
+安全な500または接続切断にして、収集した例外が0件であることをテスト終了時にassertする。
+例外を捨ててexit 0にせず、401/403、final欠落、stream error、abort/世代変更の検査を維持する。
+Browser consumerの空EOF/不正SSE/error responseも既存の公開errorへ変換されることを確認する。
+
+### Server Agent business deadline
+
+Streaming production compositionは`SERVER_AGENT_MAX_EXECUTION_MS`を必須とし、整数
+1,000〜180,000msだけを受け付ける。未設定・不正値は構成エラーとして失敗させ、共有Runtimeの
+15秒へ暗黙fallbackしない。Terraform `server_agent_max_execution_ms`の既定・推奨は120,000ms。
+この変数はstream Lambdaだけへ渡し、共有Runtime/旧Browser/default-off経路の既定値は変えない。
+
+120秒は複数model/Tool呼出しの余裕を取りつつ、Lambda240秒まで120秒を残す初期値である。
+上限180秒でも60秒を残し、Runtimeの前後にあるJWT/Context/turn保存・終了処理に余裕を持たせる。
+これは実測済み性能SLOではなく、実AWS E2Eで調整するboundedな初期契約である。Runtime計測は
+context復元後のmodel/tool loopを対象とし、認証・State通信を含む全requestの時間保証ではない。
+Lambda240秒、Gateway250秒、CloudFront completion260秒、Browser deadline270秒はtransportの
+別契約であり変更しない。35/90/180秒のtransport耐久fixtureはこのbusiness deadlineとは分ける。
+180秒のfixture成功を、実Agentが180秒まで正常完了する保証として扱わない。
+
+deadline超過は既存Runtimeの`limit_reached`→Conversation turnの失敗→streamの`agent_failed`
+＋doneのまま。completed/finalを保存・送信せず、モデルの自動再実行やBrowser fallbackを追加しない。
+下位Provider/Lambdaの遠隔処理停止を保証しないため、Tool回数上限と個別timeoutも維持する。
+
+### CDのgate入力と削除防止
+
+GitHub `dev` Environmentに次の3変数を**全て明示**する。設定可能な値は小文字`true`/`false`だけ。
+未設定をfalseへ補完せず、AWS認証より前に停止する。初期値は全て明示的な`false`で準備する。
+TerraformとBrowserコード自体のdefault-offは維持する。
+
+| Environment Variable | CDへの入力 |
+| --- | --- |
+| `AGENT_STREAM_ENABLED` | `TF_VAR_agent_stream_enabled` |
+| `FIXED_EGRESS_PROVIDER_ENABLED` | `TF_VAR_enable_fixed_egress_provider` |
+| `SERVER_AGENT_ENABLED` | `VITE_SERVER_AGENT_ENABLED`（同じjobのFrontend build） |
+
+許可する組合せは`stream/provider/browser`の順に`false/false/false`、`false/true/false`
+（Provider先行準備）、`true/true/false`（infra/E2E準備）、`true/true/true`だけ。
+Browser ON/stream OFF、stream ON/Provider OFFを拒否する。Browser gateはbuild時固定である。
+
+plan後の`tools/deployment/cutover-gates.mjs`は実planのgate値が検証済み入力と一致するか確認し、
+既存stream/Provider resourceがあるのに対応gateがfalseなら停止する。さらにcutover専用resourceの
+**deleteを含む全action（replaceを含む）をgate値によらず拒否**する。明示falseへの誤変更も防ぎ、
+部分作成済みのIAM/Secret等も検出する。通常CDに削除を許可するoverrideは置かない。
+resource移設・廃止や意図的なreplaceは別のレビュー対象とする。BrowserだけのOFFはinfraを保持できる。
+
+変更前CDはgateを渡さないため、初回ON前に本workflowがmainの正本であることを確認する。
+旧revisionのworkflow再実行には新guardが存在しないため使わない。旧route閉鎖後のBrowser OFFは
+認証迂回を再開しない構成レビューを別途要する。guardは旧route再公開の承認を代替しない。
+
+### 本番入力のplan-only
+
+`CD / Deploy`のmainに対するworkflow_dispatchは`mode=plan`が既定で、既存Environment/Secretsを
+使いbuildとplan/guardだけを実行する。Terraform apply、S3同期、invalidationは`mode=deploy`でのみ
+実行する。CI成功による従来の自動CDはdeploy modeだが、同じ必須gateと削除guardを必ず通る。
+plan-onlyも同じconcurrency groupで直列化し、進行中deployを新runで取消さない。
+
+plan-onlyはbackendのlockfileとplan lockを両方無効にし、AWSへlockオブジェクトも書かない。
+GitHub外からの同時変更までは排除できない。plan結果を後日そのままapplyせず、deploy時には
+lock付きで新規planを取り、再度guardを通して、その保存planだけをapplyする。
+
+Terraform wrapper出力を無効にし、plan本体/diagnostics/JSONはログへ出さない。JSONはguardへ
+pipeし、GitHub step summaryへresource address/actionだけを表示する。生plan/ログをartifactへ
+uploadせず、終了時（失敗時を含む）に削除する。plan失敗は値を含まない固定メッセージで通知する。
+このsummaryは値の完全diffではない。必要な詳細レビューは秘密値を表示しない保護されたローカル
+plan環境で行う。今回workflow自体は実行しておらず、本番入力のplanとAWS E2Eは次工程に残る。
+
+初回merge前に運用担当が3変数を全て`false`で準備する。未準備ならCDは停止し、AWSは更新されない。
+実際のONはSecret実値/allowlist/実AWS試験の準備後に別途判断する。この修正は実traffic切替の承認ではない。

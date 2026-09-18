@@ -62,3 +62,17 @@ it("enforces idle timeout and measures silence on abort without retry", async ()
     expect(fetcher).toHaveBeenCalledOnce();
   } finally { vi.useRealTimers(); }
 });
+
+it.each([
+  [stream(""), "incomplete_stream"],
+  [stream('event: agent\ndata: {\n\n'), "stream_error"],
+  [new Response("", { status: 401 }), "http_401"],
+  [new Response("<html>forbidden</html>", { status: 403 }), "http_403"],
+  [new Response("", { status: 500 }), "http_500"],
+] as const)("normalizes empty/invalid/error responses without a final (%s)", async (response, code) => {
+  const options = setup(response);
+  await expect(consumeAgentStream(options)).rejects.toThrow(code);
+  expect(options.onEvent).not.toHaveBeenCalled();
+  expect(options.measurement.error).toBe(code);
+  expect(options.fetcher).toHaveBeenCalledOnce();
+});
