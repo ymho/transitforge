@@ -21,19 +21,19 @@ describe("external travel tools", () => {
   });
   it("本文未取得の前提不足は本文を取得してから同じ候補で復旧できる", async () => {
     const state: ExternalTravelToolState = {};
-    const input = { candidates: [{ name: "賀茂鶴酒造", sourceUrl: "https://tourism.example/" }] };
+    const input = { candidates: [{ name: "賀茂鶴酒造", sourceUrl: "https://tourism.example/kamotsuru" }] };
     const searchPlaceMedia = vi.fn(async () => ({ result: {
       status: "available", freshness: "fresh", evidence: [],
-      data: { places: [{ providerPlaceId: "mapbox.kamotsuru", name: "賀茂鶴酒造", latitude: 34, longitude: 132, sourceUrl: "https://www.mapbox.com/", openingHoursStatus: "unknown" }] },
+      data: { places: [{ providerPlaceId: "mapbox.kamotsuru", name: "賀茂鶴酒造", officialWebsiteUrl: "https://tourism.example/kamotsuru", latitude: 34, longitude: 132, sourceUrl: "https://www.mapbox.com/", openingHoursStatus: "unknown" }] },
     } }));
     await expect(executeExternalTravelTool("resolve_place_candidates", input, { searchPlaceMedia }, state))
       .rejects.toBeInstanceOf(AgentToolPreconditionError);
     expect(searchPlaceMedia).not.toHaveBeenCalled();
 
-    await executeExternalTravelTool("read_web_pages", { urls: ["https://tourism.example/"] }, {
+    await executeExternalTravelTool("read_web_pages", { urls: ["https://tourism.example/kamotsuru"] }, {
       readWebPages: async () => ({ webPages: {
         status: "available", freshness: "fresh", evidence: [],
-        data: { pages: [{ url: "https://tourism.example/", title: "酒蔵見学", text: "賀茂鶴酒造の見学案内", contentType: "html", truncated: false, untrustedExternalContent: true }] },
+        data: { pages: [{ url: "https://tourism.example/kamotsuru", title: "酒蔵見学", text: "賀茂鶴酒造の見学案内", contentType: "html", truncated: false, untrustedExternalContent: true }] },
       } }),
     }, state);
     await executeExternalTravelTool("resolve_place_candidates", input, { searchPlaceMedia }, state);
@@ -44,8 +44,8 @@ describe("external travel tools", () => {
   it("目的地発見と具体地点の地図検索を能力契約で分離する", () => {
     expect(externalTravelToolDescription("search_web")).toContain("目的地未定の気分や体験希望");
     expect(externalTravelToolDescription("search_web")).toContain("地域 温泉地 自然エリア 具体施設");
-    expect(externalTravelToolDescription("search_place_media")).toContain("気分からの行き先発見ではなく");
-    expect(externalTravelToolDescription("search_place_media")).toContain("紹介済みの場所の旅程作成や日付・泊数の確認はできません");
+    expect(externalTravelToolDescription("search_place_media")).toContain("discovery");
+    expect(externalTravelToolDescription("search_place_media")).toContain("日程作成用ではありません");
   });
 
   it("天気検索結果を構造化状態とEvidenceへ保持する", async () => {
@@ -160,18 +160,18 @@ describe("external travel tools", () => {
     const state: ExternalTravelToolState = {
       webPages: {
         status: "available", freshness: "fresh",
-        data: { pages: [{ url: "https://tourism.example/", title: "西条酒蔵巡り", text: "賀茂鶴酒造を見学できます", contentType: "html", truncated: false, untrustedExternalContent: true }] },
-        evidence: [{ id: "page", kind: "event", provider: "web-page", sourceUrl: "https://tourism.example/", retrievedAt: "2026-08-30T00:00:00Z", confidence: "observed" }],
+        data: { pages: [{ url: "https://tourism.example/kamotsuru", title: "西条酒蔵巡り", text: "賀茂鶴酒造を見学できます", contentType: "html", truncated: false, untrustedExternalContent: true }] },
+        evidence: [{ id: "page", kind: "event", provider: "web-page", sourceUrl: "https://tourism.example/kamotsuru", retrievedAt: "2026-08-30T00:00:00Z", confidence: "observed" }],
       },
     };
     const searchPlaceMedia = vi.fn(async () => ({ result: {
       status: "available", freshness: "fresh",
-      data: { places: [{ providerPlaceId: "mapbox.kamotsuru", name: "賀茂鶴酒造", latitude: 34, longitude: 132, sourceUrl: "https://www.mapbox.com/", openingHoursStatus: "unknown" }] },
+      data: { places: [{ providerPlaceId: "mapbox.kamotsuru", name: "賀茂鶴酒造", officialWebsiteUrl: "https://tourism.example/kamotsuru", latitude: 34, longitude: 132, sourceUrl: "https://www.mapbox.com/", openingHoursStatus: "unknown" }] },
       evidence: [{ id: "mapbox", kind: "place", provider: "mapbox", sourceUrl: "https://www.mapbox.com/", retrievedAt: "2026-08-30T00:00:00Z", confidence: "observed" }],
     } }));
     const output = await executeExternalTravelTool("resolve_place_candidates", { candidates: [{
       name: "賀茂鶴酒造",
-      sourceUrl: "https://tourism.example/",
+      sourceUrl: "https://tourism.example/kamotsuru",
       overview: "酒蔵通りを歩きながら地域の酒造文化を知ることができます。",
       highlights: ["見学可能な醸造施設"],
       atmosphere: "白壁の酒蔵が続く落ち着いた通りです。",
@@ -197,10 +197,11 @@ describe("external travel tools", () => {
       data: { places: [{ providerPlaceId: "mapbox.other", name: "別の施設", latitude: 34, longitude: 132, sourceUrl: "https://www.mapbox.com/", openingHoursStatus: "unknown" }] },
     } }));
 
-    await expect(executeExternalTravelTool("resolve_place_candidates", {
+    const output = await executeExternalTravelTool("resolve_place_candidates", {
       candidates: [{ name: "静かな温泉", sourceUrl: "https://tourism.example/" }],
-    }, { searchPlaceMedia }, state)).rejects.toThrow("地点として確認できませんでした");
-    expect(state.places).toBeUndefined();
+    }, { searchPlaceMedia }, state);
+    expect(output).toMatchObject({ targetObservations: [{ status: "unresolved", reason: "missing-source-binding" }] });
+    expect(state.places?.data?.places).toEqual([]);
   });
 
   it("自治体名や交通の一般概念をスポット候補にしない", () => {

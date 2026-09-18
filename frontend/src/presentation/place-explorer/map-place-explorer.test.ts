@@ -142,7 +142,7 @@ describe("map place card models", () => {
       detail: { overview: "プロフィールに合う紹介です。" },
     })])[0]!;
     const merged = mergeMapPlaceDetailCandidate(candidate, place({
-      providerPlaceId: "refetched-id",
+      providerPlaceId: "place-1",
       images: [{
         url: "https://example.com/gallery.jpg",
         attribution: "Wikimedia Commons",

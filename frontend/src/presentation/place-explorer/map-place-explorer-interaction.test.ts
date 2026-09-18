@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { configureMapPlaceExplorer } from "./map-place-explorer";
-import { mapPlaceCandidates, mapAccommodationCandidates } from "../../domain/map-travel-candidate";
+import { mapPlaceCandidates, mapAccommodationCandidates, mergeMapPlaceDetailCandidate } from "../../domain/map-travel-candidate";
 import type { MapTravelCandidate } from "../../domain/map-travel-candidate";
 
 beforeEach(() => vi.spyOn(window, "matchMedia").mockReturnValue({ matches: true } as MediaQueryList));
@@ -32,13 +32,15 @@ function setup(loadDetail = vi.fn(async (candidate: MapTravelCandidate) => candi
 
 describe("immediate shared place details", () => {
   it("refreshes list and detail from one snapshot, removing old images and separating sources", async () => {
-    const old = place("A");
-    old.imageUrl = "https://images.example/banner.jpg";
-    old.summary = "古い要約";
+    const old = mapPlaceCandidates([{ providerPlaceId: "A", name: "A", latitude: 35, longitude: 135,
+      summary: "古い要約", sourceUrl: "https://example.com/place", openingHoursStatus: "unknown",
+      targetBinding: { status: "resolved", reason: "stable-id" },
+      images: [{ url: "https://images.example/banner.jpg", attribution: "Example", hotlinkAllowed: true }] }])[0]!;
     const fresh = mapPlaceCandidates([{ providerPlaceId: "A", name: "A", latitude: 35, longitude: 135,
       summary: "新しい要約", sourceUrl: "https://example.com/place", openingHoursStatus: "unknown",
+      targetBinding: { status: "resolved", reason: "stable-id" },
       sources: [{ provider: "official", label: "地域案内", url: "https://example.com/guide?secret=private", role: "description" }], images: [] }])[0]!;
-    const ui = setup(vi.fn(async () => fresh));
+    const ui = setup(vi.fn(async () => mergeMapPlaceDetailCandidate(old, fresh.value)));
     ui.controller.show([old]); ui.controller.select("A"); await flush();
     expect(ui.panel.textContent).toContain("新しい要約");
     expect(ui.detailContent.textContent).toContain("新しい要約");

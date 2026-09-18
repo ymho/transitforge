@@ -205,7 +205,7 @@ export async function searchPlaceMedia(
 }
 
 export async function researchPlaceDetail(
-  request: { query: string; latitude?: number; longitude?: number },
+  request: { query: string; latitude?: number; longitude?: number; targetRef?: import("@raiquora/trip/place-snapshot").PlaceRef },
   fetcher: typeof fetch = fetch,
 ): Promise<PlaceMediaSearchResponse> {
   return postAgentBody(

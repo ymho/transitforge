@@ -75,6 +75,10 @@ export function assessTravelCandidate(trip: Trip, candidate: TravelCandidate, fa
     }
   }
   const evaluated = assessCandidateConstraints(trip.request, proof, itemId);
+  if (facts.placeTargetBinding && facts.placeTargetBinding.status !== "resolved") {
+    evaluated.relevance = placeTargetRelevance(facts.placeTargetBinding.status,
+      facts.placeTargetBinding.evidenceIds.filter((id) => reader.sources.has(id)));
+  }
   const expectedDates = dates.data ? [dates.data] : effectiveTripConstraints(trip.request, itemId).flatMap((c) => {
     if (c.scope.type === "item" && itemId === undefined || c.assumptionId && trip.request.assumptions.find((a) => a.id === c.assumptionId)?.status !== "confirmed") return [];
     return c.requirement.type === "dates" ? [{ startDate: c.requirement.start.earliest,
@@ -99,4 +103,12 @@ export function assessTravelCandidate(trip: Trip, candidate: TravelCandidate, fa
   result.caveats = result.caveats.filter((c, i, all) => all.findIndex((other) => other.category === c.category && other.code === c.code) === i);
   validateTravelCandidateAssessment(result);
   return result;
+}
+
+/** Existing Assessment relevance projection for discovery before a persisted Trip exists.
+ * A stable candidate entity alone does not prove requested-target or regional relevance. */
+export function placeTargetRelevance(status: "resolved" | "unresolved" | "mismatch", evidenceIds: string[]): TravelCandidateAssessment["relevance"] {
+  return { status: !evidenceIds.length || status === "unresolved" ? "unknown" : status === "resolved" ? "fit" : "questionable",
+    reasonCodes: [status === "resolved" && evidenceIds.length ? "verified-match" : status === "mismatch" ? "identity-mismatch" : "identity-unresolved"],
+    evidenceIds: [...new Set(evidenceIds)].slice(0, 8) };
 }
