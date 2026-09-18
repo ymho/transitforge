@@ -1244,7 +1244,7 @@ function viewerToolDescription(name: ViewerAgentToolName): string {
     propose_trip_update: "現在の旅程に対する観光 移動 滞在 条件の変更案を構造化します。利用者が変更を依頼し内容が明確なら追加確認せず使います",
     remember_travel_preference: "高確信の継続的な旅行の好みを端末内へ記憶します",
     update_conversation_session: "現在の会話Sessionの要約と話題を更新します",
-    ask_follow_up: "利用者にしか確定できない必須条件を1件だけ構造化して質問します。候補提示や既知条件の聞き直しには使わず、planning-intentで目的地を尋ねず短い選択肢を返します",
+    ask_follow_up: "利用者にしか確定できない必須条件を1件だけ構造化して質問します。候補提示や既知条件の聞き直し、調べるという宣言、調査許可の再確認には使いません。既存候補ID/駅/日程はContextから利用できます。planning-intentで目的地を尋ねず短い選択肢を返します",
     inspect_previous_journey: "currentJourneyにある直前の検証済み経路について、対象列車または途中駅を確認します",
     revise_previous_journey: "currentJourneyに対する明示済みの利用・回避条件で、確認を挟まず変更候補を再検索します。区間の代替候補の提示と、選択済み候補の確定も扱います",
     search_trains: "現在表示中の列車を決定論的に検索します",
