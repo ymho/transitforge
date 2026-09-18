@@ -38,7 +38,7 @@ JourneySearchResponseから明示的に構築したfactsに由来する。
 
 外部情報にprovider/status/鮮度しかない場合、取得したという事実以上を描画しない。
 freshな取得資料では、source URLが一致するページ/地点説明から最大1,200文字の抜粋だけをEvidenceへ付ける。
-source-explanationは一時的な表示選択で、新しい永続Answer正本ではない。モデルは最大6資料から
+source-explanationは一時的な表示選択で、新しい永続Answer正本ではない。前後に表示ラベルやcode fenceがあっても、単一のJSON payloadだけを検証して描画し、周囲の自由文は破棄する。未知Evidenceや改変した抜粋を許可するものではない。モデルは最大6資料から
 各400文字以内の連続抜粋を選び、Applicationが引用元付きのfact Claimへ変換する。
 自由な事実書換え・違うページのURL流用・古い資料の現在値化は許可しない。
 推薦は実際のProfileの値と引用に結び付いたinference Claimとして事実から分ける。

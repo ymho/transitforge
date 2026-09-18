@@ -10,6 +10,7 @@ import { ToolEvidenceRegistry } from "../frontend/src/usecases/agent/tool-eviden
 import { AgentToolExecutor } from "../frontend/src/usecases/agent/agent-tool-executor";
 import type { Evidence } from "../frontend/src/usecases/agent/evidence-model";
 import { extractAgentDecisionSummary } from "../frontend/src/usecases/agent/agent-decision-summary";
+import { sourceExplanation } from "../frontend/src/usecases/agent/grounded-answer";
 
 // Synthetic, attributed sources; actual Converse/Runtime/Claim validation. No provider recordings.
 const output = resolve(process.argv[2] ?? "/tmp/raiquora-live-place-grounding");
@@ -40,8 +41,16 @@ for (const scenario of scenarios) {
       formats.push(text.includes('"source-explanation"') ? (text.includes("```") ? "fenced-source-selection" : "source-selection") : "other");
       const clean = text.replace(/<(thinking|analysis)>[\s\S]*?<\/\1>/giu, "").replace(/<decision_summary>[\s\S]*?<\/decision_summary>/gu, "").trim();
       const decision = extractAgentDecisionSummary([text]);
+      let embeddedSourceValid = false;
+      let embeddedInference = false;
+      try {
+        const structured = sourceExplanation(clean.slice(clean.indexOf("{"), clean.lastIndexOf("}") + 1), evidence, { favoriteInterests: ["歴史"] });
+        embeddedSourceValid = structured !== undefined;
+        embeddedInference = structured?.claims.some((claim) => claim.kind === "inference") === true;
+      } catch { /* Record contract booleans only, never raw model output. */ }
       contractDiagnostics.push({ instructionPresent: JSON.stringify(messages).includes("資料説明の回答contract"),
         summaryStatus: decision.status,
+        embeddedSourceValid, embeddedInference,
         hasSections: clean.includes('"sections"'), hasKind: clean.includes('"kind"'), hasFence: clean.includes("```"),
         startsWithJson: clean.startsWith("{"), bodyLength: clean.length, modelId: result.metadata?.modelId });
       return { message: result.message, stopReason: result.stopReason, metadata: result.metadata };
