@@ -87,8 +87,8 @@ stateful compositionではConversationModelへraw model-call Traceの記録要�
 ## 書込み・後続
 
 読み取り専用のLoaderであり、user/assistant messageの自動append、Profile更新、Trip mutationを行わない。
-現在のConversation storageにはturn-level idempotency keyがないため、retryで二重保存し得る
-write-throughは#480のcutover時に設計する。同じrunAgentTurn入力を再実行しても保存件数は増えない。
+Phase Cの[Conversation turn保存](conversation-turn-persistence.md)が別のtransport非依存入口で
+turn-level idempotencyとwrite-throughを提供する。既存runAgentTurn入力の再実行は保存件数を増やさない。
 会話summaryの自動更新と構造化assistant応答の保存もこの段階では追加しない。
 
 #462のHTTP/Function URL/SSE/streaming/progress event、#451 Phase 3のAPI Auth middleware、
@@ -114,3 +114,6 @@ backend workspace testは必要なshared Agent core testも実行する。
 意思決定policy/loopを変更しないためAgent Smoke/Full/Live Evalは省略する。
 Frontend全量/root全量/live AWS/production E2Eは今回ローカル実行せず、CIと#480/#461へ委ねる。
 Terraform変更はないためfmt/validateも実行しない。
+
+Phase Cの内部組成だけは、保存済みuserSequenceの直前を履歴の上限に指定する。
+現在のuserRequestを履歴と重複させず、retry時の後続messageも含めない。既存の12件上限とrevision検証は維持する。

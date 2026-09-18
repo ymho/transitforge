@@ -9,6 +9,8 @@ import { createServerAgent } from "../server-agent-composition.js";
 
 /** Internal stateful composition. Transport/auth rollout and env bindings remain with #451/#462/#480. */
 export function createStatefulServerAgent(options: Omit<Parameters<typeof createServerAgent>[0], "loadContext"> & {
+  /** Trusted composition option for persisted turns; excludes the current input from history. */
+  historyBeforeSequence?: number;
   stateTable: string;
   tripTable: string;
   stateClient?: StateDynamoClient;
@@ -22,6 +24,6 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
       conversations: new ConversationApplication(new DynamoDbConversationRepository(options.stateTable, options.stateClient)),
       profiles: new ProfileApplication(new DynamoDbProfileRepository(options.stateTable, options.stateClient)),
       trips: new DynamoDbTripRepository(options.tripTable, options.tripClient),
-    }),
+    }, { historyBeforeSequence: options.historyBeforeSequence }),
   });
 }

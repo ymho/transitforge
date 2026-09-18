@@ -1,4 +1,4 @@
-import { PutItemCommand, TransactWriteItemsCommand } from "@aws-sdk/client-dynamodb";
+import { PutItemCommand, TransactWriteItemsCommand, type Put } from "@aws-sdk/client-dynamodb";
 import type { TrustedPrincipal } from "../contracts/trusted-principal.js";
 import { StateError, exactObject, metadata, messageInputs, pageOptions, revision, stateId,
   type Conversation, type ConversationMetadata, type ConversationMessage, type MessageInput, type PageOptions, type StateClock } from "../contracts/server-state.js";
@@ -15,8 +15,8 @@ function timestamp(value: unknown): asserts value is string {
   if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) throw new Error();
 }
 export class DynamoDbConversationRepository implements ConversationRepository {
-  private readonly store: DynamoStateStore;
-  constructor(table: string, client?: StateDynamoClient, private readonly clock: StateClock = { now: () => new Date() }) {
+  protected readonly store: DynamoStateStore;
+  constructor(table: string, client?: StateDynamoClient, protected readonly clock: StateClock = { now: () => new Date() }) {
     this.store = new DynamoStateStore(table, client);
   }
   private decode(principal: TrustedPrincipal, id: string, envelope: StateEnvelope): Conversation | undefined {
@@ -31,7 +31,7 @@ export class DynamoDbConversationRepository implements ConversationRepository {
       return { ...metadata(fields), conversationId: id, ownerSubject, createdAt, updatedAt, revision: envelope.revision, messageCount };
     } catch { throw new StateError("unavailable"); }
   }
-  private now(previous?: string) {
+  protected now(previous?: string) {
     const now = this.clock.now().toISOString();
     if (previous && now < previous) throw new StateError("unavailable");
     return now;
@@ -96,10 +96,10 @@ export class DynamoDbConversationRepository implements ConversationRepository {
     if (current.revision !== expected) throw new StateError("conflict");
     return current;
   }
-  private async write(principal: TrustedPrincipal, current: Conversation, next: Conversation, messages: ConversationMessage[] = []) {
+  protected async write(principal: TrustedPrincipal, current: Conversation, next: Conversation, messages: ConversationMessage[] = [], additionalPuts: Put[] = []) {
     const put = this.store.put(principal, conversationKey(current.conversationId), { revision: next.revision, deleted: false, payload: next }, { revision: current.revision, deleted: false });
     try {
-      await this.store.send(new TransactWriteItemsCommand({ TransactItems: [{ Put: put }, ...messages.map((message) => ({ Put: {
+      await this.store.send(new TransactWriteItemsCommand({ TransactItems: [{ Put: put }, ...additionalPuts.map((Put) => ({ Put })), ...messages.map((message) => ({ Put: {
         TableName: this.store.table, Item: { ...this.store.key(principal, `${messagePrefix(current.conversationId)}${sequenceKey(message.sequence)}`),
           storageVersion: { N: "1" }, payload: { S: JSON.stringify(message) } }, ConditionExpression: "attribute_not_exists(pk)",
       } }))] }));
@@ -135,6 +135,9 @@ export class DynamoDbConversationRepository implements ConversationRepository {
     }
     const page = await this.store.query(principal, messagePrefix(id), 50);
     await this.store.purge(principal, page.items.map((item) => item.sk.S!));
-    return { complete: page.next === undefined };
+    if (page.next !== undefined) return { complete: false };
+    const turns = await this.store.query(principal, `TURN#${id}#`, 50);
+    await this.store.purge(principal, turns.items.map((item) => item.sk.S!));
+    return { complete: turns.next === undefined };
   }
 }
