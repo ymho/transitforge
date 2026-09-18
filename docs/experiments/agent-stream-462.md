@@ -1,6 +1,6 @@
 # Server Agent transport検証（#462）
 
-確認日: 2026-09-18。基準main: `eb8b475`（#485）。AWSリソース作成・deploy・実Bedrock呼出しなし。
+確認日: 2026-09-18。実装・長時間測定の基準main: `eb8b475`（#485）。PR前に`0c5169a`（#486認証UI・#487 Stateを含む）を取り込み、build/関連testを再確認した。AWSリソース作成・deploy・実Bedrock呼出しなし。
 判断は[ADR 0070](../decisions/0070-select-regional-rest-agent-streaming.md)。
 
 ## コードから確認した現状
