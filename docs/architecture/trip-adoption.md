@@ -1,5 +1,8 @@
 # Tripの採用意思と表示分類（#450）
 
+表示順は予定の各timeZoneにおける暦日順。同日ではday精度、次に判明したinstant順、最後にTrip IDで安定化する。
+UTC文字列とlocal dateを混ぜず、dayの出発時刻は捏造しない。異なるtimezoneのdate-only予定間の厳密な出発順を保証するものではない。
+
 ## Before / Afterと所有境界
 
 既存のTripにoptional `adoption: { confirmedAt, needsReconfirmation?: true }`だけを追加する。

@@ -79,4 +79,13 @@ describe("explicit trip adoption independent of certification", () => {
     expect(classifyTrips([trip], { now: () => new Date(startAt) })[0]?.group).toBe("current");
     expect(trip.items[0]).toEqual(rail);
   });
+  it("orders mixed precision by local calendar without inventing a departure instant", () => {
+    const day = confirm(dayTrip("2026-09-20"));
+    const early = confirm({ ...dayTrip(), id: "22222222-2222-4222-8222-222222222222", items: [{
+      ...day.items[0]!, schedule: { type: "fixed", startAt: { at: "2026-09-19T15:30:00Z", timeZone: "Asia/Tokyo" } },
+    }] });
+    // 00:30 September 20 JST shares the day-only local date: day precision sorts first.
+    expect(classifyTrips([early, day], clock).map((r) => r.trip.id)).toEqual([day.id, early.id]);
+    expect(day.items[0]!.schedule.type).toBe("day");
+  });
 });
