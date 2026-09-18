@@ -32,10 +32,19 @@ for (const mode of ["outside-alternative", "unknown-research", "missing-then-ans
   const choices = [a, b].map((v) => ({ ...v, value: createTravelCandidate({ id: v.candidate.candidateId, journey: v.candidate.journey }),
     coverage: assessRailCoverage(v.candidate, v.inputs, v.selectedAt) }));
   let modelCalls = 0, researchCalls = 0, trace: AgentTrace | undefined;
+  const providerFailures: Record<string, unknown>[] = [];
   const converse = async (messages: Parameters<typeof model.converse>[0]["messages"], tools?: Parameters<typeof model.converse>[0]["tools"], modelClass?: Parameters<typeof model.converse>[0]["modelClass"]) => {
     modelCalls++;
-    const r = await model.converse({ messages, ...(tools ? { tools } : {}), ...(modelClass ? { modelClass } : {}) });
-    return { message: r.message, stopReason: r.stopReason, metadata: r.metadata };
+    try {
+      const r = await model.converse({ messages, ...(tools ? { tools } : {}), ...(modelClass ? { modelClass } : {}) });
+      return { message: r.message, stopReason: r.stopReason, metadata: r.metadata };
+    } catch (error) {
+      const e = error as { name?: string; $metadata?: { httpStatusCode?: number; requestId?: string } };
+      providerFailures.push({ modelCall: modelCalls, name: /^[a-zA-Z0-9]{1,80}$/.test(e.name ?? "") ? e.name : "unknown",
+        httpStatus: e.$metadata?.httpStatusCode, requestId: /^[a-zA-Z0-9-]{1,128}$/.test(e.$metadata?.requestId ?? "") ? e.$metadata?.requestId : undefined,
+        toolCount: tools?.length ?? 0, toolDescriptionCharacters: tools?.reduce((n, tool) => n + tool.description.length, 0) ?? 0 });
+      throw error;
+    }
   };
   let firstResponse: unknown;
   if (mode === "missing-then-answer") {
@@ -72,7 +81,7 @@ for (const mode of ["outside-alternative", "unknown-research", "missing-then-ans
   }, converse);
   const proposal = typeof response !== "string" && "tripUpdateProposal" in response;
   reports.push({ mode, coverage: choices.map((v) => ({ candidateId: v.value.id, status: v.coverage.status })),
-    modelCalls, researchCalls, tools: trace?.events.filter((e) => e.type === "tool_called").map((e) => e.toolName),
+    modelCalls, researchCalls, providerFailures, tools: trace?.events.filter((e) => e.type === "tool_called").map((e) => e.toolName),
     tripUnchanged: JSON.stringify(trip) === before, proposal, response, ...(firstResponse ? { firstResponse } : {}),
   });
 }

@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
 import { tripProgressDescriptors } from "../../../../frontend/src/usecases/agent/trip-progress-tools.js";
+import { candidateAssessmentDescriptor } from "../../../../frontend/src/usecases/agent/candidate-assessment-tool.js";
 
 import {
   allowedToolNames,
@@ -18,6 +19,16 @@ import {
 } from "./agent-request.js";
 
 describe("Agent API request contract", () => {
+  it("admits the published read-only candidate assessment on both request and native response boundaries", () => {
+    const { name, description, inputSchema } = candidateAssessmentDescriptor;
+    expect(validatedToolDefinitions({ toolDefinitions: [{ name, description, inputSchema }] })).toHaveLength(1);
+    expect(validatedMessages({ messages: [{ role: "assistant", content: [{ toolUse: {
+      toolUseId: "compare", name, input: { candidateId: "candidate-b" },
+    } }] }] })).toHaveLength(1);
+    expect(() => validatedMessages({ messages: [{ role: "assistant", content: [{ toolUse: {
+      toolUseId: "unknown", name: "assess_arbitrary_resource", input: {},
+    } }] }] })).toThrow();
+  });
   it("admits existing V2 Proposal definitions and native toolUse, not arbitrary new tools or execution authority", () => {
     const toolDefinitions = tripProgressDescriptors.map((d) => ({ name: d.name, description: d.description, inputSchema: d.inputSchema }));
     expect(validatedToolDefinitions({ toolDefinitions })).toHaveLength(toolDefinitions.length);
