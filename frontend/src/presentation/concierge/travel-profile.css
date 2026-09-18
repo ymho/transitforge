@@ -15,6 +15,7 @@
 .profile-editor label { display: grid; gap: .35rem; margin-block: .5rem; color: #516273; font-weight: 600; }
 .profile-editor input:not([type=checkbox]):not([type=hidden]), .profile-editor select, .profile-editor textarea { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; font: inherit; color: #102337; background: #fff; border: 1px solid #d7dfe5; border-radius: .625rem; padding: .6rem; }
 .profile-editor textarea { min-height: 76px; resize: vertical; line-height: 1.6; }
+.profile-editor textarea[rows="1"] { min-height: 44px; }
 .profile-editor button { min-height: 44px; padding: .6rem .8rem; font: inherit; font-weight: 700; color: #29445d; background: #fff; border: 1px solid #d7dfe5; border-radius: .75rem; cursor: pointer; }
 .profile-editor button[type=submit] { background: #0c2947; color: #fff; border-color: #0c2947; }
 .profile-editor :focus-visible { outline: 3px solid #3674b8; outline-offset: 3px; }
@@ -30,10 +31,14 @@
 .profile-editor-actions { position: sticky; bottom: -3rem; padding: .75rem 1.5rem; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .5rem; border-top: 1px solid #e1e6ea; background: #fffffff5; }
 .profile-editor-actions [data-delete] { margin-right: auto; order: -1; font-weight: 400; }
 .profile-editor [data-profile-message]:not(:empty) { padding: 1rem 1.5rem; background: #f2f6f9; }
+.profile-editor [data-profile-message]:empty { margin: 0; }
+.profile-storage-actions { padding: 0 1.5rem 1rem; }
+.profile-consent-explanation { font-size: .8rem; color: #687587; }
 .profile-editor [hidden], .profile-editor [type=hidden] { display: none; }
 .profile-editor summary { min-height: 44px; cursor: pointer; }
 @media (max-width: 44rem) {
   .travel-profile-page { inset: 4rem 0 0; padding: .875rem .875rem 6rem; }
+  .profile-editor { font-size: .8125rem; }
   .profile-editor { border-radius: 1.25rem; }
   .profile-editor header { padding: 1rem; }
   .profile-editor h1 { font-size: 1.375rem; }

@@ -18,7 +18,7 @@ function edit(): void { click("#travel-profile-toggle"); }
 it("does not require registration and lets an unregistered user start consulting", () => {
   const completed = vi.fn(); configureTravelProfile(document, localStorage, completed);
   expect(document.querySelector<HTMLElement>("#travel-profile-page")!.hidden).toBe(true);
-  click("#travel-profile-toggle"); expect(document.body.textContent).toContain("未設定のままでも相談できます");
+  click("#travel-profile-toggle"); expect(document.body.textContent).toContain("今回の旅の条件を優先");
   click("[data-close]"); expect(document.querySelector<HTMLElement>("#travel-profile-page")!.hidden).toBe(true); expect(loadUserProfile(localStorage)).toBeUndefined();
 });
 
