@@ -8,6 +8,18 @@ import type { TripMutationRequest } from "./server-trip-client";
 
 const trip = createTrip("11111111-1111-4111-8111-111111111111", "Trip", "2026-09-13T01:00:00Z");
 describe("server source read view", () => {
+  it("viewer writer stays disabled and role demotion is checked again before editor confirmation", async () => {
+    let role: "editor" | "viewer" = "viewer";
+    const writer = { mutate: vi.fn(), newMutationId: vi.fn(), validateConfirmation: vi.fn() };
+    const source = createServerTripWorkspaceSource(trip.id, { get: async () => trip, getRole: () => role }, writer);
+    await source.refresh(); const controller = createTripWorkspaceController("shared"); controller.attach("shared", source);
+    controller.propose("相談用", []); expect(controller.canConfirm()).toBe(false);
+    await expect(controller.confirm()).rejects.toThrow("閲覧専用"); expect(writer.mutate).not.toHaveBeenCalled();
+    role = "editor"; expect(controller.canConfirm()).toBe(true);
+    role = "viewer";
+    await expect(source.confirmProposal!({ tripId: trip.id, baseRevision: 0, summary: "案", patches: [] })).rejects.toThrow("閲覧専用");
+    expect(writer.validateConfirmation).not.toHaveBeenCalled();
+  });
   it("restores a durable pending gate on reload and does not reopen it from stale chat metadata", () => {
     const values = new Map<string, string>(), storage = { getItem: (k: string) => values.get(k) ?? null,
       setItem: (k: string, v: string) => { values.set(k, v); }, removeItem: (k: string) => { values.delete(k); } };

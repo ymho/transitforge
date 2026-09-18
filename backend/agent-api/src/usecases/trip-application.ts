@@ -9,11 +9,12 @@ import type { TripFeasibilityReader } from "../ports/trip-feasibility-reader.js"
 import { requireFeasibleTrip, requestsReady } from "@raiquora/trip/trip-ready";
 import type { Trip } from "@raiquora/trip/trip";
 import { assertItineraryEditingAllowed, previewInTripReplan, type InTripReplanTargets } from "@raiquora/trip/in-trip-replan";
+import type { TripAuthorizer } from "../ports/trip-authorization.js";
 
 export class TripApplication {
   constructor(private readonly trips: TripRepository, private readonly references: TripConversationReferences,
     private readonly clock: TripClock = { now: () => new Date() }, private readonly reservations?: ReservationReader,
-    private readonly feasibility?: TripFeasibilityReader) {}
+    private readonly feasibility?: TripFeasibilityReader, private readonly authorization?: TripAuthorizer) {}
   private async ready(principal: TripPrincipal, proposed: Trip): Promise<void> {
     try {
       const reservations = await this.reservations?.facts(principal, proposed.id);
@@ -26,6 +27,10 @@ export class TripApplication {
       replanTargets?: InTripReplanTargets; confirmedReplan?: string } = {}): Promise<Record<string, unknown>> {
     requireTripPrincipal(principal);
     const command = parseTripCommand(value);
+    const access = this.authorization && ["get", "mutate", "archive"].includes(command.operation) && "tripId" in command
+      ? await this.authorization.authorize(principal, command.tripId, command.operation === "get" ? "read" : command.operation === "mutate" ? "write" : "owner") : undefined;
+    // Only this trusted result may resolve an owner namespace. Conversation operations stay personal.
+    if (access) principal = access.owner;
     const version = tripApiVersion;
     switch (command.operation) {
       case "create": {
@@ -65,13 +70,13 @@ export class TripApplication {
           catch (error) { throw new TripResourceError(error instanceof TripRevisionConflict ? "conflict" : "invalid-input"); }
           if (requestsReady(command.proposal)) await this.ready(principal, proposed);
           return proposed; // Repository commits this exact preview under baseRevision CAS, not a rebase.
-        });
+        }, access?.guard);
         return { version, trip, revision: trip.revision, mutationId: command.mutationId };
       }
       case "get": {
         const trip = await this.trips.get(principal, command.tripId);
         if (!trip) throw new TripResourceError("not-found");
-        return { version, trip };
+        return { version, trip, ...(access ? { role: access.role } : {}) };
       }
       case "list": return { version, ...await this.trips.list(principal, command) };
       case "archive": await this.trips.archive(principal, command.tripId); return { version };

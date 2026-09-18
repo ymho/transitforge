@@ -3,6 +3,8 @@ import { TripWriteRejected, type ServerTripClient, type TripMutationRequest } fr
 
 /** No owner parameter/header. The future authenticated transport supplies the session, not identity claims in JSON. */
 export class HttpServerTripClient implements ServerTripClient {
+  private readonly roles = new Map<string, import("@raiquora/trip/trip-sharing").TripRole>();
+  getRole(tripId: string) { return this.roles.get(tripId); }
   constructor(private readonly endpoint = "/api/trips/v1", private readonly request: typeof fetch = fetch) {}
   private async execute(command: Record<string, unknown>): Promise<Record<string, unknown> | undefined> {
     const response = await this.request(this.endpoint, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
@@ -24,10 +26,15 @@ export class HttpServerTripClient implements ServerTripClient {
     return value as Record<string, unknown>;
   }
   async get(tripId: string): Promise<Trip | undefined> {
+    this.roles.delete(tripId);
     const result = await this.execute({ operation: "get", tripId });
     if (!result) return undefined;
     validateTrip(result.trip as Trip);
     if ((result.trip as Trip).id !== tripId) throw new Error("Wrong Trip response");
+    if (result.role !== undefined) {
+      if (result.role !== "owner" && result.role !== "editor" && result.role !== "viewer") throw new Error("Invalid Trip role");
+      this.roles.set(tripId, result.role);
+    }
     return structuredClone(result.trip as Trip);
   }
   async create(trip: Trip): Promise<Trip> {

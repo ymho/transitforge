@@ -21,6 +21,7 @@
 
 ## 索引
 
+- [0065 Trip共有を独立したParticipant/Grantで認可する](0065-authorize-trip-sharing-with-independent-resources.md)
 - [0064 旅行中の事実をbounded read contextへ投影する](0064-bound-in-trip-read-context.md)
 - [0001 Webベースの3D可視化にMapboxを使用する](0001-use-mapbox-for-web-3d-visualisation.md)
 - [0002 初期WebビューワーにViteとTypeScriptを使用する](0002-use-vite-and-typescript-for-the-initial-web-viewer.md)

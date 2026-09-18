@@ -17,6 +17,7 @@ export function createTripApiHandler(application?: Pick<TripApplication, "execut
       if (!application || !options.authenticate) throw new TripResourceError("unavailable");
       const principal = await options.authenticate(event);
       requireTripPrincipal(principal);
+      if (event.rawQueryString || Object.keys(event.queryStringParameters ?? {}).length) throw new TripResourceError("invalid-input");
       if (event.requestContext?.http?.method !== "POST" || typeof event.body !== "string") throw new TripResourceError("invalid-input");
       // Bound encoded length before allocating decoded bytes as well.
       if (event.body.length > tripApiLimits.bodyBytes * 2) throw new TripResourceError("payload-too-large");

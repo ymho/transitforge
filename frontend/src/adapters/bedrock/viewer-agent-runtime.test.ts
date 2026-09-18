@@ -41,6 +41,19 @@ const position: TrainPosition = {
 };
 
 describe("Bedrock viewer agent", () => {
+  it("passes only shared Trip role into model context, without adding tool calls", async () => {
+    const converse = vi.fn<BedrockAgentConverse>(async (messages) => {
+      const block = messages[0]?.content.find((value) => "text" in value);
+      const text = block && "text" in block ? block.text : "";
+      const context = JSON.parse(text.match(/<agent_context>([\s\S]*)<\/agent_context>/u)![1]!);
+      expect(context.featureContext.tripRole).toBe("viewer");
+      expect(text).not.toMatch(/ownerSubject|principalSubject|secretHash|trip-share=/);
+      return { message: { role: "assistant", content: [{ text: "旅程を一緒に確認できます。" }] }, stopReason: "end_turn" };
+    });
+    await runViewerAgentRuntime("旅程を確認したい", { trains: [], getPositions: () => [], getRouteTime: () => 600,
+      maximumRouteTime: 1800, queryDailyCongestionAnalysis: vi.fn(), queryTrainDelayAnalysis: vi.fn(), getTripRole: () => "viewer" }, converse);
+    expect(converse).toHaveBeenCalledOnce();
+  });
   it.each([false, true])("uses a verified provisional origin without replacing a known profile: %s", async (knownProfile) => {
     const searchDirectRoutes = vi.fn(async () => ({
       originStation: knownProfile ? "関西空港" : "大阪",

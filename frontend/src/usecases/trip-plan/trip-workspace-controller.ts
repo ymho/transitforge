@@ -22,6 +22,7 @@ export interface TripWorkspaceSource {
   subscribe?(listener: () => void): () => void;
   retry?(): Promise<void>;
   getCurrentTrip(): Trip | undefined;
+  getRole?(): import("@raiquora/trip/trip-sharing").TripRole | undefined;
   /** undefined means not fetched/unavailable, not an empty set of bookings. */
   getReservationFacts?(): readonly ReservationFact[] | undefined;
   /** Already acquired runtime observations; no fetch or model call implied by rendering. */
@@ -127,9 +128,10 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
       preview({ tripId: trip.id, baseRevision: trip.revision, summary, patches });
     },
     dismiss() { const s = state(); if (s) { delete s.proposal; delete s.base; } publish(); },
-    canConfirm() { return !!state()?.source.confirmProposal; },
+    canConfirm() { return state()?.source.getRole?.() !== "viewer" && !!state()?.source.confirmProposal; },
     async confirm(confirmation?: TripProposalConfirmation) {
       const s = state(), trip = current(), selectedSession = sessionId;
+      if (s?.source.getRole?.() === "viewer") throw new TripWriteRejected("この旅程は閲覧専用です");
       if (!s?.proposal || s.confirming || !s.source.confirmProposal || !trip) throw new Error("旅程が変わったか、確認処理中です。変更案を確認し直してください。");
       if (trip.revision !== s.proposal.baseRevision || JSON.stringify(trip) !== s.base) {
         delete s.proposal; delete s.base; publish();

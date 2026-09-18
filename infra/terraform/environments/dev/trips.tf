@@ -19,6 +19,21 @@ resource "aws_dynamodb_table" "trips" {
     type = "S"
   }
   attribute {
+    name = "shareTrip"
+    type = "S"
+  }
+  attribute {
+    name = "shareOrder"
+    type = "S"
+  }
+  # Authorization candidates only. Always strongly re-read the base Participant/Grant.
+  global_secondary_index {
+    name            = "trip-sharing"
+    hash_key        = "shareTrip"
+    range_key       = "shareOrder"
+    projection_type = "KEYS_ONLY"
+  }
+  attribute {
     name = "railSubject"
     type = "S"
   }
@@ -61,6 +76,11 @@ resource "aws_dynamodb_table" "trips" {
 
 # Internal access only; owner scoping is mandatory in TripRepository. No Scan or wildcard ARN.
 data "aws_iam_policy_document" "trip_storage" {
+  statement {
+    sid       = "TripSharingLookup"
+    actions   = ["dynamodb:Query"]
+    resources = ["${aws_dynamodb_table.trips.arn}/index/trip-sharing"]
+  }
   statement {
     sid       = "OwnerScopedWatchLookup"
     actions   = ["dynamodb:Query"]

@@ -141,6 +141,10 @@ import { createReferencedTripSource } from "../usecases/trip-plan/server-trip-wo
 import { HttpServerTripClient } from "../adapters/http/server-trip-client";
 import { HttpNotificationClient } from "../adapters/http/notification-client";
 import { configureNotificationCenter } from "../presentation/notifications/notification-center";
+import { configureTripSharing } from "../presentation/trip-plan/trip-sharing-panel";
+import "../presentation/trip-plan/trip-sharing-panel.css";
+import { HttpTripSharingClient } from "../adapters/http/trip-sharing-client";
+import { consumeTripShareLink, makeTripShareLink, parseTripShareLink } from "../adapters/browser/trip-share-link";
 import { configureTripWorkspace } from "../presentation/trip-plan/trip-workspace";
 import { tripPlanFromTravelPlan } from "@raiquora/trip/trip-plan";
 import { loadTripPlan } from "../usecases/trip-plan/trip-plan-repository";
@@ -171,6 +175,7 @@ import {
 } from "../domain/map-travel-candidate";
 
 export function startViewer(): void {
+const initialShareLink = consumeTripShareLink(window.location, window.history);
 
 const realtimeUpdateDependencies = {
   pollingEnvironment: browserPollingEnvironment,
@@ -629,6 +634,21 @@ configureNotificationCenter({ root: document.body,
     if (itemId && tripWorkspaceController.current()!.items.some((item) => item.id === itemId)) tripWorkspaceController.focus(itemId);
     returnToConversation(); if (mobileChatShell.matches && conversationHistoryDialog.open) conversationHistoryDialog.close();
     tripWorkspace.show("trip");
+  } });
+const sharingButton = document.createElement("button"); sharingButton.type = "button"; sharingButton.textContent = "旅程の共有";
+document.getElementById("sidebar-notifications")?.after(sharingButton);
+configureTripSharing({ root: document.body, button: sharingButton, client: new HttpTripSharingClient(), initialLink: initialShareLink,
+  current: () => { const trip = tripWorkspaceController.current(); return trip ? { tripId: trip.id, role: tripWorkspaceController.source()?.getRole?.() } : undefined; },
+  parseLink: parseTripShareLink, makeLink: (link) => makeTripShareLink(window.location.href, link),
+  async navigate(tripId) {
+    const trip = await serverTripClient.get(tripId); if (!trip) throw new Error("Trip unavailable");
+    // A new personal conversation, never the owner's Conversation or Trace.
+    const session = conversationSessionRepository.create("general", trip.title);
+    conversationSessionRepository.save({ ...session, tripId, tripSourceState: "server-v2" });
+    conversationSessionSwitcher.activate(session.id);
+    await tripWorkspaceController.source()?.retry?.();
+    if (tripWorkspaceController.current()?.id !== tripId) throw new Error("Trip unavailable");
+    returnToConversation(); tripWorkspace.show("trip");
   } });
 aiGuideController.open();
 applyContextWorkspaceState();
@@ -1262,6 +1282,7 @@ if (!token) {
               {
                 previousAssistantTurn: agentTurnObservations.get(executionSessionId),
                 getCurrentTrip: () => workspaceSource?.getCurrentTrip(),
+                getTripRole: () => workspaceSource?.getRole?.(),
                 inTripContextReader: new HttpInTripContextClient(),
                 getReservationFacts: () => workspaceSource?.getReservationFacts?.(),
                 getChecklistItems: () => workspaceSource?.checklist?.getItems(),

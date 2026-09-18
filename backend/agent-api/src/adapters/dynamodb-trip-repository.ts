@@ -5,6 +5,8 @@ import { canonicalJson, mutationDigest, readReceipt } from "./trip-mutation-rece
 import type { TripClock } from "@raiquora/trip/trip-temporal";
 import { requireTripPrincipal, type TripPrincipal, type TripRepository, type TripConversationReferences } from "../ports/trip-repository.js";
 import { tripChangedPut } from "./trip-changed-record.js";
+import { tripSharingFence } from "./dynamodb-trip-sharing.js";
+import type { TripMutationGuard } from "../ports/trip-authorization.js";
 
 type Command = GetItemCommand | PutItemCommand | UpdateItemCommand | DeleteItemCommand | QueryCommand | TransactWriteItemsCommand;
 type Result = { Item?: Record<string, AttributeValue>; Items?: Record<string, AttributeValue>[]; LastEvaluatedKey?: Record<string, AttributeValue> };
@@ -64,7 +66,7 @@ export class DynamoDbTripRepository implements TripRepository, TripConversationR
     if (nextAfterTripId) tripIdentifier(nextAfterTripId);
     return { trips, ...(nextAfterTripId ? { nextAfterTripId } : {}) };
   }
-  async applyMutation(principal: TripPrincipal, mutation: TripMutation, prepare: (current: Trip) => Trip | Promise<Trip>): Promise<Trip> {
+  async applyMutation(principal: TripPrincipal, mutation: TripMutation, prepare: (current: Trip) => Trip | Promise<Trip>, guard?: TripMutationGuard): Promise<Trip> {
     requireTripPrincipal(principal);
     validateMutation(mutation);
     mutation = structuredClone(mutation);
@@ -84,6 +86,7 @@ export class DynamoDbTripRepository implements TripRepository, TripConversationR
     if (preview.id !== old.id || preview.createdAt !== old.createdAt || preview.revision !== old.revision || preview.updatedAt !== old.updatedAt) throw new TripResourceError("invalid-input");
     const trip = boundedTrip({ ...preview, revision: mutation.baseRevision + 1, updatedAt: this.clock.now().toISOString() });
     if (Date.parse(trip.updatedAt) < Date.parse(old.updatedAt)) throw new TripResourceError("unavailable");
+    const authorizationFence = guard ? tripSharingFence(this.table, principal, trip.id, guard, this.clock.now().toISOString()) : [];
     try {
       await this.client.send(new TransactWriteItemsCommand({ TransactItems: [
         { Update: { TableName: this.table, Key: key, UpdateExpression: "SET trip = :trip, revision = :next",
@@ -94,6 +97,7 @@ export class DynamoDbTripRepository implements TripRepository, TripConversationR
         { Put: { TableName: this.table, Item: { ...receiptKey, storageVersion: { N: "1" }, digest: { S: mutationDigest(mutation) }, trip: { S: JSON.stringify(trip) } },
           ConditionExpression: "attribute_not_exists(pk)" } },
         tripChangedPut(this.table, key.pk.S, trip.id, trip.revision, "mutated", trip.updatedAt),
+        ...authorizationFence,
       ] }));
     } catch (error) {
       // Handles duplicate concurrent requests AND a committed transaction whose response was lost.

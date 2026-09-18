@@ -1,6 +1,7 @@
 import type { Trip } from "@raiquora/trip/trip";
 import type { TripMutation } from "../contracts/trip-api.js";
 import type { TripPrincipal } from "../contracts/trip-principal.js";
+import type { TripMutationGuard } from "./trip-authorization.js";
 export { requireTripPrincipal, type TripPrincipal } from "../contracts/trip-principal.js";
 
 export interface TripPage { trips: Trip[]; nextAfterTripId?: string }
@@ -10,7 +11,7 @@ export interface TripRepository {
   get(principal: TripPrincipal, tripId: string): Promise<Trip | undefined>;
   list(principal: TripPrincipal, options?: { limit?: number; afterTripId?: string }): Promise<TripPage>;
   /** Calls the pure Application validator before any write; atomically commits Trip and retry receipt. */
-  applyMutation(principal: TripPrincipal, mutation: TripMutation, prepare: (current: Trip) => Trip | Promise<Trip>): Promise<Trip>;
+  applyMutation(principal: TripPrincipal, mutation: TripMutation, prepare: (current: Trip) => Trip | Promise<Trip>, guard?: TripMutationGuard): Promise<Trip>;
   archive(principal: TripPrincipal, tripId: string): Promise<void>;
 }
 /** Owner-scoped link index only; no conversation text, Trip ownership or reverse cascade. */
