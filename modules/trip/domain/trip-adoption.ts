@@ -50,8 +50,13 @@ export function classifyTrips(trips: readonly Trip[], clock: TripClock): Classif
     return { trip, temporal, group };
   });
   const key = (trip: Trip): string => trip.items.map(({ schedule }) => {
-    if (schedule.type === "fixed") return new Date(schedule.startAt.at).toISOString();
-    if (schedule.type === "window") return new Date(schedule.earliestStart.at).toISOString();
+    if (schedule.type === "fixed" || schedule.type === "window") {
+      const instant = schedule.type === "fixed" ? schedule.startAt : schedule.earliestStart;
+      const parts = new Intl.DateTimeFormat("en", { timeZone: instant.timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(instant.at));
+      const part = (type: string) => parts.find((p) => p.type === type)!.value;
+      // Display calendar ordering only: never infer a departure time for a day schedule.
+      return `${part("year")}-${part("month")}-${part("day")}:${new Date(instant.at).toISOString()}`;
+    }
     // Day precision has no departure instant; stable calendar ordering, not invented midnight.
     return schedule.type === "day" ? schedule.date : "~";
   }).sort()[0] ?? "~";
