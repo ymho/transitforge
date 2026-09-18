@@ -9,6 +9,23 @@ import {
 } from "./place-detail-research.js";
 
 describe("place detail research", () => {
+  it("does not research a district-named store without exact target binding", async () => {
+    const webSearch = { search: vi.fn() };
+    const summarizer = { converse: vi.fn() };
+    const operation = createPlaceDetailResearchOperation({
+      places: { search: async () => availableExternalInformation({ places: [{
+        providerPlaceId: "shop", name: "倉敷美観地区コンビニ", latitude: 34.6, longitude: 133.7,
+        sourceUrl: "https://www.mapbox.com/", openingHoursStatus: "unknown",
+        sources: [{ provider: "mapbox", role: "identity", label: "Mapbox", url: "https://www.mapbox.com/" }],
+      }] }, []) }, webSearch, webPageReader: { search: vi.fn() }, summarizer,
+    });
+    for (const targetRef of [undefined, { provider: "mapbox", providerPlaceId: "district" }]) {
+      const response = await operation({ query: "倉敷美観地区", targetRef }, { requestId: "test" });
+      expect(response.body.result).toMatchObject({ data: { places: [] } });
+    }
+    expect(webSearch.search).not.toHaveBeenCalled();
+    expect(summarizer.converse).not.toHaveBeenCalled();
+  });
   it("searches bounded pages and returns a grounded editorial summary", async () => {
     const summarizer = { converse: vi.fn(async () => ({
       message: { role: "assistant" as const, content: [{ text: JSON.stringify({
@@ -23,6 +40,7 @@ describe("place detail research", () => {
     const operation = createPlaceDetailResearchOperation({
       places: { search: async () => availableExternalInformation({ places: [{
         providerPlaceId: "poi.1", name: "通天閣", latitude: 34.652, longitude: 135.506,
+        sources: [{ provider: "mapbox", role: "identity", label: "Mapbox", url: "https://www.mapbox.com/" }],
         sourceUrl: "https://www.mapbox.com/", openingHoursStatus: "unknown",
       }] }, []) },
       webSearch: { search: async () => availableExternalInformation({ query: "通天閣", results: [{
@@ -36,7 +54,8 @@ describe("place detail research", () => {
       summarizer,
     });
 
-    const response = await operation({ query: "通天閣", latitude: 34.652, longitude: 135.506 }, { requestId: "request-1" });
+    const response = await operation({ query: "通天閣", latitude: 34.652, longitude: 135.506,
+      targetRef: { provider: "mapbox", providerPlaceId: "poi.1" } }, { requestId: "request-1" });
     const result = response.body.result as { data?: { places: Array<{ officialWebsiteUrl?: string; detail?: { overview?: string } }> } };
 
     expect(result.data?.places[0]).toMatchObject({

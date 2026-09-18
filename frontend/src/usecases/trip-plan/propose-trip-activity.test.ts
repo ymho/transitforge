@@ -27,6 +27,8 @@ describe("trusted Activity adoption", () => {
     for (const key of ["raw", "price", "review", "availability", "image", "genre", "bookingUrl", "budget", "openingHours"]) expect(JSON.stringify(item)).not.toContain(`"${key}`);
   });
   it.each([
+    (r: ResolvedActivityCandidate) => { r.targetBinding = { status: "unresolved", reason: "missing-binding" }; },
+    (r: ResolvedActivityCandidate) => { r.targetBinding = { status: "mismatch", reason: "different-id" }; },
     (r: ResolvedActivityCandidate) => { r.providerItemId = "other"; },
     (r: ResolvedActivityCandidate) => { r.provider = "other"; },
     (r: ResolvedActivityCandidate) => { r.candidateId = "other"; },

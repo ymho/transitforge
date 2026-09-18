@@ -4,6 +4,19 @@ import type { PlaceMediaProvider, PlaceMediaSearchResult } from "@raiquora/trip/
 import { EnrichedPlaceMediaProvider } from "./enriched-place-media-provider.js";
 
 describe("EnrichedPlaceMediaProvider", () => {
+  it("does not attach another entity's image based on district/name/proximity", async () => {
+    const base = { providerPlaceId: "district", name: "倉敷美観地区", latitude: 34, longitude: 133,
+      sourceUrl: "https://www.mapbox.com/", openingHoursStatus: "unknown" as const,
+      sources: [{ provider: "mapbox", role: "identity" as const, label: "Mapbox", url: "https://www.mapbox.com/" }] };
+    for (const name of ["倉敷美観地区", "倉敷美観地区コンビニ"]) {
+      const provider = new EnrichedPlaceMediaProvider(
+        { search: async () => availableExternalInformation({ places: [base] }, []) },
+        { search: async () => availableExternalInformation({ places: [{ ...base, providerPlaceId: "shop", name,
+          image: { url: "https://example.com/shop.jpg", attribution: "shop", hotlinkAllowed: true } }] }, []) },
+      );
+      expect((await provider.search({ query: base.name })).data?.places[0]?.image).toBeUndefined();
+    }
+  });
   it("Mapboxの地点を維持してWeb検索の画像だけを補完する", async () => {
     let enrichmentQuery = "";
     const primary: PlaceMediaProvider = {
@@ -14,6 +27,7 @@ describe("EnrichedPlaceMediaProvider", () => {
         longitude: 132.7,
         categories: ["神社"],
         sourceUrl: "https://www.mapbox.com/",
+        officialWebsiteUrl: "https://travel.example/izumo",
         openingHoursStatus: "unknown",
       }] }, [evidence("mapbox")]),
     };
@@ -86,6 +100,7 @@ describe("EnrichedPlaceMediaProvider", () => {
         latitude: 35.402,
         longitude: 132.685,
         sourceUrl: "https://ja.wikipedia.org/wiki/x",
+        officialWebsiteUrl: "https://travel.example/izumo",
         openingHoursStatus: "unknown",
         image: { url: "https://upload.wikimedia.org/x.jpg", attribution: "Wikipedia", hotlinkAllowed: true },
       }] }, [evidence("wikipedia")]) },

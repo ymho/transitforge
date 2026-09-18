@@ -7,6 +7,7 @@ import type {
   PlaceMediaQuery,
   PlaceMediaSearchResult,
 } from "@raiquora/trip/place-media";
+import { samePlaceMediaEntity, samePlaceSourcePage } from "@raiquora/trip/place-media";
 
 export class EnrichedPlaceMediaProvider implements PlaceMediaProvider {
   constructor(
@@ -34,7 +35,10 @@ export class EnrichedPlaceMediaProvider implements PlaceMediaProvider {
     const usedEvidence: ExternalSourceEvidence[] = [];
     const places = rankedPlaces.map((place, index) => {
       const enrichment = enrichmentResults[index];
-      const match = enrichment?.data?.places.find((candidate) => samePlaceName(place.name, candidate.name));
+      const matches = enrichment?.data?.places.filter((candidate) => samePlaceMediaEntity(place, candidate) ||
+        samePlaceSourcePage(place.officialWebsiteUrl, candidate.officialWebsiteUrl) ||
+        samePlaceSourcePage(place.officialWebsiteUrl, candidate.sourceUrl));
+      const match = matches?.length === 1 ? matches[0] : undefined;
       if (!match || !enrichment) return place;
       usedEvidence.push(...enrichment.evidence);
       return enrichPlace(place, match);
@@ -92,15 +96,6 @@ function uniqueImages(images: NonNullable<PlaceMedia["images"]>): NonNullable<Pl
 
 function uniqueSources(sources: NonNullable<PlaceMedia["sources"]>): NonNullable<PlaceMedia["sources"]> {
   return [...new Map(sources.map((source) => [`${source.provider}:${source.url}`, source])).values()];
-}
-
-function samePlaceName(left: string, right: string): boolean {
-  const normalizedLeft = normalizeName(left);
-  const normalizedRight = normalizeName(right);
-  return normalizedLeft === normalizedRight || (
-    Math.min(normalizedLeft.length, normalizedRight.length) >= 4 &&
-    (normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft))
-  );
 }
 
 function rankPlaces(places: PlaceMedia[], query: string): PlaceMedia[] {

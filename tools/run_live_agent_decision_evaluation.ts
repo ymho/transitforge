@@ -43,6 +43,7 @@ import { progressCaseIds, runAskProgressCase } from "../frontend/src/adapters/be
 import { runTravelProgressScenario } from "../frontend/src/adapters/bedrock/travel-progress-scenarios.fixture";
 import { renderTravelProgressMarkdown } from "../frontend/src/usecases/agent/evaluation/travel-progress-evaluation";
 import { parseAgentEvaluationDataset } from "../frontend/src/usecases/agent/evaluation/evaluation-dataset";
+import { runGeographicRelevance } from "../frontend/src/adapters/bedrock/geographic-relevance.fixture";
 
 interface LiveDecisionCase {
   evaluation: AgentEvaluationCase;
@@ -72,12 +73,13 @@ const outputDirectory = resolve(
   argument("--output-dir") ?? `/tmp/raiquora-live-agent-eval/${strategy}`,
 );
 const selectedCase = argument("--case");
+const geographicSuite = selectedCase === "nearby-search-geographic-mismatch";
 const progressSuite = argument("--suite") === "ask-progress";
 const tripProgressSuite = argument("--suite") === "trip-progress";
 const cases = liveDecisionCases().filter(({ evaluation }) =>
   (profile === "full" || evaluation.tags.includes("smoke")) &&
   (selectedCase === undefined || evaluation.id === selectedCase));
-if (cases.length === 0 && !progressSuite && !tripProgressSuite) throw new Error("対象となるLive Eval caseがありません");
+if (cases.length === 0 && !progressSuite && !tripProgressSuite && !geographicSuite) throw new Error("対象となるLive Eval caseがありません");
 // Only scalar request/response diagnostics, never provider payloads or model reasoning.
 const provider = new AwsBedrockConverseClient();
 const providerAttempts: Record<string, unknown>[] = [];
@@ -139,6 +141,20 @@ const converse: BedrockAgentConverse = async (messages, tools, requestedClass) =
 };
 
 const observationsByAttempt: AgentEvaluationObservation[][] = [];
+if (geographicSuite) {
+  const results = [];
+  for (let attempt = 1; attempt <= repetitions; attempt++) {
+    results.push({ attempt, ...await runGeographicRelevance(converse) });
+  }
+  await mkdir(outputDirectory, { recursive: true });
+  await writeFile(`${outputDirectory}/geographic-outcome.json`, JSON.stringify({
+    grading: "final answer + displayed candidates; no required Tool sequence/query", results,
+    wrongRegionRecommendations: results.filter(r => r.forbiddenRecommendation).length,
+    recoverySuccess: results.filter(r => r.recovery).length, providerAttempts,
+  }, null, 2));
+  console.log(`Geographic result safety: ${results.filter(r => r.passed).length}/${results.length}; recovery: ${results.filter(r => r.recovery).length}/${results.length} (${outputDirectory})`);
+  process.exit(results.some(r => !r.passed) ? 1 : 0);
+}
 if (tripProgressSuite) {
   const dataset = parseAgentEvaluationDataset(JSON.parse(await readFile(new URL("../tests/fixtures/agent-eval-cases.json", import.meta.url), "utf8")));
   const scenarios = (dataset.travelProgressScenarios ?? []).filter((s) => selectedCase ? selectedCase === s.id : profile === "full" || s.tags.includes("smoke"));
@@ -435,25 +451,6 @@ function liveDecisionCases(): LiveDecisionCase[] {
       },
       availableTools: ["search_direct_routes", "search_web", "ask_follow_up"],
       toolInputChecks: [{ toolName: "search_direct_routes", callIndex: 0, field: "provisionalOriginStation", pattern: "神戸|三ノ宮|三宮|元町" }],
-    }),
-    liveCase({
-      id: "nearby-search-geographic-mismatch",
-      name: "近場検索に別地域が混ざったら地域を照合して再探索する",
-      userRequest: "向日町駅から近場で、のんびり海や自然を感じる旅がしたい",
-      tags: ["multi-tool", "feedback-regression", "geographic-relevance"],
-      expectedTools: ["search_web", "read_web_pages", "search_web"],
-      constraints: {}, requiredHardConstraintKeys: [],
-      context: { featureContext, travelProfile: { ...profile, home: { ...profile.home, area: "京都府向日市" } }, tripContext: { planningStage: "inspiration" } },
-      availableTools: ["search_web", "read_web_pages", "resolve_place_candidates", "search_place_media", "ask_follow_up"],
-      toolOutcomes: { search_web: { webSearch: { status: "available", freshness: "fresh", data: {
-        query: "近場の海と自然",
-        results: [{ title: "宮崎県日向市の海と自然", url: "https://example.com/miyazaki-hyuga", description: "宮崎県日向市にある海岸の散策スポットを紹介する。" }],
-      }, evidence: [] } }, read_web_pages: { webPages: { status: "available", freshness: "fresh", data: {
-        pages: [{ url: "https://example.com/miyazaki-hyuga", title: "宮崎県日向市の海と自然", text: "この記事が紹介する場所はいずれも九州の宮崎県日向市にあります。京都府向日市の紹介ではありません。", contentType: "html", truncated: false, untrustedExternalContent: true }],
-      }, evidence: [] } } },
-      // Search, optional source inspection, and re-search need a fourth call reserved for finalization.
-      maxModelCalls: 4, terminalAfterCalls: 2, terminalTools: ["search_web"],
-      toolInputChecks: [{ toolName: "search_web", callIndex: 1, field: "query", pattern: "京都|関西|向日市" }],
     }),
     liveCase({
       id: "facility-weather-verified-city",

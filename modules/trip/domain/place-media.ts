@@ -34,8 +34,8 @@ export interface PlaceEditorialDetail {
 }
 
 export interface PlaceMedia {
-  /** Runtime-only identity observation; not permission to persist provider data. */
-  identity?: { status: "resolved" | "unresolved" | "mismatch"; reason: "stable-id" | "different-id" | "missing-binding" };
+  /** Matching a requested target, NOT the entity's own stable identity. Absent for discovery. */
+  targetBinding?: { status: "resolved" | "unresolved" | "mismatch"; reason: "stable-id" | "different-id" | "missing-binding" | "source-binding" };
   providerPlaceId: string;
   name: string;
   categories?: string[];
@@ -79,13 +79,34 @@ export function mergePlaceMedia(places: readonly PlaceMedia[]): PlaceMedia[] {
 }
 
 /** Names and proximity are discovery hints, never proof of target identity. */
-export function resolvePlaceMediaIdentity(place: PlaceMedia, target?: PlaceRef): NonNullable<PlaceMedia["identity"]> {
+export function resolvePlaceTargetBinding(place: PlaceMedia, target?: PlaceRef): NonNullable<PlaceMedia["targetBinding"]> {
   const provider = place.sources?.find((s) => s.role === "identity")?.provider;
   if (!target || !provider || !place.providerPlaceId || target.provider !== provider || !target.providerPlaceId) {
     return { status: "unresolved", reason: "missing-binding" };
   }
   const same = samePlaceIdentity(target, { provider, providerPlaceId: place.providerPlaceId });
   return same ? { status: "resolved", reason: "stable-id" } : { status: "mismatch", reason: "different-id" };
+}
+
+export function placeMediaRef(place: PlaceMedia): PlaceRef | undefined {
+  const provider = place.sources?.find(s => s.role === "identity")?.provider;
+  return provider && place.providerPlaceId ? { provider, providerPlaceId: place.providerPlaceId } : undefined;
+}
+
+/** Source binding must be an exact facility page, not a host, article title or nearby point. */
+export function samePlaceSourcePage(left: unknown, right: unknown): boolean {
+  if (typeof left !== "string" || typeof right !== "string") return false;
+  try {
+    const a = new URL(left), b = new URL(right);
+    return a.protocol === "https:" && b.protocol === "https:" && !a.username && !a.password && !b.username && !b.password &&
+      !a.search && !b.search && !a.hash && !b.hash && a.pathname !== "/" && a.origin === b.origin && a.pathname === b.pathname;
+  } catch { return false; }
+}
+
+export function samePlaceMediaEntity(left: PlaceMedia, right: PlaceMedia): boolean {
+  const a = placeMediaRef(left), b = placeMediaRef(right);
+  // Legacy records without namespaces cannot prove cross-response identity.
+  return Boolean(a && b && samePlaceIdentity(a, b));
 }
 
 export function placeMediaQueryForTrip(input: { destination: string; interests?: string[]; availableFrom?: string; availableUntil?: string; limit?: number }): PlaceMediaQuery {

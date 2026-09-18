@@ -143,7 +143,7 @@ function setBasemapLandmarksVisible(map: mapboxgl.Map, visible: boolean): void {
 }
 
 function hasCoordinates(place: PlaceMedia): boolean {
-  return (!place.identity || place.identity.status === "resolved") && Number.isFinite(place.latitude) && Number.isFinite(place.longitude);
+  return (!place.targetBinding || place.targetBinding.status === "resolved") && Number.isFinite(place.latitude) && Number.isFinite(place.longitude);
 }
 
 function featureCollection(places: readonly PlaceMedia[]) {

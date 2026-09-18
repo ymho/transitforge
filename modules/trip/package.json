@@ -23,6 +23,7 @@
     "./reservation": "./domain/reservation.ts",
     "./travel-candidate-assessment": "./domain/travel-candidate-assessment.ts",
     "./assess-travel-candidate": "./domain/assess-travel-candidate.ts",
+    "./candidate-constraint-assessment": "./domain/candidate-constraint-assessment.ts",
     "./validate-candidate-assessment": "./domain/validate-candidate-assessment.ts",
     "./trip-places": "./domain/trip-places.ts",
     "./money": "./domain/money.ts",

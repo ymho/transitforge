@@ -838,7 +838,6 @@ const terminalToolNames = new Set<string>([
   "search_direct_routes",
   "search_accommodations",
   "search_place_media",
-  "resolve_place_candidates",
   "plan_day_trip",
   "search_trip_route_update",
   "inspect_previous_journey",
@@ -1844,12 +1843,8 @@ async function executeViewerToolAdapter(
 ): Promise<unknown> {
   if (isExternalTravelToolName(name)) {
     const output = await executeExternalTravelTool(name, input, dependencies, externalState);
-    const guidance = externalConversationGuidanceProjectors[name]?.(
-      externalState,
-      dependencies.getTripContext?.(),
-      dependencies.getTripPlan?.(),
-    );
-    if (guidance) conversationState.response = guidance;
+    // Resolving an entity is not a regional recommendation. Let the model inspect
+    // targetBinding / Assessment before choosing a recommendation or follow-up.
     return compactExternalTravelToolObservation(name, output);
   }
   if (name === "inspect_previous_journey" || name === "revise_previous_journey") {
@@ -2609,73 +2604,7 @@ function viewerTerminalResponseText(
   const routeText = typeof directRouteResponse === "string"
     ? directRouteResponse
     : directRouteResponse?.text;
-  return routeText ?? externalTerminalResponseProjectors[toolName]?.(externalState);
-}
-
-type ExternalConversationGuidanceProjector = (
-  state: ExternalTravelToolState,
-  tripContext: TripContext | undefined,
-  currentPlan: TripPlan | undefined,
-) => ConversationGuidance | undefined;
-
-const externalConversationGuidanceProjectors: Partial<
-  Record<ExternalTravelToolName, ExternalConversationGuidanceProjector>
-> = {
-  resolve_place_candidates: (state, tripContext, currentPlan) =>
-    currentPlan || tripContext?.planningStage === "planning"
-      ? undefined
-      : resolvedPlaceConversationGuidance(state, tripContext),
-};
-
-const externalTerminalResponseProjectors: Record<
-  string,
-  (state: ExternalTravelToolState) => string | undefined
-> = {
-  resolve_place_candidates: resolvedPlaceSummary,
-};
-
-function resolvedPlaceConversationGuidance(
-  state: ExternalTravelToolState,
-  tripContext: TripContext | undefined,
-): ConversationGuidance | undefined {
-  const place = preferredResolvedPlace(state);
-  if (!place) return undefined;
-  const detail = place.detail;
-  const recommendation = [
-    `まずは${place.name}がおすすめです。`,
-    detail?.overview ?? place.summary,
-    detail?.atmosphere,
-    detail?.highlights?.slice(0, 2).join("、"),
-  ].filter((value): value is string => Boolean(value)).join("\n\n");
-  return normalizedConversationGuidance({
-    recommendation,
-    reason: "Webの説明を具体的な地点と照合できた候補です。",
-    question: `${place.name}を軸に旅を考えますか？`,
-    expectedInput: "planning-intent",
-    quickReplies: [
-      { label: "はい", value: "旅程を考えたい" },
-      { label: "いいえ", value: "もう少し見たい" },
-    ],
-    tripContext: {
-      ...tripContext,
-      planningStage: "inspiration",
-      destinationWish: place.name,
-    },
-  });
-}
-
-function preferredResolvedPlace(state: ExternalTravelToolState): PlaceMedia | undefined {
-  const places = state.places?.status === "available" ? state.places.data?.places : undefined;
-  return places?.find((place) => place.image?.hotlinkAllowed === true) ?? places?.[0];
-}
-
-function resolvedPlaceSummary(state: ExternalTravelToolState): string | undefined {
-  const names = state.places?.status === "available"
-    ? state.places.data?.places.slice(0, 3).map((place) => place.name) ?? []
-    : [];
-  return names.length > 0
-    ? `${names.join("、")}を、確認できた具体的な候補として表示しました。`
-    : undefined;
+  return routeText;
 }
 
 function extendedStayAdvisory(plan: ViewerAgentTravelPlan): string {

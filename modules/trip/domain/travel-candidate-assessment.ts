@@ -62,7 +62,7 @@ export interface TravelCandidateAssessment {
 export interface CandidateAssessmentFacts {
   candidateId: string;
   /** Trusted runtime resolver observation, not a model-supplied matching assertion. */
-  placeIdentity?: { status: "resolved" | "unresolved" | "mismatch"; evidenceIds: string[] };
+  placeTargetBinding?: { status: "resolved" | "unresolved" | "mismatch"; evidenceIds: string[] };
   places?: ExternalTravelInformation<{ origin?: PlaceSnapshot; destinations: PlaceSnapshot[]; complete: boolean }>;
   dates?: ExternalTravelInformation<{ startDate: string; endDate?: string }>;
   rail?: { candidate: VerifiedRailCandidate; inputs: readonly RailTimetableInput[] };

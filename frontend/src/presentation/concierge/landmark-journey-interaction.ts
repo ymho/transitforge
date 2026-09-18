@@ -2,6 +2,7 @@ import type { Map } from "mapbox-gl";
 
 export interface MapLandmarkSelection {
   name: string;
+  providerPlaceId?: string;
   longitude?: number;
   latitude?: number;
 }
@@ -36,6 +37,7 @@ export function mapLandmarkSelection(feature: {
   const latitude = coordinates?.[1];
   return {
     name,
+    ...(typeof feature?.properties?.mapbox_id === "string" ? { providerPlaceId: feature.properties.mapbox_id } : {}),
     ...(typeof longitude === "number" && Number.isFinite(longitude) ? { longitude } : {}),
     ...(typeof latitude === "number" && Number.isFinite(latitude) ? { latitude } : {}),
   };
