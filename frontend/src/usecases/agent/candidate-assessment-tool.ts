@@ -14,12 +14,12 @@ export const candidateAssessmentDescriptor: AgentToolDescriptor = {
   inputSchema: { type: "object", properties: { candidateId: { type: "string", minLength: 1, maxLength: 160 },
     itemId: { type: "string", minLength: 1, maxLength: 160 } }, required: ["candidateId"], additionalProperties: false },
   decisionSupport: { capability: "取得済みEvidenceに基づく候補比較。主観的な魅力scoreではない",
-    suitableCases: ["候補の条件適合・不足根拠を比較する", "取得済み情報のpartialな評価を更新する"],
+    suitableCases: ["候補の条件適合・不足根拠を比較する", "取得済み情報のpartialな評価を更新する", "希望候補が範囲外/未確認で、Contextにある別候補の移動根拠を比較して具体的な代案を説明する"],
     unsuitableCases: ["新しい場所の探索", "天気や警報の取得", "旅程の採用・保存"],
     returnedEvidence: "候補ID別のderived_value、取得済みのExternalSourceEvidenceへの参照",
     freshness: "assessedAtは評価時刻。観測/取得/有効期限はsourceごとに別。古い値を現在値にしない",
     limitations: ["serviceCoverageは現行の収録カタログ・日付別時刻表・駅からのアクセスに基づく。supported以外を移動確認済みとしない。範囲外でも相談は継続でき、代案・追加調査はモデルが判断する",
-      "未結合/未取得の結果はunknown", "異通貨は暗黙換算しない", "全Trip成立性・予約は証明しない"],
+      "候補IDが既知なら、利用者へ検索許可や候補の駅名を聞き直さず取得済み事実を読める。候補の評価・説明は採用操作ではない", "未結合/未取得の結果はunknown", "異通貨は暗黙換算しない", "全Trip成立性・予約は証明しない"],
     responsibilityBoundary: "Bedrockは追加調査・比較推薦を判断する。Domainは取得済み事実の検証と三値評価のみ" },
 };
 
