@@ -14,10 +14,13 @@ describe("coverage Live input integrity", () => {
       candidateId: candidate.id, ...facts, rail: { candidate: rail.candidate, inputs: rail.inputs },
     }, rail.selectedAt);
     expect(evaluate(input.facts).hardConstraints.map((c) => c.status)).toEqual(["satisfied", "satisfied"]);
-    expect(evaluate(input.facts).serviceCoverage.status).toBe("supported");
+    expect(evaluate(input.facts).serviceCoverage?.status).toBe("supported");
     expect(evaluate({}).hardConstraints.every((c) => c.status === "unknown")).toBe(true);
     const unresolved = structuredClone(input.facts);
-    if (unresolved.places?.data?.origin) delete unresolved.places.data.origin.ref;
+    if (unresolved.places?.data?.origin) {
+      unresolved.places = { ...unresolved.places, data: { ...unresolved.places.data,
+        origin: { name: unresolved.places.data.origin.name, sources: unresolved.places.data.origin.sources } } };
+    }
     expect(evaluate(unresolved).hardConstraints.find((c) => c.constraintId === "origin")?.status).toBe("unknown");
   });
 });
