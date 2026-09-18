@@ -44,6 +44,7 @@ CutoverのCD入力・破壊的plan拒否・plan-only条件はAWSなしで確認�
 
 ```bash
 node --test tools/deployment/*.test.mjs
+node --import tsx --test tools/cutover-validation/*.test.mjs tools/cutover-validation/*.test.ts
 npm run test:agent-cutover:browser
 ```
 

@@ -1,0 +1,72 @@
+name: Server Agent / Cutover Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Verify contracts, migrate dedicated secrets, run real E2E, or all (no traffic cutover)
+        type: choice
+        options: [verify, migrate-secrets, e2e, all]
+        default: verify
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: transitforge-dev
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CUTOVER_MODE: ${{ inputs.mode }}
+      AWS_REGION: ap-northeast-1
+      AWS_MAX_ATTEMPTS: '1'
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      AGENT_STREAM_ENABLED: ${{ vars.AGENT_STREAM_ENABLED }}
+      FIXED_EGRESS_PROVIDER_ENABLED: ${{ vars.FIXED_EGRESS_PROVIDER_ENABLED }}
+      SERVER_AGENT_ENABLED: ${{ vars.SERVER_AGENT_ENABLED }}
+      PLAYWRIGHT_MODULE: /tmp/cutover-browser/node_modules/playwright/index.mjs
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Validate manual-only gates
+        run: node --input-type=module -e 'import { gates } from "./tools/cutover-validation/safety.mjs"; gates(process.env)'
+      - run: npm ci
+      - name: Install isolated browser (before AWS credentials)
+        if: inputs.mode == 'all' || inputs.mode == 'e2e'
+        run: |
+          npm install --prefix /tmp/cutover-browser --no-save playwright@1.63.0
+          /tmp/cutover-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Configure dev OIDC with validation-only session permissions
+        id: credentials
+        uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[
+              {"Effect":"Allow","Action":["sts:GetCallerIdentity","apigateway:GET","cloudfront:ListDistributions","lambda:GetFunctionConfiguration","lambda:GetPolicy","lambda:ListFunctionUrlConfigs","cognito-idp:DescribeUserPool","cognito-idp:DescribeUserPoolClient","cognito-idp:AdminGetUser","iam:ListRolePolicies","iam:GetRolePolicy","secretsmanager:DescribeSecret","secretsmanager:GetSecretValue","dynamodb:GetItem","logs:FilterLogEvents"],"Resource":"*"},
+              {"Effect":"Allow","Action":"secretsmanager:PutSecretValue","Resource":["arn:aws:secretsmanager:ap-northeast-1:*:secret:/transitforge/dev/fixed-egress-travel-provider-*","arn:aws:secretsmanager:ap-northeast-1:*:secret:transitforge-dev-agent-stream-providers-*"]},
+              {"Effect":"Allow","Action":["cognito-idp:AdminCreateUser","cognito-idp:AdminSetUserPassword","cognito-idp:AdminDeleteUser"],"Resource":"arn:aws:cognito-idp:ap-northeast-1:*:userpool/*"},
+              {"Effect":"Allow","Action":"lambda:InvokeFunction","Resource":"arn:aws:lambda:ap-northeast-1:*:function:transitforge-dev-*-fixed-egress-provider"}
+            ]}
+      - name: Run selected cutover validation
+        run: bash tools/cutover-validation/run.sh
+      - name: Retry exact temporary-user cleanup after failure or cancellation
+        if: always() && steps.credentials.outcome == 'success' && (inputs.mode == 'all' || inputs.mode == 'e2e')
+        env:
+          CUTOVER_MODE: cleanup
+        run: bash tools/cutover-validation/run.sh

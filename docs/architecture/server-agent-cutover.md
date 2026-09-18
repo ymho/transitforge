@@ -1,5 +1,10 @@
 # Server Agent production cutover-ready統合（#480）
 
+実AWS検証の手動workflowは[cutover validation運用](server-agent-cutover-validation.md)を参照する。
+Secret分離、PKCE、実Provider/Agent、保存・再送・owner拒否を検査し、Browser gateはfalseを必須とする。
+現行owner namespaceの継続拒否gateは既知のblockerであり、35/90/180秒fixtureはNOT RUNとなる。
+workflow追加自体はAWS検証完了・traffic cutoverを意味しない。
+
 最新mainの#478/#489/#490/#491/#492/#493を接続する。AWSへのapply/deploy、Cognitoユーザー作成、
 Provider allowlist変更、実traffic切替は行っていない。#480は実AWS検証・切替までOpenとする。
 [ADR 0068](../decisions/0068-place-agent-runtime-in-server-application.md)、
