@@ -1,7 +1,8 @@
-# 共通認証境界（#451第一段階）
+# 共通認証境界（#451）
 
 導入時のmain `110d39a` のコード・infra定義を棚卸しした。実AWS設定を確認した記録ではない。
-本段階はprincipal/verifier/Application境界のみ。公開handlerへの接続とwriter有効化は未実施。
+第一段階でprincipal/verifier/Application境界、第二段階でCognito TerraformとFrontend認証を導入する。
+公開handlerへの接続とwriter有効化は未実施。Frontendと設定出力は[ADR 0069](../decisions/0069-use-cognito-managed-login-for-spa.md)。
 判断とsubjectの永続エンコードは[ADR 0067](../decisions/0067-establish-trusted-principal-boundary.md)。
 
 ## #479からの利用
@@ -15,8 +16,9 @@
   principalはinputとは別引数。認証失敗時はRepository/Bedrock/Toolを呼ばない。
 
 ```ts
-const verifier = createCognitoAccessTokenVerifier({ userPoolId, clientId });
-const executeTrip = authenticatedApplication(verifier, ["raiquora/user"],
+// authConfig is the trusted Terraform cognito_api_auth_config output, never request input.
+const verifier = createCognitoAccessTokenVerifier(authConfig);
+const executeTrip = authenticatedApplication(verifier, authConfig.requiredScopes,
   (principal, command: unknown) => tripApplication.execute(principal, command));
 // trusted transport extracts ONE token; request body is never a principal.
 await executeTrip(accessToken, command);
@@ -29,15 +31,14 @@ Cognito UIやTrip公開writerの完成待ちは不要。テストはport fakeを
 ## route / operation inventory
 
 分類は**導入先の要求ポリシー**であり、現在の利用者認証の実装済み一覧ではない。
-初期のauthenticated userには共通custom scope `raiquora/user` を要求する。これは本段階の契約名であり
-Cognito resource serverは未作成。次PRのTerraformはresource identifier `raiquora` / scope `user` と
-同じ値を定義する。利用料金制限・owner認可・ユーザー確認は別途必須で、このscopeで代替しない。
+初期のauthenticated userには共通custom scope `raiquora/user` を要求する。第二段階のTerraform resource serverがresource identifier `raiquora` / scope `user` を
+正本として定義する。SPAと後続serverの設定はTerraform出力から生成する。利用料金制限・owner認可・ユーザー確認は別途必須で、このscopeで代替しない。
 細分化が必要になった場合は台帳とserver compositionを同時更新する。
 
 | 入口 / operation | 分類 | 現状 / 接続先 |
 | --- | --- | --- |
 | Home/説明、静的Viewer asset、公開対象の`/viewer-input/*` | public | 現行CloudFrontはBasic保護。公開解除は本PR対象外 |
-| ログイン/callback/logout入口 | public | Managed Login/PKCE transportは未実装。callback検証必須 |
+| ログイン/callback/logout入口 | public | Frontend Managed Login/PKCE/callback/logoutを導入済み。実AWSの動作確認は未実施 |
 | POST `/api/agent`: `bedrock_converse`（operation省略時も同じ） | authenticated user | 現行Agent handlerは利用者認証未接続。OAC/IAM/Basicは利用者principalではない |
 | 同route: `representative_timetable_search`, `journey_search`, `daily_congestion_analysis`, `daily_congestion_peak`, `train_delay_analysis` | authenticated user | 動的Agent Tool。静的時刻表のpublic分類とは分離 |
 | 同route: `travel_accommodation_search`, `weather_forecast_search`, `weather_grid_search`, `place_media_search`, `place_detail_research` | authenticated user | 外部Provider/modelへのアクセス前に共通境界を接続する |

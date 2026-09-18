@@ -1,0 +1,14 @@
+#auth-notice:not([hidden]) {
+  position: fixed;
+  z-index: 100;
+  right: 1rem;
+  top: 1rem;
+  max-width: min(24rem, calc(100vw - 2rem));
+  padding: 0.8rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.7rem;
+  background: #fff;
+  color: #111827;
+  font-size: 0.85rem;
+}
+#auth-login[hidden], #auth-logout[hidden], #auth-notice[hidden] { display: none; }

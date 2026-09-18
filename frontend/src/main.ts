@@ -1,6 +1,8 @@
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./presentation/styles/viewer.css";
+import { startAuthentication } from "./composition/auth-composition";
 
-import { startViewer } from "./composition/viewer-composition";
-
+// Complete and scrub the OAuth callback before Viewer modules can make requests.
+await startAuthentication();
+const { startViewer } = await import("./composition/viewer-composition");
 startViewer();

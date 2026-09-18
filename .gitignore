@@ -98,3 +98,6 @@ downloads/
 # Local tool state
 .codex/
 .claude/
+
+# Generated from Terraform public output for local authentication
+/frontend/public/auth-config.json
