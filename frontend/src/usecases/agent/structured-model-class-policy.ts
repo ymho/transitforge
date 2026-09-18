@@ -7,6 +7,8 @@ import type { AgentModelClassPolicy } from "./agent-runtime";
  */
 export const structuredModelClassPolicy: AgentModelClassPolicy = ({ request, phase }) =>
   phase === "result_driven_replan" ||
+    request.initialEvidence?.some((e) => e.category === "external" && typeof e.facts.sourceExcerpt === "string" &&
+      e.facts.status === "available" && e.facts.freshness === "fresh") ||
     request.context?.currentJourney !== undefined ||
     request.context?.currentTrip !== undefined ||
     requiresTravelDecision(request)

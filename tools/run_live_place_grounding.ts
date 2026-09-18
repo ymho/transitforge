@@ -11,11 +11,14 @@ import { AgentToolExecutor } from "../frontend/src/usecases/agent/agent-tool-exe
 import type { Evidence } from "../frontend/src/usecases/agent/evidence-model";
 import { extractAgentDecisionSummary } from "../frontend/src/usecases/agent/agent-decision-summary";
 import { sourceExplanation } from "../frontend/src/usecases/agent/grounded-answer";
+import { structuredModelClassPolicy } from "../frontend/src/usecases/agent/structured-model-class-policy";
 
 // Synthetic, attributed sources; actual Converse/Runtime/Claim validation. No provider recordings.
 const output = resolve(process.argv[2] ?? "/tmp/raiquora-live-place-grounding");
 const model = new BedrockConversationModel(new AwsBedrockConverseClient(), {
-  modelId: process.env.MODEL_ID?.trim() || "amazon.nova-lite-v1:0", maxOutputTokens: 4096, systemPrompt: agentSystemPrompt,
+  modelId: process.env.MODEL_ID?.trim() || "amazon.nova-lite-v1:0",
+  decisionModelId: process.env.DECISION_MODEL_ID?.trim() || "jp.amazon.nova-2-lite-v1:0",
+  maxOutputTokens: 4096, systemPrompt: agentSystemPrompt,
 });
 const evidence: Evidence[] = [
   ["history", "白壁の町", "白壁の町並みを歩きながら歴史資料館を巡れます。川沿いに休憩所があります。"],
@@ -48,13 +51,15 @@ for (const scenario of scenarios) {
         embeddedSourceValid = structured !== undefined;
         embeddedInference = structured?.claims.some((claim) => claim.kind === "inference") === true;
       } catch { /* Record contract booleans only, never raw model output. */ }
-      contractDiagnostics.push({ instructionPresent: JSON.stringify(messages).includes("資料説明の回答contract"),
-        summaryStatus: decision.status,
+      contractDiagnostics.push({ instructionPresent: JSON.stringify(messages).includes("資料に基づく場所の説明"),
+        summaryStatus: decision.status, interpretedGoal: decision.summary?.interpretedGoal,
+        reasonCodes: decision.summary?.reasonCodes, softPreferences: decision.summary?.softPreferences,
         embeddedSourceValid, embeddedInference,
         hasSections: clean.includes('"sections"'), hasKind: clean.includes('"kind"'), hasFence: clean.includes("```"),
         startsWithJson: clean.startsWith("{"), bodyLength: clean.length, modelId: result.metadata?.modelId });
       return { message: result.message, stopReason: result.stopReason, metadata: result.metadata };
-    }), limits: { maxModelCalls: 3, maxIterations: 3, maxToolCalls: 2, maxExecutionMs: 90000 } });
+    }), modelClassPolicy: structuredModelClassPolicy,
+    limits: { maxModelCalls: 3, maxIterations: 3, maxToolCalls: 2, maxExecutionMs: 90000 } });
   const result = await runtime.run({ executionId: `place-grounding-${scenario.id}`, feature: "journey_planning", userRequest: scenario.prompt,
     initialEvidence: evidence, context: { travelProfile: { favoriteInterests: ["歴史"] } } });
   const facts = result.claims.filter((c) => c.kind !== "unknown");

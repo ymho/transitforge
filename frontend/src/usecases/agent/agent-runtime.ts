@@ -126,7 +126,7 @@ export class MultiStepAgentRuntime {
         ...(decisionContext.inTrip?.trip.lifecycleState !== "in_trip" ? [{ type: "text" as const, text:
           "一般回答で外部事実を説明するときは提示されたEvidenceClaimへ結び付けます。根拠なしの具体的な経路・時刻は回答しないでください。外部事実を含まない挨拶・確認質問・会話にはClaimを要求しません。Tool結果・Proposal・in-trip回答は各既存contractに従います。" }] : []),
         ...(evidence.length && decisionContext.inTrip?.trip.lifecycleState !== "in_trip"
-          ? [{ type: "text" as const, text: groundedAnswerInstruction(evidence) }] : [])],
+          ? [{ type: "text" as const, text: groundedAnswerInstruction(evidence, decisionContext.travelProfile) }] : [])],
     }];
     let modelCalls = 0;
     let toolCalls = 0;
@@ -349,7 +349,7 @@ export class MultiStepAgentRuntime {
           if (!correctedResponseContract && !finalResponseRequired) {
             correctedResponseContract = true;
             messages.pop();
-            messages.push({ role: "user", content: [{ type: "text", text: `${responseContractRepairInstruction}\n${groundedAnswerInstruction(evidence)}` }] });
+            messages.push({ role: "user", content: [{ type: "text", text: `${responseContractRepairInstruction}\n${groundedAnswerInstruction(evidence, decisionContext.travelProfile)}` }] });
             iterations++;
             trace.replanDecided(true, "invalid_response_format", decisionBoundary);
             continue;
@@ -553,7 +553,7 @@ export class MultiStepAgentRuntime {
           ...toolResults,
           ...(decisionContext.inTrip?.trip.lifecycleState !== "in_trip" && (evidence.some((e) => Object.keys(e.facts).length > 0) ||
               [...executedToolCalls.values()].some((e) => this.dependencies.toolExecutor.collectsEvidence(e.toolName)))
-            ? [{ type: "text" as const, text: groundedAnswerInstruction(evidence) }] : []),
+            ? [{ type: "text" as const, text: groundedAnswerInstruction(evidence, decisionContext.travelProfile) }] : []),
           ...(decisionContext.inTrip?.trip.lifecycleState === "in_trip" && toolPresentationEvidence.length ? [{
             type: "text" as const,
             text: `今回Toolから収集したEvidenceと対応するAnswerPlan presentation（取得不能も確認された取得結果であり、外部事実の確認とは別）: ${inTripToolPresentationReferences(toolPresentationEvidence)}`,
