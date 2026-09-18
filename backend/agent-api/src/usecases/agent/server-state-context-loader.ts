@@ -21,7 +21,9 @@ export interface ServerStateContextReaders {
 }
 
 /** Read-only and per-turn. No cache, message append, transport or model dependencies. */
-export function createServerStateContextLoader(readers: ServerStateContextReaders) {
+export function createServerStateContextLoader(readers: ServerStateContextReaders, options: { historyBeforeSequence?: number } = {}) {
+  const before = options.historyBeforeSequence;
+  if (before !== undefined && (!Number.isSafeInteger(before) || before < 1)) throw new StateError("invalid-input");
   return async (input: ServerStateContextReferences): Promise<AgentRuntimeContextInput> => {
     requireStatePrincipal(input.principal);
     if (input.conversationId !== undefined) stateId(input.conversationId);
@@ -36,7 +38,7 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
     const trip = tripId ? await readers.trips.get(principal, tripId) : undefined;
     if (tripId && !trip) throw new StateError("not-found");
     const profile = await readers.profiles.get(principal);
-    const history = conversation ? await recentConversation(readers.conversations, principal, conversation) : undefined;
+    const history = conversation ? await recentConversation(readers.conversations, principal, conversation, before) : undefined;
     const snapshot = createAgentContextSnapshot(profile?.profile, trip);
     const focusedItem = itemId ? trip?.items.find((item) => item.id === itemId) : undefined;
     return {
@@ -48,19 +50,20 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
   };
 }
 
-async function recentConversation(readers: ServerStateContextReaders["conversations"], principal: TrustedPrincipal, conversation: Conversation) {
-  const start = Math.max(0, conversation.messageCount - serverStateContextLimits.historyMessages);
+async function recentConversation(readers: ServerStateContextReaders["conversations"], principal: TrustedPrincipal, conversation: Conversation, before?: number) {
+  const end = Math.min(conversation.messageCount, before === undefined ? conversation.messageCount : before - 1);
+  const start = Math.max(0, end - serverStateContextLimits.historyMessages);
   let last = start;
   const messages: NonNullable<AgentConversationContext["messages"]> = [];
   // Seek into the tail using the existing sequence cursor, never scan earlier history.
   // At most 12 rows/pages even if DynamoDB ends a page at its byte limit.
-  while (last < conversation.messageCount) {
+  while (last < end) {
     const page = await readers.history(principal, conversation.conversationId, {
-      after: String(last).padStart(12, "0"), limit: conversation.messageCount - last,
+      after: String(last).padStart(12, "0"), limit: end - last,
     });
     if (!page.items.length) throw new StateError("conflict");
     for (const message of page.items) {
-      if (message.sequence !== last + 1 || message.sequence > conversation.messageCount) throw new StateError("conflict");
+      if (message.sequence !== last + 1 || message.sequence > end) throw new StateError("conflict");
       messages.push({ role: message.role, text: message.text }); last = message.sequence;
     }
   }

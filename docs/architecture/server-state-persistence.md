@@ -59,7 +59,8 @@ Phase BのContext LoaderはmessageCountから末尾12件へseekし、取得後�
 - Profile putのexpectedRevision=nullは未登録時だけのcreate、数値は該当live revisionのreplaceを意味する。
   ApplicationがupdatedAtをserver時刻に置き換える。delete/recreate後もrevisionを増やし、古い更新の復活を防ぐ。
 - 応答喪失後のappend/put再送は成功の再現を保証しない。CASにより二重append/上書きを防ぎ、
-  unavailable/conflict時はget/historyで結果を確認してから次の編集を作る。receiptによるexactly-onceは導入しない。
+  unavailable/conflict時はget/historyで結果を確認してから次の編集を作る。これらの低水準操作自体にはreceiptによるexactly-onceを導入しない。
+  Phase Cの専用turn入口は[Conversation turn保存](conversation-turn-persistence.md)を参照する。
 
 AWS制約の根拠は[DynamoDB constraints](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Constraints.html)と
 [TransactWriteItems](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html)を参照する。
@@ -73,6 +74,7 @@ AWS制約の根拠は[DynamoDB constraints](https://docs.aws.amazon.com/amazondy
 追記・更新から隠す。title/summary/topics/tripIdもこの時点で削除する。各呼出しで最大50 messageを
 transactionで物理削除し、`{ complete: false }`なら同じprincipal/id/expectedRevisionで続行する。
 途中障害も同じ引数で再試行できる。最後のpageを消して初めてcomplete=trueになる。
+Phase Cではmessageに続けて最大50件のturn receiptも削除し、両者の削除完了をcomplete=trueの条件とする。
 削除中のappendはmetadata CASで拒否され、削除済みIDの再createも拒否する。
 
 呼出し元はcomplete=trueまで継続する責務を持つ。Phase Aに公開delete endpointや背景workerはなく、
@@ -130,7 +132,7 @@ Server内部のstateful組成だけで動作し、production Browserの正本は
 
 #480以降へ残すもの:
 
-- turn idempotency / retry設計とmessage write-through、必要な構造化応答の保存、summary更新方針
+- Phase Cで追加したturn保存入口のproduction接続、必要な構造化応答の保存、summary更新方針
 - Browser切替、logout/account切替/別tab/遅着responseの破棄、transportと保存・削除継続の組成
 - LocalStorage正本停止。実利用者データ救済要否を明示確認し、必要なら明示import/read-backを設計する
 
