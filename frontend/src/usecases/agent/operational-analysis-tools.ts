@@ -18,7 +18,7 @@ import {
   validAgentToolInput,
   type AgentTool,
   type AgentToolInputResult,
-} from "./tool-contract";
+} from "@raiquora/agent/tool-contract";
 
 export const maximumOperationalAnalysisPayloadBytes = 48 * 1_024;
 

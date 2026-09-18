@@ -1,10 +1,10 @@
 import { assessTripCandidate } from "../trip-plan/assess-trip-candidate";
 import type { TripProgressDependencies } from "./trip-progress-tools";
-import { candidateAssessmentContext } from "./candidate-assessment-context";
-import type { AgentToolRegistry } from "./tool-registry";
-import { validateAgentToolInput } from "./agent-tool-input-validator";
-import { failedAgentToolResult, successfulAgentToolResult, type AgentToolDescriptor } from "./tool-contract";
-import type { Evidence } from "./evidence-model";
+import { candidateAssessmentContext } from "@raiquora/agent/candidate-assessment-context";
+import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
+import { validateAgentToolInput } from "@raiquora/agent/agent-tool-input-validator";
+import { failedAgentToolResult, successfulAgentToolResult, type AgentToolDescriptor } from "@raiquora/agent/tool-contract";
+import type { Evidence } from "@raiquora/agent/evidence-model";
 import { validateTravelCandidateAssessment } from "@raiquora/trip/validate-candidate-assessment";
 import type { TravelCandidateAssessment } from "@raiquora/trip/travel-candidate-assessment";
 

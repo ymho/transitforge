@@ -1,4 +1,4 @@
-import type { AgentRuntimeResult } from "../runtime-contract";
+import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import type {
   AgentEvaluationCase,
   AgentEvaluationCaseResult,

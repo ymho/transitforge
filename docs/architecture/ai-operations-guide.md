@@ -1,5 +1,11 @@
 # コンシェルジュの境界
 
+> Wave 2B: [ADR 0068](../decisions/0068-place-agent-runtime-in-server-application.md)により
+> Runtime coreは`modules/agent/runtime`へ移設した。transport非依存Server入口とweather縦切りを
+> 追加したが、以下のBrowser production compositionは#480まで稼働する一時経路である。
+> Server側は既存ConversationModelを直接呼び、model/tool往復にBrowserを使わない。
+
+
 ## 目的
 
 コンシェルジュは自然文を検証可能な検索条件と構造化された案内へ変換する

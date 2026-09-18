@@ -1,5 +1,5 @@
 import type { AgentEvaluationReport } from "./evaluation-contract";
-import type { AgentTrace } from "../agent-trace";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
 
 export interface AgentModelRoutingRun {
   schemaVersion: "agent-model-routing-run-v2";

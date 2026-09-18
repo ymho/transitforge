@@ -12,9 +12,9 @@ import { previewInTripReplan } from "@raiquora/trip/in-trip-replan";
 import { askProgressFixture, modelAnswer, modelTools, modelTool } from "./ask-progress-scenarios.fixture";
 import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent-runtime";
 import type { ReservationFact } from "@raiquora/trip/reservation";
-import type { AgentTrace } from "../../usecases/agent/agent-trace";
-import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
-import { extractAgentDecisionSummary } from "../../usecases/agent/agent-decision-summary";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
+import type { AgentTurnObservation } from "@raiquora/agent/agent-turn-outcome";
+import { extractAgentDecisionSummary } from "@raiquora/agent/agent-decision-summary";
 import { evaluateTravelProgress, type TravelProgressScenario } from "../../usecases/agent/evaluation/travel-progress-evaluation";
 
 export const replanCaseIds = ["AQ-in-trip-fatigue", "AR-in-trip-rail-alternative", "AS-in-trip-indoor", "AT-in-trip-booked-protection", "AU-in-trip-stale"];

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { validateAgentToolInput } from "./agent-tool-input-validator";
+import { validateAgentToolInput } from "@raiquora/agent/agent-tool-input-validator";
 
 const schema = {
   type: "object" as const,

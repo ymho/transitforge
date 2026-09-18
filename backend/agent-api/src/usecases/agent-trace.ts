@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { validInTripAnswerPlan } from "../../../../frontend/src/usecases/agent/in-trip-answer-plan.js";
+import { validInTripAnswerPlan } from "@raiquora/agent/in-trip-answer-plan";
 
 import { type JsonObject, RequestError } from "../contracts/agent-request.js";
 import type { AgentOperation } from "../ports/agent-operation.js";

@@ -98,7 +98,8 @@ tests/               境界fixtureとrepository保守toolのPythonテスト
 tools/               検証 評価 再生成コマンド
 ```
 
-本番のコンシェルジュは`frontend/src/usecases/agent/agent-runtime.ts`を唯一のモデル実行入口とする。
+Agentの共通coreは`modules/agent/runtime/agent-runtime.ts`を唯一のモデル実行実装とする。
+Server Application入口を追加済みで、本番Browser組成からの切替は#480で行う。
 Bedrock接続は`frontend/src/adapters/bedrock/viewer-agent-runtime.ts`で共通Tool Evidence Traceへ適合する。
 Viewer ActionとLocalViewerAgentは#477で撤去済みで、DEVでもAPI障害をlocal fallbackで隠さない。
 

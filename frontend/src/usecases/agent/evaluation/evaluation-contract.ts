@@ -1,4 +1,4 @@
-import type { AgentRuntimeFeature, AgentRuntimeStatus } from "../runtime-contract";
+import type { AgentRuntimeFeature, AgentRuntimeStatus } from "@raiquora/agent/runtime-contract";
 import type { TravelProgressReport, TravelProgressScenario } from "./travel-progress-evaluation";
 
 export const agentEvaluationDatasetSchemaVersion = "agent-eval-dataset-v3";

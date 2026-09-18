@@ -5,7 +5,7 @@ import { multiCityTrip, resolvedPlace } from "../../../../modules/trip/domain/tr
 import { askProgressFixture, modelAnswer, modelTool, modelTools } from "./ask-progress-scenarios.fixture";
 import { runViewerAgentRuntime } from "./viewer-agent-runtime";
 import { resolveAssistantMessage } from "../../presentation/concierge/ai-guide-panel";
-import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
+import type { AgentTurnObservation } from "@raiquora/agent/agent-turn-outcome";
 
 it("reuses the known-requirement policy for multi-city requests and delivers progress without writing Trip", async () => {
   const f = askProgressFixture("C-candidate"), base = multiCityTrip();

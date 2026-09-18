@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createAgentContextSnapshot } from "./agent-context-snapshot";
-import { agentDecisionContextText, buildAgentDecisionContext } from "./agent-decision-context";
-import type { AgentToolDescriptor } from "./tool-contract";
+import { createAgentContextSnapshot } from "@raiquora/agent/agent-context-snapshot";
+import { agentDecisionContextText, buildAgentDecisionContext } from "@raiquora/agent/agent-decision-context";
+import type { AgentToolDescriptor } from "@raiquora/agent/tool-contract";
 import { requestTrip, requestRailItem } from "../../../../modules/trip/domain/trip-request.fixture";
 import type { PlanningState } from "@raiquora/trip/trip-state";
 

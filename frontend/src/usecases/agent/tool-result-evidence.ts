@@ -14,7 +14,7 @@ import type {
   EvidenceFreshness,
   EvidenceReference,
   EvidenceSourceType,
-} from "./evidence-model";
+} from "@raiquora/agent/evidence-model";
 
 export interface EvidenceConversionContext {
   retrievedAt: string;

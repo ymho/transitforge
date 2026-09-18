@@ -1,6 +1,6 @@
-import type { AgentTurnObservation, AskOnlyException } from "../agent-turn-outcome";
-import { observeAgentTurn } from "../agent-turn-outcome";
-import type { AgentTrace } from "../agent-trace";
+import type { AgentTurnObservation, AskOnlyException } from "@raiquora/agent/agent-turn-outcome";
+import { observeAgentTurn } from "@raiquora/agent/agent-turn-outcome";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
 
 /** Evaluation observations, not a new conversation/Trip state or a persisted user log. */
 export interface TravelProgressTurn {

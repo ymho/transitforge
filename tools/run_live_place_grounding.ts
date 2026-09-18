@@ -4,14 +4,14 @@ import { AwsBedrockConverseClient } from "../backend/agent-api/src/adapters/aws-
 import { BedrockConversationModel } from "../backend/agent-api/src/adapters/bedrock-conversation-model";
 import { agentSystemPrompt } from "../backend/agent-api/src/usecases/agent-system-prompt";
 import { ConverseModelProvider } from "../frontend/src/adapters/bedrock/viewer-agent-runtime";
-import { MultiStepAgentRuntime } from "../frontend/src/usecases/agent/agent-runtime";
-import { AgentToolRegistry } from "../frontend/src/usecases/agent/tool-registry";
-import { ToolEvidenceRegistry } from "../frontend/src/usecases/agent/tool-evidence-registry";
-import { AgentToolExecutor } from "../frontend/src/usecases/agent/agent-tool-executor";
-import type { Evidence } from "../frontend/src/usecases/agent/evidence-model";
-import { extractAgentDecisionSummary } from "../frontend/src/usecases/agent/agent-decision-summary";
-import { sourceExplanation } from "../frontend/src/usecases/agent/grounded-answer";
-import { structuredModelClassPolicy } from "../frontend/src/usecases/agent/structured-model-class-policy";
+import { MultiStepAgentRuntime } from "@raiquora/agent/agent-runtime";
+import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
+import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
+import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
+import type { Evidence } from "@raiquora/agent/evidence-model";
+import { extractAgentDecisionSummary } from "@raiquora/agent/agent-decision-summary";
+import { sourceExplanation } from "@raiquora/agent/grounded-answer";
+import { structuredModelClassPolicy } from "@raiquora/agent/structured-model-class-policy";
 
 // Synthetic, attributed sources; actual Converse/Runtime/Claim validation. No provider recordings.
 const output = resolve(process.argv[2] ?? "/tmp/raiquora-live-place-grounding");

@@ -3,10 +3,10 @@ import { evaluateTripHardConstraints } from "@raiquora/trip/trip-constraint-eval
 import { createTravelCandidate } from "@raiquora/trip/travel-candidate";
 import { requestConstraint } from "../../../../modules/trip/domain/trip-request.fixture";
 import { railSelectionFixture } from "../../../../modules/trip/domain/selected-rail-journey.fixture";
-import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
-import type { AgentTrace } from "../../usecases/agent/agent-trace";
+import type { AgentTurnObservation } from "@raiquora/agent/agent-turn-outcome";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
 import type { BedrockAgentMessage, BedrockAgentResponse } from "../http/agent-api/bedrock-agent";
-import type { EvidenceClaim } from "../../usecases/agent/evidence-model";
+import type { EvidenceClaim } from "@raiquora/agent/evidence-model";
 import { runViewerAgentRuntime, type BedrockAgentConverse, type ViewerAgentRuntimeDependencies } from "./viewer-agent-runtime";
 
 /** Authored synthetic facts; not a recording of a provider or a claim about a real destination. */

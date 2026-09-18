@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.fixture";
-import { inTripApplicationEvidence } from "./in-trip-application-evidence";
-import { evidenceAwareTool } from "./evidence-tool-decision-support";
+import { inTripApplicationEvidence } from "@raiquora/agent/in-trip-application-evidence";
+import { evidenceAwareTool } from "@raiquora/agent/evidence-tool-decision-support";
 import { viewerAgentToolDescriptors } from "../../adapters/bedrock/viewer-agent-runtime";
 
 it("keeps every Tool and schema; describes covered scope without turning it into permission", () => {

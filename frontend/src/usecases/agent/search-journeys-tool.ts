@@ -10,7 +10,7 @@ import {
   validAgentToolInput,
   type AgentTool,
   type AgentToolInputResult,
-} from "./tool-contract";
+} from "@raiquora/agent/tool-contract";
 
 export const maximumJourneyToolResults = 3;
 export const maximumJourneyToolPayloadBytes = 64 * 1_024;

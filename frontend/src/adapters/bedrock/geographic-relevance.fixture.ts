@@ -1,6 +1,6 @@
 import { askProgressFixture } from "./ask-progress-scenarios.fixture";
 import { runViewerAgentRuntime, type BedrockAgentConverse } from "./viewer-agent-runtime";
-import type { AgentTrace } from "../../usecases/agent/agent-trace";
+import type { AgentTrace } from "@raiquora/agent/agent-trace";
 import { evaluateRecommendationOutcome } from "../../usecases/agent/evaluation/recommendation-outcome";
 
 /** Authored wrong-region fixture, not live provider data. Only Bedrock is live. */

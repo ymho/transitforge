@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { extractAgentDecisionSummary } from "./agent-decision-summary";
+import { extractAgentDecisionSummary } from "@raiquora/agent/agent-decision-summary";
 
 describe("Agent Decision Summary", () => {
   it("validates answer references independently of invalid optional decision metadata", () => {

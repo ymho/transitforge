@@ -1,4 +1,4 @@
-import type { AgentModelClassPolicy } from "./agent-runtime";
+import type { AgentModelClassPolicy } from "@raiquora/agent/agent-runtime";
 
 /**
  * 構造化Contextだけから、曖昧性の高い初回発見、複雑な既存旅程判断、

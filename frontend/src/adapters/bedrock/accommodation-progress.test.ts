@@ -7,8 +7,8 @@ import { accommodationSelectionFixture } from "../../usecases/trip-plan/accommod
 import { resolveAssistantMessage } from "../../presentation/concierge/ai-guide-panel";
 import { observeViewerTurn } from "../../usecases/agent/viewer-turn-progress";
 import { evaluateTravelProgress } from "../../usecases/agent/evaluation/travel-progress-evaluation";
-import type { AgentTurnObservation } from "../../usecases/agent/agent-turn-outcome";
-import { AgentToolRegistry } from "../../usecases/agent/tool-registry";
+import type { AgentTurnObservation } from "@raiquora/agent/agent-turn-outcome";
+import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { registerTripProgressTools, type TripProgressOutput } from "../../usecases/agent/trip-progress-tools";
 
 const choose = { candidateId: "candidate-a", itemId: "stay", accommodation: { provider: "fixture", providerItemId: "hotel-a" } };

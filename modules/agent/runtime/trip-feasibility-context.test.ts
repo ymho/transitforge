@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
 import { evaluateTripFeasibility } from "@raiquora/trip/trip-feasibility";
-import { feasibilityTrip, feasibilityNow, feasibilityFacts, feasibilityStayTrip } from "../../../../modules/trip/domain/trip-feasibility.fixture";
-import { tripFeasibilityContext } from "./trip-feasibility-context";
-import { buildAgentDecisionContext, agentDecisionContextText } from "./agent-decision-context";
+import { feasibilityTrip, feasibilityNow, feasibilityFacts, feasibilityStayTrip } from "../../trip/domain/trip-feasibility.fixture";
+import { tripFeasibilityContext } from "@raiquora/agent/trip-feasibility-context";
+import { buildAgentDecisionContext, agentDecisionContextText } from "@raiquora/agent/agent-decision-context";
 
 it("keeps three-valued derived result separate from Trip/Reservation and in every context budget", () => {
   const trip = feasibilityTrip();

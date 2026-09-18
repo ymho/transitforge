@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createAgentContextSnapshot } from "./agent-context-snapshot";
-import { agentDecisionContextText, buildAgentDecisionContext } from "./agent-decision-context";
-import type { AgentDecisionSummary } from "./agent-decision-summary";
+import { createAgentContextSnapshot } from "@raiquora/agent/agent-context-snapshot";
+import { agentDecisionContextText, buildAgentDecisionContext } from "@raiquora/agent/agent-decision-context";
+import type { AgentDecisionSummary } from "@raiquora/agent/agent-decision-summary";
 import { requestTrip, assumedRequest, requestConstraint, requestAt, providerRequestPlace } from "../../../../modules/trip/domain/trip-request.fixture";
 import type { TripRequest } from "@raiquora/trip/trip-request";
 

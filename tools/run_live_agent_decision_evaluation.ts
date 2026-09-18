@@ -12,10 +12,10 @@ import {
   type BedrockAgentConverse,
   type ViewerAgentToolName,
 } from "../frontend/src/adapters/bedrock/viewer-agent-runtime";
-import { AgentToolExecutor } from "../frontend/src/usecases/agent/agent-tool-executor";
-import { validateAgentToolInput } from "../frontend/src/usecases/agent/agent-tool-input-validator";
-import { MultiStepAgentRuntime } from "../frontend/src/usecases/agent/agent-runtime";
-import type { AgentRuntimeContextInput } from "../frontend/src/usecases/agent/agent-decision-context";
+import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
+import { validateAgentToolInput } from "@raiquora/agent/agent-tool-input-validator";
+import { MultiStepAgentRuntime } from "@raiquora/agent/agent-runtime";
+import type { AgentRuntimeContextInput } from "@raiquora/agent/agent-decision-context";
 import { observeAgentRuntimeResult, evaluateAgentDataset } from "../frontend/src/usecases/agent/evaluation/agent-evaluator";
 import type {
   AgentEvaluationCase,
@@ -27,16 +27,16 @@ import {
   renderAgentEvaluationStabilityMarkdown,
   summarizeAgentEvaluationStability,
 } from "../frontend/src/usecases/agent/evaluation/evaluation-stability";
-import type { AgentModelClass } from "../frontend/src/usecases/agent/model-provider";
-import { structuredModelClassPolicy } from "../frontend/src/usecases/agent/structured-model-class-policy";
+import type { AgentModelClass } from "@raiquora/agent/model-provider";
+import { structuredModelClassPolicy } from "@raiquora/agent/structured-model-class-policy";
 import {
   failedAgentToolResult,
   successfulAgentToolResult,
   type AgentTool,
-} from "../frontend/src/usecases/agent/tool-contract";
-import { ToolEvidenceRegistry } from "../frontend/src/usecases/agent/tool-evidence-registry";
-import { AgentToolRegistry } from "../frontend/src/usecases/agent/tool-registry";
-import { createAgentContextSnapshot } from "../frontend/src/usecases/agent/agent-context-snapshot";
+} from "@raiquora/agent/tool-contract";
+import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
+import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
+import { createAgentContextSnapshot } from "@raiquora/agent/agent-context-snapshot";
 import { createTrip } from "../modules/trip/domain/trip";
 import type { TripRequest } from "../modules/trip/domain/trip-request";
 import { progressCaseIds, runAskProgressCase } from "../frontend/src/adapters/bedrock/ask-progress-scenarios.fixture";

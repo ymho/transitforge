@@ -1,8 +1,8 @@
 import { checklistCategories, previewChecklistProposal, type ChecklistDetails, type ChecklistProposal, type TripChecklistItem } from "@raiquora/trip/trip-checklist";
 import type { Trip } from "@raiquora/trip/trip";
-import { AgentToolRegistry } from "./tool-registry";
-import { validateAgentToolInput } from "./agent-tool-input-validator";
-import { successfulAgentToolResult, failedAgentToolResult, type AgentToolDescriptor } from "./tool-contract";
+import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
+import { validateAgentToolInput } from "@raiquora/agent/agent-tool-input-validator";
+import { successfulAgentToolResult, failedAgentToolResult, type AgentToolDescriptor } from "@raiquora/agent/tool-contract";
 
 export const checklistDescriptor: AgentToolDescriptor = {
   name: "propose_preparation_checklist",
