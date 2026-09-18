@@ -27,7 +27,8 @@ export async function createBrowserAuth(): Promise<AuthSession> {
     return {
       initialize: async () => {}, getState: () => state,
       subscribe: listener => { listener(state); return () => {}; },
-      login: async () => {}, logout: async () => {}, getAccessToken: async () => undefined,
+      login: async () => { window.location.reload(); },
+      logout: async () => {}, getAccessToken: async () => undefined,
     };
   }
 }
