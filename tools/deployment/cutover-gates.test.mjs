@@ -42,6 +42,31 @@ test("destructive cutover diagnostics contain only the validated address and act
     return true;
   });
 });
+test("allows only the exact agent stream API Gateway deployment rotation", () => {
+  const deployment = {
+    mode: "managed",
+    type: "aws_api_gateway_deployment",
+    name: "agent_stream",
+    address: 'aws_api_gateway_deployment.agent_stream["stream"]',
+    change: { actions: ["create", "delete"], before: { id: "old" }, after: { id: "new" } },
+  };
+  assert.equal(
+    reviewCutoverPlan(plan([deployment], true, true), env("true", "true")),
+    'Terraform plan: resource actions only; sensitive values omitted.\ncreate/delete aws_api_gateway_deployment.agent_stream["stream"]\n',
+  );
+  for (const actions of [["delete"], ["delete", "create"]]) {
+    assert.throws(() => reviewCutoverPlan(plan([{ ...deployment, change: { actions, before: {} } }], true, true), env("true", "true")), /deletion/);
+  }
+  assert.throws(() => reviewCutoverPlan(plan([deployment], false, true), env("false", "true")), /deletion/);
+});
+test("does not allow the same create/delete rotation for other cutover resources", () => {
+  for (const resource of [
+    { type: "aws_lambda_function", name: "agent_stream", address: 'aws_lambda_function.agent_stream["stream"]' },
+    { type: "aws_lambda_function", name: "fixed_egress_provider", address: 'aws_lambda_function.fixed_egress_provider["0"]' },
+  ]) {
+    assert.throws(() => reviewCutoverPlan(plan([{ ...resource, mode: "managed", change: { actions: ["create", "delete"], before: {} } }], true, true), env("true", "true")), /deletion/);
+  }
+});
 test("malformed destructive addresses fail generically without exposing plan values", () => {
   const input = plan([{
     mode: "managed",
