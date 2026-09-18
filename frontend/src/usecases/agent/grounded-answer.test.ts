@@ -33,6 +33,15 @@ it("initial non-factual interaction does not require a Claim", () => {
   const generator = new DefaultAgentResponseGenerator();
   expect(generator.fromModel(model("こんにちは。どんな旅にしたいですか？"), [], "interaction").claims).toEqual([]);
 });
+it("describes the selected comparison's verified route instead of an anonymous assessment", () => {
+  const evidence: Evidence = { ...e, id: "candidate-comparison", category: "external", facts: {
+    candidateId: "internal-id", constraintStatus: "unknown", originStation: "A", destinationStation: "C", serviceDate: "2026-09-13",
+    plannedTravelMinutes: 100, plannedTransfers: 1, serviceCoverage: "supported", hardUnknown: ["origin"],
+  } };
+  const text = supportedAnswerClaims([evidence])[0]!.statement;
+  expect(text).toContain("2026-09-13のAからC"); expect(text).toContain("100分"); expect(text).toContain("乗換は1回");
+  expect(text).toContain("対応範囲内"); expect(text).toContain("未確認"); expect(text).not.toContain("internal-id");
+});
 it.each(["向日町から倉敷まで25分です", "10:00発、10:30着です", "やくも27号です", "二十五分で到着します"])("rejects invented initial rail values even with no Tool/Evidence: %s", (text) => {
   expect(() => new DefaultAgentResponseGenerator().fromModel(model(text), [], "interaction")).toThrow();
 });
