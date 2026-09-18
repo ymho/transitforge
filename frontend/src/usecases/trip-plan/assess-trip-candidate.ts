@@ -13,5 +13,12 @@ export async function assessTripCandidate(trip: Trip, request: { candidateId: st
       !validInstant(record.validUntil) || Date.parse(record.validUntil) < Date.parse(now)) throw new Error("Candidate is missing, expired or outside this task");
   const assessment = assessTravelCandidate(trip, record.candidate, record.assessmentFacts ?? { candidateId: record.candidate.id }, now, request.itemId);
   // Only identity crosses the model boundary here, not a provider record, adoption or raw journey.
-  return { candidate: { id: record.candidate.id }, assessment };
+  const journey = record.candidate.journey;
+  const serviceDate = record.assessmentFacts?.rail?.candidate.legReferences[0]?.serviceDate;
+  const comparison = assessment.mobility.status === "known" && journey?.legs.length && record.assessmentFacts?.rail ? {
+    originStation: journey.legs[0]!.originStation,
+    destinationStation: journey.legs.at(-1)!.destinationStation,
+    ...(serviceDate && record.assessmentFacts.rail.candidate.legReferences.every((leg) => leg.serviceDate === serviceDate) ? { serviceDate } : {}),
+  } : undefined;
+  return { candidate: { id: record.candidate.id }, assessment, ...(comparison ? { comparison } : {}) };
 }

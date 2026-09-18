@@ -7,6 +7,26 @@ import { candidateAssessmentEvidence, candidateAssessmentDescriptor } from "../a
 import { validateAgentToolInput } from "../agent/agent-tool-input-validator";
 import { validateEvidenceAndClaims } from "../agent/evidence-model";
 import { buildAgentDecisionContext, agentDecisionContextText } from "../agent/agent-decision-context";
+import { railSelectionFixture } from "../../../../modules/trip/domain/selected-rail-journey.fixture";
+import { createTravelCandidate } from "@raiquora/trip/travel-candidate";
+
+it("keeps verified candidate endpoints/date in comparison Evidence without promoting raw route observations", async () => {
+  const rail = railSelectionFixture(), f = candidateAssessmentFixture();
+  const candidate = createTravelCandidate({ id: rail.candidate.candidateId, journey: rail.candidate.journey });
+  const record = { candidate, tripId: f.trip.id, taskId: "task", validUntil: "2026-09-13T08:00:00Z",
+    assessmentFacts: { candidateId: candidate.id, rail: { candidate: rail.candidate, inputs: rail.inputs } } };
+  const pair = await assessTripCandidate(f.trip, { candidateId: candidate.id, taskId: "task" }, {
+    resolve: async () => record, loadTimetables: async () => [],
+  }, rail.selectedAt);
+  expect(pair.comparison).toEqual({ originStation: "A", destinationStation: "C", serviceDate: "2026-09-13" });
+  const evidence = candidateAssessmentEvidence({ ...candidateAssessmentContext(pair), assessmentEvidence: pair.assessment.sources });
+  expect(evidence[0]?.facts).toMatchObject({ originStation: "A", destinationStation: "C", serviceDate: "2026-09-13", plannedTravelMinutes: 100 });
+  expect(JSON.stringify(evidence)).not.toMatch(/delayMinutes|delayStatus|journey|bookingReference/);
+  const invalid = await assessTripCandidate(f.trip, { candidateId: candidate.id, taskId: "task" }, {
+    resolve: async () => ({ ...record, assessmentFacts: { ...record.assessmentFacts, rail: { candidate: rail.candidate, inputs: [] } } }), loadTimetables: async () => [],
+  }, rail.selectedAt);
+  expect(invalid.comparison).toBeUndefined();
+});
 
 it("uses acquired facts only, preserves inputs, and keeps partial candidates visible", async () => {
   const f = candidateAssessmentFixture();
