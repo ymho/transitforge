@@ -3,10 +3,30 @@ import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.f
 import { inTripApplicationEvidence } from "./in-trip-application-evidence";
 import { renderInTripAnswer, validInTripAnswerPlan, type InTripAnswerPlan } from "./in-trip-answer-plan";
 import { parseAgentDecisionSummary } from "./agent-decision-summary";
+import { externalTravelEvidence } from "./external-travel-tools";
+import { hazardInformation } from "../../../../modules/trip/domain/hazard-alert.fixture";
 
 describe("InTripAnswerPlan presentation boundary", () => {
   const values = () => inTripApplicationEvidence(inTripFixture().snapshot);
   const selection = (evidenceId: string, presentation: InTripAnswerPlan["evidence"][number]["presentation"]): InTripAnswerPlan => ({ evidence: [{ evidenceId, presentation }] });
+  it("renders external acquisitions separately from saved Impact, including missing Provider evidence", () => {
+    for (const output of [{ alerts: hazardInformation() }, { forecast: { status: "unavailable", freshness: "unknown", evidence: [] } }]) {
+      const evidence = externalTravelEvidence(output, { retrievedAt: "2026-09-12T08:00:00Z" }), id = evidence[0]!.id;
+      const rendered = renderInTripAnswer(selection(id, "external-result"), [id], evidence);
+      expect(rendered.text).toContain("保存済みの旅程への影響評価とは別");
+      expect(rendered.text).not.toContain("施設が危険");
+      expect(() => renderInTripAnswer(selection(id, "hazard-impact"), [id], evidence)).toThrow();
+      if ("forecast" in output) expect(rendered.text).toContain("最新情報は確認できていません");
+    }
+  });
+  it("rejects model interpretations and unrelated evidence as external result", () => {
+    const evidence = externalTravelEvidence({ alerts: hazardInformation() }, { retrievedAt: "2026-09-12T08:00:00Z" });
+    const e = evidence[0]!;
+    e.knowledgeKind = "model_interpretation";
+    expect(() => renderInTripAnswer(selection(e.id, "external-result"), [e.id], evidence)).toThrow();
+    const planned = values();
+    expect(() => renderInTripAnswer(selection(planned[0]!.id, "external-result"), [planned[0]!.id], planned)).toThrow();
+  });
   it("renders saved measurements, not model calculations, and distinguishes boarding from plan", () => {
     const evidence = values(), e = evidence.find((e) => e.coverage?.includes("rail.connection"))!, before = JSON.stringify(evidence);
     const result = renderInTripAnswer(selection(e.id, "rail-impact"), [e.id], evidence);

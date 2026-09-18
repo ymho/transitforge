@@ -49,6 +49,8 @@ export interface AgentDecisionSummary {
 }
 
 export interface ExtractedAgentDecisionSummary {
+  /** Independently valid answer references survive invalid optional decision metadata. */
+  declaredInTripAnswerPlan?: InTripAnswerPlan;
   invalidUsedEvidenceIds?: boolean;
   /** References still require runtime existence checking if other summary fields are invalid. */
   declaredEvidenceIds?: string[];
@@ -82,6 +84,8 @@ export function extractAgentDecisionSummary(
     return summary
       ? { status: "valid", summary, textBlocks: cleaned }
       : { status: "invalid", textBlocks: cleaned,
+        ...(isRecord(value) && value.selectedAction === "answer" && validInTripAnswerPlan(value.inTripAnswerPlan)
+          ? { declaredInTripAnswerPlan: value.inTripAnswerPlan } : {}),
         ...(isRecord(value) && Array.isArray(value.usedEvidenceIds) ? { declaredEvidenceIds: [...value.usedEvidenceIds as string[]] } : {}) };
   } catch {
     return { status: "invalid", textBlocks: cleaned };

@@ -10,6 +10,8 @@ describe("agentSystemPrompt", () => {
     expect(agentSystemPrompt).toContain("質問必須ではありません");
     expect(agentSystemPrompt).not.toContain("Tool Evidenceだけ");
     expect(agentSystemPrompt).toContain('"usedEvidenceIds":[]');
+    expect(agentSystemPrompt).toContain('"inTripAnswerPlan":{"evidence":[]}');
+    expect(agentSystemPrompt).toContain("in_tripのanswerだけで必須");
     expect(agentSystemPrompt).toContain("最大10件、重複なし");
     expect(agentSystemPrompt).toContain("キーごと省略");
   });

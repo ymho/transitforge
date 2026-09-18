@@ -59,7 +59,7 @@ export async function runInTripToolScenario(scenario: TravelProgressScenario, li
   if (!text.trim() || /案内を完了できません|安全な実行上限/.test(text)) failures.push("response failed");
   report.contractFailures.push(...failures); report.failures.push(...failures); report.passed = report.failures.length === 0;
   // Synthetic fixture diagnostics only: no inputs, results, provider payloads or reasoning.
-  return { ...report, decisionDiagnostics, diagnostics: trace?.events.flatMap((e): Record<string, unknown>[] => {
+  return { ...report, answerForReview: text.slice(0, 2_000), decisionDiagnostics, diagnostics: trace?.events.flatMap((e): Record<string, unknown>[] => {
     if (e.type === "tool_called") return [{ sequence: e.sequence, toolName: e.toolName, phase: "called" }];
     if (e.type === "tool_completed") return [{ sequence: e.sequence, toolName: e.toolName,
       executionResult: e.outcome, parsePreconditionExecutionResultCode: e.errorCode ?? "success" }];

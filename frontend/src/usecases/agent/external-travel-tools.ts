@@ -522,14 +522,16 @@ export function externalTravelEvidence(output: unknown, context: { retrievedAt: 
   if (!isRecord(output)) return [];
   const information = isRecord(output.forecast) ? output.forecast : isRecord(output.result) ? output.result : isRecord(output.webSearch) ? output.webSearch : isRecord(output.webPages) ? output.webPages : isRecord(output.alerts) ? output.alerts : isRecord(output.groundAccess) ? output.groundAccess : isRecord(output.restaurants) ? output.restaurants : undefined;
   if (!information || !Array.isArray(information.evidence)) return [];
-  return information.evidence.slice(0, 8).flatMap((raw) => {
+  const resultKind = isRecord(output.forecast) ? "weather" : isRecord(output.alerts) ? "hazard" : undefined;
+  const evidence: Evidence[] = information.evidence.slice(0, 8).flatMap((raw) => {
     if (!isRecord(raw) || typeof raw.id !== "string" || typeof raw.provider !== "string") return [];
     return [{
       id: raw.id,
       category: "external" as const,
       knowledgeKind: "deterministic_fact" as const,
       subject: isRecord(information.data) && typeof information.data.locationName === "string" ? `${information.data.locationName}の天気予報` : isRecord(information.data) && typeof information.data.area === "string" ? `${information.data.area}の防災情報` : "外部旅行情報",
-      facts: { provider: raw.provider, status: String(information.status ?? "unknown"), freshness: String(information.freshness ?? "unknown") },
+      facts: { provider: raw.provider, status: String(information.status ?? "unknown"), freshness: String(information.freshness ?? "unknown"),
+        ...(resultKind ? { resultKind } : {}) },
       references: [{
         sourceType: "external-source" as const,
         sourceRef: typeof raw.sourceUrl === "string" ? raw.sourceUrl : raw.id,
@@ -539,6 +541,16 @@ export function externalTravelEvidence(output: unknown, context: { retrievedAt: 
       }],
     }];
   });
+  // An unsuccessful acquisition is a known Tool outcome, not a verified weather/hazard fact.
+  // Never fabricate Provider Evidence, or turn an external observation into a saved TripImpact.
+  if (resultKind && evidence.length === 0) evidence.push({
+    id: `application:external-result:${resultKind}`,
+    category: "external", knowledgeKind: "deterministic_fact", subject: resultKind === "weather" ? "天気情報の取得結果" : "防災情報の取得結果",
+    facts: { resultKind, status: "unconfirmed", freshness: "unknown" },
+    references: [{ sourceType: "external-source", sourceRef: `application://external-result/v1/${resultKind}`,
+      retrievedAt: context.retrievedAt, freshness: "unknown", summary: "Toolの取得結果。外部事実の確認はできていない" }],
+  });
+  return evidence;
 }
 
 function optionalDate(value: unknown): string | undefined {

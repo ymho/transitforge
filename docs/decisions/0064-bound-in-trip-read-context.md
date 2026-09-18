@@ -128,6 +128,26 @@ Decision Summary parse結果・selectedAction/selectedTool/unresolvedFactsを追
 認証期限切れで今回の実行はモデルへ到達しておらず、Tool取り違えや入力エラーを原因と断定しない。
 認証更新後に実行結果を確認してからdescriptorを調整する。
 
+### Live再開後のwire contract修正
+
+初期EvidenceのbriefとTool後の参照情報には、rendererと同じ`supportsInTripPresentation`から導いた
+利用可能presentationを添える。モデルはその中から選択し、Runtimeは再度検証する。対応表を別ルールとして複製しない。
+新規Tool EvidenceはRuntimeの共通20件budgetに受理されたものだけを、最大6参照としてTool結果の後に示す。
+元のTool結果、Tool公開範囲、実行順の決定権は変更しない。
+
+`external-result`はweather/hazardのexternal-source Evidenceの取得状態のみを表示する。
+取得失敗・Provider Evidence欠落時はApplicationが確認した取得結果を記録し、外部事実の確認を捏造しない。
+詳細は既存の構造化カードが担当する。これを`weather-impact`/`hazard-impact`として表示することは拒否する。
+外部結果をTripImpactへ昇格せず、未確認を安全へ変換しない。
+
+Decision Summaryの任意metadataが不正でも、`selectedAction=answer`に付属するstrictなAnswerPlanと
+usedEvidenceIdsは独立して検証可能とする。不正metadataはTraceへ採用しない。参照の実在、subset、
+source/coverage、shapeの検証は一切省略しない。欠落・不正planを補完したり自由文へfallbackしたりしない。
+
+AOの診断で、駅間経路ではなく表示中列車の検索を選び、必要な検索条件がないまま失敗するケースを確認した。
+列車index検索・到着列車検索と独立駅間検索のsuitable/unsuitableをdescriptorへ明記する。
+検索開始下限`departureTimeMinutes`と具体的列車の発車時刻を区別する。発話のregex分岐は追加しない。
+
 ## 残す責務
 
 #397の残り旅程Patch、完了保護、予約変更確認、#399の認可rolloutは別。Trip・Reservation・通知stateを更新しない。

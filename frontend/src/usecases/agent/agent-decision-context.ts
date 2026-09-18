@@ -9,6 +9,7 @@ import type { AgentTripScheduleItem } from "./agent-context-snapshot";
 import { reservationContext, type AgentReservationContext } from "./reservation-context";
 import { tripFeasibilityContext, type AgentTripFeasibilityContext } from "./trip-feasibility-context";
 import { boundTripReadinessContext, type AgentTripReadinessContext } from "./trip-readiness-context";
+import { inTripPresentations, supportsInTripPresentation, type InTripPresentation } from "./in-trip-answer-plan";
 
 export type AgentContextValue = string | number | boolean | null;
 
@@ -55,6 +56,7 @@ export interface AgentVerifiedFactSummary {
   sourceType?: import("./evidence-model").EvidenceSourceType;
   freshness?: import("./evidence-model").EvidenceFreshness;
   coverage?: import("./evidence-model").EvidenceCoverage[];
+  presentations?: InTripPresentation[];
 }
 
 export interface AgentToolOutcomeSummary {
@@ -188,7 +190,8 @@ export function buildAgentDecisionContext(
     verifiedFacts: [
       ...(request.initialEvidence ?? []).map((e): AgentVerifiedFactSummary => ({ evidenceId: e.id, category: e.category, subject: e.subject,
         summary: e.references.map((r) => r.summary).join(" "), knowledgeKind: e.knowledgeKind,
-        sourceType: e.references[0]?.sourceType, freshness: e.references[0]?.freshness, coverage: e.coverage })),
+        sourceType: e.references[0]?.sourceType, freshness: e.references[0]?.freshness, coverage: e.coverage,
+        presentations: inTripPresentations.filter((p) => supportsInTripPresentation(e, p)) })),
       ...(input?.verifiedFacts ?? []),
     ].filter((fact, index, values) => values.findIndex((v) => v.evidenceId === fact.evidenceId) === index).slice(0, 20).map((fact) => ({
       evidenceId: bounded(fact.evidenceId, 160),
@@ -199,6 +202,7 @@ export function buildAgentDecisionContext(
       ...(fact.sourceType ? { sourceType: fact.sourceType } : {}),
       ...(fact.freshness ? { freshness: fact.freshness } : {}),
       ...(fact.coverage ? { coverage: fact.coverage } : {}),
+      ...(fact.presentations ? { presentations: fact.presentations } : {}),
     })),
     knownHardConstraints: (input?.knownHardConstraints ?? []).filter((c) => !hasTripRequest || ["user", "ui"].includes(c.source)).slice(0, 20)
       .map(constraint),
@@ -226,6 +230,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
   const brief = briefFacts.length ? ["<verified_evidence>", ...briefFacts.map((f) => [
     `- id: ${quote(f.evidenceId)}`, `  kind: ${f.knowledgeKind ?? "unverified_information"}`,
     `  freshness: ${f.freshness ?? "unknown"}`, `  coverage: ${quote(f.coverage ?? [])}`, `  fact: ${quote(f.summary)}`,
+    `  presentations: ${quote(f.presentations ?? [])}`,
   ].join("\n")), "</verified_evidence>"].join("\n") : "";
   const briefIds = new Set(briefFacts.map((f) => f.evidenceId));
   const visibleFacts = context.verifiedFacts.map((f) => briefIds.has(f.evidenceId)
@@ -323,7 +328,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     brief,
     `利用者の今回の質問: ${JSON.stringify(context.userRequest)}`,
     "旅行中のanswerではDecision SummaryへinTripAnswerPlan:{evidence:[{evidenceId:実在id,presentation:表示種別}]}を必ず含めてください。最大6件。usedEvidenceIdsの部分集合です。事実はApplication rendererが表示するため、自由文で同じ事実を言い換えず、回答に必要なEvidenceの選択と順序だけを決めてください。",
-    "AnswerPlanの対象はverified_evidenceのApplication Evidenceです。presentationはplanned-itinerary（trip.itinerary/next-item）、rail-impact（rail.impact/connection）、weather-impact（weather.impact）、hazard-impact（hazard.impact）、reservation（reservation.state）、location-permission（location.permission）、uncertainty（未確認範囲）です。質問に関連する複数の影響があるならそれぞれを参照してください。追加Toolの結果は既存の構造化カードで表示され、保存済みImpactへは昇格しません。",
+    "AnswerPlanの対象はverified_evidenceのApplication Evidence、またはToolが返すEvidenceです。presentationはplanned-itinerary（trip.itinerary/next-item）、rail-impact（rail.impact/connection）、weather-impact（weather.impact）、hazard-impact（hazard.impact）、reservation（reservation.state）、location-permission（location.permission）、uncertainty（未確認範囲）、external-result（external-sourceかつresultKind=weather/hazardの取得結果）です。質問に関連する複数の影響があるならそれぞれを参照してください。追加Toolの天気・警報Evidenceはexternal-resultで参照し、既存の構造化カードで表示します。保存済みImpactへは昇格しません。",
     "Toolは新しい候補・異なる区間/時刻・最新観測など回答に必要な追加情報を調べるときに選んでください。既存Evidenceの説明だけで答えられるときは再取得せず回答してください。ユーザーの入力に答えるために不要な質問はしないでください。",
     "予定上のcurrentは実際の現在地・乗車確認ではありません。possible-current/date-current/unknownの精度を保持し、Impact severity・乗換成立性・Notification currency・予約状態を再計算しないでください。unknown/unavailable/omitted/truncatedは問題なしではありません。Trip・予約・通知を自動変更しないでください。",
     `<agent_context>${boundedContext}</agent_context>`,

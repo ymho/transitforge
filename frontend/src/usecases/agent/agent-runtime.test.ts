@@ -21,19 +21,45 @@ import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.f
 import { inTripApplicationEvidence } from "./in-trip-application-evidence";
 
 describe("MultiStepAgentRuntime", () => {
-  it.each(["valid", "missing", "mismatched", "subset"])("in-trip %s plan cannot publish model-authored facts", async (kind) => {
+  it("returns only admitted Tool Evidence presentation references to the next model call", async () => {
+    const { tools } = toolSetup([]), requests: AgentModelRequest[] = [], evidenceMappers = new ToolEvidenceRegistry();
+    const toolExecutor = new AgentToolExecutor(tools, evidenceMappers);
+    const toolEvidence = { ...evidence("tool-outcome"), knowledgeKind: "deterministic_fact" as const,
+      facts: { resultKind: "weather", status: "unconfirmed", freshness: "unknown" },
+      references: [{ ...evidence("ref").references[0]!, sourceType: "external-source" as const }] };
+    evidenceMappers.register("first_tool", () => [toolEvidence]);
+    const answer = textResponse("model fact must not appear");
+    answer.decisionSummary = { interpretedGoal: "取得結果", hardConstraints: [], softPreferences: [], selectedAction: "answer",
+      unresolvedFacts: [], reasonCodes: [], usedEvidenceIds: [toolEvidence.id],
+      inTripAnswerPlan: { evidence: [{ evidenceId: toolEvidence.id, presentation: "external-result" }] } };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([
+      toolCallResponse([{ id: "call", name: "first_tool", input: { value: "one" } }]), answer,
+    ], requests) }).run({ ...request("最新天気"), context: { inTrip: inTripFixture().snapshot } });
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("最新情報は確認できていません");
+    expect(JSON.stringify(requests[1]!.messages)).toContain('\\"presentations\\":[\\"external-result\\"]');
+    expect(output.response).not.toContain("model fact");
+  });
+  it.each(["valid", "invalid-metadata", "invalid-metadata-subset", "invalid-metadata-missing", "missing", "mismatched", "subset"])("in-trip %s plan cannot publish model-authored facts", async (kind) => {
     const { snapshot } = inTripFixture(), initialEvidence = inTripApplicationEvidence(snapshot);
     const { tools, toolExecutor } = toolSetup([]), answer = textResponse("現在、列車で移動中です。乗換は問題ありません。秘密: RAW");
     const e = initialEvidence.find((e) => e.coverage?.includes("rail.connection"))!;
     answer.decisionSummary = { interpretedGoal: "接続を説明", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"],
       usedEvidenceIds: kind === "subset" ? [] : [e.id], ...(kind === "missing" ? {} : { inTripAnswerPlan: { evidence: [{ evidenceId: e.id,
         presentation: kind === "mismatched" ? "location-permission" : "rail-impact" }] } }) };
+    if (kind.startsWith("invalid-metadata")) {
+      answer.declaredInTripAnswerPlan = answer.decisionSummary.inTripAnswerPlan;
+      answer.declaredEvidenceIds = kind.endsWith("subset") ? [] : [e.id];
+      if (kind.endsWith("missing")) answer.declaredInTripAnswerPlan!.evidence[0]!.evidenceId = "unknown";
+      delete answer.decisionSummary;
+      answer.decisionSummaryStatus = "invalid";
+    }
     const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([answer]) }).run({ ...request("大丈夫？"), context: { inTrip: snapshot }, initialEvidence });
-    expect(output.status).toBe(kind === "valid" ? "completed" : "failed");
+    expect(output.status).toBe(["valid", "invalid-metadata"].includes(kind) ? "completed" : "failed");
     expect(JSON.stringify(output)).not.toContain("RAW");
     if (kind === "valid") {
       expect(output.response).toContain("見込み4分");
-      expect(output.trace.events.find((e) => e.type === "decision_recorded")).toMatchObject({ inTripAnswerPlan: answer.decisionSummary.inTripAnswerPlan });
+      expect(output.trace.events.find((e) => e.type === "decision_recorded")).toMatchObject({ inTripAnswerPlan: answer.decisionSummary!.inTripAnswerPlan });
     }
   });
   it("validates declared references independently of other invalid decision fields", async () => {

@@ -149,3 +149,27 @@ AO診断はsynthetic fixtureに限定したTool順/結果コードと構造化�
 Smoke（12/12・Ask 2/2・Progress 23/23）、Full（42/42・Ask 7/7・Progress 42/42）、
 Python 32件、Terraform fmt/validate（dev/bootstrap、既存deprecated警告のみ）、bundle/lambda、diff checkが成功。
 Scripted成功をLive合格とは扱わない。
+
+### 2026-09-18 AWS認証更新後
+
+`transitforge-dev`で実モデルへ到達することを確認した。モデル/temperature/上限/Tool公開範囲/閾値は変更していない。
+AnswerPlanをSystemのwire format例へ含め、任意Decision metadataと独立してstrictに検証する。
+初期Evidenceと新規Tool Evidenceの対応presentationはrendererと同じ関数から提示する。
+Tool後にmapperが作るEvidence参照がモデルへ返っていなかった欠落を補い、weather/hazardの取得結果専用
+`external-result`を追加した。これは取得状態だけを説明し、外部事実を保存済みImpactとして通さない。
+Provider Evidenceがない場合のunconfirmed outcomeも、外部情報が確認できたとは扱わない。
+
+AOの診断では表示中列車検索の誤選択と検索条件不足を確認し、descriptorで独立駅間経路との責務を分けた。
+以後は`search_direct_routes`が600分を下限として正常実行された。合成fixtureの検索結果は空であり、
+実Providerの経路発見を検証したという意味ではない。
+
+途中のAJ〜AM 4/4合格やAN/AP改善だけで完了とはしない。最新の同一コード7ケース通しLiveは5/7。
+AJ/AMは1 model・0 Tool、AN/APは2 model・1 Tool、AOは1 model・1 Toolで合格。
+AKは不要Toolとinvalid input、ALはweatherだけを選びhazardを落としたため不合格。
+追加診断でもAKは遅延Toolへ逃げ、ALは不要Web検索後の不適切なEvidence参照を拒否されて失敗した。
+失敗を安全な回答として数えず、Draftを維持する。残件はモデルによる必要Evidence選択と不要Tool抑制。
+Liveレポート: `/tmp/447-contract-<case-id>/trip-progress-live.json`。診断も合成データのみで、本番会話・内部思考は記録しない。
+
+今回のローカル確認: frontend/domain 1,877件、backend 444件、build、architecture/workspace、
+Smoke（12/12・Ask 2/2・Progress 23/23）、Full（42/42・Ask 7/7・Progress 42/42）、Python 32件、
+Terraform fmt/validate（dev/bootstrap、既存deprecated警告のみ）、bundle/lambda、diff checkが成功した。

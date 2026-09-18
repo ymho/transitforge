@@ -975,17 +975,27 @@ function viewerToolDecisionSupport(
     capability,
     responsibilityBoundary: "入力検証と事実計算はToolが担い、候補を選ぶ判断と説明はAgentが担う",
   } satisfies AgentToolDecisionSupport;
+  if (name === "search_trains" || name === "search_train_arrivals") {
+    return { ...common,
+      suitableCases: [name === "search_trains" ? "現在表示中の列車を名前・番号などの条件で探す" : "指定駅へ到着する列車を到着時刻で探す"],
+      unsuitableCases: ["出発駅と到着駅を指定した駅間経路や代替経路の検索（search_direct_routesの責務）"],
+      returnedEvidence: "条件に合う列車。駅間の経路成立性や乗換経路を探すToolではない",
+    };
+  }
   if (name === "search_direct_routes") {
     return {
       ...common,
-      suitableCases: ["駅間の経路成立性、発着時刻、乗換、列車を確認する"],
+      suitableCases: ["駅間の経路成立性、発着時刻、乗換、列車を確認する",
+        "明示されたorigin/destinationの新しい経路・代替経路を検索する。in_tripでも採用済み区間とは異なる独立した駅間はこちら"],
       unsuitableCases: [
         "観光地の魅力、宿泊、駅から先の徒歩経路を調べる",
         "currentJourneyにある直前経路の途中駅確認、利用・回避条件、区間変更",
       ],
       returnedEvidence: "日付別時刻表と利用可能な当日運行情報に基づく鉄道経路",
       freshness: "指定日ダイヤ。当日付近だけ最新運行情報を反映する",
-      limitations: ["鉄道運賃を返さない", "観光地名ではなくアクセス駅が必要", "出発駅不明でも地域のアクセス駅をprovisionalOriginStationに指定できる。Toolが駅の実在を検証して仮案と表示する。自宅からの移動や総所要時間は未確認"],
+      limitations: ["鉄道運賃を返さない", "観光地名ではなくアクセス駅が必要",
+        "departureTimeMinutesは検索開始の下限。指定時刻以降の列車をToolが探すため、正確な列車発車時刻を利用者へ聞く必要はない",
+        "出発駅不明でも地域のアクセス駅をprovisionalOriginStationに指定できる。Toolが駅の実在を検証して仮案と表示する。自宅からの移動や総所要時間は未確認"],
     };
   }
   if (name === "inspect_previous_journey") {
@@ -1049,7 +1059,7 @@ function viewerToolDecisionSupport(
     return {
       ...common,
       suitableCases: ["現在旅程の往路または復路の時刻、帰着期限、途中立寄りを変える"],
-      unsuitableCases: ["新規旅行を作る", "宿や観光地だけを変更する"],
+      unsuitableCases: ["新規旅行を作る", "宿や観光地だけを変更する", "現在の採用済みTripとは別のorigin/destinationを明示した独立駅間検索"],
       returnedEvidence: "現在旅程の方向を維持して再検索した鉄道経路",
       limitations: ["対象はoutboundかreturnを明示する", "帰着期限と出発希望を混同しない"],
     };
@@ -1322,7 +1332,7 @@ function viewerToolInputSchema(
           type: "integer",
           minimum: 0,
           maximum: 1_800,
-          description: "出発時刻。0時からの分数。未指定なら利用者の表現またはViewer時刻から決定する",
+          description: "検索開始時刻の下限。0時からの分数（時×60+分。10時以降は600）。具体的な列車の発車時刻ではない。未指定なら利用者の表現またはViewer時刻から決定する",
         },
         excludedServiceTypes: { type: "array", maxItems: 8, items: { type: "string" } },
         excludedTrainNames: { type: "array", maxItems: 8, items: { type: "string" } },
@@ -1652,6 +1662,7 @@ export class ConverseModelProvider implements AgentModelProvider {
         usage: response.metadata?.usage,
       },
       decisionSummaryStatus: decision.status,
+      ...(decision.declaredInTripAnswerPlan ? { declaredInTripAnswerPlan: decision.declaredInTripAnswerPlan } : {}),
       ...(decision.invalidUsedEvidenceIds ? { invalidUsedEvidenceIds: true } : {}),
       ...(decision.declaredEvidenceIds ? { declaredEvidenceIds: decision.declaredEvidenceIds } : {}),
       ...(decision.summary ? { decisionSummary: decision.summary } : {}),

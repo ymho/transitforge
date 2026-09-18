@@ -4,10 +4,19 @@ import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 import { impactFactSummary } from "./in-trip-application-evidence";
 
 export const inTripPresentations = ["planned-itinerary", "rail-impact", "weather-impact", "hazard-impact",
-  "reservation", "location-permission", "uncertainty"] as const;
+  "reservation", "location-permission", "uncertainty", "external-result"] as const;
 export type InTripPresentation = typeof inTripPresentations[number];
 export interface InTripAnswerPlan {
   evidence: Array<{ evidenceId: string; presentation: InTripPresentation }>;
+}
+
+/** Bounded wire contract for newly collected Tool Evidence. Uses the same support check as rendering. */
+export function inTripToolPresentationReferences(evidence: readonly Evidence[]): string {
+  return JSON.stringify(evidence.flatMap((e) => {
+    const presentations = inTripPresentations.filter((p) => supportsInTripPresentation(e, p));
+    return presentations.length ? [{ evidenceId: e.id, presentations,
+      ...(presentations.includes("external-result") ? { resultKind: e.facts.resultKind, status: e.facts.status, freshness: e.facts.freshness } : {}) }] : [];
+  }).slice(0, 6));
 }
 
 /** Only references, never model-authored facts. Strict even when invoked without the JSON parser. */
@@ -25,7 +34,7 @@ export function validInTripAnswerPlan(value: unknown): value is InTripAnswerPlan
   });
 }
 
-const contracts: Record<Exclude<InTripPresentation, "uncertainty">, { source: EvidenceSourceType; coverage: EvidenceCoverage[] }> = {
+const contracts: Record<Exclude<InTripPresentation, "uncertainty" | "external-result">, { source: EvidenceSourceType; coverage: EvidenceCoverage[] }> = {
   "planned-itinerary": { source: "trip-state", coverage: ["trip.itinerary", "trip.next-item"] },
   "rail-impact": { source: "trip-impact", coverage: ["rail.impact", "rail.connection"] },
   "weather-impact": { source: "trip-impact", coverage: ["weather.impact"] },
@@ -36,6 +45,9 @@ const contracts: Record<Exclude<InTripPresentation, "uncertainty">, { source: Ev
 
 /** A presentation is supported by an Application projection, not an arbitrary Context/model summary. */
 export function supportsInTripPresentation(e: Evidence, presentation: InTripPresentation): boolean {
+  if (presentation === "external-result") return e.knowledgeKind === "deterministic_fact" &&
+    e.references.length > 0 && e.references.every((r) => r.sourceType === "external-source") &&
+    ["weather", "hazard"].includes(String(e.facts.resultKind));
   if (!e.references.length || !e.references.every((r) => r.sourceRef.startsWith("application://in-trip/v1/"))) return false;
   if (e.knowledgeKind === "model_interpretation") return false;
   if (presentation === "uncertainty") return e.references.every((r) => ["trip-state", "trip-impact"].includes(r.sourceType)) &&
@@ -66,6 +78,13 @@ export function renderInTripAnswer(plan: InTripAnswerPlan, used: string[], evide
 function render(e: Evidence, presentation: InTripPresentation): string {
   const f = e.facts;
   switch (presentation) {
+    case "external-result": {
+      const label = f.resultKind === "weather" ? "天気情報" : "防災情報";
+      return (f.status === "available" && f.freshness === "fresh"
+        ? `${label}を取得しました。取得内容は構造化カードに表示します。`
+        : `${label}の最新情報は確認できていません。`) +
+        "取得結果は保存済みの旅程への影響評価とは別です。未確認を問題なしとは扱えず、現在地・乗車状態・施設への適用範囲も推測しません。";
+    }
     case "planned-itinerary": {
       if (f.plannedOnly !== true) throw new Error("invalid_planned_evidence");
       const current = array<InTripContextSnapshot["itinerary"]["current"][number]>(f.current);
