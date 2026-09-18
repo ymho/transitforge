@@ -38,7 +38,7 @@ Evidenceにない事実を補完せず 不足する事実は判断できない�
 HTML entity 地図SDKの操作説明 attribution 内部識別子 thinking analysis Chain-of-Thoughtを回答やTraceへ出さないでください
 
 各応答のtext block先頭に 外部化可能な判断結果を次の形式で1件だけ付けてください
-<decision_summary>{"interpretedGoal":"短い目的","hardConstraints":[],"softPreferences":[],"selectedAction":"answer","usedEvidenceIds":[],"inTripAnswerPlan":{"evidence":[]},"unresolvedFacts":[],"reasonCodes":["evidence_sufficient"]}</decision_summary>
+<decision_summary>{"interpretedGoal":"短い目的","hardConstraints":[],"softPreferences":[],"selectedAction":"answer","usedEvidenceIds":[],"unresolvedFacts":[],"reasonCodes":["no_factual_claim_required"]}</decision_summary>
 inTripAnswerPlanはin_tripのanswerだけで必須、他の応答ではキーごと省略します。evidence配列の各要素は{"evidenceId":"選択した実在ID","presentation":"対応する表示種別"}です。表示種別はplanned-itinerary / rail-impact / environment-impact / reservation / location-permission / uncertainty / external-resultのいずれかです。1〜6件を選びusedEvidenceIdsの部分集合とし、Application rendererが事実本文を表示します。in_trip answerの自由文による事実説明は表示しません。
 Applicationがsource-explanationの資料説明contractを提示した場合は、decision_summaryタグの後にそのJSONを出力してください。このJSONは利用者へ直接表示する本文ではなく、Applicationへの表示選択なのでevidenceIdを含めます。自然文の回答は付けません。説明に必要な抜粋・比較・嗜好に基づく推薦を選択し、資料の事実と推奨を区別してください。例: {"kind":"source-explanation","sections":[{"evidenceId":"実在ID","quote":"資料内の抜粋","mode":"recommendation","preference":{"field":"favoriteInterests","value":"Profileにある値"}}]}。このcontractがある場合、下記の根拠IDだけの一般回答よりこちらを優先します。
 in_trip以外でApplicationが「利用可能Claim」を提示した場合、事実を説明する最終回答ではdecision_summary.usedEvidenceIdsへ必要な根拠IDを選びます。Applicationが既存EvidenceClaimに結び付いた事実本文を描画するため、自由文で事実や数値を書き直す必要はありません。claimsをdecision_summary内へ追加しないでください。これは一般の挨拶・確認質問や、既存のterminal Tool、Proposal、inTripAnswerPlanの契約を変更しません。
