@@ -12,6 +12,11 @@ describe("result-based geographic recommendation evaluation", () => {
   it("does not allow an unrelated safe clause to excuse a positive recommendation", () => {
     expect(evaluateRecommendationOutcome(fixture, { finalAnswer: "宮崎県日向市をおすすめします。営業時間は未確認です。", candidates: [], completed: true }).passed).toBe(false);
   });
+  it("accepts a neutral search-hit mention immediately followed by its explicit rejection", () => {
+    expect(evaluateRecommendationOutcome(fixture, { finalAnswer: "検索結果には宮崎県日向市がヒットしています。これは近場という条件に合いません。候補不足です。", candidates: [], completed: true }).passed).toBe(true);
+    expect(evaluateRecommendationOutcome(fixture, { finalAnswer: "宮崎県日向市をおすすめします。これは条件に合いません。", candidates: [], completed: true }).passed).toBe(false);
+    expect(evaluateRecommendationOutcome(fixture, { finalAnswer: "検索結果には宮崎県日向市がヒットしています。別の施設は未確認です。", candidates: [], completed: true }).passed).toBe(false);
+  });
   it("checks displayed candidates, not only final prose", () => {
     expect(evaluateRecommendationOutcome(fixture, { finalAnswer: "別地域は除外します", candidates: [{ name: "宮崎県日向市" }], completed: true }).passed).toBe(false);
     expect(evaluateRecommendationOutcome(fixture, { finalAnswer: "候補です", candidates: [{ name: "桂川緑地", targetBinding: { status: "unresolved" } }], completed: true }).passed).toBe(false);
