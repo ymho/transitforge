@@ -53,6 +53,10 @@ for (const mode of ["outside-alternative", "unknown-research", "missing-then-ans
     : "未知の場所も気になります。候補Aのアクセスはまだ未確認なら、名前だけで行けると決めず追加で調べてください。", {
     ...f.base,
     getCurrentTrip: () => trip,
+    ...(firstResponse ? { getConversationContext: () => ({ messages: [
+      { role: "user" as const, text: "9月13日に、出発駅から収録時刻表で確認できる移動候補を比較したいです。出発駅はまだお伝えしていません。" },
+      { role: "assistant" as const, text: typeof firstResponse === "string" ? firstResponse : String((firstResponse as { text?: string }).text ?? "") },
+    ] }) } : {}),
     getTravelCandidates: () => choices.map((v) => ({ id: v.value.id, targetItemId: "outbound", label: v.value.id === "candidate-a" ? "候補A" : "候補B",
       originStation: "A", destinationStation: "C", serviceDate: "2026-09-13", transferStation: "B", serviceCoverage: v.coverage })),
     candidateSelection: { taskId: "coverage-task", port: {
