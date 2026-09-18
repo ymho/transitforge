@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { supportedAnswerClaims } from "./grounded-answer";
 
 import { MultiStepAgentRuntime } from "./agent-runtime";
 import { AgentToolExecutor } from "./agent-tool-executor";
@@ -164,7 +165,8 @@ describe("MultiStepAgentRuntime", () => {
   it("registers initial Evidence before the model, traces it and permits a Tool-free grounded answer", async () => {
     const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
     const initial = evidence("application:plan"); initial.references[0]!.sourceType = "trip-state";
-    const answer = textResponse("採用済みの次予定を説明します");
+    const claims = supportedAnswerClaims([initial]);
+    const answer = textResponse(JSON.stringify({ text: claims.map((c) => c.statement).join("\n\n"), claims }));
     answer.decisionSummary = { interpretedGoal: "次予定", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"], usedEvidenceIds: [initial.id] };
     const model = sequenceModel([answer], requests);
     const runtime = new MultiStepAgentRuntime({ tools, toolExecutor, model });
@@ -290,7 +292,7 @@ describe("MultiStepAgentRuntime", () => {
     expect(requests).toHaveLength(2);
     expect(requests.every(({ modelCallId }) => typeof modelCallId === "string")).toBe(true);
     expect(requests[0]?.modelCallId).not.toBe(requests[1]?.modelCallId);
-    expect(requests[1].messages.at(-1)).toEqual({
+    expect({ ...requests[1].messages.at(-1), content: requests[1].messages.at(-1)!.content.filter((c) => c.type === "tool_result") }).toEqual({
       role: "user",
       content: [
         {

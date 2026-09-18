@@ -1,6 +1,7 @@
 import type { Evidence, EvidenceClaim } from "./evidence-model";
 import type { AgentModelResponse } from "./model-provider";
 import type { ViewerAgentAction } from "../viewer/viewer-action";
+import { parseGroundedAnswer, presentGroundedEvidence, supportedAnswerClaims } from "./grounded-answer";
 
 export interface AgentGeneratedResponse {
   text: string;
@@ -10,7 +11,7 @@ export interface AgentGeneratedResponse {
 
 export interface AgentResponseGenerator {
   followUp(missingInformation: string[]): string;
-  fromModel(response: AgentModelResponse, evidence: Evidence[]): AgentGeneratedResponse;
+  fromModel(response: AgentModelResponse, evidence: Evidence[], origin?: "interaction" | "administrative" | "grounded"): AgentGeneratedResponse;
   limitReached(hasEvidence?: boolean): string;
   failure(): string;
   groundingFailure(): string;
@@ -24,13 +25,24 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
     return `確認したいことがあります: ${missingInformation.join(" ")}`;
   }
 
-  fromModel(response: AgentModelResponse, _evidence: Evidence[]): AgentGeneratedResponse {
+  fromModel(response: AgentModelResponse, evidence: Evidence[], origin: "interaction" | "administrative" | "grounded" = "grounded"): AgentGeneratedResponse {
     const text = response.message.content
       .filter((content): content is { type: "text"; text: string } =>
         content.type === "text")
       .map(({ text }) => withoutInternalReasoning(text).trim())
       .filter(Boolean)
       .join("\n");
+    if (origin === "grounded" || evidence.some((e) => Object.keys(e.facts).length > 0) || text.startsWith("{")) {
+      const ids = response.decisionSummary?.usedEvidenceIds ?? response.declaredEvidenceIds;
+      if (!text.startsWith("{") && !response.invalidUsedEvidenceIds && ids?.length) return presentGroundedEvidence(ids, evidence);
+      if (!text.startsWith("{") && !response.invalidUsedEvidenceIds && ids?.length === 0) {
+        // Explicitly selecting no factual support never licenses the model's prose.
+        // Preserve uncertainty with the existing unknown Claim contract instead.
+        const claims = supportedAnswerClaims([]);
+        return { text: claims[0]!.statement, claims, viewerActions: [] };
+      }
+      return parseGroundedAnswer(text, evidence);
+    }
     return {
       text: text || "確認できる情報が不足しているため回答できません",
       claims: [],

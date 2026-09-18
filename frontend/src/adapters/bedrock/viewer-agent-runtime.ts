@@ -1636,7 +1636,12 @@ function trainSearchEvidence(output: unknown, context: { retrievedAt: string }):
       category: "train" as const,
       knowledgeKind: "deterministic_fact" as const,
       subject: String(match.trainNumber ?? match.serviceUid),
-      facts: { serviceUid: match.serviceUid },
+      facts: { serviceUid: match.serviceUid,
+        ...(typeof match.trainNumber === "string" ? { trainNumber: match.trainNumber } : {}),
+        ...(typeof match.trainName === "string" ? { trainName: match.trainName } : {}),
+        ...(typeof match.stationName === "string" ? { stationName: match.stationName } : {}),
+        ...(typeof match.arrivalTimeMinutes === "number" ? { arrivalTimeMinutes: match.arrivalTimeMinutes } : {}),
+      },
       references: [{
         sourceType: "timetable-index" as const,
         sourceRef: match.serviceUid,

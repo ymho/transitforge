@@ -12,6 +12,12 @@
 
 評価レポートなどの派生物は`/tmp/transitforge-agent-eval`へ生成し Gitへ追加しない
 
+#376の一般回答は`frontend/src/adapters/bedrock/general-grounding-scenario.fixture.ts`で
+既存のsynthetic rail fixtureと本番Converse/Runtime/Default generatorを接続する。
+正常経路・架空所要時間・別日付の3ケースを反復し、非unknown Claimを分母にGrounded/Unsupported率を測る。
+実Providerデータや内部思考は録音しない。実行手順は
+[一般回答のGrounding](../../docs/architecture/general-answer-grounding.md)を参照する。
+
 Trip Progressの複数turnシナリオ定義（相談文・閾値・tag）は`agent-eval-cases.json`の
 `travelProgressScenarios`に置く（dataset-v2、旧v1 reader互換）。実行用fixtureは本番Runtimeと
 colocateする`frontend/src/adapters/bedrock/travel-progress-scenarios.fixture.ts`に置く。

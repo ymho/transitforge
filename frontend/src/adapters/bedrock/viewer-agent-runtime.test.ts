@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { modelGroundedAnswer } from "./ask-progress-scenarios.fixture";
 
 import type { Train } from "@raiquora/train/train";
 import type { TrainPosition } from "../../domain/train-position";
@@ -323,10 +324,7 @@ describe("Bedrock viewer agent", () => {
       .mockImplementationOnce(async (messages) => {
         expect(messages.flatMap(({ content }) => content).some((content) =>
           "text" in content && content.text.length === 0)).toBe(false);
-        return {
-          message: { role: "assistant", content: [{ text: "城崎温泉なら外湯を巡りながら休めます。" }] },
-          stopReason: "end_turn",
-        };
+        return modelGroundedAnswer(messages);
       });
 
     const result = await runViewerAgentRuntime("リラックスできる観光したい", {
@@ -584,13 +582,7 @@ describe("Bedrock viewer agent", () => {
         },
         stopReason: "tool_use",
       })
-      .mockResolvedValueOnce({
-        message: {
-          role: "assistant",
-          content: [{ text: "18時40分着のはるか16号があります。" }],
-        },
-        stopReason: "end_turn",
-      });
+      .mockImplementationOnce(async (messages) => modelGroundedAnswer(messages));
 
     const result = await runViewerAgentRuntime(
       "18時30分ごろ京都に着く特急はありますか",
@@ -2461,10 +2453,7 @@ describe("Bedrock viewer agent", () => {
         } }] },
         stopReason: "tool_use",
       })
-      .mockResolvedValueOnce({
-        message: { role: "assistant", content: [{ text: "候補を比較して、静かに過ごせる場所を提案します。" }] },
-        stopReason: "end_turn",
-      });
+      .mockImplementationOnce(async (messages) => modelGroundedAnswer(messages));
 
     const result = await runViewerAgentRuntime("リラックスできる観光したい", {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,
@@ -3377,10 +3366,7 @@ describe("Bedrock viewer agent", () => {
           input: { candidates: [{ name: "旭日酒造", sourceUrl: "https://tourism.example/izumo-sake" }] },
         } }] }, stopReason: "tool_use",
       })
-      .mockResolvedValueOnce({
-        message: { role: "assistant", content: [{ text: "出雲の旅程を保ったまま、旭日酒造を候補として地図に表示しました。" }] },
-        stopReason: "end_turn",
-      });
+      .mockImplementationOnce(async (messages) => modelGroundedAnswer(messages));
 
     const result = await runViewerAgentRuntime("酒蔵などはない？", {
       trains: [train], getPositions: () => [], getRouteTime: () => 1_200,

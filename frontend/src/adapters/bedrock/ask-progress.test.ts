@@ -113,7 +113,7 @@ describe("Ask + Progress production pipeline", () => {
       if (step === (kind === "unread" ? 0 : 1)) return modelTools(modelTool("present_travel_progress", {
         summary: "これは公開してはいけない推薦", findings: [{ sourceUrl: progressPage.url, quote: kind === "fabricated-quote" ? "存在しない観光施設の紹介です。" : progressQuote }],
       }));
-      return modelAnswer("候補を裏付ける情報を確認できませんでした。");
+      return modelTools(modelTool("ask_follow_up", progressQuestion));
     });
     expect(JSON.stringify(response)).not.toContain("これは公開してはいけない");
     expect(observation?.progress).toEqual([]);
