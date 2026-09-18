@@ -1,6 +1,17 @@
 import { applyTripProposal, validateTrip, type Trip, type TripUpdateProposal } from "@raiquora/trip/trip";
 import type { PlanningState, LifecycleState } from "@raiquora/trip/trip-state";
 import { assessTripTime, type TripClock } from "@raiquora/trip/trip-temporal";
+import { canConfirmTrip, type TripAdoptionAction } from "@raiquora/trip/trip-adoption";
+
+/** Explicit product action; host confirms this exact proposal separately before existing CAS. */
+export function proposeTripAdoption(trip: Trip, action: TripAdoptionAction): TripUpdateProposal {
+  validateTrip(trip);
+  if (["completed", "cancelled"].includes(trip.lifecycleState) || action === "confirm" && !canConfirmTrip(trip)) {
+    throw new Error("日程のある旅程を確認してください");
+  }
+  return { tripId: trip.id, baseRevision: trip.revision,
+    summary: action === "confirm" ? "この旅程で行く" : "計画へ戻す", patches: [{ type: "adoption", action }] };
+}
 
 /** AI or UI proposes a position; Domain validates the adopted items. No tool routing or storage. */
 export function proposeTripPlanningState(trip: Trip, state: PlanningState): TripUpdateProposal {

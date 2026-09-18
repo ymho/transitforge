@@ -6,6 +6,7 @@ import { validateItinerarySchedule, projectStaySchedule, sameZonedInstant, type 
 import { validateTripRequest, validatePartyAssumptionTransition, type TripRequest } from "./trip-request";
 import { validatePlanningState, validateTripState, type PlanningState, type LifecycleState } from "./trip-state";
 import { assessTripTime, type TripClock } from "./trip-temporal";
+import { validateTripAdoption, canConfirmTrip, adoptionNeedsReview, tripAdoptionConfirmationKey, type TripAdoption, type TripAdoptionAction } from "./trip-adoption";
 
 /** The single Trip V2 aggregate. Deferred fields are absent, not default-completed. Writer remains gated. */
 export interface Trip {
@@ -18,6 +19,7 @@ export interface Trip {
   readonly request: TripRequest;
   readonly planningState: PlanningState;
   readonly lifecycleState: LifecycleState;
+  readonly adoption?: TripAdoption;
   readonly items: readonly ItineraryItem[];
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -50,6 +52,7 @@ export type TripPatch = { readonly type: "replace"; readonly itemId: string; rea
   | { readonly type: "move"; readonly itemId: string; readonly afterId?: string }
   | { readonly type: "request"; readonly request: TripRequest }
   | { readonly type: "planning"; readonly state: PlanningState }
+  | { readonly type: "adoption"; readonly action: TripAdoptionAction }
   | { readonly type: "lifecycle"; readonly state: LifecycleState; readonly basis: "schedule" | "user_confirmation" };
 export interface TripUpdateProposal {
   readonly tripId: string;
@@ -75,7 +78,8 @@ export function validateSummaryDestination(value: string): void {
 }
 
 export function validateTrip(trip: Trip): void {
-  exactKeys(trip, ["id", "title", "summaryDestination", "schemaVersion", "revision", "createdAt", "updatedAt", "items", "request", "planningState", "lifecycleState"]);
+  exactKeys(trip, ["id", "title", "summaryDestination", "schemaVersion", "revision", "createdAt", "updatedAt", "items", "request", "planningState", "lifecycleState", "adoption"]);
+  if (trip.adoption !== undefined) validateTripAdoption(trip.adoption);
   if (trip.summaryDestination !== undefined) validateSummaryDestination(trip.summaryDestination);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(trip.id) ||
       trip.schemaVersion !== 2 || !Number.isSafeInteger(trip.revision) || trip.revision < 0 ||
@@ -126,7 +130,7 @@ function validateItem(item: ItineraryItem): void {
 
 /** Pure in-memory proposal application, NOT a production writer/CAS implementation. */
 export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
-  authority: { clock?: TripClock; confirmedLifecycle?: LifecycleState } = {}): Trip {
+  authority: { clock?: TripClock; confirmedLifecycle?: LifecycleState; confirmedAdoption?: string } = {}): Trip {
   validateTrip(trip);
   exactKeys(proposal, ["tripId", "baseRevision", "summary", "patches"]);
   if (!Number.isSafeInteger(proposal.baseRevision) || proposal.baseRevision < 0 ||
@@ -136,8 +140,17 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
   const items = [...trip.items];
   let request = trip.request;
   let planningState = trip.planningState;
+  let adoptionAction: TripAdoptionAction | undefined;
   let lifecyclePatch: Extract<TripPatch, { type: "lifecycle" }> | undefined;
   for (const patch of proposal.patches) {
+    if (patch.type === "adoption") {
+      exactKeys(patch, ["type", "action"]);
+      if (adoptionAction || !["confirm", "withdraw"].includes(patch.action) ||
+          ["cancelled", "completed"].includes(trip.lifecycleState) ||
+          authority.confirmedAdoption !== tripAdoptionConfirmationKey(proposal)) throw new Error("Explicit adoption confirmation required");
+      adoptionAction = patch.action;
+      continue;
+    }
     if (patch.type === "remove" || patch.type === "move") {
       exactKeys(patch, patch.type === "remove" ? ["type", "itemId"] : ["type", "itemId", "afterId"]);
       const index = items.findIndex(({ id }) => id === patch.itemId);
@@ -192,10 +205,17 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
     items[index] = patch.item;
   }
   // Preview keeps revision/updatedAt. Only a successful server CAS increments them.
-  const result: Trip = { id: trip.id, schemaVersion: 2, revision: trip.revision, title: trip.title,
+  let result: Trip = { id: trip.id, schemaVersion: 2, revision: trip.revision, title: trip.title,
     ...(trip.summaryDestination === undefined ? {} : { summaryDestination: trip.summaryDestination }),
     createdAt: trip.createdAt, updatedAt: trip.updatedAt, items, request, planningState,
     lifecycleState: lifecyclePatch?.state ?? trip.lifecycleState };
+  if (adoptionAction === "confirm") {
+    if (!canConfirmTrip(result) || !authority.clock) throw new Error("Adopted dated itinerary and real Clock required");
+    result = { ...result, adoption: { confirmedAt: authority.clock.now().toISOString() } };
+  } else if (adoptionAction !== "withdraw" && trip.adoption) {
+    result = { ...result, adoption: { ...trip.adoption,
+      ...(adoptionNeedsReview(trip, result) ? { needsReconfirmation: true as const } : {}) } };
+  }
   validateTrip(result);
   validatePartyAssumptionTransition(trip.request, result.request);
   // Confirmation is supplied separately by Application, never trusted from a model's patch body.

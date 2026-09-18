@@ -73,6 +73,14 @@ V2へ変わったという記述にはしない。#368/#380の残務は既に#38
 
 ## 影響・リスク
 
+### #450 製品上の採用意思
+
+同じTripへoptionalな採用確認metadataを追加し、readyとは分離する。
+仮保存・採用意思・成立性認定・実績・予定上の時間位置の対応と互換読込は
+[Trip採用契約](../architecture/trip-adoption.md)を参照する。旧readyを自動で明示採用へ移行しない。
+採用・撤回は既存typed ProposalとCAS、終了・中止は既存lifecycle確認を使う。
+別planStatus state machineやUI側の分類正本は作らない。
+
 - 後続Issueは1つの契約へ向かい、候補の監視や古い会話による旅程の上書きを避けられる。
 - 個別PRを可能にするため、新しいconverter/readerの導入と本番writerの切替を分離する。
 - 意図した変更として#383は#385のTrip骨格後、#384は#387の仮定契約と統合して実装する。
