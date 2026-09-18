@@ -191,3 +191,11 @@ ID TokenはAPIへ送らない。Basic認証とOAC、既存の公開writer gate�
 `fixed_egress_agent_role_name`は統合時にVPC外Server roleを指定するための任意入力であり、未指定ではInvoke権限を付けない。
 専用Secretの器だけを作り値は管理しない。共有Secretからの宿泊credentials移行・Tool接続・実plan確認は
 [#480統合手順](../../../../docs/architecture/fixed-egress-provider.md)に従う。今回apply/deployは行わない。
+
+## Server Agent Streamingの短期gate
+
+`agent_stream_enabled`は既定false。新REST/Lambda/CloudFront経路は作成せず、Browserも切り替えない。
+正本は`agent-stream.tf`で、experiment rootのfixture構成には依存しない。
+AWS applyせず確認する手順と#451/#479後の有効化条件は
+[Streaming実装記録](../../../../docs/architecture/agent-streaming-production.md)を参照。
+`terraform test -filter=tests/agent-stream.tftest.hcl`はmock providerのoffline planだけを実行する。

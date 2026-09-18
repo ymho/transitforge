@@ -128,3 +128,12 @@ describe("Server State Context Loader", () => {
     expect(f.commands).toHaveLength(0); expect(f.trips.commands).toHaveLength(0);
   });
 });
+
+it("loads only the bounded history before the persisted user message, even on retry with later messages", async () => {
+  const f = setup(); await f.conversations.create(a, metadata());
+  await f.conversations.append(a, id, 0, Array.from({ length: 20 }, (_, i) => ({ role: "user" as const, text: `message-${i + 1}` })));
+  const load = createServerStateContextLoader({ conversations: f.conversations, profiles: f.profiles, trips: f.trips.repository }, { historyBeforeSequence: 15 });
+  const context = await load({ principal: a, conversationId: id });
+  expect(context.conversation?.messages?.map((m) => m.text)).toEqual(Array.from({ length: 12 }, (_, i) => `message-${i + 3}`));
+  expect(f.history).toHaveBeenCalledExactlyOnceWith(a, id, { after: "000000000002", limit: 12 });
+});

@@ -62,3 +62,32 @@ const providerMetadata = await stat(providerBundle);
 if (!providerMetadata.isFile() || providerMetadata.size < 1 || providerMetadata.size > 20 * 1_024 * 1_024 ||
     typeof (await import(pathToFileURL(providerBundle).href)).handler !== "function") throw new Error("Invalid Provider bundle");
 console.log(JSON.stringify({ package: "fixed-egress-provider", runtime: provider.runtime, bytes: providerMetadata.size }));
+
+// Streaming runtime global is provided by AWS; use a local shim only to validate the bundle export.
+const stream = JSON.parse(await readFile(resolve(root, "infra/packaging/agent-stream.json"), "utf8"));
+if (stream.runtime !== "nodejs22.x" || stream.handler !== "index.handler" ||
+    JSON.stringify(stream.files) !== '["index.cjs"]') throw new Error("Invalid streaming package contract");
+const streamBundle = resolve(root, stream.source, stream.files[0]);
+const streamMetadata = await stat(streamBundle);
+if (!streamMetadata.isFile() || streamMetadata.size < 1 || streamMetadata.size > 20 * 1_024 * 1_024) throw new Error("Invalid streaming bundle size");
+const { Writable } = await import("node:stream");
+const previousStreamingApi = globalThis.awslambda;
+const previousStreamingGate = process.env.AGENT_STREAM_ENABLED;
+try {
+  delete process.env.AGENT_STREAM_ENABLED;
+  let status;
+  globalThis.awslambda = {
+    streamifyResponse: handler => handler,
+    HttpResponseStream: { from: (output, metadata) => { status = metadata.statusCode; return output; } },
+  };
+  const streaming = await import(pathToFileURL(streamBundle).href);
+  if (typeof streaming.handler !== "function") throw new Error("Invalid streaming handler export");
+  await streaming.handler({}, new Writable({ write(_chunk, _encoding, callback) { callback(); } }));
+  if (status !== 503) throw new Error("Streaming bundle must fail closed without its gate");
+} finally {
+  if (previousStreamingApi === undefined) delete globalThis.awslambda;
+  else globalThis.awslambda = previousStreamingApi;
+  if (previousStreamingGate === undefined) delete process.env.AGENT_STREAM_ENABLED;
+  else process.env.AGENT_STREAM_ENABLED = previousStreamingGate;
+}
+console.log(JSON.stringify({ package: "agent-stream", runtime: stream.runtime, bytes: streamMetadata.size }));

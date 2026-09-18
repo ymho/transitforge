@@ -138,3 +138,12 @@ Serverは既存AccommodationProvider PortをLambdaAccommodationProviderへ差し
 宿泊入力検証はBackend contractsを共用し、Invoke DTO/HTTP検証/AWS SDKはadaptersへ閉じる。
 専用Lambdaだけが宿泊credentialsとHttpAccommodationProviderを所有し、Tool/Evidence/Stateは移さない。
 既存production組成は統合まで維持する。
+
+## Regional REST Streaming構成（#480 Phase A）
+
+ADR 0070の採用判断をdefault-offの環境構成へ接続した。
+`agent-stream-lambda.ts`はVPC外のStreaming入口とし、transport adapterがHTTP/SSEの配送を所有する。
+Server Agent Runtimeはtransport非依存のturn実行とTool組成を所有し、固定IPが必要な宿泊通信は
+AccommodationProvider Portの先の専用Provider Lambdaへ分離する。Streaming Lambdaへ宿泊credentialsや
+VPC依存を持ち込まない。両Lambdaのpackageは別artifactとしてbuild・検証し、接続とproduction切替は統合時に行う。
+[Streaming構成と後続gate](agent-streaming-production.md)にTerraform、Lambda組成、認証、監視とcutover前の残作業を記録する。
