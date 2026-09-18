@@ -34,6 +34,18 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
       .join("\n");
     if (origin === "grounded" || evidence.some((e) => Object.keys(e.facts).length > 0) || text.startsWith("{")) {
       const ids = response.decisionSummary?.usedEvidenceIds ?? response.declaredEvidenceIds;
+      // A model may add a label/fence around the structured presentation. Only the
+      // validated JSON is rendered; surrounding prose never becomes a Claim.
+      const start = text.indexOf("{"), end = text.lastIndexOf("}");
+      if (start >= 0 && end >= start) {
+        const encoded = text.slice(start, end + 1);
+        let value: unknown;
+        try { value = JSON.parse(encoded); } catch { /* Existing strict fallback below. */ }
+        if (value && typeof value === "object" && "kind" in value && value.kind === "source-explanation") {
+          if (response.invalidUsedEvidenceIds) throw new Error("Invalid factual references");
+          return sourceExplanation(encoded, evidence, profile)!;
+        }
+      }
       if (!text.startsWith("{") && !response.invalidUsedEvidenceIds && ids?.length) return presentGroundedEvidence(ids, evidence);
       if (!text.startsWith("{") && !response.invalidUsedEvidenceIds && ids?.length === 0) {
         // Explicitly selecting no factual support never licenses the model's prose.

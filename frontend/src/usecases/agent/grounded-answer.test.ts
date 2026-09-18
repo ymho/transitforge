@@ -60,6 +60,19 @@ it("a factual answer cannot append unbound prose or forge an Evidence reference"
   const wrong = answer(); wrong.claims[0]!.evidenceIds = ["absent"];
   expect(() => parseGroundedAnswer(JSON.stringify(wrong), [e])).toThrow();
 });
+it("renders a labelled source contract without losing its recommendation or exposing surrounding prose", () => {
+  const encoded = JSON.stringify({ kind: "source-explanation", sections: [{ evidenceId: placeEvidence.id,
+    quote: "白壁の町並みを歩きながら歴史資料館を巡れます。", mode: "recommendation", preference: { field: "favoriteInterests", value: "歴史" } }] });
+  const generator = new DefaultAgentResponseGenerator();
+  for (const text of [`回答:\n${encoded}`, `\`\`\`json\n${encoded}\n\`\`\``, `現在この場所にいます。${encoded}無料列車で5分です。`]) {
+    const result = generator.fromModel({ ...model(text), declaredEvidenceIds: [placeEvidence.id] }, [placeEvidence], "grounded", { favoriteInterests: ["歴史"] });
+    expect(result.claims.map((c) => c.kind)).toEqual(["fact", "inference"]);
+    expect(result.text).toContain("普段の好み「歴史」");
+    expect(result.text).not.toMatch(/現在この場所|無料列車|5分|回答:/u);
+  }
+  expect(() => generator.fromModel(model(`回答:${encoded.replace("歴史資料館", "無料列車")}`), [placeEvidence])).toThrow();
+  expect(() => generator.fromModel({ ...model(`回答:${encoded}`), invalidUsedEvidenceIds: true }, [placeEvidence])).toThrow();
+});
 it("existing usedEvidenceIds select Application facts, never model-authored rail numbers", () => {
   const response = { ...model("向日町から倉敷へ25分です。現在乗車しています。"), declaredEvidenceIds: [e.id] };
   const result = new DefaultAgentResponseGenerator().fromModel(response, [e], "grounded");
