@@ -345,7 +345,7 @@ export class MultiStepAgentRuntime {
             evidence.some((e) => Object.keys(e.facts).length > 0) ||
               (!evidence.length && [...executedToolCalls.values()].some((e) => this.dependencies.toolExecutor.collectsEvidence(e.toolName))) || (used?.length ?? 0) > 0 ||
               (modelResponse.decisionSummary?.selectedAction === "answer" && modelResponse.decisionSummary.reasonCodes.some((r) => r === "evidence_sufficient" || r === "evidence_required"))
-              ? "grounded" : toolCalls ? "administrative" : "interaction");
+              ? "grounded" : toolCalls ? "administrative" : "interaction", decisionContext.travelProfile);
         } catch {
           if (!correctedResponseContract && !finalResponseRequired) {
             correctedResponseContract = true;
