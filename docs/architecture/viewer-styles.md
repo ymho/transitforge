@@ -31,6 +31,10 @@ import順による上書きが必要な場合は`viewer.css`ではなく所有�
 
 ## 表示比較
 
+地図操作内の`hidden`は要素種別に関係なく`display: none !important`で維持する。
+再生速度のwrapperが`display: grid`でも、既存`renderDisplayMode`の非表示を上書きしない。
+mode stateや操作可否の正本はCSSへ移さない。
+
 APIやBedrockを使わず旅程を確認する場合は
 `npm run dev --workspace @raiquora/frontend -- --host 0.0.0.0`で起動し `?trip-preview=1`を付ける
 局地天気の表示を確認する場合は`?weather-preview=mixed`を付ける

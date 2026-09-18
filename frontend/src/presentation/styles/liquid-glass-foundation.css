@@ -345,7 +345,7 @@
   border-top: 0;
 }
 
-.map-tools button[hidden] {
+.map-tools [hidden] {
   display: none !important;
 }
 
