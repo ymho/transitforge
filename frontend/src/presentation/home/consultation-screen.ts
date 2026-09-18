@@ -96,7 +96,9 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
       for (const constraint of trip.request.constraints) {
         const r = constraint.requirement;
         const display = r.type === "origin" ? ["出発地", r.place.name] : r.type === "dates" ? ["日程", `${r.start.earliest}〜${r.end?.latest ?? r.start.latest}`]
-          : r.type === "destinations" ? ["行き先", r.places.map((p) => p.name).join("、")] : undefined;
+          : r.type === "destinations" ? ["行き先", r.places.map((p) => p.name).join("、")]
+          : r.type === "pace" ? ["ペース", r.value <= .4 ? "ゆっくり" : r.value >= .7 ? "いろいろ巡る" : "バランス"]
+          : r.type === "experience" ? ["やりたいこと", r.text] : undefined;
         if (!display) continue;
         row(display[0]!, display[1]!, !state.viewer && r.type === "origin" && constraint.source === "user" && !constraint.assumptionId
           ? () => edit("出発地", r.place.name, (name) => proposeTripRequestUpdate(trip, { ...trip.request,
