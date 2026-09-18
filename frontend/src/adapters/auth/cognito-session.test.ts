@@ -156,3 +156,12 @@ it("validates config and allows only known document paths for return-to", () => 
   for (const path of ["//evil.test", "https://evil.test", "/\\evil", "/?token=secret", "/#trip-share=secret", "/unknown", null]) expect(safeReturnPath(path)).toBe("/");
   expect(safeReturnPath("/index.html")).toBe("/index.html");
 });
+
+it("invalidates rejected API credentials locally without logout navigation or automatic retry", async () => {
+  const { callback } = await login(); mockTokens();
+  const b = browser(callback), auth = createCognitoSession(config, b); await auth.initialize();
+  auth.invalidate();
+  expect(auth.getState().status).toBe("expired");
+  expect(await auth.getAccessToken()).toBeUndefined();
+  expect(sessionStorage.length).toBe(0); expect(b.location.assign).not.toHaveBeenCalled();
+});

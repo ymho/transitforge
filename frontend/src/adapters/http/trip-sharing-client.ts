@@ -1,3 +1,4 @@
+import { personalApiFetch } from "./personal-api-fetch";
 import { validateTrip, type Trip } from "@raiquora/trip/trip";
 import { validateReservationFact, type ReservationFact } from "@raiquora/trip/reservation";
 import type { TripRole, SharedTripRole, TripParticipantView, ShareGrantView } from "@raiquora/trip/trip-sharing";
@@ -15,7 +16,7 @@ function participant(v: unknown): TripParticipantView { const r = record(v); if 
   id: text(r.id), tripId: text(r.tripId), role: sharedRole(r.role), active: r.active, version: version(r.version), joinedAt: text(r.joinedAt), updatedAt: text(r.updatedAt) }; }
 function array(v: unknown): unknown[] { if (!Array.isArray(v) || v.length > 20) throw invalid(); return v; }
 export class HttpTripSharingClient implements TripSharingClient {
-  constructor(private readonly request: typeof fetch = fetch, private readonly endpoint = "/api/trips/sharing/v1") {}
+  constructor(private readonly request: typeof fetch = personalApiFetch, private readonly endpoint = "/api/trips/sharing/v1") {}
   private async execute(command: Record<string, unknown>) {
     const response = await this.request(this.endpoint, { method: "POST", credentials: "same-origin", cache: "no-store", referrerPolicy: "no-referrer",
       headers: { "content-type": "application/json" }, body: JSON.stringify({ version: "trip-sharing-v1", ...command }), signal: AbortSignal.timeout(15_000) });

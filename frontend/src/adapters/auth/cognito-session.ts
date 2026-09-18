@@ -126,6 +126,7 @@ export function createCognitoSession(config: AuthConfig, browser: AuthBrowser): 
       url.searchParams.set("logout_uri", `${browser.location.origin}/`);
       browser.location.assign(url.href);
     },
+    invalidate() { ++generation; clear(); clearPending(); refreshToken = undefined; publish({ status: "expired" }); },
     async getAccessToken() { expire(); return session?.accessToken; },
   };
 }

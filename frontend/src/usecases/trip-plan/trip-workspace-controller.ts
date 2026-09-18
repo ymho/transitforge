@@ -16,6 +16,8 @@ export interface TripProposalConfirmation { reservationChangeKey?: string; repla
 
 /** A read/preview host, not a Repository. No default writer, legacy conversion or dual write. */
 export interface TripWorkspaceSource {
+  /** Opaque session generation for dropping proposals across account changes. */
+  sessionVersion?(): number | undefined;
   checklist?: ChecklistWorkspacePort;
   sourceState?: Exclude<TripSourceState, "legacy-only">;
   getLoadState?(): TripLoadState;
@@ -100,8 +102,14 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
       if (trip) validateTrip(trip);
       sessions.set(id, { source });
       subscriptions.get(id)?.();
+      let authVersion = source.sessionVersion?.();
       const unsubscribe = source.subscribe?.(() => {
         const s = sessions.get(id), latest = source.getCurrentTrip();
+        const nextAuthVersion = source.sessionVersion?.();
+        if (s && nextAuthVersion !== authVersion) {
+          delete s.proposal; delete s.base; delete s.itemId; checklist.forget(id);
+        }
+        authVersion = nextAuthVersion;
         if (s?.proposal && latest && latest.revision !== s.proposal.baseRevision) { delete s.proposal; delete s.base; }
         if (id === sessionId) publish();
       });

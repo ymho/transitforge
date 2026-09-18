@@ -1,3 +1,5 @@
+import { authenticationErrorResponse, httpMethod } from "./adapters/http-api-auth.js";
+import { requirePersonalOperation } from "./adapters/api-route-policy.js";
 import { jsonResponse, type LambdaHttpEvent } from "./contracts/http.js";
 import { TripResourceError } from "./contracts/trip-api.js";
 import { requireTripPrincipal } from "./ports/trip-repository.js";
@@ -10,8 +12,9 @@ export function createNotificationHandler(application?: Pick<NotificationApplica
     try {
       if (!application || !authenticate) return jsonResponse(501, { version: "notification-api-v1", error: "unavailable" });
       const principal = await authenticate(event); requireTripPrincipal(principal);
-      if (event.requestContext?.http?.method !== "POST" || !event.body || event.isBase64Encoded || event.body.length > 2048) throw new TripResourceError("invalid-input");
+      if (httpMethod(event) !== "POST" || !event.body || event.isBase64Encoded || event.body.length > 2048) throw new TripResourceError("invalid-input");
       const v = JSON.parse(event.body) as Record<string, unknown>;
+      requirePersonalOperation("notification", event, v);
       if (!v || typeof v !== "object" || v.version !== "notification-api-v1") throw new TripResourceError("invalid-input");
       const fields = v.operation === "list" ? ["version", "operation", "after"] : v.operation === "read" ? ["version", "operation", "id", "revision"] : [];
       if (!fields.length || Object.keys(v).some((k) => !fields.includes(k))) throw new TripResourceError("invalid-input");
@@ -24,6 +27,8 @@ export function createNotificationHandler(application?: Pick<NotificationApplica
       await application.read(principal, v.id as string, v.revision as number);
       return jsonResponse(200, { version: "notification-api-v1", ok: true });
     } catch (e) {
+      const authError = authenticationErrorResponse(e, "notification-api-v1");
+      if (authError) return authError;
       const code = e instanceof TripResourceError ? e.code : e instanceof SyntaxError ? "invalid-input" : "unavailable";
       return jsonResponse(code === "unauthenticated" ? 401 : code === "not-found" ? 404 : code === "conflict" ? 409 : code === "unavailable" ? 503 : 400,
         { version: "notification-api-v1", error: code });

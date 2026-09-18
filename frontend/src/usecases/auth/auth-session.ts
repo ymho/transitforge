@@ -9,6 +9,8 @@ export interface AuthSession {
   subscribe(listener: (state: AuthState) => void): () => void;
   login(): Promise<void>;
   logout(): Promise<void>;
+  /** Discard locally rejected/expired credentials without retrying any business request. */
+  invalidate(): void;
   /** Only Access Tokens, never ID Tokens. No automatic business request retry. */
   getAccessToken(): Promise<string | undefined>;
 }
