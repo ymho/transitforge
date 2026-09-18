@@ -39,7 +39,7 @@ jobs:
         env:
           PLAYWRIGHT_MODULE: /tmp/visual-tools/node_modules/playwright/index.mjs
         run: |
-          npm run dev -- --host 127.0.0.1 --port 5178 > /tmp/visual-vite.log 2>&1 &
+          npm run dev --workspace @raiquora/frontend -- --host 127.0.0.1 --port 5178 --strictPort > /tmp/visual-vite.log 2>&1 &
           node tools/capture_product_design.mjs .artifacts/product-design
       - name: Upload visual comparison (not a deployment)
         if: always()
