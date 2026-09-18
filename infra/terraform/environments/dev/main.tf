@@ -127,6 +127,38 @@ resource "aws_cloudfront_distribution" "website" {
   default_root_object = "index.html"
   price_class         = "PriceClass_200"
 
+  dynamic "origin" {
+    for_each = var.agent_stream_enabled && !var.legacy_cloudfront_redirect_enabled ? [true] : []
+    content {
+      domain_name                 = "${aws_api_gateway_rest_api.agent_stream["stream"].id}.execute-api.${var.aws_region}.amazonaws.com"
+      origin_id                   = local.agent_stream_name
+      origin_path                 = "/${var.environment}"
+      connection_attempts         = 1
+      response_completion_timeout = 260
+      custom_origin_config {
+        http_port              = 80
+        https_port             = 443
+        origin_protocol_policy = "https-only"
+        origin_ssl_protocols   = ["TLSv1.2"]
+        origin_read_timeout    = 60
+      }
+    }
+  }
+  dynamic "ordered_cache_behavior" {
+    for_each = var.agent_stream_enabled && !var.legacy_cloudfront_redirect_enabled ? [true] : []
+    content {
+      path_pattern             = local.agent_stream_path
+      target_origin_id         = local.agent_stream_name
+      viewer_protocol_policy   = "https-only"
+      allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+      cached_methods           = ["GET", "HEAD"]
+      cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+      origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+      compress                 = false
+      # No Basic auth function: Authorization is the Cognito Bearer token.
+    }
+  }
+
   origin {
     domain_name              = aws_s3_bucket.website.bucket_regional_domain_name
     origin_access_control_id = aws_cloudfront_origin_access_control.website.id

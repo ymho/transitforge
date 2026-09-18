@@ -183,3 +183,11 @@ ID TokenはAPIへ送らない。Basic認証とOAC、既存の公開writer gate�
 設定画面の「ログイン / 新規登録」から日本語Managed Loginへ進む。tokenは5分のタブsessionとし、
 期限切れ時は再ログインする。詳しい保存・logout保証と未実施の実環境試験は
 [ADR 0069](../../../../docs/decisions/0069-use-cognito-managed-login-for-spa.md)を参照する。
+
+## Server Agent Streamingの短期gate
+
+`agent_stream_enabled`は既定false。新REST/Lambda/CloudFront経路は作成せず、Browserも切り替えない。
+正本は`agent-stream.tf`で、experiment rootのfixture構成には依存しない。
+AWS applyせず確認する手順と#451/#479後の有効化条件は
+[Streaming実装記録](../../../../docs/architecture/agent-streaming-production.md)を参照。
+`terraform test -filter=tests/agent-stream.tftest.hcl`はmock providerのoffline planだけを実行する。

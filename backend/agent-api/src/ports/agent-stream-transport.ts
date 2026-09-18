@@ -1,4 +1,6 @@
 export interface StreamRequest {
+  apiRequestId?: string;
+  lambdaRequestId?: string;
   method?: string;
   path?: string;
   headers?: Record<string, string | undefined>;

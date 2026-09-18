@@ -70,3 +70,11 @@ npm run typecheck --workspace @raiquora/agent-api
 `agent-stream-poc-lambda.ts`は独立したdefault-off検証入口で、production package/routeへは未接続。
 既存Server AgentをApplication event sinkで観測し、認証後にprogress/final/errorをSSEへ変換する。
 [検証記録](../../docs/experiments/agent-stream-462.md)と[ADR 0070](../../docs/decisions/0070-select-regional-rest-agent-streaming.md)に再現手順・測定値・未実施のAWS gateを記録する。
+
+## Default-off Server Agent Streaming（#480 Phase A）
+
+`npm run build`は`dist/agent-stream/index.cjs`も生成する。manifestは
+`infra/packaging/agent-stream.json`。`AGENT_STREAM_ENABLED=true`以外では503で終了する。
+既存stream adapterとCognito verifierを使い、Application factoryを差し替えられる。
+Context Loaderと全Toolは後続接続で、本番Browserは未接続。
+構成・監視・確認コマンドは[Streaming実装記録](../../docs/architecture/agent-streaming-production.md)を参照。
