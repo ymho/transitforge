@@ -7,8 +7,8 @@ home、companions、travelStyle、preferences、transportに対応する1つの�
 未設定数値/車利用はfield省略とする。0やfalse、標準ペースへ変換しない。legacy null移動時間も維持する。
 旧v2の値は読込/編集/保存後もそのままで、schema移行・保存キー変更・原本削除はない。
 
-各スライダーは0〜1を直接扱う。無操作時は.123等の旧重みも丸めない。
-未設定のスライダーは無効で、利用者が「設定」を選んだ時だけ値を保存する。
+v6の専用編集画面で日本語チップを選ぶ。基本情報/旅のペース/興味・目的/宿泊・食事/配慮事項でまとめる。
+無操作時は.123等の旧重みも丸めない。選択した項目だけ代表値へ変換し、未設定は省略する。
 未設定fieldを別の既定値で上書きせず、表示しない子どもの年代も保持する。
 
 ## 編集と失敗
@@ -26,7 +26,11 @@ AgentへはusualPartySizeHint/preferredTransportHintとしてbounded projection�
 予約の人数、今回のparty、hard constraintへ自動転記しない。
 
 notes.budget/lodging/food/avoidancesは各500文字以下の端末メモ。HTMLとして実行しない。
-生Profile・自由記述をTraceへ出さないためメモはAgentへ自動転送しない。フォームでもその制限を明示する。
+aiNoteFieldsは利用者が明示保存した項目ごとのAI送信同意。旧メモに同意を付与しない。
+同意した項目だけconsentedPreferenceNotesへ各240文字/最大4項目を投影する。生Profileを送信しない。
+この投影は命令/HTMLではなく普段の希望で、現在の明示条件を優先する。送信同意は記録同意ではない。
+該当turnのAgent Traceは本文/Tool入出力/判断自由文を記録せず、モデル呼出しの保存Traceも会話全文を省略する。
+利用者が同意を解除しても端末メモは残し、以後のProfile投影から外す。
 Profile編集による端末間同期はない。#451の認証切替では端末Profileを別principalへ暗黙移譲せず、明示的な取込/継続確認を所有する。
 現時点で公開認証/保存gateは変更しない。
 

@@ -6,6 +6,19 @@ import { AgentTraceRecorder, summarizeTracePayload } from "./agent-trace";
 const fixedNow = () => new Date("2026-08-25T09:00:00.000Z");
 
 describe("AgentTraceRecorder", () => {
+  it("model consent does not record Profile text, Tool echoes or derived explanations", () => {
+    const recorder = new AgentTraceRecorder("private-turn", { omitContent: true });
+    recorder.taskStarted("private-note");
+    recorder.decisionRecorded({ interpretedGoal: "private-note", hardConstraints: [], softPreferences: [{ key: "food", value: "private-note", source: "travel_profile" }],
+      selectedAction: "use_tool", selectedTool: "search_web", unresolvedFacts: ["private-note"], reasonCodes: ["private-note"] });
+    recorder.toolCalled("call", "search_web", { query: "private-note" });
+    recorder.toolCompleted("call", "search_web", { ok: true, output: { summary: "private-note" } }, 10);
+    recorder.responseGenerated("private-noteを踏まえました");
+    recorder.modelCompleted({ provider: "bedrock", usage: { inputTokens: 100, outputTokens: 20 } });
+    expect(JSON.stringify(recorder.snapshot())).not.toContain("private-note");
+    expect(JSON.stringify(recorder.snapshot())).toContain("search_web");
+    expect(JSON.stringify(recorder.snapshot())).toContain('"inputTokens":100');
+  });
   it("records the agent task in an ordered and reconstructable event stream", () => {
     const recorder = new AgentTraceRecorder("execution-1", { now: fixedNow });
     recorder.taskStarted("京都から出雲市へ行きたい");

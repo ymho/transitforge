@@ -35,6 +35,7 @@ TripRequestへ移行する設計を採用した（#387で実装）。Profileの�
 
 同じv2/保存キーで未設定fieldを省略可能にする。既存の値を別の既定値へ変換せず、旧v2もそのまま読める。
 普段の人数・優先移動手段と端末メモをoptionalで追加する。別Profile/Repository/クラウド同期は作らない。
-自由記述メモは端末だけに保持し、Agent Context/Traceへ自動転送しない。今回条件へ使う内容は利用者が相談で明示する。
+自由記述メモの旧値は端末だけに保持する。#457追加指示により、利用者が項目ごとにAI送信へ同意して保存した場合だけ、各240文字/最大4項目を既存Agent Contextへ投影する。
+モデルへの送信同意とログ保存は分離する。該当turnのTraceから自由文とTool payloadを除外し、サーバーのmodel-call Traceにも会話本文を残さない。今回条件を優先し、メモ内の命令やHTMLは実行しない。
 人数はContextでusualPartySizeHintと明記し、TripPartyや予約人数へ自動昇格しない。
 詳しくは[Profile編集契約](../architecture/travel-profile.md)を参照する。
