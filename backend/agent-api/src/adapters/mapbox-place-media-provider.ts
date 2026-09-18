@@ -47,27 +47,24 @@ export class MapboxPlaceMediaProvider implements PlaceMediaProvider {
     const limit = Math.max(1, Math.min(8, Math.round(query.limit ?? 5)));
     const places = new Map<string, PlaceMedia>();
     try {
-      for (const searchText of placeSearchTerms(text, query.categories)) {
-        const response = await this.http.fetch(
-          mapboxSearchUrl(searchText, query, limit, credentials.accessToken),
-          { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8_000) },
-        );
-        if (!response.ok) {
-          return failedExternalInformation({
-            code: response.status === 401 || response.status === 403
-              ? "unauthorized"
-              : response.status === 429
-                ? "rate_limited"
-                : "unavailable",
-            message: "観光地情報を取得できません",
-            retryable: response.status !== 401 && response.status !== 403,
-          });
-        }
-        const value: unknown = await response.json();
-        for (const place of mapboxPlaces(value)) {
-          if (!places.has(place.providerPlaceId)) places.set(place.providerPlaceId, place);
-          if (places.size >= limit) break;
-        }
+      const response = await this.http.fetch(
+        mapboxSearchUrl(text, query, limit, credentials.accessToken),
+        { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8_000) },
+      );
+      if (!response.ok) {
+        return failedExternalInformation({
+          code: response.status === 401 || response.status === 403
+            ? "unauthorized"
+            : response.status === 429
+              ? "rate_limited"
+              : "unavailable",
+          message: "観光地情報を取得できません",
+          retryable: response.status !== 401 && response.status !== 403,
+        });
+      }
+      const value: unknown = await response.json();
+      for (const place of mapboxPlaces(value)) {
+        if (!places.has(place.providerPlaceId)) places.set(place.providerPlaceId, place);
         if (places.size >= limit) break;
       }
 
@@ -101,20 +98,6 @@ export class MapboxPlaceMediaProvider implements PlaceMediaProvider {
       });
     }
   }
-}
-
-export function placeSearchTerms(query: string, categories: string[] = []): string[] {
-  const normalized = `${query} ${categories.join(" ")}`.normalize("NFKC").trim();
-  const terms = [query];
-  if (/(?:酒蔵|酒造|蔵元|日本酒|醸造所)/u.test(normalized)) {
-    const area = query
-      .replace(/(?:酒蔵|酒造|蔵元|日本酒|醸造所)/gu, " ")
-      .replace(/\s+/gu, " ")
-      .trim();
-    const prefix = area ? `${area} ` : "";
-    terms.push(`${prefix}酒蔵`, `${prefix}酒造`, `${prefix}日本酒 醸造所`);
-  }
-  return [...new Set(terms.map((term) => term.trim()).filter(Boolean))].slice(0, 4);
 }
 
 function mapboxSearchUrl(
