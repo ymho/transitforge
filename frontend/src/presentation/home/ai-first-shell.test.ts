@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { configureAiFirstShell, type AiFirstShellPorts } from "./ai-first-shell";
+import { createTrip } from "@raiquora/trip/trip";
 
 beforeEach(() => { document.body.innerHTML = '<main id="app"></main>'; window.history.replaceState(null, "", "#explore"); sessionStorage.clear(); });
 afterEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
@@ -53,4 +54,16 @@ it("all secondary actions use existing feature ports", () => {
   for (const key of ["profile", "history", "settings", "notifications"]) click(`[data-${key}]`);
   expect(ports.openProfile).toHaveBeenCalledOnce(); expect(ports.openHistory).toHaveBeenCalledOnce();
   expect(ports.openSettings).toHaveBeenCalledOnce(); expect(ports.openNotifications).toHaveBeenCalledOnce();
+});
+it("opens the actual Trip as a trips subview, not a selected chat tab", () => {
+  const trip = createTrip("45300000-0000-4000-8000-000000000001", "旅程", "2026-09-18T00:00:00Z", []);
+  const { ports } = setup({ read: () => ({ state: "available", trips: [trip], candidates: [] }) });
+  click('[data-primary="trips"]'); click("[data-trip]");
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("trip");
+  expect(document.querySelector('[data-primary="trips"]')!.getAttribute("aria-current")).toBe("page");
+  expect(document.querySelector('[data-primary="chat"]')!.hasAttribute("aria-current")).toBe(false);
+  expect(ports.openTrip).toHaveBeenCalledWith(trip.id);
+  expect(window.location.hash).toBe("#trip");
+  click('[data-primary="trips"]');
+  expect(document.querySelector<HTMLElement>('[data-page="trips"]')!.hidden).toBe(false);
 });

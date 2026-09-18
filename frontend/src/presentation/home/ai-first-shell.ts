@@ -70,20 +70,26 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     try {
       const profile = ports.profile(); root.querySelector("[data-profile-summary]")!.textContent = profile ? travelStyleSummary(profile) : "まだ設定していません。普段の好みを登録できます。";
     } catch { root.querySelector("[data-profile-summary]")!.textContent = "プロフィールを読み出せません。相談は登録なしでも利用できます。"; }
-    root.querySelectorAll<HTMLButtonElement>("[data-trip]").forEach((button) => button.addEventListener("click", () => { navigate("chat"); ports.openTrip(button.dataset.trip!); }));
+    root.querySelectorAll<HTMLButtonElement>("[data-trip]").forEach((button) => button.addEventListener("click", () => {
+      window.history.pushState({ tripId: button.dataset.trip! }, "", "#trip"); apply();
+    }));
+    if (window.location.hash === "#trip" && typeof window.history.state?.tripId === "string") ports.openTrip(window.history.state.tripId);
     root.querySelectorAll("[data-retry]").forEach((button) => button.addEventListener("click", () => { void ports.retry().then(render, render); }));
   };
   const apply = () => {
     const route = window.location.hash.slice(1);
     const previous = root.querySelector<HTMLElement>(`[data-page="${current}"]`); if (previous) scrolls.set(current, previous.scrollTop);
     const isMap = route === "map";
+    const isTrip = route === "trip";
     if (["explore", "chat", "trips", "my"].includes(route)) current = route as PrimaryView;
+    else if (isTrip) current = "trips";
     else if (!isMap) current = "explore";
-    app.dataset.primaryView = isMap ? "map" : current;
-    for (const page of root.querySelectorAll<HTMLElement>("[data-page]")) page.hidden = isMap || page.dataset.page !== current;
+    app.dataset.primaryView = isMap ? "map" : isTrip ? "trip" : current;
+    for (const page of root.querySelectorAll<HTMLElement>("[data-page]")) page.hidden = isMap || isTrip || page.dataset.page !== current;
     root.querySelectorAll<HTMLElement>("[data-primary]").forEach((a) => { if (a.dataset.primary === (isMap ? mapReturn : current)) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
     root.querySelector<HTMLElement>("[data-map-back]")!.hidden = !isMap;
     if (!isMap && current === "chat") ports.openChat();
+    if (isTrip && typeof window.history.state?.tripId === "string") ports.openTrip(window.history.state.tripId);
     if (isMap) {
       const routeState = window.history.state;
       if (["explore", "chat", "trips", "my"].includes(routeState?.returnView)) mapReturn = routeState.returnView;
