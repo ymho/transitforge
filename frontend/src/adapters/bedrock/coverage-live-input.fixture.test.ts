@@ -14,6 +14,7 @@ describe("coverage Live input integrity", () => {
       candidateId: candidate.id, ...facts, rail: { candidate: rail.candidate, inputs: rail.inputs },
     }, rail.selectedAt);
     expect(evaluate(input.facts).hardConstraints.map((c) => c.status)).toEqual(["satisfied", "satisfied"]);
+    expect(evaluate(input.facts).serviceCoverage.status).toBe("supported");
     expect(evaluate({}).hardConstraints.every((c) => c.status === "unknown")).toBe(true);
     const unresolved = structuredClone(input.facts);
     if (unresolved.places?.data?.origin) delete unresolved.places.data.origin.ref;
