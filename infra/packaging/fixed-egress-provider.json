@@ -1,0 +1,8 @@
+{
+  "source": "backend/agent-api/dist/fixed-egress-provider",
+  "runtime": "nodejs22.x",
+  "handler": "index.handler",
+  "files": [
+    "index.cjs"
+  ]
+}

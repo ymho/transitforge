@@ -6,6 +6,7 @@
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1118.0",
     "@aws-sdk/client-dynamodb": "^3.1118.0",
+    "@aws-sdk/client-lambda": "3.1118.0",
     "@aws-sdk/client-s3": "^3.1118.0",
     "@aws-sdk/client-secrets-manager": "^3.1118.0",
     "@raiquora/journey": "*",
@@ -15,7 +16,7 @@
     "aws-jwt-verify": "^5.2.1"
   },
   "scripts": {
-    "build": "npm run typecheck && npm run bundle:lambda && npm run bundle:trip-changed && npm run bundle:rail-impact && npm run bundle:trip-recheck && npm run bundle:notification && npm run bundle:agent-stream",
+    "build": "npm run typecheck && npm run bundle:lambda && npm run bundle:trip-changed && npm run bundle:rail-impact && npm run bundle:trip-recheck && npm run bundle:notification && npm run bundle:agent-stream && npm run bundle:fixed-egress-provider",
     "typecheck": "tsc --noEmit",
     "bundle:lambda": "esbuild src/lambda.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/lambda/index.cjs",
     "bundle:trip-changed": "esbuild src/trip-changed-lambda.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/trip-changed/index.cjs",
@@ -24,7 +25,8 @@
     "bundle:notification": "esbuild src/notification-lambda.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/notification/index.cjs",
     "lambda:check": "node ../../tools/check_lambda_package.mjs",
     "test": "TMPDIR=/tmp vitest run --root ../.. backend/agent-api/src modules/agent/runtime",
-    "bundle:agent-stream": "esbuild src/agent-stream-lambda.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/agent-stream/index.cjs"
+    "bundle:agent-stream": "esbuild src/agent-stream-lambda.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/agent-stream/index.cjs",
+    "bundle:fixed-egress-provider": "esbuild src/fixed-egress-provider-lambda.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/fixed-egress-provider/index.cjs"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",

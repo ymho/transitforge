@@ -54,6 +54,15 @@ if (!notificationMetadata.isFile() || notificationMetadata.size < 1 || notificat
     typeof (await import(pathToFileURL(notificationBundle).href)).handler !== "function") throw new Error("Invalid notification bundle");
 console.log(JSON.stringify({ package: "notification", runtime: notification.runtime, bytes: notificationMetadata.size }));
 
+const provider = JSON.parse(await readFile(resolve(root, "infra/packaging/fixed-egress-provider.json"), "utf8"));
+if (provider.runtime !== "nodejs22.x" || provider.handler !== "index.handler" ||
+    JSON.stringify(provider.files) !== '["index.cjs"]') throw new Error("Invalid Provider package contract");
+const providerBundle = resolve(root, provider.source, provider.files[0]);
+const providerMetadata = await stat(providerBundle);
+if (!providerMetadata.isFile() || providerMetadata.size < 1 || providerMetadata.size > 20 * 1_024 * 1_024 ||
+    typeof (await import(pathToFileURL(providerBundle).href)).handler !== "function") throw new Error("Invalid Provider bundle");
+console.log(JSON.stringify({ package: "fixed-egress-provider", runtime: provider.runtime, bytes: providerMetadata.size }));
+
 // Streaming runtime global is provided by AWS; use a local shim only to validate the bundle export.
 const stream = JSON.parse(await readFile(resolve(root, "infra/packaging/agent-stream.json"), "utf8"));
 if (stream.runtime !== "nodejs22.x" || stream.handler !== "index.handler" ||

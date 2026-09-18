@@ -184,6 +184,14 @@ ID TokenはAPIへ送らない。Basic認証とOAC、既存の公開writer gate�
 期限切れ時は再ログインする。詳しい保存・logout保証と未実施の実環境試験は
 [ADR 0069](../../../../docs/decisions/0069-use-cognito-managed-login-for-spa.md)を参照する。
 
+## Fixed-egress Provider（#480 Phase B）
+
+`fixed-egress-provider.tf`は宿泊Provider専用Lambdaを既存private subnet/HTTPS SGへ追加する。
+`enable_fixed_egress_provider=false`が既定で、現在のAI Lambda・NAT/EIP・production trafficは変更しない。
+`fixed_egress_agent_role_name`は統合時にVPC外Server roleを指定するための任意入力であり、未指定ではInvoke権限を付けない。
+専用Secretの器だけを作り値は管理しない。共有Secretからの宿泊credentials移行・Tool接続・実plan確認は
+[#480統合手順](../../../../docs/architecture/fixed-egress-provider.md)に従う。今回apply/deployは行わない。
+
 ## Server Agent Streamingの短期gate
 
 `agent_stream_enabled`は既定false。新REST/Lambda/CloudFront経路は作成せず、Browserも切り替えない。
