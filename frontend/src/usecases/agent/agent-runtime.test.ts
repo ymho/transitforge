@@ -22,6 +22,57 @@ import { inTripApplicationEvidence } from "./in-trip-application-evidence";
 import { calculateInTripReplanScope, replanScopeContext } from "@raiquora/trip/in-trip-replan";
 
 describe("MultiStepAgentRuntime", () => {
+  it.each(['<tool_call>{"private":"REJECTED"}</tool_call>', '{"name":"first_tool","input":{"value":"REJECTED"}}'])("repairs envelope to native Tool Use: %s", async (invalid) => {
+    const order: string[] = [], requests: AgentModelRequest[] = [];
+    const { tools, toolExecutor } = toolSetup(order);
+    const model = sequenceModel([textResponse(invalid), toolCallResponse([{ id: "native", name: "first_tool", input: { value: "accepted" } }])], requests);
+    const result = await new MultiStepAgentRuntime({ tools, toolExecutor, model, terminalToolResult: () => "確認しました" }).run(request("調べて"));
+    expect(result.status).toBe("completed"); expect(order).toEqual(["first_tool"]);
+    expect(model.generate).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(result)).not.toContain("REJECTED");
+    expect(JSON.stringify(requests[1])).not.toContain("REJECTED");
+  });
+  it.each([false, true])("repairs invalid Evidence references once (repeat=%s)", async (repeat) => {
+    const requests: AgentModelRequest[] = [], { tools, toolExecutor } = toolSetup([]);
+    const invalid = { ...textResponse("REJECTED"), declaredEvidenceIds: ["PRIVATE_UNKNOWN_ID"] };
+    const model = sequenceModel([invalid, repeat ? invalid : textResponse("確認できません")], requests);
+    const result = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run(request("調べて"));
+    expect(result.status).toBe(repeat ? "failed" : "completed");
+    expect(model.generate).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(result)).not.toMatch(/REJECTED|PRIVATE_UNKNOWN_ID/);
+    expect(JSON.stringify(requests[1])).not.toMatch(/REJECTED|PRIVATE_UNKNOWN_ID/);
+  });
+  it.each(["answer", "ask_user", "native"])("normal %s needs no repair call", async (kind) => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const answer = kind === "native" ? toolCallResponse([{ id: "native", name: "first_tool", input: { value: "ok" } }]) : textResponse("ご希望を教えてください");
+    if (kind !== "native") answer.decisionSummary = { interpretedGoal: "対話", selectedAction: kind as "answer" | "ask_user", hardConstraints: [], softPreferences: [], unresolvedFacts: [], reasonCodes: [] };
+    const model = sequenceModel([answer]);
+    expect((await new MultiStepAgentRuntime({ tools, toolExecutor, model, terminalToolResult: () => "確認" }).run(request("確認"))).status).toBe("completed");
+    expect(model.generate).toHaveBeenCalledTimes(1);
+  });
+  it("repairs general Tool prose once without retaining its payload", async () => {
+    const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
+    const repaired = { ...textResponse("確認できません"), decisionSummary: {
+      interpretedGoal: "確認", hardConstraints: [], softPreferences: [], selectedAction: "answer" as const,
+      unresolvedFacts: [], reasonCodes: ["information_missing" as const],
+    } };
+    const model = sequenceModel([textResponse('<tool_call>{"private":"DO_NOT_REPLAY"}</tool_call>'), repaired], requests);
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run(request("調べて"));
+    expect(output.status).toBe("completed");
+    expect(model.generate).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(output)).not.toContain("DO_NOT_REPLAY");
+    expect(JSON.stringify(requests[1])).not.toContain("DO_NOT_REPLAY");
+  });
+  it("shares one repair budget across Tool prose and invalid Evidence IDs", async () => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const model = sequenceModel([textResponse('<tool_call>{}</tool_call>'),
+      { ...textResponse("京都から大阪へ1分"), declaredEvidenceIds: ["MISSING"] }]);
+    const result = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run(request("経路"));
+    expect(result.status).toBe("failed");
+    expect(model.generate).toHaveBeenCalledTimes(2);
+    expect(result.response).not.toContain("1分");
+    expect(result.trace.events.filter(e => e.type === "tool_called")).toHaveLength(0);
+  });
   it("ends on Application currentness failure without later batch Tools or silent replan", async () => {
     const tools = new AgentToolRegistry(), order: string[] = [];
     tools.register({ ...echoTool("first_tool", order), execute: async () => {
