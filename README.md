@@ -258,3 +258,10 @@ mainからの手動実行だけでdev環境を更新する。両者は別Workflo
 
 ライセンス未設定
 外部データや生成物をこのリポジトリへ含めない
+
+## 利用者認証の段階導入
+
+設定画面のログイン/新規登録はCognito Managed LoginとPKCEを使う。公開設定はTerraform出力から
+配信する。未設定のローカル環境では認証なしでViewerを起動できる。
+[認証境界](docs/architecture/authentication-boundary.md)と[SPA認証ADR](docs/decisions/0069-use-cognito-managed-login-for-spa.md)を参照する。
+API route保護と本番切替は後続段階であり、ログインUIの導入だけで全API保護済みとはしない。
