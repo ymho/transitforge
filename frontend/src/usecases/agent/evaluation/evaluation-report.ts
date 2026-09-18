@@ -15,7 +15,6 @@ export function renderAgentEvaluationMarkdown(report: AgentEvaluationReport): st
     `- Grounded Claim Rate: ${optionalPercent(report.metrics.groundedClaimRate)}`,
     `- Unsupported Claim Rate: ${optionalPercent(report.metrics.unsupportedClaimRate)}`,
     `- Task Completion: ${percent(report.metrics.taskCompletion)}`,
-    `- Viewer Action Validity: ${percent(report.metrics.viewerActionValidity)}`,
     "",
     ...renderCategoryTable(report),
     "",
@@ -67,8 +66,8 @@ export function renderAgentEvaluationRunMarkdown(
 
 function renderCategoryTable(report: AgentEvaluationReport): string[] {
   const lines = [
-    "| Category | Cases | Tools | Constraints | Grounded | Unsupported | Completion | Viewer |",
-    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    "| Category | Cases | Tools | Constraints | Grounded | Unsupported | Completion |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
   ];
   for (const item of report.categories) {
     lines.push(
@@ -77,8 +76,7 @@ function renderCategoryTable(report: AgentEvaluationReport): string[] {
       `${percent(item.metrics.constraintSatisfaction)} | ` +
       `${optionalPercent(item.metrics.groundedClaimRate)} | ` +
       `${optionalPercent(item.metrics.unsupportedClaimRate)} | ` +
-      `${percent(item.metrics.taskCompletion)} | ` +
-      `${percent(item.metrics.viewerActionValidity)} |`,
+      `${percent(item.metrics.taskCompletion)} |`,
     );
   }
   return lines;
@@ -86,8 +84,8 @@ function renderCategoryTable(report: AgentEvaluationReport): string[] {
 
 function renderCaseTable(report: AgentEvaluationReport): string[] {
   const lines = [
-    "| Case | Result | Tools | Constraints | Grounded | Unsupported | Completion | Viewer |",
-    "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+    "| Case | Result | Tools | Constraints | Grounded | Unsupported | Completion |",
+    "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
   ];
   for (const item of report.cases) {
     lines.push(
@@ -96,11 +94,10 @@ function renderCaseTable(report: AgentEvaluationReport): string[] {
       `${percent(item.metrics.constraintSatisfaction)} | ` +
       `${optionalPercent(item.metrics.groundedClaimRate)} | ` +
       `${optionalPercent(item.metrics.unsupportedClaimRate)} | ` +
-      `${percent(item.metrics.taskCompletion)} | ` +
-      `${percent(item.metrics.viewerActionValidity)} |`,
+      `${percent(item.metrics.taskCompletion)} |`,
     );
     if (item.failures.length > 0) {
-      lines.push(`|  | ${escapeCell(item.failures.join(" / "))} |  |  |  |  |  |  |`);
+      lines.push(`|  | ${escapeCell(item.failures.join(" / "))} |  |  |  |  |  |`);
     }
   }
   return lines;

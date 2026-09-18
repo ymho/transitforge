@@ -7,9 +7,9 @@ import {
 } from "./evaluation-contract";
 import { parseAgentEvaluationObservations } from "./evaluation-dataset";
 
-export const agentStrategyExperimentSchemaVersion = "agent-strategy-experiment-v1";
+export const agentStrategyExperimentSchemaVersion = "agent-strategy-experiment-v2";
 export const agentStrategyExperimentReportSchemaVersion =
-  "agent-strategy-experiment-report-v1";
+  "agent-strategy-experiment-report-v2";
 
 export const agentStrategyIds = [
   "single-pass",

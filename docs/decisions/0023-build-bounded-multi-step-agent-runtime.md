@@ -1,5 +1,8 @@
 # ADR 0023: boundedなMulti-step Agent Runtimeを段階導入する
 
+> 2026-09-18 / [Wave 2A #477](https://github.com/ymho/transitforge/issues/477)（親方針 #476）: rollout routerと新旧Runtime併存の判断はretired。MultiStepAgentRuntime、bounded loop、Tool/Evidence/Policyは維持する。
+> 以下は決定当時の記録として保持する。
+
 - ステータス: Accepted
 - 日付: 2026-08-25
 

@@ -1,6 +1,5 @@
 import {
   agentEvaluationDatasetSchemaVersion,
-  travelProgressDatasetSchemaVersion,
   agentEvaluationObservationSchemaVersion,
   type AgentEvaluationCase,
   type AgentEvaluationDataset,
@@ -21,8 +20,7 @@ const knownStatuses = new Set(["completed", "follow_up", "limit_reached", "faile
 
 export function parseAgentEvaluationDataset(value: unknown): AgentEvaluationDataset {
   if (!isRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "cases", "travelProgressScenarios"]) ||
-    (value.schemaVersion !== agentEvaluationDatasetSchemaVersion && value.schemaVersion !== travelProgressDatasetSchemaVersion) ||
-    (value.schemaVersion === agentEvaluationDatasetSchemaVersion && value.travelProgressScenarios !== undefined)) {
+    value.schemaVersion !== agentEvaluationDatasetSchemaVersion) {
     throw new Error("Agent Eval datasetのschemaVersionが不正です");
   }
   if (!Array.isArray(value.cases) || value.cases.length === 0 || value.cases.length > 100) {
@@ -30,7 +28,7 @@ export function parseAgentEvaluationDataset(value: unknown): AgentEvaluationData
   }
   const cases = value.cases.map(parseCase);
   ensureUnique(cases.map(({ id }) => id), "Agent Eval case ID");
-  const travelProgressScenarios = value.schemaVersion === travelProgressDatasetSchemaVersion ? parseTravelProgressScenarios(value.travelProgressScenarios) : undefined;
+  const travelProgressScenarios = value.travelProgressScenarios === undefined ? undefined : parseTravelProgressScenarios(value.travelProgressScenarios);
   ensureUnique([...cases.map(({ id }) => id), ...(travelProgressScenarios ?? []).map(({ id }) => id)], "Agent Eval case ID");
   return { schemaVersion: value.schemaVersion, cases, ...(travelProgressScenarios ? { travelProgressScenarios } : {}) };
 }
@@ -94,20 +92,14 @@ function parseCase(value: unknown, index: number): AgentEvaluationCase {
 function parseExpectation(value: Record<string, unknown>, index: number): AgentEvaluationExpectation {
   if (!hasOnlyKeys(value, [
     "toolSequence", "constraints", "status", "minimumGroundedClaimRate",
-    "maximumUnsupportedClaimRate", "allowedViewerActions", "requiredViewerActions",
+    "maximumUnsupportedClaimRate",
     "decision", "alternativeToolSequences",
   ]) || !stringList(value.toolSequence, 8) || !isConstraintRecord(value.constraints) ||
     !knownStatuses.has(String(value.status)) ||
     !rate(value.minimumGroundedClaimRate) || !rate(value.maximumUnsupportedClaimRate) ||
-    !stringList(value.allowedViewerActions, 10) ||
-    !stringList(value.requiredViewerActions, 10) ||
     value.alternativeToolSequences !== undefined && !validAlternativeSequences(value.alternativeToolSequences) ||
     value.decision !== undefined && !validDecisionExpectation(value.decision)) {
     throw new Error(`Agent Eval case ${index + 1}件目の期待値が不正です`);
-  }
-  const allowed = new Set(value.allowedViewerActions);
-  if (value.requiredViewerActions.some((action) => !allowed.has(action))) {
-    throw new Error(`Agent Eval case ${index + 1}件目の必須Actionが許可されていません`);
   }
   return {
     toolSequence: [...value.toolSequence],
@@ -118,8 +110,6 @@ function parseExpectation(value: Record<string, unknown>, index: number): AgentE
     status: value.status as AgentEvaluationExpectation["status"],
     minimumGroundedClaimRate: value.minimumGroundedClaimRate,
     maximumUnsupportedClaimRate: value.maximumUnsupportedClaimRate,
-    allowedViewerActions: [...value.allowedViewerActions],
-    requiredViewerActions: [...value.requiredViewerActions],
     ...(value.decision === undefined ? {} : {
       decision: {
         requiredHardConstraintKeys: [...value.decision.requiredHardConstraintKeys],
@@ -132,35 +122,24 @@ function parseExpectation(value: Record<string, unknown>, index: number): AgentE
 function parseObservation(value: unknown, index: number): AgentEvaluationObservation {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     "caseId", "toolSequence", "normalizedConstraints", "status", "claimStatuses",
-    "viewerActions", "decisionHardConstraintKeys", "decisionUnresolvedFacts",
+    "decisionHardConstraintKeys", "decisionUnresolvedFacts",
   ]) || !identifier(value.caseId) || !stringList(value.toolSequence, 8) ||
     !isRecord(value.normalizedConstraints) || !knownStatuses.has(String(value.status)) ||
     !Array.isArray(value.claimStatuses) || value.claimStatuses.length > 20 ||
     value.claimStatuses.some((status) =>
       status !== "supported" && status !== "unsupported" && status !== "unknown") ||
-    !Array.isArray(value.viewerActions) || value.viewerActions.length > 10 ||
     value.decisionHardConstraintKeys !== undefined &&
       !stringList(value.decisionHardConstraintKeys, 20) ||
     value.decisionUnresolvedFacts !== undefined &&
       !stringList(value.decisionUnresolvedFacts, 20)) {
     throw new Error(`Agent Eval observation ${index + 1}件目が不正です`);
   }
-  const viewerActions: AgentEvaluationObservation["viewerActions"] =
-    value.viewerActions.map((action) => {
-    if (!isRecord(action) || !hasOnlyKeys(action, ["actionType", "status"]) ||
-      !identifier(action.actionType) ||
-      (action.status !== "applied" && action.status !== "rejected")) {
-      throw new Error(`Agent Eval observation ${index + 1}件目のViewer Actionが不正です`);
-    }
-      return { actionType: action.actionType, status: action.status };
-    });
   return {
     caseId: value.caseId,
     toolSequence: [...value.toolSequence],
     normalizedConstraints: structuredClone(value.normalizedConstraints),
     status: value.status as AgentEvaluationObservation["status"],
     claimStatuses: [...value.claimStatuses],
-    viewerActions,
     ...(value.decisionHardConstraintKeys === undefined
       ? {}
       : { decisionHardConstraintKeys: [...value.decisionHardConstraintKeys] }),

@@ -266,11 +266,11 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
 }
 
 const dataset: AgentEvaluationDataset = {
-  schemaVersion: "agent-eval-dataset-v1",
+  schemaVersion: "agent-eval-dataset-v3",
   cases: cases.map(({ evaluation }) => evaluation),
 };
 const reports = observationsByAttempt.map((observations) => evaluateAgentDataset(dataset, {
-  schemaVersion: "agent-eval-observations-v1",
+  schemaVersion: "agent-eval-observations-v2",
   observations,
 }));
 const stability = summarizeAgentEvaluationStability(reports);
@@ -281,7 +281,7 @@ const stableObservations = cases.map(({ evaluation }, caseIndex) => {
   return observationsByAttempt[failedAttempt < 0 ? 0 : failedAttempt]![caseIndex]!;
 });
 const report = evaluateAgentDataset(dataset, {
-  schemaVersion: "agent-eval-observations-v1",
+  schemaVersion: "agent-eval-observations-v2",
   observations: stableObservations,
 });
 await mkdir(outputDirectory, { recursive: true });
@@ -839,8 +839,6 @@ function liveCase(input: {
         status: "completed",
         minimumGroundedClaimRate: 0,
         maximumUnsupportedClaimRate: 0,
-        allowedViewerActions: [],
-        requiredViewerActions: [],
         decision: {
           requiredHardConstraintKeys: input.requiredHardConstraintKeys,
           forbiddenUnresolvedFacts: input.requiredHardConstraintKeys,

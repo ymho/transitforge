@@ -42,7 +42,7 @@ Traceにはaccepted/rejected、outcome、成果物の識別参照、短い例外
 直前がask_only、今回もask_only、例外なしの場合、回答公開前に再計画を求める。
 モデルが次のTool/候補/質問を選ぶ。固定Planner、state別Tool allowlist、常時Reflectionは追加しない。
 再判断も既存maxIterations/maxModelCalls/maxToolCalls/timeoutに含む。上限に達した場合は既存の安全な
-未完了応答とし、拒否済みの質問や部分結果を成功として返さない。最終Viewer Actionは回答受理後に検証適用する。
+未完了応答とし、拒否済みの質問や部分結果を成功として返さない。Viewer Actionは#477で撤去済みで、受理した構造化応答を表示する。
 
 質問を優先できる`askOnlyException`は次の3種類に限定する。
 

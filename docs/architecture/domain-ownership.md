@@ -50,7 +50,7 @@ FrontendとBackendの共有点は内部クラスではなくversioned HTTP contr
 - 遅延予測や混雑集計をAgent ToolやLLM promptで再計算すること
 - 宿泊費の集計や不明価格の補完をPresentationで行うこと
 - Provider固有payloadをDomain型として扱うこと
-- Viewer Actionの検証をUIイベントごとに独自実装すること
+- 廃止したAgent → Viewer ActionをUIイベント経由で再導入すること
 
 ## Agentからの利用
 

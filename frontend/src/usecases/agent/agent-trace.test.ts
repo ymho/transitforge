@@ -53,12 +53,6 @@ describe("AgentTraceRecorder", () => {
       usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
     });
     recorder.responseGenerated("この経路を利用できます", ["claim-1"]);
-    recorder.viewerAction("highlight_route", "proposed", {
-      targetEntityId: "journey-1",
-    });
-    recorder.viewerAction("highlight_route", "applied", {
-      targetEntityId: "journey-1",
-    });
     recorder.taskCompleted("completed", 100);
 
     const trace = recorder.snapshot();
@@ -75,12 +69,10 @@ describe("AgentTraceRecorder", () => {
       "model_started",
       "model_completed",
       "response_generated",
-      "viewer_action",
-      "viewer_action",
       "task_completed",
     ]);
     expect(trace.events.map(({ sequence }) => sequence)).toEqual(
-      Array.from({ length: 14 }, (_, index) => index + 1),
+      Array.from({ length: 12 }, (_, index) => index + 1),
     );
     expect(trace.events.every(({ occurredAt }) =>
       occurredAt === "2026-08-25T09:00:00.000Z")).toBe(true);
@@ -138,7 +130,7 @@ describe("AgentTraceRecorder", () => {
     expect(JSON.stringify(trace.events[1])).not.toContain('"id":99');
   });
 
-  it("records tool errors and viewer action rejection reasons without exception details", () => {
+  it("records tool errors without exception details", () => {
     const recorder = new AgentTraceRecorder("execution-4", { now: fixedNow });
     recorder.toolCompleted("call-1", "search_journeys", {
       ok: false,
@@ -148,10 +140,6 @@ describe("AgentTraceRecorder", () => {
         retryable: false,
       },
     });
-    recorder.viewerAction("focus_train", "rejected", {
-      targetEntityId: "unknown-train",
-      reason: "同じ実行で検証された列車ではありません",
-    });
 
     expect(recorder.snapshot().events).toEqual([
       expect.objectContaining({
@@ -159,11 +147,6 @@ describe("AgentTraceRecorder", () => {
         outcome: "error",
         errorCode: "not_found",
         retryable: false,
-      }),
-      expect.objectContaining({
-        type: "viewer_action",
-        status: "rejected",
-        reason: "同じ実行で検証された列車ではありません",
       }),
     ]);
   });

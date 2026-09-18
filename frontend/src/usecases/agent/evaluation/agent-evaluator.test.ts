@@ -57,7 +57,6 @@ describe("Agent Evaluation Framework", () => {
       groundedClaimRate: 1,
       unsupportedClaimRate: 0,
       taskCompletion: 1,
-      viewerActionValidity: 1,
     });
     expect(report.categories.map(({ category }) => category)).toEqual([
       "ambiguous-request",
@@ -66,15 +65,13 @@ describe("Agent Evaluation Framework", () => {
       "constraint",
       "information-gap",
       "multi-tool",
-      "viewer-action",
     ]);
     expect(report.categories.every(({ metrics }) =>
       metrics.toolSelectionAccuracy === 1 &&
       metrics.constraintSatisfaction === 1 &&
       (metrics.groundedClaimRate === 1 || metrics.groundedClaimRate === null) &&
       (metrics.unsupportedClaimRate === 0 || metrics.unsupportedClaimRate === null) &&
-      metrics.taskCompletion === 1 &&
-      metrics.viewerActionValidity === 1)).toBe(true);
+      metrics.taskCompletion === 1)).toBe(true);
     const markdown = renderAgentEvaluationMarkdown(report);
     expect(markdown).toContain("Cases: 42/42 passed");
     expect(markdown).toContain("Tool Selection Accuracy: 100.0%");
@@ -98,7 +95,7 @@ describe("Agent Evaluation Framework", () => {
     expect(failed?.failures).toContain("正規化された制約が不足している");
   });
 
-  it("detects tool constraint claim completion and Viewer regressions objectively", () => {
+  it("detects tool constraint claim completion regressions objectively", () => {
     const dataset = parseAgentEvaluationDataset(readJson("agent-eval-cases.json"));
     const observations = parseAgentEvaluationObservations(
       readJson("agent-eval-observations.json"),
@@ -109,7 +106,6 @@ describe("Agent Evaluation Framework", () => {
       normalizedConstraints: { maxTransfers: 3 },
       status: "failed",
       claimStatuses: ["unsupported"],
-      viewerActions: [{ actionType: "focus_train", status: "rejected" }],
     };
 
     const report = evaluateAgentDataset(dataset, observations);
@@ -121,13 +117,12 @@ describe("Agent Evaluation Framework", () => {
       "Grounded Claim Rateが下限未満",
       "Unsupported Claim Rateが上限超過",
       "Task完了状態が期待と異なる",
-      "Viewer Actionが許可条件を満たさない",
     ]);
   });
 
   it("rejects schema typos and observations outside the dataset", () => {
     expect(() => parseAgentEvaluationDataset({
-      schemaVersion: "agent-eval-dataset-v1",
+      schemaVersion: "agent-eval-dataset-v3",
       cases: [],
       unexpected: true,
     })).toThrow("schemaVersion");
@@ -142,7 +137,6 @@ describe("Agent Evaluation Framework", () => {
       normalizedConstraints: {},
       status: "completed",
       claimStatuses: [],
-      viewerActions: [],
     });
     expect(() => evaluateAgentDataset(dataset, observations)).toThrow("unknown-case");
   });
@@ -151,7 +145,6 @@ describe("Agent Evaluation Framework", () => {
     const result = {
       status: "completed",
       claims: [{ groundingStatus: "supported" }],
-      viewerActions: [{ actionType: "show_evidence", status: "applied" }],
       trace: {
         events: [
           { type: "intent_normalized", constraints: { value: { maxTransfers: 1 } } },
@@ -166,7 +159,6 @@ describe("Agent Evaluation Framework", () => {
       normalizedConstraints: { maxTransfers: 1 },
       status: "completed",
       claimStatuses: ["supported"],
-      viewerActions: [{ actionType: "show_evidence", status: "applied" }],
       decisionHardConstraintKeys: [],
       decisionUnresolvedFacts: [],
     });
