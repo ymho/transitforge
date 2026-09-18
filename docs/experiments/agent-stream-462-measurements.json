@@ -1,0 +1,254 @@
+{
+  "note": "Local Chromium only; NOT AWS/CDN. Error cases rerun after adding settledMs and error silence accounting.",
+  "runs": [
+    {
+      "measuredAt": "2026-09-18T14:29:36.606Z",
+      "environment": "localhost HTTP, Chromium, synthetic/fake providers; NOT AWS/CDN",
+      "browser": "151.0.7922.34",
+      "counts": {
+        "model": 2,
+        "tool": 1
+      },
+      "completions": [
+        "stream:immediate",
+        "stream:wire_missing_final",
+        "stream:server_agent",
+        "stream:over30",
+        "buffered:over30",
+        "stream:initial_delay",
+        "stream:ninety",
+        "stream:minutes"
+      ],
+      "results": [
+        {
+          "case": "stream:immediate",
+          "requestStart": 243.19999998807907,
+          "maxSilenceMs": 39.5,
+          "headersMs": 30.69999998807907,
+          "ttfbMs": 39.5,
+          "ttfiMs": 48.099999994039536,
+          "completionMs": 48.099999994039536,
+          "received": [
+            {
+              "type": "progress",
+              "atMs": 46.80000001192093
+            },
+            {
+              "type": "final",
+              "atMs": 48.099999994039536
+            }
+          ]
+        },
+        {
+          "case": "stream:over30",
+          "requestStart": 263.09999999403954,
+          "maxSilenceMs": 10002.40000000596,
+          "headersMs": 8.099999994039536,
+          "ttfbMs": 13,
+          "ttfiMs": 35008.19999998808,
+          "completionMs": 35008.19999998808,
+          "received": [
+            {
+              "type": "progress",
+              "atMs": 21.599999994039536
+            },
+            {
+              "type": "final",
+              "atMs": 35008.19999998808
+            }
+          ]
+        },
+        {
+          "case": "stream:ninety",
+          "requestStart": 266.80000001192093,
+          "maxSilenceMs": 10003.300000011921,
+          "headersMs": 5.199999988079071,
+          "ttfbMs": 10.400000005960464,
+          "ttfiMs": 90008.90000000596,
+          "completionMs": 90008.90000000596,
+          "received": [
+            {
+              "type": "progress",
+              "atMs": 14.400000005960464
+            },
+            {
+              "type": "final",
+              "atMs": 90008.90000000596
+            }
+          ]
+        },
+        {
+          "case": "stream:minutes",
+          "requestStart": 262,
+          "maxSilenceMs": 10004.300000011921,
+          "headersMs": 4.199999988079071,
+          "ttfbMs": 7.0999999940395355,
+          "ttfiMs": 180008.40000000596,
+          "completionMs": 180008.40000000596,
+          "received": [
+            {
+              "type": "progress",
+              "atMs": 14.199999988079071
+            },
+            {
+              "type": "final",
+              "atMs": 180008.40000000596
+            }
+          ]
+        },
+        {
+          "case": "stream:initial_delay",
+          "requestStart": 258.40000000596046,
+          "maxSilenceMs": 10004.700000017881,
+          "headersMs": 4.5999999940395355,
+          "ttfbMs": 10004.700000017881,
+          "ttfiMs": 36006,
+          "completionMs": 36006,
+          "received": [
+            {
+              "type": "progress",
+              "atMs": 35005.09999999404
+            },
+            {
+              "type": "final",
+              "atMs": 36006
+            }
+          ]
+        },
+        {
+          "case": "stream:server_agent",
+          "requestStart": 247.09999999403954,
+          "maxSilenceMs": 15.900000005960464,
+          "headersMs": 4.200000017881393,
+          "ttfbMs": 4.5,
+          "ttfiMs": 22.400000005960464,
+          "completionMs": 22.5,
+          "received": [
+            {
+              "type": "progress",
+              "atMs": 8.099999994039536
+            },
+            {
+              "type": "final",
+              "atMs": 22.400000005960464
+            }
+          ]
+        },
+        {
+          "case": "buffered:over30",
+          "requestStart": 236.5,
+          "maxSilenceMs": 35008,
+          "headersMs": 35007.29999998212,
+          "ttfbMs": 35008,
+          "ttfiMs": 35015.29999998212,
+          "completionMs": 35015.29999998212,
+          "received": [
+            {
+              "type": "progress",
+              "atMs": 35010.40000000596
+            },
+            {
+              "type": "final",
+              "atMs": 35015.29999998212
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "measuredAt": "2026-09-18T14:32:42.436Z",
+      "environment": "localhost HTTP, Chromium, synthetic/fake providers; NOT AWS/CDN",
+      "browser": "151.0.7922.34",
+      "counts": {
+        "model": 0,
+        "tool": 0
+      },
+      "completions": [
+        "stream:wire_missing_final",
+        "stream:initial_silent"
+      ],
+      "results": [
+        {
+          "case": "stream:initial_silent",
+          "requestStart": 167.40000000596046,
+          "maxSilenceMs": 35050,
+          "headersMs": 32.400000005960464,
+          "ttfbMs": 35050,
+          "ttfiMs": 36043.20000001788,
+          "completionMs": 36043.30000001192,
+          "settledMs": 36043.30000001192,
+          "received": [
+            {
+              "type": "progress",
+              "atMs": 35060.70000001788
+            },
+            {
+              "type": "final",
+              "atMs": 36043.20000001788
+            }
+          ]
+        },
+        {
+          "case": "stream:silent",
+          "requestStart": 189.90000000596046,
+          "maxSilenceMs": 45001.29999998212,
+          "headersMs": 8.300000011920929,
+          "ttfbMs": 8.700000017881393,
+          "error": "aborted",
+          "settledMs": 45010.09999999404,
+          "received": [
+            {
+              "type": "progress",
+              "atMs": 11.300000011920929
+            }
+          ]
+        },
+        {
+          "case": "stream:mid_error",
+          "requestStart": 165,
+          "maxSilenceMs": 1001.0999999940395,
+          "headersMs": 4.9000000059604645,
+          "ttfbMs": 5.300000011920929,
+          "error": "agent_failed",
+          "settledMs": 1007.2000000178814,
+          "received": [
+            {
+              "type": "progress",
+              "atMs": 7.5
+            }
+          ]
+        },
+        {
+          "case": "stream:abort",
+          "requestStart": 161,
+          "maxSilenceMs": 1193.800000011921,
+          "headersMs": 6.200000017881393,
+          "ttfbMs": 6.5999999940395355,
+          "error": "aborted",
+          "settledMs": 1200.5,
+          "received": [
+            {
+              "type": "progress",
+              "atMs": 9
+            }
+          ]
+        },
+        {
+          "case": "stream:wire_missing_final",
+          "requestStart": 144.59999999403954,
+          "maxSilenceMs": 7.9000000059604645,
+          "headersMs": 7.5,
+          "ttfbMs": 7.9000000059604645,
+          "error": "incomplete_stream",
+          "settledMs": 10.900000005960464,
+          "received": [
+            {
+              "type": "progress",
+              "atMs": 10.599999994039536
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

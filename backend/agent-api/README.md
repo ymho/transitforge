@@ -64,3 +64,9 @@ npm run typecheck --workspace @raiquora/agent-api
 ```
 
 `npm run test --workspace @raiquora/agent-api`は共有Runtime coreの隣接testも実行する。Frontend workspaceの全量testはこの範囲を除外し、root CIで重複実行しない。
+
+## Streaming transport PoC（#462）
+
+`agent-stream-poc-lambda.ts`は独立したdefault-off検証入口で、production package/routeへは未接続。
+既存Server AgentをApplication event sinkで観測し、認証後にprogress/final/errorをSSEへ変換する。
+[検証記録](../../docs/experiments/agent-stream-462.md)と[ADR 0070](../../docs/decisions/0070-select-regional-rest-agent-streaming.md)に再現手順・測定値・未実施のAWS gateを記録する。
