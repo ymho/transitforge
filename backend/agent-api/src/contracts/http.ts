@@ -1,6 +1,11 @@
 export interface LambdaHttpEvent {
   rawPath?: string;
+  path?: string;
+  httpMethod?: string;
+  headers?: Record<string, string | undefined>;
+  multiValueHeaders?: Record<string, string[] | undefined>;
   rawQueryString?: string;
+  multiValueQueryStringParameters?: Record<string, string[] | undefined>;
   queryStringParameters?: Record<string, string | undefined>;
   requestContext?: { http?: { method?: string } };
   body?: string | null;

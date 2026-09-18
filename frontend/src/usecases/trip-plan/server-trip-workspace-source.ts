@@ -1,3 +1,4 @@
+import { ApiAuthenticationError } from "../auth/api-authentication-error";
 import { validateTrip, applyTripProposal, TripRevisionConflict, type Trip, type TripUpdateProposal } from "@raiquora/trip/trip";
 import type { TripWorkspaceSource, TripProposalConfirmation } from "./trip-workspace-controller";
 import type { ServerTripClient, TripLoadState } from "./server-trip-client";
@@ -21,7 +22,7 @@ export interface ServerTripWriter {
 
 /** Restores source ownership before any legacy reader/writer can be installed on reload. */
 export function createReferencedTripSource(reference: { tripId?: string; tripSourceState?: "migration-pending" | "server-v2" },
-  client: Pick<ServerTripClient, "get" | "getRole">): TripWorkspaceSource | undefined {
+  client: Pick<ServerTripClient, "get" | "getRole" | "sessionVersion" | "subscribeSessionChange">): TripWorkspaceSource | undefined {
   if (!reference.tripId && !reference.tripSourceState) return undefined;
   if (reference.tripSourceState === "migration-pending" || !reference.tripId) return {
     sourceState: reference.tripSourceState ?? "server-v2", getCurrentTrip: () => undefined, getLoadState: () => "unavailable",
@@ -32,7 +33,7 @@ export function createReferencedTripSource(reference: { tripId?: string; tripSou
 }
 
 /** Memory is a fetched read view, never a local writer/cache fallback. Preview cannot save. */
-export function createServerTripWorkspaceSource(tripId: string, client: Pick<ServerTripClient, "get" | "getRole">, writer?: ServerTripWriter,
+export function createServerTripWorkspaceSource(tripId: string, client: Pick<ServerTripClient, "get" | "getRole" | "sessionVersion" | "subscribeSessionChange">, writer?: ServerTripWriter,
   reservationReader?: ReservationReadClient, getExternalFacts?: () => TripFeasibilityFacts["external"],
   preparation?: { reader: ChecklistReadClient; writer?: ChecklistWriteClient }): TripWorkspaceSource & { refresh(): Promise<void> } {
   let current: Trip | undefined, loadState: TripLoadState = "loading", generation = 0;
@@ -40,12 +41,21 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
   let checklist: TripChecklistItem[] | undefined, checklistSending = false;
   let pending: TripMutationRequest | undefined, sending = false, confirming = false;
   const listeners = new Set<() => void>();
+  let sessionVersion = client.sessionVersion?.();
+  const checkSession = () => {
+    const next = client.sessionVersion?.();
+    if (next === sessionVersion) return;
+    sessionVersion = next; ++generation; pending = undefined;
+    current = undefined; reservations = undefined; checklist = undefined; loadState = "unavailable";
+  };
   const publish = () => { for (const listener of listeners) listener(); };
   const refresh = async () => {
+    checkSession();
     const request = ++generation;
     current = undefined; reservations = undefined; checklist = undefined; loadState = "loading"; publish();
     try {
       const trip = await client.get(tripId);
+      checkSession();
       if (request !== generation) return;
       if (!trip || trip.id !== tripId) throw new Error("Trip unavailable");
       validateTrip(trip); current = structuredClone(trip); loadState = "loaded";
@@ -65,23 +75,27 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
     if (request === generation) publish();
   };
   const sendPending = async () => {
+    checkSession();
     if (!writer || !pending || sending || client.getRole?.(tripId) === "viewer") throw new Error("変更の確認または送信が必要です");
     sending = true;
+    const sent = pending, sentSession = sessionVersion;
     try {
-      const result = await writer.mutate(structuredClone(pending));
+      const result = await writer.mutate(structuredClone(sent));
+      checkSession();
+      if (sentSession !== sessionVersion) throw new ApiAuthenticationError("session-changed");
       validateTrip(result);
-      if (result.id !== tripId || result.revision !== pending.baseRevision + 1) throw new Error("Invalid mutation response");
+      if (result.id !== tripId || result.revision !== sent.baseRevision + 1) throw new Error("Invalid mutation response");
       pending = undefined;
       await refresh(); // Receipt may describe an older successful revision: GET the current Trip.
     } catch (error) {
-      if (error instanceof TripRevisionConflict || error instanceof TripWriteRejected) { pending = undefined; await refresh(); }
+      if (error instanceof TripRevisionConflict || error instanceof TripWriteRejected || error instanceof ApiAuthenticationError) { pending = undefined; await refresh(); }
       else { ++generation; current = undefined; loadState = "unavailable"; publish(); }
       throw error;
     } finally { sending = false; }
   };
-  return { sourceState: "server-v2", confirmationPersistence: writer ? "server" : undefined,
+  return { sessionVersion: () => { checkSession(); return sessionVersion; }, sourceState: "server-v2", confirmationPersistence: writer ? "server" : undefined,
     getRole: () => client.getRole?.(tripId),
-    ...(preparation ? { checklist: { getItems: () => current && checklist ? structuredClone(checklist) : undefined,
+    ...(preparation ? { checklist: { getItems: () => { checkSession(); return current && checklist ? structuredClone(checklist) : undefined; },
       ...(preparation.writer ? { async write(command: ChecklistCommand) {
         if (!current || checklistSending || !checklist) throw new Error("準備リストを再取得してください");
         const commandTrip = command.operation === "confirm-suggestions" ? command.proposal.tripId : command.tripId;
@@ -91,6 +105,8 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
         finally { checklistSending = false; await refresh(); } // Even uncertain writes must re-read, no blind retry.
       } } : {}) } } : {}),
     ...(writer ? { async confirmProposal(proposal: TripUpdateProposal, confirmation?: TripProposalConfirmation) {
+      checkSession();
+      const confirmationSession = sessionVersion;
       if (pending || sending || confirming) throw new Error("前回の保存結果を再確認してください");
       confirming = true;
       try {
@@ -107,14 +123,20 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
         }
         catch (error) { await refresh(); throw error; }
         await writer.validateConfirmation(structuredClone(latest), structuredClone(proposal), confirmation);
+        checkSession();
+        if (confirmationSession !== sessionVersion) throw new ApiAuthenticationError("session-changed");
         const mutationId = writer.newMutationId();
         if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(mutationId)) throw new Error("Invalid mutation ID");
         pending = { tripId, baseRevision: proposal.baseRevision, mutationId, proposal: structuredClone(proposal) };
         await sendPending();
       } finally { confirming = false; }
-    } } : {}), getLoadState: () => loadState, getCurrentTrip: () => current ? structuredClone(current) : undefined,
-    getReservationFacts: () => current && reservations ? structuredClone(reservations) : undefined,
+    } } : {}), getLoadState: () => { checkSession(); return loadState; }, getCurrentTrip: () => { checkSession(); return current ? structuredClone(current) : undefined; },
+    getReservationFacts: () => { checkSession(); return current && reservations ? structuredClone(reservations) : undefined; },
     getFeasibilityExternalFacts: getExternalFacts,
-    subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); }, refresh,
-    retry: async () => { if (pending) await sendPending(); else await refresh(); } };
+    subscribe(listener) {
+      listeners.add(listener);
+      const unsubscribe = client.subscribeSessionChange?.(() => { checkSession(); listener(); });
+      return () => { unsubscribe?.(); listeners.delete(listener); };
+    }, refresh,
+    retry: async () => { checkSession(); if (pending) await sendPending(); else await refresh(); } };
 }

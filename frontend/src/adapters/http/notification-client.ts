@@ -1,8 +1,9 @@
+import { personalApiFetch } from "./personal-api-fetch";
 import { validateNotificationView, type NotificationView } from "@raiquora/trip/notification";
 import type { NotificationClient } from "../../usecases/notifications/notification-client";
 
 export class HttpNotificationClient implements NotificationClient {
-  constructor(private readonly endpoint = "/api/trips/notifications/v1", private readonly request: typeof fetch = fetch) {}
+  constructor(private readonly endpoint = "/api/trips/notifications/v1", private readonly request: typeof fetch = personalApiFetch) {}
   private async execute(command: Record<string, unknown>) {
     const response = await this.request(this.endpoint, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
       body: JSON.stringify({ version: "notification-api-v1", ...command }), signal: AbortSignal.timeout(15000) });

@@ -9,7 +9,7 @@ describe("authentication controls", () => {
     let listener!: (state: AuthState) => void;
     const unsubscribe = vi.fn();
     const auth: AuthSession = {
-      initialize: vi.fn(), getState: () => ({ status: "signed-out" }),
+      invalidate: vi.fn(), initialize: vi.fn(), getState: () => ({ status: "signed-out" }),
       subscribe: fn => { listener = fn; fn({ status: "signed-out" }); return unsubscribe; },
       login: vi.fn(), logout: vi.fn(), getAccessToken: async () => undefined,
     };
