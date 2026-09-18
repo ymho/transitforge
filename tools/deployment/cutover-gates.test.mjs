@@ -25,6 +25,36 @@ test("cannot turn existing infrastructure off, delete it or replace it even with
     assert.throws(() => reviewCutoverPlan(plan([change(name, ["no-op"], {})]), env()), /cannot be disabled/);
   }
 });
+test("destructive cutover diagnostics contain only the validated address and actions", () => {
+  const input = plan([{
+    mode: "managed",
+    name: "agent_stream",
+    address: 'aws_api_gateway_deployment.agent_stream["stream"]',
+    change: {
+      actions: ["create", "delete"],
+      before: { id: "arn:aws:execute-api:secret-before", secret: "DO_NOT_PRINT_BEFORE" },
+      after: { id: "arn:aws:execute-api:secret-after", secret: "DO_NOT_PRINT_AFTER" },
+    },
+  }], true, true);
+  assert.throws(() => reviewCutoverPlan(input, env("true", "true")), error => {
+    assert.match(error.message, /aws_api_gateway_deployment\.agent_stream\["stream"\] \(create\/delete\)/u);
+    assert.doesNotMatch(error.message, /before|after|arn:|DO_NOT_PRINT/u);
+    return true;
+  });
+});
+test("malformed destructive addresses fail generically without exposing plan values", () => {
+  const input = plan([{
+    mode: "managed",
+    name: "agent_stream",
+    address: 'invalid address secret="DO_NOT_PRINT"',
+    change: { actions: ["delete"], before: { secret: "DO_NOT_PRINT" } },
+  }], true, true);
+  assert.throws(() => reviewCutoverPlan(input, env("true", "true")), error => {
+    assert.equal(error.message, "Invalid Terraform resource address");
+    assert.doesNotMatch(error.message, /DO_NOT_PRINT|invalid address/u);
+    return true;
+  });
+});
 test("partial API Gateway logs policy migration keeps the inline policy and creates only the managed attachment", () => {
   const inlinePolicy = {
     mode: "managed",
