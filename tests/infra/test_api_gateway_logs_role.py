@@ -30,7 +30,14 @@ class ApiGatewayLogsRoleTest(unittest.TestCase):
             "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs",
         )
 
-        self.assertNotIn('resource "aws_iam_role_policy" "agent_stream_gateway_logs"', source)
+        inline_policy = re.search(
+            r'resource "aws_iam_role_policy" "agent_stream_gateway_logs"(.*?)\n\}\nresource ',
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(inline_policy)
+        self.assertIn('"logs:DescribeLogGroups"', inline_policy.group(1))
+        self.assertIn('"logs:CreateLogStream"', inline_policy.group(1))
 
 
 if __name__ == "__main__":

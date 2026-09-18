@@ -25,6 +25,21 @@ test("cannot turn existing infrastructure off, delete it or replace it even with
     assert.throws(() => reviewCutoverPlan(plan([change(name, ["no-op"], {})]), env()), /cannot be disabled/);
   }
 });
+test("partial API Gateway logs policy migration keeps the inline policy and creates only the managed attachment", () => {
+  const inlinePolicy = {
+    mode: "managed",
+    name: "agent_stream_gateway_logs",
+    address: 'aws_iam_role_policy.agent_stream_gateway_logs["stream"]',
+    change: { actions: ["no-op"], before: { id: "existing-inline-policy" } },
+  };
+  const managedAttachment = {
+    mode: "managed",
+    name: "agent_stream_gateway_logs",
+    address: 'aws_iam_role_policy_attachment.agent_stream_gateway_logs["stream"]',
+    change: { actions: ["create"], before: null },
+  };
+  assert.doesNotThrow(() => reviewCutoverPlan(plan([inlinePolicy, managedAttachment], true, true), env("true", "true")));
+});
 test("Browser-only rollback preserves infrastructure and can proceed", () => {
   assert.doesNotThrow(() => reviewCutoverPlan(plan([change("agent_stream", ["no-op"], {}), change("fixed_egress_provider", ["update"], {})], true, true), env("true", "true", "false")));
 });
