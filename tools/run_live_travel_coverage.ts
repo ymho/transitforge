@@ -9,7 +9,7 @@ import { railSelectionFixture } from "../modules/trip/domain/selected-rail-journ
 import { assessRailCoverage } from "../modules/trip/domain/travel-coverage";
 import { createTravelCandidate } from "../modules/trip/domain/travel-candidate";
 import type { AgentTrace } from "../frontend/src/usecases/agent/agent-trace";
-import { requestConstraint } from "../modules/trip/domain/trip-request.fixture";
+import { coverageLiveInputs } from "../frontend/src/adapters/bedrock/coverage-live-input.fixture";
 
 /** Synthetic provider IO, real Domain coverage + Viewer Runtime + configured Bedrock model.
  * No Trip writes, no provider payload/CoT recording; scenario output is synthetic only. */
@@ -22,10 +22,8 @@ for (const mode of ["outside-alternative", "unknown-research", "missing-then-ans
   const f = askProgressFixture("C-candidate"), a = railSelectionFixture(), b = railSelectionFixture();
   // The former harness contradicted its timetable (Kyoto / Sep 21 vs station A / Sep 13)
   // and omitted station identities entirely. Keep the synthetic scenario internally coherent.
-  const trip = { ...f.trip, request: { constraints: [
-    requestConstraint({ type: "origin", place: { name: "A", sources: [] } }, { id: "origin" }),
-    requestConstraint({ type: "dates", start: { earliest: "2026-09-13", latest: "2026-09-13" }, timeZone: "Asia/Tokyo" }, { id: "dates" }),
-  ], assumptions: [] } };
+  const known = coverageLiveInputs();
+  const trip = { ...f.trip, request: known.request };
   a.candidate.candidateId = "candidate-a"; b.candidate.candidateId = "candidate-b";
   if (mode !== "unknown-research") a.inputs[0]!.index.station_line_catalog!.lines[0]!.stations.pop();
   else a.inputs = [];
@@ -71,7 +69,7 @@ for (const mode of ["outside-alternative", "unknown-research", "missing-then-ans
     candidateSelection: { taskId: "coverage-task", port: {
       resolve: async (id) => { const v = choices.find((c) => c.value.id === id); return v ? {
         candidate: v.value, tripId: trip.id, taskId: "coverage-task", validUntil: "2026-09-12T09:00:00Z", rail: v.candidate,
-        assessmentFacts: { candidateId: id, rail: { candidate: v.candidate, inputs: v.inputs } },
+        assessmentFacts: { candidateId: id, ...known.facts, rail: { candidate: v.candidate, inputs: v.inputs } },
       } : undefined; },
       loadTimetables: async (candidate) => choices.find((c) => c.candidate.candidateId === candidate.candidateId)?.inputs ?? [],
     } },
