@@ -36,6 +36,16 @@ test("CLI credentials use stdin and raw stderr is never forwarded or retained on
     assert.equal(await aws("synthetic", "operation", {}, { missing: true }), undefined);
   } finally { process.env.PATH = previous; rmSync(dir, { recursive: true, force: true }); }
 });
+test("STS GetCallerIdentity reproduces the no-input CLI failure and uses the safe no-input form", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "cutover-sts-test-"));
+  const previous = process.env.PATH;
+  try {
+    writeFileSync(join(dir, "aws"), '#!/bin/sh\nfor arg in "$@"; do [ "$arg" = "--cli-input-json" ] && { echo "synthetic cli input failure" >&2; exit 2; }; done\nprintf "%s" \'{"Account":"123456789012"}\'\n', { mode: 0o700 });
+    process.env.PATH = `${dir}:${previous}`;
+    await assert.rejects(aws("sts", "get-caller-identity", { synthetic: "input" }), /^Error: AWS operation failed$/u);
+    assert.deepEqual(await aws("sts", "get-caller-identity"), { Account: "123456789012" });
+  } finally { process.env.PATH = previous; rmSync(dir, { recursive: true, force: true }); }
+});
 test("workflow is manual-only, serializes with CD and limits session mutation permissions", () => {
   const workflow = readFileSync(new URL("../../.github/workflows/server-agent-cutover-validation.yml", import.meta.url), "utf8");
   assert.match(workflow, /on:\s+workflow_dispatch:/u);
