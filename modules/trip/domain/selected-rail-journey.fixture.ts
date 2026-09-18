@@ -19,7 +19,12 @@ export function railSelectionFixture(): { candidate: VerifiedRailCandidate; inpu
     },
     inputs: [{ sourceId: "synthetic-timetable", contentDigest: "sha256:fixture-a", defaultTransferMinutes: 5, stationTransferMinutes: {},
       evidence: { id: "input-evidence", kind: "timetable", provider: "timetable", sourceId: "synthetic-timetable", retrievedAt: "2026-09-12T07:58:00Z", confidence: "provider-schedule" },
-      index: { schema_version: "train-index-v1", path_catalog: "synthetic", service_date: "2026-09-13", trains: [
+      index: { schema_version: "train-index-v1", path_catalog: "synthetic", service_date: "2026-09-13",
+        station_line_catalog: { schema_version: "station-line-catalog-v1", source: "synthetic", lines: [
+          { operator: "fixture", line: "fixture", stations: [
+            { name: "A", coordinate: [135, 35] }, { name: "B", coordinate: [135.1, 35] }, { name: "C", coordinate: [135.2, 35] },
+          ] },
+        ] }, trains: [
         { service_uid: "s1", train_no: "1M", service_type: "普通", train_name: "", origin_station: "A", destination_station: "B",
           stops: [{ station_name: "A", event: "発", route_time_minutes: 540 }, { station_name: "B", event: "着", route_time_minutes: 600 }] },
         { service_uid: "s2", train_no: "2M", service_type: "普通", train_name: "", origin_station: "B", destination_station: "C",

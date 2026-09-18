@@ -21,6 +21,13 @@ function setup() {
 }
 
 describe("candidate adoption boundary", () => {
+  it("rechecks current coverage at confirmation instead of trusting an old supported candidate", async () => {
+    const f = setup();
+    const shown = await proposeCandidateSelection(f.trip, f.request, f.port, f.selectedAt);
+    f.inputs[0]!.index.station_line_catalog!.lines[0]!.stations.pop();
+    await expect(confirmCandidateSelection(f.trip, f.request, shown, f.port, "2026-09-12T08:01:00Z")).rejects.toThrow(/coverage/);
+    expect(f.trip.items[0]).toMatchObject({ detail: { status: "unresolved" } });
+  });
   it("rejects a stale Trip revision even if the candidate/timetable are unchanged", async () => {
     const f = setup(), current = { ...f.trip, revision: 5 };
     const shown = await proposeCandidateSelection(current, f.request, f.port, f.selectedAt);

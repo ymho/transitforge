@@ -18,7 +18,8 @@ export const candidateAssessmentDescriptor: AgentToolDescriptor = {
     unsuitableCases: ["新しい場所の探索", "天気や警報の取得", "旅程の採用・保存"],
     returnedEvidence: "候補ID別のderived_value、取得済みのExternalSourceEvidenceへの参照",
     freshness: "assessedAtは評価時刻。観測/取得/有効期限はsourceごとに別。古い値を現在値にしない",
-    limitations: ["未結合/未取得の結果はunknown", "異通貨は暗黙換算しない", "全Trip成立性・予約は証明しない"],
+    limitations: ["serviceCoverageは現行の収録カタログ・日付別時刻表・駅からのアクセスに基づく。supported以外を移動確認済みとしない。範囲外でも相談は継続でき、代案・追加調査はモデルが判断する",
+      "未結合/未取得の結果はunknown", "異通貨は暗黙換算しない", "全Trip成立性・予約は証明しない"],
     responsibilityBoundary: "Bedrockは追加調査・比較推薦を判断する。Domainは取得済み事実の検証と三値評価のみ" },
 };
 
@@ -52,6 +53,7 @@ export function candidateAssessmentEvidence(output: unknown): Evidence[] {
     category: "external", knowledgeKind: "derived_value", subject: assessment.candidateId,
     facts: { candidateId: assessment.candidateId, constraintStatus: assessment.constraintStatus,
       weather: assessment.weather.status, hazard: assessment.hazard.status, relevance: assessment.relevance.status,
+      ...(assessment.serviceCoverage ? { serviceCoverage: assessment.serviceCoverage.status, coverageReason: assessment.serviceCoverage.reason } : {}),
       partial: assessment.partial, hardUnknown: assessment.hardConstraints.filter((c) => c.status === "unknown").map((c) => c.constraintId),
       hardViolations: assessment.hardConstraints.filter((c) => c.status === "violated").map((c) => c.constraintId),
       ...(assessment.mobility.travelMinutes !== undefined ? { plannedTravelMinutes: assessment.mobility.travelMinutes } : {}),
