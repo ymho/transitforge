@@ -89,7 +89,8 @@ function editor(draft: Draft): string {
     <button type="submit">この端末に保存</button></form>`;
 }
 function field(name: string, label: string, value = "", type = "text"): string {
-  return `<label>${label}<input name="${name}" type="${type}" value="${esc(value)}" ${type === "number" ? 'min="0" max="1440"' : 'maxlength="500"'}></label>`;
+  const range = name === "party" ? 'min="1" max="100" step="1"' : 'min="0" max="1440" step="1"';
+  return `<label>${label}<input name="${name}" type="${type}" value="${esc(value)}" ${type === "number" ? range : 'maxlength="500"'}></label>`;
 }
 function range(name: string, label: string, value?: number): string {
   return `<div class="profile-range"><label><input type="checkbox" data-enable="${name}" ${value === undefined ? "" : "checked"}>${label}を設定</label>
