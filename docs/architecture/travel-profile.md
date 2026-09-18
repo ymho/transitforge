@@ -1,5 +1,9 @@
 # 旅行プロフィールの互換編集（#457）
 
+会話Contextを含む後続turnも自由文Traceを保存しない。同意解除後でも履歴が以前のメモを
+引用し得るため、現在の送信同意だけでログ保存を再開しない。Model/Tool回数・latency・ID等の
+内容を含まない診断は維持する。会話表示のための履歴と診断Traceは別の保存境界である。
+
 ## 正本・保存・未設定
 
 既存UserProfile v2、`transitforge.travel-profile.v2`、既存Repositoryを再利用する。
