@@ -58,3 +58,17 @@ test("public URLs, missing scope, buffering, altered deadline and unsafe client 
     r => { r["cloudfront/list-distributions"].DistributionList.Items[0].CacheBehaviors.Items[0].Compress = true; },
   ]) await assert.rejects(discover(fixture(change).call), /validation failed/u);
 });
+test("fixed checkpoints stop after the first failure and never expose remote values", async () => {
+  const f = fixture(r => { r.agent.Environment.Variables.SERVER_AGENT_MAX_EXECUTION_MS = "PRIVATE-account-arn-token"; });
+  const seen = [];
+  await assert.rejects(discover(f.call, async (label, action) => { seen.push(label); return action(); }));
+  assert.deepEqual(seen, ["AWS discovery / identity", "AWS discovery / Lambda topology"]);
+  assert.doesNotMatch(seen.join("\n"), /PRIVATE|arn|token|\d{12}/iu);
+});
+test("arbitrary discovery checkpoint labels are rejected by the fixed Report contract", async () => {
+  const f = fixture();
+  const { Report } = await import("./safety.mjs");
+  const report = new Report();
+  await assert.rejects(discover(f.call, (label, action) => report.check("arbitrary", action)), /validation failed/u);
+  assert.doesNotMatch(report.render(), /arbitrary|synthetic|arn|\d{12}/iu);
+});
