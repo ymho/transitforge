@@ -9,13 +9,20 @@ on:
     types:
       - completed
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Plan only (no AWS changes), or deploy after validation
+        type: choice
+        options: [plan, deploy]
+        default: plan
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
   group: transitforge-dev
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -29,6 +36,10 @@ jobs:
       contents: read
       id-token: write
     env:
+      CD_MODE: ${{ github.event_name == 'workflow_run' && 'deploy' || inputs.mode || 'plan' }}
+      TF_VAR_agent_stream_enabled: ${{ vars.AGENT_STREAM_ENABLED }}
+      TF_VAR_enable_fixed_egress_provider: ${{ vars.FIXED_EGRESS_PROVIDER_ENABLED }}
+      VITE_SERVER_AGENT_ENABLED: ${{ vars.SERVER_AGENT_ENABLED }}
       AWS_REGION: ap-northeast-1
       AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
@@ -59,6 +70,9 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      - name: Validate explicit cutover gates
+        run: node tools/deployment/cutover-gates.mjs inputs
+
       - name: Install JavaScript dependencies
         run: npm ci
 
@@ -78,6 +92,7 @@ jobs:
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: 1.12.2
+          terraform_wrapper: false
 
       - name: Prepare Terraform provider cache
         run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
@@ -97,16 +112,33 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           mask-aws-account-id: true
 
-      - name: Apply Terraform
+      - name: Plan Terraform without exposing values
         working-directory: infra/terraform/environments/dev
+        shell: bash
         run: |
-          terraform init \
+          set -euo pipefail
+          umask 077
+          case "$CD_MODE" in plan|deploy) ;; *) exit 1 ;; esac
+          lock=true
+          if [ "$CD_MODE" = plan ]; then lock=false; fi
+          terraform init -input=false \
             -backend-config="bucket=${TF_STATE_BUCKET}" \
-            -backend-config="region=${AWS_REGION}"
-          terraform plan -out=dev.tfplan
-          terraform apply -auto-approve dev.tfplan
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="use_lockfile=${lock}"
+          if ! terraform plan -input=false -lock="$lock" -out=dev.tfplan > plan.log 2>&1; then
+            echo "Terraform plan failed; raw diagnostics are withheld because they may contain sensitive values."
+            exit 1
+          fi
+          terraform show -json dev.tfplan | node ../../../../tools/deployment/cutover-gates.mjs plan > plan-summary.txt
+          cat plan-summary.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Apply validated Terraform plan
+        if: env.CD_MODE == 'deploy'
+        working-directory: infra/terraform/environments/dev
+        run: terraform apply -input=false -auto-approve dev.tfplan
 
       - name: Read deployment outputs
+        if: env.CD_MODE == 'deploy'
         id: terraform
         working-directory: infra/terraform/environments/dev
         run: |
@@ -114,10 +146,12 @@ jobs:
           echo "distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> "$GITHUB_OUTPUT"
 
       - name: Generate public authentication configuration
+        if: env.CD_MODE == 'deploy'
         working-directory: infra/terraform/environments/dev
         run: terraform output -json cognito_frontend_config > ../../../../dist/auth-config.json
 
       - name: Deploy viewer assets
+        if: env.CD_MODE == 'deploy'
         run: |
           aws s3 sync dist "s3://${{ steps.terraform.outputs.website_bucket }}/" \
             --delete \
@@ -126,3 +160,8 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id "${{ steps.terraform.outputs.distribution_id }}" \
             --paths "/*"
+
+      - name: Remove sensitive local plan files
+        if: always()
+        working-directory: infra/terraform/environments/dev
+        run: rm -f dev.tfplan plan.log

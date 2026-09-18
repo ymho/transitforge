@@ -1,3 +1,4 @@
+import { serverAgentDeadline } from "./composition/server-agent-deadline.js";
 import { afterEach, expect, it, vi } from "vitest";
 import { createProductionAgentStream } from "./agent-stream-composition.js";
 import { createProductionConversationAgent } from "./composition/production-conversation-agent.js";
@@ -6,7 +7,7 @@ import { tripDynamoFixture } from "./adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, issuer, token } from "./adapters/cognito-token.fixture.js";
 import type { StreamWriter } from "./ports/agent-stream-transport.js";
 
-function setup(enabled = true) {
+function setup(enabled = true, maxExecutionMs?: number) {
   const { verifier } = cognitoTokenFixture();
   const verify = vi.spyOn(verifier, "verify");
   const model = { converse: vi.fn(async () => ({ stopReason: "end_turn" as const, metadata: { modelId: "fake", latencyMs: 0 },
@@ -14,6 +15,7 @@ function setup(enabled = true) {
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
   const createApplication = vi.fn((executionId: string) => createProductionConversationAgent({
     stateTable: "test-state", stateClient: state.client, tripTable: "test-trips", tripClient: trips.client,
+    limits: maxExecutionMs === undefined ? undefined : { maxExecutionMs },
     model, weather: { search: vi.fn() }, newExecutionId: () => executionId,
   }));
   const log = vi.fn();
@@ -109,4 +111,20 @@ it("requires both stable UUID references before state access", async () => {
     const s = setup(); await s.handle({ ...s.request, body: JSON.stringify(body) }, s.writer);
     expect(s.writer.start).toHaveBeenCalledWith(400, expect.anything()); expect(s.state.commands).toHaveLength(0);
   }
+});
+
+it("ends a bounded business timeout with agent_failed and no saved final, before the transport timeout", async () => {
+  vi.useFakeTimers();
+  const s = setup(true, serverAgentDeadline({ SERVER_AGENT_MAX_EXECUTION_MS: "120000" }));
+  s.model.converse.mockImplementation(() => new Promise(() => {}));
+  const pending = s.handle(s.request, s.writer);
+  await vi.advanceTimersByTimeAsync(119_999);
+  expect(s.frames.join("")).not.toContain('"type":"error"');
+  await vi.advanceTimersByTimeAsync(2);
+  await pending;
+  expect(s.frames.join("")).toContain('"code":"agent_failed"');
+  expect(s.frames.join("")).not.toContain('"type":"final"');
+  expect(s.frames.at(-1)).toContain("event: done");
+  expect(s.model.converse).toHaveBeenCalledOnce();
+  expect([...s.state.records.values()].some(row => row.sk.S?.startsWith("TURN#") && row.payload.S?.includes('"completed"'))).toBe(false);
 });

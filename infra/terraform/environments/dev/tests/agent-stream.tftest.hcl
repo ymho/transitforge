@@ -45,6 +45,10 @@ run "enabled_contract" {
     enable_fixed_egress_provider = true
   }
   assert {
+    condition     = aws_lambda_function.agent_stream["stream"].environment[0].variables.SERVER_AGENT_MAX_EXECUTION_MS == "120000"
+    error_message = "Production must explicitly supply its business budget, not inherit the shared 15s default."
+  }
+  assert {
     condition     = aws_lambda_function.agent_stream["stream"].environment[0].variables.SERVER_STATE_TABLE_NAME == aws_dynamodb_table.server_state.name && aws_lambda_function.agent_stream["stream"].environment[0].variables.TRIP_TABLE_NAME == aws_dynamodb_table.trips.name
     error_message = "The authenticated stateful composition must use the existing State and Trip tables."
   }
@@ -122,4 +126,27 @@ run "stream_requires_provider" {
     enable_fixed_egress_provider = false
   }
   expect_failures = [aws_lambda_function.agent_stream["stream"]]
+}
+
+run "custom_business_deadline" {
+  command = plan
+  variables {
+    agent_stream_enabled          = true
+    enable_fixed_egress_provider  = true
+    server_agent_max_execution_ms = 180000
+  }
+  assert {
+    condition     = aws_lambda_function.agent_stream["stream"].environment[0].variables.SERVER_AGENT_MAX_EXECUTION_MS == "180000" && aws_lambda_function.agent_stream["stream"].timeout == 240
+    error_message = "Business budget must remain separate from Lambda timeout."
+  }
+}
+run "reject_transport_sized_business_deadline" {
+  command = plan
+  variables { server_agent_max_execution_ms = 240000 }
+  expect_failures = [var.server_agent_max_execution_ms]
+}
+run "reject_fractional_business_deadline" {
+  command = plan
+  variables { server_agent_max_execution_ms = 120000.5 }
+  expect_failures = [var.server_agent_max_execution_ms]
 }
