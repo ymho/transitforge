@@ -201,6 +201,16 @@ resource "aws_iam_role" "agent_stream_gateway_logs" {
     Effect = "Allow", Principal = { Service = "apigateway.amazonaws.com" }, Action = "sts:AssumeRole"
   }] })
 }
+# Keep the partial-apply resource address and policy document until cutover cleanup.
+# API Gateway CloudWatch permissions are provided by the AWS managed policy below.
+resource "aws_iam_role_policy" "agent_stream_gateway_logs" {
+  for_each = local.agent_stream_instances
+  role     = aws_iam_role.agent_stream_gateway_logs[each.key].id
+  policy = jsonencode({ Version = "2012-10-17", Statement = [
+    { Effect = "Allow", Action = ["logs:DescribeLogGroups"], Resource = "*" },
+    { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents", "logs:GetLogEvents", "logs:FilterLogEvents"], Resource = "${aws_cloudwatch_log_group.agent_stream_api[each.key].arn}:*" }
+  ] })
+}
 resource "aws_iam_role_policy_attachment" "agent_stream_gateway_logs" {
   for_each   = local.agent_stream_instances
   role       = aws_iam_role.agent_stream_gateway_logs[each.key].name
@@ -210,7 +220,10 @@ resource "aws_iam_role_policy_attachment" "agent_stream_gateway_logs" {
 resource "aws_api_gateway_account" "agent_stream" {
   for_each            = local.agent_stream_instances
   cloudwatch_role_arn = aws_iam_role.agent_stream_gateway_logs[each.key].arn
-  depends_on          = [aws_iam_role_policy_attachment.agent_stream_gateway_logs]
+  depends_on = [
+    aws_iam_role_policy.agent_stream_gateway_logs,
+    aws_iam_role_policy_attachment.agent_stream_gateway_logs,
+  ]
 }
 output "agent_stream_route" {
   description = "Internal opt-in path; not published to Browser configuration."
