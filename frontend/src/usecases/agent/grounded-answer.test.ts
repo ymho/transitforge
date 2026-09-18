@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { DefaultAgentResponseGenerator } from "./agent-response-generator";
-import { parseGroundedAnswer, supportedAnswerClaims } from "./grounded-answer";
+import { parseGroundedAnswer, supportedAnswerClaims, sourceExplanation } from "./grounded-answer";
 import type { Evidence } from "./evidence-model";
 import type { AgentModelResponse } from "./model-provider";
 
@@ -32,6 +32,27 @@ it("unavailable factual answer may only report unknown, never complete concrete 
 it("initial non-factual interaction does not require a Claim", () => {
   const generator = new DefaultAgentResponseGenerator();
   expect(generator.fromModel(model("こんにちは。どんな旅にしたいですか？"), [], "interaction").claims).toEqual([]);
+});
+it.each(["向日町から倉敷まで25分です", "10:00発、10:30着です", "やくも27号です", "二十五分で到着します"])("rejects invented initial rail values even with no Tool/Evidence: %s", (text) => {
+  expect(() => new DefaultAgentResponseGenerator().fromModel(model(text), [], "interaction")).toThrow();
+});
+const placeEvidence: Evidence = { id: "place-source", category: "external", knowledgeKind: "deterministic_fact", subject: "歴史の町",
+  facts: { sourceTitle: "歴史の町", sourceExcerpt: "白壁の町並みを歩きながら歴史資料館を巡れます。川沿いに休憩所があります。", sourceUrl: "https://example.org/history", sourcePrecision: "read-page", status: "available", freshness: "fresh" },
+  references: [{ sourceType: "external-source", sourceRef: "https://example.org/history", retrievedAt: "2026-09-18T00:00:00Z", freshness: "current", summary: "観光案内" }] };
+it("describes actual place features with attribution instead of a generic acquisition message", () => {
+  const result = new DefaultAgentResponseGenerator().fromModel({ ...model(JSON.stringify({ kind: "source-explanation", sections: [{ evidenceId: placeEvidence.id,
+    quote: String(placeEvidence.facts.sourceExcerpt), mode: "feature" }] })), declaredEvidenceIds: [placeEvidence.id] }, [placeEvidence]);
+  expect(result.text).toContain("白壁の町並み"); expect(result.text).toContain("https://example.org/history");
+  expect(result.text).not.toContain("外部情報の取得結果があります");
+  const fallback = new DefaultAgentResponseGenerator().fromModel({ ...model("自由な推薦文"), declaredEvidenceIds: [placeEvidence.id] }, [placeEvidence]);
+  expect(fallback.text).not.toContain("自由な推薦文"); expect(fallback.text).toContain("白壁の町並み");
+});
+it("separates a Profile-based recommendation from the source's actual description", () => {
+  const result = sourceExplanation(JSON.stringify({ kind: "source-explanation", sections: [{ evidenceId: placeEvidence.id,
+    quote: "白壁の町並みを歩きながら歴史資料館を巡れます。", mode: "recommendation", preference: { field: "favoriteInterests", value: "歴史" } }] }), [placeEvidence], { favoriteInterests: ["歴史"] })!;
+  expect(result.claims.map((c) => c.kind)).toEqual(["fact", "inference"]);
+  expect(result.text).toContain("普段の好み「歴史」"); expect(result.text).toContain("歴史資料館");
+  expect(() => sourceExplanation(JSON.stringify({ kind: "source-explanation", sections: [{ evidenceId: placeEvidence.id, quote: "架空の無料列車", mode: "feature" }] }), [placeEvidence])).toThrow();
 });
 it("a factual answer cannot append unbound prose or forge an Evidence reference", () => {
   const forged = answer(); forged.text += "現在その列車に乗車しています";

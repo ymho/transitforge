@@ -1,7 +1,7 @@
 import type { Evidence, EvidenceClaim } from "./evidence-model";
 import type { AgentModelResponse } from "./model-provider";
 import type { ViewerAgentAction } from "../viewer/viewer-action";
-import { parseGroundedAnswer, presentGroundedEvidence, supportedAnswerClaims } from "./grounded-answer";
+import { parseGroundedAnswer, presentGroundedEvidence, supportedAnswerClaims, sourceExplanation } from "./grounded-answer";
 
 export interface AgentGeneratedResponse {
   text: string;
@@ -11,7 +11,7 @@ export interface AgentGeneratedResponse {
 
 export interface AgentResponseGenerator {
   followUp(missingInformation: string[]): string;
-  fromModel(response: AgentModelResponse, evidence: Evidence[], origin?: "interaction" | "administrative" | "grounded"): AgentGeneratedResponse;
+  fromModel(response: AgentModelResponse, evidence: Evidence[], origin?: "interaction" | "administrative" | "grounded", profile?: Record<string, unknown>): AgentGeneratedResponse;
   limitReached(hasEvidence?: boolean): string;
   failure(): string;
   groundingFailure(): string;
@@ -25,7 +25,7 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
     return `確認したいことがあります: ${missingInformation.join(" ")}`;
   }
 
-  fromModel(response: AgentModelResponse, evidence: Evidence[], origin: "interaction" | "administrative" | "grounded" = "grounded"): AgentGeneratedResponse {
+  fromModel(response: AgentModelResponse, evidence: Evidence[], origin: "interaction" | "administrative" | "grounded" = "grounded", profile?: Record<string, unknown>): AgentGeneratedResponse {
     const text = response.message.content
       .filter((content): content is { type: "text"; text: string } =>
         content.type === "text")
@@ -41,7 +41,13 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
         const claims = supportedAnswerClaims([]);
         return { text: claims[0]!.statement, claims, viewerActions: [] };
       }
-      return parseGroundedAnswer(text, evidence);
+      return sourceExplanation(text, evidence, profile) ?? parseGroundedAnswer(text, evidence);
+    }
+    // Output validation, not input intent routing: no first-turn lane may publish
+    // concrete transport measurements without a bound Claim. Native question and
+    // deterministic Tool presenters do not use this free-prose lane.
+    if (origin === "interaction" && /[0-9０-９一二三四五六七八九十百]+\s*(?:[:：][0-9０-９]{2}|分|時間|時|円|km|キロ|番線|号)/iu.test(text)) {
+      throw new Error("Unbound concrete value in interaction");
     }
     return {
       text: text || "確認できる情報が不足しているため回答できません",
