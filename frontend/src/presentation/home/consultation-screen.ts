@@ -63,7 +63,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     rows.replaceChildren(); status.textContent = ""; aside.dataset.open = "false"; backdrop.hidden = true;
     conditions.setAttribute("aria-expanded", "false");
     name.textContent = trip ? `${trip.title}について相談中` : state.unavailable ? "対象の旅程を読み込めません" : "新しい旅を相談中";
-    const dates = trip ? [...new Set(trip.items.map((i) => itineraryScheduleLabel(i.schedule)))].slice(0, 2) : [];
+    const dates = trip ? [...new Set(trip.items.map((i) => itineraryScheduleLabel(i.schedule).replace(/（[^）]*）$/, "")))].slice(0, 2) : [];
     const party = trip ? tripPartyView(trip)?.text : undefined;
     meta.textContent = [...dates, ...(party ? [party] : [])].join(" ・ "); meta.hidden = !meta.textContent;
     note.textContent = trip ? "この旅程が変更案の対象です。確認するまで反映されません。" : state.unavailable ? "参照先を確認してから相談を続けてください。" : "まだ旅程に紐付いていません。";

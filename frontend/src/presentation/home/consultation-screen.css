@@ -22,7 +22,10 @@
 .consultation-messages { margin: 0; padding: 1.5rem 1.25rem; overflow-y: auto; min-height: 0; list-style: none; background: #fff; overscroll-behavior: contain; }
 .consultation-messages > li { margin: 0 0 1.5rem; max-width: 100%; color: #263f53; font-size: .9375rem; line-height: 1.85; overflow-wrap: anywhere; }
 .consultation-messages > .ai-guide-message-user { margin-left: auto; max-width: 85%; padding: .8rem 1rem; background: #edf4f9; border: 1px solid #d7e7f2; border-radius: 1.125rem 1.125rem .25rem 1.125rem; color: #23445e; box-shadow: none; }
-.consultation-messages > .ai-guide-message-assistant { border: 0; box-shadow: none; background: transparent; padding: 0; }
+.consultation-messages > .ai-guide-message-assistant { position: relative; margin-left: 2.625rem; max-width: min(39rem, calc(100% - 2.625rem)); padding: .85rem 1rem; border: 0; border-radius: 1.125rem; box-shadow: none; background: #f4f7f9; }
+.consultation-messages > .ai-guide-message-assistant::before { content: "✦"; position: absolute; left: -2.625rem; top: 0; display: grid; place-items: center; width: 2.125rem; height: 2.125rem; border-radius: 50%; color: #fff; background: #102f4b; font-size: 1.125rem; }
+.consultation-messages > .ai-guide-message-assistant :first-child { margin-top: 0; }
+.consultation-messages > .ai-guide-message-assistant :last-child { margin-bottom: 0; }
 .consultation-composer { display: flex; gap: .625rem; padding: 1rem 1.25rem; border-top: 1px solid #e1e6eb; background: #fff; }
 .consultation-composer input { flex: 1; min-width: 0; min-height: 48px; border: 1px solid #dbe3e9; border-radius: .875rem; padding: .75rem; color: #173650; background: #f9fbfc; font: 1rem/1.5 sans-serif; }
 .consultation-composer button { background: #102f4b; color: white; border: 0; min-width: 4rem; }
@@ -44,7 +47,13 @@
   .consultation-conversation { height: 100%; border: 0; border-radius: 0; box-shadow: none; }
   .consultation-heading { padding: .65rem .875rem; }
   .consultation-heading h1 { font-size: 1.15rem; }
-  .consultation-context { padding: .65rem .875rem; }
+  .consultation-context { flex-wrap: nowrap; padding: .45rem .875rem; gap: .35rem; }
+  .consultation-identity { flex: 1 1 auto; }
+  .consultation-identity strong { display: block; font-size: .78rem; line-height: 1.3; max-width: 12rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .consultation-identity p { font-size: .68rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .consultation-identity small { display: none; }
+  .consultation-context-actions { flex: 0 0 auto; }
+  .consultation-context-actions button { font-size: .68rem; min-height: 38px; padding: .35rem .45rem; }
   .consultation-messages { padding: 1rem .875rem; }
   .consultation-composer { padding: .65rem .875rem; }
   .consultation-conditions-toggle, .consultation-conditions-close { display: inline-block; }
