@@ -1,4 +1,5 @@
 import mapboxgl from "mapbox-gl";
+import { candidateIdentityContext } from "../usecases/agent/candidate-assessment-context";
 import { placeCameraOffset } from "../presentation/place-explorer/place-camera-offset";
 import { HttpInTripContextClient } from "../adapters/http/in-trip-context-client";
 import { accommodationProviderAttributionFromEnvironment } from "../adapters/browser/accommodation-provider-attribution";
@@ -721,7 +722,7 @@ handleAiGuidePrompt = async (
         getUiFocus: () => uiFocus,
         ...(workspaceSource ? {
           getTravelCandidates: () => (workspaceSource.getCandidates?.() ?? []).map(({ candidate, assessment }) =>
-            assessment ? { candidate: { id: candidate.id }, assessment } : { id: candidate.id }),
+            assessment ? { candidate: { id: candidate.id }, comparison: candidateIdentityContext(candidate), assessment } : candidateIdentityContext(candidate)),
           candidateSelection: workspaceSource.candidateSelection,
         } : {}),
         onTurnObservation: (observation) => agentTurnObservations.record(executionSessionId, observation),
