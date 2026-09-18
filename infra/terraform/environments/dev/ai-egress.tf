@@ -138,6 +138,13 @@ resource "aws_instance" "ai_nat" {
   source_dest_check           = false
   user_data_replace_on_change = true
 
+  # The public SSM parameter deliberately follows the latest AL2023 image only
+  # when this instance is first created. Cutover must not replace the fixed-IP
+  # NAT path solely because that external value moves.
+  lifecycle {
+    ignore_changes = [ami]
+  }
+
   user_data = <<-EOT
     #!/bin/bash
     # Bootstrap profile: ${var.ai_nat_instance_type}
