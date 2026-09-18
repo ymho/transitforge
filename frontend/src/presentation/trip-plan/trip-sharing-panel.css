@@ -1,0 +1,6 @@
+.trip-sharing-panel { width: min(36rem, calc(100vw - 2rem)); max-height: 85dvh; overflow: auto; border-radius: 1rem; padding: 1.25rem; }
+.trip-sharing-panel input, .trip-sharing-panel select { max-width: 100%; margin: .4rem; }
+.trip-sharing-panel input[readonly] { display: block; width: calc(100% - 1rem); }
+.trip-sharing-panel [hidden] { display: none; }
+.trip-sharing-panel li { margin-block: .7rem; overflow-wrap: anywhere; }
+.trip-sharing-panel button { padding: .5rem .75rem; margin: .25rem; }

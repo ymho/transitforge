@@ -528,7 +528,8 @@ Agent ContextはTrip/Request・比較候補・外部事実・Profile・判断結
 最終TripRepository portはcreate/get/list/update/archive/deleteを所有し、Backend Applicationが
 認証主体から解決した所有者scopeを毎回渡す。ownerIdをclient/LLMの入力で信用しない。
 RepositoryはDomain値を返し、DTO変換は境界で行う。DB属性をそのままHTTPへ返さない。
-共有は#399のTripParticipant/ShareGrant。owner基盤を#399待ちとして未認証公開してはいけない。
+共有は#399の[TripParticipant/ShareGrant認可](trip-sharing.md)。owner基盤を未認証公開してはいけない。
+Participantは内部owner namespaceへの認可projectionであり、Trip本体のowner PKや単一正本を変更しない。
 現在の配信保護をユーザー単位のTrip認可が完成した証拠とみなさない。認証未整備ならprivate/gatedのままとする。
 
 更新commandは`tripId, expectedRevision, mutationId, patches`。mutationIdはclient/Applicationが

@@ -21,7 +21,7 @@ export interface ServerTripWriter {
 
 /** Restores source ownership before any legacy reader/writer can be installed on reload. */
 export function createReferencedTripSource(reference: { tripId?: string; tripSourceState?: "migration-pending" | "server-v2" },
-  client: Pick<ServerTripClient, "get">): TripWorkspaceSource | undefined {
+  client: Pick<ServerTripClient, "get" | "getRole">): TripWorkspaceSource | undefined {
   if (!reference.tripId && !reference.tripSourceState) return undefined;
   if (reference.tripSourceState === "migration-pending" || !reference.tripId) return {
     sourceState: reference.tripSourceState ?? "server-v2", getCurrentTrip: () => undefined, getLoadState: () => "unavailable",
@@ -32,7 +32,7 @@ export function createReferencedTripSource(reference: { tripId?: string; tripSou
 }
 
 /** Memory is a fetched read view, never a local writer/cache fallback. Preview cannot save. */
-export function createServerTripWorkspaceSource(tripId: string, client: Pick<ServerTripClient, "get">, writer?: ServerTripWriter,
+export function createServerTripWorkspaceSource(tripId: string, client: Pick<ServerTripClient, "get" | "getRole">, writer?: ServerTripWriter,
   reservationReader?: ReservationReadClient, getExternalFacts?: () => TripFeasibilityFacts["external"],
   preparation?: { reader: ChecklistReadClient; writer?: ChecklistWriteClient }): TripWorkspaceSource & { refresh(): Promise<void> } {
   let current: Trip | undefined, loadState: TripLoadState = "loading", generation = 0;
@@ -65,7 +65,7 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
     if (request === generation) publish();
   };
   const sendPending = async () => {
-    if (!writer || !pending || sending) throw new Error("変更の確認または送信が必要です");
+    if (!writer || !pending || sending || client.getRole?.(tripId) === "viewer") throw new Error("変更の確認または送信が必要です");
     sending = true;
     try {
       const result = await writer.mutate(structuredClone(pending));
@@ -80,6 +80,7 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
     } finally { sending = false; }
   };
   return { sourceState: "server-v2", confirmationPersistence: writer ? "server" : undefined,
+    getRole: () => client.getRole?.(tripId),
     ...(preparation ? { checklist: { getItems: () => current && checklist ? structuredClone(checklist) : undefined,
       ...(preparation.writer ? { async write(command: ChecklistCommand) {
         if (!current || checklistSending || !checklist) throw new Error("準備リストを再取得してください");
@@ -97,6 +98,7 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
           ++generation; current = undefined; loadState = "unavailable"; publish(); throw error;
         });
         if (!latest || latest.id !== tripId) { await refresh(); throw new TripWriteRejected("旅程を取得できません"); }
+        if (client.getRole?.(tripId) === "viewer") { await refresh(); throw new TripWriteRejected("この旅程は閲覧専用です"); }
         try {
           const proposed = applyTripProposal(latest, proposal);
           if (requestsReady(proposal)) requireFeasibleTrip(proposed, {

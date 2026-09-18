@@ -159,6 +159,7 @@ import {
 } from "../../usecases/agent/external-travel-tools";
 
 export interface ViewerAgentRuntimeDependencies extends ExternalTravelToolDependencies, TripProgressDependencies {
+  getTripRole?: () => import("@raiquora/trip/trip-sharing").TripRole | undefined;
   getReservationFacts?: () => readonly import("@raiquora/trip/reservation").ReservationFact[] | undefined;
   inTripContextReader?: InTripContextReader;
   getFeasibilityExternalFacts?: () => TripFeasibilityFacts["external"];
@@ -461,6 +462,7 @@ export async function runViewerAgentRuntime(
       })) } : {}),
       previousAssistantTurn: dependencies.previousAssistantTurn,
       featureContext: {
+        ...(dependencies.getTripRole?.() ? { tripRole: dependencies.getTripRole() } : {}),
         ...(focusedItem ? { uiFocus: { itemId: focusedItem.id, item: selectedTripItemSnapshot(focusedItem) } } : {}),
         displayTimeMinutes: dependencies.getRouteTime(),
         calendarDate: currentCalendarDateInJapan(currentDate(dependencies)),

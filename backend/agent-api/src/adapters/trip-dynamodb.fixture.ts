@@ -15,7 +15,17 @@ export function tripDynamoFixture() {
       faults.beforeTransaction?.(); faults.beforeTransaction = undefined;
       const actions = command.input.TransactItems!;
       const valid = actions.map((a) => {
-        if (a.Put) { expect(a.Put.ConditionExpression).toBe("attribute_not_exists(pk)"); return !records.has(key(a.Put.Item!)); }
+        if (a.ConditionCheck) {
+          const c = a.ConditionCheck, r = records.get(key(c.Key!)), v = c.ExpressionAttributeValues!;
+          if (c.ConditionExpression === "attribute_exists(pk) AND archived = :active AND trip = :trip") return !!r && r.archived?.BOOL === false && r.trip?.S === v[":trip"]!.S;
+          if (c.ConditionExpression === "payload = :expected") return !!r && r.payload?.S === v[":expected"]!.S;
+          expect(c.ConditionExpression).toBe("payload = :expected AND expiresAt > :now AND revoked = :active");
+          return !!r && r.payload?.S === v[":expected"]!.S && r.expiresAt!.S! > v[":now"]!.S! && r.revoked?.BOOL === false;
+        }
+        if (a.Put) {
+          if (a.Put.ConditionExpression === "payload = :old") return records.get(key(a.Put.Item!))?.payload?.S === a.Put.ExpressionAttributeValues![":old"]!.S;
+          expect(a.Put.ConditionExpression).toBe("attribute_not_exists(pk)"); return !records.has(key(a.Put.Item!));
+        }
         const u = a.Update!, r = records.get(key(u.Key!)), v = u.ExpressionAttributeValues!;
         if (u.UpdateExpression === "SET archived = :archived") {
           expect(u.ConditionExpression).toBe("attribute_exists(pk) AND archived = :active AND trip = :old");
@@ -28,6 +38,7 @@ export function tripDynamoFixture() {
       if (valid.some((v) => !v)) throw Object.assign(new Error("cancelled-private-data"), { name: "TransactionCanceledException",
         CancellationReasons: valid.map((v) => ({ Code: v ? "None" : "ConditionalCheckFailed" })) });
       for (const a of actions) {
+        if (a.ConditionCheck) continue;
         if (a.Put) records.set(key(a.Put.Item!), structuredClone(a.Put.Item!));
         else {
           const u = a.Update!, r = records.get(key(u.Key!))!, v = u.ExpressionAttributeValues!;
@@ -40,8 +51,16 @@ export function tripDynamoFixture() {
     }
     if (command instanceof QueryCommand) {
       const i = command.input;
-      expect(i.KeyConditionExpression).toBe("pk = :owner AND begins_with(sk, :prefix)");
-      const pk = i.ExpressionAttributeValues![":owner"]!.S, after = i.ExclusiveStartKey?.sk?.S;
+      if (i.IndexName === "trip-sharing") {
+        expect(i.Limit).toBeLessThanOrEqual(20);
+        const v = i.ExpressionAttributeValues!;
+        const items = [...records.values()].filter((r) => r.shareTrip?.S === v[":scope"]!.S &&
+          (!v[":after"] || r.shareOrder!.S! > v[":after"]!.S!) && (!v[":order"] || r.shareOrder?.S === v[":order"]!.S))
+          .sort((a, b) => a.shareOrder!.S!.localeCompare(b.shareOrder!.S!)).slice(0, i.Limit);
+        return { Items: items.map((r) => ({ pk: r.pk!, sk: r.sk!, shareTrip: r.shareTrip!, shareOrder: r.shareOrder! })) };
+      }
+      expect(["pk = :owner AND begins_with(sk, :prefix)", "pk = :pk AND begins_with(sk, :prefix)"]).toContain(i.KeyConditionExpression);
+      const pk = (i.ExpressionAttributeValues![":owner"] ?? i.ExpressionAttributeValues![":pk"])!.S, after = i.ExclusiveStartKey?.sk?.S;
       const prefix = i.ExpressionAttributeValues![":prefix"]!.S!;
       const items = [...records.values()].filter((r) => r.pk?.S === pk && r.sk?.S?.startsWith(prefix) && (!after || r.sk.S > after)).sort((a, b) => a.sk!.S!.localeCompare(b.sk!.S!));
       const page = items.slice(0, i.Limit);
@@ -50,6 +69,9 @@ export function tripDynamoFixture() {
     if (command instanceof PutItemCommand) {
       const i = command.input, k = key(i.Item!);
       if (i.ConditionExpression === "attribute_not_exists(pk)" && records.has(k)) conditional();
+      if (i.ConditionExpression === "payload = :old" && records.get(k)?.payload?.S !== i.ExpressionAttributeValues![":old"]!.S) conditional();
+      if (i.ConditionExpression === "#window = :window AND #count = :count" &&
+          (records.get(k)?.window?.N !== i.ExpressionAttributeValues![":window"]!.N || records.get(k)?.count?.N !== i.ExpressionAttributeValues![":count"]!.N)) conditional();
       if (i.ConditionExpression === "attribute_exists(pk) AND revision = :base" &&
         (!records.has(k) || records.get(k)!.revision?.N !== i.ExpressionAttributeValues![":base"]!.N)) conditional();
       records.set(k, structuredClone(i.Item!)); return {};

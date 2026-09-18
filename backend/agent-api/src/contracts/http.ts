@@ -1,5 +1,7 @@
 export interface LambdaHttpEvent {
   rawPath?: string;
+  rawQueryString?: string;
+  queryStringParameters?: Record<string, string | undefined>;
   requestContext?: { http?: { method?: string } };
   body?: string | null;
   isBase64Encoded?: boolean;

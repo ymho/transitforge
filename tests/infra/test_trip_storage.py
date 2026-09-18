@@ -6,6 +6,19 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 class TripStorageContractTest(unittest.TestCase):
+    def test_sharing_is_independent_sparse_index_and_keeps_public_gate(self):
+        source = (ROOT / "infra/terraform/environments/dev/trips.tf").read_text()
+        for value in ['name            = "trip-sharing"', 'hash_key        = "shareTrip"',
+                      'range_key       = "shareOrder"', 'projection_type = "KEYS_ONLY"',
+                      '${aws_dynamodb_table.trips.arn}/index/trip-sharing']:
+            self.assertIn(value, source)
+        handler = (ROOT / "backend/agent-api/src/lambda.ts").read_text()
+        self.assertIn("createTripSharingHandler();", handler)
+        self.assertNotIn("createAuthorizedTripApplications", handler)
+        adapter = (ROOT / "backend/agent-api/src/adapters/dynamodb-trip-sharing.ts").read_text()
+        for forbidden in ["ScanCommand", "console.", "DeleteItemCommand"]:
+            self.assertNotIn(forbidden, adapter)
+
     def test_private_owner_scoped_permissions(self):
         source = (ROOT / "infra/terraform/environments/dev/trips.tf").read_text()
         self.assertIn("resources = [aws_dynamodb_table.trips.arn]", source)
