@@ -1,8 +1,8 @@
-.notification-center { width: min(38rem, calc(100vw - 2rem)); max-height: 85dvh; overflow: auto; border: 1px solid #dce1e8; padding: 1.25rem; background: white; color: #202938; }
-.notification-center::backdrop { background: rgb(0 0 0 / 25%); }
-.notification-center h2 { margin-top: 0; }
+.notification-center { width: min(38rem, calc(100vw - 2rem)); max-height: 85dvh; overflow: auto; border: 1px solid #dfe4e8; border-radius: 1.25rem; padding: 1.5rem; background: #fff; color: #102337; box-shadow: 0 14px 38px #12273f24; }
+.notification-center::backdrop { background: rgb(16 35 55 / 28%); }
+.notification-center h2 { margin: 0 0 1rem; font-family: "Yu Mincho", serif; font-size: 1.5rem; }
 .notification-center ol { padding: 0; list-style: none; }
-.notification-center li { border-top: 1px solid #dce1e8; padding: 1rem 0; }
+.notification-center li { border-top: 1px solid #dfe4e8; padding: 1rem 0; }
 .notification-center p { white-space: pre-wrap; overflow-wrap: anywhere; }
-.notification-center button { padding: .65rem; margin: .25rem; cursor: pointer; }
+.notification-center button { min-height: 2.6rem; padding: .55rem .85rem; margin: .25rem; border: 1px solid #dfe4e8; border-radius: .7rem; color: #173d60; background: #fff; cursor: pointer; font: 600 .8rem/1.4 sans-serif; }
 .notification-center small { display: block; }
