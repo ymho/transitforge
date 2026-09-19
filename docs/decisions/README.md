@@ -96,8 +96,8 @@
 各ADR冒頭に廃止範囲を記し、過去本文と有効なGrounding・Evidence・bounded loopの判断は保持する。
 Server Runtime・Stateの新構成は#478以降で決定する。
 
-- [ADR 0068: Agent Runtimeの実行責務をServer Applicationへ移す](0068-place-agent-runtime-in-server-application.md) — ADR 0038のBrowser組成を部分置換。bounded loop/Groundingは維持し、#480でcutoverする。
+- [ADR 0068: Agent Runtimeの実行責務をServer Applicationへ移す](0068-place-agent-runtime-in-server-application.md) — ADR 0038のBrowser組成を置換。bounded loop/Groundingは維持し、Server AgentがCurrentである。
 
-- [ADR 0070: Server Agentの通信にRegional REST progress streamingを採用する](0070-select-regional-rest-agent-streaming.md) — #462の設計判断。production切替は#480の実AWS検証gate通過後。
+- [ADR 0070: Server Agentの通信にRegional REST progress streamingを採用する](0070-select-regional-rest-agent-streaming.md) — Server AgentのCurrent transport。導入時の検証記録はHistoricalとして保持する。
 
 - [ADR 0071: 固定送信元IPが必要な宿泊Provider通信を専用Lambdaへ分離する](0071-isolate-fixed-egress-provider.md) — #480 Phase B。default-offで追加し、既存NAT/EIPを維持する。

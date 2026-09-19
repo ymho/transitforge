@@ -1,8 +1,8 @@
 # 共通認証境界（#451）
 
-導入時のmain `110d39a` のコード・infra定義を棚卸しした。実AWS設定を確認した記録ではない。
-第一段階でprincipal/verifier/Application境界、第二段階でCognito TerraformとFrontend認証を導入する。
-第三段階で既存の個人HTTP handlerへ共通認証を接続した。#451 のwriter hostは同じRegional REST APIへ専用Lambdaとして接続し、Conversation/Profile hostとは分離する。
+導入時のmain `110d39a` の棚卸しはHistoricalである。Current productionはCognito verifierを
+Conversation/Profile/Trip/Agent StreamのRegional REST APIへ接続する。#451 のwriter hostは同じRegional REST APIへ
+専用Lambdaとして接続し、Conversation/Profile hostとは分離する。
 Frontendと設定出力は[ADR 0069](../decisions/0069-use-cognito-managed-login-for-spa.md)。
 判断とsubjectの永続エンコードは[ADR 0067](../decisions/0067-establish-trusted-principal-boundary.md)。
 

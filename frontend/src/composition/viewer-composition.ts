@@ -1,5 +1,4 @@
 import { currentAuthentication } from "./auth-composition";
-import { consultationTransport } from "./agent-cutover-policy";
 import { createConversationStreamSession } from "../adapters/http/agent-stream/session";
 
 import mapboxgl from "mapbox-gl";
@@ -232,9 +231,7 @@ const aiGuidePromptHandlerReady = new Promise<AiGuidePromptHandler>((resolve) =>
 });
 let handleAiGuidePrompt: AiGuidePromptHandler = (...args) =>
   aiGuidePromptHandlerReady.then((handler) => handler(...args));
-// Consultation transport remains separately gated; Conversation persistence is always server-owned.
-const serverAgentEnabled = import.meta.env.VITE_SERVER_AGENT_ENABLED === "true";
-const consultationTransportMode = consultationTransport(serverAgentEnabled);
+// Conversation persistence and consultation are server-owned.
 const canUsePersonalState = () => currentAuthentication().getState().status === "signed-in";
 const conversationUi = new ConversationUiController(new HttpServerConversationClient(), canUsePersonalState);
 const profileUi = new ProfileUiController(new HttpServerProfileClient(), canUsePersonalState);
@@ -264,12 +261,12 @@ const contextWorkspaceController = createContextWorkspaceController(
   new BrowserContextWorkspaceRepository(localStorage),
 );
 const tripWorkspaceController = createTripWorkspaceController(activeConversationSession.id);
-const serverAgentSession = serverAgentEnabled ? createConversationStreamSession({
+const serverAgentSession = createConversationStreamSession({
   auth: currentAuthentication(), references: () => ({ conversationId: activeConversationSession.id,
     tripId: tripWorkspaceController.current()?.id, tripRevision: tripWorkspaceController.current()?.revision,
     itemId: tripWorkspaceController.uiFocus()?.itemId }),
-}) : undefined;
-tripWorkspaceController.subscribe(() => serverAgentSession?.contextChanged());
+});
+tripWorkspaceController.subscribe(() => serverAgentSession.contextChanged());
 
 const serverTripClient = new HttpServerTripClient();
 const serverTripReferences = new Map<string, string>();
@@ -402,7 +399,7 @@ aiGuideController = configureAiGuidePanel(
       contextWorkspaceController.show("map");
     },
     persistent: () => true,
-    responseContextKey: () => JSON.stringify([serverAgentSession?.contextVersion(), activeConversationSession.id, tripWorkspaceController.current()?.id, tripWorkspaceController.current()?.revision]),
+    responseContextKey: () => JSON.stringify([serverAgentSession.contextVersion(), activeConversationSession.id, tripWorkspaceController.current()?.id, tripWorkspaceController.current()?.revision]),
     onTripUpdateProposal: (proposal) => {
       if (!tripWorkspaceController.current()) return;
       try { tripWorkspaceController.preview(proposal); }
@@ -431,7 +428,7 @@ const activateConversation = async (sessionId: string) => {
   const session = conversationUi.selectLocal(sessionId);
   if (!session) return;
   returnToConversation(); mapPlaceExplorerController?.clear(); activeConversationSession = session;
-  serverAgentSession?.contextChanged(); syncServerTripSource(session);
+  serverAgentSession.contextChanged(); syncServerTripSource(session);
   tripWorkspaceController.activateSession(session.id); contextWorkspaceController.activateSession(session.id);
   await conversationUi.loadHistory(session.id);
   if (conversationUi.active()?.id === session.id) aiGuideController.switchSession(session.id);
@@ -525,10 +522,7 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip
 }
 
 const initialDateTime = new Date();
-handleAiGuidePrompt = async (prompt) => {
-  if (consultationTransportMode === "server") return serverAgentSession!.start(prompt).send();
-  throw new Error("相談機能は現在利用できません。しばらくしてから再度お試しください。");
-};
+handleAiGuidePrompt = async (prompt) => serverAgentSession.start(prompt).send();
 
 resolveAiGuidePromptHandler(handleAiGuidePrompt);
 let displayedServiceDateStart = operatingServiceDateStart(initialDateTime);

@@ -22,7 +22,7 @@
 
 - 共有する鉄道 運行 経路 旅行の決定論的な契約と計算は`modules/*/domain`
 - Viewerと端末内状態に閉じた契約と計算は`frontend/src/domain`
-- Provider非依存のAgent Runtime Tool Evidence Trace Policyは`modules/agent/runtime` Server実行入口は`backend/agent-api/src/usecases/agent` Browser固有のTool組成と表示接続だけを`frontend/src/usecases/agent`へ残す（#480でcutover）
+- Provider非依存のAgent Runtime Tool Evidence Trace Policyは`modules/agent/runtime`、Server実行入口は`backend/agent-api/src/usecases/agent`に置く。Browserは表示・入力・HTTP接続だけを所有し、Agent RuntimeやTool組成を持たない
 - ユースケースと外部境界のPortは`frontend/src/usecases`
 - 画面機能のView DOM操作 CSSは`frontend/src/presentation/<feature>`
 - ブラウザ HTTP Mapbox Bedrockなど外部技術への接続は`frontend/src/adapters`
@@ -40,6 +40,10 @@
 2. 実行しなかった確認と理由を報告
 3. 最終差分から無関係な変更を除外
 4. 秘密情報と大容量生成物がないことを確認
+
+実装中は対象のtargeted testを実行する。PR readyでは`workspace:check`、`architecture:check`、buildを実行する。
+AgentのPrompt、Tool選択、model behaviorを変更した場合はSmoke、必要に応じてFull Evalを実行する。これらを
+変更しないcleanupではpaid Live Evalを要求しない。旧経路のtestを残すために旧コードを残さない。
 
 ## Git
 

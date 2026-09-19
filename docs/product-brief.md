@@ -210,5 +210,6 @@ server参照のWorkspaceは取得失敗時にlegacy writerへ戻らない。会�
 
 [cutover統合とTool inventory](architecture/server-agent-cutover.md)を正とする。
 productionは認証済みREST streamからServer AgentのConversation turn・Context・Tool・final保存へ接続する。
-Browser Agent Runtimeは#481 Batch 1で撤去済みで、gate OFFまたは通信失敗時にfallbackせず相談を停止する。
+Browser Agent Runtimeは撤去済みで、相談は認証済みBrowserから`/api/agent-stream`のServer Agentだけを呼ぶ。
+Conversation、Profile、Trip V2はServer正本であり、Browser storageはUI状態だけを保持する。通信失敗時に別Runtimeへfallbackしない。
 時間起点のTrip再チェックもServer runtimeが正本で、Browser起動時recheckは行わない。

@@ -1,6 +1,6 @@
 # Fixed-egress Accommodation Provider（#480 Phase B）
 
-専用Secret分離と実Invokeは[手動cutover validation](server-agent-cutover-validation.md)を使う。
+専用Secret分離と実InvokeはCurrent deployment safetyのread-only planとprovider contractで確認する。
 旧mixed Secretを変更せず保持し、Browser gateをfalseのまま新経路だけを検証する。
 
 ## main監査と範囲

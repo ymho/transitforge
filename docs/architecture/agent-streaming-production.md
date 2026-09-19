@@ -1,4 +1,8 @@
-# Regional REST Streamingの本番構成（#480 Phase A）
+# Regional REST Streamingの本番構成
+
+> 2026-09-19 / #481 Batch 3: Server Agentはproduction current。`agent_stream_enabled`、
+> `AGENT_STREAM_ENABLED`、`VITE_SERVER_AGENT_ENABLED`、`SERVER_AGENT_ENABLED`の短命cutover gateは撤去した。
+> 以下のdefault-off/cutover前記録はHistoricalである。
 
 [ADR 0070](../decisions/0070-select-regional-rest-agent-streaming.md)の判断を実装へ落とした記録。
 ADRを置換しない。#488がmainへ入った`9224536`から実装し、#462は実AWS検証を残してOpen。

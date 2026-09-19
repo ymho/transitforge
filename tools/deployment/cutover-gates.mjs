@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
 
-const gateNames = ["TF_VAR_agent_stream_enabled", "TF_VAR_enable_fixed_egress_provider", "VITE_SERVER_AGENT_ENABLED"];
+const gateNames = ["TF_VAR_enable_fixed_egress_provider"];
 const safeReplacementAttribute = /^[a-z][a-z0-9_]{0,63}$/u;
 const unsafeReplacementAttribute = /secret|token|password|private|public|account|arn|policy|environment|output|variable|value/u;
 
@@ -25,24 +25,22 @@ function replacementPaths(change, actions) {
   return [...new Set(paths)].join(", ");
 }
 
-export function cutoverGates(environment) {
+export function deploymentSafetyInputs(environment) {
   const values = gateNames.map(name => {
     if (!["true", "false"].includes(environment[name])) throw new Error(`${name} must be explicitly true or false`);
     return environment[name] === "true";
   });
-  const [stream, provider, browser] = values;
-  if (browser && !stream) throw new Error("Browser requires streaming infrastructure");
-  if (stream && !provider) throw new Error("Server Agent requires fixed-egress Provider infrastructure");
-  return { stream, provider, browser };
+  const [provider] = values;
+  return { provider };
 }
 
 /** No values from plan/state/policies/outputs are printed, including on malformed input. */
 export function reviewCutoverPlan(plan, environment) {
-  const gates = cutoverGates(environment);
+  const gates = deploymentSafetyInputs(environment);
   if (!plan || !/^1\./u.test(plan.format_version ?? "") || !Array.isArray(plan.resource_changes) || plan.errored || plan.complete === false) {
     throw new Error("A complete Terraform JSON plan is required");
   }
-  for (const [name, value] of [["agent_stream_enabled", gates.stream], ["enable_fixed_egress_provider", gates.provider]]) {
+  for (const [name, value] of [["enable_fixed_egress_provider", gates.provider]]) {
     // Terraform records raw CLI/TF_VAR inputs as strings, but tfvars/defaults as booleans.
     const planned = plan.variables?.[name]?.value;
     if (planned !== value && planned !== String(value)) throw new Error("Plan gate inputs differ from validated deployment inputs");
@@ -68,7 +66,7 @@ export function reviewCutoverPlan(plan, environment) {
       }
       throw new Error("Invalid Terraform resource address");
     }
-    const isSafeAgentStreamDeploymentRotation = gates.stream &&
+    const isSafeAgentStreamDeploymentRotation =
       resource.type === "aws_api_gateway_deployment" &&
       resource.name === "agent_stream" &&
       resource.address === 'aws_api_gateway_deployment.agent_stream["stream"]' &&
@@ -78,8 +76,8 @@ export function reviewCutoverPlan(plan, environment) {
       if (paths === null) unsafeProtectedReplacement = true;
       else destructive.push({ address: resource.address, actions: actions.join("/"), paths });
     }
-    if (before != null && ((stream && !gates.stream) || (provider && !gates.provider))) {
-      throw new Error("Existing cutover infrastructure cannot be disabled by CD");
+    if (before != null && provider && !gates.provider) {
+      throw new Error("Existing fixed-egress infrastructure cannot be disabled by CD");
     }
     if (actions.every(a => a === "no-op")) continue;
     summary.push(`${actions.join("/")} ${resource.address}`);
@@ -94,7 +92,7 @@ export function reviewCutoverPlan(plan, environment) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    if (process.argv[2] === "inputs") cutoverGates(process.env);
+    if (process.argv[2] === "inputs") deploymentSafetyInputs(process.env);
     else if (process.argv[2] === "plan") {
       let input = "";
       for await (const chunk of process.stdin) input += chunk;

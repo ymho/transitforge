@@ -1,9 +1,3 @@
-# #480 Phase A: short-lived infrastructure gate, removed after the authenticated cutover.
-variable "agent_stream_enabled" {
-  description = "Create the opt-in REST streaming path; never switches the production Browser. Remove after #480 cutover."
-  type        = bool
-  default     = false
-}
 variable "server_agent_max_execution_ms" {
   description = "Server Agent business deadline, independent of transport. 120s recommended, at most 180s reserves 60s before Lambda timeout."
   type        = number
@@ -14,7 +8,8 @@ variable "server_agent_max_execution_ms" {
   }
 }
 locals {
-  agent_stream_instances = var.agent_stream_enabled ? { stream = true } : {}
+  # Keep the for_each key so every existing production resource retains its state address.
+  agent_stream_instances = { stream = true }
   agent_stream_name      = "${var.project_name}-${var.environment}-agent-stream"
   # One source for Gateway resource, permission, Lambda validation and CloudFront behavior.
   # #480 cutover changes this to agent only alongside retirement of the existing behavior.
@@ -159,7 +154,6 @@ resource "aws_lambda_function" "agent_stream" {
       TRAFFIC_SNAPSHOT_BUCKET            = aws_s3_bucket.website.id
       VIEWER_ORIGIN                      = "https://${var.viewer_domain_name}"
       SERVER_AGENT_MAX_EXECUTION_MS      = tostring(var.server_agent_max_execution_ms)
-      AGENT_STREAM_ENABLED               = "true"
       AGENT_STREAM_PATH                  = local.agent_stream_path
       COGNITO_USER_POOL_ID               = aws_cognito_user_pool.users.id
       COGNITO_CLIENT_ID                  = aws_cognito_user_pool_client.spa.id
@@ -426,8 +420,8 @@ resource "aws_api_gateway_account" "agent_stream" {
   ]
 }
 output "agent_stream_route" {
-  description = "Internal opt-in path; not published to Browser configuration."
-  value       = var.agent_stream_enabled ? local.agent_stream_path : null
+  description = "Current authenticated Server Agent streaming path."
+  value       = local.agent_stream_path
 }
 
 # Dedicated non-travel credentials only; values are provisioned separately, never in Terraform.

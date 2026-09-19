@@ -192,23 +192,20 @@ ID TokenはAPIへ送らない。Basic認証とOAC、既存の公開writer gate�
 専用Secretの器だけを作り値は管理しない。共有Secretからの宿泊credentials移行・Tool接続・実plan確認は
 [#480統合手順](../../../../docs/architecture/fixed-egress-provider.md)に従う。今回apply/deployは行わない。
 
-## Server Agent Streamingの短期gate
+## Server Agent Streaming
 
-`agent_stream_enabled`は既定false。新REST/Lambda/CloudFront経路は作成せず、Browserも切り替えない。
+Regional REST、Server Agent、personal-state、Trip APIとCloudFront behaviorは`agent-stream.tf`が管理する。
+既存resource addressを保つためfor_each keyは`"stream"`で固定する。短命の`agent_stream_enabled` gateは撤去済みである。
 正本は`agent-stream.tf`で、experiment rootのfixture構成には依存しない。
 AWS applyせず確認する手順と#451/#479後の有効化条件は
 [Streaming実装記録](../../../../docs/architecture/agent-streaming-production.md)を参照。
 `terraform test -filter=tests/agent-stream.tftest.hcl`はmock providerのoffline planだけを実行する。
 
-## Cutover gateとplan-only CD（#480 preflight後）
+## Deployment safetyとplan-only CD
 
-`dev` Environmentの`AGENT_STREAM_ENABLED`、`FIXED_EGRESS_PROVIDER_ENABLED`、
-`SERVER_AGENT_ENABLED`はCDで全て必須。初期導入では3つとも文字列`false`を明示する。
-未設定/空文字/大文字/不整合な組合せはAWS認証前に失敗する。値は今回の変更では登録しない。
-
-前2つをTerraformへ、最後をFrontend buildの`VITE_SERVER_AGENT_ENABLED`へ渡す。
-stream ONはProvider ONを、Browser ONはstream ONを必要とする。既存cutover resourceのOFF化・
-削除・replaceをplan guardで拒否するため、rollbackではinfra ONを保持してBrowserだけを戻す。
+`dev` Environmentの`FIXED_EGRESS_PROVIDER_ENABLED`はCDで明示する。これはServer Agent切替ではなく、
+固定IP Provider境界のCurrent infrastructure requirementである。streamingとBrowserの短命gateはない。
+既存resourceの削除・replaceはplan guardで拒否する。
 例外はstream ON時の`aws_api_gateway_deployment.agent_stream["stream"]`の厳密な
 `["create", "delete"]`だけで、構成snapshotの安全な世代交代を許可する。
 旧revisionのCDはguardを持たないので再実行しない。

@@ -83,9 +83,7 @@ const streamMetadata = await stat(streamBundle);
 if (!streamMetadata.isFile() || streamMetadata.size < 1 || streamMetadata.size > 20 * 1_024 * 1_024) throw new Error("Invalid streaming bundle size");
 const { Writable } = await import("node:stream");
 const previousStreamingApi = globalThis.awslambda;
-const previousStreamingGate = process.env.AGENT_STREAM_ENABLED;
 try {
-  delete process.env.AGENT_STREAM_ENABLED;
   let status;
   globalThis.awslambda = {
     streamifyResponse: handler => handler,
@@ -94,12 +92,10 @@ try {
   const streaming = await import(pathToFileURL(streamBundle).href);
   if (typeof streaming.handler !== "function") throw new Error("Invalid streaming handler export");
   await streaming.handler({}, new Writable({ write(_chunk, _encoding, callback) { callback(); } }));
-  if (status !== 503) throw new Error("Streaming bundle must fail closed without its gate");
+  if (status !== 404) throw new Error("Streaming bundle must reject an unknown route without starting a turn");
 } finally {
   if (previousStreamingApi === undefined) delete globalThis.awslambda;
   else globalThis.awslambda = previousStreamingApi;
-  if (previousStreamingGate === undefined) delete process.env.AGENT_STREAM_ENABLED;
-  else process.env.AGENT_STREAM_ENABLED = previousStreamingGate;
 }
 console.log(JSON.stringify({ package: "agent-stream", runtime: stream.runtime, bytes: streamMetadata.size }));
 
