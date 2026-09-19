@@ -1,6 +1,5 @@
 import type { ConversationUiController } from "../../usecases/personal-state/conversation-ui-controller";
 import type { ConversationSession } from "../../domain/conversation-session";
-import { loadTripPlan } from "../../usecases/trip-plan/trip-plan-repository";
 
 export interface ConversationHistoryPanelElements {
   newConversation: HTMLButtonElement;
@@ -9,7 +8,6 @@ export interface ConversationHistoryPanelElements {
   close: HTMLButtonElement;
   list: HTMLOListElement;
   empty: HTMLParagraphElement;
-  storage: Pick<Storage, "getItem">;
   repository: ConversationUiController;
   onSessionSelected: (sessionId: string) => void | Promise<void>;
   confirmDelete?: (title: string) => boolean;
@@ -34,7 +32,6 @@ export function configureConversationHistoryPanel(
     close,
     list,
     empty,
-    storage,
     repository,
     onSessionSelected,
   } = elements;
@@ -48,7 +45,7 @@ export function configureConversationHistoryPanel(
     const items = conversationHistoryListItems(
       repository.list(),
       activeId,
-      (sessionId) => loadTripPlan(storage, sessionId) !== undefined,
+      (sessionId) => repository.list().some((session) => session.id === sessionId && session.tripId !== undefined),
     );
     list.replaceChildren(...items.map((item) => historyRow(
       item,

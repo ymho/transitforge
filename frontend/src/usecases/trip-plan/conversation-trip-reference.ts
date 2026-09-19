@@ -10,5 +10,5 @@ export async function setConversationTripReference(repository: ConversationSessi
   const session = repository.list().find((value) => value.id === sessionId);
   if (!session) return; // Deleted while awaiting server; never resurrect a conversation.
   const { tripId: previous, ...rest } = session;
-  repository.save({ ...rest, tripSourceState: "server-v2", ...(tripId ? { tripId } : {}) });
+  repository.save({ ...rest, ...(tripId ? { tripId } : {}) });
 }

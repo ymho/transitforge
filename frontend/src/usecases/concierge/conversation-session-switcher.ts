@@ -12,7 +12,6 @@ export interface ConversationSessionSwitcher {
 export function createConversationSessionSwitcher(options: {
   repository: ConversationSessionRepository;
   conversation: ConversationSessionView;
-  tripPlan: ConversationSessionView;
   onActivated: (session: ConversationSession) => void;
 }): ConversationSessionSwitcher {
   return {
@@ -23,7 +22,6 @@ export function createConversationSessionSwitcher(options: {
       if (!session) return undefined;
 
       options.onActivated(session);
-      options.tripPlan.switchSession(session.id);
       options.conversation.switchSession(session.id);
       return session;
     },

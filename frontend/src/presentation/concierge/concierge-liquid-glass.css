@@ -131,7 +131,6 @@
 
 #close-ai-guide,
 #travel-profile-toggle,
-#trip-plan-toggle,
 #journey-settings-toggle,
 #close-train-details {
   display: grid;
@@ -149,7 +148,6 @@
 
 #close-ai-guide:hover,
 #travel-profile-toggle:hover,
-#trip-plan-toggle:hover,
 #close-train-details:hover {
   color: var(--glass-text);
   background: var(--glass-accent-soft);
@@ -163,10 +161,8 @@
 }
 
 #travel-profile-toggle svg,
-#trip-plan-toggle svg,
 #journey-settings-toggle svg { width: 1.2rem; height: 1.2rem; }
 
-#trip-plan-toggle[hidden] { display: none; }
 
 
 .ai-guide-messages {
@@ -220,10 +216,6 @@
   .conversation-feedback-comment { max-width: none; }
   .conversation-feedback-comment-actions button { min-height: 2.5rem; }
 }
-.trip-plan-update-changes { display: grid; gap: .3rem; margin: .6rem 0; padding-left: 1.2rem; color: var(--glass-muted); font-size: .75rem; }
-.trip-plan-update-apply { min-height: 2.35rem; padding: .55rem 1rem; border: 0; border-radius: 999px; color: #fff; background: var(--glass-accent); box-shadow: 0 .45rem 1.2rem rgb(0 150 246 / 24%); font: inherit; font-size: .75rem; font-weight: 700; cursor: pointer; }
-.trip-plan-update-apply:hover { filter: brightness(1.06); }
-.trip-plan-update-apply:disabled { color: var(--glass-muted); background: var(--glass-surface-muted); box-shadow: none; cursor: default; }
 
 .ai-guide-message-user {
   border-color: rgb(255 255 255 / 22%);

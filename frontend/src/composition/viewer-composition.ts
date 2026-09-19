@@ -112,7 +112,6 @@ import { HttpServerConversationClient } from "../adapters/http/server-conversati
 import { ConversationUiController } from "../usecases/personal-state/conversation-ui-controller";
 import { configureConversationHistoryPanel } from "../presentation/concierge/conversation-history-panel";
 import { configureApplicationSettingsPanel } from "../presentation/settings/application-settings-panel";
-import { configureTripPlanPanel } from "../presentation/trip-plan/trip-plan-panel";
 import { createTripWorkspaceController } from "../usecases/trip-plan/trip-workspace-controller";
 import { createReferencedTripSource } from "../usecases/trip-plan/server-trip-workspace-source";
 import { HttpServerTripClient } from "../adapters/http/server-trip-client";
@@ -123,14 +122,11 @@ import "../presentation/trip-plan/trip-sharing-panel.css";
 import { HttpTripSharingClient } from "../adapters/http/trip-sharing-client";
 import { consumeTripShareLink, makeTripShareLink, parseTripShareLink } from "../adapters/browser/trip-share-link";
 import { configureTripWorkspace } from "../presentation/trip-plan/trip-workspace";
-import { tripPlanFromTravelPlan } from "@raiquora/trip/trip-plan";
-import { loadTripPlan } from "../usecases/trip-plan/trip-plan-repository";
 import { BrowserContextWorkspaceRepository } from "../adapters/browser/context-workspace-repository";
 import type { ConversationSession } from "../domain/conversation-session";
 import { createContextWorkspaceController } from "../usecases/context-workspace/context-workspace-controller";
 import { createMobileContextNavigation } from "../presentation/concierge/mobile-context-navigation";
 import {
-  mapAccommodationCandidates,
   mapCandidateAsPlaceMedia,
   mergeMapPlaceDetailCandidate,
   mapPlaceCandidates,
@@ -206,10 +202,6 @@ const {
   journeySettingsPanel,
   journeyTransferPace,
   journeyRankingPreference,
-  tripPlanToggle,
-  tripPlanPanel,
-  tripPlanContent,
-  closeTripPlan,
   trainDetails,
   closeTrainDetails,
   selectedTrainTitle,
@@ -264,8 +256,6 @@ let verifiedPlaceLayer: VerifiedPlaceLayerController | undefined;
 let mapPlaceExplorerController: MapPlaceExplorerController | undefined;
 let groundAccessLayer: GroundAccessLayerController | undefined;
 let pendingMapCandidates: MapTravelCandidate[] = [];
-const tripPreviewEnabled = import.meta.env.DEV &&
-  new URLSearchParams(window.location.search).get("trip-preview") === "1";
 const weatherPreviewEnabled = import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get("weather-preview") === "mixed";
 const mobileChatShell = window.matchMedia("(max-width: 71.999rem)");
@@ -284,40 +274,14 @@ tripWorkspaceController.subscribe(() => serverAgentSession?.contextChanged());
 const serverTripClient = new HttpServerTripClient();
 const serverTripReferences = new Map<string, string>();
 const syncServerTripSource = (session: typeof activeConversationSession) => {
-  if (!session.tripId && !session.tripSourceState) return;
-  const key = `${session.tripSourceState}:${session.tripId ?? ""}`;
+  if (!session.tripId) return;
+  const key = session.tripId;
   if (serverTripReferences.get(session.id) === key) return;
   serverTripReferences.set(session.id, key);
   const source = createReferencedTripSource(session, serverTripClient);
   if (source) tripWorkspaceController.attach(session.id, source);
 };
 syncServerTripSource(activeConversationSession);
-const tripPlanController = configureTripPlanPanel(
-  tripPlanPanel,
-  tripPlanContent,
-  closeTripPlan,
-  tripPlanToggle,
-  activeConversationSession.id,
-  (prompt) => {
-    contextWorkspaceController.show("map");
-    aiGuideController.ask(prompt);
-  },
-  localStorage,
-  (accommodations, stay) => {
-    const candidates = mapAccommodationCandidates(accommodations);
-    if (candidates.length === 0) {
-      aiGuideController.ask(
-        `${stay.checkInDate}から${stay.checkOutDate}までの${stay.destination}の宿泊先を、地図で比較できる座標付き候補として探したい`,
-      );
-      return;
-    }
-    pendingMapCandidates = candidates;
-    verifiedPlaceLayer?.show(candidates.map(mapCandidateAsPlaceMedia));
-    mapPlaceExplorerController?.show(candidates);
-    contextWorkspaceController.show("map");
-  },
-  () => !tripWorkspaceController.blocksLegacy(),
-);
 let resizeContextMap: () => void = () => undefined;
 let primaryShell: ReturnType<typeof configureAiFirstShell> | undefined;
 let startMap: () => void = () => undefined;
@@ -365,36 +329,10 @@ const applyContextWorkspaceState = () => {
   const state = contextWorkspaceController.current();
   if (state.view !== "map") delete app.dataset.mapFocusMode;
   app.dataset.contextView = state.view;
-  if (tripWorkspaceController.blocksLegacy()) {
-    tripPlanPanel.hidden = true;
-    tripPlanToggle.hidden = true;
-    if (state.view !== "journey-details" && !trainDetails.hidden) closeTrainDetails.click();
-    scheduleContextMapResize();
-    return;
-  }
-  const currentTripPlan = loadTripPlan(localStorage, state.conversationSessionId);
-  if (state.view === "trip-plan" && currentTripPlan) {
-    if (!trainDetails.hidden) closeTrainDetails.click();
-    tripPlanController.open();
-    scheduleContextMapResize();
-    return;
-  }
-  if (!tripPlanPanel.hidden) tripPlanPanel.hidden = true;
   if (state.view === "map" && !trainDetails.hidden) closeTrainDetails.click();
   scheduleContextMapResize();
 };
 contextWorkspaceController.subscribe(applyContextWorkspaceState);
-tripPlanToggle.addEventListener("click", () => {
-  const currentTripPlan = loadTripPlan(
-    localStorage,
-    contextWorkspaceController.current().conversationSessionId,
-  );
-  if (!currentTripPlan) return;
-  contextWorkspaceController.show("trip-plan", {
-    kind: "trip-plan",
-    id: currentTripPlan.id,
-  });
-});
 closeContextWorkspace.addEventListener("click", () => {
   if (app.dataset.mapFocusMode === "true") {
     delete app.dataset.mapFocusMode;
@@ -412,10 +350,6 @@ railRealtimeMap.addEventListener("click", () => selectSidebarMapMode("realtime")
 sidebarRealtimeMap.addEventListener("click", () => selectSidebarMapMode("realtime"));
 railDateTimeMode.addEventListener("click", () => selectSidebarMapMode("date-time"));
 sidebarDateTimeMode.addEventListener("click", () => selectSidebarMapMode("date-time"));
-closeTripPlan.addEventListener("click", () => {
-  if (mobileChatShell.matches) mobileContextNavigation.close();
-  else contextWorkspaceController.show("map");
-});
 aiGuideController = configureAiGuidePanel(
   {
     conversationSessionId: activeConversationSession.id,
@@ -439,19 +373,6 @@ aiGuideController = configureAiGuidePanel(
       void conversationUi.rename(activeConversationSession.id, prompt.slice(0, 32))
         .then((renamed) => { activeConversationSession = renamed; })
         .catch(() => undefined);
-    },
-    onTravelPlan: (plan) => {
-      if (tripWorkspaceController.blocksLegacy()) return; // Also blocked while loading/unavailable.
-      const tripPlan = tripPlanFromTravelPlan(
-        plan,
-        new Date(),
-        `trip-${crypto.randomUUID()}`,
-      );
-      tripPlanController.show(tripPlan);
-      contextWorkspaceController.show("trip-plan", {
-        kind: "trip-plan",
-        id: tripPlan.id,
-      });
     },
     onPlaces: (places) => {
       const candidates = mapPlaceCandidates(places);
@@ -482,23 +403,6 @@ aiGuideController = configureAiGuidePanel(
     },
     persistent: () => true,
     responseContextKey: () => JSON.stringify([serverAgentSession?.contextVersion(), activeConversationSession.id, tripWorkspaceController.current()?.id, tripWorkspaceController.current()?.revision]),
-    onTripPlanUpdate: (proposal) => {
-      if (tripWorkspaceController.blocksLegacy()) return;
-      tripPlanController.apply(proposal.patches);
-      void conversationUi.update(activeConversationSession.id, {
-        title: activeConversationSession.title, scope: activeConversationSession.scope,
-        summary: proposal.summary, resolvedTopics: activeConversationSession.resolvedTopics,
-        pendingTopics: activeConversationSession.pendingTopics,
-        ...(activeConversationSession.tripId ? { tripId: activeConversationSession.tripId } : {}),
-      }).then((saved) => { activeConversationSession = saved; }).catch(() => undefined);
-      const currentPlan = loadTripPlan(localStorage, activeConversationSession.id);
-      if (currentPlan) {
-        contextWorkspaceController.show("trip-plan", {
-          kind: "trip-plan",
-          id: currentPlan.id,
-        });
-      }
-    },
     onTripUpdateProposal: (proposal) => {
       if (!tripWorkspaceController.current()) return;
       try { tripWorkspaceController.preview(proposal); }
@@ -519,7 +423,7 @@ aiGuideController = configureAiGuidePanel(
 );
 const tripWorkspace = configureTripWorkspace({
   app, chat: aiGuidePanel, messages: aiGuideMessages, input: aiGuideInput,
-  legacyPanel: tripPlanPanel, legacyToggle: tripPlanToggle, controller: tripWorkspaceController,
+  controller: tripWorkspaceController,
   showContext: (view) => contextWorkspaceController.show(view), returnToConversation,
   showMap: focusMapWorkspace, ask: (prompt) => aiGuideController.ask(prompt), nextItemId: () => crypto.randomUUID(),
 });
@@ -569,7 +473,6 @@ configureConversationHistoryPanel({
   close: closeConversationHistory,
   list: conversationHistoryList,
   empty: conversationHistoryEmpty,
-  storage: localStorage,
   repository: conversationUi,
   onSessionSelected: activateConversation,
 });
@@ -619,12 +522,6 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip
     tripWorkspaceController.attach(activeConversationSession.id, tripWorkspacePreviewSource());
     tripWorkspace.show("trip");
   });
-}
-if (tripPreviewEnabled) {
-  loadingScreen.complete();
-  document.querySelector<HTMLDialogElement>("#travel-profile-dialog")?.close();
-  void import("../dev/trip-plan-preview").then(({ tripPlanPreview }) =>
-    tripPlanController.showPreview(tripPlanPreview));
 }
 
 const initialDateTime = new Date();
@@ -760,14 +657,9 @@ if (!token) {
     },
     choose: (candidate) => {
       if (candidate.kind === "accommodation") {
-        if (tripWorkspaceController.blocksLegacy()) {
-          closeMapPlaceDetail.click();
-          tripWorkspace.show("chat");
-          aiGuideController.ask(`${candidate.name}を宿泊候補として相談したい（まだ採用していません）`);
-          return;
-        }
-        tripPlanController.selectAccommodation(candidate.value);
-        contextWorkspaceController.show("trip-plan");
+        closeMapPlaceDetail.click();
+        tripWorkspace.show("chat");
+        aiGuideController.ask(`${candidate.name}を宿泊候補として相談したい（まだ採用していません）`);
         return;
       }
       closeMapPlaceDetail.click();

@@ -11,7 +11,7 @@ describe("conversation Trip references", () => {
     for (const session of sessions) await setConversationTripReference(repository, client, session.id, tripId);
     expect(sessions.map((s) => parseConversationSession(s)?.tripId)).toEqual([tripId, tripId]);
     await setConversationTripReference(repository, client, sessions[0]!.id);
-    expect(sessions[0]!.tripId).toBeUndefined(); expect(sessions[0]!.tripSourceState).toBe("server-v2");
+    expect(sessions[0]!.tripId).toBeUndefined();
     expect(sessions[1]!.tripId).toBe(tripId);
     expect(client.create).not.toHaveBeenCalled(); expect(client.get).not.toHaveBeenCalled();
     expect(parseConversationSession({ ...sessions[0], tripId: "bad" })).toBeUndefined();

@@ -1,7 +1,5 @@
 import type { ConversationGuidance } from "./conversation-guidance";
-import type { TripPlanUpdateProposal } from "@raiquora/trip/trip-plan";
 import type {
-  TravelPlan,
   TripAccommodation,
   TripJourneyPlan,
 } from "@raiquora/trip/travel-plan";
@@ -24,7 +22,6 @@ export interface ViewerAgentRichResponse {
 }
 
 export type ViewerAgentAccommodation = TripAccommodation;
-export type ViewerAgentTravelPlan = TravelPlan;
 
 export interface ViewerAgentExternalData {
   weather?: ExternalTravelInformation<WeatherForecast>;
@@ -35,18 +32,11 @@ export interface ViewerAgentExternalData {
   groundAccess?: ExternalTravelInformation<GroundAccessRoute | GroundAccessMatrix | GroundAccessArea>;
   restaurants?: ExternalTravelInformation<RestaurantSearchResult>;
 }
-export interface ViewerAgentTravelResponse {
-  text: string;
-  travelPlan: ViewerAgentTravelPlan;
-  external?: ViewerAgentExternalData;
-}
-
 export interface ViewerAgentConversationResponse {
   text: string;
   conversation: ConversationGuidance;
   external?: ViewerAgentExternalData;
 }
-export interface ViewerAgentTripPlanUpdateResponse { text: string; tripPlanUpdate: TripPlanUpdateProposal; }
 export interface ViewerAgentExternalResponse {
   text: string;
   external: ViewerAgentExternalData;
@@ -64,8 +54,6 @@ export type ViewerAgentResponse =
   | { text: string; progressSources: Array<{ url: string; evidenceId: string }> }
   | string
   | ViewerAgentRichResponse
-  | ViewerAgentTravelResponse
   | ViewerAgentConversationResponse
-  | ViewerAgentTripPlanUpdateResponse
   | ViewerAgentExternalResponse
   | ViewerAgentContextResponse;

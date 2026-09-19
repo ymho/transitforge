@@ -21,7 +21,6 @@ import {
 } from "@raiquora/journey/journey-search-preferences";
 import type {
   ViewerAgentJourneyPlan,
-  ViewerAgentTravelPlan,
   ViewerAgentResponse,
 } from "../../domain/viewer-agent-response";
 import type { TripContext } from "@raiquora/trip/travel-profile";
@@ -66,8 +65,6 @@ export interface AiGuidePanelElements {
   historyRepository: ConversationHistoryRepository;
   submitFeedback?: (feedback: ConversationFeedback) => Promise<void>;
   onFirstPrompt?: (prompt: string) => void;
-  onTravelPlan?: (plan: ViewerAgentTravelPlan) => void;
-  onTripPlanUpdate?: (proposal: import("@raiquora/trip/trip-plan").TripPlanUpdateProposal) => void;
   onTripUpdateProposal?: (proposal: import("@raiquora/trip/trip").TripUpdateProposal) => void;
   onChecklistProposal?: (proposal: import("@raiquora/trip/trip-checklist").ChecklistProposal) => void;
   onPlaces?: (places: PlaceMediaSearchResult["places"]) => void;
@@ -325,7 +322,7 @@ export function configureAiGuidePanel(
         } else {
           input.placeholder = "列車、行き先、旅の相談を入力";
         }
-        resolveAssistantMessage(pendingMessage, response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants);
+        resolveAssistantMessage(pendingMessage, response, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants);
         // Only a newly delivered V2 proposal opens the preview. Restoring history never reapplies it.
         if (typeof response !== "string" && "tripUpdateProposal" in response) elements.onTripUpdateProposal?.(response.tripUpdateProposal);
         if (typeof response !== "string" && "checklistProposal" in response) elements.onChecklistProposal?.(response.checklistProposal);
@@ -425,7 +422,7 @@ export function configureAiGuidePanel(
           continue;
         }
         const restored = appendPendingMessage(messages, entry.messageId);
-        resolveAssistantMessage(restored, entry.response, elements.onTravelPlan, elements.onTripPlanUpdate, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants, false);
+        resolveAssistantMessage(restored, entry.response, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants, false);
         if (!submitFeedback) restored.querySelector(".conversation-feedback")?.remove();
         activeConversation = typeof entry.response !== "string" && "conversation" in entry.response
           ? entry.response.conversation
@@ -433,12 +430,6 @@ export function configureAiGuidePanel(
         if (typeof entry.response !== "string" && "tripContext" in entry.response) {
           activeTripContext = entry.response.tripContext;
         } else if (activeConversation) activeTripContext = activeConversation.tripContext;
-        if (typeof entry.response !== "string" && "travelPlan" in entry.response) {
-          activeTripContext = {
-            ...activeTripContext,
-            ...tripContextFromTravelPlan(entry.response.travelPlan),
-          };
-        }
       }
       setContextChoices(activeConversation);
       input.placeholder = activeConversation
@@ -472,36 +463,11 @@ export function nextTripConversationState(
   const responseTripContext = typeof response === "string" || !("tripContext" in response)
     ? undefined
     : response.tripContext;
-  if (typeof response !== "string" && "travelPlan" in response) {
-    return {
-      guidance: guidance && responseTripContext
-        ? { ...guidance, tripContext: responseTripContext }
-        : guidance,
-      tripContext: {
-        ...responseTripContext,
-        ...tripContextFromTravelPlan(response.travelPlan),
-      },
-    };
-  }
   return {
     guidance: guidance && responseTripContext
       ? { ...guidance, tripContext: responseTripContext }
       : guidance,
     tripContext: responseTripContext ?? guidance?.tripContext ?? currentTripContext,
-  };
-}
-
-function tripContextFromTravelPlan(plan: ViewerAgentTravelPlan): TripContext {
-  const stayNights = Math.max(0, Math.round(
-    (Date.parse(`${plan.checkOutDate}T00:00:00Z`) -
-      Date.parse(`${plan.checkInDate}T00:00:00Z`)) / 86_400_000,
-  ));
-  return {
-    planningStage: "planning",
-    destinationWish: plan.destination,
-    startDate: plan.checkInDate,
-    endDate: plan.checkOutDate,
-    stayNights: plan.dayTrip ? 0 : stayNights,
   };
 }
 
@@ -565,8 +531,6 @@ function appendPendingMessage(
 export function resolveAssistantMessage(
   item: HTMLLIElement,
   response: ViewerAgentResponse,
-  onTravelPlan?: (plan: ViewerAgentTravelPlan) => void,
-  onTripPlanUpdate?: (proposal: import("@raiquora/trip/trip-plan").TripPlanUpdateProposal) => void,
   onPlaces?: (places: PlaceMediaSearchResult["places"]) => void,
   onGroundAccess?: (access: GroundAccessRoute | GroundAccessMatrix | GroundAccessArea) => void,
   onRestaurantConsult?: (restaurant: RestaurantCandidate) => void,
@@ -577,35 +541,6 @@ export function resolveAssistantMessage(
   item.removeAttribute("aria-label");
   if (typeof response === "string") {
     renderAssistantCopy(item, visibleAssistantText(response), animate);
-  } else if ("tripPlanUpdate" in response) {
-    renderAssistantCopy(item, visibleAssistantText(response.text), animate);
-    const changes = document.createElement("ul");
-    changes.className = "trip-plan-update-changes";
-    for (const patch of response.tripPlanUpdate.patches) {
-      const change = document.createElement("li");
-      change.textContent = tripPlanPatchLabel(patch);
-      changes.append(change);
-    }
-    item.append(changes);
-    const apply = document.createElement("button");
-    apply.type = "button";
-    apply.className = "trip-plan-update-apply";
-    apply.textContent = "旅程に反映";
-    apply.addEventListener("click", () => {
-      onTripPlanUpdate?.(response.tripPlanUpdate);
-      apply.disabled = true;
-      apply.textContent = "旅程に反映済み";
-    });
-    item.append(apply);
-  } else if ("travelPlan" in response) {
-    item.classList.add("ai-guide-message-journey");
-    item.replaceChildren();
-    const text = document.createElement("p");
-    text.className = "journey-plan-intro";
-    text.textContent = visibleAssistantText(response.text);
-    item.append(text);
-    if (animate) typewriteText(text);
-    onTravelPlan?.(response.travelPlan);
   } else if ("journeyPlan" in response) {
     item.classList.add("ai-guide-message-journey");
     item.replaceChildren();
@@ -642,16 +577,6 @@ function renderAssistantCopy(item: HTMLElement, text: string, animate: boolean):
 
 function appendExternalCards(parent: HTMLElement, cards: HTMLElement): void {
   if (cards.childElementCount > 0) parent.append(cards);
-}
-
-function tripPlanPatchLabel(patch: import("@raiquora/trip/trip-plan").TripPlanPatch): string {
-  if (patch.type === "metadata") {
-    return patch.conditions ? "人数と考慮事項を変更" : "旅程の基本情報を変更";
-  }
-  if (patch.type === "add") return patch.item.type === "sightseeing" ? `${patch.item.place.name}を観光へ追加` : `${patch.item.type === "movement" ? "移動" : "滞在"}を追加`;
-  if (patch.type === "replace") return `${patch.item.type === "movement" ? "移動経路" : patch.item.type === "stay" ? "滞在" : "観光"}を更新`;
-  if (patch.type === "remove") return "旅程から項目を削除";
-  return "旅程の順番を変更";
 }
 
 function appendConversationFeedback(item: HTMLLIElement): void {

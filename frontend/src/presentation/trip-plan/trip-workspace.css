@@ -46,7 +46,6 @@
 .trip-workspace-diff > div { min-width: 0; }
 .trip-workspace-navigation { display: flex; gap: 0.4rem; padding: 0.4rem; background: #fff; z-index: 12; }
 .trip-workspace-navigation [aria-pressed="true"] { background: #dcecff; }
-#app[data-trip-workspace="v2"] .trip-plan-panel { display: none !important; }
 #app[data-trip-workspace="v2"] #map-tools[hidden] { display: none; }
 #app[data-trip-workspace="v2"][data-map-focus-mode="true"] .trip-workspace,
 #app[data-trip-workspace="v2"][data-map-focus-mode="true"] .trip-workspace-navigation { display: none; }

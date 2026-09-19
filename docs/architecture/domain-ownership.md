@@ -10,9 +10,9 @@ Issue #203ではBackendをTypeScriptへ統一し shared Domainを`modules`へ移
 所有権は言語ではなく実行責務で決める
 LLMは曖昧な要求の理解とToolの選択を担い 鉄道と旅行の計算結果を生成しない
 
-旅行の次期契約は #382/#415 と [Trip V2契約](trip-lifecycle.md)を正本とする。
-下表のTripContext/旅程LocalStorageは現行実装であり、移行後はTrip.request/Trip.itemsと
-認可されたserver Repositoryへ一本化する。Candidate・Reservation・外部観測・通知をTrip本体へ混ぜない。
+旅行の正本は #382/#415 と [Trip V2契約](trip-lifecycle.md)の Server Trip V2 である。
+Browser LocalStorage はUI表示状態だけに限り、Trip本文・採用状態・revision・migration markerは保持しない。
+Candidate・Reservation・外部観測・通知をTrip本体へ混ぜない。
 Bedrockは判断とProposalを担うがTrip永続状態の所有者ではない。
 
 ## 所有マトリクス

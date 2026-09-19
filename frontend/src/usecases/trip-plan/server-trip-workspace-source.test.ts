@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTrip, applyTripProposal, TripRevisionConflict, type Trip } from "@raiquora/trip/trip";
 import { createTripWorkspaceController } from "./trip-workspace-controller";
-import { createServerTripWorkspaceSource, createReferencedTripSource } from "./server-trip-workspace-source";
+import { createServerTripWorkspaceSource } from "./server-trip-workspace-source";
 import type { TripMutationRequest } from "./server-trip-client";
 
 const trip = createTrip("11111111-1111-4111-8111-111111111111", "Trip", "2026-09-13T01:00:00Z");
@@ -17,16 +17,6 @@ describe("server source read view", () => {
     role = "viewer";
     await expect(source.confirmProposal!({ tripId: trip.id, baseRevision: 0, summary: "案", patches: [] })).rejects.toThrow("閲覧専用");
     expect(writer.validateConfirmation).not.toHaveBeenCalled();
-  });
-  it("keeps the durable Trip migration gate outside Conversation metadata", () => {
-    const restored = { id: "conversation", title: "遅れて届いた要約", scope: "general" as const,
-      summary: "", resolvedTopics: [], pendingTopics: [], createdAt: "2026-09-01T00:00:00Z",
-      updatedAt: "2026-09-01T00:00:00Z", tripSourceState: "migration-pending" as const };
-    expect(restored.tripSourceState).toBe("migration-pending");
-    const get = vi.fn(), source = createReferencedTripSource(restored, { get })!;
-    const controller = createTripWorkspaceController(restored.id); controller.attach(restored.id, source);
-    expect(controller.blocksLegacy()).toBe(true); expect(controller.current()).toBeUndefined();
-    expect(controller.canConfirm()).toBe(false); expect(get).not.toHaveBeenCalled();
   });
   it("ignores stale requests and does not expose a mutable local copy", async () => {
     let finish!: (value: Trip) => void;

@@ -10,6 +10,7 @@
 
 親方針は #382/#415、正本は同じ `modules/trip/domain/trip.ts`。#388 は Repository/Application と
 明示 migration の基盤を実装する。#451で既存Regional REST APIの`POST /api/trips/v1`をCognito Access Tokenの二重検証と専用Trip API Lambdaへ接続した。
+現在のBrowserはこのServer Trip V2だけを読み書きし、旧TripPlan LocalStorageと明示migrationは撤去済みである。
 判断は [ADR 0053](../decisions/0053-gate-owner-scoped-trip-persistence.md)。#389 が CAS/冪等性を担当する。
 
 ## Before / After

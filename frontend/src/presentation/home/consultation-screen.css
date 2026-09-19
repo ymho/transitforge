@@ -10,7 +10,7 @@
 .consultation-page button:disabled { opacity: .5; cursor: default; }
 .consultation-page :focus-visible { outline: 3px solid #347fba; outline-offset: 2px; }
 .consultation-secondary { display: flex; }
-.consultation-secondary #close-ai-guide, .consultation-secondary #trip-plan-toggle { display: none; }
+.consultation-secondary #close-ai-guide { display: none; }
 .consultation-secondary svg { width: 1.125rem; height: 1.125rem; }
 .consultation-context { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding: .8rem 1.25rem; background: #f7f9fa; border-bottom: 1px solid #e3e8ec; }
 .consultation-identity { min-width: 0; flex: 1 1 12rem; }
