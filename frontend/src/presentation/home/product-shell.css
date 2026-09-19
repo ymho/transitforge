@@ -87,6 +87,8 @@
 .account-journey-settings label { display: grid; gap: .35rem; margin-top: .75rem; font-size: .8rem; color: #53606b; }
 .account-journey-settings select { min-height: 2.6rem; border: 1px solid var(--product-line); border-radius: .7rem; padding: .45rem .6rem; background: #fff; color: var(--product-ink); font: inherit; }
 .account-services ul { display: grid; gap: .4rem; margin: .75rem 0 0; padding-left: 1.1rem; color: #53606b; font-size: .78rem; }
+.account-services li:nth-child(3) { display: flex; align-items: center; gap: .65rem; }
+.account-services li:nth-child(3)::after { content: ""; display: block; width: 6.75rem; height: 1.25rem; flex: 0 0 auto; background: url("https://webservice.recruit.co.jp/banner/hotpepper-s.gif") center / contain no-repeat; }
 .my-preferences { display: flex; flex-wrap: wrap; gap: .4rem; color: var(--product-muted); }
 .my-preferences span { padding: .3rem .6rem; border-radius: 999px; background: #f0f3f5; font-size: .8rem; }
 .my-actions { display: grid; gap: .5rem; }
