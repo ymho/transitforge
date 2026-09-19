@@ -69,6 +69,7 @@ export async function browserHarness(browser: any) {
     'import { consumeAgentStream } from "./frontend/src/adapters/http/agent-stream/consumer.ts"; window.consumeCutoverStream = consumeAgentStream;' },
     bundle: true, format: "iife", write: false, logLevel: "silent" });
   const context = await browser.newContext({ serviceWorkers: "block" });
+  await context.addInitScript("globalThis.__name = (fn) => fn"); // tsx/esbuild evaluation helper used by the injected browser bundle.
   const page = await context.newPage();
   await page.route(`${viewerOrigin}/`, (route: any) => route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>Validation</title>" }));
   await page.goto(`${viewerOrigin}/`);
