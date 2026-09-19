@@ -95,12 +95,10 @@ Provider本文やTraceをログへ追加しない。**これは時刻による�
 
 ## 既知のcutover blockerとNOT RUN
 
-現行`createProductionConversationAgent`はowner namespaceにないconversationIdを新規作成する。
-BがAと同じIDを送ってもAのstateを読む設計ではないが、Bの別会話を作ってmodelを実行できる。
-今回指定された**他ownerのID継続を403/404で拒否しBのstateを作らないgateは、現行mainでは満たさない**。
-workflowはこれをPASSへ読み替えず`owner isolation: FAIL`とする。Bの正常turnも先に行い、
-期限切れや全API拒否をowner拒否と誤認しない。production所有権設計はこの検証PRでは変更しない。
-#480のcutover判断前に契約を解決する必要がある。
+Conversationはowner namespace内のidentityであり、同じUUIDはownerごとに独立して存在できる。
+owner isolationは、BがAと同じconversationIdで正常turnを実行してもAのConversation/Turnをread/writeせず、
+B namespaceにだけ新規stateを作り、A snapshotを不変に保つことを確認する。global owner lookup、Scan、
+forbidden判定のための他owner存在照会は行わない。
 
 - **35/90/180 real AWS transportだけ未実施**。既存experimentは独立state、scenarioをLambda環境へ
   設定するdeployと専用CDN経路の準備が必要で、許可されたmutationだけでは再利用できない。
