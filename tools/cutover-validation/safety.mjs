@@ -20,6 +20,7 @@ export const labels = [
   "simple turn / stream error absent", "simple turn / progress observed", "simple turn / single final",
   "simple turn / final non-empty", "simple turn / internal markup absent", "simple turn / TTFB measured",
   "simple turn / completion measured",
+  "simple turn / headers observed", "simple turn / error category",
   "simple real Bedrock turn", "accommodation Tool turn", "persisted turn",
   "replay/idempotency", "conflict rejection", "owner isolation", "temporary user cleanup",
   "35s transport", "90s transport", "180s transport", "Trip isolation",
@@ -35,6 +36,10 @@ export class Report {
   record(label, passed) {
     requireCheck(this.results.has(label));
     this.results.set(label, passed ? "PASS" : "FAIL");
+  }
+  recordValue(label, value) {
+    requireCheck(this.results.has(label));
+    this.results.set(label, value);
   }
   render(onlyRun = false) { return [...this.results].filter(([, result]) => !onlyRun || result !== "NOT RUN").map(([label, result]) => `- ${label}: ${result}`).join("\n") + "\n"; }
   publish(onlyRun = false) {

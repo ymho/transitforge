@@ -105,6 +105,7 @@ export const successfulTurnCheckLabels = {
   internalMarkupAbsent: "simple turn / internal markup absent",
   ttfbMeasured: "simple turn / TTFB measured",
   completionMeasured: "simple turn / completion measured",
+  headersObserved: "simple turn / headers observed",
 } as const;
 
 const internalMarkup = /<\/?(?:decision_summary|tool_call|tool_result|trace|thinking)\b|"(?:toolUse|toolResult|rawResponse|access_key|application_id|requestHash|attemptId)"\s*:/iu;
@@ -116,11 +117,21 @@ export function successfulTurnChecks(result: any) {
     streamErrorAbsent: !result?.error,
     progressObserved: events.some((event: any) => event?.type === "progress"),
     singleFinal: finals.length === 1,
-    finalNonEmpty: typeof response === "string" && response.trim().length > 0,
-    internalMarkupAbsent: typeof response === "string" && !internalMarkup.test(response),
+    finalNonEmpty: finals.length === 1 ? typeof response === "string" && response.trim().length > 0 : undefined,
+    internalMarkupAbsent: finals.length === 1 ? typeof response === "string" && !internalMarkup.test(response) : undefined,
+    headersObserved: Number.isFinite(result?.measurement?.headersMs),
     ttfbMeasured: Number.isFinite(result?.measurement?.ttfbMs),
     completionMeasured: Number.isFinite(result?.measurement?.completionMs),
   };
+}
+
+export function simpleTurnErrorCategory(error: unknown) {
+  if (!error) return "no_error";
+  if (error === "http_401" || error === "http_403" || error === "http_429") return error;
+  if (typeof error === "string" && /^http_5\d\d$/u.test(error)) return "http_5xx";
+  if (typeof error === "string" && /^http_\d+$/u.test(error)) return "other_http";
+  const known = new Set(["invalid_content_type", "aborted", "stale_generation", "incomplete_stream", "missing_final", "invalid_sequence", "invalid_event", "partial_frame", "unsupported_field", "frame_too_large", "stream_too_large", "stream_error"]);
+  return typeof error === "string" && known.has(error) ? error : "other";
 }
 
 export function successfulTurn(result: any) {

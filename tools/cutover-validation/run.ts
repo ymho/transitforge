@@ -4,7 +4,7 @@ import { aws, gates, Report, requireCheck } from "./safety.mjs";
 import { contract, migrate, readSecret, secretNames } from "./secrets.mjs";
 import { discover } from "./discovery.mjs";
 import { cleanupUsers, createUsers, ledgerPath, login } from "./cognito.mjs";
-import { browserHarness, providerInvokedBetween, providerLive, providerRequest, runPacedGatewayNegativeChecks, stateReader, successfulTurn, successfulTurnCheckLabels, successfulTurnChecks, verifiedPrincipal } from "./live.js";
+import { browserHarness, providerInvokedBetween, providerLive, providerRequest, runPacedGatewayNegativeChecks, simpleTurnErrorCategory, stateReader, successfulTurn, successfulTurnCheckLabels, successfulTurnChecks, verifiedPrincipal } from "./live.js";
 
 async function main() {
   process.umask(0o077);
@@ -49,7 +49,11 @@ async function main() {
     const request = { conversationId: randomUUID(), turnId: randomUUID(), userRequest: "E2E cutover validation: こんにちは。短く挨拶だけ返してください。" };
     const simpleTurn = await harness.turn(a.token, request);
     const simpleTurnChecks = successfulTurnChecks(simpleTurn);
-    for (const [check, label] of Object.entries(successfulTurnCheckLabels)) report.record(label, simpleTurnChecks[check as keyof typeof simpleTurnChecks]);
+    for (const [check, label] of Object.entries(successfulTurnCheckLabels)) {
+      const value = simpleTurnChecks[check as keyof typeof simpleTurnChecks];
+      if (value !== undefined) report.record(label, value);
+    }
+    report.recordValue("simple turn / error category", simpleTurnErrorCategory(simpleTurn.error));
     const response = await report.check("simple real Bedrock turn", async () => successfulTurn(simpleTurn));
     const snapshot = await report.check("persisted turn", () => state!.snapshot(a.principal, request.conversationId, request.turnId, response));
     await report.check("replay/idempotency", async () => {
