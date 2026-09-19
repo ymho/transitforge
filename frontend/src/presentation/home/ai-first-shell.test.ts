@@ -10,7 +10,7 @@ function setup(overrides: Partial<AiFirstShellPorts> = {}) {
     read: () => ({ state: "unauthenticated", trips: [], candidates: [] }), profile: () => undefined,
     authState: () => ({ status: "signed-out" }), login: vi.fn(), logout: vi.fn(),
     subscribe: () => () => {}, retry: vi.fn(async () => {}), newConsultation: vi.fn(), openChat: vi.fn(), openTrip: vi.fn(),
-    openProfile: vi.fn(), openMap: vi.fn(), openSettings: vi.fn(), openNotifications: vi.fn(), now: () => new Date("2026-09-18T00:00:00Z"), ...overrides,
+    openProfile: vi.fn(), openMap: vi.fn(), journeySettings: () => ({ transferPace: "standard", rankingPreference: "balanced" }), setJourneySettings: vi.fn(), openNotifications: vi.fn(), now: () => new Date("2026-09-18T00:00:00Z"), ...overrides,
   };
   return { shell: configureAiFirstShell(document, document.querySelector("main")!, ports), ports };
 }
@@ -69,9 +69,9 @@ it("reader failures render retry without disabling the independent consultation 
 });
 it("all secondary actions use existing feature ports", () => {
   const { shell, ports } = setup(); shell.navigate("my");
-  for (const key of ["profile", "settings", "notifications"]) click(`[data-${key}]`);
+  for (const key of ["profile", "notifications"]) click(`[data-${key}]`);
   expect(ports.openProfile).toHaveBeenCalledOnce();
-  expect(ports.openSettings).toHaveBeenCalledOnce(); expect(ports.openNotifications).toHaveBeenCalledOnce();
+  expect(ports.openNotifications).toHaveBeenCalledOnce();
 });
 it("opens the actual Trip as a trips subview, not a selected chat tab", () => {
   const trip = createTrip("45300000-0000-4000-8000-000000000001", "旅程", "2026-09-18T00:00:00Z", []);

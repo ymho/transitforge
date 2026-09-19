@@ -84,6 +84,9 @@
 .my-grid .home-card { margin: 0; box-shadow: none; border-radius: 1.125rem; }
 .my-grid p { font-size: .875rem; }
 .my-grid h2 { font-size: 1.25rem; }
+.account-journey-settings label { display: grid; gap: .35rem; margin-top: .75rem; font-size: .8rem; color: #53606b; }
+.account-journey-settings select { min-height: 2.6rem; border: 1px solid var(--product-line); border-radius: .7rem; padding: .45rem .6rem; background: #fff; color: var(--product-ink); font: inherit; }
+.account-services ul { display: grid; gap: .4rem; margin: .75rem 0 0; padding-left: 1.1rem; color: #53606b; font-size: .78rem; }
 .my-preferences { display: flex; flex-wrap: wrap; gap: .4rem; color: var(--product-muted); }
 .my-preferences span { padding: .3rem .6rem; border-radius: 999px; background: #f0f3f5; font-size: .8rem; }
 .my-actions { display: grid; gap: .5rem; }

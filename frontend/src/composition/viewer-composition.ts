@@ -577,7 +577,11 @@ primaryShell = configureAiFirstShell(document, app, {
   archiveTrip: async (id) => { await serverTripClient.archive(id); await serverTripList.refresh(); },
   openProfile: () => travelProfileToggle.click(),
   openMap: (mode) => { startMap(); selectSidebarMapMode(mode === "simulation" ? "date-time" : "realtime"); },
-  openSettings: () => document.getElementById("sidebar-account-settings")?.click(),
+  journeySettings: () => ({ transferPace: journeyTransferPace.value, rankingPreference: journeyRankingPreference.value }),
+  setJourneySettings: ({ transferPace, rankingPreference }) => {
+    journeyTransferPace.value = transferPace; journeyTransferPace.dispatchEvent(new Event("change", { bubbles: true }));
+    journeyRankingPreference.value = rankingPreference; journeyRankingPreference.dispatchEvent(new Event("change", { bubbles: true }));
+  },
   openNotifications: () => document.getElementById("sidebar-notifications")?.click(),
   now: () => new Date(),
 });

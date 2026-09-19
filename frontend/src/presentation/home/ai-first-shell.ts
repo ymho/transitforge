@@ -26,7 +26,8 @@ export interface AiFirstShellPorts {
   archiveTrip?(id: string): Promise<void>;
   openProfile(): void;
   openMap(mode: "realtime" | "simulation"): void;
-  openSettings(): void;
+  journeySettings(): { transferPace: string; rankingPreference: string };
+  setJourneySettings(settings: { transferPace: string; rankingPreference: string }): void;
   openNotifications(): void;
   now(): Date;
 }
@@ -44,7 +45,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     <div data-home-live></div><section class="home-secondary home-rail-feature"><div><p class="home-eyebrow">RAIL MAP</p><h2>列車・運行情報</h2><p>リアルタイムの運行状況や、日時を指定した列車の動きを地図で確認できます。</p><button type="button" data-map="realtime">リアルタイム運行状況</button><button type="button" data-map="simulation">日時指定で見る</button></div>${travelDecoration("rail")}</section></section>
     <section class="product-page" data-page="trips" aria-label="旅程" hidden><header class="trip-list-heading"><p class="home-eyebrow">YOUR TRIPS</p><h1>旅程</h1><p>次の旅も、考え中の旅も。ここから続きの相談や確認を始められます。</p></header><div data-trip-list></div></section>
     <section class="product-page" data-page="my" aria-label="アカウント" hidden><div class="my-shell"><p class="home-eyebrow">ACCOUNT</p><h1>アカウント</h1><div class="my-grid"><section class="home-card my-account-card"><h2>ログイン</h2><p data-my-account-status></p><button type="button" data-my-login>ログイン / 新規登録</button><button type="button" data-my-logout hidden>ログアウト</button></section><section class="home-card"><h2>旅行プロフィール</h2><p>普段の好みを、次の旅のヒントに。今回の旅の条件とは分けて管理します。</p><p class="my-preferences" data-profile-summary></p><button type="button" data-profile>旅行プロフィールを編集</button></section>
-    <section class="home-card"><h2>通知</h2><div class="my-actions"><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button></div></section><section class="home-card"><h2>アプリ設定</h2><p>経路検索の既定値と外部サービスの情報を確認できます。</p><button type="button" data-settings>アプリ設定を開く <span aria-hidden="true">→</span></button></section></div></div></section>
+    <section class="home-card"><h2>通知</h2><div class="my-actions"><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button></div></section><section class="home-card account-journey-settings"><h2>経路検索の設定</h2><p>相談で経路を比較するときの既定値です。</p><label>乗換ペース<select data-account-transfer-pace><option value="hurried">急ぐ</option><option value="standard">普通</option><option value="relaxed">ゆっくり</option></select></label><label>経路の優先<select data-account-ranking-preference><option value="balanced">バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label></section><section class="home-card account-services"><h2>外部サービス</h2><p>旅の案内に利用する情報提供元です。</p><ul><li>GTFS-JP・公共交通オープンデータ</li><li>気象庁防災情報XML</li><li>ホットペッパーグルメ Webサービス</li><li>Wikipedia / Wikimedia Commons</li></ul></section></div></div></section>
     <button type="button" class="product-map-back" data-map-back hidden>戻る</button>`;
   app.prepend(root);
   let current: PrimaryView = "explore", mapReturn: PrimaryView = "explore", composing = false;
@@ -68,7 +69,9 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   });
   root.querySelector("[data-my-login]")!.addEventListener("click", () => { if (ports.authState().status !== "signed-in") ports.login(); });
   root.querySelector("[data-my-logout]")!.addEventListener("click", ports.logout);
-  root.querySelector("[data-settings]")!.addEventListener("click", ports.openSettings);
+  const transferPace = root.querySelector<HTMLSelectElement>("[data-account-transfer-pace]")!, rankingPreference = root.querySelector<HTMLSelectElement>("[data-account-ranking-preference]")!;
+  const updateJourneySettings = () => ports.setJourneySettings({ transferPace: transferPace.value, rankingPreference: rankingPreference.value });
+  transferPace.addEventListener("change", updateJourneySettings); rankingPreference.addEventListener("change", updateJourneySettings);
   root.querySelector("[data-notifications]")!.addEventListener("click", ports.openNotifications);
   const render = () => {
     let input: HomeReadInput;
@@ -81,6 +84,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     myStatus.textContent = auth.status === "signed-in" ? `${auth.displayName} としてログイン中です。` : "旅程やプロフィールを保存するにはログインしてください。";
     myLogin.hidden = auth.status === "signed-in";
     myLogout.hidden = auth.status !== "signed-in";
+    const journey = ports.journeySettings(); transferPace.value = journey.transferPace; rankingPreference.value = journey.rankingPreference;
     const stateText = view.state === "loading" ? "旅程を読み込んでいます。" : view.state === "unauthenticated" ? "ログインすると、保存した旅程をここで確認できます。相談はこのまま始められます。"
       : view.state === "unavailable" ? "旅程を取得できませんでした。未予約・準備完了とは判断していません。" : "次の旅はまだ決まっていません。相談から始めてみましょう。";
     root.querySelector("[data-home-live]")!.innerHTML = `${view.preview ? '<p class="preview-notice">開発用の確認データです。保存されません。</p>' : ""}
