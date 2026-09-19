@@ -78,7 +78,9 @@ JWT検証器は#484の`AccessTokenVerifier`だけであり、handlerごとに検
   共有grantがないBからAへのget/mutate/archiveは不存在と同じ404。list/referenceは本人namespaceへ限定する。
   明示共有済みのeditor/viewerは既存`TripSharingApplication`で解決する。
 
-`createPersonalApiHandler({ enabled, auth, tripTable, notificationTable, stateTable })`は公開に配線しないopt-in factoryである。
+`createPersonalApiHandler({ enabled, auth, tripTable, notificationTable, stateTable })`はTrip系の公開に配線しないopt-in factoryである。
+Conversation/Profileだけは既存Regional REST APIの専用Lambda `personal-state` へ接続する。これはTrip hostを有効化せず、
+CloudFrontの `/api/conversations/*` と `/api/profile/*` behavior、Gateway Cognito authorizer、Backend verifierを順に通す。
 `enabled !== true`では501のまま、trueでも`auth`はTerraformの`cognito_api_auth_config`出力から
 trusted hostが渡す必要がある。verifierをhostごとに一度作成し、既存4handlerに同じresolverを注入する。
 ルータは4つの完全一致pathだけを受け付け、未知pathは404で閉じる。Agentへのfallbackはない。

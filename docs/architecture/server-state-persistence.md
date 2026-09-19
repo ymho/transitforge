@@ -5,8 +5,8 @@
 保存境界は **#479 Phase A / persistence foundation** で導入した。
 `TrustedPrincipal → ConversationApplication / ProfileApplication → Repository → DynamoDB`
 に加え、**Phase B**でServer Context Loaderから共有Runtimeへ読み取り専用で接続する。
-詳細は[Server Agent Context](server-agent-context.md)を参照する。認証済みpersonal hostには
-`/api/conversations/v1` と `/api/profile/v1` を接続し、同じApplication/Repositoryを利用する。
+詳細は[Server Agent Context](server-agent-context.md)を参照する。認証済みRegional REST hostには
+`/api/conversations/v1` と `/api/profile/v1` を接続し、専用Lambdaから同じApplication/Repositoryを利用する。
 Browserには将来切替用のHTTP clientだけを追加する。既存Browser LocalStorageは引き続き現行の正本であり、本基盤とのdual-writeは行わない。
 
 [ADR 0067](../decisions/0067-establish-trusted-principal-boundary.md)の検証済みissuer + subから得た

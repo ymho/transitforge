@@ -117,6 +117,21 @@ resource "aws_cloudfront_distribution" "viewer" {
       response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
     }
   }
+  dynamic "ordered_cache_behavior" {
+    for_each = var.agent_stream_enabled ? toset(["/api/conversations/*", "/api/profile/*"]) : []
+    content {
+      path_pattern               = ordered_cache_behavior.value
+      target_origin_id           = local.agent_stream_name
+      viewer_protocol_policy     = "https-only"
+      allowed_methods            = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+      cached_methods             = ["GET", "HEAD"]
+      cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
+      origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+      response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
+      compress                   = true
+      # Cognito Bearer is forwarded; never attach Basic auth here.
+    }
+  }
 
   origin {
     domain_name              = aws_s3_bucket.website.bucket_regional_domain_name
