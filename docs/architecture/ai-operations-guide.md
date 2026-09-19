@@ -1,9 +1,8 @@
 # コンシェルジュの境界
 
-> Wave 2B: [ADR 0068](../decisions/0068-place-agent-runtime-in-server-application.md)により
-> Runtime coreは`modules/agent/runtime`へ移設した。transport非依存Server入口とweather縦切りを
-> 追加したが、以下のBrowser production compositionは#480まで稼働する一時経路である。
-> Server側は既存ConversationModelを直接呼び、model/tool往復にBrowserを使わない。
+> 2026-09-19 / #481 Batch 3: production RuntimeはServer Agentである。Browserは認証済み
+> `/api/agent-stream`を呼ぶだけで、model/tool loop、fallback、Browser Agent compositionを持たない。
+> 以下のBrowser production compositionに関する導入時記録はHistoricalである。
 
 
 ## 目的

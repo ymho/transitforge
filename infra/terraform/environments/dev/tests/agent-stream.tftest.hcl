@@ -27,21 +27,20 @@ override_resource {
   override_during = plan
   values          = { response_streaming_invoke_arn = "arn:aws:apigateway:ap-northeast-1:lambda:path/2021-11-15/functions/arn:aws:lambda:ap-northeast-1:123456789012:function:stream/response-streaming-invocations" }
 }
-run "default_off" {
+run "current_topology" {
   command = plan
   assert {
-    condition     = length(aws_lambda_function.agent_stream) == 0 && length(aws_api_gateway_rest_api.agent_stream) == 0 && length(aws_api_gateway_account.agent_stream) == 0
-    error_message = "The temporary gate must create no streaming resources by default."
+    condition     = length(aws_lambda_function.agent_stream) == 1 && length(aws_api_gateway_rest_api.agent_stream) == 1 && length(aws_api_gateway_account.agent_stream) == 1
+    error_message = "The current topology must retain the Server Agent resources."
   }
   assert {
-    condition     = length([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : b if b.path_pattern == "/api/agent-stream"]) == 0 && length([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : b if b.path_pattern == "/api/agent"]) == 1
-    error_message = "Default-off must leave the old Browser route intact."
+    condition     = length([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : b if b.path_pattern == "/api/agent-stream"]) == 1 && length([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : b if b.path_pattern == "/api/agent"]) == 1
+    error_message = "Server streaming and the independent Viewer read route must coexist."
   }
 }
 run "enabled_contract" {
   command = plan
   variables {
-    agent_stream_enabled         = true
     enable_fixed_egress_provider = true
   }
   assert {
@@ -97,7 +96,6 @@ run "custom_domain_contract" {
   command = plan
   variables {
     enable_fixed_egress_provider       = true
-    agent_stream_enabled               = true
     cloudflare_front_door_enabled      = true
     legacy_cloudfront_redirect_enabled = true
     environment                        = "prod"
@@ -111,31 +109,21 @@ run "custom_domain_contract" {
     error_message = "The environment stage and CloudFront origin must match."
   }
 }
-run "custom_domain_default_off" {
+run "custom_domain_current_topology" {
   command = plan
   variables {
     cloudflare_front_door_enabled      = true
     legacy_cloudfront_redirect_enabled = true
   }
   assert {
-    condition     = length(aws_lambda_function.agent_stream) == 0 && length(aws_api_gateway_rest_api.agent_stream) == 0 && length([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : b if b.path_pattern == "/api/agent-stream"]) == 0 && length([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : b if b.path_pattern == "/api/agent"]) == 1
-    error_message = "The current custom-domain production topology must also remain default-off."
+    condition     = length(aws_lambda_function.agent_stream) == 1 && length(aws_api_gateway_rest_api.agent_stream) == 1 && length([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : b if b.path_pattern == "/api/agent-stream"]) == 1 && length([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : b if b.path_pattern == "/api/agent"]) == 1
+    error_message = "The custom-domain topology must retain both current API routes."
   }
-}
-
-run "stream_requires_provider" {
-  command = plan
-  variables {
-    agent_stream_enabled         = true
-    enable_fixed_egress_provider = false
-  }
-  expect_failures = [aws_lambda_function.agent_stream["stream"]]
 }
 
 run "custom_business_deadline" {
   command = plan
   variables {
-    agent_stream_enabled          = true
     enable_fixed_egress_provider  = true
     server_agent_max_execution_ms = 180000
   }

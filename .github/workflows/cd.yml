@@ -37,9 +37,7 @@ jobs:
       id-token: write
     env:
       CD_MODE: ${{ github.event_name == 'workflow_run' && 'deploy' || inputs.mode || 'plan' }}
-      TF_VAR_agent_stream_enabled: ${{ vars.AGENT_STREAM_ENABLED }}
       TF_VAR_enable_fixed_egress_provider: ${{ vars.FIXED_EGRESS_PROVIDER_ENABLED }}
-      VITE_SERVER_AGENT_ENABLED: ${{ vars.SERVER_AGENT_ENABLED }}
       AWS_REGION: ap-northeast-1
       AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
@@ -70,7 +68,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
-      - name: Validate explicit cutover gates
+      - name: Validate deployment safety inputs
         run: node tools/deployment/cutover-gates.mjs inputs
 
       - name: Install JavaScript dependencies

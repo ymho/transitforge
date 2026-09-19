@@ -56,8 +56,8 @@ LocalStorageの旅程は上書きしない。滞在カードの「地図で宿�
 空室状況を含む固定候補を地図上で確認できる
 
 Trip V2のread/proposal workspaceは`http://localhost:5173/?trip-workspace-preview=1`で確認する。
-DesktopはTripとChatを並べ、Mobileは会話/旅程で切り替える。APIなしのsyntheticデータであり、
-変更案の確認はメモリ内のみ。V2保存やlegacy migrationはまだ有効ではない。
+DesktopはTripとChatを並べ、Mobileは会話/旅程で切り替える。これはAPIなしのsynthetic previewであり、
+変更案の確認はメモリ内のみ。本番のTrip V2保存はServer APIが正本で、legacy migrationは存在しない。
 責務と確認方法は[Trip workspace](docs/architecture/trip-workspace.md)を参照する。
 
 局地天気の見た目だけを外部APIなしで確認する場合は
@@ -99,9 +99,10 @@ tools/               検証 評価 再生成コマンド
 ```
 
 Agentの共通coreは`modules/agent/runtime/agent-runtime.ts`を唯一のモデル実行実装とする。
-本番相談はBrowserから`/api/agent-stream`を通ってServer Agent Runtimeへ接続し、
-Bedrock・Server Tool・Evidence・Traceは`backend/agent-api`が所有する。
-Browser Agent Runtimeとそのfallbackは#481 Batch 1で撤去済みで、gate OFFまたはAPI障害時は相談を停止する。
+本番BrowserはCognito Access TokenでRegional RESTへ接続し、相談は常に`/api/agent-stream`を通る。
+Conversationは`/api/conversations/v1`、Profileは`/api/profile/v1`、Trip V2は`/api/trips/v1`がServer正本である。
+Bedrock・Server Tool・Evidence・Traceは`backend/agent-api`が所有する。Browser Agent Runtime、Browser Trip writer、
+Browser起動時recheck、legacy migrationとそれらへのfallbackは存在しない。Browser storageはUI状態だけに限る。
 
 本番Agent Lambdaは`backend/agent-api`のNode.js bundleを使う
 TypeScriptのテストは対象モジュールの隣へ置く。repository保守toolとfixtureの更新方法は
@@ -112,13 +113,11 @@ TypeScriptのテストは対象モジュールの隣へ置く。repository保守
 計算の正本は[Domainの所有権](docs/architecture/domain-ownership.md)
 移行結果は[TypeScript構成再編の完了監査](docs/architecture/typescript-reorganization-audit.md)を参照する
 
-旅行機能の次期設計は #382/#415 を親方針とした [Trip V2契約とmigration計画](docs/architecture/trip-lifecycle.md)
-を参照する。現行のTravelPlan/TripPlan/TripContextから、会話と独立したTripへ段階移行する設計であり、
-サーバ保存・予約・旅行中通知が実装済みという意味ではない。
+旅行機能の設計は [Trip V2契約](docs/architecture/trip-lifecycle.md)を参照する。Tripは会話と独立した
+Server V2 resourceであり、Browserにlegacy TravelPlan/TripPlanのwriterやmigration原本は残さない。
 
-#388の[Trip server保存基盤](docs/architecture/trip-server-persistence.md)では、owner-scoped Repository、
-明示migration、server read/preview sourceを追加した。公開経路への認証接続は未実施のため公開Trip CRUDは閉じており、
-[#389 の CAS/冪等性](docs/architecture/trip-concurrency.md)は統合済み。本番writer切替は認証境界の導入・レビュー後とする。
+#388の[Trip server保存基盤](docs/architecture/trip-server-persistence.md)はowner-scoped Repositoryと
+認証済み公開Trip CRUDを提供する。CAS/冪等性はServer V2 writerで適用し、Browserのlegacy writerへ戻さない。
 
 [#398 の Reservation](docs/architecture/trip-reservation.md)は採用済みTripとは独立した予約resourceとする。
 内部のowner-scoped保存・変更確認・Workspace/Agent向けprivate値を除いたread projectionを実装した。
@@ -242,4 +241,4 @@ API route保護と本番切替は後続段階であり、ログインUIの導入
 
 [cutover統合とTool inventory](docs/architecture/server-agent-cutover.md)を正とする。
 productionは認証済みREST streamからServer AgentのConversation turn・Context・Tool・final保存へ接続する。
-Browser Agentへのfallbackはなく、gate OFFでは相談を停止する。
+Browser Agentへのfallbackはなく、Server Agent障害時は相談を停止する。

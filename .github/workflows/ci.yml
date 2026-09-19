@@ -71,11 +71,8 @@ jobs:
       - name: Check architecture boundaries
         run: npm run architecture:check
 
-      - name: Test cutover deployment guards offline
+      - name: Test deployment safety guards offline
         run: node --test tools/deployment/*.test.mjs
-
-      - name: Test cutover validation helpers offline
-        run: node --import tsx --test tools/cutover-validation/*.test.mjs tools/cutover-validation/*.test.ts
 
       - name: Run TypeScript tests
         run: npm test
@@ -128,6 +125,6 @@ jobs:
           terraform init -backend=false -input=false
           terraform validate
 
-      - name: Test default-off Agent streaming infrastructure offline
+      - name: Test Server Agent streaming infrastructure offline
         working-directory: infra/terraform/environments/dev
         run: terraform test -filter=tests/agent-stream.tftest.hcl

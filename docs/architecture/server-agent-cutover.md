@@ -6,10 +6,8 @@
 
 ## 導入時の検証記録（履歴）
 
-実AWS検証の手動workflowは[cutover validation運用](server-agent-cutover-validation.md)を参照する。
-Secret分離、PKCE、実Provider/Agent、保存・再送・owner拒否を検査し、Browser gateはfalseを必須とする。
-現行owner namespaceの継続拒否gateは既知のblockerであり、35/90/180秒fixtureはNOT RUNとなる。
-workflow追加自体はAWS検証完了・traffic cutoverを意味しない。
+導入時の実AWS検証記録はHistoricalとして保持する。current productionはServer Agent、
+Server Conversation/Profile/Trip、Cognito、Regional RESTだけで構成し、Browser/infra cutover gateは持たない。
 
 最新mainの#478/#489/#490/#491/#492/#493を接続する。AWSへのapply/deploy、Cognitoユーザー作成、
 Provider allowlist変更、実traffic切替は行っていない。#480は実AWS検証・切替までOpenとする。
@@ -111,10 +109,8 @@ Agent streaming構成の有効化には`enable_fixed_egress_provider=true`を必
 
 ## 短命gate、閉鎖とrollback
 
-productionは`VITE_SERVER_AGENT_ENABLED=true`でServer streamを正本とする。falseでbuildした場合は
-相談を停止し、Browser Agentを起動しない。通信エラーでもgateを自動変更せず、旧経路へfallbackしない。
-`agent_stream_enabled`と`enable_fixed_egress_provider`はtrueのまま基盤・State・固定IP Providerを保持する。
-短命Browser gate自体の撤去は#481へ渡す。
+productionは常にServer streamを正本とする。通信エラーでも旧経路へfallbackしない。
+`enable_fixed_egress_provider`は固定IP Provider境界として維持する。短命のBrowser/stream cutover gateは撤去済みである。
 
 旧`/api/agent`は汎用conversationを410にした一方、地図天気・地点詳細等の独立UI read callerが残る。
 そのためFunction URL・invoke許可・CloudFront behavior・Lambdaは今回維持し、残る有料operationを
@@ -184,24 +180,10 @@ deadline超過は既存Runtimeの`limit_reached`→Conversation turnの失敗→
 ＋doneのまま。completed/finalを保存・送信せず、モデルの自動再実行やBrowser fallbackを追加しない。
 下位Provider/Lambdaの遠隔処理停止を保証しないため、Tool回数上限と個別timeoutも維持する。
 
-### CDのgate入力と削除防止
+### CDの安全確認
 
-GitHub `dev` Environmentに次の3変数を**全て明示**する。設定可能な値は小文字`true`/`false`だけ。
-未設定をfalseへ補完せず、AWS認証より前に停止する。初期値は全て明示的な`false`で準備する。
-TerraformとBrowserコード自体のdefault-offは維持する。
-
-| Environment Variable | CDへの入力 |
-| --- | --- |
-| `AGENT_STREAM_ENABLED` | `TF_VAR_agent_stream_enabled` |
-| `FIXED_EGRESS_PROVIDER_ENABLED` | `TF_VAR_enable_fixed_egress_provider` |
-| `SERVER_AGENT_ENABLED` | `VITE_SERVER_AGENT_ENABLED`（同じjobのFrontend build） |
-
-許可する組合せは`stream/provider/browser`の順に`false/false/false`、`false/true/false`
-（Provider先行準備）、`true/true/false`（infra/E2E準備）、`true/true/true`だけ。
-Browser ON/stream OFF、stream ON/Provider OFFを拒否する。Browser gateはbuild時固定である。
-
-plan後の`tools/deployment/cutover-gates.mjs`は実planのgate値が検証済み入力と一致するか確認し、
-既存stream/Provider resourceがあるのに対応gateがfalseなら停止する。さらにcutover専用resourceの
+`FIXED_EGRESS_PROVIDER_ENABLED`だけは固定IP Provider境界のため明示する。Server Agentの切替gateではない。
+plan後の`tools/deployment/cutover-gates.mjs`はProvider入力と実planの一致を確認し、さらにprotected resourceの
 **deleteを含むaction（replaceを含む）を原則拒否**する。固定送信元IPの共有基盤
 （`ai_egress` / `ai_nat`）も削除・replaceを拒否する。
 唯一の例外はstream gateがtrueで、typeが`aws_api_gateway_deployment`、nameが`agent_stream`、

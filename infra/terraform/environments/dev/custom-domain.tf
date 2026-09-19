@@ -86,7 +86,7 @@ resource "aws_cloudfront_distribution" "viewer" {
   price_class         = "PriceClass_200"
 
   dynamic "origin" {
-    for_each = var.agent_stream_enabled ? [true] : []
+    for_each = [true]
     content {
       domain_name                 = "${aws_api_gateway_rest_api.agent_stream["stream"].id}.execute-api.${var.aws_region}.amazonaws.com"
       origin_id                   = local.agent_stream_name
@@ -103,7 +103,7 @@ resource "aws_cloudfront_distribution" "viewer" {
     }
   }
   dynamic "ordered_cache_behavior" {
-    for_each = var.agent_stream_enabled ? [true] : []
+    for_each = [true]
     content {
       path_pattern             = local.agent_stream_path
       target_origin_id         = local.agent_stream_name
@@ -118,7 +118,7 @@ resource "aws_cloudfront_distribution" "viewer" {
     }
   }
   dynamic "ordered_cache_behavior" {
-    for_each = var.agent_stream_enabled ? toset(["/api/conversations/*", "/api/profile/*", "/api/trips/*"]) : []
+    for_each = toset(["/api/conversations/*", "/api/profile/*", "/api/trips/*"])
     content {
       path_pattern               = ordered_cache_behavior.value
       target_origin_id           = local.agent_stream_name

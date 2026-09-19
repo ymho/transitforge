@@ -4,14 +4,11 @@ import { readFileSync } from "node:fs";
 const workflow = readFileSync(new URL("../../.github/workflows/cd.yml", import.meta.url), "utf8");
 const steps = workflow.split(/^      - name: /mu).slice(1);
 
-test("manual runs default to plan; missing gates never fall back to false", () => {
+test("manual runs default to plan; fixed-egress input never falls back to false", () => {
   assert.match(workflow, /options: \[plan, deploy\]\s+default: plan/u);
   assert.match(workflow, /inputs.mode \|\| 'plan'/u);
-  for (const [target, source] of [
-    ["TF_VAR_agent_stream_enabled", "AGENT_STREAM_ENABLED"],
-    ["TF_VAR_enable_fixed_egress_provider", "FIXED_EGRESS_PROVIDER_ENABLED"],
-    ["VITE_SERVER_AGENT_ENABLED", "SERVER_AGENT_ENABLED"],
-  ]) assert.ok(workflow.includes(`${target}: \${{ vars.${source} }}`));
+  assert.ok(workflow.includes("TF_VAR_enable_fixed_egress_provider: ${{ vars.FIXED_EGRESS_PROVIDER_ENABLED }}"));
+  assert.doesNotMatch(workflow, /AGENT_STREAM_ENABLED|SERVER_AGENT_ENABLED|VITE_SERVER_AGENT_ENABLED/u);
   assert.ok(workflow.indexOf("cutover-gates.mjs inputs") < workflow.indexOf("Configure AWS credentials"));
   assert.match(workflow, /cancel-in-progress: false/u);
 });
