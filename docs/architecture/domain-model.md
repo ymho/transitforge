@@ -327,8 +327,8 @@ scheduled事実だけを明示変換する。現在の遅延や補正済み時�
 ### `UserProfile`
 
 - 定義: `modules/trip/domain/travel-profile.ts`
-- Repository: `frontend/src/usecases/trip-profile/user-profile-repository.ts`
-- 保存先: LocalStorage `transitforge.travel-profile.v2`
+- Repository: `backend/agent-api` のProfile Application（Browserは`HttpServerProfileClient`）
+- 保存先: owner-scoped DynamoDB Profile
 - 更新元: 初回オンボーディングとプロフィール編集
 
 普段の出発地 同行者 好み 旅行ペース 許容移動時間を表す。個人を直接特定する情報や子どもの
@@ -367,31 +367,20 @@ UIはこの契約を共通入力として描画するだけで 会話パター�
 ### `ConversationHistoryEntry`
 
 - 定義: `frontend/src/domain/conversation-history.ts`
-- 保存先: LocalStorage `transitforge.concierge-history.v3`
+- 保存先: owner-scoped DynamoDB Conversation message
 
-コンシェルジュ画面に表示した利用者の発話と構造化されたAI応答を会話セッションごとに最大50件保存する。
-再読み込み後も表示を復元し 同じセッションの直近3件だけを短いテキストへ変換してBedrockの文脈に使う。
-別の相談の全履歴を無条件に混ぜない。
-AI応答には取得できた`x-transitforge-request-id`も保存し 再読み込み後の明示的なフィードバックへ紐付ける。
-経路検索の追質問では 同じ会話セッションに保存された最新の構造化`journeyPlan`を復元する。
-出発駅 到着駅 日付 時刻 乗換条件と列車制約を維持し 利用者が変更した条件だけを重ねる。
-会話を切り替えた場合は 別セッションの経路や未確定の列車変更を引き継がない。
+Browserは選択中の会話をServerから最大50件取得してメモリへ描画する。LocalStorageへの保存・fallbackは行わない。
+Server Agent Contextは同じ会話のboundedなtext履歴を読み、別会話を混ぜない。
 
 ### `ConversationSession` `TravelMemory`
 
-以下は現行の会話削除cascadeを含む。#388でTrip ID参照へ移行し、Trip削除を会話から独立させる。
+ConversationはServer metadataとmessageを正本とし、Trip削除とは独立する。
 
-- 定義: `frontend/src/domain/conversation-session.ts`
-- Repository Port: `frontend/src/usecases/concierge/conversation-session-repository.ts`
-- Browser Adapter: `frontend/src/adapters/browser/conversation-session-repository.ts`
-- 保存先: LocalStorage `transitforge.conversation-sessions.v3` `transitforge.travel-memories.v1`
+- Browser read model: `frontend/src/usecases/personal-state/conversation-ui-controller.ts`
+- 保存先: owner-scoped DynamoDB Conversation metadata/message
 
-`ConversationSession`はUUIDで相談を識別し 現在の対象を`general` `trip` `place` `route`のスコープで表す。
-表示タイトル 短い要約 確認済みの話題 未確認の話題と 関連する`TripPlan.id`を持つ。
-Repositoryは作成 選択 改名 削除を提供し 最終更新が新しい20セッションを端末内に保持する。
-上限超過または明示削除時は同じUUIDの会話履歴と旅程も削除する。v2のUUIDと要約はv3へ一度だけ移行する。
-会話履歴画面はRepositoryのactive UUIDだけを変更し 選択後に同じUUIDのメッセージ 旅程 AI文脈を再構成する。
-新しい会話は履歴も旅程もないUUIDとして作り 最初の依頼を端末内の表示タイトルに使う。
+Conversation metadataはUUID、title、scope、summary、topic、任意tripIdを持つ。Browserのactive selectionはメモリだけに保持する。
+create/update/deleteはServer CAS commandの成功後にprojectionへ反映する。会話削除はTripを削除しない。
 
 `TravelMemory`は会話から得た継続的な好みである。一回限りの`TripContext`と分離し 高確度の記憶だけを
 別セッションのAI文脈へ渡す。現在の明示的な依頼と`UserProfile`を上書きしない。

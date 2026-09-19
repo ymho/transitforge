@@ -2,7 +2,7 @@
 
 ## 入口と責務
 
-Server内部で次の読取り境界が成立する。Conversation/Profileの認証済みAPI clientは追加済みだが、production Browserの正本切替は#481 Batch 2で行う。
+Server内部で次の読取り境界が成立する。Conversation/Profileの認証済みAPI clientとproduction Browserは同じServer正本を使う。BrowserはUI selectionと描画だけをメモリに保持する。
 
 ```text
 Browser: IDs + user input + bounded UI hint（将来のtransport入力）
@@ -93,8 +93,7 @@ turn-level idempotencyとwrite-throughを提供する。既存runAgentTurn入力
 
 #462のHTTP/Function URL/SSE/streaming/progress event、Browser stream consumer、Cognito Terraform/Login UIを変更しない。
 personal API clientは既存authenticated-fetchのgeneration/abortを使い、logout・account切替と本文読取中の変更で応答を破棄する。
-別tabの状態同期は保証しない。production cutover、Browser State切替、LocalStorage正本停止、
-必要なlegacy救済、削除のdurable継続は#480以降へ残し、Issue #479全体は閉じない。
+別tabの状態同期は保証しない。削除のdurable継続表示は後続とし、legacy LocalStorageの救済・fallbackは提供しない。
 
 ## 検証
 

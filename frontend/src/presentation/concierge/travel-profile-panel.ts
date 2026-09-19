@@ -1,5 +1,5 @@
 import { travelPreferenceLabels, travelStyleSummary, type UserProfile } from "@raiquora/trip/travel-profile";
-import { deleteUserProfile, readUserProfile, saveUserProfile, travelProfileChangedEvent } from "../../usecases/trip-profile/user-profile-repository";
+import type { ProfileUiController } from "../../usecases/personal-state/profile-ui-controller";
 
 type Draft = Omit<UserProfile, "version" | "updatedAt">;
 const styles: Array<[keyof UserProfile["travelStyle"], string]> = [
@@ -10,15 +10,14 @@ const styles: Array<[keyof UserProfile["travelStyle"], string]> = [
 ];
 const companions = { solo: "一人", partner: "パートナー", friends: "友人", children: "子ども", family: "家族" };
 
-/** Existing local Profile editor; no Trip source or mutation dependency. */
-export function configureTravelProfile(document: Document, storage: Storage, onProfileCompleted: () => void = () => undefined): void {
+/** Profile is account-scoped server state. It deliberately has no browser-storage fallback. */
+export function configureTravelProfile(document: Document, client: ProfileUiController, onProfileCompleted: () => void = () => undefined): void {
   const dialog = document.querySelector<HTMLElement>("#travel-profile-page");
   const toggle = document.querySelector<HTMLButtonElement>("#travel-profile-toggle");
   if (!dialog || !toggle) return;
   let draft = blankDraft(), editing = false, dirty = false;
-  let read = readUserProfile(storage);
+  let read: { profile?: UserProfile; revision?: number; loading?: boolean } = {};
   const finish = () => { dialog.hidden = true; delete document.querySelector<HTMLElement>("#app")?.dataset.profileEditing; toggle.focus(); };
-  const notify = () => document.dispatchEvent(new Event(travelProfileChangedEvent));
   const message = (text: string) => { dialog.querySelector<HTMLElement>("[data-profile-message]")!.textContent = text; };
   const close = () => {
     if (!dirty) { finish(); return; }
@@ -28,14 +27,12 @@ export function configureTravelProfile(document: Document, storage: Storage, onP
   const render = () => {
     dialog.innerHTML = `<section class="profile-editor"><header><button type="button" data-close aria-label="マイへ戻る">←</button><div><h1>旅行プロフィール</h1><p>普段の好みを、次の旅のヒントに。今回の旅の条件を優先します。</p></div></header>
       <p role="status" aria-live="polite" data-profile-message></p>
-      ${editing ? editor(draft) : `<p>${read.profile ? esc(travelStyleSummary(read.profile)) : "まだ登録していません。設定せずに相談できます。"}</p>
+      ${editing ? editor(draft) : `<p>${read.loading ? "プロフィールを読み込んでいます。" : read.profile ? esc(travelStyleSummary(read.profile)) : "まだ登録していません。設定せずに相談できます。"}</p>
       <button type="button" data-edit>旅行プロフィールを編集</button><button type="button" data-start>相談する</button>`}
-      <details class="profile-storage-actions"><summary>端末のデータ管理</summary><button type="button" data-delete ${read.status === "empty" ? "hidden" : ""}>この端末のプロフィールを削除</button></details>
+      <details class="profile-storage-actions"><summary>プロフィールの管理</summary><button type="button" data-delete ${!read.profile ? "hidden" : ""}>プロフィールを削除</button></details>
       <div class="profile-editor-actions"><button type="button" data-close>${editing ? "取消" : "閉じる"}</button>${editing ? '<button type="submit" form="travel-profile-form">保存する</button>' : ""}
       <button type="button" data-discard hidden>変更を破棄して閉じる</button>
       </div></section>`;
-    if (read.status === "invalid") message("保存データを読み取れません。原本は残しています。自動上書きはしません。削除してから新しく設定できます。");
-    if (read.status === "unavailable") message("この端末の保存領域を利用できません。プロフィールなしで相談できます。");
     dialog.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", close));
     dialog.querySelector("[data-discard]")?.addEventListener("click", () => { dirty = false; finish(); });
     dialog.querySelector("[data-edit]")?.addEventListener("click", () => { editing = true; render(); });
@@ -43,8 +40,10 @@ export function configureTravelProfile(document: Document, storage: Storage, onP
     dialog.querySelector("[data-delete]")?.addEventListener("click", () => {
       const button = dialog.querySelector<HTMLButtonElement>("[data-delete]")!;
       if (button.dataset.confirm !== "yes") { button.dataset.confirm = "yes"; button.textContent = "削除を確定する"; return; }
-      try { deleteUserProfile(storage); notify(); read = readUserProfile(storage); draft = blankDraft(); dirty = false; editing = false; render(); }
-      catch { message("削除できませんでした。保存データは変更していません。"); }
+      if (read.revision === undefined) return;
+      void client.delete(read.revision).then(() => {
+        read = {}; draft = blankDraft(); dirty = false; editing = false; render();
+      }).catch(() => message("削除できませんでした。時間をおいてもう一度お試しください。"));
     });
     const form = dialog.querySelector<HTMLFormElement>("form");
     form?.querySelectorAll<HTMLButtonElement>("[data-choice]").forEach((button) => button.addEventListener("click", () => {
@@ -63,12 +62,14 @@ export function configureTravelProfile(document: Document, storage: Storage, onP
     });
     form?.addEventListener("submit", (event) => {
       event.preventDefault();
-      if (read.status === "invalid" || read.status === "unavailable") { message("原本の上書きを避けるため保存していません。端末の保存状態を確認してください。"); return; }
       try {
         draft = readDraft(draft, new FormData(form));
-        saveUserProfile(storage, draft); notify(); read = readUserProfile(storage); dirty = false; editing = false; render();
-        message("この端末に保存しました。次の相談から普段の好みとして参照します。");
-      } catch { message("保存できませんでした。入力はこの画面に残しています。端末の空き容量や入力値を確認してください。"); }
+        const profile: UserProfile = { ...draft, version: 2, updatedAt: new Date().toISOString() };
+        void client.update(profile, read.revision ?? null).then((saved) => {
+          read = saved; dirty = false; editing = false; render();
+          message("プロフィールを保存しました。次の相談から普段の好みとして参照します。");
+        }).catch(() => message("保存できませんでした。入力はこの画面に残しています。時間をおいてもう一度お試しください。"));
+      } catch { message("入力を確認してください。"); }
     });
   };
   document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !dialog.hidden) { event.preventDefault(); close(); } });
@@ -79,10 +80,20 @@ export function configureTravelProfile(document: Document, storage: Storage, onP
   document.defaultView?.addEventListener("beforeunload", (event) => { if (dirty && !dialog.hidden) { event.preventDefault(); event.returnValue = ""; } });
   toggle.addEventListener("click", () => {
     if (!dialog.hidden) return;
-    read = readUserProfile(storage); draft = read.profile ? profileDraft(read.profile) : blankDraft(); dirty = false; editing = true;
+    read = { loading: true }; dirty = false; editing = false;
     render(); dialog.hidden = false;
     const app = document.querySelector<HTMLElement>("#app"); if (app) app.dataset.profileEditing = "true";
     dialog.querySelector<HTMLButtonElement>("[data-close]")?.focus();
+    void client.hydrate().then((saved) => {
+      if (dialog.hidden) return;
+      read = saved ?? {}; draft = saved ? profileDraft(saved.profile) : blankDraft(); editing = true; render();
+    }).catch(() => { if (!dialog.hidden) { read = {}; render(); message("プロフィールを取得できませんでした。時間をおいてもう一度お試しください。"); } });
+  });
+  client.subscribe(() => {
+    if (dialog.hidden) return;
+    const saved = client.current();
+    read = saved ?? {}; draft = saved ? profileDraft(saved.profile) : blankDraft(); editing = true; dirty = false;
+    render();
   });
   // Registration is optional. Never open a blocking onboarding dialog on startup.
 }

@@ -27,7 +27,7 @@ Bedrockは判断とProposalを担うがTrip永続状態の所有者ではない�
 | 旅行候補 既知価格の費用集計 Profile TripContext 旅程 外部旅行情報のEvidenceと鮮度 天気 Place 再確認 | `modules/trip/domain` | Browser保存と外部Providerを境界の外へ分離 | shared module LocalStorage migration provider contractのテスト |
 | Agent Runtime Tool Evidence Trace Policy | `modules/agent/runtime`、実行責務はBackend Application | ServerのConversationModel/Tool Portへ接続。Browser組成は#480まで同じcoreを利用 | core隣接testとServer fake/Bedrock-weather縦切り |
 | HTTP Bedrock AWS 外部提供者の形式 | `frontend/src/adapters`と`backend/agent-api/src/adapters` | Domainへ変換してからUsecaseへ渡す | Adapter contract testとLambda package check |
-| 会話Session 履歴と端末内保存 | `frontend/src/domain`とUsecase Repository | Session SwitcherがConciergeとTrip PlanのPresentationを同一ページ内で切り替える | TypeScript unit testとLocalStorage migration test |
+| 会話metadata・履歴 | `backend/agent-api` のConversation Application | BrowserはHTTP clientとmemory read modelで表示・選択する。永続状態はDynamoDB | owner-scoped Application/APIとfrontend controller test |
 
 ## BackendとDomainの境界
 

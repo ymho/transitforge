@@ -2,8 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import { createTrip, applyTripProposal, TripRevisionConflict, type Trip } from "@raiquora/trip/trip";
 import { createTripWorkspaceController } from "./trip-workspace-controller";
 import { createServerTripWorkspaceSource, createReferencedTripSource } from "./server-trip-workspace-source";
-import { createConversationSession } from "../../domain/conversation-session";
-import { LocalConversationSessionRepository } from "../../adapters/browser/conversation-session-repository";
 import type { TripMutationRequest } from "./server-trip-client";
 
 const trip = createTrip("11111111-1111-4111-8111-111111111111", "Trip", "2026-09-13T01:00:00Z");
@@ -20,13 +18,10 @@ describe("server source read view", () => {
     await expect(source.confirmProposal!({ tripId: trip.id, baseRevision: 0, summary: "案", patches: [] })).rejects.toThrow("閲覧専用");
     expect(writer.validateConfirmation).not.toHaveBeenCalled();
   });
-  it("restores a durable pending gate on reload and does not reopen it from stale chat metadata", () => {
-    const values = new Map<string, string>(), storage = { getItem: (k: string) => values.get(k) ?? null,
-      setItem: (k: string, v: string) => { values.set(k, v); }, removeItem: (k: string) => { values.delete(k); } };
-    const repository = new LocalConversationSessionRepository(storage), session = createConversationSession();
-    repository.save(session); repository.save({ ...session, tripSourceState: "migration-pending" });
-    repository.save({ ...session, title: "遅れて届いた要約" });
-    const restored = new LocalConversationSessionRepository(storage).active()!;
+  it("keeps the durable Trip migration gate outside Conversation metadata", () => {
+    const restored = { id: "conversation", title: "遅れて届いた要約", scope: "general" as const,
+      summary: "", resolvedTopics: [], pendingTopics: [], createdAt: "2026-09-01T00:00:00Z",
+      updatedAt: "2026-09-01T00:00:00Z", tripSourceState: "migration-pending" as const };
     expect(restored.tripSourceState).toBe("migration-pending");
     const get = vi.fn(), source = createReferencedTripSource(restored, { get })!;
     const controller = createTripWorkspaceController(restored.id); controller.attach(restored.id, source);

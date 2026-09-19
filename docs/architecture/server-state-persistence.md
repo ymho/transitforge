@@ -7,7 +7,7 @@
 に加え、**Phase B**でServer Context Loaderから共有Runtimeへ読み取り専用で接続する。
 詳細は[Server Agent Context](server-agent-context.md)を参照する。認証済みRegional REST hostには
 `/api/conversations/v1` と `/api/profile/v1` を接続し、専用Lambdaから同じApplication/Repositoryを利用する。
-Browserには将来切替用のHTTP clientだけを追加する。既存Browser LocalStorageは引き続き現行の正本であり、本基盤とのdual-writeは行わない。
+Browserは認証済みHTTP clientを通してこのAPIを唯一の永続正本とする。Conversationの一覧・active selection・描画中の履歴は端末メモリのread modelに置くが、LocalStorageへのfallback、import、dual-writeは行わない。
 
 [ADR 0067](../decisions/0067-establish-trusted-principal-boundary.md)の検証済みissuer + subから得た
 `TrustedPrincipal.subject`をそのままownerに使う。別identity hashやowner tableは作らない。
@@ -129,13 +129,13 @@ terraform -chdir=infra/terraform/environments/dev validate
 
 Phase BでServer Context Loaderと`MultiStepAgentRuntime`の接続を完了する。
 Browserから渡す将来の契約はIDs + user input + bounded UI hintであり、会話/Profile/Trip本文を要求しない。
-Server内部のstateful組成と認証済みread/write APIで動作し、production Browserの正本はまだ切り替えない。
+Server内部のstateful組成と認証済みread/write APIで動作し、production BrowserもConversation/ProfileをServer正本として読む。
 
 #480以降へ残すもの:
 
 - Phase Cで追加したturn保存入口のproduction接続、必要な構造化応答の保存、summary更新方針
-- Browser切替、別tabの状態同期、保存・削除継続のUI組成
-- LocalStorage正本停止。実利用者データ救済要否を明示確認し、必要なら明示import/read-backを設計する
+- 別tabの状態同期、削除継続のUI組成
+- Browser UI projectionの別tab同期と削除継続表示
 
 Agent Eval、Frontend/root全量はこの変更のローカル検証に含めない。root全量はGitHub CIへ委ねる。
 production cutoverとaccount isolationの本番相当E2Eは#480/#461で統合する。Issue #479全体は閉じない。
