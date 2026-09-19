@@ -54,10 +54,6 @@ export interface ViewerElements {
   journeySettingsPanel: HTMLElement;
   journeyTransferPace: HTMLSelectElement;
   journeyRankingPreference: HTMLSelectElement;
-  tripPlanToggle: HTMLButtonElement;
-  tripPlanPanel: HTMLElement;
-  tripPlanContent: HTMLElement;
-  closeTripPlan: HTMLButtonElement;
   trainDetails: HTMLElement;
   closeTrainDetails: HTMLButtonElement;
   selectedTrainTitle: HTMLElement;
@@ -124,10 +120,6 @@ export function loadViewerElements(root: ParentNode): ViewerElements {
     journeySettingsPanel: required(root, "#journey-settings-panel"),
     journeyTransferPace: required(root, "#journey-transfer-pace"),
     journeyRankingPreference: required(root, "#journey-ranking-preference"),
-    tripPlanToggle: required(root, "#trip-plan-toggle"),
-    tripPlanPanel: required(root, "#trip-plan-panel"),
-    tripPlanContent: required(root, "#trip-plan-content"),
-    closeTripPlan: required(root, "#close-trip-plan"),
     trainDetails: required(root, "#train-details"),
     closeTrainDetails: required(root, "#close-train-details"),
     selectedTrainTitle: required(root, "#selected-train-title"),

@@ -4,6 +4,9 @@
 [ADR 0052](../decisions/0052-establish-trip-v2-contract-and-migration.md)、[最終契約](trip-lifecycle.md)。
 本書は最終契約を変更せず、main `845f17d`から#385で実装した部分と未導入部分を区別する。
 
+> 現在のproduction BrowserはServer Trip V2を唯一の永続正本とする。旧TripPlan、LocalStorage writer、
+> migration converter/markerは撤去済みであり、本書中のそれらへの記述は導入時の履歴である。
+
 #414によるPlaceの統合・利用箇所・保存許諾・legacy部分変換は[Place導入記録](trip-place-snapshot.md)を参照する。
 #386による共通schedule・日時validation・Context/表示projectionは[Schedule導入記録](trip-schedule.md)を参照する。
 #387による同じTripのRequest・仮定・legacy mapping・評価境界は[Request導入記録](trip-request.md)を参照する。

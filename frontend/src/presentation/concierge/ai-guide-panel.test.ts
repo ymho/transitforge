@@ -10,19 +10,6 @@ import {
 } from "./ai-guide-panel";
 
 describe("AI guide trip conversation state", () => {
-  it("keeps the current trip context across a trip plan update response", () => {
-    const current = {
-      destinationWish: "宮島",
-      startDate: "2026-08-31",
-      nights: 1,
-    };
-
-    expect(nextTripConversationState(current, {
-      text: "帰りの経路を変更します",
-      tripPlanUpdate: { summary: "帰りを変更", patches: [] },
-    })).toEqual({ guidance: undefined, tripContext: current });
-  });
-
   it("updates only the trip context supplied by a follow-up question", () => {
     const next = { destinationWish: "宮島", startDate: "2026-09-01", nights: 2 };
     expect(nextTripConversationState({ destinationWish: "宮島" }, {
@@ -39,30 +26,6 @@ describe("AI guide trip conversation state", () => {
     });
   });
 
-  it("keeps a completed travel plan in planning state for later consultation", () => {
-    const route = {
-      originStation: "向日町",
-      destinationStation: "出雲市",
-      journeys: [],
-    };
-    expect(nextTripConversationState(undefined, {
-      text: "旅程を作りました",
-      travelPlan: {
-        destination: "出雲大社",
-        checkInDate: "2026-08-31",
-        checkOutDate: "2026-09-02",
-        outbound: route,
-        returning: { ...route, originStation: "出雲市", destinationStation: "向日町" },
-        accommodations: [],
-      },
-    }).tripContext).toEqual({
-      planningStage: "planning",
-      destinationWish: "出雲大社",
-      startDate: "2026-08-31",
-      endDate: "2026-09-02",
-      stayNights: 2,
-    });
-  });
 
   it("keeps a model-interpreted distance preference across ordinary responses", () => {
     const tripContext = {

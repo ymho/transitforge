@@ -11,10 +11,10 @@ import { renderTripReadiness } from "./trip-readiness-view";
 import { renderTripChecklist } from "./trip-checklist-view";
 import { travelIcon } from "../shared/travel-icon";
 
-/** DOM and navigation only. The supplied source owns current Trip; legacy storage is never read here. */
+/** DOM and navigation only. The supplied source owns the current server Trip. */
 export function configureTripWorkspace(options: {
   app: HTMLElement; chat: HTMLElement; messages: HTMLElement; input: HTMLInputElement;
-  legacyPanel: HTMLElement; legacyToggle: HTMLElement; controller: TripWorkspaceController;
+  controller: TripWorkspaceController;
   showContext(view: ContextViewKind): void; returnToConversation(): void; showMap(): void;
   ask(prompt: string): void; nextItemId(): string;
 }) {
@@ -87,13 +87,10 @@ export function configureTripWorkspace(options: {
     app.dataset.tripWorkspace = "v2"; app.dataset.tripWorkspaceView = viewState().view;
     chatButton.setAttribute("aria-pressed", String(viewState().view === "chat"));
     tripButton.setAttribute("aria-pressed", String(viewState().view === "trip"));
-    options.legacyPanel.hidden = true; options.legacyToggle.hidden = true;
-    const server = controller.source()?.sourceState === "server-v2";
+    const server = true;
     notice.textContent = controller.source()?.getRole?.() === "viewer" ? "共有された旅程です（閲覧専用）。会話履歴・予約の個人情報は共有されません。"
       : controller.source()?.confirmationPersistence === "server" ? "変更案を確認するとサーバに保存します。競合した場合は最新の旅程で確認し直してください。"
-      : server ? "サーバの旅程を参照しています。変更案は確認用プレビューで、まだ保存できません。"
-      : controller.source()?.sourceState === "migration-pending" ? "旅程の移行は未完了です。元データは保持し、端末の旧旅程編集は停止しています。"
-      : "確認用の旅程です。この画面での変更は永続保存されません。";
+      : "サーバの旅程を参照しています。変更案は確認用プレビューで、まだ保存できません。";
     retry.hidden = !controller.source()?.retry;
     retry.disabled = controller.loadState() === "loading";
     add.hidden = consult.hidden = !trip;

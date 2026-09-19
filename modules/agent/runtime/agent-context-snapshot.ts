@@ -1,6 +1,5 @@
 import type { UserProfile } from "@raiquora/trip/travel-profile";
 import { travelPreferenceLabels } from "@raiquora/trip/travel-profile";
-import type { TripPlan, TripPlanItem } from "@raiquora/trip/trip-plan";
 import { validateTrip, type Trip, type ItineraryItem } from "@raiquora/trip/trip";
 import type { ItinerarySchedule } from "@raiquora/trip/itinerary-schedule";
 import type { TripRequest } from "@raiquora/trip/trip-request";
@@ -32,8 +31,6 @@ export interface AgentContextSnapshot {
     lifecycleState?: LifecycleState;
     scheduleTruncated?: boolean;
     title: string;
-    /** Legacy only; never synthesized for V2. */
-    destination?: string;
     summaryDestination?: string;
     itineraryPlaces?: AgentTripPlaces["itineraryPlaces"];
     placesTruncated?: boolean;
@@ -48,11 +45,11 @@ export interface AgentContextSnapshot {
 export interface AgentTripScheduleItem {
   observedPrice?: import("@raiquora/trip/money").PriceObservation;
   priceSemantics?: "retained-selection-observation-not-current-price";
-  /** Stable V2 reference for item-scoped constraints and assumption effects; absent for legacy. */
+  /** Stable Trip reference for item-scoped constraints and assumption effects. */
   itemId?: string;
-  /** V2 preserves precision/flexibility; absent for legacy items, never inferred as fixed. */
+  /** Trip preserves precision/flexibility and never infers a fixed time. */
   schedule?: ItinerarySchedule;
-  type: TripPlanItem["type"] | "transport" | "activity";
+  type: "transport" | "stay" | "activity";
   category?: import("@raiquora/trip/trip").ActivityCategory;
   placeName?: string;
   area?: string;
@@ -85,12 +82,11 @@ const childAgeLabels: Record<string, string> = {
 
 export function createAgentContextSnapshot(
   profile?: UserProfile,
-  trip?: TripPlan | Trip,
+  trip?: Trip,
 ): AgentContextSnapshot {
   return {
     ...(profile ? { profile: profileSnapshot(profile) } : {}),
-    ...(trip ? "schemaVersion" in trip ? { trip: selectedTripSnapshot(trip) }
-      : { trip: tripSnapshot(trip), ...legacyCandidateSnapshot(trip) } : {}),
+    ...(trip ? { trip: selectedTripSnapshot(trip) } : {}),
   };
 }
 
@@ -140,76 +136,6 @@ function profileSnapshot(profile: UserProfile): NonNullable<AgentContextSnapshot
     avoidances: avoidances.filter(([tolerance]) => tolerance !== undefined && tolerance <= 0.35)
       .map(([, label]) => label),
   };
-}
-
-function tripSnapshot(trip: TripPlan): NonNullable<AgentContextSnapshot["trip"]> {
-  return {
-    title: bounded(trip.title, 100) ?? "現在の旅程",
-    destination: bounded(trip.destination, 100) ?? "未設定",
-    ...(trip.conditions ? {
-      adults: Math.max(0, Math.min(20, Math.round(trip.conditions.adults))),
-      children: Math.max(0, Math.min(20, Math.round(trip.conditions.children))),
-    } : {}),
-    considerations: trip.conditions?.considerations.flatMap((value) => {
-      const text = bounded(value, 100);
-      return text ? [text] : [];
-    }).slice(0, 8) ?? [],
-    schedule: trip.items.slice(0, 24).map(scheduleItem),
-  };
-}
-
-function scheduleItem(item: TripPlanItem): AgentTripScheduleItem {
-  if (item.type === "sightseeing") {
-    return { type: item.type, summary: bounded(item.place.name, 100) ?? "観光", date: item.date };
-  }
-  if (item.type === "stay") {
-    return {
-      type: item.type,
-      summary: bounded(item.accommodation?.name ?? item.destination, 100) ?? "宿泊",
-      date: `${item.checkInDate}〜${item.checkOutDate}`,
-    };
-  }
-  if (item.mode !== "rail") {
-    return {
-      type: item.type,
-      summary: `${bounded(item.origin, 80) ?? "出発地"}→${bounded(item.destination, 80) ?? "到着地"}（${item.mode}）`,
-      date: item.date,
-    };
-  }
-  return {
-    type: item.type,
-    selectionStatus: "unresolved",
-    ...(item.route.originIsProvisional ? { originIsProvisional: true } : {}),
-    summary: `${bounded(item.route.originStation, 80) ?? "出発駅"}→${bounded(item.route.destinationStation, 80) ?? "到着駅"}（鉄道・経路未採用）`,
-    date: item.route.departureDate,
-  };
-}
-
-function legacyCandidateSnapshot(trip: TripPlan): Pick<AgentContextSnapshot, "travelCandidates" | "realtimeFacts"> {
-  const travelCandidates: Record<string, unknown>[] = [];
-  const realtimeFacts: Record<string, unknown>[] = [];
-  trip.items.slice(0, 24).forEach((item, index) => {
-    const itemRef = `legacy-item-${index + 1}`;
-    if (item.type === "movement" && item.mode === "rail") {
-      item.route.journeys.slice(0, 3).forEach((journey, candidateIndex) => {
-        const candidateRef = `${itemRef}-route-${candidateIndex + 1}`;
-        travelCandidates.push({ itemRef, candidateRef, kind: "rail", selectionStatus: "not-adopted",
-          originStation: bounded(item.route.originStation, 80), destinationStation: bounded(item.route.destinationStation, 80),
-          serviceDate: item.route.serviceDate, transferCount: journey.transferCount,
-          // Legacy aggregate times can be realtime-adjusted: never project them as planned schedule.
-          scheduledDepartureTimeMinutes: journey.legs[0]?.scheduledDepartureTimeMinutes,
-          scheduledArrivalTimeMinutes: journey.legs.at(-1)?.scheduledArrivalTimeMinutes });
-        realtimeFacts.push({ candidateRef, kind: "search-time-estimate", freshness: "unknown",
-          departureTimeMinutes: journey.departureTimeMinutes, arrivalTimeMinutes: journey.arrivalTimeMinutes });
-      });
-    } else if (item.type === "stay") {
-      item.options?.slice(0, 5).forEach((option, candidateIndex) => travelCandidates.push({
-        itemRef, candidateRef: `${itemRef}-stay-${candidateIndex + 1}`, kind: "stay",
-        name: bounded(option.name, 100), checkInDate: option.checkInDate, checkOutDate: option.checkOutDate,
-      }));
-    }
-  });
-  return { travelCandidates, realtimeFacts };
 }
 
 function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["trip"]> {

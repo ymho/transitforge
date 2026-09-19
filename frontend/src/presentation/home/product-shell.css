@@ -96,12 +96,11 @@
 .product-shell :focus-visible { outline: 3px solid #426c8b; outline-offset: 3px; }
 #app[data-primary-view] .conversation-sidebar-rail, #app[data-primary-view] .ai-guide-toggle, #app[data-primary-view] #close-ai-guide, #app[data-primary-view] .context-workspace-tabs { display: none; }
 #app[data-primary-view]:not([data-primary-view="map"]) :is(#map, .hud, .map-place-explorer, .map-place-detail, .train-details, .loading-screen, #map-tools) { display: none; }
-#app[data-primary-view]:not([data-primary-view="chat"]) :is(.ai-guide-panel, .trip-plan-panel, .trip-workspace, .trip-workspace-navigation) { display: none; }
+#app[data-primary-view]:not([data-primary-view="chat"]) :is(.ai-guide-panel, .trip-workspace, .trip-workspace-navigation) { display: none; }
 #app[data-primary-view="chat"] .trip-workspace-navigation { position: absolute; z-index: 16; inset: 5rem 0 auto; }
 #app[data-primary-view="chat"] .trip-workspace { position: absolute; z-index: 10; inset: 8.5rem max(0px, calc((100vw - 60rem) / 2)) 0; }
 #app[data-primary-view="trip"] .trip-workspace:not([hidden]) { display: block; position: absolute; z-index: 10; inset: 5rem max(0px, calc((100vw - 60rem) / 2)) 0; }
 #app[data-primary-view="chat"][data-trip-workspace-view="chat"] .trip-workspace { display: none; }
-#app[data-primary-view="chat"] .trip-plan-panel:not([hidden]) { position: absolute; z-index: 14; inset: 5rem max(0px, calc((100vw - 54rem) / 2)) 0; width: auto; max-width: none; max-height: none; background: white; }
 #app[data-primary-view="map"] #map { top: 5rem; bottom: 0; height: auto; }
 #app[data-primary-view="map"] .hud { top: 9rem; }
 .product-map-back { position: absolute; z-index: 20; top: 5.7rem; left: 1rem; background: white; }
@@ -134,7 +133,6 @@
   #app[data-primary-view="chat"] .trip-workspace-navigation { top: 4rem; flex-wrap: wrap; }
   #app[data-primary-view="chat"] .trip-workspace { inset: 7.5rem 0 calc(3.8rem + env(safe-area-inset-bottom)); }
   #app[data-primary-view="trip"] .trip-workspace:not([hidden]) { inset: 4rem 0 calc(3.8rem + env(safe-area-inset-bottom)); }
-  #app[data-primary-view="chat"] .trip-plan-panel:not([hidden]) { inset: 4rem 0 calc(3.8rem + env(safe-area-inset-bottom)); }
   #app[data-primary-view="map"] #map { top: 4rem; bottom: calc(3.8rem + env(safe-area-inset-bottom)); }
   #app[data-primary-view="map"] .hud { top: 8rem; }
   .product-map-back { top: 4.6rem; }

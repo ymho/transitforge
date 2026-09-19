@@ -13,8 +13,8 @@
 #408の[天気・警報Impact](weather-hazard-trip-impact.md)も同じWatch/Event/Impactを使い、trusted areaとscheduleを照合する。
 時間起点の再検査は[Trip recheck runtime](trip-recheck-runtime.md)で扱う。通知の決定・永続化・配信は[Notification runtime](notification-runtime.md)で分離する（#395 / ADR 0063）。
 
-**これは採用する最終契約であり、V2が稼働済みという記述ではない。** #415では文書だけを変更する。
-現在稼働している型・保存処理は下表のlegacy実装である。後続Issueは本契約を同じ
+**Trip V2はproduction Server正本として稼働中である。** Browserは`conversation.tripId`からServerを再読込し、
+旧TripPlan LocalStorage、旧writer、migration compatibilityを使用しない。後続Issueは本契約を同じ
 `modules/trip/domain`へ段階実装し、別のTrip V2、Planner、平行した要求モデルを作らない。
 以下の型の骨格は文書内の設計記法であり、import可能な未使用の型を先行公開しない。
 

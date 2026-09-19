@@ -4,7 +4,7 @@ import type { TravelCandidate } from "@raiquora/trip/travel-candidate";
 import type { TravelCandidateAssessment } from "@raiquora/trip/travel-candidate-assessment";
 import { validateTravelCandidateAssessment } from "@raiquora/trip/validate-candidate-assessment";
 import { proposeCandidateSelection, type CandidateSelectionPort, type CandidateSelectionRequest } from "./select-trip-candidate";
-import type { TripLoadState, TripSourceState } from "./server-trip-client";
+import type { TripLoadState } from "./server-trip-client";
 import { validateReservationFact, bookedReservationChanges, reservationChangeKey, type ReservationFact } from "@raiquora/trip/reservation";
 import { evaluateTripFeasibility, type TripFeasibilityFacts } from "@raiquora/trip/trip-feasibility";
 import { requireFeasibleTrip, requestsReady } from "@raiquora/trip/trip-ready";
@@ -19,7 +19,6 @@ export interface TripWorkspaceSource {
   /** Opaque session generation for dropping proposals across account changes. */
   sessionVersion?(): number | undefined;
   checklist?: ChecklistWorkspacePort;
-  sourceState?: Exclude<TripSourceState, "legacy-only">;
   getLoadState?(): TripLoadState;
   subscribe?(listener: () => void): () => void;
   retry?(): Promise<void>;

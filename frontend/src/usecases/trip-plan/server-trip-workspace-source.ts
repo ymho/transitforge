@@ -20,13 +20,10 @@ export interface ServerTripWriter {
   validateConfirmation(current: Trip, proposal: TripUpdateProposal, confirmation?: TripProposalConfirmation): Promise<void>;
 }
 
-/** Restores source ownership before any legacy reader/writer can be installed on reload. */
-export function createReferencedTripSource(reference: { tripId?: string; tripSourceState?: "migration-pending" | "server-v2" },
+/** A Conversation only carries a server Trip reference; browser storage is never consulted. */
+export function createReferencedTripSource(reference: { tripId?: string },
   client: Pick<ServerTripClient, "get" | "getRole" | "sessionVersion" | "subscribeSessionChange">): TripWorkspaceSource | undefined {
-  if (!reference.tripId && !reference.tripSourceState) return undefined;
-  if (reference.tripSourceState === "migration-pending" || !reference.tripId) return {
-    sourceState: reference.tripSourceState ?? "server-v2", getCurrentTrip: () => undefined, getLoadState: () => "unavailable",
-  };
+  if (!reference.tripId) return undefined;
   const source = createServerTripWorkspaceSource(reference.tripId, client);
   void source.refresh();
   return source; // No writer: public authenticated transport is still unavailable.
@@ -93,7 +90,7 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
       throw error;
     } finally { sending = false; }
   };
-  return { sessionVersion: () => { checkSession(); return sessionVersion; }, sourceState: "server-v2", confirmationPersistence: writer ? "server" : undefined,
+  return { sessionVersion: () => { checkSession(); return sessionVersion; }, confirmationPersistence: writer ? "server" : undefined,
     getRole: () => client.getRole?.(tripId),
     ...(preparation ? { checklist: { getItems: () => { checkSession(); return current && checklist ? structuredClone(checklist) : undefined; },
       ...(preparation.writer ? { async write(command: ChecklistCommand) {

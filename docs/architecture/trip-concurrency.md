@@ -11,6 +11,7 @@ create/archiveもsignalと原子的に保存する。revision/Proposal/公開gat
 
 親方針は #382/#415、保存基盤は #388、UI は #390。同じ Trip / Proposal / Repository / converter を拡張する。
 判断は [ADR 0054](../decisions/0054-commit-trip-mutations-atomically.md)。#451で公開 writer は専用Trip API hostへ接続した。reviewed workspace以外はwriterを注入しない。
+旧TripPlan migrationのpending/markerやBrowser LocalStorage writerは撤去済みである。
 
 ## Before / After
 

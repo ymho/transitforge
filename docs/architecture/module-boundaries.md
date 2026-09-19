@@ -57,6 +57,7 @@ owner-scoped repositoryがその契約を実行し、`trip-handler.ts`はHTTP re
 #451 の`trip-api-lambda.ts`/`trip-api-composition.ts`は`POST /api/trips/v1`だけを公開する専用composition rootであり、
 Conversation/Profile の`personal-state` Lambda、Agent ingress、sharing/notification/in-trip workerと責務・IAM roleを共有しない。
 Browser側の`HttpServerTripClient`は既存の`personalApiFetch`をtransportとして使い、LocalStorageの自動移行やdual-writeをしない。
+Conversation metadataの`tripId`が唯一のTrip参照であり、旧TripPlan reader/writer・fallback・migration adapterは存在しない。
 
 ## 依存方向
 

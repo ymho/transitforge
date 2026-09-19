@@ -5,9 +5,9 @@
 稼働中の型とスキーマの実装について、この文書は責務 保存先 生成元 結合キーを説明する。型を変更するときは
 対応する実装 テスト この文書を同時に見直す。ER図が必要な範囲だけ 将来`domain-model.dbml`を補助資料として追加する。
 
-旅行機能の**移行先の正本設計**は #382/#415 と [Trip V2契約](trip-lifecycle.md)を優先する。
-以下のTravelPlan/TripPlan/TripContext・LocalStorageの説明は現行legacy実装であり、
-将来も二重正本や会話への従属を維持する方針ではない。#415でruntimeや保存形式は変更していない。
+旅行の永続正本は Server Trip V2 である。Browser は `conversation.tripId` を参照して
+`/api/trips/v1` から取得したread viewだけをメモリに保持し、Trip本文・revision・採用状態を
+LocalStorageに保存または復元しない。旧TripPlanとmigration compatibilityは撤去済みである。
 
 計算の正本と実行境界は[Domainの所有権](domain-ownership.md)を参照する。
 
@@ -403,40 +403,6 @@ DOMとControllerは表示切替の前後で維持し CSS Grid上の配置と`Con
 Mobileでは会話を通常画面とし 左側の会話操作レールから地図モードや会話履歴へ移動する。
 地図 旅程 経路詳細は同じDOM上の全面コンテキストとして表示し 戻る操作では会話の入力値と
 スクロール位置を復元する。ページ全体や各表示Controllerを再初期化しない。
-
-### `TripPlan` `TripPlanItem` `TripPlanPatch`
-
-以下は現行legacyの保存・UI契約であり、V2の最終仕様ではない。
-Patchの確認可能な差分更新は維持し、候補分離・validation・revisionを段階導入する。
-
-- 定義: `modules/trip/domain/trip-plan.ts`
-- Repository: `frontend/src/usecases/trip-plan/trip-plan-repository.ts`
-- 保存先: LocalStorage `transitforge.trip-plans.v2`
-
-1つの`ConversationSession.id`に対して編集対象の`TripPlan`は1つだけ保持する。別の旅行は新しい会話
-セッションとして分離する。同じ旅行の変更案やタイトル再生成は旅程を増やさず 現在の旅程への
-`TripPlanPatch`として扱う。旧キー`transitforge.trip-plan.v1`の単一旅程は現在の会話へ一度だけ移行する。
-
-編集可能な旅程は`movement` `stay` `sightseeing`の3種類だけで構成する。`movement`は鉄道経路のほか
-レンタカー 車 バス 徒歩を表現できる。鉄道区間は検索済みの`ViewerAgentJourneyPlan`を保持し
-検索結果のない所要時間や予約情報を補完しない。
-日帰り旅程は往路と復路の`movement`だけで構成し 空の`stay`を作らない。既存の宿泊旅程を
-日帰りへ変更する場合は`stay`を削除する確認可能なPatchとして扱う。
-
-`TripPlanConditions`は今回の旅行だけに適用する大人人数 子どもの人数 最大8件の考慮事項を持つ。
-普段の同行者や好みを表す`UserProfile`とは分離し 旅程のメタデータ変更として確認後に保存する。
-
-画面では各項目を独立したカードとして表示する。鉄道移動は保持している経路から発着時刻 列車
-行き先 路線 乗換待ち時間 遅延を描画し 自由文から経路情報を補完しない。
-カードの開閉状態とカード間の追加導線は画面状態であり`TripPlan`へ保存しない。追加導線は前後の
-`TripPlanItem`を自然文の相談へ変換する。希望が曖昧な場合は会話で一問だけ確認し 検索済みの宿泊
-観光 食事候補を地図で比較する。AIが提案した`TripPlanPatch`だけを確認後に反映する。
-
-既存旅程の変更は`TripPlanPatch`の追加 置換 削除 並べ替え メタデータ変更として提案する。
-AI応答だけでは保存せず 利用者が画面で反映を選んだ後に適用する。日程と鉄道経路の変更は
-自由文から組み立てず 宿泊検索と経路検索の構造化結果からパッチを生成する。既存の往路または
-復路を遅らせる変更と途中駅への立寄りは対象の鉄道移動だけを再検索し 他の旅程項目を維持する。
-タイトル再生成は現在の移動 滞在 観光をAIへ渡し 行程を変えず`metadata.title`だけを提案する。
 
 ## AIと旅行候補の応答
 

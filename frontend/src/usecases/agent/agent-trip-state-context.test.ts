@@ -29,11 +29,6 @@ describe("Trip state is Agent context, not a planner", () => {
     expect(compact.currentTrip).toMatchObject({ planningState, lifecycleState: "in_trip" });
     expect(compact.persistedTripRequest).toEqual(trip.request);
   });
-  it("does not invent V2 state for a legacy projection", () => {
-    const snapshot = createAgentContextSnapshot(undefined, { id: "legacy", version: 1, title: "過去旅行", destination: "京都", updatedAt: "2025-09-22T00:00:00Z", items: [] });
-    expect(snapshot.trip).not.toHaveProperty("planningState");
-    expect(snapshot.trip).not.toHaveProperty("lifecycleState");
-  });
   it("marks schedule truncation at either projection boundary", () => {
     for (const count of [21, 25]) {
       const trip = requestTrip(undefined, Array.from({ length: count }, (_, n) => ({ id: `item-${n}`, type: "stay", title: "宿",

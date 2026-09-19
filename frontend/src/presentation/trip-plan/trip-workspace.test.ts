@@ -11,11 +11,11 @@ function setup(source?: TripWorkspaceSource) {
   const app = document.createElement("main"); app.id = "app"; document.body.append(app);
   const chat = document.createElement("section"); chat.id = "chat";
   const messages = document.createElement("ol"), input = document.createElement("input"); chat.append(messages, input);
-  const legacyPanel = document.createElement("section"), legacyToggle = document.createElement("button"); app.append(chat, legacyPanel, legacyToggle);
+  app.append(chat);
   const controller = createTripWorkspaceController("one"), ask = vi.fn(), showContext = vi.fn(), returnToConversation = vi.fn();
   if (source) controller.attach("one", source);
-  const ui = configureTripWorkspace({ app, chat, messages, input, legacyPanel, legacyToggle, controller, ask, showContext, returnToConversation, showMap: vi.fn(), nextItemId: () => "new-free" });
-  return { app, chat, messages, input, controller, ui, ask, legacyPanel, legacyToggle, showContext };
+  const ui = configureTripWorkspace({ app, chat, messages, input, controller, ask, showContext, returnToConversation, showMap: vi.fn(), nextItemId: () => "new-free" });
+  return { app, chat, messages, input, controller, ui, ask, showContext };
 }
 function button(root: ParentNode, text: string) { return [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === text)!; }
 afterEach(() => document.body.replaceChildren());
@@ -25,7 +25,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
     const trip = multiCityTrip(), get = vi.fn(async () => trip);
     const source = createServerTripWorkspaceSource(trip.id, { get });
     const f = setup(source);
-    expect(f.ui.panel.hidden).toBe(false); expect(f.legacyPanel.hidden).toBe(true);
+    expect(f.ui.panel.hidden).toBe(false);
     expect(f.ui.panel.textContent).toContain("読み込んでいます");
     await source.refresh();
     expect(f.ui.panel.textContent).toContain(trip.title);
@@ -35,15 +35,15 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(f.ui.panel.textContent).toContain("保存機能はまだ有効ではありません");
     get.mockRejectedValueOnce(new Error("offline")); await source.refresh();
     expect(f.controller.current()).toBeUndefined(); expect(f.controller.blocksLegacy()).toBe(true);
-    expect(f.legacyPanel.hidden).toBe(true); expect(f.ui.panel.textContent).toContain("旧旅程へは切り替えていません");
+    expect(f.ui.panel.textContent).toContain("旧旅程へは切り替えていません");
     button(f.ui.panel, "旅程を再読み込み").click();
     await vi.waitFor(() => expect(f.ui.panel.textContent).toContain(trip.title));
     expect(f.controller.current()).toEqual(trip);
   });
-  it("leaves the legacy UI alone when no V2 source exists; empty Trip is supported", () => {
-    const f = setup(); expect(f.ui.panel.hidden).toBe(true); expect(f.app.dataset.tripWorkspace).toBeUndefined(); expect(f.legacyPanel.hidden).toBe(false);
+  it("keeps the workspace hidden when no Trip source exists; empty Trip is supported", () => {
+    const f = setup(); expect(f.ui.panel.hidden).toBe(true); expect(f.app.dataset.tripWorkspace).toBeUndefined();
     f.controller.attach("one", { getCurrentTrip: () => createTrip(placesTripId, "空の旅程", placesAt) });
-    expect(f.ui.panel.hidden).toBe(false); expect(f.legacyPanel.hidden).toBe(true); expect(f.ui.panel.textContent).toContain("空の旅程");
+    expect(f.ui.panel.hidden).toBe(false); expect(f.ui.panel.textContent).toContain("空の旅程");
     expect(f.ui.panel.querySelectorAll(".trip-workspace-card")).toHaveLength(0);
   });
   it("preserves input, session, both scroll positions, focus, collapse and proposal through chat/trip/chat", () => {

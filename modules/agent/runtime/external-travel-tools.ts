@@ -7,7 +7,6 @@ import { placeTargetRelevance } from "@raiquora/trip/assess-travel-candidate";
 import { assessCandidateConstraints } from "@raiquora/trip/candidate-constraint-assessment";
 import type { Trip } from "@raiquora/trip/trip";
 import type { TravelRecheckKind, TravelRecheckRequest } from "@raiquora/trip/travel-recheck";
-import type { TripPlan } from "@raiquora/trip/trip-plan";
 import type { WeatherForecast } from "@raiquora/trip/weather-forecast";
 import type { WebPageReadResult, WebSearchResult } from "@raiquora/trip/web-research";
 import type { HazardAlertCategory, HazardAlertSearchResult } from "@raiquora/trip/hazard-alert";
@@ -73,7 +72,6 @@ export interface ExternalTravelToolDependencies {
   searchWeb?: (request: { query: string; freshness?: "day" | "week" | "month" | "year"; domains?: string[]; limit?: number }) => Promise<unknown>;
   readWebPages?: (request: { urls: string[] }) => Promise<unknown>;
   scheduleTravelRecheck?: (request: TravelRecheckRequest) => void;
-  getTripPlan?: () => TripPlan | undefined;
 }
 
 export function isExternalTravelToolName(value: string): value is ExternalTravelToolName {
@@ -507,19 +505,19 @@ export async function executeExternalTravelTool(
         relevance: placeSearchRelevance(p, dependencies.getCurrentTrip?.(), evidence.map(e => e.id)) })),
         ...identityObservations.map(p => ({ name: p.name, relevance: placeTargetRelevance("unresolved", []) }))] };
   }
-  const plan = dependencies.getTripPlan?.();
+  const trip = dependencies.getCurrentTrip?.();
   const kinds: TravelRecheckKind[] = ["weather", "rail-operation", "place-hours"];
   const kind = typeof input.kind === "string" && kinds.includes(input.kind as TravelRecheckKind) ? input.kind as TravelRecheckKind : undefined;
   const entityId = text(input.entityId).slice(0, 120);
   const scheduledAt = typeof input.scheduledAt === "string" && Number.isFinite(Date.parse(input.scheduledAt)) ? input.scheduledAt : undefined;
   const timeZone = text(input.timeZone).slice(0, 80);
-  if (!plan || !kind || !entityId || !scheduledAt || !timeZone || !dependencies.scheduleTravelRecheck) {
+  if (!trip || !kind || !entityId || !scheduledAt || !timeZone || !dependencies.scheduleTravelRecheck) {
     throw new Error("再確認の予定を保存できません。");
   }
   const now = new Date().toISOString();
   dependencies.scheduleTravelRecheck({
     id: `recheck-${crypto.randomUUID()}`,
-    tripPlanId: plan.id,
+    tripId: trip.id,
     kind,
     entityId,
     scheduledAt,
