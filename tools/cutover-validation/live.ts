@@ -10,6 +10,15 @@ import type { TrustedPrincipal } from "../../backend/agent-api/src/contracts/tru
 import { requireCheck } from "./safety.mjs";
 import { viewerOrigin } from "./discovery.mjs";
 
+// The Gateway allows only a small burst. Negative checks use both origins before
+// the first authenticated turn, so leave one token interval for that turn.
+export const gatewayThrottleRecoveryMs = 1_100;
+export async function waitForGatewayThrottleRecovery(
+  wait: (milliseconds: number) => Promise<void> = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)),
+) {
+  await wait(gatewayThrottleRecoveryMs);
+}
+
 export function providerRequest(now = new Date()) {
   const date = (offset: number) => new Date(now.getTime() + offset * 86_400_000).toISOString().slice(0, 10);
   return parseProviderRequest({ operation: "search_accommodation", requestId: `cutover-${randomUUID()}`,

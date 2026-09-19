@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { providerRequest, providerInvokedBetween, successfulTurn } from "./live.js";
+import { gatewayThrottleRecoveryMs, providerRequest, providerInvokedBetween, successfulTurn, waitForGatewayThrottleRecovery } from "./live.js";
 import { consumeAgentStream } from "../../frontend/src/adapters/http/agent-stream/consumer.js";
 
 const frame = (seq: number, event: object) => `event: agent\ndata: ${JSON.stringify({ v: 1, runId: "synthetic", seq, event })}\n\n`;
@@ -36,6 +36,12 @@ test("live Provider request reuses strict production contract and derives future
   assert.equal(a.request.checkInDate, "2031-01-15"); assert.equal(a.request.checkOutDate, "2031-01-16");
   assert.equal(a.request.adults, 1); assert.equal(a.request.limit, 2);
   assert.match(a.requestId!, /^cutover-/u);
+});
+test("negative Gateway checks leave one throttle interval before the authenticated turn", async () => {
+  const waits: number[] = [];
+  await waitForGatewayThrottleRecovery(async milliseconds => { waits.push(milliseconds); });
+  assert.deepEqual(waits, [gatewayThrottleRecoveryMs]);
+  assert.ok(gatewayThrottleRecoveryMs >= 1_000);
 });
 test("Provider invocation corroboration uses bounded time window and ignores arbitrary log messages", async () => {
   let input: any;
