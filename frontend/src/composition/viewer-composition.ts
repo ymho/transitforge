@@ -106,7 +106,9 @@ import {
 import { MapboxThreeTrainLayer } from "../presentation/train-viewer/rendering/mapbox-three-train-layer";
 import { RuntimeMetrics } from "../observability/runtime-metrics";
 import { configureTravelProfile } from "../presentation/concierge/travel-profile-panel";
-import { loadUserProfile } from "../usecases/trip-profile/user-profile-repository";
+import { HttpServerProfileClient } from "../adapters/http/server-profile-client";
+import { HttpServerConversationClient } from "../adapters/http/server-conversation-client";
+import { ConversationUiController } from "../usecases/personal-state/conversation-ui-controller";
 import { configureConversationHistoryPanel } from "../presentation/concierge/conversation-history-panel";
 import { configureApplicationSettingsPanel } from "../presentation/settings/application-settings-panel";
 import { configureTripPlanPanel } from "../presentation/trip-plan/trip-plan-panel";
@@ -122,12 +124,6 @@ import { consumeTripShareLink, makeTripShareLink, parseTripShareLink } from "../
 import { configureTripWorkspace } from "../presentation/trip-plan/trip-workspace";
 import { tripPlanFromTravelPlan } from "@raiquora/trip/trip-plan";
 import { loadTripPlan } from "../usecases/trip-plan/trip-plan-repository";
-import {
-  browserConversationSessionStorageEvents,
-  LocalConversationSessionRepository,
-} from "../adapters/browser/conversation-session-repository";
-import { LocalConversationHistoryRepository } from "../adapters/browser/conversation-history-repository";
-import { createConversationSessionSwitcher } from "../usecases/concierge/conversation-session-switcher";
 import { BrowserContextWorkspaceRepository } from "../adapters/browser/context-workspace-repository";
 import { createContextWorkspaceController } from "../usecases/context-workspace/context-workspace-controller";
 import { createMobileContextNavigation } from "../presentation/concierge/mobile-context-navigation";
@@ -140,7 +136,7 @@ import {
   type MapTravelCandidate,
 } from "../domain/map-travel-candidate";
 
-export function startViewer(): void {
+export async function startViewer(): Promise<void> {
 const initialShareLink = consumeTripShareLink(window.location, window.history);
 
 const realtimeUpdateDependencies = {
@@ -242,24 +238,12 @@ const aiGuidePromptHandlerReady = new Promise<AiGuidePromptHandler>((resolve) =>
 });
 let handleAiGuidePrompt: AiGuidePromptHandler = (...args) =>
   aiGuidePromptHandlerReady.then((handler) => handler(...args));
-const serverConversationValues = new Map<string, string>();
-const serverConversationStorage = {
-  getItem: (key: string) => serverConversationValues.get(key) ?? null,
-  setItem: (key: string, value: string) => { serverConversationValues.set(key, value); },
-  removeItem: (key: string) => { serverConversationValues.delete(key); },
-};
-
-// Short-lived build gate. Production OFF stops consultation; final gate removal is a later #481 batch.
+// Consultation transport remains separately gated; Conversation persistence is always server-owned.
 const serverAgentEnabled = import.meta.env.VITE_SERVER_AGENT_ENABLED === "true";
 const consultationTransportMode = consultationTransport(serverAgentEnabled);
-const conversationStorage = serverAgentEnabled ? serverConversationStorage : localStorage;
-const conversationSessionRepository = new LocalConversationSessionRepository(
-  conversationStorage,
-  serverAgentEnabled ? undefined : browserConversationSessionStorageEvents(),
-);
-const conversationHistoryRepository = new LocalConversationHistoryRepository(conversationStorage);
-let activeConversationSession = conversationSessionRepository.active() ??
-  conversationSessionRepository.create();
+const conversationUi = new ConversationUiController(new HttpServerConversationClient());
+let activeConversationSession = (await conversationUi.hydrate()) ?? await conversationUi.create();
+await conversationUi.loadHistory(activeConversationSession.id);
 let aiGuideController: ReturnType<typeof configureAiGuidePanel>;
 let verifiedPlaceLayer: VerifiedPlaceLayerController | undefined;
 let mapPlaceExplorerController: MapPlaceExplorerController | undefined;
@@ -418,15 +402,6 @@ closeTripPlan.addEventListener("click", () => {
   if (mobileChatShell.matches) mobileContextNavigation.close();
   else contextWorkspaceController.show("map");
 });
-const sessionTripPlan = loadTripPlan(localStorage, activeConversationSession.id);
-if (sessionTripPlan && activeConversationSession.tripPlanId !== sessionTripPlan.id) {
-  Object.assign(activeConversationSession, {
-    scope: "trip",
-    tripPlanId: sessionTripPlan.id,
-    updatedAt: new Date().toISOString(),
-  });
-  conversationSessionRepository.save(activeConversationSession);
-}
 aiGuideController = configureAiGuidePanel(
   {
     conversationSessionId: activeConversationSession.id,
@@ -444,14 +419,11 @@ aiGuideController = configureAiGuidePanel(
     transferPace: journeyTransferPace,
     rankingPreference: journeyRankingPreference,
     storage: localStorage,
-    historyRepository: conversationHistoryRepository,
+    historyRepository: conversationUi.historyRepository,
     onFirstPrompt: (prompt) => {
       if (activeConversationSession.title !== "新しい会話") return;
-      const renamed = conversationSessionRepository.rename(
-        activeConversationSession.id,
-        prompt.slice(0, 32),
-      );
-      if (renamed) Object.assign(activeConversationSession, renamed);
+      void conversationUi.rename(activeConversationSession.id, prompt.slice(0, 32))
+        .then((renamed) => { activeConversationSession = renamed; });
     },
     onTravelPlan: (plan) => {
       if (tripWorkspaceController.blocksLegacy()) return; // Also blocked while loading/unavailable.
@@ -461,12 +433,6 @@ aiGuideController = configureAiGuidePanel(
         `trip-${crypto.randomUUID()}`,
       );
       tripPlanController.show(tripPlan);
-      Object.assign(activeConversationSession, {
-        scope: "trip",
-        tripPlanId: tripPlan.id,
-        updatedAt: new Date().toISOString(),
-      });
-      conversationSessionRepository.save(activeConversationSession);
       contextWorkspaceController.show("trip-plan", {
         kind: "trip-plan",
         id: tripPlan.id,
@@ -504,12 +470,12 @@ aiGuideController = configureAiGuidePanel(
     onTripPlanUpdate: (proposal) => {
       if (tripWorkspaceController.blocksLegacy()) return;
       tripPlanController.apply(proposal.patches);
-      Object.assign(activeConversationSession, {
-        scope: "trip",
-        summary: proposal.summary,
-        updatedAt: new Date().toISOString(),
-      });
-      conversationSessionRepository.save(activeConversationSession);
+      void conversationUi.update(activeConversationSession.id, {
+        title: activeConversationSession.title, scope: activeConversationSession.scope,
+        summary: proposal.summary, resolvedTopics: activeConversationSession.resolvedTopics,
+        pendingTopics: activeConversationSession.pendingTopics,
+        ...(activeConversationSession.tripId ? { tripId: activeConversationSession.tripId } : {}),
+      }).then((saved) => { activeConversationSession = saved; });
       const currentPlan = loadTripPlan(localStorage, activeConversationSession.id);
       if (currentPlan) {
         contextWorkspaceController.show("trip-plan", {
@@ -542,38 +508,23 @@ const tripWorkspace = configureTripWorkspace({
   showContext: (view) => contextWorkspaceController.show(view), returnToConversation,
   showMap: focusMapWorkspace, ask: (prompt) => aiGuideController.ask(prompt), nextItemId: () => crypto.randomUUID(),
 });
-const conversationSessionSwitcher = createConversationSessionSwitcher({
-  repository: conversationSessionRepository,
-  conversation: aiGuideController,
-  tripPlan: tripPlanController,
-    onActivated: (session) => {
-      returnToConversation();
-      mapPlaceExplorerController?.clear();
-      activeConversationSession = session;
-      serverAgentSession?.contextChanged();
-      syncServerTripSource(session);
-      tripWorkspaceController.activateSession(session.id);
-      contextWorkspaceController.activateSession(session.id);
-  },
-});
-if (serverAgentSession) {
-  let initialAuthNotification = true;
-  currentAuthentication().subscribe(() => {
-    if (initialAuthNotification) { initialAuthNotification = false; return; }
-    serverConversationValues.clear();
-    const session = conversationSessionRepository.create();
-    conversationSessionSwitcher.activate(session.id);
-  });
-}
-conversationSessionRepository.subscribe(() => {
-  const activeSession = conversationSessionRepository.active();
-  if (activeSession) syncServerTripSource(activeSession);
-  if (activeSession && activeSession.id !== activeConversationSession.id) {
-    conversationSessionSwitcher.activate(activeSession.id);
-  } else if (activeSession) {
-    // Keep the in-memory reference synchronized after attach/detach; later summaries must not restore an old tripId.
-    activeConversationSession = activeSession;
-  }
+const activateConversation = async (sessionId: string) => {
+  const session = conversationUi.selectLocal(sessionId);
+  if (!session) return;
+  returnToConversation(); mapPlaceExplorerController?.clear(); activeConversationSession = session;
+  serverAgentSession?.contextChanged(); syncServerTripSource(session);
+  tripWorkspaceController.activateSession(session.id); contextWorkspaceController.activateSession(session.id);
+  await conversationUi.loadHistory(session.id);
+  if (conversationUi.active()?.id === session.id) aiGuideController.switchSession(session.id);
+};
+let initialAuthenticationNotification = true;
+currentAuthentication().subscribe(() => {
+  if (initialAuthenticationNotification) { initialAuthenticationNotification = false; return; }
+  conversationUi.clear();
+  void conversationUi.hydrate().then(async (session) => {
+    const selected = session ?? await conversationUi.create();
+    await activateConversation(selected.id);
+  }).catch(() => undefined);
 });
 configureConversationHistoryPanel({
   newConversation,
@@ -583,13 +534,8 @@ configureConversationHistoryPanel({
   list: conversationHistoryList,
   empty: conversationHistoryEmpty,
   storage: localStorage,
-  repository: conversationSessionRepository,
-  onSessionSelected: (sessionId) => {
-    returnToConversation();
-    if (sessionId !== activeConversationSession.id) {
-      conversationSessionSwitcher.activate(sessionId);
-    }
-  },
+  repository: conversationUi,
+  onSessionSelected: activateConversation,
 });
 configureApplicationSettingsPanel(document, {
   travelProfileToggle,
@@ -603,10 +549,9 @@ configureNotificationCenter({ root: document.body,
   client: new HttpNotificationClient(), async navigate(tripId, itemId) {
     const trip = await serverTripClient.get(tripId); if (!trip) throw new Error("Trip unavailable");
     // Explicit navigation creates/reuses a reference, never a Trip or a second local Trip writer.
-    const existing = conversationSessionRepository.list().find((session) => session.tripId === tripId);
-    const session = existing ?? conversationSessionRepository.create("general", trip.title);
-    if (!existing) conversationSessionRepository.save({ ...session, tripId, tripSourceState: "server-v2" });
-    conversationSessionSwitcher.activate(session.id);
+    const existing = conversationUi.list().find((session) => session.tripId === tripId);
+    const session = existing ?? await conversationUi.create({ title: trip.title, tripId });
+    await activateConversation(session.id);
     const source = tripWorkspaceController.source(); await source?.retry?.();
     if (tripWorkspaceController.current()?.id !== tripId) throw new Error("Trip unavailable");
     if (itemId && tripWorkspaceController.current()!.items.some((item) => item.id === itemId)) tripWorkspaceController.focus(itemId);
@@ -621,16 +566,15 @@ configureTripSharing({ root: document.body, button: sharingButton, client: new H
   async navigate(tripId) {
     const trip = await serverTripClient.get(tripId); if (!trip) throw new Error("Trip unavailable");
     // A new personal conversation, never the owner's Conversation or Trace.
-    const session = conversationSessionRepository.create("general", trip.title);
-    conversationSessionRepository.save({ ...session, tripId, tripSourceState: "server-v2" });
-    conversationSessionSwitcher.activate(session.id);
+    const session = await conversationUi.create({ title: trip.title, tripId });
+    await activateConversation(session.id);
     await tripWorkspaceController.source()?.retry?.();
     if (tripWorkspaceController.current()?.id !== tripId) throw new Error("Trip unavailable");
     returnToConversation(); tripWorkspace.show("trip");
   } });
 aiGuideController.open();
 applyContextWorkspaceState();
-configureTravelProfile(document, localStorage, () => aiGuideController.open());
+configureTravelProfile(document, new HttpServerProfileClient(), () => aiGuideController.open());
 if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip-workspace-preview") === "1") {
   if (!token) mapTools.hidden = true;
   loadingScreen.complete();
@@ -681,7 +625,7 @@ primaryShell = configureAiFirstShell(document, app, {
       preview: !!homePreview || (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip-workspace-preview") === "1"),
     };
   },
-  profile: () => loadUserProfile(localStorage), subscribe: tripWorkspaceController.subscribe,
+  profile: () => undefined, subscribe: tripWorkspaceController.subscribe,
   retry: async () => { await tripWorkspaceController.source()?.retry?.(); },
   newConsultation: (prompt) => { newConversation.click(); aiGuideController.ask(prompt); },
   openChat: () => { aiGuideController.open(); if (tripWorkspaceController.current()) tripWorkspace.show("chat"); delete app.dataset.mapFocusMode; },
@@ -699,7 +643,7 @@ configureConsultationScreen(aiGuidePanel, aiGuideMessages, aiGuideForm, aiGuideI
   read: () => ({ sessionId: tripWorkspaceController.sessionId(), trip: tripWorkspaceController.current(),
     unavailable: tripWorkspaceController.blocksLegacy() && !tripWorkspaceController.current(),
     viewer: tripWorkspaceController.source()?.getRole?.() === "viewer" }),
-  profile: () => loadUserProfile(localStorage), subscribe: tripWorkspaceController.subscribe,
+  profile: () => undefined, subscribe: tripWorkspaceController.subscribe,
   preview: (proposal) => { tripWorkspaceController.preview(proposal); tripWorkspace.show("trip"); },
   showTrip: () => { const trip = tripWorkspaceController.current(); if (trip) { window.history.pushState({ tripId: trip.id }, "", "#trip"); window.dispatchEvent(new Event("popstate")); } },
   newConversation: () => { newConversation.click(); aiGuideController.open(); },

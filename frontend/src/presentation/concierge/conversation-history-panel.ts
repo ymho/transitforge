@@ -1,4 +1,4 @@
-import type { ConversationSessionRepository } from "../../usecases/concierge/conversation-session-repository";
+import type { ConversationUiController } from "../../usecases/personal-state/conversation-ui-controller";
 import type { ConversationSession } from "../../domain/conversation-session";
 import { loadTripPlan } from "../../usecases/trip-plan/trip-plan-repository";
 
@@ -10,8 +10,8 @@ export interface ConversationHistoryPanelElements {
   list: HTMLOListElement;
   empty: HTMLParagraphElement;
   storage: Pick<Storage, "getItem">;
-  repository: ConversationSessionRepository;
-  onSessionSelected: (sessionId: string) => void;
+  repository: ConversationUiController;
+  onSessionSelected: (sessionId: string) => void | Promise<void>;
   confirmDelete?: (title: string) => boolean;
   persistentMediaQuery?: MediaQueryList;
 }
@@ -53,19 +53,19 @@ export function configureConversationHistoryPanel(
     list.replaceChildren(...items.map((item) => historyRow(
       item,
       () => {
-        repository.select(item.id);
+        repository.selectLocal(item.id);
         if (!isPersistent()) dialog.close();
-        onSessionSelected(item.id);
+        void onSessionSelected(item.id);
       },
       () => {
         if (!confirmDelete(item.title)) return;
-        const next = repository.delete(item.id);
-        if (item.active) {
-          if (!isPersistent()) dialog.close();
-          onSessionSelected(next.id);
-          return;
-        }
-        render();
+        void repository.delete(item.id).then((next) => {
+          if (item.active && next) {
+            if (!isPersistent()) dialog.close();
+            void onSessionSelected(next.id);
+          }
+          render();
+        });
       },
     )));
     empty.hidden = items.length !== 0;
@@ -73,9 +73,11 @@ export function configureConversationHistoryPanel(
   };
 
   newConversation.addEventListener("click", () => {
-    const session = repository.create();
-    if (!isPersistent()) dialog.close();
-    onSessionSelected(session.id);
+    newConversation.disabled = true;
+    void repository.create().then((session) => {
+      if (!isPersistent()) dialog.close();
+      return onSessionSelected(session.id);
+    }).finally(() => { newConversation.disabled = false; });
   });
   toggle.addEventListener("click", () => {
     render();
