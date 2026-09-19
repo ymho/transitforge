@@ -29,10 +29,21 @@ for (const name of [
   process.env[name] ??= `lambda-package-check-${name.toLowerCase()}`;
 }
 process.env.VIEWER_ORIGIN ??= "https://viewer.example.com";
+process.env.COGNITO_USER_POOL_ID ??= "ap-northeast-1_PackageCheck";
+process.env.COGNITO_CLIENT_ID ??= "package-check-client";
 const loaded = await import(pathToFileURL(bundle).href);
 if (typeof loaded.handler !== "function") {
   throw new Error("Lambda bundleをNode.jsで読み込めません");
 }
+// Exercise the actual production bundle without reaching AWS/model/provider adapters.
+for (const operation of [undefined, "bedrock_converse", "unknown", "agent_trace", "conversation_feedback"]) {
+  const response = await loaded.handler({ rawPath: "/api/agent", requestContext: { http: { method: "POST" } },
+    body: JSON.stringify({ operation, messages: [{ role: "user", content: [{ text: "package closure check" }] }] }) });
+  if (response.statusCode !== 410) throw new Error("Production bundle reopened legacy conversation ingress");
+}
+const unauthenticated = await loaded.handler({ rawPath: "/api/agent", requestContext: { http: { method: "POST" } },
+  body: JSON.stringify({ operation: "place_detail_research", query: "package check" }) });
+if (unauthenticated.statusCode !== 401) throw new Error("Production paid operation must require Cognito before AWS calls");
 console.log(JSON.stringify({ runtime: manifest.runtime, handler: manifest.handler, files: manifest.files, bytes: metadata.size }));
 
 // #409's autonomous host is a separate deployment artifact, not part of the public Agent bundle.

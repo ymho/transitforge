@@ -40,12 +40,12 @@ Cognito UIやTrip公開writerの完成待ちは不要。テストはport fakeを
 | 入口 / operation | 分類 | 現状 / 接続先 |
 | --- | --- | --- |
 | Home/説明、静的Viewer asset・認証設定、公開対象の`/viewer-input/*`・`/api/traffic/*` | public | 現行CloudFrontはBasic保護。公開解除は本PR対象外 |
-| ログイン/callback/logout入口 | public | Frontend Managed Login/PKCE/callback/logoutを導入済み。実AWSの動作確認は未実施 |
-| POST `/api/agent`: `bedrock_converse`（operation省略時も同じ） | authenticated user | 現行Agent handlerは利用者認証未接続。OAC/IAM/Basicは利用者principalではない |
-| 同route: `representative_timetable_search`, `journey_search`, `daily_congestion_analysis`, `daily_congestion_peak`, `train_delay_analysis` | authenticated user | 動的Agent Tool。静的時刻表のpublic分類とは分離 |
-| 同route: `travel_accommodation_search`, `weather_forecast_search`, `weather_grid_search`, `place_media_search`, `place_detail_research` | authenticated user | 外部Provider/modelへのアクセス前に共通境界を接続する |
-| 同route: `web_search`, `web_page_read`, `travel_alert_search`, `ground_access_search`, `restaurant_search` | authenticated user | 同上 |
-| 同route: `conversation_feedback`, `agent_trace` | authenticated user | /api/agent内のoperationのため今回は未接続。#462/#480でS3保存前に同じprincipalを接続する |
+| ログイン/callback/logout入口 | public | Frontend Managed Login/PKCE/callback/logoutを導入済み。production loginとcutover validationを確認済み |
+| POST `/api/agent`: operation省略、`bedrock_converse`、未知名 | retired | 410。tokenやBrowser gateから汎用conversationを再開しない |
+| 同route: `conversation_feedback`, `agent_trace` | retired | 410。Server内部のTrace/Storage実装とは分離する |
+| 同route: `weather_forecast_search`, `weather_grid_search` | public read | model・有料Provider・個人Stateを使わない天気readだけを維持する |
+| 同route: `representative_timetable_search`, `journey_search`, `daily_congestion_analysis`, `daily_congestion_peak`, `train_delay_analysis` | authenticated user | 専用headerのCognito Access Tokenと`raiquora/user`を実行前に検証する |
+| 同route: `travel_accommodation_search`, `place_media_search`, `place_detail_research`, `web_search`, `web_page_read`, `travel_alert_search`, `ground_access_search`, `restaurant_search` | authenticated user | 同上。OAC/IAM/Basicだけを利用者principalとして扱わない |
 | POST `/api/trips/v1`: `create`, `mutate`, `get`, `list`, `archive`, `attach`, `detach`, `reference` | authenticated user | 共通認証→`TripApplication`→既存owner-scoped Repository。専用factoryで接続、公開501 gateは維持。未知operation/replaceは拒否 |
 | POST `/api/trips/sharing/v1`: `create-grant`, `redeem`, `revoke-grant`, `manage`, `participant`, `accessible`, `reservation-facts` | authenticated user | 共通認証→`TripSharingApplication`の本人/参加者認可。公開501 gateは維持。grant secretだけで認証しない |
 | POST `/api/trips/in-trip/v1`: read（operationなし） | authenticated user | 共通認証→`InTripContextApplication.read`のowner読取。公開501 gateは維持 |
@@ -81,7 +81,7 @@ JWT検証器は#484の`AccessTokenVerifier`だけであり、handlerごとに検
 `enabled !== true`では501のまま、trueでも`auth`はTerraformの`cognito_api_auth_config`出力から
 trusted hostが渡す必要がある。verifierをhostごとに一度作成し、既存4handlerに同じresolverを注入する。
 ルータは4つの完全一致pathだけを受け付け、未知pathは404で閉じる。Agentへのfallbackはない。
-既存`lambda.ts`は編集しておらず、現在の公開経路の501 gateを維持する。
+公開`lambda.ts`は#480でAgent ingress認証だけを接続した。Trip系4 handlerの501 gateは維持する。
 このfactoryの追加はproduction writer、IAM権限、Cognito/Bearer搬送を有効化したという意味ではない。
 
 Reservation/ChecklistはHTTP handlerがなく、確認authorityの設計も別に必要なため今回公開しない。
@@ -92,9 +92,10 @@ Bearerの存在から起動するrouteへ変更しない。
 ## Frontendの個人API境界
 
 `adapters/http/authenticated-fetch.ts`を`auth-composition.ts`で#486のAuthSessionへ接続する。
-`personal-api-fetch.ts`は4つの個人API clientのdefault transportだけを差し替え、global fetchやAgent clientは変更しない。
-同origin・既知path・POST・query/hashなしに限定し、毎回`getAccessToken()`から得たAccess Tokenを
-Authorization headerへ入れる。呼出元が指定したAuthorizationや任意外部URLは拒否し、redirect/error、
+`personal-api-fetch.ts`は4つの個人APIと残存Agent operationのdefault transportを差し替え、global fetchは変更しない。
+同origin・既知path・POST・query/hashなしに限定し、毎回`getAccessToken()`から得たAccess Tokenを使う。
+個人APIはAuthorization、OAC配下の`/api/agent`だけは`X-Raiquora-Access-Token`へ入れる。
+呼出元が指定したどちらのtoken headerや任意外部URLも拒否し、redirect/error、
 cache/no-store、referrer/no-referrerで送る。ID Tokenやprincipal/ownerを送らない。
 
 401は`ApiAuthenticationError(unauthenticated)`に変換し、AuthSession.invalidateで保存tokenを破棄して失効表示へ移す。
@@ -111,11 +112,10 @@ server workspace source/controllerもsession変更時にread view/role依存表�
 
 ## Transportとの関係と残件
 
-今回の標準Bearer Adapterは、Authorizationをそのまま受け取れるtrusted host用のコード経路である。
-現在のCloudFront Basic認証/OAC signing always配下へそのまま公開できるとは主張しない。
-AWS_IAM/OACをNONEへ変更せず、専用転送headerや一時的workaroundも追加していない。
-#462の結果に合わせた搬送Adapterの交換・公開route配線、#480の段階enable/旧経路閉鎖、#461の実AWS認証E2Eを残す。
-#451全体は未完了である。
+標準Bearer AdapterはAuthorizationを受け取れる個人APIとServer streamに使う。
+CloudFront OAC signing always配下の残存`/api/agent`は専用headerで競合を避けるが、同じverifierと
+scope契約を再利用する。AWS_IAM/OACをNONEへ変更せず、専用headerの存在だけをidentityとして扱わない。
+#451全体のTrip writer有効化等は未完了である。
 
 ## 後続transportの共通規則
 
@@ -125,8 +125,8 @@ AWS_IAM/OACをNONEへ変更せず、専用転送headerや一時的workaroundも�
   Gateway風eventの自己申告をtrusted principalへ変換しない。IAM-onlyはJWTで代替しない。
 - `AuthenticationError` の `unauthenticated`→401、`forbidden`→403を共通transportで変換し、
   応答をno-storeにする。token、claims、生Profile、会話全文、下位例外をログへ出さない。
-- Function URLのAWS_IAMとOAC signing alwaysを維持する。Bearer転送headerの外部入力を
-  削除/上書きし、重複/矛盾を拒否する搬送契約は次PR。転送されたJWTも必ず検証する。
+- Function URLのAWS_IAMとOAC signing alwaysを維持する。専用Bearer headerはBrowser clientが
+  呼出元指定を拒否して設定し、Backendが重複/矛盾/カンマ結合を拒否する。転送されたJWTも必ず検証する。
 - Gateway採用時も同じpool/client/scope/subject写像を使う。API種別ごとのAuthorizer差分は
   transportに閉じる。ID Tokenや別clientを受け入れる第二の認証設計を作らない。
 
@@ -154,3 +154,9 @@ npm run architecture:check
 header表現の根拠: [AWS Lambda proxy payload format 1.0/2.0](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-lambda.html)。
 
 root全量はCIへ委ねる。Agent Eval、live AWS/E2E、本番切替は本段階の検証に含めない。
+
+## #480の旧Agent ingress閉鎖
+
+`/api/agent`の汎用会話・trace・feedbackは410で閉鎖する。残るoperationの分類、公開weatherと
+Cognito必須operation、OAC用token搬送は[旧ingress閉鎖契約](server-agent-legacy-ingress-closure.md)を参照。
+これはTrip公開writerの有効化ではない。Server streamのAuthorization Bearer契約は維持する。

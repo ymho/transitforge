@@ -13,6 +13,19 @@ describe("createAgentApplication", () => {
     })).toBeInstanceOf(Object);
   });
 
+  it("production composition has no default Bedrock conversation, regardless of rollback flags", async () => {
+    const application = createAgentApplication({
+      SUMMARY_TABLE: "summary", DELAY_SUMMARY_TABLE: "delay", AI_TIMETABLE_BUCKET: "timetable",
+      TRAFFIC_SNAPSHOT_BUCKET: "traffic", TRAVEL_PROVIDER_SECRET_ARN: "arn:secret",
+      CONVERSATION_FEEDBACK_BUCKET: "feedback", AGENT_TRACE_BUCKET: "trace", VIEWER_ORIGIN: "https://example.test",
+      SERVER_AGENT_ENABLED: "false", VITE_SERVER_AGENT_ENABLED: "false",
+    });
+    for (const operation of [undefined, "bedrock_converse", "unknown"]) {
+      await expect(application.execute({ operation, messages: [{ role: "user", content: [{ text: "hello" }] }] }, "test"))
+        .rejects.toMatchObject({ statusCode: 410 });
+    }
+  });
+
   it("必須環境変数がない構成を拒否する", () => {
     expect(() => createAgentApplication({})).toThrow("AI_TIMETABLE_BUCKET is required");
   });

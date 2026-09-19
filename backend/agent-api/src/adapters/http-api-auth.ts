@@ -5,9 +5,9 @@ import { jsonResponse, type LambdaHttpEvent } from "../contracts/http.js";
  * but the single representation must agree. V2/Function URL coalesces duplicates with commas.
  * No forwarded identity header or requestContext claims are authentication evidence.
  */
-export function accessTokenFromHttp(event: LambdaHttpEvent): string {
-  const single = Object.entries(event.headers ?? {}).filter(([name]) => name.toLowerCase() === "authorization");
-  const multiple = Object.entries(event.multiValueHeaders ?? {}).filter(([name]) => name.toLowerCase() === "authorization");
+export function accessTokenFromHttp(event: LambdaHttpEvent, headerName = "authorization"): string {
+  const single = Object.entries(event.headers ?? {}).filter(([name]) => name.toLowerCase() === headerName);
+  const multiple = Object.entries(event.multiValueHeaders ?? {}).filter(([name]) => name.toLowerCase() === headerName);
   const invalid = () => { throw new AuthenticationError("unauthenticated"); };
   if (single.length > 1 || multiple.length > 1) return invalid();
   const values = multiple[0]?.[1];

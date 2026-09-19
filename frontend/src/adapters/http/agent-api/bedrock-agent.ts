@@ -1,3 +1,5 @@
+import { ApiAuthenticationError } from "../../../usecases/auth/api-authentication-error";
+import { personalApiFetch } from "../personal-api-fetch";
 import type {
   BedrockAgentMessage,
   BedrockAgentResponse,
@@ -61,7 +63,7 @@ export interface AgentApiResult<T> {
 
 export async function submitConversationFeedback(
   feedback: ConversationFeedbackV2,
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = personalApiFetch,
 ): Promise<void> {
   const body = JSON.stringify({ operation: "conversation_feedback", ...feedback });
   const response = await fetcher("/api/agent", {
@@ -87,7 +89,7 @@ export const maximumStoredAgentTraceEvents = 100;
 
 export async function submitAgentTrace(
   submission: AgentTraceSubmission,
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = personalApiFetch,
 ): Promise<AgentApiResult<AgentTraceStoredResponse>> {
   const omittedEventCount = Math.max(
     0,
@@ -113,7 +115,7 @@ export async function submitAgentTrace(
 
 export async function invokeBedrockAgent(
   messages: BedrockAgentMessage[],
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = personalApiFetch,
   tools?: AgentToolDescriptor[],
   modelClass?: AgentModelClass,
   modelCallId?: string,
@@ -133,21 +135,21 @@ export async function invokeBedrockAgent(
   );
 }
 
-export async function queryDailyCongestionPeak(serviceDate: string, fetcher: typeof fetch = fetch): Promise<DailyCongestionPeakResponse> {
+export async function queryDailyCongestionPeak(serviceDate: string, fetcher: typeof fetch = personalApiFetch): Promise<DailyCongestionPeakResponse> {
   return postAgentBody({ operation: "daily_congestion_peak", serviceDate }, "混雑履歴を取得できません", "混雑履歴", isDailyCongestionPeakResponse, fetcher);
 }
 
-export async function queryDailyCongestionAnalysis(serviceDate: string, fetcher: typeof fetch = fetch): Promise<DailyCongestionAnalysisResponse> {
+export async function queryDailyCongestionAnalysis(serviceDate: string, fetcher: typeof fetch = personalApiFetch): Promise<DailyCongestionAnalysisResponse> {
   return postAgentBody({ operation: "daily_congestion_analysis", serviceDate }, "混雑分析を取得できません", "混雑分析", isDailyCongestionAnalysisResponse, fetcher);
 }
 
-export async function queryTrainDelayAnalysis(serviceDate: string, fetcher: typeof fetch = fetch): Promise<TrainDelayAnalysisResponse> {
+export async function queryTrainDelayAnalysis(serviceDate: string, fetcher: typeof fetch = personalApiFetch): Promise<TrainDelayAnalysisResponse> {
   return postAgentBody({ operation: "train_delay_analysis", serviceDate }, "列車遅延分析を取得できません", "列車遅延分析", isTrainDelayAnalysisResponse, fetcher);
 }
 
 export async function searchAccommodations(
   request: { destination: string; checkInDate: string; checkOutDate: string; adults?: number; limit?: number },
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = personalApiFetch,
 ): Promise<AccommodationSearchResponse> {
   return postAgentBody(
     { operation: "travel_accommodation_search", ...request },
@@ -192,7 +194,7 @@ export async function searchWeatherGrid(
 
 export async function searchPlaceMedia(
   request: { query: string; latitude?: number; longitude?: number; radiusMeters?: number; limit?: number; detail?: boolean },
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = personalApiFetch,
 ): Promise<PlaceMediaSearchResponse> {
   return postAgentBody(
     { operation: "place_media_search", ...request },
@@ -206,7 +208,7 @@ export async function searchPlaceMedia(
 
 export async function researchPlaceDetail(
   request: { query: string; latitude?: number; longitude?: number; targetRef?: import("@raiquora/trip/place-snapshot").PlaceRef },
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = personalApiFetch,
 ): Promise<PlaceMediaSearchResponse> {
   return postAgentBody(
     { operation: "place_detail_research", ...request },
@@ -220,7 +222,7 @@ export async function researchPlaceDetail(
 
 export async function searchHazardAlerts(
   request: { area: string; categories?: import("@raiquora/trip/hazard-alert").HazardAlertCategory[]; limit?: number },
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = personalApiFetch,
 ): Promise<HazardAlertSearchResponse> {
   return postAgentBody(
     { operation: "travel_alert_search", ...request },
@@ -240,28 +242,28 @@ export async function searchGroundAccess(
     destinations?: import("@raiquora/trip/ground-access").GroundAccessPoint[];
     minutes?: number;
   },
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = personalApiFetch,
 ): Promise<GroundAccessSearchResponse> {
   return postAgentBody({ operation: "ground_access_search", ...request }, "駅から先の移動を検索できません", "徒歩と車の移動", isGroundAccessSearchResponse, fetcher, true);
 }
 
 export async function searchRestaurants(
   request: { area: string; keyword?: string; latitude?: number; longitude?: number; range?: 1 | 2 | 3 | 4 | 5; requirements?: import("@raiquora/trip/restaurant-search").RestaurantRequirements; limit?: number },
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = personalApiFetch,
 ): Promise<RestaurantSearchResponse> {
   return postAgentBody({ operation: "restaurant_search", ...request }, "飲食店候補を検索できません", "飲食店候補", isRestaurantSearchResponse, fetcher, true);
 }
 
 export async function searchWeb(
   request: { query: string; freshness?: "day" | "week" | "month" | "year"; domains?: string[]; limit?: number },
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = personalApiFetch,
 ): Promise<WebSearchResponse> {
   return postAgentBody({ operation: "web_search", ...request }, "Web情報を検索できません", "Web検索", isWebSearchResponse, fetcher, true);
 }
 
 export async function readWebPages(
   request: { urls: string[] },
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = personalApiFetch,
 ): Promise<WebPageReadResponse> {
   return postAgentBody({ operation: "web_page_read", ...request }, "Webページを確認できません", "Webページ", isWebPageReadResponse, fetcher, true);
 }
@@ -274,7 +276,7 @@ export async function searchRepresentativeTimetable(
     targetTimeMinutes?: number;
     limit?: number;
   },
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = personalApiFetch,
 ): Promise<RepresentativeTimetableSearchResponse> {
   return postAgentBody(
     { operation: "representative_timetable_search", ...request },
@@ -287,7 +289,7 @@ export async function searchRepresentativeTimetable(
 
 export async function searchTravelCandidates(
   request: JourneySearchRequest,
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = personalApiFetch,
 ): Promise<TravelCandidateSearchResponse> {
   const response = await postAgentBody(
     {
@@ -331,7 +333,7 @@ async function postAgent<T>(
   try {
     response = await fetcher("/api/agent", requestInit);
   } catch (error) {
-    if (!retryTransientFailure) {
+    if (error instanceof ApiAuthenticationError || !retryTransientFailure) {
       throw error;
     }
     retried = true;

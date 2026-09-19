@@ -1,4 +1,10 @@
-# Server Agent production cutover-ready統合（#480）
+# Server Agent production cutover統合（#480）
+
+2026-09-19: productionはServer Agentへ切替済み。現在の受け入れ条件、旧operation台帳、
+閉鎖候補とrollbackは[旧ingress閉鎖記録](server-agent-legacy-ingress-closure.md)を正とする。
+以下の導入時の未切替・Browser OFF復帰記述は履歴であり、現在のrollback手順ではない。
+
+## 導入時の検証記録（履歴）
 
 実AWS検証の手動workflowは[cutover validation運用](server-agent-cutover-validation.md)を参照する。
 Secret分離、PKCE、実Provider/Agent、保存・再送・owner拒否を検査し、Browser gateはfalseを必須とする。
@@ -105,33 +111,30 @@ Agent streaming構成の有効化には`enable_fixed_egress_provider=true`を必
 
 ## 短命gate、閉鎖とrollback
 
-`VITE_SERVER_AGENT_ENABLED=false`がBrowser既定値。
-OFFは現在のBrowser Agent。trueでbuildすると全相談がServer streamへ入り、dual executionも
-Server障害時のBrowser Agent fallbackもない。`agent_stream_enabled`と`enable_fixed_egress_provider`は
-その前段のinfra準備gateで、既定falseを維持する。今回CI/CDやtfvarsで有効にしない。
-Browser build gateは配信時に固定され、通信エラーで自動変更しない。
-#480の実AWS確認・traffic切替後、#481の旧コード削除と合わせてgate自体を撤去する。恒久flagではない。
+productionは`VITE_SERVER_AGENT_ENABLED=true`でServer streamを正本とする。falseでbuildした場合は
+相談を停止し、Browser Agentを起動しない。通信エラーでもgateを自動変更せず、旧経路へfallbackしない。
+`agent_stream_enabled`と`enable_fixed_egress_provider`はtrueのまま基盤・State・固定IP Providerを保持する。
+短命Browser gate自体の撤去は#481へ渡す。
 
-実切替前にCognito実token、direct execute-api認証、CloudFront/前段CDN経由35/90/180秒、timeout、
-buffering、Provider allowlist、IAM/Secret、保存競合、account切替を確認する。
-切替時に旧Browser model-call APIのrouting/default fallbackを無効化し、旧Function URL・invoke許可・
-CloudFront旧behaviorを閉鎖する。未認証の迂回経路を残さない。
-旧APIを使う地図専用Provider read等も棚卸しし、必要なら認証済み専用routeへ移してからURLを閉じる。
-今回旧Function URLを削除しない。
+旧`/api/agent`は汎用conversationを410にした一方、地図天気、地点詳細、Browser recheckのcallerが残る。
+そのためFunction URL・invoke許可・CloudFront behavior・Lambdaは今回維持し、残る有料operationを
+Cognitoで保護する。利用が0になった後のresource閉鎖は別差分でplanを審査する。
 
-rollbackは運用判断による旧Viewer artifactへの明示的な復帰とroute設定の復元で行う。
-Server Stateは保持する。新Server turnを旧Browserへ自動再実行せず、異なる保存正本を混ぜない。
-旧route閉鎖後のrollbackには認証の迂回を再開しない構成レビューが必要。
+rollbackは[旧ingress閉鎖記録](server-agent-legacy-ingress-closure.md)を正とする。Server Stateを保持し、
+新Server turnを旧Browserへ自動再実行せず、閉鎖前のViewer/Lambda artifactや未認証routeを復元しない。
 
 #481へ渡す削除候補: Browser Runtime組成、Bedrock HTTP message bridge、旧Tool/legacy TravelPlan adapter、
 LocalStorage Conversation/Profile writer、旧feedback/trace経路、短命Browser gate。
-#480の実AWS切替で閉じるもの: 旧model-call公開routing、Function URL、invoke権限、旧CDN behavior、
-未認証route、infra準備gateの役目。コード削除とinfra閉鎖を混同しない。
+後続で閉じる候補: 残存callerが0になった後のFunction URL、invoke権限、旧CDN behavior。
+コード削除とinfra閉鎖を混同しない。
 
 LocalStorage救済対象の有無は**要手動確認**。開発者中心の運用記述だけでは実端末内データの存在を
 判定できない。migrationを自動作成・実行しない。不要と確認できたものを#481で削除する。
 
 ## Offline検証
+
+以下は導入時のoffline手順と限界の記録である。現在の検証結果は
+[旧ingress閉鎖記録](server-agent-legacy-ingress-closure.md)を正とする。
 
 root test/build、architecture/workspace、Python infra契約、Terraform fmt/validate/mock test、Lambda package、
 Agent Smoke/Fullをcandidate完成時に実行する。format/lintのnpm scriptは存在しない。

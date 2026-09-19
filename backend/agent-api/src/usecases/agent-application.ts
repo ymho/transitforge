@@ -1,4 +1,5 @@
 import {
+  RequestError,
   type JsonObject,
   validatedMessages,
   validatedModelCallId,
@@ -17,7 +18,7 @@ export type {
 } from "../ports/agent-operation.js";
 
 export interface AgentApplicationDependencies {
-  defaultOperation: AgentOperation;
+  defaultOperation?: AgentOperation;
   operations?: ReadonlyMap<string, AgentOperation>;
   now?: () => number;
   log?: (event: string, fields: Record<string, unknown>) => void;
@@ -40,6 +41,7 @@ export class AgentApplication {
     this.log("agent_request_started", { requestId, operation: operationName });
     const registeredOperation = this.dependencies.operations?.get(operationName);
     const operation = registeredOperation ?? this.dependencies.defaultOperation;
+    if (!operation) throw new RequestError(410, "旧Agent会話経路は終了しました。");
     const operationRequest = registeredOperation ? request : {
       ...request,
       messages: validatedMessages(request),

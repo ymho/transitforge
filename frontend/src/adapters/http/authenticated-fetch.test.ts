@@ -33,9 +33,22 @@ describe("personal API authenticated fetch", () => {
     expect(f.auth.getAccessToken).toHaveBeenCalledTimes(2);
     request.dispose();
   });
-  it("never sends requests without login or to Agent/external/query destinations", async () => {
+  it("carries a verified-user token separately from OAC Authorization for remaining Agent operations", async () => {
+    const f = session(), network = vi.fn<typeof fetch>().mockImplementation(async () => json({ ok: true }));
+    const request = createAuthenticatedFetch(f.auth, origin, network);
+    await request("/api/agent", { ...post, headers: { "X-Amz-Content-Sha256": "body-digest" } });
+    const sent = network.mock.calls[0]![0] as Request;
+    expect(sent.headers.get("x-raiquora-access-token")).toBe("Bearer access-A");
+    expect(sent.headers.has("authorization")).toBe(false);
+    expect(sent.headers.get("x-amz-content-sha256")).toBe("body-digest");
+    await expect(request("/api/agent", { ...post, headers: { "x-raiquora-access-token": "forged" } })).rejects.toThrow("Invalid");
+    f.change();
+    await expect(request("/api/agent", post)).rejects.toMatchObject({ code: "unauthenticated" });
+    expect(network).toHaveBeenCalledOnce(); request.dispose();
+  });
+  it("never sends requests without login or to streaming/external/query destinations", async () => {
     const f = session(), network = vi.fn<typeof fetch>(), request = createAuthenticatedFetch(f.auth, origin, network);
-    for (const url of ["/api/agent", "https://evil.test/api/trips/v1", `${path}?token=secret`, `${path}#secret`, "/api/trips/unknown"]) {
+    for (const url of ["/api/agent-stream", "https://evil.test/api/trips/v1", `${path}?token=secret`, `${path}#secret`, "/api/trips/unknown"]) {
       await expect(request(url, post)).rejects.toThrow("Unsupported");
     }
     await expect(request(path, { ...post, headers: { authorization: "Bearer caller-token" } })).rejects.toThrow("Invalid");

@@ -1,7 +1,7 @@
 import type { AuthSession } from "../../usecases/auth/auth-session";
 import { ApiAuthenticationError } from "../../usecases/auth/api-authentication-error";
 
-const personalPaths = new Set(["/api/trips/v1", "/api/trips/sharing/v1", "/api/trips/notifications/v1", "/api/trips/in-trip/v1"]);
+const personalPaths = new Set(["/api/agent", "/api/trips/v1", "/api/trips/sharing/v1", "/api/trips/notifications/v1", "/api/trips/in-trip/v1"]);
 export type PersonalApiFetch = typeof fetch & {
   sessionVersion(): number;
   subscribeSessionChange(listener: () => void): () => void;
@@ -13,7 +13,7 @@ export function subscribeRequestSession(request: typeof fetch, listener: () => v
   return (request as Partial<PersonalApiFetch>).subscribeSessionChange?.(listener) ?? (() => {});
 }
 
-/** One explicit standard-Bearer boundary. Never wraps Agent transport or arbitrary external URLs. */
+/** Explicit token boundary for JSON APIs. OAC Agent operations use a dedicated token header. Never wraps streaming or arbitrary external URLs. */
 export function createAuthenticatedFetch(auth: AuthSession, origin: string, request: typeof fetch = fetch): PersonalApiFetch & { dispose(): void } {
   let generation = 0;
   const active = new Set<AbortController>(), listeners = new Set<() => void>();
@@ -29,14 +29,14 @@ export function createAuthenticatedFetch(auth: AuthSession, origin: string, requ
       throw new Error("Unsupported personal API destination");
     }
     const base = input instanceof Request ? new Request(input, init) : new Request(url, init);
-    if (base.method !== "POST" || base.headers.has("authorization")) throw new Error("Invalid personal API request");
+    if (base.method !== "POST" || (base.headers.has("authorization") || base.headers.has("x-raiquora-access-token"))) throw new Error("Invalid personal API request");
     const epoch = generation;
     const token = await auth.getAccessToken();
     if (epoch !== generation) throw new ApiAuthenticationError("session-changed");
     if (!token || auth.getState().status !== "signed-in") throw new ApiAuthenticationError("unauthenticated");
     if (epoch !== generation) throw new ApiAuthenticationError("session-changed");
     const controller = new AbortController(); active.add(controller);
-    const headers = new Headers(base.headers); headers.set("authorization", `Bearer ${token}`);
+    const headers = new Headers(base.headers); headers.set(url.pathname === "/api/agent" ? "x-raiquora-access-token" : "authorization", `Bearer ${token}`);
     try {
       const response = await request(new Request(base, {
         headers, signal: AbortSignal.any([base.signal, controller.signal]),
