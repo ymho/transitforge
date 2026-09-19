@@ -4,7 +4,7 @@ import { aws, gates, Report, requireCheck } from "./safety.mjs";
 import { contract, migrate, readSecret, secretNames } from "./secrets.mjs";
 import { discover } from "./discovery.mjs";
 import { cleanupUsers, createUsers, ledgerPath, login } from "./cognito.mjs";
-import { browserHarness, providerInvokedBetween, providerLive, providerRequest, stateReader, successfulTurn, verifiedPrincipal } from "./live.js";
+import { browserHarness, providerInvokedBetween, providerLive, providerRequest, stateReader, successfulTurn, verifiedPrincipal, waitForGatewayThrottleRecovery } from "./live.js";
 
 async function main() {
   process.umask(0o077);
@@ -46,6 +46,7 @@ async function main() {
     requireCheck(a.principal.subject !== b.principal.subject);
     await report.check("unauthenticated rejection", async () => { await harness.rejected(); await harness.rejected(undefined, config.directOrigin); });
     await report.check("invalid token rejection", async () => { await harness.rejected("invalid.token.value"); await harness.rejected("invalid.token.value", config.directOrigin); });
+    await waitForGatewayThrottleRecovery();
     state = stateReader(config.stateTable);
     const request = { conversationId: randomUUID(), turnId: randomUUID(), userRequest: "E2E cutover validation: こんにちは。短く挨拶だけ返してください。" };
     const response = await report.check("simple real Bedrock turn", async () => successfulTurn(await harness.turn(a.token, request)));
