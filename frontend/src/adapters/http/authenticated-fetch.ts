@@ -1,7 +1,7 @@
 import type { AuthSession } from "../../usecases/auth/auth-session";
 import { ApiAuthenticationError } from "../../usecases/auth/api-authentication-error";
 
-const personalPaths = new Set(["/api/agent", "/api/trips/v1", "/api/trips/sharing/v1", "/api/trips/notifications/v1", "/api/trips/in-trip/v1"]);
+const personalPaths = new Set(["/api/agent", "/api/trips/v1", "/api/trips/sharing/v1", "/api/trips/notifications/v1", "/api/trips/in-trip/v1", "/api/conversations/v1", "/api/profile/v1"]);
 export type PersonalApiFetch = typeof fetch & {
   sessionVersion(): number;
   subscribeSessionChange(listener: () => void): () => void;
