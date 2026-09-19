@@ -107,6 +107,7 @@ import { MapboxThreeTrainLayer } from "../presentation/train-viewer/rendering/ma
 import { RuntimeMetrics } from "../observability/runtime-metrics";
 import { configureTravelProfile } from "../presentation/concierge/travel-profile-panel";
 import { HttpServerProfileClient } from "../adapters/http/server-profile-client";
+import { ProfileUiController } from "../usecases/personal-state/profile-ui-controller";
 import { HttpServerConversationClient } from "../adapters/http/server-conversation-client";
 import { ConversationUiController } from "../usecases/personal-state/conversation-ui-controller";
 import { configureConversationHistoryPanel } from "../presentation/concierge/conversation-history-panel";
@@ -125,6 +126,7 @@ import { configureTripWorkspace } from "../presentation/trip-plan/trip-workspace
 import { tripPlanFromTravelPlan } from "@raiquora/trip/trip-plan";
 import { loadTripPlan } from "../usecases/trip-plan/trip-plan-repository";
 import { BrowserContextWorkspaceRepository } from "../adapters/browser/context-workspace-repository";
+import type { ConversationSession } from "../domain/conversation-session";
 import { createContextWorkspaceController } from "../usecases/context-workspace/context-workspace-controller";
 import { createMobileContextNavigation } from "../presentation/concierge/mobile-context-navigation";
 import {
@@ -241,9 +243,22 @@ let handleAiGuidePrompt: AiGuidePromptHandler = (...args) =>
 // Consultation transport remains separately gated; Conversation persistence is always server-owned.
 const serverAgentEnabled = import.meta.env.VITE_SERVER_AGENT_ENABLED === "true";
 const consultationTransportMode = consultationTransport(serverAgentEnabled);
-const conversationUi = new ConversationUiController(new HttpServerConversationClient());
-let activeConversationSession = (await conversationUi.hydrate()) ?? await conversationUi.create();
-await conversationUi.loadHistory(activeConversationSession.id);
+const canUsePersonalState = () => currentAuthentication().getState().status === "signed-in";
+const conversationUi = new ConversationUiController(new HttpServerConversationClient(), canUsePersonalState);
+const profileUi = new ProfileUiController(new HttpServerProfileClient(), canUsePersonalState);
+const unsignedConversation: ConversationSession = {
+  id: "ui-unauthenticated", title: "新しい会話", scope: "general", summary: "", resolvedTopics: [], pendingTopics: [],
+  createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+};
+let activeConversationSession = unsignedConversation;
+const isSignedIn = canUsePersonalState;
+if (isSignedIn()) {
+  try {
+    activeConversationSession = (await conversationUi.hydrate()) ?? await conversationUi.create();
+    await conversationUi.loadHistory(activeConversationSession.id);
+    await profileUi.hydrate();
+  } catch { conversationUi.clear(); profileUi.clear(); }
+}
 let aiGuideController: ReturnType<typeof configureAiGuidePanel>;
 let verifiedPlaceLayer: VerifiedPlaceLayerController | undefined;
 let mapPlaceExplorerController: MapPlaceExplorerController | undefined;
@@ -392,7 +407,6 @@ closeContextWorkspace.addEventListener("click", () => {
 contextWorkspaceTabs.hidden = false;
 conversationHistoryToggle.addEventListener("click", scheduleContextMapResize);
 closeConversationHistory.addEventListener("click", scheduleContextMapResize);
-railNewConversation.addEventListener("click", () => newConversation.click());
 railConversationHistory.addEventListener("click", () => conversationHistoryToggle.click());
 railRealtimeMap.addEventListener("click", () => selectSidebarMapMode("realtime"));
 sidebarRealtimeMap.addEventListener("click", () => selectSidebarMapMode("realtime"));
@@ -423,7 +437,8 @@ aiGuideController = configureAiGuidePanel(
     onFirstPrompt: (prompt) => {
       if (activeConversationSession.title !== "新しい会話") return;
       void conversationUi.rename(activeConversationSession.id, prompt.slice(0, 32))
-        .then((renamed) => { activeConversationSession = renamed; });
+        .then((renamed) => { activeConversationSession = renamed; })
+        .catch(() => undefined);
     },
     onTravelPlan: (plan) => {
       if (tripWorkspaceController.blocksLegacy()) return; // Also blocked while loading/unavailable.
@@ -475,7 +490,7 @@ aiGuideController = configureAiGuidePanel(
         summary: proposal.summary, resolvedTopics: activeConversationSession.resolvedTopics,
         pendingTopics: activeConversationSession.pendingTopics,
         ...(activeConversationSession.tripId ? { tripId: activeConversationSession.tripId } : {}),
-      }).then((saved) => { activeConversationSession = saved; });
+      }).then((saved) => { activeConversationSession = saved; }).catch(() => undefined);
       const currentPlan = loadTripPlan(localStorage, activeConversationSession.id);
       if (currentPlan) {
         contextWorkspaceController.show("trip-plan", {
@@ -517,12 +532,33 @@ const activateConversation = async (sessionId: string) => {
   await conversationUi.loadHistory(session.id);
   if (conversationUi.active()?.id === session.id) aiGuideController.switchSession(session.id);
 };
+const createAndActivateConversation = async () => {
+  if (!isSignedIn()) throw new Error("Authentication required");
+  const session = await conversationUi.create();
+  await activateConversation(session.id);
+  return session;
+};
+const startNewConsultation = async (prompt: string) => {
+  await createAndActivateConversation();
+  aiGuideController.ask(prompt);
+};
+railNewConversation.addEventListener("click", () => {
+  void createAndActivateConversation().catch(() => aiGuideController.notify("相談を始めるにはログインしてください。"));
+});
 let initialAuthenticationNotification = true;
+let authenticationGeneration = 0;
 currentAuthentication().subscribe(() => {
   if (initialAuthenticationNotification) { initialAuthenticationNotification = false; return; }
-  conversationUi.clear();
-  void conversationUi.hydrate().then(async (session) => {
+  const generation = ++authenticationGeneration;
+  conversationUi.clear(); profileUi.clear(); activeConversationSession = unsignedConversation;
+  aiGuideController.switchSession(unsignedConversation.id);
+  tripWorkspaceController.activateSession(unsignedConversation.id);
+  contextWorkspaceController.activateSession(unsignedConversation.id);
+  if (!isSignedIn()) return;
+  void Promise.all([conversationUi.hydrate(), profileUi.hydrate()]).then(async ([session]) => {
+    if (generation !== authenticationGeneration) return;
     const selected = session ?? await conversationUi.create();
+    if (generation !== authenticationGeneration) return;
     await activateConversation(selected.id);
   }).catch(() => undefined);
 });
@@ -574,7 +610,7 @@ configureTripSharing({ root: document.body, button: sharingButton, client: new H
   } });
 aiGuideController.open();
 applyContextWorkspaceState();
-configureTravelProfile(document, new HttpServerProfileClient(), () => aiGuideController.open());
+configureTravelProfile(document, profileUi, () => aiGuideController.open());
 if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip-workspace-preview") === "1") {
   if (!token) mapTools.hidden = true;
   loadingScreen.complete();
@@ -625,9 +661,12 @@ primaryShell = configureAiFirstShell(document, app, {
       preview: !!homePreview || (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip-workspace-preview") === "1"),
     };
   },
-  profile: () => undefined, subscribe: tripWorkspaceController.subscribe,
+  profile: () => profileUi.current()?.profile, subscribe: (listener) => {
+    const left = tripWorkspaceController.subscribe(listener), right = profileUi.subscribe(listener);
+    return () => { left(); right(); };
+  },
   retry: async () => { await tripWorkspaceController.source()?.retry?.(); },
-  newConsultation: (prompt) => { newConversation.click(); aiGuideController.ask(prompt); },
+  newConsultation: (prompt) => { void startNewConsultation(prompt).catch(() => aiGuideController.notify("相談を始めるにはログインしてください。")); },
   openChat: () => { aiGuideController.open(); if (tripWorkspaceController.current()) tripWorkspace.show("chat"); delete app.dataset.mapFocusMode; },
   openTrip: (id) => { if (tripWorkspaceController.current()?.id === id) tripWorkspace.show("trip"); },
   consultTrip: (id) => { if (tripWorkspaceController.current()?.id !== id) throw new Error("Trip reference mismatch"); tripWorkspace.show("chat"); },
@@ -643,10 +682,13 @@ configureConsultationScreen(aiGuidePanel, aiGuideMessages, aiGuideForm, aiGuideI
   read: () => ({ sessionId: tripWorkspaceController.sessionId(), trip: tripWorkspaceController.current(),
     unavailable: tripWorkspaceController.blocksLegacy() && !tripWorkspaceController.current(),
     viewer: tripWorkspaceController.source()?.getRole?.() === "viewer" }),
-  profile: () => undefined, subscribe: tripWorkspaceController.subscribe,
+  profile: () => profileUi.current()?.profile, subscribe: (listener) => {
+    const left = tripWorkspaceController.subscribe(listener), right = profileUi.subscribe(listener);
+    return () => { left(); right(); };
+  },
   preview: (proposal) => { tripWorkspaceController.preview(proposal); tripWorkspace.show("trip"); },
   showTrip: () => { const trip = tripWorkspaceController.current(); if (trip) { window.history.pushState({ tripId: trip.id }, "", "#trip"); window.dispatchEvent(new Event("popstate")); } },
-  newConversation: () => { newConversation.click(); aiGuideController.open(); },
+  newConversation: () => { void createAndActivateConversation().then(() => aiGuideController.open()).catch(() => aiGuideController.notify("相談を始めるにはログインしてください。")); },
 });
 if (import.meta.env.DEV && homePreview === "data") {
   void import("../dev/home-preview").then(({ homePreviewSource }) => tripWorkspaceController.attach(activeConversationSession.id, homePreviewSource()));

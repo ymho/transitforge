@@ -55,17 +55,17 @@ export function configureConversationHistoryPanel(
       () => {
         repository.selectLocal(item.id);
         if (!isPersistent()) dialog.close();
-        void onSessionSelected(item.id);
+        void Promise.resolve(onSessionSelected(item.id)).catch(() => render());
       },
       () => {
         if (!confirmDelete(item.title)) return;
         void repository.delete(item.id).then((next) => {
           if (item.active && next) {
             if (!isPersistent()) dialog.close();
-            void onSessionSelected(next.id);
+            return Promise.resolve(onSessionSelected(next.id));
           }
           render();
-        });
+        }).catch(() => { empty.hidden = false; empty.textContent = "会話を削除できませんでした。"; });
       },
     )));
     empty.hidden = items.length !== 0;
@@ -77,7 +77,8 @@ export function configureConversationHistoryPanel(
     void repository.create().then((session) => {
       if (!isPersistent()) dialog.close();
       return onSessionSelected(session.id);
-    }).finally(() => { newConversation.disabled = false; });
+    }).catch(() => { empty.hidden = false; empty.textContent = "新しい会話を作成できませんでした。"; })
+      .finally(() => { newConversation.disabled = false; });
   });
   toggle.addEventListener("click", () => {
     render();

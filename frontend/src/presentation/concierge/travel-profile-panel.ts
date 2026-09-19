@@ -1,5 +1,5 @@
 import { travelPreferenceLabels, travelStyleSummary, type UserProfile } from "@raiquora/trip/travel-profile";
-import type { ServerProfileClient } from "../../usecases/personal-state/server-profile-client";
+import type { ProfileUiController } from "../../usecases/personal-state/profile-ui-controller";
 
 type Draft = Omit<UserProfile, "version" | "updatedAt">;
 const styles: Array<[keyof UserProfile["travelStyle"], string]> = [
@@ -11,7 +11,7 @@ const styles: Array<[keyof UserProfile["travelStyle"], string]> = [
 const companions = { solo: "一人", partner: "パートナー", friends: "友人", children: "子ども", family: "家族" };
 
 /** Profile is account-scoped server state. It deliberately has no browser-storage fallback. */
-export function configureTravelProfile(document: Document, client: ServerProfileClient, onProfileCompleted: () => void = () => undefined): void {
+export function configureTravelProfile(document: Document, client: ProfileUiController, onProfileCompleted: () => void = () => undefined): void {
   const dialog = document.querySelector<HTMLElement>("#travel-profile-page");
   const toggle = document.querySelector<HTMLButtonElement>("#travel-profile-toggle");
   if (!dialog || !toggle) return;
@@ -84,10 +84,16 @@ export function configureTravelProfile(document: Document, client: ServerProfile
     render(); dialog.hidden = false;
     const app = document.querySelector<HTMLElement>("#app"); if (app) app.dataset.profileEditing = "true";
     dialog.querySelector<HTMLButtonElement>("[data-close]")?.focus();
-    void client.get().then((saved) => {
+    void client.hydrate().then((saved) => {
       if (dialog.hidden) return;
       read = saved ?? {}; draft = saved ? profileDraft(saved.profile) : blankDraft(); editing = true; render();
     }).catch(() => { if (!dialog.hidden) { read = {}; render(); message("プロフィールを取得できませんでした。時間をおいてもう一度お試しください。"); } });
+  });
+  client.subscribe(() => {
+    if (dialog.hidden) return;
+    const saved = client.current();
+    read = saved ?? {}; draft = saved ? profileDraft(saved.profile) : blankDraft(); editing = true; dirty = false;
+    render();
   });
   // Registration is optional. Never open a blocking onboarding dialog on startup.
 }
