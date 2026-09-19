@@ -25,7 +25,7 @@ export function configureTravelProfile(document: Document, client: ProfileUiCont
     dialog.querySelector<HTMLElement>("[data-discard]")!.hidden = false;
   };
   const render = () => {
-    dialog.innerHTML = `<section class="profile-editor"><header><button type="button" data-close aria-label="マイへ戻る">←</button><div><h1>旅行プロフィール</h1><p>普段の好みを、次の旅のヒントに。今回の旅の条件を優先します。</p></div></header>
+    dialog.innerHTML = `<section class="profile-editor"><header><button type="button" data-close aria-label="アカウントへ戻る">←</button><div><h1>旅行プロフィール</h1><p>普段の好みを、次の旅のヒントに。今回の旅の条件を優先します。</p></div></header>
       <p role="status" aria-live="polite" data-profile-message></p>
       ${editing ? editor(draft) : `<p>${read.loading ? "プロフィールを読み込んでいます。" : read.profile ? esc(travelStyleSummary(read.profile)) : "まだ登録していません。設定せずに相談できます。"}</p>
       <button type="button" data-edit>旅行プロフィールを編集</button><button type="button" data-start>相談する</button>`}

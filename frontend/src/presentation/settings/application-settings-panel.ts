@@ -2,7 +2,6 @@ export interface ApplicationSettingsPanelDependencies {
   travelProfileToggle: HTMLButtonElement;
   transferPace: HTMLSelectElement;
   rankingPreference: HTMLSelectElement;
-  conversationHistoryDialog: HTMLDialogElement;
   accommodationProviderAttribution: AccommodationProviderAttribution | null;
 }
 
@@ -49,10 +48,6 @@ export function configureApplicationSettingsPanel(
     canonical.dispatchEvent(new Event("change", { bubbles: true }));
   };
   const open = () => {
-    if (dependencies.conversationHistoryDialog.open &&
-        dependencies.conversationHistoryDialog.matches(":modal")) {
-      dependencies.conversationHistoryDialog.close();
-    }
     synchronizeJourneyPreferences();
     selectTab("journey");
     dialog.showModal();

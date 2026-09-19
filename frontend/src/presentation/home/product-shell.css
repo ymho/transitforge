@@ -140,8 +140,6 @@
 #app[data-primary-view="map"] .hud { top: 9rem; }
 .product-map-back { position: absolute; z-index: 20; top: 5.7rem; left: 1rem; background: white; }
 #app[data-primary-view] dialog { backdrop-filter: none; background: white; }
-#app[data-primary-view] .conversation-history-dialog { position: fixed; inset: 0; width: min(30rem, calc(100vw - 2rem)); max-height: 85dvh; height: auto; margin: auto; border: 1px solid var(--product-line); border-radius: 1rem; }
-#app[data-primary-view] .conversation-history-dialog > section { max-height: 80dvh; }
 /* Below this width the centered desktop navigation and account action cannot coexist without crowding. */
 @media (max-width: 62rem) {
   .product-nav { position: fixed; z-index: 20; inset: auto .625rem max(.625rem, env(safe-area-inset-bottom)); padding: .3rem; background: #fffffffa; border: 1px solid var(--product-line); border-radius: 1.125rem; box-shadow: 0 8px 28px #12273f1a; gap: 0; transform: none; }

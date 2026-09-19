@@ -54,7 +54,7 @@
     grid-template-columns: 15.5rem minmax(16rem, 1fr) minmax(20rem, 1.1fr) minmax(15rem, 1fr);
     grid-template-areas: "history trip conversation context";
   }
-  #app[data-trip-workspace="v2"]:not([data-map-focus-mode="true"]):not(:has(.conversation-history-dialog[open])) {
+  #app[data-trip-workspace="v2"]:not([data-map-focus-mode="true"]) {
     grid-template-columns: 3.75rem minmax(16rem, 1fr) minmax(20rem, 1.1fr) minmax(15rem, 1fr);
     grid-template-areas: "rail trip conversation context";
   }

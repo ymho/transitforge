@@ -109,7 +109,6 @@ import { HttpServerProfileClient } from "../adapters/http/server-profile-client"
 import { ProfileUiController } from "../usecases/personal-state/profile-ui-controller";
 import { HttpServerConversationClient } from "../adapters/http/server-conversation-client";
 import { ConversationUiController } from "../usecases/personal-state/conversation-ui-controller";
-import { configureConversationHistoryPanel } from "../presentation/concierge/conversation-history-panel";
 import { configureApplicationSettingsPanel } from "../presentation/settings/application-settings-panel";
 import { createTripWorkspaceController } from "../usecases/trip-plan/trip-workspace-controller";
 import { createReferencedTripSource } from "../usecases/trip-plan/server-trip-workspace-source";
@@ -185,18 +184,11 @@ const {
   aiGuideInput,
   aiGuideSubmit,
   railNewConversation,
-  railConversationHistory,
   railRealtimeMap,
   railDateTimeMode,
   sidebarRealtimeMap,
   sidebarDateTimeMode,
   travelProfileToggle,
-  newConversation,
-  conversationHistoryToggle,
-  conversationHistoryDialog,
-  closeConversationHistory,
-  conversationHistoryList,
-  conversationHistoryEmpty,
   aiGuideSuggestions,
   aiGuideContextChoices,
   journeySettingsToggle,
@@ -304,10 +296,7 @@ const focusMapWorkspace = () => {
   startMap();
   contextWorkspaceController.show("map");
   app.dataset.mapFocusMode = "true";
-  if (mobileChatShell.matches) {
-    if (conversationHistoryDialog.open) conversationHistoryDialog.close();
-    mobileContextNavigation.open("map");
-  }
+  if (mobileChatShell.matches) mobileContextNavigation.open("map");
   scheduleContextMapResize();
 };
 const selectSidebarMapMode = (mode: SidebarMapMode) => {
@@ -346,9 +335,6 @@ closeContextWorkspace.addEventListener("click", () => {
   mobileContextNavigation.close();
 });
 contextWorkspaceTabs.hidden = false;
-conversationHistoryToggle.addEventListener("click", scheduleContextMapResize);
-closeConversationHistory.addEventListener("click", scheduleContextMapResize);
-railConversationHistory.addEventListener("click", () => conversationHistoryToggle.click());
 railRealtimeMap.addEventListener("click", () => selectSidebarMapMode("realtime"));
 sidebarRealtimeMap.addEventListener("click", () => selectSidebarMapMode("realtime"));
 railDateTimeMode.addEventListener("click", () => selectSidebarMapMode("date-time"));
@@ -479,21 +465,10 @@ currentAuthentication().subscribe(() => {
     if (pending?.trim() && generation === authenticationGeneration) aiGuideController.ask(pending.trim());
   }).catch(() => undefined);
 });
-configureConversationHistoryPanel({
-  newConversation,
-  toggle: conversationHistoryToggle,
-  dialog: conversationHistoryDialog,
-  close: closeConversationHistory,
-  list: conversationHistoryList,
-  empty: conversationHistoryEmpty,
-  repository: conversationUi,
-  onSessionSelected: activateConversation,
-});
 configureApplicationSettingsPanel(document, {
   travelProfileToggle,
   transferPace: journeyTransferPace,
   rankingPreference: journeyRankingPreference,
-  conversationHistoryDialog,
   accommodationProviderAttribution: accommodationProviderAttributionFromEnvironment(import.meta.env),
 });
 configureNotificationCenter({ root: document.body,
@@ -507,7 +482,7 @@ configureNotificationCenter({ root: document.body,
     const source = tripWorkspaceController.source(); await source?.retry?.();
     if (tripWorkspaceController.current()?.id !== tripId) throw new Error("Trip unavailable");
     if (itemId && tripWorkspaceController.current()!.items.some((item) => item.id === itemId)) tripWorkspaceController.focus(itemId);
-    returnToConversation(); if (mobileChatShell.matches && conversationHistoryDialog.open) conversationHistoryDialog.close();
+    returnToConversation();
     tripWorkspace.show("trip");
   } });
 const sharingButton = document.createElement("button"); sharingButton.type = "button"; sharingButton.textContent = "旅程の共有";
@@ -602,7 +577,6 @@ primaryShell = configureAiFirstShell(document, app, {
   archiveTrip: async (id) => { await serverTripClient.archive(id); await serverTripList.refresh(); },
   openProfile: () => travelProfileToggle.click(),
   openMap: (mode) => { startMap(); selectSidebarMapMode(mode === "simulation" ? "date-time" : "realtime"); },
-  openHistory: () => conversationHistoryToggle.click(),
   openSettings: () => document.getElementById("sidebar-account-settings")?.click(),
   openNotifications: () => document.getElementById("sidebar-notifications")?.click(),
   now: () => new Date(),
