@@ -26,6 +26,7 @@ it("uses the explicit bound Trip and preserves message/composer nodes and listen
 });
 it("new consultation never infers a Trip from title or Home data", () => {
   const f = setup(false); expect(f.panel.textContent).toContain("新しい旅を相談中"); expect(f.panel.textContent).toContain("まだ旅程に紐付いていません");
+  expect(f.panel.textContent).toContain("会話で追加できます"); expect(f.panel.querySelector(".consultation-add-condition")).toBeNull();
 });
 it("direct origin edit produces a revision-bound Proposal, never mutates Trip or copies provider identity", () => {
   const f = setup(); const before = JSON.stringify(f.trip);

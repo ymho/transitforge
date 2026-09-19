@@ -48,8 +48,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   const close = node("button", "consultation-conditions-close", "閉じる"); close.type = "button";
   const rows = node("div", "consultation-condition-rows"), help = node("p", "consultation-help");
   const status = node("p", "consultation-edit-status"); status.setAttribute("role", "status");
-  aside.append(close, node("h2", "", "今回の条件"), help, rows, status,
-    node("p", "consultation-coverage", "収録時刻表と取得できた情報をもとに案内します。未確認の移動や予約を、成立済みとは扱いません。"));
+  aside.append(close, node("h2", "", "今回の条件"), help, rows, status);
   const backdrop = node("button", "consultation-backdrop"); backdrop.type = "button"; backdrop.setAttribute("aria-label", "条件を閉じる"); backdrop.hidden = true;
   const sheet = (open: boolean) => {
     aside.dataset.open = String(open); backdrop.hidden = !open; conditions.setAttribute("aria-expanded", String(open));
@@ -121,9 +120,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     } else {
       const origin = ports.profile()?.home.station;
       if (origin) row("普段の出発駅", origin);
-      row("今回の条件", "会話で相談できます");
-      const add = node("button", "consultation-add-condition", "条件を入力する"); add.type = "button";
-      add.addEventListener("click", () => { sheet(false); input.focus(); }); rows.append(add);
+      row("今回の条件", "会話で追加できます");
     }
   };
   ports.subscribe(render); render();

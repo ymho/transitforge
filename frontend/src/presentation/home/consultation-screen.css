@@ -31,14 +31,15 @@
 .consultation-composer button { background: #102f4b; color: white; border: 0; min-width: 4rem; }
 .consultation-conditions { padding: 1.25rem; overflow-y: auto; align-self: start; max-height: 100%; box-sizing: border-box; }
 .consultation-conditions h2 { font: 700 1.2rem/1.5 "Yu Mincho", serif; margin: 0 0 .75rem; }
-.consultation-help, .consultation-edit-status, .consultation-coverage { font-size: .8125rem; line-height: 1.8; color: #637487; }
+.consultation-help, .consultation-edit-status { font-size: .8125rem; line-height: 1.8; color: #637487; }
 .consultation-condition-row { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr) auto auto; gap: .6rem; align-items: center; padding: .8rem 0; border-bottom: 1px solid #e6ebee; font-size: .8125rem; }
 .consultation-condition-row span { color: #758391; }
 .consultation-condition-row strong { overflow-wrap: anywhere; }
 .consultation-condition-source { color: #6d8293; font-size: .68rem; white-space: nowrap; }
+.consultation-condition-row button { min-height: auto; padding: .2rem 0; border: 0; border-radius: 0; color: #35617f; background: transparent; font-size: .75rem; text-decoration: underline; text-underline-offset: .18em; }
+.consultation-condition-row button:hover:not(:disabled) { color: #173d60; background: transparent; }
 .consultation-condition-editor { display: flex; flex-wrap: wrap; gap: .4rem; padding: .75rem 0; }
 .consultation-condition-editor input { box-sizing: border-box; width: 100%; min-height: 44px; padding: .6rem; border: 1px solid #cad8e2; border-radius: .6rem; font: inherit; }
-.consultation-coverage { padding: .875rem; border-radius: .875rem; background: #f1f6fa; }
 .consultation-conditions-close, .consultation-backdrop { display: none; }
 #app[data-primary-view="chat"] .trip-workspace-navigation { display: none; }
 #app[data-primary-view="chat"][data-trip-workspace-view="trip"] .consultation-page { display: none; }
