@@ -5,8 +5,8 @@
 .consultation-conversation { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; overflow: hidden; }
 .consultation-heading { grid-column: 1 / -1; display: flex; gap: .75rem; align-items: center; padding: .35rem 0 .8rem; border-bottom: 1px solid #dfe4e8; }
 .consultation-heading-copy { margin-right: auto; }
-.consultation-heading .home-eyebrow { margin: 0 0 .15rem; color: #4d718d; }
-.consultation-heading h1 { margin: 0; font: 700 2rem/1.3 "Yu Mincho", serif; letter-spacing: .03em; }
+.consultation-heading .home-eyebrow { margin: .35rem 0 0; color: #4d718d; }
+.consultation-heading h1 { margin: .2rem 0 .35rem; font: 700 2rem/1.3 "Yu Mincho", serif; letter-spacing: .03em; }
 .consultation-page button { min-height: 44px; padding: .5rem .7rem; border: 1px solid #d9e2e9; border-radius: .75rem; background: #fff; color: #294963; font: 600 .8125rem/1.4 sans-serif; cursor: pointer; }
 .consultation-page button:disabled { opacity: .5; cursor: default; }
 .consultation-page :focus-visible { outline: 3px solid #347fba; outline-offset: 2px; }
