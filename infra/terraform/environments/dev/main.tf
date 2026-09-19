@@ -159,7 +159,7 @@ resource "aws_cloudfront_distribution" "website" {
     }
   }
   dynamic "ordered_cache_behavior" {
-    for_each = var.agent_stream_enabled && !var.legacy_cloudfront_redirect_enabled ? toset(["/api/conversations/*", "/api/profile/*"]) : []
+    for_each = var.agent_stream_enabled && !var.legacy_cloudfront_redirect_enabled ? toset(["/api/conversations/*", "/api/profile/*", "/api/trips/*"]) : []
     content {
       path_pattern             = ordered_cache_behavior.value
       target_origin_id         = local.agent_stream_name

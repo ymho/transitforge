@@ -1,0 +1,6 @@
+{
+  "source": "backend/agent-api/dist/trip-api",
+  "handler": "index.handler",
+  "runtime": "nodejs22.x",
+  "files": ["index.cjs"]
+}

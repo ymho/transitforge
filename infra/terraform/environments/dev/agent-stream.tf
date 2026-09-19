@@ -22,6 +22,7 @@ locals {
   agent_stream_path      = "/api/${local.agent_stream_path_part}"
   agent_stream_package   = jsondecode(file("${path.module}/../../../packaging/agent-stream.json"))
   personal_state_package = jsondecode(file("${path.module}/../../../packaging/personal-state.json"))
+  trip_api_package       = jsondecode(file("${path.module}/../../../packaging/trip-api.json"))
 }
 data "archive_file" "agent_stream" {
   for_each    = local.agent_stream_instances
@@ -34,6 +35,12 @@ data "archive_file" "personal_state" {
   type        = "zip"
   source_dir  = "${path.module}/../../../../${local.personal_state_package.source}"
   output_path = "${path.module}/.terraform/personal-state.zip"
+}
+data "archive_file" "trip_api" {
+  for_each    = local.agent_stream_instances
+  type        = "zip"
+  source_dir  = "${path.module}/../../../../${local.trip_api_package.source}"
+  output_path = "${path.module}/.terraform/trip-api.zip"
 }
 resource "aws_iam_role" "personal_state" {
   for_each           = local.agent_stream_instances
@@ -71,6 +78,44 @@ resource "aws_lambda_function" "personal_state" {
     COGNITO_CLIENT_ID          = aws_cognito_user_pool_client.spa.id
   } }
   depends_on = [aws_iam_role_policy.personal_state]
+}
+# Trip writer has its own minimal runtime role. Do not add Trip permissions to personal-state.
+resource "aws_iam_role" "trip_api" {
+  for_each           = local.agent_stream_instances
+  name               = "${local.agent_stream_name}-trip-api"
+  assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Principal = { Service = "lambda.amazonaws.com" }, Action = "sts:AssumeRole" }] })
+}
+resource "aws_cloudwatch_log_group" "trip_api" {
+  for_each          = local.agent_stream_instances
+  name              = "/aws/lambda/${local.agent_stream_name}-trip-api"
+  retention_in_days = 30
+}
+resource "aws_iam_role_policy" "trip_api" {
+  for_each = local.agent_stream_instances
+  role     = aws_iam_role.trip_api[each.key].id
+  policy = jsonencode({ Version = "2012-10-17", Statement = [
+    { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "${aws_cloudwatch_log_group.trip_api[each.key].arn}:*" },
+    { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:ConditionCheckItem", "dynamodb:TransactWriteItems"], Resource = [aws_dynamodb_table.trips.arn, "${aws_dynamodb_table.trips.arn}/index/trip-sharing"] }
+  ] })
+}
+resource "aws_lambda_function" "trip_api" {
+  for_each         = local.agent_stream_instances
+  function_name    = "${local.agent_stream_name}-trip-api"
+  role             = aws_iam_role.trip_api[each.key].arn
+  filename         = data.archive_file.trip_api[each.key].output_path
+  source_code_hash = data.archive_file.trip_api[each.key].output_base64sha256
+  runtime          = local.trip_api_package.runtime
+  handler          = local.trip_api_package.handler
+  architectures    = ["arm64"]
+  memory_size      = 256
+  timeout          = 15
+  environment { variables = {
+    TRIP_API_ENABLED     = "true"
+    TRIP_TABLE_NAME      = aws_dynamodb_table.trips.name
+    COGNITO_USER_POOL_ID = aws_cognito_user_pool.users.id
+    COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.spa.id
+  } }
+  depends_on = [aws_iam_role_policy.trip_api]
 }
 resource "aws_iam_role" "agent_stream" {
   for_each = local.agent_stream_instances
@@ -173,6 +218,18 @@ resource "aws_api_gateway_resource" "personal_state_profile_v1" {
   parent_id   = aws_api_gateway_resource.personal_state_profile[each.key].id
   path_part   = "v1"
 }
+resource "aws_api_gateway_resource" "trip_api" {
+  for_each    = local.agent_stream_instances
+  rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
+  parent_id   = aws_api_gateway_resource.agent_stream_api[each.key].id
+  path_part   = "trips"
+}
+resource "aws_api_gateway_resource" "trip_api_v1" {
+  for_each    = local.agent_stream_instances
+  rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
+  parent_id   = aws_api_gateway_resource.trip_api[each.key].id
+  path_part   = "v1"
+}
 resource "aws_api_gateway_authorizer" "agent_stream_cognito" {
   for_each        = local.agent_stream_instances
   name            = "existing-cognito"
@@ -208,6 +265,15 @@ resource "aws_api_gateway_method" "personal_profile_post" {
   authorizer_id        = aws_api_gateway_authorizer.agent_stream_cognito[each.key].id
   authorization_scopes = aws_cognito_resource_server.api.scope_identifiers
 }
+resource "aws_api_gateway_method" "trip_api_post" {
+  for_each             = local.agent_stream_instances
+  rest_api_id          = aws_api_gateway_rest_api.agent_stream[each.key].id
+  resource_id          = aws_api_gateway_resource.trip_api_v1[each.key].id
+  http_method          = "POST"
+  authorization        = "COGNITO_USER_POOLS"
+  authorizer_id        = aws_api_gateway_authorizer.agent_stream_cognito[each.key].id
+  authorization_scopes = aws_cognito_resource_server.api.scope_identifiers
+}
 resource "aws_api_gateway_integration" "agent_stream_route" {
   for_each                = local.agent_stream_instances
   rest_api_id             = aws_api_gateway_rest_api.agent_stream[each.key].id
@@ -237,6 +303,15 @@ resource "aws_api_gateway_integration" "personal_state_profile" {
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.personal_state[each.key].invoke_arn
 }
+resource "aws_api_gateway_integration" "trip_api" {
+  for_each                = local.agent_stream_instances
+  rest_api_id             = aws_api_gateway_rest_api.agent_stream[each.key].id
+  resource_id             = aws_api_gateway_resource.trip_api_v1[each.key].id
+  http_method             = aws_api_gateway_method.trip_api_post[each.key].http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.trip_api[each.key].invoke_arn
+}
 resource "aws_lambda_permission" "personal_state_conversations_gateway" {
   for_each      = local.agent_stream_instances
   action        = "lambda:InvokeFunction"
@@ -251,6 +326,13 @@ resource "aws_lambda_permission" "personal_state_profile_gateway" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.agent_stream[each.key].execution_arn}/${var.environment}/POST/api/profile/v1"
 }
+resource "aws_lambda_permission" "trip_api_gateway" {
+  for_each      = local.agent_stream_instances
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.trip_api[each.key].function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.agent_stream[each.key].execution_arn}/${var.environment}/POST/api/trips/v1"
+}
 resource "aws_lambda_permission" "agent_stream_gateway" {
   for_each      = local.agent_stream_instances
   action        = "lambda:InvokeFunction"
@@ -262,7 +344,7 @@ resource "aws_api_gateway_deployment" "agent_stream" {
   for_each    = local.agent_stream_instances
   rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
   triggers = { configuration = sha1(jsonencode([
-    aws_api_gateway_integration.agent_stream_route[each.key], aws_api_gateway_method.agent_stream_post[each.key], aws_api_gateway_authorizer.agent_stream_cognito[each.key], aws_api_gateway_integration.personal_state_conversations[each.key], aws_api_gateway_integration.personal_state_profile[each.key], aws_api_gateway_method.personal_state_post[each.key], aws_api_gateway_method.personal_profile_post[each.key]
+    aws_api_gateway_integration.agent_stream_route[each.key], aws_api_gateway_method.agent_stream_post[each.key], aws_api_gateway_authorizer.agent_stream_cognito[each.key], aws_api_gateway_integration.personal_state_conversations[each.key], aws_api_gateway_integration.personal_state_profile[each.key], aws_api_gateway_method.personal_state_post[each.key], aws_api_gateway_method.personal_profile_post[each.key], aws_api_gateway_integration.trip_api[each.key], aws_api_gateway_method.trip_api_post[each.key]
   ])) }
   lifecycle { create_before_destroy = true }
 }

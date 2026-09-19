@@ -2,14 +2,14 @@
 
 #451第一段階で[共通trusted principal / Cognito verifier](authentication-boundary.md)を追加した。
 検証済みissuer + subを既存`TripPrincipal.subject`へ写す。以下のProvider未導入記述は導入時の記録である。
-公開HTTPへの認証接続・Cognitoリソース・本番writerは引き続き未有効。
+公開HTTPへの認証接続とCognitoリソースは #451 で有効化し、本番writerは専用Trip API hostだけから利用する。
 
 #389 で replace を CAS mutation に置換し、receipt / revision / import 排他 / reload gate を統合した。
 最新契約は [Trip concurrency](trip-concurrency.md)。以下の非 CAS/read-only 制約は #388 時点の導入記録であり、
-公開認証と本番 writer が未有効という gate は #389 後も維持する。
+公開認証と本番 writer が未有効という gate は #389 後の #451 接続まで維持した導入記録である。
 
 親方針は #382/#415、正本は同じ `modules/trip/domain/trip.ts`。#388 は Repository/Application と
-明示 migration の基盤を実装する。**認証 Provider は未導入で、公開 CRUD と本番 writer は有効にしていない。**
+明示 migration の基盤を実装する。#451で既存Regional REST APIの`POST /api/trips/v1`をCognito Access Tokenの二重検証と専用Trip API Lambdaへ接続した。
 判断は [ADR 0053](../decisions/0053-gate-owner-scoped-trip-persistence.md)。#389 が CAS/冪等性を担当する。
 
 ## Before / After
@@ -34,10 +34,10 @@
   `create/replace` は `trip`、`get/archive` は `tripId`、`list` は optional `limit/afterTripId`、
   `attach` は `conversationId/tripId`、`detach/reference` は `conversationId`。他 field/version は拒否する。
   Browser に owner を指定する引数はない。将来の認証 session は transport が送る。
-- **CloudFront/API Gateway に Trip route を追加していない。** Lambda が直接 `/api/trips/*` を受けても、
-  application/verifier を持たない handler が 501 を返す。verifier が未認証を返す内部試験は 401。
+- CloudFront/API Gateway は `/api/trips/*` を専用Trip API Lambdaへ接続する。Gateway Cognito authorizerとBackend verifierが
+  `raiquora/user` Access Tokenを検証し、Lambdaが直接 `/api/trips/*` を受けても他pathは404で閉じる。
   owner B が owner A の ID を渡しても存在しない ID と同じ 404。入力 400、上限 413、既存 create 409、利用不可 501。
-- 公開時には認証 Adapter・認証失効/アカウント切替時の source 破棄と #389 の書込統合をレビューする。
+- 公開済みwriterでも認証失効/アカウント切替時の source 破棄と #389 の書込統合を維持する。
   JSON の型検証だけでユーザー/モデル由来の Evidence を信頼するものではない。
   現在の internal create/replace の呼出し側も、既存の候補採用・Evidence/保持許諾・Domain validation 境界を通す。
 
@@ -83,7 +83,7 @@ archive と attach 間の競合でも dangling link として同じ扱いにな�
 ## Migration
 
 実装入口は `migrateTripToServer`、Workspace 接続は `migrateTripWorkspace`。
-**現時点では認証/同意付き公開 import ボタンを設置しない。** injected authenticated transport による内部試験で検証する。
+**認証/同意付き公開 import ボタンはまだ設置しない。** public writer接続後も、injected authenticated transport による明示的な取込だけを許可する。
 
 1. 認証 account scope がなければ upload/marker/UUID 生成をしない。scope はローカル metadata の名前空間であって server 認可値ではない。
 2. `BrowserTripMigrationStore` が session の legacy record を独立 parse。不正な別 record を理由に全件破棄しない。
@@ -105,7 +105,7 @@ success marker は `tripId/verified` だけ。server 正本ではない。旧 ra
 別会話へ繰り返し自動コピーしない。store がある場合の未対応単一原本は自動 attach せず明示 recovery 対象とする。
 
 本実装は #389 の idempotency/並行 migration 保証ではない。複数 tab の attempt 競合・認証切替・
-旧版 client の後続書込み・複数端末の重複取込を含む本番 rollout は未有効。安易な再送 create/replace や offline merge はしない。
+旧版 client の後続書込み・複数端末の重複取込を含む**取込 rollout**は未有効。安易な再送 create/replace や offline merge はしない。
 原本削除と完全な legacy Storage helper の撤去/Port 注入は別の互換整理。今回 helper の既存呼出し境界は維持し、
 新しい JSON 実体/marker 保存だけ Browser Adapter に置く。
 
@@ -117,10 +117,10 @@ controller は source subscription で再描画し、コピーは read view で�
 
 source の存在で `blocksLegacy()` を判定する。composition の onTravelPlan/onTripPlanUpdate、宿選択、
 legacy panel 自体の reader/writer を gate。Agent 起動時も server Trip が不明なら legacy context へ戻さない。
-既存 `tripId` session を再表示すると HTTP source へ接続するが、現在は公開 API がないため unavailable になる。
+既存 `tripId` session を再表示すると HTTP source へ接続し、認証済みなら公開 API からreadする。
 通常の legacy session は従来どおりで、勝手に migration しない。
 
-server notice は「サーバの旅程を参照／変更案はまだ保存できない」。`confirmProposal` は供給しない。
+server workspace のwrite切替は既存のreviewed compositionだけが行う。公開writerを理由にLocalStorage writerを自動移行・dual-writeしない。
 既存 DEV-only source は従来どおりメモリ内確認で、「永続保存されない」と表示する。
 候補採用、Proposal validation、Tool 選択、Evidence/Claim/Viewer policy は変更しない。
 
@@ -130,7 +130,7 @@ server notice は「サーバの旅程を参照／変更案はまだ保存でき
 専用 `${local.resource_prefix}-trips` table、on-demand、暗号化、PITR、削除保護、TTL なし。
 短期の運行観測と異なり利用者の計画は再生成できないため、PITR の保存量に応じた費用を許容して回復性を優先する。
 削除保護により意図しない destroy は失敗する。データ削除を含む解除は別の明示承認が必要。
-既存 Lambda role にこの table ARN の GetItem/PutItem/UpdateItem/DeleteItem/Query のみを付与する。
+専用Trip API Lambda role にこのtableと必要なsharing indexのGetItem/PutItem/UpdateItem/DeleteItem/Query/ConditionCheckItem/TransactWriteItemsだけを付与する。
 Scan、全 table ARN、public all-trips API、auth 無し route は追加しない。将来 worker role も必要 table の最小権限で組成する。
 
 `npm test/build/architecture:check/workspace:check/eval:agent:smoke/eval:agent:full`、Terraform fmt/validate、

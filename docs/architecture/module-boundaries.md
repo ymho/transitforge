@@ -50,6 +50,14 @@ BackendはFrontendをimportせず、coreはBrowser API、Vendor、HTTP eventへ�
 固定IP ProviderはTool operation Portの先へ分離し、Runtime全体をVPCへ固定しない。
 Browserのproduction組成とHTTP bridgeは#480まで残す。UI取得・表示・端末状態はBrowserに置く。
 
+## Trip public writer の配置
+
+`modules/trip/domain`がTrip V2/CASの決定論的契約を所有する。`backend/agent-api/src/usecases/trip-application.ts`と
+owner-scoped repositoryがその契約を実行し、`trip-handler.ts`はHTTP requestを既存Application commandへ変換するだけに留める。
+#451 の`trip-api-lambda.ts`/`trip-api-composition.ts`は`POST /api/trips/v1`だけを公開する専用composition rootであり、
+Conversation/Profile の`personal-state` Lambda、Agent ingress、sharing/notification/in-trip workerと責務・IAM roleを共有しない。
+Browser側の`HttpServerTripClient`は既存の`personalApiFetch`をtransportとして使い、LocalStorageの自動移行やdual-writeをしない。
+
 ## 依存方向
 
 | 呼び出し元 | 依存してよい対象 | 依存してはいけない対象 |

@@ -10,7 +10,7 @@ create/archiveもsignalと原子的に保存する。revision/Proposal/公開gat
 既存Trip CAS/receiptは維持し、Reservationは独立revisionで更新する。
 
 親方針は #382/#415、保存基盤は #388、UI は #390。同じ Trip / Proposal / Repository / converter を拡張する。
-判断は [ADR 0054](../decisions/0054-commit-trip-mutations-atomically.md)。**公開 writer は引き続き OFF**。
+判断は [ADR 0054](../decisions/0054-commit-trip-mutations-atomically.md)。#451で公開 writer は専用Trip API hostへ接続した。reviewed workspace以外はwriterを注入しない。
 
 ## Before / After
 
@@ -21,7 +21,7 @@ create/archiveもsignalと原子的に保存する。revision/Proposal/公開gat
 | Repository | 非 CAS replace、入力 revision をそのまま保存 | replace 廃止、applyMutation と DynamoDB の atomic CAS |
 | 保存成功 | 更新番号の増加なし | baseRevision + 1、注入した server Clock の updatedAt、createdAt 不変 |
 | retry | create の既存拒否、lost response は GET 回復 | create は同じ UUID/全内容で冪等。mutation は owner 内 ID と receipt で重複排除 |
-| UI | read/preview、DEV の memory confirm のみ | reviewed authenticated host 向け確認 seam。公開組成は read-only のまま |
+| UI | read/preview、DEV の memory confirm のみ | reviewed authenticated hostだけが既存ServerTripWriterを注入する。その他の公開組成は read-only のまま |
 | migration | memory の pending、attempt / success marker | pending を Session metadata に先行保存、Web Locks で account/session ごとに排他 |
 
 ## Domain / Application
@@ -50,7 +50,7 @@ Snapshot を JSON 検証したことだけで採用元 Evidence の真実性を�
 
 既存 POST `/api/trips/v1` / `version: "trip-api-v1"` に `operation: "mutate"` を定義する。
 必須 field は `tripId / baseRevision / mutationId(UUID) / proposal`。Proposal 内 ID/番号も envelope と一致必須。
-旧 `operation: "replace"` は拒否する。未公開基盤のため公開済み client の段階移行は不要。
+旧 `operation: "replace"` は拒否する。既存 client は `mutate` 契約を使うため、別の段階移行は不要。
 ownerId/userId、未来の updatedAt、自由な resulting revision、確認 authority 等の追加 field は拒否する。
 返却値は `version / trip / revision / mutationId`。HTTP client も一致検証する。
 
