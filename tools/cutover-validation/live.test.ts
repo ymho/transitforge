@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { gatewayThrottleRecoveryMs, providerRequest, providerInvokedBetween, successfulTurn, waitForGatewayThrottleRecovery } from "./live.js";
+import { gatewayThrottleRecoveryMs, providerRequest, providerInvokedBetween, runPacedGatewayNegativeChecks, successfulTurn, waitForGatewayThrottleRecovery } from "./live.js";
 import { consumeAgentStream } from "../../frontend/src/adapters/http/agent-stream/consumer.js";
 
 const frame = (seq: number, event: object) => `event: agent\ndata: ${JSON.stringify({ v: 1, runId: "synthetic", seq, event })}\n\n`;
@@ -42,6 +42,21 @@ test("negative Gateway checks leave one throttle interval before the authenticat
   await waitForGatewayThrottleRecovery(async milliseconds => { waits.push(milliseconds); });
   assert.deepEqual(waits, [gatewayThrottleRecoveryMs]);
   assert.ok(gatewayThrottleRecoveryMs >= 1_000);
+});
+test("negative Gateway checks pace every request and retain the final recovery interval", async () => {
+  const events: string[] = [];
+  const harness = { rejected: async (token?: string, origin?: string) => {
+    events.push(token === undefined ? origin === undefined ? "unauthenticated canonical" : "unauthenticated direct" :
+      origin === undefined ? "invalid-token canonical" : "invalid-token direct");
+  } };
+  await runPacedGatewayNegativeChecks(harness, "https://direct.example", async (label, action) => {
+    events.push(`check ${label}`);
+    await action();
+  }, async milliseconds => { assert.equal(milliseconds, gatewayThrottleRecoveryMs); events.push("wait"); });
+  assert.deepEqual(events, [
+    "check unauthenticated rejection", "unauthenticated canonical", "wait", "unauthenticated direct", "wait",
+    "check invalid token rejection", "invalid-token canonical", "wait", "invalid-token direct", "wait",
+  ]);
 });
 test("Provider invocation corroboration uses bounded time window and ignores arbitrary log messages", async () => {
   let input: any;
