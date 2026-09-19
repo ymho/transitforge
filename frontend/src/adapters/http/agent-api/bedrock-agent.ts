@@ -1,8 +1,6 @@
 import { ApiAuthenticationError } from "../../../usecases/auth/api-authentication-error";
 import { personalApiFetch } from "../personal-api-fetch";
 import type {
-  BedrockAgentMessage,
-  BedrockAgentResponse,
   AccommodationSearchResponse,
   DailyCongestionAnalysisResponse,
   DailyCongestionPeakResponse,
@@ -21,7 +19,6 @@ import type {
   WebPageReadResponse,
 } from "./bedrock-agent-contract";
 import {
-  isBedrockAgentResponse,
   isAccommodationSearchResponse,
   isDailyCongestionAnalysisResponse,
   isDailyCongestionPeakResponse,
@@ -41,10 +38,6 @@ import type {
   JourneySearchRequest,
   JourneySearchService,
 } from "@raiquora/journey/journey-search-service";
-import type { AgentToolDescriptor } from "@raiquora/agent/tool-contract";
-import type { AgentModelClass } from "@raiquora/agent/model-provider";
-import type { AgentTrace } from "@raiquora/agent/agent-trace";
-import type { ConversationFeedbackV2 } from "../../../usecases/concierge/conversation-feedback";
 import {
   journeySearchContractVersion,
   toJourneySearchResponse,
@@ -59,80 +52,6 @@ export interface AgentResponseMetadata {
 export interface AgentApiResult<T> {
   body: T;
   metadata: AgentResponseMetadata;
-}
-
-export async function submitConversationFeedback(
-  feedback: ConversationFeedbackV2,
-  fetcher: typeof fetch = personalApiFetch,
-): Promise<void> {
-  const body = JSON.stringify({ operation: "conversation_feedback", ...feedback });
-  const response = await fetcher("/api/agent", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Amz-Content-Sha256": await sha256Hex(body) },
-    body,
-  });
-  if (!response.ok) throw new Error("フィードバックを保存できませんでした。");
-}
-
-export interface AgentTraceSubmission {
-  taskId: string;
-  requestIds: string[];
-  trace: AgentTrace;
-}
-
-export interface AgentTraceStoredResponse {
-  traceId: string;
-  eventCount: number;
-}
-
-export const maximumStoredAgentTraceEvents = 100;
-
-export async function submitAgentTrace(
-  submission: AgentTraceSubmission,
-  fetcher: typeof fetch = personalApiFetch,
-): Promise<AgentApiResult<AgentTraceStoredResponse>> {
-  const omittedEventCount = Math.max(
-    0,
-    submission.trace.events.length - maximumStoredAgentTraceEvents,
-  );
-  return postAgent(
-    {
-      operation: "agent_trace",
-      ...submission,
-      trace: {
-        ...submission.trace,
-        events: submission.trace.events.slice(0, maximumStoredAgentTraceEvents),
-        droppedEventCount:
-          submission.trace.droppedEventCount + omittedEventCount,
-      },
-    },
-    "Agent Traceを保存できません",
-    "Agent Trace",
-    isAgentTraceStoredResponse,
-    fetcher,
-  );
-}
-
-export async function invokeBedrockAgent(
-  messages: BedrockAgentMessage[],
-  fetcher: typeof fetch = personalApiFetch,
-  tools?: AgentToolDescriptor[],
-  modelClass?: AgentModelClass,
-  modelCallId?: string,
-): Promise<AgentApiResult<BedrockAgentResponse>> {
-  return postAgent(
-    {
-      messages,
-      ...(tools === undefined ? {} : { toolDefinitions: tools }),
-      ...(modelClass === undefined ? {} : { modelClass }),
-      ...(modelCallId === undefined ? {} : { modelCallId }),
-    },
-    "AI案内APIを利用できません",
-    "AI案内",
-    isBedrockAgentResponse,
-    fetcher,
-    true,
-  );
 }
 
 export async function queryDailyCongestionPeak(serviceDate: string, fetcher: typeof fetch = personalApiFetch): Promise<DailyCongestionPeakResponse> {
@@ -382,16 +301,6 @@ function isTransientStatus(status: number): boolean {
   return status === 429 || status >= 500;
 }
 
-function isAgentTraceStoredResponse(value: unknown): value is AgentTraceStoredResponse {
-  return typeof value === "object" &&
-    value !== null &&
-    "traceId" in value &&
-    typeof value.traceId === "string" &&
-    "eventCount" in value &&
-    typeof value.eventCount === "number" &&
-    Number.isInteger(value.eventCount) &&
-    value.eventCount >= 0;
-}
 
 export async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));

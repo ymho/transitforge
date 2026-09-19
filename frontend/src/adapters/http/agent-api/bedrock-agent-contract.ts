@@ -1,35 +1,3 @@
-export interface BedrockAgentTextBlock { text: string; }
-export interface BedrockAgentToolUseBlock {
-  toolUse: { toolUseId: string; name: string; input: Record<string, unknown> };
-}
-export interface BedrockAgentToolResultBlock {
-  toolResult: {
-    toolUseId: string;
-    status: "success" | "error";
-    content: [{ json: unknown }];
-  };
-}
-export type BedrockAgentContentBlock =
-  | BedrockAgentTextBlock
-  | BedrockAgentToolUseBlock
-  | BedrockAgentToolResultBlock;
-export interface BedrockAgentMessage {
-  role: "assistant" | "user";
-  content: BedrockAgentContentBlock[];
-}
-export interface BedrockAgentResponse {
-  message: BedrockAgentMessage;
-  stopReason: "end_turn" | "tool_use" | "max_tokens";
-  metadata?: {
-    modelId?: string;
-    latencyMs?: number;
-    usage?: {
-      inputTokens?: number;
-      outputTokens?: number;
-      totalTokens?: number;
-    };
-  };
-}
 export interface AccommodationSearchResponse {
   accommodations: Array<{
     kind: "accommodation";

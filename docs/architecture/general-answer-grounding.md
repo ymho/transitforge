@@ -47,9 +47,8 @@ Web全文やProvider rawをそのままClaimへ昇格させない。詳細情報
 
 ## 検証
 
-ブラウザのAgent Runtimeは相談実行時に動的importする。追加した検証・描画処理を
-初期画面のbundleへ含めず、既存の容量上限を維持する。Backendの実行入口と
-モデル・Tool呼出回数は変更しない。
+production相談はServer Agent Runtimeで実行する。Browser Runtimeとその動的importは
+#481 Batch 1で撤去済みであり、追加した検証・描画処理をFrontendから起動しない。
 
 本番ConverseModelProvider → MultiStepAgentRuntime → DefaultAgentResponseGenerator →
 validateEvidenceAndClaimsの合成fixtureを使う。Structured generatorだけのテストではない。
@@ -57,15 +56,9 @@ validateEvidenceAndClaimsの合成fixtureを使う。Structured generatorだけ�
 正常ケースは実際のbound factual Claimが必要。否定ケースはbound factsまたはunknownのみを許可する。
 Grounded/Unsupported Claim Rateは実際の非unknown Claimを分母にし、分母0を成功扱いしない。
 
-```bash
-AWS_PROFILE=transitforge-dev AWS_REGION=ap-northeast-1 \
-  npx tsx tools/run_live_agent_decision_evaluation.ts \
-  --suite general-grounding --repetitions 3 --output-dir /tmp/general-grounding
-```
-
-出力は合成回答、集計、形式診断とscalar provider diagnosticsだけ。
+旧Browser decision Live Eval harnessは#481 Batch 1で撤去した。
 Provider raw、内部推論、個人の会話・認証情報は保存しない。
-既存A〜AU、TTFI/TTFC、モデル、temperature、Tool公開範囲は変更しない。
 
-`tools/run_live_place_grounding.ts`は特徴説明・2候補比較・Profile推薦を同じ本番Runtimeで検証する。
+`tools/run_live_place_grounding.ts`はBackendのConversationModelProviderと共有Runtimeを使い、
+特徴説明・2候補比較・Profile推薦を検証する。
 安全性（根拠の結合）と有用性（具体的特徴・両候補・推薦理由）を独立に記録し、unknownだけの回答を成功にしない。

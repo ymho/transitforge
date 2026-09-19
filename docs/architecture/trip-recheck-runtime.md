@@ -2,6 +2,10 @@
 
 正本: #382/#415/#409、[ADR 0062](../decisions/0062-schedule-trip-rechecks-with-shared-durable-due-work.md)。
 
+2026-09-19 / #481 Batch 1: 時間起点の再チェックは本Server runtimeだけを正本とする。
+Browser起動時にLocalStorage scheduleを走査する旧経路と専用状態は撤去済みである。
+通常UIのweather・train delay等の明示readはこの変更に含めない。
+
 ## Before / After
 
 - Before: TripChanged→Watchはdurable。Weather/Hazard/Rail→Event→Impactは内部seamのみで、時刻起動hostなし。

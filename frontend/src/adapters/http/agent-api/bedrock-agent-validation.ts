@@ -1,9 +1,6 @@
 import { isPriceObservation } from "@raiquora/trip/money";
 import { validateHazardAlertInformation } from "@raiquora/trip/hazard-alert";
 import type {
-  BedrockAgentContentBlock,
-  BedrockAgentMessage,
-  BedrockAgentResponse,
   AccommodationSearchResponse,
   DailyCongestionAnalysisResponse,
   DailyCongestionPeak,
@@ -26,23 +23,6 @@ import {
   journeySearchContractVersion,
   type JourneySearchWireResponse,
 } from "./journey-search-contract";
-
-export function isBedrockAgentResponse(value: unknown): value is BedrockAgentResponse {
-  return isRecord(value) && ["end_turn", "tool_use", "max_tokens"].includes(String(value.stopReason)) &&
-    isMessage(value.message) && value.message.role === "assistant" &&
-    (value.metadata === undefined || isBedrockResponseMetadata(value.metadata));
-}
-
-function isBedrockResponseMetadata(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  return (value.modelId === undefined || typeof value.modelId === "string") &&
-    (value.latencyMs === undefined || isNonNegativeNumber(value.latencyMs)) &&
-    (value.usage === undefined || (
-      isRecord(value.usage) &&
-      [value.usage.inputTokens, value.usage.outputTokens, value.usage.totalTokens]
-        .every((item) => item === undefined || isNonNegativeInteger(item))
-    ));
-}
 
 export function isAccommodationSearchResponse(value: unknown): value is AccommodationSearchResponse {
   return isRecord(value) && Array.isArray(value.accommodations) && value.accommodations.length <= 5 &&
@@ -345,16 +325,6 @@ function isTrainDelayStat(value: unknown): value is TrainDelayStat {
     typeof value.peakCollectedAt === "string";
 }
 
-function isMessage(value: unknown): value is BedrockAgentMessage {
-  return isRecord(value) && (value.role === "assistant" || value.role === "user") &&
-    Array.isArray(value.content) && value.content.length > 0 && value.content.every(isContentBlock);
-}
-function isContentBlock(value: unknown): value is BedrockAgentContentBlock {
-  if (!isRecord(value)) return false;
-  if (typeof value.text === "string") return true;
-  return isRecord(value.toolUse) && typeof value.toolUse.toolUseId === "string" &&
-    typeof value.toolUse.name === "string" && isRecord(value.toolUse.input);
-}
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null; }
 function isNonNegativeNumber(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value) && value >= 0; }
 function isCoordinate(value: unknown, minimum: number, maximum: number): value is number { return typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum; }

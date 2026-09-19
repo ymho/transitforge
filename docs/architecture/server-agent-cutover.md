@@ -116,15 +116,16 @@ productionは`VITE_SERVER_AGENT_ENABLED=true`でServer streamを正本とする�
 `agent_stream_enabled`と`enable_fixed_egress_provider`はtrueのまま基盤・State・固定IP Providerを保持する。
 短命Browser gate自体の撤去は#481へ渡す。
 
-旧`/api/agent`は汎用conversationを410にした一方、地図天気、地点詳細、Browser recheckのcallerが残る。
+旧`/api/agent`は汎用conversationを410にした一方、地図天気・地点詳細等の独立UI read callerが残る。
 そのためFunction URL・invoke許可・CloudFront behavior・Lambdaは今回維持し、残る有料operationを
 Cognitoで保護する。利用が0になった後のresource閉鎖は別差分でplanを審査する。
 
 rollbackは[旧ingress閉鎖記録](server-agent-legacy-ingress-closure.md)を正とする。Server Stateを保持し、
 新Server turnを旧Browserへ自動再実行せず、閉鎖前のViewer/Lambda artifactや未認証routeを復元しない。
 
-#481へ渡す削除候補: Browser Runtime組成、Bedrock HTTP message bridge、旧Tool/legacy TravelPlan adapter、
-LocalStorage Conversation/Profile writer、旧feedback/trace経路、短命Browser gate。
+#481 Batch 1でBrowser Runtime組成、Bedrock HTTP conversation bridge、旧feedback/trace経路、
+Browser起動時recheckを撤去した。legacy TravelPlan adapter、LocalStorage Conversation/Profile/Trip writer、
+migration、短命Browser gate自体の撤去は後続Batchへ残す。
 後続で閉じる候補: 残存callerが0になった後のFunction URL、invoke権限、旧CDN behavior。
 コード削除とinfra閉鎖を混同しない。
 

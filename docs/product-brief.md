@@ -208,6 +208,7 @@ server参照のWorkspaceは取得失敗時にlegacy writerへ戻らない。会�
 
 ## Server Agent統合（#480）
 
-[cutover統合とTool inventory](architecture/server-agent-cutover.md)を追加した。
-短命gate ONでは認証済みREST streamからサーバのConversation turn・Context・Tool・final保存へ接続する。
-Browser Agentへのfallbackはない。既定OFFでAWS未切替。実AWS検証と旧経路閉鎖は#480に残す。
+[cutover統合とTool inventory](architecture/server-agent-cutover.md)を正とする。
+productionは認証済みREST streamからServer AgentのConversation turn・Context・Tool・final保存へ接続する。
+Browser Agent Runtimeは#481 Batch 1で撤去済みで、gate OFFまたは通信失敗時にfallbackせず相談を停止する。
+時間起点のTrip再チェックもServer runtimeが正本で、Browser起動時recheckは行わない。
