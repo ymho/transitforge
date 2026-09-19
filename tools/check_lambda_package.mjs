@@ -102,3 +102,15 @@ try {
   else process.env.AGENT_STREAM_ENABLED = previousStreamingGate;
 }
 console.log(JSON.stringify({ package: "agent-stream", runtime: stream.runtime, bytes: streamMetadata.size }));
+
+const tripApi = JSON.parse(await readFile(resolve(root, "infra/packaging/trip-api.json"), "utf8"));
+if (tripApi.runtime !== "nodejs22.x" || tripApi.handler !== "index.handler" ||
+    JSON.stringify(tripApi.files) !== '["index.cjs"]') throw new Error("Invalid Trip API package contract");
+const tripApiBundle = resolve(root, tripApi.source, tripApi.files[0]);
+const tripApiMetadata = await stat(tripApiBundle);
+if (!tripApiMetadata.isFile() || tripApiMetadata.size < 1 || tripApiMetadata.size > 20 * 1_024 * 1_024) throw new Error("Invalid Trip API bundle size");
+const tripApiModule = await import(pathToFileURL(tripApiBundle).href);
+if (typeof tripApiModule.handler !== "function") throw new Error("Invalid Trip API handler export");
+const closedTripApi = await tripApiModule.handler({ rawPath: "/api/trips/v1", requestContext: { http: { method: "POST" } } });
+if (closedTripApi.statusCode !== 503) throw new Error("Trip API bundle must fail closed without its gate");
+console.log(JSON.stringify({ package: "trip-api", runtime: tripApi.runtime, bytes: tripApiMetadata.size }));

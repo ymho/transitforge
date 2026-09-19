@@ -2,7 +2,7 @@
 
 導入時のmain `110d39a` のコード・infra定義を棚卸しした。実AWS設定を確認した記録ではない。
 第一段階でprincipal/verifier/Application境界、第二段階でCognito TerraformとFrontend認証を導入する。
-第三段階で既存の個人HTTP handlerへ共通認証を接続した。公開Lambdaのgateとwriter有効化は変更していない。
+第三段階で既存の個人HTTP handlerへ共通認証を接続した。#451 のwriter hostは同じRegional REST APIへ専用Lambdaとして接続し、Conversation/Profile hostとは分離する。
 Frontendと設定出力は[ADR 0069](../decisions/0069-use-cognito-managed-login-for-spa.md)。
 判断とsubjectの永続エンコードは[ADR 0067](../decisions/0067-establish-trusted-principal-boundary.md)。
 
@@ -46,7 +46,7 @@ Cognito UIやTrip公開writerの完成待ちは不要。テストはport fakeを
 | 同route: `weather_forecast_search`, `weather_grid_search` | public read | model・有料Provider・個人Stateを使わない天気readだけを維持する |
 | 同route: `representative_timetable_search`, `journey_search`, `daily_congestion_analysis`, `daily_congestion_peak`, `train_delay_analysis` | authenticated user | 専用headerのCognito Access Tokenと`raiquora/user`を実行前に検証する |
 | 同route: `travel_accommodation_search`, `place_media_search`, `place_detail_research`, `web_search`, `web_page_read`, `travel_alert_search`, `ground_access_search`, `restaurant_search` | authenticated user | 同上。OAC/IAM/Basicだけを利用者principalとして扱わない |
-| POST `/api/trips/v1`: `create`, `mutate`, `get`, `list`, `archive`, `attach`, `detach`, `reference` | authenticated user | 共通認証→`TripApplication`→既存owner-scoped Repository。専用factoryで接続、公開501 gateは維持。未知operation/replaceは拒否 |
+| POST `/api/trips/v1`: `create`, `mutate`, `get`, `list`, `archive`, `attach`, `detach`, `reference` | authenticated user | Gateway Cognito authorizerと共通Backend verifier→専用Trip API Lambda→`TripApplication`→既存owner-scoped Repository。未知operation/replaceは拒否 |
 | POST `/api/trips/sharing/v1`: `create-grant`, `redeem`, `revoke-grant`, `manage`, `participant`, `accessible`, `reservation-facts` | authenticated user | 共通認証→`TripSharingApplication`の本人/参加者認可。公開501 gateは維持。grant secretだけで認証しない |
 | POST `/api/trips/in-trip/v1`: read（operationなし） | authenticated user | 共通認証→`InTripContextApplication.read`のowner読取。公開501 gateは維持 |
 | POST `/api/trips/notifications/v1`: `list`, `read` | authenticated user | 共通認証→`NotificationApplication`のowner読取/CAS既読。公開501 gateは維持 |
@@ -78,14 +78,14 @@ JWT検証器は#484の`AccessTokenVerifier`だけであり、handlerごとに検
   共有grantがないBからAへのget/mutate/archiveは不存在と同じ404。list/referenceは本人namespaceへ限定する。
   明示共有済みのeditor/viewerは既存`TripSharingApplication`で解決する。
 
-`createPersonalApiHandler({ enabled, auth, tripTable, notificationTable, stateTable })`はTrip系の公開に配線しないopt-in factoryである。
-Conversation/Profileだけは既存Regional REST APIの専用Lambda `personal-state` へ接続する。これはTrip hostを有効化せず、
-CloudFrontの `/api/conversations/*` と `/api/profile/*` behavior、Gateway Cognito authorizer、Backend verifierを順に通す。
+`createPersonalApiHandler({ enabled, auth, tripTable, notificationTable, stateTable })`は全個人APIをまとめた内部factoryであり、production hostには使わない。
+Conversation/Profileは既存Regional REST APIの専用Lambda `personal-state`、Trip writerは同APIの専用Lambda `trip-api` へ接続する。
+CloudFrontの `/api/conversations/*`、`/api/profile/*`、`/api/trips/*` behavior、Gateway Cognito authorizer、Backend verifierを順に通す。
 `enabled !== true`では501のまま、trueでも`auth`はTerraformの`cognito_api_auth_config`出力から
-trusted hostが渡す必要がある。verifierをhostごとに一度作成し、既存4handlerに同じresolverを注入する。
-ルータは4つの完全一致pathだけを受け付け、未知pathは404で閉じる。Agentへのfallbackはない。
-公開`lambda.ts`は#480でAgent ingress認証だけを接続した。personal hostの実環境gateは維持する。
-このfactoryの追加はproduction writer、IAM権限、Cognito/Bearer搬送を有効化したという意味ではない。
+trusted hostが渡す必要がある。verifierをhostごとに一度作成し、各公開handlerへ同じresolverを注入する。
+各hostのルータは自身の完全一致pathだけを受け付け、未知pathは404で閉じる。Agentへのfallbackはない。
+公開`lambda.ts`は#480でAgent ingress認証だけを接続した。Trip writerはそこへ混在させず、Trip tableだけの最小IAM roleを持つ専用hostへ閉じる。
+この全個人API factoryの追加自体はproduction writer、IAM権限、Cognito/Bearer搬送を有効化したという意味ではない。#451 の専用Trip API hostだけがそれらを有効化する。
 
 Reservation/ChecklistはHTTP handlerがなく、確認authorityの設計も別に必要なため今回公開しない。
 feedback/traceは既存Agent handler内部にあり、/api/agentを変更しない責務分離を優先して#462/#480へ残す。
