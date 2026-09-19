@@ -24,9 +24,10 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   };
   const oldActions = panel.querySelector(".guide-panel-actions");
   const layout = node("div", "consultation-layout"), conversation = node("section", "consultation-conversation");
-  const head = node("header", "consultation-heading"), title = node("h1", "", "AI旅の相談");
+  const head = node("header", "consultation-heading"), headingCopy = node("div", "consultation-heading-copy"), eyebrow = node("p", "home-eyebrow", "AI CONCIERGE"), title = node("h1", "", "相談");
+  headingCopy.append(eyebrow, title);
   const fresh = node("button", "", "新しい相談"); fresh.type = "button"; fresh.addEventListener("click", ports.newConversation);
-  head.append(title, fresh);
+  head.append(headingCopy, fresh);
   // Keep secondary feature triggers alive, but discard the old panel heading/border/layout.
   if (oldActions) { oldActions.className = "consultation-secondary"; head.append(oldActions); }
   const context = node("section", "consultation-context"), identity = node("div", "consultation-identity");
