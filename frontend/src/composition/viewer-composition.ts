@@ -242,6 +242,7 @@ const unsignedConversation: ConversationSession = {
   createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
 };
 let activeConversationSession = unsignedConversation;
+const pendingConsultationKey = "raiquora:pending-consultation";
 const isSignedIn = canUsePersonalState;
 if (isSignedIn()) {
   try {
@@ -445,6 +446,12 @@ const createAndActivateConversation = async () => {
   return session;
 };
 const startNewConsultation = async (prompt: string) => {
+  if (!isSignedIn()) {
+    try { sessionStorage.setItem(pendingConsultationKey, prompt.slice(0, 400)); } catch { /* Optional UI-only return draft. */ }
+    aiGuideController.notify("相談を保存して続けるにはログインが必要です。ログイン画面へ移動します。");
+    await currentAuthentication().login();
+    return;
+  }
   await createAndActivateConversation();
   aiGuideController.ask(prompt);
 };
@@ -467,6 +474,9 @@ currentAuthentication().subscribe(() => {
     const selected = session ?? await conversationUi.create();
     if (generation !== authenticationGeneration) return;
     await activateConversation(selected.id);
+    let pending: string | undefined;
+    try { pending = sessionStorage.getItem(pendingConsultationKey)?.slice(0, 400); sessionStorage.removeItem(pendingConsultationKey); } catch { /* Storage denial only prevents automatic return. */ }
+    if (pending?.trim() && generation === authenticationGeneration) aiGuideController.ask(pending.trim());
   }).catch(() => undefined);
 });
 configureConversationHistoryPanel({
@@ -515,6 +525,12 @@ configureTripSharing({ root: document.body, button: sharingButton, client: new H
     returnToConversation(); tripWorkspace.show("trip");
   } });
 aiGuideController.open();
+if (isSignedIn()) {
+  try {
+    const pending = sessionStorage.getItem(pendingConsultationKey)?.slice(0, 400); sessionStorage.removeItem(pendingConsultationKey);
+    if (pending?.trim()) aiGuideController.ask(pending.trim());
+  } catch { /* Storage denial only prevents automatic return. */ }
+}
 applyContextWorkspaceState();
 configureTravelProfile(document, profileUi, () => aiGuideController.open());
 if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip-workspace-preview") === "1") {
@@ -560,9 +576,10 @@ primaryShell = configureAiFirstShell(document, app, {
     };
   },
   profile: () => profileUi.current()?.profile, subscribe: (listener) => {
-    const left = tripWorkspaceController.subscribe(listener), middle = profileUi.subscribe(listener), right = serverTripList.subscribe(listener);
-    return () => { left(); middle(); right(); };
+    const left = tripWorkspaceController.subscribe(listener), middle = profileUi.subscribe(listener), right = serverTripList.subscribe(listener), auth = currentAuthentication().subscribe(listener);
+    return () => { left(); middle(); right(); auth(); };
   },
+  authState: () => currentAuthentication().getState(), login: () => { void currentAuthentication().login(); }, logout: () => { void currentAuthentication().logout(); },
   retry: async () => { await serverTripList.refresh(); await tripWorkspaceController.source()?.retry?.(); },
   newConsultation: (prompt) => { void startNewConsultation(prompt).catch(() => aiGuideController.notify("相談を始めるにはログインしてください。")); },
   openChat: () => { aiGuideController.open(); if (tripWorkspaceController.current()) tripWorkspace.show("chat"); delete app.dataset.mapFocusMode; },

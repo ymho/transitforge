@@ -99,7 +99,7 @@ export function configureTravelProfile(document: Document, client: ProfileUiCont
 }
 
 function editor(draft: Draft): string {
-  return `<form id="travel-profile-form"><p class="profile-scope-note">普段の好みをこの端末に保存します。今回の旅の条件を優先し、旅程や予約は変更しません。</p><fieldset><legend>基本情報</legend><div class="profile-field-grid">${field("station", "普段の出発駅", draft.home.station)}
+  return `<form id="travel-profile-form"><p class="profile-scope-note">普段の好みを保存します。今回の旅の条件を優先し、旅程や予約は変更しません。</p><fieldset><legend>基本情報</legend><div class="profile-field-grid">${field("station", "普段の出発駅", draft.home.station)}
     ${field("party", "普段の人数（今回の人数ではありません）", draft.companions.usualPartySize?.toString(), "number")}
     <label>優先する移動手段<select name="mode">${Object.entries({ "": "未設定", rail: "鉄道", car: "車", bus: "バス", walking: "徒歩" }).map(([key, label]) => `<option value="${key}" ${key === (draft.transport.preferredMode ?? "") ? "selected" : ""}>${label}</option>`).join("")}</select></label>
     ${note("budget", "普段の予算感", draft)}</div><details><summary>出発地・同行者の詳細</summary>${field("area", "普段の出発エリア", draft.home.area)}

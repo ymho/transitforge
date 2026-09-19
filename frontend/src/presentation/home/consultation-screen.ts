@@ -48,7 +48,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   const close = node("button", "consultation-conditions-close", "閉じる"); close.type = "button";
   const rows = node("div", "consultation-condition-rows"), help = node("p", "consultation-help");
   const status = node("p", "consultation-edit-status"); status.setAttribute("role", "status");
-  aside.append(close, node("h2", "", "AIが把握している条件"), help, rows, status,
+  aside.append(close, node("h2", "", "今回の条件"), help, rows, status,
     node("p", "consultation-coverage", "収録時刻表と取得できた情報をもとに案内します。未確認の移動や予約を、成立済みとは扱いません。"));
   const backdrop = node("button", "consultation-backdrop"); backdrop.type = "button"; backdrop.setAttribute("aria-label", "条件を閉じる"); backdrop.hidden = true;
   const sheet = (open: boolean) => {
@@ -72,10 +72,11 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     note.textContent = trip ? "この旅程が変更案の対象です。確認するまで反映されません。" : state.unavailable ? "参照先を確認してから相談を続けてください。" : "まだ旅程に紐付いていません。";
     tripButton.hidden = !trip;
     saveDraft.hidden = !!trip || !ports.saveDraftTrip;
-    help.textContent = trip ? state.viewer ? "閲覧専用の旅程です。条件の変更はできません。" : "条件を編集して変更案を確認できます。保存は現在の旅程の保存機能に従います。"
+    help.textContent = trip ? state.viewer ? "閲覧専用の旅程です。条件の変更はできません。" : "出発地と旅の目的はここで編集できます。日程などの追加条件は会話で確認し、変更案として保存します。"
       : "条件は会話で追加できます。普段の好みより、今回の希望を優先します。";
-    const row = (label: string, value: string, edit?: () => void) => {
+    const row = (label: string, value: string, edit?: () => void, source?: string) => {
       const item = node("div", "consultation-condition-row"); item.append(node("span", "", label), node("strong", "", value));
+      if (source) item.append(node("small", "consultation-condition-source", source));
       if (edit) { const button = node("button", "", "編集"); button.type = "button"; button.setAttribute("aria-label", `${label}を編集`); button.addEventListener("click", edit); item.append(button); }
       rows.append(item); return item;
     };
@@ -102,11 +103,19 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
         const display = r.type === "origin" ? ["出発地", r.place.name] : r.type === "dates" ? ["日程", `${r.start.earliest}〜${r.end?.latest ?? r.start.latest}`]
           : r.type === "destinations" ? ["行き先", r.places.map((p) => p.name).join("、")]
           : r.type === "pace" ? ["ペース", r.value <= .4 ? "ゆっくり" : r.value >= .7 ? "いろいろ巡る" : "バランス"]
-          : r.type === "experience" ? ["やりたいこと", r.text] : undefined;
+          : r.type === "experience" ? [r.intent === "avoid" ? "避けたいこと" : "好み", r.text]
+          : r.type === "budget" ? ["予算", `${r.limit.currency} ${r.limit.amountMinor.toLocaleString()}${r.basis === "per-person" ? " / 1人" : ""}`]
+          : r.type === "mobility" ? ["移動", [r.maxTravelMinutes ? `移動 ${r.maxTravelMinutes}分まで` : "", r.maxTransfers !== undefined ? `乗換 ${r.maxTransfers}回まで` : "", r.transferPace ? `ペース: ${r.transferPace}` : ""].filter(Boolean).join(" ・ ") || "未定"]
+          : r.type === "duration" ? ["日程", `${r.minimum}〜${r.maximum}${r.unit === "nights" ? "泊" : "日"}`]
+          : r.type === "depart_after" ? ["出発", r.at.at]
+          : r.type === "arrive_by" ? ["到着", r.at.at]
+          : r.type === "relative_distance" ? ["距離", r.direction === "nearer" ? "もっと近く" : "もっと遠く"]
+          : r.type === "adventure" ? ["移動", "冒険度を調整"] : undefined;
         if (!display) continue;
+        const source = constraint.source === "user" ? "あなたが指定" : constraint.source === "profile" ? "プロフィール由来" : "仮置き";
         row(display[0]!, display[1]!, !state.viewer && r.type === "origin" && constraint.source === "user" && !constraint.assumptionId
           ? () => edit("出発地", r.place.name, (name) => proposeTripRequestUpdate(trip, { ...trip.request,
-            constraints: trip.request.constraints.map((c) => c.id === constraint.id ? { ...c, requirement: { type: "origin", place: { name, sources: [] } } } : c) }, "user")) : undefined);
+            constraints: trip.request.constraints.map((c) => c.id === constraint.id ? { ...c, requirement: { type: "origin", place: { name, sources: [] } } } : c) }, "user")) : undefined, source);
       }
       if (party) row("同行者", party);
     } else {

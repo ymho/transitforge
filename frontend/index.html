@@ -147,9 +147,9 @@
           </nav>
           <p id="conversation-history-empty" class="conversation-history-empty" hidden>過去の会話はまだありません</p>
           <ol id="conversation-history-list" class="conversation-history-list"></ol>
-          <button id="sidebar-account-settings" class="sidebar-account-settings" type="button" aria-label="アカウントの設定を開く">
+          <button id="sidebar-account-settings" class="sidebar-account-settings" type="button" aria-label="アプリ設定を開く">
             <span class="sidebar-account-avatar" aria-hidden="true">ゲ</span>
-            <span><strong data-auth-account-label>ゲストユーザ</strong><small>端末内プロフィール</small></span>
+            <span><strong>アプリ設定</strong><small>経路検索と外部サービス</small></span>
             <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg>
           </button>
         </section>
@@ -167,23 +167,15 @@
       <dialog id="application-settings-dialog" class="application-settings-dialog" aria-labelledby="application-settings-title">
         <section class="application-settings-shell">
           <header>
-            <div><small data-auth-account-label>ゲストユーザ</small><h2 id="application-settings-title">設定</h2></div>
+            <div><small>APP SETTINGS</small><h2 id="application-settings-title">アプリ設定</h2></div>
             <button id="close-application-settings" type="button" aria-label="設定を閉じる">×</button>
           </header>
           <nav class="application-settings-navigation" aria-label="設定項目">
-            <button type="button" data-settings-tab="profile" aria-pressed="true"><svg aria-hidden="true"><use href="#icon-user" /></svg>プロフィール</button>
-            <button type="button" data-settings-tab="journey" aria-pressed="false"><svg aria-hidden="true"><use href="#icon-train" /></svg>経路検索</button>
+            <button type="button" data-settings-tab="journey" aria-pressed="true"><svg aria-hidden="true"><use href="#icon-train" /></svg>経路検索</button>
             <button type="button" data-settings-tab="services" aria-pressed="false"><svg aria-hidden="true"><use href="#icon-settings" /></svg>外部サービス</button>
           </nav>
           <div class="application-settings-content">
-            <section data-settings-view="profile">
-              <header><h3>プロフィール</h3><p>旅の好みや普段の出発地を端末内に保存します</p></header>
-              <div class="settings-account-card"><span class="sidebar-account-avatar" aria-hidden="true">ゲ</span><span><strong data-auth-account-label>ゲストユーザ</strong><small id="auth-status" role="status" aria-live="polite">サインインなし</small></span></div>
-              <button id="auth-login" class="settings-primary-action" type="button" hidden>ログイン / 新規登録</button>
-              <button id="auth-logout" class="settings-primary-action" type="button" hidden>ログアウト</button>
-              <button id="settings-edit-travel-profile" class="settings-primary-action" type="button">旅行プロフィールを再設定</button>
-            </section>
-            <section data-settings-view="journey" hidden>
+            <section data-settings-view="journey">
               <header><h3>経路検索</h3><p>コンシェルジュが経路を比較するときの既定条件です</p></header>
               <label><span>乗換ペース</span><select id="settings-journey-transfer-pace"><option value="hurried">急ぐ</option><option value="standard">普通</option><option value="relaxed">ゆっくり</option></select></label>
               <label><span>経路の優先</span><select id="settings-journey-ranking-preference"><option value="balanced">バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label>

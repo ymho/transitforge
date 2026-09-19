@@ -8,6 +8,7 @@ afterEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
 function setup(overrides: Partial<AiFirstShellPorts> = {}) {
   const ports: AiFirstShellPorts = {
     read: () => ({ state: "unauthenticated", trips: [], candidates: [] }), profile: () => undefined,
+    authState: () => ({ status: "signed-out" }), login: vi.fn(), logout: vi.fn(),
     subscribe: () => () => {}, retry: vi.fn(async () => {}), newConsultation: vi.fn(), openChat: vi.fn(), openTrip: vi.fn(),
     openProfile: vi.fn(), openMap: vi.fn(), openHistory: vi.fn(), openSettings: vi.fn(), openNotifications: vi.fn(), now: () => new Date("2026-09-18T00:00:00Z"), ...overrides,
   };
@@ -30,6 +31,15 @@ it("starts Home without initializing Map or requiring profile/authentication", (
   expect(ports.newConsultation).toHaveBeenCalledWith("のんびりできる旅を考えたい");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("chat");
   expect(ports.openMap).not.toHaveBeenCalled();
+});
+it("keeps login visible in the header and sends signed-in people to My", () => {
+  const signedOut = setup();
+  expect(document.querySelector("[data-account]")!.textContent).toBe("ログイン / 新規登録"); click("[data-account]"); expect(signedOut.ports.login).toHaveBeenCalledOnce();
+  document.body.innerHTML = '<main id="app"></main>';
+  const signedIn = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) });
+  expect(document.querySelector("[data-account]")!.textContent).toBe("山田 花子"); click("[data-account]");
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("my"); expect(document.querySelector("[data-my-account-status]")!.textContent).toContain("ログイン中");
+  click("[data-my-logout]"); expect(signedIn.ports.logout).toHaveBeenCalledOnce();
 });
 it("does not submit IME composition and keeps input across tab navigation / re-render", () => {
   const { ports, shell } = setup(); const input = document.querySelector("textarea")!;

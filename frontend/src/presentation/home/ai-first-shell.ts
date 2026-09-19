@@ -7,11 +7,15 @@ import type { Trip } from "@raiquora/trip/trip";
 import { itineraryScheduleLabel } from "../../usecases/trip-plan/itinerary-schedule-label";
 import { tripPartyView } from "../../usecases/trip-plan/trip-party-presentation";
 import type { TripReadiness } from "@raiquora/trip/trip-readiness";
+import type { AuthState } from "../../usecases/auth/auth-session";
 
 export type PrimaryView = "explore" | "chat" | "trips" | "my";
 export interface AiFirstShellPorts {
   read(): HomeReadInput;
   profile(): UserProfile | undefined;
+  authState(): AuthState;
+  login(): void;
+  logout(): void;
   subscribe(listener: () => void): () => void;
   retry(): Promise<void>;
   newConsultation(prompt: string): void;
@@ -32,16 +36,16 @@ export interface AiFirstShellPorts {
 export function configureAiFirstShell(document: Document, app: HTMLElement, ports: AiFirstShellPorts) {
   const window = document.defaultView!;
   const root = document.createElement("section"); root.className = "product-shell";
-  root.innerHTML = `<header class="product-header"><a href="#explore" class="product-brand">Raiquora</a><span>旅を、ここから。</span></header>
+  root.innerHTML = `<header class="product-header"><a href="#explore" class="product-brand">Raiquora</a><button type="button" class="product-account" data-account></button></header>
     <nav class="product-nav" aria-label="メインナビゲーション">${Object.entries({ explore: "探す", chat: "相談", trips: "旅程", my: "マイ" }).map(([key, label], index) => `<a href="#${key}" data-primary="${key}"><span aria-hidden="true">${["⌕", "✦", "▣", "●"][index]}</span>${label}</a>`).join("")}</nav>
-    <section class="product-page" data-page="explore" aria-label="探す"><div class="home-hero"><div class="home-hero-copy"><p class="home-eyebrow">気持ちから、旅を見つける</p><h1>どこへ<br>行きますか？</h1>
-    <p>行き先が決まっていなくても大丈夫。したいことから、一緒に考えましょう。</p>
+    <section class="product-page" data-page="explore" aria-label="探す"><div class="home-hero"><div class="home-hero-copy"><p class="home-eyebrow">TRIP PLANNING</p><h1>次の旅を<br>考える</h1>
+    <p>行きたい場所、日程、予算、やりたいこと。決まっていることだけ入力してください。</p>
     <form class="home-prompt"><span aria-hidden="true">✦</span><textarea id="home-prompt" aria-label="どんな旅にしたいですか？" maxlength="400" rows="1" placeholder="行きたい場所や、やりたいことを話してください"></textarea><button type="submit" aria-label="AIに相談する">→</button></form>
     <div class="home-examples" aria-label="相談の入力例">${["のんびりできる旅を考えたい", "歴史ある街を歩きたい", "おいしいものを楽しみたい"].map((text) => `<button type="button" data-example="${text}">${text}</button>`).join("")}</div></div>${travelDecoration()}</div>
-    <div data-home-live></div><section class="home-secondary home-rail-feature"><div><p class="home-eyebrow">列車から広がる旅</p><h2>移動も、旅の楽しみに。</h2><p>列車や運行状況は地図で確認できます。</p><button type="button" data-map="realtime">リアルタイム運行状況</button><button type="button" data-map="simulation">日時指定シミュレーター</button></div>${travelDecoration("rail")}</section></section>
+    <div data-home-live></div><section class="home-secondary home-rail-feature"><div><p class="home-eyebrow">RAIL MAP</p><h2>列車・運行情報</h2><p>リアルタイムの運行状況や、日時を指定した列車の動きを地図で確認できます。</p><button type="button" data-map="realtime">リアルタイム運行状況</button><button type="button" data-map="simulation">日時指定で見る</button></div>${travelDecoration("rail")}</section></section>
     <section class="product-page" data-page="trips" aria-label="旅程" hidden><header class="trip-list-heading"><p class="home-eyebrow">YOUR TRIPS</p><h1>旅程</h1><p>次の旅も、考え中の旅も。ここから続きの相談や確認を始められます。</p></header><div data-trip-list></div></section>
-    <section class="product-page" data-page="my" aria-label="マイ" hidden><div class="my-shell"><p class="home-eyebrow">自分らしい旅のために</p><h1>マイページ</h1><div class="my-grid"><section class="home-card"><h2>旅行プロフィール</h2><p>普段の好みを、次の旅のヒントに。今回の旅の条件とは分けて管理します。</p><p class="my-preferences" data-profile-summary></p><button type="button" data-profile>旅行プロフィールを編集</button><p>この端末に保存されます。登録しなくても相談できます。</p></section>
-    <section class="home-card"><h2>会話と設定</h2><div class="my-actions"><button type="button" data-history>会話履歴 <span aria-hidden="true">→</span></button><button type="button" data-settings>設定・経路の好み <span aria-hidden="true">→</span></button><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button><button type="button" data-map="realtime">列車の地図 <span aria-hidden="true">→</span></button></div><p>ログイン状態に応じて、保存した情報を確認できます。</p></section></div></div></section>
+    <section class="product-page" data-page="my" aria-label="マイ" hidden><div class="my-shell"><p class="home-eyebrow">MY ACCOUNT</p><h1>マイ</h1><div class="my-grid"><section class="home-card my-account-card"><h2>アカウント</h2><p data-my-account-status></p><button type="button" data-my-login>ログイン / 新規登録</button><button type="button" data-my-logout hidden>ログアウト</button></section><section class="home-card"><h2>旅行プロフィール</h2><p>普段の好みを、次の旅のヒントに。今回の旅の条件とは分けて管理します。</p><p class="my-preferences" data-profile-summary></p><button type="button" data-profile>旅行プロフィールを編集</button></section>
+    <section class="home-card"><h2>履歴と通知</h2><div class="my-actions"><button type="button" data-history>会話履歴 <span aria-hidden="true">→</span></button><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button></div></section><section class="home-card"><h2>アプリ設定</h2><p>経路検索の既定値と外部サービスの情報を確認できます。</p><button type="button" data-settings>アプリ設定を開く <span aria-hidden="true">→</span></button></section></div></div></section>
     <button type="button" class="product-map-back" data-map-back hidden>戻る</button>`;
   app.prepend(root);
   let current: PrimaryView = "explore", mapReturn: PrimaryView = "explore", composing = false;
@@ -60,6 +64,11 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   });
   root.querySelectorAll<HTMLButtonElement>("[data-example]").forEach((button) => button.addEventListener("click", () => { textarea.value = button.dataset.example!; saveDraft(); textarea.focus(); }));
   root.querySelector("[data-profile]")!.addEventListener("click", ports.openProfile);
+  root.querySelector("[data-account]")!.addEventListener("click", () => {
+    if (ports.authState().status === "signed-in") navigate("my"); else ports.login();
+  });
+  root.querySelector("[data-my-login]")!.addEventListener("click", () => { if (ports.authState().status !== "signed-in") ports.login(); });
+  root.querySelector("[data-my-logout]")!.addEventListener("click", ports.logout);
   root.querySelector("[data-history]")!.addEventListener("click", ports.openHistory);
   root.querySelector("[data-settings]")!.addEventListener("click", ports.openSettings);
   root.querySelector("[data-notifications]")!.addEventListener("click", ports.openNotifications);
@@ -67,9 +76,16 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     let input: HomeReadInput;
     try { input = ports.read(); } catch { input = { state: "unavailable", trips: [], candidates: [] }; }
     const view = homeReadModel(input, ports.now());
+    const auth = ports.authState(), account = root.querySelector<HTMLButtonElement>("[data-account]")!;
+    account.textContent = auth.status === "signed-in" ? auth.displayName : "ログイン / 新規登録";
+    account.setAttribute("aria-label", auth.status === "signed-in" ? "マイを開く" : "ログインまたは新規登録");
+    const myStatus = root.querySelector<HTMLElement>("[data-my-account-status]")!, myLogin = root.querySelector<HTMLButtonElement>("[data-my-login]")!, myLogout = root.querySelector<HTMLButtonElement>("[data-my-logout]")!;
+    myStatus.textContent = auth.status === "signed-in" ? `${auth.displayName} としてログイン中です。` : "旅程やプロフィールを保存するにはログインしてください。";
+    myLogin.hidden = auth.status === "signed-in";
+    myLogout.hidden = auth.status !== "signed-in";
     const stateText = view.state === "loading" ? "旅程を読み込んでいます。" : view.state === "unauthenticated" ? "ログインすると、保存した旅程をここで確認できます。相談はこのまま始められます。"
       : view.state === "unavailable" ? "旅程を取得できませんでした。未予約・準備完了とは判断していません。" : "次の旅はまだ決まっていません。相談から始めてみましょう。";
-    root.querySelector("[data-home-live]")!.innerHTML = `${view.preview ? '<p class="preview-notice">開発preview・固定データです。保存されません。</p>' : ""}
+    root.querySelector("[data-home-live]")!.innerHTML = `${view.preview ? '<p class="preview-notice">開発用の確認データです。保存されません。</p>' : ""}
       <section class="home-next"><h2>${view.next ? tripDisplayLabels[view.next.group] : "次の旅"}</h2>${view.next ? card(view.next.trip, undefined, view.readiness, true) : `<div class="home-empty"><p role="status">${stateText}</p>${travelDecoration("canal")}</div>`}
       ${view.state === "unavailable" ? '<button type="button" data-retry>再試行</button>' : ""}
       </section>
