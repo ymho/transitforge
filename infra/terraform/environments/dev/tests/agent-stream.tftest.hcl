@@ -11,6 +11,7 @@ variables {
   basic_auth_credentials_sha256    = "0000000000000000000000000000000000000000000000000000000000000000"
   github_repository                = "example/transitforge"
   data_builder_github_oidc_subject = "repo:example@12345/transitforge-data-builder@67890:environment:dev"
+  enable_fixed_egress_provider     = true
 }
 override_resource {
   override_during = plan
@@ -119,6 +120,14 @@ run "custom_domain_current_topology" {
     condition     = length(aws_lambda_function.agent_stream) == 1 && length(aws_api_gateway_rest_api.agent_stream) == 1 && length([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : b if b.path_pattern == "/api/agent-stream"]) == 1 && length([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : b if b.path_pattern == "/api/agent"]) == 1
     error_message = "The custom-domain topology must retain both current API routes."
   }
+}
+
+run "stream_requires_provider" {
+  command = plan
+  variables {
+    enable_fixed_egress_provider = false
+  }
+  expect_failures = [aws_lambda_function.agent_stream["stream"]]
 }
 
 run "custom_business_deadline" {
