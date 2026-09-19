@@ -151,6 +151,7 @@
   .product-nav a { flex: 1; flex-direction: column; gap: .1rem; min-width: 0; padding: .35rem; min-height: 3.2rem; font-size: .75rem; }
 }
 @media (max-width: 44rem) {
+  .trip-list-heading h1, .my-shell h1 { font-size: 1.8rem; }
   .product-header { height: 4rem; padding: 0 1.1rem; }
   .product-account { min-height: 2.3rem; padding-inline: .65rem; font-size: .7rem; }
   .product-page { height: calc(100dvh - 4rem); padding: .875rem .875rem 6rem; }
