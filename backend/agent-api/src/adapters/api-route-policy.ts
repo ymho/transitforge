@@ -1,12 +1,14 @@
 import { TripResourceError } from "../contracts/trip-api.js";
 import type { LambdaHttpEvent } from "../contracts/http.js";
 
-/** Executable allowlist for the four personal HTTP handlers. Scopes come from Terraform. */
+/** Executable allowlist for the personal HTTP handlers. Scopes come from Terraform. */
 export const personalApiPolicies = {
   trip: { path: "/api/trips/v1", version: "trip-api-v1", operations: ["create", "mutate", "get", "list", "archive", "attach", "detach", "reference"] },
   sharing: { path: "/api/trips/sharing/v1", version: "trip-sharing-v1", operations: ["create-grant", "redeem", "revoke-grant", "manage", "participant", "accessible", "reservation-facts"] },
   notification: { path: "/api/trips/notifications/v1", version: "notification-api-v1", operations: ["list", "read"] },
   inTrip: { path: "/api/trips/in-trip/v1", version: "in-trip-api-v1", operations: [undefined] },
+  conversation: { path: "/api/conversations/v1", version: "conversation-api-v1", operations: ["create", "get", "list", "history", "update", "delete"] },
+  profile: { path: "/api/profile/v1", version: "profile-api-v1", operations: ["get", "update", "delete"] },
 } as const;
 export type PersonalApi = keyof typeof personalApiPolicies;
 

@@ -52,7 +52,8 @@ Cognito UIやTrip公開writerの完成待ちは不要。テストはport fakeを
 | POST `/api/trips/notifications/v1`: `list`, `read` | authenticated user | 共通認証→`NotificationApplication`のowner読取/CAS既読。公開501 gateは維持 |
 | Reservation: `create`, `get`, `list`, `update`, `cancel`, `link`, `unlink` | authenticated user | Applicationのみで対応handler/clientなし。新routeは作らず未接続。予約自体の実行APIではない |
 | Checklist: `list`, `preview`, `add`, `update`, `confirm-suggestions` | authenticated user | Applicationのみで対応handler/clientなし。新routeは作らず未接続。確認authorityは別のtrusted host入力 |
-| Conversation/Profile CRUD | authenticated user | #487で保存Applicationを導入済み。HTTP API/auth配線は本PR対象外。公開path/operations確定時に#479で追記 |
+| POST `/api/conversations/v1`: `create`, `get`, `list`, `history`, `update`, `delete` | authenticated user | 共通認証→既存`ConversationApplication`→owner-scoped Repository。owner/principalはbodyから受けず、conversation UUIDはowner namespace内だけで解決する。 |
+| POST `/api/profile/v1`: `get`, `update`, `delete` | authenticated user | 共通認証→既存`ProfileApplication`→owner-scoped Repository。未登録は`profile: null`であり、保存障害を未登録へ変換しない。 |
 | trip-changed / rail-impact / trip-recheck / notification Lambda、EventBridge/SQS/Streams worker、内部event ingest | internal IAM-only | AWS event sourceと最小IAM、保存済みownerから解決。利用者JWTだけで起動不可 |
 | 内部CLIのfeedback/trace読取・分析 | internal IAM-only | private S3のIAM読取。利用者向けread routeなし |
 
@@ -77,22 +78,24 @@ JWT検証器は#484の`AccessTokenVerifier`だけであり、handlerごとに検
   共有grantがないBからAへのget/mutate/archiveは不存在と同じ404。list/referenceは本人namespaceへ限定する。
   明示共有済みのeditor/viewerは既存`TripSharingApplication`で解決する。
 
-`createPersonalApiHandler({ enabled, auth, tripTable, notificationTable })`は公開に配線しないopt-in factoryである。
+`createPersonalApiHandler({ enabled, auth, tripTable, notificationTable, stateTable })`はTrip系の公開に配線しないopt-in factoryである。
+Conversation/Profileだけは既存Regional REST APIの専用Lambda `personal-state` へ接続する。これはTrip hostを有効化せず、
+CloudFrontの `/api/conversations/*` と `/api/profile/*` behavior、Gateway Cognito authorizer、Backend verifierを順に通す。
 `enabled !== true`では501のまま、trueでも`auth`はTerraformの`cognito_api_auth_config`出力から
 trusted hostが渡す必要がある。verifierをhostごとに一度作成し、既存4handlerに同じresolverを注入する。
 ルータは4つの完全一致pathだけを受け付け、未知pathは404で閉じる。Agentへのfallbackはない。
-公開`lambda.ts`は#480でAgent ingress認証だけを接続した。Trip系4 handlerの501 gateは維持する。
+公開`lambda.ts`は#480でAgent ingress認証だけを接続した。personal hostの実環境gateは維持する。
 このfactoryの追加はproduction writer、IAM権限、Cognito/Bearer搬送を有効化したという意味ではない。
 
 Reservation/ChecklistはHTTP handlerがなく、確認authorityの設計も別に必要なため今回公開しない。
 feedback/traceは既存Agent handler内部にあり、/api/agentを変更しない責務分離を優先して#462/#480へ残す。
-Conversation/Profileは#479へ残す。内部4workerは従来のEventBridge等のtrigger検査とIAMを維持し、
-Bearerの存在から起動するrouteへ変更しない。
+Conversation/Profile clientは`personalApiFetch`の同一session generation/abort契約を利用する。
+LocalStorageのwriterを切り替えず、internal 4 workerは従来のEventBridge等のtrigger検査とIAMを維持する。
 
 ## Frontendの個人API境界
 
 `adapters/http/authenticated-fetch.ts`を`auth-composition.ts`で#486のAuthSessionへ接続する。
-`personal-api-fetch.ts`は4つの個人APIと残存Agent operationのdefault transportを差し替え、global fetchは変更しない。
+`personal-api-fetch.ts`は個人APIと残存Agent operationのdefault transportを差し替え、global fetchは変更しない。
 同origin・既知path・POST・query/hashなしに限定し、毎回`getAccessToken()`から得たAccess Tokenを使う。
 個人APIはAuthorization、OAC配下の`/api/agent`だけは`X-Raiquora-Access-Token`へ入れる。
 呼出元が指定したどちらのtoken headerや任意外部URLも拒否し、redirect/error、

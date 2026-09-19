@@ -21,12 +21,56 @@ locals {
   agent_stream_path_part = "agent-stream"
   agent_stream_path      = "/api/${local.agent_stream_path_part}"
   agent_stream_package   = jsondecode(file("${path.module}/../../../packaging/agent-stream.json"))
+  personal_state_package = jsondecode(file("${path.module}/../../../packaging/personal-state.json"))
 }
 data "archive_file" "agent_stream" {
   for_each    = local.agent_stream_instances
   type        = "zip"
   source_dir  = "${path.module}/../../../../${local.agent_stream_package.source}"
   output_path = "${path.module}/.terraform/agent-stream.zip"
+}
+data "archive_file" "personal_state" {
+  for_each    = local.agent_stream_instances
+  type        = "zip"
+  source_dir  = "${path.module}/../../../../${local.personal_state_package.source}"
+  output_path = "${path.module}/.terraform/personal-state.zip"
+}
+resource "aws_iam_role" "personal_state" {
+  for_each           = local.agent_stream_instances
+  name               = "${local.agent_stream_name}-personal-state"
+  assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Principal = { Service = "lambda.amazonaws.com" }, Action = "sts:AssumeRole" }] })
+}
+resource "aws_cloudwatch_log_group" "personal_state" {
+  for_each          = local.agent_stream_instances
+  name              = "/aws/lambda/${local.agent_stream_name}-personal-state"
+  retention_in_days = 30
+}
+resource "aws_iam_role_policy" "personal_state" {
+  for_each = local.agent_stream_instances
+  role     = aws_iam_role.personal_state[each.key].id
+  policy = jsonencode({ Version = "2012-10-17", Statement = [
+    { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "${aws_cloudwatch_log_group.personal_state[each.key].arn}:*" },
+    { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem", "dynamodb:Query"], Resource = aws_dynamodb_table.server_state.arn }
+  ] })
+}
+resource "aws_lambda_function" "personal_state" {
+  for_each         = local.agent_stream_instances
+  function_name    = "${local.agent_stream_name}-personal-state"
+  role             = aws_iam_role.personal_state[each.key].arn
+  filename         = data.archive_file.personal_state[each.key].output_path
+  source_code_hash = data.archive_file.personal_state[each.key].output_base64sha256
+  runtime          = local.personal_state_package.runtime
+  handler          = local.personal_state_package.handler
+  architectures    = ["arm64"]
+  memory_size      = 256
+  timeout          = 15
+  environment { variables = {
+    PERSONAL_STATE_API_ENABLED = "true"
+    SERVER_STATE_TABLE_NAME    = aws_dynamodb_table.server_state.name
+    COGNITO_USER_POOL_ID       = aws_cognito_user_pool.users.id
+    COGNITO_CLIENT_ID          = aws_cognito_user_pool_client.spa.id
+  } }
+  depends_on = [aws_iam_role_policy.personal_state]
 }
 resource "aws_iam_role" "agent_stream" {
   for_each = local.agent_stream_instances
@@ -105,6 +149,30 @@ resource "aws_api_gateway_resource" "agent_stream_route" {
   parent_id   = aws_api_gateway_resource.agent_stream_api[each.key].id
   path_part   = local.agent_stream_path_part
 }
+resource "aws_api_gateway_resource" "personal_state_conversations" {
+  for_each    = local.agent_stream_instances
+  rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
+  parent_id   = aws_api_gateway_resource.agent_stream_api[each.key].id
+  path_part   = "conversations"
+}
+resource "aws_api_gateway_resource" "personal_state_conversations_v1" {
+  for_each    = local.agent_stream_instances
+  rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
+  parent_id   = aws_api_gateway_resource.personal_state_conversations[each.key].id
+  path_part   = "v1"
+}
+resource "aws_api_gateway_resource" "personal_state_profile" {
+  for_each    = local.agent_stream_instances
+  rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
+  parent_id   = aws_api_gateway_resource.agent_stream_api[each.key].id
+  path_part   = "profile"
+}
+resource "aws_api_gateway_resource" "personal_state_profile_v1" {
+  for_each    = local.agent_stream_instances
+  rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
+  parent_id   = aws_api_gateway_resource.personal_state_profile[each.key].id
+  path_part   = "v1"
+}
 resource "aws_api_gateway_authorizer" "agent_stream_cognito" {
   for_each        = local.agent_stream_instances
   name            = "existing-cognito"
@@ -122,6 +190,24 @@ resource "aws_api_gateway_method" "agent_stream_post" {
   authorizer_id        = aws_api_gateway_authorizer.agent_stream_cognito[each.key].id
   authorization_scopes = aws_cognito_resource_server.api.scope_identifiers
 }
+resource "aws_api_gateway_method" "personal_state_post" {
+  for_each             = local.agent_stream_instances
+  rest_api_id          = aws_api_gateway_rest_api.agent_stream[each.key].id
+  resource_id          = aws_api_gateway_resource.personal_state_conversations_v1[each.key].id
+  http_method          = "POST"
+  authorization        = "COGNITO_USER_POOLS"
+  authorizer_id        = aws_api_gateway_authorizer.agent_stream_cognito[each.key].id
+  authorization_scopes = aws_cognito_resource_server.api.scope_identifiers
+}
+resource "aws_api_gateway_method" "personal_profile_post" {
+  for_each             = local.agent_stream_instances
+  rest_api_id          = aws_api_gateway_rest_api.agent_stream[each.key].id
+  resource_id          = aws_api_gateway_resource.personal_state_profile_v1[each.key].id
+  http_method          = "POST"
+  authorization        = "COGNITO_USER_POOLS"
+  authorizer_id        = aws_api_gateway_authorizer.agent_stream_cognito[each.key].id
+  authorization_scopes = aws_cognito_resource_server.api.scope_identifiers
+}
 resource "aws_api_gateway_integration" "agent_stream_route" {
   for_each                = local.agent_stream_instances
   rest_api_id             = aws_api_gateway_rest_api.agent_stream[each.key].id
@@ -132,6 +218,38 @@ resource "aws_api_gateway_integration" "agent_stream_route" {
   uri                     = aws_lambda_function.agent_stream[each.key].response_streaming_invoke_arn
   response_transfer_mode  = "STREAM"
   timeout_milliseconds    = 250000
+}
+resource "aws_api_gateway_integration" "personal_state_conversations" {
+  for_each                = local.agent_stream_instances
+  rest_api_id             = aws_api_gateway_rest_api.agent_stream[each.key].id
+  resource_id             = aws_api_gateway_resource.personal_state_conversations_v1[each.key].id
+  http_method             = aws_api_gateway_method.personal_state_post[each.key].http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.personal_state[each.key].invoke_arn
+}
+resource "aws_api_gateway_integration" "personal_state_profile" {
+  for_each                = local.agent_stream_instances
+  rest_api_id             = aws_api_gateway_rest_api.agent_stream[each.key].id
+  resource_id             = aws_api_gateway_resource.personal_state_profile_v1[each.key].id
+  http_method             = aws_api_gateway_method.personal_profile_post[each.key].http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.personal_state[each.key].invoke_arn
+}
+resource "aws_lambda_permission" "personal_state_conversations_gateway" {
+  for_each      = local.agent_stream_instances
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.personal_state[each.key].function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.agent_stream[each.key].execution_arn}/${var.environment}/POST/api/conversations/v1"
+}
+resource "aws_lambda_permission" "personal_state_profile_gateway" {
+  for_each      = local.agent_stream_instances
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.personal_state[each.key].function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.agent_stream[each.key].execution_arn}/${var.environment}/POST/api/profile/v1"
 }
 resource "aws_lambda_permission" "agent_stream_gateway" {
   for_each      = local.agent_stream_instances
@@ -144,7 +262,7 @@ resource "aws_api_gateway_deployment" "agent_stream" {
   for_each    = local.agent_stream_instances
   rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
   triggers = { configuration = sha1(jsonencode([
-    aws_api_gateway_integration.agent_stream_route[each.key], aws_api_gateway_method.agent_stream_post[each.key], aws_api_gateway_authorizer.agent_stream_cognito[each.key]
+    aws_api_gateway_integration.agent_stream_route[each.key], aws_api_gateway_method.agent_stream_post[each.key], aws_api_gateway_authorizer.agent_stream_cognito[each.key], aws_api_gateway_integration.personal_state_conversations[each.key], aws_api_gateway_integration.personal_state_profile[each.key], aws_api_gateway_method.personal_state_post[each.key], aws_api_gateway_method.personal_profile_post[each.key]
   ])) }
   lifecycle { create_before_destroy = true }
 }

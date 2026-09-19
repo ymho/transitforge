@@ -60,7 +60,7 @@ describe("other stable personal handlers share the same authentication", () => {
     expect((await inTrip(event(personalApiPolicies.inTrip.path, readBody, b))).statusCode).toBe(404);
   });
   it("keeps host default-off, rejects unknown paths and does not route Agent or IAM workers", async () => {
-    const options = { auth: { userPoolId: pool, clientId: "app-client", requiredScopes: [scope] }, tripTable: "trips", notificationTable: "notifications" };
+    const options = { auth: { userPoolId: pool, clientId: "app-client", requiredScopes: [scope] }, tripTable: "trips", notificationTable: "notifications", stateTable: "state" };
     expect((await createPersonalApiHandler(options)({})).statusCode).toBe(501);
     const host = createPersonalApiHandler({ ...options, enabled: true });
     for (const path of ["/api/agent", "/api/conversations", "/api/profile", "/api/trips/unknown", "/trip-changed-lambda"]) {

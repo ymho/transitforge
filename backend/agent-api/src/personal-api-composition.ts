@@ -10,6 +10,11 @@ import { createTripApiHandler } from "./trip-handler.js";
 import { createTripSharingHandler } from "./trip-sharing-handler.js";
 import { createNotificationHandler } from "./notification-handler.js";
 import { createInTripContextHandler } from "./in-trip-context-handler.js";
+import { DynamoDbConversationRepository } from "./adapters/dynamodb-conversation-repository.js";
+import { DynamoDbProfileRepository } from "./adapters/dynamodb-profile-repository.js";
+import { ConversationApplication } from "./usecases/conversation-application.js";
+import { ProfileApplication } from "./usecases/profile-application.js";
+import { createConversationApiHandler, createProfileApiHandler } from "./server-state-handler.js";
 import { jsonResponse, type LambdaHttpEvent, type LambdaContext } from "./contracts/http.js";
 
 /** Opt-in host factory, not installed in lambda.ts. No production flag/env fallback.
@@ -21,10 +26,11 @@ export function createPersonalApiHandler(options: {
   auth: { userPoolId: string; clientId: string; requiredScopes: readonly string[] };
   tripTable: string;
   notificationTable: string;
+  stateTable: string;
 }) {
   if (options.enabled !== true) return async (_event: LambdaHttpEvent, _context?: LambdaContext) =>
     jsonResponse(501, { error: "unavailable" });
-  if (!options.tripTable || !options.notificationTable) throw new Error("Missing personal API configuration");
+  if (!options.tripTable || !options.notificationTable || !options.stateTable) throw new Error("Missing personal API configuration");
   const authenticate = createHttpPrincipalResolver(createCognitoAccessTokenVerifier(options.auth), options.auth.requiredScopes);
   const applications = createAuthorizedTripApplications(options.tripTable);
   const trips = createTripApiHandler(applications.trips, { authenticate });
@@ -33,6 +39,8 @@ export function createPersonalApiHandler(options: {
     new DynamoDbNotificationRepository(options.notificationTable, options.tripTable),
     new DynamoDbTripRepository(options.tripTable)), authenticate);
   const inTrip = createInTripContextHandler(createInTripContextApplication(options.tripTable, options.notificationTable), authenticate);
+  const conversations = createConversationApiHandler(new ConversationApplication(new DynamoDbConversationRepository(options.stateTable)), authenticate);
+  const profile = createProfileApiHandler(new ProfileApplication(new DynamoDbProfileRepository(options.stateTable)), authenticate);
   return (event: LambdaHttpEvent, context?: LambdaContext) => {
     if (event.rawPath && event.path && event.rawPath !== event.path) return Promise.resolve(jsonResponse(404, { error: "not-found" }));
     switch (event.rawPath ?? event.path) {
@@ -40,6 +48,8 @@ export function createPersonalApiHandler(options: {
       case personalApiPolicies.sharing.path: return sharing(event, context);
       case personalApiPolicies.notification.path: return notifications(event);
       case personalApiPolicies.inTrip.path: return inTrip(event);
+      case personalApiPolicies.conversation.path: return conversations(event, context);
+      case personalApiPolicies.profile.path: return profile(event, context);
       default: return Promise.resolve(jsonResponse(404, { error: "not-found" }));
     }
   };

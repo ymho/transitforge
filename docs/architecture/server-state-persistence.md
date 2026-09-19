@@ -5,8 +5,9 @@
 保存境界は **#479 Phase A / persistence foundation** で導入した。
 `TrustedPrincipal → ConversationApplication / ProfileApplication → Repository → DynamoDB`
 に加え、**Phase B**でServer Context Loaderから共有Runtimeへ読み取り専用で接続する。
-詳細は[Server Agent Context](server-agent-context.md)を参照する。HTTP/API GatewayとBrowser compositionには接続しない。
-既存Browser LocalStorageは引き続き現行の正本であり、本基盤とのdual-writeは行わない。
+詳細は[Server Agent Context](server-agent-context.md)を参照する。認証済みRegional REST hostには
+`/api/conversations/v1` と `/api/profile/v1` を接続し、専用Lambdaから同じApplication/Repositoryを利用する。
+Browserには将来切替用のHTTP clientだけを追加する。既存Browser LocalStorageは引き続き現行の正本であり、本基盤とのdual-writeは行わない。
 
 [ADR 0067](../decisions/0067-establish-trusted-principal-boundary.md)の検証済みissuer + subから得た
 `TrustedPrincipal.subject`をそのままownerに使う。別identity hashやowner tableは作らない。
@@ -77,9 +78,9 @@ transactionで物理削除し、`{ complete: false }`なら同じprincipal/id/ex
 Phase Cではmessageに続けて最大50件のturn receiptも削除し、両者の削除完了をcomplete=trueの条件とする。
 削除中のappendはmetadata CASで拒否され、削除済みIDの再createも拒否する。
 
-呼出し元はcomplete=trueまで継続する責務を持つ。Phase Aに公開delete endpointや背景workerはなく、
-中断後に自動再開するとは主張しない。中断時は非表示の本文がtableに残るため、#480でtransportを
-導入する際はdurableな削除継続（または削除完了を保証する実行境界）を組み合わせる。
+呼出し元はcomplete=trueまで継続する責務を持つ。public delete endpointは同じCASで`complete`を返すが、
+背景workerや中断後の自動再開は提供しない。中断時は非表示の本文がtableに残るため、durableな削除継続
+（または削除完了を保証する実行境界）は後続で組み合わせる。
 「非表示化成功」を「物理削除完了」と表示してはならない。
 
 Profile deleteは1回の条件付きPutで本文を除去する。revisionとdeletedだけのtombstoneを残し、
@@ -128,12 +129,12 @@ terraform -chdir=infra/terraform/environments/dev validate
 
 Phase BでServer Context Loaderと`MultiStepAgentRuntime`の接続を完了する。
 Browserから渡す将来の契約はIDs + user input + bounded UI hintであり、会話/Profile/Trip本文を要求しない。
-Server内部のstateful組成だけで動作し、production Browserの正本はまだ切り替えない。
+Server内部のstateful組成と認証済みread/write APIで動作し、production Browserの正本はまだ切り替えない。
 
 #480以降へ残すもの:
 
 - Phase Cで追加したturn保存入口のproduction接続、必要な構造化応答の保存、summary更新方針
-- Browser切替、logout/account切替/別tab/遅着responseの破棄、transportと保存・削除継続の組成
+- Browser切替、別tabの状態同期、保存・削除継続のUI組成
 - LocalStorage正本停止。実利用者データ救済要否を明示確認し、必要なら明示import/read-backを設計する
 
 Agent Eval、Frontend/root全量はこの変更のローカル検証に含めない。root全量はGitHub CIへ委ねる。

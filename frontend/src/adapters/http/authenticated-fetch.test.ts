@@ -33,6 +33,14 @@ describe("personal API authenticated fetch", () => {
     expect(f.auth.getAccessToken).toHaveBeenCalledTimes(2);
     request.dispose();
   });
+  it("routes Conversation and Profile through the same-origin Bearer boundary", async () => {
+    const f = session(), network = vi.fn<typeof fetch>().mockImplementation(async () => json({ ok: true }));
+    const request = createAuthenticatedFetch(f.auth, origin, network);
+    for (const endpoint of ["/api/conversations/v1", "/api/profile/v1"]) await request(endpoint, post);
+    expect(network.mock.calls.map(([input]) => (input as Request).url)).toEqual([`${origin}/api/conversations/v1`, `${origin}/api/profile/v1`]);
+    expect(network.mock.calls.map(([input]) => (input as Request).headers.get("authorization"))).toEqual(["Bearer access-A", "Bearer access-A"]);
+    request.dispose();
+  });
   it("carries a verified-user token separately from OAC Authorization for remaining Agent operations", async () => {
     const f = session(), network = vi.fn<typeof fetch>().mockImplementation(async () => json({ ok: true }));
     const request = createAuthenticatedFetch(f.auth, origin, network);
