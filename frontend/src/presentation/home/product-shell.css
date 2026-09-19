@@ -78,6 +78,7 @@
 .home-empty .travel-scenery { align-self: stretch; min-height: 9rem; opacity: .65; }
 .home-rail-feature { display: grid; grid-template-columns: 1.2fr .8fr; gap: 1.5rem; align-items: center; padding: 1.375rem; background: #eaf2f8; border-radius: 1.375rem; }
 .home-rail-feature p { font-size: .85rem; }
+.my-shell, .trip-list-heading { max-width: 79.25rem; margin-inline: auto; }
 .my-shell { padding: 0; }
 .my-shell h1, .trip-list-heading h1 { font-size: 2rem; }
 .my-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -95,9 +96,10 @@
 .home-secondary button { margin: .25rem .4rem .25rem 0; }
 .product-page details { font-size: .85rem; margin-top: 1.2rem; }
 .product-page summary { cursor: pointer; min-height: 2.75rem; }
-.trip-list-heading { max-width: 46rem; margin: .35rem 0 1.75rem; }
+.trip-list-heading { margin: .35rem auto 1.75rem; }
 .trip-list-heading .home-eyebrow { margin: 0; color: #4d718d; }
-.trip-list-heading h1 { margin: .2rem 0 .35rem; }
+.trip-list-heading h1, .my-shell h1 { margin: .2rem 0 .35rem; }
+.my-shell .home-eyebrow { margin: 0; color: #4d718d; }
 .trip-list-heading p:last-child { max-width: 38rem; margin: 0; font-size: .95rem; }
 /* Desktop presentation pass: preserve the component system while giving the first view a clear focal point. */
 @media (min-width: 45rem) {

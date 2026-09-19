@@ -43,7 +43,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   form.classList.remove("ai-guide-form"); form.classList.add("consultation-composer");
   input.placeholder = "希望や気になることを話してください";
   const send = form.querySelector("button[type=submit]"); if (send) send.textContent = "送る";
-  conversation.append(head, context, messages, form);
+  conversation.append(context, messages, form);
   const aside = node("aside", "consultation-conditions"); aside.id = "consultation-conditions";
   aside.setAttribute("aria-label", "この旅の条件"); conditions.setAttribute("aria-controls", aside.id);
   const close = node("button", "consultation-conditions-close", "閉じる"); close.type = "button";
@@ -57,7 +57,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   };
   conditions.addEventListener("click", () => sheet(true)); close.addEventListener("click", () => sheet(false)); backdrop.addEventListener("click", () => sheet(false));
   aside.addEventListener("keydown", (event) => { if (event.key === "Escape") sheet(false); });
-  layout.append(conversation, aside, backdrop);
+  layout.append(head, conversation, aside, backdrop);
   panel.classList.remove("ai-guide-panel"); panel.classList.add("consultation-page"); panel.replaceChildren(layout);
   let lastKey = "";
   const render = () => {
