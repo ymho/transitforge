@@ -99,7 +99,7 @@
 .trip-list-heading { margin: .35rem auto 1.75rem; }
 .trip-list-heading .home-eyebrow { margin: 0; color: #4d718d; }
 .trip-list-heading h1, .my-shell h1 { margin: .2rem 0 .35rem; }
-.my-shell .home-eyebrow { margin: 0; color: #4d718d; }
+.my-shell .home-eyebrow { margin: .35rem 0 0; color: #4d718d; }
 .trip-list-heading p:last-child { max-width: 38rem; margin: 0; font-size: .95rem; }
 /* Desktop presentation pass: preserve the component system while giving the first view a clear focal point. */
 @media (min-width: 45rem) {
