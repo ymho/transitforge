@@ -1,4 +1,5 @@
 import { currentAuthentication } from "./auth-composition";
+import { consultationTransport } from "./agent-cutover-policy";
 import { createConversationStreamSession } from "../adapters/http/agent-stream/session";
 
 import { createAgentTurnObservationStore } from "../usecases/agent/agent-turn-observation-store";
@@ -290,8 +291,9 @@ const serverConversationStorage = {
   removeItem: (key: string) => { serverConversationValues.delete(key); },
 };
 
-// Short-lived #480 build gate. Remove after AWS validation and traffic cutover.
+// Short-lived #480 build gate. Production OFF stops consultation; remove in #481.
 const serverAgentEnabled = import.meta.env.VITE_SERVER_AGENT_ENABLED === "true";
+const consultationTransportMode = consultationTransport(serverAgentEnabled, import.meta.env.DEV);
 const conversationStorage = serverAgentEnabled ? serverConversationStorage : localStorage;
 const conversationSessionRepository = new LocalConversationSessionRepository(
   conversationStorage,
@@ -729,9 +731,9 @@ handleAiGuidePrompt = async (
   conversation,
   onResponseMetadata,
 ) => {
-    if (serverAgentSession) return serverAgentSession.start(prompt).send();
+    if (consultationTransportMode === "server") return serverAgentSession!.start(prompt).send();
     // Rollback is maintenance, never a production Browser model loop.
-    if (!import.meta.env.DEV) throw new Error("相談機能は現在利用できません。しばらくしてから再度お試しください。");
+    if (consultationTransportMode === "stopped") throw new Error("相談機能は現在利用できません。しばらくしてから再度お試しください。");
     if (previousJourneySessionId !== activeConversationSession.id) {
       previousJourneySessionId = activeConversationSession.id;
       previousJourneyPlan = latestJourneyPlanFromHistory(
