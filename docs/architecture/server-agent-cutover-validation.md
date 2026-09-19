@@ -28,8 +28,9 @@ API Gateway streaming、CloudFront route、Lambda permission、IAM Provider invo
 固定checkpointへ分割する。失敗したcheckpoint以降は実行せず、remote valueや例外本文を含めずに
 固定labelとPASS/FAIL/NOT RUNだけを表示する。
 
-unauthenticated/invalid tokenの両origin検査はGatewayのburstを消費するため、最初の認証済みturnの前に
-1 token intervalを待つ。この待機はE2E harnessだけにあり、Gateway設定やproduction trafficを変更しない。
+unauthenticated/invalid tokenの両origin検査はGatewayのburstを消費するため、各requestの間と最初の
+認証済みturnの前に1 token intervalを待つ。この待機はE2E harnessだけにあり、Gateway設定やproduction
+trafficを変更しない。429をretryや許容で隠さず、validation自身がproductionのrate limitを尊重する。
 
 ## Secret split
 

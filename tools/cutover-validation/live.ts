@@ -19,6 +19,27 @@ export async function waitForGatewayThrottleRecovery(
   await wait(gatewayThrottleRecoveryMs);
 }
 
+export async function runPacedGatewayNegativeChecks(
+  harness: { rejected(token?: string, origin?: string): Promise<void> },
+  directOrigin: string,
+  check: (label: "unauthenticated rejection" | "invalid token rejection", action: () => Promise<void>) => Promise<unknown>,
+  wait: (milliseconds: number) => Promise<void> = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)),
+) {
+  const recover = () => waitForGatewayThrottleRecovery(wait);
+  await check("unauthenticated rejection", async () => {
+    await harness.rejected();
+    await recover();
+    await harness.rejected(undefined, directOrigin);
+  });
+  await recover();
+  await check("invalid token rejection", async () => {
+    await harness.rejected("invalid.token.value");
+    await recover();
+    await harness.rejected("invalid.token.value", directOrigin);
+  });
+  await recover();
+}
+
 export function providerRequest(now = new Date()) {
   const date = (offset: number) => new Date(now.getTime() + offset * 86_400_000).toISOString().slice(0, 10);
   return parseProviderRequest({ operation: "search_accommodation", requestId: `cutover-${randomUUID()}`,
