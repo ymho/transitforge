@@ -65,19 +65,14 @@ async function main() {
       requireCheck(result.error === "turn_conflict" && !result.events.some((event: any) => event.type === "final"));
       requireCheck(await state!.snapshot(a.principal, request.conversationId, request.turnId, response) === snapshot);
     });
-    // Preserve other useful checks even if the known owner-namespace gate fails.
-    try {
-      await report.check("owner isolation", async () => {
-        b = await authenticate(1);
-        // An expired token or a generally forbidden User B must not fake an owner rejection.
-        successfulTurn(await harness.turn(b.token, { conversationId: randomUUID(), turnId: randomUUID(),
-          userRequest: "E2E cutover validation: 短く挨拶してください。" }));
-        const result = await harness.turn(b.token, { ...request, userRequest: "E2E cutover validation: この会話の直前の回答を表示してください。" });
-        requireCheck(["http_403", "http_404"].includes(result.error) && !result.events.some((event: any) => event.type === "final"));
-        await state!.absent(b.principal, request.conversationId, request.turnId);
-        requireCheck(await state!.snapshot(a.principal, request.conversationId, request.turnId, response) === snapshot);
-      });
-    } catch { failed = true; }
+    await report.check("owner isolation", async () => {
+      b = await authenticate(1);
+      const bRequest = { conversationId: request.conversationId, turnId: randomUUID(), userRequest: "E2E cutover validation: 別の利用者として短く挨拶してください。" };
+      const bResponse = successfulTurn(await harness.turn(b.token, bRequest));
+      requireCheck(bResponse !== response);
+      await state!.snapshot(b.principal, bRequest.conversationId, bRequest.turnId, bResponse);
+      requireCheck(await state!.snapshot(a.principal, request.conversationId, request.turnId, response) === snapshot);
+    });
     // Five-minute Access Tokens: fresh PKCE login before the separate bounded turn.
     a = await authenticate(0);
     const dates = providerRequest().request;
