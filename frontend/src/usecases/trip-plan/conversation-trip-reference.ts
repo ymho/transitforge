@@ -2,7 +2,7 @@ import type { ConversationSessionRepository } from "../concierge/conversation-se
 import type { ServerTripClient } from "./server-trip-client";
 
 /** Successful server reference operation precedes the local UI reference; no Trip mutation. */
-export async function setConversationTripReference(repository: ConversationSessionRepository, client: ServerTripClient,
+export async function setConversationTripReference(repository: ConversationSessionRepository, client: Pick<ServerTripClient, "attach" | "detach"> & Record<string, unknown>,
   sessionId: string, tripId?: string): Promise<void> {
   if (!repository.list().some((session) => session.id === sessionId)) throw new Error("Conversation missing");
   if (tripId === undefined) await client.detach(sessionId);

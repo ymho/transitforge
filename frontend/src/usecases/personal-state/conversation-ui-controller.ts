@@ -89,6 +89,15 @@ export class ConversationUiController {
       : { messageId: `${id}:${item.sequence}`, role: "assistant", response: item.text });
     this.histories.set(id, entries); return structuredClone(entries);
   }
+  /** Read back a server-side reference after a Trip write; never synthesize a local link. */
+  async refresh(id: string): Promise<ConversationSession | undefined> {
+    this.requireAuthentication();
+    const generation = this.generation, value = await this.client.get(id);
+    if (generation !== this.generation || !value) return undefined;
+    const session = toSession(value);
+    this.sessions = this.sessions.map((item) => item.id === id ? session : item); this.notify();
+    return structuredClone(session);
+  }
   private notify(): void { for (const listener of this.listeners) listener(); }
   private requireAuthentication(): void { if (!this.canUse()) throw new Error("Authentication required"); }
 }

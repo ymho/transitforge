@@ -12,6 +12,7 @@ export interface ConsultationScreenPorts {
   preview(proposal: TripUpdateProposal): void;
   showTrip(): void;
   newConversation(): void;
+  saveDraftTrip?(): Promise<void>;
 }
 
 /** New screen composition; retained DOM nodes preserve send/stream/history/IME/draft listeners. */
@@ -23,9 +24,10 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   };
   const oldActions = panel.querySelector(".guide-panel-actions");
   const layout = node("div", "consultation-layout"), conversation = node("section", "consultation-conversation");
-  const head = node("header", "consultation-heading"), title = node("h1", "", "AI旅の相談");
+  const head = node("header", "consultation-heading"), headingCopy = node("div", "consultation-heading-copy"), eyebrow = node("p", "home-eyebrow", "AI CONCIERGE"), title = node("h1", "", "相談");
+  headingCopy.append(eyebrow, title);
   const fresh = node("button", "", "新しい相談"); fresh.type = "button"; fresh.addEventListener("click", ports.newConversation);
-  head.append(title, fresh);
+  head.append(headingCopy, fresh);
   // Keep secondary feature triggers alive, but discard the old panel heading/border/layout.
   if (oldActions) { oldActions.className = "consultation-secondary"; head.append(oldActions); }
   const context = node("section", "consultation-context"), identity = node("div", "consultation-identity");
@@ -33,20 +35,21 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   identity.append(name, meta, note);
   const actions = node("div", "consultation-context-actions");
   const conditions = node("button", "consultation-conditions-toggle", "この旅の条件"), tripButton = node("button", "", "旅程を見る");
+  const saveDraft = node("button", "", "この相談から仮旅程を保存"); saveDraft.type = "button";
+  saveDraft.addEventListener("click", () => { void ports.saveDraftTrip?.().then(render, () => { status.textContent = "旅程を保存できませんでした。相談内容はそのままです。もう一度お試しください。"; }); });
   conditions.type = tripButton.type = "button"; tripButton.addEventListener("click", ports.showTrip);
-  actions.append(conditions, tripButton); context.append(identity, actions);
+  actions.append(conditions, tripButton, saveDraft); context.append(identity, actions);
   messages.classList.remove("ai-guide-messages"); messages.classList.add("consultation-messages");
   form.classList.remove("ai-guide-form"); form.classList.add("consultation-composer");
   input.placeholder = "希望や気になることを話してください";
   const send = form.querySelector("button[type=submit]"); if (send) send.textContent = "送る";
-  conversation.append(head, context, messages, form);
+  conversation.append(context, messages, form);
   const aside = node("aside", "consultation-conditions"); aside.id = "consultation-conditions";
   aside.setAttribute("aria-label", "この旅の条件"); conditions.setAttribute("aria-controls", aside.id);
   const close = node("button", "consultation-conditions-close", "閉じる"); close.type = "button";
   const rows = node("div", "consultation-condition-rows"), help = node("p", "consultation-help");
   const status = node("p", "consultation-edit-status"); status.setAttribute("role", "status");
-  aside.append(close, node("h2", "", "AIが把握している条件"), help, rows, status,
-    node("p", "consultation-coverage", "収録時刻表と取得できた情報をもとに案内します。未確認の移動や予約を、成立済みとは扱いません。"));
+  aside.append(close, node("h2", "", "今回の条件"), help, rows, status);
   const backdrop = node("button", "consultation-backdrop"); backdrop.type = "button"; backdrop.setAttribute("aria-label", "条件を閉じる"); backdrop.hidden = true;
   const sheet = (open: boolean) => {
     aside.dataset.open = String(open); backdrop.hidden = !open; conditions.setAttribute("aria-expanded", String(open));
@@ -54,7 +57,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   };
   conditions.addEventListener("click", () => sheet(true)); close.addEventListener("click", () => sheet(false)); backdrop.addEventListener("click", () => sheet(false));
   aside.addEventListener("keydown", (event) => { if (event.key === "Escape") sheet(false); });
-  layout.append(conversation, aside, backdrop);
+  layout.append(head, conversation, aside, backdrop);
   panel.classList.remove("ai-guide-panel"); panel.classList.add("consultation-page"); panel.replaceChildren(layout);
   let lastKey = "";
   const render = () => {
@@ -68,10 +71,12 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     meta.textContent = [...dates, ...(party ? [party] : [])].join(" ・ "); meta.hidden = !meta.textContent;
     note.textContent = trip ? "この旅程が変更案の対象です。確認するまで反映されません。" : state.unavailable ? "参照先を確認してから相談を続けてください。" : "まだ旅程に紐付いていません。";
     tripButton.hidden = !trip;
-    help.textContent = trip ? state.viewer ? "閲覧専用の旅程です。条件の変更はできません。" : "条件を編集して変更案を確認できます。保存は現在の旅程の保存機能に従います。"
+    saveDraft.hidden = !!trip || !ports.saveDraftTrip;
+    help.textContent = trip ? state.viewer ? "閲覧専用の旅程です。条件の変更はできません。" : "出発地と旅の目的はここで編集できます。日程などの追加条件は会話で確認し、変更案として保存します。"
       : "条件は会話で追加できます。普段の好みより、今回の希望を優先します。";
-    const row = (label: string, value: string, edit?: () => void) => {
+    const row = (label: string, value: string, edit?: () => void, source?: string) => {
       const item = node("div", "consultation-condition-row"); item.append(node("span", "", label), node("strong", "", value));
+      if (source) item.append(node("small", "consultation-condition-source", source));
       if (edit) { const button = node("button", "", "編集"); button.type = "button"; button.setAttribute("aria-label", `${label}を編集`); button.addEventListener("click", edit); item.append(button); }
       rows.append(item); return item;
     };
@@ -98,19 +103,25 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
         const display = r.type === "origin" ? ["出発地", r.place.name] : r.type === "dates" ? ["日程", `${r.start.earliest}〜${r.end?.latest ?? r.start.latest}`]
           : r.type === "destinations" ? ["行き先", r.places.map((p) => p.name).join("、")]
           : r.type === "pace" ? ["ペース", r.value <= .4 ? "ゆっくり" : r.value >= .7 ? "いろいろ巡る" : "バランス"]
-          : r.type === "experience" ? ["やりたいこと", r.text] : undefined;
+          : r.type === "experience" ? [r.intent === "avoid" ? "避けたいこと" : "好み", r.text]
+          : r.type === "budget" ? ["予算", `${r.limit.currency} ${r.limit.amountMinor.toLocaleString()}${r.basis === "per-person" ? " / 1人" : ""}`]
+          : r.type === "mobility" ? ["移動", [r.maxTravelMinutes ? `移動 ${r.maxTravelMinutes}分まで` : "", r.maxTransfers !== undefined ? `乗換 ${r.maxTransfers}回まで` : "", r.transferPace ? `ペース: ${r.transferPace}` : ""].filter(Boolean).join(" ・ ") || "未定"]
+          : r.type === "duration" ? ["日程", `${r.minimum}〜${r.maximum}${r.unit === "nights" ? "泊" : "日"}`]
+          : r.type === "depart_after" ? ["出発", r.at.at]
+          : r.type === "arrive_by" ? ["到着", r.at.at]
+          : r.type === "relative_distance" ? ["距離", r.direction === "nearer" ? "もっと近く" : "もっと遠く"]
+          : r.type === "adventure" ? ["移動", "冒険度を調整"] : undefined;
         if (!display) continue;
+        const source = constraint.source === "user" ? "あなたが指定" : constraint.source === "profile" ? "プロフィール由来" : "仮置き";
         row(display[0]!, display[1]!, !state.viewer && r.type === "origin" && constraint.source === "user" && !constraint.assumptionId
           ? () => edit("出発地", r.place.name, (name) => proposeTripRequestUpdate(trip, { ...trip.request,
-            constraints: trip.request.constraints.map((c) => c.id === constraint.id ? { ...c, requirement: { type: "origin", place: { name, sources: [] } } } : c) }, "user")) : undefined);
+            constraints: trip.request.constraints.map((c) => c.id === constraint.id ? { ...c, requirement: { type: "origin", place: { name, sources: [] } } } : c) }, "user")) : undefined, source);
       }
       if (party) row("同行者", party);
     } else {
       const origin = ports.profile()?.home.station;
       if (origin) row("普段の出発駅", origin);
-      row("今回の条件", "会話で相談できます");
-      const add = node("button", "consultation-add-condition", "条件を入力する"); add.type = "button";
-      add.addEventListener("click", () => { sheet(false); input.focus(); }); rows.append(add);
+      row("今回の条件", "会話で追加できます");
     }
   };
   ports.subscribe(render); render();

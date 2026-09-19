@@ -5,6 +5,10 @@ const trip = { ...createTrip("11111111-1111-4111-8111-111111111111", "旅", "202
   { id: "a", title: "散策", type: "activity", category: "free-time", schedule: { type: "unscheduled" } },
 ]), revision: 5 };
 describe("proposal revision is distinct from schema/preview", () => {
+  it("updates a title only through the same revisioned proposal boundary", () => {
+    const proposal = { tripId: trip.id, baseRevision: trip.revision, summary: "名称変更", patches: [{ type: "title" as const, title: " 新しい旅 " }] };
+    expect(applyTripProposal(trip, proposal).title).toBe("新しい旅");
+  });
   it.each<TripPatch[]>([
     [{ type: "add", item: { ...trip.items[0]!, id: "b" } }],
     [{ type: "replace", itemId: "a", item: { ...trip.items[0]!, title: "変更" } }],

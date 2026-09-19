@@ -33,36 +33,35 @@
   max-height: none;
   padding: 0;
   overflow: hidden;
-  border: 1px solid var(--glass-border-subtle);
+  border: 1px solid #dfe4e8;
   border-radius: 1.25rem;
-  color: #111827;
-  background: rgb(255 255 255 / 96%);
-  box-shadow: 0 1.5rem 4rem rgb(15 23 42 / 20%);
-  backdrop-filter: var(--glass-backdrop);
+  color: #102337;
+  background: #fff;
+  box-shadow: 0 1.25rem 3rem #10233724;
 }
 
-.application-settings-dialog::backdrop { background: rgb(15 23 42 / 22%); backdrop-filter: blur(6px); }
+.application-settings-dialog::backdrop { background: rgb(16 35 55 / 24%); }
 .application-settings-shell { display: grid; grid-template-columns: 13.5rem minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: 100%; }
 .application-settings-shell > header { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid rgb(17 24 39 / 9%); }
-.application-settings-shell > header h2 { margin: 0.1rem 0 0; font-size: 1.15rem; }
-.application-settings-shell > header small { color: #6b7280; font-size: 0.65rem; }
-#close-application-settings { display: grid; width: 2.5rem; height: 2.5rem; padding: 0; place-items: center; border: 0; border-radius: 50%; color: #4b5563; background: #f0f0f0; font-size: 1.2rem; cursor: pointer; }
-.application-settings-navigation { display: grid; align-content: start; gap: 0.2rem; padding: 0.8rem; border-right: 1px solid rgb(17 24 39 / 9%); background: #f7f7f7; }
-.application-settings-navigation button { display: flex; min-height: 2.7rem; align-items: center; gap: 0.65rem; padding: 0.6rem 0.75rem; border: 0; border-radius: 0.65rem; color: #374151; background: transparent; font: inherit; font-size: 0.8rem; text-align: left; cursor: pointer; }
+.application-settings-shell > header h2 { margin: 0.1rem 0 0; font-family: "Yu Mincho", serif; font-size: 1.35rem; }
+.application-settings-shell > header small { color: #567087; font-size: 0.65rem; letter-spacing: .1em; }
+#close-application-settings { display: grid; width: 2.5rem; height: 2.5rem; padding: 0; place-items: center; border: 1px solid #dfe4e8; border-radius: 50%; color: #4b6174; background: #fff; font-size: 1.2rem; cursor: pointer; }
+.application-settings-navigation { display: grid; align-content: start; gap: 0.3rem; padding: 1rem; border-right: 1px solid #e1e6e9; background: #f6f8f9; }
+.application-settings-navigation button { display: flex; min-height: 2.7rem; align-items: center; gap: 0.65rem; padding: 0.6rem .75rem; border: 0; border-radius: .7rem; color: #536779; background: transparent; font: inherit; font-size: .82rem; font-weight: 700; text-align: left; cursor: pointer; }
 .application-settings-navigation button:hover,
-.application-settings-navigation button[aria-pressed="true"] { color: #111827; background: #e9e9e9; }
+.application-settings-navigation button[aria-pressed="true"] { color: #173d60; background: #e5f0f8; }
 .application-settings-navigation svg { width: 1.1rem; height: 1.1rem; }
-.application-settings-content { min-width: 0; overflow-y: auto; padding: 1.5rem; }
+.application-settings-content { min-width: 0; overflow-y: auto; padding: 1.75rem; }
 .application-settings-content > section { display: grid; align-content: start; gap: 1rem; max-width: 36rem; }
 .application-settings-content > section[hidden] { display: none; }
 .application-settings-content header { display: grid; gap: 0.3rem; padding-bottom: 1rem; border-bottom: 1px solid rgb(17 24 39 / 9%); }
 .application-settings-content h3,
 .application-settings-content p { margin: 0; }
-.application-settings-content h3 { font-size: 1.2rem; }
+.application-settings-content h3 { font-family: "Yu Mincho", serif; font-size: 1.35rem; }
 .application-settings-content header p,
 .application-settings-content > section > small { color: #6b7280; font-size: 0.72rem; }
 .application-settings-content label { display: grid; gap: 0.45rem; padding: 0.75rem 0; border-bottom: 1px solid rgb(17 24 39 / 8%); font-size: 0.8rem; font-weight: 600; }
-.application-settings-content select { min-height: 2.7rem; padding: 0.55rem 0.7rem; border: 1px solid rgb(17 24 39 / 14%); border-radius: 0.7rem; color: #111827; background: #f7f7f7; font: inherit; font-size: 0.82rem; }
+.application-settings-content select { min-height: 2.7rem; padding: 0.55rem 0.7rem; border: 1px solid #ccd8e1; border-radius: .7rem; color: #102337; background: #fff; font: inherit; font-size: .82rem; }
 .settings-account-card { display: flex; align-items: center; gap: 0.75rem; padding: 1rem; border-radius: 0.9rem; background: #f5f5f5; }
 .settings-primary-action { justify-self: start; min-height: 2.6rem; padding: 0.55rem 0.9rem; border: 0; border-radius: 999px; color: #fff; background: var(--glass-accent); font: inherit; font-size: 0.75rem; font-weight: 700; cursor: pointer; }
 .external-service-list { display: grid; grid-template-columns: minmax(10rem, 0.85fr) minmax(9rem, 0.8fr) minmax(12rem, 1.2fr); gap: 0; margin: 0; padding: 0; list-style: none; }

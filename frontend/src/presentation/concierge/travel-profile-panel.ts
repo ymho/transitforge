@@ -25,7 +25,7 @@ export function configureTravelProfile(document: Document, client: ProfileUiCont
     dialog.querySelector<HTMLElement>("[data-discard]")!.hidden = false;
   };
   const render = () => {
-    dialog.innerHTML = `<section class="profile-editor"><header><button type="button" data-close aria-label="マイへ戻る">←</button><div><h1>旅行プロフィール</h1><p>普段の好みを、次の旅のヒントに。今回の旅の条件を優先します。</p></div></header>
+    dialog.innerHTML = `<section class="profile-editor"><header><button type="button" data-close aria-label="アカウントへ戻る">←</button><div><h1>旅行プロフィール</h1><p>普段の好みを、次の旅のヒントに。今回の旅の条件を優先します。</p></div></header>
       <p role="status" aria-live="polite" data-profile-message></p>
       ${editing ? editor(draft) : `<p>${read.loading ? "プロフィールを読み込んでいます。" : read.profile ? esc(travelStyleSummary(read.profile)) : "まだ登録していません。設定せずに相談できます。"}</p>
       <button type="button" data-edit>旅行プロフィールを編集</button><button type="button" data-start>相談する</button>`}
@@ -99,7 +99,7 @@ export function configureTravelProfile(document: Document, client: ProfileUiCont
 }
 
 function editor(draft: Draft): string {
-  return `<form id="travel-profile-form"><p class="profile-scope-note">普段の好みをこの端末に保存します。今回の旅の条件を優先し、旅程や予約は変更しません。</p><fieldset><legend>基本情報</legend><div class="profile-field-grid">${field("station", "普段の出発駅", draft.home.station)}
+  return `<form id="travel-profile-form"><p class="profile-scope-note">普段の好みを保存します。今回の旅の条件を優先し、旅程や予約は変更しません。</p><fieldset><legend>基本情報</legend><div class="profile-field-grid">${field("station", "普段の出発駅", draft.home.station)}
     ${field("party", "普段の人数（今回の人数ではありません）", draft.companions.usualPartySize?.toString(), "number")}
     <label>優先する移動手段<select name="mode">${Object.entries({ "": "未設定", rail: "鉄道", car: "車", bus: "バス", walking: "徒歩" }).map(([key, label]) => `<option value="${key}" ${key === (draft.transport.preferredMode ?? "") ? "selected" : ""}>${label}</option>`).join("")}</select></label>
     ${note("budget", "普段の予算感", draft)}</div><details><summary>出発地・同行者の詳細</summary>${field("area", "普段の出発エリア", draft.home.area)}

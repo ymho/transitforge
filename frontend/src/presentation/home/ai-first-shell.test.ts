@@ -8,8 +8,9 @@ afterEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
 function setup(overrides: Partial<AiFirstShellPorts> = {}) {
   const ports: AiFirstShellPorts = {
     read: () => ({ state: "unauthenticated", trips: [], candidates: [] }), profile: () => undefined,
+    authState: () => ({ status: "signed-out" }), login: vi.fn(), logout: vi.fn(),
     subscribe: () => () => {}, retry: vi.fn(async () => {}), newConsultation: vi.fn(), openChat: vi.fn(), openTrip: vi.fn(),
-    openProfile: vi.fn(), openMap: vi.fn(), openHistory: vi.fn(), openSettings: vi.fn(), openNotifications: vi.fn(), now: () => new Date("2026-09-18T00:00:00Z"), ...overrides,
+    openProfile: vi.fn(), openMap: vi.fn(), journeySettings: () => ({ transferPace: "standard", rankingPreference: "balanced" }), setJourneySettings: vi.fn(), openNotifications: vi.fn(), now: () => new Date("2026-09-18T00:00:00Z"), ...overrides,
   };
   return { shell: configureAiFirstShell(document, document.querySelector("main")!, ports), ports };
 }
@@ -25,11 +26,22 @@ it("starts Home without initializing Map or requiring profile/authentication", (
   expect(ports.openMap).not.toHaveBeenCalled(); expect(ports.newConsultation).not.toHaveBeenCalled();
   expect(document.body.textContent).not.toContain("調査済みのおすすめではありません");
   expect(document.querySelector('[aria-label="相談の入力例"]')).not.toBeNull();
-  expect(document.querySelector("[data-home-live]")!.textContent).toContain("公開の旅程保存は準備中");
+  expect(document.querySelector("[data-home-live]")!.textContent).toContain("ログインすると、保存した旅程");
+  expect(document.querySelector(".home-prompt")!.hasAttribute("hidden")).toBe(true);
+  expect(document.querySelector('[data-primary="chat"]')!.hasAttribute("hidden")).toBe(true);
   click("[data-example]"); document.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
   expect(ports.newConsultation).toHaveBeenCalledWith("のんびりできる旅を考えたい");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("chat");
   expect(ports.openMap).not.toHaveBeenCalled();
+});
+it("keeps login visible in the header and sends signed-in people to My", () => {
+  const signedOut = setup();
+  expect(document.querySelector("[data-account]")!.textContent).toBe("ログイン / 新規登録"); click("[data-account]"); expect(signedOut.ports.login).toHaveBeenCalledOnce();
+  document.body.innerHTML = '<main id="app"></main>';
+  const signedIn = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) });
+  expect(document.querySelector("[data-account]")!.textContent).toBe("山田 花子"); click("[data-account]");
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("my"); expect(document.querySelector("[data-my-account-status]")!.textContent).toContain("ログイン中");
+  click("[data-my-logout]"); expect(signedIn.ports.logout).toHaveBeenCalledOnce();
 });
 it("does not submit IME composition and keeps input across tab navigation / re-render", () => {
   const { ports, shell } = setup(); const input = document.querySelector("textarea")!;
@@ -59,9 +71,9 @@ it("reader failures render retry without disabling the independent consultation 
 });
 it("all secondary actions use existing feature ports", () => {
   const { shell, ports } = setup(); shell.navigate("my");
-  for (const key of ["profile", "history", "settings", "notifications"]) click(`[data-${key}]`);
-  expect(ports.openProfile).toHaveBeenCalledOnce(); expect(ports.openHistory).toHaveBeenCalledOnce();
-  expect(ports.openSettings).toHaveBeenCalledOnce(); expect(ports.openNotifications).toHaveBeenCalledOnce();
+  for (const key of ["profile", "notifications"]) click(`[data-${key}]`);
+  expect(ports.openProfile).toHaveBeenCalledOnce();
+  expect(ports.openNotifications).toHaveBeenCalledOnce();
 });
 it("opens the actual Trip as a trips subview, not a selected chat tab", () => {
   const trip = createTrip("45300000-0000-4000-8000-000000000001", "旅程", "2026-09-18T00:00:00Z", []);

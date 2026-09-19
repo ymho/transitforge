@@ -26,6 +26,7 @@ it("uses the explicit bound Trip and preserves message/composer nodes and listen
 });
 it("new consultation never infers a Trip from title or Home data", () => {
   const f = setup(false); expect(f.panel.textContent).toContain("新しい旅を相談中"); expect(f.panel.textContent).toContain("まだ旅程に紐付いていません");
+  expect(f.panel.textContent).toContain("会話で追加できます"); expect(f.panel.querySelector(".consultation-add-condition")).toBeNull();
 });
 it("direct origin edit produces a revision-bound Proposal, never mutates Trip or copies provider identity", () => {
   const f = setup(); const before = JSON.stringify(f.trip);
@@ -36,6 +37,9 @@ it("direct origin edit produces a revision-bound Proposal, never mutates Trip or
   expect(proposal.tripId).toBe(f.trip.id); expect(proposal.baseRevision).toBe(0);
   expect(proposal.patches[0].request.constraints[0].requirement.place).toEqual({ name: "大阪", sources: [] });
   expect(JSON.stringify(f.trip)).toBe(before);
+});
+it("shows each condition's source without treating it as a second editable state", () => {
+  const f = setup(); expect(f.panel.textContent).toContain("あなたが指定"); expect(f.panel.textContent).toContain("今回の条件");
 });
 it("stale editor cannot submit into another session and mobile conditions close via Escape", () => {
   const f = setup(); f.panel.querySelector<HTMLButtonElement>('[aria-label="出発地を編集"]')!.click();

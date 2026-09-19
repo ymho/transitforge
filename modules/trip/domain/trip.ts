@@ -51,6 +51,7 @@ export type TripPatch = { readonly type: "replace"; readonly itemId: string; rea
   | { readonly type: "remove"; readonly itemId: string }
   | { readonly type: "move"; readonly itemId: string; readonly afterId?: string }
   | { readonly type: "request"; readonly request: TripRequest }
+  | { readonly type: "title"; readonly title: string }
   | { readonly type: "planning"; readonly state: PlanningState }
   | { readonly type: "adoption"; readonly action: TripAdoptionAction }
   | { readonly type: "lifecycle"; readonly state: LifecycleState; readonly basis: "schedule" | "user_confirmation" };
@@ -139,6 +140,7 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
   if (proposal.baseRevision !== trip.revision) throw new TripRevisionConflict();
   const items = [...trip.items];
   let request = trip.request;
+  let title = trip.title;
   let planningState = trip.planningState;
   let adoptionAction: TripAdoptionAction | undefined;
   let lifecyclePatch: Extract<TripPatch, { type: "lifecycle" }> | undefined;
@@ -197,6 +199,12 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
       request = patch.request;
       continue; // Cross-references are validated against the final items, not a partial patch state.
     }
+    if (patch.type === "title") {
+      exactKeys(patch, ["type", "title"]);
+      if (typeof patch.title !== "string" || !patch.title.trim() || patch.title.length > 160) throw new Error("Invalid Trip title");
+      title = patch.title.trim();
+      continue;
+    }
     exactKeys(patch, ["type", "itemId", "item"]);
     const index = items.findIndex(({ id }) => id === patch.itemId);
     if (patch.type !== "replace" || index < 0 || patch.item.id !== patch.itemId) throw new Error("Replacement requires an existing stable item ID");
@@ -205,7 +213,7 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
     items[index] = patch.item;
   }
   // Preview keeps revision/updatedAt. Only a successful server CAS increments them.
-  let result: Trip = { id: trip.id, schemaVersion: 2, revision: trip.revision, title: trip.title,
+  let result: Trip = { id: trip.id, schemaVersion: 2, revision: trip.revision, title,
     ...(trip.summaryDestination === undefined ? {} : { summaryDestination: trip.summaryDestination }),
     createdAt: trip.createdAt, updatedAt: trip.updatedAt, items, request, planningState,
     lifecycleState: lifecyclePatch?.state ?? trip.lifecycleState };

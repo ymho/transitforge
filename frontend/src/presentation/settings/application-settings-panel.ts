@@ -2,7 +2,6 @@ export interface ApplicationSettingsPanelDependencies {
   travelProfileToggle: HTMLButtonElement;
   transferPace: HTMLSelectElement;
   rankingPreference: HTMLSelectElement;
-  conversationHistoryDialog: HTMLDialogElement;
   accommodationProviderAttribution: AccommodationProviderAttribution | null;
 }
 
@@ -19,7 +18,6 @@ export function configureApplicationSettingsPanel(
 ): void {
   const dialog = required<HTMLDialogElement>(root, "#application-settings-dialog");
   const close = required<HTMLButtonElement>(dialog, "#close-application-settings");
-  const editProfile = required<HTMLButtonElement>(dialog, "#settings-edit-travel-profile");
   const settingsTransferPace = required<HTMLSelectElement>(dialog, "#settings-journey-transfer-pace");
   const settingsRankingPreference = required<HTMLSelectElement>(dialog, "#settings-journey-ranking-preference");
   const tabs = [...dialog.querySelectorAll<HTMLButtonElement>("[data-settings-tab]")];
@@ -50,12 +48,8 @@ export function configureApplicationSettingsPanel(
     canonical.dispatchEvent(new Event("change", { bubbles: true }));
   };
   const open = () => {
-    if (dependencies.conversationHistoryDialog.open &&
-        dependencies.conversationHistoryDialog.matches(":modal")) {
-      dependencies.conversationHistoryDialog.close();
-    }
     synchronizeJourneyPreferences();
-    selectTab("profile");
+    selectTab("journey");
     dialog.showModal();
   };
 
@@ -66,10 +60,6 @@ export function configureApplicationSettingsPanel(
   close.addEventListener("click", () => dialog.close());
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) dialog.close();
-  });
-  editProfile.addEventListener("click", () => {
-    dialog.close();
-    dependencies.travelProfileToggle.click();
   });
   settingsTransferPace.addEventListener("change", () =>
     updateCanonicalSelect(dependencies.transferPace, settingsTransferPace.value));
