@@ -17,6 +17,9 @@ export const labels = [
   "AWS discovery / Cognito OAuth",
   "fixed-egress secret contract", "agent provider secret contract", "provider live test",
   "temporary user setup", "PKCE User A", "PKCE User B", "unauthenticated rejection", "invalid token rejection",
+  "simple turn / stream error absent", "simple turn / progress observed", "simple turn / single final",
+  "simple turn / final non-empty", "simple turn / internal markup absent", "simple turn / TTFB measured",
+  "simple turn / completion measured",
   "simple real Bedrock turn", "accommodation Tool turn", "persisted turn",
   "replay/idempotency", "conflict rejection", "owner isolation", "temporary user cleanup",
   "35s transport", "90s transport", "180s transport", "Trip isolation",
@@ -28,6 +31,10 @@ export class Report {
     requireCheck(this.results.has(label));
     try { const result = await action(); this.results.set(label, "PASS"); return result; }
     catch { this.results.set(label, "FAIL"); throw new Error("validation failed"); }
+  }
+  record(label, passed) {
+    requireCheck(this.results.has(label));
+    this.results.set(label, passed ? "PASS" : "FAIL");
   }
   render(onlyRun = false) { return [...this.results].filter(([, result]) => !onlyRun || result !== "NOT RUN").map(([label, result]) => `- ${label}: ${result}`).join("\n") + "\n"; }
   publish(onlyRun = false) {

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { gatewayThrottleRecoveryMs, providerRequest, providerInvokedBetween, runPacedGatewayNegativeChecks, successfulTurn, waitForGatewayThrottleRecovery } from "./live.js";
+import { gatewayThrottleRecoveryMs, providerRequest, providerInvokedBetween, runPacedGatewayNegativeChecks, successfulTurn, successfulTurnCheckLabels, successfulTurnChecks, waitForGatewayThrottleRecovery } from "./live.js";
 import { consumeAgentStream } from "../../frontend/src/adapters/http/agent-stream/consumer.js";
 
 const frame = (seq: number, event: object) => `event: agent\ndata: ${JSON.stringify({ v: 1, runId: "synthetic", seq, event })}\n\n`;
@@ -30,6 +30,35 @@ test("production parser consumes split UTF-8, progress/final/done/EOF and reject
   await assert.rejects(consume(progress + frame(2, { type: "error", code: "turn_conflict" }) + done), /turn_conflict/u);
   const leaked = await consume(progress + frame(2, { type: "final", status: "completed", response: '<decision_summary>synthetic internal trace</decision_summary>' }) + done);
   assert.throws(() => successfulTurn(leaked), /validation failed/u);
+});
+test("simple turn classifier reports every successful-turn contract condition", () => {
+  const valid = () => ({ events: [{ type: "progress" }, { type: "final", response: "synthetic answer" }],
+    measurement: { ttfbMs: 1, completionMs: 2 } });
+  assert.deepEqual(successfulTurnChecks(valid()), {
+    streamErrorAbsent: true, progressObserved: true, singleFinal: true, finalNonEmpty: true,
+    internalMarkupAbsent: true, ttfbMeasured: true, completionMeasured: true,
+  });
+  assert.deepEqual(Object.values(successfulTurnCheckLabels), [
+    "simple turn / stream error absent", "simple turn / progress observed", "simple turn / single final",
+    "simple turn / final non-empty", "simple turn / internal markup absent", "simple turn / TTFB measured",
+    "simple turn / completion measured",
+  ]);
+  const cases: Array<[string, (result: any) => void, keyof ReturnType<typeof successfulTurnChecks>]> = [
+    ["stream error", result => { result.error = "SYNTHETIC_PRIVATE_ERROR"; }, "streamErrorAbsent"],
+    ["missing progress", result => { result.events = result.events.slice(1); }, "progressObserved"],
+    ["zero final", result => { result.events = result.events.slice(0, 1); }, "singleFinal"],
+    ["two finals", result => { result.events.push({ type: "final", response: "synthetic other" }); }, "singleFinal"],
+    ["empty final", result => { result.events[1].response = " "; }, "finalNonEmpty"],
+    ["internal markup", result => { result.events[1].response = "<decision_summary>synthetic private</decision_summary>"; }, "internalMarkupAbsent"],
+    ["missing TTFB", result => { result.measurement.ttfbMs = undefined; }, "ttfbMeasured"],
+    ["missing completion", result => { result.measurement.completionMs = undefined; }, "completionMeasured"],
+  ];
+  for (const [, mutate, check] of cases) {
+    const result = valid();
+    mutate(result);
+    assert.equal(successfulTurnChecks(result)[check], false);
+    assert.throws(() => successfulTurn(result), /validation failed/u);
+  }
 });
 test("live Provider request reuses strict production contract and derives future dates", () => {
   const a = providerRequest(new Date("2030-12-01T12:00:00Z"));

@@ -23,6 +23,14 @@ test("all failure classes produce only fixed labels without nested exception/sec
   assert.match(report.render(), /secret migration: FAIL/u);
   assert.match(report.render(), /180s transport: NOT RUN/u);
 });
+test("sub-check classification renders fixed status without remote values", () => {
+  const report = new Report();
+  report.record("simple turn / internal markup absent", false);
+  const summary = report.render();
+  assert.match(summary, /simple turn \/ internal markup absent: FAIL/u);
+  assert.doesNotMatch(summary, /SYNTHETIC_PRIVATE_RESPONSE/u);
+  assert.throws(() => report.record("SYNTHETIC_PRIVATE_RESPONSE", false));
+});
 test("CLI errors never expose raw stdout or stderr", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cutover-cli-test-"));
   const previous = process.env.PATH;

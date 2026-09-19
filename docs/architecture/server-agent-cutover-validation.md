@@ -82,6 +82,7 @@ deadlineは120秒のまま。新規Agent turnは最大4件、ほかにreplay/con
 
 既存stream consumerでprogress/final/done/EOF、連番、サイズ、未知field、途中切断を検証する。
 内部Trace/Tool/credential fieldと既知の内部markupも拒否し、本文は公開しない。
+単純turnはstream error、progress、final件数、空でないfinal、内部markup、TTFB、completionを固定sub-checkへ分け、同じstream結果だけを分類する。
 TTFB/completion/最大無通信時間はメモリで測定し、SummaryはPASS/FAILだけを出す。
 DynamoDBは既存owner/key契約のstrongly consistent GetItemでowner・completed receipt・final保存を
 検査する。replayはfinal一致に加えConversation revision・receipt・attemptIdを含む保存内容の

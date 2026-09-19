@@ -97,14 +97,38 @@ export async function browserHarness(browser: any) {
   };
 }
 
+export const successfulTurnCheckLabels = {
+  streamErrorAbsent: "simple turn / stream error absent",
+  progressObserved: "simple turn / progress observed",
+  singleFinal: "simple turn / single final",
+  finalNonEmpty: "simple turn / final non-empty",
+  internalMarkupAbsent: "simple turn / internal markup absent",
+  ttfbMeasured: "simple turn / TTFB measured",
+  completionMeasured: "simple turn / completion measured",
+} as const;
+
+const internalMarkup = /<\/?(?:decision_summary|tool_call|tool_result|trace|thinking)\b|"(?:toolUse|toolResult|rawResponse|access_key|application_id|requestHash|attemptId)"\s*:/iu;
+export function successfulTurnChecks(result: any) {
+  const events = Array.isArray(result?.events) ? result.events : [];
+  const finals = events.filter((event: any) => event?.type === "final");
+  const response = finals[0]?.response;
+  return {
+    streamErrorAbsent: !result?.error,
+    progressObserved: events.some((event: any) => event?.type === "progress"),
+    singleFinal: finals.length === 1,
+    finalNonEmpty: typeof response === "string" && response.trim().length > 0,
+    internalMarkupAbsent: typeof response === "string" && !internalMarkup.test(response),
+    ttfbMeasured: Number.isFinite(result?.measurement?.ttfbMs),
+    completionMeasured: Number.isFinite(result?.measurement?.completionMs),
+  };
+}
+
 export function successfulTurn(result: any) {
-  requireCheck(!result.error && result.events.some((event: any) => event.type === "progress"));
+  const checks = successfulTurnChecks(result);
+  requireCheck(Object.values(checks).every(Boolean));
   const finals = result.events.filter((event: any) => event.type === "final");
-  requireCheck(finals.length === 1 && finals[0].response.trim().length > 0);
-  requireCheck(!/<\/?(?:decision_summary|tool_call|tool_result|trace|thinking)\b|"(?:toolUse|toolResult|rawResponse|access_key|application_id|requestHash|attemptId)"\s*:/iu.test(finals[0].response));
   // The shared consumer rejects unknown event/DTO fields, partial frames, missing
   // done/EOF, sequence gaps and streams over 1 MiB. Do not publish final text.
-  requireCheck(Number.isFinite(result.measurement.ttfbMs) && Number.isFinite(result.measurement.completionMs));
   return finals[0].response as string;
 }
 
