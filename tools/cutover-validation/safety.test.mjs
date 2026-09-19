@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readFileSync, readdirSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { aws, gates, Report } from "./safety.mjs";
@@ -23,7 +23,7 @@ test("all failure classes produce only fixed labels without nested exception/sec
   assert.match(report.render(), /secret migration: FAIL/u);
   assert.match(report.render(), /180s transport: NOT RUN/u);
 });
-test("CLI credentials use stdin and raw stderr is never forwarded or retained on errors", async () => {
+test("CLI errors never expose raw stdout or stderr", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cutover-cli-test-"));
   const previous = process.env.PATH;
   try {
@@ -36,17 +36,81 @@ test("CLI credentials use stdin and raw stderr is never forwarded or retained on
     assert.equal(await aws("synthetic", "operation", {}, { missing: true }), undefined);
   } finally { process.env.PATH = previous; rmSync(dir, { recursive: true, force: true }); }
 });
-test("wrapper distinguishes no-input from explicit JSON input without exposing diagnostics", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "cutover-sts-test-"));
-  const previous = process.env.PATH;
+test("private CLI input is removed on success and every failure path", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "cutover-cli-test-"));
+  const previousPath = process.env.PATH;
+  const previousTmp = process.env.TMPDIR;
+  const receipt = join(dir, "receipt.json");
+  const source = `#!${process.execPath}
+import { readFileSync, writeFileSync, statSync } from "node:fs";
+import { dirname } from "node:path";
+const args = process.argv.slice(2);
+const [service, operation] = args;
+if (service === "sts") {
+  if (args.length !== 5 || args.slice(2).join(" ") !== "--output json --no-cli-pager") process.exit(2);
+  console.log('{}');
+} else {
+  const path = args[3]?.slice("file://".length);
+  const input = JSON.parse(readFileSync(path, "utf8"));
+  writeFileSync(${JSON.stringify(receipt)}, JSON.stringify({
+    args, input, path, fileMode: statSync(path).mode & 0o777, directoryMode: statSync(dirname(path)).mode & 0o777,
+  }));
+  if (operation === "error") { console.error("SYNTHETIC_SECRET"); process.exit(2); }
+  if (operation === "missing") { console.error("(ResourceNotFoundException) SYNTHETIC_SECRET"); process.exit(2); }
+  if (operation === "invalid") console.log("SYNTHETIC_SECRET");
+  else if (operation === "oversized") process.stdout.write("X".repeat(4_194_305));
+  else if (operation === "diagnostic") process.stderr.write("X".repeat(65_537));
+  else if (operation === "timeout") setInterval(() => {}, 1000);
+  else console.log('{}');
+}
+`;
   try {
-    writeFileSync(join(dir, "aws"), '#!/bin/sh\ninput=$(cat)\ncase "$1/$2" in\nsts/get-caller-identity)\n  [ "$#" = 5 ] && [ -z "$input" ] || exit 2\n  [ "$3" = "--output" ] && [ "$4" = "json" ] && [ "$5" = "--no-cli-pager" ] || exit 2\n  printf "%s" \'{"Account":"123456789012"}\'\n  ;;\nsynthetic/operation)\n  [ "$3" = "--cli-input-json" ] && [ "$4" = "file:///dev/stdin" ] || exit 2\n  [ "$5" = "--output" ] && [ "$6" = "json" ] && [ "$7" = "--no-cli-pager" ] || exit 2\n  case "$input" in \'{"Password":"SYNTHETIC_PASSWORD"}\'|\'{}\') printf "%s" \'{}\' ;; *) exit 2 ;; esac\n  ;;\n*) echo "SYNTHETIC_SECRET SYNTHETIC_TOKEN" >&2; exit 2 ;;\nesac\n', { mode: 0o700 });
-    process.env.PATH = `${dir}:${previous}`;
-    assert.deepEqual(await aws("sts", "get-caller-identity"), { Account: "123456789012" });
-    assert.deepEqual(await aws("synthetic", "operation", { Password: "SYNTHETIC_PASSWORD" }), {});
-    assert.deepEqual(await aws("synthetic", "operation", {}), {});
-    await assert.rejects(aws("synthetic", "unexpected"), /^Error: AWS operation failed$/u);
-  } finally { process.env.PATH = previous; rmSync(dir, { recursive: true, force: true }); }
+    process.env.TMPDIR = dir;
+    process.env.PATH = `${dir}:${previousPath}`;
+    writeFileSync(join(dir, "aws"), source, { mode: 0o700 });
+    const clean = () => assert.deepEqual(readdirSync(dir).filter(name => name.startsWith("cutover-aws-")), []);
+    assert.deepEqual(await aws("sts", "get-caller-identity"), {});
+    assert.equal(existsSync(receipt), false);
+    clean();
+    for (const input of [{ Password: "SYNTHETIC_PASSWORD" }, {}]) {
+      assert.deepEqual(await aws("synthetic", "success", input), {});
+      const record = JSON.parse(readFileSync(receipt, "utf8"));
+      assert.deepEqual(record.input, input);
+      assert.deepEqual(record.args, ["synthetic", "success", "--cli-input-json", `file://${record.path}`, "--output", "json", "--no-cli-pager"]);
+      assert.equal(record.fileMode, 0o600);
+      assert.equal(record.directoryMode, 0o700);
+      assert.doesNotMatch(JSON.stringify(record.args), /SYNTHETIC_PASSWORD|dev\/stdin/u);
+      assert.equal(existsSync(record.path), false);
+      clean();
+    }
+    for (const operation of ["error", "invalid", "oversized", "diagnostic"]) {
+      await assert.rejects(aws("synthetic", operation, {}), /^Error: AWS operation failed$/u, operation);
+      clean();
+    }
+    assert.equal(await aws("synthetic", "missing", {}, { missing: true }), undefined);
+    clean();
+    // Advance only the wrapper deadline; the synthetic child remains a real process.
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const timeout = assert.rejects(aws("synthetic", "timeout", {}), /^Error: AWS operation failed$/u);
+    t.mock.timers.tick(45_000);
+    await timeout;
+    t.mock.timers.reset();
+    clean();
+    rmSync(join(dir, "aws"));
+    process.env.PATH = dir;
+    await assert.rejects(aws("synthetic", "spawn-failure", {}), /^Error: AWS operation failed$/u);
+    clean();
+    const cyclic = {}; cyclic.self = cyclic;
+    await assert.rejects(aws("synthetic", "serialization-failure", cyclic), /^Error: AWS operation failed$/u);
+    clean();
+    process.env.TMPDIR = join(dir, "absent");
+    await assert.rejects(aws("synthetic", "filesystem-failure", {}), /^Error: AWS operation failed$/u);
+  } finally {
+    t.mock.timers.reset();
+    process.env.PATH = previousPath;
+    if (previousTmp === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = previousTmp;
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 test("workflow is manual-only, serializes with CD and limits session mutation permissions", () => {
   const workflow = readFileSync(new URL("../../.github/workflows/server-agent-cutover-validation.yml", import.meta.url), "utf8");

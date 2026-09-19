@@ -128,7 +128,13 @@ Conversation削除public APIは未接続なので直接DynamoDB Delete権限を�
 テストstateはランダムUUID、一時owner、`E2E cutover validation:` title/inputで識別して残す。
 TTL削除は保証しない。Secretはrollback元も含め保持する。
 
-AWS CLIはshellを介さず入力JSONを匿名stdin pipeで受け、stdout/stderrをメモリで捕捉する。
+AWS CLIはshellを介さず、0700の一時ディレクトリ内に0600で排他的に作成した入力JSONを
+`--cli-input-json file://<path>`へ渡し、stdout/stderrをメモリで捕捉する。入力値はargvへ含めない。
+入力のないSTS GetCallerIdentityはJSONファイルを作らず、明示的な`{}`はJSON入力として扱う。
+成功、CLI失敗、spawn失敗、timeout、応答上限超過、JSON解析失敗のいずれもfinallyで一時入力を削除する。
+プロセス強制終了やrunner喪失時の削除は保証できないため、隔離された一時runnerで実行する。
+ローカルdevのread-only比較では通常引数と一時ファイルが成功し、`file:///dev/stdin`だけが失敗したため、
+stdin transportを使用しない。実AWSの応答本文とstderrは記録・公開せず終了コードだけで比較する。
 例外・response・token・claims・user名・検索結果・モデル本文をlog/summary/artifactへ流さない。
 固定ラベルとPASS/FAIL/NOT RUNだけを出し、Playwright trace/HAR/screenshot/console転送は使わない。
 startup/browser例外のstderrもwrapperで破棄し、set -xを使わない。
