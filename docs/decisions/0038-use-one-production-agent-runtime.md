@@ -1,5 +1,8 @@
 # ADR 0038: 本番Agent実行を共通Runtimeへ一本化する
 
+> 2026-09-19 / #481 Batch 1: production Browser組成とBedrock conversation bridgeはretired。
+> 現在の実行所有はServer Agentであり、以下のBrowser Adapter記述はHistoricalである。
+
 > 2026-09-18 / [ADR 0068](0068-place-agent-runtime-in-server-application.md): production Runtimeの最終所有をBackendへ変更する。Browser組成は#480までの一時経路で、coreは共有単一実装とする。Evidence/Groundingとbounded loopは維持する。
 
 > 2026-09-18 / [Wave 2A #477](https://github.com/ymho/transitforge/issues/477)（親方針 #476）: Viewer ActionおよびLocalViewerAgent/DEV fallbackの部分はretired。本番MultiStepAgentRuntimeとBedrock Adapterの組成は引き続き有効で、Server移行は後続Issueで行う。

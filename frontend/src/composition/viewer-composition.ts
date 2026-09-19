@@ -2,15 +2,11 @@ import { currentAuthentication } from "./auth-composition";
 import { consultationTransport } from "./agent-cutover-policy";
 import { createConversationStreamSession } from "../adapters/http/agent-stream/session";
 
-import { createAgentTurnObservationStore } from "../usecases/agent/agent-turn-observation-store";
 import mapboxgl from "mapbox-gl";
-import { candidateIdentityContext } from "@raiquora/agent/candidate-assessment-context";
 import { placeCameraOffset } from "../presentation/place-explorer/place-camera-offset";
-import { HttpInTripContextClient } from "../adapters/http/in-trip-context-client";
 import { accommodationProviderAttributionFromEnvironment } from "../adapters/browser/accommodation-provider-attribution";
 import { browserDigitalTwinClockEnvironment } from "../adapters/browser/digital-twin-clock-environment";
 import { browserPollingEnvironment } from "../adapters/browser/polling-controller";
-import { currentBrowserCoordinate } from "../adapters/browser/current-coordinate";
 import { createRuntimeMonitor, nextBrowserFrame } from "../adapters/browser/runtime-monitor";
 import { applyWeather } from "../adapters/mapbox/map-weather";
 import { createLocalWeatherLayer } from "../adapters/mapbox/local-weather-layer";
@@ -19,8 +15,6 @@ import {
   createVerifiedPlaceLayer,
   type VerifiedPlaceLayerController,
 } from "../adapters/mapbox/place-media-layer";
-import { BrowserTravelRecheckRepository } from "../adapters/browser/travel-recheck-repository";
-import { runDueTravelRechecks } from "../usecases/trip-plan/travel-recheck-runner";
 import {
   congestionRefreshIntervalMilliseconds,
   congestionRetryIntervalMilliseconds,
@@ -36,31 +30,9 @@ import {
   toRouteFeatureCollections,
 } from "../adapters/http/viewer-input/path-catalog";
 import { emptyStationLineCatalog } from "../adapters/http/viewer-input/station-line-catalog";
-import {
-  invokeBedrockAgent,
-  queryDailyCongestionAnalysis,
-  queryTrainDelayAnalysis,
-  searchAccommodations,
-  searchWeatherForecast,
-  searchWeatherGrid,
-  searchPlaceMedia,
-  researchPlaceDetail,
-  searchHazardAlerts,
-  searchGroundAccess,
-  searchRestaurants,
-  searchWeb,
-  readWebPages,
-  searchRepresentativeTimetable,
-  journeySearchService,
-  submitConversationFeedback,
-  submitAgentTrace,
-} from "../adapters/http/agent-api/bedrock-agent";
+import { researchPlaceDetail, searchWeatherGrid } from "../adapters/http/agent-api/bedrock-agent";
 import { loadTrainIndex } from "../adapters/http/viewer-input/train-index";
 import type { TrainDelaySnapshot, TrainOperation } from "@raiquora/operation/operation";
-import {
-  type JourneyLegAlternativeSearch,
-  type PendingJourneyLegChange,
-} from "../domain/journey-chat-follow-up";
 import {
   dateForOperatingRouteTime,
   operatingServiceDateStart,
@@ -74,8 +46,6 @@ import type { WeatherMode } from "../domain/weather";
 import { dominantLineColorsByPathId } from "../domain/path-line-colors";
 import { currentRouteTime } from "../domain/playback";
 import { TrainFocusReturnContextSession } from "../domain/train-focus-return-context";
-import { congestionAnalysisForAgent } from "../domain/congestion-analysis";
-import { delayAnalysisForAgent } from "../domain/delay-analysis";
 import {
   coupledTrainLayouts,
   trainHitTargetsFor,
@@ -97,14 +67,11 @@ import {
   PathGeometryIndex,
 } from "../domain/train-position";
 import type { TrainPosition } from "../domain/train-position";
-import { normalizeStationName } from "@raiquora/train/station-name";
 import { loadViewerElements } from "../usecases/viewer/viewer-elements";
 import { resolveViewerDisplayMode } from "../domain/viewer-display-mode";
-import type { ViewerAgentRuntimeDependencies } from "../adapters/bedrock/viewer-agent-runtime";
 import { configureAiFirstShell } from "../presentation/home/ai-first-shell";
 import { configureConsultationScreen } from "../presentation/home/consultation-screen";
 
-import type { ViewerAgentJourneyPlan } from "../domain/viewer-agent-response";
 import {
   configureAiGuidePanel,
   type AiGuidePromptHandler,
@@ -156,19 +123,11 @@ import { configureTripWorkspace } from "../presentation/trip-plan/trip-workspace
 import { tripPlanFromTravelPlan } from "@raiquora/trip/trip-plan";
 import { loadTripPlan } from "../usecases/trip-plan/trip-plan-repository";
 import {
-  rememberTravelPreference,
-} from "../domain/conversation-session";
-import {
   browserConversationSessionStorageEvents,
   LocalConversationSessionRepository,
 } from "../adapters/browser/conversation-session-repository";
 import { LocalConversationHistoryRepository } from "../adapters/browser/conversation-history-repository";
-import {
-  latestJourneyPlanFromHistory,
-  recentConversationMessages,
-} from "../domain/conversation-history";
 import { createConversationSessionSwitcher } from "../usecases/concierge/conversation-session-switcher";
-import { createJourneySearchHandlers } from "../usecases/journey/create-journey-search-handlers";
 import { BrowserContextWorkspaceRepository } from "../adapters/browser/context-workspace-repository";
 import { createContextWorkspaceController } from "../usecases/context-workspace/context-workspace-controller";
 import { createMobileContextNavigation } from "../presentation/concierge/mobile-context-navigation";
@@ -283,7 +242,6 @@ const aiGuidePromptHandlerReady = new Promise<AiGuidePromptHandler>((resolve) =>
 });
 let handleAiGuidePrompt: AiGuidePromptHandler = (...args) =>
   aiGuidePromptHandlerReady.then((handler) => handler(...args));
-let findJourneyLegAlternatives: JourneyLegAlternativeSearch = async () => [];
 const serverConversationValues = new Map<string, string>();
 const serverConversationStorage = {
   getItem: (key: string) => serverConversationValues.get(key) ?? null,
@@ -291,28 +249,17 @@ const serverConversationStorage = {
   removeItem: (key: string) => { serverConversationValues.delete(key); },
 };
 
-// Short-lived #480 build gate. Production OFF stops consultation; remove in #481.
+// Short-lived build gate. Production OFF stops consultation; final gate removal is a later #481 batch.
 const serverAgentEnabled = import.meta.env.VITE_SERVER_AGENT_ENABLED === "true";
-const consultationTransportMode = consultationTransport(serverAgentEnabled, import.meta.env.DEV);
+const consultationTransportMode = consultationTransport(serverAgentEnabled);
 const conversationStorage = serverAgentEnabled ? serverConversationStorage : localStorage;
 const conversationSessionRepository = new LocalConversationSessionRepository(
   conversationStorage,
   serverAgentEnabled ? undefined : browserConversationSessionStorageEvents(),
 );
 const conversationHistoryRepository = new LocalConversationHistoryRepository(conversationStorage);
-const agentTurnObservations = createAgentTurnObservationStore();
-const travelRecheckRepository = new BrowserTravelRecheckRepository(localStorage);
 let activeConversationSession = conversationSessionRepository.active() ??
   conversationSessionRepository.create();
-const currentAgentConversationContext = (prompt: string) => ({
-  summary: activeConversationSession.summary,
-  resolvedTopics: activeConversationSession.resolvedTopics,
-  pendingTopics: activeConversationSession.pendingTopics,
-  messages: recentConversationMessages(
-    conversationHistoryRepository.list(activeConversationSession.id),
-    prompt,
-  ),
-});
 let aiGuideController: ReturnType<typeof configureAiGuidePanel>;
 let verifiedPlaceLayer: VerifiedPlaceLayerController | undefined;
 let mapPlaceExplorerController: MapPlaceExplorerController | undefined;
@@ -498,7 +445,6 @@ aiGuideController = configureAiGuidePanel(
     rankingPreference: journeyRankingPreference,
     storage: localStorage,
     historyRepository: conversationHistoryRepository,
-    submitFeedback: serverAgentEnabled ? undefined : submitConversationFeedback,
     onFirstPrompt: (prompt) => {
       if (activeConversationSession.title !== "新しい会話") return;
       const renamed = conversationSessionRepository.rename(
@@ -629,13 +575,6 @@ conversationSessionRepository.subscribe(() => {
     activeConversationSession = activeSession;
   }
 });
-void runDueTravelRechecks(travelRecheckRepository, {
-  weather: (location) => searchWeatherForecast({ location }),
-  railOperation: async (serviceDate) => ({
-    data: await queryTrainDelayAnalysis(serviceDate),
-    evidence: [{ id: `rail-operation:${serviceDate}`, kind: "event", provider: "raiquora-operation-snapshot", retrievedAt: new Date().toISOString(), attribution: "Raiquora operation snapshot", confidence: "observed" }],
-  }),
-}).then((notices) => { for (const notice of notices) aiGuideController.notify(notice); }).catch(() => undefined);
 configureConversationHistoryPanel({
   newConversation,
   toggle: conversationHistoryToggle,
@@ -709,134 +648,9 @@ if (tripPreviewEnabled) {
 }
 
 const initialDateTime = new Date();
-let previousJourneyPlan: ViewerAgentJourneyPlan | undefined;
-let previousJourneySessionId: string | undefined;
-let pendingJourneyLegChange: PendingJourneyLegChange | undefined;
-const textSearch = createJourneySearchHandlers({
-  trains: [], getDisplayTrains: () => [], stationLineCatalog: emptyStationLineCatalog(),
-  getDisplayedServiceDateStart: () => operatingServiceDateStart(new Date()),
-  currentCoordinate: async () => { throw new Error("出発駅が未確認です。地図の現在地は推測しません。"); },
-  journeySearchService, linePresentation: { colorForStations: () => ({ color: "#64748b", lineName: "" }) },
-});
-let runtimeMapBindings: Pick<ViewerAgentRuntimeDependencies, "trains" | "getTrains" | "getPositions" | "getRouteTime" |
-  "queryDailyCongestionAnalysis" | "queryTrainDelayAnalysis" | "searchDirectRoutes" | "resolveStationGroundPoint" | "maximumRouteTime"> = {
-  trains: [], getTrains: () => [], getPositions: () => [], getRouteTime: () => currentRouteTime(new Date()),
-  queryDailyCongestionAnalysis: async (date) => congestionAnalysisForAgent(await queryDailyCongestionAnalysis(date), [], () => ""),
-  queryTrainDelayAnalysis: async (date) => delayAnalysisForAgent(await queryTrainDelayAnalysis(date), []),
-  searchDirectRoutes: textSearch.backendSearchRoutes, maximumRouteTime: 2880,
-};
-handleAiGuidePrompt = async (
-  prompt,
-  preferences,
-  conversation,
-  onResponseMetadata,
-) => {
-    if (consultationTransportMode === "server") return serverAgentSession!.start(prompt).send();
-    // Rollback is maintenance, never a production Browser model loop.
-    if (consultationTransportMode === "stopped") throw new Error("相談機能は現在利用できません。しばらくしてから再度お試しください。");
-    if (previousJourneySessionId !== activeConversationSession.id) {
-      previousJourneySessionId = activeConversationSession.id;
-      previousJourneyPlan = latestJourneyPlanFromHistory(
-        conversationHistoryRepository.list(activeConversationSession.id),
-      );
-      pendingJourneyLegChange = undefined;
-    }
-    const runtimeRequestIds: string[] = [];
-    const executionSessionId = activeConversationSession.id;
-    const workspaceSource = tripWorkspaceController.source();
-    const executionTripId = workspaceSource?.getCurrentTrip()?.id;
-    const executionRevision = workspaceSource?.getCurrentTrip()?.revision;
-    const isCurrentExecution = () => executionSessionId === activeConversationSession.id &&
-      executionTripId === tripWorkspaceController.current()?.id && executionRevision === tripWorkspaceController.current()?.revision;
-    if (workspaceSource && !workspaceSource.getCurrentTrip()) throw new Error("サーバの旅程を再取得してから相談を続けてください。");
-    const uiFocus = tripWorkspaceController.uiFocus();
-    const { runViewerAgentRuntime } = await import("../adapters/bedrock/viewer-agent-runtime");
-    const response = await runViewerAgentRuntime(
-      prompt,
-      {
-        previousAssistantTurn: agentTurnObservations.get(executionSessionId),
-        getCurrentTrip: () => workspaceSource?.getCurrentTrip(),
-        getTripRole: () => workspaceSource?.getRole?.(),
-        inTripContextReader: new HttpInTripContextClient(),
-        getReservationFacts: () => workspaceSource?.getReservationFacts?.(),
-        getChecklistItems: () => workspaceSource?.checklist?.getItems(),
-        getFeasibilityExternalFacts: () => workspaceSource?.getFeasibilityExternalFacts?.(),
-        getUiFocus: () => uiFocus,
-        ...(workspaceSource ? {
-          getTravelCandidates: () => (workspaceSource.getCandidates?.() ?? []).map(({ candidate, assessment }) =>
-            assessment ? { candidate: { id: candidate.id }, comparison: candidateIdentityContext(candidate), assessment } : candidateIdentityContext(candidate)),
-          candidateSelection: workspaceSource.candidateSelection,
-        } : {}),
-        onTurnObservation: (observation) => agentTurnObservations.record(executionSessionId, observation),
-        ...runtimeMapBindings,
-        searchRepresentativeTimetable,
-        searchAccommodations,
-        searchWeatherForecast,
-        searchPlaceMedia,
-        searchHazardAlerts,
-        searchGroundAccess,
-        searchRestaurants,
-        searchWeb,
-        readWebPages,
-        scheduleTravelRecheck: (request) => travelRecheckRepository.schedule(request),
-        getJourneySearchPreferences: () => preferences,
-        getPreviousJourneyPlan: () => previousJourneyPlan,
-        findJourneyLegAlternatives,
-        getPendingJourneyLegChange: () => pendingJourneyLegChange,
-        setPendingJourneyLegChange: (pending) => {
-          if (isCurrentExecution()) pendingJourneyLegChange = pending;
-        },
-        getConversationContext: (() => { const context = currentAgentConversationContext(prompt); return () => context; })(),
-        getTripContext: () => conversation?.guidance.tripContext,
-        getVerifiedPlaces: () => pendingMapCandidates.flatMap((candidate) =>
-          candidate.kind === "place" ? [candidate.value] : []),
-        rememberTravelPreference: (statement, confidence) =>
-          rememberTravelPreference(
-            localStorage,
-            statement,
-            executionSessionId,
-            confidence,
-          ),
-        updateConversationSession: (update) => {
-          if (!isCurrentExecution()) return;
-          Object.assign(activeConversationSession, update, {
-            updatedAt: new Date().toISOString(),
-          });
-          conversationSessionRepository.save(activeConversationSession);
-        },
-        getTripPlan: () => workspaceSource ? undefined : loadTripPlan(
-          localStorage,
-            executionSessionId,
-        ),
-        getUserProfile: () => loadUserProfile(localStorage),
-        storeAgentTrace: async (trace) => {
-          await submitAgentTrace({
-            taskId: executionSessionId,
-            requestIds: runtimeRequestIds,
-            trace,
-          });
-        },
-      },
-      async (messages, tools, modelClass, modelCallId) => {
-        const result = await invokeBedrockAgent(
-          messages,
-          fetch,
-          tools,
-          modelClass,
-          modelCallId,
-        );
-        onResponseMetadata?.(result.metadata);
-        if (result.metadata.requestId) {
-          runtimeRequestIds.push(result.metadata.requestId);
-        }
-        return result.body;
-      },
-    );
-    if (isCurrentExecution() && typeof response !== "string" && "journeyPlan" in response) {
-      previousJourneyPlan = response.journeyPlan;
-      pendingJourneyLegChange = undefined;
-    }
-    return response;
+handleAiGuidePrompt = async (prompt) => {
+  if (consultationTransportMode === "server") return serverAgentSession!.start(prompt).send();
+  throw new Error("相談機能は現在利用できません。しばらくしてから再度お試しください。");
 };
 
 resolveAiGuidePromptHandler(handleAiGuidePrompt);
@@ -1417,19 +1231,6 @@ if (!token) {
           runtimeMonitor.log();
         };
 
-        const {
-          backendSearchRoutes,
-          findJourneyLegAlternatives: searchJourneyLegAlternatives,
-        } = createJourneySearchHandlers({
-          trains: trainIndex.trains,
-          getDisplayTrains: () => displayTrains,
-          stationLineCatalog,
-          getDisplayedServiceDateStart: () => displayedServiceDateStart,
-          currentCoordinate: currentBrowserCoordinate,
-          journeySearchService,
-          linePresentation: lineColorIndex,
-        });
-        findJourneyLegAlternatives = searchJourneyLegAlternatives;
         const disposeDelayUpdates = configureTrainDelayUpdates((snapshot) => {
           latestDelaySnapshot = snapshot;
           updateTrains();
@@ -1465,17 +1266,6 @@ if (!token) {
             displayTime.dispatchEvent(new Event("input", { bubbles: true }));
           },
         );
-        runtimeMapBindings = {
-          trains: trainIndex.trains, getTrains: () => displayTrains, getPositions: () => displayedPositions,
-          getRouteTime: () => Number(displayTime.value), maximumRouteTime, searchDirectRoutes: backendSearchRoutes,
-          queryDailyCongestionAnalysis: async (date) => congestionAnalysisForAgent(await queryDailyCongestionAnalysis(date), trainIndex.trains, (train) => lineColorIndex.colorFor(train).lineName),
-          queryTrainDelayAnalysis: async (date) => delayAnalysisForAgent(await queryTrainDelayAnalysis(date), trainIndex.trains),
-          resolveStationGroundPoint: (name) => {
-            const normalized = normalizeStationName(name);
-            const station = stationLineCatalog.lines.flatMap((line) => line.stations).find((s) => normalizeStationName(s.name) === normalized);
-            return station ? { entityId: `station:${normalized}`, name: station.name, longitude: station.coordinate[0], latitude: station.coordinate[1] } : undefined;
-          },
-        };
         displayTime.disabled = false;
         currentTimeButton.disabled = false;
         const playbackSpeedControls = configurePlaybackSpeed(

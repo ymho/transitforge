@@ -99,9 +99,9 @@ tools/               検証 評価 再生成コマンド
 ```
 
 Agentの共通coreは`modules/agent/runtime/agent-runtime.ts`を唯一のモデル実行実装とする。
-Server Application入口を追加済みで、本番Browser組成からの切替は#480で行う。
-Bedrock接続は`frontend/src/adapters/bedrock/viewer-agent-runtime.ts`で共通Tool Evidence Traceへ適合する。
-Viewer ActionとLocalViewerAgentは#477で撤去済みで、DEVでもAPI障害をlocal fallbackで隠さない。
+本番相談はBrowserから`/api/agent-stream`を通ってServer Agent Runtimeへ接続し、
+Bedrock・Server Tool・Evidence・Traceは`backend/agent-api`が所有する。
+Browser Agent Runtimeとそのfallbackは#481 Batch 1で撤去済みで、gate OFFまたはAPI障害時は相談を停止する。
 
 本番Agent Lambdaは`backend/agent-api`のNode.js bundleを使う
 TypeScriptのテストは対象モジュールの隣へ置く。repository保守toolとfixtureの更新方法は
@@ -148,8 +148,6 @@ npm run test:journey-scenarios
 npm run eval:agent
 npm run eval:agent:smoke
 npm run eval:agent:full
-npm run eval:agent:decision:live -- --profile smoke --model-class default
-npm run eval:agent:decision:live -- --profile smoke --model-class default --repetitions 3
 npm run eval:agent -- --case cancelled-service
 npm run eval:agent:strategies
 ```
@@ -159,38 +157,11 @@ Agent Benchmarkは42件を収録し 曖昧要求 運休 遅延 制約 情報不�
 戦略実験はsingle pass 結果駆動再計画 常時Reflectionの品質と相対コストを比較する
 
 通常の`eval:agent`は再現可能な保存済みObservationを採点し CIの回帰検知に使う。
-さらに本番Runtimeを通すscripted Ask + Progress（A〜G）と、複数応答の
-[Trip Progress評価](docs/architecture/trip-progress-evaluation.md)（A〜AI）を追加実行する。
-TTFC/TTFI・候補選択→draft・質問のみの連続数は構造化された表示成果物から測る。
-SmokeはTrip Progress 23件、FullはA〜AMの39件。K/LはActivity、M/Nは[TripParty](docs/architecture/trip-party.md)、O/Pは[Transport](docs/architecture/trip-transport.md)、Q/Rは[宿泊Snapshot](docs/architecture/trip-accommodation.md)の回帰評価。保存済み観測42件の5指標は維持する。SはEUR宿泊価格、T/Uは多都市、V〜Zは候補Assessment、AAはUI focus、ABは予約変更、AC〜AEは[Trip成立性](docs/architecture/trip-feasibility.md)、AF〜AHは[準備リスト](docs/architecture/trip-readiness.md)、AIは[公的ハザードとTrip影響の分離](docs/architecture/hazard-alert.md)を検証する。
-#396の[旅行中Context](docs/architecture/in-trip-context.md)は、現在/次予定、保存済みImpact、通知currency、ReservationFactを
-bounded read modelに分け、AJ〜AM（次予定・鉄道影響・雨/警報・位置未許可）を同じ評価へ追加した。
-既存A〜AIのthresholdは変更しない。
+Browser Runtimeを直接起動するscripted Ask/Progressと旧decision Live Evalは#481 Batch 1で撤去した。
+Server Agentの実行契約は`backend/agent-api`のcomposition/tool testsで確認する。
+過去のTrip Progress評価記録とthresholdは履歴として各architecture文書に残すが、現行コマンドではない。
 公開の最新事実読取は既存end-user認証gate（501）を維持する。
-実モデルで複数応答を測る場合は、既存AWS認証を更新後に
-`npm run eval:agent:decision:live -- --suite trip-progress --profile full`を実行する。
-`eval:agent:decision:live`は本番と同じSystem Prompt Tool capability contract
-`MultiStepAgentRuntime`からBedrockを実際に呼び、意思決定の単一model baselineを測る。
-Live Evalは課金とAWS認証を伴うためCIでは実行せず、結果を`/tmp/raiquora-live-agent-eval`へ保存する。
-`--profile full`と`--model-class default|lightweight|decision`を同じdatasetで実行してから
-model routing比較へ渡す。モデルの非決定性を確認するときは`--repetitions 2..10`を指定し、
-`agent-eval-stability.json`でcaseごとの成功率と全反復で成功したcase数を確認する。
-Live Evalの出力上限は本番と同じ4,096 tokensで、比較実験では`--max-output-tokens 500`のように
-指定できる。これは生成量の上限であり、常にその量の出力を要求するものではない。
 会話Contextの保持と評価の限界は[会話品質監査](docs/architecture/conversation-quality-audit.md)を参照する。
-
-```bash
-aws sso login --profile <aws-profile>
-AWS_PROFILE=<aws-profile> AWS_REGION=ap-northeast-1 \
-  npm run eval:agent:decision:live -- \
-  --profile full --model-class default --strategy single-default
-
-npm run eval:agent:model-routing:build -- \
-  --strategy single-default \
-  --report /tmp/raiquora-live-agent-eval/single-default/agent-eval-report.json \
-  --traces /tmp/raiquora-live-agent-eval/single-default/agent-eval-traces.json \
-  --output /tmp/raiquora-live-agent-eval/single-default/run.json
-```
 
 経路検索のシナリオだけを確認する場合は次を実行する
 
@@ -269,6 +240,6 @@ API route保護と本番切替は後続段階であり、ログインUIの導入
 
 ## Server Agent統合（#480）
 
-[cutover統合とTool inventory](docs/architecture/server-agent-cutover.md)を追加した。
-短命gate ONでは認証済みREST streamからサーバのConversation turn・Context・Tool・final保存へ接続する。
-Browser Agentへのfallbackはない。既定OFFでAWS未切替。実AWS検証と旧経路閉鎖は#480に残す。
+[cutover統合とTool inventory](docs/architecture/server-agent-cutover.md)を正とする。
+productionは認証済みREST streamからServer AgentのConversation turn・Context・Tool・final保存へ接続する。
+Browser Agentへのfallbackはなく、gate OFFでは相談を停止する。

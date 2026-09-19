@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { AwsBedrockConverseClient } from "../backend/agent-api/src/adapters/aws-sdk-clients";
 import { BedrockConversationModel } from "../backend/agent-api/src/adapters/bedrock-conversation-model";
 import { agentSystemPrompt } from "../backend/agent-api/src/usecases/agent-system-prompt";
-import { ConverseModelProvider } from "../frontend/src/adapters/bedrock/viewer-agent-runtime";
+import { ConversationModelProvider } from "../backend/agent-api/src/adapters/conversation-model-provider";
 import { MultiStepAgentRuntime } from "@raiquora/agent/agent-runtime";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
@@ -38,9 +38,9 @@ for (const scenario of scenarios) {
   const formats: string[] = [];
   const contractDiagnostics: Record<string, unknown>[] = [];
   const runtime = new MultiStepAgentRuntime({ tools, toolExecutor: new AgentToolExecutor(tools, new ToolEvidenceRegistry()),
-    model: new ConverseModelProvider(async (messages, descriptors, modelClass) => {
-      calls++; const result = await model.converse({ messages, ...(descriptors ? { tools: descriptors } : {}), ...(modelClass ? { modelClass } : {}) });
-      const text = result.message.content.flatMap((block) => typeof block.text === "string" ? [block.text] : []).join("\n");
+    model: new ConversationModelProvider({ converse: async (request) => {
+      calls++; const result = await model.converse(request);
+      const text = result.message.content.flatMap((block) => "text" in block ? [block.text] : []).join("\n");
       formats.push(text.includes('"source-explanation"') ? (text.includes("```") ? "fenced-source-selection" : "source-selection") : "other");
       const clean = text.replace(/<(thinking|analysis)>[\s\S]*?<\/\1>/giu, "").replace(/<decision_summary>[\s\S]*?<\/decision_summary>/gu, "").trim();
       const decision = extractAgentDecisionSummary([text]);
@@ -51,14 +51,14 @@ for (const scenario of scenarios) {
         embeddedSourceValid = structured !== undefined;
         embeddedInference = structured?.claims.some((claim) => claim.kind === "inference") === true;
       } catch { /* Record contract booleans only, never raw model output. */ }
-      contractDiagnostics.push({ instructionPresent: JSON.stringify(messages).includes("資料に基づく場所の説明"),
+      contractDiagnostics.push({ instructionPresent: JSON.stringify(request.messages).includes("資料に基づく場所の説明"),
         summaryStatus: decision.status, interpretedGoal: decision.summary?.interpretedGoal,
         reasonCodes: decision.summary?.reasonCodes, softPreferences: decision.summary?.softPreferences,
         embeddedSourceValid, embeddedInference,
         hasSections: clean.includes('"sections"'), hasKind: clean.includes('"kind"'), hasFence: clean.includes("```"),
         startsWithJson: clean.startsWith("{"), bodyLength: clean.length, modelId: result.metadata?.modelId });
       return { message: result.message, stopReason: result.stopReason, metadata: result.metadata };
-    }), modelClassPolicy: structuredModelClassPolicy,
+    } }, `place-grounding-${scenario.id}`), modelClassPolicy: structuredModelClassPolicy,
     limits: { maxModelCalls: 3, maxIterations: 3, maxToolCalls: 2, maxExecutionMs: 90000 } });
   const result = await runtime.run({ executionId: `place-grounding-${scenario.id}`, feature: "journey_planning", userRequest: scenario.prompt,
     initialEvidence: evidence, context: { travelProfile: { favoriteInterests: ["歴史"] } } });

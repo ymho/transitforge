@@ -141,11 +141,12 @@ initial/idle/completionのAWS全経路測定は記録上未達。既存productio
 閉じている。「AがTripを2件保存し再読込後再取得」の実確認はない。Trip auth fixtureの成功と本番保存を
 区別する。登録/メール確認/再設定/失効、Trip CAS/migration/quota等も既存Issue内で確認する。
 
-## #481へ渡す残件
+## #481への引継ぎ
 
-`viewer-agent-runtime.ts`大量削除、Frontend Bedrock bridge、dead/重複operation、LocalStorage legacy、
-BrowserTravelRecheckRepositoryと起動時recheck、旧TripPlan/import、重複test/fixture、短命gateの撤去を送る。
-README/product-brief/Architecture/AGENTSの全体監査も#481。今回変更した認証・閉鎖・rollback契約だけ更新する。
+Batch 1で`viewer-agent-runtime.ts`とFrontend Bedrock conversation bridge、
+BrowserTravelRecheckRepositoryと起動時recheck、専用test/fixtureを撤去した。
+LocalStorage Conversation/Profile/Trip legacy、旧TripPlan/import、migration、短命gateはBatch 2、
+README/product-brief/Architecture/AGENTSの全体監査はBatch 3へ残す。
 legacy救済は確認なしに「不要」と決めず、データを削除・自動uploadしない。
 
 ## 検証
