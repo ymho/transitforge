@@ -48,6 +48,9 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     <section class="home-card"><h2>通知</h2><div class="my-actions"><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button></div></section><section class="home-card account-journey-settings"><h2>経路検索の設定</h2><p>相談で経路を比較するときの既定値です。</p><label>乗換ペース<select data-account-transfer-pace><option value="hurried">急ぐ</option><option value="standard">普通</option><option value="relaxed">ゆっくり</option></select></label><label>経路の優先<select data-account-ranking-preference><option value="balanced">バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label></section><section class="home-card account-services"><h2>外部サービス</h2><p>旅の案内に利用する情報提供元です。</p><ul><li>GTFS-JP・公共交通オープンデータ</li><li>気象庁防災情報XML</li><li>ホットペッパーグルメ Webサービス</li><li>Wikipedia / Wikimedia Commons</li></ul></section></div></div></section>
     <button type="button" class="product-map-back" data-map-back hidden>戻る</button>`;
   app.prepend(root);
+  const consultationEntry = root.querySelector<HTMLElement>(".home-prompt")!, consultationExamples = root.querySelector<HTMLElement>(".home-examples")!;
+  const consultationLoginNotice = document.createElement("p"); consultationLoginNotice.className = "home-login-required"; consultationLoginNotice.textContent = "相談を始めるにはログインしてください。";
+  consultationEntry.before(consultationLoginNotice);
   const services = root.querySelector<HTMLUListElement>(".account-services ul")!;
   services.className = "external-service-list";
   services.innerHTML = `<li><strong>Mapbox</strong><span>地図・徒歩と車の移動</span><a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noreferrer">地図の帰属表示</a></li><li><strong>OpenStreetMap contributors</strong><span>地図データ</span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">著作権とライセンス</a></li><li><strong>Open-Meteo</strong><span>天気予報</span><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">提供元</a></li><li><strong>気象庁</strong><span>警報・防災情報</span><a href="https://xml.kishou.go.jp/" target="_blank" rel="noreferrer">気象庁防災情報XML</a></li><li><strong>ホットペッパーグルメ Webサービス</strong><span>飲食店候補</span><a href="https://webservice.recruit.co.jp/" target="_blank" rel="noreferrer"><img src="https://webservice.recruit.co.jp/banner/hotpepper-s.gif" width="135" height="17" alt="ホットペッパーグルメ Webサービス" /></a></li><li><strong>Wikipedia / Wikimedia Commons</strong><span>観光情報・画像</span><a href="https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use" target="_blank" rel="noreferrer">利用条件</a></li><li><strong>Amazon Bedrock</strong><span>コンシェルジュの言語モデル</span></li>`;
@@ -87,6 +90,9 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     myStatus.textContent = auth.status === "signed-in" ? `${auth.displayName} としてログイン中です。` : "旅程やプロフィールを保存するにはログインしてください。";
     myLogin.hidden = auth.status === "signed-in";
     myLogout.hidden = auth.status !== "signed-in";
+    const signedIn = auth.status === "signed-in";
+    consultationEntry.hidden = !signedIn; consultationExamples.hidden = !signedIn; consultationLoginNotice.hidden = signedIn;
+    for (const view of ["chat", "trips"]) root.querySelector<HTMLElement>(`[data-primary="${view}"]`)!.hidden = !signedIn;
     for (const button of root.querySelectorAll<HTMLElement>("[data-profile], [data-notifications]")) button.closest("section")!.hidden = auth.status !== "signed-in";
     const journey = ports.journeySettings(); transferPace.value = journey.transferPace; rankingPreference.value = journey.rankingPreference;
     const stateText = view.state === "loading" ? "旅程を読み込んでいます。" : view.state === "unauthenticated" ? "ログインすると、保存した旅程をここで確認できます。相談はこのまま始められます。"

@@ -27,6 +27,8 @@ it("starts Home without initializing Map or requiring profile/authentication", (
   expect(document.body.textContent).not.toContain("調査済みのおすすめではありません");
   expect(document.querySelector('[aria-label="相談の入力例"]')).not.toBeNull();
   expect(document.querySelector("[data-home-live]")!.textContent).toContain("ログインすると、保存した旅程");
+  expect(document.querySelector(".home-prompt")!.hasAttribute("hidden")).toBe(true);
+  expect(document.querySelector('[data-primary="chat"]')!.hasAttribute("hidden")).toBe(true);
   click("[data-example]"); document.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
   expect(ports.newConsultation).toHaveBeenCalledWith("のんびりできる旅を考えたい");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("chat");
