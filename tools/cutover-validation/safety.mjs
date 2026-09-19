@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 export function requireCheck(condition) {
   if (!condition) throw new Error("validation failed");
@@ -35,36 +37,50 @@ export class Report {
   }
 }
 
-// CLI input uses an anonymous pipe, never shell interpolation, argv, files or inherited output.
+// CLI input stays in a private directory (0700) and request file (0600), never argv.
 // AWS CLI retry is disabled: an ambiguous mutation is resolved by verification/cleanup.
-export function aws(service, operation, input, { missing = false } = {}) {
-  return new Promise((resolve, reject) => {
-    // Operations with no request input opt out of the shared stdin JSON path by
-    // passing input as undefined. An explicit empty object remains request input.
-    const noInput = input === undefined;
-    const args = [service, operation, ...(noInput ? [] : ["--cli-input-json", "file:///dev/stdin"]), "--output", "json", "--no-cli-pager"];
-    const child = spawn("aws", args, {
-      stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, AWS_MAX_ATTEMPTS: "1", AWS_PAGER: "", AWS_CLI_AUTO_PROMPT: "off" },
+export async function aws(service, operation, input, { missing = false } = {}) {
+  let directory;
+  try {
+    // Undefined means no request input; an explicit empty object still uses JSON.
+    const args = [service, operation];
+    if (input !== undefined) {
+      directory = mkdtempSync(join(tmpdir(), "cutover-aws-"));
+      const path = join(directory, "input.json");
+      writeFileSync(path, JSON.stringify(input), { mode: 0o600, flag: "wx" });
+      args.push("--cli-input-json", `file://${path}`);
+    }
+    args.push("--output", "json", "--no-cli-pager");
+    return await new Promise((resolve, reject) => {
+      const child = spawn("aws", args, {
+        stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, AWS_MAX_ATTEMPTS: "1", AWS_PAGER: "", AWS_CLI_AUTO_PROMPT: "off" },
+      });
+      let output = "", diagnostic = "", settled = false;
+      const fail = () => { if (!settled) { settled = true; clearTimeout(timer); reject(new Error("AWS operation failed")); } };
+      const timer = setTimeout(() => { child.kill("SIGKILL"); fail(); }, 45_000);
+      child.on("error", fail);
+      child.stdout.on("data", data => { output += data; if (output.length > 4_194_304) { child.kill("SIGKILL"); fail(); } });
+      child.stderr.on("data", data => { diagnostic += data; if (diagnostic.length > 65_536) { child.kill("SIGKILL"); fail(); } });
+      child.on("close", code => {
+        clearTimeout(timer);
+        if (settled) return;
+        if (code !== 0) {
+          if (missing && /\((ResourceNotFoundException|UserNotFoundException)\)/u.test(diagnostic)) { settled = true; resolve(undefined); }
+          else fail();
+          return;
+        }
+        try { const value = output.trim() ? JSON.parse(output) : {}; settled = true; resolve(value); }
+        catch { fail(); }
+      });
     });
-    let output = "", diagnostic = "", settled = false;
-    const fail = () => { if (!settled) { settled = true; reject(new Error("AWS operation failed")); } };
-    const timer = setTimeout(() => { child.kill("SIGKILL"); fail(); }, 45_000);
-    child.on("error", fail); child.stdin.on("error", fail);
-    child.stdout.on("data", data => { output += data; if (output.length > 4_194_304) { child.kill("SIGKILL"); fail(); } });
-    child.stderr.on("data", data => { diagnostic += data; if (diagnostic.length > 65_536) { child.kill("SIGKILL"); fail(); } });
-    child.on("close", code => {
-      clearTimeout(timer);
-      if (settled) return;
-      if (code !== 0) {
-        if (missing && /\((ResourceNotFoundException|UserNotFoundException)\)/u.test(diagnostic)) { settled = true; resolve(undefined); }
-        else fail();
-        return;
-      }
-      try { const value = output.trim() ? JSON.parse(output) : {}; settled = true; resolve(value); }
-      catch { fail(); }
-    });
-    child.stdin.end(noInput ? undefined : JSON.stringify(input));
-  });
+  } catch {
+    throw new Error("AWS operation failed");
+  } finally {
+    if (directory) {
+      try { rmSync(directory, { recursive: true, force: true }); }
+      catch { throw new Error("AWS operation failed"); }
+    }
+  }
 }
 
 export function gates(env) {
