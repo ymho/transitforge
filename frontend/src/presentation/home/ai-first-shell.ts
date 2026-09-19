@@ -18,6 +18,8 @@ export interface AiFirstShellPorts {
   openChat(): void;
   openTrip(id: string): void;
   consultTrip?(id: string): void;
+  renameTrip?(id: string, title: string): Promise<void>;
+  archiveTrip?(id: string): Promise<void>;
   openProfile(): void;
   openMap(mode: "realtime" | "simulation"): void;
   openHistory(): void;
@@ -37,9 +39,9 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     <form class="home-prompt"><span aria-hidden="true">✦</span><textarea id="home-prompt" aria-label="どんな旅にしたいですか？" maxlength="400" rows="1" placeholder="行きたい場所や、やりたいことを話してください"></textarea><button type="submit" aria-label="AIに相談する">→</button></form>
     <div class="home-examples" aria-label="相談の入力例">${["のんびりできる旅を考えたい", "歴史ある街を歩きたい", "おいしいものを楽しみたい"].map((text) => `<button type="button" data-example="${text}">${text}</button>`).join("")}</div></div>${travelDecoration()}</div>
     <div data-home-live></div><section class="home-secondary home-rail-feature"><div><p class="home-eyebrow">列車から広がる旅</p><h2>移動も、旅の楽しみに。</h2><p>列車や運行状況は地図で確認できます。</p><button type="button" data-map="realtime">リアルタイム運行状況</button><button type="button" data-map="simulation">日時指定シミュレーター</button></div>${travelDecoration("rail")}</section></section>
-    <section class="product-page" data-page="trips" aria-label="旅程" hidden><h1>旅程</h1><p>読み込んだ旅程を表示します。公開の保存・複数旅程一覧はまだ有効ではありません。</p><div data-trip-list></div></section>
+    <section class="product-page" data-page="trips" aria-label="旅程" hidden><header class="trip-list-heading"><p class="home-eyebrow">YOUR TRIPS</p><h1>旅程</h1><p>次の旅も、考え中の旅も。ここから続きの相談や確認を始められます。</p></header><div data-trip-list></div></section>
     <section class="product-page" data-page="my" aria-label="マイ" hidden><div class="my-shell"><p class="home-eyebrow">自分らしい旅のために</p><h1>マイページ</h1><div class="my-grid"><section class="home-card"><h2>旅行プロフィール</h2><p>普段の好みを、次の旅のヒントに。今回の旅の条件とは分けて管理します。</p><p class="my-preferences" data-profile-summary></p><button type="button" data-profile>旅行プロフィールを編集</button><p>この端末に保存されます。登録しなくても相談できます。</p></section>
-    <section class="home-card"><h2>会話と設定</h2><div class="my-actions"><button type="button" data-history>会話履歴 <span aria-hidden="true">→</span></button><button type="button" data-settings>設定・経路の好み <span aria-hidden="true">→</span></button><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button><button type="button" data-map="realtime">列車の地図 <span aria-hidden="true">→</span></button></div><p>ゲスト利用中です。ログイン・クラウド保存はまだ利用できません。</p></section></div></div></section>
+    <section class="home-card"><h2>会話と設定</h2><div class="my-actions"><button type="button" data-history>会話履歴 <span aria-hidden="true">→</span></button><button type="button" data-settings>設定・経路の好み <span aria-hidden="true">→</span></button><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button><button type="button" data-map="realtime">列車の地図 <span aria-hidden="true">→</span></button></div><p>ログイン状態に応じて、保存した情報を確認できます。</p></section></div></div></section>
     <button type="button" class="product-map-back" data-map-back hidden>戻る</button>`;
   app.prepend(root);
   let current: PrimaryView = "explore", mapReturn: PrimaryView = "explore", composing = false;
@@ -65,7 +67,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     let input: HomeReadInput;
     try { input = ports.read(); } catch { input = { state: "unavailable", trips: [], candidates: [] }; }
     const view = homeReadModel(input, ports.now());
-    const stateText = view.state === "loading" ? "旅程を読み込んでいます。" : view.state === "unauthenticated" ? "公開の旅程保存は準備中です。相談はこのまま始められます。"
+    const stateText = view.state === "loading" ? "旅程を読み込んでいます。" : view.state === "unauthenticated" ? "ログインすると、保存した旅程をここで確認できます。相談はこのまま始められます。"
       : view.state === "unavailable" ? "旅程を取得できませんでした。未予約・準備完了とは判断していません。" : "次の旅はまだ決まっていません。相談から始めてみましょう。";
     root.querySelector("[data-home-live]")!.innerHTML = `${view.preview ? '<p class="preview-notice">開発preview・固定データです。保存されません。</p>' : ""}
       <section class="home-next"><h2>${view.next ? tripDisplayLabels[view.next.group] : "次の旅"}</h2>${view.next ? card(view.next.trip, undefined, view.readiness, true) : `<div class="home-empty"><p role="status">${stateText}</p>${travelDecoration("canal")}</div>`}
@@ -91,6 +93,18 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     root.querySelectorAll<HTMLButtonElement>("[data-trip-chat]").forEach((button) => button.addEventListener("click", () => {
       if (!view.trips.some((row) => row.trip.id === button.dataset.tripChat)) return;
       ports.consultTrip?.(button.dataset.tripChat!); navigate("chat");
+    }));
+    root.querySelectorAll<HTMLButtonElement>("[data-trip-rename]").forEach((button) => button.addEventListener("click", () => {
+      const current = view.trips.find((row) => row.trip.id === button.dataset.tripRename)?.trip;
+      if (!current || !ports.renameTrip) return;
+      const title = window.prompt("旅程の名前", current.title)?.trim();
+      if (!title || title === current.title) return;
+      void ports.renameTrip(current.id, title).then(render, () => { void ports.retry().then(render, render); });
+    }));
+    root.querySelectorAll<HTMLButtonElement>("[data-trip-archive]").forEach((button) => button.addEventListener("click", () => {
+      const current = view.trips.find((row) => row.trip.id === button.dataset.tripArchive)?.trip;
+      if (!current || !ports.archiveTrip || !window.confirm(`「${current.title}」をアーカイブしますか？`)) return;
+      void ports.archiveTrip(current.id).then(render, () => { void ports.retry().then(render, render); });
     }));
     root.querySelectorAll<HTMLButtonElement>("[data-candidate]").forEach((button) => button.addEventListener("click", () => {
       const candidate = view.candidates.find((value) => value.id === button.dataset.candidate);
@@ -143,5 +157,5 @@ function card(trip: Trip, group?: string, readiness?: TripReadiness, withPrepara
   const preparation = readiness?.preparation.readState === "available"
     ? `準備リストの残り ${readiness.preparation.categories.reduce((n, c) => n + c.open, 0)}件` : "準備リストは、これから確認";
 const booking = readiness?.reservations.readState === "available" ? "予約の記録は旅程で確認できます" : "予約状況はまだ確認できていません";
-return `<article class="home-card home-trip-card"><div class="home-trip-copy">${group ? `<small>${esc(group)}</small>` : ""}<h3>${esc(trip.title)}</h3><div class="home-tags">${dates.slice(0, 2).map((date) => `<span>${esc(date)}</span>`).join("")}${party ? `<span>${esc(party)}</span>` : ""}</div><p>${trip.items.length}件の予定から、旅をゆっくり整えましょう。</p><button type="button" data-trip="${esc(trip.id)}">旅程を見る <span aria-hidden="true">→</span></button><button type="button" data-trip-chat="${esc(trip.id)}">AIに相談</button></div>${withPreparation ? `<aside class="home-trip-preparation"><div class="home-trip-art" aria-hidden="true">${travelIcon("trip")}</div><h4>出発までに</h4><ul><li>${preparation}</li><li>${booking}</li></ul></aside>` : `<div class="home-trip-art" aria-hidden="true">${travelIcon("trip")}</div>`}</article>`;
+return `<article class="home-card home-trip-card"><div class="home-trip-copy">${group ? `<small>${esc(group)}</small>` : ""}<h3>${esc(trip.title)}</h3><div class="home-tags">${dates.slice(0, 2).map((date) => `<span>${esc(date)}</span>`).join("")}${party ? `<span>${esc(party)}</span>` : ""}</div><p>${trip.items.length}件の予定から、旅をゆっくり整えましょう。</p><button type="button" data-trip="${esc(trip.id)}">旅程を見る <span aria-hidden="true">→</span></button><button type="button" data-trip-chat="${esc(trip.id)}">AIに相談</button><span class="home-trip-manage"><button type="button" data-trip-rename="${esc(trip.id)}">名称を編集</button><button type="button" data-trip-archive="${esc(trip.id)}">アーカイブ</button></span></div>${withPreparation ? `<aside class="home-trip-preparation"><div class="home-trip-art" aria-hidden="true">${travelIcon("trip")}</div><h4>出発までに</h4><ul><li>${preparation}</li><li>${booking}</li></ul></aside>` : `<div class="home-trip-art" aria-hidden="true">${travelIcon("trip")}</div>`}</article>`;
 }

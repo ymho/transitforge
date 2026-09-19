@@ -41,6 +41,18 @@
 .consultation-conditions-close, .consultation-backdrop { display: none; }
 #app[data-primary-view="chat"] .trip-workspace-navigation { display: none; }
 #app[data-primary-view="chat"][data-trip-workspace-view="trip"] .consultation-page { display: none; }
+@media (min-width: 45rem) {
+  .consultation-page { padding-top: 1.25rem; padding-bottom: 1.25rem; }
+  .consultation-layout { grid-template-columns: minmax(0, 1.5fr) minmax(20rem, .7fr); gap: 1.25rem; max-width: 79.25rem; margin-inline: auto; }
+  .consultation-heading { min-height: 4.25rem; padding-inline: 1.5rem; }
+  .consultation-context { padding-inline: 1.5rem; }
+  .consultation-messages { padding: 1.5rem; }
+  .consultation-composer { padding: 1rem 1.5rem 1.25rem; }
+  .consultation-conditions { padding: 1.5rem; }
+  .consultation-context-actions button:last-child { color: #536575; background: #f4f7f9; }
+  .consultation-page button:hover:not(:disabled) { border-color: #aac1d2; background: #f5f8fa; }
+  .consultation-composer button:hover:not(:disabled) { background: #173d60; }
+}
 @media (max-width: 44rem) {
   .consultation-page { inset: 4rem 0 calc(3.8rem + env(safe-area-inset-bottom)); padding: 0; }
   .consultation-layout { display: block; }

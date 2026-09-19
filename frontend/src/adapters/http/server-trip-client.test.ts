@@ -32,6 +32,13 @@ describe("Trip HTTP client", () => {
     expect(JSON.parse(request.mock.calls[0]![1]!.body as string)).toEqual({ version: "trip-api-v1", operation: "get", tripId: trip.id });
     expect(request.mock.calls[0]![1]?.credentials).toBe("same-origin");
   });
+  it("reads the existing cursor list and archives through the owner-scoped API", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ version: "trip-api-v1", trips: [trip], nextAfterTripId: trip.id }))).mockResolvedValueOnce(new Response(JSON.stringify({ version: "trip-api-v1" })));
+    const client = new HttpServerTripClient("/api/trips/v1", request);
+    expect(await client.list({ limit: 20 })).toEqual({ trips: [trip], nextAfterTripId: trip.id });
+    await client.archive(trip.id);
+    expect(JSON.parse(request.mock.calls[1]![1]!.body as string)).toEqual({ version: "trip-api-v1", operation: "archive", tripId: trip.id });
+  });
   it("distinguishes not-found from auth/network/invalid response without stale cache", async () => {
     const request = vi.fn<typeof fetch>(); const client = new HttpServerTripClient("/api/trips/v1", request);
     request.mockResolvedValueOnce(new Response("", { status: 404 })); expect(await client.get(trip.id)).toBeUndefined();

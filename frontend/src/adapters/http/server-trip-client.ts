@@ -2,7 +2,7 @@ import { requestSessionVersion, subscribeRequestSession } from "./authenticated-
 import { ApiAuthenticationError } from "../../usecases/auth/api-authentication-error";
 import { personalApiFetch } from "./personal-api-fetch";
 import { validateTrip, TripRevisionConflict, type Trip } from "@raiquora/trip/trip";
-import { TripWriteRejected, type ServerTripClient, type TripMutationRequest } from "../../usecases/trip-plan/server-trip-client";
+import { TripWriteRejected, type ServerTripClient, type ServerTripPage, type TripMutationRequest } from "../../usecases/trip-plan/server-trip-client";
 
 /** No owner parameter/header. The common authenticated transport supplies only an Access Token. */
 export class HttpServerTripClient implements ServerTripClient {
@@ -59,6 +59,13 @@ export class HttpServerTripClient implements ServerTripClient {
     if ((result!.trip as Trip).id !== trip.id) throw new Error("Wrong Trip response");
     return structuredClone(result!.trip as Trip);
   }
+  async list(page: { limit?: number; afterTripId?: string } = {}): Promise<ServerTripPage> {
+    const result = await this.execute({ operation: "list", ...page });
+    if (!Array.isArray(result?.trips) || !result.trips.every((trip) => { try { validateTrip(trip as Trip); return true; } catch { return false; } }) ||
+        result.nextAfterTripId !== undefined && typeof result.nextAfterTripId !== "string") throw new Error("Invalid Trip API response");
+    return { trips: structuredClone(result.trips as Trip[]), ...(result.nextAfterTripId ? { nextAfterTripId: result.nextAfterTripId } : {}) };
+  }
+  async archive(tripId: string): Promise<void> { await this.execute({ operation: "archive", tripId }); }
   async attach(conversationId: string, tripId: string): Promise<void> { await this.execute({ operation: "attach", conversationId, tripId }); }
   async mutate(mutation: TripMutationRequest): Promise<Trip> {
     const epoch = this.sessionVersion(), previous = this.mutationSessions.get(mutation.mutationId);

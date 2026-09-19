@@ -12,6 +12,7 @@ export interface ConsultationScreenPorts {
   preview(proposal: TripUpdateProposal): void;
   showTrip(): void;
   newConversation(): void;
+  saveDraftTrip?(): Promise<void>;
 }
 
 /** New screen composition; retained DOM nodes preserve send/stream/history/IME/draft listeners. */
@@ -33,8 +34,10 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   identity.append(name, meta, note);
   const actions = node("div", "consultation-context-actions");
   const conditions = node("button", "consultation-conditions-toggle", "この旅の条件"), tripButton = node("button", "", "旅程を見る");
+  const saveDraft = node("button", "", "この相談から仮旅程を保存"); saveDraft.type = "button";
+  saveDraft.addEventListener("click", () => { void ports.saveDraftTrip?.().then(render, () => { status.textContent = "旅程を保存できませんでした。相談内容はそのままです。もう一度お試しください。"; }); });
   conditions.type = tripButton.type = "button"; tripButton.addEventListener("click", ports.showTrip);
-  actions.append(conditions, tripButton); context.append(identity, actions);
+  actions.append(conditions, tripButton, saveDraft); context.append(identity, actions);
   messages.classList.remove("ai-guide-messages"); messages.classList.add("consultation-messages");
   form.classList.remove("ai-guide-form"); form.classList.add("consultation-composer");
   input.placeholder = "希望や気になることを話してください";
@@ -68,6 +71,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     meta.textContent = [...dates, ...(party ? [party] : [])].join(" ・ "); meta.hidden = !meta.textContent;
     note.textContent = trip ? "この旅程が変更案の対象です。確認するまで反映されません。" : state.unavailable ? "参照先を確認してから相談を続けてください。" : "まだ旅程に紐付いていません。";
     tripButton.hidden = !trip;
+    saveDraft.hidden = !!trip || !ports.saveDraftTrip;
     help.textContent = trip ? state.viewer ? "閲覧専用の旅程です。条件の変更はできません。" : "条件を編集して変更案を確認できます。保存は現在の旅程の保存機能に従います。"
       : "条件は会話で追加できます。普段の好みより、今回の希望を優先します。";
     const row = (label: string, value: string, edit?: () => void) => {

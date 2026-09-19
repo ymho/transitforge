@@ -92,6 +92,40 @@
 .home-secondary button { margin: .25rem .4rem .25rem 0; }
 .product-page details { font-size: .85rem; margin-top: 1.2rem; }
 .product-page summary { cursor: pointer; min-height: 2.75rem; }
+.trip-list-heading { max-width: 46rem; margin: .35rem 0 1.75rem; }
+.trip-list-heading .home-eyebrow { margin: 0; color: #4d718d; }
+.trip-list-heading h1 { margin: .2rem 0 .35rem; }
+.trip-list-heading p:last-child { max-width: 38rem; margin: 0; font-size: .95rem; }
+/* Desktop presentation pass: preserve the component system while giving the first view a clear focal point. */
+@media (min-width: 45rem) {
+  .product-header { padding-inline: max(1.75rem, calc((100vw - 79.25rem) / 2)); }
+  .product-nav { right: max(1.75rem, calc((100vw - 79.25rem) / 2)); }
+  .product-page { padding-top: 1.75rem; }
+  .home-hero { min-height: clamp(25rem, 57vh, 29rem); margin-bottom: 1.5rem; }
+  .home-hero-copy { max-width: 39rem; padding: clamp(2.25rem, 4vw, 3.4rem); }
+  .home-hero h1 { font-size: clamp(3rem, 4.1vw, 3.75rem); }
+  .home-prompt { margin-top: 1.35rem; min-height: 4.25rem; padding-left: 1.1rem; }
+  .home-prompt textarea { font-size: .95rem; }
+  .home-prompt button { flex-basis: 3.15rem; min-height: 3.15rem; border-radius: .875rem; font-size: 1.2rem; }
+  .home-next, .home-secondary, [data-home-live] > section { margin-top: 1.5rem; }
+  .home-next > h2, [data-home-live] > section > h2 { margin-bottom: .65rem; font-size: 1.35rem; }
+  .home-trip-card { min-height: 10.25rem; padding: 1.5rem; gap: 1.65rem; }
+  .home-trip-copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 1rem; align-items: center; }
+  .home-trip-copy small, .home-trip-copy h3, .home-trip-copy .home-tags, .home-trip-copy > p { grid-column: 1; }
+  .home-trip-copy h3 { margin-block: .1rem .55rem; font-size: 1.55rem; line-height: 1.35; }
+  .home-trip-copy > p { margin: .65rem 0 0; }
+  .home-trip-copy button { align-self: end; }
+  .home-trip-copy button[data-trip] { grid-column: 2; grid-row: 1 / span 4; border-color: var(--product-accent); background: var(--product-accent); color: #fff; box-shadow: 0 7px 16px #1023371f; }
+  .home-trip-copy button[data-trip-chat] { grid-column: 2; grid-row: 5; color: #234863; background: #f4f8fb; }
+  .home-trip-manage { grid-column: 1; display: flex; gap: .7rem; margin-top: .55rem; }
+  .home-trip-copy .home-trip-manage button { min-height: 2rem; padding: .25rem .1rem; border: 0; color: #6a7783; background: transparent; font-size: .75rem; }
+  .home-trip-preparation { flex-basis: 16.5rem; }
+  .home-empty { min-height: 9.75rem; }
+  .home-rail-feature { min-height: 12.5rem; padding: 1.75rem; }
+  .product-page[data-page="trips"] .home-trip-card { max-width: 56rem; margin-block: .9rem; }
+  .product-page button:hover:not(:disabled) { border-color: #afc2d0; background: #f5f8fa; }
+  .home-prompt button:hover:not(:disabled), .home-trip-copy button[data-trip]:hover:not(:disabled) { border-color: #173d60; background: #173d60; transform: translateY(-1px); }
+}
 .preview-notice { padding: .75rem; border: 1px solid #b88b2f; border-radius: var(--product-control-radius); background: #fff6dc; color: #69490a; }
 .product-shell :focus-visible { outline: 3px solid #426c8b; outline-offset: 3px; }
 #app[data-primary-view] .conversation-sidebar-rail, #app[data-primary-view] .ai-guide-toggle, #app[data-primary-view] #close-ai-guide, #app[data-primary-view] .context-workspace-tabs { display: none; }

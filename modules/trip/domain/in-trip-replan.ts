@@ -82,7 +82,7 @@ export function previewInTripReplan(trip: Trip, proposal: TripUpdateProposal, in
       continue;
     }
     // Preserve request/hard constraints/assumptions and lifecycle; these are separate user operations.
-    if (patch.type === "request" || patch.type === "lifecycle" || patch.type === "adoption") throw new Error("残り旅程の変更で旅行条件・状態を書き換えられません");
+    if (patch.type === "request" || patch.type === "lifecycle" || patch.type === "adoption" || patch.type === "title") throw new Error("残り旅程の変更で旅行条件・状態を書き換えられません");
     if (patch.type === "add" || patch.type === "move") {
       const anchor = patch.afterId ?? (patch.type === "add" ? order.at(-1) : undefined);
       if (!anchor) throw new Error("変更可能な予定の直後へ配置してください");

@@ -114,6 +114,8 @@ import { configureApplicationSettingsPanel } from "../presentation/settings/appl
 import { createTripWorkspaceController } from "../usecases/trip-plan/trip-workspace-controller";
 import { createReferencedTripSource } from "../usecases/trip-plan/server-trip-workspace-source";
 import { HttpServerTripClient } from "../adapters/http/server-trip-client";
+import { createServerTripListSource } from "../usecases/trip-plan/server-trip-list-source";
+import { createConversationDraftTrip } from "../usecases/trip-plan/create-conversation-draft-trip";
 import { HttpNotificationClient } from "../adapters/http/notification-client";
 import { configureNotificationCenter } from "../presentation/notifications/notification-center";
 import { configureTripSharing } from "../presentation/trip-plan/trip-sharing-panel";
@@ -269,6 +271,9 @@ const serverAgentSession = createConversationStreamSession({
 tripWorkspaceController.subscribe(() => serverAgentSession.contextChanged());
 
 const serverTripClient = new HttpServerTripClient();
+const pendingDraftTripIds = new Map<string, string>();
+const serverTripList = createServerTripListSource(serverTripClient, canUsePersonalState);
+if (isSignedIn()) void serverTripList.refresh();
 const serverTripReferences = new Map<string, string>();
 const syncServerTripSource = (session: typeof activeConversationSession) => {
   if (!session.tripId) return;
@@ -455,7 +460,8 @@ currentAuthentication().subscribe(() => {
   aiGuideController.switchSession(unsignedConversation.id);
   tripWorkspaceController.activateSession(unsignedConversation.id);
   contextWorkspaceController.activateSession(unsignedConversation.id);
-  if (!isSignedIn()) return;
+  if (!isSignedIn()) { void serverTripList.refresh(); return; }
+  void serverTripList.refresh();
   void Promise.all([conversationUi.hydrate(), profileUi.hydrate()]).then(async ([session]) => {
     if (generation !== authenticationGeneration) return;
     const selected = session ?? await conversationUi.create();
@@ -542,10 +548,11 @@ primaryShell = configureAiFirstShell(document, app, {
   read: () => {
     const source = tripWorkspaceController.source(), trip = tripWorkspaceController.current();
     const load = tripWorkspaceController.loadState();
+    const listState = serverTripList.getState();
     return {
       state: homePreview === "loading" ? "loading" : homePreview === "error" ? "unavailable" : homePreview === "empty" ? "available"
-        : !source ? "unauthenticated" : load === "loaded" ? "available" : load === "loading" ? "loading" : "unavailable",
-      trips: trip ? [trip] : [], readiness: tripWorkspaceController.readiness(),
+        : listState,
+      trips: listState === "available" ? serverTripList.getTrips() : [], readiness: trip && source && load === "loaded" ? tripWorkspaceController.readiness() : undefined,
       candidates: tripWorkspaceController.candidates().map(({ candidate, assessment }) => ({
         id: candidate.id, title: candidate.experiences[0]?.name ?? candidate.accommodations[0]?.name ?? "移動の候補", assessment,
       })),
@@ -553,14 +560,29 @@ primaryShell = configureAiFirstShell(document, app, {
     };
   },
   profile: () => profileUi.current()?.profile, subscribe: (listener) => {
-    const left = tripWorkspaceController.subscribe(listener), right = profileUi.subscribe(listener);
-    return () => { left(); right(); };
+    const left = tripWorkspaceController.subscribe(listener), middle = profileUi.subscribe(listener), right = serverTripList.subscribe(listener);
+    return () => { left(); middle(); right(); };
   },
-  retry: async () => { await tripWorkspaceController.source()?.retry?.(); },
+  retry: async () => { await serverTripList.refresh(); await tripWorkspaceController.source()?.retry?.(); },
   newConsultation: (prompt) => { void startNewConsultation(prompt).catch(() => aiGuideController.notify("相談を始めるにはログインしてください。")); },
   openChat: () => { aiGuideController.open(); if (tripWorkspaceController.current()) tripWorkspace.show("chat"); delete app.dataset.mapFocusMode; },
-  openTrip: (id) => { if (tripWorkspaceController.current()?.id === id) tripWorkspace.show("trip"); },
-  consultTrip: (id) => { if (tripWorkspaceController.current()?.id !== id) throw new Error("Trip reference mismatch"); tripWorkspace.show("chat"); },
+  openTrip: (id) => { void (async () => {
+    if (tripWorkspaceController.current()?.id !== id) {
+      const trip = await serverTripClient.get(id); if (!trip) throw new Error("Trip unavailable");
+      const existing = conversationUi.list().find((session) => session.tripId === id);
+      await activateConversation(existing?.id ?? (await conversationUi.create({ title: trip.title, tripId: id })).id);
+      await tripWorkspaceController.source()?.retry?.();
+    }
+    if (tripWorkspaceController.current()?.id === id) tripWorkspace.show("trip");
+  })().catch(() => aiGuideController.notify("旅程を読み込めませんでした。")); },
+  consultTrip: (id) => { if (tripWorkspaceController.current()?.id !== id) { window.history.pushState({ tripId: id }, "", "#trip"); window.dispatchEvent(new Event("popstate")); return; } tripWorkspace.show("chat"); },
+  renameTrip: async (id, title) => {
+    const current = await serverTripClient.get(id); if (!current) throw new Error("Trip unavailable");
+    await serverTripClient.mutate({ tripId: id, baseRevision: current.revision, mutationId: crypto.randomUUID(),
+      proposal: { tripId: id, baseRevision: current.revision, summary: "旅程名を変更", patches: [{ type: "title", title }] } });
+    await serverTripList.refresh();
+  },
+  archiveTrip: async (id) => { await serverTripClient.archive(id); await serverTripList.refresh(); },
   openProfile: () => travelProfileToggle.click(),
   openMap: (mode) => { startMap(); selectSidebarMapMode(mode === "simulation" ? "date-time" : "realtime"); },
   openHistory: () => conversationHistoryToggle.click(),
@@ -580,6 +602,23 @@ configureConsultationScreen(aiGuidePanel, aiGuideMessages, aiGuideForm, aiGuideI
   preview: (proposal) => { tripWorkspaceController.preview(proposal); tripWorkspace.show("trip"); },
   showTrip: () => { const trip = tripWorkspaceController.current(); if (trip) { window.history.pushState({ tripId: trip.id }, "", "#trip"); window.dispatchEvent(new Event("popstate")); } },
   newConversation: () => { void createAndActivateConversation().then(() => aiGuideController.open()).catch(() => aiGuideController.notify("相談を始めるにはログインしてください。")); },
+  saveDraftTrip: async () => {
+    if (!isSignedIn()) throw new Error("Authentication required");
+    const conversationId = activeConversationSession.id;
+    if (activeConversationSession.tripId) return;
+    const id = pendingDraftTripIds.get(conversationId) ?? crypto.randomUUID();
+    pendingDraftTripIds.set(conversationId, id);
+    // Explicit save only: dates, party, prices and adopted candidates remain unknown/absent.
+    const created = await createConversationDraftTrip({ conversationId, tripId: id, now: new Date().toISOString(), client: serverTripClient,
+      readBack: (value) => conversationUi.refresh(value) });
+    const linked = conversationUi.list().find((session) => session.id === conversationId);
+    if (!linked?.tripId || linked.tripId !== created.id) throw new Error("Conversation reference unavailable");
+    pendingDraftTripIds.delete(conversationId);
+    activeConversationSession = linked; syncServerTripSource(linked);
+    tripWorkspaceController.activateSession(linked.id);
+    await tripWorkspaceController.source()?.retry?.(); await serverTripList.refresh();
+    tripWorkspace.show("trip");
+  },
 });
 if (import.meta.env.DEV && homePreview === "data") {
   void import("../dev/home-preview").then(({ homePreviewSource }) => tripWorkspaceController.attach(activeConversationSession.id, homePreviewSource()));

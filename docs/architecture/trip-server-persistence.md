@@ -13,6 +13,20 @@
 現在のBrowserはこのServer Trip V2だけを読み書きし、旧TripPlan LocalStorageと明示migrationは撤去済みである。
 判断は [ADR 0053](../decisions/0053-gate-owner-scoped-trip-persistence.md)。#389 が CAS/冪等性を担当する。
 
+## #454 Wave 3A: 一覧と相談からの明示保存
+
+Home と「旅程」は同じ owner-scoped `list` cursor APIを全ページ収集してから、Domainの
+`classifyTrips` selectorへ渡す。表示groupは保存せず、archive済みTripは通常一覧へ混ぜない。
+ページ途中の失敗は空一覧ではなく取得失敗として表示し、認証session世代が変わった非同期結果は破棄する。
+
+新規ConversationはTrip未紐付けで開始する。利用者が「この相談から仮旅程を保存」を明示したときだけ、
+未定の日程・人数・費用を補完しない空のTrip V2を独立UUIDでcreateする。response loss後の再試行は
+同じUUID/内容で既存create冪等性を使う。create成功後にattachし、ConversationのServer read-backが
+`tripId`を返した場合だけUIへ反映する。attach/read-backが失敗してもTripは削除しない。
+
+名称編集はrevision付き`mutate` Proposalの`title` patch、archiveは既存`archive` operationを使う。
+どちらもowner/CAS境界を迂回せず、archiveはConversation・Reservation・Profileを削除しない。
+
 ## Before / After
 
 | 境界 | Before | #388 |

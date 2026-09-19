@@ -88,3 +88,14 @@
 .trip-workspace-checklist-form label { display: grid; gap: 0.25rem; }
 .trip-workspace-checklist-form input, .trip-workspace-checklist-form select { width: 100%; min-width: 0; box-sizing: border-box; }
 .trip-workspace-checklist button, .trip-workspace-readiness button { margin: 0.25rem; min-height: 2.5rem; }
+@media (min-width: 45rem) {
+  #app[data-primary-view="trip"] .trip-workspace { padding: clamp(1.5rem, 3vw, 2.75rem) max(1.75rem, calc((100vw - 68rem) / 2)); }
+  .trip-workspace-heading { padding: 1.75rem; margin-bottom: 1.25rem; }
+  .trip-workspace-heading h1 { margin: .45rem 0; font-size: clamp(1.8rem, 2.5vw, 2.35rem); }
+  .trip-workspace-day > h2 { margin-top: 1.75rem; padding-bottom: .45rem; border-bottom: 1px solid #e1e7eb; }
+  .trip-workspace-card { padding: 1.35rem; margin-block: .8rem; }
+  .trip-workspace-card > header { min-height: 2.75rem; }
+  .trip-workspace-actions { padding-top: .25rem; }
+  .trip-workspace-actions button:first-child { border-color: #b9ccda; background: #edf4f9; }
+  .trip-workspace button:hover:not(:disabled) { border-color: #aec3d2; background: #f4f8fb; }
+}
