@@ -69,6 +69,7 @@ export async function browserHarness(browser: any) {
     'import { consumeAgentStream } from "./frontend/src/adapters/http/agent-stream/consumer.ts"; window.consumeCutoverStream = consumeAgentStream;' },
     bundle: true, format: "iife", write: false, logLevel: "silent" });
   const context = await browser.newContext({ serviceWorkers: "block" });
+  await context.addInitScript("globalThis.__name = (fn) => fn"); // tsx/esbuild evaluation helper used by the injected browser bundle.
   const page = await context.newPage();
   await page.route(`${viewerOrigin}/`, (route: any) => route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>Validation</title>" }));
   await page.goto(`${viewerOrigin}/`);
@@ -97,14 +98,49 @@ export async function browserHarness(browser: any) {
   };
 }
 
+export const successfulTurnCheckLabels = {
+  streamErrorAbsent: "simple turn / stream error absent",
+  progressObserved: "simple turn / progress observed",
+  singleFinal: "simple turn / single final",
+  finalNonEmpty: "simple turn / final non-empty",
+  internalMarkupAbsent: "simple turn / internal markup absent",
+  ttfbMeasured: "simple turn / TTFB measured",
+  completionMeasured: "simple turn / completion measured",
+  headersObserved: "simple turn / headers observed",
+} as const;
+
+const internalMarkup = /<\/?(?:decision_summary|tool_call|tool_result|trace|thinking)\b|"(?:toolUse|toolResult|rawResponse|access_key|application_id|requestHash|attemptId)"\s*:/iu;
+export function successfulTurnChecks(result: any) {
+  const events = Array.isArray(result?.events) ? result.events : [];
+  const finals = events.filter((event: any) => event?.type === "final");
+  const response = finals[0]?.response;
+  return {
+    streamErrorAbsent: !result?.error,
+    progressObserved: events.some((event: any) => event?.type === "progress"),
+    singleFinal: finals.length === 1,
+    finalNonEmpty: finals.length === 1 ? typeof response === "string" && response.trim().length > 0 : undefined,
+    internalMarkupAbsent: finals.length === 1 ? typeof response === "string" && !internalMarkup.test(response) : undefined,
+    headersObserved: Number.isFinite(result?.measurement?.headersMs),
+    ttfbMeasured: Number.isFinite(result?.measurement?.ttfbMs),
+    completionMeasured: Number.isFinite(result?.measurement?.completionMs),
+  };
+}
+
+export function simpleTurnErrorCategory(error: unknown) {
+  if (!error) return "no_error";
+  if (error === "http_401" || error === "http_403" || error === "http_429") return error;
+  if (typeof error === "string" && /^http_5\d\d$/u.test(error)) return "http_5xx";
+  if (typeof error === "string" && /^http_\d+$/u.test(error)) return "other_http";
+  const known = new Set(["invalid_content_type", "aborted", "stale_generation", "incomplete_stream", "missing_final", "invalid_sequence", "invalid_event", "partial_frame", "unsupported_field", "frame_too_large", "stream_too_large", "stream_error"]);
+  return typeof error === "string" && known.has(error) ? error : "other";
+}
+
 export function successfulTurn(result: any) {
-  requireCheck(!result.error && result.events.some((event: any) => event.type === "progress"));
+  const checks = successfulTurnChecks(result);
+  requireCheck(Object.values(checks).every(Boolean));
   const finals = result.events.filter((event: any) => event.type === "final");
-  requireCheck(finals.length === 1 && finals[0].response.trim().length > 0);
-  requireCheck(!/<\/?(?:decision_summary|tool_call|tool_result|trace|thinking)\b|"(?:toolUse|toolResult|rawResponse|access_key|application_id|requestHash|attemptId)"\s*:/iu.test(finals[0].response));
   // The shared consumer rejects unknown event/DTO fields, partial frames, missing
   // done/EOF, sequence gaps and streams over 1 MiB. Do not publish final text.
-  requireCheck(Number.isFinite(result.measurement.ttfbMs) && Number.isFinite(result.measurement.completionMs));
   return finals[0].response as string;
 }
 
