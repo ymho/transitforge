@@ -22,10 +22,7 @@ import { HotPepperRestaurantProvider } from "./adapters/hot-pepper-restaurant-pr
 import { SecretsManagerHotPepperCredentials } from "./adapters/secrets-manager-hot-pepper-credentials.js";
 import { createAccommodationSearchOperation } from "./usecases/accommodation-search.js";
 import { AgentApplication } from "./usecases/agent-application.js";
-import { agentSystemPrompt } from "./usecases/agent-system-prompt.js";
 import { createAgentTraceOperation } from "./usecases/agent-trace.js";
-import { createBedrockConverseOperation } from "./usecases/bedrock-converse.js";
-import { StoredModelCallTraceRecorder } from "./usecases/model-call-trace.js";
 import { createConversationFeedbackOperation } from "./usecases/conversation-feedback.js";
 import { createJourneySearchOperation } from "./usecases/journey-search.js";
 import { createCongestionAnalysisOperation, createCongestionPeakOperation, createDelayAnalysisOperation } from "./usecases/operation-analysis.js";
@@ -79,23 +76,9 @@ export function createAgentApplication(environment: RuntimeEnvironment = process
   const groundAccess = new MapboxGroundAccessProvider(mapboxHttp, mapboxCredentials);
   const restaurantCredentials = new SecretsManagerHotPepperCredentials(secrets, secretArn);
   const restaurants = new HotPepperRestaurantProvider({ fetch: globalThis.fetch }, restaurantCredentials);
-  const lightweightModelId = optional(environment, "LIGHTWEIGHT_MODEL_ID");
   const decisionModelId = optional(environment, "DECISION_MODEL_ID");
   const traceBucket = required(environment, "AGENT_TRACE_BUCKET");
-  const modelCallTraceRecorder = new StoredModelCallTraceRecorder({
-    bucket: traceBucket,
-    storage,
-    log,
-  });
   const bedrock = new AwsBedrockConverseClient();
-  const model = new BedrockConversationModel(bedrock, {
-    modelId: environment.MODEL_ID ?? "amazon.nova-lite-v1:0",
-    ...(lightweightModelId === undefined ? {} : { lightweightModelId }),
-    ...(decisionModelId === undefined ? {} : { decisionModelId }),
-    systemPrompt: agentSystemPrompt,
-    traceRecorder: modelCallTraceRecorder,
-    log,
-  });
   const placeDetailSummarizer = new BedrockConversationModel(bedrock, {
     modelId: environment.MODEL_ID ?? "amazon.nova-lite-v1:0",
     ...(decisionModelId === undefined ? {} : { decisionModelId }),
@@ -126,7 +109,7 @@ export function createAgentApplication(environment: RuntimeEnvironment = process
     ["ground_access_search", createGroundAccessSearchOperation(groundAccess)],
     ["restaurant_search", createRestaurantSearchOperation(restaurants)],
   ]);
-  return new AgentApplication({ defaultOperation: createBedrockConverseOperation(model, log), operations, log });
+  return new AgentApplication({ operations, log });
 }
 
 function required(environment: RuntimeEnvironment, name: string): string {

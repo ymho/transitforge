@@ -163,7 +163,7 @@ resource "aws_iam_role_policy_attachment" "bedrock_agent_vpc_access" {
 
 resource "aws_lambda_function" "bedrock_agent" {
   function_name = local.bedrock_agent_function_name
-  description   = "Relay validated TransitForge tool conversations to Amazon Bedrock"
+  description   = "Serve explicit viewer operations; legacy Agent conversation is closed"
   role          = aws_iam_role.bedrock_agent.arn
   runtime       = local.bedrock_agent_package.runtime
   architectures = ["arm64"]
@@ -182,6 +182,8 @@ resource "aws_lambda_function" "bedrock_agent" {
 
   environment {
     variables = {
+      COGNITO_USER_POOL_ID         = aws_cognito_user_pool.users.id
+      COGNITO_CLIENT_ID            = aws_cognito_user_pool_client.spa.id
       MODEL_ID                     = var.bedrock_model_id
       LIGHTWEIGHT_MODEL_ID         = var.bedrock_lightweight_model_id
       DECISION_MODEL_ID            = var.bedrock_decision_model_id

@@ -1,3 +1,5 @@
+import { authenticationErrorResponse } from "./adapters/http-api-auth.js";
+import type { JsonObject } from "./contracts/agent-request.js";
 import { randomUUID } from "node:crypto";
 
 import { RequestError, requestValue } from "./contracts/agent-request.js";
@@ -17,6 +19,7 @@ export type AgentApiLog = (
 export function createAgentApiHandler(
   application: Pick<AgentApplication, "execute">,
   options: {
+    authorize?: (event: LambdaHttpEvent, value: JsonObject) => Promise<void>;
     requestId?: () => string;
     log?: AgentApiLog;
   } = {},
@@ -27,9 +30,12 @@ export function createAgentApiHandler(
     const requestId = context?.awsRequestId ?? context?.aws_request_id ?? createRequestId();
     try {
       const value = requestValue(event);
+      await options.authorize?.(event, value);
       const result = await application.execute(value, requestId);
       return jsonResponse(result.statusCode ?? 200, result.body, requestId);
     } catch (error) {
+      const authError = authenticationErrorResponse(error, "agent-api", requestId);
+      if (authError) return authError;
       if (error instanceof RequestError) {
         log("agent_request_rejected", {
           requestId,

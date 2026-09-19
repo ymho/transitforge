@@ -1,4 +1,8 @@
-# Server Agent production cutover-ready統合（#480）
+# Server Agent production cutover統合（#480）
+
+2026-09-19: productionはServer Agentへ切替済み。現在の受け入れ条件、旧operation台帳、
+閉鎖候補とrollbackは[旧ingress閉鎖記録](server-agent-legacy-ingress-closure.md)を正とする。
+以下の導入時の未切替・Browser OFF復帰記述は履歴であり、現在のrollback手順ではない。
 
 実AWS検証の手動workflowは[cutover validation運用](server-agent-cutover-validation.md)を参照する。
 Secret分離、PKCE、実Provider/Agent、保存・再送・owner拒否を検査し、Browser gateはfalseを必須とする。

@@ -1,3 +1,5 @@
+import { authorizeLegacyAgentRequest } from "./legacy-agent-ingress.js";
+import { createCognitoAccessTokenVerifier } from "./adapters/cognito-access-token-verifier.js";
 import { createAgentApplication } from "./composition-root.js";
 import { createAgentApiHandler } from "./handler.js";
 import { createTripApiHandler } from "./trip-handler.js";
@@ -9,6 +11,10 @@ import type { LambdaHttpEvent, LambdaContext } from "./contracts/http.js";
 const application = createAgentApplication();
 
 const agentHandler = createAgentApiHandler(application, {
+  authorize: authorizeLegacyAgentRequest(createCognitoAccessTokenVerifier({
+    userPoolId: process.env.COGNITO_USER_POOL_ID ?? "",
+    clientId: process.env.COGNITO_CLIENT_ID ?? "",
+  })),
   log: (event, fields) => console.log(JSON.stringify({ event, ...fields })),
 });
 

@@ -730,6 +730,8 @@ handleAiGuidePrompt = async (
   onResponseMetadata,
 ) => {
     if (serverAgentSession) return serverAgentSession.start(prompt).send();
+    // Rollback is maintenance, never a production Browser model loop.
+    if (!import.meta.env.DEV) throw new Error("相談機能は現在利用できません。しばらくしてから再度お試しください。");
     if (previousJourneySessionId !== activeConversationSession.id) {
       previousJourneySessionId = activeConversationSession.id;
       previousJourneyPlan = latestJourneyPlanFromHistory(

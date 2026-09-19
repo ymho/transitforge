@@ -154,3 +154,9 @@ npm run architecture:check
 header表現の根拠: [AWS Lambda proxy payload format 1.0/2.0](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-lambda.html)。
 
 root全量はCIへ委ねる。Agent Eval、live AWS/E2E、本番切替は本段階の検証に含めない。
+
+## #480の旧Agent ingress閉鎖
+
+`/api/agent`の汎用会話・trace・feedbackは410で閉鎖する。残るoperationの分類、公開weatherと
+Cognito必須operation、OAC用token搬送は[旧ingress閉鎖契約](server-agent-legacy-ingress-closure.md)を参照。
+これはTrip公開writerの有効化ではない。Server streamのAuthorization Bearer契約は維持する。

@@ -1,3 +1,4 @@
+import { ApiAuthenticationError } from "../../../usecases/auth/api-authentication-error";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -14,6 +15,12 @@ import {
 } from "./bedrock-agent";
 
 describe("Bedrock agent client", () => {
+  it("never retries a protected operation after authentication/session rejection", async () => {
+    const request = vi.fn<typeof fetch>().mockRejectedValue(new ApiAuthenticationError("unauthenticated"));
+    await expect(searchTravelCandidates({ serviceDate: "2026-09-19", originStation: "京都", destinationStation: "大阪", departureTimeMinutes: 600 }, request))
+      .rejects.toMatchObject({ code: "unauthenticated" });
+    expect(request).toHaveBeenCalledOnce();
+  });
   it("requests a bounded local weather grid", async () => {
     const fetcher = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
       weatherGrid: {
