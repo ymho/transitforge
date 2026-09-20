@@ -48,3 +48,25 @@ it("stale editor cannot submit into another session and mobile conditions close 
   const toggle = f.panel.querySelector<HTMLButtonElement>(".consultation-conditions-toggle")!; toggle.click(); expect(toggle.getAttribute("aria-expanded")).toBe("true");
   f.panel.querySelector("aside")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); expect(toggle.getAttribute("aria-expanded")).toBe("false");
 });
+it("adds exact dates through the same preview without changing adopted schedules", () => {
+  const f = setup();
+  f.panel.querySelector<HTMLSelectElement>('[aria-label="追加する条件"]')!.value = "dates";
+  f.panel.querySelector<HTMLButtonElement>(".consultation-add-condition button")!.click();
+  const editor = f.panel.querySelector<HTMLFormElement>(".consultation-condition-editor")!;
+  editor.querySelector<HTMLInputElement>('[name="start"]')!.value = "2026-10-01";
+  editor.querySelector<HTMLInputElement>('[name="end"]')!.value = "2026-10-03";
+  editor.dispatchEvent(new Event("submit", { cancelable: true }));
+  const proposal = f.preview.mock.calls[0]![0];
+  expect(proposal.patches).toHaveLength(1); expect(proposal.patches[0].type).toBe("request");
+  expect(proposal.patches[0].request.constraints.at(-1)).toMatchObject({ source: "user", requirement: { type: "dates", start: { earliest: "2026-10-01", latest: "2026-10-01" } } });
+});
+it("mobile sheet traps focus and restores background scrolling and trigger focus", () => {
+  const f = setup(); document.body.style.overflow = "auto";
+  const toggle = f.panel.querySelector<HTMLButtonElement>(".consultation-conditions-toggle")!; toggle.click();
+  expect(document.body.style.overflow).toBe("hidden");
+  const close = f.panel.querySelector<HTMLButtonElement>(".consultation-conditions-close")!;
+  expect(document.activeElement).toBe(close);
+  close.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+  expect(document.activeElement).not.toBe(close);
+  close.click(); expect(document.body.style.overflow).toBe("auto"); expect(document.activeElement).toBe(toggle);
+});

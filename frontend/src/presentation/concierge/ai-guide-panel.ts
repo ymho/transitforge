@@ -117,6 +117,7 @@ export function configureAiGuidePanel(
   } = elements;
   let conversationSessionId = elements.conversationSessionId;
   let requestGeneration = 0;
+  const scrollPositions = new Map<string, number>();
   // Tab-local, per-conversation draft only; not a Trip or server writer.
   const draftKey = () => `raiquora:conversation-draft:${conversationSessionId}`;
   const saveInputDraft = () => {
@@ -388,6 +389,7 @@ export function configureAiGuidePanel(
   const controller: AiGuidePanelController = {
     switchSession(nextConversationSessionId) {
       requestGeneration++;
+      scrollPositions.set(conversationSessionId, messages.scrollTop);
       elements.onPlaces?.([]);
       if (nextConversationSessionId !== conversationSessionId) saveInputDraft();
       conversationSessionId = nextConversationSessionId;
@@ -431,6 +433,7 @@ export function configureAiGuidePanel(
           activeTripContext = entry.response.tripContext;
         } else if (activeConversation) activeTripContext = activeConversation.tripContext;
       }
+      messages.scrollTop = scrollPositions.get(conversationSessionId) ?? 0;
       setContextChoices(activeConversation);
       input.placeholder = activeConversation
         ? inputPlaceholderForConversation(activeConversation)

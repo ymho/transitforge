@@ -22,11 +22,11 @@ export interface ServerTripWriter {
 
 /** A Conversation only carries a server Trip reference; browser storage is never consulted. */
 export function createReferencedTripSource(reference: { tripId?: string },
-  client: Pick<ServerTripClient, "get" | "getRole" | "sessionVersion" | "subscribeSessionChange">): TripWorkspaceSource | undefined {
+  client: Pick<ServerTripClient, "get" | "getRole" | "sessionVersion" | "subscribeSessionChange">, writer?: ServerTripWriter): TripWorkspaceSource | undefined {
   if (!reference.tripId) return undefined;
-  const source = createServerTripWorkspaceSource(reference.tripId, client);
+  const source = createServerTripWorkspaceSource(reference.tripId, client, writer);
   void source.refresh();
-  return source; // No writer: public authenticated transport is still unavailable.
+  return source;
 }
 
 /** Memory is a fetched read view, never a local writer/cache fallback. Preview cannot save. */
