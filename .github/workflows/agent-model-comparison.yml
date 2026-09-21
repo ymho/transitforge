@@ -93,7 +93,9 @@ jobs:
         run: npm ci
 
       - name: Validate evaluation tools
-        run: npm run typecheck:tools
+        run: |
+          npm run typecheck:tools
+          npm run test:agent:model:live-fixtures
 
       - name: Run baseline
         run: npm run eval:agent:model:live -- --strategy baseline-current-routing --repetitions "$REPETITIONS" --output-dir .artifacts/model-comparison/baseline

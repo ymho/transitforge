@@ -159,7 +159,8 @@ Agent Benchmarkは42件を収録し 曖昧要求 運休 遅延 制約 情報不�
 通常の`eval:agent`は再現可能な保存済みObservationを採点し CIの回帰検知に使う。
 Browser Runtimeを直接起動するscripted Ask/Progressと旧decision Live Evalは#481 Batch 1で撤去した。
 `eval:agent:model:live`は現行Server Agent、System Prompt、model class policyを使い、実Feedback由来の
-会話品質3ケースを合成Provider結果で反復する。AWS認証と課金を伴うため、通常はGitHub Actionsの
+会話品質3ケースを合成Provider結果で反復する。合成結果も本番と同じExternalTravelInformationと
+Evidence mapperを通し、回答が参照するEvidence IDを生成する。AWS認証と課金を伴うため、通常はGitHub Actionsの
 `Agent Eval / Model Comparison`を手動実行する。固定アクセスキーは使わず、結果は14日保持のArtifactへ保存する。
 この比較は本番model設定を変更しない。
 Server Agentの実行契約は`backend/agent-api`のcomposition/tool testsで確認する。
