@@ -157,8 +157,7 @@ interface ParsedEstimate { currency: "JPY"; partySize: number; nights: number; o
 export function travelPlan(text: string, evidence: readonly Evidence[]): AgentGeneratedResponse | undefined {
   const value: unknown = JSON.parse(text);
   if (!record(value) || value.kind !== "travel-plan") return undefined;
-  if (Object.keys(value).some((key) => !["kind", "startDate", "candidates"].includes(key)) ||
-      !(value.startDate === null || typeof value.startDate === "string" && calendarDate(value.startDate)) || !Array.isArray(value.candidates) ||
+  if (!(value.startDate === null || typeof value.startDate === "string" && calendarDate(value.startDate)) || !Array.isArray(value.candidates) ||
       !value.candidates.length || value.candidates.length > 3) throw new Error("Invalid travel plan");
   const sections: string[] = [value.startDate === null
     ? "出発日未定の仮プランです。未確認の日付や条件は補完せず、前提として明記しています。"
@@ -166,9 +165,9 @@ export function travelPlan(text: string, evidence: readonly Evidence[]): AgentGe
   const claims: EvidenceClaim[] = [];
   const selected = new Set<string>();
   for (const candidate of value.candidates) {
-    if (!record(candidate) || Object.keys(candidate).some((key) => !["evidenceId", "quote", "photoEvidenceId", "itinerary", "estimate"].includes(key)) ||
+    if (!record(candidate) ||
         typeof candidate.evidenceId !== "string" || typeof candidate.quote !== "string" || !candidate.quote.trim() || candidate.quote.length > 400 ||
-        !Array.isArray(candidate.itinerary) || !candidate.itinerary.length || candidate.itinerary.length > 5 || !record(candidate.estimate)) throw new Error("Invalid candidate plan");
+        !record(candidate.estimate)) throw new Error("Invalid candidate plan");
     const source = evidence.find((item) => item.id === candidate.evidenceId);
     if (!source || selected.has(source.id) || !validSourceQuote(source, candidate.quote)) throw new Error("Unbound candidate source");
     selected.add(source.id);
@@ -177,18 +176,12 @@ export function travelPlan(text: string, evidence: readonly Evidence[]): AgentGe
     if (!excerpt) throw new Error("Missing source presentation");
     claims.push({ id: `plan-source-${claims.length}`, statement: excerpt, kind: "fact", evidenceIds: [source.id] });
     const lines: string[] = [`### ${title}`, excerpt, "#### ゆっくり過ごす行程（提案）"];
-    const days = new Set<number>();
-    for (const day of candidate.itinerary) {
-      if (!record(day) || Object.keys(day).some((key) => !["day", "activities"].includes(key)) || !Number.isInteger(day.day) || Number(day.day) < 1 || Number(day.day) > 5 ||
-          days.has(Number(day.day)) || !Array.isArray(day.activities) || !day.activities.length || day.activities.length > 4) throw new Error("Invalid itinerary");
-      days.add(Number(day.day));
+    const estimate = parseEstimate(candidate.estimate);
+    for (const day of normalizedItinerary(candidate.itinerary, estimate.nights)) {
       for (const activity of day.activities) {
-        if (!record(activity) || Object.keys(activity).some((key) => !["period", "activity"].includes(key)) ||
-            !(String(activity.period) in periodLabels) || !(String(activity.activity) in activityLabels)) throw new Error("Invalid itinerary activity");
         lines.push(`- **${Number(day.day)}日目 ${periodLabels[activity.period as keyof typeof periodLabels]}：** ${activityLabels[activity.activity as keyof typeof activityLabels]}`);
       }
     }
-    const estimate = parseEstimate(candidate.estimate);
     lines.push("#### AI概算（旅行全体・利用者全員分）");
     for (const category of Object.keys(costLabels) as CostCategory[]) lines.push(`- ${costLabels[category]}：${yen(estimate.items[category])}`);
     const total = (Object.keys(costLabels) as CostCategory[]).reduce((sum, category) => sum + estimate.items[category], 0);
@@ -196,10 +189,10 @@ export function travelPlan(text: string, evidence: readonly Evidence[]): AgentGe
       (estimate.originTravel === "included" ? "出発地からの往復交通を含む仮定です。" : "出発地が未確認のため、目的地までの往復交通は含めていません。"),
       "これはAIによる目安で、空室・予約価格・支払額・価格保証ではありません。");
     claims.push({ id: `plan-${claims.length}`, statement: `${title}について、${estimate.partySize}名・${estimate.nights}泊の仮行程と総額${yen(total)}のAI概算を提案します。未確認の営業、空室、時刻、価格を確定事実として扱いません。`, kind: "inference", evidenceIds: [source.id] });
-    if (candidate.photoEvidenceId !== undefined) {
-      if (typeof candidate.photoEvidenceId !== "string") throw new Error("Invalid photo reference");
-      const photo = evidence.find((item) => item.id === candidate.photoEvidenceId);
-      if (!photo || !hasDisplayablePhoto(photo) || !photoBoundToSource(photo, source)) throw new Error("Unbound candidate photo");
+    const requestedPhoto = typeof candidate.photoEvidenceId === "string" ? evidence.find((item) => item.id === candidate.photoEvidenceId) : undefined;
+    const photo = requestedPhoto && hasDisplayablePhoto(requestedPhoto) && photoBoundToSource(requestedPhoto, source) ? requestedPhoto :
+      evidence.find((item) => hasDisplayablePhoto(item) && photoBoundToSource(item, source));
+    if (photo) {
       lines.splice(1, 0, `![${plain(String(photo.facts.placeName ?? title))}](${photo.facts.imageUrl} "Raiquora verified photo")`,
         `写真: [${plain(String(photo.facts.imageAttribution))}](${photo.facts.imageSourceUrl})` + (typeof photo.facts.imageLicense === "string" ? `（${plain(photo.facts.imageLicense)}）` : ""));
     }
@@ -220,11 +213,33 @@ export function groundedAnswerRepairInstruction(error: unknown): string {
 
 function parseEstimate(value: Record<string, unknown>): ParsedEstimate {
   const items = value.items;
-  if (Object.keys(value).some((key) => !["currency", "partySize", "nights", "originTravel", "lodgingClass", "items"].includes(key)) || value.currency !== "JPY" ||
+  if (value.currency !== "JPY" ||
       !Number.isInteger(value.partySize) || Number(value.partySize) < 1 || Number(value.partySize) > 20 || !Number.isInteger(value.nights) || Number(value.nights) < 0 || Number(value.nights) > 30 ||
       !["included", "excluded"].includes(String(value.originTravel)) || !["economy", "standard", "premium"].includes(String(value.lodgingClass)) || !record(items) ||
-      Object.keys(items).length !== 4 || Object.keys(costLabels).some((key) => !validAmount(items[key]))) throw new Error("Invalid cost estimate");
-  return value as unknown as ParsedEstimate;
+      Object.keys(costLabels).some((key) => !validAmount(items[key]))) throw new Error("Invalid cost estimate");
+  return { currency: "JPY", partySize: Number(value.partySize), nights: Number(value.nights), originTravel: value.originTravel as ParsedEstimate["originTravel"],
+    lodgingClass: value.lodgingClass as ParsedEstimate["lodgingClass"], items: Object.fromEntries(Object.keys(costLabels).map((key) => [key, items[key]])) as unknown as ParsedEstimate["items"] };
+}
+function normalizedItinerary(value: unknown, nights: number): Array<{ day: number; activities: Array<{ period: keyof typeof periodLabels; activity: keyof typeof activityLabels }> }> {
+  if (Array.isArray(value) && value.length > 0 && value.length <= 5) {
+    const days = new Set<number>();
+    const parsed = value.map((day) => {
+      if (!record(day) || !Number.isInteger(day.day) || Number(day.day) < 1 || Number(day.day) > 5 || days.has(Number(day.day)) ||
+          !Array.isArray(day.activities) || !day.activities.length || day.activities.length > 4) return undefined;
+      days.add(Number(day.day));
+      const activities = day.activities.map((activity) => record(activity) && String(activity.period) in periodLabels && String(activity.activity) in activityLabels
+        ? { period: activity.period as keyof typeof periodLabels, activity: activity.activity as keyof typeof activityLabels } : undefined);
+      return activities.every(Boolean) ? { day: Number(day.day), activities: activities as Array<{ period: keyof typeof periodLabels; activity: keyof typeof activityLabels }> } : undefined;
+    });
+    if (parsed.every(Boolean)) return parsed as Array<{ day: number; activities: Array<{ period: keyof typeof periodLabels; activity: keyof typeof activityLabels }> }>;
+  }
+  const days = Math.min(5, Math.max(1, nights + 1));
+  return Array.from({ length: days }, (_, index) => index === 0 ? { day: 1, activities: [
+    { period: "morning" as const, activity: "arrival_and_local_lunch" as const }, { period: "afternoon" as const, activity: "visit_featured_place" as const },
+    { period: "evening" as const, activity: "check_in_and_rest" as const },
+  ] } : index === days - 1 ? { day: index + 1, activities: [
+    { period: "morning" as const, activity: "quiet_morning" as const }, { period: "afternoon" as const, activity: "souvenir_and_departure" as const },
+  ] } : { day: index + 1, activities: [{ period: "afternoon" as const, activity: "stay_and_relax" as const }] });
 }
 function validAmount(value: unknown): value is number { return Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 10_000_000; }
 function yen(value: number): string { return `${new Intl.NumberFormat("ja-JP").format(value)}円`; }
