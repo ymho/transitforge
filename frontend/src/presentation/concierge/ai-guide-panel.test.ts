@@ -6,6 +6,7 @@ import {
   nextTripConversationState,
   normalizedFeedbackComment,
   shouldFocusAiGuideInputOnOpen,
+  staleResponseNotice,
   visibleAssistantText,
 } from "./ai-guide-panel";
 
@@ -85,6 +86,10 @@ describe("AI guide panel focus", () => {
 });
 
 describe("AI guide panel assistant text", () => {
+  it("explains when a response cannot be shown after the conversation context changes", () => {
+    expect(staleResponseNotice).toContain("もう一度お試しください");
+  });
+
   it("removes a thinking block while preserving the visible answer", () => {
     expect(
       visibleAssistantText(
