@@ -31,6 +31,15 @@ describe("assistant markdown", () => {
     expect(JSON.stringify(blocks)).toContain("script");
   });
 
+  it("renders only Application-marked HTTPS photos as images", () => {
+    const verified = parseAssistantMarkdown('![出雲大社](https://images.example/izumo.jpg "Raiquora verified photo")');
+    const ordinary = parseAssistantMarkdown("![追跡画像](https://tracker.example/pixel.jpg)");
+    const unsafe = parseAssistantMarkdown('![危険](http://images.example/plain.jpg "Raiquora verified photo")');
+    expect(JSON.stringify(verified)).toContain('"kind":"image"');
+    expect(JSON.stringify(ordinary)).not.toContain('"kind":"image"');
+    expect(JSON.stringify(unsafe)).not.toContain('"kind":"image"');
+  });
+
   it("keeps response and thinking boundaries", () => {
     expect(visibleAssistantText("<thinking>秘密</thinking><response>**案内**</response>"))
       .toBe("**案内**");

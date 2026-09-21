@@ -5,6 +5,7 @@ type InlineNode =
   | { kind: "strong" | "emphasis" | "deleted"; children: InlineNode[] }
   | { kind: "code"; value: string }
   | { kind: "link"; href: string; title?: string; children: InlineNode[] }
+  | { kind: "image"; src: string; alt: string }
   | { kind: "break" };
 
 export type AssistantMarkdownBlock =
@@ -111,7 +112,9 @@ function inlineNodes(tokens: Token[]): InlineNode[] {
       }
       case "image": {
         const href = safeExternalHttpUrl(token.href);
-        return href
+        return href && token.title === "Raiquora verified photo" && href.startsWith("https:")
+          ? [{ kind: "image", src: href, alt: token.text || "旅行候補の写真" }]
+          : href
           ? [{ kind: "link", href, children: [{ kind: "text", value: token.text || "画像" }] }]
           : [{ kind: "text", value: token.text }];
       }
@@ -198,6 +201,14 @@ function appendInline(container: HTMLElement, nodes: InlineNode[]): void {
       if (node.title) link.title = node.title;
       appendInline(link, node.children);
       container.append(link);
+    } else if (node.kind === "image") {
+      const image = document.createElement("img");
+      image.className = "assistant-grounded-photo";
+      image.src = node.src;
+      image.alt = node.alt;
+      image.loading = "lazy";
+      image.referrerPolicy = "no-referrer";
+      container.append(image);
     } else {
       const tag = node.kind === "strong" ? "strong" : node.kind === "emphasis" ? "em" : "del";
       const element = document.createElement(tag);

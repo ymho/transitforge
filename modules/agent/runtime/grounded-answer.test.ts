@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { DefaultAgentResponseGenerator } from "@raiquora/agent/agent-response-generator";
-import { groundedAnswerInstruction, parseGroundedAnswer, supportedAnswerClaims, sourceExplanation } from "@raiquora/agent/grounded-answer";
+import { groundedAnswerInstruction, parseGroundedAnswer, supportedAnswerClaims, sourceExplanation, travelPlan } from "@raiquora/agent/grounded-answer";
 import type { Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentModelResponse } from "@raiquora/agent/model-provider";
 
@@ -102,4 +102,35 @@ it("choosing no Evidence yields an unknown Claim, not unbound model prose", () =
 });
 it("unknown selected Evidence is never converted into a successful answer", () => {
   expect(() => new DefaultAgentResponseGenerator().fromModel({ ...model("30分"), declaredEvidenceIds: ["missing"] }, [e], "grounded")).toThrow();
+});
+
+const photographedPlace: Evidence = { ...placeEvidence, id: "place-photo", subject: "出雲大社", facts: { ...placeEvidence.facts,
+  sourceTitle: "出雲大社", sourceExcerpt: "御本殿や神楽殿を巡り、門前町の散策を楽しめます。", sourceUrl: "https://example.org/izumo",
+  placeName: "出雲大社", imageUrl: "https://images.example.org/izumo.jpg", imageSourceUrl: "https://photos.example.org/izumo",
+  imageAttribution: "撮影者 Example", imageLicense: "CC BY 4.0", boundSourceUrls: ["https://example.org/izumo"] },
+  references: [{ ...placeEvidence.references[0]!, sourceRef: "https://example.org/izumo" }] };
+const plan = (overrides: Record<string, unknown> = {}) => JSON.stringify({ kind: "travel-plan", startDate: "2026-09-22", candidates: [{
+  evidenceId: photographedPlace.id, quote: photographedPlace.facts.sourceExcerpt, photoEvidenceId: photographedPlace.id,
+  itinerary: [{ day: 1, activities: [{ period: "afternoon", activity: "visit_featured_place" }, { period: "evening", activity: "check_in_and_rest" }] },
+    { day: 2, activities: [{ period: "morning", activity: "quiet_morning" }, { period: "afternoon", activity: "souvenir_and_departure" }] }],
+  estimate: { currency: "JPY", partySize: 1, nights: 1, originTravel: "excluded", lodgingClass: "standard",
+    items: { transport: 0, accommodation: 18000, sightseeing: 2000, food: 7000 } }, ...overrides,
+}] });
+it("renders a grounded itinerary, all-party AI estimate, and bound photo in one answer", () => {
+  const result = travelPlan(plan(), [photographedPlace])!;
+  expect(result.text).toContain("2026年9月22日");
+  expect(result.text).toContain("1日目 午後");
+  expect(result.text).toContain("AI概算（旅行全体・利用者全員分）");
+  expect(result.text).toContain("合計：27,000円");
+  expect(result.text).toContain("目的地までの往復交通は含めていません");
+  expect(result.text).toContain('https://images.example.org/izumo.jpg "Raiquora verified photo"');
+  expect(result.claims.map(({ kind }) => kind)).toEqual(["fact", "inference"]);
+});
+it("rejects unbound photos, source text, and incomplete estimates", () => {
+  expect(() => travelPlan(plan({ quote: "架空の無料列車" }), [photographedPlace])).toThrow();
+  expect(() => travelPlan(plan({ photoEvidenceId: "missing" }), [photographedPlace])).toThrow();
+  expect(() => travelPlan(plan({ estimate: { currency: "JPY", partySize: 1, nights: 1, originTravel: "excluded", lodgingClass: "standard", items: { accommodation: 10 } } }), [photographedPlace])).toThrow();
+});
+it("does not let model prose forge the reserved photo presentation", () => {
+  expect(() => new DefaultAgentResponseGenerator().fromModel(model('![追跡画像](https://tracker.example/pixel.jpg "Raiquora verified photo")'), [], "interaction")).toThrow();
 });
