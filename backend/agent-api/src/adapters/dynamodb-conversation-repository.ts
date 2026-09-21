@@ -1,3 +1,6 @@
+import { parsePublicCostProposal } from "@raiquora/trip/public-cost-proposal";
+import { parseConsultationRequestProposal } from "@raiquora/trip/consultation-request-proposal";
+import { parsePublicRequestProposal } from "@raiquora/trip/public-request-proposal";
 import { PutItemCommand, TransactWriteItemsCommand, type Put } from "@aws-sdk/client-dynamodb";
 import type { TrustedPrincipal } from "../contracts/trusted-principal.js";
 import { StateError, exactObject, metadata, messageInputs, pageOptions, revision, stateId,
@@ -23,7 +26,7 @@ export class DynamoDbConversationRepository implements ConversationRepository {
     if (envelope.deleted) return undefined;
     try {
       const value = envelope.payload;
-      exactObject(value, ["conversationId", "ownerSubject", "createdAt", "updatedAt", "revision", "messageCount", "title", "scope", "summary", "resolvedTopics", "pendingTopics", "tripId"]);
+      exactObject(value, ["conversationId", "ownerSubject", "createdAt", "updatedAt", "revision", "messageCount", "title", "scope", "summary", "resolvedTopics", "pendingTopics", "tripId", "draftRequest"]);
       const { conversationId, ownerSubject, createdAt, updatedAt, revision: version, messageCount, ...fields } = value;
       if (conversationId !== id || ownerSubject !== principal.subject || version !== envelope.revision) throw new Error();
       timestamp(createdAt); timestamp(updatedAt); sequence(messageCount);
@@ -74,11 +77,16 @@ export class DynamoDbConversationRepository implements ConversationRepository {
     const items = result.items.map((item): ConversationMessage => {
       try {
         const value: unknown = JSON.parse(item.payload?.S ?? "");
-        exactObject(value, ["sequence", "createdAt", "role", "text"]);
+        exactObject(value, ["sequence", "createdAt", "role", "text", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"]);
         sequence(value.sequence); timestamp(value.createdAt);
         if (value.sequence < 1 || item.sk.S !== `${prefix}${sequenceKey(value.sequence)}` || item.storageVersion?.N !== "1") throw new Error();
         const [message] = messageInputs([{ role: value.role, text: value.text }]);
-        return { ...message, sequence: value.sequence, createdAt: value.createdAt };
+        if ((value.tripUpdateProposal !== undefined || value.consultationRequestProposal !== undefined || value.tripCostProposal !== undefined) && message.role !== "assistant") throw new Error();
+        if ((value.tripUpdateProposal || value.tripCostProposal) && value.consultationRequestProposal) throw new Error();
+        const consultationRequestProposal = value.consultationRequestProposal === undefined ? undefined : parseConsultationRequestProposal(value.consultationRequestProposal);
+        if (consultationRequestProposal && consultationRequestProposal.conversationId !== id) throw new Error();
+        return { ...message, sequence: value.sequence, createdAt: value.createdAt, ...(value.tripCostProposal !== undefined ? { tripCostProposal: parsePublicCostProposal(value.tripCostProposal) } : {}),
+          ...(value.tripUpdateProposal !== undefined ? { tripUpdateProposal: parsePublicRequestProposal(value.tripUpdateProposal) } : {}), ...(consultationRequestProposal ? { consultationRequestProposal } : {}) };
       } catch { throw new StateError("unavailable"); }
     });
     // Do not return content read concurrently with delete/update. Pages are not a global snapshot.
@@ -120,7 +128,7 @@ export class DynamoDbConversationRepository implements ConversationRepository {
     this.store.owner(principal);
     const fields = metadata(input), current = await this.current(principal, id, expected);
     // Whole metadata replacement deliberately allows tripId to be detached by omission.
-    const { tripId: _tripId, ...previous } = current;
+    const { tripId: _tripId, draftRequest: _draftRequest, ...previous } = current;
     return this.write(principal, current, { ...previous, ...fields, updatedAt: this.now(current.updatedAt), revision: expected + 1 });
   }
   async delete(principal: TrustedPrincipal, id: string, expected: number) {

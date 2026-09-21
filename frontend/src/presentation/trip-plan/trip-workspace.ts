@@ -1,3 +1,4 @@
+import { renderTripCosts } from "./trip-cost-view";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import type { ContextViewKind } from "../../domain/context-workspace";
 import { proposeManualActivity } from "../../usecases/trip-plan/propose-trip-activity";
@@ -10,12 +11,13 @@ import { renderTripFeasibility } from "./trip-feasibility-view";
 import { renderTripReadiness } from "./trip-readiness-view";
 import { renderTripChecklist } from "./trip-checklist-view";
 import { travelIcon } from "../shared/travel-icon";
+import { renderTripMap, tripDetailTabs, tripOverviewCopy, type TripDetailTab } from "./trip-detail-view";
 
 /** DOM and navigation only. The supplied source owns the current server Trip. */
 export function configureTripWorkspace(options: {
   app: HTMLElement; chat: HTMLElement; messages: HTMLElement; input: HTMLInputElement;
   controller: TripWorkspaceController;
-  showContext(view: ContextViewKind): void; returnToConversation(): void; showMap(): void;
+  showContext(view: ContextViewKind): void; returnToConversation(): void; showMap(itemId?: string): void;
   ask(prompt: string): void; nextItemId(): string;
 }) {
   const { controller, app } = options;
@@ -33,7 +35,34 @@ export function configureTripWorkspace(options: {
   const feasibility = element("div");
   const readiness = element("div"), checklist = element("div");
   let checklistKey = "";
+  const costs = element("div"); let costKey = "", costTripId: string | undefined, costSessionVersion: number | undefined;
+  const dayTabs = element("div", "trip-day-tabs"); dayTabs.setAttribute("role", "tablist"); dayTabs.setAttribute("aria-label", "旅程の日付");
   const days = element("div", "trip-workspace-days"), proposal = element("div"), candidates = element("div");
+  const selectedDays = new Map<string, string>();
+  const overview = element("section", "trip-detail-panel"), itinerary = element("section", "trip-detail-panel"), costPanel = element("section", "trip-detail-panel"), mapPanel = element("section", "trip-detail-panel");
+  const tablist = element("div", "trip-detail-tabs"); tablist.setAttribute("role", "tablist"); tablist.setAttribute("aria-label", "旅程詳細");
+  const detailPanels: Record<TripDetailTab, HTMLElement> = { overview, itinerary, costs: costPanel, map: mapPanel };
+  const selectedTabs = new Map<string, TripDetailTab>();
+  let activeTab: TripDetailTab = "overview", mapKey = "";
+  for (const [id, target] of Object.entries(detailPanels) as [TripDetailTab, HTMLElement][]) { target.id = `trip-detail-${id}`; target.setAttribute("role", "tabpanel"); }
+  const selectTab = (selected: TripDetailTab, focus = false) => {
+    activeTab = selected; selectedTabs.set(controller.sessionId(), selected);
+    for (const entry of tripDetailTabs) {
+      const button = tablist.querySelector<HTMLButtonElement>(`[data-tab="${entry.id}"]`)!;
+      const chosen = entry.id === selected; button.setAttribute("aria-selected", String(chosen)); button.tabIndex = chosen ? 0 : -1;
+      detailPanels[entry.id].hidden = !chosen;
+    }
+    if (focus) tablist.querySelector<HTMLButtonElement>(`[data-tab="${selected}"]`)?.focus();
+  };
+  tripDetailTabs.forEach((entry, index) => {
+    const button = control(entry.label, () => selectTab(entry.id)); button.setAttribute("role", "tab"); button.dataset.tab = entry.id;
+    button.setAttribute("aria-controls", detailPanels[entry.id].id); button.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+      event.preventDefault(); const next = event.key === "Home" ? 0 : event.key === "End" ? tripDetailTabs.length - 1
+        : (index + (event.key === "ArrowRight" ? 1 : -1) + tripDetailTabs.length) % tripDetailTabs.length;
+      selectTab(tripDetailTabs[next]!.id, true);
+    }); tablist.append(button);
+  });
   const add = element("form", "trip-workspace-add"); const addLabel = element("label", "", "追加する予定 "); const addTitle = element("input");
   addTitle.required = true; addTitle.maxLength = 200; addLabel.append(addTitle);
   const submit = element("button", "", "時間未定の自由時間として追加案"); submit.type = "submit"; add.append(addLabel, submit);
@@ -46,7 +75,11 @@ export function configureTripWorkspace(options: {
     } catch { report("追加する予定の名称と対象を確認してください。"); }
   });
   const consult = control("＋ 予定を相談して追加", () => chat("旅程に追加する予定を相談したい"));
-  panel.append(heading, status, retry, days, feasibility, readiness, checklist, assumptions, add, consult, proposal, candidates);
+  overview.append(feasibility, readiness, checklist, assumptions);
+  itinerary.append(dayTabs, days, add, consult, candidates);
+  costPanel.append(costs);
+  panel.append(heading, status, retry, tablist, overview, itinerary, costPanel, mapPanel, proposal);
+  selectTab(activeTab);
   app.append(panel, nav);
   const views = new Map<string, { scroll: number; chatScroll: number; view: "chat" | "trip"; focus?: HTMLElement }>();
   const collapsed = new Map<string, boolean>();
@@ -80,7 +113,11 @@ export function configureTripWorkspace(options: {
     if (activeSession !== controller.sessionId()) {
       viewState().scroll = panel.scrollTop; viewState().chatScroll = options.messages.scrollTop;
       activeSession = controller.sessionId(); previousTripId = undefined; report("");
+      costs.replaceChildren(); costKey = ""; costTripId = undefined;
+      activeTab = selectedTabs.get(activeSession) ?? "overview"; selectTab(activeTab); mapKey = "";
     }
+    const nextCostSession = controller.source()?.sessionVersion?.();
+    if (nextCostSession !== costSessionVersion) { costs.replaceChildren(); costKey = ""; costTripId = undefined; costSessionVersion = nextCostSession; }
     const trip = controller.current();
     panel.hidden = nav.hidden = !controller.blocksLegacy();
     if (!controller.blocksLegacy()) { delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; return; }
@@ -97,7 +134,11 @@ export function configureTripWorkspace(options: {
     if (!trip) {
       title.textContent = "旅程"; summary.textContent = "";
       report(controller.loadState() === "loading" ? "サーバから旅程を読み込んでいます。" : "旅程を取得できません。認証と接続、参照先の状態を確認して再試行してください。端末の旧旅程へは切り替えていません。");
+      const costEditor = costs.querySelector(".trip-cost-editor");
+      costs.replaceChildren(...(costEditor ? [costEditor] : [])); costKey = "";
       feasibility.replaceChildren(); assumptions.replaceChildren(); days.replaceChildren(); proposal.replaceChildren(); candidates.replaceChildren();
+      dayTabs.replaceChildren();
+      mapPanel.replaceChildren(); mapKey = "";
       readiness.replaceChildren(); checklist.replaceChildren(); checklistKey = "";
       cards.clear(); groups.clear(); previousTripId = undefined; proposalKey = candidateKey = "";
       return;
@@ -117,9 +158,21 @@ export function configureTripWorkspace(options: {
       checklistKey = nextChecklistKey;
       checklist.replaceChildren(renderTripChecklist({ controller: controller.checklist, trip, readiness: prepared, newId: () => crypto.randomUUID(), focus: controller.focus, ask: chat, report }));
     }
+    const nextCostKey = JSON.stringify([trip.id, trip.revision, trip.costs, controller.canConfirm()]);
+    if (costKey !== nextCostKey) {
+      const editor = costTripId === trip.id ? costs.querySelector(".trip-cost-editor") : null;
+      costKey = nextCostKey; costTripId = trip.id; costs.replaceChildren(renderTripCosts(trip, controller, chat, report));
+      if (editor) { costs.append(editor); report("旅程が更新されました。費用の入力は残しています。取消後、最新の費用から編集し直してください。"); }
+    }
     title.textContent = view.title;
     const partyLabel = view.party.startsWith("今回の人数") ? view.party : `今回の人数: ${view.party}`;
     summary.textContent = `${view.state}\n${partyLabel}\n${view.places}`;
+    const oldSummary = overview.querySelector(".trip-detail-overview-copy"); oldSummary?.remove();
+    const overviewCopy = element("div", "trip-detail-overview-copy");
+    overviewCopy.append(element("h2", "", "旅程の概要"), ...tripOverviewCopy(trip).map((line) => element("p", "trip-workspace-copy", line)));
+    overview.prepend(overviewCopy);
+    const nextMapKey = JSON.stringify([trip.id, trip.revision, trip.items]);
+    if (mapKey !== nextMapKey) { mapKey = nextMapKey; mapPanel.replaceChildren(renderTripMap(trip, options.showMap, controller.focus)); }
     assumptions.replaceChildren(...view.assumptions.map((a) => element("p", "trip-workspace-assumption", `⚠ 仮置き（${a.target}）: ${a.text}`)));
     const ids = new Set<string>(), dates = new Set<string>();
     for (const [date, items] of view.days) {
@@ -146,6 +199,27 @@ export function configureTripWorkspace(options: {
     }
     for (const [id, card] of cards) if (!ids.has(id)) { card.node.remove(); cards.delete(id); }
     for (const [date, group] of groups) if (!dates.has(date)) { group.remove(); groups.delete(date); }
+    const availableDays = [...dates];
+    let selectedDay = selectedDays.get(trip.id);
+    if (!selectedDay || !dates.has(selectedDay)) { selectedDay = availableDays[0]; if (selectedDay) selectedDays.set(trip.id, selectedDay); }
+    const applySelectedDay = (next: string, focus = false) => {
+      selectedDays.set(trip.id, next);
+      for (const [date, group] of groups) group.hidden = date !== next;
+      for (const button of dayTabs.querySelectorAll<HTMLButtonElement>('[role="tab"]')) {
+        const chosen = button.dataset.day === next; button.setAttribute("aria-selected", String(chosen)); button.tabIndex = chosen ? 0 : -1;
+      }
+      if (focus) dayTabs.querySelector<HTMLButtonElement>(`[data-day="${CSS.escape(next)}"]`)?.focus();
+    };
+    dayTabs.hidden = availableDays.length < 2; dayTabs.replaceChildren();
+    availableDays.forEach((date, index) => {
+      const button = control(date, () => applySelectedDay(date)); button.setAttribute("role", "tab"); button.dataset.day = date;
+      button.setAttribute("aria-controls", `trip-day-${index}`); groups.get(date)!.id = `trip-day-${index}`; groups.get(date)!.setAttribute("role", "tabpanel");
+      button.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault(); applySelectedDay(availableDays[(index + (event.key === "ArrowRight" ? 1 : -1) + availableDays.length) % availableDays.length]!, true);
+      }); dayTabs.append(button);
+    });
+    if (selectedDay) applySelectedDay(selectedDay);
     const shown = controller.proposal(), nextKey = JSON.stringify([trip, shown, controller.reservations(), evaluation.issues]);
     if (proposalKey !== nextKey) {
       proposalKey = nextKey; proposal.replaceChildren();
@@ -158,6 +232,13 @@ export function configureTripWorkspace(options: {
     if (candidateKey !== nextCandidates) { candidateKey = nextCandidates; candidates.replaceChildren(renderWorkspaceCandidates(controller, report)); }
     panel.scrollTop = scroll;
   };
+  const canLeave = () => {
+    const editor = costs.querySelector(".trip-cost-editor");
+    if (!editor || document.defaultView?.confirm("編集中の費用を破棄して移動しますか？")) { editor?.remove(); return true; }
+    return false;
+  };
+  const beforeUnload = (event: BeforeUnloadEvent) => { if (costs.querySelector(".trip-cost-editor")) { event.preventDefault(); event.returnValue = ""; } };
+  document.defaultView?.addEventListener("beforeunload", beforeUnload);
   const unsubscribe = controller.subscribe(render); render();
-  return { panel, nav, render, show, report, destroy() { unsubscribe(); panel.remove(); nav.remove(); delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; } };
+  return { panel, nav, render, show, report, canLeave, destroy() { document.defaultView?.removeEventListener("beforeunload", beforeUnload); unsubscribe(); panel.remove(); nav.remove(); delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; } };
 }

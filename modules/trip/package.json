@@ -62,7 +62,14 @@
     "./adventure-safety": "./domain/adventure-safety.ts",
     "./travel-recheck": "./domain/travel-recheck.ts",
     "./trip-recheck": "./domain/trip-recheck.ts",
-    "./airport-access": "./domain/airport-access.ts"
+    "./airport-access": "./domain/airport-access.ts",
+    "./model-request-proposal": "./domain/model-request-proposal.ts",
+    "./public-request-proposal": "./domain/public-request-proposal.ts",
+    "./reviewed-request-changes": "./domain/reviewed-request-changes.ts",
+    "./consultation-request": "./domain/consultation-request.ts",
+    "./consultation-request-proposal": "./domain/consultation-request-proposal.ts",
+    "./trip-costs": "./domain/trip-costs.ts",
+    "./public-cost-proposal": "./domain/public-cost-proposal.ts"
   },
   "dependencies": {
     "@raiquora/operation": "*",

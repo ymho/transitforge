@@ -1,3 +1,4 @@
+import { parseConsultationRequest } from "@raiquora/trip/consultation-request";
 import type { AgentToolDescriptor } from "./tool-contract";
 import { validateInTripContext, type InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 import type { AgentRuntimeFeature, AgentRuntimeRequest } from "./runtime-contract";
@@ -83,6 +84,7 @@ export interface AgentRuntimeContextInput {
   tripContext?: Record<string, AgentContextValue | AgentContextValue[]>;
   travelProfile?: Record<string, unknown>;
   currentTrip?: Record<string, unknown> & { request?: TripRequest };
+  consultationRequest?: TripRequest;
   currentJourney?: Record<string, unknown>;
   verifiedFacts?: AgentVerifiedFactSummary[];
   knownHardConstraints?: AgentKnownConstraint[];
@@ -104,6 +106,7 @@ export interface AgentDecisionContext {
   reservations?: AgentReservationContext;
   previousAssistantTurn?: AgentTurnOutcome;
   persistedTripRequest?: unknown;
+  requestSource?: "trip" | "conversation_draft";
   tripHardConstraints?: unknown;
   tripSoftPreferences?: unknown;
   unconfirmedAssumptions?: unknown;
@@ -132,7 +135,7 @@ export function buildAgentDecisionContext(
 ): AgentDecisionContext {
   const input = request.context;
   if (input?.inTrip) validateInTripContext(input.inTrip);
-  const tripRequest = input?.currentTrip?.request;
+  const tripRequest = input?.currentTrip?.request ?? (input?.consultationRequest ? parseConsultationRequest(input.consultationRequest) : undefined);
   const hasTripRequest = tripRequest !== undefined;
   const effective = tripRequest ? effectiveTripConstraints(tripRequest) : [];
   const currentTrip = input?.currentTrip ? Object.fromEntries(Object.entries(input.currentTrip).filter(([key]) =>
@@ -159,6 +162,7 @@ export function buildAgentDecisionContext(
       // Preserve complete typed constraints/links, not the generic key/value legacy interpretation.
       // Privacy is still enforced; an oversized request fails the message budget rather than losing conditions.
       persistedTripRequest: privateRequestProjection(tripRequest),
+      requestSource: input?.currentTrip?.request ? "trip" as const : "conversation_draft" as const,
       tripHardConstraints: privateRequestProjection(effective.filter((c) => c.strength === "hard")),
       tripSoftPreferences: privateRequestProjection(effective.filter((c) => c.strength === "soft")),
       unconfirmedAssumptions: privateRequestProjection(tripRequest!.assumptions.filter((a) => a.status === "unconfirmed")),
@@ -246,6 +250,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     verifiedFacts: visibleFacts,
     previousAssistantTurn: context.previousAssistantTurn,
     persistedTripRequest: context.persistedTripRequest,
+    requestSource: context.requestSource,
     tripHardConstraints: context.tripHardConstraints,
     tripSoftPreferences: context.tripSoftPreferences,
     unconfirmedAssumptions: context.unconfirmedAssumptions,
@@ -357,6 +362,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     "previousAssistantTurnは一時的な回答観測でTripのstateではありません。質問が必要でも可能なら同じturnで具体候補・比較・Proposalを示してください。連続ask_onlyは原則不可ですが、安全・未確認hard条件・本当に不足するTool必須入力は構造化例外として扱えます。内部Tool実行だけを進展と呼ばず、候補選択後は検証済みsnapshotからProposalを作り、時刻不明はunscheduled/day/windowのまま扱えます。",
     "過去Tripの振り返りと新しい旅行相談を区別し、保存Requestの年や条件を新しい旅行の希望へ無言で流用しないでください。未確認hard条件の成立を仮定せず、可能な進展と要確認事項を分けてください。",
     "期待成果物の目安は、inspiration/candidate_discoveryなら方向性・候補、candidate_selectionなら比較材料、itinerary_draft/itinerary_refinementなら具体的な変更案です。readyでは不要な確認を増やさず、in_tripでは既存Tripを前提にしてください。これはToolの固定割当や状態遷移の強制ではありません。",
+    ...(context.requestSource === "conversation_draft" ? ["requestSource=conversation_draftは、旅程を作る前にこの会話へ保存した今回条件です。既知条件を聞き直さず候補検討に使ってください。採用済み旅程や予約があるという意味ではありません。propose_request_assumptions/propose_request_changesが利用可能な場合、同じ条件契約で未保存案を作成できます。案は会話の条件ペインで利用者が比較・確認してから保存します。旅程への保存も利用者の明示操作です。"] : []),
     "currentTripは計画、travelCandidatesとcurrentJourneyは比較中の候補、realtimeFactsは観測です。候補の先頭や見込時刻を採用済み計画にしないでください。travelCandidates[].idはTool入力用の候補IDでありEvidence IDではありません。usedEvidenceIdsへ書かず、比較にはToolで根拠を取得してください。",
     "reservationsはTripの採用状態とは別の予約記録です。bookedの予定の削除・置換には影響を説明して明示確認を求めてください。変更案は予約取消・変更の実行ではありません。予約がunknown・truncatedなら未掲載の予約がないと断定せず、selectedやbooking URLから予約済み・未予約を推測しないでください。",
     "tripFeasibilityは採用済みTripをコードで検証した派生結果です。infeasibleの違反を説明だけで消さず、unknownを成立・問題なしと断定しないでください。readyは全事実の確認済みを意味せず、宿泊の正確な時刻等の未確認は残る場合があります。issueの対象を説明し変更案を提案できますが、自動修正・readyの自己認定はできません。評価revisionと現在Tripを区別し、truncatedは未掲載の問題がないという意味ではありません。",

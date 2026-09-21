@@ -1,3 +1,5 @@
+import { validateTripCosts, validateCostForecast, costCategories, type TripCosts, type TripCostForecast, type CostCategory } from "./trip-costs";
+import { validateMoney, type Money } from "./money";
 import { validateAccommodationSnapshot, type AccommodationSnapshot } from "./accommodation-snapshot";
 import { exactKeys, validInstant, projectRailSchedule } from "./selected-rail-journey";
 import { transportModes, validateNonRailTransport, type TransportDetail } from "./transport-detail";
@@ -17,6 +19,7 @@ export interface Trip {
   /** Display/search hint only. Never a place, requested destination or feasibility fact. */
   readonly summaryDestination?: string;
   readonly request: TripRequest;
+  readonly costs?: TripCosts;
   readonly planningState: PlanningState;
   readonly lifecycleState: LifecycleState;
   readonly adoption?: TripAdoption;
@@ -51,6 +54,8 @@ export type TripPatch = { readonly type: "replace"; readonly itemId: string; rea
   | { readonly type: "remove"; readonly itemId: string }
   | { readonly type: "move"; readonly itemId: string; readonly afterId?: string }
   | { readonly type: "request"; readonly request: TripRequest }
+  | { readonly type: "cost_forecast"; readonly forecast: TripCostForecast }
+  | { readonly type: "cost_override"; readonly category: CostCategory; readonly amount?: Money }
   | { readonly type: "title"; readonly title: string }
   | { readonly type: "planning"; readonly state: PlanningState }
   | { readonly type: "adoption"; readonly action: TripAdoptionAction }
@@ -79,7 +84,8 @@ export function validateSummaryDestination(value: string): void {
 }
 
 export function validateTrip(trip: Trip): void {
-  exactKeys(trip, ["id", "title", "summaryDestination", "schemaVersion", "revision", "createdAt", "updatedAt", "items", "request", "planningState", "lifecycleState", "adoption"]);
+  exactKeys(trip, ["id", "title", "summaryDestination", "schemaVersion", "revision", "createdAt", "updatedAt", "items", "request", "planningState", "lifecycleState", "adoption", "costs"]);
+  if (trip.costs !== undefined) validateTripCosts(trip.costs, trip.id, trip.revision);
   if (trip.adoption !== undefined) validateTripAdoption(trip.adoption);
   if (trip.summaryDestination !== undefined) validateSummaryDestination(trip.summaryDestination);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(trip.id) ||
@@ -141,6 +147,8 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
   const items = [...trip.items];
   let request = trip.request;
   let title = trip.title;
+  let costs = trip.costs;
+  let forecastUpdated = false;
   let planningState = trip.planningState;
   let adoptionAction: TripAdoptionAction | undefined;
   let lifecyclePatch: Extract<TripPatch, { type: "lifecycle" }> | undefined;
@@ -199,6 +207,21 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
       request = patch.request;
       continue; // Cross-references are validated against the final items, not a partial patch state.
     }
+    if (patch.type === "cost_forecast") {
+      exactKeys(patch, ["type", "forecast"]); validateCostForecast(patch.forecast);
+      if (forecastUpdated || patch.forecast.tripId !== trip.id || patch.forecast.baseRevision !== trip.revision) throw new Error("Wrong forecast basis");
+      costs = { forecast: patch.forecast, overrides: costs?.overrides ?? {}, stale: false }; forecastUpdated = true;
+      continue;
+    }
+    if (patch.type === "cost_override") {
+      exactKeys(patch, ["type", "category", "amount"]);
+      if (!costs || !costCategories.includes(patch.category)) throw new Error("Unknown cost item");
+      const category = patch.category as CostCategory;
+      const overrides = { ...costs.overrides };
+      if (patch.amount === undefined) delete overrides[category];
+      else { validateMoney(patch.amount); overrides[category] = patch.amount; }
+      costs = { ...costs, overrides }; continue;
+    }
     if (patch.type === "title") {
       exactKeys(patch, ["type", "title"]);
       if (typeof patch.title !== "string" || !patch.title.trim() || patch.title.length > 160) throw new Error("Invalid Trip title");
@@ -212,10 +235,11 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
     if (patch.item.type !== items[index]!.type) throw new Error("Candidate kind differs from target item");
     items[index] = patch.item;
   }
+  if (costs && (JSON.stringify(request) !== JSON.stringify(trip.request) || JSON.stringify(items) !== JSON.stringify(trip.items))) costs = { ...costs, stale: true };
   // Preview keeps revision/updatedAt. Only a successful server CAS increments them.
   let result: Trip = { id: trip.id, schemaVersion: 2, revision: trip.revision, title,
     ...(trip.summaryDestination === undefined ? {} : { summaryDestination: trip.summaryDestination }),
-    createdAt: trip.createdAt, updatedAt: trip.updatedAt, items, request, planningState,
+    createdAt: trip.createdAt, updatedAt: trip.updatedAt, items, request, planningState, ...(costs ? { costs } : {}),
     lifecycleState: lifecyclePatch?.state ?? trip.lifecycleState };
   if (adoptionAction === "confirm") {
     if (!canConfirmTrip(result) || !authority.clock) throw new Error("Adopted dated itinerary and real Clock required");

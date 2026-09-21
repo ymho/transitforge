@@ -1,3 +1,6 @@
+import { reviewConsultationRequestProposal, type ConsultationRequestProposal } from "@raiquora/trip/consultation-request-proposal";
+import { tripProposalProjection } from "../trip-plan/trip-workspace-projection";
+import type { TripRequest } from "@raiquora/trip/trip-request";
 import type { Trip, TripUpdateProposal } from "@raiquora/trip/trip";
 import { proposeTripRequestUpdate } from "../../usecases/trip-plan/update-trip-request";
 import { itineraryScheduleLabel } from "../../usecases/trip-plan/itinerary-schedule-label";
@@ -11,13 +14,15 @@ import type { UserProfile } from "@raiquora/trip/travel-profile";
 
 export interface ConsultationScreenPorts {
   /** Only the active Conversation's explicitly attached source; never the first Home Trip. */
-  read(): { sessionId: string; trip?: Trip; unavailable?: boolean; viewer?: boolean };
+  read(): { sessionId: string; trip?: Trip; draft?: boolean; pendingDraft?: boolean; unavailable?: boolean; viewer?: boolean };
   profile(): UserProfile | undefined;
   subscribe(listener: () => void): () => void;
   preview(proposal: TripUpdateProposal): void;
   showTrip(): void;
   newConversation(): void;
+  saveDraftRequest?(next: TripRequest, expected: TripRequest): Promise<void>;
   saveDraftTrip?(): Promise<void>;
+  cancelDraftTrip?(): void;
 }
 
 /** New screen composition; retained DOM nodes preserve send/stream/history/IME/draft listeners. */
@@ -41,15 +46,23 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   const actions = node("div", "consultation-context-actions");
   const conditions = node("button", "consultation-conditions-toggle", "この旅の条件"), tripButton = node("button", "", "旅程を見る");
   const saveDraft = node("button", "", "この相談から仮旅程を保存"); saveDraft.type = "button";
+  const cancelSave = node("button", "", "再試行をやめて条件を編集"); cancelSave.type = "button";
+  cancelSave.addEventListener("click", () => {
+    if (cancelSave.disabled) return;
+    ports.cancelDraftTrip?.(); render();
+    status.textContent = "再試行を終了しました。作成済みの旅程は一覧に残ります。次の仮保存では新しい旅程を作ります。";
+  });
   saveDraft.addEventListener("click", () => {
     if (saveDraft.disabled) return;
-    const sessionId = ports.read().sessionId; saveDraft.disabled = true;
+    const sessionId = ports.read().sessionId; saveDraft.disabled = true; cancelSave.disabled = true;
     void ports.saveDraftTrip?.().then(render, () => {
-      if (ports.read().sessionId === sessionId) status.textContent = "旅程を保存できませんでした。相談内容はそのままです。もう一度お試しください。";
-    }).finally(() => { saveDraft.disabled = false; });
+      if (ports.read().sessionId === sessionId) {
+        render(); status.textContent = "旅程の保存結果を確認できませんでした。同じ内容で再試行するか、再試行をやめて条件を編集できます。作成済みの旅程がある場合は一覧に残ります。";
+      }
+    }).finally(() => { saveDraft.disabled = false; cancelSave.disabled = false; });
   });
   conditions.type = tripButton.type = "button"; tripButton.addEventListener("click", ports.showTrip);
-  actions.append(conditions, tripButton, saveDraft); context.append(identity, actions);
+  actions.append(conditions, tripButton, saveDraft, cancelSave); context.append(identity, actions);
   messages.classList.remove("ai-guide-messages"); messages.classList.add("consultation-messages");
   form.classList.remove("ai-guide-form"); form.classList.add("consultation-composer");
   input.placeholder = "希望や気になることを話してください";
@@ -64,8 +77,8 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   const backdrop = node("button", "consultation-backdrop"); backdrop.type = "button"; backdrop.setAttribute("aria-label", "条件を閉じる"); backdrop.hidden = true;
   let previousOverflow = "";
   const sheet = (open: boolean) => {
-    if (open) { previousOverflow = doc.body.style.overflow; doc.body.style.overflow = "hidden"; }
-    else doc.body.style.overflow = previousOverflow;
+    if (open && aside.dataset.open !== "true") { previousOverflow = doc.body.style.overflow; doc.body.style.overflow = "hidden"; }
+    else if (!open) doc.body.style.overflow = previousOverflow;
     aside.dataset.open = String(open); backdrop.hidden = !open; conditions.setAttribute("aria-expanded", String(open));
     if (open) close.focus(); else conditions.focus();
   };
@@ -82,6 +95,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   layout.append(head, conversation, aside, backdrop);
   panel.classList.remove("ai-guide-panel"); panel.classList.add("consultation-page"); panel.replaceChildren(layout);
   let lastKey = "";
+  let reviewDraft: ((proposal: TripUpdateProposal) => void) | undefined;
   const canLeave = () => {
     const editor = rows.querySelector(".consultation-condition-editor");
     if (!editor || doc.defaultView?.confirm("編集中の条件を破棄して移動しますか？")) { editor?.remove(); return true; }
@@ -96,13 +110,14 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     if (aside.dataset.open === "true") sheet(false);
     rows.replaceChildren(); status.textContent = ""; aside.dataset.open = "false"; backdrop.hidden = true;
     conditions.setAttribute("aria-expanded", "false");
-    name.textContent = trip ? `${trip.title}について相談中` : state.unavailable ? "対象の旅程を読み込めません" : "新しい旅を相談中";
+    name.textContent = trip && !state.draft ? `${trip.title}について相談中` : state.unavailable ? "対象の旅程を読み込めません" : "新しい旅を相談中";
     const dates = trip ? [...new Set(trip.items.map((i) => itineraryScheduleLabel(i.schedule).replace(/（[^）]*）$/, "")))].slice(0, 2) : [];
     const party = trip ? tripPartyView(trip)?.text : undefined;
     meta.textContent = [...dates, ...(party ? [party] : [])].join(" ・ "); meta.hidden = !meta.textContent;
-    note.textContent = trip ? "この旅程が変更案の対象です。確認するまで反映されません。" : state.unavailable ? "参照先を確認してから相談を続けてください。" : "まだ旅程に紐付いていません。";
-    tripButton.hidden = !trip;
-    saveDraft.hidden = !!trip || !!state.unavailable || !ports.saveDraftTrip;
+    note.textContent = state.draft ? "条件はこの相談に保存され、仮旅程の保存時に引き継がれます。" : trip ? "この旅程が変更案の対象です。確認するまで反映されません。" : state.unavailable ? "参照先を確認してから相談を続けてください。" : "まだ旅程に紐付いていません。";
+    tripButton.hidden = !trip || !!state.draft;
+    saveDraft.hidden = (!!trip && !state.draft) || !!state.unavailable || !ports.saveDraftTrip;
+    cancelSave.hidden = !state.pendingDraft || !ports.cancelDraftTrip;
     help.textContent = trip ? state.viewer ? "閲覧専用の旅程です。条件の変更はできません。" : "条件を編集し、変更案を確認して保存できます。列車・宿・予約は自動で変更されません。"
       : "条件は会話で追加できます。普段の好みより、今回の希望を優先します。";
     const row = (label: string, value: string, edit?: () => void, source?: string) => {
@@ -111,6 +126,32 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
       if (edit) { const button = node("button", "", "編集"); button.type = "button"; button.setAttribute("aria-label", `${label}を編集`); button.addEventListener("click", edit); item.append(button); }
       rows.append(item); return item;
     };
+    const previewProposal = (proposal: TripUpdateProposal) => {
+      if (!state.draft) { ports.preview(proposal); return; }
+      if (!trip || !ports.saveDraftRequest || proposal.patches.length !== 1 || proposal.patches[0]?.type !== "request") throw new Error("条件を保存できません");
+      const request = proposal.patches[0].request, view = tripProposalProjection(trip, proposal);
+      rows.querySelector(".consultation-draft-review")?.remove();
+      const review = node("section", "consultation-draft-review consultation-condition-editor");
+      review.append(node("h3", "", "条件の変更案（未保存）"), node("p", "", view.summary), node("p", "", `現在: ${view.beforeConditions}`), node("p", "", `変更後: ${view.afterConditions}`));
+      const confirm = node("button", "", "確認して条件を保存"), cancel = node("button", "", "取消");
+      confirm.type = cancel.type = "button"; cancel.addEventListener("click", () => review.remove());
+      confirm.addEventListener("click", () => {
+        const current = ports.read();
+        if (confirm.disabled) return;
+        if (!current.draft || current.viewer || current.unavailable || current.sessionId !== state.sessionId || current.trip?.revision !== trip.revision) {
+          status.textContent = "条件が更新されました。最新の条件から編集し直してください。"; return;
+        }
+        confirm.disabled = true;
+        void ports.saveDraftRequest!(request, trip.request).then(() => {
+          review.remove(); render();
+          if (ports.read().sessionId === state.sessionId) status.textContent = "相談の条件を保存しました。";
+        }, (error: unknown) => {
+          if (ports.read().sessionId === state.sessionId) status.textContent = error instanceof Error ? error.message : "条件を保存できませんでした。";
+        }).finally(() => { confirm.disabled = false; });
+      });
+      review.append(confirm, cancel); rows.append(review);
+    };
+    reviewDraft = state.draft ? previewProposal : undefined;
     const editFields = (fields: ConditionField[], update: (values: Record<string, string>) => TripUpdateProposal) => {
       const existing = rows.querySelector(".consultation-condition-editor");
       if (existing && !doc.defaultView?.confirm("編集中の入力を破棄しますか？")) return;
@@ -137,7 +178,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
         try {
           const values: Record<string, string> = {};
           for (const field of editor.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select")) values[field.name] = field.value.trim();
-          ports.preview(update(values)); status.textContent = "変更案を作成しました。旅程で内容を確認してください。まだ保存されていません。"; editor.remove();
+          previewProposal(update(values)); status.textContent = state.draft ? "変更案を確認して保存してください。" : "変更案を作成しました。旅程で内容を確認してください。まだ保存されていません。"; editor.remove();
         } catch (error) { status.textContent = error instanceof Error ? `入力と旅程の状態を確認してください。${error.message}` : "この条件では変更案を作成できません。"; }
       });
     };
@@ -153,7 +194,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
       button.addEventListener("click", () => {
         const current = ports.read();
         if (current.sessionId !== state.sessionId || current.trip?.id !== trip?.id || current.trip?.revision !== trip?.revision || current.viewer) return;
-        try { ports.preview(proposal()); } catch { status.textContent = "関連する予定に影響があります。旅程の変更案から確認してください。"; }
+        try { previewProposal(proposal()); } catch { status.textContent = "関連する予定に影響があります。旅程の変更案から確認してください。"; }
       }); return button;
     };
     if (trip) {
@@ -211,5 +252,16 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     doc.defaultView?.addEventListener("beforeunload", (event) => {
     if (rows.querySelector(".consultation-condition-editor")) { event.preventDefault(); event.returnValue = ""; }
   });
-  return { refresh: render, canLeave };
+  return { refresh: render, canLeave,
+    previewConsultationProposal(value: ConsultationRequestProposal) {
+      const state = ports.read();
+      if (!state.draft || !state.trip || state.viewer || state.unavailable) throw new Error("相談の条件を編集できません。");
+      const proposal = reviewConsultationRequestProposal(value, state.sessionId, state.trip.request);
+      if (!canLeave()) return;
+      render();
+      if (!reviewDraft) throw new Error("相談の条件を編集できません。");
+      reviewDraft({ tripId: state.trip.id, baseRevision: state.trip.revision, summary: proposal.summary, patches: [{ type: "request", request: proposal.request }] });
+      sheet(true);
+    },
+  };
 }

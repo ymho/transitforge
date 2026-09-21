@@ -49,6 +49,8 @@ export interface ViewerAgentContextResponse {
 }
 
 export type ViewerAgentResponse =
+  | { text: string; tripCostProposal: import("@raiquora/trip/public-cost-proposal").PublicCostProposal }
+  | { text: string; consultationRequestProposal: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal }
   | { text: string; checklistProposal: ChecklistProposal }
   | { text: string; tripUpdateProposal: TripUpdateProposal }
   | { text: string; progressSources: Array<{ url: string; evidenceId: string }> }

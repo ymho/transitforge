@@ -1,5 +1,14 @@
 # Conversation turn保存 — #479 Phase C
 
+## 条件仮置き案への拡張（#455 / #456）
+
+[条件仮置き案](agent-request-proposals.md)で、以下の本文のみ契約にoptional `tripUpdateProposal`、旅程作成前には`consultationRequestProposal`を追加した（相互排他）。
+request patchだけの検証済み公開projectionをassistant messageとreceiptへ同一transactionで保存し、
+初回・再送・履歴読取で保持する。本文だけの既存データは引き続き互換。Tool JSONやTraceは保存しない。
+
+[AI費用概算](trip-cost-estimates.md)の`tripCostProposal`も同じ公開保存境界で扱う。
+条件案との同時生成は保持するが、Trip作成前の相談条件案とは同時に生成しない。
+
 ## 入口と保存契約
 
 `createConversationServerAgent(options).runConversationTurn({ principal, conversationId, turnId,

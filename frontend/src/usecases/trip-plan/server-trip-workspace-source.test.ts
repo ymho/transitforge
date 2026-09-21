@@ -105,3 +105,18 @@ it("condition approval persists only Request and reloads the server revision", a
   expect(after.request.goal).toBe("街歩き"); expect(after.items).toEqual(before.items);
   expect(after.revision).toBe(before.revision + 1);
 });
+it("a restored AI replacement only writes on explicit confirmation and cannot be reapplied", async () => {
+  const { proposeReviewedRequestChanges } = await import("@raiquora/trip/reviewed-request-changes");
+  const f = writable();
+  f.set({ ...trip, request: { constraints: [{ id: "pace", source: "user", strength: "soft", scope: { type: "trip" }, requirement: { type: "pace", value: 0.8 } }], assumptions: [] } });
+  await f.source.refresh();
+  const before = f.controller.current()!;
+  const proposal = proposeReviewedRequestChanges(before, [{ type: "replace_constraint", constraintId: "pace", strength: "soft", requirement: { type: "pace", value: 0.2 }, reason: "ゆっくり巡る案" }], () => "change");
+  f.controller.preview(structuredClone(proposal));
+  expect(f.mutate).not.toHaveBeenCalled(); expect(f.controller.current()).toEqual(before);
+  await f.controller.confirm();
+  expect(f.mutate).toHaveBeenCalledOnce(); expect(f.controller.current()?.revision).toBe(before.revision + 1);
+  expect(f.controller.current()?.request.constraints[0]).toMatchObject({ source: "assumption", requirement: { type: "pace", value: 0.2 } });
+  expect(f.controller.current()?.items).toEqual(before.items);
+  expect(() => f.controller.preview(proposal)).toThrow();
+});

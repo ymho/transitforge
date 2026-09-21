@@ -7,7 +7,7 @@ export interface ConversationTurnInput extends ServerAgentTurn { conversationId:
 /** The sequence cutoff is trusted server state, never a client-selected history boundary. */
 export function createConversationTurnApplication(dependencies: {
   turns: ConversationTurnRepository;
-  runAgentTurn: (input: ServerAgentTurn, historyBeforeSequence: number) => Promise<AgentRuntimeResult>;
+  runAgentTurn: (input: ServerAgentTurn, historyBeforeSequence: number) => Promise<AgentRuntimeResult & Pick<ConversationTurnResult, "tripUpdateProposal" | "consultationRequestProposal" | "tripCostProposal">>;
 }) {
   return { async runConversationTurn(input: ConversationTurnInput): Promise<ConversationTurnResult> {
     exactObject(input, ["principal", "conversationId", "turnId", "userRequest", "tripId", "uiContext"]);
@@ -21,7 +21,7 @@ export function createConversationTurnApplication(dependencies: {
     try {
       const runtime = await dependencies.runAgentTurn({ principal, conversationId, userRequest, tripId, uiContext }, begun.lease.userSequence);
       if (runtime.status !== "completed" && runtime.status !== "follow_up") throw new StateError("unavailable");
-      result = { status: runtime.status, response: runtime.response };
+      result = { status: runtime.status, response: runtime.response, ...(runtime.tripCostProposal ? { tripCostProposal: runtime.tripCostProposal } : {}), ...(runtime.tripUpdateProposal ? { tripUpdateProposal: runtime.tripUpdateProposal } : {}), ...(runtime.consultationRequestProposal ? { consultationRequestProposal: runtime.consultationRequestProposal } : {}) };
     } catch {
       // Best effort only. If recording failure is unavailable, lease expiry enables recovery.
       try { await dependencies.turns.failTurn(identity, begun.lease); } catch { /* No raw exception/trace retention. */ }

@@ -64,6 +64,9 @@ Provider Placeの保存可否は引き続き信頼されたAdapterと`createPlac
 - `proposeTripRequestUpdate`はメモリ上のRequest変更案を作る。信頼したApplicationがactorを決める。
   model経路の新規解釈はmodel-source unconfirmed assumptionに限定し、既知要求の書換え・削除・確認を許可しない。
   新しい場所は未検証の名称希望までとし、モデルが新しいProvider Evidence/座標を作ることを拒否する。
+  Serverの`propose_request_changes`は[明示確認専用の変更案](agent-request-proposals.md)として別途接続した。
+  既知条件を変更したい相談ではID指定の差分を作り、既存writerで利用者が確認するまで正本を変更しない。
+  追加専用のmodel経路の制約を緩和せず、置換値はmodel/unconfirmedとして区別する。
   保存済みPlaceの再利用は可能。新しいProvider snapshotは信頼された解決・明示採用の境界を通す。
   user経路は明示採用用であり、LLMがactor=userを自己申告するAPIではない。
 - `proposeAssumptionDecision`は利用者のconfirm/rejectを既存TripUpdateProposalへ接続する。

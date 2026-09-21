@@ -137,3 +137,21 @@ it("loads only the bounded history before the persisted user message, even on re
   expect(context.conversation?.messages?.map((m) => m.text)).toEqual(Array.from({ length: 12 }, (_, i) => `message-${i + 3}`));
   expect(f.history).toHaveBeenCalledExactlyOnceWith(a, id, { after: "000000000002", limit: 12 });
 });
+
+it("loads saved consultation conditions without manufacturing an adopted Trip and clears them on handoff", async () => {
+  const f = setup(), draftRequest = { goal: "温泉", constraints: [], assumptions: [] };
+  await f.conversations.create(a, { ...metadata(), draftRequest });
+  const context = await f.load({ principal: a, conversationId: id });
+  expect(context.currentTrip).toBeUndefined(); expect(context.consultationRequest).toEqual(draftRequest);
+  const decision = buildAgentDecisionContext({ executionId: "test", feature: "concierge", userRequest: "候補を相談", context }, []);
+  expect(decision.requestSource).toBe("conversation_draft"); expect(decision.persistedTripRequest).toEqual(draftRequest);
+  expect(agentDecisionContextText(decision)).toContain("conversation_draft");
+  await f.trips.repository.create(a, trip());
+  await f.conversations.update(a, id, 0, stateMetadata());
+  const linked = await f.load({ principal: a, conversationId: id });
+  expect(linked.consultationRequest).toBeUndefined(); expect(linked.currentTrip?.title).toBe("採用した旅");
+});
+it("rejects metadata containing both an adopted Trip and a draft", async () => {
+  const f = setup();
+  await expect(f.conversations.create(a, { ...stateMetadata(), draftRequest: { constraints: [], assumptions: [] } })).rejects.toMatchObject({ code: "invalid-input" });
+});

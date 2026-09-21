@@ -34,7 +34,7 @@ it("sends only references/raw request and Bearer; a communication retry retains 
   expect(s.fetcher.mock.calls[0][1]?.headers).toMatchObject({ Authorization: "Bearer access-token" });
   expect(s.session.start("次の相談").request.turnId).toBe("turn-2"); s.session.dispose();
 });
-it.each(["logout", "account", "conversation", "trip", "turn"])("rejects delayed final after %s and aborts reception", async change => {
+it.each(["logout", "account", "conversation", "trip", "draft", "turn"])("rejects delayed final after %s and aborts reception", async change => {
   const s = setup(), events = vi.fn(); const action = s.session.start("相談"); const pending = action.send(events);
   const rejection = expect(pending).rejects.toThrow();
   await vi.waitFor(() => expect(events).toHaveBeenCalledTimes(1));
@@ -42,6 +42,7 @@ it.each(["logout", "account", "conversation", "trip", "turn"])("rejects delayed 
   if (change === "account") s.changeAuth();
   if (change === "conversation") { s.refs.conversationId = "conversation-b"; s.session.contextChanged(); }
   if (change === "trip") { s.refs.tripId = "trip-b"; s.session.contextChanged(); }
+  if (change === "draft") { s.refs.draftRevision = 2; s.session.contextChanged(); }
   if (change === "turn") s.session.start("新しい相談");
   expect(s.fetcher.mock.calls[0][1]?.signal?.aborted).toBe(true);
   s.complete(); await rejection;
@@ -67,4 +68,35 @@ it.each([progress, progress + frame(2, { type: "error", code: "agent_failed" }) 
   const s = setup(); s.fetcher.mockResolvedValue(new Response(text, { headers: { "content-type": "text/event-stream" } }));
   const event = vi.fn(); await expect(s.session.start("相談").send(event)).rejects.toThrow();
   expect(event.mock.calls.some(([e]) => e.type === "final")).toBe(false); s.session.dispose();
+});
+it("receives a public proposal as structured UI data only after a complete stream", async () => {
+  const s = setup();
+  const tripUpdateProposal = { tripId: "11111111-1111-4111-8111-111111111111", baseRevision: 0, summary: "条件案", patches: [{ type: "request", request: { constraints: [], assumptions: [] } }] };
+  s.fetcher.mockResolvedValueOnce(new Response(progress + frame(2, { type: "final", status: "completed", response: "案を確認", tripUpdateProposal }) + 'event: done\ndata: {"v":1,"runId":"run","seq":3}\n\n', { headers: { "content-type": "text/event-stream" } }));
+  expect(await s.session.start("相談").send()).toEqual({ text: "案を確認", tripUpdateProposal }); s.session.dispose();
+});
+it("rejects malformed proposal data without displaying a partial final", async () => {
+  const s = setup(), onEvent = vi.fn();
+  s.fetcher.mockResolvedValueOnce(new Response(progress + frame(2, { type: "final", status: "completed", response: "案", tripUpdateProposal: { trace: "private" } }) + 'event: done\ndata: {"v":1,"runId":"run","seq":3}\n\n', { headers: { "content-type": "text/event-stream" } }));
+  await expect(s.session.start("相談").send(onEvent)).rejects.toThrow("invalid_event");
+  expect(onEvent.mock.calls.some(([e]) => e.type === "final")).toBe(false); s.session.dispose();
+});
+it("receives a separate bounded consultation proposal and rejects ambiguous or invalid envelopes", async () => {
+  const s = setup(), baseRequest = { constraints: [], assumptions: [] };
+  const consultationRequestProposal = { conversationId: "11111111-1111-4111-8111-111111111111", baseRequest, request: { ...baseRequest, goal: "美術館" }, summary: "条件案" };
+  const respond = (extra: object) => new Response(progress + frame(2, { type: "final", status: "completed", response: "案", ...extra }) + 'event: done\ndata: {"v":1,"runId":"run","seq":3}\n\n', { headers: { "content-type": "text/event-stream" } });
+  s.fetcher.mockResolvedValueOnce(respond({ consultationRequestProposal }));
+  expect(await s.session.start("相談").send()).toEqual({ text: "案", consultationRequestProposal });
+  for (const extra of [{ consultationRequestProposal: { ...consultationRequestProposal, trace: "private" } }, { consultationRequestProposal, tripUpdateProposal: {} }]) {
+    s.fetcher.mockResolvedValueOnce(respond(extra)); await expect(s.session.start("相談").send()).rejects.toThrow();
+  }
+  s.session.dispose();
+});
+it("retains both cost and condition review proposals without promoting either to a saved Trip", async () => {
+  const s = setup();
+  const { costForecast } = await import("../../../../../modules/trip/domain/trip-costs.fixture");
+  const forecast = costForecast(), tripCostProposal = { tripId: forecast.tripId, baseRevision: 0, summary: "概算", patches: [{ type: "cost_forecast", forecast }] };
+  const tripUpdateProposal = { tripId: forecast.tripId, baseRevision: 0, summary: "条件", patches: [{ type: "request", request: { constraints: [], assumptions: [] } }] };
+  s.fetcher.mockResolvedValueOnce(new Response(progress + frame(2, { type: "final", status: "completed", response: "案を確認", tripCostProposal, tripUpdateProposal }) + 'event: done\ndata: {"v":1,"runId":"run","seq":3}\n\n', { headers: { "content-type": "text/event-stream" } }));
+  expect(await s.session.start("概算して").send()).toEqual({ text: "案を確認", tripCostProposal, tripUpdateProposal }); s.session.dispose();
 });

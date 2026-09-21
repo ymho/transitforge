@@ -1,3 +1,7 @@
+import { parsePublicCostProposal } from "@raiquora/trip/public-cost-proposal";
+import { parseConsultationRequestProposal } from "@raiquora/trip/consultation-request-proposal";
+import { parseConsultationRequest } from "@raiquora/trip/consultation-request";
+import { parsePublicRequestProposal } from "@raiquora/trip/public-request-proposal";
 import { requestSessionVersion } from "./authenticated-fetch";
 import { personalApiFetch } from "./personal-api-fetch";
 import type { ServerConversation, ServerConversationClient, ServerConversationMessage, ServerConversationMetadata, ServerPage } from "../../usecases/personal-state/server-conversation-client";
@@ -5,6 +9,7 @@ import type { ServerConversation, ServerConversationClient, ServerConversationMe
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 function validMetadata(value: unknown): value is ServerConversationMetadata {
   const v = value as Partial<ServerConversationMetadata>;
+  try { if (v?.draftRequest !== undefined) { if (v.tripId) return false; parseConsultationRequest(v.draftRequest); } } catch { return false; }
   return !!v && typeof v === "object" && typeof v.title === "string" && ["general", "trip", "place", "route"].includes(v.scope ?? "") && typeof v.summary === "string" &&
     Array.isArray(v.resolvedTopics) && v.resolvedTopics.every((x) => typeof x === "string") && Array.isArray(v.pendingTopics) && v.pendingTopics.every((x) => typeof x === "string") && (v.tripId === undefined || typeof v.tripId === "string");
 }
@@ -19,6 +24,7 @@ function page<T>(value: unknown, item: (value: unknown) => value is T): ServerPa
 }
 function validMessage(value: unknown): value is ServerConversationMessage {
   const v = value as Partial<ServerConversationMessage>;
+  try { if (v?.tripCostProposal !== undefined) { if (v.role !== "assistant" || v.consultationRequestProposal !== undefined) return false; parsePublicCostProposal(v.tripCostProposal); } if (v?.consultationRequestProposal !== undefined) { if (v.role !== "assistant" || v.tripUpdateProposal !== undefined) return false; parseConsultationRequestProposal(v.consultationRequestProposal); } if (v?.tripUpdateProposal !== undefined) { if (v.role !== "assistant") return false; parsePublicRequestProposal(v.tripUpdateProposal); } } catch { return false; }
   return !!v && typeof v === "object" && (v.role === "user" || v.role === "assistant") && typeof v.text === "string" && Number.isSafeInteger(v.sequence) && typeof v.createdAt === "string";
 }
 export class HttpServerConversationClient implements ServerConversationClient {

@@ -1,3 +1,4 @@
+import type { ViewerAgentResponse } from "../../../domain/viewer-agent-response";
 import type { AuthSession } from "../../../usecases/auth/auth-session";
 import { ApiAuthenticationError } from "../../../usecases/auth/api-authentication-error";
 import { consumeAgentStream, AgentStreamError } from "./consumer";
@@ -10,7 +11,7 @@ export interface ConversationStreamRequest {
   tripId?: string;
   uiContext?: { itemId?: string };
 }
-export interface ConversationStreamReferences { conversationId: string; tripId?: string; itemId?: string; tripRevision?: number }
+export interface ConversationStreamReferences { conversationId: string; tripId?: string; itemId?: string; tripRevision?: number; draftRevision?: number }
 /** Transport only. An action owns one immutable turn ID; retry never regenerates it. */
 export function createConversationStreamSession(options: {
   auth: AuthSession; references: () => ConversationStreamReferences;
@@ -22,7 +23,7 @@ export function createConversationStreamSession(options: {
   const sync = () => {
     const next = options.references();
     if (next.conversationId !== refs.conversationId) { conversationGeneration++; active?.abort(); }
-    if (next.tripId !== refs.tripId || next.tripRevision !== refs.tripRevision) { tripGeneration++; active?.abort(); }
+    if (next.tripId !== refs.tripId || next.tripRevision !== refs.tripRevision || next.draftRevision !== refs.draftRevision) { tripGeneration++; active?.abort(); }
     refs = { ...next };
   };
   const version = () => `${authGeneration}:${conversationGeneration}:${tripGeneration}`;
@@ -38,7 +39,7 @@ export function createConversationStreamSession(options: {
       let inFlight = false;
       return {
         request: structuredClone(request),
-        async send(onEvent?: (event: AgentTurnEvent) => void): Promise<string> {
+        async send(onEvent?: (event: AgentTurnEvent) => void): Promise<ViewerAgentResponse> {
           if (inFlight || !current()) throw new AgentStreamError("stale_generation");
           inFlight = true; const controller = new AbortController(); active = controller;
           try {
@@ -46,10 +47,10 @@ export function createConversationStreamSession(options: {
             if (!current()) throw new AgentStreamError("stale_generation");
             if (!token || options.auth.getState().status !== "signed-in") throw new ApiAuthenticationError("unauthenticated");
             if (!current()) throw new AgentStreamError("stale_generation");
-            let final: string | undefined;
+            let final: ViewerAgentResponse | undefined;
             await consumeAgentStream({ token, request, endpoint: options.endpoint ?? "/api/agent-stream", fetcher: options.fetcher,
               signal: controller.signal, isCurrent: current, measurement: { requestStart: 0, maxSilenceMs: 0 },
-              onEvent(event) { if (!current()) return; if (event.type === "final") final = event.response; onEvent?.(event); },
+              onEvent(event) { if (!current()) return; if (event.type === "final") final = event.tripCostProposal ? { text: event.response, tripCostProposal: event.tripCostProposal, ...(event.tripUpdateProposal ? { tripUpdateProposal: event.tripUpdateProposal } : {}) } : event.consultationRequestProposal ? { text: event.response, consultationRequestProposal: event.consultationRequestProposal } : event.tripUpdateProposal ? { text: event.response, tripUpdateProposal: event.tripUpdateProposal } : event.response; onEvent?.(event); },
             });
             if (!current()) throw new AgentStreamError("stale_generation");
             if (final === undefined) throw new AgentStreamError("missing_final");

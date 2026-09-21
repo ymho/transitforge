@@ -1,3 +1,4 @@
+import { parseConsultationRequest } from "@raiquora/trip/consultation-request";
 export type ConversationScope = "general" | "trip" | "place" | "route";
 
 export interface ConversationSession {
@@ -5,6 +6,7 @@ export interface ConversationSession {
   title: string;
   scope: ConversationScope;
   tripId?: string;
+  draftRequest?: import("@raiquora/trip/trip-request").TripRequest;
   summary: string;
   resolvedTopics: string[];
   pendingTopics: string[];
@@ -25,6 +27,7 @@ export function parseConversationSession(value: unknown): ConversationSession | 
     !Array.isArray(item.pendingTopics) || !item.pendingTopics.every((topic) => typeof topic === "string") ||
     typeof item.createdAt !== "string" || typeof item.updatedAt !== "string" ||
     item.tripId !== undefined && (typeof item.tripId !== "string" || !uuid.test(item.tripId))) return undefined;
+  try { if (item.draftRequest !== undefined) { if (item.tripId) return undefined; parseConsultationRequest(item.draftRequest); } } catch { return undefined; }
   return structuredClone(item as ConversationSession);
 }
 

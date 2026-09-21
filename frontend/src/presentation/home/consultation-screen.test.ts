@@ -70,3 +70,40 @@ it("mobile sheet traps focus and restores background scrolling and trigger focus
   expect(document.activeElement).not.toBe(close);
   close.click(); expect(document.body.style.overflow).toBe("auto"); expect(document.activeElement).toBe(toggle);
 });
+it("pre-Trip conditions require review and save to Conversation without previewing an adopted Trip", async () => {
+  const trip = createTrip("45300000-0000-4000-8000-000000000001", "相談", "2026-09-18T00:00:00Z");
+  const preview = vi.fn(), saveDraftRequest = vi.fn(async () => {});
+  const panel = document.querySelector<HTMLElement>("section")!;
+  configureConsultationScreen(panel, document.querySelector("ol")!, document.querySelector("form")!, document.querySelector("input")!, {
+    read: () => ({ sessionId: trip.id, trip, draft: true }), profile: () => undefined, subscribe: () => () => {},
+    preview, saveDraftRequest, showTrip: vi.fn(), newConversation: vi.fn(), saveDraftTrip: vi.fn(),
+  });
+  panel.querySelector<HTMLButtonElement>('[aria-label="旅の目的を編集"]')!.click();
+  const editor = panel.querySelector("form.consultation-condition-editor")!;
+  editor.querySelector("input")!.value = "温泉"; editor.dispatchEvent(new Event("submit", { cancelable: true }));
+  expect(saveDraftRequest).not.toHaveBeenCalled(); expect(preview).not.toHaveBeenCalled();
+  expect(panel.querySelector(".consultation-draft-review")?.textContent).toContain("温泉");
+  panel.querySelector<HTMLButtonElement>(".consultation-draft-review button")!.click();
+  await vi.waitFor(() => expect(saveDraftRequest).toHaveBeenCalledWith({ ...trip.request, goal: "温泉" }, trip.request));
+  expect(trip.request.goal).toBeUndefined();
+});
+it("reviews an AI draft proposal, saves only on confirmation and rejects stale, foreign and post-handoff proposals", async () => {
+  let trip = createTrip("45300000-0000-4000-8000-000000000001", "相談", "2026-09-18T00:00:00Z"), draft = true;
+  const baseRequest = trip.request, next = { ...baseRequest, goal: "美術館" };
+  const proposal = { conversationId: trip.id, baseRequest, request: next, summary: "目的の変更案" };
+  const preview = vi.fn(), saveDraftRequest = vi.fn(async (request) => { trip = { ...trip, request, revision: trip.revision + 1 }; });
+  const panel = document.querySelector<HTMLElement>("section")!;
+  const screen = configureConsultationScreen(panel, document.querySelector("ol")!, document.querySelector("form")!, document.querySelector("input")!, {
+    read: () => ({ sessionId: trip.id, trip, draft }), profile: () => undefined, subscribe: () => () => {},
+    preview, saveDraftRequest, showTrip: vi.fn(), newConversation: vi.fn(),
+  });
+  expect(() => screen.previewConsultationProposal({ ...proposal, conversationId: "22222222-2222-4222-8222-222222222222" })).toThrow();
+  screen.previewConsultationProposal(proposal);
+  expect(panel.querySelector(".consultation-draft-review")?.textContent).toContain("美術館");
+  expect(saveDraftRequest).not.toHaveBeenCalled(); expect(preview).not.toHaveBeenCalled();
+  panel.querySelector<HTMLButtonElement>(".consultation-draft-review button")!.click();
+  await vi.waitFor(() => expect(panel.textContent).toContain("相談の条件を保存しました"));
+  expect(saveDraftRequest).toHaveBeenCalledWith(next, baseRequest);
+  expect(() => screen.previewConsultationProposal(proposal)).toThrow();
+  draft = false; expect(() => screen.previewConsultationProposal({ ...proposal, baseRequest: next })).toThrow();
+});

@@ -1,40 +1,13 @@
 import { applyTripProposal, type Trip, type TripUpdateProposal, type TripPatch } from "@raiquora/trip/trip";
 import { type TripRequest, type PlanAssumption, type TripConstraint } from "@raiquora/trip/trip-request";
 import { travelPreferenceLabels, type UserProfile, type TravelPreference } from "@raiquora/trip/travel-profile";
-import type { PlaceSnapshot } from "@raiquora/trip/place-snapshot";
+import { proposeModelRequest } from "@raiquora/trip/model-request-proposal";
 import type { TripParty } from "@raiquora/trip/trip-party";
 
 /** Model output is only a proposal. New model interpretations must be linked, unconfirmed assumptions. */
 export function proposeTripRequestUpdate(trip: Trip, request: TripRequest, actor: "user" | "model"): TripUpdateProposal {
   if (actor !== "user" && actor !== "model") throw new Error("Unknown request actor");
-  if (actor === "model") {
-    if (JSON.stringify(request.party) !== JSON.stringify(trip.request.party)) {
-      if (trip.request.party) throw new Error("Model cannot rewrite known party");
-      const a = request.assumptions.find((a) => a.id === request.party?.assumptionId);
-      if (request.party?.source !== "assumption" || a?.source !== "model" || a.status !== "unconfirmed") throw new Error("Model party must be an unconfirmed assumption");
-    }
-    for (const c of trip.request.constraints) {
-      if (!request.constraints.some((next) => JSON.stringify(c) === JSON.stringify(next))) throw new Error("Model cannot rewrite existing constraints");
-    }
-    for (const a of trip.request.assumptions) {
-      if (!request.assumptions.some((next) => JSON.stringify(a) === JSON.stringify(next))) throw new Error("Model cannot confirm/reject existing assumptions");
-    }
-    for (const c of request.constraints.filter((c) => !trip.request.constraints.some(({ id }) => id === c.id))) {
-      const a = request.assumptions.find(({ id }) => id === c.assumptionId);
-      if (c.source !== "assumption" || a?.source !== "model" || a.status !== "unconfirmed") throw new Error("Model interpretation is not a user fact");
-      for (const place of requirementPlaces(c.requirement)) {
-        const nameOnly = Object.keys(place).every((key) => ["name", "ref", "sources"].includes(key)) &&
-          (!place.ref || place.ref.provider === "manual") && place.sources.length === 0;
-        if (!nameOnly && !adoptedPlaces(trip).some((known) => JSON.stringify(known) === JSON.stringify(place))) {
-          throw new Error("New provider/place facts require trusted resolution, not model-authored evidence");
-        }
-      }
-    }
-    for (const a of request.assumptions.filter((a) => !trip.request.assumptions.some(({ id }) => id === a.id))) {
-      if (a.source !== "model" || a.status !== "unconfirmed") throw new Error("Model assumption must be unconfirmed");
-    }
-    if (request.goal !== trip.request.goal) throw new Error("Model goal changes need explicit user adoption");
-  }
+  if (actor === "model") return proposeModelRequest(trip, request);
   return checkedProposal(trip, "今回の旅行条件を更新", [{ type: "request", request }]);
 }
 
@@ -114,17 +87,4 @@ function checkedProposal(trip: Trip, summary: string, patches: readonly TripPatc
   const proposal = { tripId: trip.id, baseRevision: trip.revision, summary, patches };
   applyTripProposal(trip, proposal); // Validation only; no persistence or mutation.
   return structuredClone(proposal);
-}
-
-function requirementPlaces(requirement: TripConstraint["requirement"]): readonly PlaceSnapshot[] {
-  if (requirement.type === "destinations") return requirement.places;
-  return "place" in requirement ? [requirement.place] : [];
-}
-function adoptedPlaces(trip: Trip): readonly PlaceSnapshot[] {
-  return [...trip.request.constraints.flatMap((c) => [...requirementPlaces(c.requirement)]), ...trip.items.flatMap((item) => {
-    if (item.type === "activity") return item.place ? [item.place] : [];
-    if (item.type === "stay") return item.selection.status === "selected" ? [item.selection.accommodation.place] : item.selection.place ? [item.selection.place] : [];
-    return item.detail.status !== "selected" ? [] : item.detail.mode === "rail" ?
-      item.detail.journey.legs.flatMap((leg) => [leg.origin, leg.destination]) : [item.detail.origin, item.detail.destination];
-  })];
 }

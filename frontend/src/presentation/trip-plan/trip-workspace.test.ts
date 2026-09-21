@@ -6,6 +6,7 @@ import { tripWorkspacePreviewSource } from "../../dev/trip-workspace-preview";
 import { createTripWorkspaceController, type TripWorkspaceSource } from "../../usecases/trip-plan/trip-workspace-controller";
 import { configureTripWorkspace } from "./trip-workspace";
 import { createServerTripWorkspaceSource } from "../../usecases/trip-plan/server-trip-workspace-source";
+import { costForecast } from "../../../../modules/trip/domain/trip-costs.fixture";
 
 function setup(source?: TripWorkspaceSource) {
   const app = document.createElement("main"); app.id = "app"; document.body.append(app);
@@ -21,6 +22,39 @@ function button(root: ParentNode, text: string) { return [...root.querySelectorA
 afterEach(() => document.body.replaceChildren());
 
 describe("Trip workspace DOM and mobile navigation", () => {
+  it("switches the four detail tabs with keyboard semantics while keeping one Trip source", () => {
+    const f = setup({ getCurrentTrip: multiCityTrip });
+    const tabs = [...f.ui.panel.querySelectorAll<HTMLButtonElement>('.trip-detail-tabs > [role="tab"]')];
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["概要", "旅程", "費用", "地図"]);
+    expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
+    tabs[0]?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(tabs[1]?.getAttribute("aria-selected")).toBe("true");
+    expect(f.ui.panel.querySelector<HTMLElement>("#trip-detail-overview")?.hidden).toBe(true);
+    tabs[3]?.click(); expect(f.ui.panel.querySelector<HTMLElement>("#trip-detail-map")?.hidden).toBe(false);
+    expect(f.ui.panel.textContent).toContain("経路形状を確認できない区間は、直線で補完しません");
+    expect(f.controller.current()).toEqual(multiCityTrip());
+  });
+  it("derives day tabs from authored schedules and keeps unscheduled items separate", () => {
+    const f = setup({ getCurrentTrip: multiCityTrip });
+    button(f.ui.panel, "旅程").click();
+    const dayTabs = [...f.ui.panel.querySelectorAll<HTMLButtonElement>(".trip-day-tabs [role=tab]")];
+    expect(dayTabs.map((tab) => tab.textContent)).toEqual(["2026-09-22", "日時未定"]);
+    expect(f.ui.panel.querySelector<HTMLElement>('[data-item-id="hotel"]')?.closest<HTMLElement>(".trip-workspace-day")?.hidden).toBe(false);
+    dayTabs[1]!.click();
+    expect(f.ui.panel.querySelector<HTMLElement>('[data-item-id="hotel"]')?.closest<HTMLElement>(".trip-workspace-day")?.hidden).toBe(true);
+    expect(f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')?.closest<HTMLElement>(".trip-workspace-day")?.hidden).toBe(false);
+  });
+  it("does not discard an unsubmitted cost edit while switching detail tabs", () => {
+    const base = multiCityTrip();
+    const trip = applyTripProposal(base, { tripId: base.id, baseRevision: base.revision, summary: "概算", patches: [
+      { type: "cost_forecast", forecast: costForecast(base.id, base.revision) },
+    ] });
+    const f = setup({ getCurrentTrip: () => trip, confirmProposal: async () => undefined });
+    button(f.ui.panel, "費用").click(); button(f.ui.panel, "交通の金額を編集").click();
+    const input = f.ui.panel.querySelector<HTMLInputElement>(".trip-cost-editor input")!; input.value = "12345";
+    button(f.ui.panel, "概要").click(); expect(input.isConnected).toBe(true);
+    button(f.ui.panel, "費用").click(); expect(f.ui.panel.querySelector<HTMLInputElement>(".trip-cost-editor input")?.value).toBe("12345");
+  });
   it("keeps server ownership while loading/unavailable, retries and only previews changes", async () => {
     const trip = multiCityTrip(), get = vi.fn(async () => trip);
     const source = createServerTripWorkspaceSource(trip.id, { get });
@@ -94,5 +128,18 @@ describe("Trip workspace DOM and mobile navigation", () => {
     f.controller.attach("two", { getCurrentTrip: () => createTrip("22222222-2222-4222-8222-222222222222", "別の旅", placesAt, [placeActivity("other")]) });
     f.controller.activateSession("two"); expect(f.ui.panel.textContent).not.toContain("変更案（まだ反映"); expect(f.controller.uiFocus()).toBeUndefined();
     f.controller.activateSession("one"); expect(f.ui.panel.textContent).toContain("変更案（まだ反映"); expect(f.controller.uiFocus()?.itemId).toBe("activity");
+  });
+  it("restores the selected detail and day tabs when returning to a conversation", () => {
+    const f = setup({ getCurrentTrip: multiCityTrip });
+    button(f.ui.panel, "旅程").click();
+    [...f.ui.panel.querySelectorAll<HTMLButtonElement>(".trip-day-tabs [role=tab]")].find((tab) => tab.textContent === "日時未定")!.click();
+    const other = createTrip("22222222-2222-4222-8222-222222222222", "別の旅", placesAt, [placeActivity("other")]);
+    f.controller.attach("two", { getCurrentTrip: () => other }); f.controller.activateSession("two");
+    expect(button(f.ui.panel, "概要").getAttribute("aria-selected")).toBe("true");
+    button(f.ui.panel, "費用").click();
+    f.controller.activateSession("one");
+    expect(button(f.ui.panel, "旅程").getAttribute("aria-selected")).toBe("true");
+    expect([...f.ui.panel.querySelectorAll<HTMLButtonElement>(".trip-day-tabs [role=tab]")].find((tab) => tab.textContent === "日時未定")?.getAttribute("aria-selected")).toBe("true");
+    f.controller.activateSession("two"); expect(button(f.ui.panel, "費用").getAttribute("aria-selected")).toBe("true");
   });
 });
