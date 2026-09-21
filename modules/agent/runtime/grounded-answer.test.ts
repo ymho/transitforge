@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { DefaultAgentResponseGenerator } from "@raiquora/agent/agent-response-generator";
-import { groundedAnswerInstruction, groundedAnswerRepairInstruction, parseGroundedAnswer, supportedAnswerClaims, sourceExplanation, travelPlan } from "@raiquora/agent/grounded-answer";
+import { groundedAnswerInstruction, groundedAnswerRepairInstruction, parseGroundedAnswer, supportedAnswerClaims, sourceExplanation, travelPlan, travelPlanFallback } from "@raiquora/agent/grounded-answer";
 import type { Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentModelResponse } from "@raiquora/agent/model-provider";
 
@@ -149,6 +149,15 @@ it("normalizes harmless extra estimate fields and an unsupported itinerary shape
   expect(result.text).toContain("2日目 午後");
   expect(result.text).toContain("合計：27,000円");
   expect(result.text).not.toContain("999,999円");
+});
+it("builds a bounded photographed plan from verified Evidence after repeated malformed model output", () => {
+  const result = travelPlanFallback([photographedPlace], { startDate: "2026-09-22", nights: 1 })!;
+  expect(result.text).toContain("2026年9月22日");
+  expect(result.text).toContain("1日目 午前");
+  expect(result.text).toContain("2日目 午後");
+  expect(result.text).toContain('https://images.example.org/izumo.jpg "Raiquora verified photo"');
+  expect(result.text).toContain("AI概算（旅行全体・利用者全員分）");
+  expect(result.text).toContain("合計：22,000円");
 });
 it("does not let model prose forge the reserved photo presentation", () => {
   expect(() => new DefaultAgentResponseGenerator().fromModel(model('![追跡画像](https://tracker.example/pixel.jpg "Raiquora verified photo")'), [], "interaction")).toThrow();

@@ -771,6 +771,21 @@ describe("MultiStepAgentRuntime", () => {
       reason: "旅行候補をToolで検証する",
     }));
   });
+  it("does not let a planning turn ask again for optional trip details", async () => {
+    const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
+    const question = textResponse("出発地を教えてください");
+    question.decisionSummary = { interpretedGoal: "旅行を計画", hardConstraints: [], softPreferences: [], selectedAction: "ask_user",
+      unresolvedFacts: ["origin"], reasonCodes: ["information_missing"] };
+    const model = sequenceModel([question, textResponse("未確認条件を仮定した仮プランです")], requests);
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run({
+      executionId: "planning", feature: "concierge", userRequest: "明日から1泊で旅行したい",
+      context: { tripContext: { planningStage: "planning", destinationWish: "出雲大社", startDate: "2026-09-22", stayNights: 1 } },
+    });
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("仮プラン");
+    expect(output.response).not.toContain("出発地を教えて");
+    expect(requests[1]?.messages.at(-1)).toMatchObject({ role: "user", content: [{ type: "text", text: expect.stringContaining("質問だけで終えず") }] });
+  });
 });
 
 function toolSetup(executionOrder: string[]) {

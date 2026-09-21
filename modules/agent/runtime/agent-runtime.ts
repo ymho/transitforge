@@ -1,6 +1,6 @@
 import { AgentTraceRecorder } from "./agent-trace";
 import { invalidResponseContract, responseContractRepairInstruction } from "./response-contract";
-import { groundedAnswerInstruction, groundedAnswerRepairInstruction } from "./grounded-answer";
+import { groundedAnswerInstruction, groundedAnswerRepairInstruction, travelPlanFallback } from "./grounded-answer";
 import type {
   AgentModelContent,
   AgentModelClass,
@@ -301,7 +301,21 @@ export class MultiStepAgentRuntime {
           );
           continue;
         }
-        const finalResponseDecision = this.dependencies.finalResponsePolicy?.(
+        const planningStage = request.context?.tripContext?.planningStage;
+        const planningTurn = request.feature === "concierge" && (planningStage === "planning" || planningStage === "inspiration");
+        const sourceEvidence = evidence.filter((item) => typeof item.facts.sourceExcerpt === "string" &&
+          item.facts.status === "available" && item.facts.freshness === "fresh");
+        const hasPlacePhoto = evidence.some((item) => typeof item.facts.imageUrl === "string" &&
+          typeof item.facts.imageSourceUrl === "string" && typeof item.facts.imageAttribution === "string");
+        const placePhotoAvailable = modelTools.some(({ name }) => name === "search_place_media");
+        const planningGuard = planningTurn && modelResponse.decisionSummary?.selectedAction === "ask_user"
+          ? { accepted: false, reason: "planning_progress_required", instruction:
+            "この旅行相談は質問だけで終えず、未確認条件を仮定として明記して具体案へ進めてください。必要な場所情報と写真はToolで調査してください。" }
+          : planningTurn && sourceEvidence.length > 0 && !hasPlacePhoto && placePhotoAvailable
+            ? { accepted: false, reason: "place_photo_required", instruction:
+              "旅行先の資料は確認済みですが代表写真がありません。最終回答の前にsearch_place_mediaで各候補の写真を取得してください。" }
+            : undefined;
+        const finalResponseDecision = planningGuard ?? this.dependencies.finalResponsePolicy?.(
           modelResponse,
           request,
         );
@@ -354,7 +368,13 @@ export class MultiStepAgentRuntime {
             trace.replanDecided(true, "invalid_response_format", decisionBoundary);
             continue;
           }
-          return this.failureResult(trace, evidence, startedAt, "invalid_response_format");
+          const fallback = planningTurn ? travelPlanFallback(evidence, {
+            ...(typeof request.context?.tripContext?.startDate === "string" ? { startDate: request.context.tripContext.startDate } : {}),
+            ...(typeof request.context?.tripContext?.stayNights === "number" ? { nights: request.context.tripContext.stayNights } : {}),
+            maximumCandidates: planningStage === "inspiration" ? 3 : 1,
+          }) : undefined;
+          if (fallback) generated = fallback;
+          else return this.failureResult(trace, evidence, startedAt, "invalid_response_format");
         }
         trace.decisionRecorded({ ...decisionForAnswer(
           modelResponse,

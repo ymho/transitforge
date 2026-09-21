@@ -153,6 +153,35 @@ const costLabels = { transport: "交通", accommodation: "宿泊", sightseeing: 
 type CostCategory = keyof typeof costLabels;
 interface ParsedEstimate { currency: "JPY"; partySize: number; nights: number; originTravel: "included" | "excluded"; lodgingClass: "economy" | "standard" | "premium"; items: Record<CostCategory, number> }
 
+export interface TravelPlanFallbackOptions {
+  startDate?: string;
+  nights?: number;
+  maximumCandidates?: number;
+}
+
+/** Last-resort projection when a planning response remains malformed after one repair.
+ * It selects only verified source/photo Evidence and labels bounded defaults as an AI estimate. */
+export function travelPlanFallback(evidence: readonly Evidence[], options: TravelPlanFallbackOptions = {}): AgentGeneratedResponse | undefined {
+  const nights = Number.isInteger(options.nights) && Number(options.nights) >= 0 && Number(options.nights) <= 30 ? Number(options.nights) : 1;
+  const maximumCandidates = Number.isInteger(options.maximumCandidates) && Number(options.maximumCandidates) >= 1
+    ? Math.min(3, Number(options.maximumCandidates)) : 1;
+  const sources = evidence.filter((item) => typeof item.facts.sourceExcerpt === "string" && typeof item.facts.sourceUrl === "string" &&
+    item.facts.status === "available" && item.facts.freshness === "fresh" && validSourceQuote(item, String(item.facts.sourceExcerpt))).slice(0, maximumCandidates);
+  if (!sources.length) return undefined;
+  return travelPlan(JSON.stringify({
+    kind: "travel-plan",
+    startDate: typeof options.startDate === "string" && calendarDate(options.startDate) ? options.startDate : null,
+    candidates: sources.map((source) => ({
+      evidenceId: source.id,
+      quote: String(source.facts.sourceExcerpt).slice(0, 400),
+      estimate: {
+        currency: "JPY", partySize: 1, nights, originTravel: "excluded", lodgingClass: "standard",
+        items: { transport: 0, accommodation: 12_000 * nights, sightseeing: 1_000 * (nights + 1), food: 4_000 * (nights + 1) },
+      },
+    })),
+  }), evidence);
+}
+
 /** A bounded planning projection: source facts and photos stay Evidence-bound, while itinerary and cost are explicitly labelled proposals. */
 export function travelPlan(text: string, evidence: readonly Evidence[]): AgentGeneratedResponse | undefined {
   const value: unknown = JSON.parse(text);
