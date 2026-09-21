@@ -106,17 +106,19 @@ export function compareAgentModelRouting(
   const costImproved = measurableCostGain &&
     (changes.modelCalls === null || changes.modelCalls <= 0) &&
     (changes.toolCalls === null || changes.toolCalls <= 0);
+  const allCandidateCasesPassed = candidate.passedCaseCount === candidate.caseCount;
   const reasons: string[] = [];
   if (!sameBenchmark) reasons.push("同じBenchmarkではない");
   if (!qualityMaintained) reasons.push("Agent品質を維持できていない");
   if (!qualityImproved && !costImproved) reasons.push("品質またはlatency/tokenの明確な改善を確認できない");
+  if (!allCandidateCasesPassed) reasons.push("候補モデルが全評価ケースを完遂していない");
   return {
     schemaVersion: "agent-model-routing-comparison-v3",
     sameBenchmark,
     qualityMaintained,
     qualityImproved,
     costImproved,
-    productionRoutingRecommended: sameBenchmark && qualityMaintained && (qualityImproved || costImproved),
+    productionRoutingRecommended: sameBenchmark && allCandidateCasesPassed && qualityMaintained && (qualityImproved || costImproved),
     changes,
     reasons,
   };

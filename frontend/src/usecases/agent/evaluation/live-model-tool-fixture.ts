@@ -89,6 +89,19 @@ export function liveEvaluationAccommodationOutput(
 
 export const liveEvaluationToolEvidence: ToolEvidenceMapper = externalTravelEvidence;
 
+/** Count distinct displayable images in the same shapes returned by production Providers. */
+export function liveEvaluationPhotoCount(outputs: readonly unknown[]): number {
+  const urls = new Set<string>();
+  const visit = (value: unknown, key = "") => {
+    if (typeof value === "string" && (key === "url" || /photoUrl|imageUrl/u.test(key)) &&
+        value.startsWith("https://") && /image|photo|\.jpe?g$|\.png$|\.webp$/iu.test(value)) urls.add(value);
+    else if (Array.isArray(value)) value.forEach((item) => visit(item, key));
+    else if (isRecord(value)) Object.entries(value).forEach(([childKey, child]) => visit(child, childKey));
+  };
+  outputs.forEach((output) => visit(output));
+  return urls.size;
+}
+
 function information(
   data: Record<string, unknown>,
   places: readonly LiveEvaluationPlace[],
@@ -112,4 +125,8 @@ function information(
       confidence: "observed",
     })),
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

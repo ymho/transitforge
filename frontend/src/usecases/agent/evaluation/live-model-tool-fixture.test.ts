@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   liveEvaluationAccommodationOutput,
+  liveEvaluationPhotoCount,
   liveEvaluationToolEvidence,
   liveEvaluationTravelToolOutput,
   type LiveEvaluationPlace,
@@ -54,5 +55,17 @@ describe("live model evaluation Tool fixture", () => {
       id: "accommodation:live-eval:izumo-1",
       facts: { resultKind: "accommodation", availability: "unknown" },
     });
+  });
+
+  it("counts production image.url and legacy imageUrl shapes without duplicates", () => {
+    const placeOutput = liveEvaluationTravelToolOutput({
+      name: "search_place_media", query: { query: "出雲大社" }, places, retrievedAt,
+    });
+    expect(liveEvaluationPhotoCount([
+      placeOutput,
+      { accommodation: { imageUrl: "https://images.example.com/hotel.jpg" } },
+      { duplicate: { image: { url: places[0]?.photoUrl } } },
+      { source: { url: places[0]?.sourceUrl } },
+    ])).toBe(2);
   });
 });

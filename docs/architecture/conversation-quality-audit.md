@@ -78,6 +78,8 @@ Issue #474のモデル比較では同じ複数turnシナリオをbaseline/candid
 このfixture追加だけでは行わず、実Bedrock比較のmodel ID・反復数・latency・token・費用を記録して決める。
 合成Provider結果も本番Toolと同じEnvelopeへ入れ、本番の`externalTravelEvidence`でEvidenceへ変換する。
 Evidenceを生成しない簡略fixtureは、モデルが選んだ実在しないEvidence IDとして正常回答まで拒否するため使わない。
+写真数も本番の`image.url` / `images[].url`を数え、旧fixture専用keyへ依存しない。相対指標が改善しても
+候補が全評価ケースを完遂しない限り、本番routingへの切替は推薦しない。
 
 追加の実Feedbackでは「出雲大社に明日から1泊」と目的地・相対日付・泊数が揃っているのに、明日の日付、
 Profile由来の出発駅、予算、自然アクティビティを質問票のように一括確認していた。このケースを
