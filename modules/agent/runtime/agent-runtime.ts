@@ -206,10 +206,13 @@ export class MultiStepAgentRuntime {
       modelCalls += 1;
       trace.modelCompleted(modelResponse.metadata, modelCallId);
       const used = modelResponse.decisionSummary?.usedEvidenceIds ?? modelResponse.declaredEvidenceIds;
-      const invalidReferences = modelResponse.invalidUsedEvidenceIds || used !== undefined &&
-        (!validUsedEvidenceIds(used) || used.some((id) => !evidence.some((e) => e.id === id)));
+      const structuredPresentation = hasStructuredPresentation(modelResponse);
+      // A structured presenter validates every source/photo reference itself. A malformed
+      // decision-summary must not discard an otherwise valid, fully Evidence-bound payload.
+      const invalidReferences = !structuredPresentation && (modelResponse.invalidUsedEvidenceIds || used !== undefined &&
+        (!validUsedEvidenceIds(used) || used.some((id) => !evidence.some((e) => e.id === id))));
       const invalidContract = invalidReferences ? "invalid_used_evidence_ids" :
-        invalidResponseContract(modelResponse, (modelRequest.tools ?? []).map((tool) => tool.name));
+        structuredPresentation ? undefined : invalidResponseContract(modelResponse, (modelRequest.tools ?? []).map((tool) => tool.name));
       if (invalidContract) {
         if (!correctedResponseContract && !finalResponseRequired) {
           correctedResponseContract = true;
@@ -603,6 +606,18 @@ export class MultiStepAgentRuntime {
     trace.taskCompleted("failed", elapsed(startedAt, this.now), reason);
     return result("failed", response, evidence, [], trace);
   }
+}
+
+function hasStructuredPresentation(response: AgentModelResponse): boolean {
+  const text = response.message.content.filter((item): item is Extract<AgentModelContent, { type: "text" }> => item.type === "text")
+    .map(({ text }) => text).join("\n");
+  const start = text.indexOf("{"), end = text.lastIndexOf("}");
+  if (start < 0 || end < start) return false;
+  try {
+    const value: unknown = JSON.parse(text.slice(start, end + 1));
+    return typeof value === "object" && value !== null && "kind" in value &&
+      (value.kind === "source-explanation" || value.kind === "travel-plan");
+  } catch { return false; }
 }
 
 function toolCallSignature(
