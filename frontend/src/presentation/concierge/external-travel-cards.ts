@@ -27,44 +27,63 @@ function appendPlaceInspiration(
   container: HTMLElement,
   places: ViewerAgentExternalResponse["external"]["places"],
 ): void {
-  const inspiration = placeInspirationImage(places);
-  if (!inspiration) return;
+  const inspirations = placeInspirationImages(places);
+  if (!inspirations.length) return;
   const gallery = document.createElement("section");
   gallery.className = "external-place-inspiration";
-  const image = document.createElement("img");
-  image.src = inspiration.imageUrl;
-  image.alt = inspiration.placeName;
-  image.loading = "lazy";
-  gallery.append(
-    image,
-    createPhotoSourceDisclosure({
+  for (const inspiration of inspirations) {
+    const card = document.createElement("figure");
+    card.className = "external-place-inspiration-card";
+    const imageLink = document.createElement("a");
+    imageLink.href = inspiration.sourcePageUrl;
+    imageLink.target = "_blank";
+    imageLink.rel = "noopener noreferrer";
+    const image = document.createElement("img");
+    image.src = inspiration.imageUrl;
+    image.alt = inspiration.placeName;
+    image.loading = "lazy";
+    imageLink.append(image);
+    const caption = document.createElement("figcaption");
+    caption.textContent = inspiration.placeName;
+    card.append(imageLink, caption, createPhotoSourceDisclosure({
       url: inspiration.imageUrl,
       sourcePageUrl: inspiration.sourcePageUrl,
       attribution: inspiration.attribution,
       ...(inspiration.license ? { license: inspiration.license } : {}),
-    }, `${inspiration.placeName}の写真`),
-  );
+    }, `${inspiration.placeName}の写真`));
+    gallery.append(card);
+  }
   container.append(gallery);
 }
 
 export function placeInspirationImage(
   places: ViewerAgentExternalResponse["external"]["places"],
 ): { placeName: string; imageUrl: string; sourcePageUrl: string; attribution: string; license?: string } | undefined {
-  if (places?.status !== "available" || !places.data) return undefined;
+  return placeInspirationImages(places)[0];
+}
+
+export function placeInspirationImages(
+  places: ViewerAgentExternalResponse["external"]["places"],
+): Array<{ placeName: string; imageUrl: string; sourcePageUrl: string; attribution: string; license?: string }> {
+  if (places?.status !== "available" || !places.data) return [];
+  const images: Array<{ placeName: string; imageUrl: string; sourcePageUrl: string; attribution: string; license?: string }> = [];
+  const seenPlaces = new Set<string>();
   for (const place of places.data.places) {
     if (place.image?.hotlinkAllowed !== true) continue;
     const imageUrl = publicHttpsUrl(place.image.url);
     const sourcePageUrl = publicHttpsUrl(place.image.descriptionUrl);
-    if (!imageUrl || !sourcePageUrl) continue;
-    return {
+    if (!imageUrl || !sourcePageUrl || seenPlaces.has(place.providerPlaceId)) continue;
+    seenPlaces.add(place.providerPlaceId);
+    images.push({
       placeName: place.name,
       imageUrl,
       sourcePageUrl,
       attribution: place.image.attribution,
       ...(place.image.license ? { license: place.image.license } : {}),
-    };
+    });
+    if (images.length === 3) break;
   }
-  return undefined;
+  return images;
 }
 
 function publicHttpsUrl(value: string | undefined): string | undefined {

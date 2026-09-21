@@ -28,12 +28,15 @@ describe("Server State Context Loader", () => {
     await f.profiles.update(a, { ...stateProfile(), aiNoteFields: ["budget"] }, null);
     await f.trips.repository.create(a, trip());
     const stateBefore = structuredClone(f.records), tripBefore = structuredClone(f.trips.records);
-    const context = await f.load({ principal: a, conversationId: id, tripId, uiContext: { itemId: "stay" } });
+    const context = await f.load({ principal: a, conversationId: id, tripId, uiContext: { itemId: "stay", calendarDate: "2026-09-21" } });
     expect(context.conversation).toMatchObject({ title: "会話", scope: "trip", summary: "相談", resolvedTopics: ["行先"], pendingTopics: ["日程"],
       messages: [{ role: "user", text: "履歴" }, { role: "assistant", text: "回答" }] });
     expect(context.travelProfile).toEqual(createAgentContextSnapshot({ ...stateProfile(), aiNoteFields: ["budget"] }).profile);
     expect(context.currentTrip).toEqual(createAgentContextSnapshot(undefined, trip()).trip);
     expect(context.featureContext?.uiFocus).toMatchObject({ itemId: "stay", item: { itemId: "stay", summary: "宿泊" } });
+    expect(context.featureContext?.calendarDate).toBe("2026-09-21");
+    expect(buildAgentDecisionContext({ executionId: "date", feature: "concierge", userRequest: "明日から", context }, []).featureContext.relativeDates)
+      .toEqual({ today: "2026-09-21", tomorrow: "2026-09-22", dayAfterTomorrow: "2026-09-23" });
     expect(f.records).toEqual(stateBefore); expect(f.trips.records).toEqual(tripBefore);
     expect(JSON.stringify(context)).not.toContain(a.subject);
   });
@@ -82,6 +85,7 @@ describe("Server State Context Loader", () => {
       expect(context.featureContext).toBeUndefined(); expect(JSON.stringify(context)).not.toMatch(/private-tab|private-camera|unknown/);
     }
     await expect(f.load({ principal: a, tripId, uiContext: { itemId: "x".repeat(201) } })).rejects.toMatchObject({ code: "invalid-input" });
+    await expect(f.load({ principal: a, tripId, uiContext: { calendarDate: "2026-02-30" } })).rejects.toMatchObject({ code: "invalid-input" });
   });
   it("seeks only the newest 12 rows and bounds long history while retaining summary/topics", async () => {
     const f = setup(); await f.conversations.create(a, { ...metadata(), summary: "古い会話の要約", resolvedTopics: ["行先"] });

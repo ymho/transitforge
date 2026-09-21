@@ -122,7 +122,7 @@ describe("Agent Evaluation Framework", () => {
 
   it("rejects schema typos and observations outside the dataset", () => {
     expect(() => parseAgentEvaluationDataset({
-      schemaVersion: "agent-eval-dataset-v3",
+      schemaVersion: "agent-eval-dataset-v4",
       cases: [],
       unexpected: true,
     })).toThrow("schemaVersion");

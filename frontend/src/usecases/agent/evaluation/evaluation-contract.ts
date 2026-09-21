@@ -1,7 +1,7 @@
 import type { AgentRuntimeFeature, AgentRuntimeStatus } from "@raiquora/agent/runtime-contract";
 import type { TravelProgressReport, TravelProgressScenario } from "./travel-progress-evaluation";
 
-export const agentEvaluationDatasetSchemaVersion = "agent-eval-dataset-v3";
+export const agentEvaluationDatasetSchemaVersion = "agent-eval-dataset-v4";
 export const agentEvaluationObservationSchemaVersion = "agent-eval-observations-v2";
 
 export const agentEvaluationCategories = [
@@ -19,6 +19,29 @@ export interface AgentEvaluationDataset {
   schemaVersion: typeof agentEvaluationDatasetSchemaVersion;
   cases: AgentEvaluationCase[];
   travelProgressScenarios?: TravelProgressScenario[];
+  conversationQualityScenarios?: ConversationQualityScenario[];
+}
+
+export interface ConversationQualityScenario {
+  id: string;
+  name: string;
+  fixedNow: string;
+  turns: Array<{ role: "user"; text: string }>;
+  tags: string[];
+  expected: {
+    destination:
+      | { mode: "specified"; name: string; municipality: string; forbiddenMunicipalities: string[] }
+      | { mode: "discovery"; minimumCandidates: number; maximumCandidates: number; recommendationScope: string; forbiddenMainCandidates: string[] };
+    relativeDates: Array<{ sourceText: string; calendarDate: string }>;
+    forbiddenRepeatedQuestions: string[];
+    assumptions: { allowed: string[]; mustBeExplicit: boolean; mustRemainUnconfirmed: boolean };
+    requiredFinalCapabilities: string[];
+    maximumTurnsToStarterPlan: number;
+    minimumPlacePhotos: number;
+    maximumAskOnlyStreak: number;
+    maximumQuestionsPerAssistantTurn: number;
+    forbiddenProfilePromotions: string[];
+  };
 }
 
 export interface AgentEvaluationCase {

@@ -17,7 +17,7 @@ export class AgentStreamError extends Error {}
 
 /** POST/fetch, one run only. No automatic reconnect/retry and no token in the URL. */
 export async function consumeAgentStream(options: {
-  token: string; request: { userRequest: string; conversationId?: string; turnId?: string; tripId?: string; uiContext?: { itemId?: string } };
+  token: string; request: { userRequest: string; conversationId?: string; turnId?: string; tripId?: string; uiContext?: { itemId?: string; calendarDate?: string } };
   signal: AbortSignal; isCurrent: () => boolean; onEvent: (event: AgentTurnEvent) => void;
   measurement: StreamMeasurement; endpoint?: string; fetcher?: typeof fetch; now?: () => number;
   idleMs?: number; deadlineMs?: number;

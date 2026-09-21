@@ -10,7 +10,7 @@ import {
 const baseline: AgentModelRoutingRun = {
   schemaVersion: "agent-model-routing-run-v2",
   strategy: "single-model",
-  datasetSchemaVersion: "agent-eval-dataset-v3",
+  datasetSchemaVersion: "agent-eval-dataset-v4",
   caseCount: 42,
   repetitions: 1,
   passedCaseCount: 42,
@@ -53,6 +53,31 @@ describe("Agent model routing experiment", () => {
     expect(comparison.reasons).toContain("Agent品質を維持できていない");
   });
 
+  it("recommends a slower upper-tier model when it improves quality without regressing any metric", () => {
+    const comparison = compareAgentModelRouting({ ...baseline, passedCaseCount: 41, quality: {
+      ...baseline.quality, taskCompletion: 0.98,
+    } }, {
+      ...baseline,
+      strategy: "decision-upper-tier",
+      runtime: { ...baseline.runtime, totalLatencyMs: 160_000, inputTokens: 70_000, outputTokens: 14_000 },
+    });
+
+    expect(comparison).toMatchObject({
+      qualityMaintained: true,
+      qualityImproved: true,
+      costImproved: false,
+      productionRoutingRecommended: true,
+    });
+  });
+
+  it("does not treat a sub-threshold aggregate fluctuation as a quality improvement", () => {
+    const comparison = compareAgentModelRouting({ ...baseline, quality: {
+      ...baseline.quality, taskCompletion: 0.999,
+    } }, baseline);
+
+    expect(comparison).toMatchObject({ qualityImproved: false, costImproved: false, productionRoutingRecommended: false });
+  });
+
   it("rejects malformed measurement artifacts", () => {
     expect(parseAgentModelRoutingRun(baseline)).toEqual(baseline);
     expect(() => parseAgentModelRoutingRun({ ...baseline, caseCount: -1 })).toThrow("不正");
@@ -61,7 +86,7 @@ describe("Agent model routing experiment", () => {
   it("aggregates latency tokens and call counts from bounded traces", () => {
     const report = {
       schemaVersion: "agent-eval-report-v4" as const,
-      datasetSchemaVersion: "agent-eval-dataset-v3" as const,
+      datasetSchemaVersion: "agent-eval-dataset-v4" as const,
       caseCount: 1,
       passedCaseCount: 1,
       metrics: baseline.quality,
@@ -90,7 +115,7 @@ describe("Agent model routing experiment", () => {
   it("aggregates repeated benchmark traces and records the repetition count", () => {
     const report = {
       schemaVersion: "agent-eval-report-v4" as const,
-      datasetSchemaVersion: "agent-eval-dataset-v3" as const,
+      datasetSchemaVersion: "agent-eval-dataset-v4" as const,
       caseCount: 1,
       passedCaseCount: 1,
       metrics: baseline.quality,

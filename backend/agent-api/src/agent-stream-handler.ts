@@ -96,10 +96,12 @@ function parseInput(request: StreamRequest, conversationTurns = false): Omit<Con
   try { value = JSON.parse(request.body); } catch { throw new InputError(400); }
   if (!record(value) || Object.keys(value).some(k => !["userRequest", "conversationId", "tripId", "uiContext", ...(conversationTurns ? ["turnId"] : [])].includes(k)) ||
       typeof value.userRequest !== "string" || !value.userRequest.trim() || value.userRequest.length > 8_000) throw new InputError(400);
-  if (value.uiContext !== undefined && (!record(value.uiContext) || Object.keys(value.uiContext).some(k => k !== "itemId"))) throw new InputError(400);
+  if (value.uiContext !== undefined && (!record(value.uiContext) || Object.keys(value.uiContext).some(k => !["itemId", "calendarDate"].includes(k)))) throw new InputError(400);
   for (const ref of [value.conversationId, value.tripId, record(value.uiContext) ? value.uiContext.itemId : undefined]) {
     if (ref !== undefined && (typeof ref !== "string" || !ref.trim() || ref.length > 200 || /[\u0000-\u001f\u007f]/u.test(ref))) throw new InputError(400);
   }
+  const calendarDate = record(value.uiContext) ? value.uiContext.calendarDate : undefined;
+  if (calendarDate !== undefined && (typeof calendarDate !== "string" || !validCalendarDate(calendarDate))) throw new InputError(400);
   if (conversationTurns) {
     try { stateId(value.conversationId); stateId(value.turnId); if (value.tripId !== undefined) stateId(value.tripId); }
     catch { throw new InputError(400); }
@@ -107,6 +109,11 @@ function parseInput(request: StreamRequest, conversationTurns = false): Omit<Con
   return value as unknown as Omit<ConversationTurnInput, "principal">;
 }
 function record(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
+function validCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
 
 export interface StreamLog {
   event: "request_started" | "stream_started" | "final_sent" | "completed" | "error" | "rejected" | "disconnected";

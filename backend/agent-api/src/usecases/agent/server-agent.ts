@@ -15,7 +15,7 @@ export interface ServerAgentTurn {
   userRequest: string;
   conversationId?: string;
   tripId?: string;
-  uiContext?: { itemId?: string };
+  uiContext?: { itemId?: string; calendarDate?: string };
 }
 export interface ServerAgentScope extends ServerAgentTurn { executionId: string }
 export interface ServerAgentDependencies {
@@ -37,11 +37,15 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
     for (const value of [input.conversationId, input.tripId, input.uiContext?.itemId]) {
       if (value !== undefined && (typeof value !== "string" || !value.trim() || value.length > 200 || /[\u0000-\u001f\u007f]/u.test(value))) throw new Error("Invalid Agent reference");
     }
+    if (input.uiContext?.calendarDate !== undefined && !calendarDate(input.uiContext.calendarDate)) throw new Error("Invalid calendar date");
     const scope: ServerAgentScope = {
       principal: { subject: input.principal.subject, identity: { ...input.principal.identity }, scopes: [...input.principal.scopes] }, userRequest: input.userRequest,
       ...(input.conversationId ? { conversationId: input.conversationId } : {}),
       ...(input.tripId ? { tripId: input.tripId } : {}),
-      ...(input.uiContext?.itemId ? { uiContext: { itemId: input.uiContext.itemId } } : {}),
+      ...(input.uiContext?.itemId || input.uiContext?.calendarDate ? { uiContext: {
+        ...(input.uiContext.itemId ? { itemId: input.uiContext.itemId } : {}),
+        ...(input.uiContext.calendarDate ? { calendarDate: input.uiContext.calendarDate } : {}),
+      } } : {}),
       executionId: dependencies.newExecutionId(),
     };
     const context = await dependencies.loadContext?.(scope);
@@ -53,4 +57,10 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
     }).run({ executionId: scope.executionId, feature: "concierge", userRequest: scope.userRequest,
       ...(context ? { context, omitTraceContent: true } : {}) });
   } };
+}
+
+function calendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }

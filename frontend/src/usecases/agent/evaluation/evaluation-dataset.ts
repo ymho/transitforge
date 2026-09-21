@@ -6,6 +6,7 @@ import {
   type AgentEvaluationExpectation,
   type AgentEvaluationObservation,
   type AgentEvaluationObservationSet,
+  type ConversationQualityScenario,
 } from "./evaluation-contract";
 import type { TravelProgressScenario } from "./travel-progress-evaluation";
 
@@ -19,7 +20,7 @@ const knownFeatures = new Set([
 const knownStatuses = new Set(["completed", "follow_up", "limit_reached", "failed"]);
 
 export function parseAgentEvaluationDataset(value: unknown): AgentEvaluationDataset {
-  if (!isRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "cases", "travelProgressScenarios"]) ||
+  if (!isRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "cases", "travelProgressScenarios", "conversationQualityScenarios"]) ||
     value.schemaVersion !== agentEvaluationDatasetSchemaVersion) {
     throw new Error("Agent Eval datasetのschemaVersionが不正です");
   }
@@ -29,8 +30,47 @@ export function parseAgentEvaluationDataset(value: unknown): AgentEvaluationData
   const cases = value.cases.map(parseCase);
   ensureUnique(cases.map(({ id }) => id), "Agent Eval case ID");
   const travelProgressScenarios = value.travelProgressScenarios === undefined ? undefined : parseTravelProgressScenarios(value.travelProgressScenarios);
-  ensureUnique([...cases.map(({ id }) => id), ...(travelProgressScenarios ?? []).map(({ id }) => id)], "Agent Eval case ID");
-  return { schemaVersion: value.schemaVersion, cases, ...(travelProgressScenarios ? { travelProgressScenarios } : {}) };
+  const conversationQualityScenarios = value.conversationQualityScenarios === undefined ? undefined : parseConversationQualityScenarios(value.conversationQualityScenarios);
+  ensureUnique([...cases.map(({ id }) => id), ...(travelProgressScenarios ?? []).map(({ id }) => id),
+    ...(conversationQualityScenarios ?? []).map(({ id }) => id)], "Agent Eval case ID");
+  return { schemaVersion: value.schemaVersion, cases, ...(travelProgressScenarios ? { travelProgressScenarios } : {}),
+    ...(conversationQualityScenarios ? { conversationQualityScenarios } : {}) };
+}
+
+function parseConversationQualityScenarios(value: unknown): ConversationQualityScenario[] {
+  if (!Array.isArray(value) || !value.length || value.length > 50) throw new Error("Conversation Quality scenarios must contain 1..50 cases");
+  return value.map((scenario) => {
+    if (!isRecord(scenario) || !hasOnlyKeys(scenario, ["id", "name", "fixedNow", "turns", "tags", "expected"]) ||
+        !identifier(scenario.id) || !text(scenario.name, 160) || !instant(scenario.fixedNow) ||
+        !Array.isArray(scenario.turns) || scenario.turns.length < 1 || scenario.turns.length > 12 ||
+        scenario.turns.some((turn) => !isRecord(turn) || !hasOnlyKeys(turn, ["role", "text"]) || turn.role !== "user" || !text(turn.text, 2_000)) ||
+        !stringList(scenario.tags, 12) || !isRecord(scenario.expected)) throw new Error("Invalid Conversation Quality scenario");
+    const expected = scenario.expected;
+    if (!hasOnlyKeys(expected, ["destination", "relativeDates", "forbiddenRepeatedQuestions", "assumptions", "requiredFinalCapabilities", "maximumTurnsToStarterPlan", "minimumPlacePhotos", "maximumAskOnlyStreak", "maximumQuestionsPerAssistantTurn", "forbiddenProfilePromotions"]) ||
+        !validQualityDestination(expected.destination) ||
+        !Array.isArray(expected.relativeDates) || expected.relativeDates.length > 10 || expected.relativeDates.some((date) =>
+          !isRecord(date) || !hasOnlyKeys(date, ["sourceText", "calendarDate"]) || !text(date.sourceText, 160) || !calendarDate(date.calendarDate)) ||
+        !stringList(expected.forbiddenRepeatedQuestions, 20) || !isRecord(expected.assumptions) ||
+        !hasOnlyKeys(expected.assumptions, ["allowed", "mustBeExplicit", "mustRemainUnconfirmed"]) || !stringList(expected.assumptions.allowed, 20) ||
+        typeof expected.assumptions.mustBeExplicit !== "boolean" || typeof expected.assumptions.mustRemainUnconfirmed !== "boolean" ||
+        !stringList(expected.requiredFinalCapabilities, 20) || !positiveInteger(expected.maximumTurnsToStarterPlan, 12) ||
+        !positiveInteger(expected.minimumPlacePhotos, 8) || !nonNegativeInteger(expected.maximumAskOnlyStreak, 12) ||
+        !nonNegativeInteger(expected.maximumQuestionsPerAssistantTurn, 10) || !stringList(expected.forbiddenProfilePromotions, 20)) {
+      throw new Error("Invalid Conversation Quality expectation");
+    }
+    return structuredClone(scenario) as unknown as ConversationQualityScenario;
+  });
+}
+
+function validQualityDestination(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (value.mode === "specified") return hasOnlyKeys(value, ["mode", "name", "municipality", "forbiddenMunicipalities"]) &&
+    text(value.name, 160) && text(value.municipality, 160) && stringList(value.forbiddenMunicipalities, 10);
+  if (value.mode === "discovery") return hasOnlyKeys(value, ["mode", "minimumCandidates", "maximumCandidates", "recommendationScope", "forbiddenMainCandidates"]) &&
+    positiveInteger(value.minimumCandidates, 5) && positiveInteger(value.maximumCandidates, 5) &&
+    Number(value.maximumCandidates) >= Number(value.minimumCandidates) && text(value.recommendationScope, 160) &&
+    stringList(value.forbiddenMainCandidates, 20);
+  return false;
 }
 
 function parseTravelProgressScenarios(value: unknown): TravelProgressScenario[] {
@@ -176,6 +216,22 @@ function stringList(value: unknown, maximum: number): value is string[] {
 
 function identifier(value: unknown): value is string {
   return text(value, 200) && value.trim() === value;
+}
+
+function instant(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2})$/u.test(value) && !Number.isNaN(Date.parse(value));
+}
+
+function calendarDate(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/u.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+}
+
+function nonNegativeInteger(value: unknown, maximum: number): value is number {
+  return Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= maximum;
+}
+
+function positiveInteger(value: unknown, maximum: number): value is number {
+  return Number.isSafeInteger(value) && Number(value) >= 1 && Number(value) <= maximum;
 }
 
 function text(value: unknown, maximum: number): value is string {

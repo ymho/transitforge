@@ -20,9 +20,10 @@ export interface AgentModelRoutingRun {
 }
 
 export interface AgentModelRoutingComparison {
-  schemaVersion: "agent-model-routing-comparison-v2";
+  schemaVersion: "agent-model-routing-comparison-v3";
   sameBenchmark: boolean;
   qualityMaintained: boolean;
+  qualityImproved: boolean;
   costImproved: boolean;
   productionRoutingRecommended: boolean;
   changes: {
@@ -83,6 +84,14 @@ export function compareAgentModelRouting(
     nullableAtLeast(candidate.quality.groundedClaimRate, baseline.quality.groundedClaimRate) &&
     nullableAtMost(candidate.quality.unsupportedClaimRate, baseline.quality.unsupportedClaimRate) &&
     candidate.quality.taskCompletion >= baseline.quality.taskCompletion;
+  const qualityImproved = qualityMaintained && (
+    candidate.passedCaseCount > baseline.passedCaseCount ||
+    clearIncrease(candidate.quality.toolSelectionAccuracy, baseline.quality.toolSelectionAccuracy) ||
+    clearIncrease(candidate.quality.constraintSatisfaction, baseline.quality.constraintSatisfaction) ||
+    nullableClearIncrease(candidate.quality.groundedClaimRate, baseline.quality.groundedClaimRate) ||
+    nullableClearDecrease(candidate.quality.unsupportedClaimRate, baseline.quality.unsupportedClaimRate) ||
+    clearIncrease(candidate.quality.taskCompletion, baseline.quality.taskCompletion)
+  );
   const changes = {
     latency: ratioChange(candidate.runtime.totalLatencyMs, baseline.runtime.totalLatencyMs),
     totalTokens: ratioChange(
@@ -100,13 +109,14 @@ export function compareAgentModelRouting(
   const reasons: string[] = [];
   if (!sameBenchmark) reasons.push("同じBenchmarkではない");
   if (!qualityMaintained) reasons.push("Agent品質を維持できていない");
-  if (!costImproved) reasons.push("latencyまたはtokenの明確な改善を確認できない");
+  if (!qualityImproved && !costImproved) reasons.push("品質またはlatency/tokenの明確な改善を確認できない");
   return {
-    schemaVersion: "agent-model-routing-comparison-v2",
+    schemaVersion: "agent-model-routing-comparison-v3",
     sameBenchmark,
     qualityMaintained,
+    qualityImproved,
     costImproved,
-    productionRoutingRecommended: sameBenchmark && qualityMaintained && costImproved,
+    productionRoutingRecommended: sameBenchmark && qualityMaintained && (qualityImproved || costImproved),
     changes,
     reasons,
   };
@@ -148,6 +158,18 @@ function nullableAtLeast(value: number | null, baseline: number | null): boolean
 
 function nullableAtMost(value: number | null, baseline: number | null): boolean {
   return baseline === null ? value === null : value !== null && value <= baseline;
+}
+
+function clearIncrease(value: number, baseline: number): boolean {
+  return value - baseline >= 0.01;
+}
+
+function nullableClearIncrease(value: number | null, baseline: number | null): boolean {
+  return baseline !== null && value !== null && clearIncrease(value, baseline);
+}
+
+function nullableClearDecrease(value: number | null, baseline: number | null): boolean {
+  return baseline !== null && value !== null && baseline - value >= 0.01;
 }
 
 function unit(value: unknown): value is number {

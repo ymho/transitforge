@@ -6,11 +6,12 @@ import { stateDynamoFixture, conversationId, secondId } from "./adapters/state-d
 import { tripDynamoFixture } from "./adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, issuer, token } from "./adapters/cognito-token.fixture.js";
 import type { StreamWriter } from "./ports/agent-stream-transport.js";
+import type { ConversationModel } from "./ports/conversation-model.js";
 
 function setup(enabled = true, maxExecutionMs?: number) {
   const { verifier } = cognitoTokenFixture();
   const verify = vi.spyOn(verifier, "verify");
-  const model = { converse: vi.fn(async () => ({ stopReason: "end_turn" as const, metadata: { modelId: "fake", latencyMs: 0 },
+  const model = { converse: vi.fn<ConversationModel["converse"]>(async () => ({ stopReason: "end_turn" as const, metadata: { modelId: "fake", latencyMs: 0 },
     message: { role: "assistant" as const, content: [{ text: "確認したい日程を教えてください。" }] } })) };
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
   const createApplication = vi.fn((executionId: string) => createProductionConversationAgent({
@@ -65,6 +66,24 @@ it("runs the real Server Agent once, with correlated safe logs and no request/st
   }
   expect(s.log.mock.calls.at(-1)?.[0].executionId).toBe("execution-1");
   expect(JSON.stringify(s.log.mock.calls)).not.toMatch(/PRIVATE|Bearer|確認|identity-v1|profile|toolUse/i);
+});
+it("validates the Browser calendar date and exposes calculated relative dates to the model", async () => {
+  const s = setup();
+  s.request.body = JSON.stringify({ userRequest: "明日から", conversationId, turnId: secondId,
+    uiContext: { calendarDate: "2026-09-21" } });
+  await s.handle(s.request, s.writer);
+  const request = s.model.converse.mock.calls[0][0];
+  const contextText = request.messages[0].content.find(block => "text" in block)?.text;
+  expect(contextText).toContain('"calendarDate":"2026-09-21"');
+  expect(contextText).toContain('"tomorrow":"2026-09-22"');
+
+  for (const calendarDate of ["2026-02-30", "2026-99-99"]) {
+    const invalid = setup(); invalid.request.body = JSON.stringify({ userRequest: "明日から", conversationId, turnId: secondId,
+      uiContext: { calendarDate } });
+    await invalid.handle(invalid.request, invalid.writer);
+    expect(invalid.writer.start).toHaveBeenCalledWith(400, expect.anything());
+    expect(invalid.createApplication).not.toHaveBeenCalled();
+  }
 });
 it("keeps 10 second heartbeats during Application work and records errors without their cause", async () => {
   vi.useFakeTimers(); const s = setup();

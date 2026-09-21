@@ -29,6 +29,16 @@ Runtimeは明示的に注入されたmodel classを全model callへ渡せるが 
 本番routingを別PRで有効化する。fixtureや推測値だけでは有効化しない。Multi-Agentや常時Reflectionは
 導入しない。
 
+### 2026-09-21 品質目的の上位model比較
+
+上記の採用条件は同等品質でのコスト最適化を対象にしたものだった。Issue #474で上位modelを比較する際は、
+同一Benchmark・同一反復数で既存の各品質指標を一つも退行させず、合格case数またはいずれかの品質指標を
+改善した候補も採用候補にできる。latency/tokenの10%以上改善は、品質が同等な候補を採用する条件として維持する。
+
+`productionRoutingRecommended`は「自動で本番設定を変更してよい」という意味ではない。品質改善時は増加した
+latency、token、推定費用を比較結果へ残し、重大な正確性退行がないことと合わせて人がmodel class単位で判断する。
+実測前の切替、一回だけの改善、集約値で相殺された重大な失敗は採用根拠にしない。
+
 ## 影響
 
 - model変更がAgentのDomain Tool Evidence Viewer Action境界へ漏れない

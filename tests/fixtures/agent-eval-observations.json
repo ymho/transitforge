@@ -23,7 +23,7 @@
     { "caseId": "missing-destination", "toolSequence": [], "normalizedConstraints": {}, "status": "follow_up", "claimStatuses": [] },
     { "caseId": "ambiguous-station", "toolSequence": ["inspect_station"], "normalizedConstraints": { "stationName": "大阪" }, "status": "follow_up", "claimStatuses": ["unknown"] },
     { "caseId": "missing-origin", "toolSequence": [], "normalizedConstraints": { "destinationStation": "京都" }, "status": "follow_up", "claimStatuses": [] },
-    { "caseId": "vague-destination", "toolSequence": [], "normalizedConstraints": { "pace": "relaxed" }, "status": "follow_up", "claimStatuses": [] },
+    { "caseId": "vague-destination", "toolSequence": ["search_web", "read_web_pages", "resolve_place_candidates"], "normalizedConstraints": { "pace": "relaxed", "requiresResolvedPoi": true, "requiresStarterItinerary": true, "requiresPlacePhoto": true }, "status": "completed", "claimStatuses": ["supported", "supported"] },
     { "caseId": "cancelled-service", "toolSequence": ["search_journeys"], "normalizedConstraints": { "useRealtime": true, "excludeCancelled": true }, "status": "completed", "claimStatuses": ["supported", "supported"] },
     { "caseId": "destination-change", "toolSequence": ["search_journeys"], "normalizedConstraints": { "useRealtime": true, "authoritativeDestination": true }, "status": "completed", "claimStatuses": ["supported"] },
     { "caseId": "exclude-shinkansen", "toolSequence": ["search_journeys"], "normalizedConstraints": { "excludedServiceTypes": ["新幹線"] }, "status": "completed", "claimStatuses": ["supported"] },

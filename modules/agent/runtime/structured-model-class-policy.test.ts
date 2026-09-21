@@ -69,6 +69,20 @@ describe("structuredModelClassPolicy", () => {
     })).toBe("decision");
   });
 
+  it("keeps a multi-turn consultation without a Trip on the decision class", () => {
+    expect(structuredModelClassPolicy({
+      request: { executionId: "1", feature: "concierge", userRequest: "とりあえず仮旅程を立てて", context: {
+        conversation: { messages: [
+          { role: "user", text: "出雲大社へ行きたい" },
+          { role: "assistant", text: "日程を教えてください" },
+          { role: "user", text: "明日から" },
+        ] },
+        consultationRequest: { goal: "出雲大社", constraints: [], assumptions: [] },
+      } },
+      phase: "initial",
+    })).toBe("decision");
+  });
+
   it("uses decision class when the date and stay length are ready to plan", () => {
     expect(structuredModelClassPolicy({
       request: {
