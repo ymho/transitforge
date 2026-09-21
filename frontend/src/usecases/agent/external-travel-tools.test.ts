@@ -69,6 +69,7 @@ describe("external travel tools", () => {
   it("目的地発見と具体地点の地図検索を能力契約で分離する", () => {
     expect(externalTravelToolDescription("search_web")).toContain("目的地未定の気分や体験希望");
     expect(externalTravelToolDescription("search_web")).toContain("地域 温泉地 自然エリア 具体施設");
+    expect(externalTravelToolDescription("search_web")).toContain("候補ごとの写真を照合してから最終回答");
     expect(externalTravelToolDescription("search_place_media")).toContain("discovery");
     expect(externalTravelToolDescription("search_place_media")).toContain("日程作成用ではありません");
   });

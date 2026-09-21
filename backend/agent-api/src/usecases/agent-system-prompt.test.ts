@@ -60,6 +60,7 @@ describe("agentSystemPrompt", () => {
     expect(agentSystemPrompt).toContain("日ごとの簡単な行程");
     expect(agentSystemPrompt).toContain("具体的な候補を2〜3件比較して");
     expect(agentSystemPrompt).toContain("候補ごとの代表写真を取得し");
+    expect(agentSystemPrompt).toContain("Web検索だけで最終回答せず");
     expect(agentSystemPrompt).toContain("写真URLや出典を推測しないでください");
     expect(agentSystemPrompt).toContain("travel-planを使って");
     expect(agentSystemPrompt).toContain("旅行全体かつ利用者全員分のAI概算");

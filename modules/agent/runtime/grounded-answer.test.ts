@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { DefaultAgentResponseGenerator } from "@raiquora/agent/agent-response-generator";
-import { groundedAnswerInstruction, parseGroundedAnswer, supportedAnswerClaims, sourceExplanation, travelPlan } from "@raiquora/agent/grounded-answer";
+import { groundedAnswerInstruction, groundedAnswerRepairInstruction, parseGroundedAnswer, supportedAnswerClaims, sourceExplanation, travelPlan } from "@raiquora/agent/grounded-answer";
 import type { Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentModelResponse } from "@raiquora/agent/model-provider";
 
@@ -125,6 +125,15 @@ it("renders a grounded itinerary, all-party AI estimate, and bound photo in one 
   expect(result.text).toContain("目的地までの往復交通は含めていません");
   expect(result.text).toContain('https://images.example.org/izumo.jpg "Raiquora verified photo"');
   expect(result.claims.map(({ kind }) => kind)).toEqual(["fact", "inference"]);
+});
+it("keeps an unspecified departure date unknown instead of inventing today", () => {
+  const result = travelPlan(plan({}).replace('"startDate":"2026-09-22"', '"startDate":null'), [photographedPlace])!;
+  expect(result.text).toContain("出発日未定");
+  expect(result.text).not.toContain("2026年");
+});
+it("gives a bounded repair reason without echoing arbitrary errors", () => {
+  expect(groundedAnswerRepairInstruction(new Error("Invalid cost estimate"))).toContain("Invalid cost estimate");
+  expect(groundedAnswerRepairInstruction(new Error("secret model output"))).not.toContain("secret model output");
 });
 it("rejects unbound photos, source text, and incomplete estimates", () => {
   expect(() => travelPlan(plan({ quote: "架空の無料列車" }), [photographedPlace])).toThrow();
