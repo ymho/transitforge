@@ -40,6 +40,12 @@ const train: Train = {
 };
 
 describe("train position", () => {
+  it("slices path geometry in either travel direction", () => {
+    const geometry = new PathGeometryIndex([path]);
+    expect(geometry.coordinatesBetween("path-a", 50, 150)).toEqual([[135.5, 34], [136, 34], [136.5, 34]]);
+    expect(geometry.coordinatesBetween("path-a", 150, 50)).toEqual([[136.5, 34], [136, 34], [135.5, 34]]);
+    expect(geometry.coordinatesBetween("missing", 0, 1)).toBeUndefined();
+  });
   it("interpolates movement and keeps a train at its stop", () => {
     expect(interpolatedRouteMeter(train.stops.slice(0, 2), 1435)).toBe(50);
     expect(interpolatedRouteMeter(train.stops, 1442)).toBe(100);

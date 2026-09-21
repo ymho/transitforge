@@ -31,7 +31,6 @@ export function tripMapProjection(trip: Trip) {
     places,
     located: places.filter((entry) => entry.coordinate !== undefined),
     unknown: places.filter((entry) => entry.coordinate === undefined),
-    hasVerifiedRouteGeometry: false,
   };
 }
 
@@ -53,7 +52,7 @@ export function renderTripMap(trip: Trip, openMap: (itemId?: string) => void, fo
     row.append(select, element("span", place.coordinate ? "" : "trip-cost-warning", place.coordinate ? "座標確認済み" : "座標未確認")); list.append(row);
   }
   root.append(list);
-  if (view.located.length) root.append(control("地図で旅程の地点を見る", () => openMap()));
+  root.append(control("地図で旅程の地点・経路を見る", () => openMap()));
   root.append(element("p", "trip-workspace-copy", "経路形状を確認できない区間は、直線で補完しません。"));
   return root;
 }

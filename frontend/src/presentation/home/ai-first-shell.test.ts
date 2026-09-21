@@ -88,3 +88,13 @@ it("opens the actual Trip as a trips subview, not a selected chat tab", () => {
   click('[data-primary="trips"]');
   expect(document.querySelector<HTMLElement>('[data-page="trips"]')!.hidden).toBe(false);
 });
+it("shows a travel-mode entry only for the current adopted Trip", () => {
+  const base = createTrip("45300000-0000-4000-8000-000000000001", "今日の旅", "2026-09-18T00:00:00Z", [{
+    id: "now", title: "現在の予定", type: "activity", category: "sightseeing",
+    schedule: { type: "fixed", startAt: { at: "2026-09-17T23:00:00Z", timeZone: "UTC" }, endAt: { at: "2026-09-18T01:00:00Z", timeZone: "UTC" } },
+  }]);
+  const trip = { ...base, adoption: { confirmedAt: "2026-09-17T00:00:00Z" } };
+  const openTravelMode = vi.fn(); setup({ read: () => ({ state: "available", trips: [trip], candidates: [] }), openTravelMode });
+  click("[data-trip-travel]"); expect(openTravelMode).toHaveBeenCalledWith(trip.id);
+  expect(document.querySelectorAll("[data-trip-travel]")).toHaveLength(1);
+});

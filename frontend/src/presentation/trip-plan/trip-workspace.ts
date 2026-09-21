@@ -12,12 +12,15 @@ import { renderTripReadiness } from "./trip-readiness-view";
 import { renderTripChecklist } from "./trip-checklist-view";
 import { travelIcon } from "../shared/travel-icon";
 import { renderTripMap, tripDetailTabs, tripOverviewCopy, type TripDetailTab } from "./trip-detail-view";
+import { renderTripTravelMode } from "./trip-travel-mode";
+import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 
 /** DOM and navigation only. The supplied source owns the current server Trip. */
 export function configureTripWorkspace(options: {
   app: HTMLElement; chat: HTMLElement; messages: HTMLElement; input: HTMLInputElement;
   controller: TripWorkspaceController;
   showContext(view: ContextViewKind): void; returnToConversation(): void; showMap(itemId?: string): void;
+  loadInTripContext?(tripId: string): Promise<InTripContextSnapshot | undefined>;
   ask(prompt: string): void; nextItemId(): string;
 }) {
   const { controller, app } = options;
@@ -27,9 +30,10 @@ export function configureTripWorkspace(options: {
   const status = element("p", "trip-workspace-status"); status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
   const report = (text: string) => { status.textContent = text; };
   const heading = element("header", "trip-workspace-heading"); const title = element("h1"); const summary = element("p", "trip-workspace-copy");
+  const openTravelMode = control("旅行モードを開く", () => { void showTravelMode(); });
   const emblem = element("span", "trip-workspace-emblem"); emblem.innerHTML = travelIcon("trip"); emblem.setAttribute("aria-hidden", "true");
   const notice = element("p", "trip-workspace-notice");
-  heading.append(emblem, title, notice, summary);
+  heading.append(emblem, title, notice, summary, openTravelMode);
   const retry = control("旅程を再読み込み", () => { void controller.source()?.retry?.(); });
   const assumptions = element("section", "trip-workspace-assumptions");
   const feasibility = element("div");
@@ -78,7 +82,9 @@ export function configureTripWorkspace(options: {
   overview.append(feasibility, readiness, checklist, assumptions);
   itinerary.append(dayTabs, days, add, consult, candidates);
   costPanel.append(costs);
-  panel.append(heading, status, retry, tablist, overview, itinerary, costPanel, mapPanel, proposal);
+  const detail = element("div", "trip-detail-view"); detail.append(heading, status, retry, tablist, overview, itinerary, costPanel, mapPanel, proposal);
+  const travelMode = element("div"); travelMode.hidden = true;
+  panel.append(detail, travelMode);
   selectTab(activeTab);
   app.append(panel, nav);
   const views = new Map<string, { scroll: number; chatScroll: number; view: "chat" | "trip"; focus?: HTMLElement }>();
@@ -86,6 +92,7 @@ export function configureTripWorkspace(options: {
   const cards = new Map<string, { node: HTMLElement; key: string }>();
   const groups = new Map<string, HTMLElement>();
   let activeSession = controller.sessionId(), previousTripId: string | undefined, proposalKey = "", candidateKey = "";
+  let travelGeneration = 0, detailScroll = 0, travelTripKey = "";
   const viewState = () => {
     if (!views.has(activeSession)) views.set(activeSession, { scroll: 0, chatScroll: 0, view: "chat" });
     return views.get(activeSession)!;
@@ -109,16 +116,34 @@ export function configureTripWorkspace(options: {
   chatButton.setAttribute("aria-controls", options.chat.id); tripButton.setAttribute("aria-controls", panel.id);
   nav.append(chatButton, tripButton, control("地図", options.showMap));
 
+  async function showTravelMode() {
+    const trip = controller.current(); if (!trip) return;
+    const generation = ++travelGeneration, session = controller.sessionId(), revision = trip.revision;
+    detailScroll = panel.scrollTop; travelTripKey = `${trip.id}:${trip.revision}`; detail.hidden = true; travelMode.hidden = false;
+    travelMode.replaceChildren(element("p", "", "旅行中の情報を確認しています。")); panel.scrollTop = 0;
+    let snapshot: InTripContextSnapshot | undefined, unavailable = false;
+    if (trip.lifecycleState === "in_trip" && options.loadInTripContext) {
+      try { snapshot = await options.loadInTripContext(trip.id); } catch { unavailable = true; }
+    }
+    const latest = controller.current();
+    if (generation !== travelGeneration || controller.sessionId() !== session || !latest || latest.id !== trip.id || latest.revision !== revision) return;
+    travelMode.replaceChildren(renderTripTravelMode({ trip: latest, now: new Date(), snapshot, unavailable,
+      back: () => { travelGeneration++; travelTripKey = ""; travelMode.hidden = true; detail.hidden = false; panel.scrollTop = detailScroll; },
+      ask: chat, focus: (itemId) => { controller.focus(itemId); options.showMap(itemId); } }));
+  }
+
   const render = () => {
     if (activeSession !== controller.sessionId()) {
       viewState().scroll = panel.scrollTop; viewState().chatScroll = options.messages.scrollTop;
       activeSession = controller.sessionId(); previousTripId = undefined; report("");
+      travelGeneration++; travelTripKey = ""; travelMode.hidden = true; detail.hidden = false;
       costs.replaceChildren(); costKey = ""; costTripId = undefined;
       activeTab = selectedTabs.get(activeSession) ?? "overview"; selectTab(activeTab); mapKey = "";
     }
     const nextCostSession = controller.source()?.sessionVersion?.();
     if (nextCostSession !== costSessionVersion) { costs.replaceChildren(); costKey = ""; costTripId = undefined; costSessionVersion = nextCostSession; }
     const trip = controller.current();
+    if (trip && travelTripKey && travelTripKey !== `${trip.id}:${trip.revision}`) { travelGeneration++; travelTripKey = ""; travelMode.hidden = true; detail.hidden = false; }
     panel.hidden = nav.hidden = !controller.blocksLegacy();
     if (!controller.blocksLegacy()) { delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; return; }
     app.dataset.tripWorkspace = "v2"; app.dataset.tripWorkspaceView = viewState().view;
@@ -131,6 +156,7 @@ export function configureTripWorkspace(options: {
     retry.hidden = !controller.source()?.retry;
     retry.disabled = controller.loadState() === "loading";
     add.hidden = consult.hidden = !trip;
+    openTravelMode.hidden = !trip;
     if (!trip) {
       title.textContent = "旅程"; summary.textContent = "";
       report(controller.loadState() === "loading" ? "サーバから旅程を読み込んでいます。" : "旅程を取得できません。認証と接続、参照先の状態を確認して再試行してください。端末の旧旅程へは切り替えていません。");
@@ -240,5 +266,6 @@ export function configureTripWorkspace(options: {
   const beforeUnload = (event: BeforeUnloadEvent) => { if (costs.querySelector(".trip-cost-editor")) { event.preventDefault(); event.returnValue = ""; } };
   document.defaultView?.addEventListener("beforeunload", beforeUnload);
   const unsubscribe = controller.subscribe(render); render();
-  return { panel, nav, render, show, report, canLeave, destroy() { document.defaultView?.removeEventListener("beforeunload", beforeUnload); unsubscribe(); panel.remove(); nav.remove(); delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; } };
+  return { panel, nav, render, show, report, canLeave, openTravelMode: showTravelMode,
+    destroy() { document.defaultView?.removeEventListener("beforeunload", beforeUnload); unsubscribe(); panel.remove(); nav.remove(); delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; } };
 }

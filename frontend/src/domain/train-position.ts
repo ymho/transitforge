@@ -25,6 +25,10 @@ export class PathGeometryIndex {
   positionAt(pathId: string, routeMeter: number): PositionedCoordinate | undefined {
     return this.geometryByPathId.get(pathId)?.positionAt(routeMeter);
   }
+
+  coordinatesBetween(pathId: string, fromRouteMeter: number, toRouteMeter: number): Coordinate[] | undefined {
+    return this.geometryByPathId.get(pathId)?.coordinatesBetween(fromRouteMeter, toRouteMeter);
+  }
 }
 
 export function activeTrainPositions(
@@ -251,6 +255,18 @@ class PathGeometry {
       coordinate,
       bearingRadians: before && after ? bearingRadiansBetween(before, after) : 0,
     };
+  }
+
+  coordinatesBetween(fromRouteMeter: number, toRouteMeter: number): Coordinate[] | undefined {
+    const from = this.coordinateAt(fromRouteMeter), to = this.coordinateAt(toRouteMeter);
+    if (!from || !to || !Number.isFinite(fromRouteMeter) || !Number.isFinite(toRouteMeter)) return undefined;
+    const low = Math.min(fromRouteMeter, toRouteMeter), high = Math.max(fromRouteMeter, toRouteMeter);
+    const included = this.path.route_coords.filter((_coordinate, index) => {
+      const routeMeter = this.path.route_length_m * (this.cumulativeDistances[index]! / this.totalCoordinateDistance);
+      return routeMeter > low && routeMeter < high;
+    });
+    const ordered = fromRouteMeter <= toRouteMeter ? [from, ...included, to] : [from, ...included.reverse(), to];
+    return ordered.filter((coordinate, index) => index === 0 || coordinate[0] !== ordered[index - 1]![0] || coordinate[1] !== ordered[index - 1]![1]);
   }
 
   private coordinateAt(routeMeter: number): Coordinate | undefined {

@@ -7,15 +7,17 @@ import { createTripWorkspaceController, type TripWorkspaceSource } from "../../u
 import { configureTripWorkspace } from "./trip-workspace";
 import { createServerTripWorkspaceSource } from "../../usecases/trip-plan/server-trip-workspace-source";
 import { costForecast } from "../../../../modules/trip/domain/trip-costs.fixture";
+import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.fixture";
+import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 
-function setup(source?: TripWorkspaceSource) {
+function setup(source?: TripWorkspaceSource, loadInTripContext?: (tripId: string) => Promise<InTripContextSnapshot | undefined>) {
   const app = document.createElement("main"); app.id = "app"; document.body.append(app);
   const chat = document.createElement("section"); chat.id = "chat";
   const messages = document.createElement("ol"), input = document.createElement("input"); chat.append(messages, input);
   app.append(chat);
   const controller = createTripWorkspaceController("one"), ask = vi.fn(), showContext = vi.fn(), returnToConversation = vi.fn();
   if (source) controller.attach("one", source);
-  const ui = configureTripWorkspace({ app, chat, messages, input, controller, ask, showContext, returnToConversation, showMap: vi.fn(), nextItemId: () => "new-free" });
+  const ui = configureTripWorkspace({ app, chat, messages, input, controller, ask, showContext, returnToConversation, showMap: vi.fn(), loadInTripContext, nextItemId: () => "new-free" });
   return { app, chat, messages, input, controller, ui, ask, showContext };
 }
 function button(root: ParentNode, text: string) { return [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === text)!; }
@@ -54,6 +56,19 @@ describe("Trip workspace DOM and mobile navigation", () => {
     const input = f.ui.panel.querySelector<HTMLInputElement>(".trip-cost-editor input")!; input.value = "12345";
     button(f.ui.panel, "概要").click(); expect(input.isConnected).toBe(true);
     button(f.ui.panel, "費用").click(); expect(f.ui.panel.querySelector<HTMLInputElement>(".trip-cost-editor input")?.value).toBe("12345");
+  });
+  it("opens a bounded travel mode and drops a delayed response after Trip switch", async () => {
+    const first = inTripFixture(); let resolve!: (value: InTripContextSnapshot | undefined) => void;
+    const load = vi.fn(() => new Promise<InTripContextSnapshot | undefined>((done) => { resolve = done; }));
+    const f = setup({ getCurrentTrip: () => first.trip }, load);
+    button(f.ui.panel, "旅行モードを開く").click(); expect(f.ui.panel.textContent).toContain("確認しています");
+    const other = createTrip("22222222-2222-4222-8222-222222222222", "別の旅", placesAt);
+    f.controller.attach("two", { getCurrentTrip: () => other }); f.controller.activateSession("two"); resolve(first.snapshot);
+    await Promise.resolve(); expect(f.ui.panel.textContent).not.toContain(first.snapshot.impacts.items[0]?.observedAt ?? "never");
+    expect(f.ui.panel.textContent).toContain("別の旅");
+    button(f.ui.panel, "旅行モードを開く").click();
+    expect(load).toHaveBeenCalledTimes(1); expect(f.ui.panel.textContent).toContain("プレビュー");
+    button(f.ui.panel, "旅程詳細へ戻る").click(); expect(f.ui.panel.textContent).toContain("概要");
   });
   it("keeps server ownership while loading/unavailable, retries and only previews changes", async () => {
     const trip = multiCityTrip(), get = vi.fn(async () => trip);

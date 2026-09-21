@@ -8,7 +8,7 @@ describe("Trip detail projections", () => {
     const trip = multiCityTrip();
     const view = tripMapProjection(trip);
     expect(view.places.map((place) => place.name)).toEqual(["Vienna", "Salzburg", "Salzburgの宿", "Zürich"]);
-    expect(view.located).toEqual([]); expect(view.unknown).toHaveLength(4); expect(view.hasVerifiedRouteGeometry).toBe(false);
+    expect(view.located).toEqual([]); expect(view.unknown).toHaveLength(4);
     expect(tripOverviewCopy(trip)).toContain("日程は未定");
   });
 

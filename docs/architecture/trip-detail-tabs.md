@@ -10,11 +10,15 @@ Browser内のTripコピーは持たず、再読込・変更確認・CASは既存
 - 費用は[AI費用概算](trip-cost-estimates.md)の保存済みforecast/override/合計をそのまま表示する。
   タブ切替はDOMを破棄しないため、確認前の入力も維持される。
 - 地図は`projectTripPlaces`で採用済みitemだけを投影する。保持済み座標がある地点だけを既存Mapboxへ
-  Marker表示し、座標不明地点は一覧で未確認とする。経路geometryがTripにない区間を直線で補完しない。
+  Marker表示し、座標不明地点は一覧で未確認とする。採用済み鉄道区間は`serviceUid`・列車番号・運行日・
+  停車駅index・駅名が現在読み込んだ時刻表と一致するときだけ、その列車の`path_id`と両駅の
+  `route_meter`から`path_catalog`の実線形を切り出す。不一致・欠測・非鉄道区間を直線で補完しない。
 
-Mapbox overlayは地図インスタンスごとに1個だけ生成する。同じTrip revisionの再表示ではMarkerを再生成せず、
-Trip/revision変更時は旧Markerとイベントを除去してから置き換える。Mapbox token不足や起動失敗は既存の
+Mapbox overlayは地図インスタンスごとに1個だけ生成する。同じTrip revisionの再表示ではMarker/route sourceを再生成せず、
+Trip/revision変更時は旧Marker・route layer/source・イベントを除去してから置き換える。Mapbox token不足や起動失敗は既存の
 地図エラー境界で処理し、概要・旅程・費用はそのまま利用できる。
 
 タブはnative buttonと`tablist/tab/tabpanel`で構成し、左右キー、Home、Endで移動できる。
 日付タブも左右キーに対応する。選択外panelは`hidden`でfocus対象から外す。
+
+Tripから開く旅行時の表示は[Trip旅行モード](trip-travel-mode.md)を参照する。
