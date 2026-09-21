@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "tools/run_live_agent_model_evaluation.ts"
+  ]
+}

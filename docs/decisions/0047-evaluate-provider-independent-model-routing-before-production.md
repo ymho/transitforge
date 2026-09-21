@@ -39,6 +39,12 @@ Runtimeは明示的に注入されたmodel classを全model callへ渡せるが 
 latency、token、推定費用を比較結果へ残し、重大な正確性退行がないことと合わせて人がmodel class単位で判断する。
 実測前の切替、一回だけの改善、集約値で相殺された重大な失敗は採用根拠にしない。
 
+比較実行はGitHub Actionsの手動Workflowへ閉じ、GitHub OIDCからBedrock評価専用Roleを直接引き受ける。
+固定アクセスキーや個人のSSO sessionを渡さない。baselineとcandidateは実Feedback由来の同一会話3ケース、
+同一の合成Provider結果、同一反復数で実行し、model ID、回答、Tool列、latency、tokenをArtifactへ残す。
+candidate未指定時の自動選択結果も実IDとして記録する。Workflowは比較artifactだけを生成し、Terraform変数や
+本番routingを変更しない。公開Providerの最新性と実経路の最終確認は別のE2Eとする。
+
 ## 影響
 
 - model変更がAgentのDomain Tool Evidence Viewer Action境界へ漏れない

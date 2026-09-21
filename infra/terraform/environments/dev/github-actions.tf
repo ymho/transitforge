@@ -3,6 +3,7 @@ locals {
   github_environment                 = var.environment
   github_repository_sub              = "repo:${var.github_repository}:environment:${local.github_environment}"
   github_deploy_role                 = "${var.project_name}-${var.environment}-github-deploy"
+  github_agent_eval_role             = "${var.project_name}-${var.environment}-github-agent-eval"
   data_builder_github_repository_sub = var.data_builder_github_oidc_subject
   data_builder_github_deploy_role    = "${var.project_name}-${var.environment}-data-builder-github-deploy"
 }
@@ -48,6 +49,41 @@ resource "aws_iam_role" "github_deploy" {
   lifecycle {
     prevent_destroy = true
   }
+}
+
+resource "aws_iam_role" "github_agent_eval" {
+  name                 = local.github_agent_eval_role
+  description          = "Run manual Bedrock model evaluations from the protected GitHub environment"
+  assume_role_policy   = data.aws_iam_policy_document.github_actions_assume_role.json
+  max_session_duration = 3600
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+data "aws_iam_policy_document" "github_agent_eval" {
+  statement {
+    sid       = "DiscoverSystemInferenceProfiles"
+    actions   = ["bedrock:ListInferenceProfiles", "bedrock:GetInferenceProfile"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid     = "InvokeEvaluationModels"
+    actions = ["bedrock:InvokeModel"]
+    resources = [
+      "arn:aws:bedrock:*::foundation-model/*",
+      "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*",
+      "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:application-inference-profile/*",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "github_agent_eval" {
+  name   = "invoke-bedrock-model-evaluation"
+  role   = aws_iam_role.github_agent_eval.id
+  policy = data.aws_iam_policy_document.github_agent_eval.json
 }
 
 resource "aws_iam_role_policy_attachment" "github_deploy_power_user" {

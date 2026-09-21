@@ -148,6 +148,7 @@ npm run eval:agent
 npm run eval:agent:smoke
 npm run eval:agent:full
 npm run eval:agent -- --case cancelled-service
+npm run eval:agent:model:live -- --strategy candidate --repetitions 3
 npm run eval:agent:strategies
 ```
 
@@ -157,6 +158,10 @@ Agent Benchmarkは42件を収録し 曖昧要求 運休 遅延 制約 情報不�
 
 通常の`eval:agent`は再現可能な保存済みObservationを採点し CIの回帰検知に使う。
 Browser Runtimeを直接起動するscripted Ask/Progressと旧decision Live Evalは#481 Batch 1で撤去した。
+`eval:agent:model:live`は現行Server Agent、System Prompt、model class policyを使い、実Feedback由来の
+会話品質3ケースを合成Provider結果で反復する。AWS認証と課金を伴うため、通常はGitHub Actionsの
+`Agent Eval / Model Comparison`を手動実行する。固定アクセスキーは使わず、結果は14日保持のArtifactへ保存する。
+この比較は本番model設定を変更しない。
 Server Agentの実行契約は`backend/agent-api`のcomposition/tool testsで確認する。
 過去のTrip Progress評価記録とthresholdは履歴として各architecture文書に残すが、現行コマンドではない。
 公開の最新事実読取は既存end-user認証gate（501）を維持する。

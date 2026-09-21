@@ -59,6 +59,11 @@ output "github_actions_deploy_role_arn" {
   value       = aws_iam_role.github_deploy.arn
 }
 
+output "github_actions_agent_eval_role_arn" {
+  description = "Least-privilege GitHub Actions role for manual Bedrock model evaluation"
+  value       = aws_iam_role.github_agent_eval.arn
+}
+
 output "data_builder_github_deploy_role_arn" {
   description = "data-builderのGitHub Actionsが専用TerraformとECR公開で引き受けるIAMロールARN。"
   value       = aws_iam_role.data_builder_github_deploy.arn
