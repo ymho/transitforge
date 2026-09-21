@@ -308,7 +308,7 @@ export class MultiStepAgentRuntime {
         const hasPlacePhoto = evidence.some((item) => typeof item.facts.imageUrl === "string" &&
           typeof item.facts.imageSourceUrl === "string" && typeof item.facts.imageAttribution === "string");
         const placePhotoAvailable = modelTools.some(({ name }) => name === "search_place_media");
-        const planningGuard = planningTurn && modelResponse.decisionSummary?.selectedAction === "ask_user"
+        const planningGuard = planningTurn && (modelResponse.decisionSummary?.selectedAction === "ask_user" || asksOptionalPlanningQuestion(modelResponse))
           ? { accepted: false, reason: "planning_progress_required", instruction:
             "この旅行相談は質問だけで終えず、未確認条件を仮定として明記して具体案へ進めてください。必要な場所情報と写真はToolで調査してください。" }
           : planningTurn && sourceEvidence.length > 0 && !hasPlacePhoto && placePhotoAvailable
@@ -684,6 +684,11 @@ function result(
     claims: [...claims],
     trace: trace.snapshot(),
   };
+}
+
+function asksOptionalPlanningQuestion(response: AgentModelResponse): boolean {
+  const text = response.message.content.flatMap((content) => content.type === "text" ? [content.text] : []).join("\n");
+  return /(?:出発地|出発駅|どこから|予算|人数|何名|泊数|何泊|滞在期間).{0,80}(?:[?？]|ですか|ますか|ください)/u.test(text);
 }
 
 function elapsed(startedAt: number, now: () => Date): number {
