@@ -8,6 +8,8 @@ import { externalTravelToolDescription, externalTravelToolInputSchema } from "@r
 import type { AgentEvaluationCaseResult, AgentEvaluationDataset, AgentEvaluationReport, ConversationQualityScenario } from "../frontend/src/usecases/agent/evaluation/evaluation-contract";
 import { parseAgentEvaluationDataset } from "../frontend/src/usecases/agent/evaluation/evaluation-dataset";
 import { evaluateConversationQualityLive, type ConversationQualityLiveResult, type ConversationQualityLiveTurn } from "../frontend/src/usecases/agent/evaluation/conversation-quality-live";
+import { liveEvaluationAccommodationOutput, liveEvaluationToolEvidence, liveEvaluationTravelToolOutput,
+  type LiveEvaluationPlace, type LiveEvaluationTravelToolName } from "../frontend/src/usecases/agent/evaluation/live-model-tool-fixture";
 import { AwsBedrockConverseClient } from "../backend/agent-api/src/adapters/aws-sdk-clients";
 import { BedrockConversationModel } from "../backend/agent-api/src/adapters/bedrock-conversation-model";
 import { agentSystemPrompt } from "../backend/agent-api/src/usecases/agent-system-prompt";
@@ -144,47 +146,32 @@ function evaluationTools(scenario: ConversationQualityScenario, outputs: unknown
       operation: async input => {
         const output = toolOutput(name, input, scenario); outputs.push(output); return { body: output };
       },
-      evidence: () => [],
+      evidence: liveEvaluationToolEvidence,
     })),
     {
       descriptor: accommodationToolDescriptor,
-      operation: async () => { const output = accommodationOutput(); outputs.push(output); return { body: output }; },
-      evidence: () => [],
+      operation: async input => { const output = liveEvaluationAccommodationOutput(input); outputs.push(output); return { body: output }; },
+      evidence: liveEvaluationToolEvidence,
     },
   ];
 }
 
-function toolOutput(name: string, input: Record<string, unknown>, scenario: ConversationQualityScenario): Record<string, unknown> {
+function toolOutput(name: LiveEvaluationTravelToolName, input: Record<string, unknown>, scenario: ConversationQualityScenario): Record<string, unknown> {
   const places = scenario.expected.destination.mode === "specified" ? [izumoPlace()] : candidatePlaces();
-  if (name === "search_web") return { query: input.query, results: places.map((place) => ({
-    title: `${place.name} 公式観光案内`, url: place.sourceUrl, snippet: place.overview,
-  })) };
-  if (name === "read_web_pages") return { pages: places.map((place) => ({
-    url: place.sourceUrl, title: `${place.name} 公式観光案内`, publisher: "Live Eval fixture",
-    text: place.overview,
-  })) };
-  return { places };
+  return liveEvaluationTravelToolOutput({ name, query: input, places, retrievedAt: scenario.fixedNow });
 }
 
-function izumoPlace() {
+function izumoPlace(): LiveEvaluationPlace {
   return { providerPlaceId: "live.izumo-taisha", name: "出雲大社", municipality: "出雲市", sourceUrl: "https://example.com/izumo-taisha",
     photoUrl: "https://images.example.com/izumo-taisha.jpg", overview: "出雲市にある神社。参拝と門前町散策を組み合わせられる。" };
 }
 
-function candidatePlaces() {
+function candidatePlaces(): LiveEvaluationPlace[] {
   return [
     { providerPlaceId: "live.kinosaki", name: "城崎温泉", municipality: "豊岡市", sourceUrl: "https://example.com/kinosaki", photoUrl: "https://images.example.com/kinosaki.jpg", overview: "城崎温泉は外湯と温泉街の散策をゆっくり楽しめる。収録済み鉄道駅からアクセスできる。" },
     { providerPlaceId: "live.ogoto", name: "おごと温泉", municipality: "大津市", sourceUrl: "https://example.com/ogoto", photoUrl: "https://images.example.com/ogoto.jpg", overview: "おごと温泉は琵琶湖畔で温泉と滞在をゆっくり楽しめる。収録済み鉄道駅からアクセスできる。" },
     { providerPlaceId: "live.arima", name: "有馬温泉", municipality: "神戸市", sourceUrl: "https://example.com/arima", photoUrl: "https://images.example.com/arima.jpg", overview: "有馬温泉は歴史ある温泉街と滞在をゆっくり楽しめる。収録済み鉄道駅からアクセスできる。" },
   ];
-}
-
-function accommodationOutput() {
-  return { accommodations: [
-    { name: "竹野屋旅館", area: "出雲大社門前", priceStatus: "unconfirmed" },
-    { name: "いにしえの宿 佳雲", area: "出雲市", priceStatus: "unconfirmed" },
-    { name: "お宿 月夜のうさぎ", area: "出雲市", priceStatus: "unconfirmed" },
-  ], availability: "unconfirmed" };
 }
 
 function uniquePhotoCount(outputs: readonly unknown[]): number {

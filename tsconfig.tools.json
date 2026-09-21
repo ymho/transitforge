@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "include": [
-    "tools/run_live_agent_model_evaluation.ts"
+    "tools/run_live_agent_model_evaluation.ts",
+    "frontend/src/usecases/agent/evaluation/live-model-tool-fixture.ts"
   ]
 }

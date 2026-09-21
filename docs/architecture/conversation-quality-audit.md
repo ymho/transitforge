@@ -76,6 +76,8 @@ Issue #474のモデル比較では同じ複数turnシナリオをbaseline/candid
 比較器は全既存品質指標を維持したうえで、品質またはlatency/tokenのいずれかが改善すれば採用候補にできる。
 これにより、上位モデルの品質向上を「コスト削減がない」という理由だけで棄却しない。モデルIDの切替は
 このfixture追加だけでは行わず、実Bedrock比較のmodel ID・反復数・latency・token・費用を記録して決める。
+合成Provider結果も本番Toolと同じEnvelopeへ入れ、本番の`externalTravelEvidence`でEvidenceへ変換する。
+Evidenceを生成しない簡略fixtureは、モデルが選んだ実在しないEvidence IDとして正常回答まで拒否するため使わない。
 
 追加の実Feedbackでは「出雲大社に明日から1泊」と目的地・相対日付・泊数が揃っているのに、明日の日付、
 Profile由来の出発駅、予算、自然アクティビティを質問票のように一括確認していた。このケースを
