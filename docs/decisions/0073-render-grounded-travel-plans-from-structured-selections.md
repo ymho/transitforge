@@ -30,5 +30,6 @@ Evidence presenterが自由文を破棄したため、利用者には資料抜�
 - Web検索だけで候補回答を完了せず、利用可能な地点照合・写真取得能力へ進む。取得不能を確認した場合は写真なしでも提案全体を継続する。
 - 発話と計算済み相対日付のどちらにも出発日がない場合、`startDate`は`null`として扱い、当日などを補完しない。
 - 構造化結果が検証に失敗した再試行では、許可リスト内の検証理由だけをモデルへ返す。元のモデル出力やEvidence本文はエラーとして反射しない。
+- `travel-plan` / `source-explanation`本体が検証できる場合、付随するdecision summaryのEvidence ID不整合だけを理由に本体を破棄しない。本体内の参照は各presenterが改めて厳格に検証する。
 - 任意の自由記述行程は許可しない。より細かな時刻入り旅程は、既存のJourney/Trip ToolとProposalで扱う。
 - 既存のsource-explanation、InTripAnswerPlan、CostProposalの責務は変更しない。

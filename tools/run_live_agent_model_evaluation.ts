@@ -50,7 +50,10 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
         additionalTools: evaluationTools(scenario, observedOutputs),
         newExecutionId: () => executionId,
         loadContext: async () => scenarioContext(scenario, turnIndex, history),
-        limits: { maxIterations: 5, maxModelCalls: 5, maxToolCalls: 4, maxExecutionMs: 90_000 },
+        // Candidate discovery, page reading, POI/photo resolution and final rendering are
+        // distinct model decisions. Match the production Tool budget so the benchmark does
+        // not force finalization halfway through that supported flow.
+        limits: { maxIterations: 5, maxModelCalls: 5, maxToolCalls: 8, maxExecutionMs: 90_000 },
       });
       const result = await application.runAgentTurn({
         principal: { subject: "live-eval", identity: { issuer: "live-eval", subject: "live-eval" }, scopes: [] },

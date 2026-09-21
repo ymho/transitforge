@@ -41,7 +41,6 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
         let value: unknown;
         try { value = JSON.parse(encoded); } catch { /* Existing strict fallback below. */ }
         if (value && typeof value === "object" && "kind" in value && (value.kind === "source-explanation" || value.kind === "travel-plan")) {
-          if (response.invalidUsedEvidenceIds) throw new Error("Invalid factual references");
           return (value.kind === "travel-plan" ? travelPlan(encoded, evidence) : sourceExplanation(encoded, evidence, profile))!;
         }
       }

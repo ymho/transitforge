@@ -87,7 +87,8 @@ it("renders a labelled source contract without losing its recommendation or expo
     expect(result.text).not.toMatch(/現在この場所|無料列車|5分|回答:/u);
   }
   expect(() => generator.fromModel(model(`回答:${encoded.replace("歴史資料館", "無料列車")}`), [placeEvidence])).toThrow();
-  expect(() => generator.fromModel({ ...model(`回答:${encoded}`), invalidUsedEvidenceIds: true }, [placeEvidence])).toThrow();
+  const independentlyValidated = generator.fromModel({ ...model(`回答:${encoded}`), invalidUsedEvidenceIds: true }, [placeEvidence], "grounded", { favoriteInterests: ["歴史"] });
+  expect(independentlyValidated.text).toContain("歴史資料館");
 });
 it("existing usedEvidenceIds select Application facts, never model-authored rail numbers", () => {
   const response = { ...model("向日町から倉敷へ25分です。現在乗車しています。"), declaredEvidenceIds: [e.id] };
