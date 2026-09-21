@@ -106,6 +106,20 @@ it("saves consultation conditions with fresh CAS and read-back, and rejects conf
   saved = { ...saved, tripId: id, draftRequest: undefined };
   await expect(controller.saveDraftRequest(id, { ...empty, goal: "温泉" }, empty)).rejects.toThrow();
 });
+it("keeps the Agent draft version stable when only the conversation title changes", async () => {
+  const id = "11111111-1111-4111-8111-111111111111", draft = { constraints: [], assumptions: [] };
+  let saved: import("./server-conversation-client").ServerConversation = { ...conversation(id), draftRequest: draft };
+  const update = vi.fn(async (_id: string, revision: number, metadata: import("./server-conversation-client").ServerConversationMetadata) => {
+    saved = { ...saved, ...metadata, revision: revision + 1 };
+    return saved;
+  });
+  const controller = new ConversationUiController({ ...fake({ items: [] }), list: async () => ({ items: [saved] }), get: async () => saved, update });
+  await controller.hydrate();
+  const before = controller.draftRequestVersion(id);
+  await controller.rename(id, "明日からの相談");
+  expect(controller.draftRequestVersion(id)).toBe(before);
+  expect(update).toHaveBeenCalledOnce();
+});
 it("restores the separate consultation proposal from server history", async () => {
   const id = "11111111-1111-4111-8111-111111111111", request = { constraints: [], assumptions: [] };
   const consultationRequestProposal = { conversationId: id, baseRequest: request, request: { ...request, goal: "美術館" }, summary: "目的の案" };
