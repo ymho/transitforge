@@ -85,6 +85,9 @@ export type AiGuidePromptHandler = (
   onResponseMetadata?: (metadata: AgentResponseMetadata) => void,
 ) => Promise<ViewerAgentResponse>;
 
+export const staleResponseNotice =
+  "会話の状態が変わったため回答を表示できませんでした。もう一度お試しください。";
+
 export interface AiGuidePanelController {
   switchSession(conversationSessionId: string): void;
   openLandmarkJourney(name: string, type?: string): void;
@@ -315,8 +318,13 @@ export function configureAiGuidePanel(
       requestId = metadata.requestId;
     })
       .then((response) => {
-        if (requestedGeneration !== requestGeneration || requestedContextKey !== elements.responseContextKey?.()) {
+        if (requestedGeneration !== requestGeneration) {
           if (conversationSessionId === requestedSessionId) pendingMessage.remove();
+          return;
+        }
+        if (requestedContextKey !== elements.responseContextKey?.()) {
+          if (conversationSessionId === requestedSessionId) showStaleResponseNotice(pendingMessage);
+          else pendingMessage.remove();
           return;
         }
         const assistantMessage = historyRepository.append(
@@ -352,8 +360,13 @@ export function configureAiGuidePanel(
         pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
       .catch(() => {
-        if (requestedGeneration !== requestGeneration || requestedContextKey !== elements.responseContextKey?.()) {
+        if (requestedGeneration !== requestGeneration) {
           if (conversationSessionId === requestedSessionId) pendingMessage.remove();
+          return;
+        }
+        if (requestedContextKey !== elements.responseContextKey?.()) {
+          if (conversationSessionId === requestedSessionId) showStaleResponseNotice(pendingMessage);
+          else pendingMessage.remove();
           return;
         }
         const errorResponse = "案内を開始できませんでした。時間をおいてもう一度お試しください。";
@@ -551,6 +564,11 @@ function appendPendingMessage(
   messages.append(item);
   item.scrollIntoView({ block: "nearest" });
   return item;
+}
+
+function showStaleResponseNotice(item: HTMLLIElement): void {
+  resolveAssistantMessage(item, staleResponseNotice, undefined, undefined, undefined, undefined, false);
+  item.querySelector(".conversation-feedback")?.remove();
 }
 
 export function resolveAssistantMessage(
