@@ -784,7 +784,31 @@ describe("MultiStepAgentRuntime", () => {
     expect(output.status).toBe("completed");
     expect(output.response).toContain("仮プラン");
     expect(output.response).not.toContain("出発地を教えて");
-    expect(requests[1]?.messages.at(-1)).toMatchObject({ role: "user", content: [{ type: "text", text: expect.stringContaining("質問だけで終えず") }] });
+    expect(requests[1]?.messages.at(-1)).toMatchObject({ role: "user", content: [{ type: "text", text: expect.stringContaining("質問票だけで終えず") }] });
+  });
+  it("rejects a questionnaire-style discovery answer even when selectedAction is answer", async () => {
+    const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
+    const questionnaire = textResponse([
+      "基本情報",
+      "出発地: 向日町駅（プロフィールより）",
+      "次に必要な情報",
+      "目的地: どこへ行きたいですか？",
+      "旅行日程: いつごろ出発されますか？",
+    ].join("\n"));
+    questionnaire.decisionSummary = { interpretedGoal: "のんびりできる旅を探す", hardConstraints: [], softPreferences: [], selectedAction: "answer",
+      unresolvedFacts: ["destination", "date"], reasonCodes: ["information_missing"] };
+    const model = sequenceModel([questionnaire, textResponse("西日本の候補を3つ、仮定付きの行程で提案します")], requests);
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run({
+      executionId: "planning-discovery", feature: "concierge", userRequest: "のんびりできる旅を考えたい",
+      context: { tripContext: { planningStage: "inspiration" } },
+    });
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("候補を3つ");
+    expect(output.response).not.toContain("どこへ行きたいですか");
+    expect(requests[1]?.messages.at(-1)).toMatchObject({
+      role: "user",
+      content: [{ type: "text", text: expect.stringContaining("プロフィール由来の情報") }],
+    });
   });
 });
 
