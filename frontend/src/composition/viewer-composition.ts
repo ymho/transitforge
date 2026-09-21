@@ -269,7 +269,8 @@ const contextWorkspaceController = createContextWorkspaceController(
 const tripWorkspaceController = createTripWorkspaceController(activeConversationSession.id);
 const serverAgentSession = createConversationStreamSession({
   auth: currentAuthentication(), references: () => ({ conversationId: activeConversationSession.id,
-    tripId: tripWorkspaceController.current()?.id, tripRevision: tripWorkspaceController.current()?.revision, draftRevision: conversationUi.draftView(activeConversationSession.id)?.revision,
+    tripId: tripWorkspaceController.current()?.id, tripRevision: tripWorkspaceController.current()?.revision,
+    draftRequestVersion: conversationUi.draftRequestVersion(activeConversationSession.id),
     itemId: tripWorkspaceController.uiFocus()?.itemId }),
 });
 tripWorkspaceController.subscribe(() => {
