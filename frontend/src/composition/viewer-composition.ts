@@ -125,7 +125,9 @@ import { HttpTripSharingClient } from "../adapters/http/trip-sharing-client";
 import { consumeTripShareLink, makeTripShareLink, parseTripShareLink } from "../adapters/browser/trip-share-link";
 import { configureTripWorkspace } from "../presentation/trip-plan/trip-workspace";
 import { projectTripPlaces } from "@raiquora/trip/trip-places";
-import { createTripMapOverlay, type TripMapOverlay, type TripMapPoint } from "../adapters/mapbox/trip-map-overlay";
+import { createTripMapOverlay, type TripMapOverlay, type TripMapPoint, type TripMapRoute } from "../adapters/mapbox/trip-map-overlay";
+import { projectTripRouteGeometry } from "../domain/trip-route-geometry";
+import { HttpInTripContextClient } from "../adapters/http/in-trip-context-client";
 import { BrowserContextWorkspaceRepository } from "../adapters/browser/context-workspace-repository";
 import type { ConversationSession } from "../domain/conversation-session";
 import { createContextWorkspaceController } from "../usecases/context-workspace/context-workspace-controller";
@@ -255,7 +257,8 @@ let mapPlaceExplorerController: MapPlaceExplorerController | undefined;
 let groundAccessLayer: GroundAccessLayerController | undefined;
 let pendingMapCandidates: MapTravelCandidate[] = [];
 let tripMapOverlay: TripMapOverlay | undefined;
-let pendingTripMap: { key: string; points: TripMapPoint[]; itemId?: string } | undefined;
+let pendingTripMap: { key: string; points: TripMapPoint[]; routes: TripMapRoute[]; itemId?: string } | undefined;
+let tripRouteGeometry: ((trip: import("@raiquora/trip/trip").Trip) => TripMapRoute[]) | undefined;
 const weatherPreviewEnabled = import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get("weather-preview") === "mixed";
 const mobileChatShell = window.matchMedia("(max-width: 71.999rem)");
@@ -279,6 +282,7 @@ tripWorkspaceController.subscribe(() => {
 conversationUi.subscribe(() => serverAgentSession.contextChanged());
 
 const serverTripClient = new HttpServerTripClient();
+const inTripContextClient = new HttpInTripContextClient();
 const pendingDraftTripIds = new Map<string, { id: string; now: string; request: TripRequest }>();
 const serverTripList = createServerTripListSource(serverTripClient, canUsePersonalState);
 if (isSignedIn()) void serverTripList.refresh();
@@ -329,10 +333,11 @@ const focusTripMap = (itemId?: string) => {
   const points = projectTripPlaces(trip).visitedPlaces.flatMap((entry) => entry.place.coordinate ? [{
     itemId: entry.itemId, name: entry.place.name, longitude: entry.place.coordinate.longitude, latitude: entry.place.coordinate.latitude,
   }] : []);
-  pendingTripMap = { key: `${trip.id}:${trip.revision}`, points, ...(itemId ? { itemId } : {}) };
+  const routes = tripRouteGeometry?.(trip) ?? [];
+  pendingTripMap = { key: `${trip.id}:${trip.revision}`, points, routes, ...(itemId ? { itemId } : {}) };
   focusMapWorkspace();
-  if (!points.length) { tripWorkspace.report("保存済みの座標がないため、地図へ地点を表示できません。"); return; }
-  tripMapOverlay?.show(pendingTripMap.key, points, itemId);
+  if (!points.length && !routes.length) { tripWorkspace.report("保存済みの座標や確認できる鉄道経路がないため、地図へ表示できません。"); return; }
+  tripMapOverlay?.show(pendingTripMap.key, points, routes, itemId);
 };
 const selectSidebarMapMode = (mode: SidebarMapMode) => {
   pendingSidebarMapMode = mode;
@@ -458,7 +463,8 @@ const tripWorkspace = configureTripWorkspace({
   app, chat: aiGuidePanel, messages: aiGuideMessages, input: aiGuideInput,
   controller: tripWorkspaceController,
   showContext: (view) => contextWorkspaceController.show(view), returnToConversation,
-  showMap: focusTripMap, ask: (prompt) => aiGuideController.ask(prompt), nextItemId: () => crypto.randomUUID(),
+  showMap: focusTripMap, loadInTripContext: (tripId) => inTripContextClient.read(tripId),
+  ask: (prompt) => aiGuideController.ask(prompt), nextItemId: () => crypto.randomUUID(),
 });
 let canLeaveConditions = () => true;
 const activateConversation = async (sessionId: string) => {
@@ -631,6 +637,7 @@ primaryShell = configureAiFirstShell(document, app, {
   newConsultation: (prompt) => { void startNewConsultation(prompt).catch(() => aiGuideController.notify("相談を始めるにはログインしてください。")); },
   openChat: () => { aiGuideController.open(); if (tripWorkspaceController.current()) tripWorkspace.show("chat"); delete app.dataset.mapFocusMode; },
   openTrip: (id) => { void tripNavigation.open(id, "trip").catch(() => aiGuideController.notify("旅程を読み込めませんでした。")); },
+  openTravelMode: (id) => { void tripNavigation.open(id, "trip").then(() => tripWorkspace.openTravelMode()).catch(() => aiGuideController.notify("旅行モードを開けませんでした。")); },
   consultTrip: (id) => { void tripNavigation.open(id, "chat").catch(() => aiGuideController.notify("対象の旅程を読み込めませんでした。")); },
   renameTrip: async (id, title) => {
     const current = await serverTripClient.get(id); if (!current) throw new Error("Trip unavailable");
@@ -734,7 +741,7 @@ if (!token) {
     antialias: true,
   });
   tripMapOverlay = createTripMapOverlay(map, (itemId) => { tripWorkspaceController.focus(itemId); });
-  if (pendingTripMap) tripMapOverlay.show(pendingTripMap.key, pendingTripMap.points, pendingTripMap.itemId);
+  if (pendingTripMap) tripMapOverlay.show(pendingTripMap.key, pendingTripMap.points, pendingTripMap.routes, pendingTripMap.itemId);
   resizeContextMap = () => map.resize();
   groundAccessLayer = createGroundAccessLayer(map);
   verifiedPlaceLayer = createVerifiedPlaceLayer(map, (place) =>
@@ -907,6 +914,14 @@ if (!token) {
         );
       }
       const geometry = new PathGeometryIndex(catalog.paths);
+      tripRouteGeometry = (trip) => projectTripRouteGeometry(trip, trainIndex, geometry);
+      if (pendingTripMap) {
+        const trip = tripWorkspaceController.current();
+        if (trip && pendingTripMap.key === `${trip.id}:${trip.revision}`) {
+          const routes = tripRouteGeometry(trip); pendingTripMap = { ...pendingTripMap, routes };
+          tripMapOverlay?.show(`${pendingTripMap.key}:geometry`, pendingTripMap.points, routes, pendingTripMap.itemId);
+        }
+      }
       const lineColorIndex = new TrainLineColorIndex(stationLineCatalog);
       const colorsByServiceUid = new Map(
         trainIndex.trains.map((train) => [

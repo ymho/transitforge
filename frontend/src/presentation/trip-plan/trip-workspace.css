@@ -126,3 +126,11 @@
 @media (max-width: 30rem) { .trip-detail-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .trip-map-marker { width: 1.15rem; height: 1.15rem; padding: 0; border: 3px solid #fff; border-radius: 50%; background: #275f89; box-shadow: 0 2px 8px #172f4380; cursor: pointer; }
 .trip-map-marker:focus-visible { outline: 3px solid #163b58; outline-offset: 3px; }
+.trip-travel-mode { max-width: 52rem; margin-inline: auto; }
+.trip-travel-mode > header { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.trip-travel-mode > header h1 { min-width: 0; overflow-wrap: anywhere; }
+.trip-travel-mode-label { display: inline-block; padding: .35rem .65rem; border-radius: 999px; background: #e7f0f7; color: #244d6b; font-weight: 700; }
+.trip-travel-mode > section { margin-block: 1rem; }
+.trip-travel-item, .trip-travel-facts { padding: 1rem; margin-block: .75rem; border: 1px solid #dfe4e8; border-radius: 1rem; background: #fff; overflow-wrap: anywhere; }
+.trip-travel-item h3, .trip-travel-facts h2 { margin-top: 0; }
+.trip-travel-item p { white-space: pre-wrap; line-height: 1.6; }
