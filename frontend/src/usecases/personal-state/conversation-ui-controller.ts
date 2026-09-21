@@ -85,6 +85,12 @@ export class ConversationUiController {
     if (!session || session.tripId) return undefined;
     return { ...createTrip(session.id, "相談中の条件", session.createdAt, [], session.draftRequest), revision: session.revision };
   }
+  /** Stable content version for Agent cancellation checks; title/summary changes do not affect it. */
+  draftRequestVersion(id: string): string | undefined {
+    const session = this.sessions.find(s => s.id === id);
+    if (!session || session.tripId || session.draftRequest === undefined) return undefined;
+    return JSON.stringify(session.draftRequest);
+  }
   async saveDraftRequest(id: string, expected: TripRequest, next: TripRequest): Promise<void> {
     this.requireAuthentication();
     const generation = this.generation, request = parseConsultationRequest(next), before = parseConsultationRequest(expected);
