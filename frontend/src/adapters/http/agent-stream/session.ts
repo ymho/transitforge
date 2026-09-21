@@ -11,7 +11,16 @@ export interface ConversationStreamRequest {
   tripId?: string;
   uiContext?: { itemId?: string; calendarDate?: string };
 }
-export interface ConversationStreamReferences { conversationId: string; tripId?: string; itemId?: string; tripRevision?: number; draftRevision?: number }
+export interface ConversationStreamReferences {
+  conversationId: string;
+  tripId?: string;
+  itemId?: string;
+  tripRevision?: number;
+  /** Legacy numeric draft revision for callers that have one. */
+  draftRevision?: number;
+  /** Content version of the unsaved consultation request; metadata changes must not cancel a turn. */
+  draftRequestVersion?: string;
+}
 /** Transport only. An action owns one immutable turn ID; retry never regenerates it. */
 export function createConversationStreamSession(options: {
   auth: AuthSession; references: () => ConversationStreamReferences;
@@ -23,7 +32,11 @@ export function createConversationStreamSession(options: {
   const sync = () => {
     const next = options.references();
     if (next.conversationId !== refs.conversationId) { conversationGeneration++; active?.abort(); }
-    if (next.tripId !== refs.tripId || next.tripRevision !== refs.tripRevision || next.draftRevision !== refs.draftRevision) { tripGeneration++; active?.abort(); }
+    if (next.tripId !== refs.tripId || next.tripRevision !== refs.tripRevision ||
+        next.draftRevision !== refs.draftRevision || next.draftRequestVersion !== refs.draftRequestVersion) {
+      tripGeneration++;
+      active?.abort();
+    }
     refs = { ...next };
   };
   const version = () => `${authGeneration}:${conversationGeneration}:${tripGeneration}`;
