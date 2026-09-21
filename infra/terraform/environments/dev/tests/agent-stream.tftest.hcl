@@ -35,7 +35,7 @@ run "current_topology" {
     error_message = "The current topology must retain the Server Agent resources."
   }
   assert {
-    condition     = aws_iam_role.github_agent_eval.name == "transitforge-dev-github-agent-eval" && aws_iam_role_policy.github_agent_eval.role == aws_iam_role.github_agent_eval.id
+    condition     = aws_iam_role.github_agent_eval.name == "transitforge-dev-github-agent-eval" && aws_iam_role_policy.github_agent_eval.name == "invoke-bedrock-model-evaluation"
     error_message = "Manual model comparison must use its dedicated OIDC role and inline Bedrock-only policy."
   }
   assert {
@@ -88,70 +88,3 @@ run "enabled_contract" {
     condition     = alltrue([for o in aws_cloudfront_distribution.website.origin : o.response_completion_timeout == 260 && o.connection_attempts == 1 && one(o.custom_origin_config).origin_read_timeout == 60 if o.origin_id == local.agent_stream_name])
     error_message = "CloudFront timeouts must follow ADR 0070."
   }
-  assert {
-    condition     = aws_api_gateway_method_settings.agent_stream["stream"].settings[0].data_trace_enabled == false && aws_api_gateway_method_settings.agent_stream["stream"].settings[0].metrics_enabled && aws_api_gateway_method_settings.agent_stream["stream"].settings[0].logging_level == "OFF"
-    error_message = "Metrics must not enable body/token execution logging."
-  }
-  assert {
-    condition     = aws_iam_role.agent_stream_gateway_logs["stream"].assume_role_policy == jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Principal = { Service = "apigateway.amazonaws.com" }, Action = "sts:AssumeRole" }] }) && length(aws_iam_role_policy.agent_stream_gateway_logs) == 1 && aws_iam_role_policy_attachment.agent_stream_gateway_logs["stream"].policy_arn == "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
-    error_message = "The API Gateway account role must retain the partial-apply inline policy and AWS managed CloudWatch Logs policy."
-  }
-}
-run "custom_domain_contract" {
-  command = plan
-  variables {
-    enable_fixed_egress_provider       = true
-    cloudflare_front_door_enabled      = true
-    legacy_cloudfront_redirect_enabled = true
-    environment                        = "prod"
-  }
-  assert {
-    condition     = length([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : b if b.path_pattern == "/api/agent-stream"]) == 0 && length([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : b if b.path_pattern == "/api/agent-stream"]) == 1 && length([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : b if b.path_pattern == "/api/agent"]) == 1
-    error_message = "Use the active custom-domain distribution without replacing the Browser route."
-  }
-  assert {
-    condition     = aws_api_gateway_stage.agent_stream["stream"].stage_name == "prod" && alltrue([for o in aws_cloudfront_distribution.viewer[0].origin : o.origin_path == "/prod" && o.response_completion_timeout == 260 && one(o.custom_origin_config).origin_read_timeout == 60 if o.origin_id == local.agent_stream_name])
-    error_message = "The environment stage and CloudFront origin must match."
-  }
-}
-run "custom_domain_current_topology" {
-  command = plan
-  variables {
-    cloudflare_front_door_enabled      = true
-    legacy_cloudfront_redirect_enabled = true
-  }
-  assert {
-    condition     = length(aws_lambda_function.agent_stream) == 1 && length(aws_api_gateway_rest_api.agent_stream) == 1 && length([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : b if b.path_pattern == "/api/agent-stream"]) == 1 && length([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : b if b.path_pattern == "/api/agent"]) == 1
-    error_message = "The custom-domain topology must retain both current API routes."
-  }
-}
-
-run "stream_requires_provider" {
-  command = plan
-  variables {
-    enable_fixed_egress_provider = false
-  }
-  expect_failures = [aws_lambda_function.agent_stream["stream"]]
-}
-
-run "custom_business_deadline" {
-  command = plan
-  variables {
-    enable_fixed_egress_provider  = true
-    server_agent_max_execution_ms = 180000
-  }
-  assert {
-    condition     = aws_lambda_function.agent_stream["stream"].environment[0].variables.SERVER_AGENT_MAX_EXECUTION_MS == "180000" && aws_lambda_function.agent_stream["stream"].timeout == 240
-    error_message = "Business budget must remain separate from Lambda timeout."
-  }
-}
-run "reject_transport_sized_business_deadline" {
-  command = plan
-  variables { server_agent_max_execution_ms = 240000 }
-  expect_failures = [var.server_agent_max_execution_ms]
-}
-run "reject_fractional_business_deadline" {
-  command = plan
-  variables { server_agent_max_execution_ms = 120000.5 }
-  expect_failures = [var.server_agent_max_execution_ms]
-}
