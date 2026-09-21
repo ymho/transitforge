@@ -774,7 +774,7 @@ describe("MultiStepAgentRuntime", () => {
   it("does not let a planning turn ask again for optional trip details", async () => {
     const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
     const question = textResponse("出発地を教えてください");
-    question.decisionSummary = { interpretedGoal: "旅行を計画", hardConstraints: [], softPreferences: [], selectedAction: "ask_user",
+    question.decisionSummary = { interpretedGoal: "旅行を計画", hardConstraints: [], softPreferences: [], selectedAction: "answer",
       unresolvedFacts: ["origin"], reasonCodes: ["information_missing"] };
     const model = sequenceModel([question, textResponse("未確認条件を仮定した仮プランです")], requests);
     const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run({
