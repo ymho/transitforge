@@ -1,3 +1,4 @@
+import { parseConsultationRequest } from "@raiquora/trip/consultation-request";
 import { isUserProfile, type UserProfile } from "@raiquora/trip/travel-profile";
 import { AuthenticationError, type TrustedPrincipal } from "./trusted-principal.js";
 
@@ -13,6 +14,7 @@ export interface ConversationMetadata {
   pendingTopics: string[];
   /** Reference only. Following it requires independent Trip authorization. */
   tripId?: string;
+  draftRequest?: import("@raiquora/trip/trip-request").TripRequest;
 }
 export interface Conversation extends ConversationMetadata {
   conversationId: string;
@@ -23,7 +25,7 @@ export interface Conversation extends ConversationMetadata {
   messageCount: number;
 }
 export interface MessageInput { role: "user" | "assistant"; text: string }
-export interface ConversationMessage extends MessageInput { sequence: number; createdAt: string }
+export interface ConversationMessage extends MessageInput { sequence: number; createdAt: string; tripUpdateProposal?: import("@raiquora/trip/public-request-proposal").PublicRequestProposal; consultationRequestProposal?: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal; tripCostProposal?: import("@raiquora/trip/public-cost-proposal").PublicCostProposal }
 export interface ProfileState { profile: UserProfile; revision: number }
 export interface StateClock { now(): Date }
 export interface PageOptions { limit?: number; after?: string }
@@ -48,10 +50,14 @@ export function exactObject(value: unknown, keys: readonly string[]): asserts va
 }
 function text(value: unknown, maximum: number): boolean { return typeof value === "string" && value.length <= maximum; }
 export function metadata(value: unknown): ConversationMetadata {
-  exactObject(value, ["title", "scope", "summary", "resolvedTopics", "pendingTopics", "tripId"]);
+  exactObject(value, ["title", "scope", "summary", "resolvedTopics", "pendingTopics", "tripId", "draftRequest"]);
   if (!text(value.title, 160) || typeof value.scope !== "string" || !["general", "trip", "place", "route"].includes(value.scope) || !text(value.summary, 4000) ||
     ![value.resolvedTopics, value.pendingTopics].every((v) => Array.isArray(v) && v.length <= 20 && v.every((t) => text(t, 200)))) throw new StateError("invalid-input");
   if (value.tripId !== undefined) stateId(value.tripId);
+  if (value.draftRequest !== undefined) {
+    if (value.tripId !== undefined) throw new StateError("invalid-input");
+    try { parseConsultationRequest(value.draftRequest); } catch { throw new StateError("invalid-input"); }
+  }
   return structuredClone(value) as unknown as ConversationMetadata;
 }
 export function messageInputs(value: unknown): MessageInput[] {

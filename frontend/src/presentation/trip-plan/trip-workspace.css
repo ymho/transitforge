@@ -99,3 +99,30 @@
   .trip-workspace-actions button:first-child { border-color: #b9ccda; background: #edf4f9; }
   .trip-workspace button:hover:not(:disabled) { border-color: #aec3d2; background: #f4f8fb; }
 }
+
+.trip-costs { margin-block: 1.5rem; padding: 1rem; background: #fff; border: 1px solid #dfe4e8; border-radius: 1rem; }
+.trip-cost-item { padding: .75rem 0; border-top: 1px solid #dfe4e8; overflow-wrap: anywhere; }
+.trip-cost-item p { font-size: .9rem; line-height: 1.6; }
+.trip-cost-item strong, .trip-cost-total { font-variant-numeric: tabular-nums; }
+.trip-cost-editor { display: flex; flex-wrap: wrap; gap: .5rem; padding-block: .5rem; }
+.trip-cost-editor input, .trip-cost-editor select, .trip-costs button { min-height: 44px; max-width: 100%; }
+.trip-cost-editor input { box-sizing: border-box; font-size: 16px; }
+.trip-cost-warning { color: #715418; }
+.trip-detail-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .35rem; margin-block: 1rem; }
+.trip-detail-tabs [role="tab"] { min-width: 0; overflow-wrap: anywhere; }
+.trip-detail-tabs [aria-selected="true"] { border-color: #587b98; background: #e7f0f7; font-weight: 700; }
+.trip-detail-panel[hidden] { display: none; }
+.trip-detail-overview-copy, .trip-detail-map { padding: 1rem; border: 1px solid #dfe4e8; border-radius: 1rem; background: #fff; }
+.trip-detail-overview-copy { margin-bottom: 1rem; }
+.trip-detail-overview-copy h2, .trip-detail-map h2 { margin-top: 0; }
+.trip-detail-map-list { list-style: none; margin: .75rem 0; padding: 0; }
+.trip-detail-map-list li { display: flex; align-items: center; justify-content: space-between; gap: .75rem; border-top: 1px solid #dfe4e8; padding-block: .5rem; }
+.trip-detail-map-list button { min-width: 0; flex: 1; text-align: left; overflow-wrap: anywhere; }
+.trip-day-tabs { display: flex; gap: .4rem; overflow-x: auto; padding-block: .35rem; scrollbar-width: thin; }
+.trip-day-tabs[hidden] { display: none; }
+.trip-day-tabs [role="tab"] { flex: 0 0 auto; white-space: nowrap; }
+.trip-day-tabs [aria-selected="true"] { border-color: #587b98; background: #e7f0f7; font-weight: 700; }
+.trip-workspace-day[hidden] { display: none; }
+@media (max-width: 30rem) { .trip-detail-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.trip-map-marker { width: 1.15rem; height: 1.15rem; padding: 0; border: 3px solid #fff; border-radius: 50%; background: #275f89; box-shadow: 0 2px 8px #172f4380; cursor: pointer; }
+.trip-map-marker:focus-visible { outline: 3px solid #163b58; outline-offset: 3px; }

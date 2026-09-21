@@ -21,7 +21,7 @@ export interface ServerStateContextReaders {
 }
 
 /** Read-only and per-turn. No cache, message append, transport or model dependencies. */
-export function createServerStateContextLoader(readers: ServerStateContextReaders, options: { historyBeforeSequence?: number } = {}) {
+export function createServerStateContextLoader(readers: ServerStateContextReaders, options: { historyBeforeSequence?: number; onTrip?: (trip: import("@raiquora/trip/trip").Trip) => void; onConsultation?: (value: { conversationId: string; createdAt: string; request: import("@raiquora/trip/trip-request").TripRequest }) => void } = {}) {
   const before = options.historyBeforeSequence;
   if (before !== undefined && (!Number.isSafeInteger(before) || before < 1)) throw new StateError("invalid-input");
   return async (input: ServerStateContextReferences): Promise<AgentRuntimeContextInput> => {
@@ -39,12 +39,16 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
     if (tripId && !trip) throw new StateError("not-found");
     const profile = await readers.profiles.get(principal);
     const history = conversation ? await recentConversation(readers.conversations, principal, conversation, before) : undefined;
+    if (trip) options.onTrip?.(structuredClone(trip));
+    const consultationRequest = !trip && conversation ? conversation.draftRequest ?? { constraints: [], assumptions: [] } : undefined;
+    if (conversation && consultationRequest) options.onConsultation?.({ conversationId: conversation.conversationId, createdAt: conversation.createdAt, request: structuredClone(consultationRequest) });
     const snapshot = createAgentContextSnapshot(profile?.profile, trip);
     const focusedItem = itemId ? trip?.items.find((item) => item.id === itemId) : undefined;
     return {
       ...(history ? { conversation: history } : {}),
       ...(snapshot.profile ? { travelProfile: snapshot.profile } : {}),
       ...(snapshot.trip ? { currentTrip: snapshot.trip } : {}),
+      ...(consultationRequest ? { consultationRequest } : {}),
       ...(focusedItem ? { featureContext: { uiFocus: { itemId: focusedItem.id, item: selectedTripItemSnapshot(focusedItem) } } } : {}),
     };
   };

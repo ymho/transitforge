@@ -83,3 +83,6 @@
 .consultation-add-condition { display: flex; flex-wrap: wrap; gap: .4rem; padding-block: .75rem; }
 .consultation-conditions { overscroll-behavior: contain; }
 @media (max-width: 44rem) { .consultation-condition-editor input, .consultation-condition-editor select { font-size: 16px; } }
+
+.consultation-draft-review { flex-direction: column; }
+.consultation-draft-review p { white-space: pre-line; overflow-wrap: anywhere; }

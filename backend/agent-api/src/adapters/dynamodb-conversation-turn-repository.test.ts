@@ -140,3 +140,27 @@ it("metadata contention leaves no partial receipt or message and retry uses the 
   await f.turns.completeTurn(identity, lease, result);
   expect((await f.conversations.history(principal, conversationId)).items.map((m) => m.sequence)).toEqual([1, 2, 3]);
 });
+
+it("atomically retains public proposals in receipt/history and detects a changed proposal on retry", async () => {
+  const f = await setup(), lease = await begin(f);
+  const tripUpdateProposal = { tripId: secondId, baseRevision: 0, summary: "条件案", patches: [{ type: "request" as const, request: { constraints: [], assumptions: [] } }] as const };
+  const final = { ...result, tripUpdateProposal };
+  f.faults.lostResponse = true;
+  await expect(f.turns.completeTurn(identity, lease, final)).rejects.toMatchObject({ code: "unavailable" });
+  expect(await f.turns.beginTurn(identity, request)).toEqual({ state: "completed", result: final });
+  expect((await f.conversations.history(principal, conversationId)).items[1].tripUpdateProposal).toEqual(tripUpdateProposal);
+  await expect(f.turns.completeTurn(identity, lease, { ...final, tripUpdateProposal: { ...tripUpdateProposal, baseRevision: 1 } })).rejects.toMatchObject({ code: "conflict" });
+  await expect(f.conversations.append(principal, conversationId, 2, [{ role: "assistant", text: "偽造", tripUpdateProposal }] as never)).rejects.toMatchObject({ code: "invalid-input" });
+});
+it("retains draft proposals across a lost completion response and rejects changed, foreign or client-injected proposals", async () => {
+  const f = await setup(), lease = await begin(f), baseRequest = { constraints: [], assumptions: [] };
+  const consultationRequestProposal = { conversationId, baseRequest, request: { ...baseRequest, goal: "美術館" }, summary: "条件案" };
+  const final = { ...result, consultationRequestProposal };
+  await expect(f.turns.completeTurn(identity, lease, { ...result, consultationRequestProposal: { ...consultationRequestProposal, conversationId: secondId } })).rejects.toMatchObject({ code: "invalid-input" });
+  f.faults.lostResponse = true;
+  await expect(f.turns.completeTurn(identity, lease, final)).rejects.toMatchObject({ code: "unavailable" });
+  expect(await f.turns.beginTurn(identity, request)).toEqual({ state: "completed", result: final });
+  expect((await f.conversations.history(principal, conversationId)).items[1].consultationRequestProposal).toEqual(consultationRequestProposal);
+  await expect(f.turns.completeTurn(identity, lease, { ...final, consultationRequestProposal: { ...consultationRequestProposal, summary: "変更" } })).rejects.toMatchObject({ code: "conflict" });
+  await expect(f.conversations.append(principal, conversationId, 2, [{ role: "assistant", text: "偽造", consultationRequestProposal }] as never)).rejects.toMatchObject({ code: "invalid-input" });
+});

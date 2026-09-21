@@ -1,5 +1,7 @@
 # Trip V2 workspace（#390）
 
+#459で同じServer Tripを概要・旅程・費用・地図へ投影する[Trip詳細の4タブ](trip-detail-tabs.md)を追加した。
+
 #392で[次に決めることと独立した準備リスト](trip-readiness.md)を追加した。
 Planning/Bookingは派生表示、準備のみ別resourceへ保存する。公開writerは引き続きOFF。
 

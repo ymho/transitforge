@@ -17,6 +17,7 @@ export function createServerAgent(options: {
   limits?: ServerAgentDependencies["limits"];
   newExecutionId?: () => string;
   loadContext?: ServerAgentDependencies["loadContext"];
+  registerAdditionalTools?: ServerAgentDependencies["registerTools"];
 }) {
   return createServerAgentApplication({
     newExecutionId: options.newExecutionId ?? randomUUID,
@@ -24,9 +25,9 @@ export function createServerAgent(options: {
     modelClassPolicy: structuredModelClassPolicy,
     limits: options.limits,
     loadContext: options.loadContext,
-    registerTools: (tools, evidence) => registerServerTools(tools, evidence, [
+    registerTools: (tools, evidence, scope) => { registerServerTools(tools, evidence, [
       { descriptor: weatherToolDescriptor, operation: createWeatherForecastOperation(options.weather), evidence: externalTravelEvidence },
       ...(options.additionalTools ?? []),
-    ]),
+    ]); options.registerAdditionalTools?.(tools, evidence, scope); },
   });
 }

@@ -65,6 +65,8 @@ export interface AiGuidePanelElements {
   historyRepository: ConversationHistoryRepository;
   submitFeedback?: (feedback: ConversationFeedback) => Promise<void>;
   onFirstPrompt?: (prompt: string) => void;
+  onTripCostProposal?: (proposal: import("@raiquora/trip/public-cost-proposal").PublicCostProposal) => void;
+  onConsultationRequestProposal?: (proposal: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal) => void;
   onTripUpdateProposal?: (proposal: import("@raiquora/trip/trip").TripUpdateProposal) => void;
   onChecklistProposal?: (proposal: import("@raiquora/trip/trip-checklist").ChecklistProposal) => void;
   onPlaces?: (places: PlaceMediaSearchResult["places"]) => void;
@@ -250,6 +252,22 @@ export function configureAiGuidePanel(
     showBadFeedbackComment(message, send);
   });
 
+  const addProposalAction = (message: HTMLElement, response: ViewerAgentResponse) => {
+    if (typeof response === "string") return;
+    if ("tripCostProposal" in response && elements.onTripCostProposal) {
+      const button = document.createElement("button"); button.type = "button"; button.textContent = "費用の概算を確認";
+      button.addEventListener("click", () => elements.onTripCostProposal?.(response.tripCostProposal)); message.append(button);
+    }
+    const review = "consultationRequestProposal" in response && elements.onConsultationRequestProposal
+      ? () => elements.onConsultationRequestProposal?.(response.consultationRequestProposal)
+      : "tripUpdateProposal" in response && elements.onTripUpdateProposal ? () => elements.onTripUpdateProposal?.(response.tripUpdateProposal) : undefined;
+    if (!review) return;
+    const button = document.createElement("button");
+    button.type = "button"; button.textContent = "条件の変更案を確認";
+    button.addEventListener("click", review);
+    message.append(button);
+  };
+
   let activeConversation: ConversationGuidance | undefined;
   let activeTripContext: TripContext | undefined;
   let hasConversationHistory = false;
@@ -324,7 +342,10 @@ export function configureAiGuidePanel(
           input.placeholder = "列車、行き先、旅の相談を入力";
         }
         resolveAssistantMessage(pendingMessage, response, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants);
+        addProposalAction(pendingMessage, response);
         // Only a newly delivered V2 proposal opens the preview. Restoring history never reapplies it.
+        if (typeof response !== "string" && "consultationRequestProposal" in response) elements.onConsultationRequestProposal?.(response.consultationRequestProposal);
+        if (typeof response !== "string" && "tripCostProposal" in response && !("tripUpdateProposal" in response)) elements.onTripCostProposal?.(response.tripCostProposal);
         if (typeof response !== "string" && "tripUpdateProposal" in response) elements.onTripUpdateProposal?.(response.tripUpdateProposal);
         if (typeof response !== "string" && "checklistProposal" in response) elements.onChecklistProposal?.(response.checklistProposal);
         if (!submitFeedback) pendingMessage.querySelector(".conversation-feedback")?.remove();
@@ -425,6 +446,7 @@ export function configureAiGuidePanel(
         }
         const restored = appendPendingMessage(messages, entry.messageId);
         resolveAssistantMessage(restored, entry.response, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants, false);
+        addProposalAction(restored, entry.response);
         if (!submitFeedback) restored.querySelector(".conversation-feedback")?.remove();
         activeConversation = typeof entry.response !== "string" && "conversation" in entry.response
           ? entry.response.conversation

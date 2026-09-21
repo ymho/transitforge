@@ -5,8 +5,8 @@ export interface ConversationTurnIdentity {
   conversationId: string;
   turnId: string;
 }
-/** Only the user-facing text is replayable; Runtime traces/evidence are deliberately absent. */
-export interface ConversationTurnResult { status: "completed" | "follow_up"; response: string }
+/** Only user-facing text and validated review proposals are replayable; Runtime traces/evidence are absent. */
+export interface ConversationTurnResult { status: "completed" | "follow_up"; response: string; tripUpdateProposal?: import("@raiquora/trip/public-request-proposal").PublicRequestProposal; consultationRequestProposal?: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal; tripCostProposal?: import("@raiquora/trip/public-cost-proposal").PublicCostProposal }
 export interface ConversationTurnLease { attemptId: string; userSequence: number }
 export type BeginConversationTurn = { state: "started"; lease: ConversationTurnLease } |
   { state: "completed"; result: ConversationTurnResult };

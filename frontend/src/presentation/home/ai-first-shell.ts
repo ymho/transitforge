@@ -29,6 +29,7 @@ export interface AiFirstShellPorts {
   journeySettings(): { transferPace: string; rankingPreference: string };
   setJourneySettings(settings: { transferPace: string; rankingPreference: string }): void;
   openNotifications(): void;
+  canLeave?(): boolean;
   now(): Date;
 }
 
@@ -164,11 +165,13 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     const page = root.querySelector<HTMLElement>(`[data-page="${current}"]`); if (page) page.scrollTop = scrolls.get(current) ?? 0;
   };
   function navigate(view: PrimaryView) {
+    if (view !== current && ports.canLeave?.() === false) return;
     if (!document.dispatchEvent(new Event("transitforge:profile-leave", { cancelable: true }))) return;
     window.history.pushState(null, "", `#${view}`); apply();
   }
   root.querySelectorAll<HTMLAnchorElement>("[data-primary], .product-brand").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); navigate(link.hash.slice(1) as PrimaryView); }));
   function showMap(mode: "realtime" | "simulation") {
+    if (ports.canLeave?.() === false) return;
     mapReturn = current; window.history.pushState({ returnView: current, mapMode: mode }, "", "#map"); apply();
   }
   root.querySelectorAll<HTMLButtonElement>("[data-map]").forEach((button) => button.addEventListener("click", () => showMap(button.dataset.map as "realtime" | "simulation")));

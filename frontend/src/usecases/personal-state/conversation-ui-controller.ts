@@ -1,3 +1,6 @@
+import { createTrip, type Trip } from "@raiquora/trip/trip";
+import { parseConsultationRequest } from "@raiquora/trip/consultation-request";
+import type { TripRequest } from "@raiquora/trip/trip-request";
 import type { ConversationSession } from "../../domain/conversation-session";
 import type { ConversationHistoryRepository, ConversationMessage } from "../concierge/conversation-history-repository";
 import type { ServerConversation, ServerConversationClient, ServerConversationMetadata } from "./server-conversation-client";
@@ -76,6 +79,27 @@ export class ConversationUiController {
     } while (after);
     return undefined;
   }
+  /** Ephemeral form projection only: never sent to the Trip API or model as an adopted Trip. */
+  draftView(id: string): Trip | undefined {
+    const session = this.sessions.find(s => s.id === id);
+    if (!session || session.tripId) return undefined;
+    return { ...createTrip(session.id, "相談中の条件", session.createdAt, [], session.draftRequest), revision: session.revision };
+  }
+  async saveDraftRequest(id: string, expected: TripRequest, next: TripRequest): Promise<void> {
+    this.requireAuthentication();
+    const generation = this.generation, request = parseConsultationRequest(next), before = parseConsultationRequest(expected);
+    const current = await this.client.get(id);
+    if (generation !== this.generation || !current || current.tripId) throw new Error("Conversation changed");
+    const actual = current.draftRequest ?? { constraints: [], assumptions: [] };
+    if (JSON.stringify(actual) !== JSON.stringify(request)) {
+      if (JSON.stringify(actual) !== JSON.stringify(before)) throw new Error("条件が更新されています。会話を開き直してください。");
+      await this.client.update(id, current.revision, { ...metadataOf(toSession(current)), draftRequest: request });
+      if (generation !== this.generation) throw new Error("Conversation changed");
+    }
+    const saved = await this.client.get(id);
+    if (generation !== this.generation || !saved || saved.tripId || JSON.stringify(saved.draftRequest ?? { constraints: [], assumptions: [] }) !== JSON.stringify(request)) throw new Error("条件の保存結果を確認できません。");
+    this.sessions = this.sessions.map(s => s.id === id ? toSession(saved) : s); this.notify();
+  }
   async update(id: string, metadata: ServerConversationMetadata): Promise<ConversationSession> {
     this.requireAuthentication();
     const previous = this.sessions.find((item) => item.id === id);
@@ -106,12 +130,31 @@ export class ConversationUiController {
   async loadHistory(id: string): Promise<ConversationMessage[]> {
     this.requireAuthentication();
     const generation = ++this.historyGeneration;
-    const page = await this.client.history(id, { limit: 50 });
-    if (generation !== this.historyGeneration || this.activeId !== id) return [];
-    const entries: ConversationMessage[] = page.items.map((item) => item.role === "user"
+    const current = () => generation === this.historyGeneration && this.activeId === id;
+    const snapshot = await this.client.get(id);
+    if (!current()) return [];
+    if (!snapshot) throw new Error("Conversation unavailable");
+    const start = Math.max(0, snapshot.messageCount - 50);
+    let last = start;
+    const items: import("./server-conversation-client").ServerConversationMessage[] = [];
+    // Seek to the recent history. Dynamo byte pages can split even a 50-message window.
+    while (last < snapshot.messageCount) {
+      const page = await this.client.history(id, { limit: snapshot.messageCount - last, after: String(last).padStart(12, "0") });
+      if (!current()) return [];
+      if (!page.items.length) throw new Error("Incomplete Conversation history");
+      for (const item of page.items) {
+        if (item.sequence !== last + 1 || item.sequence > snapshot.messageCount) throw new Error("Invalid Conversation history sequence");
+        items.push(item); last = item.sequence;
+      }
+    }
+    const latest = await this.client.get(id);
+    if (!current()) return [];
+    if (latest?.revision !== snapshot.revision) throw new Error("Conversation changed while loading history");
+    const entries: ConversationMessage[] = items.map((item) => item.role === "user"
       ? { messageId: `${id}:${item.sequence}`, role: "user", text: item.text }
-      : { messageId: `${id}:${item.sequence}`, role: "assistant", response: item.text });
-    this.histories.set(id, entries); return structuredClone(entries);
+      : { messageId: `${id}:${item.sequence}`, role: "assistant", response: item.tripCostProposal ? { text: item.text, tripCostProposal: item.tripCostProposal, ...(item.tripUpdateProposal ? { tripUpdateProposal: item.tripUpdateProposal } : {}) } : item.consultationRequestProposal ? { text: item.text, consultationRequestProposal: item.consultationRequestProposal } : item.tripUpdateProposal ? { text: item.text, tripUpdateProposal: item.tripUpdateProposal } : item.text });
+    this.sessions = this.sessions.map(session => session.id === id ? toSession(latest!) : session);
+    this.histories.set(id, entries); this.notify(); return structuredClone(entries);
   }
   /** Read back a server-side reference after a Trip write; never synthesize a local link. */
   async refresh(id: string): Promise<ConversationSession | undefined> {
@@ -128,14 +171,14 @@ export class ConversationUiController {
 
 function toSession(value: ServerConversation): ConversationSession & { revision: number } {
   return { id: value.conversationId, title: value.title, scope: value.scope, summary: value.summary,
-    resolvedTopics: value.resolvedTopics, pendingTopics: value.pendingTopics, tripId: value.tripId,
+    resolvedTopics: value.resolvedTopics, pendingTopics: value.pendingTopics, tripId: value.tripId, draftRequest: value.draftRequest,
     createdAt: value.createdAt, updatedAt: value.updatedAt, revision: value.revision };
 }
 function metadataOf(value: ConversationSession): ServerConversationMetadata {
   return { title: value.title, scope: value.scope, summary: value.summary,
-    resolvedTopics: value.resolvedTopics, pendingTopics: value.pendingTopics, ...(value.tripId ? { tripId: value.tripId } : {}) };
+    resolvedTopics: value.resolvedTopics, pendingTopics: value.pendingTopics, ...(value.tripId ? { tripId: value.tripId } : {}), ...(value.draftRequest ? { draftRequest: value.draftRequest } : {}) };
 }
 function metadataFor(value: Partial<ServerConversationMetadata>): ServerConversationMetadata {
   return { title: value.title ?? "新しい会話", scope: value.scope ?? "general", summary: value.summary ?? "",
-    resolvedTopics: value.resolvedTopics ?? [], pendingTopics: value.pendingTopics ?? [], ...(value.tripId ? { tripId: value.tripId } : {}) };
+    resolvedTopics: value.resolvedTopics ?? [], pendingTopics: value.pendingTopics ?? [], ...(value.tripId ? { tripId: value.tripId } : {}), ...(value.draftRequest ? { draftRequest: value.draftRequest } : {}) };
 }

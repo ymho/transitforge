@@ -4,6 +4,8 @@
 本契約の担当は [#415](https://github.com/ymho/transitforge/issues/415)、判断記録は
 [ADR 0052](../decisions/0052-establish-trip-v2-contract-and-migration.md)とする。
 
+[AI費用概算](trip-cost-estimates.md)はTripのoptional costsへ保持し、取得済み価格や成立性factとは分離する（#458）。
+
 #384の回答観測・Runtimeへの接続・評価・writer gateの実装記録は[Ask + Progress](ask-progress.md)を参照する。
 #410のActivity/add/候補採用と部分migrationは[Activity導入記録](trip-activity.md)を参照する。
 #389の既存revisionを使うCAS/Proposal/receipt/競合回復は[更新契約](trip-concurrency.md)を参照する。

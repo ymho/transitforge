@@ -23,11 +23,9 @@
 
 ## Issueを完了にしない残件
 
-現在のServer Agent / ConversationTurn / SSE finalは本文文字列だけを返し、TripUpdateProposalの
-公開・永続再取得契約を持たない。旧Frontendのtrip-progress-toolsはproduction Serverに登録されていない。
-したがって「AIが構造化変更案を生成 → 承認」の全経路は、このUI変更だけでは完成しない。
-Serverでの提案生成・対象/revision固定・公開projection・turn再送/履歴再表示時の扱いを設計して接続する必要がある。
-モデル本文をJSON/regexで解釈して代用しない。
+[Server Agentの条件仮置き案](agent-request-proposals.md)で、旅行全体のRequest仮定案について
+生成→完了receipt/履歴保存→SSE→明示preview/承認を接続した。本文からJSON/regexで復元しない。
+既知条件の置換・解除、人数・目的の変更も明示確認用の案として接続した。item scopeの提案公開は残る。
 
 新規Trip作成前の構造化条件の保持・採用時引継ぎ、候補採用から実項目を含む仮旅程保存も残件。
 現在の明示仮保存は空Tripを作成し、その後の条件編集を提供する。

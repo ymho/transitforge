@@ -1,3 +1,6 @@
+import { parsePublicCostProposal } from "@raiquora/trip/public-cost-proposal";
+import { parseConsultationRequestProposal } from "@raiquora/trip/consultation-request-proposal";
+import { parsePublicRequestProposal } from "@raiquora/trip/public-request-proposal";
 import { createHash, randomUUID } from "node:crypto";
 import { StateError, exactObject, messageInputs, stateId, type StateClock } from "../contracts/server-state.js";
 import type { BeginConversationTurn, ConversationTurnIdentity, ConversationTurnLease, ConversationTurnRepository, ConversationTurnResult } from "../ports/conversation-turn-repository.js";
@@ -14,10 +17,13 @@ interface TurnRecord {
   result?: ConversationTurnResult;
 }
 function finalResult(value: ConversationTurnResult): ConversationTurnResult {
-  exactObject(value, ["status", "response"]);
+  exactObject(value, ["status", "response", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"]);
   if (value.status !== "completed" && value.status !== "follow_up") throw new StateError("invalid-input");
   messageInputs([{ role: "assistant", text: value.response }]);
-  return { status: value.status, response: value.response };
+  try {
+    if ((value.tripUpdateProposal || value.tripCostProposal) && value.consultationRequestProposal) throw new Error();
+    return { status: value.status, response: value.response, ...(value.tripCostProposal !== undefined ? { tripCostProposal: parsePublicCostProposal(value.tripCostProposal) } : {}), ...(value.tripUpdateProposal !== undefined ? { tripUpdateProposal: parsePublicRequestProposal(value.tripUpdateProposal) } : {}), ...(value.consultationRequestProposal !== undefined ? { consultationRequestProposal: parseConsultationRequestProposal(value.consultationRequestProposal) } : {}) };
+  } catch { throw new StateError("invalid-input"); }
 }
 
 /** Conversation CAS fences delete and every turn transition; no separate table or expiring receipts. */
@@ -49,6 +55,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     if (!current) throw new StateError("not-found");
     const old = await this.store.read(input.principal, this.key(input));
     const turn = old ? this.decodeTurn(old) : undefined;
+    if (turn?.result?.consultationRequestProposal && turn.result.consultationRequestProposal.conversationId !== input.conversationId) throw new StateError("unavailable");
     const latest = await this.get(input.principal, input.conversationId);
     if (!latest) throw new StateError("not-found");
     if (latest.revision !== current.revision) throw new StateError("conflict");
@@ -86,10 +93,11 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     exactObject(lease, ["attemptId", "userSequence"]); stateId(lease.attemptId);
     const attemptId = lease.attemptId, userSequence = lease.userSequence;
     const saved = result === undefined ? undefined : finalResult(result);
+    if (saved?.consultationRequestProposal && saved.consultationRequestProposal.conversationId !== input.conversationId) throw new StateError("invalid-input");
     const { current, old, turn } = await this.read(input);
     if (!turn || turn.attemptId !== attemptId || turn.userSequence !== userSequence) throw new StateError("conflict");
     if (turn.state === "completed") {
-      if (!saved || saved.status !== turn.result!.status || saved.response !== turn.result!.response) throw new StateError("conflict");
+      if (!saved || saved.status !== turn.result!.status || saved.response !== turn.result!.response || JSON.stringify(saved.tripUpdateProposal) !== JSON.stringify(turn.result!.tripUpdateProposal) || JSON.stringify(saved.consultationRequestProposal) !== JSON.stringify(turn.result!.consultationRequestProposal) || JSON.stringify(saved.tripCostProposal) !== JSON.stringify(turn.result!.tripCostProposal)) throw new StateError("conflict");
       return turn.result;
     }
     if (!saved && turn.state === "failed") return;
@@ -99,7 +107,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const next: TurnRecord = { ...turn, state: saved ? "completed" : "failed", ...(saved ? { result: saved } : {}) };
     await this.write(input.principal, current, { ...current, updatedAt: now, revision: current.revision + 1,
       messageCount: current.messageCount + (saved ? 1 : 0) },
-    saved ? [{ role: "assistant", text: saved.response, sequence: current.messageCount + 1, createdAt: now }] : [],
+    saved ? [{ role: "assistant", text: saved.response, ...(saved.tripCostProposal ? { tripCostProposal: saved.tripCostProposal } : {}), ...(saved.tripUpdateProposal ? { tripUpdateProposal: saved.tripUpdateProposal } : {}), ...(saved.consultationRequestProposal ? { consultationRequestProposal: saved.consultationRequestProposal } : {}), sequence: current.messageCount + 1, createdAt: now }] : [],
     [this.store.put(input.principal, this.key(input), { revision: old!.revision + 1, deleted: false, payload: next }, old)]);
     return saved;
   }
