@@ -11,7 +11,7 @@ export interface ServerStateContextReferences {
   principal: TrustedPrincipal;
   conversationId?: string;
   tripId?: string;
-  uiContext?: { itemId?: string };
+  uiContext?: { itemId?: string; calendarDate?: string };
 }
 export interface ServerStateContextReaders {
   conversations: Pick<ConversationApplication, "get" | "history">;
@@ -30,6 +30,8 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
     if (input.tripId !== undefined) stateId(input.tripId);
     const itemId = input.uiContext?.itemId;
     if (itemId !== undefined && (typeof itemId !== "string" || !itemId.trim() || itemId.length > 200 || /[\u0000-\u001f\u007f]/u.test(itemId))) throw new StateError("invalid-input");
+    const calendarDate = input.uiContext?.calendarDate;
+    if (calendarDate !== undefined && !validCalendarDate(calendarDate)) throw new StateError("invalid-input");
     // Snapshot only allowlisted references before awaiting. Caller mutations cannot switch account/Trip.
     const principal = structuredClone(input.principal), conversationId = input.conversationId, explicitTripId = input.tripId;
     const conversation = conversationId ? await readers.conversations.get(principal, conversationId) : undefined;
@@ -49,9 +51,18 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
       ...(snapshot.profile ? { travelProfile: snapshot.profile } : {}),
       ...(snapshot.trip ? { currentTrip: snapshot.trip } : {}),
       ...(consultationRequest ? { consultationRequest } : {}),
-      ...(focusedItem ? { featureContext: { uiFocus: { itemId: focusedItem.id, item: selectedTripItemSnapshot(focusedItem) } } } : {}),
+      ...(focusedItem || calendarDate ? { featureContext: {
+        ...(focusedItem ? { uiFocus: { itemId: focusedItem.id, item: selectedTripItemSnapshot(focusedItem) } } : {}),
+        ...(calendarDate ? { calendarDate } : {}),
+      } } : {}),
     };
   };
+}
+
+function validCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 async function recentConversation(readers: ServerStateContextReaders["conversations"], principal: TrustedPrincipal, conversation: Conversation, before?: number) {

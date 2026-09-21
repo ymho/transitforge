@@ -62,15 +62,17 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     if (turn && turn.userSequence > current.messageCount) throw new StateError("unavailable");
     return { current, old, turn };
   }
-  async beginTurn(identity: ConversationTurnIdentity, request: { userRequest: string; tripId?: string; uiContext?: { itemId?: string } }): Promise<BeginConversationTurn> {
+  async beginTurn(identity: ConversationTurnIdentity, request: { userRequest: string; tripId?: string; uiContext?: { itemId?: string; calendarDate?: string } }): Promise<BeginConversationTurn> {
     const input = this.identity(identity);
     exactObject(request, ["userRequest", "tripId", "uiContext"]);
     if (typeof request.userRequest !== "string" || !request.userRequest.trim() || request.userRequest.length > 8_000) throw new StateError("invalid-input");
     const [message] = messageInputs([{ role: "user", text: request.userRequest }]);
     if (request.tripId !== undefined) stateId(request.tripId);
-    if (request.uiContext !== undefined) exactObject(request.uiContext, ["itemId"]);
+    if (request.uiContext !== undefined) exactObject(request.uiContext, ["itemId", "calendarDate"]);
     const itemId = request.uiContext?.itemId;
     if (itemId !== undefined && (typeof itemId !== "string" || !itemId.trim() || itemId.length > 200 || /[\u0000-\u001f\u007f]/u.test(itemId))) throw new StateError("invalid-input");
+    const calendarDate = request.uiContext?.calendarDate;
+    if (calendarDate !== undefined && !validCalendarDate(calendarDate)) throw new StateError("invalid-input");
     const requestHash = createHash("sha256").update(JSON.stringify([request.userRequest, request.tripId ?? null, itemId ?? null])).digest("hex");
     const { current, old, turn } = await this.read(input);
     if (turn && turn.requestHash !== requestHash) throw new StateError("conflict");
@@ -115,4 +117,10 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     return (await this.finish(identity, lease, result))!;
   }
   async failTurn(identity: ConversationTurnIdentity, lease: ConversationTurnLease) { await this.finish(identity, lease); }
+}
+
+function validCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }

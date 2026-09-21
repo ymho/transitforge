@@ -17,7 +17,8 @@ function setup() {
   let stream: ReadableStreamDefaultController<Uint8Array>;
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => new Response(new ReadableStream({ start(c) { stream = c; c.enqueue(new TextEncoder().encode(progress)); } }), { headers: { "content-type": "text/event-stream" } }));
   const newTurnId = vi.fn(() => `turn-${newTurnId.mock.calls.length}`);
-  const session = createConversationStreamSession({ auth, references: () => refs, fetcher, newTurnId });
+  const session = createConversationStreamSession({ auth, references: () => refs, fetcher, newTurnId,
+    now: () => new Date(2026, 8, 21, 23, 30) });
   const complete = () => { stream.enqueue(new TextEncoder().encode(finish)); stream.close(); };
   return { auth, refs, fetcher, session, changeAuth, complete, newTurnId };
 }
@@ -29,7 +30,8 @@ it("sends only references/raw request and Bearer; a communication retry retains 
   const pending = action.send(); await vi.waitFor(() => expect(s.fetcher).toHaveBeenCalledTimes(2)); s.complete();
   expect(await pending).toBe("保存された回答");
   const bodies = s.fetcher.mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
-  expect(bodies[0]).toEqual({ conversationId: "conversation-a", turnId: "turn-1", userRequest: "相談", tripId: "trip-a", uiContext: { itemId: "item-a" } });
+  expect(bodies[0]).toEqual({ conversationId: "conversation-a", turnId: "turn-1", userRequest: "相談", tripId: "trip-a",
+    uiContext: { itemId: "item-a", calendarDate: "2026-09-21" } });
   expect(bodies[1]).toEqual(bodies[0]); expect(s.newTurnId).toHaveBeenCalledTimes(1);
   expect(s.fetcher.mock.calls[0][1]?.headers).toMatchObject({ Authorization: "Bearer access-token" });
   expect(s.session.start("次の相談").request.turnId).toBe("turn-2"); s.session.dispose();

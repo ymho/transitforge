@@ -34,7 +34,8 @@ describe("Conversation turn transactions", () => {
   });
   it("rejects changed input including Trip/UI references before and after completion", async () => {
     const f = await setup(), lease = await begin(f);
-    for (const changed of [{ userRequest: "different" }, { ...request, tripId: secondId }, { ...request, uiContext: { itemId: "item" } }]) {
+    for (const changed of [{ userRequest: "different" }, { ...request, tripId: secondId }, { ...request, uiContext: { itemId: "item" } },
+      { ...request, uiContext: { calendarDate: "2026-09-21" } }]) {
       await expect(f.turns.beginTurn(identity, changed)).rejects.toMatchObject({ code: "conflict" });
     }
     await f.turns.completeTurn(identity, lease, result);
@@ -103,7 +104,8 @@ describe("Conversation turn transactions", () => {
   });
   it("rejects malformed/oversized inputs and excludes internal data from storage", async () => {
     const f = await setup(); const count = f.commands.length;
-    for (const invalid of [{ userRequest: " " }, { userRequest: "あ".repeat(6000) }, { ...request, ownerId: stateB.subject }, { ...request, uiContext: { token: "secret" } }]) {
+    for (const invalid of [{ userRequest: " " }, { userRequest: "あ".repeat(6000) }, { ...request, ownerId: stateB.subject },
+      { ...request, uiContext: { token: "secret" } }, { ...request, uiContext: { calendarDate: "2026-02-30" } }]) {
       await expect(f.turns.beginTurn(identity, invalid as never)).rejects.toMatchObject({ code: "invalid-input" });
     }
     await expect(f.turns.beginTurn({ ...identity, turnId: "unbounded" }, request)).rejects.toMatchObject({ code: "invalid-input" });

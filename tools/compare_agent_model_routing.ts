@@ -14,7 +14,7 @@ const candidate = parseAgentModelRoutingRun(JSON.parse(await readFile(resolve(ca
 const comparison = compareAgentModelRouting(baseline, candidate);
 await writeFile(outputPath, `${JSON.stringify(comparison, null, 2)}\n`, "utf8");
 console.log(
-  `Agent model routing: quality=${comparison.qualityMaintained} ` +
+  `Agent model routing: quality=${comparison.qualityMaintained} improved=${comparison.qualityImproved} ` +
   `cost=${comparison.costImproved} recommend=${comparison.productionRoutingRecommended} (${outputPath})`,
 );
 

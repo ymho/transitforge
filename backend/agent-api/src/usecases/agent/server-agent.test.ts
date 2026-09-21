@@ -49,6 +49,7 @@ describe("Server Agent Application without Browser APIs", () => {
     const { app, execute, requests } = setup();
     await expect(app.runAgentTurn({ ...input, principal: fakePrincipal("") })).rejects.toThrow();
     await expect(app.runAgentTurn({ ...input, uiContext: { itemId: "a".repeat(201) } })).rejects.toThrow();
+    await expect(app.runAgentTurn({ ...input, uiContext: { calendarDate: "2026-02-30" } })).rejects.toThrow();
     await expect(app.runAgentTurn({ ...input, userRequest: "a".repeat(8001) })).rejects.toThrow();
     expect(execute).not.toHaveBeenCalled(); expect(requests).toEqual([]);
   });

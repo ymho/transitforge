@@ -51,7 +51,7 @@ function report(passed: boolean[]): AgentEvaluationReport {
   }));
   return {
     schemaVersion: "agent-eval-report-v4",
-    datasetSchemaVersion: "agent-eval-dataset-v3",
+    datasetSchemaVersion: "agent-eval-dataset-v4",
     caseCount: cases.length,
     passedCaseCount: cases.filter(({ passed: value }) => value).length,
     metrics: {

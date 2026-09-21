@@ -43,4 +43,30 @@ describe("agentSystemPrompt", () => {
     expect(agentSystemPrompt).not.toContain("plan_day_trip");
     expect(agentSystemPrompt).not.toContain("search_place_media");
   });
+
+  it("requires progress after the user permits provisional assumptions", () => {
+    expect(agentSystemPrompt).toContain("利用者が不明条件を仮定してよいと明示した場合");
+    expect(agentSystemPrompt).toContain("仮旅程や概算まで進めてください");
+    expect(agentSystemPrompt).toContain("置いた前提と未確認範囲を回答内で明示してください");
+  });
+
+  it("uses calculated relative dates and does not promote Profile preferences to request facts", () => {
+    expect(agentSystemPrompt).toContain("利用者へ日付を聞き返さないでください");
+    expect(agentSystemPrompt).toContain("今回の発話にない出発地・同行者・自然等の関心を確定条件として確認せず");
+  });
+
+  it("returns a photographed starter plan instead of a destination questionnaire", () => {
+    expect(agentSystemPrompt).toContain("旅行相談の初回価値を質問票にしないでください");
+    expect(agentSystemPrompt).toContain("日ごとの簡単な行程");
+    expect(agentSystemPrompt).toContain("具体的な候補を2〜3件比較して");
+    expect(agentSystemPrompt).toContain("候補ごとの代表写真を取得し");
+    expect(agentSystemPrompt).toContain("写真URLや出典を推測しないでください");
+  });
+
+  it("centers open-ended discovery on loaded West Japan coverage without inventing a geographic allowlist", () => {
+    expect(agentSystemPrompt).toContain("収録された駅・時刻表がある西日本エリアを中心");
+    expect(agentSystemPrompt).toContain("西日本という地名だけで対応範囲内と断定せず");
+    expect(agentSystemPrompt).toContain("serviceCoverageに従ってください");
+    expect(agentSystemPrompt).toContain("範囲外の場所を明示した相談は拒まず");
+  });
 });

@@ -9,13 +9,13 @@ export interface ConversationStreamRequest {
   turnId: string;
   userRequest: string;
   tripId?: string;
-  uiContext?: { itemId?: string };
+  uiContext?: { itemId?: string; calendarDate?: string };
 }
 export interface ConversationStreamReferences { conversationId: string; tripId?: string; itemId?: string; tripRevision?: number; draftRevision?: number }
 /** Transport only. An action owns one immutable turn ID; retry never regenerates it. */
 export function createConversationStreamSession(options: {
   auth: AuthSession; references: () => ConversationStreamReferences;
-  endpoint?: string; fetcher?: typeof fetch; newTurnId?: () => string;
+  endpoint?: string; fetcher?: typeof fetch; newTurnId?: () => string; now?: () => Date;
 }) {
   let authGeneration = 0, conversationGeneration = 0, tripGeneration = 0, requestGeneration = 0;
   let refs = options.references(), active: AbortController | undefined;
@@ -34,7 +34,9 @@ export function createConversationStreamSession(options: {
       sync(); active?.abort(); const requestVersion = ++requestGeneration, contextVersion = version();
       // Deliberate projection: callers cannot send history, Profile, Trip bodies or Tool data.
       const request: ConversationStreamRequest = { conversationId: refs.conversationId, turnId: (options.newTurnId ?? (() => crypto.randomUUID()))(), userRequest,
-        ...(refs.tripId ? { tripId: refs.tripId } : {}), ...(refs.itemId ? { uiContext: { itemId: refs.itemId } } : {}) };
+        ...(refs.tripId ? { tripId: refs.tripId } : {}), uiContext: {
+          ...(refs.itemId ? { itemId: refs.itemId } : {}), calendarDate: localCalendarDate(options.now?.() ?? new Date()),
+        } };
       const current = () => { sync(); return contextVersion === version() && requestVersion === requestGeneration; };
       let inFlight = false;
       return {
@@ -66,4 +68,11 @@ export function createConversationStreamSession(options: {
     },
     dispose() { unsubscribe(); requestGeneration++; active?.abort(); },
   };
+}
+
+function localCalendarDate(value: Date): string {
+  const year = String(value.getFullYear()).padStart(4, "0");
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }

@@ -1,5 +1,216 @@
 {
-  "schemaVersion": "agent-eval-dataset-v3",
+  "schemaVersion": "agent-eval-dataset-v4",
+  "conversationQualityScenarios": [
+    {
+      "id": "feedback-izumo-provisional-plan",
+      "name": "出雲大社の複数ターン相談で仮定を明示して旅程と総額へ進む",
+      "fixedNow": "2026-09-21T09:00:00+09:00",
+      "turns": [
+        {
+          "role": "user",
+          "text": "出雲大社へ行きたい"
+        },
+        {
+          "role": "user",
+          "text": "明日から"
+        },
+        {
+          "role": "user",
+          "text": "この旅程の交通・宿泊・観光・食事を、旅行全体・利用者全員分のAI概算として提案してください。不明な人数や泊数は前提を明記してください。"
+        },
+        {
+          "role": "user",
+          "text": "とりあえず適当に旅程立ててみて"
+        }
+      ],
+      "tags": [
+        "model-quality",
+        "multi-turn",
+        "feedback-regression",
+        "provisional-planning",
+        "cost"
+      ],
+      "expected": {
+        "destination": {
+          "mode": "specified",
+          "name": "出雲大社",
+          "municipality": "出雲市",
+          "forbiddenMunicipalities": [
+            "松江市"
+          ]
+        },
+        "relativeDates": [
+          {
+            "sourceText": "明日から",
+            "calendarDate": "2026-09-22"
+          }
+        ],
+        "forbiddenRepeatedQuestions": [
+          "travel_start_date"
+        ],
+        "assumptions": {
+          "allowed": [
+            "origin",
+            "party_size",
+            "stay_nights"
+          ],
+          "mustBeExplicit": true,
+          "mustRemainUnconfirmed": true
+        },
+        "requiredFinalCapabilities": [
+          "destination_overview",
+          "provisional_itinerary",
+          "lodging_suggestions",
+          "whole_trip_cost_estimate",
+          "place_photo"
+        ],
+        "maximumAskOnlyStreak": 1,
+        "maximumQuestionsPerAssistantTurn": 1,
+        "forbiddenProfilePromotions": [
+          "origin",
+          "party_size"
+        ],
+        "maximumTurnsToStarterPlan": 2,
+        "minimumPlacePhotos": 1
+      }
+    },
+    {
+      "id": "feedback-izumo-one-night-no-questionnaire",
+      "name": "出雲大社への明日から1泊を質問票にせず具体案へ進める",
+      "fixedNow": "2026-09-21T09:00:00+09:00",
+      "turns": [
+        {
+          "role": "user",
+          "text": "出雲大社に明日から1泊で旅行したい"
+        }
+      ],
+      "tags": [
+        "model-quality",
+        "multi-turn",
+        "feedback-regression",
+        "relative-date",
+        "ask-only"
+      ],
+      "expected": {
+        "destination": {
+          "mode": "specified",
+          "name": "出雲大社",
+          "municipality": "出雲市",
+          "forbiddenMunicipalities": [
+            "松江市"
+          ]
+        },
+        "relativeDates": [
+          {
+            "sourceText": "明日から",
+            "calendarDate": "2026-09-22"
+          }
+        ],
+        "forbiddenRepeatedQuestions": [
+          "travel_start_date",
+          "stay_nights"
+        ],
+        "assumptions": {
+          "allowed": [
+            "origin",
+            "party_size",
+            "budget"
+          ],
+          "mustBeExplicit": true,
+          "mustRemainUnconfirmed": true
+        },
+        "requiredFinalCapabilities": [
+          "destination_overview",
+          "provisional_itinerary",
+          "lodging_suggestions",
+          "place_photo"
+        ],
+        "maximumAskOnlyStreak": 0,
+        "maximumQuestionsPerAssistantTurn": 1,
+        "forbiddenProfilePromotions": [
+          "origin",
+          "favorite_interests",
+          "activities"
+        ],
+        "maximumTurnsToStarterPlan": 1,
+        "minimumPlacePhotos": 1
+      }
+    },
+    {
+      "id": "feedback-open-ended-relaxed-tomorrow",
+      "name": "明日出発のゆっくり旅を西日本の写真付き複数候補で提案する",
+      "fixedNow": "2026-09-21T09:00:00+09:00",
+      "turns": [
+        {
+          "role": "user",
+          "text": "明日出発で、ゆっくりできる旅行を提案して欲しい"
+        }
+      ],
+      "tags": [
+        "model-quality",
+        "single-turn",
+        "feedback-regression",
+        "destination-discovery",
+        "relative-date",
+        "multiple-candidates",
+        "place-photo",
+        "service-coverage"
+      ],
+      "expected": {
+        "destination": {
+          "mode": "discovery",
+          "minimumCandidates": 2,
+          "maximumCandidates": 3,
+          "recommendationScope": "loaded-timetable-west-japan-centered",
+          "forbiddenMainCandidates": [
+            "熱海",
+            "伊東",
+            "東京",
+            "北海道"
+          ]
+        },
+        "relativeDates": [
+          {
+            "sourceText": "明日出発",
+            "calendarDate": "2026-09-22"
+          }
+        ],
+        "forbiddenRepeatedQuestions": [
+          "travel_start_date",
+          "destination",
+          "origin",
+          "budget",
+          "interests"
+        ],
+        "assumptions": {
+          "allowed": [
+            "origin",
+            "party_size",
+            "stay_nights",
+            "budget"
+          ],
+          "mustBeExplicit": true,
+          "mustRemainUnconfirmed": true
+        },
+        "requiredFinalCapabilities": [
+          "multiple_destination_candidates",
+          "candidate_comparison",
+          "candidate_specific_itineraries",
+          "candidate_photos"
+        ],
+        "maximumTurnsToStarterPlan": 1,
+        "minimumPlacePhotos": 2,
+        "maximumAskOnlyStreak": 0,
+        "maximumQuestionsPerAssistantTurn": 1,
+        "forbiddenProfilePromotions": [
+          "origin",
+          "party_size",
+          "favorite_interests",
+          "activities"
+        ]
+      }
+    }
+  ],
   "travelProgressScenarios": [
     {
       "id": "AQ-in-trip-fatigue", "name": "疲労による残り予定だけの変更案",
@@ -596,11 +807,11 @@
     },
     {
       "id": "vague-destination",
-      "name": "曖昧な行き先を確認する",
+      "name": "雰囲気だけの希望から写真付きの主候補と簡単な行程を提示する",
       "feature": "travel_planning",
-      "userRequest": "週末どこかへゆっくり行きたい",
-      "tags": ["ambiguous-request", "information-gap"],
-      "expected": { "toolSequence": [], "constraints": { "pace": "relaxed" }, "status": "follow_up", "minimumGroundedClaimRate": 0, "maximumUnsupportedClaimRate": 0 }
+      "userRequest": "週末、歴史を感じながらゆっくりできる場所に行きたい",
+      "tags": ["ambiguous-request", "multi-tool"],
+      "expected": { "toolSequence": ["search_web", "read_web_pages", "resolve_place_candidates"], "constraints": { "pace": "relaxed", "requiresResolvedPoi": true, "requiresStarterItinerary": true, "requiresPlacePhoto": true }, "status": "completed", "minimumGroundedClaimRate": 1, "maximumUnsupportedClaimRate": 0 }
     },
     {
       "id": "cancelled-service",
