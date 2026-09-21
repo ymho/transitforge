@@ -53,3 +53,18 @@ function fake(page: { items: ReturnType<typeof conversation>[] }) {
     history: async () => ({ items: [] }), update: async () => conversation("updated"), delete: async () => ({ complete: true }),
   };
 }
+it("finds a Trip conversation beyond the first page, with fresh identity, without selecting it", async () => {
+  const first = { ...conversation("same-name-a"), tripId: "trip-a" };
+  const target = { ...conversation("same-name-b"), tripId: "trip-b" };
+  const client = { ...fake({ items: [first] }), list: vi.fn(async (page?: { after?: string }) => page?.after ? { items: [target] } : { items: [first], nextAfter: "next" }), get: async () => target };
+  const controller = new ConversationUiController(client);
+  await controller.hydrate();
+  expect((await controller.findForTrip("trip-b"))?.id).toBe(target.conversationId);
+  expect(controller.active()?.id).toBe(first.conversationId);
+  expect(client.list).toHaveBeenCalledWith({ limit: 50, after: "next" });
+});
+it("creating a navigation candidate does not switch the selected conversation", async () => {
+  const controller = new ConversationUiController(fake({ items: [conversation("a")] }));
+  await controller.hydrate(); await controller.create({ tripId: "b" }, false);
+  expect(controller.active()?.id).toBe("a");
+});

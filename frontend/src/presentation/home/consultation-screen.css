@@ -78,3 +78,8 @@
   .consultation-conditions-close { float: right; }
   .consultation-backdrop:not([hidden]) { display: block; position: fixed; z-index: 81; inset: 0; border: 0; border-radius: 0; background: #11293b66; }
 }
+.consultation-condition-editor label { display: grid; gap: .35rem; width: 100%; font-size: .85rem; }
+.consultation-condition-editor select, .consultation-add-condition select { min-height: 44px; max-width: 100%; font: inherit; border: 1px solid #cad8e2; border-radius: .6rem; background: white; padding: .5rem; }
+.consultation-add-condition { display: flex; flex-wrap: wrap; gap: .4rem; padding-block: .75rem; }
+.consultation-conditions { overscroll-behavior: contain; }
+@media (max-width: 44rem) { .consultation-condition-editor input, .consultation-condition-editor select { font-size: 16px; } }

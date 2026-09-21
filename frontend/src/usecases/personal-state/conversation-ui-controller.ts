@@ -42,15 +42,39 @@ export class ConversationUiController {
     this.histories.clear(); this.notify();
     return this.active();
   }
-  async create(metadata: Partial<ServerConversationMetadata> = {}): Promise<ConversationSession> {
+  async create(metadata: Partial<ServerConversationMetadata> = {}, select = true): Promise<ConversationSession> {
     this.requireAuthentication();
     const generation = this.generation;
     const created = await this.client.create(metadataFor(metadata));
     if (generation !== this.generation) throw new Error("Conversation session changed");
     const session = toSession(created);
     this.sessions = [session, ...this.sessions.filter((item) => item.id !== session.id)];
-    this.activeId = session.id; this.notify();
+    if (select) this.activeId = session.id; this.notify();
     return structuredClone(session);
+  }
+  /** Search every server page; a matching title never establishes a Trip reference. */
+  async findForTrip(tripId: string): Promise<ConversationSession | undefined> {
+    this.requireAuthentication();
+    const generation = this.generation;
+    let after: string | undefined;
+    const cursors = new Set<string>();
+    do {
+      const page = await this.client.list({ limit: 50, ...(after ? { after } : {}) });
+      if (generation !== this.generation) throw new Error("Conversation session changed");
+      for (const match of page.items.filter((value) => value.tripId === tripId)) {
+        const fresh = await this.client.get(match.conversationId);
+        if (generation !== this.generation) throw new Error("Conversation session changed");
+        if (fresh?.tripId === tripId) {
+          const session = toSession(fresh);
+          this.sessions = [...this.sessions.filter((s) => s.id !== session.id), session];
+          return structuredClone(session);
+        }
+      }
+      after = page.nextAfter;
+      if (after && cursors.has(after)) throw new Error("Repeated Conversation cursor");
+      if (after) cursors.add(after);
+    } while (after);
+    return undefined;
   }
   async update(id: string, metadata: ServerConversationMetadata): Promise<ConversationSession> {
     this.requireAuthentication();

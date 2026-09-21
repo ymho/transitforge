@@ -96,3 +96,12 @@ describe("authenticated server confirmation host", () => {
     await f.source.retry!(); expect(f.controller.current()?.revision).toBe(1); expect(f.mutate).toHaveBeenCalledOnce();
   });
 });
+it("condition approval persists only Request and reloads the server revision", async () => {
+  const f = writable(); await f.source.refresh();
+  const before = f.controller.current()!;
+  f.controller.propose("今回の希望", [{ type: "request", request: { ...before.request, goal: "街歩き" } }]);
+  await f.controller.confirm();
+  const after = f.controller.current()!;
+  expect(after.request.goal).toBe("街歩き"); expect(after.items).toEqual(before.items);
+  expect(after.revision).toBe(before.revision + 1);
+});
