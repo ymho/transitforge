@@ -26,6 +26,7 @@ export function externalTravelEvidence(output: unknown, context: { retrievedAt: 
       subject: isRecord(information.data) && typeof information.data.locationName === "string" ? `${information.data.locationName}の天気予報` : isRecord(information.data) && typeof information.data.area === "string" ? `${information.data.area}の防災情報` : "外部旅行情報",
       facts: { provider: raw.provider, status: String(information.status ?? "unknown"), freshness: String(information.freshness ?? "unknown"),
         ...sourceTextFacts(information, raw.sourceUrl),
+        ...placePresentationFacts(information, raw.sourceUrl),
         ...(resultKind ? { resultKind } : {}) },
       references: [{
         sourceType: "external-source" as const,
@@ -47,6 +48,21 @@ export function externalTravelEvidence(output: unknown, context: { retrievedAt: 
   });
   return evidence;
 }
+
+function placePresentationFacts(information: Record<string, unknown>, sourceUrl: unknown): Record<string, string | string[]> {
+  if (information.status !== "available" || information.freshness !== "fresh" || !isRecord(information.data) || !Array.isArray(information.data.places)) return {};
+  const place = information.data.places.find((item) => isRecord(item) && item.sourceUrl === sourceUrl);
+  if (!isRecord(place) || !isRecord(place.image) || place.image.hotlinkAllowed !== true || typeof place.image.url !== "string" || !https(place.image.url) ||
+      typeof place.image.attribution !== "string" || !place.image.attribution.trim()) return {};
+  const imageSourceUrl = typeof place.image.descriptionUrl === "string" && https(place.image.descriptionUrl) ? place.image.descriptionUrl : typeof place.sourceUrl === "string" && https(place.sourceUrl) ? place.sourceUrl : undefined;
+  if (!imageSourceUrl) return {};
+  const boundSourceUrls = [place.officialWebsiteUrl, ...(Array.isArray(place.sources) ? place.sources.flatMap((item) => isRecord(item) ? [item.url] : []) : [])]
+    .filter((item): item is string => typeof item === "string" && https(item));
+  return { placeName: typeof place.name === "string" ? place.name.slice(0, 160) : "旅行候補", imageUrl: place.image.url, imageSourceUrl,
+    imageAttribution: place.image.attribution.slice(0, 240), ...(typeof place.image.license === "string" ? { imageLicense: place.image.license.slice(0, 120) } : {}),
+    boundSourceUrls: [...new Set(boundSourceUrls)].slice(0, 8) };
+}
+function https(value: string): boolean { try { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password; } catch { return false; } }
 
 /** Bind prose to its own fetched source, never attach all pages to an unrelated Evidence ID. */
 function sourceTextFacts(information: Record<string, unknown>, sourceUrl: unknown): Record<string, string> {

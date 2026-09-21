@@ -45,6 +45,21 @@ source-explanationは一時的な表示選択で、新しい永続Answer正本�
 Web全文やProvider rawをそのままClaimへ昇格させない。詳細情報は既存Tool/Place/Proposal表示が担当する。
 これは任意のモデル自由文を意味検証できるという保証ではない。通常会話全体の強制JSON化も行わない。
 
+## 旅行提案の表示
+
+旅行案を求められた一般回答では、`travel-plan`を`source-explanation`と同じ一時的な表示選択として使う。
+新しいPlannerや永続Tripを作らず、モデルは最大3候補について、実在する資料Evidence、資料中の連続抜粋、
+日ごとの定型activity、AI概算、取得済み写真Evidenceを選択する。Applicationは次を検証して本文を構築する。
+
+- 候補説明はfreshな資料の連続抜粋に限り、出典を付ける。
+- 行程は時刻・所要時間・営業を含まない定型activityから構成し、「提案」と明示する。
+- 概算は交通・宿泊・観光・食事の4項目、利用者全員・旅行全体の整数円とし、人数、泊数、起点交通、宿の水準を前提表示する。合計はApplicationが計算し、予約価格・支払額・価格保証と区別する。
+- 写真はHTTPS、hotlink可、attributionと掲載元があるものだけを使う。資料候補と同一Evidence、またはProviderが保持するsource URL bindingで結び付く写真に限る。
+
+写真Markdownの表示用titleはApplication専用とし、モデルの自由文に同じmarkerがあれば拒否する。Frontendはこのmarkerと
+HTTPSの両方を満たす画像だけを`img`として描画し、通常のMarkdown画像は従来どおりリンクに落とす。
+これにより、未検証URLの自動読込を許さず、会話履歴からの再表示でも同じ安全境界を維持する。
+
 ## 検証
 
 production相談はServer Agent Runtimeで実行する。Browser Runtimeとその動的importは

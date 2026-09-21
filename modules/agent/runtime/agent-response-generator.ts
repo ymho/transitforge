@@ -1,6 +1,6 @@
 import type { Evidence, EvidenceClaim } from "./evidence-model";
 import type { AgentModelResponse } from "./model-provider";
-import { parseGroundedAnswer, presentGroundedEvidence, supportedAnswerClaims, sourceExplanation } from "./grounded-answer";
+import { parseGroundedAnswer, presentGroundedEvidence, supportedAnswerClaims, sourceExplanation, travelPlan } from "./grounded-answer";
 
 export interface AgentGeneratedResponse {
   text: string;
@@ -30,6 +30,7 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
       .map(({ text }) => withoutInternalReasoning(text).trim())
       .filter(Boolean)
       .join("\n");
+    if (text.includes("Raiquora verified photo")) throw new Error("Reserved photo presentation");
     if (origin === "grounded" || evidence.some((e) => Object.keys(e.facts).length > 0) || text.startsWith("{")) {
       const ids = response.decisionSummary?.usedEvidenceIds ?? response.declaredEvidenceIds;
       // A model may add a label/fence around the structured presentation. Only the
@@ -39,9 +40,9 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
         const encoded = text.slice(start, end + 1);
         let value: unknown;
         try { value = JSON.parse(encoded); } catch { /* Existing strict fallback below. */ }
-        if (value && typeof value === "object" && "kind" in value && value.kind === "source-explanation") {
+        if (value && typeof value === "object" && "kind" in value && (value.kind === "source-explanation" || value.kind === "travel-plan")) {
           if (response.invalidUsedEvidenceIds) throw new Error("Invalid factual references");
-          return sourceExplanation(encoded, evidence, profile)!;
+          return (value.kind === "travel-plan" ? travelPlan(encoded, evidence) : sourceExplanation(encoded, evidence, profile))!;
         }
       }
       if (!text.startsWith("{") && !response.invalidUsedEvidenceIds && ids?.length) return presentGroundedEvidence(ids, evidence);

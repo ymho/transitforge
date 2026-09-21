@@ -26,6 +26,17 @@ describe("external travel tools", () => {
       data: { places: [{ sourceUrl: "https://example.org/one", name: "同名の別施設", summary: "混入させない", targetBinding: { status: "mismatch" } }] } };
     expect(externalTravelEvidence({ result: information }, { retrievedAt: "2026-09-18T00:00:00Z" })[0]!.facts.sourceExcerpt).toBeUndefined();
   });
+  it("keeps only displayable attributed photos and their candidate source binding in Evidence", () => {
+    const information = { status: "available", freshness: "fresh", evidence: [{ id: "place-1", provider: "mapbox", sourceUrl: "https://map.example/izumo" }],
+      data: { places: [{ sourceUrl: "https://map.example/izumo", officialWebsiteUrl: "https://visit.example/izumo", name: "出雲大社", summary: "参拝と門前町散策を楽しめます。",
+        sources: [{ provider: "web", label: "観光案内", url: "https://visit.example/izumo", role: "discovery" }],
+        image: { url: "https://images.example/izumo.jpg", descriptionUrl: "https://photos.example/izumo", attribution: "撮影者", license: "CC BY 4.0", hotlinkAllowed: true } }] } };
+    const facts = externalTravelEvidence({ result: information }, { retrievedAt: "2026-09-18T00:00:00Z" })[0]!.facts;
+    expect(facts).toMatchObject({ placeName: "出雲大社", imageUrl: "https://images.example/izumo.jpg", imageSourceUrl: "https://photos.example/izumo", imageAttribution: "撮影者" });
+    expect(facts.boundSourceUrls).toContain("https://visit.example/izumo");
+    information.data.places[0]!.image.hotlinkAllowed = false;
+    expect(externalTravelEvidence({ result: information }, { retrievedAt: "2026-09-18T00:00:00Z" })[0]!.facts.imageUrl).toBeUndefined();
+  });
   it("records missing acquisition as outcome only, not fabricated Provider facts", () => {
     const [e] = externalTravelEvidence({ forecast: { status: "available", freshness: "fresh", evidence: [], data: { temperature: 25 } } }, { retrievedAt: "2026-09-12T08:00:00Z" });
     expect(e?.facts).toEqual({ resultKind: "weather", status: "unconfirmed", freshness: "unknown" });
