@@ -101,3 +101,5 @@ Server Runtime・Stateの新構成は#478以降で決定する。
 - [ADR 0070: Server Agentの通信にRegional REST progress streamingを採用する](0070-select-regional-rest-agent-streaming.md) — Server AgentのCurrent transport。導入時の検証記録はHistoricalとして保持する。
 
 - [ADR 0071: 固定送信元IPが必要な宿泊Provider通信を専用Lambdaへ分離する](0071-isolate-fixed-egress-provider.md) — #480 Phase B。default-offで追加し、既存NAT/EIPを維持する。
+
+- [ADR 0072: 実会話比較後も現行Agent model routingを維持する](0072-retain-current-agent-model-routing-after-live-comparison.md) — #474の3ケース×3反復比較ではSonnet 4.6へ切り替えず、一般回答構成を改善してから再比較する。

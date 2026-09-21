@@ -8,7 +8,7 @@ import { externalTravelToolDescription, externalTravelToolInputSchema } from "@r
 import type { AgentEvaluationCaseResult, AgentEvaluationDataset, AgentEvaluationReport, ConversationQualityScenario } from "../frontend/src/usecases/agent/evaluation/evaluation-contract";
 import { parseAgentEvaluationDataset } from "../frontend/src/usecases/agent/evaluation/evaluation-dataset";
 import { evaluateConversationQualityLive, type ConversationQualityLiveResult, type ConversationQualityLiveTurn } from "../frontend/src/usecases/agent/evaluation/conversation-quality-live";
-import { liveEvaluationAccommodationOutput, liveEvaluationToolEvidence, liveEvaluationTravelToolOutput,
+import { liveEvaluationAccommodationOutput, liveEvaluationPhotoCount, liveEvaluationToolEvidence, liveEvaluationTravelToolOutput,
   type LiveEvaluationPlace, type LiveEvaluationTravelToolName } from "../frontend/src/usecases/agent/evaluation/live-model-tool-fixture";
 import { AwsBedrockConverseClient } from "../backend/agent-api/src/adapters/aws-sdk-clients";
 import { BedrockConversationModel } from "../backend/agent-api/src/adapters/bedrock-conversation-model";
@@ -59,7 +59,7 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
         uiContext: { calendarDate: scenario.fixedNow.slice(0, 10) },
       });
       const toolNames = result.trace.events.flatMap((event) => event.type === "tool_called" ? [event.toolName] : []);
-      liveTurns.push({ response: result.response, toolNames, photoCount: uniquePhotoCount(observedOutputs) });
+      liveTurns.push({ response: result.response, toolNames, photoCount: liveEvaluationPhotoCount(observedOutputs) });
       history.push({ role: "user", text: turn.text }, { role: "assistant", text: result.response });
       turnTraces.push(result.trace);
     }
@@ -174,17 +174,6 @@ function candidatePlaces(): LiveEvaluationPlace[] {
   ];
 }
 
-function uniquePhotoCount(outputs: readonly unknown[]): number {
-  const urls = new Set<string>();
-  const visit = (value: unknown, key = "") => {
-    if (typeof value === "string" && /photoUrl|imageUrl/u.test(key) && value.startsWith("https://")) urls.add(value);
-    else if (Array.isArray(value)) value.forEach((item) => visit(item, key));
-    else if (isRecord(value)) Object.entries(value).forEach(([childKey, child]) => visit(child, childKey));
-  };
-  outputs.forEach((output) => visit(output));
-  return urls.size;
-}
-
 function stableReport(
   attempts: Array<{ results: ConversationQualityLiveResult[] }>,
   scenarios: readonly ConversationQualityScenario[],
@@ -269,4 +258,3 @@ function positiveIntegerArgument(name: string, fallback: number, maximum: number
   if (!Number.isInteger(value) || value < 1 || value > maximum) throw new Error(`${name}は1から${maximum}の整数で指定してください`);
   return value;
 }
-function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }

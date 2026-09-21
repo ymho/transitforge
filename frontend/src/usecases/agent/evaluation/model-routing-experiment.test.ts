@@ -53,6 +53,21 @@ describe("Agent model routing experiment", () => {
     expect(comparison.reasons).toContain("Agent品質を維持できていない");
   });
 
+  it("does not recommend a candidate while every measured case still fails", () => {
+    const comparison = compareAgentModelRouting({ ...baseline, passedCaseCount: 0, quality: {
+      ...baseline.quality, toolSelectionAccuracy: 0.2, taskCompletion: 0.4,
+    } }, { ...baseline, strategy: "decision-upper-tier", passedCaseCount: 0, quality: {
+      ...baseline.quality, toolSelectionAccuracy: 0.8, taskCompletion: 0.8,
+    } });
+
+    expect(comparison).toMatchObject({
+      qualityMaintained: true,
+      qualityImproved: true,
+      productionRoutingRecommended: false,
+    });
+    expect(comparison.reasons).toContain("候補モデルが全評価ケースを完遂していない");
+  });
+
   it("recommends a slower upper-tier model when it improves quality without regressing any metric", () => {
     const comparison = compareAgentModelRouting({ ...baseline, passedCaseCount: 41, quality: {
       ...baseline.quality, taskCompletion: 0.98,
