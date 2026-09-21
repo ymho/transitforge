@@ -690,8 +690,8 @@ function hasPlanningQuestionnaire(response: AgentModelResponse): boolean {
   const text = response.message.content
     .flatMap((content) => content.type === "text" ? [content.text] : [])
     .join("\n");
-  const asksForOptionalDetails = /(?:出発地|出発駅|どこから|予算|人数|何名|同行者|泊数|何泊|滞在期間|目的地|行き先|旅行日程|宿泊日数|地域|アクティビティ|自然スポット|好み)[\\s\\S]{0,100}(?:[?？]|ですか|ますか|教えてください|お知らせください)/u.test(text);
-  const promotesProfileAsFact = /(?:プロフィール|プロファイル)[\\s\\S]{0,24}(?:より|から|に記載|上では|上の|として|に保存|出発地|同行者|好み)/u.test(text);
+  const asksForOptionalDetails = /(?:出発地|出発駅|どこから|予算|人数|何名|同行者|泊数|何泊|滞在期間|目的地|行き先|旅行日程|宿泊日数|地域|アクティビティ|自然スポット|好み)[\s\S]{0,100}(?:[?？]|ですか|ますか|教えてください|お知らせください)/u.test(text);
+  const promotesProfileAsFact = /(?:プロフィール|プロファイル)[\s\S]{0,24}(?:より|から|に記載|上では|上の|として|に保存|出発地|同行者|好み)/u.test(text);
   return asksForOptionalDetails || promotesProfileAsFact;
 }
 
