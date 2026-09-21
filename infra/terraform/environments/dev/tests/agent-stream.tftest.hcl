@@ -35,6 +35,10 @@ run "current_topology" {
     error_message = "The current topology must retain the Server Agent resources."
   }
   assert {
+    condition     = aws_iam_role.github_agent_eval.name == "transitforge-dev-github-agent-eval" && aws_iam_role_policy.github_agent_eval.name == "invoke-bedrock-model-evaluation"
+    error_message = "Manual model comparison must use its dedicated OIDC role and inline Bedrock-only policy."
+  }
+  assert {
     condition     = length([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : b if b.path_pattern == "/api/agent-stream"]) == 1 && length([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : b if b.path_pattern == "/api/agent"]) == 1
     error_message = "Server streaming and the independent Viewer read route must coexist."
   }

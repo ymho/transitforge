@@ -10,7 +10,7 @@
 - 旅行提供者へ固定IPで接続するAI LambdaのNATインスタンスとElastic IP
 - 明示的フィードバックとbounded Agent Traceを短期保存する非公開S3
 - 混雑と遅延の収集Lambda EventBridge Scheduler S3 DynamoDB
-- GitHub Actions用OIDCロール
+- GitHub Actions用OIDCロール（デプロイ用とBedrockモデル評価専用）
 - data-builderデプロイ用OIDCロール
 
 data-builderのECS ECR 入力S3 Schedulerはdata-builderリポジトリが管理する
@@ -40,6 +40,11 @@ Bedrockは`bedrock_model_id`を通常の初期判断に使い `bedrock_decision_
 比較評価用とし 未設定classは既定modelへフォールバックする。modelまたはInference Profile IDは
 TerraformとBedrock Adapterの両方で検証し Applicationへはprovider非依存の`default`
 `lightweight` `decision`だけを公開する。routingの実測と採用判断はADR 0047 0048を参照する。
+
+手動の`Agent Eval / Model Comparison`は同じ`dev` environmentのOIDC trustを使うが、
+`transitforge-dev-github-agent-eval`へ直接認証する。このRoleはBedrockのsystem inference profile参照と
+model invokeだけを許可し、デプロイRoleのPowerUser権限を比較処理へ渡さない。Role ARNは既存の
+`AWS_DEPLOY_ROLE_ARN`から同一account内の固定名を組み立てるため、アクセスキーや追加Secretは不要である。
 
 ## GitHub Environment
 

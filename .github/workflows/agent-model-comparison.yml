@@ -1,0 +1,142 @@
+name: Agent Eval / Model Comparison
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_decision_model_id:
+        description: Candidate inference profile/model ID. Empty selects the newest active Claude Sonnet system profile.
+        required: false
+        type: string
+      repetitions:
+        description: Repetitions per conversation-quality scenario
+        required: true
+        default: "3"
+        type: choice
+        options: ["1", "3"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: transitforge-agent-model-comparison
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-northeast-1
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      DEFAULT_MODEL_ID: amazon.nova-lite-v1:0
+      BASELINE_DECISION_MODEL_ID: jp.amazon.nova-2-lite-v1:0
+      CANDIDATE_INPUT: ${{ inputs.candidate_decision_model_id }}
+      REPETITIONS: ${{ inputs.repetitions }}
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Resolve the dedicated evaluation role
+        id: eval-role
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${AWS_DEPLOY_ROLE_ARN:?dev Environment variable AWS_DEPLOY_ROLE_ARN is required}"
+          account_id="${AWS_DEPLOY_ROLE_ARN#arn:aws:iam::}"
+          account_id="${account_id%%:*}"
+          [[ "$account_id" =~ ^[0-9]{12}$ ]]
+          echo "role_arn=arn:aws:iam::${account_id}:role/transitforge-dev-github-agent-eval" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with:
+          role-to-assume: ${{ steps.eval-role.outputs.role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Select and record the candidate model
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate="$CANDIDATE_INPUT"
+          candidate_name="explicit workflow input"
+          if [[ -z "$candidate" ]]; then
+            profiles="$(aws bedrock list-inference-profiles --type-equals SYSTEM_DEFINED --region "$AWS_REGION")"
+            candidate="$(jq -r '[.inferenceProfileSummaries[] | select(.status == "ACTIVE") | select((.inferenceProfileName // "") | test("Claude.*Sonnet"; "i"))] | sort_by(.updatedAt // .createdAt // "") | last | .inferenceProfileId // empty' <<<"$profiles")"
+            candidate_name="$(jq -r --arg id "$candidate" '.inferenceProfileSummaries[] | select(.inferenceProfileId == $id) | .inferenceProfileName' <<<"$profiles")"
+          fi
+          : "${candidate:?No active Claude Sonnet system inference profile was found. Supply candidate_decision_model_id explicitly.}"
+          [[ "$candidate" =~ ^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$ ]]
+          echo "model_id=$candidate" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Model selection"
+            echo "- Baseline default: \`$DEFAULT_MODEL_ID\`"
+            echo "- Baseline decision: \`$BASELINE_DECISION_MODEL_ID\`"
+            echo "- Candidate decision: \`$candidate\` ($candidate_name)"
+            echo "- Repetitions: \`$REPETITIONS\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate evaluation tools
+        run: npm run typecheck:tools
+
+      - name: Run baseline
+        run: npm run eval:agent:model:live -- --strategy baseline-current-routing --repetitions "$REPETITIONS" --output-dir .artifacts/model-comparison/baseline
+        env:
+          MODEL_ID: ${{ env.DEFAULT_MODEL_ID }}
+          DECISION_MODEL_ID: ${{ env.BASELINE_DECISION_MODEL_ID }}
+
+      - name: Run candidate
+        run: npm run eval:agent:model:live -- --strategy candidate-decision-model --repetitions "$REPETITIONS" --output-dir .artifacts/model-comparison/candidate
+        env:
+          MODEL_ID: ${{ env.DEFAULT_MODEL_ID }}
+          DECISION_MODEL_ID: ${{ steps.candidate.outputs.model_id }}
+
+      - name: Build comparable routing artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run eval:agent:model-routing:build -- \
+            --strategy baseline-current-routing \
+            --report .artifacts/model-comparison/baseline/agent-eval-report.json \
+            --traces .artifacts/model-comparison/baseline/agent-eval-traces.json \
+            --output .artifacts/model-comparison/baseline-run.json
+          npm run eval:agent:model-routing:build -- \
+            --strategy candidate-decision-model \
+            --report .artifacts/model-comparison/candidate/agent-eval-report.json \
+            --traces .artifacts/model-comparison/candidate/agent-eval-traces.json \
+            --output .artifacts/model-comparison/candidate-run.json
+          npm run eval:agent:model-routing -- \
+            --baseline .artifacts/model-comparison/baseline-run.json \
+            --candidate .artifacts/model-comparison/candidate-run.json \
+            --output .artifacts/model-comparison/comparison.json
+          {
+            echo "### Comparison"
+            echo '```json'
+            cat .artifacts/model-comparison/comparison.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload private evaluation artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: agent-model-comparison-${{ github.run_id }}
+          path: .artifacts/model-comparison
+          if-no-files-found: error
+          retention-days: 14
