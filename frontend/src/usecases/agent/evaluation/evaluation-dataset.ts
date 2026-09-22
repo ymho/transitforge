@@ -40,10 +40,12 @@ export function parseAgentEvaluationDataset(value: unknown): AgentEvaluationData
 function parseConversationQualityScenarios(value: unknown): ConversationQualityScenario[] {
   if (!Array.isArray(value) || !value.length || value.length > 50) throw new Error("Conversation Quality scenarios must contain 1..50 cases");
   return value.map((scenario) => {
-    if (!isRecord(scenario) || !hasOnlyKeys(scenario, ["id", "name", "fixedNow", "turns", "tags", "expected"]) ||
-        !identifier(scenario.id) || !text(scenario.name, 160) || !instant(scenario.fixedNow) ||
-        !Array.isArray(scenario.turns) || scenario.turns.length < 1 || scenario.turns.length > 12 ||
-        scenario.turns.some((turn) => !isRecord(turn) || !hasOnlyKeys(turn, ["role", "text"]) || turn.role !== "user" || !text(turn.text, 2_000)) ||
+    if (!isRecord(scenario) || !hasOnlyKeys(scenario, ["id", "name", "tags", "input", "expected"]) ||
+        !identifier(scenario.id) || !text(scenario.name, 160) || !isRecord(scenario.input) ||
+        !hasOnlyKeys(scenario.input, ["conversationId", "fixedNow", "turns", "providerFixture"]) || !uuid(scenario.input.conversationId) || !instant(scenario.input.fixedNow) ||
+        !Array.isArray(scenario.input.turns) || scenario.input.turns.length < 1 || scenario.input.turns.length > 12 ||
+        scenario.input.turns.some((turn) => !isRecord(turn) || !hasOnlyKeys(turn, ["role", "text"]) || turn.role !== "user" || !text(turn.text, 2_000)) ||
+        scenario.input.providerFixture !== "izumo" && scenario.input.providerFixture !== "west_japan_discovery" ||
         !stringList(scenario.tags, 12) || !isRecord(scenario.expected)) throw new Error("Invalid Conversation Quality scenario");
     const expected = scenario.expected;
     if (!hasOnlyKeys(expected, ["destination", "relativeDates", "forbiddenRepeatedQuestions", "assumptions", "requiredFinalCapabilities", "maximumTurnsToStarterPlan", "minimumPlacePhotos", "maximumAskOnlyStreak", "maximumQuestionsPerAssistantTurn", "forbiddenProfilePromotions"]) ||
@@ -220,6 +222,10 @@ function identifier(value: unknown): value is string {
 
 function instant(value: unknown): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2})$/u.test(value) && !Number.isNaN(Date.parse(value));
+}
+
+function uuid(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(value);
 }
 
 function calendarDate(value: unknown): value is string {

@@ -96,7 +96,7 @@ describe("structuredModelClassPolicy", () => {
     })).toBe("decision");
   });
 
-  it("keeps incomplete planning on the default model", () => {
+  it("does not route from legacy planningStage details", () => {
     expect(structuredModelClassPolicy({
       request: {
         executionId: "1", feature: "concierge", userRequest: "明日",
@@ -106,7 +106,7 @@ describe("structuredModelClassPolicy", () => {
         } },
       },
       phase: "initial",
-    })).toBeUndefined();
+    })).toBe("decision");
   });
 
   it("uses decision class for a verified current journey", () => {
@@ -139,7 +139,8 @@ describe("structuredModelClassPolicy", () => {
   it("does not change incomplete planning routing solely because place facts are available", () => {
     expect(structuredModelClassPolicy({
       request: { executionId: "1", feature: "concierge", userRequest: "旅程を考えたい", context: {
-        tripContext: { planningStage: "planning", destinationWish: "確認済み地点" },
+        taskContext: { version: 1, phase: "in_trip", target: { kind: "conversation" },
+          availableProgressKinds: ["grounded_decision"] },
         verifiedFacts: [{ evidenceId: "place:verified", category: "place", subject: "確認済み地点", summary: "所在地を確認済み" }],
       } },
       phase: "initial",

@@ -8,13 +8,14 @@ import { externalTravelToolDescription, externalTravelToolInputSchema } from "@r
 import type { AgentEvaluationCaseResult, AgentEvaluationDataset, AgentEvaluationReport, ConversationQualityScenario } from "../frontend/src/usecases/agent/evaluation/evaluation-contract";
 import { parseAgentEvaluationDataset } from "../frontend/src/usecases/agent/evaluation/evaluation-dataset";
 import { evaluateConversationQualityLive, type ConversationQualityLiveResult, type ConversationQualityLiveTurn } from "../frontend/src/usecases/agent/evaluation/conversation-quality-live";
-import { liveEvaluationAccommodationOutput, liveEvaluationPhotoCount, liveEvaluationToolEvidence, liveEvaluationTravelToolOutput,
+import { liveEvaluationAccommodationOutput, liveEvaluationToolEvidence, liveEvaluationTravelToolOutput,
   type LiveEvaluationPlace, type LiveEvaluationTravelToolName } from "../frontend/src/usecases/agent/evaluation/live-model-tool-fixture";
 import { AwsBedrockConverseClient } from "../backend/agent-api/src/adapters/aws-sdk-clients";
 import { BedrockConversationModel } from "../backend/agent-api/src/adapters/bedrock-conversation-model";
 import { agentSystemPrompt } from "../backend/agent-api/src/usecases/agent-system-prompt";
 import { createServerAgent } from "../backend/agent-api/src/server-agent-composition";
 import type { ServerAgentToolBinding } from "../backend/agent-api/src/usecases/agent/server-tools";
+import { deriveAgentTaskContext } from "@raiquora/agent/agent-task-context";
 
 const root = resolve(import.meta.dirname, "..");
 const strategy = argument("--strategy") ?? "live-model";
@@ -39,15 +40,14 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
   for (const scenario of scenarios) {
     const liveTurns: ConversationQualityLiveTurn[] = [], history: Array<{ role: "user" | "assistant"; text: string }> = [];
     const turnTraces: AgentTrace[] = [];
-    for (let turnIndex = 0; turnIndex < scenario.turns.length; turnIndex += 1) {
-      const turn = scenario.turns[turnIndex]!;
-      const observedOutputs: unknown[] = [];
+    for (let turnIndex = 0; turnIndex < scenario.input.turns.length; turnIndex += 1) {
+      const turn = scenario.input.turns[turnIndex]!;
       const executionId = `${strategy}-${scenario.id}-${attempt}-${turnIndex + 1}`;
       const application = createServerAgent({
         model,
         weather: { search: async () => ({ status: "unavailable", freshness: "unknown", evidence: [],
           failure: { code: "unavailable", message: "live-eval-fixture", retryable: false } }) },
-        additionalTools: evaluationTools(scenario, observedOutputs),
+        additionalTools: evaluationTools(scenario),
         newExecutionId: () => executionId,
         loadContext: async () => scenarioContext(scenario, turnIndex, history),
         // Candidate discovery, page reading, POI/photo resolution and final rendering are
@@ -58,17 +58,20 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
       const result = await application.runAgentTurn({
         principal: { subject: "live-eval", identity: { issuer: "live-eval", subject: "live-eval" }, scopes: [] },
         userRequest: turn.text,
-        conversationId: scenario.id,
-        uiContext: { calendarDate: scenario.fixedNow.slice(0, 10) },
+        conversationId: scenario.input.conversationId,
+        uiContext: { calendarDate: scenario.input.fixedNow.slice(0, 10) },
       });
       const toolNames = result.trace.events.flatMap((event) => event.type === "tool_called" ? [event.toolName] : []);
-      liveTurns.push({ response: result.response, toolNames, photoCount: liveEvaluationPhotoCount(observedOutputs) });
+      // Count only media that reached the public turn observation. Provider output is not presentation.
+      const photoCount = new Set(result.turnObservation?.progress.flatMap((item) => item.mediaRefs ?? []) ?? []).size;
+      liveTurns.push({ response: result.response, toolNames, photoCount,
+        claimStatuses: result.claims.map(({ groundingStatus }) => groundingStatus) });
       history.push({ role: "user", text: turn.text }, { role: "assistant", text: result.response });
       turnTraces.push(result.trace);
     }
     const quality = evaluateConversationQualityLive(scenario, liveTurns);
     results.push(quality);
-    conversations.push({ scenarioId: scenario.id, turns: scenario.turns.map((turn, index) => ({
+    conversations.push({ scenarioId: scenario.id, turns: scenario.input.turns.map((turn, index) => ({
       user: turn.text,
       assistant: liveTurns[index]!.response,
       tools: liveTurns[index]!.toolNames,
@@ -88,7 +91,8 @@ await Promise.all([
   writeFile(`${outputDirectory}/conversation-quality-attempts.json`, `${JSON.stringify(attempts, null, 2)}\n`, "utf8"),
   writeFile(`${outputDirectory}/run-manifest.json`, `${JSON.stringify({
     schemaVersion: "agent-live-model-eval-manifest-v1", strategy, repetitions, modelId, decisionModelId,
-    datasetSchemaVersion: dataset.schemaVersion, scenarioIds: scenarios.map(({ id }) => id), executedAt: new Date().toISOString(),
+    datasetSchemaVersion: dataset.schemaVersion, fixtureBoundary: "input-only-runtime-v1",
+    photoMetricSource: "rendered-turn-observation", scenarioIds: scenarios.map(({ id }) => id), executedAt: new Date().toISOString(),
   }, null, 2)}\n`, "utf8"),
 ]);
 console.log(`Live Agent Model Eval (${strategy}, ${repetitions}x): ${report.passedCaseCount}/${report.caseCount} stable (${outputDirectory})`);
@@ -111,28 +115,12 @@ function scenarioContext(
   turnIndex: number,
   history: Array<{ role: "user" | "assistant"; text: string }>,
 ): AgentRuntimeContextInput {
-  const calendarDate = scenario.fixedNow.slice(0, 10), startDate = scenario.expected.relativeDates[0]?.calendarDate;
-  const destination = scenario.expected.destination;
-  const specified = destination.mode === "specified";
-  const destinationName = destination.mode === "specified" ? destination.name : undefined;
-  const oneNight = scenario.id === "feedback-izumo-one-night-no-questionnaire";
-  const dateKnown = oneNight || turnIndex >= 1 || !specified;
-  const tripContext: Record<string, string | number> = {
-    planningStage: specified && dateKnown ? "planning" : "inspiration",
-    ...(destinationName ? { destinationWish: destinationName } : {}),
-    ...(dateKnown && startDate ? { startDate } : {}),
-    ...(oneNight && startDate ? { endDate: addDays(startDate, 1), stayNights: 1 } : {}),
-  };
-  const knownHardConstraints = [
-    ...(destinationName ? [{ key: "destination", value: destinationName, source: "trip_context" as const }] : []),
-    ...(dateKnown && startDate ? [{ key: "start_date", value: startDate, source: "trip_context" as const }] : []),
-    ...(oneNight ? [{ key: "stay_nights", value: 1, source: "trip_context" as const }] : []),
-  ];
+  const calendarDate = scenario.input.fixedNow.slice(0, 10);
   return {
     featureContext: { calendarDate, serviceDate: calendarDate },
     conversation: { title: scenario.name, scope: "general", messages: structuredClone(history) },
-    tripContext,
-    knownHardConstraints,
+    taskContext: deriveAgentTaskContext({ conversationId: scenario.input.conversationId,
+      ...(history.length ? { consultationRequest: { constraints: [], assumptions: [] } } : {}), requestRevision: turnIndex + 1 }),
     verifiedFacts: [{
       evidenceId: "live-eval-service-coverage", category: "journey", subject: "収録済み交通範囲",
       summary: "収録済みの駅・時刻表は西日本を中心とし、城崎温泉、おごと温泉、有馬温泉、出雲市方面を含む。熱海・伊東・東京・北海道はこの評価の主候補範囲外。",
@@ -141,27 +129,27 @@ function scenarioContext(
   };
 }
 
-function evaluationTools(scenario: ConversationQualityScenario, outputs: unknown[]): ServerAgentToolBinding[] {
+function evaluationTools(scenario: ConversationQualityScenario): ServerAgentToolBinding[] {
   const names = ["search_place_media", "search_web", "read_web_pages", "resolve_place_candidates"] as const;
   return [
     ...names.map((name): ServerAgentToolBinding => ({
       descriptor: { name, description: externalTravelToolDescription(name), inputSchema: externalTravelToolInputSchema(name) },
       operation: async input => {
-        const output = toolOutput(name, input, scenario); outputs.push(output); return { body: output };
+        return { body: toolOutput(name, input, scenario) };
       },
       evidence: liveEvaluationToolEvidence,
     })),
     {
       descriptor: accommodationToolDescriptor,
-      operation: async input => { const output = liveEvaluationAccommodationOutput(input); outputs.push(output); return { body: output }; },
+      operation: async input => ({ body: liveEvaluationAccommodationOutput(input) }),
       evidence: liveEvaluationToolEvidence,
     },
   ];
 }
 
 function toolOutput(name: LiveEvaluationTravelToolName, input: Record<string, unknown>, scenario: ConversationQualityScenario): Record<string, unknown> {
-  const places = scenario.expected.destination.mode === "specified" ? [izumoPlace()] : candidatePlaces();
-  return liveEvaluationTravelToolOutput({ name, query: input, places, retrievedAt: scenario.fixedNow });
+  const places = scenario.input.providerFixture === "izumo" ? [izumoPlace()] : candidatePlaces();
+  return liveEvaluationTravelToolOutput({ name, query: input, places, retrievedAt: scenario.input.fixedNow });
 }
 
 function izumoPlace(): LiveEvaluationPlace {
@@ -189,7 +177,7 @@ function stableReport(
   });
   return {
     schemaVersion: "agent-eval-report-v4",
-    datasetSchemaVersion: "agent-eval-dataset-v4",
+    datasetSchemaVersion: "agent-eval-dataset-v5",
     caseCount: cases.length,
     passedCaseCount: cases.filter(({ passed }) => passed).length,
     metrics: aggregate(cases),
@@ -250,9 +238,6 @@ function renderReport(
   return `${lines.join("\n")}\n`;
 }
 
-function addDays(value: string, days: number): string {
-  const date = new Date(`${value}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10);
-}
 function percent(value: number): string { return `${(value * 100).toFixed(1)}%`; }
 function nullablePercent(value: number | null): string { return value === null ? "n/a" : percent(value); }
 function argument(name: string): string | undefined { const index = process.argv.indexOf(name); return index < 0 ? undefined : process.argv[index + 1]; }

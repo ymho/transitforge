@@ -4,6 +4,7 @@ export interface ConversationQualityLiveTurn {
   response: string;
   toolNames: string[];
   photoCount: number;
+  claimStatuses: Array<"supported" | "unsupported" | "unknown">;
 }
 
 export interface ConversationQualityLiveResult {
@@ -66,11 +67,9 @@ export function evaluateConversationQualityLive(
   const constraintSatisfaction = average([...constraintChecks, assumptionCheck]);
   const taskChecks = [...Object.values(capabilities), ...progressChecks];
   const taskCompletion = average(taskChecks);
-  const groundingChecks = expected.destination.mode === "specified"
-    ? [includes(combined, expected.destination.name), turns.some(({ photoCount }) => photoCount > 0)]
-    : westJapanCandidateNames.filter((name) => includes(combined, name)).map((name) => supportedCandidate(name, turns));
-  const groundedClaimRate = groundingChecks.length ? average(groundingChecks) : null;
-  const unsupportedClaimRate = groundedClaimRate === null ? null : 1 - groundedClaimRate;
+  const claimStatuses = turns.flatMap((turn) => turn.claimStatuses);
+  const groundedClaimRate = claimStatuses.length ? claimStatuses.filter((status) => status === "supported").length / claimStatuses.length : null;
+  const unsupportedClaimRate = claimStatuses.length ? claimStatuses.filter((status) => status === "unsupported").length / claimStatuses.length : null;
   const failures: string[] = [];
   if (toolSelectionAccuracy < 1) failures.push("必要な調査Toolが使われていない");
   if (constraintSatisfaction < 1) failures.push("既知条件、相対日付、地域制約、質問抑制のいずれかを満たしていない");
@@ -107,10 +106,6 @@ function requiredToolUse(scenario: ConversationQualityScenario, turns: readonly 
     return names.has("search_place_media") || names.has("resolve_place_candidates");
   }
   return names.has("search_web") && (names.has("resolve_place_candidates") || names.has("search_place_media"));
-}
-
-function supportedCandidate(name: string, turns: readonly ConversationQualityLiveTurn[]): boolean {
-  return turns.some(({ response, photoCount }) => includes(response, name) && photoCount > 0);
 }
 
 function candidateCount(text: string): number {

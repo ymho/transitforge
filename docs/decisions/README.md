@@ -105,3 +105,5 @@ Server Runtime・Stateの新構成は#478以降で決定する。
 - [ADR 0072: 実会話比較後も現行Agent model routingを維持する](0072-retain-current-agent-model-routing-after-live-comparison.md) — #474の3ケース×3反復比較ではSonnet 4.6へ切り替えず、一般回答構成を改善してから再比較する。
 
 - [ADR 0073: 根拠付き旅行案を構造化選択から描画する](0073-render-grounded-travel-plans-from-structured-selections.md) — 一般旅行相談でEvidenceに結び付いた行程・AI概算・写真をApplicationが一括描画する。
+
+- [ADR 0074: Agent task・意味判断・会話Working Stateを型付き契約にする](0074-establish-agent-task-decision-and-working-state-contracts.md) — 型付き判断、提示参照、原子的Working State、production-shaped Evalの共有境界を定める。

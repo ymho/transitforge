@@ -779,7 +779,8 @@ describe("MultiStepAgentRuntime", () => {
     const model = sequenceModel([question, textResponse("未確認条件を仮定した仮プランです")], requests);
     const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run({
       executionId: "planning", feature: "concierge", userRequest: "明日から1泊で旅行したい",
-      context: { tripContext: { planningStage: "planning", destinationWish: "出雲大社", startDate: "2026-09-22", stayNights: 1 } },
+      context: { taskContext: { version: 1, phase: "draft", target: { kind: "conversation" },
+        requestRevision: 1, availableProgressKinds: ["candidates", "itinerary"] } },
     });
     expect(output.status).toBe("completed");
     expect(output.response).toContain("仮プラン");
@@ -800,7 +801,8 @@ describe("MultiStepAgentRuntime", () => {
     const model = sequenceModel([questionnaire, textResponse("西日本の候補を3つ、仮定付きの行程で提案します")], requests);
     const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run({
       executionId: "planning-discovery", feature: "concierge", userRequest: "のんびりできる旅を考えたい",
-      context: { tripContext: { planningStage: "inspiration" } },
+      context: { taskContext: { version: 1, phase: "discovery", target: { kind: "conversation" },
+        requestRevision: 1, availableProgressKinds: ["candidates", "comparison"] } },
     });
     expect(output.status).toBe("completed");
     expect(output.response).toContain("候補を3つ");

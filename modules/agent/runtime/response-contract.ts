@@ -1,8 +1,10 @@
-import type { AgentModelResponse } from "./model-provider";
+import type { AgentModelContent, AgentModelResponse } from "./model-provider";
+import { semanticDecisionFromSummary } from "./semantic-decision";
 
 /** Wire-format check only. Never interpret arguments or route/execute a text Tool. */
 export function invalidResponseContract(response: AgentModelResponse, toolNames: readonly string[]): string | undefined {
-  const native = response.message.content.some((block) => block.type === "tool_call");
+  const nativeCalls = response.message.content.filter((block): block is Extract<AgentModelContent, { type: "tool_call" }> => block.type === "tool_call");
+  const native = nativeCalls.length > 0;
   const text = response.message.content.filter((b) => b.type === "text").map((b) => b.text).join("\n");
   // Code examples inside fenced blocks are not executable envelopes.
   const visible = text.replace(/```[^\n]*\n[\s\S]*?```/gu, "").trim();
@@ -23,7 +25,13 @@ export function invalidResponseContract(response: AgentModelResponse, toolNames:
     if (visible.startsWith(`${name}\n{`) || visible.startsWith(`${name} {`) ||
         visible.startsWith(`{"name":"${name}"`) || visible.startsWith(`{ "name": "${name}"`)) return "tool_text_envelope";
   }
-  if (!native && response.decisionSummary?.selectedAction === "use_tool") return "missing_native_tool_use";
+  const decision = response.decisionSummary ? semanticDecisionFromSummary(response.decisionSummary) : undefined;
+  if (!native && decision?.action === "use_tool") return "missing_native_tool_use";
+  if (native && decision && decision.action !== "use_tool") return "decision_action_mismatch";
+  if (native && decision?.action === "use_tool" && nativeCalls.some((call) => call.name !== decision.toolName)) return "decision_tool_mismatch";
+  if (decision?.action === "ask" && response.decisionSummary?.missingRequirements !== undefined &&
+    !decision.missingRequirements.some((item) => item.action === "ask" &&
+      (item.resolution === "user_decision" || item.resolution === "authorization"))) return "decision_missing_requirement_mismatch";
   if (!native && !visible && response.decisionSummaryStatus !== undefined &&
       !response.decisionSummary?.inTripAnswerPlan && !response.declaredInTripAnswerPlan) return "empty_user_response";
   return undefined;

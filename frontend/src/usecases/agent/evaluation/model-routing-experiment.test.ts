@@ -10,7 +10,7 @@ import {
 const baseline: AgentModelRoutingRun = {
   schemaVersion: "agent-model-routing-run-v2",
   strategy: "single-model",
-  datasetSchemaVersion: "agent-eval-dataset-v4",
+  datasetSchemaVersion: "agent-eval-dataset-v5",
   caseCount: 42,
   repetitions: 1,
   passedCaseCount: 42,
@@ -101,7 +101,7 @@ describe("Agent model routing experiment", () => {
   it("aggregates latency tokens and call counts from bounded traces", () => {
     const report = {
       schemaVersion: "agent-eval-report-v4" as const,
-      datasetSchemaVersion: "agent-eval-dataset-v4" as const,
+      datasetSchemaVersion: "agent-eval-dataset-v5" as const,
       caseCount: 1,
       passedCaseCount: 1,
       metrics: baseline.quality,
@@ -130,7 +130,7 @@ describe("Agent model routing experiment", () => {
   it("aggregates repeated benchmark traces and records the repetition count", () => {
     const report = {
       schemaVersion: "agent-eval-report-v4" as const,
-      datasetSchemaVersion: "agent-eval-dataset-v4" as const,
+      datasetSchemaVersion: "agent-eval-dataset-v5" as const,
       caseCount: 1,
       passedCaseCount: 1,
       metrics: baseline.quality,

@@ -29,7 +29,7 @@
 Trip Progressの複数turnシナリオ定義（相談文・閾値・tag）は`agent-eval-cases.json`の
 `travelProgressScenarios`に置く。実会話から匿名化したモデル品質の複数turn回帰は
 `conversationQualityScenarios`へ、固定時計・利用者turn・意味的な合格条件を保存する
-（dataset-v4、旧形式互換なし）。実行用fixtureは本番Runtimeと
+（dataset-v5、旧形式互換なし）。実行入力と期待値を物理的に分離し、実行用fixtureは本番Runtimeと
 colocateする`frontend/src/adapters/bedrock/travel-progress-scenarios.fixture.ts`に置く。
 通常の`eval:agent:smoke/full`は`conversationQualityScenarios`の形式とID重複を検証するが、
 実モデルの複数turn再生や意味判定は行わない。モデル比較時は同じscenarioを各候補で複数回再生し、

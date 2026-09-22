@@ -5,6 +5,8 @@ import { StateError, requireStatePrincipal, stateId, type Conversation } from ".
 import type { TripRepository } from "../../ports/trip-repository.js";
 import type { ConversationApplication } from "../conversation-application.js";
 import type { ProfileApplication } from "../profile-application.js";
+import type { ConversationTurnRepository } from "../../ports/conversation-turn-repository.js";
+import { deriveAgentTaskContext } from "@raiquora/agent/agent-task-context";
 
 export const serverStateContextLimits = { historyMessages: 12, conversationJsonCharacters: 12_000 } as const;
 export interface ServerStateContextReferences {
@@ -18,6 +20,7 @@ export interface ServerStateContextReaders {
   profiles: Pick<ProfileApplication, "get">;
   /** Owner-scoped Trip V2 read, not a global ID lookup or a request-selected owner. */
   trips: Pick<TripRepository, "get">;
+  workingStates?: Pick<ConversationTurnRepository, "getWorkingState">;
 }
 
 /** Read-only and per-turn. No cache, message append, transport or model dependencies. */
@@ -42,11 +45,25 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
     const profile = await readers.profiles.get(principal);
     const history = conversation ? await recentConversation(readers.conversations, principal, conversation, before) : undefined;
     if (trip) options.onTrip?.(structuredClone(trip));
-    const consultationRequest = !trip && conversation ? conversation.draftRequest ?? { constraints: [], assumptions: [] } : undefined;
-    if (conversation && consultationRequest) options.onConsultation?.({ conversationId: conversation.conversationId, createdAt: conversation.createdAt, request: structuredClone(consultationRequest) });
+    const persistedConsultationRequest = !trip && conversation ? conversation.draftRequest : undefined;
+    const consultationRequest = !trip && conversation ? persistedConsultationRequest ?? { constraints: [], assumptions: [] } : undefined;
+    // The empty proposal base enables the first consultation write; phase derivation still distinguishes it from persisted draft state.
+    if (conversation && consultationRequest) options.onConsultation?.({ conversationId: conversation.conversationId, createdAt: conversation.createdAt,
+      request: structuredClone(consultationRequest) });
     const snapshot = createAgentContextSnapshot(profile?.profile, trip);
+    const savedWorkingState = conversation && readers.workingStates
+      ? await readers.workingStates.getWorkingState(principal, conversation.conversationId) : undefined;
+    const workingState = savedWorkingState && (!tripId || savedWorkingState.target.tripId === undefined ||
+      savedWorkingState.target.tripId === tripId && (savedWorkingState.target.tripRevision === undefined || savedWorkingState.target.tripRevision === trip?.revision))
+      ? savedWorkingState : undefined;
+    const taskContext = conversationId || trip || consultationRequest ? deriveAgentTaskContext({ conversationId, trip: trip ? { id: trip.id, revision: trip.revision,
+      lifecycleState: trip.lifecycleState } : undefined,
+      consultationRequest: persistedConsultationRequest, requestRevision: trip?.revision ?? conversation?.revision,
+      workingStateRevision: workingState?.revision, previousOutcome: workingState?.lastOutcome?.outcome }) : undefined;
     const focusedItem = itemId ? trip?.items.find((item) => item.id === itemId) : undefined;
     return {
+      ...(taskContext ? { taskContext } : {}),
+      ...(workingState ? { workingState, previousAssistantTurn: workingState.lastOutcome?.outcome } : {}),
       ...(history ? { conversation: history } : {}),
       ...(snapshot.profile ? { travelProfile: snapshot.profile } : {}),
       ...(snapshot.trip ? { currentTrip: snapshot.trip } : {}),

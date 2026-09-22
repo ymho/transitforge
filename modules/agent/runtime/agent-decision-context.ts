@@ -11,6 +11,8 @@ import { reservationContext, type AgentReservationContext } from "./reservation-
 import { tripFeasibilityContext, type AgentTripFeasibilityContext } from "./trip-feasibility-context";
 import { boundTripReadinessContext, type AgentTripReadinessContext } from "./trip-readiness-context";
 import { inTripPresentations, supportsInTripPresentation, type InTripPresentation } from "./in-trip-answer-plan";
+import type { AgentTaskContext } from "./agent-task-context";
+import type { ConversationWorkingState } from "./conversation-working-state";
 
 export type AgentContextValue = string | number | boolean | null;
 
@@ -69,6 +71,8 @@ export interface AgentToolOutcomeSummary {
 }
 
 export interface AgentRuntimeContextInput {
+  taskContext?: AgentTaskContext;
+  workingState?: ConversationWorkingState;
   inTripReplanScope?: ReturnType<typeof import("@raiquora/trip/in-trip-replan").replanScopeContext>;
   inTrip?: InTripContextSnapshot;
   tripReadiness?: AgentTripReadinessContext;
@@ -99,6 +103,8 @@ export interface AgentAvailableCapability {
 }
 
 export interface AgentDecisionContext {
+  taskContext?: AgentTaskContext;
+  workingState?: ConversationWorkingState;
   inTripReplanScope?: AgentRuntimeContextInput["inTripReplanScope"];
   inTrip?: InTripContextSnapshot;
   tripReadiness?: AgentTripReadinessContext;
@@ -150,6 +156,8 @@ export function buildAgentDecisionContext(
     ? reservationContext(input.reservations.status === "available" ? input.reservations.facts : undefined)
     : undefined;
   return {
+    ...(input?.taskContext ? { taskContext: structuredClone(input.taskContext) } : {}),
+    ...(input?.workingState ? { workingState: structuredClone(input.workingState) } : {}),
     ...(input?.inTrip ? { inTrip: structuredClone(input.inTrip) } : {}),
     ...(input?.inTripReplanScope ? { inTripReplanScope: structuredClone(input.inTripReplanScope) } : {}),
     ...(input?.tripReadiness ? { tripReadiness: boundTripReadinessContext(input.tripReadiness) } : {}),

@@ -2,6 +2,7 @@ import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import { StateError, exactObject, requireStatePrincipal } from "../../contracts/server-state.js";
 import type { ConversationTurnRepository, ConversationTurnResult } from "../../ports/conversation-turn-repository.js";
 import type { ServerAgentTurn } from "./server-agent.js";
+import { presentationFromObservation } from "@raiquora/agent/conversation-working-state";
 
 export interface ConversationTurnInput extends ServerAgentTurn { conversationId: string; turnId: string }
 /** The sequence cutoff is trusted server state, never a client-selected history boundary. */
@@ -21,7 +22,11 @@ export function createConversationTurnApplication(dependencies: {
     try {
       const runtime = await dependencies.runAgentTurn({ principal, conversationId, userRequest, tripId, uiContext }, begun.lease.userSequence);
       if (runtime.status !== "completed" && runtime.status !== "follow_up") throw new StateError("unavailable");
-      result = { status: runtime.status, response: runtime.response, ...(runtime.tripCostProposal ? { tripCostProposal: runtime.tripCostProposal } : {}), ...(runtime.tripUpdateProposal ? { tripUpdateProposal: runtime.tripUpdateProposal } : {}), ...(runtime.consultationRequestProposal ? { consultationRequestProposal: runtime.consultationRequestProposal } : {}) };
+      const presentationReceipt = presentationFromObservation(turnId, runtime.turnObservation);
+      result = { status: runtime.status, response: runtime.response,
+        ...(runtime.turnObservation ? { turnObservation: runtime.turnObservation } : {}),
+        ...(presentationReceipt ? { presentationReceipt } : {}),
+        ...(runtime.tripCostProposal ? { tripCostProposal: runtime.tripCostProposal } : {}), ...(runtime.tripUpdateProposal ? { tripUpdateProposal: runtime.tripUpdateProposal } : {}), ...(runtime.consultationRequestProposal ? { consultationRequestProposal: runtime.consultationRequestProposal } : {}) };
     } catch {
       // Best effort only. If recording failure is unavailable, lease expiry enables recovery.
       try { await dependencies.turns.failTurn(identity, begun.lease); } catch { /* No raw exception/trace retention. */ }
