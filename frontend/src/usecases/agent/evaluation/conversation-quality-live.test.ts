@@ -3,8 +3,9 @@ import type { ConversationQualityScenario } from "./evaluation-contract";
 import { evaluateConversationQualityLive } from "./conversation-quality-live";
 
 const scenario: ConversationQualityScenario = {
-  id: "relaxed", name: "ゆっくり旅", fixedNow: "2026-09-21T09:00:00+09:00",
-  turns: [{ role: "user", text: "明日出発で、ゆっくりできる旅行を提案して欲しい" }], tags: [],
+  id: "relaxed", name: "ゆっくり旅",
+  input: { conversationId: "11111111-1111-4111-8111-111111111111", fixedNow: "2026-09-21T09:00:00+09:00", providerFixture: "west_japan_discovery",
+    turns: [{ role: "user", text: "明日出発で、ゆっくりできる旅行を提案して欲しい" }] }, tags: [],
   expected: {
     destination: { mode: "discovery", minimumCandidates: 2, maximumCandidates: 3,
       recommendationScope: "loaded-timetable-west-japan-centered", forbiddenMainCandidates: ["熱海", "伊東"] },
@@ -21,7 +22,7 @@ describe("live conversation quality evaluator", () => {
   it("accepts a grounded first-turn multi-candidate proposal", () => {
     const result = evaluateConversationQualityLive(scenario, [{
       response: "2026年9月22日出発です。1. 城崎温泉：温泉向き。1日目は街歩き。2. おごと温泉：アクセスが特徴。1日目は湖畔へ。出発地は未指定の前提です。",
-      toolNames: ["search_web", "read_web_pages", "resolve_place_candidates"], photoCount: 2,
+      toolNames: ["search_web", "read_web_pages", "resolve_place_candidates"], photoCount: 2, claimStatuses: ["supported", "supported"],
     }]);
     expect(result.passed).toBe(true);
     expect(result.metrics).toMatchObject({ toolSelectionAccuracy: 1, constraintSatisfaction: 1, taskCompletion: 1 });
@@ -30,7 +31,7 @@ describe("live conversation quality evaluator", () => {
   it("rejects questionnaires and unsupported out-of-scope candidates", () => {
     const result = evaluateConversationQualityLive(scenario, [{
       response: "熱海はいかがですか？ 出発地はどこからですか？ 出発地はプロフィールに保存します。",
-      toolNames: [], photoCount: 0,
+      toolNames: [], photoCount: 0, claimStatuses: ["unsupported"],
     }]);
     expect(result.passed).toBe(false);
     expect(result.failures).toEqual(expect.arrayContaining([
@@ -42,7 +43,7 @@ describe("live conversation quality evaluator", () => {
   it("rejects promotion of a provisional assumption to the profile", () => {
     const result = evaluateConversationQualityLive(scenario, [{
       response: "2026年9月22日出発です。1. 城崎温泉：温泉向き。1日目は街歩き。2. おごと温泉：アクセスが特徴。1日目は湖畔へ。出発地は未指定の前提ですが、プロフィールに出発地として保存します。",
-      toolNames: ["search_web", "resolve_place_candidates"], photoCount: 2,
+      toolNames: ["search_web", "resolve_place_candidates"], photoCount: 2, claimStatuses: ["supported"],
     }]);
     expect(result.passed).toBe(false);
     expect(result.metrics.constraintSatisfaction).toBeLessThan(1);

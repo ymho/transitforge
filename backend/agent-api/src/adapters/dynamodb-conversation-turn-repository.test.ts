@@ -41,6 +41,27 @@ describe("Conversation turn transactions", () => {
     await f.turns.completeTurn(identity, lease, result);
     await expect(f.turns.beginTurn(identity, { userRequest: "different" })).rejects.toMatchObject({ code: "conflict" });
   });
+  it("binds the retry hash to the original calendar date", async () => {
+    const f = await setup();
+    const dated = { ...request, uiContext: { calendarDate: "2026-09-22" } };
+    const started = await f.turns.beginTurn(identity, dated);
+    expect(started.state).toBe("started");
+    if (started.state !== "started") throw new Error();
+    await f.turns.failTurn(identity, started.lease);
+    await expect(f.turns.beginTurn(identity, { ...dated, uiContext: { calendarDate: "2026-09-23" } })).rejects.toMatchObject({ code: "conflict" });
+    expect((await f.turns.beginTurn(identity, dated)).state).toBe("started");
+  });
+  it("atomically retains visible outcome and presented order as working state", async () => {
+    const f = await setup(), lease = await begin(f);
+    const enriched = { ...result,
+      turnObservation: { outcome: "progress" as const, progress: [{ kind: "candidates" as const, refs: ["candidate:b", "candidate:a"] }] },
+      presentationReceipt: { presentationId: turnId, version: 1 as const,
+        entries: [{ ordinal: 1, candidateRef: "candidate:b" }, { ordinal: 2, candidateRef: "candidate:a" }] } };
+    await f.turns.completeTurn(identity, lease, enriched);
+    expect(await f.turns.getWorkingState(principal, conversationId)).toMatchObject({ revision: 0,
+      sourceTurnId: turnId, sourceUserSequence: 1, lastOutcome: { outcome: "progress" },
+      presentations: [{ entries: [{ ordinal: 1, candidateRef: "candidate:b" }, { ordinal: 2, candidateRef: "candidate:a" }] }] });
+  });
   it("recovers failed attempts immediately and crashed attempts after expiry with stale-worker fencing", async () => {
     const f = await setup(), first = await begin(f);
     await f.turns.failTurn(identity, first); await f.turns.failTurn(identity, first);

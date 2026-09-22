@@ -301,14 +301,14 @@ export class MultiStepAgentRuntime {
           );
           continue;
         }
-        const planningStage = request.context?.tripContext?.planningStage;
-        const planningTurn = request.feature === "concierge" && (planningStage === "planning" || planningStage === "inspiration");
+        const taskPhase = request.context?.taskContext?.phase;
+        const planningTurn = request.feature === "concierge" && (taskPhase === "discovery" || taskPhase === "draft" || taskPhase === "refine");
         const sourceEvidence = evidence.filter((item) => typeof item.facts.sourceExcerpt === "string" &&
           item.facts.status === "available" && item.facts.freshness === "fresh");
         const hasPlacePhoto = evidence.some((item) => typeof item.facts.imageUrl === "string" &&
           typeof item.facts.imageSourceUrl === "string" && typeof item.facts.imageAttribution === "string");
         const placePhotoAvailable = modelTools.some(({ name }) => name === "search_place_media");
-        const planningGuard = planningTurn && (modelResponse.decisionSummary?.selectedAction === "ask_user" || hasPlanningQuestionnaire(modelResponse))
+        const planningGuard = planningTurn && shouldRequirePlanningProgress(modelResponse)
           ? { accepted: false, reason: "planning_progress_required", instruction:
             "この旅行相談は質問票だけで終えず、未確認条件を仮定として明記して具体案へ進めてください。プロフィール由来の情報を確定条件として列挙せず、必要な場所情報と写真はToolで調査してください。" }
           : planningTurn && sourceEvidence.length > 0 && !hasPlacePhoto && placePhotoAvailable
@@ -369,9 +369,7 @@ export class MultiStepAgentRuntime {
             continue;
           }
           const fallback = planningTurn ? travelPlanFallback(evidence, {
-            ...(typeof request.context?.tripContext?.startDate === "string" ? { startDate: request.context.tripContext.startDate } : {}),
-            ...(typeof request.context?.tripContext?.stayNights === "number" ? { nights: request.context.tripContext.stayNights } : {}),
-            maximumCandidates: planningStage === "inspiration" ? 3 : 1,
+            maximumCandidates: taskPhase === "discovery" ? 3 : 1,
           }) : undefined;
           if (fallback) generated = fallback;
           else return this.failureResult(trace, evidence, startedAt, "invalid_response_format");
@@ -691,8 +689,21 @@ function hasPlanningQuestionnaire(response: AgentModelResponse): boolean {
     .flatMap((content) => content.type === "text" ? [content.text] : [])
     .join("\n");
   const asksForOptionalDetails = /(?:出発地|出発駅|どこから|予算|人数|何名|同行者|泊数|何泊|滞在期間|目的地|行き先|旅行日程|宿泊日数|地域|アクティビティ|自然スポット|好み)[\s\S]{0,100}(?:[?？]|ですか|ますか|教えてください|お知らせください)/u.test(text);
-  const promotesProfileAsFact = /(?:プロフィール|プロファイル)[\s\S]{0,24}(?:より|から|に記載|上では|上の|として|に保存|出発地|同行者|好み)/u.test(text);
-  return asksForOptionalDetails || promotesProfileAsFact;
+  return asksForOptionalDetails;
+}
+
+function shouldRequirePlanningProgress(response: AgentModelResponse): boolean {
+  const summary = response.decisionSummary;
+  if (summary?.selectedAction === "ask_user") {
+    const requirements = summary.missingRequirements ?? [];
+    const requiredQuestion = requirements.some((item) => item.action === "ask" &&
+      (item.resolution === "authorization" || item.resolution === "user_decision"));
+    const protectedReason = summary.reasonCodes.includes("safety_boundary") || summary.reasonCodes.includes("user_confirmation_required");
+    return !(requiredQuestion && protectedReason);
+  }
+  // Temporary measured safety net until PR2 makes typed provider output the sole path.
+  // A legacy model labelling a questionnaire as `answer` must not bypass the typed ask contract.
+  return hasPlanningQuestionnaire(response);
 }
 
 function elapsed(startedAt: number, now: () => Date): number {

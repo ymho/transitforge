@@ -33,6 +33,8 @@ describe("Server State Context Loader", () => {
       messages: [{ role: "user", text: "履歴" }, { role: "assistant", text: "回答" }] });
     expect(context.travelProfile).toEqual(createAgentContextSnapshot({ ...stateProfile(), aiNoteFields: ["budget"] }).profile);
     expect(context.currentTrip).toEqual(createAgentContextSnapshot(undefined, trip()).trip);
+    expect(context.taskContext).toMatchObject({ version: 1, phase: "refine", requestRevision: 0,
+      target: { kind: "trip", tripId, tripRevision: 0 } });
     expect(context.featureContext?.uiFocus).toMatchObject({ itemId: "stay", item: { itemId: "stay", summary: "宿泊" } });
     expect(context.featureContext?.calendarDate).toBe("2026-09-21");
     expect(buildAgentDecisionContext({ executionId: "date", feature: "concierge", userRequest: "明日から", context }, []).featureContext.relativeDates)
@@ -77,6 +79,12 @@ describe("Server State Context Loader", () => {
     expect(f.history).not.toHaveBeenCalled();
     await f.conversations.create(a, metadata());
     expect((await f.load({ principal: a, conversationId: id, tripId })).currentTrip?.title).toBe("採用した旅");
+  });
+  it("keeps a fresh conversation in discovery while exposing only an empty proposal base", async () => {
+    const f = setup(); await f.conversations.create(a, metadata());
+    const context = await f.load({ principal: a, conversationId: id });
+    expect(context.consultationRequest).toEqual({ constraints: [], assumptions: [] });
+    expect(context.taskContext).toMatchObject({ phase: "discovery", requestRevision: 0 });
   });
   it("does not promote unknown/no-Trip UI items or other UI state", async () => {
     const f = setup(); await f.trips.repository.create(a, trip());
@@ -147,6 +155,8 @@ it("loads saved consultation conditions without manufacturing an adopted Trip an
   await f.conversations.create(a, { ...metadata(), draftRequest });
   const context = await f.load({ principal: a, conversationId: id });
   expect(context.currentTrip).toBeUndefined(); expect(context.consultationRequest).toEqual(draftRequest);
+  expect(context.taskContext).toMatchObject({ phase: "draft", requestRevision: 0,
+    target: { kind: "conversation", conversationId: id } });
   const decision = buildAgentDecisionContext({ executionId: "test", feature: "concierge", userRequest: "候補を相談", context }, []);
   expect(decision.requestSource).toBe("conversation_draft"); expect(decision.persistedTripRequest).toEqual(draftRequest);
   expect(agentDecisionContextText(decision)).toContain("conversation_draft");
@@ -154,6 +164,18 @@ it("loads saved consultation conditions without manufacturing an adopted Trip an
   await f.conversations.update(a, id, 0, stateMetadata());
   const linked = await f.load({ principal: a, conversationId: id });
   expect(linked.consultationRequest).toBeUndefined(); expect(linked.currentTrip?.title).toBe("採用した旅");
+});
+it("restores bounded Working State through the production loader", async () => {
+  const f = setup(); await f.conversations.create(a, metadata());
+  const workingState = { version: 1 as const, revision: 2, sourceTurnId: "33333333-3333-4333-8333-333333333333", sourceUserSequence: 1,
+    target: { conversationId: id }, presentations: [{ presentationId: "33333333-3333-4333-8333-333333333333", version: 1 as const,
+      entries: [{ ordinal: 1, candidateRef: "candidate:b" }] }], pendingQuestionRefs: [], pendingProposalRefs: [],
+    lastOutcome: { outcome: "progress" as const, progress: [{ kind: "candidates" as const, refs: ["candidate:b"] }] } };
+  const load = createServerStateContextLoader({ conversations: f.conversations, profiles: f.profiles, trips: f.trips.repository,
+    workingStates: { getWorkingState: async () => workingState } });
+  const context = await load({ principal: a, conversationId: id });
+  expect(context.workingState).toEqual(workingState);
+  expect(context.taskContext).toMatchObject({ workingStateRevision: 2, previousOutcome: "progress" });
 });
 it("rejects metadata containing both an adopted Trip and a draft", async () => {
   const f = setup();

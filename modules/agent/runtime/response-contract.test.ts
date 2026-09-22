@@ -9,4 +9,13 @@ describe("response wire contract", () => {
   it.each(['こんにちは', 'JSON例: {"name":"太郎"}', '```xml\n<tool_call>例</tool_call>\n```'])('allows ordinary explanation %s', text => {
     expect(invalidResponseContract(response(text), ['search_direct_routes'])).toBeUndefined();
   });
+  it("validates typed decision action, Tool and explicit missing requirements", () => {
+    const native: AgentModelResponse = { message: { role: "assistant", content: [{ type: "tool_call", toolCallId: "call-1", name: "search_direct_routes", input: {} }] },
+      stopReason: "tool_calls", metadata: { provider: "test" }, decisionSummary: { interpretedGoal: "検索", hardConstraints: [], softPreferences: [],
+        selectedAction: "answer", unresolvedFacts: [], reasonCodes: [] } };
+    expect(invalidResponseContract(native, ["search_direct_routes"])).toBe("decision_action_mismatch");
+    const ask = response("確認しますか？"); ask.decisionSummary = { interpretedGoal: "確認", hardConstraints: [], softPreferences: [], selectedAction: "ask_user",
+      unresolvedFacts: ["confirmation"], reasonCodes: ["user_confirmation_required"], missingRequirements: [] };
+    expect(invalidResponseContract(ask, [])).toBe("decision_missing_requirement_mismatch");
+  });
 });

@@ -1,5 +1,6 @@
 import type { AgentContextValue } from "./agent-decision-context";
 import { validInTripAnswerPlan, type InTripAnswerPlan } from "./in-trip-answer-plan";
+import type { MissingRequirement } from "./semantic-decision";
 
 export const decisionSummaryStartTag = "<decision_summary>";
 export const decisionSummaryEndTag = "</decision_summary>";
@@ -46,6 +47,7 @@ export interface AgentDecisionSummary {
   reasonCodes: AgentDecisionReasonCode[];
   replanReason?: AgentReplanReasonCode;
   usedEvidenceIds?: string[];
+  missingRequirements?: MissingRequirement[];
 }
 
 export interface ExtractedAgentDecisionSummary {
@@ -95,7 +97,7 @@ export function extractAgentDecisionSummary(
 export function parseAgentDecisionSummary(value: unknown): AgentDecisionSummary | undefined {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     "interpretedGoal", "hardConstraints", "softPreferences", "selectedAction",
-    "selectedTool", "unresolvedFacts", "reasonCodes", "replanReason", "usedEvidenceIds", "inTripAnswerPlan",
+    "selectedTool", "unresolvedFacts", "reasonCodes", "replanReason", "usedEvidenceIds", "inTripAnswerPlan", "missingRequirements",
   ])) return undefined;
   if (!boundedText(value.interpretedGoal, 240) ||
     !decisionValues(value.hardConstraints, 12) ||
@@ -104,6 +106,7 @@ export function parseAgentDecisionSummary(value: unknown): AgentDecisionSummary 
     value.selectedTool !== undefined && !identifier(value.selectedTool) ||
     !identifierList(value.unresolvedFacts, 8) ||
     !enumList(value.reasonCodes, agentDecisionReasonCodes, 6) ||
+    value.missingRequirements !== undefined && !missingRequirements(value.missingRequirements) ||
     value.replanReason !== undefined &&
       !agentReplanReasonCodes.includes(value.replanReason as AgentReplanReasonCode)) {
     return undefined;
@@ -123,7 +126,16 @@ export function parseAgentDecisionSummary(value: unknown): AgentDecisionSummary 
     ...(value.replanReason ? { replanReason: value.replanReason } : {}),
     ...(value.usedEvidenceIds ? { usedEvidenceIds: [...value.usedEvidenceIds as string[]] } : {}),
     ...(value.inTripAnswerPlan ? { inTripAnswerPlan: value.inTripAnswerPlan } : {}),
+    ...(value.missingRequirements ? { missingRequirements: value.missingRequirements } : {}),
   } as AgentDecisionSummary;
+}
+
+function missingRequirements(value: unknown): value is MissingRequirement[] {
+  return Array.isArray(value) && value.length <= 8 && value.every((item) => isRecord(item) &&
+    hasOnlyKeys(item, ["action", "field", "targetRef", "resolution", "reason"]) &&
+    ["use_tool", "ask", "present", "propose"].includes(String(item.action)) && identifier(item.field) &&
+    (item.targetRef === undefined || typeof item.targetRef === "string" && item.targetRef.length <= 200) &&
+    ["tool", "assumption", "user_decision", "authorization"].includes(String(item.resolution)) && boundedText(item.reason, 240));
 }
 
 export function validUsedEvidenceIds(value: unknown): value is string[] {

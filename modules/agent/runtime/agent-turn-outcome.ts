@@ -11,6 +11,8 @@ export interface AskOnlyException {
 export interface VisibleProgress {
   kind: "candidates" | "comparison" | "trip_proposal" | "itinerary" | "grounded_decision" | "checklist_proposal";
   refs: string[];
+  /** Media actually emitted by the presenter; never raw Provider result URLs. */
+  mediaRefs?: string[];
 }
 export interface AgentTurnObservation {
   outcome: AgentTurnOutcome;
@@ -20,7 +22,8 @@ export interface AgentTurnObservation {
 
 /** The presenter supplies actual visible artifacts, not a model's progress=true assertion. */
 export function observeAgentTurn(hasQuestion: boolean, progress: VisibleProgress[], exception?: AskOnlyException): AgentTurnObservation {
-  const visible = progress.map((p) => ({ kind: p.kind, refs: [...new Set(p.refs.filter((ref) => ref.trim()))].slice(0, 12) }))
+  const visible = progress.map((p) => ({ kind: p.kind, refs: [...new Set(p.refs.filter((ref) => ref.trim()))].slice(0, 12),
+    ...(p.mediaRefs?.length ? { mediaRefs: [...new Set(p.mediaRefs.filter((ref) => ref.trim()))].slice(0, 12) } : {}) }))
     .filter((p) => p.refs.length > 0);
   return { outcome: hasQuestion ? visible.length ? "ask_and_progress" : "ask_only" : visible.length ? "progress" : "answer",
     progress: visible, ...(hasQuestion && exception ? { exception } : {}) };

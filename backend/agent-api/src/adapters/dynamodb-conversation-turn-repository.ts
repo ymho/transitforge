@@ -4,6 +4,7 @@ import { parsePublicRequestProposal } from "@raiquora/trip/public-request-propos
 import { createHash, randomUUID } from "node:crypto";
 import { StateError, exactObject, messageInputs, stateId, type StateClock } from "../contracts/server-state.js";
 import type { BeginConversationTurn, ConversationTurnIdentity, ConversationTurnLease, ConversationTurnRepository, ConversationTurnResult } from "../ports/conversation-turn-repository.js";
+import { parseConversationWorkingState, type ConversationWorkingState } from "@raiquora/agent/conversation-working-state";
 import { DynamoDbConversationRepository } from "./dynamodb-conversation-repository.js";
 import type { StateDynamoClient, StateEnvelope } from "./dynamodb-state-store.js";
 
@@ -15,14 +16,26 @@ interface TurnRecord {
   leaseUntil: number;
   userSequence: number;
   result?: ConversationTurnResult;
+  baseCalendarDate?: string;
+  targetTripId?: string;
 }
 function finalResult(value: ConversationTurnResult): ConversationTurnResult {
-  exactObject(value, ["status", "response", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"]);
+  exactObject(value, ["status", "response", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal", "turnObservation", "presentationReceipt"]);
   if (value.status !== "completed" && value.status !== "follow_up") throw new StateError("invalid-input");
   messageInputs([{ role: "assistant", text: value.response }]);
   try {
     if ((value.tripUpdateProposal || value.tripCostProposal) && value.consultationRequestProposal) throw new Error();
-    return { status: value.status, response: value.response, ...(value.tripCostProposal !== undefined ? { tripCostProposal: parsePublicCostProposal(value.tripCostProposal) } : {}), ...(value.tripUpdateProposal !== undefined ? { tripUpdateProposal: parsePublicRequestProposal(value.tripUpdateProposal) } : {}), ...(value.consultationRequestProposal !== undefined ? { consultationRequestProposal: parseConsultationRequestProposal(value.consultationRequestProposal) } : {}) };
+    if (value.turnObservation !== undefined && (!value.turnObservation || typeof value.turnObservation !== "object" || !["ask_only", "ask_and_progress", "progress", "answer"].includes(value.turnObservation.outcome))) throw new Error();
+    if (value.presentationReceipt !== undefined) parseConversationWorkingState({ version: 1, revision: 0,
+      sourceTurnId: "00000000-0000-4000-8000-000000000000", sourceUserSequence: 1,
+      target: { conversationId: "00000000-0000-4000-8000-000000000000" }, presentations: [value.presentationReceipt],
+      pendingQuestionRefs: [], pendingProposalRefs: [] });
+    return { status: value.status, response: value.response,
+      ...(value.tripCostProposal !== undefined ? { tripCostProposal: parsePublicCostProposal(value.tripCostProposal) } : {}),
+      ...(value.tripUpdateProposal !== undefined ? { tripUpdateProposal: parsePublicRequestProposal(value.tripUpdateProposal) } : {}),
+      ...(value.consultationRequestProposal !== undefined ? { consultationRequestProposal: parseConsultationRequestProposal(value.consultationRequestProposal) } : {}),
+      ...(value.turnObservation !== undefined ? { turnObservation: structuredClone(value.turnObservation) } : {}),
+      ...(value.presentationReceipt !== undefined ? { presentationReceipt: structuredClone(value.presentationReceipt) } : {}) };
   } catch { throw new StateError("invalid-input"); }
 }
 
@@ -36,15 +49,29 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     return structuredClone(input);
   }
   private key(input: ConversationTurnIdentity) { return `TURN#${input.conversationId}#${input.turnId}`; }
+  private workingKey(conversationId: string) { stateId(conversationId); return `WORKING#${conversationId}`; }
+  async getWorkingState(principal: ConversationTurnIdentity["principal"], conversationId: string): Promise<ConversationWorkingState | undefined> {
+    this.store.owner(principal);
+    const envelope = await this.store.read(principal, this.workingKey(conversationId));
+    if (!envelope) return undefined;
+    try {
+      if (envelope.deleted) throw new Error();
+      const state = parseConversationWorkingState(envelope.payload);
+      if (state.revision !== envelope.revision || state.target.conversationId !== conversationId) throw new Error();
+      return state;
+    } catch { throw new StateError("unavailable"); }
+  }
   private decodeTurn(envelope: StateEnvelope): TurnRecord {
     try {
       const value = envelope.payload;
-      exactObject(value, ["requestHash", "state", "attemptId", "leaseUntil", "userSequence", "result"]);
+      exactObject(value, ["requestHash", "state", "attemptId", "leaseUntil", "userSequence", "result", "baseCalendarDate", "targetTripId"]);
       if (envelope.deleted || typeof value.requestHash !== "string" || !/^[0-9a-f]{64}$/.test(value.requestHash) ||
         typeof value.state !== "string" || !["started", "failed", "completed"].includes(value.state) ||
         !Number.isSafeInteger(value.leaseUntil) || Number(value.leaseUntil) < 0 ||
         !Number.isSafeInteger(value.userSequence) || Number(value.userSequence) < 1) throw new Error();
       stateId(value.attemptId);
+      if (value.baseCalendarDate !== undefined && (typeof value.baseCalendarDate !== "string" || !validCalendarDate(value.baseCalendarDate))) throw new Error();
+      if (value.targetTripId !== undefined) stateId(value.targetTripId);
       if (value.state === "completed") finalResult(value.result as ConversationTurnResult);
       else if (value.result !== undefined) throw new Error();
       return value as unknown as TurnRecord;
@@ -73,7 +100,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     if (itemId !== undefined && (typeof itemId !== "string" || !itemId.trim() || itemId.length > 200 || /[\u0000-\u001f\u007f]/u.test(itemId))) throw new StateError("invalid-input");
     const calendarDate = request.uiContext?.calendarDate;
     if (calendarDate !== undefined && !validCalendarDate(calendarDate)) throw new StateError("invalid-input");
-    const requestHash = createHash("sha256").update(JSON.stringify([request.userRequest, request.tripId ?? null, itemId ?? null])).digest("hex");
+    const requestHash = createHash("sha256").update(JSON.stringify([request.userRequest, request.tripId ?? null, itemId ?? null, calendarDate ?? null])).digest("hex");
     const { current, old, turn } = await this.read(input);
     if (turn && turn.requestHash !== requestHash) throw new StateError("conflict");
     if (turn?.state === "completed") return { state: "completed", result: turn.result! };
@@ -83,7 +110,8 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     if (!turn && current.messageCount >= conversationTurnLimits.newTurnMessageLimit) throw new StateError("conflict");
     const attemptId = this.newAttemptId(); stateId(attemptId);
     const next: TurnRecord = { requestHash, state: "started", attemptId, leaseUntil: time + conversationTurnLimits.leaseMs,
-      userSequence: turn?.userSequence ?? current.messageCount + 1 };
+      userSequence: turn?.userSequence ?? current.messageCount + 1,
+      ...(calendarDate ? { baseCalendarDate: calendarDate } : {}), ...(request.tripId ? { targetTripId: request.tripId } : {}) };
     await this.write(input.principal, current, { ...current, revision: current.revision + 1, updatedAt: now,
       messageCount: current.messageCount + (turn ? 0 : 1) },
     turn ? [] : [{ ...message, sequence: next.userSequence, createdAt: now }],
@@ -107,10 +135,27 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     if (turn.state !== "started" || turn.leaseUntil <= Date.parse(now)) throw new StateError("conflict");
     if (saved && current.messageCount >= 999_999_999_999) throw new StateError("conflict");
     const next: TurnRecord = { ...turn, state: saved ? "completed" : "failed", ...(saved ? { result: saved } : {}) };
+    const workingKey = this.workingKey(input.conversationId);
+    const oldWorking = saved ? await this.store.read(input.principal, workingKey) : undefined;
+    const previousWorking = oldWorking ? parseConversationWorkingState(oldWorking.payload) : undefined;
+    const targetTripRevision = saved?.tripUpdateProposal?.baseRevision ?? saved?.tripCostProposal?.baseRevision ??
+      (previousWorking && previousWorking.target.tripId === turn.targetTripId ? previousWorking.target.tripRevision : undefined);
+    const working = saved ? parseConversationWorkingState({
+      version: 1, revision: (oldWorking?.revision ?? -1) + 1,
+      sourceTurnId: input.turnId, sourceUserSequence: turn.userSequence,
+      target: { conversationId: input.conversationId, ...(turn.targetTripId ? { tripId: turn.targetTripId,
+        ...(targetTripRevision === undefined ? {} : { tripRevision: targetTripRevision }) } : {}) },
+      presentations: [...(previousWorking?.presentations ?? []), ...(saved.presentationReceipt ? [saved.presentationReceipt] : [])].slice(-20),
+      pendingQuestionRefs: saved.turnObservation?.outcome === "ask_only" || saved.turnObservation?.outcome === "ask_and_progress"
+        ? saved.turnObservation.exception ? [saved.turnObservation.exception.missingFact] : [] : [],
+      pendingProposalRefs: [saved.tripUpdateProposal ? "trip_update" : "", saved.consultationRequestProposal ? "consultation_update" : "", saved.tripCostProposal ? "cost_update" : ""].filter(Boolean),
+      ...(saved.turnObservation ? { lastOutcome: saved.turnObservation } : {}),
+    }) : undefined;
     await this.write(input.principal, current, { ...current, updatedAt: now, revision: current.revision + 1,
       messageCount: current.messageCount + (saved ? 1 : 0) },
     saved ? [{ role: "assistant", text: saved.response, ...(saved.tripCostProposal ? { tripCostProposal: saved.tripCostProposal } : {}), ...(saved.tripUpdateProposal ? { tripUpdateProposal: saved.tripUpdateProposal } : {}), ...(saved.consultationRequestProposal ? { consultationRequestProposal: saved.consultationRequestProposal } : {}), sequence: current.messageCount + 1, createdAt: now }] : [],
-    [this.store.put(input.principal, this.key(input), { revision: old!.revision + 1, deleted: false, payload: next }, old)]);
+    [this.store.put(input.principal, this.key(input), { revision: old!.revision + 1, deleted: false, payload: next }, old),
+      ...(working ? [this.store.put(input.principal, workingKey, { revision: working.revision, deleted: false, payload: working }, oldWorking)] : [])]);
     return saved;
   }
   async completeTurn(identity: ConversationTurnIdentity, lease: ConversationTurnLease, result: ConversationTurnResult) {

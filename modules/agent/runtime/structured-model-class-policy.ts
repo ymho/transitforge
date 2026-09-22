@@ -20,14 +20,7 @@ function requiresTravelDecision(
 ): boolean {
   const context = request.context;
   if (request.feature !== "concierge") return false;
-  const tripContext = context?.tripContext;
-  const hasTripContext = tripContext !== undefined && Object.keys(tripContext).length > 0;
-  const needsDiscovery = context?.currentTrip === undefined &&
-    context?.currentJourney === undefined &&
-    (tripContext?.planningStage === "inspiration" ||
-      !hasTripContext);
-  const readyToPlan = tripContext?.planningStage === "planning" &&
-    typeof tripContext.startDate === "string" &&
-    typeof tripContext.stayNights === "number";
-  return needsDiscovery || readyToPlan;
+  if (context === undefined) return true;
+  // Absence is treated as an unframed concierge decision, never reconstructed from legacy tripContext fields.
+  return context.taskContext === undefined || ["discovery", "draft", "refine"].includes(context.taskContext.phase);
 }

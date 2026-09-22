@@ -1,11 +1,14 @@
 {
-  "schemaVersion": "agent-eval-dataset-v4",
+  "schemaVersion": "agent-eval-dataset-v5",
   "conversationQualityScenarios": [
     {
       "id": "feedback-izumo-provisional-plan",
       "name": "出雲大社の複数ターン相談で仮定を明示して旅程と総額へ進む",
-      "fixedNow": "2026-09-21T09:00:00+09:00",
-      "turns": [
+      "input": {
+        "conversationId": "11111111-1111-4111-8111-111111111111",
+        "fixedNow": "2026-09-21T09:00:00+09:00",
+        "providerFixture": "izumo",
+        "turns": [
         {
           "role": "user",
           "text": "出雲大社へ行きたい"
@@ -22,7 +25,8 @@
           "role": "user",
           "text": "とりあえず適当に旅程立ててみて"
         }
-      ],
+        ]
+      },
       "tags": [
         "model-quality",
         "multi-turn",
@@ -77,13 +81,17 @@
     {
       "id": "feedback-izumo-one-night-no-questionnaire",
       "name": "出雲大社への明日から1泊を質問票にせず具体案へ進める",
-      "fixedNow": "2026-09-21T09:00:00+09:00",
-      "turns": [
+      "input": {
+        "conversationId": "22222222-2222-4222-8222-222222222222",
+        "fixedNow": "2026-09-21T09:00:00+09:00",
+        "providerFixture": "izumo",
+        "turns": [
         {
           "role": "user",
           "text": "出雲大社に明日から1泊で旅行したい"
         }
-      ],
+        ]
+      },
       "tags": [
         "model-quality",
         "multi-turn",
@@ -139,13 +147,17 @@
     {
       "id": "feedback-open-ended-relaxed-tomorrow",
       "name": "明日出発のゆっくり旅を西日本の写真付き複数候補で提案する",
-      "fixedNow": "2026-09-21T09:00:00+09:00",
-      "turns": [
+      "input": {
+        "conversationId": "33333333-3333-4333-8333-333333333333",
+        "fixedNow": "2026-09-21T09:00:00+09:00",
+        "providerFixture": "west_japan_discovery",
+        "turns": [
         {
           "role": "user",
           "text": "明日出発で、ゆっくりできる旅行を提案して欲しい"
         }
-      ],
+        ]
+      },
       "tags": [
         "model-quality",
         "single-turn",

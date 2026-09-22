@@ -14,6 +14,7 @@ import { ConversationApplication } from "../usecases/conversation-application.js
 import { ProfileApplication } from "../usecases/profile-application.js";
 import { createServerStateContextLoader } from "../usecases/agent/server-state-context-loader.js";
 import { createServerAgent } from "../server-agent-composition.js";
+import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
 
 /** Internal stateful composition. Transport/auth rollout and env bindings remain with #451/#462/#480. */
 export function createStatefulServerAgent(options: Omit<Parameters<typeof createServerAgent>[0], "loadContext"> & {
@@ -27,6 +28,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
   return { async runAgentTurn(input: ServerAgentTurn) {
     let tripCostProposal: PublicCostProposal | undefined;
     let trip: Trip | undefined, consultation: Trip | undefined, tripUpdateProposal: PublicRequestProposal | undefined, consultationRequestProposal: ConsultationRequestProposal | undefined;
+    const turnStates = new DynamoDbConversationTurnRepository(options.stateTable, options.stateClient);
     const result = await createServerAgent({ ...options,
       registerAdditionalTools: (tools, evidence, scope) => {
         options.registerAdditionalTools?.(tools, evidence, scope);
@@ -50,6 +52,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
         conversations: new ConversationApplication(new DynamoDbConversationRepository(options.stateTable, options.stateClient)),
         profiles: new ProfileApplication(new DynamoDbProfileRepository(options.stateTable, options.stateClient)),
         trips: new DynamoDbTripRepository(options.tripTable, options.tripClient),
+        workingStates: turnStates,
       }, { historyBeforeSequence: options.historyBeforeSequence, onTrip: value => { trip = value; },
         onConsultation: value => { consultation = createTrip(value.conversationId, "相談中の条件", value.createdAt, [], value.request); } }),
     }).runAgentTurn(input);

@@ -34,15 +34,15 @@ describe("multi-turn dataset v4", () => {
     });
   });
   it("accepts single-turn cases and rejects retired dataset versions", () => {
-    const raw = fixture(); delete raw.travelProgressScenarios; delete raw.conversationQualityScenarios; raw.schemaVersion = "agent-eval-dataset-v4";
+    const raw = fixture(); delete raw.travelProgressScenarios; delete raw.conversationQualityScenarios; raw.schemaVersion = "agent-eval-dataset-v5";
     expect(parseAgentEvaluationDataset(raw)).toEqual(raw);
     raw.schemaVersion = "agent-eval-dataset-v1";
     expect(() => parseAgentEvaluationDataset(raw)).toThrow();
   });
   it.each(["no-turn", "assistant-turn", "bad-date", "extra", "cross-id", "bad-destination"])("rejects invalid conversation quality scenario: %s", (invalid) => {
     const raw = fixture(), scenario = raw.conversationQualityScenarios[0];
-    if (invalid === "no-turn") scenario.turns = [];
-    if (invalid === "assistant-turn") scenario.turns[0].role = "assistant";
+    if (invalid === "no-turn") scenario.input.turns = [];
+    if (invalid === "assistant-turn") scenario.input.turns[0].role = "assistant";
     if (invalid === "bad-date") scenario.expected.relativeDates[0].calendarDate = "tomorrow";
     if (invalid === "extra") scenario.expected.score = 1;
     if (invalid === "cross-id") scenario.id = raw.cases[0].id;
