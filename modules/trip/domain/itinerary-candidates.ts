@@ -140,7 +140,7 @@ export function proposePlanAdoption(input: { candidateSet: ItineraryCandidateSet
   trustedFactory: (draft: DraftPlanItem) => ItineraryItem }): { proposal: TripUpdateProposal; componentMap: readonly { componentId: string; itemId: string }[] } {
   validateCandidateSet(input.candidateSet); validateTrip(input.currentTrip);
   const context = input.candidateSet.contextRef;
-  if (!validInstant(input.now) || Date.parse(input.now) > Date.parse(input.candidateSet.expiresAt) || context.requestFingerprint !== input.requestFingerprint ||
+  if (!validInstant(input.now) || Date.parse(input.now) >= Date.parse(input.candidateSet.expiresAt) || context.requestFingerprint !== input.requestFingerprint ||
       context.tripId !== input.currentTrip.id || context.baseTripRevision !== input.currentTrip.revision) throw new Error("Stale or foreign candidate set");
   const variant = input.candidateSet.variants.find(({ id }) => id === input.variantId); if (!variant) throw new Error("Unknown variant");
   const componentMap: { componentId: string; itemId: string }[] = [], patches: TripUpdateProposal["patches"][number][] = [];

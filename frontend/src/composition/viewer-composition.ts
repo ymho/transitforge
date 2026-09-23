@@ -447,6 +447,15 @@ aiGuideController = configureAiGuidePanel(
       try { tripWorkspaceController.preview(proposal); tripWorkspace.show("trip"); }
       catch { tripWorkspace.report("変更案を現在の旅程に適用できません。会話で確認し直してください。"); }
     },
+    onPlanAdoption: async (target) => {
+      if (!serverTripClient.previewPlanAdoption || !serverTripClient.confirmPlanAdoption || activeConversationSession.id !== target.conversationId) throw new Error("Adoption unavailable");
+      const preview = await serverTripClient.previewPlanAdoption(target);
+      return { changes: preview.preview.changes, confirm: async () => {
+        if (activeConversationSession.id !== target.conversationId) throw new Error("Conversation changed");
+        await serverTripClient.confirmPlanAdoption!(target, preview.confirmationKey);
+        await tripWorkspaceController.source()?.retry?.(); await serverTripList.refresh(); tripWorkspace.show("trip");
+      } };
+    },
     onChecklistProposal: (proposal) => {
       try { tripWorkspaceController.checklist.preview(proposal); }
       catch { tripWorkspace.report("準備リストの追加案を表示できません。最新のリストを確認してください。"); }
@@ -593,11 +602,11 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip
 }
 
 const initialDateTime = new Date();
-handleAiGuidePrompt = async (prompt) => {
+handleAiGuidePrompt = async (prompt, _preferences, _conversation, _metadata, execution) => {
   if (activeConversationSession.tripId && tripWorkspaceController.current()?.id !== activeConversationSession.tripId) {
     throw new Error("対象の旅程を再取得してから相談してください。");
   }
-  return serverAgentSession.start(prompt).send();
+  return serverAgentSession.start(prompt, execution?.requestedResearchMode ?? "standard", execution?.researchTarget).send();
 };
 
 resolveAiGuidePromptHandler(handleAiGuidePrompt);

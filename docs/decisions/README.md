@@ -111,3 +111,4 @@ Server Runtime・Stateの新構成は#478以降で決定する。
 
 - [ADR 0077: 旅行候補発見をObservation lineageへ統合する](0077-unify-travel-discovery-with-observation-lineage.md) — Evidenceの観測scope、Applicability、Web/Knowledge/Rerankの共通契約を定める。
 - [ADR 0078: 費用明細・旅行案・全体成立性をTrip正本から派生評価する](0078-model-plan-variants-and-global-feasibility.md) — CostLine、時間制約network、多軸比較、scenario、増分再評価の境界を定める。
+- [ADR 0079: 旅行案の表示・保持・採用を型付き参照で接続する](0079-retain-typed-plan-presentations.md) — PublicPlanPresentation、immutable CandidateSet、明示確認、既存CAS保存の境界を定める。

@@ -25,7 +25,8 @@ export interface Conversation extends ConversationMetadata {
   messageCount: number;
 }
 export interface MessageInput { role: "user" | "assistant"; text: string }
-export interface ConversationMessage extends MessageInput { sequence: number; createdAt: string; tripUpdateProposal?: import("@raiquora/trip/public-request-proposal").PublicRequestProposal; consultationRequestProposal?: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal; tripCostProposal?: import("@raiquora/trip/public-cost-proposal").PublicCostProposal }
+export interface ConversationMessage extends MessageInput { sequence: number; createdAt: string; publicPlanPresentation?: import("@raiquora/agent/public-plan-presentation").PublicPlanPresentation; tripUpdateProposal?: import("@raiquora/trip/public-request-proposal").PublicRequestProposal; consultationRequestProposal?: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal; tripCostProposal?: import("@raiquora/trip/public-cost-proposal").PublicCostProposal }
+export interface ResearchTarget { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number }
 export interface ProfileState { profile: UserProfile; revision: number }
 export interface StateClock { now(): Date }
 export interface PageOptions { limit?: number; after?: string }

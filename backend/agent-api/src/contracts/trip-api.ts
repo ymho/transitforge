@@ -46,6 +46,23 @@ export type TripApiCommand =
   | { version: typeof tripApiVersion; operation: "attach"; conversationId: string; tripId: string }
   | { version: typeof tripApiVersion; operation: "detach" | "reference"; conversationId: string };
 
+export type PlanAdoptionApiCommand = { version: typeof tripApiVersion; operation: "preview-plan-adoption" | "confirm-plan-adoption";
+  conversationId: string; candidateSetId: string; candidateSetRevision: number; variantId: string; tripId: string; baseTripRevision: number; mutationId: string; confirmationKey?: string };
+
+export function parsePlanAdoptionCommand(value: unknown): PlanAdoptionApiCommand {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TripResourceError("invalid-input");
+  const command = value as Record<string, unknown>;
+  if (command.version !== tripApiVersion || !["preview-plan-adoption", "confirm-plan-adoption"].includes(String(command.operation))) throw new TripResourceError("invalid-input");
+  const confirm = command.operation === "confirm-plan-adoption";
+  const keys = ["version", "operation", "conversationId", "candidateSetId", "candidateSetRevision", "variantId", "tripId", "baseTripRevision", "mutationId", ...(confirm ? ["confirmationKey"] : [])];
+  if (Object.keys(command).some((key) => !keys.includes(key)) || confirm !== (command.confirmationKey !== undefined)) throw new TripResourceError("invalid-input");
+  conversationIdentifier(command.conversationId); tripIdentifier(command.tripId); tripIdentifier(command.mutationId);
+  for (const ref of [command.candidateSetId, command.variantId]) if (typeof ref !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/u.test(ref)) throw new TripResourceError("invalid-input");
+  if (![command.candidateSetRevision, command.baseTripRevision].every((item) => Number.isSafeInteger(item) && Number(item) >= 0) ||
+      confirm && (typeof command.confirmationKey !== "string" || !/^[0-9a-f]{64}$/u.test(command.confirmationKey))) throw new TripResourceError("invalid-input");
+  return structuredClone(command) as unknown as PlanAdoptionApiCommand;
+}
+
 export interface TripMutation {
   tripId: string;
   baseRevision: number;

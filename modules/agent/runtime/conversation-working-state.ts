@@ -3,6 +3,8 @@ import type { AgentTurnObservation } from "./agent-turn-outcome";
 export interface PresentationReceipt {
   presentationId: string;
   version: 1;
+  target?: { tripId: string; baseTripRevision: number };
+  candidateSetRef?: import("./public-plan-presentation").PublicPlanPresentation["candidateSetRef"];
   entries: Array<{ ordinal: number; candidateRef: string }>;
 }
 export interface ConversationWorkingState {
@@ -27,13 +29,15 @@ export function parseConversationWorkingState(value: unknown): ConversationWorki
     value.presentations.length > 20 || !stringList(value.pendingQuestionRefs, 20) || !stringList(value.pendingProposalRefs, 20) ||
     value.lastOutcome !== undefined && !validOutcome(value.lastOutcome)) throw new Error("Invalid working state");
   const presentations = value.presentations.map((candidate) => {
-    if (!record(candidate) || !only(candidate, ["presentationId", "version", "entries"]) || !identifier(candidate.presentationId) || candidate.version !== 1 || !Array.isArray(candidate.entries) ||
+    if (!record(candidate) || !only(candidate, ["presentationId", "version", "target", "candidateSetRef", "entries"]) || !identifier(candidate.presentationId) || candidate.version !== 1 || !Array.isArray(candidate.entries) ||
       candidate.entries.length > 24) throw new Error("Invalid presentation receipt");
     const entries = candidate.entries.map((entry, index) => {
       if (!record(entry) || !only(entry, ["ordinal", "candidateRef"]) || entry.ordinal !== index + 1 || !reference(entry.candidateRef)) throw new Error("Invalid presentation entry");
       return { ordinal: entry.ordinal as number, candidateRef: entry.candidateRef as string };
     });
-    return { presentationId: candidate.presentationId as string, version: 1 as const, entries };
+    const candidateSetRef = candidate.candidateSetRef === undefined ? undefined : parseCandidateSetRef(candidate.candidateSetRef);
+    const target = candidate.target === undefined ? undefined : parsePresentationTarget(candidate.target);
+    return { presentationId: candidate.presentationId as string, version: 1 as const, ...(target ? { target } : {}), ...(candidateSetRef ? { candidateSetRef } : {}), entries };
   });
   return structuredClone({ ...value, presentations }) as ConversationWorkingState;
 }
@@ -57,6 +61,15 @@ export function presentationFromObservation(presentationId: string, observation:
   return unique.length ? { presentationId, version: 1, entries: unique.map((candidateRef, index) => ({ ordinal: index + 1, candidateRef })) } : undefined;
 }
 
+export function presentationFromPublicPlan(value: import("./public-plan-presentation").PublicPlanPresentation): PresentationReceipt {
+  return { presentationId: value.presentationId, version: 1, ...(value.target ? { target: structuredClone(value.target) } : {}), candidateSetRef: structuredClone(value.candidateSetRef),
+    entries: value.candidateOrder.map((candidateRef, index) => ({ ordinal: index + 1, candidateRef })) };
+}
+function parsePresentationTarget(value: unknown): NonNullable<PresentationReceipt["target"]> {
+  if (!record(value) || !only(value, ["tripId", "baseTripRevision"]) || !reference(value.tripId) || !integer(value.baseTripRevision)) throw new Error("Invalid presentation target receipt");
+  return structuredClone(value) as NonNullable<PresentationReceipt["target"]>;
+}
+
 function record(value: unknown): value is Record<string, unknown> { return !!value && typeof value === "object" && !Array.isArray(value); }
 function only(value: Record<string, unknown>, keys: string[]): boolean { const allowed = new Set(keys); return Object.keys(value).every((key) => allowed.has(key)); }
 function integer(value: unknown): boolean { return Number.isSafeInteger(value) && Number(value) >= 0; }
@@ -72,4 +85,11 @@ function validOutcome(value: unknown): value is AgentTurnObservation {
   return value.exception === undefined || record(value.exception) && only(value.exception, ["reason", "missingFact", "constraintId", "toolName", "inputName"]) &&
     ["safety", "hard_constraint_unknown", "tool_input_missing"].includes(String(value.exception.reason)) && reference(value.exception.missingFact) &&
     [value.exception.constraintId, value.exception.toolName, value.exception.inputName].every((item) => item === undefined || reference(item));
+}
+function parseCandidateSetRef(value: unknown): PresentationReceipt["candidateSetRef"] {
+  if (!record(value)) throw new Error("Invalid candidate set receipt");
+  if (value.kind === "unavailable" && only(value, ["kind", "reason"]) && ["legacy-projection", "not-retained", "expired"].includes(String(value.reason))) return structuredClone(value) as PresentationReceipt["candidateSetRef"];
+  if (value.kind === "candidate-set-ref" && only(value, ["kind", "candidateSetId", "revision", "baseTripRevision"]) && reference(value.candidateSetId) && integer(value.revision) &&
+      (value.baseTripRevision === undefined || integer(value.baseTripRevision))) return structuredClone(value) as PresentationReceipt["candidateSetRef"];
+  throw new Error("Invalid candidate set receipt");
 }

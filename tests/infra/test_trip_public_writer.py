@@ -28,8 +28,12 @@ class TripPublicWriterContractTest(unittest.TestCase):
     def test_public_entrypoint_does_not_expose_other_trip_features(self):
         source = (ROOT / "backend/agent-api/src/trip-api-composition.ts").read_text()
         self.assertIn('"/api/trips/v1"', source)
-        self.assertIn('createAuthorizedTripApplications(options.tripTable).trips', source)
-        for forbidden in ['sharing.', 'notification', 'in-trip', 'createPersonalApiHandler']:
+        self.assertIn('const applications = createAuthorizedTripApplications(options.tripTable)', source)
+        self.assertIn('new DynamoDbItineraryCandidateRepository(options.tripTable)', source)
+        self.assertIn('new PlanCandidateAdoptionApplication(', source)
+        self.assertIn('executeAdoption: adoption.execute.bind(adoption)', source)
+        for forbidden in ['sharing.', 'notification', 'in-trip', 'createPersonalApiHandler',
+                          'createInternalReservationApplication', 'createInternalChecklistApplication']:
             self.assertNotIn(forbidden, source)
 
 

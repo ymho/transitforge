@@ -2,7 +2,8 @@ import { requestSessionVersion, subscribeRequestSession } from "./authenticated-
 import { ApiAuthenticationError } from "../../usecases/auth/api-authentication-error";
 import { personalApiFetch } from "./personal-api-fetch";
 import { validateTrip, TripRevisionConflict, type Trip } from "@raiquora/trip/trip";
-import { TripWriteRejected, type ServerTripClient, type ServerTripPage, type TripMutationRequest } from "../../usecases/trip-plan/server-trip-client";
+import { TripWriteRejected, type ServerTripClient, type ServerTripPage, type TripMutationRequest, type PlanAdoptionTarget, type PlanAdoptionPreview } from "../../usecases/trip-plan/server-trip-client";
+import { applyTripProposal } from "@raiquora/trip/trip";
 
 /** No owner parameter/header. The common authenticated transport supplies only an Access Token. */
 export class HttpServerTripClient implements ServerTripClient {
@@ -81,4 +82,21 @@ export class HttpServerTripClient implements ServerTripClient {
     return structuredClone(trip);
   }
   async detach(conversationId: string): Promise<void> { await this.execute({ operation: "detach", conversationId }); }
+  async previewPlanAdoption(target: PlanAdoptionTarget): Promise<PlanAdoptionPreview> {
+    const result = await this.execute({ operation: "preview-plan-adoption", ...target });
+    const preview = result?.preview as PlanAdoptionPreview["preview"] | undefined;
+    if (result?.status !== "confirmation-required" || typeof result.confirmationKey !== "string" || !/^[0-9a-f]{64}$/u.test(result.confirmationKey) || !preview ||
+        !preview.changes || ![preview.changes.added, preview.changes.replaced, preview.changes.removed].every((item) => Number.isSafeInteger(item) && item >= 0)) throw new Error("Invalid adoption preview");
+    const current = await this.get(target.tripId); if (!current || current.revision !== target.baseTripRevision) throw new TripRevisionConflict();
+    applyTripProposal(current, preview.proposal);
+    return structuredClone({ confirmationKey: result.confirmationKey, preview });
+  }
+  async confirmPlanAdoption(target: PlanAdoptionTarget, confirmationKey: string): Promise<Trip> {
+    if (!/^[0-9a-f]{64}$/u.test(confirmationKey)) throw new TripWriteRejected("旅行案を確認し直してください");
+    const result = await this.execute({ operation: "confirm-plan-adoption", ...target, confirmationKey });
+    validateTrip(result?.trip as Trip); const trip = result!.trip as Trip;
+    if (result?.status !== "saved" || trip.id !== target.tripId || trip.revision < target.baseTripRevision + 1) throw new Error("Invalid adoption result");
+    const reloaded = await this.get(target.tripId); if (!reloaded || reloaded.revision < trip.revision) throw new Error("Trip reload failed");
+    return reloaded;
+  }
 }

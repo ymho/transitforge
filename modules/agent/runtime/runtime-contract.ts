@@ -14,6 +14,7 @@ export interface AgentRuntimeRequest {
   executionId: string;
   feature: AgentRuntimeFeature;
   userRequest: string;
+  researchMode?: { requestedMode: "standard" | "detailed"; effectiveMode: "standard" | "detailed" };
   context?: AgentRuntimeContextInput;
   /** Trusted host privacy policy, never model/transport input. Keeps diagnostic counts and timing. */
   omitTraceContent?: boolean;
@@ -29,6 +30,7 @@ export type AgentRuntimeStatus =
 
 export interface AgentRuntimeResult {
   turnObservation?: AgentTurnObservation;
+  publicPlanPresentation?: import("./public-plan-presentation").PublicPlanPresentation;
   status: AgentRuntimeStatus;
   response: string;
   evidence: Evidence[];

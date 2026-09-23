@@ -44,5 +44,7 @@ describe("itinerary candidate comparison", () => {
       trustedFactory: (draft) => ({ id: draft.baseItemId ?? "added", type: "activity", title: draft.title, category: "sightseeing", schedule: draft.schedule }) });
     expect(result.proposal.patches.map(({ type }) => type)).toEqual(["remove", "replace", "add"]);
     expect(result.componentMap).toEqual([{ componentId: "replace-component", itemId: "replace" }, { componentId: "new-component", itemId: "added" }]);
+    expect(() => proposePlanAdoption({ candidateSet: set, variantId: "variant-1", currentTrip: trip, requestFingerprint: "request-1", now: set.expiresAt,
+      trustedFactory: (draft) => ({ id: draft.baseItemId ?? "added", type: "activity", title: draft.title, category: "sightseeing", schedule: draft.schedule }) })).toThrow("Stale or foreign");
   });
 });

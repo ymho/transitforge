@@ -13,6 +13,7 @@ export interface AgentTaskContext {
   workingStateRevision?: number;
   availableProgressKinds: AgentProgressKind[];
   previousOutcome?: AgentTurnOutcome;
+  researchTarget?: { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number };
 }
 
 export function deriveAgentTaskContext(input: {

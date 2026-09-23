@@ -9,6 +9,8 @@ import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import type { AgentRuntimeContextInput } from "@raiquora/agent/agent-decision-context";
 import { requireTripPrincipal } from "../../contracts/trip-principal.js";
 import type { AgentDiagnosticEvent, AgentDiagnosticsSink } from "../../ports/agent-diagnostics.js";
+import { bindPublicPlanTarget } from "@raiquora/agent/public-plan-presentation";
+import type { ResearchTarget } from "../../contracts/server-state.js";
 
 /** Caller authenticates principal. Only an injected server loader may resolve references to state. */
 export interface ServerAgentTurn {
@@ -17,8 +19,10 @@ export interface ServerAgentTurn {
   conversationId?: string;
   tripId?: string;
   uiContext?: { itemId?: string; calendarDate?: string };
+  requestedResearchMode?: "standard" | "detailed";
+  researchTarget?: ResearchTarget;
 }
-export interface ServerAgentScope extends ServerAgentTurn { executionId: string }
+export interface ServerAgentScope extends ServerAgentTurn { executionId: string; researchMode: { requestedMode: "standard" | "detailed"; effectiveMode: "standard" | "detailed" } }
 export interface ServerAgentDependencies {
   newExecutionId: () => string;
   createModel: (scope: ServerAgentScope) => AgentModelProvider;
@@ -30,6 +34,9 @@ export interface ServerAgentDependencies {
   loadContext?: (scope: ServerAgentScope) => Promise<AgentRuntimeContextInput>;
   diagnostics?: AgentDiagnosticsSink;
   log?: (event: string, fields: Record<string, unknown>) => void;
+  /** Server authorization/policy only. Browser may request detailed mode but cannot grant it. */
+  detailedResearchAllowed?: boolean;
+  detailedResearchLimits?: Partial<AgentRuntimeLimits>;
 }
 
 /** Transport-independent, per-turn composition; no shared mutable principal/tool/evidence state. */
@@ -41,17 +48,35 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
       if (value !== undefined && (typeof value !== "string" || !value.trim() || value.length > 200 || /[\u0000-\u001f\u007f]/u.test(value))) throw new Error("Invalid Agent reference");
     }
     if (input.uiContext?.calendarDate !== undefined && !calendarDate(input.uiContext.calendarDate)) throw new Error("Invalid calendar date");
+    if (input.requestedResearchMode !== undefined && !["standard", "detailed"].includes(input.requestedResearchMode)) throw new Error("Invalid research mode");
+    const requestedMode = input.requestedResearchMode ?? "standard";
     const scope: ServerAgentScope = {
       principal: { subject: input.principal.subject, identity: { ...input.principal.identity }, scopes: [...input.principal.scopes] }, userRequest: input.userRequest,
       ...(input.conversationId ? { conversationId: input.conversationId } : {}),
       ...(input.tripId ? { tripId: input.tripId } : {}),
+      requestedResearchMode: requestedMode,
+      ...(input.researchTarget ? { researchTarget: structuredClone(input.researchTarget) } : {}),
       ...(input.uiContext?.itemId || input.uiContext?.calendarDate ? { uiContext: {
         ...(input.uiContext.itemId ? { itemId: input.uiContext.itemId } : {}),
         ...(input.uiContext.calendarDate ? { calendarDate: input.uiContext.calendarDate } : {}),
       } } : {}),
       executionId: dependencies.newExecutionId(),
+      researchMode: { requestedMode, effectiveMode: requestedMode === "detailed" && dependencies.detailedResearchAllowed && dependencies.detailedResearchLimits ? "detailed" : "standard" },
     };
-    const context = await dependencies.loadContext?.(scope);
+    let context = await dependencies.loadContext?.(scope);
+    if (input.researchTarget) {
+      const target = validateResearchTarget(input.researchTarget);
+      const receipt = context?.workingState?.presentations.find((value) => value.presentationId === target.presentationId);
+      const taskTarget = context?.taskContext?.target;
+      const workingTarget = context?.workingState?.target;
+      if (!receipt || !receipt.target || target.tripId !== receipt.target.tripId || target.baseTripRevision !== receipt.target.baseTripRevision ||
+          target.tripId !== workingTarget?.tripId || target.baseTripRevision !== workingTarget?.tripRevision ||
+          target.tripId !== undefined && (scope.tripId !== target.tripId || taskTarget?.kind !== "trip" || taskTarget.tripId !== target.tripId) ||
+          target.baseTripRevision !== undefined && (taskTarget?.kind !== "trip" || taskTarget.tripRevision !== target.baseTripRevision) ||
+          target.candidateSetId !== undefined && (receipt.candidateSetRef?.kind !== "candidate-set-ref" || receipt.candidateSetRef.candidateSetId !== target.candidateSetId ||
+            receipt.candidateSetRef.revision !== target.candidateSetRevision)) throw new Error("Stale or foreign research target");
+      if (context?.taskContext) context = { ...context, taskContext: { ...context.taskContext, researchTarget: target } };
+    }
     await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: scope.executionId,
       phase: "context", reason: "compiled", occurredAt: (dependencies.now?.() ?? new Date()).toISOString(),
       counts: { acceptedCharacters: scope.userRequest.length,
@@ -62,11 +87,16 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
       correlation: { ...(Number.isSafeInteger(context?.currentTrip?.sourceRevision) ? { tripRevision: Number(context?.currentTrip?.sourceRevision) } : {}) } });
     const tools = new AgentToolRegistry(), evidence = new ToolEvidenceRegistry();
     dependencies.registerTools(tools, evidence, scope);
-    const result = await new MultiStepAgentRuntime({ model: dependencies.createModel(scope), tools,
+    let result = await new MultiStepAgentRuntime({ model: dependencies.createModel(scope), tools,
       toolExecutor: new AgentToolExecutor(tools, evidence, dependencies.now),
-      limits: dependencies.limits, now: dependencies.now, modelClassPolicy: dependencies.modelClassPolicy,
+      limits: scope.researchMode.effectiveMode === "detailed" ? dependencies.detailedResearchLimits : dependencies.limits, now: dependencies.now, modelClassPolicy: dependencies.modelClassPolicy,
     }).run({ executionId: scope.executionId, feature: "concierge", userRequest: scope.userRequest,
+      researchMode: scope.researchMode,
       ...(context ? { context, omitTraceContent: true } : {}) });
+    if (result.publicPlanPresentation && context?.taskContext?.target.kind === "trip" && context.taskContext.target.tripRevision !== undefined) {
+      result = { ...result, publicPlanPresentation: bindPublicPlanTarget(result.publicPlanPresentation,
+        { tripId: context.taskContext.target.tripId, baseTripRevision: context.taskContext.target.tripRevision }) };
+    }
     await publishRuntimeDiagnostics(dependencies, result, scope.executionId);
     return result;
   } };
@@ -92,4 +122,12 @@ function calendarDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
   const date = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+function validateResearchTarget(value: ServerAgentTurn["researchTarget"]): NonNullable<ServerAgentTurn["researchTarget"]> {
+  if (!value || typeof value.presentationId !== "string" || !value.presentationId.trim() || value.presentationId.length > 200 ||
+      value.candidateSetId !== undefined && (typeof value.candidateSetId !== "string" || !value.candidateSetId.trim() || value.candidateSetId.length > 300) ||
+      [value.candidateSetRevision, value.baseTripRevision].some((item) => item !== undefined && (!Number.isSafeInteger(item) || Number(item) < 0)) ||
+      value.tripId !== undefined && (typeof value.tripId !== "string" || !value.tripId.trim() || value.tripId.length > 200) ||
+      (value.candidateSetId === undefined) !== (value.candidateSetRevision === undefined)) throw new Error("Invalid research target");
+  return structuredClone(value);
 }

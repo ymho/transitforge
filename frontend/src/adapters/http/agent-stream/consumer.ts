@@ -2,6 +2,7 @@ import { parsePublicCostProposal } from "@raiquora/trip/public-cost-proposal";
 import { parseConsultationRequestProposal } from "@raiquora/trip/consultation-request-proposal";
 import { parsePublicRequestProposal } from "@raiquora/trip/public-request-proposal";
 import type { AgentTurnEvent } from "@raiquora/agent/agent-progress";
+import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 
 export interface StreamMeasurement {
   requestStart: number;
@@ -17,7 +18,7 @@ export class AgentStreamError extends Error {}
 
 /** POST/fetch, one run only. No automatic reconnect/retry and no token in the URL. */
 export async function consumeAgentStream(options: {
-  token: string; request: { userRequest: string; conversationId?: string; turnId?: string; tripId?: string; uiContext?: { itemId?: string; calendarDate?: string } };
+  token: string; request: { userRequest: string; requestedResearchMode?: "standard" | "detailed"; researchTarget?: { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number }; conversationId?: string; turnId?: string; tripId?: string; uiContext?: { itemId?: string; calendarDate?: string } };
   signal: AbortSignal; isCurrent: () => boolean; onEvent: (event: AgentTurnEvent) => void;
   measurement: StreamMeasurement; endpoint?: string; fetcher?: typeof fetch; now?: () => number;
   idleMs?: number; deadlineMs?: number;
@@ -124,7 +125,7 @@ function validEvent(event: unknown): event is AgentTurnEvent {
   if (!record(event)) return false;
   if (event.type === "progress") return event.phase === "running" && Object.keys(event).every(k => ["type", "phase"].includes(k));
   if (event.type === "error") return ["agent_failed", "limit_reached", "turn_conflict"].includes(String(event.code)) && Object.keys(event).every(k => ["type", "code"].includes(k));
-  try { if (event.tripCostProposal !== undefined) parsePublicCostProposal(event.tripCostProposal); if ((event.tripUpdateProposal || event.tripCostProposal) && event.consultationRequestProposal) return false; if (event.consultationRequestProposal !== undefined) parseConsultationRequestProposal(event.consultationRequestProposal); if (event.tripUpdateProposal !== undefined) parsePublicRequestProposal(event.tripUpdateProposal); } catch { return false; }
+  try { if (event.publicPlanPresentation !== undefined) parsePublicPlanPresentation(event.publicPlanPresentation); if (event.tripCostProposal !== undefined) parsePublicCostProposal(event.tripCostProposal); if ((event.tripUpdateProposal || event.tripCostProposal) && event.consultationRequestProposal) return false; if (event.consultationRequestProposal !== undefined) parseConsultationRequestProposal(event.consultationRequestProposal); if (event.tripUpdateProposal !== undefined) parsePublicRequestProposal(event.tripUpdateProposal); } catch { return false; }
   return event.type === "final" && ["completed", "follow_up"].includes(String(event.status)) && typeof event.response === "string" &&
-    event.response.length <= 32_000 && Object.keys(event).every(k => ["type", "status", "response", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"].includes(k));
+    event.response.length <= 32_000 && Object.keys(event).every(k => ["type", "status", "response", "publicPlanPresentation", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"].includes(k));
 }

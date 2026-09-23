@@ -1,15 +1,17 @@
 import type { Evidence, EvidenceClaim } from "./evidence-model";
 import type { AgentModelResponse } from "./model-provider";
 import { parseGroundedAnswer, presentGroundedEvidence, supportedAnswerClaims, sourceExplanation, travelPlan } from "./grounded-answer";
+import type { PublicPlanPresentation } from "./public-plan-presentation";
 
 export interface AgentGeneratedResponse {
   text: string;
   claims: EvidenceClaim[];
+  publicPlanPresentation?: PublicPlanPresentation;
 }
 
 export interface AgentResponseGenerator {
   followUp(missingInformation: string[]): string;
-  fromModel(response: AgentModelResponse, evidence: Evidence[], origin?: "interaction" | "administrative" | "grounded", profile?: Record<string, unknown>): AgentGeneratedResponse;
+  fromModel(response: AgentModelResponse, evidence: Evidence[], origin?: "interaction" | "administrative" | "grounded", profile?: Record<string, unknown>, presentationId?: string): AgentGeneratedResponse;
   limitReached(hasEvidence?: boolean): string;
   failure(): string;
   groundingFailure(): string;
@@ -23,7 +25,7 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
     return `確認したいことがあります: ${missingInformation.join(" ")}`;
   }
 
-  fromModel(response: AgentModelResponse, evidence: Evidence[], origin: "interaction" | "administrative" | "grounded" = "grounded", profile?: Record<string, unknown>): AgentGeneratedResponse {
+  fromModel(response: AgentModelResponse, evidence: Evidence[], origin: "interaction" | "administrative" | "grounded" = "grounded", profile?: Record<string, unknown>, presentationId?: string): AgentGeneratedResponse {
     const text = response.message.content
       .filter((content): content is { type: "text"; text: string } =>
         content.type === "text")
@@ -41,7 +43,7 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
         let value: unknown;
         try { value = JSON.parse(encoded); } catch { /* Existing strict fallback below. */ }
         if (value && typeof value === "object" && "kind" in value && (value.kind === "source-explanation" || value.kind === "travel-plan")) {
-          return (value.kind === "travel-plan" ? travelPlan(encoded, evidence) : sourceExplanation(encoded, evidence, profile))!;
+          return (value.kind === "travel-plan" ? travelPlan(encoded, evidence, presentationId) : sourceExplanation(encoded, evidence, profile))!;
         }
       }
       if (!text.startsWith("{") && !response.invalidUsedEvidenceIds && ids?.length) return presentGroundedEvidence(ids, evidence);

@@ -13,6 +13,7 @@ import type { RestaurantSearchResult } from "@raiquora/trip/restaurant-search";
 import type { TripContext } from "@raiquora/trip/travel-profile";
 import type { TripUpdateProposal } from "@raiquora/trip/trip";
 import type { ChecklistProposal } from "@raiquora/trip/trip-checklist";
+import type { PublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 
 export type ViewerAgentJourneyPlan = TripJourneyPlan;
 
@@ -49,6 +50,7 @@ export interface ViewerAgentContextResponse {
 }
 
 export type ViewerAgentResponse =
+  | { text: string; publicPlanPresentation: PublicPlanPresentation }
   | { text: string; tripCostProposal: import("@raiquora/trip/public-cost-proposal").PublicCostProposal }
   | { text: string; consultationRequestProposal: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal }
   | { text: string; checklistProposal: ChecklistProposal }

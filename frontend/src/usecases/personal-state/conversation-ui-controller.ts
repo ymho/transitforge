@@ -158,7 +158,7 @@ export class ConversationUiController {
     if (latest?.revision !== snapshot.revision) throw new Error("Conversation changed while loading history");
     const entries: ConversationMessage[] = items.map((item) => item.role === "user"
       ? { messageId: `${id}:${item.sequence}`, role: "user", text: item.text }
-      : { messageId: `${id}:${item.sequence}`, role: "assistant", response: item.tripCostProposal ? { text: item.text, tripCostProposal: item.tripCostProposal, ...(item.tripUpdateProposal ? { tripUpdateProposal: item.tripUpdateProposal } : {}) } : item.consultationRequestProposal ? { text: item.text, consultationRequestProposal: item.consultationRequestProposal } : item.tripUpdateProposal ? { text: item.text, tripUpdateProposal: item.tripUpdateProposal } : item.text });
+      : { messageId: `${id}:${item.sequence}`, role: "assistant", response: item.publicPlanPresentation ? { text: item.text, publicPlanPresentation: item.publicPlanPresentation } : item.tripCostProposal ? { text: item.text, tripCostProposal: item.tripCostProposal, ...(item.tripUpdateProposal ? { tripUpdateProposal: item.tripUpdateProposal } : {}) } : item.consultationRequestProposal ? { text: item.text, consultationRequestProposal: item.consultationRequestProposal } : item.tripUpdateProposal ? { text: item.text, tripUpdateProposal: item.tripUpdateProposal } : item.text });
     this.sessions = this.sessions.map(session => session.id === id ? toSession(latest!) : session);
     this.histories.set(id, entries); this.notify(); return structuredClone(entries);
   }

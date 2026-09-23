@@ -16,7 +16,7 @@ export function createAuthorizedTripApplications(table: string) {
   const trips = new DynamoDbTripRepository(table), sharingRepository = new DynamoDbTripSharing(table);
   const reservations = new ReservationApplication(trips, new DynamoDbReservationRepository(table));
   const sharing = new TripSharingApplication(trips, sharingRepository, new CryptographicShareSecret(), sharingRepository, undefined, reservations);
-  return { sharing, trips: new TripApplication(trips, trips, undefined, reservations, undefined, sharing) };
+  return { sharing, repository: trips, trips: new TripApplication(trips, trips, undefined, reservations, undefined, sharing) };
 }
 
 /** IAM/internal worker composition only. Every operation still requires an explicit trusted owner. */

@@ -1,6 +1,6 @@
 import { AgentTraceRecorder } from "./agent-trace";
 import { invalidResponseContract, responseContractRepairInstruction } from "./response-contract";
-import { groundedAnswerInstruction, groundedAnswerRepairInstruction, travelPlanFallback } from "./grounded-answer";
+import { groundedAnswerInstruction, groundedAnswerRepairInstruction } from "./grounded-answer";
 import type {
   AgentModelContent,
   AgentModelClass,
@@ -40,6 +40,7 @@ import { failedAgentToolResult } from "./tool-contract";
 import { acceptsAgentTurn, askProgressRepairInstruction, type AgentTurnObservation } from "./agent-turn-outcome";
 import { agentTurnOutputContract } from "./agent-output-contract";
 import { compileAgentPrompt } from "./context-compiler";
+import { withMeasuredResearchOutcome } from "./public-plan-presentation";
 
 export interface AgentRuntimeDependencies {
   model: AgentModelProvider;
@@ -369,7 +370,7 @@ export class MultiStepAgentRuntime {
             evidence.some((e) => Object.keys(e.facts).length > 0) ||
               (!evidence.length && [...executedToolCalls.values()].some((e) => this.dependencies.toolExecutor.collectsEvidence(e.toolName))) || (used?.length ?? 0) > 0 ||
               (modelResponse.decisionSummary?.selectedAction === "answer" && modelResponse.decisionSummary.reasonCodes.some((r) => r === "evidence_sufficient" || r === "evidence_required"))
-              ? "grounded" : toolCalls ? "administrative" : "interaction", decisionContext.travelProfile);
+              ? "grounded" : toolCalls ? "administrative" : "interaction", decisionContext.travelProfile, request.executionId);
         } catch (error) {
           if (!correctedResponseContract && !finalResponseRequired) {
             correctedResponseContract = true;
@@ -379,11 +380,7 @@ export class MultiStepAgentRuntime {
             trace.replanDecided(true, "invalid_response_format", decisionBoundary);
             continue;
           }
-          const fallback = planningTurn ? travelPlanFallback(evidence, {
-            maximumCandidates: taskPhase === "discovery" ? 3 : 1,
-          }) : undefined;
-          if (fallback) generated = fallback;
-          else return this.failureResult(trace, evidence, startedAt, "invalid_response_format");
+          return this.failureResult(trace, evidence, startedAt, "invalid_response_format");
         }
         trace.decisionRecorded({ ...decisionForAnswer(
           modelResponse,
@@ -435,6 +432,9 @@ export class MultiStepAgentRuntime {
           grounding.claims,
           trace,
           prepared?.observation,
+          generated.publicPlanPresentation ? withMeasuredResearchOutcome(generated.publicPlanPresentation,
+            { modelCalls, toolCalls, wallClockMs: elapsed(startedAt, this.now), requestedMode: request.researchMode?.requestedMode ?? "standard",
+              effectiveMode: request.researchMode?.effectiveMode ?? "standard" }) : undefined,
         );
       }
       if (toolCalls + calls.length > this.limits.maxToolCalls) {
@@ -684,9 +684,11 @@ function result(
   claims: AssessedEvidenceClaim[],
   trace: AgentTraceRecorder,
   turnObservation?: AgentTurnObservation,
+  publicPlanPresentation?: import("./public-plan-presentation").PublicPlanPresentation,
 ): AgentRuntimeResult {
   return {
     ...(status === "completed" && turnObservation ? { turnObservation } : {}),
+    ...(status === "completed" && publicPlanPresentation ? { publicPlanPresentation } : {}),
     status,
     response,
     evidence: [...evidence],

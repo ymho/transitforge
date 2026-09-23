@@ -2,7 +2,7 @@ import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import { StateError, exactObject, requireStatePrincipal } from "../../contracts/server-state.js";
 import type { ConversationTurnRepository, ConversationTurnResult } from "../../ports/conversation-turn-repository.js";
 import type { ServerAgentTurn } from "./server-agent.js";
-import { presentationFromObservation } from "@raiquora/agent/conversation-working-state";
+import { presentationFromObservation, presentationFromPublicPlan } from "@raiquora/agent/conversation-working-state";
 import type { AgentDiagnosticEvent, AgentDiagnosticsSink } from "../../ports/agent-diagnostics.js";
 
 export interface ConversationTurnInput extends ServerAgentTurn { conversationId: string; turnId: string }
@@ -14,22 +14,23 @@ export function createConversationTurnApplication(dependencies: {
   log?: (event: string, fields: Record<string, unknown>) => void;
 }) {
   return { async runConversationTurn(input: ConversationTurnInput): Promise<ConversationTurnResult> {
-    exactObject(input, ["principal", "conversationId", "turnId", "userRequest", "tripId", "uiContext"]);
+    exactObject(input, ["principal", "conversationId", "turnId", "userRequest", "requestedResearchMode", "researchTarget", "tripId", "uiContext"]);
     requireStatePrincipal(input.principal);
     const snapshot = structuredClone(input);
-    const { principal, conversationId, turnId, userRequest, tripId, uiContext } = snapshot;
+    const { principal, conversationId, turnId, userRequest, requestedResearchMode, researchTarget, tripId, uiContext } = snapshot;
     const identity = { principal, conversationId, turnId };
-    const begun = await dependencies.turns.beginTurn(identity, { userRequest, tripId, uiContext });
+    const begun = await dependencies.turns.beginTurn(identity, { userRequest, requestedResearchMode, researchTarget, tripId, uiContext });
     if (begun.state === "completed") return begun.result;
     let result: ConversationTurnResult;
     try {
-      const runtime = await dependencies.runAgentTurn({ principal, conversationId, userRequest, tripId, uiContext }, begun.lease.userSequence);
+      const runtime = await dependencies.runAgentTurn({ principal, conversationId, userRequest, requestedResearchMode, researchTarget, tripId, uiContext }, begun.lease.userSequence);
       if (runtime.status !== "completed" && runtime.status !== "follow_up") throw new StateError("unavailable");
-      const presentationReceipt = presentationFromObservation(turnId, runtime.turnObservation);
+      const presentationReceipt = runtime.publicPlanPresentation ? presentationFromPublicPlan(runtime.publicPlanPresentation) : presentationFromObservation(turnId, runtime.turnObservation);
       if (presentationReceipt) await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId,
         phase: "presentation", reason: "validated", occurredAt: new Date().toISOString(), correlation: { turnId },
         counts: { validated: 1 }, refs: [presentationReceipt.presentationId] });
       result = { status: runtime.status, response: runtime.response,
+        ...(runtime.publicPlanPresentation ? { publicPlanPresentation: runtime.publicPlanPresentation } : {}),
         ...(runtime.turnObservation ? { turnObservation: runtime.turnObservation } : {}),
         ...(presentationReceipt ? { presentationReceipt } : {}),
         ...(runtime.tripCostProposal ? { tripCostProposal: runtime.tripCostProposal } : {}), ...(runtime.tripUpdateProposal ? { tripUpdateProposal: runtime.tripUpdateProposal } : {}), ...(runtime.consultationRequestProposal ? { consultationRequestProposal: runtime.consultationRequestProposal } : {}) };
