@@ -16,6 +16,7 @@ import { agentSystemPrompt } from "../backend/agent-api/src/usecases/agent-syste
 import { createServerAgent } from "../backend/agent-api/src/server-agent-composition";
 import type { ServerAgentToolBinding } from "../backend/agent-api/src/usecases/agent/server-tools";
 import { deriveAgentTaskContext } from "@raiquora/agent/agent-task-context";
+import { presentationFromObservation, presentationFromPublicPlan, type ConversationWorkingState } from "@raiquora/agent/conversation-working-state";
 
 const root = resolve(import.meta.dirname, "..");
 const strategy = argument("--strategy") ?? "live-model";
@@ -40,8 +41,10 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
   for (const scenario of scenarios) {
     const liveTurns: ConversationQualityLiveTurn[] = [], history: Array<{ role: "user" | "assistant"; text: string }> = [];
     const turnTraces: AgentTrace[] = [];
+    let workingState: ConversationWorkingState | undefined;
     for (let turnIndex = 0; turnIndex < scenario.input.turns.length; turnIndex += 1) {
       const turn = scenario.input.turns[turnIndex]!;
+      const userSequence = history.length + 1;
       const executionId = `${strategy}-${scenario.id}-${attempt}-${turnIndex + 1}`;
       const application = createServerAgent({
         model,
@@ -49,7 +52,7 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
           failure: { code: "unavailable", message: "live-eval-fixture", retryable: false } }) },
         additionalTools: evaluationTools(scenario),
         newExecutionId: () => executionId,
-        loadContext: async () => scenarioContext(scenario, turnIndex, history),
+        loadContext: async () => scenarioContext(scenario, turnIndex, history, workingState),
         // Candidate discovery, page reading, POI/photo resolution and final rendering are
         // distinct model decisions. Match the production Tool budget so the benchmark does
         // not force finalization halfway through that supported flow.
@@ -66,9 +69,16 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
       // Markdown are not presentation truth; observation remains a legacy presenter source.
       const photoCount = presentedPhotoCount(result.publicPlanPresentation?.photoRefs,
         result.turnObservation?.progress.flatMap((item) => item.mediaRefs ?? []));
-      liveTurns.push({ response: result.response, toolNames, photoCount,
+      const completed = result.status === "completed" || result.status === "follow_up";
+      liveTurns.push({ response: result.response, toolNames, photoCount, completed,
         claimStatuses: result.claims.map(({ groundingStatus }) => groundingStatus) });
-      history.push({ role: "user", text: turn.text }, { role: "assistant", text: result.response });
+      // beginTurn persists the user message before Runtime execution. A failed
+      // Runtime does not persist its assistant fallback or update Working State.
+      history.push({ role: "user", text: turn.text });
+      if (completed) {
+        history.push({ role: "assistant", text: result.response });
+        workingState = nextWorkingState(scenario.input.conversationId, turnIndex, userSequence, workingState, result);
+      }
       turnTraces.push(result.trace);
     }
     const quality = evaluateConversationQualityLive(scenario, liveTurns);
@@ -116,18 +126,42 @@ function scenarioContext(
   scenario: ConversationQualityScenario,
   turnIndex: number,
   history: Array<{ role: "user" | "assistant"; text: string }>,
+  workingState: ConversationWorkingState | undefined,
 ): AgentRuntimeContextInput {
   const calendarDate = scenario.input.fixedNow.slice(0, 10);
   return {
     featureContext: { calendarDate, serviceDate: calendarDate },
     conversation: { title: scenario.name, scope: "general", messages: structuredClone(history) },
     taskContext: deriveAgentTaskContext({ conversationId: scenario.input.conversationId,
-      ...(history.length ? { consultationRequest: { constraints: [], assumptions: [] } } : {}), requestRevision: turnIndex + 1 }),
+      ...(history.length ? { consultationRequest: { constraints: [], assumptions: [] } } : {}), requestRevision: turnIndex + 1,
+      ...(workingState ? { workingStateRevision: workingState.revision, previousOutcome: workingState.lastOutcome?.outcome } : {}) }),
+    ...(workingState ? { workingState, previousAssistantTurn: workingState.lastOutcome?.outcome } : {}),
     verifiedFacts: [{
       evidenceId: "live-eval-service-coverage", category: "journey", subject: "収録済み交通範囲",
       summary: "収録済みの駅・時刻表は西日本を中心とし、城崎温泉、おごと温泉、有馬温泉、出雲市方面を含む。熱海・伊東・東京・北海道はこの評価の主候補範囲外。",
       knowledgeKind: "deterministic_fact", sourceType: "timetable-index", freshness: "scheduled", coverage: ["rail.schedule"],
     }],
+  };
+}
+
+function nextWorkingState(
+  conversationId: string,
+  turnIndex: number,
+  sourceUserSequence: number,
+  previous: ConversationWorkingState | undefined,
+  result: Awaited<ReturnType<ReturnType<typeof createServerAgent>["runAgentTurn"]>>,
+): ConversationWorkingState {
+  const turnId = `00000000-0000-4000-8000-${String(turnIndex + 1).padStart(12, "0")}`;
+  const receipt = result.publicPlanPresentation ? presentationFromPublicPlan(result.publicPlanPresentation) :
+    presentationFromObservation(turnId, result.turnObservation);
+  return {
+    version: 1, revision: (previous?.revision ?? -1) + 1, sourceTurnId: turnId, sourceUserSequence,
+    target: { conversationId },
+    presentations: [...(previous?.presentations ?? []), ...(receipt ? [receipt] : [])].slice(-20),
+    pendingQuestionRefs: result.turnObservation?.outcome === "ask_only" || result.turnObservation?.outcome === "ask_and_progress"
+      ? result.turnObservation.exception ? [result.turnObservation.exception.missingFact] : [] : [],
+    pendingProposalRefs: [],
+    ...(result.turnObservation ? { lastOutcome: result.turnObservation } : {}),
   };
 }
 

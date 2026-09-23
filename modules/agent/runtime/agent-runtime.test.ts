@@ -219,6 +219,15 @@ describe("MultiStepAgentRuntime", () => {
     expect(output.status).toBe("failed");
     expect(output.trace.events.some((e) => e.type === "response_generated" && e.response.includes("unsafe answer"))).toBe(false);
   });
+  it("publishes Application-rendered facts from valid declared references despite invalid advisory fields", async () => {
+    const { tools, toolExecutor } = toolSetup([]), response = textResponse("unsafe model fact");
+    response.decisionSummaryStatus = "invalid"; response.declaredEvidenceIds = ["app"];
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([response]) })
+      .run({ ...request("説明"), initialEvidence: [evidence("app")] });
+    expect(output.status).toBe("completed");
+    expect(output.response).not.toContain("unsafe model fact");
+    expect(output.claims).toEqual(expect.arrayContaining([expect.objectContaining({ groundingStatus: "supported" })]));
+  });
   it.each([["missing"], ["app", "app"], Array.from({ length: 11 }, () => "app")])("rejects invalid used Evidence before publishing an answer", async (...ids) => {
     const { tools, toolExecutor } = toolSetup([]), response = textResponse("unsafe answer");
     response.decisionSummary = { interpretedGoal: "説明", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: [], usedEvidenceIds: ids };

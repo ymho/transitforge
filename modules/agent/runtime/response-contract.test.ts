@@ -25,4 +25,10 @@ describe("response wire contract", () => {
       stopReason: "tool_calls", metadata: { provider: "test" }, decisionSummaryStatus: "invalid" };
     expect(invalidResponseContract(native, ["search_direct_routes"])).toBeUndefined();
   });
+  it("allows Application-rendered Evidence selection without trusting invalid advisory metadata", () => {
+    const selected = response("このモデル文は事実本文に使わない");
+    selected.decisionSummaryStatus = "invalid";
+    selected.declaredEvidenceIds = ["evidence-1"];
+    expect(invalidResponseContract(selected, [])).toBeUndefined();
+  });
 });
