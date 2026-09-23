@@ -28,7 +28,8 @@ const eventFields = {
   replan_decided: [["changed", "reason", "steps"], []],
   model_started: [["modelCallId", "messageCount", "toolNames"], ["modelClass"]],
   model_failed: [["modelCallId", "reason"], []],
-  model_completed: [["provider"], ["modelCallId", "requestId", "model", "latencyMs", "inputTokens", "outputTokens", "totalTokens"]],
+  model_completed: [["provider"], ["modelCallId", "requestId", "model", "latencyMs", "inputTokens", "outputTokens", "totalTokens",
+    "cacheReadInputTokens", "cacheWriteInputTokens", "cacheStatus", "outputMode", "outputContractHash", "presentationKind"]],
   response_generated: [["response", "claimIds"], []],
   turn_observed: [["observation", "accepted"], []],
   task_completed: [["status"], ["latencyMs", "reason"]],
@@ -36,7 +37,7 @@ const eventFields = {
 
 const stringFields = new Set(["userRequest", "intent", "interpretedGoal", "selectedTool", "replanReason", "toolCallId", "toolName", "errorCode", "modelCallId", "modelClass", "provider", "requestId", "model", "reason", "response"]);
 const stringListFields = new Set(["steps", "unresolvedFacts", "reasonCodes", "evidenceIds", "usedEvidenceIds", "categories", "sourceTypes", "claimIds", "toolNames"]);
-const countFields = new Set(["sequence", "messageCount", "latencyMs", "inputTokens", "outputTokens", "totalTokens"]);
+const countFields = new Set(["sequence", "messageCount", "latencyMs", "inputTokens", "outputTokens", "totalTokens", "cacheReadInputTokens", "cacheWriteInputTokens"]);
 const payloadFields = new Set(["constraints", "hardConstraints", "softPreferences", "input", "result"]);
 
 export interface TraceOperationOptions {
@@ -160,6 +161,10 @@ function validatedEvent(value: unknown, position: number): JsonObject {
 
 function validatedEventField(key: string, value: unknown, position: number): unknown {
   const invalid = () => new RequestError(400, `Agent Trace event ${position}件目の${key}が不正です。`);
+  if (key === "cacheStatus" && ["read", "write", "miss", "unknown", "disabled"].includes(String(value))) return value;
+  if (key === "outputMode" && ["provider_strict", "application_strict", "legacy_text"].includes(String(value))) return value;
+  if (key === "presentationKind" && ["source-explanation", "travel-plan"].includes(String(value))) return value;
+  if (key === "outputContractHash" && typeof value === "string" && /^[0-9a-f]{64}$/u.test(value)) return value;
   if (key === "inTripAnswerPlan") {
     if (!validInTripAnswerPlan(value)) throw invalid();
     return { evidence: value.evidence.map((e) => ({ evidenceId: sanitizeString(e.evidenceId), presentation: e.presentation })) };

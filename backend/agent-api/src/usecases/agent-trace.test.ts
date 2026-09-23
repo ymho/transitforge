@@ -173,6 +173,20 @@ describe("agent trace parity", () => {
     });
   });
 
+  it("stores only bounded model contract and presentation diagnostics", async () => {
+    const value = submission();
+    value.trace.events = [{
+      type: "model_completed", sequence: 1, occurredAt: "2026-09-02T08:19:45Z",
+      provider: "bedrock", outputMode: "application_strict", outputContractHash: "a".repeat(64),
+      presentationKind: "travel-plan", cacheStatus: "disabled", cacheReadInputTokens: 0, cacheWriteInputTokens: 0,
+    }];
+    const storage = new RecordingStorage();
+    await storeAgentTrace(value, { bucket: "private-bucket", storage }, fixedNow, "trace-1");
+    expect(storedJson(storage)).toMatchObject({ trace: { events: [{
+      presentationKind: "travel-plan", outputMode: "application_strict", outputContractHash: "a".repeat(64),
+    }] } });
+  });
+
   it("accepts event strings at the 512 character boundary", async () => {
     const value = submission();
     value.trace.events = [traceEvent(1, "長".repeat(512))];
