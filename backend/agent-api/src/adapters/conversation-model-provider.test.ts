@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { ConversationModelProvider } from "./conversation-model-provider.js";
 import type { ConversationModel } from "../ports/conversation-model.js";
+import { agentTurnPresentationOutputContract } from "@raiquora/agent/agent-output-contract";
 
 it("maps native messages, capability descriptions, call correlation and usage without HTTP", async () => {
   const converse = vi.fn<ConversationModel["converse"]>(async () => ({ message: { role: "assistant", content: [{ text: "こんにちは" }] },
@@ -39,6 +40,14 @@ it("forwards a typed presentation to Application validation instead of model-aut
   const result = await new ConversationModelProvider(model, "turn").generate({ messages: [] });
   expect(result.message.content).toEqual([{ type: "text", text: JSON.stringify(presentation) }]);
   expect(result.decisionSummaryStatus).toBe("valid");
+});
+it("rejects an application-strict response that omits a presentation required by its selected contract", async () => {
+  const model: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 1, outputMode: "application_strict" },
+    message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: "旅行案です",
+      decision: { interpretedGoal: "候補提示", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["goal_interpreted"] } }) }] } }) };
+  const result = await new ConversationModelProvider(model, "turn").generate({ messages: [], outputContract: agentTurnPresentationOutputContract });
+  expect(result.decisionSummaryStatus).toBe("invalid");
+  expect(result.decisionSummary).toBeUndefined();
 });
 it("passes malformed Evidence reference metadata to the shared runtime rejection policy", async () => {
   const model: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 0 },

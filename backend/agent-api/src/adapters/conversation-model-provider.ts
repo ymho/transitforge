@@ -10,6 +10,7 @@ export class ConversationModelProvider implements AgentModelProvider {
   constructor(private readonly model: ConversationModel, private readonly executionId: string) {}
 
   async generate(request: AgentModelRequest): Promise<AgentModelResponse> {
+    const outputContract = request.outputContract ?? agentTurnOutputContract;
     let response;
     try { response = await this.model.converse({
       messages: request.messages.map(toConversationMessage),
@@ -18,7 +19,7 @@ export class ConversationModelProvider implements AgentModelProvider {
       })) } : {}),
       ...(request.modelClass ? { modelClass: request.modelClass } : {}),
       ...(request.modelCallId ? { trace: { modelCallId: request.modelCallId, apiRequestId: this.executionId } } : {}),
-      outputContract: request.outputContract ?? agentTurnOutputContract,
+      outputContract,
       ...(request.prompt ? { prompt: request.prompt } : {}),
     }); } catch (error) {
       if (error instanceof ConversationModelError) throw new AgentModelError(error.code, error.message, error.retryable);
@@ -38,7 +39,8 @@ export class ConversationModelProvider implements AgentModelProvider {
     if (response.stopReason === "tool_use") return mapped;
     const textBlocks = response.message.content.flatMap(block => "text" in block ? [block.text] : []);
     const decoded = textBlocks.length === 1 ? decodeJsonOutput(textBlocks[0]!, response.metadata.outputMode) : undefined;
-    if (decoded) return {
+    const presentationRequired = Array.isArray(outputContract.schema.required) && outputContract.schema.required.includes("presentation");
+    if (decoded && (!presentationRequired || decoded.presentation)) return {
       ...mapped,
       // Structured Evidence-bound presentations are validated and rendered by the
       // Application. Model-authored responseText cannot override their facts.
