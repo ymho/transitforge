@@ -34,6 +34,15 @@ it("keeps unknowns distinct from zero, computes per-currency partial totals and 
   const after = apply(before, [{ type: "cost_forecast", forecast }]);
   expect(evaluateTripFeasibility(after, undefined, forecast.generatedAt)).toEqual(evaluateTripFeasibility(before, undefined, forecast.generatedAt));
 });
+it("uses detailed lines as authoritative totals while retaining legacy category display", () => {
+  const forecasted = apply(initial(), [{ type: "cost_forecast", forecast: costForecast() }]);
+  const trip = apply(forecasted, [{ type: "cost_lines", lines: [{ id: "room-nights", category: "accommodation", kind: "provider_observed",
+    basis: { scope: "whole-trip", dimensions: ["room", "night"] }, amount: { currency: "JPY", amountMinor: 12_000 }, amountRole: "unit", quantities: [{ dimension: "room", count: 1 }, { dimension: "night", count: 3 }],
+    targetRefs: { itemIds: ["stay"] }, coverage: "complete", included: ["room"], excluded: [], assumptions: [], evidenceRefs: ["provider-price"], inputFingerprint: "fp",
+    observedAt: "2026-09-20T00:00:00Z" }] }]);
+  expect(summarizeTripCosts(trip.costs!)).toMatchObject({ authoritativeSource: "cost-lines", totals: [{ currency: "JPY", amountMinor: 36_000 }], partial: false });
+  expect(summarizeTripCosts(trip.costs!).items).toHaveLength(4);
+});
 it("rejects wrong basis, duplicate/missing categories, invalid amounts, overflow and extra authority", () => {
   const base = initial(), valid = costForecast();
   for (const forecast of [{ ...valid, baseRevision: 1 }, { ...valid, tripId: "22222222-2222-4222-8222-222222222222" },

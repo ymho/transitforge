@@ -8,6 +8,7 @@
     "./travel-coverage": "./domain/travel-coverage.ts",
     "./trip-sharing": "./domain/trip-sharing.ts",
     "./in-trip-replan": "./domain/in-trip-replan.ts",
+    "./replan-dependencies": "./domain/replan-dependencies.ts",
     "./in-trip-context": "./domain/in-trip-context.ts",
     "./notification": "./domain/notification.ts",
     "./notification-policy": "./domain/notification-policy.ts",
@@ -21,6 +22,8 @@
     "./trip-readiness": "./domain/trip-readiness.ts",
     "./trip-feasibility": "./domain/trip-feasibility.ts",
     "./trip-feasibility-contract": "./domain/trip-feasibility-contract.ts",
+    "./temporal-constraint-network": "./domain/temporal-constraint-network.ts",
+    "./plan-robustness": "./domain/plan-robustness.ts",
     "./trip-ready": "./domain/trip-ready.ts",
     "./reservation": "./domain/reservation.ts",
     "./travel-candidate-assessment": "./domain/travel-candidate-assessment.ts",
@@ -47,6 +50,7 @@
     "./selected-rail-journey": "./domain/selected-rail-journey.ts",
     ".": "./domain/index.ts",
     "./travel-candidate": "./domain/travel-candidate.ts",
+    "./itinerary-candidates": "./domain/itinerary-candidates.ts",
     "./travel-destination": "./domain/travel-destination.ts",
     "./travel-plan": "./domain/travel-plan.ts",
     "./travel-profile": "./domain/travel-profile.ts",
@@ -73,6 +77,7 @@
     "./consultation-request": "./domain/consultation-request.ts",
     "./consultation-request-proposal": "./domain/consultation-request-proposal.ts",
     "./trip-costs": "./domain/trip-costs.ts",
+    "./cost-lines": "./domain/cost-lines.ts",
     "./public-cost-proposal": "./domain/public-cost-proposal.ts"
   },
   "dependencies": {

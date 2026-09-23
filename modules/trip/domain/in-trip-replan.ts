@@ -10,6 +10,8 @@ export interface InTripReplanTargets {
   tripId: string;
   baseRevision: number;
   itemIds: readonly string[];
+  dayRefs?: readonly string[];
+  segmentRefs?: readonly string[];
 }
 export interface InTripReplanInput {
   now: Date;
@@ -41,10 +43,18 @@ export function calculateInTripReplanScope(trip: Trip, input: InTripReplanInput)
   if (targets && (targets.tripId !== trip.id || targets.baseRevision !== trip.revision)) throw new TripRevisionConflict();
   if (targets && (targets.itemIds.length > 8 || new Set(targets.itemIds).size !== targets.itemIds.length ||
     targets.itemIds.some((id) => !trip.items.some((item) => item.id === id)))) throw new Error("変更対象を確認してください");
+  const dayRefs = new Set(targets?.dayRefs ?? []), segmentRefs = new Set(targets?.segmentRefs ?? []);
+  if (dayRefs.size !== (targets?.dayRefs?.length ?? 0) || segmentRefs.size !== (targets?.segmentRefs?.length ?? 0) ||
+      [...dayRefs].some((id) => !trip.timeline?.logicalDays.some((day) => day.id === id)) ||
+      [...segmentRefs].some((id) => !trip.structureIntent?.authoredSegments.some((segment) => segment.segmentId === id))) throw new Error("変更対象を確認してください");
   const positions = trip.items.map((item) => ({ id: item.id, position: positionAt(item.schedule, input.now) }));
   const currentItemIds = positions.filter((p) => p.position === "current").map((p) => p.id);
   const nextItemIds = positions.filter((p) => p.position === "upcoming").slice(0, 2).map((p) => p.id);
-  const requested = new Set(targets?.itemIds ?? [...currentItemIds.slice(0, 2), ...nextItemIds]);
+  const requested = new Set(targets ? [...targets.itemIds,
+    ...trip.items.filter((item) => item.logicalDayId && dayRefs.has(item.logicalDayId)).map(({ id }) => id),
+    ...(trip.structureIntent?.authoredSegments.filter(({ segmentId }) => segmentRefs.has(segmentId)).flatMap(({ anchorItemIds }) => anchorItemIds) ?? [])]
+    : [...currentItemIds.slice(0, 2), ...nextItemIds]);
+  const explicitlyRequested = targets ? requested : new Set<string>();
   const result: InTripReplanScope = { tripId: trip.id, baseRevision: trip.revision, evaluatedAt: input.now.toISOString(),
     immutableProtectedItemIds: [], confirmationProtectedItemIds: [], mutableItemIds: [], currentItemIds, nextItemIds, reasons: [] };
   for (const item of trip.items) {
@@ -58,7 +68,7 @@ export function calculateInTripReplanScope(trip: Trip, input: InTripReplanInput)
     const protectedItem = codes.some((c) => c === "booked" || c === "fixed" || c === "hard-constraint");
     if (protectedItem) result.confirmationProtectedItemIds.push(item.id);
     if (codes.some((c) => c === "past" || c === "outside-scope" || c === "reservation-unconfirmed") ||
-        (protectedItem && !targets?.itemIds.includes(item.id))) result.immutableProtectedItemIds.push(item.id);
+        (protectedItem && !explicitlyRequested.has(item.id))) result.immutableProtectedItemIds.push(item.id);
     else result.mutableItemIds.push(item.id);
     result.reasons.push({ itemId: item.id, codes });
   }
@@ -82,7 +92,7 @@ export function previewInTripReplan(trip: Trip, proposal: TripUpdateProposal, in
       continue;
     }
     // Preserve request/hard constraints/assumptions and lifecycle; these are separate user operations.
-    if (patch.type === "request" || patch.type === "lifecycle" || patch.type === "adoption" || patch.type === "title" || patch.type === "cost_forecast" || patch.type === "cost_override" || patch.type === "timeline" || patch.type === "structure_intent") throw new Error("残り旅程の変更で旅行条件・状態を書き換えられません");
+    if (patch.type === "request" || patch.type === "lifecycle" || patch.type === "adoption" || patch.type === "title" || patch.type === "cost_forecast" || patch.type === "cost_override" || patch.type === "cost_lines" || patch.type === "timeline" || patch.type === "structure_intent") throw new Error("残り旅程の変更で旅行条件・状態を書き換えられません");
     if (patch.type === "add" || patch.type === "move") {
       const anchor = patch.afterId ?? (patch.type === "add" ? order.at(-1) : undefined);
       if (!anchor) throw new Error("変更可能な予定の直後へ配置してください");

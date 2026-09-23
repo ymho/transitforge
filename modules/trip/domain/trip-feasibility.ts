@@ -5,6 +5,7 @@ import { readFeasibilityFacts } from "./trip-feasibility-facts";
 import { orderedScheduleRelation } from "./trip-feasibility-schedule";
 import { isSelectedStay, stayDateRelation, stayReservationDateConflict } from "./trip-feasibility-stay";
 import type { TripFeasibilityFacts, TripFeasibilityEvaluation, TripFeasibilityIssue, TripFeasibilityCode } from "./trip-feasibility-contract";
+import { buildTemporalConstraintNetwork, checkTemporalConsistency, type TemporalBuildFact } from "./temporal-constraint-network";
 export type { TripFeasibilityFacts, TripFeasibilityEvaluation, TripFeasibilityIssue } from "./trip-feasibility-contract";
 
 /** Pure planned feasibility. Does not fetch, optimize, mutate Trip, or use realtime observations.
@@ -15,9 +16,9 @@ export function evaluateTripFeasibility(trip: Trip, input: TripFeasibilityFacts 
   validateTrip(trip);
   const { facts, reservations, invalid, visitObservationItemIds } = readFeasibilityFacts(trip, input, evaluatedAt);
   const issues: TripFeasibilityIssue[] = [];
-  const issue = (code: TripFeasibilityCode, itemIds: string[], status: "violated" | "unknown" = "unknown",
+  const issue = (code: TripFeasibilityCode, itemIds: readonly string[], status: "violated" | "unknown" = "unknown",
     extra: Partial<Pick<TripFeasibilityIssue, "reservationIds" | "constraintIds" | "evidenceIds" | "details">> = {}) => {
-    issues.push({ code, severity: status === "violated" ? "error" : "warning", status, itemIds, ...extra });
+    issues.push({ code, severity: status === "violated" ? "error" : "warning", status, itemIds: [...itemIds], ...extra });
   };
   if (!trip.items.length) issue("empty_trip", []);
   if (invalid) issue("external_facts_invalid", []);
@@ -85,6 +86,20 @@ export function evaluateTripFeasibility(trip: Trip, input: TripFeasibilityFacts 
         violated ? "violated" : "unknown", { evidenceIds: route.evidenceIds, details: { minimumMinutes: route.data.minimumMinutes } });
     }
   }
+  const temporalFacts: TemporalBuildFact[] = facts.flatMap((fact) => fact.data.type === "movement" ? [{ type: "travel-lower-bound" as const,
+    constraintId: `movement:${fact.data.beforeItem.id}:${fact.data.afterItem.id}`, beforeItemId: fact.data.beforeItem.id,
+    afterItemId: fact.data.afterItem.id, minutes: fact.data.minimumMinutes, evidenceRefs: fact.evidenceIds }] : []);
+  temporalFacts.push(...(trip.structureIntent?.relations.map((relation) => ({ type: "explicit-order" as const, constraintId: relation.relationId,
+    beforeItemId: relation.beforeItemRef, afterItemId: relation.afterItemRef, evidenceRefs: relation.evidenceRefs ?? [] })) ?? []));
+  temporalFacts.push(...(reservations ?? []).flatMap((reservation) => reservation.status === "booked" && reservation.itineraryItemId && (reservation.startsAt || reservation.endsAt)
+    ? [{ type: "reservation-anchor" as const, constraintId: `reservation:${reservation.reservationId}`, itemId: reservation.itineraryItemId,
+      ...(reservation.startsAt ? { startsAt: reservation.startsAt.at } : {}), ...(reservation.endsAt ? { endsAt: reservation.endsAt.at } : {}), evidenceRefs: [] }] : []));
+  const temporal = checkTemporalConsistency(buildTemporalConstraintNetwork(trip, temporalFacts));
+  if (temporal.status === "infeasible") issue("temporal_network_conflict", [...new Set(temporal.conflictEdges.flatMap((edge) => edge.itemIds))], "violated", {
+    evidenceIds: [...new Set(temporal.conflictEdges.flatMap((edge) => edge.evidenceRefs))],
+    details: { constraintRefs: temporal.conflictEdges.map(({ constraintId }) => constraintId).join(",") },
+  });
+  if (temporal.exhaustedBudget) issue("temporal_network_budget", temporal.evaluatedScope);
   for (const r of reservations ?? []) {
     if (!r.itineraryItemId) {
       if (r.status === "booked" || r.status === "unknown") issue("reservation_unknown", [], "unknown", { reservationIds: [r.reservationId] });
