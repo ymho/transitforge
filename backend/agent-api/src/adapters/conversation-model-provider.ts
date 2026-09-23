@@ -38,7 +38,8 @@ export class ConversationModelProvider implements AgentModelProvider {
     };
     if (response.stopReason === "tool_use") return mapped;
     const textBlocks = response.message.content.flatMap(block => "text" in block ? [block.text] : []);
-    const decoded = textBlocks.length === 1 ? decodeJsonOutput(textBlocks[0]!, response.metadata.outputMode) : undefined;
+    const parsed = textBlocks.length === 1 ? parseJsonOutput(textBlocks[0]!, response.metadata.outputMode) : undefined;
+    const decoded = parsed === undefined ? undefined : decodeAgentTurnOutput(parsed);
     const presentationRequired = requiresPresentation(outputContract);
     // Some application-strict models still place the requested presentation JSON in
     // responseText. Promote exactly one recognized object; Application performs the
@@ -54,6 +55,19 @@ export class ConversationModelProvider implements AgentModelProvider {
       decisionSummaryStatus: "valid",
       decisionSummary: decoded.decision,
       ...(decoded.decision.usedEvidenceIds ? { declaredEvidenceIds: decoded.decision.usedEvidenceIds } : {}),
+    };
+    // Decision metadata is advisory for presentation rendering. Preserve an
+    // independently recognizable v2 presentation when only Decision decoding
+    // failed; Runtime still validates every Evidence, quote, itinerary, cost and
+    // photo reference before anything is displayed. Never use this path to route
+    // a Tool or to mark the Decision valid.
+    const presentationWithInvalidDecision = presentationRequired && response.metadata.outputMode === "application_strict"
+      ? independentlyDecodedPresentation(parsed) : undefined;
+    if (presentationWithInvalidDecision) return {
+      ...mapped,
+      message: { role: "assistant", content: [{ type: "text", text: presentationWithInvalidDecision.responseText }] },
+      declaredPresentation: presentationWithInvalidDecision.presentation,
+      decisionSummaryStatus: "invalid",
     };
     // Explicitly versioned migration path only. Provider/application strict responses never
     // get a second permissive interpretation after schema decoding failed.
@@ -80,9 +94,20 @@ function embeddedPresentation(text: string | undefined): Record<string, unknown>
   } catch { return undefined; }
 }
 
-function decodeJsonOutput(text: string, mode: "provider_strict" | "application_strict" | "legacy_text" | undefined) {
+function parseJsonOutput(text: string, mode: "provider_strict" | "application_strict" | "legacy_text" | undefined): unknown {
   if (mode === "legacy_text" || mode === undefined) return undefined;
-  try { return decodeAgentTurnOutput(JSON.parse(text)); } catch { return undefined; }
+  try { return JSON.parse(text); } catch { return undefined; }
+}
+
+function independentlyDecodedPresentation(value: unknown): { responseText: string; presentation: Record<string, unknown> } | undefined {
+  if (!isRecord(value) || Object.keys(value).some((key) => !["responseText", "decision", "presentation"].includes(key)) ||
+      !("decision" in value) || typeof value.responseText !== "string" || !value.responseText.trim() || value.responseText.length > 12_000 ||
+      !isRecord(value.presentation) || !["source-explanation", "travel-plan"].includes(String(value.presentation.kind))) return undefined;
+  return { responseText: value.responseText, presentation: value.presentation };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function toConversationMessage(message: AgentModelMessage): AgentMessage {

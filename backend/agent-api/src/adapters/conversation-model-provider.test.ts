@@ -50,6 +50,27 @@ it("rejects an application-strict response that omits a presentation required by
   expect(result.decisionSummaryStatus).toBe("invalid");
   expect(result.decisionSummary).toBeUndefined();
 });
+it("preserves a recognized v2 presentation when only strict Decision metadata is invalid", async () => {
+  const presentation = { kind: "travel-plan", startDate: null, candidates: [] };
+  const model: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 1, outputMode: "application_strict" },
+    message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: "旅行案です", presentation,
+      decision: { interpretedGoal: "候補提示", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["invented_reason"] } }) }] } }) };
+  const result = await new ConversationModelProvider(model, "turn").generate({ messages: [], outputContract: agentTurnPresentationOutputContract });
+  expect(result).toMatchObject({ decisionSummaryStatus: "invalid", declaredPresentation: presentation,
+    message: { content: [{ type: "text", text: "旅行案です" }] } });
+  expect(result.decisionSummary).toBeUndefined();
+});
+it.each([
+  { presentation: { kind: "invented" } },
+  { presentation: "travel-plan" },
+  { presentation: { kind: "travel-plan" }, extra: true },
+])("does not preserve an unrecognized or ambiguous presentation when Decision metadata is invalid", async (payload) => {
+  const model: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 1, outputMode: "application_strict" },
+    message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: "旅行案です", decision: {}, ...payload }) }] } }) };
+  const result = await new ConversationModelProvider(model, "turn").generate({ messages: [], outputContract: agentTurnPresentationOutputContract });
+  expect(result.decisionSummaryStatus).toBe("invalid");
+  expect(result.declaredPresentation).toBeUndefined();
+});
 it("bounded-repairs an application-strict v2 presentation embedded in responseText", async () => {
   const presentation = { kind: "travel-plan", startDate: null, candidates: [] };
   const model: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 1, outputMode: "application_strict" },
