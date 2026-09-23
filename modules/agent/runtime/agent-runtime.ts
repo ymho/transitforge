@@ -1,6 +1,6 @@
 import { AgentTraceRecorder } from "./agent-trace";
 import { invalidResponseContract, responseContractRepairInstruction } from "./response-contract";
-import { groundedAnswerInstruction, groundedAnswerRepairInstruction } from "./grounded-answer";
+import { groundedAnswerFailureCode, groundedAnswerInstruction, groundedAnswerRepairInstruction } from "./grounded-answer";
 import type {
   AgentModelContent,
   AgentModelClass,
@@ -382,15 +382,16 @@ export class MultiStepAgentRuntime {
               (modelResponse.decisionSummary?.selectedAction === "answer" && modelResponse.decisionSummary.reasonCodes.some((r) => r === "evidence_sufficient" || r === "evidence_required"))
               ? "grounded" : toolCalls ? "administrative" : "interaction", decisionContext.travelProfile, request.executionId);
         } catch (error) {
+          const failureCode = groundedAnswerFailureCode(error);
           if (!correctedResponseContract && !finalResponseRequired) {
             correctedResponseContract = true;
             messages.pop();
             messages.push({ role: "user", content: [{ type: "text", text: `${responseContractRepairInstruction}\n${groundedAnswerRepairInstruction(error)}\n${groundedAnswerInstruction(evidence, decisionContext.travelProfile)}` }] });
             iterations++;
-            trace.replanDecided(true, "invalid_response_format", decisionBoundary);
+            trace.replanDecided(true, failureCode, decisionBoundary);
             continue;
           }
-          return this.failureResult(trace, evidence, startedAt, "invalid_response_format");
+          return this.failureResult(trace, evidence, startedAt, failureCode);
         }
         trace.decisionRecorded({ ...decisionForAnswer(
           modelResponse,

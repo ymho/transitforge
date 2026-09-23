@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { supportedAnswerClaims } from "@raiquora/agent/grounded-answer";
 
 import { MultiStepAgentRuntime } from "@raiquora/agent/agent-runtime";
+import { DefaultAgentResponseGenerator } from "@raiquora/agent/agent-response-generator";
 import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { Evidence } from "@raiquora/agent/evidence-model";
 import type {
@@ -23,6 +24,19 @@ import { inTripApplicationEvidence } from "@raiquora/agent/in-trip-application-e
 import { calculateInTripReplanScope, replanScopeContext } from "@raiquora/trip/in-trip-replan";
 
 describe("MultiStepAgentRuntime", () => {
+  it("records a safe structured-answer failure code after bounded repair", async () => {
+    const { tools, toolExecutor } = toolSetup([]), responseGenerator = new DefaultAgentResponseGenerator();
+    vi.spyOn(responseGenerator, "fromModel").mockImplementation(() => { throw new Error("Invalid itinerary coverage"); });
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, responseGenerator,
+      model: sequenceModel([textResponse("invalid plan one"), textResponse("invalid plan two")]) }).run(request("2日間の旅行案"));
+    expect(output.status).toBe("failed");
+    expect(output.trace.events.at(-1)).toMatchObject({
+      type: "task_completed",
+      status: "failed",
+      reason: "invalid_itinerary_coverage",
+    });
+    expect(JSON.stringify(output.trace)).not.toContain("invalid plan");
+  });
   it("keeps conversation-echoed preferences out of Trace after Profile consent is removed", async () => {
     const { tools, toolExecutor } = toolSetup([]);
     const result = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([textResponse("earlier-private-preference")]) }).run({
