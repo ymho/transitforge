@@ -10,6 +10,7 @@ import { validatePlanningState, validateTripState, type PlanningState, type Life
 import { assessTripTime, type TripClock } from "./trip-temporal";
 import { validateTripAdoption, canConfirmTrip, adoptionNeedsReview, tripAdoptionConfirmationKey, type TripAdoption, type TripAdoptionAction } from "./trip-adoption";
 import { validateTripStructureIntent, type TripStructureIntent } from "./trip-structure-contract";
+import { validateCostLine, type CostLine } from "./cost-lines";
 
 /** The single Trip V2 aggregate. Deferred fields are absent, not default-completed. Writer remains gated. */
 export interface Trip {
@@ -61,6 +62,7 @@ export type TripPatch = { readonly type: "replace"; readonly itemId: string; rea
   | { readonly type: "request"; readonly request: TripRequest }
   | { readonly type: "cost_forecast"; readonly forecast: TripCostForecast }
   | { readonly type: "cost_override"; readonly category: CostCategory; readonly amount?: Money }
+  | { readonly type: "cost_lines"; readonly lines: readonly CostLine[] }
   | { readonly type: "title"; readonly title: string }
   | { readonly type: "planning"; readonly state: PlanningState }
   | { readonly type: "timeline"; readonly timeline?: TripTimeline }
@@ -242,7 +244,7 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
     if (patch.type === "cost_forecast") {
       exactKeys(patch, ["type", "forecast"]); validateCostForecast(patch.forecast);
       if (forecastUpdated || patch.forecast.tripId !== trip.id || patch.forecast.baseRevision !== trip.revision) throw new Error("Wrong forecast basis");
-      costs = { forecast: patch.forecast, overrides: costs?.overrides ?? {}, stale: false }; forecastUpdated = true;
+      costs = { forecast: patch.forecast, overrides: costs?.overrides ?? {}, stale: false, ...(costs?.lines ? { lines: costs.lines } : {}) }; forecastUpdated = true;
       continue;
     }
     if (patch.type === "cost_override") {
@@ -253,6 +255,12 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
       if (patch.amount === undefined) delete overrides[category];
       else { validateMoney(patch.amount); overrides[category] = patch.amount; }
       costs = { ...costs, overrides }; continue;
+    }
+    if (patch.type === "cost_lines") {
+      exactKeys(patch, ["type", "lines"]);
+      if (!costs || !Array.isArray(patch.lines)) throw new Error("Cost forecast compatibility basis required");
+      patch.lines.forEach(validateCostLine);
+      costs = { ...costs, lines: structuredClone(patch.lines) }; continue;
     }
     if (patch.type === "title") {
       exactKeys(patch, ["type", "title"]);

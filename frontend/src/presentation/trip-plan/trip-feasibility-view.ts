@@ -19,6 +19,8 @@ const labels: Record<TripFeasibilityCode, string> = {
   stay_movement_time_precision: "宿泊前後の移動は日付順を確認していますが、正確な時刻の余裕は未確認です",
   stay_reservation_time_precision: "宿泊予約の正確な利用時刻と旅程の照合は未確認です",
   window_time_precision: "所要時間と時間帯はありますが、正確な開始時刻は未確定です",
+  temporal_network_conflict: "予定全体の時間・順序・移動条件が両立しません",
+  temporal_network_budget: "予定全体の成立性確認が上限に達したため、未確認の範囲があります",
 };
 export function feasibilityIssueText(issue: TripFeasibilityIssue): string { return labels[issue.code]; }
 export function renderTripFeasibility(evaluation: TripFeasibilityEvaluation): HTMLElement {
