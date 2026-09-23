@@ -165,7 +165,7 @@ resource "aws_lambda_function" "agent_stream" {
       TRAVEL_KNOWLEDGE_BASE_ID           = var.travel_knowledge_base_id
       TRAVEL_KNOWLEDGE_VECTOR_STORE      = var.travel_knowledge_vector_store
       TRAVEL_KNOWLEDGE_SEARCH_TYPE       = var.travel_knowledge_search_type
-      BEDROCK_RERANK_MODEL_ARN            = var.bedrock_rerank_model_arn
+      BEDROCK_RERANK_MODEL_ARN           = var.bedrock_rerank_model_arn
     }
   }
   depends_on = [aws_iam_role_policy.agent_stream_logs, aws_iam_role_policy.agent_stream_model]
