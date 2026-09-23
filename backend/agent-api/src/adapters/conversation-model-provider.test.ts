@@ -38,7 +38,8 @@ it("forwards a typed presentation to Application validation instead of model-aut
     message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: "この文字列は表示しない", presentation,
       decision: { interpretedGoal: "候補提示", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["goal_interpreted"] } }) }] } }) };
   const result = await new ConversationModelProvider(model, "turn").generate({ messages: [] });
-  expect(result.message.content).toEqual([{ type: "text", text: JSON.stringify(presentation) }]);
+  expect(result.message.content).toEqual([{ type: "text", text: "この文字列は表示しない" }]);
+  expect(result.declaredPresentation).toEqual(presentation);
   expect(result.decisionSummaryStatus).toBe("valid");
 });
 it("rejects an application-strict response that omits a presentation required by its selected contract", async () => {
