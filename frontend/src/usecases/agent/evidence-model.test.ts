@@ -24,6 +24,7 @@ describe("evidence and grounded claims", () => {
         statement: "列車は京都を8時に出発する",
         kind: "fact",
         evidenceIds: ["evidence-1"],
+        bindings: [{ evidenceId: "evidence-1", fieldPath: "facts.departureTimeMinutes", subjectRef: "列車", transform: "identity" }],
       },
       {
         id: "unsupported",
@@ -65,7 +66,7 @@ describe("evidence and grounded claims", () => {
     ]);
 
     expect(result.errors.map(({ code }) => code)).toEqual(expect.arrayContaining([
-      "duplicate_evidence_id",
+      "evidence_collision",
       "missing_evidence_reference",
       "duplicate_claim_id",
       "invalid_unknown_claim",

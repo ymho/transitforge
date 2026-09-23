@@ -8,7 +8,8 @@ export function supportedAnswerClaims(evidence: readonly Evidence[]): EvidenceCl
   return evidence.slice(0, 40).flatMap((e, i) => {
     if (!e.references.length || e.knowledgeKind === "model_interpretation") return [];
     const statement = statementFor(e);
-    return statement ? [{ id: `fact-${i}`, statement, kind: e.knowledgeKind === "unverified_information" ? "inference" as const : "fact" as const, evidenceIds: [e.id] }] : [];
+    return statement ? [{ id: `fact-${i}`, statement, kind: e.knowledgeKind === "unverified_information" ? "inference" as const : "fact" as const,
+      evidenceIds: [e.id], bindings: [claimBinding(e, e.knowledgeKind === "unverified_information" ? "recommendation" : "deterministic_calculation")] }] : [];
   });
 }
 
@@ -66,10 +67,10 @@ export function parseGroundedAnswer(text: string, evidence: readonly Evidence[])
       value.text.length > 8000 || !Array.isArray(value.claims) || !value.claims.length || value.claims.length > 8) throw new Error("Missing factual claims");
   const allowed = supportedAnswerClaims(evidence);
   const claims: EvidenceClaim[] = value.claims.map((claim) => {
-    if (!record(claim) || Object.keys(claim).some((k) => !["id", "statement", "kind", "evidenceIds"].includes(k)) ||
+    if (!record(claim) || Object.keys(claim).some((k) => !["id", "statement", "kind", "evidenceIds", "bindings"].includes(k)) ||
         typeof claim.id !== "string" || !claim.id || claim.id.length > 200 || !Array.isArray(claim.evidenceIds)) throw new Error("Invalid claim");
     const matched = allowed.find((a) => a.statement === claim.statement && a.kind === claim.kind &&
-      JSON.stringify(a.evidenceIds) === JSON.stringify(claim.evidenceIds));
+      JSON.stringify(a.evidenceIds) === JSON.stringify(claim.evidenceIds) && JSON.stringify(a.bindings) === JSON.stringify(claim.bindings));
     if (!matched) throw new Error("Unsupported statement or mismatched subject/facts");
     return { ...matched, id: claim.id };
   });
@@ -118,7 +119,7 @@ export function sourceExplanation(text: string, evidence: readonly Evidence[], p
       source.facts.status !== "available" || source.facts.freshness !== "fresh") throw new Error("Unbound excerpt");
     selected.add(source.id);
     const excerpt = statementFor({ ...source, facts: { ...source.facts, sourceExcerpt: section.quote } })!;
-    claims.push({ id: `source-${claims.length}`, statement: excerpt, kind: "fact", evidenceIds: [source.id] });
+    claims.push({ id: `source-${claims.length}`, statement: excerpt, kind: "fact", evidenceIds: [source.id], bindings: [claimBinding(source, "bounded_quote", "facts.sourceExcerpt")] });
     if (section.mode === "recommendation") {
       let preference = "";
       if (section.preference !== undefined) {
@@ -130,7 +131,7 @@ export function sourceExplanation(text: string, evidence: readonly Evidence[], p
         if (actual !== p.value && !(Array.isArray(actual) && actual.includes(p.value))) throw new Error("Unknown preference");
         preference = `普段の好み「${plain(p.value)}」を踏まえ、`;
       }
-      claims.push({ id: `recommendation-${claims.length}`, statement: `${preference}この特徴を持つ場所を候補としておすすめします。これは資料と好みをもとにした提案で、適合や営業状況の保証ではありません。`, kind: "inference", evidenceIds: [source.id] });
+      claims.push({ id: `recommendation-${claims.length}`, statement: `${preference}この特徴を持つ場所を候補としておすすめします。これは資料と好みをもとにした提案で、適合や営業状況の保証ではありません。`, kind: "inference", evidenceIds: [source.id], bindings: [claimBinding(source, "recommendation", "facts.sourceExcerpt")] });
     }
   }
   return { text: claims.map((c) => c.statement).join("\n\n"), claims };
@@ -203,7 +204,7 @@ export function travelPlan(text: string, evidence: readonly Evidence[]): AgentGe
     const title = plain(String(source.facts.placeName ?? source.facts.sourceTitle ?? source.subject).slice(0, 160));
     const excerpt = statementFor({ ...source, facts: { ...source.facts, sourceExcerpt: candidate.quote } });
     if (!excerpt) throw new Error("Missing source presentation");
-    claims.push({ id: `plan-source-${claims.length}`, statement: excerpt, kind: "fact", evidenceIds: [source.id] });
+    claims.push({ id: `plan-source-${claims.length}`, statement: excerpt, kind: "fact", evidenceIds: [source.id], bindings: [claimBinding(source, "bounded_quote", "facts.sourceExcerpt")] });
     const lines: string[] = [`### ${title}`, excerpt, "#### ゆっくり過ごす行程（提案）"];
     const estimate = parseEstimate(candidate.estimate);
     for (const day of normalizedItinerary(candidate.itinerary, estimate.nights)) {
@@ -217,7 +218,7 @@ export function travelPlan(text: string, evidence: readonly Evidence[]): AgentGe
     lines.push(`- **合計：${yen(total)}**`, `前提：${estimate.partySize}名・${estimate.nights}泊・${lodgingLabel(estimate.lodgingClass)}。` +
       (estimate.originTravel === "included" ? "出発地からの往復交通を含む仮定です。" : "出発地が未確認のため、目的地までの往復交通は含めていません。"),
       "これはAIによる目安で、空室・予約価格・支払額・価格保証ではありません。");
-    claims.push({ id: `plan-${claims.length}`, statement: `${title}について、${estimate.partySize}名・${estimate.nights}泊の仮行程と総額${yen(total)}のAI概算を提案します。未確認の営業、空室、時刻、価格を確定事実として扱いません。`, kind: "inference", evidenceIds: [source.id] });
+    claims.push({ id: `plan-${claims.length}`, statement: `${title}について、${estimate.partySize}名・${estimate.nights}泊の仮行程と総額${yen(total)}のAI概算を提案します。未確認の営業、空室、時刻、価格を確定事実として扱いません。`, kind: "inference", evidenceIds: [source.id], bindings: [claimBinding(source, "recommendation", "facts.sourceExcerpt")] });
     const requestedPhoto = typeof candidate.photoEvidenceId === "string" ? evidence.find((item) => item.id === candidate.photoEvidenceId) : undefined;
     const photo = requestedPhoto && hasDisplayablePhoto(requestedPhoto) && photoBoundToSource(requestedPhoto, source) ? requestedPhoto :
       evidence.find((item) => hasDisplayablePhoto(item) && photoBoundToSource(item, source));
@@ -279,3 +280,8 @@ function validSourceQuote(source: Evidence, quote: string): boolean { return typ
 function hasDisplayablePhoto(source: Evidence): boolean { return typeof source.facts.imageUrl === "string" && sourceUrlAllowed(source.facts.imageUrl) && typeof source.facts.imageSourceUrl === "string" && sourceUrlAllowed(source.facts.imageSourceUrl) && typeof source.facts.imageAttribution === "string" && source.facts.imageAttribution.trim().length > 0; }
 function photoBoundToSource(photo: Evidence, source: Evidence): boolean { const sourceUrl = source.facts.sourceUrl; return photo.id === source.id || typeof sourceUrl === "string" && Array.isArray(photo.facts.boundSourceUrls) && photo.facts.boundSourceUrls.includes(sourceUrl); }
 function record(v: unknown): v is Record<string, unknown> { return typeof v === "object" && v !== null && !Array.isArray(v); }
+function claimBinding(evidence: Evidence, transform: "bounded_quote" | "deterministic_calculation" | "recommendation", fieldPath?: string) {
+  const key = fieldPath ?? `facts.${Object.keys(evidence.facts).sort()[0] ?? ""}`;
+  return { evidenceId: evidence.id, fieldPath: key, subjectRef: evidence.observation?.subjectKey ?? evidence.subject,
+    ...(evidence.observation ? { applicabilityScope: evidence.observation.scopeKey } : {}), transform } as const;
+}

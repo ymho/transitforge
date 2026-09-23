@@ -162,6 +162,10 @@ resource "aws_lambda_function" "agent_stream" {
       DECISION_MODEL_ID                  = var.bedrock_decision_model_id
       BEDROCK_CAPABILITY_MATRIX_JSON     = var.bedrock_capability_matrix_json
       BEDROCK_PROMPT_CACHING_ENABLED     = tostring(var.bedrock_prompt_caching_enabled)
+      TRAVEL_KNOWLEDGE_BASE_ID           = var.travel_knowledge_base_id
+      TRAVEL_KNOWLEDGE_VECTOR_STORE      = var.travel_knowledge_vector_store
+      TRAVEL_KNOWLEDGE_SEARCH_TYPE       = var.travel_knowledge_search_type
+      BEDROCK_RERANK_MODEL_ARN           = var.bedrock_rerank_model_arn
     }
   }
   depends_on = [aws_iam_role_policy.agent_stream_logs, aws_iam_role_policy.agent_stream_model]
@@ -377,13 +381,31 @@ resource "aws_api_gateway_method_settings" "agent_stream" {
 resource "aws_iam_role_policy" "agent_stream_model" {
   for_each = local.agent_stream_instances
   role     = aws_iam_role.agent_stream[each.key].id
-  policy = jsonencode({ Version = "2012-10-17", Statement = [{
-    Effect = "Allow", Action = ["bedrock:InvokeModel"], Resource = concat(
-      [for id in local.bedrock_foundation_model_ids : "arn:aws:bedrock:${var.aws_region}::foundation-model/${id}"],
-      [for id in local.bedrock_inference_profile_ids : "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:inference-profile/${id}"],
-      [for id in local.bedrock_inference_profile_model_ids : "arn:aws:bedrock:*::foundation-model/${id}"]
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = concat(
+      [{
+        Effect = "Allow"
+        Action = ["bedrock:InvokeModel"]
+        Resource = concat(
+          [for id in local.bedrock_foundation_model_ids : "arn:aws:bedrock:${var.aws_region}::foundation-model/${id}"],
+          [for id in local.bedrock_inference_profile_ids : "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:inference-profile/${id}"],
+          [for id in local.bedrock_inference_profile_model_ids : "arn:aws:bedrock:*::foundation-model/${id}"],
+          var.bedrock_rerank_model_arn == "" ? [] : [var.bedrock_rerank_model_arn]
+        )
+      }],
+      var.travel_knowledge_base_id == "" ? [] : [{
+        Effect   = "Allow"
+        Action   = ["bedrock:Retrieve"]
+        Resource = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:knowledge-base/${var.travel_knowledge_base_id}"
+      }],
+      var.bedrock_rerank_model_arn == "" ? [] : [{
+        Effect   = "Allow"
+        Action   = ["bedrock:Rerank"]
+        Resource = "*"
+      }]
     )
-  }] })
+  })
 }
 resource "aws_cloudwatch_log_group" "agent_stream_api" {
   for_each          = local.agent_stream_instances

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raiquora.example/schemas/travel-knowledge-manifest-v1.json",
+  "title": "Raiquora travel knowledge ingestion manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "manifestRevision", "documents"],
+  "properties": {
+    "schemaVersion": { "const": "travel-knowledge-manifest-v1" },
+    "manifestRevision": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "documents": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["documentId", "sourceUrl", "sourceVersion", "retrievedAt", "retention", "region", "parentDocumentRef", "contentSha256", "containsPersonalData"],
+        "properties": {
+          "documentId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,200}$" },
+          "sourceUrl": { "type": "string", "format": "uri", "maxLength": 2000 },
+          "sourceVersion": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "retrievedAt": { "type": "string", "format": "date-time" },
+          "validFrom": { "type": "string", "format": "date" },
+          "validUntil": { "type": "string", "format": "date" },
+          "retention": { "enum": ["reference_only", "bounded_excerpt"] },
+          "license": { "type": "string", "maxLength": 160 },
+          "region": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "type": "string", "maxLength": 120 } },
+          "season": { "type": "array", "maxItems": 12, "items": { "type": "integer", "minimum": 1, "maximum": 12 } },
+          "activities": { "type": "array", "maxItems": 30, "items": { "type": "string", "maxLength": 100 } },
+          "access": { "type": "array", "maxItems": 20, "items": { "type": "string", "maxLength": 120 } },
+          "subjectRef": { "type": "string", "maxLength": 240 },
+          "parentDocumentRef": { "type": "string", "minLength": 1, "maxLength": 240 },
+          "contentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "containsPersonalData": { "const": false }
+        }
+      }
+    }
+  }
+}

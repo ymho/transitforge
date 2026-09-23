@@ -4,6 +4,7 @@ variable "aws_region" {
   default     = "ap-northeast-1"
 }
 
+
 variable "project_name" {
   description = "リソース名とタグに使用するプロジェクト名。"
   type        = string
@@ -134,6 +135,46 @@ variable "bedrock_decision_model_id" {
       var.bedrock_decision_model_id,
     ))
     error_message = "bedrock_decision_model_idには安全な基盤モデルIDまたは空文字を指定してください。"
+  }
+}
+
+variable "travel_knowledge_base_id" {
+  description = "既存のBedrock Knowledge Base ID。空文字ではKnowledge retrievalを無効にしWeb-onlyへ戻す。"
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.travel_knowledge_base_id == "" || can(regex("^[0-9A-Za-z]{10}$", var.travel_knowledge_base_id))
+    error_message = "travel_knowledge_base_idは10文字のKnowledge Base IDまたは空文字にしてください。"
+  }
+}
+
+variable "travel_knowledge_vector_store" {
+  description = "HYBRID capability判定に使うVector Store構成。"
+  type        = string
+  default     = "other"
+  validation {
+    condition     = contains(["opensearch_serverless_filterable_text", "rds_filterable_text", "mongodb_filterable_text", "s3_vectors", "other"], var.travel_knowledge_vector_store)
+    error_message = "travel_knowledge_vector_storeは定義済みcapabilityのいずれかにしてください。"
+  }
+}
+
+variable "travel_knowledge_search_type" {
+  description = "Knowledge retrievalで要求する検索モード。非対応構成ではApplicationがSEMANTICへ明示的に降格する。"
+  type        = string
+  default     = "SEMANTIC"
+  validation {
+    condition     = contains(["HYBRID", "SEMANTIC"], var.travel_knowledge_search_type)
+    error_message = "travel_knowledge_search_typeはHYBRIDまたはSEMANTICにしてください。"
+  }
+}
+
+variable "bedrock_rerank_model_arn" {
+  description = "独立Rerankに使う既存Bedrock reranker model ARN。空文字では元順位を維持する。"
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.bedrock_rerank_model_arn == "" || can(regex("^arn:aws:bedrock:[a-z0-9-]+::foundation-model/[A-Za-z0-9._:/-]+$", var.bedrock_rerank_model_arn))
+    error_message = "bedrock_rerank_model_arnはBedrock foundation model ARNまたは空文字にしてください。"
   }
 }
 

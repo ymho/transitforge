@@ -10,7 +10,7 @@ it("runs the existing Bedrock adapter, backend weather operation and another reg
       { toolUse: { toolUseId: "weather-call", name: "search_weather_forecast", input: { location: "京都市" } } },
       { toolUse: { toolUseId: "extra-call", name: "search_web", input: {} } },
     ] } }, stopReason: "tool_use" }
-    : { output: { message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: "確認した情報を案内します。", decision: { interpretedGoal: "天気確認", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"], usedEvidenceIds: ["weather-evidence"] } }) }] } }, stopReason: "end_turn", usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } });
+    : { output: { message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: "確認した情報を案内します。", decision: { interpretedGoal: "天気確認", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"], usedEvidenceIds: ["observation:server-turn:weather-call:search_weather_forecast:q-06d9500f:weather-evidence"] } }) }] } }, stopReason: "end_turn", usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } });
   const search = vi.fn<WeatherForecastProvider["search"]>(async () => ({
     status: "available", freshness: "fresh", evidence: [{ id: "weather-evidence", kind: "weather", provider: "fixture-weather",
       sourceUrl: "https://example.test/weather", retrievedAt: "2026-09-18T00:00:00Z", confidence: "provider-forecast" }],
@@ -30,7 +30,7 @@ it("runs the existing Bedrock adapter, backend weather operation and another reg
   expect(converse.mock.calls[0][0]).toMatchObject({ modelId: "test-decision", system: expect.arrayContaining([{ text: "existing backend system prompt" }]) });
   expect(JSON.stringify(converse.mock.calls[1][0])).toContain("weather-evidence");
   expect(JSON.stringify(converse.mock.calls[1][0])).toContain("weather-call");
-  expect(result.evidence.map(e => e.id)).toEqual(["weather-evidence"]);
-  expect(result.claims[0]).toMatchObject({ evidenceIds: ["weather-evidence"], groundingStatus: "supported" });
+  expect(result.evidence.map(e => e.id)).toEqual(["observation:server-turn:weather-call:search_weather_forecast:q-06d9500f:weather-evidence"]);
+  expect(result.claims[0]).toMatchObject({ evidenceIds: ["observation:server-turn:weather-call:search_weather_forecast:q-06d9500f:weather-evidence"], groundingStatus: "supported" });
   expect(result.trace.events).toContainEqual(expect.objectContaining({ type: "model_completed", model: "test-decision" }));
 });

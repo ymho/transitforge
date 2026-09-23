@@ -2,6 +2,9 @@ import type { Evidence } from "./evidence-model";
 
 export interface ToolEvidenceContext {
   executionId: string;
+  toolCallId: string;
+  toolName: string;
+  queryFingerprint: string;
   retrievedAt: string;
 }
 
