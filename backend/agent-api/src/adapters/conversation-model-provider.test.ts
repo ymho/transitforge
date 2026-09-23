@@ -60,6 +60,24 @@ it("preserves a recognized v2 presentation when only strict Decision metadata is
     message: { content: [{ type: "text", text: "旅行案です" }] } });
   expect(result.decisionSummary).toBeUndefined();
 });
+it("preserves independently valid final Evidence selection when advisory Decision metadata is invalid", async () => {
+  const model: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 1, outputMode: "application_strict" },
+    message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: "確認済み情報を案内します",
+      decision: { interpretedGoal: "案内", hardConstraints: [], softPreferences: [], selectedAction: "answer",
+        usedEvidenceIds: ["evidence-1"], unresolvedFacts: [], reasonCodes: ["invented_reason"] } }) }] } }) };
+  const result = await new ConversationModelProvider(model, "turn").generate({ messages: [] });
+  expect(result).toMatchObject({ decisionSummaryStatus: "invalid", declaredEvidenceIds: ["evidence-1"],
+    message: { content: [{ type: "text", text: "確認済み情報を案内します" }] } });
+  expect(result.decisionSummary).toBeUndefined();
+});
+it("does not preserve Evidence selection from an invalid Tool-routing Decision", async () => {
+  const model: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 1, outputMode: "application_strict" },
+    message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: "Toolを呼びます",
+      decision: { selectedAction: "use_tool", usedEvidenceIds: ["evidence-1"] } }) }] } }) };
+  const result = await new ConversationModelProvider(model, "turn").generate({ messages: [] });
+  expect(result.decisionSummaryStatus).toBe("invalid");
+  expect(result.declaredEvidenceIds).toBeUndefined();
+});
 it.each([
   { presentation: { kind: "invented" } },
   { presentation: "travel-plan" },

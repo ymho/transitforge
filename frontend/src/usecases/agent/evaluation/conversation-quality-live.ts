@@ -5,6 +5,7 @@ export interface ConversationQualityLiveTurn {
   toolNames: string[];
   photoCount: number;
   claimStatuses: Array<"supported" | "unsupported" | "unknown">;
+  completed: boolean;
 }
 
 export interface ConversationQualityLiveResult {
@@ -67,6 +68,7 @@ export function evaluateConversationQualityLive(
   const assumptionCheck = !expected.assumptions.mustBeExplicit || !usesUnconfirmedDetails(combined) ||
     /仮定|想定|前提|未指定|未確認|分からない|わからない/u.test(combined);
   const progressChecks = [
+    turns.every(({ completed }) => completed),
     firstStarterPlan > 0 && firstStarterPlan <= expected.maximumTurnsToStarterPlan,
     askOnlyStreak <= expected.maximumAskOnlyStreak,
     maximumQuestions <= expected.maximumQuestionsPerAssistantTurn,

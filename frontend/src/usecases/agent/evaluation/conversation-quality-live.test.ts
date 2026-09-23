@@ -29,7 +29,7 @@ describe("live conversation quality evaluator", () => {
   it("accepts a grounded first-turn multi-candidate proposal", () => {
     const result = evaluateConversationQualityLive(scenario, [{
       response: "2026年9月22日出発です。1. 城崎温泉：温泉向き。1日目は街歩き。2. おごと温泉：アクセスが特徴。1日目は湖畔へ。出発地は未指定の前提です。",
-      toolNames: ["search_web", "read_web_pages", "resolve_place_candidates"], photoCount: 2, claimStatuses: ["supported", "supported"],
+      toolNames: ["search_web", "read_web_pages", "resolve_place_candidates"], photoCount: 2, claimStatuses: ["supported", "supported"], completed: true,
     }]);
     expect(result.passed).toBe(true);
     expect(result.metrics).toMatchObject({ toolSelectionAccuracy: 1, constraintSatisfaction: 1, taskCompletion: 1 });
@@ -38,7 +38,7 @@ describe("live conversation quality evaluator", () => {
   it("rejects questionnaires and unsupported out-of-scope candidates", () => {
     const result = evaluateConversationQualityLive(scenario, [{
       response: "熱海はいかがですか？ 出発地はどこからですか？ 出発地はプロフィールに保存します。",
-      toolNames: [], photoCount: 0, claimStatuses: ["unsupported"],
+      toolNames: [], photoCount: 0, claimStatuses: ["unsupported"], completed: false,
     }]);
     expect(result.passed).toBe(false);
     expect(result.failures).toEqual(expect.arrayContaining([
@@ -47,10 +47,19 @@ describe("live conversation quality evaluator", () => {
     ]));
   });
 
+  it("does not report a scenario complete when any Runtime turn failed", () => {
+    const result = evaluateConversationQualityLive(scenario, [{
+      response: "2026年9月22日出発です。1. 城崎温泉：温泉向き。1日目は街歩き。2. おごと温泉：アクセスが特徴。1日目は湖畔へ。出発地は未指定の前提です。",
+      toolNames: ["search_web", "resolve_place_candidates"], photoCount: 2, claimStatuses: ["supported"], completed: false,
+    }]);
+    expect(result.passed).toBe(false);
+    expect(result.metrics.taskCompletion).toBeLessThan(1);
+  });
+
   it("rejects promotion of a provisional assumption to the profile", () => {
     const result = evaluateConversationQualityLive(scenario, [{
       response: "2026年9月22日出発です。1. 城崎温泉：温泉向き。1日目は街歩き。2. おごと温泉：アクセスが特徴。1日目は湖畔へ。出発地は未指定の前提ですが、プロフィールに出発地として保存します。",
-      toolNames: ["search_web", "resolve_place_candidates"], photoCount: 2, claimStatuses: ["supported"],
+      toolNames: ["search_web", "resolve_place_candidates"], photoCount: 2, claimStatuses: ["supported"], completed: true,
     }]);
     expect(result.passed).toBe(false);
     expect(result.metrics.constraintSatisfaction).toBeLessThan(1);

@@ -1,5 +1,6 @@
 import { withAgentDecisionSummary } from "@raiquora/agent/model-response";
 import { agentTurnOutputContract, agentTurnPresentationOutputContract, decodeAgentTurnOutput } from "@raiquora/agent/agent-output-contract";
+import { validUsedEvidenceIds } from "@raiquora/agent/agent-decision-summary";
 import { AgentModelError, type AgentModelMessage, type AgentModelProvider, type AgentModelRequest, type AgentModelResponse } from "@raiquora/agent/model-provider";
 import { modelToolDescription } from "@raiquora/agent/tool-contract";
 import { ConversationModelError, type ConversationModel } from "../ports/conversation-model.js";
@@ -69,6 +70,17 @@ export class ConversationModelProvider implements AgentModelProvider {
       declaredPresentation: presentationWithInvalidDecision.presentation,
       decisionSummaryStatus: "invalid",
     };
+    // Final Evidence selection is independently safe even when advisory Decision
+    // metadata is malformed: Runtime still checks every ID against collected
+    // Evidence and Application renders the claims. This path never routes a Tool.
+    const evidenceSelectionWithInvalidDecision = !presentationRequired && response.metadata.outputMode === "application_strict"
+      ? independentlyDecodedEvidenceSelection(parsed) : undefined;
+    if (evidenceSelectionWithInvalidDecision) return {
+      ...mapped,
+      message: { role: "assistant", content: [{ type: "text", text: evidenceSelectionWithInvalidDecision.responseText }] },
+      declaredEvidenceIds: evidenceSelectionWithInvalidDecision.usedEvidenceIds,
+      decisionSummaryStatus: "invalid",
+    };
     // Explicitly versioned migration path only. Provider/application strict responses never
     // get a second permissive interpretation after schema decoding failed.
     return response.metadata.outputMode === "legacy_text" || response.metadata.outputMode === undefined ? withAgentDecisionSummary(mapped) : {
@@ -104,6 +116,13 @@ function independentlyDecodedPresentation(value: unknown): { responseText: strin
       !("decision" in value) || typeof value.responseText !== "string" || !value.responseText.trim() || value.responseText.length > 12_000 ||
       !isRecord(value.presentation) || !["source-explanation", "travel-plan"].includes(String(value.presentation.kind))) return undefined;
   return { responseText: value.responseText, presentation: value.presentation };
+}
+
+function independentlyDecodedEvidenceSelection(value: unknown): { responseText: string; usedEvidenceIds: string[] } | undefined {
+  if (!isRecord(value) || Object.keys(value).some((key) => !["responseText", "decision"].includes(key)) ||
+      typeof value.responseText !== "string" || !value.responseText.trim() || value.responseText.length > 12_000 ||
+      !isRecord(value.decision) || value.decision.selectedAction !== "answer" || !validUsedEvidenceIds(value.decision.usedEvidenceIds)) return undefined;
+  return { responseText: value.responseText, usedEvidenceIds: [...value.decision.usedEvidenceIds] };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
