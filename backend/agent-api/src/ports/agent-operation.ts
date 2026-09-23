@@ -2,6 +2,8 @@ import type { JsonObject } from "../contracts/agent-request.js";
 
 export interface AgentOperationContext {
   requestId: string;
+  signal?: AbortSignal;
+  deadlineAt?: number;
 }
 
 export interface AgentOperationResult {

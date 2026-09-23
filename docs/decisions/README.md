@@ -107,3 +107,4 @@ Server Runtime・Stateの新構成は#478以降で決定する。
 - [ADR 0073: 根拠付き旅行案を構造化選択から描画する](0073-render-grounded-travel-plans-from-structured-selections.md) — 一般旅行相談でEvidenceに結び付いた行程・AI概算・写真をApplicationが一括描画する。
 
 - [ADR 0074: Agent task・意味判断・会話Working Stateを型付き契約にする](0074-establish-agent-task-decision-and-working-state-contracts.md) — 型付き判断、提示参照、原子的Working State、production-shaped Evalの共有境界を定める。
+- [ADR 0076: Agent Context・Provider schema・Tool実行をversioned contractで接続する](0076-compile-agent-context-and-provider-contracts.md) — Structured Outputs、Prompt Cache、段階Context、typed Tool runtime、privacy-safe diagnosticsの境界を定める。

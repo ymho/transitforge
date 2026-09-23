@@ -160,6 +160,8 @@ resource "aws_lambda_function" "agent_stream" {
       MODEL_ID                           = var.bedrock_model_id
       LIGHTWEIGHT_MODEL_ID               = var.bedrock_lightweight_model_id
       DECISION_MODEL_ID                  = var.bedrock_decision_model_id
+      BEDROCK_CAPABILITY_MATRIX_JSON     = var.bedrock_capability_matrix_json
+      BEDROCK_PROMPT_CACHING_ENABLED     = tostring(var.bedrock_prompt_caching_enabled)
     }
   }
   depends_on = [aws_iam_role_policy.agent_stream_logs, aws_iam_role_policy.agent_stream_model]

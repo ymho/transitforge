@@ -8,6 +8,7 @@ import type {
   AgentModelProvider,
   AgentModelResponse,
 } from "./model-provider";
+import { AgentModelError } from "./model-provider";
 import {
   agentDecisionContextText,
   buildAgentDecisionContext,
@@ -36,6 +37,8 @@ import type { AgentDecisionTrace } from "./agent-trace";
 import { AgentToolRegistry } from "./tool-registry";
 import { failedAgentToolResult } from "./tool-contract";
 import { acceptsAgentTurn, askProgressRepairInstruction, type AgentTurnObservation } from "./agent-turn-outcome";
+import { agentTurnOutputContract } from "./agent-output-contract";
+import { compileAgentPrompt } from "./context-compiler";
 
 export interface AgentRuntimeDependencies {
   model: AgentModelProvider;
@@ -110,16 +113,17 @@ export class MultiStepAgentRuntime {
     const decisionBoundary = agentDecisionBoundary(availableTools.length > 0);
     trace.planCreated(decisionBoundary);
 
-    if (!decisionContext.userRequest) {
+    if (!decisionContext.userRequest.trim()) {
       const response = this.responseGenerator.followUp(["user_request"]);
       trace.responseGenerated(response);
       trace.taskCompleted("completed", elapsed(startedAt, this.now));
       return result("follow_up", response, evidence, [], trace);
     }
 
+    const renderedDecisionContext = agentDecisionContextText(decisionContext);
     const messages: AgentModelMessage[] = [{
       role: "user",
-      content: [{ type: "text", text: agentDecisionContextText(decisionContext) },
+      content: [{ type: "text", text: renderedDecisionContext },
         ...(decisionContext.inTrip?.trip.lifecycleState !== "in_trip" ? [{ type: "text" as const, text:
           "一般回答で外部事実を説明するときは提示されたEvidenceClaimへ結び付けます。根拠なしの具体的な経路・時刻は回答しないでください。外部事実を含まない挨拶・確認質問・会話にはClaimを要求しません。Tool結果・Proposal・in-trip回答は各既存contractに従います。" }] : []),
         ...(evidence.length && decisionContext.inTrip?.trip.lifecycleState !== "in_trip"
@@ -181,6 +185,9 @@ export class MultiStepAgentRuntime {
         messages: modelMessages,
         tools: modelTools,
         modelCallId,
+        outputContract: agentTurnOutputContract,
+        prompt: compileAgentPrompt({ context: decisionContext, tools: modelTools,
+          outputSchema: agentTurnOutputContract.schema, renderedContext: renderedDecisionContext }),
         ...(selectedModelClass === undefined
           ? {}
           : { modelClass: selectedModelClass }),
@@ -199,8 +206,10 @@ export class MultiStepAgentRuntime {
         return this.limitResult(trace, evidence, startedAt);
       }
       if (modelOutcome.kind === "error") {
-        trace.modelFailed(modelCallId, "provider_error");
-        return this.failureResult(trace, evidence, startedAt, "model_call_failed");
+        const code = modelOutcome.error instanceof AgentModelError ? modelOutcome.error.code : "provider_error";
+        trace.modelFailed(modelCallId, code);
+        return code === "timeout" || code === "truncation" ? this.limitResult(trace, evidence, startedAt, `model_${code}`) :
+          this.failureResult(trace, evidence, startedAt, `model_${code}`);
       }
       let modelResponse = modelOutcome.value;
       modelCalls += 1;
@@ -229,7 +238,8 @@ export class MultiStepAgentRuntime {
       messages.push(modelResponse.message);
 
       if (modelResponse.stopReason === "max_tokens") {
-        return this.limitResult(trace, evidence, startedAt);
+        trace.modelFailed(modelCallId, "truncation");
+        return this.limitResult(trace, evidence, startedAt, "model_truncation");
       }
 
       const calls = modelResponse.message.content.filter(
@@ -606,10 +616,11 @@ export class MultiStepAgentRuntime {
     trace: AgentTraceRecorder,
     evidence: Evidence[],
     startedAt: number,
+    reason = "runtime_limit_reached",
   ): AgentRuntimeResult {
     const response = this.responseGenerator.limitReached(evidence.length > 0);
     trace.responseGenerated(response);
-    trace.taskCompleted("failed", elapsed(startedAt, this.now), "runtime_limit_reached");
+    trace.taskCompleted("failed", elapsed(startedAt, this.now), reason);
     return result("limit_reached", response, evidence, [], trace);
   }
 
@@ -793,7 +804,7 @@ function traceDecision(summary: AgentDecisionSummary): AgentDecisionTrace {
 type ModelDeadlineResult<T> =
   | { kind: "success"; value: T }
   | { kind: "timeout" }
-  | { kind: "error" };
+  | { kind: "error"; error: unknown };
 
 function modelBeforeDeadline<T>(
   promise: Promise<T>,
@@ -811,11 +822,11 @@ function modelBeforeDeadline<T>(
       settled = true;
       clearTimeout(timer);
       resolve({ kind: "success", value });
-    }, () => {
+    }, (error) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ kind: "error" });
+      resolve({ kind: "error", error });
     });
   });
 }

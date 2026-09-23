@@ -36,6 +36,7 @@ export class AgentToolExecutor {
       this.tools.execute(input.toolName, input.toolInput, {
         executionId: input.executionId,
         signal: controller.signal,
+        deadlineAt: startedAt + input.timeoutMs,
       }),
       input.timeoutMs,
       controller,
@@ -56,6 +57,29 @@ export class AgentToolExecutor {
       }),
     };
   }
+}
+
+/** Only independent read effects may run concurrently. Results retain input order. */
+export async function executeBoundedAgentReads<T>(
+  jobs: readonly (() => Promise<T>)[],
+  maximumParallelReads: number,
+  signal?: AbortSignal,
+): Promise<T[]> {
+  if (!Number.isSafeInteger(maximumParallelReads) || maximumParallelReads < 1 || maximumParallelReads > 8) {
+    throw new Error("Invalid parallel read limit");
+  }
+  const results = new Array<T>(jobs.length);
+  let next = 0;
+  const worker = async () => {
+    while (true) {
+      if (signal?.aborted) throw new DOMException("Read batch aborted", "AbortError");
+      const index = next++;
+      if (index >= jobs.length) return;
+      results[index] = await jobs[index]!();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(maximumParallelReads, jobs.length) }, worker));
+  return results;
 }
 
 function withTimeout<T>(

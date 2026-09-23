@@ -19,7 +19,7 @@ it("restores a Trip without Profile, invokes fixed-egress through the existing o
   const converse = vi.fn(async () => converse.mock.calls.length === 1
     ? { output: { message: { role: "assistant", content: [{ toolUse: { toolUseId: "accommodation", name: "search_accommodations",
       input: { destination: "京都", checkInDate: "2026-10-01", checkOutDate: "2026-10-02" } } }] } }, stopReason: "tool_use" }
-    : { output: { message: { role: "assistant", content: [{ text: '<decision_summary>{"interpretedGoal":"宿を調べる","hardConstraints":[],"softPreferences":[],"selectedAction":"answer","unresolvedFacts":[],"reasonCodes":["evidence_sufficient"],"usedEvidenceIds":["accommodation:travel-provider:42"]}</decision_summary>候補の宿を確認しました。空室は未確認です。' }] } }, stopReason: "end_turn" });
+    : { output: { message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: "候補の宿を確認しました。空室は未確認です。", decision: { interpretedGoal: "宿を調べる", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"], usedEvidenceIds: ["accommodation:travel-provider:42"] } }) }] } }, stopReason: "end_turn" });
   const app = createProductionConversationAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
     model: new BedrockConversationModel({ converse }, { modelId: "test", systemPrompt: "test" }), weather: { search: vi.fn() }, newExecutionId: () => "execution",
     additionalTools: productionServerTools({ external: {}, accommodation: createFixedEgressAccommodationOperation("provider-arn", { invoke }), journey: vi.fn() }),

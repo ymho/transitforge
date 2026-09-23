@@ -10,7 +10,7 @@ it("runs the existing Bedrock adapter, backend weather operation and another reg
       { toolUse: { toolUseId: "weather-call", name: "search_weather_forecast", input: { location: "京都市" } } },
       { toolUse: { toolUseId: "extra-call", name: "search_web", input: {} } },
     ] } }, stopReason: "tool_use" }
-    : { output: { message: { role: "assistant", content: [{ text: "<decision_summary>" + JSON.stringify({ interpretedGoal: "天気確認", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"], usedEvidenceIds: ["weather-evidence"] }) + "</decision_summary>確認した情報を案内します。" }] } }, stopReason: "end_turn", usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } });
+    : { output: { message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: "確認した情報を案内します。", decision: { interpretedGoal: "天気確認", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"], usedEvidenceIds: ["weather-evidence"] } }) }] } }, stopReason: "end_turn", usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } });
   const search = vi.fn<WeatherForecastProvider["search"]>(async () => ({
     status: "available", freshness: "fresh", evidence: [{ id: "weather-evidence", kind: "weather", provider: "fixture-weather",
       sourceUrl: "https://example.test/weather", retrievedAt: "2026-09-18T00:00:00Z", confidence: "provider-forecast" }],
@@ -27,7 +27,7 @@ it("runs the existing Bedrock adapter, backend weather operation and another reg
   expect(search).toHaveBeenCalledExactlyOnceWith({ location: "京都市" });
   expect(extra).toHaveBeenCalledOnce();
   expect(converse).toHaveBeenCalledTimes(2);
-  expect(converse.mock.calls[0][0]).toMatchObject({ modelId: "test-decision", system: [{ text: "existing backend system prompt" }] });
+  expect(converse.mock.calls[0][0]).toMatchObject({ modelId: "test-decision", system: expect.arrayContaining([{ text: "existing backend system prompt" }]) });
   expect(JSON.stringify(converse.mock.calls[1][0])).toContain("weather-evidence");
   expect(JSON.stringify(converse.mock.calls[1][0])).toContain("weather-call");
   expect(result.evidence.map(e => e.id)).toEqual(["weather-evidence"]);

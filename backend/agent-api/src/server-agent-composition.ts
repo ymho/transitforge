@@ -8,6 +8,7 @@ import type { WeatherForecastProvider } from "./ports/weather-provider.js";
 import { createWeatherForecastOperation } from "./usecases/weather-forecast.js";
 import { createServerAgentApplication, type ServerAgentDependencies } from "./usecases/agent/server-agent.js";
 import { registerServerTools, type ServerAgentToolBinding } from "./usecases/agent/server-tools.js";
+import type { AgentDiagnosticsSink } from "./ports/agent-diagnostics.js";
 
 /** Internal composition only. Public routes remain on the Browser runtime until #480. */
 export function createServerAgent(options: {
@@ -18,6 +19,8 @@ export function createServerAgent(options: {
   newExecutionId?: () => string;
   loadContext?: ServerAgentDependencies["loadContext"];
   registerAdditionalTools?: ServerAgentDependencies["registerTools"];
+  diagnostics?: AgentDiagnosticsSink;
+  log?: ServerAgentDependencies["log"];
 }) {
   return createServerAgentApplication({
     newExecutionId: options.newExecutionId ?? randomUUID,
@@ -25,6 +28,8 @@ export function createServerAgent(options: {
     modelClassPolicy: structuredModelClassPolicy,
     limits: options.limits,
     loadContext: options.loadContext,
+    diagnostics: options.diagnostics,
+    log: options.log,
     registerTools: (tools, evidence, scope) => { registerServerTools(tools, evidence, [
       { descriptor: weatherToolDescriptor, operation: createWeatherForecastOperation(options.weather), evidence: externalTravelEvidence },
       ...(options.additionalTools ?? []),

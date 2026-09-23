@@ -29,10 +29,14 @@ export interface AgentContextSnapshot {
   };
   trip?: {
     /** V2 projections only; neither a repository nor writable AgentDecision state. */
+    tripId: string;
+    sourceRevision: number;
     request?: TripRequest;
     planningState?: PlanningState;
     lifecycleState?: LifecycleState;
     scheduleTruncated?: boolean;
+    totalItemCount: number;
+    omittedItemCount: number;
     title: string;
     summaryDestination?: string;
     itineraryPlaces?: AgentTripPlaces["itineraryPlaces"];
@@ -147,13 +151,16 @@ function profileSnapshot(profile: UserProfile): NonNullable<AgentContextSnapshot
 function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["trip"]> {
   validateTrip(trip);
   const dailyItinerary = projectDailyItinerary(trip, { limit: 6 });
-  return { title: bounded(trip.title, 100) ?? "現在の旅程", considerations: [],
+  return { tripId: trip.id, sourceRevision: trip.revision,
+    title: bounded(trip.title, 100) ?? "現在の旅程", considerations: [],
     ...(trip.summaryDestination === undefined ? {} : { summaryDestination: trip.summaryDestination }),
     ...agentTripPlaces(trip),
     request: structuredClone(trip.request),
     planningState: trip.planningState, lifecycleState: trip.lifecycleState,
     dailyItinerary, tripStructure: projectTripStructure(trip), workload: measureTripWorkload(trip, dailyItinerary),
     scheduleTruncated: trip.items.length > 24,
+    totalItemCount: trip.items.length,
+    omittedItemCount: Math.max(0, trip.items.length - 24),
     schedule: trip.items.slice(0, 24).map(selectedTripItemSnapshot) };
 }
 

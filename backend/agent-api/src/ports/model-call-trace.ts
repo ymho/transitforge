@@ -24,6 +24,8 @@ export interface ModelCallTraceRecord {
           inputTokens?: number;
           outputTokens?: number;
           totalTokens?: number;
+          cacheReadInputTokens?: number;
+          cacheWriteInputTokens?: number;
         };
       }
     | {
