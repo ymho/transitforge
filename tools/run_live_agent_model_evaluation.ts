@@ -7,7 +7,7 @@ import type { AgentTrace } from "@raiquora/agent/agent-trace";
 import { externalTravelToolDescription, externalTravelToolInputSchema } from "@raiquora/agent/external-travel-tools";
 import type { AgentEvaluationCaseResult, AgentEvaluationDataset, AgentEvaluationReport, ConversationQualityScenario } from "../frontend/src/usecases/agent/evaluation/evaluation-contract";
 import { parseAgentEvaluationDataset } from "../frontend/src/usecases/agent/evaluation/evaluation-dataset";
-import { evaluateConversationQualityLive, type ConversationQualityLiveResult, type ConversationQualityLiveTurn } from "../frontend/src/usecases/agent/evaluation/conversation-quality-live";
+import { evaluateConversationQualityLive, presentedPhotoCount, type ConversationQualityLiveResult, type ConversationQualityLiveTurn } from "../frontend/src/usecases/agent/evaluation/conversation-quality-live";
 import { liveEvaluationAccommodationOutput, liveEvaluationToolEvidence, liveEvaluationTravelToolOutput,
   type LiveEvaluationPlace, type LiveEvaluationTravelToolName } from "../frontend/src/usecases/agent/evaluation/live-model-tool-fixture";
 import { AwsBedrockConverseClient } from "../backend/agent-api/src/adapters/aws-sdk-clients";
@@ -62,8 +62,10 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
         uiContext: { calendarDate: scenario.input.fixedNow.slice(0, 10) },
       });
       const toolNames = result.trace.events.flatMap((event) => event.type === "tool_called" ? [event.toolName] : []);
-      // Count only media that reached the public turn observation. Provider output is not presentation.
-      const photoCount = new Set(result.turnObservation?.progress.flatMap((item) => item.mediaRefs ?? []) ?? []).size;
+      // Count only media that crossed a typed public boundary. Provider output and raw
+      // Markdown are not presentation truth; observation remains a legacy presenter source.
+      const photoCount = presentedPhotoCount(result.publicPlanPresentation?.photoRefs,
+        result.turnObservation?.progress.flatMap((item) => item.mediaRefs ?? []));
       liveTurns.push({ response: result.response, toolNames, photoCount,
         claimStatuses: result.claims.map(({ groundingStatus }) => groundingStatus) });
       history.push({ role: "user", text: turn.text }, { role: "assistant", text: result.response });
@@ -92,7 +94,7 @@ await Promise.all([
   writeFile(`${outputDirectory}/run-manifest.json`, `${JSON.stringify({
     schemaVersion: "agent-live-model-eval-manifest-v1", strategy, repetitions, modelId, decisionModelId,
     datasetSchemaVersion: dataset.schemaVersion, fixtureBoundary: "input-only-runtime-v1",
-    photoMetricSource: "rendered-turn-observation", scenarioIds: scenarios.map(({ id }) => id), executedAt: new Date().toISOString(),
+    photoMetricSource: "public-plan-presentation-and-turn-observation-v1", scenarioIds: scenarios.map(({ id }) => id), executedAt: new Date().toISOString(),
   }, null, 2)}\n`, "utf8"),
 ]);
 console.log(`Live Agent Model Eval (${strategy}, ${repetitions}x): ${report.passedCaseCount}/${report.caseCount} stable (${outputDirectory})`);

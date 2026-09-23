@@ -147,6 +147,8 @@ it("gives a bounded repair reason without echoing arbitrary errors", () => {
   expect(groundedAnswerRepairInstruction(new Error("Invalid cost estimate"))).toContain("Invalid cost estimate");
   expect(groundedAnswerRepairInstruction(new Error("Invalid itinerary coverage"))).toContain("Invalid itinerary coverage");
   expect(groundedAnswerRepairInstruction(new Error("Invalid cost estimate"))).toContain("presentation object");
+  expect(groundedAnswerRepairInstruction(new Error("Invalid itinerary activity"))).toContain("period、空でないtitle、kind");
+  expect(groundedAnswerRepairInstruction(new Error("Invalid itinerary activity"))).toContain("旧activity enumは出力しない");
   expect(groundedAnswerRepairInstruction(new Error("secret model output"))).not.toContain("secret model output");
 });
 it("classifies structured-answer failures without exposing arbitrary exception text", () => {

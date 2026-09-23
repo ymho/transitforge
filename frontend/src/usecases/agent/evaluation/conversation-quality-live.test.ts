@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationQualityScenario } from "./evaluation-contract";
-import { evaluateConversationQualityLive } from "./conversation-quality-live";
+import { evaluateConversationQualityLive, presentedPhotoCount } from "./conversation-quality-live";
 
 const scenario: ConversationQualityScenario = {
   id: "relaxed", name: "ゆっくり旅",
@@ -19,6 +19,13 @@ const scenario: ConversationQualityScenario = {
 };
 
 describe("live conversation quality evaluator", () => {
+  it("counts typed public photos with legacy observation compatibility and deduplication", () => {
+    expect(presentedPhotoCount(["photo:public"], undefined)).toBe(1);
+    expect(presentedPhotoCount(undefined, ["photo:legacy"])).toBe(1);
+    expect(presentedPhotoCount(["photo:same"], ["photo:same", "photo:legacy"])).toBe(2);
+    expect(presentedPhotoCount(undefined, undefined)).toBe(0);
+  });
+
   it("accepts a grounded first-turn multi-candidate proposal", () => {
     const result = evaluateConversationQualityLive(scenario, [{
       response: "2026年9月22日出発です。1. 城崎温泉：温泉向き。1日目は街歩き。2. おごと温泉：アクセスが特徴。1日目は湖畔へ。出発地は未指定の前提です。",

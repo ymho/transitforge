@@ -23,3 +23,13 @@ it("marks a truncated page as partial instead of treating the first 1200 chars a
     evidence: [{ id: "page", provider: "safe-reader", sourceUrl: "https://example.test/page" }] } }, context)[0]!;
   expect(evidence.facts.sourceCoverage).toBe("partial"); expect(String(evidence.facts.sourceExcerpt)).not.toContain("臨時休業");
 });
+it("keeps generated Evidence IDs inside the Decision contract without collapsing distinct observations", () => {
+  const long = { ...context, executionId: `candidate-${"long-scenario-".repeat(12)}`, toolCallId: `tooluse-${"x".repeat(40)}` };
+  const output = { accommodations: [{ kind: "accommodation", provider: "provider", providerItemId: "hotel-1", name: "ホテル" }] };
+  const first = externalTravelEvidence(output, long)[0]!;
+  const second = externalTravelEvidence(output, { ...long, queryFingerprint: "query-b" })[0]!;
+  expect(first.id.length).toBeLessThanOrEqual(160);
+  expect(first.observation?.observationId).toBe(first.id);
+  expect(second.id.length).toBeLessThanOrEqual(160);
+  expect(second.id).not.toBe(first.id);
+});

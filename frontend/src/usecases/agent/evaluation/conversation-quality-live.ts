@@ -22,6 +22,16 @@ export interface ConversationQualityLiveResult {
   failures: string[];
 }
 
+/** Counts photos that crossed a public presentation boundary. The turn
+ * observation is retained as a legacy presenter source; Provider evidence and
+ * Markdown are deliberately not parsed as presentation truth. */
+export function presentedPhotoCount(
+  publicPhotoRefs: readonly string[] | undefined,
+  observationMediaRefs: readonly string[] | undefined,
+): number {
+  return new Set([...(publicPhotoRefs ?? []), ...(observationMediaRefs ?? [])].filter((ref) => ref.trim())).size;
+}
+
 /** Transparent, deterministic checks for the real-conversation regressions in Issue #474. */
 export function evaluateConversationQualityLive(
   scenario: ConversationQualityScenario,
