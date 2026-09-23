@@ -117,6 +117,7 @@ export type AgentTraceEvent =
       cacheStatus?: AgentModelMetadata["cacheStatus"];
       outputMode?: AgentModelMetadata["outputMode"];
       outputContractHash?: string;
+      presentationKind?: "source-explanation" | "travel-plan";
     })
   | (AgentTraceEventBase & {
       type: "response_generated";
@@ -315,7 +316,11 @@ export class AgentTraceRecorder {
     });
   }
 
-  modelCompleted(metadata: AgentModelMetadata, modelCallId?: string): void {
+  modelCompleted(
+    metadata: AgentModelMetadata,
+    modelCallId?: string,
+    presentationKind?: "source-explanation" | "travel-plan",
+  ): void {
     this.append({
       type: "model_completed",
       ...(modelCallId ? { modelCallId: this.text(modelCallId) } : {}),
@@ -337,6 +342,7 @@ export class AgentTraceRecorder {
       ...(metadata.cacheStatus ? { cacheStatus: metadata.cacheStatus } : {}),
       ...(metadata.outputMode ? { outputMode: metadata.outputMode } : {}),
       ...(metadata.outputContract ? { outputContractHash: metadata.outputContract.schemaHash } : {}),
+      ...(presentationKind ? { presentationKind } : {}),
     });
   }
 
