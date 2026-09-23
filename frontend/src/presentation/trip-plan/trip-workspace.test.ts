@@ -40,9 +40,10 @@ describe("Trip workspace DOM and mobile navigation", () => {
     const f = setup({ getCurrentTrip: multiCityTrip });
     button(f.ui.panel, "旅程").click();
     const dayTabs = [...f.ui.panel.querySelectorAll<HTMLButtonElement>(".trip-day-tabs [role=tab]")];
-    expect(dayTabs.map((tab) => tab.textContent)).toEqual(["2026-09-22", "日時未定"]);
+    expect(dayTabs.map((tab) => tab.textContent)).toEqual(["2026-09-22", "2026-09-23", "日時未定"]);
+    expect(f.ui.panel.querySelectorAll<HTMLElement>('.trip-workspace-days [data-item-id="hotel"]').length).toBe(2);
     expect(f.ui.panel.querySelector<HTMLElement>('[data-item-id="hotel"]')?.closest<HTMLElement>(".trip-workspace-day")?.hidden).toBe(false);
-    dayTabs[1]!.click();
+    dayTabs[2]!.click();
     expect(f.ui.panel.querySelector<HTMLElement>('[data-item-id="hotel"]')?.closest<HTMLElement>(".trip-workspace-day")?.hidden).toBe(true);
     expect(f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')?.closest<HTMLElement>(".trip-workspace-day")?.hidden).toBe(false);
   });

@@ -5,6 +5,9 @@ import type { ItinerarySchedule } from "@raiquora/trip/itinerary-schedule";
 import type { TripRequest } from "@raiquora/trip/trip-request";
 import type { PlanningState, LifecycleState } from "@raiquora/trip/trip-state";
 import { agentTripPlaces, type AgentTripPlaces } from "./agent-trip-places";
+import { projectDailyItinerary, type DailyItineraryProjection } from "@raiquora/trip/daily-itinerary";
+import { projectTripStructure, type TripStructureProjection } from "@raiquora/trip/trip-structure";
+import { measureTripWorkload, type TripWorkload } from "@raiquora/trip/trip-workload";
 
 export interface AgentContextSnapshot {
   /** Added by the read application only for lifecycle=in_trip, never persisted with Trip. */
@@ -39,6 +42,9 @@ export interface AgentContextSnapshot {
     children?: number;
     considerations: string[];
     schedule: AgentTripScheduleItem[];
+    dailyItinerary?: DailyItineraryProjection;
+    tripStructure?: TripStructureProjection;
+    workload?: TripWorkload;
   };
 }
 
@@ -140,11 +146,13 @@ function profileSnapshot(profile: UserProfile): NonNullable<AgentContextSnapshot
 
 function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["trip"]> {
   validateTrip(trip);
+  const dailyItinerary = projectDailyItinerary(trip, { limit: 6 });
   return { title: bounded(trip.title, 100) ?? "現在の旅程", considerations: [],
     ...(trip.summaryDestination === undefined ? {} : { summaryDestination: trip.summaryDestination }),
     ...agentTripPlaces(trip),
     request: structuredClone(trip.request),
     planningState: trip.planningState, lifecycleState: trip.lifecycleState,
+    dailyItinerary, tripStructure: projectTripStructure(trip), workload: measureTripWorkload(trip, dailyItinerary),
     scheduleTruncated: trip.items.length > 24,
     schedule: trip.items.slice(0, 24).map(selectedTripItemSnapshot) };
 }

@@ -1,4 +1,4 @@
-import { validateItinerarySchedule, type ItinerarySchedule } from "./itinerary-schedule";
+import { bindRelativeSchedule, validateItinerarySchedule, type ItinerarySchedule, type TripTimeline } from "./itinerary-schedule";
 import type { Trip } from "./trip";
 
 /** Supplied by the application real-time boundary, never by the Viewer simulator. */
@@ -14,11 +14,11 @@ export interface TripTemporalAssessment {
 }
 
 /** Only adopted schedules are inputs: request dates, legacy notes and execution claims are excluded. */
-export function assessTripTime(trip: Pick<Trip, "items" | "lifecycleState">, clock: TripClock): TripTemporalAssessment {
+export function assessTripTime(trip: Pick<Trip, "items" | "lifecycleState" | "timeline">, clock: TripClock): TripTemporalAssessment {
   const now = clock.now();
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new Error("Valid real-time Clock required");
   const schedules = trip.items.map(({ schedule }) => { validateItinerarySchedule(schedule); return schedule; });
-  const positions = schedules.map((schedule) => positionAt(schedule, now));
+  const positions = schedules.map((schedule) => positionAt(schedule, now, trip.timeline));
   const exact = schedules.length > 0 && schedules.every((s) => s.type === "fixed" && s.endAt !== undefined);
   let position: TripTemporalPosition = "unknown";
   if (positions.length && !positions.includes("unknown")) {
@@ -33,7 +33,7 @@ export function assessTripTime(trip: Pick<Trip, "items" | "lifecycleState">, clo
   };
 }
 
-export function positionAt(schedule: ItinerarySchedule, now: Date): TripTemporalPosition {
+export function positionAt(schedule: ItinerarySchedule, now: Date, timeline?: TripTimeline): TripTemporalPosition {
   const timestamp = now.getTime();
   switch (schedule.type) {
     case "unscheduled": return "unknown";
@@ -51,6 +51,12 @@ export function positionAt(schedule: ItinerarySchedule, now: Date): TripTemporal
       const date = `${part("year").padStart(4, "0")}-${part("month")}-${part("day")}`;
       // Day spans have an exclusive checkout date; single days include the entire local date.
       return date < schedule.date ? "upcoming" : (schedule.endDate ? date >= schedule.endDate : date > schedule.date) ? "past" : "current";
+    }
+    case "relative": {
+      if (!timeline) return "unknown";
+      const bound = bindRelativeSchedule(schedule, timeline);
+      if (!bound) return "unknown";
+      return positionAt({ type: "day", date: bound.date, ...(bound.endDate ? { endDate: bound.endDate } : {}), timeZone: bound.timeZone }, now);
     }
   }
 }

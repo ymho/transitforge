@@ -4,6 +4,7 @@ import { failedAgentToolResult, successfulAgentToolResult } from "@raiquora/agen
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { applyTripProposal, type Trip } from "@raiquora/trip/trip";
 import { parsePublicCostProposal, type PublicCostProposal } from "@raiquora/trip/public-cost-proposal";
+import { bindRelativeSchedule } from "@raiquora/trip/itinerary-schedule";
 export function registerCostProposalTool(tools: AgentToolRegistry, trip: Trip, publish: (proposal: PublicCostProposal) => void, now = () => new Date()) {
   const base = structuredClone(trip);
   tools.register<Record<string, unknown>, unknown>({ ...costForecastDescriptor,
@@ -14,7 +15,8 @@ export function registerCostProposalTool(tools: AgentToolRegistry, trip: Trip, p
           tripId: base.id, baseRevision: base.revision, generatedAt: now().toISOString(), items: input.items,
         } }] });
         const unknownBasis = !base.request.party || base.request.party.source === "assumption" ||
-          (!base.request.constraints.some(c => ["dates", "duration"].includes(c.requirement.type)) && base.items.every(i => i.schedule.type === "unscheduled"));
+          (!base.request.constraints.some(c => ["dates", "duration"].includes(c.requirement.type)) && base.items.every(i =>
+            i.schedule.type === "unscheduled" || i.schedule.type === "relative" && (!base.timeline || !bindRelativeSchedule(i.schedule, base.timeline))));
         if (unknownBasis && proposal.patches[0].forecast.items.some(item => item.amount !== undefined && !item.assumptions.length)) throw new Error("Missing assumptions");
         applyTripProposal(base, proposal); publish(proposal);
         return successfulAgentToolResult({ proposed: true, saved: false, confirmationRequired: true, description: "AIによる概算です。予約価格や価格保証ではありません。ユーザー編集は保持します。" });

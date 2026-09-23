@@ -26,6 +26,7 @@ export function areaScheduleOverlap(schedule: ItinerarySchedule, start: number, 
       // Every legal placement must intersect, not merely the earliest placement.
       return a + duration * 60000 > start && b - duration * 60000 < end ? "definite" : "possible";
     }
+    case "relative": return "unknown";
   }
 }
 export function forecastCoversSchedule(schedule: ItinerarySchedule, hours: readonly number[]): boolean {

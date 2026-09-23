@@ -24,7 +24,7 @@ describe("minimal Trip V2", () => {
     expect(() => createTrip(id, "旅", at, [item])).toThrow();
   });
   it.each([
-    { id: "session-not-a-uuid" }, { schemaVersion: 3 }, { revision: -1 }, { revision: 0.5 },
+    { id: "session-not-a-uuid" }, { schemaVersion: 4 }, { revision: -1 }, { revision: 0.5 },
     { createdAt: "2026-02-30T00:00:00Z" }, { updatedAt: "2025-01-01T00:00:00Z" }, { journeys: [] },
   ])("rejects invalid metadata / unknown schema keys: %j", (override) => {
     expect(() => validateTrip({ ...createTrip(id, "旅", at), ...override } as Trip)).toThrow();

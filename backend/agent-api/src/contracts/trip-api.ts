@@ -1,4 +1,4 @@
-import { validateTrip, type Trip, type TripUpdateProposal } from "@raiquora/trip/trip";
+import { decodeTrip, type Trip, type TripUpdateProposal } from "@raiquora/trip/trip";
 
 export const tripApiVersion = "trip-api-v1";
 export const tripApiLimits = { bodyBytes: 256 * 1024, items: 100, constraints: 100, assumptions: 100, stringLength: 4096, arrayLength: 1000, depth: 32 } as const;
@@ -16,10 +16,15 @@ export function conversationIdentifier(value: unknown): asserts value is string 
 export function boundedTrip(value: unknown): Trip {
   checkBounds(value);
   try {
-    const trip = value as Trip;
+    const raw = value as { items?: unknown[]; request?: { constraints?: unknown[]; assumptions?: unknown[] } };
+    if (Array.isArray(raw.items) && raw.items.length > tripApiLimits.items ||
+        Array.isArray(raw.request?.constraints) && raw.request!.constraints!.length > tripApiLimits.constraints ||
+        Array.isArray(raw.request?.assumptions) && raw.request!.assumptions!.length > tripApiLimits.assumptions) {
+      throw new TripResourceError("payload-too-large");
+    }
+    const trip = decodeTrip(value);
     if (!Array.isArray(trip?.items) || !Array.isArray(trip.request?.constraints) || !Array.isArray(trip.request?.assumptions)) throw new Error();
     if (trip.items.length > tripApiLimits.items || trip.request.constraints.length > tripApiLimits.constraints || trip.request.assumptions.length > tripApiLimits.assumptions) throw new TripResourceError("payload-too-large");
-    validateTrip(trip);
     if (Buffer.byteLength(JSON.stringify(trip), "utf8") > tripApiLimits.bodyBytes) throw new TripResourceError("payload-too-large");
     return structuredClone(trip);
   } catch (error) {

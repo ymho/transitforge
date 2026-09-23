@@ -8,6 +8,7 @@ import { activityPreview } from "../../usecases/trip-plan/activity-preview";
 import { itineraryScheduleLabel } from "../../usecases/trip-plan/itinerary-schedule-label";
 import { tripPartyView } from "../../usecases/trip-plan/trip-party-presentation";
 import { tripPlacesPreview } from "../../usecases/trip-plan/trip-places-preview";
+import { projectDailyItinerary } from "@raiquora/trip/daily-itinerary";
 
 export const assumptionFieldLabels = { schedule: "日時", place: "場所", selection: "採用内容" } as const;
 export const planningLabels = { inspiration: "旅のイメージ", candidate_discovery: "候補を探す", candidate_selection: "候補を比較",
@@ -22,7 +23,7 @@ export function itineraryItemCopy(item: ItineraryItem): string {
 export function itineraryDay(item: ItineraryItem): string {
   const s = item.schedule;
   return s.type === "fixed" ? s.startAt.at.slice(0, 10) : s.type === "window" ? s.earliestStart.at.slice(0, 10)
-    : s.type === "day" ? s.date : "日時未定";
+    : s.type === "day" ? s.date : s.type === "relative" ? s.dayId : "日時未定";
 }
 export function itemAssumptions(trip: Trip, itemId: string): { field: string; text: string }[] {
   return trip.request.assumptions.filter((a) => a.status === "unconfirmed").flatMap((a) => a.affects.flatMap((r) =>
@@ -34,17 +35,20 @@ export function assumptionTarget(a: PlanAssumption, trip: Trip): string {
 }
 export function tripWorkspaceProjection(trip: Trip) {
   validateTrip(trip);
-  const days = new Map<string, ItineraryItem[]>();
-  for (const item of trip.items) {
-    const day = itineraryDay(item);
-    if (!days.has(day)) days.set(day, []);
-    days.get(day)!.push(item);
-  }
-  // Do not silently reorder a user's itinerary by date. Unscheduled is explicitly separate.
-  const unscheduled = days.get("日時未定");
-  if (unscheduled) { days.delete("日時未定"); days.set("日時未定", unscheduled); }
+  const daily = projectDailyItinerary(trip, { limit: 90 });
+  const byId = new Map(trip.items.map((item) => [item.id, item]));
+  const legacyBuckets = new Map<string, ItineraryItem[]>();
+  for (const item of trip.items) { const key = itineraryDay(item); const bucket = legacyBuckets.get(key) ?? []; bucket.push(item); legacyBuckets.set(key, bucket); }
+  const unscheduledLegacy = legacyBuckets.get("日時未定");
+  if (unscheduledLegacy) { legacyBuckets.delete("日時未定"); legacyBuckets.set("日時未定", unscheduledLegacy); }
+  const days: [string, ItineraryItem[]][] = [...legacyBuckets];
+  const dayEntries: [string, { item: ItineraryItem; entryKey: string; sourceItemId: string }[], string][] = daily.days.map((day) => [day.dayKey,
+    day.entries.flatMap((entry) => { const item = byId.get(entry.sourceItemId); return item ? [{ item, entryKey: entry.entryKey, sourceItemId: entry.sourceItemId }] : []; }), day.label]);
+  if (daily.unscheduled.length) dayEntries.push(["unscheduled", daily.unscheduled.flatMap((entry) => {
+    const item = byId.get(entry.sourceItemId); return item ? [{ item, entryKey: entry.entryKey, sourceItemId: entry.sourceItemId }] : [];
+  }), "日時未定"]);
   return { title: trip.title, places: tripPlacesPreview(trip), party: tripPartyView(trip)?.text ?? "今回の人数は未確認",
-    state: `${planningLabels[trip.planningState]} / ${lifecycleLabels[trip.lifecycleState]}`, days: [...days],
+    state: `${planningLabels[trip.planningState]} / ${lifecycleLabels[trip.lifecycleState]}`, days, dayEntries, dailyCoverage: daily.coverage,
     assumptions: trip.request.assumptions.filter((a) => a.status === "unconfirmed").map((a) => ({ id: a.id, text: a.text, target: assumptionTarget(a, trip) })) };
 }
 
@@ -81,6 +85,7 @@ function requirementCopy(r: TripRequirement): string {
     case "depart_after": case "arrive_by": return `${r.place.name} ${r.at.at} ${r.at.timeZone} ${r.type === "arrive_by" ? "までに到着" : "以降に出発"}`;
     case "experience": return `${r.intent === "avoid" ? "避ける" : r.intent === "must" ? "必ず体験" : "体験したい"}: ${r.text}`;
     case "pace": return `ペース ${r.value}（0: ゆっくり〜1: 活発）`;
+    case "aggregate_metric": return `${r.metric} の日別合計 ${r.maximum}以下`;
     case "relative_distance": return `${r.comparedCandidateIds.join(" / ")}より${r.direction === "nearer" ? "近く" : "遠く"}`;
     case "adventure": return `冒険の強さ ${r.intensity} / 避けるリスク: ${r.avoidedRisks.join("・") || "指定なし"}`;
     case "mobility": return `移動条件 ${Object.entries(r).filter(([key]) => key !== "type").map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join("・") : value}`).join(" / ")}`;

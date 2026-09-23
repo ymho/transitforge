@@ -151,6 +151,9 @@ export function buildAgentDecisionContext(
     projectedTrip.scheduleTruncated = currentTrip.scheduleTruncated === true || currentTrip.schedule.length > projectedTrip.schedule.length;
   }
   if (projectedTrip && currentTrip?.itineraryPlaces) Object.assign(projectedTrip, compactTripPlaces(currentTrip, 20));
+  if (projectedTrip) for (const key of ["dailyItinerary", "tripStructure", "workload"] as const) {
+    const value = currentTrip?.[key]; if (value && typeof value === "object") projectedTrip[key] = boundedUnknownRecord(value as Record<string, unknown>, 8);
+  }
   const decision = parseAgentDecisionSummary(input?.currentTurnDecision);
   const reservations = input?.reservations
     ? reservationContext(input.reservations.status === "available" ? input.reservations.facts : undefined)
@@ -433,6 +436,9 @@ function compactCurrentTrip(
     ...(Array.isArray(value.schedule)
       ? { schedule: value.schedule.slice(0, maximumScheduleItems), scheduleTruncated: value.schedule.length > maximumScheduleItems || value.scheduleTruncated === true }
       : {}),
+    ...(value.dailyItinerary && typeof value.dailyItinerary === "object" ? { dailyItinerary: boundedUnknownRecord(value.dailyItinerary as Record<string, unknown>, 8) } : {}),
+    ...(value.tripStructure && typeof value.tripStructure === "object" ? { tripStructure: boundedUnknownRecord(value.tripStructure as Record<string, unknown>, 8) } : {}),
+    ...(value.workload && typeof value.workload === "object" ? { workload: boundedUnknownRecord(value.workload as Record<string, unknown>, 8) } : {}),
   };
 }
 

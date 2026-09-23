@@ -1,6 +1,7 @@
 import type { Trip, TripUpdateProposal } from "./trip";
 import { assessTripTime, type TripClock } from "./trip-temporal";
 import { exactKeys, validInstant } from "./snapshot-validation";
+import { bindRelativeSchedule } from "./itinerary-schedule";
 
 /** User intent only; neither a feasibility certificate nor a booking/execution fact. */
 export interface TripAdoption { readonly confirmedAt: string; readonly needsReconfirmation?: true; }
@@ -16,9 +17,10 @@ export function validateTripAdoption(value: TripAdoption): void {
 /** Exact preview confirmation is supplied separately by a trusted interaction host. */
 export function tripAdoptionConfirmationKey(proposal: TripUpdateProposal): string { return JSON.stringify(proposal); }
 
-export function canConfirmTrip(trip: Pick<Trip, "items" | "lifecycleState">): boolean {
+export function canConfirmTrip(trip: Pick<Trip, "items" | "lifecycleState" | "timeline">): boolean {
   return !["cancelled", "completed"].includes(trip.lifecycleState) && trip.items.length > 0 &&
-    trip.items.every(({ schedule }) => schedule.type !== "unscheduled" && (schedule.type !== "day" || !!schedule.timeZone));
+    trip.items.every(({ schedule }) => schedule.type !== "unscheduled" && (schedule.type !== "day" || !!schedule.timeZone) &&
+      (schedule.type !== "relative" || !!trip.timeline && !!bindRelativeSchedule(schedule, trip.timeline)));
 }
 
 /** Compare plan semantics, not copy or explanatory labels. Prices/notes in separate resources do not invalidate intent. */
@@ -58,7 +60,9 @@ export function classifyTrips(trips: readonly Trip[], clock: TripClock): Classif
       return `${part("year")}-${part("month")}-${part("day")}:${new Date(instant.at).toISOString()}`;
     }
     // Day precision has no departure instant; stable calendar ordering, not invented midnight.
-    return schedule.type === "day" ? schedule.date : "~";
+    if (schedule.type === "day") return schedule.date;
+    if (schedule.type === "relative" && trip.timeline) return bindRelativeSchedule(schedule, trip.timeline)?.date ?? "~";
+    return "~";
   }).sort()[0] ?? "~";
   rows.sort((a, b) => key(a.trip).localeCompare(key(b.trip)) || a.trip.id.localeCompare(b.trip.id));
   const next = rows.find((row) => row.group === "scheduled");
