@@ -18,4 +18,11 @@ describe("response wire contract", () => {
       unresolvedFacts: ["confirmation"], reasonCodes: ["user_confirmation_required"], missingRequirements: [] };
     expect(invalidResponseContract(ask, [])).toBe("decision_missing_requirement_mismatch");
   });
+  it("rejects an invalid strict final envelope but preserves observable native toolUse", () => {
+    const invalidFinal = response('{"responseText":"案です"}'); invalidFinal.decisionSummaryStatus = "invalid";
+    expect(invalidResponseContract(invalidFinal, [])).toBe("invalid_decision_summary");
+    const native: AgentModelResponse = { message: { role: "assistant", content: [{ type: "tool_call", toolCallId: "call", name: "search_direct_routes", input: {} }] },
+      stopReason: "tool_calls", metadata: { provider: "test" }, decisionSummaryStatus: "invalid" };
+    expect(invalidResponseContract(native, ["search_direct_routes"])).toBeUndefined();
+  });
 });

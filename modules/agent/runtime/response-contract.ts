@@ -26,6 +26,10 @@ export function invalidResponseContract(response: AgentModelResponse, toolNames:
         visible.startsWith(`{"name":"${name}"`) || visible.startsWith(`{ "name": "${name}"`)) return "tool_text_envelope";
   }
   const decision = response.decisionSummary ? semanticDecisionFromSummary(response.decisionSummary) : undefined;
+  // Native toolUse and a separately validated in-trip plan have observable typed
+  // semantics. A final text response with an invalid strict envelope has neither
+  // and must be repaired before any legacy presentation parser can see it.
+  if (!native && response.decisionSummaryStatus === "invalid" && !response.declaredInTripAnswerPlan) return "invalid_decision_summary";
   if (!native && decision?.action === "use_tool") return "missing_native_tool_use";
   if (native && decision && decision.action !== "use_tool") return "decision_action_mismatch";
   if (native && decision?.action === "use_tool" && nativeCalls.some((call) => call.name !== decision.toolName)) return "decision_tool_mismatch";
