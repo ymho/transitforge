@@ -57,7 +57,7 @@ const structuredPresentationSchema = {
   ],
 };
 
-export const agentTurnOutputContract = outputContract("agent_turn_result", "1", {
+const agentTurnOutputSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
@@ -106,7 +106,24 @@ export const agentTurnOutputContract = outputContract("agent_turn_result", "1", 
       presentation: { type: "string", enum: ["planned-itinerary", "rail-impact", "environment-impact", "reservation", "location-permission", "uncertainty", "external-result"] },
     }, required: ["evidenceId", "presentation"] },
   },
-}, "Semantic decision and user-visible response");
+};
+
+export const agentTurnOutputContract = outputContract(
+  "agent_turn_result",
+  "1",
+  agentTurnOutputSchema,
+  "Semantic decision and user-visible response",
+);
+
+/** Final answers backed by retrieved place sources must carry the typed
+ * presentation that Application validates and renders. Native toolUse responses
+ * are unaffected because Bedrock does not apply the final text schema to them. */
+export const agentTurnPresentationOutputContract = outputContract(
+  "agent_turn_result",
+  "2",
+  { ...agentTurnOutputSchema, required: ["responseText", "presentation", "decision"] },
+  "Semantic decision and required Evidence-bound presentation",
+);
 
 export interface DecodedAgentTurnOutput {
   responseText: string;
