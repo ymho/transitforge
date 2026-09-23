@@ -246,7 +246,7 @@ export class MultiStepAgentRuntime {
           messages.push({ role: "user", content: [{ type: "text", text: invalidReferences
             ? `${responseContractRepairInstruction}\n使用可能なEvidence ID: ${JSON.stringify(evidence.slice(0, 20).map((item) => item.id))}。候補ID・Trip item IDはEvidence IDではありません。0件なら事実を引用せず、必要なToolで根拠を取得してください。`
             : outputContract.schemaHash === agentTurnPresentationOutputContract.schemaHash
-              ? `${responseContractRepairInstruction}\n現在のagent_turn_result@2ではtop-level presentationが必須です。responseTextへ旅程JSONを入れず、提示済みschemaに従うtravel-planまたはsource-explanation objectをpresentationへ設定してください。`
+              ? `${responseContractRepairInstruction}\n現在のagent_turn_result@3ではtop-level presentationが必須です。responseTextへ旅程JSONを入れず、提示済みschemaに従うtravel-planまたはsource-explanation objectをpresentationへ設定してください。`
               : responseContractRepairInstruction }] });
           iterations++;
           trace.replanDecided(true, invalidContract, decisionBoundary);

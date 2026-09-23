@@ -1,4 +1,5 @@
 import type { Evidence } from "./evidence-model";
+import { stableContractHash } from "./output-contract";
 import type { ToolEvidenceContext } from "./tool-evidence-registry";
 import type { TravelApplicabilityFact } from "./travel-applicability";
 
@@ -10,7 +11,7 @@ export function externalTravelEvidence(output: unknown, context: Pick<ToolEviden
     if (!isRecord(raw) || raw.kind !== "accommodation" || typeof raw.provider !== "string" ||
         typeof raw.providerItemId !== "string" || typeof raw.name !== "string") return [];
     const subjectKey = `accommodation:${encodeURIComponent(raw.provider)}:${encodeURIComponent(raw.providerItemId)}`;
-    const observationId = `observation:${identity}:${subjectKey}`;
+    const observationId = boundedEvidenceId(`observation:${identity}:${subjectKey}`);
     return [{ id: observationId,
       category: "external" as const, knowledgeKind: "deterministic_fact" as const, subject: raw.name,
       facts: { resultKind: "accommodation", name: raw.name, status: "available", freshness: "fresh", provider: raw.provider, providerItemId: raw.providerItemId, availability: raw.availability === "available" ? "available" : "unknown" },
@@ -28,7 +29,7 @@ export function externalTravelEvidence(output: unknown, context: Pick<ToolEviden
   const evidence: Evidence[] = information.evidence.slice(0, 8).flatMap((raw) => {
     if (!isRecord(raw) || typeof raw.id !== "string" || typeof raw.provider !== "string") return [];
     const subjectKey = subjectKeyFor(information, raw);
-    const observationId = `observation:${identity}:${encodeURIComponent(raw.id)}`;
+    const observationId = boundedEvidenceId(`observation:${identity}:${encodeURIComponent(raw.id)}`);
     return [{
       id: observationId,
       category: "external" as const,
@@ -56,16 +57,19 @@ export function externalTravelEvidence(output: unknown, context: Pick<ToolEviden
   });
   // An unsuccessful acquisition is a known Tool outcome, not a verified weather/hazard fact.
   // Never fabricate Provider Evidence, or turn an external observation into a saved TripImpact.
-  if (resultKind && evidence.length === 0) evidence.push({
-    id: `application:external-result:${resultKind}:${identity}`,
-    category: "external", knowledgeKind: "deterministic_fact", subject: resultKind === "weather" ? "天気情報の取得結果" : "防災情報の取得結果",
-    facts: { resultKind, status: "unconfirmed", freshness: "unknown" },
-    references: [{ sourceType: "external-source", sourceRef: `application://external-result/v1/${resultKind}`,
-      retrievedAt: context.retrievedAt, freshness: "unknown", summary: "Toolの取得結果。外部事実の確認はできていない" }],
-    observation: { observationId: `application:external-result:${resultKind}:${identity}`,
-      subjectKey: `application:external-result:${resultKind}`, scopeKey: identity, predicate: `${resultKind}_retrieval`,
-      retrievedAt: context.retrievedAt, applicability: "unknown", state: "current", retention: "reference_only" },
-  });
+  if (resultKind && evidence.length === 0) {
+    const observationId = boundedEvidenceId(`application:external-result:${resultKind}:${identity}`);
+    evidence.push({
+      id: observationId,
+      category: "external", knowledgeKind: "deterministic_fact", subject: resultKind === "weather" ? "天気情報の取得結果" : "防災情報の取得結果",
+      facts: { resultKind, status: "unconfirmed", freshness: "unknown" },
+      references: [{ sourceType: "external-source", sourceRef: `application://external-result/v1/${resultKind}`,
+        retrievedAt: context.retrievedAt, freshness: "unknown", summary: "Toolの取得結果。外部事実の確認はできていない" }],
+      observation: { observationId,
+        subjectKey: `application:external-result:${resultKind}`, scopeKey: identity, predicate: `${resultKind}_retrieval`,
+        retrievedAt: context.retrievedAt, applicability: "unknown", state: "current", retention: "reference_only" },
+    });
+  }
   return evidence;
 }
 
@@ -91,6 +95,11 @@ function applicabilityFacts(information: Record<string, unknown>, raw: Record<st
 function contextIdentity(context: Pick<ToolEvidenceContext, "retrievedAt"> & Partial<ToolEvidenceContext>): string {
   return [context.executionId ?? "direct", context.toolCallId ?? "call", context.toolName ?? "external", context.queryFingerprint ?? "unscoped"]
     .map((value) => encodeURIComponent(value)).join(":");
+}
+/** Decision and in-trip reference contracts admit Evidence IDs up to 160 chars. Keep
+ * useful stable context while hashing only identities that would cross that boundary. */
+function boundedEvidenceId(value: string): string {
+  return value.length <= 160 ? value : `${value.slice(0, 95)}:${stableContractHash(value)}`;
 }
 function subjectKeyFor(information: Record<string, unknown>, raw: Record<string, unknown>): string {
   if (isRecord(information.data) && Array.isArray(information.data.places)) {

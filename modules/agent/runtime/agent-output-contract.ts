@@ -35,9 +35,8 @@ const structuredPresentationSchema = {
                   type: "object", additionalProperties: false,
                   properties: {
                     period: { type: "string", enum: ["morning", "afternoon", "evening", "day", "unscheduled"] },
-                    activity: { type: "string", enum: ["arrival_and_local_lunch", "visit_featured_place", "leisurely_walk", "cafe_break", "check_in_and_rest", "local_dinner", "quiet_morning", "visit_nearby", "souvenir_and_departure", "stay_and_relax"] },
-                    title: { type: "string" }, kind: { type: "string", enum: ["transport", "stay", "activity", "free-time"] }, sourceRef: { type: "string" },
-                  }, required: ["period"],
+                    title: { type: "string", minLength: 1, maxLength: 300 }, kind: { type: "string", enum: ["transport", "stay", "activity", "free-time"] }, sourceRef: { type: "string", minLength: 1, maxLength: 300 },
+                  }, required: ["period", "title", "kind"],
                 } },
               }, required: ["day", "activities"],
             } },
@@ -75,7 +74,7 @@ const agentTurnOutputSchema = {
         unresolvedFacts: { type: "array", items: { type: "string" }, maxItems: 8 },
         reasonCodes: { type: "array", items: { type: "string" }, maxItems: 6 },
         replanReason: { type: "string", enum: ["tool_result_received", "tool_failed", "evidence_insufficient", "constraint_conflict", "new_information"] },
-        usedEvidenceIds: { type: "array", items: { type: "string" }, maxItems: 10 },
+        usedEvidenceIds: { type: "array", items: { type: "string", minLength: 1, maxLength: 160 }, maxItems: 10 },
         inTripAnswerPlan: { type: "object", additionalProperties: false, properties: {
           evidence: { type: "array", minItems: 1, maxItems: 6, items: { $ref: "#/$defs/inTripReference" } },
         }, required: ["evidence"] },
@@ -120,7 +119,7 @@ export const agentTurnOutputContract = outputContract(
  * are unaffected because Bedrock does not apply the final text schema to them. */
 export const agentTurnPresentationOutputContract = outputContract(
   "agent_turn_result",
-  "2",
+  "3",
   { ...agentTurnOutputSchema, required: ["responseText", "presentation", "decision"] },
   "Semantic decision and required Evidence-bound presentation",
 );
