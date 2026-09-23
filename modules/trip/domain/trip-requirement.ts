@@ -26,6 +26,8 @@ export type TripRequirement =
   | MobilityRequirement
   | { readonly type: "experience"; readonly intent: "prefer" | "must" | "avoid"; readonly text: string; readonly preference?: TravelPreference; readonly weight?: number }
   | { readonly type: "pace"; readonly value: number }
+  | { readonly type: "aggregate_metric"; readonly metric: "travel_minutes" | "walking_minutes" | "transfer_count";
+      readonly aggregation: "sum"; readonly maximum: number }
   | { readonly type: "relative_distance"; readonly direction: NonNullable<TripContext["relativeDistancePreference"]>; readonly comparedCandidateIds: readonly string[] }
   | { readonly type: "adventure"; readonly intensity: NonNullable<TripContext["adventureIntensity"]>; readonly avoidedRisks: NonNullable<TripContext["avoidedRisks"]> };
 
@@ -81,6 +83,10 @@ export function validateTripRequirement(value: TripRequirement): void {
           (value.preference !== undefined && !Object.hasOwn(travelPreferenceLabels, value.preference)) ||
           (value.weight !== undefined && !unitValue(value.weight))) throw new Error("Invalid experience requirement"); return;
     case "pace": exactKeys(value, ["type", "value"]); if (!unitValue(value.value)) throw new Error("Invalid pace"); return;
+    case "aggregate_metric":
+      exactKeys(value, ["type", "metric", "aggregation", "maximum"]);
+      if (!["travel_minutes", "walking_minutes", "transfer_count"].includes(value.metric) || value.aggregation !== "sum" ||
+          !Number.isSafeInteger(value.maximum) || value.maximum < 0 || value.maximum > 525_600) throw new Error("Invalid aggregate metric"); return;
     case "relative_distance":
       exactKeys(value, ["type", "direction", "comparedCandidateIds"]);
       if (!["nearer", "farther"].includes(value.direction)) throw new Error("Invalid relative distance");

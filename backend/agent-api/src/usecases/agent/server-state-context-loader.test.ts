@@ -90,7 +90,8 @@ describe("Server State Context Loader", () => {
     const f = setup(); await f.trips.repository.create(a, trip());
     for (const references of [{}, { tripId }]) {
       const context = await f.load({ principal: a, ...references, uiContext: { itemId: "unknown", tab: "private-tab", scroll: 100, camera: "private-camera" } as never });
-      expect(context.featureContext).toBeUndefined(); expect(JSON.stringify(context)).not.toMatch(/private-tab|private-camera|unknown/);
+      expect(context.featureContext).toBeUndefined();
+      expect(JSON.stringify(context)).not.toMatch(/private-tab|private-camera|"itemId":"unknown"/);
     }
     await expect(f.load({ principal: a, tripId, uiContext: { itemId: "x".repeat(201) } })).rejects.toMatchObject({ code: "invalid-input" });
     await expect(f.load({ principal: a, tripId, uiContext: { calendarDate: "2026-02-30" } })).rejects.toMatchObject({ code: "invalid-input" });

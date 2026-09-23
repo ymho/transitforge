@@ -115,6 +115,8 @@ TypeScriptのテストは対象モジュールの隣へ置く。repository保守
 
 旅行機能の設計は [Trip V2契約](docs/architecture/trip-lifecycle.md)を参照する。Tripは会話と独立した
 Server V2 resourceであり、Browserにlegacy TravelPlan/TripPlanのwriterやmigration原本は残さない。
+[相対時間・日別投影・旅行構造・負荷契約](docs/architecture/trip-time-structure-workload.md)は、日付未定の意図を
+Tripへ保持しつつ、日別表示と負荷を`Trip.items`からrevision-boundに導出する。
 
 #388の[Trip server保存基盤](docs/architecture/trip-server-persistence.md)はowner-scoped Repositoryと
 認証済み公開Trip CRUDを提供する。CAS/冪等性はServer V2 writerで適用し、Browserのlegacy writerへ戻さない。

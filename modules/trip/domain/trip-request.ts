@@ -15,9 +15,17 @@ export interface TripConstraint {
   readonly strength: "hard" | "soft";
   readonly source: "user" | "profile" | "assumption" | "legacy";
   readonly assumptionId?: string;
-  readonly scope: { readonly type: "trip" } | { readonly type: "item"; readonly itemId: string };
+  readonly scope: ConstraintScope;
   readonly requirement: TripRequirement;
 }
+export type ConstraintScope = (
+  | { readonly type: "trip" }
+  | { readonly type: "item"; readonly itemId: string }
+  | { readonly type: "item-set"; readonly itemIds: readonly string[] }
+  | { readonly type: "logical-day"; readonly logicalDayId: string }
+  | { readonly type: "all-days" }
+  | { readonly type: "segment"; readonly segmentId: string }
+) & { readonly participantIds?: readonly string[] };
 export interface PlanAssumption {
   readonly id: string;
   readonly text: string;
@@ -31,7 +39,9 @@ export interface PlanAssumption {
 }
 
 /** Request plus its aggregate references are validated together, not in a separate repository. */
-export function validateTripRequest(request: TripRequest, items: readonly ItineraryItem[]): void {
+export function validateTripRequest(request: TripRequest, items: readonly ItineraryItem[], refs: {
+  readonly logicalDayIds?: ReadonlySet<string>; readonly segmentIds?: ReadonlySet<string>; readonly participantIds?: ReadonlySet<string>;
+} = {}): void {
   exactKeys(request, ["goal", "constraints", "assumptions", "party"]);
   if ((request.goal !== undefined && !nonemptyText(request.goal)) || !Array.isArray(request.constraints) || !Array.isArray(request.assumptions)) throw new Error("Invalid Trip request");
   uniqueIds(request.constraints); uniqueIds(request.assumptions);
@@ -47,9 +57,19 @@ export function validateTripRequest(request: TripRequest, items: readonly Itiner
   for (const c of request.constraints) {
     exactKeys(c, ["id", "strength", "source", "assumptionId", "scope", "requirement"]);
     if (!["hard", "soft"].includes(c.strength) || !["user", "profile", "assumption", "legacy"].includes(c.source)) throw new Error("Invalid constraint source/strength");
-    exactKeys(c.scope, c.scope?.type === "trip" ? ["type"] : ["type", "itemId"]);
+    const keys = c.scope?.type === "item" ? ["type", "itemId", "participantIds"] : c.scope?.type === "item-set" ? ["type", "itemIds", "participantIds"]
+      : c.scope?.type === "logical-day" ? ["type", "logicalDayId", "participantIds"] : c.scope?.type === "segment" ? ["type", "segmentId", "participantIds"]
+        : ["type", "participantIds"];
+    exactKeys(c.scope, keys);
     const scope = c.scope;
-    if (scope.type !== "trip" && (scope.type !== "item" || !items.some(({ id }) => id === scope.itemId))) throw new Error("Missing constraint item");
+    const itemIds = new Set(items.map(({ id }) => id));
+    if (scope.type === "item" && !itemIds.has(scope.itemId) || scope.type === "item-set" && (!Array.isArray(scope.itemIds) || !scope.itemIds.length ||
+        new Set(scope.itemIds).size !== scope.itemIds.length || scope.itemIds.some((id: string) => !itemIds.has(id))) ||
+      scope.type === "logical-day" && refs.logicalDayIds !== undefined && !refs.logicalDayIds.has(scope.logicalDayId) ||
+      scope.type === "segment" && refs.segmentIds !== undefined && !refs.segmentIds.has(scope.segmentId) ||
+      !["trip", "item", "item-set", "logical-day", "all-days", "segment"].includes(scope.type)) throw new Error("Missing constraint scope");
+    if (scope.participantIds !== undefined && (!Array.isArray(scope.participantIds) || !scope.participantIds.length ||
+        new Set(scope.participantIds).size !== scope.participantIds.length || refs.participantIds !== undefined && scope.participantIds.some((id: string) => !refs.participantIds!.has(id)))) throw new Error("Missing constraint participant");
     validateTripRequirement(c.requirement);
     if (c.source === "assumption" && !c.assumptionId) throw new Error("Assumption source requires a reference");
     if (c.assumptionId !== undefined) {
@@ -106,7 +126,8 @@ function unresolvedField(item: ItineraryItem, field: "schedule" | "place" | "sel
 /** Active does NOT mean confirmed. Callers must retain assumptionId/status in search context. */
 export function effectiveTripConstraints(request: TripRequest, itemId?: string): TripConstraint[] {
   const eligible = request.constraints.filter((c) =>
-    (itemId === undefined || c.scope.type === "trip" || c.scope.itemId === itemId) &&
+    (itemId === undefined || c.scope.type === "trip" || c.scope.type === "all-days" ||
+      c.scope.type === "item" && c.scope.itemId === itemId || c.scope.type === "item-set" && c.scope.itemIds.includes(itemId)) &&
     (c.assumptionId === undefined || request.assumptions.some((a) => a.id === c.assumptionId && a.status !== "rejected")));
   return eligible.flatMap((c) => {
     if (c.source !== "profile" && !(c.assumptionId && request.assumptions.find(({ id }) => id === c.assumptionId)?.source === "profile")) return [structuredClone(c)];

@@ -9,6 +9,11 @@ export function itineraryScheduleLabel(schedule: ItinerarySchedule, includeStart
     const date = dayLabel(schedule.date, showYear);
     return `${date}${schedule.endDate ? `〜${dayLabel(schedule.endDate, showYear)}（終了日を含まない）` : ""}${schedule.timeZone ? `（${schedule.timeZone}）` : ""}`;
   }
+  if (schedule.type === "relative") {
+    const part = schedule.part === "morning" ? "午前" : schedule.part === "afternoon" ? "午後" : schedule.part === "evening" ? "夕方" : schedule.part === "overnight" ? "夜間" : "時間帯未定";
+    const duration = schedule.durationMinutes ? ` / ${schedule.durationMinutes.minimum}〜${schedule.durationMinutes.maximum}分` : "";
+    return `${schedule.dayId}${schedule.endDayId ? `〜${schedule.endDayId}` : ""} ${part}${duration}`;
+  }
   const start = schedule.type === "fixed" ? schedule.startAt : schedule.earliestStart;
   const end = schedule.type === "fixed" ? schedule.endAt : schedule.latestEnd;
   const showDates = includeStartDate || end !== undefined && start.at.slice(0, 10) !== end.at.slice(0, 10);

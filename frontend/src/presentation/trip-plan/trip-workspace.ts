@@ -201,21 +201,22 @@ export function configureTripWorkspace(options: {
     if (mapKey !== nextMapKey) { mapKey = nextMapKey; mapPanel.replaceChildren(renderTripMap(trip, options.showMap, controller.focus)); }
     assumptions.replaceChildren(...view.assumptions.map((a) => element("p", "trip-workspace-assumption", `⚠ 仮置き（${a.target}）: ${a.text}`)));
     const ids = new Set<string>(), dates = new Set<string>();
-    for (const [date, items] of view.days) {
-      dates.add(date);
+    const dayLabels = new Map<string, string>();
+    for (const [date, entries, label] of view.dayEntries) {
+      dates.add(date); dayLabels.set(date, label);
       let group = groups.get(date);
-      if (!group) { group = element("section", "trip-workspace-day"); group.append(element("h2", "", date)); groups.set(date, group); }
+      if (!group) { group = element("section", "trip-workspace-day"); group.append(element("h2", "", label)); groups.set(date, group); }
       if (days.children[[...dates].length - 1] !== group) days.insertBefore(group, days.children[[...dates].length - 1] ?? null);
-      items.forEach((item, index) => {
-        ids.add(item.id);
+      entries.forEach(({ item, entryKey }, index) => {
+        ids.add(entryKey);
         const key = JSON.stringify([item, itemAssumptions(trip, item.id), controller.reservations()?.filter((r) => r.itineraryItemId === item.id), evaluation.issues.filter((i) => i.itemIds.includes(item.id))]);
-        const collapseKey = `${activeSession}:${trip.id}:${item.id}`;
-        let card = cards.get(item.id);
+        const collapseKey = `${activeSession}:${trip.id}:${entryKey}`;
+        let card = cards.get(entryKey);
         if (card?.key !== key) {
           const node = renderWorkspaceCard(trip, item, controller, { collapsed: collapsed.get(collapseKey) ?? false,
             collapse: (value) => collapsed.set(collapseKey, value), chat, report }, evaluation.issues.filter((i) => i.itemIds.includes(item.id)));
           if (card) card.node.replaceWith(node);
-          card = { node, key }; cards.set(item.id, card);
+          card = { node, key }; cards.set(entryKey, card);
         }
         card.node.classList.toggle("is-focused", controller.uiFocus()?.itemId === item.id);
         refreshMoveTargets(card.node, trip, item.id);
@@ -238,7 +239,7 @@ export function configureTripWorkspace(options: {
     };
     dayTabs.hidden = availableDays.length < 2; dayTabs.replaceChildren();
     availableDays.forEach((date, index) => {
-      const button = control(date, () => applySelectedDay(date)); button.setAttribute("role", "tab"); button.dataset.day = date;
+      const button = control(dayLabels.get(date) ?? date, () => applySelectedDay(date)); button.setAttribute("role", "tab"); button.dataset.day = date;
       button.setAttribute("aria-controls", `trip-day-${index}`); groups.get(date)!.id = `trip-day-${index}`; groups.get(date)!.setAttribute("role", "tabpanel");
       button.addEventListener("keydown", (event) => {
         if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;

@@ -21,6 +21,7 @@ export function recheckEnvelope(schedule: ItinerarySchedule): { start: number; e
     case "day": return { start: Date.parse(`${schedule.date}T00:00:00Z`) - 14 * hour,
       end: Date.parse(`${schedule.endDate ?? addRecheckDays(schedule.date, 1)}T00:00:00Z`) + 14 * hour };
     case "unscheduled": return undefined;
+    case "relative": return undefined;
   }
 }
 /** undefined = ended; unknown schedule is attempted once then handled as unknown/retry, not fetched blindly. */

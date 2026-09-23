@@ -13,12 +13,18 @@ it("keeps requested, actual, summary, candidates and realtime separate in model 
   expect(snapshot.itineraryPlaces?.overnightPlaces.map((p) => p.place.name)).toEqual(["Salzburgの宿"]);
   expect(snapshot.itineraryPlaces?.transportEndpoints[0]?.origin.name).toBe("Vienna");
   expect(snapshot.placesTruncated).toBe(false);
+  expect(snapshot.dailyItinerary?.sourceRevision).toBe(trip.revision);
+  expect(snapshot.tripStructure?.segments.map(({ kind }) => kind)).toContain("stay-base");
+  expect(snapshot.workload?.tripTravelMinutes.completeness).toBe("unknown");
   const context = buildAgentDecisionContext({ executionId: "multi", feature: "concierge", userRequest: "自由時間を追加したい", context: {
     currentTrip: { ...snapshot }, travelCandidates: [{ name: "Paris" }], realtimeFacts: [{ status: "unknown" }],
   } }, []);
   expect(JSON.stringify(context.currentTrip)).not.toMatch(/Zermatt|Paris/);
   expect(JSON.stringify(context.persistedTripRequest)).toContain("Zermatt");
   expect(context.currentTrip).not.toHaveProperty("destination");
+  expect(context.currentTrip).toHaveProperty("dailyItinerary");
+  expect(context.currentTrip).toHaveProperty("tripStructure");
+  expect(context.currentTrip).toHaveProperty("workload");
   expect(context.travelCandidates).toEqual([{ name: "Paris" }]);
   expect(JSON.stringify(context)).not.toContain("source-Zürich");
 });
