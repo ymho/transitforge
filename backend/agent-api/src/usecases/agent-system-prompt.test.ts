@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { agentSystemPrompt } from "./agent-system-prompt.js";
-import { extractAgentDecisionSummary } from "@raiquora/agent/agent-decision-summary";
 
 describe("agentSystemPrompt", () => {
   it("accepts Application Evidence without promoting general Context or requiring questions for unknowns", () => {
@@ -11,9 +10,10 @@ describe("agentSystemPrompt", () => {
     expect(agentSystemPrompt).toContain("質問必須ではありません");
     expect(agentSystemPrompt).not.toContain("Tool Evidenceだけ");
     expect(agentSystemPrompt).toContain('"usedEvidenceIds":[]');
-    const example = agentSystemPrompt.match(/<decision_summary>[\s\S]*?<\/decision_summary>/u)![0];
-    expect(extractAgentDecisionSummary([example]).status).toBe("valid");
-    expect(example).not.toContain("inTripAnswerPlan");
+    expect(agentSystemPrompt).toContain("agent_turn_result JSON Schemaを外側の唯一の形式");
+    expect(agentSystemPrompt).toContain("外側のagent_turn_resultのdecision fieldへ設定");
+    expect(agentSystemPrompt).not.toContain("<decision_summary>");
+    expect(agentSystemPrompt).not.toContain("decision_summaryタグの後");
     expect(agentSystemPrompt).toContain("in_tripのanswerだけで必須");
     expect(agentSystemPrompt).toContain("最大10件、重複なし");
     expect(agentSystemPrompt).toContain("キーごと省略");
