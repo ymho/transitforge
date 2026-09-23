@@ -40,7 +40,10 @@ export class ConversationModelProvider implements AgentModelProvider {
     const decoded = textBlocks.length === 1 ? decodeJsonOutput(textBlocks[0]!, response.metadata.outputMode) : undefined;
     if (decoded) return {
       ...mapped,
-      message: { role: "assistant", content: [{ type: "text", text: decoded.responseText }] },
+      // Structured Evidence-bound presentations are validated and rendered by the
+      // Application. Model-authored responseText cannot override their facts.
+      message: { role: "assistant", content: [{ type: "text", text: decoded.presentation
+        ? JSON.stringify(decoded.presentation) : decoded.responseText }] },
       decisionSummaryStatus: "valid",
       decisionSummary: decoded.decision,
       ...(decoded.decision.usedEvidenceIds ? { declaredEvidenceIds: decoded.decision.usedEvidenceIds } : {}),

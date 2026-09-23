@@ -1,11 +1,68 @@
 import { parseAgentDecisionSummary, type AgentDecisionSummary } from "./agent-decision-summary";
 import { outputContract } from "./output-contract";
 
+const structuredPresentationSchema = {
+  anyOf: [
+    {
+      type: "object", additionalProperties: false,
+      properties: {
+        kind: { const: "source-explanation" },
+        sections: { type: "array", minItems: 1, maxItems: 6, items: {
+          type: "object", additionalProperties: false,
+          properties: {
+            evidenceId: { type: "string" }, quote: { type: "string", maxLength: 400 },
+            mode: { type: "string", enum: ["feature", "comparison", "recommendation"] },
+            preference: { type: "object", additionalProperties: false,
+              properties: { field: { type: "string" }, value: { type: "string" } }, required: ["field", "value"] },
+          }, required: ["evidenceId", "quote", "mode"],
+        } },
+      }, required: ["kind", "sections"],
+    },
+    {
+      type: "object", additionalProperties: false,
+      properties: {
+        kind: { const: "travel-plan" },
+        startDate: { anyOf: [{ type: "string" }, { type: "null" }] },
+        candidates: { type: "array", minItems: 1, maxItems: 3, items: {
+          type: "object", additionalProperties: false,
+          properties: {
+            evidenceId: { type: "string" }, quote: { type: "string", maxLength: 400 }, photoEvidenceId: { type: "string" },
+            itinerary: { type: "array", minItems: 1, maxItems: 90, items: {
+              type: "object", additionalProperties: false,
+              properties: {
+                day: { type: "integer" }, freeDay: { type: "boolean" },
+                activities: { type: "array", maxItems: 24, items: {
+                  type: "object", additionalProperties: false,
+                  properties: {
+                    period: { type: "string", enum: ["morning", "afternoon", "evening", "day", "unscheduled"] },
+                    activity: { type: "string", enum: ["arrival_and_local_lunch", "visit_featured_place", "leisurely_walk", "cafe_break", "check_in_and_rest", "local_dinner", "quiet_morning", "visit_nearby", "souvenir_and_departure", "stay_and_relax"] },
+                    title: { type: "string" }, kind: { type: "string", enum: ["transport", "stay", "activity", "free-time"] }, sourceRef: { type: "string" },
+                  }, required: ["period"],
+                } },
+              }, required: ["day", "activities"],
+            } },
+            estimate: { type: "object", additionalProperties: false,
+              properties: {
+                currency: { const: "JPY" }, partySize: { type: "integer" }, nights: { type: "integer" },
+                originTravel: { type: "string", enum: ["included", "excluded"] },
+                lodgingClass: { type: "string", enum: ["economy", "standard", "premium"] },
+                items: { type: "object", additionalProperties: false,
+                  properties: { transport: { type: "integer" }, accommodation: { type: "integer" }, sightseeing: { type: "integer" }, food: { type: "integer" } },
+                  required: ["transport", "accommodation", "sightseeing", "food"] },
+              }, required: ["currency", "partySize", "nights", "originTravel", "lodgingClass", "items"] },
+          }, required: ["evidenceId", "quote", "itinerary", "estimate"],
+        } },
+      }, required: ["kind", "startDate", "candidates"],
+    },
+  ],
+};
+
 export const agentTurnOutputContract = outputContract("agent_turn_result", "1", {
   type: "object",
   additionalProperties: false,
   properties: {
     responseText: { type: "string", minLength: 1, maxLength: 12_000 },
+    presentation: structuredPresentationSchema,
     decision: {
       type: "object",
       additionalProperties: false,
@@ -54,13 +111,16 @@ export const agentTurnOutputContract = outputContract("agent_turn_result", "1", 
 export interface DecodedAgentTurnOutput {
   responseText: string;
   decision: AgentDecisionSummary;
+  presentation?: Record<string, unknown>;
 }
 
 export function decodeAgentTurnOutput(value: unknown): DecodedAgentTurnOutput | undefined {
-  if (!isRecord(value) || Object.keys(value).some((key) => key !== "responseText" && key !== "decision") ||
+  if (!isRecord(value) || Object.keys(value).some((key) => !["responseText", "decision", "presentation"].includes(key)) ||
     typeof value.responseText !== "string" || !value.responseText.trim() || value.responseText.length > 12_000) return undefined;
   const decision = parseAgentDecisionSummary(value.decision);
-  return decision ? { responseText: value.responseText, decision } : undefined;
+  const presentation = value.presentation;
+  if (presentation !== undefined && (!isRecord(presentation) || !["source-explanation", "travel-plan"].includes(String(presentation.kind)))) return undefined;
+  return decision ? { responseText: value.responseText, decision, ...(presentation ? { presentation } : {}) } : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

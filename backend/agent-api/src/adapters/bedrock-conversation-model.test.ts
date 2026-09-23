@@ -162,18 +162,20 @@ describe("BedrockConversationModel", () => {
     expect(response.metadata.omittedSchemaConstraints).toContain("$.properties.responseText.minLength");
   });
 
-  it("keeps nested presentation JSON inside the responseText string for application strict models", async () => {
+  it("keeps typed presentation JSON inside the outer contract for application strict models", async () => {
     const converse = vi.fn(async (_input: JsonObject) => ({ output: { message: { role: "assistant", content: [{ text: JSON.stringify({
       responseText: JSON.stringify({ kind: "travel-plan", startDate: null, candidates: [] }),
       decision: { interpretedGoal: "旅行案", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["goal_interpreted"] },
     }) }] } }, stopReason: "end_turn" }));
     const model = new BedrockConversationModel({ converse }, { modelId: "unmeasured-model", systemPrompt: "stable-system" });
     await model.converse({ messages: [{ role: "user", content: [{ text: "request" }] }], outputContract: {
-      name: "agent_turn_result", version: "1", schemaHash: "hash", schema: { type: "object", properties: { responseText: { type: "string" } }, required: ["responseText"] },
+      name: "agent_turn_result", version: "1", schemaHash: "hash", schema: { type: "object", properties: {
+        responseText: { type: "string" }, presentation: { type: "object" },
+      }, required: ["responseText"] },
     } });
     const input = converse.mock.calls[0]?.[0];
-    expect(input?.system).toEqual(expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining("そのJSONをresponseTextの文字列値") })]));
-    expect(input?.system).toEqual(expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining("responseTextへobjectを直接設定しない") })]));
+    expect(input?.system).toEqual(expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining("そのobjectをpresentationへ設定") })]));
+    expect(input?.system).toEqual(expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining("responseTextは短い利用者向けラベル") })]));
   });
 
   it.each(["guardrail_intervened", "content_filtered", "refusal"])("classifies %s as refusal", async stopReason => {

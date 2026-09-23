@@ -31,6 +31,15 @@ it("decodes provider/application strict JSON once and never falls through to the
   expect(result.decisionSummaryStatus).toBe("invalid");
   expect(result.message.content).toEqual([{ type: "text", text: '<decision_summary>{"selectedAction":"answer"}</decision_summary>legacy' }]);
 });
+it("forwards a typed presentation to Application validation instead of model-authored prose", async () => {
+  const presentation = { kind: "travel-plan", startDate: null, candidates: [] };
+  const model: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 1, outputMode: "application_strict" },
+    message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: "この文字列は表示しない", presentation,
+      decision: { interpretedGoal: "候補提示", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["goal_interpreted"] } }) }] } }) };
+  const result = await new ConversationModelProvider(model, "turn").generate({ messages: [] });
+  expect(result.message.content).toEqual([{ type: "text", text: JSON.stringify(presentation) }]);
+  expect(result.decisionSummaryStatus).toBe("valid");
+});
 it("passes malformed Evidence reference metadata to the shared runtime rejection policy", async () => {
   const model: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 0 },
     message: { role: "assistant", content: [{ text: '<decision_summary>{"usedEvidenceIds":"invalid"}</decision_summary>回答' }] } }) };

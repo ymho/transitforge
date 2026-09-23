@@ -291,10 +291,14 @@ function promptCachePlan(
 }
 
 function applicationStrictInstruction(contract: NonNullable<ConversationModelRequest["outputContract"]>): string {
+  const hasPresentation = typeof contract.schema.properties === "object" && contract.schema.properties !== null &&
+    Object.hasOwn(contract.schema.properties, "presentation");
   return [
     `出力契約 ${contract.name}@${contract.version} (${contract.schemaHash}) に従い、`,
     "native toolUseを返さない最終応答ではJSON objectだけを返してください。Markdown fenceや説明文を外側へ追加しないでください。",
-    "別の指示が本文をJSONにするよう求める場合も、外側の出力契約を置き換えず、そのJSONをresponseTextの文字列値としてJSON.stringify相当で格納してください。responseTextへobjectを直接設定しないでください。",
+    hasPresentation
+      ? "別の指示がsource-explanationまたはtravel-plan JSONを求める場合も外側の出力契約を置き換えず、そのobjectをpresentationへ設定してください。responseTextは短い利用者向けラベルのstringにしてください。"
+      : "別の指示が本文をJSONにするよう求める場合も、外側の出力契約を置き換えず、そのJSONをresponseTextの文字列値としてJSON.stringify相当で格納してください。responseTextへobjectを直接設定しないでください。",
     `JSON Schema: ${JSON.stringify(contract.schema)}`,
   ].join(" ");
 }
