@@ -21,6 +21,7 @@ import {
 import { AgentToolExecutor, type AgentToolExecution } from "./agent-tool-executor";
 import {
   validateEvidenceAndClaims,
+  mergeEvidenceObservations,
   type AssessedEvidenceClaim,
   type Evidence,
 } from "./evidence-model";
@@ -515,15 +516,14 @@ export class MultiStepAgentRuntime {
             }
           }
         }
-        const availableSlots = this.limits.maxEvidence - evidence.length;
-        if (execution.evidence.length > 0 && availableSlots > 0) {
-          const existingEvidenceIds = new Set(evidence.map(({ id }) => id));
-          const collected = execution.evidence
-            .filter(({ id }) => !existingEvidenceIds.has(id))
-            .slice(0, availableSlots);
-          evidence.push(...collected);
-          toolPresentationEvidence.push(...collected);
-          if (collected.length > 0) trace.evidenceCollected(collected);
+        if (execution.evidence.length > 0) {
+          const merged = mergeEvidenceObservations(evidence, execution.evidence, this.limits.maxEvidence);
+          evidence.splice(0, evidence.length, ...merged.evidence);
+          toolPresentationEvidence.push(...merged.added);
+          if (merged.added.length > 0) trace.evidenceCollected(merged.added);
+          if (merged.collisions.length > 0) {
+            applicationFailure = this.dependencies.terminalToolFailure?.();
+          }
         }
         if (execution.result.ok) {
           terminalResponse ??= this.dependencies.terminalToolResult?.(

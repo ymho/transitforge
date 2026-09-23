@@ -49,13 +49,14 @@ export class AgentToolExecutor {
       latencyMs,
     );
     if (!result.ok) return { result, evidence: [] };
-    return {
-      result,
-      evidence: this.evidenceMappers.collect(input.toolName, result.output, {
+    const evidence = this.evidenceMappers.collect(input.toolName, result.output, {
         executionId: input.executionId,
+        toolCallId: input.toolCallId,
+        toolName: input.toolName,
+        queryFingerprint: stableFingerprint(input.toolInput),
         retrievedAt: this.now().toISOString(),
-      }),
-    };
+      });
+    return { result, evidence };
   }
 }
 
@@ -80,6 +81,25 @@ export async function executeBoundedAgentReads<T>(
   };
   await Promise.all(Array.from({ length: Math.min(maximumParallelReads, jobs.length) }, worker));
   return results;
+}
+
+/** Stable non-cryptographic identity. Inputs are already bounded by each Tool parser. */
+function stableFingerprint(input: Record<string, unknown>): string {
+  const canonical = JSON.stringify(sortValue(input));
+  let hash = 2166136261;
+  for (let index = 0; index < canonical.length; index += 1) {
+    hash ^= canonical.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `q-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+function sortValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortValue);
+  if (typeof value !== "object" || value === null) return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, item]) => [key, sortValue(item)]));
 }
 
 function withTimeout<T>(

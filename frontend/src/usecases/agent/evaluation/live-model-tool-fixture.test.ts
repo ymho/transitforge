@@ -9,6 +9,9 @@ import {
 } from "./live-model-tool-fixture";
 
 const retrievedAt = "2026-09-21T00:00:00.000Z";
+const evidenceContext = {
+  executionId: "eval", toolCallId: "fixture-call", toolName: "fixture-tool", queryFingerprint: "fixture-query", retrievedAt,
+};
 const places: LiveEvaluationPlace[] = [{
   providerPlaceId: "live.izumo-taisha",
   name: "出雲大社",
@@ -26,7 +29,7 @@ describe("live model evaluation Tool fixture", () => {
     "resolve_place_candidates",
   ])("returns production-compatible Evidence for %s", (name) => {
     const output = liveEvaluationTravelToolOutput({ name, query: { query: "出雲大社" }, places, retrievedAt });
-    const evidence = liveEvaluationToolEvidence(output, { executionId: "eval", retrievedAt });
+    const evidence = liveEvaluationToolEvidence(output, evidenceContext);
 
     expect(evidence).toHaveLength(1);
     expect(evidence[0]).toMatchObject({ category: "external", knowledgeKind: "deterministic_fact" });
@@ -35,9 +38,9 @@ describe("live model evaluation Tool fixture", () => {
 
   it("binds fetched page prose to a selectable Evidence ID", () => {
     const output = liveEvaluationTravelToolOutput({ name: "read_web_pages", query: {}, places, retrievedAt });
-    const [evidence] = liveEvaluationToolEvidence(output, { executionId: "eval", retrievedAt });
+    const [evidence] = liveEvaluationToolEvidence(output, evidenceContext);
 
-    expect(evidence?.id).toBe("live-eval:page:live.izumo-taisha");
+    expect(evidence?.id).toContain("live-eval%3Apage%3Alive.izumo-taisha");
     expect(evidence?.facts).toMatchObject({
       status: "available",
       freshness: "fresh",
@@ -48,11 +51,11 @@ describe("live model evaluation Tool fixture", () => {
 
   it("returns selectable Evidence for synthetic accommodations", () => {
     const output = liveEvaluationAccommodationOutput({ checkInDate: "2026-09-22", checkOutDate: "2026-09-23" });
-    const evidence = liveEvaluationToolEvidence(output, { executionId: "eval", retrievedAt });
+    const evidence = liveEvaluationToolEvidence(output, evidenceContext);
 
     expect(evidence).toHaveLength(3);
     expect(evidence[0]).toMatchObject({
-      id: "accommodation:live-eval:izumo-1",
+      id: expect.stringContaining("accommodation:live-eval:izumo-1"),
       facts: { resultKind: "accommodation", availability: "unknown" },
     });
   });

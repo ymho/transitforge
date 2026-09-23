@@ -19,8 +19,10 @@ it("reads every page with revision-bound coverage and rejects a cursor after rev
   expect(second).toMatchObject({ ok: true, output: { items: expect.arrayContaining([expect.objectContaining({ itemId: "item-20" })]), coverage: { status: "complete", omittedCount: 0 } } });
   if (!second.ok) throw new Error("second page failed");
   const retrievedAt = "2026-09-23T00:00:00.000Z";
-  const firstEvidence = evidence.collect("get_trip_items", first.output, { executionId: "turn", retrievedAt });
-  const secondEvidence = evidence.collect("get_trip_items", second.output, { executionId: "turn", retrievedAt });
+  const firstEvidence = evidence.collect("get_trip_items", first.output, { executionId: "turn", toolCallId: "page-1",
+    toolName: "get_trip_items", queryFingerprint: "first-page", retrievedAt });
+  const secondEvidence = evidence.collect("get_trip_items", second.output, { executionId: "turn", toolCallId: "page-2",
+    toolName: "get_trip_items", queryFingerprint: "second-page", retrievedAt });
   expect(firstEvidence[0]?.id).not.toBe(secondEvidence[0]?.id);
 
   const changed = { ...trip, revision: 1 }, changedTools = new AgentToolRegistry();

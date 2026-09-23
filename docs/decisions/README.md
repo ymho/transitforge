@@ -108,3 +108,5 @@ Server Runtime・Stateの新構成は#478以降で決定する。
 
 - [ADR 0074: Agent task・意味判断・会話Working Stateを型付き契約にする](0074-establish-agent-task-decision-and-working-state-contracts.md) — 型付き判断、提示参照、原子的Working State、production-shaped Evalの共有境界を定める。
 - [ADR 0076: Agent Context・Provider schema・Tool実行をversioned contractで接続する](0076-compile-agent-context-and-provider-contracts.md) — Structured Outputs、Prompt Cache、段階Context、typed Tool runtime、privacy-safe diagnosticsの境界を定める。
+
+- [ADR 0077: 旅行候補発見をObservation lineageへ統合する](0077-unify-travel-discovery-with-observation-lineage.md) — Evidenceの観測scope、Applicability、Web/Knowledge/Rerankの共通契約を定める。

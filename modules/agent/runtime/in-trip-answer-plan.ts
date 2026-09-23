@@ -74,7 +74,11 @@ export function renderInTripAnswer(plan: InTripAnswerPlan, used: string[], evide
   });
   return { text: blocks.map((b) => b.text).join("\n\n"),
     claims: blocks.map((b, i) => ({ id: `in-trip-presentation-${i}`, statement: b.text,
-      kind: b.evidence.knowledgeKind === "unverified_information" ? "inference" : "fact", evidenceIds: [b.evidence.id] })) };
+      kind: b.evidence.knowledgeKind === "unverified_information" ? "inference" : "fact", evidenceIds: [b.evidence.id],
+      bindings: [{ evidenceId: b.evidence.id, fieldPath: `facts.${Object.keys(b.evidence.facts).sort()[0] ?? ""}`,
+        subjectRef: b.evidence.observation?.subjectKey ?? b.evidence.subject,
+        ...(b.evidence.observation ? { applicabilityScope: b.evidence.observation.scopeKey } : {}),
+        transform: b.evidence.knowledgeKind === "unverified_information" ? "recommendation" as const : "deterministic_calculation" as const }] })) };
 }
 
 function render(e: Evidence, presentation: InTripPresentation): string {

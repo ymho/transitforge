@@ -32,6 +32,11 @@ import { createFixedEgressAccommodationOperation } from "./composition/fixed-egr
 import { serverAgentDeadline } from "./composition/server-agent-deadline.js";
 import type { AgentOperation } from "./ports/agent-operation.js";
 import { bedrockCapabilitiesFromConfiguration } from "./adapters/bedrock-provider-capabilities.js";
+import { WebTravelKnowledgeRetriever } from "./adapters/web-travel-knowledge-retriever.js";
+import { BedrockKnowledgeRetriever } from "./adapters/bedrock-knowledge-retriever.js";
+import { BedrockCandidateReranker } from "./adapters/bedrock-candidate-reranker.js";
+import { createTravelDiscoveryOperation } from "./usecases/discover-travel-candidates.js";
+import type { TravelKnowledgeRetriever } from "@raiquora/agent/travel-discovery";
 
 /** Constructed only after authentication, once per request. No Travel credentials or raw trace sink. */
 export function createProductionServerAgent(executionId: string, environment: Readonly<Record<string, string | undefined>> = process.env) {
@@ -51,6 +56,18 @@ export function createProductionServerAgent(executionId: string, environment: Re
  const places = new EnrichedPlaceMediaProvider(new MapboxPlaceMediaProvider(mapboxHttp, mapboxCredentials),
    new BraveImagePlaceMediaProvider(http, webCredentials), () => new Date(), new WikipediaPlaceMediaProvider(http));
  const weather = new OpenMeteoWeatherProvider(http);
+ const webSearch = new BraveWebSearchProvider(http, webCredentials);
+ const discoveryRetrievers: TravelKnowledgeRetriever[] = [new WebTravelKnowledgeRetriever(webSearch)];
+ if (environment.TRAVEL_KNOWLEDGE_BASE_ID) discoveryRetrievers.push(new BedrockKnowledgeRetriever({
+   knowledgeBaseId: environment.TRAVEL_KNOWLEDGE_BASE_ID,
+   vectorStore: environment.TRAVEL_KNOWLEDGE_VECTOR_STORE === "opensearch_serverless_filterable_text" ? "opensearch_serverless_filterable_text" :
+     environment.TRAVEL_KNOWLEDGE_VECTOR_STORE === "rds_filterable_text" ? "rds_filterable_text" :
+       environment.TRAVEL_KNOWLEDGE_VECTOR_STORE === "mongodb_filterable_text" ? "mongodb_filterable_text" :
+     environment.TRAVEL_KNOWLEDGE_VECTOR_STORE === "s3_vectors" ? "s3_vectors" : "other",
+   requestedSearchType: environment.TRAVEL_KNOWLEDGE_SEARCH_TYPE === "HYBRID" ? "HYBRID" : "SEMANTIC",
+ }));
+ const discovery = createTravelDiscoveryOperation({ retrievers: discoveryRetrievers,
+   ...(environment.BEDROCK_RERANK_MODEL_ARN ? { reranker: new BedrockCandidateReranker(environment.BEDROCK_RERANK_MODEL_ARN) } : {}) });
  const call = (operation: AgentOperation) => async (request: object) => {
    const result = await operation(request as Record<string, unknown>, { requestId: executionId });
    if ((result.statusCode ?? 200) >= 400) throw new Error("Provider unavailable");
@@ -70,12 +87,13 @@ export function createProductionServerAgent(executionId: string, environment: Re
    diagnostics: { record: async event => { console.info(JSON.stringify({ event: "agent_diagnostic", ...event })); } },
    log: (event, fields) => { console.warn(JSON.stringify({ event, ...fields })); },
    additionalTools: productionServerTools({
+     discovery,
      journey: createJourneySearchOperation(journey),
      representativeTimetable: createRepresentativeTimetableOperation(new S3RepresentativeTimetableRepository(s3, required("AI_TIMETABLE_BUCKET"), "ai-timetable")),
      accommodation: createFixedEgressAccommodationOperation(required("FIXED_EGRESS_PROVIDER_FUNCTION_ARN")),
      external: {
        searchPlaceMedia: call(createPlaceMediaSearchOperation(places)),
-       searchWeb: call(createWebSearchOperation(new BraveWebSearchProvider(http, webCredentials))),
+       searchWeb: call(createWebSearchOperation(webSearch)),
        readWebPages: call(createWebPageReadOperation(new SafeWebPageReader(http))),
        searchHazardAlerts: call(createHazardAlertSearchOperation(new JmaHazardAlertProvider(http))),
        searchGroundAccess: call(createGroundAccessSearchOperation(new MapboxGroundAccessProvider(mapboxHttp, mapboxCredentials))),

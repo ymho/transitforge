@@ -8,6 +8,8 @@ import { evidenceFromJourneySearch } from "@raiquora/agent/journey-search-eviden
 import type { JourneySearchResponse } from "@raiquora/journey/journey-search-service";
 import type { AgentOperation } from "../ports/agent-operation.js";
 import type { ServerAgentToolBinding } from "../usecases/agent/server-tools.js";
+import { discoveryEvidence } from "@raiquora/agent/discovery-evidence";
+import { travelDiscoveryToolDescriptor } from "../usecases/discover-travel-candidates.js";
 
 /** Per-turn provider state; no Browser storage or public HTTP round trip. */
 export function productionServerTools(options: {
@@ -15,11 +17,13 @@ export function productionServerTools(options: {
   accommodation: AgentOperation;
   journey: AgentOperation;
   representativeTimetable?: AgentOperation;
+  discovery?: AgentOperation;
 }): ServerAgentToolBinding[] {
   const state: ExternalTravelToolState = {};
   const names = ["search_place_media", "search_travel_alerts", "search_ground_access", "search_restaurants", "search_web", "read_web_pages", "resolve_place_candidates"] as const;
   const journeyDescriptor = createSearchJourneysTool({ search: async () => { throw new Error("descriptor only"); } });
   return [
+    ...(options.discovery ? [{ descriptor: travelDiscoveryToolDescriptor, operation: options.discovery, evidence: discoveryEvidence }] : []),
     ...(options.representativeTimetable ? [{ descriptor: representativeTimetableToolDescriptor, operation: options.representativeTimetable, evidence: representativeTimetableEvidence }] : []),
     ...names.map(name => ({
       descriptor: { name, description: externalTravelToolDescription(name), inputSchema: externalTravelToolInputSchema(name) },

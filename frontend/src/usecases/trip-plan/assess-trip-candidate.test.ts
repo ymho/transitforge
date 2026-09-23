@@ -64,7 +64,8 @@ it("IDs-only tool input rejects self-declared statuses; derived Evidence uses th
   const evidence = candidateAssessmentEvidence({ ...candidateAssessmentContext(pair), assessmentEvidence: pair.assessment.sources });
   expect(evidence[0]?.knowledgeKind).toBe("derived_value");
   expect(evidence[0]?.facts.weather).toBe("favorable");
-  const claim = { id: "comparison", statement: "予報の比較結果", kind: "fact" as const, evidenceIds: [evidence[0]!.id] };
+  const claim = { id: "comparison", statement: "予報の比較結果", kind: "fact" as const, evidenceIds: [evidence[0]!.id],
+    bindings: [{ evidenceId: evidence[0]!.id, fieldPath: "facts.weather", subjectRef: evidence[0]!.subject, transform: "identity" as const }] };
   expect(validateEvidenceAndClaims(evidence, [claim]).valid).toBe(true);
   expect(validateEvidenceAndClaims(evidence, [{ ...claim, evidenceIds: ["invented"] }]).valid).toBe(false);
 });
