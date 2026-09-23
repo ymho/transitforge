@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { discoverTravelCandidates } from "./discover-travel-candidates.js";
 import type { CandidateReranker, DiscoveryBatch, DiscoveryHit, DiscoveryQuery, TravelKnowledgeRetriever } from "@raiquora/agent/travel-discovery";
+import { ResearchExecutionLedger } from "@raiquora/agent/research-execution";
 
 it("searches multiple typed facets, fuses duplicate source chunks, and keeps rerank relevance separate", async () => {
   const calls: string[] = [];
@@ -51,4 +52,36 @@ it("uses multiple generic angles for a place-only request and bounds concurrent 
   { maximumQueries: 3, maximumHitsPerQuery: 3, maximumOutputHits: 10, maximumTextBytes: 100, maximumParallelReads: 1 });
   expect(calls).toEqual(["松江", "松江 体験 季節", "松江 アクセス 滞在"]);
   expect(maximumActive).toBe(1);
+});
+
+it("returns typed covered and remaining scopes without starting reads beyond the reserved provider budget", async () => {
+  const retrieve = vi.fn(async (_text, request: DiscoveryQuery): Promise<DiscoveryBatch> => ({ hits: [], coverage: {
+    attemptedFacetKinds: request.facets.map(({ kind }) => kind), channels: ["web"], requestedQueries: 1, completedQueries: 1, omittedHits: 0 }, incompleteReasons: [] }));
+  const retriever: TravelKnowledgeRetriever = { channel: "web", retrieve };
+  const ledger = new ResearchExecutionLedger({ policyVersion: "small", maximumModelCalls: 1, maximumToolCalls: 1,
+    maximumCandidates: 2, maximumDocuments: 2, maximumProviderReadCalls: 1, maximumBytes: 100, maximumInputTokens: 100,
+    maximumOutputTokens: 100, maximumRerankCalls: 0, maximumKnowledgeBaseCalls: 0, maximumParallelReads: 1, deadlineMs: 1_000 },
+  { requestedMode: "standard", effectiveMode: "standard" });
+  const result = await discoverTravelCandidates({ retrievers: [retriever], ledger }, { requestRef: "request", facets: [{ kind: "place", value: "松江" }],
+    explicitFilters: [], unresolvedFilters: [], scopeRef: "trip:1", budgetRef: "standard" },
+  { maximumQueries: 3, maximumHitsPerQuery: 3, maximumOutputHits: 10, maximumTextBytes: 100, maximumParallelReads: 1 });
+  expect(retrieve).toHaveBeenCalledTimes(1);
+  expect(result.research).toMatchObject({ status: "partial", coveredScopes: ["retrieval:web:1"],
+    remainingScopes: ["retrieval:web:2", "retrieval:web:3"] });
+});
+
+it("does not count a provider read when its Knowledge Base reservation cannot be made", async () => {
+  const retrieve = vi.fn(async (): Promise<DiscoveryBatch> => { throw new Error("must not execute"); });
+  const retriever: TravelKnowledgeRetriever = { channel: "knowledge_base", retrieve };
+  const ledger = new ResearchExecutionLedger({ policyVersion: "small", maximumModelCalls: 1, maximumToolCalls: 1,
+    maximumCandidates: 2, maximumDocuments: 2, maximumProviderReadCalls: 1, maximumBytes: 100, maximumInputTokens: 100,
+    maximumOutputTokens: 100, maximumRerankCalls: 0, maximumKnowledgeBaseCalls: 0, maximumParallelReads: 1, deadlineMs: 1_000 },
+  { requestedMode: "standard", effectiveMode: "standard" });
+  const result = await discoverTravelCandidates({ retrievers: [retriever], ledger }, { requestRef: "request",
+    facets: [{ kind: "place", value: "松江" }], explicitFilters: [], unresolvedFilters: [], scopeRef: "trip:1", budgetRef: "standard" },
+  { maximumQueries: 2, maximumHitsPerQuery: 3, maximumOutputHits: 10, maximumTextBytes: 100, maximumParallelReads: 1 });
+  expect(retrieve).not.toHaveBeenCalled();
+  expect(result.research).toMatchObject({ status: "partial", remainingScopes: ["retrieval:knowledge_base:1", "retrieval:knowledge_base:2"] });
+  expect(ledger.outcome({ remainingScopes: [] })).toMatchObject({ status: "failed", stopReason: "budget_exhausted",
+    remainingScopes: ["retrieval:knowledge_base:1", "retrieval:knowledge_base:2"], usage: { providerReads: 0, knowledgeBaseCalls: 0 } });
 });

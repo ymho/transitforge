@@ -37,6 +37,8 @@ import { BedrockKnowledgeRetriever } from "./adapters/bedrock-knowledge-retrieve
 import { BedrockCandidateReranker } from "./adapters/bedrock-candidate-reranker.js";
 import { createTravelDiscoveryOperation } from "./usecases/discover-travel-candidates.js";
 import type { TravelKnowledgeRetriever } from "@raiquora/agent/travel-discovery";
+import type { ModelTokenRates } from "@raiquora/agent/model-usage-cost";
+import type { ResearchExecutionLedger } from "@raiquora/agent/research-execution";
 
 /** Constructed only after authentication, once per request. No Travel credentials or raw trace sink. */
 export function createProductionServerAgent(executionId: string, environment: Readonly<Record<string, string | undefined>> = process.env) {
@@ -66,7 +68,8 @@ export function createProductionServerAgent(executionId: string, environment: Re
      environment.TRAVEL_KNOWLEDGE_VECTOR_STORE === "s3_vectors" ? "s3_vectors" : "other",
    requestedSearchType: environment.TRAVEL_KNOWLEDGE_SEARCH_TYPE === "HYBRID" ? "HYBRID" : "SEMANTIC",
  }));
- const discovery = createTravelDiscoveryOperation({ retrievers: discoveryRetrievers,
+ let turnResearchLedger: ResearchExecutionLedger | undefined;
+ const discovery = createTravelDiscoveryOperation({ retrievers: discoveryRetrievers, ledger: () => turnResearchLedger,
    ...(environment.BEDROCK_RERANK_MODEL_ARN ? { reranker: new BedrockCandidateReranker(environment.BEDROCK_RERANK_MODEL_ARN) } : {}) });
  const call = (operation: AgentOperation) => async (request: object) => {
    const result = await operation(request as Record<string, unknown>, { requestId: executionId });
@@ -75,6 +78,16 @@ export function createProductionServerAgent(executionId: string, environment: Re
  };
  return createProductionConversationAgent({
    limits: { maxExecutionMs },
+   detailedResearchAllowed: environment.AGENT_DETAILED_RESEARCH_ENABLED === "true",
+   ...(environment.AGENT_DETAILED_RESEARCH_ENABLED === "true" ? { detailedResearchLimits: {
+     maxIterations: boundedInteger(environment.AGENT_DETAILED_MAX_ITERATIONS, 6, 1, 12),
+     maxModelCalls: boundedInteger(environment.AGENT_DETAILED_MAX_MODEL_CALLS, 8, 1, 16),
+     maxToolCalls: boundedInteger(environment.AGENT_DETAILED_MAX_TOOL_CALLS, 16, 1, 32),
+     maxExecutionMs: boundedInteger(environment.AGENT_DETAILED_DEADLINE_MS, Math.min(240_000, maxExecutionMs), 1_000, 270_000),
+     maxEvidence: boundedInteger(environment.AGENT_DETAILED_MAX_EVIDENCE, 40, 1, 100),
+   } } : {}),
+   modelTokenRates: pricingLookup(environment.BEDROCK_MODEL_PRICING_JSON),
+   onResearchLedger: ledger => { turnResearchLedger = ledger; },
    stateTable: required("SERVER_STATE_TABLE_NAME"), tripTable: required("TRIP_TABLE_NAME"),
    newExecutionId: () => executionId, weather,
    model: new BedrockConversationModel(new AwsBedrockConverseClient(), {
@@ -102,3 +115,30 @@ export function createProductionServerAgent(executionId: string, environment: Re
    }),
  });
 }
+
+function boundedInteger(value: string | undefined, fallback: number, minimum: number, maximum: number): number {
+  if (value === undefined || value === "") return fallback;
+  if (!/^\d+$/u.test(value)) throw new Error("Invalid server configuration");
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) throw new Error("Invalid server configuration");
+  return parsed;
+}
+
+/** Exact model IDs only. A missing/unknown rate remains costComplete=false instead of guessing. */
+function pricingLookup(raw: string | undefined): (model: string | undefined) => ModelTokenRates | undefined {
+  if (!raw) return () => undefined;
+  let value: unknown;
+  try { value = JSON.parse(raw); } catch { throw new Error("Invalid server configuration"); }
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid server configuration");
+  const rates = new Map<string, ModelTokenRates>();
+  for (const [model, entry] of Object.entries(value)) {
+    if (!model || !entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error("Invalid server configuration");
+    const item = entry as Record<string, unknown>;
+    if (Object.keys(item).some((key) => !["pricingVersion", "inputPerMillionUsd", "outputPerMillionUsd", "cacheReadPerMillionUsd", "cacheWritePerMillionUsd"].includes(key)) ||
+        typeof item.pricingVersion !== "string" || !item.pricingVersion || ![item.inputPerMillionUsd, item.outputPerMillionUsd].every(rate) ||
+        item.cacheReadPerMillionUsd !== undefined && !rate(item.cacheReadPerMillionUsd) || item.cacheWritePerMillionUsd !== undefined && !rate(item.cacheWritePerMillionUsd)) throw new Error("Invalid server configuration");
+    rates.set(model, item as unknown as ModelTokenRates);
+  }
+  return model => model === undefined ? undefined : rates.get(model);
+}
+function rate(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value) && value >= 0; }

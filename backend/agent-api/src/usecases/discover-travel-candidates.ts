@@ -3,6 +3,7 @@ import { fuseDiscoveryBatches, validateDiscoveryQuery, type CandidateReranker, t
 import type { AgentOperation } from "../ports/agent-operation.js";
 import type { AgentToolDescriptor } from "@raiquora/agent/tool-contract";
 import { executeBoundedAgentReads } from "@raiquora/agent/agent-tool-executor";
+import type { ResearchExecutionLedger } from "@raiquora/agent/research-execution";
 
 export interface DiscoveryBudget {
   maximumQueries: number;
@@ -11,18 +12,33 @@ export interface DiscoveryBudget {
   maximumTextBytes: number;
   maximumParallelReads: number;
 }
-export interface DiscoveryResult { batch: DiscoveryBatch; rerank?: { provider: string; modelRef: string; before: string[]; after: string[]; fallbackReason?: string } }
+export interface DiscoveryResult { batch: DiscoveryBatch; rerank?: { provider: string; modelRef: string; before: string[]; after: string[]; fallbackReason?: string };
+  research: { status: "complete" | "partial"; coveredScopes: string[]; remainingScopes: string[] } }
 
-export async function discoverTravelCandidates(dependencies: { retrievers: TravelKnowledgeRetriever[]; reranker?: CandidateReranker },
+export async function discoverTravelCandidates(dependencies: { retrievers: TravelKnowledgeRetriever[]; reranker?: CandidateReranker; ledger?: ResearchExecutionLedger },
   request: DiscoveryQuery, budget: DiscoveryBudget, signal?: AbortSignal): Promise<DiscoveryResult> {
   validateDiscoveryQuery(request);
   validateBudget(budget);
   const queries = facetQueries(request.facets).slice(0, budget.maximumQueries);
   const attempts = queries.flatMap((query) => dependencies.retrievers.map((retriever) => ({ query, retriever })));
-  const settled = await executeBoundedAgentReads(attempts.map((attempt) => async () => {
+  const remainingScopes: string[] = [], coveredScopes: string[] = [];
+  const executable = attempts.flatMap((attempt, index) => {
+    if (!dependencies.ledger) return [{ ...attempt, ordinal: index + 1 }];
+    dependencies.ledger.markMeasured("providerReads", "knowledgeBaseCalls", "rerankCalls");
+    const reserved = dependencies.ledger.reserveAll([{ counter: "providerReads" },
+      ...(attempt.retriever.channel === "knowledge_base" ? [{ counter: "knowledgeBaseCalls" as const }] : [])]);
+    if (reserved) return [{ ...attempt, ordinal: index + 1 }];
+    const scope = `retrieval:${attempt.retriever.channel}:${index + 1}`;
+    remainingScopes.push(scope); dependencies.ledger.defer(scope);
+    return [];
+  });
+  const settled = await executeBoundedAgentReads(executable.map((attempt) => async () => {
     try {
+      const value = await attempt.retriever.retrieve(attempt.query, request, budget.maximumHitsPerQuery, signal);
+      coveredScopes.push(`retrieval:${attempt.retriever.channel}:${attempt.ordinal}`);
+      dependencies.ledger?.cover(`retrieval:${attempt.retriever.channel}:${attempt.ordinal}`);
       return { status: "fulfilled" as const,
-        value: await attempt.retriever.retrieve(attempt.query, request, budget.maximumHitsPerQuery, signal) };
+        value };
     } catch (reason) {
       return { status: "rejected" as const, reason };
     }
@@ -30,16 +46,27 @@ export async function discoverTravelCandidates(dependencies: { retrievers: Trave
   signal?.throwIfAborted();
   const batches = settled.map((result, index): DiscoveryBatch => result.status === "fulfilled" ? result.value : {
     hits: [], coverage: { attemptedFacetKinds: [...new Set(request.facets.map((facet) => facet.kind))],
-      channels: [attempts[index]!.retriever.channel], requestedQueries: 1, completedQueries: 0, omittedHits: 0 },
-    incompleteReasons: [`retrieval_failed:${attempts[index]!.retriever.channel}`],
+      channels: [executable[index]!.retriever.channel], requestedQueries: 1, completedQueries: 0, omittedHits: 0 },
+    incompleteReasons: [`retrieval_failed:${executable[index]!.retriever.channel}`],
   });
+  if (remainingScopes.length) batches.push({ hits: [], coverage: { attemptedFacetKinds: [...new Set(request.facets.map((facet) => facet.kind))],
+    channels: [...new Set(attempts.filter((_, index) => remainingScopes.some((scope) => scope.endsWith(`:${index + 1}`))).map(({ retriever }) => retriever.channel))],
+    requestedQueries: remainingScopes.length, completedQueries: 0, omittedHits: 0 }, incompleteReasons: ["research_budget_exhausted"] });
   const fused = capText(fuseDiscoveryBatches(batches, budget.maximumOutputHits), budget.maximumTextBytes);
-  if (!dependencies.reranker || !fused.hits.length) return { batch: fused };
+  if (!dependencies.reranker || !fused.hits.length) return { batch: fused, research: { status: remainingScopes.length ? "partial" : "complete", coveredScopes: coveredScopes.sort(), remainingScopes: remainingScopes.sort() } };
+  if (dependencies.ledger && !dependencies.ledger.reserve("rerankCalls")) {
+    remainingScopes.push("rerank:1");
+    dependencies.ledger.defer("rerank:1");
+    return { batch: { ...fused, incompleteReasons: [...new Set([...fused.incompleteReasons, "rerank_budget_exhausted"])] },
+      research: { status: "partial", coveredScopes: coveredScopes.sort(), remainingScopes: remainingScopes.sort() } };
+  }
   const reranked = await dependencies.reranker.rerank(queries.join(" / "), fused.hits, budget.maximumOutputHits, signal);
-  return { batch: { ...fused, hits: reranked.hits }, rerank: reranked.trace };
+  coveredScopes.push("rerank:1"); dependencies.ledger?.cover("rerank:1");
+  return { batch: { ...fused, hits: reranked.hits }, rerank: reranked.trace,
+    research: { status: remainingScopes.length ? "partial" : "complete", coveredScopes: coveredScopes.sort(), remainingScopes: remainingScopes.sort() } };
 }
 
-export function createTravelDiscoveryOperation(dependencies: { retrievers: TravelKnowledgeRetriever[]; reranker?: CandidateReranker },
+export function createTravelDiscoveryOperation(dependencies: { retrievers: TravelKnowledgeRetriever[]; reranker?: CandidateReranker; ledger?: () => ResearchExecutionLedger | undefined },
   budget: DiscoveryBudget = { maximumQueries: 6, maximumHitsPerQuery: 6, maximumOutputHits: 12, maximumTextBytes: 36_000,
     maximumParallelReads: 3 }): AgentOperation {
   return async (input, context) => {
@@ -48,7 +75,9 @@ export function createTravelDiscoveryOperation(dependencies: { retrievers: Trave
     const query: DiscoveryQuery = { requestRef: context.requestId, facets, explicitFilters: parseFilters(input.explicitFilters),
       unresolvedFilters: strings(input.unresolvedFilters, 12, 120), scopeRef: text(input.scopeRef, 160) || context.requestId,
       budgetRef: text(input.budgetRef, 80) || "standard-v1" };
-    const result = await discoverTravelCandidates(dependencies, query, budget);
+    const ledger = dependencies.ledger?.();
+    const result = await discoverTravelCandidates({ retrievers: dependencies.retrievers, ...(dependencies.reranker ? { reranker: dependencies.reranker } : {}),
+      ...(ledger ? { ledger } : {}) }, query, budget, context.signal);
     return { body: { discovery: result } };
   };
 }

@@ -119,6 +119,8 @@ Server V2 resourceであり、Browserにlegacy TravelPlan/TripPlanのwriterやmi
 Tripへ保持しつつ、日別表示と負荷を`Trip.items`からrevision-boundに導出する。
 [費用・成立性・複数案・再計画の契約](docs/architecture/plan-variants-feasibility-and-replan.md)は、請求明細、
 全体時間制約、採用前PlanVariant、scenario耐性と局所再評価をTrip正本から分離する。
+[Agent・旅行案のSecurity / Privacy threat model](docs/architecture/agent-security-privacy.md)は、外部入力、owner境界、
+候補採用、partial stream、保持・削除の防御と実行負例を対応付ける。
 
 #388の[Trip server保存基盤](docs/architecture/trip-server-persistence.md)はowner-scoped Repositoryと
 認証済み公開Trip CRUDを提供する。CAS/冪等性はServer V2 writerで適用し、Browserのlegacy writerへ戻さない。

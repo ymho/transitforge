@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "epic-537-final-expected-v1",
+  "cases": [
+    {
+      "caseId": "domain-relative-overnight-cost",
+      "requiredInvariantIds": ["relative-day-preserved", "overnight-has-departure-and-arrival", "cost-line-not-duplicated", "unknown-travel-not-zero"],
+      "minimumMetrics": { "itineraryCoverage": 1, "costCorrectness": 1, "workloadCorrectness": 1, "robustness": 1 },
+      "maximumMetrics": {}
+    },
+    {
+      "caseId": "production-candidate-adopt-replan",
+      "requiredInvariantIds": ["production-loader-used", "raw-request-tail-preserved", "typed-presentation-retained", "explicit-adoption-confirmed", "readback-matches", "partial-replan-minimal"],
+      "minimumMetrics": { "itineraryCoverage": 1, "constraintCompliance": 1, "referenceAccuracy": 1, "partialChangeMinimality": 1, "saveReloadConsistency": 1 },
+      "maximumMetrics": {}
+    },
+    {
+      "caseId": "live-model-synthetic-provider",
+      "requiredInvariantIds": ["semantic-target-correct", "reservation-protected", "unknown-preserved"],
+      "minimumMetrics": { "semanticGrounding": 0.8, "constraintCompliance": 1, "unnecessaryQuestionAvoidance": 0.8 },
+      "maximumMetrics": {}
+    },
+    {
+      "caseId": "live-provider-browser-server",
+      "requiredInvariantIds": ["browser-public-wire", "provider-evidence-applicable", "owner-trip-revision-bound", "reload-consistent"],
+      "minimumMetrics": { "candidateRecall": 0.8, "candidateDiversity": 0.6, "rerankQuality": 0.7, "saveReloadConsistency": 1 },
+      "maximumMetrics": {}
+    }
+  ]
+}

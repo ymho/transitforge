@@ -12,6 +12,7 @@ export const stateA: TrustedPrincipal = { subject: `identity-v1:${"a".repeat(64)
 export const stateB: TrustedPrincipal = { subject: `identity-v1:${"b".repeat(64)}`, identity: { issuer: "test-pool", subject: "b" }, scopes: ["raiquora/user"] };
 export const conversationId = "11111111-1111-4111-8111-111111111111";
 export const secondId = "22222222-2222-4222-8222-222222222222";
+export const noCandidateResources = { purgeConversation: async () => ({ complete: true }) };
 export const stateMetadata = (): ConversationMetadata => ({ title: "会話", scope: "trip", summary: "相談", resolvedTopics: [], pendingTopics: ["日程"], tripId: secondId });
 export const stateProfile = (): UserProfile => ({ version: 2, home: {}, companions: { usual: ["solo"], children: [] }, travelStyle: { pace: 0.123 },
   preferences: { railway: 0.8 }, transport: { maxTypicalTravelMinutes: null }, notes: { budget: "本人のメモ" }, aiNoteFields: [], updatedAt: "2026-09-18T00:00:00.000Z" });

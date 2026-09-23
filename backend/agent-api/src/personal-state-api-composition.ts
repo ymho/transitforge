@@ -7,18 +7,21 @@ import { ConversationApplication } from "./usecases/conversation-application.js"
 import { ProfileApplication } from "./usecases/profile-application.js";
 import { jsonResponse, type LambdaHttpEvent, type LambdaContext } from "./contracts/http.js";
 import type { AccessTokenVerifier } from "./ports/access-token-verifier.js";
+import { DynamoDbItineraryCandidateRepository } from "./adapters/dynamodb-itinerary-candidate-repository.js";
 
 /** Production host for only server state. It intentionally cannot expose Trip writers. */
 export function createPersonalStateApiHandler(options: {
   enabled: boolean;
   auth: { userPoolId: string; clientId: string; requiredScopes: readonly string[] };
   stateTable: string;
+  tripTable: string;
   verifier?: AccessTokenVerifier;
 }) {
   if (!options.enabled) return async (_event: LambdaHttpEvent, _context?: LambdaContext) => jsonResponse(503, { error: "unavailable" });
-  if (!options.stateTable) throw new Error("Missing personal state API configuration");
+  if (!options.stateTable || !options.tripTable) throw new Error("Missing personal state API configuration");
   const authenticate = createHttpPrincipalResolver(options.verifier ?? createCognitoAccessTokenVerifier(options.auth), options.auth.requiredScopes);
-  const conversations = createConversationApiHandler(new ConversationApplication(new DynamoDbConversationRepository(options.stateTable)), authenticate);
+  const conversations = createConversationApiHandler(new ConversationApplication(new DynamoDbConversationRepository(options.stateTable),
+    new DynamoDbItineraryCandidateRepository(options.tripTable)), authenticate);
   const profile = createProfileApiHandler(new ProfileApplication(new DynamoDbProfileRepository(options.stateTable)), authenticate);
   return (event: LambdaHttpEvent, context?: LambdaContext) => {
     if (event.rawPath && event.path && event.rawPath !== event.path) return Promise.resolve(jsonResponse(404, { error: "not-found" }));

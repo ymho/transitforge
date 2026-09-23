@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "epic-537-final-observation-v1",
+  "observations": [
+    {
+      "caseId": "domain-relative-overnight-cost",
+      "layer": "A_pure_domain",
+      "status": "not_measured",
+      "repetitions": 0,
+      "invariants": [],
+      "metrics": { "itineraryCoverage": null, "costCorrectness": null, "workloadCorrectness": null, "robustness": null },
+      "runtime": { "modelCalls": null, "toolCalls": null, "latencyMs": null, "inputTokens": null, "outputTokens": null, "cacheReadTokens": null, "cacheWriteTokens": null, "estimatedCostUsd": null, "failures": 0 },
+      "reason": "The contract fixture is not an execution artifact. Pure Domain assertions run in their owning tests and must be captured by an execution adapter before this cell becomes measured."
+    },
+    {
+      "caseId": "production-candidate-adopt-replan",
+      "layer": "B_production_composition_synthetic",
+      "status": "not_measured",
+      "repetitions": 0,
+      "invariants": [],
+      "metrics": { "itineraryCoverage": null, "constraintCompliance": null, "referenceAccuracy": null, "partialChangeMinimality": null, "saveReloadConsistency": null },
+      "runtime": { "modelCalls": null, "toolCalls": null, "latencyMs": null, "inputTokens": null, "outputTokens": null, "cacheReadTokens": null, "cacheWriteTokens": null, "estimatedCostUsd": null, "failures": 0 },
+      "reason": "The product E2E test executes production composition and post-run assertions, but this static parser fixture is not promoted to a measured run artifact."
+    },
+    {
+      "caseId": "live-model-synthetic-provider",
+      "layer": "C_live_model_synthetic_provider",
+      "status": "not_measured",
+      "repetitions": 0,
+      "invariants": [],
+      "metrics": { "semanticGrounding": null, "constraintCompliance": null, "unnecessaryQuestionAvoidance": null },
+      "runtime": { "modelCalls": null, "toolCalls": null, "latencyMs": null, "inputTokens": null, "outputTokens": null, "cacheReadTokens": null, "cacheWriteTokens": null, "estimatedCostUsd": null, "failures": 0 },
+      "reason": "Live Bedrock model evaluation has not been executed for this revision."
+    },
+    {
+      "caseId": "live-provider-browser-server",
+      "layer": "D_live_provider_browser_server",
+      "status": "not_measured",
+      "repetitions": 0,
+      "invariants": [],
+      "metrics": { "candidateRecall": null, "candidateDiversity": null, "rerankQuality": null, "saveReloadConsistency": null },
+      "runtime": { "modelCalls": null, "toolCalls": null, "latencyMs": null, "inputTokens": null, "outputTokens": null, "cacheReadTokens": null, "cacheWriteTokens": null, "estimatedCostUsd": null, "failures": 0 },
+      "reason": "Live providers, authenticated browser, and deployed Server persistence have not been exercised together for this revision."
+    }
+  ]
+}

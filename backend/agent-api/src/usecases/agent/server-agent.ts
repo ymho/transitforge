@@ -11,6 +11,9 @@ import { requireTripPrincipal } from "../../contracts/trip-principal.js";
 import type { AgentDiagnosticEvent, AgentDiagnosticsSink } from "../../ports/agent-diagnostics.js";
 import { bindPublicPlanTarget } from "@raiquora/agent/public-plan-presentation";
 import type { ResearchTarget } from "../../contracts/server-state.js";
+import { ResearchExecutionLedger, researchBudgetForRuntimeLimits } from "@raiquora/agent/research-execution";
+import { validateAgentRuntimeLimits } from "@raiquora/agent/runtime-policies";
+import type { ModelTokenRates } from "@raiquora/agent/model-usage-cost";
 
 /** Caller authenticates principal. Only an injected server loader may resolve references to state. */
 export interface ServerAgentTurn {
@@ -37,6 +40,9 @@ export interface ServerAgentDependencies {
   /** Server authorization/policy only. Browser may request detailed mode but cannot grant it. */
   detailedResearchAllowed?: boolean;
   detailedResearchLimits?: Partial<AgentRuntimeLimits>;
+  /** Exact provider model ID lookup. Unknown models deliberately produce incomplete cost. */
+  modelTokenRates?: (model: string | undefined) => ModelTokenRates | undefined;
+  onResearchLedger?: (ledger: ResearchExecutionLedger) => void;
 }
 
 /** Transport-independent, per-turn composition; no shared mutable principal/tool/evidence state. */
@@ -87,12 +93,20 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
       correlation: { ...(Number.isSafeInteger(context?.currentTrip?.sourceRevision) ? { tripRevision: Number(context?.currentTrip?.sourceRevision) } : {}) } });
     const tools = new AgentToolRegistry(), evidence = new ToolEvidenceRegistry();
     dependencies.registerTools(tools, evidence, scope);
+    const selectedLimits = validateAgentRuntimeLimits(scope.researchMode.effectiveMode === "detailed" ? dependencies.detailedResearchLimits : dependencies.limits);
+    const researchLedger = new ResearchExecutionLedger(
+      researchBudgetForRuntimeLimits(selectedLimits, scope.researchMode.effectiveMode === "detailed" ? "detailed-v1" : "standard-v1"),
+      scope.researchMode, () => (dependencies.now?.() ?? new Date()).getTime(), ["modelCalls", "toolCalls", "tokens", "cache", "cost"]);
+    dependencies.onResearchLedger?.(researchLedger);
     let result = await new MultiStepAgentRuntime({ model: dependencies.createModel(scope), tools,
       toolExecutor: new AgentToolExecutor(tools, evidence, dependencies.now),
-      limits: scope.researchMode.effectiveMode === "detailed" ? dependencies.detailedResearchLimits : dependencies.limits, now: dependencies.now, modelClassPolicy: dependencies.modelClassPolicy,
+      limits: selectedLimits, now: dependencies.now, modelClassPolicy: dependencies.modelClassPolicy,
+      researchLedger, modelTokenRates: dependencies.modelTokenRates,
     }).run({ executionId: scope.executionId, feature: "concierge", userRequest: scope.userRequest,
       researchMode: scope.researchMode,
       ...(context ? { context, omitTraceContent: true } : {}) });
+    result = { ...result, researchExecution: researchLedger.outcome({ remainingScopes: [],
+      ...(result.status === "failed" || result.status === "limit_reached" ? { failed: true, stopReason: result.status === "limit_reached" ? "budget_exhausted" as const : "provider_failure" as const } : {}) }) };
     if (result.publicPlanPresentation && context?.taskContext?.target.kind === "trip" && context.taskContext.target.tripRevision !== undefined) {
       result = { ...result, publicPlanPresentation: bindPublicPlanTarget(result.publicPlanPresentation,
         { tripId: context.taskContext.target.tripId, baseTripRevision: context.taskContext.target.tripRevision }) };

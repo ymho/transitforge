@@ -27,6 +27,14 @@ it.each([progress + final, progress + done, progress + final + done.slice(0, -1)
   const options = setup(stream(text)); await expect(consumeAgentStream(options)).rejects.toThrow();
   expect(options.onEvent.mock.calls.some(([e]) => e.type === "final")).toBe(false);
 });
+it("rejects an invalid structured Presentation before publishing the final event", async () => {
+  const invalid = frame(2, { type: "final", status: "completed", response: "保存できます", publicPlanPresentation: {
+    version: "public-plan-presentation-v1", presentationId: "forged", candidateSetRef: { kind: "candidate-set-ref", candidateSetId: "foreign", revision: 0 },
+  } });
+  const options = setup(stream(progress + invalid + done));
+  await expect(consumeAgentStream(options)).rejects.toThrow("invalid_event");
+  expect(options.onEvent.mock.calls.some(([event]) => event.type === "final")).toBe(false);
+});
 it("treats error+done as failure even under HTTP 200", async () => {
   await expect(consumeAgentStream(setup(stream(progress + frame(2, { type: "error", code: "agent_failed" }) + done)))).rejects.toThrow("agent_failed");
 });

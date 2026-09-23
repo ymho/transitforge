@@ -41,6 +41,8 @@ import { acceptsAgentTurn, askProgressRepairInstruction, type AgentTurnObservati
 import { agentTurnOutputContract } from "./agent-output-contract";
 import { compileAgentPrompt } from "./context-compiler";
 import { withMeasuredResearchOutcome } from "./public-plan-presentation";
+import type { ResearchExecutionLedger } from "./research-execution";
+import type { ModelTokenRates } from "./model-usage-cost";
 
 export interface AgentRuntimeDependencies {
   model: AgentModelProvider;
@@ -62,6 +64,9 @@ export interface AgentRuntimeDependencies {
   ) => { accepted: boolean; reason?: string; instruction?: string };
   limits?: Partial<AgentRuntimeLimits>;
   now?: () => Date;
+  /** Application-owned budget. Reservations happen before model/tool external calls. */
+  researchLedger?: ResearchExecutionLedger;
+  modelTokenRates?: (model: string | undefined) => ModelTokenRates | undefined;
 }
 
 export interface AgentModelClassPolicyInput {
@@ -156,6 +161,9 @@ export class MultiStepAgentRuntime {
         phase: hasToolResults ? "result_driven_replan" : "initial",
       }) ?? this.dependencies.modelClass;
       const modelCallId = crypto.randomUUID();
+      if (this.dependencies.researchLedger && !this.dependencies.researchLedger.reserve("modelCalls")) {
+        return this.limitResult(trace, evidence, startedAt, this.dependencies.researchLedger.deadlineReached() ? "research_deadline" : "research_model_budget");
+      }
       const finalResponseRequired = hasToolResults && (
         finalizeAfterToolResult ||
         iterations >= this.limits.maxIterations - 1 ||
@@ -215,6 +223,8 @@ export class MultiStepAgentRuntime {
       }
       let modelResponse = modelOutcome.value;
       modelCalls += 1;
+      this.dependencies.researchLedger?.recordModel(modelResponse.metadata.usage, modelResponse.metadata.cacheStatus ?? "unknown",
+        this.dependencies.modelTokenRates?.(modelResponse.metadata.model));
       trace.modelCompleted(modelResponse.metadata, modelCallId);
       const used = modelResponse.decisionSummary?.usedEvidenceIds ?? modelResponse.declaredEvidenceIds;
       const structuredPresentation = hasStructuredPresentation(modelResponse);
@@ -439,6 +449,9 @@ export class MultiStepAgentRuntime {
       }
       if (toolCalls + calls.length > this.limits.maxToolCalls) {
         return this.limitResult(trace, evidence, startedAt);
+      }
+      if (calls.length && this.dependencies.researchLedger && !this.dependencies.researchLedger.reserve("toolCalls", calls.length)) {
+        return this.limitResult(trace, evidence, startedAt, "research_tool_budget");
       }
 
       const toolResults: AgentModelContent[] = [];

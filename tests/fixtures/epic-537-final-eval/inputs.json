@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "epic-537-final-input-v1",
+  "cases": [
+    {
+      "id": "domain-relative-overnight-cost",
+      "layer": "A_pure_domain",
+      "category": "relative-day-overnight-cost-workload",
+      "heldOut": true,
+      "seed": 53701,
+      "fixedNow": "2026-09-23T00:00:00Z",
+      "userRequest": "日付未定の3泊4日。2日目の夜行で移動し、宿代は1室単位、未知の移動時間は未知のままにして。",
+      "providerFixtureRefs": [],
+      "scenarioRefs": ["delay-30m", "rain", "closure"]
+    },
+    {
+      "id": "production-candidate-adopt-replan",
+      "layer": "B_production_composition_synthetic",
+      "category": "product-e2e-candidate-adoption-reload-partial-replan",
+      "heldOut": true,
+      "seed": 53702,
+      "fixedNow": "2026-09-23T00:00:00Z",
+      "userRequest": "車なしで複数日を比較したい。宿は維持し、3日目だけ雨天案へ変更できる形で2案を出して。最後の条件も省略しないで。",
+      "providerFixtureRefs": ["synthetic-discovery-v1", "synthetic-weather-v1"],
+      "scenarioRefs": ["rain", "candidate-second", "refresh", "partial-replan-day-3"]
+    },
+    {
+      "id": "live-model-synthetic-provider",
+      "layer": "C_live_model_synthetic_provider",
+      "category": "live-model-semantic-and-tool-selection",
+      "heldOut": true,
+      "seed": 53703,
+      "fixedNow": "2026-09-23T00:00:00Z",
+      "userRequest": "20日目だけ変更し、予約済みの宿は維持して。営業不明なら確認済みにしないで。",
+      "providerFixtureRefs": ["synthetic-discovery-v1"],
+      "scenarioRefs": ["long-history-ordinal", "reservation-protected"]
+    },
+    {
+      "id": "live-provider-browser-server",
+      "layer": "D_live_provider_browser_server",
+      "category": "public-product-e2e",
+      "heldOut": true,
+      "seed": 53704,
+      "fixedNow": "2026-09-23T00:00:00Z",
+      "userRequest": "行き先未定、車なし、7日間。候補を比較して2番目を保存し、再読込後に雨なら3日目だけ差し替えて。",
+      "providerFixtureRefs": ["live-web", "live-knowledge", "live-rerank"],
+      "scenarioRefs": ["cache-cold", "provider-partial", "disconnect-resume", "other-trip-rejection"]
+    }
+  ]
+}

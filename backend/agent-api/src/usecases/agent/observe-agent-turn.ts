@@ -14,6 +14,7 @@ export async function observeAgentTurn(
     await emit({ type: "error", code: result.status === "failed" ? "agent_failed" : "limit_reached" });
   } else {
     await emit({ type: "final", status: result.status, response: result.response,
-      ...(result.publicPlanPresentation ? { publicPlanPresentation: result.publicPlanPresentation } : {}) });
+      ...(result.publicPlanPresentation ? { publicPlanPresentation: result.publicPlanPresentation } : {}),
+      ...(result.researchExecution ? { researchExecution: result.researchExecution } : {}) });
   }
 }

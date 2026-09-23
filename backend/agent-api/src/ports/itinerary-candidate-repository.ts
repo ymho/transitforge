@@ -22,7 +22,12 @@ export interface CandidateAdoptionPreviewReceipt {
 }
 export interface CandidateAdoptionReceiptRepository {
   putPreview(principal: TripPrincipal, receipt: CandidateAdoptionPreviewReceipt): Promise<CandidateAdoptionPreviewReceipt>;
-  getPreview(principal: TripPrincipal, mutationId: string): Promise<CandidateAdoptionPreviewReceipt | undefined>;
+  getPreview(principal: TripPrincipal, conversationId: string, mutationId: string): Promise<CandidateAdoptionPreviewReceipt | undefined>;
+}
+
+/** Cross-table cleanup boundary used only after the Conversation has been tombstoned. */
+export interface ConversationCandidateResourceRepository {
+  purgeConversation(principal: TripPrincipal, conversationId: string): Promise<{ complete: boolean }>;
 }
 export type CandidateAdoptionResult =
   | { status: "confirmation-required"; confirmationKey: string; preview: { proposal: TripUpdateProposal; componentMap: readonly { componentId: string; itemId: string }[]; changes: { added: number; replaced: number; removed: number } } }
