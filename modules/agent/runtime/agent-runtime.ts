@@ -228,7 +228,10 @@ export class MultiStepAgentRuntime {
       modelCalls += 1;
       this.dependencies.researchLedger?.recordModel(modelResponse.metadata.usage, modelResponse.metadata.cacheStatus ?? "unknown",
         this.dependencies.modelTokenRates?.(modelResponse.metadata.model));
-      trace.modelCompleted(modelResponse.metadata, modelCallId);
+      const decodedPresentationKind = modelResponse.declaredPresentation?.kind;
+      trace.modelCompleted(modelResponse.metadata, modelCallId,
+        decodedPresentationKind === "source-explanation" || decodedPresentationKind === "travel-plan"
+          ? decodedPresentationKind : undefined);
       const used = modelResponse.decisionSummary?.usedEvidenceIds ?? modelResponse.declaredEvidenceIds;
       const structuredPresentation = hasStructuredPresentation(modelResponse);
       // A structured presenter validates every source/photo reference itself. A malformed

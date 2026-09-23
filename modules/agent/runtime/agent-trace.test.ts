@@ -51,7 +51,7 @@ describe("AgentTraceRecorder", () => {
       model: "model-a",
       latencyMs: 80,
       usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
-    });
+    }, undefined, "travel-plan");
     recorder.responseGenerated("この経路を利用できます", ["claim-1"]);
     recorder.taskCompleted("completed", 100);
 
@@ -74,6 +74,9 @@ describe("AgentTraceRecorder", () => {
     expect(trace.events.map(({ sequence }) => sequence)).toEqual(
       Array.from({ length: 12 }, (_, index) => index + 1),
     );
+    expect(trace.events.find(({ type }) => type === "model_completed")).toMatchObject({
+      presentationKind: "travel-plan",
+    });
     expect(trace.events.every(({ occurredAt }) =>
       occurredAt === "2026-08-25T09:00:00.000Z")).toBe(true);
     expect(trace.events[5]).toMatchObject({ latencyMs: 12, outcome: "success" });
