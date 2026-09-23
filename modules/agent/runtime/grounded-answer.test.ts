@@ -52,6 +52,8 @@ it("gives the model bounded, real preference choices without forwarding private 
   const instruction = groundedAnswerInstruction([placeEvidence], { favoriteInterests: ["歴史"],
     consentedPreferenceNotes: { avoidances: "非公開の自由記述" } });
   expect(instruction).toContain('"field":"favoriteInterests","value":"歴史"');
+  expect(instruction).toContain("外側のagent_turn_result JSONを維持");
+  expect(instruction).toContain("responseTextへobjectを直接設定せず");
   expect(instruction).toContain("推薦質問を資料の列挙だけで終えてはいけません");
   expect(instruction).not.toContain("非公開の自由記述");
 });
@@ -134,6 +136,7 @@ it("keeps an unspecified departure date unknown instead of inventing today", () 
 });
 it("gives a bounded repair reason without echoing arbitrary errors", () => {
   expect(groundedAnswerRepairInstruction(new Error("Invalid cost estimate"))).toContain("Invalid cost estimate");
+  expect(groundedAnswerRepairInstruction(new Error("Invalid cost estimate"))).toContain("responseTextはstringのまま");
   expect(groundedAnswerRepairInstruction(new Error("secret model output"))).not.toContain("secret model output");
 });
 it("falls back to a bound photo while rejecting unbound source text and incomplete estimates", () => {

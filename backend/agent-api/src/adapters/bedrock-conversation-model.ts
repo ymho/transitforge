@@ -294,6 +294,7 @@ function applicationStrictInstruction(contract: NonNullable<ConversationModelReq
   return [
     `出力契約 ${contract.name}@${contract.version} (${contract.schemaHash}) に従い、`,
     "native toolUseを返さない最終応答ではJSON objectだけを返してください。Markdown fenceや説明文を外側へ追加しないでください。",
+    "別の指示が本文をJSONにするよう求める場合も、外側の出力契約を置き換えず、そのJSONをresponseTextの文字列値としてJSON.stringify相当で格納してください。responseTextへobjectを直接設定しないでください。",
     `JSON Schema: ${JSON.stringify(contract.schema)}`,
   ].join(" ");
 }
