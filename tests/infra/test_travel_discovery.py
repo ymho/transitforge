@@ -1,6 +1,7 @@
 """Static contracts for default-off Bedrock travel discovery infrastructure."""
 import json
 import pathlib
+import re
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -9,11 +10,15 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 class TravelDiscoveryInfrastructureTest(unittest.TestCase):
     def test_retrieve_is_scoped_and_rerank_permissions_are_gated(self):
         source = (ROOT / "infra/terraform/environments/dev/agent-stream.tf").read_text()
-        self.assertIn('Action = ["bedrock:Retrieve"]', source)
+        self.assertRegex(source, r'Action\s*=\s*\["bedrock:Retrieve"\]')
         self.assertIn('knowledge-base/${var.travel_knowledge_base_id}', source)
-        self.assertNotIn('Action = ["bedrock:Retrieve"], Resource = "*"', source)
+        self.assertIsNone(re.search(
+            r'Action\s*=\s*\["bedrock:Retrieve"\].{0,120}Resource\s*=\s*"\*"',
+            source,
+            re.DOTALL,
+        ))
         self.assertIn('var.bedrock_rerank_model_arn == "" ? []', source)
-        self.assertIn('Action = ["bedrock:Rerank"], Resource = "*"', source)
+        self.assertRegex(source, r'Action\s*=\s*\["bedrock:Rerank"\]\s*Resource\s*=\s*"\*"')
         self.assertIn('[var.bedrock_rerank_model_arn]', source)
 
     def test_knowledge_and_rerank_configuration_is_default_off(self):
