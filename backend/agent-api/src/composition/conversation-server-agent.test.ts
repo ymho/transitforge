@@ -25,7 +25,10 @@ it("verified principal → idempotent messages → stateful Server Runtime → p
   const app = createConversationServerAgent(options);
   const turn = { principal: a, userRequest: "続きを相談したい", conversationId, turnId: secondId };
   const result = await app.runConversationTurn(turn);
-  expect(result).toEqual({ status: "completed", response: "こんにちは" });
+  expect(result).toMatchObject({ status: "completed", response: "こんにちは", researchExecution: {
+    version: "research-execution-v1", policyVersion: "standard-v1", status: "completed",
+    usage: { modelCalls: 1, toolCalls: 0, saveCalls: 1, measurementCoverage: { providerReads: false, saveCalls: true } },
+  } });
   const text = requests[0].messages[0].content.find((block) => "text" in block)!;
   const context = JSON.parse(("text" in text ? text.text : "").match(/<agent_context>([\s\S]*)<\/agent_context>/)![1]);
   expect(context.userRequest).toBe(turn.userRequest);

@@ -12,7 +12,7 @@ Agent内部の旅行案をMarkdownだけで表示すると、案の順序、日�
 
 `PublicPlanPresentation v1`を表示正本ではなくversioned read modelとして導入する。Presentationは候補順、日順、`entryRef`と`itemRef`、Evidence/photo参照、coverage、fact/proposal/assumption、比較・scenario・research outcomeを保持する。Tripに結び付くPresentationとWorking State receiptは`tripId + baseTripRevision`へ束縛する。Runtimeがmodel/tool回数とwall-clockを上書きし、model自己申告値を公開しない。
 
-保存可能な案は`ItineraryCandidateSet`をowner・conversation・revision付きのimmutable DynamoDB itemとして最大180,000 bytesで保持する。`expiresAtIso`は適用可否を判定するISO時刻でありDynamoDB TTL属性ではない。期限切れ候補は読めても採用できず、物理削除は将来の明示的cleanup jobで行う。会話履歴には候補本体でなくrefだけを残す。
+保存可能な案は`ItineraryCandidateSet`をowner・conversation・revision付きのimmutable DynamoDB itemとして最大180,000 bytesで保持する。`expiresAtIso`は適用可否を判定するISO時刻でありDynamoDB TTL属性ではない。期限切れ候補は読めても採用できない。Conversation削除時はcandidate/adoption previewもowner・conversation prefixでresumableに削除し、Conversationを残した期限切れ候補の物理evictionだけを将来の明示的cleanup jobへ残す。会話履歴には候補本体でなくrefだけを残す。
 
 候補生成境界はserver-issued ID、request fingerprint、Trip revision、発行・期限を設定し、canonical variantとPresentation順序の一致を検証してから保存する。legacy `travel-plan` projectionは実在するCandidateSetを捏造せず`unavailable`とする。
 

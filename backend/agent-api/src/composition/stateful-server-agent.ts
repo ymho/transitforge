@@ -60,7 +60,8 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
       // Runtime metadata/latency diagnostics remain available; no Bedrock/provider implementation change.
       model: { converse: ({ trace: _trace, ...request }) => options.model.converse(request) },
       loadContext: createServerStateContextLoader({
-        conversations: new ConversationApplication(new DynamoDbConversationRepository(options.stateTable, options.stateClient)),
+        conversations: new ConversationApplication(new DynamoDbConversationRepository(options.stateTable, options.stateClient),
+          new DynamoDbItineraryCandidateRepository(options.tripTable, options.tripClient)),
         profiles: new ProfileApplication(new DynamoDbProfileRepository(options.stateTable, options.stateClient)),
         trips: new DynamoDbTripRepository(options.tripTable, options.tripClient),
         workingStates: turnStates,

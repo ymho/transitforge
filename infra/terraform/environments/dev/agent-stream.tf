@@ -52,7 +52,10 @@ resource "aws_iam_role_policy" "personal_state" {
   role     = aws_iam_role.personal_state[each.key].id
   policy = jsonencode({ Version = "2012-10-17", Statement = [
     { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "${aws_cloudwatch_log_group.personal_state[each.key].arn}:*" },
-    { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem", "dynamodb:Query"], Resource = aws_dynamodb_table.server_state.arn }
+    { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem", "dynamodb:Query"], Resource = aws_dynamodb_table.server_state.arn },
+    # Candidate sets/adoption previews are conversation-derived but live beside Trip. The
+    # application exposes only owner+conversation-scoped Query/transactional deletion.
+    { Effect = "Allow", Action = ["dynamodb:Query", "dynamodb:TransactWriteItems"], Resource = aws_dynamodb_table.trips.arn }
   ] })
 }
 resource "aws_lambda_function" "personal_state" {
@@ -69,12 +72,14 @@ resource "aws_lambda_function" "personal_state" {
   environment { variables = {
     PERSONAL_STATE_API_ENABLED = "true"
     SERVER_STATE_TABLE_NAME    = aws_dynamodb_table.server_state.name
+    TRIP_TABLE_NAME            = aws_dynamodb_table.trips.name
     COGNITO_USER_POOL_ID       = aws_cognito_user_pool.users.id
     COGNITO_CLIENT_ID          = aws_cognito_user_pool_client.spa.id
   } }
   depends_on = [aws_iam_role_policy.personal_state]
 }
-# Trip writer has its own minimal runtime role. Do not add Trip permissions to personal-state.
+# Trip writer has its own runtime role. Personal-state has no Trip Get/Put/Update permission;
+# its trip-table access is limited to derived candidate cleanup on conversation deletion.
 resource "aws_iam_role" "trip_api" {
   for_each           = local.agent_stream_instances
   name               = "${local.agent_stream_name}-trip-api"

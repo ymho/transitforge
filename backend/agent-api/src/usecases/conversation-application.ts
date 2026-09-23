@@ -2,10 +2,13 @@ import { randomUUID } from "node:crypto";
 import type { TrustedPrincipal } from "../contracts/trusted-principal.js";
 import { StateError, metadata, messageInputs, requireStatePrincipal, revision, stateId, pageOptions, type PageOptions } from "../contracts/server-state.js";
 import type { ConversationRepository } from "../ports/conversation-repository.js";
+import type { ConversationCandidateResourceRepository } from "../ports/itinerary-candidate-repository.js";
 
 /** Internal application only. Public transport must call through authenticatedApplication. */
 export class ConversationApplication {
-  constructor(private readonly repository: ConversationRepository, private readonly newId: () => string = randomUUID) {}
+  constructor(private readonly repository: ConversationRepository,
+    private readonly candidateResources: ConversationCandidateResourceRepository,
+    private readonly newId: () => string = randomUUID) {}
   async create(principal: TrustedPrincipal, input: unknown) {
     requireStatePrincipal(principal);
     return this.repository.create(principal, this.newId(), metadata(input));
@@ -34,6 +37,8 @@ export class ConversationApplication {
   }
   async delete(principal: TrustedPrincipal, conversationId: string, expectedRevision: number) {
     requireStatePrincipal(principal); stateId(conversationId); revision(expectedRevision);
-    return this.repository.delete(principal, conversationId, expectedRevision);
+    const state = await this.repository.delete(principal, conversationId, expectedRevision);
+    const candidates = await this.candidateResources.purgeConversation(principal, conversationId);
+    return { complete: state.complete && candidates.complete };
   }
 }

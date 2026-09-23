@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "epic-537-final-manifest-v1",
+  "runId": "epic-537-final-local-20260923",
+  "createdAt": "2026-09-23T00:00:00Z",
+  "sourceRevision": "PR7_LOCAL_UNMERGED",
+  "datasetRevision": "epic-537-final-fixtures-v1",
+  "seeds": [53701, 53702, 53703, 53704],
+  "fixedClock": "2026-09-23T00:00:00Z",
+  "structureVersions": { "before": "ddd5ac9bdecd3995c5e615c5afc7393dd17d7f2a", "after": "PR7_LOCAL_UNMERGED" },
+  "models": { "current": "amazon.nova-lite-v1:0", "upper": "UNRESOLVED_AT_RUN_TIME" },
+  "modelRegion": "UNRESOLVED_AT_RUN_TIME",
+  "inferenceSettings": { "temperature": 0, "maximumOutputTokens": 4096, "repetitions": 3 },
+  "providerFixtureVersion": "epic-537-synthetic-provider-v1",
+  "sourceVersions": { "web": "not-live", "knowledge": "not-live", "rerank": "not-live", "browser": "not-live" },
+  "cacheState": "off",
+  "pricingVersion": "NOT_MEASURED",
+  "promptVersion": "agent-system-prompt-current",
+  "schemaVersionRef": "structured-output-current",
+  "toolVersion": "production-server-tools-current",
+  "comparison": [
+    { "structure": "before", "model": "current", "status": "not_measured", "repetitions": 0, "metrics": { "semanticGrounding": null }, "latencyP95Ms": null, "estimatedCostUsd": null, "reason": "A compatible baseline run artifact has not been produced." },
+    { "structure": "before", "model": "upper", "status": "not_measured", "repetitions": 0, "metrics": { "semanticGrounding": null }, "latencyP95Ms": null, "estimatedCostUsd": null, "reason": "A compatible baseline and upper-model run artifact has not been produced." },
+    { "structure": "after", "model": "current", "status": "not_measured", "repetitions": 0, "metrics": { "semanticGrounding": null }, "latencyP95Ms": null, "estimatedCostUsd": null, "reason": "The paid three-repetition live run has not been executed for this revision." },
+    { "structure": "after", "model": "upper", "status": "not_measured", "repetitions": 0, "metrics": { "semanticGrounding": null }, "latencyP95Ms": null, "estimatedCostUsd": null, "reason": "The upper model and region have not been selected and measured for this revision." }
+  ],
+  "confounders": [
+    "The baseline lacks newer typed candidate and presentation APIs, so any later comparison must identify incompatible cases rather than silently adapting expectations.",
+    "Provider freshness and browser behavior are absent from layers A and B."
+  ],
+  "smallSampleNotice": "Three repetitions are only an initial small sample. A p95 or success rate from three runs is descriptive and must not be treated as a precise population estimate."
+}

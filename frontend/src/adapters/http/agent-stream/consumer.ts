@@ -3,6 +3,7 @@ import { parseConsultationRequestProposal } from "@raiquora/trip/consultation-re
 import { parsePublicRequestProposal } from "@raiquora/trip/public-request-proposal";
 import type { AgentTurnEvent } from "@raiquora/agent/agent-progress";
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
+import { parseResearchExecutionOutcome } from "@raiquora/agent/research-execution";
 
 export interface StreamMeasurement {
   requestStart: number;
@@ -125,7 +126,7 @@ function validEvent(event: unknown): event is AgentTurnEvent {
   if (!record(event)) return false;
   if (event.type === "progress") return event.phase === "running" && Object.keys(event).every(k => ["type", "phase"].includes(k));
   if (event.type === "error") return ["agent_failed", "limit_reached", "turn_conflict"].includes(String(event.code)) && Object.keys(event).every(k => ["type", "code"].includes(k));
-  try { if (event.publicPlanPresentation !== undefined) parsePublicPlanPresentation(event.publicPlanPresentation); if (event.tripCostProposal !== undefined) parsePublicCostProposal(event.tripCostProposal); if ((event.tripUpdateProposal || event.tripCostProposal) && event.consultationRequestProposal) return false; if (event.consultationRequestProposal !== undefined) parseConsultationRequestProposal(event.consultationRequestProposal); if (event.tripUpdateProposal !== undefined) parsePublicRequestProposal(event.tripUpdateProposal); } catch { return false; }
+  try { if (event.publicPlanPresentation !== undefined) parsePublicPlanPresentation(event.publicPlanPresentation); if (event.researchExecution !== undefined) parseResearchExecutionOutcome(event.researchExecution); if (event.tripCostProposal !== undefined) parsePublicCostProposal(event.tripCostProposal); if ((event.tripUpdateProposal || event.tripCostProposal) && event.consultationRequestProposal) return false; if (event.consultationRequestProposal !== undefined) parseConsultationRequestProposal(event.consultationRequestProposal); if (event.tripUpdateProposal !== undefined) parsePublicRequestProposal(event.tripUpdateProposal); } catch { return false; }
   return event.type === "final" && ["completed", "follow_up"].includes(String(event.status)) && typeof event.response === "string" &&
-    event.response.length <= 32_000 && Object.keys(event).every(k => ["type", "status", "response", "publicPlanPresentation", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"].includes(k));
+    event.response.length <= 32_000 && Object.keys(event).every(k => ["type", "status", "response", "publicPlanPresentation", "researchExecution", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"].includes(k));
 }

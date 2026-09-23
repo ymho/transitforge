@@ -3,7 +3,7 @@ import { executeBoundedAgentReads } from "./agent-tool-executor";
 import { ResearchBudgetLedger, selectResearchBudget, type ResearchBudget } from "./research-budget";
 
 const budget: ResearchBudget = { policyVersion: "v1", maximumModelCalls: 2, maximumToolCalls: 3, maximumCandidates: 5,
-  maximumDocuments: 5, maximumBytes: 1000, maximumInputTokens: 100, maximumOutputTokens: 100,
+  maximumDocuments: 5, maximumProviderReadCalls: 6, maximumBytes: 1000, maximumInputTokens: 100, maximumOutputTokens: 100,
   maximumRerankCalls: 1, maximumKnowledgeBaseCalls: 1, maximumParallelReads: 2, deadlineMs: 1000 };
 
 it("reserves budget atomically before parallel work and does not escalate detailed mode", () => {

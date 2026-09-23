@@ -5,13 +5,13 @@ import { ProfileApplication } from "./profile-application.js";
 import { authenticatedApplication } from "./authenticated-application.js";
 import { cognitoTokenFixture, token, scope } from "../adapters/cognito-token.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
-import { stateDynamoFixture, conversationId as id, secondId, stateMetadata, stateProfile } from "../adapters/state-dynamodb.fixture.js";
+import { stateDynamoFixture, stateA, conversationId as id, secondId, stateMetadata, stateProfile, noCandidateResources } from "../adapters/state-dynamodb.fixture.js";
 
 describe("verified principal → applications → DynamoDB", () => {
   it("uses #484 identity for all account isolation and rejects forged owner input", async () => {
     const auth = cognitoTokenFixture(), f = stateDynamoFixture();
     const a = await auth.verifier.verify(token()), b = await auth.verifier.verify(token({ sub: "user-b" }));
-    const conversations = new ConversationApplication(f.conversations, () => id), profiles = new ProfileApplication(f.profiles, f.clock);
+    const conversations = new ConversationApplication(f.conversations, noCandidateResources, () => id), profiles = new ProfileApplication(f.profiles, f.clock);
     const create = authenticatedApplication(auth.verifier, [scope], (principal, input: unknown) => conversations.create(principal, input));
     const saved = await create(token(), stateMetadata());
     expect(saved.ownerSubject).toBe(a.subject);
@@ -40,7 +40,7 @@ describe("verified principal → applications → DynamoDB", () => {
     expect(await profiles.get(a)).toBeDefined();
   });
   it("does not enter storage on invalid token or missing scope", async () => {
-    const auth = cognitoTokenFixture(), f = stateDynamoFixture(), app = new ConversationApplication(f.conversations);
+    const auth = cognitoTokenFixture(), f = stateDynamoFixture(), app = new ConversationApplication(f.conversations, noCandidateResources);
     const create = authenticatedApplication(auth.verifier, [scope], (p, input: unknown) => app.create(p, input));
     for (const accessToken of [undefined, "forged", token({ exp: 1 })]) await expect(create(accessToken, stateMetadata())).rejects.toMatchObject({ code: "unauthenticated" });
     await expect(create(token({ scope: "unrelated" }), stateMetadata())).rejects.toMatchObject({ code: "forbidden" });
@@ -51,7 +51,7 @@ describe("verified principal → applications → DynamoDB", () => {
     const trip = createTrip(secondId, "独立した旅程", "2026-09-18T00:00:00Z");
     await trips.repository.create(principal, trip);
     const original = structuredClone(trips.records), commandCount = trips.commands.length;
-    const app = new ConversationApplication(f.conversations, () => id), profile = new ProfileApplication(f.profiles, f.clock);
+    const app = new ConversationApplication(f.conversations, noCandidateResources, () => id), profile = new ProfileApplication(f.profiles, f.clock);
     await app.create(principal, stateMetadata());
     await profile.update(principal, stateProfile(), null);
     await profile.update(principal, { ...stateProfile(), preferences: { mountain: 1 } }, 0);
@@ -59,5 +59,19 @@ describe("verified principal → applications → DynamoDB", () => {
     await app.delete(principal, id, 0);
     expect(trips.records).toEqual(original);
     expect(trips.commands).toHaveLength(commandCount);
+  });
+  it("reports deletion complete only after cross-table candidate cleanup and resumes from the tombstone", async () => {
+    const f = stateDynamoFixture(); let attempts = 0;
+    const candidates = { purgeConversation: async (principal: { subject: string }, conversationId: string) => {
+      expect(principal.subject).toBe(stateA.subject); expect(conversationId).toBe(id); attempts++;
+      if (attempts === 1) throw Object.assign(new Error("candidate table unavailable"), { code: "unavailable" });
+      return { complete: attempts >= 3 };
+    } };
+    const app = new ConversationApplication(f.conversations, candidates, () => id);
+    await app.create(stateA, stateMetadata());
+    await expect(app.delete(stateA, id, 0)).rejects.toMatchObject({ code: "unavailable" });
+    expect(await f.conversations.get(stateA, id)).toBeUndefined();
+    expect(await app.delete(stateA, id, 0)).toEqual({ complete: false });
+    expect(await app.delete(stateA, id, 0)).toEqual({ complete: true });
   });
 });

@@ -16,6 +16,7 @@ import { ConversationApplication } from "./usecases/conversation-application.js"
 import { ProfileApplication } from "./usecases/profile-application.js";
 import { createConversationApiHandler, createProfileApiHandler } from "./server-state-handler.js";
 import { jsonResponse, type LambdaHttpEvent, type LambdaContext } from "./contracts/http.js";
+import { DynamoDbItineraryCandidateRepository } from "./adapters/dynamodb-itinerary-candidate-repository.js";
 
 /** Opt-in host factory, not installed in lambda.ts. No production flag/env fallback.
  * auth is the trusted cognito_api_auth_config Terraform output, never HTTP input.
@@ -39,7 +40,8 @@ export function createPersonalApiHandler(options: {
     new DynamoDbNotificationRepository(options.notificationTable, options.tripTable),
     new DynamoDbTripRepository(options.tripTable)), authenticate);
   const inTrip = createInTripContextHandler(createInTripContextApplication(options.tripTable, options.notificationTable), authenticate);
-  const conversations = createConversationApiHandler(new ConversationApplication(new DynamoDbConversationRepository(options.stateTable)), authenticate);
+  const conversations = createConversationApiHandler(new ConversationApplication(new DynamoDbConversationRepository(options.stateTable),
+    new DynamoDbItineraryCandidateRepository(options.tripTable)), authenticate);
   const profile = createProfileApiHandler(new ProfileApplication(new DynamoDbProfileRepository(options.stateTable)), authenticate);
   return (event: LambdaHttpEvent, context?: LambdaContext) => {
     if (event.rawPath && event.path && event.rawPath !== event.path) return Promise.resolve(jsonResponse(404, { error: "not-found" }));

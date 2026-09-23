@@ -4,13 +4,13 @@ import { createConversationApiHandler, createProfileApiHandler } from "./server-
 import { ConversationApplication } from "./usecases/conversation-application.js";
 import { ProfileApplication } from "./usecases/profile-application.js";
 import { cognitoTokenFixture, scope, token } from "./adapters/cognito-token.fixture.js";
-import { stateDynamoFixture, conversationId, stateMetadata, stateProfile } from "./adapters/state-dynamodb.fixture.js";
+import { stateDynamoFixture, conversationId, stateMetadata, stateProfile, noCandidateResources } from "./adapters/state-dynamodb.fixture.js";
 
 const event = (path: string, body: object, access?: string) => ({ rawPath: path, requestContext: { http: { method: "POST" } }, headers: access ? { authorization: `Bearer ${access}` } : {}, body: JSON.stringify(body) });
 describe("authenticated Conversation and Profile HTTP APIs", () => {
   it("uses the verified owner for conversation create/get/list/history/delete and keeps foreign state indistinguishable", async () => {
     const f = stateDynamoFixture(), { verifier } = cognitoTokenFixture(), auth = createHttpPrincipalResolver(verifier, [scope]);
-    const app = new ConversationApplication(f.conversations, () => conversationId), handler = createConversationApiHandler(app, auth);
+    const app = new ConversationApplication(f.conversations, noCandidateResources, () => conversationId), handler = createConversationApiHandler(app, auth);
     const create = await handler(event("/api/conversations/v1", { version: "conversation-api-v1", operation: "create", metadata: stateMetadata() }, token()));
     expect(create.statusCode).toBe(200); expect(JSON.parse(create.body).conversation.ownerSubject).toBeUndefined();
     await app.append(await verifier.verify(token()), conversationId, 0, [{ role: "user", text: "相談" }]);
@@ -19,13 +19,13 @@ describe("authenticated Conversation and Profile HTTP APIs", () => {
     const other = await handler(event("/api/conversations/v1", { version: "conversation-api-v1", operation: "get", conversationId }, token({ sub: "B" })));
     const missing = await handler(event("/api/conversations/v1", { version: "conversation-api-v1", operation: "get", conversationId: "22222222-2222-4222-8222-222222222222" }, token({ sub: "B" })));
     expect(other.statusCode).toBe(404); expect(other.body).toBe(missing.body);
-    const bHandler = createConversationApiHandler(new ConversationApplication(f.conversations, () => conversationId), auth);
+    const bHandler = createConversationApiHandler(new ConversationApplication(f.conversations, noCandidateResources, () => conversationId), auth);
     expect((await bHandler(event("/api/conversations/v1", { version: "conversation-api-v1", operation: "create", metadata: stateMetadata() }, token({ sub: "B" })))).statusCode).toBe(200);
     expect(JSON.parse((await bHandler(event("/api/conversations/v1", { version: "conversation-api-v1", operation: "list", page: {} }, token({ sub: "B" })))).body).items).toHaveLength(1);
     expect((await handler(event("/api/conversations/v1", { version: "conversation-api-v1", operation: "delete", conversationId, expectedRevision: 1 }, token()))).statusCode).toBe(200);
   });
   it("rejects malformed or unauthenticated conversation commands before state access", async () => {
-    const f = stateDynamoFixture(), { verifier } = cognitoTokenFixture(), handler = createConversationApiHandler(new ConversationApplication(f.conversations), createHttpPrincipalResolver(verifier, [scope]));
+    const f = stateDynamoFixture(), { verifier } = cognitoTokenFixture(), handler = createConversationApiHandler(new ConversationApplication(f.conversations, noCandidateResources), createHttpPrincipalResolver(verifier, [scope]));
     for (const [body, access, status] of [[{ version: "conversation-api-v1", operation: "list", page: {}, ownerId: "forged" }, token(), 400], [{ version: "conversation-api-v1", operation: "append" }, token(), 400], [{ version: "conversation-api-v1", operation: "list", page: {} }, undefined, 401], [{ version: "conversation-api-v1", operation: "list", page: {} }, token({ scope: "openid" }), 403]] as const) {
       expect((await handler(event("/api/conversations/v1", body, access))).statusCode).toBe(status);
     }

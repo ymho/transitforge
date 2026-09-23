@@ -6,6 +6,7 @@ import { StateError, exactObject, messageInputs, stateId, type StateClock } from
 import type { BeginConversationTurn, ConversationTurnIdentity, ConversationTurnLease, ConversationTurnRepository, ConversationTurnResult } from "../ports/conversation-turn-repository.js";
 import { parseConversationWorkingState, type ConversationWorkingState } from "@raiquora/agent/conversation-working-state";
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
+import { parseResearchExecutionOutcome } from "@raiquora/agent/research-execution";
 import { DynamoDbConversationRepository } from "./dynamodb-conversation-repository.js";
 import type { StateDynamoClient, StateEnvelope } from "./dynamodb-state-store.js";
 
@@ -21,12 +22,13 @@ interface TurnRecord {
   targetTripId?: string;
 }
 function finalResult(value: ConversationTurnResult): ConversationTurnResult {
-  exactObject(value, ["status", "response", "publicPlanPresentation", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal", "turnObservation", "presentationReceipt"]);
+  exactObject(value, ["status", "response", "publicPlanPresentation", "researchExecution", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal", "turnObservation", "presentationReceipt"]);
   if (value.status !== "completed" && value.status !== "follow_up") throw new StateError("invalid-input");
   messageInputs([{ role: "assistant", text: value.response }]);
   try {
     if ((value.tripUpdateProposal || value.tripCostProposal) && value.consultationRequestProposal) throw new Error();
     const publicPlanPresentation = value.publicPlanPresentation === undefined ? undefined : parsePublicPlanPresentation(value.publicPlanPresentation);
+    const researchExecution = value.researchExecution === undefined ? undefined : parseResearchExecutionOutcome(value.researchExecution);
     if (value.turnObservation !== undefined && (!value.turnObservation || typeof value.turnObservation !== "object" || !["ask_only", "ask_and_progress", "progress", "answer"].includes(value.turnObservation.outcome))) throw new Error();
     if (value.presentationReceipt !== undefined) parseConversationWorkingState({ version: 1, revision: 0,
       sourceTurnId: "00000000-0000-4000-8000-000000000000", sourceUserSequence: 1,
@@ -34,6 +36,7 @@ function finalResult(value: ConversationTurnResult): ConversationTurnResult {
       pendingQuestionRefs: [], pendingProposalRefs: [] });
     return { status: value.status, response: value.response,
       ...(publicPlanPresentation ? { publicPlanPresentation } : {}),
+      ...(researchExecution ? { researchExecution } : {}),
       ...(value.tripCostProposal !== undefined ? { tripCostProposal: parsePublicCostProposal(value.tripCostProposal) } : {}),
       ...(value.tripUpdateProposal !== undefined ? { tripUpdateProposal: parsePublicRequestProposal(value.tripUpdateProposal) } : {}),
       ...(value.consultationRequestProposal !== undefined ? { consultationRequestProposal: parseConsultationRequestProposal(value.consultationRequestProposal) } : {}),
@@ -131,7 +134,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const { current, old, turn } = await this.read(input);
     if (!turn || turn.attemptId !== attemptId || turn.userSequence !== userSequence) throw new StateError("conflict");
     if (turn.state === "completed") {
-      if (!saved || saved.status !== turn.result!.status || saved.response !== turn.result!.response || JSON.stringify(saved.publicPlanPresentation) !== JSON.stringify(turn.result!.publicPlanPresentation) || JSON.stringify(saved.tripUpdateProposal) !== JSON.stringify(turn.result!.tripUpdateProposal) || JSON.stringify(saved.consultationRequestProposal) !== JSON.stringify(turn.result!.consultationRequestProposal) || JSON.stringify(saved.tripCostProposal) !== JSON.stringify(turn.result!.tripCostProposal)) throw new StateError("conflict");
+      if (!saved || saved.status !== turn.result!.status || saved.response !== turn.result!.response || JSON.stringify(saved.publicPlanPresentation) !== JSON.stringify(turn.result!.publicPlanPresentation) || JSON.stringify(saved.researchExecution) !== JSON.stringify(turn.result!.researchExecution) || JSON.stringify(saved.tripUpdateProposal) !== JSON.stringify(turn.result!.tripUpdateProposal) || JSON.stringify(saved.consultationRequestProposal) !== JSON.stringify(turn.result!.consultationRequestProposal) || JSON.stringify(saved.tripCostProposal) !== JSON.stringify(turn.result!.tripCostProposal)) throw new StateError("conflict");
       return turn.result;
     }
     if (!saved && turn.state === "failed") return;

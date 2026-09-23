@@ -112,3 +112,6 @@ Server Runtime・Stateの新構成は#478以降で決定する。
 - [ADR 0077: 旅行候補発見をObservation lineageへ統合する](0077-unify-travel-discovery-with-observation-lineage.md) — Evidenceの観測scope、Applicability、Web/Knowledge/Rerankの共通契約を定める。
 - [ADR 0078: 費用明細・旅行案・全体成立性をTrip正本から派生評価する](0078-model-plan-variants-and-global-feasibility.md) — CostLine、時間制約network、多軸比較、scenario、増分再評価の境界を定める。
 - [ADR 0079: 旅行案の表示・保持・採用を型付き参照で接続する](0079-retain-typed-plan-presentations.md) — PublicPlanPresentation、immutable CandidateSet、明示確認、既存CAS保存の境界を定める。
+- [ADR 0080: 詳細調査をboundedな同期turnとimmutable receiptで継続する](0080-keep-bounded-synchronous-research-with-turn-receipts.md) — 調査予算、切断後再取得、continuation authority、AgentCore不採用の境界を定める。
+- [ADR 0081: 30日・90日測定後も単一Trip aggregateとimmutable receiptを維持する](0081-retain-single-trip-aggregate-after-scale-measurement.md) — items/bytes/receipt測定に基づきchunk移行を見送り、既存CAS正本を維持する。
+- [ADR 0082: 本番model routingを層別Final Evalの実測で判定する](0082-gate-model-routing-on-layered-final-evaluation.md) — A/B/C/D、2×2、未測定、反復、routing公開条件を分離する。

@@ -29,7 +29,7 @@ export class PlanCandidateAdoptionApplication {
 
   async execute(principal: TripPrincipal | undefined, value: CandidateAdoptionRequest, authority?: CandidateAdoptionAuthority): Promise<CandidateAdoptionResult> {
     requireTripPrincipal(principal); validateRequest(value);
-    const retained = await this.receipts.getPreview(principal, value.mutationId);
+    const retained = await this.receipts.getPreview(principal, value.conversationId, value.mutationId);
     if (retained) return this.executeRetained(principal, value, retained, authority);
     if (value.operation === "confirm") throw new TripResourceError("confirmation-required");
     const candidateSet = await this.candidates.get(principal, value.conversationId, value.candidateSetId, value.candidateSetRevision);

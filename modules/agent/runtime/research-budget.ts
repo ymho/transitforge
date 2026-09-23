@@ -6,6 +6,7 @@ export interface ResearchBudget {
   maximumToolCalls: number;
   maximumCandidates: number;
   maximumDocuments: number;
+  maximumProviderReadCalls: number;
   maximumBytes: number;
   maximumInputTokens: number;
   maximumOutputTokens: number;
@@ -70,7 +71,7 @@ export function selectResearchBudget(
 }
 
 function validateResearchBudget(value: ResearchBudget): void {
-  for (const number of [value.maximumModelCalls, value.maximumToolCalls, value.maximumCandidates, value.maximumDocuments,
+  for (const number of [value.maximumModelCalls, value.maximumToolCalls, value.maximumCandidates, value.maximumDocuments, value.maximumProviderReadCalls,
     value.maximumBytes, value.maximumInputTokens, value.maximumOutputTokens, value.maximumRerankCalls,
     value.maximumKnowledgeBaseCalls, value.maximumParallelReads, value.deadlineMs]) {
     if (!Number.isSafeInteger(number) || number < 0) throw new Error("Invalid research budget");

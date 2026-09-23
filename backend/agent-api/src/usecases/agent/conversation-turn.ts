@@ -4,6 +4,7 @@ import type { ConversationTurnRepository, ConversationTurnResult } from "../../p
 import type { ServerAgentTurn } from "./server-agent.js";
 import { presentationFromObservation, presentationFromPublicPlan } from "@raiquora/agent/conversation-working-state";
 import type { AgentDiagnosticEvent, AgentDiagnosticsSink } from "../../ports/agent-diagnostics.js";
+import { reserveResearchResultSave } from "@raiquora/agent/research-execution";
 
 export interface ConversationTurnInput extends ServerAgentTurn { conversationId: string; turnId: string }
 /** The sequence cutoff is trusted server state, never a client-selected history boundary. */
@@ -31,6 +32,7 @@ export function createConversationTurnApplication(dependencies: {
         counts: { validated: 1 }, refs: [presentationReceipt.presentationId] });
       result = { status: runtime.status, response: runtime.response,
         ...(runtime.publicPlanPresentation ? { publicPlanPresentation: runtime.publicPlanPresentation } : {}),
+        ...(runtime.researchExecution ? { researchExecution: reserveResearchResultSave(runtime.researchExecution) } : {}),
         ...(runtime.turnObservation ? { turnObservation: runtime.turnObservation } : {}),
         ...(presentationReceipt ? { presentationReceipt } : {}),
         ...(runtime.tripCostProposal ? { tripCostProposal: runtime.tripCostProposal } : {}), ...(runtime.tripUpdateProposal ? { tripUpdateProposal: runtime.tripUpdateProposal } : {}), ...(runtime.consultationRequestProposal ? { consultationRequestProposal: runtime.consultationRequestProposal } : {}) };

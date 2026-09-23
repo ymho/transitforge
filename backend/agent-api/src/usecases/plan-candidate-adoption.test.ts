@@ -29,7 +29,7 @@ function fixture() {
   const candidates: ItineraryCandidateRepository = { put: async () => {}, get: async (principal, conversationId, id, revision) =>
     principal.subject === owner.subject && conversationId === "conversation-1" && id === set.id && revision === set.revision ? structuredClone(set) : undefined };
   let retained: CandidateAdoptionPreviewReceipt | undefined;
-  const receipts = { getPreview: async (principal: TripPrincipal, id: string) => principal.subject === owner.subject && retained?.mutationId === id ? structuredClone(retained) : undefined,
+  const receipts = { getPreview: async (principal: TripPrincipal, conversationId: string, id: string) => principal.subject === owner.subject && retained?.conversationId === conversationId && retained.mutationId === id ? structuredClone(retained) : undefined,
     putPreview: async (_principal: TripPrincipal, value: CandidateAdoptionPreviewReceipt) => { retained ??= structuredClone(value); return structuredClone(retained); } };
   const mutations = new Map<string, Trip>();
   const tripApplication = { execute: async (principal: TripPrincipal | undefined, command: unknown) => {
@@ -63,5 +63,12 @@ describe("typed plan candidate adoption", () => {
     await expect(f.application.execute(owner, { ...f.request, baseTripRevision: 1 })).rejects.toMatchObject({ code: "conflict" });
     await expect(f.application.execute(owner, { ...f.request, candidateSetId: "set-2" })).rejects.toMatchObject({ code: "not-found" });
     await expect(f.application.execute(owner, { ...f.request, confirmationKey: "0".repeat(64) } as never)).rejects.toMatchObject({ code: "invalid-input" });
+  });
+  it("does not increase side effects when a mutation ID is retried or reused for another candidate", async () => {
+    const f = fixture(); const preview = await f.application.execute(owner, f.request) as { confirmationKey: string };
+    const saved = await f.application.execute(owner, { ...f.request, operation: "confirm" }, { confirmationKey: preview.confirmationKey });
+    expect(await f.application.execute(owner, { ...f.request, operation: "confirm" }, { confirmationKey: preview.confirmationKey })).toEqual(saved);
+    await expect(f.application.execute(owner, { ...f.request, operation: "preview", variantId: "variant-2" })).rejects.toMatchObject({ code: "mutation-reused" });
+    expect(f.current()).toMatchObject({ revision: 1, items: [{ id: "keep" }, { id: "adopted-1" }] });
   });
 });

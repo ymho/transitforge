@@ -25,6 +25,7 @@
     "eval:agent:model:live": "node --import tsx tools/run_live_agent_model_evaluation.ts",
     "test:agent:model:live-fixtures": "vitest run --root . frontend/src/usecases/agent/evaluation/live-model-tool-fixture.test.ts",
     "eval:agent:strategies": "node --import tsx tools/run_agent_strategy_experiment.ts",
+    "eval:epic-537:scale": "node --import tsx tools/run_epic_537_scale_evaluation.ts",
     "eval:agent:model-routing:build": "node --import tsx tools/build_agent_model_routing_run.ts",
     "eval:agent:model-routing": "node --import tsx tools/compare_agent_model_routing.ts",
     "test:agent-cutover:browser": "vitest run tools/agent-transport/production-cutover.test.ts --maxWorkers=1"

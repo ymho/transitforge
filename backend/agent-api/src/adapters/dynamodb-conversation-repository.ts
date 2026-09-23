@@ -142,11 +142,14 @@ export class DynamoDbConversationRepository implements ConversationRepository {
       this.decode(principal, id, old);
       await this.store.send(new PutItemCommand(this.store.put(principal, sk, { revision: expected + 1, deleted: true }, old)));
     }
-    const page = await this.store.query(principal, messagePrefix(id), 50);
-    await this.store.purge(principal, page.items.map((item) => item.sk.S!));
-    if (page.next !== undefined) return { complete: false };
-    const turns = await this.store.query(principal, `TURN#${id}#`, 50);
-    await this.store.purge(principal, turns.items.map((item) => item.sk.S!));
-    return { complete: turns.next === undefined };
+    // Every conversation-derived resource is owner scoped and begins with one of these
+    // prefixes. Purge one bounded page per kind; a retry resumes from the tombstone.
+    // Trip/Profile/Reservation are independent resources and deliberately stay intact.
+    for (const prefix of [messagePrefix(id), `TURN#${id}#`, `WORKING#${id}`]) {
+      const page = await this.store.query(principal, prefix, 50);
+      await this.store.purge(principal, page.items.map((item) => item.sk.S!));
+      if (page.next !== undefined) return { complete: false };
+    }
+    return { complete: true };
   }
 }

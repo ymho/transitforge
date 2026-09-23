@@ -1,15 +1,16 @@
-import { DynamoDBClient, GetItemCommand, PutItemCommand, type AttributeValue } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, TransactWriteItemsCommand, type AttributeValue } from "@aws-sdk/client-dynamodb";
 import { createItineraryCandidateSet, type ItineraryCandidateSet } from "@raiquora/trip/itinerary-candidates";
 import { conversationIdentifier, TripResourceError, tripIdentifier, validateMutation } from "../contracts/trip-api.js";
 import { requireTripPrincipal, type TripPrincipal } from "../ports/trip-repository.js";
-import type { CandidateAdoptionPreviewReceipt, CandidateAdoptionReceiptRepository, ItineraryCandidateRepository } from "../ports/itinerary-candidate-repository.js";
+import type { CandidateAdoptionPreviewReceipt, CandidateAdoptionReceiptRepository, ConversationCandidateResourceRepository, ItineraryCandidateRepository } from "../ports/itinerary-candidate-repository.js";
 
 const maximumCandidateBytes = 180_000;
-type Result = { Item?: Record<string, AttributeValue> };
-export interface CandidateDynamoClient { send(command: GetItemCommand | PutItemCommand): Promise<Result> }
+type Result = { Item?: Record<string, AttributeValue>; Items?: Record<string, AttributeValue>[]; LastEvaluatedKey?: Record<string, AttributeValue> };
+type CandidateCommand = GetItemCommand | PutItemCommand | QueryCommand | TransactWriteItemsCommand;
+export interface CandidateDynamoClient { send(command: CandidateCommand): Promise<Result> }
 
 /** Candidate sets are immutable, bounded read models. They are not a second editable Trip source. */
-export class DynamoDbItineraryCandidateRepository implements ItineraryCandidateRepository, CandidateAdoptionReceiptRepository {
+export class DynamoDbItineraryCandidateRepository implements ItineraryCandidateRepository, CandidateAdoptionReceiptRepository, ConversationCandidateResourceRepository {
   constructor(private readonly table: string, private readonly client: CandidateDynamoClient = new DynamoDBClient({})) {
     if (!table) throw new TripResourceError("unavailable");
   }
@@ -42,37 +43,55 @@ export class DynamoDbItineraryCandidateRepository implements ItineraryCandidateR
     } catch { throw new TripResourceError("unavailable"); }
   }
   async putPreview(principal: TripPrincipal, value: CandidateAdoptionPreviewReceipt): Promise<CandidateAdoptionPreviewReceipt> {
-    const receipt = boundedPreview(value), key = this.previewKey(principal, receipt.mutationId), encoded = JSON.stringify(receipt);
+    const receipt = boundedPreview(value), key = this.previewKey(principal, receipt.conversationId, receipt.mutationId), encoded = JSON.stringify(receipt);
     try {
       await this.client.send(new PutItemCommand({ TableName: this.table, Item: { ...key, storageVersion: { N: "1" }, preview: { S: encoded } }, ConditionExpression: "attribute_not_exists(pk)" }));
       return structuredClone(receipt);
     } catch (error) {
       if (error instanceof Error && error.name === "ConditionalCheckFailedException") {
-        const existing = await this.getPreview(principal, receipt.mutationId);
+        const existing = await this.getPreview(principal, receipt.conversationId, receipt.mutationId);
         if (existing && JSON.stringify(existing) === encoded) return existing;
         throw new TripResourceError("mutation-reused");
       }
       throw new TripResourceError("unavailable");
     }
   }
-  async getPreview(principal: TripPrincipal, mutationId: string): Promise<CandidateAdoptionPreviewReceipt | undefined> {
-    const key = this.previewKey(principal, mutationId); let result: Result;
+  async getPreview(principal: TripPrincipal, conversationId: string, mutationId: string): Promise<CandidateAdoptionPreviewReceipt | undefined> {
+    const key = this.previewKey(principal, conversationId, mutationId); let result: Result;
     try { result = await this.client.send(new GetItemCommand({ TableName: this.table, Key: key, ConsistentRead: true })); }
     catch { throw new TripResourceError("unavailable"); }
     if (!result.Item) return undefined;
     try {
       if (result.Item.pk?.S !== key.pk.S || result.Item.sk?.S !== key.sk.S || result.Item.storageVersion?.N !== "1" || typeof result.Item.preview?.S !== "string") throw new Error();
-      return boundedPreview(JSON.parse(result.Item.preview.S));
+      const receipt = boundedPreview(JSON.parse(result.Item.preview.S));
+      if (receipt.conversationId !== conversationId || receipt.mutationId !== mutationId) throw new Error();
+      return receipt;
     } catch (error) { if (error instanceof TripResourceError) throw error; throw new TripResourceError("unavailable"); }
+  }
+  async purgeConversation(principal: TripPrincipal, conversationId: string): Promise<{ complete: boolean }> {
+    requireTripPrincipal(principal); conversationIdentifier(conversationId);
+    for (const prefix of [`CANDIDATE#${conversationId}#`, `CANDIDATE_ADOPTION#${conversationId}#`]) {
+      let result: Result;
+      try {
+        result = await this.client.send(new QueryCommand({ TableName: this.table, ConsistentRead: true, Limit: 50,
+          KeyConditionExpression: "pk = :owner AND begins_with(sk, :prefix)", ExpressionAttributeValues: {
+            ":owner": { S: `OWNER#${principal.subject}` }, ":prefix": { S: prefix },
+          }, ProjectionExpression: "pk, sk" }));
+        const keys = result.Items?.map((item) => ({ pk: item.pk!, sk: item.sk! })) ?? [];
+        if (keys.length) await this.client.send(new TransactWriteItemsCommand({ TransactItems: keys.map((Key) => ({ Delete: { TableName: this.table, Key } })) }));
+      } catch { throw new TripResourceError("unavailable"); }
+      if (result.LastEvaluatedKey) return { complete: false };
+    }
+    return { complete: true };
   }
   private key(principal: TripPrincipal, conversationId: string, candidateSetId: string, revision: number) {
     requireTripPrincipal(principal); conversationIdentifier(conversationId); stableId(candidateSetId);
     if (!Number.isSafeInteger(revision) || revision < 0) throw new TripResourceError("invalid-input");
     return { pk: { S: `OWNER#${principal.subject}` }, sk: { S: `CANDIDATE#${conversationId}#${candidateSetId}#${revision}` } };
   }
-  private previewKey(principal: TripPrincipal, mutationId: string) {
-    requireTripPrincipal(principal); tripIdentifier(mutationId);
-    return { pk: { S: `OWNER#${principal.subject}` }, sk: { S: `CANDIDATE_ADOPTION#${mutationId}` } };
+  private previewKey(principal: TripPrincipal, conversationId: string, mutationId: string) {
+    requireTripPrincipal(principal); conversationIdentifier(conversationId); tripIdentifier(mutationId);
+    return { pk: { S: `OWNER#${principal.subject}` }, sk: { S: `CANDIDATE_ADOPTION#${conversationId}#${mutationId}` } };
   }
 }
 

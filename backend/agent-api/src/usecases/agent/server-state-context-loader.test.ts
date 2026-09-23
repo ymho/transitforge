@@ -6,12 +6,12 @@ import { agentDecisionContextText, buildAgentDecisionContext } from "@raiquora/a
 import { createServerStateContextLoader, serverStateContextLimits } from "./server-state-context-loader.js";
 import { ConversationApplication } from "../conversation-application.js";
 import { ProfileApplication } from "../profile-application.js";
-import { stateDynamoFixture, stateA as a, stateB as b, conversationId as id, secondId as tripId, stateMetadata, stateProfile } from "../../adapters/state-dynamodb.fixture.js";
+import { stateDynamoFixture, stateA as a, stateB as b, conversationId as id, secondId as tripId, stateMetadata, stateProfile, noCandidateResources } from "../../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../../adapters/trip-dynamodb.fixture.js";
 
 function setup() {
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const conversations = new ConversationApplication(state.conversations, () => id), profiles = new ProfileApplication(state.profiles, state.clock);
+  const conversations = new ConversationApplication(state.conversations, noCandidateResources, () => id), profiles = new ProfileApplication(state.profiles, state.clock);
   const history = vi.spyOn(conversations, "history");
   const load = createServerStateContextLoader({ conversations, profiles, trips: trips.repository });
   return { ...state, trips, conversations, profiles, history, load };

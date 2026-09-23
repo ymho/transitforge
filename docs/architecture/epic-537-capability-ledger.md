@@ -2,7 +2,7 @@
 
 - 基準commit: `ddd5ac9bdecd3995c5e615c5afc7393dd17d7f2a`
 - 実装開始時main: 同commit（基準以降の関連差分なし）
-- 更新日: 2026-09-22
+- 更新日: 2026-09-23
 - 対象: #538、Epic #537の後続batchが共有する契約境界
 
 ## 本番呼出経路
@@ -54,3 +54,44 @@ dataset-v5は`input`と`expected`を別objectにし、Runtime組成へ渡せる�
 - `frontend/src/usecases/agent/evaluation`: 入力/期待値parserと客観評価
 
 後続laneはこの契約をmainへ統合してから利用し、未統合interfaceを個別に複製しない。
+
+## PR7 最終能力マップ
+
+`実装`、`fixture`、`Live実測`、`本番有効化`を別状態として記録する。`—`は未測定/未接続であり0点や失敗率0%ではない。
+
+| 能力 | 型 | pure計算 | Server組成 | Tool到達 | 公開wire | UI | 保存 | 自動test | 実モデル測定 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 相対日・日別・夜行・時差 | 済 | 済 | 済 | read済 | 済 | 済 | Trip V3 | 済 | — |
+| scoped制約・負荷 | 済 | 済 | 済 | read済 | 済 | 済 | Trip/派生 | 済 | — |
+| Evidence/applicability/lineage | 済 | 済 | 済 | discovery済 | 済 | 済 | observation ref | 済 | — |
+| Cost/feasibility/variant/scenario | 済 | 済 | 済 | proposal済 | 済 | 済 | Candidate/Trip分離 | 済 | — |
+| typed Presentation/採用/再読込 | 済 | 済 | production loader | proposal済 | SSE/history済 | 済 | receipt/CAS | 済 | — |
+| owner/revision/security | 済 | 済 | 済 | 境界検証 | 済 | 済 | CAS/idempotency | negative test | — |
+| 30/90日と調査予算 | 済 | 測定対象 | 接続済 | bounded read | partial/continuation | research表示 | receipt | stress test | — |
+
+自動testの成功はA/B層の証拠であり、C（実モデル＋合成Provider）またはD（実Provider＋実Browser＋Server保存）を代替しない。
+`tests/fixtures/epic-537-final-eval/observations.json`はparser契約fixtureで、静的な成功値を実績へ昇格しない。
+production-shaped製品scenarioは`epic-537-product-e2e.test.ts`が、独自`loadContext`を使わず本番の
+`createConversationServerAgent`を通して原文末尾、検索Evidence、typed Presentation、明示採用、readback、局所replanを検査する。
+
+## A01〜A04 状態
+
+| ID | 実装 | fixture検証 | Live実測 | 本番有効化 | 現時点の判断 |
+| --- | --- | --- | --- | --- | --- |
+| A01 検索・候補発見 | Web/KB/Rerank共通contractとadapterは済 | Web＋合成候補、KB/Rerank境界test済 | — | Webのみ既存設定。KB/Rerankは設定時だけで未有効 | adapter存在を品質改善とは判定しない |
+| A02 崩れにくさ | scenario差分、多軸比較、unknown保持は済 | delay/rain/closure等のDomain test済 | — | 公開presentation/UI接続済 | scenario pass率を実旅行成功確率へ変換しない |
+| A03 調査予算 | standard/detailed、typed usage、partial/continuationをPR7で接続 | budget/stress fixtureをPR7で検証 | — | current Server Agent内のbounded実行。AgentCore全面移行なし | checkpoint/resumeの実運用効果は未測定 |
+| A04 Prompt Cache | Bedrock cache point、usage/cache状態contractは済 | off/cold/warm/TTLのadapter test seam済 | — | default-off。production有効化未確認 | 総費用・latency非退行をLiveで測るまで有効化推薦なし |
+
+## 最終Evalの実行層
+
+| 層 | 構成 | このrevisionの状態 |
+| --- | --- | --- |
+| A | pure Domain（時間・日別・費用・制約・lineage） | owner別自動testは実行可能。統合report用execution artifactは未生成 |
+| B | production composition＋合成repository/Provider/model | traceable製品E2E testあり。統合report用反復artifactは未生成 |
+| C | 同composition＋実モデル＋合成Provider | 未実施 |
+| D | 実Provider＋実Browser＋Server保存 | 未実施 |
+
+Final Eval manifestはseed、clock、input、Provider/source版、推論設定、model ID、region、cache状態、料金表、
+prompt/schema/tool版と構造before/after×current/upperの全4セルを必須とする。未測定セルは`not_measured`と`null`で表し、
+0へ丸めない。Live比較は最低3反復を入口とするが、小標本のp95/成功率を精密な母集団推定として扱わない。
