@@ -1,6 +1,6 @@
 import { AgentTraceRecorder } from "./agent-trace";
 import { invalidResponseContract, responseContractRepairInstruction } from "./response-contract";
-import { groundedAnswerFailureCode, groundedAnswerInstruction, groundedAnswerRepairInstruction } from "./grounded-answer";
+import { groundedAnswerFailureCode, groundedAnswerInstruction, groundedAnswerRepairInstruction, hasStructuredPresentationEvidence } from "./grounded-answer";
 import type {
   AgentModelContent,
   AgentModelClass,
@@ -38,7 +38,7 @@ import type { AgentDecisionTrace } from "./agent-trace";
 import { AgentToolRegistry } from "./tool-registry";
 import { failedAgentToolResult } from "./tool-contract";
 import { acceptsAgentTurn, askProgressRepairInstruction, type AgentTurnObservation } from "./agent-turn-outcome";
-import { agentTurnOutputContract } from "./agent-output-contract";
+import { agentTurnOutputContract, agentTurnPresentationOutputContract } from "./agent-output-contract";
 import { compileAgentPrompt } from "./context-compiler";
 import { withMeasuredResearchOutcome } from "./public-plan-presentation";
 import type { ResearchExecutionLedger } from "./research-execution";
@@ -191,13 +191,16 @@ export class MultiStepAgentRuntime {
           }],
         }]
         : messages;
+      const outputContract = evidence.some(hasStructuredPresentationEvidence)
+        ? agentTurnPresentationOutputContract
+        : agentTurnOutputContract;
       const modelRequest = {
         messages: modelMessages,
         tools: modelTools,
         modelCallId,
-        outputContract: agentTurnOutputContract,
+        outputContract,
         prompt: compileAgentPrompt({ context: decisionContext, tools: modelTools,
-          outputSchema: agentTurnOutputContract.schema, renderedContext: renderedDecisionContext }),
+          outputSchema: outputContract.schema, renderedContext: renderedDecisionContext }),
         ...(selectedModelClass === undefined
           ? {}
           : { modelClass: selectedModelClass }),

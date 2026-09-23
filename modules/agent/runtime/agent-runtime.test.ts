@@ -24,6 +24,19 @@ import { inTripApplicationEvidence } from "@raiquora/agent/in-trip-application-e
 import { calculateInTripReplanScope, replanScopeContext } from "@raiquora/trip/in-trip-replan";
 
 describe("MultiStepAgentRuntime", () => {
+  it("requires typed presentation after fresh external source Evidence is available", async () => {
+    const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
+    const responseGenerator = new DefaultAgentResponseGenerator();
+    vi.spyOn(responseGenerator, "fromModel").mockReturnValue({ text: "検証済み表示", claims: [] });
+    const source: Evidence = { ...evidence("place-source"), category: "external", facts: {
+      sourceTitle: "出雲", sourceExcerpt: "神社と門前町を巡れます。", sourceUrl: "https://example.org/izumo", status: "available", freshness: "fresh",
+    }, references: [{ sourceType: "external-source", sourceRef: "https://example.org/izumo", retrievedAt: "2026-09-23T00:00:00Z", freshness: "current", summary: "観光資料" }] };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, responseGenerator,
+      model: sequenceModel([textResponse("旅行案です")], requests) }).run({ ...request("出雲の旅行案"), initialEvidence: [source] });
+    expect(output.status).toBe("completed");
+    expect(requests[0]?.outputContract).toMatchObject({ name: "agent_turn_result", version: "2",
+      schema: { required: ["responseText", "presentation", "decision"] } });
+  });
   it("records a safe structured-answer failure code after bounded repair", async () => {
     const { tools, toolExecutor } = toolSetup([]), responseGenerator = new DefaultAgentResponseGenerator();
     vi.spyOn(responseGenerator, "fromModel").mockImplementation(() => { throw new Error("Invalid itinerary coverage"); });
