@@ -655,6 +655,7 @@ export class MultiStepAgentRuntime {
 }
 
 function hasStructuredPresentation(response: AgentModelResponse): boolean {
+  if (response.declaredPresentation?.kind === "source-explanation" || response.declaredPresentation?.kind === "travel-plan") return true;
   const text = response.message.content.filter((item): item is Extract<AgentModelContent, { type: "text" }> => item.type === "text")
     .map(({ text }) => text).join("\n");
   const start = text.indexOf("{"), end = text.lastIndexOf("}");

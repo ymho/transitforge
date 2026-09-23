@@ -130,6 +130,14 @@ it("renders a grounded itinerary, all-party AI estimate, and bound photo in one 
   expect(result.text).toContain('https://images.example.org/izumo.jpg "Raiquora verified photo"');
   expect(result.claims.map(({ kind }) => kind)).toEqual(["fact", "inference"]);
 });
+it("renders a provider-decoded typed presentation without reparsing responseText as the source of truth", () => {
+  const presentation = JSON.parse(plan()) as Record<string, unknown>;
+  const result = new DefaultAgentResponseGenerator().fromModel({ ...model("表示してはいけないモデル文"), declaredPresentation: presentation }, [photographedPlace]);
+  expect(result.text).toContain("AI概算（旅行全体・利用者全員分）");
+  expect(result.text).toContain("合計：27,000円");
+  expect(result.text).not.toContain("表示してはいけないモデル文");
+  expect(result.publicPlanPresentation?.candidateOrder).toHaveLength(1);
+});
 it("keeps an unspecified departure date unknown instead of inventing today", () => {
   const result = travelPlan(plan({}).replace('"startDate":"2026-09-22"', '"startDate":null'), [photographedPlace])!;
   expect(result.text).toContain("出発日未定");

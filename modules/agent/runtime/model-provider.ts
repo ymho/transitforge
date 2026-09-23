@@ -71,6 +71,9 @@ export interface AgentModelMetadata {
 
 export interface AgentModelResponse {
   declaredInTripAnswerPlan?: import("./in-trip-answer-plan").InTripAnswerPlan;
+  /** Provider-decoded structure. Application still validates every nested source,
+   * itinerary, cost and photo reference before presentation. */
+  declaredPresentation?: Record<string, unknown>;
   message: AgentModelMessage;
   stopReason: "completed" | "tool_calls" | "max_tokens";
   metadata: AgentModelMetadata;

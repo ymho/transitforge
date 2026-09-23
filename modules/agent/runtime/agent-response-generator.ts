@@ -32,6 +32,11 @@ export class DefaultAgentResponseGenerator implements AgentResponseGenerator {
       .map(({ text }) => withoutInternalReasoning(text).trim())
       .filter(Boolean)
       .join("\n");
+    const presentation = response.declaredPresentation;
+    if (presentation?.kind === "travel-plan" || presentation?.kind === "source-explanation") {
+      const encoded = JSON.stringify(presentation);
+      return (presentation.kind === "travel-plan" ? travelPlan(encoded, evidence, presentationId) : sourceExplanation(encoded, evidence, profile))!;
+    }
     if (text.includes("Raiquora verified photo")) throw new Error("Reserved photo presentation");
     if (origin === "grounded" || evidence.some((e) => Object.keys(e.facts).length > 0) || text.startsWith("{")) {
       const ids = response.decisionSummary?.usedEvidenceIds ?? response.declaredEvidenceIds;
