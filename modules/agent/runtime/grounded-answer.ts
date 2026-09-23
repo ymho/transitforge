@@ -1,5 +1,6 @@
 import type { Evidence, EvidenceClaim } from "./evidence-model";
 import type { AgentGeneratedResponse } from "./agent-response-generator";
+import { parsePublicPlanPresentation, type PublicPlanCandidate } from "./public-plan-presentation";
 
 /** Statements are Application projections of actual Evidence, not model-authored facts.
  * Selection/order belongs to the model. Existing terminal/Proposal/InTrip presenters do not enter here. */
@@ -154,37 +155,8 @@ const costLabels = { transport: "交通", accommodation: "宿泊", sightseeing: 
 type CostCategory = keyof typeof costLabels;
 interface ParsedEstimate { currency: "JPY"; partySize: number; nights: number; originTravel: "included" | "excluded"; lodgingClass: "economy" | "standard" | "premium"; items: Record<CostCategory, number> }
 
-export interface TravelPlanFallbackOptions {
-  startDate?: string;
-  nights?: number;
-  maximumCandidates?: number;
-}
-
-/** Last-resort projection when a planning response remains malformed after one repair.
- * It selects only verified source/photo Evidence and labels bounded defaults as an AI estimate. */
-export function travelPlanFallback(evidence: readonly Evidence[], options: TravelPlanFallbackOptions = {}): AgentGeneratedResponse | undefined {
-  const nights = Number.isInteger(options.nights) && Number(options.nights) >= 0 && Number(options.nights) <= 30 ? Number(options.nights) : 1;
-  const maximumCandidates = Number.isInteger(options.maximumCandidates) && Number(options.maximumCandidates) >= 1
-    ? Math.min(3, Number(options.maximumCandidates)) : 1;
-  const sources = evidence.filter((item) => typeof item.facts.sourceExcerpt === "string" && typeof item.facts.sourceUrl === "string" &&
-    item.facts.status === "available" && item.facts.freshness === "fresh" && validSourceQuote(item, String(item.facts.sourceExcerpt))).slice(0, maximumCandidates);
-  if (!sources.length) return undefined;
-  return travelPlan(JSON.stringify({
-    kind: "travel-plan",
-    startDate: typeof options.startDate === "string" && calendarDate(options.startDate) ? options.startDate : null,
-    candidates: sources.map((source) => ({
-      evidenceId: source.id,
-      quote: String(source.facts.sourceExcerpt).slice(0, 400),
-      estimate: {
-        currency: "JPY", partySize: 1, nights, originTravel: "excluded", lodgingClass: "standard",
-        items: { transport: 0, accommodation: 12_000 * nights, sightseeing: 1_000 * (nights + 1), food: 4_000 * (nights + 1) },
-      },
-    })),
-  }), evidence);
-}
-
 /** A bounded planning projection: source facts and photos stay Evidence-bound, while itinerary and cost are explicitly labelled proposals. */
-export function travelPlan(text: string, evidence: readonly Evidence[]): AgentGeneratedResponse | undefined {
+export function travelPlan(text: string, evidence: readonly Evidence[], presentationId = "00000000-0000-4000-8000-000000000001"): AgentGeneratedResponse | undefined {
   const value: unknown = JSON.parse(text);
   if (!record(value) || value.kind !== "travel-plan") return undefined;
   if (!(value.startDate === null || typeof value.startDate === "string" && calendarDate(value.startDate)) || !Array.isArray(value.candidates) ||
@@ -193,6 +165,8 @@ export function travelPlan(text: string, evidence: readonly Evidence[]): AgentGe
     ? "出発日未定の仮プランです。未確認の日付や条件は補完せず、前提として明記しています。"
     : `${japaneseDate(value.startDate)}出発の仮プランです。未確認の条件は前提として明記しています。`];
   const claims: EvidenceClaim[] = [];
+  const presentationCandidates: PublicPlanCandidate[] = [];
+  const presentationEvidence = new Set<string>(), presentationPhotos = new Set<string>(), coveredDays = new Set<string>();
   const selected = new Set<string>();
   for (const candidate of value.candidates) {
     if (!record(candidate) ||
@@ -207,10 +181,22 @@ export function travelPlan(text: string, evidence: readonly Evidence[]): AgentGe
     claims.push({ id: `plan-source-${claims.length}`, statement: excerpt, kind: "fact", evidenceIds: [source.id], bindings: [claimBinding(source, "bounded_quote", "facts.sourceExcerpt")] });
     const lines: string[] = [`### ${title}`, excerpt, "#### ゆっくり過ごす行程（提案）"];
     const estimate = parseEstimate(candidate.estimate);
-    for (const day of normalizedItinerary(candidate.itinerary, estimate.nights)) {
+    const itinerary = parseProposedItinerary(candidate.itinerary, estimate.nights);
+    const variantId = `variant:${source.id}`;
+    const presentationItems: Array<PublicPlanCandidate["items"][number]> = [];
+    const presentationDays: Array<PublicPlanCandidate["days"][number]> = [];
+    for (const day of itinerary) {
+      const dayRef = `${variantId}:day:${day.day}`; coveredDays.add(dayRef);
+      const entries: Array<PublicPlanCandidate["days"][number]["entries"][number]> = [];
       for (const activity of day.activities) {
-        lines.push(`- **${Number(day.day)}日目 ${periodLabels[activity.period as keyof typeof periodLabels]}：** ${activityLabels[activity.activity as keyof typeof activityLabels]}`);
+        const itemRef = `${dayRef}:item:${entries.length + 1}`;
+        entries.push({ entryRef: `${dayRef}:entry:${entries.length + 1}`, itemRef, role: "visit" });
+        lines.push(`- **${Number(day.day)}日目 ${activity.period === "unscheduled" ? "時間未定" : activity.period === "day" ? "終日" : periodLabels[activity.period]}：** ${plain(activity.title)}`);
+        presentationItems.push({ itemRef, sourceRef: activity.sourceRef ?? itemRef, title: activity.title, kind: activity.kind,
+          timing: activity.period === "unscheduled" ? "unscheduled" : activity.period === "day" ? "day" : "window", evidenceRefs: [source.id], photoRefs: [] });
       }
+      if (day.freeDay) lines.push(`- **${Number(day.day)}日目：** 予定を入れない自由日`);
+      presentationDays.push({ dayRef, label: `${day.day}日目`, entries, status: day.freeDay ? "free" : "planned" });
     }
     lines.push("#### AI概算（旅行全体・利用者全員分）");
     for (const category of Object.keys(costLabels) as CostCategory[]) lines.push(`- ${costLabels[category]}：${yen(estimate.items[category])}`);
@@ -226,9 +212,21 @@ export function travelPlan(text: string, evidence: readonly Evidence[]): AgentGe
       lines.splice(1, 0, `![${plain(String(photo.facts.placeName ?? title))}](${photo.facts.imageUrl} "Raiquora verified photo")`,
         `写真: [${plain(String(photo.facts.imageAttribution))}](${photo.facts.imageSourceUrl})` + (typeof photo.facts.imageLicense === "string" ? `（${plain(photo.facts.imageLicense)}）` : ""));
     }
+    presentationEvidence.add(source.id);
+    if (photo) presentationPhotos.add(photo.id);
+    presentationCandidates.push({ variantId, label: title, dayOrder: presentationDays.map(({ dayRef }) => dayRef), days: presentationDays,
+      items: presentationItems.map((item) => ({ ...item, photoRefs: photo ? [photo.id] : [] })),
+      unknowns: ["営業・空室・時刻・予約価格は未確認"], workload: { status: "unknown" }, cost: { status: "partial", currency: "JPY", amountMinor: total },
+      comparisonAssessmentRefs: [], scenarioRefs: [] });
     sections.push(lines.join("\n\n"));
   }
-  return { text: sections.join("\n\n"), claims };
+  const publicPlanPresentation = parsePublicPlanPresentation({ version: "public-plan-presentation-v1", presentationId,
+    candidateSetRef: { kind: "unavailable", reason: "legacy-projection" }, candidateOrder: presentationCandidates.map(({ variantId }) => variantId), candidates: presentationCandidates,
+    evidenceRefs: [...presentationEvidence], photoRefs: [...presentationPhotos], coverage: { status: "complete", coveredDayRefs: [...coveredDays], omittedDayRefs: [], omittedScopes: [] },
+    statements: [...presentationEvidence].map((ref) => ({ kind: "fact", ref: `source:${ref}`, evidenceRefs: [ref] })), comparisonAssessmentRefs: [], scenarioRefs: [],
+    researchOutcome: { status: "complete", requestedMode: "standard", effectiveMode: "standard", budget: { modelCalls: 0, toolCalls: 0, wallClockMs: 0 },
+      coveredScopes: ["candidate-sources", "proposed-itinerary", "ai-cost-estimate"], remainingScopes: [] } });
+  return { text: sections.join("\n\n"), claims, publicPlanPresentation };
 }
 
 const travelPlanValidationMessages = new Set([
@@ -250,26 +248,36 @@ function parseEstimate(value: Record<string, unknown>): ParsedEstimate {
   return { currency: "JPY", partySize: Number(value.partySize), nights: Number(value.nights), originTravel: value.originTravel as ParsedEstimate["originTravel"],
     lodgingClass: value.lodgingClass as ParsedEstimate["lodgingClass"], items: Object.fromEntries(Object.keys(costLabels).map((key) => [key, items[key]])) as unknown as ParsedEstimate["items"] };
 }
-function normalizedItinerary(value: unknown, nights: number): Array<{ day: number; activities: Array<{ period: keyof typeof periodLabels; activity: keyof typeof activityLabels }> }> {
-  if (Array.isArray(value) && value.length > 0 && value.length <= 5) {
-    const days = new Set<number>();
-    const parsed = value.map((day) => {
-      if (!record(day) || !Number.isInteger(day.day) || Number(day.day) < 1 || Number(day.day) > 5 || days.has(Number(day.day)) ||
-          !Array.isArray(day.activities) || !day.activities.length || day.activities.length > 4) return undefined;
-      days.add(Number(day.day));
-      const activities = day.activities.map((activity) => record(activity) && String(activity.period) in periodLabels && String(activity.activity) in activityLabels
-        ? { period: activity.period as keyof typeof periodLabels, activity: activity.activity as keyof typeof activityLabels } : undefined);
-      return activities.every(Boolean) ? { day: Number(day.day), activities: activities as Array<{ period: keyof typeof periodLabels; activity: keyof typeof activityLabels }> } : undefined;
+export interface ParsedProposedDay {
+  day: number;
+  freeDay: boolean;
+  activities: Array<{ period: keyof typeof periodLabels | "day" | "unscheduled"; title: string; kind: "transport" | "stay" | "activity" | "free-time"; sourceRef?: string }>;
+}
+/** Strict model-output parser. Missing/invalid days are never replaced with a plausible itinerary. */
+export function parseProposedItinerary(value: unknown, nights: number): ParsedProposedDay[] {
+  if (!Array.isArray(value) || !value.length || value.length > 90) throw new Error("Invalid itinerary");
+  const days = new Set<number>();
+  const parsed = value.map((day): ParsedProposedDay => {
+    if (!record(day) || Object.keys(day).some((key) => !["day", "activities", "freeDay"].includes(key)) || !Number.isInteger(day.day) ||
+        Number(day.day) < 1 || Number(day.day) > 90 || days.has(Number(day.day)) || !Array.isArray(day.activities) || day.activities.length > 24 ||
+        day.freeDay !== undefined && typeof day.freeDay !== "boolean" || day.freeDay === true && day.activities.length) throw new Error("Invalid itinerary");
+    days.add(Number(day.day));
+    const activities = day.activities.map((activity) => {
+      if (!record(activity) || Object.keys(activity).some((key) => !["period", "activity", "title", "kind", "sourceRef"].includes(key)) ||
+          !["morning", "afternoon", "evening", "day", "unscheduled"].includes(String(activity.period)) ||
+          activity.kind !== undefined && !["transport", "stay", "activity", "free-time"].includes(String(activity.kind)) ||
+          activity.sourceRef !== undefined && (typeof activity.sourceRef !== "string" || !activity.sourceRef.trim() || activity.sourceRef.length > 300)) throw new Error("Invalid itinerary activity");
+      const legacy = typeof activity.activity === "string" && Object.hasOwn(activityLabels, activity.activity) ? activityLabels[activity.activity as keyof typeof activityLabels] : undefined;
+      const title = typeof activity.title === "string" && activity.title.trim() && activity.title.length <= 300 ? activity.title.trim() : legacy;
+      if (!title || activity.title !== undefined && activity.activity !== undefined || activity.activity !== undefined && !legacy) throw new Error("Invalid itinerary activity");
+      return { period: activity.period as ParsedProposedDay["activities"][number]["period"], title,
+        kind: (activity.kind ?? "activity") as ParsedProposedDay["activities"][number]["kind"], ...(activity.sourceRef ? { sourceRef: activity.sourceRef } : {}) };
     });
-    if (parsed.every(Boolean)) return parsed as Array<{ day: number; activities: Array<{ period: keyof typeof periodLabels; activity: keyof typeof activityLabels }> }>;
-  }
-  const days = Math.min(5, Math.max(1, nights + 1));
-  return Array.from({ length: days }, (_, index) => index === 0 ? { day: 1, activities: [
-    { period: "morning" as const, activity: "arrival_and_local_lunch" as const }, { period: "afternoon" as const, activity: "visit_featured_place" as const },
-    { period: "evening" as const, activity: "check_in_and_rest" as const },
-  ] } : index === days - 1 ? { day: index + 1, activities: [
-    { period: "morning" as const, activity: "quiet_morning" as const }, { period: "afternoon" as const, activity: "souvenir_and_departure" as const },
-  ] } : { day: index + 1, activities: [{ period: "afternoon" as const, activity: "stay_and_relax" as const }] });
+    if (!activities.length && day.freeDay !== true) throw new Error("Invalid itinerary activity");
+    return { day: Number(day.day), freeDay: day.freeDay === true, activities };
+  });
+  if (!Number.isInteger(nights) || nights < 0 || nights > 89 || parsed.length !== nights + 1 || parsed.some((day, index) => day.day !== index + 1)) throw new Error("Invalid itinerary coverage");
+  return parsed;
 }
 function validAmount(value: unknown): value is number { return Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 10_000_000; }
 function yen(value: number): string { return `${new Intl.NumberFormat("ja-JP").format(value)}円`; }

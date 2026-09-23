@@ -30,7 +30,7 @@ it("sends only references/raw request and Bearer; a communication retry retains 
   const pending = action.send(); await vi.waitFor(() => expect(s.fetcher).toHaveBeenCalledTimes(2)); s.complete();
   expect(await pending).toBe("保存された回答");
   const bodies = s.fetcher.mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
-  expect(bodies[0]).toEqual({ conversationId: "conversation-a", turnId: "turn-1", userRequest: "相談", tripId: "trip-a",
+  expect(bodies[0]).toEqual({ conversationId: "conversation-a", turnId: "turn-1", userRequest: "相談", requestedResearchMode: "standard", tripId: "trip-a",
     uiContext: { itemId: "item-a", calendarDate: "2026-09-21" } });
   expect(bodies[1]).toEqual(bodies[0]); expect(s.newTurnId).toHaveBeenCalledTimes(1);
   expect(s.fetcher.mock.calls[0][1]?.headers).toMatchObject({ Authorization: "Bearer access-token" });

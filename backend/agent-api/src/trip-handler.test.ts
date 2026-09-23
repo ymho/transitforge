@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTrip } from "@raiquora/trip/trip";
 import { createTripApiHandler } from "./trip-handler.js";
-import { boundedTrip, tripApiLimits } from "./contracts/trip-api.js";
+import { boundedTrip, tripApiLimits, TripResourceError } from "./contracts/trip-api.js";
 
 const trip = () => createTrip("11111111-1111-4111-8111-111111111111", "private itinerary", "2026-09-13T01:00:00Z");
 const event = (body: unknown) => ({ requestContext: { http: { method: "POST" } }, body: JSON.stringify(body) });
@@ -42,5 +42,28 @@ describe("Trip HTTP authentication and privacy boundary", () => {
       { ...trip(), title: "x".repeat(4097) },
     ]) expect(() => boundedTrip(value)).toThrow("payload-too-large");
     expect(boundedTrip(trip())).toEqual(trip());
+  });
+  it("wires typed adoption preview/confirm authority and keeps retry, stale and owner failures explicit", async () => {
+    const confirmationKey = "a".repeat(64), mutationId = "22222222-2222-4222-8222-222222222222";
+    const base = { version: "trip-api-v1", conversationId: "conversation-1", candidateSetId: "set-1", candidateSetRevision: 2,
+      variantId: "variant-1", tripId: trip().id, baseTripRevision: 0, mutationId };
+    const execute = vi.fn(), executeAdoption = vi.fn(async (principal, request, authority) => {
+      if (principal.subject !== "trusted") throw new TripResourceError("not-found");
+      if (request.baseTripRevision !== 0) throw new TripResourceError("conflict");
+      if (request.operation === "confirm" && authority?.confirmationKey !== confirmationKey) throw new TripResourceError("confirmation-required");
+      return request.operation === "preview" ? { status: "confirmation-required" as const, confirmationKey, preview: { proposal: { tripId: trip().id, baseRevision: 0, summary: "案", patches: [] }, componentMap: [], changes: { added: 0, replaced: 0, removed: 0 } } }
+        : { status: "saved" as const, trip: { ...trip(), revision: 1 }, revision: 1, mutationId };
+    });
+    const handler = createTripApiHandler({ execute, executeAdoption }, { authenticate: async () => ({ subject: "trusted" }) });
+    const preview = await handler(event({ ...base, operation: "preview-plan-adoption" })); expect(preview.statusCode).toBe(200);
+    const confirm = await handler(event({ ...base, operation: "confirm-plan-adoption", confirmationKey })); expect(confirm.statusCode).toBe(200);
+    const retry = await handler(event({ ...base, operation: "confirm-plan-adoption", confirmationKey }));
+    expect({ statusCode: retry.statusCode, body: retry.body }).toEqual({ statusCode: confirm.statusCode, body: confirm.body });
+    expect(execute).not.toHaveBeenCalled(); expect(executeAdoption.mock.calls[0]?.[0]).toEqual({ subject: "trusted" });
+    expect(executeAdoption.mock.calls[0]?.[2]).toBeUndefined(); expect(executeAdoption.mock.calls[1]?.[2]).toEqual({ confirmationKey });
+    expect((await handler(event({ ...base, operation: "confirm-plan-adoption", confirmationKey: "fake" }))).statusCode).toBe(400);
+    expect((await handler(event({ ...base, operation: "preview-plan-adoption", baseTripRevision: 9 }))).statusCode).toBe(409);
+    const other = createTripApiHandler({ execute, executeAdoption }, { authenticate: async () => ({ subject: "other" }) });
+    expect((await other(event({ ...base, operation: "preview-plan-adoption" }))).statusCode).toBe(404);
   });
 });

@@ -16,6 +16,8 @@ import { createServerStateContextLoader } from "../usecases/agent/server-state-c
 import { createServerAgent } from "../server-agent-composition.js";
 import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
 import { registerTripReadTools } from "../usecases/agent/trip-read-tool.js";
+import { DynamoDbItineraryCandidateRepository } from "../adapters/dynamodb-itinerary-candidate-repository.js";
+import { PlanCandidateRetentionApplication, registerPlanCandidateRetentionTool, type RetainedCandidatePlan } from "../usecases/plan-candidate-retention.js";
 
 /** Internal stateful composition. Transport/auth rollout and env bindings remain with #451/#462/#480. */
 export function createStatefulServerAgent(options: Omit<Parameters<typeof createServerAgent>[0], "loadContext"> & {
@@ -27,7 +29,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
   tripClient?: TripDynamoClient;
 }) {
   return { async runAgentTurn(input: ServerAgentTurn) {
-    let tripCostProposal: PublicCostProposal | undefined;
+    let tripCostProposal: PublicCostProposal | undefined, retainedCandidatePlan: RetainedCandidatePlan | undefined;
     let trip: Trip | undefined, consultation: Trip | undefined, tripUpdateProposal: PublicRequestProposal | undefined, consultationRequestProposal: ConsultationRequestProposal | undefined;
     const turnStates = new DynamoDbConversationTurnRepository(options.stateTable, options.stateClient);
     const result = await createServerAgent({ ...options,
@@ -37,6 +39,13 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
           registerTripReadTools(tools, evidence, trip);
           registerRequestProposalTool(tools, trip, proposal => { tripUpdateProposal = proposal; });
           registerCostProposalTool(tools, trip, proposal => { tripCostProposal = proposal; });
+          if (scope.conversationId) {
+            const candidateRepository = new DynamoDbItineraryCandidateRepository(options.tripTable, options.tripClient);
+            registerPlanCandidateRetentionTool(tools, new PlanCandidateRetentionApplication(candidateRepository), {
+              principal: scope.principal, executionId: scope.executionId, conversationId: scope.conversationId, userRequest: scope.userRequest,
+              tripId: trip.id, baseTripRevision: trip.revision,
+            }, value => { retainedCandidatePlan = value; });
+          }
         }
         else if (consultation) {
           const base = consultation;
@@ -58,7 +67,8 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
       }, { historyBeforeSequence: options.historyBeforeSequence, onTrip: value => { trip = value; },
         onConsultation: value => { consultation = createTrip(value.conversationId, "相談中の条件", value.createdAt, [], value.request); } }),
     }).runAgentTurn(input);
-    return { ...result, ...((result.status === "completed" || result.status === "follow_up") && tripCostProposal ? { tripCostProposal } : {}), ...((result.status === "completed" || result.status === "follow_up") && tripUpdateProposal ? { tripUpdateProposal } : {}),
+    return { ...result, ...((result.status === "completed" || result.status === "follow_up") && retainedCandidatePlan ? { publicPlanPresentation: retainedCandidatePlan.presentation } : {}),
+      ...((result.status === "completed" || result.status === "follow_up") && tripCostProposal ? { tripCostProposal } : {}), ...((result.status === "completed" || result.status === "follow_up") && tripUpdateProposal ? { tripUpdateProposal } : {}),
       ...((result.status === "completed" || result.status === "follow_up") && consultationRequestProposal ? { consultationRequestProposal } : {}) };
   } };
 }

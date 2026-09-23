@@ -7,6 +7,7 @@ import type {
 import {
   type ConversationHistoryRepository,
 } from "../../usecases/concierge/conversation-history-repository";
+import { renderPublicPlanPresentation } from "./public-plan-presentation-view";
 import {
   buildConversationFeedback,
   type ConversationFeedbackV2,
@@ -69,6 +70,9 @@ export interface AiGuidePanelElements {
   onConsultationRequestProposal?: (proposal: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal) => void;
   onTripUpdateProposal?: (proposal: import("@raiquora/trip/trip").TripUpdateProposal) => void;
   onChecklistProposal?: (proposal: import("@raiquora/trip/trip-checklist").ChecklistProposal) => void;
+  onPlanAdoption?: (target: { conversationId: string; candidateSetId: string; candidateSetRevision: number; variantId: string; tripId: string; baseTripRevision: number; mutationId: string }) => Promise<{
+    changes: { added: number; replaced: number; removed: number }; confirm(): Promise<void>;
+  }>;
   onPlaces?: (places: PlaceMediaSearchResult["places"]) => void;
   onGroundAccess?: (access: GroundAccessRoute | GroundAccessMatrix | GroundAccessArea) => void;
   onRestaurantConsult?: (restaurant: RestaurantCandidate) => void;
@@ -83,6 +87,7 @@ export type AiGuidePromptHandler = (
   preferences: JourneySearchPreferences,
   conversation?: ConversationSubmission,
   onResponseMetadata?: (metadata: AgentResponseMetadata) => void,
+  options?: { requestedResearchMode: "standard" | "detailed"; researchTarget?: { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number } },
 ) => Promise<ViewerAgentResponse>;
 
 export const staleResponseNotice =
@@ -288,7 +293,8 @@ export function configureAiGuidePanel(
     if (choices.length > 0) messages.append(contextChoices);
   };
 
-  const sendPrompt = (prompt: string, conversation?: ConversationSubmission) => {
+  const sendPrompt = (prompt: string, conversation?: ConversationSubmission, requestedResearchMode: "standard" | "detailed" = "standard",
+    researchTarget?: { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number }) => {
     if (!prompt || submit.disabled) {
       return;
     }
@@ -316,7 +322,7 @@ export function configureAiGuidePanel(
     let requestId: string | undefined;
     void handlePrompt(prompt, preferences(), conversation, (metadata) => {
       requestId = metadata.requestId;
-    })
+    }, { requestedResearchMode, ...(researchTarget ? { researchTarget } : {}) })
       .then((response) => {
         if (requestedGeneration !== requestGeneration) {
           if (conversationSessionId === requestedSessionId) pendingMessage.remove();
@@ -390,7 +396,7 @@ export function configureAiGuidePanel(
       });
   };
 
-  const submitPrompt = (prompt: string) => {
+  const submitPrompt = (prompt: string, requestedResearchMode: "standard" | "detailed" = "standard", researchTarget?: { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number }) => {
     if (!prompt || submit.disabled) return;
     const guidance = activeConversation ?? (activeTripContext === undefined ? undefined : {
       question: "現在の旅行条件を変更します",
@@ -412,8 +418,33 @@ export function configureAiGuidePanel(
       : { answer: prompt, guidance: updatedGuidance };
     activeConversation = undefined;
     setContextChoices();
-    sendPrompt(prompt, conversation);
+    sendPrompt(prompt, conversation, requestedResearchMode, researchTarget);
   };
+
+  messages.addEventListener("raiquora:detailed-research", (event) => {
+    const detail = (event as CustomEvent<{ presentationId?: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number }>).detail;
+    if (!detail?.presentationId) return;
+    submitPrompt("提示された案をさらに詳しく比較したい", "detailed", { presentationId: detail.presentationId,
+      ...(detail.candidateSetId ? { candidateSetId: detail.candidateSetId } : {}), ...(detail.candidateSetRevision === undefined ? {} : { candidateSetRevision: detail.candidateSetRevision }),
+      ...(detail.tripId ? { tripId: detail.tripId } : {}), ...(detail.baseTripRevision === undefined ? {} : { baseTripRevision: detail.baseTripRevision }) });
+  });
+  messages.addEventListener("raiquora:preview-plan-adoption", (event) => {
+    const detail = (event as CustomEvent<{ candidateSetId?: string; candidateSetRevision?: number; variantId?: string; tripId?: string; baseTripRevision?: number }>).detail;
+    if (!elements.onPlanAdoption || !detail?.candidateSetId || detail.candidateSetRevision === undefined || !detail.variantId || !detail.tripId || detail.baseTripRevision === undefined) return;
+    const session = conversationSessionId, generation = requestGeneration, host = (event.target as Element | null)?.closest<HTMLElement>(".public-plan-candidate");
+    if (!host || host.querySelector(".public-plan-change-preview")) return;
+    const status = document.createElement("aside"); status.className = "public-plan-change-preview"; status.textContent = "変更内容を確認しています…"; host.append(status);
+    const target = { conversationId: session, candidateSetId: detail.candidateSetId, candidateSetRevision: detail.candidateSetRevision, variantId: detail.variantId,
+      tripId: detail.tripId, baseTripRevision: detail.baseTripRevision, mutationId: crypto.randomUUID() };
+    void elements.onPlanAdoption(target).then((result) => {
+      if (session !== conversationSessionId || generation !== requestGeneration || !status.isConnected) return;
+      status.replaceChildren(); const summary = document.createElement("p"); summary.textContent = `変更プレビュー: 追加${result.changes.added}件・差替${result.changes.replaced}件・削除${result.changes.removed}件`;
+      const confirm = document.createElement("button"); confirm.type = "button"; confirm.textContent = "この変更を確認して保存";
+      confirm.addEventListener("click", () => { confirm.disabled = true; void result.confirm().then(() => { status.textContent = "旅程へ保存し、最新状態を再読込しました。"; })
+        .catch(() => { confirm.disabled = false; status.append(feedbackStatus("保存できませんでした。最新の旅程で案を作り直してください。")); }); });
+      status.append(summary, confirm);
+    }).catch(() => { status.textContent = "変更プレビューを作成できませんでした。最新の旅程で案を作り直してください。"; });
+  });
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -595,6 +626,7 @@ export function resolveAssistantMessage(
   } else {
     // V2 is a preview only until the #388/#389 writer gate. Never invoke the legacy apply callback.
     renderAssistantCopy(item, visibleAssistantText(response.text), animate);
+    if ("publicPlanPresentation" in response) item.append(renderPublicPlanPresentation(response.publicPlanPresentation));
   }
   // A question is metadata on the same turn, not a branch that hides its artifacts.
   if (typeof response !== "string" && "external" in response && response.external) {

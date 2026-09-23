@@ -5,6 +5,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { StateError, exactObject, messageInputs, stateId, type StateClock } from "../contracts/server-state.js";
 import type { BeginConversationTurn, ConversationTurnIdentity, ConversationTurnLease, ConversationTurnRepository, ConversationTurnResult } from "../ports/conversation-turn-repository.js";
 import { parseConversationWorkingState, type ConversationWorkingState } from "@raiquora/agent/conversation-working-state";
+import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 import { DynamoDbConversationRepository } from "./dynamodb-conversation-repository.js";
 import type { StateDynamoClient, StateEnvelope } from "./dynamodb-state-store.js";
 
@@ -20,17 +21,19 @@ interface TurnRecord {
   targetTripId?: string;
 }
 function finalResult(value: ConversationTurnResult): ConversationTurnResult {
-  exactObject(value, ["status", "response", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal", "turnObservation", "presentationReceipt"]);
+  exactObject(value, ["status", "response", "publicPlanPresentation", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal", "turnObservation", "presentationReceipt"]);
   if (value.status !== "completed" && value.status !== "follow_up") throw new StateError("invalid-input");
   messageInputs([{ role: "assistant", text: value.response }]);
   try {
     if ((value.tripUpdateProposal || value.tripCostProposal) && value.consultationRequestProposal) throw new Error();
+    const publicPlanPresentation = value.publicPlanPresentation === undefined ? undefined : parsePublicPlanPresentation(value.publicPlanPresentation);
     if (value.turnObservation !== undefined && (!value.turnObservation || typeof value.turnObservation !== "object" || !["ask_only", "ask_and_progress", "progress", "answer"].includes(value.turnObservation.outcome))) throw new Error();
     if (value.presentationReceipt !== undefined) parseConversationWorkingState({ version: 1, revision: 0,
       sourceTurnId: "00000000-0000-4000-8000-000000000000", sourceUserSequence: 1,
       target: { conversationId: "00000000-0000-4000-8000-000000000000" }, presentations: [value.presentationReceipt],
       pendingQuestionRefs: [], pendingProposalRefs: [] });
     return { status: value.status, response: value.response,
+      ...(publicPlanPresentation ? { publicPlanPresentation } : {}),
       ...(value.tripCostProposal !== undefined ? { tripCostProposal: parsePublicCostProposal(value.tripCostProposal) } : {}),
       ...(value.tripUpdateProposal !== undefined ? { tripUpdateProposal: parsePublicRequestProposal(value.tripUpdateProposal) } : {}),
       ...(value.consultationRequestProposal !== undefined ? { consultationRequestProposal: parseConsultationRequestProposal(value.consultationRequestProposal) } : {}),
@@ -89,18 +92,19 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     if (turn && turn.userSequence > current.messageCount) throw new StateError("unavailable");
     return { current, old, turn };
   }
-  async beginTurn(identity: ConversationTurnIdentity, request: { userRequest: string; tripId?: string; uiContext?: { itemId?: string; calendarDate?: string } }): Promise<BeginConversationTurn> {
+  async beginTurn(identity: ConversationTurnIdentity, request: { userRequest: string; requestedResearchMode?: "standard" | "detailed"; researchTarget?: import("../contracts/server-state.js").ResearchTarget; tripId?: string; uiContext?: { itemId?: string; calendarDate?: string } }): Promise<BeginConversationTurn> {
     const input = this.identity(identity);
-    exactObject(request, ["userRequest", "tripId", "uiContext"]);
+    exactObject(request, ["userRequest", "requestedResearchMode", "researchTarget", "tripId", "uiContext"]);
     if (typeof request.userRequest !== "string" || !request.userRequest.trim() || request.userRequest.length > 8_000) throw new StateError("invalid-input");
     const [message] = messageInputs([{ role: "user", text: request.userRequest }]);
     if (request.tripId !== undefined) stateId(request.tripId);
+    if (request.requestedResearchMode !== undefined && !["standard", "detailed"].includes(request.requestedResearchMode)) throw new StateError("invalid-input");
     if (request.uiContext !== undefined) exactObject(request.uiContext, ["itemId", "calendarDate"]);
     const itemId = request.uiContext?.itemId;
     if (itemId !== undefined && (typeof itemId !== "string" || !itemId.trim() || itemId.length > 200 || /[\u0000-\u001f\u007f]/u.test(itemId))) throw new StateError("invalid-input");
     const calendarDate = request.uiContext?.calendarDate;
     if (calendarDate !== undefined && !validCalendarDate(calendarDate)) throw new StateError("invalid-input");
-    const requestHash = createHash("sha256").update(JSON.stringify([request.userRequest, request.tripId ?? null, itemId ?? null, calendarDate ?? null])).digest("hex");
+    const requestHash = createHash("sha256").update(JSON.stringify([request.userRequest, request.requestedResearchMode ?? "standard", request.researchTarget ?? null, request.tripId ?? null, itemId ?? null, calendarDate ?? null])).digest("hex");
     const { current, old, turn } = await this.read(input);
     if (turn && turn.requestHash !== requestHash) throw new StateError("conflict");
     if (turn?.state === "completed") return { state: "completed", result: turn.result! };
@@ -127,7 +131,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const { current, old, turn } = await this.read(input);
     if (!turn || turn.attemptId !== attemptId || turn.userSequence !== userSequence) throw new StateError("conflict");
     if (turn.state === "completed") {
-      if (!saved || saved.status !== turn.result!.status || saved.response !== turn.result!.response || JSON.stringify(saved.tripUpdateProposal) !== JSON.stringify(turn.result!.tripUpdateProposal) || JSON.stringify(saved.consultationRequestProposal) !== JSON.stringify(turn.result!.consultationRequestProposal) || JSON.stringify(saved.tripCostProposal) !== JSON.stringify(turn.result!.tripCostProposal)) throw new StateError("conflict");
+      if (!saved || saved.status !== turn.result!.status || saved.response !== turn.result!.response || JSON.stringify(saved.publicPlanPresentation) !== JSON.stringify(turn.result!.publicPlanPresentation) || JSON.stringify(saved.tripUpdateProposal) !== JSON.stringify(turn.result!.tripUpdateProposal) || JSON.stringify(saved.consultationRequestProposal) !== JSON.stringify(turn.result!.consultationRequestProposal) || JSON.stringify(saved.tripCostProposal) !== JSON.stringify(turn.result!.tripCostProposal)) throw new StateError("conflict");
       return turn.result;
     }
     if (!saved && turn.state === "failed") return;
@@ -138,7 +142,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const workingKey = this.workingKey(input.conversationId);
     const oldWorking = saved ? await this.store.read(input.principal, workingKey) : undefined;
     const previousWorking = oldWorking ? parseConversationWorkingState(oldWorking.payload) : undefined;
-    const targetTripRevision = saved?.tripUpdateProposal?.baseRevision ?? saved?.tripCostProposal?.baseRevision ??
+    const targetTripRevision = saved?.publicPlanPresentation?.target?.baseTripRevision ?? saved?.tripUpdateProposal?.baseRevision ?? saved?.tripCostProposal?.baseRevision ??
       (previousWorking && previousWorking.target.tripId === turn.targetTripId ? previousWorking.target.tripRevision : undefined);
     const working = saved ? parseConversationWorkingState({
       version: 1, revision: (oldWorking?.revision ?? -1) + 1,
@@ -153,7 +157,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     }) : undefined;
     await this.write(input.principal, current, { ...current, updatedAt: now, revision: current.revision + 1,
       messageCount: current.messageCount + (saved ? 1 : 0) },
-    saved ? [{ role: "assistant", text: saved.response, ...(saved.tripCostProposal ? { tripCostProposal: saved.tripCostProposal } : {}), ...(saved.tripUpdateProposal ? { tripUpdateProposal: saved.tripUpdateProposal } : {}), ...(saved.consultationRequestProposal ? { consultationRequestProposal: saved.consultationRequestProposal } : {}), sequence: current.messageCount + 1, createdAt: now }] : [],
+    saved ? [{ role: "assistant", text: saved.response, ...(saved.publicPlanPresentation ? { publicPlanPresentation: saved.publicPlanPresentation } : {}), ...(saved.tripCostProposal ? { tripCostProposal: saved.tripCostProposal } : {}), ...(saved.tripUpdateProposal ? { tripUpdateProposal: saved.tripUpdateProposal } : {}), ...(saved.consultationRequestProposal ? { consultationRequestProposal: saved.consultationRequestProposal } : {}), sequence: current.messageCount + 1, createdAt: now }] : [],
     [this.store.put(input.principal, this.key(input), { revision: old!.revision + 1, deleted: false, payload: next }, old),
       ...(working ? [this.store.put(input.principal, workingKey, { revision: working.revision, deleted: false, payload: working }, oldWorking)] : [])]);
     return saved;

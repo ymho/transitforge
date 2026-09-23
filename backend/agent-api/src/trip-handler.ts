@@ -5,10 +5,12 @@ import { TripResourceError, tripApiLimits, tripApiVersion } from "./contracts/tr
 import { jsonResponse, type LambdaContext, type LambdaHttpEvent } from "./contracts/http.js";
 import { requireTripPrincipal, type TripPrincipal } from "./ports/trip-repository.js";
 import type { TripApplication } from "./usecases/trip-application.js";
+import { parsePlanAdoptionCommand } from "./contracts/trip-api.js";
+import type { PlanCandidateAdoptionApplication } from "./usecases/plan-candidate-adoption.js";
 
 /** Trusted host injection; production uses createHttpPrincipalResolver, never request identity. */
 export type TripPrincipalResolver = (event: LambdaHttpEvent) => Promise<TripPrincipal | undefined>;
-export function createTripApiHandler(application?: Pick<TripApplication, "execute">, options: {
+export function createTripApiHandler(application?: Pick<TripApplication, "execute"> & { executeAdoption?: PlanCandidateAdoptionApplication["execute"] }, options: {
   authenticate?: TripPrincipalResolver;
   log?: (fields: { requestId: string; category: string; operation: string }) => void;
 } = {}) {
@@ -29,7 +31,14 @@ export function createTripApiHandler(application?: Pick<TripApplication, "execut
       try { value = JSON.parse(body); } catch { throw new TripResourceError("invalid-input"); }
       requirePersonalOperation("trip", event, value);
       const requested = (value as { operation?: unknown } | null)?.operation;
-      if (typeof requested === "string" && ["create", "mutate", "get", "list", "archive", "attach", "detach", "reference"].includes(requested)) operation = requested;
+      if (typeof requested === "string" && ["create", "mutate", "get", "list", "archive", "attach", "detach", "reference", "preview-plan-adoption", "confirm-plan-adoption"].includes(requested)) operation = requested;
+      if (requested === "preview-plan-adoption" || requested === "confirm-plan-adoption") {
+        if (!application.executeAdoption) throw new TripResourceError("unavailable");
+        const command = parsePlanAdoptionCommand(value), { version: _version, confirmationKey, ...request } = command;
+        return jsonResponse(200, { version: tripApiVersion, ...await application.executeAdoption(principal, {
+          ...request, operation: requested === "preview-plan-adoption" ? "preview" : "confirm",
+        }, confirmationKey ? { confirmationKey } : undefined) }, requestId);
+      }
       return jsonResponse(200, await application.execute(principal, value), requestId);
     } catch (error) {
       const authError = authenticationErrorResponse(error, tripApiVersion, requestId);

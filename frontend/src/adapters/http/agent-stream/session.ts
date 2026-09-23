@@ -8,6 +8,8 @@ export interface ConversationStreamRequest {
   conversationId: string;
   turnId: string;
   userRequest: string;
+  requestedResearchMode?: "standard" | "detailed";
+  researchTarget?: { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number };
   tripId?: string;
   uiContext?: { itemId?: string; calendarDate?: string };
 }
@@ -43,10 +45,15 @@ export function createConversationStreamSession(options: {
   return {
     contextVersion() { sync(); return version(); },
     contextChanged: sync,
-    start(userRequest: string) {
+    start(userRequest: string, requestedResearchMode: "standard" | "detailed" = "standard", researchTarget?: { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number }) {
       sync(); active?.abort(); const requestVersion = ++requestGeneration, contextVersion = version();
+      if (researchTarget && ((researchTarget.tripId !== undefined && researchTarget.tripId !== refs.tripId) ||
+          (researchTarget.baseTripRevision !== undefined && researchTarget.baseTripRevision !== refs.tripRevision))) throw new AgentStreamError("stale_generation");
       // Deliberate projection: callers cannot send history, Profile, Trip bodies or Tool data.
       const request: ConversationStreamRequest = { conversationId: refs.conversationId, turnId: (options.newTurnId ?? (() => crypto.randomUUID()))(), userRequest,
+        requestedResearchMode,
+        ...(researchTarget ? { researchTarget: { ...researchTarget, ...(refs.tripId ? { tripId: refs.tripId } : {}),
+          ...(refs.tripRevision === undefined ? {} : { baseTripRevision: refs.tripRevision }) } } : {}),
         ...(refs.tripId ? { tripId: refs.tripId } : {}), uiContext: {
           ...(refs.itemId ? { itemId: refs.itemId } : {}), calendarDate: localCalendarDate(options.now?.() ?? new Date()),
         } };
@@ -65,7 +72,7 @@ export function createConversationStreamSession(options: {
             let final: ViewerAgentResponse | undefined;
             await consumeAgentStream({ token, request, endpoint: options.endpoint ?? "/api/agent-stream", fetcher: options.fetcher,
               signal: controller.signal, isCurrent: current, measurement: { requestStart: 0, maxSilenceMs: 0 },
-              onEvent(event) { if (!current()) return; if (event.type === "final") final = event.tripCostProposal ? { text: event.response, tripCostProposal: event.tripCostProposal, ...(event.tripUpdateProposal ? { tripUpdateProposal: event.tripUpdateProposal } : {}) } : event.consultationRequestProposal ? { text: event.response, consultationRequestProposal: event.consultationRequestProposal } : event.tripUpdateProposal ? { text: event.response, tripUpdateProposal: event.tripUpdateProposal } : event.response; onEvent?.(event); },
+              onEvent(event) { if (!current()) return; if (event.type === "final") final = event.publicPlanPresentation ? { text: event.response, publicPlanPresentation: event.publicPlanPresentation } : event.tripCostProposal ? { text: event.response, tripCostProposal: event.tripCostProposal, ...(event.tripUpdateProposal ? { tripUpdateProposal: event.tripUpdateProposal } : {}) } : event.consultationRequestProposal ? { text: event.response, consultationRequestProposal: event.consultationRequestProposal } : event.tripUpdateProposal ? { text: event.response, tripUpdateProposal: event.tripUpdateProposal } : event.response; onEvent?.(event); },
             });
             if (!current()) throw new AgentStreamError("stale_generation");
             if (final === undefined) throw new AgentStreamError("missing_final");

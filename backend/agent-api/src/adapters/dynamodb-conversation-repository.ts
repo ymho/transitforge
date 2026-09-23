@@ -1,6 +1,7 @@
 import { parsePublicCostProposal } from "@raiquora/trip/public-cost-proposal";
 import { parseConsultationRequestProposal } from "@raiquora/trip/consultation-request-proposal";
 import { parsePublicRequestProposal } from "@raiquora/trip/public-request-proposal";
+import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 import { PutItemCommand, TransactWriteItemsCommand, type Put } from "@aws-sdk/client-dynamodb";
 import type { TrustedPrincipal } from "../contracts/trusted-principal.js";
 import { StateError, exactObject, metadata, messageInputs, pageOptions, revision, stateId,
@@ -77,15 +78,15 @@ export class DynamoDbConversationRepository implements ConversationRepository {
     const items = result.items.map((item): ConversationMessage => {
       try {
         const value: unknown = JSON.parse(item.payload?.S ?? "");
-        exactObject(value, ["sequence", "createdAt", "role", "text", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"]);
+        exactObject(value, ["sequence", "createdAt", "role", "text", "publicPlanPresentation", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"]);
         sequence(value.sequence); timestamp(value.createdAt);
         if (value.sequence < 1 || item.sk.S !== `${prefix}${sequenceKey(value.sequence)}` || item.storageVersion?.N !== "1") throw new Error();
         const [message] = messageInputs([{ role: value.role, text: value.text }]);
-        if ((value.tripUpdateProposal !== undefined || value.consultationRequestProposal !== undefined || value.tripCostProposal !== undefined) && message.role !== "assistant") throw new Error();
+        if ((value.publicPlanPresentation !== undefined || value.tripUpdateProposal !== undefined || value.consultationRequestProposal !== undefined || value.tripCostProposal !== undefined) && message.role !== "assistant") throw new Error();
         if ((value.tripUpdateProposal || value.tripCostProposal) && value.consultationRequestProposal) throw new Error();
         const consultationRequestProposal = value.consultationRequestProposal === undefined ? undefined : parseConsultationRequestProposal(value.consultationRequestProposal);
         if (consultationRequestProposal && consultationRequestProposal.conversationId !== id) throw new Error();
-        return { ...message, sequence: value.sequence, createdAt: value.createdAt, ...(value.tripCostProposal !== undefined ? { tripCostProposal: parsePublicCostProposal(value.tripCostProposal) } : {}),
+        return { ...message, sequence: value.sequence, createdAt: value.createdAt, ...(value.publicPlanPresentation !== undefined ? { publicPlanPresentation: parsePublicPlanPresentation(value.publicPlanPresentation) } : {}), ...(value.tripCostProposal !== undefined ? { tripCostProposal: parsePublicCostProposal(value.tripCostProposal) } : {}),
           ...(value.tripUpdateProposal !== undefined ? { tripUpdateProposal: parsePublicRequestProposal(value.tripUpdateProposal) } : {}), ...(consultationRequestProposal ? { consultationRequestProposal } : {}) };
       } catch { throw new StateError("unavailable"); }
     });

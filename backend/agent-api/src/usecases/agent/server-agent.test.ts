@@ -70,6 +70,22 @@ describe("Server Agent Application without Browser APIs", () => {
     expect(JSON.stringify(results[0])).not.toContain("owner-b");
     expect(JSON.stringify(results[1])).not.toContain("owner-a");
   });
+  it("accepts detailed research only for the exact Trip/revision-bound presentation receipt", async () => {
+    const tripId = "11111111-1111-4111-8111-111111111111", presentationId = "22222222-2222-4222-8222-222222222222";
+    const context = { taskContext: { version: 1 as const, phase: "refine" as const, availableProgressKinds: ["candidates" as const, "comparison" as const],
+      target: { kind: "trip" as const, tripId, tripRevision: 4 } },
+      workingState: { version: 1 as const, revision: 1, sourceTurnId: "33333333-3333-4333-8333-333333333333", sourceUserSequence: 1,
+        target: { conversationId: "44444444-4444-4444-8444-444444444444", tripId, tripRevision: 4 }, presentations: [{ presentationId, version: 1 as const,
+          target: { tripId, baseTripRevision: 4 }, candidateSetRef: { kind: "candidate-set-ref" as const, candidateSetId: "set-1", revision: 2, baseTripRevision: 4 }, entries: [{ ordinal: 1, candidateRef: "variant-1" }] }],
+        pendingQuestionRefs: [], pendingProposalRefs: [] } };
+    const app = createServerAgentApplication({ newExecutionId: () => "execution-1", createModel: () => ({ generate: async () => final }), registerTools: () => {},
+      detailedResearchAllowed: true, detailedResearchLimits: { maxModelCalls: 2, maxIterations: 2 }, loadContext: async () => context });
+    const target = { presentationId, candidateSetId: "set-1", candidateSetRevision: 2, tripId, baseTripRevision: 4 };
+    expect((await app.runAgentTurn({ ...input, tripId, requestedResearchMode: "detailed", researchTarget: target })).status).toBe("completed");
+    for (const changed of [{ ...target, baseTripRevision: 3 }, { ...target, tripId: "55555555-5555-4555-8555-555555555555" }, { ...target, candidateSetRevision: 3 }]) {
+      await expect(app.runAgentTurn({ ...input, tripId, requestedResearchMode: "detailed", researchTarget: changed })).rejects.toThrow("Stale or foreign");
+    }
+  });
 });
 
 

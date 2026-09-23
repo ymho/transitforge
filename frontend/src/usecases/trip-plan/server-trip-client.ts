@@ -1,6 +1,8 @@
 import type { Trip, TripUpdateProposal } from "@raiquora/trip/trip";
 
 export interface TripMutationRequest { tripId: string; baseRevision: number; mutationId: string; proposal: TripUpdateProposal }
+export interface PlanAdoptionTarget { conversationId: string; candidateSetId: string; candidateSetRevision: number; variantId: string; tripId: string; baseTripRevision: number; mutationId: string }
+export interface PlanAdoptionPreview { confirmationKey: string; preview: { proposal: TripUpdateProposal; componentMap: readonly { componentId: string; itemId: string }[]; changes: { added: number; replaced: number; removed: number } } }
 /** A definitive rejection, unlike a lost response whose mutation may already have committed. */
 export class TripWriteRejected extends Error {}
 
@@ -17,5 +19,7 @@ export interface ServerTripClient {
   mutate(mutation: TripMutationRequest): Promise<Trip>;
   attach(conversationId: string, tripId: string): Promise<void>;
   detach(conversationId: string): Promise<void>;
+  previewPlanAdoption?(target: PlanAdoptionTarget): Promise<PlanAdoptionPreview>;
+  confirmPlanAdoption?(target: PlanAdoptionTarget, confirmationKey: string): Promise<Trip>;
 }
 export type TripLoadState = "loading" | "loaded" | "unavailable";

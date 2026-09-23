@@ -94,8 +94,10 @@ function parseInput(request: StreamRequest, conversationTurns = false): Omit<Con
   if (request.isBase64Encoded || typeof request.body !== "string" || new TextEncoder().encode(request.body).length > 40_000) throw new InputError(400);
   let value: unknown;
   try { value = JSON.parse(request.body); } catch { throw new InputError(400); }
-  if (!record(value) || Object.keys(value).some(k => !["userRequest", "conversationId", "tripId", "uiContext", ...(conversationTurns ? ["turnId"] : [])].includes(k)) ||
+  if (!record(value) || Object.keys(value).some(k => !["userRequest", "requestedResearchMode", "researchTarget", "conversationId", "tripId", "uiContext", ...(conversationTurns ? ["turnId"] : [])].includes(k)) ||
       typeof value.userRequest !== "string" || !value.userRequest.trim() || value.userRequest.length > 8_000) throw new InputError(400);
+  if (value.requestedResearchMode !== undefined && !["standard", "detailed"].includes(String(value.requestedResearchMode))) throw new InputError(400);
+  if (value.researchTarget !== undefined && !validResearchTarget(value.researchTarget)) throw new InputError(400);
   if (value.uiContext !== undefined && (!record(value.uiContext) || Object.keys(value.uiContext).some(k => !["itemId", "calendarDate"].includes(k)))) throw new InputError(400);
   for (const ref of [value.conversationId, value.tripId, record(value.uiContext) ? value.uiContext.itemId : undefined]) {
     if (ref !== undefined && (typeof ref !== "string" || !ref.trim() || ref.length > 200 || /[\u0000-\u001f\u007f]/u.test(ref))) throw new InputError(400);
@@ -109,6 +111,15 @@ function parseInput(request: StreamRequest, conversationTurns = false): Omit<Con
   return value as unknown as Omit<ConversationTurnInput, "principal">;
 }
 function record(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
+function validResearchTarget(value: unknown): boolean {
+  if (!record(value) || Object.keys(value).some((key) => !["presentationId", "candidateSetId", "candidateSetRevision", "tripId", "baseTripRevision"].includes(key)) ||
+      typeof value.presentationId !== "string" || !value.presentationId.trim() || value.presentationId.length > 200 || /[\u0000-\u001f\u007f]/u.test(value.presentationId) ||
+      value.candidateSetId !== undefined && (typeof value.candidateSetId !== "string" || !value.candidateSetId.trim() || value.candidateSetId.length > 300) ||
+      value.tripId !== undefined && (typeof value.tripId !== "string" || !value.tripId.trim() || value.tripId.length > 200) ||
+      [value.candidateSetRevision, value.baseTripRevision].some((item) => item !== undefined && (!Number.isSafeInteger(item) || Number(item) < 0)) ||
+      (value.candidateSetId === undefined) !== (value.candidateSetRevision === undefined)) return false;
+  return true;
+}
 function validCalendarDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00Z`);

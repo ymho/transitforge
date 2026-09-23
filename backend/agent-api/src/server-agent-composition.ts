@@ -21,6 +21,8 @@ export function createServerAgent(options: {
   registerAdditionalTools?: ServerAgentDependencies["registerTools"];
   diagnostics?: AgentDiagnosticsSink;
   log?: ServerAgentDependencies["log"];
+  detailedResearchAllowed?: boolean;
+  detailedResearchLimits?: Partial<import("@raiquora/agent/runtime-policies").AgentRuntimeLimits>;
 }) {
   return createServerAgentApplication({
     newExecutionId: options.newExecutionId ?? randomUUID,
@@ -30,6 +32,8 @@ export function createServerAgent(options: {
     loadContext: options.loadContext,
     diagnostics: options.diagnostics,
     log: options.log,
+    detailedResearchAllowed: options.detailedResearchAllowed,
+    detailedResearchLimits: options.detailedResearchLimits,
     registerTools: (tools, evidence, scope) => { registerServerTools(tools, evidence, [
       { descriptor: weatherToolDescriptor, operation: createWeatherForecastOperation(options.weather), evidence: externalTravelEvidence },
       ...(options.additionalTools ?? []),

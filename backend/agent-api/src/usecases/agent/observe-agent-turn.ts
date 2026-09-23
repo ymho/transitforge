@@ -13,6 +13,7 @@ export async function observeAgentTurn(
   if (result.status === "failed" || result.status === "limit_reached") {
     await emit({ type: "error", code: result.status === "failed" ? "agent_failed" : "limit_reached" });
   } else {
-    await emit({ type: "final", status: result.status, response: result.response });
+    await emit({ type: "final", status: result.status, response: result.response,
+      ...(result.publicPlanPresentation ? { publicPlanPresentation: result.publicPlanPresentation } : {}) });
   }
 }

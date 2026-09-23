@@ -3,7 +3,7 @@ import type { LambdaHttpEvent } from "../contracts/http.js";
 
 /** Executable allowlist for the personal HTTP handlers. Scopes come from Terraform. */
 export const personalApiPolicies = {
-  trip: { path: "/api/trips/v1", version: "trip-api-v1", operations: ["create", "mutate", "get", "list", "archive", "attach", "detach", "reference"] },
+  trip: { path: "/api/trips/v1", version: "trip-api-v1", operations: ["create", "mutate", "get", "list", "archive", "attach", "detach", "reference", "preview-plan-adoption", "confirm-plan-adoption"] },
   sharing: { path: "/api/trips/sharing/v1", version: "trip-sharing-v1", operations: ["create-grant", "redeem", "revoke-grant", "manage", "participant", "accessible", "reservation-facts"] },
   notification: { path: "/api/trips/notifications/v1", version: "notification-api-v1", operations: ["list", "read"] },
   inTrip: { path: "/api/trips/in-trip/v1", version: "in-trip-api-v1", operations: [undefined] },
