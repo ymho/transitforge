@@ -1,5 +1,5 @@
 import { withAgentDecisionSummary } from "@raiquora/agent/model-response";
-import { agentTurnOutputContract, decodeAgentTurnOutput } from "@raiquora/agent/agent-output-contract";
+import { agentTurnOutputContract, agentTurnPresentationOutputContract, decodeAgentTurnOutput } from "@raiquora/agent/agent-output-contract";
 import { AgentModelError, type AgentModelMessage, type AgentModelProvider, type AgentModelRequest, type AgentModelResponse } from "@raiquora/agent/model-provider";
 import { modelToolDescription } from "@raiquora/agent/tool-contract";
 import { ConversationModelError, type ConversationModel } from "../ports/conversation-model.js";
@@ -39,13 +39,18 @@ export class ConversationModelProvider implements AgentModelProvider {
     if (response.stopReason === "tool_use") return mapped;
     const textBlocks = response.message.content.flatMap(block => "text" in block ? [block.text] : []);
     const decoded = textBlocks.length === 1 ? decodeJsonOutput(textBlocks[0]!, response.metadata.outputMode) : undefined;
-    const presentationRequired = Array.isArray(outputContract.schema.required) && outputContract.schema.required.includes("presentation");
-    if (decoded && (!presentationRequired || decoded.presentation)) return {
+    const presentationRequired = requiresPresentation(outputContract);
+    // Some application-strict models still place the requested presentation JSON in
+    // responseText. Promote exactly one recognized object; Application performs the
+    // complete Evidence/itinerary/cost/reference validation before rendering it.
+    const presentation = decoded?.presentation ?? (presentationRequired && response.metadata.outputMode === "application_strict"
+      ? embeddedPresentation(decoded?.responseText) : undefined);
+    if (decoded && (!presentationRequired || presentation)) return {
       ...mapped,
       // Structured Evidence-bound presentations are validated and rendered by the
       // Application. Model-authored responseText cannot override their facts.
       message: { role: "assistant", content: [{ type: "text", text: decoded.responseText }] },
-      ...(decoded.presentation ? { declaredPresentation: decoded.presentation } : {}),
+      ...(presentation ? { declaredPresentation: presentation } : {}),
       decisionSummaryStatus: "valid",
       decisionSummary: decoded.decision,
       ...(decoded.decision.usedEvidenceIds ? { declaredEvidenceIds: decoded.decision.usedEvidenceIds } : {}),
@@ -56,6 +61,23 @@ export class ConversationModelProvider implements AgentModelProvider {
       ...mapped, decisionSummaryStatus: "invalid",
     };
   }
+}
+
+function requiresPresentation(contract: typeof agentTurnOutputContract): boolean {
+  return contract.name === agentTurnPresentationOutputContract.name &&
+    contract.version === agentTurnPresentationOutputContract.version &&
+    contract.schemaHash === agentTurnPresentationOutputContract.schemaHash;
+}
+
+function embeddedPresentation(text: string | undefined): Record<string, unknown> | undefined {
+  if (!text) return undefined;
+  try {
+    const value: unknown = JSON.parse(text);
+    return value && typeof value === "object" && !Array.isArray(value) &&
+      (value as Record<string, unknown>).kind !== undefined &&
+      ["source-explanation", "travel-plan"].includes(String((value as Record<string, unknown>).kind))
+      ? value as Record<string, unknown> : undefined;
+  } catch { return undefined; }
 }
 
 function decodeJsonOutput(text: string, mode: "provider_strict" | "application_strict" | "legacy_text" | undefined) {

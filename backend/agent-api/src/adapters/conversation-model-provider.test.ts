@@ -50,6 +50,15 @@ it("rejects an application-strict response that omits a presentation required by
   expect(result.decisionSummaryStatus).toBe("invalid");
   expect(result.decisionSummary).toBeUndefined();
 });
+it("bounded-repairs an application-strict v2 presentation embedded in responseText", async () => {
+  const presentation = { kind: "travel-plan", startDate: null, candidates: [] };
+  const model: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 1, outputMode: "application_strict" },
+    message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: JSON.stringify(presentation),
+      decision: { interpretedGoal: "候補提示", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["goal_interpreted"] } }) }] } }) };
+  const result = await new ConversationModelProvider(model, "turn").generate({ messages: [], outputContract: agentTurnPresentationOutputContract });
+  expect(result.decisionSummaryStatus).toBe("valid");
+  expect(result.declaredPresentation).toEqual(presentation);
+});
 it("passes malformed Evidence reference metadata to the shared runtime rejection policy", async () => {
   const model: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 0 },
     message: { role: "assistant", content: [{ text: '<decision_summary>{"usedEvidenceIds":"invalid"}</decision_summary>回答' }] } }) };
