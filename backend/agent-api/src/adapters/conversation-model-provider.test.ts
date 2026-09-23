@@ -18,6 +18,19 @@ it("maps native messages, capability descriptions, call correlation and usage wi
     ] });
   expect(result).toMatchObject({ stopReason: "max_tokens", metadata: { provider: "bedrock", model: "configured-model", latencyMs: 12, usage: { totalTokens: 5 } } });
 });
+
+it("decodes provider/application strict JSON once and never falls through to the legacy tag parser", async () => {
+  const valid: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 1, outputMode: "provider_strict" },
+    message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: "候補です", decision: { interpretedGoal: "候補提示", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["goal_interpreted"] } }) }] } }) };
+  await expect(new ConversationModelProvider(valid, "turn").generate({ messages: [] })).resolves.toMatchObject({
+    message: { content: [{ type: "text", text: "候補です" }] }, decisionSummaryStatus: "valid", decisionSummary: { selectedAction: "answer" },
+  });
+  const invalid: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 1, outputMode: "application_strict" },
+    message: { role: "assistant", content: [{ text: '<decision_summary>{"selectedAction":"answer"}</decision_summary>legacy' }] } }) };
+  const result = await new ConversationModelProvider(invalid, "turn").generate({ messages: [] });
+  expect(result.decisionSummaryStatus).toBe("invalid");
+  expect(result.message.content).toEqual([{ type: "text", text: '<decision_summary>{"selectedAction":"answer"}</decision_summary>legacy' }]);
+});
 it("passes malformed Evidence reference metadata to the shared runtime rejection policy", async () => {
   const model: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 0 },
     message: { role: "assistant", content: [{ text: '<decision_summary>{"usedEvidenceIds":"invalid"}</decision_summary>回答' }] } }) };

@@ -3,6 +3,12 @@ export type AgentToolErrorCode =
   | "precondition_failed"
   | "unknown_tool"
   | "not_found"
+  | "outside_coverage"
+  | "precondition_missing"
+  | "stale_revision"
+  | "permission_denied"
+  | "rate_limited"
+  | "unavailable"
   | "ambiguous_entity"
   | "execution_failed";
 
@@ -28,6 +34,7 @@ export type AgentToolInputResult<TInput> =
 export interface AgentExecutionContext {
   executionId: string;
   signal?: AbortSignal;
+  deadlineAt?: number;
 }
 
 export interface AgentToolInputSchema {
@@ -52,6 +59,11 @@ export interface AgentToolDescriptor {
   description: string;
   inputSchema: AgentToolInputSchema;
   decisionSupport?: AgentToolDecisionSupport;
+  effect?: "read" | "proposal";
+  prerequisite?: string[];
+  requiredCapabilities?: string[];
+  outputSchema?: AgentToolInputSchema;
+  errorRecovery?: Partial<Record<AgentToolErrorCode, "retry" | "resolve_precondition" | "ask_user" | "stop">>;
 }
 
 export interface AgentTool<TInput, TOutput> extends AgentToolDescriptor {
@@ -64,8 +76,13 @@ export interface AgentTool<TInput, TOutput> extends AgentToolDescriptor {
 
 export function modelToolDescription(tool: AgentToolDescriptor): string {
   const support = tool.decisionSupport;
-  if (!support) return tool.description;
   const sections = [
+    ...(!support ? [tool.description] : []),
+    tool.effect ? `effect: ${tool.effect}` : "",
+    tool.requiredCapabilities?.length ? `必要能力: ${tool.requiredCapabilities.join(" / ")}` : "",
+    tool.prerequisite?.length ? `前提: ${tool.prerequisite.join(" / ")}` : "",
+    tool.errorRecovery ? `回復: ${Object.entries(tool.errorRecovery).map(([code, recovery]) => `${code}=${recovery}`).join(" / ")}` : "",
+    ...(!support ? [] : [
     `能力: ${support.capability}`,
     support.suitableCases?.length ? `適する: ${support.suitableCases.join(" / ")}` : "",
     support.unsuitableCases?.length ? `適さない: ${support.unsuitableCases.join(" / ")}` : "",
@@ -73,6 +90,7 @@ export function modelToolDescription(tool: AgentToolDescriptor): string {
     support.freshness ? `鮮度: ${support.freshness}` : "",
     support.limitations?.length ? `制約: ${support.limitations.join(" / ")}` : "",
     `境界: ${support.responsibilityBoundary}`,
+    ]),
   ].filter(Boolean);
   // These are authored capability contracts, not untrusted Tool observations.
   // Preserve the responsibility boundary at the end; transport validates size.

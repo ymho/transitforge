@@ -8,6 +8,7 @@ import type { AgentRuntimeLimits } from "@raiquora/agent/runtime-policies";
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import type { AgentRuntimeContextInput } from "@raiquora/agent/agent-decision-context";
 import { requireTripPrincipal } from "../../contracts/trip-principal.js";
+import type { AgentDiagnosticEvent, AgentDiagnosticsSink } from "../../ports/agent-diagnostics.js";
 
 /** Caller authenticates principal. Only an injected server loader may resolve references to state. */
 export interface ServerAgentTurn {
@@ -27,6 +28,8 @@ export interface ServerAgentDependencies {
   now?: () => Date;
   /** Trusted composition only; never supplied through the turn/request payload. */
   loadContext?: (scope: ServerAgentScope) => Promise<AgentRuntimeContextInput>;
+  diagnostics?: AgentDiagnosticsSink;
+  log?: (event: string, fields: Record<string, unknown>) => void;
 }
 
 /** Transport-independent, per-turn composition; no shared mutable principal/tool/evidence state. */
@@ -49,14 +52,40 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
       executionId: dependencies.newExecutionId(),
     };
     const context = await dependencies.loadContext?.(scope);
+    await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: scope.executionId,
+      phase: "context", reason: "compiled", occurredAt: (dependencies.now?.() ?? new Date()).toISOString(),
+      counts: { acceptedCharacters: scope.userRequest.length,
+        included: Array.isArray(context?.currentTrip?.schedule) ? context.currentTrip.schedule.length : 0,
+        omitted: Number.isSafeInteger(context?.currentTrip?.omittedItemCount)
+          ? Number(context?.currentTrip?.omittedItemCount)
+          : context?.currentTrip?.scheduleTruncated === true ? 1 : 0 },
+      correlation: { ...(Number.isSafeInteger(context?.currentTrip?.sourceRevision) ? { tripRevision: Number(context?.currentTrip?.sourceRevision) } : {}) } });
     const tools = new AgentToolRegistry(), evidence = new ToolEvidenceRegistry();
     dependencies.registerTools(tools, evidence, scope);
-    return new MultiStepAgentRuntime({ model: dependencies.createModel(scope), tools,
+    const result = await new MultiStepAgentRuntime({ model: dependencies.createModel(scope), tools,
       toolExecutor: new AgentToolExecutor(tools, evidence, dependencies.now),
       limits: dependencies.limits, now: dependencies.now, modelClassPolicy: dependencies.modelClassPolicy,
     }).run({ executionId: scope.executionId, feature: "concierge", userRequest: scope.userRequest,
       ...(context ? { context, omitTraceContent: true } : {}) });
+    await publishRuntimeDiagnostics(dependencies, result, scope.executionId);
+    return result;
   } };
+}
+
+async function publishRuntimeDiagnostics(dependencies: ServerAgentDependencies, result: AgentRuntimeResult, executionId: string): Promise<void> {
+  for (const event of result.trace.events) {
+    if (event.type === "decision_recorded") await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId,
+      phase: "decision", reason: "validated", occurredAt: event.occurredAt, counts: { validated: 1 } });
+    if (event.type === "tool_completed") await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId,
+      phase: "tool", reason: event.outcome === "success" ? "completed" : "failed", occurredAt: event.occurredAt,
+      correlation: { toolCallId: event.toolCallId }, refs: [event.toolName] });
+  }
+}
+
+async function safeDiagnostic(dependencies: ServerAgentDependencies, event: AgentDiagnosticEvent): Promise<void> {
+  if (!dependencies.diagnostics) return;
+  try { await dependencies.diagnostics.record(event); }
+  catch { dependencies.log?.("agent_diagnostic_dropped", { executionId: event.executionId, phase: event.phase }); }
 }
 
 function calendarDate(value: string): boolean {

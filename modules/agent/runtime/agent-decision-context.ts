@@ -179,7 +179,9 @@ export function buildAgentDecisionContext(
       unconfirmedAssumptions: privateRequestProjection(tripRequest!.assumptions.filter((a) => a.status === "unconfirmed")),
     } : {}),
     ...(decision ? { currentTurnDecision: structuredClone(decision) } : {}),
-    userRequest: bounded(request.userRequest, 1_500),
+    // The API already applies an explicit 8,000-character boundary. This field is the
+    // authoritative current request and must never be silently normalized or sliced.
+    userRequest: request.userRequest,
     ...(input?.travelCandidates ? { travelCandidates: input.travelCandidates.slice(0, 12).map((value) =>
       value.assessment && value.candidate ? candidateAssessmentContext(value as Parameters<typeof candidateAssessmentContext>[0]) : boundedUnknownRecord(value)) } : {}),
     ...(input?.realtimeFacts ? { realtimeFacts: input.realtimeFacts.slice(0, 12).map((value) => boundedUnknownRecord(value)) } : {}),
@@ -306,7 +308,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     });
   const core = JSON.stringify({
     ...requestFields,
-    userRequest: context.userRequest.slice(0, 1_000),
+    userRequest: context.userRequest,
     featureContext: context.featureContext,
     conversation: context.conversation ? {
       ...context.conversation,

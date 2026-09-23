@@ -112,6 +112,11 @@ export type AgentTraceEvent =
       inputTokens?: number;
       outputTokens?: number;
       totalTokens?: number;
+      cacheReadInputTokens?: number;
+      cacheWriteInputTokens?: number;
+      cacheStatus?: AgentModelMetadata["cacheStatus"];
+      outputMode?: AgentModelMetadata["outputMode"];
+      outputContractHash?: string;
     })
   | (AgentTraceEventBase & {
       type: "response_generated";
@@ -327,6 +332,11 @@ export class AgentTraceRecorder {
       ...(validCount(metadata.usage?.totalTokens)
         ? { totalTokens: metadata.usage.totalTokens }
         : {}),
+      ...(validCount(metadata.usage?.cacheReadInputTokens) ? { cacheReadInputTokens: metadata.usage.cacheReadInputTokens } : {}),
+      ...(validCount(metadata.usage?.cacheWriteInputTokens) ? { cacheWriteInputTokens: metadata.usage.cacheWriteInputTokens } : {}),
+      ...(metadata.cacheStatus ? { cacheStatus: metadata.cacheStatus } : {}),
+      ...(metadata.outputMode ? { outputMode: metadata.outputMode } : {}),
+      ...(metadata.outputContract ? { outputContractHash: metadata.outputContract.schemaHash } : {}),
     });
   }
 

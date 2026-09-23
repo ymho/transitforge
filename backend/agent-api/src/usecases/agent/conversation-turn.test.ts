@@ -33,10 +33,21 @@ describe("Conversation turn Application", () => {
     const f = await setup(); f.runAgentTurn.mockResolvedValueOnce({ ...success, status: "follow_up" });
     expect(await f.app.runConversationTurn(input)).toEqual({ status: "follow_up", response: "案内" });
   });
+  it("records save completion only after the turn receipt commits", async () => {
+    const f = await setup(), record = vi.fn(async () => undefined);
+    const complete = vi.spyOn(f.turns, "completeTurn");
+    const app = createConversationTurnApplication({ turns: f.turns, runAgentTurn: f.runAgentTurn, diagnostics: { record } });
+    await app.runConversationTurn(input);
+    expect(complete).toHaveBeenCalledOnce();
+    expect(record).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "save", reason: "completed", correlation: { turnId: secondId } }));
+    expect(complete.mock.invocationCallOrder[0]).toBeLessThan(record.mock.invocationCallOrder.at(-1)!);
+  });
   it("recovers Agent success before storage failure after lease expiry", async () => {
-    const f = await setup();
+    const f = await setup(), record = vi.fn(async () => undefined);
     const complete = vi.spyOn(f.turns, "completeTurn").mockRejectedValueOnce(new Error("unavailable"));
-    await expect(f.app.runConversationTurn(input)).rejects.toThrow("unavailable");
+    const firstApp = createConversationTurnApplication({ turns: f.turns, runAgentTurn: f.runAgentTurn, diagnostics: { record } });
+    await expect(firstApp.runConversationTurn(input)).rejects.toThrow("unavailable");
+    expect(record).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "save", reason: "completion_ambiguous", incomplete: true }));
     expect((await f.conversations.get(principal, conversationId))?.messageCount).toBe(1);
     await expect(f.app.runConversationTurn(input)).rejects.toMatchObject({ code: "conflict" });
     const turns = new DynamoDbConversationTurnRepository("test-state", f.client, { now: () => new Date(f.clock.now().getTime() + 300_000) });

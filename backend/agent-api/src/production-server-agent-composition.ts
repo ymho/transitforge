@@ -31,6 +31,7 @@ import { productionServerTools } from "./composition/production-server-tools.js"
 import { createFixedEgressAccommodationOperation } from "./composition/fixed-egress-accommodation.js";
 import { serverAgentDeadline } from "./composition/server-agent-deadline.js";
 import type { AgentOperation } from "./ports/agent-operation.js";
+import { bedrockCapabilitiesFromConfiguration } from "./adapters/bedrock-provider-capabilities.js";
 
 /** Constructed only after authentication, once per request. No Travel credentials or raw trace sink. */
 export function createProductionServerAgent(executionId: string, environment: Readonly<Record<string, string | undefined>> = process.env) {
@@ -62,7 +63,12 @@ export function createProductionServerAgent(executionId: string, environment: Re
    model: new BedrockConversationModel(new AwsBedrockConverseClient(), {
      modelId: environment.MODEL_ID ?? "amazon.nova-lite-v1:0", lightweightModelId: environment.LIGHTWEIGHT_MODEL_ID || undefined,
      decisionModelId: environment.DECISION_MODEL_ID || undefined, systemPrompt: agentSystemPrompt,
+     region: environment.AWS_REGION ?? "unknown",
+     capabilities: modelId => bedrockCapabilitiesFromConfiguration(modelId, environment.AWS_REGION ?? "unknown", environment.BEDROCK_CAPABILITY_MATRIX_JSON),
+     promptCachingEnabled: environment.BEDROCK_PROMPT_CACHING_ENABLED === "true",
    }),
+   diagnostics: { record: async event => { console.info(JSON.stringify({ event: "agent_diagnostic", ...event })); } },
+   log: (event, fields) => { console.warn(JSON.stringify({ event, ...fields })); },
    additionalTools: productionServerTools({
      journey: createJourneySearchOperation(journey),
      representativeTimetable: createRepresentativeTimetableOperation(new S3RepresentativeTimetableRepository(s3, required("AI_TIMETABLE_BUCKET"), "ai-timetable")),

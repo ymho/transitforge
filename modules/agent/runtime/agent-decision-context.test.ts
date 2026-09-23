@@ -6,6 +6,12 @@ import {
 } from "@raiquora/agent/agent-decision-context";
 
 describe("AgentDecisionContext", () => {
+  it("preserves the complete accepted request beyond the retired 1,500-character boundary", () => {
+    const request = "前提".repeat(760) + " 帰路は18時まで。ホテルは変更不可。";
+    const context = buildAgentDecisionContext({ executionId: "long-request", feature: "concierge", userRequest: request }, []);
+    expect(context.userRequest).toBe(request);
+    expect(agentDecisionContextText(context)).toContain("ホテルは変更不可");
+  });
   it("bounds conversation metadata and preserves topics when compressing restored history", () => {
     const context = buildAgentDecisionContext({ executionId: "restored", feature: "concierge", userRequest: "相談".repeat(750), context: {
       conversation: { title: "題".repeat(200), scope: "trip", summary: "要約".repeat(2000),

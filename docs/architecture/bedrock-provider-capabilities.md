@@ -1,0 +1,27 @@
+# Bedrock Provider capability matrix
+
+確認日: 2026-09-23。正本はAWS公式の[Structured Outputs](https://docs.aws.amazon.com/bedrock/latest/userguide/structured-output.html)と[Prompt Caching](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html)、および承認済み環境で保存したcontract probe結果である。
+
+| 利用候補 | API | region | Structured text | strict Tool | Prompt Cache | 状態 |
+|---|---|---|---|---|---|---|
+| `amazon.nova-lite-v1:0`（既定） | Converse | model提供region | 非対応 | 非対応 | explicit: system/messages, 最低1K, 最大4, TTL 5分 | AWS model card確認、Live probe未実施 |
+| `LIGHTWEIGHT_MODEL_ID` | Converse | deployment region | 未実測 | 未実測 | 未実測 | 任意設定、実IDのprobe未実施 |
+| `jp.amazon.nova-2-lite-v1:0`（既定Decision） | Converse | JP cross-region profile | 非対応 | 非対応 | explicit: system/messages, 最低1K, 最大4, TTL 5分 | AWS model card確認、Live probe未実施 |
+
+`BEDROCK_CAPABILITY_MATRIX_JSON`は完全一致するmodel IDごとにレビュー済み結果を与える。未設定・未登録modelは`unmeasured`であり、model名部分一致では昇格しない。`BEDROCK_PROMPT_CACHING_ENABLED=true`かつmatrixが対応を示す場合だけcachePointを送る。
+
+```json
+{
+  "provider.model-id": {
+    "structuredTextOutput": "supported",
+    "strictToolUse": "supported",
+    "streaming": "supported",
+    "citations": "unsupported",
+    "promptCaching": { "mode": "explicit", "checkpointFields": ["tools"], "minimumTokens": 1024, "maximumCheckpoints": 4, "ttlSeconds": 300 },
+    "source": "contract-probe",
+    "verifiedAt": "2026-09-23"
+  }
+}
+```
+
+ローカルadapter fixtureはpayload契約だけを検証する。cold/warm latency、repair率、token、cache read/write、拒否/打切りのLive値ではない。schema compilation cache、Bedrock Prompt Cache、検索結果cacheは別指標で扱う。

@@ -15,6 +15,7 @@ import { ProfileApplication } from "../usecases/profile-application.js";
 import { createServerStateContextLoader } from "../usecases/agent/server-state-context-loader.js";
 import { createServerAgent } from "../server-agent-composition.js";
 import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
+import { registerTripReadTools } from "../usecases/agent/trip-read-tool.js";
 
 /** Internal stateful composition. Transport/auth rollout and env bindings remain with #451/#462/#480. */
 export function createStatefulServerAgent(options: Omit<Parameters<typeof createServerAgent>[0], "loadContext"> & {
@@ -33,6 +34,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
       registerAdditionalTools: (tools, evidence, scope) => {
         options.registerAdditionalTools?.(tools, evidence, scope);
         if (trip) {
+          registerTripReadTools(tools, evidence, trip);
           registerRequestProposalTool(tools, trip, proposal => { tripUpdateProposal = proposal; });
           registerCostProposalTool(tools, trip, proposal => { tripCostProposal = proposal; });
         }

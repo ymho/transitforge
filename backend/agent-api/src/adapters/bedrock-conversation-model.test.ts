@@ -123,6 +123,7 @@ describe("BedrockConversationModel", () => {
           type: "object",
           properties: { originStation: { type: "string" } },
           required: ["originStation"],
+          additionalProperties: false,
         } },
       } }] },
       inferenceConfig: { maxTokens: 4_096, temperature: 0 },
@@ -134,8 +135,44 @@ describe("BedrockConversationModel", () => {
         modelId: "amazon.nova-lite-v1:0",
         latencyMs: 25,
         usage: { inputTokens: 12, outputTokens: 4, totalTokens: 16 },
+        outputMode: "legacy_text",
+        cacheStatus: "disabled",
       },
     });
+  });
+
+  it("emits Structured Outputs, strict tools and explicit cache checkpoints only from configured capabilities", async () => {
+    const converse = vi.fn(async (_input: JsonObject) => ({ output: { message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: "回答", decision: {
+      interpretedGoal: "旅行相談", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["goal_interpreted"],
+    } }) }] } }, stopReason: "end_turn", usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120, cacheWriteInputTokens: 80 } }));
+    const model = new BedrockConversationModel({ converse }, { modelId: "configured", systemPrompt: "stable-system",
+      promptCachingEnabled: true, capabilities: modelId => ({ capabilityVersion: "bedrock-capabilities-v1", modelId, api: "converse", region: "us-east-1",
+        structuredTextOutput: "supported", strictToolUse: "supported", streaming: "supported", citations: "unsupported",
+        promptCaching: { mode: "explicit", checkpointFields: ["tools", "system"], minimumTokens: 1, maximumCheckpoints: 4, ttlSeconds: 300 },
+        source: "configuration", verifiedAt: "2026-09-23" }) });
+    const contract = { name: "answer", version: "1", schemaHash: "hash", schema: { type: "object", properties: { responseText: { type: "string", minLength: 1 } }, required: ["responseText"] } };
+    const response = await model.converse({ messages: [{ role: "user", content: [{ text: "request" }] }], outputContract: contract,
+      prompt: { contractVersion: "compiled-prompt-v1", stableSegments: [], dynamicSegments: [], coverage: { status: "complete", includedScopes: [], omittedScopes: [] }, omissionManifest: [], cacheIntent: { enabled: true, checkpoint: "tools" } },
+      tools: [{ name: "search_web", description: "search", inputSchema: { type: "object", properties: { query: { type: "string", minLength: 1 } }, required: ["query"] } }] });
+    expect(converse.mock.calls[0]?.[0]).toMatchObject({
+      outputConfig: { textFormat: { type: "json_schema", structure: { jsonSchema: { name: "answer", schema: expect.any(String) } } } },
+      toolConfig: { tools: [{ toolSpec: { strict: true, inputSchema: { json: { additionalProperties: false } } } }, { cachePoint: { type: "default" } }] },
+    });
+    expect(response.metadata).toMatchObject({ outputMode: "provider_strict", cacheStatus: "write", usage: { cacheWriteInputTokens: 80 } });
+    expect(response.metadata.omittedSchemaConstraints).toContain("$.properties.responseText.minLength");
+  });
+
+  it.each(["guardrail_intervened", "content_filtered", "refusal"])("classifies %s as refusal", async stopReason => {
+    const model = new BedrockConversationModel({ converse: async () => ({ output: { message: { role: "assistant", content: [{ text: "blocked" }] } }, stopReason }) },
+      { modelId: "model", systemPrompt: "system" });
+    await expect(model.converse({ messages: [] })).rejects.toMatchObject({ code: "refusal", retryable: false });
+  });
+
+  it("classifies malformed provider messages as invalid_schema", async () => {
+    const model = new BedrockConversationModel({ converse: async () => ({
+      output: { message: { role: "assistant", content: [{ unsupported: true }] } }, stopReason: "end_turn",
+    }) }, { modelId: "model", systemPrompt: "system" });
+    await expect(model.converse({ messages: [] })).rejects.toMatchObject({ code: "invalid_schema", retryable: false });
   });
 
   it("records the exact provider request and failure diagnostic", async () => {

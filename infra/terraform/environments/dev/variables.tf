@@ -93,6 +93,22 @@ variable "bedrock_model_id" {
   }
 }
 
+variable "bedrock_capability_matrix_json" {
+  description = "完全一致model IDごとのreview済みBedrock capability JSON。未登録modelは未実測として扱う。"
+  type        = string
+  default     = "{}"
+  validation {
+    condition     = can(jsondecode(var.bedrock_capability_matrix_json)) && length(var.bedrock_capability_matrix_json) <= 3000
+    error_message = "bedrock_capability_matrix_jsonには3,000文字以下のJSONを指定してください。"
+  }
+}
+
+variable "bedrock_prompt_caching_enabled" {
+  description = "capability matrixが対応を示すmodelでPrompt Cachingを有効にする。"
+  type        = bool
+  default     = false
+}
+
 variable "bedrock_lightweight_model_id" {
   description = "比較評価用の軽量model ID。空文字では既定modelへフォールバックする。"
   type        = string

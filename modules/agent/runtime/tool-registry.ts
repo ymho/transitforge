@@ -45,6 +45,11 @@ export class AgentToolRegistry {
       name: tool.name,
       description: modelToolDescription(tool),
       inputSchema: tool.inputSchema,
+      ...(tool.effect ? { effect: tool.effect } : {}),
+      ...(tool.prerequisite ? { prerequisite: [...tool.prerequisite] } : {}),
+      ...(tool.requiredCapabilities ? { requiredCapabilities: [...tool.requiredCapabilities] } : {}),
+      ...(tool.outputSchema ? { outputSchema: structuredClone(tool.outputSchema) } : {}),
+      ...(tool.errorRecovery ? { errorRecovery: { ...tool.errorRecovery } } : {}),
     }));
   }
 

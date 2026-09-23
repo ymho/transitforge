@@ -7,5 +7,7 @@ export function createConversationServerAgent(options: Omit<Parameters<typeof cr
   return createConversationTurnApplication({
     turns: new DynamoDbConversationTurnRepository(options.stateTable, options.stateClient),
     runAgentTurn: (input, historyBeforeSequence) => createStatefulServerAgent({ ...options, historyBeforeSequence }).runAgentTurn(input),
+    diagnostics: options.diagnostics,
+    log: options.log,
   });
 }
