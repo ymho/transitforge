@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { DefaultAgentResponseGenerator } from "@raiquora/agent/agent-response-generator";
-import { groundedAnswerInstruction, groundedAnswerRepairInstruction, parseGroundedAnswer, parseProposedItinerary, supportedAnswerClaims, sourceExplanation, travelPlan } from "@raiquora/agent/grounded-answer";
+import { groundedAnswerFailureCode, groundedAnswerInstruction, groundedAnswerRepairInstruction, parseGroundedAnswer, parseProposedItinerary, supportedAnswerClaims, sourceExplanation, travelPlan } from "@raiquora/agent/grounded-answer";
 import type { Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentModelResponse } from "@raiquora/agent/model-provider";
 
@@ -137,8 +137,17 @@ it("keeps an unspecified departure date unknown instead of inventing today", () 
 });
 it("gives a bounded repair reason without echoing arbitrary errors", () => {
   expect(groundedAnswerRepairInstruction(new Error("Invalid cost estimate"))).toContain("Invalid cost estimate");
+  expect(groundedAnswerRepairInstruction(new Error("Invalid itinerary coverage"))).toContain("Invalid itinerary coverage");
   expect(groundedAnswerRepairInstruction(new Error("Invalid cost estimate"))).toContain("presentation object");
   expect(groundedAnswerRepairInstruction(new Error("secret model output"))).not.toContain("secret model output");
+});
+it("classifies structured-answer failures without exposing arbitrary exception text", () => {
+  expect(groundedAnswerFailureCode(new SyntaxError("Unexpected private model output"))).toBe("invalid_grounded_json");
+  expect(groundedAnswerFailureCode(new Error("Invalid itinerary coverage"))).toBe("invalid_itinerary_coverage");
+  expect(groundedAnswerFailureCode(new Error("Invalid cost estimate"))).toBe("invalid_cost_estimate");
+  expect(groundedAnswerFailureCode(new Error("Unbound candidate source"))).toBe("unbound_candidate_source");
+  expect(groundedAnswerFailureCode(new Error("private model output"))).toBe("invalid_response_format");
+  expect(groundedAnswerFailureCode("private model output")).toBe("invalid_response_format");
 });
 it("falls back to a bound photo while rejecting unbound source text and incomplete estimates", () => {
   expect(() => travelPlan(plan({ quote: "架空の無料列車" }), [photographedPlace])).toThrow();

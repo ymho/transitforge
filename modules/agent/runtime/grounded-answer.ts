@@ -231,8 +231,68 @@ export function travelPlan(text: string, evidence: readonly Evidence[], presenta
 
 const travelPlanValidationMessages = new Set([
   "Invalid travel plan", "Invalid candidate plan", "Unbound candidate source", "Missing source presentation",
-  "Invalid itinerary", "Invalid itinerary activity", "Invalid cost estimate", "Invalid photo reference", "Unbound candidate photo",
+  "Invalid itinerary", "Invalid itinerary activity", "Invalid itinerary coverage", "Invalid cost estimate", "Invalid photo reference", "Unbound candidate photo",
 ]);
+
+export type GroundedAnswerFailureCode =
+  | "invalid_grounded_json"
+  | "missing_factual_claims"
+  | "invalid_grounded_claim"
+  | "unsupported_grounded_claim"
+  | "unbound_response_text"
+  | "invalid_factual_references"
+  | "missing_factual_presentation"
+  | "invalid_source_explanation"
+  | "invalid_source_selection"
+  | "unbound_source_excerpt"
+  | "invalid_preference_reference"
+  | "unknown_preference_reference"
+  | "invalid_travel_plan"
+  | "invalid_candidate_plan"
+  | "unbound_candidate_source"
+  | "missing_source_presentation"
+  | "invalid_itinerary"
+  | "invalid_itinerary_activity"
+  | "invalid_itinerary_coverage"
+  | "invalid_cost_estimate"
+  | "invalid_photo_reference"
+  | "unbound_candidate_photo"
+  | "reserved_photo_presentation"
+  | "unbound_concrete_value"
+  | "invalid_response_format";
+
+const groundedAnswerFailureCodes: Readonly<Record<string, GroundedAnswerFailureCode>> = {
+  "Missing factual claims": "missing_factual_claims",
+  "Invalid claim": "invalid_grounded_claim",
+  "Unsupported statement or mismatched subject/facts": "unsupported_grounded_claim",
+  "Unbound response text": "unbound_response_text",
+  "Invalid factual references": "invalid_factual_references",
+  "Missing factual presentation": "missing_factual_presentation",
+  "Invalid explanation": "invalid_source_explanation",
+  "Invalid source selection": "invalid_source_selection",
+  "Unbound excerpt": "unbound_source_excerpt",
+  "Invalid preference": "invalid_preference_reference",
+  "Unknown preference": "unknown_preference_reference",
+  "Invalid travel plan": "invalid_travel_plan",
+  "Invalid candidate plan": "invalid_candidate_plan",
+  "Unbound candidate source": "unbound_candidate_source",
+  "Missing source presentation": "missing_source_presentation",
+  "Invalid itinerary": "invalid_itinerary",
+  "Invalid itinerary activity": "invalid_itinerary_activity",
+  "Invalid itinerary coverage": "invalid_itinerary_coverage",
+  "Invalid cost estimate": "invalid_cost_estimate",
+  "Invalid photo reference": "invalid_photo_reference",
+  "Unbound candidate photo": "unbound_candidate_photo",
+  "Reserved photo presentation": "reserved_photo_presentation",
+  "Unbound concrete value in interaction": "unbound_concrete_value",
+};
+
+/** Stable, non-sensitive diagnostics only. Never expose an arbitrary exception message. */
+export function groundedAnswerFailureCode(error: unknown): GroundedAnswerFailureCode {
+  if (error instanceof SyntaxError) return "invalid_grounded_json";
+  if (!(error instanceof Error)) return "invalid_response_format";
+  return groundedAnswerFailureCodes[error.message] ?? "invalid_response_format";
+}
 /** Gives the model a bounded validation reason without replaying model text or private Evidence. */
 export function groundedAnswerRepairInstruction(error: unknown): string {
   const reason = error instanceof Error && travelPlanValidationMessages.has(error.message) ? error.message : "Invalid structured answer";
