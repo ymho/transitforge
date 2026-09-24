@@ -51,6 +51,21 @@ describe("Server Agent Application without Browser APIs", () => {
     expect(["failed", "limit_reached"]).toContain(result.status);
     expect(result.trace.events.at(-1)?.type).toBe("task_completed");
   });
+  it("records the exact safe budget reason without logging request or Tool input", async () => {
+    const diagnostics: unknown[] = [];
+    const app = createServerAgentApplication({ newExecutionId: () => "execution-1",
+      limits: { maxToolCalls: 1 }, diagnostics: { record: async event => { diagnostics.push(event); } },
+      createModel: () => ({ generate: async () => ({ ...call, message: { role: "assistant", content: [
+        { type: "tool_call", name: "fake_tool", toolCallId: "call-1", input: {} },
+        { type: "tool_call", name: "fake_tool", toolCallId: "call-2", input: {} },
+      ] } }) }),
+      registerTools: tools => tools.register({ name: "fake_tool", description: "fake", inputSchema: { type: "object", properties: {} },
+        parseInput: validAgentToolInput, execute: async () => successfulAgentToolResult({ checked: true }) }),
+    });
+    expect((await app.runAgentTurn({ ...input, userRequest: "PRIVATE_MESSAGE" })).status).toBe("limit_reached");
+    expect(diagnostics).toContainEqual(expect.objectContaining({ phase: "runtime", reason: "tool_budget", incomplete: true }));
+    expect(JSON.stringify(diagnostics)).not.toContain("PRIVATE_MESSAGE");
+  });
   it("validates principal and bounded input before constructing capabilities", async () => {
     const { app, execute, requests } = setup();
     await expect(app.runAgentTurn({ ...input, principal: fakePrincipal("") })).rejects.toThrow();

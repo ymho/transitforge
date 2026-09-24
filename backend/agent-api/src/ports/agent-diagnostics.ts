@@ -2,7 +2,7 @@ export type AgentDiagnosticPhase = "context" | "decision" | "tool" | "evidence" 
 export type AgentDiagnosticReason = "compiled" | "validated" | "rejected" | "completed" | "failed" | "partial" |
   "not_loaded" | "stale_revision" | "budget_exhausted" | "schema_invalid" | "provider_refusal" | "provider_timeout" | "provider_error" |
   "response_rejected" |
-  "completion_ambiguous";
+  "completion_ambiguous" | "iteration_budget" | "model_budget" | "tool_budget" | "deadline" | "finalization_tool_calls";
 
 /** Allowlisted operational data only. No prompt, profile text, coordinates, URL or reservation value. */
 export interface AgentDiagnosticEvent {

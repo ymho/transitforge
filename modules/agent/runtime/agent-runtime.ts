@@ -158,7 +158,9 @@ export class MultiStepAgentRuntime {
         modelCalls >= this.limits.maxModelCalls ||
         this.now().getTime() >= deadline
       ) {
-        return this.limitResult(trace, evidence, startedAt);
+        return this.limitResult(trace, evidence, startedAt,
+          this.now().getTime() >= deadline ? "runtime_deadline" :
+            modelCalls >= this.limits.maxModelCalls ? "runtime_model_budget" : "runtime_iteration_budget");
       }
 
       const remainingMs = Math.max(1, deadline - this.now().getTime());
@@ -226,7 +228,7 @@ export class MultiStepAgentRuntime {
       );
       if (modelOutcome.kind === "timeout") {
         trace.modelFailed(modelCallId, "runtime_timeout");
-        return this.limitResult(trace, evidence, startedAt);
+        return this.limitResult(trace, evidence, startedAt, "runtime_deadline");
       }
       if (modelOutcome.kind === "error") {
         const code = modelOutcome.error instanceof AgentModelError ? modelOutcome.error.code : "provider_error";
@@ -281,7 +283,7 @@ export class MultiStepAgentRuntime {
           content.type === "tool_call",
       );
       if (finalResponseRequired && calls.length > 0) {
-        return this.limitResult(trace, evidence, startedAt);
+        return this.limitResult(trace, evidence, startedAt, "finalization_tool_calls");
       }
       if (calls.length > 0) {
         for (const call of calls) {
@@ -494,7 +496,7 @@ export class MultiStepAgentRuntime {
         );
       }
       if (toolCalls + calls.length > this.limits.maxToolCalls) {
-        return this.limitResult(trace, evidence, startedAt);
+        return this.limitResult(trace, evidence, startedAt, "runtime_tool_budget");
       }
       if (calls.length && this.dependencies.researchLedger && !this.dependencies.researchLedger.reserve("toolCalls", calls.length)) {
         return this.limitResult(trace, evidence, startedAt, "research_tool_budget");

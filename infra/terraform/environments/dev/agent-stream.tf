@@ -1,7 +1,7 @@
 variable "server_agent_max_execution_ms" {
-  description = "Server Agent business deadline, independent of transport. 120s recommended, at most 180s reserves 60s before Lambda timeout."
+  description = "Server Agent business deadline, independent of transport. 150s default, at most 180s reserves 60s before Lambda timeout."
   type        = number
-  default     = 120000
+  default     = 150000
   validation {
     condition     = var.server_agent_max_execution_ms >= 1000 && var.server_agent_max_execution_ms <= 180000 && floor(var.server_agent_max_execution_ms) == var.server_agent_max_execution_ms
     error_message = "Server Agent deadline must be an integer from 1000 to 180000 milliseconds."

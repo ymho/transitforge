@@ -134,12 +134,18 @@ async function publishRuntimeDiagnostics(dependencies: ServerAgentDependencies, 
   const completion = [...result.trace.events].reverse().find((event) => event.type === "task_completed");
   await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId,
     phase: "runtime", reason: result.status === "completed" || result.status === "follow_up" ? "completed" :
-      result.status === "limit_reached" ? "budget_exhausted" : diagnosticFailureReason(completion?.type === "task_completed" ? completion.reason : undefined),
+      diagnosticFailureReason(completion?.type === "task_completed" ? completion.reason : undefined),
     occurredAt: completion?.occurredAt ?? (dependencies.now?.() ?? new Date()).toISOString(),
     incomplete: result.status === "failed" || result.status === "limit_reached" });
 }
 
 function diagnosticFailureReason(reason: string | undefined): AgentDiagnosticEvent["reason"] {
+  if (reason === "runtime_iteration_budget") return "iteration_budget";
+  if (reason === "runtime_model_budget" || reason === "research_model_budget") return "model_budget";
+  if (reason === "runtime_tool_budget" || reason === "research_tool_budget") return "tool_budget";
+  if (reason === "runtime_deadline" || reason === "research_deadline") return "deadline";
+  if (reason === "finalization_tool_calls") return "finalization_tool_calls";
+  if (reason === "runtime_limit_reached") return "budget_exhausted";
   if (reason?.includes("timeout")) return "provider_timeout";
   if (reason?.includes("refusal")) return "provider_refusal";
   if (reason?.includes("provider_error")) return "provider_error";

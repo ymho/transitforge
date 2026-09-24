@@ -24,6 +24,18 @@ import { inTripApplicationEvidence } from "@raiquora/agent/in-trip-application-e
 import { calculateInTripReplanScope, replanScopeContext } from "@raiquora/trip/in-trip-replan";
 
 describe("MultiStepAgentRuntime", () => {
+  it("finishes an open-ended seven-round research within the expanded Server budget", async () => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const responses = Array.from({ length: 7 }, (_, index) => toolCallResponse([
+      { id: `source-${index}`, name: "first_tool", input: { value: `candidate-${index}` } },
+    ]));
+    const model = sequenceModel([...responses, textResponse("候補を比較しました")]);
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model,
+      limits: { maxIterations: 8, maxModelCalls: 11, maxToolCalls: 12 },
+    }).run(request("歴史ある街を歩きたい"));
+    expect(output.status).toBe("completed");
+    expect(model.generate).toHaveBeenCalledTimes(8);
+  });
   it("uses one reserved model call to repair an invalid final response contract", async () => {
     const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
     const responseGenerator = new DefaultAgentResponseGenerator();
@@ -609,7 +621,7 @@ describe("MultiStepAgentRuntime", () => {
     expect(output.trace.events.at(-1)).toMatchObject({
       type: "task_completed",
       status: "failed",
-      reason: "runtime_limit_reached",
+      reason: "runtime_tool_budget",
     });
   });
 
