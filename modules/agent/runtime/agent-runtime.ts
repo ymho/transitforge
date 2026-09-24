@@ -283,6 +283,17 @@ export class MultiStepAgentRuntime {
           content.type === "tool_call",
       );
       if (finalResponseRequired && calls.length > 0) {
+        // A final-phase toolUse has no matching toolResult and cannot be replayed
+        // in a Converse history. Discard it and spend the reserved repair call
+        // on a final answer, without executing the requested Tool.
+        messages.pop();
+        if (!correctedFinalResponse && modelCalls < this.limits.maxModelCalls) {
+          correctedFinalResponse = true;
+          messages.push({ role: "user", content: [{ type: "text", text:
+            "最終回答フェーズでToolを要求しましたが、追加実行はできません。直前までに確認済みのEvidenceだけを使い、Toolを呼ばずにkind=answerまたはkind=askの最終回答を返してください。未確認事項は推測せず不足として説明してください。" }] });
+          trace.replanDecided(true, "finalization_tool_calls", decisionBoundary);
+          continue;
+        }
         return this.limitResult(trace, evidence, startedAt, "finalization_tool_calls");
       }
       if (calls.length > 0) {
