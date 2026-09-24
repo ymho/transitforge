@@ -1,4 +1,4 @@
-import { allowedToolNames, maximumTextCharacters, type JsonObject } from "../contracts/agent-request.js";
+import { maximumTextCharacters, type JsonObject } from "../contracts/agent-request.js";
 import { validatedMessages } from "../contracts/agent-request.js";
 import type {
   ConversationModel,
@@ -113,6 +113,7 @@ export class BedrockConversationModel implements ConversationModel {
         request.outputContract,
         caching.enabled,
         this.log,
+        new Set(request.tools?.map((tool) => tool.name)),
       );
       await this.recordTrace(request, providerRequest, startedAtIso, {
         status: "completed",
@@ -191,6 +192,7 @@ function normalizedResponse(
   outputContract?: ConversationModelRequest["outputContract"],
   cachingEnabled = false,
   log: BedrockConversationOptions["log"] = () => undefined,
+  assistantToolNames: ReadonlySet<string> = new Set(),
 ): ConversationModelResponse {
   if (!isRecord(value) || !isRecord(value.output) || !isRecord(value.output.message)) {
     throw new ConversationModelError("provider_error", "Bedrock response is missing output.message", false);
@@ -203,15 +205,15 @@ function normalizedResponse(
   }
   let message: ReturnType<typeof validatedMessages>[number];
   try {
-    message = validatedMessages({ messages: [withoutProviderReasoning(value.output.message)] })[0];
+    message = validatedMessages({ messages: [withoutProviderReasoning(value.output.message)] }, assistantToolNames)[0];
   } catch {
     // Only closed categories and counts leave this boundary. Never log provider
     // text, reasoning, Tool inputs, IDs, unknown field names, or raw errors.
-    log("agent_model_response_rejected", responseShapeDiagnostic(value.output.message));
+    log("agent_model_response_rejected", responseShapeDiagnostic(value.output.message, assistantToolNames));
     throw new ConversationModelError("invalid_schema", "Bedrock response does not match the assistant message contract", false);
   }
   if (!message || message.role !== "assistant") {
-    log("agent_model_response_rejected", responseShapeDiagnostic(value.output.message));
+    log("agent_model_response_rejected", responseShapeDiagnostic(value.output.message, assistantToolNames));
     throw new ConversationModelError("invalid_schema", "Bedrock response does not match the assistant message contract", false);
   }
   const providerLatency = isRecord(value.metrics) && nonNegativeNumber(value.metrics.latencyMs)
@@ -232,7 +234,7 @@ function normalizedResponse(
   };
 }
 
-function responseShapeDiagnostic(value: JsonObject): Record<string, unknown> {
+function responseShapeDiagnostic(value: JsonObject, assistantToolNames: ReadonlySet<string>): Record<string, unknown> {
   if (value.role !== "assistant") return { reason: "invalid_role" };
   if (!Array.isArray(value.content)) return { reason: "missing_content" };
   const kinds = value.content.slice(0, 13).map((block) => {
@@ -251,7 +253,7 @@ function responseShapeDiagnostic(value: JsonObject): Record<string, unknown> {
     }
     if ("toolUse" in block) {
       if (!isRecord(block.toolUse)) return { ...base, reason: "tool_shape" };
-      if (typeof block.toolUse.name !== "string" || !allowedToolNames.has(block.toolUse.name)) return { ...base, reason: "tool_not_allowed" };
+      if (typeof block.toolUse.name !== "string" || !assistantToolNames.has(block.toolUse.name)) return { ...base, reason: "tool_not_allowed" };
       if (typeof block.toolUse.toolUseId !== "string" || !isRecord(block.toolUse.input)) return { ...base, reason: "tool_shape" };
     }
     if ("reasoningContent" in block && !validReasoningContent(block.reasoningContent)) return { ...base, reason: "reasoning_shape" };

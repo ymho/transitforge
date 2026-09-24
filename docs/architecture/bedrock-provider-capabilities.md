@@ -14,6 +14,8 @@ Converseのassistant応答に含まれる`reasoningContent`はprovider内部の�
 
 応答検証で失敗した際の運用診断は、ブロックの閉じた種類・件数と検証失敗の分類だけをCloudWatchへ出す。本文、内部推論、Tool入力、未知フィールド名、例外文字列、ユーザ識別子は出さない。CDと手動の診断Workflowではこの分類だけを集計し、実際の失敗型が確認できるまでは原因を推定で確定しない。
 
+Bedrockのassistant `toolUse.name`は、そのモデル呼び出しで実際に公開したTool descriptor名との完全一致で検証する。HTTP入力の固定許可リストをprovider応答へ流用しない。新しいServer Tool（例: `search_travel_knowledge`）も公開済みなら受け入れ、未公開Toolは拒否する。HTTP利用者のmessage検証に使う固定許可リストは維持する。
+
 ```json
 {
   "provider.model-id": {

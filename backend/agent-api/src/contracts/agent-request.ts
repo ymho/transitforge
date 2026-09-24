@@ -149,12 +149,13 @@ export function requestValue(event: LambdaHttpEvent): JsonObject {
   return value;
 }
 
-export function validatedMessages(value: JsonObject): AgentMessage[] {
+/** HTTP callers use the fixed allowlist; provider responses use their advertised Tool names. */
+export function validatedMessages(value: JsonObject, assistantToolNames: ReadonlySet<string> = allowedToolNames): AgentMessage[] {
   const messages = value.messages;
   if (!Array.isArray(messages) || messages.length < 1 || messages.length > maximumMessages) {
     throw new RequestError(400, "messagesの件数が不正です。");
   }
-  return messages.map(validatedMessage);
+  return messages.map((message) => validatedMessage(message, assistantToolNames));
 }
 
 export function validatedToolDefinitions(
@@ -202,7 +203,7 @@ export function validatedToolDefinitions(
   });
 }
 
-function validatedMessage(value: unknown): AgentMessage {
+function validatedMessage(value: unknown, assistantToolNames: ReadonlySet<string>): AgentMessage {
   if (!isRecord(value) || (value.role !== "user" && value.role !== "assistant")) {
     throw new RequestError(400, "messageのroleが不正です。");
   }
@@ -216,13 +217,14 @@ function validatedMessage(value: unknown): AgentMessage {
   const role = value.role;
   return {
     role,
-    content: value.content.map((block) => validatedContentBlock(block, role)),
+    content: value.content.map((block) => validatedContentBlock(block, role, assistantToolNames)),
   };
 }
 
 function validatedContentBlock(
   value: unknown,
   role: AgentMessage["role"],
+  assistantToolNames: ReadonlySet<string>,
 ): AgentMessage["content"][number] {
   if (!isRecord(value) || Object.keys(value).length !== 1) {
     throw new RequestError(400, "content blockの形式が不正です。");
@@ -239,7 +241,7 @@ function validatedContentBlock(
     if (
       typeof toolUseId === "string" &&
       typeof name === "string" &&
-      allowedToolNames.has(name) &&
+      assistantToolNames.has(name) &&
       isRecord(input)
     ) {
       return { toolUse: { toolUseId: toolUseId.slice(0, 128), name, input } };
