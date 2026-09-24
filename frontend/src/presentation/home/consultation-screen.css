@@ -1,5 +1,5 @@
 /* v6 consultation is a first-class screen. No old panel/frame or glass surface. */
-.consultation-page { position: absolute; z-index: 9; inset: 5rem 0 0; padding: 1.5rem max(1.625rem, calc((100vw - 79.25rem) / 2)); color: #142a40; background: #f6f6f1; }
+.consultation-page { position: absolute; z-index: 9; inset: var(--product-header-height) 0 0; padding: 1.5rem max(1.625rem, calc((100vw - 79.25rem) / 2)); color: #142a40; background: #f6f6f1; }
 .consultation-page[hidden], #app:not([data-primary-view="chat"]) .consultation-page { display: none; }
 .consultation-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(19rem, .75fr); grid-template-rows: auto minmax(0, 1fr); gap: 1.125rem; height: 100%; min-height: 0; }
 .consultation-conversation { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; overflow: hidden; }
@@ -63,7 +63,7 @@
   .consultation-composer button:hover:not(:disabled) { background: #173d60; }
 }
 @media (max-width: 44rem) {
-  .consultation-page { inset: 4rem 0 calc(3.8rem + env(safe-area-inset-bottom)); padding: .45rem .875rem .5rem; }
+  .consultation-page { inset: var(--product-header-height) 0 calc(4.5rem + env(safe-area-inset-bottom)); padding: .45rem .875rem .5rem; }
   .consultation-layout { position: relative; display: block; height: 100%; }
   .consultation-conversation { height: 100%; grid-template-rows: auto minmax(0, 1fr) auto; border: 0; border-radius: 0; box-shadow: none; }
   .consultation-heading { position: absolute; z-index: 2; top: .3rem; right: 0; justify-content: flex-end; padding: 0; }
