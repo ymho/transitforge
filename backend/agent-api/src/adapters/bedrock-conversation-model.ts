@@ -1,4 +1,4 @@
-import type { JsonObject } from "../contracts/agent-request.js";
+import { allowedToolNames, maximumTextCharacters, type JsonObject } from "../contracts/agent-request.js";
 import { validatedMessages } from "../contracts/agent-request.js";
 import type {
   ConversationModel,
@@ -112,6 +112,7 @@ export class BedrockConversationModel implements ConversationModel {
         compiledOutput,
         request.outputContract,
         caching.enabled,
+        this.log,
       );
       await this.recordTrace(request, providerRequest, startedAtIso, {
         status: "completed",
@@ -189,6 +190,7 @@ function normalizedResponse(
   compiledOutput?: ReturnType<typeof compileBedrockSchema>,
   outputContract?: ConversationModelRequest["outputContract"],
   cachingEnabled = false,
+  log: BedrockConversationOptions["log"] = () => undefined,
 ): ConversationModelResponse {
   if (!isRecord(value) || !isRecord(value.output) || !isRecord(value.output.message)) {
     throw new ConversationModelError("provider_error", "Bedrock response is missing output.message", false);
@@ -203,9 +205,13 @@ function normalizedResponse(
   try {
     message = validatedMessages({ messages: [withoutProviderReasoning(value.output.message)] })[0];
   } catch {
+    // Only closed categories and counts leave this boundary. Never log provider
+    // text, reasoning, Tool inputs, IDs, unknown field names, or raw errors.
+    log("agent_model_response_rejected", responseShapeDiagnostic(value.output.message));
     throw new ConversationModelError("invalid_schema", "Bedrock response does not match the assistant message contract", false);
   }
   if (!message || message.role !== "assistant") {
+    log("agent_model_response_rejected", responseShapeDiagnostic(value.output.message));
     throw new ConversationModelError("invalid_schema", "Bedrock response does not match the assistant message contract", false);
   }
   const providerLatency = isRecord(value.metrics) && nonNegativeNumber(value.metrics.latencyMs)
@@ -224,6 +230,34 @@ function normalizedResponse(
       cacheStatus: cacheStatus(usage, cachingEnabled),
     },
   };
+}
+
+function responseShapeDiagnostic(value: JsonObject): Record<string, unknown> {
+  if (value.role !== "assistant") return { reason: "invalid_role" };
+  if (!Array.isArray(value.content)) return { reason: "missing_content" };
+  const kinds = value.content.slice(0, 13).map((block) => {
+    if (!isRecord(block) || Object.keys(block).length !== 1) return "invalid_union";
+    if ("text" in block) return "text";
+    if ("toolUse" in block) return "tool_use";
+    if ("reasoningContent" in block) return "reasoning";
+    return "unsupported";
+  });
+  const base = { contentCount: Math.min(value.content.length, 100), kinds };
+  if (value.content.length === 0 || value.content.length > 12) return { ...base, reason: "content_count" };
+  for (const block of value.content) {
+    if (!isRecord(block) || Object.keys(block).length !== 1) return { ...base, reason: "invalid_union" };
+    if ("text" in block && (typeof block.text !== "string" || block.text.length === 0 || block.text.length > maximumTextCharacters)) {
+      return { ...base, reason: typeof block.text !== "string" ? "text_type" : block.text.length === 0 ? "text_empty" : "text_oversize" };
+    }
+    if ("toolUse" in block) {
+      if (!isRecord(block.toolUse)) return { ...base, reason: "tool_shape" };
+      if (typeof block.toolUse.name !== "string" || !allowedToolNames.has(block.toolUse.name)) return { ...base, reason: "tool_not_allowed" };
+      if (typeof block.toolUse.toolUseId !== "string" || !isRecord(block.toolUse.input)) return { ...base, reason: "tool_shape" };
+    }
+    if ("reasoningContent" in block && !validReasoningContent(block.reasoningContent)) return { ...base, reason: "reasoning_shape" };
+    if (!("text" in block) && !("toolUse" in block) && !("reasoningContent" in block)) return { ...base, reason: "unsupported_block" };
+  }
+  return { ...base, reason: "no_actionable_content" };
 }
 
 /**

@@ -12,6 +12,8 @@
 
 Converseのassistant応答に含まれる`reasoningContent`はprovider内部の推論であり、Applicationの表示・Tool実行・会話履歴の契約には含めない。Adapter境界で形式を検証して破棄し、同じ応答の`text`または`toolUse`だけを既存の厳格なmessage検証へ渡す。推論しかない応答や不正な推論blockは正常応答へ昇格しない。
 
+応答検証で失敗した際の運用診断は、ブロックの閉じた種類・件数と検証失敗の分類だけをCloudWatchへ出す。本文、内部推論、Tool入力、未知フィールド名、例外文字列、ユーザ識別子は出さない。CDと手動の診断Workflowではこの分類だけを集計し、実際の失敗型が確認できるまでは原因を推定で確定しない。
+
 ```json
 {
   "provider.model-id": {

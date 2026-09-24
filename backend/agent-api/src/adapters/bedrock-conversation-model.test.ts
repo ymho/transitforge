@@ -191,6 +191,24 @@ describe("BedrockConversationModel", () => {
     await expect(model.converse({ messages: [] })).rejects.toMatchObject({ code: "invalid_schema", retryable: false });
   });
 
+  it("reports only closed response-shape categories when validation rejects provider output", async () => {
+    const privateText = "private-provider-response";
+    const log = vi.fn();
+    const model = new BedrockConversationModel({ converse: async () => ({
+      output: { message: { role: "assistant", content: [
+        { reasoningContent: { reasoningText: { text: "private-reasoning" } } },
+        { text: "" },
+        { unexpectedPrivateField: privateText },
+      ] } }, stopReason: "end_turn",
+    }) }, { modelId: "model", systemPrompt: "system", log });
+
+    await expect(model.converse({ messages: [] })).rejects.toMatchObject({ code: "invalid_schema" });
+    expect(log).toHaveBeenCalledWith("agent_model_response_rejected", {
+      reason: "text_empty", kinds: ["reasoning", "text", "unsupported"], contentCount: 3,
+    });
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/private-provider-response|private-reasoning|unexpectedPrivateField/);
+  });
+
   it("drops Bedrock reasoning blocks without retaining private reasoning", async () => {
     const privateReasoning = "利用者へ表示・保持しない推論";
     const model = new BedrockConversationModel({ converse: async () => ({

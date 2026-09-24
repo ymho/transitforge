@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-const [diagnosticPath, streamPath] = process.argv.slice(2);
+const [diagnosticPath, streamPath, modelShapePath] = process.argv.slice(2);
 if (!diagnosticPath || !streamPath) throw new Error("Expected diagnostic and stream event files");
 
 const diagnostics = messages(diagnosticPath)
@@ -18,6 +18,13 @@ const streams = messages(streamPath)
     status: Number.isSafeInteger(status) ? status : undefined,
     latencyMs: Number.isFinite(latencyMs) ? Math.round(latencyMs) : undefined,
   }));
+const modelShapes = modelShapePath ? messages(modelShapePath)
+  .filter((value) => value.event === "agent_model_response_rejected")
+  .map(({ reason, kinds, contentCount }) => ({
+    reason: text(reason),
+    kinds: Array.isArray(kinds) ? kinds.map(text).slice(0, 13).join(",") : "unknown",
+    contentCount: Number.isSafeInteger(contentCount) && contentCount >= 0 ? contentCount : undefined,
+  })) : [];
 
 console.log("## Agent production diagnostics (last 2 hours)");
 console.log("");
@@ -29,6 +36,10 @@ table(
 );
 console.log("");
 table(["Stream event", "HTTP status", "Count", "Max latency (ms)"], groupedStreams(streams));
+if (modelShapePath) {
+  console.log("");
+  table(["Model response rejection", "Block kinds", "Count", "Max blocks"], groupedModelShapes(modelShapes));
+}
 
 function messages(path) {
   const encoded = JSON.parse(readFileSync(path, "utf8"));
@@ -81,6 +92,18 @@ function groupedStreams(values) {
   return [...groups.values()]
     .sort((left, right) => left.event.localeCompare(right.event))
     .map((value) => [value.event, value.status === undefined ? "-" : String(value.status), String(value.count), value.latencyMs === undefined ? "-" : String(value.latencyMs)]);
+}
+
+function groupedModelShapes(values) {
+  const groups = new Map();
+  for (const value of values) {
+    const key = JSON.stringify([value.reason, value.kinds]);
+    const current = groups.get(key) ?? { ...value, count: 0 };
+    current.count += 1;
+    current.contentCount = Math.max(current.contentCount ?? 0, value.contentCount ?? 0);
+    groups.set(key, current);
+  }
+  return [...groups.values()].map((value) => [value.reason, value.kinds, String(value.count), String(value.contentCount ?? "-")]);
 }
 
 function table(header, rows) {
