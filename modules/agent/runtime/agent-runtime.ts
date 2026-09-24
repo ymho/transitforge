@@ -145,6 +145,7 @@ export class MultiStepAgentRuntime {
     const executedToolCalls = new Map<string, AgentToolExecution & { toolName: string }>();
     let finalizeAfterToolResult = false;
     let correctedResponseContract = false;
+    let correctedGroundedAnswer = false;
 
     while (true) {
       if (
@@ -391,8 +392,8 @@ export class MultiStepAgentRuntime {
               ? "grounded" : toolCalls ? "administrative" : "interaction", decisionContext.travelProfile, request.executionId);
         } catch (error) {
           const failureCode = groundedAnswerFailureCode(error);
-          if (!correctedResponseContract && !finalResponseRequired) {
-            correctedResponseContract = true;
+          if (!correctedGroundedAnswer && !finalResponseRequired) {
+            correctedGroundedAnswer = true;
             messages.pop();
             messages.push({ role: "user", content: [{ type: "text", text: `${responseContractRepairInstruction}\n${groundedAnswerRepairInstruction(error)}\n${groundedAnswerInstruction(evidence, decisionContext.travelProfile)}` }] });
             iterations++;

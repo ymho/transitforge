@@ -109,3 +109,18 @@ Profile由来の出発駅、予算、自然アクティビティを質問票の�
 固定allowlistではない。ADR 0066どおり、実際の移動のsupported判定は読込済み日付別経路、駅カタログ、
 施設なら確認済みGroundAccessから導く。目的地未定の発見では熱海・伊東等を主候補にせず、範囲外の場所を
 利用者が明示した場合は相談を拒まず、移動の範囲外または未確認を分離して説明する。
+
+## 2026-09-24 Run #25 の出力契約安定化
+
+PR #580展開後の3反復では8/9 scenario-attempt、16/18 turnを完遂した。残る2 turnはProviderやToolの
+失敗ではなく、`feedback-izumo-provisional-plan`の3反復目で`invalid_response_contract`となった。
+Traceでは宿泊・天気Evidence取得後に長いapplication-strict応答を返しており、base contractを選んだturnでも
+モデルが任意の`travel-plan`を返し得る。一方、Decision metadataだけが不正な場合の独立presentation検証を
+presentation必須contractに限定していたため、安全にApplication検証へ渡せるpayloadまで破棄していた。
+
+recognizedなtop-level presentationは、選択されたcontractで任意の場合もDecisionとは独立に保持する。
+これはTool routingやDecisionのvalid化を行うfallbackではない。Evidence、抜粋、行程、費用、写真は従来どおり
+Application parserが全件検証し、不正なら表示しない。また、旅程内容の検証修正とwire contract修正は別の
+bounded budgetを各1回だけ持つ。共通のmodel call、iteration、timeout上限は維持し、同じ種類の不正を無制限に
+再試行しない。Profile等を省略するTraceでは、任意の理由文は引き続き伏せ、Applicationが定義した診断codeだけを
+保持する。これによりraw応答を保存せず、次回比較で失敗境界を判別できる。

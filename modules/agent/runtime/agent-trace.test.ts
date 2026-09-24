@@ -19,6 +19,15 @@ describe("AgentTraceRecorder", () => {
     expect(JSON.stringify(recorder.snapshot())).toContain("search_web");
     expect(JSON.stringify(recorder.snapshot())).toContain('"inputTokens":100');
   });
+  it("keeps only allowlisted operational replan codes when content is omitted", () => {
+    const recorder = new AgentTraceRecorder("private-turn", { omitContent: true });
+    recorder.replanDecided(true, "invalid_itinerary_coverage");
+    recorder.replanDecided(true, "private-note");
+    expect(recorder.snapshot().events).toEqual([
+      expect.objectContaining({ type: "replan_decided", reason: "invalid_itinerary_coverage" }),
+      expect.objectContaining({ type: "replan_decided", reason: "[private-profile-content-omitted]" }),
+    ]);
+  });
   it("records the agent task in an ordered and reconstructable event stream", () => {
     const recorder = new AgentTraceRecorder("execution-1", { now: fixedNow });
     recorder.taskStarted("京都から出雲市へ行きたい");

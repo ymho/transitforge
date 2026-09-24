@@ -62,7 +62,7 @@ export class ConversationModelProvider implements AgentModelProvider {
     // failed; Runtime still validates every Evidence, quote, itinerary, cost and
     // photo reference before anything is displayed. Never use this path to route
     // a Tool or to mark the Decision valid.
-    const presentationWithInvalidDecision = presentationRequired && response.metadata.outputMode === "application_strict"
+    const presentationWithInvalidDecision = response.metadata.outputMode === "application_strict"
       ? independentlyDecodedPresentation(parsed) : undefined;
     if (presentationWithInvalidDecision) return {
       ...mapped,
