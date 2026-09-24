@@ -9,6 +9,7 @@ import {
   staleResponseNotice,
   visibleAssistantText,
   agentProgressLabel,
+  agentFailureMessage,
 } from "./ai-guide-panel";
 
 describe("AI guide trip conversation state", () => {
@@ -95,6 +96,11 @@ describe("AI guide panel assistant text", () => {
 
   it("explains when a response cannot be shown after the conversation context changes", () => {
     expect(staleResponseNotice).toContain("もう一度お試しください");
+  });
+
+  it("distinguishes a bounded research limit from an unknown failure", () => {
+    expect(agentFailureMessage(new Error("limit_reached"))).toContain("条件は保持しています");
+    expect(agentFailureMessage(new Error("agent_failed"))).toContain("時間をおいて");
   });
 
   it("removes a thinking block while preserving the visible answer", () => {

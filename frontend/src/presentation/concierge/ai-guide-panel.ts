@@ -366,7 +366,7 @@ export function configureAiGuidePanel(
         if (!submitFeedback) pendingMessage.querySelector(".conversation-feedback")?.remove();
         pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (requestedGeneration !== requestGeneration) {
           if (conversationSessionId === requestedSessionId) pendingMessage.remove();
           return;
@@ -376,7 +376,7 @@ export function configureAiGuidePanel(
           else pendingMessage.remove();
           return;
         }
-        const errorResponse = "案内を開始できませんでした。時間をおいてもう一度お試しください。";
+        const errorResponse = agentFailureMessage(error);
         const assistantMessage = historyRepository.append(requestedSessionId, {
           role: "assistant",
           response: errorResponse,
@@ -518,6 +518,16 @@ export function configureAiGuidePanel(
   };
   controller.switchSession(conversationSessionId);
   return controller;
+}
+
+export function agentFailureMessage(error: unknown): string {
+  if (error instanceof Error && error.message === "limit_reached") {
+    return "候補の確認に時間がかかり、今回の案をまとめきれませんでした。条件は保持しています。もう一度送るか、地域・日数などを一つ加えて続けてください。";
+  }
+  if (error instanceof Error && error.message === "turn_conflict") {
+    return "同じ相談を処理中です。少し待ってから、もう一度お試しください。";
+  }
+  return "案内を開始できませんでした。時間をおいてもう一度お試しください。";
 }
 
 export function nextTripConversationState(

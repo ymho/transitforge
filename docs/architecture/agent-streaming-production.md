@@ -82,6 +82,10 @@ Lambda/API logは30日保持。token、生会話、Profile、raw Tool、traceを
 Lambda roleは専用logと選択Bedrock modelのInvokeModelだけを許可する。
 Gatewayのrate 1/s・burst 2、Lambda reserved concurrency 1は初期の保守的な上限であり、負荷調整は統合時に行う。
 
+Runtime完了時は内容を含まない`runtime`診断を追加し、`completed`、`budget_exhausted`、
+`provider_timeout`、`schema_invalid`、`failed`を区別する。実行上限はSSEでも`limit_reached`のまま公開し、
+保存層や画面で一般障害へ潰さない。Browserは条件が保持されていることと再開方法を表示する。
+
 API Gateway CloudWatch roleはaccount/region単位のsingletonである。このrootには既存ownerがないため
 新gate配下で定義するが、#451 Phase 3 merge後に既存ownerがあれば統合し、二重管理しない。
 AWSで既存roleが設定済みの場合も所有権を確認してから有効化する。このPRではその設定を変更しない。

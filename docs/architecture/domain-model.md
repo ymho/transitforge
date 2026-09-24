@@ -219,7 +219,7 @@ Lambdaが同じschemaと秘匿情報除去を再検証してからprivate S3へ3
 直前の検索済み経路はboundedな`currentJourney`としてContextへ渡し、照会や制約変更の必要性は
 Bedrockが判断する。列車種別や列車名などの制約はTool入力で受け、経路計算そのものは引き続き
 決定論的なJourney Domainが担う。
-RuntimeはProvider固有形式を扱わず 既定で反復4回 model call 5回 Tool 8回
+RuntimeはProvider固有形式を扱わず 既定で反復6回 model call 8回 Tool 8回
 実行15秒 Evidence 20件を上限とする。複数Toolは順番に実行し 結果をTool call IDで
 次のmodel callへ返す。不足情報がある場合はToolを実行せずfollow-upを返す。
 

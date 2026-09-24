@@ -1,4 +1,4 @@
-export type AgentDiagnosticPhase = "context" | "decision" | "tool" | "evidence" | "presentation" | "save" | "research" | "cache";
+export type AgentDiagnosticPhase = "context" | "decision" | "tool" | "evidence" | "presentation" | "runtime" | "save" | "research" | "cache";
 export type AgentDiagnosticReason = "compiled" | "validated" | "rejected" | "completed" | "failed" | "partial" |
   "not_loaded" | "stale_revision" | "budget_exhausted" | "schema_invalid" | "provider_refusal" | "provider_timeout" |
   "completion_ambiguous";

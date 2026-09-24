@@ -7,6 +7,10 @@ import type { AgentDiagnosticEvent, AgentDiagnosticsSink } from "../../ports/age
 import { reserveResearchResultSave } from "@raiquora/agent/research-execution";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
 
+export class ConversationTurnExecutionError extends Error {
+  constructor(readonly code: "limit_reached" | "agent_failed") { super(code); }
+}
+
 export interface ConversationTurnInput extends ServerAgentTurn { conversationId: string; turnId: string }
 /** The sequence cutoff is trusted server state, never a client-selected history boundary. */
 export function createConversationTurnApplication(dependencies: {
@@ -30,7 +34,9 @@ export function createConversationTurnApplication(dependencies: {
       const runtime = reportProgress
         ? await dependencies.runAgentTurn(runtimeInput, begun.lease.userSequence, reportProgress)
         : await dependencies.runAgentTurn(runtimeInput, begun.lease.userSequence);
-      if (runtime.status !== "completed" && runtime.status !== "follow_up") throw new StateError("unavailable");
+      if (runtime.status !== "completed" && runtime.status !== "follow_up") {
+        throw new ConversationTurnExecutionError(runtime.status === "limit_reached" ? "limit_reached" : "agent_failed");
+      }
       const presentationReceipt = runtime.publicPlanPresentation ? presentationFromPublicPlan(runtime.publicPlanPresentation) : presentationFromObservation(turnId, runtime.turnObservation);
       if (presentationReceipt) await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId,
         phase: "presentation", reason: "validated", occurredAt: new Date().toISOString(), correlation: { turnId },
@@ -49,11 +55,12 @@ export function createConversationTurnApplication(dependencies: {
         ...(runtime.claims ?? []).flatMap((claim) => claim.evidenceIds),
       ])];
       continuity = { publishedEvidenceIds, evidence: runtime.evidence ?? [] };
-    } catch {
+    } catch (error) {
       // Best effort only. If recording failure is unavailable, lease expiry enables recovery.
       try { await dependencies.turns.failTurn(identity, begun.lease); } catch { /* No raw exception/trace retention. */ }
       await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "save", reason: "failed",
         occurredAt: new Date().toISOString(), correlation: { turnId }, incomplete: true });
+      if (error instanceof ConversationTurnExecutionError) throw error;
       throw new StateError("unavailable");
     }
     // An ambiguous completion must not transition to failed: the transaction may have committed.
