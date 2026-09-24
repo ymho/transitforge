@@ -384,6 +384,20 @@ export function configureAiGuidePanel(
         });
         if (conversationSessionId !== requestedSessionId) return;
         resolveAssistantMessage(pendingMessage, errorResponse);
+        pendingMessage.classList.add("ai-guide-message-failure");
+        const actions = document.createElement("div");
+        actions.className = "ai-guide-failure-actions";
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.textContent = "もう一度試す";
+        retry.disabled = true;
+        retry.addEventListener("click", () => {
+          if (retry.disabled) return;
+          retry.disabled = true;
+          submitPrompt(prompt, requestedResearchMode, researchTarget);
+        });
+        actions.append(retry);
+        pendingMessage.append(actions);
         if (!submitFeedback) pendingMessage.querySelector(".conversation-feedback")?.remove();
         pendingMessage.dataset.messageId = assistantMessage.messageId;
       })
@@ -393,6 +407,7 @@ export function configureAiGuidePanel(
         submit.disabled = false;
         submit.ariaLabel = "送信";
         delete submit.dataset.submitting;
+        pendingMessage.querySelector<HTMLButtonElement>(".ai-guide-failure-actions button")?.removeAttribute("disabled");
         input.focus();
       });
   };
