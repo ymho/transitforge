@@ -83,7 +83,8 @@ Lambda roleは専用logと選択Bedrock modelのInvokeModelだけを許可する
 Gatewayのrate 1/s・burst 2、Lambda reserved concurrency 1は初期の保守的な上限であり、負荷調整は統合時に行う。
 
 Runtime完了時は内容を含まない`runtime`診断を追加し、`completed`、`budget_exhausted`、
-`provider_timeout`、`schema_invalid`、`failed`を区別する。実行上限はSSEでも`limit_reached`のまま公開し、
+`provider_timeout`、`provider_refusal`、`provider_error`、`schema_invalid`、`response_rejected`、`failed`を区別する。
+実行上限はSSEでも`limit_reached`のまま公開し、
 保存層や画面で一般障害へ潰さない。Browserは条件が保持されていることと再開方法を表示する。
 `building_answer`後の最終応答が構造化contractまたはEvidence表示検証に失敗した場合は、Toolを追加実行せず、
 残っているmodel budgetから1回だけ修復を要求する。再失敗は一般障害ではなく`limit_reached`として安全に終了する。
