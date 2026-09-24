@@ -53,7 +53,7 @@ run "enabled_contract" {
     enable_fixed_egress_provider = true
   }
   assert {
-    condition     = aws_lambda_function.agent_stream["stream"].environment[0].variables.SERVER_AGENT_MAX_EXECUTION_MS == "120000"
+    condition     = aws_lambda_function.agent_stream["stream"].environment[0].variables.SERVER_AGENT_MAX_EXECUTION_MS == "150000"
     error_message = "Production must explicitly supply its business budget, not inherit the shared 15s default."
   }
   assert {
