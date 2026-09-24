@@ -468,6 +468,7 @@ describe("MultiStepAgentRuntime", () => {
       "model_started",
       "model_completed",
       "decision_recorded",
+      "turn_observed",
       "response_generated",
       "task_completed",
     ]);
@@ -935,6 +936,45 @@ describe("MultiStepAgentRuntime", () => {
     expect(output.response).toContain("仮プラン");
     expect(output.response).not.toContain("出発地を教えて");
     expect(requests[1]?.messages.at(-1)).toMatchObject({ role: "user", content: [{ type: "text", text: expect.stringContaining("質問票だけで終えず") }] });
+  });
+  it("does not treat an optional typed user confirmation as permission for a discovery questionnaire", async () => {
+    const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
+    const question = textResponse("自然、鉄道、街歩きのどれがお好みですか？");
+    question.decisionSummary = {
+      interpretedGoal: "のんびりできる旅を探す",
+      hardConstraints: [], softPreferences: [], selectedAction: "ask_user",
+      unresolvedFacts: ["travel_style"], reasonCodes: ["user_confirmation_required"],
+      missingRequirements: [{ action: "ask", field: "travel_style", resolution: "user_decision", reason: "候補を絞るため" }],
+    };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor,
+      model: sequenceModel([question, textResponse("温泉地を3件比較して提案します")], requests) }).run({
+      executionId: "typed-planning-discovery", feature: "concierge", userRequest: "のんびりできる旅を考えたい",
+      context: { taskContext: { version: 1, phase: "discovery", target: { kind: "conversation" },
+        requestRevision: 1, availableProgressKinds: ["candidates", "comparison"] } },
+    });
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("3件比較");
+    expect(output.response).not.toContain("どれがお好み");
+    expect(JSON.stringify(requests[1]?.messages)).toContain("質問票だけで終えず");
+    expect(output.turnObservation).toMatchObject({ outcome: "answer", progress: [] });
+  });
+  it("allows a typed candidate selection after visible progress from a prior turn", async () => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const question = textResponse("3候補のうち、詳しく見たい温泉地はどれですか？");
+    question.decisionSummary = {
+      interpretedGoal: "提示済み候補から選ぶ",
+      hardConstraints: [], softPreferences: [], selectedAction: "ask_user",
+      unresolvedFacts: ["candidate_selection"], reasonCodes: ["user_confirmation_required"],
+      missingRequirements: [{ action: "ask", field: "candidate_selection", resolution: "user_decision", reason: "次に詳しく調べる候補を選ぶため" }],
+    };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([question]) }).run({
+      executionId: "candidate-selection", feature: "concierge", userRequest: "次に進みたい",
+      context: { taskContext: { version: 1, phase: "refine", target: { kind: "conversation" },
+        requestRevision: 2, availableProgressKinds: ["candidates", "comparison"], previousOutcome: "progress" } },
+    });
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("どれですか");
+    expect(output.turnObservation).toMatchObject({ outcome: "ask_only", progress: [] });
   });
   it("rejects a questionnaire-style discovery answer even when selectedAction is answer", async () => {
     const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
