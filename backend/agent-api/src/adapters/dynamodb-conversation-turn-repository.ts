@@ -3,8 +3,8 @@ import { parseConsultationRequestProposal } from "@raiquora/trip/consultation-re
 import { parsePublicRequestProposal } from "@raiquora/trip/public-request-proposal";
 import { createHash, randomUUID } from "node:crypto";
 import { StateError, exactObject, messageInputs, stateId, type StateClock } from "../contracts/server-state.js";
-import type { BeginConversationTurn, ConversationTurnIdentity, ConversationTurnLease, ConversationTurnRepository, ConversationTurnResult } from "../ports/conversation-turn-repository.js";
-import { parseConversationWorkingState, type ConversationWorkingState } from "@raiquora/agent/conversation-working-state";
+import type { BeginConversationTurn, ConversationTurnContinuity, ConversationTurnIdentity, ConversationTurnLease, ConversationTurnRepository, ConversationTurnResult } from "../ports/conversation-turn-repository.js";
+import { parseConversationWorkingState, retainConversationEvidence, type ConversationWorkingState } from "@raiquora/agent/conversation-working-state";
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 import { parseResearchExecutionOutcome } from "@raiquora/agent/research-execution";
 import { DynamoDbConversationRepository } from "./dynamodb-conversation-repository.js";
@@ -125,7 +125,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     [this.store.put(input.principal, this.key(input), { revision: (old?.revision ?? -1) + 1, deleted: false, payload: next }, old)]);
     return { state: "started", lease: { attemptId, userSequence: next.userSequence } };
   }
-  private async finish(identity: ConversationTurnIdentity, lease: ConversationTurnLease, result?: ConversationTurnResult) {
+  private async finish(identity: ConversationTurnIdentity, lease: ConversationTurnLease, result?: ConversationTurnResult, continuity?: ConversationTurnContinuity) {
     const input = this.identity(identity);
     exactObject(lease, ["attemptId", "userSequence"]); stateId(lease.attemptId);
     const attemptId = lease.attemptId, userSequence = lease.userSequence;
@@ -147,6 +147,8 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const previousWorking = oldWorking ? parseConversationWorkingState(oldWorking.payload) : undefined;
     const targetTripRevision = saved?.publicPlanPresentation?.target?.baseTripRevision ?? saved?.tripUpdateProposal?.baseRevision ?? saved?.tripCostProposal?.baseRevision ??
       (previousWorking && previousWorking.target.tripId === turn.targetTripId ? previousWorking.target.tripRevision : undefined);
+    const groundingEvidence = saved ? retainConversationEvidence(previousWorking?.groundingEvidence,
+      continuity?.evidence ?? [], continuity?.publishedEvidenceIds ?? []) : [];
     const working = saved ? parseConversationWorkingState({
       version: 1, revision: (oldWorking?.revision ?? -1) + 1,
       sourceTurnId: input.turnId, sourceUserSequence: turn.userSequence,
@@ -156,6 +158,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
       pendingQuestionRefs: saved.turnObservation?.outcome === "ask_only" || saved.turnObservation?.outcome === "ask_and_progress"
         ? saved.turnObservation.exception ? [saved.turnObservation.exception.missingFact] : [] : [],
       pendingProposalRefs: [saved.tripUpdateProposal ? "trip_update" : "", saved.consultationRequestProposal ? "consultation_update" : "", saved.tripCostProposal ? "cost_update" : ""].filter(Boolean),
+      ...(groundingEvidence.length ? { groundingEvidence } : {}),
       ...(saved.turnObservation ? { lastOutcome: saved.turnObservation } : {}),
     }) : undefined;
     await this.write(input.principal, current, { ...current, updatedAt: now, revision: current.revision + 1,
@@ -165,8 +168,8 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
       ...(working ? [this.store.put(input.principal, workingKey, { revision: working.revision, deleted: false, payload: working }, oldWorking)] : [])]);
     return saved;
   }
-  async completeTurn(identity: ConversationTurnIdentity, lease: ConversationTurnLease, result: ConversationTurnResult) {
-    return (await this.finish(identity, lease, result))!;
+  async completeTurn(identity: ConversationTurnIdentity, lease: ConversationTurnLease, result: ConversationTurnResult, continuity?: ConversationTurnContinuity) {
+    return (await this.finish(identity, lease, result, continuity))!;
   }
   async failTurn(identity: ConversationTurnIdentity, lease: ConversationTurnLease) { await this.finish(identity, lease); }
 }

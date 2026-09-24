@@ -2,10 +2,16 @@ import { describe, expect, it } from "vitest";
 import { DynamoDbConversationTurnRepository, conversationTurnLimits } from "./dynamodb-conversation-turn-repository.js";
 import { stateDynamoFixture, stateA as principal, stateB, conversationId, secondId, stateMetadata } from "./state-dynamodb.fixture.js";
 import type { ConversationTurnLease } from "../ports/conversation-turn-repository.js";
+import type { Evidence } from "@raiquora/agent/evidence-model";
 
 const turnId = "33333333-3333-4333-8333-333333333333";
 const identity = { principal, conversationId, turnId }, request = { userRequest: "旅行の相談" };
 const result = { status: "completed" as const, response: "候補を案内します" };
+const publishedEvidence: Evidence = { id: "evidence:izumo", category: "external", knowledgeKind: "deterministic_fact", subject: "出雲大社",
+  facts: { status: "available", freshness: "fresh", sourceTitle: "出雲大社", sourceExcerpt: "出雲市にある神社です。", sourceUrl: "https://example.test/izumo" },
+  references: [{ sourceType: "external-source", sourceRef: "https://example.test/izumo", retrievedAt: "2026-09-24T00:00:00Z", freshness: "current", summary: "公式情報" }],
+  observation: { observationId: "evidence:izumo", subjectKey: "place:izumo", scopeKey: "izumo", predicate: "place_description", retrievedAt: "2026-09-24T00:00:00Z",
+    applicability: "applicable", retention: "bounded_excerpt" } };
 async function setup() {
   const f = stateDynamoFixture();
   let time = f.clock.now().getTime();
@@ -57,9 +63,10 @@ describe("Conversation turn transactions", () => {
       turnObservation: { outcome: "progress" as const, progress: [{ kind: "candidates" as const, refs: ["candidate:b", "candidate:a"] }] },
       presentationReceipt: { presentationId: turnId, version: 1 as const,
         entries: [{ ordinal: 1, candidateRef: "candidate:b" }, { ordinal: 2, candidateRef: "candidate:a" }] } };
-    await f.turns.completeTurn(identity, lease, enriched);
+    await f.turns.completeTurn(identity, lease, enriched, { publishedEvidenceIds: [publishedEvidence.id], evidence: [publishedEvidence] });
     expect(await f.turns.getWorkingState(principal, conversationId)).toMatchObject({ revision: 0,
       sourceTurnId: turnId, sourceUserSequence: 1, lastOutcome: { outcome: "progress" },
+      groundingEvidence: [{ id: publishedEvidence.id }],
       presentations: [{ entries: [{ ordinal: 1, candidateRef: "candidate:b" }, { ordinal: 2, candidateRef: "candidate:a" }] }] });
   });
   it("recovers failed attempts immediately and crashed attempts after expiry with stale-worker fencing", async () => {

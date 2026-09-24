@@ -1,6 +1,6 @@
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import { StateError, exactObject, requireStatePrincipal } from "../../contracts/server-state.js";
-import type { ConversationTurnRepository, ConversationTurnResult } from "../../ports/conversation-turn-repository.js";
+import type { ConversationTurnContinuity, ConversationTurnRepository, ConversationTurnResult } from "../../ports/conversation-turn-repository.js";
 import type { ServerAgentTurn } from "./server-agent.js";
 import { presentationFromObservation, presentationFromPublicPlan } from "@raiquora/agent/conversation-working-state";
 import type { AgentDiagnosticEvent, AgentDiagnosticsSink } from "../../ports/agent-diagnostics.js";
@@ -23,6 +23,7 @@ export function createConversationTurnApplication(dependencies: {
     const begun = await dependencies.turns.beginTurn(identity, { userRequest, requestedResearchMode, researchTarget, tripId, uiContext });
     if (begun.state === "completed") return begun.result;
     let result: ConversationTurnResult;
+    let continuity: ConversationTurnContinuity | undefined;
     try {
       const runtime = await dependencies.runAgentTurn({ principal, conversationId, userRequest, requestedResearchMode, researchTarget, tripId, uiContext }, begun.lease.userSequence);
       if (runtime.status !== "completed" && runtime.status !== "follow_up") throw new StateError("unavailable");
@@ -36,6 +37,12 @@ export function createConversationTurnApplication(dependencies: {
         ...(runtime.turnObservation ? { turnObservation: runtime.turnObservation } : {}),
         ...(presentationReceipt ? { presentationReceipt } : {}),
         ...(runtime.tripCostProposal ? { tripCostProposal: runtime.tripCostProposal } : {}), ...(runtime.tripUpdateProposal ? { tripUpdateProposal: runtime.tripUpdateProposal } : {}), ...(runtime.consultationRequestProposal ? { consultationRequestProposal: runtime.consultationRequestProposal } : {}) };
+      const publishedEvidenceIds = [...new Set([
+        ...(runtime.publicPlanPresentation?.evidenceRefs ?? []),
+        ...(runtime.publicPlanPresentation?.photoRefs ?? []),
+        ...(runtime.claims ?? []).flatMap((claim) => claim.evidenceIds),
+      ])];
+      continuity = { publishedEvidenceIds, evidence: runtime.evidence ?? [] };
     } catch {
       // Best effort only. If recording failure is unavailable, lease expiry enables recovery.
       try { await dependencies.turns.failTurn(identity, begun.lease); } catch { /* No raw exception/trace retention. */ }
@@ -45,7 +52,7 @@ export function createConversationTurnApplication(dependencies: {
     }
     // An ambiguous completion must not transition to failed: the transaction may have committed.
     let completed: ConversationTurnResult;
-    try { completed = await dependencies.turns.completeTurn(identity, begun.lease, result); }
+    try { completed = await dependencies.turns.completeTurn(identity, begun.lease, result, continuity); }
     catch (error) {
       await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "save", reason: "completion_ambiguous",
         occurredAt: new Date().toISOString(), correlation: { turnId }, incomplete: true });

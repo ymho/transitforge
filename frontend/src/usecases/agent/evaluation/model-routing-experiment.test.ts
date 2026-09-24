@@ -123,6 +123,9 @@ describe("Agent model routing experiment", () => {
       outputTokens: 5,
       modelCalls: 1,
       toolCalls: 1,
+      cacheReadInputTokens: 0,
+      cacheWriteInputTokens: 0,
+      cacheStatuses: { unknown: 1 },
     });
     expect(createAgentModelRoutingRun("single-model", report, [trace]).repetitions).toBe(1);
   });
@@ -153,5 +156,28 @@ describe("Agent model routing experiment", () => {
 
     expect(run.repetitions).toBe(2);
     expect(run.runtime).toMatchObject({ totalLatencyMs: 200, modelCalls: 2 });
+  });
+  it("blocks production routing when aggregate quality hides failed turns", () => {
+    const complete = { totalTurns: 18, completedTurns: 18, completionRate: 1, failureCodes: {} };
+    const comparison = compareAgentModelRouting({ ...baseline, reliability: complete }, {
+      ...baseline, strategy: "unstable-upper-tier", reliability: { totalTurns: 18, completedTurns: 10, completionRate: 10 / 18,
+        failureCodes: { unbound_candidate_source: 5, invalid_response_contract: 3 } },
+      quality: { ...baseline.quality, taskCompletion: 1 },
+    });
+    expect(comparison.productionRoutingRecommended).toBe(false);
+    expect(comparison.qualityMaintained).toBe(false);
+    expect(comparison.reasons).toContain("候補モデルが全turnを完遂していない");
+  });
+  it("reports all-turn completion, failure codes and cache usage from traces", () => {
+    const report = { schemaVersion: "agent-eval-report-v4" as const, datasetSchemaVersion: "agent-eval-dataset-v5" as const,
+      caseCount: 1, passedCaseCount: 0, metrics: baseline.quality, categories: [], cases: [] };
+    const trace = { executionId: "case-1", droppedEventCount: 0, events: [
+      { type: "model_completed" as const, sequence: 1, occurredAt: "2026-09-24T00:00:00Z", provider: "bedrock", cacheReadInputTokens: 30, cacheWriteInputTokens: 10, cacheStatus: "read" as const },
+      { type: "task_completed" as const, sequence: 2, occurredAt: "2026-09-24T00:00:01Z", status: "failed" as const, reason: "unbound_candidate_source" },
+    ] };
+    const run = createAgentModelRoutingRun("candidate", report, [trace]);
+    expect(run.reliability).toEqual({ totalTurns: 1, completedTurns: 0, completionRate: 0,
+      failureCodes: { unbound_candidate_source: 1 } });
+    expect(run.runtime).toMatchObject({ cacheReadInputTokens: 30, cacheWriteInputTokens: 10, cacheStatuses: { read: 1 } });
   });
 });

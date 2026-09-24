@@ -299,11 +299,17 @@ export function groundedAnswerFailureCode(error: unknown): GroundedAnswerFailure
   return groundedAnswerFailureCodes[error.message] ?? "invalid_response_format";
 }
 /** Gives the model a bounded validation reason without replaying model text or private Evidence. */
-export function groundedAnswerRepairInstruction(error: unknown): string {
+export function groundedAnswerRepairInstruction(error: unknown, evidence: readonly Evidence[] = []): string {
   const reason = error instanceof Error && travelPlanValidationMessages.has(error.message) ? error.message : "Invalid structured answer";
   const activity = reason === "Invalid itinerary activity"
     ? "各activityはperiod、空でないtitle、kindを設定し、旧activity enumは出力しないでください。"
     : "";
+  if (reason === "Unbound candidate source") {
+    const sources = evidence.filter(hasStructuredPresentationEvidence).slice(0, 6)
+      .map((item) => ({ evidenceId: item.id, title: item.facts.sourceTitle ?? item.subject }));
+    if (!sources.length) return "検証エラー: Unbound candidate source。旅行案へ結び付けられるsource Evidenceがありません。同じtravel-planを推測で再生成せず、利用可能な調査Toolをnative toolUseで呼び出して出典を取得してください。Toolを追加実行できない場合は、根拠不足を短く説明してください。";
+    return `検証エラー: Unbound candidate source。候補のevidenceIdは次のsource Evidenceだけを使用できます: ${JSON.stringify(sources)}。候補IDや宿泊・天気Evidenceを代用せず、quoteは対応するsourceExcerpt内の連続した抜粋にしてください。外側のagent_turn_result JSONを維持し、presentation objectだけを修正してください。`;
+  }
   return `検証エラー: ${reason}。${activity}外側のagent_turn_result JSONを維持し、presentation objectだけを提示されたtravel-plan schemaと実在Evidence IDで修正してください。responseTextは短いstringのままにしてください。`;
 }
 

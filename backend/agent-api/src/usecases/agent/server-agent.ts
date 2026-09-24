@@ -70,6 +70,7 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
       researchMode: { requestedMode, effectiveMode: requestedMode === "detailed" && dependencies.detailedResearchAllowed && dependencies.detailedResearchLimits ? "detailed" : "standard" },
     };
     let context = await dependencies.loadContext?.(scope);
+    const initialEvidence = context?.workingState?.groundingEvidence;
     if (input.researchTarget) {
       const target = validateResearchTarget(input.researchTarget);
       const receipt = context?.workingState?.presentations.find((value) => value.presentationId === target.presentationId);
@@ -104,7 +105,8 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
       researchLedger, modelTokenRates: dependencies.modelTokenRates,
     }).run({ executionId: scope.executionId, feature: "concierge", userRequest: scope.userRequest,
       researchMode: scope.researchMode,
-      ...(context ? { context, omitTraceContent: true } : {}) });
+      ...(context ? { context, omitTraceContent: true } : {}),
+      ...(initialEvidence?.length ? { initialEvidence } : {}) });
     result = { ...result, researchExecution: researchLedger.outcome({ remainingScopes: [],
       ...(result.status === "failed" || result.status === "limit_reached" ? { failed: true, stopReason: result.status === "limit_reached" ? "budget_exhausted" as const : "provider_failure" as const } : {}) }) };
     if (result.publicPlanPresentation && context?.taskContext?.target.kind === "trip" && context.taskContext.target.tripRevision !== undefined) {
