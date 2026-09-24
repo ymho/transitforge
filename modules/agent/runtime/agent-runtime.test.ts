@@ -95,7 +95,7 @@ describe("MultiStepAgentRuntime", () => {
     vi.spyOn(responseGenerator, "fromModel").mockImplementation(() => { throw new Error("Invalid itinerary coverage"); });
     const output = await new MultiStepAgentRuntime({ tools, toolExecutor, responseGenerator,
       model: sequenceModel([textResponse("invalid plan one"), textResponse("invalid plan two")]) }).run(request("2日間の旅行案"));
-    expect(output.status).toBe("failed");
+    expect(output.status).toBe("limit_reached");
     expect(output.trace.events.at(-1)).toMatchObject({
       type: "task_completed",
       status: "failed",
@@ -142,7 +142,7 @@ describe("MultiStepAgentRuntime", () => {
     const invalid = { ...textResponse("REJECTED"), declaredEvidenceIds: ["PRIVATE_UNKNOWN_ID"] };
     const model = sequenceModel([invalid, repeat ? invalid : textResponse("確認できません")], requests);
     const result = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run(request("調べて"));
-    expect(result.status).toBe(repeat ? "failed" : "completed");
+    expect(result.status).toBe(repeat ? "limit_reached" : "completed");
     expect(model.generate).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(result)).not.toMatch(/REJECTED|PRIVATE_UNKNOWN_ID/);
     expect(JSON.stringify(requests[1])).not.toMatch(/REJECTED|PRIVATE_UNKNOWN_ID/);
@@ -183,7 +183,7 @@ describe("MultiStepAgentRuntime", () => {
     const model = sequenceModel([textResponse('<tool_call>{}</tool_call>'),
       { ...textResponse("京都から大阪へ1分"), declaredEvidenceIds: ["MISSING"] }]);
     const result = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run(request("経路"));
-    expect(result.status).toBe("failed");
+    expect(result.status).toBe("limit_reached");
     expect(model.generate).toHaveBeenCalledTimes(2);
     expect(result.response).not.toContain("1分");
     expect(result.trace.events.filter(e => e.type === "tool_called")).toHaveLength(0);
@@ -233,7 +233,7 @@ describe("MultiStepAgentRuntime", () => {
     const result = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run({ ...request("変更案"),
       context: { inTrip: f.snapshot, inTripReplanScope: replanScopeContext(calculateInTripReplanScope(f.trip, { now: new Date(f.now.at), reservations: [] })) },
       initialEvidence: inTripApplicationEvidence(f.snapshot) });
-    expect(result.status).toBe("failed"); expect(model.generate).toHaveBeenCalledTimes(2);
+    expect(result.status).toBe("limit_reached"); expect(model.generate).toHaveBeenCalledTimes(2);
     expect(result.trace.events.filter((e) => e.type === "tool_called")).toEqual([]);
     expect(result.trace.events.filter((e) => e.type === "replan_decided")).toHaveLength(1);
     expect(JSON.stringify(result)).not.toContain("unsafe");
@@ -957,6 +957,32 @@ describe("MultiStepAgentRuntime", () => {
     expect(output.response).not.toContain("どれがお好み");
     expect(JSON.stringify(requests[1]?.messages)).toContain("質問票だけで終えず");
     expect(output.turnObservation).toMatchObject({ outcome: "answer", progress: [] });
+  });
+  it("routes an ungrounded planning answer to research before presenting candidates", async () => {
+    const executionOrder: string[] = [], requests: AgentModelRequest[] = [];
+    const { tools, toolExecutor } = toolSetup(executionOrder);
+    const ungrounded = textResponse("歴史ある街なら倉敷がおすすめです");
+    ungrounded.decisionSummary = {
+      interpretedGoal: "歴史ある街を歩く旅を提案する",
+      hardConstraints: [], softPreferences: [], selectedAction: "answer",
+      unresolvedFacts: [], reasonCodes: ["evidence_sufficient"],
+    };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor,
+      model: sequenceModel([
+        ungrounded,
+        toolCallResponse([{ id: "research", name: "first_tool", input: { value: "歴史ある街" } }]),
+        textResponse("確認済みの候補です"),
+      ], requests),
+    }).run({
+      executionId: "planning-evidence", feature: "concierge", userRequest: "歴史ある街を歩きたい",
+      context: { taskContext: { version: 1, phase: "discovery", target: { kind: "conversation" },
+        requestRevision: 1, availableProgressKinds: ["candidates", "comparison"] } },
+    });
+    expect(output.status).toBe("completed");
+    expect(output.response).toBe("確認済みの候補です");
+    expect(executionOrder).toEqual(["first_tool"]);
+    expect(JSON.stringify(requests[1]?.messages)).toContain("Evidenceがまだありません");
+    expect(JSON.stringify(output)).not.toContain("倉敷がおすすめ");
   });
   it("allows a typed candidate selection after visible progress from a prior turn", async () => {
     const { tools, toolExecutor } = toolSetup([]);

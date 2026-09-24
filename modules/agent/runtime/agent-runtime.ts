@@ -266,10 +266,8 @@ export class MultiStepAgentRuntime {
           trace.replanDecided(true, invalidContract, decisionBoundary);
           continue;
         }
-        return finalResponseRequired
-          ? this.limitResult(trace, evidence, startedAt, invalidReferences ? "invalid_used_evidence_ids" : "invalid_response_contract")
-          : this.failureResult(trace, evidence, startedAt,
-            invalidReferences ? "invalid_used_evidence_ids" : "invalid_response_contract");
+        return this.limitResult(trace, evidence, startedAt,
+          invalidReferences ? "invalid_used_evidence_ids" : "invalid_response_contract");
       }
       messages.push(modelResponse.message);
 
@@ -334,9 +332,7 @@ export class MultiStepAgentRuntime {
           const canRepair = finalResponseRequired
             ? !correctedFinalResponse && modelCalls < this.limits.maxModelCalls
             : !correctedResponseContract;
-          if (!canRepair) return finalResponseRequired
-            ? this.limitResult(trace, evidence, startedAt, "invalid_response_contract")
-            : this.failureResult(trace, evidence, startedAt, "invalid_response_contract");
+          if (!canRepair) return this.limitResult(trace, evidence, startedAt, "invalid_response_contract");
           if (finalResponseRequired) correctedFinalResponse = true;
           else correctedResponseContract = true;
           messages.push({
@@ -363,9 +359,14 @@ export class MultiStepAgentRuntime {
         const placePhotoAvailable = modelTools.some(({ name }) => name === "search_place_media");
         const priorVisibleProgress = request.context?.taskContext?.previousOutcome === "progress" ||
           request.context?.taskContext?.previousOutcome === "ask_and_progress";
+        const planningAnswerWithoutEvidence = planningTurn && evidence.length === 0 &&
+          modelResponse.decisionSummary?.selectedAction === "answer";
         const planningGuard = planningTurn && shouldRequirePlanningProgress(modelResponse, priorVisibleProgress)
           ? { accepted: false, reason: "planning_progress_required", instruction:
             "この旅行相談は質問票だけで終えず、未確認条件を仮定として明記して具体案へ進めてください。プロフィール由来の情報を確定条件として列挙せず、必要な場所情報と写真はToolで調査してください。" }
+          : planningAnswerWithoutEvidence
+            ? { accepted: false, reason: "planning_evidence_required", instruction:
+              "旅行候補を提案するためのEvidenceがまだありません。質問や推測の回答で終えず、利用可能な旅行先調査Toolをnative toolUseで実行し、候補の出典と写真を確認してから具体案を作ってください。" }
           : planningTurn && sourceEvidence.length > 0 && !hasPlacePhoto && placePhotoAvailable
             ? { accepted: false, reason: "place_photo_required", instruction:
               "旅行先の資料は確認済みですが代表写真がありません。最終回答の前にsearch_place_mediaで各候補の写真を取得してください。" }
@@ -426,9 +427,7 @@ export class MultiStepAgentRuntime {
             trace.replanDecided(true, failureCode, decisionBoundary);
             continue;
           }
-          return finalResponseRequired
-            ? this.limitResult(trace, evidence, startedAt, failureCode)
-            : this.failureResult(trace, evidence, startedAt, failureCode);
+          return this.limitResult(trace, evidence, startedAt, failureCode);
         }
         trace.decisionRecorded({ ...decisionForAnswer(
           modelResponse,
