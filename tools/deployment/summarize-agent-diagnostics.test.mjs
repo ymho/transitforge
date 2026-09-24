@@ -8,11 +8,11 @@ const directory = mkdtempSync(join(tmpdir(), "raiquora-agent-diagnostics-"));
 const diagnostics = join(directory, "diagnostics.json");
 const streams = join(directory, "streams.json");
 writeFileSync(diagnostics, JSON.stringify([
-  JSON.stringify({ event: "agent_diagnostic", executionId: "private-id", phase: "runtime", reason: "schema_invalid", incomplete: true, occurredAt: "2026-09-24T12:00:00Z" }),
+  `2026-09-24T12:00:00.000Z\trequest-id\tINFO\t${JSON.stringify({ event: "agent_diagnostic", executionId: "private-id", phase: "runtime", reason: "schema_invalid", incomplete: true, occurredAt: "2026-09-24T12:00:00Z" })}`,
   "not-json",
 ]));
 writeFileSync(streams, JSON.stringify([
-  JSON.stringify({ eventSource: "agent_stream", event: "error", requestId: "private-id", latencyMs: 321 }),
+  JSON.stringify({ timestamp: "2026-09-24T12:00:00.000Z", level: "INFO", message: JSON.stringify({ eventSource: "agent_stream", event: "error", requestId: "private-id", latencyMs: 321 }) }),
 ]));
 
 const result = spawnSync(process.execPath, ["tools/deployment/summarize-agent-diagnostics.mjs", diagnostics, streams], { encoding: "utf8" });
