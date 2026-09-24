@@ -7,6 +7,7 @@ import { tripDynamoFixture } from "./adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, issuer, token } from "./adapters/cognito-token.fixture.js";
 import type { StreamWriter } from "./ports/agent-stream-transport.js";
 import type { ConversationModel } from "./ports/conversation-model.js";
+import { ConversationTurnExecutionError } from "./usecases/agent/conversation-turn.js";
 
 function setup(enabled = true, maxExecutionMs?: number) {
   const { verifier } = cognitoTokenFixture();
@@ -98,6 +99,15 @@ it("keeps 10 second heartbeats during Application work and records errors withou
   expect(s.log.mock.calls.at(-1)?.[0].event).toBe("error");
   expect(JSON.stringify(s.log.mock.calls) + s.frames.join("")).not.toContain("PRIVATE_PROVIDER_RESULT");
 });
+it("preserves the public runtime-limit code instead of collapsing it into agent_failed", async () => {
+  const s = setup();
+  s.createApplication.mockImplementation(() => ({ runConversationTurn: async () => {
+    throw new ConversationTurnExecutionError("limit_reached");
+  } }));
+  await s.handle(s.request, s.writer);
+  expect(s.frames.join("")).toContain('"type":"error","code":"limit_reached"');
+  expect(s.frames.at(-1)).toContain("event: done");
+});
 it("never reports completion after a failed final write", async () => {
   const s = setup();
   s.writer.write = vi.fn(async frame => { if (frame.includes('"type":"final"')) throw new Error("PRIVATE_WRITE"); });
@@ -134,7 +144,7 @@ it("requires both stable UUID references before state access", async () => {
   }
 });
 
-it("ends a bounded business timeout with agent_failed and no saved final, before the transport timeout", async () => {
+it("ends a bounded business timeout with limit_reached and no saved final, before the transport timeout", async () => {
   vi.useFakeTimers();
   const s = setup(true, serverAgentDeadline({ SERVER_AGENT_MAX_EXECUTION_MS: "120000" }));
   s.model.converse.mockImplementation(() => new Promise(() => {}));
@@ -143,7 +153,7 @@ it("ends a bounded business timeout with agent_failed and no saved final, before
   expect(s.frames.join("")).not.toContain('"type":"error"');
   await vi.advanceTimersByTimeAsync(2);
   await pending;
-  expect(s.frames.join("")).toContain('"code":"agent_failed"');
+  expect(s.frames.join("")).toContain('"code":"limit_reached"');
   expect(s.frames.join("")).not.toContain('"type":"final"');
   expect(s.frames.at(-1)).toContain("event: done");
   expect(s.model.converse).toHaveBeenCalledOnce();

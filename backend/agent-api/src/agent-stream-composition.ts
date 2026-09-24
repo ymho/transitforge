@@ -5,6 +5,7 @@ import { StateError } from "./contracts/server-state.js";
 import type { AccessTokenVerifier } from "./ports/access-token-verifier.js";
 import { createAgentStreamHandler, type StreamLog } from "./agent-stream-handler.js";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
+import { ConversationTurnExecutionError } from "./usecases/agent/conversation-turn.js";
 
 export interface StreamingAgentApplication {
   runConversationTurn(input: ConversationTurnInput, reportProgress?: AgentProgressReporter): Promise<ConversationTurnResult>;
@@ -34,7 +35,8 @@ export function createProductionAgentStream(options: {
       let result: ConversationTurnResult;
       try { result = await application.runConversationTurn(input as ConversationTurnInput, reportProgress); }
       catch (error) {
-        await emit({ type: "error", code: error instanceof StateError && error.code === "conflict" ? "turn_conflict" : "agent_failed" });
+        await emit({ type: "error", code: error instanceof StateError && error.code === "conflict" ? "turn_conflict" :
+          error instanceof ConversationTurnExecutionError ? error.code : "agent_failed" });
         return;
       }
       // The transaction has completed before any final bytes are published (including replay).

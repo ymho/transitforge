@@ -7,8 +7,11 @@ export interface AgentRuntimeLimits {
 }
 
 export const defaultAgentRuntimeLimits: AgentRuntimeLimits = {
-  maxIterations: 4,
-  maxModelCalls: 5,
+  // Open-ended discovery commonly needs candidate discovery, source reading and
+  // several place-photo lookups before the final presentation. Keep enough
+  // result-driven rounds for that path while retaining the production Tool cap.
+  maxIterations: 6,
+  maxModelCalls: 8,
   maxToolCalls: 8,
   maxExecutionMs: 15_000,
   maxEvidence: 20,

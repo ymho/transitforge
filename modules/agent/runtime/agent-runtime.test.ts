@@ -713,6 +713,33 @@ describe("MultiStepAgentRuntime", () => {
     expect(executionOrder).toEqual(["first_tool", "second_tool"]);
   });
 
+  it("keeps enough default rounds for open-ended candidate and photo research before finalization", async () => {
+    const executionOrder: string[] = [];
+    const { tools, toolExecutor } = toolSetup(executionOrder);
+    const final = textResponse("確認済みの候補です");
+    final.decisionSummaryStatus = "valid";
+    final.decisionSummary = { interpretedGoal: "のんびりできる旅を考える", hardConstraints: [], softPreferences: [],
+      selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"],
+      usedEvidenceIds: ["first_tool:候補発見", "second_tool:資料確認", "first_tool:写真1", "second_tool:写真2", "first_tool:写真3"] };
+    const runtime = new MultiStepAgentRuntime({
+      model: sequenceModel([
+        toolCallResponse([{ id: "discover", name: "first_tool", input: { value: "候補発見" } }]),
+        toolCallResponse([{ id: "read", name: "second_tool", input: { value: "資料確認" } }]),
+        toolCallResponse([{ id: "photo-1", name: "first_tool", input: { value: "写真1" } }]),
+        toolCallResponse([{ id: "photo-2", name: "second_tool", input: { value: "写真2" } }]),
+        toolCallResponse([{ id: "photo-3", name: "first_tool", input: { value: "写真3" } }]),
+        final,
+      ]),
+      tools,
+      toolExecutor,
+    });
+
+    const output = await runtime.run(request("のんびりできる旅を考えたい"));
+
+    expect(output.status).toBe("completed");
+    expect(executionOrder).toEqual(["first_tool", "second_tool", "first_tool", "second_tool", "first_tool"]);
+  });
+
   it("bounds iterations model calls and collected evidence", async () => {
     const { tools, toolExecutor } = toolSetup([]);
     const model = sequenceModel([

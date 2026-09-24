@@ -21,10 +21,14 @@ describe("Conversation turn Application", () => {
     expect(f.runAgentTurn).toHaveBeenCalledWith({ principal, conversationId, userRequest: input.userRequest, tripId: undefined, uiContext: undefined }, 1);
     expect(JSON.stringify([...f.records.values()])).not.toContain("private");
   });
-  it.each(["failed", "limit_reached", "throw"])("records %s as failed and retries without a second user message", async (status) => {
+  it.each([
+    ["failed", "agent_failed"],
+    ["limit_reached", "limit_reached"],
+    ["throw", "unavailable"],
+  ] as const)("records %s as failed and retries without a second user message", async (status, error) => {
     const f = await setup();
     f.runAgentTurn.mockImplementationOnce(async () => { if (status === "throw") throw new Error("private"); return { ...success, status: status as AgentRuntimeResult["status"] }; });
-    await expect(f.app.runConversationTurn(input)).rejects.toMatchObject({ message: "unavailable" });
+    await expect(f.app.runConversationTurn(input)).rejects.toMatchObject({ message: error });
     expect((await f.conversations.get(principal, conversationId))?.messageCount).toBe(1);
     expect(await f.app.runConversationTurn(input)).toEqual({ status: "completed", response: "案内" });
     expect((await f.conversations.get(principal, conversationId))?.messageCount).toBe(2);

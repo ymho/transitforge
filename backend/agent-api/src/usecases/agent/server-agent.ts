@@ -131,6 +131,18 @@ async function publishRuntimeDiagnostics(dependencies: ServerAgentDependencies, 
       phase: "tool", reason: event.outcome === "success" ? "completed" : "failed", occurredAt: event.occurredAt,
       correlation: { toolCallId: event.toolCallId }, refs: [event.toolName] });
   }
+  const completion = [...result.trace.events].reverse().find((event) => event.type === "task_completed");
+  await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId,
+    phase: "runtime", reason: result.status === "completed" || result.status === "follow_up" ? "completed" :
+      result.status === "limit_reached" ? "budget_exhausted" : diagnosticFailureReason(completion?.type === "task_completed" ? completion.reason : undefined),
+    occurredAt: completion?.occurredAt ?? (dependencies.now?.() ?? new Date()).toISOString(),
+    incomplete: result.status === "failed" || result.status === "limit_reached" });
+}
+
+function diagnosticFailureReason(reason: string | undefined): AgentDiagnosticEvent["reason"] {
+  if (reason?.includes("timeout")) return "provider_timeout";
+  if (reason?.startsWith("invalid_") || reason?.includes("contract") || reason?.includes("grounded")) return "schema_invalid";
+  return "failed";
 }
 
 async function safeDiagnostic(dependencies: ServerAgentDependencies, event: AgentDiagnosticEvent): Promise<void> {

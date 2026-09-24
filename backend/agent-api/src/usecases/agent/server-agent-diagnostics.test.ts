@@ -16,5 +16,6 @@ it("emits privacy-safe diagnostics and does not fail the turn when the sink fail
   expect(JSON.stringify(record.mock.calls)).not.toContain("private-food");
   expect(JSON.stringify(record.mock.calls)).not.toContain("private-request");
   expect(record.mock.calls[0]?.[0]).toMatchObject({ phase: "context", counts: { acceptedCharacters: 15, omitted: 1 }, correlation: { tripRevision: 4 } });
+  expect(record).toHaveBeenCalledWith(expect.objectContaining({ phase: "runtime", reason: "completed", incomplete: false }));
   expect(log).toHaveBeenCalledWith("agent_diagnostic_dropped", { executionId: "execution", phase: "decision" });
 });
