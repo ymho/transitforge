@@ -51,7 +51,10 @@ export function reviewCutoverPlan(plan, environment) {
   for (const resource of plan.resource_changes) {
     if (resource.mode !== "managed") continue;
     const { actions, before } = resource.change ?? {};
-    if (!Array.isArray(actions) || !actions.length || actions.some(a => !["no-op", "create", "read", "update", "delete"].includes(a))) {
+    const detachedLegacyAuth = resource.address === "aws_cloudfront_function.basic_auth" &&
+      actions?.length === 1 && actions[0] === "forget";
+    if (!Array.isArray(actions) || !actions.length ||
+        !detachedLegacyAuth && actions.some(a => !["no-op", "create", "read", "update", "delete"].includes(a))) {
       throw new Error("Invalid Terraform resource actions");
     }
     const stream = hasResourceName(resource, "agent_stream");

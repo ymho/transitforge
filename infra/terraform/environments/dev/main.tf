@@ -101,6 +101,17 @@ resource "aws_cloudfront_origin_access_control" "ai_agent" {
   signing_protocol                  = "sigv4"
 }
 
+// Detach the retired Basic auth function from state before updating distributions.
+// CloudFront rejects deletion while the old association is still deployed; CD
+// deletes the detached function only after the distribution updates complete.
+removed {
+  from = aws_cloudfront_function.basic_auth
+
+  lifecycle {
+    destroy = false
+  }
+}
+
 resource "aws_cloudfront_function" "legacy_redirect" {
   name    = "${var.project_name}-${var.environment}-legacy-redirect"
   comment = "Redirect the legacy CloudFront hostname to the canonical viewer hostname"

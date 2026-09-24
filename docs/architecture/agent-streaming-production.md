@@ -103,6 +103,9 @@ Applicationが提示する。根拠がない場合は候補を捏造せず、残
 CDのdeploy実行は、直近2時間の`agent_diagnostic`とstream終端を会話本文・利用者識別子・実行IDを除いて
 集計し、Job Summaryへ出力する。本番で公開エラーへ丸められた場合も、`context / runtime / save`と
 `provider_timeout / schema_invalid / failed`の境界を、個人情報を取得せずに切り分けられる。
+旧Basic認証のCloudFront FunctionはTerraformのstateから破棄せず切り離し、Distributionからの
+関連付け解除がデプロイされた後にCDで削除する。CloudFrontは使用中のFunction削除を拒否するため、
+同じTerraform適用内でDistribution変更とFunction削除を同時実行しない。
 
 API Gateway CloudWatch roleはaccount/region単位のsingletonである。このrootには既存ownerがないため
 新gate配下で定義するが、#451 Phase 3 merge後に既存ownerがあれば統合し、二重管理しない。

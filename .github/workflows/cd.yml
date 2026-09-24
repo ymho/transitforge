@@ -134,6 +134,20 @@ jobs:
         working-directory: infra/terraform/environments/dev
         run: terraform apply -input=false -auto-approve dev.tfplan
 
+      - name: Remove detached legacy Basic auth function
+        if: env.CD_MODE == 'deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Terraform has waited for the distributions to deploy without this
+          # association. Deleting the function earlier returns FunctionInUse.
+          if etag=$(aws cloudfront describe-function --name transitforge-dev-basic-auth --stage LIVE --query ETag --output text 2>&1); then
+            aws cloudfront delete-function --name transitforge-dev-basic-auth --if-match "$etag"
+          elif [[ "$etag" != *NoSuchFunctionExists* && "$etag" != *FunctionNotFound* ]]; then
+            printf '%s\n' "$etag" >&2
+            exit 1
+          fi
+
       - name: Read deployment outputs
         if: env.CD_MODE == 'deploy'
         id: terraform
