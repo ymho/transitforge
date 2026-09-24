@@ -201,7 +201,7 @@ function normalizedResponse(
   }
   let message: ReturnType<typeof validatedMessages>[number];
   try {
-    message = validatedMessages({ messages: [value.output.message] })[0];
+    message = validatedMessages({ messages: [withoutProviderReasoning(value.output.message)] })[0];
   } catch {
     throw new ConversationModelError("invalid_schema", "Bedrock response does not match the assistant message contract", false);
   }
@@ -224,6 +224,35 @@ function normalizedResponse(
       cacheStatus: cacheStatus(usage, cachingEnabled),
     },
   };
+}
+
+/**
+ * Bedrock may prepend a provider-only reasoning block to an otherwise valid
+ * assistant response. It is neither user-facing output nor an application
+ * action, so discard it at the provider boundary instead of retaining private
+ * reasoning in conversation state. All remaining blocks still pass through the
+ * strict application message validator.
+ */
+function withoutProviderReasoning(message: JsonObject): JsonObject {
+  if (message.role !== "assistant" || !Array.isArray(message.content)) return message;
+  const content = message.content.filter((block) => {
+    if (!isRecord(block) || Object.keys(block).length !== 1 || !("reasoningContent" in block)) return true;
+    if (!validReasoningContent(block.reasoningContent)) {
+      throw new ConversationModelError("invalid_schema", "Bedrock returned malformed reasoning content", false);
+    }
+    return false;
+  });
+  return { ...message, content };
+}
+
+function validReasoningContent(value: unknown): boolean {
+  if (!isRecord(value) || Object.keys(value).length !== 1) return false;
+  if (isRecord(value.reasoningText)) {
+    return Object.keys(value.reasoningText).every((key) => key === "text" || key === "signature") &&
+      typeof value.reasoningText.text === "string" &&
+      (value.reasoningText.signature === undefined || typeof value.reasoningText.signature === "string");
+  }
+  return value.redactedContent instanceof Uint8Array;
 }
 
 function modelCallFailureDiagnostic(error: unknown): ModelCallFailureDiagnostic {

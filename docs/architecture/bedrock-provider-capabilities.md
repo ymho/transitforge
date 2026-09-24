@@ -10,6 +10,8 @@
 
 `BEDROCK_CAPABILITY_MATRIX_JSON`は完全一致するmodel IDごとにレビュー済み結果を与える。未設定・未登録modelは`unmeasured`であり、model名部分一致では昇格しない。`BEDROCK_PROMPT_CACHING_ENABLED=true`かつmatrixが対応を示す場合だけcachePointを送る。
 
+Converseのassistant応答に含まれる`reasoningContent`はprovider内部の推論であり、Applicationの表示・Tool実行・会話履歴の契約には含めない。Adapter境界で形式を検証して破棄し、同じ応答の`text`または`toolUse`だけを既存の厳格なmessage検証へ渡す。推論しかない応答や不正な推論blockは正常応答へ昇格しない。
+
 ```json
 {
   "provider.model-id": {
