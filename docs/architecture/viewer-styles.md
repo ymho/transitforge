@@ -79,9 +79,9 @@ CSSだけの整理ではDOM classや見た目を変更しない
 - Consumer表示では通常cardの角丸20px/controlの角丸12pxを共通tokenとして使う。
   Home heroだけはcardへ閉じ込めずviewport幅・高さを使う写真面とし、headerのロゴとアカウント導線を重ねる。
   Heroを離れてスクロールしたheaderはsolid surfaceへ戻し、ロゴ色も背景に合わせて反転する。
-  Homeの重複状態ラベルと相談例の技術的な注意書きは表示しない（入力例のaccessible labelは維持）。
+  Home heroは中央の相談入力と、操作できない短い入力例1件だけを表示する。見出し・説明・認証CTA・写真選択UIは重ねない。
   写真を持たないTripには装飾アイコンを使う。Home heroはRaiquora所有の西日本観光写真を背景に使い、
-  コピー直下だけの局所的なscrimで可読性を保つ。3枚の切替は利用者操作だけで行い、自動再生しない。
+  表示開始時に写真と入力例をそれぞれ1件選ぶ。写真の切替操作や自動再生は設けず、scrimで入力の可読性を保つ。
   `travel-decoration`はaria-hiddenの純粋な装飾で、実景や調査済み地点の証拠ではない。
 - 成立性の計算とready判定は変更せず、表示のみ「旅の確認ポイント」等にする。
   未確認/見直し事項は本文に残す。評価日時は日本時間の読みやすい形式で折りたたみ詳細へ置き、
@@ -90,7 +90,8 @@ CSSだけの整理ではDOM classや見た目を変更しない
 - `home-read-model`は#450 `classifyTrips`と#452 CandidateAssessmentのcoverageを利用する読取projection。
 - 読取元は現在Conversationが参照する既存Trip Workspace source。一覧API・public writerは有効化しない。
   全server Trip一覧は#454へ残す。未認証/読取不能は空の保存済みTrip一覧と同義にしない。
-- Home送信は既存ConversationSessionの新規相談へ渡す。Trip採用/変更は既存Proposal確認だけ。
+- Home送信は既存ConversationSessionの新規相談へ渡す。未認証でも入力欄は表示し、内容のある送信時に認証を開始して
+  タブ内の下書きを保持する。認証前に相談を開始したり入力を消したりしない。Trip採用/変更は既存Proposal確認だけ。
 - 地図はsubview初回表示で起動する。初期の文章相談は同じAgent RuntimeとHTTP Toolを使用し、
   Mapbox token/WebGL/列車描画データを待たない。全画面loadingは地図を明示的に開いた初回だけ表示し、
   Homeや相談の起動状態には使わない。現在地を起点として推定しない。
