@@ -185,8 +185,9 @@ terraform output -json cognito_frontend_config > ../../../../frontend/public/aut
 渡すことを後続server wiringの契約とする。本段階ではLambda environment/handler/Runtimeを変更しない。
 ID TokenはAPIへ送らない。Basic認証とOAC、既存の公開writer gateも維持する。
 
-設定画面の「ログイン / 新規登録」から日本語Managed Loginへ進む。tokenは5分のタブsessionとし、
-期限切れ時は再ログインする。詳しい保存・logout保証と未実施の実環境試験は
+設定画面の「ログイン / 新規登録」から日本語Managed Loginへ進む。Access/ID Tokenは5分のまま、
+Refresh TokenをsessionStorageへタブ単位で保持して失効前と401時に1回だけ更新する。ログイン開始から
+最大8時間の絶対期限は更新で延長しない。詳しい保存・logout保証と未実施の実環境試験は
 [ADR 0069](../../../../docs/decisions/0069-use-cognito-managed-login-for-spa.md)を参照する。
 
 ## Fixed-egress Provider（#480 Phase B）

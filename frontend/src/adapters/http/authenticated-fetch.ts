@@ -31,33 +31,42 @@ export function createAuthenticatedFetch(auth: AuthSession, origin: string, requ
     const base = input instanceof Request ? new Request(input, init) : new Request(url, init);
     if (base.method !== "POST" || (base.headers.has("authorization") || base.headers.has("x-raiquora-access-token"))) throw new Error("Invalid personal API request");
     const epoch = generation;
-    const token = await auth.getAccessToken();
+    let token = await auth.getAccessToken();
     if (epoch !== generation) throw new ApiAuthenticationError("session-changed");
     if (!token || auth.getState().status !== "signed-in") throw new ApiAuthenticationError("unauthenticated");
     if (epoch !== generation) throw new ApiAuthenticationError("session-changed");
     const controller = new AbortController(); active.add(controller);
-    const headers = new Headers(base.headers); headers.set(url.pathname === "/api/agent" ? "x-raiquora-access-token" : "authorization", `Bearer ${token}`);
     try {
-      const response = await request(new Request(base, {
-        headers, signal: AbortSignal.any([base.signal, controller.signal]),
-        credentials: "same-origin", cache: "no-store", redirect: "error", referrerPolicy: "no-referrer",
-      }));
-      if (epoch !== generation) throw new ApiAuthenticationError("session-changed");
-      if (response.status === 401) { auth.invalidate(); throw new ApiAuthenticationError("unauthenticated"); }
-      if (response.status === 403) throw new ApiAuthenticationError("forbidden");
-      // These bounded JSON APIs are not streams. Buffer before returning so session changes
-      // during body consumption cannot publish another account's data to the client.
-      const body = await response.arrayBuffer();
-      if (auth.getState().status !== "signed-in" || epoch !== generation) throw new ApiAuthenticationError("session-changed");
-      const buffered = new Response([204, 205, 304].includes(response.status) ? null : body,
-        { status: response.status, statusText: response.statusText, headers: response.headers });
-      const readJson = buffered.json.bind(buffered);
-      buffered.json = async () => {
-        const value: unknown = await readJson();
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const headers = new Headers(base.headers); headers.set(url.pathname === "/api/agent" ? "x-raiquora-access-token" : "authorization", `Bearer ${token}`);
+        const response = await request(new Request(base.clone(), {
+          headers, signal: AbortSignal.any([base.signal, controller.signal]),
+          credentials: "same-origin", cache: "no-store", redirect: "error", referrerPolicy: "no-referrer",
+        }));
+        if (epoch !== generation) throw new ApiAuthenticationError("session-changed");
+        if (response.status === 401 && attempt === 0) {
+          const refreshed = await auth.refreshAccessToken(token);
+          if (epoch !== generation) throw new ApiAuthenticationError("session-changed");
+          if (!refreshed || refreshed === token || auth.getState().status !== "signed-in") { auth.invalidate(); throw new ApiAuthenticationError("unauthenticated"); }
+          token = refreshed; continue;
+        }
+        if (response.status === 401) { auth.invalidate(); throw new ApiAuthenticationError("unauthenticated"); }
+        if (response.status === 403) throw new ApiAuthenticationError("forbidden");
+        // These bounded JSON APIs are not streams. Buffer before returning so session changes
+        // during body consumption cannot publish another account's data to the client.
+        const body = await response.arrayBuffer();
         if (auth.getState().status !== "signed-in" || epoch !== generation) throw new ApiAuthenticationError("session-changed");
-        return value;
-      };
-      return buffered;
+        const buffered = new Response([204, 205, 304].includes(response.status) ? null : body,
+          { status: response.status, statusText: response.statusText, headers: response.headers });
+        const readJson = buffered.json.bind(buffered);
+        buffered.json = async () => {
+          const value: unknown = await readJson();
+          if (auth.getState().status !== "signed-in" || epoch !== generation) throw new ApiAuthenticationError("session-changed");
+          return value;
+        };
+        return buffered;
+      }
+      throw new ApiAuthenticationError("unauthenticated");
     } catch (error) {
       if (error instanceof ApiAuthenticationError) throw error;
       if (epoch !== generation) throw new ApiAuthenticationError("session-changed");

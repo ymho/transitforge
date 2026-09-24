@@ -35,23 +35,24 @@ Basic保護とOACを維持する。CD実行・Terraform apply・本番切替は�
 
 ## 保持・期限・ログアウト
 
-Access Tokenは最大5分、タブ単位のsessionStorageへ表示名と絶対期限を保存する。
-localStorageへtokenを書かない。再読込では期限内のsessionだけを復元し、期限切れ時は破棄する。
-API用portはAccess Tokenだけを返す。期限切れ時はtokenを返さず、Managed Loginから再認証する。
-サイレント更新・自動refresh・業務リクエストの自動再送は行わない。
+Access/ID Tokenは最大5分のまま、Refresh TokenのCognito上の期限は8時間とする。タブ単位の
+sessionStorageへschema version、issuer、client ID、scope、発行時刻、Access Token期限、ログイン開始から
+最大8時間の絶対期限、Access/Refresh Token、表示名を保存する。localStorageへtokenを書かず、ID Tokenも
+保存しない。再読込では設定との完全一致と期限を検証し、不正または絶対期限切れのsessionを破棄する。
 
-Refresh TokenのCognito上の期限は最小の1時間とする。永続保存せず、そのdocumentのメモリだけに
-保持してlogout時にbest effortでrevokeする。再読込すると失い、refreshにも再利用しないためrotationを
-導入しない。ID TokenもsessionStorageに残さない。認証取引のstate/nonce/verifierはsessionStorageに
+Access Tokenの失効30秒前にはrefresh grantを行う。同時要求は単一flightへ集約し、rotationされたRefresh
+Tokenは同じ絶対期限で置換する。401だけは強制refresh後に同一要求を1回再送し、2度目の401でsessionを
+失効させる。403や業務エラーはrefreshしない。refresh失敗をループせず再ログインへ戻す。認証取引の
+state/nonce/verifierはsessionStorageに
 最大10分保持し、callbackで消費する。新規login/logout時は当clientの未完了取引を消去する。
 
 logoutはまず当タブのsessionと未完了取引を消し、revoke成否にかかわらずCognito `/logout`へ遷移する。
 遅着したtoken交換結果でsessionを復元しない。Cognito cookieの破棄とJWTの即時失効は別であり、
 #484の署名検証だけでは発行済みAccess Tokenは最大5分有効。別タブのsessionも期限まで残り得る。
-revoke対象のRefresh Tokenは再読込後には保持していない。この段階は全端末logoutを保証しない。
+logout世代より遅く完了したrefreshはsessionを復元しない。この段階は全端末logoutを保証しない。
 
 sessionStorageはXSSからtokenを守る仕組みではなく、同originの悪意あるscriptは読み取り可能である。
-保持時間を短くし、token/claims/下位例外をログへ出さず、UIへはtextContentで表示する。
+絶対期限を8時間に限定し、token/claims/下位例外をログへ出さず、UIへはtextContentで表示する。
 stateとPKCEでlogin CSRF/code横取りを抑止し、nonceで応答との対応を確認する。
 BFFやIdentity Poolは追加しない。
 

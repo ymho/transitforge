@@ -590,7 +590,6 @@ if (isSignedIn()) {
   } catch { /* Storage denial only prevents automatic return. */ }
 }
 applyContextWorkspaceState();
-configureTravelProfile(document, profileUi, () => aiGuideController.open());
 if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip-workspace-preview") === "1") {
   if (!token) mapTools.hidden = true;
   loadingScreen.complete();
@@ -638,7 +637,7 @@ primaryShell = configureAiFirstShell(document, app, {
       preview: !!homePreview || (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip-workspace-preview") === "1"),
     };
   },
-  profile: () => profileUi.current()?.profile, subscribe: (listener) => {
+  subscribe: (listener) => {
     const left = tripWorkspaceController.subscribe(listener), middle = profileUi.subscribe(listener), right = serverTripList.subscribe(listener), auth = currentAuthentication().subscribe(listener);
     return () => { left(); middle(); right(); auth(); };
   },
@@ -656,7 +655,6 @@ primaryShell = configureAiFirstShell(document, app, {
     await serverTripList.refresh();
   },
   archiveTrip: async (id) => { await serverTripClient.archive(id); await serverTripList.refresh(); },
-  openProfile: () => travelProfileToggle.click(),
   openMap: (mode) => { startMap(); selectSidebarMapMode(mode === "simulation" ? "date-time" : "realtime"); },
   journeySettings: () => ({ transferPace: journeyTransferPace.value, rankingPreference: journeyRankingPreference.value }),
   setJourneySettings: ({ transferPace, rankingPreference }) => {
@@ -667,6 +665,7 @@ primaryShell = configureAiFirstShell(document, app, {
   canLeave: () => tripWorkspace.canLeave(),
   now: () => new Date(),
 });
+configureTravelProfile(document, profileUi);
 loadingScreen.complete();
 const consultationScreen = configureConsultationScreen(aiGuidePanel, aiGuideMessages, aiGuideForm, aiGuideInput, {
   read: () => ({ sessionId: tripWorkspaceController.sessionId(), trip: tripWorkspaceController.current() ?? (isSignedIn() && !activeConversationSession.tripId ? conversationUi.draftView(activeConversationSession.id) : undefined),

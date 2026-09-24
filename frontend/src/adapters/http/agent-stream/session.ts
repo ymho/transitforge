@@ -65,15 +65,26 @@ export function createConversationStreamSession(options: {
           if (inFlight || !current()) throw new AgentStreamError("stale_generation");
           inFlight = true; const controller = new AbortController(); active = controller;
           try {
-            const token = await options.auth.getAccessToken();
+            let token = await options.auth.getAccessToken();
             if (!current()) throw new AgentStreamError("stale_generation");
             if (!token || options.auth.getState().status !== "signed-in") throw new ApiAuthenticationError("unauthenticated");
             if (!current()) throw new AgentStreamError("stale_generation");
             let final: ViewerAgentResponse | undefined;
-            await consumeAgentStream({ token, request, endpoint: options.endpoint ?? "/api/agent-stream", fetcher: options.fetcher,
-              signal: controller.signal, isCurrent: current, measurement: { requestStart: 0, maxSilenceMs: 0 },
-              onEvent(event) { if (!current()) return; if (event.type === "final") final = event.publicPlanPresentation ? { text: event.response, publicPlanPresentation: event.publicPlanPresentation } : event.tripCostProposal ? { text: event.response, tripCostProposal: event.tripCostProposal, ...(event.tripUpdateProposal ? { tripUpdateProposal: event.tripUpdateProposal } : {}) } : event.consultationRequestProposal ? { text: event.response, consultationRequestProposal: event.consultationRequestProposal } : event.tripUpdateProposal ? { text: event.response, tripUpdateProposal: event.tripUpdateProposal } : event.response; onEvent?.(event); },
-            });
+            for (let attempt = 0; attempt < 2; attempt++) {
+              try {
+                await consumeAgentStream({ token, request, endpoint: options.endpoint ?? "/api/agent-stream", fetcher: options.fetcher,
+                  signal: controller.signal, isCurrent: current, measurement: { requestStart: 0, maxSilenceMs: 0 },
+                  onEvent(event) { if (!current()) return; if (event.type === "final") final = event.publicPlanPresentation ? { text: event.response, publicPlanPresentation: event.publicPlanPresentation } : event.tripCostProposal ? { text: event.response, tripCostProposal: event.tripCostProposal, ...(event.tripUpdateProposal ? { tripUpdateProposal: event.tripUpdateProposal } : {}) } : event.consultationRequestProposal ? { text: event.response, consultationRequestProposal: event.consultationRequestProposal } : event.tripUpdateProposal ? { text: event.response, tripUpdateProposal: event.tripUpdateProposal } : event.response; onEvent?.(event); },
+                });
+                break;
+              } catch (error) {
+                if (!(error instanceof AgentStreamError) || error.message !== "http_401" || attempt !== 0) throw error;
+                const refreshed = await options.auth.refreshAccessToken(token);
+                if (!current()) throw new AgentStreamError("stale_generation");
+                if (!refreshed || refreshed === token || options.auth.getState().status !== "signed-in") { options.auth.invalidate(); throw new ApiAuthenticationError("unauthenticated"); }
+                token = refreshed;
+              }
+            }
             if (!current()) throw new AgentStreamError("stale_generation");
             if (final === undefined) throw new AgentStreamError("missing_final");
             return final;

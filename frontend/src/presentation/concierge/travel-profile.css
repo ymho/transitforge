@@ -1,10 +1,8 @@
-/* Dedicated v6 Profile screen, not a modal over another feature. */
-.travel-profile-page { position: absolute; inset: 5rem 0 0; z-index: 14; overflow-y: auto; padding: 1.5rem max(1.625rem, calc((100vw - 79.25rem) / 2)) 3rem; color: #102337; background: #f6f6f1; font-size: .875rem; }
-#app[data-profile-editing=true] .product-page { visibility: hidden; pointer-events: none; }
-.travel-profile-page[hidden] { display: none; }
-.profile-editor { background: #fff; border: 1px solid #dfe4e8; border-radius: 1.5rem; box-shadow: 0 6px 20px #12273f12; overflow: clip; overflow-wrap: anywhere; }
+/* Account-page form: participates in normal document flow on every viewport. */
+.travel-profile-page { position: static; min-width: 0; color: #102337; background: transparent; font-size: .875rem; }
+.profile-editor { min-width: 0; overflow-wrap: anywhere; }
 .profile-editor header { padding: 1.375rem 1.5rem; display: flex; gap: .75rem; align-items: center; border-bottom: 1px solid #dfe4e8; }
-.profile-editor h1 { margin: 0; font: 700 1.6rem/1.5 "Yu Mincho", "Hiragino Mincho ProN", serif; }
+.profile-editor h2 { margin: 0; font: 700 1.4rem/1.5 "Yu Mincho", "Hiragino Mincho ProN", serif; }
 .profile-editor header p { margin: .25rem 0 0; color: #6b7885; }
 .profile-editor p { line-height: 1.7; }
 .profile-editor form { padding: 1.25rem 1.5rem 1.6rem; display: grid; gap: 1.125rem; }
@@ -29,7 +27,7 @@
 .profile-editor small { display: block; color: #687587; font-size: .75rem; line-height: 1.6; }
 .profile-choice > p { margin: .5rem 0 .35rem; color: #657382; font-weight: 700; }
 .profile-scope-note { background: #f2f6f9; border-radius: .8125rem; padding: .75rem .8rem; color: #5e6e7c; margin: 0; }
-.profile-editor-actions { position: sticky; bottom: -3rem; padding: .75rem 1.5rem; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .5rem; border-top: 1px solid #e1e6ea; background: #fffffff5; }
+.profile-editor-actions { position: sticky; bottom: 0; z-index: 1; padding: .75rem 1.5rem max(.75rem, env(safe-area-inset-bottom)); display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .5rem; border-top: 1px solid #e1e6ea; background: #fffffff5; }
 .profile-editor-actions [data-delete] { margin-right: auto; order: -1; font-weight: 400; }
 .profile-editor [data-profile-message]:not(:empty) { padding: 1rem 1.5rem; background: #f2f6f9; }
 .profile-editor [data-profile-message]:empty { margin: 0; }
@@ -38,14 +36,12 @@
 .profile-editor [hidden], .profile-editor [type=hidden] { display: none; }
 .profile-editor summary { min-height: 44px; cursor: pointer; }
 @media (max-width: 44rem) {
-  .travel-profile-page { inset: 4rem 0 0; padding: .875rem .875rem 6rem; }
   .profile-editor { font-size: .8125rem; }
-  .profile-editor { border-radius: 1.25rem; }
   .profile-editor header { padding: 1rem; }
-  .profile-editor h1 { font-size: 1.375rem; }
+  .profile-editor h2 { font-size: 1.375rem; }
   .profile-editor form { padding: .9rem .875rem 1.25rem; gap: .875rem; }
   .profile-editor fieldset { padding: .875rem; }
   .profile-field-grid, .profile-interest-grid { grid-template-columns: 1fr; }
   .profile-field-grid { gap: .625rem; }
-  .profile-editor-actions { bottom: -1.25rem; padding: .625rem .875rem; }
+  .profile-editor-actions { bottom: 0; padding: .625rem .875rem max(.625rem, env(safe-area-inset-bottom)); }
 }

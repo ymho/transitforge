@@ -7,19 +7,18 @@ beforeEach(() => { document.body.innerHTML = '<main id="app"></main>'; window.hi
 afterEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
 function setup(overrides: Partial<AiFirstShellPorts> = {}) {
   const ports: AiFirstShellPorts = {
-    read: () => ({ state: "unauthenticated", trips: [], candidates: [] }), profile: () => undefined,
+    read: () => ({ state: "unauthenticated", trips: [], candidates: [] }),
     authState: () => ({ status: "signed-out" }), login: vi.fn(), logout: vi.fn(),
     subscribe: () => () => {}, retry: vi.fn(async () => {}), newConsultation: vi.fn(), openChat: vi.fn(), openTrip: vi.fn(),
-    openProfile: vi.fn(), openMap: vi.fn(), journeySettings: () => ({ transferPace: "standard", rankingPreference: "balanced" }), setJourneySettings: vi.fn(), openNotifications: vi.fn(), now: () => new Date("2026-09-18T00:00:00Z"), ...overrides,
+    openMap: vi.fn(), journeySettings: () => ({ transferPace: "standard", rankingPreference: "balanced" }), setJourneySettings: vi.fn(), openNotifications: vi.fn(), now: () => new Date("2026-09-18T00:00:00Z"), ...overrides,
   };
   return { shell: configureAiFirstShell(document, document.querySelector("main")!, ports), ports };
 }
 const click = (selector: string) => document.querySelector<HTMLElement>(selector)!.click();
-it("shows real Profile choices as bounded chips, not fixed mock preferences", () => {
-  setup({ profile: () => ({ version: 2, home: {}, companions: { usual: [], children: [] }, travelStyle: { pace: .2 },
-    preferences: { food: .9, history: .9, sea: .1 }, transport: { preferredMode: "rail" }, updatedAt: "2026-09-18T00:00:00Z" }) });
-  expect([...document.querySelectorAll("[data-profile-summary] span")].map((e) => e.textContent)).toEqual(["列車を優先", "ゆったり", "食", "歴史"]);
-  expect(document.querySelector("[data-profile-summary]")!.textContent).not.toContain("海");
+it("places the profile settings target directly in the account page", () => {
+  setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) });
+  expect(document.querySelector("[data-profile]")).toBeNull();
+  expect(document.querySelector("[data-page=my] #travel-profile-page")).not.toBeNull();
 });
 it("starts Home without initializing Map or requiring profile/authentication", () => {
   const { ports } = setup();
@@ -41,6 +40,7 @@ it("keeps login visible in the header and sends signed-in people to My", () => {
   const signedIn = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) });
   expect(document.querySelector("[data-account]")!.textContent).toBe("山田 花子"); click("[data-account]");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("my"); expect(document.querySelector("[data-my-account-status]")!.textContent).toContain("ログイン中");
+  expect(document.querySelector("[data-my-account-status]")!.textContent).toContain("最大8時間");
   click("[data-my-logout]"); expect(signedIn.ports.logout).toHaveBeenCalledOnce();
 });
 it("does not submit IME composition and keeps input across tab navigation / re-render", () => {
@@ -71,8 +71,7 @@ it("reader failures render retry without disabling the independent consultation 
 });
 it("all secondary actions use existing feature ports", () => {
   const { shell, ports } = setup(); shell.navigate("my");
-  for (const key of ["profile", "notifications"]) click(`[data-${key}]`);
-  expect(ports.openProfile).toHaveBeenCalledOnce();
+  click("[data-notifications]");
   expect(ports.openNotifications).toHaveBeenCalledOnce();
 });
 it("opens the actual Trip as a trips subview, not a selected chat tab", () => {

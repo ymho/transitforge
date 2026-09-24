@@ -83,6 +83,7 @@
 .my-shell { padding: 0; }
 .my-shell h1, .trip-list-heading h1 { font-size: 2rem; }
 .my-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.account-profile-card { grid-column: 1 / -1; min-width: 0; padding: 0; overflow: clip; }
 .my-grid .home-card { margin: 0; box-shadow: none; border-radius: 1.125rem; }
 .my-grid p { font-size: .875rem; }
 .my-grid h2 { font-size: 1.25rem; }

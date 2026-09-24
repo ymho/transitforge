@@ -11,7 +11,7 @@ describe("authentication controls", () => {
     const auth: AuthSession = {
       invalidate: vi.fn(), initialize: vi.fn(), getState: () => ({ status: "signed-out" }),
       subscribe: fn => { listener = fn; fn({ status: "signed-out" }); return unsubscribe; },
-      login: vi.fn(), logout: vi.fn(), getAccessToken: async () => undefined,
+      login: vi.fn(), logout: vi.fn(), refreshAccessToken: async () => undefined, getAccessToken: async () => undefined,
     };
     const dispose = mountAuthControls(document, auth);
     const login = document.querySelector<HTMLButtonElement>("#auth-login")!;
