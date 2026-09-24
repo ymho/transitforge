@@ -141,3 +141,14 @@ native Toolによる再取得か根拠不足の説明へ戻す。
 
 モデル比較runには全turn数、完遂turn数、完遂率、failure code分布、cache read/write tokenとstatus分布を追加する。
 集計qualityが改善していても全turn完遂・failure code 0でなければproduction routingを推薦しない。
+
+## 2026-09-24 新規相談の質問票ループ防止
+
+目的地未定の旅行相談で、モデルが任意の好みを`user_confirmation_required`として返すと、System Promptでは
+具体案を先に求めていてもRuntimeが質問だけの応答を許可していた。新規のdiscovery/draft/refineでは、
+安全確認または明示的なauthorizationだけを初回の質問単独終了として認める。候補選択の`user_decision`は、
+前turnに候補・比較等のvisible progressが保存されている場合だけ質問単独終了を認める。
+
+Runtimeはmodel回答とterminal回答に既定の`AgentTurnObservation`を付与し、`ask_only`、`answer`、
+構造化候補の`progress`をWorking Stateへ保存可能にする。これにより同じ会話の次turnでも、質問だけを
+連続させないApplication policyが実際の本番compositionで働く。モデルのreason codeだけを進展とは扱わない。

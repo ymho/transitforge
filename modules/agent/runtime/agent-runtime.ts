@@ -37,7 +37,7 @@ import { renderInTripAnswer, inTripToolPresentationReferences } from "./in-trip-
 import type { AgentDecisionTrace } from "./agent-trace";
 import { AgentToolRegistry } from "./tool-registry";
 import { failedAgentToolResult } from "./tool-contract";
-import { acceptsAgentTurn, askProgressRepairInstruction, type AgentTurnObservation } from "./agent-turn-outcome";
+import { acceptsAgentTurn, askProgressRepairInstruction, observeAgentTurn, type AgentTurnObservation } from "./agent-turn-outcome";
 import { agentTurnOutputContract, agentTurnPresentationOutputContract } from "./agent-output-contract";
 import { compileAgentPrompt } from "./context-compiler";
 import { withMeasuredResearchOutcome } from "./public-plan-presentation";
@@ -361,7 +361,9 @@ export class MultiStepAgentRuntime {
         const hasPlacePhoto = evidence.some((item) => typeof item.facts.imageUrl === "string" &&
           typeof item.facts.imageSourceUrl === "string" && typeof item.facts.imageAttribution === "string");
         const placePhotoAvailable = modelTools.some(({ name }) => name === "search_place_media");
-        const planningGuard = planningTurn && shouldRequirePlanningProgress(modelResponse)
+        const priorVisibleProgress = request.context?.taskContext?.previousOutcome === "progress" ||
+          request.context?.taskContext?.previousOutcome === "ask_and_progress";
+        const planningGuard = planningTurn && shouldRequirePlanningProgress(modelResponse, priorVisibleProgress)
           ? { accepted: false, reason: "planning_progress_required", instruction:
             "この旅行相談は質問票だけで終えず、未確認条件を仮定として明記して具体案へ進めてください。プロフィール由来の情報を確定条件として列挙せず、必要な場所情報と写真はToolで調査してください。" }
           : planningTurn && sourceEvidence.length > 0 && !hasPlacePhoto && placePhotoAvailable
@@ -459,7 +461,15 @@ export class MultiStepAgentRuntime {
             trace,
           );
         }
-        const prepared = this.dependencies.prepareResponse?.(generated.text, evidence, true, modelResponse.decisionSummary?.selectedAction === "ask_user");
+        const asksUser = modelResponse.decisionSummary?.selectedAction === "ask_user";
+        const prepared = this.dependencies.prepareResponse?.(generated.text, evidence, true, asksUser) ?? {
+          text: generated.text,
+          observation: observeAgentTurn(Boolean(asksUser), generated.publicPlanPresentation ? [{
+            kind: "candidates",
+            refs: [...generated.publicPlanPresentation.candidateOrder],
+            ...(generated.publicPlanPresentation.photoRefs.length ? { mediaRefs: [...generated.publicPlanPresentation.photoRefs] } : {}),
+          }] : []),
+        };
         if (prepared) {
           const accepted = acceptsAgentTurn(request.context?.previousAssistantTurn, prepared.observation);
           trace.turnObserved(prepared.observation, accepted);
@@ -627,7 +637,10 @@ export class MultiStepAgentRuntime {
       hasToolResults = true;
       finalizeAfterToolResult ||= duplicateToolCallDetected;
       if (terminalResponse !== undefined) {
-        const prepared = this.dependencies.prepareResponse?.(terminalResponse, evidence, false);
+        const prepared = this.dependencies.prepareResponse?.(terminalResponse, evidence, false) ?? {
+          text: terminalResponse,
+          observation: observeAgentTurn(false, []),
+        };
         if (prepared) {
           const accepted = acceptsAgentTurn(request.context?.previousAssistantTurn, prepared.observation);
           trace.turnObserved(prepared.observation, accepted);
@@ -757,14 +770,18 @@ function hasPlanningQuestionnaire(response: AgentModelResponse): boolean {
   return asksForOptionalDetails;
 }
 
-function shouldRequirePlanningProgress(response: AgentModelResponse): boolean {
+function shouldRequirePlanningProgress(response: AgentModelResponse, priorVisibleProgress: boolean): boolean {
   const summary = response.decisionSummary;
   if (summary?.selectedAction === "ask_user") {
     const requirements = summary.missingRequirements ?? [];
-    const requiredQuestion = requirements.some((item) => item.action === "ask" &&
-      (item.resolution === "authorization" || item.resolution === "user_decision"));
-    const protectedReason = summary.reasonCodes.includes("safety_boundary") || summary.reasonCodes.includes("user_confirmation_required");
-    return !(requiredQuestion && protectedReason);
+    const authorizationRequired = requirements.some((item) => item.action === "ask" && item.resolution === "authorization");
+    const safetyRequired = summary.reasonCodes.includes("safety_boundary");
+    const selectionAfterProgress = priorVisibleProgress && requirements.some((item) =>
+      item.action === "ask" && item.resolution === "user_decision");
+    // `user_confirmation_required` alone is not a license to turn an open-ended
+    // discovery into a questionnaire. First show candidates; selection may be
+    // requested on a later turn after visible progress has been persisted.
+    return !(authorizationRequired || safetyRequired || selectionAfterProgress);
   }
   // Temporary measured safety net until PR2 makes typed provider output the sole path.
   // A legacy model labelling a questionnaire as `answer` must not bypass the typed ask contract.
