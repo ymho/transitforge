@@ -222,5 +222,5 @@ resource action一覧をstep summaryへ出す。AWS lockfileも作らず、apply
 今回このworkflowは起動しない。詳細は[cutover契約](../../../../docs/architecture/server-agent-cutover.md)を参照する。
 
 stream Lambdaの`SERVER_AGENT_MAX_EXECUTION_MS`はTerraformの`server_agent_max_execution_ms`
-から生成する。推奨・既定120000ms、許容範囲は整数1000〜180000ms。Lambda240秒とは別のbusiness
+から生成する。推奨・既定150000ms、許容範囲は整数1000〜180000ms。Lambda240秒とは別のbusiness
 実行上限で、共有Browser Runtimeの15秒設定は変更しない。35/90/180秒のtransport fixtureとは分ける。

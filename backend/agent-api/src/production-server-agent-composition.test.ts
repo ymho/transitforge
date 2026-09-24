@@ -8,5 +8,7 @@ it("passes the validated business deadline to the production stateful Runtime", 
     AGENT_PROVIDER_SECRET_ARN: "test", VIEWER_ORIGIN: "https://example.com", SERVER_STATE_TABLE_NAME: "test",
     TRIP_TABLE_NAME: "test", FIXED_EGRESS_PROVIDER_FUNCTION_ARN: "test",
   });
-  expect(createProductionConversationAgent).toHaveBeenCalledWith(expect.objectContaining({ limits: { maxExecutionMs: 90000 } }));
+  expect(createProductionConversationAgent).toHaveBeenCalledWith(expect.objectContaining({
+    limits: { maxIterations: 8, maxModelCalls: 11, maxToolCalls: 12, maxExecutionMs: 90000 },
+  }));
 });

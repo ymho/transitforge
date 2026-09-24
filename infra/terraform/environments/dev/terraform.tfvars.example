@@ -27,4 +27,4 @@ cloudflare_front_door_enabled           = false
 legacy_cloudfront_redirect_enabled      = false
 
 # Server Agent business budget only; transport/Lambda timeoutとは別。infra gateは既定OFF。
-# server_agent_max_execution_ms = 120000
+# server_agent_max_execution_ms = 150000

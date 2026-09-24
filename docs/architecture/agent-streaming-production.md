@@ -84,6 +84,9 @@ Gatewayのrate 1/s・burst 2、Lambda reserved concurrency 1は初期の保守�
 
 Runtime完了時は内容を含まない`runtime`診断を追加し、`completed`、`budget_exhausted`、
 `provider_timeout`、`provider_refusal`、`provider_error`、`schema_invalid`、`response_rejected`、`failed`を区別する。
+上限到達は`iteration_budget`、`model_budget`、`tool_budget`、`deadline`、`finalization_tool_calls`を
+安全なreasonとして区別し、修復失敗などの既存reasonも`schema_invalid`等へ集約する。本番Serverの標準上限は
+8判断ラウンド、11モデル呼出、12 Tool呼出、150秒（transportは240秒）とし、Browser/共有Runtime既定値は維持する。
 実行上限はSSEでも`limit_reached`のまま公開し、
 保存層や画面で一般障害へ潰さない。Browserは条件が保持されていることと再開方法を表示する。
 `building_answer`後の最終応答が構造化contractまたはEvidence表示検証に失敗した場合は、Toolを追加実行せず、
