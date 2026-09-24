@@ -113,7 +113,8 @@ it("map is a realtime-only subview and source tab survives history restoration",
   expect(document.querySelector('[data-primary="trips"]')!.hasAttribute("aria-current")).toBe(false);
   expect(document.querySelector("[data-map-navigation]")!.getAttribute("aria-current")).toBe("page");
   expect(window.history.state).toEqual({ returnView: "trips" });
-  click("[data-map-back]"); expect(document.querySelector("main")!.dataset.primaryView).toBe("trips");
+  expect(document.querySelector("[data-map-back]")).toBeNull();
+  click('[data-primary="trips"]'); expect(document.querySelector("main")!.dataset.primaryView).toBe("trips");
 });
 it("opens realtime operations from the persistent navigation and marks it current", () => {
   const { ports } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) }); click("[data-map-navigation]");
