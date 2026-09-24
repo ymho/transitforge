@@ -76,13 +76,13 @@ NOT APPLICABLE: Agent用Function URLを維持する案、async導入案、token-
 behavior/OAC invoke許可を今回削除しない。専用routeへの移設も不要。`bedrock-agent` Lambdaは存続する。
 旧origin/routeはコードとして残るが、汎用会話能力は閉じたままである。
 
-残る保護operationは同じCognito Access Token/`raiquora/user`を業務実行前に検証する。
+map weatherを含む残存operationはすべて同じCognito Access Token/`raiquora/user`を業務実行前に検証する。
 OACのSigV4 `Authorization`と競合しないよう、同originのJSON API clientだけが
 `X-Raiquora-Access-Token: Bearer <access token>`を設定する。既存AllViewerExceptHostHeaderで転送する。
 このheaderは**未検証のtoken搬送**であり、存在を認証済みidentityとは扱わない。body/headerのownerや
 Gateway claimsは認可に使わない。署名・期限・pool・client・token_use・scopeは既存verifierのまま。
 重複/矛盾/カンマ結合headerは拒否し、欠落/不正は401、scope不足は403。応答はno-store、tokenをlogへ出さない。
-Basic認証とAWS_IAM/OACは維持する。Browserはcaller指定token、外部URL/query/redirectを拒否し、
+AWS_IAM/OACは維持する。CloudFront Basic認証は撤去し、Browserはcaller指定token、外部URL/query/redirectを拒否し、
 account変更中のtoken待ち/受信/body読取を破棄する。認証エラーをHTTP自動retryしない。
 `/api/agent-stream`は標準Authorization Bearerのままで変更しない。
 

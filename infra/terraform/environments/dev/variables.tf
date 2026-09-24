@@ -27,28 +27,6 @@ variable "environment" {
   }
 }
 
-variable "basic_auth_username" {
-  description = "CloudFront Basic認証のユーザー名。パスワードハッシュ生成時にも同じ値を使用する。"
-  type        = string
-  default     = "trf"
-
-  validation {
-    condition     = can(regex("^[A-Za-z0-9._-]{1,64}$", var.basic_auth_username))
-    error_message = "basic_auth_usernameは1〜64文字の英数字・ピリオド・アンダースコア・ハイフンにしてください。"
-  }
-}
-
-variable "basic_auth_credentials_sha256" {
-  description = "「ユーザー名:パスワード」をSHA-256でハッシュした16進数64文字。平文のパスワードは保存しない。"
-  type        = string
-  sensitive   = true
-
-  validation {
-    condition     = can(regex("^[0-9a-f]{64}$", var.basic_auth_credentials_sha256))
-    error_message = "basic_auth_credentials_sha256は小文字のSHA-256ハッシュ（16進数64文字）にしてください。"
-  }
-}
-
 variable "viewer_domain_name" {
   description = "Cloudflare経由で公開するTransitForgeのFQDN。"
   type        = string

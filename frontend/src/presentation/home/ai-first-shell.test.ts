@@ -67,6 +67,22 @@ it("uses an account icon in the header and sends signed-in people to My", () => 
   expect(document.querySelector('[data-primary="my"]')).toBeNull();
   click("[data-my-logout]"); expect(signedIn.ports.logout).toHaveBeenCalledOnce();
 });
+
+it("requires authentication before opening every feature route including realtime operations", () => {
+  window.history.replaceState(null, "", "#map");
+  const signedOut = setup();
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("explore");
+  expect(window.location.hash).toBe("#explore");
+  expect(document.querySelector<HTMLElement>("[data-home-live]")!.hidden).toBe(true);
+  expect(signedOut.ports.openTrip).not.toHaveBeenCalled();
+  click("[data-map]");
+  expect(signedOut.ports.login).toHaveBeenCalledOnce();
+  expect(signedOut.ports.openMap).not.toHaveBeenCalled();
+
+  window.history.replaceState(null, "", "#my");
+  window.dispatchEvent(new HashChangeEvent("hashchange"));
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("explore");
+});
 it("shows one random western Japan hero photo without selection controls", () => {
   vi.spyOn(Math, "random").mockReturnValue(0.5);
   setup();
@@ -100,7 +116,7 @@ it("map is a realtime-only subview and source tab survives history restoration",
   click("[data-map-back]"); expect(document.querySelector("main")!.dataset.primaryView).toBe("trips");
 });
 it("opens realtime operations from the persistent navigation and marks it current", () => {
-  const { ports } = setup(); click("[data-map-navigation]");
+  const { ports } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) }); click("[data-map-navigation]");
   expect(ports.openMap).toHaveBeenCalledExactlyOnceWith();
   expect(document.querySelector("main")!.dataset.primaryView).toBe("map");
   expect(document.querySelector("[data-map-navigation]")!.getAttribute("aria-current")).toBe("page");
@@ -117,7 +133,7 @@ it("reader failures render retry without disabling the independent consultation 
   expect(document.querySelector<HTMLButtonElement>('form button')!.disabled).toBe(false);
 });
 it("all secondary actions use existing feature ports", () => {
-  const { shell, ports } = setup(); shell.navigate("my");
+  const { shell, ports } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) }); shell.navigate("my");
   click("[data-notifications]");
   expect(ports.openNotifications).toHaveBeenCalledOnce();
 });
@@ -140,7 +156,7 @@ it("shows a travel-mode entry only for the current adopted Trip", () => {
     schedule: { type: "fixed", startAt: { at: "2026-09-17T23:00:00Z", timeZone: "UTC" }, endAt: { at: "2026-09-18T01:00:00Z", timeZone: "UTC" } },
   }]);
   const trip = { ...base, adoption: { confirmedAt: "2026-09-17T00:00:00Z" } };
-  const openTravelMode = vi.fn(); setup({ read: () => ({ state: "available", trips: [trip], candidates: [] }), openTravelMode });
+  const openTravelMode = vi.fn(); setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }), read: () => ({ state: "available", trips: [trip], candidates: [] }), openTravelMode });
   click("[data-trip-travel]"); expect(openTravelMode).toHaveBeenCalledWith(trip.id);
   expect(document.querySelectorAll("[data-trip-travel]")).toHaveLength(1);
 });

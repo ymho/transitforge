@@ -65,7 +65,7 @@ resource "aws_cloudfront_response_headers_policy" "cloudflare_no_store" {
   count = var.cloudflare_front_door_enabled ? 1 : 0
 
   name    = "${var.project_name}-${var.environment}-cloudflare-no-store"
-  comment = "Prevent Cloudflare from caching responses protected by CloudFront Basic authentication"
+  comment = "Prevent Cloudflare from caching application and authenticated API responses"
 
   custom_headers_config {
     items {
@@ -113,7 +113,7 @@ resource "aws_cloudfront_distribution" "viewer" {
       cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
       origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
       compress                 = false
-      # No Basic auth function: Authorization is the Cognito Bearer token.
+      # Authorization is the Cognito Bearer token.
       response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
     }
   }
@@ -129,7 +129,7 @@ resource "aws_cloudfront_distribution" "viewer" {
       origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
       response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
       compress                   = true
-      # Cognito Bearer is forwarded; never attach Basic auth here.
+      # Cognito Bearer is forwarded to the origin.
     }
   }
 
@@ -165,11 +165,6 @@ resource "aws_cloudfront_distribution" "viewer" {
     target_origin_id           = local.ai_agent_origin
     viewer_protocol_policy     = "https-only"
     compress                   = true
-
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.basic_auth.arn
-    }
   }
 
   ordered_cache_behavior {
@@ -181,11 +176,6 @@ resource "aws_cloudfront_distribution" "viewer" {
     target_origin_id           = local.website_origin
     viewer_protocol_policy     = "https-only"
     compress                   = true
-
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.basic_auth.arn
-    }
   }
 
   default_cache_behavior {
@@ -196,11 +186,6 @@ resource "aws_cloudfront_distribution" "viewer" {
     target_origin_id           = local.website_origin
     viewer_protocol_policy     = "https-only"
     compress                   = true
-
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.basic_auth.arn
-    }
   }
 
   restrictions {

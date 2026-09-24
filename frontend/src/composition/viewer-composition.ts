@@ -570,6 +570,10 @@ displayTime.value = String(currentRouteTime(initialDateTime));
 let mapStarted = false;
 const homePreview = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("home-preview") : null;
 startMap = async () => {
+  if (!isSignedIn()) {
+    await currentAuthentication().login();
+    return;
+  }
   if (mapStarted) return;
   mapStarted = true;
   loadingScreen.start("地図と列車表示を読み込んでいます。");

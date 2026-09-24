@@ -31,7 +31,8 @@ Frontendの環境変数にpool/client/scopeを別途書かない。Backendも同
 
 callbackは配信済み`/index.html`、logoutは`/`とする。CloudFrontのSPA fallback追加を不要にする。
 正規originは既存`viewer_domain_name`を使用し、localhost:5173の許可はdev変数で明示的に有効化する。
-Basic保護とOACを維持する。CD実行・Terraform apply・本番切替は本作業では行わない。
+OACを維持する。CloudFront Basic認証は2026-09-24に撤去し、Home以外の全機能をFrontendのCognito認証gate、
+業務APIをBackendのCognito verifierで保護する。CD実行・Terraform applyは別のデプロイ手順で行う。
 
 ## 保持・期限・ログアウト
 
@@ -66,8 +67,9 @@ callback成功・失敗ともURLを最初に消去し、その後に設定取得
 Mapbox等のorigin制限付き公開tokenとの互換性を保ち、認証設定の取得自体はno-referrerとする。
 認証情報をURLログへ残さない運用は後続の公開経路監査にも含める。
 
-設定画面からログイン/新規登録とlogoutを提供する。未設定のローカル環境では認証不可と表示し、
-Viewerは従来通り起動できる。取消/失敗/失効は固定文言で通知する。旅行プロフィール入力は認証条件にしない。
+アカウントアイコンと各機能入口からログイン/新規登録へ進み、設定画面からlogoutを提供する。
+未認証ではHomeだけを表示し、相談、旅程、プロフィール、通知、設定、地図、列車、運行情報を起動しない。
+直リンクもHomeへ戻し、地図と運行データを読み込まない。取消/失敗/失効は固定文言で通知する。
 既存の端末内Profile/Tripをアカウント所有データとみなさず、アップロードしない。
 owner cache破棄・個人API保護・全route配線は#451後続と#479/#480で行う。
 

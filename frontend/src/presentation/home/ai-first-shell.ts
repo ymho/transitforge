@@ -66,6 +66,12 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   const scrolls = new Map<string, number>();
   const textarea = root.querySelector<HTMLTextAreaElement>("#home-prompt")!;
   const draftKey = "raiquora:home-prompt-draft";
+  const isSignedIn = () => ports.authState().status === "signed-in";
+  const requireAuthentication = () => {
+    if (isSignedIn()) return true;
+    ports.login();
+    return false;
+  };
   try { textarea.value = window.sessionStorage.getItem(draftKey)?.slice(0, 400) ?? ""; } catch { /* Optional tab-local draft; never a Trip writer. */ }
   const saveDraft = () => { try { if (textarea.value) window.sessionStorage.setItem(draftKey, textarea.value.slice(0, 400)); else window.sessionStorage.removeItem(draftKey); } catch { /* Storage denial must not block conversation. */ } };
   textarea.addEventListener("input", saveDraft);
@@ -75,11 +81,11 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   root.querySelector("form")!.addEventListener("submit", (event) => {
     event.preventDefault();
     if (composing || !textarea.value.trim()) return;
-    if (ports.authState().status !== "signed-in") { saveDraft(); ports.login(); return; }
+    if (!isSignedIn()) { saveDraft(); ports.login(); return; }
     const prompt = textarea.value.trim(); textarea.value = ""; saveDraft(); navigate("chat"); ports.newConsultation(prompt);
   });
   root.querySelector("[data-account]")!.addEventListener("click", () => {
-    if (ports.authState().status === "signed-in") navigate("my"); else ports.login();
+    if (isSignedIn()) navigate("my"); else ports.login();
   });
   root.querySelector("[data-my-login]")!.addEventListener("click", () => { if (ports.authState().status !== "signed-in") ports.login(); });
   root.querySelector("[data-my-logout]")!.addEventListener("click", ports.logout);
@@ -102,6 +108,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     const signedIn = auth.status === "signed-in";
     for (const view of ["chat", "trips"]) root.querySelector<HTMLElement>(`[data-primary="${view}"]`)!.hidden = !signedIn;
     for (const section of root.querySelectorAll<HTMLElement>("[data-signed-in-only]")) section.hidden = auth.status !== "signed-in";
+    root.querySelector<HTMLElement>("[data-home-live]")!.hidden = !signedIn;
     const journey = ports.journeySettings(); transferPace.value = journey.transferPace; rankingPreference.value = journey.rankingPreference;
     const stateText = view.state === "loading" ? "旅程を読み込んでいます。" : view.state === "unauthenticated" ? "ログインすると、保存した旅程をここで確認できます。相談はこのまま始められます。"
       : view.state === "unavailable" ? "旅程を取得できませんでした。未予約・準備完了とは判断していません。" : "次の旅はまだ決まっていません。相談から始めてみましょう。";
@@ -140,13 +147,13 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
       if (!candidate) return;
       navigate("chat"); ports.newConsultation(`「${candidate.title}」の候補について相談したいです。`);
     }));
-    if (window.location.hash === "#trip" && typeof window.history.state?.tripId === "string") ports.openTrip(window.history.state.tripId);
+    if (signedIn && window.location.hash === "#trip" && typeof window.history.state?.tripId === "string") ports.openTrip(window.history.state.tripId);
     root.querySelectorAll("[data-retry]").forEach((button) => button.addEventListener("click", () => { void ports.retry().then(render, render); }));
-    if (!signedIn && (current === "chat" || current === "trips")) { window.history.replaceState(null, "", "#explore"); apply(); }
+    if (!signedIn && current !== "explore") { window.history.replaceState(null, "", "#explore"); apply(); }
   };
   const apply = () => {
     let route = window.location.hash.slice(1);
-    if ((route === "chat" || route === "trips") && ports.authState().status !== "signed-in") {
+    if (["chat", "trips", "my", "map", "trip"].includes(route) && !isSignedIn()) {
       window.history.replaceState(null, "", "#explore"); route = "explore";
     }
     const previous = root.querySelector<HTMLElement>(`[data-page="${current}"]`); if (previous) scrolls.set(current, previous.scrollTop);
@@ -162,7 +169,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     if (isMap) mapNavigation.setAttribute("aria-current", "page"); else mapNavigation.removeAttribute("aria-current");
     root.querySelector<HTMLElement>("[data-map-back]")!.hidden = !isMap;
     if (!isMap && current === "chat") ports.openChat();
-    if (isTrip && typeof window.history.state?.tripId === "string") ports.openTrip(window.history.state.tripId);
+    if (isTrip && isSignedIn() && typeof window.history.state?.tripId === "string") ports.openTrip(window.history.state.tripId);
     if (isMap) {
       const routeState = window.history.state;
       if (["explore", "chat", "trips", "my"].includes(routeState?.returnView)) mapReturn = routeState.returnView;
@@ -172,13 +179,14 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     syncHeader();
   };
   function navigate(view: PrimaryView) {
-    if ((view === "chat" || view === "trips") && ports.authState().status !== "signed-in") { ports.login(); return; }
+    if (view !== "explore" && !requireAuthentication()) return;
     if (view !== current && ports.canLeave?.() === false) return;
     if (!document.dispatchEvent(new Event("transitforge:profile-leave", { cancelable: true }))) return;
     window.history.pushState(null, "", `#${view}`); apply();
   }
   root.querySelectorAll<HTMLAnchorElement>("[data-primary], .product-brand").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); navigate(link.hash.slice(1) as PrimaryView); }));
   function showMap() {
+    if (!requireAuthentication()) return;
     if (ports.canLeave?.() === false) return;
     mapReturn = current; window.history.pushState({ returnView: current }, "", "#map"); apply();
   }
