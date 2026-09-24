@@ -152,3 +152,7 @@ native Toolによる再取得か根拠不足の説明へ戻す。
 Runtimeはmodel回答とterminal回答に既定の`AgentTurnObservation`を付与し、`ask_only`、`answer`、
 構造化候補の`progress`をWorking Stateへ保存可能にする。これにより同じ会話の次turnでも、質問だけを
 連続させないApplication policyが実際の本番compositionで働く。モデルのreason codeだけを進展とは扱わない。
+
+目的地未定のplanning turnでモデルがToolを使わず`answer`を返しても、Evidenceが0件なら候補として公開しない。
+質問票防止の修正指示を先に適用し、その次の回答でも根拠がなければ旅行先調査Toolへ戻す。構造化回答の
+boundedな修復後も検証を通らない場合は一般障害ではなく`limit_reached`として終了し、Provider障害と区別する。
