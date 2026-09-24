@@ -141,7 +141,10 @@ async function publishRuntimeDiagnostics(dependencies: ServerAgentDependencies, 
 
 function diagnosticFailureReason(reason: string | undefined): AgentDiagnosticEvent["reason"] {
   if (reason?.includes("timeout")) return "provider_timeout";
-  if (reason?.startsWith("invalid_") || reason?.includes("contract") || reason?.includes("grounded")) return "schema_invalid";
+  if (reason?.includes("refusal")) return "provider_refusal";
+  if (reason?.includes("provider_error")) return "provider_error";
+  if (reason?.startsWith("invalid_") || reason?.includes("contract") || reason?.includes("grounded") || reason === "missing_tool_call") return "schema_invalid";
+  if (reason === "unsupported_claim" || reason?.startsWith("unbound_") || reason?.startsWith("missing_source_")) return "response_rejected";
   return "failed";
 }
 
