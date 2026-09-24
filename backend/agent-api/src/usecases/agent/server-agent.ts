@@ -145,6 +145,8 @@ function diagnosticFailureReason(reason: string | undefined): AgentDiagnosticEve
   if (reason === "runtime_tool_budget" || reason === "research_tool_budget") return "tool_budget";
   if (reason === "runtime_deadline" || reason === "research_deadline") return "deadline";
   if (reason === "finalization_tool_calls") return "finalization_tool_calls";
+  if (reason === "planning_progress_required" || reason === "planning_evidence_required" ||
+      reason === "place_photo_required" || reason === "final_response_policy_rejected") return reason;
   if (reason === "runtime_limit_reached") return "budget_exhausted";
   if (reason?.includes("timeout")) return "provider_timeout";
   if (reason?.includes("refusal")) return "provider_refusal";

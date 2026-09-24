@@ -94,6 +94,10 @@ Runtime完了時は内容を含まない`runtime`診断を追加し、`completed
 最終回答中にモデルがToolを要求した場合も、そのToolを実行せず不完全なtoolUseを履歴から除き、
 残りのmodel budgetから1回だけ確認済みEvidenceに基づく最終回答へ修復する。再度Toolを要求した場合は
 `finalization_tool_calls`として終了する。
+最終回答で追加Toolを利用できない場合、写真未取得を理由に検証済みの旅行案を破棄しない。
+任意条件の質問だけになった場合は、検証済みの外部資料があれば最大3件の出典付き要約を
+Applicationが提示する。根拠がない場合は候補を捏造せず、残る失敗を`planning_progress_required`、
+`planning_evidence_required`、`place_photo_required`等で区別する。
 
 CDのdeploy実行は、直近2時間の`agent_diagnostic`とstream終端を会話本文・利用者識別子・実行IDを除いて
 集計し、Job Summaryへ出力する。本番で公開エラーへ丸められた場合も、`context / runtime / save`と

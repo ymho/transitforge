@@ -1,6 +1,6 @@
 import { AgentTraceRecorder } from "./agent-trace";
 import { invalidResponseContract, responseContractRepairInstruction } from "./response-contract";
-import { groundedAnswerFailureCode, groundedAnswerInstruction, groundedAnswerRepairInstruction, hasStructuredPresentationEvidence } from "./grounded-answer";
+import { groundedAnswerFailureCode, groundedAnswerInstruction, groundedAnswerRepairInstruction, hasStructuredPresentationEvidence, presentGroundedEvidence, supportedAnswerClaims } from "./grounded-answer";
 import type {
   AgentModelContent,
   AgentModelClass,
@@ -384,7 +384,9 @@ export class MultiStepAgentRuntime {
             ? { accepted: false, reason: "place_photo_required", instruction:
               "旅行先の資料は確認済みですが代表写真がありません。最終回答の前にsearch_place_mediaで各候補の写真を取得してください。" }
             : undefined;
-        const finalResponseDecision = planningGuard ?? this.dependencies.finalResponsePolicy?.(
+        // Photo lookup is best effort once no more Tools can run. A missing photo
+        // must not discard a valid, source-bound plan at finalization.
+        const finalResponseDecision = finalResponseRequired && planningGuard?.reason === "place_photo_required" ? undefined : planningGuard ?? this.dependencies.finalResponsePolicy?.(
           modelResponse,
           request,
         );
@@ -399,10 +401,15 @@ export class MultiStepAgentRuntime {
             replanReason: finalResponseDecision.reason ?? "grounding_required",
           });
           if (finalResponseRequired) {
+            if (planningGuard?.reason === "planning_progress_required" && sourceEvidence.length > 0) {
+              const fallback = this.verifiedSourceSummary(trace, evidence, sourceEvidence, startedAt, request);
+              if (fallback) return fallback;
+            }
             return this.limitResult(
               trace,
               evidence,
               startedAt,
+              planningGuard?.reason ?? "final_response_policy_rejected",
             );
           }
           messages.push({
@@ -686,6 +693,30 @@ export class MultiStepAgentRuntime {
         decisionBoundary,
       );
     }
+  }
+
+  private verifiedSourceSummary(
+    trace: AgentTraceRecorder,
+    evidence: Evidence[],
+    sources: Evidence[],
+    startedAt: number,
+    request: AgentRuntimeRequest,
+  ): AgentRuntimeResult | undefined {
+    const selected = sources.filter((source) => supportedAnswerClaims([source]).some((claim) => claim.kind === "fact"))
+      .slice(0, 3).map((source) => source.id);
+    if (!selected.length) return undefined;
+    const generated = presentGroundedEvidence(selected, evidence);
+    const grounding = validateEvidenceAndClaims(evidence, generated.claims);
+    if (!grounding.valid || grounding.claims.some((claim) => claim.groundingStatus === "unsupported")) return undefined;
+    const text = `確認できた資料から場所の候補を紹介します。写真や日別行程がない候補は、確認できた範囲だけを表示しています。\n\n${generated.text}`;
+    const prepared = this.dependencies.prepareResponse?.(text, evidence, false) ?? {
+      text, observation: observeAgentTurn(false, []),
+    };
+    if (!acceptsAgentTurn(request.context?.previousAssistantTurn, prepared.observation)) return undefined;
+    trace.turnObserved(prepared.observation, true);
+    trace.responseGenerated(prepared.text, grounding.claims.map(({ id }) => id));
+    trace.taskCompleted("completed", elapsed(startedAt, this.now));
+    return result("completed", prepared.text, evidence, grounding.claims, trace, prepared.observation);
   }
 
   private limitResult(

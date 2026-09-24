@@ -971,6 +971,62 @@ describe("MultiStepAgentRuntime", () => {
     expect(output.response).not.toContain("出発地を教えて");
     expect(requests[1]?.messages.at(-1)).toMatchObject({ role: "user", content: [{ type: "text", text: expect.stringContaining("質問票だけで終えず") }] });
   });
+  it("publishes a source-bound plan without a photo when finalization cannot run another Tool", async () => {
+    const order: string[] = [], { tools, toolExecutor } = toolSetup(order);
+    tools.register(echoTool("search_place_media", order));
+    const source = planningSource();
+    const final = textResponse("確認済みの倉敷の案です");
+    final.declaredPresentation = { kind: "travel-plan", startDate: null, candidates: [{ evidenceId: source.id,
+      quote: "歴史的な町並みが残ります。", itinerary: [{ day: 1, activities: [
+        { period: "day", title: "歴史ある町をゆっくり歩く", kind: "activity" },
+      ] }], estimate: { currency: "JPY", partySize: 1, nights: 0, originTravel: "excluded", lodgingClass: "economy",
+        items: { transport: 0, accommodation: 0, sightseeing: 0, food: 0 } } }] };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor,
+      model: sequenceModel([toolCallResponse([{ id: "research", name: "first_tool", input: { value: "倉敷" } }]), final]),
+      limits: { maxIterations: 2, maxModelCalls: 4 },
+    }).run({ executionId: "planning-photo", feature: "concierge", userRequest: "倉敷の歴史旅行をしたい", initialEvidence: [source],
+      context: { taskContext: { version: 1, phase: "discovery", target: { kind: "conversation" },
+        requestRevision: 1, availableProgressKinds: ["candidates"] } } });
+    expect(output.status).toBe("completed");
+    expect(output.publicPlanPresentation?.photoRefs).toEqual([]);
+    expect(output.response).toContain("倉敷");
+    expect(order).toEqual(["first_tool"]);
+  });
+  it("shows verified sources when finalization otherwise ends on an optional questionnaire", async () => {
+    const order: string[] = [], { tools, toolExecutor } = toolSetup(order), source = planningSource();
+    const question = textResponse("どの街を歩きたいですか？");
+    question.decisionSummary = { interpretedGoal: "歴史ある街の旅", hardConstraints: [], softPreferences: [],
+      selectedAction: "ask_user", unresolvedFacts: ["destination"], reasonCodes: ["user_confirmation_required"],
+      missingRequirements: [{ action: "ask", field: "destination", resolution: "user_decision", reason: "候補を選ぶため" }] };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor,
+      model: sequenceModel([toolCallResponse([{ id: "research", name: "first_tool", input: { value: "倉敷" } }]), question]),
+      limits: { maxIterations: 2, maxModelCalls: 4 },
+    }).run({ executionId: "planning-summary", feature: "concierge", userRequest: "歴史を感じる旅行をしたい", initialEvidence: [source],
+      context: { taskContext: { version: 1, phase: "discovery", target: { kind: "conversation" },
+        requestRevision: 1, availableProgressKinds: ["candidates"] } } });
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("倉敷の歴史的な町並み");
+    expect(output.response).not.toContain("どの街を歩きたいですか");
+    expect(output.claims).toHaveLength(1);
+    expect(order).toEqual(["first_tool"]);
+  });
+  it("never invents a place when finalization has no verified source", async () => {
+    const tools = new AgentToolRegistry(), order: string[] = [];
+    tools.register(echoTool("first_tool", order));
+    const unsupported = textResponse("倉敷をおすすめします");
+    unsupported.decisionSummary = { interpretedGoal: "歴史ある街の旅", hardConstraints: [], softPreferences: [],
+      selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"] };
+    const output = await new MultiStepAgentRuntime({ tools,
+      toolExecutor: new AgentToolExecutor(tools, new ToolEvidenceRegistry()),
+      model: sequenceModel([toolCallResponse([{ id: "research", name: "first_tool", input: { value: "歴史" } }]), unsupported]),
+      limits: { maxIterations: 2, maxModelCalls: 4 },
+    }).run({ executionId: "planning-no-source", feature: "concierge", userRequest: "歴史ある街を歩きたい",
+      context: { taskContext: { version: 1, phase: "discovery", target: { kind: "conversation" },
+        requestRevision: 1, availableProgressKinds: ["candidates"] } } });
+    expect(output.status).toBe("limit_reached");
+    expect(output.trace.events.at(-1)).toMatchObject({ type: "task_completed", reason: "planning_evidence_required" });
+    expect(JSON.stringify(output)).not.toContain("倉敷をおすすめします");
+  });
   it("does not treat an optional typed user confirmation as permission for a discovery questionnaire", async () => {
     const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
     const question = textResponse("自然、鉄道、街歩きのどれがお好みですか？");
@@ -1169,6 +1225,14 @@ function evidence(id: string): Evidence {
       summary: "fixture",
     }],
   };
+}
+
+function planningSource(): Evidence {
+  return { id: "source:kurashiki", category: "external", knowledgeKind: "deterministic_fact", subject: "倉敷",
+    facts: { status: "available", freshness: "fresh", sourceTitle: "倉敷の歴史的な町並み",
+      sourceExcerpt: "歴史的な町並みが残ります。", sourceUrl: "https://example.test/kurashiki" },
+    references: [{ sourceType: "external-source", sourceRef: "https://example.test/kurashiki",
+      retrievedAt: "2026-09-24T00:00:00Z", freshness: "current", summary: "倉敷の公式資料" }] };
 }
 
 function tickingClock(): () => Date {
