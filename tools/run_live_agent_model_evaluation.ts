@@ -16,7 +16,7 @@ import { agentSystemPrompt } from "../backend/agent-api/src/usecases/agent-syste
 import { createServerAgent } from "../backend/agent-api/src/server-agent-composition";
 import type { ServerAgentToolBinding } from "../backend/agent-api/src/usecases/agent/server-tools";
 import { deriveAgentTaskContext } from "@raiquora/agent/agent-task-context";
-import { presentationFromObservation, presentationFromPublicPlan, type ConversationWorkingState } from "@raiquora/agent/conversation-working-state";
+import { presentationFromObservation, presentationFromPublicPlan, retainConversationEvidence, type ConversationWorkingState } from "@raiquora/agent/conversation-working-state";
 
 const root = resolve(import.meta.dirname, "..");
 const strategy = argument("--strategy") ?? "live-model";
@@ -154,6 +154,12 @@ function nextWorkingState(
   const turnId = `00000000-0000-4000-8000-${String(turnIndex + 1).padStart(12, "0")}`;
   const receipt = result.publicPlanPresentation ? presentationFromPublicPlan(result.publicPlanPresentation) :
     presentationFromObservation(turnId, result.turnObservation);
+  const publishedEvidenceIds = [...new Set([
+    ...(result.publicPlanPresentation?.evidenceRefs ?? []),
+    ...(result.publicPlanPresentation?.photoRefs ?? []),
+    ...result.claims.flatMap((claim) => claim.evidenceIds),
+  ])];
+  const groundingEvidence = retainConversationEvidence(previous?.groundingEvidence, result.evidence, publishedEvidenceIds);
   return {
     version: 1, revision: (previous?.revision ?? -1) + 1, sourceTurnId: turnId, sourceUserSequence,
     target: { conversationId },
@@ -161,6 +167,7 @@ function nextWorkingState(
     pendingQuestionRefs: result.turnObservation?.outcome === "ask_only" || result.turnObservation?.outcome === "ask_and_progress"
       ? result.turnObservation.exception ? [result.turnObservation.exception.missingFact] : [] : [],
     pendingProposalRefs: [],
+    ...(groundingEvidence.length ? { groundingEvidence } : {}),
     ...(result.turnObservation ? { lastOutcome: result.turnObservation } : {}),
   };
 }

@@ -12,7 +12,7 @@ import { tripFeasibilityContext, type AgentTripFeasibilityContext } from "./trip
 import { boundTripReadinessContext, type AgentTripReadinessContext } from "./trip-readiness-context";
 import { inTripPresentations, supportsInTripPresentation, type InTripPresentation } from "./in-trip-answer-plan";
 import type { AgentTaskContext } from "./agent-task-context";
-import type { ConversationWorkingState } from "./conversation-working-state";
+import { workingStateWithoutEvidence, type ConversationWorkingState } from "./conversation-working-state";
 
 export type AgentContextValue = string | number | boolean | null;
 
@@ -160,7 +160,7 @@ export function buildAgentDecisionContext(
     : undefined;
   return {
     ...(input?.taskContext ? { taskContext: structuredClone(input.taskContext) } : {}),
-    ...(input?.workingState ? { workingState: structuredClone(input.workingState) } : {}),
+    ...(input?.workingState ? { workingState: workingStateWithoutEvidence(input.workingState) } : {}),
     ...(input?.inTrip ? { inTrip: structuredClone(input.inTrip) } : {}),
     ...(input?.inTripReplanScope ? { inTripReplanScope: structuredClone(input.inTripReplanScope) } : {}),
     ...(input?.tripReadiness ? { tripReadiness: boundTripReadinessContext(input.tripReadiness) } : {}),

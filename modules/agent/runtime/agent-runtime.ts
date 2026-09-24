@@ -395,7 +395,7 @@ export class MultiStepAgentRuntime {
           if (!correctedGroundedAnswer && !finalResponseRequired) {
             correctedGroundedAnswer = true;
             messages.pop();
-            messages.push({ role: "user", content: [{ type: "text", text: `${responseContractRepairInstruction}\n${groundedAnswerRepairInstruction(error)}\n${groundedAnswerInstruction(evidence, decisionContext.travelProfile)}` }] });
+            messages.push({ role: "user", content: [{ type: "text", text: `${responseContractRepairInstruction}\n${groundedAnswerRepairInstruction(error, evidence)}\n${groundedAnswerInstruction(evidence, decisionContext.travelProfile)}` }] });
             iterations++;
             trace.replanDecided(true, failureCode, decisionBoundary);
             continue;

@@ -150,6 +150,8 @@ it("gives a bounded repair reason without echoing arbitrary errors", () => {
   expect(groundedAnswerRepairInstruction(new Error("Invalid itinerary activity"))).toContain("period、空でないtitle、kind");
   expect(groundedAnswerRepairInstruction(new Error("Invalid itinerary activity"))).toContain("旧activity enumは出力しない");
   expect(groundedAnswerRepairInstruction(new Error("secret model output"))).not.toContain("secret model output");
+  expect(groundedAnswerRepairInstruction(new Error("Unbound candidate source"), [])).toContain("同じtravel-planを推測で再生成せず");
+  expect(groundedAnswerRepairInstruction(new Error("Unbound candidate source"), [photographedPlace])).toContain(photographedPlace.id);
 });
 it("classifies structured-answer failures without exposing arbitrary exception text", () => {
   expect(groundedAnswerFailureCode(new SyntaxError("Unexpected private model output"))).toBe("invalid_grounded_json");

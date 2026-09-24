@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AgentModelRequest, AgentModelResponse } from "@raiquora/agent/model-provider";
 import { successfulAgentToolResult, validAgentToolInput } from "@raiquora/agent/tool-contract";
 import { createServerAgentApplication } from "./server-agent.js";
+import type { Evidence } from "@raiquora/agent/evidence-model";
 
 const final: AgentModelResponse = { message: { role: "assistant", content: [{ type: "text", text: "こんにちは" }] }, stopReason: "completed", metadata: { provider: "fake" } };
 const call: AgentModelResponse = { ...final, stopReason: "tool_calls", message: { role: "assistant", content: [{ type: "tool_call", name: "fake_tool", toolCallId: "call-1", input: {} }] } };
@@ -19,6 +20,11 @@ function setup(responses: AgentModelResponse[] = [call, final], maxExecutionMs =
 }
 const fakePrincipal = (subject: string): TrustedPrincipal => ({ subject, identity: { issuer: "https://issuer.example.test", subject }, scopes: ["raiquora/user"] });
 const input = { principal: fakePrincipal("fake-principal"), userRequest: "確認して" };
+const retainedSource: Evidence = { id: "evidence:izumo", category: "external", knowledgeKind: "deterministic_fact", subject: "出雲大社",
+  facts: { status: "available", freshness: "fresh", sourceTitle: "出雲大社", sourceExcerpt: "出雲市にある神社です。", sourceUrl: "https://example.test/izumo" },
+  references: [{ sourceType: "external-source", sourceRef: "https://example.test/izumo", retrievedAt: "2026-09-24T00:00:00Z", freshness: "current", summary: "公式情報" }],
+  observation: { observationId: "evidence:izumo", subjectKey: "place:izumo", scopeKey: "izumo", predicate: "place_description", retrievedAt: "2026-09-24T00:00:00Z",
+    applicability: "applicable", retention: "bounded_excerpt" } };
 
 describe("Server Agent Application without Browser APIs", () => {
   it("completes model -> tool -> result -> model -> final with an ordered trace", async () => {
@@ -85,6 +91,23 @@ describe("Server Agent Application without Browser APIs", () => {
     for (const changed of [{ ...target, baseTripRevision: 3 }, { ...target, tripId: "55555555-5555-4555-8555-555555555555" }, { ...target, candidateSetRevision: 3 }]) {
       await expect(app.runAgentTurn({ ...input, tripId, requestedResearchMode: "detailed", researchTarget: changed })).rejects.toThrow("Stale or foreign");
     }
+  });
+  it("rehydrates published Evidence without embedding its payload in model-visible Working State", async () => {
+    const requests: AgentModelRequest[] = [];
+    const response: AgentModelResponse = { message: { role: "assistant", content: [{ type: "text", text: "出典を説明します" }] }, stopReason: "completed",
+      metadata: { provider: "fake", outputMode: "application_strict" }, declaredPresentation: { kind: "source-explanation",
+        sections: [{ evidenceId: retainedSource.id, quote: retainedSource.facts.sourceExcerpt, mode: "feature" }] } };
+    const workingState = { version: 1 as const, revision: 1, sourceTurnId: "33333333-3333-4333-8333-333333333333", sourceUserSequence: 1,
+      target: { conversationId: "44444444-4444-4444-8444-444444444444" }, presentations: [], pendingQuestionRefs: [], pendingProposalRefs: [],
+      groundingEvidence: [retainedSource] };
+    const app = createServerAgentApplication({ newExecutionId: () => "execution-1", registerTools: () => {},
+      loadContext: async () => ({ workingState }), createModel: () => ({ generate: async request => { requests.push(structuredClone(request)); return response; } }) });
+    const result = await app.runAgentTurn(input);
+    expect(result.status).toBe("completed");
+    expect(result.evidence.map(({ id }) => id)).toEqual([retainedSource.id]);
+    expect(JSON.stringify(requests[0]!.messages)).toContain("出雲市にある神社です");
+    expect(JSON.stringify(requests[0]!.messages)).not.toContain("groundingEvidence");
+    expect(requests[0]!.prompt?.dynamicSegments.some(({ kind }) => kind === "evidence")).toBe(true);
   });
 });
 

@@ -124,3 +124,20 @@ Application parserが全件検証し、不正なら表示しない。また、�
 bounded budgetを各1回だけ持つ。共通のmodel call、iteration、timeout上限は維持し、同じ種類の不正を無制限に
 再試行しない。Profile等を省略するTraceでは、任意の理由文は引き続き伏せ、Applicationが定義した診断codeだけを
 保持する。これによりraw応答を保存せず、次回比較で失敗境界を判別できる。
+
+## 2026-09-24 Run #26 のEvidence継続性
+
+Run #26は3反復で6/9 scenario-attempt、10/18 turnを完遂した。失敗は`unbound_candidate_source` 5件と
+`invalid_response_contract` 3件で、特に`feedback-izumo-provisional-plan`が全反復で不安定だった。
+最初のturnで検証した旅行先のsource Evidenceは同一Runtime内だけに存在し、後続turnが宿泊・天気Evidenceを
+取得した時点では再利用できなかった。一方、会話履歴には表示文、Working Stateには候補参照だけがあり、
+引用とsource URLを再検証できるEvidenceそのものがなかった。
+
+公開presentation/Claimが参照した`bounded_excerpt` Evidenceだけをturn完了と同じtransactionでWorking Stateへ保存し、
+次turnの`initialEvidence`へ再注入する。最大24件・64KBとし、raw Tool output、未公開・保存禁止Evidence、Profile、
+会話本文は追加保存しない。モデル向けWorking State投影からEvidence payloadを除き、Grounding instructionとしてのみ渡す。
+`unbound_candidate_source`修復時は利用可能source IDを明示し、sourceが0件なら同じtravel-planを再生成させず、
+native Toolによる再取得か根拠不足の説明へ戻す。
+
+モデル比較runには全turn数、完遂turn数、完遂率、failure code分布、cache read/write tokenとstatus分布を追加する。
+集計qualityが改善していても全turn完遂・failure code 0でなければproduction routingを推薦しない。
