@@ -26,10 +26,16 @@ it("starts Home without initializing Map or requiring profile/authentication", (
   expect(document.body.textContent).not.toContain("調査済みのおすすめではありません");
   expect(document.querySelector('[aria-label="相談の入力例"]')).not.toBeNull();
   expect(document.querySelector("[data-home-live]")!.textContent).toContain("ログインすると、保存した旅程");
-  expect(document.querySelector(".home-prompt")!.hasAttribute("hidden")).toBe(true);
+  expect(document.querySelector(".home-prompt")!.hasAttribute("hidden")).toBe(false);
+  expect(document.body.textContent).not.toContain("旅行相談を始めるにはログインしてください");
+  expect(document.querySelector("[data-home-login]")).toBeNull();
   expect(document.querySelector('[data-primary="chat"]')!.hasAttribute("hidden")).toBe(true);
-  click("[data-example]"); document.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
+  const input = document.querySelector<HTMLTextAreaElement>("#home-prompt")!;
+  input.value = "出雲へ行きたい"; input.dispatchEvent(new Event("input"));
+  document.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
   expect(ports.login).toHaveBeenCalledOnce(); expect(ports.newConsultation).not.toHaveBeenCalled();
+  expect(input.value).toBe("出雲へ行きたい");
+  expect(sessionStorage.getItem("raiquora:home-prompt-draft")).toBe("出雲へ行きたい");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("explore");
   expect(ports.openMap).not.toHaveBeenCalled();
 });
@@ -60,14 +66,22 @@ it("uses an account icon in the header and sends signed-in people to My", () => 
   expect(document.querySelector('[data-primary="my"]')).toBeNull();
   click("[data-my-logout]"); expect(signedIn.ports.logout).toHaveBeenCalledOnce();
 });
-it("shows three western Japan hero photos and switches them only on explicit selection", () => {
+it("shows one random western Japan hero photo without selection controls", () => {
+  vi.spyOn(Math, "random").mockReturnValue(0.5);
   setup();
   const images = [...document.querySelectorAll<HTMLImageElement>("[data-hero-image]")];
   expect(images).toHaveLength(3); expect(images[0]!.src).toContain("home-setouchi-v2.webp");
-  expect(images[0]!.hidden).toBe(false); expect(images[1]!.hidden).toBe(true);
-  click('[data-hero-page="1"]');
-  expect(images[0]!.hidden).toBe(true); expect(images[1]!.hidden).toBe(false);
-  expect(document.querySelector('[data-hero-page="1"]')!.getAttribute("aria-current")).toBe("true");
+  expect(images.filter((image) => !image.hidden)).toHaveLength(1);
+  expect(images[1]!.hidden).toBe(false);
+  expect(document.querySelector("[data-hero-page]")).toBeNull();
+});
+it("shows one short consultation example as non-interactive text", () => {
+  vi.spyOn(Math, "random").mockReturnValue(0);
+  setup();
+  const example = document.querySelector('[aria-label="相談の入力例"]')!;
+  expect(example.textContent).toBe("例：温泉でゆっくりしたい");
+  expect(example.tagName).toBe("P");
+  expect(document.querySelector("[data-example]")).toBeNull();
 });
 it("does not submit IME composition and keeps input across tab navigation / re-render", () => {
   const { ports, shell } = setup(); const input = document.querySelector("textarea")!;
