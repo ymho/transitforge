@@ -24,17 +24,17 @@ import { inTripApplicationEvidence } from "@raiquora/agent/in-trip-application-e
 import { calculateInTripReplanScope, replanScopeContext } from "@raiquora/trip/in-trip-replan";
 
 describe("MultiStepAgentRuntime", () => {
-  it("finishes an open-ended seven-round research within the expanded Server budget", async () => {
+  it("finishes an open-ended nine-round research within the expanded Server budget", async () => {
     const { tools, toolExecutor } = toolSetup([]);
-    const responses = Array.from({ length: 7 }, (_, index) => toolCallResponse([
+    const responses = Array.from({ length: 9 }, (_, index) => toolCallResponse([
       { id: `source-${index}`, name: "first_tool", input: { value: `candidate-${index}` } },
     ]));
     const model = sequenceModel([...responses, textResponse("候補を比較しました")]);
     const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model,
-      limits: { maxIterations: 8, maxModelCalls: 11, maxToolCalls: 12 },
+      limits: { maxIterations: 10, maxModelCalls: 14, maxToolCalls: 16 },
     }).run(request("歴史ある街を歩きたい"));
     expect(output.status).toBe("completed");
-    expect(model.generate).toHaveBeenCalledTimes(8);
+    expect(model.generate).toHaveBeenCalledTimes(10);
   });
   it("uses one reserved model call to repair an invalid final response contract", async () => {
     const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
@@ -758,23 +758,45 @@ describe("MultiStepAgentRuntime", () => {
     ]);
   });
 
-  it("does not execute another Tool requested during the final response phase", async () => {
+  it("repairs a final-phase Tool request without executing or replaying it", async () => {
     const executionOrder: string[] = [];
     const { tools, toolExecutor } = toolSetup(executionOrder);
+    const requests: AgentModelRequest[] = [];
     const runtime = new MultiStepAgentRuntime({
       model: sequenceModel([
         toolCallResponse([{ id: "search-1", name: "first_tool", input: { value: "候補" } }]),
         toolCallResponse([{ id: "search-2", name: "second_tool", input: { value: "詳細" } }]),
         toolCallResponse([{ id: "search-3", name: "first_tool", input: { value: "追加" } }]),
-      ]),
+        textResponse("確認できた範囲で候補を紹介します"),
+      ], requests),
       tools,
       toolExecutor,
-      limits: { maxIterations: 3, maxModelCalls: 4 },
+      limits: { maxIterations: 3, maxModelCalls: 5 },
     });
 
     const output = await runtime.run(request("候補の詳細を調べて"));
 
+    expect(output.status).toBe("completed");
+    expect(output.response).toBe("確認できた範囲で候補を紹介します");
+    expect(executionOrder).toEqual(["first_tool", "second_tool"]);
+    expect(JSON.stringify(requests[3]!.messages)).not.toContain("search-3");
+    expect(JSON.stringify(requests[3]!.messages)).toContain("追加実行はできません");
+    expect(output.trace.events).toContainEqual(expect.objectContaining({ type: "replan_decided", reason: "finalization_tool_calls" }));
+  });
+
+  it("stops after one final-phase Tool repair without executing either request", async () => {
+    const executionOrder: string[] = [];
+    const { tools, toolExecutor } = toolSetup(executionOrder);
+    const output = await new MultiStepAgentRuntime({
+      model: sequenceModel([
+        toolCallResponse([{ id: "search-1", name: "first_tool", input: { value: "候補" } }]),
+        toolCallResponse([{ id: "search-2", name: "second_tool", input: { value: "詳細" } }]),
+        toolCallResponse([{ id: "search-3", name: "first_tool", input: { value: "追加" } }]),
+        toolCallResponse([{ id: "search-4", name: "first_tool", input: { value: "再追加" } }]),
+      ]), tools, toolExecutor, limits: { maxIterations: 3, maxModelCalls: 5 },
+    }).run(request("候補の詳細を調べて"));
     expect(output.status).toBe("limit_reached");
+    expect(output.trace.events.at(-1)).toMatchObject({ type: "task_completed", reason: "finalization_tool_calls" });
     expect(executionOrder).toEqual(["first_tool", "second_tool"]);
   });
 

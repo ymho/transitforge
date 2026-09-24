@@ -86,11 +86,14 @@ Runtime完了時は内容を含まない`runtime`診断を追加し、`completed
 `provider_timeout`、`provider_refusal`、`provider_error`、`schema_invalid`、`response_rejected`、`failed`を区別する。
 上限到達は`iteration_budget`、`model_budget`、`tool_budget`、`deadline`、`finalization_tool_calls`を
 安全なreasonとして区別し、修復失敗などの既存reasonも`schema_invalid`等へ集約する。本番Serverの標準上限は
-8判断ラウンド、11モデル呼出、12 Tool呼出、150秒（transportは240秒）とし、Browser/共有Runtime既定値は維持する。
+10判断ラウンド、14モデル呼出、16 Tool呼出、150秒（transportは240秒）とし、Browser/共有Runtime既定値は維持する。
 実行上限はSSEでも`limit_reached`のまま公開し、
 保存層や画面で一般障害へ潰さない。Browserは条件が保持されていることと再開方法を表示する。
 `building_answer`後の最終応答が構造化contractまたはEvidence表示検証に失敗した場合は、Toolを追加実行せず、
 残っているmodel budgetから1回だけ修復を要求する。再失敗は一般障害ではなく`limit_reached`として安全に終了する。
+最終回答中にモデルがToolを要求した場合も、そのToolを実行せず不完全なtoolUseを履歴から除き、
+残りのmodel budgetから1回だけ確認済みEvidenceに基づく最終回答へ修復する。再度Toolを要求した場合は
+`finalization_tool_calls`として終了する。
 
 CDのdeploy実行は、直近2時間の`agent_diagnostic`とstream終端を会話本文・利用者識別子・実行IDを除いて
 集計し、Job Summaryへ出力する。本番で公開エラーへ丸められた場合も、`context / runtime / save`と
