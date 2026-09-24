@@ -220,7 +220,7 @@ function stableReport(
   });
   return {
     schemaVersion: "agent-eval-report-v4",
-    datasetSchemaVersion: "agent-eval-dataset-v5",
+    datasetSchemaVersion: "agent-eval-dataset-v6",
     caseCount: cases.length,
     passedCaseCount: cases.filter(({ passed }) => passed).length,
     metrics: aggregate(cases),

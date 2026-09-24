@@ -65,6 +65,8 @@ describe("agentSystemPrompt", () => {
     expect(agentSystemPrompt).toContain("写真URLや出典を推測しないでください");
     expect(agentSystemPrompt).toContain("travel-planを使って");
     expect(agentSystemPrompt).toContain("旅行全体かつ利用者全員分のAI概算");
+    expect(agentSystemPrompt).toContain("固有の目的地を指定した場合は、その地点を旅程のアンカーとして維持");
+    expect(agentSystemPrompt).toContain("周辺拡張であることを明示");
   });
 
   it("centers open-ended discovery on loaded West Japan coverage without inventing a geographic allowlist", () => {

@@ -41,16 +41,18 @@ export function evaluateConversationQualityLive(
   const responses = turns.map(({ response }) => response);
   const combined = responses.join("\n");
   const expected = scenario.expected;
-  const destinationChecks = expected.destination.mode === "specified"
+  const destination = expected.destination;
+  const destinationChecks = destination.mode === "specified"
     ? [
-        includes(combined, expected.destination.name),
-        includes(combined, expected.destination.municipality),
-        expected.destination.forbiddenMunicipalities.every((name) => !includes(combined, name)),
+        includes(combined, destination.name),
+        includes(combined, destination.municipality),
+        destination.optionalExpansionMunicipalities.every((municipality) =>
+          validOptionalExpansion(combined, destination.name, municipality)),
       ]
     : [
-        candidateCount(combined) >= expected.destination.minimumCandidates,
-        candidateCount(combined) <= expected.destination.maximumCandidates,
-        expected.destination.forbiddenMainCandidates.every((name) => !includes(combined, name)),
+        candidateCount(combined) >= destination.minimumCandidates,
+        candidateCount(combined) <= destination.maximumCandidates,
+        destination.forbiddenMainCandidates.every((name) => !includes(combined, name)),
       ];
   const dateChecks = expected.relativeDates.map(({ calendarDate }) => mentionsDate(combined, calendarDate));
   const repeatedQuestionChecks = expected.forbiddenRepeatedQuestions.map((key) =>
@@ -95,6 +97,27 @@ export function evaluateConversationQualityLive(
     capabilities,
     failures,
   };
+}
+
+export function validOptionalExpansion(text: string, anchorName: string, municipality: string): boolean {
+  const normalized = text.normalize("NFKC");
+  const target = municipality.normalize("NFKC");
+  let offset = normalized.indexOf(target);
+  while (offset >= 0) {
+    const nearby = normalized.slice(Math.max(0, offset - 80), Math.min(normalized.length, offset + target.length + 80));
+    if (!/(?:任意|オプション|追加案|別案|足を延ば|余裕があれば|希望があれば|周辺拡張)/u.test(nearby)) return false;
+    const sentenceStart = Math.max(normalized.lastIndexOf("。", offset - 1), normalized.lastIndexOf("\n", offset - 1)) + 1;
+    const nextPeriod = normalized.indexOf("。", offset + target.length);
+    const nextLine = normalized.indexOf("\n", offset + target.length);
+    const ends = [nextPeriod, nextLine].filter((value) => value >= 0);
+    const sentenceEnd = ends.length ? Math.min(...ends) : normalized.length;
+    const sentence = normalized.slice(sentenceStart, sentenceEnd);
+    if (sentence.includes(anchorName.normalize("NFKC")) &&
+        /(?:所在地|位置|にある|に所在|市内)/u.test(sentence) &&
+        !/(?:任意|オプション|追加案|別案|足を延ば|余裕があれば|希望があれば|周辺拡張)/u.test(sentence)) return false;
+    offset = normalized.indexOf(target, offset + target.length);
+  }
+  return true;
 }
 
 const westJapanCandidateNames = ["城崎温泉", "おごと温泉", "有馬温泉"];

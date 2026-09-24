@@ -14,6 +14,11 @@ describe("MapboxPlaceMediaProvider", () => {
             feature_type: "poi",
             name: "西条酒造",
             full_address: "広島県東広島市西条本町",
+            context: {
+              place: { mapbox_id: "place.higashihiroshima", name: "東広島市" },
+              region: { mapbox_id: "region.hiroshima", name: "広島県" },
+              country: { mapbox_id: "country.japan", name: "日本" },
+            },
             poi_category: ["酒蔵", "醸造所"],
             coordinates: { latitude: 34.431, longitude: 132.743 },
             metadata: {
@@ -61,6 +66,11 @@ describe("MapboxPlaceMediaProvider", () => {
       openingHours: "10:00〜17:00",
       reviewAverage: 4.3,
       reviewCount: 128,
+      administrativeAreas: [
+        { kind: "place", name: "東広島市", providerPlaceId: "place.higashihiroshima" },
+        { kind: "region", name: "広島県", providerPlaceId: "region.hiroshima" },
+        { kind: "country", name: "日本", providerPlaceId: "country.japan" },
+      ],
       latitude: 34.431,
       longitude: 132.743,
     })]);

@@ -66,8 +66,8 @@ function parseConversationQualityScenarios(value: unknown): ConversationQualityS
 
 function validQualityDestination(value: unknown): boolean {
   if (!isRecord(value)) return false;
-  if (value.mode === "specified") return hasOnlyKeys(value, ["mode", "name", "municipality", "forbiddenMunicipalities"]) &&
-    text(value.name, 160) && text(value.municipality, 160) && stringList(value.forbiddenMunicipalities, 10);
+  if (value.mode === "specified") return hasOnlyKeys(value, ["mode", "name", "municipality", "optionalExpansionMunicipalities"]) &&
+    text(value.name, 160) && text(value.municipality, 160) && stringList(value.optionalExpansionMunicipalities, 10);
   if (value.mode === "discovery") return hasOnlyKeys(value, ["mode", "minimumCandidates", "maximumCandidates", "recommendationScope", "forbiddenMainCandidates"]) &&
     positiveInteger(value.minimumCandidates, 5) && positiveInteger(value.maximumCandidates, 5) &&
     Number(value.maximumCandidates) >= Number(value.minimumCandidates) && text(value.recommendationScope, 160) &&

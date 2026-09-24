@@ -33,6 +33,21 @@ export interface PlaceEditorialDetail {
   nearby?: string[];
 }
 
+export type PlaceAdministrativeAreaKind =
+  | "neighborhood"
+  | "locality"
+  | "place"
+  | "district"
+  | "region"
+  | "country";
+
+/** Provider-independent administrative hierarchy observed for a place. */
+export interface PlaceAdministrativeArea {
+  kind: PlaceAdministrativeAreaKind;
+  name: string;
+  providerPlaceId?: string;
+}
+
 export interface PlaceMedia {
   /** Matching a requested target, NOT the entity's own stable identity. Absent for discovery. */
   targetBinding?: { status: "resolved" | "unresolved" | "mismatch"; reason: "stable-id" | "different-id" | "missing-binding" | "source-binding" };
@@ -40,6 +55,7 @@ export interface PlaceMedia {
   name: string;
   categories?: string[];
   address?: string;
+  administrativeAreas?: PlaceAdministrativeArea[];
   summary?: string;
   latitude?: number;
   longitude?: number;

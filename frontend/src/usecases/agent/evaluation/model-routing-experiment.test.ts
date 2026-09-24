@@ -10,7 +10,7 @@ import {
 const baseline: AgentModelRoutingRun = {
   schemaVersion: "agent-model-routing-run-v2",
   strategy: "single-model",
-  datasetSchemaVersion: "agent-eval-dataset-v5",
+  datasetSchemaVersion: "agent-eval-dataset-v6",
   caseCount: 42,
   repetitions: 1,
   passedCaseCount: 42,
@@ -101,7 +101,7 @@ describe("Agent model routing experiment", () => {
   it("aggregates latency tokens and call counts from bounded traces", () => {
     const report = {
       schemaVersion: "agent-eval-report-v4" as const,
-      datasetSchemaVersion: "agent-eval-dataset-v5" as const,
+      datasetSchemaVersion: "agent-eval-dataset-v6" as const,
       caseCount: 1,
       passedCaseCount: 1,
       metrics: baseline.quality,
@@ -133,7 +133,7 @@ describe("Agent model routing experiment", () => {
   it("aggregates repeated benchmark traces and records the repetition count", () => {
     const report = {
       schemaVersion: "agent-eval-report-v4" as const,
-      datasetSchemaVersion: "agent-eval-dataset-v5" as const,
+      datasetSchemaVersion: "agent-eval-dataset-v6" as const,
       caseCount: 1,
       passedCaseCount: 1,
       metrics: baseline.quality,
@@ -169,7 +169,7 @@ describe("Agent model routing experiment", () => {
     expect(comparison.reasons).toContain("候補モデルが全turnを完遂していない");
   });
   it("reports all-turn completion, failure codes and cache usage from traces", () => {
-    const report = { schemaVersion: "agent-eval-report-v4" as const, datasetSchemaVersion: "agent-eval-dataset-v5" as const,
+    const report = { schemaVersion: "agent-eval-report-v4" as const, datasetSchemaVersion: "agent-eval-dataset-v6" as const,
       caseCount: 1, passedCaseCount: 0, metrics: baseline.quality, categories: [], cases: [] };
     const trace = { executionId: "case-1", droppedEventCount: 0, events: [
       { type: "model_completed" as const, sequence: 1, occurredAt: "2026-09-24T00:00:00Z", provider: "bedrock", cacheReadInputTokens: 30, cacheWriteInputTokens: 10, cacheStatus: "read" as const },

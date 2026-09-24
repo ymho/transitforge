@@ -124,9 +124,13 @@ function placePresentationFacts(information: Record<string, unknown>, sourceUrl:
   if (!imageSourceUrl) return {};
   const boundSourceUrls = [place.officialWebsiteUrl, ...(Array.isArray(place.sources) ? place.sources.flatMap((item) => isRecord(item) ? [item.url] : []) : [])]
     .filter((item): item is string => typeof item === "string" && https(item));
+  const administrativeAreas = Array.isArray(place.administrativeAreas) ? place.administrativeAreas.flatMap((item) =>
+    isRecord(item) && typeof item.kind === "string" && typeof item.name === "string" && item.name.trim()
+      ? [`${item.kind}:${item.name.trim().slice(0, 120)}`]
+      : []).slice(0, 8) : [];
   return { placeName: typeof place.name === "string" ? place.name.slice(0, 160) : "旅行候補", imageUrl: place.image.url, imageSourceUrl,
     imageAttribution: place.image.attribution.slice(0, 240), ...(typeof place.image.license === "string" ? { imageLicense: place.image.license.slice(0, 120) } : {}),
-    boundSourceUrls: [...new Set(boundSourceUrls)].slice(0, 8) };
+    boundSourceUrls: [...new Set(boundSourceUrls)].slice(0, 8), ...(administrativeAreas.length ? { administrativeAreas } : {}) };
 }
 function https(value: string): boolean { try { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password; } catch { return false; } }
 

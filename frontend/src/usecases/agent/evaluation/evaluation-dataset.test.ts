@@ -4,7 +4,7 @@ import { parseAgentEvaluationDataset } from "./evaluation-dataset";
 
 const fixture = () => JSON.parse(readFileSync(new URL("../../../../../tests/fixtures/agent-eval-cases.json", import.meta.url), "utf8"));
 
-describe("multi-turn dataset v4", () => {
+describe("multi-turn dataset v6", () => {
   it("keeps the 42 five-metric cases and A–AP, adding remainder Proposal cases AQ–AU", () => {
     const data = parseAgentEvaluationDataset(fixture());
     expect(data.cases).toHaveLength(42);
@@ -34,7 +34,7 @@ describe("multi-turn dataset v4", () => {
     });
   });
   it("accepts single-turn cases and rejects retired dataset versions", () => {
-    const raw = fixture(); delete raw.travelProgressScenarios; delete raw.conversationQualityScenarios; raw.schemaVersion = "agent-eval-dataset-v5";
+    const raw = fixture(); delete raw.travelProgressScenarios; delete raw.conversationQualityScenarios; raw.schemaVersion = "agent-eval-dataset-v6";
     expect(parseAgentEvaluationDataset(raw)).toEqual(raw);
     raw.schemaVersion = "agent-eval-dataset-v1";
     expect(() => parseAgentEvaluationDataset(raw)).toThrow();
