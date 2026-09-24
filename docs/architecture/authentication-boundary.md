@@ -39,13 +39,13 @@ Cognito UIやTrip公開writerの完成待ちは不要。テストはport fakeを
 
 | 入口 / operation | 分類 | 現状 / 接続先 |
 | --- | --- | --- |
-| Home/説明、静的Viewer asset・認証設定、公開対象の`/viewer-input/*`・`/api/traffic/*` | public | 現行CloudFrontはBasic保護。公開解除は本PR対象外 |
+| Home/説明、静的Viewer asset・認証設定、配信上の`/viewer-input/*`・`/api/traffic/*` | public distribution | CloudFront Basic認証は撤去。Frontendは認証前に機能画面へ遷移せず、Viewer inputと運行情報の読込を開始しない |
 | ログイン/callback/logout入口 | public | Frontend Managed Login/PKCE/callback/logoutを導入済み。production loginとcutover validationを確認済み |
 | POST `/api/agent`: operation省略、`bedrock_converse`、未知名 | retired | 410。tokenやBrowser gateから汎用conversationを再開しない |
 | 同route: `conversation_feedback`, `agent_trace` | retired | 410。Server内部のTrace/Storage実装とは分離する |
-| 同route: `weather_forecast_search`, `weather_grid_search` | public read | model・有料Provider・個人Stateを使わない天気readだけを維持する |
+| 同route: `weather_forecast_search`, `weather_grid_search` | authenticated user | 地図機能と同じ専用headerのCognito Access Tokenと`raiquora/user`を実行前に検証する |
 | 同route: `representative_timetable_search`, `journey_search`, `daily_congestion_analysis`, `daily_congestion_peak`, `train_delay_analysis` | authenticated user | 専用headerのCognito Access Tokenと`raiquora/user`を実行前に検証する |
-| 同route: `travel_accommodation_search`, `place_media_search`, `place_detail_research`, `web_search`, `web_page_read`, `travel_alert_search`, `ground_access_search`, `restaurant_search` | authenticated user | 同上。OAC/IAM/Basicだけを利用者principalとして扱わない |
+| 同route: `travel_accommodation_search`, `place_media_search`, `place_detail_research`, `web_search`, `web_page_read`, `travel_alert_search`, `ground_access_search`, `restaurant_search` | authenticated user | 同上。OAC/IAMだけを利用者principalとして扱わない |
 | POST `/api/trips/v1`: `create`, `mutate`, `get`, `list`, `archive`, `attach`, `detach`, `reference` | authenticated user | Gateway Cognito authorizerと共通Backend verifier→専用Trip API Lambda→`TripApplication`→既存owner-scoped Repository。未知operation/replaceは拒否 |
 | POST `/api/trips/sharing/v1`: `create-grant`, `redeem`, `revoke-grant`, `manage`, `participant`, `accessible`, `reservation-facts` | authenticated user | 共通認証→`TripSharingApplication`の本人/参加者認可。公開501 gateは維持。grant secretだけで認証しない |
 | POST `/api/trips/in-trip/v1`: read（operationなし） | authenticated user | 共通認証→`InTripContextApplication.read`のowner読取。公開501 gateは維持 |

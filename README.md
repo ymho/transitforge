@@ -241,12 +241,13 @@ mainからの手動実行だけでdev環境を更新する。両者は別Workflo
 ライセンス未設定
 外部データや生成物をこのリポジトリへ含めない
 
-## 利用者認証の段階導入
+## 利用者認証
 
-設定画面のログイン/新規登録はCognito Managed LoginとPKCEを使う。公開設定はTerraform出力から
-配信する。未設定のローカル環境では認証なしでViewerを起動できる。
+ログイン/新規登録はCognito Managed LoginとPKCEを使い、公開設定はTerraform出力から配信する。
+Homeの静的な入口を除き、相談、旅程、プロフィール、通知、経路設定、地図・列車・運行情報はログイン後だけ起動する。
+未認証の直リンクはHomeへ戻し、地図と運行データを読み込まない。残存`/api/agent` operationを含む業務APIも
+Cognito Access Tokenと`raiquora/user` scopeを必須とする。CloudFrontのBasic認証は使用しない。
 [認証境界](docs/architecture/authentication-boundary.md)と[SPA認証ADR](docs/decisions/0069-use-cognito-managed-login-for-spa.md)を参照する。
-API route保護と本番切替は後続段階であり、ログインUIの導入だけで全API保護済みとはしない。
 
 ## Server Agent統合（#480）
 

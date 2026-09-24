@@ -19,8 +19,8 @@ TransitForgeをローカル環境だけでなくAWS上へデプロイし、利�
 - AWSリソースはTerraformで宣言し、コンソールでの継続的な手作業を前提としない。
 - 最初のデプロイでは、Vite成果物と列車入力を非公開S3バケットへ置き、
   CloudFront Origin Access Control経由で配信する。
-- 開発環境のCloudFrontにはviewer-requestのCloudFront FunctionでBasic認証を
-  適用する。平文パスワードは保存せず、認証情報のSHA-256だけをTerraformへ渡す。
+- 開発環境で当初使用したCloudFront Basic認証は2026-09-24に撤去した。
+  現在はHome以外の全機能をCognitoログイン後だけ起動し、業務APIでAccess Tokenを検証する。
 - Terraform stateはアプリケーション用バケットとは別のS3バケットへ保存し、
   バージョニング、暗号化、パブリックアクセス遮断、S3ロックファイルを使用する。
 - TerraformのAWS認証情報はコードや変数ファイルへ保存せず、AWS CLIのセッションまたは
@@ -30,7 +30,7 @@ TransitForgeをローカル環境だけでなくAWS上へデプロイし、利�
 - 最初のモデルは東京リージョンのAmazon Nova Liteを使用する。ツール利用に対応し、
   小規模な案内用途でコストを抑えやすく、第三者モデルの利用条件を追加しないためである。
 - AI APIはIAM認証付きLambda Function URLとし、Lambda用CloudFront OACからだけ
-  呼び出せるようにする。CloudFrontのBasic認証を同じパスにも適用し、API Gatewayは
+  呼び出せるようにする。利用者認証はCognito Access TokenをBackendで検証し、API Gatewayは
   独自の認証、利用量プラン、WebSocketが必要になるまで追加しない。
 - GitHub ActionsはGitHub OIDCの一時認証情報を使用する。信頼対象は
   このリポジトリの`dev` environmentに限定し、固定アクセスキーを保存しない。

@@ -17,7 +17,7 @@ export const apiAuthenticationInventory = {
   public: ["/", "/index.html", "/auth-config.json", "/assets/*", "/viewer-input/*", "/api/traffic/*"],
   authenticated: Object.values(personalApiPolicies).map(policy => policy.path),
   agentOperations: { path: "/api/agent", policy: "legacy-agent-ingress.ts",
-    public: ["weather_grid_search", "weather_forecast_search"],
+    authenticated: ["weather_grid_search", "weather_forecast_search"],
     retired: ["bedrock_converse", "conversation_feedback", "agent_trace"],
     remaining: "Cognito Access Token + raiquora/user; unknown/missing operations return 410" },
   internalIamOnly: ["trip-changed-lambda", "rail-impact-lambda", "trip-recheck-lambda", "notification-lambda"],

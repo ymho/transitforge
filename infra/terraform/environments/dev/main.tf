@@ -101,17 +101,6 @@ resource "aws_cloudfront_origin_access_control" "ai_agent" {
   signing_protocol                  = "sigv4"
 }
 
-resource "aws_cloudfront_function" "basic_auth" {
-  name    = "${var.project_name}-${var.environment}-basic-auth"
-  comment = "Require Basic authentication before serving TransitForge"
-  runtime = "cloudfront-js-2.0"
-  publish = true
-  code = templatefile("${path.module}/cloudfront-basic-auth.js.tftpl", {
-    auth_username      = var.basic_auth_username
-    credentials_sha256 = var.basic_auth_credentials_sha256
-  })
-}
-
 resource "aws_cloudfront_function" "legacy_redirect" {
   name    = "${var.project_name}-${var.environment}-legacy-redirect"
   comment = "Redirect the legacy CloudFront hostname to the canonical viewer hostname"
@@ -155,7 +144,7 @@ resource "aws_cloudfront_distribution" "website" {
       cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
       origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
       compress                 = false
-      # No Basic auth function: Authorization is the Cognito Bearer token.
+      # Authorization is the Cognito Bearer token.
     }
   }
   dynamic "ordered_cache_behavior" {
@@ -169,7 +158,7 @@ resource "aws_cloudfront_distribution" "website" {
       cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
       origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
       compress                 = true
-      # Cognito Bearer is forwarded; never attach Basic auth here.
+      # Cognito Bearer is forwarded to the origin.
     }
   }
 
@@ -211,11 +200,6 @@ resource "aws_cloudfront_distribution" "website" {
       target_origin_id         = local.ai_agent_origin
       viewer_protocol_policy   = "https-only"
       compress                 = true
-
-      function_association {
-        event_type   = "viewer-request"
-        function_arn = aws_cloudfront_function.basic_auth.arn
-      }
     }
   }
 
@@ -230,11 +214,6 @@ resource "aws_cloudfront_distribution" "website" {
       target_origin_id       = local.website_origin
       viewer_protocol_policy = "https-only"
       compress               = true
-
-      function_association {
-        event_type   = "viewer-request"
-        function_arn = aws_cloudfront_function.basic_auth.arn
-      }
     }
   }
 
@@ -246,9 +225,12 @@ resource "aws_cloudfront_distribution" "website" {
     viewer_protocol_policy = var.legacy_cloudfront_redirect_enabled ? "allow-all" : "redirect-to-https"
     compress               = true
 
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = var.legacy_cloudfront_redirect_enabled ? aws_cloudfront_function.legacy_redirect.arn : aws_cloudfront_function.basic_auth.arn
+    dynamic "function_association" {
+      for_each = var.legacy_cloudfront_redirect_enabled ? [true] : []
+      content {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.legacy_redirect.arn
+      }
     }
   }
 

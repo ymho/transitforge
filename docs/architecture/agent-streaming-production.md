@@ -31,7 +31,7 @@ Lambda自身も`AGENT_STREAM_ENABLED`が文字列`true`でなければ503を返�
 - invoke permissionはそのAPI、環境stage、POST、新pathへ限定する。新Function URLは作らない。
 - CloudFrontはManaged-CachingDisabled、圧縮なし、接続試行1回、HTTPSのみ。
   Managed-AllViewerExceptHostHeaderでBearer Authorizationをoriginへ渡し、cache keyには入れない。
-  Basic auth viewer functionは新routeへ付けない（同じAuthorizationヘッダーを消費するため）。
+  viewer-request認証Functionは付けず、Cognito Bearerをoriginへ転送する。
 - 新routeにCloudFront request loggingは追加しない。既存custom-domainのCloudflare-CDN-Cache-Control: no-storeも適用する。
 - ADR値を維持: Lambda 240秒、Gateway 250秒、CloudFront read 60秒/completion 260秒。
   認証・入力検査後に`understanding_request` progressをwriteし、Application実行中は10秒heartbeat。

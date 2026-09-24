@@ -61,7 +61,6 @@ model invokeだけを許可し、デプロイRoleのPowerUser権限を比較処�
 | Variable | `ACCOMMODATION_PROVIDER_CREDIT_URL` | 宿泊提供者のクレジットリンク |
 | Variable | `ACCOMMODATION_PROVIDER_CREDIT_IMAGE_URL` | 宿泊提供者のクレジット画像 |
 | Variable | `ACCOMMODATION_PROVIDER_CREDIT_ALT` | クレジット画像の代替テキスト |
-| Secret | `BASIC_AUTH_CREDENTIALS_SHA256` | 開発環境の認証情報ハッシュ |
 | Secret | `VITE_MAPBOX_ACCESS_TOKEN` | Mapbox公開トークン |
 
 ## 外部旅行提供者の認証情報
@@ -112,8 +111,8 @@ data-builder側へ渡す値はTerraform出力から取得し data-builderの`dev
 
 正規URLは`https://app.ohmyki.com`とする
 Cloudflareのper-hostname Authenticated Origin PullsとCloudFront viewer mTLS required modeを組み合わせる
-Basic認証はCloudFront Functionで維持し Cloudflare AccessやWorkerへ重複実装しない
-独自ドメイン用Distributionは`Cloudflare-CDN-Cache-Control: no-store`を返し Cloudflareキャッシュで認証を迂回させない
+CloudFront Basic認証は使用せず 利用者機能はCognito認証へ統一する
+独自ドメイン用Distributionは`Cloudflare-CDN-Cache-Control: no-store`を返し Cloudflareへ認証状態やAPI応答を保存しない
 CloudFront自身のキャッシュは維持する
 
 切り替えは次の順で行う
@@ -128,7 +127,7 @@ CloudFront自身のキャッシュは維持する
 8. `CLOUDFLARE_FRONT_DOOR_ENABLED=true`へ変更してworkflowを手動実行
 9. `viewer_cloudfront_domain_name`を参照するproxied CNAME `app`をCloudflare DNSへ追加
 10. CloudflareのSSLモードをFull strictへ変更して独自ドメインを確認
-11. 認証なしで401 正しいBasic認証で200になることを確認
+11. Homeが未認証で表示でき 各機能入口がCognito Managed Loginへ進むことを確認
 12. 成功応答の`CF-Cache-Status`が`HIT`にならないことを確認
 13. CloudFrontの直接URLがクライアント証明書なしで失敗することを確認
 14. `LEGACY_CLOUDFRONT_REDIRECT_ENABLED=true`へ変更してworkflowを手動実行
@@ -183,7 +182,7 @@ terraform output -json cognito_frontend_config > ../../../../frontend/public/aut
 
 `cognito_api_auth_config`の`userPoolId`/`clientId`を#484のverifierへ、`requiredScopes`を共通認証Applicationへ
 渡すことを後続server wiringの契約とする。本段階ではLambda environment/handler/Runtimeを変更しない。
-ID TokenはAPIへ送らない。Basic認証とOAC、既存の公開writer gateも維持する。
+ID TokenはAPIへ送らない。OACと既存の公開writer gateも維持する。
 
 設定画面の「ログイン / 新規登録」から日本語Managed Loginへ進む。Access/ID Tokenは5分のまま、
 Refresh TokenをsessionStorageへタブ単位で保持して失効前と401時に1回だけ更新する。ログイン開始から

@@ -8,7 +8,6 @@ mock_provider "aws" {
 mock_provider "aws" { alias = "us_east_1" }
 mock_provider "archive" {}
 variables {
-  basic_auth_credentials_sha256    = "0000000000000000000000000000000000000000000000000000000000000000"
   github_repository                = "example/transitforge"
   data_builder_github_oidc_subject = "repo:example@12345/transitforge-data-builder@67890:environment:dev"
   enable_fixed_egress_provider     = true
@@ -45,6 +44,13 @@ run "current_topology" {
   assert {
     condition     = length([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : b if b.path_pattern == "/api/agent-stream"]) == 1 && length([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : b if b.path_pattern == "/api/agent"]) == 1
     error_message = "Server streaming and the independent Viewer read route must coexist."
+  }
+  assert {
+    condition = (
+      length(one(aws_cloudfront_distribution.website.default_cache_behavior).function_association) == 0 &&
+      alltrue([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : length(b.function_association) == 0])
+    )
+    error_message = "The active distribution must not retain CloudFront Basic authentication associations."
   }
 }
 run "enabled_contract" {
@@ -86,7 +92,7 @@ run "enabled_contract" {
   }
   assert {
     condition     = alltrue([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : !b.compress && length(b.function_association) == 0 && b.cache_policy_id == data.aws_cloudfront_cache_policy.caching_disabled.id && b.origin_request_policy_id == data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id if b.path_pattern == "/api/agent-stream"])
-    error_message = "Streaming must not buffer compression or run Basic auth on the Bearer header."
+    error_message = "Streaming must not buffer compression or run a viewer-request function on the Bearer header."
   }
   assert {
     condition     = alltrue([for o in aws_cloudfront_distribution.website.origin : o.response_completion_timeout == 260 && o.connection_attempts == 1 && one(o.custom_origin_config).origin_read_timeout == 60 if o.origin_id == local.agent_stream_name])
@@ -116,6 +122,13 @@ run "custom_domain_contract" {
   assert {
     condition     = aws_api_gateway_stage.agent_stream["stream"].stage_name == "prod" && alltrue([for o in aws_cloudfront_distribution.viewer[0].origin : o.origin_path == "/prod" && o.response_completion_timeout == 260 && one(o.custom_origin_config).origin_read_timeout == 60 if o.origin_id == local.agent_stream_name])
     error_message = "The environment stage and CloudFront origin must match."
+  }
+  assert {
+    condition = (
+      length(one(aws_cloudfront_distribution.viewer[0].default_cache_behavior).function_association) == 0 &&
+      alltrue([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : length(b.function_association) == 0])
+    )
+    error_message = "The custom-domain distribution must not retain CloudFront Basic authentication associations."
   }
 }
 run "custom_domain_current_topology" {

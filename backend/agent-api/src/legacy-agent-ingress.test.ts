@@ -63,10 +63,11 @@ describe("production legacy ingress closure", () => {
       multiValueHeaders: { "x-raiquora-access-token": ["Bearer other"] } })).statusCode).toBe(401);
     expect(f.execute).not.toHaveBeenCalled();
   });
-  it("preserves public map weather without authorizing a model call", async () => {
+  it("requires the same Cognito contract for map weather", async () => {
     const f = fixture();
     for (const operation of ["weather_grid_search", "weather_forecast_search"]) {
-      expect((await f.handler(post({ operation }))).statusCode).toBe(200);
+      expect((await f.handler(post({ operation }))).statusCode).toBe(401);
+      expect((await f.handler(post({ operation }, token()))).statusCode).toBe(200);
     }
     expect(f.execute).toHaveBeenCalledTimes(2);
   });

@@ -16,8 +16,8 @@ Cloudflareの送信元IP範囲だけを許可する方法は変更追従が必�
 - per-hostname Authenticated Origin Pullsへ専用クライアント証明書を設定する
 - CloudFront viewer mTLSをrequired modeにして専用CAで署名された接続だけを受け入れる
 - CloudFrontのHTTP/3を無効化し 全cache behaviorをHTTPS onlyにする
-- Basic認証は独自ドメイン用Distributionで維持する
-- Cloudflare AccessやWorkerへBasic認証を重複実装しない
+- CloudFront Basic認証は2026-09-24に撤去し、利用者機能はCognito認証へ統一する
+- Cloudflare AccessやWorkerへ利用者認証を重複実装しない
 - 独自ドメイン用Distributionから`Cloudflare-CDN-Cache-Control: no-store`を返し Cloudflareキャッシュを無効化する
 - CloudFront自身のキャッシュは維持する
 - 既存Distributionは切り替え完了後に正規URLへの308リダイレクト専用とする
@@ -33,7 +33,7 @@ Cloudflareの送信元IP範囲だけを許可する方法は変更追従が必�
 - CloudFront Distributionが2つになり固定費と反映待ち時間が増える
 - AOPクライアント証明書の期限監視と安全なローテーションが必要になる
 - 初回導入と証明書更新ではCloudflareへの秘密鍵アップロードを手作業で行う
-- Cloudflareの追加キャッシュは使わず すべての要求をCloudFront FunctionのBasic認証へ通す
+- Cloudflareの追加キャッシュは使わず Cognito認証状態とAPI応答をCloudflare cacheへ保存しない
 
 ## 代替案
 

@@ -82,7 +82,7 @@ export async function searchAccommodations(
 
 export async function searchWeatherForecast(
   request: { location: string; startDate?: string; endDate?: string },
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = personalApiFetch,
 ): Promise<WeatherForecastSearchResponse> {
   return postAgentBody(
     { operation: "weather_forecast_search", ...request },
@@ -99,7 +99,7 @@ export async function searchWeatherGrid(
     points: import("@raiquora/trip/weather-grid").WeatherGridPoint[];
     targetTime?: string;
   },
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch = personalApiFetch,
 ): Promise<WeatherGridSearchResponse> {
   return postAgentBody(
     { operation: "weather_grid_search", ...request },
