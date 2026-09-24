@@ -24,7 +24,6 @@ export function configureApplicationSettingsPanel(
   const views = [...dialog.querySelectorAll<HTMLElement>("[data-settings-view]")];
   const openers = [
     required<HTMLButtonElement>(root, "#sidebar-account-settings"),
-    required<HTMLButtonElement>(root, "#rail-travel-profile"),
   ];
   renderAccommodationProviderAttribution(dialog, dependencies.accommodationProviderAttribution);
 

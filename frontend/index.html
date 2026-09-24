@@ -5,6 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f4f7fb" />
+    <style>#app:not([data-primary-view]) { visibility: hidden; }</style>
     <title>Raiquora — Agentic Transit Intelligence</title>
   </head>
   <body>
@@ -63,24 +64,6 @@
       </svg>
       <nav id="map-tools" class="map-tools mapboxgl-ctrl mapboxgl-ctrl-group" aria-label="地図操作">
         <button id="congestion-toggle" type="button" aria-label="混雑表示" title="混雑表示" aria-pressed="true" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-congestion" /></svg></button>
-      </nav>
-      <button
-        id="ai-guide-toggle"
-        class="ai-guide-toggle"
-        type="button"
-        aria-controls="ai-guide-panel"
-        aria-expanded="false"
-        aria-label="旅の相談を開く"
-        title="旅の相談"
-      >
-        <svg class="guide-toggle-icon ai-guide-button-icon" aria-hidden="true"><use href="#icon-ai-sparkles" /></svg>
-      </button>
-      <nav id="conversation-sidebar-rail" class="conversation-sidebar-rail" aria-label="会話操作">
-        <button id="rail-notifications" type="button" aria-label="通知" title="通知"><svg aria-hidden="true" viewBox="0 0 20 20"><path d="M15 7a5 5 0 0 0-10 0c0 5-2.5 5.5-2.5 7h15C17.5 12.5 15 12 15 7ZM8 17h4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></button>
-        <span class="conversation-sidebar-rail-brand" title="Raiquora" aria-label="Raiquora"><svg aria-hidden="true"><use href="#icon-ai-sparkles" /></svg></span>
-        <button id="rail-new-conversation" type="button" aria-label="新しい会話" title="新しい会話"><svg aria-hidden="true"><use href="#icon-new-conversation" /></svg></button>
-        <button id="rail-realtime-map" type="button" aria-label="リアルタイム運行状況" title="リアルタイム運行状況"><svg aria-hidden="true"><use href="#icon-digital-twin" /></svg></button>
-        <button id="rail-travel-profile" class="conversation-sidebar-rail-profile" type="button" aria-label="アカウントの設定" title="設定"><span class="sidebar-account-avatar" aria-hidden="true">ゲ</span></button>
       </nav>
       <aside id="ai-guide-panel" class="ai-guide-panel" aria-label="旅の相談" hidden>
         <span class="sheet-grabber" aria-hidden="true"></span>
