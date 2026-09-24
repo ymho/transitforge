@@ -36,7 +36,8 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   const oldActions = panel.querySelector(".guide-panel-actions");
   const layout = node("div", "consultation-layout"), conversation = node("section", "consultation-conversation");
   const head = node("div", "consultation-heading"), headingCopy = createPageHeading(doc, "AI CONCIERGE", "相談"); headingCopy.classList.add("consultation-heading-copy");
-  const fresh = createButton(doc, "新しい相談"); fresh.addEventListener("click", ports.newConversation);
+  const fresh = createButton(doc, "", "icon"); fresh.innerHTML = iconMarkup("compose");
+  fresh.setAttribute("aria-label", "新しい相談"); fresh.title = "新しい相談"; fresh.addEventListener("click", ports.newConversation);
   head.append(headingCopy, fresh);
   // Keep secondary feature triggers alive, but discard the old panel heading/border/layout.
   if (oldActions) { oldActions.className = "consultation-secondary"; head.append(oldActions); }
@@ -45,7 +46,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   identity.append(name, meta, note);
   const actions = node("div", "consultation-context-actions");
   const conditions = node("button", "consultation-conditions-toggle", "この旅の条件"), tripButton = node("button", "", "旅程を見る");
-  const saveDraft = node("button", "", "この相談から仮旅程を保存"); saveDraft.type = "button";
+  const saveDraft = node("button", "", "仮旅程を保存"); saveDraft.type = "button";
   const cancelSave = node("button", "", "再試行をやめて条件を編集"); cancelSave.type = "button";
   cancelSave.addEventListener("click", () => {
     if (cancelSave.disabled) return;
@@ -66,7 +67,9 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   messages.classList.remove("ai-guide-messages"); messages.classList.add("consultation-messages");
   form.classList.remove("ai-guide-form"); form.classList.add("consultation-composer");
   input.placeholder = "希望や気になることを話してください";
-  const send = form.querySelector<HTMLButtonElement>("button[type=submit]"); if (send) { adoptComposer(form, input, send); send.innerHTML = `${iconMarkup("send")}<span>送る</span>`; }
+  const send = form.querySelector<HTMLButtonElement>("button[type=submit]"); if (send) {
+    adoptComposer(form, input, send); send.innerHTML = iconMarkup("send"); send.setAttribute("aria-label", "送信"); send.title = "送信";
+  }
   conversation.append(context, messages, form);
   const aside = node("aside", "consultation-conditions"); aside.id = "consultation-conditions";
   aside.setAttribute("aria-label", "この旅の条件"); conditions.setAttribute("aria-controls", aside.id);

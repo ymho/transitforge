@@ -79,7 +79,8 @@ CSSだけの整理ではDOM classや見た目を変更しない
 - Consumer表示では通常cardの角丸20px/controlの角丸12pxを共通tokenとして使う。
   v6と同じ階層を保ち、heroは30px、専用ページ枠は24px、選択chipはpillとする。
   Homeの重複状態ラベルと相談例の技術的な注意書きは表示しない（入力例のaccessible labelは維持）。
-  写真を持たないTripには装飾アイコン、Homeにはv6由来のCSS風景を使う。
+  写真を持たないTripには装飾アイコンを使う。Home heroはRaiquora所有の西日本観光写真を背景に使い、
+  コピー直下だけの局所的なscrimで可読性を保つ。3枚の切替は利用者操作だけで行い、自動再生しない。
   `travel-decoration`はaria-hiddenの純粋な装飾で、実景や調査済み地点の証拠ではない。
 - 成立性の計算とready判定は変更せず、表示のみ「旅の確認ポイント」等にする。
   未確認/見直し事項は本文に残す。評価日時は日本時間の読みやすい形式で折りたたみ詳細へ置き、
@@ -91,14 +92,14 @@ CSSだけの整理ではDOM classや見た目を変更しない
 - Home送信は既存ConversationSessionの新規相談へ渡す。Trip採用/変更は既存Proposal確認だけ。
 - 地図はsubview初回表示で起動する。初期の文章相談は同じAgent RuntimeとHTTP Toolを使用し、
   Mapbox token/WebGL/列車描画データを待たない。現在地を起点として推定しない。
-- URLは4ナビ/地図subviewだけを保持し、Trip documentやowner/共有secretは保持しない。
+- URLは3つの主要ナビ、headerのアカウント導線、地図subviewだけを保持し、Trip documentやowner/共有secretは保持しない。
   入力下書きはタブ内sessionStorage（Home/Conversation ID単位）、読取不能でも操作を妨げない。
 - DEV専用`?home-preview=loading|empty|error|unauthenticated|data`で表示状態を再現できる。
   dataは明示サンプルの読取専用Trip/候補を本番共通componentへ渡し、保存・予約・調査済み情報を捏造しない。
   v6と同じブラウザの1440/390px比較は`tools/capture_product_design.mjs`で行う。
   CI / Testのmanual `visual_comparison`入力で比較画像/HTMLをartifact化できる。deployは行わない。
 - Profileは#457の既存UserProfile v2 editorへ接続。設定・履歴・通知・列車地図は二次導線。
-- 大見出しのみシステム明朝fallback、本文はシステム日本語ゴシック。Webフォントの追加配信なし。
-  写真未取得時に架空のhero画像を入れず、出典付き既存Place表示は地図内に維持する。
+- Product UIは見出しを含めシステム日本語ゴシックへ統一し、Webフォントの追加配信は行わない。
+  地点の証拠として写真を使う場合は検証済みPlaceと出典を維持し、Homeのブランド写真と混同しない。
 - モックの固定料金・固定天気・固定旅程・固定残日数はコピーしない。
   費用予測#458、旅程詳細4タブ#459、旅行モード#460、認証#451は未実装として残す。

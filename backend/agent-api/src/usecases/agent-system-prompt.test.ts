@@ -40,6 +40,7 @@ describe("agentSystemPrompt", () => {
     expect(agentSystemPrompt).toContain("私ならそうする理由");
     expect(agentSystemPrompt).toContain("地図SDKの操作説明");
     expect(agentSystemPrompt).toContain("Chain-of-Thought");
+    expect(agentSystemPrompt).toContain("一般名詞を自然な日本語で表記");
     expect(agentSystemPrompt).not.toContain("search_accommodations");
     expect(agentSystemPrompt).not.toContain("plan_day_trip");
     expect(agentSystemPrompt).not.toContain("search_place_media");

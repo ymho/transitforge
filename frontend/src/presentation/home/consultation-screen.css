@@ -3,17 +3,19 @@
 .consultation-page[hidden], #app:not([data-primary-view="chat"]) .consultation-page { display: none; }
 .consultation-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(19rem, .75fr); grid-template-rows: auto minmax(0, 1fr); gap: 1.125rem; height: 100%; min-height: 0; }
 .consultation-conversation { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; overflow: hidden; }
-.consultation-heading { grid-column: 1 / -1; display: flex; gap: .75rem; align-items: center; padding: .35rem 0 .8rem; border-bottom: 1px solid #dfe4e8; }
+.consultation-heading { grid-column: 1 / -1; display: flex; gap: .75rem; align-items: center; padding: .35rem 0 .5rem; }
 .consultation-heading-copy { margin-right: auto; }
 .consultation-heading .ds-eyebrow { margin: .35rem 0 0; color: #4d718d; }
 .consultation-heading h1 { margin: .2rem 0 .35rem; font: 750 2rem/1.25 var(--product-font); letter-spacing: -.025em; }
 .consultation-page button { min-height: 44px; padding: .5rem .7rem; border: 1px solid #d9e2e9; border-radius: .75rem; background: #fff; color: #294963; font: 600 .8125rem/1.4 sans-serif; cursor: pointer; }
 .consultation-page button:disabled { opacity: .5; cursor: default; }
+.consultation-heading > .ds-button--icon { width: 44px; padding: .6rem; flex: 0 0 44px; }
+.consultation-heading > .ds-button--icon .ds-icon { width: 1.35rem; height: 1.35rem; }
 .consultation-page :focus-visible { outline: 3px solid #347fba; outline-offset: 2px; }
 .consultation-secondary { display: flex; }
 .consultation-secondary #close-ai-guide { display: none; }
 .consultation-secondary svg { width: 1.125rem; height: 1.125rem; }
-.consultation-context { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding: .8rem 1.25rem; background: #f7f9fa; border-bottom: 1px solid #e3e8ec; }
+.consultation-context { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding: .65rem 1.25rem; background: transparent; }
 .consultation-identity { min-width: 0; flex: 1 1 12rem; }
 .consultation-identity strong { font-size: .875rem; color: #224b6f; overflow-wrap: anywhere; }
 .consultation-identity p { font-size: .8125rem; margin: .25rem 0; }
@@ -26,10 +28,10 @@
 .consultation-messages > .ai-guide-message-assistant { max-width: min(47rem, 100%); padding: 0; border: 0; box-shadow: none; background: transparent; }
 .consultation-messages > .ai-guide-message-assistant :first-child { margin-top: 0; }
 .consultation-messages > .ai-guide-message-assistant :last-child { margin-bottom: 0; }
-.consultation-composer { display: flex; gap: .625rem; padding: 1rem 1.25rem; border-top: 1px solid #e1e6eb; }
+.consultation-composer { display: flex; gap: .625rem; padding: 1rem 1.25rem; }
 .consultation-composer input { flex: 1; min-width: 0; min-height: 48px; border: 1px solid #dbe3e9; border-radius: .875rem; padding: .75rem; color: #173650; background: #f9fbfc; font: 1rem/1.5 sans-serif; }
-.consultation-composer button { min-width: 4rem; }
-.consultation-composer button span { margin-left: .35rem; }
+.consultation-composer button { width: 48px; min-width: 48px; padding: .65rem; }
+.consultation-composer button .ds-icon { width: 1.35rem; height: 1.35rem; }
 .consultation-conditions { min-width: 0; padding: 1.25rem 0 1.25rem 1.5rem; overflow-y: auto; align-self: start; max-height: 100%; box-sizing: border-box; border-left: 1px solid #dfe5e8; }
 .consultation-conditions h2 { font: 750 1.2rem/1.5 var(--product-font); margin: 0 0 .75rem; }
 .consultation-help, .consultation-edit-status { font-size: .8125rem; line-height: 1.8; color: #637487; }
@@ -60,16 +62,17 @@
   .consultation-page { inset: 4rem 0 calc(3.8rem + env(safe-area-inset-bottom)); padding: .875rem; }
   .consultation-layout { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: 100%; }
   .consultation-conversation { height: auto; border: 0; border-radius: 0; box-shadow: none; }
-  .consultation-heading { padding: .35rem 0 .8rem; }
-  .consultation-heading .ds-eyebrow { font-size: .62rem; }
-  .consultation-heading h1 { font-size: 1.8rem; }
-  .consultation-context { flex-wrap: nowrap; padding: .45rem 0; gap: .35rem; }
-  .consultation-identity { flex: 1 1 auto; }
+  .consultation-heading { padding: 0 0 .35rem; }
+  .consultation-heading .ds-eyebrow { display: none; }
+  .consultation-heading h1 { margin: 0; font-size: 1.55rem; }
+  .consultation-context { display: grid; grid-template-columns: minmax(0, 1fr); padding: .35rem 0 .55rem; gap: .45rem; }
+  .consultation-identity { min-width: 0; }
   .consultation-identity strong { display: block; font-size: .78rem; line-height: 1.3; max-width: 12rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .consultation-identity p { font-size: .68rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .consultation-identity small { display: none; }
-  .consultation-context-actions { flex: 0 0 auto; }
-  .consultation-context-actions button { font-size: .68rem; min-height: 38px; padding: .35rem .45rem; }
+  .consultation-context-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; width: 100%; }
+  .consultation-context-actions button { min-width: 0; font-size: .72rem; min-height: 44px; padding: .4rem .5rem; white-space: normal; overflow-wrap: anywhere; }
+  .consultation-context-actions button:not([hidden]):only-child { grid-column: 1 / -1; }
   .consultation-messages { padding: 1rem 0; }
   .consultation-composer { padding: .65rem 0; }
   .consultation-conditions-toggle, .consultation-conditions-close { display: inline-block; }
