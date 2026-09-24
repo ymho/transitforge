@@ -154,13 +154,13 @@ jobs:
           aws logs filter-log-events \
             --log-group-name "$AGENT_STREAM_LOG_GROUP" \
             --start-time "$start_time" \
-            --filter-pattern '{ $.event = "agent_diagnostic" }' \
+            --filter-pattern '"agent_diagnostic"' \
             --query 'events[].message' \
             --output json > agent-diagnostics.json
           aws logs filter-log-events \
             --log-group-name "$AGENT_STREAM_LOG_GROUP" \
             --start-time "$start_time" \
-            --filter-pattern '{ $.eventSource = "agent_stream" }' \
+            --filter-pattern '"agent_stream"' \
             --query 'events[].message' \
             --output json > agent-stream-events.json
           node tools/deployment/summarize-agent-diagnostics.mjs \
