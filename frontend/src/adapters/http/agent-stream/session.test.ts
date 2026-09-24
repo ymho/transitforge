@@ -10,6 +10,7 @@ function setup() {
   const listeners = new Set<(state: AuthState) => void>();
   const changeAuth = (next: AuthState = { status: "signed-in", displayName: "B" }) => { state = next; listeners.forEach(l => l(state)); };
   const auth: AuthSession = { initialize: async () => {}, getState: () => state, getAccessToken: vi.fn(async () => "access-token"),
+    refreshAccessToken: vi.fn(async () => "access-token"),
     subscribe: l => { listeners.add(l); l(state); return () => { listeners.delete(l); }; },
     login: async () => {}, logout: async () => changeAuth({ status: "signed-out" }), invalidate: vi.fn(() => changeAuth({ status: "expired" })),
   };
@@ -51,10 +52,29 @@ it.each(["logout", "account", "conversation", "trip", "draft", "turn"])("rejects
   expect(events.mock.calls.map(([e]) => e.type)).toEqual(["progress"]);
   await expect(action.send()).rejects.toThrow("stale_generation"); s.session.dispose();
 });
-it.each([401, 403])("handles %s without refresh or fallback", async status => {
-  const s = setup(); s.fetcher.mockResolvedValue(new Response("{}", { status }));
-  await expect(s.session.start("相談").send()).rejects.toMatchObject({ code: status === 401 ? "unauthenticated" : "forbidden" });
-  expect(s.fetcher).toHaveBeenCalledTimes(1); expect(s.auth.invalidate).toHaveBeenCalledTimes(status === 401 ? 1 : 0); s.session.dispose();
+it("refreshes and retries one 401 with the same turn", async () => {
+  const s = setup(); s.fetcher.mockResolvedValueOnce(new Response("{}", { status: 401 }));
+  vi.mocked(s.auth.refreshAccessToken).mockResolvedValueOnce("refreshed-token");
+  const pending = s.session.start("相談").send();
+  await vi.waitFor(() => expect(s.fetcher).toHaveBeenCalledTimes(2)); s.complete();
+  expect(await pending).toBe("保存された回答");
+  expect(s.auth.refreshAccessToken).toHaveBeenCalledWith("access-token");
+  expect(s.fetcher.mock.calls[1][1]?.headers).toMatchObject({ Authorization: "Bearer refreshed-token" });
+  expect(s.fetcher.mock.calls[1][1]?.body).toBe(s.fetcher.mock.calls[0][1]?.body);
+  expect(s.auth.invalidate).not.toHaveBeenCalled(); s.session.dispose();
+});
+it("does not refresh a forbidden response", async () => {
+  const s = setup(); s.fetcher.mockResolvedValue(new Response("{}", { status: 403 }));
+  await expect(s.session.start("相談").send()).rejects.toMatchObject({ code: "forbidden" });
+  expect(s.fetcher).toHaveBeenCalledTimes(1); expect(s.auth.refreshAccessToken).not.toHaveBeenCalled();
+  expect(s.auth.invalidate).not.toHaveBeenCalled(); s.session.dispose();
+});
+it("invalidates after a refreshed request is still unauthenticated", async () => {
+  const s = setup(); s.fetcher.mockResolvedValue(new Response("{}", { status: 401 }));
+  vi.mocked(s.auth.refreshAccessToken).mockResolvedValueOnce("refreshed-token");
+  await expect(s.session.start("相談").send()).rejects.toMatchObject({ code: "unauthenticated" });
+  expect(s.fetcher).toHaveBeenCalledTimes(2); expect(s.auth.refreshAccessToken).toHaveBeenCalledTimes(1);
+  expect(s.auth.invalidate).toHaveBeenCalledTimes(1); s.session.dispose();
 });
 it("does not send a request if the account changes while obtaining the token", async () => {
   const s = setup(); vi.mocked(s.auth.getAccessToken).mockImplementation(async () => { s.changeAuth(); return "old-token"; });

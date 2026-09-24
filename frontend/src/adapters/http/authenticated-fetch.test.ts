@@ -13,6 +13,7 @@ function session() {
   const listeners = new Set<(value: AuthState) => void>();
   const change = (next?: string) => { access = next; state = next ? { status: "signed-in", displayName: next } : { status: "signed-out" }; listeners.forEach(fn => fn(state)); };
   const auth: AuthSession = { initialize: async () => {}, getState: () => state, getAccessToken: vi.fn(async () => access),
+    refreshAccessToken: vi.fn(async () => access),
     login: async () => {}, logout: async () => change(), invalidate: vi.fn(() => change()),
     subscribe: fn => { listeners.add(fn); fn(state); return () => { listeners.delete(fn); }; } };
   return { auth, change };
@@ -63,19 +64,29 @@ describe("personal API authenticated fetch", () => {
     f.change(); await expect(request(path, post)).rejects.toBeInstanceOf(ApiAuthenticationError);
     expect(network).not.toHaveBeenCalled(); request.dispose();
   });
-  it("distinguishes 401/403 from business errors, clears rejected credentials and never retries", async () => {
+  it("refreshes and retries one 401, but never hides 403 or business errors", async () => {
     const f = session(), network = vi.fn<typeof fetch>(), request = createAuthenticatedFetch(f.auth, origin, network);
     network.mockResolvedValueOnce(new Response("private claims", { status: 401 }));
-    await expect(request(path, post)).rejects.toMatchObject({ code: "unauthenticated" });
-    expect(f.auth.invalidate).toHaveBeenCalledOnce(); expect(network).toHaveBeenCalledTimes(1);
-    await expect(request(path, post)).rejects.toMatchObject({ code: "unauthenticated" });
-    expect(network).toHaveBeenCalledTimes(1);
-    f.change("access-B"); network.mockResolvedValueOnce(new Response("private claims", { status: 403 }));
+    vi.mocked(f.auth.refreshAccessToken).mockResolvedValueOnce("access-B");
+    network.mockResolvedValueOnce(json({ ok: true }));
+    expect((await request(path, post)).status).toBe(200);
+    expect(network.mock.calls.map(([input]) => (input as Request).headers.get("authorization"))).toEqual(["Bearer access-A", "Bearer access-B"]);
+    expect(f.auth.refreshAccessToken).toHaveBeenCalledExactlyOnceWith("access-A");
+    network.mockResolvedValueOnce(new Response("private claims", { status: 403 }));
     await expect(request(path, post)).rejects.toMatchObject({ code: "forbidden" });
-    expect(f.auth.invalidate).toHaveBeenCalledOnce();
+    expect(f.auth.invalidate).not.toHaveBeenCalled(); expect(f.auth.refreshAccessToken).toHaveBeenCalledOnce();
     network.mockResolvedValueOnce(json({ error: "conflict" }, 409));
     expect((await request(path, post)).status).toBe(409);
-    expect(network).toHaveBeenCalledTimes(3); request.dispose();
+    expect(network).toHaveBeenCalledTimes(4); request.dispose();
+  });
+  it("invalidates after a refreshed credential is rejected and never loops", async () => {
+    const f = session(), network = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 401 })).mockResolvedValueOnce(new Response(null, { status: 401 }));
+    vi.mocked(f.auth.refreshAccessToken).mockResolvedValueOnce("access-B");
+    const request = createAuthenticatedFetch(f.auth, origin, network);
+    await expect(request(path, post)).rejects.toMatchObject({ code: "unauthenticated" });
+    expect(network).toHaveBeenCalledTimes(2); expect(f.auth.refreshAccessToken).toHaveBeenCalledOnce(); expect(f.auth.invalidate).toHaveBeenCalledOnce();
+    request.dispose();
   });
   it("rejects a token lookup that completes after account switch, before network", async () => {
     const f = session(); let resolve!: (value: string) => void;

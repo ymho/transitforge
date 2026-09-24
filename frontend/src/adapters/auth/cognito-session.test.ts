@@ -36,6 +36,10 @@ function mockTokens(overrides: Record<string, unknown> = {}, claims: Record<stri
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
+function refreshedTokens(accessToken = "access-token-refreshed", refreshToken?: string) {
+  return new Response(JSON.stringify({ access_token: accessToken, ...(refreshToken ? { refresh_token: refreshToken } : {}),
+    token_type: "Bearer", scope: config.scopes.join(" "), expires_in: 300 }), { headers: { "Content-Type": "application/json" } });
+}
 beforeEach(() => { sessionStorage.clear(); now = Date.now(); vi.stubGlobal("crypto", webcrypto); });
 afterEach(() => { vi.unstubAllGlobals(); });
 
@@ -54,12 +58,12 @@ describe("Cognito public-client authentication", () => {
     expect(request.searchParams.get("code_challenge")).toBe(createHash("sha256").update(stored.code_verifier).digest("base64url"));
   });
 
-  it("scrubs callback first, exchanges code, persists only short session and restores safely", async () => {
+  it("scrubs callback first, stores a tab-only refresh session and restores it safely", async () => {
     const { callback } = await login();
     const fetchMock = mockTokens();
     const b = browser(callback), auth = createCognitoSession(config, b);
     await auth.initialize();
-    expect(auth.getState()).toEqual({ status: "signed-in", displayName: "user@example.test" });
+    expect(auth.getState()).toEqual({ status: "signed-in", displayName: "user@example.test", sessionExpiresAt: now + 8 * 60 * 60 * 1000 });
     expect(await auth.getAccessToken()).toBe("access-token-fixture");
     expect(b.history.replaceState).toHaveBeenLastCalledWith(null, "", "/");
     expect(vi.mocked(b.history.replaceState).mock.invocationCallOrder[0]).toBeLessThan(fetchMock.mock.invocationCallOrder[0]!);
@@ -68,13 +72,47 @@ describe("Cognito public-client authentication", () => {
     expect(body.get("client_id")).toBe(config.clientId);
     expect(body.get("redirect_uri")).toBe(`${origin}/index.html`);
     expect(body.has("client_secret")).toBe(false);
-    expect(JSON.stringify(sessionStorage)).not.toMatch(/refresh-token-fixture|id_token|test-random-nonce|one-time-code/);
+    expect(JSON.stringify(sessionStorage)).toContain("refresh-token-fixture");
+    expect(JSON.stringify(sessionStorage)).not.toMatch(/id_token|test-random-nonce|one-time-code/);
+    expect(JSON.stringify(localStorage)).not.toContain("refresh-token-fixture");
     const reloaded = createCognitoSession(config, browser());
     await reloaded.initialize();
     expect(await reloaded.getAccessToken()).toBe("access-token-fixture");
-    now += 301_000;
-    expect(await reloaded.getAccessToken()).toBeUndefined();
-    expect(reloaded.getState().status).toBe("expired");
+    now += 271_000; fetchMock.mockResolvedValueOnce(refreshedTokens());
+    expect(await reloaded.getAccessToken()).toBe("access-token-refreshed");
+    const refreshBody = fetchMock.mock.calls.at(-1)![1].body as URLSearchParams;
+    expect(refreshBody.get("grant_type")).toBe("refresh_token");
+    expect(refreshBody.get("refresh_token")).toBe("refresh-token-fixture");
+    expect(refreshBody.has("client_secret")).toBe(false);
+    expect(JSON.stringify(fetchMock.mock.calls.at(-1))).not.toContain("id_token");
+  });
+
+  it("single-flights concurrent refreshes, rotates the token atomically and never extends the eight-hour deadline", async () => {
+    const { callback } = await login(); const fetchMock = mockTokens();
+    const auth = createCognitoSession(config, browser(callback)); await auth.initialize();
+    const stored = JSON.parse(sessionStorage.getItem(`raiquora.auth.${config.clientId}.session`)!) as { absoluteExpiresAt: number };
+    now += 271_000;
+    let finish!: (response: Response) => void;
+    fetchMock.mockReturnValueOnce(new Promise<Response>(resolve => { finish = resolve; }));
+    const left = auth.getAccessToken(), right = auth.getAccessToken();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    finish(refreshedTokens("rotated-access", "rotated-refresh"));
+    expect(await Promise.all([left, right])).toEqual(["rotated-access", "rotated-access"]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const updated = JSON.parse(sessionStorage.getItem(`raiquora.auth.${config.clientId}.session`)!) as { refreshToken: string; absoluteExpiresAt: number };
+    expect(updated.refreshToken).toBe("rotated-refresh"); expect(updated.absoluteExpiresAt).toBe(stored.absoluteExpiresAt);
+    now = stored.absoluteExpiresAt;
+    expect(await auth.getAccessToken()).toBeUndefined(); expect(auth.getState().status).toBe("expired");
+  });
+
+  it("expires once on invalid_grant and does not retry refresh", async () => {
+    const { callback } = await login(); const fetchMock = mockTokens();
+    const auth = createCognitoSession(config, browser(callback)); await auth.initialize();
+    now += 271_000;
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: "invalid_grant", error_description: "private" }), { status: 400 }));
+    expect(await Promise.all([auth.getAccessToken(), auth.getAccessToken()])).toEqual([undefined, undefined]);
+    expect(fetchMock).toHaveBeenCalledTimes(2); expect(auth.getState().status).toBe("expired");
+    expect(JSON.stringify(sessionStorage)).not.toMatch(/refresh-token-fixture|private/);
   });
 
   it.each(["nonce", "iss", "aud", "exp"])("rejects invalid ID claim %s without retaining tokens", async key => {

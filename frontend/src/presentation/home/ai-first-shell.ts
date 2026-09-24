@@ -1,6 +1,4 @@
 import { homeReadModel, tripDisplayLabels, type HomeReadInput } from "../../usecases/trip-plan/home-read-model";
-import type { UserProfile } from "@raiquora/trip/travel-profile";
-import { travelStyleSummary, travelPreferenceLabels } from "@raiquora/trip/travel-profile";
 import { travelIcon } from "../shared/travel-icon";
 import { travelDecoration } from "./travel-decoration";
 import type { Trip } from "@raiquora/trip/trip";
@@ -12,7 +10,6 @@ import type { AuthState } from "../../usecases/auth/auth-session";
 export type PrimaryView = "explore" | "chat" | "trips" | "my";
 export interface AiFirstShellPorts {
   read(): HomeReadInput;
-  profile(): UserProfile | undefined;
   authState(): AuthState;
   login(): void;
   logout(): void;
@@ -25,7 +22,6 @@ export interface AiFirstShellPorts {
   consultTrip?(id: string): void;
   renameTrip?(id: string, title: string): Promise<void>;
   archiveTrip?(id: string): Promise<void>;
-  openProfile(): void;
   openMap(mode: "realtime" | "simulation"): void;
   journeySettings(): { transferPace: string; rankingPreference: string };
   setJourneySettings(settings: { transferPace: string; rankingPreference: string }): void;
@@ -46,8 +42,8 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     <div class="home-examples" aria-label="相談の入力例">${["のんびりできる旅を考えたい", "歴史ある街を歩きたい", "おいしいものを楽しみたい"].map((text) => `<button type="button" data-example="${text}">${text}</button>`).join("")}</div></div>${travelDecoration("hero")}</div>
     <div data-home-live></div><section class="home-secondary home-rail-feature"><div><p class="home-eyebrow">RAIL MAP</p><h2>列車・運行情報</h2><p>リアルタイムの運行状況や、日時を指定した列車の動きを地図で確認できます。</p><button type="button" data-map="realtime">リアルタイム運行状況</button><button type="button" data-map="simulation">日時指定で見る</button></div>${travelDecoration("rail")}</section></section>
     <section class="product-page" data-page="trips" aria-label="旅程" hidden><header class="trip-list-heading"><p class="home-eyebrow">YOUR TRIPS</p><h1>旅程</h1><p>次の旅も、考え中の旅も。ここから続きの相談や確認を始められます。</p></header><div data-trip-list></div></section>
-    <section class="product-page" data-page="my" aria-label="アカウント" hidden><div class="my-shell"><p class="home-eyebrow">ACCOUNT</p><h1>アカウント</h1><div class="my-grid"><section class="home-card my-account-card"><h2>ログイン</h2><p data-my-account-status></p><button type="button" data-my-login>ログイン / 新規登録</button><button type="button" data-my-logout hidden>ログアウト</button></section><section class="home-card"><h2>旅行プロフィール</h2><p>普段の好みを、次の旅のヒントに。今回の旅の条件とは分けて管理します。</p><p class="my-preferences" data-profile-summary></p><button type="button" data-profile>旅行プロフィールを編集</button></section>
-    <section class="home-card"><h2>通知</h2><div class="my-actions"><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button></div></section><section class="home-card account-journey-settings"><h2>経路検索の設定</h2><p>相談で経路を比較するときの既定値です。</p><label>乗換ペース<select data-account-transfer-pace><option value="hurried">急ぐ</option><option value="standard">普通</option><option value="relaxed">ゆっくり</option></select></label><label>経路の優先<select data-account-ranking-preference><option value="balanced">バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label></section><section class="home-card account-services"><h2>外部サービス</h2><p>旅の案内に利用する情報提供元です。</p><ul><li>GTFS-JP・公共交通オープンデータ</li><li>気象庁防災情報XML</li><li>ホットペッパーグルメ Webサービス</li><li>Wikipedia / Wikimedia Commons</li></ul></section></div></div></section>
+    <section class="product-page" data-page="my" aria-label="アカウント" hidden><div class="my-shell"><p class="home-eyebrow">ACCOUNT</p><h1>アカウント</h1><div class="my-grid"><section class="home-card my-account-card"><h2>ログイン</h2><p data-my-account-status></p><button type="button" data-my-login>ログイン / 新規登録</button><button type="button" data-my-logout hidden>ログアウト</button></section><section class="home-card account-profile-card" data-signed-in-only><div id="travel-profile-page" class="travel-profile-page" aria-label="旅行プロフィール設定"></div></section>
+    <section class="home-card" data-signed-in-only><h2>通知</h2><div class="my-actions"><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button></div></section><section class="home-card account-journey-settings"><h2>経路検索の設定</h2><p>相談で経路を比較するときの既定値です。</p><label>乗換ペース<select data-account-transfer-pace><option value="hurried">急ぐ</option><option value="standard">普通</option><option value="relaxed">ゆっくり</option></select></label><label>経路の優先<select data-account-ranking-preference><option value="balanced">バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label></section><section class="home-card account-services"><h2>外部サービス</h2><p>旅の案内に利用する情報提供元です。</p><ul><li>GTFS-JP・公共交通オープンデータ</li><li>気象庁防災情報XML</li><li>ホットペッパーグルメ Webサービス</li><li>Wikipedia / Wikimedia Commons</li></ul></section></div></div></section>
     <button type="button" class="product-map-back" data-map-back hidden>戻る</button>`;
   app.prepend(root);
   const consultationEntry = root.querySelector<HTMLElement>(".home-prompt")!, consultationExamples = root.querySelector<HTMLElement>(".home-examples")!;
@@ -71,7 +67,6 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     const prompt = textarea.value.trim(); textarea.value = ""; saveDraft(); navigate("chat"); ports.newConsultation(prompt);
   });
   root.querySelectorAll<HTMLButtonElement>("[data-example]").forEach((button) => button.addEventListener("click", () => { textarea.value = button.dataset.example!; saveDraft(); textarea.focus(); }));
-  root.querySelector("[data-profile]")!.addEventListener("click", ports.openProfile);
   root.querySelector("[data-account]")!.addEventListener("click", () => {
     if (ports.authState().status === "signed-in") navigate("my"); else ports.login();
   });
@@ -89,13 +84,13 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     account.textContent = auth.status === "signed-in" ? auth.displayName : "ログイン / 新規登録";
     account.setAttribute("aria-label", auth.status === "signed-in" ? "アカウントを開く" : "ログインまたは新規登録");
     const myStatus = root.querySelector<HTMLElement>("[data-my-account-status]")!, myLogin = root.querySelector<HTMLButtonElement>("[data-my-login]")!, myLogout = root.querySelector<HTMLButtonElement>("[data-my-logout]")!;
-    myStatus.textContent = auth.status === "signed-in" ? `${auth.displayName} としてログイン中です。` : "旅程やプロフィールを保存するにはログインしてください。";
+    myStatus.textContent = auth.status === "signed-in" ? `${auth.displayName} としてログイン中です。このタブのログインは開始から最大8時間、自動更新されます。` : "旅程やプロフィールを保存するにはログインしてください。";
     myLogin.hidden = auth.status === "signed-in";
     myLogout.hidden = auth.status !== "signed-in";
     const signedIn = auth.status === "signed-in";
     consultationEntry.hidden = !signedIn; consultationExamples.hidden = !signedIn; consultationLoginNotice.hidden = signedIn;
     for (const view of ["chat", "trips"]) root.querySelector<HTMLElement>(`[data-primary="${view}"]`)!.hidden = !signedIn;
-    for (const button of root.querySelectorAll<HTMLElement>("[data-profile], [data-notifications]")) button.closest("section")!.hidden = auth.status !== "signed-in";
+    for (const section of root.querySelectorAll<HTMLElement>("[data-signed-in-only]")) section.hidden = auth.status !== "signed-in";
     const journey = ports.journeySettings(); transferPace.value = journey.transferPace; rankingPreference.value = journey.rankingPreference;
     const stateText = view.state === "loading" ? "旅程を読み込んでいます。" : view.state === "unauthenticated" ? "ログインすると、保存した旅程をここで確認できます。相談はこのまま始められます。"
       : view.state === "unavailable" ? "旅程を取得できませんでした。未予約・準備完了とは判断していません。" : "次の旅はまだ決まっていません。相談から始めてみましょう。";
@@ -106,17 +101,6 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
       <section><h2>旅の候補</h2>${view.candidates.length ? `<div class="home-candidates">${view.candidates.map((c, index) => `<article class="home-candidate">${travelDecoration(index % 2 ? "retreat" : "canal")}<div class="home-candidate-copy"><h3>${esc(c.title)}</h3><p>移動の対応範囲を確認した候補です。訪れたい場所や過ごし方を、相談しながら考えられます。</p><div class="home-tags"><span>候補</span><span>未採用</span></div><button type="button" data-candidate="${esc(c.id)}">この候補を相談する <span aria-hidden="true">→</span></button></div></article>`).join("")}</div>` : `<div class="home-empty"><p>まだ行き先が決まっていなくても。<br>上の相談例から、気になる旅を探してみましょう。</p>${travelDecoration("retreat")}</div>`}
       <details><summary>対応範囲について</summary><p>収録駅・日付別時刻表と、駅からのアクセスを確認できる範囲をご案内します。未確認の場所も相談できます。</p></details></section>`;
     root.querySelector("[data-trip-list]")!.innerHTML = view.trips.length ? view.trips.map((row) => card(row.trip, tripDisplayLabels[row.group])).join("") : `<p role="status">${stateText}</p>`;
-    try {
-      const profile = ports.profile();
-      const summary = root.querySelector("[data-profile-summary]")!;
-      const tags = profile ? [
-        ...(profile.transport.preferredMode === "rail" ? ["列車を優先"] : []),
-        ...(profile.travelStyle.pace !== undefined ? [profile.travelStyle.pace <= .4 ? "ゆったり" : profile.travelStyle.pace >= .7 ? "いろいろ巡る" : "バランス"] : []),
-        ...Object.entries(profile.preferences).filter(([, value]) => value !== undefined && value >= .8).map(([key]) => travelPreferenceLabels[key as keyof typeof travelPreferenceLabels]),
-      ].slice(0, 6) : [];
-      if (tags.length) summary.innerHTML = tags.map((tag) => `<span>${esc(tag)}</span>`).join("");
-      else summary.textContent = profile ? travelStyleSummary(profile) : "まだ設定していません。普段の好みを登録できます。";
-    } catch { root.querySelector("[data-profile-summary]")!.textContent = "プロフィールを読み出せません。相談は登録なしでも利用できます。"; }
     root.querySelectorAll<HTMLButtonElement>("[data-trip]").forEach((button) => button.addEventListener("click", () => {
       window.history.pushState({ tripId: button.dataset.trip! }, "", "#trip"); apply();
     }));

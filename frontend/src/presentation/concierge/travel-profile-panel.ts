@@ -1,5 +1,6 @@
-import { travelPreferenceLabels, travelStyleSummary, type UserProfile } from "@raiquora/trip/travel-profile";
+import { travelPreferenceLabels, type UserProfile } from "@raiquora/trip/travel-profile";
 import type { ProfileUiController } from "../../usecases/personal-state/profile-ui-controller";
+import type { ServerProfileState } from "../../usecases/personal-state/server-profile-client";
 
 type Draft = Omit<UserProfile, "version" | "updatedAt">;
 const styles: Array<[keyof UserProfile["travelStyle"], string]> = [
@@ -11,91 +12,62 @@ const styles: Array<[keyof UserProfile["travelStyle"], string]> = [
 const companions = { solo: "一人", partner: "パートナー", friends: "友人", children: "子ども", family: "家族" };
 
 /** Profile is account-scoped server state. It deliberately has no browser-storage fallback. */
-export function configureTravelProfile(document: Document, client: ProfileUiController, onProfileCompleted: () => void = () => undefined): void {
-  const dialog = document.querySelector<HTMLElement>("#travel-profile-page");
-  const toggle = document.querySelector<HTMLButtonElement>("#travel-profile-toggle");
-  if (!dialog || !toggle) return;
-  let draft = blankDraft(), editing = false, dirty = false;
-  let read: { profile?: UserProfile; revision?: number; loading?: boolean } = {};
-  const finish = () => { dialog.hidden = true; delete document.querySelector<HTMLElement>("#app")?.dataset.profileEditing; toggle.focus(); };
-  const message = (text: string) => { dialog.querySelector<HTMLElement>("[data-profile-message]")!.textContent = text; };
-  const close = () => {
-    if (!dirty) { finish(); return; }
-    message("変更はまだ保存されていません。編集を続けるか、破棄して閉じてください。");
-    dialog.querySelector<HTMLElement>("[data-discard]")!.hidden = false;
+export function configureTravelProfile(document: Document, client: ProfileUiController): void {
+  const page = document.querySelector<HTMLElement>("#travel-profile-page");
+  if (!page) return;
+  let read: ServerProfileState | undefined = client.current();
+  let draft = read?.profile ? profileDraft(read.profile) : blankDraft(), dirty = false;
+  const message = (text: string) => { page.querySelector<HTMLElement>("[data-profile-message]")!.textContent = text; };
+  const warnUnsaved = () => {
+    message("変更はまだ保存されていません。保存するか、変更を破棄してから移動してください。");
+    page.querySelector<HTMLElement>("[data-discard]")!.hidden = false;
   };
   const render = () => {
-    dialog.innerHTML = `<section class="profile-editor"><header><button type="button" data-close aria-label="アカウントへ戻る">←</button><div><h1>旅行プロフィール</h1><p>普段の好みを、次の旅のヒントに。今回の旅の条件を優先します。</p></div></header>
-      <p role="status" aria-live="polite" data-profile-message></p>
-      ${editing ? editor(draft) : `<p>${read.loading ? "プロフィールを読み込んでいます。" : read.profile ? esc(travelStyleSummary(read.profile)) : "まだ登録していません。設定せずに相談できます。"}</p>
-      <button type="button" data-edit>旅行プロフィールを編集</button><button type="button" data-start>相談する</button>`}
-      <details class="profile-storage-actions"><summary>プロフィールの管理</summary><button type="button" data-delete ${!read.profile ? "hidden" : ""}>プロフィールを削除</button></details>
-      <div class="profile-editor-actions"><button type="button" data-close>${editing ? "取消" : "閉じる"}</button>${editing ? '<button type="submit" form="travel-profile-form">保存する</button>' : ""}
-      <button type="button" data-discard hidden>変更を破棄して閉じる</button>
-      </div></section>`;
-    dialog.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", close));
-    dialog.querySelector("[data-discard]")?.addEventListener("click", () => { dirty = false; finish(); });
-    dialog.querySelector("[data-edit]")?.addEventListener("click", () => { editing = true; render(); });
-    dialog.querySelector("[data-start]")?.addEventListener("click", () => { finish(); onProfileCompleted(); });
-    dialog.querySelector("[data-delete]")?.addEventListener("click", () => {
-      const button = dialog.querySelector<HTMLButtonElement>("[data-delete]")!;
+    page.innerHTML = `<section class="profile-editor"><header><div><h2>旅行プロフィール</h2><p>普段の好みを、次の旅のヒントに。今回の旅の条件を優先します。</p></div></header>
+      <p role="status" aria-live="polite" data-profile-message></p>${editor(draft)}
+      <details class="profile-storage-actions"><summary>プロフィールの管理</summary><button type="button" data-delete ${!read?.profile ? "hidden" : ""}>プロフィールを削除</button></details>
+      <div class="profile-editor-actions"><button type="button" data-discard hidden>変更を破棄</button><button type="submit" form="travel-profile-form">保存する</button></div></section>`;
+    page.querySelector("[data-discard]")?.addEventListener("click", () => {
+      draft = read?.profile ? profileDraft(read.profile) : blankDraft(); dirty = false; render(); message("変更を破棄しました。");
+    });
+    page.querySelector("[data-delete]")?.addEventListener("click", () => {
+      const button = page.querySelector<HTMLButtonElement>("[data-delete]")!;
       if (button.dataset.confirm !== "yes") { button.dataset.confirm = "yes"; button.textContent = "削除を確定する"; return; }
-      if (read.revision === undefined) return;
+      if (read?.revision === undefined) return;
       void client.delete(read.revision).then(() => {
-        read = {}; draft = blankDraft(); dirty = false; editing = false; render();
+        read = undefined; draft = blankDraft(); dirty = false; render(); message("プロフィールを削除しました。");
       }).catch(() => message("削除できませんでした。時間をおいてもう一度お試しください。"));
     });
-    const form = dialog.querySelector<HTMLFormElement>("form");
-    form?.querySelectorAll<HTMLButtonElement>("[data-choice]").forEach((button) => button.addEventListener("click", () => {
+    const form = page.querySelector<HTMLFormElement>("form")!;
+    form.querySelectorAll<HTMLButtonElement>("[data-choice]").forEach((button) => button.addEventListener("click", () => {
       const name = button.dataset.choice!;
       const selected = button.dataset.toggle !== "true" || button.getAttribute("aria-pressed") !== "true";
       form.querySelector<HTMLInputElement>(`[name="${name}"]`)!.value = selected ? button.dataset.value! : "";
       form.querySelectorAll<HTMLButtonElement>(`[data-choice="${name}"]`).forEach((choice) => choice.setAttribute("aria-pressed", String(choice === button && selected)));
       dirty = true;
     }));
-    form?.addEventListener("input", () => { dirty = true; });
-    form?.addEventListener("change", () => {
-      dirty = true;
-      for (const input of form.querySelectorAll<HTMLInputElement>("[data-enable]")) {
-        form.querySelector<HTMLInputElement>(`[name="${input.dataset.enable}"]`)!.disabled = !input.checked;
-      }
-    });
-    form?.addEventListener("submit", (event) => {
+    form.addEventListener("input", () => { dirty = true; });
+    form.addEventListener("change", () => { dirty = true; });
+    form.addEventListener("submit", (event) => {
       event.preventDefault();
       try {
         draft = readDraft(draft, new FormData(form));
         const profile: UserProfile = { ...draft, version: 2, updatedAt: new Date().toISOString() };
-        void client.update(profile, read.revision ?? null).then((saved) => {
-          read = saved; dirty = false; editing = false; render();
+        void client.update(profile, read?.revision ?? null).then((saved) => {
+          read = saved; draft = profileDraft(saved.profile); dirty = false; render();
           message("プロフィールを保存しました。次の相談から普段の好みとして参照します。");
         }).catch(() => message("保存できませんでした。入力はこの画面に残しています。時間をおいてもう一度お試しください。"));
       } catch { message("入力を確認してください。"); }
     });
   };
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !dialog.hidden) { event.preventDefault(); close(); } });
-  document.addEventListener("transitforge:profile-leave", (event) => {
-    if (dialog.hidden) return;
-    if (dirty) { event.preventDefault(); close(); } else finish();
-  });
-  document.defaultView?.addEventListener("beforeunload", (event) => { if (dirty && !dialog.hidden) { event.preventDefault(); event.returnValue = ""; } });
-  toggle.addEventListener("click", () => {
-    if (!dialog.hidden) return;
-    read = { loading: true }; dirty = false; editing = false;
-    render(); dialog.hidden = false;
-    const app = document.querySelector<HTMLElement>("#app"); if (app) app.dataset.profileEditing = "true";
-    dialog.querySelector<HTMLButtonElement>("[data-close]")?.focus();
-    void client.hydrate().then((saved) => {
-      if (dialog.hidden) return;
-      read = saved ?? {}; draft = saved ? profileDraft(saved.profile) : blankDraft(); editing = true; render();
-    }).catch(() => { if (!dialog.hidden) { read = {}; render(); message("プロフィールを取得できませんでした。時間をおいてもう一度お試しください。"); } });
-  });
+  document.addEventListener("transitforge:profile-leave", (event) => { if (dirty) { event.preventDefault(); warnUnsaved(); } });
+  document.defaultView?.addEventListener("beforeunload", (event) => { if (dirty) { event.preventDefault(); event.returnValue = ""; } });
   client.subscribe(() => {
-    if (dialog.hidden) return;
     const saved = client.current();
-    read = saved ?? {}; draft = saved ? profileDraft(saved.profile) : blankDraft(); editing = true; dirty = false;
-    render();
+    if (dirty && saved) return;
+    read = saved; draft = saved ? profileDraft(saved.profile) : blankDraft(); dirty = false; render();
   });
-  // Registration is optional. Never open a blocking onboarding dialog on startup.
+  render();
 }
 
 function editor(draft: Draft): string {
