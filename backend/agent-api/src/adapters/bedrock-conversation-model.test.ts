@@ -24,6 +24,7 @@ it("sends opted-in preferences to the model but omits conversation content from 
 
 import type { JsonObject } from "../contracts/agent-request.js";
 import { validatedToolDefinitions } from "../contracts/agent-request.js";
+import { travelDiscoveryToolDescriptor } from "../usecases/discover-travel-candidates.js";
 import {
   BedrockConversationModel,
   validateBedrockModelId,
@@ -139,6 +140,37 @@ describe("BedrockConversationModel", () => {
         cacheStatus: "disabled",
       },
     });
+  });
+
+  it("accepts a production Tool response only when that exact Tool was advertised", async () => {
+    const log = vi.fn();
+    const converse = vi.fn(async () => ({
+      output: { message: { role: "assistant", content: [{ toolUse: {
+        toolUseId: "tool-1", name: travelDiscoveryToolDescriptor.name, input: { query: "歴史ある街" },
+      } }] } }, stopReason: "tool_use",
+    }));
+    const model = new BedrockConversationModel({ converse }, { modelId: "model", systemPrompt: "system", log });
+
+    const response = await model.converse({ messages: [{ role: "user", content: [{ text: "歴史ある街を歩きたい" }] }],
+      tools: [{ name: travelDiscoveryToolDescriptor.name, description: travelDiscoveryToolDescriptor.description,
+        inputSchema: { type: "object", properties: { query: { type: "string" } } } }] });
+    expect(response.message.content).toEqual([{ toolUse: { toolUseId: "tool-1", name: "search_travel_knowledge", input: { query: "歴史ある街" } } }]);
+    expect(log).not.toHaveBeenCalled();
+
+    await expect(model.converse({ messages: [{ role: "user", content: [{ text: "歴史ある街を歩きたい" }] }] }))
+      .rejects.toMatchObject({ code: "invalid_schema" });
+    expect(log).toHaveBeenCalledWith("agent_model_response_rejected", {
+      reason: "tool_not_allowed", kinds: ["tool_use"], contentCount: 1,
+    });
+  });
+
+  it("rejects a historically allowlisted Tool if it was not advertised in this call", async () => {
+    const model = new BedrockConversationModel({ converse: async () => ({
+      output: { message: { role: "assistant", content: [{ toolUse: { toolUseId: "tool-1", name: "search_web", input: {} } }] } },
+      stopReason: "tool_use",
+    }) }, { modelId: "model", systemPrompt: "system" });
+    await expect(model.converse({ messages: [], tools: [{ name: "search_travel_knowledge", description: "旅行候補", inputSchema: { type: "object", properties: {} } }] }))
+      .rejects.toMatchObject({ code: "invalid_schema" });
   });
 
   it("emits Structured Outputs, strict tools and explicit cache checkpoints only from configured capabilities", async () => {
