@@ -1,6 +1,7 @@
 export type AgentDiagnosticPhase = "context" | "decision" | "tool" | "evidence" | "presentation" | "runtime" | "save" | "research" | "cache";
 export type AgentDiagnosticReason = "compiled" | "validated" | "rejected" | "completed" | "failed" | "partial" |
-  "not_loaded" | "stale_revision" | "budget_exhausted" | "schema_invalid" | "provider_refusal" | "provider_timeout" |
+  "not_loaded" | "stale_revision" | "budget_exhausted" | "schema_invalid" | "provider_refusal" | "provider_timeout" | "provider_error" |
+  "response_rejected" |
   "completion_ambiguous";
 
 /** Allowlisted operational data only. No prompt, profile text, coordinates, URL or reservation value. */
