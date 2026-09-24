@@ -11,6 +11,7 @@ import { proposeAssumptionDecision } from "../../usecases/trip-plan/update-trip-
 import { effectiveTripConstraints, type TripConstraint } from "@raiquora/trip/trip-request";
 import { formatMoney } from "@raiquora/trip/money";
 import type { UserProfile } from "@raiquora/trip/travel-profile";
+import { adoptComposer, createButton, createPageHeading, iconMarkup } from "../shared/primitives";
 
 export interface ConsultationScreenPorts {
   /** Only the active Conversation's explicitly attached source; never the first Home Trip. */
@@ -34,9 +35,8 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   };
   const oldActions = panel.querySelector(".guide-panel-actions");
   const layout = node("div", "consultation-layout"), conversation = node("section", "consultation-conversation");
-  const head = node("header", "consultation-heading"), headingCopy = node("div", "consultation-heading-copy"), eyebrow = node("p", "home-eyebrow", "AI CONCIERGE"), title = node("h1", "", "相談");
-  headingCopy.append(eyebrow, title);
-  const fresh = node("button", "", "新しい相談"); fresh.type = "button"; fresh.addEventListener("click", ports.newConversation);
+  const head = node("div", "consultation-heading"), headingCopy = createPageHeading(doc, "AI CONCIERGE", "相談"); headingCopy.classList.add("consultation-heading-copy");
+  const fresh = createButton(doc, "新しい相談"); fresh.addEventListener("click", ports.newConversation);
   head.append(headingCopy, fresh);
   // Keep secondary feature triggers alive, but discard the old panel heading/border/layout.
   if (oldActions) { oldActions.className = "consultation-secondary"; head.append(oldActions); }
@@ -66,7 +66,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   messages.classList.remove("ai-guide-messages"); messages.classList.add("consultation-messages");
   form.classList.remove("ai-guide-form"); form.classList.add("consultation-composer");
   input.placeholder = "希望や気になることを話してください";
-  const send = form.querySelector("button[type=submit]"); if (send) send.textContent = "送る";
+  const send = form.querySelector<HTMLButtonElement>("button[type=submit]"); if (send) { adoptComposer(form, input, send); send.innerHTML = `${iconMarkup("send")}<span>送る</span>`; }
   conversation.append(context, messages, form);
   const aside = node("aside", "consultation-conditions"); aside.id = "consultation-conditions";
   aside.setAttribute("aria-label", "この旅の条件"); conditions.setAttribute("aria-controls", aside.id);
@@ -159,7 +159,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
       const base = ports.read(), editor = node("form", "consultation-condition-editor");
       for (const spec of fields) {
         const label = node("label", "", spec.label);
-        const field = spec.options ? node("select", "") : node("input", "");
+        const field = spec.options ? node("select", "ds-control") : node("input", "ds-control");
         field.name = spec.key; field.setAttribute("aria-label", spec.label);
         if (field.tagName === "SELECT") for (const [value, title] of spec.options!) {
           const option = node("option", "", title); option.value = value; field.append(option);

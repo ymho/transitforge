@@ -15,6 +15,7 @@ export async function observeAgentTurn(
   } else {
     await emit({ type: "final", status: result.status, response: result.response,
       ...(result.publicPlanPresentation ? { publicPlanPresentation: result.publicPlanPresentation } : {}),
+      ...(result.publicJourneyPresentation ? { publicJourneyPresentation: result.publicJourneyPresentation } : {}),
       ...(result.researchExecution ? { researchExecution: result.researchExecution } : {}) });
   }
 }

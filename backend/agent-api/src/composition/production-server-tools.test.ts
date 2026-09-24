@@ -8,6 +8,18 @@ import { createProductionConversationAgent } from "./production-conversation-age
 import { stateDynamoFixture, stateA, conversationId, secondId } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 
+it("compares only a verified journey result from the same server turn", async () => {
+  const result = { serviceDate: "2026-09-24", originStation: "京都", destinationStation: "出雲市", searchTimeMinutes: 480, totalMatchCount: 1, matches: [], journeys: [{ departureTimeMinutes: 480, arrivalTimeMinutes: 720, transferCount: 1, legs: [{ serviceUid: "s1", trainNumber: "1M", serviceType: "特急", trainName: "やくも", originStation: "岡山", destinationStation: "出雲市", departureTimeMinutes: 540, arrivalTimeMinutes: 720, scheduledDepartureTimeMinutes: 540, scheduledArrivalTimeMinutes: 720, delayMinutes: 0 }] }] };
+  const captured: typeof result[] = [];
+  const bindings = productionServerTools({ external: {}, accommodation: vi.fn(), journey: vi.fn(async () => ({ body: result })), onJourneyResult: value => captured.push(value as typeof result) });
+  const search = bindings.find(binding => binding.descriptor.name === "search_journeys")!;
+  const searched = await search.operation({}, { requestId: "execution" });
+  expect(searched.body.searchResultId).toBe("journey-search-1"); expect(captured).toHaveLength(1);
+  const compare = bindings.find(binding => binding.descriptor.name === "compare_journeys")!;
+  await expect(compare.operation({ searchResultId: "foreign" }, { requestId: "execution" })).resolves.toMatchObject({ statusCode: 404 });
+  await expect(compare.operation({ searchResultId: "journey-search-1" }, { requestId: "execution" })).resolves.toMatchObject({ body: { source: "verified-journey-search-result", candidates: [{ candidateId: "journey-1" }] } });
+});
+
 it("restores a Trip without Profile, invokes fixed-egress through the existing operation, and persists the grounded final", async () => {
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
   await trips.repository.create(stateA, createTrip(secondId, "server trip", "2026-09-18T00:00:00Z"));

@@ -39,6 +39,8 @@ import { createTravelDiscoveryOperation } from "./usecases/discover-travel-candi
 import type { TravelKnowledgeRetriever } from "@raiquora/agent/travel-discovery";
 import type { ModelTokenRates } from "@raiquora/agent/model-usage-cost";
 import type { ResearchExecutionLedger } from "@raiquora/agent/research-execution";
+import type { JourneySearchResponse } from "@raiquora/journey/journey-search-service";
+import { projectPublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
 
 /** Constructed only after authentication, once per request. No Travel credentials or raw trace sink. */
 export function createProductionServerAgent(executionId: string, environment: Readonly<Record<string, string | undefined>> = process.env) {
@@ -69,6 +71,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
    requestedSearchType: environment.TRAVEL_KNOWLEDGE_SEARCH_TYPE === "HYBRID" ? "HYBRID" : "SEMANTIC",
  }));
  let turnResearchLedger: ResearchExecutionLedger | undefined;
+ let verifiedJourneyResults: JourneySearchResponse[] = [];
  const discovery = createTravelDiscoveryOperation({ retrievers: discoveryRetrievers, ledger: () => turnResearchLedger,
    ...(environment.BEDROCK_RERANK_MODEL_ARN ? { reranker: new BedrockCandidateReranker(environment.BEDROCK_RERANK_MODEL_ARN) } : {}) });
  const call = (operation: AgentOperation) => async (request: object) => {
@@ -88,6 +91,12 @@ export function createProductionServerAgent(executionId: string, environment: Re
    } } : {}),
    modelTokenRates: pricingLookup(environment.BEDROCK_MODEL_PRICING_JSON),
    onResearchLedger: ledger => { turnResearchLedger = ledger; },
+   projectResult: result => {
+     const published = new Set(result.claims.filter(claim => claim.groundingStatus === "supported").flatMap(claim => claim.evidenceIds));
+     const presentation = verifiedJourneyResults.map(search => projectPublicJourneyPresentation(search, published)).find(Boolean);
+     verifiedJourneyResults = [];
+     return presentation ? { publicJourneyPresentation: presentation } : {};
+   },
    stateTable: required("SERVER_STATE_TABLE_NAME"), tripTable: required("TRIP_TABLE_NAME"),
    newExecutionId: () => executionId, weather,
    model: new BedrockConversationModel(new AwsBedrockConverseClient(), {
@@ -104,6 +113,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
      journey: createJourneySearchOperation(journey),
      representativeTimetable: createRepresentativeTimetableOperation(new S3RepresentativeTimetableRepository(s3, required("AI_TIMETABLE_BUCKET"), "ai-timetable")),
      accommodation: createFixedEgressAccommodationOperation(required("FIXED_EGRESS_PROVIDER_FUNCTION_ARN")),
+     onJourneyResult: result => { verifiedJourneyResults.push(result); },
      external: {
        searchPlaceMedia: call(createPlaceMediaSearchOperation(places)),
        searchWeb: call(createWebSearchOperation(webSearch)),

@@ -1,5 +1,4 @@
 import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
-import { formatRouteClockTime } from "@raiquora/train/route-time";
 import type {
   ConversationGuidance,
   ConversationSubmission,
@@ -8,6 +7,7 @@ import {
   type ConversationHistoryRepository,
 } from "../../usecases/concierge/conversation-history-repository";
 import { renderPublicPlanPresentation } from "./public-plan-presentation-view";
+import { renderPublicJourneyPresentation } from "./public-journey-presentation-view";
 import {
   buildConversationFeedback,
   type ConversationFeedbackV2,
@@ -16,14 +16,9 @@ import {
   defaultJourneySearchPreferences,
   isJourneyRankingPreference,
   isTransferPace,
-  type JourneyRankingPreference,
   type JourneySearchPreferences,
-  type TransferPace,
 } from "@raiquora/journey/journey-search-preferences";
-import type {
-  ViewerAgentJourneyPlan,
-  ViewerAgentResponse,
-} from "../../domain/viewer-agent-response";
+import type { ViewerAgentResponse } from "../../domain/viewer-agent-response";
 import type { TripContext } from "@raiquora/trip/travel-profile";
 import type { PlaceMediaSearchResult } from "@raiquora/trip/place-media";
 import type { GroundAccessArea, GroundAccessMatrix, GroundAccessRoute } from "@raiquora/trip/ground-access";
@@ -103,7 +98,6 @@ export interface AiGuidePanelController {
   notify(text: string): void;
 }
 
-let journeyPlanSequence = 0;
 
 export function configureAiGuidePanel(
   elements: AiGuidePanelElements,
@@ -264,13 +258,16 @@ export function configureAiGuidePanel(
 
   const addProposalAction = (message: HTMLElement, response: ViewerAgentResponse) => {
     if (typeof response === "string") return;
-    if ("tripCostProposal" in response && elements.onTripCostProposal) {
+    const cost = "tripCostProposal" in response ? response.tripCostProposal : undefined;
+    const consultation = "consultationRequestProposal" in response ? response.consultationRequestProposal : undefined;
+    const update = "tripUpdateProposal" in response ? response.tripUpdateProposal : undefined;
+    if (cost && elements.onTripCostProposal) {
       const button = document.createElement("button"); button.type = "button"; button.textContent = "費用の概算を確認";
-      button.addEventListener("click", () => elements.onTripCostProposal?.(response.tripCostProposal)); message.append(button);
+      button.addEventListener("click", () => elements.onTripCostProposal?.(cost)); message.append(button);
     }
-    const review = "consultationRequestProposal" in response && elements.onConsultationRequestProposal
-      ? () => elements.onConsultationRequestProposal?.(response.consultationRequestProposal)
-      : "tripUpdateProposal" in response && elements.onTripUpdateProposal ? () => elements.onTripUpdateProposal?.(response.tripUpdateProposal) : undefined;
+    const review = consultation && elements.onConsultationRequestProposal
+      ? () => elements.onConsultationRequestProposal?.(consultation)
+      : update && elements.onTripUpdateProposal ? () => elements.onTripUpdateProposal?.(update) : undefined;
     if (!review) return;
     const button = document.createElement("button");
     button.type = "button"; button.textContent = "条件の変更案を確認";
@@ -362,9 +359,9 @@ export function configureAiGuidePanel(
         resolveAssistantMessage(pendingMessage, response, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants);
         addProposalAction(pendingMessage, response);
         // Only a newly delivered V2 proposal opens the preview. Restoring history never reapplies it.
-        if (typeof response !== "string" && "consultationRequestProposal" in response) elements.onConsultationRequestProposal?.(response.consultationRequestProposal);
-        if (typeof response !== "string" && "tripCostProposal" in response && !("tripUpdateProposal" in response)) elements.onTripCostProposal?.(response.tripCostProposal);
-        if (typeof response !== "string" && "tripUpdateProposal" in response) elements.onTripUpdateProposal?.(response.tripUpdateProposal);
+        if (typeof response !== "string" && "consultationRequestProposal" in response && response.consultationRequestProposal) elements.onConsultationRequestProposal?.(response.consultationRequestProposal);
+        if (typeof response !== "string" && "tripCostProposal" in response && response.tripCostProposal && !("tripUpdateProposal" in response && response.tripUpdateProposal)) elements.onTripCostProposal?.(response.tripCostProposal);
+        if (typeof response !== "string" && "tripUpdateProposal" in response && response.tripUpdateProposal) elements.onTripUpdateProposal?.(response.tripUpdateProposal);
         if (typeof response !== "string" && "checklistProposal" in response) elements.onChecklistProposal?.(response.checklistProposal);
         if (!submitFeedback) pendingMessage.querySelector(".conversation-feedback")?.remove();
         pendingMessage.dataset.messageId = assistantMessage.messageId;
@@ -636,18 +633,11 @@ export function resolveAssistantMessage(
   item.removeAttribute("aria-label");
   if (typeof response === "string") {
     renderAssistantCopy(item, visibleAssistantText(response), animate);
-  } else if ("journeyPlan" in response) {
-    item.classList.add("ai-guide-message-journey");
-    item.replaceChildren();
-    const text = document.createElement("p");
-    text.className = "journey-plan-intro";
-    text.textContent = visibleAssistantText(response.text);
-    item.append(text, renderJourneyPlan(response.journeyPlan));
-    if (animate) typewriteText(text);
   } else {
     // V2 is a preview only until the #388/#389 writer gate. Never invoke the legacy apply callback.
     renderAssistantCopy(item, visibleAssistantText(response.text), animate);
-    if ("publicPlanPresentation" in response) item.append(renderPublicPlanPresentation(response.publicPlanPresentation));
+    if ("publicPlanPresentation" in response && response.publicPlanPresentation) item.append(renderPublicPlanPresentation(response.publicPlanPresentation));
+    if ("publicJourneyPresentation" in response && response.publicJourneyPresentation) item.append(renderPublicJourneyPresentation(response.publicJourneyPresentation));
   }
   // A question is metadata on the same turn, not a branch that hides its artifacts.
   if (typeof response !== "string" && "external" in response && response.external) {
@@ -765,217 +755,10 @@ function setFeedbackControlsDisabled(item: HTMLElement, disabled: boolean): void
   }
 }
 
-function renderJourneyPlan(
-  plan: ViewerAgentJourneyPlan,
-): HTMLElement {
-  const planSequence = ++journeyPlanSequence;
-  const container = document.createElement("section");
-  container.className = "journey-plan";
-  const tabs = document.createElement("div");
-  tabs.className = "journey-plan-tabs";
-  tabs.setAttribute("role", "tablist");
-  tabs.setAttribute("aria-label", "経路候補");
-  const panels = document.createElement("div");
-  panels.className = "journey-plan-panels";
-  const hasMultipleJourneys = plan.journeys.length > 1;
-  const excludedLabels = [...new Set([
-    ...(plan.excludedServiceTypes ?? []),
-    ...(plan.excludedTrainNames ?? []),
-    ...(plan.excludedTrainNumbers ?? []),
-  ])];
-  const requiredLabels = [...new Set([
-    ...(plan.requiredServiceTypes ?? []),
-    ...(plan.requiredTrainNames ?? []),
-    ...(plan.requiredTrainNumbers ?? []),
-  ])];
-  if (plan.transferPace && plan.rankingPreference) {
-    const conditions = document.createElement("p");
-    conditions.className = "journey-plan-conditions";
-    conditions.textContent = [
-      `乗換: ${transferPaceLabel(plan.transferPace)}`,
-      `優先: ${rankingPreferenceLabel(plan.rankingPreference)}`,
-      `最大乗換: ${plan.maxTransfers ?? 3}回`,
-      ...(excludedLabels.length
-        ? [`除外: ${excludedLabels.join("・")}`]
-        : []),
-      ...(requiredLabels.length
-        ? [`利用: ${requiredLabels.join("・")}`]
-        : []),
-      ...(plan.allowedServiceTypes?.length
-        ? [`限定: ${plan.allowedServiceTypes.join("・")}`]
-        : []),
-    ].join("　");
-    container.append(conditions);
-  }
-
-  plan.journeys.forEach((journey, index) => {
-    const tab = document.createElement("button");
-    const panel = document.createElement("article");
-    const tabId = `journey-tab-${planSequence}-${index}`;
-    const panelId = `journey-panel-${planSequence}-${index}`;
-    if (hasMultipleJourneys) {
-      tab.type = "button";
-      tab.id = tabId;
-      tab.className = "journey-plan-tab";
-      tab.setAttribute("role", "tab");
-      tab.setAttribute("aria-controls", panelId);
-      tab.setAttribute("aria-selected", String(index === 0));
-      tab.textContent = `候補${index + 1}`;
-    }
-    panel.id = panelId;
-    panel.className = "journey-plan-panel";
-    if (hasMultipleJourneys) {
-      panel.setAttribute("role", "tabpanel");
-      panel.setAttribute("aria-labelledby", tabId);
-      panel.tabIndex = 0;
-    }
-    panel.hidden = index !== 0;
-    panel.replaceChildren(
-      renderJourneySummary(journey),
-      renderJourneyTimeline(journey),
-    );
-    tab.addEventListener("click", () => {
-      for (const candidate of tabs.querySelectorAll<HTMLButtonElement>("[role=tab]")) {
-        candidate.setAttribute("aria-selected", String(candidate === tab));
-      }
-      for (const candidate of panels.querySelectorAll<HTMLElement>("[role=tabpanel]")) {
-        candidate.hidden = candidate !== panel;
-      }
-      panel.focus({ preventScroll: true });
-    });
-    if (hasMultipleJourneys) tabs.append(tab);
-    panels.append(panel);
-  });
-  if (hasMultipleJourneys) container.append(tabs);
-  container.append(panels);
-  return container;
-}
-
-function renderJourneySummary(journey: JourneyRouteResult): HTMLElement {
-  const summary = document.createElement("div");
-  summary.className = "journey-plan-summary";
-  const time = document.createElement("strong");
-  time.textContent = `${formatRouteClockTime(journey.departureTimeMinutes)} → ${formatRouteClockTime(journey.arrivalTimeMinutes)}`;
-  const detail = document.createElement("span");
-  const duration = Math.max(0, journey.arrivalTimeMinutes - journey.departureTimeMinutes);
-  detail.textContent = `${formatDuration(duration)}・${journey.transferCount === 0 ? "乗換なし" : `乗換${journey.transferCount}回`}`;
-  summary.append(time, detail);
-  return summary;
-}
-
-function renderJourneyTimeline(
-  journey: JourneyRouteResult,
-): HTMLElement {
-  const timeline = document.createElement("div");
-  timeline.className = "journey-timeline";
-  journey.legs.forEach((leg, index) => {
-    const segment = document.createElement("section");
-    segment.className = "journey-leg";
-    segment.style.setProperty("--journey-line-color", safeLineColor(leg.lineColor));
-    const summary = document.createElement("div");
-    summary.className = "journey-leg-summary";
-    const trainLabel = [
-      leg.serviceType,
-      leg.trainName,
-      destinationLabel(leg.serviceDestination ?? leg.destinationStation),
-    ].filter(Boolean).join(" ");
-    summary.append(
-      stationRow(formatRouteClockTime(leg.departureTimeMinutes), leg.originStation),
-      segmentLine(trainLabel, leg.lineName, journeyDelayLabel(leg), leg.delayBasis),
-    );
-    summary.append(
-      stationRow(formatRouteClockTime(leg.arrivalTimeMinutes), leg.destinationStation),
-    );
-    segment.append(summary);
-    timeline.append(segment);
-    const nextLeg = journey.legs[index + 1];
-    if (nextLeg) {
-      const transfer = document.createElement("p");
-      transfer.className = "journey-transfer";
-      transfer.textContent = `${leg.destinationStation}で乗換・${Math.round(nextLeg.departureTimeMinutes - leg.arrivalTimeMinutes)}分待ち`;
-      timeline.append(transfer);
-    }
-  });
-  return timeline;
-}
-
-function stationRow(time: string, station: string): HTMLElement {
-  const row = document.createElement("span");
-  row.className = "journey-station";
-  const timeElement = document.createElement("time");
-  timeElement.textContent = time;
-  const name = document.createElement("strong");
-  name.textContent = station;
-  row.append(timeElement, name);
-  return row;
-}
-
-function segmentLine(
-  label: string,
-  lineName?: string,
-  delayLabel?: string,
-  delayBasis?: string,
-): HTMLElement {
-  const row = document.createElement("span");
-  row.className = "journey-segment";
-  const line = document.createElement("i");
-  line.setAttribute("aria-hidden", "true");
-  const text = document.createElement("span");
-  const primary = document.createElement("strong");
-  primary.textContent = label;
-  text.append(primary);
-  if (lineName) {
-    const secondary = document.createElement("small");
-    secondary.textContent = lineName;
-    text.append(secondary);
-  }
-  if (delayLabel) {
-    const delay = document.createElement("small");
-    delay.className = "journey-delay-badge";
-    delay.textContent = delayLabel;
-    if (delayBasis) {
-      delay.title = `${delayBasis}を走る近隣列車から推定`;
-    }
-    text.append(delay);
-  }
-  row.append(line, text);
-  return row;
-}
-
 export function journeyDelayLabel(leg: JourneyRouteResult["legs"][number]): string | undefined {
   const delay = Math.round(leg.delayMinutes ?? 0);
   if (delay <= 0) return undefined;
   return leg.delayStatus === "estimated"
     ? `遅延見込み +${delay}分`
     : `遅延 +${delay}分`;
-}
-
-function destinationLabel(value: string): string {
-  const destination = value.trim().replace(/駅$/u, "");
-  return destination === "" || /行き$/u.test(destination)
-    ? destination
-    : `${destination}行き`;
-}
-
-function formatDuration(minutes: number): string {
-  const rounded = Math.round(minutes);
-  const hours = Math.floor(rounded / 60);
-  return hours > 0 ? `${hours}時間${rounded % 60}分` : `${rounded}分`;
-}
-
-function safeLineColor(value: string | undefined): string {
-  return value && /^#[0-9a-f]{6}$/iu.test(value) ? value : "#8b96a1";
-}
-
-function transferPaceLabel(value: TransferPace): string {
-  return { hurried: "急ぐ", standard: "普通", relaxed: "ゆっくり" }[value];
-}
-
-function rankingPreferenceLabel(value: JourneyRankingPreference): string {
-  return {
-    balanced: "バランス",
-    "earliest-arrival": "早く着く",
-    "latest-departure": "遅く出る",
-    "fewest-transfers": "乗換少なめ",
-  }[value];
 }
