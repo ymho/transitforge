@@ -6,6 +6,7 @@ export interface LoadingScreenElements {
 }
 
 export interface LoadingScreenController {
+  start(message: string): void;
   setMessage(message: string): void;
   complete(): void;
   fail(message: string): void;
@@ -17,9 +18,22 @@ const completionDelayMilliseconds = 450;
 export function createLoadingScreen(
   elements: LoadingScreenElements,
 ): LoadingScreenController {
-  let complete = false;
+  let complete = elements.screen.hidden;
+  let generation = 0;
 
   return {
+    start(message) {
+      generation += 1;
+      complete = false;
+      elements.app.dataset.loadingState = "loading";
+      elements.app.setAttribute("aria-busy", "true");
+      elements.screen.hidden = false;
+      elements.screen.setAttribute("aria-hidden", "false");
+      elements.screen.setAttribute("role", "status");
+      elements.screen.classList.remove("loading-screen-complete", "loading-screen-error");
+      elements.message.textContent = message;
+      elements.retry.hidden = true;
+    },
     setMessage(message) {
       if (!complete) elements.message.textContent = message;
     },
@@ -30,8 +44,9 @@ export function createLoadingScreen(
       elements.app.setAttribute("aria-busy", "false");
       elements.screen.setAttribute("aria-hidden", "true");
       elements.screen.classList.add("loading-screen-complete");
+      const completedGeneration = generation;
       globalThis.setTimeout(() => {
-        elements.screen.hidden = true;
+        if (generation === completedGeneration && complete) elements.screen.hidden = true;
       }, completionDelayMilliseconds);
     },
     fail(message) {

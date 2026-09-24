@@ -8,8 +8,8 @@ function elements() {
     setAttribute: vi.fn(),
   } as unknown as HTMLElement;
   const screen = {
-    classList: { add: vi.fn() },
-    hidden: false,
+    classList: { add: vi.fn(), remove: vi.fn() },
+    hidden: true,
     setAttribute: vi.fn(),
   } as unknown as HTMLElement;
   const message = { textContent: "starting" } as HTMLElement;
@@ -20,11 +20,16 @@ function elements() {
 afterEach(() => vi.useRealTimers());
 
 describe("loading screen", () => {
-  it("keeps the map loading state until loading completes", () => {
+  it("stays hidden during product startup and covers only explicit map loading", () => {
     vi.useFakeTimers();
     const view = elements();
     const loading = createLoadingScreen(view);
 
+    expect(loading.isComplete()).toBe(true);
+    loading.start("地図を読み込んでいます。");
+    expect(view.screen.hidden).toBe(false);
+    expect(view.app.dataset.loadingState).toBe("loading");
+    expect(view.app.setAttribute).toHaveBeenCalledWith("aria-busy", "true");
     loading.setMessage("列車を読み込んでいます。");
     expect(view.message.textContent).toBe("列車を読み込んでいます。");
     expect(view.app.dataset.loadingState).toBe("loading");
@@ -43,6 +48,7 @@ describe("loading screen", () => {
     const view = elements();
     const loading = createLoadingScreen(view);
 
+    loading.start("地図を読み込んでいます。");
     loading.fail("入力を読み込めませんでした。");
 
     expect(view.app.dataset.loadingState).toBe("error");

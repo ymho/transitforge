@@ -37,7 +37,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   const root = document.createElement("section"); root.className = "product-shell";
   const navigation: Array<[PrimaryView, string, ProductIconName]> = [["explore", "探す", "explore"], ["chat", "相談", "chat"], ["trips", "旅程", "trips"]];
   root.innerHTML = `<header class="product-header"><a href="#explore" class="product-brand" aria-label="Raiquora ホーム"><img src="/brand/raiquora-wordmark.svg" alt="" width="180" height="40"></a><button type="button" class="product-account ds-button" data-account></button></header>
-    <nav class="product-nav" aria-label="メインナビゲーション">${navigation.map(([key, label, icon]) => `<a href="#${key}" data-primary="${key}">${iconMarkup(icon)}<span>${label}</span></a>`).join("")}</nav>
+    <nav class="product-nav" aria-label="メインナビゲーション">${navigation.map(([key, label, icon]) => `<a href="#${key}" data-primary="${key}">${iconMarkup(icon)}<span>${label}</span></a>`).join("")}<button type="button" data-map="realtime" data-map-navigation>${iconMarkup("train")}<span>運行</span></button></nav>
     <section class="product-page" data-page="explore" aria-label="探す"><div class="home-hero" data-home-hero role="region" aria-roledescription="カルーセル" aria-label="西日本の旅の風景"><figure class="home-hero-media"><img data-hero-image src="/media/home-setouchi-v2.webp" width="1672" height="941" alt="瀬戸内海の島々と海辺の町" fetchpriority="high"><img data-hero-image src="/media/home-kinosaki-v2.webp" width="1942" height="809" alt="夕暮れの温泉街と柳の水路" loading="lazy" hidden><img data-hero-image src="/media/home-izumo-v2.webp" width="1774" height="887" alt="木立に包まれた神社の参道" loading="lazy" hidden><figcaption>Raiquora original images</figcaption></figure><div class="home-hero-scrim" aria-hidden="true"></div><div class="home-hero-copy"><p class="ds-eyebrow">TRIP PLANNING</p><h1>次の旅を<br>考える</h1>
     <p>行きたい場所、日程、予算、やりたいこと。決まっていることだけ入力してください。</p>
     <form class="home-prompt ds-composer"><textarea class="ds-control" id="home-prompt" aria-label="どんな旅にしたいですか？" maxlength="400" rows="1" placeholder="行きたい場所や、やりたいことを話してください"></textarea><button class="ds-button ds-button--primary" type="submit" aria-label="AIに相談する">${iconMarkup("send")}</button></form>
@@ -48,8 +48,14 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     <section class="home-card" data-signed-in-only><h2>通知</h2><div class="my-actions"><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button></div></section><section class="home-card account-journey-settings"><h2>経路検索の設定</h2><p>相談で経路を比較するときの既定値です。</p><label>乗換ペース<select data-account-transfer-pace><option value="hurried">急ぐ</option><option value="standard">普通</option><option value="relaxed">ゆっくり</option></select></label><label>経路の優先<select data-account-ranking-preference><option value="balanced">バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label></section><section class="home-card account-services"><h2>外部サービス</h2><p>旅の案内に利用する情報提供元です。</p><ul><li>GTFS-JP・公共交通オープンデータ</li><li>気象庁防災情報XML</li><li>ホットペッパーグルメ Webサービス</li><li>Wikipedia / Wikimedia Commons</li></ul></section></div></div></section>
     <button type="button" class="product-map-back ds-button" data-map-back hidden>戻る</button>`;
   app.prepend(root);
+  const header = root.querySelector<HTMLElement>(".product-header")!;
+  const explorePage = root.querySelector<HTMLElement>('[data-page="explore"]')!;
+  const syncHeader = () => { header.dataset.overlay = String(app.dataset.primaryView === "explore" && explorePage.scrollTop < 24); };
+  explorePage.addEventListener("scroll", syncHeader, { passive: true });
   const consultationEntry = root.querySelector<HTMLElement>(".home-prompt")!, consultationExamples = root.querySelector<HTMLElement>(".home-examples")!;
-  const consultationLoginNotice = document.createElement("p"); consultationLoginNotice.className = "home-login-required"; consultationLoginNotice.textContent = "相談を始めるにはログインしてください。";
+  const consultationLoginNotice = document.createElement("div"); consultationLoginNotice.className = "home-login-required";
+  consultationLoginNotice.innerHTML = '<p>旅行相談を始めるにはログインしてください。</p><button type="button" class="ds-button" data-home-login>ログインして相談する</button>';
+  consultationLoginNotice.querySelector("button")!.addEventListener("click", ports.login);
   consultationEntry.before(consultationLoginNotice);
   const services = root.querySelector<HTMLUListElement>(".account-services ul")!;
   services.className = "external-service-list";
@@ -65,7 +71,9 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   textarea.addEventListener("compositionend", () => { composing = false; });
   textarea.addEventListener("keydown", (event) => { if (event.key === "Enter" && (event.isComposing || composing)) event.stopPropagation(); });
   root.querySelector("form")!.addEventListener("submit", (event) => {
-    event.preventDefault(); if (composing || !textarea.value.trim()) return;
+    event.preventDefault();
+    if (ports.authState().status !== "signed-in") { ports.login(); return; }
+    if (composing || !textarea.value.trim()) return;
     const prompt = textarea.value.trim(); textarea.value = ""; saveDraft(); navigate("chat"); ports.newConsultation(prompt);
   });
   root.querySelectorAll<HTMLButtonElement>("[data-example]").forEach((button) => button.addEventListener("click", () => { textarea.value = button.dataset.example!; saveDraft(); textarea.focus(); }));
@@ -141,9 +149,13 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     }));
     if (window.location.hash === "#trip" && typeof window.history.state?.tripId === "string") ports.openTrip(window.history.state.tripId);
     root.querySelectorAll("[data-retry]").forEach((button) => button.addEventListener("click", () => { void ports.retry().then(render, render); }));
+    if (!signedIn && (current === "chat" || current === "trips")) { window.history.replaceState(null, "", "#explore"); apply(); }
   };
   const apply = () => {
-    const route = window.location.hash.slice(1);
+    let route = window.location.hash.slice(1);
+    if ((route === "chat" || route === "trips") && ports.authState().status !== "signed-in") {
+      window.history.replaceState(null, "", "#explore"); route = "explore";
+    }
     const previous = root.querySelector<HTMLElement>(`[data-page="${current}"]`); if (previous) scrolls.set(current, previous.scrollTop);
     const isMap = route === "map";
     const isTrip = route === "trip";
@@ -152,7 +164,9 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     else if (!isMap) current = "explore";
     app.dataset.primaryView = isMap ? "map" : isTrip ? "trip" : current;
     for (const page of root.querySelectorAll<HTMLElement>("[data-page]")) page.hidden = isMap || isTrip || page.dataset.page !== current;
-    root.querySelectorAll<HTMLElement>("[data-primary]").forEach((a) => { if (a.dataset.primary === (isMap ? mapReturn : current)) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    root.querySelectorAll<HTMLElement>("[data-primary]").forEach((a) => { if (!isMap && a.dataset.primary === current) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    const mapNavigation = root.querySelector<HTMLElement>("[data-map-navigation]")!;
+    if (isMap) mapNavigation.setAttribute("aria-current", "page"); else mapNavigation.removeAttribute("aria-current");
     root.querySelector<HTMLElement>("[data-map-back]")!.hidden = !isMap;
     if (!isMap && current === "chat") ports.openChat();
     if (isTrip && typeof window.history.state?.tripId === "string") ports.openTrip(window.history.state.tripId);
@@ -162,8 +176,10 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
       ports.openMap(routeState?.mapMode === "simulation" ? "simulation" : "realtime");
     }
     const page = root.querySelector<HTMLElement>(`[data-page="${current}"]`); if (page) page.scrollTop = scrolls.get(current) ?? 0;
+    syncHeader();
   };
   function navigate(view: PrimaryView) {
+    if ((view === "chat" || view === "trips") && ports.authState().status !== "signed-in") { ports.login(); return; }
     if (view !== current && ports.canLeave?.() === false) return;
     if (!document.dispatchEvent(new Event("transitforge:profile-leave", { cancelable: true }))) return;
     window.history.pushState(null, "", `#${view}`); apply();

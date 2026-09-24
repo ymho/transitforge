@@ -4,7 +4,7 @@
 
 現在の共通要素は次の2つ
 
-- `loading-screen`: Application起動全体の状態表示
+- `loading-screen`: 地図・列車Viewerを明示的に開いたときだけ表示する初期化状態
 - `sheet-transition`: ConciergeとTrain Detailsが共有するSheet開閉規則
 
 会話 旅程 列車 日時などFeatureの語彙を持つViewとCSSはここへ置かない

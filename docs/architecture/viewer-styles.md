@@ -77,7 +77,8 @@ CSSだけの整理ではDOM classや見た目を変更しない
 ## AI-first shell (#453)
 
 - Consumer表示では通常cardの角丸20px/controlの角丸12pxを共通tokenとして使う。
-  v6と同じ階層を保ち、heroは30px、専用ページ枠は24px、選択chipはpillとする。
+  Home heroだけはcardへ閉じ込めずviewport幅・高さを使う写真面とし、headerのロゴとアカウント導線を重ねる。
+  Heroを離れてスクロールしたheaderはsolid surfaceへ戻し、ロゴ色も背景に合わせて反転する。
   Homeの重複状態ラベルと相談例の技術的な注意書きは表示しない（入力例のaccessible labelは維持）。
   写真を持たないTripには装飾アイコンを使う。Home heroはRaiquora所有の西日本観光写真を背景に使い、
   コピー直下だけの局所的なscrimで可読性を保つ。3枚の切替は利用者操作だけで行い、自動再生しない。
@@ -91,8 +92,10 @@ CSSだけの整理ではDOM classや見た目を変更しない
   全server Trip一覧は#454へ残す。未認証/読取不能は空の保存済みTrip一覧と同義にしない。
 - Home送信は既存ConversationSessionの新規相談へ渡す。Trip採用/変更は既存Proposal確認だけ。
 - 地図はsubview初回表示で起動する。初期の文章相談は同じAgent RuntimeとHTTP Toolを使用し、
-  Mapbox token/WebGL/列車描画データを待たない。現在地を起点として推定しない。
-- URLは3つの主要ナビ、headerのアカウント導線、地図subviewだけを保持し、Trip documentやowner/共有secretは保持しない。
+  Mapbox token/WebGL/列車描画データを待たない。全画面loadingは地図を明示的に開いた初回だけ表示し、
+  Homeや相談の起動状態には使わない。現在地を起点として推定しない。
+- URLは「探す・相談・旅程・運行」の主要ナビ、headerのアカウント導線、地図subviewだけを保持し、Trip documentやowner/共有secretは保持しない。
+  相談と保存旅程は認証済み利用者だけが開け、未認証のdirect routeはHomeへ戻す。
   入力下書きはタブ内sessionStorage（Home/Conversation ID単位）、読取不能でも操作を妨げない。
 - DEV専用`?home-preview=loading|empty|error|unauthenticated|data`で表示状態を再現できる。
   dataは明示サンプルの読取専用Trip/候補を本番共通componentへ渡し、保存・予約・調査済み情報を捏造しない。
