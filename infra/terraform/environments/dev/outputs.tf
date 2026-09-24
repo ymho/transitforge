@@ -44,6 +44,11 @@ output "bedrock_agent_function_name" {
   value       = aws_lambda_function.bedrock_agent.function_name
 }
 
+output "agent_stream_log_group_name" {
+  description = "会話本文を含まないAgent実行診断をCDで集計するCloudWatch Logs group名。"
+  value       = one(values(aws_cloudwatch_log_group.agent_stream)).name
+}
+
 output "ai_provider_egress_ip_address" {
   description = "旅行提供者など送信元IP許可制の外部提供者へ登録するAI Lambdaの固定IPv4アドレス。"
   value       = aws_eip.ai_egress.public_ip
