@@ -105,6 +105,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
      region: environment.AWS_REGION ?? "unknown",
      capabilities: modelId => bedrockCapabilitiesFromConfiguration(modelId, environment.AWS_REGION ?? "unknown", environment.BEDROCK_CAPABILITY_MATRIX_JSON),
      promptCachingEnabled: environment.BEDROCK_PROMPT_CACHING_ENABLED === "true",
+     log: (event, fields) => { console.warn(JSON.stringify({ event, ...fields })); },
    }),
    diagnostics: { record: async event => { console.info(JSON.stringify({ event: "agent_diagnostic", ...event })); } },
    log: (event, fields) => { console.warn(JSON.stringify({ event, ...fields })); },

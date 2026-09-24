@@ -163,8 +163,14 @@ jobs:
             --filter-pattern '"agent_stream"' \
             --query 'events[].message' \
             --output json > agent-stream-events.json
+          aws logs filter-log-events \
+            --log-group-name "$AGENT_STREAM_LOG_GROUP" \
+            --start-time "$start_time" \
+            --filter-pattern '"agent_model_response_rejected"' \
+            --query 'events[].message' \
+            --output json > agent-model-shapes.json
           node tools/deployment/summarize-agent-diagnostics.mjs \
-            agent-diagnostics.json agent-stream-events.json | tee -a "$GITHUB_STEP_SUMMARY"
+            agent-diagnostics.json agent-stream-events.json agent-model-shapes.json | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Generate public authentication configuration
         if: env.CD_MODE == 'deploy'
