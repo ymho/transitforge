@@ -1,7 +1,7 @@
 import type { AgentRuntimeFeature, AgentRuntimeStatus } from "@raiquora/agent/runtime-contract";
 import type { TravelProgressReport, TravelProgressScenario } from "./travel-progress-evaluation";
 
-export const agentEvaluationDatasetSchemaVersion = "agent-eval-dataset-v5";
+export const agentEvaluationDatasetSchemaVersion = "agent-eval-dataset-v6";
 export const agentEvaluationObservationSchemaVersion = "agent-eval-observations-v2";
 
 export const agentEvaluationCategories = [
@@ -35,7 +35,7 @@ export interface ConversationQualityScenario {
   };
   expected: {
     destination:
-      | { mode: "specified"; name: string; municipality: string; forbiddenMunicipalities: string[] }
+      | { mode: "specified"; name: string; municipality: string; optionalExpansionMunicipalities: string[] }
       | { mode: "discovery"; minimumCandidates: number; maximumCandidates: number; recommendationScope: string; forbiddenMainCandidates: string[] };
     relativeDates: Array<{ sourceText: string; calendarDate: string }>;
     forbiddenRepeatedQuestions: string[];

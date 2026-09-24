@@ -4,6 +4,7 @@ import {
 } from "@raiquora/trip/external-travel-information";
 import type { ExternalTravelInformation } from "@raiquora/trip/external-travel-information";
 import type {
+  PlaceAdministrativeArea,
   PlaceMedia,
   PlaceMediaProvider,
   PlaceMediaQuery,
@@ -133,6 +134,7 @@ function mapboxPlaces(value: unknown): PlaceMedia[] {
     const metadata = isRecord(properties.metadata) ? properties.metadata : {};
     const website = likelyOfficialWebsiteUrl(metadata.website);
     const categories = stringArray(properties.poi_category);
+    const administrativeAreas = mapboxAdministrativeAreas(properties.context);
     const openingHours = openingHoursText(metadata.open_hours);
     const reviewAverage = boundedRating(metadata.rating);
     const reviewCount = nonNegativeInteger(metadata.review_count);
@@ -141,6 +143,7 @@ function mapboxPlaces(value: unknown): PlaceMedia[] {
       name: name.slice(0, 120),
       ...(categories.length ? { categories } : {}),
       ...(text(properties.full_address) ? { address: text(properties.full_address).slice(0, 240) } : {}),
+      ...(administrativeAreas.length ? { administrativeAreas } : {}),
       latitude: coordinate.latitude,
       longitude: coordinate.longitude,
       sourceUrl: "https://www.mapbox.com/",
@@ -150,6 +153,20 @@ function mapboxPlaces(value: unknown): PlaceMedia[] {
       ...(reviewAverage === undefined ? {} : { reviewAverage }),
       ...(reviewCount === undefined ? {} : { reviewCount }),
     }];
+  });
+}
+
+const administrativeAreaKinds = ["neighborhood", "locality", "place", "district", "region", "country"] as const;
+
+function mapboxAdministrativeAreas(value: unknown): PlaceAdministrativeArea[] {
+  if (!isRecord(value)) return [];
+  return administrativeAreaKinds.flatMap((kind): PlaceAdministrativeArea[] => {
+    const area = value[kind];
+    if (!isRecord(area)) return [];
+    const name = text(area.name);
+    if (!name) return [];
+    const providerPlaceId = text(area.mapbox_id);
+    return [{ kind, name: name.slice(0, 120), ...(providerPlaceId ? { providerPlaceId } : {}) }];
   });
 }
 

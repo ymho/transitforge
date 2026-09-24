@@ -14,8 +14,11 @@ it("normalizes Mapbox access and Place envelopes through the production evidence
     destination: { entityId: "place:b" }, mode: "walking", durationMinutes: 14.2 }, evidence: [{ id: "route", provider: "mapbox", sourceUrl: "https://example.test/route" }] } }, context)[0]!;
   expect(access.applicabilityFacts?.[0]).toMatchObject({ kind: "access_requirement", lowerBoundMinutes: 15 });
   const place = externalTravelEvidence({ result: { status: "available", freshness: "fresh", data: { places: [{ providerPlaceId: "branch-a", name: "同名店", sourceUrl: "https://example.test/branch-a",
-    targetBinding: { status: "resolved" }, summary: "紹介" }] }, evidence: [{ id: "place", provider: "mapbox", sourceUrl: "https://example.test/branch-a" }] } }, context)[0]!;
+    targetBinding: { status: "resolved" }, summary: "紹介", administrativeAreas: [{ kind: "place", name: "出雲市" }, { kind: "region", name: "島根県" }],
+    image: { url: "https://images.example.test/place.jpg", descriptionUrl: "https://example.test/place-photo", attribution: "Example", hotlinkAllowed: true } }] },
+    evidence: [{ id: "place", provider: "mapbox", sourceUrl: "https://example.test/branch-a" }] } }, context)[0]!;
   expect(place.observation?.subjectKey).toBe("place:mapbox:branch-a"); expect(place.applicabilityFacts?.[0]).toMatchObject({ kind: "visit_requirement", reservation: "unknown" });
+  expect(place.facts.administrativeAreas).toEqual(["place:出雲市", "region:島根県"]);
 });
 it("marks a truncated page as partial instead of treating the first 1200 chars as complete", () => {
   const text = "紹介".repeat(700) + "臨時休業";

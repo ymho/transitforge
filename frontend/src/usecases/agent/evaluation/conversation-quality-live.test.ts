@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationQualityScenario } from "./evaluation-contract";
-import { evaluateConversationQualityLive, presentedPhotoCount } from "./conversation-quality-live";
+import { evaluateConversationQualityLive, presentedPhotoCount, validOptionalExpansion } from "./conversation-quality-live";
 
 const scenario: ConversationQualityScenario = {
   id: "relaxed", name: "ゆっくり旅",
@@ -19,6 +19,24 @@ const scenario: ConversationQualityScenario = {
 };
 
 describe("live conversation quality evaluator", () => {
+  it("keeps a specified destination as the anchor while allowing explicit nearby expansion", () => {
+    expect(validOptionalExpansion(
+      "出雲大社は出雲市にあります。余裕があれば松江市へ足を延ばす案は任意です。",
+      "出雲大社",
+      "松江市",
+    )).toBe(true);
+    expect(validOptionalExpansion(
+      "出雲大社は出雲市にあります。宿泊と観光は松江市を中心にします。",
+      "出雲大社",
+      "松江市",
+    )).toBe(false);
+    expect(validOptionalExpansion(
+      "出雲大社は松江市にある観光地です。別案として温泉も検討できます。",
+      "出雲大社",
+      "松江市",
+    )).toBe(false);
+  });
+
   it("counts typed public photos with legacy observation compatibility and deduplication", () => {
     expect(presentedPhotoCount(["photo:public"], undefined)).toBe(1);
     expect(presentedPhotoCount(undefined, ["photo:legacy"])).toBe(1);

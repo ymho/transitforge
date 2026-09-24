@@ -111,7 +111,8 @@ it("unknown selected Evidence is never converted into a successful answer", () =
 const photographedPlace: Evidence = { ...placeEvidence, id: "place-photo", subject: "出雲大社", facts: { ...placeEvidence.facts,
   sourceTitle: "出雲大社", sourceExcerpt: "御本殿や神楽殿を巡り、門前町の散策を楽しめます。", sourceUrl: "https://example.org/izumo",
   placeName: "出雲大社", imageUrl: "https://images.example.org/izumo.jpg", imageSourceUrl: "https://photos.example.org/izumo",
-  imageAttribution: "撮影者 Example", imageLicense: "CC BY 4.0", boundSourceUrls: ["https://example.org/izumo"] },
+  imageAttribution: "撮影者 Example", imageLicense: "CC BY 4.0", boundSourceUrls: ["https://example.org/izumo"],
+  administrativeAreas: ["place:出雲市", "region:島根県"] },
   references: [{ ...placeEvidence.references[0]!, sourceRef: "https://example.org/izumo" }] };
 const plan = (overrides: Record<string, unknown> = {}) => JSON.stringify({ kind: "travel-plan", startDate: "2026-09-22", candidates: [{
   evidenceId: photographedPlace.id, quote: photographedPlace.facts.sourceExcerpt, photoEvidenceId: photographedPlace.id,
@@ -129,6 +130,10 @@ it("renders a grounded itinerary, all-party AI estimate, and bound photo in one 
   expect(result.text).toContain("目的地までの往復交通は含めていません");
   expect(result.text).toContain('https://images.example.org/izumo.jpg "Raiquora verified photo"');
   expect(result.claims.map(({ kind }) => kind)).toEqual(["fact", "inference"]);
+});
+it("passes verified administrative areas to the travel-plan selection prompt", () => {
+  const instruction = groundedAnswerInstruction([photographedPlace]);
+  expect(instruction).toContain('"administrativeAreas":["place:出雲市","region:島根県"]');
 });
 it("renders a provider-decoded typed presentation without reparsing responseText as the source of truth", () => {
   const presentation = JSON.parse(plan()) as Record<string, unknown>;

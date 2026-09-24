@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "agent-eval-dataset-v5",
+  "schemaVersion": "agent-eval-dataset-v6",
   "conversationQualityScenarios": [
     {
       "id": "feedback-izumo-provisional-plan",
@@ -39,7 +39,7 @@
           "mode": "specified",
           "name": "出雲大社",
           "municipality": "出雲市",
-          "forbiddenMunicipalities": [
+          "optionalExpansionMunicipalities": [
             "松江市"
           ]
         },
@@ -104,7 +104,7 @@
           "mode": "specified",
           "name": "出雲大社",
           "municipality": "出雲市",
-          "forbiddenMunicipalities": [
+          "optionalExpansionMunicipalities": [
             "松江市"
           ]
         },
