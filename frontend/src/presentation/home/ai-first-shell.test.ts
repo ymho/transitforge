@@ -33,15 +33,29 @@ it("starts Home without initializing Map or requiring profile/authentication", (
   expect(document.querySelector("main")!.dataset.primaryView).toBe("chat");
   expect(ports.openMap).not.toHaveBeenCalled();
 });
-it("keeps login visible in the header and sends signed-in people to My", () => {
+it("uses an account icon in the header and sends signed-in people to My", () => {
   const signedOut = setup();
-  expect(document.querySelector("[data-account]")!.textContent).toBe("ログイン / 新規登録"); click("[data-account]"); expect(signedOut.ports.login).toHaveBeenCalledOnce();
+  expect(document.querySelector("[data-account] .ds-icon")).not.toBeNull();
+  expect(document.querySelector("[data-account]")!.textContent).toBe("");
+  expect(document.querySelector("[data-account]")!.getAttribute("aria-label")).toBe("ログインまたは新規登録");
+  click("[data-account]"); expect(signedOut.ports.login).toHaveBeenCalledOnce();
   document.body.innerHTML = '<main id="app"></main>';
   const signedIn = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) });
-  expect(document.querySelector("[data-account]")!.textContent).toBe("山田 花子"); click("[data-account]");
+  expect(document.querySelector("[data-account]")!.textContent).toBe(""); click("[data-account]");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("my"); expect(document.querySelector("[data-my-account-status]")!.textContent).toContain("ログイン中");
-  expect(document.querySelector("[data-my-account-status]")!.textContent).toContain("最大8時間");
+  expect(document.querySelector("[data-my-account-status]")!.textContent).not.toContain("最大8時間");
+  expect(document.querySelectorAll("[data-primary]")).toHaveLength(3);
+  expect(document.querySelector('[data-primary="my"]')).toBeNull();
   click("[data-my-logout]"); expect(signedIn.ports.logout).toHaveBeenCalledOnce();
+});
+it("shows three western Japan hero photos and switches them only on explicit selection", () => {
+  setup();
+  const images = [...document.querySelectorAll<HTMLImageElement>("[data-hero-image]")];
+  expect(images).toHaveLength(3); expect(images[0]!.src).toContain("home-setouchi-v2.webp");
+  expect(images[0]!.hidden).toBe(false); expect(images[1]!.hidden).toBe(true);
+  click('[data-hero-page="1"]');
+  expect(images[0]!.hidden).toBe(true); expect(images[1]!.hidden).toBe(false);
+  expect(document.querySelector('[data-hero-page="1"]')!.getAttribute("aria-current")).toBe("true");
 });
 it("does not submit IME composition and keeps input across tab navigation / re-render", () => {
   const { ports, shell } = setup(); const input = document.querySelector("textarea")!;
@@ -52,11 +66,11 @@ it("does not submit IME composition and keeps input across tab navigation / re-r
   expect(sessionStorage.getItem("raiquora:home-prompt-draft")).toBe(input.value);
 });
 it("map is a subview; requested simulation and source tab survive history restoration", () => {
-  const { shell, ports } = setup(); shell.navigate("my"); shell.showMap("simulation");
+  const { shell, ports } = setup(); shell.navigate("trips"); shell.showMap("simulation");
   expect(ports.openMap).toHaveBeenCalledExactlyOnceWith("simulation");
-  expect(document.querySelector('[data-primary="my"]')!.getAttribute("aria-current")).toBe("page");
-  expect(window.history.state).toEqual({ returnView: "my", mapMode: "simulation" });
-  click("[data-map-back]"); expect(document.querySelector("main")!.dataset.primaryView).toBe("my");
+  expect(document.querySelector('[data-primary="trips"]')!.getAttribute("aria-current")).toBe("page");
+  expect(window.history.state).toEqual({ returnView: "trips", mapMode: "simulation" });
+  click("[data-map-back]"); expect(document.querySelector("main")!.dataset.primaryView).toBe("trips");
 });
 it.each(["loading", "available", "unavailable", "unauthenticated"] as const)("renders %s without inventing reservations or completion", (state) => {
   setup({ read: () => ({ state, trips: [], candidates: [] }) });

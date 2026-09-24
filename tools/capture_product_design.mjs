@@ -36,9 +36,9 @@ try {
     await app.locator(".home-next").scrollIntoViewIfNeeded();
     await capture("home-cards");
     await ref.locator('[data-view="profile"]:visible').first().click();
-    await app.locator('[data-primary="my"]').click();
-    // Seed comparable preferences through real UI, not a second storage contract.
-    await app.locator("[data-profile]").click();
+    await app.locator("[data-account]").click();
+    await capture("my");
+    // Seed comparable preferences through the account page's real editor, not a second storage contract.
     await app.locator('[name="station"]').fill("京都");
     await app.locator('[name="party"]').fill("2");
     await app.locator('[name="budget"]').fill("バランス重視");
@@ -46,12 +46,8 @@ try {
     await app.locator('[data-choice="pace"][data-value="0.2"]').click();
     await app.locator('[data-choice="interest-food"]').click();
     await app.locator('[type="submit"][form="travel-profile-form"]').click();
-    await app.locator("#travel-profile-page [data-close]").first().click();
-    await capture("my");
     await ref.locator("#openProfileEditor").click();
-    await app.locator("[data-profile]").click();
     await capture("profile");
-    await app.locator("#travel-profile-page [data-close]").first().click();
     const sampleChat = async () => {
       // Visual-only synthetic messages in the actual production message-list node.
       // No response handler, Trip, storage or Agent state is replaced.

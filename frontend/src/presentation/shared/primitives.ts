@@ -1,9 +1,10 @@
-export type ProductIconName = "account" | "chat" | "close" | "explore" | "notifications" | "send" | "train" | "trips";
+export type ProductIconName = "account" | "chat" | "close" | "compose" | "explore" | "notifications" | "send" | "train" | "trips";
 
 const paths: Record<ProductIconName, string> = {
   account: '<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0"/>',
   chat: '<path d="M20 15a4 4 0 0 1-4 4H8l-4 2V7a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v8Z"/><path d="M8 9h8M8 13h5"/>',
   close: '<path d="m6 6 12 12M18 6 6 18"/>',
+  compose: '<path d="M20 15a4 4 0 0 1-4 4H8l-4 2V7a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4"/><path d="M12 7v6M9 10h6"/>',
   explore: '<circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/>',
   notifications: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/>',
   send: '<path d="m4 12 16-8-6 16-2.5-6.5L4 12Z"/><path d="m11.5 13.5 3-3"/>',

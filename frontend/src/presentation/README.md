@@ -24,4 +24,5 @@
 - `iconMarkup`: 固定SVG icon。Unicode文字をナビゲーションiconに使わない
 
 feature固有componentはこれらを組み合わせ、色・文字・間隔は `styles/tokens.css` の
-`--product-*` tokenを参照する。Product UIではgradient、serif、強いshadowを使わない。
+`--product-*` tokenを参照する。Product UIではserifと強いshadowを使わない。gradientは装飾面に
+使わず、写真上の文字を読めるようにする局所的なscrimに限って使用する。

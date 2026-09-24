@@ -35,13 +35,13 @@ export interface AiFirstShellPorts {
 export function configureAiFirstShell(document: Document, app: HTMLElement, ports: AiFirstShellPorts) {
   const window = document.defaultView!;
   const root = document.createElement("section"); root.className = "product-shell";
-  const navigation: Array<[PrimaryView, string, ProductIconName]> = [["explore", "探す", "explore"], ["chat", "相談", "chat"], ["trips", "旅程", "trips"], ["my", "アカウント", "account"]];
+  const navigation: Array<[PrimaryView, string, ProductIconName]> = [["explore", "探す", "explore"], ["chat", "相談", "chat"], ["trips", "旅程", "trips"]];
   root.innerHTML = `<header class="product-header"><a href="#explore" class="product-brand" aria-label="Raiquora ホーム"><img src="/brand/raiquora-wordmark.svg" alt="" width="180" height="40"></a><button type="button" class="product-account ds-button" data-account></button></header>
     <nav class="product-nav" aria-label="メインナビゲーション">${navigation.map(([key, label, icon]) => `<a href="#${key}" data-primary="${key}">${iconMarkup(icon)}<span>${label}</span></a>`).join("")}</nav>
-    <section class="product-page" data-page="explore" aria-label="探す"><div class="home-hero"><div class="home-hero-copy"><p class="ds-eyebrow">TRIP PLANNING</p><h1>次の旅を<br>考える</h1>
+    <section class="product-page" data-page="explore" aria-label="探す"><div class="home-hero" data-home-hero role="region" aria-roledescription="カルーセル" aria-label="西日本の旅の風景"><figure class="home-hero-media"><img data-hero-image src="/media/home-setouchi-v2.webp" width="1672" height="941" alt="瀬戸内海の島々と海辺の町" fetchpriority="high"><img data-hero-image src="/media/home-kinosaki-v2.webp" width="1942" height="809" alt="夕暮れの温泉街と柳の水路" loading="lazy" hidden><img data-hero-image src="/media/home-izumo-v2.webp" width="1774" height="887" alt="木立に包まれた神社の参道" loading="lazy" hidden><figcaption>Raiquora original images</figcaption></figure><div class="home-hero-scrim" aria-hidden="true"></div><div class="home-hero-copy"><p class="ds-eyebrow">TRIP PLANNING</p><h1>次の旅を<br>考える</h1>
     <p>行きたい場所、日程、予算、やりたいこと。決まっていることだけ入力してください。</p>
     <form class="home-prompt ds-composer"><textarea class="ds-control" id="home-prompt" aria-label="どんな旅にしたいですか？" maxlength="400" rows="1" placeholder="行きたい場所や、やりたいことを話してください"></textarea><button class="ds-button ds-button--primary" type="submit" aria-label="AIに相談する">${iconMarkup("send")}</button></form>
-    <div class="home-examples" aria-label="相談の入力例">${["のんびりできる旅を考えたい", "歴史ある街を歩きたい", "おいしいものを楽しみたい"].map((text) => `<button class="ds-button" type="button" data-example="${text}">${text}</button>`).join("")}</div></div><figure class="home-hero-media ds-media-frame"><img src="/media/home-rail-journey.webp" width="1536" height="1024" alt="緑の山あいを走る日本の列車" fetchpriority="high"><figcaption>Raiquora original image</figcaption></figure></div>
+    <div class="home-examples" aria-label="相談の入力例">${["のんびりできる旅を考えたい", "歴史ある街を歩きたい", "おいしいものを楽しみたい"].map((text) => `<button class="ds-button" type="button" data-example="${text}">${text}</button>`).join("")}</div></div><div class="home-hero-pagination" aria-label="背景写真を選ぶ">${["瀬戸内", "温泉街", "神社"].map((label, index) => `<button type="button" data-hero-page="${index}" aria-label="${label}の風景を表示"${index === 0 ? ' aria-current="true"' : ""}></button>`).join("")}</div></div>
     <div data-home-live></div><section class="home-secondary home-rail-feature ds-surface"><div><p class="ds-eyebrow">RAIL MAP</p><h2>列車・運行情報</h2><p>リアルタイムの運行状況や、日時を指定した列車の動きを地図で確認できます。</p><button class="ds-button" type="button" data-map="realtime">${iconMarkup("train")}リアルタイム運行状況</button><button class="ds-button" type="button" data-map="simulation">日時指定で見る</button></div>${travelDecoration("rail")}</section></section>
     <section class="product-page" data-page="trips" aria-label="旅程" hidden><div class="trip-list-heading">${pageHeadingMarkup("YOUR TRIPS", "旅程", "次の旅も、考え中の旅も。ここから続きの相談や確認を始められます。")}</div><div data-trip-list></div></section>
     <section class="product-page" data-page="my" aria-label="アカウント" hidden><div class="my-shell">${pageHeadingMarkup("ACCOUNT", "アカウント")}<div class="my-grid"><section class="home-card my-account-card ds-surface"><h2>ログイン</h2><p data-my-account-status></p><button class="ds-button" type="button" data-my-login>ログイン / 新規登録</button><button class="ds-button" type="button" data-my-logout hidden>ログアウト</button></section><section class="home-card account-profile-card ds-surface" data-signed-in-only><div id="travel-profile-page" class="travel-profile-page" aria-label="旅行プロフィール設定"></div></section>
@@ -69,6 +69,13 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     const prompt = textarea.value.trim(); textarea.value = ""; saveDraft(); navigate("chat"); ports.newConsultation(prompt);
   });
   root.querySelectorAll<HTMLButtonElement>("[data-example]").forEach((button) => button.addEventListener("click", () => { textarea.value = button.dataset.example!; saveDraft(); textarea.focus(); }));
+  const heroImages = [...root.querySelectorAll<HTMLImageElement>("[data-hero-image]")];
+  const heroPages = [...root.querySelectorAll<HTMLButtonElement>("[data-hero-page]")];
+  heroPages.forEach((button) => button.addEventListener("click", () => {
+    const selected = Number(button.dataset.heroPage);
+    heroImages.forEach((image, index) => { image.hidden = index !== selected; });
+    heroPages.forEach((page, index) => index === selected ? page.setAttribute("aria-current", "true") : page.removeAttribute("aria-current"));
+  }));
   root.querySelector("[data-account]")!.addEventListener("click", () => {
     if (ports.authState().status === "signed-in") navigate("my"); else ports.login();
   });
@@ -83,10 +90,11 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     try { input = ports.read(); } catch { input = { state: "unavailable", trips: [], candidates: [] }; }
     const view = homeReadModel(input, ports.now());
     const auth = ports.authState(), account = root.querySelector<HTMLButtonElement>("[data-account]")!;
-    account.textContent = auth.status === "signed-in" ? auth.displayName : "ログイン / 新規登録";
+    account.innerHTML = iconMarkup("account");
     account.setAttribute("aria-label", auth.status === "signed-in" ? "アカウントを開く" : "ログインまたは新規登録");
+    account.title = account.getAttribute("aria-label")!;
     const myStatus = root.querySelector<HTMLElement>("[data-my-account-status]")!, myLogin = root.querySelector<HTMLButtonElement>("[data-my-login]")!, myLogout = root.querySelector<HTMLButtonElement>("[data-my-logout]")!;
-    myStatus.textContent = auth.status === "signed-in" ? `${auth.displayName} としてログイン中です。このタブのログインは開始から最大8時間、自動更新されます。` : "旅程やプロフィールを保存するにはログインしてください。";
+    myStatus.textContent = auth.status === "signed-in" ? `${auth.displayName} としてログイン中です。` : "旅程やプロフィールを保存するにはログインしてください。";
     myLogin.hidden = auth.status === "signed-in";
     myLogout.hidden = auth.status !== "signed-in";
     const signedIn = auth.status === "signed-in";
