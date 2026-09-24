@@ -4,6 +4,7 @@ import type { TripRequest } from "@raiquora/trip/trip-request";
 import type { ConversationSession } from "../../domain/conversation-session";
 import type { ConversationHistoryRepository, ConversationMessage } from "../concierge/conversation-history-repository";
 import type { ServerConversation, ServerConversationClient, ServerConversationMetadata } from "./server-conversation-client";
+import { projectAssistantTurn } from "../concierge/assistant-turn-projection";
 
 /** Account-scoped browser read model. It never persists Conversation data locally. */
 export class ConversationUiController {
@@ -158,7 +159,7 @@ export class ConversationUiController {
     if (latest?.revision !== snapshot.revision) throw new Error("Conversation changed while loading history");
     const entries: ConversationMessage[] = items.map((item) => item.role === "user"
       ? { messageId: `${id}:${item.sequence}`, role: "user", text: item.text }
-      : { messageId: `${id}:${item.sequence}`, role: "assistant", response: item.publicPlanPresentation ? { text: item.text, publicPlanPresentation: item.publicPlanPresentation } : item.tripCostProposal ? { text: item.text, tripCostProposal: item.tripCostProposal, ...(item.tripUpdateProposal ? { tripUpdateProposal: item.tripUpdateProposal } : {}) } : item.consultationRequestProposal ? { text: item.text, consultationRequestProposal: item.consultationRequestProposal } : item.tripUpdateProposal ? { text: item.text, tripUpdateProposal: item.tripUpdateProposal } : item.text });
+      : { messageId: `${id}:${item.sequence}`, role: "assistant", response: assistantResponse(item) });
     this.sessions = this.sessions.map(session => session.id === id ? toSession(latest!) : session);
     this.histories.set(id, entries); this.notify(); return structuredClone(entries);
   }
@@ -187,4 +188,7 @@ function metadataOf(value: ConversationSession): ServerConversationMetadata {
 function metadataFor(value: Partial<ServerConversationMetadata>): ServerConversationMetadata {
   return { title: value.title ?? "新しい会話", scope: value.scope ?? "general", summary: value.summary ?? "",
     resolvedTopics: value.resolvedTopics ?? [], pendingTopics: value.pendingTopics ?? [], ...(value.tripId ? { tripId: value.tripId } : {}), ...(value.draftRequest ? { draftRequest: value.draftRequest } : {}) };
+}
+function assistantResponse(item: import("./server-conversation-client").ServerConversationMessage): import("../../domain/viewer-agent-response").ViewerAgentResponse {
+  return projectAssistantTurn({ response: item.text, ...item });
 }

@@ -37,6 +37,7 @@ export function createConversationTurnApplication(dependencies: {
         counts: { validated: 1 }, refs: [presentationReceipt.presentationId] });
       result = { status: runtime.status, response: runtime.response,
         ...(runtime.publicPlanPresentation ? { publicPlanPresentation: runtime.publicPlanPresentation } : {}),
+        ...(runtime.publicJourneyPresentation ? { publicJourneyPresentation: runtime.publicJourneyPresentation } : {}),
         ...(runtime.researchExecution ? { researchExecution: reserveResearchResultSave(runtime.researchExecution) } : {}),
         ...(runtime.turnObservation ? { turnObservation: runtime.turnObservation } : {}),
         ...(presentationReceipt ? { presentationReceipt } : {}),
@@ -44,6 +45,7 @@ export function createConversationTurnApplication(dependencies: {
       const publishedEvidenceIds = [...new Set([
         ...(runtime.publicPlanPresentation?.evidenceRefs ?? []),
         ...(runtime.publicPlanPresentation?.photoRefs ?? []),
+        ...(runtime.publicJourneyPresentation?.evidenceRefs ?? []),
         ...(runtime.claims ?? []).flatMap((claim) => claim.evidenceIds),
       ])];
       continuity = { publishedEvidenceIds, evidence: runtime.evidence ?? [] };

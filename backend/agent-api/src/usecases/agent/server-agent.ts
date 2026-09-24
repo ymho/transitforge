@@ -44,6 +44,8 @@ export interface ServerAgentDependencies {
   /** Exact provider model ID lookup. Unknown models deliberately produce incomplete cost. */
   modelTokenRates?: (model: string | undefined) => ModelTokenRates | undefined;
   onResearchLedger?: (ledger: ResearchExecutionLedger) => void;
+  /** Trusted Application projection over validated per-turn results. */
+  projectResult?: (result: AgentRuntimeResult, scope: ServerAgentScope) => Partial<AgentRuntimeResult>;
 }
 
 /** Transport-independent, per-turn composition; no shared mutable principal/tool/evidence state. */
@@ -115,6 +117,7 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
       result = { ...result, publicPlanPresentation: bindPublicPlanTarget(result.publicPlanPresentation,
         { tripId: context.taskContext.target.tripId, baseTripRevision: context.taskContext.target.tripRevision }) };
     }
+    if (result.status === "completed" || result.status === "follow_up") result = { ...result, ...dependencies.projectResult?.(result, scope) };
     await publishRuntimeDiagnostics(dependencies, result, scope.executionId);
     return result;
   } };

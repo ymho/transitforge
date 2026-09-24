@@ -1,5 +1,16 @@
 /* Figma TransitForge UI Researchを正本にした最終UIレイヤー */
 #app {
+  --product-font: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --product-paper: #f7f8f6;
+  --product-surface: #fff;
+  --product-surface-muted: #eef2f3;
+  --product-ink: #122536;
+  --product-muted: #596978;
+  --product-line: #dce3e7;
+  --product-accent: #123d5b;
+  --product-accent-hover: #0b304b;
+  --product-radius: 1.25rem;
+  --product-control-radius: .75rem;
   --glass-canvas: #f4f7fb;
   --glass-surface: rgb(250 250 250 / 70%);
   --glass-surface-strong: rgb(255 255 255 / 65%);
@@ -20,12 +31,13 @@
 
 #app {
   color: var(--glass-text);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Noto Sans JP", system-ui, sans-serif;
+  font-family: var(--product-font);
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -36,6 +48,7 @@ button {
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
+textarea:focus-visible,
 summary:focus-visible {
   outline: 3px solid rgb(0 150 246 / 34%);
   outline-offset: 2px;

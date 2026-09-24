@@ -3,7 +3,6 @@ import { createTripConsultationNavigation } from "../usecases/trip-plan/trip-con
 import { currentAuthentication } from "./auth-composition";
 import { createConversationStreamSession } from "../adapters/http/agent-stream/session";
 
-import mapboxgl from "mapbox-gl";
 import { placeCameraOffset } from "../presentation/place-explorer/place-camera-offset";
 import { accommodationProviderAttributionFromEnvironment } from "../adapters/browser/accommodation-provider-attribution";
 import { browserDigitalTwinClockEnvironment } from "../adapters/browser/digital-twin-clock-environment";
@@ -12,10 +11,7 @@ import { createRuntimeMonitor, nextBrowserFrame } from "../adapters/browser/runt
 import { applyWeather } from "../adapters/mapbox/map-weather";
 import { createLocalWeatherLayer } from "../adapters/mapbox/local-weather-layer";
 import { createGroundAccessLayer, type GroundAccessLayerController } from "../adapters/mapbox/ground-access-layer";
-import {
-  createVerifiedPlaceLayer,
-  type VerifiedPlaceLayerController,
-} from "../adapters/mapbox/place-media-layer";
+import type { VerifiedPlaceLayerController } from "../adapters/mapbox/place-media-layer";
 import {
   congestionRefreshIntervalMilliseconds,
   congestionRetryIntervalMilliseconds,
@@ -104,7 +100,6 @@ import {
   configureMapPlaceExplorer,
   type MapPlaceExplorerController,
 } from "../presentation/place-explorer/map-place-explorer";
-import { MapboxThreeTrainLayer } from "../presentation/train-viewer/rendering/mapbox-three-train-layer";
 import { RuntimeMetrics } from "../observability/runtime-metrics";
 import { configureTravelProfile } from "../presentation/concierge/travel-profile-panel";
 import { HttpServerProfileClient } from "../adapters/http/server-profile-client";
@@ -125,7 +120,7 @@ import { HttpTripSharingClient } from "../adapters/http/trip-sharing-client";
 import { consumeTripShareLink, makeTripShareLink, parseTripShareLink } from "../adapters/browser/trip-share-link";
 import { configureTripWorkspace } from "../presentation/trip-plan/trip-workspace";
 import { projectTripPlaces } from "@raiquora/trip/trip-places";
-import { createTripMapOverlay, type TripMapOverlay, type TripMapPoint, type TripMapRoute } from "../adapters/mapbox/trip-map-overlay";
+import type { TripMapOverlay, TripMapPoint, TripMapRoute } from "../adapters/mapbox/trip-map-overlay";
 import { projectTripRouteGeometry } from "../domain/trip-route-geometry";
 import { HttpInTripContextClient } from "../adapters/http/in-trip-context-client";
 import { BrowserContextWorkspaceRepository } from "../adapters/browser/context-workspace-repository";
@@ -308,7 +303,7 @@ const syncServerTripSource = (session: typeof activeConversationSession) => {
 syncServerTripSource(activeConversationSession);
 let resizeContextMap: () => void = () => undefined;
 let primaryShell: ReturnType<typeof configureAiFirstShell> | undefined;
-let startMap: () => void = () => undefined;
+let startMap: () => Promise<void> = async () => undefined;
 const scheduleContextMapResize = () => {
   requestAnimationFrame(() => resizeContextMap());
 };
@@ -322,7 +317,7 @@ configureSidebarMapModeSelection({
 });
 const focusMapWorkspace = () => {
   if (app.dataset.primaryView !== "map") primaryShell?.showMap("realtime");
-  startMap();
+  void startMap();
   contextWorkspaceController.show("map");
   app.dataset.mapFocusMode = "true";
   if (mobileChatShell.matches) mobileContextNavigation.open("map");
@@ -618,11 +613,12 @@ renderDisplayDateTime(dateTimeDisplayElements, initialDateTime);
 
 let mapStarted = false;
 const homePreview = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("home-preview") : null;
-startMap = () => {
+startMap = async () => {
   if (mapStarted) return;
   mapStarted = true;
-  try { initializeMap(); }
-  catch { status.hidden = false; status.textContent = "地図を起動できませんでした。相談は引き続き利用できます。"; }
+  status.hidden = false; status.textContent = "地図と列車表示を読み込んでいます。";
+  try { await initializeMap(); }
+  catch { mapStarted = false; status.hidden = false; status.textContent = "地図を起動できませんでした。もう一度開くと再試行できます。相談は引き続き利用できます。"; }
 };
 primaryShell = configureAiFirstShell(document, app, {
   read: () => {
@@ -657,7 +653,7 @@ primaryShell = configureAiFirstShell(document, app, {
     await serverTripList.refresh();
   },
   archiveTrip: async (id) => { await serverTripClient.archive(id); await serverTripList.refresh(); },
-  openMap: (mode) => { startMap(); selectSidebarMapMode(mode === "simulation" ? "date-time" : "realtime"); },
+  openMap: (mode) => { void startMap(); selectSidebarMapMode(mode === "simulation" ? "date-time" : "realtime"); },
   journeySettings: () => ({ transferPace: journeyTransferPace.value, rankingPreference: journeyRankingPreference.value }),
   setJourneySettings: ({ transferPace, rankingPreference }) => {
     journeyTransferPace.value = transferPace; journeyTransferPace.dispatchEvent(new Event("change", { bubbles: true }));
@@ -717,7 +713,14 @@ if (import.meta.env.DEV && homePreview === "data") {
   void import("../dev/home-preview").then(({ homePreviewSource }) => tripWorkspaceController.attach(activeConversationSession.id, homePreviewSource()));
 }
 
-function initializeMap() {
+async function initializeMap() {
+const [{ default: mapboxgl }, { MapboxThreeTrainLayer }, { createTripMapOverlay }, { createVerifiedPlaceLayer }] = await Promise.all([
+  import("mapbox-gl"),
+  import("../presentation/train-viewer/rendering/mapbox-three-train-layer"),
+  import("../adapters/mapbox/trip-map-overlay"),
+  import("../adapters/mapbox/place-media-layer"),
+  import("mapbox-gl/dist/mapbox-gl.css"),
+]);
 if (!token) {
   const missingTokenMessage =
     "Mapbox公開トークンがありません。.env.localにVITE_MAPBOX_ACCESS_TOKENを設定してください。";
@@ -1229,7 +1232,7 @@ if (!token) {
           displayedPositions = positions;
           threeTrainLayer.setPositions(positions);
           selection.updateTracking(positions);
-          const hitSource = map.getSource("train-hit-targets") as mapboxgl.GeoJSONSource;
+          const hitSource = map.getSource("train-hit-targets") as import("mapbox-gl").GeoJSONSource;
           const trainLayouts = coupledTrainLayouts(positions, formationLinks);
           hitSource.setData({
             type: "FeatureCollection",

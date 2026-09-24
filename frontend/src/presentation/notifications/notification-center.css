@@ -1,6 +1,6 @@
 .notification-center { width: min(38rem, calc(100vw - 2rem)); max-height: 85dvh; overflow: auto; border: 1px solid #dfe4e8; border-radius: 1.25rem; padding: 1.5rem; background: #fff; color: #102337; box-shadow: 0 14px 38px #12273f24; }
 .notification-center::backdrop { background: rgb(16 35 55 / 28%); }
-.notification-center h2 { margin: 0 0 1rem; font-family: "Yu Mincho", serif; font-size: 1.5rem; }
+.notification-center h2 { margin: 0 0 1rem; font: 750 1.5rem/1.4 var(--product-font); }
 .notification-center ol { padding: 0; list-style: none; }
 .notification-center li { border-top: 1px solid #dfe4e8; padding: 1rem 0; }
 .notification-center p { white-space: pre-wrap; overflow-wrap: anywhere; }

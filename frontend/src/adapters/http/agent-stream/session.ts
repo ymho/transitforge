@@ -3,6 +3,7 @@ import type { AuthSession } from "../../../usecases/auth/auth-session";
 import { ApiAuthenticationError } from "../../../usecases/auth/api-authentication-error";
 import { consumeAgentStream, AgentStreamError } from "./consumer";
 import type { AgentTurnEvent } from "@raiquora/agent/agent-progress";
+import { projectAssistantTurn } from "../../../usecases/concierge/assistant-turn-projection";
 
 export interface ConversationStreamRequest {
   conversationId: string;
@@ -74,7 +75,9 @@ export function createConversationStreamSession(options: {
               try {
                 await consumeAgentStream({ token, request, endpoint: options.endpoint ?? "/api/agent-stream", fetcher: options.fetcher,
                   signal: controller.signal, isCurrent: current, measurement: { requestStart: 0, maxSilenceMs: 0 },
-                  onEvent(event) { if (!current()) return; if (event.type === "final") final = event.publicPlanPresentation ? { text: event.response, publicPlanPresentation: event.publicPlanPresentation } : event.tripCostProposal ? { text: event.response, tripCostProposal: event.tripCostProposal, ...(event.tripUpdateProposal ? { tripUpdateProposal: event.tripUpdateProposal } : {}) } : event.consultationRequestProposal ? { text: event.response, consultationRequestProposal: event.consultationRequestProposal } : event.tripUpdateProposal ? { text: event.response, tripUpdateProposal: event.tripUpdateProposal } : event.response; onEvent?.(event); },
+                  onEvent(event) { if (!current()) return; if (event.type === "final") {
+                    final = projectAssistantTurn(event);
+                  } onEvent?.(event); },
                 });
                 break;
               } catch (error) {

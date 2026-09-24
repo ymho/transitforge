@@ -182,6 +182,15 @@ it("atomically retains public proposals in receipt/history and detects a changed
   await expect(f.turns.completeTurn(identity, lease, { ...final, tripUpdateProposal: { ...tripUpdateProposal, baseRevision: 1 } })).rejects.toMatchObject({ code: "conflict" });
   await expect(f.conversations.append(principal, conversationId, 2, [{ role: "assistant", text: "偽造", tripUpdateProposal }] as never)).rejects.toMatchObject({ code: "invalid-input" });
 });
+it("persists and replays only the public journey projection", async () => {
+  const f = await setup(), lease = await begin(f);
+  const publicJourneyPresentation = { version: "public-journey-presentation-v1" as const, presentationId: "journey-presentation:test", serviceDate: "2026-09-24", originStation: "京都", destinationStation: "出雲市", evidenceRefs: ["journey:2026-09-24:0"], journeys: [{ id: "journey-1", departureTime: "08:00", arrivalTime: "12:00", durationMinutes: 240, transferCount: 1, legs: [{ originStation: "岡山", destinationStation: "出雲市", departureTime: "09:00", arrivalTime: "12:00", serviceUid: "s1", trainNumber: "1M", serviceType: "特急", trainName: "やくも" }] }] };
+  const final = { ...result, publicJourneyPresentation };
+  await f.turns.completeTurn(identity, lease, final);
+  expect(await f.turns.beginTurn(identity, request)).toEqual({ state: "completed", result: final });
+  expect((await f.conversations.history(principal, conversationId)).items[1].publicJourneyPresentation).toEqual(publicJourneyPresentation);
+  expect(JSON.stringify([...f.records.values()])).not.toContain("rawToolOutput");
+});
 it("retains draft proposals across a lost completion response and rejects changed, foreign or client-injected proposals", async () => {
   const f = await setup(), lease = await begin(f), baseRequest = { constraints: [], assumptions: [] };
   const consultationRequestProposal = { conversationId, baseRequest, request: { ...baseRequest, goal: "美術館" }, summary: "条件案" };

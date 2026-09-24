@@ -1,7 +1,6 @@
 import type { ConversationGuidance } from "./conversation-guidance";
 import type {
   TripAccommodation,
-  TripJourneyPlan,
 } from "@raiquora/trip/travel-plan";
 import type { ExternalTravelInformation } from "@raiquora/trip/external-travel-information";
 import type { WeatherForecast } from "@raiquora/trip/weather-forecast";
@@ -14,13 +13,10 @@ import type { TripContext } from "@raiquora/trip/travel-profile";
 import type { TripUpdateProposal } from "@raiquora/trip/trip";
 import type { ChecklistProposal } from "@raiquora/trip/trip-checklist";
 import type { PublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
+import type { PublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
 
-export type ViewerAgentJourneyPlan = TripJourneyPlan;
-
-export interface ViewerAgentRichResponse {
-  text: string;
-  journeyPlan: ViewerAgentJourneyPlan;
-}
+/** Domain compatibility for pure journey follow-up rules; it is not a Browser response contract. */
+export type ViewerAgentJourneyPlan = import("@raiquora/trip/travel-plan").TripJourneyPlan;
 
 export type ViewerAgentAccommodation = TripAccommodation;
 
@@ -49,7 +45,17 @@ export interface ViewerAgentContextResponse {
   tripContext: TripContext;
 }
 
+export interface ViewerAgentTurnResponse {
+  text: string;
+  publicPlanPresentation?: PublicPlanPresentation;
+  publicJourneyPresentation?: PublicJourneyPresentation;
+  tripCostProposal?: import("@raiquora/trip/public-cost-proposal").PublicCostProposal;
+  consultationRequestProposal?: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal;
+  tripUpdateProposal?: TripUpdateProposal;
+}
+
 export type ViewerAgentResponse =
+  | ViewerAgentTurnResponse
   | { text: string; publicPlanPresentation: PublicPlanPresentation }
   | { text: string; tripCostProposal: import("@raiquora/trip/public-cost-proposal").PublicCostProposal }
   | { text: string; consultationRequestProposal: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal }
@@ -57,7 +63,6 @@ export type ViewerAgentResponse =
   | { text: string; tripUpdateProposal: TripUpdateProposal }
   | { text: string; progressSources: Array<{ url: string; evidenceId: string }> }
   | string
-  | ViewerAgentRichResponse
   | ViewerAgentConversationResponse
   | ViewerAgentExternalResponse
   | ViewerAgentContextResponse;
