@@ -294,7 +294,10 @@ export class MultiStepAgentRuntime {
           trace.replanDecided(true, "finalization_tool_calls", decisionBoundary);
           continue;
         }
-        return this.limitResult(trace, evidence, startedAt, "finalization_tool_calls");
+        // The provider can insist on another Tool even after the bounded repair.
+        // Preserve verified research instead of discarding the entire planning turn.
+        const summary = this.verifiedPlanningSummary(trace, evidence, startedAt, request);
+        return summary ?? this.limitResult(trace, evidence, startedAt, "finalization_tool_calls");
       }
       if (calls.length > 0) {
         for (const call of calls) {
@@ -402,7 +405,7 @@ export class MultiStepAgentRuntime {
           });
           if (finalResponseRequired) {
             if (planningGuard?.reason === "planning_progress_required" && sourceEvidence.length > 0) {
-              const fallback = this.verifiedSourceSummary(trace, evidence, sourceEvidence, startedAt, request);
+              const fallback = this.verifiedPlanningSummary(trace, evidence, startedAt, request);
               if (fallback) return fallback;
             }
             return this.limitResult(
@@ -695,13 +698,16 @@ export class MultiStepAgentRuntime {
     }
   }
 
-  private verifiedSourceSummary(
+  private verifiedPlanningSummary(
     trace: AgentTraceRecorder,
     evidence: Evidence[],
-    sources: Evidence[],
     startedAt: number,
     request: AgentRuntimeRequest,
   ): AgentRuntimeResult | undefined {
+    const phase = request.context?.taskContext?.phase;
+    if (request.feature !== "concierge" || (phase !== "discovery" && phase !== "draft" && phase !== "refine")) return undefined;
+    const sources = evidence.filter((source) => typeof source.facts.sourceExcerpt === "string" &&
+      source.facts.status === "available" && source.facts.freshness === "fresh");
     const selected = sources.filter((source) => supportedAnswerClaims([source]).some((claim) => claim.kind === "fact"))
       .slice(0, 3).map((source) => source.id);
     if (!selected.length) return undefined;

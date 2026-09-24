@@ -800,6 +800,26 @@ describe("MultiStepAgentRuntime", () => {
     expect(executionOrder).toEqual(["first_tool", "second_tool"]);
   });
 
+  it("answers from verified sources when a planning model requests another final-phase Tool twice", async () => {
+    const executionOrder: string[] = [];
+    const { tools, toolExecutor } = toolSetup(executionOrder);
+    const source = planningSource();
+    const output = await new MultiStepAgentRuntime({
+      model: sequenceModel([
+        toolCallResponse([{ id: "research", name: "first_tool", input: { value: "倉敷" } }]),
+        toolCallResponse([{ id: "photo", name: "second_tool", input: { value: "写真" } }]),
+        toolCallResponse([{ id: "again", name: "second_tool", input: { value: "追加写真" } }]),
+      ]), tools, toolExecutor, limits: { maxIterations: 2, maxModelCalls: 4 },
+    }).run({ executionId: "planning-repeated-tool", feature: "concierge", userRequest: "歴史を感じる旅をしたい",
+      initialEvidence: [source], context: { taskContext: { version: 1, phase: "discovery", target: { kind: "conversation" },
+        requestRevision: 1, availableProgressKinds: ["candidates"] } } });
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("倉敷の歴史的な町並み");
+    expect(output.claims).toHaveLength(1);
+    expect(executionOrder).toEqual(["first_tool"]);
+    expect(output.trace.events.at(-1)).toMatchObject({ type: "task_completed", status: "completed" });
+  });
+
   it("keeps enough default rounds for open-ended candidate and photo research before finalization", async () => {
     const executionOrder: string[] = [];
     const { tools, toolExecutor } = toolSetup(executionOrder);

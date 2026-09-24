@@ -93,7 +93,8 @@ Runtime完了時は内容を含まない`runtime`診断を追加し、`completed
 残っているmodel budgetから1回だけ修復を要求する。再失敗は一般障害ではなく`limit_reached`として安全に終了する。
 最終回答中にモデルがToolを要求した場合も、そのToolを実行せず不完全なtoolUseを履歴から除き、
 残りのmodel budgetから1回だけ確認済みEvidenceに基づく最終回答へ修復する。再度Toolを要求した場合は
-`finalization_tool_calls`として終了する。
+旅行相談で検証済みの新鮮な外部資料があるならApplicationが最大3件の出典付き要約を提示する。
+提示可能な資料がなければToolを実行・事実を捏造せず、`finalization_tool_calls`として終了する。
 最終回答で追加Toolを利用できない場合、写真未取得を理由に検証済みの旅行案を破棄しない。
 任意条件の質問だけになった場合は、検証済みの外部資料があれば最大3件の出典付き要約を
 Applicationが提示する。根拠がない場合は候補を捏造せず、残る失敗を`planning_progress_required`、
