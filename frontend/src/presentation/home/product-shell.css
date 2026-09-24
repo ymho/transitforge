@@ -145,7 +145,7 @@
 }
 .preview-notice { padding: .75rem; border: 1px solid #b88b2f; border-radius: var(--product-control-radius); background: #fff6dc; color: #69490a; }
 .product-shell :focus-visible { outline: 3px solid #426c8b; outline-offset: 3px; }
-#app[data-primary-view] .conversation-sidebar-rail, #app[data-primary-view] .ai-guide-toggle, #app[data-primary-view] #close-ai-guide, #app[data-primary-view] .context-workspace-tabs { display: none; }
+#app[data-primary-view] #close-ai-guide, #app[data-primary-view] .context-workspace-tabs { display: none; }
 #app[data-primary-view]:not([data-primary-view="map"]) :is(#map, .hud, .map-place-explorer, .map-place-detail, .train-details, .loading-screen, #map-tools) { display: none; }
 #app[data-primary-view]:not([data-primary-view="chat"]) :is(.ai-guide-panel, .trip-workspace, .trip-workspace-navigation) { display: none; }
 #app[data-primary-view="chat"] .trip-workspace-navigation { position: absolute; z-index: 16; inset: 5rem 0 auto; }

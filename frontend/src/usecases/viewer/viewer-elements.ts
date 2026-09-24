@@ -17,16 +17,11 @@ export interface ViewerElements {
   closeMapPlaceDetail: HTMLButtonElement;
   congestionToggle: HTMLButtonElement;
   aiGuidePanel: HTMLElement;
-  aiGuideToggle: HTMLButtonElement;
   closeAiGuide: HTMLButtonElement;
   aiGuideMessages: HTMLOListElement;
   aiGuideForm: HTMLFormElement;
   aiGuideInput: HTMLInputElement;
   aiGuideSubmit: HTMLButtonElement;
-  conversationSidebarRail: HTMLElement;
-  railNewConversation: HTMLButtonElement;
-  railRealtimeMap: HTMLButtonElement;
-  railTravelProfile: HTMLButtonElement;
   sidebarRealtimeMap: HTMLButtonElement;
   travelProfileToggle: HTMLButtonElement;
   aiGuideSuggestions: HTMLButtonElement[];
@@ -64,16 +59,11 @@ export function loadViewerElements(root: ParentNode): ViewerElements {
     closeMapPlaceDetail: required(root, "#close-map-place-detail"),
     congestionToggle: required(root, "#congestion-toggle"),
     aiGuidePanel: required(root, "#ai-guide-panel"),
-    aiGuideToggle: required(root, "#ai-guide-toggle"),
     closeAiGuide: required(root, "#close-ai-guide"),
     aiGuideMessages: required(root, "#ai-guide-messages"),
     aiGuideForm: required(root, "#ai-guide-form"),
     aiGuideInput: required(root, "#ai-guide-input"),
     aiGuideSubmit: required(root, "#ai-guide-submit"),
-    conversationSidebarRail: required(root, "#conversation-sidebar-rail"),
-    railNewConversation: required(root, "#rail-new-conversation"),
-    railRealtimeMap: required(root, "#rail-realtime-map"),
-    railTravelProfile: required(root, "#rail-travel-profile"),
     sidebarRealtimeMap: required(root, "#sidebar-realtime-map"),
     travelProfileToggle: required(root, "#travel-profile-toggle"),
     aiGuideSuggestions: all(root, "[data-prompt]"),

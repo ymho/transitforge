@@ -150,14 +150,11 @@ const {
   closeMapPlaceDetail,
   congestionToggle,
   aiGuidePanel,
-  aiGuideToggle,
   closeAiGuide,
   aiGuideMessages,
   aiGuideForm,
   aiGuideInput,
   aiGuideSubmit,
-  railNewConversation,
-  railRealtimeMap,
   sidebarRealtimeMap,
   travelProfileToggle,
   aiGuideSuggestions,
@@ -275,7 +272,7 @@ const scheduleContextMapResize = () => {
 };
 configureSidebarMapModeSelection({
   app,
-  realtimeModeButtons: [sidebarRealtimeMap, railRealtimeMap],
+  realtimeModeButtons: [sidebarRealtimeMap],
 });
 const focusMapWorkspace = () => {
   if (app.dataset.primaryView !== "map") primaryShell?.showMap();
@@ -331,8 +328,10 @@ closeContextWorkspace.addEventListener("click", () => {
   mobileContextNavigation.close();
 });
 contextWorkspaceTabs.hidden = false;
-railRealtimeMap.addEventListener("click", selectSidebarMapMode);
 sidebarRealtimeMap.addEventListener("click", selectSidebarMapMode);
+// The consultation controller still manages panel state, but its old map button is gone.
+const aiGuideToggle = document.createElement("button");
+aiGuideToggle.type = "button";
 aiGuideController = configureAiGuidePanel(
   {
     conversationSessionId: activeConversationSession.id,
@@ -477,9 +476,6 @@ const startNewConsultation = async (prompt: string) => {
   await createAndActivateConversation();
   aiGuideController.ask(prompt);
 };
-railNewConversation.addEventListener("click", () => {
-  void createAndActivateConversation().catch(() => aiGuideController.notify("相談を始めるにはログインしてください。"));
-});
 let initialAuthenticationNotification = true;
 let authenticationGeneration = 0;
 currentAuthentication().subscribe(() => {
@@ -509,7 +505,7 @@ configureApplicationSettingsPanel(document, {
   accommodationProviderAttribution: accommodationProviderAttributionFromEnvironment(import.meta.env),
 });
 configureNotificationCenter({ root: document.body,
-  buttons: [document.getElementById("rail-notifications")!, document.getElementById("sidebar-notifications")!],
+  buttons: [document.getElementById("sidebar-notifications")!],
   client: new HttpNotificationClient(), async navigate(tripId, itemId) {
     const trip = await serverTripClient.get(tripId); if (!trip) throw new Error("Trip unavailable");
     // Explicit navigation creates/reuses a reference, never a Trip or a second local Trip writer.
@@ -786,18 +782,6 @@ if (!token) {
     {
       onAdd: () => mapTools,
       onRemove: () => mapTools.remove(),
-    },
-    "top-right",
-  );
-  map.addControl(
-    {
-      onAdd: () => {
-        const control = document.createElement("div");
-        control.className = "ai-guide-control mapboxgl-ctrl";
-        control.append(aiGuideToggle);
-        return control;
-      },
-      onRemove: () => aiGuideToggle.remove(),
     },
     "top-right",
   );
