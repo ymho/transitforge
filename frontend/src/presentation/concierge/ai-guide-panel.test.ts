@@ -8,6 +8,7 @@ import {
   shouldFocusAiGuideInputOnOpen,
   staleResponseNotice,
   visibleAssistantText,
+  agentProgressLabel,
 } from "./ai-guide-panel";
 
 describe("AI guide trip conversation state", () => {
@@ -86,6 +87,12 @@ describe("AI guide panel focus", () => {
 });
 
 describe("AI guide panel assistant text", () => {
+  it("maps safe Application phases to short user-visible status text", () => {
+    expect(agentProgressLabel("understanding_request")).toBe("相談内容を整理しています");
+    expect(agentProgressLabel("checking_information")).toBe("必要な情報を確認しています");
+    expect(agentProgressLabel("validating_answer")).toBe("回答内容を確認しています");
+  });
+
   it("explains when a response cannot be shown after the conversation context changes", () => {
     expect(staleResponseNotice).toContain("もう一度お試しください");
   });

@@ -6,7 +6,7 @@ import { createStatefulServerAgent } from "./stateful-server-agent.js";
 export function createConversationServerAgent(options: Omit<Parameters<typeof createStatefulServerAgent>[0], "historyBeforeSequence">) {
   return createConversationTurnApplication({
     turns: new DynamoDbConversationTurnRepository(options.stateTable, options.stateClient),
-    runAgentTurn: (input, historyBeforeSequence) => createStatefulServerAgent({ ...options, historyBeforeSequence }).runAgentTurn(input),
+    runAgentTurn: (input, historyBeforeSequence, reportProgress) => createStatefulServerAgent({ ...options, historyBeforeSequence }).runAgentTurn(input, reportProgress),
     diagnostics: options.diagnostics,
     log: options.log,
   });

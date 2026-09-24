@@ -9,12 +9,13 @@ describe("agentSystemPrompt", () => {
     expect(agentSystemPrompt).toContain("未検証候補はEvidenceではありません");
     expect(agentSystemPrompt).toContain("質問必須ではありません");
     expect(agentSystemPrompt).not.toContain("Tool Evidenceだけ");
-    expect(agentSystemPrompt).toContain('"usedEvidenceIds":[]');
+    expect(agentSystemPrompt).toContain('"kind":"answer"');
+    expect(agentSystemPrompt).toContain("answer.evidenceIds");
     expect(agentSystemPrompt).toContain("agent_turn_result JSON Schemaを外側の唯一の形式");
-    expect(agentSystemPrompt).toContain("外側のagent_turn_resultのdecision fieldへ設定");
+    expect(agentSystemPrompt).toContain("目的・制約・行動・理由コードはApplicationが実行結果から記録");
     expect(agentSystemPrompt).not.toContain("<decision_summary>");
     expect(agentSystemPrompt).not.toContain("decision_summaryタグの後");
-    expect(agentSystemPrompt).toContain("in_tripのanswerだけで必須");
+    expect(agentSystemPrompt).toContain("in_tripのanswerだけで必要に応じて");
     expect(agentSystemPrompt).toContain("最大10件、重複なし");
     expect(agentSystemPrompt).toContain("キーごと省略");
   });

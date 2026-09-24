@@ -1,7 +1,7 @@
 import { parsePublicCostProposal } from "@raiquora/trip/public-cost-proposal";
 import { parseConsultationRequestProposal } from "@raiquora/trip/consultation-request-proposal";
 import { parsePublicRequestProposal } from "@raiquora/trip/public-request-proposal";
-import type { AgentTurnEvent } from "@raiquora/agent/agent-progress";
+import { agentProgressPhases, type AgentTurnEvent } from "@raiquora/agent/agent-progress";
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 import { parseResearchExecutionOutcome } from "@raiquora/agent/research-execution";
 
@@ -124,7 +124,7 @@ export class SseFrameParser {
 function record(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function validEvent(event: unknown): event is AgentTurnEvent {
   if (!record(event)) return false;
-  if (event.type === "progress") return event.phase === "running" && Object.keys(event).every(k => ["type", "phase"].includes(k));
+  if (event.type === "progress") return agentProgressPhases.includes(event.phase as typeof agentProgressPhases[number]) && Object.keys(event).every(k => ["type", "phase"].includes(k));
   if (event.type === "error") return ["agent_failed", "limit_reached", "turn_conflict"].includes(String(event.code)) && Object.keys(event).every(k => ["type", "code"].includes(k));
   try { if (event.publicPlanPresentation !== undefined) parsePublicPlanPresentation(event.publicPlanPresentation); if (event.researchExecution !== undefined) parseResearchExecutionOutcome(event.researchExecution); if (event.tripCostProposal !== undefined) parsePublicCostProposal(event.tripCostProposal); if ((event.tripUpdateProposal || event.tripCostProposal) && event.consultationRequestProposal) return false; if (event.consultationRequestProposal !== undefined) parseConsultationRequestProposal(event.consultationRequestProposal); if (event.tripUpdateProposal !== undefined) parsePublicRequestProposal(event.tripUpdateProposal); } catch { return false; }
   return event.type === "final" && ["completed", "follow_up"].includes(String(event.status)) && typeof event.response === "string" &&

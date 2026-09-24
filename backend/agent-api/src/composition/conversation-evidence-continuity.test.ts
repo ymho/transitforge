@@ -52,9 +52,8 @@ function finalPlan() {
       { period: "afternoon", title: "余裕を持って帰路につく", kind: "transport" }] }],
     estimate: { currency: "JPY", partySize: 1, nights: 1, originTravel: "excluded", lodgingClass: "standard",
       items: { transport: 0, accommodation: 18_000, sightseeing: 2_000, food: 7_000 } } }] };
-  return { message: { role: "assistant" as const, content: [{ text: JSON.stringify({ responseText: "旅行案です", presentation,
-    decision: { interpretedGoal: "出雲大社の1泊旅行を提案する", hardConstraints: [], softPreferences: [], selectedAction: "answer",
-      unresolvedFacts: [], reasonCodes: ["evidence_sufficient"], usedEvidenceIds: [sourceEvidenceId] } }) }] },
+  return { message: { role: "assistant" as const, content: [{ text: JSON.stringify({ kind: "answer", responseText: "旅行案です", presentation,
+    evidenceIds: [sourceEvidenceId] }) }] },
     stopReason: "end_turn" as const, metadata: { modelId: "synthetic", latencyMs: 1, outputMode: "application_strict" as const } };
 }
 

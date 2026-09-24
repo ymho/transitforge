@@ -23,6 +23,17 @@ it.each([true, false])("handles UTF-8 byte splits and coalesced events (split=%s
   expect(options.onEvent).toHaveBeenLastCalledWith({ type: "final", status: "completed", response: "日本語の回答" });
   expect(options.measurement.ttfiMs).toBeDefined(); expect(options.fetcher).toHaveBeenCalledOnce();
 });
+it("accepts multiple safe Application phases before the terminal event", async () => {
+  const phases = frame(1, { type: "progress", phase: "understanding_request" }) +
+    frame(2, { type: "progress", phase: "checking_information" }) +
+    frame(3, { type: "progress", phase: "validating_answer" });
+  const terminal = frame(4, { type: "final", status: "completed", response: "回答" });
+  const complete = 'event: done\ndata: {"v":1,"runId":"run","seq":5}\n\n';
+  const options = setup(stream(phases + terminal + complete));
+  await consumeAgentStream(options);
+  expect(options.onEvent.mock.calls.map(([event]) => event.type === "progress" ? event.phase : event.type))
+    .toEqual(["understanding_request", "checking_information", "validating_answer", "final"]);
+});
 it.each([progress + final, progress + done, progress + final + done.slice(0, -1), progress + final + done + progress])("rejects incomplete/out-of-order streams", async text => {
   const options = setup(stream(text)); await expect(consumeAgentStream(options)).rejects.toThrow();
   expect(options.onEvent.mock.calls.some(([e]) => e.type === "final")).toBe(false);

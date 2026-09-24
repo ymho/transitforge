@@ -36,10 +36,9 @@ it("traces production input → decision → search/Evidence → presentation �
     const statement = "外部情報は未確認、または鮮度を確認できていません。移動の成立・空き状況・天気や警報に問題がないとは判断できません。必要な情報を追加確認してください。";
     const claim = { id: "fact-0", statement, kind: "fact", evidenceIds: ["eval-evidence-1"], bindings: [{ evidenceId: "eval-evidence-1", fieldPath: "facts.candidateCount",
       subjectRef: "eval-candidates", applicabilityScope: executionId, transform: "deterministic_calculation" }] };
-    return { message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: JSON.stringify({ text: statement, claims: [claim] }), decision: {
-      interpretedGoal: "車なしの複数日案を比較し宿を維持する", hardConstraints: [], softPreferences: [], selectedAction: "answer",
-      unresolvedFacts: [], reasonCodes: ["evidence_sufficient"], usedEvidenceIds: ["eval-evidence-1"],
-    } }) }] }, stopReason: "end_turn", metadata: { modelId: "synthetic", latencyMs: 1, outputMode: "application_strict" } };
+    return { message: { role: "assistant", content: [{ text: JSON.stringify({ kind: "answer",
+      responseText: JSON.stringify({ text: statement, claims: [claim] }), evidenceIds: ["eval-evidence-1"] }) }] },
+      stopReason: "end_turn", metadata: { modelId: "synthetic", latencyMs: 1, outputMode: "application_strict" } };
   }) };
   const search = syntheticSearchBinding();
   const agent = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,

@@ -43,6 +43,7 @@ import { compileAgentPrompt } from "./context-compiler";
 import { withMeasuredResearchOutcome } from "./public-plan-presentation";
 import type { ResearchExecutionLedger } from "./research-execution";
 import type { ModelTokenRates } from "./model-usage-cost";
+import type { AgentProgressReporter } from "./agent-progress";
 
 export interface AgentRuntimeDependencies {
   model: AgentModelProvider;
@@ -67,6 +68,8 @@ export interface AgentRuntimeDependencies {
   /** Application-owned budget. Reservations happen before model/tool external calls. */
   researchLedger?: ResearchExecutionLedger;
   modelTokenRates?: (model: string | undefined) => ModelTokenRates | undefined;
+  /** Coarse Application phase only. Never model reasoning, prompts or Tool payloads. */
+  reportProgress?: AgentProgressReporter;
 }
 
 export interface AgentModelClassPolicyInput {
@@ -91,6 +94,7 @@ export class MultiStepAgentRuntime {
   }
 
   async run(request: AgentRuntimeRequest): Promise<AgentRuntimeResult> {
+    await this.dependencies.reportProgress?.("understanding_request");
     const startedAt = this.now().getTime();
     const deadline = startedAt + this.limits.maxExecutionMs;
     const trace = new AgentTraceRecorder(request.executionId, { now: this.now,
@@ -171,6 +175,7 @@ export class MultiStepAgentRuntime {
         modelCalls >= this.limits.maxModelCalls - 1 ||
         toolCalls >= this.limits.maxToolCalls
       );
+      await this.dependencies.reportProgress?.(finalResponseRequired ? "building_answer" : hasToolResults ? "comparing_options" : "understanding_request");
       // Bedrock requires toolConfig whenever the conversation history contains
       // toolUse/toolResult blocks. Keep the same capability contract attached
       // during finalization. The explicit instruction guides the model, while
@@ -247,7 +252,7 @@ export class MultiStepAgentRuntime {
           messages.push({ role: "user", content: [{ type: "text", text: invalidReferences
             ? `${responseContractRepairInstruction}\n使用可能なEvidence ID: ${JSON.stringify(evidence.slice(0, 20).map((item) => item.id))}。候補ID・Trip item IDはEvidence IDではありません。0件なら事実を引用せず、必要なToolで根拠を取得してください。`
             : outputContract.schemaHash === agentTurnPresentationOutputContract.schemaHash
-              ? `${responseContractRepairInstruction}\n現在のagent_turn_result@3ではtop-level presentationが必須です。responseTextへ旅程JSONを入れず、提示済みschemaに従うtravel-planまたはsource-explanation objectをpresentationへ設定してください。`
+              ? `${responseContractRepairInstruction}\n現在のagent_turn_result@4-presentationではkind=answerのときtop-level presentationが必須です。responseTextへ旅程JSONを入れず、提示済みschemaに従うtravel-planまたはsource-explanation objectをpresentationへ設定してください。利用者判断だけが不足する場合はkind=askを使えます。`
               : responseContractRepairInstruction }] });
           iterations++;
           trace.replanDecided(true, invalidContract, decisionBoundary);
@@ -286,6 +291,7 @@ export class MultiStepAgentRuntime {
         return this.failureResult(trace, evidence, startedAt, "missing_tool_call");
       }
       if (modelResponse.stopReason !== "tool_calls") {
+        await this.dependencies.reportProgress?.("validating_answer");
         let inTripRendered: ReturnType<typeof renderInTripAnswer> | undefined;
         // The in-trip factual channel accepts only structured references. Free prose cannot bypass
         // this boundary through a missing/invalid Decision Summary or a forged ask_user action.
@@ -305,7 +311,7 @@ export class MultiStepAgentRuntime {
               // valid Converse content. Do not replay it (or its reasoning) as assistant text.
               messages.pop();
               messages.push({ role: "user", content: [{ type: "text", text:
-                "応答の構造化contractが不正なため表示・実行していません。selectedActionはanswer/use_tool/ask_userのみです。Toolを選ぶ場合はselectedToolに名前を書くことに加え、Converseのnative toolUseで呼び出してください。回答の場合は実在Evidence IDと対応presentationからvalidなinTripAnswerPlanを返してください。変更案を説明textやAnswerPlan内のpatchで代用できません。利用者の依頼に必要な行動を再判断してください。" }] });
+                "応答の構造化contractが不正なため表示・実行していません。Toolが必要ならConverseのnative toolUseを使ってください。最終応答はkind=answerまたはkind=askです。回答の場合は実在Evidence IDと対応presentationからvalidなinTripAnswerPlanを返してください。変更案を説明textやAnswerPlan内のpatchで代用できません。利用者の依頼に必要な行動を再判断してください。" }] });
               iterations++;
               trace.replanDecided(true, "invalid_in_trip_response_contract", decisionBoundary);
               continue;
@@ -469,6 +475,7 @@ export class MultiStepAgentRuntime {
       let terminalResponse: string | undefined;
       const newlyUnavailableToolNames = new Set<string>();
       let duplicateToolCallDetected = false;
+      if (calls.length) await this.dependencies.reportProgress?.("checking_information");
       for (const call of calls) {
         let applicationFailure: string | undefined;
         const signature = toolCallSignature(call.name, call.input);

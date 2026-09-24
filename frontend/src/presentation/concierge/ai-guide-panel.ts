@@ -28,6 +28,7 @@ import type { TripContext } from "@raiquora/trip/travel-profile";
 import type { PlaceMediaSearchResult } from "@raiquora/trip/place-media";
 import type { GroundAccessArea, GroundAccessMatrix, GroundAccessRoute } from "@raiquora/trip/ground-access";
 import type { RestaurantCandidate } from "@raiquora/trip/restaurant-search";
+import type { AgentProgressPhase } from "@raiquora/agent/agent-progress";
 import { hideSheet, showSheet } from "../shared/sheet-transition";
 import { renderAssistantMarkdown, visibleAssistantText } from "./assistant-markdown";
 import {
@@ -87,7 +88,8 @@ export type AiGuidePromptHandler = (
   preferences: JourneySearchPreferences,
   conversation?: ConversationSubmission,
   onResponseMetadata?: (metadata: AgentResponseMetadata) => void,
-  options?: { requestedResearchMode: "standard" | "detailed"; researchTarget?: { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number } },
+  options?: { requestedResearchMode: "standard" | "detailed"; researchTarget?: { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number };
+    onProgress?: (phase: AgentProgressPhase) => void },
 ) => Promise<ViewerAgentResponse>;
 
 export const staleResponseNotice =
@@ -322,7 +324,9 @@ export function configureAiGuidePanel(
     let requestId: string | undefined;
     void handlePrompt(prompt, preferences(), conversation, (metadata) => {
       requestId = metadata.requestId;
-    }, { requestedResearchMode, ...(researchTarget ? { researchTarget } : {}) })
+    }, { requestedResearchMode, ...(researchTarget ? { researchTarget } : {}), onProgress: phase => {
+      if (requestedGeneration === requestGeneration && conversationSessionId === requestedSessionId) updatePendingMessage(pendingMessage, phase);
+    } })
       .then((response) => {
         if (requestedGeneration !== requestGeneration) {
           if (conversationSessionId === requestedSessionId) pendingMessage.remove();
@@ -595,6 +599,23 @@ function appendPendingMessage(
   messages.append(item);
   item.scrollIntoView({ block: "nearest" });
   return item;
+}
+
+const progressLabels: Record<AgentProgressPhase, string> = {
+  running: "考え中",
+  understanding_request: "相談内容を整理しています",
+  checking_information: "必要な情報を確認しています",
+  comparing_options: "候補を比較しています",
+  building_answer: "旅行案を組み立てています",
+  validating_answer: "回答内容を確認しています",
+};
+
+export function agentProgressLabel(phase: AgentProgressPhase): string { return progressLabels[phase]; }
+
+function updatePendingMessage(item: HTMLLIElement, phase: AgentProgressPhase): void {
+  const label = item.querySelector("span");
+  if (label) label.textContent = agentProgressLabel(phase);
+  item.setAttribute("aria-label", agentProgressLabel(phase));
 }
 
 function showStaleResponseNotice(item: HTMLLIElement): void {
