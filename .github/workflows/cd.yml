@@ -142,6 +142,29 @@ jobs:
         run: |
           echo "website_bucket=$(terraform output -raw website_bucket_name)" >> "$GITHUB_OUTPUT"
           echo "distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> "$GITHUB_OUTPUT"
+          echo "agent_stream_log_group=$(terraform output -raw agent_stream_log_group_name)" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize recent Agent failures without conversation content
+        if: env.CD_MODE == 'deploy'
+        env:
+          AGENT_STREAM_LOG_GROUP: ${{ steps.terraform.outputs.agent_stream_log_group }}
+        run: |
+          set -euo pipefail
+          start_time="$(( ($(date +%s) - 7200) * 1000 ))"
+          aws logs filter-log-events \
+            --log-group-name "$AGENT_STREAM_LOG_GROUP" \
+            --start-time "$start_time" \
+            --filter-pattern '{ $.event = "agent_diagnostic" }' \
+            --query 'events[].message' \
+            --output json > agent-diagnostics.json
+          aws logs filter-log-events \
+            --log-group-name "$AGENT_STREAM_LOG_GROUP" \
+            --start-time "$start_time" \
+            --filter-pattern '{ $.eventSource = "agent_stream" }' \
+            --query 'events[].message' \
+            --output json > agent-stream-events.json
+          node tools/deployment/summarize-agent-diagnostics.mjs \
+            agent-diagnostics.json agent-stream-events.json | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Generate public authentication configuration
         if: env.CD_MODE == 'deploy'

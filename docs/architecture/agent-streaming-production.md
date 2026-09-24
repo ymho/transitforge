@@ -88,6 +88,10 @@ Runtime完了時は内容を含まない`runtime`診断を追加し、`completed
 `building_answer`後の最終応答が構造化contractまたはEvidence表示検証に失敗した場合は、Toolを追加実行せず、
 残っているmodel budgetから1回だけ修復を要求する。再失敗は一般障害ではなく`limit_reached`として安全に終了する。
 
+CDのdeploy実行は、直近2時間の`agent_diagnostic`とstream終端を会話本文・利用者識別子・実行IDを除いて
+集計し、Job Summaryへ出力する。本番で公開エラーへ丸められた場合も、`context / runtime / save`と
+`provider_timeout / schema_invalid / failed`の境界を、個人情報を取得せずに切り分けられる。
+
 API Gateway CloudWatch roleはaccount/region単位のsingletonである。このrootには既存ownerがないため
 新gate配下で定義するが、#451 Phase 3 merge後に既存ownerがあれば統合し、二重管理しない。
 AWSで既存roleが設定済みの場合も所有権を確認してから有効化する。このPRではその設定を変更しない。
