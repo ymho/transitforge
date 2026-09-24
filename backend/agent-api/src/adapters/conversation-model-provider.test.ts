@@ -60,6 +60,16 @@ it("preserves a recognized v2 presentation when only strict Decision metadata is
     message: { content: [{ type: "text", text: "旅行案です" }] } });
   expect(result.decisionSummary).toBeUndefined();
 });
+it("preserves an independently valid presentation under the base contract when advisory Decision metadata is invalid", async () => {
+  const presentation = { kind: "travel-plan", startDate: null, candidates: [] };
+  const model: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 1, outputMode: "application_strict" },
+    message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: "旅行案です", presentation,
+      decision: { interpretedGoal: "候補提示", hardConstraints: [], softPreferences: [], selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["invented_reason"] } }) }] } }) };
+  const result = await new ConversationModelProvider(model, "turn").generate({ messages: [] });
+  expect(result).toMatchObject({ decisionSummaryStatus: "invalid", declaredPresentation: presentation,
+    message: { content: [{ type: "text", text: "旅行案です" }] } });
+  expect(result.decisionSummary).toBeUndefined();
+});
 it("preserves independently valid final Evidence selection when advisory Decision metadata is invalid", async () => {
   const model: ConversationModel = { converse: async () => ({ stopReason: "end_turn", metadata: { modelId: "fixture", latencyMs: 1, outputMode: "application_strict" },
     message: { role: "assistant", content: [{ text: JSON.stringify({ responseText: "確認済み情報を案内します",

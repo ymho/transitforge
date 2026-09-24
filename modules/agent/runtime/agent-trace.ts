@@ -409,10 +409,24 @@ function contentFreeEvent(event: AgentTraceEventInput): AgentTraceEventInput {
     case "tool_completed": return { ...event, result: hidden };
     case "response_generated": return { ...event, response: "[private-profile-content-omitted]" };
     case "turn_observed": return { ...event, observation: { outcome: event.observation.outcome, progress: [] } };
-    case "replan_decided": return { ...event, reason: "[private-profile-content-omitted]", steps: [] };
+    case "replan_decided": return { ...event,
+      reason: safeOperationalReplanReasons.has(event.reason) ? event.reason : "[private-profile-content-omitted]", steps: [] };
     default: return event;
   }
 }
+
+/** These values are Application-owned diagnostics and never contain model/user text. */
+const safeOperationalReplanReasons = new Set([
+  "tool_text_envelope", "invalid_decision_summary", "missing_native_tool_use", "decision_action_mismatch",
+  "decision_tool_mismatch", "decision_missing_requirement_mismatch", "empty_user_response", "invalid_used_evidence_ids",
+  "invalid_in_trip_response_contract", "invalid_grounded_json", "invalid_response_format", "missing_factual_claims",
+  "invalid_grounded_claim", "unsupported_grounded_claim", "unbound_response_text", "invalid_factual_references",
+  "missing_factual_presentation", "invalid_source_explanation", "invalid_source_selection", "unbound_source_excerpt",
+  "invalid_preference_reference", "unknown_preference_reference", "invalid_travel_plan", "invalid_candidate_plan",
+  "unbound_candidate_source", "missing_source_presentation",
+  "invalid_itinerary", "invalid_itinerary_activity", "invalid_itinerary_coverage", "invalid_cost_estimate",
+  "invalid_photo_reference", "unbound_candidate_photo", "reserved_photo_presentation", "unbound_concrete_value",
+]);
 
 export function summarizeTracePayload(
   value: unknown,

@@ -50,6 +50,21 @@ describe("MultiStepAgentRuntime", () => {
     });
     expect(JSON.stringify(output.trace)).not.toContain("invalid plan");
   });
+  it("keeps wire repair available after one rejected structured presentation", async () => {
+    const { tools, toolExecutor } = toolSetup([]), responseGenerator = new DefaultAgentResponseGenerator();
+    const requests: AgentModelRequest[] = [];
+    vi.spyOn(responseGenerator, "fromModel")
+      .mockImplementationOnce(() => { throw new Error("Invalid itinerary coverage"); })
+      .mockReturnValueOnce({ text: "検証済み表示", claims: [] });
+    const invalidWire = textResponse("REJECTED"); invalidWire.decisionSummaryStatus = "invalid";
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, responseGenerator,
+      model: sequenceModel([textResponse("invalid plan"), invalidWire, textResponse("repaired plan")], requests) })
+      .run(request("2日間の旅行案"));
+    expect(output.status).toBe("completed");
+    expect(output.response).toBe("検証済み表示");
+    expect(requests).toHaveLength(3);
+    expect(JSON.stringify(output)).not.toContain("REJECTED");
+  });
   it("keeps conversation-echoed preferences out of Trace after Profile consent is removed", async () => {
     const { tools, toolExecutor } = toolSetup([]);
     const result = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([textResponse("earlier-private-preference")]) }).run({
