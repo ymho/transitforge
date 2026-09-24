@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 96" role="img" aria-labelledby="title desc">
+  <title id="title">Raiquora</title>
+  <desc id="desc">Compact geometric Raiquora wordmark built from uniform monoline strokes.</desc>
+  <g fill="none" stroke="#0C2947" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <!-- shared frame / ligature rails -->
+    <path d="M14 72V31Q14 18 27 18H112M154 18H493Q506 18 506 31V72H472"/>
+    <path d="M14 72H94M206 72H338M392 72H506"/>
+
+    <!-- r+a -->
+    <path d="M28 68V41Q28 30 39 30H78Q90 30 90 42V48H52Q42 48 42 58Q42 68 52 68H94"/>
+
+    <!-- i -->
+    <path d="M112 34V68"/>
+    <path d="M112 18H113"/>
+
+    <!-- q -->
+    <path d="M132 48Q132 30 150 30H171Q190 30 190 48V68H151Q132 68 132 49Z"/>
+    <path d="M176 59L202 84"/>
+
+    <!-- u -->
+    <path d="M212 30V53Q212 68 227 68H244Q260 68 260 53V30"/>
+
+    <!-- o -->
+    <path d="M279 44Q279 30 293 30H312Q326 30 326 44V54Q326 68 312 68H293Q279 68 279 54Z"/>
+
+    <!-- r -->
+    <path d="M344 68V43Q344 30 357 30H381Q392 30 392 41"/>
+
+    <!-- a -->
+    <path d="M412 48Q412 30 430 30H452Q470 30 470 48V68H430Q412 68 412 54Q412 42 425 42H470"/>
+  </g>
+</svg>
