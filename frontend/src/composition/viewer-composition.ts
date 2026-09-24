@@ -616,9 +616,10 @@ const homePreview = import.meta.env.DEV ? new URLSearchParams(window.location.se
 startMap = async () => {
   if (mapStarted) return;
   mapStarted = true;
+  loadingScreen.start("地図と列車表示を読み込んでいます。");
   status.hidden = false; status.textContent = "地図と列車表示を読み込んでいます。";
   try { await initializeMap(); }
-  catch { mapStarted = false; status.hidden = false; status.textContent = "地図を起動できませんでした。もう一度開くと再試行できます。相談は引き続き利用できます。"; }
+  catch { mapStarted = false; status.hidden = false; status.textContent = "地図を起動できませんでした。もう一度開くと再試行できます。相談は引き続き利用できます。"; loadingScreen.fail(status.textContent); }
 };
 primaryShell = configureAiFirstShell(document, app, {
   read: () => {

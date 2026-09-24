@@ -29,9 +29,21 @@ it("starts Home without initializing Map or requiring profile/authentication", (
   expect(document.querySelector(".home-prompt")!.hasAttribute("hidden")).toBe(true);
   expect(document.querySelector('[data-primary="chat"]')!.hasAttribute("hidden")).toBe(true);
   click("[data-example]"); document.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
-  expect(ports.newConsultation).toHaveBeenCalledWith("のんびりできる旅を考えたい");
-  expect(document.querySelector("main")!.dataset.primaryView).toBe("chat");
+  expect(ports.login).toHaveBeenCalledOnce(); expect(ports.newConsultation).not.toHaveBeenCalled();
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("explore");
   expect(ports.openMap).not.toHaveBeenCalled();
+});
+it("starts consultation only after authentication and rejects a direct signed-out chat route", () => {
+  window.history.replaceState(null, "", "#chat");
+  const signedOut = setup();
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("explore");
+  expect(signedOut.ports.openChat).not.toHaveBeenCalled();
+  document.body.innerHTML = '<main id="app"></main>'; window.history.replaceState(null, "", "#explore");
+  const signedIn = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) });
+  const input = document.querySelector<HTMLTextAreaElement>("#home-prompt")!; input.value = "温泉へ行きたい";
+  document.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
+  expect(signedIn.ports.newConsultation).toHaveBeenCalledWith("温泉へ行きたい");
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("chat");
 });
 it("uses an account icon in the header and sends signed-in people to My", () => {
   const signedOut = setup();
@@ -66,11 +78,18 @@ it("does not submit IME composition and keeps input across tab navigation / re-r
   expect(sessionStorage.getItem("raiquora:home-prompt-draft")).toBe(input.value);
 });
 it("map is a subview; requested simulation and source tab survive history restoration", () => {
-  const { shell, ports } = setup(); shell.navigate("trips"); shell.showMap("simulation");
+  const { shell, ports } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) }); shell.navigate("trips"); shell.showMap("simulation");
   expect(ports.openMap).toHaveBeenCalledExactlyOnceWith("simulation");
-  expect(document.querySelector('[data-primary="trips"]')!.getAttribute("aria-current")).toBe("page");
+  expect(document.querySelector('[data-primary="trips"]')!.hasAttribute("aria-current")).toBe(false);
+  expect(document.querySelector("[data-map-navigation]")!.getAttribute("aria-current")).toBe("page");
   expect(window.history.state).toEqual({ returnView: "trips", mapMode: "simulation" });
   click("[data-map-back]"); expect(document.querySelector("main")!.dataset.primaryView).toBe("trips");
+});
+it("opens realtime operations from the persistent navigation and marks it current", () => {
+  const { ports } = setup(); click("[data-map-navigation]");
+  expect(ports.openMap).toHaveBeenCalledExactlyOnceWith("realtime");
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("map");
+  expect(document.querySelector("[data-map-navigation]")!.getAttribute("aria-current")).toBe("page");
 });
 it.each(["loading", "available", "unavailable", "unauthenticated"] as const)("renders %s without inventing reservations or completion", (state) => {
   setup({ read: () => ({ state, trips: [], candidates: [] }) });
@@ -90,7 +109,7 @@ it("all secondary actions use existing feature ports", () => {
 });
 it("opens the actual Trip as a trips subview, not a selected chat tab", () => {
   const trip = createTrip("45300000-0000-4000-8000-000000000001", "旅程", "2026-09-18T00:00:00Z", []);
-  const { ports } = setup({ read: () => ({ state: "available", trips: [trip], candidates: [] }) });
+  const { ports } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }), read: () => ({ state: "available", trips: [trip], candidates: [] }) });
   expect(document.querySelector('.home-trip-art svg[aria-hidden="true"]')).not.toBeNull();
   click('[data-primary="trips"]'); click("[data-trip]");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("trip");
