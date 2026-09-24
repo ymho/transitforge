@@ -8,11 +8,16 @@
     <title>Raiquora — Agentic Transit Intelligence</title>
   </head>
   <body>
-    <main id="app" data-loading-state="ready" data-display-mode="simulation" aria-busy="false">
+    <main id="app" data-loading-state="ready" data-display-mode="digital-twin" aria-busy="false">
       <section id="loading-screen" class="loading-screen" role="status" aria-live="polite" aria-atomic="true" aria-hidden="true" hidden>
         <div class="loading-screen-content">
           <p id="loading-screen-message" class="loading-screen-message">地図と列車表示を読み込んでいます。</p>
-          <div class="loading-screen-progress" aria-hidden="true"><span></span></div>
+          <ol class="loading-steps" aria-label="読み込み状況">
+            <li data-loading-step="map" data-state="pending"><span class="loading-step-indicator" aria-hidden="true"></span><span>地図</span></li>
+            <li data-loading-step="routes" data-state="pending"><span class="loading-step-indicator" aria-hidden="true"></span><span>路線</span></li>
+            <li data-loading-step="trains" data-state="pending"><span class="loading-step-indicator" aria-hidden="true"></span><span>列車</span></li>
+            <li data-loading-step="draw" data-state="pending"><span class="loading-step-indicator" aria-hidden="true"></span><span>描画</span></li>
+          </ol>
           <button id="loading-screen-retry" class="loading-screen-retry" type="button" hidden>再読み込み</button>
         </div>
       </section>
@@ -31,15 +36,8 @@
         <button id="close-map-place-detail" type="button" aria-label="スポット詳細を閉じる">×</button>
         <div id="map-place-detail-content" class="map-place-detail-content"></div>
       </aside>
-      <section id="control-panel" class="hud" aria-label="表示日時パネル">
-        <div id="date-time-panel" class="time-control">
-          <label class="date-time-display" aria-label="表示日時" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false">
-            <span id="date-time-date" class="date-time-date">----</span>
-            <time id="date-time-clock" class="date-time-clock">--:--:--</time>
-            <input id="date-time-input" class="date-time-input" type="datetime-local" step="1" aria-label="表示日時を変更" tabindex="-1" disabled />
-          </label>
-          <input id="display-time" type="hidden" min="240" max="1440" value="720" />
-        </div>
+      <section id="control-panel" class="hud" aria-label="地図の状態">
+        <input id="display-time" type="hidden" min="240" max="1440" value="720" />
         <p id="map-status">Mapboxを初期化しています。</p>
       </section>
       <svg class="map-tool-symbols" aria-hidden="true">
@@ -64,21 +62,7 @@
         <symbol id="icon-digital-twin" viewBox="0 0 20 20"><path d="m10 2.7 6.4 3.4-6.4 3.4-6.4-3.4zM3.6 10l6.4 3.4 6.4-3.4M3.6 13.9l6.4 3.4 6.4-3.4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.55"/></symbol>
       </svg>
       <nav id="map-tools" class="map-tools mapboxgl-ctrl mapboxgl-ctrl-group" aria-label="地図操作">
-        <button id="digital-twin-mode-toggle" type="button" aria-label="リアルタイム運行状況へ切り替え" title="リアルタイム運行状況" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-digital-twin" /></svg></button>
-        <button id="current-time-button" type="button" aria-label="現在時刻へ移動" title="現在時刻へ移動" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-clock" /></svg></button>
-        <button id="play-toggle" type="button" aria-label="再生" title="再生" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-play" /></svg></button>
-        <div class="playback-speed-menu">
-          <button id="playback-speed-menu-toggle" class="playback-speed-menu-toggle" type="button" aria-label="再生速度を選択（現在は1倍）" title="再生速度: 1倍" aria-expanded="false" aria-controls="playback-speed-options" disabled>1×</button>
-          <input id="playback-speed" type="hidden" value="0.016666666666666666" />
-          <fieldset id="playback-speed-options" class="playback-speed-controls" aria-label="再生速度の選択" hidden>
-            <button type="button" data-playback-speed="0.016666666666666666" data-playback-speed-label="1×" aria-label="1倍速" aria-pressed="true" disabled>1×</button>
-            <button type="button" data-playback-speed="1" data-playback-speed-label="60×" aria-label="60倍速" aria-pressed="false" disabled>60×</button>
-            <button type="button" data-playback-speed="10" data-playback-speed-label="600×" aria-label="600倍速" aria-pressed="false" disabled>600×</button>
-            <button type="button" data-playback-speed="60" data-playback-speed-label="3600×" aria-label="3600倍速" aria-pressed="false" disabled>3600×</button>
-          </fieldset>
-        </div>
         <button id="congestion-toggle" type="button" aria-label="混雑表示" title="混雑表示" aria-pressed="true" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-congestion" /></svg></button>
-        <button id="destination-arcs-toggle" type="button" aria-label="行先アーチ" title="行先アーチ" aria-pressed="false" disabled><svg class="map-tool-icon" aria-hidden="true"><use href="#icon-arc" /></svg></button>
       </nav>
       <button
         id="ai-guide-toggle"
@@ -96,7 +80,6 @@
         <span class="conversation-sidebar-rail-brand" title="Raiquora" aria-label="Raiquora"><svg aria-hidden="true"><use href="#icon-ai-sparkles" /></svg></span>
         <button id="rail-new-conversation" type="button" aria-label="新しい会話" title="新しい会話"><svg aria-hidden="true"><use href="#icon-new-conversation" /></svg></button>
         <button id="rail-realtime-map" type="button" aria-label="リアルタイム運行状況" title="リアルタイム運行状況"><svg aria-hidden="true"><use href="#icon-digital-twin" /></svg></button>
-        <button id="rail-date-time-mode" type="button" aria-label="日時指定シミュレーター" title="日時指定シミュレーター"><svg aria-hidden="true"><use href="#icon-calendar" /></svg></button>
         <button id="rail-travel-profile" class="conversation-sidebar-rail-profile" type="button" aria-label="アカウントの設定" title="設定"><span class="sidebar-account-avatar" aria-hidden="true">ゲ</span></button>
       </nav>
       <aside id="ai-guide-panel" class="ai-guide-panel" aria-label="旅の相談" hidden>
@@ -134,7 +117,6 @@
           <nav class="conversation-sidebar-tools" aria-label="地図モード">
             <button id="sidebar-notifications" type="button"><span>通知</span></button>
             <button id="sidebar-realtime-map" type="button"><svg aria-hidden="true"><use href="#icon-digital-twin" /></svg><span>リアルタイム運行状況</span></button>
-            <button id="sidebar-date-time-mode" type="button"><svg aria-hidden="true"><use href="#icon-calendar" /></svg><span>日時指定シミュレーター</span></button>
           </nav>
           <button id="sidebar-account-settings" class="sidebar-account-settings" type="button" aria-label="アプリ設定を開く">
             <span class="sidebar-account-avatar" aria-hidden="true">ゲ</span>

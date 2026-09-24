@@ -6,7 +6,7 @@
 .consultation-heading { grid-column: 1 / -1; display: flex; gap: .75rem; align-items: center; padding: .35rem 0 .5rem; }
 .consultation-heading-copy { margin-right: auto; }
 .consultation-heading .ds-eyebrow { margin: .35rem 0 0; color: #4d718d; }
-.consultation-heading h1 { margin: .2rem 0 .35rem; font: 750 2rem/1.25 var(--product-font); letter-spacing: -.025em; }
+.consultation-heading h1 { margin: .2rem 0 .35rem; font: 750 1.75rem/1.25 var(--product-font); letter-spacing: -.025em; }
 .consultation-page button { min-height: 44px; padding: .5rem .7rem; border: 1px solid #d9e2e9; border-radius: .75rem; background: #fff; color: #294963; font: 600 .8125rem/1.4 sans-serif; cursor: pointer; }
 .consultation-page button:disabled { opacity: .5; cursor: default; }
 .consultation-heading > .ds-button--icon { width: 44px; padding: .6rem; flex: 0 0 44px; }
@@ -23,17 +23,18 @@
 .consultation-context-actions { display: flex; gap: .4rem; }
 .consultation-conditions-toggle { display: none; }
 .consultation-messages { margin: 0; padding: 1.5rem 1.25rem; overflow-y: auto; min-height: 0; list-style: none; overscroll-behavior: contain; }
-.consultation-messages > li { margin: 0 0 1.5rem; max-width: 100%; color: #263f53; font-size: .9375rem; line-height: 1.85; overflow-wrap: anywhere; }
-.consultation-messages > .ai-guide-message-user { margin-left: auto; max-width: 85%; padding: .8rem 1rem; background: #edf4f9; border: 1px solid #d7e7f2; border-radius: 1.125rem 1.125rem .25rem 1.125rem; color: #23445e; box-shadow: none; }
+.consultation-messages > li { margin: 0 0 1.5rem; max-width: 100%; color: #263f53; font-size: .875rem; line-height: 1.75; overflow-wrap: anywhere; }
+.consultation-messages > .ai-guide-message-user { margin-left: auto; max-width: 85%; padding: .15rem 0; border: 0; border-radius: 0; color: #23445e; background: transparent; box-shadow: none; text-align: right; }
 .consultation-messages > .ai-guide-message-assistant { max-width: min(47rem, 100%); padding: 0; border: 0; box-shadow: none; background: transparent; }
 .consultation-messages > .ai-guide-message-assistant :first-child { margin-top: 0; }
 .consultation-messages > .ai-guide-message-assistant :last-child { margin-bottom: 0; }
-.consultation-messages > .ai-guide-message-failure { padding: .9rem 1rem; border: 1px solid #dfe7ec; border-radius: 1rem; background: #fff; box-shadow: 0 5px 18px #18344c0a; }
-.consultation-messages .ai-guide-failure-actions { display: flex; margin-top: .75rem; }
-.consultation-messages .ai-guide-failure-actions button { min-height: 36px; padding: .4rem .75rem; border-color: #cbd9e3; border-radius: 999px; color: #24577d; background: #f4f8fb; }
+.consultation-messages > .ai-guide-message-failure { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.consultation-messages .ai-guide-failure-actions { display: flex; margin-top: .3rem; }
+.consultation-messages .ai-guide-failure-actions button { display: grid; place-items: center; width: 30px; min-width: 30px; min-height: 30px; padding: .4rem; border: 0; border-radius: 50%; color: #527087; background: transparent; }
+.consultation-messages .ai-guide-failure-actions .ds-icon { width: 1rem; height: 1rem; }
 .consultation-composer { display: flex; gap: .625rem; padding: 1rem 1.25rem; }
-.consultation-composer input { flex: 1; min-width: 0; min-height: 48px; border: 1px solid #dbe3e9; border-radius: .875rem; padding: .75rem; color: #173650; background: #f9fbfc; font: 1rem/1.5 sans-serif; }
-.consultation-composer button { width: 48px; min-width: 48px; padding: .65rem; }
+.consultation-composer input { flex: 1; min-width: 0; min-height: 48px; border: 1px solid #dbe3e9; border-radius: .875rem; padding: .75rem; color: #173650; background: #f9fbfc; font: .9rem/1.5 sans-serif; }
+.consultation-composer button { display: grid; place-items: center; align-self: center; flex: 0 0 48px; width: 48px; min-width: 48px; min-height: 48px; padding: .65rem; }
 .consultation-composer button .ds-icon { width: 1.35rem; height: 1.35rem; }
 .consultation-conditions { min-width: 0; padding: 1.25rem 0 1.25rem 1.5rem; overflow-y: auto; align-self: start; max-height: 100%; box-sizing: border-box; border-left: 1px solid #dfe5e8; }
 .consultation-conditions h2 { font: 750 1.2rem/1.5 var(--product-font); margin: 0 0 .75rem; }
@@ -79,13 +80,13 @@
   .consultation-context-actions { display: flex; flex-wrap: wrap; gap: .35rem; width: auto; }
   .consultation-context-actions button { min-width: 0; min-height: 32px; padding: .3rem .65rem; border-color: transparent; border-radius: 999px; color: #476278; background: #e9eef1; font-size: .69rem; white-space: nowrap; }
   .consultation-messages { padding: .85rem 0 1rem; }
-  .consultation-messages > li { margin-bottom: 1.05rem; font-size: .91rem; line-height: 1.72; }
-  .consultation-messages > .ai-guide-message-user { max-width: 82%; padding: .7rem .9rem; border-radius: 1rem 1rem .25rem 1rem; }
-  .consultation-messages > .ai-guide-message-failure { max-width: 100%; padding: .85rem .9rem; }
-  .consultation-composer { gap: .25rem; margin: 0; padding: .3rem; border: 1px solid #d5dfe6; border-radius: 1.1rem; background: #fff; box-shadow: 0 8px 24px #19344c0b; }
-  .consultation-composer input { min-height: 44px; padding: .6rem .65rem; border: 0; border-radius: .8rem; background: transparent; }
+  .consultation-messages > li { margin-bottom: 1.05rem; font-size: .84rem; line-height: 1.68; }
+  .consultation-messages > .ai-guide-message-user { max-width: 82%; padding: .1rem 0; }
+  .consultation-messages > .ai-guide-message-failure { max-width: 100%; padding: 0; }
+  .consultation-composer { box-sizing: border-box; position: relative; z-index: 2; width: 100%; gap: .35rem; margin: 0; padding: .25rem; border: 1px solid #d5dfe6; border-radius: 1rem; background: #fff; box-shadow: 0 5px 16px #19344c0a; }
+  .consultation-composer input { box-sizing: border-box; min-height: 42px; padding: .55rem .7rem; border: 0; border-radius: .8rem; background: transparent; font-size: .9rem; }
   .consultation-composer input:focus { outline: none; }
-  .consultation-composer button { width: 44px; min-width: 44px; min-height: 44px; padding: .55rem; border-color: #245a80; border-radius: .85rem; color: #fff; background: #245a80; }
+  .consultation-composer button { flex-basis: 42px; width: 42px; min-width: 42px; min-height: 42px; padding: .55rem; border: 0; border-radius: .78rem; color: #fff; background: #245a80; }
   .consultation-conditions-toggle, .consultation-conditions-close { display: inline-block; }
   .consultation-conditions { display: none; position: fixed; z-index: 82; left: .75rem; right: .75rem; bottom: calc(4.25rem + env(safe-area-inset-bottom)); max-height: 70dvh; padding: 1.25rem; border: 1px solid #dfe5e8; border-radius: 1.375rem; background: #fff; box-shadow: 0 6px 20px #132d4610; }
   .consultation-conditions[data-open="true"] { display: block; }

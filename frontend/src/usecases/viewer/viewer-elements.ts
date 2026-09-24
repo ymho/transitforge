@@ -3,19 +3,11 @@ export interface ViewerElements {
   loadingScreenElement: HTMLElement;
   loadingScreenMessage: HTMLElement;
   loadingScreenRetry: HTMLButtonElement;
+  loadingSteps: HTMLElement[];
   status: HTMLParagraphElement;
   contextWorkspaceTabs: HTMLElement;
   closeContextWorkspace: HTMLButtonElement;
   displayTime: HTMLInputElement;
-  dateTimeInput: HTMLInputElement;
-  dateTimeDate: HTMLElement;
-  dateTimeClock: HTMLTimeElement;
-  playToggle: HTMLButtonElement;
-  currentTimeButton: HTMLButtonElement;
-  playbackSpeed: HTMLInputElement;
-  playbackSpeedMenuToggle: HTMLButtonElement;
-  playbackSpeedOptions: HTMLFieldSetElement;
-  playbackSpeedButtons: HTMLButtonElement[];
   mapTools: HTMLElement;
   mapPlaceExplorer: HTMLElement;
   mapPlaceExplorerList: HTMLElement;
@@ -24,8 +16,6 @@ export interface ViewerElements {
   mapPlaceDetailContent: HTMLElement;
   closeMapPlaceDetail: HTMLButtonElement;
   congestionToggle: HTMLButtonElement;
-  destinationArcsToggle: HTMLButtonElement;
-  digitalTwinModeToggle: HTMLButtonElement;
   aiGuidePanel: HTMLElement;
   aiGuideToggle: HTMLButtonElement;
   closeAiGuide: HTMLButtonElement;
@@ -36,10 +26,8 @@ export interface ViewerElements {
   conversationSidebarRail: HTMLElement;
   railNewConversation: HTMLButtonElement;
   railRealtimeMap: HTMLButtonElement;
-  railDateTimeMode: HTMLButtonElement;
   railTravelProfile: HTMLButtonElement;
   sidebarRealtimeMap: HTMLButtonElement;
-  sidebarDateTimeMode: HTMLButtonElement;
   travelProfileToggle: HTMLButtonElement;
   aiGuideSuggestions: HTMLButtonElement[];
   aiGuideContextChoices: HTMLElement;
@@ -62,19 +50,11 @@ export function loadViewerElements(root: ParentNode): ViewerElements {
     loadingScreenElement: required(root, "#loading-screen"),
     loadingScreenMessage: required(root, "#loading-screen-message"),
     loadingScreenRetry: required(root, "#loading-screen-retry"),
+    loadingSteps: requiredAll(root, "[data-loading-step]", 4, 4),
     status: required(root, "#map-status"),
     contextWorkspaceTabs: required(root, "#context-workspace-tabs"),
     closeContextWorkspace: required(root, "#close-context-workspace"),
     displayTime: required(root, "#display-time"),
-    dateTimeInput: required(root, "#date-time-input"),
-    dateTimeDate: required(root, "#date-time-date"),
-    dateTimeClock: required(root, "#date-time-clock"),
-    playToggle: required(root, "#play-toggle"),
-    currentTimeButton: required(root, "#current-time-button"),
-    playbackSpeed: required(root, "#playback-speed"),
-    playbackSpeedMenuToggle: required(root, "#playback-speed-menu-toggle"),
-    playbackSpeedOptions: required(root, "#playback-speed-options"),
-    playbackSpeedButtons: requiredAll(root, "[data-playback-speed]", 1),
     mapTools: required(root, "#map-tools"),
     mapPlaceExplorer: required(root, "#map-place-explorer"),
     mapPlaceExplorerList: required(root, "#map-place-explorer-list"),
@@ -83,8 +63,6 @@ export function loadViewerElements(root: ParentNode): ViewerElements {
     mapPlaceDetailContent: required(root, "#map-place-detail-content"),
     closeMapPlaceDetail: required(root, "#close-map-place-detail"),
     congestionToggle: required(root, "#congestion-toggle"),
-    destinationArcsToggle: required(root, "#destination-arcs-toggle"),
-    digitalTwinModeToggle: required(root, "#digital-twin-mode-toggle"),
     aiGuidePanel: required(root, "#ai-guide-panel"),
     aiGuideToggle: required(root, "#ai-guide-toggle"),
     closeAiGuide: required(root, "#close-ai-guide"),
@@ -95,10 +73,8 @@ export function loadViewerElements(root: ParentNode): ViewerElements {
     conversationSidebarRail: required(root, "#conversation-sidebar-rail"),
     railNewConversation: required(root, "#rail-new-conversation"),
     railRealtimeMap: required(root, "#rail-realtime-map"),
-    railDateTimeMode: required(root, "#rail-date-time-mode"),
     railTravelProfile: required(root, "#rail-travel-profile"),
     sidebarRealtimeMap: required(root, "#sidebar-realtime-map"),
-    sidebarDateTimeMode: required(root, "#sidebar-date-time-mode"),
     travelProfileToggle: required(root, "#travel-profile-toggle"),
     aiGuideSuggestions: all(root, "[data-prompt]"),
     aiGuideContextChoices: required(root, "#ai-guide-context-choices"),

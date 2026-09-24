@@ -14,7 +14,10 @@ function elements() {
   } as unknown as HTMLElement;
   const message = { textContent: "starting" } as HTMLElement;
   const retry = { hidden: true } as HTMLButtonElement;
-  return { app, screen, message, retry };
+  const steps = (["map", "routes", "trains", "draw"] as const).map((loadingStep) => ({
+    dataset: { loadingStep, state: "pending" },
+  } as unknown as HTMLElement));
+  return { app, screen, message, retry, steps };
 }
 
 afterEach(() => vi.useRealTimers());
@@ -30,6 +33,10 @@ describe("loading screen", () => {
     expect(view.screen.hidden).toBe(false);
     expect(view.app.dataset.loadingState).toBe("loading");
     expect(view.app.setAttribute).toHaveBeenCalledWith("aria-busy", "true");
+    expect(view.steps.map((step) => step.dataset.state)).toEqual(["loading", "pending", "pending", "pending"]);
+    loading.setStep("map", "complete");
+    loading.setStep("routes", "loading");
+    expect(view.steps.map((step) => step.dataset.state)).toEqual(["complete", "loading", "pending", "pending"]);
     loading.setMessage("列車を読み込んでいます。");
     expect(view.message.textContent).toBe("列車を読み込んでいます。");
     expect(view.app.dataset.loadingState).toBe("loading");
@@ -55,6 +62,7 @@ describe("loading screen", () => {
     expect(view.message.textContent).toBe("入力を読み込めませんでした。");
     expect(view.retry.hidden).toBe(false);
     expect(view.screen.setAttribute).toHaveBeenCalledWith("role", "alert");
+    expect(view.steps[0]!.dataset.state).toBe("error");
     expect(loading.isComplete()).toBe(false);
   });
 });

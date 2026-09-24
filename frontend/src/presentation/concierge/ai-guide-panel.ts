@@ -389,7 +389,9 @@ export function configureAiGuidePanel(
         actions.className = "ai-guide-failure-actions";
         const retry = document.createElement("button");
         retry.type = "button";
-        retry.textContent = "もう一度試す";
+        retry.setAttribute("aria-label", "もう一度試す");
+        retry.title = "もう一度試す";
+        retry.innerHTML = '<svg class="ds-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M19 12a7 7 0 1 1-2-5l3 5"/></svg>';
         retry.disabled = true;
         retry.addEventListener("click", () => {
           if (retry.disabled) return;

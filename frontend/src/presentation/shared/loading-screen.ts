@@ -3,11 +3,16 @@ export interface LoadingScreenElements {
   screen: HTMLElement;
   message: HTMLElement;
   retry: HTMLButtonElement;
+  steps?: HTMLElement[];
 }
+
+export type LoadingStep = "map" | "routes" | "trains" | "draw";
+export type LoadingStepState = "pending" | "loading" | "complete" | "error";
 
 export interface LoadingScreenController {
   start(message: string): void;
   setMessage(message: string): void;
+  setStep(step: LoadingStep, state: LoadingStepState): void;
   complete(): void;
   fail(message: string): void;
   isComplete(): boolean;
@@ -20,6 +25,10 @@ export function createLoadingScreen(
 ): LoadingScreenController {
   let complete = elements.screen.hidden;
   let generation = 0;
+  const setStep = (step: LoadingStep, state: LoadingStepState) => {
+    const element = elements.steps?.find((item) => item.dataset.loadingStep === step);
+    if (element) element.dataset.state = state;
+  };
 
   return {
     start(message) {
@@ -31,12 +40,15 @@ export function createLoadingScreen(
       elements.screen.setAttribute("aria-hidden", "false");
       elements.screen.setAttribute("role", "status");
       elements.screen.classList.remove("loading-screen-complete", "loading-screen-error");
+      for (const step of ["map", "routes", "trains", "draw"] as const) setStep(step, "pending");
+      setStep("map", "loading");
       elements.message.textContent = message;
       elements.retry.hidden = true;
     },
     setMessage(message) {
       if (!complete) elements.message.textContent = message;
     },
+    setStep,
     complete() {
       if (complete) return;
       complete = true;
@@ -51,6 +63,8 @@ export function createLoadingScreen(
     },
     fail(message) {
       if (complete) return;
+      const activeStep = elements.steps?.find((step) => step.dataset.state === "loading");
+      if (activeStep) activeStep.dataset.state = "error";
       elements.app.dataset.loadingState = "error";
       elements.app.setAttribute("aria-busy", "false");
       elements.screen.setAttribute("role", "alert");

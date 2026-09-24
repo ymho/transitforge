@@ -12,7 +12,7 @@ Trip Workspaceや会話・地図の内部componentは既存所有featureに残�
 | `presentation/styles/map-layout.css` | 地図とHUDの基礎配置 |
 | `presentation/home/product-shell.css` | Home/4ナビ/不透明な製品面/primary routeと二次導線の配置 |
 | `presentation/styles/tokens.css` | day night共通の色 影 ぼかし Focus |
-| `presentation/styles/liquid-glass-foundation.css` | 時計と地図操作のLiquid Glass基盤 |
+| `presentation/styles/liquid-glass-foundation.css` | 地図操作の既存スタイル基盤 |
 | `presentation/styles/legacy-*.css` | 複数Featureへまたがる移行中のtokenと上書き |
 | `presentation/concierge/*.css` | 会話 プロフィール 経路候補 |
 | `presentation/trip-plan/*.css` | 旅程PanelとCard |
@@ -40,8 +40,7 @@ Place Explorerは詳細取得後に同じcandidate snapshotで詳細と一覧を
 詳細は内容サイズとviewport上限を持ち、地図focusはpanelのscreen offsetを使う（座標は変更しない）。
 
 地図操作内の`hidden`は要素種別に関係なく`display: none !important`で維持する。
-再生速度のwrapperが`display: grid`でも、既存`renderDisplayMode`の非表示を上書きしない。
-mode stateや操作可否の正本はCSSへ移さない。
+日時指定モードのUIは廃止し、現在時刻への同期と運行スナップショットの可用性はPresentationのCSSで判断しない。
 
 APIやBedrockを使わず旅程を確認する場合は
 `npm run dev --workspace @raiquora/frontend -- --host 0.0.0.0`で起動し `?trip-preview=1`を付ける
@@ -52,9 +51,9 @@ APIやBedrockを使わず旅程を確認する場合は
 
 | Viewport | モード | 確認する状態 |
 | --- | --- | --- |
-| 1440 x 900 | day night | 地図 時計 操作Panel 列車詳細 |
+| 1440 x 900 | day night | 地図 混雑操作 列車詳細 |
 | 1440 x 900 | day night | Concierge 経路候補 旅程Panel |
-| 390 x 844 | day night | Bottom Sheet 入力欄 日時Picker |
+| 390 x 844 | day night | Bottom Sheet 入力欄 下部ナビとの間隔 |
 | 390 x 844 | day night | プロフィール初回表示 旅程Card |
 | 390 x 844 | day night | 観光候補の横スクロール Cardと地図Pin選択 |
 
@@ -79,7 +78,7 @@ CSSだけの整理ではDOM classや見た目を変更しない
 - Consumer表示では通常cardの角丸20px/controlの角丸12pxを共通tokenとして使う。
   Home heroだけはcardへ閉じ込めずviewport幅・高さを使う写真面とし、headerのロゴとアカウント導線を重ねる。
   Heroを離れてスクロールしたheaderはsolid surfaceへ戻し、ロゴ色も背景に合わせて反転する。
-  Home heroは中央の相談入力と、操作できない短い入力例1件だけを表示する。見出し・説明・認証CTA・写真選択UIは重ねない。
+  Home heroは中央の相談入力だけを表示し、操作できない短い入力例1件をplaceholderへ入れる。見出し・説明・認証CTA・写真選択UIは重ねない。
   写真を持たないTripには装飾アイコンを使う。Home heroはRaiquora所有の西日本観光写真を背景に使い、
   表示開始時に写真と入力例をそれぞれ1件選ぶ。写真の切替操作や自動再生は設けず、scrimで入力の可読性を保つ。
   `travel-decoration`はaria-hiddenの純粋な装飾で、実景や調査済み地点の証拠ではない。
