@@ -24,7 +24,8 @@ it("starts Home without initializing Map or requiring profile/authentication", (
   const { ports } = setup();
   expect(ports.openMap).not.toHaveBeenCalled(); expect(ports.newConsultation).not.toHaveBeenCalled();
   expect(document.body.textContent).not.toContain("調査済みのおすすめではありません");
-  expect(document.querySelector('[aria-label="相談の入力例"]')).not.toBeNull();
+  expect(document.querySelector('[aria-label="相談の入力例"]')).toBeNull();
+  expect(document.querySelector(".home-rail-feature")).toBeNull();
   expect(document.querySelector("[data-home-live]")!.textContent).toContain("ログインすると、保存した旅程");
   expect(document.querySelector(".home-prompt")!.hasAttribute("hidden")).toBe(false);
   expect(document.body.textContent).not.toContain("旅行相談を始めるにはログインしてください");
@@ -75,12 +76,11 @@ it("shows one random western Japan hero photo without selection controls", () =>
   expect(images[1]!.hidden).toBe(false);
   expect(document.querySelector("[data-hero-page]")).toBeNull();
 });
-it("shows one short consultation example as non-interactive text", () => {
+it("places one short consultation example in the prompt placeholder", () => {
   vi.spyOn(Math, "random").mockReturnValue(0);
   setup();
-  const example = document.querySelector('[aria-label="相談の入力例"]')!;
-  expect(example.textContent).toBe("例：温泉でゆっくりしたい");
-  expect(example.tagName).toBe("P");
+  const example = document.querySelector<HTMLTextAreaElement>("#home-prompt")!;
+  expect(example.placeholder).toBe("例：温泉でゆっくりしたい");
   expect(document.querySelector("[data-example]")).toBeNull();
 });
 it("does not submit IME composition and keeps input across tab navigation / re-render", () => {
@@ -91,17 +91,17 @@ it("does not submit IME composition and keeps input across tab navigation / re-r
   shell.navigate("my"); shell.navigate("explore"); shell.refresh(); expect(input.value).toBe("日本語の入力途中");
   expect(sessionStorage.getItem("raiquora:home-prompt-draft")).toBe(input.value);
 });
-it("map is a subview; requested simulation and source tab survive history restoration", () => {
-  const { shell, ports } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) }); shell.navigate("trips"); shell.showMap("simulation");
-  expect(ports.openMap).toHaveBeenCalledExactlyOnceWith("simulation");
+it("map is a realtime-only subview and source tab survives history restoration", () => {
+  const { shell, ports } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) }); shell.navigate("trips"); shell.showMap();
+  expect(ports.openMap).toHaveBeenCalledExactlyOnceWith();
   expect(document.querySelector('[data-primary="trips"]')!.hasAttribute("aria-current")).toBe(false);
   expect(document.querySelector("[data-map-navigation]")!.getAttribute("aria-current")).toBe("page");
-  expect(window.history.state).toEqual({ returnView: "trips", mapMode: "simulation" });
+  expect(window.history.state).toEqual({ returnView: "trips" });
   click("[data-map-back]"); expect(document.querySelector("main")!.dataset.primaryView).toBe("trips");
 });
 it("opens realtime operations from the persistent navigation and marks it current", () => {
   const { ports } = setup(); click("[data-map-navigation]");
-  expect(ports.openMap).toHaveBeenCalledExactlyOnceWith("realtime");
+  expect(ports.openMap).toHaveBeenCalledExactlyOnceWith();
   expect(document.querySelector("main")!.dataset.primaryView).toBe("map");
   expect(document.querySelector("[data-map-navigation]")!.getAttribute("aria-current")).toBe("page");
 });

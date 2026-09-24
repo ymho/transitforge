@@ -23,7 +23,7 @@ export interface AiFirstShellPorts {
   consultTrip?(id: string): void;
   renameTrip?(id: string, title: string): Promise<void>;
   archiveTrip?(id: string): Promise<void>;
-  openMap(mode: "realtime" | "simulation"): void;
+  openMap(): void;
   journeySettings(): { transferPace: string; rankingPreference: string };
   setJourneySettings(settings: { transferPace: string; rankingPreference: string }): void;
   openNotifications(): void;
@@ -47,9 +47,9 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   root.innerHTML = `<header class="product-header"><a href="#explore" class="product-brand" aria-label="Raiquora ホーム"><img src="/brand/raiquora-wordmark.svg" alt="" width="180" height="40"></a><button type="button" class="product-account ds-button" data-account></button></header>
     <nav class="product-nav" aria-label="メインナビゲーション">${navigation.map(([key, label, icon]) => `<a href="#${key}" data-primary="${key}">${iconMarkup(icon)}<span>${label}</span></a>`).join("")}<button type="button" data-map="realtime" data-map-navigation>${iconMarkup("train")}<span>運行</span></button></nav>
     <section class="product-page" data-page="explore" aria-label="探す"><div class="home-hero" data-home-hero role="region" aria-label="旅の相談を始める"><figure class="home-hero-media">${heroImages.map(([src, width, height, alt], index) => `<img data-hero-image src="${src}" width="${width}" height="${height}" alt="${alt}"${index === selectedHeroImage ? ' fetchpriority="high"' : ' loading="lazy" hidden'}>`).join("")}<figcaption>Raiquora original images</figcaption></figure><div class="home-hero-scrim" aria-hidden="true"></div><div class="home-hero-copy">
-    <form class="home-prompt ds-composer"><textarea class="ds-control" id="home-prompt" aria-label="どんな旅にしたいですか？" maxlength="400" rows="1" placeholder="行きたい場所や、やりたいことを話してください"></textarea><button class="ds-button ds-button--primary" type="submit" aria-label="AIに相談する">${iconMarkup("send")}</button></form>
-    <p class="home-example" aria-label="相談の入力例">例：${selectedExample}</p></div></div>
-    <div data-home-live></div><section class="home-secondary home-rail-feature ds-surface"><div><p class="ds-eyebrow">RAIL MAP</p><h2>列車・運行情報</h2><p>リアルタイムの運行状況や、日時を指定した列車の動きを地図で確認できます。</p><button class="ds-button" type="button" data-map="realtime">${iconMarkup("train")}リアルタイム運行状況</button><button class="ds-button" type="button" data-map="simulation">日時指定で見る</button></div>${travelDecoration("rail")}</section></section>
+    <form class="home-prompt ds-composer"><textarea class="ds-control" id="home-prompt" aria-label="どんな旅にしたいですか？" maxlength="400" rows="1" placeholder="例：${selectedExample}"></textarea><button class="ds-button ds-button--primary" type="submit" aria-label="AIに相談する">${iconMarkup("send")}</button></form>
+    </div></div>
+    <div data-home-live></div></section>
     <section class="product-page" data-page="trips" aria-label="旅程" hidden><div class="trip-list-heading">${pageHeadingMarkup("YOUR TRIPS", "旅程", "次の旅も、考え中の旅も。ここから続きの相談や確認を始められます。")}</div><div data-trip-list></div></section>
     <section class="product-page" data-page="my" aria-label="アカウント" hidden><div class="my-shell">${pageHeadingMarkup("ACCOUNT", "アカウント")}<div class="my-grid"><section class="home-card my-account-card ds-surface"><h2>ログイン</h2><p data-my-account-status></p><button class="ds-button" type="button" data-my-login>ログイン / 新規登録</button><button class="ds-button" type="button" data-my-logout hidden>ログアウト</button></section><section class="home-card account-profile-card ds-surface" data-signed-in-only><div id="travel-profile-page" class="travel-profile-page" aria-label="旅行プロフィール設定"></div></section>
     <section class="home-card" data-signed-in-only><h2>通知</h2><div class="my-actions"><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button></div></section><section class="home-card account-journey-settings"><h2>経路検索の設定</h2><p>相談で経路を比較するときの既定値です。</p><label>乗換ペース<select data-account-transfer-pace><option value="hurried">急ぐ</option><option value="standard">普通</option><option value="relaxed">ゆっくり</option></select></label><label>経路の優先<select data-account-ranking-preference><option value="balanced">バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label></section><section class="home-card account-services"><h2>外部サービス</h2><p>旅の案内に利用する情報提供元です。</p><ul><li>GTFS-JP・公共交通オープンデータ</li><li>気象庁防災情報XML</li><li>ホットペッパーグルメ Webサービス</li><li>Wikipedia / Wikimedia Commons</li></ul></section></div></div></section>
@@ -166,7 +166,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     if (isMap) {
       const routeState = window.history.state;
       if (["explore", "chat", "trips", "my"].includes(routeState?.returnView)) mapReturn = routeState.returnView;
-      ports.openMap(routeState?.mapMode === "simulation" ? "simulation" : "realtime");
+      ports.openMap();
     }
     const page = root.querySelector<HTMLElement>(`[data-page="${current}"]`); if (page) page.scrollTop = scrolls.get(current) ?? 0;
     syncHeader();
@@ -178,11 +178,11 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     window.history.pushState(null, "", `#${view}`); apply();
   }
   root.querySelectorAll<HTMLAnchorElement>("[data-primary], .product-brand").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); navigate(link.hash.slice(1) as PrimaryView); }));
-  function showMap(mode: "realtime" | "simulation") {
+  function showMap() {
     if (ports.canLeave?.() === false) return;
-    mapReturn = current; window.history.pushState({ returnView: current, mapMode: mode }, "", "#map"); apply();
+    mapReturn = current; window.history.pushState({ returnView: current }, "", "#map"); apply();
   }
-  root.querySelectorAll<HTMLButtonElement>("[data-map]").forEach((button) => button.addEventListener("click", () => showMap(button.dataset.map as "realtime" | "simulation")));
+  root.querySelectorAll<HTMLButtonElement>("[data-map]").forEach((button) => button.addEventListener("click", () => showMap()));
   root.querySelector("[data-map-back]")!.addEventListener("click", () => navigate(mapReturn));
   window.addEventListener("popstate", apply); window.addEventListener("hashchange", apply);
   document.addEventListener("transitforge:travel-profile-changed", render);

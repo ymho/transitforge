@@ -35,8 +35,8 @@ it("marks a failed answer and lets the user retry the same prompt", async () => 
 
   controller.ask("歴史ある街を歩きたい");
   await vi.waitFor(() => expect(messages.querySelector(".ai-guide-message-failure")).not.toBeNull());
-  const retry = [...messages.querySelectorAll<HTMLButtonElement>("button")]
-    .find((candidate) => candidate.textContent === "もう一度試す")!;
+  const retry = messages.querySelector<HTMLButtonElement>('[aria-label="もう一度試す"]')!;
+  expect(retry.textContent).toBe("");
   expect(retry.disabled).toBe(false);
 
   retry.click();

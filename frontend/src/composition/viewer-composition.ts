@@ -30,11 +30,8 @@ import { emptyStationLineCatalog } from "../adapters/http/viewer-input/station-l
 import { researchPlaceDetail, searchWeatherGrid } from "../adapters/http/agent-api/bedrock-agent";
 import { loadTrainIndex } from "../adapters/http/viewer-input/train-index";
 import type { TrainDelaySnapshot, TrainOperation } from "@raiquora/operation/operation";
-import {
-  dateForOperatingRouteTime,
-  operatingServiceDateStart,
-  stepDisplayDateTime,
-} from "../domain/display-date-time";
+import { dateForOperatingRouteTime, operatingServiceDateStart } from "../domain/display-date-time";
+import { createDigitalTwinClockSynchronizer } from "../domain/digital-twin-clock";
 import {
   lightPresetForRouteTime,
   type LightPreset,
@@ -65,7 +62,6 @@ import {
 } from "../domain/train-position";
 import type { TrainPosition } from "../domain/train-position";
 import { loadViewerElements } from "../usecases/viewer/viewer-elements";
-import { resolveViewerDisplayMode } from "../domain/viewer-display-mode";
 import { configureAiFirstShell } from "../presentation/home/ai-first-shell";
 import { configureConsultationScreen } from "../presentation/home/consultation-screen";
 
@@ -80,21 +76,7 @@ import {
   configureTrainDelayUpdates,
 } from "../usecases/train-viewer/realtime-updates";
 import { configureLocalWeatherUpdates } from "../usecases/train-viewer/local-weather-updates";
-import {
-  configureDateTimeInput,
-  maximumRouteTimeFor,
-  renderDisplayDateTime,
-} from "../presentation/train-viewer/date-time-control";
-import {
-  configurePlayback,
-  configurePlaybackSpeed,
-  type PlaybackUiController,
-} from "../presentation/train-viewer/playback-controls";
-import {
-  configureDestinationArcs,
-  renderDisplayMode,
-  configureSidebarMapModeSelection,
-} from "../presentation/train-viewer/map-controls";
+import { configureSidebarMapModeSelection } from "../presentation/train-viewer/map-controls";
 import { createLoadingScreen } from "../presentation/shared/loading-screen";
 import {
   configureMapPlaceExplorer,
@@ -154,19 +136,11 @@ const {
   loadingScreenElement,
   loadingScreenMessage,
   loadingScreenRetry,
+  loadingSteps,
   status,
   contextWorkspaceTabs,
   closeContextWorkspace,
   displayTime,
-  dateTimeInput,
-  dateTimeDate,
-  dateTimeClock,
-  playToggle,
-  currentTimeButton,
-  playbackSpeed,
-  playbackSpeedMenuToggle,
-  playbackSpeedOptions,
-  playbackSpeedButtons,
   mapTools,
   mapPlaceExplorer,
   mapPlaceExplorerList,
@@ -175,8 +149,6 @@ const {
   mapPlaceDetailContent,
   closeMapPlaceDetail,
   congestionToggle,
-  destinationArcsToggle,
-  digitalTwinModeToggle,
   aiGuidePanel,
   aiGuideToggle,
   closeAiGuide,
@@ -186,9 +158,7 @@ const {
   aiGuideSubmit,
   railNewConversation,
   railRealtimeMap,
-  railDateTimeMode,
   sidebarRealtimeMap,
-  sidebarDateTimeMode,
   travelProfileToggle,
   aiGuideSuggestions,
   aiGuideContextChoices,
@@ -204,11 +174,6 @@ const {
   selectedTrainStops,
   trainDetailTabs,
 } = loadViewerElements(document);
-const dateTimeDisplayElements = {
-  input: dateTimeInput,
-  date: dateTimeDate,
-  clock: dateTimeClock,
-};
 const metrics = new RuntimeMetrics();
 const runtimeMonitor = createRuntimeMonitor(metrics);
 
@@ -217,6 +182,7 @@ const loadingScreen = createLoadingScreen({
   screen: loadingScreenElement,
   message: loadingScreenMessage,
   retry: loadingScreenRetry,
+  steps: loadingSteps,
 });
 loadingScreenRetry.addEventListener("click", () => window.location.reload());
 
@@ -307,16 +273,12 @@ let startMap: () => Promise<void> = async () => undefined;
 const scheduleContextMapResize = () => {
   requestAnimationFrame(() => resizeContextMap());
 };
-type SidebarMapMode = "realtime" | "date-time";
-let pendingSidebarMapMode: SidebarMapMode | undefined;
-let applySidebarMapMode: (mode: SidebarMapMode) => void = () => undefined;
 configureSidebarMapModeSelection({
   app,
   realtimeModeButtons: [sidebarRealtimeMap, railRealtimeMap],
-  dateTimeModeButtons: [sidebarDateTimeMode, railDateTimeMode],
 });
 const focusMapWorkspace = () => {
-  if (app.dataset.primaryView !== "map") primaryShell?.showMap("realtime");
+  if (app.dataset.primaryView !== "map") primaryShell?.showMap();
   void startMap();
   contextWorkspaceController.show("map");
   app.dataset.mapFocusMode = "true";
@@ -335,10 +297,8 @@ const focusTripMap = (itemId?: string) => {
   if (!points.length && !routes.length) { tripWorkspace.report("保存済みの座標や確認できる鉄道経路がないため、地図へ表示できません。"); return; }
   tripMapOverlay?.show(pendingTripMap.key, points, routes, itemId);
 };
-const selectSidebarMapMode = (mode: SidebarMapMode) => {
-  pendingSidebarMapMode = mode;
+const selectSidebarMapMode = () => {
   focusMapWorkspace();
-  applySidebarMapMode(mode);
 };
 const mobileContextNavigation = createMobileContextNavigation({
   app,
@@ -371,10 +331,8 @@ closeContextWorkspace.addEventListener("click", () => {
   mobileContextNavigation.close();
 });
 contextWorkspaceTabs.hidden = false;
-railRealtimeMap.addEventListener("click", () => selectSidebarMapMode("realtime"));
-sidebarRealtimeMap.addEventListener("click", () => selectSidebarMapMode("realtime"));
-railDateTimeMode.addEventListener("click", () => selectSidebarMapMode("date-time"));
-sidebarDateTimeMode.addEventListener("click", () => selectSidebarMapMode("date-time"));
+railRealtimeMap.addEventListener("click", selectSidebarMapMode);
+sidebarRealtimeMap.addEventListener("click", selectSidebarMapMode);
 aiGuideController = configureAiGuidePanel(
   {
     conversationSessionId: activeConversationSession.id,
@@ -607,9 +565,7 @@ handleAiGuidePrompt = async (prompt, _preferences, _conversation, _metadata, exe
 
 resolveAiGuidePromptHandler(handleAiGuidePrompt);
 let displayedServiceDateStart = operatingServiceDateStart(initialDateTime);
-const initialRouteTime = currentRouteTime(initialDateTime);
-displayTime.value = String(initialRouteTime);
-renderDisplayDateTime(dateTimeDisplayElements, initialDateTime);
+displayTime.value = String(currentRouteTime(initialDateTime));
 
 let mapStarted = false;
 const homePreview = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("home-preview") : null;
@@ -654,7 +610,7 @@ primaryShell = configureAiFirstShell(document, app, {
     await serverTripList.refresh();
   },
   archiveTrip: async (id) => { await serverTripClient.archive(id); await serverTripList.refresh(); },
-  openMap: (mode) => { void startMap(); selectSidebarMapMode(mode === "simulation" ? "date-time" : "realtime"); },
+  openMap: () => { void startMap(); selectSidebarMapMode(); },
   journeySettings: () => ({ transferPace: journeyTransferPace.value, rankingPreference: journeyRankingPreference.value }),
   setJourneySettings: ({ transferPace, rankingPreference }) => {
     journeyTransferPace.value = transferPace; journeyTransferPace.dispatchEvent(new Event("change", { bubbles: true }));
@@ -851,6 +807,8 @@ if (!token) {
     disposeDataUpdates();
     disposeDataUpdates = () => undefined;
     status.hidden = false;
+    loadingScreen.setStep("map", "complete");
+    loadingScreen.setStep("routes", "loading");
     loadingScreen.setMessage("地図の表示を整えています。");
     map.setConfigProperty("basemap", "show3dObjects", true);
     map.setConfigProperty("basemap", "showPointOfInterestLabels", false);
@@ -911,16 +869,20 @@ if (!token) {
 
     try {
       status.textContent = "全経路を読み込んでいます。";
+      loadingScreen.setStep("routes", "loading");
       loadingScreen.setMessage("鉄道路線を読み込んでいます。");
       const routeLoadStartedAt = performance.now();
       const catalog = await loadPathCatalog();
       metrics.recordRouteLoad(performance.now() - routeLoadStartedAt);
       runtimeMonitor.log();
+      loadingScreen.setStep("routes", "complete");
 
       status.textContent = "列車を読み込んでいます。";
+      loadingScreen.setStep("trains", "loading");
       loadingScreen.setMessage("列車と時刻表を読み込んでいます。");
       const trainLoadStartedAt = performance.now();
       const trainIndex = await loadTrainIndex();
+      loadingScreen.setStep("trains", "complete");
       const stationLineCatalog =
         trainIndex.station_line_catalog ?? emptyStationLineCatalog();
       if (!trainIndex.station_line_catalog) {
@@ -965,6 +927,7 @@ if (!token) {
         routes: catalog.paths.length,
         trains: trainIndex.trains.length,
       });
+      loadingScreen.setStep("draw", "loading");
       for (const [index, routes] of routeCollections.entries()) {
         const sourceId = `routes-${index}`;
         map.addSource(sourceId, { type: "geojson", data: routes });
@@ -990,9 +953,8 @@ if (!token) {
         );
         await nextBrowserFrame();
       }
+      loadingScreen.setStep("draw", "complete");
 
-      const maximumRouteTime = maximumRouteTimeFor(trainIndex.trains);
-      displayTime.max = String(Math.ceil(maximumRouteTime / 60) * 60);
       const formationLinks = trainFormationLinks(trainIndex.trains);
 
         loadingScreen.setMessage("列車の初期位置を準備しています。");
@@ -1006,10 +968,6 @@ if (!token) {
         };
         applyWeatherToTrains(activeWeatherMode);
         map.addLayer(threeTrainLayer);
-        configureDestinationArcs(
-          threeTrainLayer,
-          destinationArcsToggle,
-        );
         const congestionUpdates = configureTrainCongestionUpdates(
           threeTrainLayer,
           congestionToggle,
@@ -1073,7 +1031,6 @@ if (!token) {
         );
         let displayedPositions: TrainPosition[] = [];
         let latestDelaySnapshot: TrainDelaySnapshot | undefined;
-        let digitalTwinModeRequested = true;
         const localWeatherLayer = createLocalWeatherLayer(map, applyAutomaticWeather);
         const localizedWeatherSearch = weatherPreviewEnabled
           ? (await import("../dev/weather-grid-preview")).searchWeatherGridPreview
@@ -1082,14 +1039,8 @@ if (!token) {
           map,
           localWeatherLayer,
           localizedWeatherSearch,
-          () => digitalTwinModeRequested
-            ? undefined
-            : dateForOperatingRouteTime(
-                displayedServiceDateStart,
-                Number(displayTime.value),
-              ),
+          () => undefined,
         );
-        let playbackControls: PlaybackUiController | undefined;
         let aliasedOperationsSource: ReadonlyMap<string, TrainOperation> | undefined;
         let aliasedOperations: ReadonlyMap<string, TrainOperation> | undefined;
         let appliedOperations:
@@ -1109,13 +1060,7 @@ if (!token) {
             now,
             false,
           );
-          const modeState = resolveViewerDisplayMode(
-            realtimeOperations !== undefined,
-            digitalTwinModeRequested,
-          );
-          const sourceOperations = modeState.mode === "digital-twin"
-            ? realtimeOperations
-            : undefined;
+          const sourceOperations = realtimeOperations ?? new Map<string, TrainOperation>();
           if (sourceOperations !== aliasedOperationsSource) {
             aliasedOperationsSource = sourceOperations;
             const trainNumberOperations = operationsWithTimetableTrainNumberAliases(
@@ -1129,30 +1074,8 @@ if (!token) {
             );
           }
           const operations = aliasedOperations;
-          renderDisplayMode(
-            {
-              app,
-              dateTimeInput,
-              currentTimeButton,
-              toggle: digitalTwinModeToggle,
-              realtimeModeButtons: [sidebarRealtimeMap, railRealtimeMap],
-              dateTimeModeButtons: [sidebarDateTimeMode, railDateTimeMode],
-              simulationOnlyControls: [
-                digitalTwinModeToggle,
-                currentTimeButton,
-                playToggle,
-                playbackSpeedMenuToggle.closest<HTMLElement>(".playback-speed-menu") ?? playbackSpeedMenuToggle,
-                destinationArcsToggle,
-              ],
-              realtimeOnlyControls: [congestionToggle],
-            },
-            realtimeOperations !== undefined,
-            modeState.mode,
-          );
-          congestionUpdates.setAvailable(modeState.congestionEnabled);
-          playbackControls?.setDigitalTwinMode(
-            !modeState.simulationControlsEnabled,
-          );
+          app.dataset.displayMode = "digital-twin";
+          congestionUpdates.setAvailable(realtimeOperations !== undefined);
           if (operations === appliedOperations) {
             return;
           }
@@ -1190,12 +1113,10 @@ if (!token) {
           );
           selection.updateOperations(operations, destinationChanges);
           console.info("[Raiquora] 列車表示モード", {
-            mode: operations ? "digital-twin" : "simulation",
+            mode: "realtime",
             timetableTrains: trainIndex.trains.length,
             displayedTrains: displayTrains.length,
-            unobservedTimetableEntries: operations
-              ? trainIndex.trains.length - displayTrains.length
-              : 0,
+            unobservedTimetableEntries: trainIndex.trains.length - displayTrains.length,
             delayedTrains: [...displayDelays.values()].filter(
               (delay) => delay > 0,
             ).length,
@@ -1243,7 +1164,6 @@ if (!token) {
               geometry: { type: "Point" as const, coordinates: target.coordinate },
             })),
           });
-          renderDisplayDateTime(dateTimeDisplayElements, displayedAt);
           status.hidden = true;
           metrics.recordPositionUpdate(performance.now() - updateStartedAt, positions.length);
           runtimeMonitor.log();
@@ -1253,82 +1173,27 @@ if (!token) {
           latestDelaySnapshot = snapshot;
           updateTrains();
         }, realtimeUpdateDependencies);
+        const synchronizeRealtimeClock = (now: Date) => {
+          displayedServiceDateStart = operatingServiceDateStart(now);
+          displayTime.value = String(currentRouteTime(now));
+          updateTrains();
+          localWeatherUpdates.scheduleRefresh();
+        };
+        const realtimeClock = createDigitalTwinClockSynchronizer(
+          synchronizeRealtimeClock,
+          browserDigitalTwinClockEnvironment(),
+        );
+        realtimeClock.setEnabled(true);
+        const realtimeClockInterval = window.setInterval(() => {
+          if (document.visibilityState === "visible") synchronizeRealtimeClock(new Date());
+        }, 15_000);
         disposeDataUpdates = () => {
           congestionUpdates.dispose();
           disposeDelayUpdates();
           localWeatherUpdates.dispose();
+          realtimeClock.dispose();
+          window.clearInterval(realtimeClockInterval);
         };
-
-        displayTime.addEventListener("input", () => {
-          updateTrains();
-          localWeatherUpdates.scheduleRefresh();
-        });
-        digitalTwinModeToggle.addEventListener("click", () => {
-          if (digitalTwinModeToggle.disabled) {
-            return;
-          }
-          digitalTwinModeRequested = digitalTwinModeToggle.ariaPressed !== "true";
-          updateTrains();
-          localWeatherUpdates.scheduleRefresh();
-        });
-        configureDateTimeInput(
-          dateTimeInput,
-          () =>
-            dateForOperatingRouteTime(
-              displayedServiceDateStart,
-              Number(displayTime.value),
-            ),
-          (date) => {
-            displayedServiceDateStart = operatingServiceDateStart(date);
-            displayTime.value = String(currentRouteTime(date));
-            displayTime.dispatchEvent(new Event("input", { bubbles: true }));
-          },
-        );
-        displayTime.disabled = false;
-        currentTimeButton.disabled = false;
-        const playbackSpeedControls = configurePlaybackSpeed(
-          playbackSpeed,
-          playbackSpeedButtons,
-          playbackSpeedMenuToggle,
-          playbackSpeedOptions,
-        );
-        playbackControls = configurePlayback(
-          { displayTime, playToggle, currentTimeButton, playbackSpeed },
-          updateTrains,
-          maximumRouteTime,
-          (date) => {
-            displayedServiceDateStart = operatingServiceDateStart(date);
-          },
-          () => {
-            displayedServiceDateStart = stepDisplayDateTime(
-              displayedServiceDateStart,
-              "day",
-              1,
-            );
-          },
-          playbackSpeedControls,
-          browserDigitalTwinClockEnvironment(),
-        );
-        applySidebarMapMode = (mode) => {
-          if (mode === "realtime") {
-            const now = new Date();
-            digitalTwinModeRequested = true;
-            displayedServiceDateStart = operatingServiceDateStart(now);
-            displayTime.value = String(currentRouteTime(now));
-            displayTime.dispatchEvent(new Event("input", { bubbles: true }));
-            return;
-          }
-          digitalTwinModeRequested = false;
-          updateTrains();
-          requestAnimationFrame(() => {
-            dateTimeInput.closest<HTMLElement>(".date-time-display")?.click();
-          });
-        };
-        if (pendingSidebarMapMode) {
-          const pendingMode = pendingSidebarMapMode;
-          pendingSidebarMapMode = undefined;
-          applySidebarMapMode(pendingMode);
-        }
         updateTrains();
         await nextBrowserFrame();
         resolveAiGuidePromptHandler(handleAiGuidePrompt);

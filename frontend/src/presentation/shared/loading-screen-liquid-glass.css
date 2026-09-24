@@ -1,40 +1,70 @@
-/* 読み込み中も完成後と同じ素材感にする */
+/* 読み込み情報はカードに囲わず、画面へ直接配置する */
 .loading-screen {
-  color: var(--glass-text);
-  background: var(--glass-canvas);
+  color: #173650;
+  background: #f6f6f1;
 }
 
 .loading-screen-content {
-  width: min(25rem, calc(100vw - 3rem));
-  padding: 1.5rem;
-  border: 1px solid var(--glass-border);
-  border-radius: 1.5rem;
-  background: var(--glass-surface-strong);
-  box-shadow: 0 1.5rem 4rem var(--glass-shadow);
-  backdrop-filter: blur(24px);
+  width: min(30rem, calc(100vw - 3rem));
+  padding: 0;
+  text-align: center;
 }
 
 .loading-screen-message {
-  color: var(--glass-muted);
+  margin: 0 0 1.25rem;
+  color: #536b7e;
 }
 
-.loading-screen-progress {
-  height: 0.25rem;
-  border-radius: 999px;
-  background: var(--glass-surface-muted);
+.loading-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.loading-screen-progress span {
-  border-radius: inherit;
-  background: var(--glass-accent);
-  box-shadow: 0 0 1rem rgb(0 150 246 / 32%);
+.loading-steps li {
+  display: grid;
+  justify-items: center;
+  gap: .45rem;
+  color: #718092;
+  font-size: .8rem;
+}
+
+.loading-step-indicator {
+  display: grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  color: #17608c;
+}
+
+.loading-steps [data-state="complete"] .loading-step-indicator::before {
+  content: "✓";
+  font-weight: 800;
+}
+
+.loading-steps [data-state="loading"] .loading-step-indicator::before {
+  width: .85rem;
+  height: .85rem;
+  border: 2px solid #cad6df;
+  border-top-color: #17608c;
+  border-radius: 50%;
+  animation: loading-orbit .8s linear infinite;
+  content: "";
+}
+
+.loading-steps [data-state="error"] .loading-step-indicator::before {
+  content: "!";
+  font-weight: 800;
 }
 
 .loading-screen-retry {
-  border-color: var(--glass-border-subtle);
+  border-color: #cad6df;
   border-radius: 0.85rem;
-  color: var(--glass-text);
-  background: var(--glass-surface-muted);
+  color: #173650;
+  background: transparent;
 }
 
 @media (max-width: 720px) {

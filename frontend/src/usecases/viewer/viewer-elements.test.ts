@@ -7,19 +7,19 @@ describe("loadViewerElements", () => {
     const element = {} as Element;
     const root = {
       querySelector: () => element,
-      querySelectorAll: () => [element],
+      querySelectorAll: () => [element, element, element, element],
     } as unknown as ParentNode;
 
     const result = loadViewerElements(root);
 
     expect(result.app).toBe(element);
-    expect(result.playbackSpeedButtons).toHaveLength(1);
+    expect(result.loadingSteps).toHaveLength(4);
   });
 
   it("不足している要素をselector付きで報告する", () => {
     const root = {
       querySelector: (selector: string) => selector === "#map-status" ? null : {},
-      querySelectorAll: () => [{}],
+      querySelectorAll: () => [{}, {}, {}, {}],
     } as unknown as ParentNode;
 
     expect(() => loadViewerElements(root)).toThrow("#map-status");
