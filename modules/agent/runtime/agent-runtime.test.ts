@@ -24,6 +24,58 @@ import { inTripApplicationEvidence } from "@raiquora/agent/in-trip-application-e
 import { calculateInTripReplanScope, replanScopeContext } from "@raiquora/trip/in-trip-replan";
 
 describe("MultiStepAgentRuntime", () => {
+  it("uses one reserved model call to repair an invalid final response contract", async () => {
+    const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
+    const responseGenerator = new DefaultAgentResponseGenerator();
+    vi.spyOn(responseGenerator, "fromModel").mockReturnValue({ text: "修復した旅行案です", claims: [] });
+    const invalidFinal = textResponse("REJECTED");
+    invalidFinal.decisionSummaryStatus = "invalid";
+    const model = sequenceModel([
+      toolCallResponse([{ id: "source", name: "first_tool", input: { value: "候補を確認" } }]),
+      invalidFinal,
+      textResponse("修復済み"),
+    ], requests);
+
+    const output = await new MultiStepAgentRuntime({
+      tools, toolExecutor, model, responseGenerator,
+      limits: { maxIterations: 2, maxModelCalls: 4 },
+    }).run(request("のんびりできる旅を考えたい"));
+
+    expect(output.status).toBe("completed");
+    expect(output.response).toBe("修復した旅行案です");
+    expect(model.generate).toHaveBeenCalledTimes(3);
+    expect(JSON.stringify(requests[2]?.messages)).toContain("出力contract違反");
+    expect(JSON.stringify(output)).not.toContain("REJECTED");
+  });
+
+  it("reports exhausted final-response repair as a limit instead of a system failure", async () => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const invalidFinal = () => {
+      const response = textResponse("REJECTED");
+      response.decisionSummaryStatus = "invalid";
+      return response;
+    };
+    const model = sequenceModel([
+      toolCallResponse([{ id: "source", name: "first_tool", input: { value: "候補を確認" } }]),
+      invalidFinal(),
+      invalidFinal(),
+    ]);
+
+    const output = await new MultiStepAgentRuntime({
+      tools, toolExecutor, model,
+      limits: { maxIterations: 2, maxModelCalls: 4 },
+    }).run(request("おいしいものを楽しみたい"));
+
+    expect(output.status).toBe("limit_reached");
+    expect(output.response).toContain("条件は保持しています");
+    expect(output.trace.events.at(-1)).toMatchObject({
+      type: "task_completed",
+      status: "failed",
+      reason: "invalid_response_contract",
+    });
+    expect(JSON.stringify(output)).not.toContain("REJECTED");
+  });
+
   it("requires typed presentation after fresh external source Evidence is available", async () => {
     const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
     const responseGenerator = new DefaultAgentResponseGenerator();

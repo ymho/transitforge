@@ -150,6 +150,7 @@ export class MultiStepAgentRuntime {
     let finalizeAfterToolResult = false;
     let correctedResponseContract = false;
     let correctedGroundedAnswer = false;
+    let correctedFinalResponse = false;
 
     while (true) {
       if (
@@ -172,7 +173,10 @@ export class MultiStepAgentRuntime {
       const finalResponseRequired = hasToolResults && (
         finalizeAfterToolResult ||
         iterations >= this.limits.maxIterations - 1 ||
-        modelCalls >= this.limits.maxModelCalls - 1 ||
+        // Enter finalization with one model call still reserved for a bounded
+        // contract/presentation repair. This avoids a valid research run ending
+        // as a generic failure solely because its first final envelope is invalid.
+        modelCalls >= this.limits.maxModelCalls - 2 ||
         toolCalls >= this.limits.maxToolCalls
       );
       await this.dependencies.reportProgress?.(finalResponseRequired ? "building_answer" : hasToolResults ? "comparing_options" : "understanding_request");
@@ -247,19 +251,25 @@ export class MultiStepAgentRuntime {
       const invalidContract = invalidReferences ? "invalid_used_evidence_ids" :
         structuredPresentation ? undefined : invalidResponseContract(modelResponse, (modelRequest.tools ?? []).map((tool) => tool.name));
       if (invalidContract) {
-        if (!correctedResponseContract && !finalResponseRequired) {
-          correctedResponseContract = true;
+        if ((!finalResponseRequired && !correctedResponseContract) ||
+            (finalResponseRequired && !correctedFinalResponse && modelCalls < this.limits.maxModelCalls)) {
+          if (finalResponseRequired) correctedFinalResponse = true;
+          else correctedResponseContract = true;
           messages.push({ role: "user", content: [{ type: "text", text: invalidReferences
             ? `${responseContractRepairInstruction}\n使用可能なEvidence ID: ${JSON.stringify(evidence.slice(0, 20).map((item) => item.id))}。候補ID・Trip item IDはEvidence IDではありません。0件なら事実を引用せず、必要なToolで根拠を取得してください。`
             : outputContract.schemaHash === agentTurnPresentationOutputContract.schemaHash
               ? `${responseContractRepairInstruction}\n現在のagent_turn_result@4-presentationではkind=answerのときtop-level presentationが必須です。responseTextへ旅程JSONを入れず、提示済みschemaに従うtravel-planまたはsource-explanation objectをpresentationへ設定してください。利用者判断だけが不足する場合はkind=askを使えます。`
               : responseContractRepairInstruction }] });
-          iterations++;
+          // Finalization is already the last decision round. Spend one remaining
+          // model call on contract repair without consuming another Tool round.
+          if (!finalResponseRequired) iterations++;
           trace.replanDecided(true, invalidContract, decisionBoundary);
           continue;
         }
-        return this.failureResult(trace, evidence, startedAt,
-          invalidReferences ? "invalid_used_evidence_ids" : "invalid_response_contract");
+        return finalResponseRequired
+          ? this.limitResult(trace, evidence, startedAt, invalidReferences ? "invalid_used_evidence_ids" : "invalid_response_contract")
+          : this.failureResult(trace, evidence, startedAt,
+            invalidReferences ? "invalid_used_evidence_ids" : "invalid_response_contract");
       }
       messages.push(modelResponse.message);
 
@@ -321,8 +331,14 @@ export class MultiStepAgentRuntime {
         }
         if (hasOnlyInternalReasoning(modelResponse)) {
           messages.pop();
-          if (correctedResponseContract || finalResponseRequired) return this.failureResult(trace, evidence, startedAt, "invalid_response_contract");
-          correctedResponseContract = true;
+          const canRepair = finalResponseRequired
+            ? !correctedFinalResponse && modelCalls < this.limits.maxModelCalls
+            : !correctedResponseContract;
+          if (!canRepair) return finalResponseRequired
+            ? this.limitResult(trace, evidence, startedAt, "invalid_response_contract")
+            : this.failureResult(trace, evidence, startedAt, "invalid_response_contract");
+          if (finalResponseRequired) correctedFinalResponse = true;
+          else correctedResponseContract = true;
           messages.push({
             role: "user",
             content: [{
@@ -330,7 +346,7 @@ export class MultiStepAgentRuntime {
               text: "内部推論は表示せず 必要なToolを実行するか 利用者向けの質問または回答だけを返してください",
             }],
           });
-          iterations += 1;
+          if (!finalResponseRequired) iterations += 1;
           trace.replanDecided(
             true,
             "内部推論だけの応答を破棄して利用者向け応答を再要求する",
@@ -398,15 +414,19 @@ export class MultiStepAgentRuntime {
               ? "grounded" : toolCalls ? "administrative" : "interaction", decisionContext.travelProfile, request.executionId);
         } catch (error) {
           const failureCode = groundedAnswerFailureCode(error);
-          if (!correctedGroundedAnswer && !finalResponseRequired) {
-            correctedGroundedAnswer = true;
+          if ((!finalResponseRequired && !correctedGroundedAnswer) ||
+              (finalResponseRequired && !correctedFinalResponse && modelCalls < this.limits.maxModelCalls)) {
+            if (finalResponseRequired) correctedFinalResponse = true;
+            else correctedGroundedAnswer = true;
             messages.pop();
             messages.push({ role: "user", content: [{ type: "text", text: `${responseContractRepairInstruction}\n${groundedAnswerRepairInstruction(error, evidence)}\n${groundedAnswerInstruction(evidence, decisionContext.travelProfile)}` }] });
-            iterations++;
+            if (!finalResponseRequired) iterations++;
             trace.replanDecided(true, failureCode, decisionBoundary);
             continue;
           }
-          return this.failureResult(trace, evidence, startedAt, failureCode);
+          return finalResponseRequired
+            ? this.limitResult(trace, evidence, startedAt, failureCode)
+            : this.failureResult(trace, evidence, startedAt, failureCode);
         }
         trace.decisionRecorded({ ...decisionForAnswer(
           modelResponse,
@@ -423,6 +443,7 @@ export class MultiStepAgentRuntime {
           grounding.claims.some(({ groundingStatus }) =>
             groundingStatus === "unsupported")
         ) {
+          if (finalResponseRequired) return this.limitResult(trace, evidence, startedAt, "unsupported_claim");
           const response = this.responseGenerator.groundingFailure();
           trace.responseGenerated(response, grounding.claims.map(({ id }) => id));
           trace.taskCompleted(
