@@ -35,13 +35,24 @@ function messages(path) {
   if (!Array.isArray(encoded)) throw new Error("Expected a JSON array of CloudWatch messages");
   return encoded.flatMap((message) => {
     if (typeof message !== "string") return [];
-    try {
-      const value = JSON.parse(message);
-      return value && typeof value === "object" && !Array.isArray(value) ? [value] : [];
-    } catch {
-      return [];
-    }
+    const value = decodedMessage(message);
+    return value ? [value] : [];
   });
+}
+
+function decodedMessage(message) {
+  const candidates = [message, message.slice(Math.max(0, message.indexOf("{")))];
+  for (const candidate of candidates) {
+    try {
+      const value = JSON.parse(candidate);
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+      if (typeof value.message === "string") return decodedMessage(value.message) ?? value;
+      return value;
+    } catch {
+      // Lambda plain-text logs prefix console output with timestamp, request ID and level.
+    }
+  }
+  return undefined;
 }
 
 function groupedDiagnostics(values) {
