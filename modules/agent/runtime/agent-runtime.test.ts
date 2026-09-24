@@ -34,8 +34,9 @@ describe("MultiStepAgentRuntime", () => {
     const output = await new MultiStepAgentRuntime({ tools, toolExecutor, responseGenerator,
       model: sequenceModel([textResponse("旅行案です")], requests) }).run({ ...request("出雲の旅行案"), initialEvidence: [source] });
     expect(output.status).toBe("completed");
-    expect(requests[0]?.outputContract).toMatchObject({ name: "agent_turn_result", version: "3",
-      schema: { required: ["responseText", "presentation", "decision"] } });
+    expect(requests[0]?.outputContract).toMatchObject({ name: "agent_turn_result", version: "4-presentation",
+      schema: { anyOf: [{ required: ["kind", "responseText", "presentation"] },
+        { required: ["kind", "responseText", "missingRequirements"] }] } });
   });
   it("records a safe structured-answer failure code after bounded repair", async () => {
     const { tools, toolExecutor } = toolSetup([]), responseGenerator = new DefaultAgentResponseGenerator();

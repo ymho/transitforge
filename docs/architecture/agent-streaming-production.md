@@ -34,7 +34,7 @@ Lambda自身も`AGENT_STREAM_ENABLED`が文字列`true`でなければ503を返�
   Basic auth viewer functionは新routeへ付けない（同じAuthorizationヘッダーを消費するため）。
 - 新routeにCloudFront request loggingは追加しない。既存custom-domainのCloudflare-CDN-Cache-Control: no-storeも適用する。
 - ADR値を維持: Lambda 240秒、Gateway 250秒、CloudFront read 60秒/completion 260秒。
-  認証・入力検査後にrunning progressをwriteし、Application実行中は10秒heartbeat。
+  認証・入力検査後に`understanding_request` progressをwriteし、Application実行中は10秒heartbeat。
   Browser consumerのidle 45秒/deadline 270秒はPoC契約のままで、本番Browserは未接続。
   cold start/JWKS/Authorizerは最初の待ち時間へ含む。heartbeatは有用回答でもトークンstreamでもない。
 
@@ -89,6 +89,14 @@ AWSで既存roleが設定済みの場合も所有権を確認してから有効�
 ヘッダー送信後の失敗はerror eventとdoneで表し、欠けたfinalは成功としない。
 write失敗後の追加writeは止める。Browser切断はLambda/model停止・課金停止を保証せず、240秒の上限を維持する。
 自動retry、Browser Agentへの無言fallbackは追加しない。
+
+## 公開進捗phase
+
+本番streamは最終回答まで無言にせず、Applicationが実際に通過した`understanding_request`、
+`checking_information`、`comparing_options`、`building_answer`、`validating_answer`をprogress eventとして送る。
+連続する同一phaseはtransport境界で一度にまとめる。これは利用者へ待機理由を示すUI状態であり、モデルの
+thinking、仮説、prompt、Tool名・入力・結果、Evidence本文を含めない。永続化、再生、Traceへの転用もしない。
+heartbeatは接続維持だけで、progress eventではない。旧PoC fixture向けの`running`はwire互換の受信だけ残す。
 
 ## 確認と後続
 

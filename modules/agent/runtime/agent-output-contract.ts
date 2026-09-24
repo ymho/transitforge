@@ -1,4 +1,5 @@
-import { parseAgentDecisionSummary, type AgentDecisionSummary } from "./agent-decision-summary";
+import type { MissingRequirement } from "./semantic-decision";
+import { inTripPresentations, validInTripAnswerPlan, type InTripAnswerPlan } from "./in-trip-answer-plan";
 import { outputContract } from "./output-contract";
 
 const structuredPresentationSchema = {
@@ -56,89 +57,93 @@ const structuredPresentationSchema = {
   ],
 };
 
-const agentTurnOutputSchema = {
-  type: "object",
-  additionalProperties: false,
+const missingRequirementSchema = {
+  type: "object", additionalProperties: false,
   properties: {
-    responseText: { type: "string", minLength: 1, maxLength: 12_000 },
-    presentation: structuredPresentationSchema,
-    decision: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        interpretedGoal: { type: "string", minLength: 1, maxLength: 240 },
-        hardConstraints: { type: "array", items: { $ref: "#/$defs/decisionValue" }, maxItems: 12 },
-        softPreferences: { type: "array", items: { $ref: "#/$defs/decisionValue" }, maxItems: 12 },
-        selectedAction: { type: "string", enum: ["use_tool", "ask_user", "answer"] },
-        selectedTool: { type: "string" },
-        unresolvedFacts: { type: "array", items: { type: "string" }, maxItems: 8 },
-        reasonCodes: { type: "array", items: { type: "string" }, maxItems: 6 },
-        replanReason: { type: "string", enum: ["tool_result_received", "tool_failed", "evidence_insufficient", "constraint_conflict", "new_information"] },
-        usedEvidenceIds: { type: "array", items: { type: "string", minLength: 1, maxLength: 160 }, maxItems: 10 },
-        inTripAnswerPlan: { type: "object", additionalProperties: false, properties: {
-          evidence: { type: "array", minItems: 1, maxItems: 6, items: { $ref: "#/$defs/inTripReference" } },
-        }, required: ["evidence"] },
-        missingRequirements: { type: "array", items: { $ref: "#/$defs/missingRequirement" }, maxItems: 8 },
-      },
-      required: ["interpretedGoal", "hardConstraints", "softPreferences", "selectedAction", "unresolvedFacts", "reasonCodes"],
-    },
+    action: { const: "ask" }, field: { type: "string" }, targetRef: { type: "string" },
+    resolution: { type: "string", enum: ["user_decision", "authorization"] }, reason: { type: "string", maxLength: 240 },
   },
-  required: ["responseText", "decision"],
-  $defs: {
-    decisionValue: {
-      type: "object", additionalProperties: false,
-      properties: { key: { type: "string" }, value: { anyOf: [{ type: "string" }, { type: "number" }, { type: "boolean" }, { type: "null" }] } },
-      required: ["key", "value"],
-    },
-    missingRequirement: {
-      type: "object", additionalProperties: false,
-      properties: {
-        action: { type: "string", enum: ["use_tool", "ask", "present", "propose"] },
-        field: { type: "string" }, targetRef: { type: "string" },
-        resolution: { type: "string", enum: ["tool", "assumption", "user_decision", "authorization"] },
-        reason: { type: "string" },
-      },
-      required: ["action", "field", "resolution", "reason"],
-    },
-    inTripReference: { type: "object", additionalProperties: false, properties: {
-      evidenceId: { type: "string", minLength: 1, maxLength: 160 },
-      presentation: { type: "string", enum: ["planned-itinerary", "rail-impact", "environment-impact", "reservation", "location-permission", "uncertainty", "external-result"] },
-    }, required: ["evidenceId", "presentation"] },
-  },
+  required: ["action", "field", "resolution", "reason"],
 };
 
-export const agentTurnOutputContract = outputContract(
-  "agent_turn_result",
-  "1",
-  agentTurnOutputSchema,
-  "Semantic decision and user-visible response",
-);
+const inTripAnswerPlanSchema = {
+  type: "object", additionalProperties: false,
+  properties: {
+    evidence: { type: "array", minItems: 1, maxItems: 6, items: {
+      type: "object", additionalProperties: false,
+      properties: {
+        evidenceId: { type: "string", minLength: 1, maxLength: 160 },
+        presentation: { type: "string", enum: [...inTripPresentations] },
+      },
+      required: ["evidenceId", "presentation"],
+    } },
+  },
+  required: ["evidence"],
+};
 
-/** Final answers backed by retrieved place sources must carry the typed
- * presentation that Application validates and renders. Native toolUse responses
- * are unaffected because Bedrock does not apply the final text schema to them. */
-export const agentTurnPresentationOutputContract = outputContract(
-  "agent_turn_result",
-  "3",
-  { ...agentTurnOutputSchema, required: ["responseText", "presentation", "decision"] },
-  "Semantic decision and required Evidence-bound presentation",
-);
-
-export interface DecodedAgentTurnOutput {
-  responseText: string;
-  decision: AgentDecisionSummary;
-  presentation?: Record<string, unknown>;
+function answerSchema(presentationRequired: boolean) {
+  return {
+    type: "object", additionalProperties: false,
+    properties: {
+      kind: { const: "answer" }, responseText: { type: "string", minLength: 1, maxLength: 12_000 },
+      evidenceIds: { type: "array", items: { type: "string", minLength: 1, maxLength: 160 }, maxItems: 10 },
+      presentation: structuredPresentationSchema,
+      inTripAnswerPlan: inTripAnswerPlanSchema,
+    },
+    required: presentationRequired ? ["kind", "responseText", "presentation"] : ["kind", "responseText"],
+  };
 }
+
+const askSchema = {
+  type: "object", additionalProperties: false,
+  properties: {
+    kind: { const: "ask" }, responseText: { type: "string", minLength: 1, maxLength: 12_000 },
+    missingRequirements: { type: "array", minItems: 1, maxItems: 4, items: missingRequirementSchema },
+  },
+  required: ["kind", "responseText", "missingRequirements"],
+};
+
+/** Final text has only two observable actions. Tool selection remains native toolUse. */
+export const agentTurnOutputContract = outputContract(
+  "agent_turn_result", "4", { anyOf: [answerSchema(false), askSchema] },
+  "User-visible answer or an explicit user decision request",
+);
+
+export const agentTurnPresentationOutputContract = outputContract(
+  "agent_turn_result", "4-presentation", { anyOf: [answerSchema(true), askSchema] },
+  "User-visible answer with Evidence-bound presentation, or an explicit user decision request",
+);
+
+export type DecodedAgentTurnOutput =
+  | { kind: "answer"; responseText: string; evidenceIds?: string[]; presentation?: Record<string, unknown>; inTripAnswerPlan?: InTripAnswerPlan }
+  | { kind: "ask"; responseText: string; missingRequirements: MissingRequirement[] };
 
 export function decodeAgentTurnOutput(value: unknown): DecodedAgentTurnOutput | undefined {
-  if (!isRecord(value) || Object.keys(value).some((key) => !["responseText", "decision", "presentation"].includes(key)) ||
-    typeof value.responseText !== "string" || !value.responseText.trim() || value.responseText.length > 12_000) return undefined;
-  const decision = parseAgentDecisionSummary(value.decision);
+  if (!isRecord(value) || typeof value.responseText !== "string" || !value.responseText.trim() || value.responseText.length > 12_000) return undefined;
+  if (value.kind === "ask") {
+    if (!hasOnlyKeys(value, ["kind", "responseText", "missingRequirements"]) || !askRequirements(value.missingRequirements)) return undefined;
+    return { kind: "ask", responseText: value.responseText, missingRequirements: value.missingRequirements };
+  }
+  if (value.kind !== "answer" || !hasOnlyKeys(value, ["kind", "responseText", "evidenceIds", "presentation", "inTripAnswerPlan"]) ||
+      value.evidenceIds !== undefined && !evidenceIds(value.evidenceIds) ||
+      value.inTripAnswerPlan !== undefined && !validInTripAnswerPlan(value.inTripAnswerPlan)) return undefined;
   const presentation = value.presentation;
   if (presentation !== undefined && (!isRecord(presentation) || !["source-explanation", "travel-plan"].includes(String(presentation.kind)))) return undefined;
-  return decision ? { responseText: value.responseText, decision, ...(presentation ? { presentation } : {}) } : undefined;
+  return { kind: "answer", responseText: value.responseText,
+    ...(value.evidenceIds ? { evidenceIds: [...value.evidenceIds as string[]] } : {}), ...(presentation ? { presentation } : {}),
+    ...(value.inTripAnswerPlan ? { inTripAnswerPlan: value.inTripAnswerPlan } : {}) };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function askRequirements(value: unknown): value is MissingRequirement[] {
+  return Array.isArray(value) && value.length > 0 && value.length <= 4 && value.every((item) => isRecord(item) &&
+    hasOnlyKeys(item, ["action", "field", "targetRef", "resolution", "reason"]) && item.action === "ask" && identifier(item.field) &&
+    (item.targetRef === undefined || typeof item.targetRef === "string" && item.targetRef.length <= 200) &&
+    ["user_decision", "authorization"].includes(String(item.resolution)) && typeof item.reason === "string" && item.reason.trim() === item.reason && item.reason.length > 0 && item.reason.length <= 240);
 }
+function evidenceIds(value: unknown): value is string[] {
+  return Array.isArray(value) && value.length <= 10 && new Set(value).size === value.length &&
+    value.every((id) => typeof id === "string" && id.length > 0 && id.length <= 160 && id.trim() === id);
+}
+function identifier(value: unknown): value is string { return typeof value === "string" && /^[a-z][a-z0-9_]{0,63}$/u.test(value); }
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
+function hasOnlyKeys(value: Record<string, unknown>, keys: string[]): boolean { const allowed = new Set(keys); return Object.keys(value).every((key) => allowed.has(key)); }

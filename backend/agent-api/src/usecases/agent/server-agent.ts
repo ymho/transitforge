@@ -14,6 +14,7 @@ import type { ResearchTarget } from "../../contracts/server-state.js";
 import { ResearchExecutionLedger, researchBudgetForRuntimeLimits } from "@raiquora/agent/research-execution";
 import { validateAgentRuntimeLimits } from "@raiquora/agent/runtime-policies";
 import type { ModelTokenRates } from "@raiquora/agent/model-usage-cost";
+import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
 
 /** Caller authenticates principal. Only an injected server loader may resolve references to state. */
 export interface ServerAgentTurn {
@@ -47,7 +48,7 @@ export interface ServerAgentDependencies {
 
 /** Transport-independent, per-turn composition; no shared mutable principal/tool/evidence state. */
 export function createServerAgentApplication(dependencies: ServerAgentDependencies) {
-  return { async runAgentTurn(input: ServerAgentTurn): Promise<AgentRuntimeResult> {
+  return { async runAgentTurn(input: ServerAgentTurn, reportProgress?: AgentProgressReporter): Promise<AgentRuntimeResult> {
     requireTripPrincipal(input.principal);
     if (typeof input.userRequest !== "string" || !input.userRequest.trim() || input.userRequest.length > 8_000) throw new Error("Invalid user request");
     for (const value of [input.conversationId, input.tripId, input.uiContext?.itemId]) {
@@ -103,6 +104,7 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
       toolExecutor: new AgentToolExecutor(tools, evidence, dependencies.now),
       limits: selectedLimits, now: dependencies.now, modelClassPolicy: dependencies.modelClassPolicy,
       researchLedger, modelTokenRates: dependencies.modelTokenRates,
+      reportProgress,
     }).run({ executionId: scope.executionId, feature: "concierge", userRequest: scope.userRequest,
       researchMode: scope.researchMode,
       ...(context ? { context, omitTraceContent: true } : {}),

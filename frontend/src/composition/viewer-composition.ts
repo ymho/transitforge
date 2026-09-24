@@ -461,12 +461,13 @@ aiGuideController = configureAiGuidePanel(
       catch { tripWorkspace.report("準備リストの追加案を表示できません。最新のリストを確認してください。"); }
     },
   },
-  (prompt, preferences, conversation, onResponseMetadata) =>
+  (prompt, preferences, conversation, onResponseMetadata, options) =>
     handleAiGuidePrompt(
       prompt,
       preferences,
       conversation,
       onResponseMetadata,
+      options,
     ),
 );
 const tripWorkspace = configureTripWorkspace({
@@ -605,7 +606,8 @@ handleAiGuidePrompt = async (prompt, _preferences, _conversation, _metadata, exe
   if (activeConversationSession.tripId && tripWorkspaceController.current()?.id !== activeConversationSession.tripId) {
     throw new Error("対象の旅程を再取得してから相談してください。");
   }
-  return serverAgentSession.start(prompt, execution?.requestedResearchMode ?? "standard", execution?.researchTarget).send();
+  return serverAgentSession.start(prompt, execution?.requestedResearchMode ?? "standard", execution?.researchTarget)
+    .send(event => { if (event.type === "progress") execution?.onProgress?.(event.phase); });
 };
 
 resolveAiGuidePromptHandler(handleAiGuidePrompt);

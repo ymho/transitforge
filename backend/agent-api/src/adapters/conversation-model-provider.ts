@@ -1,5 +1,5 @@
 import { withAgentDecisionSummary } from "@raiquora/agent/model-response";
-import { agentTurnOutputContract, agentTurnPresentationOutputContract, decodeAgentTurnOutput } from "@raiquora/agent/agent-output-contract";
+import { agentTurnOutputContract, agentTurnPresentationOutputContract, decodeAgentTurnOutput, type DecodedAgentTurnOutput } from "@raiquora/agent/agent-output-contract";
 import { validUsedEvidenceIds } from "@raiquora/agent/agent-decision-summary";
 import { AgentModelError, type AgentModelMessage, type AgentModelProvider, type AgentModelRequest, type AgentModelResponse } from "@raiquora/agent/model-provider";
 import { modelToolDescription } from "@raiquora/agent/tool-contract";
@@ -45,17 +45,17 @@ export class ConversationModelProvider implements AgentModelProvider {
     // Some application-strict models still place the requested presentation JSON in
     // responseText. Promote exactly one recognized object; Application performs the
     // complete Evidence/itinerary/cost/reference validation before rendering it.
-    const presentation = decoded?.presentation ?? (presentationRequired && response.metadata.outputMode === "application_strict"
-      ? embeddedPresentation(decoded?.responseText) : undefined);
-    if (decoded && (!presentationRequired || presentation)) return {
+    const presentation = decoded?.kind === "answer" ? decoded.presentation ?? (presentationRequired && response.metadata.outputMode === "application_strict"
+      ? embeddedPresentation(decoded.responseText) : undefined) : undefined;
+    if (decoded && (decoded.kind === "ask" || !presentationRequired || presentation)) return {
       ...mapped,
       // Structured Evidence-bound presentations are validated and rendered by the
       // Application. Model-authored responseText cannot override their facts.
       message: { role: "assistant", content: [{ type: "text", text: decoded.responseText }] },
       ...(presentation ? { declaredPresentation: presentation } : {}),
       decisionSummaryStatus: "valid",
-      decisionSummary: decoded.decision,
-      ...(decoded.decision.usedEvidenceIds ? { declaredEvidenceIds: decoded.decision.usedEvidenceIds } : {}),
+      decisionSummary: applicationDecision(decoded),
+      ...(decoded.kind === "answer" && decoded.evidenceIds ? { declaredEvidenceIds: decoded.evidenceIds } : {}),
     };
     // Decision metadata is advisory for presentation rendering. Preserve an
     // independently recognizable v2 presentation when only Decision decoding
@@ -112,17 +112,29 @@ function parseJsonOutput(text: string, mode: "provider_strict" | "application_st
 }
 
 function independentlyDecodedPresentation(value: unknown): { responseText: string; presentation: Record<string, unknown> } | undefined {
-  if (!isRecord(value) || Object.keys(value).some((key) => !["responseText", "decision", "presentation"].includes(key)) ||
-      !("decision" in value) || typeof value.responseText !== "string" || !value.responseText.trim() || value.responseText.length > 12_000 ||
+  if (!isRecord(value) || Object.keys(value).some((key) => !["kind", "responseText", "evidenceIds", "presentation"].includes(key)) ||
+      value.kind !== "answer" || typeof value.responseText !== "string" || !value.responseText.trim() || value.responseText.length > 12_000 ||
       !isRecord(value.presentation) || !["source-explanation", "travel-plan"].includes(String(value.presentation.kind))) return undefined;
   return { responseText: value.responseText, presentation: value.presentation };
 }
 
 function independentlyDecodedEvidenceSelection(value: unknown): { responseText: string; usedEvidenceIds: string[] } | undefined {
-  if (!isRecord(value) || Object.keys(value).some((key) => !["responseText", "decision"].includes(key)) ||
+  if (!isRecord(value) || Object.keys(value).some((key) => !["kind", "responseText", "evidenceIds"].includes(key)) || value.kind !== "answer" ||
       typeof value.responseText !== "string" || !value.responseText.trim() || value.responseText.length > 12_000 ||
-      !isRecord(value.decision) || value.decision.selectedAction !== "answer" || !validUsedEvidenceIds(value.decision.usedEvidenceIds)) return undefined;
-  return { responseText: value.responseText, usedEvidenceIds: [...value.decision.usedEvidenceIds] };
+      !validUsedEvidenceIds(value.evidenceIds)) return undefined;
+  return { responseText: value.responseText, usedEvidenceIds: [...value.evidenceIds] };
+}
+
+/** Decision is an Application observation of a validated final envelope, not model-authored metadata. */
+function applicationDecision(output: DecodedAgentTurnOutput) {
+  return output.kind === "ask"
+    ? { interpretedGoal: "利用者判断の確認", hardConstraints: [], softPreferences: [], selectedAction: "ask_user" as const,
+      unresolvedFacts: output.missingRequirements.map(({ field }) => field), reasonCodes: ["user_confirmation_required" as const],
+      missingRequirements: output.missingRequirements }
+    : { interpretedGoal: "利用者への回答", hardConstraints: [], softPreferences: [], selectedAction: "answer" as const,
+      unresolvedFacts: [], reasonCodes: [output.presentation || output.evidenceIds?.length ? "evidence_sufficient" as const : "no_factual_claim_required" as const],
+      ...(output.evidenceIds ? { usedEvidenceIds: output.evidenceIds } : {}),
+      ...(output.inTripAnswerPlan ? { inTripAnswerPlan: output.inTripAnswerPlan } : {}) };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

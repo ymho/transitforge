@@ -60,6 +60,8 @@ it("runs the real Server Agent once, with correlated safe logs and no request/st
   expect(s.createApplication).toHaveBeenCalledExactlyOnceWith("execution-1");
   expect(s.model.converse).toHaveBeenCalledOnce();
   expect(s.frames.join("")).toContain('"type":"final"'); expect(s.frames.at(-1)).toContain("event: done");
+  expect(s.frames.join("")).toContain('"phase":"understanding_request"');
+  expect(s.frames.join("")).toContain('"phase":"validating_answer"');
   expect(s.log.mock.calls.map(([entry]) => entry.event)).toEqual(["request_started", "stream_started", "final_sent", "completed"]);
   for (const [entry] of s.log.mock.calls) {
     expect(entry).toMatchObject({ requestId: "execution-1", apiRequestId: "gateway-1", lambdaRequestId: "lambda-1", latencyMs: expect.any(Number) });

@@ -5,6 +5,7 @@ import { parseConsultationRequestProposal, type ConsultationRequestProposal } fr
 import type { Trip } from "@raiquora/trip/trip";
 import type { PublicRequestProposal } from "@raiquora/trip/public-request-proposal";
 import type { ServerAgentTurn } from "../usecases/agent/server-agent.js";
+import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
 import { registerRequestProposalTool } from "../usecases/agent/request-proposal-tool.js";
 import { DynamoDbConversationRepository } from "../adapters/dynamodb-conversation-repository.js";
 import { DynamoDbProfileRepository } from "../adapters/dynamodb-profile-repository.js";
@@ -28,7 +29,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
   stateClient?: StateDynamoClient;
   tripClient?: TripDynamoClient;
 }) {
-  return { async runAgentTurn(input: ServerAgentTurn) {
+  return { async runAgentTurn(input: ServerAgentTurn, reportProgress?: AgentProgressReporter) {
     let tripCostProposal: PublicCostProposal | undefined, retainedCandidatePlan: RetainedCandidatePlan | undefined;
     let trip: Trip | undefined, consultation: Trip | undefined, tripUpdateProposal: PublicRequestProposal | undefined, consultationRequestProposal: ConsultationRequestProposal | undefined;
     const turnStates = new DynamoDbConversationTurnRepository(options.stateTable, options.stateClient);
@@ -67,7 +68,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
         workingStates: turnStates,
       }, { historyBeforeSequence: options.historyBeforeSequence, onTrip: value => { trip = value; },
         onConsultation: value => { consultation = createTrip(value.conversationId, "相談中の条件", value.createdAt, [], value.request); } }),
-    }).runAgentTurn(input);
+    }).runAgentTurn(input, reportProgress);
     return { ...result, ...((result.status === "completed" || result.status === "follow_up") && retainedCandidatePlan ? { publicPlanPresentation: retainedCandidatePlan.presentation } : {}),
       ...((result.status === "completed" || result.status === "follow_up") && tripCostProposal ? { tripCostProposal } : {}), ...((result.status === "completed" || result.status === "follow_up") && tripUpdateProposal ? { tripUpdateProposal } : {}),
       ...((result.status === "completed" || result.status === "follow_up") && consultationRequestProposal ? { consultationRequestProposal } : {}) };

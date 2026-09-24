@@ -2,12 +2,13 @@ import { createConversationServerAgent } from "./conversation-server-agent.js";
 import { DynamoDbConversationRepository } from "../adapters/dynamodb-conversation-repository.js";
 import type { ConversationTurnInput } from "../usecases/agent/conversation-turn.js";
 import { StateError } from "../contracts/server-state.js";
+import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
 
 /** A new client-generated UUID starts an empty server conversation, never imports local history. */
 export function createProductionConversationAgent(options: Parameters<typeof createConversationServerAgent>[0]) {
   const conversations = new DynamoDbConversationRepository(options.stateTable, options.stateClient);
   const application = createConversationServerAgent(options);
-  return { async runConversationTurn(input: ConversationTurnInput) {
+  return { async runConversationTurn(input: ConversationTurnInput, reportProgress?: AgentProgressReporter) {
     if (!await conversations.get(input.principal, input.conversationId)) {
       try {
         await conversations.create(input.principal, input.conversationId, {
@@ -19,6 +20,6 @@ export function createProductionConversationAgent(options: Parameters<typeof cre
         if (!(error instanceof StateError) || error.code !== "conflict" || !await conversations.get(input.principal, input.conversationId)) throw error;
       }
     }
-    return application.runConversationTurn(input);
+    return application.runConversationTurn(input, reportProgress);
   } };
 }

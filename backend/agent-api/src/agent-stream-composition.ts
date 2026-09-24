@@ -4,9 +4,10 @@ import type { ConversationTurnInput } from "./usecases/agent/conversation-turn.j
 import { StateError } from "./contracts/server-state.js";
 import type { AccessTokenVerifier } from "./ports/access-token-verifier.js";
 import { createAgentStreamHandler, type StreamLog } from "./agent-stream-handler.js";
+import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
 
 export interface StreamingAgentApplication {
-  runConversationTurn(input: ConversationTurnInput): Promise<ConversationTurnResult>;
+  runConversationTurn(input: ConversationTurnInput, reportProgress?: AgentProgressReporter): Promise<ConversationTurnResult>;
 }
 
 /** Authenticated streaming owns transport; the stateful Application owns one persisted turn. */
@@ -23,9 +24,15 @@ export function createProductionAgentStream(options: {
     newRunId: options.newExecutionId ?? randomUUID, log: options.log, heartbeatMs: 10_000,
     run: async (input, emit, executionId) => {
       const application = options.createApplication(executionId);
-      await emit({ type: "progress", phase: "running" });
+      let lastPhase: Parameters<AgentProgressReporter>[0] | undefined;
+      const reportProgress: AgentProgressReporter = async phase => {
+        if (phase === lastPhase) return;
+        lastPhase = phase;
+        await emit({ type: "progress", phase });
+      };
+      await reportProgress("understanding_request");
       let result: ConversationTurnResult;
-      try { result = await application.runConversationTurn(input as ConversationTurnInput); }
+      try { result = await application.runConversationTurn(input as ConversationTurnInput, reportProgress); }
       catch (error) {
         await emit({ type: "error", code: error instanceof StateError && error.code === "conflict" ? "turn_conflict" : "agent_failed" });
         return;
