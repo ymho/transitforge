@@ -191,6 +191,34 @@ describe("BedrockConversationModel", () => {
     await expect(model.converse({ messages: [] })).rejects.toMatchObject({ code: "invalid_schema", retryable: false });
   });
 
+  it("drops Bedrock reasoning blocks without retaining private reasoning", async () => {
+    const privateReasoning = "利用者へ表示・保持しない推論";
+    const model = new BedrockConversationModel({ converse: async () => ({
+      output: { message: { role: "assistant", content: [
+        { reasoningContent: { reasoningText: { text: privateReasoning, signature: "signature" } } },
+        { text: "案内します" },
+      ] } },
+      stopReason: "end_turn",
+    }) }, { modelId: "model", systemPrompt: "system" });
+
+    const response = await model.converse({ messages: [] });
+
+    expect(response.message).toEqual({ role: "assistant", content: [{ text: "案内します" }] });
+    expect(JSON.stringify(response)).not.toContain(privateReasoning);
+  });
+
+  it("rejects malformed or reasoning-only Bedrock messages", async () => {
+    const response = (reasoningContent: unknown) => new BedrockConversationModel({ converse: async () => ({
+      output: { message: { role: "assistant", content: [{ reasoningContent }] } },
+      stopReason: "end_turn",
+    }) }, { modelId: "model", systemPrompt: "system" });
+
+    await expect(response({ reasoningText: { text: "private", unexpected: true } }).converse({ messages: [] }))
+      .rejects.toMatchObject({ code: "invalid_schema", retryable: false });
+    await expect(response({ redactedContent: new Uint8Array([1, 2, 3]) }).converse({ messages: [] }))
+      .rejects.toMatchObject({ code: "invalid_schema", retryable: false });
+  });
+
   it("records the exact provider request and failure diagnostic", async () => {
     const providerError = Object.assign(new Error("messages are invalid"), {
       name: "ValidationException",
