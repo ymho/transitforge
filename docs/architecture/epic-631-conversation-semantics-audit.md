@@ -34,8 +34,8 @@ BrowserからWorking State、Profile、Trip本文、owner、revisionを受け取
 | 日付 | `uiContext.calendarDate`、Trip temporal | app-owned relative-date解決 #635 | 2026-09-25→26 fixture | recovery regexを#645/#653で撤去 |
 | 条件強度 | Trip requirement/assumptionの部分表現 | required/preferred/acceptable/avoid/forbidden #633 | pure parser/reducer tests | Prompt内の暗黙強度推測 |
 | 訂正・撤回 | Trip Proposal/CAS、request validator | replace/retract/tombstone/relax/narrow #638 | pure reducer + failure tests | history要約からの復活を禁止 |
-| scope/reference | PresentationReceipt、Trip/day/segment IDs | scope型は最小配置、resolverは#636 | parser testsのみ | 本文の「2番目」再parse |
-| Effective Intent | server context compiler、Trip/Profile snapshot | base+overlay投影 #640 | 未実装 | 直近12 message依存 |
+| scope/reference | PresentationReceipt、Trip/day/segment IDs | frameをfact/tombstone/reducerへ貫通。ordinalは最新のowner-scoped PresentationReceiptからApplication解決 #636 | production turn + stale/range負例 | 本文の「2番目」再parse |
+| Effective Intent | server context compiler、Trip/Profile snapshot | base+overlay+retractをauthority別にpure投影 #640 | Server Runtime context + pure tests | raw semantic overlayのmodel重複送信を撤去 |
 | action policy | Tool schema、SemanticDecision、progress guard | effective revision連携 #641 | 未実装 | LLM自己申告だけの不足判定 |
 | invalidation/replan | Evidence applicability、PlanVariant、CAS | meaning dependency連携 #642 | 未実装 | 全消去・無条件再検索 |
 | proposal/branch | Request Proposal、PlanVariant、Trip CAS | conversation delta接続 #643 | 未実装 | overlayからの直接Trip writeは禁止 |
@@ -111,3 +111,14 @@ phaseは表示・予算を選ぶ補助情報であり、質問・Evidence・行�
 - 実装開始SHA: `4a720021bde15fce77afb9759868bfe1becbf686`
 - 自動test: `npm test`（frontend 1718、agent-api/runtime 1095、stream contract 5、全件成功）、`npm run workspace:check`、`npm run architecture:check`、`npm run build`（全て成功）。`npm run eval:agent:smoke`は12/12成功。
 - 実model、実Provider、実Browser、deployment: この表の作成時点では未実施。scripted fixtureの成功と区別する。
+
+## Wave 2 実行記録
+
+- base: PR #655 merge `4cd61282cefedea0efd18e8ebc131e878575eb45`
+- frameはfact/tombstone/reducer receiptのidentityに含め、hypothetical set/retractがactualを変更しない対テストを追加した。
+- 発言行為を操作と分離し、Application受理receiptからRuntimeへ投影する。repair/guard文はInterpreterのtrusted utteranceへ入れない。
+- `EffectiveIntent`は保存Request、Profile hint、actual/hypothetical会話fact、retraction、suppressed base refを同じrevision/fingerprintで導出する。decision modelへraw semantic overlayを重複送信しない。
+- ordinalはPresentationReceiptからApplicationがcandidate refへ解決し、model自己申告のresolved ref、範囲外ordinal、別Trip targetを拒否する。
+- 相対日、相対weekday、月offsetをtrusted calendarで解決し、anchor/rule versionを保持する。月精度を日へ丸めず、quoteにないexact dateを拒否する。
+- 自動test: `npm test`（frontend 1718、agent-api/runtime 1103、stream contract 5、全件成功）、`npm run workspace:check`、`npm run architecture:check`、`npm run build`（全て成功）。`npm run eval:agent:smoke`は12/12成功。
+- 実model、実Provider、実Browser、deployment: 未実施。scripted成功と区別する。

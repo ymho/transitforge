@@ -28,7 +28,7 @@ async function begin(f: Awaited<ReturnType<typeof setup>>) {
 describe("Conversation turn transactions", () => {
   it("commits accepted intent before the answer and replays it after answer failure", async () => {
     const f = await setup(), lease = await begin(f);
-    const delta = { version: 1 as const, mutationId: `intent-turn:${turnId}`, baseIntentRevision: 0, operations: [{
+    const delta = { version: 1 as const, mutationId: `intent-turn:${turnId}`, baseIntentRevision: 0, speechAct: "inform" as const, operations: [{
       operationId: `intent-op:${turnId}:1`, groupId: `intent-group:${turnId}:1`, action: "set" as const, target: "destination" as const,
       scope: { type: "conversation" as const }, modality: "preferred" as const, precision: "exact" as const,
       value: { kind: "place_label" as const, label: "出雲大社" }, frame: "actual" as const,

@@ -1,6 +1,7 @@
 export const intentTargets = [
   "goal", "origin", "destination", "start_date", "end_date", "duration", "party_size",
   "budget", "experience", "pace", "accommodation", "transport", "fixed_schedule",
+  "candidate_selection",
 ] as const;
 export type IntentTarget = typeof intentTargets[number];
 
@@ -10,6 +11,8 @@ export const intentUnknownReasons = ["unspecified", "undecided", "no_preference"
 export type IntentUnknownReason = typeof intentUnknownReasons[number];
 export type IntentPrecision = "exact" | "approximate" | "range" | "qualitative";
 export type IntentOperationKind = "set" | "add_alternative" | "replace" | "retract" | "relax" | "narrow";
+export const intentSpeechActs = ["inform", "correct", "question", "consider", "reject", "confirm", "cancel", "switch_topic"] as const;
+export type IntentSpeechAct = typeof intentSpeechActs[number];
 
 export type IntentScope =
   | { type: "conversation" }
@@ -21,10 +24,13 @@ export type IntentScope =
 export type IntentValue =
   | { kind: "text"; text: string }
   | { kind: "place_label"; label: string }
-  | { kind: "local_date"; date: string; expression?: "today" | "tomorrow" | "day_after_tomorrow" }
+  | { kind: "local_date"; date: string; expression?: "today" | "tomorrow" | "day_after_tomorrow" | "relative_weekday";
+      anchorDate?: string; resolverVersion?: "calendar-v1" }
+  | { kind: "local_month"; month: string; expression: "month_offset"; anchorDate: string; resolverVersion: "calendar-v1" }
   | { kind: "quantity"; amount: number; unit: "nights" | "days" | "people" }
   | { kind: "quantity_range"; minimum: number; maximum: number; unit: "nights" | "days" | "people" }
   | { kind: "money"; amount: number; currency?: string; basis?: "trip" | "per_person" | "per_night" | "per_room" }
+  | { kind: "candidate_ref"; presentationId: string; presentationVersion: 1; candidateRef: string }
   | { kind: "unknown"; reason: IntentUnknownReason };
 
 export interface AcceptedIntentOperation {
@@ -44,6 +50,7 @@ export interface AcceptedIntentDelta {
   version: 1;
   mutationId: string;
   baseIntentRevision: number;
+  speechAct: IntentSpeechAct;
   operations: AcceptedIntentOperation[];
 }
 
@@ -63,6 +70,7 @@ export interface ConversationIntentTombstone {
   tombstoneId: string;
   target: IntentTarget;
   scope: IntentScope;
+  frame: "actual" | "hypothetical";
   sourceOperationId: string;
   reason: IntentUnknownReason | "retracted";
 }
@@ -89,8 +97,9 @@ export function emptyConversationIntentOverlay(): ConversationIntentOverlay {
 }
 
 export function parseAcceptedIntentDelta(value: unknown): AcceptedIntentDelta {
-  if (!record(value) || !only(value, ["version", "mutationId", "baseIntentRevision", "operations"]) || value.version !== 1 ||
+  if (!record(value) || !only(value, ["version", "mutationId", "baseIntentRevision", "speechAct", "operations"]) || value.version !== 1 ||
       !reference(value.mutationId) || !nonnegativeInteger(value.baseIntentRevision) || !Array.isArray(value.operations) ||
+      !intentSpeechActs.includes(value.speechAct as IntentSpeechAct) ||
       value.operations.length < 1 || value.operations.length > conversationIntentLimits.maximumOperations || encodedBytes(value) > conversationIntentLimits.maximumBytes) {
     throw new Error("Invalid accepted intent delta");
   }
@@ -99,11 +108,11 @@ export function parseAcceptedIntentDelta(value: unknown): AcceptedIntentDelta {
   const groups = new Map<string, Set<string>>();
   for (const operation of operations) {
     const targets = groups.get(operation.groupId) ?? new Set<string>();
-    const key = `${operation.target}:${JSON.stringify(operation.scope)}`;
+    const key = `${operation.frame}:${operation.target}:${JSON.stringify(operation.scope)}`;
     if (targets.has(key)) throw new Error("Conflicting operations in one atomic group");
     targets.add(key); groups.set(operation.groupId, targets);
   }
-  return structuredClone({ version: 1, mutationId: value.mutationId, baseIntentRevision: value.baseIntentRevision, operations });
+  return structuredClone({ version: 1, mutationId: value.mutationId, baseIntentRevision: value.baseIntentRevision, speechAct: value.speechAct, operations }) as AcceptedIntentDelta;
 }
 
 export function parseConversationIntentOverlay(value: unknown): ConversationIntentOverlay {
@@ -143,10 +152,11 @@ function parseFact(value: unknown): ConversationIntentFact {
 }
 
 function parseTombstone(value: unknown): ConversationIntentTombstone {
-  if (!record(value) || !only(value, ["tombstoneId", "target", "scope", "sourceOperationId", "reason"]) || !reference(value.tombstoneId) ||
+  if (!record(value) || !only(value, ["tombstoneId", "target", "scope", "frame", "sourceOperationId", "reason"]) || !reference(value.tombstoneId) ||
       !intentTargets.includes(value.target as IntentTarget) || !reference(value.sourceOperationId) ||
+      !["actual", "hypothetical"].includes(String(value.frame)) ||
       ![...intentUnknownReasons, "retracted"].includes(value.reason as IntentUnknownReason | "retracted")) throw new Error("Invalid conversation intent tombstone");
-  return { tombstoneId: value.tombstoneId, target: value.target as IntentTarget, scope: parseIntentScope(value.scope), sourceOperationId: value.sourceOperationId,
+  return { tombstoneId: value.tombstoneId, target: value.target as IntentTarget, scope: parseIntentScope(value.scope), frame: value.frame as "actual" | "hypothetical", sourceOperationId: value.sourceOperationId,
     reason: value.reason as ConversationIntentTombstone["reason"] };
 }
 
@@ -166,9 +176,15 @@ function parseValue(value: unknown): IntentValue {
   if (!record(value) || typeof value.kind !== "string") throw new Error("Invalid intent value");
   if (value.kind === "text" && only(value, ["kind", "text"]) && boundedText(value.text)) return { kind: "text", text: value.text };
   if (value.kind === "place_label" && only(value, ["kind", "label"]) && boundedText(value.label)) return { kind: "place_label", label: value.label };
-  if (value.kind === "local_date" && only(value, ["kind", "date", "expression"]) && validDate(value.date) &&
-      (value.expression === undefined || ["today", "tomorrow", "day_after_tomorrow"].includes(String(value.expression)))) return { kind: "local_date", date: value.date,
-        ...(value.expression ? { expression: value.expression as "today" | "tomorrow" | "day_after_tomorrow" } : {}) };
+  if (value.kind === "local_date" && only(value, ["kind", "date", "expression", "anchorDate", "resolverVersion"]) && validDate(value.date) &&
+      (value.expression === undefined || ["today", "tomorrow", "day_after_tomorrow", "relative_weekday"].includes(String(value.expression))) &&
+      (value.anchorDate === undefined || validDate(value.anchorDate)) && (value.resolverVersion === undefined || value.resolverVersion === "calendar-v1") &&
+      (value.expression === undefined || value.anchorDate !== undefined && value.resolverVersion === "calendar-v1")) return { kind: "local_date", date: value.date,
+        ...(value.expression ? { expression: value.expression as "today" | "tomorrow" | "day_after_tomorrow" | "relative_weekday",
+          anchorDate: value.anchorDate as string, resolverVersion: "calendar-v1" as const } : {}) };
+  if (value.kind === "local_month" && only(value, ["kind", "month", "expression", "anchorDate", "resolverVersion"]) && validMonth(value.month) &&
+      value.expression === "month_offset" && validDate(value.anchorDate) && value.resolverVersion === "calendar-v1") return { kind: "local_month", month: value.month,
+        expression: "month_offset", anchorDate: value.anchorDate, resolverVersion: "calendar-v1" };
   if (value.kind === "quantity" && only(value, ["kind", "amount", "unit"]) && nonnegativeInteger(value.amount) && ["nights", "days", "people"].includes(String(value.unit)))
     return { kind: "quantity", amount: value.amount, unit: value.unit as "nights" | "days" | "people" };
   if (value.kind === "quantity_range" && only(value, ["kind", "minimum", "maximum", "unit"]) && nonnegativeInteger(value.minimum) && nonnegativeInteger(value.maximum) &&
@@ -178,6 +194,9 @@ function parseValue(value: unknown): IntentValue {
       (value.currency === undefined || typeof value.currency === "string" && /^[A-Z]{3}$/u.test(value.currency)) &&
       (value.basis === undefined || ["trip", "per_person", "per_night", "per_room"].includes(String(value.basis)))) return { kind: "money", amount: value.amount,
         ...(value.currency ? { currency: value.currency } : {}), ...(value.basis ? { basis: value.basis as "trip" | "per_person" | "per_night" | "per_room" } : {}) };
+  if (value.kind === "candidate_ref" && only(value, ["kind", "presentationId", "presentationVersion", "candidateRef"]) && reference(value.presentationId) &&
+      value.presentationVersion === 1 && reference(value.candidateRef)) return { kind: "candidate_ref", presentationId: value.presentationId,
+        presentationVersion: 1, candidateRef: value.candidateRef };
   if (value.kind === "unknown" && only(value, ["kind", "reason"]) && intentUnknownReasons.includes(value.reason as IntentUnknownReason)) return { kind: "unknown", reason: value.reason as IntentUnknownReason };
   throw new Error("Invalid intent value");
 }
@@ -189,6 +208,7 @@ function boundedText(value: unknown): value is string { return typeof value === 
 function nonnegativeInteger(value: unknown): value is number { return Number.isSafeInteger(value) && Number(value) >= 0; }
 function finiteNonnegative(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value) && value >= 0; }
 function validDate(value: unknown): value is string { if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false; const parsed = new Date(`${value}T00:00:00Z`); return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value; }
+function validMonth(value: unknown): value is string { if (typeof value !== "string" || !/^\d{4}-\d{2}$/u.test(value)) return false; const parsed = new Date(`${value}-01T00:00:00Z`); return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 7) === value; }
 function stringList(value: unknown, maximum: number): value is string[] { return Array.isArray(value) && value.length <= maximum && value.every(reference); }
 function unique(values: readonly string[]): void { if (new Set(values).size !== values.length) throw new Error("Duplicate conversation intent reference"); }
 function encodedBytes(value: unknown): number { try { return new TextEncoder().encode(JSON.stringify(value)).byteLength; } catch { return Number.POSITIVE_INFINITY; } }

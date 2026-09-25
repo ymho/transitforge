@@ -2,12 +2,14 @@ import { decodeUtteranceInterpretation, semanticInterpretationOutputContract, ty
 import type { ConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
 import type { ConversationModel } from "../../ports/conversation-model.js";
 import { ConversationModelError } from "../../ports/conversation-model.js";
+import type { ConversationWorkingState } from "@raiquora/agent/conversation-working-state";
 
 export interface ConversationIntentInterpreterInput {
   userRequest: string;
   calendarDate?: string;
   overlay: ConversationIntentOverlay;
   turnId: string;
+  workingState?: ConversationWorkingState;
 }
 
 /** One bounded structured decision call. The model proposes meaning only; authority,
@@ -15,10 +17,13 @@ export interface ConversationIntentInterpreterInput {
 export function createConversationIntentInterpreter(model: ConversationModel) {
   return async (input: ConversationIntentInterpreterInput): Promise<UtteranceInterpretation> => {
     const request = {
-      task: "Interpret only the semantic changes stated in utterance. Do not invent missing values. Questions do not assert values. Preserve acceptable/preferred/required distinctions. Use hypothetical frame for if/なら questions. Quote the exact supporting substring from utterance. Return no_change for greetings or questions with no requested change.",
+      task: "Interpret only the semantic changes stated in utterance. Classify its speechAct independently from outcome. Do not invent missing values. Questions do not assert values. Preserve acceptable/preferred/required distinctions. Use hypothetical frame for if/なら questions. Quote the exact supporting substring from utterance. Return no_change for greetings or questions with no requested change.",
       trustedCalendar: input.calendarDate ? { today: input.calendarDate, tomorrow: stepDate(input.calendarDate, 1), dayAfterTomorrow: stepDate(input.calendarDate, 2) } : undefined,
       currentIntent: { intentRevision: input.overlay.intentRevision, facts: input.overlay.facts.map(({ target, scope, modality, precision, value, frame }) =>
         ({ target, scope, modality, precision, value, frame })), tombstones: input.overlay.tombstones.map(({ target, scope, reason }) => ({ target, scope, reason })) },
+      recentPresentations: input.workingState?.presentations.slice(-3).map(({ presentationId, version, target, entries }) => ({
+        presentationId, version, ...(target ? { target } : {}), entries,
+      })) ?? [],
       utterance: input.userRequest,
     };
     const response = await model.converse({

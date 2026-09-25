@@ -10,6 +10,7 @@ import {
   type IntentModality,
   type IntentOperationKind,
   type IntentScope,
+  type IntentSpeechAct,
   type IntentTarget,
 } from "@raiquora/trip/conversation-intent";
 
@@ -20,6 +21,7 @@ export interface IntentOperationReceipt {
   action: IntentOperationKind;
   target: IntentTarget;
   scope: IntentScope;
+  frame: "actual" | "hypothetical";
   status: "accepted" | "rejected";
   reason: IntentOperationReason;
   beforeFactRefs: string[];
@@ -28,6 +30,7 @@ export interface IntentOperationReceipt {
 export interface IntentApplicationReceipt {
   version: 1;
   mutationId: string;
+  speechAct: IntentSpeechAct;
   beforeIntentRevision: number;
   intentRevision: number;
   replayed: boolean;
@@ -36,19 +39,20 @@ export interface IntentApplicationReceipt {
 export interface IntentReductionResult { overlay: ConversationIntentOverlay; receipt: IntentApplicationReceipt }
 
 export function parseIntentApplicationReceipt(value: unknown): IntentApplicationReceipt {
-  if (!record(value) || !only(value, ["version", "mutationId", "beforeIntentRevision", "intentRevision", "replayed", "operations"]) || value.version !== 1 ||
+  if (!record(value) || !only(value, ["version", "mutationId", "speechAct", "beforeIntentRevision", "intentRevision", "replayed", "operations"]) || value.version !== 1 ||
       !reference(value.mutationId) || !nonnegativeInteger(value.beforeIntentRevision) || !nonnegativeInteger(value.intentRevision) || typeof value.replayed !== "boolean" ||
+      !["inform", "correct", "question", "consider", "reject", "confirm", "cancel", "switch_topic"].includes(String(value.speechAct)) ||
       !Array.isArray(value.operations) || value.operations.length > conversationIntentLimits.maximumOperations) throw new Error("Invalid intent application receipt");
   const operations = value.operations.map((item) => {
-    if (!record(item) || !only(item, ["operationId", "groupId", "action", "target", "scope", "status", "reason", "beforeFactRefs", "afterFactRefs"]) || !reference(item.operationId) ||
+    if (!record(item) || !only(item, ["operationId", "groupId", "action", "target", "scope", "frame", "status", "reason", "beforeFactRefs", "afterFactRefs"]) || !reference(item.operationId) ||
         !reference(item.groupId) || !["set", "add_alternative", "replace", "retract", "relax", "narrow"].includes(String(item.action)) ||
-        !["goal", "origin", "destination", "start_date", "end_date", "duration", "party_size", "budget", "experience", "pace", "accommodation", "transport", "fixed_schedule"].includes(String(item.target)) ||
-        !["accepted", "rejected"].includes(String(item.status)) ||
+        !["goal", "origin", "destination", "start_date", "end_date", "duration", "party_size", "budget", "experience", "pace", "accommodation", "transport", "fixed_schedule", "candidate_selection"].includes(String(item.target)) ||
+        !["actual", "hypothetical"].includes(String(item.frame)) || !["accepted", "rejected"].includes(String(item.status)) ||
         !["applied", "already_applied", "target_missing", "invalid_transition", "capacity_exceeded"].includes(String(item.reason)) ||
         !referenceList(item.beforeFactRefs) || !referenceList(item.afterFactRefs)) throw new Error("Invalid intent operation receipt");
     return { ...structuredClone(item), scope: parseIntentScope(item.scope) } as IntentOperationReceipt;
   });
-  return { version: 1, mutationId: value.mutationId, beforeIntentRevision: value.beforeIntentRevision, intentRevision: value.intentRevision,
+  return { version: 1, mutationId: value.mutationId, speechAct: value.speechAct as IntentSpeechAct, beforeIntentRevision: value.beforeIntentRevision, intentRevision: value.intentRevision,
     replayed: value.replayed, operations };
 }
 
@@ -58,9 +62,9 @@ export function reduceConversationIntent(current: ConversationIntentOverlay, can
   if (delta.baseIntentRevision !== overlay.intentRevision) throw new Error("Intent revision conflict");
   if (overlay.appliedMutationIds.includes(delta.mutationId)) return {
     overlay,
-    receipt: { version: 1, mutationId: delta.mutationId, beforeIntentRevision: overlay.intentRevision,
+    receipt: { version: 1, mutationId: delta.mutationId, speechAct: delta.speechAct, beforeIntentRevision: overlay.intentRevision,
       intentRevision: overlay.intentRevision, replayed: true, operations: delta.operations.map((operation) => ({ operationId: operation.operationId,
-        groupId: operation.groupId, action: operation.action, target: operation.target, scope: structuredClone(operation.scope), status: "accepted", reason: "already_applied", beforeFactRefs: matchingFacts(overlay, operation).map(({ factId }) => factId),
+        groupId: operation.groupId, action: operation.action, target: operation.target, scope: structuredClone(operation.scope), frame: operation.frame, status: "accepted", reason: "already_applied", beforeFactRefs: matchingFacts(overlay, operation).map(({ factId }) => factId),
         afterFactRefs: matchingFacts(overlay, operation).map(({ factId }) => factId) })) },
   };
 
@@ -70,7 +74,7 @@ export function reduceConversationIntent(current: ConversationIntentOverlay, can
     const simulated = simulateGroup(next, operations);
     if (!simulated.valid) {
       receipts.push(...operations.map((operation): IntentOperationReceipt => ({ operationId: operation.operationId, groupId: operation.groupId,
-        action: operation.action, target: operation.target, scope: structuredClone(operation.scope), status: "rejected",
+        action: operation.action, target: operation.target, scope: structuredClone(operation.scope), frame: operation.frame, status: "rejected",
         reason: simulated.reason, beforeFactRefs: matchingFacts(next, operation).map(({ factId }) => factId), afterFactRefs: [] })));
       continue;
     }
@@ -80,7 +84,7 @@ export function reduceConversationIntent(current: ConversationIntentOverlay, can
   next.intentRevision += 1;
   next.appliedMutationIds = [...next.appliedMutationIds, delta.mutationId].slice(-conversationIntentLimits.maximumAppliedMutations);
   next = parseConversationIntentOverlay(next);
-  return { overlay: next, receipt: { version: 1, mutationId: delta.mutationId, beforeIntentRevision: overlay.intentRevision,
+  return { overlay: next, receipt: { version: 1, mutationId: delta.mutationId, speechAct: delta.speechAct, beforeIntentRevision: overlay.intentRevision,
     intentRevision: next.intentRevision, replayed: false, operations: receipts } };
 }
 
@@ -103,7 +107,7 @@ function simulateGroup(current: ConversationIntentOverlay, operations: AcceptedI
       overlay.facts = overlay.facts.filter((fact) => !before.some(({ factId }) => factId === fact.factId));
       overlay.tombstones = [...overlay.tombstones.filter((value) => !sameTargetScope(value, operation)), {
         tombstoneId: boundedRef(`tombstone:${operation.operationId}`), target: operation.target, scope: structuredClone(operation.scope),
-        sourceOperationId: operation.operationId, reason: "retracted" as const,
+        frame: operation.frame, sourceOperationId: operation.operationId, reason: "retracted" as const,
       }];
       if (overlay.tombstones.length > conversationIntentLimits.maximumTombstones) return { valid: false, reason: "capacity_exceeded" };
       receipts.push(receipt(operation, before, []));
@@ -155,18 +159,18 @@ function grouped(operations: AcceptedIntentOperation[]): AcceptedIntentOperation
   return [...groups.values()];
 }
 
-function matchingFacts(overlay: ConversationIntentOverlay, operation: Pick<AcceptedIntentOperation, "target" | "scope">): ConversationIntentFact[] {
+function matchingFacts(overlay: ConversationIntentOverlay, operation: Pick<AcceptedIntentOperation, "target" | "scope" | "frame">): ConversationIntentFact[] {
   return overlay.facts.filter((fact) => sameTargetScope(fact, operation));
 }
-function sameTargetScope(left: { target: AcceptedIntentOperation["target"]; scope: AcceptedIntentOperation["scope"] }, right: { target: AcceptedIntentOperation["target"]; scope: AcceptedIntentOperation["scope"] }): boolean {
-  return left.target === right.target && JSON.stringify(left.scope) === JSON.stringify(right.scope);
+function sameTargetScope(left: { target: AcceptedIntentOperation["target"]; scope: AcceptedIntentOperation["scope"]; frame: AcceptedIntentOperation["frame"] }, right: { target: AcceptedIntentOperation["target"]; scope: AcceptedIntentOperation["scope"]; frame: AcceptedIntentOperation["frame"] }): boolean {
+  return left.target === right.target && left.frame === right.frame && JSON.stringify(left.scope) === JSON.stringify(right.scope);
 }
 function sameFactMeaning(left: ConversationIntentFact, right: ConversationIntentFact): boolean {
   return sameTargetScope(left, right) && left.modality === right.modality && left.precision === right.precision && left.frame === right.frame && JSON.stringify(left.value) === JSON.stringify(right.value);
 }
 function receipt(operation: AcceptedIntentOperation, before: ConversationIntentFact[], after: ConversationIntentFact[]): IntentOperationReceipt {
   return { operationId: operation.operationId, groupId: operation.groupId, action: operation.action, target: operation.target,
-    scope: structuredClone(operation.scope), status: "accepted", reason: "applied",
+    scope: structuredClone(operation.scope), frame: operation.frame, status: "accepted", reason: "applied",
     beforeFactRefs: before.map(({ factId }) => factId), afterFactRefs: after.map(({ factId }) => factId) };
 }
 function boundedRef(value: string): string { return value.length <= 200 ? value : value.slice(0, 200); }

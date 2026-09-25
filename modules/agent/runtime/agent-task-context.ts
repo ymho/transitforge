@@ -16,9 +16,11 @@ export interface AgentTaskContext {
   /** Application-derived current-turn meaning change. Models cannot assert this field. */
   currentIntentChange?: {
     intentRevision: number;
+    speechAct: import("@raiquora/trip/conversation-intent").IntentSpeechAct;
     operations: Array<{
       action: import("@raiquora/trip/conversation-intent").IntentOperationKind;
       target: import("@raiquora/trip/conversation-intent").IntentTarget;
+      frame: "actual" | "hypothetical";
     }>;
   };
   researchTarget?: { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number };

@@ -12,7 +12,8 @@ import { tripFeasibilityContext, type AgentTripFeasibilityContext } from "./trip
 import { boundTripReadinessContext, type AgentTripReadinessContext } from "./trip-readiness-context";
 import { inTripPresentations, supportsInTripPresentation, type InTripPresentation } from "./in-trip-answer-plan";
 import type { AgentTaskContext } from "./agent-task-context";
-import { workingStateWithoutEvidence, type ConversationWorkingState } from "./conversation-working-state";
+import { semanticStateOf, workingStateWithoutEvidence, type ConversationWorkingState } from "./conversation-working-state";
+import { compileEffectiveIntent, type EffectiveIntent } from "./effective-intent";
 
 export type AgentContextValue = string | number | boolean | null;
 
@@ -113,6 +114,7 @@ export interface AgentDecisionContext {
   previousAssistantTurn?: AgentTurnOutcome;
   persistedTripRequest?: unknown;
   requestSource?: "trip" | "conversation_draft";
+  effectiveIntent?: EffectiveIntent;
   tripHardConstraints?: unknown;
   tripSoftPreferences?: unknown;
   unconfirmedAssumptions?: unknown;
@@ -143,6 +145,16 @@ export function buildAgentDecisionContext(
   if (input?.inTrip) validateInTripContext(input.inTrip);
   const tripRequest = input?.currentTrip?.request ?? (input?.consultationRequest ? parseConsultationRequest(input.consultationRequest) : undefined);
   const hasTripRequest = tripRequest !== undefined;
+  const requestSource = input?.currentTrip?.request ? "trip" as const : input?.consultationRequest ? "conversation_draft" as const : undefined;
+  const effectiveIntent = input?.workingState?.semantic || tripRequest ? compileEffectiveIntent({
+    ...(tripRequest ? { baseRequest: tripRequest } : {}), ...(requestSource ? { baseSource: requestSource } : {}),
+    ...(input?.taskContext?.requestRevision === undefined ? {} : { baseRevision: input.taskContext.requestRevision }),
+    overlay: semanticStateOf(input?.workingState).overlay,
+  }) : undefined;
+  const workingStateProjection = input?.workingState ? workingStateWithoutEvidence(input.workingState) : undefined;
+  // effectiveIntent is the only semantic projection exposed to the decision model.
+  // Keep presentation/question continuity without duplicating the mutable overlay.
+  if (workingStateProjection && effectiveIntent) delete workingStateProjection.semantic;
   const effective = tripRequest ? effectiveTripConstraints(tripRequest) : [];
   const currentTrip = input?.currentTrip ? Object.fromEntries(Object.entries(input.currentTrip).filter(([key]) =>
     !["request", "effectiveHardConstraints", "effectiveSoftPreferences", "unconfirmedAssumptions"].includes(key))) : undefined;
@@ -160,7 +172,7 @@ export function buildAgentDecisionContext(
     : undefined;
   return {
     ...(input?.taskContext ? { taskContext: structuredClone(input.taskContext) } : {}),
-    ...(input?.workingState ? { workingState: workingStateWithoutEvidence(input.workingState) } : {}),
+    ...(workingStateProjection ? { workingState: workingStateProjection } : {}),
     ...(input?.inTrip ? { inTrip: structuredClone(input.inTrip) } : {}),
     ...(input?.inTripReplanScope ? { inTripReplanScope: structuredClone(input.inTripReplanScope) } : {}),
     ...(input?.tripReadiness ? { tripReadiness: boundTripReadinessContext(input.tripReadiness) } : {}),
@@ -173,11 +185,12 @@ export function buildAgentDecisionContext(
       // Preserve complete typed constraints/links, not the generic key/value legacy interpretation.
       // Privacy is still enforced; an oversized request fails the message budget rather than losing conditions.
       persistedTripRequest: privateRequestProjection(tripRequest),
-      requestSource: input?.currentTrip?.request ? "trip" as const : "conversation_draft" as const,
+      requestSource: requestSource!,
       tripHardConstraints: privateRequestProjection(effective.filter((c) => c.strength === "hard")),
       tripSoftPreferences: privateRequestProjection(effective.filter((c) => c.strength === "soft")),
       unconfirmedAssumptions: privateRequestProjection(tripRequest!.assumptions.filter((a) => a.status === "unconfirmed")),
     } : {}),
+    ...(effectiveIntent ? { effectiveIntent } : {}),
     ...(decision ? { currentTurnDecision: structuredClone(decision) } : {}),
     // The API already applies an explicit 8,000-character boundary. This field is the
     // authoritative current request and must never be silently normalized or sliced.
@@ -264,6 +277,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     previousAssistantTurn: context.previousAssistantTurn,
     persistedTripRequest: context.persistedTripRequest,
     requestSource: context.requestSource,
+    effectiveIntent: context.effectiveIntent,
     tripHardConstraints: context.tripHardConstraints,
     tripSoftPreferences: context.tripSoftPreferences,
     unconfirmedAssumptions: context.unconfirmedAssumptions,
@@ -383,6 +397,7 @@ export function agentDecisionContextText(context: AgentDecisionContext): string 
     "featureContext.uiFocusは利用者が画面で選択した予定の一時的な参照です。「ここ」などの相談では同じitemIdの最新itemを参照し、変更は具体的なProposalにしてください。focus自体はTripの状態でも変更の承認でもなく、他の予定を変更する指示ではありません。",
     "currentTrip.planningState/lifecycleStateはTripの現在地であり、Tool選択や質問順を固定しません。persistedTripRequestは希望・条件、currentTurnDecisionは今回の判断で、状態とは別です。pre_tripだけで将来の旅行とは断定せず、採用済みscheduleの年・精度を保ち、過去日程を今年や翌年に補正しないでください。旅行日・実行状態をViewerの表示日時から推測せず、scheduleTruncatedの場合は全旅行期間を断定しないでください。状態変更はProposalにしてください。",
     ...(context.persistedTripRequest !== undefined ? ["persistedTripRequestだけが今回条件の正本です。tripHardConstraints/ tripSoftPreferencesは有効条件の読み取り投影で、強さと仮定の確認状態は別です。unconfirmedAssumptionsは仮置きとして説明し、却下済みの条件は使わないでください。travelProfileは普段の嗜好、currentTurnDecisionは今回の解釈です。解釈や履歴で正本を上書きせず、変更はProposalとして提案してください。"] : []),
+    ...(context.effectiveIntent ? ["effectiveIntentはApplicationが保存Requestと受理済み会話差分から導出した同一revisionのprojectionです。actualConversationFactsは今回の会話で検証済みの明示条件、hypotheticalFactsは仮定、profileHintsは普段の参考情報です。suppressedBaseRefsとretractionsを尊重し、古いRequest・Profile・会話要約から値を復活させないでください。"] : []),
     `<agent_context>${boundedContext}</agent_context>`,
   ].join("\n");
 }

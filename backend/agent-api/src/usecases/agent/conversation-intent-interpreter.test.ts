@@ -5,7 +5,7 @@ import type { ConversationModel } from "../../ports/conversation-model.js";
 
 describe("Conversation intent interpreter", () => {
   it("uses the decision model with the bounded semantic contract", async () => {
-    const converse = vi.fn<ConversationModel["converse"]>(async () => ({ message: { role: "assistant" as const, content: [{ text: JSON.stringify({ outcome: "delta", operations: [{ atomicGroup: 1,
+    const converse = vi.fn<ConversationModel["converse"]>(async () => ({ message: { role: "assistant" as const, content: [{ text: JSON.stringify({ outcome: "delta", speechAct: "inform", operations: [{ atomicGroup: 1,
       action: "set", target: "start_date", modality: "required", precision: "exact", frame: "actual", quote: "明日出発",
       value: { kind: "relative_date", relation: "tomorrow" } }], unresolvedFragments: [] }) }] }, stopReason: "end_turn" as const,
       metadata: { modelId: "test", latencyMs: 1 } }));

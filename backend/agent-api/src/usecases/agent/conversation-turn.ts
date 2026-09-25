@@ -18,7 +18,8 @@ export interface ConversationTurnInput extends ServerAgentTurn { conversationId:
 export function createConversationTurnApplication(dependencies: {
   turns: ConversationTurnRepository;
   runAgentTurn: (input: ServerAgentTurn, historyBeforeSequence: number, reportProgress?: AgentProgressReporter) => Promise<AgentRuntimeResult & Pick<ConversationTurnResult, "tripUpdateProposal" | "consultationRequestProposal" | "tripCostProposal">>;
-  interpretIntent?: (input: { userRequest: string; calendarDate?: string; overlay: import("@raiquora/trip/conversation-intent").ConversationIntentOverlay; turnId: string }) => Promise<UtteranceInterpretation>;
+  interpretIntent?: (input: { userRequest: string; calendarDate?: string; overlay: import("@raiquora/trip/conversation-intent").ConversationIntentOverlay;
+    turnId: string; workingState?: import("@raiquora/agent/conversation-working-state").ConversationWorkingState }) => Promise<UtteranceInterpretation>;
   diagnostics?: AgentDiagnosticsSink;
   log?: (event: string, fields: Record<string, unknown>) => void;
 }) {
@@ -34,10 +35,12 @@ export function createConversationTurnApplication(dependencies: {
     let continuity: ConversationTurnContinuity | undefined;
     try {
       if (begun.state === "started" && dependencies.interpretIntent) {
-        const semantic = semanticStateOf(await dependencies.turns.getWorkingState(principal, conversationId));
-        const interpretation = await dependencies.interpretIntent({ userRequest, calendarDate: uiContext?.calendarDate, overlay: semantic.overlay, turnId });
+        const workingState = await dependencies.turns.getWorkingState(principal, conversationId);
+        const semantic = semanticStateOf(workingState);
+        const interpretation = await dependencies.interpretIntent({ userRequest, calendarDate: uiContext?.calendarDate, overlay: semantic.overlay, turnId,
+          ...(workingState ? { workingState } : {}) });
         const delta = acceptedIntentDeltaFromInterpretation({ interpretation, userRequest, turnId,
-          baseIntentRevision: semantic.overlay.intentRevision, calendarDate: uiContext?.calendarDate });
+          baseIntentRevision: semantic.overlay.intentRevision, calendarDate: uiContext?.calendarDate, ...(workingState ? { workingState } : {}) });
         if (delta) {
           const receipt = await dependencies.turns.acceptIntent(identity, begun.lease, delta);
           await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "decision", reason: "validated",

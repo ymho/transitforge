@@ -66,8 +66,8 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
       ? receiptCandidate : undefined;
     const acceptedIntentOperations = currentIntentReceipt?.operations.filter(({ status }) => status === "accepted") ?? [];
     const taskContextWithIntent = taskContext && currentIntentReceipt && acceptedIntentOperations.length ? { ...taskContext,
-      currentIntentChange: { intentRevision: currentIntentReceipt.intentRevision,
-        operations: acceptedIntentOperations.map(({ action, target }) => ({ action, target })) },
+      currentIntentChange: { intentRevision: currentIntentReceipt.intentRevision, speechAct: currentIntentReceipt.speechAct,
+        operations: acceptedIntentOperations.map(({ action, target, frame }) => ({ action, target, frame })) },
     } : taskContext;
     const focusedItem = itemId ? trip?.items.find((item) => item.id === itemId) : undefined;
     return {

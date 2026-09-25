@@ -7,13 +7,13 @@ const operation = { operationId: "op-1", groupId: "group-1", action: "set", targ
 
 describe("conversation intent contracts", () => {
   it("round-trips an accepted sparse delta without owner or revision metadata from a model", () => {
-    const delta = parseAcceptedIntentDelta({ version: 1, mutationId: "turn-1", baseIntentRevision: 3, operations: [operation] });
+    const delta = parseAcceptedIntentDelta({ version: 1, mutationId: "turn-1", baseIntentRevision: 3, speechAct: "inform", operations: [operation] });
     expect(delta.operations[0]).toEqual(operation);
     expect(JSON.parse(JSON.stringify(delta))).toEqual(delta);
   });
 
   it("keeps acceptable, approximate, range and unknown as independent axes", () => {
-    const delta = parseAcceptedIntentDelta({ version: 1, mutationId: "turn-2", baseIntentRevision: 0, operations: [operation,
+    const delta = parseAcceptedIntentDelta({ version: 1, mutationId: "turn-2", baseIntentRevision: 0, speechAct: "inform", operations: [operation,
       { ...operation, operationId: "op-2", groupId: "group-2", target: "budget", modality: "preferred", precision: "range",
         value: { kind: "money", amount: 30_000, basis: "per_person" } },
       { ...operation, operationId: "op-3", groupId: "group-3", target: "origin", modality: "preferred", precision: "qualitative",
@@ -25,8 +25,8 @@ describe("conversation intent contracts", () => {
   });
 
   it("rejects unknown fields, duplicate targets in an atomic group and oversized state", () => {
-    expect(() => parseAcceptedIntentDelta({ version: 1, mutationId: "x", baseIntentRevision: 0, operations: [{ ...operation, owner: "attacker" }] })).toThrow();
-    expect(() => parseAcceptedIntentDelta({ version: 1, mutationId: "x", baseIntentRevision: 0, operations: [operation, { ...operation, operationId: "op-2" }] })).toThrow();
+    expect(() => parseAcceptedIntentDelta({ version: 1, mutationId: "x", baseIntentRevision: 0, speechAct: "inform", operations: [{ ...operation, owner: "attacker" }] })).toThrow();
+    expect(() => parseAcceptedIntentDelta({ version: 1, mutationId: "x", baseIntentRevision: 0, speechAct: "inform", operations: [operation, { ...operation, operationId: "op-2" }] })).toThrow();
     expect(() => parseConversationIntentOverlay({ ...emptyConversationIntentOverlay(), appliedMutationIds: Array.from({ length: 65 }, (_, index) => `m-${index}`) })).toThrow();
   });
 });
