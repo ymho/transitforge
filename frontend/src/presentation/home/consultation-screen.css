@@ -51,7 +51,7 @@
 #app[data-primary-view="chat"] .trip-workspace-navigation { display: none; }
 #app[data-primary-view="chat"][data-trip-workspace-view="trip"] .consultation-page { display: none; }
 @media (min-width: 45rem) {
-  .consultation-page { padding-top: 1.75rem; padding-bottom: 1.75rem; }
+  .consultation-page { padding-top: 5.5rem; padding-bottom: 1.75rem; }
   .consultation-layout { grid-template-columns: minmax(0, 1.5fr) minmax(20rem, .7fr); gap: 1.25rem; max-width: 79.25rem; margin-inline: auto; }
   .consultation-heading { min-height: auto; padding-inline: 0; }
   .consultation-context { padding-inline: 1.5rem; }

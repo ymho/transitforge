@@ -44,8 +44,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   const consultationExamples = ["温泉でゆっくりしたい", "歴史ある街を歩きたい", "おいしいものを楽しみたい", "週末の旅を考えたい"];
   const selectedHeroImage = Math.floor(Math.random() * heroImages.length);
   const selectedExample = consultationExamples[Math.floor(Math.random() * consultationExamples.length)]!;
-  root.innerHTML = `<header class="product-header"><a href="#explore" class="product-brand" aria-label="Raiquora ホーム"><img src="/brand/raiquora-wordmark.svg" alt="" width="180" height="40"></a><button type="button" class="product-account ds-button" data-account></button></header>
-    <nav class="product-nav" aria-label="メインナビゲーション">${navigation.map(([key, label, icon]) => `<a href="#${key}" data-primary="${key}">${iconMarkup(icon)}<span>${label}</span></a>`).join("")}<button type="button" data-map="realtime" data-map-navigation>${iconMarkup("train")}<span>運行</span></button></nav>
+  root.innerHTML = `<nav class="product-nav" aria-label="メインナビゲーション">${navigation.map(([key, label, icon]) => `<a href="#${key}" data-primary="${key}">${iconMarkup(icon)}<span>${label}</span></a>`).join("")}<button type="button" data-map="realtime" data-map-navigation>${iconMarkup("train")}<span>運行</span></button><button type="button" data-account>${iconMarkup("account")}<span>アカウント</span></button></nav>
     <section class="product-page" data-page="explore" aria-label="探す"><div class="home-hero" data-home-hero role="region" aria-label="旅の相談を始める"><figure class="home-hero-media">${heroImages.map(([src, width, height, alt], index) => `<img data-hero-image src="${src}" width="${width}" height="${height}" alt="${alt}"${index === selectedHeroImage ? ' fetchpriority="high"' : ' loading="lazy" hidden'}>`).join("")}<figcaption>Raiquora original images</figcaption></figure><div class="home-hero-scrim" aria-hidden="true"></div><div class="home-hero-copy">
     <form class="home-prompt ds-composer"><textarea class="ds-control" id="home-prompt" aria-label="どんな旅にしたいですか？" maxlength="400" rows="1" placeholder="例：${selectedExample}"></textarea><button class="ds-button ds-button--primary" type="submit" aria-label="AIに相談する">${iconMarkup("send")}</button></form>
     </div></div>
@@ -54,10 +53,6 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     <section class="product-page" data-page="my" aria-label="アカウント" hidden><div class="my-shell">${pageHeadingMarkup("ACCOUNT", "アカウント")}<div class="my-grid"><section class="home-card my-account-card ds-surface"><h2>ログイン</h2><p data-my-account-status></p><button class="ds-button" type="button" data-my-login>ログイン / 新規登録</button><button class="ds-button" type="button" data-my-logout hidden>ログアウト</button></section><section class="home-card account-profile-card ds-surface" data-signed-in-only><div id="travel-profile-page" class="travel-profile-page" aria-label="旅行プロフィール設定"></div></section>
     <section class="home-card" data-signed-in-only><h2>通知</h2><div class="my-actions"><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button></div></section><section class="home-card account-journey-settings"><h2>経路検索の設定</h2><p>相談で経路を比較するときの既定値です。</p><label>乗換ペース<select data-account-transfer-pace><option value="hurried">急ぐ</option><option value="standard">普通</option><option value="relaxed">ゆっくり</option></select></label><label>経路の優先<select data-account-ranking-preference><option value="balanced">バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label></section><section class="home-card account-services"><h2>外部サービス</h2><p>旅の案内に利用する情報提供元です。</p><ul><li>GTFS-JP・公共交通オープンデータ</li><li>気象庁防災情報XML</li><li>ホットペッパーグルメ Webサービス</li><li>Wikipedia / Wikimedia Commons</li></ul></section></div></div></section>`;
   app.prepend(root);
-  const header = root.querySelector<HTMLElement>(".product-header")!;
-  const explorePage = root.querySelector<HTMLElement>('[data-page="explore"]')!;
-  const syncHeader = () => { header.dataset.overlay = String(app.dataset.primaryView === "explore" && explorePage.scrollTop < 24); };
-  explorePage.addEventListener("scroll", syncHeader, { passive: true });
   const services = root.querySelector<HTMLUListElement>(".account-services ul")!;
   services.className = "external-service-list";
   services.innerHTML = `<li><strong>Mapbox</strong><span>地図・徒歩と車の移動</span><a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noreferrer">地図の帰属表示</a></li><li><strong>OpenStreetMap contributors</strong><span>地図データ</span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">著作権とライセンス</a></li><li><strong>Open-Meteo</strong><span>天気予報</span><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">提供元</a></li><li><strong>気象庁</strong><span>警報・防災情報</span><a href="https://xml.kishou.go.jp/" target="_blank" rel="noreferrer">気象庁防災情報XML</a></li><li><strong>ホットペッパーグルメ Webサービス</strong><span>飲食店候補</span><a href="https://webservice.recruit.co.jp/" target="_blank" rel="noreferrer"><img src="https://webservice.recruit.co.jp/banner/hotpepper-s.gif" width="135" height="17" alt="ホットペッパーグルメ Webサービス" /></a></li><li><strong>Wikipedia / Wikimedia Commons</strong><span>観光情報・画像</span><a href="https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use" target="_blank" rel="noreferrer">利用条件</a></li><li><strong>Amazon Bedrock</strong><span>コンシェルジュの言語モデル</span></li>`;
@@ -97,7 +92,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     try { input = ports.read(); } catch { input = { state: "unavailable", trips: [], candidates: [] }; }
     const view = homeReadModel(input, ports.now());
     const auth = ports.authState(), account = root.querySelector<HTMLButtonElement>("[data-account]")!;
-    account.innerHTML = iconMarkup("account");
+    account.innerHTML = `${iconMarkup("account")}<span>アカウント</span>`;
     account.setAttribute("aria-label", auth.status === "signed-in" ? "アカウントを開く" : "ログインまたは新規登録");
     account.title = account.getAttribute("aria-label")!;
     const myStatus = root.querySelector<HTMLElement>("[data-my-account-status]")!, myLogin = root.querySelector<HTMLButtonElement>("[data-my-login]")!, myLogout = root.querySelector<HTMLButtonElement>("[data-my-logout]")!;
@@ -166,13 +161,14 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     root.querySelectorAll<HTMLElement>("[data-primary]").forEach((a) => { if (!isMap && a.dataset.primary === current) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
     const mapNavigation = root.querySelector<HTMLElement>("[data-map-navigation]")!;
     if (isMap) mapNavigation.setAttribute("aria-current", "page"); else mapNavigation.removeAttribute("aria-current");
+    const accountNavigation = root.querySelector<HTMLElement>("[data-account]")!;
+    if (!isMap && current === "my") accountNavigation.setAttribute("aria-current", "page"); else accountNavigation.removeAttribute("aria-current");
     if (!isMap && current === "chat") ports.openChat();
     if (isTrip && isSignedIn() && typeof window.history.state?.tripId === "string") ports.openTrip(window.history.state.tripId);
     if (isMap) {
       ports.openMap();
     }
     const page = root.querySelector<HTMLElement>(`[data-page="${current}"]`); if (page) page.scrollTop = scrolls.get(current) ?? 0;
-    syncHeader();
   };
   function navigate(view: PrimaryView) {
     if (view !== "explore" && !requireAuthentication()) return;
@@ -180,7 +176,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     if (!document.dispatchEvent(new Event("transitforge:profile-leave", { cancelable: true }))) return;
     window.history.pushState(null, "", `#${view}`); apply();
   }
-  root.querySelectorAll<HTMLAnchorElement>("[data-primary], .product-brand").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); navigate(link.hash.slice(1) as PrimaryView); }));
+  root.querySelectorAll<HTMLAnchorElement>("[data-primary]").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); navigate(link.hash.slice(1) as PrimaryView); }));
   function showMap() {
     if (!requireAuthentication()) return;
     if (ports.canLeave?.() === false) return;
