@@ -737,8 +737,7 @@ export class MultiStepAgentRuntime {
   ): AgentRuntimeResult | undefined {
     const phase = request.context?.taskContext?.phase;
     if (request.feature !== "concierge" || (phase !== "discovery" && phase !== "draft" && phase !== "refine")) return undefined;
-    const sources = evidence.filter((source) => typeof source.facts.sourceExcerpt === "string" &&
-      source.facts.status === "available" && source.facts.freshness === "fresh");
+    const sources = evidence.filter(hasStructuredPresentationEvidence);
     const selected = sources.filter((source) => supportedAnswerClaims([source]).some((claim) => claim.kind === "fact"))
       .sort((left, right) => sourcePresentationScore(right) - sourcePresentationScore(left))
       .filter((source, index, all) => all.findIndex((candidate) => planningSourceKey(candidate) === planningSourceKey(source)) === index)

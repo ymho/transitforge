@@ -26,12 +26,57 @@ export function productionServerTools(options: {
   const names = ["search_place_media", "search_travel_alerts", "search_ground_access", "search_restaurants", "search_web", "read_web_pages", "resolve_place_candidates"] as const;
   const journeyDescriptor = createSearchJourneysTool({ search: async () => { throw new Error("descriptor only"); } });
   return [
-    ...(options.discovery ? [{ descriptor: travelDiscoveryToolDescriptor, operation: options.discovery, evidence: discoveryEvidence }] : []),
+    ...(options.discovery ? [{ descriptor: travelDiscoveryToolDescriptor, operation: (async (input, context) => {
+      const response = await options.discovery!(input, context);
+      if ((response.statusCode ?? 200) >= 400 || !options.external.readWebPages) return response;
+      const body = response.body as Record<string, unknown>;
+      const discovery = body.discovery as { batch?: { hits?: Array<{ sourceRef?: string; retrievalChannel?: string }> } } | undefined;
+      // Discovery hits are leads, never verified facts. Materialize a small, bounded
+      // number of web pages in this same Tool round so vague requests can acquire
+      // source-bound evidence before the model enters the strict presentation phase.
+      const urls = [...new Set((discovery?.batch?.hits ?? []).filter((hit) => hit.retrievalChannel === "web")
+        .map((hit) => hit.sourceRef).filter((url): url is string => typeof url === "string" && /^https:\/\//u.test(url)))].slice(0, 3);
+      if (!urls.length) return response;
+      try {
+        const pages = await options.external.readWebPages({ urls });
+        if (pages && typeof pages === "object" && "webPages" in pages) {
+          state.webPages = (pages as { webPages: ExternalTravelToolState["webPages"] }).webPages;
+          return { ...response, body: { ...body, ...pages } };
+        }
+      } catch {
+        // Keep the discovery result available for a subsequent explicit read.
+      }
+      return response;
+    }) as AgentOperation, evidence: (output: unknown, context: Parameters<typeof discoveryEvidence>[1]) =>
+      [...discoveryEvidence(output, context), ...externalTravelEvidence(output, context)] }] : []),
     ...(options.representativeTimetable ? [{ descriptor: representativeTimetableToolDescriptor, operation: options.representativeTimetable, evidence: representativeTimetableEvidence }] : []),
     ...names.map(name => ({
       descriptor: { name, description: externalTravelToolDescription(name), inputSchema: externalTravelToolInputSchema(name) },
-      operation: (async input => ({ body: await executeExternalTravelTool(name, input, options.external, state) as Record<string, unknown> })) as AgentOperation,
-      evidence: externalTravelEvidence,
+      operation: (async input => {
+        const output = await executeExternalTravelTool(name, input, options.external, state) as Record<string, unknown>;
+        if (name === "search_web" && options.external.readWebPages) {
+          const search = output.webSearch as { data?: { results?: Array<{ url?: string }> } } | undefined;
+          const urls = [...new Set((search?.data?.results ?? []).map((hit) => hit.url)
+            .filter((url): url is string => typeof url === "string" && /^https:\/\//u.test(url)))].slice(0, 3);
+          if (urls.length) {
+            try {
+              const pages = await options.external.readWebPages({ urls });
+              if (pages && typeof pages === "object" && "webPages" in pages) {
+                state.webPages = (pages as { webPages: ExternalTravelToolState["webPages"] }).webPages;
+                return { body: { ...output, ...pages } };
+              }
+            } catch {
+              // Search results remain unverified leads when page reading fails.
+            }
+          }
+        }
+        return { body: output };
+      }) as AgentOperation,
+      evidence: (output: unknown, context: Parameters<typeof externalTravelEvidence>[1]) => {
+        const search = externalTravelEvidence(output, context);
+        return name === "search_web" && output && typeof output === "object" && "webPages" in output
+          ? [...search, ...externalTravelEvidence({ webPages: output.webPages }, context)] : search;
+      },
     })),
     { descriptor: accommodationToolDescriptor, operation: options.accommodation, evidence: externalTravelEvidence },
     { descriptor: journeyDescriptor, operation: async (input, context) => {

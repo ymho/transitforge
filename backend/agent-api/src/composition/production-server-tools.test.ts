@@ -4,9 +4,55 @@ import { createTrip } from "@raiquora/trip/trip";
 import { createFixedEgressProviderHandler } from "../adapters/fixed-egress-provider-handler.js";
 import { createFixedEgressAccommodationOperation } from "./fixed-egress-accommodation.js";
 import { productionServerTools } from "./production-server-tools.js";
+import { hasStructuredPresentationEvidence } from "@raiquora/agent/grounded-answer";
 import { createProductionConversationAgent } from "./production-conversation-agent.js";
 import { stateDynamoFixture, stateA, conversationId, secondId } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
+const evidenceContext = { retrievedAt: "2026-09-25T00:00:00Z", queryFingerprint: "history",
+  executionId: "consultation", toolCallId: "tool-1", toolName: "search_travel_knowledge" };
+
+it("materializes discovery leads into verified page evidence in the same tool round", async () => {
+  const url = "https://example.org/kurashiki";
+  const readWebPages = vi.fn(async () => ({ webPages: { status: "available", freshness: "fresh",
+    data: { pages: [{ url, title: "倉敷観光案内", text: "白壁の町並みを散策できます。" }] },
+    evidence: [{ id: "page-1", provider: "safe-reader", sourceUrl: url }] } }));
+  const discovery = vi.fn(async () => ({ body: { discovery: { batch: { hits: [{ hitId: "hit-1", sourceRef: url,
+    retrievalChannel: "web", text: "検索で見つかった候補", originalRank: 1 }] } } } }));
+  const tools = productionServerTools({ external: { readWebPages }, discovery, accommodation: vi.fn(), journey: vi.fn() });
+  const search = tools.find((tool) => tool.descriptor.name === "search_travel_knowledge")!;
+  const response = await search.operation({}, { requestId: "consultation" });
+  const evidence = search.evidence(response.body, evidenceContext);
+  expect(readWebPages).toHaveBeenCalledWith({ urls: [url] });
+  expect(evidence.filter(hasStructuredPresentationEvidence)).toHaveLength(1);
+  expect(evidence.find((item) => item.knowledgeKind === "unverified_information")).toBeDefined();
+  expect(evidence.find(hasStructuredPresentationEvidence)?.facts.sourceExcerpt).toContain("白壁の町並み");
+});
+
+it("never promotes discovery snippets into verified travel plans when the page read fails", async () => {
+  const tools = productionServerTools({ external: { readWebPages: vi.fn(async () => { throw Error("unavailable"); }) },
+    discovery: vi.fn(async () => ({ body: { discovery: { batch: { hits: [{ hitId: "hit-1", sourceRef: "https://example.org/lead",
+      retrievalChannel: "web", text: "検索結果" }] } } } })), accommodation: vi.fn(), journey: vi.fn() });
+  const search = tools.find((tool) => tool.descriptor.name === "search_travel_knowledge")!;
+  const response = await search.operation({}, { requestId: "consultation" });
+  const evidence = search.evidence(response.body, evidenceContext);
+  expect(evidence).toHaveLength(1);
+  expect(evidence.some(hasStructuredPresentationEvidence)).toBe(false);
+});
+
+it("reads search_web hits before presenting them as verified sources", async () => {
+  const url = "https://example.org/history";
+  const tools = productionServerTools({ external: { searchWeb: vi.fn(async () => ({ webSearch: { status: "available", freshness: "fresh",
+    data: { query: "歴史", results: [{ id: "hit", title: "歴史", url, description: "候補" }] },
+    evidence: [{ id: "search-hit", provider: "web", sourceUrl: url }] } })),
+  readWebPages: vi.fn(async () => ({ webPages: { status: "available", freshness: "fresh",
+    data: { pages: [{ url, title: "観光資料", text: "歴史的な町並みを紹介しています。" }] },
+    evidence: [{ id: "read-page", provider: "safe-reader", sourceUrl: url }] } })) }, accommodation: vi.fn(), journey: vi.fn() });
+  const search = tools.find((tool) => tool.descriptor.name === "search_web")!;
+  const response = await search.operation({ query: "歴史" }, { requestId: "consultation" });
+  const evidence = search.evidence(response.body, { ...evidenceContext, toolName: "search_web" });
+  expect(evidence.filter(hasStructuredPresentationEvidence)).toHaveLength(1);
+  expect(evidence.find(hasStructuredPresentationEvidence)?.facts.sourcePrecision).toBe("read-page");
+});
 
 it("compares only a verified journey result from the same server turn", async () => {
   const result = { serviceDate: "2026-09-24", originStation: "京都", destinationStation: "出雲市", searchTimeMinutes: 480, totalMatchCount: 1, matches: [], journeys: [{ departureTimeMinutes: 480, arrivalTimeMinutes: 720, transferCount: 1, legs: [{ serviceUid: "s1", trainNumber: "1M", serviceType: "特急", trainName: "やくも", originStation: "岡山", destinationStation: "出雲市", departureTimeMinutes: 540, arrivalTimeMinutes: 720, scheduledDepartureTimeMinutes: 540, scheduledArrivalTimeMinutes: 720, delayMinutes: 0 }] }] };
