@@ -91,7 +91,7 @@ function answered(effective: EffectiveIntent, target: IntentTarget): boolean {
   if (effective.actualConversationFacts.some((fact) => fact.target === target)) return true;
   if (effective.activeBaseFacts.some((fact) => fact.target === target)) return true;
   if (target === "goal" && effective.activeBaseGoal) return true;
-  if (target === "party_size" && (effective.activeBaseParty || effective.profilePartyHint)) return effective.activeBaseParty !== undefined;
+  if (target === "party_size" && effective.activeBaseParty) return true;
   return false;
 }
 

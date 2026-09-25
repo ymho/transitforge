@@ -31,7 +31,10 @@ describe("Server State Context Loader", () => {
     const context = await f.load({ principal: a, conversationId: id, tripId, uiContext: { itemId: "stay", calendarDate: "2026-09-21" } });
     expect(context.conversation).toMatchObject({ title: "会話", scope: "trip", summary: "相談", resolvedTopics: ["行先"], pendingTopics: ["日程"],
       messages: [{ role: "user", text: "履歴" }, { role: "assistant", text: "回答" }] });
-    expect(context.travelProfile).toEqual(createAgentContextSnapshot({ ...stateProfile(), aiNoteFields: ["budget"] }).profile);
+    expect(context.travelProfile).toMatchObject({ source: { profileVersion: 2, profileRevision: 0 }, application: "reference_only",
+      pace: 0.123, favoriteInterests: ["鉄道"] });
+    expect(context.travelProfile?.consentedPreferenceNotes).toBeUndefined();
+    expect(context.effectiveIntent?.ignoredProfileSettings).toContainEqual({ path: "notes.budget", reason: "trip_specific" });
     expect(context.currentTrip).toEqual(createAgentContextSnapshot(undefined, trip()).trip);
     expect(context.taskContext).toMatchObject({ version: 1, phase: "refine", requestRevision: 0,
       target: { kind: "trip", tripId, tripRevision: 0 } });
@@ -68,8 +71,8 @@ describe("Server State Context Loader", () => {
     await f.profiles.update(b, { ...stateProfile(), home: { station: "B駅" } }, null);
     const [left, right] = await Promise.all([f.load({ principal: a }), f.load({ principal: b })]);
     expect(left.travelProfile?.home).toEqual({ station: "A駅" }); expect(right.travelProfile?.home).toEqual({ station: "B駅" });
-    expect(left.travelProfile?.consentedPreferenceNotes).toEqual({ budget: "同意メモ" });
-    expect(JSON.stringify([left, right])).not.toContain("非同意メモ");
+    expect(left.travelProfile?.consentedPreferenceNotes).toBeUndefined();
+    expect(JSON.stringify([left, right])).not.toMatch(/非同意メモ|同意メモ/);
   });
   it("supports no conversation, no profile and an explicit authorized Trip", async () => {
     const f = setup(); await f.trips.repository.create(a, trip());

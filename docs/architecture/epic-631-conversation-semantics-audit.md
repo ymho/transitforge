@@ -36,6 +36,7 @@ BrowserからWorking State、Profile、Trip本文、owner、revisionを受け取
 | 訂正・撤回 | Trip Proposal/CAS、request validator | replace/retract/tombstone/relax/narrow #638 | pure reducer + failure tests | history要約からの復活を禁止 |
 | scope/reference | PresentationReceipt、Trip/day/segment IDs | frameをfact/tombstone/reducerへ貫通。ordinalは最新のowner-scoped PresentationReceiptからApplication解決 #636 | production turn + stale/range負例 | 本文の「2番目」再parse |
 | Effective Intent | server context compiler、Trip/Profile snapshot | base+overlay+retractをauthority別にpure投影 #640 | Server Runtime context + pure tests | raw semantic overlayのmodel重複送信を撤去 |
+| Profile preferences | UserProfile v2、TripRequest source=profile、Agent profile snapshot | 常設の弱い既定値をEffective Intentへ直接解決 #634/#640/#658/#659 | Profile一項目比較、scope/撤回、Server context | 人数・子年代・予算感・移動上限・noveltyをAI/UIから除外。保存済み値は保持 |
 | action policy | Tool schema、SemanticDecision、progress guard | Application-authored requirementとeffective revision連携 #641 | Runtime Tool前検証 + allow/reject対テスト | LLM自己申告だけの不足判定を不採用 |
 | invalidation/replan | Evidence applicability、PlanVariant、CAS | target別meaning dependency連携 #642 | Server initial Evidence + Tool Evidence tests | legacy無依存Evidenceだけ安全側で失効。全消去・無条件再検索を撤去 |
 | proposal/branch | Request Proposal、PlanVariant、Trip CAS | conversation delta接続 #643 | 未実装 | overlayからの直接Trip writeは禁止 |
@@ -93,6 +94,7 @@ phaseは表示・予算を選ぶ補助情報であり、質問・Evidence・行�
 | Tool重複/cache/retry | readは依存stateが同じなら再利用し、proposal/writeは実行内で冪等にする | 別Tool成功で前提が変化したread再評価。署名はrequest/Working/intent revisionを含む | 同じ依存版の同一read、同一proposal/write、無制限retry | Application登録のeffectと依存版を署名へ追加。異なるTool成功後だけ同一readを1回再評価し、proposalは常に重複抑止。allow/reject対テスト済み |
 | Tool intent requirement | Tool固有の必須入力・精度・現在値一致をApplication由来のEffective Intentで検証 | 受理済み京都・2026-10-01を同値で検索 | 未定/非開示値の補完、日付訂正後の旧日付、必須値欠落 | descriptorの`intentPolicy`をRuntime実行前に適用。modelは依存targetを緩和できない |
 | Evidence meaning dependency | Evidenceを取得時の意味targetへ束縛し、局所訂正だけ失効 | 目的地訂正後も日付だけに依存するEvidenceを保持 | 目的地依存Evidence、意味依存を記録しない旧Evidence | Tool成功時にintent revision/fingerprint/targetsをApplication付与。Server再利用前にfilter |
+| Profile resolution | 保存Request、Profile、actual会話差分を属性・scopeごとに解決し、Profileはreference-onlyに保つ | 食事の追加と既存の自然/歴史を併用、2日目だけpace変更、許諾済みメモ全文 | 出発地を未定へ戻した後のProfile復活、非同意メモ、普段人数を今回人数へ昇格 | `compileEffectiveIntent`へUserProfile revisionを入力し、`travelProfile`も解決済みhintから導出。modelへraw Profileを並列送信しない |
 
 認証、owner分離、Trip実在参照、予約保護、利用者confirmation、Evidence参照、CAS/turn冪等性、保持/削除保証は意味ガードの緩和対象に含めない。開発作業の包括承認も、製品利用者のTrip/Profile/予約変更への同意として扱わない。
 
