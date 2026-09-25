@@ -1,4 +1,5 @@
 import { displayDateTimeLabels } from "../../domain/display-date-time";
+import { japanDateTimeParts } from "../../domain/japan-time";
 
 export interface DateTimeDisplayElements {
   input: HTMLInputElement;
@@ -25,12 +26,13 @@ export function renderDisplayDateTime(
 }
 
 export function formatDateTimeLocal(date: Date): string {
-  const year = String(date.getFullYear()).padStart(4, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  const second = String(date.getSeconds()).padStart(2, "0");
+  const { year: rawYear, month: rawMonth, day: rawDay, hour: rawHour, minute: rawMinute, second: rawSecond } = japanDateTimeParts(date);
+  const year = String(rawYear).padStart(4, "0");
+  const month = String(rawMonth).padStart(2, "0");
+  const day = String(rawDay).padStart(2, "0");
+  const hour = String(rawHour).padStart(2, "0");
+  const minute = String(rawMinute).padStart(2, "0");
+  const second = String(rawSecond).padStart(2, "0");
   return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
 }
 

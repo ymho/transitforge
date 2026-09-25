@@ -1,4 +1,5 @@
 import { operatingDayStartMinutes } from "./playback";
+import { dateFromJapanDateTime, japanDateTimeParts } from "./japan-time";
 
 export type DisplayDateTimeUnit = "month" | "day" | "hour" | "minute" | "second";
 
@@ -10,14 +11,10 @@ export interface DisplayDateTimeLabels {
 const japaneseWeekdays = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 export function displayDateTimeLabels(date: Date): DisplayDateTimeLabels {
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  const second = String(date.getSeconds()).padStart(2, "0");
+  const { year, month, day, hour, minute, second, weekday } = japanDateTimeParts(date);
   return {
-    date: `${date.getFullYear()}年${month}月${day}日(${japaneseWeekdays[date.getDay()]})`,
-    time: `${hour}:${minute}:${second}`,
+    date: `${year}年${month}月${day}日(${japaneseWeekdays[weekday]})`,
+    time: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`,
   };
 }
 
@@ -47,12 +44,13 @@ export function stepDisplayDateTime(
 }
 
 export function operatingServiceDateStart(date: Date): Date {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-  if (date.getHours() * 60 + date.getMinutes() < operatingDayStartMinutes) {
-    start.setDate(start.getDate() - 1);
-  }
-  return start;
+  const japan = japanDateTimeParts(date);
+  const utcCalendar = new Date(Date.UTC(japan.year, japan.month - 1, japan.day));
+  if (japan.hour * 60 + japan.minute < operatingDayStartMinutes) utcCalendar.setUTCDate(utcCalendar.getUTCDate() - 1);
+  return dateFromJapanDateTime({
+    year: utcCalendar.getUTCFullYear(), month: utcCalendar.getUTCMonth() + 1, day: utcCalendar.getUTCDate(),
+    hour: 0, minute: 0, second: 0,
+  });
 }
 
 export function dateForOperatingRouteTime(

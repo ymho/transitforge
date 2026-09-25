@@ -1,3 +1,5 @@
+import { japanDateTimeParts } from "./japan-time";
+
 export interface RouteTimeRange {
   minimum: number;
   maximum: number;
@@ -12,10 +14,11 @@ export function operatingDayRouteTime(routeTimeMinutes: number): number {
 }
 
 export function currentRouteTime(date: Date): number {
+  const japan = japanDateTimeParts(date);
   return operatingDayRouteTime(
-    date.getHours() * 60 +
-      date.getMinutes() +
-      date.getSeconds() / 60 +
+    japan.hour * 60 +
+      japan.minute +
+      japan.second / 60 +
       date.getMilliseconds() / 60_000,
   );
 }
