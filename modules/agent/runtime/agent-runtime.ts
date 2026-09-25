@@ -1,6 +1,6 @@
 import { AgentTraceRecorder } from "./agent-trace";
 import { invalidResponseContract, responseContractRepairInstruction } from "./response-contract";
-import { groundedAnswerFailureCode, groundedAnswerInstruction, groundedAnswerRepairInstruction, hasStructuredPresentationEvidence, presentGroundedEvidence, supportedAnswerClaims } from "./grounded-answer";
+import { groundedAnswerFailureCode, groundedAnswerInstruction, groundedAnswerRepairInstruction, hasStructuredPresentationEvidence, presentGroundedEvidence, sourcePresentationScore, supportedAnswerClaims } from "./grounded-answer";
 import type {
   AgentModelContent,
   AgentModelClass,
@@ -159,7 +159,7 @@ export class MultiStepAgentRuntime {
         modelCalls >= this.limits.maxModelCalls ||
         this.now().getTime() >= deadline
       ) {
-        return this.limitResult(trace, evidence, startedAt,
+        return this.limitOrPlanningSummary(trace, evidence, startedAt, request,
           this.now().getTime() >= deadline ? "runtime_deadline" :
             modelCalls >= this.limits.maxModelCalls ? "runtime_model_budget" : "runtime_iteration_budget");
       }
@@ -171,7 +171,8 @@ export class MultiStepAgentRuntime {
       }) ?? this.dependencies.modelClass;
       const modelCallId = crypto.randomUUID();
       if (this.dependencies.researchLedger && !this.dependencies.researchLedger.reserve("modelCalls")) {
-        return this.limitResult(trace, evidence, startedAt, this.dependencies.researchLedger.deadlineReached() ? "research_deadline" : "research_model_budget");
+        return this.limitOrPlanningSummary(trace, evidence, startedAt, request,
+          this.dependencies.researchLedger.deadlineReached() ? "research_deadline" : "research_model_budget");
       }
       const finalResponseRequired = hasToolResults && (
         finalizeAfterToolResult ||
@@ -229,7 +230,7 @@ export class MultiStepAgentRuntime {
       );
       if (modelOutcome.kind === "timeout") {
         trace.modelFailed(modelCallId, "runtime_timeout");
-        return this.limitResult(trace, evidence, startedAt, "runtime_deadline");
+        return this.limitOrPlanningSummary(trace, evidence, startedAt, request, "runtime_deadline");
       }
       if (modelOutcome.kind === "error") {
         const code = modelOutcome.error instanceof AgentModelError ? modelOutcome.error.code : "provider_error";
@@ -253,7 +254,7 @@ export class MultiStepAgentRuntime {
             continue;
           }
         }
-        return code === "timeout" || code === "truncation" ? this.limitResult(trace, evidence, startedAt, `model_${code}`) :
+        return code === "timeout" || code === "truncation" ? this.limitOrPlanningSummary(trace, evidence, startedAt, request, `model_${code}`) :
           this.failureResult(trace, evidence, startedAt, `model_${code}`);
       }
       let modelResponse = modelOutcome.value;
@@ -296,7 +297,7 @@ export class MultiStepAgentRuntime {
 
       if (modelResponse.stopReason === "max_tokens") {
         trace.modelFailed(modelCallId, "truncation");
-        return this.limitResult(trace, evidence, startedAt, "model_truncation");
+        return this.limitOrPlanningSummary(trace, evidence, startedAt, request, "model_truncation");
       }
 
       const calls = modelResponse.message.content.filter(
@@ -433,10 +434,11 @@ export class MultiStepAgentRuntime {
               const fallback = this.verifiedPlanningSummary(trace, evidence, startedAt, request);
               if (fallback) return fallback;
             }
-            return this.limitResult(
+            return this.limitOrPlanningSummary(
               trace,
               evidence,
               startedAt,
+              request,
               planningGuard?.reason ?? "final_response_policy_rejected",
             );
           }
@@ -546,10 +548,10 @@ export class MultiStepAgentRuntime {
         );
       }
       if (toolCalls + calls.length > this.limits.maxToolCalls) {
-        return this.limitResult(trace, evidence, startedAt, "runtime_tool_budget");
+        return this.limitOrPlanningSummary(trace, evidence, startedAt, request, "runtime_tool_budget");
       }
       if (calls.length && this.dependencies.researchLedger && !this.dependencies.researchLedger.reserve("toolCalls", calls.length)) {
-        return this.limitResult(trace, evidence, startedAt, "research_tool_budget");
+        return this.limitOrPlanningSummary(trace, evidence, startedAt, request, "research_tool_budget");
       }
 
       const toolResults: AgentModelContent[] = [];
@@ -738,6 +740,8 @@ export class MultiStepAgentRuntime {
     const sources = evidence.filter((source) => typeof source.facts.sourceExcerpt === "string" &&
       source.facts.status === "available" && source.facts.freshness === "fresh");
     const selected = sources.filter((source) => supportedAnswerClaims([source]).some((claim) => claim.kind === "fact"))
+      .sort((left, right) => sourcePresentationScore(right) - sourcePresentationScore(left))
+      .filter((source, index, all) => all.findIndex((candidate) => planningSourceKey(candidate) === planningSourceKey(source)) === index)
       .slice(0, 3).map((source) => source.id);
     if (!selected.length) return undefined;
     const generated = presentGroundedEvidence(selected, evidence);
@@ -752,6 +756,17 @@ export class MultiStepAgentRuntime {
     trace.responseGenerated(prepared.text, grounding.claims.map(({ id }) => id));
     trace.taskCompleted("completed", elapsed(startedAt, this.now));
     return result("completed", prepared.text, evidence, grounding.claims, trace, prepared.observation);
+  }
+
+  private limitOrPlanningSummary(
+    trace: AgentTraceRecorder,
+    evidence: Evidence[],
+    startedAt: number,
+    request: AgentRuntimeRequest,
+    reason: string,
+  ): AgentRuntimeResult {
+    return this.verifiedPlanningSummary(trace, evidence, startedAt, request) ??
+      this.limitResult(trace, evidence, startedAt, reason);
   }
 
   private limitResult(
@@ -777,6 +792,11 @@ export class MultiStepAgentRuntime {
     trace.taskCompleted("failed", elapsed(startedAt, this.now), reason);
     return result("failed", response, evidence, [], trace);
   }
+}
+
+function planningSourceKey(source: Evidence): string {
+  const title = String(source.facts.placeName ?? source.facts.sourceTitle ?? source.subject).normalize("NFKC").toLocaleLowerCase("ja");
+  return title.split(/[|｜\-–—]/u, 1)[0]!.replace(/[\s・･,，.。()（）「」『』]/gu, "");
 }
 
 function hasStructuredPresentation(response: AgentModelResponse): boolean {

@@ -145,6 +145,31 @@ describe("MultiStepAgentRuntime", () => {
     expect(output.trace.events.at(-1)).toMatchObject({ type: "task_completed", status: "completed" });
   });
 
+  it("returns the best verified source when the planning iteration budget is reached", async () => {
+    const executionOrder: string[] = [], { tools, toolExecutor } = toolSetup(executionOrder);
+    const concise = { ...planningSource(), id: "source:izumo-search", subject: "出雲大社", facts: {
+      ...planningSource().facts, sourceTitle: "出雲大社｜出雲観光ガイド", sourceExcerpt: "御本殿を参拝し、神門通りの町歩きを楽しめます。",
+      sourceUrl: "https://example.test/izumo-search", sourcePrecision: "search-snippet",
+    }, references: [{ sourceType: "external-source" as const, sourceRef: "https://example.test/izumo-search",
+      retrievedAt: "2026-09-24T00:00:00Z", freshness: "current" as const, summary: "出雲の公式観光資料" }] };
+    const navigation = { ...planningSource(), id: "source:izumo-page", subject: "出雲大社", facts: {
+      ...planningSource().facts, sourceTitle: "出雲大社 - Wikipedia", sourceExcerpt: "メインメニュー\n案内\nヘルプ\nお問い合わせ",
+      sourceUrl: "https://example.test/izumo-page", sourcePrecision: "read-page",
+    }, references: [{ sourceType: "external-source" as const, sourceRef: "https://example.test/izumo-page",
+      retrievedAt: "2026-09-24T00:00:00Z", freshness: "current" as const, summary: "出雲大社の資料" }] };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor,
+      model: sequenceModel([toolCallResponse([{ id: "research", name: "first_tool", input: { value: "出雲" } }])]),
+      limits: { maxIterations: 1, maxModelCalls: 2 },
+    }).run(planningRequest("歴史ある街を歩きたい", [navigation, concise]));
+
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("御本殿を参拝し、神門通りの町歩き");
+    expect(output.response).not.toContain("Wikipedia");
+    expect(output.claims).toHaveLength(1);
+    expect(executionOrder).toEqual(["first_tool"]);
+    expect(output.trace.events.at(-1)).toMatchObject({ type: "task_completed", status: "completed" });
+  });
+
   it("requires typed presentation after fresh external source Evidence is available", async () => {
     const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
     const responseGenerator = new DefaultAgentResponseGenerator();

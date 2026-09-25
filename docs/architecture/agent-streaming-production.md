@@ -106,6 +106,10 @@ Runtime完了時は内容を含まない`runtime`診断を追加し、`completed
 Applicationが最大3件の出典付き要約を返す。資料がまだない場合に限り、同じモデル呼出上限の中で
 schema準拠応答を1回だけ再要求する。失敗したProvider呼出もmodel budgetへ算入し、無制限には再試行しない。
 native toolUseなしで`stopReason=tool_calls`となった場合も、検証済み資料があれば同じ要約へフォールバックする。
+旅行候補の調査後に判断・model・Tool・deadlineのいずれの上限へ到達した場合も、検証済み資料を破棄せず
+同じ要約へフォールバックする。Webページ本文は`main`/`article`を優先し、header・navigation・footer等の
+site chromeを除去する。救済表示ではナビゲーションだけの抜粋を特徴として表示せず、簡潔な抜粋を持つ
+資料を優先し、同じ候補名の資料を重複表示しない。
 任意条件の質問だけになった場合は、検証済みの外部資料があれば最大3件の出典付き要約を
 Applicationが提示する。根拠がない場合は候補を捏造せず、残る失敗を`planning_progress_required`、
 `planning_evidence_required`、`place_photo_required`等で区別する。
