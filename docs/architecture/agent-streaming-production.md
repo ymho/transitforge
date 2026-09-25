@@ -102,6 +102,10 @@ Runtime完了時は内容を含まない`runtime`診断を追加し、`completed
 旅行相談で検証済みの新鮮な外部資料があるならApplicationが最大3件の出典付き要約を提示する。
 提示可能な資料がなければToolを実行・事実を捏造せず、`finalization_tool_calls`として終了する。
 最終回答で追加Toolを利用できない場合、写真未取得を理由に検証済みの旅行案を破棄しない。
+旅行相談でProviderの最終応答がschema検証に失敗した場合も、検証済みの新鮮な外部資料があれば
+Applicationが最大3件の出典付き要約を返す。資料がまだない場合に限り、同じモデル呼出上限の中で
+schema準拠応答を1回だけ再要求する。失敗したProvider呼出もmodel budgetへ算入し、無制限には再試行しない。
+native toolUseなしで`stopReason=tool_calls`となった場合も、検証済み資料があれば同じ要約へフォールバックする。
 任意条件の質問だけになった場合は、検証済みの外部資料があれば最大3件の出典付き要約を
 Applicationが提示する。根拠がない場合は候補を捏造せず、残る失敗を`planning_progress_required`、
 `planning_evidence_required`、`place_photo_required`等で区別する。
