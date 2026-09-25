@@ -77,5 +77,8 @@ it("runs natural language through semantic acceptance before Runtime", async () 
   const contextBlock = runtimeRequests[0]!.messages[0]!.content.find((block) => "text" in block) as { text: string };
   const context = JSON.parse(contextBlock.text.match(/<agent_context>([\s\S]*)<\/agent_context>/)![1]);
   expect(context.workingState.semantic.overlay.facts.map((fact: { target: string }) => fact.target)).toEqual(["destination", "start_date"]);
+  expect(context.taskContext.currentIntentChange).toEqual({ intentRevision: 1, operations: [
+    { action: "set", target: "destination" }, { action: "set", target: "start_date" },
+  ] });
   expect(requests.filter(({ outputContract }) => outputContract?.name === "conversation_semantic_delta")).toHaveLength(1);
 });

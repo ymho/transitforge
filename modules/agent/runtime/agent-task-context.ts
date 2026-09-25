@@ -13,6 +13,14 @@ export interface AgentTaskContext {
   workingStateRevision?: number;
   availableProgressKinds: AgentProgressKind[];
   previousOutcome?: AgentTurnOutcome;
+  /** Application-derived current-turn meaning change. Models cannot assert this field. */
+  currentIntentChange?: {
+    intentRevision: number;
+    operations: Array<{
+      action: import("@raiquora/trip/conversation-intent").IntentOperationKind;
+      target: import("@raiquora/trip/conversation-intent").IntentTarget;
+    }>;
+  };
   researchTarget?: { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number };
 }
 

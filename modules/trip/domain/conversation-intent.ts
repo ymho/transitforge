@@ -128,7 +128,7 @@ function parseOperation(value: unknown): AcceptedIntentOperation {
       value.precision !== undefined && !["exact", "approximate", "range", "qualitative"].includes(String(value.precision))) throw new Error("Invalid intent operation attributes");
   if (!record(value.provenance) || !only(value.provenance, ["kind", "turnId", "quote"]) || !["user_turn", "ui_action"].includes(String(value.provenance.kind)) ||
       !reference(value.provenance.turnId) || value.provenance.quote !== undefined && !boundedText(value.provenance.quote)) throw new Error("Invalid intent provenance");
-  return structuredClone({ ...value, scope: parseScope(value.scope), ...(value.value === undefined ? {} : { value: parseValue(value.value) }) }) as AcceptedIntentOperation;
+  return structuredClone({ ...value, scope: parseIntentScope(value.scope), ...(value.value === undefined ? {} : { value: parseValue(value.value) }) }) as AcceptedIntentOperation;
 }
 
 function parseFact(value: unknown): ConversationIntentFact {
@@ -146,11 +146,11 @@ function parseTombstone(value: unknown): ConversationIntentTombstone {
   if (!record(value) || !only(value, ["tombstoneId", "target", "scope", "sourceOperationId", "reason"]) || !reference(value.tombstoneId) ||
       !intentTargets.includes(value.target as IntentTarget) || !reference(value.sourceOperationId) ||
       ![...intentUnknownReasons, "retracted"].includes(value.reason as IntentUnknownReason | "retracted")) throw new Error("Invalid conversation intent tombstone");
-  return { tombstoneId: value.tombstoneId, target: value.target as IntentTarget, scope: parseScope(value.scope), sourceOperationId: value.sourceOperationId,
+  return { tombstoneId: value.tombstoneId, target: value.target as IntentTarget, scope: parseIntentScope(value.scope), sourceOperationId: value.sourceOperationId,
     reason: value.reason as ConversationIntentTombstone["reason"] };
 }
 
-function parseScope(value: unknown): IntentScope {
+export function parseIntentScope(value: unknown): IntentScope {
   if (!record(value) || typeof value.type !== "string") throw new Error("Invalid intent scope");
   if (value.type === "conversation" && only(value, ["type"])) return { type: "conversation" };
   if (value.type === "trip" && only(value, ["type", "tripId"]) && reference(value.tripId)) return { type: "trip", tripId: value.tripId };

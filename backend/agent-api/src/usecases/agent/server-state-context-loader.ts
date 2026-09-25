@@ -60,9 +60,18 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
       lifecycleState: trip.lifecycleState } : undefined,
       consultationRequest: persistedConsultationRequest, requestRevision: trip?.revision ?? conversation?.revision,
       workingStateRevision: workingState?.revision, previousOutcome: workingState?.lastOutcome?.outcome }) : undefined;
+    const receiptCandidate = before !== undefined && workingState?.sourceUserSequence === before
+      ? workingState.semantic?.receipts.at(-1) : undefined;
+    const currentIntentReceipt = receiptCandidate?.intentRevision === workingState?.semantic?.overlay.intentRevision
+      ? receiptCandidate : undefined;
+    const acceptedIntentOperations = currentIntentReceipt?.operations.filter(({ status }) => status === "accepted") ?? [];
+    const taskContextWithIntent = taskContext && currentIntentReceipt && acceptedIntentOperations.length ? { ...taskContext,
+      currentIntentChange: { intentRevision: currentIntentReceipt.intentRevision,
+        operations: acceptedIntentOperations.map(({ action, target }) => ({ action, target })) },
+    } : taskContext;
     const focusedItem = itemId ? trip?.items.find((item) => item.id === itemId) : undefined;
     return {
-      ...(taskContext ? { taskContext } : {}),
+      ...(taskContextWithIntent ? { taskContext: taskContextWithIntent } : {}),
       ...(workingState ? { workingState, previousAssistantTurn: workingState.lastOutcome?.outcome } : {}),
       ...(history ? { conversation: history } : {}),
       ...(snapshot.profile ? { travelProfile: snapshot.profile } : {}),

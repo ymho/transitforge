@@ -2,17 +2,24 @@ import {
   conversationIntentLimits,
   parseAcceptedIntentDelta,
   parseConversationIntentOverlay,
+  parseIntentScope,
   type AcceptedIntentDelta,
   type AcceptedIntentOperation,
   type ConversationIntentFact,
   type ConversationIntentOverlay,
   type IntentModality,
+  type IntentOperationKind,
+  type IntentScope,
+  type IntentTarget,
 } from "@raiquora/trip/conversation-intent";
 
 export type IntentOperationReason = "applied" | "already_applied" | "target_missing" | "invalid_transition" | "capacity_exceeded";
 export interface IntentOperationReceipt {
   operationId: string;
   groupId: string;
+  action: IntentOperationKind;
+  target: IntentTarget;
+  scope: IntentScope;
   status: "accepted" | "rejected";
   reason: IntentOperationReason;
   beforeFactRefs: string[];
@@ -33,11 +40,13 @@ export function parseIntentApplicationReceipt(value: unknown): IntentApplication
       !reference(value.mutationId) || !nonnegativeInteger(value.beforeIntentRevision) || !nonnegativeInteger(value.intentRevision) || typeof value.replayed !== "boolean" ||
       !Array.isArray(value.operations) || value.operations.length > conversationIntentLimits.maximumOperations) throw new Error("Invalid intent application receipt");
   const operations = value.operations.map((item) => {
-    if (!record(item) || !only(item, ["operationId", "groupId", "status", "reason", "beforeFactRefs", "afterFactRefs"]) || !reference(item.operationId) ||
-        !reference(item.groupId) || !["accepted", "rejected"].includes(String(item.status)) ||
+    if (!record(item) || !only(item, ["operationId", "groupId", "action", "target", "scope", "status", "reason", "beforeFactRefs", "afterFactRefs"]) || !reference(item.operationId) ||
+        !reference(item.groupId) || !["set", "add_alternative", "replace", "retract", "relax", "narrow"].includes(String(item.action)) ||
+        !["goal", "origin", "destination", "start_date", "end_date", "duration", "party_size", "budget", "experience", "pace", "accommodation", "transport", "fixed_schedule"].includes(String(item.target)) ||
+        !["accepted", "rejected"].includes(String(item.status)) ||
         !["applied", "already_applied", "target_missing", "invalid_transition", "capacity_exceeded"].includes(String(item.reason)) ||
         !referenceList(item.beforeFactRefs) || !referenceList(item.afterFactRefs)) throw new Error("Invalid intent operation receipt");
-    return structuredClone(item) as IntentOperationReceipt;
+    return { ...structuredClone(item), scope: parseIntentScope(item.scope) } as IntentOperationReceipt;
   });
   return { version: 1, mutationId: value.mutationId, beforeIntentRevision: value.beforeIntentRevision, intentRevision: value.intentRevision,
     replayed: value.replayed, operations };
@@ -51,7 +60,7 @@ export function reduceConversationIntent(current: ConversationIntentOverlay, can
     overlay,
     receipt: { version: 1, mutationId: delta.mutationId, beforeIntentRevision: overlay.intentRevision,
       intentRevision: overlay.intentRevision, replayed: true, operations: delta.operations.map((operation) => ({ operationId: operation.operationId,
-        groupId: operation.groupId, status: "accepted", reason: "already_applied", beforeFactRefs: matchingFacts(overlay, operation).map(({ factId }) => factId),
+        groupId: operation.groupId, action: operation.action, target: operation.target, scope: structuredClone(operation.scope), status: "accepted", reason: "already_applied", beforeFactRefs: matchingFacts(overlay, operation).map(({ factId }) => factId),
         afterFactRefs: matchingFacts(overlay, operation).map(({ factId }) => factId) })) },
   };
 
@@ -60,7 +69,8 @@ export function reduceConversationIntent(current: ConversationIntentOverlay, can
   for (const operations of grouped(delta.operations)) {
     const simulated = simulateGroup(next, operations);
     if (!simulated.valid) {
-      receipts.push(...operations.map((operation): IntentOperationReceipt => ({ operationId: operation.operationId, groupId: operation.groupId, status: "rejected",
+      receipts.push(...operations.map((operation): IntentOperationReceipt => ({ operationId: operation.operationId, groupId: operation.groupId,
+        action: operation.action, target: operation.target, scope: structuredClone(operation.scope), status: "rejected",
         reason: simulated.reason, beforeFactRefs: matchingFacts(next, operation).map(({ factId }) => factId), afterFactRefs: [] })));
       continue;
     }
@@ -155,7 +165,8 @@ function sameFactMeaning(left: ConversationIntentFact, right: ConversationIntent
   return sameTargetScope(left, right) && left.modality === right.modality && left.precision === right.precision && left.frame === right.frame && JSON.stringify(left.value) === JSON.stringify(right.value);
 }
 function receipt(operation: AcceptedIntentOperation, before: ConversationIntentFact[], after: ConversationIntentFact[]): IntentOperationReceipt {
-  return { operationId: operation.operationId, groupId: operation.groupId, status: "accepted", reason: "applied",
+  return { operationId: operation.operationId, groupId: operation.groupId, action: operation.action, target: operation.target,
+    scope: structuredClone(operation.scope), status: "accepted", reason: "applied",
     beforeFactRefs: before.map(({ factId }) => factId), afterFactRefs: after.map(({ factId }) => factId) };
 }
 function boundedRef(value: string): string { return value.length <= 200 ? value : value.slice(0, 200); }

@@ -148,7 +148,13 @@ export class MultiStepAgentRuntime {
     let hasToolResults = false;
     const nonRetryableFailureCounts = new Map<string, number>();
     const unavailableToolNames = new Set<string>();
-    const executedToolCalls = new Map<string, AgentToolExecution & { toolName: string }>();
+    const executedToolCalls = new Map<string, AgentToolExecution & {
+      toolName: string;
+      effect: "read" | "proposal";
+      dependencyEpoch: number;
+    }>();
+    let readDependencyEpoch = 0;
+    let lastSuccessfulToolSignature: string | undefined;
     let finalizeAfterToolResult = false;
     let correctedResponseContract = false;
     let correctedGroundedAnswer = false;
@@ -407,23 +413,22 @@ export class MultiStepAgentRuntime {
         const hasPlacePhoto = evidence.some((item) => typeof item.facts.imageUrl === "string" &&
           typeof item.facts.imageSourceUrl === "string" && typeof item.facts.imageAttribution === "string");
         const placePhotoAvailable = modelTools.some(({ name }) => name === "search_place_media");
-        const priorVisibleProgress = request.context?.taskContext?.previousOutcome === "progress" ||
-          request.context?.taskContext?.previousOutcome === "ask_and_progress";
+        const previousOutcome = request.context?.taskContext?.previousOutcome;
+        const currentMeaningChanged = Boolean(request.context?.taskContext?.currentIntentChange?.operations.length);
+        const claimsExternalEvidence = modelResponse.declaredPresentation?.kind === "travel-plan" ||
+          Boolean(modelResponse.declaredEvidenceIds?.length) || modelResponse.decisionSummary?.reasonCodes.includes("evidence_sufficient") === true;
         const planningAnswerWithoutEvidence = planningTurn && evidence.length === 0 &&
-          modelResponse.decisionSummary?.selectedAction === "answer";
-        const planningGuard = planningTurn && shouldRequirePlanningProgress(modelResponse, priorVisibleProgress)
+          modelResponse.decisionSummary?.selectedAction === "answer" && claimsExternalEvidence;
+        const declaredTravelPlan = modelResponse.declaredPresentation?.kind === "travel-plan";
+        const planningGuard = planningTurn && shouldRequirePlanningProgress(modelResponse, previousOutcome, currentMeaningChanged)
           ? { accepted: false, reason: "planning_progress_required", instruction:
-            "この旅行相談は質問票だけで終えず、未確認条件を仮定として明記して具体案へ進めてください。プロフィール由来の情報を確定条件として列挙せず、必要な場所情報と写真はToolで調査してください。" }
+            "直前も質問だけでした。受理済み条件を使って進め、質問が不可欠なら安全・権限・Tool必須入力など外部化できる理由を示してください。" }
           : planningAnswerWithoutEvidence
             ? { accepted: false, reason: "planning_evidence_required", instruction:
-              "旅行候補を提案するためのEvidenceがまだありません。質問や推測の回答で終えず、利用可能な旅行先調査Toolをnative toolUseで実行し、候補の出典と写真を確認してから具体案を作ってください。" }
-          : planningTurn && sourceEvidence.length > 0 && modelResponse.decisionSummary?.selectedAction === "answer" &&
-            modelResponse.declaredPresentation?.kind !== "travel-plan"
-            ? { accepted: false, reason: "planning_plan_required", instruction:
-              "資料の列挙やsource-explanationでは旅行案になりません。確認済み資料を使ってpresentation.kind=travel-planで1日目からの仮行程を作成してください。日数・出発日・起点が不明なら明示し、推測した移動時刻や宿泊価格は書かないでください。" }
-          : planningTurn && sourceEvidence.length > 0 && !hasPlacePhoto && placePhotoAvailable
-            ? { accepted: false, reason: "place_photo_required", instruction:
-              "旅行先の資料は確認済みですが代表写真がありません。最終回答の前にsearch_place_mediaで各候補の写真を取得してください。" }
+              "外部事実や旅行候補を根拠確認済みとして提示していますがEvidenceがありません。利用可能なToolで確認するか、未確認の状態・一般的な案内に限定してください。" }
+            : planningTurn && declaredTravelPlan && sourceEvidence.length > 0 && !hasPlacePhoto && placePhotoAvailable
+              ? { accepted: false, reason: "place_photo_required", instruction:
+              "写真付き旅行案を構成できる場合はsearch_place_mediaで代表写真を取得してください。条件変更・確認・一般質問に写真は不要です。" }
             : undefined;
         // Photo lookup is best effort once no more Tools can run. A missing photo
         // must not discard a valid, source-bound plan at finalization.
@@ -536,7 +541,8 @@ export class MultiStepAgentRuntime {
           }] : []),
         };
         if (prepared) {
-          const accepted = acceptsAgentTurn(request.context?.previousAssistantTurn, prepared.observation);
+          const accepted = acceptsAgentTurn(request.context?.previousAssistantTurn, prepared.observation,
+            Boolean(request.context?.taskContext?.currentIntentChange?.operations.length));
           trace.turnObserved(prepared.observation, accepted);
           if (!accepted) {
             messages.push({ role: "user", content: [{ type: "text", text: askProgressRepairInstruction }] });
@@ -574,9 +580,12 @@ export class MultiStepAgentRuntime {
       if (calls.length) await this.dependencies.reportProgress?.("checking_information");
       for (const call of calls) {
         let applicationFailure: string | undefined;
-        const signature = toolCallSignature(call.name, call.input);
+        const signature = toolCallSignature(call.name, call.input, toolStateRevision(request));
         const previousExecution = executedToolCalls.get(signature);
-        if (previousExecution) {
+        const effect = this.dependencies.toolExecutor.effect(call.name);
+        const changedReadDependency = previousExecution?.result.ok === true && effect === "read" &&
+          readDependencyEpoch > previousExecution.dependencyEpoch && lastSuccessfulToolSignature !== signature;
+        if (previousExecution && !changedReadDependency) {
           const duplicateResult = previousExecution.result.ok
             ? failedAgentToolResult({
               code: "invalid_input",
@@ -618,9 +627,13 @@ export class MultiStepAgentRuntime {
           toolInput: call.input,
           timeoutMs: Math.max(1, deadline - this.now().getTime()),
         }, trace);
-        executedToolCalls.set(signature, { ...execution, toolName: call.name });
+        executedToolCalls.set(signature, { ...execution, toolName: call.name, effect, dependencyEpoch: readDependencyEpoch });
         toolCalls += 1;
         if (execution.result.ok) {
+          if (lastSuccessfulToolSignature !== signature) {
+            readDependencyEpoch += 1;
+            lastSuccessfulToolSignature = signature;
+          }
           // Context-dependent failures are not permanent. Let the model retry
           // them after a successful Tool has added information/changed task state.
           // Successful executions and permanent failures remain deduplicated.
@@ -707,7 +720,8 @@ export class MultiStepAgentRuntime {
           observation: observeAgentTurn(false, []),
         };
         if (prepared) {
-          const accepted = acceptsAgentTurn(request.context?.previousAssistantTurn, prepared.observation);
+          const accepted = acceptsAgentTurn(request.context?.previousAssistantTurn, prepared.observation,
+            Boolean(request.context?.taskContext?.currentIntentChange?.operations.length));
           trace.turnObserved(prepared.observation, accepted);
           if (!accepted) {
             messages.push({ role: "user", content: [{ type: "text", text: askProgressRepairInstruction }] });
@@ -760,7 +774,8 @@ export class MultiStepAgentRuntime {
       text, observation: observeAgentTurn(false, [{ kind: "candidates", refs: [...generated.publicPlanPresentation.candidateOrder],
         ...(generated.publicPlanPresentation.photoRefs.length ? { mediaRefs: [...generated.publicPlanPresentation.photoRefs] } : {}) }]),
     };
-    if (!acceptsAgentTurn(request.context?.previousAssistantTurn, prepared.observation)) return undefined;
+    if (!acceptsAgentTurn(request.context?.previousAssistantTurn, prepared.observation,
+      Boolean(request.context?.taskContext?.currentIntentChange?.operations.length))) return undefined;
     trace.turnObserved(prepared.observation, true);
     trace.responseGenerated(prepared.text, grounding.claims.map(({ id }) => id));
     trace.taskCompleted("completed", elapsed(startedAt, this.now));
@@ -822,8 +837,18 @@ function hasStructuredPresentation(response: AgentModelResponse): boolean {
 function toolCallSignature(
   toolName: string,
   input: Record<string, unknown>,
+  stateRevision: string,
 ): string {
-  return `${toolName}:${canonicalJson(input)}`;
+  return `${toolName}:${canonicalJson(input)}:${stateRevision}`;
+}
+
+function toolStateRevision(request: AgentRuntimeRequest): string {
+  const task = request.context?.taskContext;
+  return canonicalJson({
+    requestRevision: task?.requestRevision,
+    workingStateRevision: task?.workingStateRevision,
+    intentRevision: task?.currentIntentChange?.intentRevision ?? request.context?.workingState?.semantic?.overlay.intentRevision,
+  });
 }
 
 function canonicalJson(value: unknown): string {
@@ -875,22 +900,24 @@ function hasPlanningQuestionnaire(response: AgentModelResponse): boolean {
   return asksForOptionalDetails;
 }
 
-function shouldRequirePlanningProgress(response: AgentModelResponse, priorVisibleProgress: boolean): boolean {
+function shouldRequirePlanningProgress(response: AgentModelResponse, previousOutcome: import("./agent-turn-outcome").AgentTurnOutcome | undefined,
+  currentMeaningChanged: boolean): boolean {
   const summary = response.decisionSummary;
   if (summary?.selectedAction === "ask_user") {
     const requirements = summary.missingRequirements ?? [];
     const authorizationRequired = requirements.some((item) => item.action === "ask" && item.resolution === "authorization");
     const safetyRequired = summary.reasonCodes.includes("safety_boundary");
-    const selectionAfterProgress = priorVisibleProgress && requirements.some((item) =>
+    const selectionAfterProgress = (previousOutcome === "progress" || previousOutcome === "ask_and_progress") && requirements.some((item) =>
       item.action === "ask" && item.resolution === "user_decision");
-    // `user_confirmation_required` alone is not a license to turn an open-ended
-    // discovery into a questionnaire. First show candidates; selection may be
-    // requested on a later turn after visible progress has been persisted.
-    return !(authorizationRequired || safetyRequired || selectionAfterProgress);
+    const firstClarification = previousOutcome === undefined && requirements.some((item) =>
+      item.action === "ask" && item.resolution === "user_decision");
+    // A validated current-turn correction may make a different follow-up question
+    // legitimate. Consecutive unchanged questionnaires remain repair targets.
+    return !(authorizationRequired || safetyRequired || selectionAfterProgress || firstClarification || currentMeaningChanged);
   }
-  // Temporary measured safety net until PR2 makes typed provider output the sole path.
-  // A legacy model labelling a questionnaire as `answer` must not bypass the typed ask contract.
-  return hasPlanningQuestionnaire(response);
+  // Regex is a legacy-text migration guard only. Provider/Application strict
+  // responses use the typed answer|ask action and are not reinterpreted from prose.
+  return (response.metadata.outputMode === undefined || response.metadata.outputMode === "legacy_text") && hasPlanningQuestionnaire(response);
 }
 
 function elapsed(startedAt: number, now: () => Date): number {
