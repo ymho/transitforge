@@ -97,7 +97,22 @@ jobs:
           [[ "$CASE_LIMIT" =~ ^(10|30|120)$ ]]
           [[ "$REPETITIONS" =~ ^(1|3)$ ]]
           [[ "$MAXIMUM_ESTIMATED_USD" =~ ^[0-9]+([.][0-9]{1,2})?$ ]]
-          if [[ -n "$CASE_ID" ]]; then\n            calls="$REPETITIONS"\n            case_summary="`$CASE_ID × $REPETITIONS`"\n          else\n            calls=$((CASE_LIMIT * REPETITIONS))\n            case_summary="`$CASE_LIMIT × $REPETITIONS`"\n          fi\n          echo "calls=$calls" >> "$GITHUB_OUTPUT"\n          {\n            echo "### Predeclared semantic evaluation budget"\n            echo "- Model: \`$DECISION_MODEL_ID\`"\n            echo "- Cases × repetitions: $case_summary"\n            echo "- Maximum calls: \`$calls\`"\n            echo "- Maximum input/output tokens: \`1000000 / 250000\`"\n            echo "- Estimated cost stop: \`\$$MAXIMUM_ESTIMATED_USD\`"\n          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n "$CASE_ID" ]]; then
+            calls="$REPETITIONS"
+            case_summary="\`$CASE_ID × $REPETITIONS\`"
+          else
+            calls=$((CASE_LIMIT * REPETITIONS))
+            case_summary="\`$CASE_LIMIT × $REPETITIONS\`"
+          fi
+          echo "calls=$calls" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Predeclared semantic evaluation budget"
+            echo "- Model: \`$DECISION_MODEL_ID\`"
+            echo "- Cases × repetitions: $case_summary"
+            echo "- Maximum calls: \`$calls\`"
+            echo "- Maximum input/output tokens: \`1000000 / 250000\`"
+            echo "- Estimated cost stop: \`\$$MAXIMUM_ESTIMATED_USD\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run semantic intent evaluation
         shell: bash
