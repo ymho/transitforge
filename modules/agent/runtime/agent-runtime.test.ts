@@ -47,7 +47,7 @@ describe("MultiStepAgentRuntime", () => {
       limits: { maxIterations: 1, maxModelCalls: 2 },
     }).run(planningRequest("倉敷に行きたい", [source]));
     expect(output.status).toBe("completed");
-    expect(output.response).toContain("1日目の仮行程");
+    expect(output.response).toContain("現地で過ごす1日目の仮案");
     expect(output.publicPlanPresentation?.candidates[0]?.days).toHaveLength(1);
     expect(output.response).not.toContain("出典の説明だけです");
     expect(requests[0]?.outputContract?.schemaHash).toBe(agentTurnPlanningOutputContract.schemaHash);
@@ -129,7 +129,7 @@ describe("MultiStepAgentRuntime", () => {
     ));
 
     expect(output.status).toBe("completed");
-    expect(output.response).toContain("倉敷の歴史的な町並み");
+    expect(output.response).toContain("歴史的な町並みが残ります");
     expect(output.claims).toHaveLength(1);
     expect(model.generate).toHaveBeenCalledTimes(1);
     expect(output.trace.events.at(-1)).toMatchObject({ type: "task_completed", status: "completed" });
@@ -167,7 +167,7 @@ describe("MultiStepAgentRuntime", () => {
     }).run(planningRequest("歴史を感じる旅行をしたい", [source]));
 
     expect(output.status).toBe("completed");
-    expect(output.response).toContain("倉敷の歴史的な町並み");
+    expect(output.response).toContain("歴史的な町並みが残ります");
     expect(output.claims).toHaveLength(1);
     expect(output.trace.events.at(-1)).toMatchObject({ type: "task_completed", status: "completed" });
   });
@@ -923,7 +923,7 @@ describe("MultiStepAgentRuntime", () => {
       initialEvidence: [source], context: { taskContext: { version: 1, phase: "discovery", target: { kind: "conversation" },
         requestRevision: 1, availableProgressKinds: ["candidates"] } } });
     expect(output.status).toBe("completed");
-    expect(output.response).toContain("倉敷の歴史的な町並み");
+    expect(output.response).toContain("歴史的な町並みが残ります");
     expect(output.claims).toHaveLength(1);
     expect(executionOrder).toEqual(["first_tool"]);
     expect(output.trace.events.at(-1)).toMatchObject({ type: "task_completed", status: "completed" });
@@ -1134,7 +1134,7 @@ describe("MultiStepAgentRuntime", () => {
       context: { taskContext: { version: 1, phase: "discovery", target: { kind: "conversation" },
         requestRevision: 1, availableProgressKinds: ["candidates"] } } });
     expect(output.status).toBe("completed");
-    expect(output.response).toContain("倉敷の歴史的な町並み");
+    expect(output.response).toContain("歴史的な町並みが残ります");
     expect(output.response).not.toContain("どの街を歩きたいですか");
     expect(output.claims).toHaveLength(1);
     expect(order).toEqual(["first_tool"]);

@@ -2,21 +2,17 @@ import type { PublicPlanPresentation } from "@raiquora/agent/public-plan-present
 
 export function renderPublicPlanPresentation(value: PublicPlanPresentation): HTMLElement {
   const root = document.createElement("section"); root.className = "public-plan-presentation";
-  root.dataset.presentationId = value.presentationId; root.setAttribute("aria-label", "旅行案の比較");
+  root.dataset.presentationId = value.presentationId; root.setAttribute("aria-label", "旅の仮行程");
   const navigation = document.createElement("div"); navigation.className = "public-plan-candidate-tabs"; navigation.setAttribute("role", "tablist");
   const panels = value.candidates.map((candidate, index) => {
     const panel = document.createElement("article"); panel.className = "public-plan-candidate"; panel.id = safeId(`${value.presentationId}-${candidate.variantId}`);
-    panel.setAttribute("role", "tabpanel"); panel.hidden = index !== 0;
-    const heading = document.createElement("h3"); heading.textContent = candidate.label; panel.append(heading);
+    if (value.candidates.length > 1) panel.setAttribute("role", "tabpanel"); panel.hidden = index !== 0;
+    const heading = document.createElement("h3"); heading.textContent = value.candidates.length === 1 ? "現地での過ごし方" : candidate.label; panel.append(heading);
     const axes = document.createElement("dl"); axes.className = "public-plan-axes";
-    axis(axes, "費用", candidate.cost?.status === "known" || candidate.cost?.status === "partial"
-      ? `${formatMinorCurrency(candidate.cost.currency, candidate.cost.amountMinor)}${candidate.cost.status === "partial" ? "（一部）" : ""}` : "未確認");
-    axis(axes, "移動負荷", candidate.workload?.status === "known" ? `${candidate.workload.travelMinutes}分` : candidate.workload?.status === "partial" ? "一部確認" : "未確認");
-    axis(axes, "根拠", `${candidate.items.filter((item) => item.evidenceRefs.length).length}/${candidate.items.length}予定`);
-    axis(axes, "写真", candidate.items.some((item) => item.photoRefs.length) ? `${candidate.items.filter((item) => item.photoRefs.length).length}予定に参照あり` : "未取得");
-    axis(axes, "変更", candidate.comparisonAssessmentRefs.length ? "比較結果あり" : "未評価"); panel.append(axes);
-    if (candidate.unknowns.length) { const details = document.createElement("details"); const summary = document.createElement("summary"); summary.textContent = `未確認 ${candidate.unknowns.length}件`;
-      const list = document.createElement("ul"); for (const unknown of candidate.unknowns) { const item = document.createElement("li"); item.textContent = unknown; list.append(item); } details.append(summary, list); panel.append(details); }
+    if (candidate.cost?.status === "known" || candidate.cost?.status === "partial")
+      axis(axes, "費用の目安", `${formatMinorCurrency(candidate.cost.currency, candidate.cost.amountMinor)}${candidate.cost.status === "partial" ? "（一部）" : ""}`);
+    if (candidate.workload?.status === "known") axis(axes, "移動時間", `${candidate.workload.travelMinutes}分`);
+    if (axes.childElementCount) panel.append(axes);
     const dayList = document.createElement("ol"); dayList.className = "public-plan-days";
     const items = new Map(candidate.items.map((item) => [item.itemRef, item]));
     for (const day of candidate.days) {
@@ -41,6 +37,7 @@ export function renderPublicPlanPresentation(value: PublicPlanPresentation): HTM
     return panel;
   });
   value.candidates.forEach((candidate, index) => {
+    if (value.candidates.length === 1) return;
     const button = document.createElement("button"); button.type = "button"; button.setAttribute("role", "tab"); button.setAttribute("aria-selected", String(index === 0));
     button.id = `${panels[index]!.id}-tab`; panels[index]!.setAttribute("aria-labelledby", button.id); button.tabIndex = index === 0 ? 0 : -1;
     button.setAttribute("aria-controls", panels[index]!.id); button.textContent = `${index + 1}. ${candidate.label}`;
@@ -52,20 +49,14 @@ export function renderPublicPlanPresentation(value: PublicPlanPresentation): HTM
       event.preventDefault(); tabs[next]?.click(); tabs[next]?.focus(); });
     navigation.append(button);
   });
-  root.append(navigation, ...panels);
-  const research = document.createElement("aside"); research.className = "public-plan-research";
-  const outcome = value.researchOutcome; research.append(text(outcome.status === "complete" ? "調査済み" : outcome.status === "partial" ? "一部を調査済み" : "調査を完了できませんでした"),
-    text(`旅程表示: ${value.coverage.status === "complete" ? "全日" : `一部（未取得 ${value.coverage.omittedDayRefs.length}日）`}`),
-    text(`確認範囲: ${outcome.coveredScopes.join("、") || "なし"}`));
-  if (outcome.remainingScopes.length) research.append(text(`未確認: ${outcome.remainingScopes.join("、")}`));
-  research.append(text(`実行: ${outcome.effectiveMode === "detailed" ? "詳細調査" : "通常調査"}・モデル${outcome.budget.modelCalls}回・Tool${outcome.budget.toolCalls}回`));
-  if (outcome.effectiveMode === "standard") { const detail = document.createElement("button"); detail.type = "button"; detail.textContent = "さらに詳しく比較する";
+  if (value.candidates.length > 1) root.append(navigation);
+  root.append(...panels);
+  if (value.researchOutcome.effectiveMode === "standard" && value.candidateSetRef.kind === "candidate-set-ref") { const detail = document.createElement("button"); detail.type = "button"; detail.textContent = "さらに詳しく比較する";
     detail.addEventListener("click", () => detail.dispatchEvent(new CustomEvent("raiquora:detailed-research", { bubbles: true, detail: { presentationId: value.presentationId,
       ...(value.candidateSetRef.kind === "candidate-set-ref" ? { candidateSetId: value.candidateSetRef.candidateSetId, candidateSetRevision: value.candidateSetRef.revision,
         ...(value.candidateSetRef.baseTripRevision === undefined ? {} : { baseTripRevision: value.candidateSetRef.baseTripRevision }) } : {}),
-      ...(value.target ? { tripId: value.target.tripId, baseTripRevision: value.target.baseTripRevision } : {}) } }))); research.append(detail); }
-  if (value.candidateSetRef.kind === "unavailable") research.append(text("この表示案はそのまま旅程へ採用できません。保存可能な候補を作成してから確認します。"));
-  root.append(research); return root;
+      ...(value.target ? { tripId: value.target.tripId, baseTripRevision: value.target.baseTripRevision } : {}) } }))); root.append(detail); }
+  return root;
 }
 
 function axis(parent: HTMLElement, name: string, value: string) { const dt = document.createElement("dt"), dd = document.createElement("dd"); dt.textContent = name; dd.textContent = value; parent.append(dt, dd); }

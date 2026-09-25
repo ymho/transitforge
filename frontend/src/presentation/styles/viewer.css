@@ -23,6 +23,7 @@
 @import "../settings/application-settings-panel.css";
 @import "../place-explorer/map-place-explorer-liquid-glass.css";
 @import "../concierge/public-journey-presentation.css";
+@import "../concierge/public-plan-presentation.css";
 @import "../train-viewer/train-details-liquid-glass.css";
 @import "../shared/loading-screen-liquid-glass.css";
 @import "../trip-plan/trip-workspace.css";
