@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { faultBoundaryCoverage } from "./fault-boundary-catalog";
+
+const repositoryRoot = fileURLToPath(new URL("../../../../../", import.meta.url));
 
 describe("semantic fault boundary coverage", () => {
   it("indexes twenty distinct allow/reject contracts backed by normal CI tests", () => {
@@ -13,7 +15,7 @@ describe("semantic fault boundary coverage", () => {
     for (const item of faultBoundaryCoverage) {
       expect(item.invariant).not.toBe(""); expect(item.appliesTo).not.toBe("");
       expect(item.allows).not.toBe(""); expect(item.rejects).not.toBe(""); expect(item.replacement).not.toBe("");
-      const source = readFileSync(resolve(process.cwd(), item.testFile), "utf8");
+      const source = readFileSync(new URL(item.testFile, `file://${repositoryRoot}`), "utf8");
       expect(source, `${item.id} references a missing test: ${item.testName}`).toContain(JSON.stringify(item.testName));
     }
   });
