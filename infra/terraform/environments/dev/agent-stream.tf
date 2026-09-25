@@ -165,7 +165,7 @@ resource "aws_lambda_function" "agent_stream" {
       MODEL_ID                           = var.bedrock_model_id
       LIGHTWEIGHT_MODEL_ID               = var.bedrock_lightweight_model_id
       DECISION_MODEL_ID                  = var.bedrock_decision_model_id
-      SEMANTIC_INTENT_ENABLED             = tostring(var.conversation_semantic_kernel_enabled)
+      SEMANTIC_INTENT_ENABLED            = tostring(var.conversation_semantic_kernel_enabled)
       BEDROCK_CAPABILITY_MATRIX_JSON     = var.bedrock_capability_matrix_json
       BEDROCK_PROMPT_CACHING_ENABLED     = tostring(var.bedrock_prompt_caching_enabled)
       TRAVEL_KNOWLEDGE_BASE_ID           = var.travel_knowledge_base_id
