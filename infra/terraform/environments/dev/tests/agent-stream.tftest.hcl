@@ -42,6 +42,10 @@ run "current_topology" {
     error_message = "The SPA must keep short-lived access/ID tokens and bound refresh to eight hours."
   }
   assert {
+    condition     = aws_cognito_user_pool.users.admin_create_user_config[0].allow_admin_create_user_only
+    error_message = "The private application must reject public self-service sign-up and allow only administrator-created users."
+  }
+  assert {
     condition     = length([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : b if b.path_pattern == "/api/agent-stream"]) == 1 && length([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : b if b.path_pattern == "/api/agent"]) == 1
     error_message = "Server streaming and the independent Viewer read route must coexist."
   }
