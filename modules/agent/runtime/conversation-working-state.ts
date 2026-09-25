@@ -2,6 +2,7 @@ import type { AgentTurnObservation } from "./agent-turn-outcome";
 import { validateEvidenceAndClaims, type Evidence } from "./evidence-model";
 import { emptyConversationIntentOverlay, parseConversationIntentOverlay, type ConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
 import { parseIntentApplicationReceipt, type IntentApplicationReceipt } from "./conversation-intent-reducer";
+import { parseIntentProposalBinding, type IntentProposalBinding } from "@raiquora/trip/intent-proposal-binding";
 
 export const conversationEvidenceLimits = { maximumItems: 24, maximumBytes: 64_000, maximumItemBytes: 8_000 } as const;
 
@@ -25,7 +26,13 @@ export interface ConversationWorkingState {
   groundingEvidence?: Evidence[];
   lastOutcome?: AgentTurnObservation;
   /** Version 2 semantic overlay. It is sparse and never a second full TripRequest. */
-  semantic?: { overlay: ConversationIntentOverlay; receipts: IntentApplicationReceipt[] };
+  semantic?: {
+    overlay: ConversationIntentOverlay;
+    receipts: IntentApplicationReceipt[];
+    pendingProposal?: { binding: IntentProposalBinding; tripId: string; baseTripRevision: number };
+    adoptionInFlight?: { binding: IntentProposalBinding; tripId: string; baseTripRevision: number; mutationId: string };
+    adoptions?: Array<{ binding: IntentProposalBinding; tripId: string; baseTripRevision: number; committedTripRevision: number; mutationId: string }>;
+  };
 }
 
 export function parseConversationWorkingState(value: unknown): ConversationWorkingState {
@@ -153,11 +160,28 @@ function validOutcome(value: unknown): value is AgentTurnObservation {
     [value.exception.constraintId, value.exception.toolName, value.exception.inputName].every((item) => item === undefined || reference(item));
 }
 function parseSemanticState(value: unknown): NonNullable<ConversationWorkingState["semantic"]> {
-  if (!record(value) || !only(value, ["overlay", "receipts"]) || !Array.isArray(value.receipts) || value.receipts.length > 20) throw new Error("Invalid semantic working state");
+  if (!record(value) || !only(value, ["overlay", "receipts", "pendingProposal", "adoptionInFlight", "adoptions"]) ||
+      !Array.isArray(value.receipts) || value.receipts.length > 20 || value.adoptions !== undefined && (!Array.isArray(value.adoptions) || value.adoptions.length > 20)) throw new Error("Invalid semantic working state");
   const overlay = parseConversationIntentOverlay(value.overlay);
   const receipts = value.receipts.map(parseIntentApplicationReceipt);
   if (receipts.some((receipt) => receipt.intentRevision > overlay.intentRevision)) throw new Error("Invalid semantic receipt revision");
-  return { overlay, receipts };
+  const pendingProposal = value.pendingProposal === undefined ? undefined : parsePendingProposal(value.pendingProposal);
+  const adoptionInFlight = value.adoptionInFlight === undefined ? undefined : parseAdoption(value.adoptionInFlight, false);
+  const adoptions = value.adoptions === undefined ? undefined : value.adoptions.map((item) => parseAdoption(item, true)) as NonNullable<NonNullable<ConversationWorkingState["semantic"]>["adoptions"]>;
+  if (adoptionInFlight && (!pendingProposal || adoptionInFlight.tripId !== pendingProposal.tripId || adoptionInFlight.baseTripRevision !== pendingProposal.baseTripRevision ||
+      JSON.stringify(adoptionInFlight.binding) !== JSON.stringify(pendingProposal.binding))) throw new Error("Adoption does not match pending proposal");
+  if (adoptions && new Set(adoptions.map(({ mutationId }) => mutationId)).size !== adoptions.length) throw new Error("Duplicate intent adoption");
+  return { overlay, receipts, ...(pendingProposal ? { pendingProposal } : {}), ...(adoptionInFlight ? { adoptionInFlight } : {}), ...(adoptions?.length ? { adoptions } : {}) };
+}
+function parsePendingProposal(value: unknown): NonNullable<NonNullable<ConversationWorkingState["semantic"]>["pendingProposal"]> {
+  if (!record(value) || !only(value, ["binding", "tripId", "baseTripRevision"]) || !identifier(value.tripId) || !integer(value.baseTripRevision)) throw new Error("Invalid pending intent proposal");
+  return { binding: parseIntentProposalBinding(value.binding), tripId: value.tripId as string, baseTripRevision: value.baseTripRevision as number };
+}
+function parseAdoption(value: unknown, committed: boolean): NonNullable<NonNullable<ConversationWorkingState["semantic"]>["adoptionInFlight"]> & { committedTripRevision?: number } {
+  if (!record(value) || !only(value, ["binding", "tripId", "baseTripRevision", "mutationId", ...(committed ? ["committedTripRevision"] : [])]) ||
+      !identifier(value.tripId) || !identifier(value.mutationId) || !integer(value.baseTripRevision) || committed && !integer(value.committedTripRevision)) throw new Error("Invalid intent adoption");
+  return { binding: parseIntentProposalBinding(value.binding), tripId: value.tripId as string, baseTripRevision: value.baseTripRevision as number,
+    mutationId: value.mutationId as string, ...(committed ? { committedTripRevision: value.committedTripRevision as number } : {}) };
 }
 function parseCandidateSetRef(value: unknown): PresentationReceipt["candidateSetRef"] {
   if (!record(value)) throw new Error("Invalid candidate set receipt");

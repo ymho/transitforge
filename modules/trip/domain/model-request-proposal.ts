@@ -5,6 +5,9 @@ import type { PlaceSnapshot } from "./place-snapshot";
 /** Model interpretations remain unconfirmed. The caller supplies the authorized base Trip. */
 export function proposeModelRequest(trip: Trip, request: TripRequest): TripUpdateProposal {
   validateTripRequest(request, trip.items);
+  if (JSON.stringify(request.profileSuppressions) !== JSON.stringify(trip.request.profileSuppressions)) {
+    throw new Error("Model cannot change Profile inheritance suppressions");
+  }
   if (JSON.stringify(request.party) !== JSON.stringify(trip.request.party)) {
     if (trip.request.party) throw new Error("Model cannot rewrite known party");
     const a = request.assumptions.find((a) => a.id === request.party?.assumptionId);

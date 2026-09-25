@@ -23,7 +23,7 @@ export function proposeVerifiedIntentRequest(input: {
   const projected = projectFacts(relevantFacts);
   const supportedSlots = new Set(projected.flatMap((constraint) => constraint.semantic!.facts.map(slotOf)));
   const removalSlots = new Set([...supportedSlots, ...accepted.filter(({ action }) => action === "retract").map(slotOf),
-    ...relevantFacts.filter(({ value }) => value.kind === "unknown").map(slotOf)]);
+    ...relevantFacts.filter(({ target, value }) => target === "origin" && value.kind === "unknown").map(slotOf)]);
   const removableTargets = new Set(accepted.filter((operation) => removalSlots.has(slotOf(operation))).map(({ target }) => target));
   const suppressed = new Set(effectiveIntent.suppressedBaseRefs.map((ref) => ref.replace(/^constraint:/u, "")));
   let constraints = trip.request.constraints.filter((constraint) => !(suppressed.has(constraint.id) && removableTargets.has(targetOf(constraint)!)) &&
@@ -33,7 +33,13 @@ export function proposeVerifiedIntentRequest(input: {
     effectiveIntent.suppressedBaseRefs.some((ref) => trip.request.constraints.some((constraint) => `constraint:${constraint.id}` === ref && targetOf(constraint) === operation.target))));
   if (!boundChanges.length) return undefined;
   constraints = [...constraints, ...projected];
-  const request: TripRequest = { ...trip.request, constraints };
+  let profileSuppressions = [...(trip.request.profileSuppressions ?? [])].filter((suppression) =>
+    !accepted.some((operation) => operation.target === suppression.target && JSON.stringify(operation.scope) === JSON.stringify(suppression.scope)));
+  for (const fact of relevantFacts.filter(({ target, value }) => target === "origin" && value.kind === "unknown")) profileSuppressions.push({
+    id: `profile-suppression:${fact.factId}`, target: fact.target, scope: structuredClone(fact.scope), sourceOperationId: fact.sourceOperationId, reason: "explicit_unknown",
+  });
+  const { profileSuppressions: _oldSuppressions, ...requestBase } = trip.request;
+  const request: TripRequest = { ...requestBase, constraints, ...(profileSuppressions.length ? { profileSuppressions } : {}) };
   const intentBinding: IntentProposalBinding = {
     version: "intent-proposal-binding-v1",
     conversationId: input.conversationId,

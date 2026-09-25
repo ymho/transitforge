@@ -10,6 +10,16 @@ export interface TripRequest {
   readonly constraints: readonly TripConstraint[];
   readonly assumptions: readonly PlanAssumption[];
   readonly party?: TripParty;
+  /** Explicit per-trip inhibition of a Profile fallback. This is not a saved
+   * preference deletion and carries only verified semantic provenance. */
+  readonly profileSuppressions?: readonly ProfileInheritanceSuppression[];
+}
+export interface ProfileInheritanceSuppression {
+  readonly id: string;
+  readonly target: IntentTarget;
+  readonly scope: IntentScope;
+  readonly sourceOperationId: string;
+  readonly reason: "explicit_unknown";
 }
 export interface TripConstraint {
   readonly id: string;
@@ -55,9 +65,19 @@ export interface PlanAssumption {
 export function validateTripRequest(request: TripRequest, items: readonly ItineraryItem[], refs: {
   readonly logicalDayIds?: ReadonlySet<string>; readonly segmentIds?: ReadonlySet<string>; readonly participantIds?: ReadonlySet<string>;
 } = {}): void {
-  exactKeys(request, ["goal", "constraints", "assumptions", "party"]);
+  exactKeys(request, ["goal", "constraints", "assumptions", "party", "profileSuppressions"]);
   if ((request.goal !== undefined && !nonemptyText(request.goal)) || !Array.isArray(request.constraints) || !Array.isArray(request.assumptions)) throw new Error("Invalid Trip request");
   uniqueIds(request.constraints); uniqueIds(request.assumptions);
+  if (request.profileSuppressions !== undefined) {
+    if (!Array.isArray(request.profileSuppressions) || request.profileSuppressions.length > 24) throw new Error("Invalid profile suppressions");
+    uniqueIds(request.profileSuppressions);
+    for (const suppression of request.profileSuppressions) {
+      exactKeys(suppression, ["id", "target", "scope", "sourceOperationId", "reason"]);
+      if (!intentTargets.includes(suppression.target) || suppression.reason !== "explicit_unknown" ||
+          typeof suppression.sourceOperationId !== "string" || !suppression.sourceOperationId || suppression.sourceOperationId.length > 200 || /[\u0000-\u001f\u007f]/u.test(suppression.sourceOperationId)) throw new Error("Invalid profile suppression");
+      parseIntentScope(suppression.scope);
+    }
+  }
   if (request.party !== undefined) {
     validateTripParty(request.party);
     const party = request.party;

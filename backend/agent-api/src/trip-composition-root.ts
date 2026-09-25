@@ -10,13 +10,15 @@ import type { TripImpactEvaluator, WatchScopeResolver } from "./ports/trip-impac
 import { DynamoDbTripSharing } from "./adapters/dynamodb-trip-sharing.js";
 import { CryptographicShareSecret } from "./adapters/share-secret.js";
 import { TripSharingApplication } from "./usecases/trip-sharing-application.js";
+import { DynamoDbConversationTurnRepository } from "./adapters/dynamodb-conversation-turn-repository.js";
 
 /** Install only in a host with reviewed end-user authentication and explicit confirmation authority. */
-export function createAuthorizedTripApplications(table: string) {
+export function createAuthorizedTripApplications(table: string, stateTable?: string) {
   const trips = new DynamoDbTripRepository(table), sharingRepository = new DynamoDbTripSharing(table);
   const reservations = new ReservationApplication(trips, new DynamoDbReservationRepository(table));
   const sharing = new TripSharingApplication(trips, sharingRepository, new CryptographicShareSecret(), sharingRepository, undefined, reservations);
-  return { sharing, repository: trips, trips: new TripApplication(trips, trips, undefined, reservations, undefined, sharing) };
+  return { sharing, repository: trips, trips: new TripApplication(trips, trips, undefined, reservations, undefined, sharing,
+    stateTable ? new DynamoDbConversationTurnRepository(stateTable) : undefined) };
 }
 
 /** IAM/internal worker composition only. Every operation still requires an explicit trusted owner. */
