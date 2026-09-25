@@ -15,7 +15,7 @@ const noChange = (category: string, count: number): SemanticIntentCaseExpected[]
 
 /** Gold is physically separated from utterances. Runners join only after a
  * model result exists and assert that case IDs are complete and unique. */
-export const semanticIntentCorpusExpected: SemanticIntentCaseExpected[] = [
+const baseSemanticIntentCorpusExpected: SemanticIntentCaseExpected[] = [
   ...family("destination", ["出雲大社", "金沢", "松江", "倉敷", "高山", "長崎", "奈良", "富山", "仙台", "広島"].map((value) => place("destination", value))),
   ...family("origin", ["大阪", "京都", "東京", "博多駅", "名古屋", "札幌", "神戸", "横浜", "大宮", "広島駅"].map((value) => place("origin", value))),
   ...family("duration", [
@@ -89,3 +89,21 @@ export const semanticIntentCorpusExpected: SemanticIntentCaseExpected[] = [
     op(target as ExpectedSemanticOperation["target"], { kind: "unknown", reason: ["unknown_to_user", "undecided", "undecided", "unknown_to_user", "withheld", "no_preference", "no_preference", "unspecified", "no_preference", "unknown_to_user"][index]! },
       { precision: "qualitative" }))),
 ];
+
+export const semanticIntentCorpusExpected: SemanticIntentCaseExpected[] = baseSemanticIntentCorpusExpected.map((item) => {
+  if (item.caseId === "retract-04") return { ...item, allowed: [...item.allowed, { outcome: "delta", speechAct: "reject", operations: [
+    op("experience", { kind: "text", text: "温泉" }, { modality: "avoid", precision: "qualitative" }),
+  ] }] };
+  if (item.caseId === "relative-date-06") return { ...item, allowed: [{ outcome: "delta", speechAct: "inform", operations: [
+    op("start_date", { kind: "relative_date", relation: "tomorrow" }, { precision: "exact" }),
+    op("duration", { kind: "quantity", amount: 2, unit: "nights" }, { precision: "exact" }),
+  ] }] };
+  if (item.caseId === "budget-07") return { ...item, allowed: [{ outcome: "delta", speechAct: "inform", operations: [
+    op("party_size", { kind: "quantity", amount: 2, unit: "people" }, { precision: "exact" }),
+    op("budget", { kind: "money", amount: 120_000, currency: "JPY", basis: "trip" }, { precision: "range" }),
+  ] }] };
+  if (item.caseId === "alternative-06") return { ...item, allowed: [{ outcome: "delta", speechAct: "consider", operations: [
+    { ...place("destination", "奈良"), action: "add_alternative" }, { ...place("destination", "京都"), action: "add_alternative" },
+  ] }] };
+  return item;
+});

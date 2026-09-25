@@ -29,6 +29,7 @@ const modelId = process.env.DECISION_MODEL_ID?.trim() || "jp.amazon.nova-2-lite-
 const rawModel = new BedrockConversationModel(new AwsBedrockConverseClient(), { modelId, decisionModelId: modelId, systemPrompt: "", timeoutMs: 80_000 });
 const usage: Required<Pick<ConversationModelUsage, "inputTokens" | "outputTokens">> & { calls: number; latencyMs: number } = { inputTokens: 0, outputTokens: 0, calls: 0, latencyMs: 0 };
 const model: ConversationModel = { converse: async (request) => {
+  enforceBudget();
   if (usage.calls >= maximumCalls) throw new Error("Model call budget exhausted");
   const response = await rawModel.converse(request); usage.calls += 1; usage.latencyMs += response.metadata.latencyMs;
   usage.inputTokens += response.metadata.usage?.inputTokens ?? 0; usage.outputTokens += response.metadata.usage?.outputTokens ?? 0;

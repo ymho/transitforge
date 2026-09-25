@@ -12,6 +12,8 @@ describe("semantic intent gold corpus", () => {
     expect(new Set(semanticIntentCorpusInputs.map(({ category }) => category)).size).toBe(12);
     expect(JSON.stringify(semanticIntentCorpusInputs)).not.toMatch(/allowed|forbiddenTargets|operations|speechAct/);
     expect(new Set(semanticIntentCorpusInputs.map(({ utterance }) => utterance)).size).toBe(120);
+    expect(semanticIntentCorpusExpected.find(({ caseId }) => caseId === "retract-04")?.allowed).toHaveLength(2);
+    expect(semanticIntentCorpusExpected.find(({ caseId }) => caseId === "relative-date-06")?.allowed[0]?.operations).toHaveLength(2);
   });
 
   it("accepts one allowed interpretation and rejects forbidden mutation even if another field matches", () => {
