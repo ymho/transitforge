@@ -57,12 +57,13 @@ it("puts the account icon in the shared navigation and sends signed-in people to
   expect(document.querySelector("[data-account] .ds-icon")).not.toBeNull();
   expect(document.querySelector(".product-header")).toBeNull();
   expect(document.querySelector(".product-brand")).toBeNull();
-  expect(document.querySelector(".product-nav [data-account]")!.textContent).toBe("アカウント");
+  expect(document.querySelector(".product-nav [data-account]")!.textContent).toBe("設定");
   expect(document.querySelector("[data-account]")!.getAttribute("aria-label")).toBe("ログインまたは新規登録");
   click("[data-account]"); expect(signedOut.ports.login).toHaveBeenCalledOnce();
   document.body.innerHTML = '<main id="app"></main>';
   const signedIn = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) });
-  expect(document.querySelector("[data-account]")!.textContent).toBe("アカウント"); click("[data-account]");
+  expect(document.querySelector("[data-account]")!.textContent).toBe("設定"); click("[data-account]");
+  expect(document.querySelector('[data-page="my"]')!.getAttribute("aria-label")).toBe("設定");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("my"); expect(document.querySelector("[data-my-account-status]")!.textContent).toContain("ログイン中");
   expect(document.querySelector("[data-account]")!.getAttribute("aria-current")).toBe("page");
   expect(document.querySelector("[data-my-account-status]")!.textContent).not.toContain("最大8時間");

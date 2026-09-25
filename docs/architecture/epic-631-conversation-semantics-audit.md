@@ -134,3 +134,10 @@ phaseは表示・予算を選ぶ補助情報であり、質問・Evidence・行�
 - Tool Evidenceへ取得時のintent revision/fingerprint/targetを付与し、次turnの意味差分と交差するEvidenceだけを失効する。旧Evidenceは意味変更時だけ安全側で失効する。
 - semantic feature gateがまだreceiptを生成していない空projectionは移行互換として旧経路を許可する。gate有効化後はcurrent turn receiptで検証する。
 - scripted test/build結果、PR/CI、実model、deploymentはWave完了時に追記する。
+
+## Profile設定統合（#658/#659）
+
+- Profile永続schema v2は維持し、非表示にした普段人数・同行者・子年代・予算感・移動上限・noveltyを削除しない。AI projectionではADR 0086の`ignoredProfileSettings`として値を送らない。
+- 設定UIは5カテゴリの独立開閉とdraft由来summaryへ変更し、保存button/sticky bar/discard/通常の離脱blockを撤去した。
+- text/textareaはIME確定後400ms、select/checkbox/choiceは即時autosaveする。ControllerがCAS revisionを使って直列化・coalesceし、失敗時は入力を保持する。
+- ナビ、accessible name、page headingを「設定」に統一した。DOM/Controller scripted testとbuildを実施し、実Browser visual/IMEはPR記録で別に扱う。
