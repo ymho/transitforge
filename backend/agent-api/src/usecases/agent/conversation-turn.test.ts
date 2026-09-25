@@ -16,7 +16,7 @@ async function setup() {
 describe("Conversation turn Application", () => {
   it("interprets, accepts and exposes intent to Runtime before answer generation", async () => {
     const f = await setup();
-    const interpretIntent = vi.fn(async () => ({ outcome: "delta" as const, operations: [{ atomicGroup: 1, action: "set" as const,
+    const interpretIntent = vi.fn(async () => ({ outcome: "delta" as const, speechAct: "inform" as const, operations: [{ atomicGroup: 1, action: "set" as const,
       target: "destination" as const, modality: "preferred" as const, precision: "exact" as const, frame: "actual" as const,
       quote: "旅", value: { kind: "place_label" as const, label: "出雲大社" } }], unresolvedFragments: [] }));
     f.runAgentTurn.mockImplementationOnce(async () => {
@@ -30,7 +30,7 @@ describe("Conversation turn Application", () => {
   });
 
   it("keeps accepted intent when answer generation fails and does not reinterpret on retry", async () => {
-    const f = await setup(), interpretIntent = vi.fn(async () => ({ outcome: "delta" as const, operations: [{ atomicGroup: 1,
+    const f = await setup(), interpretIntent = vi.fn(async () => ({ outcome: "delta" as const, speechAct: "inform" as const, operations: [{ atomicGroup: 1,
       action: "set" as const, target: "destination" as const, modality: "preferred" as const, precision: "exact" as const,
       frame: "actual" as const, quote: "旅", value: { kind: "place_label" as const, label: "出雲大社" } }], unresolvedFragments: [] }));
     f.runAgentTurn.mockRejectedValueOnce(new Error("provider failed"));
@@ -42,15 +42,19 @@ describe("Conversation turn Application", () => {
   });
   it("runs the S00 production-shaped semantic continuity fixtures without feeding expected state to Runtime", async () => {
     const f = await setup();
+    f.runAgentTurn.mockImplementation(async ({ userRequest }) => userRequest === "出雲大社に行きたい"
+      ? { ...success, turnObservation: { outcome: "progress", progress: [{ kind: "candidates", refs: ["candidate:izumo", "candidate:toyama"] }] } }
+      : success);
     const interpretations = new Map<string, UtteranceInterpretation>([
-      ["出雲大社に行きたい", { outcome: "delta", operations: [{ atomicGroup: 1, action: "set", target: "destination", modality: "preferred", precision: "exact", frame: "actual", quote: "出雲大社", value: { kind: "place_label", label: "出雲大社" } }], unresolvedFragments: [] }],
-      ["明日出発", { outcome: "delta", operations: [{ atomicGroup: 1, action: "set", target: "start_date", modality: "required", precision: "exact", frame: "actual", quote: "明日", value: { kind: "relative_date", relation: "tomorrow" } }], unresolvedFragments: [] }],
-      ["温泉でもよい", { outcome: "delta", operations: [{ atomicGroup: 1, action: "set", target: "experience", modality: "acceptable", precision: "qualitative", frame: "actual", quote: "温泉でもよい", value: { kind: "text", text: "温泉" } }], unresolvedFragments: [] }],
-      ["富山に変更", { outcome: "delta", operations: [{ atomicGroup: 1, action: "replace", target: "destination", modality: "preferred", precision: "exact", frame: "actual", quote: "富山に変更", value: { kind: "place_label", label: "富山" } }], unresolvedFragments: [] }],
-      ["行き先は未定に戻して", { outcome: "delta", operations: [{ atomicGroup: 1, action: "retract", target: "destination", frame: "actual", quote: "未定に戻して" }], unresolvedFragments: [] }],
-      ["2番目で", { outcome: "unsupported", operations: [], unresolvedFragments: ["2番目"] }],
-      ["金沢もあり", { outcome: "delta", operations: [{ atomicGroup: 1, action: "add_alternative", target: "destination", modality: "acceptable", precision: "exact", frame: "actual", quote: "金沢もあり", value: { kind: "place_label", label: "金沢" } }], unresolvedFragments: [] }],
-      ["大阪もあり", { outcome: "delta", operations: [{ atomicGroup: 1, action: "add_alternative", target: "destination", modality: "acceptable", precision: "exact", frame: "actual", quote: "大阪もあり", value: { kind: "place_label", label: "大阪" } }], unresolvedFragments: [] }],
+      ["出雲大社に行きたい", { outcome: "delta", speechAct: "inform", operations: [{ atomicGroup: 1, action: "set", target: "destination", modality: "preferred", precision: "exact", frame: "actual", quote: "出雲大社", value: { kind: "place_label", label: "出雲大社" } }], unresolvedFragments: [] }],
+      ["明日出発", { outcome: "delta", speechAct: "inform", operations: [{ atomicGroup: 1, action: "set", target: "start_date", modality: "required", precision: "exact", frame: "actual", quote: "明日", value: { kind: "relative_date", relation: "tomorrow" } }], unresolvedFragments: [] }],
+      ["温泉でもよい", { outcome: "delta", speechAct: "inform", operations: [{ atomicGroup: 1, action: "set", target: "experience", modality: "acceptable", precision: "qualitative", frame: "actual", quote: "温泉でもよい", value: { kind: "text", text: "温泉" } }], unresolvedFragments: [] }],
+      ["富山に変更", { outcome: "delta", speechAct: "correct", operations: [{ atomicGroup: 1, action: "replace", target: "destination", modality: "preferred", precision: "exact", frame: "actual", quote: "富山に変更", value: { kind: "place_label", label: "富山" } }], unresolvedFragments: [] }],
+      ["行き先は未定に戻して", { outcome: "delta", speechAct: "cancel", operations: [{ atomicGroup: 1, action: "retract", target: "destination", frame: "actual", quote: "未定に戻して" }], unresolvedFragments: [] }],
+      ["2番目で", { outcome: "delta", speechAct: "confirm", operations: [{ atomicGroup: 1, action: "set", target: "candidate_selection",
+        modality: "preferred", precision: "exact", frame: "actual", quote: "2番目", value: { kind: "presentation_ordinal", ordinal: 2 } }], unresolvedFragments: [] }],
+      ["金沢もあり", { outcome: "delta", speechAct: "consider", operations: [{ atomicGroup: 1, action: "add_alternative", target: "destination", modality: "acceptable", precision: "exact", frame: "actual", quote: "金沢もあり", value: { kind: "place_label", label: "金沢" } }], unresolvedFragments: [] }],
+      ["大阪もあり", { outcome: "delta", speechAct: "consider", operations: [{ atomicGroup: 1, action: "add_alternative", target: "destination", modality: "acceptable", precision: "exact", frame: "actual", quote: "大阪もあり", value: { kind: "place_label", label: "大阪" } }], unresolvedFragments: [] }],
     ] as const);
     const interpretIntent = vi.fn(async ({ userRequest }: { userRequest: string }) => structuredClone(interpretations.get(userRequest)!));
     const app = createConversationTurnApplication({ turns: f.turns, runAgentTurn: f.runAgentTurn, interpretIntent });
@@ -61,7 +65,8 @@ describe("Conversation turn Application", () => {
     let overlay = (await f.turns.getWorkingState(principal, conversationId))!.semantic!.overlay;
     expect(overlay.facts).toEqual(expect.arrayContaining([
       expect.objectContaining({ target: "destination", value: { kind: "place_label", label: "出雲大社" } }),
-      expect.objectContaining({ target: "start_date", value: { kind: "local_date", date: "2026-09-26", expression: "tomorrow" } }),
+      expect.objectContaining({ target: "start_date", value: expect.objectContaining({ kind: "local_date", date: "2026-09-26", expression: "tomorrow",
+        anchorDate: "2026-09-25", resolverVersion: "calendar-v1" }) }),
     ]));
 
     await turn(12, "温泉でもよい");
@@ -73,10 +78,9 @@ describe("Conversation turn Application", () => {
     expect(overlay.facts.some(({ target }) => target === "destination")).toBe(false);
     expect(overlay.tombstones).toContainEqual(expect.objectContaining({ target: "destination", reason: "retracted" }));
 
-    const beforeUnsupported = structuredClone(overlay);
     await turn(15, "2番目で");
     overlay = (await f.turns.getWorkingState(principal, conversationId))!.semantic!.overlay;
-    expect(overlay).toEqual(beforeUnsupported); // #636: unresolved ordinal must not mutate state yet.
+    expect(overlay.facts.find(({ target }) => target === "candidate_selection")?.value).toMatchObject({ kind: "candidate_ref", candidateRef: "candidate:toyama" });
 
     await turn(16, "金沢もあり"); await turn(17, "大阪もあり");
     overlay = (await f.turns.getWorkingState(principal, conversationId))!.semantic!.overlay;

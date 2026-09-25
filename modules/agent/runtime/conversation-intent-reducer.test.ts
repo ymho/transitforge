@@ -4,7 +4,7 @@ import { reduceConversationIntent } from "./conversation-intent-reducer";
 
 const turnId = "00000000-0000-4000-8000-000000000001";
 function delta(mutationId: string, baseIntentRevision: number, operations: AcceptedIntentDelta["operations"]): AcceptedIntentDelta {
-  return { version: 1, mutationId, baseIntentRevision, operations: [...operations] };
+  return { version: 1, mutationId, baseIntentRevision, speechAct: "inform", operations: [...operations] };
 }
 function op(id: string, action: AcceptedIntentDelta["operations"][number]["action"], target: AcceptedIntentDelta["operations"][number]["target"], value?: AcceptedIntentDelta["operations"][number]["value"]) {
   return { operationId: id, groupId: `group-${id}`, action, target, scope: { type: "conversation" as const }, modality: "preferred" as const,
@@ -33,6 +33,24 @@ describe("reduceConversationIntent", () => {
     const second = reduceConversationIntent(first.overlay, delta("m2", 1, [op("o2", "retract", "origin")]));
     expect(second.overlay.facts).toEqual([]);
     expect(second.overlay.tombstones).toMatchObject([{ target: "origin", reason: "retracted" }]);
+  });
+
+  it("keeps hypothetical changes isolated from the actual conversation intent", () => {
+    const actual = reduceConversationIntent(emptyConversationIntentOverlay(), delta("m1", 0, [
+      op("o1", "set", "party_size", { kind: "quantity", amount: 1, unit: "people" }),
+    ]));
+    const hypotheticalOperation = { ...op("o2", "set", "party_size", { kind: "quantity", amount: 2, unit: "people" }),
+      frame: "hypothetical" as const };
+    const withHypothesis = reduceConversationIntent(actual.overlay, delta("m2", 1, [hypotheticalOperation]));
+    expect(withHypothesis.overlay.facts.map(({ frame, value }) => [frame, value])).toEqual([
+      ["actual", { kind: "quantity", amount: 1, unit: "people" }],
+      ["hypothetical", { kind: "quantity", amount: 2, unit: "people" }],
+    ]);
+
+    const hypotheticalRetract = { ...op("o3", "retract", "party_size"), frame: "hypothetical" as const };
+    const retracted = reduceConversationIntent(withHypothesis.overlay, delta("m3", 2, [hypotheticalRetract]));
+    expect(retracted.overlay.facts).toMatchObject([{ frame: "actual", value: { amount: 1 } }]);
+    expect(retracted.overlay.tombstones).toMatchObject([{ target: "party_size", frame: "hypothetical", reason: "retracted" }]);
   });
 
   it("replays a mutation without advancing intentRevision", () => {

@@ -1232,7 +1232,7 @@ describe("MultiStepAgentRuntime", () => {
       executionId: "typed-planning-after-change", feature: "concierge", userRequest: "やっぱりホテルに変えて",
       context: { taskContext: { version: 1, phase: "refine", target: { kind: "conversation" },
         requestRevision: 2, availableProgressKinds: ["candidates"], previousOutcome: "ask_only",
-        currentIntentChange: { intentRevision: 2, operations: [{ action: "replace", target: "accommodation" }] } } },
+        currentIntentChange: { intentRevision: 2, speechAct: "correct", operations: [{ action: "replace", target: "accommodation", frame: "actual" }] } } },
     });
     expect(output.status).toBe("completed");
     expect(output.response).toContain("どちらを優先しますか");
@@ -1246,8 +1246,8 @@ describe("MultiStepAgentRuntime", () => {
     const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([acknowledgement]) }).run({
       executionId: "typed-planning-ack", feature: "concierge", userRequest: "ホテルに変えて",
       context: { taskContext: { version: 1, phase: "refine", target: { kind: "conversation" }, requestRevision: 2,
-        availableProgressKinds: ["candidates"], currentIntentChange: { intentRevision: 2,
-          operations: [{ action: "replace", target: "accommodation" }] } } },
+        availableProgressKinds: ["candidates"], currentIntentChange: { intentRevision: 2, speechAct: "correct",
+          operations: [{ action: "replace", target: "accommodation", frame: "actual" }] } } },
     });
     expect(output.status).toBe("completed");
     expect(output.response).toContain("変更しました");

@@ -55,7 +55,7 @@ it("runs natural language through semantic acceptance before Runtime", async () 
   const model = { converse: vi.fn(async (request: ConversationModelRequest) => {
     requests.push(structuredClone(request));
     if (request.outputContract?.name === "conversation_semantic_delta") {
-      return { message: { role: "assistant" as const, content: [{ text: JSON.stringify({ outcome: "delta", operations: [
+      return { message: { role: "assistant" as const, content: [{ text: JSON.stringify({ outcome: "delta", speechAct: "inform", operations: [
         { atomicGroup: 1, action: "set", target: "destination", modality: "preferred", precision: "exact", frame: "actual", quote: "出雲大社", value: { kind: "place_label", label: "出雲大社" } },
         { atomicGroup: 1, action: "set", target: "start_date", modality: "required", precision: "exact", frame: "actual", quote: "明日出発", value: { kind: "relative_date", relation: "tomorrow" } },
       ], unresolvedFragments: [] }) }] },
@@ -71,14 +71,17 @@ it("runs natural language through semantic acceptance before Runtime", async () 
   const working = await new DynamoDbConversationTurnRepository("test-state", state.client).getWorkingState(principal, conversationId);
   expect(working?.semantic?.overlay).toMatchObject({ intentRevision: 1, facts: [
     { target: "destination", value: { kind: "place_label", label: "出雲大社" } },
-    { target: "start_date", value: { kind: "local_date", date: "2026-09-26", expression: "tomorrow" } },
+    { target: "start_date", value: { kind: "local_date", date: "2026-09-26", expression: "tomorrow",
+      anchorDate: "2026-09-25", resolverVersion: "calendar-v1" } },
   ] });
   const runtimeRequests = requests.filter(({ outputContract }) => outputContract?.name !== "conversation_semantic_delta");
   const contextBlock = runtimeRequests[0]!.messages[0]!.content.find((block) => "text" in block) as { text: string };
   const context = JSON.parse(contextBlock.text.match(/<agent_context>([\s\S]*)<\/agent_context>/)![1]);
-  expect(context.workingState.semantic.overlay.facts.map((fact: { target: string }) => fact.target)).toEqual(["destination", "start_date"]);
-  expect(context.taskContext.currentIntentChange).toEqual({ intentRevision: 1, operations: [
-    { action: "set", target: "destination" }, { action: "set", target: "start_date" },
+  expect(context.workingState.semantic).toBeUndefined();
+  expect(context.effectiveIntent.actualConversationFacts.map((fact: { target: string }) => fact.target)).toEqual(["destination", "start_date"]);
+  expect(context.effectiveIntent).toMatchObject({ intentRevision: 1, profileHints: [], hypotheticalFacts: [] });
+  expect(context.taskContext.currentIntentChange).toEqual({ intentRevision: 1, speechAct: "inform", operations: [
+    { action: "set", target: "destination", frame: "actual" }, { action: "set", target: "start_date", frame: "actual" },
   ] });
   expect(requests.filter(({ outputContract }) => outputContract?.name === "conversation_semantic_delta")).toHaveLength(1);
 });
