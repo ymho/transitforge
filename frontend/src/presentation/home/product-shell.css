@@ -159,7 +159,7 @@
 #app[data-primary-view] dialog { backdrop-filter: none; background: white; }
 /* Below this width the centered desktop navigation and account action cannot coexist without crowding. */
 @media (max-width: 62rem) {
-  .product-nav { position: fixed; z-index: 20; inset: auto .625rem max(.625rem, env(safe-area-inset-bottom)); padding: .3rem; background: #fffffffa; border: 1px solid var(--product-line); border-radius: 1.125rem; box-shadow: 0 8px 28px #12273f1a; gap: 0; transform: none; }
+  .product-nav { position: fixed; z-index: 20; inset: auto .625rem env(safe-area-inset-bottom); padding: .3rem; background: #fffffffa; border: 1px solid var(--product-line); border-radius: 1.125rem; box-shadow: 0 8px 28px #12273f1a; gap: 0; transform: none; }
   .product-nav :is(a, button) { flex: 1; flex-direction: column; gap: .1rem; min-width: 0; padding: .35rem; min-height: 3.2rem; font-size: .75rem; }
   #app[data-primary-view="map"] #map { bottom: calc(4.5rem + env(safe-area-inset-bottom)); }
 }

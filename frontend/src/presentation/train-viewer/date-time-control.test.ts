@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { formatDateTimeLocal, maximumRouteTimeFor } from "./date-time-control";
 
 describe("date time control", () => {
-  it("日時入力へローカル日時を秒まで整形する", () => {
-    expect(formatDateTimeLocal(new Date(2026, 7, 25, 9, 4, 7))).toBe(
+  it("日時入力へ日本時間を秒まで整形する", () => {
+    expect(formatDateTimeLocal(new Date("2026-08-25T00:04:07.000Z"))).toBe(
       "2026-08-25T09:04:07",
     );
   });

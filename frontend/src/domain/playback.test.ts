@@ -18,13 +18,13 @@ describe("playback", () => {
     expect(advanceRouteTime(1_559, 2_000, 1, range)).toBe(1);
   });
 
-  it("converts the current local clock to route minutes", () => {
-    expect(currentRouteTime(new Date(2026, 6, 29, 23, 37, 30, 500))).toBeCloseTo(
+  it("converts the current Japan clock to route minutes regardless of device timezone", () => {
+    expect(currentRouteTime(new Date("2026-07-29T23:37:30.500+09:00"))).toBeCloseTo(
       1_417 + 30.5 / 60,
     );
-    expect(currentRouteTime(new Date(2026, 6, 30, 0, 37))).toBe(24 * 60 + 37);
-    expect(currentRouteTime(new Date(2026, 6, 30, 3, 59))).toBe(27 * 60 + 59);
-    expect(currentRouteTime(new Date(2026, 6, 30, 4, 0))).toBe(4 * 60);
+    expect(currentRouteTime(new Date("2026-07-29T15:37:00.000Z"))).toBe(24 * 60 + 37);
+    expect(currentRouteTime(new Date("2026-07-29T18:59:00.000Z"))).toBe(27 * 60 + 59);
+    expect(currentRouteTime(new Date("2026-07-29T19:00:00.000Z"))).toBe(4 * 60);
   });
 
   it("normalizes only early-morning clock times into the previous operating day", () => {
