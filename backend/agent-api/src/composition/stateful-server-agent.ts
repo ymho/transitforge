@@ -3,7 +3,7 @@ import type { PublicCostProposal } from "@raiquora/trip/public-cost-proposal";
 import { createTrip } from "@raiquora/trip/trip";
 import { parseConsultationRequestProposal, type ConsultationRequestProposal } from "@raiquora/trip/consultation-request-proposal";
 import type { Trip } from "@raiquora/trip/trip";
-import type { PublicRequestProposal } from "@raiquora/trip/public-request-proposal";
+import { parsePublicRequestProposal, type PublicRequestProposal } from "@raiquora/trip/public-request-proposal";
 import type { ServerAgentTurn } from "../usecases/agent/server-agent.js";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
 import { registerRequestProposalTool } from "../usecases/agent/request-proposal-tool.js";
@@ -19,6 +19,9 @@ import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-convers
 import { registerTripReadTools } from "../usecases/agent/trip-read-tool.js";
 import { DynamoDbItineraryCandidateRepository } from "../adapters/dynamodb-itinerary-candidate-repository.js";
 import { PlanCandidateRetentionApplication, registerPlanCandidateRetentionTool, type RetainedCandidatePlan } from "../usecases/plan-candidate-retention.js";
+import { proposeVerifiedIntentRequest } from "@raiquora/agent/verified-intent-proposal";
+import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
+import type { IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
 
 /** Internal stateful composition. Transport/auth rollout and env bindings remain with #451/#462/#480. */
 export function createStatefulServerAgent(options: Omit<Parameters<typeof createServerAgent>[0], "loadContext"> & {
@@ -32,6 +35,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
   return { async runAgentTurn(input: ServerAgentTurn, reportProgress?: AgentProgressReporter) {
     let tripCostProposal: PublicCostProposal | undefined, retainedCandidatePlan: RetainedCandidatePlan | undefined;
     let trip: Trip | undefined, consultation: Trip | undefined, tripUpdateProposal: PublicRequestProposal | undefined, consultationRequestProposal: ConsultationRequestProposal | undefined;
+    let effectiveIntent: EffectiveIntent | undefined, currentIntentReceipt: IntentApplicationReceipt | undefined;
     const turnStates = new DynamoDbConversationTurnRepository(options.stateTable, options.stateClient);
     const result = await createServerAgent({ ...options,
       registerAdditionalTools: (tools, evidence, scope) => {
@@ -67,8 +71,24 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
         trips: new DynamoDbTripRepository(options.tripTable, options.tripClient),
         workingStates: turnStates,
       }, { historyBeforeSequence: options.historyBeforeSequence, onTrip: value => { trip = value; },
-        onConsultation: value => { consultation = createTrip(value.conversationId, "相談中の条件", value.createdAt, [], value.request); } }),
+        onConsultation: value => { consultation = createTrip(value.conversationId, "相談中の条件", value.createdAt, [], value.request); },
+        onEffectiveIntent: value => { effectiveIntent = value.effectiveIntent; currentIntentReceipt = value.currentReceipt; } }),
     }).runAgentTurn(input, reportProgress);
+    if (input.conversationId && effectiveIntent && currentIntentReceipt) {
+      const base = trip ?? consultation;
+      if (base) {
+        const verified = proposeVerifiedIntentRequest({ conversationId: input.conversationId, trip: base, effectiveIntent, receipt: currentIntentReceipt });
+        if (verified) {
+          if (trip) tripUpdateProposal = parsePublicRequestProposal(verified);
+          else {
+            const patch = verified.patches[0];
+            if (patch?.type !== "request") throw new Error("Verified intent projection must be request-only");
+            consultationRequestProposal = parseConsultationRequestProposal({ conversationId: base.id, baseRequest: base.request,
+              request: patch.request, summary: verified.summary, intentBinding: verified.intentBinding });
+          }
+        }
+      }
+    }
     return { ...result, ...((result.status === "completed" || result.status === "follow_up") && retainedCandidatePlan ? { publicPlanPresentation: retainedCandidatePlan.presentation } : {}),
       ...((result.status === "completed" || result.status === "follow_up") && tripCostProposal ? { tripCostProposal } : {}), ...((result.status === "completed" || result.status === "follow_up") && tripUpdateProposal ? { tripUpdateProposal } : {}),
       ...((result.status === "completed" || result.status === "follow_up") && consultationRequestProposal ? { consultationRequestProposal } : {}) };

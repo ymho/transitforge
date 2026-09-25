@@ -2,6 +2,7 @@ import type { ItineraryItem } from "./trip";
 import { validateTripParty, samePartyValue, type TripParty } from "./trip-party";
 import { exactKeys } from "./snapshot-validation";
 import { nonemptyText, validateTripRequirement, type TripRequirement } from "./trip-requirement";
+import { parseIntentScope, intentModalities, intentTargets, type IntentPrecision, type IntentScope, type IntentTarget } from "./conversation-intent";
 export type { TripRequirement } from "./trip-requirement";
 
 export interface TripRequest {
@@ -17,6 +18,18 @@ export interface TripConstraint {
   readonly assumptionId?: string;
   readonly scope: ConstraintScope;
   readonly requirement: TripRequirement;
+  /** Verified conversation provenance, authored by Application rather than a model. */
+  readonly semantic?: {
+    readonly version: 1;
+    readonly facts: readonly {
+      readonly factRef: string;
+      readonly sourceOperationId: string;
+      readonly target: IntentTarget;
+      readonly scope: IntentScope;
+      readonly modality: import("./conversation-intent").IntentModality;
+      readonly precision: IntentPrecision;
+    }[];
+  };
 }
 export type ConstraintScope = (
   | { readonly type: "trip" }
@@ -55,7 +68,7 @@ export function validateTripRequest(request: TripRequest, items: readonly Itiner
     }
   }
   for (const c of request.constraints) {
-    exactKeys(c, ["id", "strength", "source", "assumptionId", "scope", "requirement"]);
+    exactKeys(c, ["id", "strength", "source", "assumptionId", "scope", "requirement", "semantic"]);
     if (!["hard", "soft"].includes(c.strength) || !["user", "profile", "assumption", "legacy"].includes(c.source)) throw new Error("Invalid constraint source/strength");
     const keys = c.scope?.type === "item" ? ["type", "itemId", "participantIds"] : c.scope?.type === "item-set" ? ["type", "itemIds", "participantIds"]
       : c.scope?.type === "logical-day" ? ["type", "logicalDayId", "participantIds"] : c.scope?.type === "segment" ? ["type", "segmentId", "participantIds"]
@@ -71,6 +84,7 @@ export function validateTripRequest(request: TripRequest, items: readonly Itiner
     if (scope.participantIds !== undefined && (!Array.isArray(scope.participantIds) || !scope.participantIds.length ||
         new Set(scope.participantIds).size !== scope.participantIds.length || refs.participantIds !== undefined && scope.participantIds.some((id: string) => !refs.participantIds!.has(id)))) throw new Error("Missing constraint participant");
     validateTripRequirement(c.requirement);
+    if (c.semantic !== undefined) validateSemanticConstraint(c);
     if (c.source === "assumption" && !c.assumptionId) throw new Error("Assumption source requires a reference");
     if (c.assumptionId !== undefined) {
       const a = request.assumptions.find(({ id }) => id === c.assumptionId);
@@ -102,6 +116,20 @@ export function validateTripRequest(request: TripRequest, items: readonly Itiner
       } else throw new Error("Unknown assumption effect");
     }
   }
+}
+
+function validateSemanticConstraint(constraint: TripConstraint): void {
+  const semantic = constraint.semantic!;
+  exactKeys(semantic, ["version", "facts"]);
+  if (semantic.version !== 1 || constraint.source !== "user" || constraint.assumptionId !== undefined ||
+      !Array.isArray(semantic.facts) || !semantic.facts.length || semantic.facts.length > 12) throw new Error("Invalid semantic constraint");
+  for (const fact of semantic.facts) {
+    exactKeys(fact, ["factRef", "sourceOperationId", "target", "scope", "modality", "precision"]);
+    if (![fact.factRef, fact.sourceOperationId].every((value) => typeof value === "string" && value.length > 0 && value.length <= 200 && !/[\u0000-\u001f\u007f]/u.test(value)) ||
+        !intentTargets.includes(fact.target) || !intentModalities.includes(fact.modality) || !["exact", "approximate", "range", "qualitative"].includes(fact.precision)) throw new Error("Invalid semantic fact reference");
+    parseIntentScope(fact.scope);
+  }
+  if (new Set(semantic.facts.map(({ factRef }) => factRef)).size !== semantic.facts.length) throw new Error("Duplicate semantic fact reference");
 }
 
 /** Compare final Request to original; rejection cannot keep the rejected value under a new label. */
