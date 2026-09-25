@@ -152,6 +152,15 @@ it("renders a grounded itinerary, all-party AI estimate, and bound photo in one 
   expect(result.text).toContain('https://images.example.org/izumo.jpg "Raiquora verified photo"');
   expect(result.claims.map(({ kind }) => kind)).toEqual(["fact", "inference"]);
 });
+it("keeps cost unknown when the trip's starting point and lodging terms are not established", () => {
+  const value = JSON.parse(plan());
+  delete value.candidates[0].estimate;
+  value.candidates[0].itinerary = [{ day: 1, activities: [{ period: "unscheduled", title: "出雲大社を参拝", kind: "activity" }] }];
+  const result = travelPlan(JSON.stringify(value), [photographedPlace])!;
+  expect(result.publicPlanPresentation?.candidates[0]?.cost).toEqual({ status: "unknown" });
+  expect(result.text).toContain("費用は出発地・日数・宿泊条件を確認してから");
+  expect(result.text).not.toContain("合計：0円");
+});
 it("passes verified administrative areas to the travel-plan selection prompt", () => {
   const instruction = groundedAnswerInstruction([photographedPlace]);
   expect(instruction).toContain('"administrativeAreas":["place:出雲市","region:島根県"]');

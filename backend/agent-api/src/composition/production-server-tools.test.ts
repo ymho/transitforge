@@ -28,6 +28,25 @@ it("materializes discovery leads into verified page evidence in the same tool ro
   expect(evidence.find(hasStructuredPresentationEvidence)?.facts.sourceExcerpt).toContain("白壁の町並み");
 });
 
+it("finds an attributed photo tied to the fetched destination page", async () => {
+  const url = "https://example.org/izumo";
+  const readWebPages = vi.fn(async () => ({ webPages: { status: "available", freshness: "fresh",
+    data: { pages: [{ url, title: "出雲大社|出雲観光ガイド", text: "出雲大社は古社として知られています。" }] },
+    evidence: [{ id: "page", provider: "safe-reader", sourceUrl: url }] } }));
+  const searchPlaceMedia = vi.fn(async () => ({ result: { status: "available", freshness: "fresh", data: {
+    places: [{ providerPlaceId: "izumo", name: "出雲大社", sourceUrl: "https://map.example/izumo", officialWebsiteUrl: url,
+      image: { url: "https://images.example/izumo.jpg", descriptionUrl: "https://photos.example/izumo", attribution: "Example", hotlinkAllowed: true } }] },
+    evidence: [{ id: "media", provider: "map", sourceUrl: "https://map.example/izumo" }] } }));
+  const discovery = vi.fn(async () => ({ body: { discovery: { batch: { hits: [{ hitId: "hit", sourceRef: url,
+    retrievalChannel: "web", text: "出雲大社を紹介" }] } } } }));
+  const binding = productionServerTools({ external: { readWebPages, searchPlaceMedia }, discovery, accommodation: vi.fn(), journey: vi.fn() })
+    .find((tool) => tool.descriptor.name === "search_travel_knowledge")!;
+  const response = await binding.operation({}, { requestId: "consultation" });
+  const evidence = binding.evidence(response.body, evidenceContext);
+  expect(searchPlaceMedia).toHaveBeenCalledWith({ query: "出雲大社", limit: 3 });
+  expect(evidence.find((item) => item.facts.imageUrl)?.facts.boundSourceUrls).toContain(url);
+});
+
 it("never promotes discovery snippets into verified travel plans when the page read fails", async () => {
   const tools = productionServerTools({ external: { readWebPages: vi.fn(async () => { throw Error("unavailable"); }) },
     discovery: vi.fn(async () => ({ body: { discovery: { batch: { hits: [{ hitId: "hit-1", sourceRef: "https://example.org/lead",

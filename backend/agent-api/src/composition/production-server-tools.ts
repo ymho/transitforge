@@ -1,6 +1,6 @@
 import { representativeTimetableEvidence } from "@raiquora/agent/representative-timetable-evidence";
 import { representativeTimetableToolDescriptor } from "@raiquora/agent/representative-timetable-tool-descriptor";
-import { externalTravelToolDescription, externalTravelToolInputSchema, executeExternalTravelTool, type ExternalTravelToolDependencies, type ExternalTravelToolState } from "@raiquora/agent/external-travel-tools";
+import { externalTravelToolDescription, externalTravelToolInputSchema, executeExternalTravelTool, isSpecificPlaceCandidateName, type ExternalTravelToolDependencies, type ExternalTravelToolState } from "@raiquora/agent/external-travel-tools";
 import { externalTravelEvidence } from "@raiquora/agent/external-travel-evidence";
 import { accommodationToolDescriptor } from "@raiquora/agent/accommodation-tool-descriptor";
 import { createSearchJourneysTool } from "@raiquora/agent/search-journeys-tool";
@@ -25,6 +25,18 @@ export function productionServerTools(options: {
   const journeyResults = new Map<string, JourneySearchResponse>();
   const names = ["search_place_media", "search_travel_alerts", "search_ground_access", "search_restaurants", "search_web", "read_web_pages", "resolve_place_candidates"] as const;
   const journeyDescriptor = createSearchJourneysTool({ search: async () => { throw new Error("descriptor only"); } });
+  const enrichPagesWithMedia = async (output: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    if (!options.external.searchPlaceMedia || !state.webPages?.data?.pages?.length) return output;
+    const page = state.webPages.data.pages[0];
+    const title = page?.title?.split(/[|｜]/u, 1)[0]?.trim();
+    if (!page || !title || !isSpecificPlaceCandidateName(title)) return output;
+    try {
+      const media = await executeExternalTravelTool("search_place_media", { query: title, mode: "target", sourceUrl: page.url, limit: 3 }, options.external, state);
+      return media && typeof media === "object" && "result" in media ? { ...output, ...media } : output;
+    } catch {
+      return output;
+    }
+  };
   return [
     ...(options.discovery ? [{ descriptor: travelDiscoveryToolDescriptor, operation: (async (input, context) => {
       const response = await options.discovery!(input, context);
@@ -41,14 +53,14 @@ export function productionServerTools(options: {
         const pages = await options.external.readWebPages({ urls });
         if (pages && typeof pages === "object" && "webPages" in pages) {
           state.webPages = (pages as { webPages: ExternalTravelToolState["webPages"] }).webPages;
-          return { ...response, body: { ...body, ...pages } };
+          return { ...response, body: await enrichPagesWithMedia({ ...body, ...pages }) };
         }
       } catch {
         // Keep the discovery result available for a subsequent explicit read.
       }
       return response;
     }) as AgentOperation, evidence: (output: unknown, context: Parameters<typeof discoveryEvidence>[1]) =>
-      [...discoveryEvidence(output, context), ...externalTravelEvidence(output, context)] }] : []),
+      [...discoveryEvidence(output, context), ...materializedEvidence(output, context)] }] : []),
     ...(options.representativeTimetable ? [{ descriptor: representativeTimetableToolDescriptor, operation: options.representativeTimetable, evidence: representativeTimetableEvidence }] : []),
     ...names.map(name => ({
       descriptor: { name, description: externalTravelToolDescription(name), inputSchema: externalTravelToolInputSchema(name) },
@@ -63,7 +75,7 @@ export function productionServerTools(options: {
               const pages = await options.external.readWebPages({ urls });
               if (pages && typeof pages === "object" && "webPages" in pages) {
                 state.webPages = (pages as { webPages: ExternalTravelToolState["webPages"] }).webPages;
-                return { body: { ...output, ...pages } };
+                return { body: await enrichPagesWithMedia({ ...output, ...pages }) };
               }
             } catch {
               // Search results remain unverified leads when page reading fails.
@@ -73,9 +85,9 @@ export function productionServerTools(options: {
         return { body: output };
       }) as AgentOperation,
       evidence: (output: unknown, context: Parameters<typeof externalTravelEvidence>[1]) => {
-        const search = externalTravelEvidence(output, context);
         return name === "search_web" && output && typeof output === "object" && "webPages" in output
-          ? [...search, ...externalTravelEvidence({ webPages: output.webPages }, context)] : search;
+          ? [...externalTravelEvidence({ webSearch: (output as Record<string, unknown>).webSearch }, context), ...materializedEvidence(output, context)]
+          : externalTravelEvidence(output, context);
       },
     })),
     { descriptor: accommodationToolDescriptor, operation: options.accommodation, evidence: externalTravelEvidence },
@@ -98,4 +110,11 @@ export function productionServerTools(options: {
       catch { return { statusCode: 400, body: { code: "invalid_input", message: "経路候補を比較できません" } }; }
     }, evidence: () => [] },
   ];
+}
+
+function materializedEvidence(output: unknown, context: Parameters<typeof externalTravelEvidence>[1]) {
+  if (!output || typeof output !== "object") return [];
+  const values = output as Record<string, unknown>;
+  return [...(values.webPages ? externalTravelEvidence({ webPages: values.webPages }, context) : []),
+    ...(values.result ? externalTravelEvidence({ result: values.result }, context) : [])];
 }

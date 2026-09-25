@@ -600,7 +600,8 @@ function normalizedIncludes(source: string, target: string): boolean {
 function bindPlaceSearchOutput(output: unknown, isTarget: boolean, target?: PlaceMedia, source?: string, trip?: Trip): unknown {
   if (!isRecord(output) || !isRecord(output.result) || !isRecord(output.result.data) || !Array.isArray(output.result.data.places)) return output;
   const discovered = mergePlaceMedia(output.result.data.places as PlaceMedia[]);
-  const sourceMatches = source ? discovered.filter(p => samePlaceSourcePage(p.officialWebsiteUrl, source)) : [];
+  const sourceMatches = source ? discovered.filter(p => samePlaceSourcePage(p.officialWebsiteUrl, source) ||
+    p.sources?.some(ref => (ref.role === "identity" || ref.role === "description") && samePlaceSourcePage(ref.url, source))) : [];
   const places = discovered.map(place => {
     if (!isTarget) return place;
     const binding = sourceMatches.length === 1 && sourceMatches[0] === place

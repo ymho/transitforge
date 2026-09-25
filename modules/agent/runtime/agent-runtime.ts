@@ -1,6 +1,6 @@
 import { AgentTraceRecorder } from "./agent-trace";
 import { invalidResponseContract, responseContractRepairInstruction } from "./response-contract";
-import { groundedAnswerFailureCode, groundedAnswerInstruction, groundedAnswerRepairInstruction, hasStructuredPresentationEvidence, presentGroundedEvidence, sourcePresentationScore, supportedAnswerClaims } from "./grounded-answer";
+import { groundedAnswerFailureCode, groundedAnswerInstruction, groundedAnswerRepairInstruction, hasStructuredPresentationEvidence } from "./grounded-answer";
 import type {
   AgentModelContent,
   AgentModelClass,
@@ -38,9 +38,10 @@ import type { AgentDecisionTrace } from "./agent-trace";
 import { AgentToolRegistry } from "./tool-registry";
 import { failedAgentToolResult } from "./tool-contract";
 import { acceptsAgentTurn, askProgressRepairInstruction, observeAgentTurn, type AgentTurnObservation } from "./agent-turn-outcome";
-import { agentTurnOutputContract, agentTurnPresentationOutputContract } from "./agent-output-contract";
+import { agentTurnOutputContract, agentTurnPlanningOutputContract, agentTurnPresentationOutputContract } from "./agent-output-contract";
 import { compileAgentPrompt } from "./context-compiler";
 import { withMeasuredResearchOutcome } from "./public-plan-presentation";
+import { recoverPlanningDraft } from "./planning-draft-recovery";
 import type { ResearchExecutionLedger } from "./research-execution";
 import type { ModelTokenRates } from "./model-usage-cost";
 import type { AgentProgressReporter } from "./agent-progress";
@@ -205,8 +206,9 @@ export class MultiStepAgentRuntime {
           }],
         }]
         : messages;
+      const planningPhase = request.feature === "concierge" && ["discovery", "draft", "refine"].includes(request.context?.taskContext?.phase ?? "");
       const outputContract = evidence.some(hasStructuredPresentationEvidence)
-        ? agentTurnPresentationOutputContract
+        ? planningPhase ? agentTurnPlanningOutputContract : agentTurnPresentationOutputContract
         : agentTurnOutputContract;
       const modelRequest = {
         messages: modelMessages,
@@ -280,8 +282,8 @@ export class MultiStepAgentRuntime {
           else correctedResponseContract = true;
           messages.push({ role: "user", content: [{ type: "text", text: invalidReferences
             ? `${responseContractRepairInstruction}\n使用可能なEvidence ID: ${JSON.stringify(evidence.slice(0, 20).map((item) => item.id))}。候補ID・Trip item IDはEvidence IDではありません。0件なら事実を引用せず、必要なToolで根拠を取得してください。`
-            : outputContract.schemaHash === agentTurnPresentationOutputContract.schemaHash
-              ? `${responseContractRepairInstruction}\n現在のagent_turn_result@4-presentationではkind=answerのときtop-level presentationが必須です。responseTextへ旅程JSONを入れず、提示済みschemaに従うtravel-planまたはsource-explanation objectをpresentationへ設定してください。利用者判断だけが不足する場合はkind=askを使えます。`
+            : outputContract.schemaHash === agentTurnPresentationOutputContract.schemaHash || outputContract.schemaHash === agentTurnPlanningOutputContract.schemaHash
+              ? `${responseContractRepairInstruction}\n現在の出力契約ではkind=answerのときtop-level presentationが必須です。responseTextへ旅程JSONを入れず、提示済みschemaに従う${planningPhase ? "travel-plan" : "travel-planまたはsource-explanation"} objectをpresentationへ設定してください。利用者判断だけが不足する場合はkind=askを使えます。`
               : responseContractRepairInstruction }] });
           // Finalization is already the last decision round. Spend one remaining
           // model call on contract repair without consuming another Tool round.
@@ -394,8 +396,7 @@ export class MultiStepAgentRuntime {
         }
         const taskPhase = request.context?.taskContext?.phase;
         const planningTurn = request.feature === "concierge" && (taskPhase === "discovery" || taskPhase === "draft" || taskPhase === "refine");
-        const sourceEvidence = evidence.filter((item) => typeof item.facts.sourceExcerpt === "string" &&
-          item.facts.status === "available" && item.facts.freshness === "fresh");
+        const sourceEvidence = evidence.filter(hasStructuredPresentationEvidence);
         const hasPlacePhoto = evidence.some((item) => typeof item.facts.imageUrl === "string" &&
           typeof item.facts.imageSourceUrl === "string" && typeof item.facts.imageAttribution === "string");
         const placePhotoAvailable = modelTools.some(({ name }) => name === "search_place_media");
@@ -409,6 +410,10 @@ export class MultiStepAgentRuntime {
           : planningAnswerWithoutEvidence
             ? { accepted: false, reason: "planning_evidence_required", instruction:
               "旅行候補を提案するためのEvidenceがまだありません。質問や推測の回答で終えず、利用可能な旅行先調査Toolをnative toolUseで実行し、候補の出典と写真を確認してから具体案を作ってください。" }
+          : planningTurn && sourceEvidence.length > 0 && modelResponse.decisionSummary?.selectedAction === "answer" &&
+            modelResponse.declaredPresentation?.kind !== "travel-plan"
+            ? { accepted: false, reason: "planning_plan_required", instruction:
+              "資料の列挙やsource-explanationでは旅行案になりません。確認済み資料を使ってpresentation.kind=travel-planで1日目からの仮行程を作成してください。日数・出発日・起点が不明なら明示し、推測した移動時刻や宿泊価格は書かないでください。" }
           : planningTurn && sourceEvidence.length > 0 && !hasPlacePhoto && placePhotoAvailable
             ? { accepted: false, reason: "place_photo_required", instruction:
               "旅行先の資料は確認済みですが代表写真がありません。最終回答の前にsearch_place_mediaで各候補の写真を取得してください。" }
@@ -430,7 +435,7 @@ export class MultiStepAgentRuntime {
             replanReason: finalResponseDecision.reason ?? "grounding_required",
           });
           if (finalResponseRequired) {
-            if (planningGuard?.reason === "planning_progress_required" && sourceEvidence.length > 0) {
+            if (sourceEvidence.length > 0) {
               const fallback = this.verifiedPlanningSummary(trace, evidence, startedAt, request);
               if (fallback) return fallback;
             }
@@ -737,24 +742,23 @@ export class MultiStepAgentRuntime {
   ): AgentRuntimeResult | undefined {
     const phase = request.context?.taskContext?.phase;
     if (request.feature !== "concierge" || (phase !== "discovery" && phase !== "draft" && phase !== "refine")) return undefined;
-    const sources = evidence.filter(hasStructuredPresentationEvidence);
-    const selected = sources.filter((source) => supportedAnswerClaims([source]).some((claim) => claim.kind === "fact"))
-      .sort((left, right) => sourcePresentationScore(right) - sourcePresentationScore(left))
-      .filter((source, index, all) => all.findIndex((candidate) => planningSourceKey(candidate) === planningSourceKey(source)) === index)
-      .slice(0, 3).map((source) => source.id);
-    if (!selected.length) return undefined;
-    const generated = presentGroundedEvidence(selected, evidence);
+    const generated = recoverPlanningDraft(evidence, request.userRequest);
+    if (!generated?.publicPlanPresentation) return undefined;
     const grounding = validateEvidenceAndClaims(evidence, generated.claims);
     if (!grounding.valid || grounding.claims.some((claim) => claim.groundingStatus === "unsupported")) return undefined;
-    const text = `確認できた資料から場所の候補を紹介します。写真や日別行程がない候補は、確認できた範囲だけを表示しています。\n\n${generated.text}`;
+    const text = generated.text;
     const prepared = this.dependencies.prepareResponse?.(text, evidence, false) ?? {
-      text, observation: observeAgentTurn(false, []),
+      text, observation: observeAgentTurn(false, [{ kind: "candidates", refs: [...generated.publicPlanPresentation.candidateOrder],
+        ...(generated.publicPlanPresentation.photoRefs.length ? { mediaRefs: [...generated.publicPlanPresentation.photoRefs] } : {}) }]),
     };
     if (!acceptsAgentTurn(request.context?.previousAssistantTurn, prepared.observation)) return undefined;
     trace.turnObserved(prepared.observation, true);
     trace.responseGenerated(prepared.text, grounding.claims.map(({ id }) => id));
     trace.taskCompleted("completed", elapsed(startedAt, this.now));
-    return result("completed", prepared.text, evidence, grounding.claims, trace, prepared.observation);
+    return result("completed", prepared.text, evidence, grounding.claims, trace, prepared.observation,
+      withMeasuredResearchOutcome(generated.publicPlanPresentation,
+        { modelCalls: 0, toolCalls: 0, wallClockMs: elapsed(startedAt, this.now), requestedMode: request.researchMode?.requestedMode ?? "standard",
+          effectiveMode: request.researchMode?.effectiveMode ?? "standard" }));
   }
 
   private limitOrPlanningSummary(
@@ -791,11 +795,6 @@ export class MultiStepAgentRuntime {
     trace.taskCompleted("failed", elapsed(startedAt, this.now), reason);
     return result("failed", response, evidence, [], trace);
   }
-}
-
-function planningSourceKey(source: Evidence): string {
-  const title = String(source.facts.placeName ?? source.facts.sourceTitle ?? source.subject).normalize("NFKC").toLocaleLowerCase("ja");
-  return title.split(/[|｜\-–—]/u, 1)[0]!.replace(/[\s・･,，.。()（）「」『』]/gu, "");
 }
 
 function hasStructuredPresentation(response: AgentModelResponse): boolean {

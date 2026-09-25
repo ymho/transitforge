@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { agentTurnPlanningOutputContract } from "@raiquora/agent/agent-output-contract";
 
 it("does not retain earlier Profile text echoed in conversation after consent removal", async () => {
   const record = vi.fn(async () => undefined);
@@ -208,6 +209,15 @@ describe("BedrockConversationModel", () => {
     const input = converse.mock.calls[0]?.[0];
     expect(input?.system).toEqual(expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining("そのobjectをpresentationへ設定") })]));
     expect(input?.system).toEqual(expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining("responseTextは短い利用者向けラベル") })]));
+  });
+
+  it("finds presentation nested in anyOf when instructing Bedrock about the actual planning schema", async () => {
+    const converse = vi.fn(async (_input: JsonObject) => ({ output: { message: { role: "assistant", content: [{ text: "{}" }] } }, stopReason: "end_turn" }));
+    const model = new BedrockConversationModel({ converse }, { modelId: "model", systemPrompt: "system" });
+    await model.converse({ messages: [{ role: "user", content: [{ text: "出雲大社に行きたい" }] }], outputContract: agentTurnPlanningOutputContract });
+    const system = JSON.stringify(converse.mock.calls[0]?.[0]?.system);
+    expect(system).toContain("そのobjectをpresentationへ設定");
+    expect(system).not.toContain("そのJSONをresponseTextの文字列値として");
   });
 
   it.each(["guardrail_intervened", "content_filtered", "refusal"])("classifies %s as refusal", async stopReason => {
