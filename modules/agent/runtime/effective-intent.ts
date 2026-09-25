@@ -147,6 +147,8 @@ export function effectiveProfileContext(effective: EffectiveIntent): Record<stri
 }
 
 function targetForConstraint(constraint: TripConstraint): IntentTarget {
+  const semanticTarget = constraint.semantic?.facts[0]?.target;
+  if (semanticTarget) return semanticTarget;
   switch (constraint.requirement.type) {
     case "origin": return "origin";
     case "destinations": return "destination";

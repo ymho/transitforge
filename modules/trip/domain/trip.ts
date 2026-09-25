@@ -11,6 +11,7 @@ import { assessTripTime, type TripClock } from "./trip-temporal";
 import { validateTripAdoption, canConfirmTrip, adoptionNeedsReview, tripAdoptionConfirmationKey, type TripAdoption, type TripAdoptionAction } from "./trip-adoption";
 import { validateTripStructureIntent, type TripStructureIntent } from "./trip-structure-contract";
 import { validateCostLine, type CostLine } from "./cost-lines";
+import { parseIntentProposalBinding, type IntentProposalBinding } from "./intent-proposal-binding";
 
 /** The single Trip V2 aggregate. Deferred fields are absent, not default-completed. Writer remains gated. */
 export interface Trip {
@@ -74,6 +75,8 @@ export interface TripUpdateProposal {
   readonly baseRevision: number;
   readonly summary: string;
   readonly patches: readonly TripPatch[];
+  /** Present only when Application projected a verified user delta. */
+  readonly intentBinding?: IntentProposalBinding;
 }
 
 /** A stale proposal must be reviewed again, never silently rebased. */
@@ -160,9 +163,10 @@ function validateItem(item: ItineraryItem): void {
 export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
   authority: { clock?: TripClock; confirmedLifecycle?: LifecycleState; confirmedAdoption?: string } = {}): Trip {
   validateTrip(trip);
-  exactKeys(proposal, ["tripId", "baseRevision", "summary", "patches"]);
+  exactKeys(proposal, ["tripId", "baseRevision", "summary", "patches", "intentBinding"]);
   if (!Number.isSafeInteger(proposal.baseRevision) || proposal.baseRevision < 0 ||
       typeof proposal.summary !== "string" || !Array.isArray(proposal.patches)) throw new Error("Invalid proposal");
+  if (proposal.intentBinding !== undefined) parseIntentProposalBinding(proposal.intentBinding);
   if (proposal.tripId !== trip.id) throw new Error("Proposal belongs to another Trip");
   if (proposal.baseRevision !== trip.revision) throw new TripRevisionConflict();
   const items = [...trip.items];

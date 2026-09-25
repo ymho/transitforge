@@ -67,7 +67,14 @@ it("runs natural language through semantic acceptance before Runtime", async () 
   }) };
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
     model, weather: { search: async () => { throw new Error("not used"); } }, semanticIntentEnabled: true, newExecutionId: () => "runtime-execution" });
-  await app.runConversationTurn({ principal, conversationId, turnId: "11111111-1111-4111-8111-111111111111", userRequest: "出雲大社へ明日出発します", uiContext: { calendarDate: "2026-09-25" } });
+  const result = await app.runConversationTurn({ principal, conversationId, turnId: "11111111-1111-4111-8111-111111111111", userRequest: "出雲大社へ明日出発します", uiContext: { calendarDate: "2026-09-25" } });
+  expect(result.consultationRequestProposal).toMatchObject({ conversationId, baseRequest: { constraints: [], assumptions: [] },
+    request: { constraints: [
+      { source: "user", requirement: { type: "dates", start: { earliest: "2026-09-26", latest: "2026-09-26" } } },
+      { source: "user", requirement: { type: "destinations", places: [{ name: "出雲大社", sources: [] }] } },
+    ], assumptions: [] }, intentBinding: { version: "intent-proposal-binding-v1", intentRevision: 1, changes: [
+      { target: "destination" }, { target: "start_date" },
+    ] } });
   const working = await new DynamoDbConversationTurnRepository("test-state", state.client).getWorkingState(principal, conversationId);
   expect(working?.semantic?.overlay).toMatchObject({ intentRevision: 1, facts: [
     { target: "destination", value: { kind: "place_label", label: "出雲大社" } },

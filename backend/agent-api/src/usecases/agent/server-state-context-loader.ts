@@ -8,6 +8,8 @@ import type { ProfileApplication } from "../profile-application.js";
 import type { ConversationTurnRepository } from "../../ports/conversation-turn-repository.js";
 import { deriveAgentTaskContext } from "@raiquora/agent/agent-task-context";
 import { compileEffectiveIntent, effectiveProfileContext } from "@raiquora/agent/effective-intent";
+import type { IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
+import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 
 export const serverStateContextLimits = { historyMessages: 12, conversationJsonCharacters: 12_000 } as const;
 export interface ServerStateContextReferences {
@@ -25,7 +27,8 @@ export interface ServerStateContextReaders {
 }
 
 /** Read-only and per-turn. No cache, message append, transport or model dependencies. */
-export function createServerStateContextLoader(readers: ServerStateContextReaders, options: { historyBeforeSequence?: number; onTrip?: (trip: import("@raiquora/trip/trip").Trip) => void; onConsultation?: (value: { conversationId: string; createdAt: string; request: import("@raiquora/trip/trip-request").TripRequest }) => void } = {}) {
+export function createServerStateContextLoader(readers: ServerStateContextReaders, options: { historyBeforeSequence?: number; onTrip?: (trip: import("@raiquora/trip/trip").Trip) => void; onConsultation?: (value: { conversationId: string; createdAt: string; request: import("@raiquora/trip/trip-request").TripRequest }) => void;
+  onEffectiveIntent?: (value: { effectiveIntent: EffectiveIntent; currentReceipt?: IntentApplicationReceipt }) => void } = {}) {
   const before = options.historyBeforeSequence;
   if (before !== undefined && (!Number.isSafeInteger(before) || before < 1)) throw new StateError("invalid-input");
   return async (input: ServerStateContextReferences): Promise<AgentRuntimeContextInput> => {
@@ -81,6 +84,8 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
       overlay: workingState?.semantic?.overlay ?? { version: 1, intentRevision: 0, facts: [], tombstones: [], appliedMutationIds: [] },
     }) : undefined;
     const effectiveProfile = effectiveIntent ? effectiveProfileContext(effectiveIntent) : undefined;
+    if (effectiveIntent) options.onEffectiveIntent?.({ effectiveIntent: structuredClone(effectiveIntent),
+      ...(currentIntentReceipt ? { currentReceipt: structuredClone(currentIntentReceipt) } : {}) });
     const focusedItem = itemId ? trip?.items.find((item) => item.id === itemId) : undefined;
     return {
       ...(taskContextWithIntent ? { taskContext: taskContextWithIntent } : {}),
