@@ -15,12 +15,13 @@ export function createTripApiPublicHandler(options: {
   enabled: boolean;
   auth: { userPoolId: string; clientId: string; requiredScopes: readonly string[] };
   tripTable: string;
+  stateTable: string;
   verifier?: AccessTokenVerifier;
 }) {
   if (!options.enabled) return async (_event: LambdaHttpEvent, _context?: LambdaContext) => jsonResponse(503, { error: "unavailable" });
-  if (!options.tripTable) throw new Error("Missing Trip API configuration");
+  if (!options.tripTable || !options.stateTable) throw new Error("Missing Trip API configuration");
   const authenticate = createHttpPrincipalResolver(options.verifier ?? createCognitoAccessTokenVerifier(options.auth), options.auth.requiredScopes);
-  const applications = createAuthorizedTripApplications(options.tripTable);
+  const applications = createAuthorizedTripApplications(options.tripTable, options.stateTable);
   const candidates = new DynamoDbItineraryCandidateRepository(options.tripTable);
   const adoption = new PlanCandidateAdoptionApplication(candidates, applications.repository, candidates, applications.trips,
     (draft, context) => trustedCandidateItem(draft, context.candidateSetId, context.variantId));

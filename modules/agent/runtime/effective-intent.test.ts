@@ -78,6 +78,15 @@ describe("compileEffectiveIntent", () => {
     expect(effective.profileHints.some(({ target }) => target === "origin")).toBe(false);
   });
 
+  it("keeps Profile inheritance suppressed after the accepted unknown is consumed into a Trip", () => {
+    const effective = compileEffectiveIntent({ profile: userProfile(), profileRevision: 8, baseSource: "trip", baseRevision: 2,
+      baseRequest: { constraints: [], assumptions: [], profileSuppressions: [{ id: "profile-suppression:origin", target: "origin",
+        scope: { type: "conversation" }, sourceOperationId: "origin-unknown", reason: "explicit_unknown" }] },
+      overlay: emptyConversationIntentOverlay() });
+    expect(effective.profileHints.some(({ target }) => target === "origin")).toBe(false);
+    expect(effective.profileSuppressions).toHaveLength(1);
+  });
+
   it("preserves exact retained values and records legacy fields as ignored without deleting them", () => {
     const profile = userProfile();
     const effective = compileEffectiveIntent({ profile, profileRevision: 8, overlay: emptyConversationIntentOverlay() });

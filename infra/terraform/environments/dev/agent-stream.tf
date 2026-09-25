@@ -95,7 +95,8 @@ resource "aws_iam_role_policy" "trip_api" {
   role     = aws_iam_role.trip_api[each.key].id
   policy = jsonencode({ Version = "2012-10-17", Statement = [
     { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "${aws_cloudwatch_log_group.trip_api[each.key].arn}:*" },
-    { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:ConditionCheckItem", "dynamodb:TransactWriteItems"], Resource = [aws_dynamodb_table.trips.arn, "${aws_dynamodb_table.trips.arn}/index/trip-sharing"] }
+    { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:ConditionCheckItem", "dynamodb:TransactWriteItems"], Resource = [aws_dynamodb_table.trips.arn, "${aws_dynamodb_table.trips.arn}/index/trip-sharing"] },
+    { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:TransactWriteItems"], Resource = aws_dynamodb_table.server_state.arn }
   ] })
 }
 resource "aws_lambda_function" "trip_api" {
@@ -110,10 +111,11 @@ resource "aws_lambda_function" "trip_api" {
   memory_size      = 256
   timeout          = 15
   environment { variables = {
-    TRIP_API_ENABLED     = "true"
-    TRIP_TABLE_NAME      = aws_dynamodb_table.trips.name
-    COGNITO_USER_POOL_ID = aws_cognito_user_pool.users.id
-    COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.spa.id
+    TRIP_API_ENABLED        = "true"
+    TRIP_TABLE_NAME         = aws_dynamodb_table.trips.name
+    SERVER_STATE_TABLE_NAME = aws_dynamodb_table.server_state.name
+    COGNITO_USER_POOL_ID    = aws_cognito_user_pool.users.id
+    COGNITO_CLIENT_ID       = aws_cognito_user_pool_client.spa.id
   } }
   depends_on = [aws_iam_role_policy.trip_api]
 }

@@ -71,6 +71,10 @@ run "enabled_contract" {
     error_message = "The authenticated stateful composition must use the existing State and Trip tables."
   }
   assert {
+    condition     = aws_lambda_function.trip_api["stream"].environment[0].variables.SERVER_STATE_TABLE_NAME == aws_dynamodb_table.server_state.name && aws_lambda_function.trip_api["stream"].environment[0].variables.TRIP_TABLE_NAME == aws_dynamodb_table.trips.name
+    error_message = "Intent-bound Trip adoption must use the existing owner-scoped State and Trip tables."
+  }
+  assert {
     condition     = !contains(keys(aws_lambda_function.agent_stream["stream"].environment[0].variables), "TRAVEL_PROVIDER_SECRET_ARN") && length(aws_iam_role_policy.agent_stream_provider_invoke) == 1 && length(aws_secretsmanager_secret.agent_stream_providers) == 1
     error_message = "The Runtime must invoke the dedicated Provider and never receive the mixed Travel secret."
   }

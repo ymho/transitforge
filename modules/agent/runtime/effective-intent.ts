@@ -47,6 +47,7 @@ export interface EffectiveIntent {
   hypotheticalFacts: ConversationIntentFact[];
   retractions: ConversationIntentTombstone[];
   suppressedBaseRefs: string[];
+  profileSuppressions: NonNullable<TripRequest["profileSuppressions"]>;
   fingerprint: string;
 }
 
@@ -78,6 +79,7 @@ export function compileEffectiveIntent(input: {
       scope: clone(constraint.scope),
       requirement: clone(constraint.requirement),
     }));
+  const profileSuppressions = input.baseRequest?.profileSuppressions?.map(clone) ?? [];
   const requestProfileHints = constraints.filter(({ source, id }) => source === "profile" && !suppressed.has(`constraint:${id}`))
     .map((constraint): EffectiveIntentProfileHint => ({
       ref: `constraint:${constraint.id}`,
@@ -90,9 +92,9 @@ export function compileEffectiveIntent(input: {
       application: "reference_only",
     }));
   const directProfile = input.profile ? userProfileHints(input.profile, input.profileRevision) : { hints: [], ignored: [] };
-  const profileHints = [...requestProfileHints, ...directProfile.hints.filter((hint) =>
+  const profileHints = [...requestProfileHints, ...directProfile.hints].filter((hint) => !profileSuppressed(hint, profileSuppressions)).filter((hint) =>
     !hintSuppressed(hint, actualConversationFacts, actualRetractions) &&
-    !activeBaseFacts.some((baseFact) => sameHintAttribute(baseFact, hint)))];
+    !activeBaseFacts.some((baseFact) => sameHintAttribute(baseFact, hint)));
   const base = {
     source: input.baseSource ?? "none" as const,
     ...(input.baseRevision === undefined ? {} : { revision: input.baseRevision }),
@@ -118,8 +120,13 @@ export function compileEffectiveIntent(input: {
     hypotheticalFacts,
     retractions: input.overlay.tombstones.map(clone),
     suppressedBaseRefs,
+    profileSuppressions,
   };
   return { ...semantic, fingerprint: fingerprint(semantic) };
+}
+
+function profileSuppressed(hint: EffectiveIntentProfileHint, suppressions: NonNullable<TripRequest["profileSuppressions"]>): boolean {
+  return suppressions.some((suppression) => suppression.target === hint.target && scopeOverrides(hint.scope, suppression.scope));
 }
 
 /** Compatibility presentation for recommendation binding, derived only from the

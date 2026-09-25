@@ -31,7 +31,9 @@ describe("verified intent proposal", () => {
     const reduced = apply({ action: "set", target: "origin", value: { kind: "unknown", reason: "undecided" }, modality: "preferred" });
     const effectiveIntent = compileEffectiveIntent({ baseRequest: trip.request, baseSource: "trip", baseRevision: 0, overlay: reduced.overlay });
     const proposal = proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent, receipt: reduced.receipt });
-    expect(proposal?.patches[0]).toEqual({ type: "request", request: { constraints: [], assumptions: [] } });
+    expect(proposal?.patches[0]).toMatchObject({ type: "request", request: { constraints: [], assumptions: [], profileSuppressions: [{
+      target: "origin", reason: "explicit_unknown", sourceOperationId: `intent-op:${turnId}:1`,
+    }] } });
     expect(proposal?.intentBinding?.changes).toHaveLength(1);
   });
 

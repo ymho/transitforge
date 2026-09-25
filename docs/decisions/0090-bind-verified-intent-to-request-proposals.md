@@ -20,4 +20,4 @@ Public proposal validation now uses the authenticated Trip API's 100-condition a
 
 - Conversation acceptance remains low-risk and automatic; Trip/draft persistence still requires the existing explicit review path.
 - The same deterministic proposal is persisted in history and delivered over SSE/UI boundaries.
-- Proposal adoption must validate this binding against Working State and record exactly which change/group references were consumed. That adoption receipt/state-machine step is deliberately separate from this proposal-production decision; until it lands, bindings are evidence for review and must not be treated as consumption.
+- Proposal adoption validates this binding against Working State and records exactly which change/group references were consumed through ADR 0091のdurable reservation。Proposal生成だけでは引き続き消費・保存完了を意味しない。

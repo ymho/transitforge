@@ -10,11 +10,13 @@ import { requireFeasibleTrip, requestsReady } from "@raiquora/trip/trip-ready";
 import type { Trip } from "@raiquora/trip/trip";
 import { assertItineraryEditingAllowed, previewInTripReplan, type InTripReplanTargets } from "@raiquora/trip/in-trip-replan";
 import type { TripAuthorizer } from "../ports/trip-authorization.js";
+import type { IntentProposalAdoptionPort } from "../ports/intent-proposal-adoption.js";
 
 export class TripApplication {
   constructor(private readonly trips: TripRepository, private readonly references: TripConversationReferences,
     private readonly clock: TripClock = { now: () => new Date() }, private readonly reservations?: ReservationReader,
-    private readonly feasibility?: TripFeasibilityReader, private readonly authorization?: TripAuthorizer) {}
+    private readonly feasibility?: TripFeasibilityReader, private readonly authorization?: TripAuthorizer,
+    private readonly intentAdoptions?: IntentProposalAdoptionPort) {}
   private async ready(principal: TripPrincipal, proposed: Trip): Promise<void> {
     try {
       const reservations = await this.reservations?.facts(principal, proposed.id);
@@ -26,6 +28,7 @@ export class TripApplication {
     authority: { confirmedLifecycle?: LifecycleState; confirmedAdoption?: string; confirmedReservationChange?: string;
       replanTargets?: InTripReplanTargets; confirmedReplan?: string } = {}): Promise<Record<string, unknown>> {
     requireTripPrincipal(principal);
+    const actor = principal;
     const command = parseTripCommand(value);
     const access = this.authorization && ["get", "mutate", "archive"].includes(command.operation) && "tripId" in command
       ? await this.authorization.authorize(principal, command.tripId, command.operation === "get" ? "read" : command.operation === "mutate" ? "write" : "owner") : undefined;
@@ -39,7 +42,14 @@ export class TripApplication {
         return { version, trip: await this.trips.create(principal, command.trip) };
       }
       case "mutate": {
-        const trip = await this.trips.applyMutation(principal, command, async (current) => {
+        const binding = command.proposal.intentBinding;
+        if (binding && !this.intentAdoptions) throw new TripResourceError("unavailable");
+        if (binding) {
+          try { await this.intentAdoptions!.prepare(actor, { binding, tripId: command.tripId, baseTripRevision: command.baseRevision, mutationId: command.mutationId }); }
+          catch (error) { throw new TripResourceError((error as { code?: string }).code === "conflict" ? "conflict" : "unavailable"); }
+        }
+        let trip: Trip;
+        try { trip = await this.trips.applyMutation(principal, command, async (current) => {
           try { assertItineraryEditingAllowed(current, command.proposal); }
           catch { throw new TripResourceError("invalid-input"); }
           if (current.lifecycleState === "in_trip" && command.proposal.patches.some((p) => ["add", "replace", "remove", "move"].includes(p.type))) {
@@ -71,7 +81,19 @@ export class TripApplication {
           catch (error) { throw new TripResourceError(error instanceof TripRevisionConflict ? "conflict" : "invalid-input"); }
           if (requestsReady(command.proposal)) await this.ready(principal, proposed);
           return proposed; // Repository commits this exact preview under baseRevision CAS, not a rebase.
-        }, access?.guard);
+          }, access?.guard); }
+        catch (error) {
+          if (binding) {
+            try { await this.intentAdoptions!.release(actor, { binding, tripId: command.tripId, baseTripRevision: command.baseRevision, mutationId: command.mutationId }); }
+            catch { throw new TripResourceError("unavailable"); }
+          }
+          throw error;
+        }
+        if (binding) {
+          try { await this.intentAdoptions!.complete(actor, { binding, tripId: command.tripId, baseTripRevision: command.baseRevision,
+            committedTripRevision: trip.revision, mutationId: command.mutationId }); }
+          catch { throw new TripResourceError("unavailable"); }
+        }
         return { version, trip, revision: trip.revision, mutationId: command.mutationId };
       }
       case "get": {

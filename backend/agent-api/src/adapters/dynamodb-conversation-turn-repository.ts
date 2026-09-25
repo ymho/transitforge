@@ -14,6 +14,9 @@ import { parseResearchExecutionOutcome } from "@raiquora/agent/research-executio
 import { parsePublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 import { DynamoDbConversationRepository } from "./dynamodb-conversation-repository.js";
 import type { StateDynamoClient, StateEnvelope } from "./dynamodb-state-store.js";
+import type { IntentProposalAdoptionPort } from "../ports/intent-proposal-adoption.js";
+import type { IntentProposalBinding } from "@raiquora/trip/intent-proposal-binding";
+import { TransactWriteItemsCommand } from "@aws-sdk/client-dynamodb";
 
 export const conversationTurnLimits = { leaseMs: 300_000, newTurnMessageLimit: 2_000 } as const;
 interface TurnRecord {
@@ -58,7 +61,7 @@ function finalResult(value: ConversationTurnResult): ConversationTurnResult {
 }
 
 /** Conversation CAS fences delete and every turn transition; no separate table or expiring receipts. */
-export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepository implements ConversationTurnRepository {
+export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepository implements ConversationTurnRepository, IntentProposalAdoptionPort {
   constructor(table: string, client?: StateDynamoClient, clock?: StateClock, private readonly newAttemptId = randomUUID) {
     super(table, client, clock);
   }
@@ -78,6 +81,53 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
       if (state.revision !== envelope.revision || state.target.conversationId !== conversationId) throw new Error();
       return state;
     } catch { throw new StateError("unavailable"); }
+  }
+  async prepare(principal: ConversationTurnIdentity["principal"], input: { binding: IntentProposalBinding; tripId: string; baseTripRevision: number; mutationId: string }): Promise<void> {
+    const binding = structuredClone(input.binding), key = this.workingKey(binding.conversationId);
+    stateId(input.tripId); stateId(input.mutationId);
+    const old = await this.store.read(principal, key);
+    if (!old) throw new StateError("conflict");
+    const working = parseConversationWorkingState(old.payload), semantic = semanticStateOf(working);
+    if (semantic.adoptions?.some((item) => sameAdoption(item, { ...input, binding }))) return;
+    if (semantic.adoptionInFlight) {
+      if (sameAdoption(semantic.adoptionInFlight, { ...input, binding })) return;
+      throw new StateError("conflict");
+    }
+    if (working.target.tripId !== input.tripId || working.target.tripRevision !== input.baseTripRevision || semantic.overlay.intentRevision !== binding.intentRevision ||
+        !semantic.pendingProposal || semantic.pendingProposal.tripId !== input.tripId || semantic.pendingProposal.baseTripRevision !== input.baseTripRevision ||
+        JSON.stringify(semantic.pendingProposal.binding) !== JSON.stringify(binding) || !receiptMatches(semantic.receipts, binding)) throw new StateError("conflict");
+    const next = parseConversationWorkingState({ ...working, revision: working.revision + 1,
+      semantic: { ...semantic, adoptionInFlight: { binding, tripId: input.tripId, baseTripRevision: input.baseTripRevision, mutationId: input.mutationId } } });
+    await this.store.send(new TransactWriteItemsCommand({ TransactItems: [{ Put: this.store.put(principal, key, { revision: next.revision, deleted: false, payload: next }, old) }] }));
+  }
+  async complete(principal: ConversationTurnIdentity["principal"], input: { binding: IntentProposalBinding; tripId: string; baseTripRevision: number; committedTripRevision: number; mutationId: string }): Promise<void> {
+    const binding = structuredClone(input.binding), key = this.workingKey(binding.conversationId);
+    stateId(input.tripId); stateId(input.mutationId);
+    const old = await this.store.read(principal, key);
+    if (!old) throw new StateError("conflict");
+    const working = parseConversationWorkingState(old.payload), semantic = semanticStateOf(working);
+    if (semantic.adoptions?.some((item) => sameAdoption(item, { ...input, binding }) && item.committedTripRevision === input.committedTripRevision)) return;
+    if (!semantic.adoptionInFlight || !sameAdoption(semantic.adoptionInFlight, { ...input, binding }) || input.committedTripRevision !== input.baseTripRevision + 1) throw new StateError("conflict");
+    const receipt = semantic.receipts.find((item) => item.intentRevision === binding.intentRevision && receiptMatches([item], binding));
+    if (!receipt) throw new StateError("conflict");
+    const selected = new Set(binding.changes.map(({ changeRef }) => changeRef));
+    const factRefs = new Set(receipt.operations.filter(({ operationId }) => selected.has(operationId)).flatMap(({ afterFactRefs }) => afterFactRefs));
+    const overlay = { ...semantic.overlay, facts: semantic.overlay.facts.filter(({ factId }) => !factRefs.has(factId)),
+      tombstones: semantic.overlay.tombstones.filter(({ sourceOperationId }) => !selected.has(sourceOperationId)) };
+    const adoption = { binding, tripId: input.tripId, baseTripRevision: input.baseTripRevision, committedTripRevision: input.committedTripRevision, mutationId: input.mutationId };
+    const next = parseConversationWorkingState({ ...working, revision: working.revision + 1,
+      target: { ...working.target, tripRevision: input.committedTripRevision }, pendingProposalRefs: working.pendingProposalRefs.filter((ref) => ref !== "trip_update"),
+      semantic: { overlay, receipts: semantic.receipts, adoptions: [...(semantic.adoptions ?? []), adoption].slice(-20) } });
+    await this.store.send(new TransactWriteItemsCommand({ TransactItems: [{ Put: this.store.put(principal, key, { revision: next.revision, deleted: false, payload: next }, old) }] }));
+  }
+  async release(principal: ConversationTurnIdentity["principal"], input: { binding: IntentProposalBinding; tripId: string; baseTripRevision: number; mutationId: string }): Promise<void> {
+    const binding = structuredClone(input.binding), key = this.workingKey(binding.conversationId), old = await this.store.read(principal, key);
+    if (!old) return;
+    const working = parseConversationWorkingState(old.payload), semantic = semanticStateOf(working);
+    if (!semantic.adoptionInFlight || !sameAdoption(semantic.adoptionInFlight, { ...input, binding })) return;
+    const { adoptionInFlight: _reservation, ...rest } = semantic;
+    const next = parseConversationWorkingState({ ...working, revision: working.revision + 1, semantic: rest });
+    await this.store.send(new TransactWriteItemsCommand({ TransactItems: [{ Put: this.store.put(principal, key, { revision: next.revision, deleted: false, payload: next }, old) }] }));
   }
   private decodeTurn(envelope: StateEnvelope): TurnRecord {
     try {
@@ -123,6 +173,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     if (calendarDate !== undefined && !validCalendarDate(calendarDate)) throw new StateError("invalid-input");
     const requestHash = createHash("sha256").update(JSON.stringify([request.userRequest, request.requestedResearchMode ?? "standard", request.researchTarget ?? null, request.tripId ?? null, itemId ?? null, calendarDate ?? null])).digest("hex");
     const { current, old, turn } = await this.read(input);
+    if ((await this.getWorkingState(input.principal, input.conversationId))?.semantic?.adoptionInFlight) throw new StateError("conflict");
     if (turn && turn.requestHash !== requestHash) throw new StateError("conflict");
     if (turn?.state === "completed") return { state: "completed", result: turn.result! };
     const now = this.now(current.updatedAt), time = Date.parse(now);
@@ -156,6 +207,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const workingKey = this.workingKey(input.conversationId), oldWorking = await this.store.read(input.principal, workingKey);
     const previousWorking = oldWorking ? parseConversationWorkingState(oldWorking.payload) : undefined;
     const semantic = semanticStateOf(previousWorking);
+    if (semantic.adoptionInFlight) throw new StateError("conflict");
     let reduction;
     try { reduction = reduceConversationIntent(semantic.overlay, delta); }
     catch { throw new StateError("conflict"); }
@@ -166,7 +218,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
       presentations: previousWorking?.presentations ?? [], pendingQuestionRefs: previousWorking?.pendingQuestionRefs ?? [],
       pendingProposalRefs: previousWorking?.pendingProposalRefs ?? [], ...(previousWorking?.groundingEvidence?.length ? { groundingEvidence: previousWorking.groundingEvidence } : {}),
       ...(previousWorking?.lastOutcome ? { lastOutcome: previousWorking.lastOutcome } : {}),
-      semantic: { overlay: reduction.overlay, receipts: [...semantic.receipts, reduction.receipt].slice(-20) },
+      semantic: { ...semantic, overlay: reduction.overlay, receipts: [...semantic.receipts, reduction.receipt].slice(-20) },
     });
     const next: TurnRecord = { ...turn, state: "intent_accepted", intentReceipt: reduction.receipt };
     await this.write(input.principal, current, { ...current, updatedAt: now, revision: current.revision + 1 }, [], [
@@ -195,6 +247,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const workingKey = this.workingKey(input.conversationId);
     const oldWorking = saved ? await this.store.read(input.principal, workingKey) : undefined;
     const previousWorking = oldWorking ? parseConversationWorkingState(oldWorking.payload) : undefined;
+    const savedTargetTripId = saved?.tripUpdateProposal?.tripId ?? saved?.tripCostProposal?.tripId ?? turn.targetTripId;
     const targetTripRevision = saved?.publicPlanPresentation?.target?.baseTripRevision ?? saved?.tripUpdateProposal?.baseRevision ?? saved?.tripCostProposal?.baseRevision ??
       (previousWorking && previousWorking.target.tripId === turn.targetTripId ? previousWorking.target.tripRevision : undefined);
     const groundingEvidence = saved ? retainConversationEvidence(previousWorking?.groundingEvidence,
@@ -203,7 +256,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const working = saved ? parseConversationWorkingState({
       version: 2, revision: (oldWorking?.revision ?? -1) + 1,
       sourceTurnId: input.turnId, sourceUserSequence: turn.userSequence,
-      target: { conversationId: input.conversationId, ...(turn.targetTripId ? { tripId: turn.targetTripId,
+      target: { conversationId: input.conversationId, ...(savedTargetTripId ? { tripId: savedTargetTripId,
         ...(targetTripRevision === undefined ? {} : { tripRevision: targetTripRevision }) } : {}) },
       presentations: [...(previousWorking?.presentations ?? []), ...(saved.presentationReceipt ? [saved.presentationReceipt] : [])].slice(-20),
       pendingQuestionRefs: saved.turnObservation?.outcome === "ask_only" || saved.turnObservation?.outcome === "ask_and_progress"
@@ -211,7 +264,8 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
       pendingProposalRefs: [saved.tripUpdateProposal ? "trip_update" : "", saved.consultationRequestProposal ? "consultation_update" : "", saved.tripCostProposal ? "cost_update" : ""].filter(Boolean),
       ...(groundingEvidence.length ? { groundingEvidence } : {}),
       ...(saved.turnObservation ? { lastOutcome: saved.turnObservation } : {}),
-      semantic,
+      semantic: saved.tripUpdateProposal?.intentBinding ? { ...semantic, pendingProposal: { binding: saved.tripUpdateProposal.intentBinding,
+        tripId: saved.tripUpdateProposal.tripId, baseTripRevision: saved.tripUpdateProposal.baseRevision } } : semantic,
     }) : undefined;
     await this.write(input.principal, current, { ...current, updatedAt: now, revision: current.revision + 1,
       messageCount: current.messageCount + (saved ? 1 : 0) },
@@ -235,4 +289,15 @@ function parseDelivery(value: unknown): NonNullable<ConversationTurnResult["deli
   exactObject(value, ["status", "basis"]);
   if (!["full", "partial", "degraded"].includes(String(value.status)) || !["model", "verified_projection"].includes(String(value.basis))) throw new StateError("invalid-input");
   return { status: value.status as NonNullable<ConversationTurnResult["delivery"]>["status"], basis: value.basis as NonNullable<ConversationTurnResult["delivery"]>["basis"] };
+}
+function receiptMatches(receipts: readonly IntentApplicationReceipt[], binding: IntentProposalBinding): boolean {
+  const receipt = receipts.find(({ intentRevision }) => intentRevision === binding.intentRevision);
+  if (!receipt) return false;
+  return binding.changes.every((change) => receipt.operations.some((operation) => operation.status === "accepted" && operation.operationId === change.changeRef &&
+    operation.groupId === change.groupRef && operation.action === change.action && operation.target === change.target && JSON.stringify(operation.scope) === JSON.stringify(change.scope)));
+}
+function sameAdoption(left: { binding: IntentProposalBinding; tripId: string; baseTripRevision: number; mutationId: string },
+  right: { binding: IntentProposalBinding; tripId: string; baseTripRevision: number; mutationId: string }): boolean {
+  return left.tripId === right.tripId && left.baseTripRevision === right.baseTripRevision && left.mutationId === right.mutationId &&
+    JSON.stringify(left.binding) === JSON.stringify(right.binding);
 }
