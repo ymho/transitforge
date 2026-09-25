@@ -47,6 +47,7 @@ export interface ViewerAgentContextResponse {
 
 export interface ViewerAgentTurnResponse {
   text: string;
+  semanticReceipt?: import("@raiquora/agent/public-semantic-receipt").PublicSemanticReceipt;
   publicPlanPresentation?: PublicPlanPresentation;
   publicJourneyPresentation?: PublicJourneyPresentation;
   tripCostProposal?: import("@raiquora/trip/public-cost-proposal").PublicCostProposal;

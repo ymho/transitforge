@@ -5,6 +5,7 @@ import { agentProgressPhases, type AgentTurnEvent } from "@raiquora/agent/agent-
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 import { parseResearchExecutionOutcome } from "@raiquora/agent/research-execution";
 import { parsePublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
+import { parsePublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 
 export interface StreamMeasurement {
   requestStart: number;
@@ -60,7 +61,7 @@ export async function consumeAgentStream(options: {
         if (Object.keys(value).some(k => !["v", "runId", "seq"].includes(k)) || !pending) throw new AgentStreamError("missing_final");
         done = true;
       } else if (name === "agent" && !pending && Object.keys(value).every(k => ["v", "runId", "seq", "event"].includes(k)) && validEvent(value.event)) {
-        if (value.event.type === "progress") options.onEvent(value.event);
+        if (value.event.type === "progress" || value.event.type === "intent_accepted") options.onEvent(value.event);
         else {
           pending = value.event;
         }
@@ -126,8 +127,12 @@ function record(value: unknown): value is Record<string, unknown> { return typeo
 function validEvent(event: unknown): event is AgentTurnEvent {
   if (!record(event)) return false;
   if (event.type === "progress") return agentProgressPhases.includes(event.phase as typeof agentProgressPhases[number]) && Object.keys(event).every(k => ["type", "phase"].includes(k));
+  if (event.type === "intent_accepted") {
+    try { parsePublicSemanticReceipt(event.receipt); } catch { return false; }
+    return Object.keys(event).every(k => ["type", "receipt"].includes(k));
+  }
   if (event.type === "error") return ["agent_failed", "limit_reached", "turn_conflict"].includes(String(event.code)) && Object.keys(event).every(k => ["type", "code"].includes(k));
-  try { if (event.publicPlanPresentation !== undefined) parsePublicPlanPresentation(event.publicPlanPresentation); if (event.publicJourneyPresentation !== undefined) parsePublicJourneyPresentation(event.publicJourneyPresentation); if (event.researchExecution !== undefined) parseResearchExecutionOutcome(event.researchExecution); if (event.tripCostProposal !== undefined) parsePublicCostProposal(event.tripCostProposal); if ((event.tripUpdateProposal || event.tripCostProposal) && event.consultationRequestProposal) return false; if (event.consultationRequestProposal !== undefined) parseConsultationRequestProposal(event.consultationRequestProposal); if (event.tripUpdateProposal !== undefined) parsePublicRequestProposal(event.tripUpdateProposal); } catch { return false; }
+  try { if (event.semanticReceipt !== undefined) parsePublicSemanticReceipt(event.semanticReceipt); if (event.publicPlanPresentation !== undefined) parsePublicPlanPresentation(event.publicPlanPresentation); if (event.publicJourneyPresentation !== undefined) parsePublicJourneyPresentation(event.publicJourneyPresentation); if (event.researchExecution !== undefined) parseResearchExecutionOutcome(event.researchExecution); if (event.tripCostProposal !== undefined) parsePublicCostProposal(event.tripCostProposal); if ((event.tripUpdateProposal || event.tripCostProposal) && event.consultationRequestProposal) return false; if (event.consultationRequestProposal !== undefined) parseConsultationRequestProposal(event.consultationRequestProposal); if (event.tripUpdateProposal !== undefined) parsePublicRequestProposal(event.tripUpdateProposal); } catch { return false; }
   return event.type === "final" && ["completed", "follow_up"].includes(String(event.status)) && typeof event.response === "string" &&
-    event.response.length <= 32_000 && Object.keys(event).every(k => ["type", "status", "response", "publicPlanPresentation", "publicJourneyPresentation", "researchExecution", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"].includes(k));
+    event.response.length <= 32_000 && Object.keys(event).every(k => ["type", "status", "response", "semanticReceipt", "publicPlanPresentation", "publicJourneyPresentation", "researchExecution", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"].includes(k));
 }

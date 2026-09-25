@@ -199,6 +199,9 @@
 }
 
 .conversation-feedback { display: flex; gap: .2rem; margin-top: .25rem; opacity: .42; transition: opacity 140ms ease; }
+.semantic-receipt { width: fit-content; margin: .55rem 0 0; padding: .25rem .55rem; border: 1px solid color-mix(in srgb, var(--glass-accent) 35%, var(--glass-border-subtle)); border-radius: 999px; color: var(--glass-muted); background: var(--glass-surface-muted); font-size: .7rem; line-height: 1.45; }
+.semantic-receipt-partial { border-style: dashed; }
+.semantic-receipt-unchanged { border-color: var(--glass-border-subtle); }
 .conversation-feedback button { width: 1.2rem; height: 1.2rem; padding: 0; border: 0; border-radius: .3rem; color: var(--glass-muted); background: transparent; font-size: .64rem; line-height: 1; filter: grayscale(1); }
 .ai-guide-message-assistant:hover .conversation-feedback, .conversation-feedback:focus-within { opacity: 1; }
 .conversation-feedback button:hover, .conversation-feedback button[data-feedback-stored="true"] { color: var(--glass-accent-strong); filter: none; }

@@ -21,7 +21,7 @@
 | context再読込 | `createServerStateContextLoader` | owner-scoped Conversation/Profile/Trip/Working State |
 | 判断・Tool・回答 | `createStatefulServerAgent` → `MultiStepAgentRuntime` | native Tool、Evidence、bounded loop、answer/ask v4 |
 | B: 回答保存 | `completeTurn` | assistant message、presentation/Evidence receipt、最新semantic merge |
-| history/SSE | Conversation history / stream application | 公開artifactのみ。意味receiptの公開projectionは#644/#646 |
+| history/SSE | Conversation history / stream application | 公開artifact + 値/引用/資源IDを除いた意味receipt。新着・再送・履歴は同じprojection |
 
 BrowserからWorking State、Profile、Trip本文、owner、revisionを受け取らない。TripとTripRequestは採用済み状態、Proposalは未採用変更案、Conversation semantic overlayは今回の会話で受理した疎な希望差分である。
 
@@ -40,7 +40,7 @@ BrowserからWorking State、Profile、Trip本文、owner、revisionを受け取
 | action policy | Tool schema、SemanticDecision、progress guard | Application-authored requirementとeffective revision連携 #641 | Runtime Tool前検証 + allow/reject対テスト | LLM自己申告だけの不足判定を不採用 |
 | invalidation/replan | Evidence applicability、PlanVariant、CAS | target別meaning dependency連携 #642 | Server initial Evidence + Tool Evidence tests | legacy無依存Evidenceだけ安全側で失効。全消去・無条件再検索を撤去 |
 | proposal/branch | Request Proposal、PlanVariant、Trip CAS | conversation delta接続 #643 | 未実装 | overlayからの直接Trip writeは禁止 |
-| response/UI | typed presentation、history/SSE、既存cards | public meaning receipt #644/#646 | 未実装 | UI本文推測 |
+| response/UI | typed presentation、history/SSE、既存cards | public meaning receipt #644/#646 | Application受理後SSE + final + Dynamo history + 共通UI projection | UI本文推測を状態表示に使わない |
 | degraded path | verified Evidence summary、turn retry | A/B故障区別 #645 | A後failure/retry testあり | 独自自然言語補完を撤去 |
 | eval/trace/security | Epic #537/#557/#558基盤 | #647/#648/#650/#651 | 初期diagnostic hookあり | raw state/CoTを追加しない |
 | budget/rollout | bounded Runtime、feature env | default-off gate/read-old-write-new #652/#653 | Terraform/schema tests | 専用二重推論は暫定 |
@@ -74,7 +74,7 @@ BrowserからWorking State、Profile、Trip本文、owner、revisionを受け取
 | system/model Prompt | 自由文指示 | 強度、質問、Tool判断 | semantic schema + action requirement policy #633/#641 | model表現指示は残せるがstate確定の第二正本にしない |
 | legacy Decision Summary parser | legacy text parser | provider移行 | answer/ask v4 + native Tool | legacy provider期限中のみ。strict出力へfallback適用しない |
 | Conversation history/summary | implicit recovery | 過去条件想起 | Working semantic overlay #640 | 表示文脈として保持、確定条件抽出には使わない |
-| UI proposal/card inference | UI推測 | pending/current表示 | public semantic/proposal receipt #644/#646 | receipt接続後に自然言語・カード存在による推測を削除 |
+| UI proposal/card inference | UI推測 | pending/current表示 | public semantic/proposal receipt #644/#646 | 意味受理表示はreceiptへ置換済み。Proposal current/stale表示は#643/#646で置換 |
 
 UUID、owner、revision、schema、暦日、文字数/bytes、Evidence reference、CAS、認可のvalidatorは撤去対象ではない。新経路が再現ケースと言い換えケースを通る前に旧縮退を削除しない。
 
@@ -95,6 +95,7 @@ phaseは表示・予算を選ぶ補助情報であり、質問・Evidence・行�
 | Tool intent requirement | Tool固有の必須入力・精度・現在値一致をApplication由来のEffective Intentで検証 | 受理済み京都・2026-10-01を同値で検索 | 未定/非開示値の補完、日付訂正後の旧日付、必須値欠落 | descriptorの`intentPolicy`をRuntime実行前に適用。modelは依存targetを緩和できない |
 | Evidence meaning dependency | Evidenceを取得時の意味targetへ束縛し、局所訂正だけ失効 | 目的地訂正後も日付だけに依存するEvidenceを保持 | 目的地依存Evidence、意味依存を記録しない旧Evidence | Tool成功時にintent revision/fingerprint/targetsをApplication付与。Server再利用前にfilter |
 | Profile resolution | 保存Request、Profile、actual会話差分を属性・scopeごとに解決し、Profileはreference-onlyに保つ | 食事の追加と既存の自然/歴史を併用、2日目だけpace変更、許諾済みメモ全文 | 出発地を未定へ戻した後のProfile復活、非同意メモ、普段人数を今回人数へ昇格 | `compileEffectiveIntent`へUserProfile revisionを入力し、`travelProfile`も解決済みhintから導出。modelへraw Profileを並列送信しない |
+| public semantic receipt | A transactionで受理済みになった変更だけをBrowserへ伝え、新着/履歴を一致させる | `intent_accepted`後に回答処理中を表示し、final/reloadも同じ対象を表示 | model出力だけの変更、quote/value/Profile/Trip ID/Trace、A未commitの成功表示 | Applicationが内部receiptを最小projectionへ変換。SSE中間/final、Turn result、assistant message、historyをstrict parseし共通UI projectionへ接続 |
 
 認証、owner分離、Trip実在参照、予約保護、利用者confirmation、Evidence参照、CAS/turn冪等性、保持/削除保証は意味ガードの緩和対象に含めない。開発作業の包括承認も、製品利用者のTrip/Profile/予約変更への同意として扱わない。
 
@@ -105,7 +106,7 @@ phaseは表示・予算を選ぶ補助情報であり、質問・Evidence・行�
 | 目的地→日付 | production turn app + Dynamo-shaped adapter | 受理・継続。full Server同一turn入力も確認 |
 | 許容≠必須 | parser/reducer + turn app | `acceptable`を保持 |
 | 訂正・未定へ戻す | reducer + turn app | replace/retract+tombstoneを保持 |
-| 候補2番目 | bounded interpreter outcome | **未実装**。安全にunsupported/no mutation。#636でreceipt resolverへ接続 |
+| 候補2番目 | bounded interpreter outcome + PresentationReceipt | owner/scope/rangeを検証してcandidate refへ解決。stale/範囲外はmutationなし |
 | 元案を保持 | reducer + turn app | `add_alternative`で既存fact保持。PlanVariant化は#643 |
 | Provider failure後の再送 | turn app + Dynamo-shaped adapter | A前は再解釈、A後はreceipt replayし状態保持 |
 
@@ -126,6 +127,14 @@ phaseは表示・予算を選ぶ補助情報であり、質問・Evidence・行�
 - 相対日、相対weekday、月offsetをtrusted calendarで解決し、anchor/rule versionを保持する。月精度を日へ丸めず、quoteにないexact dateを拒否する。
 - 自動test: `npm test`（frontend 1718、agent-api/runtime 1103、stream contract 5、全件成功）、`npm run workspace:check`、`npm run architecture:check`、`npm run build`（全て成功）。`npm run eval:agent:smoke`は12/12成功。
 - 実model、実Provider、実Browser、deployment: 未実施。scripted成功と区別する。
+
+## Public semantic receipt（#644/#646）
+
+- 内部`IntentApplicationReceipt`から、intent revision、発言行為、全体結果、操作/group参照、操作種別、target、scope種別、frame、採否だけを投影する。値、発言引用、before/after fact、scope resource ID、Profile、Evidence、Tool、Traceを公開しない。
+- A transaction完了後に`intent_accepted`を送る。これは会話希望の受理であり、Trip/Profile/予約の保存完了ではない。final/errorだけをSSE terminalとし、受理後の回答生成を継続できる。
+- final resultとassistant messageにも同じreceiptを保存し、Dynamo decode、history、frontend consumerの各境界でunknown fieldを拒否する。liveとreloadは`projectAssistantTurn`を共有する。
+- UIはモデル本文やカード有無を解析せず、「今回の希望に反映 / 一部を反映 / 条件変更なし」とtyped targetだけを表示する。内部参照・revisionは画面に出さない。
+- scripted testは内部情報非公開、unknown field拒否、A後failure/retryで同一receipt、SSE中間→final順序、live/history共通projectionを対象にする。実Browserと実modelの本文忠実性は未実施として区別する。
 
 ## Wave 3 実行記録
 

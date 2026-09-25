@@ -6,9 +6,11 @@ import type { AccessTokenVerifier } from "./ports/access-token-verifier.js";
 import { createAgentStreamHandler, type StreamLog } from "./agent-stream-handler.js";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
 import { ConversationTurnExecutionError } from "./usecases/agent/conversation-turn.js";
+import type { PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 
 export interface StreamingAgentApplication {
-  runConversationTurn(input: ConversationTurnInput, reportProgress?: AgentProgressReporter): Promise<ConversationTurnResult>;
+  runConversationTurn(input: ConversationTurnInput, reportProgress?: AgentProgressReporter,
+    reportIntentAccepted?: (receipt: PublicSemanticReceipt) => Promise<void>): Promise<ConversationTurnResult>;
 }
 
 /** Authenticated streaming owns transport; the stateful Application owns one persisted turn. */
@@ -33,7 +35,8 @@ export function createProductionAgentStream(options: {
       };
       await reportProgress("understanding_request");
       let result: ConversationTurnResult;
-      try { result = await application.runConversationTurn(input as ConversationTurnInput, reportProgress); }
+      try { result = await application.runConversationTurn(input as ConversationTurnInput, reportProgress,
+        receipt => emit({ type: "intent_accepted", receipt })); }
       catch (error) {
         await emit({ type: "error", code: error instanceof StateError && error.code === "conflict" ? "turn_conflict" :
           error instanceof ConversationTurnExecutionError ? error.code : "agent_failed" });
@@ -43,6 +46,7 @@ export function createProductionAgentStream(options: {
       // Stored continuity metadata is not part of the public SSE contract.
       // Project an allowlist on both fresh completion and persisted replay.
       await emit({ type: "final", status: result.status, response: result.response,
+        ...(result.semanticReceipt ? { semanticReceipt: result.semanticReceipt } : {}),
         ...(result.publicPlanPresentation ? { publicPlanPresentation: result.publicPlanPresentation } : {}),
         ...(result.publicJourneyPresentation ? { publicJourneyPresentation: result.publicJourneyPresentation } : {}),
         ...(result.researchExecution ? { researchExecution: result.researchExecution } : {}),

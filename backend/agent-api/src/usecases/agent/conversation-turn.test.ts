@@ -25,8 +25,10 @@ describe("Conversation turn Application", () => {
       return success;
     });
     const app = createConversationTurnApplication({ turns: f.turns, runAgentTurn: f.runAgentTurn, interpretIntent });
-    await app.runConversationTurn(input);
+    const result = await app.runConversationTurn(input);
     expect(interpretIntent).toHaveBeenCalledOnce();
+    const history = await f.conversations.history(principal, conversationId);
+    expect(history.items.at(-1)?.semanticReceipt).toEqual(result.semanticReceipt);
   });
 
   it("keeps accepted intent when answer generation fails and does not reinterpret on retry", async () => {
@@ -37,8 +39,22 @@ describe("Conversation turn Application", () => {
     const app = createConversationTurnApplication({ turns: f.turns, runAgentTurn: f.runAgentTurn, interpretIntent });
     await expect(app.runConversationTurn(input)).rejects.toMatchObject({ code: "unavailable" });
     expect((await f.turns.getWorkingState(principal, conversationId))?.semantic?.overlay.intentRevision).toBe(1);
-    expect(await app.runConversationTurn(input)).toEqual({ status: "completed", response: "案内" });
+    expect(await app.runConversationTurn(input)).toMatchObject({ status: "completed", response: "案内",
+      semanticReceipt: { version: "public-semantic-receipt-v1", intentRevision: 1, outcome: "accepted" } });
     expect(interpretIntent).toHaveBeenCalledTimes(1);
+  });
+  it("publishes the same bounded receipt after acceptance and on accepted-intent retry", async () => {
+    const f = await setup(), report = vi.fn(async () => {});
+    const interpretIntent = vi.fn(async () => ({ outcome: "delta" as const, speechAct: "inform" as const, operations: [{ atomicGroup: 1,
+      action: "set" as const, target: "destination" as const, modality: "preferred" as const, precision: "exact" as const,
+      frame: "actual" as const, quote: "旅", value: { kind: "place_label" as const, label: "秘密の値" } }], unresolvedFragments: [] }));
+    f.runAgentTurn.mockRejectedValueOnce(new Error("provider failed"));
+    const app = createConversationTurnApplication({ turns: f.turns, runAgentTurn: f.runAgentTurn, interpretIntent });
+    await expect(app.runConversationTurn(input, undefined, report)).rejects.toMatchObject({ code: "unavailable" });
+    await app.runConversationTurn(input, undefined, report);
+    expect(report).toHaveBeenCalledTimes(2);
+    expect(report.mock.calls[0]).toEqual(report.mock.calls[1]);
+    expect(JSON.stringify(report.mock.calls)).not.toMatch(/秘密|quote|value|tripId/);
   });
   it("runs the S00 production-shaped semantic continuity fixtures without feeding expected state to Runtime", async () => {
     const f = await setup();

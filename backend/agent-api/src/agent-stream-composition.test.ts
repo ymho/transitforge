@@ -8,6 +8,9 @@ import { cognitoTokenFixture, issuer, token } from "./adapters/cognito-token.fix
 import type { StreamWriter } from "./ports/agent-stream-transport.js";
 import type { ConversationModel } from "./ports/conversation-model.js";
 import { ConversationTurnExecutionError } from "./usecases/agent/conversation-turn.js";
+import type { ConversationTurnInput } from "./usecases/agent/conversation-turn.js";
+import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
+import type { PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 
 function setup(enabled = true, maxExecutionMs?: number) {
   const { verifier } = cognitoTokenFixture();
@@ -69,6 +72,22 @@ it("runs the real Server Agent once, with correlated safe logs and no request/st
   }
   expect(s.log.mock.calls.at(-1)?.[0].executionId).toBe("execution-1");
   expect(JSON.stringify(s.log.mock.calls)).not.toMatch(/PRIVATE|Bearer|確認|identity-v1|profile|toolUse/i);
+});
+it("streams Application acceptance after commit without terminating the answer stream", async () => {
+  const s = setup();
+  const receipt = { version: "public-semantic-receipt-v1" as const, intentRevision: 1, speechAct: "inform" as const, outcome: "accepted" as const,
+    changes: [{ changeRef: "change-1", groupRef: "group-1", action: "set" as const, target: "destination" as const,
+      scope: { type: "conversation" as const }, frame: "actual" as const, status: "accepted" as const }] };
+  s.createApplication.mockImplementation(() => ({ runConversationTurn: async (_input: ConversationTurnInput, _progress?: AgentProgressReporter,
+    accepted?: (receipt: PublicSemanticReceipt) => Promise<void>) => {
+    await accepted?.(receipt);
+    return { status: "completed" as const, response: "回答", semanticReceipt: receipt };
+  } }));
+  await s.handle(s.request, s.writer);
+  const payload = s.frames.join("");
+  expect(payload.indexOf('"type":"intent_accepted"')).toBeLessThan(payload.indexOf('"type":"final"'));
+  expect(payload.match(/public-semantic-receipt-v1/g)).toHaveLength(2);
+  expect(s.frames.at(-1)).toContain("event: done");
 });
 it("validates the Browser calendar date and exposes calculated relative dates to the model", async () => {
   const s = setup();

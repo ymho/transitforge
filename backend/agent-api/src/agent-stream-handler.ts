@@ -36,7 +36,7 @@ export function createAgentStreamHandler(options: { verifier: AccessTokenVerifie
     };
     const emit: AgentTurnEventSink = async event => {
       if (terminal) throw new Error("event after terminal");
-      if (event.type !== "progress") terminal = true;
+      if (event.type === "final" || event.type === "error") terminal = true;
       await send(`event: agent\ndata: ${JSON.stringify({ v: 1, runId, seq: ++sequence, event })}\n\n`);
       if (event.type === "final") { log("final_sent"); outcome = "completed"; }
       if (event.type === "error") outcome = "error";
