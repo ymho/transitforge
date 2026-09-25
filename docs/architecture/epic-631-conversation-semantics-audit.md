@@ -1,7 +1,7 @@
 # Epic #631 会話意味論の現行監査と移行台帳
 
 - 基準commit（Epic記載）: `84faf820`
-- 実装開始時main: `4a72002505e0686bcfd93a949c177780357dbd93`
+- 実装開始時main: `4a720021bde15fce77afb9759868bfe1becbf686`
 - 開始時open PR: なし
 - 更新日: 2026-09-25
 - 対象: #632–#648、#650–#654
@@ -91,6 +91,6 @@ UUID、owner、revision、schema、暦日、文字数/bytes、Evidence reference
 ## Wave 1 実行記録
 
 - branch: `feat/631-wave1-semantic-acceptance`
-- 実装開始SHA: `4a72002505e0686bcfd93a949c177780357dbd93`
+- 実装開始SHA: `4a720021bde15fce77afb9759868bfe1becbf686`
 - 自動test: `npm test`（frontend 1718、agent-api/runtime 1090、stream contract 5、全件成功）、`npm run workspace:check`、`npm run architecture:check`、`npm run build`（全て成功）。`npm run eval:agent:smoke`は12/12成功。
 - 実model、実Provider、実Browser、deployment: この表の作成時点では未実施。scripted fixtureの成功と区別する。
