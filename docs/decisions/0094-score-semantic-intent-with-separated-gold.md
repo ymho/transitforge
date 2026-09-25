@@ -18,6 +18,8 @@ Live runnerは反復前にcase数、model call、input/output token、推計USD�
 
 API試行数は成功応答後ではなく送信前に加算する。Providerの設定・契約エラーは同一入力の品質差ではないため、閉じた分類だけを記録して最初の1件で評価全体を停止する。停止後に未実行のcaseを空集合の成功として数えない。空のbase system promptはBedrockへ送らず、call固有のInterpreter指示だけをsystem blockとして送れるようにする。
 
+Application-strictの共通指示はschema形状に従う。presentationを持つ回答契約、responseTextを持つ回答契約、それらを持たない独立した意味差分契約を分け、schemaに存在しないwrapperをモデルへ要求しない。
+
 ## 帰結
 
 - Promptやruntimeはgoldを参照できず、case ID・地名分岐を追加する理由にならない。

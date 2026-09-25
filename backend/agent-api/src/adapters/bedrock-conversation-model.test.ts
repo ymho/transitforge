@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { agentTurnPlanningOutputContract } from "@raiquora/agent/agent-output-contract";
+import { semanticInterpretationOutputContract } from "@raiquora/agent/semantic-interpretation";
 
 it("does not retain earlier Profile text echoed in conversation after consent removal", async () => {
   const record = vi.fn(async () => undefined);
@@ -227,6 +228,25 @@ describe("BedrockConversationModel", () => {
     const input = converse.mock.calls[0]?.[0];
     expect(input?.system).toEqual(expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining("そのobjectをpresentationへ設定") })]));
     expect(input?.system).toEqual(expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining("responseTextは短い利用者向けラベル") })]));
+  });
+
+  it("does not invent an answer wrapper for a standalone semantic contract", async () => {
+    const converse = vi.fn(async (_input: JsonObject) => ({
+      output: { message: { role: "assistant", content: [{ text: JSON.stringify({
+        outcome: "no_change", speechAct: "question", operations: [], unresolvedFragments: [],
+      }) }] } }, stopReason: "end_turn",
+    }));
+    const model = new BedrockConversationModel({ converse }, {
+      modelId: "jp.amazon.nova-2-lite-v1:0", systemPrompt: "",
+    });
+
+    await model.converse({ messages: [{ role: "user", content: [{ text: "一般に旅行保険は必要？" }] }],
+      instruction: "Interpret the utterance.", outputContract: semanticInterpretationOutputContract });
+
+    const system = JSON.stringify(converse.mock.calls[0]?.[0].system);
+    expect(system).toContain("root objectをそのまま返し");
+    expect(system).toContain("schemaにないwrapperやfieldを追加しない");
+    expect(system).not.toContain("responseTextの文字列値");
   });
 
   it("finds presentation nested in anyOf when instructing Bedrock about the actual planning schema", async () => {
