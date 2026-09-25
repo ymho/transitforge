@@ -32,26 +32,40 @@ export function createConversationTurnApplication(dependencies: {
     const { principal, conversationId, turnId, userRequest, requestedResearchMode, researchTarget, tripId, uiContext } = snapshot;
     const identity = { principal, conversationId, turnId };
     const begun = await dependencies.turns.beginTurn(identity, { userRequest, requestedResearchMode, researchTarget, tripId, uiContext });
+    await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "authorize", reason: "validated",
+      occurredAt: new Date().toISOString(), correlation: { turnId, schemaVersion: "semantic-v1", ruleVersion: "intent-v1" } });
     if (begun.state === "completed") return begun.result;
     let acceptedReceipt = begun.state === "intent_accepted" ? begun.receipt : undefined;
-    if (acceptedReceipt) await reportIntentAccepted?.(publicSemanticReceipt(acceptedReceipt));
+    if (acceptedReceipt) {
+      await reportIntentAccepted?.(publicSemanticReceipt(acceptedReceipt));
+      await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "publish", "completed", acceptedReceipt));
+    }
     let result: ConversationTurnResult;
     let continuity: ConversationTurnContinuity | undefined;
     try {
       if (begun.state === "started" && dependencies.interpretIntent) {
         const workingState = await dependencies.turns.getWorkingState(principal, conversationId);
         const semantic = semanticStateOf(workingState);
+        await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "interpret", reason: "started",
+          occurredAt: new Date().toISOString(), correlation: { turnId, intentRevision: semantic.overlay.intentRevision, schemaVersion: "semantic-v1", ruleVersion: "intent-v1" } });
         const interpretation = await dependencies.interpretIntent({ userRequest, calendarDate: uiContext?.calendarDate, overlay: semantic.overlay, turnId,
           ...(workingState ? { workingState } : {}) });
+        await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "interpret",
+          reason: interpretation.outcome === "delta" ? "validated" : interpretation.outcome,
+          occurredAt: new Date().toISOString(), correlation: { turnId, intentRevision: semantic.overlay.intentRevision, schemaVersion: "semantic-v1", ruleVersion: "intent-v1" },
+          counts: { generated: interpretation.operations.length }, incomplete: interpretation.outcome === "ambiguous" || interpretation.outcome === "unsupported" });
         const delta = acceptedIntentDeltaFromInterpretation({ interpretation, userRequest, turnId,
           baseIntentRevision: semantic.overlay.intentRevision, calendarDate: uiContext?.calendarDate, ...(workingState ? { workingState } : {}) });
         if (delta) {
+          await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "resolve", reason: "validated",
+            occurredAt: new Date().toISOString(), correlation: { turnId, intentRevision: semantic.overlay.intentRevision, schemaVersion: "semantic-v1", ruleVersion: "intent-v1" },
+            counts: { validated: delta.operations.length }, refs: delta.operations.map(({ operationId }) => operationId) });
           const receipt = await dependencies.turns.acceptIntent(identity, begun.lease, delta);
           acceptedReceipt = receipt;
+          await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "reduce", "completed", receipt));
+          await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "accept", "accepted", receipt));
           await reportIntentAccepted?.(publicSemanticReceipt(receipt));
-          await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "decision", reason: "validated",
-            occurredAt: new Date().toISOString(), correlation: { turnId }, counts: { validated: receipt.operations.filter(({ status }) => status === "accepted").length },
-            refs: receipt.operations.map(({ operationId }) => operationId) });
+          await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "publish", "completed", receipt));
         }
       }
       const runtimeInput = { principal, conversationId, userRequest, requestedResearchMode, researchTarget, tripId, uiContext };
@@ -74,6 +88,9 @@ export function createConversationTurnApplication(dependencies: {
         ...(runtime.turnObservation ? { turnObservation: runtime.turnObservation } : {}),
         ...(presentationReceipt ? { presentationReceipt } : {}),
         ...(runtime.tripCostProposal ? { tripCostProposal: runtime.tripCostProposal } : {}), ...(runtime.tripUpdateProposal ? { tripUpdateProposal: runtime.tripUpdateProposal } : {}), ...(runtime.consultationRequestProposal ? { consultationRequestProposal: runtime.consultationRequestProposal } : {}) };
+      await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "respond", reason: "validated",
+        occurredAt: new Date().toISOString(), correlation: { turnId, ...(acceptedReceipt ? { intentRevision: acceptedReceipt.intentRevision } : {}) },
+        counts: { acceptedCharacters: runtime.response.length } });
       const publishedEvidenceIds = [...new Set([
         ...(runtime.publicPlanPresentation?.evidenceRefs ?? []),
         ...(runtime.publicPlanPresentation?.photoRefs ?? []),
@@ -101,6 +118,14 @@ export function createConversationTurnApplication(dependencies: {
       occurredAt: new Date().toISOString(), correlation: { turnId }, counts: { published: 1 } });
     return completed;
   } };
+}
+
+function semanticDiagnostic(turnId: string, phase: "reduce" | "accept" | "publish", reason: "accepted" | "completed",
+  receipt: import("@raiquora/agent/conversation-intent-reducer").IntentApplicationReceipt): AgentDiagnosticEvent {
+  return { version: "agent-diagnostic-v1", executionId: turnId, phase, reason, occurredAt: new Date().toISOString(),
+    correlation: { turnId, intentRevision: receipt.intentRevision, schemaVersion: "semantic-v1", ruleVersion: "intent-v1" },
+    counts: { validated: receipt.operations.filter(({ status }) => status === "accepted").length },
+    refs: receipt.operations.map(({ operationId }) => operationId) };
 }
 
 async function safeDiagnostic(

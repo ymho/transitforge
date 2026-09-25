@@ -37,6 +37,23 @@ describe("semantic interpretation", () => {
     ]);
   });
 
+  it("keeps a day-specific preference off the whole-trip scope", () => {
+    const interpretation = decodeUtteranceInterpretation({ outcome: "delta", speechAct: "inform", operations: [{ atomicGroup: 1,
+      action: "set", target: "pace", modality: "preferred", precision: "qualitative", frame: "actual", quote: "2日目だけ活発",
+      scope: { kind: "logical_day_ordinal", ordinal: 2 }, value: { kind: "text", text: "活発" } }], unresolvedFragments: [] })!;
+    const delta = acceptedIntentDeltaFromInterpretation({ interpretation, userRequest: "2日目だけ活発にしたい", turnId: "00000000-0000-4000-8000-000000000003",
+      baseIntentRevision: 0 })!;
+    expect(delta.operations[0]?.scope).toEqual({ type: "logical_day", logicalDayId: "day-2" });
+  });
+
+  it("rejects a day selector not grounded in its cited user fragment", () => {
+    const interpretation = decodeUtteranceInterpretation({ outcome: "delta", speechAct: "inform", operations: [{ atomicGroup: 1,
+      action: "set", target: "pace", frame: "actual", quote: "活発に", scope: { kind: "logical_day_ordinal", ordinal: 2 },
+      value: { kind: "text", text: "活発" } }], unresolvedFragments: [] })!;
+    expect(() => acceptedIntentDeltaFromInterpretation({ interpretation, userRequest: "2日目だけ活発に", turnId: "00000000-0000-4000-8000-000000000004",
+      baseIntentRevision: 0 })).toThrow("Logical day ordinal");
+  });
+
   it("rejects a fabricated quote and relative dates without a trusted clock", () => {
     const interpretation = decodeUtteranceInterpretation({ outcome: "delta", speechAct: "inform", operations: [{ atomicGroup: 1, action: "set", target: "start_date",
       frame: "actual", quote: "明日", value: { kind: "relative_date", relation: "tomorrow" } }], unresolvedFragments: [] })!;

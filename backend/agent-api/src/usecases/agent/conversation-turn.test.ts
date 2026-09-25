@@ -4,6 +4,7 @@ import { stateDynamoFixture, stateA as principal, conversationId, secondId, stat
 import { DynamoDbConversationTurnRepository } from "../../adapters/dynamodb-conversation-turn-repository.js";
 import { createConversationTurnApplication } from "./conversation-turn.js";
 import type { UtteranceInterpretation } from "@raiquora/agent/semantic-interpretation";
+import type { AgentDiagnosticEvent } from "../../ports/agent-diagnostics.js";
 
 const input = { principal, conversationId, turnId: secondId, userRequest: "旅の相談" };
 const success = { status: "completed", response: "案内", trace: { secret: "private" }, evidence: [{ raw: "private" }] } as unknown as AgentRuntimeResult;
@@ -137,6 +138,23 @@ describe("Conversation turn Application", () => {
     expect(complete).toHaveBeenCalledOnce();
     expect(record).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "save", reason: "completed", correlation: { turnId: secondId } }));
     expect(complete.mock.invocationCallOrder[0]).toBeLessThan(record.mock.invocationCallOrder.at(-1)!);
+  });
+  it("traces semantic phases from trusted interpretation through bounded publication", async () => {
+    const f = await setup(), events: AgentDiagnosticEvent[] = [], record = vi.fn(async (event: AgentDiagnosticEvent) => { events.push(event); });
+    const interpretIntent = vi.fn(async () => ({ outcome: "delta" as const, speechAct: "inform" as const, operations: [{ atomicGroup: 1,
+      action: "set" as const, target: "pace" as const, modality: "preferred" as const, precision: "qualitative" as const, frame: "actual" as const,
+      quote: "2日目だけ活発", scope: { kind: "logical_day_ordinal" as const, ordinal: 2 }, value: { kind: "text" as const, text: "活発" } }], unresolvedFragments: [] }));
+    const app = createConversationTurnApplication({ turns: f.turns, runAgentTurn: f.runAgentTurn, interpretIntent, diagnostics: { record } });
+    await app.runConversationTurn({ ...input, userRequest: "2日目だけ活発にしたい" });
+    expect(events.map((event) => [event.phase, event.reason])).toEqual(expect.arrayContaining([
+      ["authorize", "validated"], ["interpret", "started"], ["interpret", "validated"], ["resolve", "validated"],
+      ["reduce", "completed"], ["accept", "accepted"],
+      ["publish", "completed"], ["respond", "validated"], ["save", "completed"],
+    ]));
+    const accepted = events.find((event) => event.phase === "accept");
+    expect(accepted).toMatchObject({ correlation: { intentRevision: 1, schemaVersion: "semantic-v1", ruleVersion: "intent-v1" },
+      counts: { validated: 1 } });
+    expect(JSON.stringify(record.mock.calls)).not.toContain("2日目だけ活発");
   });
   it("recovers Agent success before storage failure after lease expiry", async () => {
     const f = await setup(), record = vi.fn(async () => undefined);

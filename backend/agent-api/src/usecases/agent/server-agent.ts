@@ -100,6 +100,11 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
           ? Number(context?.currentTrip?.omittedItemCount)
           : context?.currentTrip?.scheduleTruncated === true ? 1 : 0 },
       correlation: { ...(Number.isSafeInteger(context?.currentTrip?.sourceRevision) ? { tripRevision: Number(context?.currentTrip?.sourceRevision) } : {}) } });
+    await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: scope.executionId,
+      phase: "compile-context", reason: "compiled", occurredAt: (dependencies.now?.() ?? new Date()).toISOString(),
+      counts: { included: Array.isArray(context?.currentTrip?.schedule) ? context.currentTrip.schedule.length : 0,
+        omitted: Number.isSafeInteger(context?.currentTrip?.omittedItemCount) ? Number(context?.currentTrip?.omittedItemCount) : context?.currentTrip?.scheduleTruncated === true ? 1 : 0 },
+      correlation: { ...(Number.isSafeInteger(context?.currentTrip?.sourceRevision) ? { tripRevision: Number(context?.currentTrip?.sourceRevision) } : {}) } });
     const tools = new AgentToolRegistry(), evidence = new ToolEvidenceRegistry();
     dependencies.registerTools(tools, evidence, scope);
     const selectedLimits = validateAgentRuntimeLimits(scope.researchMode.effectiveMode === "detailed" ? dependencies.detailedResearchLimits : dependencies.limits);
@@ -130,8 +135,12 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
 
 async function publishRuntimeDiagnostics(dependencies: ServerAgentDependencies, result: AgentRuntimeResult, executionId: string): Promise<void> {
   for (const event of result.trace.events) {
-    if (event.type === "decision_recorded") await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId,
-      phase: "decision", reason: "validated", occurredAt: event.occurredAt, counts: { validated: 1 } });
+    if (event.type === "decision_recorded") {
+      await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId,
+        phase: "decision", reason: "validated", occurredAt: event.occurredAt, counts: { validated: 1 } });
+      await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId,
+        phase: "select-action", reason: "validated", occurredAt: event.occurredAt, counts: { validated: 1 } });
+    }
     if (event.type === "tool_completed") await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId,
       phase: "tool", reason: event.outcome === "success" ? "completed" : "failed", occurredAt: event.occurredAt,
       correlation: { toolCallId: event.toolCallId }, refs: [event.toolName] });
