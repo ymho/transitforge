@@ -33,3 +33,11 @@ it("does not attach unrelated photos, search snippets, or navigation-only pages"
   expect(recoverPlanningDraft([{ ...source, knowledgeKind: "unverified_information", facts: { ...source.facts, sourcePrecision: "search-snippet" } }], "出雲大社に行きたい")).toBeUndefined();
   expect(recoverPlanningDraft([{ ...source, facts: { ...source.facts, sourceExcerpt: "menu\nホーム\nお問い合わせ" } }], "出雲大社に行きたい")).toBeUndefined();
 });
+
+it("uses only a validated supplied departure date and keeps travel logistics unconfirmed", () => {
+  const result = recoverPlanningDraft([source], "明日出発します", "2026-09-26")!;
+  expect(result.text).toContain("9月26日出発の予定");
+  expect(result.text).toContain("移動時刻と費用はまだ確認できていません");
+  expect(result.text).not.toContain("日程と出発地が未定");
+  expect(recoverPlanningDraft([source], "明日出発します", "2026-02-30")?.text).toContain("日程と出発地が未定");
+});
