@@ -24,6 +24,7 @@ import type { PlaceMediaSearchResult } from "@raiquora/trip/place-media";
 import type { GroundAccessArea, GroundAccessMatrix, GroundAccessRoute } from "@raiquora/trip/ground-access";
 import type { RestaurantCandidate } from "@raiquora/trip/restaurant-search";
 import type { AgentProgressPhase } from "@raiquora/agent/agent-progress";
+import type { PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 import { hideSheet, showSheet } from "../shared/sheet-transition";
 import { renderAssistantMarkdown, visibleAssistantText } from "./assistant-markdown";
 import {
@@ -663,6 +664,7 @@ export function resolveAssistantMessage(
   } else {
     // V2 is a preview only until the #388/#389 writer gate. Never invoke the legacy apply callback.
     renderAssistantCopy(item, visibleAssistantText(response.text), animate);
+    if ("semanticReceipt" in response && response.semanticReceipt) item.append(renderSemanticReceipt(response.semanticReceipt));
     if ("publicPlanPresentation" in response && response.publicPlanPresentation) item.append(renderPublicPlanPresentation(response.publicPlanPresentation));
     if ("publicJourneyPresentation" in response && response.publicJourneyPresentation) item.append(renderPublicJourneyPresentation(response.publicJourneyPresentation));
   }
@@ -678,6 +680,28 @@ export function resolveAssistantMessage(
   }
   appendConversationFeedback(item);
   item.scrollIntoView({ block: "nearest" });
+}
+
+const semanticTargetLabels: Record<PublicSemanticReceipt["changes"][number]["target"], string> = {
+  goal: "旅の目的", origin: "出発地", destination: "行き先", start_date: "開始日", end_date: "終了日", duration: "日数",
+  party_size: "人数", budget: "予算", experience: "興味・過ごし方", pace: "ペース", accommodation: "宿泊", transport: "移動",
+  fixed_schedule: "固定予定", candidate_selection: "候補",
+};
+
+/** Stable public receipt presentation shared by live turns and restored history. */
+export function renderSemanticReceipt(receipt: PublicSemanticReceipt): HTMLElement {
+  const status = document.createElement("p");
+  status.className = `semantic-receipt semantic-receipt-${receipt.outcome}`;
+  status.textContent = semanticReceiptLabel(receipt);
+  status.setAttribute("role", "status");
+  return status;
+}
+
+export function semanticReceiptLabel(receipt: PublicSemanticReceipt): string {
+  const accepted = [...new Set(receipt.changes.filter(change => change.status === "accepted" && change.frame === "actual")
+    .map(change => semanticTargetLabels[change.target]))];
+  const prefix = receipt.outcome === "accepted" ? "今回の希望に反映" : receipt.outcome === "partial" ? "一部を今回の希望に反映" : "条件変更なし";
+  return accepted.length ? `${prefix}: ${accepted.join("・")}` : prefix;
 }
 
 function renderAssistantCopy(item: HTMLElement, text: string, animate: boolean): void {

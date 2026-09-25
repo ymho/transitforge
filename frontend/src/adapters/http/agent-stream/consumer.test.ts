@@ -34,6 +34,21 @@ it("accepts multiple safe Application phases before the terminal event", async (
   expect(options.onEvent.mock.calls.map(([event]) => event.type === "progress" ? event.phase : event.type))
     .toEqual(["understanding_request", "checking_information", "validating_answer", "final"]);
 });
+it("publishes a bounded intent receipt before the final response", async () => {
+  const receipt = { version: "public-semantic-receipt-v1", intentRevision: 2, speechAct: "correct", outcome: "accepted", changes: [{
+    changeRef: "change-1", groupRef: "group-1", action: "replace", target: "destination", scope: { type: "trip" }, frame: "actual", status: "accepted",
+  }] };
+  const options = setup(stream(frame(1, { type: "intent_accepted", receipt }) +
+    frame(2, { type: "final", status: "completed", response: "回答", semanticReceipt: receipt }) + done));
+  await consumeAgentStream(options);
+  expect(options.onEvent.mock.calls.map(([event]) => event.type)).toEqual(["intent_accepted", "final"]);
+});
+it("rejects private fields on a semantic receipt", async () => {
+  const options = setup(stream(frame(1, { type: "intent_accepted", receipt: { version: "public-semantic-receipt-v1", intentRevision: 1,
+    speechAct: "inform", outcome: "accepted", changes: [], quote: "private" } }) + final + done));
+  await expect(consumeAgentStream(options)).rejects.toThrow("invalid_event");
+  expect(options.onEvent).not.toHaveBeenCalled();
+});
 it.each([progress + final, progress + done, progress + final + done.slice(0, -1), progress + final + done + progress])("rejects incomplete/out-of-order streams", async text => {
   const options = setup(stream(text)); await expect(consumeAgentStream(options)).rejects.toThrow();
   expect(options.onEvent.mock.calls.some(([e]) => e.type === "final")).toBe(false);

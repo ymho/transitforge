@@ -10,7 +10,16 @@ import {
   visibleAssistantText,
   agentProgressLabel,
   agentFailureMessage,
+  semanticReceiptLabel,
 } from "./ai-guide-panel";
+
+it("derives a public semantic status without internal references", () => {
+  const label = semanticReceiptLabel({ version: "public-semantic-receipt-v1", intentRevision: 4, speechAct: "correct", outcome: "accepted", changes: [{
+    changeRef: "private-change", groupRef: "private-group", action: "replace", target: "destination", scope: { type: "trip" }, frame: "actual", status: "accepted",
+  }] });
+  expect(label).toBe("今回の希望に反映: 行き先");
+  expect(label).not.toMatch(/private|revision|changeRef/);
+});
 
 describe("AI guide trip conversation state", () => {
   it("updates only the trip context supplied by a follow-up question", () => {

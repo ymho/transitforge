@@ -8,6 +8,7 @@ import { acceptedIntentDeltaFromInterpretation, type UtteranceInterpretation } f
 import type { AgentDiagnosticEvent, AgentDiagnosticsSink } from "../../ports/agent-diagnostics.js";
 import { reserveResearchResultSave } from "@raiquora/agent/research-execution";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
+import { publicSemanticReceipt, type PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 
 export class ConversationTurnExecutionError extends Error {
   constructor(readonly code: "limit_reached" | "agent_failed") { super(code); }
@@ -23,7 +24,8 @@ export function createConversationTurnApplication(dependencies: {
   diagnostics?: AgentDiagnosticsSink;
   log?: (event: string, fields: Record<string, unknown>) => void;
 }) {
-  return { async runConversationTurn(input: ConversationTurnInput, reportProgress?: AgentProgressReporter): Promise<ConversationTurnResult> {
+  return { async runConversationTurn(input: ConversationTurnInput, reportProgress?: AgentProgressReporter,
+    reportIntentAccepted?: (receipt: PublicSemanticReceipt) => Promise<void>): Promise<ConversationTurnResult> {
     exactObject(input, ["principal", "conversationId", "turnId", "userRequest", "requestedResearchMode", "researchTarget", "tripId", "uiContext"]);
     requireStatePrincipal(input.principal);
     const snapshot = structuredClone(input);
@@ -31,6 +33,8 @@ export function createConversationTurnApplication(dependencies: {
     const identity = { principal, conversationId, turnId };
     const begun = await dependencies.turns.beginTurn(identity, { userRequest, requestedResearchMode, researchTarget, tripId, uiContext });
     if (begun.state === "completed") return begun.result;
+    let acceptedReceipt = begun.state === "intent_accepted" ? begun.receipt : undefined;
+    if (acceptedReceipt) await reportIntentAccepted?.(publicSemanticReceipt(acceptedReceipt));
     let result: ConversationTurnResult;
     let continuity: ConversationTurnContinuity | undefined;
     try {
@@ -43,6 +47,8 @@ export function createConversationTurnApplication(dependencies: {
           baseIntentRevision: semantic.overlay.intentRevision, calendarDate: uiContext?.calendarDate, ...(workingState ? { workingState } : {}) });
         if (delta) {
           const receipt = await dependencies.turns.acceptIntent(identity, begun.lease, delta);
+          acceptedReceipt = receipt;
+          await reportIntentAccepted?.(publicSemanticReceipt(receipt));
           await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "decision", reason: "validated",
             occurredAt: new Date().toISOString(), correlation: { turnId }, counts: { validated: receipt.operations.filter(({ status }) => status === "accepted").length },
             refs: receipt.operations.map(({ operationId }) => operationId) });
@@ -60,6 +66,7 @@ export function createConversationTurnApplication(dependencies: {
         phase: "presentation", reason: "validated", occurredAt: new Date().toISOString(), correlation: { turnId },
         counts: { validated: 1 }, refs: [presentationReceipt.presentationId] });
       result = { status: runtime.status, response: runtime.response,
+        ...(acceptedReceipt ? { semanticReceipt: publicSemanticReceipt(acceptedReceipt) } : {}),
         ...(runtime.publicPlanPresentation ? { publicPlanPresentation: runtime.publicPlanPresentation } : {}),
         ...(runtime.publicJourneyPresentation ? { publicJourneyPresentation: runtime.publicJourneyPresentation } : {}),
         ...(runtime.researchExecution ? { researchExecution: reserveResearchResultSave(runtime.researchExecution) } : {}),

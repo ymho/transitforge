@@ -11,6 +11,7 @@ import { parseIntentApplicationReceipt, reduceConversationIntent, type IntentApp
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 import { parsePublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
 import { parseResearchExecutionOutcome } from "@raiquora/agent/research-execution";
+import { parsePublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 import { DynamoDbConversationRepository } from "./dynamodb-conversation-repository.js";
 import type { StateDynamoClient, StateEnvelope } from "./dynamodb-state-store.js";
 
@@ -27,7 +28,7 @@ interface TurnRecord {
   intentReceipt?: IntentApplicationReceipt;
 }
 function finalResult(value: ConversationTurnResult): ConversationTurnResult {
-  exactObject(value, ["status", "response", "publicPlanPresentation", "publicJourneyPresentation", "researchExecution", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal", "turnObservation", "presentationReceipt"]);
+  exactObject(value, ["status", "response", "semanticReceipt", "publicPlanPresentation", "publicJourneyPresentation", "researchExecution", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal", "turnObservation", "presentationReceipt"]);
   if (value.status !== "completed" && value.status !== "follow_up") throw new StateError("invalid-input");
   messageInputs([{ role: "assistant", text: value.response }]);
   try {
@@ -35,12 +36,14 @@ function finalResult(value: ConversationTurnResult): ConversationTurnResult {
     const publicPlanPresentation = value.publicPlanPresentation === undefined ? undefined : parsePublicPlanPresentation(value.publicPlanPresentation);
     const publicJourneyPresentation = value.publicJourneyPresentation === undefined ? undefined : parsePublicJourneyPresentation(value.publicJourneyPresentation);
     const researchExecution = value.researchExecution === undefined ? undefined : parseResearchExecutionOutcome(value.researchExecution);
+    const semanticReceipt = value.semanticReceipt === undefined ? undefined : parsePublicSemanticReceipt(value.semanticReceipt);
     if (value.turnObservation !== undefined && (!value.turnObservation || typeof value.turnObservation !== "object" || !["ask_only", "ask_and_progress", "progress", "answer"].includes(value.turnObservation.outcome))) throw new Error();
     if (value.presentationReceipt !== undefined) parseConversationWorkingState({ version: 1, revision: 0,
       sourceTurnId: "00000000-0000-4000-8000-000000000000", sourceUserSequence: 1,
       target: { conversationId: "00000000-0000-4000-8000-000000000000" }, presentations: [value.presentationReceipt],
       pendingQuestionRefs: [], pendingProposalRefs: [] });
     return { status: value.status, response: value.response,
+      ...(semanticReceipt ? { semanticReceipt } : {}),
       ...(publicPlanPresentation ? { publicPlanPresentation } : {}),
       ...(publicJourneyPresentation ? { publicJourneyPresentation } : {}),
       ...(researchExecution ? { researchExecution } : {}),
@@ -179,7 +182,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const { current, old, turn } = await this.read(input);
     if (!turn || turn.attemptId !== attemptId || turn.userSequence !== userSequence) throw new StateError("conflict");
     if (turn.state === "completed") {
-      if (!saved || saved.status !== turn.result!.status || saved.response !== turn.result!.response || JSON.stringify(saved.publicPlanPresentation) !== JSON.stringify(turn.result!.publicPlanPresentation) || JSON.stringify(saved.publicJourneyPresentation) !== JSON.stringify(turn.result!.publicJourneyPresentation) || JSON.stringify(saved.researchExecution) !== JSON.stringify(turn.result!.researchExecution) || JSON.stringify(saved.tripUpdateProposal) !== JSON.stringify(turn.result!.tripUpdateProposal) || JSON.stringify(saved.consultationRequestProposal) !== JSON.stringify(turn.result!.consultationRequestProposal) || JSON.stringify(saved.tripCostProposal) !== JSON.stringify(turn.result!.tripCostProposal)) throw new StateError("conflict");
+      if (!saved || saved.status !== turn.result!.status || saved.response !== turn.result!.response || JSON.stringify(saved.semanticReceipt) !== JSON.stringify(turn.result!.semanticReceipt) || JSON.stringify(saved.publicPlanPresentation) !== JSON.stringify(turn.result!.publicPlanPresentation) || JSON.stringify(saved.publicJourneyPresentation) !== JSON.stringify(turn.result!.publicJourneyPresentation) || JSON.stringify(saved.researchExecution) !== JSON.stringify(turn.result!.researchExecution) || JSON.stringify(saved.tripUpdateProposal) !== JSON.stringify(turn.result!.tripUpdateProposal) || JSON.stringify(saved.consultationRequestProposal) !== JSON.stringify(turn.result!.consultationRequestProposal) || JSON.stringify(saved.tripCostProposal) !== JSON.stringify(turn.result!.tripCostProposal)) throw new StateError("conflict");
       return turn.result;
     }
     if (!saved && turn.state === "failed") return;
@@ -210,7 +213,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     }) : undefined;
     await this.write(input.principal, current, { ...current, updatedAt: now, revision: current.revision + 1,
       messageCount: current.messageCount + (saved ? 1 : 0) },
-    saved ? [{ role: "assistant", text: saved.response, ...(saved.publicPlanPresentation ? { publicPlanPresentation: saved.publicPlanPresentation } : {}), ...(saved.publicJourneyPresentation ? { publicJourneyPresentation: saved.publicJourneyPresentation } : {}), ...(saved.tripCostProposal ? { tripCostProposal: saved.tripCostProposal } : {}), ...(saved.tripUpdateProposal ? { tripUpdateProposal: saved.tripUpdateProposal } : {}), ...(saved.consultationRequestProposal ? { consultationRequestProposal: saved.consultationRequestProposal } : {}), sequence: current.messageCount + 1, createdAt: now }] : [],
+    saved ? [{ role: "assistant", text: saved.response, ...(saved.semanticReceipt ? { semanticReceipt: saved.semanticReceipt } : {}), ...(saved.publicPlanPresentation ? { publicPlanPresentation: saved.publicPlanPresentation } : {}), ...(saved.publicJourneyPresentation ? { publicJourneyPresentation: saved.publicJourneyPresentation } : {}), ...(saved.tripCostProposal ? { tripCostProposal: saved.tripCostProposal } : {}), ...(saved.tripUpdateProposal ? { tripUpdateProposal: saved.tripUpdateProposal } : {}), ...(saved.consultationRequestProposal ? { consultationRequestProposal: saved.consultationRequestProposal } : {}), sequence: current.messageCount + 1, createdAt: now }] : [],
     [this.store.put(input.principal, this.key(input), { revision: old!.revision + 1, deleted: false, payload: next }, old),
       ...(working ? [this.store.put(input.principal, workingKey, { revision: working.revision, deleted: false, payload: working }, oldWorking)] : [])]);
     return saved;
