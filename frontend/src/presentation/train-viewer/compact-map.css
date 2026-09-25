@@ -1,0 +1,48 @@
+/* Final map presentation: opaque surfaces, compact timetable, edge-to-edge map. */
+#app[data-primary-view="map"] #map { bottom: 0; }
+#app[data-primary-view] { --map-bottom-clearance: .75rem; }
+.map-timetable-notice { display: none; }
+#app[data-primary-view="map"][data-operation-source="timetable"] .map-timetable-notice {
+  display: block; position: absolute; z-index: 5;
+  top: calc(var(--product-header-height) + .5rem); left: .5rem;
+  max-width: calc(100% - 5rem); margin: 0; padding: .35rem .5rem;
+  border: 1px solid #dfe4e8; border-radius: .35rem;
+  background: #fff; color: #53606b; font-size: .65rem;
+}
+#app .mapboxgl-ctrl-group {
+  width: 2.5rem; padding: .125rem; border: 1px solid #dfe4e8 !important;
+  border-radius: .5rem !important; background: #fff !important;
+  box-shadow: 0 2px 6px #10233714 !important;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+#app .mapboxgl-ctrl-group button {
+  display: grid; place-items: center; width: 2.125rem; height: 2.125rem;
+  padding: 0; border-radius: .3rem !important;
+}
+#app #congestion-toggle .map-tool-icon {
+  display: block; width: 20px; height: 20px; margin: 0; fill: none;
+}
+#app .train-details {
+  inset: auto 4rem calc(var(--map-bottom-clearance) + 2rem) auto;
+  display: flex; flex-direction: column; width: min(22rem, calc(100vw - 1rem));
+  max-height: min(38dvh, 22rem); padding: .625rem; overflow: hidden;
+  border: 1px solid #dfe4e8; border-radius: .625rem;
+  background: #fff; color: #102337; box-shadow: 0 2px 10px #10233714;
+  backdrop-filter: none; -webkit-backdrop-filter: none; animation: none;
+}
+#app .train-details[hidden] { display: none; }
+#app .train-details::before { display: none; }
+#app .train-details h2 { flex: 0 0 auto; min-height: 2rem; margin: 0; padding-right: 2.5rem; font-size: .9rem; gap: .4rem; }
+#app .train-service-badge { min-height: 1.4rem; padding: .2rem .4rem; font-size: .65rem; box-shadow: none; }
+#app #close-train-details { top: .25rem; right: .25rem; width: 2.5rem; height: 2.5rem; border-radius: .35rem; background: transparent; font-size: 1.2rem; box-shadow: none; }
+#app .train-timetable { min-height: 0; overflow-y: auto; margin-top: .35rem; }
+#app .train-timetable ol { max-height: none; margin: 0; padding: 0; overflow: visible; }
+#app .train-timetable li { min-height: 1.8rem; margin: 0; padding: .3rem .4rem; gap: .4rem; border-radius: .25rem; }
+#app .train-timetable-station, #app .train-timetable-times { font-size: .72rem; }
+#app .train-detail-tabs { flex-shrink: 0; margin: .25rem 0; padding: 0; border-radius: .3rem; box-shadow: none; background: #f2f5f7; }
+#app .train-detail-tabs button { min-height: 2rem; border-radius: .3rem; }
+@media (max-width: 62rem) {
+  #app[data-primary-view] { --map-bottom-clearance: calc(4.5rem + env(safe-area-inset-bottom)); }
+  #app .mapboxgl-ctrl-bottom-left, #app .mapboxgl-ctrl-bottom-right { bottom: var(--map-bottom-clearance); }
+  #app .train-details { right: .5rem; bottom: calc(var(--map-bottom-clearance) + 1.75rem); }
+}

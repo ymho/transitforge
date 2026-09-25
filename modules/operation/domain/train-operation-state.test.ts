@@ -102,6 +102,18 @@ describe("train operation state", () => {
     expect(delayByTrainNumber(undefined).size).toBe(0);
   });
 
+  it("falls back for stale or missing observations but respects a valid empty snapshot", () => {
+    const trains = [train("100A", "姫路")];
+    for (const snapshot of [undefined, operationSnapshot("2026-08-14T02:00:00.000Z"),
+      { ...operationSnapshot(now.toISOString()), failedSources: ["a"] }]) {
+      const operations = operationsForDisplay(snapshot, now, now, false);
+      expect(trainsForOperations(trains, operations)).toBe(trains);
+      expect(delayByTrainNumber(operations).size).toBe(0);
+    }
+    expect(trainsForOperations(trains, operationsForDisplay({ ...operationSnapshot(now.toISOString()),
+      operationsByTrainNumber: new Map() }, now, now, false))).toEqual([]);
+  });
+
   it("matches an Osaka Loop snapshot number without the timetable M suffix", () => {
     const trains = [train("4204M", "京橋", "関空快速")];
     const operation = {

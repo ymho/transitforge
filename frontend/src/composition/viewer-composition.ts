@@ -1048,7 +1048,7 @@ if (!token) {
             now,
             false,
           );
-          const sourceOperations = realtimeOperations ?? new Map<string, TrainOperation>();
+          const sourceOperations = realtimeOperations;
           if (sourceOperations !== aliasedOperationsSource) {
             aliasedOperationsSource = sourceOperations;
             const trainNumberOperations = operationsWithTimetableTrainNumberAliases(
@@ -1063,6 +1063,7 @@ if (!token) {
           }
           const operations = aliasedOperations;
           app.dataset.displayMode = "digital-twin";
+          app.dataset.operationSource = realtimeOperations === undefined ? "timetable" : "realtime";
           congestionUpdates.setAvailable(realtimeOperations !== undefined);
           if (operations === appliedOperations) {
             return;
@@ -1101,7 +1102,7 @@ if (!token) {
           );
           selection.updateOperations(operations, destinationChanges);
           console.info("[Raiquora] 列車表示モード", {
-            mode: "realtime",
+            mode: realtimeOperations === undefined ? "timetable" : "realtime",
             timetableTrains: trainIndex.trains.length,
             displayedTrains: displayTrains.length,
             unobservedTimetableEntries: trainIndex.trains.length - displayTrains.length,

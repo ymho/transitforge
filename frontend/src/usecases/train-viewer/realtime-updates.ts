@@ -41,8 +41,10 @@ export function configureTrainCongestionUpdates(
       apply: (snapshot) => {
         trainLayer.setCongestionByTrainNumber(snapshot.byTrainNumber);
       },
-      onError: (error) =>
-        console.warn("列車混雑情報を更新できませんでした。", error),
+      onError: (error) => {
+        trainLayer.setCongestionByTrainNumber(new Map());
+        console.warn("列車混雑情報を更新できませんでした。", error);
+      },
       refreshIntervalMilliseconds: dependencies.congestionRefreshIntervalMilliseconds,
       retryIntervalMilliseconds: dependencies.congestionRetryIntervalMilliseconds,
     },
@@ -72,6 +74,7 @@ export function configureTrainCongestionUpdates(
     setEnabled,
     setAvailable: (nextAvailable) => {
       available = nextAvailable;
+      if (!available) trainLayer.setCongestionByTrainNumber(new Map());
       apply();
     },
     dispose: () => {
@@ -82,7 +85,7 @@ export function configureTrainCongestionUpdates(
 }
 
 export function configureTrainDelayUpdates(
-  onUpdate: (snapshot: TrainDelaySnapshot) => void,
+  onUpdate: (snapshot: TrainDelaySnapshot | undefined) => void,
   dependencies: RealtimeUpdateDependencies,
 ): () => void {
   const poller = createPollingController(
@@ -91,18 +94,21 @@ export function configureTrainDelayUpdates(
       apply: (snapshot) => {
         if (snapshot.failedSources.length > 0) {
           console.warn(
-            "[Raiquora] 遅延スナップショットが不完全なため日時指定表示を維持します。",
+            "[Raiquora] 遅延スナップショットが不完全なためダイヤ上の位置を表示します。",
             {
               collectedAt: snapshot.collectedAt,
               failedSources: snapshot.failedSources,
             },
           );
+          onUpdate(undefined);
           return;
         }
         onUpdate(snapshot);
       },
-      onError: (error) =>
-        console.warn("列車遅延情報を更新できませんでした。", error),
+      onError: (error) => {
+        onUpdate(undefined);
+        console.warn("列車遅延情報を更新できませんでした。", error);
+      },
       refreshIntervalMilliseconds: dependencies.delayRefreshIntervalMilliseconds,
       retryIntervalMilliseconds: dependencies.delayRetryIntervalMilliseconds,
     },
