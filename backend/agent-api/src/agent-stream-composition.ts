@@ -40,7 +40,16 @@ export function createProductionAgentStream(options: {
         return;
       }
       // The transaction has completed before any final bytes are published (including replay).
-      await emit({ type: "final", ...result });
+      // Stored continuity metadata is not part of the public SSE contract.
+      // Project an allowlist on both fresh completion and persisted replay.
+      await emit({ type: "final", status: result.status, response: result.response,
+        ...(result.publicPlanPresentation ? { publicPlanPresentation: result.publicPlanPresentation } : {}),
+        ...(result.publicJourneyPresentation ? { publicJourneyPresentation: result.publicJourneyPresentation } : {}),
+        ...(result.researchExecution ? { researchExecution: result.researchExecution } : {}),
+        ...(result.tripUpdateProposal ? { tripUpdateProposal: result.tripUpdateProposal } : {}),
+        ...(result.consultationRequestProposal ? { consultationRequestProposal: result.consultationRequestProposal } : {}),
+        ...(result.tripCostProposal ? { tripCostProposal: result.tripCostProposal } : {}),
+      });
     },
   });
 }

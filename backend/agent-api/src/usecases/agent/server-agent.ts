@@ -140,6 +140,8 @@ async function publishRuntimeDiagnostics(dependencies: ServerAgentDependencies, 
 }
 
 function diagnosticFailureReason(reason: string | undefined): AgentDiagnosticEvent["reason"] {
+  if (reason === "model_invalid_schema" || reason === "invalid_initial_evidence" ||
+      reason === "missing_tool_call" || reason === "invalid_in_trip_answer_plan") return reason;
   if (reason === "runtime_iteration_budget") return "iteration_budget";
   if (reason === "runtime_model_budget" || reason === "research_model_budget") return "model_budget";
   if (reason === "runtime_tool_budget" || reason === "research_tool_budget") return "tool_budget";
