@@ -40,6 +40,30 @@ it("reuses a published candidate source after an unrelated follow-up Tool call",
   expect(working?.groundingEvidence?.map(({ id }) => id)).toContain(sourceEvidenceId);
 });
 
+it("keeps a verified draft usable when the next turn supplies tomorrow's departure", async () => {
+  const state = stateDynamoFixture(), trips = tripDynamoFixture();
+  const { tripId: _tripId, ...metadata } = stateMetadata();
+  await state.conversations.create(stateA, conversationId, { ...metadata, scope: "general" });
+  let providerUnavailable = false;
+  const model: ConversationModel = { converse: vi.fn(async (_request) => {
+    if (providerUnavailable) throw new Error("provider unavailable");
+    return toolCall("source-1", "discover_source");
+  }) };
+  const agent = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
+    model, weather: { search: vi.fn() }, newExecutionId: () => crypto.randomUUID(), additionalTools: [sourceTool()] });
+  const first = await agent.runConversationTurn({ principal: stateA, conversationId,
+    turnId: "11111111-1111-4111-8111-111111111111", userRequest: "出雲大社に行きたい", uiContext: { calendarDate: "2026-09-25" } });
+  expect(first.publicPlanPresentation?.candidates[0]?.label).toBe("出雲大社");
+  const retained = await new DynamoDbConversationTurnRepository("test-state", state.client).getWorkingState(stateA, conversationId);
+  expect(retained?.groundingEvidence?.map(({ id }) => id)).toContain(sourceEvidenceId);
+  providerUnavailable = true;
+  const second = await agent.runConversationTurn({ principal: stateA, conversationId,
+    turnId: "22222222-2222-4222-8222-222222222222", userRequest: "明日出発します", uiContext: { calendarDate: "2026-09-25" } });
+  expect(second.status).toBe("completed");
+  expect(second.response).toContain("9月26日出発");
+  expect(second.response).toContain("出雲大社");
+});
+
 function toolCall(toolUseId: string, name: string) {
   return { message: { role: "assistant" as const, content: [{ toolUse: { toolUseId, name, input: {} } }] },
     stopReason: "tool_use" as const, metadata: { modelId: "synthetic", latencyMs: 1 } };

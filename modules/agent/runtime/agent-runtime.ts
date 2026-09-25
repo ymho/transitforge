@@ -12,6 +12,7 @@ import { AgentModelError } from "./model-provider";
 import {
   agentDecisionContextText,
   buildAgentDecisionContext,
+  calendarDateReferences,
 } from "./agent-decision-context";
 import {
   DefaultAgentResponseGenerator,
@@ -242,6 +243,12 @@ export class MultiStepAgentRuntime {
         // before invocation; keep both guards aligned so schema failures cannot
         // retry beyond the configured model-call limit.
         modelCalls += 1;
+        if (code === "provider_error") {
+          // A prior turn may already have published a bounded, verified source.
+          // Keep a planning follow-up usable when the provider cannot answer.
+          const summary = this.verifiedPlanningSummary(trace, evidence, startedAt, request);
+          if (summary) return summary;
+        }
         if (code === "invalid_schema") {
           // Planning Tools may already have returned enough source-bound Evidence.
           // Do not discard it merely because the model failed to wrap the final
@@ -742,7 +749,9 @@ export class MultiStepAgentRuntime {
   ): AgentRuntimeResult | undefined {
     const phase = request.context?.taskContext?.phase;
     if (request.feature !== "concierge" || (phase !== "discovery" && phase !== "draft" && phase !== "refine")) return undefined;
-    const generated = recoverPlanningDraft(evidence, request.userRequest);
+    const tomorrow = calendarDateReferences(request.context?.featureContext?.calendarDate).relativeDates?.tomorrow;
+    const startDate = tomorrow && /明日(?:から|に|出発|発|行|旅|$)/u.test(request.userRequest) ? tomorrow : undefined;
+    const generated = recoverPlanningDraft(evidence, request.userRequest, startDate);
     if (!generated?.publicPlanPresentation) return undefined;
     const grounding = validateEvidenceAndClaims(evidence, generated.claims);
     if (!grounding.valid || grounding.claims.some((claim) => claim.groundingStatus === "unsupported")) return undefined;

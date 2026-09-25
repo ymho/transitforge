@@ -570,7 +570,7 @@ function date(value: string | undefined): boolean {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/u.test(value);
 }
 
-function calendarDateReferences(value: string | undefined): Pick<AgentFeatureContext, "relativeDates"> {
+export function calendarDateReferences(value: string | undefined): Pick<AgentFeatureContext, "relativeDates"> {
   if (!date(value)) return {};
   const timestamp = Date.parse(`${value}T00:00:00Z`);
   if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== value) return {};

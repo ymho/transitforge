@@ -5,7 +5,7 @@ import { parsePublicPlanPresentation, type PublicPlanCandidate } from "./public-
 
 /** A conservative, source-bound draft when the model cannot complete its presentation.
  * No timetable, accommodation, fare, or second place is invented. */
-export function recoverPlanningDraft(evidence: readonly Evidence[], userRequest: string): AgentGeneratedResponse | undefined {
+export function recoverPlanningDraft(evidence: readonly Evidence[], userRequest: string, startDate?: string): AgentGeneratedResponse | undefined {
   const sources = evidence.filter((source) => hasStructuredPresentationEvidence(source) &&
     typeof source.facts.sourceUrl === "string" && source.references.some((ref) => ref.sourceRef === source.facts.sourceUrl) &&
     typeof source.facts.sourceExcerpt === "string" && Boolean(sourceDisplayExcerpt(source.facts.sourceExcerpt)));
@@ -15,7 +15,11 @@ export function recoverPlanningDraft(evidence: readonly Evidence[], userRequest:
     .filter((source, index, all) => all.findIndex((item) => normalizedTitle(item) === normalizedTitle(source)) === index)
     .slice(0, 2);
   if (!selected.length) return undefined;
-  const sections: string[] = ["日程と出発地が未定のため、現地で過ごす1日目の仮案を作りました。移動時刻と費用はまだ確認できていません。"];
+  const date = startDate && /^\d{4}-\d{2}-\d{2}$/u.test(startDate) && !Number.isNaN(Date.parse(`${startDate}T00:00:00Z`)) &&
+    new Date(`${startDate}T00:00:00Z`).toISOString().slice(0, 10) === startDate ? startDate : undefined;
+  const sections: string[] = [date
+    ? `${Number(date.slice(5, 7))}月${Number(date.slice(8, 10))}日出発の予定ですね。現地で過ごす日の仮案です。往復の移動時刻と費用はまだ確認できていません。`
+    : "日程と出発地が未定のため、現地で過ごす1日目の仮案を作りました。移動時刻と費用はまだ確認できていません。"];
   const candidates: PublicPlanCandidate[] = [];
   const claims: AgentGeneratedResponse["claims"] = [];
   const photoRefs: string[] = [];
@@ -47,7 +51,7 @@ export function recoverPlanningDraft(evidence: readonly Evidence[], userRequest:
       comparisonAssessmentRefs: [], scenarioRefs: [] });
   }
   if (!candidates.length) return undefined;
-  sections.push("日数や出発地が決まれば、往復移動と宿泊も含めて考えられます。");
+  sections.push(date ? "出発地や日数が分かれば、移動と宿泊を含む日別の案に広げられます。" : "日数や出発地が決まれば、往復移動と宿泊も含めて考えられます。");
   const presentation = parsePublicPlanPresentation({ version: "public-plan-presentation-v1", presentationId: "00000000-0000-4000-8000-000000000001",
     candidateSetRef: { kind: "unavailable", reason: "legacy-projection" }, candidateOrder: candidates.map((item) => item.variantId), candidates,
     evidenceRefs: selected.filter((source) => candidates.some((item) => item.variantId === `variant:${source.id}`)).map((source) => source.id),
