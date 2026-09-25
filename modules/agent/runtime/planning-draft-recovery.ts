@@ -15,7 +15,7 @@ export function recoverPlanningDraft(evidence: readonly Evidence[], userRequest:
     .filter((source, index, all) => all.findIndex((item) => normalizedTitle(item) === normalizedTitle(source)) === index)
     .slice(0, 2);
   if (!selected.length) return undefined;
-  const sections: string[] = ["日程・出発地が未定のため、まず現地で過ごす1日目の仮案です。移動時刻と費用は未確認です。"];
+  const sections: string[] = ["日程と出発地が未定のため、現地で過ごす1日目の仮案を作りました。移動時刻と費用はまだ確認できていません。"];
   const candidates: PublicPlanCandidate[] = [];
   const claims: AgentGeneratedResponse["claims"] = [];
   const photoRefs: string[] = [];
@@ -36,8 +36,8 @@ export function recoverPlanningDraft(evidence: readonly Evidence[], userRequest:
       typeof item.facts.imageAttribution === "string" && item.facts.imageAttribution.trim() &&
       (item.id === source.id || Array.isArray(item.facts.boundSourceUrls) && item.facts.boundSourceUrls.includes(source.facts.sourceUrl as string)));
     if (photo) photoRefs.push(photo.id);
-    const image = photo ? `![${escapeText(title)}](${photo.facts.imageUrl} "出典付きの写真")\n\n写真: [${escapeText(String(photo.facts.imageAttribution))}](${photo.facts.imageSourceUrl})` : "";
-    sections.push(`### ${escapeText(title)}\n\n${image}\n\n${explanation.text}\n\n**1日目の仮行程**\n\n- 時間未定：${escapeText(title)}をゆっくり訪ねる\n- 時間未定：休憩を挟み、無理のないペースで過ごす`);
+    const image = photo ? `![${escapeText(title)}](${photo.facts.imageUrl} "Raiquora verified photo")\n\n[写真: ${escapeText(String(photo.facts.imageAttribution))}](${photo.facts.imageSourceUrl} "写真の出典")\n\n` : "";
+    sections.push(`${image}${escapeText(quote)} [出典 ↗](${source.facts.sourceUrl} "参考資料")`);
     claims.push(...explanation.claims.map((claim) => ({ ...claim, id: `draft-${claims.length}` })));
     const entries = [activityRef, breakRef].map((itemRef, index) => ({ entryRef: `${dayRef}:entry:${index + 1}`, itemRef, role: "visit" as const }));
     candidates.push({ variantId, label: title, dayOrder: [dayRef], days: [{ dayRef, label: "1日目", entries, status: "planned" }],
@@ -47,7 +47,7 @@ export function recoverPlanningDraft(evidence: readonly Evidence[], userRequest:
       comparisonAssessmentRefs: [], scenarioRefs: [] });
   }
   if (!candidates.length) return undefined;
-  sections.push("日数や出発地を教えていただければ、往復移動と宿泊を含む案に広げられます。");
+  sections.push("日数や出発地が決まれば、往復移動と宿泊も含めて考えられます。");
   const presentation = parsePublicPlanPresentation({ version: "public-plan-presentation-v1", presentationId: "00000000-0000-4000-8000-000000000001",
     candidateSetRef: { kind: "unavailable", reason: "legacy-projection" }, candidateOrder: candidates.map((item) => item.variantId), candidates,
     evidenceRefs: selected.filter((source) => candidates.some((item) => item.variantId === `variant:${source.id}`)).map((source) => source.id),

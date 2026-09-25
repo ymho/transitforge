@@ -17,8 +17,11 @@ it("returns a validated day-one itinerary with a source-bound photo and unknown 
   expect(result.publicPlanPresentation?.candidates[0]?.days[0]?.label).toBe("1日目");
   expect(result.publicPlanPresentation?.candidates[0]?.cost).toEqual({ status: "unknown" });
   expect(result.publicPlanPresentation?.photoRefs).toEqual([photo.id]);
-  expect(result.text).toContain("1日目の仮行程");
+  expect(result.text).toContain("現地で過ごす1日目の仮案");
+  expect(result.text).not.toContain("出雲大社をゆっくり訪ねる");
+  expect(result.text).toContain('[出典 ↗](https://izumo.example/guide "参考資料")');
   expect(result.text).toContain("![出雲大社]");
+  expect(result.text).toContain('"Raiquora verified photo"');
   expect(result.text).not.toContain("確認できた資料から場所の候補を紹介します");
   expect(result.text).not.toContain("神門通りでは町歩きを楽しめます。神々が集う神在祭も紹介しています。");
 });

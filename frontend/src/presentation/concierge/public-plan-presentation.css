@@ -1,0 +1,19 @@
+.public-plan-presentation { display: grid; gap: .75rem; min-width: 0; margin-block: .9rem; }
+.public-plan-candidate-tabs { display: flex; gap: .4rem; max-width: 100%; overflow-x: auto; }
+.public-plan-candidate-tabs button, .public-plan-adopt, .public-plan-presentation > button { min-height: 2.4rem; padding: .4rem .75rem; border: 1px solid var(--glass-border-subtle); border-radius: .8rem; background: var(--glass-surface-strong); color: var(--glass-text); font: inherit; cursor: pointer; }
+.public-plan-candidate-tabs button[aria-selected="true"] { border-color: var(--glass-accent); background: var(--glass-surface-muted); }
+.public-plan-candidate { min-width: 0; padding: .85rem 1rem; border: 1px solid var(--glass-border-subtle); border-radius: 1rem; background: var(--glass-surface); }
+.public-plan-candidate[hidden] { display: none; }
+.ai-guide-message-assistant .public-plan-candidate h3 { margin: 0 0 .55rem; font-size: .95rem; }
+.public-plan-days { display: grid; gap: .6rem; margin: 0; padding: 0; list-style: none; }
+.ai-guide-message-assistant .public-plan-days h4 { margin: 0 0 .3rem; color: var(--glass-muted); font-size: .75rem; }
+.public-plan-days ul { display: grid; gap: .35rem; margin: 0; padding: 0; list-style: none; }
+.public-plan-days ul li { position: relative; padding-left: 1rem; overflow-wrap: anywhere; }
+.public-plan-days ul li::before { position: absolute; left: 0; color: var(--glass-accent); content: "•"; }
+.public-plan-axes { display: flex; flex-wrap: wrap; gap: .25rem .7rem; margin: 0 0 .75rem; color: var(--glass-muted); font-size: .72rem; }
+.public-plan-axes dt, .public-plan-axes dd { margin: 0; }
+.public-plan-axes dd { color: var(--glass-text); font-weight: 650; }
+.public-plan-scenarios { margin: .6rem 0 0; color: var(--glass-muted); font-size: .72rem; }
+.public-plan-adopt { margin-top: .75rem; }
+.ai-guide-message-copy a[title="参考資料"], .ai-guide-message-copy a[title="写真の出典"] { display: inline-flex; align-items: center; width: fit-content; padding: .1rem .4rem; border: 1px solid var(--glass-border-subtle); border-radius: 999px; color: var(--glass-muted); font-size: .7rem; line-height: 1.5; text-decoration: none; vertical-align: baseline; }
+.ai-guide-message-copy a[title="参考資料"]:hover, .ai-guide-message-copy a[title="写真の出典"]:hover { color: var(--glass-text); border-color: var(--glass-accent); }

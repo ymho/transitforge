@@ -16,7 +16,8 @@ function value(days = 1) { const candidates = [candidate("a", days), candidate("
 describe("public plan presentation view", () => {
   it("supports keyboard tabs and emits typed detailed/adoption targets", () => {
     const root = renderPublicPlanPresentation(value()), detailed = vi.fn(), adoption = vi.fn(); root.addEventListener("raiquora:detailed-research", detailed); root.addEventListener("raiquora:preview-plan-adoption", adoption);
-    expect(root.textContent).toContain("€12.34"); expect(root.textContent).toContain("写真未取得");
+    expect(root.textContent).toContain("€12.34"); expect(root.textContent).not.toContain("写真未取得");
+    expect(root.textContent).not.toContain("モデル2回");
     const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')]; tabs[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     expect(tabs[1]!.getAttribute("aria-selected")).toBe("true");
     root.querySelector<HTMLButtonElement>(".public-plan-adopt")!.click(); expect(adoption.mock.calls[0]![0].detail).toMatchObject({ candidateSetId: "set-1", variantId: "a", baseTripRevision: 2 });
@@ -24,4 +25,16 @@ describe("public plan presentation view", () => {
     expect(detailed.mock.calls[0]![0].detail).toMatchObject({ presentationId: "presentation-1", candidateSetRevision: 3, tripId: "11111111-1111-4111-8111-111111111111" });
   });
   it("renders all 30 days without clipping", () => { const root = renderPublicPlanPresentation(value(30)); expect(root.querySelectorAll(".public-plan-days > li")).toHaveLength(60); });
+  it("shows a single unsaved draft as one itinerary without misleading actions or internal metrics", () => {
+    const draft = value();
+    const root = renderPublicPlanPresentation(parsePublicPlanPresentation({ ...draft, candidates: [draft.candidates[0]], candidateOrder: ["a"],
+      target: undefined, candidateSetRef: { kind: "unavailable", reason: "legacy-projection" },
+      coverage: { status: "partial", coveredDayRefs: ["a-day-0"], omittedDayRefs: [], omittedScopes: ["出発地"] },
+      researchOutcome: { ...draft.researchOutcome, status: "partial", budget: { modelCalls: 0, toolCalls: 0, wallClockMs: 0 } } }));
+    expect(root.querySelectorAll(".public-plan-days li li")).toHaveLength(1);
+    expect(root.querySelector('[role="tablist"]')).toBeNull();
+    expect(root.textContent).toContain("予定1");
+    for (const phrase of ["モデル0回", "Tool0回", "2/2予定", "写真未取得", "採用できません", "さらに詳しく比較する"])
+      expect(root.textContent).not.toContain(phrase);
+  });
 });
