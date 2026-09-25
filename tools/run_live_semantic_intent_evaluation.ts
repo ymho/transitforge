@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { AwsBedrockConverseClient } from "../backend/agent-api/src/adapters/aws-sdk-clients";
 import { BedrockConversationModel } from "../backend/agent-api/src/adapters/bedrock-conversation-model";
 import { createConversationIntentInterpreter } from "../backend/agent-api/src/usecases/agent/conversation-intent-interpreter";
+import { SemanticInterpretationContractError } from "../backend/agent-api/src/usecases/agent/semantic-interpretation-diagnostics";
 import type { ConversationModel, ConversationModelUsage } from "../backend/agent-api/src/ports/conversation-model";
 import { emptyConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
 import { semanticIntentCorpusInputs } from "../frontend/src/usecases/agent/evaluation/semantic-intent-corpus-inputs";
@@ -93,9 +94,10 @@ function environmentRate(name: string): number | undefined {
   const raw = process.env[name]; if (!raw) return undefined; const value = Number(raw); return Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 function executionErrorCategory(error: unknown): string {
+  if (error instanceof SemanticInterpretationContractError) return error.category;
   const name = error instanceof Error ? error.name : "";
   if (["ValidationException", "AccessDeniedException", "ResourceNotFoundException"].includes(name)) return "provider_configuration";
   if (name === "ThrottlingException") return "provider_throttled";
-  if (name === "ConversationModelError") return "model_contract";
+  if (name === "ConversationModelError") return "model_contract_other";
   return "execution_failure";
 }
