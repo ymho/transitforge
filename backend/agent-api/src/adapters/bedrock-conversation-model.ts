@@ -74,6 +74,7 @@ export class BedrockConversationModel implements ConversationModel {
       modelId,
       system: [
         { text: this.options.systemPrompt },
+        ...(request.instruction ? [{ text: request.instruction }] : []),
         ...(compiledOutput?.mode === "application_strict" ? [{ text: applicationStrictInstruction(request.outputContract!) }] : []),
         ...(caching.systemCheckpoint ? [{ cachePoint: { type: "default" } }] : []),
       ],

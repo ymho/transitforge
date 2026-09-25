@@ -1,5 +1,7 @@
 import type { AgentTurnObservation } from "./agent-turn-outcome";
 import { validateEvidenceAndClaims, type Evidence } from "./evidence-model";
+import { emptyConversationIntentOverlay, parseConversationIntentOverlay, type ConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
+import { parseIntentApplicationReceipt, type IntentApplicationReceipt } from "./conversation-intent-reducer";
 
 export const conversationEvidenceLimits = { maximumItems: 24, maximumBytes: 64_000, maximumItemBytes: 8_000 } as const;
 
@@ -11,7 +13,7 @@ export interface PresentationReceipt {
   entries: Array<{ ordinal: number; candidateRef: string }>;
 }
 export interface ConversationWorkingState {
-  version: 1;
+  version: 1 | 2;
   revision: number;
   sourceTurnId: string;
   sourceUserSequence: number;
@@ -22,17 +24,19 @@ export interface ConversationWorkingState {
   /** Published, bounded source Evidence only. Never raw Tool output or prohibited content. */
   groundingEvidence?: Evidence[];
   lastOutcome?: AgentTurnObservation;
+  /** Version 2 semantic overlay. It is sparse and never a second full TripRequest. */
+  semantic?: { overlay: ConversationIntentOverlay; receipts: IntentApplicationReceipt[] };
 }
 
 export function parseConversationWorkingState(value: unknown): ConversationWorkingState {
   if (!record(value) || !only(value, ["version", "revision", "sourceTurnId", "sourceUserSequence", "target", "presentations",
-    "pendingQuestionRefs", "pendingProposalRefs", "groundingEvidence", "lastOutcome"]) || value.version !== 1 || !integer(value.revision) || !identifier(value.sourceTurnId) ||
+    "pendingQuestionRefs", "pendingProposalRefs", "groundingEvidence", "lastOutcome", "semantic"]) || ![1, 2].includes(Number(value.version)) || !integer(value.revision) || !identifier(value.sourceTurnId) ||
     !Number.isSafeInteger(value.sourceUserSequence) || Number(value.sourceUserSequence) < 1 || !record(value.target) ||
     !only(value.target, ["conversationId", "tripId", "tripRevision"]) ||
     !identifier(value.target.conversationId) || value.target.tripId !== undefined && !identifier(value.target.tripId) ||
     value.target.tripRevision !== undefined && !integer(value.target.tripRevision) || !Array.isArray(value.presentations) ||
     value.presentations.length > 20 || !stringList(value.pendingQuestionRefs, 20) || !stringList(value.pendingProposalRefs, 20) ||
-    value.lastOutcome !== undefined && !validOutcome(value.lastOutcome)) throw new Error("Invalid working state");
+    value.lastOutcome !== undefined && !validOutcome(value.lastOutcome) || value.version === 1 && value.semantic !== undefined || value.version === 2 && value.semantic === undefined) throw new Error("Invalid working state");
   const presentations = value.presentations.map((candidate) => {
     if (!record(candidate) || !only(candidate, ["presentationId", "version", "target", "candidateSetRef", "entries"]) || !identifier(candidate.presentationId) || candidate.version !== 1 || !Array.isArray(candidate.entries) ||
       candidate.entries.length > 24) throw new Error("Invalid presentation receipt");
@@ -45,7 +49,12 @@ export function parseConversationWorkingState(value: unknown): ConversationWorki
     return { presentationId: candidate.presentationId as string, version: 1 as const, ...(target ? { target } : {}), ...(candidateSetRef ? { candidateSetRef } : {}), entries };
   });
   const groundingEvidence = value.groundingEvidence === undefined ? undefined : parseConversationEvidence(value.groundingEvidence);
-  return structuredClone({ ...value, presentations, ...(groundingEvidence ? { groundingEvidence } : {}) }) as ConversationWorkingState;
+  const semantic = value.semantic === undefined ? undefined : parseSemanticState(value.semantic);
+  return structuredClone({ ...value, presentations, ...(groundingEvidence ? { groundingEvidence } : {}), ...(semantic ? { semantic } : {}) }) as ConversationWorkingState;
+}
+
+export function semanticStateOf(state: ConversationWorkingState | undefined): NonNullable<ConversationWorkingState["semantic"]> {
+  return state?.semantic ? structuredClone(state.semantic) : { overlay: emptyConversationIntentOverlay(), receipts: [] };
 }
 
 /** Persist only Evidence that crossed a validated public boundary. Older published
@@ -142,6 +151,13 @@ function validOutcome(value: unknown): value is AgentTurnObservation {
   return value.exception === undefined || record(value.exception) && only(value.exception, ["reason", "missingFact", "constraintId", "toolName", "inputName"]) &&
     ["safety", "hard_constraint_unknown", "tool_input_missing"].includes(String(value.exception.reason)) && reference(value.exception.missingFact) &&
     [value.exception.constraintId, value.exception.toolName, value.exception.inputName].every((item) => item === undefined || reference(item));
+}
+function parseSemanticState(value: unknown): NonNullable<ConversationWorkingState["semantic"]> {
+  if (!record(value) || !only(value, ["overlay", "receipts"]) || !Array.isArray(value.receipts) || value.receipts.length > 20) throw new Error("Invalid semantic working state");
+  const overlay = parseConversationIntentOverlay(value.overlay);
+  const receipts = value.receipts.map(parseIntentApplicationReceipt);
+  if (receipts.some((receipt) => receipt.intentRevision > overlay.intentRevision)) throw new Error("Invalid semantic receipt revision");
+  return { overlay, receipts };
 }
 function parseCandidateSetRef(value: unknown): PresentationReceipt["candidateSetRef"] {
   if (!record(value)) throw new Error("Invalid candidate set receipt");

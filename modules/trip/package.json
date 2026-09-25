@@ -43,6 +43,7 @@
     "./trip-constraint-evaluation": "./domain/trip-constraint-evaluation.ts",
     "./trip-constraint-scope": "./domain/trip-constraint-scope.ts",
     "./trip-request": "./domain/trip-request.ts",
+    "./conversation-intent": "./domain/conversation-intent.ts",
     "./trip-requirement": "./domain/trip-requirement.ts",
     "./itinerary-schedule": "./domain/itinerary-schedule.ts",
     "./place-snapshot": "./domain/place-snapshot.ts",

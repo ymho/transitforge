@@ -26,6 +26,26 @@ async function begin(f: Awaited<ReturnType<typeof setup>>) {
   return (start as { lease: ConversationTurnLease }).lease;
 }
 describe("Conversation turn transactions", () => {
+  it("commits accepted intent before the answer and replays it after answer failure", async () => {
+    const f = await setup(), lease = await begin(f);
+    const delta = { version: 1 as const, mutationId: `intent-turn:${turnId}`, baseIntentRevision: 0, operations: [{
+      operationId: `intent-op:${turnId}:1`, groupId: `intent-group:${turnId}:1`, action: "set" as const, target: "destination" as const,
+      scope: { type: "conversation" as const }, modality: "preferred" as const, precision: "exact" as const,
+      value: { kind: "place_label" as const, label: "出雲大社" }, frame: "actual" as const,
+      provenance: { kind: "user_turn" as const, turnId, quote: "出雲大社" },
+    }] };
+    const receipt = await f.turns.acceptIntent(identity, lease, delta);
+    expect(receipt).toMatchObject({ beforeIntentRevision: 0, intentRevision: 1, replayed: false });
+    expect(await f.turns.getWorkingState(principal, conversationId)).toMatchObject({ version: 2,
+      semantic: { overlay: { intentRevision: 1, facts: [{ target: "destination", value: { label: "出雲大社" } }] } } });
+    await f.turns.failTurn(identity, lease);
+    const retry = await f.turns.beginTurn(identity, request);
+    expect(retry).toMatchObject({ state: "intent_accepted", receipt: { intentRevision: 1 } });
+    if (retry.state !== "intent_accepted") throw new Error();
+    await f.turns.completeTurn(identity, retry.lease, result);
+    expect((await f.turns.getWorkingState(principal, conversationId))?.semantic?.overlay.intentRevision).toBe(1);
+    expect((await f.conversations.get(principal, conversationId))?.messageCount).toBe(2);
+  });
   it("atomically appends once and replays completion across fresh repository instances", async () => {
     const f = await setup(), lease = await begin(f);
     await expect(f.turns.beginTurn(identity, request)).rejects.toMatchObject({ code: "conflict" });

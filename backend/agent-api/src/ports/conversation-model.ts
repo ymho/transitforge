@@ -8,6 +8,8 @@ import type { AgentOutputContract, OutputContractRef } from "@raiquora/agent/out
 
 export interface ConversationModelRequest {
   messages: AgentMessage[];
+  /** Application-owned task instruction. User content remains a separate data message. */
+  instruction?: string;
   tools?: AgentToolDefinition[];
   modelClass?: ConversationModelClass;
   trace?: {

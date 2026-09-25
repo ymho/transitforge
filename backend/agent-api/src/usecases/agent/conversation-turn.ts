@@ -3,6 +3,8 @@ import { StateError, exactObject, requireStatePrincipal } from "../../contracts/
 import type { ConversationTurnContinuity, ConversationTurnRepository, ConversationTurnResult } from "../../ports/conversation-turn-repository.js";
 import type { ServerAgentTurn } from "./server-agent.js";
 import { presentationFromObservation, presentationFromPublicPlan } from "@raiquora/agent/conversation-working-state";
+import { semanticStateOf } from "@raiquora/agent/conversation-working-state";
+import { acceptedIntentDeltaFromInterpretation, type UtteranceInterpretation } from "@raiquora/agent/semantic-interpretation";
 import type { AgentDiagnosticEvent, AgentDiagnosticsSink } from "../../ports/agent-diagnostics.js";
 import { reserveResearchResultSave } from "@raiquora/agent/research-execution";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
@@ -16,6 +18,7 @@ export interface ConversationTurnInput extends ServerAgentTurn { conversationId:
 export function createConversationTurnApplication(dependencies: {
   turns: ConversationTurnRepository;
   runAgentTurn: (input: ServerAgentTurn, historyBeforeSequence: number, reportProgress?: AgentProgressReporter) => Promise<AgentRuntimeResult & Pick<ConversationTurnResult, "tripUpdateProposal" | "consultationRequestProposal" | "tripCostProposal">>;
+  interpretIntent?: (input: { userRequest: string; calendarDate?: string; overlay: import("@raiquora/trip/conversation-intent").ConversationIntentOverlay; turnId: string }) => Promise<UtteranceInterpretation>;
   diagnostics?: AgentDiagnosticsSink;
   log?: (event: string, fields: Record<string, unknown>) => void;
 }) {
@@ -30,6 +33,18 @@ export function createConversationTurnApplication(dependencies: {
     let result: ConversationTurnResult;
     let continuity: ConversationTurnContinuity | undefined;
     try {
+      if (begun.state === "started" && dependencies.interpretIntent) {
+        const semantic = semanticStateOf(await dependencies.turns.getWorkingState(principal, conversationId));
+        const interpretation = await dependencies.interpretIntent({ userRequest, calendarDate: uiContext?.calendarDate, overlay: semantic.overlay, turnId });
+        const delta = acceptedIntentDeltaFromInterpretation({ interpretation, userRequest, turnId,
+          baseIntentRevision: semantic.overlay.intentRevision, calendarDate: uiContext?.calendarDate });
+        if (delta) {
+          const receipt = await dependencies.turns.acceptIntent(identity, begun.lease, delta);
+          await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "decision", reason: "validated",
+            occurredAt: new Date().toISOString(), correlation: { turnId }, counts: { validated: receipt.operations.filter(({ status }) => status === "accepted").length },
+            refs: receipt.operations.map(({ operationId }) => operationId) });
+        }
+      }
       const runtimeInput = { principal, conversationId, userRequest, requestedResearchMode, researchTarget, tripId, uiContext };
       const runtime = reportProgress
         ? await dependencies.runAgentTurn(runtimeInput, begun.lease.userSequence, reportProgress)
