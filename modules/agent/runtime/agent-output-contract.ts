@@ -50,7 +50,7 @@ const structuredPresentationSchema = {
                   properties: { transport: { type: "integer" }, accommodation: { type: "integer" }, sightseeing: { type: "integer" }, food: { type: "integer" } },
                   required: ["transport", "accommodation", "sightseeing", "food"] },
               }, required: ["currency", "partySize", "nights", "originTravel", "lodgingClass", "items"] },
-          }, required: ["evidenceId", "quote", "itinerary", "estimate"],
+          }, required: ["evidenceId", "quote", "itinerary"],
         } },
       }, required: ["kind", "startDate", "candidates"],
     },
@@ -112,6 +112,15 @@ export const agentTurnOutputContract = outputContract(
 export const agentTurnPresentationOutputContract = outputContract(
   "agent_turn_result", "4-presentation", { anyOf: [answerSchema(true), askSchema] },
   "User-visible answer with Evidence-bound presentation, or an explicit user decision request",
+);
+
+/** Destination research may answer with a source-bound itinerary or an explicit question.
+ * Removing the source-explanation branch prevents a valid but incomplete consultation. */
+export const agentTurnPlanningOutputContract = outputContract(
+  "agent_turn_result", "5-planning", { anyOf: [{ ...answerSchema(true), properties: {
+    ...answerSchema(true).properties, presentation: structuredPresentationSchema.anyOf[1],
+  } }, askSchema] },
+  "Evidence-bound travel itinerary or an explicit user decision request",
 );
 
 export type DecodedAgentTurnOutput =

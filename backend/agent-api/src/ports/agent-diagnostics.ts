@@ -4,7 +4,7 @@ export type AgentDiagnosticReason = "compiled" | "validated" | "rejected" | "com
   "response_rejected" | "model_invalid_schema" | "invalid_initial_evidence" | "missing_tool_call" | "invalid_in_trip_answer_plan" |
   "invalid_response_contract" | "invalid_used_evidence_ids" | "unbound_candidate_source" |
   "completion_ambiguous" | "iteration_budget" | "model_budget" | "tool_budget" | "deadline" | "finalization_tool_calls" |
-  "planning_progress_required" | "planning_evidence_required" | "place_photo_required" | "final_response_policy_rejected";
+  "planning_progress_required" | "planning_evidence_required" | "planning_plan_required" | "place_photo_required" | "final_response_policy_rejected";
 
 /** Allowlisted operational data only. No prompt, profile text, coordinates, URL or reservation value. */
 export interface AgentDiagnosticEvent {

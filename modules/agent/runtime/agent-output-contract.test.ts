@@ -1,5 +1,12 @@
 import { expect, it } from "vitest";
-import { agentTurnOutputContract, agentTurnPresentationOutputContract, decodeAgentTurnOutput } from "./agent-output-contract";
+import { agentTurnOutputContract, agentTurnPlanningOutputContract, agentTurnPresentationOutputContract, decodeAgentTurnOutput } from "./agent-output-contract";
+
+it("requires a travel-plan presentation for a verified planning answer", () => {
+  const answer = (agentTurnPlanningOutputContract.schema as any).anyOf[0];
+  expect(answer.required).toContain("presentation");
+  expect(answer.properties.presentation.properties.kind.const).toBe("travel-plan");
+  expect(answer.properties.presentation.properties.candidates.items.required).not.toContain("estimate");
+});
 
 it("publishes a small answer-or-ask contract and requires presentation only for Evidence-backed answers", () => {
   expect(agentTurnOutputContract.version).toBe("4");

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { supportedAnswerClaims } from "@raiquora/agent/grounded-answer";
-import { agentTurnOutputContract, agentTurnPresentationOutputContract } from "@raiquora/agent/agent-output-contract";
+import { agentTurnOutputContract, agentTurnPlanningOutputContract, agentTurnPresentationOutputContract } from "@raiquora/agent/agent-output-contract";
 
 import { MultiStepAgentRuntime } from "@raiquora/agent/agent-runtime";
 import { DefaultAgentResponseGenerator } from "@raiquora/agent/agent-response-generator";
@@ -34,6 +34,23 @@ describe("MultiStepAgentRuntime", () => {
     await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run(planningRequest("歴史ある街を歩きたい", [discovery]));
     expect(requests[0]?.outputContract?.schemaHash).toBe(agentTurnOutputContract.schemaHash);
     expect(requests[0]?.outputContract?.schemaHash).not.toBe(agentTurnPresentationOutputContract.schemaHash);
+  });
+  it("does not publish a source explanation as a finished travel consultation", async () => {
+    const { tools, toolExecutor } = toolSetup([]), source = planningSource(), requests: AgentModelRequest[] = [];
+    const explanation = textResponse("出典の説明だけです");
+    explanation.declaredPresentation = { kind: "source-explanation", sections: [{ evidenceId: source.id,
+      quote: source.facts.sourceExcerpt, mode: "feature" }] };
+    explanation.decisionSummary = { interpretedGoal: "倉敷を訪ねたい", hardConstraints: [], softPreferences: [],
+      selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["evidence_sufficient"] };
+    explanation.decisionSummaryStatus = "valid";
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([explanation], requests),
+      limits: { maxIterations: 1, maxModelCalls: 2 },
+    }).run(planningRequest("倉敷に行きたい", [source]));
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("1日目の仮行程");
+    expect(output.publicPlanPresentation?.candidates[0]?.days).toHaveLength(1);
+    expect(output.response).not.toContain("出典の説明だけです");
+    expect(requests[0]?.outputContract?.schemaHash).toBe(agentTurnPlanningOutputContract.schemaHash);
   });
   it("finishes an open-ended nine-round research within the expanded Server budget", async () => {
     const { tools, toolExecutor } = toolSetup([]);
