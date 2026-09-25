@@ -1,0 +1,123 @@
+name: Agent Eval / Semantic Intent Live
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_limit:
+        description: Public development cases (10 smoke, 120 full)
+        required: true
+        default: "10"
+        type: choice
+        options: ["10", "30", "120"]
+      repetitions:
+        description: Independent repetitions per case
+        required: true
+        default: "3"
+        type: choice
+        options: ["1", "3"]
+      maximum_estimated_usd:
+        description: Hard estimated Bedrock spend stop in USD
+        required: true
+        default: "1.00"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: transitforge-semantic-intent-live
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-northeast-1
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      DECISION_MODEL_ID: jp.amazon.nova-2-lite-v1:0
+      CASE_LIMIT: ${{ inputs.case_limit }}
+      REPETITIONS: ${{ inputs.repetitions }}
+      MAXIMUM_ESTIMATED_USD: ${{ inputs.maximum_estimated_usd }}
+      # Pricing snapshot: AWS Nova 2 Lite example, 2026-06-02.
+      # https://aws.amazon.com/blogs/machine-learning/object-detection-with-amazon-nova-2-lite/
+      DECISION_INPUT_USD_PER_MILLION: "0.30"
+      DECISION_OUTPUT_USD_PER_MILLION: "2.50"
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Resolve the dedicated evaluation role
+        id: eval-role
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${AWS_DEPLOY_ROLE_ARN:?dev Environment variable AWS_DEPLOY_ROLE_ARN is required}"
+          account_id="${AWS_DEPLOY_ROLE_ARN#arn:aws:iam::}"
+          account_id="${account_id%%:*}"
+          [[ "$account_id" =~ ^[0-9]{12}$ ]]
+          echo "role_arn=arn:aws:iam::${account_id}:role/transitforge-dev-github-agent-eval" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with:
+          role-to-assume: ${{ steps.eval-role.outputs.role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Install and validate
+        run: |
+          npm ci
+          npm run typecheck:tools
+          npx vitest run --root . frontend/src/usecases/agent/evaluation/semantic-intent-evaluation.test.ts
+
+      - name: Fix execution budget
+        id: budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CASE_LIMIT" =~ ^(10|30|120)$ ]]
+          [[ "$REPETITIONS" =~ ^(1|3)$ ]]
+          [[ "$MAXIMUM_ESTIMATED_USD" =~ ^[0-9]+([.][0-9]{1,2})?$ ]]
+          calls=$((CASE_LIMIT * REPETITIONS))
+          echo "calls=$calls" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Predeclared semantic evaluation budget"
+            echo "- Model: \`$DECISION_MODEL_ID\`"
+            echo "- Cases × repetitions: \`$CASE_LIMIT × $REPETITIONS\`"
+            echo "- Maximum calls: \`$calls\`"
+            echo "- Maximum input/output tokens: \`1000000 / 250000\`"
+            echo "- Estimated cost stop: \`\$$MAXIMUM_ESTIMATED_USD\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run semantic intent evaluation
+        run: npm run eval:agent:semantic:live -- --limit "$CASE_LIMIT" --repetitions "$REPETITIONS" --max-calls "${{ steps.budget.outputs.calls }}" --max-input-tokens 1000000 --max-output-tokens 250000 --max-estimated-usd "$MAXIMUM_ESTIMATED_USD" --output-dir .artifacts/semantic-intent --require-all
+
+      - name: Publish bounded summary
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f .artifacts/semantic-intent/report.json ]]; then
+            jq '{modelId,repetitions,executedCalls,inputTokens,outputTokens,latencyMs,estimatedCostUsd,cases,stablePassed}' .artifacts/semantic-intent/report.json >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload private evaluation artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: semantic-intent-live-${{ github.run_id }}
+          path: .artifacts/semantic-intent
+          if-no-files-found: error
+          retention-days: 14

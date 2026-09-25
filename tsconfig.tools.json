@@ -2,7 +2,11 @@
   "extends": "./tsconfig.json",
   "include": [
     "tools/run_live_agent_model_evaluation.ts",
+    "tools/run_live_semantic_intent_evaluation.ts",
     "tools/run_epic_537_scale_evaluation.ts",
-    "frontend/src/usecases/agent/evaluation/live-model-tool-fixture.ts"
+    "frontend/src/usecases/agent/evaluation/live-model-tool-fixture.ts",
+    "frontend/src/usecases/agent/evaluation/semantic-intent-evaluation.ts",
+    "frontend/src/usecases/agent/evaluation/semantic-intent-corpus-inputs.ts",
+    "frontend/src/usecases/agent/evaluation/semantic-intent-corpus-expected.ts"
   ]
 }

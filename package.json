@@ -24,6 +24,7 @@
     "eval:agent:smoke": "npm run eval:agent -- --profile smoke",
     "eval:agent:full": "npm run eval:agent -- --profile full",
     "eval:agent:model:live": "node --import tsx tools/run_live_agent_model_evaluation.ts",
+    "eval:agent:semantic:live": "node --import tsx tools/run_live_semantic_intent_evaluation.ts",
     "test:agent:model:live-fixtures": "vitest run --root . frontend/src/usecases/agent/evaluation/live-model-tool-fixture.test.ts",
     "eval:agent:strategies": "node --import tsx tools/run_agent_strategy_experiment.ts",
     "eval:epic-537:scale": "node --import tsx tools/run_epic_537_scale_evaluation.ts",

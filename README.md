@@ -154,6 +154,7 @@ npm run eval:agent:smoke
 npm run eval:agent:full
 npm run eval:agent -- --case cancelled-service
 npm run eval:agent:model:live -- --strategy candidate --repetitions 3
+npm run eval:agent:semantic:live -- --limit 10 --repetitions 3 --max-calls 30 --max-input-tokens 250000 --max-output-tokens 100000 --max-estimated-usd 1
 npm run eval:agent:strategies
 ```
 
@@ -168,6 +169,9 @@ Browser Runtimeを直接起動するscripted Ask/Progressと旧decision Live Eva
 Evidence mapperを通し、回答が参照するEvidence IDを生成する。AWS認証と課金を伴うため、通常はGitHub Actionsの
 `Agent Eval / Model Comparison`を手動実行する。固定アクセスキーは使わず、結果は14日保持のArtifactへ保存する。
 この比較は本番model設定を変更しない。
+`eval:agent:semantic:live`は入力とgoldを分離した120件の公開意味コーパスをDecision modelで採点する。
+実行前に`DECISION_INPUT_USD_PER_MILLION`と`DECISION_OUTPUT_USD_PER_MILLION`を公式料金に合わせて設定し、
+call・token・推計USDの全上限を固定する。上限超過は通常失敗と分けて停止し、失敗caseを実行後に除外しない。
 Server Agentの実行契約は`backend/agent-api`のcomposition/tool testsで確認する。
 過去のTrip Progress評価記録とthresholdは履歴として各architecture文書に残すが、現行コマンドではない。
 公開の最新事実読取は既存end-user認証gate（501）を維持する。
