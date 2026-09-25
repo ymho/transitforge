@@ -35,7 +35,7 @@ describe("MultiStepAgentRuntime", () => {
     expect(requests[0]?.outputContract?.schemaHash).toBe(agentTurnOutputContract.schemaHash);
     expect(requests[0]?.outputContract?.schemaHash).not.toBe(agentTurnPresentationOutputContract.schemaHash);
   });
-  it("does not publish a source explanation as a finished travel consultation", async () => {
+  it("allows a source explanation when the current turn does not request a travel-plan presentation", async () => {
     const { tools, toolExecutor } = toolSetup([]), source = planningSource(), requests: AgentModelRequest[] = [];
     const explanation = textResponse("出典の説明だけです");
     explanation.declaredPresentation = { kind: "source-explanation", sections: [{ evidenceId: source.id,
@@ -47,9 +47,10 @@ describe("MultiStepAgentRuntime", () => {
       limits: { maxIterations: 1, maxModelCalls: 2 },
     }).run(planningRequest("倉敷に行きたい", [source]));
     expect(output.status).toBe("completed");
-    expect(output.response).toContain("現地で過ごす1日目の仮案");
-    expect(output.publicPlanPresentation?.candidates[0]?.days).toHaveLength(1);
-    expect(output.response).not.toContain("出典の説明だけです");
+    expect(output.response).toContain("倉敷の歴史的な町並み");
+    expect(output.response).toContain("出典を読む");
+    expect(output.publicPlanPresentation).toBeUndefined();
+    expect(requests).toHaveLength(1);
     expect(requests[0]?.outputContract?.schemaHash).toBe(agentTurnPlanningOutputContract.schemaHash);
   });
   it("finishes an open-ended nine-round research within the expanded Server budget", async () => {
@@ -840,6 +841,48 @@ describe("MultiStepAgentRuntime", () => {
     }));
   });
 
+  it("re-evaluates the same read and input after a different read changes its dependencies", async () => {
+    const executionOrder: string[] = [];
+    const { tools, toolExecutor } = toolSetup(executionOrder);
+    const runtime = new MultiStepAgentRuntime({
+      model: sequenceModel([
+        toolCallResponse([{ id: "candidate-before", name: "first_tool", input: { value: "候補" } }]),
+        toolCallResponse([{ id: "details", name: "second_tool", input: { value: "追加資料" } }]),
+        toolCallResponse([{ id: "candidate-after", name: "first_tool", input: { value: "候補" } }]),
+        textResponse("追加資料を反映して再評価しました"),
+      ]),
+      tools,
+      toolExecutor,
+      limits: { maxIterations: 5, maxModelCalls: 6 },
+    });
+    const output = await runtime.run(request("追加資料を確認して候補を再評価して"));
+    expect(output.status).toBe("completed");
+    expect(executionOrder).toEqual(["first_tool", "second_tool", "first_tool"]);
+  });
+
+  it("never replays an identical proposal after an unrelated read succeeds", async () => {
+    const executionOrder: string[] = [];
+    const { tools, toolExecutor } = toolSetup(executionOrder);
+    tools.register(echoTool("propose_change", executionOrder, "proposal"));
+    const runtime = new MultiStepAgentRuntime({
+      model: sequenceModel([
+        toolCallResponse([{ id: "proposal-before", name: "propose_change", input: { value: "変更案" } }]),
+        toolCallResponse([{ id: "details", name: "second_tool", input: { value: "追加資料" } }]),
+        toolCallResponse([{ id: "proposal-after", name: "propose_change", input: { value: "変更案" } }]),
+        textResponse("既存の変更案を使います"),
+      ]),
+      tools,
+      toolExecutor,
+      limits: { maxIterations: 5, maxModelCalls: 6 },
+    });
+    const output = await runtime.run(request("資料を確認して変更案を作って"));
+    expect(output.status).toBe("completed");
+    expect(executionOrder).toEqual(["propose_change", "second_tool"]);
+    expect(output.trace.events).toContainEqual(expect.objectContaining({
+      type: "tool_completed", toolCallId: "proposal-after", outcome: "error", errorCode: "invalid_input",
+    }));
+  });
+
   it("reserves the last iteration for an evidence-bounded final answer", async () => {
     const executionOrder: string[] = [];
     const { tools, toolExecutor } = toolSetup(executionOrder);
@@ -1093,12 +1136,12 @@ describe("MultiStepAgentRuntime", () => {
     const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run({
       executionId: "planning", feature: "concierge", userRequest: "明日から1泊で旅行したい",
       context: { taskContext: { version: 1, phase: "draft", target: { kind: "conversation" },
-        requestRevision: 1, availableProgressKinds: ["candidates", "itinerary"] } },
+        requestRevision: 1, availableProgressKinds: ["candidates", "itinerary"], previousOutcome: "ask_only" } },
     });
     expect(output.status).toBe("completed");
     expect(output.response).toContain("仮プラン");
     expect(output.response).not.toContain("出発地を教えて");
-    expect(requests[1]?.messages.at(-1)).toMatchObject({ role: "user", content: [{ type: "text", text: expect.stringContaining("質問票だけで終えず") }] });
+    expect(requests[1]?.messages.at(-1)).toMatchObject({ role: "user", content: [{ type: "text", text: expect.stringContaining("直前も質問だけでした") }] });
   });
   it("publishes a source-bound plan without a photo when finalization cannot run another Tool", async () => {
     const order: string[] = [], { tools, toolExecutor } = toolSetup(order);
@@ -1156,7 +1199,7 @@ describe("MultiStepAgentRuntime", () => {
     expect(output.trace.events.at(-1)).toMatchObject({ type: "task_completed", reason: "planning_evidence_required" });
     expect(JSON.stringify(output)).not.toContain("倉敷をおすすめします");
   });
-  it("does not treat an optional typed user confirmation as permission for a discovery questionnaire", async () => {
+  it("allows one legitimate typed clarification on the first planning turn", async () => {
     const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
     const question = textResponse("自然、鉄道、街歩きのどれがお好みですか？");
     question.decisionSummary = {
@@ -1172,10 +1215,43 @@ describe("MultiStepAgentRuntime", () => {
         requestRevision: 1, availableProgressKinds: ["candidates", "comparison"] } },
     });
     expect(output.status).toBe("completed");
-    expect(output.response).toContain("3件比較");
-    expect(output.response).not.toContain("どれがお好み");
-    expect(JSON.stringify(requests[1]?.messages)).toContain("質問票だけで終えず");
-    expect(output.turnObservation).toMatchObject({ outcome: "answer", progress: [] });
+    expect(output.response).toContain("どれがお好み");
+    expect(requests).toHaveLength(1);
+    expect(output.turnObservation).toMatchObject({ outcome: "ask_only", progress: [] });
+  });
+  it("allows a new typed clarification after the application accepted a current-turn meaning change", async () => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const question = textResponse("変更後の候補は、静かな宿と駅近のどちらを優先しますか？");
+    question.decisionSummary = {
+      interpretedGoal: "宿泊条件の訂正を反映して候補を絞る",
+      hardConstraints: [], softPreferences: [], selectedAction: "ask_user",
+      unresolvedFacts: ["accommodation_priority"], reasonCodes: ["user_confirmation_required"],
+      missingRequirements: [{ action: "ask", field: "accommodation_priority", resolution: "user_decision", reason: "変更後の候補を絞るため" }],
+    };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([question]) }).run({
+      executionId: "typed-planning-after-change", feature: "concierge", userRequest: "やっぱりホテルに変えて",
+      context: { taskContext: { version: 1, phase: "refine", target: { kind: "conversation" },
+        requestRevision: 2, availableProgressKinds: ["candidates"], previousOutcome: "ask_only",
+        currentIntentChange: { intentRevision: 2, operations: [{ action: "replace", target: "accommodation" }] } } },
+    });
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("どちらを優先しますか");
+    expect(output.turnObservation).toMatchObject({ outcome: "ask_only", progress: [] });
+  });
+  it("accepts a condition acknowledgement without forcing external Evidence or a new itinerary", async () => {
+    const { tools, toolExecutor } = toolSetup([]);
+    const acknowledgement = textResponse("ホテルへ変更しました。以後の候補に反映します。");
+    acknowledgement.decisionSummary = { interpretedGoal: "宿泊条件の変更を反映する", hardConstraints: [], softPreferences: [],
+      selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["no_factual_claim_required"] };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([acknowledgement]) }).run({
+      executionId: "typed-planning-ack", feature: "concierge", userRequest: "ホテルに変えて",
+      context: { taskContext: { version: 1, phase: "refine", target: { kind: "conversation" }, requestRevision: 2,
+        availableProgressKinds: ["candidates"], currentIntentChange: { intentRevision: 2,
+          operations: [{ action: "replace", target: "accommodation" }] } } },
+    });
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("変更しました");
+    expect(output.publicPlanPresentation).toBeUndefined();
   });
   it("routes an ungrounded planning answer to research before presenting candidates", async () => {
     const executionOrder: string[] = [], requests: AgentModelRequest[] = [];
@@ -1200,7 +1276,7 @@ describe("MultiStepAgentRuntime", () => {
     expect(output.status).toBe("completed");
     expect(output.response).toBe("確認済みの候補です");
     expect(executionOrder).toEqual(["first_tool"]);
-    expect(JSON.stringify(requests[1]?.messages)).toContain("Evidenceがまだありません");
+    expect(JSON.stringify(requests[1]?.messages)).toContain("Evidenceがありません");
     expect(JSON.stringify(output)).not.toContain("倉敷がおすすめ");
   });
   it("allows a typed candidate selection after visible progress from a prior turn", async () => {
@@ -1232,6 +1308,7 @@ describe("MultiStepAgentRuntime", () => {
     ].join("\n"));
     questionnaire.decisionSummary = { interpretedGoal: "のんびりできる旅を探す", hardConstraints: [], softPreferences: [], selectedAction: "answer",
       unresolvedFacts: ["destination", "date"], reasonCodes: ["information_missing"] };
+    questionnaire.metadata.outputMode = "legacy_text";
     const model = sequenceModel([questionnaire, textResponse("西日本の候補を3つ、仮定付きの行程で提案します")], requests);
     const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run({
       executionId: "planning-discovery", feature: "concierge", userRequest: "のんびりできる旅を考えたい",
@@ -1243,8 +1320,23 @@ describe("MultiStepAgentRuntime", () => {
     expect(output.response).not.toContain("どこへ行きたいですか");
     expect(requests[1]?.messages.at(-1)).toMatchObject({
       role: "user",
-      content: [{ type: "text", text: expect.stringContaining("プロフィール由来の情報") }],
+      content: [{ type: "text", text: expect.stringContaining("直前も質問だけでした") }],
     });
+  });
+  it("does not reinterpret a strict typed answer as a questionnaire from prose regexes", async () => {
+    const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
+    const answer = textResponse("一般的には、出発地や日付が分かると候補を絞れます。どこへ行きたいか未定でも相談できます。");
+    answer.metadata.outputMode = "application_strict";
+    answer.decisionSummary = { interpretedGoal: "旅行相談の進め方を説明する", hardConstraints: [], softPreferences: [], selectedAction: "answer",
+      unresolvedFacts: [], reasonCodes: ["no_factual_claim_required"] };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model: sequenceModel([answer], requests) }).run({
+      executionId: "strict-general-answer", feature: "concierge", userRequest: "旅行相談では何を伝えればいい？",
+      context: { taskContext: { version: 1, phase: "discovery", target: { kind: "conversation" },
+        requestRevision: 1, availableProgressKinds: ["candidates"] } },
+    });
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("未定でも相談できます");
+    expect(requests).toHaveLength(1);
   });
 });
 
@@ -1268,9 +1360,11 @@ function toolSetup(executionOrder: string[]) {
 function echoTool(
   name: string,
   executionOrder: string[],
+  effect: "read" | "proposal" = "read",
 ): AgentTool<{ value: string }, { toolName: string; value: string }> {
   return {
     name,
+    effect,
     description: `${name}を実行する`,
     inputSchema: {
       type: "object",

@@ -83,6 +83,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
    // Open-ended discovery needs several candidate/source/photo rounds and a
    // reserved final answer/repair round. Only the production Server budget grows.
    limits: { maxIterations: 10, maxModelCalls: 14, maxToolCalls: 16, maxExecutionMs },
+   semanticIntentEnabled: environment.SEMANTIC_INTENT_ENABLED === "true",
    detailedResearchAllowed: environment.AGENT_DETAILED_RESEARCH_ENABLED === "true",
    ...(environment.AGENT_DETAILED_RESEARCH_ENABLED === "true" ? { detailedResearchLimits: {
      maxIterations: boundedInteger(environment.AGENT_DETAILED_MAX_ITERATIONS, 6, 1, 12),

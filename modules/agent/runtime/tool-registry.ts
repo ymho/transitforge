@@ -53,6 +53,11 @@ export class AgentToolRegistry {
     }));
   }
 
+  /** Missing effect is treated as proposal: unknown Tools never gain read-style replay. */
+  effect(name: string): "read" | "proposal" {
+    return this.tools.get(name)?.effect === "read" ? "read" : "proposal";
+  }
+
   async execute(
     name: string,
     input: unknown,

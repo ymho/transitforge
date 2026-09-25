@@ -29,8 +29,8 @@ export function observeAgentTurn(hasQuestion: boolean, progress: VisibleProgress
     progress: visible, ...(hasQuestion && exception ? { exception } : {}) };
 }
 
-export function acceptsAgentTurn(previous: AgentTurnOutcome | undefined, current: AgentTurnObservation): boolean {
-  return previous !== "ask_only" || current.outcome !== "ask_only" || current.exception !== undefined;
+export function acceptsAgentTurn(previous: AgentTurnOutcome | undefined, current: AgentTurnObservation, currentMeaningChanged = false): boolean {
+  return previous !== "ask_only" || current.outcome !== "ask_only" || current.exception !== undefined || currentMeaningChanged;
 }
 
 export const askProgressRepairInstruction = "直前も質問だけでした。既知のRequestと今回確認した結果を使い、候補・比較・検証可能な変更案など利用者に見える進展を質問と併記してください。内部Tool実行や条件整理だけは進展ではありません。安全、未確認hard条件、Tool必須入力の不足で質問を優先する場合だけaskOnlyExceptionに外部化可能な不足事項を示してください。Toolや順序は自分で判断し、事実は捏造しないでください。";

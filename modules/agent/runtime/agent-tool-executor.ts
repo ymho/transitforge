@@ -19,6 +19,9 @@ export class AgentToolExecutor {
   /** Application capability origin, independent of the model's no-fact declaration. */
   collectsEvidence(toolName: string): boolean { return this.evidenceMappers.has(toolName); }
 
+  /** Application-registered effect; the model cannot downgrade a write/proposal to a read. */
+  effect(toolName: string): "read" | "proposal" { return this.tools.effect(toolName); }
+
   async execute(
     input: {
       executionId: string;

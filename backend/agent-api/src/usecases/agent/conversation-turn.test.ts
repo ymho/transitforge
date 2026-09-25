@@ -3,16 +3,88 @@ import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import { stateDynamoFixture, stateA as principal, conversationId, secondId, stateMetadata } from "../../adapters/state-dynamodb.fixture.js";
 import { DynamoDbConversationTurnRepository } from "../../adapters/dynamodb-conversation-turn-repository.js";
 import { createConversationTurnApplication } from "./conversation-turn.js";
+import type { UtteranceInterpretation } from "@raiquora/agent/semantic-interpretation";
 
 const input = { principal, conversationId, turnId: secondId, userRequest: "旅の相談" };
 const success = { status: "completed", response: "案内", trace: { secret: "private" }, evidence: [{ raw: "private" }] } as unknown as AgentRuntimeResult;
 async function setup() {
   const f = stateDynamoFixture(); await f.conversations.create(principal, conversationId, stateMetadata());
   const turns = new DynamoDbConversationTurnRepository("test-state", f.client, f.clock);
-  const runAgentTurn = vi.fn(async () => success);
+  const runAgentTurn = vi.fn<Parameters<typeof createConversationTurnApplication>[0]["runAgentTurn"]>(async () => success);
   return { ...f, turns, runAgentTurn, app: createConversationTurnApplication({ turns, runAgentTurn }) };
 }
 describe("Conversation turn Application", () => {
+  it("interprets, accepts and exposes intent to Runtime before answer generation", async () => {
+    const f = await setup();
+    const interpretIntent = vi.fn(async () => ({ outcome: "delta" as const, operations: [{ atomicGroup: 1, action: "set" as const,
+      target: "destination" as const, modality: "preferred" as const, precision: "exact" as const, frame: "actual" as const,
+      quote: "旅", value: { kind: "place_label" as const, label: "出雲大社" } }], unresolvedFragments: [] }));
+    f.runAgentTurn.mockImplementationOnce(async () => {
+      expect(await f.turns.getWorkingState(principal, conversationId)).toMatchObject({ semantic: { overlay: { intentRevision: 1,
+        facts: [{ target: "destination", value: { label: "出雲大社" } }] } } });
+      return success;
+    });
+    const app = createConversationTurnApplication({ turns: f.turns, runAgentTurn: f.runAgentTurn, interpretIntent });
+    await app.runConversationTurn(input);
+    expect(interpretIntent).toHaveBeenCalledOnce();
+  });
+
+  it("keeps accepted intent when answer generation fails and does not reinterpret on retry", async () => {
+    const f = await setup(), interpretIntent = vi.fn(async () => ({ outcome: "delta" as const, operations: [{ atomicGroup: 1,
+      action: "set" as const, target: "destination" as const, modality: "preferred" as const, precision: "exact" as const,
+      frame: "actual" as const, quote: "旅", value: { kind: "place_label" as const, label: "出雲大社" } }], unresolvedFragments: [] }));
+    f.runAgentTurn.mockRejectedValueOnce(new Error("provider failed"));
+    const app = createConversationTurnApplication({ turns: f.turns, runAgentTurn: f.runAgentTurn, interpretIntent });
+    await expect(app.runConversationTurn(input)).rejects.toMatchObject({ code: "unavailable" });
+    expect((await f.turns.getWorkingState(principal, conversationId))?.semantic?.overlay.intentRevision).toBe(1);
+    expect(await app.runConversationTurn(input)).toEqual({ status: "completed", response: "案内" });
+    expect(interpretIntent).toHaveBeenCalledTimes(1);
+  });
+  it("runs the S00 production-shaped semantic continuity fixtures without feeding expected state to Runtime", async () => {
+    const f = await setup();
+    const interpretations = new Map<string, UtteranceInterpretation>([
+      ["出雲大社に行きたい", { outcome: "delta", operations: [{ atomicGroup: 1, action: "set", target: "destination", modality: "preferred", precision: "exact", frame: "actual", quote: "出雲大社", value: { kind: "place_label", label: "出雲大社" } }], unresolvedFragments: [] }],
+      ["明日出発", { outcome: "delta", operations: [{ atomicGroup: 1, action: "set", target: "start_date", modality: "required", precision: "exact", frame: "actual", quote: "明日", value: { kind: "relative_date", relation: "tomorrow" } }], unresolvedFragments: [] }],
+      ["温泉でもよい", { outcome: "delta", operations: [{ atomicGroup: 1, action: "set", target: "experience", modality: "acceptable", precision: "qualitative", frame: "actual", quote: "温泉でもよい", value: { kind: "text", text: "温泉" } }], unresolvedFragments: [] }],
+      ["富山に変更", { outcome: "delta", operations: [{ atomicGroup: 1, action: "replace", target: "destination", modality: "preferred", precision: "exact", frame: "actual", quote: "富山に変更", value: { kind: "place_label", label: "富山" } }], unresolvedFragments: [] }],
+      ["行き先は未定に戻して", { outcome: "delta", operations: [{ atomicGroup: 1, action: "retract", target: "destination", frame: "actual", quote: "未定に戻して" }], unresolvedFragments: [] }],
+      ["2番目で", { outcome: "unsupported", operations: [], unresolvedFragments: ["2番目"] }],
+      ["金沢もあり", { outcome: "delta", operations: [{ atomicGroup: 1, action: "add_alternative", target: "destination", modality: "acceptable", precision: "exact", frame: "actual", quote: "金沢もあり", value: { kind: "place_label", label: "金沢" } }], unresolvedFragments: [] }],
+      ["大阪もあり", { outcome: "delta", operations: [{ atomicGroup: 1, action: "add_alternative", target: "destination", modality: "acceptable", precision: "exact", frame: "actual", quote: "大阪もあり", value: { kind: "place_label", label: "大阪" } }], unresolvedFragments: [] }],
+    ] as const);
+    const interpretIntent = vi.fn(async ({ userRequest }: { userRequest: string }) => structuredClone(interpretations.get(userRequest)!));
+    const app = createConversationTurnApplication({ turns: f.turns, runAgentTurn: f.runAgentTurn, interpretIntent });
+    const turn = async (index: number, userRequest: string) => app.runConversationTurn({ principal, conversationId,
+      turnId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`, userRequest, uiContext: { calendarDate: "2026-09-25" } });
+
+    await turn(10, "出雲大社に行きたい"); await turn(11, "明日出発");
+    let overlay = (await f.turns.getWorkingState(principal, conversationId))!.semantic!.overlay;
+    expect(overlay.facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ target: "destination", value: { kind: "place_label", label: "出雲大社" } }),
+      expect.objectContaining({ target: "start_date", value: { kind: "local_date", date: "2026-09-26", expression: "tomorrow" } }),
+    ]));
+
+    await turn(12, "温泉でもよい");
+    overlay = (await f.turns.getWorkingState(principal, conversationId))!.semantic!.overlay;
+    expect(overlay.facts.find(({ target }) => target === "experience")?.modality).toBe("acceptable");
+
+    await turn(13, "富山に変更"); await turn(14, "行き先は未定に戻して");
+    overlay = (await f.turns.getWorkingState(principal, conversationId))!.semantic!.overlay;
+    expect(overlay.facts.some(({ target }) => target === "destination")).toBe(false);
+    expect(overlay.tombstones).toContainEqual(expect.objectContaining({ target: "destination", reason: "retracted" }));
+
+    const beforeUnsupported = structuredClone(overlay);
+    await turn(15, "2番目で");
+    overlay = (await f.turns.getWorkingState(principal, conversationId))!.semantic!.overlay;
+    expect(overlay).toEqual(beforeUnsupported); // #636: unresolved ordinal must not mutate state yet.
+
+    await turn(16, "金沢もあり"); await turn(17, "大阪もあり");
+    overlay = (await f.turns.getWorkingState(principal, conversationId))!.semantic!.overlay;
+    expect(overlay.facts.filter(({ target }) => target === "destination").map(({ value }) => value)).toEqual([
+      { kind: "place_label", label: "金沢" }, { kind: "place_label", label: "大阪" },
+    ]);
+    expect(f.runAgentTurn.mock.calls.every(([runtimeInput]) => !("expected" in runtimeInput))).toBe(true);
+  });
   it("returns only persisted final text, replays completion without Agent execution", async () => {
     const f = await setup();
     expect(await f.app.runConversationTurn(input)).toEqual({ status: "completed", response: "案内" });

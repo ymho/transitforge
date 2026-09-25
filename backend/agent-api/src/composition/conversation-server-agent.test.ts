@@ -5,6 +5,7 @@ import { stateDynamoFixture, conversationId, secondId, stateMetadata, stateProfi
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, token } from "../adapters/cognito-token.fixture.js";
 import { createConversationServerAgent } from "./conversation-server-agent.js";
+import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
 
 it("verified principal → idempotent messages → stateful Server Runtime → persisted final replay", async () => {
   const { verifier } = cognitoTokenFixture();
@@ -43,4 +44,41 @@ it("verified principal → idempotent messages → stateful Server Runtime → p
   await expect(app.runConversationTurn({ ...turn, principal: b })).rejects.toMatchObject({ code: "not-found" });
   await expect(app.runConversationTurn({ ...turn, ownerId: b.subject } as never)).rejects.toMatchObject({ code: "invalid-input" });
   expect(model.converse).toHaveBeenCalledTimes(1);
+});
+
+it("runs natural language through semantic acceptance before Runtime", async () => {
+  const { verifier } = cognitoTokenFixture(); const principal = await verifier.verify(token());
+  const state = stateDynamoFixture(), trips = tripDynamoFixture();
+  const { tripId: _tripId, ...consultationMetadata } = stateMetadata();
+  await state.conversations.create(principal, conversationId, consultationMetadata);
+  const requests: ConversationModelRequest[] = [];
+  const model = { converse: vi.fn(async (request: ConversationModelRequest) => {
+    requests.push(structuredClone(request));
+    if (request.outputContract?.name === "conversation_semantic_delta") {
+      return { message: { role: "assistant" as const, content: [{ text: JSON.stringify({ outcome: "delta", operations: [
+        { atomicGroup: 1, action: "set", target: "destination", modality: "preferred", precision: "exact", frame: "actual", quote: "出雲大社", value: { kind: "place_label", label: "出雲大社" } },
+        { atomicGroup: 1, action: "set", target: "start_date", modality: "required", precision: "exact", frame: "actual", quote: "明日出発", value: { kind: "relative_date", relation: "tomorrow" } },
+      ], unresolvedFragments: [] }) }] },
+        stopReason: "end_turn" as const, metadata: { modelId: "decision", latencyMs: 1 } };
+    }
+    return { message: { role: "assistant" as const, content: [{ text: JSON.stringify({ kind: "ask", responseText: "外部の最新情報を調べてもよいですか？",
+      missingRequirements: [{ action: "ask", field: "research_authorization", resolution: "authorization", reason: "外部調査の許可を確認する" }] }) }] },
+      stopReason: "end_turn" as const, metadata: { modelId: "answer", latencyMs: 1, outputMode: "application_strict" as const } };
+  }) };
+  const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
+    model, weather: { search: async () => { throw new Error("not used"); } }, semanticIntentEnabled: true, newExecutionId: () => "runtime-execution" });
+  await app.runConversationTurn({ principal, conversationId, turnId: "11111111-1111-4111-8111-111111111111", userRequest: "出雲大社へ明日出発します", uiContext: { calendarDate: "2026-09-25" } });
+  const working = await new DynamoDbConversationTurnRepository("test-state", state.client).getWorkingState(principal, conversationId);
+  expect(working?.semantic?.overlay).toMatchObject({ intentRevision: 1, facts: [
+    { target: "destination", value: { kind: "place_label", label: "出雲大社" } },
+    { target: "start_date", value: { kind: "local_date", date: "2026-09-26", expression: "tomorrow" } },
+  ] });
+  const runtimeRequests = requests.filter(({ outputContract }) => outputContract?.name !== "conversation_semantic_delta");
+  const contextBlock = runtimeRequests[0]!.messages[0]!.content.find((block) => "text" in block) as { text: string };
+  const context = JSON.parse(contextBlock.text.match(/<agent_context>([\s\S]*)<\/agent_context>/)![1]);
+  expect(context.workingState.semantic.overlay.facts.map((fact: { target: string }) => fact.target)).toEqual(["destination", "start_date"]);
+  expect(context.taskContext.currentIntentChange).toEqual({ intentRevision: 1, operations: [
+    { action: "set", target: "destination" }, { action: "set", target: "start_date" },
+  ] });
+  expect(requests.filter(({ outputContract }) => outputContract?.name === "conversation_semantic_delta")).toHaveLength(1);
 });

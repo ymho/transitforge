@@ -116,6 +116,12 @@ variable "bedrock_decision_model_id" {
   }
 }
 
+variable "conversation_semantic_kernel_enabled" {
+  description = "会話発言を回答生成前に型付き意味差分として受理する段階導入gate。"
+  type        = bool
+  default     = false
+}
+
 variable "travel_knowledge_base_id" {
   description = "既存のBedrock Knowledge Base ID。空文字ではKnowledge retrievalを無効にしWeb-onlyへ戻す。"
   type        = string

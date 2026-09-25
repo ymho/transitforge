@@ -8,6 +8,7 @@ environment  = "dev"
 # bedrock_capability_matrix_json = "{}"
 # bedrock_lightweight_model_id = ""
 # bedrock_decision_model_id    = "jp.amazon.nova-2-lite-v1:0"
+# conversation_semantic_kernel_enabled = false
 # travel_knowledge_base_id      = ""
 # travel_knowledge_vector_store = "other" # HYBRID requires a supported store with a filterable text field
 # travel_knowledge_search_type  = "SEMANTIC"
