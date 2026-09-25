@@ -54,6 +54,21 @@ export interface AgentToolDecisionSupport {
   responsibilityBoundary: string;
 }
 
+export interface AgentToolIntentRequirement {
+  target: import("@raiquora/trip/conversation-intent").IntentTarget;
+  inputField: string;
+  necessity: "required" | "optional";
+  match: "presence" | "exact";
+  acceptedPrecisions?: import("@raiquora/trip/conversation-intent").IntentPrecision[];
+  acceptedModalities?: import("@raiquora/trip/conversation-intent").IntentModality[];
+}
+
+export interface AgentToolIntentPolicy {
+  /** Application-authored dependency targets used for stale Evidence/cache invalidation. */
+  dependencies: import("@raiquora/trip/conversation-intent").IntentTarget[];
+  requirements?: AgentToolIntentRequirement[];
+}
+
 export interface AgentToolDescriptor {
   name: string;
   description: string;
@@ -64,6 +79,7 @@ export interface AgentToolDescriptor {
   requiredCapabilities?: string[];
   outputSchema?: AgentToolInputSchema;
   errorRecovery?: Partial<Record<AgentToolErrorCode, "retry" | "resolve_precondition" | "ask_user" | "stop">>;
+  intentPolicy?: AgentToolIntentPolicy;
 }
 
 export interface AgentTool<TInput, TOutput> extends AgentToolDescriptor {
@@ -81,6 +97,7 @@ export function modelToolDescription(tool: AgentToolDescriptor): string {
     tool.effect ? `effect: ${tool.effect}` : "",
     tool.requiredCapabilities?.length ? `必要能力: ${tool.requiredCapabilities.join(" / ")}` : "",
     tool.prerequisite?.length ? `前提: ${tool.prerequisite.join(" / ")}` : "",
+    tool.intentPolicy?.requirements?.length ? `意味入力: ${tool.intentPolicy.requirements.map(({ target, inputField, necessity }) => `${inputField}<-${target}(${necessity})`).join(" / ")}` : "",
     tool.errorRecovery ? `回復: ${Object.entries(tool.errorRecovery).map(([code, recovery]) => `${code}=${recovery}`).join(" / ")}` : "",
     ...(!support ? [] : [
     `能力: ${support.capability}`,

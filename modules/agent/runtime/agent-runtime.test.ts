@@ -24,6 +24,7 @@ import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { inTripFixture } from "../../trip/domain/in-trip-context.fixture";
 import { inTripApplicationEvidence } from "@raiquora/agent/in-trip-application-evidence";
 import { calculateInTripReplanScope, replanScopeContext } from "@raiquora/trip/in-trip-replan";
+import { compileEffectiveIntent } from "@raiquora/agent/effective-intent";
 
 describe("MultiStepAgentRuntime", () => {
   it("does not force the strict travel-plan schema on unverified discovery hits", async () => {
@@ -1218,6 +1219,28 @@ describe("MultiStepAgentRuntime", () => {
     expect(output.response).toContain("どれがお好み");
     expect(requests).toHaveLength(1);
     expect(output.turnObservation).toMatchObject({ outcome: "ask_only", progress: [] });
+  });
+  it("rejects a first-turn clarification that asks for an already accepted condition", async () => {
+    const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
+    const question = textResponse("行き先はどこですか？");
+    question.decisionSummary = { interpretedGoal: "京都旅行", hardConstraints: [], softPreferences: [], selectedAction: "ask_user",
+      unresolvedFacts: ["destination"], reasonCodes: ["user_confirmation_required"],
+      missingRequirements: [{ action: "ask", field: "destination", resolution: "user_decision", reason: "候補検索のため" }] };
+    const effectiveIntent = compileEffectiveIntent({ overlay: { version: 1, intentRevision: 1, tombstones: [], appliedMutationIds: [], facts: [{
+      factId: "destination", target: "destination", scope: { type: "conversation" }, modality: "required", precision: "exact",
+      value: { kind: "place_label", label: "京都" }, frame: "actual", sourceOperationId: "destination-op",
+      provenance: { kind: "user_turn", turnId: "00000000-0000-4000-8000-000000000001", quote: "京都" },
+    }] } });
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor,
+      model: sequenceModel([question, textResponse("京都の候補を調べます")], requests) }).run({
+      executionId: "known-first-question", feature: "concierge", userRequest: "京都に行きたい",
+      context: { effectiveIntent, taskContext: { version: 1, phase: "discovery", target: { kind: "conversation" },
+        requestRevision: 1, availableProgressKinds: ["candidates"] } },
+    });
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("候補を調べます");
+    expect(output.response).not.toContain("行き先はどこ");
+    expect(requests).toHaveLength(2);
   });
   it("allows a new typed clarification after the application accepted a current-turn meaning change", async () => {
     const { tools, toolExecutor } = toolSetup([]);

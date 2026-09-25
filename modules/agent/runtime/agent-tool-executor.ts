@@ -3,6 +3,7 @@ import type { AgentTraceRecorder } from "./agent-trace";
 import type { AgentToolResult } from "./tool-contract";
 import { AgentToolRegistry } from "./tool-registry";
 import { ToolEvidenceRegistry } from "./tool-evidence-registry";
+import type { IntentTarget } from "@raiquora/trip/conversation-intent";
 
 export interface AgentToolExecution {
   result: AgentToolResult<unknown>;
@@ -29,6 +30,7 @@ export class AgentToolExecutor {
       toolName: string;
       toolInput: Record<string, unknown>;
       timeoutMs: number;
+      intentDependency?: { intentRevision: number; fingerprint: string; targets: IntentTarget[] };
     },
     trace: AgentTraceRecorder,
   ): Promise<AgentToolExecution> {
@@ -58,7 +60,7 @@ export class AgentToolExecutor {
         toolName: input.toolName,
         queryFingerprint: stableFingerprint(input.toolInput),
         retrievedAt: this.now().toISOString(),
-      });
+      }).map((item) => input.intentDependency ? { ...item, intentDependency: structuredClone(input.intentDependency) } : item);
     return { result, evidence };
   }
 }

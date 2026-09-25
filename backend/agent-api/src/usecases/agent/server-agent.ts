@@ -15,6 +15,7 @@ import { ResearchExecutionLedger, researchBudgetForRuntimeLimits } from "@raiquo
 import { validateAgentRuntimeLimits } from "@raiquora/agent/runtime-policies";
 import type { ModelTokenRates } from "@raiquora/agent/model-usage-cost";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
+import { evidenceForCurrentIntent } from "@raiquora/agent/intent-action-policy";
 
 /** Caller authenticates principal. Only an injected server loader may resolve references to state. */
 export interface ServerAgentTurn {
@@ -73,7 +74,11 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
       researchMode: { requestedMode, effectiveMode: requestedMode === "detailed" && dependencies.detailedResearchAllowed && dependencies.detailedResearchLimits ? "detailed" : "standard" },
     };
     let context = await dependencies.loadContext?.(scope);
-    const initialEvidence = context?.workingState?.groundingEvidence;
+    const changedIntentTargets = context?.taskContext?.currentIntentChange?.operations
+      .filter(({ frame }) => frame === "actual").map(({ target }) => target) ?? [];
+    const initialEvidence = context?.workingState?.groundingEvidence
+      ? evidenceForCurrentIntent(context.workingState.groundingEvidence, context.effectiveIntent, changedIntentTargets)
+      : undefined;
     if (input.researchTarget) {
       const target = validateResearchTarget(input.researchTarget);
       const receipt = context?.workingState?.presentations.find((value) => value.presentationId === target.presentationId);

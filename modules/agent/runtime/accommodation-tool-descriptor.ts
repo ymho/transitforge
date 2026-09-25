@@ -2,6 +2,11 @@ import type { AgentToolDescriptor } from "./tool-contract";
 export const accommodationToolDescriptor: AgentToolDescriptor = {
  name: "search_accommodations",
  description: "指定日程と宿泊地の宿泊候補を調べます。Providerで未確認の空室や料金を推測しません",
+ intentPolicy: { dependencies: ["destination", "start_date", "end_date", "duration", "party_size", "accommodation", "budget"], requirements: [
+   { target: "destination", inputField: "destination", necessity: "required", match: "presence" },
+   { target: "start_date", inputField: "checkInDate", necessity: "optional", match: "exact", acceptedPrecisions: ["exact"] },
+   { target: "end_date", inputField: "checkOutDate", necessity: "optional", match: "exact", acceptedPrecisions: ["exact"] },
+ ] },
  inputSchema: {
       type: "object",
       properties: {

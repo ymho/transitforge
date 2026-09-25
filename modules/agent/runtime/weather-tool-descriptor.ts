@@ -3,6 +3,11 @@ import type { AgentToolDescriptor } from "./tool-contract";
 export const weatherToolDescriptor: AgentToolDescriptor = {
   name: "search_weather_forecast",
   description: "目的地の時間別と週間天気予報をEvidence付きで検索します",
+  intentPolicy: { dependencies: ["destination", "start_date", "end_date"], requirements: [
+    { target: "destination", inputField: "location", necessity: "required", match: "presence" },
+    { target: "start_date", inputField: "startDate", necessity: "optional", match: "exact", acceptedPrecisions: ["exact"] },
+    { target: "end_date", inputField: "endDate", necessity: "optional", match: "exact", acceptedPrecisions: ["exact"] },
+  ] },
   inputSchema: {
       type: "object",
       properties: {

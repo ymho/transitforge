@@ -1,4 +1,5 @@
 import type { TravelApplicabilityFact } from "./travel-applicability";
+import type { IntentTarget } from "@raiquora/trip/conversation-intent";
 
 export type EvidenceCategory =
   | "timetable"
@@ -84,6 +85,13 @@ export interface Evidence {
   coverage?: EvidenceCoverage[];
   observation?: EvidenceObservation;
   applicabilityFacts?: TravelApplicabilityFact[];
+  /** Application-authored semantic inputs used to obtain this observation.
+   * The model cannot declare or relax this dependency. */
+  intentDependency?: {
+    intentRevision: number;
+    fingerprint: string;
+    targets: IntentTarget[];
+  };
 }
 
 export type ClaimKind = "fact" | "inference" | "unknown";

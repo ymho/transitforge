@@ -36,8 +36,8 @@ BrowserからWorking State、Profile、Trip本文、owner、revisionを受け取
 | 訂正・撤回 | Trip Proposal/CAS、request validator | replace/retract/tombstone/relax/narrow #638 | pure reducer + failure tests | history要約からの復活を禁止 |
 | scope/reference | PresentationReceipt、Trip/day/segment IDs | frameをfact/tombstone/reducerへ貫通。ordinalは最新のowner-scoped PresentationReceiptからApplication解決 #636 | production turn + stale/range負例 | 本文の「2番目」再parse |
 | Effective Intent | server context compiler、Trip/Profile snapshot | base+overlay+retractをauthority別にpure投影 #640 | Server Runtime context + pure tests | raw semantic overlayのmodel重複送信を撤去 |
-| action policy | Tool schema、SemanticDecision、progress guard | effective revision連携 #641 | 未実装 | LLM自己申告だけの不足判定 |
-| invalidation/replan | Evidence applicability、PlanVariant、CAS | meaning dependency連携 #642 | 未実装 | 全消去・無条件再検索 |
+| action policy | Tool schema、SemanticDecision、progress guard | Application-authored requirementとeffective revision連携 #641 | Runtime Tool前検証 + allow/reject対テスト | LLM自己申告だけの不足判定を不採用 |
+| invalidation/replan | Evidence applicability、PlanVariant、CAS | target別meaning dependency連携 #642 | Server initial Evidence + Tool Evidence tests | legacy無依存Evidenceだけ安全側で失効。全消去・無条件再検索を撤去 |
 | proposal/branch | Request Proposal、PlanVariant、Trip CAS | conversation delta接続 #643 | 未実装 | overlayからの直接Trip writeは禁止 |
 | response/UI | typed presentation、history/SSE、既存cards | public meaning receipt #644/#646 | 未実装 | UI本文推測 |
 | degraded path | verified Evidence summary、turn retry | A/B故障区別 #645 | A後failure/retry testあり | 独自自然言語補完を撤去 |
@@ -83,7 +83,7 @@ phaseは表示・予算を選ぶ補助情報であり、質問・Evidence・行�
 
 | guard / code | 守る条件・適用対象 | 正当に通す例 | 拒否する例 | 置換状況 |
 | --- | --- | --- | --- | --- |
-| `shouldRequirePlanningProgress` | 同じ意味状態のままoptional質問だけを連続させない | 初回の型付き確認、現在turnの訂正受理後の別質問、安全・authorization、候補提示後の選択 | 直前も`ask_only`で、意味差分も例外理由もない質問票 | phase一律抑止を`previousOutcome + currentIntentChange + typed requirement`へ置換。allow/reject対テスト済み |
+| `shouldRequirePlanningProgress` | 同じ意味状態のままoptional質問だけを連続させず、受理済み項目を聞き直さない | 未回答項目の初回型付き確認、現在turnの訂正受理後の別質問、安全・authorization、候補提示後の選択 | 初回でもEffective Intentに回答済みの項目、または直前も`ask_only`で意味差分も例外理由もない質問票 | phase一律抑止を`previousOutcome + currentIntentChange + typed requirement + EffectiveIntent`へ置換。allow/reject対テスト済み |
 | `hasPlanningQuestionnaire` | strict移行前のlegacy proseが`answer`を偽装して質問票を出すのを限定的に防ぐ | `application_strict`/`provider_strict`の一般説明、型付き`ask_user` | `legacy_text`またはmode不明で複数optional項目を列挙 | strict出力へのregex再解釈を停止。legacy期限後に削除 #653 |
 | `acceptsAgentTurn` | 保存済み直前turnとの組合せで無進展の連続質問を防ぐ | Application検証済みの現在turn意味変更、外部化可能な安全/認可例外 | 同一stateで例外なしの`ask_only → ask_only` | `currentIntentChange`をServer contextから渡す。modelはこのフラグを自己申告できない |
 | `planning_evidence_required` | 外部事実を確認済みとして主張するanswer/planだけをEvidenceへ束縛 | 条件追加・訂正・撤回のack、一般質問、未確認と明示した案内 | `travel-plan`、Evidence ID、`evidence_sufficient`を宣言したのにEvidenceなし | phase+answer一律要求をclaim起点へ置換。根拠なし候補拒否テストを維持 |
@@ -91,6 +91,8 @@ phaseは表示・予算を選ぶ補助情報であり、質問・Evidence・行�
 | `place_photo_required` | `travel-plan`を写真付きで構成可能なfinalizationだけをbest-effort補完 | 条件変更・確認・一般質問・source説明、Tool予算終了時のsource-bound plan | travel-plan宣言、sourceあり、photoなし、かつphoto Tool実行可能 | phase一律要求を`declaredPresentation.kind=travel-plan`へ限定 |
 | quote/provenance acceptance | 実際の現在user turnに存在する引用だけを`user_turn`へ昇格 | exact substringをApplicationが検証しID/revision/sourceを付与 | modelの`source=user`自己申告、history、repair/guard文だけにある語句 | Interpreter schemaにsourceを持たせず、`acceptedIntentDeltaFromInterpretation`がcurrent `userRequest`だけで検証 |
 | Tool重複/cache/retry | readは依存stateが同じなら再利用し、proposal/writeは実行内で冪等にする | 別Tool成功で前提が変化したread再評価。署名はrequest/Working/intent revisionを含む | 同じ依存版の同一read、同一proposal/write、無制限retry | Application登録のeffectと依存版を署名へ追加。異なるTool成功後だけ同一readを1回再評価し、proposalは常に重複抑止。allow/reject対テスト済み |
+| Tool intent requirement | Tool固有の必須入力・精度・現在値一致をApplication由来のEffective Intentで検証 | 受理済み京都・2026-10-01を同値で検索 | 未定/非開示値の補完、日付訂正後の旧日付、必須値欠落 | descriptorの`intentPolicy`をRuntime実行前に適用。modelは依存targetを緩和できない |
+| Evidence meaning dependency | Evidenceを取得時の意味targetへ束縛し、局所訂正だけ失効 | 目的地訂正後も日付だけに依存するEvidenceを保持 | 目的地依存Evidence、意味依存を記録しない旧Evidence | Tool成功時にintent revision/fingerprint/targetsをApplication付与。Server再利用前にfilter |
 
 認証、owner分離、Trip実在参照、予約保護、利用者confirmation、Evidence参照、CAS/turn冪等性、保持/削除保証は意味ガードの緩和対象に含めない。開発作業の包括承認も、製品利用者のTrip/Profile/予約変更への同意として扱わない。
 
@@ -122,3 +124,11 @@ phaseは表示・予算を選ぶ補助情報であり、質問・Evidence・行�
 - 相対日、相対weekday、月offsetをtrusted calendarで解決し、anchor/rule versionを保持する。月精度を日へ丸めず、quoteにないexact dateを拒否する。
 - 自動test: `npm test`（frontend 1718、agent-api/runtime 1103、stream contract 5、全件成功）、`npm run workspace:check`、`npm run architecture:check`、`npm run build`（全て成功）。`npm run eval:agent:smoke`は12/12成功。
 - 実model、実Provider、実Browser、deployment: 未実施。scripted成功と区別する。
+
+## Wave 3 実行記録
+
+- base: PR #656 merge `000385468e4ee20f32b439306dae49d2b71dade1`
+- Tool descriptorへApplication-ownedの意味依存target、必須/任意、必要精度、現在値一致contractを追加した。RuntimeはTool実行前に同じEffective Intentへ照合し、未定・欠落・訂正前入力を非retryableで拒否する。
+- Tool Evidenceへ取得時のintent revision/fingerprint/targetを付与し、次turnの意味差分と交差するEvidenceだけを失効する。旧Evidenceは意味変更時だけ安全側で失効する。
+- semantic feature gateがまだreceiptを生成していない空projectionは移行互換として旧経路を許可する。gate有効化後はcurrent turn receiptで検証する。
+- scripted test/build結果、PR/CI、実model、deploymentはWave完了時に追記する。
