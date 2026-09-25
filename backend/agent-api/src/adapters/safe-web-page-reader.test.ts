@@ -9,9 +9,26 @@ describe("SafeWebPageReader", () => {
 
     const result = await reader.search({ urls: ["https://brewery.example/visit"] });
 
-    expect(result.data?.pages[0]).toMatchObject({ title: "酒蔵見学", text: "酒蔵見学 見学は予約制です。", untrustedExternalContent: true });
+    expect(result.data?.pages[0]).toMatchObject({ title: "酒蔵見学", text: "酒蔵見学\n見学は予約制です。", untrustedExternalContent: true });
     expect(result.data?.pages[0]?.text).not.toContain("ignore");
     expect(result.evidence[0]?.sourceUrl).toBe("https://brewery.example/visit");
+  });
+
+  it("semantic本文を優先してヘッダー・ナビゲーション・フッターを除く", async () => {
+    const reader = new SafeWebPageReader({
+      fetch: vi.fn(async () => new Response([
+        "<html><head><title>出雲大社</title></head><body>",
+        "<header>menu ホーム お知らせ</header><nav>みる 食べる 泊まる 買う</nav>",
+        "<main><article><h1>出雲大社</h1><p>御本殿を参拝し、神門通りの町歩きを楽しめます。</p></article></main>",
+        "<footer>お問い合わせ サイトマップ</footer></body></html>",
+      ].join(""), { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } })),
+    }, { resolve: async () => ["203.0.113.10"] });
+
+    const result = await reader.search({ urls: ["https://izumo.example/guide"] });
+
+    expect(result.data?.pages[0]?.text).toBe("出雲大社\n御本殿を参拝し、神門通りの町歩きを楽しめます。");
+    expect(result.data?.pages[0]?.text).not.toContain("menu");
+    expect(result.data?.pages[0]?.text).not.toContain("お問い合わせ");
   });
 
   it.each(["https://127.0.0.1/private", "http://example.com/", "https://service.internal/"])("危険なURL %s を拒否する", async (url) => {

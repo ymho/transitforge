@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { DefaultAgentResponseGenerator } from "@raiquora/agent/agent-response-generator";
-import { groundedAnswerFailureCode, groundedAnswerInstruction, groundedAnswerRepairInstruction, parseGroundedAnswer, parseProposedItinerary, supportedAnswerClaims, sourceExplanation, travelPlan } from "@raiquora/agent/grounded-answer";
+import { groundedAnswerFailureCode, groundedAnswerInstruction, groundedAnswerRepairInstruction, parseGroundedAnswer, parseProposedItinerary, sourceDisplayExcerpt, sourceExplanation, sourcePresentationScore, supportedAnswerClaims, travelPlan } from "@raiquora/agent/grounded-answer";
 import type { Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentModelResponse } from "@raiquora/agent/model-provider";
 
@@ -9,6 +9,17 @@ const e: Evidence = { id: "route-1", category: "journey", knowledgeKind: "derive
 }, references: [{ sourceType: "timetable-graph", sourceRef: "fixture:20260920", retrievedAt: "2026-09-18T00:00:00Z", freshness: "scheduled", summary: "検証済み経路" }] };
 const answer = () => { const claims = supportedAnswerClaims([e]); return { text: claims.map(c => c.statement).join("\n\n"), claims }; };
 const model = (text: string): AgentModelResponse => ({ message: { role: "assistant", content: [{ type: "text", text }] }, stopReason: "completed", metadata: { provider: "test" } });
+
+it("omits navigation-only source excerpts instead of presenting them as a feature", () => {
+  const navigation = "menu\nホーム\n特集\nみる\n楽しむ\n食べる\n泊まる\n買う\nお問い合わせ";
+  expect(sourceDisplayExcerpt(navigation)).toBeUndefined();
+  expect(sourceDisplayExcerpt("御本殿を参拝し、神門通りの町歩きを楽しめます。")).toBe("御本殿を参拝し、神門通りの町歩きを楽しめます。");
+  const source = { ...placeEvidence, facts: { ...placeEvidence.facts, sourceExcerpt: navigation } };
+  const statement = supportedAnswerClaims([source])[0]!.statement;
+  expect(statement).toContain("出典のみ案内します");
+  expect(statement).not.toContain("資料に記載されている特徴");
+  expect(sourcePresentationScore(placeEvidence)).toBeGreaterThan(sourcePresentationScore(source));
+});
 it("Default production generator rejects omitted claims and free factual prose with actual Evidence", () => {
   const generator = new DefaultAgentResponseGenerator();
   for (const text of ['向日町から倉敷まで25分です。', JSON.stringify({ text: "京都から大阪へ5分です", claims: [] })]) {

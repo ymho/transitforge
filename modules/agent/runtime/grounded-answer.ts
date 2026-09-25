@@ -28,7 +28,10 @@ function statementFor(e: Evidence): string | undefined {
   }
   if (e.category === "external") {
     if (typeof f.sourceExcerpt === "string" && typeof f.sourceTitle === "string" && typeof f.sourceUrl === "string" && sourceUrlAllowed(f.sourceUrl)) {
-      return `**${plain(f.sourceTitle)}**\n\n資料に記載されている特徴:「${plain(f.sourceExcerpt.slice(0, 400))}」\n\n[出典を読む](${encodeURI(f.sourceUrl).replaceAll("(", "%28").replaceAll(")", "%29")})` +
+      const excerpt = sourceDisplayExcerpt(f.sourceExcerpt);
+      return `**${plain(f.sourceTitle)}**\n\n${excerpt
+        ? `資料に記載されている特徴:「${plain(excerpt)}」`
+        : "ページ本文から特徴を安全に抜き出せなかったため、出典のみ案内します。"}\n\n[出典を読む](${encodeURI(f.sourceUrl).replaceAll("(", "%28").replaceAll(")", "%29")})` +
         (f.sourcePrecision === "search-snippet" ? "（検索結果の抜粋です。本文は未確認です。）" : "（取得した資料の記述であり、現在の営業・移動の成立を保証するものではありません。）");
     }
     if (typeof f.candidateId === "string") {
@@ -86,6 +89,25 @@ export function presentGroundedEvidence(ids: readonly string[], evidence: readon
   if (claims.length !== ids.length) throw new Error("Missing factual presentation");
   const bound = claims.map((claim, index) => ({ ...claim, id: `fact-${index}` }));
   return { text: bound.map((c) => c.statement).join("\n\n"), claims: bound };
+}
+
+/** Deterministic display hygiene only; never invent or paraphrase source text. */
+export function sourceDisplayExcerpt(value: string): string | undefined {
+  const navigation = /^(?:menu|ホーム|トップ|特集|お知らせ|アクセス|お問い合わせ|よくあるご質問|english|メインメニュー|サイドバーに移動|コンテンツにスキップ|案内|ヘルプ|ログイン|サイトマップ|目的で探す|みる|楽しむ|食べる|泊まる|買う|お気に入り)$/iu;
+  const lines = value.normalize("NFKC").replace(/\r/gu, "").split(/\n+/gu)
+    .map((line) => line.replace(/\s+/gu, " ").trim())
+    .filter((line) => line && !navigation.test(line));
+  const meaningful = lines.filter((line) => /[。！？.!?]/u.test(line) || line.length >= 36);
+  const selected = meaningful.length ? meaningful : lines.length === 1 && lines[0]!.length >= 8 ? lines : [];
+  if (!selected.length) return undefined;
+  return selected.join(" ").slice(0, 400).trim() || undefined;
+}
+
+export function sourcePresentationScore(evidence: Evidence): number {
+  if (typeof evidence.facts.sourceExcerpt !== "string") return 0;
+  const excerpt = sourceDisplayExcerpt(evidence.facts.sourceExcerpt);
+  return (excerpt ? 100 + Math.min(excerpt.length, 400) : 0) +
+    (evidence.facts.sourcePrecision === "place-description" ? 30 : evidence.facts.sourcePrecision === "search-snippet" ? 20 : 0);
 }
 export function groundedAnswerInstruction(evidence: readonly Evidence[], profile?: Record<string, unknown>): string {
   const claims = supportedAnswerClaims(evidence);

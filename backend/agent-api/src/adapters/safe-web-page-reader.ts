@@ -62,7 +62,8 @@ export class SafeWebPageReader implements WebPageReader {
       const body = await boundedText(response, MAX_RESPONSE_BYTES);
       const html = contentType === "text/html";
       const title = html ? extractTitle(body.text) : undefined;
-      const text = (html ? htmlToText(body.text) : cleanText(body.text)).slice(0, MAX_TEXT_CHARS);
+      const pageText = html ? htmlToText(body.text) : cleanText(body.text);
+      const text = cleanText(title && !pageText.startsWith(title) ? `${title}\n${pageText}` : pageText).slice(0, MAX_TEXT_CHARS);
       if (!text) return undefined;
       return {
         url: url.toString(),
@@ -140,15 +141,25 @@ function extractTitle(html: string): string | undefined {
 }
 
 function htmlToText(html: string): string {
-  return cleanText(decodeEntities(html
+  // Prefer the page's semantic content and remove repeated site chrome. A raw
+  // tag strip puts global navigation ahead of the actual article, which makes
+  // bounded excerpts useless even though the fetch itself succeeded.
+  const semantic = longestTagContent(html, "main") ?? longestTagContent(html, "article") ?? html;
+  return cleanText(decodeEntities(semantic
     .replace(/<!--([\s\S]*?)-->/gu, " ")
-    .replace(/<(?:script|style|noscript|template|svg|iframe)\b[^>]*>[\s\S]*?<\/(?:script|style|noscript|template|svg|iframe)>/giu, " ")
+    .replace(/<(?:head|script|style|noscript|template|svg|iframe|nav|header|footer|aside|form|dialog)\b[^>]*>[\s\S]*?<\/(?:head|script|style|noscript|template|svg|iframe|nav|header|footer|aside|form|dialog)>/giu, " ")
     .replace(/<(?:br|\/p|\/div|\/li|\/h[1-6]|\/section|\/article)>/giu, "\n")
     .replace(/<[^>]+>/gu, " ")));
 }
 
+function longestTagContent(html: string, tag: "main" | "article"): string | undefined {
+  const matches = [...html.matchAll(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "giu"))]
+    .flatMap((match) => match[1]?.trim() ? [match[1]] : []);
+  return matches.sort((left, right) => right.length - left.length)[0];
+}
+
 function cleanText(value: string): string {
-  return value.normalize("NFKC").replace(/\r/gu, "").replace(/[ \t]+/gu, " ").replace(/\n{3,}/gu, "\n\n").trim();
+  return value.normalize("NFKC").replace(/\r/gu, "").replace(/[ \t]+/gu, " ").replace(/\n +/gu, "\n").replace(/\n{3,}/gu, "\n\n").trim();
 }
 
 function decodeEntities(value: string): string {
