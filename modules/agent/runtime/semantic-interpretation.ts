@@ -27,6 +27,11 @@ const operationSchema = {
     precision: { type: "string", enum: ["exact", "approximate", "range", "qualitative"] },
     frame: { type: "string", enum: ["actual", "hypothetical"] },
     quote: { type: "string", minLength: 1, maxLength: 300 },
+    scope: { anyOf: [
+      { type: "object", additionalProperties: false, properties: { kind: { const: "conversation" } }, required: ["kind"] },
+      { type: "object", additionalProperties: false, properties: { kind: { const: "logical_day_ordinal" }, ordinal: { type: "integer", minimum: 1, maximum: 90 } }, required: ["kind", "ordinal"] },
+      { type: "object", additionalProperties: false, properties: { kind: { const: "segment_direction" }, direction: { type: "string", enum: ["outbound", "return"] } }, required: ["kind", "direction"] },
+    ] },
     value: valueSchema,
   },
   required: ["atomicGroup", "action", "target", "frame", "quote"],
@@ -58,6 +63,8 @@ export interface InterpretedIntentOperation {
   precision?: IntentPrecision;
   frame: "actual" | "hypothetical";
   quote: string;
+  /** A bounded selector only. Application creates the stable scope reference. */
+  scope?: { kind: "conversation" } | { kind: "logical_day_ordinal"; ordinal: number } | { kind: "segment_direction"; direction: "outbound" | "return" };
   value?: InterpretedIntentValue;
 }
 export interface UtteranceInterpretation {
@@ -94,7 +101,7 @@ export function acceptedIntentDeltaFromInterpretation(input: {
     validateTargetValue(operation.target, value, operation.action);
     return {
       operationId: boundedRef(`intent-op:${input.turnId}:${index + 1}`), groupId: boundedRef(`intent-group:${input.turnId}:${operation.atomicGroup}`),
-      action: operation.action, target: operation.target, scope: acceptedScope(value, input.workingState),
+      action: operation.action, target: operation.target, scope: acceptedScope(operation.scope, operation.quote, value, input.workingState),
       ...(operation.modality ? { modality: operation.modality } : {}), ...(operation.precision ? { precision: operation.precision } : {}),
       ...(value ? { value } : {}), frame: operation.frame,
       provenance: { kind: "user_turn" as const, turnId: input.turnId, quote: operation.quote },
@@ -105,17 +112,31 @@ export function acceptedIntentDeltaFromInterpretation(input: {
 }
 
 function decodeOperation(value: unknown): InterpretedIntentOperation | undefined {
-  if (!record(value) || !only(value, ["atomicGroup", "action", "target", "modality", "precision", "frame", "quote", "value"]) ||
+  if (!record(value) || !only(value, ["atomicGroup", "action", "target", "modality", "precision", "frame", "quote", "scope", "value"]) ||
       !Number.isSafeInteger(value.atomicGroup) || Number(value.atomicGroup) < 1 || Number(value.atomicGroup) > 12 ||
       !["set", "add_alternative", "replace", "retract", "relax", "narrow"].includes(String(value.action)) || !intentTargets.includes(value.target as IntentTarget) ||
       value.modality !== undefined && !intentModalities.includes(value.modality as IntentModality) ||
       value.precision !== undefined && !["exact", "approximate", "range", "qualitative"].includes(String(value.precision)) ||
       !["actual", "hypothetical"].includes(String(value.frame)) || !boundedText(value.quote)) return undefined;
   const action = value.action as InterpretedIntentOperation["action"], decodedValue = value.value === undefined ? undefined : decodeValue(value.value);
+  const scope = value.scope === undefined ? undefined : decodeScopeSelector(value.scope);
+  if (value.scope !== undefined && !scope) return undefined;
   if (value.value !== undefined && !decodedValue || ["set", "add_alternative", "replace"].includes(action) && !decodedValue || action === "retract" && decodedValue) return undefined;
   return { atomicGroup: value.atomicGroup, action, target: value.target as IntentTarget,
     ...(value.modality ? { modality: value.modality as IntentModality } : {}), ...(value.precision ? { precision: value.precision as IntentPrecision } : {}),
-    frame: value.frame as "actual" | "hypothetical", quote: value.quote, ...(decodedValue ? { value: decodedValue } : {}) };
+    frame: value.frame as "actual" | "hypothetical", quote: value.quote, ...(scope ? { scope } : {}), ...(decodedValue ? { value: decodedValue } : {}) };
+}
+
+function decodeScopeSelector(value: unknown): InterpretedIntentOperation["scope"] | undefined {
+  if (!record(value) || typeof value.kind !== "string") return undefined;
+  if (value.kind === "conversation" && only(value, ["kind"])) return { kind: "conversation" };
+  if (value.kind === "logical_day_ordinal" && only(value, ["kind", "ordinal"]) && Number.isSafeInteger(value.ordinal) && Number(value.ordinal) >= 1 && Number(value.ordinal) <= 90) {
+    return { kind: "logical_day_ordinal", ordinal: Number(value.ordinal) };
+  }
+  if (value.kind === "segment_direction" && only(value, ["kind", "direction"]) && ["outbound", "return"].includes(String(value.direction))) {
+    return { kind: "segment_direction", direction: value.direction as "outbound" | "return" };
+  }
+  return undefined;
 }
 
 function decodeValue(value: unknown): InterpretedIntentValue | undefined {
@@ -183,10 +204,22 @@ function validateTargetValue(target: IntentTarget, value: IntentValue | undefine
   if (target === "candidate_selection" && !["candidate_ref", "unknown"].includes(value.kind)) throw new Error("Candidate selection requires a verified presentation reference");
 }
 
-function acceptedScope(value: IntentValue | undefined, workingState?: ConversationWorkingState): AcceptedIntentDelta["operations"][number]["scope"] {
+function acceptedScope(selector: InterpretedIntentOperation["scope"], quote: string, value: IntentValue | undefined,
+  workingState?: ConversationWorkingState): AcceptedIntentDelta["operations"][number]["scope"] {
+  if (selector?.kind === "logical_day_ordinal") {
+    if (!dayOrdinalAppearsInQuote(quote, selector.ordinal)) throw new Error("Logical day ordinal is not present in the user quote");
+    return { type: "logical_day", logicalDayId: `day-${selector.ordinal}` };
+  }
+  if (selector?.kind === "segment_direction") return { type: "segment", segmentId: `segment:${selector.direction}`, direction: selector.direction };
   if (value?.kind !== "candidate_ref") return { type: "conversation" };
   const presentation = workingState?.presentations.find(({ presentationId, version }) => presentationId === value.presentationId && version === value.presentationVersion);
   return presentation?.target ? { type: "trip", tripId: presentation.target.tripId } : { type: "conversation" };
+}
+
+function dayOrdinalAppearsInQuote(quote: string, ordinal: number): boolean {
+  const japanese = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
+  return quote.includes(`${ordinal}日目`) || quote.includes(`第${ordinal}日`) ||
+    ordinal <= japanese.length && (quote.includes(`${japanese[ordinal - 1]}日目`) || quote.includes(`第${japanese[ordinal - 1]}日`));
 }
 
 function stepDate(value: string, days: number): string { const date = new Date(`${value}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); }
