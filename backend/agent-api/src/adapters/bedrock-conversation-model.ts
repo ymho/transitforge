@@ -358,22 +358,25 @@ function promptCachePlan(
 }
 
 function applicationStrictInstruction(contract: NonNullable<ConversationModelRequest["outputContract"]>): string {
-  const hasPresentation = schemaHasPresentation(contract.schema);
+  const hasPresentation = schemaHasProperty(contract.schema, "presentation");
+  const hasResponseText = schemaHasProperty(contract.schema, "responseText");
   return [
     `出力契約 ${contract.name}@${contract.version} (${contract.schemaHash}) に従い、`,
     "native toolUseを返さない最終応答ではJSON objectだけを返してください。Markdown fenceや説明文を外側へ追加しないでください。",
     hasPresentation
       ? "別の指示がsource-explanationまたはtravel-plan JSONを求める場合も外側の出力契約を置き換えず、そのobjectをpresentationへ設定してください。responseTextは短い利用者向けラベルのstringにしてください。"
-      : "別の指示が本文をJSONにするよう求める場合も、外側の出力契約を置き換えず、そのJSONをresponseTextの文字列値としてJSON.stringify相当で格納してください。responseTextへobjectを直接設定しないでください。",
+      : hasResponseText
+        ? "別の指示が本文をJSONにするよう求める場合も、外側の出力契約を置き換えず、そのJSONをresponseTextの文字列値としてJSON.stringify相当で格納してください。responseTextへobjectを直接設定しないでください。"
+        : "JSON Schemaのroot objectをそのまま返し、responseTextなどschemaにないwrapperやfieldを追加しないでください。",
     `JSON Schema: ${JSON.stringify(contract.schema)}`,
   ].join(" ");
 }
 
-function schemaHasPresentation(schema: unknown): boolean {
+function schemaHasProperty(schema: unknown, property: string): boolean {
   if (typeof schema !== "object" || schema === null || Array.isArray(schema)) return false;
   const value = schema as Record<string, unknown>;
-  return typeof value.properties === "object" && value.properties !== null && Object.hasOwn(value.properties, "presentation") ||
-    Array.isArray(value.anyOf) && value.anyOf.some(schemaHasPresentation);
+  return typeof value.properties === "object" && value.properties !== null && Object.hasOwn(value.properties, property) ||
+    Array.isArray(value.anyOf) && value.anyOf.some((candidate) => schemaHasProperty(candidate, property));
 }
 
 function nonNegativeNumber(value: unknown): value is number {
