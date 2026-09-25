@@ -82,10 +82,11 @@
 .home-rail-feature p { font-size: .85rem; }
 .my-shell, .trip-list-heading { max-width: 79.25rem; margin-inline: auto; }
 .my-shell { padding: 0; }
-.my-shell h1, .trip-list-heading h1 { font-size: 2rem; }
+.my-shell h1 { font-size: 1.5rem; }
+.trip-list-heading h1 { font-size: 2rem; }
 .my-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .account-profile-card { grid-column: 1 / -1; min-width: 0; padding: 0; overflow: clip; }
-.my-grid .home-card { margin: 0; box-shadow: none; border-radius: 1.125rem; }
+.my-grid .home-card { margin: 0; box-shadow: none; border-radius: .875rem; }
 .my-grid p { font-size: .875rem; }
 .my-grid h2 { font-size: 1.25rem; }
 .account-journey-settings label { display: grid; gap: .35rem; margin-top: .75rem; font-size: .8rem; color: #53606b; }

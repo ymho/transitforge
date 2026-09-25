@@ -3,125 +3,167 @@ import type { ProfileUiController } from "../../usecases/personal-state/profile-
 import type { ServerProfileState } from "../../usecases/personal-state/server-profile-client";
 
 type Draft = Omit<UserProfile, "version" | "updatedAt">;
+type Section = "origin" | "interests" | "pace" | "stay-food" | "avoidances";
 const styles: Array<[keyof UserProfile["travelStyle"], string]> = [
-  ["pace", "ペース（ゆっくり → 活発）"], ["novelty", "行き先（定番 → 新しい場所）"],
-  ["crowdTolerance", "混雑の許容度"], ["walkingTolerance", "歩行の許容度"], ["transferTolerance", "乗換の許容度"],
-  ["earlyMorningTolerance", "早朝出発の許容度"], ["lateNightTolerance", "夜遅い到着の許容度"],
-  ["drivingTolerance", "運転の許容度"], ["busTolerance", "バス移動の許容度"],
+  ["pace", "1日の過ごし方"], ["crowdTolerance", "混雑"], ["walkingTolerance", "長時間歩行"],
+  ["transferTolerance", "乗換"], ["earlyMorningTolerance", "早朝出発"], ["lateNightTolerance", "夜遅い到着"],
+  ["drivingTolerance", "車の運転"], ["busTolerance", "バス移動"],
 ];
-const companions = { solo: "一人", partner: "パートナー", friends: "友人", children: "子ども", family: "家族" };
 
-/** Profile is account-scoped server state. It deliberately has no browser-storage fallback. */
+/** Account-scoped Profile editor. Hidden legacy v2 fields remain in the draft and
+ * round-trip unchanged; only retained everyday preferences are editable here. */
 export function configureTravelProfile(document: Document, client: ProfileUiController): void {
   const page = document.querySelector<HTMLElement>("#travel-profile-page");
   if (!page) return;
   let read: ServerProfileState | undefined = client.current();
-  let draft = read?.profile ? profileDraft(read.profile) : blankDraft(), dirty = false;
-  const message = (text: string) => { page.querySelector<HTMLElement>("[data-profile-message]")!.textContent = text; };
-  const warnUnsaved = () => {
-    message("変更はまだ保存されていません。保存するか、変更を破棄してから移動してください。");
-    page.querySelector<HTMLElement>("[data-discard]")!.hidden = false;
+  let draft = read?.profile ? profileDraft(read.profile) : blankDraft();
+  let dirty = false, composing = false, debounce: ReturnType<typeof setTimeout> | undefined;
+  let editVersion = 0, lastSection: Section = "origin", rendered = false;
+
+  const message = (text: string, state: "idle" | "pending" | "saving" | "saved" | "error" = "idle") => {
+    const element = page.querySelector<HTMLElement>("[data-profile-message]");
+    if (!element) return;
+    element.textContent = text; element.dataset.state = state;
+    const retry = page.querySelector<HTMLButtonElement>("[data-profile-retry]");
+    if (retry) retry.hidden = state !== "error";
+    page.querySelectorAll<HTMLElement>("[data-profile-section]").forEach((section) => {
+      section.dataset.saveState = state === "error" && section.dataset.profileSection === lastSection ? "error" : "";
+    });
+  };
+  const refreshSummaries = () => {
+    for (const section of ["origin", "interests", "pace", "stay-food", "avoidances"] as const) {
+      const summary = page.querySelector<HTMLElement>(`[data-profile-summary="${section}"]`);
+      if (summary) summary.textContent = sectionSummary(section, draft);
+    }
+  };
+  const syncDraft = (form: HTMLFormElement): boolean => {
+    try { draft = readDraft(draft, new FormData(form)); refreshSummaries(); return true; }
+    catch { message("入力内容を確認してください。", "error"); return false; }
+  };
+  const flush = () => {
+    if (debounce) clearTimeout(debounce); debounce = undefined;
+    const form = page.querySelector<HTMLFormElement>("form");
+    if (!form || composing || !syncDraft(form) || !dirty) return;
+    const version = editVersion;
+    const profile: UserProfile = { ...structuredClone(draft), version: 2, updatedAt: new Date().toISOString() };
+    message("保存中…", "saving");
+    void client.autosave(profile).then((saved) => {
+      read = saved;
+      if (version !== editVersion) return;
+      dirty = false;
+      message("保存済み", "saved");
+    }).catch(() => {
+      if (version !== editVersion) return;
+      dirty = true;
+      message("保存できませんでした。入力は保持しています。", "error");
+    });
+  };
+  const changed = (target: Element, immediate: boolean) => {
+    const form = page.querySelector<HTMLFormElement>("form")!;
+    if (!syncDraft(form)) return;
+    lastSection = (target.closest<HTMLElement>("[data-profile-section]")?.dataset.profileSection as Section | undefined) ?? lastSection;
+    dirty = true; editVersion += 1; message("未保存の変更", "pending");
+    if (debounce) clearTimeout(debounce);
+    if (immediate) flush(); else debounce = setTimeout(flush, 400);
   };
   const render = () => {
-    page.innerHTML = `<section class="profile-editor"><header><div><h2>旅行プロフィール</h2><p>普段の好みを、次の旅のヒントに。今回の旅の条件を優先します。</p></div></header>
-      <p role="status" aria-live="polite" data-profile-message></p>${editor(draft)}
-      <details class="profile-storage-actions"><summary>プロフィールの管理</summary><button type="button" data-delete ${!read?.profile ? "hidden" : ""}>プロフィールを削除</button></details>
-      <div class="profile-editor-actions"><button type="button" data-discard hidden>変更を破棄</button><button type="submit" form="travel-profile-form">保存する</button></div></section>`;
-    page.querySelector("[data-discard]")?.addEventListener("click", () => {
-      draft = read?.profile ? profileDraft(read.profile) : blankDraft(); dirty = false; render(); message("変更を破棄しました。");
-    });
-    page.querySelector("[data-delete]")?.addEventListener("click", () => {
-      const button = page.querySelector<HTMLButtonElement>("[data-delete]")!;
-      if (button.dataset.confirm !== "yes") { button.dataset.confirm = "yes"; button.textContent = "削除を確定する"; return; }
-      if (read?.revision === undefined) return;
-      void client.delete(read.revision).then(() => {
-        read = undefined; draft = blankDraft(); dirty = false; render(); message("プロフィールを削除しました。");
-      }).catch(() => message("削除できませんでした。時間をおいてもう一度お試しください。"));
-    });
+    page.innerHTML = `<section class="profile-editor"><header><div><h2>いつもの好み</h2><p>次の相談で参考にする任意設定です。今回の条件や保存済み旅程・予約は変えません。</p></div><div class="profile-save-status"><span role="status" aria-live="polite" data-profile-message></span><button type="button" data-profile-retry hidden>再試行</button></div></header>
+      ${editor(draft)}
+      <details class="profile-storage-actions"><summary>プロフィールの管理</summary><p>設定はアカウントに保存されます。削除すると普段の好み全体を削除します。</p><button type="button" data-delete ${!read?.profile ? "hidden" : ""}>プロフィールを削除</button></details></section>`;
     const form = page.querySelector<HTMLFormElement>("form")!;
     form.querySelectorAll<HTMLButtonElement>("[data-choice]").forEach((button) => button.addEventListener("click", () => {
       const name = button.dataset.choice!;
       const selected = button.dataset.toggle !== "true" || button.getAttribute("aria-pressed") !== "true";
       form.querySelector<HTMLInputElement>(`[name="${name}"]`)!.value = selected ? button.dataset.value! : "";
       form.querySelectorAll<HTMLButtonElement>(`[data-choice="${name}"]`).forEach((choice) => choice.setAttribute("aria-pressed", String(choice === button && selected)));
-      dirty = true;
+      changed(button, true);
     }));
-    form.addEventListener("input", () => { dirty = true; });
-    form.addEventListener("change", () => { dirty = true; });
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      try {
-        draft = readDraft(draft, new FormData(form));
-        const profile: UserProfile = { ...draft, version: 2, updatedAt: new Date().toISOString() };
-        void client.update(profile, read?.revision ?? null).then((saved) => {
-          read = saved; draft = profileDraft(saved.profile); dirty = false; render();
-          message("プロフィールを保存しました。次の相談から普段の好みとして参照します。");
-        }).catch(() => message("保存できませんでした。入力はこの画面に残しています。時間をおいてもう一度お試しください。"));
-      } catch { message("入力を確認してください。"); }
+    form.addEventListener("compositionstart", () => { composing = true; });
+    form.addEventListener("compositionend", (event) => { composing = false; changed(event.target as Element, false); });
+    form.addEventListener("input", (event) => {
+      const target = event.target;
+      if (!composing && (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement && target.type === "text")) changed(target, false);
     });
+    form.addEventListener("change", (event) => { if (!composing) changed(event.target as Element, true); });
+    page.querySelector("[data-profile-retry]")?.addEventListener("click", flush);
+    page.querySelector("[data-delete]")?.addEventListener("click", () => {
+      const button = page.querySelector<HTMLButtonElement>("[data-delete]")!;
+      if (button.dataset.confirm !== "yes") { button.dataset.confirm = "yes"; button.textContent = "削除を確定する"; return; }
+      if (read?.revision === undefined) return;
+      if (debounce) clearTimeout(debounce); debounce = undefined;
+      void client.delete(read.revision).then(() => {
+        read = undefined; draft = blankDraft(); dirty = false; editVersion += 1; render(); message("プロフィールを削除しました。", "saved");
+      }).catch(() => message("削除できませんでした。時間をおいてもう一度お試しください。", "error"));
+    });
+    refreshSummaries(); rendered = true;
   };
-  document.addEventListener("transitforge:profile-leave", (event) => { if (dirty) { event.preventDefault(); warnUnsaved(); } });
-  document.defaultView?.addEventListener("beforeunload", (event) => { if (dirty) { event.preventDefault(); event.returnValue = ""; } });
+  document.addEventListener("transitforge:profile-leave", () => flush());
+  document.defaultView?.addEventListener("beforeunload", (event) => { if (dirty) { flush(); event.preventDefault(); event.returnValue = ""; } });
   client.subscribe(() => {
-    const saved = client.current();
-    if (dirty && saved) return;
-    read = saved; draft = saved ? profileDraft(saved.profile) : blankDraft(); dirty = false; render();
+    const current = client.current();
+    if (!rendered) { read = current; draft = current?.profile ? profileDraft(current.profile) : blankDraft(); render(); return; }
+    if (!current) {
+      if (debounce) clearTimeout(debounce); debounce = undefined;
+      read = undefined; draft = blankDraft(); dirty = false; editVersion += 1; render(); return;
+    }
+    if (dirty) return;
+    if (read?.revision !== current.revision) { read = current; draft = profileDraft(current.profile); render(); }
   });
   render();
 }
 
 function editor(draft: Draft): string {
-  return `<form id="travel-profile-form"><p class="profile-scope-note">普段の好みを保存します。今回の旅の条件を優先し、旅程や予約は変更しません。</p><fieldset><legend>基本情報</legend><div class="profile-field-grid">${field("station", "普段の出発駅", draft.home.station)}
-    ${field("party", "普段の人数（今回の人数ではありません）", draft.companions.usualPartySize?.toString(), "number")}
-    <label>優先する移動手段<select name="mode">${Object.entries({ "": "未設定", rail: "鉄道", car: "車", bus: "バス", walking: "徒歩" }).map(([key, label]) => `<option value="${key}" ${key === (draft.transport.preferredMode ?? "") ? "selected" : ""}>${label}</option>`).join("")}</select></label>
-    ${note("budget", "普段の予算感", draft)}</div><details><summary>出発地・同行者の詳細</summary>${field("area", "普段の出発エリア", draft.home.area)}
-    <label>車の利用<select name="car"><option value="" ${draft.home.carAvailable === undefined ? "selected" : ""}>未設定</option><option value="yes" ${draft.home.carAvailable === true ? "selected" : ""}>使える</option><option value="no" ${draft.home.carAvailable === false ? "selected" : ""}>使わない</option></select></label>
-    <p>よく一緒に出かける人</p><div class="profile-chips">${Object.entries(companions).map(([key, label]) => `<label><input type="checkbox" name="companion" value="${key}" ${draft.companions.usual.includes(key as keyof typeof companions) ? "checked" : ""}>${label}</label>`).join("")}</div></details></fieldset>
-    <fieldset><legend>旅のペース</legend><p>無理なく楽しめる、いつもの過ごし方を教えてください。</p>
-    ${choice("earlyMorningTolerance", "朝のスタート", draft.travelStyle.earlyMorningTolerance, ["ゆっくり", "どちらでも", "早朝から動ける"])}
-    ${choice("pace", "1日の詰め込み度", draft.travelStyle.pace, ["ゆったり", "バランス", "いろいろ巡りたい"])}
-    ${choice("transferTolerance", "乗換の好み", draft.travelStyle.transferTolerance, ["少なめ", "バランス", "乗換も楽しめる"])}</fieldset>
-    <fieldset><legend>興味・目的</legend><p>気になるものを選んでください。今までの細かな好みは、触れた項目だけ変更します。</p><div class="profile-chips">${Object.entries(travelPreferenceLabels).map(([key, label]) => {
+  return `<form id="travel-profile-form"><p class="profile-scope-note">AI利用を選んだ好みだけを初期提案・比較の参考にします。今回の明示条件を常に優先します。</p>
+    ${section("origin", "出発地・移動", sectionSummary("origin", draft), `<div class="profile-field-grid">${field("station", "普段の出発駅", draft.home.station)}${field("area", "普段の出発エリア", draft.home.area)}
+      <label>優先する移動手段<select name="mode">${Object.entries({ "": "未設定", rail: "鉄道", car: "車", bus: "バス", walking: "徒歩" }).map(([key, label]) => `<option value="${key}" ${key === (draft.transport.preferredMode ?? "") ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+      <label>車の利用<select name="car"><option value="" ${draft.home.carAvailable === undefined ? "selected" : ""}>未設定</option><option value="yes" ${draft.home.carAvailable === true ? "selected" : ""}>使える</option><option value="no" ${draft.home.carAvailable === false ? "selected" : ""}>使わない</option></select></label></div>`, true)}
+    ${section("interests", "興味", sectionSummary("interests", draft), `<p>複数選べます。今回の会話で追加・訂正した興味は別に扱います。</p><div class="profile-chips">${Object.entries(travelPreferenceLabels).map(([key, label]) => {
       const value = draft.preferences[key as keyof typeof travelPreferenceLabels];
       return `<input type="hidden" name="interest-${key}" value="${value ?? ""}"><button type="button" data-choice="interest-${key}" data-value="0.9" data-toggle="true" aria-pressed="${value !== undefined && value >= .7}">${label}</button>`;
-    }).join("")}</div></fieldset>
-    <fieldset><legend>宿泊・食事</legend><div class="profile-field-grid">${note("lodging", "宿泊の好み", draft)}${note("food", "食事の好み", draft)}</div></fieldset>
-    <fieldset><legend>配慮事項</legend>${note("avoidances", "避けたいこと・配慮してほしいこと", draft)}
-    <details><summary>移動・過ごし方の詳細設定</summary>${field("minutes", "普段の移動上限（分・空欄は未設定）", draft.transport.maxTypicalTravelMinutes?.toString(), "number")}
-    ${styles.filter(([key]) => !["earlyMorningTolerance", "pace", "transferTolerance"].includes(key)).map(([key, label]) => choice(key, label, draft.travelStyle[key], ["控えめ", "ほどほど", "多めでも大丈夫"])).join("")}<p>保存済みの子どもの年代は維持します。今回の人数・年齢は旅行ごとに確認します。</p></details></fieldset>
-    <p class="profile-consent-explanation">「AIの提案に使う」を選んで保存したメモは、項目ごとに先頭240文字までAIへ送信します。未選択のメモはこの端末だけに保存し、メモ本文はログへ記録しません。</p></form>`;
+    }).join("")}</div>`)}
+    ${section("pace", "ペース・移動の好み", sectionSummary("pace", draft), styles.map(([key, label]) => choice(key, label, draft.travelStyle[key], ["控えめ", "ほどほど", "高め"])).join(""))}
+    ${section("stay-food", "宿泊・食事", sectionSummary("stay-food", draft), `<div class="profile-field-grid">${note("lodging", "宿泊の好み", draft)}${note("food", "食事の好み", draft)}</div>`)}
+    ${section("avoidances", "避けたいこと", sectionSummary("avoidances", draft), note("avoidances", "避けたいこと・配慮してほしいこと", draft))}
+    <p class="profile-consent-explanation">設定はアカウントに保存します。各メモの「AIの提案に使う」がOFFなら本文をAIへ送りません。プロフィール変更で既存の旅程・予約は更新しません。</p></form>`;
 }
-function field(name: string, label: string, value = "", type = "text"): string {
-  const range = name === "party" ? 'min="1" max="100" step="1"' : 'min="0" max="1440" step="1"';
-  return `<label>${label}<input name="${name}" type="${type}" value="${esc(value)}" ${type === "number" ? range : 'maxlength="500"'}></label>`;
+function section(key: Section, label: string, summary: string, body: string, open = false): string {
+  return `<details class="profile-section" data-profile-section="${key}" ${open ? "open" : ""}><summary><span>${label}</span><small data-profile-summary="${key}">${esc(summary)}</small><span class="profile-section-state" aria-hidden="true"></span></summary><div class="profile-section-body">${body}</div></details>`;
+}
+function sectionSummary(section: Section, draft: Draft): string {
+  if (section === "origin") return [draft.home.station, draft.home.area, draft.transport.preferredMode === "rail" ? "鉄道" : draft.transport.preferredMode === "car" ? "車" : draft.transport.preferredMode === "bus" ? "バス" : draft.transport.preferredMode === "walking" ? "徒歩" : undefined].filter(Boolean).join("・") || "未設定";
+  if (section === "interests") return (Object.entries(draft.preferences) as Array<[keyof typeof travelPreferenceLabels, number]>).filter(([, value]) => value >= .7).map(([key]) => travelPreferenceLabels[key]).join("・") || "未設定";
+  if (section === "pace") return styles.filter(([key]) => draft.travelStyle[key] !== undefined).map(([, label]) => label).join("・") || "未設定";
+  if (section === "stay-food") return [draft.notes?.lodging ? "宿泊" : undefined, draft.notes?.food ? "食事" : undefined].filter(Boolean).join("・") || "未設定";
+  return draft.notes?.avoidances ? "設定あり" : "未設定";
+}
+function field(name: string, label: string, value = ""): string {
+  return `<label>${label}<input name="${name}" type="text" value="${esc(value)}" maxlength="500"></label>`;
 }
 function choice(name: string, label: string, value: number | undefined, labels: string[]): string {
   const values = ["", "0.2", "0.5", "0.9"];
   const selected = value === undefined ? 0 : value < .35 ? 1 : value < .7 ? 2 : 3;
   return `<div class="profile-choice"><p>${label}</p><input type="hidden" name="${name}" value="${value ?? ""}"><div class="profile-chips" role="group" aria-label="${label}">${["未設定", ...labels].map((text, index) => `<button type="button" data-choice="${name}" data-value="${values[index]}" aria-pressed="${selected === index}">${text}</button>`).join("")}</div></div>`;
 }
-function note(key: "budget" | "lodging" | "food" | "avoidances", label: string, draft: Draft): string {
-  return `<div><label>${label}<textarea name="${key}" maxlength="500" rows="${key === "budget" ? 1 : 2}">${esc(draft.notes?.[key] ?? "")}</textarea></label><label class="profile-note-consent"><input type="checkbox" name="ai-note" value="${key}" ${draft.aiNoteFields?.includes(key) ? "checked" : ""}>AIの提案に使う</label></div>`;
+function note(key: "lodging" | "food" | "avoidances", label: string, draft: Draft): string {
+  return `<div><label>${label}<textarea name="${key}" maxlength="500" rows="2">${esc(draft.notes?.[key] ?? "")}</textarea></label><label class="profile-note-consent"><input type="checkbox" name="ai-note" value="${key}" ${draft.aiNoteFields?.includes(key) ? "checked" : ""}>AIの提案に使う</label></div>`;
 }
 function blankDraft(): Draft { return { home: {}, companions: { usual: [], children: [] }, travelStyle: {}, preferences: {}, transport: {} }; }
 function profileDraft(profile: UserProfile): Draft { const { version: _, updatedAt: __, ...draft } = structuredClone(profile); return draft; }
 function readDraft(previous: Draft, data: FormData): Draft {
-  const draft = structuredClone(previous);
-  const text = (key: string) => String(data.get(key) ?? "").trim();
+  const draft = structuredClone(previous), text = (key: string) => String(data.get(key) ?? "").trim();
   draft.home.station = text("station") || undefined; draft.home.area = text("area") || undefined;
   draft.home.carAvailable = text("car") === "" ? undefined : text("car") === "yes";
-  draft.companions.usual = data.getAll("companion") as UserProfile["companions"]["usual"];
-  draft.companions.usualPartySize = text("party") ? Number(text("party")) : undefined;
-  for (const [key] of styles) { if (text(key)) draft.travelStyle[key] = Number(data.get(key)); else delete draft.travelStyle[key]; }
+  for (const [key] of styles) { if (text(key)) draft.travelStyle[key] = Number(text(key)); else delete draft.travelStyle[key]; }
+  // novelty, companions, party size, budget and typical travel limit are legacy-retained fields: this UI never rewrites them.
   for (const key of Object.keys(travelPreferenceLabels) as Array<keyof typeof travelPreferenceLabels>) {
-    if (text(`interest-${key}`)) draft.preferences[key] = Number(data.get(`interest-${key}`)); else delete draft.preferences[key];
+    if (text(`interest-${key}`)) draft.preferences[key] = Number(text(`interest-${key}`)); else delete draft.preferences[key];
   }
-  draft.transport.maxTypicalTravelMinutes = text("minutes") ? Number(text("minutes")) : previous.transport.maxTypicalTravelMinutes === null ? null : undefined;
   draft.transport.preferredMode = (text("mode") || undefined) as UserProfile["transport"]["preferredMode"];
-  for (const key of ["budget", "lodging", "food", "avoidances"] as const) {
+  for (const key of ["lodging", "food", "avoidances"] as const) {
     if (text(key)) (draft.notes ??= {})[key] = text(key); else if (draft.notes) delete draft.notes[key];
   }
-  const aiNoteFields = data.getAll("ai-note") as NonNullable<UserProfile["aiNoteFields"]>;
+  const retainedBudgetConsent = previous.aiNoteFields?.includes("budget") ? ["budget" as const] : [];
+  const aiNoteFields = [...retainedBudgetConsent, ...(data.getAll("ai-note") as Array<"lodging" | "food" | "avoidances">)];
   if (aiNoteFields.length) draft.aiNoteFields = aiNoteFields; else delete draft.aiNoteFields;
   return draft;
 }

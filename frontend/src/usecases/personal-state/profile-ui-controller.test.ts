@@ -23,4 +23,30 @@ describe("ProfileUiController", () => {
     await expect(controller.hydrate()).rejects.toThrow("Authentication required");
     expect(get).not.toHaveBeenCalled();
   });
+  it("serializes and coalesces autosaves with the latest CAS revision", async () => {
+    let release!: () => void;
+    const updates: Array<{ profile: typeof profile; revision: number | null }> = [];
+    const client = { get: async () => ({ profile, revision: 1 }), delete: async () => undefined,
+      update: vi.fn(async (next: typeof profile, revision: number | null) => {
+        updates.push({ profile: structuredClone(next), revision });
+        if (updates.length === 1) await new Promise<void>((resolve) => { release = resolve; });
+        return { profile: next, revision: revision! + 1 };
+      }) };
+    const controller = new ProfileUiController(client); await controller.hydrate();
+    const first = { ...profile, home: { station: "東" } }, second = { ...profile, home: { station: "東京" } };
+    const saving = controller.autosave(first); expect(client.update).toHaveBeenCalledOnce();
+    expect(controller.autosave(second)).toBe(saving);
+    release(); await saving;
+    expect(updates).toEqual([{ profile: first, revision: 1 }, { profile: second, revision: 2 }]);
+    expect(controller.current()).toMatchObject({ profile: second, revision: 3 });
+  });
+  it("does not apply a late autosave response after account clear", async () => {
+    let release!: () => void;
+    const client = { get: async () => ({ profile, revision: 1 }), delete: async () => undefined,
+      update: async () => { await new Promise<void>((resolve) => { release = resolve; }); return { profile, revision: 2 }; } };
+    const controller = new ProfileUiController(client); await controller.hydrate();
+    const saving = controller.autosave(profile); controller.clear(); release();
+    await expect(saving).rejects.toThrow("Profile session changed");
+    expect(controller.current()).toBeUndefined();
+  });
 });
