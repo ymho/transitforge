@@ -12,7 +12,6 @@ import { AgentModelError } from "./model-provider";
 import {
   agentDecisionContextText,
   buildAgentDecisionContext,
-  calendarDateReferences,
 } from "./agent-decision-context";
 import {
   DefaultAgentResponseGenerator,
@@ -783,9 +782,7 @@ export class MultiStepAgentRuntime {
   ): AgentRuntimeResult | undefined {
     const phase = request.context?.taskContext?.phase;
     if (request.feature !== "concierge" || (phase !== "discovery" && phase !== "draft" && phase !== "refine")) return undefined;
-    const tomorrow = calendarDateReferences(request.context?.featureContext?.calendarDate).relativeDates?.tomorrow;
-    const startDate = tomorrow && /明日(?:から|に|出発|発|行|旅|$)/u.test(request.userRequest) ? tomorrow : undefined;
-    const generated = recoverPlanningDraft(evidence, request.userRequest, startDate);
+    const generated = recoverPlanningDraft(evidence, request.context?.effectiveIntent);
     if (!generated?.publicPlanPresentation) return undefined;
     const grounding = validateEvidenceAndClaims(evidence, generated.claims);
     if (!grounding.valid || grounding.claims.some((claim) => claim.groundingStatus === "unsupported")) return undefined;
@@ -802,7 +799,7 @@ export class MultiStepAgentRuntime {
     return result("completed", prepared.text, evidence, grounding.claims, trace, prepared.observation,
       withMeasuredResearchOutcome(generated.publicPlanPresentation,
         { modelCalls: 0, toolCalls: 0, wallClockMs: elapsed(startedAt, this.now), requestedMode: request.researchMode?.requestedMode ?? "standard",
-          effectiveMode: request.researchMode?.effectiveMode ?? "standard" }));
+          effectiveMode: request.researchMode?.effectiveMode ?? "standard" }), { status: "degraded", basis: "verified_projection" });
   }
 
   private limitOrPlanningSummary(
@@ -900,8 +897,10 @@ function result(
   trace: AgentTraceRecorder,
   turnObservation?: AgentTurnObservation,
   publicPlanPresentation?: import("./public-plan-presentation").PublicPlanPresentation,
+  delivery: NonNullable<AgentRuntimeResult["delivery"]> = { status: "full", basis: "model" },
 ): AgentRuntimeResult {
   return {
+    delivery,
     ...(status === "completed" && turnObservation ? { turnObservation } : {}),
     ...(status === "completed" && publicPlanPresentation ? { publicPlanPresentation } : {}),
     status,

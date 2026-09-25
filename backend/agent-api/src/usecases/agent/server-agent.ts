@@ -138,10 +138,12 @@ async function publishRuntimeDiagnostics(dependencies: ServerAgentDependencies, 
   }
   const completion = [...result.trace.events].reverse().find((event) => event.type === "task_completed");
   await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId,
-    phase: "runtime", reason: result.status === "completed" || result.status === "follow_up" ? "completed" :
+    phase: "runtime", reason: result.status === "completed" || result.status === "follow_up" ?
+      result.delivery?.status === "degraded" || result.delivery?.status === "partial" ? "partial" : "completed" :
       diagnosticFailureReason(completion?.type === "task_completed" ? completion.reason : undefined),
     occurredAt: completion?.occurredAt ?? (dependencies.now?.() ?? new Date()).toISOString(),
-    incomplete: result.status === "failed" || result.status === "limit_reached" });
+    ...(result.delivery ? { mode: `delivery:${result.delivery.status}:${result.delivery.basis}` } : {}),
+    incomplete: result.status === "failed" || result.status === "limit_reached" || result.delivery?.status !== undefined && result.delivery.status !== "full" });
 }
 
 function diagnosticFailureReason(reason: string | undefined): AgentDiagnosticEvent["reason"] {

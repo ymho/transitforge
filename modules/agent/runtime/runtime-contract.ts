@@ -29,6 +29,8 @@ export type AgentRuntimeStatus =
   | "failed";
 
 export interface AgentRuntimeResult {
+  /** Public quality axis independent from transport/runtime completion. */
+  delivery?: { status: "full" | "partial" | "degraded"; basis: "model" | "verified_projection" };
   turnObservation?: AgentTurnObservation;
   publicPlanPresentation?: import("./public-plan-presentation").PublicPlanPresentation;
   publicJourneyPresentation?: import("./public-journey-presentation").PublicJourneyPresentation;

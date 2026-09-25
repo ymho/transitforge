@@ -39,9 +39,14 @@ it("publishes a bounded intent receipt before the final response", async () => {
     changeRef: "change-1", groupRef: "group-1", action: "replace", target: "destination", scope: { type: "trip" }, frame: "actual", status: "accepted",
   }] };
   const options = setup(stream(frame(1, { type: "intent_accepted", receipt }) +
-    frame(2, { type: "final", status: "completed", response: "回答", semanticReceipt: receipt }) + done));
+    frame(2, { type: "final", status: "completed", response: "回答", delivery: { status: "degraded", basis: "verified_projection" }, semanticReceipt: receipt }) + done));
   await consumeAgentStream(options);
   expect(options.onEvent.mock.calls.map(([event]) => event.type)).toEqual(["intent_accepted", "final"]);
+  expect(options.onEvent.mock.calls.at(-1)?.[0]).toMatchObject({ delivery: { status: "degraded", basis: "verified_projection" } });
+});
+it("rejects malformed delivery quality instead of treating transport success as a full answer", async () => {
+  const invalid = frame(2, { type: "final", status: "completed", response: "回答", delivery: { status: "full", basis: "model", trace: "private" } });
+  await expect(consumeAgentStream(setup(stream(progress + invalid + done)))).rejects.toThrow("invalid_event");
 });
 it("rejects private fields on a semantic receipt", async () => {
   const options = setup(stream(frame(1, { type: "intent_accepted", receipt: { version: "public-semantic-receipt-v1", intentRevision: 1,

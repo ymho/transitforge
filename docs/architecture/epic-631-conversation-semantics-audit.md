@@ -41,7 +41,7 @@ BrowserからWorking State、Profile、Trip本文、owner、revisionを受け取
 | invalidation/replan | Evidence applicability、PlanVariant、CAS | target別meaning dependency連携 #642 | Server initial Evidence + Tool Evidence tests | legacy無依存Evidenceだけ安全側で失効。全消去・無条件再検索を撤去 |
 | proposal/branch | Request Proposal、PlanVariant、Trip CAS | conversation delta接続 #643 | 未実装 | overlayからの直接Trip writeは禁止 |
 | response/UI | typed presentation、history/SSE、既存cards | public meaning receipt #644/#646 | Application受理後SSE + final + Dynamo history + 共通UI projection | UI本文推測を状態表示に使わない |
-| degraded path | verified Evidence summary、turn retry | A/B故障区別 #645 | A後failure/retry testあり | 独自自然言語補完を撤去 |
+| degraded path | verified Evidence summary、turn retry | A/B故障区別 + delivery quality軸 #645 | A後failure/retry、Provider schema failure、SSE/history test | 独自自然言語補完を撤去済み。transport completedとdegradedを別表示 |
 | eval/trace/security | Epic #537/#557/#558基盤 | #647/#648/#650/#651 | 初期diagnostic hookあり | raw state/CoTを追加しない |
 | budget/rollout | bounded Runtime、feature env | default-off gate/read-old-write-new #652/#653 | Terraform/schema tests | 専用二重推論は暫定 |
 
@@ -69,8 +69,8 @@ BrowserからWorking State、Profile、Trip本文、owner、revisionを受け取
 
 | 現行箇所 | 種別 | 現行目的 | 後継契約 | 削除条件 / 保持条件 |
 | --- | --- | --- | --- | --- |
-| `agent-runtime.ts::verifiedPlanningSummary` | regex (`明日`等) | Provider failure時の日付継続 | accepted semantic overlay + degraded presenter #645 | 明日/明後日/月末/言い換えの2turn回帰後に語句抽出を削除。検証済みEvidence summaryは保持 |
-| `planning-draft-recovery.ts::recoverPlanningDraft` | recovery/default | draft条件補完 | Effective Intent + receipt #640/#645 | 同等failure fixture後に自然言語抽出を削除。schema/date validationは保持 |
+| `agent-runtime.ts::verifiedPlanningSummary` | 旧regex (`明日`等) | Provider failure時の日付継続 | accepted Effective Intent + degraded presenter #645 | **置換済み**。current `userRequest`を再解釈せず、Application解決済みexact dateだけを使用 |
+| `planning-draft-recovery.ts::recoverPlanningDraft` | 旧recovery/default | draft条件補完 | Effective Intent + verified Evidence #640/#645 | **置換済み**。地名一致regex、固定の「日程・出発地未定」、固定pace/休憩を削除。typed dateと有効Evidenceだけを投影 |
 | system/model Prompt | 自由文指示 | 強度、質問、Tool判断 | semantic schema + action requirement policy #633/#641 | model表現指示は残せるがstate確定の第二正本にしない |
 | legacy Decision Summary parser | legacy text parser | provider移行 | answer/ask v4 + native Tool | legacy provider期限中のみ。strict出力へfallback適用しない |
 | Conversation history/summary | implicit recovery | 過去条件想起 | Working semantic overlay #640 | 表示文脈として保持、確定条件抽出には使わない |

@@ -47,16 +47,17 @@ describe("Conversation turn transactions", () => {
     expect((await f.conversations.get(principal, conversationId))?.messageCount).toBe(2);
   });
   it("atomically appends once and replays completion across fresh repository instances", async () => {
-    const f = await setup(), lease = await begin(f);
+    const f = await setup(), lease = await begin(f), delivered = { ...result, delivery: { status: "degraded" as const, basis: "verified_projection" as const } };
     await expect(f.turns.beginTurn(identity, request)).rejects.toMatchObject({ code: "conflict" });
-    expect(await f.turns.completeTurn(identity, lease, result)).toEqual(result);
-    expect(await f.turns.completeTurn(identity, lease, result)).toEqual(result);
+    expect(await f.turns.completeTurn(identity, lease, delivered)).toEqual(delivered);
+    expect(await f.turns.completeTurn(identity, lease, delivered)).toEqual(delivered);
     const fresh = new DynamoDbConversationTurnRepository("test-state", f.client, f.clock);
-    expect(await fresh.beginTurn(identity, request)).toEqual({ state: "completed", result });
+    expect(await fresh.beginTurn(identity, request)).toEqual({ state: "completed", result: delivered });
     expect(await f.conversations.get(principal, conversationId)).toMatchObject({ messageCount: 2, revision: 2 });
     expect((await f.conversations.history(principal, conversationId)).items.map(({ role, text, sequence }) => ({ role, text, sequence })))
       .toEqual([{ role: "user", text: request.userRequest, sequence: 1 }, { role: "assistant", text: result.response, sequence: 2 }]);
-    await expect(f.turns.completeTurn(identity, lease, { ...result, response: "changed" })).rejects.toMatchObject({ code: "conflict" });
+    expect((await f.conversations.history(principal, conversationId)).items.at(-1)?.delivery).toEqual(delivered.delivery);
+    await expect(f.turns.completeTurn(identity, lease, { ...delivered, response: "changed" })).rejects.toMatchObject({ code: "conflict" });
   });
   it("rejects changed input including Trip/UI references before and after completion", async () => {
     const f = await setup(), lease = await begin(f);

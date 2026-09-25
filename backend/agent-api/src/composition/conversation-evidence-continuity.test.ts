@@ -45,12 +45,19 @@ it("keeps a verified draft usable when the next turn supplies tomorrow's departu
   const { tripId: _tripId, ...metadata } = stateMetadata();
   await state.conversations.create(stateA, conversationId, { ...metadata, scope: "general" });
   let providerUnavailable = false;
-  const model: ConversationModel = { converse: vi.fn(async (_request) => {
+  const model: ConversationModel = { converse: vi.fn(async (request) => {
+    if (request.outputContract?.name === "conversation_semantic_delta") {
+      const current = JSON.parse("text" in request.messages[0]!.content[0]! ? request.messages[0]!.content[0]!.text : "{}");
+      return { message: { role: "assistant" as const, content: [{ text: JSON.stringify(current.utterance === "明日出発します"
+        ? { outcome: "delta", speechAct: "inform", operations: [{ atomicGroup: 1, action: "set", target: "start_date", modality: "required", precision: "exact", frame: "actual", quote: "明日", value: { kind: "relative_date", relation: "tomorrow" } }], unresolvedFragments: [] }
+        : { outcome: "no_change", speechAct: "inform", operations: [], unresolvedFragments: [] }) }] },
+      stopReason: "end_turn" as const, metadata: { modelId: "semantic", latencyMs: 1 } };
+    }
     if (providerUnavailable) throw new Error("provider unavailable");
     return toolCall("source-1", "discover_source");
   }) };
   const agent = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model, weather: { search: vi.fn() }, newExecutionId: () => crypto.randomUUID(), additionalTools: [sourceTool()] });
+    model, weather: { search: vi.fn() }, newExecutionId: () => crypto.randomUUID(), additionalTools: [sourceTool()], semanticIntentEnabled: true });
   const first = await agent.runConversationTurn({ principal: stateA, conversationId,
     turnId: "11111111-1111-4111-8111-111111111111", userRequest: "出雲大社に行きたい", uiContext: { calendarDate: "2026-09-25" } });
   expect(first.publicPlanPresentation?.candidates[0]?.label).toBe("出雲大社");
@@ -82,7 +89,8 @@ function finalPlan() {
 }
 
 function sourceTool(): ServerAgentToolBinding {
-  return { descriptor: { name: "discover_source", description: "旅行先の資料を確認する", inputSchema: { type: "object", additionalProperties: false, properties: {} } },
+  return { descriptor: { name: "discover_source", description: "旅行先の資料を確認する", inputSchema: { type: "object", additionalProperties: false, properties: {} },
+    intentPolicy: { dependencies: ["destination"] } },
     operation: async () => ({ body: { source: "izumo" } }), evidence: (_output, context) => [{ id: sourceEvidenceId, category: "external", knowledgeKind: "deterministic_fact",
       subject: "出雲大社", facts: { status: "available", freshness: "fresh", sourceTitle: "出雲大社", sourceExcerpt,
         sourceUrl: "https://example.test/izumo", placeName: "出雲大社", imageUrl: "https://images.example.test/izumo.jpg",

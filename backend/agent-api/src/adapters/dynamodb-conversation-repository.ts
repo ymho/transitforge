@@ -80,15 +80,16 @@ export class DynamoDbConversationRepository implements ConversationRepository {
     const items = result.items.map((item): ConversationMessage => {
       try {
         const value: unknown = JSON.parse(item.payload?.S ?? "");
-        exactObject(value, ["sequence", "createdAt", "role", "text", "semanticReceipt", "publicPlanPresentation", "publicJourneyPresentation", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"]);
+        exactObject(value, ["sequence", "createdAt", "role", "text", "delivery", "semanticReceipt", "publicPlanPresentation", "publicJourneyPresentation", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"]);
         sequence(value.sequence); timestamp(value.createdAt);
         if (value.sequence < 1 || item.sk.S !== `${prefix}${sequenceKey(value.sequence)}` || item.storageVersion?.N !== "1") throw new Error();
         const [message] = messageInputs([{ role: value.role, text: value.text }]);
-        if ((value.semanticReceipt !== undefined || value.publicPlanPresentation !== undefined || value.publicJourneyPresentation !== undefined || value.tripUpdateProposal !== undefined || value.consultationRequestProposal !== undefined || value.tripCostProposal !== undefined) && message.role !== "assistant") throw new Error();
+        if ((value.delivery !== undefined || value.semanticReceipt !== undefined || value.publicPlanPresentation !== undefined || value.publicJourneyPresentation !== undefined || value.tripUpdateProposal !== undefined || value.consultationRequestProposal !== undefined || value.tripCostProposal !== undefined) && message.role !== "assistant") throw new Error();
         if ((value.tripUpdateProposal || value.tripCostProposal) && value.consultationRequestProposal) throw new Error();
         const consultationRequestProposal = value.consultationRequestProposal === undefined ? undefined : parseConsultationRequestProposal(value.consultationRequestProposal);
         if (consultationRequestProposal && consultationRequestProposal.conversationId !== id) throw new Error();
-        return { ...message, sequence: value.sequence, createdAt: value.createdAt, ...(value.semanticReceipt !== undefined ? { semanticReceipt: parsePublicSemanticReceipt(value.semanticReceipt) } : {}), ...(value.publicPlanPresentation !== undefined ? { publicPlanPresentation: parsePublicPlanPresentation(value.publicPlanPresentation) } : {}), ...(value.publicJourneyPresentation !== undefined ? { publicJourneyPresentation: parsePublicJourneyPresentation(value.publicJourneyPresentation) } : {}), ...(value.tripCostProposal !== undefined ? { tripCostProposal: parsePublicCostProposal(value.tripCostProposal) } : {}),
+        const delivery = value.delivery === undefined ? undefined : deliveryStatus(value.delivery);
+        return { ...message, sequence: value.sequence, createdAt: value.createdAt, ...(delivery ? { delivery } : {}), ...(value.semanticReceipt !== undefined ? { semanticReceipt: parsePublicSemanticReceipt(value.semanticReceipt) } : {}), ...(value.publicPlanPresentation !== undefined ? { publicPlanPresentation: parsePublicPlanPresentation(value.publicPlanPresentation) } : {}), ...(value.publicJourneyPresentation !== undefined ? { publicJourneyPresentation: parsePublicJourneyPresentation(value.publicJourneyPresentation) } : {}), ...(value.tripCostProposal !== undefined ? { tripCostProposal: parsePublicCostProposal(value.tripCostProposal) } : {}),
           ...(value.tripUpdateProposal !== undefined ? { tripUpdateProposal: parsePublicRequestProposal(value.tripUpdateProposal) } : {}), ...(consultationRequestProposal ? { consultationRequestProposal } : {}) };
       } catch { throw new StateError("unavailable"); }
     });
@@ -154,4 +155,9 @@ export class DynamoDbConversationRepository implements ConversationRepository {
     }
     return { complete: true };
   }
+}
+function deliveryStatus(value: unknown): NonNullable<ConversationMessage["delivery"]> {
+  exactObject(value, ["status", "basis"]);
+  if (!["full", "partial", "degraded"].includes(String(value.status)) || !["model", "verified_projection"].includes(String(value.basis))) throw new Error();
+  return { status: value.status as NonNullable<ConversationMessage["delivery"]>["status"], basis: value.basis as NonNullable<ConversationMessage["delivery"]>["basis"] };
 }

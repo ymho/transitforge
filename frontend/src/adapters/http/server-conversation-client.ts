@@ -3,6 +3,8 @@ import { parseConsultationRequestProposal } from "@raiquora/trip/consultation-re
 import { parseConsultationRequest } from "@raiquora/trip/consultation-request";
 import { parsePublicRequestProposal } from "@raiquora/trip/public-request-proposal";
 import { parsePublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
+import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
+import { parsePublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 import { requestSessionVersion } from "./authenticated-fetch";
 import { personalApiFetch } from "./personal-api-fetch";
 import type { ServerConversation, ServerConversationClient, ServerConversationMessage, ServerConversationMetadata, ServerPage } from "../../usecases/personal-state/server-conversation-client";
@@ -25,8 +27,22 @@ function page<T>(value: unknown, item: (value: unknown) => value is T): ServerPa
 }
 function validMessage(value: unknown): value is ServerConversationMessage {
   const v = value as Partial<ServerConversationMessage>;
-  try { if (v?.publicJourneyPresentation !== undefined) { if (v.role !== "assistant") return false; parsePublicJourneyPresentation(v.publicJourneyPresentation); } if (v?.tripCostProposal !== undefined) { if (v.role !== "assistant" || v.consultationRequestProposal !== undefined) return false; parsePublicCostProposal(v.tripCostProposal); } if (v?.consultationRequestProposal !== undefined) { if (v.role !== "assistant" || v.tripUpdateProposal !== undefined) return false; parseConsultationRequestProposal(v.consultationRequestProposal); } if (v?.tripUpdateProposal !== undefined) { if (v.role !== "assistant") return false; parsePublicRequestProposal(v.tripUpdateProposal); } } catch { return false; }
-  return !!v && typeof v === "object" && (v.role === "user" || v.role === "assistant") && typeof v.text === "string" && Number.isSafeInteger(v.sequence) && typeof v.createdAt === "string";
+  if (!v || typeof v !== "object" || Object.keys(v).some(key => !["role", "text", "sequence", "createdAt", "delivery", "semanticReceipt", "publicPlanPresentation", "publicJourneyPresentation", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"].includes(key))) return false;
+  try {
+    if (v.delivery !== undefined && (v.role !== "assistant" || !validDelivery(v.delivery))) return false;
+    if (v.semanticReceipt !== undefined) { if (v.role !== "assistant") return false; parsePublicSemanticReceipt(v.semanticReceipt); }
+    if (v.publicPlanPresentation !== undefined) { if (v.role !== "assistant") return false; parsePublicPlanPresentation(v.publicPlanPresentation); }
+    if (v.publicJourneyPresentation !== undefined) { if (v.role !== "assistant") return false; parsePublicJourneyPresentation(v.publicJourneyPresentation); }
+    if (v.tripCostProposal !== undefined) { if (v.role !== "assistant" || v.consultationRequestProposal !== undefined) return false; parsePublicCostProposal(v.tripCostProposal); }
+    if (v.consultationRequestProposal !== undefined) { if (v.role !== "assistant" || v.tripUpdateProposal !== undefined) return false; parseConsultationRequestProposal(v.consultationRequestProposal); }
+    if (v.tripUpdateProposal !== undefined) { if (v.role !== "assistant") return false; parsePublicRequestProposal(v.tripUpdateProposal); }
+  } catch { return false; }
+  return (v.role === "user" || v.role === "assistant") && typeof v.text === "string" && Number.isSafeInteger(v.sequence) && typeof v.createdAt === "string";
+}
+function validDelivery(value: unknown): boolean {
+  const v = value as { status?: unknown; basis?: unknown };
+  return !!v && typeof v === "object" && Object.keys(v).every(key => ["status", "basis"].includes(key)) &&
+    ["full", "partial", "degraded"].includes(String(v.status)) && ["model", "verified_projection"].includes(String(v.basis));
 }
 export class HttpServerConversationClient implements ServerConversationClient {
   constructor(private readonly endpoint = "/api/conversations/v1", private readonly request: typeof fetch = personalApiFetch) {}

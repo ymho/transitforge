@@ -66,6 +66,7 @@ export function createConversationTurnApplication(dependencies: {
         phase: "presentation", reason: "validated", occurredAt: new Date().toISOString(), correlation: { turnId },
         counts: { validated: 1 }, refs: [presentationReceipt.presentationId] });
       result = { status: runtime.status, response: runtime.response,
+        ...(runtime.delivery ? { delivery: runtime.delivery } : {}),
         ...(acceptedReceipt ? { semanticReceipt: publicSemanticReceipt(acceptedReceipt) } : {}),
         ...(runtime.publicPlanPresentation ? { publicPlanPresentation: runtime.publicPlanPresentation } : {}),
         ...(runtime.publicJourneyPresentation ? { publicJourneyPresentation: runtime.publicJourneyPresentation } : {}),
