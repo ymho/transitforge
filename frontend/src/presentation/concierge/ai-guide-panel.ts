@@ -664,6 +664,7 @@ export function resolveAssistantMessage(
   } else {
     // V2 is a preview only until the #388/#389 writer gate. Never invoke the legacy apply callback.
     renderAssistantCopy(item, visibleAssistantText(response.text), animate);
+    if ("delivery" in response && response.delivery && response.delivery.status !== "full") item.append(renderDeliveryStatus(response.delivery));
     if ("semanticReceipt" in response && response.semanticReceipt) item.append(renderSemanticReceipt(response.semanticReceipt));
     if ("publicPlanPresentation" in response && response.publicPlanPresentation) item.append(renderPublicPlanPresentation(response.publicPlanPresentation));
     if ("publicJourneyPresentation" in response && response.publicJourneyPresentation) item.append(renderPublicJourneyPresentation(response.publicJourneyPresentation));
@@ -680,6 +681,16 @@ export function resolveAssistantMessage(
   }
   appendConversationFeedback(item);
   item.scrollIntoView({ block: "nearest" });
+}
+
+function renderDeliveryStatus(delivery: NonNullable<import("@raiquora/agent/runtime-contract").AgentRuntimeResult["delivery"]>): HTMLElement {
+  const status = document.createElement("p");
+  status.className = `agent-delivery-status agent-delivery-${delivery.status}`;
+  status.textContent = delivery.status === "degraded"
+    ? "一部の処理を完了できなかったため、確認済み情報だけを表示しています。"
+    : "確認できた範囲の回答です。";
+  status.setAttribute("role", "status");
+  return status;
 }
 
 const semanticTargetLabels: Record<PublicSemanticReceipt["changes"][number]["target"], string> = {

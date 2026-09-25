@@ -131,6 +131,7 @@ describe("MultiStepAgentRuntime", () => {
     ));
 
     expect(output.status).toBe("completed");
+    expect(output.delivery).toEqual({ status: "degraded", basis: "verified_projection" });
     expect(output.response).toContain("歴史的な町並みが残ります");
     expect(output.claims).toHaveLength(1);
     expect(model.generate).toHaveBeenCalledTimes(1);

@@ -14,4 +14,14 @@ describe("Conversation HTTP client", () => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ version: "conversation-api-v1", items: [{ conversationId: id }] })));
     await expect(new HttpServerConversationClient("/api/conversations/v1", request).list()).rejects.toThrow("Invalid Conversation API response");
   });
+  it("accepts strict public delivery/semantic history and rejects extra private fields", async () => {
+    const receipt = { version: "public-semantic-receipt-v1", intentRevision: 1, speechAct: "inform", outcome: "accepted", changes: [] };
+    const item = { role: "assistant", text: "限定回答", sequence: 1, createdAt: "2026-09-18T00:00:00.000Z",
+      delivery: { status: "degraded", basis: "verified_projection" }, semanticReceipt: receipt };
+    const request = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ version: "conversation-api-v1", items: [item] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ version: "conversation-api-v1", items: [{ ...item, trace: "private" }] })));
+    const client = new HttpServerConversationClient("/api/conversations/v1", request);
+    expect((await client.history(id)).items).toEqual([item]);
+    await expect(client.history(id)).rejects.toThrow("Invalid Conversation API response");
+  });
 });

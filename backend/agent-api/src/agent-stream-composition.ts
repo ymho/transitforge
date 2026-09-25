@@ -46,6 +46,7 @@ export function createProductionAgentStream(options: {
       // Stored continuity metadata is not part of the public SSE contract.
       // Project an allowlist on both fresh completion and persisted replay.
       await emit({ type: "final", status: result.status, response: result.response,
+        ...(result.delivery ? { delivery: result.delivery } : {}),
         ...(result.semanticReceipt ? { semanticReceipt: result.semanticReceipt } : {}),
         ...(result.publicPlanPresentation ? { publicPlanPresentation: result.publicPlanPresentation } : {}),
         ...(result.publicJourneyPresentation ? { publicJourneyPresentation: result.publicJourneyPresentation } : {}),
