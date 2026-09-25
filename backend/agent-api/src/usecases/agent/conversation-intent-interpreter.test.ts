@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { emptyConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
 import { createConversationIntentInterpreter } from "./conversation-intent-interpreter.js";
+import { SemanticInterpretationContractError } from "./semantic-interpretation-diagnostics.js";
 import type { ConversationModel } from "../../ports/conversation-model.js";
 
 describe("Conversation intent interpreter", () => {
@@ -25,5 +26,40 @@ describe("Conversation intent interpreter", () => {
     const interpret = createConversationIntentInterpreter({ converse: vi.fn(async () => ({ message: { role: "assistant" as const,
       content: [{ toolUse: { toolUseId: "x", name: "search_web", input: {} } }] }, stopReason: "tool_use" as const, metadata: { modelId: "test", latencyMs: 1 } })) });
     await expect(interpret({ userRequest: "大阪から", overlay: emptyConversationIntentOverlay(), turnId: "00000000-0000-4000-8000-000000000001" })).rejects.toMatchObject({ code: "invalid_schema" });
+  });
+
+  it("classifies semantic contract failures without retaining content", async () => {
+    const baseInput = { userRequest: "大阪から", overlay: emptyConversationIntentOverlay(),
+      turnId: "00000000-0000-4000-8000-000000000002" };
+
+    const malformedJson = createConversationIntentInterpreter({ converse: vi.fn(async () => ({
+      message: { role: "assistant" as const, content: [{ text: "{" }] }, stopReason: "end_turn" as const,
+      metadata: { modelId: "test", latencyMs: 1 },
+    })) });
+    await expect(malformedJson(baseInput)).rejects.toMatchObject({ name: "SemanticInterpretationContractError", category: "json_parse" });
+
+    const badScope = createConversationIntentInterpreter({ converse: vi.fn(async () => ({
+      message: { role: "assistant" as const, content: [{ text: JSON.stringify({ outcome: "delta", speechAct: "inform",
+        operations: [{ atomicGroup: 1, action: "set", target: "pace", frame: "actual", quote: "大阪",
+          scope: { kind: "logical_day_ordinal", ordinal: 0 }, value: { kind: "text", text: "ゆっくり" } }],
+        unresolvedFragments: [] }) }] }, stopReason: "end_turn" as const, metadata: { modelId: "test", latencyMs: 1 },
+    })) });
+    await expect(badScope(baseInput)).rejects.toMatchObject({ category: "scope_shape" });
+
+    const fabricatedQuote = createConversationIntentInterpreter({ converse: vi.fn(async () => ({
+      message: { role: "assistant" as const, content: [{ text: JSON.stringify({ outcome: "delta", speechAct: "inform",
+        operations: [{ atomicGroup: 1, action: "set", target: "origin", frame: "actual", quote: "京都から",
+          value: { kind: "place_label", label: "京都" } }], unresolvedFragments: [] }) }] },
+      stopReason: "end_turn" as const, metadata: { modelId: "test", latencyMs: 1 },
+    })) });
+    await expect(fabricatedQuote(baseInput)).rejects.toMatchObject({ category: "quote_verification" });
+  });
+
+  it("maps provider message validation to a closed category", async () => {
+    const interpret = createConversationIntentInterpreter({ converse: vi.fn(async () => {
+      throw new SemanticInterpretationContractError("provider_message");
+    }) });
+    await expect(interpret({ userRequest: "大阪から", overlay: emptyConversationIntentOverlay(),
+      turnId: "00000000-0000-4000-8000-000000000003" })).rejects.toMatchObject({ category: "provider_message" });
   });
 });
