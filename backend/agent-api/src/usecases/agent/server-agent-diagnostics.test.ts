@@ -24,7 +24,7 @@ it("emits privacy-safe diagnostics and does not fail the turn when the sink fail
 it.each([
   ["refusal", "provider_refusal"],
   ["provider_error", "provider_error"],
-  ["invalid_schema", "schema_invalid"],
+  ["invalid_schema", "model_invalid_schema"],
 ] as const)("classifies %s without retaining provider text", async (code, expectedReason) => {
   const record = vi.fn();
   const app = createServerAgentApplication({

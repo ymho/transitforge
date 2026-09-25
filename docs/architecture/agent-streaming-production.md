@@ -75,6 +75,10 @@ requestIdとAgent executionIdは同じserver生成UUID、SSE runIdも同値。
 Lambda awsRequestIdとGateway extendedRequestIdをadapterで受け、latencyMs、拒否HTTP statusと相関する。
 Gateway IDはcallerが差し替え可能な通常requestIdではなくextendedRequestIdをLambda側の結合キーとする。
 final_sentはwrite成功後、completedはdone/write/end成功後。相手Browserでの受領保証ではない。
+保存済みConversationTurnResultをSSEへそのまま展開せず、公開finalの項目だけを投影する。
+内部のturnObservation・presentationReceiptは保存・継続用であり、新規回答と再送のどちらにも含めない。
+`npm test`は本番stream/Runtime/保存層から実際のBrowser consumerまでを通す契約テストを含む。
+回答生成成功だけでなく、consumerがfinalを受理することを回帰条件とする。
 
 API stage access logはrequestId、extendedRequestId、status、response/integration latencyだけ。
 body/header/identity/error messageは記録せず、execution logging OFF、data trace OFF、metrics ON。
@@ -84,6 +88,8 @@ Gatewayのrate 1/s・burst 2、Lambda reserved concurrency 1は初期の保守�
 
 Runtime完了時は内容を含まない`runtime`診断を追加し、`completed`、`budget_exhausted`、
 `provider_timeout`、`provider_refusal`、`provider_error`、`schema_invalid`、`response_rejected`、`failed`を区別する。
+一般障害になる構造エラーは`model_invalid_schema`・`invalid_initial_evidence`・`missing_tool_call`・
+`invalid_in_trip_answer_plan`に分け、Provider応答不正とContext/Runtime不正を混同しない。
 上限到達は`iteration_budget`、`model_budget`、`tool_budget`、`deadline`、`finalization_tool_calls`を
 安全なreasonとして区別し、修復失敗などの既存reasonも`schema_invalid`等へ集約する。本番Serverの標準上限は
 10判断ラウンド、14モデル呼出、16 Tool呼出、150秒（transportは240秒）とし、Browser/共有Runtime既定値は維持する。

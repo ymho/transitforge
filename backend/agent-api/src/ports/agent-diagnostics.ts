@@ -1,7 +1,7 @@
 export type AgentDiagnosticPhase = "context" | "decision" | "tool" | "evidence" | "presentation" | "runtime" | "save" | "research" | "cache";
 export type AgentDiagnosticReason = "compiled" | "validated" | "rejected" | "completed" | "failed" | "partial" |
   "not_loaded" | "stale_revision" | "budget_exhausted" | "schema_invalid" | "provider_refusal" | "provider_timeout" | "provider_error" |
-  "response_rejected" |
+  "response_rejected" | "model_invalid_schema" | "invalid_initial_evidence" | "missing_tool_call" | "invalid_in_trip_answer_plan" |
   "completion_ambiguous" | "iteration_budget" | "model_budget" | "tool_budget" | "deadline" | "finalization_tool_calls" |
   "planning_progress_required" | "planning_evidence_required" | "place_photo_required" | "final_response_policy_rejected";
 
