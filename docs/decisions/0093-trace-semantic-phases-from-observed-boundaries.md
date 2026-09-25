@@ -1,6 +1,8 @@
 # ADR 0093: Trace semantic phases from observed boundaries
 
-Status: accepted
+- ステータス: Accepted
+- 日付: 2026-09-25
+- 関連: Epic #631、#647、#650、#652、ADR 0083
 
 ## Context
 

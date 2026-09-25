@@ -1,6 +1,8 @@
 # ADR 0092: Resolve conversation scope selectors in Application
 
-Status: accepted
+- ステータス: Accepted
+- 日付: 2026-09-25
+- 関連: Epic #631、#634、#640、#643、#647、ADR 0083、ADR 0084
 
 ## Context
 
