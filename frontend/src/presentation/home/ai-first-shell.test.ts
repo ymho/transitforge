@@ -52,16 +52,19 @@ it("starts consultation only after authentication and rejects a direct signed-ou
   expect(signedIn.ports.newConsultation).toHaveBeenCalledWith("温泉へ行きたい");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("chat");
 });
-it("uses an account icon in the header and sends signed-in people to My", () => {
+it("puts the account icon in the shared navigation and sends signed-in people to My", () => {
   const signedOut = setup();
   expect(document.querySelector("[data-account] .ds-icon")).not.toBeNull();
-  expect(document.querySelector("[data-account]")!.textContent).toBe("");
+  expect(document.querySelector(".product-header")).toBeNull();
+  expect(document.querySelector(".product-brand")).toBeNull();
+  expect(document.querySelector(".product-nav [data-account]")!.textContent).toBe("アカウント");
   expect(document.querySelector("[data-account]")!.getAttribute("aria-label")).toBe("ログインまたは新規登録");
   click("[data-account]"); expect(signedOut.ports.login).toHaveBeenCalledOnce();
   document.body.innerHTML = '<main id="app"></main>';
   const signedIn = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) });
-  expect(document.querySelector("[data-account]")!.textContent).toBe(""); click("[data-account]");
+  expect(document.querySelector("[data-account]")!.textContent).toBe("アカウント"); click("[data-account]");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("my"); expect(document.querySelector("[data-my-account-status]")!.textContent).toContain("ログイン中");
+  expect(document.querySelector("[data-account]")!.getAttribute("aria-current")).toBe("page");
   expect(document.querySelector("[data-my-account-status]")!.textContent).not.toContain("最大8時間");
   expect(document.querySelectorAll("[data-primary]")).toHaveLength(3);
   expect(document.querySelector('[data-primary="my"]')).toBeNull();

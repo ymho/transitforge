@@ -6,7 +6,7 @@
   --product-accent: #0c2947;
   --product-radius: 1.25rem;
   --product-control-radius: .75rem;
-  --product-header-height: 4.25rem;
+  --product-header-height: 0rem;
   --glass-canvas: var(--product-paper);
   --glass-surface: #fff;
   --glass-surface-strong: #fff;
@@ -27,15 +27,7 @@
 }
 .product-shell { position: relative; z-index: 15; height: 100%; pointer-events: none; }
 .product-shell > * { pointer-events: auto; }
-.product-header { position: absolute; z-index: 18; inset: 0 0 auto; height: var(--product-header-height); padding: 0 1.75rem; display: flex; align-items: center; gap: 1.5rem; border-bottom: 1px solid var(--product-line); background: var(--product-paper); transition: background-color .2s ease, border-color .2s ease; }
-.product-brand { display: flex; align-items: center; color: inherit; text-decoration: none; }
-.product-brand img { display: block; width: clamp(8.5rem, 14vw, 11.25rem); height: auto; transition: filter .2s ease; }
-.product-account { margin-left: auto; width: 2.75rem; min-height: 2.75rem; display: grid; place-items: center; padding: .6rem; border: 0; color: #173d60; background: transparent; cursor: pointer; }
-.product-account .ds-icon { width: 1.35rem; height: 1.35rem; }
-.product-header[data-overlay="true"] { border-color: transparent; background: transparent; }
-.product-header[data-overlay="true"] .product-brand img { filter: brightness(0) invert(1); }
-.product-header[data-overlay="true"] .product-account { color: #fff; background: transparent; }
-.product-nav { position: absolute; z-index: 20; top: .75rem; left: 50%; display: flex; gap: .3rem; transform: translateX(-50%); }
+.product-nav { position: absolute; z-index: 20; top: .75rem; left: 50%; display: flex; gap: .3rem; padding: .2rem; border: 1px solid var(--product-line); border-radius: 1rem; background: #fffffffa; box-shadow: 0 5px 18px #12273f12; transform: translateX(-50%); }
 .product-nav :is(a, button) { min-width: 4.5rem; min-height: 3.5rem; display: flex; gap: .4rem; align-items: center; justify-content: center; padding: .5rem .8rem; border: 0; border-radius: .75rem; color: #647181; background: transparent; text-decoration: none; font: 700 .85rem/1.2 var(--product-font); cursor: pointer; }
 .product-nav :is(a, button)[aria-current="page"] { background: #e5edf4; color: var(--product-accent); }
 .product-page { height: 100dvh; overflow-y: auto; padding: calc(var(--product-header-height) + 1.5rem) max(1.625rem, calc((100vw - 79.25rem) / 2)) 4rem; box-sizing: border-box; line-height: 1.85; scroll-padding: calc(var(--product-header-height) + 1rem); }
@@ -51,7 +43,7 @@
 .home-eyebrow { font-size: .75rem; font-weight: 800; letter-spacing: .13em; }
 .home-prompt { width: min(44rem, calc(100vw - 2rem)); min-height: 4rem; align-items: center; padding: .375rem; }
 .home-prompt > span { color: #146ac7; }
-.home-prompt textarea { height: 3.25rem; min-height: 3.25rem; resize: none; padding: .8rem .75rem; line-height: 1.65; }
+.home-prompt textarea { height: 3.25rem; min-height: 3.25rem; resize: none; padding: .8rem .75rem; font-size: .9rem; line-height: 1.65; }
 .product-page button { min-height: 2.75rem; padding: .6rem 1rem; border: 1px solid var(--product-line); border-radius: var(--product-control-radius); background: white; color: var(--product-ink); cursor: pointer; font: inherit; font-size: .9rem; }
 .home-prompt button { align-self: center; flex: 0 0 3.25rem; width: 3.25rem; height: 3.25rem; min-height: 3.25rem; display: grid; place-items: center; margin: 0; padding: 0; border: 0; background: var(--product-accent); color: #fff; }
 .home-prompt button .ds-icon { display: block; width: 1.25rem; height: 1.25rem; }
@@ -114,8 +106,8 @@
 .trip-list-heading p:last-child { max-width: 38rem; margin: 0; font-size: .95rem; }
 /* Desktop presentation pass: preserve the component system while giving the first view a clear focal point. */
 @media (min-width: 45rem) {
-  .product-header { padding-inline: max(1.75rem, calc((100vw - 79.25rem) / 2)); }
   .product-nav { right: auto; }
+  .product-page:not([data-page="explore"]) { padding-top: 5.25rem; }
   .home-hero { margin-bottom: 1.5rem; }
   .home-prompt { min-height: 4rem; }
   .home-prompt textarea { font-size: 16px; }
@@ -138,12 +130,6 @@
   .product-page[data-page="trips"] .home-trip-card { max-width: 56rem; margin-block: .9rem; }
   .product-page button:hover:not(:disabled) { border-color: #afc2d0; background: #f5f8fa; }
   .home-prompt button:hover:not(:disabled), .home-trip-copy button[data-trip]:hover:not(:disabled) { border-color: #173d60; background: #173d60; transform: translateY(-1px); }
-  .product-account:hover:not(:disabled) { color: #315f80; background: transparent; }
-  .product-header[data-overlay="true"] .product-account:hover:not(:disabled) { color: #d8e8f4; }
-}
-@media (min-width: 62.01rem) {
-  .product-header[data-overlay="true"] + .product-nav :is(a, button) { color: #fff; }
-  .product-header[data-overlay="true"] + .product-nav :is(a, button)[aria-current="page"] { color: #fff; background: #10233766; }
 }
 .preview-notice { padding: .75rem; border: 1px solid #b88b2f; border-radius: var(--product-control-radius); background: #fff6dc; color: #69490a; }
 .product-shell :focus-visible { outline: 3px solid #426c8b; outline-offset: 3px; }
@@ -152,11 +138,12 @@
 #app[data-primary-view]:not([data-primary-view="map"]) :is(#map, .map-place-explorer, .map-place-detail, .train-details, .loading-screen, #map-tools) { display: none; }
 #app[data-primary-view]:not([data-primary-view="chat"]) :is(.ai-guide-panel, .trip-workspace, .trip-workspace-navigation) { display: none; }
 #app[data-primary-view="chat"] .trip-workspace-navigation { position: absolute; z-index: 16; inset: var(--product-header-height) 0 auto; }
-#app[data-primary-view="chat"] .trip-workspace { position: absolute; z-index: 10; inset: calc(var(--product-header-height) + 3.5rem) max(0px, calc((100vw - 60rem) / 2)) 0; }
-#app[data-primary-view="trip"] .trip-workspace:not([hidden]) { display: block; position: absolute; z-index: 10; inset: var(--product-header-height) max(0px, calc((100vw - 60rem) / 2)) 0; }
+#app[data-primary-view="chat"] .trip-workspace { position: absolute; z-index: 10; inset: 5rem max(0px, calc((100vw - 60rem) / 2)) 0; }
+#app[data-primary-view="trip"] .trip-workspace:not([hidden]) { display: block; position: absolute; z-index: 10; inset: 5rem max(0px, calc((100vw - 60rem) / 2)) 0; }
 #app[data-primary-view="chat"][data-trip-workspace-view="chat"] .trip-workspace { display: none; }
 #app[data-primary-view="map"] #map { top: var(--product-header-height); bottom: 0; height: auto; }
 #app[data-primary-view] dialog { backdrop-filter: none; background: white; }
+#app[data-primary-view] .loading-screen { z-index: 14; }
 /* Below this width the centered desktop navigation and account action cannot coexist without crowding. */
 @media (max-width: 62rem) {
   .product-nav { position: fixed; z-index: 20; inset: auto .625rem env(safe-area-inset-bottom); padding: .3rem; background: #fffffffa; border: 1px solid var(--product-line); border-radius: 1.125rem; box-shadow: 0 8px 28px #12273f1a; gap: 0; transform: none; }
@@ -164,10 +151,6 @@
   #app[data-primary-view="map"] #map { bottom: calc(4.5rem + env(safe-area-inset-bottom)); }
 }
 @media (max-width: 44rem) {
-  #app[data-primary-view] { --product-header-height: 3.5rem; }
-  .product-header { padding: 0 1.1rem; }
-  .product-brand img { width: clamp(8rem, 35vw, 9.5rem); }
-  .product-account { width: 2.5rem; min-height: 2.5rem; padding: .55rem; }
   .product-page { height: 100dvh; padding: calc(var(--product-header-height) + 1rem) .875rem 6rem; scroll-padding-top: calc(var(--product-header-height) + 1rem); }
   .product-page[data-page="explore"] { padding: 0 0 6rem; }
   .product-page[data-page="explore"] > :not(.home-hero) { margin-inline: .875rem; }
@@ -188,7 +171,7 @@
   .my-shell { padding: 0; }
   .trip-list-heading, .my-shell > .ds-page-heading { display: none; }
   #app[data-primary-view="chat"] .trip-workspace-navigation { top: var(--product-header-height); flex-wrap: wrap; }
-  #app[data-primary-view="chat"] .trip-workspace { inset: calc(var(--product-header-height) + 3.5rem) 0 calc(4.5rem + env(safe-area-inset-bottom)); }
+  #app[data-primary-view="chat"] .trip-workspace { inset: 3.5rem 0 calc(4.5rem + env(safe-area-inset-bottom)); }
   #app[data-primary-view="trip"] .trip-workspace:not([hidden]) { inset: var(--product-header-height) 0 calc(4.5rem + env(safe-area-inset-bottom)); }
   #app[data-primary-view="map"] #map { top: var(--product-header-height); }
   #app[data-primary-view="map"] .map-place-explorer { bottom: 4.5rem; }
