@@ -82,6 +82,24 @@ describe("BedrockConversationModel", () => {
     expect(converse.mock.calls[0]?.[0]).not.toHaveProperty("toolConfig");
   });
 
+  it("omits an empty base system block while retaining the call instruction", async () => {
+    const converse = vi.fn(async (_input: JsonObject) => ({
+      output: { message: { role: "assistant", content: [{ text: "{}" }] } },
+      stopReason: "end_turn",
+    }));
+    const model = new BedrockConversationModel({ converse }, {
+      modelId: "amazon.nova-lite-v1:0",
+      systemPrompt: "   ",
+    });
+
+    await model.converse({
+      messages: [{ role: "user", content: [{ text: "interpret" }] }],
+      instruction: "Return the bounded JSON contract.",
+    });
+
+    expect(converse.mock.calls[0]?.[0].system).toEqual([{ text: "Return the bounded JSON contract." }]);
+  });
+
   it("keeps provider DTOs inside the adapter and normalizes metadata", async () => {
     const converse = vi.fn(async (_input: JsonObject) => ({
       output: {

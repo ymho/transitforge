@@ -20,5 +20,5 @@ single-turnのInterpreter精度だけでは、後続発言で前の条件を保�
 
 - A/B層で30 conversation・60 unique utteranceを決定論的に再実行できる。
 - scripted providerの成功は実モデル品質を意味せず、#648のC層を置換しない。
-- 12 message超、公開候補の並替後ordinal、Profile継承抑止、受理後の回答失敗・再送は既存の個別回帰も維持し、横断scenarioとして追加検証するまで#647/#654を完了扱いにしない。
+- 12 message超、公開候補の並替後ordinal、Profile継承抑止、受理後の回答失敗・再送・次turnを同一のServer Application横断scenarioでも検証する。個別の境界回帰は原因の局所化用として併存させる。
 - 実Browser、実Provider、本番gate有効化後のread-backは別のD層であり、このADRだけでは完了しない。

@@ -70,10 +70,11 @@ export class BedrockConversationModel implements ConversationModel {
       ? compileBedrockSchema(request.outputContract.schema, capabilities)
       : undefined;
     const caching = promptCachePlan(request, capabilities, this.options.promptCachingEnabled === true);
+    const baseSystem = this.options.systemPrompt.trim();
     const providerRequest: JsonObject = {
       modelId,
       system: [
-        { text: this.options.systemPrompt },
+        ...(baseSystem ? [{ text: baseSystem }] : []),
         ...(request.instruction ? [{ text: request.instruction }] : []),
         ...(compiledOutput?.mode === "application_strict" ? [{ text: applicationStrictInstruction(request.outputContract!) }] : []),
         ...(caching.systemCheckpoint ? [{ cachePoint: { type: "default" } }] : []),

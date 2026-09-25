@@ -31,15 +31,17 @@ const usage: Required<Pick<ConversationModelUsage, "inputTokens" | "outputTokens
 const model: ConversationModel = { converse: async (request) => {
   enforceBudget();
   if (usage.calls >= maximumCalls) throw new Error("Model call budget exhausted");
-  const response = await rawModel.converse(request); usage.calls += 1; usage.latencyMs += response.metadata.latencyMs;
+  usage.calls += 1;
+  const response = await rawModel.converse(request); usage.latencyMs += response.metadata.latencyMs;
   usage.inputTokens += response.metadata.usage?.inputTokens ?? 0; usage.outputTokens += response.metadata.usage?.outputTokens ?? 0;
   enforceBudget(); return response;
 } };
 const interpret = createConversationIntentInterpreter(model);
 const expected = new Map(semanticIntentCorpusExpected.map((item) => [item.caseId, item]));
 const results: Array<{ attempt: number; caseId: string; category: string; passed: boolean; failures: string[]; outcome?: string; error?: string }> = [];
+let haltedReason: string | undefined;
 
-for (let attempt = 1; attempt <= repetitions; attempt += 1) {
+evaluation: for (let attempt = 1; attempt <= repetitions; attempt += 1) {
   for (const input of inputs) {
     const gold = expected.get(input.caseId); if (!gold) throw new Error(`Missing gold ${input.caseId}`);
     try {
@@ -48,16 +50,24 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
       const score = scoreSemanticInterpretation(gold, actual);
       results.push({ attempt, caseId: input.caseId, category: input.category, passed: score.passed, failures: score.failures, outcome: actual.outcome });
     } catch (error) {
+      const category = executionErrorCategory(error);
       results.push({ attempt, caseId: input.caseId, category: input.category, passed: false, failures: ["execution-failure"],
-        error: error instanceof Error ? error.name : "unknown" });
+        error: category });
+      if (category === "provider_configuration") {
+        haltedReason = category;
+        break evaluation;
+      }
     }
   }
 }
 
-const stable = inputs.map(({ caseId }) => ({ caseId, passed: results.filter((item) => item.caseId === caseId).every(({ passed }) => passed) }));
+const stable = inputs.map(({ caseId }) => {
+  const attempts = results.filter((item) => item.caseId === caseId);
+  return { caseId, passed: attempts.length === repetitions && attempts.every(({ passed }) => passed) };
+});
 const report = { schemaVersion: "semantic-intent-live-eval-v1", modelId, repetitions, plannedCalls, executedCalls: usage.calls,
   inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, latencyMs: usage.latencyMs, estimatedCostUsd: estimatedCost(),
-  cases: inputs.length, stablePassed: stable.filter(({ passed }) => passed).length, results };
+  cases: inputs.length, stablePassed: stable.filter(({ passed }) => passed).length, ...(haltedReason ? { haltedReason } : {}), results };
 await mkdir(outputDirectory, { recursive: true });
 await writeFile(`${outputDirectory}/report.json`, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 await writeFile(`${outputDirectory}/manifest.json`, `${JSON.stringify({ schemaVersion: "semantic-intent-live-eval-manifest-v1", modelId,
@@ -81,4 +91,11 @@ function numberArg(name: string, fallback: number, minimum: number, maximum: num
 }
 function environmentRate(name: string): number | undefined {
   const raw = process.env[name]; if (!raw) return undefined; const value = Number(raw); return Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+function executionErrorCategory(error: unknown): string {
+  const name = error instanceof Error ? error.name : "";
+  if (["ValidationException", "AccessDeniedException", "ResourceNotFoundException"].includes(name)) return "provider_configuration";
+  if (name === "ThrottlingException") return "provider_throttled";
+  if (name === "ConversationModelError") return "model_contract";
+  return "execution_failure";
 }
