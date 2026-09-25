@@ -60,6 +60,11 @@ export function createSearchJourneysTool(
   return {
     name: "search_journeys",
     description: "自前の時刻表と当日の運行情報を使って鉄道経路を検索します",
+    intentPolicy: { dependencies: ["origin", "destination", "start_date", "transport"], requirements: [
+      { target: "origin", inputField: "originStation", necessity: "required", match: "presence" },
+      { target: "destination", inputField: "destinationStation", necessity: "required", match: "presence" },
+      { target: "start_date", inputField: "serviceDate", necessity: "required", match: "presence", acceptedPrecisions: ["exact"] },
+    ] },
     decisionSupport: {
       capability: "日付別時刻表と利用可能な当日運行情報を正本として駅間経路を検索する",
       suitableCases: ["出発駅、到着駅、日付、出発時刻が確定した鉄道移動"],

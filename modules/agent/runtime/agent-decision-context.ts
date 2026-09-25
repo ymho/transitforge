@@ -73,6 +73,8 @@ export interface AgentToolOutcomeSummary {
 
 export interface AgentRuntimeContextInput {
   taskContext?: AgentTaskContext;
+  /** Trusted Application projection shared by model, Tool policy and public response. */
+  effectiveIntent?: EffectiveIntent;
   workingState?: ConversationWorkingState;
   inTripReplanScope?: ReturnType<typeof import("@raiquora/trip/in-trip-replan").replanScopeContext>;
   inTrip?: InTripContextSnapshot;
@@ -146,11 +148,11 @@ export function buildAgentDecisionContext(
   const tripRequest = input?.currentTrip?.request ?? (input?.consultationRequest ? parseConsultationRequest(input.consultationRequest) : undefined);
   const hasTripRequest = tripRequest !== undefined;
   const requestSource = input?.currentTrip?.request ? "trip" as const : input?.consultationRequest ? "conversation_draft" as const : undefined;
-  const effectiveIntent = input?.workingState?.semantic || tripRequest ? compileEffectiveIntent({
+  const effectiveIntent = input?.effectiveIntent ?? (input?.workingState?.semantic || tripRequest ? compileEffectiveIntent({
     ...(tripRequest ? { baseRequest: tripRequest } : {}), ...(requestSource ? { baseSource: requestSource } : {}),
     ...(input?.taskContext?.requestRevision === undefined ? {} : { baseRevision: input.taskContext.requestRevision }),
     overlay: semanticStateOf(input?.workingState).overlay,
-  }) : undefined;
+  }) : undefined);
   const workingStateProjection = input?.workingState ? workingStateWithoutEvidence(input.workingState) : undefined;
   // effectiveIntent is the only semantic projection exposed to the decision model.
   // Keep presentation/question continuity without duplicating the mutable overlay.

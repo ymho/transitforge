@@ -7,6 +7,7 @@ import type { ConversationApplication } from "../conversation-application.js";
 import type { ProfileApplication } from "../profile-application.js";
 import type { ConversationTurnRepository } from "../../ports/conversation-turn-repository.js";
 import { deriveAgentTaskContext } from "@raiquora/agent/agent-task-context";
+import { compileEffectiveIntent } from "@raiquora/agent/effective-intent";
 
 export const serverStateContextLimits = { historyMessages: 12, conversationJsonCharacters: 12_000 } as const;
 export interface ServerStateContextReferences {
@@ -69,9 +70,17 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
       currentIntentChange: { intentRevision: currentIntentReceipt.intentRevision, speechAct: currentIntentReceipt.speechAct,
         operations: acceptedIntentOperations.map(({ action, target, frame }) => ({ action, target, frame })) },
     } : taskContext;
+    const effectiveIntent = workingState?.semantic || trip?.request || consultationRequest ? compileEffectiveIntent({
+      ...(trip?.request ? { baseRequest: trip.request, baseSource: "trip" as const } : consultationRequest ? {
+        baseRequest: consultationRequest, baseSource: "conversation_draft" as const,
+      } : {}),
+      ...(taskContext?.requestRevision === undefined ? {} : { baseRevision: taskContext.requestRevision }),
+      overlay: workingState?.semantic?.overlay ?? { version: 1, intentRevision: 0, facts: [], tombstones: [], appliedMutationIds: [] },
+    }) : undefined;
     const focusedItem = itemId ? trip?.items.find((item) => item.id === itemId) : undefined;
     return {
       ...(taskContextWithIntent ? { taskContext: taskContextWithIntent } : {}),
+      ...(effectiveIntent ? { effectiveIntent } : {}),
       ...(workingState ? { workingState, previousAssistantTurn: workingState.lastOutcome?.outcome } : {}),
       ...(history ? { conversation: history } : {}),
       ...(snapshot.profile ? { travelProfile: snapshot.profile } : {}),

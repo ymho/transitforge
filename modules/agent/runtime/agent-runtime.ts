@@ -46,6 +46,7 @@ import { recoverPlanningDraft } from "./planning-draft-recovery";
 import type { ResearchExecutionLedger } from "./research-execution";
 import type { ModelTokenRates } from "./model-usage-cost";
 import type { AgentProgressReporter } from "./agent-progress";
+import { asksForKnownIntent, validateToolIntentUse } from "./intent-action-policy";
 
 export interface AgentRuntimeDependencies {
   model: AgentModelProvider;
@@ -420,7 +421,8 @@ export class MultiStepAgentRuntime {
         const planningAnswerWithoutEvidence = planningTurn && evidence.length === 0 &&
           modelResponse.decisionSummary?.selectedAction === "answer" && claimsExternalEvidence;
         const declaredTravelPlan = modelResponse.declaredPresentation?.kind === "travel-plan";
-        const planningGuard = planningTurn && shouldRequirePlanningProgress(modelResponse, previousOutcome, currentMeaningChanged)
+        const planningGuard = planningTurn && shouldRequirePlanningProgress(modelResponse, previousOutcome, currentMeaningChanged,
+          decisionContext.effectiveIntent)
           ? { accepted: false, reason: "planning_progress_required", instruction:
             "直前も質問だけでした。受理済み条件を使って進め、質問が不可欠なら安全・権限・Tool必須入力など外部化できる理由を示してください。" }
           : planningAnswerWithoutEvidence
@@ -580,6 +582,19 @@ export class MultiStepAgentRuntime {
       if (calls.length) await this.dependencies.reportProgress?.("checking_information");
       for (const call of calls) {
         let applicationFailure: string | undefined;
+        const descriptor = availableTools.find(({ name }) => name === call.name);
+        const intentDecision = descriptor
+          ? validateToolIntentUse(descriptor, call.input, decisionContext.effectiveIntent)
+          : { accepted: true, dependencyTargets: [] };
+        if (!intentDecision.accepted && intentDecision.error) {
+          const rejected = failedAgentToolResult(intentDecision.error);
+          trace.toolCalled(call.toolCallId, call.name, call.input);
+          trace.toolCompleted(call.toolCallId, call.name, rejected, 0);
+          toolCalls += 1;
+          toolResults.push({ type: "tool_result", toolCallId: call.toolCallId, status: "error",
+            output: { error: intentDecision.error } });
+          continue;
+        }
         const signature = toolCallSignature(call.name, call.input, toolStateRevision(request));
         const previousExecution = executedToolCalls.get(signature);
         const effect = this.dependencies.toolExecutor.effect(call.name);
@@ -626,6 +641,11 @@ export class MultiStepAgentRuntime {
           toolName: call.name,
           toolInput: call.input,
           timeoutMs: Math.max(1, deadline - this.now().getTime()),
+          ...(decisionContext.effectiveIntent && intentDecision.dependencyTargets.length ? { intentDependency: {
+            intentRevision: decisionContext.effectiveIntent.intentRevision,
+            fingerprint: decisionContext.effectiveIntent.fingerprint,
+            targets: intentDecision.dependencyTargets,
+          } } : {}),
         }, trace);
         executedToolCalls.set(signature, { ...execution, toolName: call.name, effect, dependencyEpoch: readDependencyEpoch });
         toolCalls += 1;
@@ -901,7 +921,7 @@ function hasPlanningQuestionnaire(response: AgentModelResponse): boolean {
 }
 
 function shouldRequirePlanningProgress(response: AgentModelResponse, previousOutcome: import("./agent-turn-outcome").AgentTurnOutcome | undefined,
-  currentMeaningChanged: boolean): boolean {
+  currentMeaningChanged: boolean, effectiveIntent: import("./effective-intent").EffectiveIntent | undefined): boolean {
   const summary = response.decisionSummary;
   if (summary?.selectedAction === "ask_user") {
     const requirements = summary.missingRequirements ?? [];
@@ -913,7 +933,8 @@ function shouldRequirePlanningProgress(response: AgentModelResponse, previousOut
       item.action === "ask" && item.resolution === "user_decision");
     // A validated current-turn correction may make a different follow-up question
     // legitimate. Consecutive unchanged questionnaires remain repair targets.
-    return !(authorizationRequired || safetyRequired || selectionAfterProgress || firstClarification || currentMeaningChanged);
+    return asksForKnownIntent(summary, effectiveIntent) ||
+      !(authorizationRequired || safetyRequired || selectionAfterProgress || firstClarification || currentMeaningChanged);
   }
   // Regex is a legacy-text migration guard only. Provider/Application strict
   // responses use the typed answer|ask action and are not reinterpreted from prose.

@@ -50,6 +50,7 @@ export class AgentToolRegistry {
       ...(tool.requiredCapabilities ? { requiredCapabilities: [...tool.requiredCapabilities] } : {}),
       ...(tool.outputSchema ? { outputSchema: structuredClone(tool.outputSchema) } : {}),
       ...(tool.errorRecovery ? { errorRecovery: { ...tool.errorRecovery } } : {}),
+      ...(tool.intentPolicy ? { intentPolicy: structuredClone(tool.intentPolicy) } : {}),
     }));
   }
 
