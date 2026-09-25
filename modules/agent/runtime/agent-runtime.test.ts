@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { supportedAnswerClaims } from "@raiquora/agent/grounded-answer";
+import { agentTurnOutputContract, agentTurnPresentationOutputContract } from "@raiquora/agent/agent-output-contract";
 
 import { MultiStepAgentRuntime } from "@raiquora/agent/agent-runtime";
 import { DefaultAgentResponseGenerator } from "@raiquora/agent/agent-response-generator";
@@ -25,6 +26,15 @@ import { inTripApplicationEvidence } from "@raiquora/agent/in-trip-application-e
 import { calculateInTripReplanScope, replanScopeContext } from "@raiquora/trip/in-trip-replan";
 
 describe("MultiStepAgentRuntime", () => {
+  it("does not force the strict travel-plan schema on unverified discovery hits", async () => {
+    const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
+    const discovery: Evidence = { ...planningSource(), knowledgeKind: "unverified_information",
+      facts: { ...planningSource().facts, sourcePrecision: "search-snippet" } };
+    const model = sequenceModel([textResponse("条件を確認します")], requests);
+    await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run(planningRequest("歴史ある街を歩きたい", [discovery]));
+    expect(requests[0]?.outputContract?.schemaHash).toBe(agentTurnOutputContract.schemaHash);
+    expect(requests[0]?.outputContract?.schemaHash).not.toBe(agentTurnPresentationOutputContract.schemaHash);
+  });
   it("finishes an open-ended nine-round research within the expanded Server budget", async () => {
     const { tools, toolExecutor } = toolSetup([]);
     const responses = Array.from({ length: 9 }, (_, index) => toolCallResponse([
@@ -147,10 +157,10 @@ describe("MultiStepAgentRuntime", () => {
 
   it("returns the best verified source when the planning iteration budget is reached", async () => {
     const executionOrder: string[] = [], { tools, toolExecutor } = toolSetup(executionOrder);
-    const concise = { ...planningSource(), id: "source:izumo-search", subject: "出雲大社", facts: {
+    const concise = { ...planningSource(), id: "source:izumo-verified-page", subject: "出雲大社", facts: {
       ...planningSource().facts, sourceTitle: "出雲大社｜出雲観光ガイド", sourceExcerpt: "御本殿を参拝し、神門通りの町歩きを楽しめます。",
-      sourceUrl: "https://example.test/izumo-search", sourcePrecision: "search-snippet",
-    }, references: [{ sourceType: "external-source" as const, sourceRef: "https://example.test/izumo-search",
+      sourceUrl: "https://example.test/izumo-verified-page", sourcePrecision: "read-page",
+    }, references: [{ sourceType: "external-source" as const, sourceRef: "https://example.test/izumo-verified-page",
       retrievedAt: "2026-09-24T00:00:00Z", freshness: "current" as const, summary: "出雲の公式観光資料" }] };
     const navigation = { ...planningSource(), id: "source:izumo-page", subject: "出雲大社", facts: {
       ...planningSource().facts, sourceTitle: "出雲大社 - Wikipedia", sourceExcerpt: "メインメニュー\n案内\nヘルプ\nお問い合わせ",

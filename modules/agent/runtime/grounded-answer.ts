@@ -126,7 +126,8 @@ export function groundedAnswerInstruction(evidence: readonly Evidence[], profile
 
 /** Matches the exact Evidence subset exposed to the structured presentation prompt. */
 export function hasStructuredPresentationEvidence(evidence: Evidence): boolean {
-  return typeof evidence.facts.sourceExcerpt === "string" && evidence.facts.status === "available" && evidence.facts.freshness === "fresh";
+  return evidence.knowledgeKind !== "unverified_information" && evidence.facts.sourcePrecision !== "search-snippet" &&
+    typeof evidence.facts.sourceExcerpt === "string" && evidence.facts.status === "available" && evidence.facts.freshness === "fresh";
 }
 function plain(text: string): string { return text.replace(/[<>&*_`\[\]\\]/gu, (c) => `&#${c.charCodeAt(0)};`); }
 function sourceUrlAllowed(value: string): boolean { try { return ["https:", "http:"].includes(new URL(value).protocol); } catch { return false; } }
@@ -142,7 +143,7 @@ export function sourceExplanation(text: string, evidence: readonly Evidence[], p
     if (!record(section) || Object.keys(section).some((key) => !["evidenceId", "quote", "mode", "preference"].includes(key)) ||
       !["feature", "comparison", "recommendation"].includes(String(section.mode)) || typeof section.quote !== "string" || !section.quote.trim() || section.quote.length > 400) throw new Error("Invalid source selection");
     const source = evidence.find((e) => e.id === section.evidenceId);
-    if (!source || typeof source.facts.sourceExcerpt !== "string" || !source.facts.sourceExcerpt.includes(section.quote) ||
+    if (!source || !hasStructuredPresentationEvidence(source) || typeof source.facts.sourceExcerpt !== "string" || !source.facts.sourceExcerpt.includes(section.quote) ||
       typeof source.facts.sourceUrl !== "string" || !sourceUrlAllowed(source.facts.sourceUrl) || !source.references.some((r) => r.sourceRef === source.facts.sourceUrl) || selected.has(source.id) ||
       source.facts.status !== "available" || source.facts.freshness !== "fresh") throw new Error("Unbound excerpt");
     selected.add(source.id);
@@ -380,7 +381,7 @@ function yen(value: number): string { return `${new Intl.NumberFormat("ja-JP").f
 function lodgingLabel(value: "economy" | "standard" | "premium"): string { return value === "economy" ? "手頃な宿" : value === "premium" ? "上質な宿" : "標準的な宿"; }
 function calendarDate(value: string): boolean { const date = /^\d{4}-\d{2}-\d{2}$/u.test(value) ? new Date(`${value}T00:00:00Z`) : undefined; return Boolean(date && !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value); }
 function japaneseDate(value: string): string { const [year, month, day] = value.split("-").map(Number); return `${year}年${month}月${day}日`; }
-function validSourceQuote(source: Evidence, quote: string): boolean { return typeof source.facts.sourceExcerpt === "string" && source.facts.sourceExcerpt.includes(quote) && typeof source.facts.sourceUrl === "string" && sourceUrlAllowed(source.facts.sourceUrl) && source.references.some((r) => r.sourceRef === source.facts.sourceUrl) && source.facts.status === "available" && source.facts.freshness === "fresh"; }
+function validSourceQuote(source: Evidence, quote: string): boolean { return hasStructuredPresentationEvidence(source) && typeof source.facts.sourceExcerpt === "string" && source.facts.sourceExcerpt.includes(quote) && typeof source.facts.sourceUrl === "string" && sourceUrlAllowed(source.facts.sourceUrl) && source.references.some((r) => r.sourceRef === source.facts.sourceUrl); }
 function hasDisplayablePhoto(source: Evidence): boolean { return typeof source.facts.imageUrl === "string" && sourceUrlAllowed(source.facts.imageUrl) && typeof source.facts.imageSourceUrl === "string" && sourceUrlAllowed(source.facts.imageSourceUrl) && typeof source.facts.imageAttribution === "string" && source.facts.imageAttribution.trim().length > 0; }
 function photoBoundToSource(photo: Evidence, source: Evidence): boolean { const sourceUrl = source.facts.sourceUrl; return photo.id === source.id || typeof sourceUrl === "string" && Array.isArray(photo.facts.boundSourceUrls) && photo.facts.boundSourceUrls.includes(sourceUrl); }
 function record(v: unknown): v is Record<string, unknown> { return typeof v === "object" && v !== null && !Array.isArray(v); }

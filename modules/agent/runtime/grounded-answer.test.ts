@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { DefaultAgentResponseGenerator } from "@raiquora/agent/agent-response-generator";
-import { groundedAnswerFailureCode, groundedAnswerInstruction, groundedAnswerRepairInstruction, parseGroundedAnswer, parseProposedItinerary, sourceDisplayExcerpt, sourceExplanation, sourcePresentationScore, supportedAnswerClaims, travelPlan } from "@raiquora/agent/grounded-answer";
+import { groundedAnswerFailureCode, groundedAnswerInstruction, groundedAnswerRepairInstruction, hasStructuredPresentationEvidence, parseGroundedAnswer, parseProposedItinerary, sourceDisplayExcerpt, sourceExplanation, sourcePresentationScore, supportedAnswerClaims, travelPlan } from "@raiquora/agent/grounded-answer";
 import type { Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentModelResponse } from "@raiquora/agent/model-provider";
 
@@ -9,6 +9,16 @@ const e: Evidence = { id: "route-1", category: "journey", knowledgeKind: "derive
 }, references: [{ sourceType: "timetable-graph", sourceRef: "fixture:20260920", retrievedAt: "2026-09-18T00:00:00Z", freshness: "scheduled", summary: "検証済み経路" }] };
 const answer = () => { const claims = supportedAnswerClaims([e]); return { text: claims.map(c => c.statement).join("\n\n"), claims }; };
 const model = (text: string): AgentModelResponse => ({ message: { role: "assistant", content: [{ type: "text", text }] }, stopReason: "completed", metadata: { provider: "test" } });
+
+it("rejects discovery and search snippets as source-bound presentations even when an excerpt exists", () => {
+  const discovery: Evidence = { ...placeEvidence, knowledgeKind: "unverified_information" };
+  const snippet: Evidence = { ...placeEvidence, facts: { ...placeEvidence.facts, sourcePrecision: "search-snippet" } };
+  for (const source of [discovery, snippet]) {
+    expect(hasStructuredPresentationEvidence(source)).toBe(false);
+    expect(() => sourceExplanation(JSON.stringify({ kind: "source-explanation", sections: [{ evidenceId: source.id,
+      quote: String(source.facts.sourceExcerpt), mode: "feature" }] }), [source])).toThrow();
+  }
+});
 
 it("omits navigation-only source excerpts instead of presenting them as a feature", () => {
   const navigation = "menu\nホーム\n特集\nみる\n楽しむ\n食べる\n泊まる\n買う\nお問い合わせ";
