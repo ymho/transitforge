@@ -7,7 +7,9 @@
 ## 決定
 
 Cognito User PoolのEssentials、Managed Login v2、Cognito標準brandingをTerraformで管理する。
-メールをusernameとし、メール検証・登録・再送・パスワード再設定はManaged Loginへ委ねる。
+メールをusernameとし、ログインとパスワード再設定はManaged Loginへ委ねる。
+2026-09-25以降は自己登録を無効化し、新しい利用者は管理者だけが作成する。Managed Loginに新規登録リンクを
+表示せず、公開されているApp Client IDを使った`SignUp` API要求も拒否する。既存利用者のログインは維持する。
 公開SPA App Clientはsecretなし、Authorization Code + PKCE S256だけを使用する。
 Resource Serverが`raiquora/user`を定義し、`openid email`と合わせて要求する。
 
@@ -67,7 +69,7 @@ callback成功・失敗ともURLを最初に消去し、その後に設定取得
 Mapbox等のorigin制限付き公開tokenとの互換性を保ち、認証設定の取得自体はno-referrerとする。
 認証情報をURLログへ残さない運用は後続の公開経路監査にも含める。
 
-アカウントアイコンと各機能入口からログイン/新規登録へ進み、設定画面からlogoutを提供する。
+アカウントアイコンと各機能入口からログインへ進み、設定画面からlogoutを提供する。
 未認証ではHomeだけを表示し、相談、旅程、プロフィール、通知、設定、地図、列車、運行情報を起動しない。
 直リンクもHomeへ戻し、地図と運行データを読み込まない。取消/失敗/失効は固定文言で通知する。
 既存の端末内Profile/Tripをアカウント所有データとみなさず、アップロードしない。
@@ -79,8 +81,8 @@ owner cache破棄・個人API保護・全route配線は#451後続と#479/#480で
 scope不足、期限、安全な復帰、保存内容、logout、遅着responseを検査する。実Cognito稼働の証明ではない。
 Terraform fmt/validate、Frontend auth test/typecheck/buildを行い、root全量とAgent Evalは実行しない。
 
-適用前にEssentialsの課金条件を確認する。AWSでの日本語登録→メール検証/再送→login→callback、
-パスワード再設定、logout、発行Access Tokenを#484へ渡す実環境確認は未実施とする。
+適用前にEssentialsの課金条件を確認する。AWSでの管理者作成→初回login→callback、パスワード再設定、
+logout、発行Access Tokenを#484へ渡す実環境確認は未実施とする。
 API保護/直接API E2E/owner isolation/旧経路閉鎖は#451後続・#480/#461の責務である。
 
 ## 根拠

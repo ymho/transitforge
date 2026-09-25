@@ -243,7 +243,8 @@ mainからの手動実行だけでdev環境を更新する。両者は別Workflo
 
 ## 利用者認証
 
-ログイン/新規登録はCognito Managed LoginとPKCEを使い、公開設定はTerraform出力から配信する。
+ログインはCognito Managed LoginとPKCEを使い、公開設定はTerraform出力から配信する。
+自己登録は無効で、新しい利用者はCognito管理者だけが作成する。
 Homeの静的な入口を除き、相談、旅程、プロフィール、通知、経路設定、地図・列車・運行情報はログイン後だけ起動する。
 未認証の直リンクはHomeへ戻し、地図と運行データを読み込まない。残存`/api/agent` operationを含む業務APIも
 Cognito Access Tokenと`raiquora/user` scopeを必須とする。CloudFrontのBasic認証は使用しない。

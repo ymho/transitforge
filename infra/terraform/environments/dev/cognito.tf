@@ -17,6 +17,10 @@ resource "aws_cognito_user_pool" "users" {
   auto_verified_attributes = ["email"]
   deletion_protection      = "ACTIVE"
 
+  admin_create_user_config {
+    allow_admin_create_user_only = true
+  }
+
   username_configuration {
     case_sensitive = false
   }
