@@ -151,6 +151,7 @@ export class MultiStepAgentRuntime {
     let correctedResponseContract = false;
     let correctedGroundedAnswer = false;
     let correctedFinalResponse = false;
+    let correctedProviderSchema = false;
 
     while (true) {
       if (
@@ -233,6 +234,25 @@ export class MultiStepAgentRuntime {
       if (modelOutcome.kind === "error") {
         const code = modelOutcome.error instanceof AgentModelError ? modelOutcome.error.code : "provider_error";
         trace.modelFailed(modelCallId, code);
+        // A provider invocation consumes the local budget even when its decoded
+        // response is rejected. The research ledger already reserves this call
+        // before invocation; keep both guards aligned so schema failures cannot
+        // retry beyond the configured model-call limit.
+        modelCalls += 1;
+        if (code === "invalid_schema") {
+          // Planning Tools may already have returned enough source-bound Evidence.
+          // Do not discard it merely because the model failed to wrap the final
+          // answer in the output schema.
+          const summary = this.verifiedPlanningSummary(trace, evidence, startedAt, request);
+          if (summary) return summary;
+          if (!correctedProviderSchema && modelCalls < this.limits.maxModelCalls) {
+            correctedProviderSchema = true;
+            messages.push({ role: "user", content: [{ type: "text", text:
+              `${responseContractRepairInstruction}\n直前の応答はProviderでschema検証に失敗したため表示していません。提示済みの出力schemaに一致するJSONだけを返してください。Toolが必要ならnative toolUseを使い、説明文の中にTool呼出やJSONを埋め込まないでください。` }] });
+            trace.replanDecided(true, "model_invalid_schema", decisionBoundary);
+            continue;
+          }
+        }
         return code === "timeout" || code === "truncation" ? this.limitResult(trace, evidence, startedAt, `model_${code}`) :
           this.failureResult(trace, evidence, startedAt, `model_${code}`);
       }
@@ -268,7 +288,8 @@ export class MultiStepAgentRuntime {
           trace.replanDecided(true, invalidContract, decisionBoundary);
           continue;
         }
-        return this.limitResult(trace, evidence, startedAt,
+        const summary = this.verifiedPlanningSummary(trace, evidence, startedAt, request);
+        return summary ?? this.limitResult(trace, evidence, startedAt,
           invalidReferences ? "invalid_used_evidence_ids" : "invalid_response_contract");
       }
       messages.push(modelResponse.message);
@@ -312,7 +333,8 @@ export class MultiStepAgentRuntime {
         }
       }
       if (modelResponse.stopReason === "tool_calls" && calls.length === 0) {
-        return this.failureResult(trace, evidence, startedAt, "missing_tool_call");
+        const summary = this.verifiedPlanningSummary(trace, evidence, startedAt, request);
+        return summary ?? this.failureResult(trace, evidence, startedAt, "missing_tool_call");
       }
       if (modelResponse.stopReason !== "tool_calls") {
         await this.dependencies.reportProgress?.("validating_answer");
@@ -348,7 +370,10 @@ export class MultiStepAgentRuntime {
           const canRepair = finalResponseRequired
             ? !correctedFinalResponse && modelCalls < this.limits.maxModelCalls
             : !correctedResponseContract;
-          if (!canRepair) return this.limitResult(trace, evidence, startedAt, "invalid_response_contract");
+          if (!canRepair) {
+            const summary = this.verifiedPlanningSummary(trace, evidence, startedAt, request);
+            return summary ?? this.limitResult(trace, evidence, startedAt, "invalid_response_contract");
+          }
           if (finalResponseRequired) correctedFinalResponse = true;
           else correctedResponseContract = true;
           messages.push({
@@ -450,7 +475,8 @@ export class MultiStepAgentRuntime {
             trace.replanDecided(true, failureCode, decisionBoundary);
             continue;
           }
-          return this.limitResult(trace, evidence, startedAt, failureCode);
+          const summary = this.verifiedPlanningSummary(trace, evidence, startedAt, request);
+          return summary ?? this.limitResult(trace, evidence, startedAt, failureCode);
         }
         trace.decisionRecorded({ ...decisionForAnswer(
           modelResponse,
@@ -467,7 +493,10 @@ export class MultiStepAgentRuntime {
           grounding.claims.some(({ groundingStatus }) =>
             groundingStatus === "unsupported")
         ) {
-          if (finalResponseRequired) return this.limitResult(trace, evidence, startedAt, "unsupported_claim");
+          if (finalResponseRequired) {
+            const summary = this.verifiedPlanningSummary(trace, evidence, startedAt, request);
+            return summary ?? this.limitResult(trace, evidence, startedAt, "unsupported_claim");
+          }
           const response = this.responseGenerator.groundingFailure();
           trace.responseGenerated(response, grounding.claims.map(({ id }) => id));
           trace.taskCompleted(

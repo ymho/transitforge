@@ -10,6 +10,7 @@ import type {
   AgentModelRequest,
   AgentModelResponse,
 } from "@raiquora/agent/model-provider";
+import { AgentModelError } from "@raiquora/agent/model-provider";
 import {
   invalidAgentToolInput,
   failedAgentToolResult,
@@ -86,6 +87,62 @@ describe("MultiStepAgentRuntime", () => {
       reason: "invalid_response_contract",
     });
     expect(JSON.stringify(output)).not.toContain("REJECTED");
+  });
+
+  it("returns verified planning sources when the provider rejects the final response schema", async () => {
+    const { tools, toolExecutor } = toolSetup([]), source = planningSource();
+    const model: AgentModelProvider & { generate: ReturnType<typeof vi.fn<AgentModelProvider["generate"]>> } = {
+      generate: vi.fn<AgentModelProvider["generate"]>(async () => {
+        throw new AgentModelError("invalid_schema", "invalid provider envelope", false);
+      }),
+    };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run(planningRequest(
+      "歴史ある街を歩きたい",
+      [source],
+    ));
+
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("倉敷の歴史的な町並み");
+    expect(output.claims).toHaveLength(1);
+    expect(model.generate).toHaveBeenCalledTimes(1);
+    expect(output.trace.events.at(-1)).toMatchObject({ type: "task_completed", status: "completed" });
+  });
+
+  it("retries one invalid provider schema when no verified planning source exists", async () => {
+    const { tools, toolExecutor } = toolSetup([]), requests: AgentModelRequest[] = [];
+    let call = 0;
+    const model: AgentModelProvider & { generate: ReturnType<typeof vi.fn<AgentModelProvider["generate"]>> } = {
+      generate: vi.fn<AgentModelProvider["generate"]>(async (input) => {
+        requests.push(structuredClone(input));
+        call += 1;
+        if (call === 1) throw new AgentModelError("invalid_schema", "invalid provider envelope", false);
+        return textResponse("確認したい条件を教えてください");
+      }),
+    };
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor, model }).run(request("旅行を相談したい"));
+
+    expect(output.status).toBe("completed");
+    expect(output.response).toBe("確認したい条件を教えてください");
+    expect(model.generate).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(requests[1]?.messages)).toContain("schema検証に失敗");
+    expect(output.trace.events).toContainEqual(expect.objectContaining({
+      type: "replan_decided",
+      reason: "model_invalid_schema",
+    }));
+  });
+
+  it("returns verified planning sources for a missing native Tool call", async () => {
+    const { tools, toolExecutor } = toolSetup([]), source = planningSource();
+    const malformed = textResponse("");
+    malformed.stopReason = "tool_calls";
+    const output = await new MultiStepAgentRuntime({ tools, toolExecutor,
+      model: sequenceModel([malformed]),
+    }).run(planningRequest("歴史を感じる旅行をしたい", [source]));
+
+    expect(output.status).toBe("completed");
+    expect(output.response).toContain("倉敷の歴史的な町並み");
+    expect(output.claims).toHaveLength(1);
+    expect(output.trace.events.at(-1)).toMatchObject({ type: "task_completed", status: "completed" });
   });
 
   it("requires typed presentation after fresh external source Evidence is available", async () => {
@@ -1227,6 +1284,18 @@ function request(userRequest: string) {
     executionId: "execution-1",
     feature: "journey_planning" as const,
     userRequest,
+  };
+}
+
+function planningRequest(userRequest: string, initialEvidence: Evidence[] = []) {
+  return {
+    executionId: "planning-execution",
+    feature: "concierge" as const,
+    userRequest,
+    initialEvidence,
+    context: { taskContext: { version: 1 as const, phase: "discovery" as const,
+      target: { kind: "conversation" as const }, requestRevision: 1,
+      availableProgressKinds: ["candidates" as const] } },
   };
 }
 
