@@ -7,7 +7,7 @@ import type { ConversationApplication } from "../conversation-application.js";
 import type { ProfileApplication } from "../profile-application.js";
 import type { ConversationTurnRepository } from "../../ports/conversation-turn-repository.js";
 import { deriveAgentTaskContext } from "@raiquora/agent/agent-task-context";
-import { compileEffectiveIntent } from "@raiquora/agent/effective-intent";
+import { compileEffectiveIntent, effectiveProfileContext } from "@raiquora/agent/effective-intent";
 
 export const serverStateContextLimits = { historyMessages: 12, conversationJsonCharacters: 12_000 } as const;
 export interface ServerStateContextReferences {
@@ -51,7 +51,9 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
     // The empty proposal base enables the first consultation write; phase derivation still distinguishes it from persisted draft state.
     if (conversation && consultationRequest) options.onConsultation?.({ conversationId: conversation.conversationId, createdAt: conversation.createdAt,
       request: structuredClone(consultationRequest) });
-    const snapshot = createAgentContextSnapshot(profile?.profile, trip);
+    // Profile is resolved through EffectiveIntent below; do not expose a second
+    // raw snapshot whose precedence would be left to the model.
+    const snapshot = createAgentContextSnapshot(undefined, trip);
     const savedWorkingState = conversation && readers.workingStates
       ? await readers.workingStates.getWorkingState(principal, conversation.conversationId) : undefined;
     const workingState = savedWorkingState && (!tripId || savedWorkingState.target.tripId === undefined ||
@@ -70,20 +72,22 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
       currentIntentChange: { intentRevision: currentIntentReceipt.intentRevision, speechAct: currentIntentReceipt.speechAct,
         operations: acceptedIntentOperations.map(({ action, target, frame }) => ({ action, target, frame })) },
     } : taskContext;
-    const effectiveIntent = workingState?.semantic || trip?.request || consultationRequest ? compileEffectiveIntent({
+    const effectiveIntent = workingState?.semantic || trip?.request || consultationRequest || profile?.profile ? compileEffectiveIntent({
       ...(trip?.request ? { baseRequest: trip.request, baseSource: "trip" as const } : consultationRequest ? {
         baseRequest: consultationRequest, baseSource: "conversation_draft" as const,
       } : {}),
       ...(taskContext?.requestRevision === undefined ? {} : { baseRevision: taskContext.requestRevision }),
+      ...(profile?.profile ? { profile: profile.profile, profileRevision: profile.revision } : {}),
       overlay: workingState?.semantic?.overlay ?? { version: 1, intentRevision: 0, facts: [], tombstones: [], appliedMutationIds: [] },
     }) : undefined;
+    const effectiveProfile = effectiveIntent ? effectiveProfileContext(effectiveIntent) : undefined;
     const focusedItem = itemId ? trip?.items.find((item) => item.id === itemId) : undefined;
     return {
       ...(taskContextWithIntent ? { taskContext: taskContextWithIntent } : {}),
       ...(effectiveIntent ? { effectiveIntent } : {}),
       ...(workingState ? { workingState, previousAssistantTurn: workingState.lastOutcome?.outcome } : {}),
       ...(history ? { conversation: history } : {}),
-      ...(snapshot.profile ? { travelProfile: snapshot.profile } : {}),
+      ...(effectiveProfile ? { travelProfile: effectiveProfile } : {}),
       ...(snapshot.trip ? { currentTrip: snapshot.trip } : {}),
       ...(consultationRequest ? { consultationRequest } : {}),
       ...(focusedItem || calendarDate ? { featureContext: {
