@@ -1,5 +1,5 @@
 import { agentDecisionContextText, buildAgentDecisionContext } from "@raiquora/agent/agent-decision-context";
-import type { Evidence } from "@raiquora/agent/evidence-model";
+import { validateEvidenceAndClaims, type Evidence } from "@raiquora/agent/evidence-model";
 import { presentGroundedEvidence } from "@raiquora/agent/grounded-answer";
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import type { ServerAgentRuntimeRunner } from "../ports/server-agent-runtime.js";
@@ -43,11 +43,13 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine): ServerAg
     if (evidence.length) {
       try {
         const grounded = presentGroundedEvidence(evidence.map(({ id }) => id), evidence);
+        const validation = validateEvidenceAndClaims(evidence, grounded.claims);
+        if (!validation.valid) throw new Error("Invalid grounded Strands claims");
         return {
           status: "completed",
           response: grounded.text,
           evidence,
-          claims: grounded.claims,
+          claims: validation.claims,
           trace: run.trace,
           delivery: { status: "full", basis: "verified_projection" },
         };
