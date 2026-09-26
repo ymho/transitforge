@@ -1,77 +1,60 @@
-import { validateEvidenceAndClaims, type Evidence } from "@raiquora/agent/evidence-model";
-import { presentGroundedEvidence } from "@raiquora/agent/grounded-answer";
+import { mergeEvidenceObservations, validateEvidenceAndClaims } from "@raiquora/agent/evidence-model";
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
-import type { ServerAgentRuntimeRunner } from "../ports/server-agent-runtime.js";
+import { AgentV2ReplyError, type AgentV2ReplyProof } from "@raiquora/agent/agent-v2-reply";
+import { admitAgentV2Reply } from "@raiquora/agent/agent-v2-publication";
+import type { ServerAgentRuntimeInput } from "../ports/server-agent-runtime.js";
 import { StrandsAgentEngine } from "./strands-agent-engine.js";
 import { strandsTurnInput } from "./strands-turn-input.js";
 
-export function createStrandsServerRuntime(engine: StrandsAgentEngine): ServerAgentRuntimeRunner {
-  return async (input): Promise<AgentRuntimeResult> => {
+/** Proof is Application-authored and intended for V2 evaluation/diagnostics. It
+ * does not authorize mutations and is not a second Conversation state store. */
+export type StrandsRuntimeResult = AgentRuntimeResult & { publicReply?: AgentV2ReplyProof; publicationError?: string };
+export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
+  return async (input: ServerAgentRuntimeInput): Promise<StrandsRuntimeResult> => {
     const run = await engine.run({
-      executionId: input.executionId,
-      userRequest: input.userRequest,
-      modelInput: strandsTurnInput(input),
-      tools: input.tools,
-      toolExecutor: input.toolExecutor,
-      effectiveIntent: input.context?.effectiveIntent,
-      limits: {
-        maxTurns: Math.min(input.limits.maxIterations, input.limits.maxModelCalls),
-        maxToolCalls: input.limits.maxToolCalls,
-        maxExecutionMs: input.limits.maxExecutionMs,
-      },
+      executionId: input.executionId, userRequest: input.userRequest, modelInput: strandsTurnInput(input),
+      tools: input.tools, toolExecutor: input.toolExecutor, effectiveIntent: input.context?.effectiveIntent,
+      limits: { maxTurns: Math.min(input.limits.maxIterations, input.limits.maxModelCalls),
+        maxToolCalls: input.limits.maxToolCalls, maxExecutionMs: input.limits.maxExecutionMs },
       reserveToolCall: () => input.researchLedger.reserve("toolCalls"),
     });
     accountStrandsUsage(input.researchLedger, run.metrics);
-    const evidence = uniqueEvidence([...(input.initialEvidence ?? []), ...run.evidence], input.limits.maxEvidence);
     const status = runtimeStatus(run.stopReason, run.limitReason);
-    if (status !== "completed") return {
-      status, response: "", evidence, claims: [], trace: run.trace,
+    const denied = (publicationError: string): StrandsRuntimeResult => ({
+      status: status === "completed" ? "failed" : status,
+      response: "", evidence: [], claims: [], trace: run.trace, publicationError,
       delivery: { status: "degraded", basis: "verified_projection" },
-    };
-
-    // Temporary verified projection bridge. Replaced by the V2 public-answer
-    // contract in #703; this is NOT the intended final conversation experience.
-    if (evidence.length) {
-      try {
-        const grounded = presentGroundedEvidence(evidence.map(({ id }) => id), evidence);
-        const validation = validateEvidenceAndClaims(evidence, grounded.claims);
-        if (!validation.valid) throw new Error("Invalid grounded Strands claims");
-        return { status: "completed", response: grounded.text, evidence,
-          claims: validation.claims, trace: run.trace,
-          delivery: { status: "full", basis: "verified_projection" } };
-      } catch {
-        return { status: "failed", response: "", evidence, claims: [], trace: run.trace,
-          delivery: { status: "degraded", basis: "verified_projection" } };
-      }
+    });
+    if (status !== "completed") return denied("incomplete_execution");
+    if (!run.replyProposal) return denied("missing_reply_proposal");
+    // Merge rather than silently choosing the first of colliding evidence IDs.
+    const merged = mergeEvidenceObservations([], [...(input.initialEvidence ?? []), ...run.evidence], input.limits.maxEvidence);
+    if (merged.collisions.length || merged.conflictingObservationIds.length) return denied("evidence_collision");
+    try {
+      const reply = admitAgentV2Reply(run.replyProposal, {
+        executionId: input.executionId, evidence: merged.evidence, effectiveIntent: input.context?.effectiveIntent,
+        // This composition exposes reads only. No model-supplied success receipts.
+        receipts: [], availableOperations: [],
+      });
+      const validation = validateEvidenceAndClaims(reply.evidence, reply.claims);
+      if (!validation.valid) return denied("invalid_claim_binding");
+      return { status: "completed", response: reply.text, evidence: reply.evidence,
+        claims: validation.claims, trace: run.trace, publicReply: reply.proof,
+        delivery: { status: "full", basis: "verified_projection" } };
+    } catch (error) {
+      if (error instanceof AgentV2ReplyError) return denied(error.code);
+      throw error;
     }
-
-    // Missing evidence does not make arbitrary model prose safe to publish.
-    // Clarification, ordinary conversation and unsupported-operation replies
-    // need explicit admission in #703; do not pass them via a permissive fallback.
-    return { status: "failed", response: "", evidence: [], claims: [], trace: run.trace,
-      delivery: { status: "degraded", basis: "model" } };
   };
 }
-
-function accountStrandsUsage(
-  ledger: Parameters<ServerAgentRuntimeRunner>[0]["researchLedger"],
-  metrics: Awaited<ReturnType<StrandsAgentEngine["run"]>>["metrics"],
-): void {
+function accountStrandsUsage(ledger: ServerAgentRuntimeInput["researchLedger"],
+  metrics: Awaited<ReturnType<StrandsAgentEngine["run"]>>["metrics"]): void {
   if (!metrics) return;
   for (let index = 0; index < metrics.modelCalls; index += 1) ledger.reserve("modelCalls");
-  ledger.recordModel({
-    inputTokens: metrics.inputTokens, outputTokens: metrics.outputTokens, totalTokens: metrics.totalTokens,
+  ledger.recordModel({ inputTokens: metrics.inputTokens, outputTokens: metrics.outputTokens, totalTokens: metrics.totalTokens,
     ...(metrics.cacheReadInputTokens === undefined ? {} : { cacheReadInputTokens: metrics.cacheReadInputTokens }),
     ...(metrics.cacheWriteInputTokens === undefined ? {} : { cacheWriteInputTokens: metrics.cacheWriteInputTokens }),
   }, metrics.cacheReadInputTokens ? "read" : metrics.cacheWriteInputTokens ? "write" : "unknown");
-}
-function uniqueEvidence(values: readonly Evidence[], maximum: number): Evidence[] {
-  const byId = new Map<string, Evidence>();
-  for (const item of values) {
-    if (!byId.has(item.id)) byId.set(item.id, structuredClone(item));
-    if (byId.size >= maximum) break;
-  }
-  return [...byId.values()];
 }
 function runtimeStatus(stopReason: string, limitReason?: "tool_calls" | "deadline"): AgentRuntimeResult["status"] {
   if (limitReason) return "limit_reached";

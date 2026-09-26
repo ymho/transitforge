@@ -9,8 +9,11 @@ import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
-import { strandsAnswerText } from "./strands-answer-text.js";
+import { agentV2ReplySchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
+import { AgentV2ReplySubmission } from "./strands-reply-submission.js";
+import { publicReplyField } from "@raiquora/agent/agent-v2-publication";
 
+export const strandsReplyToolName = "submit_reply";
 export interface StrandsAgentEngineOptions {
   modelId: string;
   region: string;
@@ -20,44 +23,27 @@ export interface StrandsAgentEngineOptions {
   maxOutputTokens?: number;
   toolTimeoutMs?: number;
 }
-
 export interface StrandsAgentRunInput {
   executionId: string;
   userRequest: string;
-  /** Model-visible data produced by the Application. Defaults to userRequest. */
   modelInput?: string;
   tools: AgentToolRegistry;
   toolExecutor: AgentToolExecutor;
   effectiveIntent?: EffectiveIntent;
   cancelSignal?: AbortSignal;
-  limits?: {
-    maxTurns?: number;
-    maxToolCalls?: number;
-    maxExecutionMs?: number;
-    maxTotalTokens?: number;
-    maxOutputTokens?: number;
-  };
+  limits?: { maxTurns?: number; maxToolCalls?: number; maxExecutionMs?: number; maxTotalTokens?: number; maxOutputTokens?: number };
   reserveToolCall?: () => boolean;
 }
-
 export interface StrandsAgentRunResult {
-  /** Text candidate only; the Application still owns admission and persistence. */
-  response: string;
+  /** Not public text. The Application admits the typed proposal separately. */
+  replyProposal?: AgentV2ReplyProposal;
   stopReason: string;
   evidence: Evidence[];
   trace: AgentTrace;
   limitReason?: "tool_calls" | "deadline";
-  metrics?: {
-    modelCalls: number;
-    toolCalls: number;
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-    cacheReadInputTokens?: number;
-    cacheWriteInputTokens?: number;
-  };
+  metrics?: { modelCalls: number; toolCalls: number; inputTokens: number; outputTokens: number; totalTokens: number;
+    cacheReadInputTokens?: number; cacheWriteInputTokens?: number };
 }
-
 export interface StrandsAgentLike {
   invoke(args: string, options?: {
     cancelSignal?: AbortSignal;
@@ -65,38 +51,28 @@ export interface StrandsAgentLike {
   }): Promise<{
     stopReason: string;
     lastMessage?: unknown;
-    metrics?: {
-      cycleCount: number;
-      accumulatedUsage: {
-        inputTokens: number;
-        outputTokens: number;
-        totalTokens: number;
-        cacheReadInputTokens?: number;
-        cacheWriteInputTokens?: number;
-      };
-      toolMetrics: Record<string, { callCount: number }>;
-    };
+    metrics?: { cycleCount: number;
+      accumulatedUsage: { inputTokens: number; outputTokens: number; totalTokens: number;
+        cacheReadInputTokens?: number; cacheWriteInputTokens?: number };
+      toolMetrics: Record<string, { callCount: number }> };
   }>;
 }
-
 export type StrandsAgentFactory = (config: AgentConfig) => StrandsAgentLike;
 
-/** Strands owns the loop; Application owns authority, state and answer admission. */
+/** Strands owns the loop. This adapter provides scoped Tools and a reply channel,
+ * not planning phases, text repairs or a second source of Conversation state. */
 export class StrandsAgentEngine {
   private readonly createAgent: StrandsAgentFactory;
   private readonly model?: Model<BaseModelConfig>;
-
-  constructor(
-    private readonly options: StrandsAgentEngineOptions,
-    dependencies: { createAgent?: StrandsAgentFactory; model?: Model<BaseModelConfig> } = {},
-  ) {
+  constructor(private readonly options: StrandsAgentEngineOptions,
+    dependencies: { createAgent?: StrandsAgentFactory; model?: Model<BaseModelConfig> } = {}) {
     this.model = dependencies.model;
     this.createAgent = dependencies.createAgent ?? ((config) => new Agent(config));
   }
-
   async run(input: StrandsAgentRunInput): Promise<StrandsAgentRunResult> {
     if (!input.executionId.trim() || !input.userRequest.trim()) throw new Error("Strands Agent requires executionId and userRequest");
-    const evidence: Evidence[] = [];
+    if (input.tools.descriptors().some(({ name }) => name === strandsReplyToolName)) throw new Error("Reserved reply tool name");
+    const evidence: Evidence[] = [], submission = new AgentV2ReplySubmission();
     const trace = new AgentTraceRecorder(input.executionId, { omitContent: true });
     trace.taskStarted(input.userRequest);
     const budgetState = { toolCalls: 0, toolLimitReached: false };
@@ -104,15 +80,17 @@ export class StrandsAgentEngine {
       registry: input.tools, executor: input.toolExecutor, executionId: input.executionId,
       effectiveIntent: input.effectiveIntent, toolTimeoutMs: this.options.toolTimeoutMs ?? 20_000,
       trace, evidence, budgetState, maxToolCalls: input.limits?.maxToolCalls,
-      reserveToolCall: input.reserveToolCall,
+      reserveToolCall: input.reserveToolCall, canExecute: () => !submission.submitted,
     });
+    tools.push(tool({
+      name: strandsReplyToolName,
+      description: "Submit a reply proposal, once, after any necessary research. This does not save or execute anything. Use answer with references to actual Evidence fields; conversation with a message key; clarification with a missing target; unavailable with an operation; operation_result with an Application receipt ID; uncertainty when information cannot be verified. Do not include prose, reasoning, or new facts. Stop researching after submission.",
+      inputSchema: agentV2ReplySchema as JSONSchema,
+      callback: (value) => jsonValue(submission.receive(value)),
+    }));
     const agent = this.createAgent({
-      model: this.model ?? new BedrockModel({
-        modelId: this.options.modelId, region: this.options.region,
-        maxTokens: this.options.maxOutputTokens ?? 2_048, temperature: 0,
-        // Provider transport is Converse. No model-token stream is exposed to users.
-        stream: false,
-      }),
+      model: this.model ?? new BedrockModel({ modelId: this.options.modelId, region: this.options.region,
+        maxTokens: this.options.maxOutputTokens ?? 2_048, temperature: 0, stream: false }),
       tools, systemPrompt: this.options.systemPrompt,
       printer: false, contextManager: false, retryStrategy: null, toolExecutor: "sequential",
     });
@@ -121,8 +99,7 @@ export class StrandsAgentEngine {
     const cancelSignal = combineSignals(input.cancelSignal, deadlineSignal);
     try {
       const result = await agent.invoke(input.modelInput ?? input.userRequest, {
-        ...(cancelSignal ? { cancelSignal } : {}),
-        limits: {
+        ...(cancelSignal ? { cancelSignal } : {}), limits: {
           turns: input.limits?.maxTurns ?? this.options.maxTurns ?? 8,
           ...(input.limits?.maxTotalTokens ?? this.options.maxTotalTokens
             ? { totalTokens: input.limits?.maxTotalTokens ?? this.options.maxTotalTokens } : {}),
@@ -130,20 +107,19 @@ export class StrandsAgentEngine {
             ? { outputTokens: input.limits?.maxOutputTokens ?? this.options.maxOutputTokens } : {}),
         },
       });
-      const response = result.stopReason === "endTurn" || result.stopReason === "stopSequence"
-        ? strandsAnswerText(result) : "";
-      trace.responseGenerated(response);
+      // Neither lastMessage nor SDK debug/string output crosses the publication boundary.
       trace.taskCompleted(result.stopReason === "cancelled" ? "cancelled" : "completed", Date.now() - startedAt,
         result.stopReason === "endTurn" ? undefined : result.stopReason);
-      const usage = result.metrics?.accumulatedUsage;
+      const usage = result.metrics?.accumulatedUsage, replyProposal = submission.snapshot();
       return {
-        response, stopReason: result.stopReason,
+        ...(replyProposal ? { replyProposal } : {}), stopReason: result.stopReason,
         evidence: evidence.map((item) => structuredClone(item)), trace: trace.snapshot(),
         ...(budgetState.toolLimitReached ? { limitReason: "tool_calls" as const } : {}),
         ...(result.stopReason === "cancelled" && deadlineSignal?.aborted ? { limitReason: "deadline" as const } : {}),
         ...(result.metrics && usage ? { metrics: {
           modelCalls: result.metrics.cycleCount,
-          toolCalls: Object.values(result.metrics.toolMetrics).reduce((sum, item) => sum + item.callCount, 0),
+          // Submission is a local reply operation, not an external Domain Tool call.
+          toolCalls: budgetState.toolCalls,
           inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens,
           ...(usage.cacheReadInputTokens === undefined ? {} : { cacheReadInputTokens: usage.cacheReadInputTokens }),
           ...(usage.cacheWriteInputTokens === undefined ? {} : { cacheWriteInputTokens: usage.cacheWriteInputTokens }),
@@ -155,58 +131,44 @@ export class StrandsAgentEngine {
     }
   }
 }
-
 export function createStrandsReadTools(input: {
-  registry: AgentToolRegistry;
-  executor: AgentToolExecutor;
-  executionId: string;
-  effectiveIntent?: EffectiveIntent;
-  toolTimeoutMs: number;
-  trace: AgentTraceRecorder;
-  evidence: Evidence[];
-  budgetState?: { toolCalls: number; toolLimitReached: boolean };
-  maxToolCalls?: number;
-  reserveToolCall?: () => boolean;
+  registry: AgentToolRegistry; executor: AgentToolExecutor; executionId: string; effectiveIntent?: EffectiveIntent;
+  toolTimeoutMs: number; trace: AgentTraceRecorder; evidence: Evidence[];
+  budgetState?: { toolCalls: number; toolLimitReached: boolean }; maxToolCalls?: number;
+  reserveToolCall?: () => boolean; canExecute?: () => boolean;
 }): InvokableTool<unknown, JSONValue>[] {
-  return input.registry.descriptors().filter((descriptor) => input.registry.effect(descriptor.name) === "read").map((descriptor) =>
-    tool({
-      name: descriptor.name, description: descriptor.description,
-      inputSchema: descriptor.inputSchema as JSONSchema,
-      callback: async (rawInput, context) => {
-        const toolInput = jsonObject(rawInput);
-        if (!toolInput) return jsonValue({ ok: false, error: { code: "invalid_input", retryable: false } });
-        const decision = validateToolIntentUse(descriptor, toolInput, input.effectiveIntent);
-        if (!decision.accepted) {
-          return jsonValue({ ok: false, error: {
-            code: decision.error?.code ?? "precondition_failed", retryable: decision.error?.retryable ?? false,
-          } });
-        }
-        if (context?.cancelSignal.aborted) return jsonValue({ ok: false, error: { code: "execution_failed", retryable: true } });
-        if (input.maxToolCalls !== undefined && (input.budgetState?.toolCalls ?? 0) >= input.maxToolCalls ||
-            input.reserveToolCall && !input.reserveToolCall()) {
-          if (input.budgetState) input.budgetState.toolLimitReached = true;
-          return jsonValue({ ok: false, error: { code: "execution_failed", retryable: false, reason: "tool_budget" } });
-        }
-        if (input.budgetState) input.budgetState.toolCalls += 1;
-        const execution = await input.executor.execute({
-          executionId: input.executionId, toolCallId: context?.toolUse.toolUseId ?? `strands-${descriptor.name}`,
-          toolName: descriptor.name, toolInput, timeoutMs: input.toolTimeoutMs,
-          ...(input.effectiveIntent && decision.dependencyTargets.length ? { intentDependency: {
-            intentRevision: input.effectiveIntent.intentRevision, fingerprint: input.effectiveIntent.fingerprint,
-            targets: decision.dependencyTargets,
-          } } : {}),
-        }, input.trace);
-        if (execution.evidence.length) input.evidence.push(...execution.evidence.map((item) => structuredClone(item)));
-        if (!execution.result.ok) {
-          return jsonValue({ ok: false, error: {
-            code: execution.result.error.code, retryable: execution.result.error.retryable,
-          } });
-        }
-        return jsonValue({ ok: true, output: execution.result.output, evidenceIds: execution.evidence.map(({ id }) => id) });
-      },
-    }));
+  return input.registry.descriptors().filter(({ name }) => input.registry.effect(name) === "read").map((descriptor) => tool({
+    name: descriptor.name, description: descriptor.description, inputSchema: descriptor.inputSchema as JSONSchema,
+    callback: async (rawInput, context) => {
+      const toolInput = jsonObject(rawInput);
+      if (!toolInput) return jsonValue({ ok: false, error: { code: "invalid_input", retryable: false } });
+      if (input.canExecute && !input.canExecute()) return jsonValue({ ok: false, error: { code: "reply_submitted", retryable: false } });
+      const decision = validateToolIntentUse(descriptor, toolInput, input.effectiveIntent);
+      if (!decision.accepted) return jsonValue({ ok: false, error: {
+        code: decision.error?.code ?? "precondition_failed", retryable: decision.error?.retryable ?? false } });
+      if (context?.cancelSignal.aborted) return jsonValue({ ok: false, error: { code: "execution_failed", retryable: true } });
+      if (input.maxToolCalls !== undefined && (input.budgetState?.toolCalls ?? 0) >= input.maxToolCalls ||
+          input.reserveToolCall && !input.reserveToolCall()) {
+        if (input.budgetState) input.budgetState.toolLimitReached = true;
+        return jsonValue({ ok: false, error: { code: "execution_failed", retryable: false, reason: "tool_budget" } });
+      }
+      if (input.budgetState) input.budgetState.toolCalls += 1;
+      const execution = await input.executor.execute({
+        executionId: input.executionId, toolCallId: context?.toolUse.toolUseId ?? `strands-${descriptor.name}`,
+        toolName: descriptor.name, toolInput, timeoutMs: input.toolTimeoutMs,
+        ...(input.effectiveIntent && decision.dependencyTargets.length ? { intentDependency: {
+          intentRevision: input.effectiveIntent.intentRevision, fingerprint: input.effectiveIntent.fingerprint,
+          targets: decision.dependencyTargets } } : {}),
+      }, input.trace);
+      if (execution.evidence.length) input.evidence.push(...execution.evidence.map((item) => structuredClone(item)));
+      if (!execution.result.ok) return jsonValue({ ok: false, error: {
+        code: execution.result.error.code, retryable: execution.result.error.retryable } });
+      return jsonValue({ ok: true, output: execution.result.output, evidenceIds: execution.evidence.map(({ id }) => id),
+        replyReferences: execution.evidence.map((item) => ({ evidenceId: item.id,
+          fields: Object.fromEntries(Object.entries(item.facts).filter(([key]) => publicReplyField(key))) })) });
+    },
+  }));
 }
-
 function jsonObject(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
