@@ -87,7 +87,7 @@ describe("small Conversation condition operations", () => {
     }, quote: "10月3日から5日まで" }, "10月3日から5日まで旅行します", "2026-09-27");
     expect(accepted).toEqual({ target: "travel_period", period: {
       start: { kind: "local_date", date: "2026-10-03", anchorDate: "2026-09-27", resolverVersion: "calendar-v1" },
-      end: { kind: "local_date", date: "2026-10-05" },
+      end: { kind: "local_date", date: "2026-10-05", anchorDate: "2026-09-27", resolverVersion: "calendar-v1" },
     }, quote: "10月3日から5日まで" });
     const reduction = reduceConversationIntent(empty(), conditionDelta(accepted, "73000000-0000-4000-8000-000000000001", empty()));
     expect(reduction.receipt.intentRevision).toBe(1);
