@@ -8,6 +8,7 @@ import { cognitoTokenFixture, token } from "../adapters/cognito-token.fixture.js
 import { StrandsAgentEngine } from "../adapters/strands-agent-engine.js";
 import { createStrandsServerRuntime } from "../adapters/strands-server-runtime.js";
 import { createConversationServerAgent } from "./conversation-server-agent.js";
+import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
 
 class ToolThenAnswerModel extends Model<BaseModelConfig> {
   private calls = 0;
@@ -202,8 +203,8 @@ it("persists a V2 intent A-commit across answer failure and retries without reap
   });
 
   await expect(firstApp.runConversationTurn(input)).rejects.toMatchObject({ code: "agent_failed" });
-  const afterFailure = await new (await import("../adapters/dynamodb-conversation-turn-repository.js")).DynamoDbConversationTurnRepository(
-    "test-state", state.client).getWorkingState(principal, conversationId);
+  const afterFailure = await new DynamoDbConversationTurnRepository("test-state", state.client)
+    .getWorkingState(principal, conversationId);
   expect(afterFailure?.semantic?.overlay).toMatchObject({ intentRevision: 1, facts: [
     { target: "destination", value: { kind: "place_label", label: "京都" } },
   ] });
@@ -220,8 +221,8 @@ it("persists a V2 intent A-commit across answer failure and retries without reap
 
   expect(result).toMatchObject({ status: "completed",
     semanticReceipt: { version: "public-semantic-receipt-v1", intentRevision: 1, outcome: "accepted" } });
-  const afterRetry = await new (await import("../adapters/dynamodb-conversation-turn-repository.js")).DynamoDbConversationTurnRepository(
-    "test-state", state.client).getWorkingState(principal, conversationId);
+  const afterRetry = await new DynamoDbConversationTurnRepository("test-state", state.client)
+    .getWorkingState(principal, conversationId);
   expect(afterRetry?.semantic?.overlay.intentRevision).toBe(1);
   expect(afterRetry?.semantic?.overlay.facts).toHaveLength(1);
   expect(v1Model.converse).not.toHaveBeenCalled();
