@@ -12,7 +12,7 @@ import { scoreSemanticInterpretation } from "../frontend/src/usecases/agent/eval
 
 const repetitions = integerArg("--repetitions", 3, 1, 5);
 const limit = integerArg("--limit", semanticIntentCorpusInputs.length, 1, semanticIntentCorpusInputs.length);
-const selectedId = arg("--case");
+const selectedId = arg("--case")?.trim();
 const inputs = semanticIntentCorpusInputs.filter(({ caseId }) => !selectedId || caseId === selectedId).slice(0, limit);
 if (!inputs.length) throw new Error("No matching semantic evaluation cases");
 const maximumCalls = integerArg("--max-calls", 30, 1, 1_000);
