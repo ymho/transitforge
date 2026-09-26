@@ -97,11 +97,15 @@ export class StrandsAgentEngine {
         if (!interpretation || interpretation.outcome !== "delta") {
           return jsonValue({ ok: false, error: { code: "invalid_intent_delta", retryable: false } });
         }
-        const accepted = await input.intentController!.apply(interpretation);
-        currentEffectiveIntent = accepted.effectiveIntent;
-        intentUpdated = true;
-        return jsonValue({ ok: true, receipt: accepted.receipt,
-          effectiveIntent: accepted.effectiveIntent ?? null });
+        try {
+          const accepted = await input.intentController!.apply(interpretation);
+          currentEffectiveIntent = accepted.effectiveIntent;
+          intentUpdated = true;
+          return jsonValue({ ok: true, receipt: accepted.receipt,
+            effectiveIntent: accepted.effectiveIntent ?? null });
+        } catch {
+          return jsonValue({ ok: false, error: { code: "intent_rejected", retryable: false } });
+        }
       },
     }));
     tools.push(tool({
