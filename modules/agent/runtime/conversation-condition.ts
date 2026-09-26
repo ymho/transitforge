@@ -11,12 +11,6 @@ const placeLabel = z.string().min(1).max(200).regex(/^(?!\s)(?![\s\S]*\s$)[^\u00
 export const placeConditionInputSchema = z.strictObject({ place: placeLabel, quote: sourceQuote });
 export const clearConditionInputSchema = z.strictObject({ quote: sourceQuote });
 
-const childAgeGroup = z.enum(["baby", "preschool", "elementary", "teen"]);
-const companion = z.enum(["solo", "partner", "friends", "children", "family"]);
-const partyChild = z.strictObject({
-  ageGroup: childAgeGroup.optional().describe("利用者が年代を明示した子どもだけ設定する。"),
-  age: z.number().int().min(0).max(17).optional().describe("利用者が年齢を明示した子どもだけ設定する。"),
-});
 const partyCount = z.strictObject({
   kind: z.literal("count"),
   people: z.number().int().min(1).max(20).describe("明示された合計人数。大人/子どもの内訳は推測しない。"),
@@ -24,16 +18,13 @@ const partyCount = z.strictObject({
 const partyComposition = z.strictObject({
   kind: z.literal("composition"),
   adults: z.number().int().min(0).max(20),
-  children: z.array(partyChild).max(20).describe("子ども1人につき1要素。年齢・年代を推測して埋めない。"),
-  composition: z.array(companion).max(5).optional().describe("solo/partner/friends/children/familyを利用者が明示した場合だけ設定し、人数から推測しない。"),
-}).refine((value) => value.adults + value.children.length >= 1 && value.adults + value.children.length <= 20, {
+  children: z.number().int().min(0).max(20).describe("明示された子どもの人数。年齢・年代・関係性はこのToolでは扱わない。"),
+}).refine((value) => value.adults + value.children >= 1 && value.adults + value.children <= 20, {
   message: "同行者は1〜20人にする",
-}).refine((value) => !value.composition?.includes("solo") || value.adults + value.children.length === 1, {
-  message: "soloと複数人は同時に指定できない",
 });
 export const partyConditionValueSchema = z.union([partyCount, partyComposition]);
 export const partyConditionInputSchema = z.strictObject({
-  party: partyConditionValueSchema.describe("今回の同行者。合計だけならcount、明示された大人/子どもの内訳がある時だけcomposition。"),
+  party: partyConditionValueSchema.describe("今回の同行者。合計だけならcount、明示された大人/子どもの人数がある時だけcomposition。年齢・年代・関係性は推測しない。"),
   quote: sourceQuote,
 });
 
@@ -64,8 +55,7 @@ export function admitConditionChange(value: unknown, userMessage: string): Conve
     throw new ConditionUpdateRejectedError("invalid_source");
   if ("party" in change && change.party?.kind === "composition") {
     try {
-      validateTripParty({ adults: change.party.adults, children: change.party.children,
-        ...(change.party.composition === undefined ? {} : { composition: change.party.composition }), source: "user" });
+      validateTripParty({ adults: change.party.adults, children: Array.from({ length: change.party.children }, () => ({})), source: "user" });
     } catch { throw new ConditionUpdateRejectedError("invalid_condition"); }
   }
   return change;
@@ -81,13 +71,7 @@ export function conditionPayload(change: ConversationConditionChange): string {
   // Exact, already-validated quote may differ on a replay; the requested state must not.
   if ("place" in change) return JSON.stringify([1, change.target, change.place]);
   if (change.party === null || change.party.kind === "count") return JSON.stringify([1, change.target, change.party]);
-  // Companion labels and anonymous children are sets for this condition. Model retry
-  // ordering must not turn the same requested state into a conflicting operation.
-  return JSON.stringify([1, change.target, {
-    kind: "composition", adults: change.party.adults,
-    children: change.party.children.map(({ age, ageGroup }) => [age ?? null, ageGroup ?? null]).sort(),
-    composition: [...(change.party.composition ?? [])].sort(),
-  }]);
+  return JSON.stringify([1, change.target, change.party]);
 }
 
 /** Adapt a validated business operation directly to the existing pure reducer.
@@ -100,8 +84,7 @@ export function conditionDelta(change: ConversationConditionChange, turnId: stri
   if (!cleared && "party" in change && change.party?.kind === "count")
     value = { kind: "quantity", amount: change.party.people, unit: "people" };
   if (!cleared && "party" in change && change.party?.kind === "composition")
-    value = { kind: "party", adults: change.party.adults, children: change.party.children.map((child) => ({ ...child })),
-      ...(change.party.composition === undefined ? {} : { composition: [...change.party.composition] }) };
+    value = { kind: "party", adults: change.party.adults, children: Array.from({ length: change.party.children }, () => ({})) };
   return parseAcceptedIntentDelta({ version: 1, mutationId: operationId, baseIntentRevision: overlay.intentRevision,
     speechAct: cleared ? "cancel" : "inform", operations: [{
       operationId, groupId: operationId, target: change.target, action: cleared ? "retract" : "set",
