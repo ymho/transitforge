@@ -1,5 +1,5 @@
 name: Party condition workbench (temporary)
-# Run 3: one update Tool per condition; correction is one final-state operation.
+# Run 4: one update Tool per condition with a Bedrock-compatible root object schema.
 # Detailed age/school cohorts and scoped participation are deferred to #729.
 
 on:
