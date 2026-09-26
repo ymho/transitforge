@@ -11,10 +11,12 @@ type Reply = { text: string } | { tool: string; input: Record<string, unknown> }
 class ScriptedModel extends Model<BaseModelConfig> {
   private index = 0;
   private config: BaseModelConfig = { modelId: "synthetic" };
+  readonly toolChoices: StreamOptions["toolChoice"][] = [];
   constructor(private readonly replies: Reply[]) { super(); }
   updateConfig(config: BaseModelConfig): void { this.config = { ...this.config, ...config }; }
   getConfig(): BaseModelConfig { return this.config; }
-  async *stream(_messages: Message[], _options?: StreamOptions): AsyncGenerator<ModelStreamEvent> {
+  async *stream(_messages: Message[], options?: StreamOptions): AsyncGenerator<ModelStreamEvent> {
+    this.toolChoices.push(options?.toolChoice);
     const reply = this.replies[this.index++];
     if (!reply) throw new Error("Unexpected extra model invocation");
     yield { type: "modelMessageStartEvent", role: "assistant" };
@@ -54,11 +56,13 @@ function setup(effect: "read" | "proposal" = "read") {
 describe("StrandsAgentEngine", () => {
   it("runs a real Strands model-tool-model loop through the existing Tool executor", async () => {
     const { execute, input } = setup();
-    const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([lookup, submitted, end]) }).run(input);
+    const model = new ScriptedModel([lookup, submitted, end]);
+    const result = await new StrandsAgentEngine(options, { model }).run(input);
     expect(result.stopReason).toBe("endTurn");
     expect(result.replyProposal).toEqual({ kind: "uncertainty" });
     expect(execute).toHaveBeenCalledOnce();
     expect(result.trace.events.some(({ type }) => type === "tool_completed")).toBe(true);
+    expect(model.toolChoices).toEqual([{ any: {} }, { any: {} }, { auto: {} }]);
   });
   it("rejects stale model Tool input before the Domain Tool executes", async () => {
     const { execute, input } = setup();
@@ -111,9 +115,11 @@ describe("StrandsAgentEngine", () => {
     expect(JSON.stringify(result)).not.toContain("保存しておきます");
     expect(result).not.toHaveProperty("response");
   });
-  it("does not convert an unstructured model answer into a reply proposal", async () => {
+  it("does not convert an unstructured model answer into a reply proposal when a noncompliant model ignores ToolChoice", async () => {
     const { input } = setup();
-    const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([{ text: "保存しておきます。" }]) }).run(input);
+    const model = new ScriptedModel([{ text: "保存しておきます。" }]);
+    const result = await new StrandsAgentEngine(options, { model }).run(input);
+    expect(model.toolChoices).toEqual([{ any: {} }]);
     expect(result.replyProposal).toBeUndefined();
   });
   it("does not execute more Domain Tools after the reply has been submitted", async () => {
