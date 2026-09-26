@@ -48,7 +48,13 @@ Strandsのdefault retry、SessionManager、MemoryManagerには依存しない。
 
 V1の内部クラス、Prompt repair、planning guard、fallbackの挙動は互換要件にしない。互換要件は#631の受入シナリオとDomain/Application invariantである。
 
-移行中はproduction defaultをV1に維持し、V2をopt-inで組成する。V2がcritical security gate、Smoke/Full、production-shaped multi-turnを通った後にのみ切り替える。切替後はV1 Runtimeと移行adapterを削除する。
+初期移行はproduction defaultをV1に維持し、V2をopt-inで組成した。一般公開の完成判定はcritical security gate、Smoke/Full、production-shaped multi-turnで行い、最終的にV1 Runtimeと移行adapterを削除する。
+
+### 2026-09-26 開発用実環境の前倒し切替
+
+#706で、利用者が未対応機能・品質低下を許容する開発用切替を承認した。現在のdev実サービスはCDの明示設定でV2を選ぶ。これは一般公開の品質合格や#703/#681の完了ではない。
+旧Semantic IntentはOFF、Agentの業務Toolはread-onlyを維持し、V1への自動fallbackは追加しない。V1は緊急時の明示的な復帰用に一時保持する。
+設定の読み戻し、既知の未完了、復帰と実装順は[Agent v2開発用実環境切替](../architecture/agent-v2-development-cutover.md)を参照する。
 
 ## 影響
 
@@ -62,4 +68,4 @@ V1の内部クラス、Prompt repair、planning guard、fallbackの挙動は互�
 
 AgentCore Runtime/Harness、multi-agent、Memory/RAG基盤の追加、Domain Toolの再実装はこの判断に含めない。
 
-関連: #631 #676 #681
+関連: #631 #676 #681 #706
