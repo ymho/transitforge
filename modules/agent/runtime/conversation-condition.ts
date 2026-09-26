@@ -48,7 +48,6 @@ export const periodDateExpressionSchema = z.strictObject({
   month: z.number().int().min(1).max(12).optional(),
   day: z.number().int().min(1).max(31).optional(),
   relation: z.enum(["today", "tomorrow", "day_after_tomorrow"]).optional(),
-  quote: sourceQuote.describe("この日付要素だけを裏付ける完全な部分文字列。"),
 }).superRefine((value, context) => {
   if (value.kind === "relative_date") {
     if (value.relation === undefined || value.year !== undefined || value.month !== undefined || value.day !== undefined)
@@ -61,7 +60,6 @@ export const periodDateExpressionSchema = z.strictObject({
 export const travelDurationSchema = z.strictObject({
   amount: z.number().int().min(1).max(90),
   unit: z.enum(["days", "nights"]),
-  quote: sourceQuote.describe("日数・泊数だけを裏付ける完全な部分文字列。"),
 });
 export const travelPeriodValueSchema = z.strictObject({
   start: periodDateExpressionSchema.optional(),
@@ -279,8 +277,7 @@ function resolveTravelPeriod(value: z.infer<typeof travelPeriodValueSchema>, quo
 
 function resolveDuration(value: z.infer<typeof travelDurationSchema>, commandQuote: string,
   mayOmit: boolean): z.infer<typeof resolvedDurationSchema> | undefined {
-  const unitMarker = value.unit === "nights" ? "泊" : "日";
-  const grounded = commandQuote.includes(value.quote) && containsNumber(value.quote, value.amount) && value.quote.includes(unitMarker);
+  const grounded = value.unit === "nights" ? nightsAppear(commandQuote, value.amount) : durationDaysAppear(commandQuote, value.amount);
   if (!grounded) {
     if (mayOmit) return undefined;
     throw new ConditionUpdateRejectedError("invalid_source");
@@ -290,18 +287,17 @@ function resolveDuration(value: z.infer<typeof travelDurationSchema>, commandQuo
 
 function resolvePeriodDate(value: z.infer<typeof periodDateExpressionSchema>, commandQuote: string, anchor?: string,
   sameMonthReference?: string): z.infer<typeof resolvedDateSchema> {
-  if (!commandQuote.includes(value.quote)) throw new ConditionUpdateRejectedError("invalid_source");
   if (value.kind === "relative_date") {
-    if (!value.relation || !anchor || !validDate(anchor) || !relativeDateAppears(value.quote, value.relation))
+    if (!value.relation || !anchor || !validDate(anchor) || !relativeDateAppears(commandQuote, value.relation))
       throw new ConditionUpdateRejectedError(anchor ? "invalid_source" : "invalid_condition");
     const offset = value.relation === "today" ? 0 : value.relation === "tomorrow" ? 1 : 2;
     return { kind: "local_date", date: stepDate(anchor, offset), expression: value.relation, anchorDate: anchor, resolverVersion: "calendar-v1" };
   }
-  if (value.day === undefined || !containsNumber(value.quote, value.day)) throw new ConditionUpdateRejectedError("invalid_source");
+  if (value.day === undefined || !dayAppears(commandQuote, value.day)) throw new ConditionUpdateRejectedError("invalid_source");
 
   // year/month may be shared by the whole range ("10月3日から5日").
   // Day remains grounded by the element quote so one endpoint cannot borrow the other endpoint's day.
-  const explicitYear = value.year !== undefined && containsNumber(commandQuote, value.year);
+  const explicitYear = value.year !== undefined && yearAppears(commandQuote, value.year);
   const explicitMonth = value.month !== undefined && monthAppears(commandQuote, value.month);
   const referenceMonth = sameMonthReference ? Number(sameMonthReference.slice(5, 7)) : undefined;
   const month = explicitMonth ? value.month : referenceMonth;
@@ -330,12 +326,25 @@ function relativeDateAppears(quote: string, relation: "today" | "tomorrow" | "da
   return quote.includes("明後日") || quote.includes("あさって");
 }
 function monthAppears(quote: string, month: number): boolean {
-  const padded = String(month).padStart(2, "0");
-  return quote.includes(`${month}月`) || quote.includes(`${month}/`) ||
-    quote.includes(`${padded}/`) || quote.includes(`-${padded}-`);
+  const normalized = quote.normalize("NFKC"), padded = String(month).padStart(2, "0");
+  return normalized.includes(`${month}月`) || normalized.includes(`${month}/`) ||
+    normalized.includes(`${padded}/`) || normalized.includes(`-${padded}-`);
 }
-function containsNumber(quote: string, value: number): boolean {
-  return quote.normalize("NFKC").includes(String(value));
+function dayAppears(quote: string, day: number): boolean {
+  const normalized = quote.normalize("NFKC"), padded = String(day).padStart(2, "0");
+  return normalized.includes(`${day}日`) || normalized.includes(`/${day}`) ||
+    normalized.includes(`/${padded}`) || normalized.includes(`-${padded}`);
+}
+function yearAppears(quote: string, year: number): boolean {
+  return quote.normalize("NFKC").includes(String(year));
+}
+function nightsAppear(quote: string, amount: number): boolean {
+  return quote.normalize("NFKC").includes(`${amount}泊`);
+}
+function durationDaysAppear(quote: string, amount: number): boolean {
+  const normalized = quote.normalize("NFKC");
+  return normalized.trim() === `${amount}日` || [`${amount}日間`, `${amount}日で`, `${amount}日ほど`,
+    `${amount}日くらい`, `${amount}日程度`, `${amount}日旅行`].some(marker => normalized.includes(marker));
 }
 function isoDate(year: number, month: number, day: number): string | undefined {
   const value = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
