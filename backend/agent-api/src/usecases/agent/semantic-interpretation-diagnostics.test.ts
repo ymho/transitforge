@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { semanticInterpretationShapeFailure } from "./semantic-interpretation-diagnostics.js";
+import { parseSemanticInterpretationJson, semanticInterpretationShapeFailure } from "./semantic-interpretation-diagnostics.js";
 
 const valid = {
   outcome: "delta",
@@ -20,5 +20,19 @@ describe("semantic interpretation diagnostics", () => {
 
   it("accepts the bounded semantic root shape", () => {
     expect(semanticInterpretationShapeFailure(valid)).toBeUndefined();
+  });
+
+  it("accepts only direct JSON or one exact JSON code fence", () => {
+    expect(parseSemanticInterpretationJson(JSON.stringify(valid))).toEqual(valid);
+    expect(parseSemanticInterpretationJson(`\`\`\`json
+${JSON.stringify(valid)}
+\`\`\``)).toEqual(valid);
+    expect(() => parseSemanticInterpretationJson(`prefix
+\`\`\`json
+${JSON.stringify(valid)}
+\`\`\``)).toThrowError();
+    expect(() => parseSemanticInterpretationJson(`\`\`\`json
+not-json
+\`\`\``)).toThrowError();
   });
 });
