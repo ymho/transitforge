@@ -5,7 +5,6 @@ import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
 import type { AgentRuntimeLimits } from "@raiquora/agent/runtime-policies";
-import type { Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import type { AgentRuntimeContextInput } from "@raiquora/agent/agent-decision-context";
 import { requireTripPrincipal } from "../../contracts/trip-principal.js";
@@ -16,6 +15,7 @@ import { ResearchExecutionLedger, researchBudgetForRuntimeLimits } from "@raiquo
 import { validateAgentRuntimeLimits } from "@raiquora/agent/runtime-policies";
 import type { ModelTokenRates } from "@raiquora/agent/model-usage-cost";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
+import type { ServerAgentRuntimeRunner } from "../../ports/server-agent-runtime.js";
 import { evidenceForCurrentIntent } from "@raiquora/agent/intent-action-policy";
 
 /** Caller authenticates principal. Only an injected server loader may resolve references to state. */
@@ -29,20 +29,6 @@ export interface ServerAgentTurn {
   researchTarget?: ResearchTarget;
 }
 export interface ServerAgentScope extends ServerAgentTurn { executionId: string; researchMode: { requestedMode: "standard" | "detailed"; effectiveMode: "standard" | "detailed" } }
-export interface ServerAgentRuntimeInput {
-  scope: ServerAgentScope;
-  context?: AgentRuntimeContextInput;
-  tools: AgentToolRegistry;
-  evidenceRegistry: ToolEvidenceRegistry;
-  toolExecutor: AgentToolExecutor;
-  limits: AgentRuntimeLimits;
-  researchLedger: ResearchExecutionLedger;
-  initialEvidence?: Evidence[];
-  reportProgress?: AgentProgressReporter;
-}
-
-export type ServerAgentRuntimeRunner = (input: ServerAgentRuntimeInput) => Promise<AgentRuntimeResult>;
-
 export interface ServerAgentDependencies {
   newExecutionId: () => string;
   createModel: (scope: ServerAgentScope) => AgentModelProvider;
@@ -132,7 +118,9 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
     const toolExecutor = new AgentToolExecutor(tools, evidence, dependencies.now);
     let result = dependencies.runRuntime
       ? await dependencies.runRuntime({
-          scope,
+          executionId: scope.executionId,
+          userRequest: scope.userRequest,
+          researchMode: scope.researchMode,
           ...(context ? { context } : {}),
           tools,
           evidenceRegistry: evidence,
