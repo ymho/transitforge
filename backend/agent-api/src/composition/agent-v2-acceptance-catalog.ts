@@ -74,6 +74,20 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
     testName: "runs an actual Strands model-tool-model loop inside the production-shaped Conversation path",
   },
   {
+    id: "V2-CONVERSATION-01",
+    kind: "v2_specific",
+    invariant: "a no-evidence conversational reply is Application-admitted, persisted and replayed without Domain Tool or V1 execution",
+    testFile: "backend/agent-api/src/composition/strands-conversation-production-shaped.test.ts",
+    testName: "publishes and replays a no-evidence greeting without calling Domain Tools or V1",
+  },
+  {
+    id: "V2-AUTHORITY-02",
+    kind: "v2_specific",
+    invariant: "an unavailable save request is reported as unavailable and replayed without claiming or performing a write",
+    testFile: "backend/agent-api/src/composition/strands-conversation-production-shaped.test.ts",
+    testName: "reports unavailable save through the Application boundary and replays it without side effects",
+  },
+  {
     id: "V2-REPLAY-01",
     kind: "v2_specific",
     invariant: "Conversation completion replay, owner isolation, and published Evidence continuity hold across the v2 runtime seam",
