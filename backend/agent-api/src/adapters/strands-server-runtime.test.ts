@@ -44,7 +44,7 @@ const verifiedEvidence: Evidence = {
 describe("createStrandsServerRuntime", () => {
   it("passes the existing bounded Application context to Strands", async () => {
     const input = runtimeInput();
-    const run = vi.fn(async (value: { modelInput?: string }) => ({
+    const run = vi.fn(async (_value: { modelInput?: string }) => ({
       response: "一般案内です",
       stopReason: "endTurn",
       evidence: [],
