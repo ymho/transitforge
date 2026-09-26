@@ -3,6 +3,7 @@ import { createProductionServerAgent } from "./production-server-agent-compositi
 import { createProductionConversationAgent } from "./composition/production-conversation-agent.js";
 import { StrandsAgentEngine } from "./adapters/strands-agent-engine.js";
 import { createStrandsServerRuntime } from "./adapters/strands-server-runtime.js";
+import { agentV2SystemPrompt } from "./usecases/agent-v2-system-prompt.js";
 vi.mock("./composition/production-conversation-agent.js", () => ({ createProductionConversationAgent: vi.fn() }));
 vi.mock("./adapters/strands-agent-engine.js", () => ({ StrandsAgentEngine: vi.fn(function () {}) }));
 vi.mock("./adapters/strands-server-runtime.js", () => ({ createStrandsServerRuntime: vi.fn(() => vi.fn()) }));
@@ -36,6 +37,7 @@ it("keeps Strands disabled by default and enables it only through trusted produc
   createProductionServerAgent("v2", { ...base, AGENT_RUNTIME_V2_ENABLED: "true", AWS_REGION: "ap-northeast-1", MODEL_ID: "test-model" });
   expect(StrandsAgentEngine).toHaveBeenCalledWith(expect.objectContaining({
     modelId: "test-model", region: "ap-northeast-1", maxTurns: 10, maxOutputTokens: 4096,
+    systemPrompt: agentV2SystemPrompt,
   }));
   expect(createStrandsServerRuntime).toHaveBeenCalledTimes(1);
   expect(createProductionConversationAgent).toHaveBeenLastCalledWith(expect.objectContaining({ runRuntime: expect.any(Function) }));
