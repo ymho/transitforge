@@ -6,6 +6,8 @@ import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, token } from "../adapters/cognito-token.fixture.js";
 import { createConversationServerAgent } from "./conversation-server-agent.js";
 import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
+import type { ServerAgentRuntimeRunner } from "../ports/server-agent-runtime.js";
+import type { Evidence } from "@raiquora/agent/evidence-model";
 
 it("verified principal → idempotent messages → stateful Server Runtime → persisted final replay", async () => {
   const { verifier } = cognitoTokenFixture();
@@ -91,4 +93,84 @@ it("runs natural language through semantic acceptance before Runtime", async () 
     { action: "set", target: "destination", frame: "actual" }, { action: "set", target: "start_date", frame: "actual" },
   ] });
   expect(requests.filter(({ outputContract }) => outputContract?.name === "conversation_semantic_delta")).toHaveLength(1);
+});
+
+
+it("runs the production-shaped Conversation state path through the trusted Strands Runtime seam", async () => {
+  const { verifier } = cognitoTokenFixture();
+  const principal = await verifier.verify(token()), other = await verifier.verify(token({ sub: "user-b" }));
+  const state = stateDynamoFixture(), trips = tripDynamoFixture();
+  const { tripId: _tripId, ...consultationMetadata } = stateMetadata();
+  await state.conversations.create(principal, conversationId, consultationMetadata);
+  const evidence: Evidence = {
+    id: "evidence:conversation:kyoto",
+    category: "external",
+    knowledgeKind: "deterministic_fact",
+    subject: "京都",
+    facts: { status: "available", freshness: "fresh", sourceTitle: "京都の確認済み資料",
+      sourceExcerpt: "京都について会話で公開済みの確認済み資料です。", sourceUrl: "https://example.test/kyoto" },
+    references: [{ sourceType: "external-source", sourceRef: "https://example.test/kyoto", retrievedAt: "2026-09-26T00:00:00.000Z",
+      freshness: "current", summary: "会話で確認済みの京都に関する根拠" }],
+    observation: { observationId: "evidence:conversation:kyoto", subjectKey: "place:kyoto", scopeKey: "conversation",
+      predicate: "place_description", retrievedAt: "2026-09-26T00:00:00.000Z", applicability: "applicable", retention: "bounded_excerpt" },
+  };
+  const calls: Parameters<ServerAgentRuntimeRunner>[0][] = [];
+  const runtimeImplementation: ServerAgentRuntimeRunner = async (input) => {
+    calls.push(input);
+    const published: Evidence[] = calls.length === 1 ? [evidence] : [...(input.initialEvidence ?? [])];
+    return {
+      status: "completed",
+      response: calls.length === 1 ? "Strands first answer" : "Strands second answer",
+      evidence: published,
+      claims: published.map((item, index) => ({
+        id: `claim-${index}`,
+        statement: "確認済みの根拠です",
+        kind: "fact",
+        evidenceIds: [item.id],
+        bindings: [{
+          evidenceId: item.id,
+          fieldPath: "facts.status",
+          subjectRef: item.observation?.subjectKey ?? item.subject,
+          transform: "identity",
+        }],
+        groundingStatus: "supported",
+        missingEvidenceIds: [],
+      })),
+      trace: { executionId: input.executionId, events: [], droppedEventCount: 0 },
+      delivery: { status: "full", basis: "verified_projection" },
+    };
+  };
+  const runRuntime = vi.fn(runtimeImplementation);
+  const model = { converse: vi.fn(async () => { throw new Error("V1 model must not run"); }) };
+  const app = createConversationServerAgent({
+    stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
+    model, weather: { search: async () => { throw new Error("not used"); } },
+    newExecutionId: () => `strands-${calls.length + 1}`, runRuntime,
+  });
+  const firstTurn = { principal, conversationId, turnId: secondId, userRequest: "京都について続けて" };
+  const first = await app.runConversationTurn(firstTurn);
+  expect(first).toMatchObject({ status: "completed", response: "Strands first answer",
+    delivery: { status: "full", basis: "verified_projection" } });
+  expect(runRuntime).toHaveBeenCalledTimes(1);
+  expect(model.converse).not.toHaveBeenCalled();
+
+  const replay = await createConversationServerAgent({
+    stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
+    model, weather: { search: async () => { throw new Error("not used"); } },
+    newExecutionId: () => "must-not-run", runRuntime,
+  }).runConversationTurn(firstTurn);
+  expect(replay).toEqual(first);
+  expect(runRuntime).toHaveBeenCalledTimes(1);
+
+  const nextTurn = { ...firstTurn, turnId: "33333333-3333-4333-8333-333333333333", userRequest: "その根拠を踏まえて続けて" };
+  const second = await app.runConversationTurn(nextTurn);
+  expect(second.response).toBe("Strands second answer");
+  expect(runRuntime).toHaveBeenCalledTimes(2);
+  expect(calls[1]?.initialEvidence?.map(({ id }) => id)).toEqual([evidence.id]);
+
+  const callsBeforeForeign = calls.length;
+  await expect(app.runConversationTurn({ ...nextTurn, principal: other,
+    turnId: "44444444-4444-4444-8444-444444444444" })).rejects.toMatchObject({ code: "not-found" });
+  expect(calls).toHaveLength(callsBeforeForeign);
+  expect(model.converse).not.toHaveBeenCalled();
 });
