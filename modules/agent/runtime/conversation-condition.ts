@@ -299,8 +299,10 @@ function resolvePeriodDate(value: z.infer<typeof periodDateExpressionSchema>, co
   }
   if (value.day === undefined || !containsNumber(value.quote, value.day)) throw new ConditionUpdateRejectedError("invalid_source");
 
-  const explicitYear = value.year !== undefined && containsNumber(value.quote, value.year);
-  const explicitMonth = value.month !== undefined && monthAppears(value.quote, value.month);
+  // year/month may be shared by the whole range ("10月3日から5日").
+  // Day remains grounded by the element quote so one endpoint cannot borrow the other endpoint's day.
+  const explicitYear = value.year !== undefined && containsNumber(commandQuote, value.year);
+  const explicitMonth = value.month !== undefined && monthAppears(commandQuote, value.month);
   const referenceMonth = sameMonthReference ? Number(sameMonthReference.slice(5, 7)) : undefined;
   const month = explicitMonth ? value.month : referenceMonth;
   if (month === undefined) throw new ConditionUpdateRejectedError("invalid_source");
