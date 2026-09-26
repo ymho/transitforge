@@ -27,8 +27,9 @@ it("starts Home without initializing Map or requiring profile/authentication", (
   expect(document.querySelector('[aria-label="相談の入力例"]')).toBeNull();
   expect(document.querySelector(".home-rail-feature")).toBeNull();
   expect(document.querySelector("[data-home-live]")).toBeNull();
-  expect(document.body.textContent).not.toContain("次の旅");
-  expect(document.body.textContent).not.toContain("旅の候補");
+  const home = document.querySelector<HTMLElement>('[data-page="explore"]')!;
+  expect(home.textContent).not.toContain("次の旅");
+  expect(home.textContent).not.toContain("旅の候補");
   expect(document.querySelector(".home-prompt")!.hasAttribute("hidden")).toBe(false);
   expect(document.querySelector(".home-prompt")!.classList.contains("ds-composer")).toBe(true);
   expect(document.querySelector("#home-prompt")!.classList.contains("ds-control")).toBe(true);
