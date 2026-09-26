@@ -97,7 +97,7 @@ tests/               境界fixtureとrepository保守toolのPythonテスト
 tools/               検証 評価 再生成コマンド
 ```
 
-Agentの共通coreは`modules/agent/runtime/agent-runtime.ts`を唯一のモデル実行実装とする。
+productionの現行Agentは移行完了まで`modules/agent/runtime/agent-runtime.ts`を使用する。Agent v2はADR 0096に従い、#631の共通契約を再利用しつつStrandsの実行Adapterを`backend/agent-api`へ段階導入する。
 本番BrowserはCognito Access TokenでRegional RESTへ接続し、相談は常に`/api/agent-stream`を通る。
 Conversationは`/api/conversations/v1`、Profileは`/api/profile/v1`、Trip V2は`/api/trips/v1`がServer正本である。
 Bedrock・Server Tool・Evidence・Traceは`backend/agent-api`が所有する。Browser Agent Runtime、Browser Trip writer、

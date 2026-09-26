@@ -42,8 +42,10 @@ Infrastructureの確認と障害調査は`infra/README.md`を正本とする
 ## Agent Runtimeの配置
 
 [ADR 0068](../decisions/0068-place-agent-runtime-in-server-application.md)によりproduction Agentの
-最終所有者はBackendとする。`modules/agent/runtime`はProvider非依存のApplication coreを所有し、
-BrowserとServerが`@raiquora/agent/*`から同じloop/Evidence/Trace/response policyを参照する。
+最終所有者はBackendとする。[ADR 0096](../decisions/0096-use-strands-for-agent-v2-execution.md)のAgent v2では、
+`modules/agent/runtime`はProvider非依存のEffective Intent、Tool、Evidence、Trace、Policy契約を所有し、
+Strands SDKによるmodel/tool loopは`backend/agent-api/src/adapters`へ閉じる。
+移行中のV1だけが`MultiStepAgentRuntime`を利用し、V2はその内部構造を互換要件にしない。
 BackendはFrontendをimportせず、coreはBrowser API、Vendor、HTTP eventへ依存しない。
 `backend/agent-api/src/usecases/agent`がtransport非依存turn入口とTool登録、
 `server-agent-composition.ts`が既存ConversationModelとweatherを接続する。
