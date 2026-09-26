@@ -10,10 +10,16 @@ const placeLabel = z.string().min(1).max(200).regex(/^(?!\s)(?![\s\S]*\s$)[^\u00
   .describe("今回の発言からそのまま取り出した地名。");
 export const placeConditionInputSchema = z.strictObject({ place: placeLabel, quote: sourceQuote });
 export const clearConditionInputSchema = z.strictObject({ quote: sourceQuote });
-export const placeConditionUpdateInputSchema = z.discriminatedUnion("action", [
-  z.strictObject({ action: z.literal("set"), place: placeLabel, quote: sourceQuote }),
-  z.strictObject({ action: z.literal("clear"), quote: sourceQuote }),
-]);
+export const placeConditionUpdateInputSchema = z.strictObject({
+  action: z.enum(["set", "clear"]),
+  place: placeLabel.optional(),
+  quote: sourceQuote,
+}).superRefine((value, context) => {
+  if (value.action === "set" && value.place === undefined)
+    context.addIssue({ code: "custom", message: "set requires place" });
+  if (value.action === "clear" && value.place !== undefined)
+    context.addIssue({ code: "custom", message: "clear must not include place" });
+});
 
 const partyCount = z.strictObject({
   kind: z.literal("count"),
@@ -31,10 +37,16 @@ export const partyConditionInputSchema = z.strictObject({
   party: partyConditionValueSchema.describe("今回の同行者。合計だけならcount、明示された大人/子どもの人数がある時だけcomposition。年齢・年代・関係性は推測しない。"),
   quote: sourceQuote,
 });
-export const partyConditionUpdateInputSchema = z.discriminatedUnion("action", [
-  z.strictObject({ action: z.literal("set"), party: partyConditionValueSchema, quote: sourceQuote }),
-  z.strictObject({ action: z.literal("clear"), quote: sourceQuote }),
-]);
+export const partyConditionUpdateInputSchema = z.strictObject({
+  action: z.enum(["set", "clear"]),
+  party: partyConditionValueSchema.optional(),
+  quote: sourceQuote,
+}).superRefine((value, context) => {
+  if (value.action === "set" && value.party === undefined)
+    context.addIssue({ code: "custom", message: "set requires party" });
+  if (value.action === "clear" && value.party !== undefined)
+    context.addIssue({ code: "custom", message: "clear must not include party" });
+});
 
 export const conditionTargets = ["origin", "destination", "party_size"] as const;
 const placeChangeSchema = z.strictObject({ target: z.enum(["origin", "destination"]), place: placeLabel.nullable(), quote: sourceQuote });
