@@ -1,0 +1,31 @@
+name: Condition workbench (temporary)
+on:
+  push:
+    branches: [feat/716-condition-operations]
+    paths: [.github/workflows/condition-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Package tracked source and installed dependencies only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-files -z > /tmp/source-files
+          tar --null -czf /tmp/condition-source.tgz -T /tmp/source-files node_modules
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: condition-workbench-source
+          path: /tmp/condition-source.tgz
+          retention-days: 1
