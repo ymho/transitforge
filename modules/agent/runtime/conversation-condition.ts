@@ -73,7 +73,15 @@ export function conditionOperationId(turnId: string, target: ConditionTarget): s
 }
 export function conditionPayload(change: ConversationConditionChange): string {
   // Exact, already-validated quote may differ on a replay; the requested state must not.
-  return JSON.stringify([1, change.target, "place" in change ? change.place : change.party]);
+  if ("place" in change) return JSON.stringify([1, change.target, change.place]);
+  if (change.party === null || change.party.kind === "count") return JSON.stringify([1, change.target, change.party]);
+  // Companion labels and anonymous children are sets for this condition. Model retry
+  // ordering must not turn the same requested state into a conflicting operation.
+  return JSON.stringify([1, change.target, {
+    kind: "composition", adults: change.party.adults,
+    children: change.party.children.map(({ age, ageGroup }) => [age ?? null, ageGroup ?? null]).sort(),
+    composition: [...(change.party.composition ?? [])].sort(),
+  }]);
 }
 
 /** Adapt a validated business operation directly to the existing pure reducer.
