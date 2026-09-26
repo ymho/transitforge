@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { claimsCompletedWrite, evaluateStrandsV2LiveCase, strandsV2LiveCases } from "./strands-v2-live-evaluation.js";
+import { claimsCompletedWrite, classifyStrandsV2LiveError, evaluateStrandsV2LiveCase, strandsV2LiveCases } from "./strands-v2-live-evaluation.js";
 
 describe("Strands v2 live evaluation policy", () => {
   it("scores Tool grounding by Application boundaries, not wording", () => {
@@ -33,5 +33,15 @@ describe("Strands v2 live evaluation policy", () => {
       status: "completed", toolCalls: 0, evidenceCount: 0, claimStatuses: [],
       response: "この環境では保存できません。",
     })).toEqual([]);
+  });
+
+  it("classifies provider failures without retaining provider messages", () => {
+    const accessDenied = new Error("wrapped", {
+      cause: { name: "AccessDeniedException", message: "sensitive provider text", $metadata: { httpStatusCode: 403 } },
+    });
+    accessDenied.name = "ModelError";
+    expect(classifyStrandsV2LiveError(accessDenied)).toBe("ModelError/AccessDeniedException/403");
+    expect(classifyStrandsV2LiveError(new Error("do not retain me"))).toBe("Error");
+    expect(classifyStrandsV2LiveError("not-an-error")).toBe("unknown_error");
   });
 });
