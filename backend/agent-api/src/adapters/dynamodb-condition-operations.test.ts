@@ -48,7 +48,7 @@ describe("condition-operation acceptance and replay", () => {
     expect(await f.fresh().acceptCondition(identity, f.lease, { ...count, quote: "2人" })).toEqual(first);
     expect((await overlay(f))?.intentRevision).toBe(1);
     await expect(f.turns.acceptCondition(identity, f.lease, {
-      target: "party_size", party: { kind: "composition", adults: 2, children: [] }, quote: "大人2人",
+      target: "party_size", party: { kind: "composition", adults: 2, children: 0 }, quote: "大人2人",
     })).rejects.toMatchObject({ code: "conflict" });
   });
   it("retains a committed first operation when the second fails and resumes only the missing work", async () => {
