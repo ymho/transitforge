@@ -164,6 +164,41 @@ for (const absolutePath of sourceFiles(agentRuntimeRoot)) {
     line: lineNumber(content, browserReference), message: "Agent coreからBrowser APIへの依存は禁止されています" });
 }
 
+const agentV2ForbiddenImports = new Set([
+  "@raiquora/agent/agent-runtime",
+  "@raiquora/agent/agent-response-generator",
+  "@raiquora/agent/response-contract",
+  "@raiquora/agent/agent-output-contract",
+  "@raiquora/agent/planning-draft-recovery",
+  "@raiquora/agent/agent-decision-summary",
+  "@raiquora/agent/agent-turn-outcome",
+]);
+
+for (const absolutePath of sourceFiles(backendAgentApiRoot).filter((path) =>
+  /[\\/]strands-[^\\/]+\.ts$/u.test(path) || path.endsWith(`${sep}ports${sep}server-agent-runtime.ts`)
+)) {
+  const source = repositoryPath(absolutePath);
+  const content = readFileSync(absolutePath, "utf8");
+  for (const imported of importedSpecifiers(content)) {
+    if (agentV2ForbiddenImports.has(imported.specifier)) {
+      violations.push({
+        source,
+        kind: "agent-v2-v1-runtime-dependency",
+        line: lineNumber(content, imported.index),
+        message: `Agent v2 greenfield層からV1 runtime module ${imported.specifier} への依存は禁止されています`,
+      });
+    }
+  }
+  if (/\bMultiStepAgentRuntime\b/u.test(content)) {
+    violations.push({
+      source,
+      kind: "agent-v2-v1-runtime-symbol",
+      line: lineNumber(content, content.search(/\bMultiStepAgentRuntime\b/u)),
+      message: "Agent v2 greenfield層へMultiStepAgentRuntimeを持ち込めません",
+    });
+  }
+}
+
 for (const absolutePath of sourceFiles(backendAgentApiRoot)) {
   const source = repositoryPath(absolutePath);
   const backendLayer = relative(backendAgentApiRoot, absolutePath).split(sep)[0];
