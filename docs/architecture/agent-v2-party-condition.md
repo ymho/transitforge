@@ -30,15 +30,15 @@ Conversation Intentでは既存の`quantity / people`へ保存する。大人2�
 
 ### composition
 
-利用者が大人/子どもの内訳を明示した場合。
+利用者が大人/子どもの人数を明示した場合。
 
 ```text
 party.kind = composition
 adults = 2
-children = [{}]
+children = 1
 ```
 
-Conversation Intentでは`kind=party`として保持する。子どもの`age`/`ageGroup`は利用者が明示した場合だけ保持し、未確認を数値や年代へ変換しない。TripPartyと同じ基本整合性をDomainで検証するが、Tripへの採用はこのsliceでは行わない。
+Conversation Intentでは匿名の`kind=party`へ変換し、子どもの人数だけ空要素として保持する。年齢・年代・家族/友人等の関係性はこのToolのSchema自体に置かないため、モデルが任意に補完できない。具体的なProviderが年齢を必要とする段階で、確認済み詳細を扱う別の業務操作を追加する。TripPartyと同じ基本整合性をDomainで検証するが、Tripへの採用はこのsliceでは行わない。
 
 ## 一操作の理由
 
@@ -60,4 +60,4 @@ Profileに残る旧`usualPartySize`、同行者、子どもの年代はtrip-spec
 
 決定論的テストではcount/composition/撤回、operation journal replay/conflict、Trip/Profileより今回条件が優先されることを検証する。
 
-実モデルはNova 2 Lite＋固定read Provider＋テスト保存先で、明示人数、構成訂正、仮定で更新しないこと、撤回を検証する。固定Providerの成功を実Providerや実ブラウザの成功とは扱わない。
+実モデルはNova 2 Lite＋固定read Provider＋テスト保存先で、明示人数、構成訂正、仮定で更新しないこと、撤回を検証する。初回liveでは年齢未定から年代を補完する挙動と仮定比較でwriterを呼ぶ挙動を観測したため、個別語句の補修ではなく、年齢・関係性をwriter Schemaから外し、writerを「実際の今回条件を変更する操作」として一般化した。固定Providerの成功を実Providerや実ブラウザの成功とは扱わない。
