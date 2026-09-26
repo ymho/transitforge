@@ -114,7 +114,7 @@ export class StrandsAgentEngine {
           description: "今回の相談の出発地を設定・訂正する。利用者が今回の出発地を伝えたら調査より先に使う。撤回はclear_originを使う。普段の出発地の推測、仮定の質問、変更なしでは使わない。Tripやプロフィールは変更しない。",
           callback: (value, context) => apply({ target: "origin", ...value }, context?.cancelSignal) }),
         tool({ name: "set_party", inputSchema: partyConditionInputSchema,
-          description: "今回の旅行の人数・同行者構成を設定・訂正する。合計人数だけならparty.kind=countを使い、大人/子どもの内訳を推測しない。内訳が明示された場合だけparty.kind=compositionを使い、未指定の子どもの年齢・年代は省略する。仮定・比較・変更なしでは使わない。プロフィールは変更しない。",
+          description: "今回の旅行の実際の人数条件を書き込む。利用者が現在の旅行条件として人数を採用・訂正した場合だけ使う。合計人数だけならparty.kind=countを使い、大人/子どもの内訳を推測しない。大人/子どもの人数が明示された場合だけparty.kind=compositionを使う。年齢・年代・関係性は扱わない。仮定・反実仮想・what-if・シナリオ比較、または現条件を維持すると明示された場合は絶対に使わない。プロフィールは変更しない。",
           callback: (value, context) => apply({ target: "party_size", ...value }, context?.cancelSignal) }),
         tool({ name: "clear_destination", inputSchema: clearConditionInputSchema,
           description: "利用者が今回の行き先を取り消し・未定に戻すことを明示した場合だけ、その行き先条件を撤回する。他の条件は変えない。変更なし・仮定・比較の質問では使わない。",
