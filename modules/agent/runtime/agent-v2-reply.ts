@@ -1,18 +1,29 @@
-/** The model selects references and explains them. Only the Application may admit
- * Evidence payloads, public cards or mutation receipts for publication. */
+import { z } from "zod";
+
+/** One syntax definition for TypeScript, SDK JSON Schema and Application parsing.
+ * References authorize nothing: Evidence/currentness/receipts are checked by admission. */
 export const replyOperations = ["save", "change", "book", "pay"] as const;
 export type ReplyOperation = typeof replyOperations[number];
 export const replyQuestions = ["goal", "origin", "destination", "start_date", "duration", "party_size", "budget"] as const;
 export type ReplyQuestion = typeof replyQuestions[number];
-export interface ReplyReference { evidenceId: string; field: string }
-export type AgentV2ReplyProposal =
-  | { kind: "answer"; references: ReplyReference[]; commentary?: string }
-  | { kind: "candidates"; evidenceIds: string[]; commentary: string }
-  | { kind: "conversation"; message: "greeting" | "thanks" | "acknowledgement" }
-  | { kind: "clarification"; target: ReplyQuestion }
-  | { kind: "unavailable"; operation: ReplyOperation }
-  | { kind: "operation_result"; receiptId: string }
-  | { kind: "uncertainty" };
+const identifier = (maximum: number) => z.string().min(1).max(maximum)
+  .regex(/^(?!\s)(?![\s\S]*\s$)[^\u0000-\u001f\u007f<>]+$/u);
+const reference = z.strictObject({ evidenceId: identifier(240), field: z.string().min(1).max(80).regex(/^[a-zA-Z][a-zA-Z0-9_]*$/u) });
+export type ReplyReference = z.infer<typeof reference>;
+const commentary = z.string().min(1).max(1200).describe("Selected Evidenceに基づく説明・比較・推薦。未確認の時刻・料金・操作結果を作らない。");
+export const agentV2ReplySchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("answer"), references: z.array(reference).min(1).max(8), commentary: commentary.optional() }),
+  z.strictObject({ kind: z.literal("candidates"), evidenceIds: z.array(identifier(240)).min(1).max(8), commentary }),
+  z.strictObject({ kind: z.literal("conversation"), message: z.enum(["greeting", "thanks", "acknowledgement"]) }),
+  z.strictObject({ kind: z.literal("clarification"), target: z.enum(replyQuestions) }),
+  z.strictObject({ kind: z.literal("unavailable"), operation: z.enum(replyOperations) }),
+  z.strictObject({ kind: z.literal("operation_result"), receiptId: identifier(240) }),
+  z.strictObject({ kind: z.literal("uncertainty") }),
+]);
+export type AgentV2ReplyProposal = z.infer<typeof agentV2ReplySchema>;
+/** The object envelope is the SDK Tool's input; the variant is nested, not flattened. */
+export const agentV2StructuredOutputSchema = z.strictObject({ reply: agentV2ReplySchema })
+  .describe("必要なread/条件受理の後の最終回答。replyだけを返す。カード本体や新たな事実・実行結果は生成しない。");
 
 /** Trusted Application input, never a field in the model's reply schema.
  * The current read-only composition supplies no receipts. */
@@ -38,85 +49,9 @@ export class AgentV2ReplyError extends Error {
   }
 }
 
-/** Flat schema; parseAgentV2Reply checks each variant's exact field set as well. */
-export const agentV2ReplySchema = {
-  type: "object",
-  properties: {
-    kind: { type: "string", enum: ["answer", "candidates", "conversation", "clarification", "unavailable", "operation_result", "uncertainty"] },
-    commentary: { type: "string", minLength: 1, maxLength: 1200 },
-    evidenceIds: { type: "array", minItems: 1, maxItems: 8, uniqueItems: true,
-      items: { type: "string", minLength: 1, maxLength: 240 } },
-    references: { type: "array", minItems: 1, maxItems: 8, items: {
-      type: "object", properties: { evidenceId: { type: "string", minLength: 1, maxLength: 240 },
-        field: { type: "string", minLength: 1, maxLength: 80 } },
-      required: ["evidenceId", "field"], additionalProperties: false,
-    } },
-    message: { type: "string", enum: ["greeting", "thanks", "acknowledgement"] },
-    target: { type: "string", enum: [...replyQuestions] },
-    operation: { type: "string", enum: [...replyOperations] },
-    receiptId: { type: "string", minLength: 1, maxLength: 240 },
-  },
-  required: ["kind"], additionalProperties: false,
-};
-
+/** No handwritten variant parser and no response repair. */
 export function parseAgentV2Reply(value: unknown): AgentV2ReplyProposal {
-  if (!record(value)) return invalid();
-  switch (value.kind) {
-    case "candidates": {
-      if (!exact(value, ["kind", "evidenceIds", "commentary"]) || !Array.isArray(value.evidenceIds) ||
-          value.evidenceIds.length < 1 || value.evidenceIds.length > 8 || !value.evidenceIds.every((id) => identifier(id, 240)) ||
-          new Set(value.evidenceIds).size !== value.evidenceIds.length) return invalid();
-      return { kind: "candidates", evidenceIds: [...value.evidenceIds] as string[], commentary: replyCommentary(value.commentary) };
-    }
-    case "answer": {
-      if (!(exact(value, ["kind", "references"]) || exact(value, ["kind", "references", "commentary"])) ||
-          !Array.isArray(value.references) || value.references.length < 1 || value.references.length > 8) return invalid();
-      const references: ReplyReference[] = [];
-      const seen = new Set<string>();
-      for (const item of value.references) {
-        if (!record(item) || !exact(item, ["evidenceId", "field"]) || !identifier(item.evidenceId, 240) ||
-            !identifier(item.field, 80) || !/^[a-zA-Z][a-zA-Z0-9_]*$/u.test(item.field)) return invalid();
-        const key = `${item.evidenceId}\u0000${item.field}`;
-        if (seen.has(key)) return invalid();
-        seen.add(key);
-        references.push({ evidenceId: item.evidenceId, field: item.field });
-      }
-      const commentary = value.commentary === undefined ? undefined : replyCommentary(value.commentary);
-      return { kind: "answer", references, ...(commentary ? { commentary } : {}) };
-    }
-    case "conversation":
-      if (!exact(value, ["kind", "message"]) || typeof value.message !== "string" || !["greeting", "thanks", "acknowledgement"].includes(value.message)) return invalid();
-      return { kind: "conversation", message: value.message as "greeting" | "thanks" | "acknowledgement" };
-    case "clarification":
-      if (!exact(value, ["kind", "target"]) || !replyQuestions.includes(value.target as ReplyQuestion)) return invalid();
-      return { kind: "clarification", target: value.target as ReplyQuestion };
-    case "unavailable":
-      if (!exact(value, ["kind", "operation"]) || !replyOperations.includes(value.operation as ReplyOperation)) return invalid();
-      return { kind: "unavailable", operation: value.operation as ReplyOperation };
-    case "operation_result":
-      if (!exact(value, ["kind", "receiptId"]) || !identifier(value.receiptId, 240)) return invalid();
-      return { kind: "operation_result", receiptId: value.receiptId };
-    case "uncertainty":
-      if (!exact(value, ["kind"])) return invalid();
-      return { kind: "uncertainty" };
-    default: return invalid();
-  }
+  const parsed = agentV2ReplySchema.safeParse(value);
+  if (!parsed.success) throw new AgentV2ReplyError("invalid_proposal");
+  return parsed.data;
 }
-function record(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value) &&
-    (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
-}
-function exact(value: Record<string, unknown>, keys: string[]): boolean {
-  return Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
-}
-function identifier(value: unknown, maximum: number): value is string {
-  return typeof value === "string" && value.length > 0 && value.length <= maximum && value.trim() === value &&
-    !/[\u0000-\u001f\u007f<>]/u.test(value);
-}
-function replyCommentary(value: unknown): string {
-  if (typeof value !== "string" || value.length > 1200 || value.trim() !== value || !value ||
-      /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value) ||
-      /<\s*\/?\s*(?:thinking|analysis|reasoning|think)(?:\s|>|\/)/iu.test(value)) return invalid();
-  return value;
-}
-function invalid(): never { throw new AgentV2ReplyError("invalid_proposal"); }

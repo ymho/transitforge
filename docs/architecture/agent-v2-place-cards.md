@@ -5,14 +5,14 @@
 ## 最小の公開契約
 
 代表readは既存の`search_place_media`。写真の取得成功を前提にせず、`externalTravelEvidence`が作る解決済み場所の`place_description`だけを候補カードへ使う。
-モデルは`submit_reply`の`kind=candidates`でEvidence IDの順序と根拠付きcommentaryを選ぶ。場所名、説明、出典URLはApplicationがEvidenceから投影し、モデルのカードpayloadを受け取らない。
+モデルは`SDK structured output`の`kind=candidates`でEvidence IDの順序と根拠付きcommentaryを選ぶ。場所名、説明、出典URLはApplicationがEvidenceから投影し、モデルのカードpayloadを受け取らない。
 
 `PublicPlacePresentation`はConversationへ保存する表示snapshotであり、Trip、旅程、採用候補セット、第二の永続候補ストアではない。写真、価格、空室、営業状態、保存・予約の結果はこの型へ入れない。
 
 ```text
 Strands → 必要ならupdate_intent / A commit
   → 既存旅行read → Evidence / candidateReferences
-  → submit_reply(candidates) → Applicationの参照・claim検証
+  → SDK structured output(candidates) → Applicationの参照・claim検証
   → B commit → final SSE → 共通UI投影
                 ↘ owner-scoped履歴 / replay → 同じUI投影
 ```
@@ -37,4 +37,4 @@ PRではV2 Acceptance、Smoke、全体CIを確認する。実Strands＋scripted 
 
 ## V2終端プロトコル
 
-Promptだけに`submit_reply`遵守を委ねない。reply未提出の各model requestはStrands/Bedrockの`toolChoice=any`で最低1つのTool callを要求し、`submit_reply`が受理された後だけ`toolChoice=auto`へ戻す。これによりread後のfree-text `endTurn`を公開候補へ変換したりrepair loopで再解釈したりせず、typed publication boundaryをモデル呼出し層で維持する。
+SDKのstructuredOutputSchema/structuredOutputへ統一する。独自ToolChoice切替は撤去した。詳細は[公開境界](agent-v2-publication.md)を参照。

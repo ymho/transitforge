@@ -22,7 +22,7 @@ apply後、Terraformが出力した既存Agent Lambdaに対してAWSの設定を
 
 ## 維持する境界
 
-V2から公開する業務Toolはread-onlyのまま。回答提出 `submit_reply` はDB更新Toolではない。
+V2から公開する業務Toolはread-onlyのまま。回答提出 `SDK structured output` はDB更新Toolではない。
 旧Semantic Intentの実モデルgateを同時に有効化しない。
 認証、owner、CAS、Trip/Profile/Conversation正本、既存画面の手動保存API、IAM、予算は変更しない。
 V2が失敗してもV1の回答へ自動フォールバックしない。利用不能と機能不足を混同せず、実際の失敗を記録する。

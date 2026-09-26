@@ -14,7 +14,7 @@ import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
 
 type Step = { tool: string; input: Record<string, unknown> } | "candidates" | "end";
 const read: Step = { tool: "search_place_media", input: { query: "青葉庭園", mode: "discovery", limit: 1 } };
-const uncertainty: Step = { tool: "submit_reply", input: { kind: "uncertainty" } };
+const uncertainty: Step = { tool: "strands_structured_output", input: { kind: "uncertainty" } };
 const update: Step = { tool: "update_intent", input: { outcome: "delta", speechAct: "inform", unresolvedFragments: [], operations: [{
   atomicGroup: 1, action: "set", target: "destination", modality: "preferred", precision: "exact",
   frame: "actual", quote: "青葉庭園", value: { kind: "place_label", label: "青葉庭園" },
@@ -33,7 +33,7 @@ class CandidateModel extends Model<BaseModelConfig> {
     if (!step) throw new Error("Unexpected model invocation");
     const ids = candidateIds(JSON.parse(JSON.stringify(messages)));
     this.seenCandidateIds = [...new Set([...this.seenCandidateIds, ...ids])];
-    const proposal = step === "candidates" ? { tool: "submit_reply", input: { kind: "candidates",
+    const proposal = step === "candidates" ? { tool: "strands_structured_output", input: { kind: "candidates",
       evidenceIds: ids.slice(-1), commentary: "散策先として、この庭園を検討できます。" } } : step;
     yield { type: "modelMessageStartEvent", role: "assistant" };
     if (proposal === "end") {
@@ -41,7 +41,7 @@ class CandidateModel extends Model<BaseModelConfig> {
       yield { type: "modelContentBlockDeltaEvent", delta: { type: "textDelta", text: "DO_NOT_PUBLISH_MODEL_TRAILER" } };
     } else {
       yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: proposal.tool, toolUseId: `tool-${this.calls}` } };
-      yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(proposal.input) } };
+      yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(proposal.tool === "strands_structured_output" ? { reply: proposal.input } : proposal.input) } };
     }
     yield { type: "modelContentBlockStopEvent" };
     yield { type: "modelMessageStopEvent", stopReason: proposal === "end" ? "endTurn" : "toolUse" };
@@ -144,7 +144,7 @@ it("returns uncertainty without fabricated cards when the travel Provider has no
 
 it("rejects a model-selected foreign Evidence reference without saving a successful candidate reply", async () => {
   const test = await setup();
-  const { app } = test.build([read, { tool: "submit_reply", input: {
+  const { app } = test.build([read, { tool: "strands_structured_output", input: {
     kind: "candidates", evidenceIds: ["foreign-evidence"], commentary: "確認できました。",
   } }, "end"]);
   await expect(app.runConversationTurn(test.input)).rejects.toMatchObject({ code: "agent_failed" });

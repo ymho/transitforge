@@ -58,6 +58,7 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
       return reply(`${operationLabels[receipt.operation]}しました。`);
     }
     case "candidates": {
+      if (new Set(proposal.evidenceIds).size !== proposal.evidenceIds.length) throw new AgentV2ReplyError("invalid_proposal");
       const selected = proposal.evidenceIds.map((id) => {
         const matches = context.evidence.filter((item) => item.id === id);
         if (matches.length !== 1) throw new AgentV2ReplyError("missing_evidence");
@@ -95,7 +96,11 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
       const claims: EvidenceClaim[] = [];
       const parts: string[] = [];
       const commentaryBindings: NonNullable<EvidenceClaim["bindings"]> = [];
+      const seenReferences = new Set<string>();
       for (const reference of proposal.references) {
+        const key = JSON.stringify(reference);
+        if (seenReferences.has(key)) throw new AgentV2ReplyError("invalid_proposal");
+        seenReferences.add(key);
         const matches = context.evidence.filter(({ id }) => id === reference.evidenceId);
         if (matches.length !== 1) throw new AgentV2ReplyError("missing_evidence");
         const evidence = matches[0]!;

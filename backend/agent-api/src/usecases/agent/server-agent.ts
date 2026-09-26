@@ -191,7 +191,7 @@ function publicationFailureMode(result: AgentRuntimeResult): string | undefined 
   const value = (result as AgentRuntimeResult & { publicationError?: unknown }).publicationError;
   if (typeof value !== "string") return undefined;
   const allowed = new Set([
-    "incomplete_execution", "missing_reply_proposal", "evidence_collision", "response_budget", "invalid_claim_binding",
+    "incomplete_execution", "missing_reply_proposal", "missing_structured_output", "evidence_collision", "response_budget", "invalid_claim_binding",
     "invalid_proposal", "missing_evidence", "ineligible_evidence", "invalid_field", "known_condition",
     "operation_available", "invalid_receipt", "unsafe_content",
   ]);

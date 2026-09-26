@@ -149,15 +149,17 @@ for (const absolutePath of sharedDomainFiles(modulesRoot)) {
   }
 }
 
+// ADR 0097: Zod is a portable, I/O-free contract/schema dependency, not an
+// execution/provider implementation. Keep AWS/Strands/Frontend/Backend forbidden.
 const agentRuntimeRoot = resolve(modulesRoot, "agent/runtime");
 for (const absolutePath of sourceFiles(agentRuntimeRoot)) {
   const content = readFileSync(absolutePath, "utf8");
   for (const imported of importedSpecifiers(content)) {
     const permitted = imported.specifier.startsWith(".")
       ? resolve(dirname(absolutePath), imported.specifier).startsWith(agentRuntimeRoot + sep)
-      : /^@raiquora\/(agent|trip|journey|operation|train)\//u.test(imported.specifier);
+      : imported.specifier === "zod" || /^@raiquora\/(agent|trip|journey|operation|train)\//u.test(imported.specifier);
     if (!permitted) violations.push({ source: repositoryPath(absolutePath), kind: "agent-runtime-dependency",
-      line: lineNumber(content, imported.index), message: "Agent coreは共有契約以外のFrontend/Backend/Vendor実装へ依存できません" });
+      line: lineNumber(content, imported.index), message: "Agent coreは共有契約とZod schema以外のFrontend/Backend/Vendor実装へ依存できません" });
   }
   const browserReference = browserGlobalReference(content);
   if (browserReference >= 0) violations.push({ source: repositoryPath(absolutePath), kind: "agent-runtime-browser-global",

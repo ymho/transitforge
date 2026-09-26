@@ -1,8 +1,7 @@
 import {
-  Agent, BedrockModel, tool,
+  Agent, BedrockModel, StructuredOutputError, tool,
   type AgentConfig, type BaseModelConfig, type InvokableTool,
-  type JSONSchema, type JSONValue, type Model, type Message,
-  type StreamOptions, type ToolChoice,
+  type JSONSchema, type JSONValue, type Model,
 } from "@strands-agents/sdk";
 import { AgentTraceRecorder, type AgentTrace } from "@raiquora/agent/agent-trace";
 import { validateToolIntentUse } from "@raiquora/agent/intent-action-policy";
@@ -10,14 +9,12 @@ import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
-import { agentV2ReplySchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
-import { AgentV2ReplySubmission } from "./strands-reply-submission.js";
+import { agentV2StructuredOutputSchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
 import { agentV2CandidateReferences, publicReplyField } from "@raiquora/agent/agent-v2-publication";
 import { decodeUtteranceInterpretation, semanticInterpretationOutputContract } from "@raiquora/agent/semantic-interpretation";
 import { ServerAgentIntentRejectedError, ServerAgentRuntimeExecutionError, type ServerAgentIntentController,
   type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
 
-export const strandsReplyToolName = "submit_reply";
 export const strandsIntentToolName = "update_intent";
 export interface StrandsAgentEngineOptions {
   modelId: string;
@@ -58,6 +55,7 @@ export interface StrandsAgentLike {
     limits?: { turns?: number; totalTokens?: number; outputTokens?: number };
   }): Promise<{
     stopReason: string;
+    structuredOutput?: unknown;
     lastMessage?: unknown;
     metrics?: { cycleCount: number;
       accumulatedUsage: { inputTokens: number; outputTokens: number; totalTokens: number;
@@ -79,8 +77,8 @@ export class StrandsAgentEngine {
   }
   async run(input: StrandsAgentRunInput): Promise<StrandsAgentRunResult> {
     if (!input.executionId.trim() || !input.userRequest.trim()) throw new Error("Strands Agent requires executionId and userRequest");
-    if (input.tools.descriptors().some(({ name }) => [strandsReplyToolName, strandsIntentToolName].includes(name))) throw new Error("Reserved Agent v2 tool name");
-    const evidence: Evidence[] = [], submission = new AgentV2ReplySubmission();
+    if (input.tools.descriptors().some(({ name }) => name === strandsIntentToolName)) throw new Error("Reserved Agent v2 tool name");
+    const evidence: Evidence[] = [];
     let currentEffectiveIntent = input.effectiveIntent, intentAttempted = false, intentUnavailable = false;
     const trace = new AgentTraceRecorder(input.executionId, { omitContent: true });
     trace.taskStarted(input.userRequest);
@@ -89,15 +87,14 @@ export class StrandsAgentEngine {
       registry: input.tools, executor: input.toolExecutor, executionId: input.executionId,
       getEffectiveIntent: () => currentEffectiveIntent, toolTimeoutMs: this.options.toolTimeoutMs ?? 20_000,
       trace, evidence, budgetState, maxToolCalls: input.limits?.maxToolCalls,
-      reserveToolCall: input.reserveToolCall, canExecute: () => !submission.submitted && !intentUnavailable,
+      reserveToolCall: input.reserveToolCall, canExecute: () => !intentUnavailable,
     });
     const intentController = input.intentController;
     if (intentController) tools.push(tool({
       name: strandsIntentToolName,
-      description: "Submit one bounded semantic delta from the current userMessage when it adds, corrects, retracts or narrows accepted travel conditions. Quotes must be exact substrings of the current userMessage. The Application validates and commits the delta before any later read Tool uses it. Do not call this for unchanged conversation or after submit_reply.",
+      description: "Submit one bounded semantic delta from the current userMessage when it adds, corrects, retracts or narrows accepted travel conditions. Quotes must be exact substrings of the current userMessage. The Application validates and commits the delta before any later read Tool uses it. Do not call this for unchanged conversation or after the final structured result.",
       inputSchema: semanticInterpretationOutputContract.schema as JSONSchema,
       callback: async (value, context) => {
-        if (submission.submitted) return jsonValue({ ok: false, error: { code: "reply_submitted", retryable: false } });
         if (context?.cancelSignal.aborted) return jsonValue({ ok: false, error: { code: "execution_failed", retryable: true } });
         if (intentAttempted) return jsonValue({ ok: false, error: { code: "intent_update_limit", retryable: false } });
         intentAttempted = true;
@@ -120,19 +117,11 @@ export class StrandsAgentEngine {
         }
       },
     }));
-    tools.push(tool({
-      name: strandsReplyToolName,
-      description: "Submit one reply after any necessary reads, then stop. Use answer with references to actual Evidence fields and optional evidence-bound commentary; candidates with evidenceIds selected from candidateReferences and required commentary explaining your selection; conversation with a message key; clarification with a missing target; unavailable with an operation; operation_result only with an Application receipt ID; uncertainty for unverified information. Never supply card payloads, new factual values, reasoning, or fabricated operation results. This does not save, book or pay.",
-      inputSchema: agentV2ReplySchema as JSONSchema,
-      callback: (value) => jsonValue(submission.receive(value)),
-    }));
     const baseModel = this.model ?? new BedrockModel({ modelId: this.options.modelId, region: this.options.region,
       maxTokens: this.options.maxOutputTokens ?? 2_048, temperature: 0, stream: false });
     const agent = this.createAgent({
-      // Before a typed reply is submitted, free-text termination is not a valid V2
-      // protocol outcome. Force at least one Tool call at the model-provider boundary.
-      // After submit_reply succeeds, return to auto so Strands can end the loop.
-      model: requireToolUntilReply(baseModel, submission),
+      model: baseModel,
+      structuredOutputSchema: agentV2StructuredOutputSchema,
       tools, systemPrompt: this.options.systemPrompt,
       printer: false, contextManager: false, retryStrategy: null, toolExecutor: "sequential",
     });
@@ -153,7 +142,10 @@ export class StrandsAgentEngine {
       // Neither lastMessage nor SDK debug/string output crosses the publication boundary.
       trace.taskCompleted(result.stopReason === "cancelled" ? "cancelled" : "completed", Date.now() - startedAt,
         result.stopReason === "endTurn" ? undefined : result.stopReason);
-      const usage = result.metrics?.accumulatedUsage, replyProposal = submission.snapshot();
+      const usage = result.metrics?.accumulatedUsage;
+      const parsed = result.structuredOutput === undefined ? undefined : agentV2StructuredOutputSchema.safeParse(result.structuredOutput);
+      if (parsed && !parsed.success) throw new ServerAgentRuntimeExecutionError("runtime_projection", "validation");
+      const replyProposal = parsed?.success ? parsed.data.reply : undefined;
       return {
         ...(replyProposal ? { replyProposal } : {}), stopReason: result.stopReason,
         ...(currentEffectiveIntent ? { effectiveIntent: structuredClone(currentEffectiveIntent) } : {}),
@@ -172,6 +164,7 @@ export class StrandsAgentEngine {
     } catch (error) {
       trace.taskCompleted("failed", Date.now() - startedAt, error instanceof Error ? error.name : "unknown_error");
       if (error instanceof ServerAgentRuntimeExecutionError) throw error;
+      if (error instanceof StructuredOutputError) throw new ServerAgentRuntimeExecutionError("runtime_projection", "validation");
       throw new ServerAgentRuntimeExecutionError("agent_invoke", runtimeFailureKind(error));
     }
   }
@@ -187,7 +180,7 @@ export function createStrandsReadTools(input: {
     callback: async (rawInput, context) => {
       const toolInput = jsonObject(rawInput);
       if (!toolInput) return jsonValue({ ok: false, error: { code: "invalid_input", retryable: false } });
-      if (input.canExecute && !input.canExecute()) return jsonValue({ ok: false, error: { code: "reply_submitted", retryable: false } });
+      if (input.canExecute && !input.canExecute()) return jsonValue({ ok: false, error: { code: "intent_unavailable", retryable: false } });
       const effectiveIntent = input.getEffectiveIntent?.();
       const decision = validateToolIntentUse(descriptor, toolInput, effectiveIntent);
       if (!decision.accepted) return jsonValue({ ok: false, error: {
@@ -223,24 +216,6 @@ export function createStrandsReadTools(input: {
     },
   }));
 }
-function requireToolUntilReply(baseModel: Model<BaseModelConfig>, submission: AgentV2ReplySubmission): Model<BaseModelConfig> {
-  return new Proxy(baseModel, {
-    get(target, property) {
-      // Strands Agent invokes streamAggregated(), not stream() directly.
-      // Inject ToolChoice at that boundary so the base implementation forwards it
-      // into the provider's stream() call.
-      if (property === "streamAggregated") {
-        return async function* (messages: Message[], options?: StreamOptions) {
-          const toolChoice: ToolChoice = submission.submitted ? { auto: {} } : { any: {} };
-          return yield* target.streamAggregated(messages, { ...options, toolChoice });
-        };
-      }
-      const value = Reflect.get(target, property, target);
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-  }) as Model<BaseModelConfig>;
-}
-
 function runtimeFailureKind(error: unknown): ServerAgentRuntimeFailureKind {
   const name = error instanceof Error ? error.name : "";
   if (/abort/iu.test(name)) return "abort";

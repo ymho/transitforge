@@ -8,7 +8,8 @@
     "./cost-forecast-descriptor": "./runtime/cost-forecast-descriptor.ts"
   },
   "dependencies": {
+    "@raiquora/journey": "*",
     "@raiquora/trip": "*",
-    "@raiquora/journey": "*"
+    "zod": "^4.4.3"
   }
 }
