@@ -26,6 +26,8 @@ export function createServerAgent(options: {
   modelTokenRates?: ServerAgentDependencies["modelTokenRates"];
   onResearchLedger?: ServerAgentDependencies["onResearchLedger"];
   projectResult?: ServerAgentDependencies["projectResult"];
+  /** Trusted composition-only execution engine override. Never sourced from request/env. */
+  runRuntime?: ServerAgentDependencies["runRuntime"];
 }) {
   return createServerAgentApplication({
     newExecutionId: options.newExecutionId ?? randomUUID,
@@ -40,6 +42,7 @@ export function createServerAgent(options: {
     modelTokenRates: options.modelTokenRates,
     onResearchLedger: options.onResearchLedger,
     projectResult: options.projectResult,
+    runRuntime: options.runRuntime,
     registerTools: (tools, evidence, scope) => { registerServerTools(tools, evidence, [
       { descriptor: weatherToolDescriptor, operation: createWeatherForecastOperation(options.weather), evidence: externalTravelEvidence },
       ...(options.additionalTools ?? []),
