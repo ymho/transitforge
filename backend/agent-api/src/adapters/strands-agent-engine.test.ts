@@ -196,13 +196,15 @@ describe("StrandsAgentEngine", () => {
     }, effectiveIntent: effectiveDestination("京都") }));
     await new StrandsAgentEngine(options, { model: new ScriptedModel([
       { tool: "update_current_travel_period", input: { action: "set", period: {
-        start: { kind: "month_day", month: 10, day: 3 }, end: { kind: "day_of_month", day: 5 },
+        start: { kind: "calendar_date", month: 10, day: 3, quote: "10月3日" },
+        end: { kind: "calendar_date", day: 5, quote: "5日" },
       }, quote: "10月3日から5日まで" } },
       submitted,
     ]) }).run({ ...input, userRequest: "10月3日から5日まで旅行します", conditionController: { apply } });
     expect(apply).toHaveBeenCalledOnce();
     expect(apply).toHaveBeenCalledWith({ target: "travel_period", period: {
-      start: { kind: "month_day", month: 10, day: 3 }, end: { kind: "day_of_month", day: 5 },
+      start: { kind: "calendar_date", month: 10, day: 3, quote: "10月3日" },
+      end: { kind: "calendar_date", day: 5, quote: "5日" },
     }, quote: "10月3日から5日まで" });
   });
 
