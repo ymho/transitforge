@@ -209,7 +209,10 @@ describe("StrandsAgentEngine", () => {
       modelId: "unused", region: "ap-northeast-1", systemPrompt: "test",
     }, { createAgent: () => ({
       id: "deadline-agent",
-      async invoke(_args, options) {
+      async invoke(_args: string, options?: {
+        cancelSignal?: AbortSignal;
+        limits?: { turns?: number; totalTokens?: number; outputTokens?: number };
+      }) {
         await new Promise<void>((resolve) => {
           if (options?.cancelSignal?.aborted) return resolve();
           options?.cancelSignal?.addEventListener("abort", () => resolve(), { once: true });
