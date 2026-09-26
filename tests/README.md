@@ -13,6 +13,15 @@
 
 複数層を通すシナリオでも 可能な限り公開Portから実行し 内部実装へ依存しない
 
+
+### Agent v2
+
+Agent v2のcutover判定は[Agent v2テスト戦略](../docs/architecture/agent-v2-testing.md)と
+`backend/agent-api/src/composition/agent-v2-acceptance-catalog.ts`を正本にする。
+
+V1 `MultiStepAgentRuntime` のrepair順序、guard名、Prompt本文、内部phase、model callの厳密回数を
+V2の互換要件にしない。ユーザー可視の意味がある場合はApplication/Domain invariantとして書き直す。
+
 DOMの読み順・非同期画面更新・MutationObserverを検証するPresentationテストは、
 先頭に`// @vitest-environment happy-dom`を指定する。Happy DOMはFrontendの開発依存だけに置き、
 手作りのDOMモックでは確認しにくい要素の表示・イベント・属性の退行を再現する。
