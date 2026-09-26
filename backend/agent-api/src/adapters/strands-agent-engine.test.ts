@@ -176,6 +176,18 @@ describe("StrandsAgentEngine", () => {
     expect(apply).toHaveBeenCalledWith({ target: "party_size", party: { kind: "count", people: 2 }, quote: "2人で" });
   });
 
+  it("keeps a hypothetical party scenario out of the durable condition controller", async () => {
+    const { input } = setup();
+    const apply = vi.fn();
+    const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([
+      { tool: "consider_party_scenario", input: { party: { kind: "count", people: 4 }, quote: "もし4人なら" } },
+      submitted,
+    ]) }).run({ ...input, userRequest: "もし4人ならどうなる？今の人数は変えずに比較したい", conditionController: { apply } });
+    expect(apply).not.toHaveBeenCalled();
+    expect(result.effectiveIntent).toEqual(input.effectiveIntent);
+    expect(result.replyProposal).toEqual({ kind: "uncertainty" });
+  });
+
   it("lets independent condition Tools use the same Application without an invocation-wide limiter", async () => {
     const { input } = setup();
     const apply = vi.fn(async () => ({ receipt: {
