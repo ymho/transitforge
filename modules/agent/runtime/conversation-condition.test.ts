@@ -44,7 +44,7 @@ describe("small Conversation condition operations", () => {
     expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 2, children: 1 }, quote: "大人2人と子ども1人" }).success).toBe(true);
     expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 0, children: 0 }, quote: "0人" }).success).toBe(false);
     expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 21, children: 0 }, quote: "21人" }).success).toBe(false);
-    
+
     let overlay = empty();
     const count = admitConditionChange({ target: "party_size", party: { kind: "count", people: 2 }, quote: "2人で" }, "2人で行きたい");
     overlay = reduceConversationIntent(overlay, conditionDelta(count, "72700000-0000-4000-8000-000000000001", overlay)).overlay;
@@ -54,7 +54,7 @@ describe("small Conversation condition operations", () => {
       party: { kind: "composition", adults: 2, children: 1 }, quote: "大人2人と子ども1人" },
       "大人2人と子ども1人で行く");
     overlay = reduceConversationIntent(overlay, conditionDelta(detailed, "72700000-0000-4000-8000-000000000002", overlay)).overlay;
-    expect(overlay.facts[0]?.value).toEqual({ kind: "party", adults: 2, children: [{}], composition: ["family"] });
+    expect(overlay.facts[0]?.value).toEqual({ kind: "party", adults: 2, children: [{}] });
 
     const cleared = admitConditionChange({ target: "party_size", party: null, quote: "人数は未定に戻して" }, "人数は未定に戻して");
     overlay = reduceConversationIntent(overlay, conditionDelta(cleared, "72700000-0000-4000-8000-000000000003", overlay)).overlay;
