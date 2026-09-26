@@ -1,9 +1,9 @@
 # 小さい条件Toolの実装と検証記録
 
 関連: #716 / #724。2026-09-26。
-基準main: `8d15f42382910f7b312163fc010a451fca790a48`。
-実モデル反復のsource: `36584026e78351cdfdb2083789fd34e9156150a6`。
-GitHub Actions run: 36269860088。job: Nova 2 Lite 108481703899、Nova Lite 108481703930。
+基準main: `8c877569d8b057d26a4b62a85e0bdbe1af10614d`（#725/#726反映済み）。
+最終実モデル反復のsource: `51e3278ac0cff0ae56eb49fb614bbbae4bbd37ad`。
+GitHub Actions run: 36272420105。Nova 2 LiteをV2の基準モデルとして、条件試験とproduction-shaped Conversationを各3回独立実行した。
 
 ## 実装
 
@@ -27,19 +27,19 @@ V2の旧意味解析レポート入力、旧decoderへの依存、1 invoke全体
 
 7turnの最小条件試験を新しいtest repositoryで独立3回実行。3/3 PASS（21turn）。挨拶、行き先設定、訂正、出発地＋行き先、仮定の比較、行き先だけ撤回、礼を含む。各回16 model calls / 5 external reads / 5 accepted condition operations。別地点を同じsubjectと誤って扱っていた先行fixtureを修正した後の結果で、Applicationの衝突検証は弱めていない。
 
-4turnのproduction-shaped Conversation試験も独立3回実行。2/3 PASS。全12turnの条件受理revision、回答完了、訂正後のカード、未対応保存、B保存/履歴/replayは成立したが、2回目の初回「出雲大社にいきたい」で期待した場所Provider readが0回だったためFAIL。失敗assertionは残している。
+4turnのproduction-shaped Conversation試験も独立3回実行し、3/3 PASS（12turn）。各回で挨拶は更新なし、初回行き先はintentRevision 1、訂正後は2、各旅行相談で1 read / 1 card、未対応保存はreadなしで完了した。B commit、同じturnのreplay、8件の履歴、訂正後カードも全反復で成立した。
 
-これは最小条件Toolの改善を支持するが、旅行相談全体を安定したと認定する結果ではない。通常CIと独立した総合gateはFAIL。
+最終live gateは条件試験3/3・Conversation試験3/3で成功した。固定Provider/fixture stateでの結果であり、実Provider・実ブラウザの成功とは区別する。
 
 ## 実Bedrock: Nova Lite
 
-`amazon.nova-lite-v1:0`には、同じ条件Toolの複数更新漏れや不要な更新試行、期待した旅行readに到達しないケースが残る。比較対象から除外しない。production model設定は今回変更していない。
+`amazon.nova-lite-v1:0`では、同じ条件Toolの複数更新漏れや不要な更新試行、期待した旅行readに到達しないケースを観測した。#726 / ADR 0098でV2の基準モデルは`jp.amazon.nova-2-lite-v1:0`へ変更済みで、Nova Lite固有の失敗はV2のmerge blockerとせず、比較記録として残す。
 
 ## 対象外と次の切り分け
 
 実Provider、実ブラウザ、実DynamoDBの状態移行は未検証。使用した保存先はfixtureであり、ユーザーのTrip/Profile/Conversationへ書いていない。
 
-次は実モデルのTool選択とTool提供内容を読み取り専用のSDK hooksで照合し、必要な旅行readへ進まない理由を調べる。地域別・語尾別の分岐、追加model callによるrepair、強制ToolChoiceは追加しない。必要なreadを選べない場合のモデル適性判断と、正本の永続化保証を分ける。
+次は本変更をmainへ反映後、実Provider・実ブラウザで行き先設定/訂正/複数条件を確認する。次の条件型は人数・同行者構成で、同じ操作単位の受理基盤を再利用する。地域別・語尾別の分岐、追加model callによるrepair、強制ToolChoiceは追加しない。
 
 作業用のbranch限定workflow/変換scriptは最終差分から削除する。再実行は既存手動Strands v2 Liveの `condition-operations` / `conversation-output` から行う。どれか1回の失敗を反復成功で隠さず最終exitを失敗にする。
 
