@@ -5,6 +5,7 @@ import { agentProgressPhases, type AgentTurnEvent } from "@raiquora/agent/agent-
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 import { parseResearchExecutionOutcome } from "@raiquora/agent/research-execution";
 import { parsePublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
+import { parsePublicPlacePresentation } from "@raiquora/agent/public-place-presentation";
 import { parsePublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 
 export interface StreamMeasurement {
@@ -132,9 +133,9 @@ function validEvent(event: unknown): event is AgentTurnEvent {
     return Object.keys(event).every(k => ["type", "receipt"].includes(k));
   }
   if (event.type === "error") return ["agent_failed", "limit_reached", "turn_conflict"].includes(String(event.code)) && Object.keys(event).every(k => ["type", "code"].includes(k));
-  try { if (event.delivery !== undefined && !validDelivery(event.delivery)) return false; if (event.semanticReceipt !== undefined) parsePublicSemanticReceipt(event.semanticReceipt); if (event.publicPlanPresentation !== undefined) parsePublicPlanPresentation(event.publicPlanPresentation); if (event.publicJourneyPresentation !== undefined) parsePublicJourneyPresentation(event.publicJourneyPresentation); if (event.researchExecution !== undefined) parseResearchExecutionOutcome(event.researchExecution); if (event.tripCostProposal !== undefined) parsePublicCostProposal(event.tripCostProposal); if ((event.tripUpdateProposal || event.tripCostProposal) && event.consultationRequestProposal) return false; if (event.consultationRequestProposal !== undefined) parseConsultationRequestProposal(event.consultationRequestProposal); if (event.tripUpdateProposal !== undefined) parsePublicRequestProposal(event.tripUpdateProposal); } catch { return false; }
+  try { if (event.delivery !== undefined && !validDelivery(event.delivery)) return false; if (event.semanticReceipt !== undefined) parsePublicSemanticReceipt(event.semanticReceipt); if (event.publicPlanPresentation !== undefined) parsePublicPlanPresentation(event.publicPlanPresentation); if (event.publicJourneyPresentation !== undefined) parsePublicJourneyPresentation(event.publicJourneyPresentation); if (event.publicPlacePresentation !== undefined) parsePublicPlacePresentation(event.publicPlacePresentation); if (event.researchExecution !== undefined) parseResearchExecutionOutcome(event.researchExecution); if (event.tripCostProposal !== undefined) parsePublicCostProposal(event.tripCostProposal); if ((event.tripUpdateProposal || event.tripCostProposal) && event.consultationRequestProposal) return false; if (event.consultationRequestProposal !== undefined) parseConsultationRequestProposal(event.consultationRequestProposal); if (event.tripUpdateProposal !== undefined) parsePublicRequestProposal(event.tripUpdateProposal); } catch { return false; }
   return event.type === "final" && ["completed", "follow_up"].includes(String(event.status)) && typeof event.response === "string" &&
-    event.response.length <= 32_000 && Object.keys(event).every(k => ["type", "status", "response", "delivery", "semanticReceipt", "publicPlanPresentation", "publicJourneyPresentation", "researchExecution", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"].includes(k));
+    event.response.length <= 32_000 && Object.keys(event).every(k => ["type", "status", "response", "delivery", "semanticReceipt", "publicPlanPresentation", "publicJourneyPresentation", "publicPlacePresentation", "researchExecution", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"].includes(k));
 }
 function validDelivery(value: unknown): boolean {
   return record(value) && Object.keys(value).every(key => ["status", "basis"].includes(key)) &&

@@ -11,7 +11,7 @@ import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { agentV2ReplySchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
 import { AgentV2ReplySubmission } from "./strands-reply-submission.js";
-import { publicReplyField } from "@raiquora/agent/agent-v2-publication";
+import { agentV2CandidateReferences, publicReplyField } from "@raiquora/agent/agent-v2-publication";
 import { decodeUtteranceInterpretation, semanticInterpretationOutputContract } from "@raiquora/agent/semantic-interpretation";
 import { ServerAgentIntentRejectedError, type ServerAgentIntentController } from "../ports/server-agent-runtime.js";
 
@@ -120,7 +120,7 @@ export class StrandsAgentEngine {
     }));
     tools.push(tool({
       name: strandsReplyToolName,
-      description: "Submit a reply proposal, once, after any necessary research. This does not save or execute anything. Use answer with references to actual Evidence fields; conversation with a message key; clarification with a missing target; unavailable with an operation; operation_result with an Application receipt ID; uncertainty when information cannot be verified. Do not include prose, reasoning, or new facts. Stop researching after submission.",
+      description: "Submit one reply after any necessary reads, then stop. Use answer with references to actual Evidence fields and optional evidence-bound commentary; candidates with evidenceIds selected from candidateReferences and required commentary explaining your selection; conversation with a message key; clarification with a missing target; unavailable with an operation; operation_result only with an Application receipt ID; uncertainty for unverified information. Never supply card payloads, new factual values, reasoning, or fabricated operation results. This does not save, book or pay.",
       inputSchema: agentV2ReplySchema as JSONSchema,
       callback: (value) => jsonValue(submission.receive(value)),
     }));
@@ -195,7 +195,9 @@ export function createStrandsReadTools(input: {
       const execution = await input.executor.execute({
         executionId: input.executionId, toolCallId: context?.toolUse.toolUseId ?? `strands-${descriptor.name}`,
         toolName: descriptor.name, toolInput, timeoutMs: input.toolTimeoutMs,
-        ...(effectiveIntent && decision.dependencyTargets.length ? { intentDependency: {
+        // Bind every V2 read to its Application snapshot, even where a Tool has no
+        // field-level intent policy. A later intent update cannot relabel old reads.
+        ...(effectiveIntent ? { intentDependency: {
           intentRevision: effectiveIntent.intentRevision, fingerprint: effectiveIntent.fingerprint,
           targets: decision.dependencyTargets } } : {}),
       }, input.trace);
@@ -203,6 +205,7 @@ export function createStrandsReadTools(input: {
       if (!execution.result.ok) return jsonValue({ ok: false, error: {
         code: execution.result.error.code, retryable: execution.result.error.retryable } });
       return jsonValue({ ok: true, output: execution.result.output, evidenceIds: execution.evidence.map(({ id }) => id),
+        candidateReferences: agentV2CandidateReferences(execution.evidence, effectiveIntent),
         replyReferences: execution.evidence.map((item) => ({ evidenceId: item.id,
           fields: Object.fromEntries(Object.entries(item.facts).filter(([key]) => publicReplyField(key))) })) });
     },

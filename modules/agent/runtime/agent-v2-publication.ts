@@ -2,6 +2,8 @@ import type { Evidence, EvidenceClaim } from "./evidence-model";
 import type { EffectiveIntent } from "./effective-intent";
 import { AgentV2ReplyError, parseAgentV2Reply, type AgentV2OperationReceipt, type AgentV2ReplyProof,
   type ReplyOperation, type ReplyQuestion } from "./agent-v2-reply";
+import { parsePublicPlacePresentation, publicPlacePresentationVersion, publicPlaceSourceUrl,
+  type PublicPlaceCard, type PublicPlacePresentation } from "./public-place-presentation";
 
 export interface AgentV2ReplyContext {
   executionId: string;
@@ -16,6 +18,7 @@ export interface AgentV2AdmittedReply {
   evidence: Evidence[];
   claims: EvidenceClaim[];
   proof: AgentV2ReplyProof;
+  publicPlacePresentation?: PublicPlacePresentation;
 }
 const operationLabels: Record<ReplyOperation, string> = { save: "保存", change: "変更", book: "予約", pay: "決済" };
 const conversationText = {
@@ -30,9 +33,7 @@ const questions: Record<ReplyQuestion, string> = {
 };
 
 /** Resolve references and operation status from trusted inputs. Never infer success
- * from prose, and never let a model-declared kind authorize arbitrary text.
- * This first publisher supports selected factual values/quotations, not unrestricted
- * paraphrase or a complete itinerary renderer. */
+ * from prose, and never let a model-declared kind authorize arbitrary payloads. */
 export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext): AgentV2AdmittedReply {
   const proposal = parseAgentV2Reply(value);
   const proof: AgentV2ReplyProof = { kind: proposal.kind, references: [] };
@@ -55,6 +56,39 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
           !Object.hasOwn(operationLabels, receipt.operation)) throw new AgentV2ReplyError("invalid_receipt");
       proof.operation = { type: receipt.operation, status: "succeeded", receiptId: receipt.id };
       return reply(`${operationLabels[receipt.operation]}しました。`);
+    }
+    case "candidates": {
+      const selected = proposal.evidenceIds.map((id) => {
+        const matches = context.evidence.filter((item) => item.id === id);
+        if (matches.length !== 1) throw new AgentV2ReplyError("missing_evidence");
+        return matches[0]!;
+      });
+      let publicPlacePresentation: PublicPlacePresentation;
+      try {
+        publicPlacePresentation = parsePublicPlacePresentation({ version: publicPlacePresentationVersion,
+          cards: selected.map((item) => placeCard(item, context.effectiveIntent)) });
+      } catch (error) {
+        if (error instanceof AgentV2ReplyError) throw error;
+        throw new AgentV2ReplyError("invalid_field");
+      }
+      const claims: EvidenceClaim[] = [];
+      const bindings: NonNullable<EvidenceClaim["bindings"]> = [];
+      publicPlacePresentation.cards.forEach((card, index) => {
+        const evidence = selected[index]!;
+        for (const [field, statement, transform] of [
+          ["sourceTitle", card.title, "identity"], ["sourceExcerpt", card.description, "bounded_quote"],
+        ] as const) {
+          const binding = { evidenceId: evidence.id, fieldPath: `facts.${field}`, subjectRef: card.placeRef,
+            applicabilityScope: evidence.observation!.scopeKey };
+          proof.references.push({ evidenceId: evidence.id, field });
+          claims.push({ id: `v2-place-${claims.length + 1}`, statement, kind: "fact", evidenceIds: [evidence.id], bindings: [{ ...binding, transform }] });
+          bindings.push({ ...binding, transform: "recommendation" });
+        }
+      });
+      const commentary = boundedText(proposal.commentary);
+      proof.commentary = true;
+      claims.push({ id: "v2-commentary", statement: commentary, kind: "inference", evidenceIds: [...proposal.evidenceIds], bindings });
+      return { text: escapeMarkdown(commentary), evidence: selected.map((item) => structuredClone(item)), claims, proof, publicPlacePresentation };
     }
     case "answer": {
       const selected = new Map<string, Evidence>();
@@ -92,6 +126,34 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
       return { text: parts.join("\n\n"), evidence: [...selected.values()], claims, proof };
     }
   }
+}
+
+/** Tell the model which references are eligible for cards, without creating a
+ * second candidate store or accepting a model-authored title/URL/price/image. */
+export function agentV2CandidateReferences(evidence: readonly Evidence[], effective?: EffectiveIntent): { evidenceId: string; title: string }[] {
+  return evidence.flatMap((item) => {
+    try { const card = placeCard(item, effective); return [{ evidenceId: card.evidenceId, title: card.title }]; }
+    catch (error) { if (error instanceof AgentV2ReplyError) return []; throw error; }
+  });
+}
+function placeCard(evidence: Evidence, effective?: EffectiveIntent): PublicPlaceCard {
+  assertEvidence(evidence, effective);
+  const facts = evidence.facts, observation = evidence.observation;
+  if (observation?.predicate !== "place_description" || observation.state !== "current" ||
+      !/^place:[^:]+:.+$/u.test(observation.subjectKey) || facts.sourcePrecision !== "place-description" ||
+      typeof facts.sourceTitle !== "string" || typeof facts.sourceExcerpt !== "string" || typeof facts.sourceUrl !== "string" ||
+      effective && !evidence.intentDependency || !evidence.references.some((ref) => ref.sourceType === "external-source" &&
+        ref.sourceRef === facts.sourceUrl && ref.freshness === "current")) throw new AgentV2ReplyError("ineligible_evidence");
+  const sourceUrl = publicPlaceSourceUrl(facts.sourceUrl);
+  if (!sourceUrl) throw new AgentV2ReplyError("invalid_field");
+  const title = boundedText(facts.sourceTitle).trim(), raw = boundedText(facts.sourceExcerpt).trim();
+  // A bounded source excerpt, not a generated description or a full fetched page.
+  const description = raw.slice(0, 400).trimEnd();
+  try {
+    return parsePublicPlacePresentation({ version: publicPlacePresentationVersion, cards: [{
+      evidenceId: evidence.id, placeRef: observation.subjectKey, title, description, sourceUrl,
+    }] }).cards[0]!;
+  } catch { throw new AgentV2ReplyError("invalid_field"); }
 }
 
 /** Expose only factual fields that this publisher knows how to display. */

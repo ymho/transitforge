@@ -1,5 +1,5 @@
-/** The model selects a reply. Only the Application may admit it for publication.
- * No free-form text, evidence payloads or mutation receipts are model-owned. */
+/** The model selects references and explains them. Only the Application may admit
+ * Evidence payloads, public cards or mutation receipts for publication. */
 export const replyOperations = ["save", "change", "book", "pay"] as const;
 export type ReplyOperation = typeof replyOperations[number];
 export const replyQuestions = ["goal", "origin", "destination", "start_date", "duration", "party_size", "budget"] as const;
@@ -7,6 +7,7 @@ export type ReplyQuestion = typeof replyQuestions[number];
 export interface ReplyReference { evidenceId: string; field: string }
 export type AgentV2ReplyProposal =
   | { kind: "answer"; references: ReplyReference[]; commentary?: string }
+  | { kind: "candidates"; evidenceIds: string[]; commentary: string }
   | { kind: "conversation"; message: "greeting" | "thanks" | "acknowledgement" }
   | { kind: "clarification"; target: ReplyQuestion }
   | { kind: "unavailable"; operation: ReplyOperation }
@@ -37,13 +38,14 @@ export class AgentV2ReplyError extends Error {
   }
 }
 
-/** Flat schema for model interoperability; parseAgentV2Reply checks the variant's
- * exact field set as well. A JSON Schema tool does not itself validate at runtime. */
+/** Flat schema; parseAgentV2Reply checks each variant's exact field set as well. */
 export const agentV2ReplySchema = {
   type: "object",
   properties: {
-    kind: { type: "string", enum: ["answer", "conversation", "clarification", "unavailable", "operation_result", "uncertainty"] },
+    kind: { type: "string", enum: ["answer", "candidates", "conversation", "clarification", "unavailable", "operation_result", "uncertainty"] },
     commentary: { type: "string", minLength: 1, maxLength: 1200 },
+    evidenceIds: { type: "array", minItems: 1, maxItems: 8, uniqueItems: true,
+      items: { type: "string", minLength: 1, maxLength: 240 } },
     references: { type: "array", minItems: 1, maxItems: 8, items: {
       type: "object", properties: { evidenceId: { type: "string", minLength: 1, maxLength: 240 },
         field: { type: "string", minLength: 1, maxLength: 80 } },
@@ -60,6 +62,12 @@ export const agentV2ReplySchema = {
 export function parseAgentV2Reply(value: unknown): AgentV2ReplyProposal {
   if (!record(value)) return invalid();
   switch (value.kind) {
+    case "candidates": {
+      if (!exact(value, ["kind", "evidenceIds", "commentary"]) || !Array.isArray(value.evidenceIds) ||
+          value.evidenceIds.length < 1 || value.evidenceIds.length > 8 || !value.evidenceIds.every((id) => identifier(id, 240)) ||
+          new Set(value.evidenceIds).size !== value.evidenceIds.length) return invalid();
+      return { kind: "candidates", evidenceIds: [...value.evidenceIds] as string[], commentary: replyCommentary(value.commentary) };
+    }
     case "answer": {
       if (!(exact(value, ["kind", "references"]) || exact(value, ["kind", "references", "commentary"])) ||
           !Array.isArray(value.references) || value.references.length < 1 || value.references.length > 8) return invalid();
