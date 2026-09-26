@@ -151,6 +151,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     const accountNavigation = root.querySelector<HTMLElement>("[data-account]")!;
     if (!isMap && current === "my") accountNavigation.setAttribute("aria-current", "page"); else accountNavigation.removeAttribute("aria-current");
     if (!isMap && current === "chat") ports.openChat();
+    if (!isMap && current === "trips") void ports.retry();
     if (isTrip && isSignedIn() && typeof window.history.state?.tripId === "string") ports.openTrip(window.history.state.tripId);
     if (isMap) {
       ports.openMap();

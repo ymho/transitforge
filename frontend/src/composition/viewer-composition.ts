@@ -222,7 +222,6 @@ const serverTripClient = new HttpServerTripClient();
 const inTripContextClient = new HttpInTripContextClient();
 const pendingDraftTripIds = new Map<string, { id: string; now: string; request: TripRequest }>();
 const serverTripList = createServerTripListSource(serverTripClient, canUsePersonalState);
-if (isSignedIn()) void serverTripList.refresh();
 const serverTripReferences = new Map<string, string>();
 const syncServerTripSource = (session: typeof activeConversationSession) => {
   if (!session.tripId) return;
@@ -444,8 +443,7 @@ currentAuthentication().subscribe(() => {
   aiGuideController.switchSession(unsignedConversation.id);
   tripWorkspaceController.activateSession(unsignedConversation.id);
   contextWorkspaceController.activateSession(unsignedConversation.id);
-  if (!isSignedIn()) { void serverTripList.refresh(); return; }
-  void serverTripList.refresh();
+  if (!isSignedIn()) return;
   void Promise.all([conversationUi.hydrate(), profileUi.hydrate()]).then(async ([session]) => {
     if (generation !== authenticationGeneration) return;
     const selected = session ?? await conversationUi.create();
