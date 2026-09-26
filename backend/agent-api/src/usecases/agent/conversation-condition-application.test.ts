@@ -29,8 +29,8 @@ it("resolves month/day and relative travel dates from the trusted calendar befor
   const apply = createConversationConditionApplication({ acceptCondition }, identity, lease,
     "10月3日から5日まで旅行します", "2026-09-27");
   await apply({ target: "travel_period", period: {
-    start: { kind: "calendar_date", month: 10, day: 3, quote: "10月3日" },
-    end: { kind: "calendar_date", day: 5, quote: "5日" },
+    start: { kind: "calendar_date", month: 10, day: 3 },
+    end: { kind: "calendar_date", day: 5 },
   }, quote: "10月3日から5日まで" });
   expect(acceptCondition).toHaveBeenCalledWith(identity, lease, {
     target: "travel_period", period: {
@@ -45,12 +45,12 @@ it("chooses the first future occurrence when the user omits the year", async () 
     beforeIntentRevision: 0, intentRevision: 1, replayed: false, operations: [] }));
   const apply = createConversationConditionApplication({ acceptCondition }, identity, lease, "1/21に行きます", "2026-09-26");
   await apply({ target: "travel_period", period: {
-    start: { kind: "calendar_date", year: 2026, month: 1, day: 21, quote: "1/21" },
-  }, quote: "1/21" });
+    start: { kind: "calendar_date", year: 2026, month: 1, day: 21 },
+  } });
   expect(acceptCondition).toHaveBeenCalledWith(identity, lease, {
     target: "travel_period", period: {
       start: { kind: "local_date", date: "2027-01-21", anchorDate: "2026-09-26", resolverVersion: "calendar-v1" },
-    }, quote: "1/21",
+    },
   });
 });
 
