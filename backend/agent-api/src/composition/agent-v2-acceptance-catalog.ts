@@ -60,6 +60,13 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
     testName: "publishes verified Evidence instead of unbound model prose",
   },
   {
+    id: "V2-EXPLANATION-01",
+    kind: "v2_specific",
+    invariant: "natural explanation and comparison remain model-authored inference while factual values stay bound to selected Evidence fields",
+    testFile: "modules/agent/runtime/agent-v2-publication.test.ts",
+    testName: "publishes natural commentary as an inference bound to the selected Evidence instead of replacing factual values",
+  },
+  {
     id: "V2-CONTEXT-01",
     kind: "v2_specific",
     invariant: "the model receives the existing bounded Application context rather than a second v2 state model",
