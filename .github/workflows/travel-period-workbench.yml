@@ -1,5 +1,5 @@
 name: Travel period workbench (temporary)
-# Rerun: first-future-date Application policy + element-specific grounding; never log raw user/model payload.
+# Rerun: shared range month/year grounding + first-future-date policy; never log raw user/model payload.
 
 on:
   push:
