@@ -33,6 +33,42 @@ describe("Agent v2 publication contract", () => {
     expect(result.proof.kind).toBe("answer");
     expect(result.claims).toHaveLength(1);
   });
+  it("publishes natural commentary as an inference bound to the selected Evidence instead of replacing factual values", () => {
+    const kyoto = observation();
+    const osaka = observation();
+    osaka.id = "e-osaka";
+    osaka.subject = "大阪";
+    osaka.facts.sourceExcerpt = "大阪は移動候補が多い確認済み資料です。";
+    osaka.observation = { ...osaka.observation!, observationId: "obs-osaka", subjectKey: "place:osaka" };
+    osaka.references = [{ ...osaka.references[0]!, sourceRef: "https://example.test/osaka" }];
+    const commentary = "移動を少なくしたいなら京都を優先し、大阪は選択肢を広げたい場合の候補として比較できます。";
+    const result = admitAgentV2Reply({ kind: "answer", commentary, references: [
+      { evidenceId: "e-kyoto", field: "sourceExcerpt" },
+      { evidenceId: "e-osaka", field: "sourceExcerpt" },
+    ] }, { executionId: "turn-1", evidence: [kyoto, osaka] });
+
+    expect(result.text).toContain(commentary);
+    expect(result.text).toContain("京都について確認した資料です。");
+    expect(result.text).toContain("大阪は移動候補が多い確認済み資料です。");
+    expect(result.claims.find(({ id }) => id === "v2-commentary")).toMatchObject({
+      statement: commentary,
+      kind: "inference",
+      evidenceIds: ["e-kyoto", "e-osaka"],
+      bindings: [
+        { evidenceId: "e-kyoto", fieldPath: "facts.sourceExcerpt", transform: "recommendation" },
+        { evidenceId: "e-osaka", fieldPath: "facts.sourceExcerpt", transform: "recommendation" },
+      ],
+    });
+    expect(result.proof.commentary).toBe(true);
+    expect(JSON.stringify(result.proof)).not.toContain(commentary);
+  });
+  it("rejects unsafe or oversized commentary before publication", () => {
+    for (const commentary of ["<thinking>hidden</thinking>", "x".repeat(1201), "  surrounding whitespace"]) {
+      expect(() => parseAgentV2Reply({ ...proposal, commentary })).toThrow("invalid_proposal");
+    }
+    expect(() => parseAgentV2Reply({ kind: "unavailable", operation: "save", commentary: "保存します" }))
+      .toThrow("invalid_proposal");
+  });
   it.each(["保存しました。", "保存しておきます。", "保存を承りました。", "<thinking>private</thinking>"])(
     "does not admit arbitrary prose through a model-declared reply kind: %s", (text) => {
       for (const draft of [{ kind: "conversation", message: "acknowledgement", text },
