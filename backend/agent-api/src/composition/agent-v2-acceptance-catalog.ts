@@ -46,6 +46,20 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
     testName: "uses an Application-accepted intent update for later read Tool validation in the same Strands loop",
   },
   {
+    id: "V2-SEMANTIC-02",
+    kind: "v2_specific",
+    invariant: "an Application-accepted intent update changes Tool validation inside the same Strands invocation",
+    testFile: "backend/agent-api/src/adapters/strands-agent-engine.test.ts",
+    testName: "applies one accepted intent update before validating later read Tools in the same Strands invoke",
+  },
+  {
+    id: "V2-SEMANTIC-03",
+    kind: "v2_specific",
+    invariant: "an accepted intent A-commit survives answer failure and retry does not reapply the change",
+    testFile: "backend/agent-api/src/composition/strands-conversation-production-shaped.test.ts",
+    testName: "persists a V2 intent A-commit across answer failure and retries without reapplying the semantic change",
+  },
+  {
     id: "V2-TOOL-01",
     kind: "v2_specific",
     invariant: "stale or mismatched Effective Intent is rejected before a Domain Tool executes",
