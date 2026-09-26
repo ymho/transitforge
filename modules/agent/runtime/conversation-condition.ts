@@ -40,6 +40,23 @@ export const partyConditionUpdateInputSchema = z.strictObject({
   if (value.action === "clear" && value.party !== undefined) context.addIssue({ code: "custom", message: "clear must not include party" });
 });
 
+export const budgetConditionValueSchema = z.strictObject({
+  amount: z.number().positive().max(1_000_000_000)
+    .describe("通貨のmajor unitで表した金額。例: 5万円は50000、500ユーロは500。"),
+  currency: z.enum(["JPY", "EUR", "CHF", "USD", "GBP", "KWD"]).optional()
+    .describe("利用者が通貨を明示した場合だけ設定する。"),
+  basis: z.enum(["trip", "per_person"]).optional()
+    .describe("旅行全体か1人あたりかを利用者が明示した場合だけ設定する。"),
+});
+export const budgetConditionUpdateInputSchema = z.strictObject({
+  action: z.enum(["set", "clear"]),
+  budget: budgetConditionValueSchema.optional(),
+  quote: sourceQuote,
+}).superRefine((value, context) => {
+  if (value.action === "set" && value.budget === undefined) context.addIssue({ code: "custom", message: "set requires budget" });
+  if (value.action === "clear" && value.budget !== undefined) context.addIssue({ code: "custom", message: "clear must not include budget" });
+});
+
 const localDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u);
 export const periodDateExpressionSchema = z.strictObject({
   kind: z.enum(["calendar_date", "relative_date"]),
@@ -71,6 +88,7 @@ export const travelPeriodValueSchema = z.strictObject({
 export const travelPeriodUpdateInputSchema = z.strictObject({
   action: z.enum(["set", "clear"]),
   period: travelPeriodValueSchema.optional(),
+  budget: budgetConditionValueSchema.optional(),
   quote: sourceQuote,
 }).superRefine((value, context) => {
   if (value.action === "set" && value.period === undefined) context.addIssue({ code: "custom", message: "set requires period" });
@@ -78,15 +96,17 @@ export const travelPeriodUpdateInputSchema = z.strictObject({
 });
 
 export const tripScenarioInputSchema = z.strictObject({
-  kind: z.enum(["party", "travel_period"]),
+  kind: z.enum(["party", "travel_period", "budget"]),
   party: partyConditionValueSchema.optional(),
   period: travelPeriodValueSchema.optional(),
   quote: sourceQuote,
 }).superRefine((value, context) => {
-  if (value.kind === "party" && (value.party === undefined || value.period !== undefined))
+  if (value.kind === "party" && (value.party === undefined || value.period !== undefined || value.budget !== undefined))
     context.addIssue({ code: "custom", message: "party scenario requires only party" });
-  if (value.kind === "travel_period" && (value.period === undefined || value.party !== undefined))
+  if (value.kind === "travel_period" && (value.period === undefined || value.party !== undefined || value.budget !== undefined))
     context.addIssue({ code: "custom", message: "travel_period scenario requires only period" });
+  if (value.kind === "budget" && (value.budget === undefined || value.party !== undefined || value.period !== undefined))
+    context.addIssue({ code: "custom", message: "budget scenario requires only budget" });
 });
 
 const resolvedDateSchema = z.strictObject({
@@ -108,21 +128,24 @@ const resolvedPeriodSchema = z.strictObject({
   message: "resolved travel period requires at least one component",
 });
 
-export const conditionSlots = ["origin", "destination", "party_size", "travel_period"] as const;
+export const conditionSlots = ["origin", "destination", "party_size", "travel_period", "budget"] as const;
 const placeInputSchema = z.strictObject({ target: z.enum(["origin", "destination"]), place: placeLabel.nullable(), quote: sourceQuote });
 const partyInputSchema = z.strictObject({ target: z.literal("party_size"), party: partyConditionValueSchema.nullable(), quote: sourceQuote });
 const periodInputSchema = z.strictObject({ target: z.literal("travel_period"), period: travelPeriodValueSchema.nullable(), quote: sourceQuote });
-export const conversationConditionInputSchema = z.union([placeInputSchema, partyInputSchema, periodInputSchema]);
+const budgetInputSchema = z.strictObject({ target: z.literal("budget"), budget: budgetConditionValueSchema.nullable(), quote: sourceQuote });
+export const conversationConditionInputSchema = z.union([placeInputSchema, partyInputSchema, periodInputSchema, budgetInputSchema]);
 
 const placeChangeSchema = placeInputSchema;
 const partyChangeSchema = partyInputSchema;
 const periodChangeSchema = z.strictObject({ target: z.literal("travel_period"), period: resolvedPeriodSchema.nullable(), quote: sourceQuote });
-export const conversationConditionSchema = z.union([placeChangeSchema, partyChangeSchema, periodChangeSchema]);
+const budgetChangeSchema = budgetInputSchema;
+export const conversationConditionSchema = z.union([placeChangeSchema, partyChangeSchema, periodChangeSchema, budgetChangeSchema]);
 
 export type PlaceConditionInput = z.infer<typeof placeConditionInputSchema>;
 export type PartyConditionInput = z.infer<typeof partyConditionInputSchema>;
 export type PlaceConditionUpdateInput = z.infer<typeof placeConditionUpdateInputSchema>;
 export type PartyConditionUpdateInput = z.infer<typeof partyConditionUpdateInputSchema>;
+export type BudgetConditionUpdateInput = z.infer<typeof budgetConditionUpdateInputSchema>;
 export type TravelPeriodUpdateInput = z.infer<typeof travelPeriodUpdateInputSchema>;
 export type TripScenarioInput = z.infer<typeof tripScenarioInputSchema>;
 export type ConversationConditionInput = z.infer<typeof conversationConditionInputSchema>;
@@ -141,7 +164,9 @@ export function admitTripScenario(value: unknown, userMessage: string): TripScen
   const parsed = tripScenarioInputSchema.safeParse(value);
   if (!parsed.success) throw new ConditionUpdateRejectedError("invalid_condition");
   if (!userMessage.includes(parsed.data.quote)) throw new ConditionUpdateRejectedError("invalid_source");
-  return parsed.data;
+  if (parsed.data.kind !== "budget") return parsed.data;
+  const budget = resolveBudget(parsed.data.budget!, parsed.data.quote);
+  return { kind: "budget", budget, quote: parsed.data.quote };
 }
 
 /** Syntax is shared with the SDK. Source grounding and calendar resolution belong
@@ -160,6 +185,10 @@ export function admitConditionChange(value: unknown, userMessage: string, calend
   }
   if ("place" in input) return input;
   if ("party" in input) return input;
+  if ("budget" in input) {
+    if (input.budget === null) return input;
+    return { target: "budget", budget: resolveBudget(input.budget, input.quote), quote: input.quote };
+  }
   if (input.period === null) return { target: "travel_period", period: null, quote: input.quote };
   const period = resolveTravelPeriod(input.period, input.quote, calendarDate);
   return { target: "travel_period", period, quote: input.quote };
@@ -175,6 +204,7 @@ export function conditionPayload(change: ConversationConditionChange): string {
   // can replay across deployment without becoming a false conflict.
   if ("place" in change) return JSON.stringify([1, change.target, change.place]);
   if ("party" in change) return JSON.stringify([1, change.target, change.party]);
+  if ("budget" in change) return JSON.stringify([3, change.target, change.budget]);
   return JSON.stringify([2, change.target, change.period]);
 }
 
@@ -182,6 +212,20 @@ export function conditionPayload(change: ConversationConditionChange): string {
 export function conditionDelta(change: ConversationConditionChange, turnId: string, overlay: ConversationIntentOverlay): AcceptedIntentDelta {
   const slot = conditionSlot(change), mutationId = conditionOperationId(turnId, slot);
   if (change.target === "travel_period") return travelPeriodDelta(change, turnId, overlay, mutationId);
+  if (change.target === "budget") {
+    const cleared = change.budget === null;
+    const value: IntentValue | undefined = cleared ? undefined : { kind: "money", amount: change.budget.amount,
+      ...(change.budget.currency ? { currency: change.budget.currency } : {}),
+      ...(change.budget.basis ? { basis: change.budget.basis } : {}) };
+    const approximate = /(?:くらい|ぐらい|程度|ほど|前後|目安)/u.test(change.quote);
+    return parseAcceptedIntentDelta({ version: 1, mutationId, baseIntentRevision: overlay.intentRevision,
+      speechAct: cleared ? "cancel" : "inform", operations: [{
+        operationId: mutationId, groupId: mutationId, target: "budget", action: cleared ? "retract" : "set",
+        scope: { type: "conversation" }, frame: "actual",
+        ...(value === undefined ? {} : { value, modality: "preferred" as const, precision: approximate ? "approximate" as const : "exact" as const }),
+        provenance: { kind: "user_turn", turnId, quote: change.quote },
+      }] });
+  }
   const cleared = "place" in change ? change.place === null : change.party === null;
   let value: IntentValue | undefined;
   if (!cleared && "place" in change) value = { kind: "place_label", label: change.place! };
@@ -254,6 +298,50 @@ export function parseConditionJournal(value: unknown, turnId: string): Condition
     return { target: item.target, payloadHash: item.payloadHash, receipt };
   });
   return { version: 1, operations };
+}
+
+function resolveBudget(value: z.infer<typeof budgetConditionValueSchema>, quote: string): z.infer<typeof budgetConditionValueSchema> {
+  if (!moneyAmountAppears(quote, value.amount)) throw new ConditionUpdateRejectedError("invalid_source");
+  const currency = explicitCurrency(quote);
+  const basis = explicitBudgetBasis(quote, value.amount);
+  return { amount: value.amount, ...(currency ? { currency } : {}), ...(basis ? { basis } : {}) };
+}
+
+function moneyAmountAppears(quote: string, amount: number): boolean {
+  const normalized = quote.normalize("NFKC").replaceAll(",", "");
+  const matches = [...normalized.matchAll(/(\d+(?:\.\d+)?)\s*(万|千)?\s*(?:円|ユーロ|€|CHF|USD|米ドル|USドル|GBP|英ポンド|£|KWD)?/gu)];
+  return matches.some(match => {
+    const token = match[0] ?? "", unit = match[2], hasMoneyMarker = unit !== undefined ||
+      /(?:円|ユーロ|€|CHF|USD|米ドル|USドル|GBP|英ポンド|£|KWD)/u.test(token);
+    if (!hasMoneyMarker) return false;
+    const base = Number(match[1]), multiplier = unit === "万" ? 10_000 : unit === "千" ? 1_000 : 1;
+    return Number.isFinite(base) && Math.abs(base * multiplier - amount) < 1e-9;
+  });
+}
+function explicitCurrency(quote: string): "JPY" | "EUR" | "CHF" | "USD" | "GBP" | "KWD" | undefined {
+  const normalized = quote.normalize("NFKC");
+  const found = new Set<"JPY" | "EUR" | "CHF" | "USD" | "GBP" | "KWD">();
+  if (/円/u.test(normalized) || /\bJPY\b/iu.test(normalized)) found.add("JPY");
+  if (/ユーロ|€/u.test(normalized) || /\bEUR\b/iu.test(normalized)) found.add("EUR");
+  if (/スイスフラン/u.test(normalized) || /\bCHF\b/iu.test(normalized)) found.add("CHF");
+  if (/米ドル|USドル/u.test(normalized) || /\bUSD\b/iu.test(normalized)) found.add("USD");
+  if (/英ポンド|£/u.test(normalized) || /\bGBP\b/iu.test(normalized)) found.add("GBP");
+  if (/\bKWD\b/iu.test(normalized)) found.add("KWD");
+  return found.size === 1 ? [...found][0] : undefined;
+}
+function explicitBudgetBasis(quote: string, amount: number): "trip" | "per_person" | undefined {
+  const normalized = quote.normalize("NFKC").replaceAll(",", "");
+  const perPerson = /(?:1人あたり|一人あたり|1名あたり|一名あたり)/u.test(normalized) ||
+    new RegExp(`(?:1人|一人|1名|一名)\\s*(?:で)?\\s*${amountExpression(amount)}`, "u").test(normalized);
+  const trip = /(?:全部で|総額|合計|旅行全体で|全体で)/u.test(normalized);
+  if (perPerson && trip) throw new ConditionUpdateRejectedError("invalid_condition");
+  return perPerson ? "per_person" : trip ? "trip" : undefined;
+}
+function amountExpression(amount: number): string {
+  const variants = [String(amount).replace(".", "\\.")];
+  if (Number.isInteger(amount) && amount % 10_000 === 0) variants.push(`${amount / 10_000}(?:\\.0+)?\\s*万`);
+  if (Number.isInteger(amount) && amount % 1_000 === 0) variants.push(`${amount / 1_000}(?:\\.0+)?\\s*千`);
+  return `(?:${variants.join("|")})`;
 }
 
 function resolveTravelPeriod(value: z.infer<typeof travelPeriodValueSchema>, quote: string, anchor?: string): z.infer<typeof resolvedPeriodSchema> {
