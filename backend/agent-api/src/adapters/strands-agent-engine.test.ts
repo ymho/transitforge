@@ -37,6 +37,28 @@ class TwoTurnToolModel extends Model<BaseModelConfig> {
   }
 }
 
+class TwoToolThenAnswerModel extends Model<BaseModelConfig> {
+  private calls = 0;
+  private config: BaseModelConfig = { modelId: "test-model" };
+  updateConfig(config: BaseModelConfig): void { this.config = { ...this.config, ...config }; }
+  getConfig(): BaseModelConfig { return this.config; }
+  async *stream(_messages: Message[], _options?: StreamOptions): AsyncGenerator<ModelStreamEvent> {
+    this.calls += 1;
+    yield { type: "modelMessageStartEvent", role: "assistant" };
+    if (this.calls <= 2) {
+      yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: "lookup_place", toolUseId: `tool-${this.calls}` } };
+      yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify({ location: "京都" }) } };
+      yield { type: "modelContentBlockStopEvent" };
+      yield { type: "modelMessageStopEvent", stopReason: "toolUse" };
+      return;
+    }
+    yield { type: "modelContentBlockStartEvent" };
+    yield { type: "modelContentBlockDeltaEvent", delta: { type: "textDelta", text: "完了" } };
+    yield { type: "modelContentBlockStopEvent" };
+    yield { type: "modelMessageStopEvent", stopReason: "endTurn" };
+  }
+}
+
 function effectiveDestination(label: string): EffectiveIntent {
   return {
     version: 1,
@@ -159,5 +181,53 @@ describe("StrandsAgentEngine", () => {
 
     const config = agentFactory.mock.calls[0]?.[0];
     expect(config?.tools).toHaveLength(0);
+  });
+
+  it("stops additional Tool side effects after the per-turn Tool budget is exhausted", async () => {
+    const execute = vi.fn(async () => successfulAgentToolResult({ name: "京都" }));
+    const { registry, executor } = setupTool(execute);
+    const engine = new StrandsAgentEngine({
+      modelId: "unused", region: "ap-northeast-1", systemPrompt: "Use tools.", maxTurns: 4,
+    }, { model: new TwoToolThenAnswerModel() });
+
+    const result = await engine.run({
+      executionId: "execution-budget",
+      userRequest: "京都を確認して",
+      tools: registry,
+      toolExecutor: executor,
+      effectiveIntent: effectiveDestination("京都"),
+      limits: { maxToolCalls: 1, maxTurns: 4 },
+    });
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(result.limitReason).toBe("tool_calls");
+  });
+
+  it("marks the invocation as deadline-limited when the Strands invocation is cancelled by its deadline", async () => {
+    const { registry, executor } = setupTool();
+    const engine = new StrandsAgentEngine({
+      modelId: "unused", region: "ap-northeast-1", systemPrompt: "test",
+    }, { createAgent: () => ({
+      id: "deadline-agent",
+      async invoke(_args, options) {
+        await new Promise<void>((resolve) => {
+          if (options?.cancelSignal?.aborted) return resolve();
+          options?.cancelSignal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        return { stopReason: "cancelled", toString: () => "" };
+      },
+      async *stream() { throw new Error("not used"); },
+    }) as never });
+
+    const result = await engine.run({
+      executionId: "execution-deadline",
+      userRequest: "期限テスト",
+      tools: registry,
+      toolExecutor: executor,
+      limits: { maxExecutionMs: 5 },
+    });
+
+    expect(result.stopReason).toBe("cancelled");
+    expect(result.limitReason).toBe("deadline");
   });
 });
