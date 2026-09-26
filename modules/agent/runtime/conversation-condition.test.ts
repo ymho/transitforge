@@ -105,8 +105,8 @@ describe("small Conversation condition operations", () => {
   it("keeps duration explicit, resolves trusted relative dates, and rejects inferred or inconsistent periods", () => {
     const duration = admitConditionChange({ target: "travel_period", period: {
       duration: { amount: 3, unit: "nights" },
-    } }, "3泊で行きたい", "2026-09-27");
-    expect(duration).toEqual({ target: "travel_period", period: { duration: { amount: 3, unit: "nights" } } });
+    }, quote: "3泊" }, "3泊で行きたい", "2026-09-27");
+    expect(duration).toEqual({ target: "travel_period", period: { duration: { amount: 3, unit: "nights" } }, quote: "3泊" });
     const relative = admitConditionChange({ target: "travel_period", period: {
       start: { kind: "relative_date", relation: "tomorrow" },
       duration: { amount: 2, unit: "days" },
@@ -117,7 +117,7 @@ describe("small Conversation condition operations", () => {
     }, quote: "明日から2日間" });
     expect(() => admitConditionChange({ target: "travel_period", period: {
       start: { kind: "relative_date", relation: "tomorrow" },
-    } }, "明日から", undefined)).toThrow("invalid_condition");
+    }, quote: "明日" }, "明日から", undefined)).toThrow("invalid_condition");
     expect(() => admitConditionChange({ target: "travel_period", period: {
       start: { kind: "calendar_date", year: 2026, month: 10, day: 5 },
       end: { kind: "calendar_date", year: 2026, month: 10, day: 3 },
@@ -132,24 +132,24 @@ describe("small Conversation condition operations", () => {
   it("maps a yearless month/day to its first occurrence on or after the trusted calendar date", () => {
     const christmas = admitConditionChange({ target: "travel_period", period: {
       start: { kind: "calendar_date", month: 12, day: 25 },
-    } }, "12/25に出発", "2026-09-26");
+    }, quote: "12/25" }, "12/25に出発", "2026-09-26");
     expect(christmas).toEqual({ target: "travel_period", period: {
       start: { kind: "local_date", date: "2026-12-25", anchorDate: "2026-09-26", resolverVersion: "calendar-v1" },
-    } });
+    }, quote: "12/25" });
 
     const january = admitConditionChange({ target: "travel_period", period: {
       start: { kind: "calendar_date", month: 1, day: 21 },
-    } }, "1/21に出発", "2026-09-26");
+    }, quote: "1/21" }, "1/21に出発", "2026-09-26");
     expect(january).toEqual({ target: "travel_period", period: {
       start: { kind: "local_date", date: "2027-01-21", anchorDate: "2026-09-26", resolverVersion: "calendar-v1" },
-    } });
+    }, quote: "1/21" });
 
     const explicitYear = admitConditionChange({ target: "travel_period", period: {
       start: { kind: "calendar_date", year: 2028, month: 1, day: 21 },
-    } }, "2028年1月21日に出発", "2026-09-26");
+    }, quote: "2028年1月21日" }, "2028年1月21日に出発", "2026-09-26");
     expect(explicitYear).toEqual({ target: "travel_period", period: {
       start: { kind: "local_date", date: "2028-01-21" },
-    } });
+    }, quote: "2028年1月21日" });
   });
 
   it("identifies a final condition decision independently of SDK call order and quote selection", () => {
