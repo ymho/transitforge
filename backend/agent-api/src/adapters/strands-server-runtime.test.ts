@@ -31,7 +31,7 @@ function runtimeInput() {
 
 const verifiedEvidence: Evidence = {
   id: "evidence:trip:kyoto",
-  category: "external",
+  category: "station",
   knowledgeKind: "deterministic_fact",
   subject: "京都",
   facts: { status: "available" },
