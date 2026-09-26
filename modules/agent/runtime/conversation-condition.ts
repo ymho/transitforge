@@ -150,8 +150,10 @@ export function conditionOperationId(turnId: string, slot: ConditionSlot): strin
 }
 export function conditionSlot(change: ConversationConditionChange): ConditionSlot { return change.target; }
 export function conditionPayload(change: ConversationConditionChange): string {
-  if ("place" in change) return JSON.stringify([2, change.target, change.place]);
-  if ("party" in change) return JSON.stringify([2, change.target, change.party]);
+  // Preserve the v1 payload for existing slots so an unfinished pre-period turn
+  // can replay across deployment without becoming a false conflict.
+  if ("place" in change) return JSON.stringify([1, change.target, change.place]);
+  if ("party" in change) return JSON.stringify([1, change.target, change.party]);
   return JSON.stringify([2, change.target, change.period]);
 }
 
