@@ -60,3 +60,17 @@ export function claimsCompletedWrite(response: string): boolean {
     /決済(?:しました|済みです|しておきました)/u,
   ].some((pattern) => pattern.test(response));
 }
+
+
+export function classifyStrandsV2LiveError(error: unknown): string {
+  if (!(error instanceof Error)) return "unknown_error";
+  const cause = error.cause;
+  if (!cause || typeof cause !== "object") return error.name || "Error";
+  const record = cause as Record<string, unknown>;
+  const causeName = typeof record.name === "string" && record.name ? record.name : "UnknownCause";
+  const metadata = record.$metadata;
+  const status = metadata && typeof metadata === "object" && typeof (metadata as Record<string, unknown>).httpStatusCode === "number"
+    ? String((metadata as Record<string, unknown>).httpStatusCode)
+    : undefined;
+  return [error.name || "Error", causeName, status].filter(Boolean).join("/");
+}
