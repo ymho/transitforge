@@ -103,10 +103,11 @@ describe("StrandsAgentEngine", () => {
     const { input } = setup();
     const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([
       { tool: "submit_reply", input: { kind: "unavailable", operation: "save" } },
-      { text: "<thinking>private</thinking>保存しておきます。" },
+      { text: "<thinking>DO_NOT_EXPOSE_REASONING_705</thinking>保存しておきます。" },
     ]) }).run(input);
     expect(result.replyProposal).toEqual({ kind: "unavailable", operation: "save" });
-    expect(JSON.stringify(result)).not.toContain("private");
+    expect(JSON.stringify(result)).not.toContain("DO_NOT_EXPOSE_REASONING_705");
+    expect(JSON.stringify(result)).not.toContain("<thinking>");
     expect(JSON.stringify(result)).not.toContain("保存しておきます");
     expect(result).not.toHaveProperty("response");
   });
