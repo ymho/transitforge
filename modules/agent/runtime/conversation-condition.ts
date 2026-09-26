@@ -13,7 +13,10 @@ export const clearConditionInputSchema = z.strictObject({ quote: sourceQuote });
 
 const childAgeGroup = z.enum(["baby", "preschool", "elementary", "teen"]);
 const companion = z.enum(["solo", "partner", "friends", "children", "family"]);
-const partyChild = z.strictObject({ ageGroup: childAgeGroup.optional(), age: z.number().int().min(0).max(17).optional() });
+const partyChild = z.strictObject({
+  ageGroup: childAgeGroup.optional().describe("利用者が年代を明示した子どもだけ設定する。"),
+  age: z.number().int().min(0).max(17).optional().describe("利用者が年齢を明示した子どもだけ設定する。"),
+});
 const partyCount = z.strictObject({
   kind: z.literal("count"),
   people: z.number().int().min(1).max(20).describe("明示された合計人数。大人/子どもの内訳は推測しない。"),
@@ -21,15 +24,18 @@ const partyCount = z.strictObject({
 const partyComposition = z.strictObject({
   kind: z.literal("composition"),
   adults: z.number().int().min(0).max(20),
-  children: z.array(partyChild).max(20),
-  composition: z.array(companion).max(5).optional(),
+  children: z.array(partyChild).max(20).describe("子ども1人につき1要素。年齢・年代を推測して埋めない。"),
+  composition: z.array(companion).max(5).optional().describe("solo/partner/friends/children/familyを利用者が明示した場合だけ設定し、人数から推測しない。"),
 }).refine((value) => value.adults + value.children.length >= 1 && value.adults + value.children.length <= 20, {
   message: "同行者は1〜20人にする",
 }).refine((value) => !value.composition?.includes("solo") || value.adults + value.children.length === 1, {
   message: "soloと複数人は同時に指定できない",
 });
 export const partyConditionValueSchema = z.union([partyCount, partyComposition]);
-export const partyConditionInputSchema = z.strictObject({ party: partyConditionValueSchema, quote: sourceQuote });
+export const partyConditionInputSchema = z.strictObject({
+  party: partyConditionValueSchema.describe("今回の同行者。合計だけならcount、明示された大人/子どもの内訳がある時だけcomposition。"),
+  quote: sourceQuote,
+});
 
 export const conditionTargets = ["origin", "destination", "party_size"] as const;
 const placeChangeSchema = z.strictObject({ target: z.enum(["origin", "destination"]), place: placeLabel.nullable(), quote: sourceQuote });
