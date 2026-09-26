@@ -1,5 +1,6 @@
 name: Party condition workbench (temporary)
-# Run 2: minimal party schema; no child age/group or relationship fields.
+# Run 3: one update Tool per condition; correction is one final-state operation.
+# Detailed age/school cohorts and scoped participation are deferred to #729.
 
 on:
   push:
