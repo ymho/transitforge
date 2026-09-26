@@ -13,7 +13,7 @@ describe("semantic interpretation diagnostics", () => {
   it("classifies root, operation, value and scope failures without content", () => {
     expect(semanticInterpretationShapeFailure({ ...valid, unexpected: true })).toBe("root_shape");
     expect(semanticInterpretationShapeFailure({ ...valid, operations: [{ ...valid.operations[0], action: "invent" }] })).toBe("operation_shape");
-    expect(semanticInterpretationShapeFailure({ ...valid, operations: [{ ...valid.operations[0], value: { kind: "place_label", label: "" } }] })).toBe("value_shape");
+    expect(semanticInterpretationShapeFailure({ ...valid, operations: [{ ...valid.operations[0], value: { kind: "place_label", label: "" } }] })).toBe("value_constraint");
     expect(semanticInterpretationShapeFailure({ ...valid, operations: [{ ...valid.operations[0],
       scope: { kind: "logical_day_ordinal", ordinal: 0 } }] })).toBe("scope_shape");
   });
@@ -34,5 +34,12 @@ ${JSON.stringify(valid)}
     expect(() => parseSemanticInterpretationJson(`\`\`\`json
 not-json
 \`\`\``)).toThrowError();
+  });
+
+  it("separates value kind, field and constraint failures", () => {
+    expect(semanticInterpretationShapeFailure({ ...valid, operations: [{ ...valid.operations[0], value: "大阪" }] })).toBe("value_not_object");
+    expect(semanticInterpretationShapeFailure({ ...valid, operations: [{ ...valid.operations[0], value: { label: "大阪" } }] })).toBe("value_kind");
+    expect(semanticInterpretationShapeFailure({ ...valid, operations: [{ ...valid.operations[0], value: { kind: "place_label", text: "大阪" } }] })).toBe("value_fields");
+    expect(semanticInterpretationShapeFailure({ ...valid, operations: [{ ...valid.operations[0], value: { kind: "place_label", label: "" } }] })).toBe("value_constraint");
   });
 });
