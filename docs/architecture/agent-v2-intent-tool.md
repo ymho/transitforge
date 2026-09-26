@@ -6,16 +6,17 @@
 
 #712の `update_intent` / `UtteranceInterpretation` / `semanticInterpretationOutputContract` / V2内の旧decoder / 1 invoke1試行制限は、このbranchでは使用しない。純粋なAcceptedIntentDeltaとreducer、Effective Intent、owner、A/B commit、CAS、Evidence/currentnessは再利用する。
 
-標準Strands `tool()`にZodのstrict schemaを渡し、以下の独立した業務操作を公開する。
+標準Strands `tool()`にZodのstrict schemaを渡し、モデルには1条件につき1つの業務Toolを公開する。
 
-- `set_destination(place, quote)` / `set_origin(place, quote)`: 指定・訂正。
-- `clear_destination(quote)` / `clear_origin(quote)`: 明示された撤回。
+- `update_destination({action, place?, quote})`
+- `update_origin({action, place?, quote})`
+- `update_party({action, party?, quote})`
 
-未設定やnullを設定操作で受け付けない。撤回は別の明確な業務操作であり、モデルがsetterのnullを変更なしと誤解して条件を消す経路を作らない。検証フィードバックと逐次実行はSDK標準へ任せ、独自のAgent phase、ToolChoice強制、Proxy、入力補修を追加しない。
+`action=set`は指定・訂正、`action=clear`は明示された撤回である。訂正を`clear→set`の2操作に分けず、そのuser turnにおける条件の最終状態を1回で受理する。これによりApplicationの「1 turn・1 target・1 final decision」という冪等slotとTool粒度が一致する。検証フィードバックと逐次実行はSDK標準へ任せ、独自のAgent phase、ToolChoice強制、Proxy、入力補修を追加しない。
 
 ## Applicationの契約
 
-最初のscopeはConversationの行き先・出発地だけ。Trip/Profile/予約/決済は更新しない。型と許可項目はZod、根拠が今回の発言に含まれることと地名がその根拠に含まれることはApplicationが確認する。仮定や比較を変更と扱うかはモデルの意味理解を実モデル試験で評価する。部分文字列検証だけで意味理解を証明したとは扱わない。
+最初のscopeはConversationの行き先・出発地・globalな人数条件。Trip/Profile/予約/決済は更新しない。型と許可項目はZod、根拠が今回の発言に含まれることと地名がその根拠に含まれることはApplicationが確認する。仮定や比較を変更と扱うかはモデルの意味理解を実モデル試験で評価する。部分文字列検証だけで意味理解を証明したとは扱わない。
 
 1操作の正体は、このuser turnにおける1条件の最終意思決定。Applicationが `condition:<turnId>:<target>` を識別子にする。同じ条件/同じ値の再送は元receiptを返し、同じslot/別値は競合とする。異なる値へさらに変更したい場合は次の利用者turnで行う。モデルのtoolUseId、呼出順、再試行attemptに依存しない。
 
