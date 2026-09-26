@@ -118,7 +118,7 @@ export class StrandsAgentEngine {
             ? { target: "origin", place: value.place!, quote: value.quote }
             : { target: "origin", place: null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "update_party", inputSchema: partyConditionUpdateInputSchema,
-          description: "今回の旅行の実際の人数条件について、利用者が採用・訂正・明示撤回した最終状態を1回で反映する。設定/訂正はaction=set、人数を未定に戻す明示はaction=clear。合計人数だけならparty.kind=countを使い、大人/子どもの内訳を推測しない。大人/子どもの人数が明示された場合だけparty.kind=compositionを使う。年齢・年代・関係性は扱わない。仮定・反実仮想・what-if・シナリオ比較、現条件維持の依頼では使わない。プロフィールは変更しない。",
+          description: "今回の旅行で実際に採用する現在の人数条件だけを永続更新する。仮定を試すscratchpadではない。利用者が現在条件として採用・訂正した場合はaction=set、人数を未定に戻す明示はaction=clear。合計人数だけならparty.kind=countを使い、大人/子どもの内訳を推測しない。大人/子どもの人数が明示された場合だけparty.kind=compositionを使う。年齢・年代・関係性は扱わない。仮定・反実仮想・what-if・シナリオ比較、または現条件を維持すると明示された場合は呼ばない。比較用read Toolが無いことはこのwriterを呼ぶ理由にならない。プロフィールは変更しない。",
           callback: (value, context) => apply(value.action === "set"
             ? { target: "party_size", party: value.party!, quote: value.quote }
             : { target: "party_size", party: null, quote: value.quote }, context?.cancelSignal) }),
