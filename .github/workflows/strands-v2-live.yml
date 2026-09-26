@@ -22,7 +22,7 @@ on:
       model_id:
         description: Bedrock model for Agent v2
         required: true
-        default: "amazon.nova-lite-v1:0"
+        default: "jp.amazon.nova-2-lite-v1:0"
         type: choice
         options:
           - "amazon.nova-lite-v1:0"

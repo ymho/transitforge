@@ -3,7 +3,7 @@ project_name = "transitforge"
 environment  = "dev"
 
 # 既定では単一modelを使う。比較評価時だけ任意のmodel classを設定する。
-# bedrock_model_id             = "amazon.nova-lite-v1:0"
+# bedrock_model_id             = "jp.amazon.nova-2-lite-v1:0"
 # bedrock_prompt_caching_enabled = false
 # bedrock_capability_matrix_json = "{}"
 # bedrock_lightweight_model_id = ""

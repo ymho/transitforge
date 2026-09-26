@@ -83,7 +83,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
    if ((result.statusCode ?? 200) >= 400) throw new Error("Provider unavailable");
    return result.body;
  };
- const modelId = environment.MODEL_ID ?? "amazon.nova-lite-v1:0";
+ const modelId = environment.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
  const region = environment.AWS_REGION ?? "unknown";
  const conversationModel = new BedrockConversationModel(new AwsBedrockConverseClient(), {
    modelId, lightweightModelId: environment.LIGHTWEIGHT_MODEL_ID || undefined,

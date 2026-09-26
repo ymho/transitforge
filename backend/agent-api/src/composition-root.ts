@@ -80,7 +80,7 @@ export function createAgentApplication(environment: RuntimeEnvironment = process
   const traceBucket = required(environment, "AGENT_TRACE_BUCKET");
   const bedrock = new AwsBedrockConverseClient();
   const placeDetailSummarizer = new BedrockConversationModel(bedrock, {
-    modelId: environment.MODEL_ID ?? "amazon.nova-lite-v1:0",
+    modelId: environment.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0",
     ...(decisionModelId === undefined ? {} : { decisionModelId }),
     systemPrompt: placeDetailResearchSystemPrompt,
     log,
