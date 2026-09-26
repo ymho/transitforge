@@ -87,6 +87,26 @@ describe("compileEffectiveIntent", () => {
     expect(effective.profileSuppressions).toHaveLength(1);
   });
 
+  it("uses the current Conversation party over a persisted Trip party and never promotes Profile party hints", () => {
+    const partyFact: ConversationIntentFact = {
+      factId: "fact-party", target: "party_size", scope: { type: "conversation" }, modality: "preferred", precision: "exact",
+      value: { kind: "party", adults: 1, children: [{}] }, frame: "actual", sourceOperationId: "op-party",
+      provenance: { kind: "user_turn", turnId, quote: "大人1人と子ども1人" },
+    };
+    const request: TripRequest = { constraints: [], assumptions: [], party: { adults: 2, children: [], source: "user" } };
+    const effective = compileEffectiveIntent({ baseRequest: request, baseSource: "trip", profile: userProfile(), profileRevision: 8,
+      overlay: { ...emptyConversationIntentOverlay(), intentRevision: 1, facts: [partyFact] } });
+    expect(effective.activeBaseParty).toBeUndefined();
+    expect(effective.suppressedBaseRefs).toContain("request:party");
+    expect(effective.actualConversationFacts).toContainEqual(partyFact);
+    expect(effective.profileHints.some(({ target }) => target === "party_size")).toBe(false);
+    expect(effective.ignoredProfileSettings).toEqual(expect.arrayContaining([
+      { path: "companions.usualPartySize", reason: "trip_specific" },
+      { path: "companions.usual", reason: "trip_specific" },
+      { path: "companions.children", reason: "trip_specific" },
+    ]));
+  });
+
   it("preserves exact retained values and records legacy fields as ignored without deleting them", () => {
     const profile = userProfile();
     const effective = compileEffectiveIntent({ profile, profileRevision: 8, overlay: emptyConversationIntentOverlay() });

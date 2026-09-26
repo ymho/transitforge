@@ -11,11 +11,11 @@ import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { agentV2StructuredOutputSchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
 import { agentV2CandidateReferences, publicReplyField } from "@raiquora/agent/agent-v2-publication";
-import { placeConditionInputSchema, clearConditionInputSchema, ConditionUpdateRejectedError, type ConditionTarget, type ConversationConditionChange } from "@raiquora/agent/conversation-condition";
+import { placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, partyScenarioInputSchema, admitPartyScenario, ConditionUpdateRejectedError, type ConversationConditionChange } from "@raiquora/agent/conversation-condition";
 import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
   type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
 
-export const strandsConditionToolNames = ["set_destination", "set_origin", "clear_destination", "clear_origin"] as const;
+export const strandsConditionToolNames = ["update_current_destination", "update_current_origin", "update_current_party", "consider_party_scenario"] as const;
 export interface StrandsAgentEngineOptions {
   modelId: string;
   region: string;
@@ -91,11 +91,11 @@ export class StrandsAgentEngine {
     });
     const controller = input.conditionController;
     if (controller) {
-      const apply = async (target: ConditionTarget, value: Omit<ConversationConditionChange, "target">, signal?: AbortSignal): Promise<JSONValue> => {
+      const apply = async (change: ConversationConditionChange, signal?: AbortSignal): Promise<JSONValue> => {
         if (signal?.aborted) throw new Error("execution_cancelled");
         if (intentUnavailable) throw new Error("condition_unavailable");
         try {
-          const accepted = await controller.apply({ target, ...value });
+          const accepted = await controller.apply(change);
           currentEffectiveIntent = accepted.effectiveIntent;
           return jsonValue({ ok: true, receipt: accepted.receipt, effectiveIntent: accepted.effectiveIntent });
         } catch (error) {
@@ -107,18 +107,28 @@ export class StrandsAgentEngine {
         }
       };
       tools.push(
-        tool({ name: "set_destination", inputSchema: placeConditionInputSchema,
-          description: "今回の相談の行き先を設定・訂正する。利用者が行き先を希望したら調査より先に使う。撤回はclear_destinationを使う。仮定の質問、比較だけ、変更なしでは使わない。Tripやプロフィールは変更しない。",
-          callback: (value, context) => apply("destination", value, context?.cancelSignal) }),
-        tool({ name: "set_origin", inputSchema: placeConditionInputSchema,
-          description: "今回の相談の出発地を設定・訂正する。利用者が今回の出発地を伝えたら調査より先に使う。撤回はclear_originを使う。普段の出発地の推測、仮定の質問、変更なしでは使わない。Tripやプロフィールは変更しない。",
-          callback: (value, context) => apply("origin", value, context?.cancelSignal) }),
-        tool({ name: "clear_destination", inputSchema: clearConditionInputSchema,
-          description: "利用者が今回の行き先を取り消し・未定に戻すことを明示した場合だけ、その行き先条件を撤回する。他の条件は変えない。変更なし・仮定・比較の質問では使わない。",
-          callback: (value, context) => apply("destination", { ...value, place: null }, context?.cancelSignal) }),
-        tool({ name: "clear_origin", inputSchema: clearConditionInputSchema,
-          description: "利用者が今回の出発地を取り消し・未定に戻すことを明示した場合だけ、その出発地条件を撤回する。他の条件は変えない。変更なし・仮定・比較の質問では使わない。",
-          callback: (value, context) => apply("origin", { ...value, place: null }, context?.cancelSignal) }),
+        tool({ name: "update_current_destination", inputSchema: placeConditionUpdateInputSchema,
+          description: "今回の相談の行き先について、利用者が実際の条件として設定・訂正・明示撤回した最終状態を1回で反映する。設定/訂正はaction=set、未定に戻す明示はaction=clear。訂正でclear→setの2操作に分けない。仮定・what-if・比較だけ、変更なしでは使わない。Tripやプロフィールは変更しない。",
+          callback: (value, context) => apply(value.action === "set"
+            ? { target: "destination", place: value.place!, quote: value.quote }
+            : { target: "destination", place: null, quote: value.quote }, context?.cancelSignal) }),
+        tool({ name: "update_current_origin", inputSchema: placeConditionUpdateInputSchema,
+          description: "今回の相談の出発地について、利用者が実際の条件として設定・訂正・明示撤回した最終状態を1回で反映する。設定/訂正はaction=set、未定に戻す明示はaction=clear。訂正でclear→setの2操作に分けない。普段の出発地の推測、仮定・what-if・比較だけ、変更なしでは使わない。Tripやプロフィールは変更しない。",
+          callback: (value, context) => apply(value.action === "set"
+            ? { target: "origin", place: value.place!, quote: value.quote }
+            : { target: "origin", place: null, quote: value.quote }, context?.cancelSignal) }),
+        tool({ name: "update_current_party", inputSchema: partyConditionUpdateInputSchema,
+          description: "今回の旅行で実際に採用する現在の人数条件だけを永続更新する。利用者が現在条件として採用・訂正した場合はaction=set、人数を未定に戻す明示はaction=clear。合計人数だけならparty.kind=countを使い、大人/子どもの内訳を推測しない。大人/子どもの人数が明示された場合だけparty.kind=compositionを使う。年齢・年代・関係性は扱わない。仮定・反実仮想・what-if・比較では使わず、consider_party_scenarioを使う。プロフィールは変更しない。",
+          callback: (value, context) => apply(value.action === "set"
+            ? { target: "party_size", party: value.party!, quote: value.quote }
+            : { target: "party_size", party: null, quote: value.quote }, context?.cancelSignal) }),
+        tool({ name: "consider_party_scenario", inputSchema: partyScenarioInputSchema,
+          description: "現在の人数条件を一切変更せず、仮定・反実仮想・what-if・シナリオ比較として別の人数を考える時に使う非永続Tool。update_current_partyの代わりに使う。保存・A commit・revision更新を行わない。",
+          callback: (value, context) => {
+            if (context?.cancelSignal.aborted) throw new Error("execution_cancelled");
+            const scenario = admitPartyScenario(value, input.userRequest);
+            return jsonValue({ ok: true, hypotheticalParty: scenario.party, currentConditionsUnchanged: true });
+          } }),
       );
     }
     const baseModel = this.model ?? new BedrockModel({ modelId: this.options.modelId, region: this.options.region,

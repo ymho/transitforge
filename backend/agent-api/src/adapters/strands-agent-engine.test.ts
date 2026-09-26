@@ -131,7 +131,7 @@ describe("StrandsAgentEngine", () => {
 
   it("uses an Application-accepted intent update for later read Tool validation in the same Strands loop", async () => {
     const { execute, input } = setup();
-    const update: Reply = { tool: "set_destination", input: { place: "神戸", quote: "神戸" } };
+    const update: Reply = { tool: "update_current_destination", input: { action: "set", place: "神戸", quote: "神戸" } };
     const lookupKobe: Reply = { tool: "lookup_place", input: { location: "神戸" } };
     const apply = vi.fn(async () => ({
       receipt: { version: "public-semantic-receipt-v1" as const, intentRevision: 4, speechAct: "correct" as const,
@@ -148,6 +148,46 @@ describe("StrandsAgentEngine", () => {
     expect(result.replyProposal).toEqual({ kind: "uncertainty" });
   });
 
+  it("represents a correction as one final-state update instead of clear then set", async () => {
+    const { input } = setup();
+    const apply = vi.fn(async () => ({ receipt: {
+      version: "public-semantic-receipt-v1" as const, intentRevision: 4, speechAct: "correct" as const,
+      outcome: "accepted" as const, changes: [],
+    }, effectiveIntent: effectiveDestination("神戸") }));
+    await new StrandsAgentEngine(options, { model: new ScriptedModel([
+      { tool: "update_current_destination", input: { action: "set", place: "神戸", quote: "神戸に変更" } },
+      submitted,
+    ]) }).run({ ...input, userRequest: "神戸に変更", conditionController: { apply } });
+    expect(apply).toHaveBeenCalledOnce();
+    expect(apply).toHaveBeenCalledWith({ target: "destination", place: "神戸", quote: "神戸に変更" });
+  });
+
+  it("uses one party Tool without guessing an adult/child split for a total-only party", async () => {
+    const { input } = setup();
+    const apply = vi.fn(async () => ({ receipt: {
+      version: "public-semantic-receipt-v1" as const, intentRevision: 4, speechAct: "inform" as const,
+      outcome: "accepted" as const, changes: [],
+    }, effectiveIntent: effectiveDestination("京都") }));
+    await new StrandsAgentEngine(options, { model: new ScriptedModel([
+      { tool: "update_current_party", input: { action: "set", party: { kind: "count", people: 2 }, quote: "2人で" } },
+      submitted,
+    ]) }).run({ ...input, userRequest: "2人で京都へ行きたい", conditionController: { apply } });
+    expect(apply).toHaveBeenCalledOnce();
+    expect(apply).toHaveBeenCalledWith({ target: "party_size", party: { kind: "count", people: 2 }, quote: "2人で" });
+  });
+
+  it("keeps a hypothetical party scenario out of the durable condition controller", async () => {
+    const { input } = setup();
+    const apply = vi.fn();
+    const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([
+      { tool: "consider_party_scenario", input: { party: { kind: "count", people: 4 }, quote: "もし4人なら" } },
+      submitted,
+    ]) }).run({ ...input, userRequest: "もし4人ならどうなる？今の人数は変えずに比較したい", conditionController: { apply } });
+    expect(apply).not.toHaveBeenCalled();
+    expect(result.effectiveIntent).toEqual(input.effectiveIntent);
+    expect(result.replyProposal).toEqual({ kind: "uncertainty" });
+  });
+
   it("lets independent condition Tools use the same Application without an invocation-wide limiter", async () => {
     const { input } = setup();
     const apply = vi.fn(async () => ({ receipt: {
@@ -155,8 +195,8 @@ describe("StrandsAgentEngine", () => {
       outcome: "accepted" as const, changes: [],
     }, effectiveIntent: effectiveDestination("京都") }));
     await new StrandsAgentEngine(options, { model: new ScriptedModel([
-      { tool: "set_destination", input: { place: "京都", quote: "京都" } },
-      { tool: "set_origin", input: { place: "大阪", quote: "大阪" } },
+      { tool: "update_current_destination", input: { action: "set", place: "京都", quote: "京都" } },
+      { tool: "update_current_origin", input: { action: "set", place: "大阪", quote: "大阪" } },
       submitted,
     ]) }).run({ ...input, conditionController: { apply } });
     expect(apply).toHaveBeenCalledTimes(2);

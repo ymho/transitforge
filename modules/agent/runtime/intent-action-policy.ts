@@ -81,6 +81,7 @@ function matchesInput(value: IntentValue, input: unknown): boolean {
   if (value.kind === "local_date") return input === value.date;
   if (value.kind === "place_label") return input === value.label;
   if (value.kind === "quantity") return input === value.amount;
+  if (value.kind === "party") return typeof input === "number" && input === value.adults + value.children.length;
   if (value.kind === "money") return input === value.amount;
   if (value.kind === "text") return input === value.text;
   if (value.kind === "candidate_ref") return input === value.candidateRef;

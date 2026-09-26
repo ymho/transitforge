@@ -113,6 +113,12 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
     testName: "fences unfinished older turns before new writes, new replies or resumed work",
   },
   {
+    id: "V2-CONDITIONS-PARTY-01", kind: "v2_specific",
+    invariant: "one current-trip party operation preserves total-only uncertainty, explicit adult/child composition, replay and retraction without Profile inference",
+    testFile: "modules/agent/runtime/conversation-condition.test.ts",
+    testName: "keeps total-only party separate from an explicit adult/child composition without guessing ages",
+  },
+  {
     id: "V2-PROFILE-READ-01", kind: "v2_specific",
     invariant: "current conditions override profile hints without mutating the Profile or reviving a retracted default",
     testFile: "backend/agent-api/src/composition/strands-intent-acceptance.test.ts",

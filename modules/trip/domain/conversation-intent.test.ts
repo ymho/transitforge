@@ -24,6 +24,16 @@ describe("conversation intent contracts", () => {
     ]);
   });
 
+  it("preserves explicit party composition without manufacturing child ages", () => {
+    const partyOperation = { ...operation, operationId: "party-op", groupId: "party-group", target: "party_size",
+      modality: "preferred", precision: "exact", value: { kind: "party", adults: 2, children: [{}] } } as const;
+    const delta = parseAcceptedIntentDelta({ version: 1, mutationId: "party-turn", baseIntentRevision: 0, speechAct: "inform", operations: [partyOperation] });
+    expect(delta.operations[0]?.value).toEqual({ kind: "party", adults: 2, children: [{}] });
+    expect(() => parseAcceptedIntentDelta({ version: 1, mutationId: "bad-party", baseIntentRevision: 0, speechAct: "inform", operations: [
+      { ...partyOperation, value: { kind: "party", adults: 0, children: [] } },
+    ] })).toThrow();
+  });
+
   it("rejects unknown fields, duplicate targets in an atomic group and oversized state", () => {
     expect(() => parseAcceptedIntentDelta({ version: 1, mutationId: "x", baseIntentRevision: 0, speechAct: "inform", operations: [{ ...operation, owner: "attacker" }] })).toThrow();
     expect(() => parseAcceptedIntentDelta({ version: 1, mutationId: "x", baseIntentRevision: 0, speechAct: "inform", operations: [operation, { ...operation, operationId: "op-2" }] })).toThrow();

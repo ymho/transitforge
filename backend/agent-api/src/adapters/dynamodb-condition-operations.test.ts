@@ -39,6 +39,18 @@ describe("condition-operation acceptance and replay", () => {
     expect((await f.conversations.history(stateA, conversationId)).items).toHaveLength(2);
     expect(summary.changes.map(({ target }) => target)).toEqual(["origin", "destination"]);
   });
+  it("persists party as one operation slot and replays the same requested state without inferring composition", async () => {
+    const f = await setup();
+    const count = { target: "party_size" as const, party: { kind: "count" as const, people: 2 }, quote: "2人で" };
+    const first = await f.turns.acceptCondition(identity, f.lease, count);
+    expect(first.intentRevision).toBe(1);
+    expect((await overlay(f))?.facts[0]?.value).toEqual({ kind: "quantity", amount: 2, unit: "people" });
+    expect(await f.fresh().acceptCondition(identity, f.lease, { ...count, quote: "2人" })).toEqual(first);
+    expect((await overlay(f))?.intentRevision).toBe(1);
+    await expect(f.turns.acceptCondition(identity, f.lease, {
+      target: "party_size", party: { kind: "composition", adults: 2, children: 0 }, quote: "大人2人",
+    })).rejects.toMatchObject({ code: "conflict" });
+  });
   it("retains a committed first operation when the second fails and resumes only the missing work", async () => {
     const f = await setup();
     const first = await f.turns.acceptCondition(identity, f.lease, origin);
