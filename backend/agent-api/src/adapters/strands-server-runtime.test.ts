@@ -73,6 +73,14 @@ describe("createStrandsServerRuntime", () => {
       { ...runtimeInput(), initialEvidence: [evidence] });
     expect(result).toMatchObject({ status: "failed", publicationError: "evidence_collision" });
   });
+  it("rejects a UTF-8 reply that cannot fit the Conversation message envelope", async () => {
+    const large = { ...evidence, facts: { first: "旅".repeat(2000), second: "旅".repeat(2000), third: "旅".repeat(2000) } };
+    const replyProposal = { kind: "answer", references: ["first", "second", "third"].map((field) => ({ evidenceId: large.id, field })) };
+    const result = await createStrandsServerRuntime(fake({ replyProposal }) as unknown as StrandsAgentEngine)(
+      { ...runtimeInput(), initialEvidence: [large] });
+    expect(result).toMatchObject({ status: "failed", response: "", publicationError: "response_budget" });
+    expect(result.publicReply).toBeUndefined();
+  });
   it("maps bounded Strands stops to the shared Runtime status", async () => {
     const result = await createStrandsServerRuntime(fake({ stopReason: "limitTurns", replyProposal: answer }) as unknown as StrandsAgentEngine)(runtimeInput());
     expect(result.status).toBe("limit_reached");

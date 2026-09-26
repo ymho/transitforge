@@ -36,6 +36,9 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
         // This composition exposes reads only. No model-supplied success receipts.
         receipts: [], availableOperations: [],
       });
+      // Match the existing Conversation message envelope before committing a reply.
+      // Count UTF-8 bytes after rendering/escaping, not source characters.
+      if (Buffer.byteLength(reply.text, "utf8") > 16 * 1024) return denied("response_budget");
       const validation = validateEvidenceAndClaims(reply.evidence, reply.claims);
       if (!validation.valid) return denied("invalid_claim_binding");
       return { status: "completed", response: reply.text, evidence: reply.evidence,
