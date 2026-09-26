@@ -53,6 +53,7 @@ function effectiveDestination(label: string): EffectiveIntent {
       precision: "exact",
       value: { kind: "place_label", label },
       frame: "actual",
+      sourceOperationId: "operation-destination",
       provenance: { kind: "user_turn", turnId: "00000000-0000-4000-8000-000000000001", quote: label },
     }],
     hypotheticalFacts: [],
@@ -136,13 +137,13 @@ describe("StrandsAgentEngine", () => {
       execute: async () => successfulAgentToolResult({ proposed: true }),
     });
     const executor = new AgentToolExecutor(registry, new ToolEvidenceRegistry());
-    const agentFactory = vi.fn((config) => ({
+    const agentFactory = vi.fn((_config) => ({
       id: "fake",
       invoke: async () => ({
         stopReason: "endTurn",
         lastMessage: { role: "assistant", content: [] },
         invocationState: {},
-        toString: () => "ok",
+        toString: (): string => "ok",
       }),
       stream: async function* () { throw new Error("not used"); },
       name: undefined,
