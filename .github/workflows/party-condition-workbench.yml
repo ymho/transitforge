@@ -1,5 +1,5 @@
 name: Party condition workbench (temporary)
-# Run 4: one update Tool per condition with a Bedrock-compatible root object schema.
+# Run 5: durable-current-condition rule; hypothetical comparisons must not invoke writers.
 # Detailed age/school cohorts and scoped participation are deferred to #729.
 
 on:
