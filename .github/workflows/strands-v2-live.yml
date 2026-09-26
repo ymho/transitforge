@@ -15,6 +15,7 @@ on:
           - "conversation-output"
           - "condition-operations"
           - "party-condition"
+          - "travel-period"
       repetitions:
         description: Independent repetitions per case
         required: true
@@ -98,7 +99,7 @@ jobs:
             tool-grounding|write-not-available) cases=1; cycles=4 ;;
             conversation-output) cases=4; cycles=6 ;;
             condition-operations) cases=7; cycles=8 ;;
-            party-condition) cases=6; cycles=6 ;;
+            party-condition|travel-period) cases=6; cycles=6 ;;
             *) echo "Invalid CASE_ID: $CASE_ID" >&2; exit 2 ;;
           esac
           maximum_calls=$((cases * REPETITIONS * cycles))
@@ -116,7 +117,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run Strands v2 live evaluation
-        if: inputs.case_id != 'conversation-output' && inputs.case_id != 'condition-operations'
+        if: inputs.case_id != 'conversation-output' && inputs.case_id != 'condition-operations' && inputs.case_id != 'party-condition' && inputs.case_id != 'travel-period'
         shell: bash
         run: |
           set -euo pipefail
@@ -126,7 +127,7 @@ jobs:
           npm run eval:agent:strands:live -- "${args[@]}"
 
       - name: Run independent Conversation or condition repetitions
-        if: inputs.case_id == 'conversation-output' || inputs.case_id == 'condition-operations' || inputs.case_id == 'party-condition'
+        if: inputs.case_id == 'conversation-output' || inputs.case_id == 'condition-operations' || inputs.case_id == 'party-condition' || inputs.case_id == 'travel-period'
         shell: bash
         env:
           AGENT_V2_LIVE: 'true'
@@ -137,6 +138,7 @@ jobs:
             conversation-output) script=test:agent:v2:conversation-live ;;
             condition-operations) script=test:agent:v2:condition-live ;;
             party-condition) script=test:agent:v2:party-live ;;
+            travel-period) script=test:agent:v2:period-live ;;
             *) exit 2 ;;
           esac
           status=0
@@ -152,7 +154,7 @@ jobs:
           if [[ -f .artifacts/strands-v2-live/report.json ]]; then
             jq '{modelId,region,repetitions,maximumModelCalls,observedModelCalls,stablePassed,cases,results:[.results[]|{caseId,attempt,passed,failures,metrics:{status:.observation.status,deliveryBasis:.observation.deliveryBasis,toolCalls:.observation.toolCalls,evidenceCount:.observation.evidenceCount,modelCalls:.observation.modelCalls,inputTokens:.observation.inputTokens,outputTokens:.observation.outputTokens,durationMs:.observation.durationMs}}]}' .artifacts/strands-v2-live/report.json >> "$GITHUB_STEP_SUMMARY"
           fi
-          for file in .artifacts/strands-v2-live/conversation-output-*.json .artifacts/strands-v2-live/condition-operations-*.json .artifacts/strands-v2-live/party-condition-*.json; do
+          for file in .artifacts/strands-v2-live/conversation-output-*.json .artifacts/strands-v2-live/condition-operations-*.json .artifacts/strands-v2-live/party-condition-*.json .artifacts/strands-v2-live/travel-period-*.json; do
             if [[ -f "$file" ]]; then
               echo "$(basename "$file")" >> "$GITHUB_STEP_SUMMARY"
               jq '{success,numPassedTests,numFailedTests,numPendingTests}' "$file" >> "$GITHUB_STEP_SUMMARY"
