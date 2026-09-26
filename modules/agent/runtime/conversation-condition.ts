@@ -266,7 +266,8 @@ function resolveTravelPeriod(value: z.infer<typeof travelPeriodValueSchema>, quo
   }
   const start = value.start ? resolvePeriodDate(value.start, quote, anchor) : undefined;
   const end = value.end ? resolvePeriodDate(value.end, quote, anchor, start?.date) : undefined;
-  const duration = value.duration ? resolveDuration(value.duration, quote) : undefined;
+  const duration = value.duration ? resolveDuration(value.duration, quote, start !== undefined || end !== undefined) : undefined;
+  if (!start && !end && value.duration && !duration) throw new ConditionUpdateRejectedError("invalid_source");
   if (start && end && end.date < start.date) throw new ConditionUpdateRejectedError("invalid_condition");
   if (start && end && duration) {
     const days = differenceInDays(start.date, end.date);
@@ -276,10 +277,14 @@ function resolveTravelPeriod(value: z.infer<typeof travelPeriodValueSchema>, quo
   return { ...(start ? { start } : {}), ...(end ? { end } : {}), ...(duration ? { duration } : {}) };
 }
 
-function resolveDuration(value: z.infer<typeof travelDurationSchema>, commandQuote: string): z.infer<typeof resolvedDurationSchema> {
-  if (!commandQuote.includes(value.quote)) throw new ConditionUpdateRejectedError("invalid_source");
+function resolveDuration(value: z.infer<typeof travelDurationSchema>, commandQuote: string,
+  mayOmit: boolean): z.infer<typeof resolvedDurationSchema> | undefined {
   const unitMarker = value.unit === "nights" ? "泊" : "日";
-  if (!containsNumber(value.quote, value.amount) || !value.quote.includes(unitMarker)) throw new ConditionUpdateRejectedError("invalid_source");
+  const grounded = commandQuote.includes(value.quote) && containsNumber(value.quote, value.amount) && value.quote.includes(unitMarker);
+  if (!grounded) {
+    if (mayOmit) return undefined;
+    throw new ConditionUpdateRejectedError("invalid_source");
+  }
   return { amount: value.amount, unit: value.unit };
 }
 
