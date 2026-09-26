@@ -8,13 +8,8 @@ import type { ResearchExecutionLedger } from "@raiquora/agent/research-execution
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import type { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
 import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
-import type { UtteranceInterpretation } from "@raiquora/agent/semantic-interpretation";
+import type { ConversationConditionChange } from "@raiquora/agent/conversation-condition";
 import type { PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
-
-/** A known validation rejection, not a failed or ambiguously committed state operation. */
-export class ServerAgentIntentRejectedError extends Error {
-  constructor() { super("intent_rejected"); this.name = "ServerAgentIntentRejectedError"; }
-}
 
 /** Bounded runtime failure metadata. It deliberately carries no provider message,
  * prompt, user content, Tool payload, URL, ID or raw exception. */
@@ -27,8 +22,8 @@ export class ServerAgentRuntimeExecutionError extends Error {
   }
 }
 
-export interface ServerAgentIntentController {
-  apply(interpretation: UtteranceInterpretation): Promise<{
+export interface ServerAgentConditionController {
+  apply(change: ConversationConditionChange): Promise<{
     receipt: PublicSemanticReceipt;
     effectiveIntent: EffectiveIntent;
   }>;
@@ -46,8 +41,8 @@ export interface ServerAgentRuntimeInput {
   researchLedger: ResearchExecutionLedger;
   initialEvidence?: Evidence[];
   reportProgress?: AgentProgressReporter;
-  /** Application-owned semantic acceptance seam. Absent on V1 and accepted-turn replay. */
-  intentController?: ServerAgentIntentController;
+  /** Application-owned condition writer. Replays remain available after a partial turn. */
+  conditionController?: ServerAgentConditionController;
 }
 
 /** Backend execution-engine port. Authentication/state resolution happens before this boundary. */
