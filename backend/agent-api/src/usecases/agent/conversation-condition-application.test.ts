@@ -46,11 +46,11 @@ it("chooses the first future occurrence when the user omits the year", async () 
   const apply = createConversationConditionApplication({ acceptCondition }, identity, lease, "1/21に行きます", "2026-09-26");
   await apply({ target: "travel_period", period: {
     start: { kind: "calendar_date", year: 2026, month: 1, day: 21 },
-  } });
+  }, quote: "1/21" });
   expect(acceptCondition).toHaveBeenCalledWith(identity, lease, {
     target: "travel_period", period: {
       start: { kind: "local_date", date: "2027-01-21", anchorDate: "2026-09-26", resolverVersion: "calendar-v1" },
-    },
+    }, quote: "1/21",
   });
 });
 
