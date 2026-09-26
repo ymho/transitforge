@@ -106,7 +106,7 @@
 .product-shell :focus-visible { outline: 3px solid #426c8b; outline-offset: 3px; }
 #app[data-primary-view] #close-ai-guide, #app[data-primary-view] .context-workspace-tabs { display: none; }
 #app[data-primary-view] .hud { display: none; }
-#app[data-primary-view]:not([data-primary-view="map"]) :is(#map, .map-place-explorer, .map-place-detail, .train-details, .loading-screen, #map-tools) { display: none; }
+#app[data-primary-view]:not([data-primary-view="map"]) :is(#map, .train-details, .loading-screen, #map-tools) { display: none; }
 #app[data-primary-view]:not([data-primary-view="chat"]) :is(.ai-guide-panel, .trip-workspace, .trip-workspace-navigation) { display: none; }
 #app[data-primary-view="chat"] .trip-workspace-navigation { position: absolute; z-index: 16; inset: var(--product-header-height) 0 auto; }
 #app[data-primary-view="chat"] .trip-workspace { position: absolute; z-index: 10; inset: 5rem max(0px, calc((100vw - 60rem) / 2)) 0; }
@@ -143,7 +143,5 @@
   #app[data-primary-view="chat"] .trip-workspace { inset: 3.5rem 0 calc(4.5rem + env(safe-area-inset-bottom)); }
   #app[data-primary-view="trip"] .trip-workspace:not([hidden]) { inset: var(--product-header-height) 0 calc(4.5rem + env(safe-area-inset-bottom)); }
   #app[data-primary-view="map"] #map { top: var(--product-header-height); }
-  #app[data-primary-view="map"] .map-place-explorer { bottom: 4.5rem; }
-  #app[data-primary-view="map"] .map-place-detail { max-height: calc(100dvh - 9rem); top: 4.5rem; bottom: auto; }
 }
 @media (prefers-reduced-motion: reduce) { .product-shell *, #app[data-primary-view] .ai-guide-panel { animation: none; transition: none; } }

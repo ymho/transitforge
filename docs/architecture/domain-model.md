@@ -435,13 +435,10 @@ AI応答からUIへ渡す経路表示用モデルである。`JourneyRouteResult
 `reference-minimum`と日付別空室検索の`selected-dates`を区別し 日付別照会で確認できた候補だけ
 `availability: available`として保持する。正本データがない値は保持も表示もしない。
 
-### `MapTravelCandidate`
+### 運行地図への候補投影
 
-- 定義: `frontend/src/domain/map-travel-candidate.ts`
-
-Viewerに閉じた宿泊 観光 食事の共通地図表示契約である。Provider固有の検索結果をこの判別共用体へ
-変換し 同じピン カード 詳細シートで比較する。宿泊選択は現在の会話UUIDの`TripPlan`へ反映し
-観光と食事は追加位置や時間を会話で確認してから`TripPlanPatch`を作る。
+観光・宿泊・飲食のruntime候補は相談・旅程のpresentationで扱い、運行地図専用の共通候補型・ピン・詳細シートへ変換しない。
+Placeのidentity・Evidence・保存契約は各Domain/Application契約を正本とし、運行画面の都合で別の保存形式を作らない。
 
 ### `ViewerAgentResponse`
 
