@@ -9,10 +9,12 @@ test("V2 publication is independent of legacy instructions, renderers and free-p
   assert.match(runtime, /admitAgentV2Reply/u);
   assert.match(runtime, /validateEvidenceAndClaims/u);
 });
-test("V2 submits typed references and never publishes SDK last-message text", () => {
+test("V2 consumes SDK structured output without a custom submission protocol or last-message publication", () => {
   const engine = read("backend/agent-api/src/adapters/strands-agent-engine.ts");
-  assert.doesNotMatch(engine, /\.toString\(|strandsAnswerText|responseGenerated/u);
-  assert.match(engine, /AgentV2ReplySubmission/u);
+  assert.doesNotMatch(engine, /\.toString\(|strandsAnswerText|responseGenerated|result\.lastMessage/u);
+  assert.doesNotMatch(engine, /AgentV2ReplySubmission|new Proxy|submit_reply/u);
+  assert.match(engine, /structuredOutputSchema:/u);
+  assert.match(engine, /result\.structuredOutput/u);
   const evaluator = read("tools/strands-v2-live-evaluation.ts");
   assert.doesNotMatch(evaluator, /claimsCompletedWrite/u);
   assert.match(evaluator, /unadmitted_reply/u);
