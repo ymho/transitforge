@@ -6,9 +6,57 @@ on:
 permissions:
   contents: read
 jobs:
-  model:
+  prepare:
+    if: github.ref == 'refs/heads/feat/716-condition-operations'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      revision: ${{ steps.commit.outputs.revision }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Apply reviewed development migrations once
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/.condition-migrate.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tools/.condition-tests-migrate.py')
+          s=p.read_text()
+          start=s.index("a=s.index('input: JSON.stringify({'")
+          end=s.index(';p.write_text(s)',start)
+          s=s[:start]+'''a=s.index('      const input = { outcome:');b=s.index('      yield { type: "modelContentBlockStartEvent"',a)
+          s=s[:a]+'      const input = { place: "京都", quote: "京都" };\\n'+s[b:]'''+s[end:]
+          exec(compile(s,str(p),'exec'))
+          PY
+          python3 tools/.profile-migrate.py
+          rm tools/.condition-migrate.py tools/.condition-tests-migrate.py tools/.profile-migrate.py
+      - run: npm ci
+      - run: npm run typecheck --workspace @raiquora/agent-api && npm run test:agent:v2
+      - run: npx vitest run --root . frontend/src/presentation/concierge/travel-profile-panel.test.ts modules/agent/runtime/effective-intent.test.ts
+      - name: Commit only reviewed application and test directories to this work branch
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(git branch --show-current)" == feat/716-condition-operations ]]
+          git add backend frontend modules package.json tools/.condition-migrate.py tools/.condition-tests-migrate.py tools/.profile-migrate.py
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m '🧩 条件操作の永続化・再送とプロフィール縮小を接続'
+          git push origin HEAD:refs/heads/feat/716-condition-operations
+          echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+  model:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: dev
     permissions:
       contents: read
@@ -26,6 +74,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           persist-credentials: false
+          ref: ${{ needs.prepare.outputs.revision }}
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version-file: .nvmrc
@@ -40,11 +89,25 @@ jobs:
           account_id="${account_id%%:*}"
           [[ "$account_id" =~ ^[0-9]{12}$ ]]
           echo "arn=arn:aws:iam::${account_id}:role/transitforge-dev-github-agent-eval" >> "$GITHUB_OUTPUT"
-          echo 'Budget per model: 7 turns x 8 cycles, 2 reads/60s per turn. Test state and fixed read results only.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Per model: 7 turns x 8 cycles + 4 turns x 6 cycles. Fixed Providers/test state, 2 reads/60s per turn.' >> "$GITHUB_STEP_SUMMARY"
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5
         with:
           role-to-assume: ${{ steps.role.outputs.arn }}
           aws-region: ${{ env.AWS_REGION }}
           mask-aws-account-id: true
-      - name: Verify small Tools without duplicate capability declarations
-        run: npx vitest run --root . backend/agent-api/src/composition/strands-condition-tools-live.test.ts --maxWorkers=1
+      - name: Small condition contracts
+        id: small
+        continue-on-error: true
+        run: npm run test:agent:v2:condition-live
+      - name: Full Conversation integration
+        id: conversation
+        continue-on-error: true
+        run: npm run test:agent:v2:conversation-live
+      - name: Both independent checks are required
+        if: always()
+        env:
+          SMALL: ${{ steps.small.outcome }}
+          CONVERSATION: ${{ steps.conversation.outcome }}
+        run: |
+          echo "Model $MODEL_ID small=$SMALL conversation=$CONVERSATION" >> "$GITHUB_STEP_SUMMARY"
+          [[ "$SMALL" == success && "$CONVERSATION" == success ]]
