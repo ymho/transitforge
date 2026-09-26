@@ -14,7 +14,7 @@
     "build": "npm run typecheck:tools && npm run build --workspace @raiquora/frontend && npm run build --workspace @raiquora/agent-api",
     "typecheck:tools": "tsc --noEmit -p tsconfig.tools.json",
     "bundle:check": "node tools/check_bundle_budget.mjs dist/assets",
-    "test": "npm run test --workspace @raiquora/frontend && npm run test --workspace @raiquora/agent-api && npm run test:agent-stream-contract",
+    "test": "npm run test --workspace @raiquora/frontend && npm run test --workspace @raiquora/agent-api && npm run test:agent-stream-contract && npm run test:agent:strands:live-fixtures",
     "test:agent-stream-contract": "vitest run tools/agent-transport/stream-contract.test.ts",
     "workspace:check": "node tools/check_workspace_layout.mjs",
     "architecture:check": "npm run workspace:check && node --test tools/browser_global_reference.test.mjs && node tools/check_architecture_boundaries.mjs",
@@ -30,7 +30,9 @@
     "eval:epic-537:scale": "node --import tsx tools/run_epic_537_scale_evaluation.ts",
     "eval:agent:model-routing:build": "node --import tsx tools/build_agent_model_routing_run.ts",
     "eval:agent:model-routing": "node --import tsx tools/compare_agent_model_routing.ts",
-    "test:agent-cutover:browser": "vitest run tools/agent-transport/production-cutover.test.ts --maxWorkers=1"
+    "test:agent-cutover:browser": "vitest run tools/agent-transport/production-cutover.test.ts --maxWorkers=1",
+    "eval:agent:strands:live": "node --import tsx tools/run_live_strands_v2_evaluation.ts",
+    "test:agent:strands:live-fixtures": "vitest run --root . tools/strands-v2-live-evaluation.test.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.12"
