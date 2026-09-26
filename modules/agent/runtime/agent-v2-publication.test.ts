@@ -63,9 +63,11 @@ describe("Agent v2 publication contract", () => {
     expect(JSON.stringify(result.proof)).not.toContain(commentary);
   });
   it("rejects unsafe or oversized commentary before publication", () => {
-    for (const commentary of ["<thinking>hidden</thinking>", "x".repeat(1201), "  surrounding whitespace"]) {
-      expect(() => parseAgentV2Reply({ ...proposal, commentary })).toThrow("invalid_proposal");
-    }
+    // Syntax limits and publication safety are different boundaries.
+    expect(() => parseAgentV2Reply({ ...proposal, commentary: "x".repeat(1201) })).toThrow("invalid_proposal");
+    expect(() => admitAgentV2Reply({ ...proposal, commentary: "<thinking>hidden</thinking>" }, context())).toThrow("unsafe_content");
+    // Leading whitespace is not a security or factuality failure.
+    expect(admitAgentV2Reply({ ...proposal, commentary: "  surrounding whitespace" }, context()).text).toContain("surrounding whitespace");
     expect(() => parseAgentV2Reply({ kind: "unavailable", operation: "save", commentary: "保存します" }))
       .toThrow("invalid_proposal");
   });
@@ -117,7 +119,7 @@ describe("Agent v2 publication contract", () => {
   it("rejects absent, duplicate and invalid Evidence references", () => {
     expect(() => admitAgentV2Reply(proposal, { ...context(), evidence: [] })).toThrow("missing_evidence");
     expect(() => admitAgentV2Reply(proposal, { ...context(), evidence: [observation(), observation()] })).toThrow("missing_evidence");
-    expect(() => parseAgentV2Reply({ ...proposal, references: [...proposal.references, ...proposal.references] })).toThrow("invalid_proposal");
+    expect(() => admitAgentV2Reply({ ...proposal, references: [...proposal.references, ...proposal.references] }, context())).toThrow("invalid_proposal");
     expect(() => admitAgentV2Reply({ kind: "answer", references: [{ evidenceId: "e-kyoto", field: "referenceDate" }] }, context()))
       .toThrow("invalid_field");
   });

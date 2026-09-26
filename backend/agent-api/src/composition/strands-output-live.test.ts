@@ -34,6 +34,7 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
     const v1 = { converse: vi.fn(async () => { throw new Error("V1 must not run"); }) };
     let execution = 0;
     const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
+      diagnostics: { record: async ({ phase, reason, mode }) => { console.log(JSON.stringify({ phase, reason, mode })); } },
       model: v1, weather: { search: vi.fn() }, newExecutionId: () => `native-live-${++execution}`,
       limits: { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 2, maxExecutionMs: 60000 },
       runRuntime: createStrandsServerRuntime(new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,

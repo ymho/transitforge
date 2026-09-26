@@ -92,7 +92,7 @@ export class StrandsAgentEngine {
     const intentController = input.intentController;
     if (intentController) tools.push(tool({
       name: strandsIntentToolName,
-      description: "Submit one bounded semantic delta from the current userMessage when it adds, corrects, retracts or narrows accepted travel conditions. Quotes must be exact substrings of the current userMessage. The Application validates and commits the delta before any later read Tool uses it. Do not call this for unchanged conversation after the final structured result.",
+      description: "Submit one bounded semantic delta from the current userMessage when it adds, corrects, retracts or narrows accepted travel conditions. Quotes must be exact substrings of the current userMessage. The Application validates and commits the delta before any later read Tool uses it. Do not call this for unchanged conversation or after the final structured result.",
       inputSchema: semanticInterpretationOutputContract.schema as JSONSchema,
       callback: async (value, context) => {
         if (context?.cancelSignal.aborted) return jsonValue({ ok: false, error: { code: "execution_failed", retryable: true } });
