@@ -181,4 +181,47 @@ describe("StrandsAgentEngine", () => {
     expect(result.replyProposal).toEqual({ kind: "conversation", message: "acknowledgement" });
     expect(result.metrics?.toolCalls).toBe(1);
   });
+
+  it("uses an Application-accepted intent update for later read Tool validation in the same Strands loop", async () => {
+    const { execute, input } = setup();
+    const interpretation = {
+      outcome: "delta", speechAct: "correct", unresolvedFragments: [], operations: [{
+        atomicGroup: 1, action: "replace", target: "destination", modality: "preferred",
+        precision: "exact", frame: "actual", quote: "神戸", value: { kind: "place_label", label: "神戸" },
+      }],
+    };
+    const update: Reply = { tool: "update_intent", input: interpretation };
+    const lookupKobe: Reply = { tool: "lookup_place", input: { location: "神戸" } };
+    const apply = vi.fn(async () => ({
+      receipt: { version: "public-semantic-receipt-v1" as const, intentRevision: 4, speechAct: "correct" as const,
+        outcome: "accepted" as const, changes: [{ changeRef: "change-1", groupRef: "group-1", action: "replace" as const,
+          target: "destination" as const, scope: { type: "conversation" as const }, frame: "actual" as const, status: "accepted" as const }] },
+      effectiveIntent: { ...effectiveDestination("神戸"), intentRevision: 4, fingerprint: "effective-kobe" },
+    }));
+    const result = await new StrandsAgentEngine(options, {
+      model: new ScriptedModel([update, lookupKobe, submitted, end]),
+    }).run({ ...input, userRequest: "行き先は神戸に変更", intentController: { apply } });
+
+    expect(apply).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledOnce();
+    expect(result.replyProposal).toEqual({ kind: "uncertainty" });
+  });
+
+  it("allows only one intent update per Strands invocation", async () => {
+    const { input } = setup();
+    const interpretation = { outcome: "delta", speechAct: "inform", unresolvedFragments: [], operations: [{
+      atomicGroup: 1, action: "set", target: "destination", modality: "preferred",
+      precision: "exact", frame: "actual", quote: "京都", value: { kind: "place_label", label: "京都" },
+    }] };
+    const apply = vi.fn(async () => ({ receipt: {
+      version: "public-semantic-receipt-v1" as const, intentRevision: 4, speechAct: "inform" as const,
+      outcome: "accepted" as const, changes: [],
+    }, effectiveIntent: effectiveDestination("京都") }));
+    await new StrandsAgentEngine(options, { model: new ScriptedModel([
+      { tool: "update_intent", input: interpretation },
+      { tool: "update_intent", input: interpretation },
+      submitted, end,
+    ]) }).run({ ...input, intentController: { apply } });
+    expect(apply).toHaveBeenCalledOnce();
+  });
 });
