@@ -12,8 +12,11 @@ import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { agentV2ReplySchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
 import { AgentV2ReplySubmission } from "./strands-reply-submission.js";
 import { publicReplyField } from "@raiquora/agent/agent-v2-publication";
+import { decodeUtteranceInterpretation, semanticInterpretationOutputContract } from "@raiquora/agent/semantic-interpretation";
+import { ServerAgentIntentRejectedError, type ServerAgentIntentController } from "../ports/server-agent-runtime.js";
 
 export const strandsReplyToolName = "submit_reply";
+export const strandsIntentToolName = "update_intent";
 export interface StrandsAgentEngineOptions {
   modelId: string;
   region: string;
@@ -33,10 +36,13 @@ export interface StrandsAgentRunInput {
   cancelSignal?: AbortSignal;
   limits?: { maxTurns?: number; maxToolCalls?: number; maxExecutionMs?: number; maxTotalTokens?: number; maxOutputTokens?: number };
   reserveToolCall?: () => boolean;
+  intentController?: ServerAgentIntentController;
 }
 export interface StrandsAgentRunResult {
   /** Not public text. The Application admits the typed proposal separately. */
   replyProposal?: AgentV2ReplyProposal;
+  /** Latest Application-owned snapshot, also used at the reply publication boundary. */
+  effectiveIntent?: EffectiveIntent;
   stopReason: string;
   evidence: Evidence[];
   trace: AgentTrace;
@@ -71,17 +77,47 @@ export class StrandsAgentEngine {
   }
   async run(input: StrandsAgentRunInput): Promise<StrandsAgentRunResult> {
     if (!input.executionId.trim() || !input.userRequest.trim()) throw new Error("Strands Agent requires executionId and userRequest");
-    if (input.tools.descriptors().some(({ name }) => name === strandsReplyToolName)) throw new Error("Reserved reply tool name");
+    if (input.tools.descriptors().some(({ name }) => [strandsReplyToolName, strandsIntentToolName].includes(name))) throw new Error("Reserved Agent v2 tool name");
     const evidence: Evidence[] = [], submission = new AgentV2ReplySubmission();
+    let currentEffectiveIntent = input.effectiveIntent, intentAttempted = false, intentUnavailable = false;
     const trace = new AgentTraceRecorder(input.executionId, { omitContent: true });
     trace.taskStarted(input.userRequest);
     const budgetState = { toolCalls: 0, toolLimitReached: false };
     const tools = createStrandsReadTools({
       registry: input.tools, executor: input.toolExecutor, executionId: input.executionId,
-      effectiveIntent: input.effectiveIntent, toolTimeoutMs: this.options.toolTimeoutMs ?? 20_000,
+      getEffectiveIntent: () => currentEffectiveIntent, toolTimeoutMs: this.options.toolTimeoutMs ?? 20_000,
       trace, evidence, budgetState, maxToolCalls: input.limits?.maxToolCalls,
-      reserveToolCall: input.reserveToolCall, canExecute: () => !submission.submitted,
+      reserveToolCall: input.reserveToolCall, canExecute: () => !submission.submitted && !intentUnavailable,
     });
+    const intentController = input.intentController;
+    if (intentController) tools.push(tool({
+      name: strandsIntentToolName,
+      description: "Submit one bounded semantic delta from the current userMessage when it adds, corrects, retracts or narrows accepted travel conditions. Quotes must be exact substrings of the current userMessage. The Application validates and commits the delta before any later read Tool uses it. Do not call this for unchanged conversation or after submit_reply.",
+      inputSchema: semanticInterpretationOutputContract.schema as JSONSchema,
+      callback: async (value, context) => {
+        if (submission.submitted) return jsonValue({ ok: false, error: { code: "reply_submitted", retryable: false } });
+        if (context?.cancelSignal.aborted) return jsonValue({ ok: false, error: { code: "execution_failed", retryable: true } });
+        if (intentAttempted) return jsonValue({ ok: false, error: { code: "intent_update_limit", retryable: false } });
+        intentAttempted = true;
+        const interpretation = decodeUtteranceInterpretation(value);
+        if (!interpretation || interpretation.outcome !== "delta") {
+          return jsonValue({ ok: false, error: { code: "intent_rejected", retryable: false } });
+        }
+        try {
+          const accepted = await intentController.apply(interpretation);
+          currentEffectiveIntent = accepted.effectiveIntent;
+          return jsonValue({ ok: true, receipt: accepted.receipt, effectiveIntent: accepted.effectiveIntent });
+        } catch (error) {
+          if (error instanceof ServerAgentIntentRejectedError) {
+            return jsonValue({ ok: false, error: { code: "intent_rejected", retryable: false } });
+          }
+          // A commit or refresh may have failed after persistence. Never publish
+          // against the old snapshot or turn an ambiguous write into a rejection.
+          intentUnavailable = true;
+          return jsonValue({ ok: false, error: { code: "intent_unavailable", retryable: false } });
+        }
+      },
+    }));
     tools.push(tool({
       name: strandsReplyToolName,
       description: "Submit a reply proposal, once, after any necessary research. This does not save or execute anything. Use answer with references to actual Evidence fields; conversation with a message key; clarification with a missing target; unavailable with an operation; operation_result with an Application receipt ID; uncertainty when information cannot be verified. Do not include prose, reasoning, or new facts. Stop researching after submission.",
@@ -107,18 +143,20 @@ export class StrandsAgentEngine {
             ? { outputTokens: input.limits?.maxOutputTokens ?? this.options.maxOutputTokens } : {}),
         },
       });
+      if (intentUnavailable) throw new Error("Application intent state is unavailable");
       // Neither lastMessage nor SDK debug/string output crosses the publication boundary.
       trace.taskCompleted(result.stopReason === "cancelled" ? "cancelled" : "completed", Date.now() - startedAt,
         result.stopReason === "endTurn" ? undefined : result.stopReason);
       const usage = result.metrics?.accumulatedUsage, replyProposal = submission.snapshot();
       return {
         ...(replyProposal ? { replyProposal } : {}), stopReason: result.stopReason,
+        ...(currentEffectiveIntent ? { effectiveIntent: structuredClone(currentEffectiveIntent) } : {}),
         evidence: evidence.map((item) => structuredClone(item)), trace: trace.snapshot(),
         ...(budgetState.toolLimitReached ? { limitReason: "tool_calls" as const } : {}),
         ...(result.stopReason === "cancelled" && deadlineSignal?.aborted ? { limitReason: "deadline" as const } : {}),
         ...(result.metrics && usage ? { metrics: {
           modelCalls: result.metrics.cycleCount,
-          // Submission is a local reply operation, not an external Domain Tool call.
+          // Local intent/reply operations are not external Domain Tool calls.
           toolCalls: budgetState.toolCalls,
           inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens,
           ...(usage.cacheReadInputTokens === undefined ? {} : { cacheReadInputTokens: usage.cacheReadInputTokens }),
@@ -132,7 +170,7 @@ export class StrandsAgentEngine {
   }
 }
 export function createStrandsReadTools(input: {
-  registry: AgentToolRegistry; executor: AgentToolExecutor; executionId: string; effectiveIntent?: EffectiveIntent;
+  registry: AgentToolRegistry; executor: AgentToolExecutor; executionId: string; getEffectiveIntent?: () => EffectiveIntent | undefined;
   toolTimeoutMs: number; trace: AgentTraceRecorder; evidence: Evidence[];
   budgetState?: { toolCalls: number; toolLimitReached: boolean }; maxToolCalls?: number;
   reserveToolCall?: () => boolean; canExecute?: () => boolean;
@@ -143,7 +181,8 @@ export function createStrandsReadTools(input: {
       const toolInput = jsonObject(rawInput);
       if (!toolInput) return jsonValue({ ok: false, error: { code: "invalid_input", retryable: false } });
       if (input.canExecute && !input.canExecute()) return jsonValue({ ok: false, error: { code: "reply_submitted", retryable: false } });
-      const decision = validateToolIntentUse(descriptor, toolInput, input.effectiveIntent);
+      const effectiveIntent = input.getEffectiveIntent?.();
+      const decision = validateToolIntentUse(descriptor, toolInput, effectiveIntent);
       if (!decision.accepted) return jsonValue({ ok: false, error: {
         code: decision.error?.code ?? "precondition_failed", retryable: decision.error?.retryable ?? false } });
       if (context?.cancelSignal.aborted) return jsonValue({ ok: false, error: { code: "execution_failed", retryable: true } });
@@ -156,8 +195,8 @@ export function createStrandsReadTools(input: {
       const execution = await input.executor.execute({
         executionId: input.executionId, toolCallId: context?.toolUse.toolUseId ?? `strands-${descriptor.name}`,
         toolName: descriptor.name, toolInput, timeoutMs: input.toolTimeoutMs,
-        ...(input.effectiveIntent && decision.dependencyTargets.length ? { intentDependency: {
-          intentRevision: input.effectiveIntent.intentRevision, fingerprint: input.effectiveIntent.fingerprint,
+        ...(effectiveIntent && decision.dependencyTargets.length ? { intentDependency: {
+          intentRevision: effectiveIntent.intentRevision, fingerprint: effectiveIntent.fingerprint,
           targets: decision.dependencyTargets } } : {}),
       }, input.trace);
       if (execution.evidence.length) input.evidence.push(...execution.evidence.map((item) => structuredClone(item)));

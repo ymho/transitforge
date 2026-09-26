@@ -14,6 +14,7 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
     const run = await engine.run({
       executionId: input.executionId, userRequest: input.userRequest, modelInput: strandsTurnInput(input),
       tools: input.tools, toolExecutor: input.toolExecutor, effectiveIntent: input.context?.effectiveIntent,
+      ...(input.intentController ? { intentController: input.intentController } : {}),
       limits: { maxTurns: Math.min(input.limits.maxIterations, input.limits.maxModelCalls),
         maxToolCalls: input.limits.maxToolCalls, maxExecutionMs: input.limits.maxExecutionMs },
       reserveToolCall: () => input.researchLedger.reserve("toolCalls"),
@@ -32,7 +33,7 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
     if (merged.collisions.length || merged.conflictingObservationIds.length) return denied("evidence_collision");
     try {
       const reply = admitAgentV2Reply(run.replyProposal, {
-        executionId: input.executionId, evidence: merged.evidence, effectiveIntent: input.context?.effectiveIntent,
+        executionId: input.executionId, evidence: merged.evidence, effectiveIntent: run.effectiveIntent,
         // This composition exposes reads only. No model-supplied success receipts.
         receipts: [], availableOperations: [],
       });

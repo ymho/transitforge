@@ -22,6 +22,8 @@ import { PlanCandidateRetentionApplication, registerPlanCandidateRetentionTool, 
 import { proposeVerifiedIntentRequest } from "@raiquora/agent/verified-intent-proposal";
 import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
+import { publicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
+import type { UtteranceInterpretation } from "@raiquora/agent/semantic-interpretation";
 
 /** Internal stateful composition. Transport/auth rollout and env bindings remain with #451/#462/#480. */
 export function createStatefulServerAgent(options: Omit<Parameters<typeof createServerAgent>[0], "loadContext"> & {
@@ -32,11 +34,39 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
   stateClient?: StateDynamoClient;
   tripClient?: TripDynamoClient;
 }) {
-  return { async runAgentTurn(input: ServerAgentTurn, reportProgress?: AgentProgressReporter) {
+  return { async runAgentTurn(input: ServerAgentTurn, reportProgress?: AgentProgressReporter,
+    acceptIntent?: (interpretation: UtteranceInterpretation) => Promise<IntentApplicationReceipt>) {
     let tripCostProposal: PublicCostProposal | undefined, retainedCandidatePlan: RetainedCandidatePlan | undefined;
     let trip: Trip | undefined, consultation: Trip | undefined, tripUpdateProposal: PublicRequestProposal | undefined, consultationRequestProposal: ConsultationRequestProposal | undefined;
     let effectiveIntent: EffectiveIntent | undefined, currentIntentReceipt: IntentApplicationReceipt | undefined;
     const turnStates = new DynamoDbConversationTurnRepository(options.stateTable, options.stateClient);
+    const contextLoader = createServerStateContextLoader({
+      conversations: new ConversationApplication(new DynamoDbConversationRepository(options.stateTable, options.stateClient),
+        new DynamoDbItineraryCandidateRepository(options.tripTable, options.tripClient)),
+      profiles: new ProfileApplication(new DynamoDbProfileRepository(options.stateTable, options.stateClient)),
+      trips: new DynamoDbTripRepository(options.tripTable, options.tripClient),
+      workingStates: turnStates,
+    }, { historyBeforeSequence: options.historyBeforeSequence, onTrip: value => { trip = value; },
+      onConsultation: value => { consultation = createTrip(value.conversationId, "相談中の条件", value.createdAt, [], value.request); },
+      onEffectiveIntent: value => { effectiveIntent = value.effectiveIntent; currentIntentReceipt = value.currentReceipt; } });
+    const runtime = options.runRuntime;
+    const runRuntime = runtime ? async (runtimeInput: Parameters<typeof runtime>[0]) =>
+      runtime({
+        ...runtimeInput,
+        ...(acceptIntent ? { intentController: {
+          apply: async (interpretation: UtteranceInterpretation) => {
+            const receipt = await acceptIntent(interpretation);
+            const refreshed = await contextLoader({
+              principal: input.principal,
+              ...(input.conversationId ? { conversationId: input.conversationId } : {}),
+              ...(input.tripId ? { tripId: input.tripId } : {}),
+              ...(input.uiContext ? { uiContext: input.uiContext } : {}),
+            });
+            if (!refreshed.effectiveIntent) throw new Error("Accepted intent requires a refreshed Application snapshot");
+            return { receipt: publicSemanticReceipt(receipt), effectiveIntent: refreshed.effectiveIntent };
+          },
+        } } : {}),
+      }) : undefined;
     const result = await createServerAgent({ ...options,
       registerAdditionalTools: (tools, evidence, scope) => {
         options.registerAdditionalTools?.(tools, evidence, scope);
@@ -64,15 +94,8 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
       // Restored private state may be echoed in any later turn block. Do not retain raw model-call traces.
       // Runtime metadata/latency diagnostics remain available; no Bedrock/provider implementation change.
       model: { converse: ({ trace: _trace, ...request }) => options.model.converse(request) },
-      loadContext: createServerStateContextLoader({
-        conversations: new ConversationApplication(new DynamoDbConversationRepository(options.stateTable, options.stateClient),
-          new DynamoDbItineraryCandidateRepository(options.tripTable, options.tripClient)),
-        profiles: new ProfileApplication(new DynamoDbProfileRepository(options.stateTable, options.stateClient)),
-        trips: new DynamoDbTripRepository(options.tripTable, options.tripClient),
-        workingStates: turnStates,
-      }, { historyBeforeSequence: options.historyBeforeSequence, onTrip: value => { trip = value; },
-        onConsultation: value => { consultation = createTrip(value.conversationId, "相談中の条件", value.createdAt, [], value.request); },
-        onEffectiveIntent: value => { effectiveIntent = value.effectiveIntent; currentIntentReceipt = value.currentReceipt; } }),
+      loadContext: contextLoader,
+      ...(runRuntime ? { runRuntime } : {}),
     }).runAgentTurn(input, reportProgress);
     if (input.conversationId && effectiveIntent && currentIntentReceipt) {
       const base = trip ?? consultation;

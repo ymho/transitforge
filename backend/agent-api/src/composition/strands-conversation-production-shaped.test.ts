@@ -8,6 +8,7 @@ import { cognitoTokenFixture, token } from "../adapters/cognito-token.fixture.js
 import { StrandsAgentEngine } from "../adapters/strands-agent-engine.js";
 import { createStrandsServerRuntime } from "../adapters/strands-server-runtime.js";
 import { createConversationServerAgent } from "./conversation-server-agent.js";
+import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
 
 class ToolThenAnswerModel extends Model<BaseModelConfig> {
   private calls = 0;
@@ -53,6 +54,32 @@ class ReplyOnlyModel extends Model<BaseModelConfig> {
     }
     yield { type: "modelContentBlockStartEvent" };
     yield { type: "modelContentBlockDeltaEvent", delta: { type: "textDelta", text: this.trailingText } };
+    yield { type: "modelContentBlockStopEvent" };
+    yield { type: "modelMessageStopEvent", stopReason: "endTurn" };
+  }
+}
+
+class IntentThenNoReplyModel extends Model<BaseModelConfig> {
+  private calls = 0;
+  private config: BaseModelConfig = { modelId: "synthetic-strands" };
+  updateConfig(config: BaseModelConfig): void { this.config = { ...this.config, ...config }; }
+  getConfig(): BaseModelConfig { return this.config; }
+  async *stream(_messages: Message[], _options?: StreamOptions): AsyncGenerator<ModelStreamEvent> {
+    this.calls += 1;
+    yield { type: "modelMessageStartEvent", role: "assistant" };
+    if (this.calls === 1) {
+      const input = { outcome: "delta", speechAct: "inform", operations: [{
+        atomicGroup: 1, action: "set", target: "destination", modality: "preferred", precision: "exact",
+        frame: "actual", quote: "京都", value: { kind: "place_label", label: "京都" },
+      }], unresolvedFragments: [] };
+      yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: "update_intent", toolUseId: "intent-1" } };
+      yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(input) } };
+      yield { type: "modelContentBlockStopEvent" };
+      yield { type: "modelMessageStopEvent", stopReason: "toolUse" };
+      return;
+    }
+    yield { type: "modelContentBlockStartEvent" };
+    yield { type: "modelContentBlockDeltaEvent", delta: { type: "textDelta", text: "reply submission intentionally omitted" } };
     yield { type: "modelContentBlockStopEvent" };
     yield { type: "modelMessageStopEvent", stopReason: "endTurn" };
   }
@@ -153,6 +180,52 @@ it("reports unavailable save through the Application boundary and replays it wit
   expect(v1Model.converse).not.toHaveBeenCalled();
   expect(await app.runConversationTurn(input)).toEqual(result);
   expect(weather.search).not.toHaveBeenCalled();
+  expect((await state.conversations.history(principal, conversationId)).items.map(({ text }) => text))
+    .toEqual([input.userRequest, result.response]);
+});
+
+
+it("persists a V2 intent A-commit across answer failure and retries without reapplying the semantic change", async () => {
+  const { verifier } = cognitoTokenFixture();
+  const principal = await verifier.verify(token());
+  const state = stateDynamoFixture(), trips = tripDynamoFixture();
+  const { tripId: _tripId, ...metadata } = stateMetadata();
+  await state.conversations.create(principal, conversationId, metadata);
+  const v1Model = { converse: vi.fn(async () => { throw new Error("V1 model must not run"); }) };
+  const failingEngine = new StrandsAgentEngine({
+    modelId: "unused", region: "ap-northeast-1", systemPrompt: "Use update_intent before replying.", maxTurns: 3,
+  }, { model: new IntentThenNoReplyModel() });
+  const input = { principal, conversationId, turnId: secondId, userRequest: "行き先は京都にしたい" };
+  const firstApp = createConversationServerAgent({
+    stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
+    model: v1Model, weather: { search: vi.fn() }, newExecutionId: () => "strands-intent-fail",
+    runRuntime: createStrandsServerRuntime(failingEngine),
+  });
+
+  await expect(firstApp.runConversationTurn(input)).rejects.toMatchObject({ code: "agent_failed" });
+  const afterFailure = await new DynamoDbConversationTurnRepository("test-state", state.client)
+    .getWorkingState(principal, conversationId);
+  expect(afterFailure?.semantic?.overlay).toMatchObject({ intentRevision: 1, facts: [
+    { target: "destination", value: { kind: "place_label", label: "京都" } },
+  ] });
+
+  const retryEngine = new StrandsAgentEngine({
+    modelId: "unused", region: "ap-northeast-1", systemPrompt: "Submit the reply.", maxTurns: 3,
+  }, { model: new ReplyOnlyModel({ kind: "conversation", message: "acknowledgement" }, "ignored") });
+  const retryApp = createConversationServerAgent({
+    stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
+    model: v1Model, weather: { search: vi.fn() }, newExecutionId: () => "strands-intent-retry",
+    runRuntime: createStrandsServerRuntime(retryEngine),
+  });
+  const result = await retryApp.runConversationTurn(input);
+
+  expect(result).toMatchObject({ status: "completed",
+    semanticReceipt: { version: "public-semantic-receipt-v1", intentRevision: 1, outcome: "accepted" } });
+  const afterRetry = await new DynamoDbConversationTurnRepository("test-state", state.client)
+    .getWorkingState(principal, conversationId);
+  expect(afterRetry?.semantic?.overlay.intentRevision).toBe(1);
+  expect(afterRetry?.semantic?.overlay.facts).toHaveLength(1);
+  expect(v1Model.converse).not.toHaveBeenCalled();
   expect((await state.conversations.history(principal, conversationId)).items.map(({ text }) => text))
     .toEqual([input.userRequest, result.response]);
 });
