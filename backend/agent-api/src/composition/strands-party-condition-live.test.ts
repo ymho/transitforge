@@ -54,7 +54,7 @@ describe.skipIf(!enabled)("party condition Tool with real Bedrock", () => {
       const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1_024 }, {
         createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, event => {
           modelCalls++; selectedTools.push(...event.message.content.flatMap(block => block.type === "toolUseBlock"
-            ? [["update_current_party", "consider_party_scenario", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
+            ? [["update_current_party", "consider_trip_scenario", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
         }); return agent; },
       });
       const result = await createStrandsServerRuntime(engine)({ executionId: turnId, userRequest: scenario.message,
@@ -71,7 +71,7 @@ describe.skipIf(!enabled)("party condition Tool with real Bedrock", () => {
       expect.soft(party, `case ${index} party`).toEqual(scenario.party);
       expect.soft(journal.size, `case ${index} mutation count`).toBe(scenario.writes);
       expect.soft(selectedTools.includes("update_current_party"), `case ${index} writer selection`).toBe(scenario.update);
-      expect.soft(selectedTools.includes("consider_party_scenario"), `case ${index} scenario selection`).toBe(scenario.scenario);
+      expect.soft(selectedTools.includes("consider_trip_scenario"), `case ${index} scenario selection`).toBe(scenario.scenario);
     }
   }, 300_000);
 });
