@@ -115,3 +115,4 @@ Server Runtime・Stateの新構成は#478以降で決定する。
 - [ADR 0080: 詳細調査をboundedな同期turnとimmutable receiptで継続する](0080-keep-bounded-synchronous-research-with-turn-receipts.md) — 調査予算、切断後再取得、continuation authority、AgentCore不採用の境界を定める。
 - [ADR 0081: 30日・90日測定後も単一Trip aggregateとimmutable receiptを維持する](0081-retain-single-trip-aggregate-after-scale-measurement.md) — items/bytes/receipt測定に基づきchunk移行を見送り、既存CAS正本を維持する。
 - [ADR 0082: 本番model routingを層別Final Evalの実測で判定する](0082-gate-model-routing-on-layered-final-evaluation.md) — A/B/C/D、2×2、未測定、反復、routing公開条件を分離する。
+- [ADR 0096: Agent実行ループをStrandsへ移しApplication契約を外側に保つ](0096-use-strands-for-agent-v2-execution.md) — #631の意味・権限・保存・Evidenceを維持し、汎用model/tool loopだけをStrandsへ委譲する。
