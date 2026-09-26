@@ -180,12 +180,30 @@ describe("StrandsAgentEngine", () => {
     const { input } = setup();
     const apply = vi.fn();
     const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([
-      { tool: "consider_party_scenario", input: { party: { kind: "count", people: 4 }, quote: "もし4人なら" } },
+      { tool: "consider_trip_scenario", input: { party: { kind: "count", people: 4 }, quote: "もし4人なら" } },
       submitted,
     ]) }).run({ ...input, userRequest: "もし4人ならどうなる？今の人数は変えずに比較したい", conditionController: { apply } });
     expect(apply).not.toHaveBeenCalled();
     expect(result.effectiveIntent).toEqual(input.effectiveIntent);
     expect(result.replyProposal).toEqual({ kind: "uncertainty" });
+  });
+
+  it("sends one travel-period command to Application instead of separate date writers", async () => {
+    const { input } = setup();
+    const apply = vi.fn(async () => ({ receipt: {
+      version: "public-semantic-receipt-v1" as const, intentRevision: 4, speechAct: "inform" as const,
+      outcome: "accepted" as const, changes: [],
+    }, effectiveIntent: effectiveDestination("京都") }));
+    await new StrandsAgentEngine(options, { model: new ScriptedModel([
+      { tool: "update_current_travel_period", input: { action: "set", period: {
+        start: { kind: "month_day", month: 10, day: 3 }, end: { kind: "day_of_month", day: 5 },
+      }, quote: "10月3日から5日まで" } },
+      submitted,
+    ]) }).run({ ...input, userRequest: "10月3日から5日まで旅行します", conditionController: { apply } });
+    expect(apply).toHaveBeenCalledOnce();
+    expect(apply).toHaveBeenCalledWith({ target: "travel_period", period: {
+      start: { kind: "month_day", month: 10, day: 3 }, end: { kind: "day_of_month", day: 5 },
+    }, quote: "10月3日から5日まで" });
   });
 
   it("lets independent condition Tools use the same Application without an invocation-wide limiter", async () => {
