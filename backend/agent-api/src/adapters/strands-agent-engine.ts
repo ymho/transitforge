@@ -42,13 +42,36 @@ export interface StrandsAgentRunResult {
   stopReason: string;
   evidence: Evidence[];
   trace: AgentTrace;
+  metrics?: {
+    modelCalls: number;
+    toolCalls: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    cacheReadInputTokens?: number;
+    cacheWriteInputTokens?: number;
+  };
 }
 
 export interface StrandsAgentLike {
   invoke(args: string, options?: {
     cancelSignal?: AbortSignal;
     limits?: { turns?: number; totalTokens?: number; outputTokens?: number };
-  }): Promise<{ stopReason: string; toString(): string }>;
+  }): Promise<{
+    stopReason: string;
+    toString(): string;
+    metrics?: {
+      cycleCount: number;
+      accumulatedUsage: {
+        inputTokens: number;
+        outputTokens: number;
+        totalTokens: number;
+        cacheReadInputTokens?: number;
+        cacheWriteInputTokens?: number;
+      };
+      toolMetrics: Record<string, { callCount: number }>;
+    };
+  }>;
 }
 
 export type StrandsAgentFactory = (config: AgentConfig) => StrandsAgentLike;
@@ -115,11 +138,21 @@ export class StrandsAgentEngine {
       trace.responseGenerated(response);
       trace.taskCompleted(result.stopReason === "cancelled" ? "cancelled" : "completed", Date.now() - startedAt,
         result.stopReason === "endTurn" ? undefined : result.stopReason);
+      const usage = result.metrics?.accumulatedUsage;
       return {
         response,
         stopReason: result.stopReason,
         evidence: evidence.map((item) => structuredClone(item)),
         trace: trace.snapshot(),
+        ...(result.metrics && usage ? { metrics: {
+          modelCalls: result.metrics.cycleCount,
+          toolCalls: Object.values(result.metrics.toolMetrics).reduce((sum, item) => sum + item.callCount, 0),
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          totalTokens: usage.totalTokens,
+          ...(usage.cacheReadInputTokens === undefined ? {} : { cacheReadInputTokens: usage.cacheReadInputTokens }),
+          ...(usage.cacheWriteInputTokens === undefined ? {} : { cacheWriteInputTokens: usage.cacheWriteInputTokens }),
+        } } : {}),
       };
     } catch (error) {
       trace.taskCompleted("failed", Date.now() - startedAt, error instanceof Error ? error.name : "unknown_error");
