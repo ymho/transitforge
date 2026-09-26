@@ -8,9 +8,9 @@
 
 標準Strands `tool()`にZodのstrict schemaを渡し、モデルには1条件につき1つの業務Toolを公開する。
 
-- `update_destination({action, place?, quote})`
-- `update_origin({action, place?, quote})`
-- `update_party({action, party?, quote})`
+- `update_current_destination({action, place?, quote})`
+- `update_current_origin({action, place?, quote})`
+- `update_current_party({action, party?, quote})`
 
 `action=set`は指定・訂正、`action=clear`は明示された撤回である。訂正を`clear→set`の2操作に分けず、そのuser turnにおける条件の最終状態を1回で受理する。これによりApplicationの「1 turn・1 target・1 final decision」という冪等slotとTool粒度が一致する。検証フィードバックと逐次実行はSDK標準へ任せ、独自のAgent phase、ToolChoice強制、Proxy、入力補修を追加しない。
 
