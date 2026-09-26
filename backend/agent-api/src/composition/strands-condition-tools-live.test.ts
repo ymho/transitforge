@@ -21,9 +21,9 @@ import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
 
 /** Paid opt-in, early contract check before the persistence integration. Real SDK/Bedrock,
  * small business writer with a test repository and deterministic read data. No production
- * state/Provider is accessed. Seven turns, each at most 8 cycles / 2 reads / 60 seconds. */
+ * state/Provider is accessed. Twelve turns, each at most 8 cycles / 2 reads / 60 seconds. */
 const enabled = process.env.AGENT_V2_LIVE === "true";
-const modelId = process.env.MODEL_ID ?? "amazon.nova-lite-v1:0";
+const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
 const limits = { maxIterations: 8, maxModelCalls: 8, maxToolCalls: 2, maxExecutionMs: 60000, maxEvidence: 20 };
 describe.skipIf(!enabled)("small condition Tools with real Bedrock", () => {
   it("accepts real changes, not questions or hypotheses, without an interpretation report", async () => {
@@ -37,13 +37,21 @@ describe.skipIf(!enabled)("small condition Tools with real Bedrock", () => {
       return reduction.receipt;
     } };
     const scenarios = [
-      { message: "おはよう", origin: undefined, destination: undefined, writes: 0 },
-      { message: "京都に行きたい。どんなところ？", origin: undefined, destination: "京都", writes: 1 },
-      { message: "やっぱり行き先は神戸に変更したい", origin: undefined, destination: "神戸", writes: 2 },
-      { message: "大阪から京都に行きたい。今回の条件にして", origin: "大阪", destination: "京都", writes: 4 },
-      { message: "金沢に行くとしたらどう？今の条件は変えずに比較したい", origin: "大阪", destination: "京都", writes: 4 },
-      { message: "行き先はいったん未定に戻して。出発地はそのまま", origin: "大阪", destination: undefined, writes: 5 },
-      { message: "ありがとう", origin: "大阪", destination: undefined, writes: 5 },
+      { message: "おはよう", origin: undefined, destination: undefined, party: undefined, writes: 0 },
+      { message: "京都に行きたい。どんなところ？", origin: undefined, destination: "京都", party: undefined, writes: 1 },
+      { message: "やっぱり行き先は神戸に変更したい", origin: undefined, destination: "神戸", party: undefined, writes: 2 },
+      { message: "大阪から京都に行きたい。今回の条件にして", origin: "大阪", destination: "京都", party: undefined, writes: 4 },
+      { message: "金沢に行くとしたらどう？今の条件は変えずに比較したい", origin: "大阪", destination: "京都", party: undefined, writes: 4 },
+      { message: "行き先はいったん未定に戻して。出発地はそのまま", origin: "大阪", destination: undefined, party: undefined, writes: 5 },
+      { message: "今回は2人で行きます。大人か子どもかはまだ決めていません", origin: "大阪", destination: undefined,
+        party: { kind: "quantity", amount: 2, unit: "people" }, writes: 6 },
+      { message: "やっぱり大人2人と子ども1人で行きます。子どもの年齢はまだ未定です", origin: "大阪", destination: undefined,
+        party: { kind: "party", adults: 2, children: [{}] }, writes: 7 },
+      { message: "もし4人ならどうなる？今の人数は変えずに比較したい", origin: "大阪", destination: undefined,
+        party: { kind: "party", adults: 2, children: [{}] }, writes: 7 },
+      { message: "人数はいったん未定に戻して", origin: "大阪", destination: undefined, party: undefined, writes: 8 },
+      { message: "出発地も未定に戻して", origin: undefined, destination: undefined, party: undefined, writes: 9 },
+      { message: "ありがとう", origin: undefined, destination: undefined, party: undefined, writes: 9 },
     ];
     for (const [index, scenario] of scenarios.entries()) {
       const turnId = `71600000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
@@ -73,7 +81,7 @@ describe.skipIf(!enabled)("small condition Tools with real Bedrock", () => {
       const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1024 }, {
         createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, event => {
           modelCalls++; selectedTools.push(...event.message.content.flatMap(block => block.type === "toolUseBlock"
-            ? [["set_origin", "set_destination", "clear_origin", "clear_destination", "lookup_place", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
+            ? [["set_origin", "set_destination", "set_party", "clear_origin", "clear_destination", "clear_party", "lookup_place", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
         }); return agent; },
       });
       const result = await createStrandsServerRuntime(engine)({ executionId: turnId, userRequest: scenario.message,
@@ -86,11 +94,13 @@ describe.skipIf(!enabled)("small condition Tools with real Bedrock", () => {
       const value = (target: "origin" | "destination") => {
         const fact = overlay.facts.find(f => f.target === target); return fact?.value.kind === "place_label" ? fact.value.label : undefined;
       };
+      const party = overlay.facts.find(f => f.target === "party_size")?.value;
       console.log(JSON.stringify({ case: index, modelId, status: result.status, modelCalls, readCalls: read.mock.calls.length, acceptedOperations: journal.size,
         publicationError: result.publicationError, selectedTools }));
       expect.soft(result.status, `case ${index} must reply`).toBe("completed");
       expect.soft(value("origin"), `case ${index} origin`).toBe(scenario.origin);
       expect.soft(value("destination"), `case ${index} destination`).toBe(scenario.destination);
+      expect.soft(party, `case ${index} party`).toEqual(scenario.party);
       expect.soft(journal.size, `case ${index} mutation count`).toBe(scenario.writes);
     }
   }, 450000);
