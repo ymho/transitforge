@@ -41,11 +41,14 @@ import type { ModelTokenRates } from "@raiquora/agent/model-usage-cost";
 import type { ResearchExecutionLedger } from "@raiquora/agent/research-execution";
 import type { JourneySearchResponse } from "@raiquora/journey/journey-search-service";
 import { projectPublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
+import { StrandsAgentEngine } from "./adapters/strands-agent-engine.js";
+import { createStrandsServerRuntime } from "./adapters/strands-server-runtime.js";
 
 /** Constructed only after authentication, once per request. No Travel credentials or raw trace sink. */
 export function createProductionServerAgent(executionId: string, environment: Readonly<Record<string, string | undefined>> = process.env) {
  const required = (key: string) => { const value = environment[key]; if (!value) throw new Error("Missing server configuration"); return value; };
  const maxExecutionMs = serverAgentDeadline(environment);
+ const strandsEnabled = strictBoolean(environment.AGENT_RUNTIME_V2_ENABLED, false);
  const s3 = new AwsS3Client();
  const journey = new S3JourneyDataRepository(s3, { indexBucket: required("AI_TIMETABLE_BUCKET"),
    indexPrefix: environment.PLANNING_TIMETABLE_PREFIX ?? "timetable", snapshotBucket: required("TRAFFIC_SNAPSHOT_BUCKET"),
@@ -79,6 +82,23 @@ export function createProductionServerAgent(executionId: string, environment: Re
    if ((result.statusCode ?? 200) >= 400) throw new Error("Provider unavailable");
    return result.body;
  };
+ const modelId = environment.MODEL_ID ?? "amazon.nova-lite-v1:0";
+ const region = environment.AWS_REGION ?? "unknown";
+ const conversationModel = new BedrockConversationModel(new AwsBedrockConverseClient(), {
+   modelId, lightweightModelId: environment.LIGHTWEIGHT_MODEL_ID || undefined,
+   decisionModelId: environment.DECISION_MODEL_ID || undefined, systemPrompt: agentSystemPrompt,
+   region,
+   capabilities: candidateId => bedrockCapabilitiesFromConfiguration(candidateId, region, environment.BEDROCK_CAPABILITY_MATRIX_JSON),
+   promptCachingEnabled: environment.BEDROCK_PROMPT_CACHING_ENABLED === "true",
+   log: (event, fields) => { console.warn(JSON.stringify({ event, ...fields })); },
+ });
+ const runRuntime = strandsEnabled ? createStrandsServerRuntime(new StrandsAgentEngine({
+   modelId,
+   region: required("AWS_REGION"),
+   systemPrompt: agentSystemPrompt,
+   maxTurns: 10,
+   maxOutputTokens: 4_096,
+ })) : undefined;
  return createProductionConversationAgent({
    // Open-ended discovery needs several candidate/source/photo rounds and a
    // reserved final answer/repair round. Only the production Server budget grows.
@@ -102,14 +122,8 @@ export function createProductionServerAgent(executionId: string, environment: Re
    },
    stateTable: required("SERVER_STATE_TABLE_NAME"), tripTable: required("TRIP_TABLE_NAME"),
    newExecutionId: () => executionId, weather,
-   model: new BedrockConversationModel(new AwsBedrockConverseClient(), {
-     modelId: environment.MODEL_ID ?? "amazon.nova-lite-v1:0", lightweightModelId: environment.LIGHTWEIGHT_MODEL_ID || undefined,
-     decisionModelId: environment.DECISION_MODEL_ID || undefined, systemPrompt: agentSystemPrompt,
-     region: environment.AWS_REGION ?? "unknown",
-     capabilities: modelId => bedrockCapabilitiesFromConfiguration(modelId, environment.AWS_REGION ?? "unknown", environment.BEDROCK_CAPABILITY_MATRIX_JSON),
-     promptCachingEnabled: environment.BEDROCK_PROMPT_CACHING_ENABLED === "true",
-     log: (event, fields) => { console.warn(JSON.stringify({ event, ...fields })); },
-   }),
+   model: conversationModel,
+   ...(runRuntime ? { runRuntime } : {}),
    diagnostics: { record: async event => { console.info(JSON.stringify({ event: "agent_diagnostic", ...event })); } },
    log: (event, fields) => { console.warn(JSON.stringify({ event, ...fields })); },
    additionalTools: productionServerTools({
@@ -156,3 +170,10 @@ function pricingLookup(raw: string | undefined): (model: string | undefined) => 
   return model => model === undefined ? undefined : rates.get(model);
 }
 function rate(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value) && value >= 0; }
+
+function strictBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined || value === "") return fallback;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error("Invalid server configuration");
+}
