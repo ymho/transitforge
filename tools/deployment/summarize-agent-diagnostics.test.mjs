@@ -33,3 +33,10 @@ const unsafe = spawnSync(process.execPath, ["tools/deployment/summarize-agent-di
 assert.equal(unsafe.status, 0, unsafe.stderr);
 assert.match(unsafe.stdout, /runtime \| failed \| - \| true \| 1/);
 assert.doesNotMatch(unsafe.stdout, /private:secret/);
+
+writeFileSync(diagnostics, JSON.stringify([
+  JSON.stringify({ event: "agent_diagnostic", phase: "runtime", reason: "failed", mode: "v2:publication:missing_reply_proposal", incomplete: true, occurredAt: "2026-09-24T12:00:02Z" }),
+]));
+const publication = spawnSync(process.execPath, ["tools/deployment/summarize-agent-diagnostics.mjs", diagnostics, streams], { encoding: "utf8" });
+assert.equal(publication.status, 0, publication.stderr);
+assert.match(publication.stdout, /v2:publication:missing_reply_proposal/);

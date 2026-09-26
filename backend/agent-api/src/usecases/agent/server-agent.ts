@@ -177,13 +177,25 @@ async function publishRuntimeDiagnostics(dependencies: ServerAgentDependencies, 
       correlation: { toolCallId: event.toolCallId }, refs: [event.toolName] });
   }
   const completion = [...result.trace.events].reverse().find((event) => event.type === "task_completed");
+  const failureMode = result.status === "failed" || result.status === "limit_reached" ? publicationFailureMode(result) : undefined;
   await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId,
     phase: "runtime", reason: result.status === "completed" || result.status === "follow_up" ?
       result.delivery?.status === "degraded" || result.delivery?.status === "partial" ? "partial" : "completed" :
       diagnosticFailureReason(completion?.type === "task_completed" ? completion.reason : undefined),
     occurredAt: completion?.occurredAt ?? (dependencies.now?.() ?? new Date()).toISOString(),
-    ...(result.delivery ? { mode: `delivery:${result.delivery.status}:${result.delivery.basis}` } : {}),
+    ...(failureMode ? { mode: failureMode } : result.delivery ? { mode: `delivery:${result.delivery.status}:${result.delivery.basis}` } : {}),
     incomplete: result.status === "failed" || result.status === "limit_reached" || result.delivery?.status !== undefined && result.delivery.status !== "full" });
+}
+
+function publicationFailureMode(result: AgentRuntimeResult): string | undefined {
+  const value = (result as AgentRuntimeResult & { publicationError?: unknown }).publicationError;
+  if (typeof value !== "string") return undefined;
+  const allowed = new Set([
+    "incomplete_execution", "missing_reply_proposal", "evidence_collision", "response_budget", "invalid_claim_binding",
+    "invalid_proposal", "missing_evidence", "ineligible_evidence", "invalid_field", "known_condition",
+    "operation_available", "invalid_receipt", "unsafe_content",
+  ]);
+  return allowed.has(value) ? `v2:publication:${value}` : undefined;
 }
 
 function diagnosticFailureReason(reason: string | undefined): AgentDiagnosticEvent["reason"] {
