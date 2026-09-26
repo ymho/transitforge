@@ -20,15 +20,13 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version-file: .nvmrc
           cache: npm
       - name: Apply the reviewed source transformation on the isolated branch
         run: python3 tools/716-sdk-output-bootstrap.py
-      - name: Update the direct Zod dependency and npm lockfile
-        run: npm install --package-lock-only --ignore-scripts --workspace @raiquora/agent zod@4.4.3
       - name: Publish generated source to this feature branch only
         id: source
         shell: bash
@@ -38,7 +36,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add backend modules tools package.json package-lock.json docs
-          git commit -m '♻️ 構造化出力をStrands標準へ置換'
+          git commit -m '🧪 構文と公開検証の境界を受入テストで確認'
           git push origin HEAD:refs/heads/refactor/716-sdk-structured-output
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           git diff --numstat bf291769f9f093777a9fa7679ddac1be854bb140 -- backend modules tools package.json package-lock.json docs
