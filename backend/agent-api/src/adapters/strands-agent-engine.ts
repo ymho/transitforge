@@ -1,13 +1,7 @@
 import {
-  Agent,
-  BedrockModel,
-  tool,
-  type AgentConfig,
-  type BaseModelConfig,
-  type InvokableTool,
-  type JSONSchema,
-  type JSONValue,
-  type Model,
+  Agent, BedrockModel, tool,
+  type AgentConfig, type BaseModelConfig, type InvokableTool,
+  type JSONSchema, type JSONValue, type Model,
 } from "@strands-agents/sdk";
 import { AgentTraceRecorder, type AgentTrace } from "@raiquora/agent/agent-trace";
 import { validateToolIntentUse } from "@raiquora/agent/intent-action-policy";
@@ -15,6 +9,7 @@ import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
+import { strandsAnswerText } from "./strands-answer-text.js";
 
 export interface StrandsAgentEngineOptions {
   modelId: string;
@@ -29,7 +24,7 @@ export interface StrandsAgentEngineOptions {
 export interface StrandsAgentRunInput {
   executionId: string;
   userRequest: string;
-  /** Model-visible bounded context produced by the Application. Defaults to userRequest. */
+  /** Model-visible data produced by the Application. Defaults to userRequest. */
   modelInput?: string;
   tools: AgentToolRegistry;
   toolExecutor: AgentToolExecutor;
@@ -42,11 +37,11 @@ export interface StrandsAgentRunInput {
     maxTotalTokens?: number;
     maxOutputTokens?: number;
   };
-  /** Return false to reject a Tool call before side effects/provider access. */
   reserveToolCall?: () => boolean;
 }
 
 export interface StrandsAgentRunResult {
+  /** Text candidate only; the Application still owns admission and persistence. */
   response: string;
   stopReason: string;
   evidence: Evidence[];
@@ -69,7 +64,7 @@ export interface StrandsAgentLike {
     limits?: { turns?: number; totalTokens?: number; outputTokens?: number };
   }): Promise<{
     stopReason: string;
-    toString(): string;
+    lastMessage?: unknown;
     metrics?: {
       cycleCount: number;
       accumulatedUsage: {
@@ -86,14 +81,10 @@ export interface StrandsAgentLike {
 
 export type StrandsAgentFactory = (config: AgentConfig) => StrandsAgentLike;
 
-/**
- * Greenfield Agent v2 execution adapter.
- *
- * Strands owns only the bounded model/tool loop. Conversation state, authority,
- * Effective Intent, Evidence applicability and persistence remain Application-owned.
- */
+/** Strands owns the loop; Application owns authority, state and answer admission. */
 export class StrandsAgentEngine {
   private readonly createAgent: StrandsAgentFactory;
+  private readonly model?: Model<BaseModelConfig>;
 
   constructor(
     private readonly options: StrandsAgentEngineOptions,
@@ -103,44 +94,27 @@ export class StrandsAgentEngine {
     this.createAgent = dependencies.createAgent ?? ((config) => new Agent(config));
   }
 
-  private readonly model?: Model<BaseModelConfig>;
-
   async run(input: StrandsAgentRunInput): Promise<StrandsAgentRunResult> {
     if (!input.executionId.trim() || !input.userRequest.trim()) throw new Error("Strands Agent requires executionId and userRequest");
     const evidence: Evidence[] = [];
     const trace = new AgentTraceRecorder(input.executionId, { omitContent: true });
     trace.taskStarted(input.userRequest);
-
     const budgetState = { toolCalls: 0, toolLimitReached: false };
     const tools = createStrandsReadTools({
-      registry: input.tools,
-      executor: input.toolExecutor,
-      executionId: input.executionId,
-      effectiveIntent: input.effectiveIntent,
-      toolTimeoutMs: this.options.toolTimeoutMs ?? 20_000,
-      trace,
-      evidence,
-      budgetState,
-      maxToolCalls: input.limits?.maxToolCalls,
+      registry: input.tools, executor: input.toolExecutor, executionId: input.executionId,
+      effectiveIntent: input.effectiveIntent, toolTimeoutMs: this.options.toolTimeoutMs ?? 20_000,
+      trace, evidence, budgetState, maxToolCalls: input.limits?.maxToolCalls,
       reserveToolCall: input.reserveToolCall,
     });
     const agent = this.createAgent({
       model: this.model ?? new BedrockModel({
-        modelId: this.options.modelId,
-        region: this.options.region,
-        maxTokens: this.options.maxOutputTokens ?? 2_048,
-        temperature: 0,
-        // Agent v2 consumes the bounded final invocation result at the Application boundary.
-        // We do not stream model tokens directly to the client, so keep Bedrock on Converse
-        // and avoid widening IAM to InvokeModelWithResponseStream.
+        modelId: this.options.modelId, region: this.options.region,
+        maxTokens: this.options.maxOutputTokens ?? 2_048, temperature: 0,
+        // Provider transport is Converse. No model-token stream is exposed to users.
         stream: false,
       }),
-      tools,
-      systemPrompt: this.options.systemPrompt,
-      printer: false,
-      contextManager: false,
-      retryStrategy: null,
-      toolExecutor: "sequential",
+      tools, systemPrompt: this.options.systemPrompt,
+      printer: false, contextManager: false, retryStrategy: null, toolExecutor: "sequential",
     });
     const startedAt = Date.now();
     const deadlineSignal = input.limits?.maxExecutionMs ? AbortSignal.timeout(input.limits.maxExecutionMs) : undefined;
@@ -156,24 +130,21 @@ export class StrandsAgentEngine {
             ? { outputTokens: input.limits?.maxOutputTokens ?? this.options.maxOutputTokens } : {}),
         },
       });
-      const response = result.toString();
+      const response = result.stopReason === "endTurn" || result.stopReason === "stopSequence"
+        ? strandsAnswerText(result) : "";
       trace.responseGenerated(response);
       trace.taskCompleted(result.stopReason === "cancelled" ? "cancelled" : "completed", Date.now() - startedAt,
         result.stopReason === "endTurn" ? undefined : result.stopReason);
       const usage = result.metrics?.accumulatedUsage;
       return {
-        response,
-        stopReason: result.stopReason,
-        evidence: evidence.map((item) => structuredClone(item)),
-        trace: trace.snapshot(),
+        response, stopReason: result.stopReason,
+        evidence: evidence.map((item) => structuredClone(item)), trace: trace.snapshot(),
         ...(budgetState.toolLimitReached ? { limitReason: "tool_calls" as const } : {}),
         ...(result.stopReason === "cancelled" && deadlineSignal?.aborted ? { limitReason: "deadline" as const } : {}),
         ...(result.metrics && usage ? { metrics: {
           modelCalls: result.metrics.cycleCount,
           toolCalls: Object.values(result.metrics.toolMetrics).reduce((sum, item) => sum + item.callCount, 0),
-          inputTokens: usage.inputTokens,
-          outputTokens: usage.outputTokens,
-          totalTokens: usage.totalTokens,
+          inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens,
           ...(usage.cacheReadInputTokens === undefined ? {} : { cacheReadInputTokens: usage.cacheReadInputTokens }),
           ...(usage.cacheWriteInputTokens === undefined ? {} : { cacheWriteInputTokens: usage.cacheWriteInputTokens }),
         } } : {}),
@@ -199,18 +170,15 @@ export function createStrandsReadTools(input: {
 }): InvokableTool<unknown, JSONValue>[] {
   return input.registry.descriptors().filter((descriptor) => input.registry.effect(descriptor.name) === "read").map((descriptor) =>
     tool({
-      name: descriptor.name,
-      description: descriptor.description,
+      name: descriptor.name, description: descriptor.description,
       inputSchema: descriptor.inputSchema as JSONSchema,
       callback: async (rawInput, context) => {
         const toolInput = jsonObject(rawInput);
         if (!toolInput) return jsonValue({ ok: false, error: { code: "invalid_input", retryable: false } });
-
         const decision = validateToolIntentUse(descriptor, toolInput, input.effectiveIntent);
         if (!decision.accepted) {
           return jsonValue({ ok: false, error: {
-            code: decision.error?.code ?? "precondition_failed",
-            retryable: decision.error?.retryable ?? false,
+            code: decision.error?.code ?? "precondition_failed", retryable: decision.error?.retryable ?? false,
           } });
         }
         if (context?.cancelSignal.aborted) return jsonValue({ ok: false, error: { code: "execution_failed", retryable: true } });
@@ -220,47 +188,33 @@ export function createStrandsReadTools(input: {
           return jsonValue({ ok: false, error: { code: "execution_failed", retryable: false, reason: "tool_budget" } });
         }
         if (input.budgetState) input.budgetState.toolCalls += 1;
-
         const execution = await input.executor.execute({
-          executionId: input.executionId,
-          toolCallId: context?.toolUse.toolUseId ?? `strands-${descriptor.name}`,
-          toolName: descriptor.name,
-          toolInput,
-          timeoutMs: input.toolTimeoutMs,
+          executionId: input.executionId, toolCallId: context?.toolUse.toolUseId ?? `strands-${descriptor.name}`,
+          toolName: descriptor.name, toolInput, timeoutMs: input.toolTimeoutMs,
           ...(input.effectiveIntent && decision.dependencyTargets.length ? { intentDependency: {
-            intentRevision: input.effectiveIntent.intentRevision,
-            fingerprint: input.effectiveIntent.fingerprint,
+            intentRevision: input.effectiveIntent.intentRevision, fingerprint: input.effectiveIntent.fingerprint,
             targets: decision.dependencyTargets,
           } } : {}),
         }, input.trace);
         if (execution.evidence.length) input.evidence.push(...execution.evidence.map((item) => structuredClone(item)));
         if (!execution.result.ok) {
           return jsonValue({ ok: false, error: {
-            code: execution.result.error.code,
-            retryable: execution.result.error.retryable,
+            code: execution.result.error.code, retryable: execution.result.error.retryable,
           } });
         }
-        return jsonValue({
-          ok: true,
-          output: execution.result.output,
-          evidenceIds: execution.evidence.map(({ id }) => id),
-        });
+        return jsonValue({ ok: true, output: execution.result.output, evidenceIds: execution.evidence.map(({ id }) => id) });
       },
     }));
 }
 
 function jsonObject(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined;
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
-
 function jsonValue(value: unknown): JSONValue {
   const serialized = JSON.stringify(value);
   if (serialized === undefined) throw new Error("Tool result is not JSON serializable");
   return JSON.parse(serialized) as JSONValue;
 }
-
 function combineSignals(primary: AbortSignal | undefined, deadline: AbortSignal | undefined): AbortSignal | undefined {
   if (!primary) return deadline;
   if (!deadline) return primary;
