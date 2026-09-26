@@ -24,9 +24,11 @@ export function parseSemanticInterpretationJson(text: string): unknown {
   if (direct.ok) return direct.value;
 
   const trimmed = text.trim();
-  const fenced = /^\`\`\`(?:json)?\s*([\s\S]*?)\s*\`\`\`$/u.exec(trimmed);
-  if (!fenced) throw new SemanticInterpretationContractError("json_parse");
-  const parsed = parseJson(fenced[1]!);
+  const prefix = trimmed.startsWith("```json") ? "```json" : trimmed.startsWith("```") ? "```" : undefined;
+  if (!prefix || !trimmed.endsWith("```")) throw new SemanticInterpretationContractError("json_parse");
+  const body = trimmed.slice(prefix.length, -3).trim();
+  if (!body || body.includes("```")) throw new SemanticInterpretationContractError("json_parse");
+  const parsed = parseJson(body);
   if (!parsed.ok) throw new SemanticInterpretationContractError("json_parse");
   return parsed.value;
 }
