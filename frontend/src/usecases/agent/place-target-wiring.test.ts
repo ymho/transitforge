@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { executeExternalTravelTool, compactExternalTravelToolObservation, type ExternalTravelToolState } from "./external-travel-tools";
-import { mapPlaceCandidates, mapRestaurantCandidates, mergeMapPlaceDetailCandidate } from "../../domain/map-travel-candidate";
 import { availableExternalInformation } from "@raiquora/trip/external-travel-information";
 import { createTrip } from "@raiquora/trip/trip";
 import type { PlaceMedia } from "@raiquora/trip/place-media";
@@ -13,7 +12,7 @@ const shop = place("shop", "倉敷美観地区コンビニ");
 const info = (places: PlaceMedia[]) => availableExternalInformation({ places }, [{ id: "search", kind: "place", provider: "mapbox",
   sourceUrl: "https://www.mapbox.com/", retrievedAt: "2026-09-12T08:00:00Z", confidence: "observed" }]);
 
-describe("production target binding / Assessment / viewer seams", () => {
+describe("production target binding / Assessment", () => {
   it("rejects a district-named shop as target and exposes questionable relevance to the Agent", async () => {
     const state: ExternalTravelToolState = { places: info([district]) };
     const output = await executeExternalTravelTool("search_place_media", { query: district.name, mode: "target", targetPlaceId: district.providerPlaceId },
@@ -22,14 +21,13 @@ describe("production target binding / Assessment / viewer seams", () => {
       candidateAssessments: [{ candidateId: "shop", relevance: { status: "questionable", reasonCodes: ["identity-mismatch"] } }],
       targetObservations: [{ status: "mismatch" }], result: { data: { places: [] } },
     });
-    expect(mapPlaceCandidates(state.places?.data?.places ?? [])).toEqual([]);
   });
   it("allows discovery entities but never claims query target relevance from the stable entity ID", async () => {
     const state: ExternalTravelToolState = {};
     const output = await executeExternalTravelTool("search_place_media", { query: district.name },
       { searchPlaceMedia: async () => ({ result: info([shop]) }) }, state);
     expect(output).toMatchObject({ searchPurpose: "discovery", candidateAssessments: [{ relevance: { status: "unknown" } }] });
-    expect(mapPlaceCandidates(state.places!.data!.places)[0]?.name).toBe(shop.name);
+    expect(state.places!.data!.places[0]?.name).toBe(shop.name);
   });
   it("connects adopted Trip destination intent to existing constraint Assessment, not name matching", async () => {
     const trip = createTrip("11111111-1111-4111-8111-111111111111", "旅", "2026-09-12T08:00:00Z", [], {
@@ -55,8 +53,7 @@ describe("production target binding / Assessment / viewer seams", () => {
     await executeExternalTravelTool("search_place_media", { query: district.name, mode: "target", targetPlaceId: "district" },
       { searchPlaceMedia: async () => ({ result: info([district, shop]) }) }, state);
     expect(state.places!.data!.places).toHaveLength(1);
-    const candidate = mapPlaceCandidates(state.places!.data!.places)[0]!;
-    expect(mergeMapPlaceDetailCandidate(candidate, shop)).toBe(candidate);
+    expect(state.places!.data!.places[0]?.providerPlaceId).toBe("district");
   });
   it("keeps restaurant discovery's own identity/coordinates without name-only Mapbox enrichment", async () => {
     const restaurant = { providerRestaurantId: "hotpepper-1", name: shop.name, latitude: 34, longitude: 133,
@@ -67,6 +64,6 @@ describe("production target binding / Assessment / viewer seams", () => {
       searchPlaceMedia: async () => ({ result: info([shop]) }),
     }, state);
     expect(state.restaurants!.data!.restaurants[0]?.mapboxPlaceId).toBeUndefined();
-    expect(mapRestaurantCandidates(state.restaurants!.data!.restaurants)[0]?.name).toBe(shop.name);
+    expect(state.restaurants!.data!.restaurants[0]?.name).toBe(shop.name);
   });
 });

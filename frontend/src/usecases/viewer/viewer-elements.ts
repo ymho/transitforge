@@ -9,12 +9,6 @@ export interface ViewerElements {
   closeContextWorkspace: HTMLButtonElement;
   displayTime: HTMLInputElement;
   mapTools: HTMLElement;
-  mapPlaceExplorer: HTMLElement;
-  mapPlaceExplorerList: HTMLElement;
-  closeMapPlaceExplorer: HTMLButtonElement;
-  mapPlaceDetail: HTMLElement;
-  mapPlaceDetailContent: HTMLElement;
-  closeMapPlaceDetail: HTMLButtonElement;
   congestionToggle: HTMLButtonElement;
   aiGuidePanel: HTMLElement;
   closeAiGuide: HTMLButtonElement;
@@ -51,12 +45,6 @@ export function loadViewerElements(root: ParentNode): ViewerElements {
     closeContextWorkspace: required(root, "#close-context-workspace"),
     displayTime: required(root, "#display-time"),
     mapTools: required(root, "#map-tools"),
-    mapPlaceExplorer: required(root, "#map-place-explorer"),
-    mapPlaceExplorerList: required(root, "#map-place-explorer-list"),
-    closeMapPlaceExplorer: required(root, "#close-map-place-explorer"),
-    mapPlaceDetail: required(root, "#map-place-detail"),
-    mapPlaceDetailContent: required(root, "#map-place-detail-content"),
-    closeMapPlaceDetail: required(root, "#close-map-place-detail"),
     congestionToggle: required(root, "#congestion-toggle"),
     aiGuidePanel: required(root, "#ai-guide-panel"),
     closeAiGuide: required(root, "#close-ai-guide"),

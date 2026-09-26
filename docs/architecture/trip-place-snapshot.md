@@ -17,7 +17,7 @@
 | `RestaurantCandidate` / Hot Pepper Adapter | providerRestaurantId、任意mapboxPlaceId、位置・営業・価格等のruntime候補。Provider間IDを同一視せず#410で同じPlaceSnapshotを採用 |
 | `GroundAccessRoute` / Matrix等 | 現在は検証済み検索地点を使うruntime移動結果。#402/#413でTripのPlaceSnapshotの位置/identityを照合して利用。Placeへ移動時間を保存しない |
 | `agent-context-snapshot.ts` | V2の宿名・鉄道発着名を既存と同じbounded projectionで読む。Place全体やsource/IDを追加送信しない。currentTrip/candidates/realtimeFactsの意味は不変 |
-| `place-media-layer.ts` / `map-place-explorer.ts` / MapTravelCandidate | runtime PlaceMedia/候補を地図と詳細へ投影。V2の正本ではない。#390/#410で同じPlace型の表示projectionを利用し、ここに保存・同定ロジックを追加しない |
+| `PlaceMedia` / `RestaurantCandidate` 等のruntime候補 | 相談・旅程のpresentationへ投影する一時データ。運行地図には観光候補用の別projectionを持たず、V2の正本や保存形式にはしない |
 
 ## 唯一の保存可能モデル
 

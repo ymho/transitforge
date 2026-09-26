@@ -3,7 +3,6 @@ import { createTripConsultationNavigation } from "../usecases/trip-plan/trip-con
 import { currentAuthentication } from "./auth-composition";
 import { createConversationStreamSession } from "../adapters/http/agent-stream/session";
 
-import { placeCameraOffset } from "../presentation/place-explorer/place-camera-offset";
 import { accommodationProviderAttributionFromEnvironment } from "../adapters/browser/accommodation-provider-attribution";
 import { browserDigitalTwinClockEnvironment } from "../adapters/browser/digital-twin-clock-environment";
 import { browserPollingEnvironment } from "../adapters/browser/polling-controller";
@@ -11,7 +10,6 @@ import { createRuntimeMonitor, nextBrowserFrame } from "../adapters/browser/runt
 import { applyWeather } from "../adapters/mapbox/map-weather";
 import { createLocalWeatherLayer } from "../adapters/mapbox/local-weather-layer";
 import { createGroundAccessLayer, type GroundAccessLayerController } from "../adapters/mapbox/ground-access-layer";
-import type { VerifiedPlaceLayerController } from "../adapters/mapbox/place-media-layer";
 import {
   congestionRefreshIntervalMilliseconds,
   congestionRetryIntervalMilliseconds,
@@ -27,7 +25,7 @@ import {
   toRouteFeatureCollections,
 } from "../adapters/http/viewer-input/path-catalog";
 import { emptyStationLineCatalog } from "../adapters/http/viewer-input/station-line-catalog";
-import { researchPlaceDetail, searchWeatherGrid } from "../adapters/http/agent-api/bedrock-agent";
+import { searchWeatherGrid } from "../adapters/http/agent-api/bedrock-agent";
 import { loadTrainIndex } from "../adapters/http/viewer-input/train-index";
 import type { TrainDelaySnapshot, TrainOperation } from "@raiquora/operation/operation";
 import { dateForOperatingRouteTime, operatingServiceDateStart } from "../domain/display-date-time";
@@ -69,7 +67,6 @@ import {
   configureAiGuidePanel,
   type AiGuidePromptHandler,
 } from "../presentation/concierge/ai-guide-panel";
-import { configureLandmarkJourneyInteraction } from "../presentation/concierge/landmark-journey-interaction";
 import { configureTrainSelection } from "../presentation/train-viewer/train-selection-controller";
 import {
   configureTrainCongestionUpdates,
@@ -77,11 +74,8 @@ import {
 } from "../usecases/train-viewer/realtime-updates";
 import { configureLocalWeatherUpdates } from "../usecases/train-viewer/local-weather-updates";
 import { configureSidebarMapModeSelection } from "../presentation/train-viewer/map-controls";
+import { applyOperationBasemapConfig, operationBasemapConfig } from "../presentation/train-viewer/operation-map-basemap";
 import { createLoadingScreen } from "../presentation/shared/loading-screen";
-import {
-  configureMapPlaceExplorer,
-  type MapPlaceExplorerController,
-} from "../presentation/place-explorer/map-place-explorer";
 import { RuntimeMetrics } from "../observability/runtime-metrics";
 import { configureTravelProfile } from "../presentation/concierge/travel-profile-panel";
 import { HttpServerProfileClient } from "../adapters/http/server-profile-client";
@@ -109,13 +103,6 @@ import { BrowserContextWorkspaceRepository } from "../adapters/browser/context-w
 import type { ConversationSession } from "../domain/conversation-session";
 import { createContextWorkspaceController } from "../usecases/context-workspace/context-workspace-controller";
 import { createMobileContextNavigation } from "../presentation/concierge/mobile-context-navigation";
-import {
-  mapCandidateAsPlaceMedia,
-  mergeMapPlaceDetailCandidate,
-  mapPlaceCandidates,
-  mapRestaurantCandidates,
-  type MapTravelCandidate,
-} from "../domain/map-travel-candidate";
 
 export async function startViewer(): Promise<void> {
 const initialShareLink = consumeTripShareLink(window.location, window.history);
@@ -142,12 +129,6 @@ const {
   closeContextWorkspace,
   displayTime,
   mapTools,
-  mapPlaceExplorer,
-  mapPlaceExplorerList,
-  closeMapPlaceExplorer,
-  mapPlaceDetail,
-  mapPlaceDetailContent,
-  closeMapPlaceDetail,
   congestionToggle,
   aiGuidePanel,
   closeAiGuide,
@@ -210,10 +191,7 @@ if (isSignedIn()) {
   } catch { conversationUi.clear(); profileUi.clear(); }
 }
 let aiGuideController: ReturnType<typeof configureAiGuidePanel>;
-let verifiedPlaceLayer: VerifiedPlaceLayerController | undefined;
-let mapPlaceExplorerController: MapPlaceExplorerController | undefined;
 let groundAccessLayer: GroundAccessLayerController | undefined;
-let pendingMapCandidates: MapTravelCandidate[] = [];
 let tripMapOverlay: TripMapOverlay | undefined;
 let pendingTripMap: { key: string; points: TripMapPoint[]; routes: TripMapRoute[]; itemId?: string } | undefined;
 let tripRouteGeometry: ((trip: import("@raiquora/trip/trip").Trip) => TripMapRoute[]) | undefined;
@@ -244,7 +222,6 @@ const serverTripClient = new HttpServerTripClient();
 const inTripContextClient = new HttpInTripContextClient();
 const pendingDraftTripIds = new Map<string, { id: string; now: string; request: TripRequest }>();
 const serverTripList = createServerTripListSource(serverTripClient, canUsePersonalState);
-if (isSignedIn()) void serverTripList.refresh();
 const serverTripReferences = new Map<string, string>();
 const syncServerTripSource = (session: typeof activeConversationSession) => {
   if (!session.tripId) return;
@@ -357,32 +334,12 @@ aiGuideController = configureAiGuidePanel(
         .then((renamed) => { if (activeConversationSession.id === conversationId) activeConversationSession = renamed; })
         .catch(() => undefined);
     },
-    onPlaces: (places) => {
-      const candidates = mapPlaceCandidates(places);
-      pendingMapCandidates = candidates;
-      if (candidates.length === 0) {
-        mapPlaceExplorerController?.clear();
-        verifiedPlaceLayer?.clear();
-        return;
-      }
-      verifiedPlaceLayer?.show(candidates.map(mapCandidateAsPlaceMedia));
-      mapPlaceExplorerController?.show(candidates);
-      contextWorkspaceController.show("map");
-    },
     onGroundAccess: (access) => {
       groundAccessLayer?.show(access);
       contextWorkspaceController.show("map");
     },
     onRestaurantConsult: (restaurant) => {
       aiGuideController.ask(`${restaurant.name}を食事候補として旅程に入れたい`);
-    },
-    onRestaurants: (restaurants) => {
-      const candidates = mapRestaurantCandidates(restaurants);
-      pendingMapCandidates = candidates;
-      if (candidates.length === 0) return;
-      verifiedPlaceLayer?.show(candidates.map(mapCandidateAsPlaceMedia));
-      mapPlaceExplorerController?.show(candidates);
-      contextWorkspaceController.show("map");
     },
     persistent: () => true,
     responseContextKey: () => JSON.stringify([serverAgentSession.contextVersion(), activeConversationSession.id, tripWorkspaceController.current()?.id, tripWorkspaceController.current()?.revision]),
@@ -434,7 +391,7 @@ const activateConversation = async (sessionId: string) => {
   if (activeConversationSession.id !== sessionId && !canLeaveConditions()) throw new Error("Navigation cancelled");
   const session = conversationUi.selectLocal(sessionId);
   if (!session) return;
-  returnToConversation(); mapPlaceExplorerController?.clear(); activeConversationSession = session;
+  returnToConversation(); activeConversationSession = session;
   serverAgentSession.contextChanged(); syncServerTripSource(session);
   tripWorkspaceController.activateSession(session.id); contextWorkspaceController.activateSession(session.id);
   aiGuideController.switchSession(session.id);
@@ -486,8 +443,7 @@ currentAuthentication().subscribe(() => {
   aiGuideController.switchSession(unsignedConversation.id);
   tripWorkspaceController.activateSession(unsignedConversation.id);
   contextWorkspaceController.activateSession(unsignedConversation.id);
-  if (!isSignedIn()) { void serverTripList.refresh(); return; }
-  void serverTripList.refresh();
+  if (!isSignedIn()) return;
   void Promise.all([conversationUi.hydrate(), profileUi.hydrate()]).then(async ([session]) => {
     if (generation !== authenticationGeneration) return;
     const selected = session ?? await conversationUi.create();
@@ -579,25 +535,18 @@ startMap = async () => {
 };
 primaryShell = configureAiFirstShell(document, app, {
   read: () => {
-    const source = tripWorkspaceController.source(), trip = tripWorkspaceController.current();
-    const load = tripWorkspaceController.loadState();
     const listState = serverTripList.getState();
     return {
-      state: homePreview === "loading" ? "loading" : homePreview === "error" ? "unavailable" : homePreview === "empty" ? "available"
-        : listState,
-      trips: listState === "available" ? serverTripList.getTrips() : [], readiness: trip && source && load === "loaded" ? tripWorkspaceController.readiness() : undefined,
-      candidates: tripWorkspaceController.candidates().map(({ candidate, assessment }) => ({
-        id: candidate.id, title: candidate.experiences[0]?.name ?? candidate.accommodations[0]?.name ?? "移動の候補", assessment,
-      })),
-      preview: !!homePreview || (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip-workspace-preview") === "1"),
+      state: homePreview === "loading" ? "loading" : homePreview === "error" ? "unavailable" : homePreview === "empty" ? "available" : listState,
+      trips: listState === "available" ? serverTripList.getTrips() : [],
     };
   },
   subscribe: (listener) => {
-    const left = tripWorkspaceController.subscribe(listener), middle = profileUi.subscribe(listener), right = serverTripList.subscribe(listener), auth = currentAuthentication().subscribe(listener);
-    return () => { left(); middle(); right(); auth(); };
+    const trips = serverTripList.subscribe(listener), auth = currentAuthentication().subscribe(listener);
+    return () => { trips(); auth(); };
   },
   authState: () => currentAuthentication().getState(), login: () => { void currentAuthentication().login(); }, logout: () => { void currentAuthentication().logout(); },
-  retry: async () => { await serverTripList.refresh(); await tripWorkspaceController.source()?.retry?.(); },
+  retry: async () => { await serverTripList.refresh(); },
   newConsultation: (prompt) => { void startNewConsultation(prompt).catch(() => aiGuideController.notify("相談を始めるにはログインしてください。")); },
   openChat: () => { aiGuideController.open(); if (tripWorkspaceController.current()) tripWorkspace.show("chat"); delete app.dataset.mapFocusMode; },
   openTrip: (id) => { void tripNavigation.open(id, "trip").catch(() => aiGuideController.notify("旅程を読み込めませんでした。")); },
@@ -671,11 +620,10 @@ if (import.meta.env.DEV && homePreview === "data") {
 }
 
 async function initializeMap() {
-const [{ default: mapboxgl }, { MapboxThreeTrainLayer }, { createTripMapOverlay }, { createVerifiedPlaceLayer }] = await Promise.all([
+const [{ default: mapboxgl }, { MapboxThreeTrainLayer }, { createTripMapOverlay }] = await Promise.all([
   import("mapbox-gl"),
   import("../presentation/train-viewer/rendering/mapbox-three-train-layer"),
   import("../adapters/mapbox/trip-map-overlay"),
-  import("../adapters/mapbox/place-media-layer"),
   import("mapbox-gl/dist/mapbox-gl.css"),
 ]);
 if (!token) {
@@ -690,17 +638,7 @@ if (!token) {
     container: "map",
     style: "mapbox://styles/mapbox/standard",
     config: {
-      basemap: {
-        // 地図を抑えた背景へ寄せ、半透明の操作面と路線色を主役にする。
-        theme: "faded",
-        show3dObjects: true,
-        showPointOfInterestLabels: false,
-        showPlaceLabels: false,
-        showRoadLabels: false,
-        showTransitLabels: false,
-        showLandmarkIcons: true,
-        showLandmarkIconLabels: true,
-      },
+      basemap: operationBasemapConfig,
     },
     language: "ja",
     center: [135.4959, 34.7025],
@@ -715,57 +653,6 @@ if (!token) {
   if (pendingTripMap) tripMapOverlay.show(pendingTripMap.key, pendingTripMap.points, pendingTripMap.routes, pendingTripMap.itemId);
   resizeContextMap = () => map.resize();
   groundAccessLayer = createGroundAccessLayer(map);
-  verifiedPlaceLayer = createVerifiedPlaceLayer(map, (place) =>
-    mapPlaceExplorerController?.select(place.providerPlaceId, true), () => placeCameraOffset(
-      map.getContainer().getBoundingClientRect(),
-      [mapPlaceExplorer, mapPlaceDetail].filter((panel) => !panel.hidden).map((panel) => panel.getBoundingClientRect()),
-    ));
-  mapPlaceExplorerController = configureMapPlaceExplorer({
-    panel: mapPlaceExplorer,
-    list: mapPlaceExplorerList,
-    close: closeMapPlaceExplorer,
-    detail: mapPlaceDetail,
-    detailContent: mapPlaceDetailContent,
-    closeDetail: closeMapPlaceDetail,
-    focusPlace: (providerPlaceId) => verifiedPlaceLayer?.focus(providerPlaceId),
-    loadDetail: async (candidate) => {
-      if (candidate.kind !== "place") return candidate;
-      const response = await researchPlaceDetail({
-        query: candidate.name,
-        targetRef: candidate.value.sources?.find(source => source.role === "identity")
-          ? { provider: candidate.value.sources.find(source => source.role === "identity")!.provider, providerPlaceId: candidate.id }
-          : undefined,
-        latitude: candidate.latitude,
-        longitude: candidate.longitude,
-      });
-      const detail = response.result.status === "available"
-        ? response.result.data?.places[0]
-        : undefined;
-      return detail ? mergeMapPlaceDetailCandidate(candidate, detail) : candidate;
-    },
-    choose: (candidate) => {
-      if (candidate.kind === "accommodation") {
-        closeMapPlaceDetail.click();
-        tripWorkspace.show("chat");
-        aiGuideController.ask(`${candidate.name}を宿泊候補として相談したい（まだ採用していません）`);
-        return;
-      }
-      closeMapPlaceDetail.click();
-      aiGuideController.ask(candidate.kind === "restaurant"
-        ? `${candidate.name}を食事候補として旅程に入れたい`
-        : `${candidate.name}を軸に旅程を考えたい`);
-      returnToConversation();
-    },
-    clearPlaces: () => {
-      pendingMapCandidates = [];
-      verifiedPlaceLayer?.clear();
-    },
-  });
-  if (pendingMapCandidates.length > 0) {
-    verifiedPlaceLayer.show(pendingMapCandidates.map(mapCandidateAsPlaceMedia));
-    mapPlaceExplorerController.show(pendingMapCandidates);
-  }
-
   map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }));
   const geolocateControl = new mapboxgl.GeolocateControl({
     positionOptions: { enableHighAccuracy: true },
@@ -798,52 +685,8 @@ if (!token) {
     loadingScreen.setStep("map", "complete");
     loadingScreen.setStep("routes", "loading");
     loadingScreen.setMessage("地図の表示を整えています。");
-    map.setConfigProperty("basemap", "show3dObjects", true);
-    map.setConfigProperty("basemap", "showPointOfInterestLabels", false);
-    map.setConfigProperty("basemap", "showPlaceLabels", false);
-    map.setConfigProperty("basemap", "showRoadLabels", false);
-    // Mapbox Standardでは空港だけを除外できないため、空港を含む交通ラベル群を隠す。
-    // TransitForgeが描画する路線・列車・詳細表示には影響しない。
-    map.setConfigProperty("basemap", "showTransitLabels", false);
-    map.setConfigProperty("basemap", "showLandmarkIcons", true);
-    map.setConfigProperty("basemap", "showLandmarkIconLabels", true);
-    configureLandmarkJourneyInteraction(map, (landmark) => {
-      const landmarkCoordinate: [number, number] | undefined = landmark.longitude !== undefined &&
-        landmark.latitude !== undefined
-        ? [landmark.longitude, landmark.latitude]
-        : undefined;
-      if (landmarkCoordinate) {
-        map.easeTo({
-          center: landmarkCoordinate,
-          zoom: Math.max(map.getZoom(), 17.6),
-          pitch: 68,
-          bearing: -24,
-          duration: 850,
-        });
-      }
-      mapPlaceExplorerController?.showPending({
-        name: landmark.name,
-        choose: () => {
-          closeMapPlaceDetail.click();
-          aiGuideController.ask(`${landmark.name}を軸に旅程を考えたい`);
-          returnToConversation();
-        },
-        load: async () => {
-          const response = await researchPlaceDetail({
-            query: landmark.name,
-            ...(landmark.providerPlaceId ? { targetRef: { provider: "mapbox", providerPlaceId: landmark.providerPlaceId } } : {}),
-            ...(landmarkCoordinate ? { latitude: landmarkCoordinate[1], longitude: landmarkCoordinate[0] } : {}),
-          });
-          return response.result.status === "available" ? mapPlaceCandidates(response.result.data?.places ?? []) : [];
-        },
-        onLoaded: (candidates) => {
-          pendingMapCandidates = [...candidates];
-          verifiedPlaceLayer?.show(candidates.map(mapCandidateAsPlaceMedia));
-          verifiedPlaceLayer?.focus(candidates[0]!.id);
-          contextWorkspaceController.show("map", { kind: "place", id: candidates[0]!.id });
-        },
-      });
-    });
+    // Reapply the operation-screen basemap policy after every Mapbox style reload.
+    applyOperationBasemapConfig(map);
     let applyWeatherToTrains: (mode: WeatherMode) => void = () => undefined;
     let activeWeatherMode: WeatherMode = "clear";
     const applyAutomaticWeather = (mode: WeatherMode) => {

@@ -7,7 +7,7 @@ beforeEach(() => { document.body.innerHTML = '<main id="app"></main>'; window.hi
 afterEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
 function setup(overrides: Partial<AiFirstShellPorts> = {}) {
   const ports: AiFirstShellPorts = {
-    read: () => ({ state: "unauthenticated", trips: [], candidates: [] }),
+    read: () => ({ state: "unauthenticated", trips: [] }),
     authState: () => ({ status: "signed-out" }), login: vi.fn(), logout: vi.fn(),
     subscribe: () => () => {}, retry: vi.fn(async () => {}), newConsultation: vi.fn(), openChat: vi.fn(), openTrip: vi.fn(),
     openMap: vi.fn(), journeySettings: () => ({ transferPace: "standard", rankingPreference: "balanced" }), setJourneySettings: vi.fn(), openNotifications: vi.fn(), now: () => new Date("2026-09-18T00:00:00Z"), ...overrides,
@@ -26,8 +26,13 @@ it("starts Home without initializing Map or requiring profile/authentication", (
   expect(document.body.textContent).not.toContain("調査済みのおすすめではありません");
   expect(document.querySelector('[aria-label="相談の入力例"]')).toBeNull();
   expect(document.querySelector(".home-rail-feature")).toBeNull();
-  expect(document.querySelector("[data-home-live]")!.textContent).toContain("ログインすると、保存した旅程");
+  expect(document.querySelector("[data-home-live]")).toBeNull();
+  const home = document.querySelector<HTMLElement>('[data-page="explore"]')!;
+  expect(home.textContent).not.toContain("次の旅");
+  expect(home.textContent).not.toContain("旅の候補");
   expect(document.querySelector(".home-prompt")!.hasAttribute("hidden")).toBe(false);
+  expect(document.querySelector(".home-prompt")!.classList.contains("ds-composer")).toBe(true);
+  expect(document.querySelector("#home-prompt")!.classList.contains("ds-control")).toBe(true);
   expect(document.body.textContent).not.toContain("旅行相談を始めるにはログインしてください");
   expect(document.querySelector("[data-home-login]")).toBeNull();
   expect(document.querySelector('[data-primary="chat"]')!.hasAttribute("hidden")).toBe(true);
@@ -39,6 +44,13 @@ it("starts Home without initializing Map or requiring profile/authentication", (
   expect(sessionStorage.getItem("raiquora:home-prompt-draft")).toBe("出雲へ行きたい");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("explore");
   expect(ports.openMap).not.toHaveBeenCalled();
+});
+it("loads saved trips only when the dedicated Trips screen is opened", () => {
+  const retry = vi.fn(async () => {});
+  const { shell } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }), retry });
+  expect(retry).not.toHaveBeenCalled();
+  shell.navigate("trips");
+  expect(retry).toHaveBeenCalledOnce();
 });
 it("starts consultation only after authentication and rejects a direct signed-out chat route", () => {
   window.history.replaceState(null, "", "#chat");
@@ -77,7 +89,6 @@ it("requires authentication before opening every feature route including realtim
   const signedOut = setup();
   expect(document.querySelector("main")!.dataset.primaryView).toBe("explore");
   expect(window.location.hash).toBe("#explore");
-  expect(document.querySelector<HTMLElement>("[data-home-live]")!.hidden).toBe(true);
   expect(signedOut.ports.openTrip).not.toHaveBeenCalled();
   click("[data-map]");
   expect(signedOut.ports.login).toHaveBeenCalledOnce();
@@ -126,16 +137,20 @@ it("opens realtime operations from the persistent navigation and marks it curren
   expect(document.querySelector("main")!.dataset.primaryView).toBe("map");
   expect(document.querySelector("[data-map-navigation]")!.getAttribute("aria-current")).toBe("page");
 });
-it.each(["loading", "available", "unavailable", "unauthenticated"] as const)("renders %s without inventing reservations or completion", (state) => {
-  setup({ read: () => ({ state, trips: [], candidates: [] }) });
-  const text = document.querySelector("[data-home-live]")!.textContent!;
-  expect(text).not.toContain("予約済み"); expect(text).not.toContain("準備完了です");
-  expect(document.querySelector("[data-retry]") !== null).toBe(state === "unavailable");
+it.each(["loading", "available", "unavailable", "unauthenticated"] as const)("keeps read state out of Home and reports it only in the Trips surface (%s)", (state) => {
+  const signedIn = state === "unauthenticated" ? { status: "signed-out" as const } : { status: "signed-in" as const, displayName: "山田 花子" };
+  const { shell } = setup({ authState: () => signedIn, read: () => ({ state, trips: [] }) });
+  expect(document.querySelector("[data-home-live]")).toBeNull();
+  if (signedIn.status === "signed-in") {
+    shell.navigate("trips");
+    expect(document.querySelector("[data-trip-list]")!.textContent).not.toContain("予約済み");
+    expect(document.querySelector("[data-trip-list]")!.textContent).not.toContain("準備完了です");
+  }
 });
-it("reader failures render retry without disabling the independent consultation form", () => {
+it("reader failures do not disable the independent Home consultation form", () => {
   setup({ read: () => { throw new Error("unavailable"); } });
-  expect(document.querySelector("[data-retry]")).not.toBeNull();
-  expect(document.querySelector<HTMLButtonElement>('form button')!.disabled).toBe(false);
+  expect(document.querySelector("[data-home-live]")).toBeNull();
+  expect(document.querySelector<HTMLButtonElement>('.home-prompt button')!.disabled).toBe(false);
 });
 it("all secondary actions use existing feature ports", () => {
   const { shell, ports } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) }); shell.navigate("my");
@@ -144,7 +159,7 @@ it("all secondary actions use existing feature ports", () => {
 });
 it("opens the actual Trip as a trips subview, not a selected chat tab", () => {
   const trip = createTrip("45300000-0000-4000-8000-000000000001", "旅程", "2026-09-18T00:00:00Z", []);
-  const { ports } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }), read: () => ({ state: "available", trips: [trip], candidates: [] }) });
+  const { ports } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }), read: () => ({ state: "available", trips: [trip] }) });
   expect(document.querySelector('.home-trip-art svg[aria-hidden="true"]')).not.toBeNull();
   click('[data-primary="trips"]'); click("[data-trip]");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("trip");
@@ -161,7 +176,7 @@ it("shows a travel-mode entry only for the current adopted Trip", () => {
     schedule: { type: "fixed", startAt: { at: "2026-09-17T23:00:00Z", timeZone: "UTC" }, endAt: { at: "2026-09-18T01:00:00Z", timeZone: "UTC" } },
   }]);
   const trip = { ...base, adoption: { confirmedAt: "2026-09-17T00:00:00Z" } };
-  const openTravelMode = vi.fn(); setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }), read: () => ({ state: "available", trips: [trip], candidates: [] }), openTravelMode });
-  click("[data-trip-travel]"); expect(openTravelMode).toHaveBeenCalledWith(trip.id);
+  const openTravelMode = vi.fn(); const { shell } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }), read: () => ({ state: "available", trips: [trip] }), openTravelMode });
+  shell.navigate("trips"); click("[data-trip-travel]"); expect(openTravelMode).toHaveBeenCalledWith(trip.id);
   expect(document.querySelectorAll("[data-trip-travel]")).toHaveLength(1);
 });
