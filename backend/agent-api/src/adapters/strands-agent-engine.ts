@@ -1,7 +1,7 @@
 import {
   Agent, BedrockModel, tool,
   type AgentConfig, type BaseModelConfig, type InvokableTool,
-  type JSONSchema, type JSONValue, type Model, type Message, type ModelStreamEvent,
+  type JSONSchema, type JSONValue, type Model, type Message,
   type StreamOptions, type ToolChoice,
 } from "@strands-agents/sdk";
 import { AgentTraceRecorder, type AgentTrace } from "@raiquora/agent/agent-trace";
@@ -226,10 +226,13 @@ export function createStrandsReadTools(input: {
 function requireToolUntilReply(baseModel: Model<BaseModelConfig>, submission: AgentV2ReplySubmission): Model<BaseModelConfig> {
   return new Proxy(baseModel, {
     get(target, property) {
-      if (property === "stream") {
-        return async function* (messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
+      // Strands Agent invokes streamAggregated(), not stream() directly.
+      // Inject ToolChoice at that boundary so the base implementation forwards it
+      // into the provider's stream() call.
+      if (property === "streamAggregated") {
+        return async function* (messages: Message[], options?: StreamOptions) {
           const toolChoice: ToolChoice = submission.submitted ? { auto: {} } : { any: {} };
-          yield* target.stream(messages, { ...options, toolChoice });
+          return yield* target.streamAggregated(messages, { ...options, toolChoice });
         };
       }
       const value = Reflect.get(target, property, target);
