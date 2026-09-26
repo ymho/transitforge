@@ -119,6 +119,18 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
     testName: "keeps total-only party separate from an explicit adult/child composition without guessing ages",
   },
   {
+    id: "V2-CONDITIONS-PERIOD-01", kind: "v2_specific",
+    invariant: "one travel-period business slot atomically updates start date, end date and duration without a partial A-commit",
+    testFile: "modules/agent/runtime/conversation-condition.test.ts",
+    testName: "accepts one atomic travel-period slot with multiple Domain targets and resolves calendar expressions in Application",
+  },
+  {
+    id: "V2-CONDITIONS-PERIOD-STORAGE-01", kind: "v2_specific",
+    invariant: "travel-period persistence records one journal slot and never commits only part of its Domain operations",
+    testFile: "backend/agent-api/src/adapters/dynamodb-condition-operations.test.ts",
+    testName: "never persists a partial travel period when its single A-commit transaction fails",
+  },
+  {
     id: "V2-PROFILE-READ-01", kind: "v2_specific",
     invariant: "current conditions override profile hints without mutating the Profile or reviving a retracted default",
     testFile: "backend/agent-api/src/composition/strands-intent-acceptance.test.ts",
