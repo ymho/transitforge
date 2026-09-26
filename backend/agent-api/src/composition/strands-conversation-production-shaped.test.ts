@@ -69,7 +69,7 @@ class IntentThenNoReplyModel extends Model<BaseModelConfig> {
     yield { type: "modelMessageStartEvent", role: "assistant" };
     if (this.calls === 1) {
       const input = { action: "set", place: "京都", quote: "京都" };
-      yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: "update_destination", toolUseId: "intent-1" } };
+      yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: "update_current_destination", toolUseId: "intent-1" } };
       yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(input) } };
       yield { type: "modelContentBlockStopEvent" };
       yield { type: "modelMessageStopEvent", stopReason: "toolUse" };
