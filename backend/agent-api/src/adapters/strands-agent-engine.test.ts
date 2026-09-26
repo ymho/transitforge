@@ -33,6 +33,37 @@ const options = { modelId: "unused", region: "ap-northeast-1", systemPrompt: "Us
 const lookup: Reply = { tool: "lookup_place", input: { location: "京都" } };
 const submitted: Reply = { tool: "submit_reply", input: { kind: "uncertainty" } };
 const end: Reply = { text: "終了しました。" };
+class IntentThenToolThenReplyModel extends Model<BaseModelConfig> {
+  private calls = 0;
+  private config: BaseModelConfig = { modelId: "test-model" };
+  updateConfig(config: BaseModelConfig): void { this.config = { ...this.config, ...config }; }
+  getConfig(): BaseModelConfig { return this.config; }
+  async *stream(_messages: Message[], _options?: StreamOptions): AsyncGenerator<ModelStreamEvent> {
+    this.calls += 1;
+    yield { type: "modelMessageStartEvent", role: "assistant" };
+    const calls = [
+      { name: "update_intent", input: { outcome: "delta", speechAct: "correct", operations: [{
+        atomicGroup: 1, action: "replace", target: "destination", modality: "preferred", precision: "exact",
+        frame: "actual", quote: "京都", value: { kind: "place_label", label: "京都" },
+      }], unresolvedFragments: [] } },
+      { name: "lookup_place", input: { location: "京都" } },
+      { name: "submit_reply", input: { kind: "conversation", message: "acknowledgement" } },
+    ] as const;
+    const call = calls[this.calls - 1];
+    if (call) {
+      yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: call.name, toolUseId: `tool-${this.calls}` } };
+      yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(call.input) } };
+      yield { type: "modelContentBlockStopEvent" };
+      yield { type: "modelMessageStopEvent", stopReason: "toolUse" };
+      return;
+    }
+    yield { type: "modelContentBlockStartEvent" };
+    yield { type: "modelContentBlockDeltaEvent", delta: { type: "textDelta", text: "ignored" } };
+    yield { type: "modelContentBlockStopEvent" };
+    yield { type: "modelMessageStopEvent", stopReason: "endTurn" };
+  }
+}
+
 function effectiveDestination(label: string): EffectiveIntent {
   return { version: 1, base: { source: "none", fingerprint: "base" }, intentRevision: 3,
     activeBaseFacts: [], profileHints: [], ignoredProfileSettings: [], hypotheticalFacts: [],
@@ -120,5 +151,34 @@ describe("StrandsAgentEngine", () => {
     const { execute, input } = setup();
     await new StrandsAgentEngine(options, { model: new ScriptedModel([submitted, lookup, end]) }).run(input);
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("applies one accepted intent update before validating later read Tools in the same Strands invoke", async () => {
+    const execute = vi.fn(async () => successfulAgentToolResult({ name: "京都" }));
+    const { registry, executor } = setupTool(execute);
+    const apply = vi.fn(async () => ({
+      receipt: { version: "public-semantic-receipt-v1" as const, intentRevision: 4, speechAct: "correct" as const,
+        outcome: "accepted" as const, changes: [{ changeRef: "change-1", groupRef: "group-1", action: "replace" as const,
+          target: "destination" as const, scope: { type: "conversation" as const }, frame: "actual" as const, status: "accepted" as const }] },
+      effectiveIntent: effectiveDestination("京都"),
+    }));
+    const engine = new StrandsAgentEngine({
+      modelId: "unused", region: "ap-northeast-1", systemPrompt: "test", maxTurns: 5,
+    }, { model: new IntentThenToolThenReplyModel() });
+
+    const result = await engine.run({
+      executionId: "execution-intent-update",
+      userRequest: "行き先を京都に変えて",
+      tools: registry,
+      toolExecutor: executor,
+      effectiveIntent: effectiveDestination("神戸"),
+      intentController: { apply },
+      limits: { maxTurns: 5, maxToolCalls: 1 },
+    });
+
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(result.replyProposal).toEqual({ kind: "conversation", message: "acknowledgement" });
+    expect(result.metrics?.toolCalls).toBe(1);
   });
 });
