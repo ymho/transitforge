@@ -38,6 +38,9 @@ jobs:
     env:
       CD_MODE: ${{ github.event_name == 'workflow_run' && 'deploy' || inputs.mode || 'plan' }}
       TF_VAR_enable_fixed_egress_provider: ${{ vars.FIXED_EGRESS_PROVIDER_ENABLED }}
+      # #706: development-service cutover, not a general-availability quality gate.
+      TF_VAR_agent_runtime_v2_enabled: "true"
+      TF_VAR_conversation_semantic_kernel_enabled: "false"
       AWS_REGION: ap-northeast-1
       AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
@@ -156,6 +159,20 @@ jobs:
           echo "website_bucket=$(terraform output -raw website_bucket_name)" >> "$GITHUB_OUTPUT"
           echo "distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> "$GITHUB_OUTPUT"
           echo "agent_stream_log_group=$(terraform output -raw agent_stream_log_group_name)" >> "$GITHUB_OUTPUT"
+          echo "agent_stream_function=$(terraform output -raw agent_stream_function_name)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify deployed Agent runtime
+        if: env.CD_MODE == 'deploy'
+        env:
+          AGENT_STREAM_FUNCTION: ${{ steps.terraform.outputs.agent_stream_function }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws lambda wait function-updated-v2 --function-name "$AGENT_STREAM_FUNCTION"
+          aws lambda get-function-configuration \
+            --function-name "$AGENT_STREAM_FUNCTION" \
+            --query '{state:State,updateStatus:LastUpdateStatus,v2:Environment.Variables.AGENT_RUNTIME_V2_ENABLED,semantic:Environment.Variables.SEMANTIC_INTENT_ENABLED}' \
+            --output json | node tools/deployment/verify-agent-runtime.mjs | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Summarize recent Agent failures without conversation content
         if: env.CD_MODE == 'deploy'
