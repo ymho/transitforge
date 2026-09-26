@@ -2,49 +2,40 @@ name: Agent v2 / One-time structured output verification
 on:
   push:
     branches: [refactor/716-sdk-structured-output]
-    paths: [.github/workflows/716-sdk-output-bootstrap.yml, tools/716-sdk-output-bootstrap.py]
+    paths: [.github/workflows/716-sdk-output-bootstrap.yml]
 permissions:
   contents: read
 concurrency:
   group: transitforge-716-sdk-output-bootstrap
   cancel-in-progress: false
 jobs:
-  prepare:
-    if: github.repository == 'ymho/transitforge' && github.ref == 'refs/heads/refactor/716-sdk-structured-output'
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    permissions:
-      contents: write
-    outputs:
-      source_sha: ${{ steps.source.outputs.sha }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version-file: .nvmrc
           cache: npm
-      - name: Apply the reviewed source transformation on the isolated branch
-        run: python3 tools/716-sdk-output-bootstrap.py
-      - name: Publish generated source to this feature branch only
-        id: source
-        shell: bash
-        run: |
-          set -euo pipefail
-          git diff --check
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add backend modules tools package.json package-lock.json docs
-          git commit -m '🧪 構文と公開検証の境界を受入テストで確認'
-          git push origin HEAD:refs/heads/refactor/716-sdk-structured-output
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          git diff --numstat bf291769f9f093777a9fa7679ddac1be854bb140 -- backend modules tools package.json package-lock.json docs
       - run: npm ci
       - run: npm run test:agent:v2
       - run: npm run architecture:check && npm run build
+      - name: Verify Provider imports remain forbidden in the contract module
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=modules/agent/runtime/architecture-negative-probe.ts
+          trap 'rm -f "$file"' EXIT
+          printf 'import { Agent } from "@strands-agents/sdk";\n' > "$file"
+          if node tools/check_architecture_boundaries.mjs; then
+            echo 'Provider boundary was weakened' >&2
+            exit 1
+          fi
   model-verification:
-    needs: prepare
+    needs: verify
     if: github.repository == 'ymho/transitforge' && github.ref == 'refs/heads/refactor/716-sdk-structured-output'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -60,7 +51,6 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          ref: ${{ needs.prepare.outputs.source_sha }}
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:

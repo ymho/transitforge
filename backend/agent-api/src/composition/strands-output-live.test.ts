@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { stateDynamoFixture, conversationId, secondId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
+import { stateDynamoFixture, conversationId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, token } from "../adapters/cognito-token.fixture.js";
 import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
@@ -39,17 +39,19 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
       limits: { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 2, maxExecutionMs: 60000 },
       runRuntime: createStrandsServerRuntime(new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
         maxTurns: 6, maxOutputTokens: 1024 })),
-      additionalTools: productionServerTools({ external: { searchPlaceMedia }, accommodation: vi.fn(), journey: vi.fn() }) });
+      // This lane isolates the real model/output contract. Only the representative
+      // production read is exposed, not unrelated Providers with empty stubs.
+      additionalTools: productionServerTools({ external: { searchPlaceMedia }, accommodation: vi.fn(), journey: vi.fn() })
+        .filter(({ descriptor }) => descriptor.name === "search_place_media") });
     const messages = ["おはよう", "出雲大社にいきたい", "やっぱり清水寺に行きたい。候補カードを見せて", "この候補を保存して"];
-    const reports: object[] = [];
     for (const [index, userRequest] of messages.entries()) {
       const turnId = `72200000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
       const started = Date.now(), before = calls.length;
       const result = await app.runConversationTurn({ principal, conversationId, turnId, userRequest });
       const working = await new DynamoDbConversationTurnRepository("test-state", state.client).getWorkingState(principal, conversationId);
-      reports.push({ case: index, status: result.status, reads: calls.length - before, cards: result.publicPlacePresentation?.cards.length ?? 0,
-        intentRevision: working?.semantic?.overlay.intentRevision ?? 0, durationMs: Date.now() - started });
-      console.log(JSON.stringify({ modelId, ...reports.at(-1) }));
+      console.log(JSON.stringify({ modelId, case: index, status: result.status, reads: calls.length - before,
+        cards: result.publicPlacePresentation?.cards.length ?? 0, intentRevision: working?.semantic?.overlay.intentRevision ?? 0,
+        durationMs: Date.now() - started }));
       expect(result.status).toBe("completed");
       const beforeReplay = calls.length;
       expect(await app.runConversationTurn({ principal, conversationId, turnId, userRequest })).toEqual(result);
