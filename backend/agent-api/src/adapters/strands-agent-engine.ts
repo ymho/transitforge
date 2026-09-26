@@ -123,7 +123,7 @@ export class StrandsAgentEngine {
             ? { target: "party_size", party: value.party!, quote: value.quote }
             : { target: "party_size", party: null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "update_current_travel_period", inputSchema: travelPeriodUpdateInputSchema,
-          description: "今回の旅行で実際に採用する旅行期間の最終状態を1回で永続更新する。設定・訂正はaction=set、日程全体を未定へ戻す明示はaction=clear。start/end/durationは今回の発言で明示したものだけ指定し、各要素にその要素だけのquoteを付ける。日付はcalendar_dateでdayを必須、monthは明示または開始日から同月と読める場合、yearは利用者が年を明示した場合だけ設定する。年未指定はApplicationが基準日以降で最初に来る月日へ決める。今日/明日/明後日はrelative_date。以前のduration等を持ち越さず、日付や日数を推測・補完しない。what-if・比較ではconsider_trip_scenarioを使う。",
+          description: "今回の旅行で実際に採用する旅行期間の最終状態を1回で永続更新する。設定・訂正はaction=set、日程全体を未定へ戻す明示はaction=clear。start/end/durationは今回の発言で明示したものだけ指定する。外側quoteをApplicationが月・日・泊数/日数の根拠として検証する。日付はcalendar_dateでdayを必須、monthは明示または開始日から同月と読める場合、yearは利用者が年を明示した場合だけ設定する。年未指定はApplicationが基準日以降で最初に来る月日へ決める。今日/明日/明後日はrelative_date。以前のduration等を持ち越さず、日付や日数を推測・補完しない。what-if・比較ではconsider_trip_scenarioを使う。",
           callback: (value, context) => apply(value.action === "set"
             ? { target: "travel_period", period: value.period!, quote: value.quote }
             : { target: "travel_period", period: null, quote: value.quote }, context?.cancelSignal) }),
