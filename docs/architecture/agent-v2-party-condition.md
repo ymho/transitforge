@@ -6,7 +6,7 @@
 
 同行者は今回の旅行条件であり、常設Profileの普段の人数・同行者から自動補完しない。
 
-モデルへ公開する変更操作は`update_party`の1つだけ。
+モデルへ公開する変更操作は`update_current_party`の1つだけ。
 
 - `action=set`: 今回の人数・同行者構成を設定または訂正する。
 - `action=clear`: 今回のparty条件を明示撤回する。
@@ -17,7 +17,7 @@ Strands標準`tool()`とZodを使う。Tool callbackは#724の共通Conversation
 
 ## 値
 
-`update_party(action=set)`は2種類の値を区別する。
+`update_current_party(action=set)`は2種類の値を区別する。
 
 ### count
 
