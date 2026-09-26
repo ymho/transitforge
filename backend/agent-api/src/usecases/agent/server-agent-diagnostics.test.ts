@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { createServerAgentApplication } from "./server-agent.js";
 import { AgentModelError } from "@raiquora/agent/model-provider";
+import { ServerAgentRuntimeExecutionError } from "../../ports/server-agent-runtime.js";
 
 it("emits privacy-safe diagnostics and does not fail the turn when the sink fails", async () => {
   const record = vi.fn(async (event) => { if (event.phase === "decision") throw new Error("sink unavailable"); }), log = vi.fn();
@@ -40,4 +41,24 @@ it.each([
   expect(result.status).toBe("failed");
   expect(record).toHaveBeenCalledWith(expect.objectContaining({ phase: "runtime", reason: expectedReason, incomplete: true }));
   expect(JSON.stringify(record.mock.calls)).not.toContain("private provider detail");
+});
+
+
+it("records only bounded V2 runtime throw classification before rethrowing", async () => {
+  const record = vi.fn();
+  const app = createServerAgentApplication({
+    newExecutionId: () => "execution",
+    diagnostics: { record },
+    registerTools: () => undefined,
+    createModel: () => ({ generate: async () => { throw new Error("V1 must not run"); } }),
+    runRuntime: async () => { throw new ServerAgentRuntimeExecutionError("agent_invoke", "provider"); },
+  });
+  await expect(app.runAgentTurn({
+    principal: { subject: "owner", identity: { subject: "owner", issuer: "issuer" }, scopes: ["trip:read"] },
+    userRequest: "private-request",
+  })).rejects.toBeInstanceOf(ServerAgentRuntimeExecutionError);
+  expect(record).toHaveBeenCalledWith(expect.objectContaining({
+    phase: "runtime", reason: "failed", mode: "v2:agent_invoke:provider", incomplete: true,
+  }));
+  expect(JSON.stringify(record.mock.calls)).not.toContain("private-request");
 });

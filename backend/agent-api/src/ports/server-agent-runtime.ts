@@ -16,6 +16,17 @@ export class ServerAgentIntentRejectedError extends Error {
   constructor() { super("intent_rejected"); this.name = "ServerAgentIntentRejectedError"; }
 }
 
+/** Bounded runtime failure metadata. It deliberately carries no provider message,
+ * prompt, user content, Tool payload, URL, ID or raw exception. */
+export type ServerAgentRuntimeFailureStage = "agent_invoke" | "intent_state" | "read_tool" | "runtime_projection";
+export type ServerAgentRuntimeFailureKind = "abort" | "timeout" | "provider" | "validation" | "unknown";
+export class ServerAgentRuntimeExecutionError extends Error {
+  constructor(readonly stage: ServerAgentRuntimeFailureStage, readonly kind: ServerAgentRuntimeFailureKind) {
+    super(`server_agent_runtime_${stage}_${kind}`);
+    this.name = "ServerAgentRuntimeExecutionError";
+  }
+}
+
 export interface ServerAgentIntentController {
   apply(interpretation: UtteranceInterpretation): Promise<{
     receipt: PublicSemanticReceipt;

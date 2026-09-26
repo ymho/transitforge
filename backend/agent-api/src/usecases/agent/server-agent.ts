@@ -15,7 +15,7 @@ import { ResearchExecutionLedger, researchBudgetForRuntimeLimits } from "@raiquo
 import { validateAgentRuntimeLimits } from "@raiquora/agent/runtime-policies";
 import type { ModelTokenRates } from "@raiquora/agent/model-usage-cost";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
-import type { ServerAgentRuntimeRunner } from "../../ports/server-agent-runtime.js";
+import { ServerAgentRuntimeExecutionError, type ServerAgentRuntimeRunner } from "../../ports/server-agent-runtime.js";
 import { evidenceForCurrentIntent } from "@raiquora/agent/intent-action-policy";
 
 /** Caller authenticates principal. Only an injected server loader may resolve references to state. */
@@ -116,8 +116,10 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
       scope.researchMode, () => (dependencies.now?.() ?? new Date()).getTime(), ["modelCalls", "toolCalls", "tokens", "cache", "cost"]);
     dependencies.onResearchLedger?.(researchLedger);
     const toolExecutor = new AgentToolExecutor(tools, evidence, dependencies.now);
-    let result = dependencies.runRuntime
-      ? await dependencies.runRuntime({
+    let result: AgentRuntimeResult;
+    if (dependencies.runRuntime) {
+      try {
+        result = await dependencies.runRuntime({
           executionId: scope.executionId,
           userRequest: scope.userRequest,
           researchMode: scope.researchMode,
@@ -129,16 +131,27 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
           researchLedger,
           ...(initialEvidence?.length ? { initialEvidence } : {}),
           ...(reportProgress ? { reportProgress } : {}),
-        })
-      : await new MultiStepAgentRuntime({ model: dependencies.createModel(scope), tools,
-          toolExecutor,
-          limits: selectedLimits, now: dependencies.now, modelClassPolicy: dependencies.modelClassPolicy,
-          researchLedger, modelTokenRates: dependencies.modelTokenRates,
-          reportProgress,
-        }).run({ executionId: scope.executionId, feature: "concierge", userRequest: scope.userRequest,
-          researchMode: scope.researchMode,
-          ...(context ? { context, omitTraceContent: true } : {}),
-          ...(initialEvidence?.length ? { initialEvidence } : {}) });
+        });
+      } catch (error) {
+        const failure = error instanceof ServerAgentRuntimeExecutionError
+          ? `v2:${error.stage}:${error.kind}`
+          : "v2:runner:unknown";
+        await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: scope.executionId,
+          phase: "runtime", reason: "failed", mode: failure, incomplete: true,
+          occurredAt: (dependencies.now?.() ?? new Date()).toISOString() });
+        throw error;
+      }
+    } else {
+      result = await new MultiStepAgentRuntime({ model: dependencies.createModel(scope), tools,
+        toolExecutor,
+        limits: selectedLimits, now: dependencies.now, modelClassPolicy: dependencies.modelClassPolicy,
+        researchLedger, modelTokenRates: dependencies.modelTokenRates,
+        reportProgress,
+      }).run({ executionId: scope.executionId, feature: "concierge", userRequest: scope.userRequest,
+        researchMode: scope.researchMode,
+        ...(context ? { context, omitTraceContent: true } : {}),
+        ...(initialEvidence?.length ? { initialEvidence } : {}) });
+    }
     result = { ...result, researchExecution: researchLedger.outcome({ remainingScopes: [],
       ...(result.status === "failed" || result.status === "limit_reached" ? { failed: true, stopReason: result.status === "limit_reached" ? "budget_exhausted" as const : "provider_failure" as const } : {}) }) };
     if (result.publicPlanPresentation && context?.taskContext?.target.kind === "trip" && context.taskContext.target.tripRevision !== undefined) {
