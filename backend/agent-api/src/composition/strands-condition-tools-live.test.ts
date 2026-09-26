@@ -9,8 +9,8 @@ import { conditionDelta, conditionOperationId, conditionPayload } from "@raiquor
 import { reduceConversationIntent, type IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
 import { publicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 import { compileEffectiveIntent } from "@raiquora/agent/effective-intent";
-import type { ConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
 import type { Evidence } from "@raiquora/agent/evidence-model";
+import type { ConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
 import { createConversationConditionApplication } from "../usecases/agent/conversation-condition-application.js";
 import { StrandsAgentEngine } from "../adapters/strands-agent-engine.js";
 import { createStrandsServerRuntime } from "../adapters/strands-server-runtime.js";
@@ -52,18 +52,23 @@ describe.skipIf(!enabled)("small condition Tools with real Bedrock", () => {
       const tools = new AgentToolRegistry(), evidenceRegistry = new ToolEvidenceRegistry();
       const read = vi.fn(async ({ place }: { place: string }) => successfulAgentToolResult({
         sourceTitle: place, sourceExcerpt: "散策の候補となる場所です。接続試験用の資料です。",
-        sourceUrl: "https://example.org/places/verified", sourcePrecision: "place-description",
+        sourceUrl: `https://example.org/places/${encodeURIComponent(place)}`, sourcePrecision: "place-description",
       }));
       tools.register({ name: "lookup_place", effect: "read", description: "候補の場所について固定資料を確認する。", inputSchema: {
         type: "object", properties: { place: { type: "string" } }, required: ["place"], additionalProperties: false },
         parseInput: raw => validAgentToolInput(raw as { place: string }), execute: read });
-      evidenceRegistry.register("lookup_place", (output, context) => [{ id: `evidence:${context.executionId}:${context.toolCallId}`, category: "station",
-        knowledgeKind: "deterministic_fact", subject: "資料", facts: output as Evidence["facts"],
-        references: [{ sourceType: "external-source", sourceRef: "https://example.org/places/verified", retrievedAt: context.retrievedAt, freshness: "current", summary: "接続試験の資料" }],
-        observation: { observationId: `obs:${context.executionId}:${context.toolCallId}`, subjectKey: "place:fixture:verified",
-          predicate: "place_description", scopeKey: "conversation", retrievedAt: context.retrievedAt,
-          applicability: "applicable", retention: "reference_only", state: "current" },
-      }]);
+      evidenceRegistry.register("lookup_place", (output, context) => {
+        const facts = output as Evidence["facts"];
+        // Different places are different observations. The earlier fixture incorrectly
+        // gave Osaka and Kyoto the same subject, correctly triggering collision checks.
+        return [{ id: `evidence:${context.executionId}:${context.toolCallId}`, category: "station",
+          knowledgeKind: "deterministic_fact", subject: String(facts.sourceTitle), facts,
+          references: [{ sourceType: "external-source", sourceRef: String(facts.sourceUrl), retrievedAt: context.retrievedAt, freshness: "current", summary: "接続試験の資料" }],
+          observation: { observationId: `obs:${context.executionId}:${context.toolCallId}`, subjectKey: `place:fixture:${encodeURIComponent(String(facts.sourceTitle))}`,
+            predicate: "place_description", scopeKey: "conversation", retrievedAt: context.retrievedAt,
+            applicability: "applicable", retention: "reference_only", state: "current" },
+        }];
+      });
       let modelCalls = 0; const selectedTools: string[] = [];
       const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1024 }, {
         createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, event => {
