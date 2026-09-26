@@ -68,5 +68,10 @@ describe("small Conversation condition operations", () => {
     expect(conditionPayload(a)).toBe(conditionPayload(b));
     expect(conditionOperationId(turn, a.target)).not.toBe(conditionOperationId(turn, "origin"));
     expect(conditionOperationId(turn, a.target)).not.toBe(conditionOperationId("71600000-0000-4000-8000-000000000002", a.target));
+    const partyA = admitConditionChange({ target: "party_size", party: { kind: "composition", adults: 1,
+      children: [{ ageGroup: "elementary" }, { age: 4 }], composition: ["family", "children"] }, quote: "家族3人" }, "家族3人");
+    const partyB = admitConditionChange({ target: "party_size", party: { kind: "composition", adults: 1,
+      children: [{ age: 4 }, { ageGroup: "elementary" }], composition: ["children", "family"] }, quote: "家族3人で" }, "家族3人で");
+    expect(conditionPayload(partyA)).toBe(conditionPayload(partyB));
   });
 });
