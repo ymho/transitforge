@@ -12,6 +12,17 @@ it("validates the source before persistence and never accepts model-supplied aut
   await apply({ target: "origin", place: "大阪", quote: "大阪から" });
   expect(acceptCondition).toHaveBeenCalledWith(identity, lease, { target: "origin", place: "大阪", quote: "大阪から" });
 });
+it("accepts one grounded party operation without Profile or persistence metadata from the model", async () => {
+  const acceptCondition = vi.fn(async () => ({ version: 1 as const, mutationId: "condition:party", speechAct: "inform" as const,
+    beforeIntentRevision: 0, intentRevision: 1, replayed: false, operations: [] }));
+  const apply = createConversationConditionApplication({ acceptCondition }, identity, lease, "大人2人と子ども1人で行きたい");
+  const change = { target: "party_size" as const, party: { kind: "composition" as const, adults: 2, children: [{}] },
+    quote: "大人2人と子ども1人" };
+  await apply(change);
+  expect(acceptCondition).toHaveBeenCalledWith(identity, lease, change);
+  await expect(apply({ ...change, quote: "別の発言" })).rejects.toMatchObject({ code: "invalid_source" });
+});
+
 it("separates a definite conflict from an uncertain storage result", async () => {
   const acceptCondition = vi.fn().mockRejectedValueOnce(new StateError("conflict")).mockRejectedValueOnce(new StateError("unavailable"));
   const apply = createConversationConditionApplication({ acceptCondition }, identity, lease, "京都に行きたい");
