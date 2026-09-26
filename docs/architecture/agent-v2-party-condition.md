@@ -6,12 +6,14 @@
 
 同行者は今回の旅行条件であり、常設Profileの普段の人数・同行者から自動補完しない。
 
-モデルへ公開する変更操作は`update_current_party`の1つだけ。
+永続変更操作は`update_current_party`の1つだけ。
 
 - `action=set`: 今回の人数・同行者構成を設定または訂正する。
 - `action=clear`: 今回のparty条件を明示撤回する。
 
 訂正をclear→setへ分けず、そのturnでのpartyの最終状態を1回で受理する。
+
+仮定・反実仮想・what-if・シナリオ比較は別の`consider_party_scenario`を使う。このToolは入力を検証してモデルへ返すだけで、A commit、Intent revision更新、Profile/Trip更新を一切行わない。比較の置き場を永続writerへ兼用しない。
 
 Strands標準`tool()`とZodを使う。Tool callbackは#724の共通Conversation条件Applicationへ渡すだけで、別Agent loop、意味解析model call、repair、強制ToolChoiceを追加しない。
 
@@ -62,7 +64,7 @@ Profileに残る旧`usualPartySize`、同行者、子どもの年代はtrip-spec
 
 決定論的テストではcount/composition/撤回、operation journal replay/conflict、Trip/Profileより今回条件が優先されることを検証する。
 
-実モデルはNova 2 Lite＋固定read Provider＋テスト保存先で、明示人数、構成訂正、仮定で更新しないこと、撤回を検証する。初回liveでは年齢未定から年代を補完する挙動と仮定比較でwriterを呼ぶ挙動を観測したため、個別語句の補修ではなく、年齢・関係性をwriter Schemaから外し、writerを「実際の今回条件を変更する操作」として一般化した。固定Providerの成功を実Providerや実ブラウザの成功とは扱わない。
+実モデルはNova 2 Lite＋固定Provider＋テスト保存先で、明示人数、構成訂正、仮定で永続更新しないこと、撤回を検証する。初期liveでは年齢未定から年代を補完する挙動と、仮定比較で永続writerを呼ぶ挙動を観測した。個別語句の補修ではなく、年齢・関係性をwriter Schemaから外し、永続writerと非永続scenario Toolを責務分離した。固定Providerの成功を実Providerや実ブラウザの成功とは扱わない。
 
 
 ## 詳細な年代・参加scope
