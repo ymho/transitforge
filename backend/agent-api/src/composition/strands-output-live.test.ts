@@ -16,7 +16,7 @@ import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
  * test failures; soft assertions let later turns be measured without hiding them. */
 const enabled = process.env.AGENT_V2_LIVE === "true";
 const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
-const toolsToObserve = new Set(["update_origin", "update_destination", "search_place_media", "strands_structured_output"]);
+const toolsToObserve = new Set(["update_current_origin", "update_current_destination", "search_place_media", "strands_structured_output"]);
 describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () => {
   it("handles greeting, destination, correction and unavailable save through Conversation/replay", async () => {
     const { verifier } = cognitoTokenFixture();
@@ -47,7 +47,7 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
           tools: message.content.flatMap(block => block.type === "toolUseBlock" && toolsToObserve.has(block.name) ? [block.name] : []) }));
       });
       agent.addHook(BeforeToolCallEvent, ({ toolUse }) => {
-        if (!["update_origin", "update_destination"].includes(toolUse.name)) return;
+        if (!["update_current_origin", "update_current_destination"].includes(toolUse.name)) return;
         console.log(JSON.stringify({ phase: "sdk-condition-input", valid: placeConditionUpdateInputSchema.safeParse(toolUse.input).success }));
       });
       agent.addHook(ToolResultEvent, ({ result }) => {
