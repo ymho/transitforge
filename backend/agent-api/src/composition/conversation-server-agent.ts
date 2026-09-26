@@ -8,7 +8,8 @@ export function createConversationServerAgent(options: Omit<Parameters<typeof cr
   return createConversationTurnApplication({
     turns: new DynamoDbConversationTurnRepository(options.stateTable, options.stateClient),
     ...(options.semanticIntentEnabled ? { interpretIntent: createConversationIntentInterpreter(options.model) } : {}),
-    runAgentTurn: (input, historyBeforeSequence, reportProgress) => createStatefulServerAgent({ ...options, historyBeforeSequence }).runAgentTurn(input, reportProgress),
+    runAgentTurn: (input, historyBeforeSequence, reportProgress, acceptIntent) =>
+      createStatefulServerAgent({ ...options, historyBeforeSequence }).runAgentTurn(input, reportProgress, acceptIntent),
     diagnostics: options.diagnostics,
     log: options.log,
   });
