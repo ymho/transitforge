@@ -4,11 +4,12 @@ import type { ConversationTurnContinuity, ConversationTurnRepository, Conversati
 import type { ServerAgentTurn } from "./server-agent.js";
 import { presentationFromObservation, presentationFromPublicPlan } from "@raiquora/agent/conversation-working-state";
 import { semanticStateOf } from "@raiquora/agent/conversation-working-state";
-import { acceptedIntentDeltaFromInterpretation, type UtteranceInterpretation } from "@raiquora/agent/semantic-interpretation";
+import { acceptedIntentDeltaFromInterpretation, decodeUtteranceInterpretation, type UtteranceInterpretation } from "@raiquora/agent/semantic-interpretation";
 import type { AgentDiagnosticEvent, AgentDiagnosticsSink } from "../../ports/agent-diagnostics.js";
 import { reserveResearchResultSave } from "@raiquora/agent/research-execution";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
 import { publicSemanticReceipt, type PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
+import { ServerAgentIntentRejectedError } from "../../ports/server-agent-runtime.js";
 
 export class ConversationTurnExecutionError extends Error {
   constructor(readonly code: "limit_reached" | "agent_failed") { super(code); }
@@ -71,12 +72,17 @@ export function createConversationTurnApplication(dependencies: {
         }
       }
       const acceptRuntimeIntent = begun.state === "started" && !dependencies.interpretIntent ? async (interpretation: UtteranceInterpretation) => {
+        const decoded = decodeUtteranceInterpretation(interpretation);
+        if (!decoded || decoded.outcome !== "delta") throw new ServerAgentIntentRejectedError();
         const workingState = await dependencies.turns.getWorkingState(principal, conversationId);
         const semantic = semanticStateOf(workingState);
-        const delta = acceptedIntentDeltaFromInterpretation({ interpretation, userRequest, turnId,
-          baseIntentRevision: semantic.overlay.intentRevision, calendarDate: uiContext?.calendarDate,
-          ...(workingState ? { workingState } : {}) });
-        if (!delta) throw new StateError("invalid-input");
+        let delta: ReturnType<typeof acceptedIntentDeltaFromInterpretation>;
+        try {
+          delta = acceptedIntentDeltaFromInterpretation({ interpretation: decoded, userRequest, turnId,
+            baseIntentRevision: semantic.overlay.intentRevision, calendarDate: uiContext?.calendarDate,
+            ...(workingState ? { workingState } : {}) });
+        } catch { throw new ServerAgentIntentRejectedError(); }
+        if (!delta) throw new ServerAgentIntentRejectedError();
         await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "resolve", reason: "validated",
           occurredAt: new Date().toISOString(), correlation: { turnId, intentRevision: semantic.overlay.intentRevision, schemaVersion: "semantic-v1", ruleVersion: "intent-v2" },
           counts: { validated: delta.operations.length }, refs: delta.operations.map(({ operationId }) => operationId) });

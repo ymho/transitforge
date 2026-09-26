@@ -33,7 +33,7 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
     if (merged.collisions.length || merged.conflictingObservationIds.length) return denied("evidence_collision");
     try {
       const reply = admitAgentV2Reply(run.replyProposal, {
-        executionId: input.executionId, evidence: merged.evidence, effectiveIntent: input.context?.effectiveIntent,
+        executionId: input.executionId, evidence: merged.evidence, effectiveIntent: run.effectiveIntent,
         // This composition exposes reads only. No model-supplied success receipts.
         receipts: [], availableOperations: [],
       });

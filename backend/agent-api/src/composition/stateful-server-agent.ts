@@ -49,8 +49,9 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
     }, { historyBeforeSequence: options.historyBeforeSequence, onTrip: value => { trip = value; },
       onConsultation: value => { consultation = createTrip(value.conversationId, "相談中の条件", value.createdAt, [], value.request); },
       onEffectiveIntent: value => { effectiveIntent = value.effectiveIntent; currentIntentReceipt = value.currentReceipt; } });
-    const runRuntime = options.runRuntime ? async (runtimeInput: Parameters<NonNullable<typeof options.runRuntime>>[0]) =>
-      options.runRuntime!({
+    const runtime = options.runRuntime;
+    const runRuntime = runtime ? async (runtimeInput: Parameters<typeof runtime>[0]) =>
+      runtime({
         ...runtimeInput,
         ...(acceptIntent ? { intentController: {
           apply: async (interpretation: UtteranceInterpretation) => {
@@ -61,8 +62,8 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
               ...(input.tripId ? { tripId: input.tripId } : {}),
               ...(input.uiContext ? { uiContext: input.uiContext } : {}),
             });
-            return { receipt: publicSemanticReceipt(receipt),
-              ...(refreshed.effectiveIntent ? { effectiveIntent: refreshed.effectiveIntent } : {}) };
+            if (!refreshed.effectiveIntent) throw new Error("Accepted intent requires a refreshed Application snapshot");
+            return { receipt: publicSemanticReceipt(receipt), effectiveIntent: refreshed.effectiveIntent };
           },
         } } : {}),
       }) : undefined;

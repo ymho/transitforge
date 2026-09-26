@@ -11,10 +11,15 @@ import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { UtteranceInterpretation } from "@raiquora/agent/semantic-interpretation";
 import type { PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 
+/** A known validation rejection, not a failed or ambiguously committed state operation. */
+export class ServerAgentIntentRejectedError extends Error {
+  constructor() { super("intent_rejected"); this.name = "ServerAgentIntentRejectedError"; }
+}
+
 export interface ServerAgentIntentController {
   apply(interpretation: UtteranceInterpretation): Promise<{
     receipt: PublicSemanticReceipt;
-    effectiveIntent?: EffectiveIntent;
+    effectiveIntent: EffectiveIntent;
   }>;
 }
 
