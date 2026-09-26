@@ -1,4 +1,5 @@
 name: Travel period workbench (temporary)
+# Diagnostic rerun: observe only rejection class and date-shape, never raw user/model payload.
 
 on:
   push:
