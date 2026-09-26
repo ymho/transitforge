@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+// V1 regression only: do not use this suite as the Agent v2 compatibility oracle.\n// Re-express user-visible requirements at Application/Domain boundaries for the greenfield Strands runtime.\nimport { describe, expect, it, vi } from "vitest";
 import { supportedAnswerClaims } from "@raiquora/agent/grounded-answer";
 import { agentTurnOutputContract, agentTurnPlanningOutputContract, agentTurnPresentationOutputContract } from "@raiquora/agent/agent-output-contract";
 
