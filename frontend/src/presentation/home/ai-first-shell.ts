@@ -130,7 +130,6 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
       void ports.archiveTrip(current.id).then(render, () => { void ports.retry().then(render, render); });
     }));
     if (signedIn && window.location.hash === "#trip" && typeof window.history.state?.tripId === "string") ports.openTrip(window.history.state.tripId);
-    root.querySelectorAll("[data-retry]").forEach((button) => button.addEventListener("click", () => { void ports.retry().then(render, render); }));
     if (!signedIn && current !== "explore") { window.history.replaceState(null, "", "#explore"); apply(); }
   };
   const apply = () => {
