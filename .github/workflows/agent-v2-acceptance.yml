@@ -1,0 +1,40 @@
+name: Agent v2 / Acceptance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-v2-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Enforce greenfield architecture boundaries
+        run: npm run architecture:check
+
+      - name: Typecheck Agent v2 evaluation tooling
+        run: npm run typecheck:tools
+
+      - name: Run Agent v2 acceptance suite
+        run: npm run test:agent:v2
