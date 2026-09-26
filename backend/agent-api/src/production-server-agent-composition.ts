@@ -17,6 +17,7 @@ import { createMapboxHttpClient } from "./adapters/mapbox-http-client.js";
 import { HotPepperRestaurantProvider } from "./adapters/hot-pepper-restaurant-provider.js";
 import { SecretsManagerHotPepperCredentials } from "./adapters/secrets-manager-hot-pepper-credentials.js";
 import { agentSystemPrompt } from "./usecases/agent-system-prompt.js";
+import { agentV2SystemPrompt } from "./usecases/agent-v2-system-prompt.js";
 import { createJourneySearchOperation } from "./usecases/journey-search.js";
 import { createPlaceMediaSearchOperation } from "./usecases/place-media-search.js";
 
@@ -95,7 +96,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
  const runRuntime = strandsEnabled ? createStrandsServerRuntime(new StrandsAgentEngine({
    modelId,
    region: required("AWS_REGION"),
-   systemPrompt: agentSystemPrompt,
+   systemPrompt: agentV2SystemPrompt,
    maxTurns: 10,
    maxOutputTokens: 4_096,
  })) : undefined;
