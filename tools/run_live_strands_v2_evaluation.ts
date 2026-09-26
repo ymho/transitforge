@@ -39,6 +39,36 @@ const maximumModelCalls = cases.length * repetitions * limits.maxModelCalls;
 let observedModelCalls = 0;
 const results: LiveResult[] = [];
 
+const syntheticEvidence: ToolEvidenceMapper = (_output, context): Evidence[] => [{
+  id: `evidence:${context.executionId}:kyoto`,
+  category: "external",
+  knowledgeKind: "deterministic_fact",
+  subject: "京都",
+  facts: {
+    status: "available",
+    freshness: "fresh",
+    sourceTitle: "京都の確認済み評価資料",
+    sourceExcerpt: "京都は評価fixtureで確認済みの旅行先です。",
+    sourceUrl: "https://example.test/strands-v2/kyoto",
+  },
+  references: [{
+    sourceType: "external-source",
+    sourceRef: "https://example.test/strands-v2/kyoto",
+    retrievedAt: context.retrievedAt,
+    freshness: "current",
+    summary: "synthetic public evaluation fixture",
+  }],
+  observation: {
+    observationId: `observation:${context.toolCallId}`,
+    subjectKey: "place:kyoto",
+    scopeKey: "strands-v2-live",
+    predicate: "place_description",
+    retrievedAt: context.retrievedAt,
+    applicability: "applicable",
+    retention: "bounded_excerpt",
+  },
+}];
+
 for (let attempt = 1; attempt <= repetitions; attempt += 1) {
   for (const testCase of cases) {
     const executionId = `strands-v2-live-${testCase.id}-${attempt}`;
@@ -178,35 +208,7 @@ interface LiveReport {
   results: LiveResult[];
 }
 
-const syntheticEvidence: ToolEvidenceMapper = (_output, context): Evidence[] => [{
-  id: `evidence:${context.executionId}:kyoto`,
-  category: "external",
-  knowledgeKind: "deterministic_fact",
-  subject: "京都",
-  facts: {
-    status: "available",
-    freshness: "fresh",
-    sourceTitle: "京都の確認済み評価資料",
-    sourceExcerpt: "京都は評価fixtureで確認済みの旅行先です。",
-    sourceUrl: "https://example.test/strands-v2/kyoto",
-  },
-  references: [{
-    sourceType: "external-source",
-    sourceRef: "https://example.test/strands-v2/kyoto",
-    retrievedAt: context.retrievedAt,
-    freshness: "current",
-    summary: "synthetic public evaluation fixture",
-  }],
-  observation: {
-    observationId: `observation:${context.toolCallId}`,
-    subjectKey: "place:kyoto",
-    scopeKey: "strands-v2-live",
-    predicate: "place_description",
-    retrievedAt: context.retrievedAt,
-    applicability: "applicable",
-    retention: "bounded_excerpt",
-  },
-}];
+
 
 function renderReport(report: LiveReport): string {
   const rows = report.results.map((result) =>
