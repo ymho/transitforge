@@ -62,6 +62,16 @@ describe("small Conversation condition operations", () => {
     expect(overlay.facts).toHaveLength(0);
     expect(overlay.tombstones).toContainEqual(expect.objectContaining({ target: "party_size" }));
   });
+  it("admits a hypothetical party only as a non-persistent scenario input", () => {
+    expect(partyScenarioInputSchema.safeParse({ party: { kind: "count", people: 4 }, quote: "もし4人なら" }).success).toBe(true);
+    expect(admitPartyScenario({ party: { kind: "count", people: 4 }, quote: "もし4人なら" },
+      "もし4人ならどうなる？今の人数は変えずに比較したい")).toEqual({
+        party: { kind: "count", people: 4 }, quote: "もし4人なら",
+      });
+    expect(() => admitPartyScenario({ party: { kind: "count", people: 4 }, quote: "別の発言" },
+      "もし4人ならどうなる？")).toThrow("invalid_source");
+  });
+
   it("identifies a final condition decision independently of SDK call order and quote selection", () => {
     const a = admitConditionChange({ target: "destination", place: "京都", quote: "京都" }, "京都に行きたい");
     const b = admitConditionChange({ target: "destination", place: "京都", quote: "京都に行きたい" }, "京都に行きたい");
