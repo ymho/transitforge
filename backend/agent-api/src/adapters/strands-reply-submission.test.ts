@@ -17,4 +17,19 @@ describe("Strands reply submission", () => {
     if (snapshot?.kind === "conversation") snapshot.message = "greeting";
     expect(channel.snapshot()).toEqual({ kind: "conversation", message: "thanks" });
   });
+
+  it("accepts one evidence-bound commentary draft without retaining mutable caller state", () => {
+    const channel = new AgentV2ReplySubmission();
+    const draft = { kind: "answer", commentary: "確認済みの2候補を比較します。", references: [
+      { evidenceId: "e-a", field: "duration" },
+      { evidenceId: "e-b", field: "duration" },
+    ] };
+    expect(channel.receive(draft).ok).toBe(true);
+    draft.commentary = "changed";
+    expect(channel.snapshot()).toEqual({
+      kind: "answer",
+      commentary: "確認済みの2候補を比較します。",
+      references: [{ evidenceId: "e-a", field: "duration" }, { evidenceId: "e-b", field: "duration" }],
+    });
+  });
 });
