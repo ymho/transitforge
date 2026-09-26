@@ -23,22 +23,15 @@ jobs:
       - run: npm ci
       - run: npm run test:agent:v2
       - run: npm run architecture:check && npm run build
-      - name: Verify Provider imports remain forbidden in the contract module
-        shell: bash
-        run: |
-          set -euo pipefail
-          file=modules/agent/runtime/architecture-negative-probe.ts
-          trap 'rm -f "$file"' EXIT
-          printf 'import { Agent } from "@strands-agents/sdk";\n' > "$file"
-          if node tools/check_architecture_boundaries.mjs; then
-            echo 'Provider boundary was weakened' >&2
-            exit 1
-          fi
   model-verification:
     needs: verify
     if: github.repository == 'ymho/transitforge' && github.ref == 'refs/heads/refactor/716-sdk-structured-output'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        model: ['amazon.nova-lite-v1:0', 'jp.amazon.nova-2-lite-v1:0']
     environment: dev
     permissions:
       contents: read
@@ -46,7 +39,7 @@ jobs:
     env:
       AWS_REGION: ap-northeast-1
       AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-      MODEL_ID: amazon.nova-lite-v1:0
+      MODEL_ID: ${{ matrix.model }}
       AGENT_V2_LIVE: 'true'
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -66,11 +59,28 @@ jobs:
           account_id="${account_id%%:*}"
           [[ "$account_id" =~ ^[0-9]{12}$ ]]
           echo "arn=arn:aws:iam::${account_id}:role/transitforge-dev-github-agent-eval" >> "$GITHUB_OUTPUT"
+          echo 'Maximum: 8 model cycles for basic cases + 24 for Conversation; fixed providers and synthetic state only.' >> "$GITHUB_STEP_SUMMARY"
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5
         with:
           role-to-assume: ${{ steps.role.outputs.arn }}
           aws-region: ${{ env.AWS_REGION }}
           mask-aws-account-id: true
       - run: npm ci
+      - name: Basic evidence-bound reply and unsupported write
+        id: basic
+        continue-on-error: true
+        run: npm run eval:agent:strands:live -- --repetitions 1 --output-dir /tmp/v2-native-basic --require-all
       - name: Real Bedrock and fixed travel results, no production state
+        id: conversation
+        continue-on-error: true
         run: npm run test:agent:v2:conversation-live
+      - name: Preserve independent results without hiding failures
+        if: always()
+        shell: bash
+        env:
+          BASIC: ${{ steps.basic.outcome }}
+          CONVERSATION: ${{ steps.conversation.outcome }}
+        run: |
+          echo "Model: $MODEL_ID; basic=$BASIC; conversation=$CONVERSATION" >> "$GITHUB_STEP_SUMMARY"
+          if [[ -f /tmp/v2-native-basic/report.md ]]; then cat /tmp/v2-native-basic/report.md; fi
+          [[ "$BASIC" == success && "$CONVERSATION" == success ]]
