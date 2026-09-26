@@ -14,6 +14,7 @@ export function createConversationConditionApplication(repository: ConversationC
     try { return await repository.acceptCondition(scope, executionLease, change); }
     catch (error) {
       if (error instanceof StateError && error.code === "conflict") throw new ConditionUpdateRejectedError("condition_conflict");
+      if (error instanceof StateError && error.code === "invalid-input") throw new ConditionUpdateRejectedError("invalid_condition");
       throw error; // Unknown/ambiguous persistence failures must stop publication.
     }
   };

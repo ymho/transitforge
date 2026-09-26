@@ -68,7 +68,7 @@ describe.skipIf(!enabled)("small condition Tools with real Bedrock", () => {
       const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1024 }, {
         createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, event => {
           modelCalls++; selectedTools.push(...event.message.content.flatMap(block => block.type === "toolUseBlock"
-            ? [["set_origin", "set_destination", "lookup_place", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
+            ? [["set_origin", "set_destination", "clear_origin", "clear_destination", "lookup_place", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
         }); return agent; },
       });
       const result = await createStrandsServerRuntime(engine)({ executionId: turnId, userRequest: scenario.message,

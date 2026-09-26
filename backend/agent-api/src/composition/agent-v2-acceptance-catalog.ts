@@ -69,9 +69,9 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
   {
     id: "V2-INTENT-VALIDATION-01",
     kind: "v2_specific",
-    invariant: "quote, date and scope validation reject ungrounded deltas before A commit",
+    invariant: "one shared Tool syntax and source validation reject invalid condition input before acceptance",
     testFile: "backend/agent-api/src/composition/strands-intent-acceptance.test.ts",
-    testName: "rejects an ungrounded %s delta without committing intent",
+    testName: "rejects invalid %s input without changing conditions",
   },
   {
     id: "V2-INTENT-LIFECYCLE-01",
@@ -83,9 +83,9 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
   {
     id: "V2-INTENT-RETRY-01",
     kind: "v2_specific",
-    invariant: "a validation rejection cannot start another mutation attempt in the same invocation",
+    invariant: "the SDK can return validation feedback without an invocation-wide mutation lock",
     testFile: "backend/agent-api/src/composition/strands-intent-acceptance.test.ts",
-    testName: "does not retry an intent mutation in the same invocation after validation rejection",
+    testName: "uses standard Tool validation feedback and accepts a valid operation after rejected input",
   },
   {
     id: "V2-INTENT-RECOVERY-01",
@@ -93,6 +93,30 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
     invariant: "an ambiguous post-commit refresh failure cannot publish stale state and retry preserves the accepted revision",
     testFile: "backend/agent-api/src/composition/strands-intent-acceptance.test.ts",
     testName: "fails closed after post-commit context refresh failure and resumes without a second intent application",
+  },
+  {
+    id: "V2-CONDITIONS-BATCH-01", kind: "v2_specific",
+    invariant: "independent conditions in one model response are sequentially accepted before read and replay",
+    testFile: "backend/agent-api/src/composition/strands-intent-acceptance.test.ts",
+    testName: "executes independent conditions in one model response before reading and replaying the final reply",
+  },
+  {
+    id: "V2-CONDITIONS-RECOVERY-01", kind: "v2_specific",
+    invariant: "accepted operations survive a later operation failure and replay never rolls back the latest state",
+    testFile: "backend/agent-api/src/adapters/dynamodb-condition-operations.test.ts",
+    testName: "retains a committed first operation when the second fails and resumes only the missing work",
+  },
+  {
+    id: "V2-CONDITIONS-FENCE-01", kind: "v2_specific",
+    invariant: "an unfinished older turn cannot overwrite newer conditions or publish a stale reply",
+    testFile: "backend/agent-api/src/adapters/dynamodb-condition-operations.test.ts",
+    testName: "fences unfinished older turns before new writes, new replies or resumed work",
+  },
+  {
+    id: "V2-PROFILE-READ-01", kind: "v2_specific",
+    invariant: "current conditions override profile hints without mutating the Profile or reviving a retracted default",
+    testFile: "backend/agent-api/src/composition/strands-intent-acceptance.test.ts",
+    testName: "overrides profile hints only in this Conversation and retracts without reviving a hidden default",
   },
   {
     id: "V2-TOOL-01",

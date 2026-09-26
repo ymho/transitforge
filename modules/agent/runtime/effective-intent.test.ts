@@ -93,7 +93,9 @@ describe("compileEffectiveIntent", () => {
     const context = effectiveProfileContext(effective)!;
     expect(context).toMatchObject({ source: { profileVersion: 2, profileRevision: 8 }, pace: 0.5,
       favoriteInterests: ["自然", "食", "歴史"], consentedPreferenceNotes: { food: profile.notes!.food } });
-    expect(JSON.stringify(context)).toContain("0.65");
+    expect(JSON.stringify(context)).not.toContain("0.65");
+    expect(profile.travelStyle.walkingTolerance).toBe(0.65);
+    expect(effective.profileHints.some(({ attribute }) => attribute.startsWith("mobility:") || attribute.startsWith("tolerance:"))).toBe(false);
     expect(JSON.stringify(context)).toContain(profile.notes!.food);
     expect(effective.ignoredProfileSettings).toEqual(expect.arrayContaining([
       { path: "companions.usualPartySize", reason: "trip_specific" },
@@ -125,3 +127,15 @@ function userProfile(): UserProfile {
     transport: { preferredMode: "rail", maxTypicalTravelMinutes: 120 }, notes: { budget: "普段の予算", food: "季節の料理を少量ずつ。".repeat(30) },
     aiNoteFields: ["food"], updatedAt: "2026-09-25T00:00:00Z" };
 }
+
+
+it("keeps unconsented notes and hidden legacy preferences out of model input without deleting saved data", () => {
+  const profile = userProfile();
+  profile.notes = { ...profile.notes, lodging: "PRIVATE_LODGING_NOTE", avoidances: "PRIVATE_AVOID_NOTE" };
+  const original = structuredClone(profile);
+  const effective = compileEffectiveIntent({ profile, overlay: emptyConversationIntentOverlay() });
+  expect(JSON.stringify(effective)).not.toContain("PRIVATE_LODGING_NOTE");
+  expect(JSON.stringify(effective)).not.toContain("PRIVATE_AVOID_NOTE");
+  expect(effective.profileHints.map(({ attribute }) => attribute).sort()).toEqual(["interest:food", "interest:history", "interest:nature", "note:food", "origin", "pace"]);
+  expect(profile).toEqual(original);
+});

@@ -11,11 +11,11 @@ import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { agentV2StructuredOutputSchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
 import { agentV2CandidateReferences, publicReplyField } from "@raiquora/agent/agent-v2-publication";
-import { placeConditionInputSchema, ConditionUpdateRejectedError, type ConditionTarget, type PlaceConditionInput } from "@raiquora/agent/conversation-condition";
+import { placeConditionInputSchema, clearConditionInputSchema, ConditionUpdateRejectedError, type ConditionTarget, type ConversationConditionChange } from "@raiquora/agent/conversation-condition";
 import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
   type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
 
-export const strandsConditionToolNames = ["set_destination", "set_origin"] as const;
+export const strandsConditionToolNames = ["set_destination", "set_origin", "clear_destination", "clear_origin"] as const;
 export interface StrandsAgentEngineOptions {
   modelId: string;
   region: string;
@@ -91,7 +91,7 @@ export class StrandsAgentEngine {
     });
     const controller = input.conditionController;
     if (controller) {
-      const apply = async (target: ConditionTarget, value: PlaceConditionInput, signal?: AbortSignal): Promise<JSONValue> => {
+      const apply = async (target: ConditionTarget, value: Omit<ConversationConditionChange, "target">, signal?: AbortSignal): Promise<JSONValue> => {
         if (signal?.aborted) throw new Error("execution_cancelled");
         if (intentUnavailable) throw new Error("condition_unavailable");
         try {
@@ -108,11 +108,17 @@ export class StrandsAgentEngine {
       };
       tools.push(
         tool({ name: "set_destination", inputSchema: placeConditionInputSchema,
-          description: "今回の相談の行き先を設定・訂正する。利用者が行き先を希望したら調査より先に使う。未定に戻す明示依頼はplace=null。仮定の質問、比較だけ、変更なしでは使わない。Tripやプロフィールは変更しない。",
+          description: "今回の相談の行き先を設定・訂正する。利用者が行き先を希望したら調査より先に使う。撤回はclear_destinationを使う。仮定の質問、比較だけ、変更なしでは使わない。Tripやプロフィールは変更しない。",
           callback: (value, context) => apply("destination", value, context?.cancelSignal) }),
         tool({ name: "set_origin", inputSchema: placeConditionInputSchema,
-          description: "今回の相談の出発地を設定・訂正する。利用者が今回の出発地を伝えたら調査より先に使う。未定に戻す明示依頼はplace=null。普段の出発地の推測、仮定の質問、変更なしでは使わない。Tripやプロフィールは変更しない。",
+          description: "今回の相談の出発地を設定・訂正する。利用者が今回の出発地を伝えたら調査より先に使う。撤回はclear_originを使う。普段の出発地の推測、仮定の質問、変更なしでは使わない。Tripやプロフィールは変更しない。",
           callback: (value, context) => apply("origin", value, context?.cancelSignal) }),
+        tool({ name: "clear_destination", inputSchema: clearConditionInputSchema,
+          description: "利用者が今回の行き先を取り消し・未定に戻すことを明示した場合だけ、その行き先条件を撤回する。他の条件は変えない。変更なし・仮定・比較の質問では使わない。",
+          callback: (value, context) => apply("destination", { ...value, place: null }, context?.cancelSignal) }),
+        tool({ name: "clear_origin", inputSchema: clearConditionInputSchema,
+          description: "利用者が今回の出発地を取り消し・未定に戻すことを明示した場合だけ、その出発地条件を撤回する。他の条件は変えない。変更なし・仮定・比較の質問では使わない。",
+          callback: (value, context) => apply("origin", { ...value, place: null }, context?.cancelSignal) }),
       );
     }
     const baseModel = this.model ?? new BedrockModel({ modelId: this.options.modelId, region: this.options.region,

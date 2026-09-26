@@ -23,7 +23,7 @@ import { proposeVerifiedIntentRequest } from "@raiquora/agent/verified-intent-pr
 import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
 import { publicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
-import type { UtteranceInterpretation } from "@raiquora/agent/semantic-interpretation";
+import type { ConversationConditionChange } from "@raiquora/agent/conversation-condition";
 
 /** Internal stateful composition. Transport/auth rollout and env bindings remain with #451/#462/#480. */
 export function createStatefulServerAgent(options: Omit<Parameters<typeof createServerAgent>[0], "loadContext"> & {
@@ -35,7 +35,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
   tripClient?: TripDynamoClient;
 }) {
   return { async runAgentTurn(input: ServerAgentTurn, reportProgress?: AgentProgressReporter,
-    acceptIntent?: (interpretation: UtteranceInterpretation) => Promise<IntentApplicationReceipt>) {
+    acceptCondition?: (change: ConversationConditionChange) => Promise<IntentApplicationReceipt>) {
     let tripCostProposal: PublicCostProposal | undefined, retainedCandidatePlan: RetainedCandidatePlan | undefined;
     let trip: Trip | undefined, consultation: Trip | undefined, tripUpdateProposal: PublicRequestProposal | undefined, consultationRequestProposal: ConsultationRequestProposal | undefined;
     let effectiveIntent: EffectiveIntent | undefined, currentIntentReceipt: IntentApplicationReceipt | undefined;
@@ -53,9 +53,9 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
     const runRuntime = runtime ? async (runtimeInput: Parameters<typeof runtime>[0]) =>
       runtime({
         ...runtimeInput,
-        ...(acceptIntent ? { intentController: {
-          apply: async (interpretation: UtteranceInterpretation) => {
-            const receipt = await acceptIntent(interpretation);
+        ...(acceptCondition ? { conditionController: {
+          apply: async (change: ConversationConditionChange) => {
+            const receipt = await acceptCondition(change);
             const refreshed = await contextLoader({
               principal: input.principal,
               ...(input.conversationId ? { conversationId: input.conversationId } : {}),
@@ -97,7 +97,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
       loadContext: contextLoader,
       ...(runRuntime ? { runRuntime } : {}),
     }).runAgentTurn(input, reportProgress);
-    if (input.conversationId && effectiveIntent && currentIntentReceipt) {
+    if (!options.runRuntime && input.conversationId && effectiveIntent && currentIntentReceipt) {
       const base = trip ?? consultation;
       if (base) {
         const verified = proposeVerifiedIntentRequest({ conversationId: input.conversationId, trip: base, effectiveIntent, receipt: currentIntentReceipt });

@@ -131,13 +131,7 @@ describe("StrandsAgentEngine", () => {
 
   it("uses an Application-accepted intent update for later read Tool validation in the same Strands loop", async () => {
     const { execute, input } = setup();
-    const interpretation = {
-      outcome: "delta", speechAct: "correct", unresolvedFragments: [], operations: [{
-        atomicGroup: 1, action: "replace", target: "destination", modality: "preferred",
-        precision: "exact", frame: "actual", quote: "神戸", value: { kind: "place_label", label: "神戸" },
-      }],
-    };
-    const update: Reply = { tool: "update_intent", input: interpretation };
+    const update: Reply = { tool: "set_destination", input: { place: "神戸", quote: "神戸" } };
     const lookupKobe: Reply = { tool: "lookup_place", input: { location: "神戸" } };
     const apply = vi.fn(async () => ({
       receipt: { version: "public-semantic-receipt-v1" as const, intentRevision: 4, speechAct: "correct" as const,
@@ -147,28 +141,26 @@ describe("StrandsAgentEngine", () => {
     }));
     const result = await new StrandsAgentEngine(options, {
       model: new ScriptedModel([update, lookupKobe, submitted, end]),
-    }).run({ ...input, userRequest: "行き先は神戸に変更", intentController: { apply } });
+    }).run({ ...input, userRequest: "行き先は神戸に変更", conditionController: { apply } });
 
     expect(apply).toHaveBeenCalledOnce();
     expect(execute).toHaveBeenCalledOnce();
     expect(result.replyProposal).toEqual({ kind: "uncertainty" });
   });
 
-  it("allows only one intent update per Strands invocation", async () => {
+  it("lets independent condition Tools use the same Application without an invocation-wide limiter", async () => {
     const { input } = setup();
-    const interpretation = { outcome: "delta", speechAct: "inform", unresolvedFragments: [], operations: [{
-      atomicGroup: 1, action: "set", target: "destination", modality: "preferred",
-      precision: "exact", frame: "actual", quote: "京都", value: { kind: "place_label", label: "京都" },
-    }] };
     const apply = vi.fn(async () => ({ receipt: {
       version: "public-semantic-receipt-v1" as const, intentRevision: 4, speechAct: "inform" as const,
       outcome: "accepted" as const, changes: [],
     }, effectiveIntent: effectiveDestination("京都") }));
     await new StrandsAgentEngine(options, { model: new ScriptedModel([
-      { tool: "update_intent", input: interpretation },
-      { tool: "update_intent", input: interpretation },
-      submitted, end,
-    ]) }).run({ ...input, intentController: { apply } });
-    expect(apply).toHaveBeenCalledOnce();
+      { tool: "set_destination", input: { place: "京都", quote: "京都" } },
+      { tool: "set_origin", input: { place: "大阪", quote: "大阪" } },
+      submitted,
+    ]) }).run({ ...input, conditionController: { apply } });
+    expect(apply).toHaveBeenCalledTimes(2);
+    expect(apply).toHaveBeenCalledWith({ target: "destination", place: "京都", quote: "京都" });
+    expect(apply).toHaveBeenCalledWith({ target: "origin", place: "大阪", quote: "大阪" });
   });
 });

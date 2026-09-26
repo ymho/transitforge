@@ -3,7 +3,7 @@ import { Model, type BaseModelConfig, type Message, type ModelStreamEvent, type 
 import type { Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentToolDescriptor } from "@raiquora/agent/tool-contract";
 import type { ServerAgentRuntimeInput } from "../ports/server-agent-runtime.js";
-import { stateDynamoFixture, conversationId, secondId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
+import { stateDynamoFixture, conversationId, secondId, stateMetadata, stateProfile } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, token } from "../adapters/cognito-token.fixture.js";
 import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
@@ -11,7 +11,8 @@ import { StrandsAgentEngine } from "../adapters/strands-agent-engine.js";
 import { createStrandsServerRuntime } from "../adapters/strands-server-runtime.js";
 import { createConversationServerAgent } from "./conversation-server-agent.js";
 
-type Step = { tool: string; input: Record<string, unknown> } | "end";
+type ToolStep = { tool: string; input: Record<string, unknown> };
+type Step = ToolStep | ToolStep[] | "end";
 class IntentScenarioModel extends Model<BaseModelConfig> {
   readonly requests: string[] = [];
   private config: BaseModelConfig = { modelId: "synthetic-intent" };
@@ -26,20 +27,22 @@ class IntentScenarioModel extends Model<BaseModelConfig> {
     if (step === "end") {
       yield { type: "modelContentBlockStartEvent" };
       yield { type: "modelContentBlockDeltaEvent", delta: { type: "textDelta", text: "not public" } };
+      yield { type: "modelContentBlockStopEvent" };
     } else {
-      yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: step.tool, toolUseId: `tool-${this.requests.length}` } };
-      yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(step.tool === "strands_structured_output" ? { reply: step.input } : step.input) } };
+      for (const [index, call] of (Array.isArray(step) ? step : [step]).entries()) {
+        yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: call.tool, toolUseId: `tool-${this.requests.length}-${index}` } };
+        yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(call.tool === "strands_structured_output" ? { reply: call.input } : call.input) } };
+        yield { type: "modelContentBlockStopEvent" };
+      }
     }
-    yield { type: "modelContentBlockStopEvent" };
     yield { type: "modelMessageStopEvent", stopReason: step === "end" ? "endTurn" : "toolUse" };
   }
 }
-function update(label = "京都", overrides: Record<string, unknown> = {}): Step {
-  return { tool: "update_intent", input: { outcome: "delta", speechAct: "inform", unresolvedFragments: [], operations: [{
-    atomicGroup: 1, action: "set", target: "destination", modality: "preferred", precision: "exact",
-    frame: "actual", quote: label, value: { kind: "place_label", label }, ...overrides,
-  }] } };
+function update(label = "京都", overrides: Record<string, unknown> = {}): ToolStep {
+  return { tool: "set_destination", input: { place: label, quote: label, ...overrides } };
 }
+const origin = (place = "大阪"): ToolStep => ({ tool: "set_origin", input: { place, quote: place } });
+
 const read = (place = "京都"): Step => ({ tool: "lookup_intent_place", input: { place } });
 const uncertainty: Step = { tool: "strands_structured_output", input: { kind: "uncertainty" } };
 const answer = (executionId: string): Step => ({ tool: "strands_structured_output", input: {
@@ -109,7 +112,7 @@ it("uses corrected conditions for both read validation and publication on a late
   const test = await setup();
   const first = test.build([update("神戸"), read("神戸"), answer("intent-kobe"), "end"], "intent-kobe");
   await first.app.runConversationTurn({ ...test.input, userRequest: "行き先は神戸にしたい" });
-  const next = test.build([read("京都"), update("京都", { action: "replace" }), read("京都"), answer("intent-kyoto"), "end"], "intent-kyoto");
+  const next = test.build([read("京都"), update("京都"), read("京都"), answer("intent-kyoto"), "end"], "intent-kyoto");
   const result = await next.app.runConversationTurn({ ...test.input,
     turnId: "71200000-0000-4000-8000-000000000002", userRequest: "行き先を京都に変更したい" });
   expect(result.status).toBe("completed");
@@ -125,15 +128,15 @@ it("uses corrected conditions for both read validation and publication on a late
 
 it.each([
   ["quote", { quote: "大阪" }],
-  ["date", { target: "start_date", value: { kind: "local_date", date: "2026-10-01" } }],
+  ["authority", { owner: "someone-else" }],
   ["scope", { scope: { kind: "logical_day_ordinal", ordinal: 2 } }],
-] as const)("rejects an ungrounded %s delta without committing intent", async (_kind, overrides) => {
+  ["null setter", { place: null }],
+] as const)("rejects invalid %s input without changing conditions", async (_kind, overrides) => {
   const test = await setup();
-  const { app, model } = test.build([update("京都", overrides), uncertainty, "end"]);
+  const { app } = test.build([update("京都", overrides), uncertainty]);
   const result = await app.runConversationTurn(test.input);
   expect(result.semanticReceipt).toBeUndefined();
   expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.intentRevision ?? 0).toBe(0);
-  expect(model.requests.join("\n")).toContain("intent_rejected");
   expect(test.operation).not.toHaveBeenCalled();
   expect(test.v1Model.converse).not.toHaveBeenCalled();
 });
@@ -154,13 +157,31 @@ it("does not mutate intent after reply submission or on an unchanged conversatio
   }
 });
 
-it("does not retry an intent mutation in the same invocation after validation rejection", async () => {
+it("executes independent conditions in one model response before reading and replaying the final reply", async () => {
   const test = await setup();
-  const { app, model } = test.build([update("京都", { quote: "大阪" }), update(), uncertainty, "end"]);
+  const { app, model } = test.build([[origin(), update()], read(), answer("intent-acceptance")]);
+  const input = { ...test.input, userRequest: "大阪から京都に行きたい" };
+  const result = await app.runConversationTurn(input);
+  expect(result.semanticReceipt?.changes.map(({ target }) => target).sort()).toEqual(["destination", "origin"]);
+  const state = await test.turns.getWorkingState(test.principal, conversationId);
+  expect(state?.semantic?.overlay.facts).toEqual(expect.arrayContaining([
+    expect.objectContaining({ target: "origin", value: { kind: "place_label", label: "大阪" } }),
+    expect.objectContaining({ target: "destination", value: { kind: "place_label", label: "京都" } }),
+  ]));
+  expect(test.operation).toHaveBeenCalledOnce();
+  expect(model.requests).toHaveLength(3); // A specific two-call batch does not need a separate model round-trip per write.
+  expect(await app.runConversationTurn(input)).toEqual(result);
+  expect(model.requests).toHaveLength(3);
+  expect(result.consultationRequestProposal).toBeUndefined();
+  expect(result.tripUpdateProposal).toBeUndefined();
+});
+
+it("uses standard Tool validation feedback and accepts a valid operation after rejected input", async () => {
+  const test = await setup();
+  const { app } = test.build([update("京都", { place: null }), update(), read(), answer("intent-acceptance")]);
   const result = await app.runConversationTurn(test.input);
-  expect(result.semanticReceipt).toBeUndefined();
-  expect(model.requests.join("\n")).toContain("intent_update_limit");
-  expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.intentRevision ?? 0).toBe(0);
+  expect(result.semanticReceipt?.intentRevision).toBe(1);
+  expect(test.operation).toHaveBeenCalledOnce();
 });
 
 it("fails closed after post-commit context refresh failure and resumes without a second intent application", async () => {
@@ -173,15 +194,35 @@ it("fails closed after post-commit context refresh failure and resumes without a
   expect(test.operation).not.toHaveBeenCalled();
   expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.intentRevision).toBe(1);
   expect((await test.state.conversations.history(test.principal, conversationId)).items).toHaveLength(1);
-  const retry = test.build([read(), answer("intent-retry"), "end"], "intent-retry");
+  const retry = test.build([update(), read(), answer("intent-retry")], "intent-retry");
   const result = await retry.app.runConversationTurn(test.input);
   expect(result.status).toBe("completed");
   expect(result.semanticReceipt).toMatchObject({ intentRevision: 1 });
-  expect(retry.runRuntime.mock.calls[0]?.[0].intentController).toBeUndefined();
+  expect(retry.runRuntime.mock.calls[0]?.[0].conditionController).toBeDefined();
   expect(test.operation).toHaveBeenCalledOnce();
   expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.intentRevision).toBe(1);
   expect(await retry.app.runConversationTurn(test.input)).toEqual(result);
   expect(test.operation).toHaveBeenCalledOnce();
   expect((await test.state.conversations.history(test.principal, conversationId)).items).toHaveLength(2);
   expect(test.v1Model.converse).not.toHaveBeenCalled();
+});
+
+
+it("overrides profile hints only in this Conversation and retracts without reviving a hidden default", async () => {
+  const test = await setup();
+  const savedProfile = await test.state.profiles.put(test.principal, { ...stateProfile(), home: { station: "神戸" } }, null);
+  const first = test.build([origin(), update(), read(), answer("profile-first")], "profile-first");
+  const input = { ...test.input, userRequest: "今回は大阪から京都に行きたい" };
+  const result = await first.app.runConversationTurn(input);
+  expect(result.status).toBe("completed");
+  expect(await test.state.profiles.get(test.principal)).toEqual(savedProfile);
+  const final = test.build([{ tool: "clear_origin", input: { quote: "出発地を未定に戻して" } }, uncertainty], "profile-clear");
+  await final.app.runConversationTurn({ ...input, turnId: "71600000-0000-4000-8000-000000000005", userRequest: "出発地を未定に戻して" });
+  expect(await test.state.profiles.get(test.principal)).toEqual(savedProfile);
+  const probe = test.build([uncertainty], "profile-probe");
+  await probe.app.runConversationTurn({ ...input, turnId: "71600000-0000-4000-8000-000000000006", userRequest: "今の条件で相談を続けたい" });
+  const effective = probe.runRuntime.mock.calls[0]?.[0].context?.effectiveIntent;
+  expect(effective?.actualConversationFacts.some(({ target }) => target === "origin")).toBe(false);
+  expect(effective?.profileHints.some(({ target }) => target === "origin")).toBe(false);
+  expect(effective?.actualConversationFacts.some(({ target }) => target === "destination")).toBe(true);
 });

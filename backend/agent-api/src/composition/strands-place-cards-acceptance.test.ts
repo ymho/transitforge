@@ -15,12 +15,7 @@ import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
 type Step = { tool: string; input: Record<string, unknown> } | "candidates" | "end";
 const read: Step = { tool: "search_place_media", input: { query: "青葉庭園", mode: "discovery", limit: 1 } };
 const uncertainty: Step = { tool: "strands_structured_output", input: { kind: "uncertainty" } };
-const update: Step = { tool: "update_intent", input: { outcome: "delta", speechAct: "inform", unresolvedFragments: [], operations: [{
-  atomicGroup: 1, action: "set", target: "destination", modality: "preferred", precision: "exact",
-  frame: "actual", quote: "青葉庭園", value: { kind: "place_label", label: "青葉庭園" },
-}] } };
-
-/** The fixture selects returned references, not mapper-specific IDs or V1 loop behavior. */
+const update: Step = { tool: "set_destination", input: { place: "青葉庭園", quote: "青葉庭園" } };
 class CandidateModel extends Model<BaseModelConfig> {
   calls = 0;
   seenCandidateIds: string[] = [];

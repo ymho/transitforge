@@ -36,6 +36,7 @@ describe("createStrandsServerRuntime", () => {
     expect(result.status).toBe("completed");
     const payload = JSON.parse(engine.run.mock.calls[0]![0].modelInput!);
     expect(payload.userMessage).toBe(input.userRequest);
+    expect(payload.application).not.toHaveProperty("capabilities");
     expect(payload.application.clock).toMatchObject({ role: "reference_only", referenceDate: "2026-09-26" });
     expect(result.publicReply?.kind).toBe("conversation");
     expect(input.researchLedger.outcome({ remainingScopes: [] }).usage).toMatchObject({ modelCalls: 1, inputTokens: 100, outputTokens: 20 });

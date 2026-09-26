@@ -4,12 +4,15 @@ import type { ConversationTurnContinuity, ConversationTurnRepository, Conversati
 import type { ServerAgentTurn } from "./server-agent.js";
 import { presentationFromObservation, presentationFromPublicPlan } from "@raiquora/agent/conversation-working-state";
 import { semanticStateOf } from "@raiquora/agent/conversation-working-state";
-import { acceptedIntentDeltaFromInterpretation, decodeUtteranceInterpretation, type UtteranceInterpretation } from "@raiquora/agent/semantic-interpretation";
+import { acceptedIntentDeltaFromInterpretation, type UtteranceInterpretation } from "@raiquora/agent/semantic-interpretation";
 import type { AgentDiagnosticEvent, AgentDiagnosticsSink } from "../../ports/agent-diagnostics.js";
 import { reserveResearchResultSave } from "@raiquora/agent/research-execution";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
 import { publicSemanticReceipt, type PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
-import { ServerAgentIntentRejectedError } from "../../ports/server-agent-runtime.js";
+import { summarizeConditionReceipts, type ConversationConditionChange } from "@raiquora/agent/conversation-condition";
+import type { IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
+import type { ConversationConditionRepository } from "../../ports/conversation-condition-repository.js";
+import { createConversationConditionApplication } from "./conversation-condition-application.js";
 
 export class ConversationTurnExecutionError extends Error {
   constructor(readonly code: "limit_reached" | "agent_failed") { super(code); }
@@ -19,8 +22,9 @@ export interface ConversationTurnInput extends ServerAgentTurn { conversationId:
 /** The sequence cutoff is trusted server state, never a client-selected history boundary. */
 export function createConversationTurnApplication(dependencies: {
   turns: ConversationTurnRepository;
+  conditions?: ConversationConditionRepository;
   runAgentTurn: (input: ServerAgentTurn, historyBeforeSequence: number, reportProgress?: AgentProgressReporter,
-    acceptIntent?: (interpretation: UtteranceInterpretation) => Promise<import("@raiquora/agent/conversation-intent-reducer").IntentApplicationReceipt>) =>
+    acceptCondition?: (change: ConversationConditionChange) => Promise<IntentApplicationReceipt>) =>
     Promise<AgentRuntimeResult & Pick<ConversationTurnResult, "tripUpdateProposal" | "consultationRequestProposal" | "tripCostProposal">>;
   interpretIntent?: (input: { userRequest: string; calendarDate?: string; overlay: import("@raiquora/trip/conversation-intent").ConversationIntentOverlay;
     turnId: string; workingState?: import("@raiquora/agent/conversation-working-state").ConversationWorkingState }) => Promise<UtteranceInterpretation>;
@@ -38,7 +42,10 @@ export function createConversationTurnApplication(dependencies: {
     await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "authorize", reason: "validated",
       occurredAt: new Date().toISOString(), correlation: { turnId, schemaVersion: "semantic-v1", ruleVersion: "intent-v1" } });
     if (begun.state === "completed") return begun.result;
-    let acceptedReceipt = begun.state === "intent_accepted" ? begun.receipt : undefined;
+    const conditionReceipts = new Map<string, IntentApplicationReceipt>(begun.state === "intent_accepted"
+      ? begun.conditionReceipts?.map(receipt => [receipt.mutationId, receipt]) : []);
+    let acceptedReceipt = begun.state === "intent_accepted"
+      ? summarizeConditionReceipts([...conditionReceipts.values()]) ?? begun.receipt : undefined;
     if (acceptedReceipt) {
       await reportIntentAccepted?.(publicSemanticReceipt(acceptedReceipt));
       await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "publish", "completed", acceptedReceipt));
@@ -71,33 +78,23 @@ export function createConversationTurnApplication(dependencies: {
           await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "publish", "completed", receipt));
         }
       }
-      const acceptRuntimeIntent = begun.state === "started" && !dependencies.interpretIntent ? async (interpretation: UtteranceInterpretation) => {
-        const decoded = decodeUtteranceInterpretation(interpretation);
-        if (!decoded || decoded.outcome !== "delta") throw new ServerAgentIntentRejectedError();
-        const workingState = await dependencies.turns.getWorkingState(principal, conversationId);
-        const semantic = semanticStateOf(workingState);
-        let delta: ReturnType<typeof acceptedIntentDeltaFromInterpretation>;
-        try {
-          delta = acceptedIntentDeltaFromInterpretation({ interpretation: decoded, userRequest, turnId,
-            baseIntentRevision: semantic.overlay.intentRevision, calendarDate: uiContext?.calendarDate,
-            ...(workingState ? { workingState } : {}) });
-        } catch { throw new ServerAgentIntentRejectedError(); }
-        if (!delta) throw new ServerAgentIntentRejectedError();
-        await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "resolve", reason: "validated",
-          occurredAt: new Date().toISOString(), correlation: { turnId, intentRevision: semantic.overlay.intentRevision, schemaVersion: "semantic-v1", ruleVersion: "intent-v2" },
-          counts: { validated: delta.operations.length }, refs: delta.operations.map(({ operationId }) => operationId) });
-        const receipt = await dependencies.turns.acceptIntent(identity, begun.lease, delta);
-        acceptedReceipt = receipt;
-        await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "reduce", "completed", receipt));
+      // Resuming an operation-aware turn must allow the remaining independent updates.
+      // Legacy accepted turns stay sealed; their original receipt remains replayable.
+      const allowConditions = dependencies.conditions && !dependencies.interpretIntent &&
+        (begun.state === "started" || begun.conditionReceipts !== undefined);
+      const applyCondition = allowConditions ? createConversationConditionApplication(dependencies.conditions!, identity, begun.lease, userRequest) : undefined;
+      const acceptCondition = applyCondition ? async (change: ConversationConditionChange) => {
+        const receipt = await applyCondition(change);
+        conditionReceipts.set(receipt.mutationId, receipt);
+        acceptedReceipt = summarizeConditionReceipts([...conditionReceipts.values()]);
         await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "accept", "accepted", receipt));
-        await reportIntentAccepted?.(publicSemanticReceipt(receipt));
-        await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "publish", "completed", receipt));
+        await reportIntentAccepted?.(publicSemanticReceipt(acceptedReceipt!));
         return receipt;
       } : undefined;
       const runtimeInput = { principal, conversationId, userRequest, requestedResearchMode, researchTarget, tripId, uiContext };
       const runtime = reportProgress
-        ? await dependencies.runAgentTurn(runtimeInput, begun.lease.userSequence, reportProgress, acceptRuntimeIntent)
-        : await dependencies.runAgentTurn(runtimeInput, begun.lease.userSequence, undefined, acceptRuntimeIntent);
+        ? await dependencies.runAgentTurn(runtimeInput, begun.lease.userSequence, reportProgress, acceptCondition)
+        : await dependencies.runAgentTurn(runtimeInput, begun.lease.userSequence, undefined, acceptCondition);
       if (runtime.status !== "completed" && runtime.status !== "follow_up") {
         throw new ConversationTurnExecutionError(runtime.status === "limit_reached" ? "limit_reached" : "agent_failed");
       }

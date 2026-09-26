@@ -68,11 +68,8 @@ class IntentThenNoReplyModel extends Model<BaseModelConfig> {
     this.calls += 1;
     yield { type: "modelMessageStartEvent", role: "assistant" };
     if (this.calls === 1) {
-      const input = { outcome: "delta", speechAct: "inform", operations: [{
-        atomicGroup: 1, action: "set", target: "destination", modality: "preferred", precision: "exact",
-        frame: "actual", quote: "京都", value: { kind: "place_label", label: "京都" },
-      }], unresolvedFragments: [] };
-      yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: "update_intent", toolUseId: "intent-1" } };
+      const input = { place: "京都", quote: "京都" };
+      yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: "set_destination", toolUseId: "intent-1" } };
       yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(input) } };
       yield { type: "modelContentBlockStopEvent" };
       yield { type: "modelMessageStopEvent", stopReason: "toolUse" };
@@ -193,7 +190,7 @@ it("persists a V2 intent A-commit across answer failure and retries without reap
   await state.conversations.create(principal, conversationId, metadata);
   const v1Model = { converse: vi.fn(async () => { throw new Error("V1 model must not run"); }) };
   const failingEngine = new StrandsAgentEngine({
-    modelId: "unused", region: "ap-northeast-1", systemPrompt: "Use update_intent before replying.", maxTurns: 3,
+    modelId: "unused", region: "ap-northeast-1", systemPrompt: "Accept the destination before replying.", maxTurns: 3,
   }, { model: new IntentThenNoReplyModel() });
   const input = { principal, conversationId, turnId: secondId, userRequest: "行き先は京都にしたい" };
   const firstApp = createConversationServerAgent({

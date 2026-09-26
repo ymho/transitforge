@@ -1,12 +1,15 @@
 import { parsePublicCostProposal } from "@raiquora/trip/public-cost-proposal";
 import { parseConsultationRequestProposal } from "@raiquora/trip/consultation-request-proposal";
 import { parsePublicRequestProposal } from "@raiquora/trip/public-request-proposal";
+import { conditionDelta, conditionPayload, conversationConditionSchema, parseConditionJournal,
+  type ConditionOperationJournal, type ConditionOperationRecord, type ConversationConditionChange } from "@raiquora/agent/conversation-condition";
+import type { ConversationConditionRepository } from "../ports/conversation-condition-repository.js";
 import { createHash, randomUUID } from "node:crypto";
-import { StateError, exactObject, messageInputs, stateId, type StateClock } from "../contracts/server-state.js";
+import { StateError, exactObject, messageInputs, stateId, type StateClock, type Conversation } from "../contracts/server-state.js";
 import type { BeginConversationTurn, ConversationTurnContinuity, ConversationTurnIdentity, ConversationTurnLease, ConversationTurnRepository, ConversationTurnResult } from "../ports/conversation-turn-repository.js";
 import { parseConversationWorkingState, retainConversationEvidence, type ConversationWorkingState } from "@raiquora/agent/conversation-working-state";
 import { semanticStateOf } from "@raiquora/agent/conversation-working-state";
-import { parseAcceptedIntentDelta, type AcceptedIntentDelta } from "@raiquora/trip/conversation-intent";
+import { parseAcceptedIntentDelta, type AcceptedIntentDelta, type ConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
 import { parseIntentApplicationReceipt, reduceConversationIntent, type IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 import { parsePublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
@@ -30,7 +33,10 @@ interface TurnRecord {
   baseCalendarDate?: string;
   targetTripId?: string;
   intentReceipt?: IntentApplicationReceipt;
+  /** Added in condition writer v1. Absence with intentReceipt means a sealed legacy turn. */
+  conditionUpdates?: ConditionOperationJournal;
 }
+interface TurnSnapshot { current: Conversation; old?: StateEnvelope; turn?: TurnRecord }
 function finalResult(value: ConversationTurnResult): ConversationTurnResult {
   exactObject(value, ["status", "response", "delivery", "semanticReceipt", "publicPlanPresentation", "publicJourneyPresentation", "publicPlacePresentation", "researchExecution", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal", "turnObservation", "presentationReceipt"]);
   if (value.status !== "completed" && value.status !== "follow_up") throw new StateError("invalid-input");
@@ -64,7 +70,7 @@ function finalResult(value: ConversationTurnResult): ConversationTurnResult {
 }
 
 /** Conversation CAS fences delete and every turn transition; no separate table or expiring receipts. */
-export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepository implements ConversationTurnRepository, IntentProposalAdoptionPort {
+export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepository implements ConversationTurnRepository, ConversationConditionRepository, IntentProposalAdoptionPort {
   constructor(table: string, client?: StateDynamoClient, clock?: StateClock, private readonly newAttemptId = randomUUID) {
     super(table, client, clock);
   }
@@ -132,10 +138,10 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const next = parseConversationWorkingState({ ...working, revision: working.revision + 1, semantic: rest });
     await this.store.send(new TransactWriteItemsCommand({ TransactItems: [{ Put: this.store.put(principal, key, { revision: next.revision, deleted: false, payload: next }, old) }] }));
   }
-  private decodeTurn(envelope: StateEnvelope): TurnRecord {
+  private decodeTurn(envelope: StateEnvelope, turnId: string): TurnRecord {
     try {
       const value = envelope.payload;
-      exactObject(value, ["requestHash", "state", "attemptId", "leaseUntil", "userSequence", "result", "baseCalendarDate", "targetTripId", "intentReceipt"]);
+      exactObject(value, ["requestHash", "state", "attemptId", "leaseUntil", "userSequence", "result", "baseCalendarDate", "targetTripId", "intentReceipt", "conditionUpdates"]);
       if (envelope.deleted || typeof value.requestHash !== "string" || !/^[0-9a-f]{64}$/.test(value.requestHash) ||
         typeof value.state !== "string" || !["started", "intent_accepted", "failed", "completed"].includes(value.state) ||
         !Number.isSafeInteger(value.leaseUntil) || Number(value.leaseUntil) < 0 ||
@@ -144,17 +150,21 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
       if (value.baseCalendarDate !== undefined && (typeof value.baseCalendarDate !== "string" || !validCalendarDate(value.baseCalendarDate))) throw new Error();
       if (value.targetTripId !== undefined) stateId(value.targetTripId);
       if (value.intentReceipt !== undefined) parseIntentApplicationReceipt(value.intentReceipt);
+      if (value.conditionUpdates !== undefined) {
+        const journal = parseConditionJournal(value.conditionUpdates, turnId);
+        if (JSON.stringify(journal.operations.at(-1)!.receipt) !== JSON.stringify(value.intentReceipt)) throw new Error();
+      }
       if (value.state === "intent_accepted" && value.intentReceipt === undefined) throw new Error();
       if (value.state === "completed") finalResult(value.result as ConversationTurnResult);
       else if (value.result !== undefined) throw new Error();
       return value as unknown as TurnRecord;
     } catch { throw new StateError("unavailable"); }
   }
-  private async read(input: ConversationTurnIdentity) {
+  private async read(input: ConversationTurnIdentity): Promise<TurnSnapshot> {
     const current = await this.get(input.principal, input.conversationId);
     if (!current) throw new StateError("not-found");
     const old = await this.store.read(input.principal, this.key(input));
-    const turn = old ? this.decodeTurn(old) : undefined;
+    const turn = old ? this.decodeTurn(old, input.turnId) : undefined;
     if (turn?.result?.consultationRequestProposal && turn.result.consultationRequestProposal.conversationId !== input.conversationId) throw new StateError("unavailable");
     const latest = await this.get(input.principal, input.conversationId);
     if (!latest) throw new StateError("not-found");
@@ -179,6 +189,9 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     if ((await this.getWorkingState(input.principal, input.conversationId))?.semantic?.adoptionInFlight) throw new StateError("conflict");
     if (turn && turn.requestHash !== requestHash) throw new StateError("conflict");
     if (turn?.state === "completed") return { state: "completed", result: turn.result! };
+    // A later user message supersedes unfinished older work. Completed turns replay
+    // above; they never re-run a writer or rewind current accepted conditions.
+    if (turn && current.messageCount !== turn.userSequence) throw new StateError("conflict");
     const now = this.now(current.updatedAt), time = Date.parse(now);
     if ((turn?.state === "started" || turn?.state === "intent_accepted") && turn.leaseUntil > time) throw new StateError("conflict");
     // Retain receipts for the entire conversation lifetime; never silently forget an old ID.
@@ -187,33 +200,67 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const next: TurnRecord = { requestHash, state: turn?.intentReceipt ? "intent_accepted" : "started", attemptId, leaseUntil: time + conversationTurnLimits.leaseMs,
       userSequence: turn?.userSequence ?? current.messageCount + 1,
       ...(calendarDate ? { baseCalendarDate: calendarDate } : {}), ...(request.tripId ? { targetTripId: request.tripId } : {}),
-      ...(turn?.intentReceipt ? { intentReceipt: turn.intentReceipt } : {}) };
+      ...(turn?.intentReceipt ? { intentReceipt: turn.intentReceipt } : {}),
+      ...(turn?.conditionUpdates ? { conditionUpdates: turn.conditionUpdates } : {}) };
     await this.write(input.principal, current, { ...current, revision: current.revision + 1, updatedAt: now,
       messageCount: current.messageCount + (turn ? 0 : 1) },
     turn ? [] : [{ ...message, sequence: next.userSequence, createdAt: now }],
     [this.store.put(input.principal, this.key(input), { revision: (old?.revision ?? -1) + 1, deleted: false, payload: next }, old)]);
-    return next.intentReceipt ? { state: "intent_accepted", lease: { attemptId, userSequence: next.userSequence }, receipt: next.intentReceipt } :
+    return next.intentReceipt ? { state: "intent_accepted", lease: { attemptId, userSequence: next.userSequence }, receipt: next.intentReceipt,
+      ...(next.conditionUpdates ? { conditionReceipts: next.conditionUpdates.operations.map(({ receipt }) => structuredClone(receipt)) } : {}) } :
       { state: "started", lease: { attemptId, userSequence: next.userSequence } };
   }
 
   async acceptIntent(identity: ConversationTurnIdentity, lease: ConversationTurnLease, candidate: AcceptedIntentDelta): Promise<IntentApplicationReceipt> {
-    const input = this.identity(identity), delta = parseAcceptedIntentDelta(candidate);
-    exactObject(lease, ["attemptId", "userSequence"]); stateId(lease.attemptId);
-    const { current, old, turn } = await this.read(input);
-    if (!turn || turn.attemptId !== lease.attemptId || turn.userSequence !== lease.userSequence) throw new StateError("conflict");
-    if (turn.intentReceipt) {
-      if (turn.intentReceipt.mutationId !== delta.mutationId) throw new StateError("conflict");
-      return turn.intentReceipt;
+    const input = this.identity(identity), delta = parseAcceptedIntentDelta(candidate), snapshot = await this.read(input);
+    this.validateLease(snapshot.turn, lease);
+    if (snapshot.turn!.conditionUpdates) throw new StateError("conflict");
+    if (snapshot.turn!.intentReceipt) {
+      if (snapshot.turn!.intentReceipt.mutationId !== delta.mutationId) throw new StateError("conflict");
+      return snapshot.turn!.intentReceipt;
     }
+    return this.commitIntent(input, snapshot, lease, () => delta);
+  }
+
+  async acceptCondition(identity: ConversationTurnIdentity, lease: ConversationTurnLease, candidate: ConversationConditionChange): Promise<IntentApplicationReceipt> {
+    const input = this.identity(identity), change = conversationConditionSchema.parse(candidate), snapshot = await this.read(input);
+    this.validateLease(snapshot.turn, lease);
+    const turn = snapshot.turn!;
+    // Do not resume a legacy accepted turn as a new multi-operation turn.
+    if (turn.intentReceipt && !turn.conditionUpdates) throw new StateError("conflict");
+    const payloadHash = createHash("sha256").update(conditionPayload(change)).digest("hex");
+    const recorded = turn.conditionUpdates?.operations.find(({ target }) => target === change.target);
+    if (recorded) {
+      if (recorded.payloadHash !== payloadHash) throw new StateError("conflict");
+      return structuredClone(recorded.receipt);
+    }
+    return this.commitIntent(input, snapshot, lease, overlay => conditionDelta(change, input.turnId, overlay),
+      { target: change.target, payloadHash });
+  }
+
+  private validateLease(turn: TurnRecord | undefined, lease: ConversationTurnLease): void {
+    exactObject(lease, ["attemptId", "userSequence"]); stateId(lease.attemptId);
+    if (!turn || turn.attemptId !== lease.attemptId || turn.userSequence !== lease.userSequence) throw new StateError("conflict");
+  }
+
+  /** The accepted state and its durable replay receipt share one existing CAS transaction. */
+  private async commitIntent(input: ConversationTurnIdentity, snapshot: TurnSnapshot, lease: ConversationTurnLease,
+    candidate: (overlay: ConversationIntentOverlay) => AcceptedIntentDelta, record?: Omit<ConditionOperationRecord, "receipt">): Promise<IntentApplicationReceipt> {
+    const { current, old, turn } = snapshot;
+    this.validateLease(turn, lease);
     const now = this.now(current.updatedAt);
-    if (turn.state !== "started" || turn.leaseUntil <= Date.parse(now)) throw new StateError("conflict");
+    if (!turn || !["started", "intent_accepted"].includes(turn.state) || turn.leaseUntil <= Date.parse(now) ||
+        current.messageCount !== turn.userSequence) throw new StateError("conflict");
     const workingKey = this.workingKey(input.conversationId), oldWorking = await this.store.read(input.principal, workingKey);
     const previousWorking = oldWorking ? parseConversationWorkingState(oldWorking.payload) : undefined;
+    if (previousWorking && previousWorking.sourceUserSequence > turn.userSequence) throw new StateError("conflict");
     const semantic = semanticStateOf(previousWorking);
     if (semantic.adoptionInFlight) throw new StateError("conflict");
     let reduction;
-    try { reduction = reduceConversationIntent(semantic.overlay, delta); }
+    try { reduction = reduceConversationIntent(semantic.overlay, candidate(semantic.overlay)); }
     catch { throw new StateError("conflict"); }
+    // An individual business command either applies or is rejected without a commit.
+    if (record && reduction.receipt.operations.some(({ status }) => status !== "accepted")) throw new StateError("invalid-input");
     const working = parseConversationWorkingState({
       version: 2, revision: (oldWorking?.revision ?? -1) + 1,
       sourceTurnId: input.turnId, sourceUserSequence: turn.userSequence,
@@ -223,7 +270,10 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
       ...(previousWorking?.lastOutcome ? { lastOutcome: previousWorking.lastOutcome } : {}),
       semantic: { ...semantic, overlay: reduction.overlay, receipts: [...semantic.receipts, reduction.receipt].slice(-20) },
     });
-    const next: TurnRecord = { ...turn, state: "intent_accepted", intentReceipt: reduction.receipt };
+    const conditionUpdates = record ? parseConditionJournal({ version: 1,
+      operations: [...(turn.conditionUpdates?.operations ?? []), { ...record, receipt: reduction.receipt }] }, input.turnId) : undefined;
+    const next: TurnRecord = { ...turn, state: "intent_accepted", intentReceipt: reduction.receipt,
+      ...(conditionUpdates ? { conditionUpdates } : {}) };
     await this.write(input.principal, current, { ...current, updatedAt: now, revision: current.revision + 1 }, [], [
       this.store.put(input.principal, this.key(input), { revision: old!.revision + 1, deleted: false, payload: next }, old),
       this.store.put(input.principal, workingKey, { revision: working.revision, deleted: false, payload: working }, oldWorking),
@@ -245,6 +295,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     if (!saved && turn.state === "failed") return;
     const now = this.now(current.updatedAt);
     if (!["started", "intent_accepted"].includes(turn.state) || turn.leaseUntil <= Date.parse(now)) throw new StateError("conflict");
+    if (saved && current.messageCount !== turn.userSequence) throw new StateError("conflict");
     if (saved && current.messageCount >= 999_999_999_999) throw new StateError("conflict");
     const next: TurnRecord = { ...turn, state: saved ? "completed" : "failed", ...(saved ? { result: saved } : {}) };
     const workingKey = this.workingKey(input.conversationId);

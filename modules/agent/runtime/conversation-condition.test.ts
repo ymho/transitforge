@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { admitConditionChange, conditionDelta, conditionOperationId, conditionPayload, placeConditionInputSchema } from "./conversation-condition";
+import { admitConditionChange, conditionDelta, conditionOperationId, conditionPayload, placeConditionInputSchema, clearConditionInputSchema } from "./conversation-condition";
 import { reduceConversationIntent } from "./conversation-intent-reducer";
 import { compileEffectiveIntent } from "./effective-intent";
 import type { ConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
@@ -12,8 +12,10 @@ describe("small Conversation condition operations", () => {
     const schema = z.toJSONSchema(placeConditionInputSchema);
     expect(schema.required).toEqual(["place", "quote"]);
     expect(schema.additionalProperties).toBe(false);
-    for (const input of [{ place: "京都", quote: "京都" }, { place: null, quote: "未定に戻す" }])
-      expect(placeConditionInputSchema.safeParse(input).success).toBe(true);
+    expect(placeConditionInputSchema.safeParse({ place: "京都", quote: "京都" }).success).toBe(true);
+    expect(placeConditionInputSchema.safeParse({ place: null, quote: "未定に戻す" }).success).toBe(false);
+    expect(clearConditionInputSchema.safeParse({ quote: "未定に戻す" }).success).toBe(true);
+    expect(clearConditionInputSchema.safeParse({ place: "京都", quote: "京都" }).success).toBe(false);
     for (const extra of ["owner", "turnId", "revision", "mutationId", "speechAct", "outcome", "operations", "atomicGroup"])
       expect(placeConditionInputSchema.safeParse({ place: "京都", quote: "京都", [extra]: "injected" }).success).toBe(false);
   });
