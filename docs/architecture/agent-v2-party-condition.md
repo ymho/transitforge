@@ -6,16 +6,18 @@
 
 同行者は今回の旅行条件であり、常設Profileの普段の人数・同行者から自動補完しない。
 
-モデルへ公開する変更操作は次だけ。
+モデルへ公開する変更操作は`update_party`の1つだけ。
 
-- `set_party`: 今回の人数・同行者構成を設定または訂正する。
-- `clear_party`: 今回のparty条件を明示撤回する。
+- `action=set`: 今回の人数・同行者構成を設定または訂正する。
+- `action=clear`: 今回のparty条件を明示撤回する。
+
+訂正をclear→setへ分けず、そのturnでのpartyの最終状態を1回で受理する。
 
 Strands標準`tool()`とZodを使う。Tool callbackは#724の共通Conversation条件Applicationへ渡すだけで、別Agent loop、意味解析model call、repair、強制ToolChoiceを追加しない。
 
 ## 値
 
-`set_party`は2種類の値を区別する。
+`update_party(action=set)`は2種類の値を区別する。
 
 ### count
 
@@ -61,3 +63,8 @@ Profileに残る旧`usualPartySize`、同行者、子どもの年代はtrip-spec
 決定論的テストではcount/composition/撤回、operation journal replay/conflict、Trip/Profileより今回条件が優先されることを検証する。
 
 実モデルはNova 2 Lite＋固定read Provider＋テスト保存先で、明示人数、構成訂正、仮定で更新しないこと、撤回を検証する。初回liveでは年齢未定から年代を補完する挙動と仮定比較でwriterを呼ぶ挙動を観測したため、個別語句の補修ではなく、年齢・関係性をwriter Schemaから外し、writerを「実際の今回条件を変更する操作」として一般化した。固定Providerの成功を実Providerや実ブラウザの成功とは扱わない。
+
+
+## 詳細な年代・参加scope
+
+年代・学年・途中参加は#729で扱う。小学生/中学生/高校生/大学生と20代/30代等は同一enumに潰さず、学校区分と年代を独立した匿名属性として必要時だけ確認する。Providerごとの「こども」「学割」「シニア」資格へ直接昇格せず、確認済み商品ルールと照合する。途中参加・途中離脱は全行程人数を上書きせずlogical day/segment等の限定scopeとして扱う。
