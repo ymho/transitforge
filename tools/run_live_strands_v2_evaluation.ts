@@ -11,7 +11,7 @@ import { ToolEvidenceRegistry, type ToolEvidenceMapper } from "@raiquora/agent/t
 import { StrandsAgentEngine } from "../backend/agent-api/src/adapters/strands-agent-engine";
 import { createStrandsServerRuntime } from "../backend/agent-api/src/adapters/strands-server-runtime";
 import { agentV2SystemPrompt } from "../backend/agent-api/src/usecases/agent-v2-system-prompt";
-import { evaluateStrandsV2LiveCase, strandsV2LiveCases, type StrandsV2LiveCase } from "./strands-v2-live-evaluation";
+import { classifyStrandsV2LiveError, evaluateStrandsV2LiveCase, strandsV2LiveCases, type StrandsV2LiveCase } from "./strands-v2-live-evaluation";
 
 const repetitions = integerArgument("--repetitions", 1, 3);
 const selectedId = argument("--case")?.trim();
@@ -140,7 +140,7 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
         durationMs: Date.now() - startedAt,
       };
     } catch (caught) {
-      error = caught instanceof Error ? caught.name : "unknown_error";
+      error = classifyStrandsV2LiveError(caught);
       observation = {
         status: "execution_error",
         toolCalls: executedToolCalls,

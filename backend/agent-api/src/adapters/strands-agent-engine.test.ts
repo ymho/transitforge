@@ -181,6 +181,8 @@ describe("StrandsAgentEngine", () => {
 
     const config = agentFactory.mock.calls[0]?.[0];
     expect(config?.tools).toHaveLength(0);
+    expect((config?.model as { getConfig(): { stream?: boolean; modelId?: string } }).getConfig())
+      .toMatchObject({ modelId: "unused", stream: false });
   });
 
   it("stops additional Tool side effects after the per-turn Tool budget is exhausted", async () => {
