@@ -1,7 +1,8 @@
 # ADR 0096: Agent実行ループをStrandsへ移しApplication契約を外側に保つ
 
-Status: Accepted
-Date: 2026-09-26
+- ステータス: Accepted
+- 日付: 2026-09-26
+- 関連: #631、#676、#681
 
 ## 背景
 
