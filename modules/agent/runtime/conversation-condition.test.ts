@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { admitConditionChange, conditionDelta, conditionOperationId, conditionPayload, placeConditionInputSchema, clearConditionInputSchema } from "./conversation-condition";
+import { admitConditionChange, conditionDelta, conditionOperationId, conditionPayload, placeConditionInputSchema, partyConditionInputSchema, clearConditionInputSchema } from "./conversation-condition";
 import { reduceConversationIntent } from "./conversation-intent-reducer";
 import { compileEffectiveIntent } from "./effective-intent";
 import type { ConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
@@ -38,6 +38,29 @@ describe("small Conversation condition operations", () => {
     expect(overlay.facts.map(({ target, value }) => ({ target, value }))).toEqual([{ target: "origin", value: { kind: "place_label", label: "大阪" } }]);
     expect(overlay.tombstones).toContainEqual(expect.objectContaining({ target: "destination" }));
     expect(compileEffectiveIntent({ overlay }).actualConversationFacts).toHaveLength(1);
+  });
+  it("keeps total-only party separate from an explicit adult/child composition without guessing ages", () => {
+    expect(partyConditionInputSchema.safeParse({ party: { kind: "count", people: 2 }, quote: "2人で" }).success).toBe(true);
+    expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 2, children: [{}] }, quote: "大人2人と子ども1人" }).success).toBe(true);
+    expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 0, children: [] }, quote: "0人" }).success).toBe(false);
+    expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 2, children: [], composition: ["solo"] }, quote: "2人" }).success).toBe(false);
+    expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 1, children: [{ age: 18 }] }, quote: "18歳の子" }).success).toBe(false);
+
+    let overlay = empty();
+    const count = admitConditionChange({ target: "party_size", party: { kind: "count", people: 2 }, quote: "2人で" }, "2人で行きたい");
+    overlay = reduceConversationIntent(overlay, conditionDelta(count, "72700000-0000-4000-8000-000000000001", overlay)).overlay;
+    expect(overlay.facts[0]?.value).toEqual({ kind: "quantity", amount: 2, unit: "people" });
+
+    const detailed = admitConditionChange({ target: "party_size",
+      party: { kind: "composition", adults: 2, children: [{}], composition: ["family"] }, quote: "大人2人と子ども1人" },
+      "大人2人と子ども1人で行く");
+    overlay = reduceConversationIntent(overlay, conditionDelta(detailed, "72700000-0000-4000-8000-000000000002", overlay)).overlay;
+    expect(overlay.facts[0]?.value).toEqual({ kind: "party", adults: 2, children: [{}], composition: ["family"] });
+
+    const cleared = admitConditionChange({ target: "party_size", party: null, quote: "人数は未定に戻して" }, "人数は未定に戻して");
+    overlay = reduceConversationIntent(overlay, conditionDelta(cleared, "72700000-0000-4000-8000-000000000003", overlay)).overlay;
+    expect(overlay.facts).toHaveLength(0);
+    expect(overlay.tombstones).toContainEqual(expect.objectContaining({ target: "party_size" }));
   });
   it("identifies a final condition decision independently of SDK call order and quote selection", () => {
     const a = admitConditionChange({ target: "destination", place: "京都", quote: "京都" }, "京都に行きたい");
