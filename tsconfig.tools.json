@@ -7,6 +7,8 @@
     "frontend/src/usecases/agent/evaluation/live-model-tool-fixture.ts",
     "frontend/src/usecases/agent/evaluation/semantic-intent-evaluation.ts",
     "frontend/src/usecases/agent/evaluation/semantic-intent-corpus-inputs.ts",
-    "frontend/src/usecases/agent/evaluation/semantic-intent-corpus-expected.ts"
+    "frontend/src/usecases/agent/evaluation/semantic-intent-corpus-expected.ts",
+    "tools/run_live_strands_v2_evaluation.ts",
+    "tools/strands-v2-live-evaluation.ts"
   ]
 }
