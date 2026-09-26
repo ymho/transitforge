@@ -1,0 +1,66 @@
+name: Party condition workbench (temporary)
+
+on:
+  push:
+    branches: [feat/727-party-condition]
+    paths: [.github/workflows/party-condition-workbench.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-northeast-1
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      MODEL_ID: jp.amazon.nova-2-lite-v1:0
+      AGENT_V2_LIVE: 'true'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with: {node-version-file: .nvmrc, cache: npm}
+      - run: npm ci
+      - name: Resolve Bedrock-only evaluation role
+        id: role
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${AWS_DEPLOY_ROLE_ARN:?missing role configuration}"
+          account_id="${AWS_DEPLOY_ROLE_ARN#arn:aws:iam::}"
+          account_id="${account_id%%:*}"
+          [[ "$account_id" =~ ^[0-9]{12}$ ]]
+          echo "arn=arn:aws:iam::${account_id}:role/transitforge-dev-github-agent-eval" >> "$GITHUB_OUTPUT"
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5
+        with:
+          role-to-assume: ${{ steps.role.outputs.arn }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+      - name: Repeat party condition lane without hiding failures
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/party
+          status=0
+          for attempt in 1 2 3; do
+            npm run test:agent:v2:condition-live -- --reporter=default --reporter=json --outputFile=".artifacts/party/condition-${attempt}.json" || status=1
+          done
+          for file in .artifacts/party/*.json; do
+            echo "$(basename "$file")" >> "$GITHUB_STEP_SUMMARY"
+            jq '{success,numPassedTests,numFailedTests,numPendingTests}' "$file" >> "$GITHUB_STEP_SUMMARY"
+          done
+          exit "$status"
+      - name: Upload private evaluation artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: party-condition-${{ github.run_id }}
+          path: .artifacts/party
+          if-no-files-found: warn
+          retention-days: 14
