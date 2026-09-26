@@ -35,7 +35,7 @@ it("resolves month/day and relative travel dates from the trusted calendar befor
   expect(acceptCondition).toHaveBeenCalledWith(identity, lease, {
     target: "travel_period", period: {
       start: { kind: "local_date", date: "2026-10-03", anchorDate: "2026-09-27", resolverVersion: "calendar-v1" },
-      end: { kind: "local_date", date: "2026-10-05" },
+      end: { kind: "local_date", date: "2026-10-05", anchorDate: "2026-09-27", resolverVersion: "calendar-v1" },
     }, quote: "10月3日から5日まで",
   });
 });
