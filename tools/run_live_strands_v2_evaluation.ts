@@ -16,7 +16,7 @@ import { classifyStrandsV2LiveError, evaluateStrandsV2LiveCase, strandsV2LiveCas
 const repetitions = integerArgument("--repetitions", 1, 3);
 const selectedId = argument("--case")?.trim();
 const outputDirectory = resolve(argument("--output-dir") ?? "/tmp/raiquora-strands-v2-live");
-const modelId = process.env.MODEL_ID?.trim() || "amazon.nova-lite-v1:0";
+const modelId = process.env.MODEL_ID?.trim() || "jp.amazon.nova-2-lite-v1:0";
 const region = process.env.AWS_REGION?.trim() || "ap-northeast-1";
 const cases = selectedId && selectedId !== "all" ? strandsV2LiveCases.filter(({ id }) => id === selectedId) : [...strandsV2LiveCases];
 if (!cases.length) throw new Error("Unknown Strands v2 live evaluation case");

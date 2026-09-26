@@ -64,7 +64,7 @@ variable "mtls_ca_bundle_key" {
 variable "bedrock_model_id" {
   description = "Raiquoraが既定でConverse APIに使用するAmazon Bedrock基盤モデルID。"
   type        = string
-  default     = "amazon.nova-lite-v1:0"
+  default     = "jp.amazon.nova-2-lite-v1:0"
 
   validation {
     condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$", var.bedrock_model_id))
