@@ -35,6 +35,15 @@ export interface StrandsAgentRunInput {
   toolExecutor: AgentToolExecutor;
   effectiveIntent?: EffectiveIntent;
   cancelSignal?: AbortSignal;
+  limits?: {
+    maxTurns?: number;
+    maxToolCalls?: number;
+    maxExecutionMs?: number;
+    maxTotalTokens?: number;
+    maxOutputTokens?: number;
+  };
+  /** Return false to reject a Tool call before side effects/provider access. */
+  reserveToolCall?: () => boolean;
 }
 
 export interface StrandsAgentRunResult {
@@ -42,6 +51,7 @@ export interface StrandsAgentRunResult {
   stopReason: string;
   evidence: Evidence[];
   trace: AgentTrace;
+  limitReason?: "tool_calls" | "deadline";
   metrics?: {
     modelCalls: number;
     toolCalls: number;
@@ -101,6 +111,7 @@ export class StrandsAgentEngine {
     const trace = new AgentTraceRecorder(input.executionId, { omitContent: true });
     trace.taskStarted(input.userRequest);
 
+    const budgetState = { toolCalls: 0, toolLimitReached: false };
     const tools = createStrandsReadTools({
       registry: input.tools,
       executor: input.toolExecutor,
@@ -109,6 +120,9 @@ export class StrandsAgentEngine {
       toolTimeoutMs: this.options.toolTimeoutMs ?? 20_000,
       trace,
       evidence,
+      budgetState,
+      maxToolCalls: input.limits?.maxToolCalls,
+      reserveToolCall: input.reserveToolCall,
     });
     const agent = this.createAgent({
       model: this.model ?? new BedrockModel({
@@ -125,13 +139,17 @@ export class StrandsAgentEngine {
       toolExecutor: "sequential",
     });
     const startedAt = Date.now();
+    const deadlineSignal = input.limits?.maxExecutionMs ? AbortSignal.timeout(input.limits.maxExecutionMs) : undefined;
+    const cancelSignal = combineSignals(input.cancelSignal, deadlineSignal);
     try {
       const result = await agent.invoke(input.modelInput ?? input.userRequest, {
-        cancelSignal: input.cancelSignal,
+        ...(cancelSignal ? { cancelSignal } : {}),
         limits: {
-          turns: this.options.maxTurns ?? 8,
-          ...(this.options.maxTotalTokens ? { totalTokens: this.options.maxTotalTokens } : {}),
-          ...(this.options.maxOutputTokens ? { outputTokens: this.options.maxOutputTokens } : {}),
+          turns: input.limits?.maxTurns ?? this.options.maxTurns ?? 8,
+          ...(input.limits?.maxTotalTokens ?? this.options.maxTotalTokens
+            ? { totalTokens: input.limits?.maxTotalTokens ?? this.options.maxTotalTokens } : {}),
+          ...(input.limits?.maxOutputTokens ?? this.options.maxOutputTokens
+            ? { outputTokens: input.limits?.maxOutputTokens ?? this.options.maxOutputTokens } : {}),
         },
       });
       const response = result.toString();
@@ -144,6 +162,8 @@ export class StrandsAgentEngine {
         stopReason: result.stopReason,
         evidence: evidence.map((item) => structuredClone(item)),
         trace: trace.snapshot(),
+        ...(budgetState.toolLimitReached ? { limitReason: "tool_calls" as const } : {}),
+        ...(result.stopReason === "cancelled" && deadlineSignal?.aborted ? { limitReason: "deadline" as const } : {}),
         ...(result.metrics && usage ? { metrics: {
           modelCalls: result.metrics.cycleCount,
           toolCalls: Object.values(result.metrics.toolMetrics).reduce((sum, item) => sum + item.callCount, 0),
@@ -169,6 +189,9 @@ export function createStrandsReadTools(input: {
   toolTimeoutMs: number;
   trace: AgentTraceRecorder;
   evidence: Evidence[];
+  budgetState?: { toolCalls: number; toolLimitReached: boolean };
+  maxToolCalls?: number;
+  reserveToolCall?: () => boolean;
 }): InvokableTool<unknown, JSONValue>[] {
   return input.registry.descriptors().filter((descriptor) => input.registry.effect(descriptor.name) === "read").map((descriptor) =>
     tool({
@@ -187,6 +210,12 @@ export function createStrandsReadTools(input: {
           } });
         }
         if (context?.cancelSignal.aborted) return jsonValue({ ok: false, error: { code: "execution_failed", retryable: true } });
+        if (input.maxToolCalls !== undefined && (input.budgetState?.toolCalls ?? 0) >= input.maxToolCalls ||
+            input.reserveToolCall && !input.reserveToolCall()) {
+          if (input.budgetState) input.budgetState.toolLimitReached = true;
+          return jsonValue({ ok: false, error: { code: "execution_failed", retryable: false, reason: "tool_budget" } });
+        }
+        if (input.budgetState) input.budgetState.toolCalls += 1;
 
         const execution = await input.executor.execute({
           executionId: input.executionId,
@@ -226,4 +255,10 @@ function jsonValue(value: unknown): JSONValue {
   const serialized = JSON.stringify(value);
   if (serialized === undefined) throw new Error("Tool result is not JSON serializable");
   return JSON.parse(serialized) as JSONValue;
+}
+
+function combineSignals(primary: AbortSignal | undefined, deadline: AbortSignal | undefined): AbortSignal | undefined {
+  if (!primary) return deadline;
+  if (!deadline) return primary;
+  return AbortSignal.any([primary, deadline]);
 }

@@ -23,11 +23,17 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine): ServerAg
       tools: input.tools,
       toolExecutor: input.toolExecutor,
       effectiveIntent: decisionContext.effectiveIntent,
+      limits: {
+        maxTurns: Math.min(input.limits.maxIterations, input.limits.maxModelCalls),
+        maxToolCalls: input.limits.maxToolCalls,
+        maxExecutionMs: input.limits.maxExecutionMs,
+      },
+      reserveToolCall: () => input.researchLedger.reserve("toolCalls"),
     });
 
     accountStrandsUsage(input.researchLedger, run.metrics);
     const evidence = uniqueEvidence([...(input.initialEvidence ?? []), ...run.evidence], input.limits.maxEvidence);
-    const status = runtimeStatus(run.stopReason);
+    const status = runtimeStatus(run.stopReason, run.limitReason);
 
     if (status !== "completed") {
       return {
@@ -82,7 +88,6 @@ function accountStrandsUsage(
 ): void {
   if (!metrics) return;
   for (let index = 0; index < metrics.modelCalls; index += 1) ledger.reserve("modelCalls");
-  for (let index = 0; index < metrics.toolCalls; index += 1) ledger.reserve("toolCalls");
   ledger.recordModel({
     inputTokens: metrics.inputTokens,
     outputTokens: metrics.outputTokens,
@@ -101,7 +106,8 @@ function uniqueEvidence(values: readonly Evidence[], maximum: number): Evidence[
   return [...byId.values()];
 }
 
-function runtimeStatus(stopReason: string): AgentRuntimeResult["status"] {
+function runtimeStatus(stopReason: string, limitReason?: "tool_calls" | "deadline"): AgentRuntimeResult["status"] {
+  if (limitReason) return "limit_reached";
   if (stopReason === "endTurn" || stopReason === "stopSequence") return "completed";
   if (["limitTurns", "limitTotalTokens", "limitOutputTokens", "maxTokens", "modelContextWindowExceeded"].includes(stopReason)) return "limit_reached";
   return "failed";
