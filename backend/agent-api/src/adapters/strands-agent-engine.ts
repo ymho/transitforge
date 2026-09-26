@@ -15,7 +15,7 @@ import { placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, Condi
 import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
   type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
 
-export const strandsConditionToolNames = ["update_destination", "update_origin", "update_party"] as const;
+export const strandsConditionToolNames = ["update_current_destination", "update_current_origin", "update_current_party"] as const;
 export interface StrandsAgentEngineOptions {
   modelId: string;
   region: string;
@@ -107,17 +107,17 @@ export class StrandsAgentEngine {
         }
       };
       tools.push(
-        tool({ name: "update_destination", inputSchema: placeConditionUpdateInputSchema,
+        tool({ name: "update_current_destination", inputSchema: placeConditionUpdateInputSchema,
           description: "今回の相談の行き先について、利用者が実際の条件として設定・訂正・明示撤回した最終状態を1回で反映する。設定/訂正はaction=set、未定に戻す明示はaction=clear。訂正でclear→setの2操作に分けない。仮定・what-if・比較だけ、変更なしでは使わない。Tripやプロフィールは変更しない。",
           callback: (value, context) => apply(value.action === "set"
             ? { target: "destination", place: value.place!, quote: value.quote }
             : { target: "destination", place: null, quote: value.quote }, context?.cancelSignal) }),
-        tool({ name: "update_origin", inputSchema: placeConditionUpdateInputSchema,
+        tool({ name: "update_current_origin", inputSchema: placeConditionUpdateInputSchema,
           description: "今回の相談の出発地について、利用者が実際の条件として設定・訂正・明示撤回した最終状態を1回で反映する。設定/訂正はaction=set、未定に戻す明示はaction=clear。訂正でclear→setの2操作に分けない。普段の出発地の推測、仮定・what-if・比較だけ、変更なしでは使わない。Tripやプロフィールは変更しない。",
           callback: (value, context) => apply(value.action === "set"
             ? { target: "origin", place: value.place!, quote: value.quote }
             : { target: "origin", place: null, quote: value.quote }, context?.cancelSignal) }),
-        tool({ name: "update_party", inputSchema: partyConditionUpdateInputSchema,
+        tool({ name: "update_current_party", inputSchema: partyConditionUpdateInputSchema,
           description: "今回の旅行で実際に採用する現在の人数条件だけを永続更新する。仮定を試すscratchpadではない。利用者が現在条件として採用・訂正した場合はaction=set、人数を未定に戻す明示はaction=clear。合計人数だけならparty.kind=countを使い、大人/子どもの内訳を推測しない。大人/子どもの人数が明示された場合だけparty.kind=compositionを使う。年齢・年代・関係性は扱わない。仮定・反実仮想・what-if・シナリオ比較、または現条件を維持すると明示された場合は呼ばない。比較用read Toolが無いことはこのwriterを呼ぶ理由にならない。プロフィールは変更しない。",
           callback: (value, context) => apply(value.action === "set"
             ? { target: "party_size", party: value.party!, quote: value.quote }
