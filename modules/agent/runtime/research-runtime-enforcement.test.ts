@@ -1,4 +1,4 @@
-import { expect, it, vi } from "vitest";
+// V1 regression only: do not use this suite as the Agent v2 compatibility oracle.\n// Re-express user-visible requirements at Application/Domain boundaries for the greenfield Strands runtime.\nimport { expect, it, vi } from "vitest";
 import { MultiStepAgentRuntime } from "./agent-runtime";
 import { AgentToolExecutor } from "./agent-tool-executor";
 import { ResearchExecutionLedger } from "./research-execution";
