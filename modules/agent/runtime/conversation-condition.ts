@@ -137,8 +137,8 @@ export function admitConditionChange(value: unknown, userMessage: string, calend
       validateTripParty({ adults: input.party.adults, children: Array.from({ length: input.party.children }, () => ({})), source: "user" });
     } catch { throw new ConditionUpdateRejectedError("invalid_condition"); }
   }
-  if (input.target === "origin" || input.target === "destination") return input;
-  if (input.target === "party_size") return input;
+  if ("place" in input) return input;
+  if ("party" in input) return input;
   if (input.period === null) return { target: "travel_period", period: null, quote: input.quote };
   const period = resolveTravelPeriod(input.period, input.quote, calendarDate);
   return { target: "travel_period", period, quote: input.quote };
