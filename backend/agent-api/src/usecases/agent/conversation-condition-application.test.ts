@@ -23,6 +23,22 @@ it("accepts one grounded party operation without Profile or persistence metadata
   await expect(apply({ ...change, quote: "別の発言" })).rejects.toMatchObject({ code: "invalid_source" });
 });
 
+it("resolves month/day and relative travel dates from the trusted calendar before persistence", async () => {
+  const acceptCondition = vi.fn(async () => ({ version: 1 as const, mutationId: "condition:period", speechAct: "inform" as const,
+    beforeIntentRevision: 0, intentRevision: 1, replayed: false, operations: [] }));
+  const apply = createConversationConditionApplication({ acceptCondition }, identity, lease,
+    "10月3日から5日まで旅行します", "2026-09-27");
+  await apply({ target: "travel_period", period: {
+    start: { kind: "month_day", month: 10, day: 3 }, end: { kind: "day_of_month", day: 5 },
+  }, quote: "10月3日から5日まで" });
+  expect(acceptCondition).toHaveBeenCalledWith(identity, lease, {
+    target: "travel_period", period: {
+      start: { kind: "local_date", date: "2026-10-03", anchorDate: "2026-09-27", resolverVersion: "calendar-v1" },
+      end: { kind: "local_date", date: "2026-10-05" },
+    }, quote: "10月3日から5日まで",
+  });
+});
+
 it("separates a definite conflict from an uncertain storage result", async () => {
   const acceptCondition = vi.fn().mockRejectedValueOnce(new StateError("conflict")).mockRejectedValueOnce(new StateError("unavailable"));
   const apply = createConversationConditionApplication({ acceptCondition }, identity, lease, "京都に行きたい");
