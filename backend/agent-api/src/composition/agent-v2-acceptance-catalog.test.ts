@@ -33,4 +33,15 @@ describe("Agent v2 greenfield acceptance catalog", () => {
     ]);
     expect(deferred.every(({ reason }) => Boolean(reason?.trim()))).toBe(true);
   });
+
+  it("keeps the dedicated v2 test command independent from V1 runtime suites", () => {
+    const packageJson = JSON.parse(readFileSync(resolve(repositoryRoot, "package.json"), "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+    const command = packageJson.scripts?.["test:agent:v2"] ?? "";
+    expect(command).toContain("strands-agent-engine.test.ts");
+    expect(command).toContain("agent-v2-acceptance-catalog.test.ts");
+    expect(command).not.toContain("agent-runtime.test.ts");
+    expect(command).not.toContain("research-runtime-enforcement.test.ts");
+  });
 });
