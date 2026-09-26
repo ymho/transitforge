@@ -41,12 +41,12 @@ describe("Server Agent Application without Browser APIs", () => {
   });
   it("delegates the model/tool loop to an injected runtime without constructing the V1 model", async () => {
     const createModel = vi.fn(() => { throw new Error("V1 model must not be created"); });
-    const runRuntime = vi.fn(async ({ scope, tools }: Parameters<NonNullable<Parameters<typeof createServerAgentApplication>[0]["runRuntime"]>>[0]) => ({
+    const runRuntime = vi.fn(async ({ executionId, tools }: Parameters<NonNullable<Parameters<typeof createServerAgentApplication>[0]["runRuntime"]>>[0]) => ({
       status: "completed" as const,
       response: "Strands runtime response",
       evidence: [],
       claims: [],
-      trace: { executionId: scope.executionId, events: [], droppedEventCount: 0 },
+      trace: { executionId, events: [], droppedEventCount: 0 },
     }));
     const app = createServerAgentApplication({
       newExecutionId: () => "strands-execution",
