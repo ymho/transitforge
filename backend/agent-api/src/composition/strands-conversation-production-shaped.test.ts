@@ -33,6 +33,30 @@ class ToolThenAnswerModel extends Model<BaseModelConfig> {
     yield { type: "modelMessageStopEvent", stopReason: "endTurn" };
   }
 }
+
+class ReplyOnlyModel extends Model<BaseModelConfig> {
+  private calls = 0;
+  private config: BaseModelConfig = { modelId: "synthetic-strands" };
+  constructor(private readonly proposal: Record<string, unknown>, private readonly trailingText: string) { super(); }
+  updateConfig(config: BaseModelConfig): void { this.config = { ...this.config, ...config }; }
+  getConfig(): BaseModelConfig { return this.config; }
+  async *stream(_messages: Message[], _options?: StreamOptions): AsyncGenerator<ModelStreamEvent> {
+    this.calls += 1;
+    yield { type: "modelMessageStartEvent", role: "assistant" };
+    if (this.calls === 1) {
+      yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: "submit_reply", toolUseId: "reply-1" } };
+      yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(this.proposal) } };
+      yield { type: "modelContentBlockStopEvent" };
+      yield { type: "modelMessageStopEvent", stopReason: "toolUse" };
+      return;
+    }
+    yield { type: "modelContentBlockStartEvent" };
+    yield { type: "modelContentBlockDeltaEvent", delta: { type: "textDelta", text: this.trailingText } };
+    yield { type: "modelContentBlockStopEvent" };
+    yield { type: "modelMessageStopEvent", stopReason: "endTurn" };
+  }
+}
+
 it("runs an actual Strands model-tool-model loop inside the production-shaped Conversation path", async () => {
   const { verifier } = cognitoTokenFixture();
   const principal = await verifier.verify(token());
@@ -68,4 +92,65 @@ it("runs an actual Strands model-tool-model loop inside the production-shaped Co
   expect(replay).toEqual(result);
   expect(operation).toHaveBeenCalledTimes(1);
   expect((await state.conversations.history(principal, conversationId)).items.map(({ text }) => text)).toEqual([input.userRequest, result.response]);
+});
+
+
+it("publishes and replays a no-evidence greeting without calling Domain Tools or V1", async () => {
+  const { verifier } = cognitoTokenFixture();
+  const principal = await verifier.verify(token());
+  const state = stateDynamoFixture(), trips = tripDynamoFixture();
+  const { tripId: _tripId, ...metadata } = stateMetadata();
+  await state.conversations.create(principal, conversationId, metadata);
+  const weather = { search: vi.fn(async () => { throw new Error("weather must not run"); }) };
+  const v1Model = { converse: vi.fn(async () => { throw new Error("V1 model must not run"); }) };
+  const engine = new StrandsAgentEngine({
+    modelId: "unused", region: "ap-northeast-1", systemPrompt: "Submit a typed reply.", maxTurns: 3,
+  }, { model: new ReplyOnlyModel({ kind: "conversation", message: "greeting" }, "<thinking>ignore</thinking>") });
+  const app = createConversationServerAgent({
+    stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
+    model: v1Model, weather, newExecutionId: () => "strands-greeting", runRuntime: createStrandsServerRuntime(engine),
+  });
+  const input = { principal, conversationId, turnId: secondId, userRequest: "こんにちは" };
+
+  const result = await app.runConversationTurn(input);
+
+  expect(result).toMatchObject({ status: "completed", response: "こんにちは。旅について相談したいことを教えてください。" });
+  expect(result.response).not.toContain("thinking");
+  expect(weather.search).not.toHaveBeenCalled();
+  expect(v1Model.converse).not.toHaveBeenCalled();
+  expect(await app.runConversationTurn(input)).toEqual(result);
+  expect(weather.search).not.toHaveBeenCalled();
+  expect((await state.conversations.history(principal, conversationId)).items.map(({ text }) => text))
+    .toEqual([input.userRequest, result.response]);
+});
+
+it("reports unavailable save through the Application boundary and replays it without side effects", async () => {
+  const { verifier } = cognitoTokenFixture();
+  const principal = await verifier.verify(token());
+  const state = stateDynamoFixture(), trips = tripDynamoFixture();
+  const { tripId: _tripId, ...metadata } = stateMetadata();
+  await state.conversations.create(principal, conversationId, metadata);
+  const weather = { search: vi.fn(async () => { throw new Error("weather must not run"); }) };
+  const v1Model = { converse: vi.fn(async () => { throw new Error("V1 model must not run"); }) };
+  const engine = new StrandsAgentEngine({
+    modelId: "unused", region: "ap-northeast-1", systemPrompt: "Submit a typed reply.", maxTurns: 3,
+  }, { model: new ReplyOnlyModel({ kind: "unavailable", operation: "save" }, "保存しておきます。") });
+  const app = createConversationServerAgent({
+    stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
+    model: v1Model, weather, newExecutionId: () => "strands-save-unavailable", runRuntime: createStrandsServerRuntime(engine),
+  });
+  const input = { principal, conversationId, turnId: secondId, userRequest: "この条件を保存しておいて" };
+
+  const result = await app.runConversationTurn(input);
+
+  expect(result).toMatchObject({ status: "completed" });
+  expect(result.response).toContain("保存を実行できません");
+  expect(result.response).toContain("保存は行っていません");
+  expect(result.response).not.toContain("保存しておきます");
+  expect(weather.search).not.toHaveBeenCalled();
+  expect(v1Model.converse).not.toHaveBeenCalled();
+  expect(await app.runConversationTurn(input)).toEqual(result);
+  expect(weather.search).not.toHaveBeenCalled();
+  expect((await state.conversations.history(principal, conversationId)).items.map(({ text }) => text))
+    .toEqual([input.userRequest, result.response]);
 });
