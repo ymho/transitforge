@@ -1,4 +1,5 @@
 name: Party condition workbench (temporary)
+# Run 2: minimal party schema; no child age/group or relationship fields.
 
 on:
   push:
