@@ -1,5 +1,5 @@
 name: Party condition workbench (temporary)
-# Run 10 final: current-condition Tool names, three independent party-only repetitions.
+# Run 11: persistent current-party writer + non-persistent scenario Tool, three independent repetitions.
 # Detailed age/school cohorts and scoped participation are deferred to #729.
 
 on:
