@@ -60,6 +60,7 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
       const selected = new Map<string, Evidence>();
       const claims: EvidenceClaim[] = [];
       const parts: string[] = [];
+      const commentaryBindings: NonNullable<EvidenceClaim["bindings"]> = [];
       for (const reference of proposal.references) {
         const matches = context.evidence.filter(({ id }) => id === reference.evidenceId);
         if (matches.length !== 1) throw new AgentV2ReplyError("missing_evidence");
@@ -73,13 +74,21 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
         const quotation = reference.field === "sourceExcerpt";
         parts.push(`${escapeMarkdown(subject)}\n\n${quotation ? "> " : ""}${escapeMarkdown(text).replaceAll("\n", quotation ? "\n> " : "\n")}\n${sourceLink(evidence)}`.trim());
         selected.set(evidence.id, structuredClone(evidence));
+        const binding = { evidenceId: evidence.id, fieldPath: `facts.${reference.field}`,
+          subjectRef: evidence.observation?.subjectKey ?? evidence.subject,
+          ...(evidence.observation?.scopeKey ? { applicabilityScope: evidence.observation.scopeKey } : {}) };
         claims.push({ id: `v2-claim-${claims.length + 1}`, statement: text, kind: "fact", evidenceIds: [evidence.id],
-          bindings: [{ evidenceId: evidence.id, fieldPath: `facts.${reference.field}`,
-            subjectRef: evidence.observation?.subjectKey ?? evidence.subject,
-            ...(evidence.observation?.scopeKey ? { applicabilityScope: evidence.observation.scopeKey } : {}),
-            transform: quotation ? "bounded_quote" : "identity" }] });
+          bindings: [{ ...binding, transform: quotation ? "bounded_quote" : "identity" }] });
+        commentaryBindings.push({ ...binding, transform: "recommendation" });
       }
       proof.references = proposal.references.map((item) => ({ ...item }));
+      if (proposal.commentary) {
+        const commentary = boundedText(proposal.commentary);
+        proof.commentary = true;
+        claims.push({ id: "v2-commentary", statement: commentary, kind: "inference",
+          evidenceIds: [...selected.keys()], bindings: commentaryBindings });
+        parts.unshift(escapeMarkdown(commentary));
+      }
       return { text: parts.join("\n\n"), evidence: [...selected.values()], claims, proof };
     }
   }
