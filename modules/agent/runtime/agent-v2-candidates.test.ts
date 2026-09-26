@@ -49,6 +49,13 @@ describe("V2 place candidate publication", () => {
     expect(validateEvidenceAndClaims(result.evidence, result.claims).valid).toBe(true);
     expect(result.text).not.toContain("資料の説明です。");
   });
+  it("keeps a valid bounded quote when the excerpt limit falls on source whitespace", () => {
+    const evidence = place("garden", "庭園", "文".repeat(398) + " \n続きの資料です。");
+    const result = submit([evidence]);
+    expect(result.publicPlacePresentation?.cards[0]?.description).toBe("文".repeat(398));
+    expect(agentV2CandidateReferences([evidence], intent)).toHaveLength(1);
+    expect(validateEvidenceAndClaims(result.evidence, result.claims).valid).toBe(true);
+  });
   it.each(["search-snippet", "read-page"])("does not promote a %s to a resolved place candidate", (sourcePrecision) => {
     const evidence = place(); evidence.facts.sourcePrecision = sourcePrecision;
     expect(agentV2CandidateReferences([evidence], intent)).toEqual([]);

@@ -148,7 +148,7 @@ function placeCard(evidence: Evidence, effective?: EffectiveIntent): PublicPlace
   if (!sourceUrl) throw new AgentV2ReplyError("invalid_field");
   const title = boundedText(facts.sourceTitle).trim(), raw = boundedText(facts.sourceExcerpt).trim();
   // A bounded source excerpt, not a generated description or a full fetched page.
-  const description = raw.length > 400 ? raw.slice(0, 399) : raw;
+  const description = raw.slice(0, 400).trimEnd();
   try {
     return parsePublicPlacePresentation({ version: publicPlacePresentationVersion, cards: [{
       evidenceId: evidence.id, placeRef: observation.subjectKey, title, description, sourceUrl,
