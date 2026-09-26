@@ -1,7 +1,8 @@
 import {
   Agent, BedrockModel, tool,
   type AgentConfig, type BaseModelConfig, type InvokableTool,
-  type JSONSchema, type JSONValue, type Model,
+  type JSONSchema, type JSONValue, type Model, type Message,
+  type StreamOptions, type ToolChoice,
 } from "@strands-agents/sdk";
 import { AgentTraceRecorder, type AgentTrace } from "@raiquora/agent/agent-trace";
 import { validateToolIntentUse } from "@raiquora/agent/intent-action-policy";
@@ -125,9 +126,13 @@ export class StrandsAgentEngine {
       inputSchema: agentV2ReplySchema as JSONSchema,
       callback: (value) => jsonValue(submission.receive(value)),
     }));
+    const baseModel = this.model ?? new BedrockModel({ modelId: this.options.modelId, region: this.options.region,
+      maxTokens: this.options.maxOutputTokens ?? 2_048, temperature: 0, stream: false });
     const agent = this.createAgent({
-      model: this.model ?? new BedrockModel({ modelId: this.options.modelId, region: this.options.region,
-        maxTokens: this.options.maxOutputTokens ?? 2_048, temperature: 0, stream: false }),
+      // Before a typed reply is submitted, free-text termination is not a valid V2
+      // protocol outcome. Force at least one Tool call at the model-provider boundary.
+      // After submit_reply succeeds, return to auto so Strands can end the loop.
+      model: requireToolUntilReply(baseModel, submission),
       tools, systemPrompt: this.options.systemPrompt,
       printer: false, contextManager: false, retryStrategy: null, toolExecutor: "sequential",
     });
@@ -218,6 +223,24 @@ export function createStrandsReadTools(input: {
     },
   }));
 }
+function requireToolUntilReply(baseModel: Model<BaseModelConfig>, submission: AgentV2ReplySubmission): Model<BaseModelConfig> {
+  return new Proxy(baseModel, {
+    get(target, property) {
+      // Strands Agent invokes streamAggregated(), not stream() directly.
+      // Inject ToolChoice at that boundary so the base implementation forwards it
+      // into the provider's stream() call.
+      if (property === "streamAggregated") {
+        return async function* (messages: Message[], options?: StreamOptions) {
+          const toolChoice: ToolChoice = submission.submitted ? { auto: {} } : { any: {} };
+          return yield* target.streamAggregated(messages, { ...options, toolChoice });
+        };
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as Model<BaseModelConfig>;
+}
+
 function runtimeFailureKind(error: unknown): ServerAgentRuntimeFailureKind {
   const name = error instanceof Error ? error.name : "";
   if (/abort/iu.test(name)) return "abort";

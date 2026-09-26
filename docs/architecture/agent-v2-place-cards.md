@@ -33,3 +33,8 @@ Strands → 必要ならupdate_intent / A commit
 通信断はB commit後のfinal書込みを失敗させ、同じturnのretryでカードを失わず旅行readを繰り返さないことを検証する。
 
 PRではV2 Acceptance、Smoke、全体CIを確認する。実Strands＋scripted modelの契約検証と、実Bedrockの意味理解・推薦品質、実ブラウザの視覚確認は別に記録する。実環境の一般エラー表示だけから失敗境界を確定しない。
+
+
+## V2終端プロトコル
+
+Promptだけに`submit_reply`遵守を委ねない。reply未提出の各model requestはStrands/Bedrockの`toolChoice=any`で最低1つのTool callを要求し、`submit_reply`が受理された後だけ`toolChoice=auto`へ戻す。これによりread後のfree-text `endTurn`を公開候補へ変換したりrepair loopで再解釈したりせず、typed publication boundaryをモデル呼出し層で維持する。
