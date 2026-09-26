@@ -130,6 +130,10 @@ export class StrandsAgentEngine {
         region: this.options.region,
         maxTokens: this.options.maxOutputTokens ?? 2_048,
         temperature: 0,
+        // Agent v2 consumes the bounded final invocation result at the Application boundary.
+        // We do not stream model tokens directly to the client, so keep Bedrock on Converse
+        // and avoid widening IAM to InvokeModelWithResponseStream.
+        stream: false,
       }),
       tools,
       systemPrompt: this.options.systemPrompt,
