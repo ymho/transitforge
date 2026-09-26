@@ -328,8 +328,9 @@ function relativeDateAppears(quote: string, relation: "today" | "tomorrow" | "da
   return quote.includes("明後日") || quote.includes("あさって");
 }
 function monthAppears(quote: string, month: number): boolean {
+  const padded = String(month).padStart(2, "0");
   return quote.includes(`${month}月`) || quote.includes(`${month}/`) ||
-    quote.includes(`${String(month).padStart(2, "0")}/`);
+    quote.includes(`${padded}/`) || quote.includes(`-${padded}-`);
 }
 function containsNumber(quote: string, value: number): boolean {
   return quote.normalize("NFKC").includes(String(value));
