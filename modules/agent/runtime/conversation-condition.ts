@@ -37,6 +37,10 @@ export const partyConditionInputSchema = z.strictObject({
   party: partyConditionValueSchema.describe("今回の同行者。合計だけならcount、明示された大人/子どもの人数がある時だけcomposition。年齢・年代・関係性は推測しない。"),
   quote: sourceQuote,
 });
+export const partyScenarioInputSchema = z.strictObject({
+  party: partyConditionValueSchema.describe("現在条件を変えずに比較する仮定上の同行者。"),
+  quote: sourceQuote.describe("仮定・比較を求めるuserMessageの完全な部分文字列。"),
+});
 export const partyConditionUpdateInputSchema = z.strictObject({
   action: z.enum(["set", "clear"]),
   party: partyConditionValueSchema.optional(),
@@ -55,10 +59,18 @@ const partyChangeSchema = z.strictObject({ target: z.literal("party_size"), part
 export const conversationConditionSchema = z.union([placeChangeSchema, partyChangeSchema]);
 export type PlaceConditionInput = z.infer<typeof placeConditionInputSchema>;
 export type PartyConditionInput = z.infer<typeof partyConditionInputSchema>;
+export type PartyScenarioInput = z.infer<typeof partyScenarioInputSchema>;
 export type PlaceConditionUpdateInput = z.infer<typeof placeConditionUpdateInputSchema>;
 export type PartyConditionUpdateInput = z.infer<typeof partyConditionUpdateInputSchema>;
 export type ConversationConditionChange = z.infer<typeof conversationConditionSchema>;
 export type ConditionTarget = ConversationConditionChange["target"];
+
+export function admitPartyScenario(value: unknown, userMessage: string): PartyScenarioInput {
+  const parsed = partyScenarioInputSchema.safeParse(value);
+  if (!parsed.success) throw new ConditionUpdateRejectedError("invalid_condition");
+  if (!userMessage.includes(parsed.data.quote)) throw new ConditionUpdateRejectedError("invalid_source");
+  return parsed.data;
+}
 
 export class ConditionUpdateRejectedError extends Error {
   constructor(readonly code: "invalid_condition" | "invalid_source" | "condition_conflict") {
