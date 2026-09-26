@@ -39,6 +39,33 @@ describe("Server Agent Application without Browser APIs", () => {
       .toEqual(["model_completed", "tool_called", "tool_completed", "model_completed", "response_generated"]);
     expect(JSON.stringify(result.trace)).not.toContain("fake-principal");
   });
+  it("delegates the model/tool loop to an injected runtime without constructing the V1 model", async () => {
+    const createModel = vi.fn(() => { throw new Error("V1 model must not be created"); });
+    const runRuntime = vi.fn(async ({ executionId }: Parameters<NonNullable<Parameters<typeof createServerAgentApplication>[0]["runRuntime"]>>[0]) => ({
+      status: "completed" as const,
+      response: "Strands runtime response",
+      evidence: [],
+      claims: [],
+      trace: { executionId, events: [], droppedEventCount: 0 },
+    }));
+    const app = createServerAgentApplication({
+      newExecutionId: () => "strands-execution",
+      createModel,
+      registerTools: tools => tools.register({ name: "read_only", description: "read", effect: "read",
+        inputSchema: { type: "object", properties: {} }, parseInput: validAgentToolInput,
+        execute: async () => successfulAgentToolResult({ ok: true }) }),
+      runRuntime,
+    });
+
+    const result = await app.runAgentTurn(input);
+
+    expect(result.status).toBe("completed");
+    expect(result.response).toBe("Strands runtime response");
+    expect(createModel).not.toHaveBeenCalled();
+    expect(runRuntime).toHaveBeenCalledOnce();
+    expect(runRuntime.mock.calls[0]?.[0].tools.descriptors().map(({ name }) => name)).toEqual(["read_only"]);
+  });
+
   it("does not execute duplicate calls", async () => {
     const { app, execute } = setup([call, { ...call, message: { ...call.message, content: [{ type: "tool_call", name: "fake_tool", toolCallId: "call-2", input: {} }] } }, final]);
     await app.runAgentTurn(input);
