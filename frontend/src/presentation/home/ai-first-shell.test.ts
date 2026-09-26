@@ -45,6 +45,13 @@ it("starts Home without initializing Map or requiring profile/authentication", (
   expect(document.querySelector("main")!.dataset.primaryView).toBe("explore");
   expect(ports.openMap).not.toHaveBeenCalled();
 });
+it("loads saved trips only when the dedicated Trips screen is opened", () => {
+  const retry = vi.fn(async () => {});
+  const { shell } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }), retry });
+  expect(retry).not.toHaveBeenCalled();
+  shell.navigate("trips");
+  expect(retry).toHaveBeenCalledOnce();
+});
 it("starts consultation only after authentication and rejects a direct signed-out chat route", () => {
   window.history.replaceState(null, "", "#chat");
   const signedOut = setup();
