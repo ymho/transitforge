@@ -10,6 +10,10 @@ const placeLabel = z.string().min(1).max(200).regex(/^(?!\s)(?![\s\S]*\s$)[^\u00
   .describe("今回の発言からそのまま取り出した地名。");
 export const placeConditionInputSchema = z.strictObject({ place: placeLabel, quote: sourceQuote });
 export const clearConditionInputSchema = z.strictObject({ quote: sourceQuote });
+export const placeConditionUpdateInputSchema = z.discriminatedUnion("action", [
+  z.strictObject({ action: z.literal("set"), place: placeLabel, quote: sourceQuote }),
+  z.strictObject({ action: z.literal("clear"), quote: sourceQuote }),
+]);
 
 const partyCount = z.strictObject({
   kind: z.literal("count"),
@@ -27,6 +31,10 @@ export const partyConditionInputSchema = z.strictObject({
   party: partyConditionValueSchema.describe("今回の同行者。合計だけならcount、明示された大人/子どもの人数がある時だけcomposition。年齢・年代・関係性は推測しない。"),
   quote: sourceQuote,
 });
+export const partyConditionUpdateInputSchema = z.discriminatedUnion("action", [
+  z.strictObject({ action: z.literal("set"), party: partyConditionValueSchema, quote: sourceQuote }),
+  z.strictObject({ action: z.literal("clear"), quote: sourceQuote }),
+]);
 
 export const conditionTargets = ["origin", "destination", "party_size"] as const;
 const placeChangeSchema = z.strictObject({ target: z.enum(["origin", "destination"]), place: placeLabel.nullable(), quote: sourceQuote });
@@ -35,6 +43,8 @@ const partyChangeSchema = z.strictObject({ target: z.literal("party_size"), part
 export const conversationConditionSchema = z.union([placeChangeSchema, partyChangeSchema]);
 export type PlaceConditionInput = z.infer<typeof placeConditionInputSchema>;
 export type PartyConditionInput = z.infer<typeof partyConditionInputSchema>;
+export type PlaceConditionUpdateInput = z.infer<typeof placeConditionUpdateInputSchema>;
+export type PartyConditionUpdateInput = z.infer<typeof partyConditionUpdateInputSchema>;
 export type ConversationConditionChange = z.infer<typeof conversationConditionSchema>;
 export type ConditionTarget = ConversationConditionChange["target"];
 
