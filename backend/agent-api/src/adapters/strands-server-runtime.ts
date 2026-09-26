@@ -27,7 +27,7 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
       delivery: { status: "degraded", basis: "verified_projection" },
     });
     if (status !== "completed") return denied("incomplete_execution");
-    if (!run.replyProposal) return denied("missing_reply_proposal");
+    if (!run.replyProposal) return denied("missing_structured_output");
     // Merge rather than silently choosing the first of colliding evidence IDs.
     const merged = mergeEvidenceObservations([], [...(input.initialEvidence ?? []), ...run.evidence], input.limits.maxEvidence);
     if (merged.collisions.length || merged.conflictingObservationIds.length) return denied("evidence_collision");
@@ -63,7 +63,7 @@ function accountStrandsUsage(ledger: ServerAgentRuntimeInput["researchLedger"],
 }
 function runtimeStatus(stopReason: string, limitReason?: "tool_calls" | "deadline"): AgentRuntimeResult["status"] {
   if (limitReason) return "limit_reached";
-  if (stopReason === "endTurn" || stopReason === "stopSequence") return "completed";
+  if (stopReason === "toolUse" || stopReason === "endTurn" || stopReason === "stopSequence") return "completed";
   if (["limitTurns", "limitTotalTokens", "limitOutputTokens", "maxTokens", "modelContextWindowExceeded"].includes(stopReason)) return "limit_reached";
   return "failed";
 }

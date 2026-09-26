@@ -231,4 +231,16 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
     invariant: "proposal adoption remains Application-bound, CAS-protected, and exactly-once",
     reason: "Keep existing Application adoption tests; add a v2 execution-path test only when write/proposal Tools are connected.",
   },
+  {
+    id: "V2-OUTPUT-NATIVE-01", kind: "v2_specific",
+    invariant: "a validated SDK structured result ends without an additional model request",
+    testFile: "backend/agent-api/src/adapters/strands-structured-output.test.ts",
+    testName: "lets the SDK end on a validated result without an Application submit Tool or trailing model call",
+  },
+  {
+    id: "V2-OUTPUT-BOUNDED-01", kind: "v2_specific",
+    invariant: "SDK validation retries share the invoke budget and never become a fabricated reply",
+    testFile: "backend/agent-api/src/adapters/strands-structured-output.test.ts",
+    testName: "bounds repeated invalid structured output without a custom repair loop or fake success",
+  },
 ] as const;

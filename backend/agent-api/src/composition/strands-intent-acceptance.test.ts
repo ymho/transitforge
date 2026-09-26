@@ -28,7 +28,7 @@ class IntentScenarioModel extends Model<BaseModelConfig> {
       yield { type: "modelContentBlockDeltaEvent", delta: { type: "textDelta", text: "not public" } };
     } else {
       yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: step.tool, toolUseId: `tool-${this.requests.length}` } };
-      yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(step.input) } };
+      yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(step.tool === "strands_structured_output" ? { reply: step.input } : step.input) } };
     }
     yield { type: "modelContentBlockStopEvent" };
     yield { type: "modelMessageStopEvent", stopReason: step === "end" ? "endTurn" : "toolUse" };
@@ -41,8 +41,8 @@ function update(label = "京都", overrides: Record<string, unknown> = {}): Step
   }] } };
 }
 const read = (place = "京都"): Step => ({ tool: "lookup_intent_place", input: { place } });
-const uncertainty: Step = { tool: "submit_reply", input: { kind: "uncertainty" } };
-const answer = (executionId: string): Step => ({ tool: "submit_reply", input: {
+const uncertainty: Step = { tool: "strands_structured_output", input: { kind: "uncertainty" } };
+const answer = (executionId: string): Step => ({ tool: "strands_structured_output", input: {
   kind: "answer", references: [{ evidenceId: `evidence:${executionId}:place`, field: "description" }],
 } });
 async function setup() {
@@ -141,7 +141,7 @@ it.each([
 it("does not mutate intent after reply submission or on an unchanged conversational turn", async () => {
   const scenarios: { userRequest: string; steps: Step[] }[] = [
     { userRequest: "行き先は京都にしたい", steps: [uncertainty, update(), "end"] },
-    { userRequest: "こんにちは", steps: [{ tool: "submit_reply", input: { kind: "conversation", message: "greeting" } }, "end"] },
+    { userRequest: "こんにちは", steps: [{ tool: "strands_structured_output", input: { kind: "conversation", message: "greeting" } }, "end"] },
   ];
   for (const { userRequest, steps } of scenarios) {
     const test = await setup();

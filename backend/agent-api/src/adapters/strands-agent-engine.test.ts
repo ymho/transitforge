@@ -22,7 +22,7 @@ class ScriptedModel extends Model<BaseModelConfig> {
     yield { type: "modelMessageStartEvent", role: "assistant" };
     if ("tool" in reply) {
       yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: reply.tool, toolUseId: `tool-${this.index}` } };
-      yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(reply.input) } };
+      yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(reply.tool === "strands_structured_output" ? { reply: reply.input } : reply.input) } };
     } else {
       yield { type: "modelContentBlockStartEvent" };
       yield { type: "modelContentBlockDeltaEvent", delta: { type: "textDelta", text: reply.text } };
@@ -33,7 +33,7 @@ class ScriptedModel extends Model<BaseModelConfig> {
 }
 const options = { modelId: "unused", region: "ap-northeast-1", systemPrompt: "Use available tools for facts.", maxTurns: 4 };
 const lookup: Reply = { tool: "lookup_place", input: { location: "京都" } };
-const submitted: Reply = { tool: "submit_reply", input: { kind: "uncertainty" } };
+const submitted: Reply = { tool: "strands_structured_output", input: { kind: "uncertainty" } };
 const end: Reply = { text: "終了しました。" };
 function effectiveDestination(label: string): EffectiveIntent {
   return { version: 1, base: { source: "none", fingerprint: "base" }, intentRevision: 3,
@@ -58,11 +58,11 @@ describe("StrandsAgentEngine", () => {
     const { execute, input } = setup();
     const model = new ScriptedModel([lookup, submitted, end]);
     const result = await new StrandsAgentEngine(options, { model }).run(input);
-    expect(result.stopReason).toBe("endTurn");
+    expect(result.stopReason).toBe("toolUse");
     expect(result.replyProposal).toEqual({ kind: "uncertainty" });
     expect(execute).toHaveBeenCalledOnce();
     expect(result.trace.events.some(({ type }) => type === "tool_completed")).toBe(true);
-    expect(model.toolChoices).toEqual([{ any: {} }, { any: {} }, { auto: {} }]);
+    expect(model.toolChoices).toHaveLength(2); // No model request after the structured result.
   });
   it("rejects stale model Tool input before the Domain Tool executes", async () => {
     const { execute, input } = setup();
@@ -78,8 +78,9 @@ describe("StrandsAgentEngine", () => {
       return { invoke: async () => ({ stopReason: "endTurn", lastMessage: { role: "assistant", content: [] } }) };
     };
     await new StrandsAgentEngine(options, { createAgent }).run(input);
-    // The only Tool is a local reply submission; there are no Domain write/proposal Tools.
-    expect(captured?.tools).toHaveLength(1);
+    // The SDK supplies its own output Tool; no Application reply or Domain write Tool is registered.
+    expect(captured?.tools).toHaveLength(0);
+    expect(captured?.structuredOutputSchema).toBeDefined();
     expect(execute).not.toHaveBeenCalled();
     expect((captured?.model as { getConfig(): { stream?: boolean } }).getConfig().stream).toBe(false);
   });
@@ -106,7 +107,7 @@ describe("StrandsAgentEngine", () => {
   it("does not publish last-message prose, reasoning, or a false promise after a valid submission", async () => {
     const { input } = setup();
     const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([
-      { tool: "submit_reply", input: { kind: "unavailable", operation: "save" } },
+      { tool: "strands_structured_output", input: { kind: "unavailable", operation: "save" } },
       { text: "<thinking>DO_NOT_EXPOSE_REASONING_705</thinking>保存しておきます。" },
     ]) }).run(input);
     expect(result.replyProposal).toEqual({ kind: "unavailable", operation: "save" });
@@ -117,10 +118,9 @@ describe("StrandsAgentEngine", () => {
   });
   it("does not convert an unstructured model answer into a reply proposal when a noncompliant model ignores ToolChoice", async () => {
     const { input } = setup();
-    const model = new ScriptedModel([{ text: "保存しておきます。" }]);
-    const result = await new StrandsAgentEngine(options, { model }).run(input);
-    expect(model.toolChoices).toEqual([{ any: {} }]);
-    expect(result.replyProposal).toBeUndefined();
+    const model = new ScriptedModel([{ text: "保存しておきます。" }, { text: "保存しておきます。" }]);
+    await expect(new StrandsAgentEngine(options, { model }).run(input)).rejects.toMatchObject({ stage: "runtime_projection", kind: "validation" });
+    expect(model.toolChoices).toHaveLength(2); // The SDK owns the single forced-output attempt.
   });
   it("does not execute more Domain Tools after the reply has been submitted", async () => {
     const { execute, input } = setup();

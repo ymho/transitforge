@@ -25,7 +25,7 @@ const trace = { executionId: "strands-runtime-test", events: [], droppedEventCou
 const answer = { kind: "answer", references: [{ evidenceId: evidence.id, field: "description" }] };
 function fake(overrides: Record<string, unknown> = {}) {
   return { run: vi.fn(async (_input: { modelInput?: string }) => ({
-    stopReason: "endTurn", evidence: [], trace, ...overrides,
+    stopReason: "toolUse", evidence: [], trace, ...overrides,
   })) };
 }
 describe("createStrandsServerRuntime", () => {
@@ -53,7 +53,7 @@ describe("createStrandsServerRuntime", () => {
     for (const initialEvidence of [[], [evidence]]) {
       const engine = fake({ response: "保存しておきます。" });
       const result = await createStrandsServerRuntime(engine as unknown as StrandsAgentEngine)({ ...runtimeInput(), initialEvidence });
-      expect(result).toMatchObject({ status: "failed", response: "", publicationError: "missing_reply_proposal" });
+      expect(result).toMatchObject({ status: "failed", response: "", publicationError: "missing_structured_output" });
       expect(result.publicReply).toBeUndefined();
     }
   });

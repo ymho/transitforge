@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { agentV2SystemPrompt } from "./agent-v2-system-prompt.js";
 describe("agentV2SystemPrompt", () => {
   it("separates the user request, reference clock, accepted conditions and submitted reply", () => {
-    for (const term of ["userMessage", "application.effectiveIntent", "clock", "read Tool", "submit_reply", "receiptId", "commentary", "自然な説明", "update_intent"])
+    for (const term of ["userMessage", "application.effectiveIntent", "clock", "read Tool", "structured output", "receiptId", "commentary", "自然な説明", "update_intent"])
       expect(agentV2SystemPrompt).toContain(term);
   });
   it("does not inherit V1 runtime protocol or repair vocabulary", () => {

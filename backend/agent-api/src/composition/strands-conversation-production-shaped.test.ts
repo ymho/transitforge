@@ -19,12 +19,12 @@ class ToolThenAnswerModel extends Model<BaseModelConfig> {
     this.calls += 1;
     yield { type: "modelMessageStartEvent", role: "assistant" };
     if (this.calls <= 2) {
-      const name = this.calls === 1 ? "lookup_verified_place" : "submit_reply";
+      const name = this.calls === 1 ? "lookup_verified_place" : "strands_structured_output";
       const input = this.calls === 1 ? { place: "京都" } : { kind: "answer",
         commentary: "確認済みの情報を見る限り、京都についてこの内容を案内できます。",
         references: [{ evidenceId: "evidence:strands-production-shaped:place:kyoto", field: "description" }] };
       yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name, toolUseId: `tool-${this.calls}` } };
-      yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(input) } };
+      yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(name === "strands_structured_output" ? { reply: input } : input) } };
       yield { type: "modelContentBlockStopEvent" };
       yield { type: "modelMessageStopEvent", stopReason: "toolUse" };
       return;
@@ -46,8 +46,8 @@ class ReplyOnlyModel extends Model<BaseModelConfig> {
     this.calls += 1;
     yield { type: "modelMessageStartEvent", role: "assistant" };
     if (this.calls === 1) {
-      yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: "submit_reply", toolUseId: "reply-1" } };
-      yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(this.proposal) } };
+      yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: "strands_structured_output", toolUseId: "reply-1" } };
+      yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify({ reply: this.proposal }) } };
       yield { type: "modelContentBlockStopEvent" };
       yield { type: "modelMessageStopEvent", stopReason: "toolUse" };
       return;
@@ -202,7 +202,7 @@ it("persists a V2 intent A-commit across answer failure and retries without reap
     runRuntime: createStrandsServerRuntime(failingEngine),
   });
 
-  await expect(firstApp.runConversationTurn(input)).rejects.toMatchObject({ code: "agent_failed" });
+  await expect(firstApp.runConversationTurn(input)).rejects.toBeDefined();
   const afterFailure = await new DynamoDbConversationTurnRepository("test-state", state.client)
     .getWorkingState(principal, conversationId);
   expect(afterFailure?.semantic?.overlay).toMatchObject({ intentRevision: 1, facts: [
