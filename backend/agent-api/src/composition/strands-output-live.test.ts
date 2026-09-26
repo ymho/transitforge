@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { Agent, BeforeToolCallEvent, ModelMessageEvent, ToolResultEvent } from "@strands-agents/sdk";
-import { placeConditionInputSchema, clearConditionInputSchema } from "@raiquora/agent/conversation-condition";
+import { placeConditionUpdateInputSchema } from "@raiquora/agent/conversation-condition";
 import { stateDynamoFixture, conversationId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, token } from "../adapters/cognito-token.fixture.js";
@@ -16,7 +16,7 @@ import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
  * test failures; soft assertions let later turns be measured without hiding them. */
 const enabled = process.env.AGENT_V2_LIVE === "true";
 const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
-const toolsToObserve = new Set(["set_origin", "set_destination", "clear_origin", "clear_destination", "search_place_media", "strands_structured_output"]);
+const toolsToObserve = new Set(["update_origin", "update_destination", "search_place_media", "strands_structured_output"]);
 describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () => {
   it("handles greeting, destination, correction and unavailable save through Conversation/replay", async () => {
     const { verifier } = cognitoTokenFixture();
@@ -47,9 +47,8 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
           tools: message.content.flatMap(block => block.type === "toolUseBlock" && toolsToObserve.has(block.name) ? [block.name] : []) }));
       });
       agent.addHook(BeforeToolCallEvent, ({ toolUse }) => {
-        if (!["set_origin", "set_destination", "clear_origin", "clear_destination"].includes(toolUse.name)) return;
-        const schema = toolUse.name.startsWith("clear_") ? clearConditionInputSchema : placeConditionInputSchema;
-        console.log(JSON.stringify({ phase: "sdk-condition-input", valid: schema.safeParse(toolUse.input).success }));
+        if (!["update_origin", "update_destination"].includes(toolUse.name)) return;
+        console.log(JSON.stringify({ phase: "sdk-condition-input", valid: placeConditionUpdateInputSchema.safeParse(toolUse.input).success }));
       });
       agent.addHook(ToolResultEvent, ({ result }) => {
         const block = result.content.find(item => item.type === "jsonBlock");
