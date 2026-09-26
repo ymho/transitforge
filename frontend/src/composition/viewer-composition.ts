@@ -579,25 +579,18 @@ startMap = async () => {
 };
 primaryShell = configureAiFirstShell(document, app, {
   read: () => {
-    const source = tripWorkspaceController.source(), trip = tripWorkspaceController.current();
-    const load = tripWorkspaceController.loadState();
     const listState = serverTripList.getState();
     return {
-      state: homePreview === "loading" ? "loading" : homePreview === "error" ? "unavailable" : homePreview === "empty" ? "available"
-        : listState,
-      trips: listState === "available" ? serverTripList.getTrips() : [], readiness: trip && source && load === "loaded" ? tripWorkspaceController.readiness() : undefined,
-      candidates: tripWorkspaceController.candidates().map(({ candidate, assessment }) => ({
-        id: candidate.id, title: candidate.experiences[0]?.name ?? candidate.accommodations[0]?.name ?? "移動の候補", assessment,
-      })),
-      preview: !!homePreview || (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip-workspace-preview") === "1"),
+      state: homePreview === "loading" ? "loading" : homePreview === "error" ? "unavailable" : homePreview === "empty" ? "available" : listState,
+      trips: listState === "available" ? serverTripList.getTrips() : [],
     };
   },
   subscribe: (listener) => {
-    const left = tripWorkspaceController.subscribe(listener), middle = profileUi.subscribe(listener), right = serverTripList.subscribe(listener), auth = currentAuthentication().subscribe(listener);
-    return () => { left(); middle(); right(); auth(); };
+    const trips = serverTripList.subscribe(listener), auth = currentAuthentication().subscribe(listener);
+    return () => { trips(); auth(); };
   },
   authState: () => currentAuthentication().getState(), login: () => { void currentAuthentication().login(); }, logout: () => { void currentAuthentication().logout(); },
-  retry: async () => { await serverTripList.refresh(); await tripWorkspaceController.source()?.retry?.(); },
+  retry: async () => { await serverTripList.refresh(); },
   newConsultation: (prompt) => { void startNewConsultation(prompt).catch(() => aiGuideController.notify("相談を始めるにはログインしてください。")); },
   openChat: () => { aiGuideController.open(); if (tripWorkspaceController.current()) tripWorkspace.show("chat"); delete app.dataset.mapFocusMode; },
   openTrip: (id) => { void tripNavigation.open(id, "trip").catch(() => aiGuideController.notify("旅程を読み込めませんでした。")); },
