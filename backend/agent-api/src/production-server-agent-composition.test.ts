@@ -43,6 +43,7 @@ it("keeps Strands disabled by default and enables it only through trusted produc
 
 it("rejects an invalid Strands production flag and requires a real AWS region when enabled", () => {
   const base = {
+    SERVER_AGENT_MAX_EXECUTION_MS: "90000",
     AI_TIMETABLE_BUCKET: "test", TRAFFIC_SNAPSHOT_BUCKET: "test", AGENT_PROVIDER_SECRET_ARN: "test",
     VIEWER_ORIGIN: "https://example.com", SERVER_STATE_TABLE_NAME: "test", TRIP_TABLE_NAME: "test",
     FIXED_EGRESS_PROVIDER_FUNCTION_ARN: "test",
