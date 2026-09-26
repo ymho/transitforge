@@ -14,6 +14,7 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
     const run = await engine.run({
       executionId: input.executionId, userRequest: input.userRequest, modelInput: strandsTurnInput(input),
       tools: input.tools, toolExecutor: input.toolExecutor, effectiveIntent: input.context?.effectiveIntent,
+      ...(input.intentController ? { intentController: input.intentController } : {}),
       limits: { maxTurns: Math.min(input.limits.maxIterations, input.limits.maxModelCalls),
         maxToolCalls: input.limits.maxToolCalls, maxExecutionMs: input.limits.maxExecutionMs },
       reserveToolCall: () => input.researchLedger.reserve("toolCalls"),
