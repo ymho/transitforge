@@ -65,7 +65,8 @@ describe.skipIf(!enabled)("party condition Tool with real Bedrock", () => {
         conditionController: { apply: async change => ({ receipt: publicSemanticReceipt(await apply(change)), effectiveIntent: compileEffectiveIntent({ overlay }) }) },
       });
       const party = overlay.facts.find(fact => fact.target === "party_size")?.value;
-      console.log(JSON.stringify({ case: index, modelId, status: result.status, modelCalls, acceptedOperations: journal.size, selectedTools }));
+      console.log(JSON.stringify({ case: index, modelId, status: result.status, modelCalls, acceptedOperations: journal.size,
+        publicationError: result.publicationError, selectedTools }));
       expect.soft(result.status, `case ${index} must reply`).toBe("completed");
       expect.soft(party, `case ${index} party`).toEqual(scenario.party);
       expect.soft(journal.size, `case ${index} mutation count`).toBe(scenario.writes);
