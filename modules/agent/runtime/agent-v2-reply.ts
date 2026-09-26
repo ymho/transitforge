@@ -6,7 +6,7 @@ export const replyQuestions = ["goal", "origin", "destination", "start_date", "d
 export type ReplyQuestion = typeof replyQuestions[number];
 export interface ReplyReference { evidenceId: string; field: string }
 export type AgentV2ReplyProposal =
-  | { kind: "answer"; references: ReplyReference[] }
+  | { kind: "answer"; references: ReplyReference[]; commentary?: string }
   | { kind: "conversation"; message: "greeting" | "thanks" | "acknowledgement" }
   | { kind: "clarification"; target: ReplyQuestion }
   | { kind: "unavailable"; operation: ReplyOperation }
@@ -26,6 +26,8 @@ export interface AgentV2ReplyProof {
   references: ReplyReference[];
   question?: ReplyQuestion;
   operation?: { type: ReplyOperation; status: "unavailable" | "succeeded"; receiptId?: string };
+  /** Presence only. Raw model commentary is not retained in the proof. */
+  commentary?: boolean;
 }
 export class AgentV2ReplyError extends Error {
   constructor(readonly code: "invalid_proposal" | "missing_evidence" | "ineligible_evidence" |
@@ -41,6 +43,7 @@ export const agentV2ReplySchema = {
   type: "object",
   properties: {
     kind: { type: "string", enum: ["answer", "conversation", "clarification", "unavailable", "operation_result", "uncertainty"] },
+    commentary: { type: "string", minLength: 1, maxLength: 1200 },
     references: { type: "array", minItems: 1, maxItems: 8, items: {
       type: "object", properties: { evidenceId: { type: "string", minLength: 1, maxLength: 240 },
         field: { type: "string", minLength: 1, maxLength: 80 } },
@@ -58,8 +61,8 @@ export function parseAgentV2Reply(value: unknown): AgentV2ReplyProposal {
   if (!record(value)) return invalid();
   switch (value.kind) {
     case "answer": {
-      if (!exact(value, ["kind", "references"]) || !Array.isArray(value.references) ||
-          value.references.length < 1 || value.references.length > 8) return invalid();
+      if (!(exact(value, ["kind", "references"]) || exact(value, ["kind", "references", "commentary"])) ||
+          !Array.isArray(value.references) || value.references.length < 1 || value.references.length > 8) return invalid();
       const references: ReplyReference[] = [];
       const seen = new Set<string>();
       for (const item of value.references) {
@@ -70,7 +73,8 @@ export function parseAgentV2Reply(value: unknown): AgentV2ReplyProposal {
         seen.add(key);
         references.push({ evidenceId: item.evidenceId, field: item.field });
       }
-      return { kind: "answer", references };
+      const commentary = value.commentary === undefined ? undefined : replyCommentary(value.commentary);
+      return { kind: "answer", references, ...(commentary ? { commentary } : {}) };
     }
     case "conversation":
       if (!exact(value, ["kind", "message"]) || typeof value.message !== "string" || !["greeting", "thanks", "acknowledgement"].includes(value.message)) return invalid();
@@ -100,5 +104,11 @@ function exact(value: Record<string, unknown>, keys: string[]): boolean {
 function identifier(value: unknown, maximum: number): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= maximum && value.trim() === value &&
     !/[\u0000-\u001f\u007f<>]/u.test(value);
+}
+function replyCommentary(value: unknown): string {
+  if (typeof value !== "string" || value.length > 1200 || value.trim() !== value || !value ||
+      /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value) ||
+      /<\s*\/?\s*(?:thinking|analysis|reasoning|think)(?:\s|>|\/)/iu.test(value)) return invalid();
+  return value;
 }
 function invalid(): never { throw new AgentV2ReplyError("invalid_proposal"); }
