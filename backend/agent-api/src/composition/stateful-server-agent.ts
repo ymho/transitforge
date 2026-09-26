@@ -23,7 +23,7 @@ import { proposeVerifiedIntentRequest } from "@raiquora/agent/verified-intent-pr
 import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
 import { publicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
-import type { ConversationConditionChange } from "@raiquora/agent/conversation-condition";
+import type { ConversationConditionInput } from "@raiquora/agent/conversation-condition";
 
 /** Internal stateful composition. Transport/auth rollout and env bindings remain with #451/#462/#480. */
 export function createStatefulServerAgent(options: Omit<Parameters<typeof createServerAgent>[0], "loadContext"> & {
@@ -35,7 +35,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
   tripClient?: TripDynamoClient;
 }) {
   return { async runAgentTurn(input: ServerAgentTurn, reportProgress?: AgentProgressReporter,
-    acceptCondition?: (change: ConversationConditionChange) => Promise<IntentApplicationReceipt>) {
+    acceptCondition?: (change: ConversationConditionInput) => Promise<IntentApplicationReceipt>) {
     let tripCostProposal: PublicCostProposal | undefined, retainedCandidatePlan: RetainedCandidatePlan | undefined;
     let trip: Trip | undefined, consultation: Trip | undefined, tripUpdateProposal: PublicRequestProposal | undefined, consultationRequestProposal: ConsultationRequestProposal | undefined;
     let effectiveIntent: EffectiveIntent | undefined, currentIntentReceipt: IntentApplicationReceipt | undefined;
@@ -54,7 +54,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
       runtime({
         ...runtimeInput,
         ...(acceptCondition ? { conditionController: {
-          apply: async (change: ConversationConditionChange) => {
+          apply: async (change: ConversationConditionInput) => {
             const receipt = await acceptCondition(change);
             const refreshed = await contextLoader({
               principal: input.principal,
