@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { admitConditionChange, conditionDelta, conditionOperationId, conditionPayload, placeConditionInputSchema, partyConditionInputSchema, clearConditionInputSchema } from "./conversation-condition";
+import { admitConditionChange, conditionDelta, conditionOperationId, conditionPayload, placeConditionUpdateInputSchema, partyConditionUpdateInputSchema } from "./conversation-condition";
 import { reduceConversationIntent } from "./conversation-intent-reducer";
 import { compileEffectiveIntent } from "./effective-intent";
 import type { ConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
@@ -8,16 +8,17 @@ const turn = "71600000-0000-4000-8000-000000000001";
 const empty = (): ConversationIntentOverlay => ({ version: 1, intentRevision: 0, facts: [], tombstones: [], appliedMutationIds: [] });
 
 describe("small Conversation condition operations", () => {
-  it("has one strict Zod syntax with no interpretation metadata or model-selected authority", () => {
-    const schema = z.toJSONSchema(placeConditionInputSchema);
-    expect(schema.required).toEqual(["place", "quote"]);
-    expect(schema.additionalProperties).toBe(false);
-    expect(placeConditionInputSchema.safeParse({ place: "京都", quote: "京都" }).success).toBe(true);
-    expect(placeConditionInputSchema.safeParse({ place: null, quote: "未定に戻す" }).success).toBe(false);
-    expect(clearConditionInputSchema.safeParse({ quote: "未定に戻す" }).success).toBe(true);
-    expect(clearConditionInputSchema.safeParse({ place: "京都", quote: "京都" }).success).toBe(false);
+  it("has one strict update syntax per condition with no interpretation metadata or model-selected authority", () => {
+    const schema = z.toJSONSchema(placeConditionUpdateInputSchema);
+    expect(JSON.stringify(schema)).toContain("action");
+    expect(placeConditionUpdateInputSchema.safeParse({ action: "set", place: "京都", quote: "京都" }).success).toBe(true);
+    expect(placeConditionUpdateInputSchema.safeParse({ action: "clear", quote: "未定に戻す" }).success).toBe(true);
+    expect(placeConditionUpdateInputSchema.safeParse({ action: "clear", place: "京都", quote: "京都" }).success).toBe(false);
+    expect(placeConditionUpdateInputSchema.safeParse({ action: "set", place: null, quote: "未定に戻す" }).success).toBe(false);
+    expect(partyConditionUpdateInputSchema.safeParse({ action: "set", party: { kind: "count", people: 2 }, quote: "2人で" }).success).toBe(true);
+    expect(partyConditionUpdateInputSchema.safeParse({ action: "clear", quote: "人数は未定" }).success).toBe(true);
     for (const extra of ["owner", "turnId", "revision", "mutationId", "speechAct", "outcome", "operations", "atomicGroup"])
-      expect(placeConditionInputSchema.safeParse({ place: "京都", quote: "京都", [extra]: "injected" }).success).toBe(false);
+      expect(placeConditionUpdateInputSchema.safeParse({ action: "set", place: "京都", quote: "京都", [extra]: "injected" }).success).toBe(false);
   });
   it("rejects missing values, unsupported types and labels not grounded in the current message", () => {
     for (const input of [{ quote: "京都" }, { place: 2, quote: "京都" }, { place: "京都", quote: "大阪" }])
@@ -40,10 +41,10 @@ describe("small Conversation condition operations", () => {
     expect(compileEffectiveIntent({ overlay }).actualConversationFacts).toHaveLength(1);
   });
   it("keeps total-only party separate from an explicit adult/child composition without guessing ages", () => {
-    expect(partyConditionInputSchema.safeParse({ party: { kind: "count", people: 2 }, quote: "2人で" }).success).toBe(true);
-    expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 2, children: 1 }, quote: "大人2人と子ども1人" }).success).toBe(true);
-    expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 0, children: 0 }, quote: "0人" }).success).toBe(false);
-    expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 21, children: 0 }, quote: "21人" }).success).toBe(false);
+    expect(partyConditionUpdateInputSchema.safeParse({ action: "set", party: { kind: "count", people: 2 }, quote: "2人で" }).success).toBe(true);
+    expect(partyConditionUpdateInputSchema.safeParse({ action: "set", party: { kind: "composition", adults: 2, children: 1 }, quote: "大人2人と子ども1人" }).success).toBe(true);
+    expect(partyConditionUpdateInputSchema.safeParse({ action: "set", party: { kind: "composition", adults: 0, children: 0 }, quote: "0人" }).success).toBe(false);
+    expect(partyConditionUpdateInputSchema.safeParse({ action: "set", party: { kind: "composition", adults: 21, children: 0 }, quote: "21人" }).success).toBe(false);
 
     let overlay = empty();
     const count = admitConditionChange({ target: "party_size", party: { kind: "count", people: 2 }, quote: "2人で" }, "2人で行きたい");
