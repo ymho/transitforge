@@ -4,7 +4,8 @@ import { resolve } from "node:path";
 import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { Evidence } from "@raiquora/agent/evidence-model";
 import { ResearchExecutionLedger, researchBudgetForRuntimeLimits } from "@raiquora/agent/research-execution";
-import { validAgentToolInput, successfulAgentToolResult } from "@raiquora/agent/tool-contract";
+import { successfulAgentToolResult } from "@raiquora/agent/tool-contract";
+import { validateAgentToolInput } from "@raiquora/agent/agent-tool-input-validator";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { ToolEvidenceRegistry, type ToolEvidenceMapper } from "@raiquora/agent/tool-evidence-registry";
 import { StrandsAgentEngine } from "../backend/agent-api/src/adapters/strands-agent-engine";
@@ -19,6 +20,13 @@ const modelId = process.env.MODEL_ID?.trim() || "amazon.nova-lite-v1:0";
 const region = process.env.AWS_REGION?.trim() || "ap-northeast-1";
 const cases = selectedId ? strandsV2LiveCases.filter(({ id }) => id === selectedId) : [...strandsV2LiveCases];
 if (!cases.length) throw new Error("Unknown Strands v2 live evaluation case");
+
+const verifiedPlaceInputSchema = {
+  type: "object" as const,
+  properties: { place: { type: "string" as const } },
+  required: ["place"],
+  additionalProperties: false,
+};
 
 const limits = {
   maxIterations: 4,
@@ -43,13 +51,8 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
         name: "lookup_verified_place",
         description: "指定された場所について、評価fixture内の確認済み資料を取得します。",
         effect: "read",
-        inputSchema: {
-          type: "object",
-          properties: { place: { type: "string" } },
-          required: ["place"],
-          additionalProperties: false,
-        },
-        parseInput: (value: unknown) => validAgentToolInput(value as { place: string }),
+        inputSchema: verifiedPlaceInputSchema,
+        parseInput: (value: unknown) => validateAgentToolInput(verifiedPlaceInputSchema, value),
         execute: async () => {
           executedToolCalls += 1;
           return successfulAgentToolResult({
@@ -126,7 +129,7 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
   }
 }
 
-const report = {
+const report: LiveReport = {
   schemaVersion: "strands-v2-live-eval-v1",
   modelId,
   region,
@@ -163,6 +166,17 @@ interface LiveResult {
   failures: string[];
   observation: LiveObservation;
 }
+interface LiveReport {
+  schemaVersion: "strands-v2-live-eval-v1";
+  modelId: string;
+  region: string;
+  repetitions: number;
+  maximumModelCalls: number;
+  observedModelCalls: number;
+  stablePassed: number;
+  cases: number;
+  results: LiveResult[];
+}
 
 const syntheticEvidence: ToolEvidenceMapper = (_output, context): Evidence[] => [{
   id: `evidence:${context.executionId}:kyoto`,
@@ -194,7 +208,7 @@ const syntheticEvidence: ToolEvidenceMapper = (_output, context): Evidence[] => 
   },
 }];
 
-function renderReport(report: typeof report): string {
+function renderReport(report: LiveReport): string {
   const rows = report.results.map((result) =>
     `| ${result.caseId} | ${result.attempt} | ${result.passed ? "PASS" : "FAIL"} | ${result.observation.modelCalls} | ${result.observation.toolCalls} | ${result.observation.inputTokens} | ${result.observation.outputTokens} | ${result.observation.durationMs} | ${result.failures.join(", ") || "-"} |`);
   return [
