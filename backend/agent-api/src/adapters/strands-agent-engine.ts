@@ -13,7 +13,8 @@ import { agentV2ReplySchema, type AgentV2ReplyProposal } from "@raiquora/agent/a
 import { AgentV2ReplySubmission } from "./strands-reply-submission.js";
 import { agentV2CandidateReferences, publicReplyField } from "@raiquora/agent/agent-v2-publication";
 import { decodeUtteranceInterpretation, semanticInterpretationOutputContract } from "@raiquora/agent/semantic-interpretation";
-import { ServerAgentIntentRejectedError, type ServerAgentIntentController } from "../ports/server-agent-runtime.js";
+import { ServerAgentIntentRejectedError, ServerAgentRuntimeExecutionError, type ServerAgentIntentController,
+  type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
 
 export const strandsReplyToolName = "submit_reply";
 export const strandsIntentToolName = "update_intent";
@@ -143,7 +144,7 @@ export class StrandsAgentEngine {
             ? { outputTokens: input.limits?.maxOutputTokens ?? this.options.maxOutputTokens } : {}),
         },
       });
-      if (intentUnavailable) throw new Error("Application intent state is unavailable");
+      if (intentUnavailable) throw new ServerAgentRuntimeExecutionError("intent_state", "unknown");
       // Neither lastMessage nor SDK debug/string output crosses the publication boundary.
       trace.taskCompleted(result.stopReason === "cancelled" ? "cancelled" : "completed", Date.now() - startedAt,
         result.stopReason === "endTurn" ? undefined : result.stopReason);
@@ -165,7 +166,8 @@ export class StrandsAgentEngine {
       };
     } catch (error) {
       trace.taskCompleted("failed", Date.now() - startedAt, error instanceof Error ? error.name : "unknown_error");
-      throw error;
+      if (error instanceof ServerAgentRuntimeExecutionError) throw error;
+      throw new ServerAgentRuntimeExecutionError("agent_invoke", runtimeFailureKind(error));
     }
   }
 }
@@ -192,15 +194,20 @@ export function createStrandsReadTools(input: {
         return jsonValue({ ok: false, error: { code: "execution_failed", retryable: false, reason: "tool_budget" } });
       }
       if (input.budgetState) input.budgetState.toolCalls += 1;
-      const execution = await input.executor.execute({
-        executionId: input.executionId, toolCallId: context?.toolUse.toolUseId ?? `strands-${descriptor.name}`,
-        toolName: descriptor.name, toolInput, timeoutMs: input.toolTimeoutMs,
-        // Bind every V2 read to its Application snapshot, even where a Tool has no
-        // field-level intent policy. A later intent update cannot relabel old reads.
-        ...(effectiveIntent ? { intentDependency: {
-          intentRevision: effectiveIntent.intentRevision, fingerprint: effectiveIntent.fingerprint,
-          targets: decision.dependencyTargets } } : {}),
-      }, input.trace);
+      let execution;
+      try {
+        execution = await input.executor.execute({
+          executionId: input.executionId, toolCallId: context?.toolUse.toolUseId ?? `strands-${descriptor.name}`,
+          toolName: descriptor.name, toolInput, timeoutMs: input.toolTimeoutMs,
+          // Bind every V2 read to its Application snapshot, even where a Tool has no
+          // field-level intent policy. A later intent update cannot relabel old reads.
+          ...(effectiveIntent ? { intentDependency: {
+            intentRevision: effectiveIntent.intentRevision, fingerprint: effectiveIntent.fingerprint,
+            targets: decision.dependencyTargets } } : {}),
+        }, input.trace);
+      } catch (error) {
+        throw new ServerAgentRuntimeExecutionError("read_tool", runtimeFailureKind(error));
+      }
       if (execution.evidence.length) input.evidence.push(...execution.evidence.map((item) => structuredClone(item)));
       if (!execution.result.ok) return jsonValue({ ok: false, error: {
         code: execution.result.error.code, retryable: execution.result.error.retryable } });
@@ -210,6 +217,14 @@ export function createStrandsReadTools(input: {
           fields: Object.fromEntries(Object.entries(item.facts).filter(([key]) => publicReplyField(key))) })) });
     },
   }));
+}
+function runtimeFailureKind(error: unknown): ServerAgentRuntimeFailureKind {
+  const name = error instanceof Error ? error.name : "";
+  if (/abort/iu.test(name)) return "abort";
+  if (/timeout/iu.test(name)) return "timeout";
+  if (/(?:service|throttl|quota|bedrock|model)/iu.test(name)) return "provider";
+  if (/(?:validation|schema|invalid|type)/iu.test(name)) return "validation";
+  return "unknown";
 }
 function jsonObject(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
