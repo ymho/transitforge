@@ -5,9 +5,10 @@ if (!diagnosticPath || !streamPath) throw new Error("Expected diagnostic and str
 
 const diagnostics = messages(diagnosticPath)
   .filter((value) => value.event === "agent_diagnostic")
-  .map(({ phase, reason, incomplete, occurredAt }) => ({
+  .map(({ phase, reason, mode, incomplete, occurredAt }) => ({
     phase: text(phase),
     reason: text(reason),
+    mode: diagnosticMode(mode),
     incomplete: incomplete === true,
     occurredAt: timestamp(occurredAt),
   }));
@@ -31,7 +32,7 @@ console.log("");
 console.log("Only bounded phase/reason/status fields are aggregated; conversation content and identifiers are excluded.");
 console.log("");
 table(
-  ["Phase", "Reason", "Incomplete", "Count", "Latest (UTC)"],
+  ["Phase", "Reason", "Mode", "Incomplete", "Count", "Latest (UTC)"],
   groupedDiagnostics(diagnostics),
 );
 console.log("");
@@ -69,7 +70,7 @@ function decodedMessage(message) {
 function groupedDiagnostics(values) {
   const groups = new Map();
   for (const value of values) {
-    const key = JSON.stringify([value.phase, value.reason, value.incomplete]);
+    const key = JSON.stringify([value.phase, value.reason, value.mode, value.incomplete]);
     const current = groups.get(key) ?? { ...value, count: 0 };
     current.count += 1;
     if ((value.occurredAt ?? "") > (current.occurredAt ?? "")) current.occurredAt = value.occurredAt;
@@ -77,7 +78,7 @@ function groupedDiagnostics(values) {
   }
   return [...groups.values()]
     .sort((left, right) => (right.occurredAt ?? "").localeCompare(left.occurredAt ?? ""))
-    .map((value) => [value.phase, value.reason, String(value.incomplete), String(value.count), value.occurredAt ?? "-"]);
+    .map((value) => [value.phase, value.reason, value.mode ?? "-", String(value.incomplete), String(value.count), value.occurredAt ?? "-"]);
 }
 
 function groupedStreams(values) {
@@ -115,6 +116,13 @@ function table(header, rows) {
 
 function text(value) {
   return typeof value === "string" && /^[a-z0-9_-]{1,64}$/u.test(value) ? value : "unknown";
+}
+
+function diagnosticMode(value) {
+  return typeof value === "string" &&
+    /^v2:(?:agent_invoke|intent_state|read_tool|runtime_projection|runner):(?:abort|timeout|provider|validation|unknown)$/u.test(value)
+    ? value
+    : undefined;
 }
 
 function timestamp(value) {
