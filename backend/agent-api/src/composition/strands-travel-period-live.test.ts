@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Agent, ModelMessageEvent } from "@strands-agents/sdk";
 import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
@@ -61,7 +61,19 @@ describe.skipIf(!enabled)("travel-period condition Tool with real Bedrock", () =
         context: { featureContext: { calendarDate }, effectiveIntent: compileEffectiveIntent({ overlay }) }, tools, evidenceRegistry,
         toolExecutor: new AgentToolExecutor(tools, evidenceRegistry), limits,
         researchLedger: new ResearchExecutionLedger(researchBudgetForRuntimeLimits(limits, "period-live"), { requestedMode: "standard", effectiveMode: "standard" }),
-        conditionController: { apply: async change => ({ receipt: publicSemanticReceipt(await apply(change)), effectiveIntent: compileEffectiveIntent({ overlay }) }) },
+        conditionController: { apply: async change => {
+          try { return { receipt: publicSemanticReceipt(await apply(change)), effectiveIntent: compileEffectiveIntent({ overlay }) }; }
+          catch (error) {
+            console.log(JSON.stringify({ event: "period-condition-rejected", case: index,
+              code: error instanceof Error && "code" in error ? String((error as { code?: unknown }).code) : "unknown",
+              target: change.target,
+              periodShape: change.target === "travel_period" && change.period ? {
+                startKind: change.period.start?.kind, endKind: change.period.end?.kind,
+                hasDuration: change.period.duration !== undefined,
+              } : undefined }));
+            throw error;
+          }
+        } },
       });
       const date = (target: "start_date" | "end_date") => {
         const fact = overlay.facts.find(value => value.target === target);
