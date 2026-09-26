@@ -29,6 +29,8 @@ export interface StrandsAgentEngineOptions {
 export interface StrandsAgentRunInput {
   executionId: string;
   userRequest: string;
+  /** Model-visible bounded context produced by the Application. Defaults to userRequest. */
+  modelInput?: string;
   tools: AgentToolRegistry;
   toolExecutor: AgentToolExecutor;
   effectiveIntent?: EffectiveIntent;
@@ -101,7 +103,7 @@ export class StrandsAgentEngine {
     });
     const startedAt = Date.now();
     try {
-      const result = await agent.invoke(input.userRequest, {
+      const result = await agent.invoke(input.modelInput ?? input.userRequest, {
         cancelSignal: input.cancelSignal,
         limits: {
           turns: this.options.maxTurns ?? 8,
