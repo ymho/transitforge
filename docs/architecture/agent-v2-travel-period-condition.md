@@ -22,7 +22,7 @@ start/end/durationを複数Toolへ分けない。1回の呼出しをApplication�
 - `calendar_date`: dayは必須。monthは明示された場合、またはendがstartと同月で日だけ明示された場合に使う。yearは利用者が年を明示した場合だけ権威を持つ。
 - `relative_date`: 今日 / 明日 / 明後日。
 
-start/end/durationはそれぞれ、その要素だけを裏付ける部分quoteを持つ。前turnのdurationなど、今回発言に根拠がない任意要素は今回のperiodへ持ち越さない。
+旅行期間全体のquoteを唯一のsource substringとして使い、Applicationがそこに月・日・泊数/日数が実在するか決定論的に検証する。前turnのdurationなど、今回発言に根拠がない任意要素は今回のperiodへ持ち越さない。モデルへ日付ごとのquote切り出しは要求しない。
 
 年が明示されていない月日は、Applicationがtrusted `calendarDate`を基準に**その日以降で最初に到来する月日**へ機械的に解決する。たとえば基準日2026-09-26なら12/25は2026-12-25、1/21は2027-01-21である。モデルが推測したyear値は対応する部分quoteに年が無ければ無視する。明示年がある場合だけその年を使う。相対表現にcalendar anchorが無ければ受理しない。
 
@@ -60,6 +60,6 @@ V1 semantic interpreter、旧semantic corpus、V1 runtime testsを互換oracle�
 
 ## 検証
 
-決定論的テストでは、最初の未来月日解決、明示年、相対日付解決、要素別quote grounding、start/endの同一A commit、durationの非推測/非持越し、clear、矛盾拒否、journal replay、transaction failure時の非partialを確認する。
+決定論的テストでは、最初の未来月日解決、明示年、相対日付解決、外側quote grounding、start/endの同一A commit、durationの非推測/非持越し、clear、矛盾拒否、journal replay、transaction failure時の非partialを確認する。
 
 実モデルはNova 2 Lite＋test repositoryで、actual期間設定、訂正、what-ifで非永続scenarioを選ぶこと、明示clearを反復確認する。固定fixtureの成功を実Providerや実ブラウザの成功とは扱わない。
