@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       case_id:
-        description: Strands v2 evaluation case
+        description: Strands v2 evaluation case (all selects the two basic cases)
         required: true
         default: "all"
         type: choice
@@ -12,6 +12,7 @@ on:
           - "all"
           - "tool-grounding"
           - "write-not-available"
+          - "conversation-output"
       repetitions:
         description: Independent repetitions per case
         required: true
@@ -53,6 +54,8 @@ jobs:
     steps:
       - name: Check out main
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -90,23 +93,26 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$REPETITIONS" =~ ^(1|3)$ ]]
+          cycles=4
+          reads=1
           case "$CASE_ID" in
             all) cases=2 ;;
             tool-grounding|write-not-available) cases=1 ;;
+            conversation-output) cases=4; cycles=6; reads=2 ;;
             *) echo "Invalid CASE_ID: $CASE_ID" >&2; exit 2 ;;
           esac
-          maximum_calls=$((cases * REPETITIONS * 4))
+          maximum_calls=$((cases * REPETITIONS * cycles))
           echo "maximum_calls=$maximum_calls" >> "$GITHUB_OUTPUT"
           {
             echo "### Strands v2 Live Eval budget"
             echo "- Model: $MODEL_ID"
             echo "- Case selection: $CASE_ID"
-            echo "- Cases: $cases"
+            echo "- Cases/turns: $cases"
             echo "- Repetitions: $REPETITIONS"
-            echo "- Maximum model calls: $maximum_calls"
-            echo "- Maximum Tool calls per case: 1"
-            echo "- Deadline per case: 60s"
-            echo "- External Travel Providers: none"
+            echo "- Maximum model cycles: $maximum_calls"
+            echo "- Maximum Domain Tool calls per case/turn: $reads"
+            echo "- Deadline per case/turn: 60s"
+            echo "- External Travel Providers and production state: none"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run Strands v2 live evaluation
@@ -114,6 +120,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .artifacts/strands-v2-live
+          if [[ "$CASE_ID" == conversation-output ]]; then
+            status=0
+            for ((attempt=1; attempt<=REPETITIONS; attempt++)); do
+              AGENT_V2_LIVE=true npm run test:agent:v2:conversation-live -- \
+                --reporter=default --reporter=json --outputFile=".artifacts/strands-v2-live/conversation-${attempt}.json" || status=1
+            done
+            exit "$status"
+          fi
           args=(--repetitions "$REPETITIONS" --output-dir .artifacts/strands-v2-live --require-all)
           if [[ "$CASE_ID" != "all" ]]; then args+=(--case "$CASE_ID"); fi
           npm run eval:agent:strands:live -- "${args[@]}"
@@ -125,8 +139,13 @@ jobs:
           if [[ -f .artifacts/strands-v2-live/report.json ]]; then
             jq '{modelId,region,repetitions,maximumModelCalls,observedModelCalls,stablePassed,cases,results:[.results[]|{caseId,attempt,passed,failures,metrics:{status:.observation.status,deliveryBasis:.observation.deliveryBasis,toolCalls:.observation.toolCalls,evidenceCount:.observation.evidenceCount,modelCalls:.observation.modelCalls,inputTokens:.observation.inputTokens,outputTokens:.observation.outputTokens,durationMs:.observation.durationMs}}]}' .artifacts/strands-v2-live/report.json >> "$GITHUB_STEP_SUMMARY"
           fi
+          for report in .artifacts/strands-v2-live/conversation-*.json; do
+            if [[ -f "$report" ]]; then
+              jq '{success,numPassedTests,numFailedTests,numPendingTests}' "$report" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
 
-      - name: Upload private evaluation artifacts
+      - name: Upload synthetic evaluation artifacts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
