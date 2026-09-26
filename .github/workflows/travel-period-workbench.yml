@@ -27,6 +27,15 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with: {node-version-file: .nvmrc, cache: npm}
       - run: npm ci
+      - name: Inspect model-visible schemas
+        shell: bash
+        run: |
+          node --import tsx --input-type=module <<'NODE'
+          import { z } from "zod";
+          import { travelPeriodUpdateInputSchema, tripScenarioInputSchema } from "./modules/agent/runtime/conversation-condition.ts";
+          console.log("TRAVEL_PERIOD_SCHEMA=" + JSON.stringify(z.toJSONSchema(travelPeriodUpdateInputSchema)));
+          console.log("TRIP_SCENARIO_SCHEMA=" + JSON.stringify(z.toJSONSchema(tripScenarioInputSchema)));
+          NODE
       - name: Resolve Bedrock-only evaluation role
         id: role
         shell: bash
