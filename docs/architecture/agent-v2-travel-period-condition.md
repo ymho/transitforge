@@ -63,3 +63,17 @@ V1 semantic interpreter、旧semantic corpus、V1 runtime testsを互換oracle�
 決定論的テストでは、最初の未来月日解決、明示年、相対日付解決、外側quote grounding、start/endの同一A commit、durationの非推測/非持越し、clear、矛盾拒否、journal replay、transaction failure時の非partialを確認する。
 
 実モデルはNova 2 Lite＋test repositoryで、actual期間設定、訂正、what-ifで非永続scenarioを選ぶこと、明示clearを反復確認する。固定fixtureの成功を実Providerや実ブラウザの成功とは扱わない。
+
+
+## 実モデル結果
+
+Nova 2 Lite final travel-period live run 36280727426を3回独立実行し、3/3 PASSした。各反復で以下を確認した。
+
+- 挨拶: 条件更新なし
+- 「明日から2日間」: `update_current_travel_period` 1回、trusted calendarからstartを解決
+- 「10月3日から5日までに変更」: `update_current_travel_period` 1回、年未指定を基準日以降の最初の月日へ解決し、旧durationを持ち越さない
+- 「もし1週間なら」: `consider_trip_scenario`のみ。accepted operation数・actual期間は不変
+- 「日程は未定に戻して」: `update_current_travel_period(action=clear)`
+- お礼: 条件更新なし
+
+各actual更新は2 model calls（writer→structured output）、what-ifも2 calls、更新不要turnは1 callだった。固定test repositoryでの結果であり、実Provider・実ブラウザとは区別する。
