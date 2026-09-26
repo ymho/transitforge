@@ -1,0 +1,104 @@
+/** The model selects a reply. Only the Application may admit it for publication.
+ * No free-form text, evidence payloads or mutation receipts are model-owned. */
+export const replyOperations = ["save", "change", "book", "pay"] as const;
+export type ReplyOperation = typeof replyOperations[number];
+export const replyQuestions = ["goal", "origin", "destination", "start_date", "duration", "party_size", "budget"] as const;
+export type ReplyQuestion = typeof replyQuestions[number];
+export interface ReplyReference { evidenceId: string; field: string }
+export type AgentV2ReplyProposal =
+  | { kind: "answer"; references: ReplyReference[] }
+  | { kind: "conversation"; message: "greeting" | "thanks" | "acknowledgement" }
+  | { kind: "clarification"; target: ReplyQuestion }
+  | { kind: "unavailable"; operation: ReplyOperation }
+  | { kind: "operation_result"; receiptId: string }
+  | { kind: "uncertainty" };
+
+/** Trusted Application input, never a field in the model's reply schema.
+ * The current read-only composition supplies no receipts. */
+export interface AgentV2OperationReceipt {
+  id: string;
+  executionId: string;
+  operation: ReplyOperation;
+  status: "succeeded" | "failed" | "pending";
+}
+export interface AgentV2ReplyProof {
+  kind: AgentV2ReplyProposal["kind"];
+  references: ReplyReference[];
+  question?: ReplyQuestion;
+  operation?: { type: ReplyOperation; status: "unavailable" | "succeeded"; receiptId?: string };
+}
+export class AgentV2ReplyError extends Error {
+  constructor(readonly code: "invalid_proposal" | "missing_evidence" | "ineligible_evidence" |
+    "invalid_field" | "known_condition" | "operation_available" | "invalid_receipt" | "unsafe_content") {
+    super(`Agent v2 reply rejected: ${code}`);
+    this.name = "AgentV2ReplyError";
+  }
+}
+
+/** Flat schema for model interoperability; parseAgentV2Reply checks the variant's
+ * exact field set as well. A JSON Schema tool does not itself validate at runtime. */
+export const agentV2ReplySchema = {
+  type: "object",
+  properties: {
+    kind: { type: "string", enum: ["answer", "conversation", "clarification", "unavailable", "operation_result", "uncertainty"] },
+    references: { type: "array", minItems: 1, maxItems: 8, items: {
+      type: "object", properties: { evidenceId: { type: "string", minLength: 1, maxLength: 240 },
+        field: { type: "string", minLength: 1, maxLength: 80 } },
+      required: ["evidenceId", "field"], additionalProperties: false,
+    } },
+    message: { type: "string", enum: ["greeting", "thanks", "acknowledgement"] },
+    target: { type: "string", enum: [...replyQuestions] },
+    operation: { type: "string", enum: [...replyOperations] },
+    receiptId: { type: "string", minLength: 1, maxLength: 240 },
+  },
+  required: ["kind"], additionalProperties: false,
+};
+
+export function parseAgentV2Reply(value: unknown): AgentV2ReplyProposal {
+  if (!record(value)) return invalid();
+  switch (value.kind) {
+    case "answer": {
+      if (!exact(value, ["kind", "references"]) || !Array.isArray(value.references) ||
+          value.references.length < 1 || value.references.length > 8) return invalid();
+      const references: ReplyReference[] = [];
+      const seen = new Set<string>();
+      for (const item of value.references) {
+        if (!record(item) || !exact(item, ["evidenceId", "field"]) || !identifier(item.evidenceId, 240) ||
+            !identifier(item.field, 80) || !/^[a-zA-Z][a-zA-Z0-9_]*$/u.test(item.field)) return invalid();
+        const key = `${item.evidenceId}\u0000${item.field}`;
+        if (seen.has(key)) return invalid();
+        seen.add(key);
+        references.push({ evidenceId: item.evidenceId, field: item.field });
+      }
+      return { kind: "answer", references };
+    }
+    case "conversation":
+      if (!exact(value, ["kind", "message"]) || typeof value.message !== "string" || !["greeting", "thanks", "acknowledgement"].includes(value.message)) return invalid();
+      return { kind: "conversation", message: value.message as "greeting" | "thanks" | "acknowledgement" };
+    case "clarification":
+      if (!exact(value, ["kind", "target"]) || !replyQuestions.includes(value.target as ReplyQuestion)) return invalid();
+      return { kind: "clarification", target: value.target as ReplyQuestion };
+    case "unavailable":
+      if (!exact(value, ["kind", "operation"]) || !replyOperations.includes(value.operation as ReplyOperation)) return invalid();
+      return { kind: "unavailable", operation: value.operation as ReplyOperation };
+    case "operation_result":
+      if (!exact(value, ["kind", "receiptId"]) || !identifier(value.receiptId, 240)) return invalid();
+      return { kind: "operation_result", receiptId: value.receiptId };
+    case "uncertainty":
+      if (!exact(value, ["kind"])) return invalid();
+      return { kind: "uncertainty" };
+    default: return invalid();
+  }
+}
+function record(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) &&
+    (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+}
+function exact(value: Record<string, unknown>, keys: string[]): boolean {
+  return Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
+function identifier(value: unknown, maximum: number): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= maximum && value.trim() === value &&
+    !/[\u0000-\u001f\u007f<>]/u.test(value);
+}
+function invalid(): never { throw new AgentV2ReplyError("invalid_proposal"); }

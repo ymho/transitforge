@@ -6,9 +6,8 @@ import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { successfulAgentToolResult, validAgentToolInput } from "@raiquora/agent/tool-contract";
 import { StrandsAgentEngine, type StrandsAgentFactory } from "./strands-agent-engine.js";
-import { strandsAnswerText } from "./strands-answer-text.js";
 
-type Reply = { text: string } | { tool: string; input: Record<string, string> };
+type Reply = { text: string } | { tool: string; input: Record<string, unknown> };
 class ScriptedModel extends Model<BaseModelConfig> {
   private index = 0;
   private config: BaseModelConfig = { modelId: "synthetic" };
@@ -32,16 +31,15 @@ class ScriptedModel extends Model<BaseModelConfig> {
 }
 const options = { modelId: "unused", region: "ap-northeast-1", systemPrompt: "Use available tools for facts.", maxTurns: 4 };
 const lookup: Reply = { tool: "lookup_place", input: { location: "京都" } };
-const answer: Reply = { text: "京都の情報を確認しました。" };
+const submitted: Reply = { tool: "submit_reply", input: { kind: "uncertainty" } };
+const end: Reply = { text: "終了しました。" };
 function effectiveDestination(label: string): EffectiveIntent {
-  return {
-    version: 1, base: { source: "none", fingerprint: "base" }, intentRevision: 3,
+  return { version: 1, base: { source: "none", fingerprint: "base" }, intentRevision: 3,
     activeBaseFacts: [], profileHints: [], ignoredProfileSettings: [], hypotheticalFacts: [],
     retractions: [], suppressedBaseRefs: [], profileSuppressions: [], fingerprint: "effective",
     actualConversationFacts: [{ factId: "destination", target: "destination", scope: { type: "conversation" },
       modality: "preferred", precision: "exact", value: { kind: "place_label", label }, frame: "actual",
-      sourceOperationId: "destination-op", provenance: { kind: "user_turn", turnId: "00000000-0000-4000-8000-000000000001", quote: label } }],
-  };
+      sourceOperationId: "destination-op", provenance: { kind: "user_turn", turnId: "00000000-0000-4000-8000-000000000001", quote: label } }] };
 }
 function setup(effect: "read" | "proposal" = "read") {
   const tools = new AgentToolRegistry();
@@ -53,81 +51,74 @@ function setup(effect: "read" | "proposal" = "read") {
   return { execute, input: { executionId: "v2-test", userRequest: "京都について教えて", tools,
     toolExecutor: new AgentToolExecutor(tools, new ToolEvidenceRegistry()), effectiveIntent: effectiveDestination("京都") } };
 }
-
 describe("StrandsAgentEngine", () => {
   it("runs a real Strands model-tool-model loop through the existing Tool executor", async () => {
     const { execute, input } = setup();
-    const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([lookup, answer]) }).run(input);
+    const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([lookup, submitted, end]) }).run(input);
     expect(result.stopReason).toBe("endTurn");
-    expect(result.response).toBe("京都の情報を確認しました。");
+    expect(result.replyProposal).toEqual({ kind: "uncertainty" });
     expect(execute).toHaveBeenCalledOnce();
     expect(result.trace.events.some(({ type }) => type === "tool_completed")).toBe(true);
   });
   it("rejects stale model Tool input before the Domain Tool executes", async () => {
     const { execute, input } = setup();
-    await new StrandsAgentEngine(options, { model: new ScriptedModel([lookup, answer]) })
+    await new StrandsAgentEngine(options, { model: new ScriptedModel([lookup, submitted, end]) })
       .run({ ...input, effectiveIntent: effectiveDestination("神戸") });
     expect(execute).not.toHaveBeenCalled();
   });
   it("does not expose proposal Tools in the initial Strands slice", async () => {
-    const { input } = setup("proposal");
-    const configs: AgentConfig[] = [];
+    const { execute, input } = setup("proposal");
+    let captured: AgentConfig | undefined;
     const createAgent: StrandsAgentFactory = (config) => {
-      configs.push(config);
-      return { invoke: async () => ({ stopReason: "endTurn",
-        lastMessage: { role: "assistant", content: [{ type: "textBlock", text: "回答候補" }] },
-        toString: () => { throw new Error("Must not stringify the SDK result"); } }) };
+      captured = config;
+      return { invoke: async () => ({ stopReason: "endTurn", lastMessage: { role: "assistant", content: [] } }) };
     };
     await new StrandsAgentEngine(options, { createAgent }).run(input);
-    expect(configs[0]?.tools).toHaveLength(0);
-    const model = configs[0]?.model as { getConfig(): { stream?: boolean } };
-    expect(model.getConfig().stream).toBe(false);
+    // The only Tool is a local reply submission; there are no Domain write/proposal Tools.
+    expect(captured?.tools).toHaveLength(1);
+    expect(execute).not.toHaveBeenCalled();
+    expect((captured?.model as { getConfig(): { stream?: boolean } }).getConfig().stream).toBe(false);
   });
   it("stops additional Tool side effects after the per-turn Tool budget is exhausted", async () => {
     const { execute, input } = setup();
-    const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([lookup, lookup, answer]) })
-      .run({ ...input, limits: { maxToolCalls: 1, maxTurns: 4 } });
+    const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([lookup, lookup, submitted, end]) })
+      .run({ ...input, limits: { maxToolCalls: 1 } });
     expect(execute).toHaveBeenCalledOnce();
     expect(result.limitReason).toBe("tool_calls");
   });
   it("marks the invocation as deadline-limited when the Strands invocation is cancelled by its deadline", async () => {
     const { input } = setup();
-    const createAgent: StrandsAgentFactory = () => ({ invoke: async (_request, invokeOptions) => {
+    const createAgent: StrandsAgentFactory = () => ({ invoke: async (_args, options) => {
       await new Promise<void>((resolve) => {
-        if (invokeOptions?.cancelSignal?.aborted) return resolve();
-        invokeOptions?.cancelSignal?.addEventListener("abort", () => resolve(), { once: true });
+        if (options?.cancelSignal?.aborted) return resolve();
+        options?.cancelSignal?.addEventListener("abort", () => resolve(), { once: true });
       });
       return { stopReason: "cancelled" };
     } });
     const result = await new StrandsAgentEngine(options, { createAgent }).run({ ...input, limits: { maxExecutionMs: 5 } });
-    expect(result.response).toBe("");
+    expect(result.stopReason).toBe("cancelled");
     expect(result.limitReason).toBe("deadline");
   });
-  it("rejects provider thought markup rather than publishing or repairing it", async () => {
+  it("does not publish last-message prose, reasoning, or a false promise after a valid submission", async () => {
     const { input } = setup();
-    await expect(new StrandsAgentEngine(options, { model: new ScriptedModel([{ text: "<thinking>private</thinking>京都です" }]) })
-      .run(input)).rejects.toMatchObject({ name: "StrandsAnswerTextError", code: "internal_content" });
+    const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([
+      { tool: "submit_reply", input: { kind: "unavailable", operation: "save" } },
+      { text: "<thinking>DO_NOT_EXPOSE_REASONING_705</thinking>保存しておきます。" },
+    ]) }).run(input);
+    expect(result.replyProposal).toEqual({ kind: "unavailable", operation: "save" });
+    expect(JSON.stringify(result)).not.toContain("DO_NOT_EXPOSE_REASONING_705");
+    expect(JSON.stringify(result)).not.toContain("<thinking>");
+    expect(JSON.stringify(result)).not.toContain("保存しておきます");
+    expect(result).not.toHaveProperty("response");
   });
-});
-
-describe("Strands answer text boundary", () => {
-  const result = (content: unknown[]) => ({ lastMessage: { role: "assistant", content } });
-  it("extracts only assistant text and never reasoning, signatures, or debug output", () => {
-    expect(strandsAnswerText(result([{ type: "reasoningBlock", text: "private", signature: "private" },
-      { type: "textBlock", text: "公開する本文" }]))).toBe("公開する本文");
+  it("does not convert an unstructured model answer into a reply proposal", async () => {
+    const { input } = setup();
+    const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([{ text: "保存しておきます。" }]) }).run(input);
+    expect(result.replyProposal).toBeUndefined();
   });
-  it("does not fall back to stringification or accept reasoning-only results", () => {
-    expect(() => strandsAnswerText({})).toThrow();
-    expect(() => strandsAnswerText(result([{ type: "reasoningBlock", text: "private" }]))).toThrow();
-  });
-  it("rejects tool payloads and thought markup inside ordinary text", () => {
-    expect(() => strandsAnswerText(result([{ type: "toolUseBlock", input: { secret: "private" } }]))).toThrow();
-    for (const text of ["<thinking>private</thinking>本文", "<analysis>private", "💭 Reasoning: private"]) {
-      expect(() => strandsAnswerText(result([{ type: "textBlock", text }]))).toThrow();
-    }
-  });
-  it("preserves ordinary text without truncating oversized answers into success", () => {
-    expect(strandsAnswerText(result([{ type: "textBlock", text: "一行目" }, { type: "textBlock", text: "二行目" }]))).toBe("一行目\n二行目");
-    expect(() => strandsAnswerText(result([{ type: "textBlock", text: "x".repeat(12_001) }]))).toThrow();
+  it("does not execute more Domain Tools after the reply has been submitted", async () => {
+    const { execute, input } = setup();
+    await new StrandsAgentEngine(options, { model: new ScriptedModel([submitted, lookup, end]) }).run(input);
+    expect(execute).not.toHaveBeenCalled();
   });
 });
