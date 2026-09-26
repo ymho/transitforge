@@ -1,5 +1,5 @@
 name: Party condition workbench (temporary)
-# Run 8 diagnostic: condition receipts are state, not reply Evidence.
+# Run 9 final: three independent party-only repetitions.
 # Detailed age/school cohorts and scoped participation are deferred to #729.
 
 on:
@@ -50,7 +50,7 @@ jobs:
           set -euo pipefail
           mkdir -p .artifacts/party
           status=0
-          for attempt in 1; do
+          for attempt in 1 2 3; do
             npm run test:agent:v2:party-live -- --reporter=default --reporter=json --outputFile=".artifacts/party/condition-${attempt}.json" || status=1
           done
           for file in .artifacts/party/*.json; do
