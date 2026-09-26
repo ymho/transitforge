@@ -16,7 +16,7 @@ it("accepts one grounded party operation without Profile or persistence metadata
   const acceptCondition = vi.fn(async () => ({ version: 1 as const, mutationId: "condition:party", speechAct: "inform" as const,
     beforeIntentRevision: 0, intentRevision: 1, replayed: false, operations: [] }));
   const apply = createConversationConditionApplication({ acceptCondition }, identity, lease, "大人2人と子ども1人で行きたい");
-  const change = { target: "party_size" as const, party: { kind: "composition" as const, adults: 2, children: [{}] },
+  const change = { target: "party_size" as const, party: { kind: "composition" as const, adults: 2, children: 1 },
     quote: "大人2人と子ども1人" };
   await apply(change);
   expect(acceptCondition).toHaveBeenCalledWith(identity, lease, change);
