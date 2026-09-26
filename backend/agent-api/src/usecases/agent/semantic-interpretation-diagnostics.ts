@@ -7,6 +7,10 @@ export type SemanticInterpretationContractFailure =
   | "root_shape"
   | "operation_shape"
   | "value_shape"
+  | "value_not_object"
+  | "value_kind"
+  | "value_fields"
+  | "value_constraint"
   | "scope_shape"
   | "quote_verification";
 
@@ -66,9 +70,12 @@ export function semanticInterpretationShapeFailure(value: unknown): Exclude<
     if (operation.scope !== undefined && !validScope(operation.scope)) return "scope_shape";
 
     const action = String(operation.action);
-    if (operation.value !== undefined && !validValue(operation.value) ||
-        ["set", "add_alternative", "replace"].includes(action) && operation.value === undefined ||
+    if (["set", "add_alternative", "replace"].includes(action) && operation.value === undefined ||
         action === "retract" && operation.value !== undefined) return "value_shape";
+    if (operation.value !== undefined) {
+      const valueFailure = invalidValueReason(operation.value);
+      if (valueFailure) return valueFailure;
+    }
   }
 
   if (value.outcome === "delta" && value.operations.length === 0 ||
@@ -86,34 +93,35 @@ function validScope(value: unknown): boolean {
   return false;
 }
 
-function validValue(value: unknown): boolean {
-  if (!record(value) || typeof value.kind !== "string") return false;
-  if (value.kind === "text") return only(value, ["kind", "text"]) && boundedText(value.text);
-  if (value.kind === "place_label") return only(value, ["kind", "label"]) && boundedText(value.label);
-  if (value.kind === "relative_date") return only(value, ["kind", "relation"]) &&
-    ["today", "tomorrow", "day_after_tomorrow"].includes(String(value.relation));
-  if (value.kind === "month_offset") return only(value, ["kind", "offset"]) &&
-    Number.isSafeInteger(value.offset) && Number(value.offset) >= -12 && Number(value.offset) <= 24;
-  if (value.kind === "relative_weekday") return only(value, ["kind", "weekday", "direction"]) &&
-    Number.isSafeInteger(value.weekday) && Number(value.weekday) >= 1 && Number(value.weekday) <= 7 &&
-    ["next", "on_or_after"].includes(String(value.direction));
-  if (value.kind === "local_date") return only(value, ["kind", "date"]) && validDate(value.date);
-  if (value.kind === "quantity") return only(value, ["kind", "amount", "unit"]) &&
-    Number.isSafeInteger(value.amount) && Number(value.amount) >= 0 &&
-    ["nights", "days", "people"].includes(String(value.unit));
-  if (value.kind === "quantity_range") return only(value, ["kind", "minimum", "maximum", "unit"]) &&
-    Number.isSafeInteger(value.minimum) && Number(value.minimum) >= 0 &&
-    Number.isSafeInteger(value.maximum) && Number(value.maximum) >= 0 &&
-    ["nights", "days", "people"].includes(String(value.unit));
-  if (value.kind === "money") return only(value, ["kind", "amount", "currency", "basis"]) &&
-    typeof value.amount === "number" && Number.isFinite(value.amount) && value.amount >= 0 &&
-    (value.currency === undefined || typeof value.currency === "string" && /^[A-Z]{3}$/u.test(value.currency)) &&
-    (value.basis === undefined || ["trip", "per_person", "per_night", "per_room"].includes(String(value.basis)));
-  if (value.kind === "presentation_ordinal") return only(value, ["kind", "ordinal"]) &&
-    Number.isSafeInteger(value.ordinal) && Number(value.ordinal) >= 1 && Number(value.ordinal) <= 24;
-  if (value.kind === "unknown") return only(value, ["kind", "reason"]) &&
-    intentUnknownReasons.includes(value.reason as never);
-  return false;
+function invalidValueReason(value: unknown): "value_not_object" | "value_kind" | "value_fields" | "value_constraint" | undefined {
+  if (!record(value)) return "value_not_object";
+  if (typeof value.kind !== "string") return "value_kind";
+  const fields = Object.keys(value);
+  const exactFields = (allowed: string[]) => fields.every((field) => allowed.includes(field));
+  if (value.kind === "text") return !exactFields(["kind", "text"]) ? "value_fields" : !boundedText(value.text) ? "value_constraint" : undefined;
+  if (value.kind === "place_label") return !exactFields(["kind", "label"]) ? "value_fields" : !boundedText(value.label) ? "value_constraint" : undefined;
+  if (value.kind === "relative_date") return !exactFields(["kind", "relation"]) ? "value_fields" :
+    !["today", "tomorrow", "day_after_tomorrow"].includes(String(value.relation)) ? "value_constraint" : undefined;
+  if (value.kind === "month_offset") return !exactFields(["kind", "offset"]) ? "value_fields" :
+    !Number.isSafeInteger(value.offset) || Number(value.offset) < -12 || Number(value.offset) > 24 ? "value_constraint" : undefined;
+  if (value.kind === "relative_weekday") return !exactFields(["kind", "weekday", "direction"]) ? "value_fields" :
+    !Number.isSafeInteger(value.weekday) || Number(value.weekday) < 1 || Number(value.weekday) > 7 ||
+    !["next", "on_or_after"].includes(String(value.direction)) ? "value_constraint" : undefined;
+  if (value.kind === "local_date") return !exactFields(["kind", "date"]) ? "value_fields" : !validDate(value.date) ? "value_constraint" : undefined;
+  if (value.kind === "quantity") return !exactFields(["kind", "amount", "unit"]) ? "value_fields" :
+    !Number.isSafeInteger(value.amount) || Number(value.amount) < 0 || !["nights", "days", "people"].includes(String(value.unit)) ? "value_constraint" : undefined;
+  if (value.kind === "quantity_range") return !exactFields(["kind", "minimum", "maximum", "unit"]) ? "value_fields" :
+    !Number.isSafeInteger(value.minimum) || Number(value.minimum) < 0 || !Number.isSafeInteger(value.maximum) || Number(value.maximum) < 0 ||
+    !["nights", "days", "people"].includes(String(value.unit)) ? "value_constraint" : undefined;
+  if (value.kind === "money") return !exactFields(["kind", "amount", "currency", "basis"]) ? "value_fields" :
+    typeof value.amount !== "number" || !Number.isFinite(value.amount) || value.amount < 0 ||
+    value.currency !== undefined && (typeof value.currency !== "string" || !/^[A-Z]{3}$/u.test(value.currency)) ||
+    value.basis !== undefined && !["trip", "per_person", "per_night", "per_room"].includes(String(value.basis)) ? "value_constraint" : undefined;
+  if (value.kind === "presentation_ordinal") return !exactFields(["kind", "ordinal"]) ? "value_fields" :
+    !Number.isSafeInteger(value.ordinal) || Number(value.ordinal) < 1 || Number(value.ordinal) > 24 ? "value_constraint" : undefined;
+  if (value.kind === "unknown") return !exactFields(["kind", "reason"]) ? "value_fields" :
+    !intentUnknownReasons.includes(value.reason as never) ? "value_constraint" : undefined;
+  return "value_kind";
 }
 
 function validDate(value: unknown): boolean {
