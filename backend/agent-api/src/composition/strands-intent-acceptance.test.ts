@@ -139,11 +139,14 @@ it.each([
 });
 
 it("does not mutate intent after reply submission or on an unchanged conversational turn", async () => {
-  for (const steps of [[uncertainty, update(), "end"],
-    [{ tool: "submit_reply", input: { kind: "conversation", message: "greeting" } }, "end"]] satisfies Step[][]) {
+  const scenarios: { userRequest: string; steps: Step[] }[] = [
+    { userRequest: "行き先は京都にしたい", steps: [uncertainty, update(), "end"] },
+    { userRequest: "こんにちは", steps: [{ tool: "submit_reply", input: { kind: "conversation", message: "greeting" } }, "end"] },
+  ];
+  for (const { userRequest, steps } of scenarios) {
     const test = await setup();
     const { app } = test.build(steps);
-    const result = await app.runConversationTurn(test.input);
+    const result = await app.runConversationTurn({ ...test.input, userRequest });
     expect(result.semanticReceipt).toBeUndefined();
     expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.intentRevision ?? 0).toBe(0);
     expect(test.operation).not.toHaveBeenCalled();
