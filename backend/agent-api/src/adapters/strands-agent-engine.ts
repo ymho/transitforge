@@ -11,11 +11,11 @@ import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { agentV2StructuredOutputSchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
 import { agentV2CandidateReferences, publicReplyField } from "@raiquora/agent/agent-v2-publication";
-import { placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, partyScenarioInputSchema, admitPartyScenario, ConditionUpdateRejectedError, type ConversationConditionChange } from "@raiquora/agent/conversation-condition";
+import { placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, travelPeriodUpdateInputSchema, tripScenarioInputSchema, admitTripScenario, ConditionUpdateRejectedError, type ConversationConditionInput } from "@raiquora/agent/conversation-condition";
 import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
   type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
 
-export const strandsConditionToolNames = ["update_current_destination", "update_current_origin", "update_current_party", "consider_party_scenario"] as const;
+export const strandsConditionToolNames = ["update_current_destination", "update_current_origin", "update_current_party", "update_current_travel_period", "consider_trip_scenario"] as const;
 export interface StrandsAgentEngineOptions {
   modelId: string;
   region: string;
@@ -91,7 +91,7 @@ export class StrandsAgentEngine {
     });
     const controller = input.conditionController;
     if (controller) {
-      const apply = async (change: ConversationConditionChange, signal?: AbortSignal): Promise<JSONValue> => {
+      const apply = async (change: ConversationConditionInput, signal?: AbortSignal): Promise<JSONValue> => {
         if (signal?.aborted) throw new Error("execution_cancelled");
         if (intentUnavailable) throw new Error("condition_unavailable");
         try {
@@ -118,16 +118,21 @@ export class StrandsAgentEngine {
             ? { target: "origin", place: value.place!, quote: value.quote }
             : { target: "origin", place: null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "update_current_party", inputSchema: partyConditionUpdateInputSchema,
-          description: "今回の旅行で実際に採用する現在の人数条件だけを永続更新する。利用者が現在条件として採用・訂正した場合はaction=set、人数を未定に戻す明示はaction=clear。合計人数だけならparty.kind=countを使い、大人/子どもの内訳を推測しない。大人/子どもの人数が明示された場合だけparty.kind=compositionを使う。年齢・年代・関係性は扱わない。仮定・反実仮想・what-if・比較では使わず、consider_party_scenarioを使う。プロフィールは変更しない。",
+          description: "今回の旅行で実際に採用する現在の人数条件だけを永続更新する。利用者が現在条件として採用・訂正した場合はaction=set、人数を未定に戻す明示はaction=clear。合計人数だけならparty.kind=countを使い、大人/子どもの内訳を推測しない。大人/子どもの人数が明示された場合だけparty.kind=compositionを使う。年齢・年代・関係性は扱わない。仮定・反実仮想・what-if・比較では使わず、consider_trip_scenarioを使う。プロフィールは変更しない。",
           callback: (value, context) => apply(value.action === "set"
             ? { target: "party_size", party: value.party!, quote: value.quote }
             : { target: "party_size", party: null, quote: value.quote }, context?.cancelSignal) }),
-        tool({ name: "consider_party_scenario", inputSchema: partyScenarioInputSchema,
-          description: "現在の人数条件を一切変更せず、仮定・反実仮想・what-if・シナリオ比較として別の人数を考える時に使う非永続Tool。update_current_partyの代わりに使う。保存・A commit・revision更新を行わない。",
+        tool({ name: "update_current_travel_period", inputSchema: travelPeriodUpdateInputSchema,
+          description: "今回の旅行で実際に採用する旅行期間の最終状態を1回で永続更新する。設定・訂正はaction=set、日程全体を未定へ戻す明示はaction=clear。start/end/durationは今回の発言で明示したものだけ指定する。外側quoteをApplicationが月・日・泊数/日数の根拠として検証する。日付はcalendar_dateでdayを必須、monthは明示または開始日から同月と読める場合、yearは利用者が年を明示した場合だけ設定する。年未指定はApplicationが基準日以降で最初に来る月日へ決める。今日/明日/明後日はrelative_date。以前のduration等を持ち越さず、日付や日数を推測・補完しない。what-if・比較ではconsider_trip_scenarioを使う。",
+          callback: (value, context) => apply(value.action === "set"
+            ? { target: "travel_period", period: value.period!, quote: value.quote }
+            : { target: "travel_period", period: null, quote: value.quote }, context?.cancelSignal) }),
+        tool({ name: "consider_trip_scenario", inputSchema: tripScenarioInputSchema,
+          description: "現在の実旅行条件を一切変更せず、人数または旅行期間の仮定・反実仮想・what-if・シナリオ比較を考える非永続Tool。条件writerの代わりに使い、保存・A commit・Intent revision更新を行わない。",
           callback: (value, context) => {
             if (context?.cancelSignal.aborted) throw new Error("execution_cancelled");
-            const scenario = admitPartyScenario(value, input.userRequest);
-            return jsonValue({ ok: true, hypotheticalParty: scenario.party, currentConditionsUnchanged: true });
+            const scenario = admitTripScenario(value, input.userRequest);
+            return jsonValue({ ok: true, scenario, currentConditionsUnchanged: true });
           } }),
       );
     }

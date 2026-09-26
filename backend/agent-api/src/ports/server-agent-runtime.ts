@@ -8,7 +8,7 @@ import type { ResearchExecutionLedger } from "@raiquora/agent/research-execution
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import type { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
 import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
-import type { ConversationConditionChange } from "@raiquora/agent/conversation-condition";
+import type { ConversationConditionInput } from "@raiquora/agent/conversation-condition";
 import type { PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 
 /** Bounded runtime failure metadata. It deliberately carries no provider message,
@@ -23,7 +23,7 @@ export class ServerAgentRuntimeExecutionError extends Error {
 }
 
 export interface ServerAgentConditionController {
-  apply(change: ConversationConditionChange): Promise<{
+  apply(change: ConversationConditionInput): Promise<{
     receipt: PublicSemanticReceipt;
     effectiveIntent: EffectiveIntent;
   }>;

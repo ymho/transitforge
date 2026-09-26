@@ -9,7 +9,7 @@ import type { AgentDiagnosticEvent, AgentDiagnosticsSink } from "../../ports/age
 import { reserveResearchResultSave } from "@raiquora/agent/research-execution";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
 import { publicSemanticReceipt, type PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
-import { summarizeConditionReceipts, type ConversationConditionChange } from "@raiquora/agent/conversation-condition";
+import { summarizeConditionReceipts, type ConversationConditionInput } from "@raiquora/agent/conversation-condition";
 import type { IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
 import type { ConversationConditionRepository } from "../../ports/conversation-condition-repository.js";
 import { createConversationConditionApplication } from "./conversation-condition-application.js";
@@ -24,7 +24,7 @@ export function createConversationTurnApplication(dependencies: {
   turns: ConversationTurnRepository;
   conditions?: ConversationConditionRepository;
   runAgentTurn: (input: ServerAgentTurn, historyBeforeSequence: number, reportProgress?: AgentProgressReporter,
-    acceptCondition?: (change: ConversationConditionChange) => Promise<IntentApplicationReceipt>) =>
+    acceptCondition?: (change: ConversationConditionInput) => Promise<IntentApplicationReceipt>) =>
     Promise<AgentRuntimeResult & Pick<ConversationTurnResult, "tripUpdateProposal" | "consultationRequestProposal" | "tripCostProposal">>;
   interpretIntent?: (input: { userRequest: string; calendarDate?: string; overlay: import("@raiquora/trip/conversation-intent").ConversationIntentOverlay;
     turnId: string; workingState?: import("@raiquora/agent/conversation-working-state").ConversationWorkingState }) => Promise<UtteranceInterpretation>;
@@ -82,8 +82,8 @@ export function createConversationTurnApplication(dependencies: {
       // Legacy accepted turns stay sealed; their original receipt remains replayable.
       const allowConditions = dependencies.conditions && !dependencies.interpretIntent &&
         (begun.state === "started" || begun.conditionReceipts !== undefined);
-      const applyCondition = allowConditions ? createConversationConditionApplication(dependencies.conditions!, identity, begun.lease, userRequest) : undefined;
-      const acceptCondition = applyCondition ? async (change: ConversationConditionChange) => {
+      const applyCondition = allowConditions ? createConversationConditionApplication(dependencies.conditions!, identity, begun.lease, userRequest, uiContext?.calendarDate) : undefined;
+      const acceptCondition = applyCondition ? async (change: ConversationConditionInput) => {
         const receipt = await applyCondition(change);
         conditionReceipts.set(receipt.mutationId, receipt);
         acceptedReceipt = summarizeConditionReceipts([...conditionReceipts.values()]);

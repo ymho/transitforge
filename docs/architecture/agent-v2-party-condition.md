@@ -13,7 +13,7 @@
 
 訂正をclear→setへ分けず、そのturnでのpartyの最終状態を1回で受理する。
 
-仮定・反実仮想・what-if・シナリオ比較は別の`consider_party_scenario`を使う。このToolは入力を検証してモデルへ返すだけで、A commit、Intent revision更新、Profile/Trip更新を一切行わない。比較の置き場を永続writerへ兼用しない。
+仮定・反実仮想・what-if・シナリオ比較は汎用の`consider_trip_scenario`を使う。このToolはpartyや旅行期間などの仮定を検証してモデルへ返すだけで、A commit、Intent revision更新、Profile/Trip更新を一切行わない。条件ごとにscenario Toolを増やさず、比較の置き場を永続writerへ兼用しない。
 
 Strands標準`tool()`とZodを使う。Tool callbackは#724の共通Conversation条件Applicationへ渡すだけで、別Agent loop、意味解析model call、repair、強制ToolChoiceを追加しない。
 
@@ -66,7 +66,7 @@ Profileに残る旧`usualPartySize`、同行者、子どもの年代はtrip-spec
 
 実モデルはNova 2 Lite＋固定Provider＋テスト保存先で、明示人数、構成訂正、仮定で永続更新しないこと、撤回を検証する。初期liveでは年齢未定から年代を補完する挙動と、仮定比較で永続writerを呼ぶ挙動を観測した。個別語句の補修ではなく、年齢・関係性をwriter Schemaから外し、永続writerと非永続scenario Toolを責務分離した。固定Providerの成功を実Providerや実ブラウザの成功とは扱わない。
 
-最終party-only live run 36277632302ではNova 2 Liteを3回独立実行し、3/3 PASSした。各反復で、挨拶は更新なし、合計人数設定は`update_current_party`、大人/子ども人数への訂正も同writer、what-if「もし4人なら」は`consider_party_scenario`のみでaccepted operation数を増やさず、明示撤回は`update_current_party(action=clear)`、お礼は更新なしとなった。
+最終party-only live run 36277632302ではNova 2 Liteを3回独立実行し、3/3 PASSした。各反復で、挨拶は更新なし、合計人数設定は`update_current_party`、大人/子ども人数への訂正も同writer、what-if「もし4人なら」は`consider_trip_scenario`のみでaccepted operation数を増やさず、明示撤回は`update_current_party(action=clear)`、お礼は更新なしとなった。
 
 
 ## 詳細な年代・参加scope

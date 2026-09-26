@@ -17,14 +17,13 @@ import { StateError } from "../contracts/server-state.js";
 import type { ConversationConditionRepository } from "../ports/conversation-condition-repository.js";
 import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
 
-/** Paid opt-in: party-only Agent v2 behavior. It deliberately does not reuse V1
- * interpretation fixtures or the destination live lane as an oracle. */
 const enabled = process.env.AGENT_V2_LIVE === "true";
 const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
 const limits = { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 1, maxExecutionMs: 60_000, maxEvidence: 4 };
+const calendarDate = "2026-09-27";
 
-describe.skipIf(!enabled)("party condition Tool with real Bedrock", () => {
-  it("persists actual party changes but never uses the durable writer for a what-if comparison", async () => {
+describe.skipIf(!enabled)("travel-period condition Tool with real Bedrock", () => {
+  it("persists actual period changes atomically and routes period what-if through the non-persistent scenario Tool", async () => {
     let overlay: ConversationIntentOverlay = { version: 1, intentRevision: 0, facts: [], tombstones: [], appliedMutationIds: [] };
     const journal = new Map<string, { payload: string; receipt: IntentApplicationReceipt }>();
     const repository: ConversationConditionRepository = { acceptCondition: async (identity, _lease, change) => {
@@ -35,42 +34,60 @@ describe.skipIf(!enabled)("party condition Tool with real Bedrock", () => {
       return reduction.receipt;
     } };
     const scenarios = [
-      { message: "おはよう", party: undefined, writes: 0, update: false, scenario: false },
-      { message: "今回は2人で行きます。大人か子どもかはまだ決めていません",
-        party: { kind: "quantity", amount: 2, unit: "people" } as const, writes: 1, update: true, scenario: false },
-      { message: "やっぱり大人2人と子ども1人で行きます。子どもの年齢はまだ未定です",
-        party: { kind: "party", adults: 2, children: [{}] } as const, writes: 2, update: true, scenario: false },
-      { message: "もし4人ならどうなる？今の人数は変えずに比較したい",
-        party: { kind: "party", adults: 2, children: [{}] } as const, writes: 2, update: false, scenario: true },
-      { message: "人数はいったん未定に戻して", party: undefined, writes: 3, update: true, scenario: false },
-      { message: "ありがとう", party: undefined, writes: 3, update: false, scenario: false },
+      { message: "おはよう", start: undefined, end: undefined, duration: undefined, writes: 0, update: false, scenario: false },
+      { message: "明日から2日間で行きます", start: "2026-09-28", end: undefined,
+        duration: { kind: "quantity", amount: 2, unit: "days" } as const, writes: 1, update: true, scenario: false },
+      { message: "やっぱり10月3日から5日までに変更します", start: "2026-10-03", end: "2026-10-05",
+        duration: undefined, writes: 2, update: true, scenario: false },
+      { message: "もし1週間ならどう？今の日程は変えずに比較したい", start: "2026-10-03", end: "2026-10-05",
+        duration: undefined, writes: 2, update: false, scenario: true },
+      { message: "日程はいったん未定に戻して", start: undefined, end: undefined, duration: undefined, writes: 3, update: true, scenario: false },
+      { message: "ありがとう", start: undefined, end: undefined, duration: undefined, writes: 3, update: false, scenario: false },
     ];
     for (const [index, scenario] of scenarios.entries()) {
-      const turnId = `72700000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
+      const turnId = `73000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
       const apply = createConversationConditionApplication(repository, { principal: stateA, conversationId, turnId },
-        { attemptId: turnId, userSequence: index + 1 }, scenario.message);
+        { attemptId: turnId, userSequence: index + 1 }, scenario.message, calendarDate);
       const tools = new AgentToolRegistry(), evidenceRegistry = new ToolEvidenceRegistry();
       let modelCalls = 0; const selectedTools: string[] = [];
       const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1_024 }, {
         createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, event => {
           modelCalls++; selectedTools.push(...event.message.content.flatMap(block => block.type === "toolUseBlock"
-            ? [["update_current_party", "consider_trip_scenario", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
+            ? [["update_current_travel_period", "consider_trip_scenario", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
         }); return agent; },
       });
       const result = await createStrandsServerRuntime(engine)({ executionId: turnId, userRequest: scenario.message,
         researchMode: { requestedMode: "standard", effectiveMode: "standard" },
-        context: { effectiveIntent: compileEffectiveIntent({ overlay }) }, tools, evidenceRegistry,
+        context: { featureContext: { calendarDate }, effectiveIntent: compileEffectiveIntent({ overlay }) }, tools, evidenceRegistry,
         toolExecutor: new AgentToolExecutor(tools, evidenceRegistry), limits,
-        researchLedger: new ResearchExecutionLedger(researchBudgetForRuntimeLimits(limits, "party-live"), { requestedMode: "standard", effectiveMode: "standard" }),
-        conditionController: { apply: async change => ({ receipt: publicSemanticReceipt(await apply(change)), effectiveIntent: compileEffectiveIntent({ overlay }) }) },
+        researchLedger: new ResearchExecutionLedger(researchBudgetForRuntimeLimits(limits, "period-live"), { requestedMode: "standard", effectiveMode: "standard" }),
+        conditionController: { apply: async change => {
+          try { return { receipt: publicSemanticReceipt(await apply(change)), effectiveIntent: compileEffectiveIntent({ overlay }) }; }
+          catch (error) {
+            console.log(JSON.stringify({ event: "period-condition-rejected", case: index,
+              code: error instanceof Error && "code" in error ? String((error as { code?: unknown }).code) : "unknown",
+              target: change.target,
+              periodShape: change.target === "travel_period" && change.period ? {
+                startKind: change.period.start?.kind, endKind: change.period.end?.kind,
+                hasDuration: change.period.duration !== undefined,
+              } : undefined }));
+            throw error;
+          }
+        } },
       });
-      const party = overlay.facts.find(fact => fact.target === "party_size")?.value;
+      const date = (target: "start_date" | "end_date") => {
+        const fact = overlay.facts.find(value => value.target === target);
+        return fact?.value.kind === "local_date" ? fact.value.date : undefined;
+      };
+      const duration = overlay.facts.find(value => value.target === "duration")?.value;
       console.log(JSON.stringify({ case: index, modelId, status: result.status, modelCalls, acceptedOperations: journal.size,
         publicationError: result.publicationError, selectedTools }));
       expect.soft(result.status, `case ${index} must reply`).toBe("completed");
-      expect.soft(party, `case ${index} party`).toEqual(scenario.party);
+      expect.soft(date("start_date"), `case ${index} start`).toBe(scenario.start);
+      expect.soft(date("end_date"), `case ${index} end`).toBe(scenario.end);
+      expect.soft(duration, `case ${index} duration`).toEqual(scenario.duration);
       expect.soft(journal.size, `case ${index} mutation count`).toBe(scenario.writes);
-      expect.soft(selectedTools.includes("update_current_party"), `case ${index} writer selection`).toBe(scenario.update);
+      expect.soft(selectedTools.includes("update_current_travel_period"), `case ${index} writer selection`).toBe(scenario.update);
       expect.soft(selectedTools.includes("consider_trip_scenario"), `case ${index} scenario selection`).toBe(scenario.scenario);
     }
   }, 300_000);

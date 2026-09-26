@@ -51,6 +51,35 @@ describe("condition-operation acceptance and replay", () => {
       target: "party_size", party: { kind: "composition", adults: 2, children: 0 }, quote: "大人2人",
     })).rejects.toMatchObject({ code: "conflict" });
   });
+  it("persists one travel-period slot as three atomic Domain operations and replays the slot as one command", async () => {
+    const f = await setup();
+    const period = { target: "travel_period" as const, period: {
+      start: { kind: "local_date" as const, date: "2026-10-03" },
+      end: { kind: "local_date" as const, date: "2026-10-05" },
+    }, quote: "10月3日から5日まで" };
+    const receipt = await f.turns.acceptCondition(identity, f.lease, period);
+    expect(receipt.intentRevision).toBe(1);
+    expect(receipt.operations).toHaveLength(3);
+    expect(new Set(receipt.operations.map(({ groupId }) => groupId))).toEqual(new Set([`condition:${turnId}:travel_period`]));
+    expect((await overlay(f))?.facts.map(({ target }) => target).sort()).toEqual(["end_date", "start_date"]);
+    expect((await overlay(f))?.tombstones).toContainEqual(expect.objectContaining({ target: "duration" }));
+    expect(await f.fresh().acceptCondition(identity, f.lease, { ...period, quote: "別の同じ根拠" })).toEqual(receipt);
+    expect((await overlay(f))?.intentRevision).toBe(1);
+    await expect(f.turns.acceptCondition(identity, f.lease, { ...period, period: {
+      start: { kind: "local_date", date: "2026-10-04" }, end: { kind: "local_date", date: "2026-10-05" },
+    } })).rejects.toMatchObject({ code: "conflict" });
+  });
+  it("never persists a partial travel period when its single A-commit transaction fails", async () => {
+    const f = await setup();
+    f.faults.beforeWrite = () => { throw new Error("synthetic transaction failure"); };
+    await expect(f.turns.acceptCondition(identity, f.lease, { target: "travel_period", period: {
+      start: { kind: "local_date", date: "2026-10-03" }, end: { kind: "local_date", date: "2026-10-05" },
+      duration: { amount: 3, unit: "days" },
+    }, quote: "2026-10-03から2026-10-05まで3日間" })).rejects.toMatchObject({ code: "unavailable" });
+    const state = await overlay(f);
+    expect(state?.intentRevision ?? 0).toBe(0);
+    expect(state?.facts ?? []).toEqual([]);
+  });
   it("retains a committed first operation when the second fails and resumes only the missing work", async () => {
     const f = await setup();
     const first = await f.turns.acceptCondition(identity, f.lease, origin);
