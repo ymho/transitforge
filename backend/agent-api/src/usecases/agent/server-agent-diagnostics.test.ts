@@ -62,3 +62,23 @@ it("records only bounded V2 runtime throw classification before rethrowing", asy
   }));
   expect(JSON.stringify(record.mock.calls)).not.toContain("private-request");
 });
+
+
+it("publishes only allowlisted V2 publication failure codes in runtime diagnostics", async () => {
+  const record = vi.fn();
+  const trace = { executionId: "execution", omitContent: true, events: [{ type: "task_started", occurredAt: "2026-09-26T00:00:00Z" }, { type: "task_completed", occurredAt: "2026-09-26T00:00:01Z", outcome: "completed", reason: "completed", latencyMs: 1 }] };
+  const app = createServerAgentApplication({
+    newExecutionId: () => "execution", diagnostics: { record }, registerTools: () => undefined,
+    createModel: () => ({ generate: async () => { throw new Error("V1 must not run"); } }),
+    runRuntime: async () => ({ status: "failed", response: "", evidence: [], claims: [], trace, publicationError: "missing_reply_proposal" } as never),
+  });
+  const result = await app.runAgentTurn({
+    principal: { subject: "owner", identity: { subject: "owner", issuer: "issuer" }, scopes: ["trip:read"] },
+    userRequest: "private-request",
+  });
+  expect(result.status).toBe("failed");
+  expect(record).toHaveBeenCalledWith(expect.objectContaining({
+    phase: "runtime", mode: "v2:publication:missing_reply_proposal", incomplete: true,
+  }));
+  expect(JSON.stringify(record.mock.calls)).not.toContain("private-request");
+});
