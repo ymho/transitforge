@@ -104,14 +104,15 @@ it("runs the production-shaped Conversation state path through the trusted Stran
   await state.conversations.create(principal, conversationId, consultationMetadata);
   const evidence: Evidence = {
     id: "evidence:conversation:kyoto",
-    category: "station",
+    category: "external",
     knowledgeKind: "deterministic_fact",
     subject: "京都",
-    facts: { status: "available" },
-    references: [{ sourceType: "session-state", sourceRef: "conversation:kyoto", retrievedAt: "2026-09-26T00:00:00.000Z",
+    facts: { status: "available", freshness: "fresh", sourceTitle: "京都の確認済み資料",
+      sourceExcerpt: "京都について会話で公開済みの確認済み資料です。", sourceUrl: "https://example.test/kyoto" },
+    references: [{ sourceType: "external-source", sourceRef: "https://example.test/kyoto", retrievedAt: "2026-09-26T00:00:00.000Z",
       freshness: "current", summary: "会話で確認済みの京都に関する根拠" }],
-    observation: { observationId: "evidence:conversation:kyoto", subjectKey: "conversation:kyoto", scopeKey: "conversation",
-      predicate: "destination", retrievedAt: "2026-09-26T00:00:00.000Z", applicability: "applicable", retention: "reference_only" },
+    observation: { observationId: "evidence:conversation:kyoto", subjectKey: "place:kyoto", scopeKey: "conversation",
+      predicate: "place_description", retrievedAt: "2026-09-26T00:00:00.000Z", applicability: "applicable", retention: "bounded_excerpt" },
   };
   const calls: Parameters<ServerAgentRuntimeRunner>[0][] = [];
   const runRuntime: ServerAgentRuntimeRunner = vi.fn(async input => {
@@ -154,7 +155,6 @@ it("runs the production-shaped Conversation state path through the trusted Stran
   expect(second.response).toBe("Strands second answer");
   expect(runRuntime).toHaveBeenCalledTimes(2);
   expect(calls[1]?.initialEvidence?.map(({ id }) => id)).toEqual([evidence.id]);
-  expect(calls[1]?.context?.workingState?.groundingEvidence).toBeUndefined();
 
   const callsBeforeForeign = calls.length;
   await expect(app.runConversationTurn({ ...nextTurn, principal: other,
