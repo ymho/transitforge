@@ -1,0 +1,88 @@
+name: Agent v2 / One-time structured output verification
+on:
+  push:
+    branches: [refactor/716-sdk-structured-output]
+    paths: [.github/workflows/716-sdk-output-bootstrap.yml, tools/716-sdk-output-bootstrap.py]
+permissions:
+  contents: read
+concurrency:
+  group: transitforge-716-sdk-output-bootstrap
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.repository == 'ymho/transitforge' && github.ref == 'refs/heads/refactor/716-sdk-structured-output'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Apply the reviewed source transformation on the isolated branch
+        run: python3 tools/716-sdk-output-bootstrap.py
+      - name: Update the direct Zod dependency and npm lockfile
+        run: npm install --package-lock-only --ignore-scripts --workspace @raiquora/agent zod@4.4.3
+      - name: Publish generated source to this feature branch only
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend modules tools package.json package-lock.json docs
+          git commit -m '♻️ 構造化出力をStrands標準へ置換'
+          git push origin HEAD:refs/heads/refactor/716-sdk-structured-output
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git diff --numstat bf291769f9f093777a9fa7679ddac1be854bb140 -- backend modules tools package.json package-lock.json docs
+      - run: npm ci
+      - run: npm run test:agent:v2
+      - run: npm run architecture:check && npm run build
+  model-verification:
+    needs: prepare
+    if: github.repository == 'ymho/transitforge' && github.ref == 'refs/heads/refactor/716-sdk-structured-output'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-northeast-1
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      MODEL_ID: amazon.nova-lite-v1:0
+      AGENT_V2_LIVE: 'true'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Resolve Bedrock-only evaluation role
+        id: role
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${AWS_DEPLOY_ROLE_ARN:?missing dev role configuration}"
+          account_id="${AWS_DEPLOY_ROLE_ARN#arn:aws:iam::}"
+          account_id="${account_id%%:*}"
+          [[ "$account_id" =~ ^[0-9]{12}$ ]]
+          echo "arn=arn:aws:iam::${account_id}:role/transitforge-dev-github-agent-eval" >> "$GITHUB_OUTPUT"
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5
+        with:
+          role-to-assume: ${{ steps.role.outputs.arn }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+      - run: npm ci
+      - name: Real Bedrock and fixed travel results, no production state
+        run: npm run test:agent:v2:conversation-live
