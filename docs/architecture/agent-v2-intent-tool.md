@@ -1,31 +1,39 @@
-# Agent v2の同一loop内Intent更新
+# V2の条件更新Tool
 
-関連: #712、#631、ADR 0096
+関連: #716 / #724。前提: #722 / ADR 0097のStrands標準構造化出力。
 
-`update_intent`はApplication-localな条件差分の受付口であり、旅行・予約・決済のwriterではない。
-意味理解とTool選択はStrands内のモデルが行う。旧Interpreter、別のSemanticモデル呼出し、V1 Prompt、repairは使用しない。
-共通のbounded schema、quote/date/scope検証、AcceptedIntentDelta、reducer、CAS、receiptは#631の契約を再利用する。
+## 置換対象
 
-```text
-userMessage → Strands → 必要な場合だけupdate_intent
-  → Application validation → A commit → Context Loader再読込
-  → 同一invokeのread Tool → SDK structured output → 最新Intentで公開検証 → B commit
-```
+#712の `update_intent` / `UtteranceInterpretation` / `semanticInterpretationOutputContract` / V2内の旧decoder / 1 invoke1試行制限は、このbranchでは使用しない。純粋なAcceptedIntentDeltaとreducer、Effective Intent、owner、A/B commit、CAS、Evidence/currentnessは再利用する。
 
-## 境界
+標準Strands `tool()`にZodのstrict schemaを渡し、以下の独立した業務操作を公開する。
 
-- Controllerは認証済みConversation Applicationが組成する。モデルはowner、turn ID、revision、保存キーを選ばない。
-- 1 invokeの更新試行は最大1回。入力拒否後も同じinvoke内で再試行しない。回答提出後は更新しない。
-- 更新が不要な発話では呼ばない。`update_intent`と`SDK structured output`は外部Domain Tool budgetへ加算しない。
-- 成功時に返すEffective IntentはA commit後にApplicationが読み戻したsnapshotである。readの事前条件と回答のEvidence/既知条件検証は同じ最新snapshotを参照する。
-- quote/date/scopeなどの既知の入力不正は`intent_rejected`。保存、receipt送信、再読込の失敗は入力拒否に変換せず、そのturnの後続readと回答公開を止める。
-- A commit済みの失敗は既存の`intent_accepted`からretryする。Controllerを再公開せず、revisionを増やさない。完了済みturnは保存結果をreplayする。
-- V2 runtimeが組成されている場合、古いSemantic rollout optionが残っていてもV1 Interpreterは組成しない。
+- `set_destination(place, quote)` / `set_origin(place, quote)`: 指定・訂正。
+- `clear_destination(quote)` / `clear_origin(quote)`: 明示された撤回。
 
-## 検証
+未設定やnullを設定操作で受け付けない。撤回は別の明確な業務操作であり、モデルがsetterのnullを変更なしと誤解して条件を消す経路を作らない。検証フィードバックと逐次実行はSDK標準へ任せ、独自のAgent phase、ToolChoice強制、Proxy、入力補修を追加しない。
 
-V2 Acceptanceは`strands-intent-acceptance.test.ts`で、実Strands SDKとproduction-shapedな認証・DynamoDB fixture・Conversation保存経路を通す。
-受入対象はA/read/B/history/replay、別turnの条件訂正、quote/date/scope拒否、不要な更新の不実行、1回制限、A commit後の再読込失敗からの回復である。
-Providerの意味理解品質をsynthetic modelで証明したとは扱わない。V2 Live Evalは別の測定であり、V1 runtime testを互換oracleにしない。
+## Applicationの契約
 
-次段階は旅行read Tool、カード、旅程、写真の利用シナリオから小さく追加する。提案・採用・保存のwriter公開は別段階とする。
+最初のscopeはConversationの行き先・出発地だけ。Trip/Profile/予約/決済は更新しない。型と許可項目はZod、根拠が今回の発言に含まれることと地名がその根拠に含まれることはApplicationが確認する。仮定や比較を変更と扱うかはモデルの意味理解を実モデル試験で評価する。部分文字列検証だけで意味理解を証明したとは扱わない。
+
+1操作の正体は、このuser turnにおける1条件の最終意思決定。Applicationが `condition:<turnId>:<target>` を識別子にする。同じ条件/同じ値の再送は元receiptを返し、同じslot/別値は競合とする。異なる値へさらに変更したい場合は次の利用者turnで行う。モデルのtoolUseId、呼出順、再試行attemptに依存しない。
+
+独立した条件は同一turnで複数確定できる。一方、期間の始終など一体で整合性を守る必要がある条件は、将来1つの業務操作として追加する。この実装を一般的な任意patch engineへ拡張しない。
+
+## 永続化と回復
+
+既存TURN recordにversion 1のoperation journalを追加する。個々のreceiptとWorking overlayを既存DynamoDB transaction/CASで原子的に保存する。別テーブル・別Intent正本は作らない。
+
+- 最初の更新が成功し次が失敗しても、成功した操作は保持する。
+- 同じ操作の再送で二重適用しない。元receiptを返した後もContext Loaderは現在の正本を読み、古いsnapshotへ戻さない。
+- 保存結果が不明な失敗では後続read/公開を閉じる。新しい試行はjournalから再開する。
+- 完了済みturnは保存済みB結果をreplayする。未完了の古いturnは後続turnの条件を上書きしたり、新しい回答を保存したりできない。
+- journalがない旧intentReceipt付きturnは旧形式として再生するが、新しい複数更新のturnとして再解釈しない。
+- 既存の単数public semanticReceiptは操作receipt群から作る表示用summaryであって、新たなmutationや正本ではない。
+
+## 進捗・検証
+
+2026-09-26、PR #724はDraft。決定論的な受入は173テスト成功。実モデルの最小条件試験はNova 2 Liteで3/3成功したが、旅行検索/カードを含むConversation試験は2/3で、一般的な利用成立は未完了。#716をcloseせず、実モデルの不合格を通常CI greenで代用しない。
+
+詳細な結果は `agent-v2-condition-verification.md`。プロフィール縮小は独立した#725へ分離する。
