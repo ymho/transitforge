@@ -19,8 +19,9 @@ class ToolThenAnswerModel extends Model<BaseModelConfig> {
     yield { type: "modelMessageStartEvent", role: "assistant" };
     if (this.calls <= 2) {
       const name = this.calls === 1 ? "lookup_verified_place" : "submit_reply";
-      const input = this.calls === 1 ? { place: "京都" } : { kind: "answer", references: [
-        { evidenceId: "evidence:strands-production-shaped:place:kyoto", field: "description" }] };
+      const input = this.calls === 1 ? { place: "京都" } : { kind: "answer",
+        commentary: "確認済みの情報を見る限り、京都についてこの内容を案内できます。",
+        references: [{ evidenceId: "evidence:strands-production-shaped:place:kyoto", field: "description" }] };
       yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name, toolUseId: `tool-${this.calls}` } };
       yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(input) } };
       yield { type: "modelContentBlockStopEvent" };
@@ -83,6 +84,7 @@ it("runs an actual Strands model-tool-model loop inside the production-shaped Co
   const input = { principal, conversationId, turnId: secondId, userRequest: "京都について確認して" };
   const result = await app.runConversationTurn(input);
   expect(result.status).toBe("completed");
+  expect(result.response).toContain("確認済みの情報を見る限り、京都についてこの内容を案内できます。");
   expect(result.response).toContain("Toolで京都を検証済みです");
   expect(result.response).not.toContain("thinking");
   expect(result.response).not.toContain("保存しておきます");
