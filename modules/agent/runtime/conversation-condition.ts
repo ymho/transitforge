@@ -42,22 +42,26 @@ export const partyConditionUpdateInputSchema = z.strictObject({
 
 const localDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u);
 export const periodDateExpressionSchema = z.strictObject({
-  kind: z.enum(["local_date", "month_day", "day_of_month", "relative_date"]),
-  date: localDate.optional(),
+  kind: z.enum(["calendar_date", "relative_date"]),
+  year: z.number().int().min(2000).max(2100).optional()
+    .describe("利用者が年を明示した場合だけ設定する。未指定の年はApplicationが決める。"),
   month: z.number().int().min(1).max(12).optional(),
   day: z.number().int().min(1).max(31).optional(),
   relation: z.enum(["today", "tomorrow", "day_after_tomorrow"]).optional(),
+  quote: sourceQuote.describe("この日付要素だけを裏付ける完全な部分文字列。"),
 }).superRefine((value, context) => {
-  const fields = [value.date !== undefined, value.month !== undefined, value.day !== undefined, value.relation !== undefined];
-  const valid = value.kind === "local_date" ? value.date !== undefined && fields.filter(Boolean).length === 1 :
-    value.kind === "month_day" ? value.month !== undefined && value.day !== undefined && fields.filter(Boolean).length === 2 :
-    value.kind === "day_of_month" ? value.day !== undefined && fields.filter(Boolean).length === 1 :
-    value.relation !== undefined && fields.filter(Boolean).length === 1;
-  if (!valid) context.addIssue({ code: "custom", message: "date expression fields do not match kind" });
+  if (value.kind === "relative_date") {
+    if (value.relation === undefined || value.year !== undefined || value.month !== undefined || value.day !== undefined)
+      context.addIssue({ code: "custom", message: "relative_date requires only relation" });
+    return;
+  }
+  if (value.day === undefined || value.relation !== undefined)
+    context.addIssue({ code: "custom", message: "calendar_date requires day and no relation" });
 });
 export const travelDurationSchema = z.strictObject({
   amount: z.number().int().min(1).max(90),
   unit: z.enum(["days", "nights"]),
+  quote: sourceQuote.describe("日数・泊数だけを裏付ける完全な部分文字列。"),
 });
 export const travelPeriodValueSchema = z.strictObject({
   start: periodDateExpressionSchema.optional(),
@@ -94,10 +98,14 @@ const resolvedDateSchema = z.strictObject({
   anchorDate: localDate.optional(),
   resolverVersion: z.literal("calendar-v1").optional(),
 });
+const resolvedDurationSchema = z.strictObject({
+  amount: z.number().int().min(1).max(90),
+  unit: z.enum(["days", "nights"]),
+});
 const resolvedPeriodSchema = z.strictObject({
   start: resolvedDateSchema.optional(),
   end: resolvedDateSchema.optional(),
-  duration: travelDurationSchema.optional(),
+  duration: resolvedDurationSchema.optional(),
 }).refine(value => value.start !== undefined || value.end !== undefined || value.duration !== undefined, {
   message: "resolved travel period requires at least one component",
 });
@@ -251,43 +259,60 @@ export function parseConditionJournal(value: unknown, turnId: string): Condition
 }
 
 function resolveTravelPeriod(value: z.infer<typeof travelPeriodValueSchema>, quote: string, anchor?: string): z.infer<typeof resolvedPeriodSchema> {
+  if (!anchor || !validDate(anchor)) {
+    if (value.start?.kind === "relative_date" || value.end?.kind === "relative_date" ||
+        value.start?.kind === "calendar_date" && value.start.year === undefined ||
+        value.end?.kind === "calendar_date" && value.end.year === undefined) throw new ConditionUpdateRejectedError("invalid_condition");
+  }
   const start = value.start ? resolvePeriodDate(value.start, quote, anchor) : undefined;
   const end = value.end ? resolvePeriodDate(value.end, quote, anchor, start?.date) : undefined;
+  const duration = value.duration ? resolveDuration(value.duration, quote) : undefined;
   if (start && end && end.date < start.date) throw new ConditionUpdateRejectedError("invalid_condition");
-  if (start && end && value.duration) {
+  if (start && end && duration) {
     const days = differenceInDays(start.date, end.date);
-    const expected = value.duration.unit === "nights" ? days : days + 1;
-    if (expected !== value.duration.amount) throw new ConditionUpdateRejectedError("invalid_condition");
+    const expected = duration.unit === "nights" ? days : days + 1;
+    if (expected !== duration.amount) throw new ConditionUpdateRejectedError("invalid_condition");
   }
-  return {
-    ...(start ? { start } : {}), ...(end ? { end } : {}), ...(value.duration ? { duration: { ...value.duration } } : {}),
-  };
+  return { ...(start ? { start } : {}), ...(end ? { end } : {}), ...(duration ? { duration } : {}) };
 }
 
-function resolvePeriodDate(value: z.infer<typeof periodDateExpressionSchema>, quote: string, anchor?: string,
+function resolveDuration(value: z.infer<typeof travelDurationSchema>, commandQuote: string): z.infer<typeof resolvedDurationSchema> {
+  if (!commandQuote.includes(value.quote)) throw new ConditionUpdateRejectedError("invalid_source");
+  const unitMarker = value.unit === "nights" ? "泊" : "日";
+  if (!containsNumber(value.quote, value.amount) || !value.quote.includes(unitMarker)) throw new ConditionUpdateRejectedError("invalid_source");
+  return { amount: value.amount, unit: value.unit };
+}
+
+function resolvePeriodDate(value: z.infer<typeof periodDateExpressionSchema>, commandQuote: string, anchor?: string,
   sameMonthReference?: string): z.infer<typeof resolvedDateSchema> {
-  if (value.kind === "local_date") {
-    if (!value.date || !validDate(value.date) || !explicitDateAppears(quote, value.date)) throw new ConditionUpdateRejectedError("invalid_source");
-    return { kind: "local_date", date: value.date! };
-  }
+  if (!commandQuote.includes(value.quote)) throw new ConditionUpdateRejectedError("invalid_source");
   if (value.kind === "relative_date") {
-    if (!value.relation || !anchor || !validDate(anchor) || !relativeDateAppears(quote, value.relation)) throw new ConditionUpdateRejectedError(anchor ? "invalid_source" : "invalid_condition");
-    const relation = value.relation!;
-    const offset = relation === "today" ? 0 : relation === "tomorrow" ? 1 : 2;
-    return { kind: "local_date", date: stepDate(anchor, offset), expression: relation, anchorDate: anchor, resolverVersion: "calendar-v1" };
+    if (!value.relation || !anchor || !validDate(anchor) || !relativeDateAppears(value.quote, value.relation))
+      throw new ConditionUpdateRejectedError(anchor ? "invalid_source" : "invalid_condition");
+    const offset = value.relation === "today" ? 0 : value.relation === "tomorrow" ? 1 : 2;
+    return { kind: "local_date", date: stepDate(anchor, offset), expression: value.relation, anchorDate: anchor, resolverVersion: "calendar-v1" };
   }
-  if (value.kind === "day_of_month") {
-    if (value.day === undefined || !sameMonthReference || !quote.includes(`${value.day}日`)) throw new ConditionUpdateRejectedError("invalid_source");
-    const date = `${sameMonthReference.slice(0, 8)}${String(value.day).padStart(2, "0")}`;
-    if (!validDate(date)) throw new ConditionUpdateRejectedError("invalid_condition");
+  if (value.day === undefined || !containsNumber(value.quote, value.day)) throw new ConditionUpdateRejectedError("invalid_source");
+
+  const explicitYear = value.year !== undefined && containsNumber(value.quote, value.year);
+  const explicitMonth = value.month !== undefined && monthAppears(value.quote, value.month);
+  const referenceMonth = sameMonthReference ? Number(sameMonthReference.slice(5, 7)) : undefined;
+  const month = explicitMonth ? value.month : referenceMonth;
+  if (month === undefined) throw new ConditionUpdateRejectedError("invalid_source");
+
+  if (explicitYear) {
+    const date = isoDate(value.year!, month, value.day);
+    if (!date) throw new ConditionUpdateRejectedError("invalid_condition");
     return { kind: "local_date", date };
   }
-  if (value.month === undefined || value.day === undefined || !anchor || !validDate(anchor) || !monthDayAppears(quote, value.month, value.day))
-    throw new ConditionUpdateRejectedError(anchor ? "invalid_source" : "invalid_condition");
-  const year = Number(anchor.slice(0, 4));
-  let date = isoDate(year, value.month!, value.day!);
+  if (!anchor || !validDate(anchor)) throw new ConditionUpdateRejectedError("invalid_condition");
+  let year = Number(anchor.slice(0, 4));
+  let date = isoDate(year, month, value.day);
   if (!date) throw new ConditionUpdateRejectedError("invalid_condition");
-  if (date < anchor) date = isoDate(year + 1, value.month!, value.day!);
+  if (date < anchor) {
+    year += 1;
+    date = isoDate(year, month, value.day);
+  }
   if (!date) throw new ConditionUpdateRejectedError("invalid_condition");
   return { kind: "local_date", date, anchorDate: anchor, resolverVersion: "calendar-v1" };
 }
@@ -297,13 +322,12 @@ function relativeDateAppears(quote: string, relation: "today" | "tomorrow" | "da
   if (relation === "tomorrow") return quote.includes("明日");
   return quote.includes("明後日") || quote.includes("あさって");
 }
-function explicitDateAppears(quote: string, date: string): boolean {
-  const [year, month, day] = date.split("-").map(Number);
-  return quote.includes(date) || quote.includes(`${year}/${month}/${day}`) || quote.includes(`${year}年${month}月${day}日`);
+function monthAppears(quote: string, month: number): boolean {
+  return quote.includes(`${month}月`) || quote.includes(`${month}/`) ||
+    quote.includes(`${String(month).padStart(2, "0")}/`);
 }
-function monthDayAppears(quote: string, month: number, day: number): boolean {
-  return quote.includes(`${month}月${day}日`) || quote.includes(`${month}/${day}`) ||
-    quote.includes(`${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")}`);
+function containsNumber(quote: string, value: number): boolean {
+  return quote.normalize("NFKC").includes(String(value));
 }
 function isoDate(year: number, month: number, day: number): string | undefined {
   const value = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
