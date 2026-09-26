@@ -11,11 +11,11 @@ import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { agentV2StructuredOutputSchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
 import { agentV2CandidateReferences, publicReplyField } from "@raiquora/agent/agent-v2-publication";
-import { placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, ConditionUpdateRejectedError, type ConversationConditionChange } from "@raiquora/agent/conversation-condition";
+import { placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, partyScenarioInputSchema, admitPartyScenario, ConditionUpdateRejectedError, type ConversationConditionChange } from "@raiquora/agent/conversation-condition";
 import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
   type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
 
-export const strandsConditionToolNames = ["update_current_destination", "update_current_origin", "update_current_party"] as const;
+export const strandsConditionToolNames = ["update_current_destination", "update_current_origin", "update_current_party", "consider_party_scenario"] as const;
 export interface StrandsAgentEngineOptions {
   modelId: string;
   region: string;
@@ -118,10 +118,17 @@ export class StrandsAgentEngine {
             ? { target: "origin", place: value.place!, quote: value.quote }
             : { target: "origin", place: null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "update_current_party", inputSchema: partyConditionUpdateInputSchema,
-          description: "今回の旅行で実際に採用する現在の人数条件だけを永続更新する。仮定を試すscratchpadではない。利用者が現在条件として採用・訂正した場合はaction=set、人数を未定に戻す明示はaction=clear。合計人数だけならparty.kind=countを使い、大人/子どもの内訳を推測しない。大人/子どもの人数が明示された場合だけparty.kind=compositionを使う。年齢・年代・関係性は扱わない。仮定・反実仮想・what-if・シナリオ比較、または現条件を維持すると明示された場合は呼ばない。比較用read Toolが無いことはこのwriterを呼ぶ理由にならない。プロフィールは変更しない。",
+          description: "今回の旅行で実際に採用する現在の人数条件だけを永続更新する。利用者が現在条件として採用・訂正した場合はaction=set、人数を未定に戻す明示はaction=clear。合計人数だけならparty.kind=countを使い、大人/子どもの内訳を推測しない。大人/子どもの人数が明示された場合だけparty.kind=compositionを使う。年齢・年代・関係性は扱わない。仮定・反実仮想・what-if・比較では使わず、consider_party_scenarioを使う。プロフィールは変更しない。",
           callback: (value, context) => apply(value.action === "set"
             ? { target: "party_size", party: value.party!, quote: value.quote }
             : { target: "party_size", party: null, quote: value.quote }, context?.cancelSignal) }),
+        tool({ name: "consider_party_scenario", inputSchema: partyScenarioInputSchema,
+          description: "現在の人数条件を一切変更せず、仮定・反実仮想・what-if・シナリオ比較として別の人数を考える時に使う非永続Tool。update_current_partyの代わりに使う。保存・A commit・revision更新を行わない。",
+          callback: (value, context) => {
+            if (context?.cancelSignal.aborted) throw new Error("execution_cancelled");
+            const scenario = admitPartyScenario(value, input.userRequest);
+            return jsonValue({ ok: true, hypotheticalParty: scenario.party, currentConditionsUnchanged: true });
+          } }),
       );
     }
     const baseModel = this.model ?? new BedrockModel({ modelId: this.options.modelId, region: this.options.region,
