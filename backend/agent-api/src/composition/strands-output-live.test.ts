@@ -15,7 +15,7 @@ import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
  * Four turns, 6 model cycles/2 reads/60 seconds per turn. All semantic failures remain
  * test failures; soft assertions let later turns be measured without hiding them. */
 const enabled = process.env.AGENT_V2_LIVE === "true";
-const modelId = process.env.MODEL_ID ?? "amazon.nova-lite-v1:0";
+const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
 const toolsToObserve = new Set(["set_origin", "set_destination", "clear_origin", "clear_destination", "search_place_media", "strands_structured_output"]);
 describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () => {
   it("handles greeting, destination, correction and unavailable save through Conversation/replay", async () => {
