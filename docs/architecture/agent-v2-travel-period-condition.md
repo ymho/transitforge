@@ -17,16 +17,16 @@ start/end/durationを複数Toolへ分けない。1回の呼出しをApplication�
 
 `action=set`のperiodには利用者が今回の発言で明示した要素だけを入れる。省略した要素は未設定へ戻し、以前の期間値と黙って混在させない。
 
-日付入力は次の表現だけを許可する。
+日付入力は`calendar_date`または`relative_date`だけとする。
 
-- `local_date`: 年月日が明示された場合。
-- `month_day`: 年なしの月日。
-- `day_of_month`: 開始日と同じ月で終了日の「5日」のように日だけが明示された場合。
+- `calendar_date`: dayは必須。monthは明示された場合、またはendがstartと同月で日だけ明示された場合に使う。yearは利用者が年を明示した場合だけ権威を持つ。
 - `relative_date`: 今日 / 明日 / 明後日。
 
-日数は`days`または`nights`で、明示された整数だけを受け取る。
+start/end/durationはそれぞれ、その要素だけを裏付ける部分quoteを持つ。前turnのdurationなど、今回発言に根拠がない任意要素は今回のperiodへ持ち越さない。
 
-モデルは暦日を確定する権限を持たない。年なし月日と相対日付はApplicationがtrusted `calendarDate`から解決し、解決済み値だけをConversation Intentへ保存する。相対表現にcalendar anchorが無ければ受理しない。
+年が明示されていない月日は、Applicationがtrusted `calendarDate`を基準に**その日以降で最初に到来する月日**へ機械的に解決する。たとえば基準日2026-09-26なら12/25は2026-12-25、1/21は2027-01-21である。モデルが推測したyear値は対応する部分quoteに年が無ければ無視する。明示年がある場合だけその年を使う。相対表現にcalendar anchorが無ければ受理しない。
+
+日数は`days`または`nights`で、今回発言に明示された整数だけを受け取る。
 
 ## 整合性
 
@@ -60,6 +60,6 @@ V1 semantic interpreter、旧semantic corpus、V1 runtime testsを互換oracle�
 
 ## 検証
 
-決定論的テストでは、月日解決、相対日付解決、start/endの同一A commit、durationの非推測、clear、矛盾拒否、journal replay、transaction failure時の非partialを確認する。
+決定論的テストでは、最初の未来月日解決、明示年、相対日付解決、要素別quote grounding、start/endの同一A commit、durationの非推測/非持越し、clear、矛盾拒否、journal replay、transaction failure時の非partialを確認する。
 
 実モデルはNova 2 Lite＋test repositoryで、actual期間設定、訂正、what-ifで非永続scenarioを選ぶこと、明示clearを反復確認する。固定fixtureの成功を実Providerや実ブラウザの成功とは扱わない。
