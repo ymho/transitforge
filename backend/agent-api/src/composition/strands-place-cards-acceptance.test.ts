@@ -15,7 +15,7 @@ import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
 type Step = { tool: string; input: Record<string, unknown> } | "candidates" | "end";
 const read: Step = { tool: "search_place_media", input: { query: "青葉庭園", mode: "discovery", limit: 1 } };
 const uncertainty: Step = { tool: "strands_structured_output", input: { kind: "uncertainty" } };
-const update: Step = { tool: "update_destination", input: { action: "set", place: "青葉庭園", quote: "青葉庭園" } };
+const update: Step = { tool: "update_current_destination", input: { action: "set", place: "青葉庭園", quote: "青葉庭園" } };
 class CandidateModel extends Model<BaseModelConfig> {
   calls = 0;
   seenCandidateIds: string[] = [];
