@@ -115,20 +115,22 @@ it("runs the production-shaped Conversation state path through the trusted Stran
       predicate: "place_description", retrievedAt: "2026-09-26T00:00:00.000Z", applicability: "applicable", retention: "bounded_excerpt" },
   };
   const calls: Parameters<ServerAgentRuntimeRunner>[0][] = [];
-  const runRuntime: ServerAgentRuntimeRunner = vi.fn(async input => {
+  const runtimeImplementation: ServerAgentRuntimeRunner = async input => {
     calls.push(input);
-    const published = calls.length === 1 ? [evidence] : input.initialEvidence ?? [];
+    const published: Evidence[] = calls.length === 1 ? [evidence] : [...(input.initialEvidence ?? [])];
     return {
       status: "completed",
       response: calls.length === 1 ? "Strands first answer" : "Strands second answer",
       evidence: published,
-      claims: published.map((item, index) => ({ id: `claim-${index}`, statement: "確認済みの根拠です", kind: "fact" as const,
+      claims: published.map((item, index) => ({ id: `claim-${index}`, statement: "確認済みの根拠です", kind: "fact",
         evidenceIds: [item.id], bindings: [{ evidenceId: item.id, fieldPath: "facts.status",
-          subjectRef: item.observation?.subjectKey ?? item.subject, transform: "identity" as const }] })),
+          subjectRef: item.observation?.subjectKey ?? item.subject, transform: "identity" }],
+        groundingStatus: "supported", missingEvidenceIds: [] })),
       trace: { executionId: input.executionId, events: [], droppedEventCount: 0 },
       delivery: { status: "full", basis: "verified_projection" },
     };
-  });
+  };
+  const runRuntime = vi.fn(runtimeImplementation);
   const model = { converse: vi.fn(async () => { throw new Error("V1 model must not run"); }) };
   const app = createConversationServerAgent({
     stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
