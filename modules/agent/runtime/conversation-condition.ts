@@ -41,12 +41,20 @@ export const partyConditionUpdateInputSchema = z.strictObject({
 });
 
 const localDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u);
-export const periodDateExpressionSchema = z.discriminatedUnion("kind", [
-  z.strictObject({ kind: z.literal("local_date"), date: localDate }),
-  z.strictObject({ kind: z.literal("month_day"), month: z.number().int().min(1).max(12), day: z.number().int().min(1).max(31) }),
-  z.strictObject({ kind: z.literal("day_of_month"), day: z.number().int().min(1).max(31) }),
-  z.strictObject({ kind: z.literal("relative_date"), relation: z.enum(["today", "tomorrow", "day_after_tomorrow"]) }),
-]);
+export const periodDateExpressionSchema = z.strictObject({
+  kind: z.enum(["local_date", "month_day", "day_of_month", "relative_date"]),
+  date: localDate.optional(),
+  month: z.number().int().min(1).max(12).optional(),
+  day: z.number().int().min(1).max(31).optional(),
+  relation: z.enum(["today", "tomorrow", "day_after_tomorrow"]).optional(),
+}).superRefine((value, context) => {
+  const fields = [value.date !== undefined, value.month !== undefined, value.day !== undefined, value.relation !== undefined];
+  const valid = value.kind === "local_date" ? value.date !== undefined && fields.filter(Boolean).length === 1 :
+    value.kind === "month_day" ? value.month !== undefined && value.day !== undefined && fields.filter(Boolean).length === 2 :
+    value.kind === "day_of_month" ? value.day !== undefined && fields.filter(Boolean).length === 1 :
+    value.relation !== undefined && fields.filter(Boolean).length === 1;
+  if (!valid) context.addIssue({ code: "custom", message: "date expression fields do not match kind" });
+});
 export const travelDurationSchema = z.strictObject({
   amount: z.number().int().min(1).max(90),
   unit: z.enum(["days", "nights"]),
@@ -67,10 +75,17 @@ export const travelPeriodUpdateInputSchema = z.strictObject({
   if (value.action === "clear" && value.period !== undefined) context.addIssue({ code: "custom", message: "clear must not include period" });
 });
 
-export const tripScenarioInputSchema = z.discriminatedUnion("kind", [
-  z.strictObject({ kind: z.literal("party"), party: partyConditionValueSchema, quote: sourceQuote }),
-  z.strictObject({ kind: z.literal("travel_period"), period: travelPeriodValueSchema, quote: sourceQuote }),
-]);
+export const tripScenarioInputSchema = z.strictObject({
+  kind: z.enum(["party", "travel_period"]),
+  party: partyConditionValueSchema.optional(),
+  period: travelPeriodValueSchema.optional(),
+  quote: sourceQuote,
+}).superRefine((value, context) => {
+  if (value.kind === "party" && (value.party === undefined || value.period !== undefined))
+    context.addIssue({ code: "custom", message: "party scenario requires only party" });
+  if (value.kind === "travel_period" && (value.period === undefined || value.party !== undefined))
+    context.addIssue({ code: "custom", message: "travel_period scenario requires only period" });
+});
 
 const resolvedDateSchema = z.strictObject({
   kind: z.literal("local_date"),
@@ -252,26 +267,27 @@ function resolveTravelPeriod(value: z.infer<typeof travelPeriodValueSchema>, quo
 function resolvePeriodDate(value: z.infer<typeof periodDateExpressionSchema>, quote: string, anchor?: string,
   sameMonthReference?: string): z.infer<typeof resolvedDateSchema> {
   if (value.kind === "local_date") {
-    if (!validDate(value.date) || !explicitDateAppears(quote, value.date)) throw new ConditionUpdateRejectedError("invalid_source");
-    return { kind: "local_date", date: value.date };
+    if (!value.date || !validDate(value.date) || !explicitDateAppears(quote, value.date)) throw new ConditionUpdateRejectedError("invalid_source");
+    return { kind: "local_date", date: value.date! };
   }
   if (value.kind === "relative_date") {
-    if (!anchor || !validDate(anchor) || !relativeDateAppears(quote, value.relation)) throw new ConditionUpdateRejectedError(anchor ? "invalid_source" : "invalid_condition");
-    const offset = value.relation === "today" ? 0 : value.relation === "tomorrow" ? 1 : 2;
-    return { kind: "local_date", date: stepDate(anchor, offset), expression: value.relation, anchorDate: anchor, resolverVersion: "calendar-v1" };
+    if (!value.relation || !anchor || !validDate(anchor) || !relativeDateAppears(quote, value.relation)) throw new ConditionUpdateRejectedError(anchor ? "invalid_source" : "invalid_condition");
+    const relation = value.relation!;
+    const offset = relation === "today" ? 0 : relation === "tomorrow" ? 1 : 2;
+    return { kind: "local_date", date: stepDate(anchor, offset), expression: relation, anchorDate: anchor, resolverVersion: "calendar-v1" };
   }
   if (value.kind === "day_of_month") {
-    if (!sameMonthReference || !quote.includes(`${value.day}日`)) throw new ConditionUpdateRejectedError("invalid_source");
+    if (value.day === undefined || !sameMonthReference || !quote.includes(`${value.day}日`)) throw new ConditionUpdateRejectedError("invalid_source");
     const date = `${sameMonthReference.slice(0, 8)}${String(value.day).padStart(2, "0")}`;
     if (!validDate(date)) throw new ConditionUpdateRejectedError("invalid_condition");
     return { kind: "local_date", date };
   }
-  if (!anchor || !validDate(anchor) || !monthDayAppears(quote, value.month, value.day))
+  if (value.month === undefined || value.day === undefined || !anchor || !validDate(anchor) || !monthDayAppears(quote, value.month, value.day))
     throw new ConditionUpdateRejectedError(anchor ? "invalid_source" : "invalid_condition");
   const year = Number(anchor.slice(0, 4));
-  let date = isoDate(year, value.month, value.day);
+  let date = isoDate(year, value.month!, value.day!);
   if (!date) throw new ConditionUpdateRejectedError("invalid_condition");
-  if (date < anchor) date = isoDate(year + 1, value.month, value.day);
+  if (date < anchor) date = isoDate(year + 1, value.month!, value.day!);
   if (!date) throw new ConditionUpdateRejectedError("invalid_condition");
   return { kind: "local_date", date, anchorDate: anchor, resolverVersion: "calendar-v1" };
 }
