@@ -59,7 +59,7 @@ jobs:
           account_id="${account_id%%:*}"
           [[ "$account_id" =~ ^[0-9]{12}$ ]]
           echo "arn=arn:aws:iam::${account_id}:role/transitforge-dev-github-agent-eval" >> "$GITHUB_OUTPUT"
-          echo 'Maximum: 8 model cycles for basic cases + 24 for Conversation; fixed providers and synthetic state only.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Maximum: 24 model cycles for repeated basic cases + 24 for Conversation; fixture Providers/state only. Semantic failures are not ignored.' >> "$GITHUB_STEP_SUMMARY"
       - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5
         with:
           role-to-assume: ${{ steps.role.outputs.arn }}
@@ -69,8 +69,8 @@ jobs:
       - name: Basic evidence-bound reply and unsupported write
         id: basic
         continue-on-error: true
-        run: npm run eval:agent:strands:live -- --repetitions 1 --output-dir /tmp/v2-native-basic --require-all
-      - name: Real Bedrock and fixed travel results, no production state
+        run: npm run eval:agent:strands:live -- --repetitions 3 --output-dir /tmp/v2-native-basic --require-all
+      - name: Observe all Conversation turns through standard read-only SDK hooks
         id: conversation
         continue-on-error: true
         run: npm run test:agent:v2:conversation-live
