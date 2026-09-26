@@ -6,30 +6,7 @@ on:
 permissions:
   contents: read
 jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - run: npx vitest run --root . modules/agent/runtime/conversation-condition.test.ts backend/agent-api/src/usecases/agent/conversation-condition-application.test.ts
-      - name: Package nested dependencies for the isolated worktree
-        run: |
-          find backend frontend modules -name node_modules -prune -print0 > /tmp/nested-modules
-          tar --null -czf /tmp/condition-extra-deps.tgz -T /tmp/nested-modules
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: condition-extra-deps
-          path: /tmp/condition-extra-deps.tgz
-          retention-days: 1
   model:
-    needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 12
     environment: dev
@@ -69,4 +46,5 @@ jobs:
           role-to-assume: ${{ steps.role.outputs.arn }}
           aws-region: ${{ env.AWS_REGION }}
           mask-aws-account-id: true
-      - run: npx vitest run --root . backend/agent-api/src/composition/strands-condition-tools-live.test.ts --maxWorkers=1
+      - name: Verify small Tools without duplicate capability declarations
+        run: npx vitest run --root . backend/agent-api/src/composition/strands-condition-tools-live.test.ts --maxWorkers=1

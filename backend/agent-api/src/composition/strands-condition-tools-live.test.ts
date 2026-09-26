@@ -10,6 +10,7 @@ import { reduceConversationIntent, type IntentApplicationReceipt } from "@raiquo
 import { publicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 import { compileEffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { ConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
+import type { Evidence } from "@raiquora/agent/evidence-model";
 import { createConversationConditionApplication } from "../usecases/agent/conversation-condition-application.js";
 import { StrandsAgentEngine } from "../adapters/strands-agent-engine.js";
 import { createStrandsServerRuntime } from "../adapters/strands-server-runtime.js";
@@ -49,16 +50,26 @@ describe.skipIf(!enabled)("small condition Tools with real Bedrock", () => {
       const apply = createConversationConditionApplication(repository, { principal: stateA, conversationId, turnId },
         { attemptId: turnId, userSequence: index + 1 }, scenario.message);
       const tools = new AgentToolRegistry(), evidenceRegistry = new ToolEvidenceRegistry();
-      const read = vi.fn(async () => successfulAgentToolResult({ description: "散策の候補となる場所です。接続試験用の資料です。" }));
+      const read = vi.fn(async ({ place }: { place: string }) => successfulAgentToolResult({
+        sourceTitle: place, sourceExcerpt: "散策の候補となる場所です。接続試験用の資料です。",
+        sourceUrl: "https://example.org/places/verified", sourcePrecision: "place-description",
+      }));
       tools.register({ name: "lookup_place", effect: "read", description: "候補の場所について固定資料を確認する。", inputSchema: {
         type: "object", properties: { place: { type: "string" } }, required: ["place"], additionalProperties: false },
         parseInput: raw => validAgentToolInput(raw as { place: string }), execute: read });
       evidenceRegistry.register("lookup_place", (output, context) => [{ id: `evidence:${context.executionId}:${context.toolCallId}`, category: "station",
-        knowledgeKind: "deterministic_fact", subject: "資料", facts: output as Record<string, unknown>,
-        references: [{ sourceType: "session-state", sourceRef: "fixture:place", retrievedAt: context.retrievedAt, freshness: "current", summary: "接続試験の資料" }] }]);
-      let modelCalls = 0;
+        knowledgeKind: "deterministic_fact", subject: "資料", facts: output as Evidence["facts"],
+        references: [{ sourceType: "external-source", sourceRef: "https://example.org/places/verified", retrievedAt: context.retrievedAt, freshness: "current", summary: "接続試験の資料" }],
+        observation: { observationId: `obs:${context.executionId}:${context.toolCallId}`, subjectKey: "place:fixture:verified",
+          predicate: "place_description", scopeKey: "conversation", retrievedAt: context.retrievedAt,
+          applicability: "applicable", retention: "reference_only", state: "current" },
+      }]);
+      let modelCalls = 0; const selectedTools: string[] = [];
       const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1024 }, {
-        createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, () => { modelCalls++; }); return agent; },
+        createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, event => {
+          modelCalls++; selectedTools.push(...event.message.content.flatMap(block => block.type === "toolUseBlock"
+            ? [["set_origin", "set_destination", "lookup_place", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
+        }); return agent; },
       });
       const result = await createStrandsServerRuntime(engine)({ executionId: turnId, userRequest: scenario.message,
         researchMode: { requestedMode: "standard", effectiveMode: "standard" },
@@ -71,7 +82,7 @@ describe.skipIf(!enabled)("small condition Tools with real Bedrock", () => {
         const fact = overlay.facts.find(f => f.target === target); return fact?.value.kind === "place_label" ? fact.value.label : undefined;
       };
       console.log(JSON.stringify({ case: index, modelId, status: result.status, modelCalls, readCalls: read.mock.calls.length, acceptedOperations: journal.size,
-        publicationError: result.publicationError }));
+        publicationError: result.publicationError, selectedTools }));
       expect.soft(result.status, `case ${index} must reply`).toBe("completed");
       expect.soft(value("origin"), `case ${index} origin`).toBe(scenario.origin);
       expect.soft(value("destination"), `case ${index} destination`).toBe(scenario.destination);
