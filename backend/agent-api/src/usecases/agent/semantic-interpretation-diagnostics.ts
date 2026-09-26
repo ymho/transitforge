@@ -17,6 +17,27 @@ export class SemanticInterpretationContractError extends ConversationModelError 
   }
 }
 
+
+
+export function parseSemanticInterpretationJson(text: string): unknown {
+  const direct = parseJson(text);
+  if (direct.ok) return direct.value;
+
+  const trimmed = text.trim();
+  const prefix = trimmed.startsWith("```json") ? "```json" : trimmed.startsWith("```") ? "```" : undefined;
+  if (!prefix || !trimmed.endsWith("```")) throw new SemanticInterpretationContractError("json_parse");
+  const body = trimmed.slice(prefix.length, -3).trim();
+  if (!body || body.includes("```")) throw new SemanticInterpretationContractError("json_parse");
+  const parsed = parseJson(body);
+  if (!parsed.ok) throw new SemanticInterpretationContractError("json_parse");
+  return parsed.value;
+}
+
+function parseJson(text: string): { ok: true; value: unknown } | { ok: false } {
+  try { return { ok: true, value: JSON.parse(text) }; }
+  catch { return { ok: false }; }
+}
+
 /** Privacy-safe structural classifier for semantic model output.
  * It returns only a closed failure category and never includes model/user content. */
 export function semanticInterpretationShapeFailure(value: unknown): Exclude<

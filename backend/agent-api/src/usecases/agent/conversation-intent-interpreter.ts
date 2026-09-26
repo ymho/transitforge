@@ -2,7 +2,7 @@ import { decodeUtteranceInterpretation, semanticInterpretationOutputContract, ty
 import type { ConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
 import type { ConversationModel } from "../../ports/conversation-model.js";
 import { ConversationModelError } from "../../ports/conversation-model.js";
-import { SemanticInterpretationContractError, semanticInterpretationShapeFailure } from "./semantic-interpretation-diagnostics.js";
+import { SemanticInterpretationContractError, parseSemanticInterpretationJson, semanticInterpretationShapeFailure } from "./semantic-interpretation-diagnostics.js";
 import type { ConversationWorkingState } from "@raiquora/agent/conversation-working-state";
 
 export interface ConversationIntentInterpreterInput {
@@ -45,9 +45,7 @@ export function createConversationIntentInterpreter(model: ConversationModel) {
       if (response.stopReason === "max_tokens") throw new ConversationModelError("truncation", "Semantic interpretation response is incomplete", false);
       throw new SemanticInterpretationContractError("provider_message");
     }
-    let value: unknown;
-    try { value = JSON.parse(response.message.content[0]!.text); }
-    catch { throw new SemanticInterpretationContractError("json_parse"); }
+    const value = parseSemanticInterpretationJson(response.message.content[0]!.text);
     const shapeFailure = semanticInterpretationShapeFailure(value);
     if (shapeFailure) throw new SemanticInterpretationContractError(shapeFailure);
     const interpretation = decodeUtteranceInterpretation(value);
