@@ -4,7 +4,6 @@ import {
   tool,
   type AgentConfig,
   type BaseModelConfig,
-  type InvokableAgent,
   type InvokableTool,
   type JSONSchema,
   type JSONValue,
@@ -43,7 +42,14 @@ export interface StrandsAgentRunResult {
   trace: AgentTrace;
 }
 
-export type StrandsAgentFactory = (config: AgentConfig) => InvokableAgent;
+export interface StrandsAgentLike {
+  invoke(args: string, options?: {
+    cancelSignal?: AbortSignal;
+    limits?: { turns?: number; totalTokens?: number; outputTokens?: number };
+  }): Promise<{ stopReason: string; toString(): string }>;
+}
+
+export type StrandsAgentFactory = (config: AgentConfig) => StrandsAgentLike;
 
 /**
  * Greenfield Agent v2 execution adapter.
