@@ -148,6 +148,20 @@ describe("StrandsAgentEngine", () => {
     expect(result.replyProposal).toEqual({ kind: "uncertainty" });
   });
 
+  it("uses one party Tool without guessing an adult/child split for a total-only party", async () => {
+    const { input } = setup();
+    const apply = vi.fn(async () => ({ receipt: {
+      version: "public-semantic-receipt-v1" as const, intentRevision: 4, speechAct: "inform" as const,
+      outcome: "accepted" as const, changes: [],
+    }, effectiveIntent: effectiveDestination("京都") }));
+    await new StrandsAgentEngine(options, { model: new ScriptedModel([
+      { tool: "set_party", input: { party: { kind: "count", people: 2 }, quote: "2人で" } },
+      submitted,
+    ]) }).run({ ...input, userRequest: "2人で京都へ行きたい", conditionController: { apply } });
+    expect(apply).toHaveBeenCalledOnce();
+    expect(apply).toHaveBeenCalledWith({ target: "party_size", party: { kind: "count", people: 2 }, quote: "2人で" });
+  });
+
   it("lets independent condition Tools use the same Application without an invocation-wide limiter", async () => {
     const { input } = setup();
     const apply = vi.fn(async () => ({ receipt: {

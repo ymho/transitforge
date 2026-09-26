@@ -96,7 +96,7 @@ jobs:
             all) cases=2; cycles=4 ;;
             tool-grounding|write-not-available) cases=1; cycles=4 ;;
             conversation-output) cases=4; cycles=6 ;;
-            condition-operations) cases=7; cycles=8 ;;
+            condition-operations) cases=12; cycles=8 ;;
             *) echo "Invalid CASE_ID: $CASE_ID" >&2; exit 2 ;;
           esac
           maximum_calls=$((cases * REPETITIONS * cycles))

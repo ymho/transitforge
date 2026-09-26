@@ -162,6 +162,7 @@ function decodeValue(value: unknown): InterpretedIntentValue | undefined {
 function targetForValue(kind: unknown): IntentTarget {
   if (kind === "place_label") return "destination";
   if (kind === "quantity" || kind === "quantity_range") return "duration";
+  if (kind === "party") return "party_size";
   if (kind === "money") return "budget";
   return "goal";
 }
@@ -199,7 +200,7 @@ function validateTargetValue(target: IntentTarget, value: IntentValue | undefine
   if ((target === "origin" || target === "destination") && !["place_label", "unknown"].includes(value.kind)) throw new Error("Place intent requires a label");
   if ((target === "start_date" || target === "end_date") && !["local_date", "local_month", "unknown"].includes(value.kind)) throw new Error("Date intent requires a date");
   if (target === "duration" && !["quantity", "quantity_range", "unknown"].includes(value.kind)) throw new Error("Duration intent requires a quantity");
-  if (target === "party_size" && !(value.kind === "quantity" && value.unit === "people") && value.kind !== "unknown") throw new Error("Party intent requires people");
+  if (target === "party_size" && !(value.kind === "quantity" && value.unit === "people") && value.kind !== "party" && value.kind !== "unknown") throw new Error("Party intent requires people or an explicit party");
   if (target === "budget" && !["money", "unknown"].includes(value.kind)) throw new Error("Budget intent requires money");
   if (target === "candidate_selection" && !["candidate_ref", "unknown"].includes(value.kind)) throw new Error("Candidate selection requires a verified presentation reference");
 }

@@ -11,11 +11,11 @@ import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { agentV2StructuredOutputSchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
 import { agentV2CandidateReferences, publicReplyField } from "@raiquora/agent/agent-v2-publication";
-import { placeConditionInputSchema, clearConditionInputSchema, ConditionUpdateRejectedError, type ConditionTarget, type ConversationConditionChange } from "@raiquora/agent/conversation-condition";
+import { placeConditionInputSchema, partyConditionInputSchema, clearConditionInputSchema, ConditionUpdateRejectedError, type ConversationConditionChange } from "@raiquora/agent/conversation-condition";
 import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
   type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
 
-export const strandsConditionToolNames = ["set_destination", "set_origin", "clear_destination", "clear_origin"] as const;
+export const strandsConditionToolNames = ["set_destination", "set_origin", "set_party", "clear_destination", "clear_origin", "clear_party"] as const;
 export interface StrandsAgentEngineOptions {
   modelId: string;
   region: string;
@@ -91,11 +91,11 @@ export class StrandsAgentEngine {
     });
     const controller = input.conditionController;
     if (controller) {
-      const apply = async (target: ConditionTarget, value: Omit<ConversationConditionChange, "target">, signal?: AbortSignal): Promise<JSONValue> => {
+      const apply = async (change: ConversationConditionChange, signal?: AbortSignal): Promise<JSONValue> => {
         if (signal?.aborted) throw new Error("execution_cancelled");
         if (intentUnavailable) throw new Error("condition_unavailable");
         try {
-          const accepted = await controller.apply({ target, ...value });
+          const accepted = await controller.apply(change);
           currentEffectiveIntent = accepted.effectiveIntent;
           return jsonValue({ ok: true, receipt: accepted.receipt, effectiveIntent: accepted.effectiveIntent });
         } catch (error) {
@@ -109,16 +109,22 @@ export class StrandsAgentEngine {
       tools.push(
         tool({ name: "set_destination", inputSchema: placeConditionInputSchema,
           description: "今回の相談の行き先を設定・訂正する。利用者が行き先を希望したら調査より先に使う。撤回はclear_destinationを使う。仮定の質問、比較だけ、変更なしでは使わない。Tripやプロフィールは変更しない。",
-          callback: (value, context) => apply("destination", value, context?.cancelSignal) }),
+          callback: (value, context) => apply({ target: "destination", ...value }, context?.cancelSignal) }),
         tool({ name: "set_origin", inputSchema: placeConditionInputSchema,
           description: "今回の相談の出発地を設定・訂正する。利用者が今回の出発地を伝えたら調査より先に使う。撤回はclear_originを使う。普段の出発地の推測、仮定の質問、変更なしでは使わない。Tripやプロフィールは変更しない。",
-          callback: (value, context) => apply("origin", value, context?.cancelSignal) }),
+          callback: (value, context) => apply({ target: "origin", ...value }, context?.cancelSignal) }),
+        tool({ name: "set_party", inputSchema: partyConditionInputSchema,
+          description: "今回の旅行の実際の人数条件を書き込む。利用者が現在の旅行条件として人数を採用・訂正した場合だけ使う。合計人数だけならparty.kind=countを使い、大人/子どもの内訳を推測しない。大人/子どもの人数が明示された場合だけparty.kind=compositionを使う。年齢・年代・関係性は扱わない。仮定・反実仮想・what-if・シナリオ比較、または現条件を維持すると明示された場合は絶対に使わない。プロフィールは変更しない。",
+          callback: (value, context) => apply({ target: "party_size", ...value }, context?.cancelSignal) }),
         tool({ name: "clear_destination", inputSchema: clearConditionInputSchema,
           description: "利用者が今回の行き先を取り消し・未定に戻すことを明示した場合だけ、その行き先条件を撤回する。他の条件は変えない。変更なし・仮定・比較の質問では使わない。",
-          callback: (value, context) => apply("destination", { ...value, place: null }, context?.cancelSignal) }),
+          callback: (value, context) => apply({ target: "destination", ...value, place: null }, context?.cancelSignal) }),
         tool({ name: "clear_origin", inputSchema: clearConditionInputSchema,
           description: "利用者が今回の出発地を取り消し・未定に戻すことを明示した場合だけ、その出発地条件を撤回する。他の条件は変えない。変更なし・仮定・比較の質問では使わない。",
-          callback: (value, context) => apply("origin", { ...value, place: null }, context?.cancelSignal) }),
+          callback: (value, context) => apply({ target: "origin", ...value, place: null }, context?.cancelSignal) }),
+        tool({ name: "clear_party", inputSchema: clearConditionInputSchema,
+          description: "利用者が今回の人数・同行者構成を取り消し・未定に戻すことを明示した場合だけparty条件を撤回する。プロフィールの普段の人数や同行者を復活・推測しない。仮定・比較では使わない。",
+          callback: (value, context) => apply({ target: "party_size", ...value, party: null }, context?.cancelSignal) }),
       );
     }
     const baseModel = this.model ?? new BedrockModel({ modelId: this.options.modelId, region: this.options.region,

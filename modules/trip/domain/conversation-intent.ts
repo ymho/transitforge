@@ -1,3 +1,6 @@
+import { validateTripParty } from "./trip-party";
+import type { ChildAgeGroup, TravelCompanion } from "./travel-profile";
+
 export const intentTargets = [
   "goal", "origin", "destination", "start_date", "end_date", "duration", "party_size",
   "budget", "experience", "pace", "accommodation", "transport", "fixed_schedule",
@@ -29,6 +32,7 @@ export type IntentValue =
   | { kind: "local_month"; month: string; expression: "month_offset"; anchorDate: string; resolverVersion: "calendar-v1" }
   | { kind: "quantity"; amount: number; unit: "nights" | "days" | "people" }
   | { kind: "quantity_range"; minimum: number; maximum: number; unit: "nights" | "days" | "people" }
+  | { kind: "party"; adults: number; children: readonly { ageGroup?: ChildAgeGroup; age?: number }[]; composition?: readonly TravelCompanion[] }
   | { kind: "money"; amount: number; currency?: string; basis?: "trip" | "per_person" | "per_night" | "per_room" }
   | { kind: "candidate_ref"; presentationId: string; presentationVersion: 1; candidateRef: string }
   | { kind: "unknown"; reason: IntentUnknownReason };
@@ -190,6 +194,13 @@ function parseValue(value: unknown): IntentValue {
   if (value.kind === "quantity_range" && only(value, ["kind", "minimum", "maximum", "unit"]) && nonnegativeInteger(value.minimum) && nonnegativeInteger(value.maximum) &&
       Number(value.minimum) <= Number(value.maximum) && ["nights", "days", "people"].includes(String(value.unit))) return { kind: "quantity_range", minimum: value.minimum, maximum: value.maximum,
         unit: value.unit as "nights" | "days" | "people" };
+  if (value.kind === "party" && only(value, ["kind", "adults", "children", "composition"]) && Array.isArray(value.children)) {
+    const party = { adults: value.adults, children: value.children,
+      ...(value.composition === undefined ? {} : { composition: value.composition }), source: "user" as const };
+    validateTripParty(party);
+    return { kind: "party", adults: party.adults, children: party.children.map((child) => ({ ...child })),
+      ...(party.composition === undefined ? {} : { composition: [...party.composition] }) };
+  }
   if (value.kind === "money" && only(value, ["kind", "amount", "currency", "basis"]) && finiteNonnegative(value.amount) &&
       (value.currency === undefined || typeof value.currency === "string" && /^[A-Z]{3}$/u.test(value.currency)) &&
       (value.basis === undefined || ["trip", "per_person", "per_night", "per_room"].includes(String(value.basis)))) return { kind: "money", amount: value.amount,
