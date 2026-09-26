@@ -39,6 +39,13 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
     testName: "keeps accepted intent when answer generation fails and does not reinterpret on retry",
   },
   {
+    id: "V2-INTENT-01",
+    kind: "v2_specific",
+    invariant: "a semantic delta accepted by the Application is visible to later read Tool validation in the same Strands loop",
+    testFile: "backend/agent-api/src/adapters/strands-agent-engine.test.ts",
+    testName: "uses an Application-accepted intent update for later read Tool validation in the same Strands loop",
+  },
+  {
     id: "V2-TOOL-01",
     kind: "v2_specific",
     invariant: "stale or mismatched Effective Intent is rejected before a Domain Tool executes",
