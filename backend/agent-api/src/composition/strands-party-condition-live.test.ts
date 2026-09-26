@@ -35,15 +35,15 @@ describe.skipIf(!enabled)("party condition Tool with real Bedrock", () => {
       return reduction.receipt;
     } };
     const scenarios = [
-      { message: "おはよう", party: undefined, writes: 0, update: false },
+      { message: "おはよう", party: undefined, writes: 0, update: false, scenario: false },
       { message: "今回は2人で行きます。大人か子どもかはまだ決めていません",
-        party: { kind: "quantity", amount: 2, unit: "people" } as const, writes: 1, update: true },
+        party: { kind: "quantity", amount: 2, unit: "people" } as const, writes: 1, update: true, scenario: false },
       { message: "やっぱり大人2人と子ども1人で行きます。子どもの年齢はまだ未定です",
-        party: { kind: "party", adults: 2, children: [{}] } as const, writes: 2, update: true },
+        party: { kind: "party", adults: 2, children: [{}] } as const, writes: 2, update: true, scenario: false },
       { message: "もし4人ならどうなる？今の人数は変えずに比較したい",
-        party: { kind: "party", adults: 2, children: [{}] } as const, writes: 2, update: false },
-      { message: "人数はいったん未定に戻して", party: undefined, writes: 3, update: true },
-      { message: "ありがとう", party: undefined, writes: 3, update: false },
+        party: { kind: "party", adults: 2, children: [{}] } as const, writes: 2, update: false, scenario: true },
+      { message: "人数はいったん未定に戻して", party: undefined, writes: 3, update: true, scenario: false },
+      { message: "ありがとう", party: undefined, writes: 3, update: false, scenario: false },
     ];
     for (const [index, scenario] of scenarios.entries()) {
       const turnId = `72700000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
@@ -54,7 +54,7 @@ describe.skipIf(!enabled)("party condition Tool with real Bedrock", () => {
       const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1_024 }, {
         createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, event => {
           modelCalls++; selectedTools.push(...event.message.content.flatMap(block => block.type === "toolUseBlock"
-            ? [["update_current_party", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
+            ? [["update_current_party", "consider_party_scenario", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
         }); return agent; },
       });
       const result = await createStrandsServerRuntime(engine)({ executionId: turnId, userRequest: scenario.message,
@@ -71,6 +71,7 @@ describe.skipIf(!enabled)("party condition Tool with real Bedrock", () => {
       expect.soft(party, `case ${index} party`).toEqual(scenario.party);
       expect.soft(journal.size, `case ${index} mutation count`).toBe(scenario.writes);
       expect.soft(selectedTools.includes("update_current_party"), `case ${index} writer selection`).toBe(scenario.update);
+      expect.soft(selectedTools.includes("consider_party_scenario"), `case ${index} scenario selection`).toBe(scenario.scenario);
     }
   }, 300_000);
 });
