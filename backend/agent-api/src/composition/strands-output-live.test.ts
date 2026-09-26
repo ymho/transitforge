@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { Agent, BeforeToolCallEvent, ModelMessageEvent, ToolResultEvent } from "@strands-agents/sdk";
-import { decodeUtteranceInterpretation } from "@raiquora/agent/semantic-interpretation";
+import { placeConditionInputSchema, clearConditionInputSchema } from "@raiquora/agent/conversation-condition";
 import { stateDynamoFixture, conversationId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, token } from "../adapters/cognito-token.fixture.js";
@@ -16,7 +16,7 @@ import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
  * test failures; soft assertions let later turns be measured without hiding them. */
 const enabled = process.env.AGENT_V2_LIVE === "true";
 const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
-const toolsToObserve = new Set(["update_intent", "search_place_media", "strands_structured_output"]);
+const toolsToObserve = new Set(["set_origin", "set_destination", "clear_origin", "clear_destination", "search_place_media", "strands_structured_output"]);
 describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () => {
   it("handles greeting, destination, correction and unavailable save through Conversation/replay", async () => {
     const { verifier } = cognitoTokenFixture();
@@ -47,16 +47,15 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
           tools: message.content.flatMap(block => block.type === "toolUseBlock" && toolsToObserve.has(block.name) ? [block.name] : []) }));
       });
       agent.addHook(BeforeToolCallEvent, ({ toolUse }) => {
-        if (toolUse.name !== "update_intent") return;
-        const value = decodeUtteranceInterpretation(toolUse.input);
-        console.log(JSON.stringify({ phase: "sdk-intent-input", decoded: !!value,
-          outcome: value?.outcome, operations: value?.operations.length }));
+        if (!["set_origin", "set_destination", "clear_origin", "clear_destination"].includes(toolUse.name)) return;
+        const schema = toolUse.name.startsWith("clear_") ? clearConditionInputSchema : placeConditionInputSchema;
+        console.log(JSON.stringify({ phase: "sdk-condition-input", valid: schema.safeParse(toolUse.input).success }));
       });
       agent.addHook(ToolResultEvent, ({ result }) => {
         const block = result.content.find(item => item.type === "jsonBlock");
         const payload = block?.type === "jsonBlock" && block.json && typeof block.json === "object" ? block.json as Record<string, unknown> : undefined;
         const error = payload?.error && typeof payload.error === "object" ? payload.error as Record<string, unknown> : undefined;
-        const code = ["intent_rejected", "intent_unavailable", "intent_update_limit", "invalid_input", "precondition_failed"].includes(String(error?.code)) ? error?.code : undefined;
+        const code = ["invalid_condition", "invalid_source", "condition_conflict", "condition_unavailable", "invalid_input", "precondition_failed"].includes(String(error?.code)) ? error?.code : undefined;
         console.log(JSON.stringify({ phase: "sdk-tool-result", status: result.status, code,
           candidateCount: Array.isArray(payload?.candidateReferences) ? payload.candidateReferences.length : undefined }));
       });

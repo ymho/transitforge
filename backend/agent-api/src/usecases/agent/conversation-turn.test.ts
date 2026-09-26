@@ -111,7 +111,7 @@ describe("Conversation turn Application", () => {
     expect(await f.app.runConversationTurn(input)).toEqual({ status: "completed", response: "案内" });
     expect(await f.app.runConversationTurn(input)).toEqual({ status: "completed", response: "案内" });
     expect(f.runAgentTurn).toHaveBeenCalledTimes(1);
-    expect(f.runAgentTurn).toHaveBeenCalledWith(expect.objectContaining({ principal, conversationId, userRequest: input.userRequest }), 1, undefined, expect.any(Function));
+    expect(f.runAgentTurn).toHaveBeenCalledWith(expect.objectContaining({ principal, conversationId, userRequest: input.userRequest }), 1, undefined, undefined);
     expect(JSON.stringify([...f.records.values()])).not.toContain("private");
   });
   it.each([

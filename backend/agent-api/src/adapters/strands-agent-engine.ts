@@ -11,11 +11,11 @@ import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { agentV2StructuredOutputSchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
 import { agentV2CandidateReferences, publicReplyField } from "@raiquora/agent/agent-v2-publication";
-import { decodeUtteranceInterpretation, semanticInterpretationOutputContract } from "@raiquora/agent/semantic-interpretation";
-import { ServerAgentIntentRejectedError, ServerAgentRuntimeExecutionError, type ServerAgentIntentController,
+import { placeConditionInputSchema, clearConditionInputSchema, ConditionUpdateRejectedError, type ConditionTarget, type ConversationConditionChange } from "@raiquora/agent/conversation-condition";
+import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
   type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
 
-export const strandsIntentToolName = "update_intent";
+export const strandsConditionToolNames = ["set_destination", "set_origin", "clear_destination", "clear_origin"] as const;
 export interface StrandsAgentEngineOptions {
   modelId: string;
   region: string;
@@ -35,7 +35,7 @@ export interface StrandsAgentRunInput {
   cancelSignal?: AbortSignal;
   limits?: { maxTurns?: number; maxToolCalls?: number; maxExecutionMs?: number; maxTotalTokens?: number; maxOutputTokens?: number };
   reserveToolCall?: () => boolean;
-  intentController?: ServerAgentIntentController;
+  conditionController?: ServerAgentConditionController;
 }
 export interface StrandsAgentRunResult {
   /** Not public text. The Application admits the typed proposal separately. */
@@ -77,9 +77,9 @@ export class StrandsAgentEngine {
   }
   async run(input: StrandsAgentRunInput): Promise<StrandsAgentRunResult> {
     if (!input.executionId.trim() || !input.userRequest.trim()) throw new Error("Strands Agent requires executionId and userRequest");
-    if (input.tools.descriptors().some(({ name }) => name === strandsIntentToolName)) throw new Error("Reserved Agent v2 tool name");
+    if (input.tools.descriptors().some(({ name }) => (strandsConditionToolNames as readonly string[]).includes(name))) throw new Error("Reserved Agent v2 tool name");
     const evidence: Evidence[] = [];
-    let currentEffectiveIntent = input.effectiveIntent, intentAttempted = false, intentUnavailable = false;
+    let currentEffectiveIntent = input.effectiveIntent, intentUnavailable = false;
     const trace = new AgentTraceRecorder(input.executionId, { omitContent: true });
     trace.taskStarted(input.userRequest);
     const budgetState = { toolCalls: 0, toolLimitReached: false };
@@ -89,34 +89,38 @@ export class StrandsAgentEngine {
       trace, evidence, budgetState, maxToolCalls: input.limits?.maxToolCalls,
       reserveToolCall: input.reserveToolCall, canExecute: () => !intentUnavailable,
     });
-    const intentController = input.intentController;
-    if (intentController) tools.push(tool({
-      name: strandsIntentToolName,
-      description: "Submit one bounded semantic delta from the current userMessage when it adds, corrects, retracts or narrows accepted travel conditions. Quotes must be exact substrings of the current userMessage. The Application validates and commits the delta before any later read Tool uses it. Do not call this for unchanged conversation or after the final structured result.",
-      inputSchema: semanticInterpretationOutputContract.schema as JSONSchema,
-      callback: async (value, context) => {
-        if (context?.cancelSignal.aborted) return jsonValue({ ok: false, error: { code: "execution_failed", retryable: true } });
-        if (intentAttempted) return jsonValue({ ok: false, error: { code: "intent_update_limit", retryable: false } });
-        intentAttempted = true;
-        const interpretation = decodeUtteranceInterpretation(value);
-        if (!interpretation || interpretation.outcome !== "delta") {
-          return jsonValue({ ok: false, error: { code: "intent_rejected", retryable: false } });
-        }
+    const controller = input.conditionController;
+    if (controller) {
+      const apply = async (target: ConditionTarget, value: Omit<ConversationConditionChange, "target">, signal?: AbortSignal): Promise<JSONValue> => {
+        if (signal?.aborted) throw new Error("execution_cancelled");
+        if (intentUnavailable) throw new Error("condition_unavailable");
         try {
-          const accepted = await intentController.apply(interpretation);
+          const accepted = await controller.apply({ target, ...value });
           currentEffectiveIntent = accepted.effectiveIntent;
           return jsonValue({ ok: true, receipt: accepted.receipt, effectiveIntent: accepted.effectiveIntent });
         } catch (error) {
-          if (error instanceof ServerAgentIntentRejectedError) {
-            return jsonValue({ ok: false, error: { code: "intent_rejected", retryable: false } });
-          }
-          // A commit or refresh may have failed after persistence. Never publish
-          // against the old snapshot or turn an ambiguous write into a rejection.
+          if (error instanceof ConditionUpdateRejectedError) throw error;
+          // The SDK reports Tool errors. An uncertain write additionally closes reads
+          // and publication; no recovery by reinterpreting or repairing the user input.
           intentUnavailable = true;
-          return jsonValue({ ok: false, error: { code: "intent_unavailable", retryable: false } });
+          throw new Error("condition_unavailable");
         }
-      },
-    }));
+      };
+      tools.push(
+        tool({ name: "set_destination", inputSchema: placeConditionInputSchema,
+          description: "今回の相談の行き先を設定・訂正する。利用者が行き先を希望したら調査より先に使う。撤回はclear_destinationを使う。仮定の質問、比較だけ、変更なしでは使わない。Tripやプロフィールは変更しない。",
+          callback: (value, context) => apply("destination", value, context?.cancelSignal) }),
+        tool({ name: "set_origin", inputSchema: placeConditionInputSchema,
+          description: "今回の相談の出発地を設定・訂正する。利用者が今回の出発地を伝えたら調査より先に使う。撤回はclear_originを使う。普段の出発地の推測、仮定の質問、変更なしでは使わない。Tripやプロフィールは変更しない。",
+          callback: (value, context) => apply("origin", value, context?.cancelSignal) }),
+        tool({ name: "clear_destination", inputSchema: clearConditionInputSchema,
+          description: "利用者が今回の行き先を取り消し・未定に戻すことを明示した場合だけ、その行き先条件を撤回する。他の条件は変えない。変更なし・仮定・比較の質問では使わない。",
+          callback: (value, context) => apply("destination", { ...value, place: null }, context?.cancelSignal) }),
+        tool({ name: "clear_origin", inputSchema: clearConditionInputSchema,
+          description: "利用者が今回の出発地を取り消し・未定に戻すことを明示した場合だけ、その出発地条件を撤回する。他の条件は変えない。変更なし・仮定・比較の質問では使わない。",
+          callback: (value, context) => apply("origin", { ...value, place: null }, context?.cancelSignal) }),
+      );
+    }
     const baseModel = this.model ?? new BedrockModel({ modelId: this.options.modelId, region: this.options.region,
       maxTokens: this.options.maxOutputTokens ?? 2_048, temperature: 0, stream: false });
     const agent = this.createAgent({

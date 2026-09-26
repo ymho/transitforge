@@ -48,12 +48,8 @@ export function strandsTurnInput(input: ServerAgentRuntimeInput): string {
     // These objects are the actual admitted observations, not model interpretations
     // or duplicated summaries from the previous runtime's decision context.
     evidence: input.initialEvidence ?? [],
-    capabilities: {
-      readTools: input.tools.descriptors()
-        .filter(({ name }) => input.tools.effect(name) === "read")
-        .map(({ name }) => name),
-      mutationTools: [],
-    },
+    // SDK Tool specs are the capability source of truth. Do not duplicate an
+    // incomplete registry view here (Application-local writers are added later).
   });
   const serialized = JSON.stringify({ userMessage: input.userRequest, application });
   // Fail explicitly rather than silently dropping dates, exclusions or corrections.

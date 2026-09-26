@@ -14,7 +14,7 @@ export interface ConversationTurnContinuity {
   evidence: import("@raiquora/agent/evidence-model").Evidence[];
 }
 export type BeginConversationTurn = { state: "started"; lease: ConversationTurnLease } |
-  { state: "intent_accepted"; lease: ConversationTurnLease; receipt: import("@raiquora/agent/conversation-intent-reducer").IntentApplicationReceipt } |
+  { state: "intent_accepted"; lease: ConversationTurnLease; receipt: import("@raiquora/agent/conversation-intent-reducer").IntentApplicationReceipt; conditionReceipts?: import("@raiquora/agent/conversation-intent-reducer").IntentApplicationReceipt[] } |
   { state: "completed"; result: ConversationTurnResult };
 export interface ConversationTurnRepository {
   beginTurn(identity: ConversationTurnIdentity, request: { userRequest: string; requestedResearchMode?: "standard" | "detailed"; researchTarget?: import("../contracts/server-state.js").ResearchTarget; tripId?: string; uiContext?: { itemId?: string; calendarDate?: string } }): Promise<BeginConversationTurn>;
