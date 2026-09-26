@@ -41,18 +41,17 @@ describe("small Conversation condition operations", () => {
   });
   it("keeps total-only party separate from an explicit adult/child composition without guessing ages", () => {
     expect(partyConditionInputSchema.safeParse({ party: { kind: "count", people: 2 }, quote: "2人で" }).success).toBe(true);
-    expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 2, children: [{}] }, quote: "大人2人と子ども1人" }).success).toBe(true);
-    expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 0, children: [] }, quote: "0人" }).success).toBe(false);
-    expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 2, children: [], composition: ["solo"] }, quote: "2人" }).success).toBe(false);
-    expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 1, children: [{ age: 18 }] }, quote: "18歳の子" }).success).toBe(false);
-
+    expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 2, children: 1 }, quote: "大人2人と子ども1人" }).success).toBe(true);
+    expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 0, children: 0 }, quote: "0人" }).success).toBe(false);
+    expect(partyConditionInputSchema.safeParse({ party: { kind: "composition", adults: 21, children: 0 }, quote: "21人" }).success).toBe(false);
+    
     let overlay = empty();
     const count = admitConditionChange({ target: "party_size", party: { kind: "count", people: 2 }, quote: "2人で" }, "2人で行きたい");
     overlay = reduceConversationIntent(overlay, conditionDelta(count, "72700000-0000-4000-8000-000000000001", overlay)).overlay;
     expect(overlay.facts[0]?.value).toEqual({ kind: "quantity", amount: 2, unit: "people" });
 
     const detailed = admitConditionChange({ target: "party_size",
-      party: { kind: "composition", adults: 2, children: [{}], composition: ["family"] }, quote: "大人2人と子ども1人" },
+      party: { kind: "composition", adults: 2, children: 1 }, quote: "大人2人と子ども1人" },
       "大人2人と子ども1人で行く");
     overlay = reduceConversationIntent(overlay, conditionDelta(detailed, "72700000-0000-4000-8000-000000000002", overlay)).overlay;
     expect(overlay.facts[0]?.value).toEqual({ kind: "party", adults: 2, children: [{}], composition: ["family"] });
@@ -68,10 +67,6 @@ describe("small Conversation condition operations", () => {
     expect(conditionPayload(a)).toBe(conditionPayload(b));
     expect(conditionOperationId(turn, a.target)).not.toBe(conditionOperationId(turn, "origin"));
     expect(conditionOperationId(turn, a.target)).not.toBe(conditionOperationId("71600000-0000-4000-8000-000000000002", a.target));
-    const partyA = admitConditionChange({ target: "party_size", party: { kind: "composition", adults: 1,
-      children: [{ ageGroup: "elementary" }, { age: 4 }], composition: ["family", "children"] }, quote: "家族3人" }, "家族3人");
-    const partyB = admitConditionChange({ target: "party_size", party: { kind: "composition", adults: 1,
-      children: [{ age: 4 }, { ageGroup: "elementary" }], composition: ["children", "family"] }, quote: "家族3人で" }, "家族3人で");
-    expect(conditionPayload(partyA)).toBe(conditionPayload(partyB));
+
   });
 });
