@@ -39,9 +39,9 @@ class IntentScenarioModel extends Model<BaseModelConfig> {
   }
 }
 function update(label = "京都", overrides: Record<string, unknown> = {}): ToolStep {
-  return { tool: "set_destination", input: { place: label, quote: label, ...overrides } };
+  return { tool: "update_destination", input: { action: "set", place: label, quote: label, ...overrides } };
 }
-const origin = (place = "大阪"): ToolStep => ({ tool: "set_origin", input: { place, quote: place } });
+const origin = (place = "大阪"): ToolStep => ({ tool: "update_origin", input: { action: "set", place, quote: place } });
 
 const read = (place = "京都"): Step => ({ tool: "lookup_intent_place", input: { place } });
 const uncertainty: Step = { tool: "strands_structured_output", input: { kind: "uncertainty" } };
@@ -216,7 +216,7 @@ it("overrides profile hints only in this Conversation and retracts without reviv
   const result = await first.app.runConversationTurn(input);
   expect(result.status).toBe("completed");
   expect(await test.state.profiles.get(test.principal)).toEqual(savedProfile);
-  const final = test.build([{ tool: "clear_origin", input: { quote: "出発地を未定に戻して" } }, uncertainty], "profile-clear");
+  const final = test.build([{ tool: "update_origin", input: { action: "clear", quote: "出発地を未定に戻して" } }, uncertainty], "profile-clear");
   await final.app.runConversationTurn({ ...input, turnId: "71600000-0000-4000-8000-000000000005", userRequest: "出発地を未定に戻して" });
   expect(await test.state.profiles.get(test.principal)).toEqual(savedProfile);
   const probe = test.build([uncertainty], "profile-probe");
