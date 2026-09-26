@@ -21,7 +21,7 @@ export function parsePublicPlacePresentation(value: unknown): PublicPlacePresent
   const cards = value.cards.map((card): PublicPlaceCard => {
     if (!record(card) || !exact(card, ["evidenceId", "placeRef", "title", "description", "sourceUrl"]) ||
         !text(card.evidenceId, 240) || !text(card.placeRef, 1000) || !/^place:[^:]+:.+$/u.test(card.placeRef) ||
-        !text(card.title, 160) || !text(card.description, 400) || !text(card.sourceUrl, 2048)) return invalid();
+        !text(card.title, 160) || !text(card.description, 400, true) || !text(card.sourceUrl, 2048)) return invalid();
     const sourceUrl = publicPlaceSourceUrl(card.sourceUrl);
     if (!sourceUrl || evidenceIds.has(card.evidenceId) || places.has(card.placeRef)) return invalid();
     evidenceIds.add(card.evidenceId); places.add(card.placeRef);
@@ -45,7 +45,8 @@ function record(value: unknown): value is Record<string, unknown> { return !!val
 function exact(value: Record<string, unknown>, keys: readonly string[]): boolean {
   return Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 }
-function text(value: unknown, maximum: number): value is string {
-  return typeof value === "string" && value.trim() === value && value.length > 0 && value.length <= maximum && !/[\u0000-\u001f\u007f]/u.test(value);
+function text(value: unknown, maximum: number, multiline = false): value is string {
+  const controls = multiline ? /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u : /[\u0000-\u001f\u007f]/u;
+  return typeof value === "string" && value.trim() === value && value.length > 0 && value.length <= maximum && !controls.test(value);
 }
 function invalid(): never { throw new Error("Invalid public place presentation"); }

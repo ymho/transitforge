@@ -34,6 +34,7 @@ export interface AgentRuntimeResult {
   turnObservation?: AgentTurnObservation;
   publicPlanPresentation?: import("./public-plan-presentation").PublicPlanPresentation;
   publicJourneyPresentation?: import("./public-journey-presentation").PublicJourneyPresentation;
+  publicPlacePresentation?: import("./public-place-presentation").PublicPlacePresentation;
   /** Content-free per-turn accounting. Safe to retain/replay with the turn receipt. */
   researchExecution?: import("./research-execution").ResearchExecutionOutcome;
   status: AgentRuntimeStatus;

@@ -1,0 +1,41 @@
+.public-place-presentation {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: .65rem;
+  margin-block: .8rem;
+  min-width: 0;
+  width: 100%;
+  font-family: var(--product-font);
+}
+.public-place-card {
+  min-width: 0;
+  padding: .85rem;
+  border: 1px solid var(--product-line);
+  border-radius: .75rem;
+  background: var(--product-surface-muted);
+  overflow-wrap: anywhere;
+}
+.public-place-card > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .75rem;
+}
+.public-place-card > header h3 { margin: 0; font: 650 .95rem/1.5 var(--product-font); }
+.public-place-card > header .public-place-source {
+  flex-shrink: 0;
+  color: var(--product-accent);
+  font-size: .75rem;
+  text-decoration: underline;
+  text-underline-offset: .2em;
+}
+.public-place-source:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.public-place-card > blockquote {
+  margin: .55rem 0 0;
+  padding: 0;
+  border: 0;
+  color: var(--product-muted);
+  font-size: .85rem;
+  line-height: 1.7;
+  white-space: pre-line;
+}

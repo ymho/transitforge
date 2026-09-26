@@ -8,6 +8,7 @@ import {
 } from "../../usecases/concierge/conversation-history-repository";
 import { renderPublicPlanPresentation } from "./public-plan-presentation-view";
 import { renderPublicJourneyPresentation } from "./public-journey-presentation-view";
+import { renderPublicPlacePresentation } from "./public-place-presentation-view";
 import {
   buildConversationFeedback,
   type ConversationFeedbackV2,
@@ -668,6 +669,7 @@ export function resolveAssistantMessage(
     if ("semanticReceipt" in response && response.semanticReceipt) item.append(renderSemanticReceipt(response.semanticReceipt));
     if ("publicPlanPresentation" in response && response.publicPlanPresentation) item.append(renderPublicPlanPresentation(response.publicPlanPresentation));
     if ("publicJourneyPresentation" in response && response.publicJourneyPresentation) item.append(renderPublicJourneyPresentation(response.publicJourneyPresentation));
+    if ("publicPlacePresentation" in response && response.publicPlacePresentation) item.append(renderPublicPlacePresentation(response.publicPlacePresentation));
   }
   // A question is metadata on the same turn, not a branch that hides its artifacts.
   if (typeof response !== "string" && "external" in response && response.external) {

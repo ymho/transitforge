@@ -50,6 +50,7 @@ export function createProductionAgentStream(options: {
         ...(result.semanticReceipt ? { semanticReceipt: result.semanticReceipt } : {}),
         ...(result.publicPlanPresentation ? { publicPlanPresentation: result.publicPlanPresentation } : {}),
         ...(result.publicJourneyPresentation ? { publicJourneyPresentation: result.publicJourneyPresentation } : {}),
+        ...(result.publicPlacePresentation ? { publicPlacePresentation: result.publicPlacePresentation } : {}),
         ...(result.researchExecution ? { researchExecution: result.researchExecution } : {}),
         ...(result.tripUpdateProposal ? { tripUpdateProposal: result.tripUpdateProposal } : {}),
         ...(result.consultationRequestProposal ? { consultationRequestProposal: result.consultationRequestProposal } : {}),

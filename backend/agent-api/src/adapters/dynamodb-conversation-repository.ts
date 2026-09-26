@@ -3,6 +3,7 @@ import { parseConsultationRequestProposal } from "@raiquora/trip/consultation-re
 import { parsePublicRequestProposal } from "@raiquora/trip/public-request-proposal";
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 import { parsePublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
+import { parsePublicPlacePresentation } from "@raiquora/agent/public-place-presentation";
 import { parsePublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 import { PutItemCommand, TransactWriteItemsCommand, type Put } from "@aws-sdk/client-dynamodb";
 import type { TrustedPrincipal } from "../contracts/trusted-principal.js";
@@ -80,16 +81,16 @@ export class DynamoDbConversationRepository implements ConversationRepository {
     const items = result.items.map((item): ConversationMessage => {
       try {
         const value: unknown = JSON.parse(item.payload?.S ?? "");
-        exactObject(value, ["sequence", "createdAt", "role", "text", "delivery", "semanticReceipt", "publicPlanPresentation", "publicJourneyPresentation", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"]);
+        exactObject(value, ["sequence", "createdAt", "role", "text", "delivery", "semanticReceipt", "publicPlanPresentation", "publicJourneyPresentation", "publicPlacePresentation", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"]);
         sequence(value.sequence); timestamp(value.createdAt);
         if (value.sequence < 1 || item.sk.S !== `${prefix}${sequenceKey(value.sequence)}` || item.storageVersion?.N !== "1") throw new Error();
         const [message] = messageInputs([{ role: value.role, text: value.text }]);
-        if ((value.delivery !== undefined || value.semanticReceipt !== undefined || value.publicPlanPresentation !== undefined || value.publicJourneyPresentation !== undefined || value.tripUpdateProposal !== undefined || value.consultationRequestProposal !== undefined || value.tripCostProposal !== undefined) && message.role !== "assistant") throw new Error();
+        if ((value.delivery !== undefined || value.semanticReceipt !== undefined || value.publicPlanPresentation !== undefined || value.publicJourneyPresentation !== undefined || value.publicPlacePresentation !== undefined || value.tripUpdateProposal !== undefined || value.consultationRequestProposal !== undefined || value.tripCostProposal !== undefined) && message.role !== "assistant") throw new Error();
         if ((value.tripUpdateProposal || value.tripCostProposal) && value.consultationRequestProposal) throw new Error();
         const consultationRequestProposal = value.consultationRequestProposal === undefined ? undefined : parseConsultationRequestProposal(value.consultationRequestProposal);
         if (consultationRequestProposal && consultationRequestProposal.conversationId !== id) throw new Error();
         const delivery = value.delivery === undefined ? undefined : deliveryStatus(value.delivery);
-        return { ...message, sequence: value.sequence, createdAt: value.createdAt, ...(delivery ? { delivery } : {}), ...(value.semanticReceipt !== undefined ? { semanticReceipt: parsePublicSemanticReceipt(value.semanticReceipt) } : {}), ...(value.publicPlanPresentation !== undefined ? { publicPlanPresentation: parsePublicPlanPresentation(value.publicPlanPresentation) } : {}), ...(value.publicJourneyPresentation !== undefined ? { publicJourneyPresentation: parsePublicJourneyPresentation(value.publicJourneyPresentation) } : {}), ...(value.tripCostProposal !== undefined ? { tripCostProposal: parsePublicCostProposal(value.tripCostProposal) } : {}),
+        return { ...message, sequence: value.sequence, createdAt: value.createdAt, ...(delivery ? { delivery } : {}), ...(value.semanticReceipt !== undefined ? { semanticReceipt: parsePublicSemanticReceipt(value.semanticReceipt) } : {}), ...(value.publicPlanPresentation !== undefined ? { publicPlanPresentation: parsePublicPlanPresentation(value.publicPlanPresentation) } : {}), ...(value.publicJourneyPresentation !== undefined ? { publicJourneyPresentation: parsePublicJourneyPresentation(value.publicJourneyPresentation) } : {}), ...(value.publicPlacePresentation !== undefined ? { publicPlacePresentation: parsePublicPlacePresentation(value.publicPlacePresentation) } : {}), ...(value.tripCostProposal !== undefined ? { tripCostProposal: parsePublicCostProposal(value.tripCostProposal) } : {}),
           ...(value.tripUpdateProposal !== undefined ? { tripUpdateProposal: parsePublicRequestProposal(value.tripUpdateProposal) } : {}), ...(consultationRequestProposal ? { consultationRequestProposal } : {}) };
       } catch { throw new StateError("unavailable"); }
     });
