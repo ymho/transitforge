@@ -22,7 +22,7 @@ it("autosaves text with the current revision without replacing the focused form"
   const controller = new ProfileUiController(client); await controller.hydrate(); configureTravelProfile(document, controller);
   expect(document.querySelector('[type="submit"]')).toBeNull();
   expect(document.querySelector(".profile-editor-actions")).toBeNull();
-  expect(document.querySelectorAll("[data-profile-section]")).toHaveLength(5);
+  expect(document.querySelectorAll("[data-profile-section]")).toHaveLength(4);
   expect(document.body.textContent).not.toMatch(/普段の人数|子どもの年代|普段の予算感|移動上限|行き先（定番/);
   const station = document.querySelector<HTMLInputElement>('[name="station"]')!; station.value = "上野"; station.dispatchEvent(new Event("input", { bubbles: true }));
   station.focus();
@@ -79,4 +79,39 @@ it("waits for IME composition and cancels a pending draft on account clear", asy
   expect(client.update).not.toHaveBeenCalled();
   expect(document.querySelector<HTMLInputElement>('[name="station"]')!.value).toBe("");
   vi.useRealTimers();
+});
+
+
+it("shows only origin, interests, pace and consented notes without rewriting hidden legacy preferences", async () => {
+  const old: UserProfile = { ...profile, home: { area: "神戸", carAvailable: true },
+    travelStyle: { pace: .45, novelty: .8, walkingTolerance: .65, crowdTolerance: .2 },
+    transport: { preferredMode: "car", maxTypicalTravelMinutes: 120 },
+    notes: { budget: "旧予算", lodging: "古いメモ", food: "食事メモ", avoidances: "配慮メモ" }, aiNoteFields: ["lodging"] };
+  const update = vi.fn(async (next: UserProfile) => ({ profile: next, revision: 4 }));
+  const controller = new ProfileUiController({ get: vi.fn(async () => ({ profile: old, revision: 3 })), update, delete: vi.fn() });
+  await controller.hydrate(); configureTravelProfile(document, controller);
+  expect(document.querySelectorAll("[data-profile-section]")).toHaveLength(4);
+  for (const name of ["area", "mode", "car", "walkingTolerance", "crowdTolerance", "transferTolerance", "earlyMorningTolerance", "lateNightTolerance", "drivingTolerance", "busTolerance"])
+    expect(document.querySelector(`[name="${name}"]`)).toBeNull();
+  expect(document.querySelector<HTMLInputElement>('[name="station"]')?.value).toBe("神戸");
+  document.querySelector<HTMLButtonElement>('[data-choice="interest-food"]')!.click();
+  await vi.waitFor(() => expect(update).toHaveBeenCalledOnce());
+  const saved = update.mock.calls[0]![0];
+  expect(saved.home).toEqual(old.home);
+  expect(saved.travelStyle).toEqual(old.travelStyle);
+  expect(saved.transport).toEqual(old.transport);
+  expect(saved.notes).toEqual(old.notes);
+  expect(saved.aiNoteFields).toEqual(["lodging"]);
+  expect(saved.companions).toEqual(old.companions);
+});
+
+it("clears the represented origin without reviving a hidden area fallback", async () => {
+  const old: UserProfile = { ...profile, home: { station: "京都駅", area: "京都", carAvailable: true } };
+  const update = vi.fn(async (next: UserProfile) => ({ profile: next, revision: 4 }));
+  const controller = new ProfileUiController({ get: vi.fn(async () => ({ profile: old, revision: 3 })), update, delete: vi.fn() });
+  await controller.hydrate(); configureTravelProfile(document, controller);
+  const station = document.querySelector<HTMLInputElement>('[name="station"]')!;
+  station.value = ""; station.dispatchEvent(new Event("change", { bubbles: true }));
+  await vi.waitFor(() => expect(update).toHaveBeenCalledOnce());
+  expect(update.mock.calls[0]![0].home).toEqual({ station: undefined, area: undefined, carAvailable: true });
 });

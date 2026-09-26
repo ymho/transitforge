@@ -3,12 +3,8 @@ import type { ProfileUiController } from "../../usecases/personal-state/profile-
 import type { ServerProfileState } from "../../usecases/personal-state/server-profile-client";
 
 type Draft = Omit<UserProfile, "version" | "updatedAt">;
-type Section = "origin" | "interests" | "pace" | "stay-food" | "avoidances";
-const styles: Array<[keyof UserProfile["travelStyle"], string]> = [
-  ["pace", "1日の過ごし方"], ["crowdTolerance", "混雑"], ["walkingTolerance", "長時間歩行"],
-  ["transferTolerance", "乗換"], ["earlyMorningTolerance", "早朝出発"], ["lateNightTolerance", "夜遅い到着"],
-  ["drivingTolerance", "車の運転"], ["busTolerance", "バス移動"],
-];
+const profileSections = ["origin", "interests", "pace", "notes"] as const;
+type Section = typeof profileSections[number];
 
 /** Account-scoped Profile editor. Hidden legacy v2 fields remain in the draft and
  * round-trip unchanged; only retained everyday preferences are editable here. */
@@ -31,7 +27,7 @@ export function configureTravelProfile(document: Document, client: ProfileUiCont
     });
   };
   const refreshSummaries = () => {
-    for (const section of ["origin", "interests", "pace", "stay-food", "avoidances"] as const) {
+    for (const section of profileSections) {
       const summary = page.querySelector<HTMLElement>(`[data-profile-summary="${section}"]`);
       if (summary) summary.textContent = sectionSummary(section, draft);
     }
@@ -114,28 +110,26 @@ export function configureTravelProfile(document: Document, client: ProfileUiCont
 
 function editor(draft: Draft): string {
   return `<form id="travel-profile-form"><p class="profile-scope-note">AI利用を選んだ好みだけを初期提案・比較の参考にします。今回の明示条件を常に優先します。</p>
-    ${section("origin", "出発地・移動", sectionSummary("origin", draft), `<div class="profile-field-grid">${field("station", "普段の出発駅", draft.home.station)}${field("area", "普段の出発エリア", draft.home.area)}
-      <label>優先する移動手段<select name="mode">${Object.entries({ "": "未設定", rail: "鉄道", car: "車", bus: "バス", walking: "徒歩" }).map(([key, label]) => `<option value="${key}" ${key === (draft.transport.preferredMode ?? "") ? "selected" : ""}>${label}</option>`).join("")}</select></label>
-      <label>車の利用<select name="car"><option value="" ${draft.home.carAvailable === undefined ? "selected" : ""}>未設定</option><option value="yes" ${draft.home.carAvailable === true ? "selected" : ""}>使える</option><option value="no" ${draft.home.carAvailable === false ? "selected" : ""}>使わない</option></select></label></div>`, true)}
+    ${section("origin", "普段の出発地", sectionSummary("origin", draft), field("station", "駅・エリア", profileOrigin(draft)), true)}
     ${section("interests", "興味", sectionSummary("interests", draft), `<p>複数選べます。今回の会話で追加・訂正した興味は別に扱います。</p><div class="profile-chips">${Object.entries(travelPreferenceLabels).map(([key, label]) => {
       const value = draft.preferences[key as keyof typeof travelPreferenceLabels];
       return `<input type="hidden" name="interest-${key}" value="${value ?? ""}"><button type="button" data-choice="interest-${key}" data-value="0.9" data-toggle="true" aria-pressed="${value !== undefined && value >= .7}">${label}</button>`;
     }).join("")}</div>`)}
-    ${section("pace", "ペース・移動の好み", sectionSummary("pace", draft), styles.map(([key, label]) => choice(key, label, draft.travelStyle[key], ["控えめ", "ほどほど", "高め"])).join(""))}
-    ${section("stay-food", "宿泊・食事", sectionSummary("stay-food", draft), `<div class="profile-field-grid">${note("lodging", "宿泊の好み", draft)}${note("food", "食事の好み", draft)}</div>`)}
-    ${section("avoidances", "避けたいこと", sectionSummary("avoidances", draft), note("avoidances", "避けたいこと・配慮してほしいこと", draft))}
+    ${section("pace", "ペース", sectionSummary("pace", draft), choice("pace", "1日の過ごし方", draft.travelStyle.pace, ["ゆっくり", "ほどほど", "しっかり"] ))}
+    ${section("notes", "配慮してほしいこと", sectionSummary("notes", draft), `<div class="profile-field-grid">${note("lodging", "宿泊の好み", draft)}${note("food", "食事の好み", draft)}${note("avoidances", "避けたいこと", draft)}</div>`)}
     <p class="profile-consent-explanation">設定はアカウントに保存します。各メモの「AIの提案に使う」がOFFなら本文をAIへ送りません。プロフィール変更で既存の旅程・予約は更新しません。</p></form>`;
 }
 function section(key: Section, label: string, summary: string, body: string, open = false): string {
   return `<details class="profile-section" data-profile-section="${key}" ${open ? "open" : ""}><summary><span>${label}</span><small data-profile-summary="${key}">${esc(summary)}</small><span class="profile-section-state" aria-hidden="true"></span></summary><div class="profile-section-body">${body}</div></details>`;
 }
 function sectionSummary(section: Section, draft: Draft): string {
-  if (section === "origin") return [draft.home.station, draft.home.area, draft.transport.preferredMode === "rail" ? "鉄道" : draft.transport.preferredMode === "car" ? "車" : draft.transport.preferredMode === "bus" ? "バス" : draft.transport.preferredMode === "walking" ? "徒歩" : undefined].filter(Boolean).join("・") || "未設定";
+  if (section === "origin") return profileOrigin(draft) || "未設定";
   if (section === "interests") return (Object.entries(draft.preferences) as Array<[keyof typeof travelPreferenceLabels, number]>).filter(([, value]) => value >= .7).map(([key]) => travelPreferenceLabels[key]).join("・") || "未設定";
-  if (section === "pace") return styles.filter(([key]) => draft.travelStyle[key] !== undefined).map(([, label]) => label).join("・") || "未設定";
-  if (section === "stay-food") return [draft.notes?.lodging ? "宿泊" : undefined, draft.notes?.food ? "食事" : undefined].filter(Boolean).join("・") || "未設定";
-  return draft.notes?.avoidances ? "設定あり" : "未設定";
+  if (section === "pace") return draft.travelStyle.pace === undefined ? "未設定" : draft.travelStyle.pace < .35 ? "ゆっくり" : draft.travelStyle.pace < .7 ? "ほどほど" : "しっかり";
+  return [draft.notes?.lodging ? "宿泊" : undefined, draft.notes?.food ? "食事" : undefined, draft.notes?.avoidances ? "配慮事項" : undefined].filter(Boolean).join("・") || "未設定";
 }
+function profileOrigin(draft: Draft): string { return draft.home.station?.trim() || draft.home.area?.trim() || ""; }
+
 function field(name: string, label: string, value = ""): string {
   return `<label>${label}<input name="${name}" type="text" value="${esc(value)}" maxlength="500"></label>`;
 }
@@ -151,14 +145,17 @@ function blankDraft(): Draft { return { home: {}, companions: { usual: [], child
 function profileDraft(profile: UserProfile): Draft { const { version: _, updatedAt: __, ...draft } = structuredClone(profile); return draft; }
 function readDraft(previous: Draft, data: FormData): Draft {
   const draft = structuredClone(previous), text = (key: string) => String(data.get(key) ?? "").trim();
-  draft.home.station = text("station") || undefined; draft.home.area = text("area") || undefined;
-  draft.home.carAvailable = text("car") === "" ? undefined : text("car") === "yes";
-  for (const [key] of styles) { if (text(key)) draft.travelStyle[key] = Number(text(key)); else delete draft.travelStyle[key]; }
-  // novelty, companions, party size, budget and typical travel limit are legacy-retained fields: this UI never rewrites them.
+  // Preserve the two legacy origin fields unless the visible origin was edited.
+  // An explicit clear must also remove the hidden area fallback.
+  if (text("station") !== profileOrigin(previous)) {
+    draft.home.station = text("station") || undefined;
+    draft.home.area = undefined;
+  }
+  if (text("pace")) draft.travelStyle.pace = Number(text("pace")); else delete draft.travelStyle.pace;
+  // Hidden old mobility/tolerance, party and budget fields round-trip unchanged.
   for (const key of Object.keys(travelPreferenceLabels) as Array<keyof typeof travelPreferenceLabels>) {
     if (text(`interest-${key}`)) draft.preferences[key] = Number(text(`interest-${key}`)); else delete draft.preferences[key];
   }
-  draft.transport.preferredMode = (text("mode") || undefined) as UserProfile["transport"]["preferredMode"];
   for (const key of ["lodging", "food", "avoidances"] as const) {
     if (text(key)) (draft.notes ??= {})[key] = text(key); else if (draft.notes) delete draft.notes[key];
   }

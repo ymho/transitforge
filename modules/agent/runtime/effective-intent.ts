@@ -244,20 +244,8 @@ function userProfileHints(profile: UserProfile, profileRevision?: number): { hin
       { type: "experience", intent: "prefer", text: travelPreferenceLabels[preference], preference, weight });
   }
   if (profile.travelStyle.pace !== undefined) add("travelStyle.pace", "pace", "pace", { type: "pace", value: profile.travelStyle.pace });
-  if (profile.transport.preferredMode) add("transport.preferredMode", "transport", "mobility:modes",
-    { type: "mobility", modes: [profile.transport.preferredMode === "walking" ? "walk" : profile.transport.preferredMode] });
-  if (profile.home.carAvailable !== undefined) add("home.carAvailable", "transport", "mobility:carAvailable",
-    { type: "mobility", carAvailable: profile.home.carAvailable });
-  const toleranceLabels: Partial<Record<keyof UserProfile["travelStyle"], string>> = {
-    crowdTolerance: "混雑", walkingTolerance: "長時間歩行", transferTolerance: "乗換",
-    earlyMorningTolerance: "早朝出発", lateNightTolerance: "夜遅い到着", drivingTolerance: "車の運転", busTolerance: "バス移動",
-  };
-  for (const [key, label] of Object.entries(toleranceLabels) as Array<[keyof UserProfile["travelStyle"], string]>) {
-    const value = profile.travelStyle[key];
-    if (value !== undefined) add(`travelStyle.${key}`, key === "transferTolerance" || key === "walkingTolerance" || key === "drivingTolerance" || key === "busTolerance"
-      ? "transport" : "experience", `tolerance:${key}`,
-      { type: "experience", intent: value <= 0.35 ? "avoid" : "prefer", text: `${label}の許容度`, weight: value });
-  }
+  // The editable always-on profile is origin, interests, pace and consented notes.
+  // Hidden old mobility/tolerance settings remain stored, but do not silently steer AI.
   for (const key of ["lodging", "food", "avoidances"] as const) {
     const value = profile.notes?.[key]?.trim();
     if (value && profile.aiNoteFields?.includes(key)) add(`notes.${key}`, key === "lodging" ? "accommodation" : "experience", `note:${key}`,
