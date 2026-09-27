@@ -11,11 +11,12 @@ import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { agentV2StructuredOutputSchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
 import { agentV2CandidateReferences, publicReplyField } from "@raiquora/agent/agent-v2-publication";
-import { placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, travelPeriodUpdateInputSchema, tripScenarioInputSchema, admitTripScenario, ConditionUpdateRejectedError, type ConversationConditionInput } from "@raiquora/agent/conversation-condition";
+import { placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, travelPeriodUpdateInputSchema, budgetConditionUpdateInputSchema,
+  tripScenarioInputSchema, admitTripScenario, ConditionUpdateRejectedError, type ConversationConditionInput } from "@raiquora/agent/conversation-condition";
 import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
   type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
 
-export const strandsConditionToolNames = ["update_current_destination", "update_current_origin", "update_current_party", "update_current_travel_period", "consider_trip_scenario"] as const;
+export const strandsConditionToolNames = ["update_current_destination", "update_current_origin", "update_current_party", "update_current_travel_period", "update_current_budget", "consider_trip_scenario"] as const;
 export interface StrandsAgentEngineOptions {
   modelId: string;
   region: string;
@@ -127,8 +128,13 @@ export class StrandsAgentEngine {
           callback: (value, context) => apply(value.action === "set"
             ? { target: "travel_period", period: value.period!, quote: value.quote }
             : { target: "travel_period", period: null, quote: value.quote }, context?.cancelSignal) }),
+        tool({ name: "update_current_budget", inputSchema: budgetConditionUpdateInputSchema,
+          description: "今回の旅行で実際に採用する予算条件を永続更新する。設定・訂正はaction=set、予算を未定に戻す明示はaction=clear。amountは通貨のmajor unitで指定し、5万円は50000。currencyは利用者が通貨を明示した場合だけ、basisは旅行全体か1人あたりかを明示した場合だけ指定する。Applicationがquoteから金額・通貨・basisを再検証し、モデルの推測は保存しない。what-if・比較ではconsider_trip_scenarioを使う。プロフィールは変更しない。",
+          callback: (value, context) => apply(value.action === "set"
+            ? { target: "budget", budget: value.budget!, quote: value.quote }
+            : { target: "budget", budget: null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "consider_trip_scenario", inputSchema: tripScenarioInputSchema,
-          description: "現在の実旅行条件を一切変更せず、人数または旅行期間の仮定・反実仮想・what-if・シナリオ比較を考える非永続Tool。条件writerの代わりに使い、保存・A commit・Intent revision更新を行わない。",
+          description: "現在の実旅行条件を一切変更せず、人数・旅行期間・予算の仮定、反実仮想、what-if、シナリオ比較を考える非永続Tool。条件writerの代わりに使い、保存・A commit・Intent revision更新を行わない。",
           callback: (value, context) => {
             if (context?.cancelSignal.aborted) throw new Error("execution_cancelled");
             const scenario = admitTripScenario(value, input.userRequest);
