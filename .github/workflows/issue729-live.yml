@@ -1,5 +1,5 @@
 name: Agent v2 / Dialogue output verification
-# bounded free conversation rerun
+# bounded free conversation rerun after deterministic contract update
 on:
   push:
     branches: [feat/agent-v2-party-cohorts-729]
