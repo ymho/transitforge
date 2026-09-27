@@ -87,7 +87,7 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
       const receipt = context?.workingState?.presentations.find((value) => value.presentationId === target.presentationId);
       const taskTarget = context?.taskContext?.target;
       const workingTarget = context?.workingState?.target;
-      if (!receipt || !receipt.target || target.tripId !== receipt.target.tripId || target.baseTripRevision !== receipt.baseTripRevision ||
+      if (!receipt || !receipt.target || target.tripId !== receipt.target.tripId || target.baseTripRevision !== receipt.target.baseTripRevision ||
           target.tripId !== workingTarget?.tripId || target.baseTripRevision !== workingTarget?.tripRevision ||
           target.tripId !== undefined && (scope.tripId !== target.tripId || taskTarget?.kind !== "trip" || taskTarget.tripId !== target.tripId) ||
           target.baseTripRevision !== undefined && (taskTarget?.kind !== "trip" || taskTarget.tripRevision !== target.baseTripRevision) ||
