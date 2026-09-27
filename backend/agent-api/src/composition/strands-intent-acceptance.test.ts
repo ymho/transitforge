@@ -211,9 +211,11 @@ it("does not revive an old conversation condition after the Trip was manually ed
   const first = test.build([update("京都"), uncertainty], "manual-edit-first");
   await first.app.runConversationTurn({ ...test.input, userRequest: "京都に行きたい" });
   const current = (await test.trips.repository.get(test.principal, stateMetadata().tripId))!;
-  const request = { ...current.request, constraints: current.request.constraints.map((constraint) =>
-    constraint.requirement.type === "destinations" ? { ...constraint, requirement: { ...constraint.requirement,
-      places: [{ name: "神戸", sources: [] }] } } : constraint) };
+  const request = { ...current.request, constraints: current.request.constraints.map((constraint) => {
+    if (constraint.requirement.type !== "destinations") return constraint;
+    const { semantic: _semantic, ...manual } = constraint;
+    return { ...manual, requirement: { ...constraint.requirement, places: [{ name: "神戸", sources: [] }] } };
+  }) };
   const proposal = { tripId: current.id, baseRevision: current.revision, summary: "手動で行き先を神戸へ変更",
     patches: [{ type: "request" as const, request }] };
   await test.trips.repository.applyMutation(test.principal, { tripId: current.id, baseRevision: current.revision,
