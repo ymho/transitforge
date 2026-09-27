@@ -176,7 +176,7 @@ const serverConversationClient = new HttpServerConversationClient();
 const conversationUi = new ConversationUiController(serverConversationClient, canUsePersonalState);
 const profileUi = new ProfileUiController(new HttpServerProfileClient(), canUsePersonalState);
 const unsignedConversation: ConversationSession = {
-  id: "ui-unauthenticated", title: "新しい会話", scope: "general", summary: "", resolvedTopics: [], pendingTopics: [],
+  id: "ui-unauthenticated", title: "新しい旅", scope: "trip", summary: "", resolvedTopics: [], pendingTopics: [],
   createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
 };
 let activeConversationSession = unsignedConversation;
