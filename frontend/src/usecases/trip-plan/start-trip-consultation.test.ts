@@ -18,16 +18,14 @@ const run = (f: ReturnType<typeof fixture>, prompt = "出雲大社に行きた�
   archiveTrip: f.archiveTrip, createConversation: f.createConversation, activate: f.activate, current: f.current, submit: f.submit,
 });
 it("creates an inspiration Trip before its history stream and sends the first prompt only after both are active", async () => {
-  const f = fixture(), order: string[] = [];
-  f.createTrip.mockImplementation(async trip => { order.push("trip"); return structuredClone(trip); });
-  f.createConversation.mockImplementation(async metadata => { order.push("conversation"); return { id: "conversation", ...metadata, summary: "", resolvedTopics: [], pendingTopics: [], createdAt: "2026-09-27T12:00:00.000Z", updatedAt: "2026-09-27T12:00:00.000Z" }; });
-  f.activate.mockImplementation(async id => { order.push("activate"); (f as any).current = () => ({ conversationId: id, tripId: f.tripId }); });
-  f.submit.mockImplementation(() => { order.push("submit"); });
+  const f = fixture();
   const result = await run(f);
-  expect(order).toEqual(["trip","conversation","activate","submit"]);
   expect(result.trip).toMatchObject({ id: f.tripId, planningState: "inspiration", items: [], request: { constraints: [], assumptions: [] } });
   expect(f.createConversation).toHaveBeenCalledWith(expect.objectContaining({ scope: "trip", tripId: f.tripId }));
   expect(f.submit).toHaveBeenCalledExactlyOnceWith("出雲大社に行きたい");
+  expect(f.createTrip.mock.invocationCallOrder[0]).toBeLessThan(f.createConversation.mock.invocationCallOrder[0]!);
+  expect(f.createConversation.mock.invocationCallOrder[0]).toBeLessThan(f.activate.mock.invocationCallOrder[0]!);
+  expect(f.activate.mock.invocationCallOrder[0]).toBeLessThan(f.submit.mock.invocationCallOrder[0]!);
 });
 it("never creates a standalone Conversation when Trip creation fails", async () => {
   const f = fixture(); f.createTrip.mockRejectedValueOnce(new Error("trip unavailable"));
