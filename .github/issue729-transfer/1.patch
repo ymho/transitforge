@@ -1,0 +1,71 @@
+diff --git a/backend/agent-api/src/usecases/agent-v2-system-prompt.ts b/backend/agent-api/src/usecases/agent-v2-system-prompt.ts
+index 120e4c311692e110653e29d52db3ec53292f4ce8..f4d4074410483736eb93217456d49c7906c07c7c 100644
+--- a/backend/agent-api/src/usecases/agent-v2-system-prompt.ts
++++ b/backend/agent-api/src/usecases/agent-v2-system-prompt.ts
+@@ -7,2 +7,2 @@ export const agentV2SystemPrompt = [
+-  "userMessageで今回の行き先・出発地・人数/同行者構成・旅行期間・予算が実際の条件として指定・訂正・撤回されたら、条件ごとにupdate_current_destination/update_current_origin/update_current_party/update_current_travel_period/update_current_budgetを最大1回使い、その条件の最終状態を受理してから調査します。設定・訂正はaction=set、明示された未定戻しはaction=clearです。訂正をclear→setの2操作に分けません。placeは発言の地名をそのまま、quoteは根拠となる完全な部分文字列にします。人数だけ分かる時はupdate_current_partyのcountを使い、大人/子どもの内訳を推測しません。大人/子どもの人数が明示された時だけcompositionを使い、年齢・年代・関係性はこのToolでは扱いません。旅行期間は開始日・終了日・日数を1つの条件として扱い、利用者が明示した要素だけをupdate_current_travel_periodへ渡します。日付はcalendar_dateでdayを必須とし、yearは利用者が年を明示した場合だけ設定します。年がなければApplicationが基準日以降で最初に来る月日を決めます。旅行期間の外側quoteを根拠にし、今回発言にない以前の日数などを持ち越しません。今日/明日/明後日はrelative_dateを使い、終了日・日数をモデルで補完しません。予算はamountをmajor unitで表し、5万円なら50000です。currencyは円・ユーロ等が明示された場合だけ、basisは「1人あたり」「全部で」等で明示された場合だけ指定します。currency/basisを文脈から推測しません。条件writerは利用者が実際の今回条件として採用・訂正した内容だけに使い、仮定・反実仮想・what-if・シナリオ比較や「今の条件は変えない」という依頼では更新しません。複数の独立条件は各update Toolを1回ずつ使い、返されたeffectiveIntentを以後のread Toolに使います.",
+-  "同行者詳細は、誰がどの範囲に参加するか決まっている内容だけを更新します。対象が未決定ならその条件は保留し、clarificationのcommentaryで自然に確認・説明します。無関係な確定条件は同じturnで更新できます。取消しと新条件は最終的に残す集合で1回だけ置換し、全詳細を撤回して何も残さない時だけfinalCohorts=nullです。人数維持のためのwriterや人数合わせの集団は不要です。",
++  "userMessageで今回の行き先・出発地・人数/同行者構成・旅行期間・予算が実際の条件として指定・訂正・撤回されたら、条件ごとにupdate_current_destination/update_current_origin/update_current_party/update_current_travel_period/update_current_budgetを最大1回使い、その条件の最終状態を受理してから調査します。設定・訂正はaction=set、明示された未定戻しはaction=clearです。訂正をclear→setの2操作に分けません。placeは発言の地名をそのまま、quoteは根拠となる完全な部分文字列にします。人数だけ分かる時はupdate_current_partyのcountを使い、大人/子どもの内訳を推測しません。大人/子どもの人数が明示された時だけcompositionを使い、年齢・年代・関係性はこのToolでは扱いません。旅行期間は開始日・終了日・日数を1つの条件として扱い、利用者が明示した要素だけをupdate_current_travel_periodへ渡します。日付はcalendar_dateでdayを必須とし、yearは利用者が年を明示した場合だけ設定します。年がなければApplicationが基準日以降で最初に来る月日を決めます。旅行期間の外側quoteを根拠にし、今回発言にない以前の日数などを持ち越しません。今日/明日/明後日はrelative_dateを使い、終了日・日数をモデルで補完しません。予算はamountをmajor unitで表し、5万円なら50000です。currencyは円・ユーロ等が明示された場合だけ、basisは「1人あたり」「全部で」等で明示された場合だけ指定します。currency/basisを文脈から推測しません。条件writerは利用者が実際の今回条件として採用・訂正した内容だけに使い、仮定・反実仮想・what-if・シナリオ比較や「今の条件は変えない」という依頼では更新しません。複数の独立条件は各update Toolを1回ずつ使います。writerがstatus=appliedを返した条件は同じターンで再度更新しません。以後のread ToolはApplicationが最新の受理済み条件へ自動的に拘束するため、モデルがeffectiveIntentを運搬・再設定する必要はありません。",
++  "同行者詳細は、誰がどの範囲に参加するか決まっている内容だけを更新します。対象が未決定ならその条件は保留し、clarificationのtextで自然に確認・説明します。無関係な確定条件は同じturnで更新できます。取消しと新条件は最終的に残す集合で1回だけ置換し、全詳細を撤回して何も残さない時だけfinalCohorts=nullです。人数維持のためのwriterや人数合わせの集団は不要です。",
+@@ -12 +12 @@ export const agentV2SystemPrompt = [
+-  "consider_trip_scenarioの結果は仮定入力の確認で、外部事実の回答用Evidenceではありません。外部情報がない時も、仮定を置いた考え方や未確認の点をuncertaintyのcommentaryで説明して会話を完了できます。実料金・空室・時刻を推測して埋めません。",
++  "consider_trip_scenarioの結果は仮定入力の確認で、外部事実の回答用Evidenceではありません。外部情報がない時も、仮定を置いた考え方や未確認の点をuncertaintyのtextで説明して会話を完了できます。実料金・空室・時刻を推測して埋めません。",
+@@ -14 +14 @@ export const agentV2SystemPrompt = [
+-  "条件update ToolのreceiptとeffectiveIntentは受理済み状態で、外部事実のEvidenceではありません。条件を受け止める返答はconversation・message=acknowledgementのcommentaryへ自然文を書きます。成功した内容だけを説明し、拒否された操作を反映済みと言いません。Applicationは実際に受理した変更内容を別に表示します。Evidence IDを捏造しません。",
++  "条件update ToolのreceiptとeffectiveIntentは受理済み状態で、外部事実のEvidenceではありません。条件を受け止める返答はconversation・message=acknowledgementのtextへ自然文を書きます。成功した内容だけを説明し、拒否された操作を反映済みと言いません。Applicationは実際に受理した変更内容を別に表示します。Evidence IDを捏造しません。",
+@@ -19 +19 @@ export const agentV2SystemPrompt = [
+-  "conversation・clarification・uncertaintyにもcommentaryで利用者への短い自由文を書けます。挨拶・お礼・受け止めはconversationのmessage=greeting/thanks/acknowledgement、確認はclarificationのtargetを選びます。未決定なら無理に即答を求めず保留と説明して構いません。application.conversation.messagesは会話履歴です。短い補足や『逆でした』は直前の質問・回答と現在値に照らして理解し、変更対象が特定できなければ確認します。過去のAIの説明を実行記録とは扱いません。",
++  "conversation・clarification・uncertaintyにもtextで利用者への短い自由文を書けます。挨拶・お礼・受け止めはconversationのmessage=greeting/thanks/acknowledgement、確認はclarificationのtargetを選びます。未決定なら無理に即答を求めず保留と説明して構いません。application.conversation.messagesは会話履歴です。短い補足や『逆でした』は直前の質問・回答と現在値に照らして理解し、変更対象が特定できなければ確認します。過去のAIの説明を実行記録とは扱いません。",
+diff --git a/docs/architecture/agent-v2-publication.md b/docs/architecture/agent-v2-publication.md
+index 482ebb2362193c49284b47bcc1b9dec41aa6e7e3..986fb7f5a630ea67f8bba75332b2247688f8cd77 100644
+--- a/docs/architecture/agent-v2-publication.md
++++ b/docs/architecture/agent-v2-publication.md
+@@ -41 +41 @@ SDK 1.18.0は不正な構造化出力にvalidation feedbackを返す。plain tex
+-`conversation`、`clarification`、`uncertainty`に任意の`commentary`（1〜1200文字）を追加する。
++`conversation`、`clarification`、`uncertainty`に任意の`text`（1〜600文字）を追加する。
+@@ -60 +60 @@ Applicationが「今回の相談条件（反映済み）」として変更内容
+-commentaryを持つ文脈付き質問はモデルが判断し、未確定の対象は更新しない。一方、別の確定済み
++textを持つ文脈付き質問はモデルが判断し、未確定の対象は更新しない。一方、別の確定済み
+diff --git a/modules/agent/runtime/agent-v2-publication.test.ts b/modules/agent/runtime/agent-v2-publication.test.ts
+index d3c0e465a401ae333b4b6ae5f42289308553c78b..70d6fb9a3a04ecd81934a8a43edaada058ea3453 100644
+--- a/modules/agent/runtime/agent-v2-publication.test.ts
++++ b/modules/agent/runtime/agent-v2-publication.test.ts
+@@ -74,7 +74,9 @@ describe("Agent v2 publication contract", () => {
+-  it.each(["保存しました。", "保存しておきます。", "保存を承りました。", "<thinking>private</thinking>"])(
+-    "does not admit arbitrary prose through a model-declared reply kind: %s", (text) => {
+-      for (const draft of [{ kind: "conversation", message: "acknowledgement", text },
+-        { kind: "unavailable", operation: "save", text }, { ...proposal, text }]) {
+-        expect(() => admitAgentV2Reply(draft, context())).toThrow("invalid_proposal");
+-      }
+-    });
++  it("keeps free conversation in its declared variant and still rejects internal markup or extra fields", () => {
++    for (const text of ["保存しました。", "保存しておきます。", "保存を承りました。"]) {
++      expect(admitAgentV2Reply({ kind: "conversation", message: "acknowledgement", text }, context()).text).toContain("保存");
++      expect(() => admitAgentV2Reply({ kind: "unavailable", operation: "save", text }, context())).toThrow("invalid_proposal");
++      expect(() => admitAgentV2Reply({ ...proposal, text }, context())).toThrow("invalid_proposal");
++    }
++    expect(() => admitAgentV2Reply({ kind: "conversation", message: "acknowledgement",
++      text: "<thinking>private</thinking>" }, context())).toThrow("unsafe_content");
++  });
+@@ -172,3 +174,3 @@ it.each([
+-  const commentary = "帰る方はまだ未定ですね。決まってから参加範囲を反映しましょう。";
+-  const result = admitAgentV2Reply({ ...draft, commentary }, { executionId: "dialogue", evidence: [] });
+-  expect(result.text).toBe(commentary);
++  const text = "帰る方はまだ未定ですね。決まってから参加範囲を反映しましょう。";
++  const result = admitAgentV2Reply({ ...draft, text }, { executionId: "dialogue", evidence: [] });
++  expect(result.text).toBe(text);
+@@ -179 +181 @@ it.each([
+-  expect(JSON.stringify(result.proof)).not.toContain(commentary);
++  expect(JSON.stringify(result.proof)).not.toContain(text);
+@@ -181,4 +183,4 @@ it.each([
+-    expect(() => admitAgentV2Reply({ ...draft, commentary, ...extra }, { executionId: "dialogue", evidence: [] })).toThrow("invalid_proposal");
+-  for (const text of ["<thinking>private</thinking>", "\u0000hidden", " ", "x".repeat(1201)])
+-    expect(() => admitAgentV2Reply({ ...draft, commentary: text }, { executionId: "dialogue", evidence: [] })).toThrow();
+-  const html = admitAgentV2Reply({ ...draft, commentary: '<script>x</script>[x](javascript:bad)' }, { executionId: "dialogue", evidence: [] });
++    expect(() => admitAgentV2Reply({ ...draft, text, ...extra }, { executionId: "dialogue", evidence: [] })).toThrow("invalid_proposal");
++  for (const text of ["<thinking>private</thinking>", "\u0000hidden", " ", "x".repeat(601)])
++    expect(() => admitAgentV2Reply({ ...draft, text: text }, { executionId: "dialogue", evidence: [] })).toThrow();
++  const html = admitAgentV2Reply({ ...draft, text: '<script>x</script>[x](javascript:bad)' }, { executionId: "dialogue", evidence: [] });
+@@ -189 +191 @@ it("allows a contextual clarification about a known destination rather than repe
+-  expect(admitAgentV2Reply({ kind: "clarification", target: "destination", commentary: "京都のどのエリアを考えていますか？" },
++  expect(admitAgentV2Reply({ kind: "clarification", target: "destination", text: "京都のどのエリアを考えていますか？" },
