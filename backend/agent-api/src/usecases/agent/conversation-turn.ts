@@ -94,12 +94,9 @@ export function createConversationTurnApplication(dependencies: {
       if (runtime.status !== "completed" && runtime.status !== "follow_up") {
         throw new ConversationTurnExecutionError(runtime.status === "limit_reached" ? "limit_reached" : "agent_failed");
       }
-      const autoAdoptConditionProposal = runtime.tripUpdateProposal?.intentBinding &&
+      const autoAdoptConditionProposal = !!dependencies.adoptTripProposal && runtime.tripUpdateProposal?.intentBinding &&
         runtime.tripUpdateProposal.patches.length > 0 && runtime.tripUpdateProposal.patches.every(({ type }) => type === "request");
-      if (autoAdoptConditionProposal) {
-        if (!dependencies.adoptTripProposal) throw new StateError("unavailable");
-        await dependencies.adoptTripProposal(identity, begun.lease, runtime.tripUpdateProposal!);
-      }
+      if (autoAdoptConditionProposal) await dependencies.adoptTripProposal!(identity, begun.lease, runtime.tripUpdateProposal!);
       if (acceptedReceipt) {
         // "Reflected" is public only after a verified request proposal was adopted.
         // Partial values without a Trip representation remain internal until #761 persists them.
