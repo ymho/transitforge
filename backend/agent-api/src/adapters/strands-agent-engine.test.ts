@@ -148,6 +148,22 @@ describe("StrandsAgentEngine", () => {
     expect(result.replyProposal).toEqual({ kind: "uncertainty" });
   });
 
+  it("applies each durable condition target at most once per turn even if the model repeats the writer", async () => {
+    const { input } = setup();
+    const apply = vi.fn(async () => ({
+      receipt: { version: "public-semantic-receipt-v1" as const, intentRevision: 4, speechAct: "inform" as const,
+        outcome: "accepted" as const, changes: [] },
+      effectiveIntent: { ...effectiveDestination("出雲大社"), intentRevision: 4, fingerprint: "effective-izumo" },
+    }));
+    const repeated = { tool: "update_current_destination", input: { action: "set", place: "出雲大社", quote: "出雲大社に行きたい" } } as const;
+    const result = await new StrandsAgentEngine(options, {
+      model: new ScriptedModel([repeated, repeated, submitted]),
+    }).run({ ...input, userRequest: "出雲大社に行きたい", conditionController: { apply } });
+    expect(apply).toHaveBeenCalledOnce();
+    expect(result.effectiveIntent?.destination).toEqual(expect.objectContaining({ label: "出雲大社" }));
+    expect(result.replyProposal).toEqual({ kind: "uncertainty" });
+  });
+
   it("represents a correction as one final-state update instead of clear then set", async () => {
     const { input } = setup();
     const apply = vi.fn(async () => ({ receipt: {
