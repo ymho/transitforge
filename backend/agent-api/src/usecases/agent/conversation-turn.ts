@@ -100,7 +100,7 @@ export function createConversationTurnApplication(dependencies: {
       if (acceptedReceipt) {
         // "Reflected" is public only after a verified request proposal was adopted.
         // Partial values without a Trip representation remain internal until #761 persists them.
-        if (!autoAdoptConditionProposal) throw new StateError("unavailable");
+        if (dependencies.adoptTripProposal && !autoAdoptConditionProposal) throw new StateError("unavailable");
         await reportIntentAccepted?.(publicSemanticReceipt(acceptedReceipt));
         await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "publish", "completed", acceptedReceipt));
       }
