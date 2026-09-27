@@ -78,6 +78,20 @@ describe("Agent v2 publication contract", () => {
         expect(() => admitAgentV2Reply(draft, context())).toThrow("invalid_proposal");
       }
     });
+  it("allows bounded natural conversation and clarification without Evidence, but not operation-success claims or links", () => {
+    const conversation = admitAgentV2Reply({ kind: "conversation", message: "acknowledgement",
+      text: "10代の大学生は2日目まで、20代の大学生は全行程参加として扱います。" }, { executionId: "turn-1", evidence: [] });
+    expect(conversation.text).toContain("10代の大学生");
+    expect(conversation.claims).toEqual([]);
+    const clarification = admitAgentV2Reply({ kind: "clarification", target: "participation_scope",
+      text: "どちらの大学生が2日目まで参加するか教えてください。実名は不要です。" }, { executionId: "turn-1", evidence: [] });
+    expect(clarification.proof.question).toBe("participation_scope");
+    expect(clarification.text).toContain("どちらの大学生");
+    expect(() => admitAgentV2Reply({ kind: "conversation", message: "acknowledgement", text: "保存しました。" },
+      { executionId: "turn-1", evidence: [] })).toThrow("unsafe_content");
+    expect(() => admitAgentV2Reply({ kind: "uncertainty", text: "https://example.test を確認してください。" },
+      { executionId: "turn-1", evidence: [] })).toThrow("unsafe_content");
+  });
   it.each(["greeting", "thanks", "acknowledgement"])("allows bounded nonfactual conversation without Evidence: %s", (message) => {
     const result = admitAgentV2Reply({ kind: "conversation", message }, { executionId: "turn-1", evidence: [] });
     expect(result.text).not.toBe("");
