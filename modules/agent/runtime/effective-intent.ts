@@ -134,22 +134,18 @@ function profileSuppressed(hint: EffectiveIntentProfileHint, suppressions: NonNu
 export function effectiveProfileContext(effective: EffectiveIntent): Record<string, unknown> | undefined {
   const profileHints = effective.profileHints.filter(({ source }) => source.kind === "user_profile");
   if (!profileHints.length) return undefined;
-  const interestHints = profileHints.filter(({ attribute, requirement }) => attribute.startsWith("interest:") && requirement.type === "experience");
-  const pace = profileHints.find(({ attribute, requirement }) => attribute === "pace" && requirement.type === "pace");
-  const origin = profileHints.find(({ target, requirement }) => target === "origin" && requirement.type === "origin");
-  const notes = Object.fromEntries(profileHints.filter(({ attribute }) => attribute.startsWith("note:"))
-    .map(({ attribute, requirement }) => [attribute.slice("note:".length), requirement.type === "experience" ? requirement.text : ""]));
+  const origin = profileHints.find(({ attribute, requirement }) => attribute === "origin" && requirement.type === "origin");
+  const interests = profileHints.filter(({ attribute, requirement }) => attribute.startsWith("interest:") && requirement.type === "experience");
+  const considerations = profileHints.find(({ attribute }) => attribute === "considerations");
   const source = profileHints[0]!.source;
   return {
     source: { profileVersion: source.profileVersion, ...(source.profileRevision === undefined ? {} : { profileRevision: source.profileRevision }) },
     application: "reference_only",
-    ...(origin?.requirement.type === "origin" ? { home: origin.source.path === "home.area"
-      ? { area: origin.requirement.place.name } : { station: origin.requirement.place.name } } : {}),
-    favoriteInterests: interestHints.map(({ requirement }) => requirement.type === "experience" ? requirement.text : ""),
-    ...(pace?.requirement.type === "pace" ? { pace: pace.requirement.value } : {}),
+    ...(origin?.requirement.type === "origin" ? { usualOrigin: origin.requirement.place.name } : {}),
+    favoriteInterests: interests.map(({ requirement }) => requirement.type === "experience" ? requirement.text : ""),
+    ...(considerations?.requirement.type === "experience" ? { considerations: considerations.requirement.text } : {}),
     preferenceHints: profileHints.map(({ ref, target, attribute, requirement, source: hintSource }) =>
       ({ ref, target, attribute, requirement: clone(requirement), path: hintSource.path })),
-    ...(Object.keys(notes).length ? { consentedPreferenceNotes: notes } : {}),
   };
 }
 
@@ -236,32 +232,14 @@ function userProfileHints(profile: UserProfile, profileRevision?: number): { hin
     source: { kind: "user_profile", profileVersion: profile.version, ...(profileRevision === undefined ? {} : { profileRevision }), path },
     application: "reference_only",
   });
-  const origin = profile.home.station?.trim() || profile.home.area?.trim();
-  if (origin) add(profile.home.station?.trim() ? "home.station" : "home.area", "origin", "origin",
-    { type: "origin", place: { name: origin, sources: [] } });
-  for (const [preference, weight] of Object.entries(profile.preferences) as Array<[keyof typeof travelPreferenceLabels, number]>) {
-    add(`preferences.${preference}`, "experience", `interest:${preference}`,
-      { type: "experience", intent: "prefer", text: travelPreferenceLabels[preference], preference, weight });
-  }
-  if (profile.travelStyle.pace !== undefined) add("travelStyle.pace", "pace", "pace", { type: "pace", value: profile.travelStyle.pace });
-  // The editable always-on profile is origin, interests, pace and consented notes.
-  // Hidden old mobility/tolerance settings remain stored, but do not silently steer AI.
-  for (const key of ["lodging", "food", "avoidances"] as const) {
-    const value = profile.notes?.[key]?.trim();
-    if (value && profile.aiNoteFields?.includes(key)) add(`notes.${key}`, key === "lodging" ? "accommodation" : "experience", `note:${key}`,
-      { type: "experience", intent: key === "avoidances" ? "avoid" : "prefer", text: value });
-  }
-  const ignored: IgnoredProfileSetting[] = [];
-  if (profile.companions.usual.length) ignored.push({ path: "companions.usual", reason: "trip_specific" });
-  if (profile.companions.children.length) ignored.push({ path: "companions.children", reason: "trip_specific" });
-  if (profile.companions.usualPartySize !== undefined) ignored.push({ path: "companions.usualPartySize", reason: "trip_specific" });
-  if (profile.transport.maxTypicalTravelMinutes !== undefined) ignored.push({ path: "transport.maxTypicalTravelMinutes", reason: "trip_specific" });
-  if (profile.travelStyle.novelty !== undefined) ignored.push({ path: "travelStyle.novelty", reason: "unused_setting" });
-  if (profile.notes?.budget) ignored.push({ path: "notes.budget", reason: "trip_specific" });
-  for (const key of ["lodging", "food", "avoidances"] as const) if (profile.notes?.[key] && !profile.aiNoteFields?.includes(key)) {
-    ignored.push({ path: `notes.${key}`, reason: "consent_required" });
-  }
-  return { hints, ignored };
+  const origin = profile.usualOrigin?.trim();
+  if (origin) add("usualOrigin", "origin", "origin", { type: "origin", place: { name: origin, sources: [] } });
+  for (const preference of profile.interests) add(`interests.${preference}`, "experience", `interest:${preference}`,
+    { type: "experience", intent: "prefer", text: travelPreferenceLabels[preference], preference, weight: 0.9 });
+  const considerations = profile.considerations?.trim();
+  if (considerations) add("considerations", "experience", "considerations",
+    { type: "experience", intent: "prefer", text: considerations });
+  return { hints, ignored: [] };
 }
 
 function normalize(value: string): string { return value.normalize("NFKC").replace(/\s+/gu, "").toLowerCase(); }
