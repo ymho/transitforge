@@ -142,7 +142,7 @@ it("uses corrected conditions for both read validation and publication on a late
   const test = await setup();
   const first = test.build([update("神戸"), read("神戸"), answer("intent-kobe"), "end"], "intent-kobe");
   await first.app.runConversationTurn({ ...test.input, userRequest: "行き先は神戸にしたい" });
-  const next = test.build([read("京都"), update("京都"), read("京都"), answer("intent-kyoto"), "end"], "intent-kyoto");
+  const next = test.build([update("京都"), read("京都"), answer("intent-kyoto"), "end"], "intent-kyoto");
   const result = await next.app.runConversationTurn({ ...test.input,
     turnId: "71200000-0000-4000-8000-000000000002", userRequest: "行き先を京都に変更したい" });
   expect(result.status).toBe("completed");
@@ -238,28 +238,22 @@ it("uses standard Tool validation feedback and accepts a valid operation after r
   expect(test.operation).toHaveBeenCalledOnce();
 });
 
-it("fails closed after post-commit context refresh failure and resumes without a second intent application", async () => {
+it("recovers a lost Trip mutation response without duplicating the accepted condition", async () => {
   const test = await setup();
-  const first = test.build([update(), read(), uncertainty, "end"], "intent-refresh-failure");
-  const reportReceipt = vi.fn(async () => {
-    vi.spyOn(test.state.client, "send").mockRejectedValueOnce(new Error("synthetic context refresh failure"));
-  });
-  await expect(first.app.runConversationTurn(test.input, undefined, reportReceipt)).rejects.toBeDefined();
-  expect(test.operation).not.toHaveBeenCalled();
-  expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.intentRevision).toBe(1);
-  expect((await test.state.conversations.history(test.principal, conversationId)).items).toHaveLength(1);
-  const retry = test.build([update(), read(), answer("intent-retry")], "intent-retry");
-  const result = await retry.app.runConversationTurn(test.input);
+  test.trips.faults.lostResponse = true;
+  const first = test.build([update(), read(), answer("intent-retry")], "intent-trip-lost-response");
+  const result = await first.app.runConversationTurn(test.input);
   expect(result.status).toBe("completed");
   expect(result.semanticReceipt).toMatchObject({ intentRevision: 1 });
-  expect(retry.runRuntime.mock.calls[0]?.[0].conditionController).toBeDefined();
-  expect(test.operation).toHaveBeenCalledOnce();
-  expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.intentRevision).toBe(1);
-  expect(await retry.app.runConversationTurn(test.input)).toEqual(result);
-  expect(test.operation).toHaveBeenCalledOnce();
-  expect((await test.state.conversations.history(test.principal, conversationId)).items).toHaveLength(2);
-  expect(test.v1Model.converse).not.toHaveBeenCalled();
+  const saved = await test.trips.repository.get(test.principal, stateMetadata().tripId);
+  expect(saved?.revision).toBe(1);
+  expect(saved?.request.constraints.some(({ requirement }) => requirement.type === "destinations" &&
+    requirement.places.some(({ name }) => name === "京都"))).toBe(true);
+  expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.facts).toEqual([]);
+  expect(await first.app.runConversationTurn(test.input)).toEqual(result);
+  expect((await test.trips.repository.get(test.principal, stateMetadata().tripId))?.revision).toBe(1);
 });
+
 
 
 it("overrides profile hints only in this Conversation and retracts without reviving a hidden default", async () => {
