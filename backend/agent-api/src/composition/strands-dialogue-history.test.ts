@@ -62,10 +62,14 @@ it("loads real persisted history for short corrections, exposes accepted conditi
       expect(overlay?.facts.find(f => f.target === "party_details")?.value).toEqual({ kind: "party_cohorts", cohorts: parsePartyCohorts(expected) });
       expect(result.response).toContain("今回の相談条件（反映済み）");
       expect(result.response).toContain("1〜2日目");
-      const input = JSON.parse((model.messages[firstCall]![0]!.content[0] as { text: string }).text);
-      expect(input.application.conversation.messages).toHaveLength(i * 2);
-      expect(input.application.conversation.messages.at(-1).role).toBe("assistant");
-      expect(input.application.conversation.messages.at(-2).text).toBe(dialogueMessages[i - 1]);
+      const messages = model.messages[firstCall]!;
+      const history = messages.slice(0, -1);
+      const input = JSON.parse((messages.at(-1)!.content[0] as { text: string }).text);
+      expect(history).toHaveLength(i * 2);
+      expect(history.at(-1)!.role).toBe("assistant");
+      expect(history.at(-2)!.role).toBe("user");
+      expect(history.at(-2)!.content).toEqual([{ type: "textBlock", text: dialogueMessages[i - 1] }]);
+      expect(input.application.conversation.messages).toBeUndefined();
       expect(input.userMessage).toBe(dialogueMessages[i]);
     }
     if (i === 4) { expect(overlay).toEqual(before); expect(f.writerCallbacks).toBe(callbacks); expect(result.response).not.toContain("反映済み"); }
