@@ -37,15 +37,51 @@ describe("verified intent proposal", () => {
     expect(proposal?.intentBinding?.changes).toHaveLength(1);
   });
 
-  it("does not promote a Conversation budget to Trip when currency or basis is unconfirmed", () => {
+  it("persists an explicit origin retraction so a Profile default cannot return after adoption", () => {
+    const trip = createTrip(tripId, "旅", "2026-09-25T00:00:00Z", [], { constraints: [
+      { id: "current-origin", source: "user", strength: "soft", scope: { type: "trip" },
+        requirement: { type: "origin", place: { name: "大阪", sources: [] } } },
+    ], assumptions: [] });
+    const reduced = reduceConversationIntent(emptyConversationIntentOverlay(), { version: 1, mutationId: `intent-turn:${turnId}`,
+      baseIntentRevision: 0, speechAct: "cancel", operations: [{
+        operationId: `intent-op:${turnId}:1`, groupId: `intent-group:${turnId}:1`, action: "retract", target: "origin",
+        scope: { type: "conversation" }, frame: "actual", provenance: { kind: "user_turn", turnId, quote: "出発地を未定に戻す" },
+      }] });
+    const effectiveIntent = compileEffectiveIntent({ baseRequest: trip.request, baseSource: "trip", baseRevision: 0, overlay: reduced.overlay });
+    const proposal = proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent, receipt: reduced.receipt });
+    expect(proposal?.patches[0]).toMatchObject({ type: "request", request: { constraints: [], assumptions: [], profileSuppressions: [{
+      target: "origin", reason: "explicit_unknown", sourceOperationId: `intent-op:${turnId}:1`,
+    }] } });
+  });
+
+  it("persists an incomplete budget as a partial Trip condition without inventing currency or basis", () => {
     const trip = createTrip(tripId, "旅", "2026-09-25T00:00:00Z");
     const noBasis = apply({ action: "set", target: "budget", value: { kind: "money", amount: 500, currency: "EUR" }, modality: "preferred" });
     const effectiveNoBasis = compileEffectiveIntent({ baseRequest: trip.request, baseSource: "trip", baseRevision: 0, overlay: noBasis.overlay });
-    expect(proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent: effectiveNoBasis, receipt: noBasis.receipt })).toBeUndefined();
+    const first = proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent: effectiveNoBasis, receipt: noBasis.receipt });
+    expect(first?.patches[0]).toMatchObject({ type: "request", request: { partialConditions: [
+      { target: "budget", value: { kind: "money", amount: 500, currency: "EUR" } },
+    ] } });
 
     const noCurrency = apply({ action: "set", target: "budget", value: { kind: "money", amount: 50000, basis: "per_person" }, modality: "preferred" });
     const effectiveNoCurrency = compileEffectiveIntent({ baseRequest: trip.request, baseSource: "trip", baseRevision: 0, overlay: noCurrency.overlay });
-    expect(proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent: effectiveNoCurrency, receipt: noCurrency.receipt })).toBeUndefined();
+    const second = proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent: effectiveNoCurrency, receipt: noCurrency.receipt });
+    expect(second?.patches[0]).toMatchObject({ type: "request", request: { partialConditions: [
+      { target: "budget", value: { kind: "money", amount: 50000, basis: "per_person" } },
+    ] } });
+  });
+
+  it("persists total people and end-date-only as partial conditions without fabricating composition or start date", () => {
+    const trip = createTrip(tripId, "旅", "2026-09-25T00:00:00Z");
+    const party = apply({ action: "set", target: "party_size", value: { kind: "quantity", amount: 3, unit: "people" }, modality: "preferred" });
+    const partyIntent = compileEffectiveIntent({ baseRequest: trip.request, baseSource: "trip", baseRevision: 0, overlay: party.overlay });
+    expect(proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent: partyIntent, receipt: party.receipt })?.patches[0])
+      .toMatchObject({ type: "request", request: { partialConditions: [{ target: "party_size", value: { kind: "quantity", amount: 3, unit: "people" } }] } });
+
+    const end = apply({ action: "set", target: "end_date", value: { kind: "local_date", date: "2026-10-03" }, modality: "preferred" });
+    const endIntent = compileEffectiveIntent({ baseRequest: trip.request, baseSource: "trip", baseRevision: 0, overlay: end.overlay });
+    expect(proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent: endIntent, receipt: end.receipt })?.patches[0])
+      .toMatchObject({ type: "request", request: { partialConditions: [{ target: "end_date", value: { kind: "local_date", date: "2026-10-03" } }] } });
   });
 
   it("projects a fully confirmed budget basis without defaulting basis", () => {
@@ -67,7 +103,7 @@ describe("verified intent proposal", () => {
   });
 });
 
-function apply(operation: { action: "set" | "add_alternative"; target: "origin" | "destination" | "experience" | "budget"; value: AcceptedIntentDelta["operations"][number]["value"]; modality: "preferred"; frame?: "actual" | "hypothetical" }) {
+function apply(operation: { action: "set" | "add_alternative"; target: "origin" | "destination" | "experience" | "budget" | "party_size" | "end_date"; value: AcceptedIntentDelta["operations"][number]["value"]; modality: "preferred"; frame?: "actual" | "hypothetical" }) {
   return reduceConversationIntent(emptyConversationIntentOverlay(), { version: 1, mutationId: `intent-turn:${turnId}`, baseIntentRevision: 0, speechAct: "inform", operations: [{
     operationId: `intent-op:${turnId}:1`, groupId: `intent-group:${turnId}:1`, action: operation.action, target: operation.target,
     scope: { type: "conversation" }, modality: operation.modality, precision: "exact", value: operation.value!, frame: operation.frame ?? "actual",

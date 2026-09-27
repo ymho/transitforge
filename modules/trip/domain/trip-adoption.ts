@@ -28,6 +28,7 @@ export function adoptionNeedsReview(before: Trip, after: Trip): boolean {
   const relevant = (trip: Trip) => ({
     items: trip.items.map(({ title: _title, ...item }) => item),
     party: trip.request.party,
+    partialConditions: trip.request.partialConditions,
     conditions: trip.request.constraints.filter(({ requirement }) =>
       ["origin", "destinations", "dates", "duration", "depart_after", "arrive_by", "mobility"].includes(requirement.type)),
   });

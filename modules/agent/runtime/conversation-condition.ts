@@ -195,8 +195,9 @@ export function admitConditionChange(value: unknown, userMessage: string, calend
 }
 
 /** Application-issued identity: one final decision per business slot per user message. */
-export function conditionOperationId(turnId: string, slot: ConditionSlot): string {
-  return `condition:${turnId}:${slot}`;
+export function conditionOperationId(turnId: string, slot: ConditionSlot, occurrence = 0): string {
+  if (!Number.isSafeInteger(occurrence) || occurrence < 0) throw new Error("Invalid condition occurrence");
+  return `condition:${turnId}:${slot}${occurrence ? `:${occurrence + 1}` : ""}`;
 }
 export function conditionSlot(change: ConversationConditionChange): ConditionSlot { return change.target; }
 export function conditionPayload(change: ConversationConditionChange): string {
@@ -209,8 +210,8 @@ export function conditionPayload(change: ConversationConditionChange): string {
 }
 
 /** One business slot may map to several atomic Domain operations. */
-export function conditionDelta(change: ConversationConditionChange, turnId: string, overlay: ConversationIntentOverlay): AcceptedIntentDelta {
-  const slot = conditionSlot(change), mutationId = conditionOperationId(turnId, slot);
+export function conditionDelta(change: ConversationConditionChange, turnId: string, overlay: ConversationIntentOverlay, occurrence = 0): AcceptedIntentDelta {
+  const slot = conditionSlot(change), mutationId = conditionOperationId(turnId, slot, occurrence);
   if (change.target === "travel_period") return travelPeriodDelta(change, turnId, overlay, mutationId);
   if (change.target === "budget") {
     const budget = change.budget, cleared = budget === null;
@@ -271,16 +272,18 @@ export function summarizeConditionReceipts(receipts: readonly IntentApplicationR
 
 const conditionJournalSchema = z.strictObject({ version: z.literal(1), operations: z.array(z.strictObject({
   target: z.enum(conditionSlots), payloadHash: z.string().regex(/^[0-9a-f]{64}$/u), receipt: z.unknown(),
-})).min(1).max(conditionSlots.length) });
+})).min(1).max(20) });
 export interface ConditionOperationRecord { target: ConditionSlot; payloadHash: string; receipt: IntentApplicationReceipt }
 export interface ConditionOperationJournal { version: 1; operations: ConditionOperationRecord[] }
 
 export function parseConditionJournal(value: unknown, turnId: string): ConditionOperationJournal {
-  const parsed = conditionJournalSchema.parse(value), seen = new Set<ConditionSlot>();
+  const parsed = conditionJournalSchema.parse(value), occurrences = new Map<ConditionSlot, number>(), seenPayloads = new Set<string>();
   let previousRevision: number | undefined;
   const operations = parsed.operations.map(item => {
-    const receipt = parseIntentApplicationReceipt(item.receipt), id = conditionOperationId(turnId, item.target);
-    if (seen.has(item.target) || receipt.mutationId !== id || receipt.intentRevision !== receipt.beforeIntentRevision + 1 ||
+    const occurrence = occurrences.get(item.target) ?? 0;
+    const receipt = parseIntentApplicationReceipt(item.receipt), id = conditionOperationId(turnId, item.target, occurrence);
+    const replayKey = `${item.target}:${item.payloadHash}`;
+    if (seenPayloads.has(replayKey) || receipt.mutationId !== id || receipt.intentRevision !== receipt.beforeIntentRevision + 1 ||
         previousRevision !== undefined && receipt.beforeIntentRevision !== previousRevision) throw new Error("Invalid condition journal");
     if (item.target === "travel_period") {
       const expected = new Set(["start_date", "end_date", "duration"]);
@@ -294,7 +297,7 @@ export function parseConditionJournal(value: unknown, turnId: string): Condition
           operation.target !== item.target || operation.scope.type !== "conversation" || operation.frame !== "actual" ||
           operation.status !== "accepted" || !["set", "retract"].includes(operation.action)) throw new Error("Invalid condition journal");
     }
-    seen.add(item.target); previousRevision = receipt.intentRevision;
+    seenPayloads.add(replayKey); occurrences.set(item.target, occurrence + 1); previousRevision = receipt.intentRevision;
     return { target: item.target, payloadHash: item.payloadHash, receipt };
   });
   return { version: 1, operations };

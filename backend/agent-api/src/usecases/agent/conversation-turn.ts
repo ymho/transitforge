@@ -1,6 +1,7 @@
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import { StateError, exactObject, requireStatePrincipal } from "../../contracts/server-state.js";
-import type { ConversationTurnContinuity, ConversationTurnRepository, ConversationTurnResult } from "../../ports/conversation-turn-repository.js";
+import type { ConversationTurnContinuity, ConversationTurnIdentity, ConversationTurnLease, ConversationTurnRepository,
+  ConversationTurnResult } from "../../ports/conversation-turn-repository.js";
 import type { ServerAgentTurn } from "./server-agent.js";
 import { presentationFromObservation, presentationFromPublicPlan } from "@raiquora/agent/conversation-working-state";
 import { semanticStateOf } from "@raiquora/agent/conversation-working-state";
@@ -28,6 +29,7 @@ export function createConversationTurnApplication(dependencies: {
     Promise<AgentRuntimeResult & Pick<ConversationTurnResult, "tripUpdateProposal" | "consultationRequestProposal" | "tripCostProposal">>;
   interpretIntent?: (input: { userRequest: string; calendarDate?: string; overlay: import("@raiquora/trip/conversation-intent").ConversationIntentOverlay;
     turnId: string; workingState?: import("@raiquora/agent/conversation-working-state").ConversationWorkingState }) => Promise<UtteranceInterpretation>;
+  adoptTripProposal?: (identity: ConversationTurnIdentity, lease: ConversationTurnLease, proposal: import("@raiquora/trip/trip").TripUpdateProposal) => Promise<void>;
   diagnostics?: AgentDiagnosticsSink;
   log?: (event: string, fields: Record<string, unknown>) => void;
 }) {
@@ -46,10 +48,6 @@ export function createConversationTurnApplication(dependencies: {
       ? begun.conditionReceipts?.map(receipt => [receipt.mutationId, receipt]) : []);
     let acceptedReceipt = begun.state === "intent_accepted"
       ? summarizeConditionReceipts([...conditionReceipts.values()]) ?? begun.receipt : undefined;
-    if (acceptedReceipt) {
-      await reportIntentAccepted?.(publicSemanticReceipt(acceptedReceipt));
-      await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "publish", "completed", acceptedReceipt));
-    }
     let result: ConversationTurnResult;
     let continuity: ConversationTurnContinuity | undefined;
     try {
@@ -88,7 +86,6 @@ export function createConversationTurnApplication(dependencies: {
         conditionReceipts.set(receipt.mutationId, receipt);
         acceptedReceipt = summarizeConditionReceipts([...conditionReceipts.values()]);
         await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "accept", "accepted", receipt));
-        await reportIntentAccepted?.(publicSemanticReceipt(acceptedReceipt!));
         return receipt;
       } : undefined;
       const runtimeInput = { principal, conversationId, userRequest, requestedResearchMode, researchTarget, tripId, uiContext };
@@ -97,6 +94,16 @@ export function createConversationTurnApplication(dependencies: {
         : await dependencies.runAgentTurn(runtimeInput, begun.lease.userSequence, undefined, acceptCondition);
       if (runtime.status !== "completed" && runtime.status !== "follow_up") {
         throw new ConversationTurnExecutionError(runtime.status === "limit_reached" ? "limit_reached" : "agent_failed");
+      }
+      const autoAdoptConditionProposal = !!dependencies.adoptTripProposal && runtime.tripUpdateProposal?.intentBinding &&
+        runtime.tripUpdateProposal.patches.length > 0 && runtime.tripUpdateProposal.patches.every(({ type }) => type === "request");
+      if (autoAdoptConditionProposal) await dependencies.adoptTripProposal!(identity, begun.lease, runtime.tripUpdateProposal!);
+      if (acceptedReceipt) {
+        // "Reflected" is public only after a verified request proposal was adopted.
+        // Partial values without a Trip representation remain internal until #761 persists them.
+        if (dependencies.adoptTripProposal && !autoAdoptConditionProposal) throw new StateError("unavailable");
+        await reportIntentAccepted?.(publicSemanticReceipt(acceptedReceipt));
+        await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "publish", "completed", acceptedReceipt));
       }
       const presentationReceipt = runtime.publicPlanPresentation ? presentationFromPublicPlan(runtime.publicPlanPresentation) : presentationFromObservation(turnId, runtime.turnObservation);
       if (presentationReceipt) await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId,
@@ -111,7 +118,7 @@ export function createConversationTurnApplication(dependencies: {
         ...(runtime.researchExecution ? { researchExecution: reserveResearchResultSave(runtime.researchExecution) } : {}),
         ...(runtime.turnObservation ? { turnObservation: runtime.turnObservation } : {}),
         ...(presentationReceipt ? { presentationReceipt } : {}),
-        ...(runtime.tripCostProposal ? { tripCostProposal: runtime.tripCostProposal } : {}), ...(runtime.tripUpdateProposal ? { tripUpdateProposal: runtime.tripUpdateProposal } : {}), ...(runtime.consultationRequestProposal ? { consultationRequestProposal: runtime.consultationRequestProposal } : {}) };
+        ...(runtime.tripCostProposal ? { tripCostProposal: runtime.tripCostProposal } : {}), ...(!autoAdoptConditionProposal && runtime.tripUpdateProposal ? { tripUpdateProposal: runtime.tripUpdateProposal } : {}), ...(runtime.consultationRequestProposal ? { consultationRequestProposal: runtime.consultationRequestProposal } : {}) };
       await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "respond", reason: "validated",
         occurredAt: new Date().toISOString(), correlation: { turnId, ...(acceptedReceipt ? { intentRevision: acceptedReceipt.intentRevision } : {}) },
         counts: { acceptedCharacters: runtime.response.length } });

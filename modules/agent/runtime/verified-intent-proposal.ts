@@ -22,14 +22,17 @@ export function proposeVerifiedIntentRequest(input: {
   const relevantFacts = effectiveIntent.actualConversationFacts.filter((fact) => acceptedSlots.has(slotOf(fact)));
   const projected = projectFacts(relevantFacts);
   const supportedSlots = new Set(projected.flatMap((constraint) => constraint.semantic!.facts.map(slotOf)));
-  const removalSlots = new Set([...supportedSlots, ...accepted.filter(({ action }) => action === "retract").map(slotOf),
+  const partialFacts = relevantFacts.filter((fact) => !supportedSlots.has(slotOf(fact)) && fact.value.kind !== "unknown");
+  const partialSlots = new Set(partialFacts.map(slotOf));
+  const removalSlots = new Set([...supportedSlots, ...partialSlots, ...accepted.filter(({ action }) => action === "retract").map(slotOf),
     ...relevantFacts.filter(({ target, value }) => target === "origin" && value.kind === "unknown").map(slotOf)]);
   const removableTargets = new Set(accepted.filter((operation) => removalSlots.has(slotOf(operation))).map(({ target }) => target));
   const suppressed = new Set(effectiveIntent.suppressedBaseRefs.map((ref) => ref.replace(/^constraint:/u, "")));
   let constraints = trip.request.constraints.filter((constraint) => !(suppressed.has(constraint.id) && removableTargets.has(targetOf(constraint)!)) &&
     !(constraint.semantic?.facts.some((fact) => removalSlots.has(slotOf(fact)))));
-  const boundChanges = accepted.filter((operation) => supportedSlots.has(slotOf(operation)) || removalSlots.has(slotOf(operation)) && (
+  const boundChanges = accepted.filter((operation) => supportedSlots.has(slotOf(operation)) || partialSlots.has(slotOf(operation)) || removalSlots.has(slotOf(operation)) && (
     trip.request.constraints.some((constraint) => constraint.semantic?.facts.some((fact) => slotOf(fact) === slotOf(operation))) ||
+    (trip.request.partialConditions ?? []).some((fact) => slotOf(fact) === slotOf(operation)) ||
     effectiveIntent.suppressedBaseRefs.some((ref) => trip.request.constraints.some((constraint) => `constraint:${constraint.id}` === ref && targetOf(constraint) === operation.target))));
   if (!boundChanges.length) return undefined;
   constraints = [...constraints, ...projected];
@@ -38,8 +41,16 @@ export function proposeVerifiedIntentRequest(input: {
   for (const fact of relevantFacts.filter(({ target, value }) => target === "origin" && value.kind === "unknown")) profileSuppressions.push({
     id: `profile-suppression:${fact.factId}`, target: fact.target, scope: structuredClone(fact.scope), sourceOperationId: fact.sourceOperationId, reason: "explicit_unknown",
   });
-  const { profileSuppressions: _oldSuppressions, ...requestBase } = trip.request;
-  const request: TripRequest = { ...requestBase, constraints, ...(profileSuppressions.length ? { profileSuppressions } : {}) };
+  for (const operation of accepted.filter(({ action, target }) => action === "retract" && target === "origin")) profileSuppressions.push({
+    id: `profile-suppression:${operation.operationId}`, target: operation.target, scope: structuredClone(operation.scope),
+    sourceOperationId: operation.operationId, reason: "explicit_unknown",
+  });
+  const previousPartial = trip.request.partialConditions ?? [];
+  const partialConditions = [...previousPartial.filter((fact) => !removalSlots.has(slotOf(fact))), ...partialFacts.map((fact) => structuredClone(fact))];
+  const { profileSuppressions: _oldSuppressions, partialConditions: _oldPartial, ...requestBase } = trip.request;
+  const request: TripRequest = { ...requestBase, constraints,
+    ...(partialConditions.length ? { partialConditions } : {}),
+    ...(profileSuppressions.length ? { profileSuppressions } : {}) };
   const intentBinding: IntentProposalBinding = {
     version: "intent-proposal-binding-v1",
     conversationId: input.conversationId,

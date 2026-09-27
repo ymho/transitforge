@@ -1,35 +1,17 @@
-import { expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import { createTrip } from "@raiquora/trip/trip";
-import type { ConversationModel, ConversationModelRequest } from "../ports/conversation-model.js";
 import { stateDynamoFixture, stateA, conversationId, secondId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
-import { createConversationServerAgent } from "./conversation-server-agent.js";
 import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
 import { TripApplication } from "../usecases/trip-application.js";
+import { compileEffectiveIntent } from "@raiquora/agent/effective-intent";
+import { proposeVerifiedIntentRequest } from "@raiquora/agent/verified-intent-proposal";
 
 it("adopts only bound verified changes, consumes them once, and retains unrelated intent", async () => {
-  const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  await trips.repository.create(stateA, createTrip(secondId, "旅", "2026-09-14T00:00:00Z"));
-  await state.conversations.create(stateA, conversationId, { ...stateMetadata(), tripId: secondId });
-  const model: ConversationModel = { converse: vi.fn(async (request: ConversationModelRequest) => {
-    if (request.outputContract?.name === "conversation_semantic_delta") return { message: { role: "assistant" as const, content: [{ text: JSON.stringify({
-      outcome: "delta", speechAct: "inform", operations: [
-        { atomicGroup: 1, action: "set", target: "destination", modality: "required", precision: "exact", frame: "actual", quote: "京都", value: { kind: "place_label", label: "京都" } },
-        { atomicGroup: 2, action: "set", target: "party_size", modality: "required", precision: "exact", frame: "actual", quote: "2人", value: { kind: "quantity", amount: 2, unit: "people" } },
-      ], unresolvedFragments: [],
-    }) }] }, stopReason: "end_turn" as const, metadata: { modelId: "semantic", latencyMs: 1 } };
-    return { message: { role: "assistant" as const, content: [{ text: JSON.stringify({ kind: "ask", responseText: "外部の最新情報を調べてもよいですか？",
-      missingRequirements: [{ action: "ask", field: "research_authorization", resolution: "authorization", reason: "外部調査の許可を確認する" }] }) }] },
-      stopReason: "end_turn" as const, metadata: { modelId: "answer", latencyMs: 1, outputMode: "application_strict" as const } };
-  }) };
-  const agent = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model, weather: { search: vi.fn() }, semanticIntentEnabled: true, newExecutionId: () => "execution" });
-  const result = await agent.runConversationTurn({ principal: stateA, conversationId, turnId: "33333333-3333-4333-8333-333333333333",
-    userRequest: "京都へ2人で行きたい" });
-  const proposal = result.tripUpdateProposal!;
+  const f = await verifiedProposalFixture();
+  const { state, trips, turns, proposal } = f;
   expect(proposal.intentBinding?.changes.map(({ target }) => target)).toEqual(["destination"]);
 
-  const turns = new DynamoDbConversationTurnRepository("test-state", state.client);
   const application = new TripApplication(trips.repository, trips.repository, trips.clock, undefined, undefined, undefined, turns);
   const mutationId = "44444444-4444-4444-8444-444444444444";
   const command = { version: "trip-api-v1" as const, operation: "mutate" as const, tripId: secondId, baseRevision: 0, mutationId, proposal };
@@ -58,8 +40,8 @@ it("rejects an old intent binding before Trip mutation after meaning changes", a
   const identity = { principal: stateA, conversationId, turnId: "77777777-7777-4777-8777-777777777777" };
   const begun = await f.turns.beginTurn(identity, { userRequest: "大阪へ訂正", tripId: secondId });
   if (begun.state !== "started") throw new Error("unexpected turn state");
-  await f.turns.acceptIntent(identity, begun.lease, { version: 1, mutationId: "intent-turn:replacement", baseIntentRevision: 1, speechAct: "correct", operations: [{
-    operationId: "intent-op:replacement", groupId: "intent-group:replacement", action: "replace", target: "destination", scope: { type: "conversation" },
+  await f.turns.acceptIntent(identity, begun.lease, { version: 1, mutationId: "intent-turn:replacement", baseIntentRevision: 2, speechAct: "correct", operations: [{
+    operationId: "intent-op:replacement", groupId: "intent-group:replacement", action: "set", target: "destination", scope: { type: "conversation" },
     modality: "required", precision: "exact", value: { kind: "place_label", label: "大阪" }, frame: "actual", provenance: { kind: "user_turn", turnId: identity.turnId, quote: "大阪" },
   }] });
   const application = new TripApplication(f.trips.repository, f.trips.repository, f.trips.clock, undefined, undefined, undefined, f.turns);
@@ -87,15 +69,32 @@ async function verifiedProposalFixture() {
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
   await trips.repository.create(stateA, createTrip(secondId, "旅", "2026-09-14T00:00:00Z"));
   await state.conversations.create(stateA, conversationId, { ...stateMetadata(), tripId: secondId });
-  const model: ConversationModel = { converse: vi.fn(async (request: ConversationModelRequest) => request.outputContract?.name === "conversation_semantic_delta"
-    ? { message: { role: "assistant" as const, content: [{ text: JSON.stringify({ outcome: "delta", speechAct: "inform", operations: [
-      { atomicGroup: 1, action: "set", target: "destination", modality: "required", precision: "exact", frame: "actual", quote: "京都", value: { kind: "place_label", label: "京都" } },
-    ], unresolvedFragments: [] }) }] }, stopReason: "end_turn" as const, metadata: { modelId: "semantic", latencyMs: 1 } }
-    : { message: { role: "assistant" as const, content: [{ text: JSON.stringify({ kind: "ask", responseText: "外部情報を調べてもよいですか？",
-      missingRequirements: [{ action: "ask", field: "research_authorization", resolution: "authorization", reason: "許可を確認する" }] }) }] },
-      stopReason: "end_turn" as const, metadata: { modelId: "answer", latencyMs: 1, outputMode: "application_strict" as const } }) };
-  const agent = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model, weather: { search: vi.fn() }, semanticIntentEnabled: true, newExecutionId: () => "execution" });
-  const result = await agent.runConversationTurn({ principal: stateA, conversationId, turnId: "99999999-9999-4999-8999-999999999999", userRequest: "京都へ行きたい" });
-  return { state, trips, turns: new DynamoDbConversationTurnRepository("test-state", state.client), proposal: result.tripUpdateProposal! };
+  const turns = new DynamoDbConversationTurnRepository("test-state", state.client);
+  const partyIdentity = { principal: stateA, conversationId, turnId: "22222222-2222-4222-8222-222222222221" };
+  const partyTurn = await turns.beginTurn(partyIdentity, { userRequest: "2人です", tripId: secondId });
+  if (partyTurn.state !== "started") throw new Error("unexpected party turn state");
+  await turns.acceptIntent(partyIdentity, partyTurn.lease, { version: 1, mutationId: "intent-turn:party", baseIntentRevision: 0, speechAct: "inform", operations: [{
+    operationId: "intent-op:party", groupId: "intent-group:party", action: "set", target: "party_size", scope: { type: "conversation" },
+    modality: "required", precision: "exact", value: { kind: "quantity", amount: 2, unit: "people" }, frame: "actual",
+    provenance: { kind: "user_turn", turnId: partyIdentity.turnId, quote: "2人" },
+  }] });
+  await turns.failTurn(partyIdentity, partyTurn.lease);
+
+  const identity = { principal: stateA, conversationId, turnId: "99999999-9999-4999-8999-999999999999" };
+  const begun = await turns.beginTurn(identity, { userRequest: "京都へ行きたい", tripId: secondId });
+  if (begun.state !== "started") throw new Error("unexpected destination turn state");
+  const receipt = await turns.acceptIntent(identity, begun.lease, { version: 1, mutationId: "intent-turn:destination", baseIntentRevision: 1, speechAct: "inform", operations: [{
+    operationId: "intent-op:destination", groupId: "intent-group:destination", action: "set", target: "destination", scope: { type: "conversation" },
+    modality: "required", precision: "exact", value: { kind: "place_label", label: "京都" }, frame: "actual",
+    provenance: { kind: "user_turn", turnId: identity.turnId, quote: "京都" },
+  }] });
+  const trip = (await trips.repository.get(stateA, secondId))!;
+  const working = (await turns.getWorkingState(stateA, conversationId))!;
+  const effectiveIntent = compileEffectiveIntent({ baseRequest: trip.request, baseSource: "trip", baseRevision: trip.revision,
+    overlay: working.semantic!.overlay });
+  const proposal = proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent, receipt });
+  if (!proposal) throw new Error("expected verified proposal");
+  await turns.stageIntentProposal(identity, begun.lease, proposal);
+  await turns.failTurn(identity, begun.lease);
+  return { state, trips, turns, proposal };
 }

@@ -10,6 +10,7 @@ import { deriveAgentTaskContext } from "@raiquora/agent/agent-task-context";
 import { compileEffectiveIntent, effectiveProfileContext } from "@raiquora/agent/effective-intent";
 import type { IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
 import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
+import { summarizeConditionReceipts } from "@raiquora/agent/conversation-condition";
 
 export const serverStateContextLimits = { historyMessages: 12, conversationJsonCharacters: 12_000 } as const;
 export interface ServerStateContextReferences {
@@ -62,8 +63,10 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
       lifecycleState: trip.lifecycleState, planningState: trip.planningState } : undefined,
       requestRevision: trip?.revision,
       workingStateRevision: workingState?.revision, previousOutcome: workingState?.lastOutcome?.outcome }) : undefined;
-    const receiptCandidate = before !== undefined && workingState?.sourceUserSequence === before
-      ? workingState.semantic?.receipts.at(-1) : undefined;
+    const turnReceipts = before !== undefined && workingState?.sourceUserSequence === before
+      ? workingState.semantic?.receipts.filter(({ mutationId }) => mutationId.startsWith(`condition:${workingState.sourceTurnId}:`)) ?? [] : [];
+    const receiptCandidate = turnReceipts.length ? summarizeConditionReceipts(turnReceipts)
+      : before !== undefined && workingState?.sourceUserSequence === before ? workingState.semantic?.receipts.at(-1) : undefined;
     const currentIntentReceipt = receiptCandidate?.intentRevision === workingState?.semantic?.overlay.intentRevision
       ? receiptCandidate : undefined;
     const acceptedIntentOperations = currentIntentReceipt?.operations.filter(({ status }) => status === "accepted") ?? [];

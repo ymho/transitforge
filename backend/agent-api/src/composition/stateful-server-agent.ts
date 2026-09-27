@@ -86,7 +86,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
       loadContext: contextLoader,
       ...(runRuntime ? { runRuntime } : {}),
     }).runAgentTurn(input, reportProgress);
-    if (!options.runRuntime && input.conversationId && effectiveIntent && currentIntentReceipt && trip) {
+    if (input.conversationId && effectiveIntent && currentIntentReceipt && trip) {
       const verified = proposeVerifiedIntentRequest({ conversationId: input.conversationId, trip, effectiveIntent, receipt: currentIntentReceipt });
       if (verified) tripUpdateProposal = parsePublicRequestProposal(verified);
     }

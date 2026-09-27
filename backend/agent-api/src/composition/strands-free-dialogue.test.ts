@@ -97,13 +97,17 @@ async function runDialogue(model?: Model<BaseModelConfig>) {
     expect.soft(result.status).toBe("completed");
     expect.soft(hasText, `case ${index} free text from native structured output`).toBe(true);
     expect.soft(overlay?.intentRevision).toBe([1, 2, 2, 3, 4, 4][index]);
-    expect.soft(overlay?.facts.find(f => f.target === "party_size")?.value).toEqual({ kind: "quantity", amount: index < 3 ? 3 : 4, unit: "people" });
+    expect.soft(overlay?.facts).toEqual([]);
+    const savedTrip = await trips.repository.get(principal, stateMetadata().tripId);
+    const party = savedTrip?.request.partialConditions?.find(({ target }) => target === "party_size")?.value;
+    expect.soft(party).toEqual({ kind: "quantity", amount: index < 3 ? 3 : 4, unit: "people" });
     if (index === 0) expect.soft(result.response).toContain("全体人数：3人");
-    if (index >= 1 && index < 4) expect.soft(overlay?.facts.find(f => f.target === "origin")?.value).toEqual({ kind: "place_label", label: "大阪" });
+    const savedOrigin = savedTrip?.request.constraints.find(({ requirement }) => requirement.type === "origin")?.requirement;
+    if (index >= 1 && index < 4) expect.soft(savedOrigin).toMatchObject({ type: "origin", place: { name: "大阪" } });
     if (index === 1) expect.soft(result.response).toContain("出発地：大阪");
     if (index === 2 || index === 5) { expect.soft(overlay).toEqual(before); expect.soft(writes).toBe(beforeWrites); expect.soft(result.response).not.toContain("反映済み"); }
     if (index === 3) expect.soft(result.response).toContain("全体人数：4人");
-    if (index === 4) { expect.soft(overlay?.facts.find(f => f.target === "origin")).toBeUndefined(); expect.soft(result.response).toContain("出発地：未定"); }
+    if (index === 4) { expect.soft(savedOrigin).toBeUndefined(); expect.soft(result.response).toContain("出発地：未定"); }
     const afterCalls = calls;
     expect(await app.runConversationTurn(input)).toEqual(result);
     expect(calls).toBe(afterCalls);

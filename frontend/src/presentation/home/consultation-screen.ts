@@ -94,7 +94,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     const dates = trip ? [...new Set(trip.items.map((i) => itineraryScheduleLabel(i.schedule).replace(/（[^）]*）$/, "")))].slice(0, 2) : [];
     const party = trip ? tripPartyView(trip)?.text : undefined;
     meta.textContent = [...dates, ...(party ? [party] : [])].join(" ・ "); meta.hidden = !meta.textContent;
-    note.textContent = trip ? "この旅程が変更案の対象です。確認するまで反映されません。" : state.unavailable ? "参照先を確認してから相談を続けてください。" : "まだ旅程に紐付いていません。";
+    note.textContent = trip ? "会話で受理した今回条件は旅程に保存されます。手動編集は変更案を確認して保存します。" : state.unavailable ? "参照先を確認してから相談を続けてください。" : "まだ旅程に紐付いていません。";
     tripButton.hidden = !trip;
     help.textContent = trip ? state.viewer ? "閲覧専用の旅程です。条件の変更はできません。" : "条件を編集し、変更案を確認して保存できます。列車・宿・予約は自動で変更されません。"
       : "条件は会話で追加できます。普段の好みより、今回の希望を優先します。";
@@ -173,7 +173,19 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
         if (!state.viewer) item.append(offer(`${display[0]}を解除`, () => editTripConstraint(trip, constraint.id, undefined)));
 
       }
-      row("同行者", party ?? "人数は未設定", state.viewer ? undefined : () => editFields([
+      for (const fact of trip.request.partialConditions ?? []) {
+        const display = fact.target === "party_size" && fact.value.kind === "quantity" && fact.value.unit === "people"
+          ? ["同行者", `${fact.value.amount}人（内訳未定）`]
+          : fact.target === "budget" && fact.value.kind === "money"
+            ? ["予算", `${fact.value.amount}${fact.value.currency ? ` ${fact.value.currency}` : "（通貨未定）"}${fact.value.basis === "per_person" ? " / 1人" : fact.value.basis === "trip" ? " / 旅行全体" : "（対象未定）"}`]
+            : fact.target === "end_date" && fact.value.kind === "local_date" ? ["日程", `終了 ${fact.value.date}（開始日未定）`]
+            : fact.target === "start_date" && fact.value.kind === "local_date" ? ["日程", `開始 ${fact.value.date}`]
+            : fact.target === "duration" && fact.value.kind === "quantity" ? ["日程", `${fact.value.amount}${fact.value.unit === "nights" ? "泊" : "日"}`]
+            : undefined;
+        if (display) row(display[0]!, display[1]!, undefined, "あなたが指定");
+      }
+      const partialParty = (trip.request.partialConditions ?? []).some(({ target }) => target === "party_size");
+      if (!partialParty)       row("同行者", party ?? "人数は未設定", state.viewer ? undefined : () => editFields([
         { key: "adults", label: "大人の人数（全て空欄で未設定）", type: "number", value: trip.request.party ? String(trip.request.party.adults) : "" },
         { key: "children", label: "子どもの年齢（カンマ区切り・不明は?）", value: trip.request.party?.children.map((child) => child.age === undefined ? "?" : String(child.age)).join(",") ?? "" },
       ], (v) => editTripParty(trip, v.adults!, v.children!)));

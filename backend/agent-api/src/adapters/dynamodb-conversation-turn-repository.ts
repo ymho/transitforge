@@ -117,10 +117,17 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const working = parseConversationWorkingState(old.payload), semantic = semanticStateOf(working);
     if (semantic.adoptions?.some((item) => sameAdoption(item, { ...input, binding }) && item.committedTripRevision === input.committedTripRevision)) return;
     if (!semantic.adoptionInFlight || !sameAdoption(semantic.adoptionInFlight, { ...input, binding }) || input.committedTripRevision !== input.baseTripRevision + 1) throw new StateError("conflict");
-    const receipt = semantic.receipts.find((item) => item.intentRevision === binding.intentRevision && receiptMatches([item], binding));
-    if (!receipt) throw new StateError("conflict");
     const selected = new Set(binding.changes.map(({ changeRef }) => changeRef));
-    const factRefs = new Set(receipt.operations.filter(({ operationId }) => selected.has(operationId)).flatMap(({ afterFactRefs }) => afterFactRefs));
+    // A single Trip proposal may adopt several independent condition commands
+    // accepted during the same turn. Each command has its own receipt/revision;
+    // the binding revision is the final revision, not a requirement that every
+    // selected operation lives in that final receipt.
+    const selectedOperations = semantic.receipts
+      .filter(({ intentRevision }) => intentRevision <= binding.intentRevision)
+      .flatMap(({ operations }) => operations)
+      .filter(({ operationId }) => selected.has(operationId));
+    if (selectedOperations.length !== selected.size || !receiptMatches(semantic.receipts, binding)) throw new StateError("conflict");
+    const factRefs = new Set(selectedOperations.flatMap(({ afterFactRefs }) => afterFactRefs));
     const overlay = { ...semantic.overlay, facts: semantic.overlay.facts.filter(({ factId }) => !factRefs.has(factId)),
       tombstones: semantic.overlay.tombstones.filter(({ sourceOperationId }) => !selected.has(sourceOperationId)) };
     const adoption = { binding, tripId: input.tripId, baseTripRevision: input.baseTripRevision, committedTripRevision: input.committedTripRevision, mutationId: input.mutationId };
@@ -187,7 +194,10 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const requestHash = createHash("sha256").update(JSON.stringify([request.userRequest, request.requestedResearchMode ?? "standard", request.researchTarget ?? null, request.tripId ?? null, itemId ?? null, calendarDate ?? null])).digest("hex");
     const { current, old, turn } = await this.read(input);
     if (request.tripId !== undefined && request.tripId !== current.tripId) throw new StateError("invalid-input");
-    if ((await this.getWorkingState(input.principal, input.conversationId))?.semantic?.adoptionInFlight) throw new StateError("conflict");
+    const inFlightAdoption = (await this.getWorkingState(input.principal, input.conversationId))?.semantic?.adoptionInFlight;
+    // A retry of this exact turn may resume its staged Trip adoption. A different
+    // turn is fenced until the in-flight adoption is completed or released.
+    if (inFlightAdoption && !turn) throw new StateError("conflict");
     if (turn && turn.requestHash !== requestHash) throw new StateError("conflict");
     if (turn?.state === "completed") return { state: "completed", result: turn.result! };
     // A later user message supersedes unfinished older work. Completed turns replay
@@ -212,6 +222,29 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
       { state: "started", lease: { attemptId, userSequence: next.userSequence } };
   }
 
+  async stageIntentProposal(identity: ConversationTurnIdentity, lease: ConversationTurnLease, proposal: import("@raiquora/trip/trip").TripUpdateProposal): Promise<void> {
+    const input = this.identity(identity), snapshot = await this.read(input);
+    this.validateLease(snapshot.turn, lease);
+    const binding = proposal.intentBinding;
+    if (!binding || binding.conversationId !== input.conversationId || proposal.tripId !== snapshot.turn?.targetTripId) throw new StateError("invalid-input");
+    const workingKey = this.workingKey(input.conversationId), oldWorking = await this.store.read(input.principal, workingKey);
+    if (!oldWorking) throw new StateError("conflict");
+    const working = parseConversationWorkingState(oldWorking.payload), semantic = semanticStateOf(working);
+    if (!receiptMatches(semantic.receipts, binding) || working.target.tripId !== proposal.tripId) throw new StateError("conflict");
+    const pending = { binding: structuredClone(binding), tripId: proposal.tripId, baseTripRevision: proposal.baseRevision };
+    if (semantic.pendingProposal) {
+      if (JSON.stringify(semantic.pendingProposal) === JSON.stringify(pending)) return;
+      throw new StateError("conflict");
+    }
+    if (semantic.adoptionInFlight) throw new StateError("conflict");
+    const next = parseConversationWorkingState({ ...working, revision: working.revision + 1,
+      target: { ...working.target, tripId: proposal.tripId, tripRevision: proposal.baseRevision },
+      pendingProposalRefs: [...new Set([...working.pendingProposalRefs, "trip_update"])],
+      semantic: { ...semantic, pendingProposal: pending } });
+    await this.store.send(new TransactWriteItemsCommand({ TransactItems: [{ Put: this.store.put(input.principal, workingKey,
+      { revision: next.revision, deleted: false, payload: next }, oldWorking) }] }));
+  }
+
   async acceptIntent(identity: ConversationTurnIdentity, lease: ConversationTurnLease, candidate: AcceptedIntentDelta): Promise<IntentApplicationReceipt> {
     const input = this.identity(identity), delta = parseAcceptedIntentDelta(candidate), snapshot = await this.read(input);
     this.validateLease(snapshot.turn, lease);
@@ -230,12 +263,10 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     // Do not resume a legacy accepted turn as a new multi-operation turn.
     if (turn.intentReceipt && !turn.conditionUpdates) throw new StateError("conflict");
     const payloadHash = createHash("sha256").update(conditionPayload(change)).digest("hex");
-    const recorded = turn.conditionUpdates?.operations.find(({ target }) => target === change.target);
-    if (recorded) {
-      if (recorded.payloadHash !== payloadHash) throw new StateError("conflict");
-      return structuredClone(recorded.receipt);
-    }
-    return this.commitIntent(input, snapshot, lease, overlay => conditionDelta(change, input.turnId, overlay),
+    const recorded = turn.conditionUpdates?.operations.find(({ target, payloadHash: hash }) => target === change.target && hash === payloadHash);
+    if (recorded) return structuredClone(recorded.receipt);
+    const occurrence = turn.conditionUpdates?.operations.filter(({ target }) => target === change.target).length ?? 0;
+    return this.commitIntent(input, snapshot, lease, overlay => conditionDelta(change, input.turnId, overlay, occurrence),
       { target: change.target, payloadHash });
   }
 
@@ -346,10 +377,11 @@ function parseDelivery(value: unknown): NonNullable<ConversationTurnResult["deli
   return { status: value.status as NonNullable<ConversationTurnResult["delivery"]>["status"], basis: value.basis as NonNullable<ConversationTurnResult["delivery"]>["basis"] };
 }
 function receiptMatches(receipts: readonly IntentApplicationReceipt[], binding: IntentProposalBinding): boolean {
-  const receipt = receipts.find(({ intentRevision }) => intentRevision === binding.intentRevision);
-  if (!receipt) return false;
-  return binding.changes.every((change) => receipt.operations.some((operation) => operation.status === "accepted" && operation.operationId === change.changeRef &&
-    operation.groupId === change.groupRef && operation.action === change.action && operation.target === change.target && JSON.stringify(operation.scope) === JSON.stringify(change.scope)));
+  if (!receipts.some(({ intentRevision }) => intentRevision === binding.intentRevision)) return false;
+  return binding.changes.every((change) => receipts.some((receipt) => receipt.intentRevision <= binding.intentRevision &&
+    receipt.operations.some((operation) => operation.status === "accepted" && operation.operationId === change.changeRef &&
+      operation.groupId === change.groupRef && operation.action === change.action && operation.target === change.target &&
+      JSON.stringify(operation.scope) === JSON.stringify(change.scope))));
 }
 function sameAdoption(left: { binding: IntentProposalBinding; tripId: string; baseTripRevision: number; mutationId: string },
   right: { binding: IntentProposalBinding; tripId: string; baseTripRevision: number; mutationId: string }): boolean {

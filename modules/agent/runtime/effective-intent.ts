@@ -62,9 +62,13 @@ export function compileEffectiveIntent(input: {
   overlay: ConversationIntentOverlay;
 }): EffectiveIntent {
   const constraints = input.baseRequest?.constraints ?? [];
-  const actualConversationFacts = input.overlay.facts.filter(({ frame }) => frame === "actual").map(clone);
-  const hypotheticalFacts = input.overlay.facts.filter(({ frame }) => frame === "hypothetical").map(clone);
+  const overlayActualFacts = input.overlay.facts.filter(({ frame }) => frame === "actual").map(clone);
   const actualRetractions = input.overlay.tombstones.filter(({ frame }) => frame === "actual");
+  const persistedPartialFacts = (input.baseRequest?.partialConditions ?? []).filter((fact) =>
+    !overlayActualFacts.some((current) => current.target === fact.target && JSON.stringify(current.scope) === JSON.stringify(fact.scope)) &&
+    !actualRetractions.some((current) => current.target === fact.target && JSON.stringify(current.scope) === JSON.stringify(fact.scope))).map(clone);
+  const actualConversationFacts = [...persistedPartialFacts, ...overlayActualFacts];
+  const hypotheticalFacts = input.overlay.facts.filter(({ frame }) => frame === "hypothetical").map(clone);
   const suppressedBaseRefs = constraints.filter((constraint) => suppressedByConversation(constraint, actualConversationFacts, actualRetractions))
     .map(({ id }) => `constraint:${id}`);
   if (input.baseRequest?.goal && targetSuppressed("goal", actualConversationFacts, actualRetractions)) suppressedBaseRefs.push("request:goal");

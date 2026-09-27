@@ -2,7 +2,7 @@ import type { ItineraryItem } from "./trip";
 import { validateTripParty, samePartyValue, type TripParty } from "./trip-party";
 import { exactKeys } from "./snapshot-validation";
 import { nonemptyText, validateTripRequirement, type TripRequirement } from "./trip-requirement";
-import { parseIntentScope, intentModalities, intentTargets, type IntentPrecision, type IntentScope, type IntentTarget } from "./conversation-intent";
+import { parseConversationIntentOverlay, parseIntentScope, intentModalities, intentTargets, type ConversationIntentFact, type IntentPrecision, type IntentScope, type IntentTarget } from "./conversation-intent";
 export type { TripRequirement } from "./trip-requirement";
 
 export interface TripRequest {
@@ -10,6 +10,9 @@ export interface TripRequest {
   readonly constraints: readonly TripConstraint[];
   readonly assumptions: readonly PlanAssumption[];
   readonly party?: TripParty;
+  /** Explicit user conditions that are not yet representable as a planning Requirement
+   * (for example total people only, end-date only, or budget without currency/basis). */
+  readonly partialConditions?: readonly ConversationIntentFact[];
   /** Explicit per-trip inhibition of a Profile fallback. This is not a saved
    * preference deletion and carries only verified semantic provenance. */
   readonly profileSuppressions?: readonly ProfileInheritanceSuppression[];
@@ -65,10 +68,16 @@ export interface PlanAssumption {
 export function validateTripRequest(request: TripRequest, items: readonly ItineraryItem[], refs: {
   readonly logicalDayIds?: ReadonlySet<string>; readonly segmentIds?: ReadonlySet<string>; readonly participantIds?: ReadonlySet<string>;
 } = {}): void {
-  exactKeys(request, ["goal", "constraints", "assumptions", "party", "profileSuppressions"]);
+  exactKeys(request, ["goal", "constraints", "assumptions", "party", "partialConditions", "profileSuppressions"]);
   if ((request.goal !== undefined && !nonemptyText(request.goal)) || !Array.isArray(request.constraints) || !Array.isArray(request.assumptions)) throw new Error("Invalid Trip request");
   uniqueIds(request.constraints); uniqueIds(request.assumptions);
-  if (request.profileSuppressions !== undefined) {
+  if (request.partialConditions !== undefined) {
+    if (!Array.isArray(request.partialConditions) || request.partialConditions.length > 24 ||
+        request.partialConditions.some(({ frame, provenance }) => frame !== "actual" || provenance.kind !== "user_turn")) throw new Error("Invalid partial conditions");
+    parseConversationIntentOverlay({ version: 1, intentRevision: 0, facts: request.partialConditions,
+      tombstones: [], appliedMutationIds: [] });
+  }
+    if (request.profileSuppressions !== undefined) {
     if (!Array.isArray(request.profileSuppressions) || request.profileSuppressions.length > 24) throw new Error("Invalid profile suppressions");
     uniqueIds(request.profileSuppressions);
     for (const suppression of request.profileSuppressions) {
