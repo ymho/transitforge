@@ -18,7 +18,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Archive locked dependencies only
-        run: tar -czf /tmp/issue729-dependencies.tar.gz node_modules frontend/node_modules backend/agent-api/node_modules
+        run: find . -type d -name node_modules -prune -print0 | tar --null -T - -czf /tmp/issue729-dependencies.tar.gz
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: issue729-dependencies
