@@ -1,0 +1,89 @@
+name: Agent v2 / Free dialogue pre-merge live
+on:
+  push:
+    branches: [feat/agent-v2-free-dialogue-736]
+    paths: [.github/workflows/free-dialogue-live.yml]
+permissions:
+  contents: read
+concurrency:
+  group: transitforge-strands-v2-live
+  cancel-in-progress: false
+jobs:
+  evaluate:
+    if: github.ref == 'refs/heads/feat/agent-v2-free-dialogue-736'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-northeast-1
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      MODEL_ID: jp.amazon.nova-2-lite-v1:0
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Validate deterministic boundaries
+        run: |
+          npm ci
+          npm run typecheck:tools
+          npm run test:agent:v2
+      - name: Resolve dedicated evaluation role
+        id: role
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${AWS_DEPLOY_ROLE_ARN:?}"
+          account_id="${AWS_DEPLOY_ROLE_ARN#arn:aws:iam::}"
+          account_id="${account_id%%:*}"
+          [[ "$account_id" =~ ^[0-9]{12}$ ]]
+          echo "arn=arn:aws:iam::${account_id}:role/transitforge-dev-github-agent-eval" >> "$GITHUB_OUTPUT"
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5
+        with:
+          role-to-assume: ${{ steps.role.outputs.arn }}
+          aws-region: ap-northeast-1
+          mask-aws-account-id: true
+      - name: Three independent persisted-history dialogue repetitions
+        env:
+          AGENT_V2_LIVE: 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/free-dialogue-live
+          {
+            echo '### Free dialogue pre-merge live'
+            echo "- Commit: $GITHUB_SHA"
+            echo "- Model: $MODEL_ID"
+            echo '- Budget: 6 turns x 6 calls x 3 = at most 108 model calls.'
+            echo '- Per turn: 60 seconds, per-model output 1536, cumulative output 4096.'
+            echo '- Synthetic owner-scoped state only; no production writes or external Travel Providers.'
+            echo '- Parent 0c5f6ba passed Acceptance, Smoke, and full CI.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          status=0
+          for attempt in 1 2 3; do
+            npm run test:agent:v2:free-dialogue-live -- --reporter=default --reporter=json --outputFile=".artifacts/free-dialogue-live/free-${attempt}.json" || status=1
+          done
+          exit "$status"
+      - name: Publish bounded summary
+        if: always()
+        shell: bash
+        run: |
+          for file in .artifacts/free-dialogue-live/free-*.json; do
+            if [[ -f "$file" ]]; then
+              echo "$(basename "$file")" >> "$GITHUB_STEP_SUMMARY"
+              jq '{success,numPassedTests,numFailedTests,numPendingTests}' "$file" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: free-dialogue-live-${{ github.run_id }}
+          path: .artifacts/free-dialogue-live
+          retention-days: 14
+          if-no-files-found: warn
