@@ -35,7 +35,7 @@ describe("verified principal → applications → DynamoDB", () => {
     await expect(profiles.update(b, stateProfile(), 0)).rejects.toMatchObject({ code: "not-found" });
     await expect(profiles.delete(b, 0)).rejects.toMatchObject({ code: "not-found" });
     await profiles.update(b, { ...stateProfile(), considerations: "Bのメモ" }, null);
-    expect((await profiles.get(a))?.profile).toEqual(stateProfile());
+    expect((await profiles.get(a))?.profile).toEqual({ ...stateProfile(), updatedAt: "2026-09-18T12:00:00.000Z" });
     await profiles.delete(b, 0);
     expect(await profiles.get(a)).toBeDefined();
   });
