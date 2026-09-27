@@ -30,7 +30,7 @@ export class DynamoDbConversationRepository implements ConversationRepository {
     if (envelope.deleted) return undefined;
     try {
       const value = envelope.payload;
-      exactObject(value, ["conversationId", "ownerSubject", "createdAt", "updatedAt", "revision", "messageCount", "title", "scope", "summary", "resolvedTopics", "pendingTopics", "tripId", "draftRequest"]);
+      exactObject(value, ["conversationId", "ownerSubject", "createdAt", "updatedAt", "revision", "messageCount", "title", "scope", "summary", "resolvedTopics", "pendingTopics", "tripId"]);
       const { conversationId, ownerSubject, createdAt, updatedAt, revision: version, messageCount, ...fields } = value;
       if (conversationId !== id || ownerSubject !== principal.subject || version !== envelope.revision) throw new Error();
       timestamp(createdAt); timestamp(updatedAt); sequence(messageCount);
