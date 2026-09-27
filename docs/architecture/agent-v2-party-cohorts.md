@@ -82,3 +82,11 @@ AGENT_V2_LIVE=true MODEL_ID=jp.amazon.nova-2-lite-v1:0 npm run test:agent:v2:par
 どちらも1ターン最大6 model calls・60秒で、実Providerやproduction stateへは書き込まない。fixtureはユーザーの後続発言を別turnで実行するだけで、runtimeへの自動repairやretryを追加しない。
 
 厳密な初回probeのrun `36294025636`では、元の10ターンは2/3成功、重複訂正は3/3成功、対象未確定時の確認は0/3だった。対話完了gateの成功とこの未達項目は、PRと#736で別々に報告する。受理した条件が利用者に見えづらい表示の問題も#721/#736で扱う。固定fixtureの成功を未知の全発話に対する保証とは扱わない。
+
+### 対話契約の更新
+
+自由文・受理内容表示・履歴込みの短い訂正を[公開回答境界](agent-v2-publication.md#対話の自由文と受理済み条件729--736)へ追加した。
+従来fixtureにも直前の公開会話履歴を渡す。callbackの完全一致ではなく、受理されたoperationと
+revisionを検証する。`clarification`という返答種別だけで全条件の更新を禁止しない。
+未確定の同行者は保留し、同じ発言で出発地だけ変更できることをproduction-shaped fixtureで確認する。
+初回解釈probeと、明示訂正後の保存結果の区別は維持する。

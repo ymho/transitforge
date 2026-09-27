@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Agent, AfterToolCallEvent } from "@strands-agents/sdk";
-import { agentV2StructuredOutputSchema } from "@raiquora/agent/agent-v2-reply";
+import { outputSyntaxDiagnostic } from "../adapters/strands-output-syntax.fixture.js";
 import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
@@ -16,20 +16,6 @@ import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
 
 // Synthetic fixture only. Hooks observe SDK validation; they never rewrite inputs,
 // retry a Tool, publish a fallback or log prose, IDs, exception messages or reasoning.
-const fields = new Set(["reply", "kind", "text", "commentary", "message", "target", "references", "evidenceIds", "receiptId", "operation"]);
-const codes = new Set(["unrecognized_keys", "invalid_type", "invalid_value", "invalid_union", "too_small", "too_big", "invalid_format", "custom"]);
-const kinds = new Set(["answer", "candidates", "conversation", "clarification", "uncertainty", "unavailable", "operation_result"]);
-export function outputSyntaxDiagnostic(value: unknown) {
-  const parsed = agentV2StructuredOutputSchema.safeParse(value);
-  const reply = value && typeof value === "object" && "reply" in value ? value.reply : undefined;
-  const kind = reply && typeof reply === "object" && "kind" in reply ? reply.kind : undefined;
-  return { valid: parsed.success, kind: typeof kind === "string" && kinds.has(kind) ? kind : "unknown",
-    issues: parsed.success ? [] : parsed.error.issues.slice(0, 8).map(issue => ({
-      code: codes.has(issue.code) ? issue.code : "other",
-      path: issue.path.slice(0, 6).map(key => typeof key === "number" ? "index" : fields.has(String(key)) ? String(key) : "other"),
-      ...(issue.code === "unrecognized_keys" ? { keys: issue.keys.slice(0, 8).map(key => fields.has(key) ? key : "other") } : {}),
-    })) };
-}
 
 describe.skipIf(process.env.AGENT_V2_LIVE !== "true")("dialogue output with real Nova 2 Lite", () => {
   it("finishes a nonpersistent participation what-if through SDK structured output", async () => {
@@ -46,7 +32,7 @@ describe.skipIf(process.env.AGENT_V2_LIVE !== "true")("dialogue output with real
     const tools = new AgentToolRegistry(), evidence = new ToolEvidenceRegistry();
     const limits = { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 1, maxExecutionMs: 60000, maxEvidence: 4 };
     let writerCallbacks = 0;
-    const engine = new StrandsAgentEngine({ modelId: process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0", region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1536 }, {
+    const engine = new StrandsAgentEngine({ modelId: process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0", region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1536, maxInvocationOutputTokens: 1536 }, {
       createAgent: config => { const agent = new Agent(config); agent.addHook(AfterToolCallEvent, event => {
         if (event.toolUse.name === "strands_structured_output") console.log(JSON.stringify({ event: "output_syntax", sdkStatus: event.result.status, ...outputSyntaxDiagnostic(event.toolUse.input) }));
       }); return agent; },

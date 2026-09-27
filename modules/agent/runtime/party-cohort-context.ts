@@ -35,7 +35,7 @@ export function partyCohortEditableValue(intent?: EffectiveIntent, catalog?: Par
     if (!indexes.length || indexes[0]! < 0 || indexes.some((index, offset) => index !== indexes[0]! + offset)) return null;
     return { ...attributes, scope: { kind: "logical_days" as const, fromDay: indexes[0]! + 1, toDay: indexes[indexes.length - 1]! + 1 } };
   });
-  return projected.some(cohort => cohort === null) ? null : projected;
+  return projected.every(cohort => cohort !== null) ? projected : null;
 }
 
 function currentCohorts(intent?: EffectiveIntent) {

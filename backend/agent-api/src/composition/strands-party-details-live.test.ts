@@ -48,6 +48,7 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
       quote: "以前に受理された合成条件" }, "synthetic-prior-details", overlay)).overlay;
   }
   const journal = new Map<string, { payload: string; receipt: IntentApplicationReceipt }>();
+  const history: Array<{ role: "user" | "assistant"; text: string }> = [];
   const repository: ConversationConditionRepository = { acceptCondition: async (identity, _lease, change) => {
     const key = conditionOperationId(identity.turnId, change.target), payload = conditionPayload(change), saved = journal.get(key);
     if (saved) { if (saved.payload !== payload) throw new StateError("conflict"); return saved.receipt; }
@@ -64,14 +65,14 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
     const tools = new AgentToolRegistry(), evidenceRegistry = new ToolEvidenceRegistry();
     let modelCalls = 0, writerCallbacks = 0;
     const selectedTools: string[] = [];
-    const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1_536 }, {
+    const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1_536, maxInvocationOutputTokens: 1_536 }, {
       createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, event => {
         modelCalls++; selectedTools.push(...event.message.content.flatMap(block => block.type === "toolUseBlock"
           ? [["update_current_party", "update_current_party_details", "consider_trip_scenario", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
       }); return agent; },
     });
     const result = await createStrandsServerRuntime(engine)({ executionId: turnId, userRequest: scenario.message,
-      researchMode: { requestedMode: "standard", effectiveMode: "standard" }, context: { effectiveIntent: compileEffectiveIntent({ overlay }) },
+      researchMode: { requestedMode: "standard", effectiveMode: "standard" }, context: { effectiveIntent: compileEffectiveIntent({ overlay }), conversation: { messages: history.slice(-12) } },
       tools, evidenceRegistry, toolExecutor: new AgentToolExecutor(tools, evidenceRegistry), limits,
       researchLedger: new ResearchExecutionLedger(researchBudgetForRuntimeLimits(limits, "cohort-live"), { requestedMode: "standard", effectiveMode: "standard" }),
       conditionController: { ...(scopeCatalog ? { scopeCatalog } : {}), apply: async change => {
@@ -79,6 +80,8 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
         return { receipt: publicSemanticReceipt(await apply(change, scopeCatalog)), effectiveIntent: compileEffectiveIntent({ overlay }) };
       } },
     });
+    history.push({ role: "user", text: scenario.message });
+    if (result.status === "completed") history.push({ role: "assistant", text: result.response });
     const details = overlay.facts.find(fact => fact.target === "party_details")?.value;
     const expectedDetails = scenario.cohorts ? { kind: "party_cohorts", cohorts: parsePartyCohorts(scenario.cohorts) } : undefined;
     // Bounded operational diagnostics only; no model prose, reasoning or production inputs.
@@ -98,10 +101,9 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
         // first-pass probes. No hypothetical turn may use this observation lane.
         expect(scenario.scenario).not.toBe(true);
         expect(scenario.noCatalog).not.toBe(true);
-        if (result.publicReply?.kind === "clarification") {
-          expect.soft(writerCallbacks, "a clarification must not also write").toBe(0);
-          expect.soft(overlay).toEqual(before);
-        }
+        // A misinterpreted first turn stays a quality failure in the strict probe.
+        // Final-reply kind alone does not determine which independent slot may
+        // commit. The production-history fixture checks the unresolved slot.
         continue;
       }
     }
@@ -109,15 +111,13 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
     expect.soft(details, `${fixture} case ${index} final cohorts`).toEqual(expectedDetails);
     expect.soft(journal.size, `${fixture} case ${index} accepted operations`).toBe(dialogueCompletion ? journalBefore.size + (scenario.update ? 1 : 0) : scenario.writes);
     expect.soft(overlay.intentRevision, `${fixture} case ${index} revisions`).toBe(before.intentRevision + (scenario.update ? 1 : 0));
-    if (!dialogueCompletion) expect.soft(selectedTools.includes("update_current_party"), `${fixture} case ${index} must not flatten scope into count`).toBe(false);
-    if (!scenario.noCatalog) expect.soft(selectedTools.includes("update_current_party_details"), `${fixture} case ${index} details writer`).toBe(!!scenario.update);
     expect.soft(selectedTools.includes("consider_trip_scenario"), `${fixture} case ${index} scenario`).toBe(!!scenario.scenario);
     if (scenario.scenario || !scenario.update && !scenario.noCatalog) {
       expect.soft(writerCallbacks, `${fixture} case ${index} no writer callbacks`).toBe(0);
       expect.soft(overlay, `${fixture} case ${index} unchanged state`).toEqual(before);
     }
     if (scenario.update) {
-      expect.soft(writerCallbacks, `${fixture} case ${index} one final decision`).toBe(1);
+      expect.soft([...journal.keys()].filter(key => !journalBefore.has(key)), `${fixture} case ${index} one accepted decision`).toEqual([conditionOperationId(turnId, "party_details")]);
       expect.soft(result.publicReply?.kind, `${fixture} case ${index} unnecessary questionnaire`).toBe("conversation");
     }
     if (scenario.noCatalog || scenario.clarification) expect.soft(result.publicReply).toMatchObject({ kind: "clarification", question: "participation_scope" });

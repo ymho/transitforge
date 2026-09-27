@@ -134,7 +134,7 @@ it("actual SDK usage reaches the Conversation diagnostic sink and CLI on a faile
   await state.conversations.create(stateA, conversationId, metadata);
   const record = vi.fn(async (_event: AgentDiagnosticEvent) => undefined);
   const engine = new StrandsAgentEngine({ modelId: "unused", region: "ap-northeast-1", systemPrompt: "test",
-    maxTurns: 10, maxOutputTokens: 4096 }, { model });
+    maxTurns: 10, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096 }, { model });
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips",
     stateClient: state.client, tripClient: trips.client, diagnostics: { record }, newExecutionId: () => "test-execution",
     model: { converse: vi.fn(async () => { throw new Error("V1 must not run"); }) }, weather: { search: vi.fn() },

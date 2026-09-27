@@ -25,7 +25,9 @@ export interface StrandsAgentEngineOptions {
   systemPrompt: string;
   maxTurns?: number;
   maxTotalTokens?: number;
+  /** Per model response, not the cumulative invocation budget. */
   maxOutputTokens?: number;
+  maxInvocationOutputTokens?: number;
   toolTimeoutMs?: number;
 }
 export interface StrandsAgentRunInput {
@@ -172,8 +174,8 @@ export class StrandsAgentEngine {
           turns: input.limits?.maxTurns ?? this.options.maxTurns ?? 8,
           ...(input.limits?.maxTotalTokens ?? this.options.maxTotalTokens
             ? { totalTokens: input.limits?.maxTotalTokens ?? this.options.maxTotalTokens } : {}),
-          ...(input.limits?.maxOutputTokens ?? this.options.maxOutputTokens
-            ? { outputTokens: input.limits?.maxOutputTokens ?? this.options.maxOutputTokens } : {}),
+          ...(input.limits?.maxOutputTokens ?? this.options.maxInvocationOutputTokens
+            ? { outputTokens: input.limits?.maxOutputTokens ?? this.options.maxInvocationOutputTokens } : {}),
         },
       });
       if (intentUnavailable) throw new ServerAgentRuntimeExecutionError("intent_state", "unknown");

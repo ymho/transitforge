@@ -37,7 +37,7 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
     const v1 = { converse: vi.fn(async () => { throw new Error("V1 must not run"); }) };
     let execution = 0;
     const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
-      maxTurns: 6, maxOutputTokens: 1024 }, { createAgent: config => {
+      maxTurns: 6, maxOutputTokens: 1024, maxInvocationOutputTokens: 1024 }, { createAgent: config => {
       const agent = new Agent(config);
       // Read-only SDK hooks for this synthetic live lane; never alter input, Tools,
       // retries or termination. No user text, IDs, raw Tool data or reasoning is logged.

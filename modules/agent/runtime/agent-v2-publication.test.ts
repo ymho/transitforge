@@ -163,3 +163,29 @@ describe("Agent v2 publication contract", () => {
     expect(result.evidence[0]!.facts.sourceExcerpt).not.toBe("changed");
   });
 });
+
+it.each([
+  { kind: "conversation", message: "acknowledgement" },
+  { kind: "clarification", target: "participation_scope" },
+  { kind: "uncertainty" },
+])("admits contextual dialogue without manufacturing Evidence or mutation authority: $kind", draft => {
+  const commentary = "帰る方はまだ未定ですね。決まってから参加範囲を反映しましょう。";
+  const result = admitAgentV2Reply({ ...draft, commentary }, { executionId: "dialogue", evidence: [] });
+  expect(result.text).toBe(commentary);
+  expect(result.claims).toEqual([]);
+  expect(result.evidence).toEqual([]);
+  expect(result.proof.operation).toBeUndefined();
+  expect(result.proof.commentary).toBe(true);
+  expect(JSON.stringify(result.proof)).not.toContain(commentary);
+  for (const extra of [{ receiptId: "invented" }, { references: [{ evidenceId: "invented", field: "price" }] }])
+    expect(() => admitAgentV2Reply({ ...draft, commentary, ...extra }, { executionId: "dialogue", evidence: [] })).toThrow("invalid_proposal");
+  for (const text of ["<thinking>private</thinking>", "\u0000hidden", " ", "x".repeat(1201)])
+    expect(() => admitAgentV2Reply({ ...draft, commentary: text }, { executionId: "dialogue", evidence: [] })).toThrow();
+  const html = admitAgentV2Reply({ ...draft, commentary: '<script>x</script>[x](javascript:bad)' }, { executionId: "dialogue", evidence: [] });
+  expect(html.text).not.toContain("<script>");
+  expect(html.text).not.toContain("[x](javascript:");
+});
+it("allows a contextual clarification about a known destination rather than repeating the fixed questionnaire", () => {
+  expect(admitAgentV2Reply({ kind: "clarification", target: "destination", commentary: "京都のどのエリアを考えていますか？" },
+    { executionId: "dialogue", evidence: [], effectiveIntent: intent() }).text).toContain("どのエリア");
+});

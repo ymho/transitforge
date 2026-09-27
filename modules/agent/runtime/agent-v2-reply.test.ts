@@ -14,7 +14,7 @@ describe("single-source V2 reply syntax", () => {
   });
   it.each([
     { kind: "candidates" },
-    { kind: "conversation", message: "greeting", commentary: "こんにちは" },
+    { kind: "conversation", message: "greeting", commentary: "" },
     { kind: "answer", references: [] },
     { kind: "candidates", evidenceIds: ["evidence:1"], commentary: "説明", cards: [] },
   ])("rejects the same invalid syntax at both boundaries", (reply) => {
