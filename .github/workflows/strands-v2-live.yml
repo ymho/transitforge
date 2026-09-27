@@ -18,6 +18,7 @@ on:
           - "travel-period"
           - "budget-condition"
           - "party-details"
+          - "party-details-dialogue"
       repetitions:
         description: Independent repetitions per case
         required: true
@@ -103,7 +104,8 @@ jobs:
             condition-operations) cases=7; cycles=8 ;;
             party-condition|travel-period) cases=6; cycles=6 ;;
             budget-condition) cases=7; cycles=6 ;;
-            party-details) cases=14; cycles=6 ;;
+            party-details) cases=22; cycles=6 ;;
+            party-details-dialogue) cases=9; cycles=6 ;;
             *) echo "Invalid CASE_ID: $CASE_ID" >&2; exit 2 ;;
           esac
           maximum_calls=$((cases * REPETITIONS * cycles))
@@ -118,10 +120,13 @@ jobs:
             echo "- External read Tool calls per turn: at most 2 (basic cases: 1)"
             echo "- Deadline per turn: 60s"
             echo "- External Travel Providers / production state: none"
+            if [[ "$CASE_ID" == "party-details-dialogue" ]]; then
+              echo '- Dialogue completion/recovery gate only; first-pass quality failures remain tracked in #736.'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run Strands v2 live evaluation
-        if: inputs.case_id != 'conversation-output' && inputs.case_id != 'condition-operations' && inputs.case_id != 'party-condition' && inputs.case_id != 'travel-period' && inputs.case_id != 'budget-condition' && inputs.case_id != 'party-details'
+        if: inputs.case_id != 'conversation-output' && inputs.case_id != 'condition-operations' && inputs.case_id != 'party-condition' && inputs.case_id != 'travel-period' && inputs.case_id != 'budget-condition' && inputs.case_id != 'party-details' && inputs.case_id != 'party-details-dialogue'
         shell: bash
         run: |
           set -euo pipefail
@@ -131,13 +136,14 @@ jobs:
           npm run eval:agent:strands:live -- "${args[@]}"
 
       - name: Run independent Conversation or condition repetitions
-        if: inputs.case_id == 'conversation-output' || inputs.case_id == 'condition-operations' || inputs.case_id == 'party-condition' || inputs.case_id == 'travel-period' || inputs.case_id == 'budget-condition' || inputs.case_id == 'party-details'
+        if: inputs.case_id == 'conversation-output' || inputs.case_id == 'condition-operations' || inputs.case_id == 'party-condition' || inputs.case_id == 'travel-period' || inputs.case_id == 'budget-condition' || inputs.case_id == 'party-details' || inputs.case_id == 'party-details-dialogue'
         shell: bash
         env:
           AGENT_V2_LIVE: 'true'
         run: |
           set -euo pipefail
           mkdir -p .artifacts/strands-v2-live
+          test_args=()
           case "$CASE_ID" in
             conversation-output) script=test:agent:v2:conversation-live ;;
             condition-operations) script=test:agent:v2:condition-live ;;
@@ -145,11 +151,15 @@ jobs:
             travel-period) script=test:agent:v2:period-live ;;
             budget-condition) script=test:agent:v2:budget-live ;;
             party-details) script=test:agent:v2:party-details-live ;;
+            party-details-dialogue)
+              script=test:agent:v2:party-details-live
+              test_args+=(--testNamePattern 'recovers from|dialogue completion')
+              ;;
             *) exit 2 ;;
           esac
           status=0
           for ((attempt=1; attempt<=REPETITIONS; attempt++)); do
-            npm run "$script" -- --reporter=default --reporter=json --outputFile=".artifacts/strands-v2-live/${CASE_ID}-${attempt}.json" || status=1
+            npm run "$script" -- "${test_args[@]}" --reporter=default --reporter=json --outputFile=".artifacts/strands-v2-live/${CASE_ID}-${attempt}.json" || status=1
           done
           exit "$status"
 
