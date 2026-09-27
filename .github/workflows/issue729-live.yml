@@ -1,5 +1,5 @@
 name: Agent v2 / Party details pre-merge live
-# One bounded diagnostic repetition; production code unchanged from 66e2210.
+# Three independent repetitions after full CI for 26e3ff9.
 on:
   push:
     branches: [feat/agent-v2-party-cohorts-729]
@@ -55,7 +55,7 @@ jobs:
           role-to-assume: ${{ steps.eval-role.outputs.role_arn }}
           aws-region: ${{ env.AWS_REGION }}
           mask-aws-account-id: true
-      - name: Run one diagnostic Nova 2 Lite repetition
+      - name: Run three independent Nova 2 Lite repetitions
         shell: bash
         run: |
           set -euo pipefail
@@ -64,12 +64,12 @@ jobs:
             echo '### Party details pre-merge live'
             echo "- Commit: $GITHUB_SHA"
             echo "- Model: $MODEL_ID"
-            echo '- Budget: 10 turns x 6 model calls x 1 diagnostic repetition = at most 60 model calls'
+            echo '- Budget: 10 turns x 6 model calls x 3 independent repetitions = at most 180 model calls'
             echo '- Deadline: 60 seconds per turn; output: 1536 tokens per model call'
             echo '- External Travel Providers and production writes: none'
           } >> "$GITHUB_STEP_SUMMARY"
           status=0
-          for attempt in 1; do
+          for attempt in 1 2 3; do
             npm run test:agent:v2:party-details-live -- --reporter=default --reporter=json --outputFile=".artifacts/issue729-live/party-details-${attempt}.json" || status=1
           done
           exit "$status"
