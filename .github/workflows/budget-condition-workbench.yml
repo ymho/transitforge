@@ -1,4 +1,5 @@
 name: Budget condition workbench (temporary)
+# Diagnostic rerun: classify writer rejection without logging model/user payload.
 
 on:
   push:
