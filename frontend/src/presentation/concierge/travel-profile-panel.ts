@@ -1,6 +1,5 @@
 import { travelPreferenceLabels, type TravelPreference, type UserProfile } from "@raiquora/trip/travel-profile";
 import type { ProfileUiController } from "../../usecases/personal-state/profile-ui-controller";
-import type { ServerProfileState } from "../../usecases/personal-state/server-profile-client";
 
 interface Draft { usualOrigin: string; interests: TravelPreference[]; considerations: string }
 
