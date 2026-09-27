@@ -1,4 +1,5 @@
 name: Agent v2 / Party details pre-merge live
+# Re-run unchanged acceptance cases after full CI for 66e2210.
 on:
   push:
     branches: [feat/agent-v2-party-cohorts-729]
