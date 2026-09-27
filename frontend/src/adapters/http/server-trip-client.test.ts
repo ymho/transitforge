@@ -39,6 +39,23 @@ describe("Trip HTTP client", () => {
     await client.archive(trip.id);
     expect(JSON.parse(request.mock.calls[1]![1]!.body as string)).toEqual({ version: "trip-api-v1", operation: "archive", tripId: trip.id });
   });
+  it("branches a consultation and performs the two-step Trip adoption contract", async () => {
+    const request = vi.fn<typeof fetch>(), client = new HttpServerTripClient("/api/trips/v1", request);
+    const branchId = "75400000-0000-4000-8000-000000000002", mutationId = "75400000-0000-4000-8000-000000000003", confirmationKey = "c".repeat(64);
+    const branched = { ...trip, id: branchId, title: "別案" };
+    request.mockResolvedValueOnce(new Response(JSON.stringify({ version: "trip-api-v1", trip: branched, conversationId: branchId, sourceTripId: trip.id })));
+    expect(await client.branchConsultation({ sourceTripId: trip.id, sourceRevision: 0, tripId: branchId, title: "別案" })).toMatchObject({ trip: branched, conversationId: branchId });
+    const target = { tripId: branchId, baseTripRevision: 0, mutationId, action: "confirm" as const };
+    request.mockResolvedValueOnce(new Response(JSON.stringify({ version: "trip-api-v1", status: "confirmation-required", confirmationKey,
+      preview: { action: "confirm", summary: "この旅程で行く", needsReconfirmation: false } })));
+    expect(await client.previewTripAdoption(target)).toMatchObject({ confirmationKey, preview: { action: "confirm" } });
+    const confirmed = { ...branched, revision: 1, adoption: { confirmedAt: "2026-09-14T02:00:00.000Z" } };
+    request.mockResolvedValueOnce(new Response(JSON.stringify({ version: "trip-api-v1", status: "saved", trip: confirmed })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ version: "trip-api-v1", trip: confirmed })));
+    expect(await client.confirmTripAdoption(target, confirmationKey)).toEqual(confirmed);
+    expect(JSON.parse(request.mock.calls[0]![1]!.body as string)).toMatchObject({ operation: "branch-consultation", sourceTripId: trip.id, tripId: branchId });
+    expect(JSON.parse(request.mock.calls[2]![1]!.body as string)).toMatchObject({ operation: "confirm-trip-adoption", confirmationKey });
+  });
   it("distinguishes not-found from auth/network/invalid response without stale cache", async () => {
     const request = vi.fn<typeof fetch>(); const client = new HttpServerTripClient("/api/trips/v1", request);
     request.mockResolvedValueOnce(new Response("", { status: 404 })); expect(await client.get(trip.id)).toBeUndefined();

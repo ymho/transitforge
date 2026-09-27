@@ -373,6 +373,7 @@ aiGuideController = configureAiGuidePanel(
       options,
     ),
 );
+let openBranchedTrip: (trip: import("@raiquora/trip/trip").Trip, title: string) => Promise<void> = async () => { throw new Error("Branch navigation unavailable"); };
 const tripWorkspace = configureTripWorkspace({
   app, chat: aiGuidePanel, messages: aiGuideMessages, input: aiGuideInput,
   controller: tripWorkspaceController,
@@ -384,6 +385,14 @@ const tripWorkspace = configureTripWorkspace({
   },
   showMap: focusTripMap, loadInTripContext: (tripId) => inTripContextClient.read(tripId),
   ask: (prompt) => aiGuideController.ask(prompt), nextItemId: () => crypto.randomUUID(),
+  changeAdoption: async (trip, action) => {
+    if (!serverTripClient.previewTripAdoption || !serverTripClient.confirmTripAdoption) throw new Error("Trip adoption unavailable");
+    const target = { tripId: trip.id, baseTripRevision: trip.revision, mutationId: crypto.randomUUID(), action };
+    const preview = await serverTripClient.previewTripAdoption(target);
+    await serverTripClient.confirmTripAdoption(target, preview.confirmationKey);
+    await tripWorkspaceController.source()?.retry?.(); await serverTripList.refresh();
+  },
+  branchTrip: (trip, title) => openBranchedTrip(trip, title),
 });
 let canLeaveConditions = () => true;
 const activateConversation = async (sessionId: string) => {
@@ -402,6 +411,17 @@ const activateConversation = async (sessionId: string) => {
     tripWorkspaceController.activateSession(session.id);
     aiGuideController.switchSession(session.id);
   }
+};
+openBranchedTrip = async (trip, title) => {
+  if (!serverTripClient.branchConsultation) throw new Error("Trip branching unavailable");
+  const account = serverTripClient.sessionVersion(), result = await serverTripClient.branchConsultation({
+    sourceTripId: trip.id, sourceRevision: trip.revision, tripId: crypto.randomUUID(), title,
+  });
+  if (account !== serverTripClient.sessionVersion()) throw new Error("Session changed");
+  await Promise.all([serverTripList.refresh(), conversationUi.hydrate()]);
+  const session = await conversationUi.findForTrip(result.trip.id);
+  if (!session || session.id !== result.conversationId) throw new Error("Branch history unavailable");
+  await activateConversation(session.id); tripWorkspace.show("trip");
 };
 const tripNavigation = createTripConsultationNavigation({
   getTrip: (id) => serverTripClient.get(id),

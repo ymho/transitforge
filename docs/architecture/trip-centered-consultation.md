@@ -94,6 +94,14 @@ was `eb1ee3cbc6b17fa5cf425d45bd833fa5ca381261`. Temporary transfer files and its
 workflow were removed before that source commit. Normal PR CI is run against the
 final PR head separately; this record is not a live provider or deployment claim.
 
+## Branch snapshot (#754)
+
+`branch-consultation` snapshots the owner-scoped Trip and its Conversation header/messages in one DynamoDB transaction. The request identifies the exact source Trip revision, and the transaction also fences the Conversation revision. A concurrent Trip edit or appended message therefore returns a conflict rather than a mixed snapshot. A durable destination receipt makes a retry after a lost response return the same branch.
+
+The destination has a new Trip identity, revision `0`, and `pre_trip` lifecycle. Existing adoption intent is retained only with `needsReconfirmation: true`; copied cost observations are marked stale and rebound to the new Trip identity. Visible user/assistant text and delivery status are copied. Turn execution state, Working State, semantic operation receipts, and actionable proposals are excluded, so a branch cannot replay an old tool call or apply a proposal tied to the source Trip. Source and destination then have independent CAS streams.
+
+The atomic transaction supports at most 94 messages after source fences and destination records. A larger history is rejected as `payload-too-large`, never partially copied.
+
 ## Subsequent boundaries
 
 Accepted current-condition adoption/display completion is #761 within #753. Trip

@@ -2,7 +2,7 @@ import { requestSessionVersion, subscribeRequestSession } from "./authenticated-
 import { ApiAuthenticationError } from "../../usecases/auth/api-authentication-error";
 import { personalApiFetch } from "./personal-api-fetch";
 import { validateTrip, TripRevisionConflict, type Trip } from "@raiquora/trip/trip";
-import { TripWriteRejected, type ServerTripClient, type ServerTripPage, type TripMutationRequest, type PlanAdoptionTarget, type PlanAdoptionPreview } from "../../usecases/trip-plan/server-trip-client";
+import { TripWriteRejected, type ServerTripClient, type ServerTripPage, type TripMutationRequest, type PlanAdoptionTarget, type PlanAdoptionPreview, type TripAdoptionTarget, type TripAdoptionPreview } from "../../usecases/trip-plan/server-trip-client";
 import { applyTripProposal } from "@raiquora/trip/trip";
 
 /** No owner parameter/header. The common authenticated transport supplies only an Access Token. */
@@ -66,6 +66,12 @@ export class HttpServerTripClient implements ServerTripClient {
     if ((result!.trip as Trip).id !== input.tripId || result?.conversationId !== input.tripId) throw new Error("Wrong Trip consultation response");
     return { trip: structuredClone(result.trip as Trip), conversationId: result.conversationId as string };
   }
+  async branchConsultation(input: { sourceTripId: string; sourceRevision: number; tripId: string; title: string }) {
+    const result = await this.execute({ operation: "branch-consultation", ...input });
+    validateTrip(result?.trip as Trip);
+    if ((result!.trip as Trip).id !== input.tripId || result?.conversationId !== input.tripId || result?.sourceTripId !== input.sourceTripId) throw new Error("Wrong Trip branch response");
+    return { trip: structuredClone(result.trip as Trip), conversationId: result.conversationId as string, sourceTripId: result.sourceTripId as string };
+  }
   async list(page: { limit?: number; afterTripId?: string } = {}): Promise<ServerTripPage> {
     const result = await this.execute({ operation: "list", ...page });
     if (!Array.isArray(result?.trips) || !result.trips.every((trip) => { try { validateTrip(trip as Trip); return true; } catch { return false; } }) ||
@@ -102,6 +108,20 @@ export class HttpServerTripClient implements ServerTripClient {
     const result = await this.execute({ operation: "confirm-plan-adoption", ...target, confirmationKey });
     validateTrip(result?.trip as Trip); const trip = result!.trip as Trip;
     if (result?.status !== "saved" || trip.id !== target.tripId || trip.revision < target.baseTripRevision + 1) throw new Error("Invalid adoption result");
+    const reloaded = await this.get(target.tripId); if (!reloaded || reloaded.revision < trip.revision) throw new Error("Trip reload failed");
+    return reloaded;
+  }
+  async previewTripAdoption(target: TripAdoptionTarget): Promise<TripAdoptionPreview> {
+    const result = await this.execute({ operation: "preview-trip-adoption", ...target });
+    const preview = result?.preview as TripAdoptionPreview["preview"] | undefined;
+    if (result?.status !== "confirmation-required" || typeof result.confirmationKey !== "string" || !/^[0-9a-f]{64}$/u.test(result.confirmationKey) ||
+        !preview || preview.action !== target.action || typeof preview.summary !== "string" || typeof preview.needsReconfirmation !== "boolean") throw new Error("Invalid Trip adoption preview");
+    return structuredClone({ confirmationKey: result.confirmationKey, preview });
+  }
+  async confirmTripAdoption(target: TripAdoptionTarget, confirmationKey: string): Promise<Trip> {
+    const result = await this.execute({ operation: "confirm-trip-adoption", ...target, confirmationKey });
+    validateTrip(result?.trip as Trip); const trip = result!.trip as Trip;
+    if (result?.status !== "saved" || trip.id !== target.tripId || trip.revision !== target.baseTripRevision + 1) throw new Error("Invalid Trip adoption result");
     const reloaded = await this.get(target.tripId); if (!reloaded || reloaded.revision < trip.revision) throw new Error("Trip reload failed");
     return reloaded;
   }

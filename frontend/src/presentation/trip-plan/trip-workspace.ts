@@ -14,6 +14,8 @@ import { travelIcon } from "../shared/travel-icon";
 import { renderTripMap, tripDetailTabs, tripOverviewCopy, type TripDetailTab } from "./trip-detail-view";
 import { renderTripTravelMode } from "./trip-travel-mode";
 import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
+import type { Trip } from "@raiquora/trip/trip";
+import { canConfirmTrip } from "@raiquora/trip/trip-adoption";
 
 /** DOM and navigation only. The supplied source owns the current server Trip. */
 export function configureTripWorkspace(options: {
@@ -23,6 +25,8 @@ export function configureTripWorkspace(options: {
   loadInTripContext?(tripId: string): Promise<InTripContextSnapshot | undefined>;
   ask(prompt: string): void; nextItemId(): string;
   onViewChange?(view: "chat" | "trip"): void;
+  changeAdoption?(trip: Trip, action: "confirm" | "withdraw"): Promise<void>;
+  branchTrip?(trip: Trip, title: string): Promise<void>;
 }) {
   const { controller, app } = options;
   const panel = element("section", "trip-workspace"); panel.id = "trip-workspace"; panel.hidden = true;
@@ -36,7 +40,25 @@ export function configureTripWorkspace(options: {
   const notice = element("p", "trip-workspace-notice");
   const openConsultation = control("この旅について相談", () => show("chat"));
   openConsultation.dataset.tripConsultation = "";
-  heading.append(emblem, title, notice, summary, openConsultation, openTravelMode);
+  let adoptionBusy = false, branchBusy = false;
+  const adoption = control("この旅程で行く", () => {
+    const trip = controller.current(); if (!trip || !options.changeAdoption) return;
+    const action = trip.adoption && !trip.adoption.needsReconfirmation ? "withdraw" : "confirm";
+    const message = action === "confirm" ? "この旅程を確定しますか？" : "確定を取り消して計画へ戻しますか？";
+    if (!document.defaultView?.confirm(message)) return;
+    adoptionBusy = true; adoption.disabled = true;
+    void options.changeAdoption(trip, action).then(() => report(action === "confirm" ? "旅程を確定しました。" : "計画中へ戻しました。"))
+      .catch(() => report("旅程の状態を変更できませんでした。最新の旅程を確認してください。")).finally(() => { adoptionBusy = false; adoption.disabled = false; });
+  });
+  const branch = control("この旅程を分岐", () => {
+    const trip = controller.current(); if (!trip || !options.branchTrip) return;
+    const value = document.defaultView?.prompt("分岐した旅程の名前", `${trip.title}（分岐）`)?.trim();
+    if (!value) return;
+    branchBusy = true; branch.disabled = true;
+    void options.branchTrip(trip, value).catch(() => report("旅程を分岐できませんでした。最新の旅程を確認してください。"))
+      .finally(() => { branchBusy = false; branch.disabled = false; });
+  });
+  heading.append(emblem, title, notice, summary, openConsultation, adoption, branch, openTravelMode);
   const retry = control("旅程を再読み込み", () => { void controller.source()?.retry?.(); });
   const assumptions = element("section", "trip-workspace-assumptions");
   const feasibility = element("div");
@@ -160,7 +182,7 @@ export function configureTripWorkspace(options: {
     retry.hidden = !controller.source()?.retry;
     retry.disabled = controller.loadState() === "loading";
     add.hidden = consult.hidden = !trip;
-    openTravelMode.hidden = openConsultation.hidden = !trip;
+    openTravelMode.hidden = openConsultation.hidden = adoption.hidden = branch.hidden = !trip;
     if (!trip) {
       title.textContent = "旅程"; summary.textContent = "";
       report(controller.loadState() === "loading" ? "サーバから旅程を読み込んでいます。" : "旅程を取得できません。認証と接続、参照先の状態を確認して再試行してください。端末の旧旅程へは切り替えていません。");
@@ -195,6 +217,13 @@ export function configureTripWorkspace(options: {
       if (editor) { costs.append(editor); report("旅程が更新されました。費用の入力は残しています。取消後、最新の費用から編集し直してください。"); }
     }
     title.textContent = view.title;
+    const role = controller.source()?.getRole?.(), personalOwner = role === undefined || role === "owner";
+    adoption.hidden = !options.changeAdoption || !personalOwner || ["cancelled", "completed"].includes(trip.lifecycleState);
+    adoption.textContent = trip.adoption && !trip.adoption.needsReconfirmation ? "計画へ戻す"
+      : trip.adoption?.needsReconfirmation ? "変更後の旅程を再確認" : "この旅程で行く";
+    adoption.disabled = adoptionBusy || (!trip.adoption || trip.adoption.needsReconfirmation ? !canConfirmTrip(trip) : false);
+    branch.hidden = !options.branchTrip || !personalOwner;
+    branch.disabled = branchBusy;
     const partyLabel = view.party.startsWith("今回の人数") ? view.party : `今回の人数: ${view.party}`;
     summary.textContent = `${view.state}\n${partyLabel}\n${view.places}`;
     const oldSummary = overview.querySelector(".trip-detail-overview-copy"); oldSummary?.remove();

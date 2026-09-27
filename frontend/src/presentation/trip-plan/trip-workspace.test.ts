@@ -10,18 +10,19 @@ import { costForecast } from "../../../../modules/trip/domain/trip-costs.fixture
 import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.fixture";
 import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 
-function setup(source?: TripWorkspaceSource, loadInTripContext?: (tripId: string) => Promise<InTripContextSnapshot | undefined>) {
+function setup(source?: TripWorkspaceSource, loadInTripContext?: (tripId: string) => Promise<InTripContextSnapshot | undefined>,
+  actions: Partial<Pick<Parameters<typeof configureTripWorkspace>[0], "changeAdoption" | "branchTrip">> = {}) {
   const app = document.createElement("main"); app.id = "app"; document.body.append(app);
   const chat = document.createElement("section"); chat.id = "chat";
   const messages = document.createElement("ol"), input = document.createElement("input"); chat.append(messages, input);
   app.append(chat);
   const controller = createTripWorkspaceController("one"), ask = vi.fn(), showContext = vi.fn(), returnToConversation = vi.fn();
   if (source) controller.attach("one", source);
-  const ui = configureTripWorkspace({ app, chat, messages, input, controller, ask, showContext, returnToConversation, showMap: vi.fn(), loadInTripContext, nextItemId: () => "new-free" });
+  const ui = configureTripWorkspace({ app, chat, messages, input, controller, ask, showContext, returnToConversation, showMap: vi.fn(), loadInTripContext, nextItemId: () => "new-free", ...actions });
   return { app, chat, messages, input, controller, ui, ask, showContext };
 }
 function button(root: ParentNode, text: string) { return [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === text)!; }
-afterEach(() => document.body.replaceChildren());
+afterEach(() => { document.body.replaceChildren(); vi.unstubAllGlobals(); });
 
 describe("Trip workspace DOM and mobile navigation", () => {
   it("switches the four detail tabs with keyboard semantics while keeping one Trip source", () => {
@@ -95,6 +96,17 @@ describe("Trip workspace DOM and mobile navigation", () => {
     f.controller.attach("one", { getCurrentTrip: () => createTrip(placesTripId, "空の旅程", placesAt) });
     expect(f.ui.panel.hidden).toBe(false); expect(f.ui.panel.textContent).toContain("空の旅程");
     expect(f.ui.panel.querySelectorAll(".trip-workspace-card")).toHaveLength(0);
+  });
+  it("requires explicit UI confirmation for adoption and branches from the displayed revision", async () => {
+    const trip = createTrip(placesTripId, "出雲の旅", placesAt, [{ id: "visit", title: "出雲大社", type: "activity", category: "sightseeing",
+      schedule: { type: "day", date: "2026-10-01", timeZone: "Asia/Tokyo" } }]);
+    const changeAdoption = vi.fn(async () => undefined), branchTrip = vi.fn(async () => undefined);
+    vi.stubGlobal("confirm", vi.fn(() => true)); vi.stubGlobal("prompt", vi.fn(() => "雨の日案"));
+    const f = setup({ getCurrentTrip: () => trip }, undefined, { changeAdoption, branchTrip });
+    button(f.ui.panel, "この旅程で行く").click();
+    await vi.waitFor(() => expect(changeAdoption).toHaveBeenCalledWith(trip, "confirm"));
+    button(f.ui.panel, "この旅程を分岐").click();
+    await vi.waitFor(() => expect(branchTrip).toHaveBeenCalledWith(trip, "雨の日案"));
   });
   it("preserves input, session, both scroll positions, focus, collapse and proposal through chat/trip/chat", () => {
     const f = setup({ getCurrentTrip: multiCityTrip }); f.input.value = "編集中の文章"; f.messages.scrollTop = 240; f.input.focus();
