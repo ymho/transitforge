@@ -22,6 +22,7 @@ export function configureTripWorkspace(options: {
   showContext(view: ContextViewKind): void; returnToConversation(): void; showMap(itemId?: string): void;
   loadInTripContext?(tripId: string): Promise<InTripContextSnapshot | undefined>;
   ask(prompt: string): void; nextItemId(): string;
+  onViewChange?(view: "chat" | "trip"): void;
 }) {
   const { controller, app } = options;
   const panel = element("section", "trip-workspace"); panel.id = "trip-workspace"; panel.hidden = true;
@@ -33,7 +34,9 @@ export function configureTripWorkspace(options: {
   const openTravelMode = control("旅行モードを開く", () => { void showTravelMode(); });
   const emblem = element("span", "trip-workspace-emblem"); emblem.innerHTML = travelIcon("trip"); emblem.setAttribute("aria-hidden", "true");
   const notice = element("p", "trip-workspace-notice");
-  heading.append(emblem, title, notice, summary, openTravelMode);
+  const openConsultation = control("この旅について相談", () => show("chat"));
+  openConsultation.dataset.tripConsultation = "";
+  heading.append(emblem, title, notice, summary, openConsultation, openTravelMode);
   const retry = control("旅程を再読み込み", () => { void controller.source()?.retry?.(); });
   const assumptions = element("section", "trip-workspace-assumptions");
   const feasibility = element("div");
@@ -106,6 +109,7 @@ export function configureTripWorkspace(options: {
     }
     state.view = view; options.returnToConversation(); options.showContext(view === "trip" ? "trip-plan" : "map");
     app.dataset.tripWorkspaceView = view;
+    options.onViewChange?.(view);
     for (const button of [chatButton, tripButton]) button.setAttribute("aria-pressed", String(button === (view === "trip" ? tripButton : chatButton)));
     panel.scrollTop = state.scroll;
     if (view === "chat") { options.messages.scrollTop = state.chatScroll; (state.focus?.isConnected ? state.focus : options.input).focus({ preventScroll: true }); }
@@ -156,7 +160,7 @@ export function configureTripWorkspace(options: {
     retry.hidden = !controller.source()?.retry;
     retry.disabled = controller.loadState() === "loading";
     add.hidden = consult.hidden = !trip;
-    openTravelMode.hidden = !trip;
+    openTravelMode.hidden = openConsultation.hidden = !trip;
     if (!trip) {
       title.textContent = "旅程"; summary.textContent = "";
       report(controller.loadState() === "loading" ? "サーバから旅程を読み込んでいます。" : "旅程を取得できません。認証と接続、参照先の状態を確認して再試行してください。端末の旧旅程へは切り替えていません。");

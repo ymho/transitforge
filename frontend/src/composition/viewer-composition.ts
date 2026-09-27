@@ -1,3 +1,4 @@
+import { startFreshConsultation } from "../usecases/concierge/start-fresh-consultation";
 import type { TripRequest } from "@raiquora/trip/trip-request";
 import { createTripConsultationNavigation } from "../usecases/trip-plan/trip-consultation-navigation";
 import { currentAuthentication } from "./auth-composition";
@@ -181,13 +182,10 @@ const unsignedConversation: ConversationSession = {
   createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
 };
 let activeConversationSession = unsignedConversation;
-const pendingConsultationKey = "raiquora:pending-consultation";
 const isSignedIn = canUsePersonalState;
 if (isSignedIn()) {
   try {
-    activeConversationSession = (await conversationUi.hydrate()) ?? await conversationUi.create();
-    await conversationUi.loadHistory(activeConversationSession.id);
-    activeConversationSession = conversationUi.active() ?? activeConversationSession;
+    // No standalone-chat restoration or empty server conversation at startup.
     await profileUi.hydrate();
   } catch { conversationUi.clear(); profileUi.clear(); }
 }
@@ -283,7 +281,10 @@ const mobileContextNavigation = createMobileContextNavigation({
   restoreFocus: () => window.matchMedia("(pointer: fine)").matches,
 });
 const returnToConversation = () => {
-  if (app.dataset.primaryView === "map") primaryShell?.navigate("chat");
+  if (app.dataset.primaryView === "map") {
+    if (conversationUi.active()) primaryShell?.showConversation(activeConversationSession.tripId);
+    else primaryShell?.navigate("chat");
+  }
   delete app.dataset.mapFocusMode;
   if (mobileContextNavigation.isOpen()) mobileContextNavigation.close();
   scheduleContextMapResize();
@@ -384,6 +385,11 @@ const tripWorkspace = configureTripWorkspace({
   app, chat: aiGuidePanel, messages: aiGuideMessages, input: aiGuideInput,
   controller: tripWorkspaceController,
   showContext: (view) => contextWorkspaceController.show(view), returnToConversation,
+  onViewChange: (view) => {
+    const trip = tripWorkspaceController.current();
+    if (view === "trip" && trip) primaryShell?.showTrip(trip.id);
+    else if (view === "chat") primaryShell?.showConversation(trip?.id);
+  },
   showMap: focusTripMap, loadInTripContext: (tripId) => inTripContextClient.read(tripId),
   ask: (prompt) => aiGuideController.ask(prompt), nextItemId: () => crypto.randomUUID(),
 });
@@ -415,24 +421,25 @@ const tripNavigation = createTripConsultationNavigation({
   show: (view) => { returnToConversation(); aiGuideController.open(); tripWorkspace.show(view); },
   sessionVersion: () => serverTripClient.sessionVersion(),
 });
-const createAndActivateConversation = async () => {
-  if (!canLeaveConditions()) throw new Error("Navigation cancelled");
-  const navigation = tripNavigation.cancel(), account = serverTripClient.sessionVersion();
-  if (!isSignedIn()) throw new Error("Authentication required");
-  const session = await conversationUi.create({}, false);
-  if (navigation !== tripNavigation.version() || account !== serverTripClient.sessionVersion()) throw new Error("Navigation cancelled");
-  await activateConversation(session.id);
-  return session;
+const resetConsultation = () => {
+  tripNavigation.cancel(); conversationUi.clear();
+  activeConversationSession = { ...unsignedConversation, id: `ui-new-${crypto.randomUUID()}` };
+  serverAgentSession.contextChanged();
+  tripWorkspaceController.activateSession(activeConversationSession.id);
+  contextWorkspaceController.activateSession(activeConversationSession.id);
+  aiGuideController.switchSession(activeConversationSession.id);
 };
 const startNewConsultation = async (prompt: string) => {
-  if (!isSignedIn()) {
-    try { sessionStorage.setItem(pendingConsultationKey, prompt.slice(0, 400)); } catch { /* Optional UI-only return draft. */ }
-    aiGuideController.notify("相談を保存して続けるにはログインが必要です。ログイン画面へ移動します。");
-    await currentAuthentication().login();
-    return;
-  }
-  await createAndActivateConversation();
-  aiGuideController.ask(prompt);
+  if (!isSignedIn()) throw new Error("Authentication required");
+  if (!canLeaveConditions()) throw new Error("Navigation cancelled");
+  const navigation = tripNavigation.cancel(), account = serverTripClient.sessionVersion();
+  await startFreshConsultation(prompt, {
+    create: () => conversationUi.create({}, false),
+    activate: activateConversation,
+    isCurrent: () => isSignedIn() && navigation === tripNavigation.version() && account === serverTripClient.sessionVersion(),
+    currentConversationId: () => activeConversationSession.id,
+    submit: value => aiGuideController.ask(value),
+  });
 };
 let initialAuthenticationNotification = true;
 let authenticationGeneration = 0;
@@ -445,15 +452,9 @@ currentAuthentication().subscribe(() => {
   tripWorkspaceController.activateSession(unsignedConversation.id);
   contextWorkspaceController.activateSession(unsignedConversation.id);
   if (!isSignedIn()) return;
-  void Promise.all([conversationUi.hydrate(), profileUi.hydrate()]).then(async ([session]) => {
-    if (generation !== authenticationGeneration) return;
-    const selected = session ?? await conversationUi.create();
-    if (generation !== authenticationGeneration) return;
-    await activateConversation(selected.id);
-    let pending: string | undefined;
-    try { pending = sessionStorage.getItem(pendingConsultationKey)?.slice(0, 400); sessionStorage.removeItem(pendingConsultationKey); } catch { /* Storage denial only prevents automatic return. */ }
-    if (pending?.trim() && generation === authenticationGeneration) aiGuideController.ask(pending.trim());
-  }).catch(() => undefined);
+  void profileUi.hydrate().catch(() => {
+    if (generation === authenticationGeneration) profileUi.clear();
+  });
 });
 configureApplicationSettingsPanel(document, {
   travelProfileToggle,
@@ -490,12 +491,7 @@ configureTripSharing({ root: document.body, button: sharingButton, client: new H
     returnToConversation(); tripWorkspace.show("trip");
   } });
 aiGuideController.open();
-if (isSignedIn()) {
-  try {
-    const pending = sessionStorage.getItem(pendingConsultationKey)?.slice(0, 400); sessionStorage.removeItem(pendingConsultationKey);
-    if (pending?.trim()) aiGuideController.ask(pending.trim());
-  } catch { /* Storage denial only prevents automatic return. */ }
-}
+
 applyContextWorkspaceState();
 if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip-workspace-preview") === "1") {
   if (!token) mapTools.hidden = true;
@@ -548,11 +544,13 @@ primaryShell = configureAiFirstShell(document, app, {
   },
   authState: () => currentAuthentication().getState(), login: () => { void currentAuthentication().login(); }, logout: () => { void currentAuthentication().logout(); },
   retry: async () => { await serverTripList.refresh(); },
-  newConsultation: (prompt) => { void startNewConsultation(prompt).catch(() => aiGuideController.notify("相談を始めるにはログインしてください。")); },
+  newConsultation: startNewConsultation,
+  resetConsultation,
+  cancelNavigation: () => { tripNavigation.cancel(); },
   openChat: () => { aiGuideController.open(); if (tripWorkspaceController.current()) tripWorkspace.show("chat"); delete app.dataset.mapFocusMode; },
   openTrip: (id) => { void tripNavigation.open(id, "trip").catch(() => aiGuideController.notify("旅程を読み込めませんでした。")); },
   openTravelMode: (id) => { void tripNavigation.open(id, "trip").then(() => tripWorkspace.openTravelMode()).catch(() => aiGuideController.notify("旅行モードを開けませんでした。")); },
-  consultTrip: (id) => { void tripNavigation.open(id, "chat").catch(() => aiGuideController.notify("対象の旅程を読み込めませんでした。")); },
+  consultTrip: (id) => tripNavigation.open(id, "chat"),
   renameTrip: async (id, title) => {
     const current = await serverTripClient.get(id); if (!current) throw new Error("Trip unavailable");
     await serverTripClient.mutate({ tripId: id, baseRevision: current.revision, mutationId: crypto.randomUUID(),
@@ -584,7 +582,7 @@ const consultationScreen = configureConsultationScreen(aiGuidePanel, aiGuideMess
   },
   preview: (proposal) => { tripWorkspaceController.preview(proposal); tripWorkspace.show("trip"); },
   showTrip: () => { if (tripWorkspaceController.current()) tripWorkspace.show("trip"); },
-  newConversation: () => { void createAndActivateConversation().then(() => aiGuideController.open()).catch(() => aiGuideController.notify("相談を始めるにはログインしてください。")); },
+  newConversation: () => { primaryShell?.navigate("chat"); },
   cancelDraftTrip: () => { pendingDraftTripIds.delete(activeConversationSession.id); },
   saveDraftRequest: async (next, expected) => {
     const id = activeConversationSession.id, account = serverTripClient.sessionVersion();
