@@ -1,4 +1,4 @@
-import { createTrip } from "@raiquora/trip/trip";
+import { applyTripProposal, createTrip } from "@raiquora/trip/trip";
 import { expect, it, vi } from "vitest";
 import { Model, type BaseModelConfig, type Message, type ModelStreamEvent, type StreamOptions } from "@strands-agents/sdk";
 import type { Evidence } from "@raiquora/agent/evidence-model";
@@ -204,6 +204,28 @@ it("executes independent conditions in one model response before reading and rep
   expect(model.requests).toHaveLength(3);
   expect(result.consultationRequestProposal).toBeUndefined();
   expect(result.tripUpdateProposal).toBeUndefined();
+});
+
+it("does not revive an old conversation condition after the Trip was manually edited", async () => {
+  const test = await setup();
+  const first = test.build([update("京都"), uncertainty], "manual-edit-first");
+  await first.app.runConversationTurn({ ...test.input, userRequest: "京都に行きたい" });
+  const current = (await test.trips.repository.get(test.principal, stateMetadata().tripId))!;
+  const request = { ...current.request, constraints: current.request.constraints.map((constraint) =>
+    constraint.requirement.type === "destinations" ? { ...constraint, requirement: { ...constraint.requirement,
+      places: [{ name: "神戸", sources: [] }] } } : constraint) };
+  const proposal = { tripId: current.id, baseRevision: current.revision, summary: "手動で行き先を神戸へ変更",
+    patches: [{ type: "request" as const, request }] };
+  await test.trips.repository.applyMutation(test.principal, { tripId: current.id, baseRevision: current.revision,
+    mutationId: "99999999-9999-4999-8999-999999999999", proposal }, (trip) => applyTripProposal(trip, proposal));
+  const probe = test.build([uncertainty], "manual-edit-probe");
+  await probe.app.runConversationTurn({ ...test.input, turnId: "79999999-9999-4999-8999-999999999999", userRequest: "今の行き先で相談を続けたい" });
+  const effective = probe.runRuntime.mock.calls[0]?.[0].context?.effectiveIntent;
+  expect(effective?.actualConversationFacts.some(({ target }) => target === "destination")).toBe(false);
+  expect(effective?.activeBaseFacts.some(({ target, requirement }) => target === "destination" &&
+    requirement.type === "destinations" && requirement.places.some(({ name }) => name === "神戸"))).toBe(true);
+  expect(effective?.activeBaseFacts.some(({ requirement }) => requirement.type === "destinations" &&
+    requirement.places.some(({ name }) => name === "京都"))).toBe(false);
 });
 
 it("uses standard Tool validation feedback and accepts a valid operation after rejected input", async () => {
