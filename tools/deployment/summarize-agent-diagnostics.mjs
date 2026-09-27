@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
+import { executionSummaryRows } from "./agent-execution-summary.mjs";
 
 const [diagnosticPath, streamPath, modelShapePath] = process.argv.slice(2);
 if (!diagnosticPath || !streamPath) throw new Error("Expected diagnostic and stream event files");
 
-const diagnostics = messages(diagnosticPath)
-  .filter((value) => value.event === "agent_diagnostic")
+const diagnosticMessages = messages(diagnosticPath).filter((value) => value.event === "agent_diagnostic");
+const diagnostics = diagnosticMessages
   .map(({ phase, reason, mode, incomplete, occurredAt }) => ({
     phase: text(phase),
     reason: text(reason),
@@ -29,12 +30,17 @@ const modelShapes = modelShapePath ? messages(modelShapePath)
 
 console.log("## Agent production diagnostics (last 2 hours)");
 console.log("");
-console.log("Only bounded phase/reason/status fields are aggregated; conversation content and identifiers are excluded.");
+console.log("Only bounded phase/reason/status fields and numeric usage are aggregated; conversation content and identifiers are excluded.");
 console.log("");
 table(
   ["Phase", "Reason", "Mode", "Incomplete", "Count", "Latest (UTC)"],
   groupedDiagnostics(diagnostics),
 );
+console.log("");
+console.log("### Execution termination (separate from reply publication)");
+console.log("Usage cells show maximum (measured samples / group samples), not sums or percentiles. not_recorded is not zero. Legacy logs cannot reconstruct missing usage.");
+table(["Reason", "Stop reason", "Local limit", "Samples", "Model calls", "Read Tool calls", "Input tokens", "Output tokens", "Total tokens", "Latest (UTC)"],
+  executionSummaryRows(diagnosticMessages));
 console.log("");
 table(["Stream event", "HTTP status", "Count", "Max latency (ms)"], groupedStreams(streams));
 if (modelShapePath) {

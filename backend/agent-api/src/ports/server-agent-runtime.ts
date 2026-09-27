@@ -10,6 +10,7 @@ import type { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registr
 import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { ConversationConditionInput } from "@raiquora/agent/conversation-condition";
 import type { PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
+import type { AgentExecutionDiagnostic } from "./agent-diagnostics.js";
 
 /** Bounded runtime failure metadata. It deliberately carries no provider message,
  * prompt, user content, Tool payload, URL, ID or raw exception. */
@@ -41,6 +42,8 @@ export interface ServerAgentRuntimeInput {
   researchLedger: ResearchExecutionLedger;
   initialEvidence?: Evidence[];
   reportProgress?: AgentProgressReporter;
+  /** Operational metadata only; never part of SSE, history or an authoritative reply. */
+  reportExecution?: (diagnostic: AgentExecutionDiagnostic) => Promise<void>;
   /** Application-owned condition writer. Replays remain available after a partial turn. */
   conditionController?: ServerAgentConditionController;
 }
