@@ -61,7 +61,8 @@ export function strandsTurnInput(input: ServerAgentRuntimeInput & {
     // SDK Tool specs are the capability source of truth. Do not duplicate an
     // incomplete registry view here (Application-local writers are added later).
   });
-  const serialized = JSON.stringify({ userMessage: input.userRequest, application });
+  // Historical provenance is reference data; the current request follows it.
+  const serialized = JSON.stringify({ application, userMessage: input.userRequest });
   // Fail explicitly rather than silently dropping dates, exclusions or corrections.
   if (serialized.length > 24_000) throw new StrandsTurnInputError("context_budget");
   return serialized;
