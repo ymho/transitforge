@@ -88,7 +88,6 @@ export const travelPeriodValueSchema = z.strictObject({
 export const travelPeriodUpdateInputSchema = z.strictObject({
   action: z.enum(["set", "clear"]),
   period: travelPeriodValueSchema.optional(),
-  budget: budgetConditionValueSchema.optional(),
   quote: sourceQuote,
 }).superRefine((value, context) => {
   if (value.action === "set" && value.period === undefined) context.addIssue({ code: "custom", message: "set requires period" });
@@ -99,6 +98,7 @@ export const tripScenarioInputSchema = z.strictObject({
   kind: z.enum(["party", "travel_period", "budget"]),
   party: partyConditionValueSchema.optional(),
   period: travelPeriodValueSchema.optional(),
+  budget: budgetConditionValueSchema.optional(),
   quote: sourceQuote,
 }).superRefine((value, context) => {
   if (value.kind === "party" && (value.party === undefined || value.period !== undefined || value.budget !== undefined))
@@ -213,10 +213,10 @@ export function conditionDelta(change: ConversationConditionChange, turnId: stri
   const slot = conditionSlot(change), mutationId = conditionOperationId(turnId, slot);
   if (change.target === "travel_period") return travelPeriodDelta(change, turnId, overlay, mutationId);
   if (change.target === "budget") {
-    const cleared = change.budget === null;
-    const value: IntentValue | undefined = cleared ? undefined : { kind: "money", amount: change.budget.amount,
-      ...(change.budget.currency ? { currency: change.budget.currency } : {}),
-      ...(change.budget.basis ? { basis: change.budget.basis } : {}) };
+    const budget = change.budget, cleared = budget === null;
+    const value: IntentValue | undefined = budget === null ? undefined : { kind: "money", amount: budget.amount,
+      ...(budget.currency ? { currency: budget.currency } : {}),
+      ...(budget.basis ? { basis: budget.basis } : {}) };
     const approximate = /(?:くらい|ぐらい|程度|ほど|前後|目安)/u.test(change.quote);
     return parseAcceptedIntentDelta({ version: 1, mutationId, baseIntentRevision: overlay.intentRevision,
       speechAct: cleared ? "cancel" : "inform", operations: [{
