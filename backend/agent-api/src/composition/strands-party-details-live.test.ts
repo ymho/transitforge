@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isDeepStrictEqual } from "node:util";
 import { Agent, ModelMessageEvent } from "@strands-agents/sdk";
 import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
@@ -33,10 +34,13 @@ const childUntilDayTwo: PartyCohort = { ...child, scope: days(["day-a", "day-b"]
 const adult: PartyCohort = { count: 1, membership: "baseline", ageDecade: "thirties", scope: whole };
 const joined: PartyCohort = { ...college, membership: "additional", scope: days(["day-b", "day-c"]) };
 const segment: PartyCohort = { ...joined, scope: { kind: "segment", tripId: catalog.tripId, tripRevision: catalog.tripRevision, segmentId: "return" } };
-interface Case { message: string; cohorts?: PartyCohort[]; writes: number; update?: boolean; scenario?: boolean; noCatalog?: boolean; clarification?: boolean }
+interface Case { message: string; cohorts?: PartyCohort[]; writes?: number; update?: boolean; scenario?: boolean; noCatalog?: boolean; clarification?: boolean; observeFirstInterpretation?: boolean }
 
-/** Each fixture owns independent, synthetic Application state. No production writes. */
-async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCohort[]): Promise<void> {
+/** Each fixture owns independent, synthetic Application state. No production writes.
+ * The original first-pass probes stay strict. Dialogue mode observes the first
+ * interpretation, then REQUIRES the subsequent explicit correction to be right.
+ * This is test sequencing, not a runtime retry/repair or an altered user message. */
+async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCohort[], dialogueCompletion = false): Promise<void> {
   let overlay = reduceConversationIntent(emptyConversationIntentOverlay(), conditionDelta({ target: "party_size",
     party: { kind: "count", people: 3 }, quote: "全体で3人" }, "previous-user-turn", emptyConversationIntentOverlay())).overlay;
   if (initialCohorts) {
@@ -53,7 +57,7 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
   } };
   for (const [index, scenario] of cases.entries()) {
     const turnId = `72900000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
-    const before = structuredClone(overlay);
+    const before = structuredClone(overlay), journalBefore = new Set(journal.keys());
     const apply = createConversationConditionApplication(repository, { principal: stateA, conversationId, turnId },
       { attemptId: turnId, userSequence: index + 1 }, scenario.message);
     const scopeCatalog = scenario.noCatalog ? undefined : catalog;
@@ -76,15 +80,36 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
       } },
     });
     const details = overlay.facts.find(fact => fact.target === "party_details")?.value;
+    const expectedDetails = scenario.cohorts ? { kind: "party_cohorts", cohorts: parsePartyCohorts(scenario.cohorts) } : undefined;
     // Bounded operational diagnostics only; no model prose, reasoning or production inputs.
     console.log(JSON.stringify({ fixture, case: index, modelId, status: result.status, modelCalls, writerCallbacks,
-      acceptedOperations: journal.size, publicationError: result.publicationError, selectedTools, replyKind: result.publicReply?.kind }));
-    expect.soft(result.status, `${fixture} case ${index} reply`).toBe("completed");
-    expect.soft(details, `${fixture} case ${index} final cohorts`).toEqual(scenario.cohorts ? { kind: "party_cohorts", cohorts: parsePartyCohorts(scenario.cohorts) } : undefined);
+      acceptedOperations: journal.size, publicationError: result.publicationError, selectedTools, replyKind: result.publicReply?.kind,
+      ...(scenario.observeFirstInterpretation ? { firstInterpretationMatches: isDeepStrictEqual(details, expectedDetails),
+        clarifiedWithoutWrite: result.publicReply?.kind === "clarification" && writerCallbacks === 0 && isDeepStrictEqual(overlay, before) } : {}) }));
     expect.soft(overlay.facts.find(fact => fact.target === "party_size")?.value, `${fixture} case ${index} global count`).toEqual({ kind: "quantity", amount: 3, unit: "people" });
-    expect.soft(journal.size, `${fixture} case ${index} accepted operations`).toBe(scenario.writes);
+    if (dialogueCompletion) {
+      expect.soft(overlay.facts.filter(f => f.target !== "party_details"), "unrelated conditions are preserved").toEqual(before.facts.filter(f => f.target !== "party_details"));
+      const accepted = [...journal.keys()].filter(key => !journalBefore.has(key));
+      expect.soft(accepted.every(key => key === conditionOperationId(turnId, "party_details")), "only the current cohort business slot can commit").toBe(true);
+      expect.soft(accepted.length, "at most one accepted decision per turn").toBeLessThanOrEqual(1);
+      expect.soft(overlay.intentRevision, "one revision per accepted decision").toBe(before.intentRevision + accepted.length);
+      if (scenario.observeFirstInterpretation) {
+        // Quality failures are recorded above and remain failures in the separate
+        // first-pass probes. No hypothetical turn may use this observation lane.
+        expect(scenario.scenario).not.toBe(true);
+        expect(scenario.noCatalog).not.toBe(true);
+        if (result.publicReply?.kind === "clarification") {
+          expect.soft(writerCallbacks, "a clarification must not also write").toBe(0);
+          expect.soft(overlay).toEqual(before);
+        }
+        continue;
+      }
+    }
+    expect.soft(result.status, `${fixture} case ${index} reply`).toBe("completed");
+    expect.soft(details, `${fixture} case ${index} final cohorts`).toEqual(expectedDetails);
+    expect.soft(journal.size, `${fixture} case ${index} accepted operations`).toBe(dialogueCompletion ? journalBefore.size + (scenario.update ? 1 : 0) : scenario.writes);
     expect.soft(overlay.intentRevision, `${fixture} case ${index} revisions`).toBe(before.intentRevision + (scenario.update ? 1 : 0));
-    expect.soft(selectedTools.includes("update_current_party"), `${fixture} case ${index} must not flatten scope into count`).toBe(false);
+    if (!dialogueCompletion) expect.soft(selectedTools.includes("update_current_party"), `${fixture} case ${index} must not flatten scope into count`).toBe(false);
     if (!scenario.noCatalog) expect.soft(selectedTools.includes("update_current_party_details"), `${fixture} case ${index} details writer`).toBe(!!scenario.update);
     expect.soft(selectedTools.includes("consider_trip_scenario"), `${fixture} case ${index} scenario`).toBe(!!scenario.scenario);
     if (scenario.scenario || !scenario.update && !scenario.noCatalog) {
@@ -130,4 +155,22 @@ describe.skipIf(!enabled)("anonymous party details with real Nova 2 Lite", () =>
       { message: "逆でした。2日目まで参加するのは20代の大学生です。10代の大学生は全行程に参加します。", cohorts: [teen, collegeUntilDayTwo], writes: 2, update: true },
     ], [college, teen]);
   }, 210_000);
+  it("dialogue completion reaches corrected conditions and preserves what-if and unresolved-scope boundaries", async () => {
+    const teenUntilDayTwo = { ...teen, scope: days(["day-a", "day-b"]) };
+    const collegeUntilDayTwo = { ...college, scope: days(["day-a", "day-b"]) };
+    await runCases("dialogue-completion", [
+      { message: "今回の大学生のうち1人が2日目まで参加して離脱しますが、10代と20代のどちらかはまだ決まっていません。", cohorts: [college, teen], observeFirstInterpretation: true },
+      { message: "2日目で帰るのは10代の大学生です。20代の大学生は全行程に参加します。", cohorts: [college, teenUntilDayTwo], update: true },
+      { message: "逆でした。2日目まで参加するのは20代の大学生です。10代の大学生は全行程に参加します。", cohorts: [teen, collegeUntilDayTwo], update: true },
+      { message: "もし20代の大学生も全行程に参加できるならどうですか。今の条件は変えずに考えてください。", cohorts: [teen, collegeUntilDayTwo], scenario: true },
+      { message: "同行者の詳細条件はいったん未定に戻して。合計3人という条件はそのままです。", update: true },
+      { message: "大学生1人が2日目から追加参加することにします。", noCatalog: true },
+    ], [college, teen], true);
+  }, 390_000);
+  it("dialogue completion recovers from a misunderstood combined withdrawal and replacement", async () => {
+    await runCases("compound-correction", [
+      { message: "さっきの同行者の属性条件はいったんすべて取り消します。全行程の同行者のうち1人は小学生です。年齢はまだ分かりません。", cohorts: [child], observeFirstInterpretation: true },
+      { message: "訂正します。同行者の詳細条件として残すのは、全行程に参加する小学生1人だけです。正確な年齢は未確認です。大学生や20代という前の属性は残さず、合計3人という人数条件は変えないでください。", cohorts: [child], update: true },
+    ], [college], true);
+  }, 150_000);
 });
