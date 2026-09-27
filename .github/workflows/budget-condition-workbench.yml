@@ -1,5 +1,5 @@
 name: Budget condition workbench (temporary)
-# Rerun: scenario success explicitly declares no restore writer is required.
+# Final rerun: scenario success must terminate without a restore writer.
 
 on:
   push:
