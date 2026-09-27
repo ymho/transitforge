@@ -104,7 +104,7 @@ export class StrandsAgentEngine {
           return jsonValue({ ok: true, receipt: accepted.receipt, effectiveIntent: accepted.effectiveIntent,
             partyDetailsApplicability: partyCohortContext(accepted.effectiveIntent, controller.scopeCatalog) });
         } catch (error) {
-          if (error instanceof ConditionUpdateRejectedError) throw error;
+          if (error instanceof ConditionUpdateRejectedError) return rejectedCondition(error);
           // The SDK reports Tool errors. An uncertain write additionally closes reads
           // and publication; no recovery by reinterpreting or repairing the user input.
           intentUnavailable = true;
@@ -128,7 +128,7 @@ export class StrandsAgentEngine {
             ? { target: "party_size", party: value.party!, quote: value.quote }
             : { target: "party_size", party: null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "update_current_party_details", inputSchema: partyDetailsUpdateInputSchema,
-          description: "今回の明示された年代・学年・正確な年齢・参加範囲を、匿名cohortの最終状態として1回で受理する。setは設定/訂正、clearは詳細のみ撤回。学生区分と年代は別軸で大学生かつ20代も可。未指定属性を推測しない。baselineは全行程人数の一部、additionalは限定scopeでの追加参加。途中離脱はbaseline cohortの参加範囲を短くする。全行程人数を変更しない。scopeは既知の日/区間の番号だけを指定。what-ifはconsider_trip_scenario(kind=party_details)。Profileは更新しない。料金資格や実名を含めない。",
+          description: "今回の明示された年代・学年・正確な年齢・参加範囲を、匿名cohortの最終状態として1回で受理する。setは詳細全体の置換。以前の条件の取消しと新条件が同じ発言にある場合も、最後に残すcohortsを1回のsetで渡し、clear→setに分けない。clearは最終状態が詳細未定のときだけ使う。学生区分と年代は別軸で大学生かつ20代も可。未指定属性を推測しない。baselineは全行程人数の一部、additionalは限定scopeでの追加参加。途中離脱はbaseline cohortの参加範囲を短くする。全行程人数を変更しない。scopeは既知の日/区間の番号だけを指定。範囲が未解決なら確認が必要で、同じ入力の再試行やwhole_tripへの拡張では解決しない。what-ifはconsider_trip_scenario(kind=party_details)。Profileは更新しない。料金資格や実名を含めない。",
           callback: (value, context) => apply({ target: "party_details", cohorts: value.action === "set" ? value.cohorts! : null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "update_current_travel_period", inputSchema: travelPeriodUpdateInputSchema,
           description: "今回の旅行で実際に採用する旅行期間の最終状態を1回で永続更新する。設定・訂正はaction=set、日程全体を未定へ戻す明示はaction=clear。start/end/durationは今回の発言で明示したものだけ指定する。外側quoteをApplicationが月・日・泊数/日数の根拠として検証する。日付はcalendar_dateでdayを必須、monthは明示または開始日から同月と読める場合、yearは利用者が年を明示した場合だけ設定する。年未指定はApplicationが基準日以降で最初に来る月日へ決める。今日/明日/明後日はrelative_date。以前のduration等を持ち越さず、日付や日数を推測・補完しない。what-if・比較ではconsider_trip_scenarioを使う。",
@@ -144,9 +144,14 @@ export class StrandsAgentEngine {
           description: "現在の実旅行条件を一切変更せず、人数・同行者詳細/参加範囲・旅行期間・予算の仮定、反実仮想、what-if、シナリオ比較を考える非永続Tool。成功時点でactual条件はすでに保持されているため、元の値へ戻す・維持する目的でupdate_current_*を呼ばない。同じuserMessageに仮定とは別の明示的なactual変更がある場合だけ、その変更に対応するwriterを別途使う。保存・A commit・Intent revision更新を行わない。",
           callback: (value, context) => {
             if (context?.cancelSignal.aborted) throw new Error("execution_cancelled");
-            const scenario = admitTripScenario(value, input.userRequest, controller.scopeCatalog);
-            return jsonValue({ ok: true, scenario, currentConditionsUnchanged: true,
-              actualConditionWriteRequired: false, restoreCurrentConditions: false });
+            try {
+              const scenario = admitTripScenario(value, input.userRequest, controller.scopeCatalog);
+              return jsonValue({ ok: true, scenario, currentConditionsUnchanged: true,
+                actualConditionWriteRequired: false, restoreCurrentConditions: false });
+            } catch (error) {
+              if (error instanceof ConditionUpdateRejectedError) return rejectedCondition(error);
+              throw error;
+            }
           } }),
       );
     }
@@ -250,6 +255,13 @@ export function createStrandsReadTools(input: {
           fields: Object.fromEntries(Object.entries(item.facts).filter(([key]) => publicReplyField(key))) })) });
     },
   }));
+}
+/** Known admission rejections are Tool data, not transient SDK execution failures.
+ * Unknown/ambiguous persistence failures still fence reads and publication above. */
+function rejectedCondition(error: ConditionUpdateRejectedError): JSONValue {
+  const scopeMissing = error.code === "scope_required" || error.code === "scope_not_found" || error.code === "stale_scope";
+  return jsonValue({ ok: false, conditionAccepted: false, error: { code: error.code, retryable: false,
+    ...(scopeMissing ? { requiredInput: "participation_scope" } : {}) } });
 }
 function runtimeFailureKind(error: unknown): ServerAgentRuntimeFailureKind {
   const name = error instanceof Error ? error.name : "";

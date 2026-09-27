@@ -5,6 +5,7 @@ import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { successfulAgentToolResult, validAgentToolInput } from "@raiquora/agent/tool-contract";
+import { ConditionUpdateRejectedError } from "@raiquora/agent/conversation-condition";
 import { StrandsAgentEngine, type StrandsAgentFactory } from "./strands-agent-engine.js";
 
 type Reply = { text: string } | { tool: string; input: Record<string, unknown> };
@@ -265,6 +266,33 @@ describe("V2 cohort standard SDK Tools", () => {
     const model = new ScriptedModel([{ tool: "update_current_party_details", input: { action: "set", cohorts: [cohort], quote: "20代の大学生1人" } }, submitted]);
     await new StrandsAgentEngine(options, { model }).run({ ...input, userRequest: "20代の大学生1人", conditionController: { apply } });
     expect(apply).toHaveBeenCalledExactlyOnceWith({ target: "party_details", cohorts: [cohort], quote: "20代の大学生1人" });
+  });
+  it.each(["scope_required", "scope_not_found", "stale_scope"] as const)("returns %s as a nonretryable Tool precondition without closing independent reads", async code => {
+    const { input, execute } = setup();
+    const apply = vi.fn(async () => { throw new ConditionUpdateRejectedError(code); });
+    const model = new ScriptedModel([
+      { tool: "update_current_party_details", input: { action: "set", cohorts: [cohort], quote: "大学生1人" } },
+      lookup, { tool: "strands_structured_output", input: { kind: "clarification", target: "participation_scope" } },
+    ]);
+    const result = await new StrandsAgentEngine(options, { model }).run({ ...input, conditionController: { apply } });
+    expect(apply).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledOnce();
+    expect(result.effectiveIntent).toEqual(input.effectiveIntent);
+    expect(result.replyProposal).toEqual({ kind: "clarification", target: "participation_scope" });
+    const messages = JSON.stringify(model.seenMessages);
+    expect(messages).toContain('"conditionAccepted":false');
+    expect(messages).toContain(JSON.stringify({ code, retryable: false, requiredInput: "participation_scope" }));
+  });
+  it("returns missing what-if scope without calling the writer or fabricating a scenario", async () => {
+    const { input } = setup(), apply = vi.fn();
+    const model = new ScriptedModel([{ tool: "consider_trip_scenario", input: { kind: "party_details",
+      cohorts: [{ ...cohort, membership: "additional", scope: { kind: "logical_days", fromDay: 2 } }], quote: "もし2日目からなら" } },
+      { tool: "strands_structured_output", input: { kind: "clarification", target: "participation_scope" } }]);
+    const result = await new StrandsAgentEngine(options, { model }).run({ ...input, userRequest: "もし2日目からなら", conditionController: { apply } });
+    expect(apply).not.toHaveBeenCalled();
+    expect(result.effectiveIntent).toEqual(input.effectiveIntent);
+    expect(JSON.stringify(model.seenMessages)).toContain('"requiredInput":"participation_scope"');
+    expect(JSON.stringify(model.seenMessages)).not.toContain('"scenario":');
   });
   it("returns a successfully resolved what-if and never invokes the actual writer", async () => {
     const { input } = setup(), apply = vi.fn();

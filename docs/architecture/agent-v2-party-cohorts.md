@@ -4,7 +4,7 @@ Issue: #729。人数条件 #728 とは独立した `party_details` business slot
 
 ## 受理する条件
 
-`update_current_party_details(action=set|clear, cohorts?, quote)` を追加する。1回の呼び出しは、今回の相談における重複しない匿名集団の最終状態を1つの操作として受理する。属性ごとのToolや実名participantは作らない。既存の明示済み属性を維持した訂正も、この最終状態に含める。clearは詳細だけを撤回し、`party_size`は変更しない。
+`update_current_party_details(action=set|clear, cohorts?, quote)` を追加する。1回の呼び出しは、今回の相談における重複しない匿名集団の最終状態を1つの操作として受理する。属性ごとのToolや実名participantは作らない。既存の明示済み属性を維持した訂正も、この最終状態に含める。取消しと新しい詳細を同じ発言で指定した場合も、最後に残す集合を1回のsetで置換する。clear→setへ分割しない。clearは最終状態が未定の場合だけ詳細を撤回し、`party_size`は変更しない。
 
 - `count`、任意の `schoolStage`、`ageDecade`、`exactAge`。
 - 学生区分: preschool / elementary / middle_school / high_school / university。
@@ -42,6 +42,8 @@ Applicationがowner-scoped Tripを読み、そのrevisionのlogicalDaysと`proje
 Strands標準`tool()`、sequential executor、structured outputをそのまま使う。V1 runtime/interpreter/prompt/testsをoracleにしない。意味理解とTool選択はモデル、値検証・scope解決・owner/auth・CAS・replayはApplication/Domain。
 
 `condition:<turnId>:party_details`が操作ID。cohorts全体は1 Intent operation、1 group、1 receipt、1 revisionで既存journal/CASへcommitする。匿名集団の順序はidentityではないため正規化する。異なるTrip revisionへのretryは異なるpayloadとなり、既存の同一ターン操作を上書きできない。A commit後のB失敗、再送、古いターンの書き込みを既存のfencingで防ぐ。
+
+既知の受理拒否は`ok=false`、`conditionAccepted=false`、`retryable=false`を持つTool結果で返す。scope不足・不明・staleの場合は不足入力`participation_scope`も返し、モデルが確認を選べるようにする。Applicationは再試行や最終回答を強制しない。不明な永続化エラーは従来通りreadとpublicationを閉じる。
 
 what-ifは`consider_trip_scenario(kind=party_details)`。scope解決と値検証は共用するがwriter callbackを呼ばず、Intent revision、journal、Profile、Tripを変更しない。成功後にactualを「元に戻す」writerを呼ばない。
 

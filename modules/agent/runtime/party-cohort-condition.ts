@@ -16,8 +16,8 @@ export const partyCohortValueSchema = z.array(z.strictObject({
   scope: scopeSchema.describe("日・区間はApplicationの既知scope選択肢から番号で指定。raw IDは禁止。fromDay省略は初日、toDay省略は既知の最終日。"),
 })).min(1).max(20);
 export const partyDetailsUpdateInputSchema = z.strictObject({
-  action: z.enum(["set", "clear"]),
-  cohorts: partyCohortValueSchema.optional().describe("重複しない匿名集団の最終状態。既存の明示済み属性は維持し、不明な属性は補完しない。"),
+  action: z.enum(["set", "clear"]).describe("setは最終状態への全体置換。取消しと新条件の指定は1回のset。clearは最終的に詳細を未定へ戻す場合のみ。"),
+  cohorts: partyCohortValueSchema.optional().describe("重複しない匿名集団の最終状態。変更も撤回もされていない明示済み属性は維持し、撤回された属性は除く。不明な属性や人数合わせの集団は補完しない。"),
   quote: z.string().min(1).max(300),
 }).superRefine((value, context) => {
   if (value.action === "set" && value.cohorts === undefined || value.action === "clear" && value.cohorts !== undefined)

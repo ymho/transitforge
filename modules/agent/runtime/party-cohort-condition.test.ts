@@ -36,6 +36,18 @@ describe("V2 cohort condition business slot", () => {
     expect(cleared.overlay.facts.map(f => f.target)).toEqual(["party_size"]);
     expect(cleared.overlay.tombstones.some(t => t.target === "party_details")).toBe(true);
   });
+  it("atomically replaces withdrawn details with new details in one final decision", () => {
+    const initial = emptyConversationIntentOverlay();
+    const prior = reduceConversationIntent(initial, conditionDelta(admitConditionChange(input, quote), "prior", initial)).overlay;
+    const message = "前の属性は取り消し、全行程に小学生1人です";
+    const child = { count: 1, membership: "baseline" as const, schoolStage: "elementary" as const, scope: { kind: "whole_trip" as const } };
+    const change = admitConditionChange({ target: "party_details", cohorts: [child], quote: message }, message);
+    const result = reduceConversationIntent(prior, conditionDelta(change, "replace", prior));
+    expect(result.overlay.intentRevision).toBe(prior.intentRevision + 1);
+    expect(result.receipt.operations).toHaveLength(1);
+    expect(result.overlay.facts.find(f => f.target === "party_details")?.value).toEqual({ kind: "party_cohorts", cohorts: [child] });
+    expect(result.overlay.facts.some(f => f.value.kind === "party_cohorts" && f.value.cohorts.some(c => c.ageDecade))).toBe(false);
+  });
   it("rejects an ungrounded quote and detail count exceeding the already accepted baseline", () => {
     expect(() => admitConditionChange(input, "別のメッセージ")).toThrow("invalid_source");
     const before = reduceConversationIntent(emptyConversationIntentOverlay(), conditionDelta({ target: "party_size", party: { kind: "count", people: 1 }, quote: "1人" }, "count", emptyConversationIntentOverlay())).overlay;
