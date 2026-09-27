@@ -20,7 +20,7 @@ const isolated = vi.hoisted(() => ({
 
 // Keep the actual production factory, Tool inventory, Providers, prompt and budgets.
 // Replace only personal state clients/tables and suppress application content logs.
-// The workbench's AWS session policy additionally has no DynamoDB permissions.
+// Any paid runner must additionally exclude real personal-state permissions.
 vi.mock("./production-conversation-agent.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./production-conversation-agent.js")>();
   return { ...actual, createProductionConversationAgent: (options: CompositionOptions) => {
@@ -96,7 +96,7 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
       console.log(JSON.stringify({ event: "production-repro-input", source: process.env.GITHUB_SHA,
         model: environment.MODEL_ID, limits: input.limits,
         tools: input.tools.descriptors().map(({ name }) => name),
-        emptyInitialEvidence: !input.effectiveIntent || !input.effectiveIntent.facts?.length }));
+        initialIntentRevision: input.effectiveIntent?.intentRevision ?? null }));
       const result = await original.call(this, input);
       console.log(JSON.stringify({ event: "production-repro-engine", stopReason: allowedStops.has(result.stopReason) ? result.stopReason : "other",
         limitReason: result.limitReason ?? null, metrics: result.metrics ?? null,
