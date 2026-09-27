@@ -20,7 +20,7 @@ describe("complex semantic acceptance matrix", () => {
     const { tripId: _tripId, ...metadata } = stateMetadata();
     await state.conversations.create(principal, conversationId, metadata);
     const profiles = new ProfileApplication(state.profiles, state.clock);
-    await profiles.update(principal, { ...stateProfile(), home: { station: "京都駅" } }, null);
+    await profiles.update(principal, { ...stateProfile(), usualOrigin: "京都駅" }, null);
     const turns = new DynamoDbConversationTurnRepository("test-state", state.client, state.clock);
     const interpretations = new Map<string, UtteranceInterpretation>([
       ["候補を見せて", noChange()],
