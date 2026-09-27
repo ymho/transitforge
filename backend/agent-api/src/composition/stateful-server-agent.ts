@@ -22,8 +22,6 @@ import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
 import { publicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 import type { ConversationConditionInput } from "@raiquora/agent/conversation-condition";
-import { TripApplication } from "../usecases/trip-application.js";
-import { createHash } from "node:crypto";
 
 /** Internal stateful composition. Transport/auth rollout and env bindings remain with #451/#462/#480. */
 export function createStatefulServerAgent(options: Omit<Parameters<typeof createServerAgent>[0], "loadContext"> & {
@@ -40,13 +38,11 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
     let trip: Trip | undefined, tripUpdateProposal: PublicRequestProposal | undefined;
     let effectiveIntent: EffectiveIntent | undefined, currentIntentReceipt: IntentApplicationReceipt | undefined;
     const turnStates = new DynamoDbConversationTurnRepository(options.stateTable, options.stateClient);
-    const tripRepository = new DynamoDbTripRepository(options.tripTable, options.tripClient);
-    const tripApplication = new TripApplication(tripRepository, tripRepository, undefined, undefined, undefined, undefined, turnStates);
     const contextLoader = createServerStateContextLoader({
       conversations: new ConversationApplication(new DynamoDbConversationRepository(options.stateTable, options.stateClient),
         new DynamoDbItineraryCandidateRepository(options.tripTable, options.tripClient)),
       profiles: new ProfileApplication(new DynamoDbProfileRepository(options.stateTable, options.stateClient)),
-      trips: tripRepository,
+      trips: new DynamoDbTripRepository(options.tripTable, options.tripClient),
       workingStates: turnStates,
     }, { historyBeforeSequence: options.historyBeforeSequence, onTrip: value => { trip = value; },
       onEffectiveIntent: value => { effectiveIntent = value.effectiveIntent; currentIntentReceipt = value.currentReceipt; } });
@@ -63,21 +59,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
               ...(input.tripId ? { tripId: input.tripId } : {}),
               ...(input.uiContext ? { uiContext: input.uiContext } : {}),
             });
-            if (!refreshed.effectiveIntent || !trip || !input.conversationId) throw new Error("Accepted intent requires a refreshed Trip snapshot");
-            const proposal = proposeVerifiedIntentRequest({ conversationId: input.conversationId, trip, effectiveIntent: refreshed.effectiveIntent, receipt });
-            if (proposal) {
-              const mutationId = deterministicConditionMutationId(receipt.mutationId);
-              await tripApplication.execute(input.principal, { version: "trip-api-v1", operation: "mutate", tripId: trip.id,
-                baseRevision: proposal.baseRevision, mutationId, proposal });
-              const committed = await contextLoader({
-                principal: input.principal, conversationId: input.conversationId, tripId: trip.id,
-                ...(input.uiContext ? { uiContext: input.uiContext } : {}),
-              });
-              if (!committed.effectiveIntent) throw new Error("Committed condition requires a refreshed Trip snapshot");
-              return { receipt: publicSemanticReceipt(receipt), effectiveIntent: committed.effectiveIntent };
-            }
-            // Partial conditions that cannot yet be represented in TripRequest are handled by
-            // the next #761 slice; never claim Trip adoption for them here.
+            if (!refreshed.effectiveIntent) throw new Error("Accepted intent requires a refreshed Application snapshot");
             return { receipt: publicSemanticReceipt(receipt), effectiveIntent: refreshed.effectiveIntent };
           },
         } } : {}),
@@ -111,10 +93,4 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
     return { ...result, ...((result.status === "completed" || result.status === "follow_up") && retainedCandidatePlan ? { publicPlanPresentation: retainedCandidatePlan.presentation } : {}),
       ...((result.status === "completed" || result.status === "follow_up") && tripCostProposal ? { tripCostProposal } : {}), ...((result.status === "completed" || result.status === "follow_up") && tripUpdateProposal ? { tripUpdateProposal } : {}) };
   } };
-}
-
-function deterministicConditionMutationId(value: string): string {
-  const hex = createHash("sha256").update(value).digest("hex").slice(0, 32).split("");
-  hex[12] = "4"; hex[16] = ((parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16);
-  return `${hex.slice(0,8).join("")}-${hex.slice(8,12).join("")}-${hex.slice(12,16).join("")}-${hex.slice(16,20).join("")}-${hex.slice(20).join("")}`;
 }
