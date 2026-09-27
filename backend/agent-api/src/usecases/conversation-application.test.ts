@@ -34,8 +34,8 @@ describe("verified principal → applications → DynamoDB", () => {
     expect(await profiles.get(b)).toBeUndefined();
     await expect(profiles.update(b, stateProfile(), 0)).rejects.toMatchObject({ code: "not-found" });
     await expect(profiles.delete(b, 0)).rejects.toMatchObject({ code: "not-found" });
-    await profiles.update(b, { ...stateProfile(), notes: { food: "Bのメモ" } }, null);
-    expect((await profiles.get(a))?.profile.notes).toEqual(stateProfile().notes);
+    await profiles.update(b, { ...stateProfile(), considerations: "Bのメモ" }, null);
+    expect((await profiles.get(a))?.profile).toEqual(stateProfile());
     await profiles.delete(b, 0);
     expect(await profiles.get(a)).toBeDefined();
   });
@@ -54,7 +54,7 @@ describe("verified principal → applications → DynamoDB", () => {
     const app = new ConversationApplication(f.conversations, noCandidateResources, () => id), profile = new ProfileApplication(f.profiles, f.clock);
     await app.create(principal, stateMetadata());
     await profile.update(principal, stateProfile(), null);
-    await profile.update(principal, { ...stateProfile(), preferences: { mountain: 1 } }, 0);
+    await profile.update(principal, { ...stateProfile(), interests: ["mountain"] }, 0);
     await profile.delete(principal, 1);
     await app.delete(principal, id, 0);
     expect(trips.records).toEqual(original);
