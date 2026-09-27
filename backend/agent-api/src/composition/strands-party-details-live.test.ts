@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Agent, ModelMessageEvent } from "@strands-agents/sdk";
+import { Agent, ModelMessageEvent, AfterToolCallEvent } from "@strands-agents/sdk";
 import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
@@ -70,7 +70,13 @@ describe.skipIf(!enabled)("anonymous party details with real Nova 2 Lite", () =>
         createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, event => {
           modelCalls++; selectedTools.push(...event.message.content.flatMap(block => block.type === "toolUseBlock"
             ? [["update_current_party", "update_current_party_details", "consider_trip_scenario", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
-        }); return agent; },
+        });
+          // Only these synthetic fixtures are logged; never model prose/reasoning or production inputs.
+          agent.addHook(AfterToolCallEvent, event => {
+            if (index === 2 || index === 3) console.log(JSON.stringify({ case: index, fixtureTool: {
+              name: event.toolUse.name, input: event.toolUse.input, result: event.result,
+            } }).slice(0, 12_000));
+          }); return agent; },
       });
       const result = await createStrandsServerRuntime(engine)({ executionId: turnId, userRequest: scenario.message,
         researchMode: { requestedMode: "standard", effectiveMode: "standard" }, context: { effectiveIntent: compileEffectiveIntent({ overlay }) },
