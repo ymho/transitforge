@@ -86,7 +86,7 @@ async function setup() {
     });
     return { app, model, runRuntime };
   };
-  return { principal, state, turns, v1Model, operation, build,
+  return { principal, state, trips, turns, v1Model, operation, build,
     input: { principal, conversationId, turnId: secondId, userRequest: "行き先は京都にしたい" } };
 }
 
@@ -108,6 +108,21 @@ it("publishes updated-intent Evidence through A commit, a read, B commit, histor
   expect(test.operation).toHaveBeenCalledOnce();
   expect((await test.state.conversations.history(test.principal, conversationId)).items.map(({ text }) => text))
     .toEqual([test.input.userRequest, result.response]);
+});
+
+it("persists an accepted destination into Trip.request before treating it as reflected", async () => {
+  const test = await setup();
+  const { app } = test.build([update("出雲大社"), uncertainty], "trip-authority-destination");
+  const result = await app.runConversationTurn({ ...test.input, userRequest: "出雲大社に行きたい" });
+  const saved = await test.trips.repository.get(test.principal, stateMetadata().tripId);
+  expect(saved?.request.constraints).toEqual(expect.arrayContaining([
+    expect.objectContaining({ source: "user", requirement: expect.objectContaining({
+      type: "destinations", places: [expect.objectContaining({ name: "出雲大社" })],
+    }) }),
+  ]));
+  expect(result.tripUpdateProposal).toBeUndefined();
+  expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.facts
+    .some(({ target }) => target === "destination")).toBe(false);
 });
 
 it("uses corrected conditions for both read validation and publication on a later turn", async () => {
