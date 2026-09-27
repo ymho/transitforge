@@ -10,10 +10,20 @@ Issue: #729。人数条件 #728 とは独立した `party_details` business slot
 - 学生区分: preschool / elementary / middle_school / high_school / university。
 - 年代: teensからeighties、nineties_plus。学生区分と独立で、大学生かつ20代を保持できる。
 - exactAgeは明示された値だけ。年代から正確な年齢、学校区分から年代や料金区分を補完しない。
-- `membership=baseline` は全行程人数の内数。`additional` は特定範囲で加わる外数。
+- `membership=baseline` は既存の全体人数の内数であり、全行程参加を意味しない。`additional` は特定範囲で加わる外数。
 - 集団の参加範囲を短くすることで途中離脱を表す。合計人数へ平坦化しない。全体人数が未確認なら詳細から全体人数を捏造しない。
 
 全体と匿名集団の上限は20人。全体人数に矛盾する内数は拒否する。詳細受理後に全体人数が変更され矛盾した場合も、詳細を有効な料金・人数条件として使わない。
+
+## 対話による確認と訂正
+
+1要素は同じ人たちの人数・属性・参加範囲を一体で表す。属性の記録と参加日の記録に分割しない。既存の人の参加範囲を変更する時は、その要素を置換し、旧要素を別人として残さない。離脱後の不参加行や人数合わせの集団も生成しない。
+
+変更対象の同行者や範囲が曖昧なら、モデルはwriterを呼ばず既存の`clarification(target=participation_scope)`で確認できる。質問は実名を要求せず、既知の年代等で区別できる。確認中はIntent revision、journal、保存済み条件を変えない。属性が既知でも、新しい発言の変更対象が確定しているとは限らない。
+
+受理済み条件は保存の正本だが、モデルの意味理解が正しかった証明ではない。ユーザーが誤解や重複を指摘した場合は、新しいturnの通常の条件更新で訂正後の最終集合を受理する。無関係な同行者、明示済み属性、全体人数は維持する。以前のturnの再送で訂正を取り消せないことは既存journal/CAS/replayの責務である。
+
+Applicationに発話regexや同じ属性の自動dedupeを追加しない。同じ属性を持つ別人は存在でき、属性一致だけで同一人物と判断できない。意味理解・確認・訂正の判断はモデル、値の妥当性と保存の一貫性はApplication/Domainという境界を保つ。すべての初回理解の完全性ではなく、曖昧な時の非更新と、ユーザーの補足・訂正から正しく復旧できることも受入対象とする。
 
 ## scopeの権限とcurrentness
 
@@ -51,9 +61,11 @@ Trip/Profile writer、予約、決済は接続しない。Profileへ常設同行
 
 ## 検証
 
-- `npm run test:agent:v2`: Domainの独立軸・scope・資格、SDK Tool/what-if、journal/replay/CAS、認証済みproduction-shaped経路を含む。
+- `npm run test:agent:v2`: Domainの独立軸・scope・資格、SDK Tool/what-if、journal/replay/CAS、認証済みproduction-shaped経路、保存済み誤解の訂正・確認時の非更新を含む。
 - `npm run eval:agent:smoke`、`npm test`、`npm run build`、通常CI。
 - `AGENT_V2_LIVE=true MODEL_ID=jp.amazon.nova-2-lite-v1:0 npm run test:agent:v2:party-details-live`。
-- `Agent Eval / Strands v2 Live` の `party-details` は10ターン、1/3独立反復、1ターン最大6 model calls、60秒。実Provider/production stateへの書き込みはない。
+- `Agent Eval / Strands v2 Live` の `party-details` は14ターン、1/3独立反復、1ターン最大6 model calls、60秒。3反復の上限は252 model calls。実Provider/production stateへの書き込みはない。
 
-liveは大学生かつ20代、小学生のexactAge未確認、途中離脱、途中追加、what-ifのwriter callback 0、区間参加、詳細撤回、挨拶/お礼、Trip未解決を確認する。決定論的テストは実モデルの意味理解を証明する代わりではなく、liveと別のゲートである。
+liveの従来10ターンは大学生かつ20代、小学生のexactAge未確認、途中離脱、途中追加、what-ifのwriter callback 0、区間参加、詳細撤回、挨拶/お礼、Trip未解決を確認する。入力と保存結果の期待値は維持する。独立した合成状態から、以前の重複保存をユーザー訂正で解消する1ターンと、曖昧な変更対象の確認→回答の受理→再訂正の3ターンを追加する。確認とwhat-ifではwriter callback 0・状態不変、実際の訂正では1操作・1revisionと無関係な条件の維持を検証する。
+
+決定論的テストは実モデルの意味理解を証明する代わりではなく、liveと別のゲートである。固定ケースの成功を未知の全発話で完全に理解できる保証とは扱わない。
