@@ -137,9 +137,9 @@ it("uses corrected conditions for both read validation and publication on a late
   // The Kyoto lookup before acceptance was rejected without consuming the one-read budget.
   expect(test.operation).toHaveBeenCalledTimes(2);
   const working = await test.turns.getWorkingState(test.principal, conversationId);
-  expect(working?.semantic?.overlay.facts).toEqual(expect.arrayContaining([
-    expect.objectContaining({ target: "destination", value: { kind: "place_label", label: "京都" } }),
-  ]));
+  expect(working?.semantic?.overlay.facts.some(({ target }) => target === "destination")).toBe(false);
+  const saved = await test.trips.repository.get(test.principal, stateMetadata().tripId);
+  expect(saved?.request.constraints.some(({ requirement }) => requirement.type === "destinations" && requirement.places.some(({ name }) => name === "京都"))).toBe(true);
   expect(test.v1Model.converse).not.toHaveBeenCalled();
 });
 
@@ -181,10 +181,10 @@ it("executes independent conditions in one model response before reading and rep
   const result = await app.runConversationTurn(input);
   expect(result.semanticReceipt?.changes.map(({ target }) => target).sort()).toEqual(["destination", "origin"]);
   const state = await test.turns.getWorkingState(test.principal, conversationId);
-  expect(state?.semantic?.overlay.facts).toEqual(expect.arrayContaining([
-    expect.objectContaining({ target: "origin", value: { kind: "place_label", label: "大阪" } }),
-    expect.objectContaining({ target: "destination", value: { kind: "place_label", label: "京都" } }),
-  ]));
+  expect(state?.semantic?.overlay.facts.filter(({ target }) => ["origin","destination"].includes(target))).toEqual([]);
+  const saved = await test.trips.repository.get(test.principal, stateMetadata().tripId);
+  expect(saved?.request.constraints.some(({ requirement }) => requirement.type === "origin" && requirement.place.name === "大阪")).toBe(true);
+  expect(saved?.request.constraints.some(({ requirement }) => requirement.type === "destinations" && requirement.places.some(({ name }) => name === "京都"))).toBe(true);
   expect(test.operation).toHaveBeenCalledOnce();
   expect(model.requests).toHaveLength(3); // A specific two-call batch does not need a separate model round-trip per write.
   expect(await app.runConversationTurn(input)).toEqual(result);
@@ -241,5 +241,5 @@ it("overrides profile hints only in this Conversation and retracts without reviv
   const effective = probe.runRuntime.mock.calls[0]?.[0].context?.effectiveIntent;
   expect(effective?.actualConversationFacts.some(({ target }) => target === "origin")).toBe(false);
   expect(effective?.profileHints.some(({ target }) => target === "origin")).toBe(false);
-  expect(effective?.actualConversationFacts.some(({ target }) => target === "destination")).toBe(true);
+  expect(effective?.activeBaseFacts.some(({ target, requirement }) => target === "destination" && requirement.type === "destinations")).toBe(true);
 });
