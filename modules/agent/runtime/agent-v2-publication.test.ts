@@ -87,7 +87,7 @@ describe("Agent v2 publication contract", () => {
       text: "どちらの大学生が2日目まで参加するか教えてください。実名は不要です。" }, { executionId: "turn-1", evidence: [] });
     expect(clarification.proof.question).toBe("participation_scope");
     expect(clarification.text).toContain("どちらの大学生");
-    expect(() => admitAgentV2Reply({ kind: "conversation", message: "acknowledgement", text: "保存しました。" },
+    expect(() => admitAgentV2Reply({ kind: "conversation", message: "acknowledgement", text: "予約しました。" },
       { executionId: "turn-1", evidence: [] })).toThrow("unsafe_content");
     expect(() => admitAgentV2Reply({ kind: "uncertainty", text: "https://example.test を確認してください。" },
       { executionId: "turn-1", evidence: [] })).toThrow("unsafe_content");
