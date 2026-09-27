@@ -11,11 +11,13 @@ type Reply = { text: string } | { tool: string; input: Record<string, unknown> }
 class ScriptedModel extends Model<BaseModelConfig> {
   private index = 0;
   private config: BaseModelConfig = { modelId: "synthetic" };
+  readonly seenMessages: Message[][] = [];
   readonly toolChoices: StreamOptions["toolChoice"][] = [];
   constructor(private readonly replies: Reply[]) { super(); }
   updateConfig(config: BaseModelConfig): void { this.config = { ...this.config, ...config }; }
   getConfig(): BaseModelConfig { return this.config; }
   async *stream(_messages: Message[], options?: StreamOptions): AsyncGenerator<ModelStreamEvent> {
+    this.seenMessages.push(structuredClone(_messages));
     this.toolChoices.push(options?.toolChoice);
     const reply = this.replies[this.index++];
     if (!reply) throw new Error("Unexpected extra model invocation");
@@ -180,7 +182,7 @@ describe("StrandsAgentEngine", () => {
     const { input } = setup();
     const apply = vi.fn();
     const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([
-      { tool: "consider_trip_scenario", input: { party: { kind: "count", people: 4 }, quote: "もし4人なら" } },
+      { tool: "consider_trip_scenario", input: { kind: "party", party: { kind: "count", people: 4 }, quote: "もし4人なら" } },
       submitted,
     ]) }).run({ ...input, userRequest: "もし4人ならどうなる？今の人数は変えずに比較したい", conditionController: { apply } });
     expect(apply).not.toHaveBeenCalled();
@@ -250,5 +252,42 @@ describe("StrandsAgentEngine", () => {
     expect(apply).toHaveBeenCalledTimes(2);
     expect(apply).toHaveBeenCalledWith({ target: "destination", place: "京都", quote: "京都" });
     expect(apply).toHaveBeenCalledWith({ target: "origin", place: "大阪", quote: "大阪" });
+  });
+});
+
+
+describe("V2 cohort standard SDK Tools", () => {
+  const cohort = { count: 1, membership: "baseline", schoolStage: "university", ageDecade: "twenties", scope: { kind: "whole_trip" } };
+  it("passes a single cohort business operation to Application, not per-attribute writers", async () => {
+    const { input } = setup();
+    const apply = vi.fn(async () => ({ receipt: { version: "public-semantic-receipt-v1" as const, intentRevision: 4,
+      speechAct: "inform" as const, outcome: "accepted" as const, changes: [] }, effectiveIntent: input.effectiveIntent }));
+    const model = new ScriptedModel([{ tool: "update_current_party_details", input: { action: "set", cohorts: [cohort], quote: "20代の大学生1人" } }, submitted]);
+    await new StrandsAgentEngine(options, { model }).run({ ...input, userRequest: "20代の大学生1人", conditionController: { apply } });
+    expect(apply).toHaveBeenCalledExactlyOnceWith({ target: "party_details", cohorts: [cohort], quote: "20代の大学生1人" });
+  });
+  it("returns a successfully resolved what-if and never invokes the actual writer", async () => {
+    const { input } = setup(), apply = vi.fn();
+    const model = new ScriptedModel([{ tool: "consider_trip_scenario", input: { kind: "party_details",
+      cohorts: [{ ...cohort, membership: "additional", scope: { kind: "logical_days", fromDay: 2 } }], quote: "もし2日目からなら" } }, submitted]);
+    await new StrandsAgentEngine(options, { model }).run({ ...input, userRequest: "もし2日目からなら", conditionController: { apply,
+      scopeCatalog: { tripId: "known-trip", tripRevision: 1, days: [{ id: "a", label: "初日" }, { id: "b", label: "翌日" }], segments: [] } } });
+    expect(apply).not.toHaveBeenCalled();
+    expect(JSON.stringify(model.seenMessages)).toContain('"currentConditionsUnchanged":true');
+    expect(JSON.stringify(model.seenMessages)).toContain('"dayIds":["b"]');
+  });
+  it("does not execute a global party-dependent reader with a scoped cohort", async () => {
+    const { input } = setup();
+    const execute = vi.fn(async () => successfulAgentToolResult({ known: true }));
+    input.tools.register({ name: "party_dependent_lookup", description: "人数に依存する照会", effect: "read",
+      intentPolicy: { dependencies: ["party_size"] }, inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      parseInput: value => validAgentToolInput(value as Record<string, never>), execute });
+    input.effectiveIntent.actualConversationFacts.push({ factId: "details", target: "party_details", scope: { type: "conversation" },
+      modality: "preferred", precision: "exact", frame: "actual", sourceOperationId: "details", provenance: { kind: "user_turn", turnId: "details" },
+      value: { kind: "party_cohorts", cohorts: [{ count: 1, membership: "additional", scope: { kind: "logical_days", tripId: "trip", tripRevision: 1, dayIds: ["day-2"] } }] } });
+    const model = new ScriptedModel([{ tool: "party_dependent_lookup", input: {} }, lookup, submitted]);
+    await new StrandsAgentEngine(options, { model }).run(input);
+    expect(execute).not.toHaveBeenCalled();
+    expect(JSON.stringify(model.seenMessages)).toContain("scope_required");
   });
 });

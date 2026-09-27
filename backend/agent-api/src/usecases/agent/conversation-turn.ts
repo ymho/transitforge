@@ -1,3 +1,4 @@
+import type { PartyScopeCatalog } from "@raiquora/trip/party-cohorts";
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import { StateError, exactObject, requireStatePrincipal } from "../../contracts/server-state.js";
 import type { ConversationTurnContinuity, ConversationTurnRepository, ConversationTurnResult } from "../../ports/conversation-turn-repository.js";
@@ -24,7 +25,7 @@ export function createConversationTurnApplication(dependencies: {
   turns: ConversationTurnRepository;
   conditions?: ConversationConditionRepository;
   runAgentTurn: (input: ServerAgentTurn, historyBeforeSequence: number, reportProgress?: AgentProgressReporter,
-    acceptCondition?: (change: ConversationConditionInput) => Promise<IntentApplicationReceipt>) =>
+    acceptCondition?: (change: ConversationConditionInput, catalog?: PartyScopeCatalog) => Promise<IntentApplicationReceipt>) =>
     Promise<AgentRuntimeResult & Pick<ConversationTurnResult, "tripUpdateProposal" | "consultationRequestProposal" | "tripCostProposal">>;
   interpretIntent?: (input: { userRequest: string; calendarDate?: string; overlay: import("@raiquora/trip/conversation-intent").ConversationIntentOverlay;
     turnId: string; workingState?: import("@raiquora/agent/conversation-working-state").ConversationWorkingState }) => Promise<UtteranceInterpretation>;
@@ -83,8 +84,8 @@ export function createConversationTurnApplication(dependencies: {
       const allowConditions = dependencies.conditions && !dependencies.interpretIntent &&
         (begun.state === "started" || begun.conditionReceipts !== undefined);
       const applyCondition = allowConditions ? createConversationConditionApplication(dependencies.conditions!, identity, begun.lease, userRequest, uiContext?.calendarDate) : undefined;
-      const acceptCondition = applyCondition ? async (change: ConversationConditionInput) => {
-        const receipt = await applyCondition(change);
+      const acceptCondition = applyCondition ? async (change: ConversationConditionInput, catalog?: PartyScopeCatalog) => {
+        const receipt = await applyCondition(change, catalog);
         conditionReceipts.set(receipt.mutationId, receipt);
         acceptedReceipt = summarizeConditionReceipts([...conditionReceipts.values()]);
         await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "accept", "accepted", receipt));

@@ -1,3 +1,5 @@
+import type { PartyScopeCatalog } from "@raiquora/trip/party-cohorts";
+import { partyCohortContext, partyCohortReadBoundary } from "@raiquora/agent/party-cohort-context";
 import {
   Agent, BedrockModel, StructuredOutputError, tool,
   type AgentConfig, type BaseModelConfig, type InvokableTool,
@@ -12,11 +14,11 @@ import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { agentV2StructuredOutputSchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
 import { agentV2CandidateReferences, publicReplyField } from "@raiquora/agent/agent-v2-publication";
 import { placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, travelPeriodUpdateInputSchema, budgetConditionUpdateInputSchema,
-  tripScenarioInputSchema, admitTripScenario, ConditionUpdateRejectedError, type ConversationConditionInput } from "@raiquora/agent/conversation-condition";
+  partyDetailsUpdateInputSchema, tripScenarioInputSchema, admitTripScenario, ConditionUpdateRejectedError, type ConversationConditionInput } from "@raiquora/agent/conversation-condition";
 import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
   type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
 
-export const strandsConditionToolNames = ["update_current_destination", "update_current_origin", "update_current_party", "update_current_travel_period", "update_current_budget", "consider_trip_scenario"] as const;
+export const strandsConditionToolNames = ["update_current_destination", "update_current_origin", "update_current_party", "update_current_travel_period", "update_current_budget", "update_current_party_details", "consider_trip_scenario"] as const;
 export interface StrandsAgentEngineOptions {
   modelId: string;
   region: string;
@@ -89,6 +91,7 @@ export class StrandsAgentEngine {
       getEffectiveIntent: () => currentEffectiveIntent, toolTimeoutMs: this.options.toolTimeoutMs ?? 20_000,
       trace, evidence, budgetState, maxToolCalls: input.limits?.maxToolCalls,
       reserveToolCall: input.reserveToolCall, canExecute: () => !intentUnavailable,
+      scopeCatalog: input.conditionController?.scopeCatalog,
     });
     const controller = input.conditionController;
     if (controller) {
@@ -98,7 +101,8 @@ export class StrandsAgentEngine {
         try {
           const accepted = await controller.apply(change);
           currentEffectiveIntent = accepted.effectiveIntent;
-          return jsonValue({ ok: true, receipt: accepted.receipt, effectiveIntent: accepted.effectiveIntent });
+          return jsonValue({ ok: true, receipt: accepted.receipt, effectiveIntent: accepted.effectiveIntent,
+            partyDetailsApplicability: partyCohortContext(accepted.effectiveIntent, controller.scopeCatalog) });
         } catch (error) {
           if (error instanceof ConditionUpdateRejectedError) throw error;
           // The SDK reports Tool errors. An uncertain write additionally closes reads
@@ -123,6 +127,9 @@ export class StrandsAgentEngine {
           callback: (value, context) => apply(value.action === "set"
             ? { target: "party_size", party: value.party!, quote: value.quote }
             : { target: "party_size", party: null, quote: value.quote }, context?.cancelSignal) }),
+        tool({ name: "update_current_party_details", inputSchema: partyDetailsUpdateInputSchema,
+          description: "今回の明示された年代・学年・正確な年齢・参加範囲を、匿名cohortの最終状態として1回で受理する。setは設定/訂正、clearは詳細のみ撤回。学生区分と年代は別軸で大学生かつ20代も可。未指定属性を推測しない。baselineは全行程人数の一部、additionalは限定scopeでの追加参加。途中離脱はbaseline cohortの参加範囲を短くする。全行程人数を変更しない。scopeは既知の日/区間の番号だけを指定。what-ifはconsider_trip_scenario(kind=party_details)。Profileは更新しない。料金資格や実名を含めない。",
+          callback: (value, context) => apply({ target: "party_details", cohorts: value.action === "set" ? value.cohorts! : null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "update_current_travel_period", inputSchema: travelPeriodUpdateInputSchema,
           description: "今回の旅行で実際に採用する旅行期間の最終状態を1回で永続更新する。設定・訂正はaction=set、日程全体を未定へ戻す明示はaction=clear。start/end/durationは今回の発言で明示したものだけ指定する。外側quoteをApplicationが月・日・泊数/日数の根拠として検証する。日付はcalendar_dateでdayを必須、monthは明示または開始日から同月と読める場合、yearは利用者が年を明示した場合だけ設定する。年未指定はApplicationが基準日以降で最初に来る月日へ決める。今日/明日/明後日はrelative_date。以前のduration等を持ち越さず、日付や日数を推測・補完しない。what-if・比較ではconsider_trip_scenarioを使う。",
           callback: (value, context) => apply(value.action === "set"
@@ -134,10 +141,10 @@ export class StrandsAgentEngine {
             ? { target: "budget", budget: value.budget!, quote: value.quote }
             : { target: "budget", budget: null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "consider_trip_scenario", inputSchema: tripScenarioInputSchema,
-          description: "現在の実旅行条件を一切変更せず、人数・旅行期間・予算の仮定、反実仮想、what-if、シナリオ比較を考える非永続Tool。成功時点でactual条件はすでに保持されているため、元の値へ戻す・維持する目的でupdate_current_*を呼ばない。同じuserMessageに仮定とは別の明示的なactual変更がある場合だけ、その変更に対応するwriterを別途使う。保存・A commit・Intent revision更新を行わない。",
+          description: "現在の実旅行条件を一切変更せず、人数・同行者詳細/参加範囲・旅行期間・予算の仮定、反実仮想、what-if、シナリオ比較を考える非永続Tool。成功時点でactual条件はすでに保持されているため、元の値へ戻す・維持する目的でupdate_current_*を呼ばない。同じuserMessageに仮定とは別の明示的なactual変更がある場合だけ、その変更に対応するwriterを別途使う。保存・A commit・Intent revision更新を行わない。",
           callback: (value, context) => {
             if (context?.cancelSignal.aborted) throw new Error("execution_cancelled");
-            const scenario = admitTripScenario(value, input.userRequest);
+            const scenario = admitTripScenario(value, input.userRequest, controller.scopeCatalog);
             return jsonValue({ ok: true, scenario, currentConditionsUnchanged: true,
               actualConditionWriteRequired: false, restoreCurrentConditions: false });
           } }),
@@ -199,7 +206,7 @@ export function createStrandsReadTools(input: {
   registry: AgentToolRegistry; executor: AgentToolExecutor; executionId: string; getEffectiveIntent?: () => EffectiveIntent | undefined;
   toolTimeoutMs: number; trace: AgentTraceRecorder; evidence: Evidence[];
   budgetState?: { toolCalls: number; toolLimitReached: boolean }; maxToolCalls?: number;
-  reserveToolCall?: () => boolean; canExecute?: () => boolean;
+  reserveToolCall?: () => boolean; canExecute?: () => boolean; scopeCatalog?: PartyScopeCatalog;
 }): InvokableTool<unknown, JSONValue>[] {
   return input.registry.descriptors().filter(({ name }) => input.registry.effect(name) === "read").map((descriptor) => tool({
     name: descriptor.name, description: descriptor.description, inputSchema: descriptor.inputSchema as JSONSchema,
@@ -208,6 +215,8 @@ export function createStrandsReadTools(input: {
       if (!toolInput) return jsonValue({ ok: false, error: { code: "invalid_input", retryable: false } });
       if (input.canExecute && !input.canExecute()) return jsonValue({ ok: false, error: { code: "intent_unavailable", retryable: false } });
       const effectiveIntent = input.getEffectiveIntent?.();
+      const cohortReason = partyCohortReadBoundary(effectiveIntent, descriptor.intentPolicy?.dependencies ?? [], input.scopeCatalog);
+      if (cohortReason) return jsonValue({ ok: false, error: { code: "precondition_missing", retryable: false, reason: cohortReason } });
       const decision = validateToolIntentUse(descriptor, toolInput, effectiveIntent);
       if (!decision.accepted) return jsonValue({ ok: false, error: {
         code: decision.error?.code ?? "precondition_failed", retryable: decision.error?.retryable ?? false } });

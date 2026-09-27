@@ -4,7 +4,7 @@ import { z } from "zod";
  * References authorize nothing: Evidence/currentness/receipts are checked by admission. */
 export const replyOperations = ["save", "change", "book", "pay"] as const;
 export type ReplyOperation = typeof replyOperations[number];
-export const replyQuestions = ["goal", "origin", "destination", "start_date", "duration", "party_size", "budget"] as const;
+export const replyQuestions = ["goal", "origin", "destination", "start_date", "duration", "party_size", "budget", "participation_scope"] as const;
 export type ReplyQuestion = typeof replyQuestions[number];
 const identifier = (maximum: number) => z.string().min(1).max(maximum)
   .regex(/^(?!\s)(?![\s\S]*\s$)[^\u0000-\u001f\u007f<>]+$/u);

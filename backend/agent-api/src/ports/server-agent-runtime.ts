@@ -1,3 +1,4 @@
+import type { PartyScopeCatalog } from "@raiquora/trip/party-cohorts";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
 import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentRuntimeContextInput } from "@raiquora/agent/agent-decision-context";
@@ -23,6 +24,7 @@ export class ServerAgentRuntimeExecutionError extends Error {
 }
 
 export interface ServerAgentConditionController {
+  readonly scopeCatalog?: PartyScopeCatalog;
   apply(change: ConversationConditionInput): Promise<{
     receipt: PublicSemanticReceipt;
     effectiveIntent: EffectiveIntent;

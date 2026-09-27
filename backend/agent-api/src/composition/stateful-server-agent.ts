@@ -1,3 +1,8 @@
+import { assertCohortBaseline } from "@raiquora/trip/party-cohorts";
+import { partyBaselineCount } from "@raiquora/agent/party-cohort-context";
+import { partyScopeCatalog } from "../usecases/agent/party-scope-catalog.js";
+import { ConditionUpdateRejectedError } from "@raiquora/agent/conversation-condition";
+import type { PartyScopeCatalog } from "@raiquora/trip/party-cohorts";
 import { registerCostProposalTool } from "../usecases/agent/cost-proposal-tool.js";
 import type { PublicCostProposal } from "@raiquora/trip/public-cost-proposal";
 import { createTrip } from "@raiquora/trip/trip";
@@ -35,7 +40,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
   tripClient?: TripDynamoClient;
 }) {
   return { async runAgentTurn(input: ServerAgentTurn, reportProgress?: AgentProgressReporter,
-    acceptCondition?: (change: ConversationConditionInput) => Promise<IntentApplicationReceipt>) {
+    acceptCondition?: (change: ConversationConditionInput, catalog?: PartyScopeCatalog) => Promise<IntentApplicationReceipt>) {
     let tripCostProposal: PublicCostProposal | undefined, retainedCandidatePlan: RetainedCandidatePlan | undefined;
     let trip: Trip | undefined, consultation: Trip | undefined, tripUpdateProposal: PublicRequestProposal | undefined, consultationRequestProposal: ConsultationRequestProposal | undefined;
     let effectiveIntent: EffectiveIntent | undefined, currentIntentReceipt: IntentApplicationReceipt | undefined;
@@ -50,12 +55,23 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
       onConsultation: value => { consultation = createTrip(value.conversationId, "相談中の条件", value.createdAt, [], value.request); },
       onEffectiveIntent: value => { effectiveIntent = value.effectiveIntent; currentIntentReceipt = value.currentReceipt; } });
     const runtime = options.runRuntime;
-    const runRuntime = runtime ? async (runtimeInput: Parameters<typeof runtime>[0]) =>
-      runtime({
+    const runRuntime = runtime ? async (runtimeInput: Parameters<typeof runtime>[0]) => {
+      const catalog = trip ? partyScopeCatalog(trip) : undefined;
+      return runtime({
         ...runtimeInput,
         ...(acceptCondition ? { conditionController: {
+          ...(catalog ? { scopeCatalog: catalog } : {}),
           apply: async (change: ConversationConditionInput) => {
-            const receipt = await acceptCondition(change);
+            const baseline = partyBaselineCount(effectiveIntent);
+            if (change.target === "party_details" && change.cohorts && baseline !== undefined) {
+              try { assertCohortBaseline(change.cohorts, baseline); }
+              catch { throw new ConditionUpdateRejectedError("invalid_condition"); }
+            }
+            if (change.target === "party_details" && change.cohorts?.some(cohort => cohort.scope.kind !== "whole_trip") && catalog) {
+              const latest = await new DynamoDbTripRepository(options.tripTable, options.tripClient).get(input.principal, catalog.tripId);
+              if (!latest || latest.id !== catalog.tripId || latest.revision !== catalog.tripRevision) throw new ConditionUpdateRejectedError("stale_scope");
+            }
+            const receipt = await acceptCondition(change, catalog);
             const refreshed = await contextLoader({
               principal: input.principal,
               ...(input.conversationId ? { conversationId: input.conversationId } : {}),
@@ -66,7 +82,8 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
             return { receipt: publicSemanticReceipt(receipt), effectiveIntent: refreshed.effectiveIntent };
           },
         } } : {}),
-      }) : undefined;
+      });
+    } : undefined;
     const result = await createServerAgent({ ...options,
       registerAdditionalTools: (tools, evidence, scope) => {
         options.registerAdditionalTools?.(tools, evidence, scope);

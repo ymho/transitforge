@@ -29,6 +29,7 @@ const conversationText = {
 const questions: Record<ReplyQuestion, string> = {
   goal: "どのような旅にしたいですか？", origin: "どこから出発しますか？", destination: "行き先はどちらですか？",
   start_date: "出発日はいつですか？", duration: "何日間の旅を考えていますか？",
+  participation_scope: "途中参加・離脱を反映する旅程と、参加する日または区間を確認させてください。",
   party_size: "何人での旅行ですか？", budget: "今回の旅行の予算を教えてください。",
 };
 
