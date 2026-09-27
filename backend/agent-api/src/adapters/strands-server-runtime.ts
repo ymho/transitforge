@@ -4,13 +4,17 @@ import { AgentV2ReplyError, type AgentV2ReplyProof } from "@raiquora/agent/agent
 import { admitAgentV2Reply } from "@raiquora/agent/agent-v2-publication";
 import type { ServerAgentRuntimeInput } from "../ports/server-agent-runtime.js";
 import { StrandsAgentEngine } from "./strands-agent-engine.js";
+import { partyCohortContext } from "@raiquora/agent/party-cohort-context";
 import { strandsTurnInput } from "./strands-turn-input.js";
 
 /** Proof is Application-authored and intended for V2 evaluation/diagnostics. It
  * does not authorize mutations and is not a second Conversation state store. */
 export type StrandsRuntimeResult = AgentRuntimeResult & { publicReply?: AgentV2ReplyProof; publicationError?: string };
 export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
-  return async (input: ServerAgentRuntimeInput): Promise<StrandsRuntimeResult> => {
+  return async (request: ServerAgentRuntimeInput): Promise<StrandsRuntimeResult> => {
+    // Resolve Domain applicability before the data-only model input projection.
+    const input = { ...request, partyDetailsApplicability: partyCohortContext(
+      request.context?.effectiveIntent, request.conditionController?.scopeCatalog) };
     const run = await engine.run({
       executionId: input.executionId, userRequest: input.userRequest, modelInput: strandsTurnInput(input),
       tools: input.tools, toolExecutor: input.toolExecutor, effectiveIntent: input.context?.effectiveIntent,

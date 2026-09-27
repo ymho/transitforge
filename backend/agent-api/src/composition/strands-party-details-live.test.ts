@@ -49,7 +49,7 @@ describe.skipIf(!enabled)("anonymous party details with real Nova 2 Lite", () =>
     const cases: Case[] = [
       { message: "こんにちは", writes: 0 },
       { message: "今回、全行程の同行者のうち1人は20代の大学生です。正確な年齢はまだ分かりません。", cohorts: [college], writes: 1, update: true },
-      { message: "さっきの大学生という条件は取り消します。全行程の同行者のうち1人は小学生です。年齢はまだ分かりません。", cohorts: [child], writes: 2, update: true },
+      { message: "さっきの同行者の属性条件はいったんすべて取り消します。全行程の同行者のうち1人は小学生です。年齢はまだ分かりません。", cohorts: [child], writes: 2, update: true },
       { message: "この小学生は2日目まで参加して、その後は離脱します。全行程の人数条件は変えません。", cohorts: [{ ...child, scope: days(["day-a", "day-b"]) }], writes: 3, update: true },
       { message: "詳細条件を変更します。全行程に参加する30代1人と、2日目から最後まで追加参加する20代の大学生1人です。前の小学生の条件は取り消します。", cohorts: [adult, joined], writes: 4, update: true },
       { message: "もし追加参加の大学生が10代ならどう？今の条件は変えずに比較して。", cohorts: [adult, joined], writes: 4, scenario: true },
