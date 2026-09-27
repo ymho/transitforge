@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { applyTripProposal } from "@raiquora/trip/trip";
 import { partyRequest } from "../../../../modules/trip/domain/trip-party.fixture";
 import { requestTrip } from "../../../../modules/trip/domain/trip-request.fixture";
-import { proposeAssumptionDecision, proposeUserParty, proposeTripRequestUpdate } from "./update-trip-request";
+import { proposeAssumptionDecision, proposeTripRequestUpdate } from "./update-trip-request";
 import { tripPartyView } from "./trip-party-presentation";
 import { planAssumptionViews } from "../../presentation/trip-plan/plan-assumption-view";
 
