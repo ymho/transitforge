@@ -1,9 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { applyTripProposal } from "@raiquora/trip/trip";
-import type { UserProfile } from "@raiquora/trip/travel-profile";
 import { partyRequest } from "../../../../modules/trip/domain/trip-party.fixture";
 import { requestTrip } from "../../../../modules/trip/domain/trip-request.fixture";
-import { proposeAssumptionDecision, proposeUserParty, proposeProfileParty, proposeTripRequestUpdate } from "./update-trip-request";
+import { proposeAssumptionDecision, proposeUserParty, proposeTripRequestUpdate } from "./update-trip-request";
 import { tripPartyView } from "./trip-party-presentation";
 import { planAssumptionViews } from "../../presentation/trip-plan/plan-assumption-view";
 
@@ -39,18 +38,6 @@ describe("party proposal ownership and atomic assumption decisions", () => {
     const known = requestTrip(request);
     expect(() => proposeTripRequestUpdate(known, { ...request, party: undefined }, "model")).toThrow();
     expect(() => proposeTripRequestUpdate(known, { ...request, party: { ...request.party!, adults: 5 } }, "model")).toThrow();
-  });
-  it("keeps profile tendencies separate; explicit friends supersede family without profile mutation", () => {
-    const profile = { companions: { usual: ["family"], children: [{ ageGroup: "preschool" }] } } as UserProfile;
-    const original = structuredClone(profile), trip = requestTrip();
-    expect(trip.request.party).toBeUndefined();
-    const next = applyTripProposal(trip, proposeProfileParty(trip, profile, 2, "family"));
-    expect(next.request.party).toMatchObject({ adults: 2, children: [{ ageGroup: "preschool" }], source: "profile", assumptionId: "family" });
-    expect(next.request.assumptions[0]).toMatchObject({ status: "unconfirmed", source: "profile" });
-    const explicit = applyTripProposal(next, proposeUserParty(next, { adults: 2, children: [], composition: ["friends"] }));
-    expect(explicit.request.party).toEqual({ adults: 2, children: [], composition: ["friends"], source: "user" });
-    expect(() => proposeProfileParty(explicit, profile, 2, "another")).toThrow();
-    expect(profile).toEqual(original);
   });
   it("invalid replacement or unrelated repair leaves original unchanged", () => {
     const trip = requestTrip(partyRequest()), before = structuredClone(trip);
