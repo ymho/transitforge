@@ -11,14 +11,16 @@ const identifier = (maximum: number) => z.string().min(1).max(maximum)
 const reference = z.strictObject({ evidenceId: identifier(240), field: z.string().min(1).max(80).regex(/^[a-zA-Z][a-zA-Z0-9_]*$/u) });
 export type ReplyReference = z.infer<typeof reference>;
 const commentary = z.string().min(1).max(1200).describe("Selected Evidenceに基づく説明・比較・推薦。未確認の時刻・料金・操作結果を作らない。");
+const conversationalText = z.string().min(1).max(600)
+  .describe("短い自然な会話文。利用者発言とApplicationの現在条件を説明・確認するためだけに使い、外部事実や未検証の操作成功を作らない。");
 export const agentV2ReplySchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("answer"), references: z.array(reference).min(1).max(8), commentary: commentary.optional() }),
   z.strictObject({ kind: z.literal("candidates"), evidenceIds: z.array(identifier(240)).min(1).max(8), commentary }),
-  z.strictObject({ kind: z.literal("conversation"), message: z.enum(["greeting", "thanks", "acknowledgement"]) }),
-  z.strictObject({ kind: z.literal("clarification"), target: z.enum(replyQuestions) }),
+  z.strictObject({ kind: z.literal("conversation"), message: z.enum(["greeting", "thanks", "acknowledgement"]), text: conversationalText.optional() }),
+  z.strictObject({ kind: z.literal("clarification"), target: z.enum(replyQuestions), text: conversationalText.optional() }),
   z.strictObject({ kind: z.literal("unavailable"), operation: z.enum(replyOperations) }),
   z.strictObject({ kind: z.literal("operation_result"), receiptId: identifier(240) }),
-  z.strictObject({ kind: z.literal("uncertainty") }),
+  z.strictObject({ kind: z.literal("uncertainty"), text: conversationalText.optional() }),
 ]);
 export type AgentV2ReplyProposal = z.infer<typeof agentV2ReplySchema>;
 /** The object envelope is the SDK Tool's input; the variant is nested, not flattened. */
