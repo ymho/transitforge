@@ -13,7 +13,7 @@ export type AgentDiagnosticReason = "compiled" | "validated" | "rejected" | "com
 export type AgentExecutionStopReason = "endTurn" | "toolUse" | "stopSequence" | "limitTurns" | "limitTotalTokens" |
   "limitOutputTokens" | "maxTokens" | "modelContextWindowExceeded" | "cancelled" | "contentFiltered" |
   "guardrailIntervened" | "unknown" | "not_recorded";
-export type AgentExecutionCounts = Partial<Record<"modelCalls" | "toolCalls" | "inputTokens" | "outputTokens" | "totalTokens", number>>;
+export type AgentExecutionCounts = Partial<Record<"modelCalls" | "toolCalls" | "conditionToolCalls" | "structuredOutputCalls" | "inputTokens" | "outputTokens" | "totalTokens", number>>;
 export interface AgentExecutionDiagnostic {
   reason: AgentDiagnosticReason;
   stopReason: AgentExecutionStopReason;
@@ -32,7 +32,7 @@ export interface AgentDiagnosticEvent {
   correlation?: { modelCallId?: string; toolCallId?: string; turnId?: string; tripRevision?: number; intentRevision?: number;
     schemaVersion?: string; ruleVersion?: string };
   counts?: Partial<Record<"acceptedCharacters" | "included" | "omitted" | "generated" | "validated" | "published" |
-    "inputTokens" | "outputTokens" | "totalTokens" | "modelCalls" | "toolCalls" |
+    "inputTokens" | "outputTokens" | "totalTokens" | "modelCalls" | "toolCalls" | "conditionToolCalls" | "structuredOutputCalls" |
     "cacheReadInputTokens" | "cacheWriteInputTokens" | "parallelReads" | "retries", number>>;
   stopReason?: AgentExecutionStopReason;
   limitReason?: "tool_calls" | "deadline";
