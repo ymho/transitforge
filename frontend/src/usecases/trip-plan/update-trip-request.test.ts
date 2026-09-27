@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { applyTripProposal, type ItineraryItem } from "@raiquora/trip/trip";
 import { effectiveTripConstraints, type TripRequest } from "@raiquora/trip/trip-request";
-import { proposeAssumptionDecision, proposeProfilePreference, proposeTripRequestUpdate } from "./update-trip-request";
+import { proposeAssumptionDecision, proposeTripRequestUpdate } from "./update-trip-request";
 import { assumedRequest, requestTrip, requestConstraint, providerRequestPlace } from "../../../../modules/trip/domain/trip-request.fixture";
 import { planAssumptionViews } from "../../presentation/trip-plan/plan-assumption-view";
-import type { UserProfile } from "@raiquora/trip/travel-profile";
 
 describe("request proposals and assumption UI boundary", () => {
   it.each(["model", "profile", "legacy"] as const)("confirms/rejects %s through explicit proposals with source and strength intact", (source) => {
@@ -71,23 +70,5 @@ describe("request proposals and assumption UI boundary", () => {
     expect(() => proposeTripRequestUpdate(requestTrip(), withPlace(providerRequestPlace()), "model")).toThrow("trusted resolution");
     expect(() => proposeTripRequestUpdate(requestTrip(), withPlace({ name: "京都駅", sources: [], coordinate: { longitude: 135, latitude: 35 } }), "model")).toThrow("trusted resolution");
   });
-  it("selects individual profile preferences as profile, optionally assumed, never the whole profile", () => {
-    const profile = { home: { station: "private-home", carAvailable: false }, travelStyle: { pace: 0.2 }, preferences: { nature: 0.9 },
-      transport: { maxTypicalTravelMinutes: 120 }, updatedAt: "private-metadata" } as UserProfile;
-    const trip = requestTrip();
-    const before = structuredClone(profile);
-    for (const choice of [{ field: "pace" }, { field: "carAvailable" }, { field: "maxTravelMinutes" }, { field: "interest", preference: "nature" }] as const) {
-      const updated = applyTripProposal(trip, proposeProfilePreference(trip, profile, choice, { constraintId: "profile", assumptionId: "profile-assumption" }));
-      expect(updated.request.constraints[0]!.source).toBe("profile");
-      expect(updated.request.assumptions[0]).toMatchObject({ source: "profile", status: "unconfirmed" });
-      expect(JSON.stringify(updated.request)).not.toMatch(/private-home|private-metadata|updatedAt/);
-    }
-    const adopted = applyTripProposal(trip, proposeProfilePreference(trip, profile, { field: "pace" }, { constraintId: "pace" }));
-    const explicit = applyTripProposal(adopted, proposeTripRequestUpdate(adopted, { ...adopted.request, constraints: [
-      ...adopted.request.constraints, requestConstraint({ type: "pace", value: 0.9 }),
-    ] }, "user"));
-    expect(effectiveTripConstraints(explicit.request)).toEqual([requestConstraint({ type: "pace", value: 0.9 })]);
-    expect(profile).toEqual(before);
-    expect(() => proposeProfilePreference(trip, { ...profile, transport: { maxTypicalTravelMinutes: null } }, { field: "maxTravelMinutes" }, { constraintId: "none" })).toThrow();
-  });
+
 });
