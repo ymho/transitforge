@@ -4,7 +4,7 @@ import { partyCohortReadBoundary } from "@raiquora/agent/party-cohort-context";
 import {
   Agent, BedrockModel, StructuredOutputError, tool,
   type AgentConfig, type BaseModelConfig, type InvokableTool,
-  type JSONSchema, type JSONValue, type Model,
+  type JSONSchema, type JSONValue, type Model, type MessageData,
 } from "@strands-agents/sdk";
 import { AgentTraceRecorder, type AgentTrace } from "@raiquora/agent/agent-trace";
 import { validateToolIntentUse } from "@raiquora/agent/intent-action-policy";
@@ -35,6 +35,8 @@ export interface StrandsAgentRunInput {
   executionId: string;
   userRequest: string;
   modelInput?: string;
+  /** Owned public Conversation history; SDK-native roles, rebuilt for each invocation. */
+  messages?: MessageData[];
   tools: AgentToolRegistry;
   toolExecutor: AgentToolExecutor;
   effectiveIntent?: EffectiveIntent;
@@ -173,6 +175,7 @@ export class StrandsAgentEngine {
       model: baseModel,
       structuredOutputSchema: agentV2StructuredOutputSchema,
       tools, systemPrompt: this.options.systemPrompt,
+      ...(input.messages ? { messages: structuredClone(input.messages) } : {}),
       printer: false, contextManager: false, retryStrategy: null, toolExecutor: "sequential",
     });
     const startedAt = Date.now();

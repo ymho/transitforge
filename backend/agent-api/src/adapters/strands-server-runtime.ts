@@ -8,7 +8,7 @@ import { partyCohortContext, partyCohortEditableValue } from "@raiquora/agent/pa
 import type { ServerAgentRuntimeInput } from "../ports/server-agent-runtime.js";
 import type { AgentExecutionDiagnostic } from "../ports/agent-diagnostics.js";
 import { StrandsAgentEngine } from "./strands-agent-engine.js";
-import { strandsTurnInput } from "./strands-turn-input.js";
+import { strandsConversationInput } from "./strands-conversation-input.js";
 import { strandsExecutionDiagnostic } from "./strands-execution-diagnostic.js";
 
 /** Proof is Application-authored and intended for V2 evaluation/diagnostics. It
@@ -25,7 +25,7 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
     let run: Awaited<ReturnType<StrandsAgentEngine["run"]>>;
     try {
       run = await engine.run({
-        executionId: input.executionId, userRequest: input.userRequest, modelInput: strandsTurnInput(input),
+        executionId: input.executionId, userRequest: input.userRequest, ...strandsConversationInput(input),
         tools: input.tools, toolExecutor: input.toolExecutor, effectiveIntent: input.context?.effectiveIntent,
         ...(input.conditionController ? { conditionController: { ...input.conditionController, apply: async change => {
           const accepted = await input.conditionController!.apply(change);
