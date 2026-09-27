@@ -50,7 +50,7 @@ describe.skipIf(!enabled)("budget condition Tool with real Bedrock", () => {
       const apply = createConversationConditionApplication(repository, { principal: stateA, conversationId, turnId },
         { attemptId: turnId, userSequence: index + 1 }, scenario.message);
       const tools = new AgentToolRegistry(), evidenceRegistry = new ToolEvidenceRegistry();
-      let modelCalls = 0; const selectedTools: string[] = [];
+      let modelCalls = 0, writerCallbacks = 0; const selectedTools: string[] = [];
       const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1_024 }, {
         createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, event => {
           modelCalls++; selectedTools.push(...event.message.content.flatMap(block => block.type === "toolUseBlock"
@@ -63,12 +63,20 @@ describe.skipIf(!enabled)("budget condition Tool with real Bedrock", () => {
         toolExecutor: new AgentToolExecutor(tools, evidenceRegistry), limits,
         researchLedger: new ResearchExecutionLedger(researchBudgetForRuntimeLimits(limits, "budget-live"),
           { requestedMode: "standard", effectiveMode: "standard" }),
-        conditionController: { apply: async change => ({ receipt: publicSemanticReceipt(await apply(change)),
-          effectiveIntent: compileEffectiveIntent({ overlay }) }) },
+        conditionController: { apply: async change => {
+          writerCallbacks++;
+          try { return { receipt: publicSemanticReceipt(await apply(change)), effectiveIntent: compileEffectiveIntent({ overlay }) }; }
+          catch (error) {
+            console.log(JSON.stringify({ event: "budget-writer-rejected", case: index,
+              code: error instanceof Error && "code" in error ? String((error as { code?: unknown }).code) : "unknown",
+              target: change.target }));
+            throw error;
+          }
+        } },
       });
       const budget = overlay.facts.find(value => value.target === "budget")?.value;
-      console.log(JSON.stringify({ case: index, modelId, status: result.status, modelCalls, acceptedOperations: journal.size,
-        publicationError: result.publicationError, selectedTools }));
+      console.log(JSON.stringify({ case: index, modelId, status: result.status, modelCalls, writerCallbacks,
+        acceptedOperations: journal.size, publicationError: result.publicationError, selectedTools }));
       expect.soft(result.status, `case ${index} must reply`).toBe("completed");
       expect.soft(budget, `case ${index} budget`).toEqual(scenario.budget);
       expect.soft(journal.size, `case ${index} mutation count`).toBe(scenario.writes);
