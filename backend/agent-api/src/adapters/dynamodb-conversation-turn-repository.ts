@@ -230,12 +230,10 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     // Do not resume a legacy accepted turn as a new multi-operation turn.
     if (turn.intentReceipt && !turn.conditionUpdates) throw new StateError("conflict");
     const payloadHash = createHash("sha256").update(conditionPayload(change)).digest("hex");
-    const recorded = turn.conditionUpdates?.operations.find(({ target }) => target === change.target);
-    if (recorded) {
-      if (recorded.payloadHash !== payloadHash) throw new StateError("conflict");
-      return structuredClone(recorded.receipt);
-    }
-    return this.commitIntent(input, snapshot, lease, overlay => conditionDelta(change, input.turnId, overlay),
+    const recorded = turn.conditionUpdates?.operations.find(({ target, payloadHash: hash }) => target === change.target && hash === payloadHash);
+    if (recorded) return structuredClone(recorded.receipt);
+    const occurrence = turn.conditionUpdates?.operations.filter(({ target }) => target === change.target).length ?? 0;
+    return this.commitIntent(input, snapshot, lease, overlay => conditionDelta(change, input.turnId, overlay, occurrence),
       { target: change.target, payloadHash });
   }
 
