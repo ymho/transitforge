@@ -55,7 +55,7 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
       const receipt = matches[0];
       if (matches.length !== 1 || !receipt || receipt.executionId !== context.executionId || receipt.status !== "succeeded" ||
           !Object.hasOwn(operationLabels, receipt.operation)) throw new AgentV2ReplyError("invalid_receipt");
-      proof.operation = { type: proposal.operation, status: "succeeded", receiptId: receipt.id };
+      proof.operation = { type: receipt.operation, status: "succeeded", receiptId: receipt.id };
       return reply(`${operationLabels[receipt.operation]}しました。`);
     }
     case "candidates": {
