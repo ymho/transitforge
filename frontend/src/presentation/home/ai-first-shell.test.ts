@@ -3,13 +3,13 @@ import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { configureAiFirstShell, type AiFirstShellPorts } from "./ai-first-shell";
 import { createTrip } from "@raiquora/trip/trip";
 
-beforeEach(() => { document.body.innerHTML = '<main id="app"></main>'; window.history.replaceState(null, "", "#explore"); sessionStorage.clear(); });
+beforeEach(() => { document.body.innerHTML = '<main id="app"></main>'; window.history.replaceState(null, "", "#chat"); sessionStorage.clear(); });
 afterEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
 function setup(overrides: Partial<AiFirstShellPorts> = {}) {
   const ports: AiFirstShellPorts = {
     read: () => ({ state: "unauthenticated", trips: [] }),
     authState: () => ({ status: "signed-out" }), login: vi.fn(), logout: vi.fn(),
-    subscribe: () => () => {}, retry: vi.fn(async () => {}), newConsultation: vi.fn(), openChat: vi.fn(), openTrip: vi.fn(),
+    subscribe: () => () => {}, retry: vi.fn(async () => {}), newConsultation: vi.fn(async () => {}), resetConsultation: vi.fn(), openChat: vi.fn(), openTrip: vi.fn(),
     openMap: vi.fn(), journeySettings: () => ({ transferPace: "standard", rankingPreference: "balanced" }), setJourneySettings: vi.fn(), openNotifications: vi.fn(), now: () => new Date("2026-09-18T00:00:00Z"), ...overrides,
   };
   return { shell: configureAiFirstShell(document, document.querySelector("main")!, ports), ports };
@@ -27,7 +27,7 @@ it("starts Home without initializing Map or requiring profile/authentication", (
   expect(document.querySelector('[aria-label="相談の入力例"]')).toBeNull();
   expect(document.querySelector(".home-rail-feature")).toBeNull();
   expect(document.querySelector("[data-home-live]")).toBeNull();
-  const home = document.querySelector<HTMLElement>('[data-page="explore"]')!;
+  const home = document.querySelector<HTMLElement>('[data-page="chat"]')!;
   expect(home.textContent).not.toContain("次の旅");
   expect(home.textContent).not.toContain("旅の候補");
   expect(document.querySelector(".home-prompt")!.hasAttribute("hidden")).toBe(false);
@@ -35,14 +35,14 @@ it("starts Home without initializing Map or requiring profile/authentication", (
   expect(document.querySelector("#home-prompt")!.classList.contains("ds-control")).toBe(true);
   expect(document.body.textContent).not.toContain("旅行相談を始めるにはログインしてください");
   expect(document.querySelector("[data-home-login]")).toBeNull();
-  expect(document.querySelector('[data-primary="chat"]')!.hasAttribute("hidden")).toBe(true);
+  expect(document.querySelector('[data-primary="chat"]')!.hasAttribute("hidden")).toBe(false);
   const input = document.querySelector<HTMLTextAreaElement>("#home-prompt")!;
   input.value = "出雲へ行きたい"; input.dispatchEvent(new Event("input"));
   document.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
   expect(ports.login).toHaveBeenCalledOnce(); expect(ports.newConsultation).not.toHaveBeenCalled();
   expect(input.value).toBe("出雲へ行きたい");
   expect(sessionStorage.getItem("raiquora:home-prompt-draft")).toBe("出雲へ行きたい");
-  expect(document.querySelector("main")!.dataset.primaryView).toBe("explore");
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("chat");
   expect(ports.openMap).not.toHaveBeenCalled();
 });
 it("loads saved trips only when the dedicated Trips screen is opened", () => {
@@ -52,12 +52,12 @@ it("loads saved trips only when the dedicated Trips screen is opened", () => {
   shell.navigate("trips");
   expect(retry).toHaveBeenCalledOnce();
 });
-it("starts consultation only after authentication and rejects a direct signed-out chat route", () => {
+it("starts consultation only after authentication and keeps a direct signed-out chat at its landing state", () => {
   window.history.replaceState(null, "", "#chat");
   const signedOut = setup();
-  expect(document.querySelector("main")!.dataset.primaryView).toBe("explore");
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("chat");
   expect(signedOut.ports.openChat).not.toHaveBeenCalled();
-  document.body.innerHTML = '<main id="app"></main>'; window.history.replaceState(null, "", "#explore");
+  document.body.innerHTML = '<main id="app"></main>'; window.history.replaceState(null, "", "#chat");
   const signedIn = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) });
   const input = document.querySelector<HTMLTextAreaElement>("#home-prompt")!; input.value = "温泉へ行きたい";
   document.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
@@ -79,7 +79,7 @@ it("puts the account icon in the shared navigation and sends signed-in people to
   expect(document.querySelector("main")!.dataset.primaryView).toBe("my"); expect(document.querySelector("[data-my-account-status]")!.textContent).toContain("ログイン中");
   expect(document.querySelector("[data-account]")!.getAttribute("aria-current")).toBe("page");
   expect(document.querySelector("[data-my-account-status]")!.textContent).not.toContain("最大8時間");
-  expect(document.querySelectorAll("[data-primary]")).toHaveLength(3);
+  expect(document.querySelectorAll("[data-primary]")).toHaveLength(2);
   expect(document.querySelector('[data-primary="my"]')).toBeNull();
   click("[data-my-logout]"); expect(signedIn.ports.logout).toHaveBeenCalledOnce();
 });
@@ -87,8 +87,8 @@ it("puts the account icon in the shared navigation and sends signed-in people to
 it("requires authentication before opening every feature route including realtime operations", () => {
   window.history.replaceState(null, "", "#map");
   const signedOut = setup();
-  expect(document.querySelector("main")!.dataset.primaryView).toBe("explore");
-  expect(window.location.hash).toBe("#explore");
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("chat");
+  expect(window.location.hash).toBe("#chat");
   expect(signedOut.ports.openTrip).not.toHaveBeenCalled();
   click("[data-map]");
   expect(signedOut.ports.login).toHaveBeenCalledOnce();
@@ -96,7 +96,7 @@ it("requires authentication before opening every feature route including realtim
 
   window.history.replaceState(null, "", "#my");
   window.dispatchEvent(new HashChangeEvent("hashchange"));
-  expect(document.querySelector("main")!.dataset.primaryView).toBe("explore");
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("chat");
 });
 it("shows one random western Japan hero photo without selection controls", () => {
   vi.spyOn(Math, "random").mockReturnValue(0.5);
@@ -119,7 +119,7 @@ it("does not submit IME composition and keeps input across tab navigation / re-r
   input.value = "日本語の入力途中"; input.dispatchEvent(new Event("input"));
   input.dispatchEvent(new CompositionEvent("compositionstart")); document.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
   expect(ports.newConsultation).not.toHaveBeenCalled();
-  shell.navigate("my"); shell.navigate("explore"); shell.refresh(); expect(input.value).toBe("日本語の入力途中");
+  shell.navigate("my"); shell.navigate("chat"); shell.refresh(); expect(input.value).toBe("日本語の入力途中");
   expect(sessionStorage.getItem("raiquora:home-prompt-draft")).toBe(input.value);
 });
 it("map is a realtime-only subview and source tab survives history restoration", () => {
@@ -179,4 +179,76 @@ it("shows a travel-mode entry only for the current adopted Trip", () => {
   const openTravelMode = vi.fn(); const { shell } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }), read: () => ({ state: "available", trips: [trip] }), openTravelMode });
   shell.navigate("trips"); click("[data-trip-travel]"); expect(openTravelMode).toHaveBeenCalledWith(trip.id);
   expect(document.querySelectorAll("[data-trip-travel]")).toHaveLength(1);
+});
+
+const signedIn = () => ({ status: "signed-in" as const, displayName: "テスト" });
+it("unifies the menu and uses a fresh hero entry even when a prior chat was active", async () => {
+  const { shell, ports } = setup({ authState: signedIn });
+  expect([...document.querySelectorAll(".product-nav a, .product-nav button")].map(x => x.textContent)).toEqual(["相談", "旅程", "運行", "設定"]);
+  expect(document.querySelector('[data-page="explore"]')).toBeNull();
+  expect(document.querySelector("main")!.dataset.consultationMode).toBe("landing");
+  expect(ports.newConsultation).not.toHaveBeenCalled();
+  shell.showConversation("trip-one");
+  expect(document.querySelector<HTMLElement>("[data-home-hero]")!.hidden).toBe(true);
+  const before = vi.mocked(ports.resetConsultation).mock.calls.length;
+  click('[data-primary="chat"]');
+  expect(ports.resetConsultation).toHaveBeenCalledTimes(before + 1);
+  expect(window.history.state.tripId).toBeUndefined();
+  expect(document.querySelector<HTMLElement>("[data-home-hero]")!.hidden).toBe(false);
+});
+it("sends the unchanged prompt exactly once, leaves the hero and does not double-open on history events", async () => {
+  let complete!: () => void;
+  const newConsultation = vi.fn(() => new Promise<void>(resolve => { complete = resolve; }));
+  const { ports } = setup({ authState: signedIn, newConsultation });
+  const input = document.querySelector<HTMLTextAreaElement>("#home-prompt")!;
+  input.value = "出雲大社に行きたい";
+  const form = document.querySelector<HTMLFormElement>(".home-prompt")!;
+  form.dispatchEvent(new Event("submit", { cancelable: true }));
+  form.dispatchEvent(new Event("submit", { cancelable: true }));
+  expect(newConsultation).toHaveBeenCalledExactlyOnceWith("出雲大社に行きたい");
+  expect(document.querySelector("main")!.dataset.consultationMode).toBe("starting");
+  expect(document.querySelector<HTMLElement>("[data-home-hero]")!.hidden).toBe(true);
+  complete(); await vi.waitFor(() => expect(document.querySelector("main")!.dataset.consultationMode).toBe("conversation"));
+  window.dispatchEvent(new PopStateEvent("popstate")); window.dispatchEvent(new HashChangeEvent("hashchange"));
+  expect(newConsultation).toHaveBeenCalledTimes(1); expect(ports.openChat).toHaveBeenCalledOnce();
+  expect(input.value).toBe("");
+});
+it("keeps the hero prompt and reports a failed start without showing an old conversation", async () => {
+  setup({ authState: signedIn, newConsultation: vi.fn(async () => { throw new Error("offline"); }) });
+  const input = document.querySelector<HTMLTextAreaElement>("#home-prompt")!; input.value = "まだ入力を残す";
+  document.querySelector(".home-prompt")!.dispatchEvent(new Event("submit", { cancelable: true }));
+  await vi.waitFor(() => expect(document.querySelector("main")!.dataset.consultationMode).toBe("landing"));
+  expect(input.value).toBe("まだ入力を残す"); expect(input.disabled).toBe(false);
+  expect(document.querySelector<HTMLElement>("[data-consultation-error]")!.hidden).toBe(false);
+});
+it("does not let a late new-conversation response override a newer navigation", async () => {
+  let complete!: () => void;
+  const { shell, ports } = setup({ authState: signedIn, newConsultation: vi.fn(() => new Promise<void>(resolve => { complete = resolve; })) });
+  document.querySelector<HTMLTextAreaElement>("#home-prompt")!.value = "新しい相談";
+  document.querySelector(".home-prompt")!.dispatchEvent(new Event("submit", { cancelable: true }));
+  shell.navigate("trips"); complete(); await Promise.resolve(); await Promise.resolve();
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("trips"); expect(ports.openChat).not.toHaveBeenCalled();
+});
+it("opens a trip consultation without the hero and restores only its explicitly referenced trip", async () => {
+  window.history.replaceState({ consultation: "trip", tripId: "trip-one" }, "", "#chat");
+  const consultTrip = vi.fn(async () => {});
+  const { shell, ports } = setup({ authState: signedIn, consultTrip });
+  expect(document.querySelector<HTMLElement>("[data-home-hero]")!.hidden).toBe(true);
+  await vi.waitFor(() => expect(consultTrip).toHaveBeenCalledExactlyOnceWith("trip-one"));
+  await vi.waitFor(() => expect(document.querySelector("main")!.dataset.consultationMode).toBe("conversation"));
+  expect(ports.newConsultation).not.toHaveBeenCalled();
+  shell.showTrip("trip-one"); expect(window.location.hash).toBe("#trip");
+  shell.showConversation("trip-one"); expect(window.location.hash).toBe("#chat");
+  expect(document.querySelector<HTMLElement>("[data-home-hero]")!.hidden).toBe(true);
+  expect(consultTrip).toHaveBeenCalledTimes(1);
+});
+it("keeps a failed trip consultation separate from new-chat hero and supports retry", async () => {
+  window.history.replaceState({ consultation: "trip", tripId: "trip-one" }, "", "#chat");
+  const consultTrip = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValue(undefined);
+  setup({ authState: signedIn, consultTrip });
+  await vi.waitFor(() => expect(document.querySelector("main")!.dataset.consultationMode).toBe("unavailable"));
+  expect(document.querySelector<HTMLElement>("[data-home-hero]")!.hidden).toBe(true);
+  click("[data-consultation-retry]");
+  await vi.waitFor(() => expect(document.querySelector("main")!.dataset.consultationMode).toBe("conversation"));
+  expect(consultTrip).toHaveBeenCalledTimes(2);
 });

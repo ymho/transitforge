@@ -31,7 +31,7 @@
 .product-nav :is(a, button) { min-width: 4.5rem; min-height: 3.5rem; display: flex; gap: .4rem; align-items: center; justify-content: center; padding: .5rem .8rem; border: 0; border-radius: .75rem; color: #647181; background: transparent; text-decoration: none; font: 700 .85rem/1.2 var(--product-font); cursor: pointer; }
 .product-nav :is(a, button)[aria-current="page"] { background: #e5edf4; color: var(--product-accent); }
 .product-page { height: 100dvh; overflow-y: auto; padding: calc(var(--product-header-height) + 1.5rem) max(1.625rem, calc((100vw - 79.25rem) / 2)) 4rem; box-sizing: border-box; line-height: 1.85; scroll-padding: calc(var(--product-header-height) + 1rem); }
-.product-page[data-page="explore"] { padding: 0; }
+.product-page[data-page="chat"] { padding: 0; }
 .product-page[hidden] { display: none; }
 .product-page h1 { margin: .5rem 0 1rem; font: 750 clamp(1.8rem, 4vw, 3.2rem)/1.25 var(--product-font); letter-spacing: -.025em; }
 .product-page h2 { font: 750 1.5rem/1.35 var(--product-font); margin-top: 0; }
@@ -87,7 +87,7 @@
 /* Desktop presentation pass: preserve the component system while giving the first view a clear focal point. */
 @media (min-width: 45rem) {
   .product-nav { right: auto; }
-  .product-page:not([data-page="explore"]) { padding-top: 5.25rem; }
+  .product-page:not([data-page="chat"]) { padding-top: 5.25rem; }
   .home-prompt button { border-radius: .875rem; font-size: 1.2rem; }
   .home-trip-card { min-height: 10.25rem; padding: 1.5rem; gap: 1.65rem; }
   .home-trip-copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 1rem; align-items: center; }
@@ -123,7 +123,7 @@
 }
 @media (max-width: 44rem) {
   .product-page { height: 100dvh; padding: calc(var(--product-header-height) + 1rem) .875rem 6rem; scroll-padding-top: calc(var(--product-header-height) + 1rem); }
-  .product-page[data-page="explore"] { padding: 0; }
+  .product-page[data-page="chat"] { padding: 0; }
   .home-hero { min-height: 100svh; }
   .home-hero-copy { width: 100%; min-height: 100svh; padding: 5.5rem 1rem 6.25rem; justify-content: center; }
   .home-hero-media { height: 100%; }
@@ -145,3 +145,9 @@
   #app[data-primary-view="map"] #map { top: var(--product-header-height); }
 }
 @media (prefers-reduced-motion: reduce) { .product-shell *, #app[data-primary-view] .ai-guide-panel { animation: none; transition: none; } }
+
+/* One consultation route; the hero is its empty state, never a second menu page. */
+#app[data-primary-view="chat"]:not([data-consultation-mode="conversation"]) :is(.consultation-page, .ai-guide-panel, .trip-workspace, .trip-workspace-navigation) { display: none; }
+.consultation-entry-error { max-width: 42rem; margin: .75rem 1rem; padding: .5rem .75rem; border-radius: .5rem; background: var(--product-paper); }
+.consultation-entry-progress { min-height: 70svh; display: grid; place-content: center; justify-items: center; gap: .75rem; padding: 5rem 1rem; }
+.consultation-entry-progress[hidden], .consultation-entry-error[hidden], .home-hero[hidden] { display: none; }

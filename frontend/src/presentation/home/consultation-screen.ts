@@ -45,7 +45,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   const name = node("strong", ""), meta = node("p", ""), note = node("small", "");
   identity.append(name, meta, note);
   const actions = node("div", "consultation-context-actions");
-  const conditions = node("button", "consultation-conditions-toggle", "この旅の条件"), tripButton = node("button", "", "旅程を見る");
+  const conditions = node("button", "consultation-conditions-toggle", "この旅の条件"), tripButton = node("button", "", "旅程に戻る");
   const saveDraft = node("button", "", "仮旅程を保存"); saveDraft.type = "button";
   const cancelSave = node("button", "", "再試行をやめて条件を編集"); cancelSave.type = "button";
   cancelSave.addEventListener("click", () => {
