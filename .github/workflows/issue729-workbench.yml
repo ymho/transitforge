@@ -2,7 +2,7 @@ name: Issue 729 Workbench
 on:
   push:
     branches: [feat/agent-v2-party-cohorts-729]
-    paths: [.github/issue729.part3]
+    paths: [.github/workflows/issue729-workbench.yml]
 permissions:
   contents: write
 jobs:
@@ -18,9 +18,9 @@ jobs:
           set -euo pipefail
           cat .github/issue729.part{0,1,2,3} | base64 --decode | xz --decompress > /tmp/issue729.patch
           echo 'cbb77f3da02af399632a04620be481684aa23ca0edabb439813a2e736bb6ec52  /tmp/issue729.patch' | sha256sum --check
-          git apply --check /tmp/issue729.patch
-          git apply --index /tmp/issue729.patch
-          git rm .github/issue729.part{0,1,2,3} .github/workflows/issue729-workbench.yml
+          git apply --exclude='.github/workflows/*' --check /tmp/issue729.patch
+          git apply --exclude='.github/workflows/*' --index /tmp/issue729.patch
+          git rm .github/issue729.part{0,1,2,3}
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m '✨ V2の同行者属性と途中参加を業務条件として受理'
