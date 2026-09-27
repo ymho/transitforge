@@ -68,20 +68,6 @@ export interface AgentTripScheduleItem {
   arrivalTimeMinutes?: number;
 }
 
-const companionLabels: Record<string, string> = {
-  solo: "一人",
-  partner: "パートナー",
-  friends: "友人",
-  children: "子ども",
-  family: "家族",
-};
-
-const childAgeLabels: Record<string, string> = {
-  baby: "0〜2歳",
-  preschool: "3〜5歳",
-  elementary: "小学生",
-  teen: "中学生以上",
-};
 
 export function createAgentContextSnapshot(
   profile?: UserProfile,
