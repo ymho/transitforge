@@ -67,10 +67,13 @@ function projectFacts(facts: readonly ConversationIntentFact[]): TripConstraint[
     if (fact.target === "origin" && fact.value.kind === "place_label") constraints.push(constraint([fact], { type: "origin", place: { name: fact.value.label, sources: [] } }));
     else if (fact.target === "duration" && fact.value.kind === "quantity" && fact.value.unit !== "people") constraints.push(constraint([fact], { type: "duration", unit: fact.value.unit, minimum: fact.value.amount, maximum: fact.value.amount }));
     else if (fact.target === "duration" && fact.value.kind === "quantity_range" && fact.value.unit !== "people") constraints.push(constraint([fact], { type: "duration", unit: fact.value.unit, minimum: fact.value.minimum, maximum: fact.value.maximum }));
-    else if (fact.target === "budget" && fact.value.kind === "money" && isCurrency(fact.value.currency)) {
+    else if (fact.target === "budget" && fact.value.kind === "money" && isCurrency(fact.value.currency) &&
+        (fact.value.basis === "trip" || fact.value.basis === "per_person")) {
       const digits = currencyMinorUnits[fact.value.currency];
       const factor = 10 ** digits;
-      if (Number.isSafeInteger(fact.value.amount * factor)) constraints.push(constraint([fact], { type: "budget", limit: { amountMinor: fact.value.amount * factor, currency: fact.value.currency }, basis: fact.value.basis === "per_person" ? "per-person" : "trip" }));
+      if (Number.isSafeInteger(fact.value.amount * factor)) constraints.push(constraint([fact], { type: "budget",
+        limit: { amountMinor: fact.value.amount * factor, currency: fact.value.currency },
+        basis: fact.value.basis === "per_person" ? "per-person" : "trip" }));
     } else if (["experience", "accommodation"].includes(fact.target) && fact.value.kind === "text") constraints.push(constraint([fact], {
       type: "experience", intent: fact.modality === "required" ? "must" : ["avoid", "forbidden"].includes(fact.modality) ? "avoid" : "prefer", text: fact.value.text,
     }));
