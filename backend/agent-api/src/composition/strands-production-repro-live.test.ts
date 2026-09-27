@@ -60,7 +60,7 @@ it("measures the cumulative output cap separately from the unchanged per-call ca
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       parseInput: () => validAgentToolInput({}), execute: async () => successfulAgentToolResult({ available: true }) });
     const engine = new StrandsAgentEngine({ modelId: "unused", region: "ap-northeast-1",
-      systemPrompt: "Return structured output.", maxTurns: 10, maxOutputTokens: 4096 }, { model });
+      systemPrompt: "Return structured output.", maxTurns: 10, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096 }, { model });
     const result = await engine.run({ executionId: "synthetic-output-budget", userRequest: "synthetic request", tools,
       toolExecutor: new AgentToolExecutor(tools, evidence),
       limits: { maxTurns: 10, maxToolCalls: 16, maxExecutionMs: 150000,

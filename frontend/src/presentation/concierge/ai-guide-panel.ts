@@ -697,7 +697,7 @@ function renderDeliveryStatus(delivery: NonNullable<import("@raiquora/agent/runt
 
 const semanticTargetLabels: Record<PublicSemanticReceipt["changes"][number]["target"], string> = {
   goal: "旅の目的", origin: "出発地", destination: "行き先", start_date: "開始日", end_date: "終了日", duration: "日数",
-  party_size: "人数", budget: "予算", experience: "興味・過ごし方", pace: "ペース", accommodation: "宿泊", transport: "移動",
+  party_size: "人数", party_details: "同行者の属性・参加範囲", budget: "予算", experience: "興味・過ごし方", pace: "ペース", accommodation: "宿泊", transport: "移動",
   fixed_schedule: "固定予定", candidate_selection: "候補",
 };
 

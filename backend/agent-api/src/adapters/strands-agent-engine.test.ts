@@ -5,17 +5,20 @@ import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { successfulAgentToolResult, validAgentToolInput } from "@raiquora/agent/tool-contract";
+import { ConditionUpdateRejectedError } from "@raiquora/agent/conversation-condition";
 import { StrandsAgentEngine, type StrandsAgentFactory } from "./strands-agent-engine.js";
 
 type Reply = { text: string } | { tool: string; input: Record<string, unknown> };
 class ScriptedModel extends Model<BaseModelConfig> {
   private index = 0;
   private config: BaseModelConfig = { modelId: "synthetic" };
+  readonly seenMessages: Message[][] = [];
   readonly toolChoices: StreamOptions["toolChoice"][] = [];
   constructor(private readonly replies: Reply[]) { super(); }
   updateConfig(config: BaseModelConfig): void { this.config = { ...this.config, ...config }; }
   getConfig(): BaseModelConfig { return this.config; }
   async *stream(_messages: Message[], options?: StreamOptions): AsyncGenerator<ModelStreamEvent> {
+    this.seenMessages.push(structuredClone(_messages));
     this.toolChoices.push(options?.toolChoice);
     const reply = this.replies[this.index++];
     if (!reply) throw new Error("Unexpected extra model invocation");
@@ -196,7 +199,7 @@ describe("StrandsAgentEngine", () => {
     const { input } = setup();
     const apply = vi.fn();
     const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([
-      { tool: "consider_trip_scenario", input: { party: { kind: "count", people: 4 }, quote: "もし4人なら" } },
+      { tool: "consider_trip_scenario", input: { kind: "party", party: { kind: "count", people: 4 }, quote: "もし4人なら" } },
       submitted,
     ]) }).run({ ...input, userRequest: "もし4人ならどうなる？今の人数は変えずに比較したい", conditionController: { apply } });
     expect(apply).not.toHaveBeenCalled();
@@ -266,5 +269,99 @@ describe("StrandsAgentEngine", () => {
     expect(apply).toHaveBeenCalledTimes(2);
     expect(apply).toHaveBeenCalledWith({ target: "destination", place: "京都", quote: "京都" });
     expect(apply).toHaveBeenCalledWith({ target: "origin", place: "大阪", quote: "大阪" });
+  });
+});
+
+
+describe("V2 cohort standard SDK Tools", () => {
+  const cohort = { count: 1, membership: "baseline", schoolStage: "university", ageDecade: "twenties", scope: { kind: "whole_trip" } };
+  it("passes a single cohort business operation to Application, not per-attribute writers", async () => {
+    const { input } = setup();
+    const apply = vi.fn(async () => ({ receipt: { version: "public-semantic-receipt-v1" as const, intentRevision: 4,
+      speechAct: "inform" as const, outcome: "accepted" as const, changes: [] }, effectiveIntent: input.effectiveIntent }));
+    const model = new ScriptedModel([{ tool: "update_current_party_details", input: { finalCohorts: [cohort], quote: "20代の大学生1人" } }, submitted]);
+    await new StrandsAgentEngine(options, { model }).run({ ...input, userRequest: "20代の大学生1人", conditionController: { apply } });
+    expect(apply).toHaveBeenCalledExactlyOnceWith({ target: "party_details", cohorts: [cohort], quote: "20代の大学生1人" });
+  });
+  it("retracts details through the same final-state value without a procedural action", async () => {
+    const { input } = setup();
+    const apply = vi.fn(async () => ({ receipt: { version: "public-semantic-receipt-v1" as const, intentRevision: 4,
+      speechAct: "cancel" as const, outcome: "accepted" as const, changes: [] }, effectiveIntent: input.effectiveIntent }));
+    const model = new ScriptedModel([{ tool: "update_current_party_details", input: { finalCohorts: null, quote: "詳細は未定" } }, submitted]);
+    await new StrandsAgentEngine(options, { model }).run({ ...input, userRequest: "詳細は未定", conditionController: { apply } });
+    expect(apply).toHaveBeenCalledExactlyOnceWith({ target: "party_details", cohorts: null, quote: "詳細は未定" });
+  });
+  it.each(["scope_required", "scope_not_found", "stale_scope"] as const)("returns %s as a nonretryable Tool precondition without closing independent reads", async code => {
+    const { input, execute } = setup();
+    const apply = vi.fn(async () => { throw new ConditionUpdateRejectedError(code); });
+    const model = new ScriptedModel([
+      { tool: "update_current_party_details", input: { finalCohorts: [cohort], quote: "大学生1人" } },
+      lookup, { tool: "strands_structured_output", input: { kind: "clarification", target: "participation_scope" } },
+    ]);
+    const result = await new StrandsAgentEngine(options, { model }).run({ ...input, conditionController: { apply } });
+    expect(apply).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledOnce();
+    expect(result.effectiveIntent).toEqual(input.effectiveIntent);
+    expect(result.replyProposal).toEqual({ kind: "clarification", target: "participation_scope" });
+    const messages = JSON.stringify(model.seenMessages);
+    expect(messages).toContain('"conditionAccepted":false');
+    expect(messages).toContain(JSON.stringify({ code, retryable: false, requiredInput: "participation_scope" }));
+  });
+  it("returns missing what-if scope without calling the writer or fabricating a scenario", async () => {
+    const { input } = setup(), apply = vi.fn();
+    const model = new ScriptedModel([{ tool: "consider_trip_scenario", input: { kind: "party_details",
+      cohorts: [{ ...cohort, membership: "additional", scope: { kind: "logical_days", fromDay: 2 } }], quote: "もし2日目からなら" } },
+      { tool: "strands_structured_output", input: { kind: "clarification", target: "participation_scope" } }]);
+    const result = await new StrandsAgentEngine(options, { model }).run({ ...input, userRequest: "もし2日目からなら", conditionController: { apply } });
+    expect(apply).not.toHaveBeenCalled();
+    expect(result.effectiveIntent).toEqual(input.effectiveIntent);
+    expect(JSON.stringify(model.seenMessages)).toContain('"requiredInput":"participation_scope"');
+    expect(JSON.stringify(model.seenMessages)).not.toContain('"scenario":');
+  });
+  it("returns a successfully resolved what-if and never invokes the actual writer", async () => {
+    const { input } = setup(), apply = vi.fn();
+    const model = new ScriptedModel([{ tool: "consider_trip_scenario", input: { kind: "party_details",
+      cohorts: [{ ...cohort, membership: "additional", scope: { kind: "logical_days", fromDay: 2 } }], quote: "もし2日目からなら" } }, submitted]);
+    await new StrandsAgentEngine(options, { model }).run({ ...input, userRequest: "もし2日目からなら", conditionController: { apply,
+      scopeCatalog: { tripId: "known-trip", tripRevision: 1, days: [{ id: "a", label: "初日" }, { id: "b", label: "翌日" }], segments: [] } } });
+    expect(apply).not.toHaveBeenCalled();
+    expect(JSON.stringify(model.seenMessages)).toContain('"currentConditionsUnchanged":true');
+    expect(JSON.stringify(model.seenMessages)).toContain('"dayIds":["b"]');
+  });
+  it("does not execute a global party-dependent reader with a scoped cohort", async () => {
+    const { input } = setup();
+    const execute = vi.fn(async () => successfulAgentToolResult({ known: true }));
+    input.tools.register({ name: "party_dependent_lookup", description: "人数に依存する照会", effect: "read",
+      intentPolicy: { dependencies: ["party_size"] }, inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      parseInput: value => validAgentToolInput(value as Record<string, never>), execute });
+    input.effectiveIntent.actualConversationFacts.push({ factId: "details", target: "party_details", scope: { type: "conversation" },
+      modality: "preferred", precision: "exact", frame: "actual", sourceOperationId: "details", provenance: { kind: "user_turn", turnId: "details" },
+      value: { kind: "party_cohorts", cohorts: [{ count: 1, membership: "additional", scope: { kind: "logical_days", tripId: "trip", tripRevision: 1, dayIds: ["day-2"] } }] } });
+    const model = new ScriptedModel([{ tool: "party_dependent_lookup", input: {} }, lookup, submitted]);
+    await new StrandsAgentEngine(options, { model }).run(input);
+    expect(execute).not.toHaveBeenCalled();
+    expect(JSON.stringify(model.seenMessages)).toContain("scope_required");
+  });
+});
+
+describe("independent model and invocation output limits", () => {
+  it("does not silently use a per-model cap as the cumulative SDK cap", async () => {
+    const { input } = setup();
+    let modelLimit: number | undefined, invocation: unknown;
+    const createAgent: StrandsAgentFactory = config => {
+      modelLimit = (config.model as { getConfig(): { maxTokens?: number } }).getConfig().maxTokens;
+      return { invoke: async (_value, opts) => { invocation = opts?.limits;
+        return { stopReason: "toolUse", structuredOutput: { reply: { kind: "uncertainty", text: "未確認の点を説明します。" } } }; } };
+    };
+    const result = await new StrandsAgentEngine({ ...options, maxOutputTokens: 1024 }, { createAgent }).run(input);
+    expect(modelLimit).toBe(1024);
+    expect(invocation).not.toHaveProperty("outputTokens");
+    expect(result.replyProposal?.kind).toBe("uncertainty");
+    await new StrandsAgentEngine({ ...options, maxOutputTokens: 1024, maxInvocationOutputTokens: 4096 }, { createAgent }).run(input);
+    expect(modelLimit).toBe(1024);
+    expect(invocation).toMatchObject({ outputTokens: 4096 });
+    await new StrandsAgentEngine({ ...options, maxOutputTokens: 1024, maxInvocationOutputTokens: 4096 }, { createAgent })
+      .run({ ...input, limits: { maxOutputTokens: 2048 } });
+    expect(invocation).toMatchObject({ outputTokens: 2048 });
   });
 });

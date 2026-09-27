@@ -1,10 +1,11 @@
+import { parsePartyCohorts, type PartyCohort } from "./party-cohorts";
 import { validateTripParty } from "./trip-party";
 import type { ChildAgeGroup, TravelCompanion } from "./travel-profile";
 
 export const intentTargets = [
   "goal", "origin", "destination", "start_date", "end_date", "duration", "party_size",
   "budget", "experience", "pace", "accommodation", "transport", "fixed_schedule",
-  "candidate_selection",
+  "candidate_selection", "party_details",
 ] as const;
 export type IntentTarget = typeof intentTargets[number];
 
@@ -33,6 +34,7 @@ export type IntentValue =
   | { kind: "quantity"; amount: number; unit: "nights" | "days" | "people" }
   | { kind: "quantity_range"; minimum: number; maximum: number; unit: "nights" | "days" | "people" }
   | { kind: "party"; adults: number; children: readonly { ageGroup?: ChildAgeGroup; age?: number }[]; composition?: readonly TravelCompanion[] }
+  | { kind: "party_cohorts"; cohorts: PartyCohort[] }
   | { kind: "money"; amount: number; currency?: string; basis?: "trip" | "per_person" | "per_night" | "per_room" }
   | { kind: "candidate_ref"; presentationId: string; presentationVersion: 1; candidateRef: string }
   | { kind: "unknown"; reason: IntentUnknownReason };
@@ -201,6 +203,7 @@ function parseValue(value: unknown): IntentValue {
     return { kind: "party", adults: party.adults, children: party.children.map((child) => ({ ...child })),
       ...(party.composition === undefined ? {} : { composition: [...party.composition] }) };
   }
+  if (value.kind === "party_cohorts" && only(value, ["kind", "cohorts"])) return { kind: "party_cohorts", cohorts: parsePartyCohorts(value.cohorts) };
   if (value.kind === "money" && only(value, ["kind", "amount", "currency", "basis"]) && finiteNonnegative(value.amount) &&
       (value.currency === undefined || typeof value.currency === "string" && /^[A-Z]{3}$/u.test(value.currency)) &&
       (value.basis === undefined || ["trip", "per_person", "per_night", "per_room"].includes(String(value.basis)))) return { kind: "money", amount: value.amount,

@@ -1,5 +1,5 @@
 import {
-  conversationIntentLimits,
+  conversationIntentLimits, intentTargets,
   parseAcceptedIntentDelta,
   parseConversationIntentOverlay,
   parseIntentScope,
@@ -46,7 +46,7 @@ export function parseIntentApplicationReceipt(value: unknown): IntentApplication
   const operations = value.operations.map((item) => {
     if (!record(item) || !only(item, ["operationId", "groupId", "action", "target", "scope", "frame", "status", "reason", "beforeFactRefs", "afterFactRefs"]) || !reference(item.operationId) ||
         !reference(item.groupId) || !["set", "add_alternative", "replace", "retract", "relax", "narrow"].includes(String(item.action)) ||
-        !["goal", "origin", "destination", "start_date", "end_date", "duration", "party_size", "budget", "experience", "pace", "accommodation", "transport", "fixed_schedule", "candidate_selection"].includes(String(item.target)) ||
+        !intentTargets.includes(item.target as IntentTarget) ||
         !["actual", "hypothetical"].includes(String(item.frame)) || !["accepted", "rejected"].includes(String(item.status)) ||
         !["applied", "already_applied", "target_missing", "invalid_transition", "capacity_exceeded"].includes(String(item.reason)) ||
         !referenceList(item.beforeFactRefs) || !referenceList(item.afterFactRefs)) throw new Error("Invalid intent operation receipt");

@@ -182,3 +182,31 @@ describe("condition-operation acceptance and replay", () => {
     await expect(f.turns.acceptCondition(identity, f.lease, destination)).rejects.toMatchObject({ code: "unavailable" });
   });
 });
+
+
+it("journals a cohort aggregate atomically and keeps owner/replay/CAS/stale-turn fences", async () => {
+  const f = await setup();
+  const details = { target: "party_details" as const, quote: "大学生1人は2日目から", cohorts: [{ count: 1,
+    schoolStage: "university" as const, ageDecade: "twenties" as const, membership: "additional" as const,
+    scope: { kind: "logical_days" as const, tripId: "trip", tripRevision: 2, dayIds: ["day-2", "day-3"] } }] };
+  const receipt = await f.turns.acceptCondition(identity, f.lease, details);
+  expect(receipt.intentRevision).toBe(1);
+  expect(receipt.operations).toHaveLength(1);
+  expect(await f.fresh().acceptCondition(identity, f.lease, details)).toEqual(receipt);
+  expect((await overlay(f))?.facts).toHaveLength(1);
+  const changed = { ...details, cohorts: [{ ...details.cohorts[0]!, scope: { ...details.cohorts[0]!.scope, tripRevision: 3 } }] };
+  await expect(f.turns.acceptCondition(identity, f.lease, changed)).rejects.toMatchObject({ code: "conflict" });
+  await expect(f.turns.acceptCondition({ ...identity, principal: stateB }, f.lease, details)).rejects.toMatchObject({ code: "not-found" });
+  await f.turns.failTurn(identity, f.lease);
+  const retry = await f.fresh().beginTurn(identity, request);
+  if (retry.state !== "intent_accepted") throw new Error("Expected journal replay");
+  expect(retry.conditionReceipts).toEqual([receipt]);
+  expect(await f.turns.acceptCondition(identity, retry.lease, details)).toEqual(receipt);
+  const newer = { ...identity, turnId: secondId }, started = await f.turns.beginTurn(newer, { userRequest: "同行者の詳細は未定に戻す" });
+  if (started.state !== "started") throw new Error("Expected later turn");
+  await f.turns.acceptCondition(newer, started.lease, { target: "party_details", cohorts: null, quote: "詳細は未定" });
+  await expect(f.turns.acceptCondition(identity, retry.lease, { target: "party_size", party: { kind: "count", people: 3 }, quote: "3人" }))
+    .rejects.toMatchObject({ code: "conflict" });
+  expect((await overlay(f))?.facts).toHaveLength(0);
+  expect((await overlay(f))?.intentRevision).toBe(2);
+});

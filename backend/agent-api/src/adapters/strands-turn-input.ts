@@ -1,3 +1,4 @@
+import type { partyCohortContext, partyCohortEditableValue } from "@raiquora/agent/party-cohort-context";
 import type { ServerAgentRuntimeInput } from "../ports/server-agent-runtime.js";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -10,7 +11,10 @@ export class StrandsTurnInputError extends Error {
 }
 
 /** Per-turn data projection only. No planning instructions, prompts or persisted state. */
-export function strandsTurnInput(input: ServerAgentRuntimeInput): string {
+export function strandsTurnInput(input: ServerAgentRuntimeInput & {
+  partyDetailsApplicability?: ReturnType<typeof partyCohortContext>;
+  currentPartyDetails?: ReturnType<typeof partyCohortEditableValue>;
+}): string {
   if (!input.userRequest.trim() || input.userRequest.length > 8_000) {
     throw new StrandsTurnInputError("invalid_input");
   }
@@ -37,6 +41,12 @@ export function strandsTurnInput(input: ServerAgentRuntimeInput): string {
       ...(context?.featureContext?.serviceDate ? { serviceDate: context.featureContext.serviceDate } : {}),
     },
     effectiveIntent: context?.effectiveIntent ?? null,
+    currentPartyDetails: input.currentPartyDetails ?? null,
+    partyScopeChoices: input.conditionController?.scopeCatalog ? {
+      days: input.conditionController.scopeCatalog.days.map((day, index) => ({ dayNumber: index + 1, label: day.label })),
+      segments: input.conditionController.scopeCatalog.segments.map((segment, index) => ({ segmentNumber: index + 1, label: segment.label })),
+    } : null,
+    partyDetailsApplicability: input.partyDetailsApplicability ?? null,
     state,
     conversation: context?.conversation ? {
       title: context.conversation.title,
@@ -51,7 +61,8 @@ export function strandsTurnInput(input: ServerAgentRuntimeInput): string {
     // SDK Tool specs are the capability source of truth. Do not duplicate an
     // incomplete registry view here (Application-local writers are added later).
   });
-  const serialized = JSON.stringify({ userMessage: input.userRequest, application });
+  // Historical provenance is reference data; the current request follows it.
+  const serialized = JSON.stringify({ application, userMessage: input.userRequest });
   // Fail explicitly rather than silently dropping dates, exclusions or corrections.
   if (serialized.length > 24_000) throw new StrandsTurnInputError("context_budget");
   return serialized;

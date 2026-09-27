@@ -1,7 +1,10 @@
+import { isDeepStrictEqual } from "node:util";
+import type { PartyScopeCatalog } from "@raiquora/trip/party-cohorts";
+import { partyCohortReadBoundary } from "@raiquora/agent/party-cohort-context";
 import {
   Agent, BedrockModel, StructuredOutputError, tool,
   type AgentConfig, type BaseModelConfig, type InvokableTool,
-  type JSONSchema, type JSONValue, type Model,
+  type JSONSchema, type JSONValue, type Model, type MessageData,
 } from "@strands-agents/sdk";
 import { AgentTraceRecorder, type AgentTrace } from "@raiquora/agent/agent-trace";
 import { validateToolIntentUse } from "@raiquora/agent/intent-action-policy";
@@ -12,24 +15,28 @@ import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { agentV2StructuredOutputSchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
 import { agentV2CandidateReferences, publicReplyField } from "@raiquora/agent/agent-v2-publication";
 import { placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, travelPeriodUpdateInputSchema, budgetConditionUpdateInputSchema,
-  tripScenarioInputSchema, admitTripScenario, ConditionUpdateRejectedError, type ConversationConditionInput } from "@raiquora/agent/conversation-condition";
+  partyDetailsUpdateInputSchema, tripScenarioInputSchema, admitTripScenario, ConditionUpdateRejectedError, type ConversationConditionInput } from "@raiquora/agent/conversation-condition";
 import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
   type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
 
-export const strandsConditionToolNames = ["update_current_destination", "update_current_origin", "update_current_party", "update_current_travel_period", "update_current_budget", "consider_trip_scenario"] as const;
+export const strandsConditionToolNames = ["update_current_destination", "update_current_origin", "update_current_party", "update_current_travel_period", "update_current_budget", "update_current_party_details", "consider_trip_scenario"] as const;
 export interface StrandsAgentEngineOptions {
   modelId: string;
   region: string;
   systemPrompt: string;
   maxTurns?: number;
   maxTotalTokens?: number;
+  /** Per model response, not the cumulative invocation budget. */
   maxOutputTokens?: number;
+  maxInvocationOutputTokens?: number;
   toolTimeoutMs?: number;
 }
 export interface StrandsAgentRunInput {
   executionId: string;
   userRequest: string;
   modelInput?: string;
+  /** Owned public Conversation history; SDK-native roles, rebuilt for each invocation. */
+  messages?: MessageData[];
   tools: AgentToolRegistry;
   toolExecutor: AgentToolExecutor;
   effectiveIntent?: EffectiveIntent;
@@ -90,25 +97,28 @@ export class StrandsAgentEngine {
       getEffectiveIntent: () => currentEffectiveIntent, toolTimeoutMs: this.options.toolTimeoutMs ?? 20_000,
       trace, evidence, budgetState, maxToolCalls: input.limits?.maxToolCalls,
       reserveToolCall: input.reserveToolCall, canExecute: () => !intentUnavailable,
+      scopeCatalog: input.conditionController?.scopeCatalog,
     });
     const controller = input.conditionController;
     if (controller) {
-      const appliedConditionTargets = new Set<ConversationConditionInput["target"]>();
+      const appliedConditions = new Map<ConversationConditionInput["target"], { change: ConversationConditionInput; result: JSONValue }>();
       const apply = async (change: ConversationConditionInput, signal?: AbortSignal): Promise<JSONValue> => {
         if (signal?.aborted) throw new Error("execution_cancelled");
         if (intentUnavailable) throw new Error("condition_unavailable");
-        if (appliedConditionTargets.has(change.target)) return jsonValue({
-          ok: true, status: "already_applied_this_turn", condition: change.target,
-        });
+        const previous = appliedConditions.get(change.target);
+        if (previous) return isDeepStrictEqual(previous.change, change) ? structuredClone(previous.result) :
+          rejectedCondition(new ConditionUpdateRejectedError("condition_conflict"));
         try {
           const accepted = await controller.apply(change);
           currentEffectiveIntent = accepted.effectiveIntent;
-          appliedConditionTargets.add(change.target);
-          // The model only needs the acceptance receipt. The authoritative effectiveIntent
-          // stays Application-owned and is bound to later reads through getEffectiveIntent.
-          return jsonValue({ ok: true, status: "applied", receipt: accepted.receipt });
+          // Replay only the identical submitted value. A different value must not
+          // inherit the first payload's acceptance merely because the target matches.
+          // The durable journal remains the authority across invocation boundaries.
+          const result = jsonValue({ ok: true, status: "applied", receipt: accepted.receipt });
+          appliedConditions.set(change.target, { change: structuredClone(change), result });
+          return result;
         } catch (error) {
-          if (error instanceof ConditionUpdateRejectedError) throw error;
+          if (error instanceof ConditionUpdateRejectedError) return rejectedCondition(error);
           // The SDK reports Tool errors. An uncertain write additionally closes reads
           // and publication; no recovery by reinterpreting or repairing the user input.
           intentUnavailable = true;
@@ -131,6 +141,9 @@ export class StrandsAgentEngine {
           callback: (value, context) => apply(value.action === "set"
             ? { target: "party_size", party: value.party!, quote: value.quote }
             : { target: "party_size", party: null, quote: value.quote }, context?.cancelSignal) }),
+        tool({ name: "update_current_party_details", inputSchema: partyDetailsUpdateInputSchema,
+          description: "利用者が対象と変更内容を決めた同行者条件だけを永続更新する。誰に適用するかが未特定・未決定なら呼ばず、structured outputのclarification(target=participation_scope)で確認する。候補者をまとめて識別属性を消すことは確認の代わりにならない。詳細を全て取り消す・未定に戻す明示撤回はfinalCohorts=null。それ以外はapplication.currentPartyDetailsに今回の変更だけを反映した全集合を1回で置換する。同じ人の訂正は置換、別人の追加だけ新要素。範囲だけの変更では既存属性を保つ。baselineは全体人数の内数で、全行程参加を意味しない。fromDayは参加開始日、toDayは含まれる最終日。全体人数を維持するための人数writerは不要。what-ifはconsider_trip_scenario。Profile・実名・料金資格は扱わない。",
+          callback: (value, context) => apply({ target: "party_details", cohorts: value.finalCohorts, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "update_current_travel_period", inputSchema: travelPeriodUpdateInputSchema,
           description: "今回の旅行で実際に採用する旅行期間の最終状態を1回で永続更新する。設定・訂正はaction=set、日程全体を未定へ戻す明示はaction=clear。start/end/durationは今回の発言で明示したものだけ指定する。外側quoteをApplicationが月・日・泊数/日数の根拠として検証する。日付はcalendar_dateでdayを必須、monthは明示または開始日から同月と読める場合、yearは利用者が年を明示した場合だけ設定する。年未指定はApplicationが基準日以降で最初に来る月日へ決める。今日/明日/明後日はrelative_date。以前のduration等を持ち越さず、日付や日数を推測・補完しない。what-if・比較ではconsider_trip_scenarioを使う。",
           callback: (value, context) => apply(value.action === "set"
@@ -142,12 +155,17 @@ export class StrandsAgentEngine {
             ? { target: "budget", budget: value.budget!, quote: value.quote }
             : { target: "budget", budget: null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "consider_trip_scenario", inputSchema: tripScenarioInputSchema,
-          description: "現在の実旅行条件を一切変更せず、人数・旅行期間・予算の仮定、反実仮想、what-if、シナリオ比較を考える非永続Tool。成功時点でactual条件はすでに保持されているため、元の値へ戻す・維持する目的でupdate_current_*を呼ばない。同じuserMessageに仮定とは別の明示的なactual変更がある場合だけ、その変更に対応するwriterを別途使う。保存・A commit・Intent revision更新を行わない。",
+          description: "現在の実旅行条件を一切変更せず、人数・同行者詳細/参加範囲・旅行期間・予算の仮定、反実仮想、what-if、シナリオ比較を考える非永続Tool。成功時点でactual条件はすでに保持されているため、元の値へ戻す・維持する目的でupdate_current_*を呼ばない。同じuserMessageに仮定とは別の明示的なactual変更がある場合だけ、その変更に対応するwriterを別途使う。保存・A commit・Intent revision更新を行わない。",
           callback: (value, context) => {
             if (context?.cancelSignal.aborted) throw new Error("execution_cancelled");
-            const scenario = admitTripScenario(value, input.userRequest);
-            return jsonValue({ ok: true, scenario, currentConditionsUnchanged: true,
-              actualConditionWriteRequired: false, restoreCurrentConditions: false });
+            try {
+              const scenario = admitTripScenario(value, input.userRequest, controller.scopeCatalog);
+              return jsonValue({ ok: true, scenario, currentConditionsUnchanged: true,
+                actualConditionWriteRequired: false, restoreCurrentConditions: false });
+            } catch (error) {
+              if (error instanceof ConditionUpdateRejectedError) return rejectedCondition(error);
+              throw error;
+            }
           } }),
       );
     }
@@ -157,6 +175,7 @@ export class StrandsAgentEngine {
       model: baseModel,
       structuredOutputSchema: agentV2StructuredOutputSchema,
       tools, systemPrompt: this.options.systemPrompt,
+      ...(input.messages ? { messages: structuredClone(input.messages) } : {}),
       printer: false, contextManager: false, retryStrategy: null, toolExecutor: "sequential",
     });
     const startedAt = Date.now();
@@ -168,8 +187,8 @@ export class StrandsAgentEngine {
           turns: input.limits?.maxTurns ?? this.options.maxTurns ?? 8,
           ...(input.limits?.maxTotalTokens ?? this.options.maxTotalTokens
             ? { totalTokens: input.limits?.maxTotalTokens ?? this.options.maxTotalTokens } : {}),
-          ...(input.limits?.maxOutputTokens ?? this.options.maxOutputTokens
-            ? { outputTokens: input.limits?.maxOutputTokens ?? this.options.maxOutputTokens } : {}),
+          ...(input.limits?.maxOutputTokens ?? this.options.maxInvocationOutputTokens
+            ? { outputTokens: input.limits?.maxOutputTokens ?? this.options.maxInvocationOutputTokens } : {}),
         },
       });
       if (intentUnavailable) throw new ServerAgentRuntimeExecutionError("intent_state", "unknown");
@@ -212,7 +231,7 @@ export function createStrandsReadTools(input: {
   registry: AgentToolRegistry; executor: AgentToolExecutor; executionId: string; getEffectiveIntent?: () => EffectiveIntent | undefined;
   toolTimeoutMs: number; trace: AgentTraceRecorder; evidence: Evidence[];
   budgetState?: { toolCalls: number; toolLimitReached: boolean }; maxToolCalls?: number;
-  reserveToolCall?: () => boolean; canExecute?: () => boolean;
+  reserveToolCall?: () => boolean; canExecute?: () => boolean; scopeCatalog?: PartyScopeCatalog;
 }): InvokableTool<unknown, JSONValue>[] {
   return input.registry.descriptors().filter(({ name }) => input.registry.effect(name) === "read").map((descriptor) => tool({
     name: descriptor.name, description: descriptor.description, inputSchema: descriptor.inputSchema as JSONSchema,
@@ -221,6 +240,8 @@ export function createStrandsReadTools(input: {
       if (!toolInput) return jsonValue({ ok: false, error: { code: "invalid_input", retryable: false } });
       if (input.canExecute && !input.canExecute()) return jsonValue({ ok: false, error: { code: "intent_unavailable", retryable: false } });
       const effectiveIntent = input.getEffectiveIntent?.();
+      const cohortReason = partyCohortReadBoundary(effectiveIntent, descriptor.intentPolicy?.dependencies ?? [], input.scopeCatalog);
+      if (cohortReason) return jsonValue({ ok: false, error: { code: "precondition_missing", retryable: false, reason: cohortReason } });
       const decision = validateToolIntentUse(descriptor, toolInput, effectiveIntent);
       if (!decision.accepted) return jsonValue({ ok: false, error: {
         code: decision.error?.code ?? "precondition_failed", retryable: decision.error?.retryable ?? false } });
@@ -254,6 +275,13 @@ export function createStrandsReadTools(input: {
           fields: Object.fromEntries(Object.entries(item.facts).filter(([key]) => publicReplyField(key))) })) });
     },
   }));
+}
+/** Known admission rejections are Tool data, not transient SDK execution failures.
+ * Unknown/ambiguous persistence failures still fence reads and publication above. */
+function rejectedCondition(error: ConditionUpdateRejectedError): JSONValue {
+  const scopeMissing = error.code === "scope_required" || error.code === "scope_not_found" || error.code === "stale_scope";
+  return jsonValue({ ok: false, conditionAccepted: false, error: { code: error.code, retryable: false,
+    ...(scopeMissing ? { requiredInput: "participation_scope" } : {}) } });
 }
 function runtimeFailureKind(error: unknown): ServerAgentRuntimeFailureKind {
   const name = error instanceof Error ? error.name : "";

@@ -80,7 +80,9 @@
     "./consultation-request-proposal": "./domain/consultation-request-proposal.ts",
     "./trip-costs": "./domain/trip-costs.ts",
     "./cost-lines": "./domain/cost-lines.ts",
-    "./public-cost-proposal": "./domain/public-cost-proposal.ts"
+    "./public-cost-proposal": "./domain/public-cost-proposal.ts",
+    "./party-cohorts": "./domain/party-cohorts.ts",
+    "./cohort-eligibility": "./domain/cohort-eligibility.ts"
   },
   "dependencies": {
     "@raiquora/operation": "*",

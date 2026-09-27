@@ -1,3 +1,6 @@
+import { resolvePartyCohorts, PartyCohortError, assertCohortBaseline, type PartyScopeCatalog } from "@raiquora/trip/party-cohorts";
+import { partyCohortValueSchema, resolvedPartyCohortsSchema } from "./party-cohort-condition";
+export { partyDetailsUpdateInputSchema } from "./party-cohort-condition";
 import { z } from "zod";
 import { parseAcceptedIntentDelta, type AcceptedIntentDelta, type ConversationIntentOverlay, type IntentValue } from "@raiquora/trip/conversation-intent";
 import { validateTripParty } from "@raiquora/trip/trip-party";
@@ -95,12 +98,15 @@ export const travelPeriodUpdateInputSchema = z.strictObject({
 });
 
 export const tripScenarioInputSchema = z.strictObject({
-  kind: z.enum(["party", "travel_period", "budget"]),
+  kind: z.enum(["party", "travel_period", "budget", "party_details"]),
+  cohorts: partyCohortValueSchema.optional(),
   party: partyConditionValueSchema.optional(),
   period: travelPeriodValueSchema.optional(),
   budget: budgetConditionValueSchema.optional(),
   quote: sourceQuote,
 }).superRefine((value, context) => {
+  if (value.kind === "party_details" ? value.cohorts === undefined || value.party !== undefined || value.period !== undefined || value.budget !== undefined : value.cohorts !== undefined)
+    context.addIssue({ code: "custom", message: "party_details scenario requires only cohorts" });
   if (value.kind === "party" && (value.party === undefined || value.period !== undefined || value.budget !== undefined))
     context.addIssue({ code: "custom", message: "party scenario requires only party" });
   if (value.kind === "travel_period" && (value.period === undefined || value.party !== undefined || value.budget !== undefined))
@@ -128,18 +134,20 @@ const resolvedPeriodSchema = z.strictObject({
   message: "resolved travel period requires at least one component",
 });
 
-export const conditionSlots = ["origin", "destination", "party_size", "travel_period", "budget"] as const;
+export const conditionSlots = ["origin", "destination", "party_size", "travel_period", "budget", "party_details"] as const;
 const placeInputSchema = z.strictObject({ target: z.enum(["origin", "destination"]), place: placeLabel.nullable(), quote: sourceQuote });
 const partyInputSchema = z.strictObject({ target: z.literal("party_size"), party: partyConditionValueSchema.nullable(), quote: sourceQuote });
 const periodInputSchema = z.strictObject({ target: z.literal("travel_period"), period: travelPeriodValueSchema.nullable(), quote: sourceQuote });
 const budgetInputSchema = z.strictObject({ target: z.literal("budget"), budget: budgetConditionValueSchema.nullable(), quote: sourceQuote });
-export const conversationConditionInputSchema = z.union([placeInputSchema, partyInputSchema, periodInputSchema, budgetInputSchema]);
+const partyDetailsInputSchema = z.strictObject({ target: z.literal("party_details"), cohorts: partyCohortValueSchema.nullable(), quote: sourceQuote });
+export const conversationConditionInputSchema = z.union([placeInputSchema, partyInputSchema, periodInputSchema, budgetInputSchema, partyDetailsInputSchema]);
 
 const placeChangeSchema = placeInputSchema;
 const partyChangeSchema = partyInputSchema;
 const periodChangeSchema = z.strictObject({ target: z.literal("travel_period"), period: resolvedPeriodSchema.nullable(), quote: sourceQuote });
 const budgetChangeSchema = budgetInputSchema;
-export const conversationConditionSchema = z.union([placeChangeSchema, partyChangeSchema, periodChangeSchema, budgetChangeSchema]);
+const partyDetailsChangeSchema = z.strictObject({ target: z.literal("party_details"), cohorts: resolvedPartyCohortsSchema.nullable(), quote: sourceQuote });
+export const conversationConditionSchema = z.union([placeChangeSchema, partyChangeSchema, periodChangeSchema, budgetChangeSchema, partyDetailsChangeSchema]);
 
 export type PlaceConditionInput = z.infer<typeof placeConditionInputSchema>;
 export type PartyConditionInput = z.infer<typeof partyConditionInputSchema>;
@@ -155,15 +163,16 @@ export type ConditionSlot = typeof conditionSlots[number];
 export type ConditionTarget = ConditionSlot;
 
 export class ConditionUpdateRejectedError extends Error {
-  constructor(readonly code: "invalid_condition" | "invalid_source" | "condition_conflict") {
+  constructor(readonly code: "invalid_condition" | "invalid_source" | "condition_conflict" | "scope_required" | "scope_not_found" | "stale_scope") {
     super(code); this.name = "ConditionUpdateRejectedError";
   }
 }
 
-export function admitTripScenario(value: unknown, userMessage: string): TripScenarioInput {
+export function admitTripScenario(value: unknown, userMessage: string, catalog?: PartyScopeCatalog) {
   const parsed = tripScenarioInputSchema.safeParse(value);
   if (!parsed.success) throw new ConditionUpdateRejectedError("invalid_condition");
   if (!userMessage.includes(parsed.data.quote)) throw new ConditionUpdateRejectedError("invalid_source");
+  if (parsed.data.kind === "party_details") return { kind: "party_details" as const, cohorts: admittedCohorts(parsed.data.cohorts!, catalog), quote: parsed.data.quote };
   if (parsed.data.kind !== "budget") return parsed.data;
   const budget = resolveBudget(parsed.data.budget!, parsed.data.quote);
   return { kind: "budget", budget, quote: parsed.data.quote };
@@ -171,7 +180,7 @@ export function admitTripScenario(value: unknown, userMessage: string): TripScen
 
 /** Syntax is shared with the SDK. Source grounding and calendar resolution belong
  * to Application admission, not to the model or a legacy semantic interpreter. */
-export function admitConditionChange(value: unknown, userMessage: string, calendarDate?: string): ConversationConditionChange {
+export function admitConditionChange(value: unknown, userMessage: string, calendarDate?: string, catalog?: PartyScopeCatalog): ConversationConditionChange {
   const parsed = conversationConditionInputSchema.safeParse(value);
   if (!parsed.success) throw new ConditionUpdateRejectedError("invalid_condition");
   const input = parsed.data;
@@ -183,6 +192,7 @@ export function admitConditionChange(value: unknown, userMessage: string, calend
       validateTripParty({ adults: input.party.adults, children: Array.from({ length: input.party.children }, () => ({})), source: "user" });
     } catch { throw new ConditionUpdateRejectedError("invalid_condition"); }
   }
+  if ("cohorts" in input) return { target: "party_details", cohorts: input.cohorts === null ? null : admittedCohorts(input.cohorts, catalog), quote: input.quote };
   if ("place" in input) return input;
   if ("party" in input) return input;
   if ("budget" in input) {
@@ -205,6 +215,7 @@ export function conditionPayload(change: ConversationConditionChange): string {
   if ("place" in change) return JSON.stringify([1, change.target, change.place]);
   if ("party" in change) return JSON.stringify([1, change.target, change.party]);
   if ("budget" in change) return JSON.stringify([3, change.target, change.budget]);
+  if ("cohorts" in change) return JSON.stringify([4, change.target, change.cohorts]);
   return JSON.stringify([2, change.target, change.period]);
 }
 
@@ -226,8 +237,16 @@ export function conditionDelta(change: ConversationConditionChange, turnId: stri
         provenance: { kind: "user_turn", turnId, quote: change.quote },
       }] });
   }
-  const cleared = "place" in change ? change.place === null : change.party === null;
+  if ("cohorts" in change && change.cohorts !== null) {
+    const party = overlay.facts.find(fact => fact.target === "party_size" && fact.frame === "actual" && fact.scope.type === "conversation")?.value;
+    const count = party?.kind === "quantity" && party.unit === "people" ? party.amount : party?.kind === "party" ? party.adults + party.children.length : undefined;
+    if (count !== undefined) {
+      try { assertCohortBaseline(change.cohorts, count); } catch { throw new ConditionUpdateRejectedError("invalid_condition"); }
+    }
+  }
+  const cleared = "place" in change ? change.place === null : "cohorts" in change ? change.cohorts === null : change.party === null;
   let value: IntentValue | undefined;
+  if (!cleared && "cohorts" in change) value = { kind: "party_cohorts", cohorts: change.cohorts! };
   if (!cleared && "place" in change) value = { kind: "place_label", label: change.place! };
   if (!cleared && "party" in change && change.party?.kind === "count") value = { kind: "quantity", amount: change.party.people, unit: "people" };
   if (!cleared && "party" in change && change.party?.kind === "composition")
@@ -448,4 +467,13 @@ function stepDate(value: string, days: number): string {
 }
 function differenceInDays(start: string, end: string): number {
   return Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000);
+}
+
+function admittedCohorts(cohorts: z.infer<typeof partyCohortValueSchema>, catalog?: PartyScopeCatalog) {
+  try { return resolvePartyCohorts(cohorts, catalog); }
+  catch (error) {
+    if (error instanceof PartyCohortError) throw new ConditionUpdateRejectedError(
+      error.code === "scope_required" || error.code === "scope_not_found" || error.code === "stale_scope" ? error.code : "invalid_condition");
+    throw error;
+  }
 }

@@ -60,3 +60,19 @@ it("separates a definite conflict from an uncertain storage result", async () =>
   await expect(apply({ target: "destination", place: "京都", quote: "京都" })).rejects.toMatchObject({ code: "condition_conflict" });
   await expect(apply({ target: "destination", place: "京都", quote: "京都" })).rejects.toBeInstanceOf(StateError);
 });
+
+
+it("resolves companion selectors from trusted Application context and refuses model-owned IDs", async () => {
+  const acceptCondition = vi.fn();
+  const quote = "大学生1人が2日目から参加", apply = createConversationConditionApplication({ acceptCondition }, identity, lease, quote);
+  const input = { target: "party_details" as const, quote, cohorts: [{ count: 1, membership: "additional" as const, schoolStage: "university" as const,
+    scope: { kind: "logical_days" as const, fromDay: 2 } }] };
+  await expect(apply(input)).rejects.toMatchObject({ code: "scope_required" });
+  expect(acceptCondition).not.toHaveBeenCalled();
+  const catalog = { tripId: "known-trip", tripRevision: 3, days: [{ id: "day-1", label: "初日" }, { id: "day-2", label: "2日目" }], segments: [] };
+  await apply(input, catalog);
+  expect(acceptCondition).toHaveBeenCalledExactlyOnceWith(identity, lease, { target: "party_details", quote, cohorts: [{ count: 1,
+    membership: "additional", schoolStage: "university", scope: { kind: "logical_days", tripId: "known-trip", tripRevision: 3, dayIds: ["day-2"] } }] });
+  await expect(apply({ ...input, cohorts: [{ ...input.cohorts[0]!, scope: { kind: "logical_days", fromDay: 3 } }] }, catalog)).rejects.toMatchObject({ code: "scope_not_found" });
+  expect(acceptCondition).toHaveBeenCalledOnce();
+});

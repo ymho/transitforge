@@ -1,3 +1,4 @@
+import type { PartyScopeCatalog } from "@raiquora/trip/party-cohorts";
 import { admitConditionChange, ConditionUpdateRejectedError, type ConversationConditionInput } from "@raiquora/agent/conversation-condition";
 import type { ConversationConditionRepository } from "../../ports/conversation-condition-repository.js";
 import type { ConversationTurnIdentity, ConversationTurnLease } from "../../ports/conversation-turn-repository.js";
@@ -9,8 +10,8 @@ export function createConversationConditionApplication(repository: ConversationC
   identity: ConversationTurnIdentity, lease: ConversationTurnLease, userMessage: string, calendarDate?: string) {
   requireStatePrincipal(identity.principal); stateId(identity.conversationId); stateId(identity.turnId);
   const scope = structuredClone(identity), executionLease = structuredClone(lease);
-  return async (value: ConversationConditionInput) => {
-    const change = admitConditionChange(value, userMessage, calendarDate);
+  return async (value: ConversationConditionInput, catalog?: PartyScopeCatalog) => {
+    const change = admitConditionChange(value, userMessage, calendarDate, catalog === undefined ? undefined : structuredClone(catalog));
     try { return await repository.acceptCondition(scope, executionLease, change); }
     catch (error) {
       if (error instanceof StateError && error.code === "conflict") throw new ConditionUpdateRejectedError("condition_conflict");

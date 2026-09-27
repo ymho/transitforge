@@ -5,6 +5,7 @@ import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
 import type { StrandsAgentEngine } from "./strands-agent-engine.js";
+import { strandsTurnInput } from "./strands-turn-input.js";
 import { createStrandsServerRuntime } from "./strands-server-runtime.js";
 const limits = { maxIterations: 4, maxModelCalls: 6, maxToolCalls: 6, maxExecutionMs: 10_000, maxEvidence: 20 };
 function runtimeInput() {
@@ -37,9 +38,16 @@ describe("createStrandsServerRuntime", () => {
     const payload = JSON.parse(engine.run.mock.calls[0]![0].modelInput!);
     expect(payload.userMessage).toBe(input.userRequest);
     expect(payload.application).not.toHaveProperty("capabilities");
+    expect(payload.application.partyDetailsApplicability).toEqual({ status: "none" });
+    expect(input).not.toHaveProperty("partyDetailsApplicability");
     expect(payload.application.clock).toMatchObject({ role: "reference_only", referenceDate: "2026-09-26" });
     expect(result.publicReply?.kind).toBe("conversation");
     expect(input.researchLedger.outcome({ remainingScopes: [] }).usage).toMatchObject({ modelCalls: 1, inputTokens: 100, outputTokens: 20 });
+  });
+  it("serializes Application-authored applicability without recomputing Domain decisions", () => {
+    const payload = JSON.parse(strandsTurnInput({ ...runtimeInput(), partyDetailsApplicability: {
+      status: "unconfirmed", reason: "stale_scope" } }));
+    expect(payload.application.partyDetailsApplicability).toEqual({ status: "unconfirmed", reason: "stale_scope" });
   });
   it("publishes verified Evidence instead of unbound model prose", async () => {
     const engine = fake({ replyProposal: answer, response: "捏造した自由文" });
