@@ -197,7 +197,8 @@ function conversationalText(value: string): string {
   // Free conversation is explanatory only. It must not manufacture external facts
   // or claim an operation succeeded; those remain Evidence/receipt-backed variants.
   if (/(?:https?:\/\/|www\.)/iu.test(text) ||
-      /(?:保存|変更|予約|決済)(?:しました|済み|完了|成功)/u.test(text)) throw new AgentV2ReplyError("unsafe_content");
+      /(?:Trip|旅程|プロフィール|予約|決済)(?:を)?(?:保存|変更|更新|作成|実行)?(?:しました|済み|完了|成功)/iu.test(text) ||
+      /(?:予約|決済)(?:しました|済み|完了|成功)/u.test(text)) throw new AgentV2ReplyError("unsafe_content");
   return escapeMarkdown(text);
 }
 function boundedText(value: string): string {
