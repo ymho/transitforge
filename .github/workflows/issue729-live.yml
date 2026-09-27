@@ -1,5 +1,5 @@
-name: Agent v2 / Dialogue output verification
-# bounded free conversation rerun after deterministic contract update
+name: Agent v2 / Party dialogue free-text live
+# three bounded dialogue repetitions after full CI
 on:
   push:
     branches: [feat/agent-v2-party-cohorts-729]
@@ -49,13 +49,17 @@ jobs:
           role-to-assume: ${{ steps.role.outputs.arn }}
           aws-region: ap-northeast-1
           mask-aws-account-id: true
-      - name: Single bounded what-if diagnostic
+      - name: Three bounded dialogue repetitions
         env:
           AGENT_V2_LIVE: 'true'
         run: |
           mkdir -p .artifacts/dialogue-output
-          echo 'One synthetic turn, at most 6 model calls, 60 seconds; no production state or external Providers.' >> "$GITHUB_STEP_SUMMARY"
-          npx vitest run --root . backend/agent-api/src/composition/strands-dialogue-output-live.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=.artifacts/dialogue-output/baseline.json
+          echo 'Three independent dialogue/recovery repetitions; no production state or external Providers.' >> "$GITHUB_STEP_SUMMARY"
+          status=0
+          for attempt in 1 2 3; do
+            npx vitest run --root . backend/agent-api/src/composition/strands-party-details-live.test.ts --maxWorkers=1 --testNamePattern 'recovers from|dialogue completion' --reporter=default --reporter=json --outputFile=".artifacts/dialogue-output/dialogue-${attempt}.json" || status=1
+          done
+          exit "$status"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
