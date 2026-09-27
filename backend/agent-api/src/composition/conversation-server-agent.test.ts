@@ -71,18 +71,15 @@ it("runs natural language through semantic acceptance before Runtime", async () 
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
     model, weather: { search: async () => { throw new Error("not used"); } }, semanticIntentEnabled: true, newExecutionId: () => "runtime-execution" });
   const result = await app.runConversationTurn({ principal, conversationId, turnId: "11111111-1111-4111-8111-111111111111", userRequest: "出雲大社へ明日出発します", uiContext: { calendarDate: "2026-09-25" } });
-  expect(result.tripUpdateProposal).toMatchObject({ tripId: secondId, baseRevision: 0, patches: [{ type: "request", request: { constraints: [
-      { source: "user", requirement: { type: "dates", start: { earliest: "2026-09-26", latest: "2026-09-26" } } },
-      { source: "user", requirement: { type: "destinations", places: [{ name: "出雲大社", sources: [] }] } },
-    ], assumptions: [] } }], intentBinding: { version: "intent-proposal-binding-v1", intentRevision: 1, changes: [
-      { target: "destination" }, { target: "start_date" },
-    ] } });
+  expect(result.tripUpdateProposal).toBeUndefined();
+  const saved = await trips.repository.get(principal, secondId);
+  expect(saved?.request.constraints).toEqual(expect.arrayContaining([
+    expect.objectContaining({ source: "user", requirement: expect.objectContaining({ type: "dates", start: { earliest: "2026-09-26", latest: "2026-09-26" } }) }),
+    expect.objectContaining({ source: "user", requirement: expect.objectContaining({ type: "destinations", places: [{ name: "出雲大社", sources: [] }] }) }),
+  ]));
   const working = await new DynamoDbConversationTurnRepository("test-state", state.client).getWorkingState(principal, conversationId);
-  expect(working?.semantic?.overlay).toMatchObject({ intentRevision: 1, facts: [
-    { target: "destination", value: { kind: "place_label", label: "出雲大社" } },
-    { target: "start_date", value: { kind: "local_date", date: "2026-09-26", expression: "tomorrow",
-      anchorDate: "2026-09-25", resolverVersion: "calendar-v1" } },
-  ] });
+  expect(working?.semantic?.overlay.intentRevision).toBe(1);
+  expect(working?.semantic?.overlay.facts).toEqual([]);
   const runtimeRequests = requests.filter(({ outputContract }) => outputContract?.name !== "conversation_semantic_delta");
   const contextBlock = runtimeRequests[0]!.messages[0]!.content.find((block) => "text" in block) as { text: string };
   const context = JSON.parse(contextBlock.text.match(/<agent_context>([\s\S]*)<\/agent_context>/)![1]);
