@@ -162,7 +162,7 @@ it("actual SDK usage reaches the Conversation diagnostic sink and CLI on a faile
     writeFileSync(streams, "[]");
     const summary = execFileSync(process.execPath, [new URL("../../../../tools/deployment/summarize-agent-diagnostics.mjs", import.meta.url).pathname,
       diagnostics, streams], { encoding: "utf8" });
-    expect(summary).toContain("output_token_budget | limitOutputTokens | - | 1 | 2 (1/1) | 2 (1/1) | not_recorded (0/1) | not_recorded (0/1) | 200 (1/1) | 4800 (1/1) | 5000 (1/1)");
+    expect(summary).toContain("output_token_budget | limitOutputTokens | - | 1 | 2 (1/1) | 2 (1/1) | 0 (1/1) | 0 (1/1) | 200 (1/1) | 4800 (1/1) | 5000 (1/1)");
     expect(summary).not.toContain("test-execution");
     expect(summary).not.toContain("PRIVATE_REQUEST");
   } finally { rmSync(directory, { recursive: true, force: true }); }
