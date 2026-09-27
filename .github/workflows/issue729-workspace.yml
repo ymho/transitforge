@@ -18,14 +18,14 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - name: Package tracked public source and locked dependencies only
+      - name: Package tracked public source and nested locked dependencies only
         run: |
           mkdir -p /tmp/issue729-offline
           git archive --format=tar HEAD > /tmp/issue729-offline/source.tar
-          tar -cf /tmp/issue729-offline/dependencies.tar node_modules
+          find backend frontend modules -type d -name node_modules -prune -print0 | tar --null -T - -cf /tmp/issue729-offline/nested-dependencies.tar
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: issue729-offline-workspace
+          name: issue729-offline-nested
           path: /tmp/issue729-offline/*.tar
           retention-days: 1
           if-no-files-found: error
