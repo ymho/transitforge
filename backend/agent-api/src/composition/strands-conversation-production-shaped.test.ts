@@ -226,7 +226,10 @@ it("persists a V2 intent A-commit across answer failure and retries without reap
   const afterRetry = await new DynamoDbConversationTurnRepository("test-state", state.client)
     .getWorkingState(principal, conversationId);
   expect(afterRetry?.semantic?.overlay.intentRevision).toBe(1);
-  expect(afterRetry?.semantic?.overlay.facts).toHaveLength(1);
+  expect(afterRetry?.semantic?.overlay.facts).toHaveLength(0);
+  const saved = await trips.repository.get(principal, stateMetadata().tripId);
+  expect(saved?.request.constraints.some(({ requirement }) => requirement.type === "destinations" &&
+    requirement.places.some(({ name }) => name === "京都"))).toBe(true);
   expect(v1Model.converse).not.toHaveBeenCalled();
   expect((await state.conversations.history(principal, conversationId)).items.map(({ text }) => text))
     .toEqual([input.userRequest, result.response]);
