@@ -129,6 +129,14 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
           toolExecutor,
           limits: selectedLimits,
           researchLedger,
+          reportExecution: diagnostic => safeDiagnostic(dependencies, {
+            version: "agent-diagnostic-v1", executionId: scope.executionId,
+            phase: "execution", reason: diagnostic.reason, stopReason: diagnostic.stopReason,
+            ...(diagnostic.limitReason ? { limitReason: diagnostic.limitReason } : {}),
+            ...(diagnostic.counts ? { counts: { ...diagnostic.counts } } : {}),
+            incomplete: diagnostic.reason !== "completed",
+            occurredAt: (dependencies.now?.() ?? new Date()).toISOString(),
+          }),
           ...(initialEvidence?.length ? { initialEvidence } : {}),
           ...(reportProgress ? { reportProgress } : {}),
         });

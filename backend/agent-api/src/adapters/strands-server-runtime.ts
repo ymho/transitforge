@@ -2,10 +2,12 @@ import { mergeEvidenceObservations, validateEvidenceAndClaims } from "@raiquora/
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import { AgentV2ReplyError, type AgentV2ReplyProof } from "@raiquora/agent/agent-v2-reply";
 import { admitAgentV2Reply } from "@raiquora/agent/agent-v2-publication";
-import type { ServerAgentRuntimeInput } from "../ports/server-agent-runtime.js";
-import { StrandsAgentEngine } from "./strands-agent-engine.js";
 import { partyCohortContext, partyCohortEditableValue } from "@raiquora/agent/party-cohort-context";
+import type { ServerAgentRuntimeInput } from "../ports/server-agent-runtime.js";
+import type { AgentExecutionDiagnostic } from "../ports/agent-diagnostics.js";
+import { StrandsAgentEngine } from "./strands-agent-engine.js";
 import { strandsTurnInput } from "./strands-turn-input.js";
+import { strandsExecutionDiagnostic } from "./strands-execution-diagnostic.js";
 
 /** Proof is Application-authored and intended for V2 evaluation/diagnostics. It
  * does not authorize mutations and is not a second Conversation state store. */
@@ -17,14 +19,24 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
       partyDetailsApplicability: partyCohortContext(request.context?.effectiveIntent, request.conditionController?.scopeCatalog),
       currentPartyDetails: partyCohortEditableValue(request.context?.effectiveIntent, request.conditionController?.scopeCatalog),
     };
-    const run = await engine.run({
-      executionId: input.executionId, userRequest: input.userRequest, modelInput: strandsTurnInput(input),
-      tools: input.tools, toolExecutor: input.toolExecutor, effectiveIntent: input.context?.effectiveIntent,
-      ...(input.conditionController ? { conditionController: input.conditionController } : {}),
-      limits: { maxTurns: Math.min(input.limits.maxIterations, input.limits.maxModelCalls),
-        maxToolCalls: input.limits.maxToolCalls, maxExecutionMs: input.limits.maxExecutionMs },
-      reserveToolCall: () => input.researchLedger.reserve("toolCalls"),
-    });
+    let run: Awaited<ReturnType<StrandsAgentEngine["run"]>>;
+    try {
+      run = await engine.run({
+        executionId: input.executionId, userRequest: input.userRequest, modelInput: strandsTurnInput(input),
+        tools: input.tools, toolExecutor: input.toolExecutor, effectiveIntent: input.context?.effectiveIntent,
+        ...(input.conditionController ? { conditionController: input.conditionController } : {}),
+        limits: { maxTurns: Math.min(input.limits.maxIterations, input.limits.maxModelCalls),
+          maxToolCalls: input.limits.maxToolCalls, maxExecutionMs: input.limits.maxExecutionMs },
+        reserveToolCall: () => input.researchLedger.reserve("toolCalls"),
+      });
+    } catch (error) {
+      // A thrown invocation has no returned SDK usage. Do not invent zero calls/tokens.
+      await reportExecution(input, strandsExecutionDiagnostic());
+      throw error;
+    }
+    // Loop termination and reply publication are separate observations. A valid
+    // SDK stop is not evidence that the Application admitted a public reply.
+    await reportExecution(input, strandsExecutionDiagnostic(run));
     accountStrandsUsage(input.researchLedger, run.metrics);
     const status = runtimeStatus(run.stopReason, run.limitReason);
     const denied = (publicationError: string): StrandsRuntimeResult => ({
@@ -57,6 +69,10 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
       throw error;
     }
   };
+}
+async function reportExecution(input: ServerAgentRuntimeInput, diagnostic: AgentExecutionDiagnostic): Promise<void> {
+  try { await input.reportExecution?.(diagnostic); }
+  catch { /* Observability must not change a reply, mask an exception or trigger a retry. */ }
 }
 function accountStrandsUsage(ledger: ServerAgentRuntimeInput["researchLedger"],
   metrics: Awaited<ReturnType<StrandsAgentEngine["run"]>>["metrics"]): void {

@@ -74,3 +74,38 @@ catalog testは、active gateがV1の `agent-runtime.test.ts` / `research-runtim
 - 旧Runtimeのprivate class/phaseを固定するためだけのassertion
 
 関連: #631 #681 #691
+
+## 実行終了の診断（#735）
+
+V2は既存の`agent_diagnostic` sinkへ`phase=execution`を通知する。Strandsの実行終了と、
+Applicationによる回答公開（従来の`phase=runtime`）、Conversation保存（`phase=save`）を分ける。
+例えばSDKが`endTurn`で終了しても、構造化回答がなければexecutionはcompleted、runtimeはfailedになる。
+execution単独を製品成功・保存成功として集計しない。
+
+`stopReason`はBackendの固定allowlistであり、SDK結果全体・本文・例外messageはログへ渡さない。
+`limitOutputTokens`は`output_token_budget`、`limitTotalTokens`は`total_token_budget`、
+`limitTurns`は`iteration_budget`、単一model出力の`maxTokens`は`model_output_limit`へ分類する。
+Adapterが確定した`limitReason=deadline/tool_calls`は別フィールドで保持し、時間切れとTool上限を区別する。
+未認識の文字列はunknown、SDK結果を取得できなかった例外はnot_recordedとする。
+
+`counts`はmodelCalls、read ToolのtoolCalls、inputTokens、outputTokens、totalTokensだけをコピーする。
+有限な非負の安全整数だけを受理し、欠測を0へ置換しない。特にinvokeがthrowした場合、
+使用量を取得できなかったことは無料・呼出し0回を意味しない。数値は既存EngineがSDKから取得した集計であり、
+請求額の確定値ではない。条件更新・構造化出力の内部Toolはread Tool回数に含めない。
+診断sinkが失敗しても再invoke、回答の差替え、公開検証の緩和を行わない。
+
+診断は専用callbackから既存sinkへ渡し、Agentの公開結果・SSE・会話履歴へ新規フィールドを追加しない。
+既存の内部executionIdによるログ相関は維持し、公開されるActions集計からはIDを除外する。
+`tools/deployment/summarize-agent-diagnostics.mjs`は停止理由別の表を追加し、各数値を
+`最大値 (計測件数/該当イベント件数)`で表示する。合計・percentile・相談件数ではない。
+旧ログに存在しない停止理由や使用量を復元したとは扱わない。
+
+通常のV2 Acceptanceに含まれる`strands-runtime-diagnostics.test.ts`で、usage付き合成モデルを
+実SDKへ通し、累積4096に対して出力4800となる停止を、Conversation→診断sink→実CLIまで検証する。
+この数値は合成metadataであり、実Bedrockの観測ではない。診断を履歴へ保存しないこと、例外時の欠測、
+sink障害時の結果維持、未知値・不正数値・本文の除外も確認する。
+集計単体の負例は`node --test tools/deployment/*.test.mjs`で実行する。
+
+本変更は診断の追加であり、model、prompt、4096の出力上限、150秒の時間上限、retry方針、IAM、
+デプロイworkflowを変更しない。実Providerを使うopt-inテストのskipや通常CI成功を、
+実ブラウザでの症状解消・本番ログの取得成功として扱わない。デプロイ後の再現と診断照合が別途必要である。
