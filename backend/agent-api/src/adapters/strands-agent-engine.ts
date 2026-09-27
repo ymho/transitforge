@@ -128,7 +128,7 @@ export class StrandsAgentEngine {
             ? { target: "party_size", party: value.party!, quote: value.quote }
             : { target: "party_size", party: null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "update_current_party_details", inputSchema: partyDetailsUpdateInputSchema,
-          description: "今回の同行者属性と参加範囲を更新後の最終集合finalCohortsで1回だけ置換する。追加・削除・取消しを順番に実行するToolではない。取消しと新条件が同じ発言なら最後に残す集合だけを提出する。最終的に詳細が未定ならnull。学生区分と年代は独立、未指定属性は推測しない。baselineは全行程人数の内数、additionalは限定scopeでの外数。途中離脱はbaselineのscopeを短くする。全行程人数は変更しない。scopeは既知の日/区間の番号だけ。範囲が未解決なら確認し、全行程に広げない。what-ifはconsider_trip_scenario(kind=party_details)。Profile・実名・料金資格は扱わない。",
+          description: "利用者が対象と変更内容を決めた同行者条件だけを永続更新する。誰に適用するかが未特定・未決定なら呼ばず、structured outputのclarification(target=participation_scope)で確認する。候補者をまとめて識別属性を消すことは確認の代わりにならない。詳細を全て取り消す・未定に戻す明示撤回はfinalCohorts=null。それ以外はapplication.currentPartyDetailsに今回の変更だけを反映した全集合を1回で置換する。同じ人の訂正は置換、別人の追加だけ新要素。範囲だけの変更では既存属性を保つ。baselineは全体人数の内数で、全行程参加を意味しない。fromDayは参加開始日、toDayは含まれる最終日。全体人数を維持するための人数writerは不要。what-ifはconsider_trip_scenario。Profile・実名・料金資格は扱わない。",
           callback: (value, context) => apply({ target: "party_details", cohorts: value.finalCohorts, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "update_current_travel_period", inputSchema: travelPeriodUpdateInputSchema,
           description: "今回の旅行で実際に採用する旅行期間の最終状態を1回で永続更新する。設定・訂正はaction=set、日程全体を未定へ戻す明示はaction=clear。start/end/durationは今回の発言で明示したものだけ指定する。外側quoteをApplicationが月・日・泊数/日数の根拠として検証する。日付はcalendar_dateでdayを必須、monthは明示または開始日から同月と読める場合、yearは利用者が年を明示した場合だけ設定する。年未指定はApplicationが基準日以降で最初に来る月日へ決める。今日/明日/明後日はrelative_date。以前のduration等を持ち越さず、日付や日数を推測・補完しない。what-if・比較ではconsider_trip_scenarioを使う。",
