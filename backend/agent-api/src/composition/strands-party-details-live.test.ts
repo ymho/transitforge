@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Agent, ModelMessageEvent, AfterToolCallEvent } from "@strands-agents/sdk";
+import { Agent, ModelMessageEvent } from "@strands-agents/sdk";
 import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
@@ -27,79 +27,107 @@ const catalog: PartyScopeCatalog = { tripId: "known-trip", tripRevision: 2,
 const whole = { kind: "whole_trip" as const };
 const days = (dayIds: string[]) => ({ kind: "logical_days" as const, tripId: catalog.tripId, tripRevision: catalog.tripRevision, dayIds });
 const college: PartyCohort = { count: 1, membership: "baseline", schoolStage: "university", ageDecade: "twenties", scope: whole };
+const teen: PartyCohort = { ...college, ageDecade: "teens" };
 const child: PartyCohort = { count: 1, membership: "baseline", schoolStage: "elementary", scope: whole };
+const childUntilDayTwo: PartyCohort = { ...child, scope: days(["day-a", "day-b"]) };
 const adult: PartyCohort = { count: 1, membership: "baseline", ageDecade: "thirties", scope: whole };
 const joined: PartyCohort = { ...college, membership: "additional", scope: days(["day-b", "day-c"]) };
 const segment: PartyCohort = { ...joined, scope: { kind: "segment", tripId: catalog.tripId, tripRevision: catalog.tripRevision, segmentId: "return" } };
-interface Case { message: string; cohorts?: PartyCohort[]; writes: number; update?: boolean; scenario?: boolean; noCatalog?: boolean }
+interface Case { message: string; cohorts?: PartyCohort[]; writes: number; update?: boolean; scenario?: boolean; noCatalog?: boolean; clarification?: boolean }
+
+/** Each fixture owns independent, synthetic Application state. No production writes. */
+async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCohort[]): Promise<void> {
+  let overlay = reduceConversationIntent(emptyConversationIntentOverlay(), conditionDelta({ target: "party_size",
+    party: { kind: "count", people: 3 }, quote: "全体で3人" }, "previous-user-turn", emptyConversationIntentOverlay())).overlay;
+  if (initialCohorts) {
+    overlay = reduceConversationIntent(overlay, conditionDelta({ target: "party_details", cohorts: parsePartyCohorts(initialCohorts),
+      quote: "以前に受理された合成条件" }, "synthetic-prior-details", overlay)).overlay;
+  }
+  const journal = new Map<string, { payload: string; receipt: IntentApplicationReceipt }>();
+  const repository: ConversationConditionRepository = { acceptCondition: async (identity, _lease, change) => {
+    const key = conditionOperationId(identity.turnId, change.target), payload = conditionPayload(change), saved = journal.get(key);
+    if (saved) { if (saved.payload !== payload) throw new StateError("conflict"); return saved.receipt; }
+    const reduced = reduceConversationIntent(overlay, conditionDelta(change, identity.turnId, overlay));
+    overlay = reduced.overlay; journal.set(key, { payload, receipt: reduced.receipt });
+    return reduced.receipt;
+  } };
+  for (const [index, scenario] of cases.entries()) {
+    const turnId = `72900000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
+    const before = structuredClone(overlay);
+    const apply = createConversationConditionApplication(repository, { principal: stateA, conversationId, turnId },
+      { attemptId: turnId, userSequence: index + 1 }, scenario.message);
+    const scopeCatalog = scenario.noCatalog ? undefined : catalog;
+    const tools = new AgentToolRegistry(), evidenceRegistry = new ToolEvidenceRegistry();
+    let modelCalls = 0, writerCallbacks = 0;
+    const selectedTools: string[] = [];
+    const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1_536 }, {
+      createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, event => {
+        modelCalls++; selectedTools.push(...event.message.content.flatMap(block => block.type === "toolUseBlock"
+          ? [["update_current_party", "update_current_party_details", "consider_trip_scenario", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
+      }); return agent; },
+    });
+    const result = await createStrandsServerRuntime(engine)({ executionId: turnId, userRequest: scenario.message,
+      researchMode: { requestedMode: "standard", effectiveMode: "standard" }, context: { effectiveIntent: compileEffectiveIntent({ overlay }) },
+      tools, evidenceRegistry, toolExecutor: new AgentToolExecutor(tools, evidenceRegistry), limits,
+      researchLedger: new ResearchExecutionLedger(researchBudgetForRuntimeLimits(limits, "cohort-live"), { requestedMode: "standard", effectiveMode: "standard" }),
+      conditionController: { ...(scopeCatalog ? { scopeCatalog } : {}), apply: async change => {
+        writerCallbacks++;
+        return { receipt: publicSemanticReceipt(await apply(change, scopeCatalog)), effectiveIntent: compileEffectiveIntent({ overlay }) };
+      } },
+    });
+    const details = overlay.facts.find(fact => fact.target === "party_details")?.value;
+    // Bounded operational diagnostics only; no model prose, reasoning or production inputs.
+    console.log(JSON.stringify({ fixture, case: index, modelId, status: result.status, modelCalls, writerCallbacks,
+      acceptedOperations: journal.size, publicationError: result.publicationError, selectedTools, replyKind: result.publicReply?.kind }));
+    expect.soft(result.status, `${fixture} case ${index} reply`).toBe("completed");
+    expect.soft(details, `${fixture} case ${index} final cohorts`).toEqual(scenario.cohorts ? { kind: "party_cohorts", cohorts: parsePartyCohorts(scenario.cohorts) } : undefined);
+    expect.soft(overlay.facts.find(fact => fact.target === "party_size")?.value, `${fixture} case ${index} global count`).toEqual({ kind: "quantity", amount: 3, unit: "people" });
+    expect.soft(journal.size, `${fixture} case ${index} accepted operations`).toBe(scenario.writes);
+    expect.soft(overlay.intentRevision, `${fixture} case ${index} revisions`).toBe(before.intentRevision + (scenario.update ? 1 : 0));
+    expect.soft(selectedTools.includes("update_current_party"), `${fixture} case ${index} must not flatten scope into count`).toBe(false);
+    if (!scenario.noCatalog) expect.soft(selectedTools.includes("update_current_party_details"), `${fixture} case ${index} details writer`).toBe(!!scenario.update);
+    expect.soft(selectedTools.includes("consider_trip_scenario"), `${fixture} case ${index} scenario`).toBe(!!scenario.scenario);
+    if (scenario.scenario || !scenario.update && !scenario.noCatalog) {
+      expect.soft(writerCallbacks, `${fixture} case ${index} no writer callbacks`).toBe(0);
+      expect.soft(overlay, `${fixture} case ${index} unchanged state`).toEqual(before);
+    }
+    if (scenario.update) {
+      expect.soft(writerCallbacks, `${fixture} case ${index} one final decision`).toBe(1);
+      expect.soft(result.publicReply?.kind, `${fixture} case ${index} unnecessary questionnaire`).toBe("conversation");
+    }
+    if (scenario.noCatalog || scenario.clarification) expect.soft(result.publicReply).toMatchObject({ kind: "clarification", question: "participation_scope" });
+  }
+}
 
 describe.skipIf(!enabled)("anonymous party details with real Nova 2 Lite", () => {
   it("separates school/decade and participation, keeps what-if nonpersistent, and does not ask for unnecessary exact ages", async () => {
-    // Known prior user condition, not a model inference from Profile or the new cohorts.
-    let overlay = reduceConversationIntent(emptyConversationIntentOverlay(), conditionDelta({ target: "party_size",
-      party: { kind: "count", people: 3 }, quote: "全体で3人" }, "previous-user-turn", emptyConversationIntentOverlay())).overlay;
-    const journal = new Map<string, { payload: string; receipt: IntentApplicationReceipt }>();
-    const repository: ConversationConditionRepository = { acceptCondition: async (identity, _lease, change) => {
-      const key = conditionOperationId(identity.turnId, change.target), payload = conditionPayload(change), saved = journal.get(key);
-      if (saved) { if (saved.payload !== payload) throw new StateError("conflict"); return saved.receipt; }
-      const reduced = reduceConversationIntent(overlay, conditionDelta(change, identity.turnId, overlay));
-      overlay = reduced.overlay; journal.set(key, { payload, receipt: reduced.receipt });
-      return reduced.receipt;
-    } };
-    const cases: Case[] = [
+    // Original ten messages and their saved-state expectations remain unchanged.
+    await runCases("conditions", [
       { message: "こんにちは", writes: 0 },
       { message: "今回、全行程の同行者のうち1人は20代の大学生です。正確な年齢はまだ分かりません。", cohorts: [college], writes: 1, update: true },
       { message: "さっきの同行者の属性条件はいったんすべて取り消します。全行程の同行者のうち1人は小学生です。年齢はまだ分かりません。", cohorts: [child], writes: 2, update: true },
-      { message: "この小学生は2日目まで参加して、その後は離脱します。全行程の人数条件は変えません。", cohorts: [{ ...child, scope: days(["day-a", "day-b"]) }], writes: 3, update: true },
+      { message: "この小学生は2日目まで参加して、その後は離脱します。全行程の人数条件は変えません。", cohorts: [childUntilDayTwo], writes: 3, update: true },
       { message: "詳細条件を変更します。全行程に参加する30代1人と、2日目から最後まで追加参加する20代の大学生1人です。前の小学生の条件は取り消します。", cohorts: [adult, joined], writes: 4, update: true },
       { message: "もし追加参加の大学生が10代ならどう？今の条件は変えずに比較して。", cohorts: [adult, joined], writes: 4, scenario: true },
       { message: "追加参加の大学生は帰路の区間だけ参加することに変更します。30代1人は全行程のままです。", cohorts: [adult, segment], writes: 5, update: true },
       { message: "同行者の詳細条件はいったん未定に戻して。合計3人という条件はそのままです。", writes: 6, update: true },
       { message: "ありがとう", writes: 6 },
       { message: "大学生1人が2日目から追加参加することにします。", writes: 6, noCatalog: true },
-    ];
-    for (const [index, scenario] of cases.entries()) {
-      const turnId = `72900000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
-      const apply = createConversationConditionApplication(repository, { principal: stateA, conversationId, turnId },
-        { attemptId: turnId, userSequence: index + 1 }, scenario.message);
-      const scopeCatalog = scenario.noCatalog ? undefined : catalog;
-      const tools = new AgentToolRegistry(), evidenceRegistry = new ToolEvidenceRegistry();
-      let modelCalls = 0, writerCallbacks = 0;
-      const selectedTools: string[] = [];
-      const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1_536 }, {
-        createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, event => {
-          modelCalls++; selectedTools.push(...event.message.content.flatMap(block => block.type === "toolUseBlock"
-            ? [["update_current_party", "update_current_party_details", "consider_trip_scenario", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
-        });
-          // Only these synthetic fixtures are logged; never model prose/reasoning or production inputs.
-          agent.addHook(AfterToolCallEvent, event => {
-            if (index === 2 || index === 3) console.log(JSON.stringify({ case: index, fixtureTool: {
-              name: event.toolUse.name, input: event.toolUse.input, result: event.result,
-            } }).slice(0, 12_000));
-          }); return agent; },
-      });
-      const result = await createStrandsServerRuntime(engine)({ executionId: turnId, userRequest: scenario.message,
-        researchMode: { requestedMode: "standard", effectiveMode: "standard" }, context: { effectiveIntent: compileEffectiveIntent({ overlay }) },
-        tools, evidenceRegistry, toolExecutor: new AgentToolExecutor(tools, evidenceRegistry), limits,
-        researchLedger: new ResearchExecutionLedger(researchBudgetForRuntimeLimits(limits, "cohort-live"), { requestedMode: "standard", effectiveMode: "standard" }),
-        conditionController: { ...(scopeCatalog ? { scopeCatalog } : {}), apply: async change => {
-          writerCallbacks++;
-          return { receipt: publicSemanticReceipt(await apply(change, scopeCatalog)), effectiveIntent: compileEffectiveIntent({ overlay }) };
-        } },
-      });
-      const details = overlay.facts.find(fact => fact.target === "party_details")?.value;
-      console.log(JSON.stringify({ case: index, modelId, status: result.status, modelCalls, writerCallbacks,
-        acceptedOperations: journal.size, publicationError: result.publicationError, selectedTools, replyKind: result.publicReply?.kind }));
-      expect.soft(result.status, `case ${index} reply`).toBe("completed");
-      expect.soft(details, `case ${index} final cohorts`).toEqual(scenario.cohorts ? { kind: "party_cohorts", cohorts: parsePartyCohorts(scenario.cohorts) } : undefined);
-      expect.soft(overlay.facts.find(fact => fact.target === "party_size")?.value, `case ${index} global count`).toEqual({ kind: "quantity", amount: 3, unit: "people" });
-      expect.soft(journal.size, `case ${index} accepted operations`).toBe(scenario.writes);
-      expect.soft(selectedTools.includes("update_current_party"), `case ${index} must not flatten scope into count`).toBe(false);
-      if (!scenario.noCatalog) expect.soft(selectedTools.includes("update_current_party_details"), `case ${index} details writer`).toBe(!!scenario.update);
-      expect.soft(selectedTools.includes("consider_trip_scenario"), `case ${index} scenario`).toBe(!!scenario.scenario);
-      if (scenario.scenario || !scenario.update && !scenario.noCatalog) expect.soft(writerCallbacks, `case ${index} no writer callbacks`).toBe(0);
-      if (scenario.update) expect.soft(result.publicReply?.kind, `case ${index} unnecessary questionnaire`).toBe("conversation");
-      if (scenario.noCatalog) expect.soft(result.publicReply).toMatchObject({ kind: "clarification", question: "participation_scope" });
-    }
+    ]);
   }, 660_000);
+  it("recovers from a previously accepted duplicate when the user corrects it", async () => {
+    // Deliberately seed the previously observed mistake; this is not a successful model prediction.
+    await runCases("recovery", [
+      { message: "違います。小学生は1人だけで、2日目まで参加して離脱します。全行程に参加する小学生という重複は取り消してください。30代の人は全行程参加のまま、合計3人という条件もそのままです。", cohorts: [adult, childUntilDayTwo], writes: 1, update: true },
+    ], [child, childUntilDayTwo, adult]);
+  }, 90_000);
+  it("clarifies an ambiguous participant without writing and accepts the answer and a later correction", async () => {
+    const teenUntilDayTwo = { ...teen, scope: days(["day-a", "day-b"]) };
+    const collegeUntilDayTwo = { ...college, scope: days(["day-a", "day-b"]) };
+    await runCases("clarification", [
+      { message: "今回の大学生のうち1人が2日目まで参加して離脱しますが、10代と20代のどちらかはまだ決まっていません。", cohorts: [college, teen], writes: 0, clarification: true },
+      { message: "2日目で帰るのは10代の大学生です。20代の大学生は全行程に参加します。", cohorts: [college, teenUntilDayTwo], writes: 1, update: true },
+      { message: "逆でした。2日目まで参加するのは20代の大学生です。10代の大学生は全行程に参加します。", cohorts: [teen, collegeUntilDayTwo], writes: 2, update: true },
+    ], [college, teen]);
+  }, 210_000);
 });
