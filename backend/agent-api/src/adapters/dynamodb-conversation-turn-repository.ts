@@ -370,10 +370,11 @@ function parseDelivery(value: unknown): NonNullable<ConversationTurnResult["deli
   return { status: value.status as NonNullable<ConversationTurnResult["delivery"]>["status"], basis: value.basis as NonNullable<ConversationTurnResult["delivery"]>["basis"] };
 }
 function receiptMatches(receipts: readonly IntentApplicationReceipt[], binding: IntentProposalBinding): boolean {
-  const receipt = receipts.find(({ intentRevision }) => intentRevision === binding.intentRevision);
-  if (!receipt) return false;
-  return binding.changes.every((change) => receipt.operations.some((operation) => operation.status === "accepted" && operation.operationId === change.changeRef &&
-    operation.groupId === change.groupRef && operation.action === change.action && operation.target === change.target && JSON.stringify(operation.scope) === JSON.stringify(change.scope)));
+  if (!receipts.some(({ intentRevision }) => intentRevision === binding.intentRevision)) return false;
+  return binding.changes.every((change) => receipts.some((receipt) => receipt.intentRevision <= binding.intentRevision &&
+    receipt.operations.some((operation) => operation.status === "accepted" && operation.operationId === change.changeRef &&
+      operation.groupId === change.groupRef && operation.action === change.action && operation.target === change.target &&
+      JSON.stringify(operation.scope) === JSON.stringify(change.scope))));
 }
 function sameAdoption(left: { binding: IntentProposalBinding; tripId: string; baseTripRevision: number; mutationId: string },
   right: { binding: IntentProposalBinding; tripId: string; baseTripRevision: number; mutationId: string }): boolean {
