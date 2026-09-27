@@ -6,6 +6,7 @@ import { DynamoDbConversationRepository } from "./dynamodb-conversation-reposito
 import { tripConsultationDynamoFixture } from "./trip-consultation-dynamo.fixture.js";
 import { stateA, stateB } from "./state-dynamodb.fixture.js";
 const input = { tripId: "75300000-0000-4000-8000-000000000001", title: "出雲大社に行きたい" };
+const branch = { sourceTripId: input.tripId, sourceRevision: 0, tripId: "75400000-0000-4000-8000-000000000002", title: "出雲大社 別案" };
 function setup() {
   const f = tripConsultationDynamoFixture();
   const repository = () => new DynamoDbTripConsultationRepository("test-trips", "test-state", f.client, f.clock);
@@ -56,4 +57,33 @@ it("a history tombstone or archived Trip is not resurrected on a later retry", a
     await expect(f.repository().start(stateA,input)).rejects.toMatchObject({ code: "not-found" });
     expect(f.rows.size).toBe(4);
   }
+});
+it("atomically branches the Trip and visible history without copying executable proposals", async () => {
+  const f = setup(); await f.repository().start(stateA,input);
+  await f.conversations.append(stateA,input.tripId,0,[{ role: "user", text: "雨なら屋内中心にしたい" }, { role: "assistant", text: "当時の予報を踏まえた案です" }]);
+  const assistantRow = [...f.rows.entries()].find(([key]) => key.endsWith(`TRIP_MESSAGE#${input.tripId}#000000000002`))![1];
+  assistantRow.payload = { S: JSON.stringify({ ...JSON.parse(assistantRow.payload!.S!),
+    tripUpdateProposal: { tripId: input.tripId, baseRevision: 0, summary: "旧案", patches: [] } }) };
+  const result = await f.repository().branch(stateA,branch);
+  expect(result).toMatchObject({ conversationId: branch.tripId, sourceTripId: input.tripId, trip: { id: branch.tripId, title: branch.title, revision: 0, lifecycleState: "pre_trip" } });
+  const history = await f.conversations.history(stateA,branch.tripId);
+  expect(history.items.map(({ role,text }) => ({ role,text }))).toEqual([
+    { role: "user", text: "雨なら屋内中心にしたい" }, { role: "assistant", text: "当時の予報を踏まえた案です" },
+  ]);
+  expect(history.items[1]).not.toHaveProperty("tripUpdateProposal");
+  expect(await f.repository().branch(stateA,branch)).toEqual(result);
+  const proposal = { tripId: branch.tripId, baseRevision: 0, summary: "分岐だけ更新", patches: [{ type: "title" as const, title: "分岐後" }] };
+  await f.trips.applyMutation(stateA,{ tripId: branch.tripId, baseRevision: 0, mutationId: "75400000-0000-4000-8000-000000000098", proposal },
+    current => ({ ...current, title: "分岐後" }));
+  expect((await f.trips.get(stateA,input.tripId))?.title).toBe(input.title);
+  expect((await f.trips.get(stateA,branch.tripId))?.title).toBe("分岐後");
+});
+it("branches are independent, owner-scoped, and stale source snapshots fail CAS", async () => {
+  const f = setup(); await f.repository().start(stateA,input);
+  await expect(f.repository().branch(stateB,branch)).rejects.toMatchObject({ code: "not-found" });
+  const proposal = { tripId: input.tripId, baseRevision: 0, summary: "題名を更新", patches: [{ type: "title" as const, title: "更新後" }] };
+  await f.trips.applyMutation(stateA,{ tripId: input.tripId, baseRevision: 0, mutationId: "75400000-0000-4000-8000-000000000099", proposal },
+    current => ({ ...current, title: "更新後" }));
+  await expect(f.repository().branch(stateA,branch)).rejects.toMatchObject({ code: "conflict" });
+  expect(await f.trips.get(stateA,branch.tripId)).toBeUndefined();
 });

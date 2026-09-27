@@ -29,6 +29,10 @@ hostは画面で確認したexact Proposalの確認keyを、モデル/HTTP body�
 終了/中止は既存lifecycle ProposalとconfirmedLifecycleを使用し、Reservationを変更しない。
 terminalの復活は禁止のまま。replanからadoptionを書き換えられない。
 
+#754でowner向けTrip APIに`preview-trip-adoption` / `confirm-trip-adoption`を追加した。confirm/withdrawとも、`tripId`、`baseTripRevision`、`mutationId`、actionへ結び付けた確認keyを使う。previewと同じ明示操作だけをtrusted Application hostがDomainの確認authorityへ変換し、generic mutation bodyからauthorityを注入することはできない。既存mutation receiptで再送を冪等にし、古いrevisionは再previewを要求する。
+
+Trip画面は同じ正本を「この旅程で行く」「変更後の旅程を再確認」「計画へ戻す」として表示する。この操作は成立性の認定、予約、当時の天候・価格の現在値化を行わない。
+
 採用後のitem追加/削除/順序/場所/時刻/交通、party、起終点/日付/期間/移動条件変更は確認日時を保持して再確認フラグを立てる。
 タイトルだけの変更、budgetや好み、別resourceの費用メモは採用意思を維持する。
 重要変更の後も意図の記録は消さず、明示再確認でフラグを外す。withdrawだけが採用を撤回する。

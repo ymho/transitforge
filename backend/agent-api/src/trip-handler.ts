@@ -1,7 +1,7 @@
 import { authenticationErrorResponse, httpMethod } from "./adapters/http-api-auth.js";
 import { requirePersonalOperation } from "./adapters/api-route-policy.js";
 import { randomUUID } from "node:crypto";
-import { TripResourceError, tripApiLimits, tripApiVersion } from "./contracts/trip-api.js";
+import { TripResourceError, parseTripAdoptionCommand, tripApiLimits, tripApiVersion } from "./contracts/trip-api.js";
 import { jsonResponse, type LambdaContext, type LambdaHttpEvent } from "./contracts/http.js";
 import { requireTripPrincipal, type TripPrincipal } from "./ports/trip-repository.js";
 import type { TripApplication } from "./usecases/trip-application.js";
@@ -10,7 +10,8 @@ import type { PlanCandidateAdoptionApplication } from "./usecases/plan-candidate
 
 /** Trusted host injection; production uses createHttpPrincipalResolver, never request identity. */
 export type TripPrincipalResolver = (event: LambdaHttpEvent) => Promise<TripPrincipal | undefined>;
-export function createTripApiHandler(application?: Pick<TripApplication, "execute"> & { executeAdoption?: PlanCandidateAdoptionApplication["execute"] }, options: {
+export function createTripApiHandler(application?: Pick<TripApplication, "execute"> & { executeAdoption?: PlanCandidateAdoptionApplication["execute"];
+  executeTripAdoption?: TripApplication["executeTripAdoption"] }, options: {
   authenticate?: TripPrincipalResolver;
   log?: (fields: { requestId: string; category: string; operation: string }) => void;
 } = {}) {
@@ -31,12 +32,19 @@ export function createTripApiHandler(application?: Pick<TripApplication, "execut
       try { value = JSON.parse(body); } catch { throw new TripResourceError("invalid-input"); }
       requirePersonalOperation("trip", event, value);
       const requested = (value as { operation?: unknown } | null)?.operation;
-      if (typeof requested === "string" && ["start-consultation", "create", "mutate", "get", "list", "archive", "attach", "detach", "reference", "preview-plan-adoption", "confirm-plan-adoption"].includes(requested)) operation = requested;
+      if (typeof requested === "string" && ["start-consultation", "branch-consultation", "create", "mutate", "get", "list", "archive", "attach", "detach", "reference", "preview-plan-adoption", "confirm-plan-adoption", "preview-trip-adoption", "confirm-trip-adoption"].includes(requested)) operation = requested;
       if (requested === "preview-plan-adoption" || requested === "confirm-plan-adoption") {
         if (!application.executeAdoption) throw new TripResourceError("unavailable");
         const command = parsePlanAdoptionCommand(value), { version: _version, confirmationKey, ...request } = command;
         return jsonResponse(200, { version: tripApiVersion, ...await application.executeAdoption(principal, {
           ...request, operation: requested === "preview-plan-adoption" ? "preview" : "confirm",
+        }, confirmationKey ? { confirmationKey } : undefined) }, requestId);
+      }
+      if (requested === "preview-trip-adoption" || requested === "confirm-trip-adoption") {
+        if (!application.executeTripAdoption) throw new TripResourceError("unavailable");
+        const command = parseTripAdoptionCommand(value), { version: _version, confirmationKey, ...request } = command;
+        return jsonResponse(200, { version: tripApiVersion, ...await application.executeTripAdoption(principal, {
+          ...request, operation: requested === "preview-trip-adoption" ? "preview" : "confirm",
         }, confirmationKey ? { confirmationKey } : undefined) }, requestId);
       }
       return jsonResponse(200, await application.execute(principal, value), requestId);

@@ -66,4 +66,17 @@ describe("Trip HTTP authentication and privacy boundary", () => {
     const other = createTripApiHandler({ execute, executeAdoption }, { authenticate: async () => ({ subject: "other" }) });
     expect((await other(event({ ...base, operation: "preview-plan-adoption" }))).statusCode).toBe(404);
   });
+  it("routes Trip-level confirmation separately from generic mutation authority", async () => {
+    const confirmationKey = "b".repeat(64), mutationId = "33333333-3333-4333-8333-333333333333";
+    const execute = vi.fn(), executeTripAdoption = vi.fn(async (_principal, request, authority) => request.operation === "preview"
+      ? { status: "confirmation-required" as const, confirmationKey, preview: { action: request.action, summary: "この旅程で行く", needsReconfirmation: false } }
+      : authority?.confirmationKey === confirmationKey ? { status: "saved" as const, trip: { ...trip(), revision: 1 }, revision: 1, mutationId }
+        : Promise.reject(new TripResourceError("confirmation-required")));
+    const handler = createTripApiHandler({ execute, executeTripAdoption }, { authenticate: async () => ({ subject: "trusted" }) });
+    const base = { version: "trip-api-v1", tripId: trip().id, baseTripRevision: 0, mutationId, action: "confirm" };
+    expect((await handler(event({ ...base, operation: "preview-trip-adoption" }))).statusCode).toBe(200);
+    expect((await handler(event({ ...base, operation: "confirm-trip-adoption", confirmationKey }))).statusCode).toBe(200);
+    expect(execute).not.toHaveBeenCalled(); expect(executeTripAdoption.mock.calls[1]?.[2]).toEqual({ confirmationKey });
+    expect((await handler(event({ ...base, operation: "confirm-trip-adoption", confirmationKey: "bad" }))).statusCode).toBe(400);
+  });
 });

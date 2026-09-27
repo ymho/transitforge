@@ -11,6 +11,8 @@ import type { Trip } from "@raiquora/trip/trip";
 import { assertItineraryEditingAllowed, previewInTripReplan, type InTripReplanTargets } from "@raiquora/trip/in-trip-replan";
 import type { TripAuthorizer } from "../ports/trip-authorization.js";
 import type { IntentProposalAdoptionPort } from "../ports/intent-proposal-adoption.js";
+import { createHash } from "node:crypto";
+import { canConfirmTrip, tripAdoptionConfirmationKey, type TripAdoptionAction } from "@raiquora/trip/trip-adoption";
 
 export class TripApplication {
   constructor(private readonly trips: TripRepository, private readonly references: TripConversationReferences,
@@ -24,6 +26,26 @@ export class TripApplication {
       const external = await this.feasibility?.external(principal, structuredClone(proposed));
       requireFeasibleTrip(proposed, { tripId: proposed.id, tripRevision: proposed.revision, reservations, external }, this.clock.now().toISOString());
     } catch { throw new TripResourceError("feasibility-required"); }
+  }
+  async executeTripAdoption(principal: TripPrincipal | undefined, request: { operation: "preview" | "confirm"; tripId: string;
+    baseTripRevision: number; mutationId: string; action: TripAdoptionAction }, authority?: { confirmationKey: string }) {
+    requireTripPrincipal(principal);
+    const proposal = { tripId: request.tripId, baseRevision: request.baseTripRevision,
+      summary: request.action === "confirm" ? "この旅程で行く" : "計画へ戻す", patches: [{ type: "adoption" as const, action: request.action }] };
+    const domainKey = tripAdoptionConfirmationKey(proposal);
+    const confirmationKey = createHash("sha256").update(JSON.stringify(["trip-adoption-v1", domainKey, request.mutationId])).digest("hex");
+    if (request.operation === "preview") {
+      const current = await this.trips.get(principal, request.tripId);
+      if (!current) throw new TripResourceError("not-found");
+      if (current.revision !== request.baseTripRevision) throw new TripResourceError("conflict");
+      if (["cancelled", "completed"].includes(current.lifecycleState) || request.action === "confirm" && !canConfirmTrip(current)) throw new TripResourceError("invalid-input");
+      return { status: "confirmation-required" as const, confirmationKey,
+        preview: { action: request.action, summary: proposal.summary, needsReconfirmation: current.adoption?.needsReconfirmation === true } };
+    }
+    if (authority?.confirmationKey !== confirmationKey) throw new TripResourceError("confirmation-required");
+    const result = await this.execute(principal, { version: tripApiVersion, operation: "mutate", tripId: request.tripId,
+      baseRevision: request.baseTripRevision, mutationId: request.mutationId, proposal }, { confirmedAdoption: domainKey });
+    return { status: "saved" as const, ...result };
   }
   async execute(principal: TripPrincipal | undefined, value: unknown,
     authority: { confirmedLifecycle?: LifecycleState; confirmedAdoption?: string; confirmedReservationChange?: string;
@@ -40,6 +62,9 @@ export class TripApplication {
       case "start-consultation":
         if (!this.consultations) throw new TripResourceError("unavailable");
         return { version, ...await this.consultations.start(actor, { tripId: command.tripId, title: command.title }) };
+      case "branch-consultation":
+        if (!this.consultations) throw new TripResourceError("unavailable");
+        return { version, ...await this.consultations.branch(actor, command) };
       case "create": {
         if (command.trip.adoption !== undefined) throw new TripResourceError("confirmation-required");
         if (command.trip.planningState === "ready") await this.ready(principal, command.trip);

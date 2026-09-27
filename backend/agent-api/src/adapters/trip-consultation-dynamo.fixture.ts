@@ -19,6 +19,14 @@ export function tripConsultationDynamoFixture() {
   const valid = (action: TransactWriteItem) => {
     if (action.Put) return validPut(action.Put);
     if (action.Delete) return true;
+    if (action.ConditionCheck) {
+      const check = action.ConditionCheck, current = rows.get(key(check.TableName!, check.Key!)), values = check.ExpressionAttributeValues!;
+      if (check.ConditionExpression === "attribute_exists(pk) AND archived = :active AND revision = :revision") {
+        return !!current && current.archived?.BOOL === values[":active"]!.BOOL && current.revision?.N === values[":revision"]!.N;
+      }
+      expect(check.ConditionExpression).toBe("attribute_exists(pk) AND deleted = :deleted AND revision = :revision");
+      return !!current && current.deleted?.BOOL === values[":deleted"]!.BOOL && current.revision?.N === values[":revision"]!.N;
+    }
     const update = action.Update!, current = rows.get(key(update.TableName!, update.Key!)), values = update.ExpressionAttributeValues!;
     expect(update.ConditionExpression).toBe("attribute_exists(pk) AND archived = :active AND (revision = :base OR (attribute_not_exists(revision) AND trip = :old))");
     expect(update.UpdateExpression).toBe("SET trip = :trip, revision = :next");
@@ -48,6 +56,7 @@ export function tripConsultationDynamoFixture() {
     for (const action of actions) {
       if (action.Put) rows.set(key(action.Put.TableName!, action.Put.Item!), structuredClone(action.Put.Item!));
       else if (action.Delete) rows.delete(key(action.Delete.TableName!, action.Delete.Key!));
+      else if (action.ConditionCheck) continue;
       else {
         const update = action.Update!, row = rows.get(key(update.TableName!, update.Key!))!;
         row.trip = structuredClone(update.ExpressionAttributeValues![":trip"]!); row.revision = structuredClone(update.ExpressionAttributeValues![":next"]!);
