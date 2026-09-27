@@ -99,7 +99,8 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
         expect(scenario.scenario).not.toBe(true);
         expect(scenario.noCatalog).not.toBe(true);
         if (result.publicReply?.kind === "clarification") {
-          expect.soft(writerCallbacks, "a clarification must not also write").toBe(0);
+          const acceptedAfterClarification = [...journal.keys()].filter(key => !journalBefore.has(key));
+          expect.soft(acceptedAfterClarification.length, "clarification may follow a rejected/replayed call but must not accept an unresolved cohort decision").toBe(0);
           expect.soft(overlay).toEqual(before);
         }
         continue;
@@ -117,7 +118,8 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
       expect.soft(overlay, `${fixture} case ${index} unchanged state`).toEqual(before);
     }
     if (scenario.update) {
-      expect.soft(writerCallbacks, `${fixture} case ${index} one final decision`).toBe(1);
+      expect.soft([...journal.keys()].filter(key => !journalBefore.has(key)).length,
+        `${fixture} case ${index} one accepted decision`).toBe(1);
       expect.soft(result.publicReply?.kind, `${fixture} case ${index} unnecessary questionnaire`).toBe("conversation");
     }
     if (scenario.noCatalog || scenario.clarification) expect.soft(result.publicReply).toMatchObject({ kind: "clarification", question: "participation_scope" });
