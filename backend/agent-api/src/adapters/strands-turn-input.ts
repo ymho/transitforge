@@ -1,4 +1,4 @@
-import { partyCohortEditableValue, type partyCohortContext } from "@raiquora/agent/party-cohort-context";
+import type { partyCohortContext, partyCohortEditableValue } from "@raiquora/agent/party-cohort-context";
 import type { ServerAgentRuntimeInput } from "../ports/server-agent-runtime.js";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -13,6 +13,7 @@ export class StrandsTurnInputError extends Error {
 /** Per-turn data projection only. No planning instructions, prompts or persisted state. */
 export function strandsTurnInput(input: ServerAgentRuntimeInput & {
   partyDetailsApplicability?: ReturnType<typeof partyCohortContext>;
+  currentPartyDetails?: ReturnType<typeof partyCohortEditableValue>;
 }): string {
   if (!input.userRequest.trim() || input.userRequest.length > 8_000) {
     throw new StrandsTurnInputError("invalid_input");
@@ -40,7 +41,7 @@ export function strandsTurnInput(input: ServerAgentRuntimeInput & {
       ...(context?.featureContext?.serviceDate ? { serviceDate: context.featureContext.serviceDate } : {}),
     },
     effectiveIntent: context?.effectiveIntent ?? null,
-    currentPartyDetails: partyCohortEditableValue(context?.effectiveIntent, input.conditionController?.scopeCatalog),
+    currentPartyDetails: input.currentPartyDetails ?? null,
     partyScopeChoices: input.conditionController?.scopeCatalog ? {
       days: input.conditionController.scopeCatalog.days.map((day, index) => ({ dayNumber: index + 1, label: day.label })),
       segments: input.conditionController.scopeCatalog.segments.map((segment, index) => ({ segmentNumber: index + 1, label: segment.label })),
