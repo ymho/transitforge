@@ -6,7 +6,7 @@ import { admitConditionChange, admitTripScenario, conditionDelta, conditionPaylo
 import { reduceConversationIntent } from "./conversation-intent-reducer";
 import { compileEffectiveIntent } from "./effective-intent";
 import { admitAgentV2Reply } from "./agent-v2-publication";
-import { partyCohortContext, partyCohortReadBoundary } from "./party-cohort-context";
+import { partyCohortContext, partyCohortReadBoundary, partyCohortEditableValue } from "./party-cohort-context";
 
 const cohort = { count: 1, membership: "baseline" as const, schoolStage: "university" as const, ageDecade: "twenties" as const, scope: { kind: "whole_trip" as const } };
 const quote = "20代の大学生1人", input = { target: "party_details" as const, cohorts: [cohort], quote };
@@ -83,6 +83,34 @@ describe("V2 cohort condition business slot", () => {
     const reply = admitAgentV2Reply({ kind: "clarification", target: "participation_scope" }, { executionId: "clarify", evidence: [], effectiveIntent: intent });
     expect(reply.proof).toMatchObject({ kind: "clarification", question: "participation_scope" });
     expect(overlay).toEqual(snapshot);
+  });
+  it("projects current whole/day/segment cohorts into Tool inputs without losing attributes or exposing scope IDs", () => {
+    const withSegments = { ...catalog, segments: [{ id: "segment-private", label: "帰路" }] };
+    const values = [cohort, { ...cohort, scope: { kind: "logical_days", fromDay: 1, toDay: 2 } },
+      { ...cohort, membership: "additional", scope: { kind: "segment", segmentNumber: 1 } }];
+    const initial = emptyConversationIntentOverlay();
+    const change = admitConditionChange({ ...input, cohorts: values }, quote, undefined, withSegments);
+    const overlay = reduceConversationIntent(initial, conditionDelta(change, "details", initial)).overlay;
+    const before = structuredClone(overlay);
+    const editable = partyCohortEditableValue(compileEffectiveIntent({ overlay }), withSegments);
+    expect(editable).toHaveLength(3);
+    expect(editable).toEqual(expect.arrayContaining(values));
+    expect(JSON.stringify(editable)).not.toMatch(/tripId|tripRevision|dayIds|segmentId|known-a|segment-private/u);
+    const value = partyDetailsUpdateInputSchema.parse({ finalCohorts: editable, quote });
+    const roundtrip = admitConditionChange({ target: "party_details", cohorts: value.finalCohorts, quote }, quote, undefined, withSegments);
+    expect(conditionPayload(roundtrip)).toBe(conditionPayload(change));
+    expect(overlay).toEqual(before);
+  });
+  it("never broadens stale, unknown or non-contiguous scope into an editable range", () => {
+    const extended = { ...catalog, days: [...catalog.days, { id: "known-c", label: "3日目" }] };
+    const initial = emptyConversationIntentOverlay();
+    const scoped = { ...cohort, scope: { kind: "logical_days" as const, tripId: catalog.tripId, tripRevision: 2, dayIds: ["known-a", "known-c"] } };
+    const overlay = reduceConversationIntent(initial, conditionDelta({ target: "party_details", cohorts: [scoped], quote }, "details", initial)).overlay;
+    const intent = compileEffectiveIntent({ overlay });
+    expect(partyCohortEditableValue()).toBeNull();
+    expect(partyCohortEditableValue(intent, extended)).toBeNull();
+    expect(partyCohortEditableValue(intent)).toBeNull();
+    expect(partyCohortEditableValue(intent, { ...extended, tripRevision: 3 })).toBeNull();
   });
   it("rejects an ungrounded quote and detail count exceeding the already accepted baseline", () => {
     expect(() => admitConditionChange(input, "別のメッセージ")).toThrow("invalid_source");
