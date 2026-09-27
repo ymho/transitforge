@@ -6,7 +6,10 @@ const source = (name) => readFileSync(new URL(`../../backend/agent-api/src/adapt
 test("V2 input is a data projection, not the old instruction serializer", () => {
   const runtime = source("strands-server-runtime");
   assert.doesNotMatch(runtime, /agentDecisionContextText|buildAgentDecisionContext/u);
-  assert.match(runtime, /modelInput: strandsTurnInput\(input\)/u);
+  assert.match(runtime, /\.\.\.strandsConversationInput\(input\)/u);
+  const conversation = source("strands-conversation-input");
+  assert.match(conversation, /JSON\.parse\(strandsTurnInput\(input\)\)/u);
+  assert.doesNotMatch(conversation, /agentDecisionContextText|buildAgentDecisionContext|conditionController\.apply/u);
   assert.doesNotMatch(source("strands-turn-input"), /import\s*\{[^}]*\}\s*from/u);
 });
 test("V2 does not stringify SDK results or auto-publish unadmitted prose", () => {
