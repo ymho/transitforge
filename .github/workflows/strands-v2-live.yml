@@ -17,6 +17,7 @@ on:
           - "party-condition"
           - "travel-period"
           - "budget-condition"
+          - "party-details"
       repetitions:
         description: Independent repetitions per case
         required: true
@@ -102,6 +103,7 @@ jobs:
             condition-operations) cases=7; cycles=8 ;;
             party-condition|travel-period) cases=6; cycles=6 ;;
             budget-condition) cases=7; cycles=6 ;;
+            party-details) cases=10; cycles=6 ;;
             *) echo "Invalid CASE_ID: $CASE_ID" >&2; exit 2 ;;
           esac
           maximum_calls=$((cases * REPETITIONS * cycles))
@@ -119,7 +121,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run Strands v2 live evaluation
-        if: inputs.case_id != 'conversation-output' && inputs.case_id != 'condition-operations' && inputs.case_id != 'party-condition' && inputs.case_id != 'travel-period' && inputs.case_id != 'budget-condition'
+        if: inputs.case_id != 'conversation-output' && inputs.case_id != 'condition-operations' && inputs.case_id != 'party-condition' && inputs.case_id != 'travel-period' && inputs.case_id != 'budget-condition' && inputs.case_id != 'party-details'
         shell: bash
         run: |
           set -euo pipefail
@@ -129,7 +131,7 @@ jobs:
           npm run eval:agent:strands:live -- "${args[@]}"
 
       - name: Run independent Conversation or condition repetitions
-        if: inputs.case_id == 'conversation-output' || inputs.case_id == 'condition-operations' || inputs.case_id == 'party-condition' || inputs.case_id == 'travel-period' || inputs.case_id == 'budget-condition'
+        if: inputs.case_id == 'conversation-output' || inputs.case_id == 'condition-operations' || inputs.case_id == 'party-condition' || inputs.case_id == 'travel-period' || inputs.case_id == 'budget-condition' || inputs.case_id == 'party-details'
         shell: bash
         env:
           AGENT_V2_LIVE: 'true'
@@ -142,6 +144,7 @@ jobs:
             party-condition) script=test:agent:v2:party-live ;;
             travel-period) script=test:agent:v2:period-live ;;
             budget-condition) script=test:agent:v2:budget-live ;;
+            party-details) script=test:agent:v2:party-details-live ;;
             *) exit 2 ;;
           esac
           status=0
@@ -157,7 +160,7 @@ jobs:
           if [[ -f .artifacts/strands-v2-live/report.json ]]; then
             jq '{modelId,region,repetitions,maximumModelCalls,observedModelCalls,stablePassed,cases,results:[.results[]|{caseId,attempt,passed,failures,metrics:{status:.observation.status,deliveryBasis:.observation.deliveryBasis,toolCalls:.observation.toolCalls,evidenceCount:.observation.evidenceCount,modelCalls:.observation.modelCalls,inputTokens:.observation.inputTokens,outputTokens:.observation.outputTokens,durationMs:.observation.durationMs}}]}' .artifacts/strands-v2-live/report.json >> "$GITHUB_STEP_SUMMARY"
           fi
-          for file in .artifacts/strands-v2-live/conversation-output-*.json .artifacts/strands-v2-live/condition-operations-*.json .artifacts/strands-v2-live/party-condition-*.json .artifacts/strands-v2-live/travel-period-*.json .artifacts/strands-v2-live/budget-condition-*.json; do
+          for file in .artifacts/strands-v2-live/conversation-output-*.json .artifacts/strands-v2-live/condition-operations-*.json .artifacts/strands-v2-live/party-condition-*.json .artifacts/strands-v2-live/travel-period-*.json .artifacts/strands-v2-live/budget-condition-*.json .artifacts/strands-v2-live/party-details-*.json; do
             if [[ -f "$file" ]]; then
               echo "$(basename "$file")" >> "$GITHUB_STEP_SUMMARY"
               jq '{success,numPassedTests,numFailedTests,numPendingTests}' "$file" >> "$GITHUB_STEP_SUMMARY"
