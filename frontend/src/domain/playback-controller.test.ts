@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { AnimationScheduler } from "./playback-controller";
+import { operatingDayStartMinutes } from "./playback";
 import { PlaybackController } from "./playback-controller";
 
 describe("PlaybackController", () => {
@@ -52,6 +53,41 @@ describe("PlaybackController", () => {
 
     expect(controller.isPlaying()).toBe(false);
     expect(scheduler.cancel).toHaveBeenCalledWith(7);
+  });
+
+  it("advances realtime playback smoothly and wraps at the 4:00 operating-day boundary", () => {
+    let scheduled: ((timestamp: number) => void) | undefined;
+    const scheduler: AnimationScheduler = {
+      request: vi.fn((callback) => {
+        scheduled = callback;
+        return 1;
+      }),
+      cancel: vi.fn(),
+    };
+    const render = vi.fn();
+    const onOperatingDayWrapped = vi.fn();
+    const controller = new PlaybackController({
+      initialRouteTime: operatingDayStartMinutes + 24 * 60 - 0.01,
+      range: {
+        minimum: operatingDayStartMinutes,
+        maximum: operatingDayStartMinutes + 24 * 60,
+      },
+      getMinutesPerSecond: () => 1 / 60,
+      render,
+      onOperatingDayWrapped,
+      scheduler,
+    });
+
+    controller.start();
+    scheduled?.(1_000);
+    scheduled?.(2_000);
+
+    expect(onOperatingDayWrapped).toHaveBeenCalledOnce();
+    expect(render).toHaveBeenCalledOnce();
+    expect(render.mock.calls[0]?.[0]).toBeCloseTo(
+      operatingDayStartMinutes + 1 / 60 - 0.01,
+      6,
+    );
   });
 
   it("does not add the inactive duration again after clock synchronization", () => {

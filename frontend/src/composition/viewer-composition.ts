@@ -36,7 +36,8 @@ import {
 } from "../domain/map-lighting";
 import type { WeatherMode } from "../domain/weather";
 import { dominantLineColorsByPathId } from "../domain/path-line-colors";
-import { currentRouteTime } from "../domain/playback";
+import { currentRouteTime, operatingDayStartMinutes } from "../domain/playback";
+import { PlaybackController } from "../domain/playback-controller";
 import { TrainFocusReturnContextSession } from "../domain/train-focus-return-context";
 import {
   coupledTrainLayouts,
@@ -1005,10 +1006,25 @@ if (!token) {
           latestDelaySnapshot = snapshot;
           updateTrains();
         }, realtimeUpdateDependencies);
+        const realtimePlayback = new PlaybackController({
+          initialRouteTime: Number(displayTime.value),
+          range: {
+            minimum: operatingDayStartMinutes,
+            maximum: operatingDayStartMinutes + 24 * 60,
+          },
+          getMinutesPerSecond: () => 1 / 60,
+          render: (routeTime) => {
+            displayTime.value = String(routeTime);
+            updateTrains(routeTime);
+          },
+          onOperatingDayWrapped: () => {
+            displayedServiceDateStart = operatingServiceDateStart(new Date());
+          },
+          minimumRenderIntervalMilliseconds: 1_000 / 30,
+        });
         const synchronizeRealtimeClock = (now: Date) => {
           displayedServiceDateStart = operatingServiceDateStart(now);
-          displayTime.value = String(currentRouteTime(now));
-          updateTrains();
+          realtimePlayback.synchronize(currentRouteTime(now));
           localWeatherUpdates.scheduleRefresh();
         };
         const realtimeClock = createDigitalTwinClockSynchronizer(
@@ -1016,6 +1032,7 @@ if (!token) {
           browserDigitalTwinClockEnvironment(),
         );
         realtimeClock.setEnabled(true);
+        realtimePlayback.start();
         const realtimeClockInterval = window.setInterval(() => {
           if (document.visibilityState === "visible") synchronizeRealtimeClock(new Date());
         }, 15_000);
@@ -1023,6 +1040,7 @@ if (!token) {
           congestionUpdates.dispose();
           disposeDelayUpdates();
           localWeatherUpdates.dispose();
+          realtimePlayback.stop();
           realtimeClock.dispose();
           window.clearInterval(realtimeClockInterval);
         };
