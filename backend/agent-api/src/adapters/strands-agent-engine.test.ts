@@ -268,3 +268,25 @@ describe("StrandsAgentEngine", () => {
     expect(apply).toHaveBeenCalledWith({ target: "origin", place: "大阪", quote: "大阪" });
   });
 });
+
+describe("independent model and invocation output limits", () => {
+  it("does not silently use a per-model cap as the cumulative SDK cap", async () => {
+    const { input } = setup();
+    let modelLimit: number | undefined, invocation: unknown;
+    const createAgent: StrandsAgentFactory = config => {
+      modelLimit = (config.model as { getConfig(): { maxTokens?: number } }).getConfig().maxTokens;
+      return { invoke: async (_value, opts) => { invocation = opts?.limits;
+        return { stopReason: "toolUse", structuredOutput: { reply: { kind: "uncertainty", text: "未確認の点を説明します。" } } }; } };
+    };
+    const result = await new StrandsAgentEngine({ ...options, maxOutputTokens: 1024 }, { createAgent }).run(input);
+    expect(modelLimit).toBe(1024);
+    expect(invocation).not.toHaveProperty("outputTokens");
+    expect(result.replyProposal?.kind).toBe("uncertainty");
+    await new StrandsAgentEngine({ ...options, maxOutputTokens: 1024, maxInvocationOutputTokens: 4096 }, { createAgent }).run(input);
+    expect(modelLimit).toBe(1024);
+    expect(invocation).toMatchObject({ outputTokens: 4096 });
+    await new StrandsAgentEngine({ ...options, maxOutputTokens: 1024, maxInvocationOutputTokens: 4096 }, { createAgent })
+      .run({ ...input, limits: { maxOutputTokens: 2048 } });
+    expect(invocation).toMatchObject({ outputTokens: 2048 });
+  });
+});
