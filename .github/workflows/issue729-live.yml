@@ -1,5 +1,5 @@
 name: Agent v2 / Party details pre-merge live
-# Three independent repetitions after full CI for 26e3ff9.
+# Three independent repetitions after full CI for 3ee9a6a, including clarification and recovery.
 on:
   push:
     branches: [feat/agent-v2-party-cohorts-729]
@@ -64,7 +64,7 @@ jobs:
             echo '### Party details pre-merge live'
             echo "- Commit: $GITHUB_SHA"
             echo "- Model: $MODEL_ID"
-            echo '- Budget: 10 turns x 6 model calls x 3 independent repetitions = at most 180 model calls'
+            echo '- Budget: 14 turns x 6 model calls x 3 independent repetitions = at most 252 model calls'
             echo '- Deadline: 60 seconds per turn; output: 1536 tokens per model call'
             echo '- External Travel Providers and production writes: none'
           } >> "$GITHUB_STEP_SUMMARY"
