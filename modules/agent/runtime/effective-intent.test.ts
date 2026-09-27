@@ -16,7 +16,7 @@ describe("compileEffectiveIntent Profile V3", () => {
     const overlay = { ...emptyConversationIntentOverlay(), intentRevision: 1, facts: [fact("actual", "美術館")] };
     const effective = compileEffectiveIntent({ baseRequest: base, baseSource: "conversation_draft", baseRevision: 4, profile: profile(), profileRevision: 8, overlay });
     expect(effective.activeBaseFacts.map(({ ref }) => ref)).toEqual(["constraint:user-experience"]);
-    expect(effective.profileHints.map(({ attribute }) => attribute).sort()).toEqual(["considerations","interest:food","interest:history","interest:nature","origin"]);
+    expect(effective.profileHints.map(({ attribute }) => attribute).sort()).toEqual(["considerations","experience:温泉","interest:food","interest:history","interest:nature","origin"]);
     expect(effective.actualConversationFacts).toHaveLength(1);
   });
   it("does not let a hypothetical branch shadow actual persisted intent", () => {
@@ -35,7 +35,7 @@ describe("compileEffectiveIntent Profile V3", () => {
     const effective = compileEffectiveIntent({ profile: profile(), profileRevision: 8,
       overlay: { ...emptyConversationIntentOverlay(), intentRevision: 1, facts: [fact("actual", "食")] } });
     expect(effective.profileHints.filter(({ attribute }) => attribute.startsWith("interest:")).map(({ attribute }) => attribute))
-      .toEqual(["interest:nature","interest:food","interest:history"]);
+      .toEqual(["interest:nature","interest:history"]);
   });
   it("does not resurrect Profile origin after user returns origin to undecided", () => {
     const originUnknown: ConversationIntentFact = { ...fact("actual", "未定"), target: "origin", value: { kind: "unknown", reason: "undecided" } };
