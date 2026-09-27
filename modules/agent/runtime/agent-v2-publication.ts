@@ -40,12 +40,13 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
   const proof: AgentV2ReplyProof = { kind: proposal.kind, references: [] };
   const reply = (text: string): AgentV2AdmittedReply => ({ text, evidence: [], claims: [], proof });
   switch (proposal.kind) {
-    case "conversation": return reply(conversationText[proposal.message]);
-    case "uncertainty": return reply("必要な情報をまだ確認できていません。未確認の内容を確定情報としては案内できません。");
+    case "conversation": return reply(proposal.text ? conversationalText(proposal.text) : conversationText[proposal.message]);
+    case "uncertainty": return reply(proposal.text ? conversationalText(proposal.text) :
+      "必要な情報をまだ確認できていません。未確認の内容を確定情報としては案内できません。");
     case "clarification":
       if (knownCondition(context.effectiveIntent, proposal.target)) throw new AgentV2ReplyError("known_condition");
       proof.question = proposal.target;
-      return reply(questions[proposal.target]);
+      return reply(proposal.text ? conversationalText(proposal.text) : questions[proposal.target]);
     case "unavailable":
       if (context.availableOperations?.includes(proposal.operation)) throw new AgentV2ReplyError("operation_available");
       proof.operation = { type: proposal.operation, status: "unavailable" };
@@ -190,6 +191,14 @@ function factText(value: unknown): string {
   if (typeof value === "number" && Number.isFinite(value) || typeof value === "boolean") return String(value);
   if (Array.isArray(value) && value.every((item) => typeof item === "string")) return boundedText(value.join("、"));
   throw new AgentV2ReplyError("invalid_field");
+}
+function conversationalText(value: string): string {
+  const text = boundedText(value);
+  // Free conversation is explanatory only. It must not manufacture external facts
+  // or claim an operation succeeded; those remain Evidence/receipt-backed variants.
+  if (/(?:https?:\/\/|www\.)/iu.test(text) ||
+      /(?:保存|変更|予約|決済)(?:しました|済み|完了|成功)/u.test(text)) throw new AgentV2ReplyError("unsafe_content");
+  return escapeMarkdown(text);
 }
 function boundedText(value: string): string {
   if (!value.trim() || value.length > 2_000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value) ||
