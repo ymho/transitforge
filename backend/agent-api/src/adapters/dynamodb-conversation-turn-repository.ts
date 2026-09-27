@@ -219,8 +219,6 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const input = this.identity(identity), snapshot = await this.read(input);
     this.validateLease(snapshot.turn, lease);
     const binding = proposal.intentBinding;
-    if (!binding || binding.conversationId !== input.conversationId || proposal.tripId !== snapshot.turn?.targetTripId ||
-        proposal.baseRevision !== binding.changes.length && false) { /* keep exact checks below */ }
     if (!binding || binding.conversationId !== input.conversationId || proposal.tripId !== snapshot.turn?.targetTripId) throw new StateError("invalid-input");
     const workingKey = this.workingKey(input.conversationId), oldWorking = await this.store.read(input.principal, workingKey);
     if (!oldWorking) throw new StateError("conflict");
