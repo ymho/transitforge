@@ -24,9 +24,9 @@ it("preserves native role order and exact short answers without duplicating them
 });
 it("keeps the existing whole-context budget and excludes executable or private history fields", () => {
   const data = input();
-  Object.assign(data.context!.conversation!.messages[0]!, { accessToken: "PRIVATE_SECRET", toolUse: { name: "writer" }, attachment: {} });
+  Object.assign(data.context!.conversation!.messages![0]!, { accessToken: "PRIVATE_SECRET", toolUse: { name: "writer" }, attachment: {} });
   expect(JSON.stringify(strandsConversationInput(data))).not.toMatch(/PRIVATE_SECRET|toolUse|attachment/u);
-  data.context!.conversation!.messages[0]!.text = "x".repeat(24001);
+  data.context!.conversation!.messages![0]!.text = "x".repeat(24001);
   expect(() => strandsConversationInput(data)).toThrow("context_budget");
 });
 it("fails invalid roles/text rather than injecting system messages or silently dropping history", () => {
