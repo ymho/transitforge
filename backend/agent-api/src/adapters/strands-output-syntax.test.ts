@@ -7,6 +7,6 @@ it("reports missing/empty Evidence reference fields without emitting the model p
   const bad = outputSyntaxDiagnostic({ reply: { kind: "conversation", message: "thanks", PRIVATE_KEY: "PRIVATE_VALUE" }, PRIVATE_EXTRA: true });
   expect(JSON.stringify(bad)).not.toContain("PRIVATE");
   expect(bad.valid).toBe(false);
-  expect(outputSyntaxDiagnostic({ reply: { kind: "uncertainty", commentary: "PRIVATE_PROSE" } }))
+  expect(outputSyntaxDiagnostic({ reply: { kind: "uncertainty", text: "PRIVATE_PROSE" } }))
     .toEqual({ valid: true, kind: "uncertainty", issues: [] });
 });

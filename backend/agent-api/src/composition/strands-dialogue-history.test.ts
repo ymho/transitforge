@@ -7,7 +7,7 @@ const whole = { kind: "whole_trip" }, untilTwo = { kind: "logical_days", fromDay
 const teen = { count: 1, membership: "baseline", schoolStage: "university", ageDecade: "teens", scope: whole };
 const college = { ...teen, ageDecade: "twenties" };
 type Step = { name: string; input: unknown };
-const say = (commentary: string): Step => ({ name: "strands_structured_output", input: { reply: { kind: "conversation", message: "acknowledgement", commentary } } });
+const say = (text: string): Step => ({ name: "strands_structured_output", input: { reply: { kind: "conversation", message: "acknowledgement", text } } });
 const update = (index: number, finalCohorts: unknown): Step => ({ name: "update_current_party_details", input: { finalCohorts, quote: dialogueMessages[index] } });
 class DialogueModel extends Model<BaseModelConfig> {
   calls = 0;
@@ -17,11 +17,11 @@ class DialogueModel extends Model<BaseModelConfig> {
     { name: "update_current_party", input: { action: "set", party: { kind: "count", people: 3 }, quote: "全体で3人です。" } },
     update(0, [teen, college]), say("大学生のお二人の条件を受け取りました。"),
     { name: "update_current_origin", input: { action: "set", place: "大阪", quote: "出発地は大阪にします。" } },
-    { name: "strands_structured_output", input: { reply: { kind: "clarification", target: "participation_scope", commentary: "途中で帰る方はまだ未定ですね。決まったら10代か20代かを教えてください。同行者条件は保留にします。" } } },
+    { name: "strands_structured_output", input: { reply: { kind: "clarification", target: "participation_scope", text: "途中で帰る方はまだ未定ですね。決まったら10代か20代かを教えてください。同行者条件は保留にします。" } } },
     update(2, [{ ...teen, scope: untilTwo }, college]), say("10代の大学生の方ですね。参加範囲を反映しました。"),
     update(3, [teen, { ...college, scope: untilTwo }]), say("逆でしたね。20代の方が2日目まで参加する条件に訂正しました。"),
     { name: "consider_trip_scenario", input: { kind: "party_details", cohorts: [teen, college], quote: dialogueMessages[4] } },
-    { name: "strands_structured_output", input: { reply: { kind: "uncertainty", commentary: "全行程参加できる仮定で検討できます。費用や空室はまだ確認していません。現在の条件は変更していません。" } } },
+    { name: "strands_structured_output", input: { reply: { kind: "uncertainty", text: "全行程参加できる仮定で検討できます。費用や空室はまだ確認していません。現在の条件は変更していません。" } } },
     update(5, null), say("同行者の詳細だけを未定に戻しました。"),
   ];
   updateConfig(config: BaseModelConfig) { this.config = { ...this.config, ...config }; }

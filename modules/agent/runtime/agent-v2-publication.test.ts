@@ -71,13 +71,15 @@ describe("Agent v2 publication contract", () => {
     expect(() => parseAgentV2Reply({ kind: "unavailable", operation: "save", commentary: "保存します" }))
       .toThrow("invalid_proposal");
   });
-  it.each(["保存しました。", "保存しておきます。", "保存を承りました。", "<thinking>private</thinking>"])(
-    "does not admit arbitrary prose through a model-declared reply kind: %s", (text) => {
-      for (const draft of [{ kind: "conversation", message: "acknowledgement", text },
-        { kind: "unavailable", operation: "save", text }, { ...proposal, text }]) {
-        expect(() => admitAgentV2Reply(draft, context())).toThrow("invalid_proposal");
-      }
-    });
+  it("keeps free conversation in its declared variant and still rejects internal markup or extra fields", () => {
+    for (const text of ["保存しました。", "保存しておきます。", "保存を承りました。"]) {
+      expect(admitAgentV2Reply({ kind: "conversation", message: "acknowledgement", text }, context()).text).toContain("保存");
+      expect(() => admitAgentV2Reply({ kind: "unavailable", operation: "save", text }, context())).toThrow("invalid_proposal");
+      expect(() => admitAgentV2Reply({ ...proposal, text }, context())).toThrow("invalid_proposal");
+    }
+    expect(() => admitAgentV2Reply({ kind: "conversation", message: "acknowledgement",
+      text: "<thinking>private</thinking>" }, context())).toThrow("unsafe_content");
+  });
   it.each(["greeting", "thanks", "acknowledgement"])("allows bounded nonfactual conversation without Evidence: %s", (message) => {
     const result = admitAgentV2Reply({ kind: "conversation", message }, { executionId: "turn-1", evidence: [] });
     expect(result.text).not.toBe("");
@@ -169,23 +171,23 @@ it.each([
   { kind: "clarification", target: "participation_scope" },
   { kind: "uncertainty" },
 ])("admits contextual dialogue without manufacturing Evidence or mutation authority: $kind", draft => {
-  const commentary = "帰る方はまだ未定ですね。決まってから参加範囲を反映しましょう。";
-  const result = admitAgentV2Reply({ ...draft, commentary }, { executionId: "dialogue", evidence: [] });
-  expect(result.text).toBe(commentary);
+  const text = "帰る方はまだ未定ですね。決まってから参加範囲を反映しましょう。";
+  const result = admitAgentV2Reply({ ...draft, text }, { executionId: "dialogue", evidence: [] });
+  expect(result.text).toBe(text);
   expect(result.claims).toEqual([]);
   expect(result.evidence).toEqual([]);
   expect(result.proof.operation).toBeUndefined();
   expect(result.proof.commentary).toBe(true);
-  expect(JSON.stringify(result.proof)).not.toContain(commentary);
+  expect(JSON.stringify(result.proof)).not.toContain(text);
   for (const extra of [{ receiptId: "invented" }, { references: [{ evidenceId: "invented", field: "price" }] }])
-    expect(() => admitAgentV2Reply({ ...draft, commentary, ...extra }, { executionId: "dialogue", evidence: [] })).toThrow("invalid_proposal");
-  for (const text of ["<thinking>private</thinking>", "\u0000hidden", " ", "x".repeat(1201)])
-    expect(() => admitAgentV2Reply({ ...draft, commentary: text }, { executionId: "dialogue", evidence: [] })).toThrow();
-  const html = admitAgentV2Reply({ ...draft, commentary: '<script>x</script>[x](javascript:bad)' }, { executionId: "dialogue", evidence: [] });
+    expect(() => admitAgentV2Reply({ ...draft, text, ...extra }, { executionId: "dialogue", evidence: [] })).toThrow("invalid_proposal");
+  for (const text of ["<thinking>private</thinking>", "\u0000hidden", " ", "x".repeat(601)])
+    expect(() => admitAgentV2Reply({ ...draft, text: text }, { executionId: "dialogue", evidence: [] })).toThrow();
+  const html = admitAgentV2Reply({ ...draft, text: '<script>x</script>[x](javascript:bad)' }, { executionId: "dialogue", evidence: [] });
   expect(html.text).not.toContain("<script>");
   expect(html.text).not.toContain("[x](javascript:");
 });
 it("allows a contextual clarification about a known destination rather than repeating the fixed questionnaire", () => {
-  expect(admitAgentV2Reply({ kind: "clarification", target: "destination", commentary: "京都のどのエリアを考えていますか？" },
+  expect(admitAgentV2Reply({ kind: "clarification", target: "destination", text: "京都のどのエリアを考えていますか？" },
     { executionId: "dialogue", evidence: [], effectiveIntent: intent() }).text).toContain("どのエリア");
 });

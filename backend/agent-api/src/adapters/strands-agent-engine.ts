@@ -1,5 +1,5 @@
 import type { PartyScopeCatalog } from "@raiquora/trip/party-cohorts";
-import { partyCohortContext, partyCohortReadBoundary } from "@raiquora/agent/party-cohort-context";
+import { partyCohortReadBoundary } from "@raiquora/agent/party-cohort-context";
 import {
   Agent, BedrockModel, StructuredOutputError, tool,
   type AgentConfig, type BaseModelConfig, type InvokableTool,
@@ -51,7 +51,8 @@ export interface StrandsAgentRunResult {
   evidence: Evidence[];
   trace: AgentTrace;
   limitReason?: "tool_calls" | "deadline";
-  metrics?: { modelCalls: number; toolCalls: number; inputTokens: number; outputTokens: number; totalTokens: number;
+  metrics?: { modelCalls: number; toolCalls: number; conditionToolCalls: number; structuredOutputCalls: number;
+    inputTokens: number; outputTokens: number; totalTokens: number;
     cacheReadInputTokens?: number; cacheWriteInputTokens?: number };
 }
 export interface StrandsAgentLike {
@@ -97,14 +98,20 @@ export class StrandsAgentEngine {
     });
     const controller = input.conditionController;
     if (controller) {
+      const appliedConditionTargets = new Set<ConversationConditionInput["target"]>();
       const apply = async (change: ConversationConditionInput, signal?: AbortSignal): Promise<JSONValue> => {
         if (signal?.aborted) throw new Error("execution_cancelled");
         if (intentUnavailable) throw new Error("condition_unavailable");
+        if (appliedConditionTargets.has(change.target)) return jsonValue({
+          ok: true, status: "already_applied_this_turn", condition: change.target,
+        });
         try {
           const accepted = await controller.apply(change);
           currentEffectiveIntent = accepted.effectiveIntent;
-          return jsonValue({ ok: true, receipt: accepted.receipt, effectiveIntent: accepted.effectiveIntent,
-            partyDetailsApplicability: partyCohortContext(accepted.effectiveIntent, controller.scopeCatalog) });
+          appliedConditionTargets.add(change.target);
+          // The model only needs the acceptance receipt. The authoritative effectiveIntent
+          // stays Application-owned and is bound to later reads through getEffectiveIntent.
+          return jsonValue({ ok: true, status: "applied", receipt: accepted.receipt });
         } catch (error) {
           if (error instanceof ConditionUpdateRejectedError) return rejectedCondition(error);
           // The SDK reports Tool errors. An uncertain write additionally closes reads
@@ -196,6 +203,11 @@ export class StrandsAgentEngine {
           modelCalls: result.metrics.cycleCount,
           // Local intent/reply operations are not external Domain Tool calls.
           toolCalls: budgetState.toolCalls,
+          // SDK-owned/local Tools are not external reads, but their bounded call counts
+          // distinguish a condition-write loop from structured-output retries.
+          conditionToolCalls: strandsConditionToolNames.reduce((sum, name) =>
+            sum + (result.metrics?.toolMetrics[name]?.callCount ?? 0), 0),
+          structuredOutputCalls: result.metrics.toolMetrics.strands_structured_output?.callCount ?? 0,
           inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens,
           ...(usage.cacheReadInputTokens === undefined ? {} : { cacheReadInputTokens: usage.cacheReadInputTokens }),
           ...(usage.cacheWriteInputTokens === undefined ? {} : { cacheWriteInputTokens: usage.cacheWriteInputTokens }),

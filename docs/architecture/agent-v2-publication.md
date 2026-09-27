@@ -38,7 +38,7 @@ SDK 1.18.0は不正な構造化出力にvalidation feedbackを返す。plain tex
 
 ## 対話の自由文と受理済み条件（#729 / #736）
 
-`conversation`、`clarification`、`uncertainty`に任意の`commentary`（1〜1200文字）を追加する。
+`conversation`、`clarification`、`uncertainty`に任意の`text`（1〜600文字）を追加する。
 確認、補足、仮定を置いた検討、未確認事項をモデル自身の自然文で説明できる。既存の短い形式も
 受理するが、固定文への置換を対話の標準としない。SDKのstructured outputだけを公開し、
 lastMessageの抜取り・本文再解析・outer repair・新しいAgent loopは追加しない。
@@ -57,7 +57,7 @@ Applicationが「今回の相談条件（反映済み）」として変更内容
 これは条件の受理であって、Tripへの保存や予約の成功表示ではない。
 
 確認はtargetの存在だけでは一律に拒否しない。既知の行き先や同行者にも変更対象の確認があり得る。
-commentaryを持つ文脈付き質問はモデルが判断し、未確定の対象は更新しない。一方、別の確定済み
+textを持つ文脈付き質問はモデルが判断し、未確定の対象は更新しない。一方、別の確定済み
 条件は同じ発言で更新できる。「質問が含まれるturnは全writer禁止」という規則は設けない。
 
 ### 再現した停止原因

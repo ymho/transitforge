@@ -5,8 +5,8 @@ import { agentV2ReplySchema, agentV2StructuredOutputSchema, parseAgentV2Reply } 
 const examples = [
   { kind: "answer", references: [{ evidenceId: "evidence:place", field: "description" }] },
   { kind: "candidates", evidenceIds: ["evidence:place"], commentary: "候補を検討できます。" },
-  { kind: "conversation", message: "greeting" }, { kind: "clarification", target: "origin" },
-  { kind: "unavailable", operation: "save" }, { kind: "operation_result", receiptId: "receipt:1" }, { kind: "uncertainty" },
+  { kind: "conversation", message: "greeting", text: "こんにちは。何を相談しますか？" }, { kind: "clarification", target: "origin", text: "出発地を教えてください。" },
+  { kind: "unavailable", operation: "save" }, { kind: "operation_result", receiptId: "receipt:1" }, { kind: "uncertainty", text: "まだ確認できていません。" },
 ];
 describe("single-source V2 reply syntax", () => {
   it.each(examples)("shares a valid $kind between the SDK envelope and Application parser", (reply) => {
@@ -14,7 +14,8 @@ describe("single-source V2 reply syntax", () => {
   });
   it.each([
     { kind: "candidates" },
-    { kind: "conversation", message: "greeting", commentary: "" },
+    { kind: "conversation", message: "greeting", commentary: "こんにちは" },
+    { kind: "conversation", message: "greeting", text: "" },
     { kind: "answer", references: [] },
     { kind: "candidates", evidenceIds: ["evidence:1"], commentary: "説明", cards: [] },
   ])("rejects the same invalid syntax at both boundaries", (reply) => {
@@ -29,7 +30,8 @@ describe("single-source V2 reply syntax", () => {
     expect(variants).toHaveLength(examples.length);
     for (const example of examples) {
       const variant = variants.find((v: any) => v.properties.kind.const === example.kind);
-      expect(variant.required).toEqual(expect.arrayContaining(Object.keys(example)));
+      const requiredExampleKeys = Object.keys(example).filter(key => key !== "text");
+      expect(variant.required).toEqual(expect.arrayContaining(requiredExampleKeys));
       expect(variant.additionalProperties).toBe(false);
     }
     expect(agentV2ReplySchema.safeParse({ kind: "candidates" }).success).toBe(false);

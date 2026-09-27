@@ -151,6 +151,22 @@ describe("StrandsAgentEngine", () => {
     expect(result.replyProposal).toEqual({ kind: "uncertainty" });
   });
 
+  it("applies each durable condition target at most once per turn even if the model repeats the writer", async () => {
+    const { input } = setup();
+    const apply = vi.fn(async () => ({
+      receipt: { version: "public-semantic-receipt-v1" as const, intentRevision: 4, speechAct: "inform" as const,
+        outcome: "accepted" as const, changes: [] },
+      effectiveIntent: { ...effectiveDestination("出雲大社"), intentRevision: 4, fingerprint: "effective-izumo" },
+    }));
+    const repeated = { tool: "update_current_destination", input: { action: "set", place: "出雲大社", quote: "出雲大社に行きたい" } } as const;
+    const result = await new StrandsAgentEngine(options, {
+      model: new ScriptedModel([repeated, repeated, submitted]),
+    }).run({ ...input, userRequest: "出雲大社に行きたい", conditionController: { apply } });
+    expect(apply).toHaveBeenCalledOnce();
+    expect(result.effectiveIntent?.fingerprint).toBe("effective-izumo");
+    expect(result.replyProposal).toEqual({ kind: "uncertainty" });
+  });
+
   it("represents a correction as one final-state update instead of clear then set", async () => {
     const { input } = setup();
     const apply = vi.fn(async () => ({ receipt: {
@@ -335,7 +351,7 @@ describe("independent model and invocation output limits", () => {
     const createAgent: StrandsAgentFactory = config => {
       modelLimit = (config.model as { getConfig(): { maxTokens?: number } }).getConfig().maxTokens;
       return { invoke: async (_value, opts) => { invocation = opts?.limits;
-        return { stopReason: "toolUse", structuredOutput: { reply: { kind: "uncertainty", commentary: "未確認の点を説明します。" } } }; } };
+        return { stopReason: "toolUse", structuredOutput: { reply: { kind: "uncertainty", text: "未確認の点を説明します。" } } }; } };
     };
     const result = await new StrandsAgentEngine({ ...options, maxOutputTokens: 1024 }, { createAgent }).run(input);
     expect(modelLimit).toBe(1024);
