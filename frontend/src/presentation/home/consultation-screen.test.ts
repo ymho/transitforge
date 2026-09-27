@@ -32,6 +32,26 @@ it("new consultation never infers a Trip from title or Home data", () => {
   const f = setup(false); expect(f.panel.textContent).toContain("新しい旅を相談中"); expect(f.panel.textContent).toContain("まだ旅程に紐付いていません");
   expect(f.panel.textContent).toContain("会話で追加できます"); expect(f.panel.querySelector(".consultation-add-condition")).toBeNull();
 });
+it("shows persisted partial people and budget without inventing missing details", () => {
+  const trip = createTrip("45300000-0000-4000-8000-000000000001", "途中条件の旅", "2026-09-18T00:00:00Z", [], {
+    constraints: [], assumptions: [], partialConditions: [
+      { factId: "fact-party", sourceOperationId: "op-party", target: "party_size", scope: { type: "conversation" },
+        modality: "preferred", precision: "exact", value: { kind: "quantity", amount: 3, unit: "people" }, frame: "actual",
+        provenance: { kind: "user_turn", turnId: "33333333-3333-4333-8333-333333333333", quote: "3人です" } },
+      { factId: "fact-budget", sourceOperationId: "op-budget", target: "budget", scope: { type: "conversation" },
+        modality: "preferred", precision: "approximate", value: { kind: "money", amount: 500 }, frame: "actual",
+        provenance: { kind: "user_turn", turnId: "33333333-3333-4333-8333-333333333333", quote: "500くらい" } },
+    ],
+  });
+  const panel = document.querySelector<HTMLElement>("section")!, messages = document.querySelector("ol")!, form = document.querySelector("form")!, input = document.querySelector("input")!;
+  configureConsultationScreen(panel, messages, form, input, { read: () => ({ trip, sessionId: "partial" }), profile: () => undefined,
+    subscribe: () => () => {}, preview: vi.fn(), showTrip: vi.fn(), newConversation: vi.fn() });
+  expect(panel.textContent).toContain("3人（内訳未定）");
+  expect(panel.textContent).toContain("500（通貨未定）（対象未定）");
+  expect(panel.textContent).not.toContain("大人3人");
+  expect(panel.textContent).not.toContain("JPY");
+});
+
 it("direct origin edit produces a revision-bound Proposal, never mutates Trip or copies provider identity", () => {
   const f = setup(); const before = JSON.stringify(f.trip);
   f.panel.querySelector<HTMLButtonElement>('[aria-label="出発地を編集"]')!.click();
