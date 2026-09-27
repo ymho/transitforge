@@ -208,6 +208,34 @@ describe("StrandsAgentEngine", () => {
     }, quote: "10月3日から5日まで" });
   });
 
+  it("sends one budget command to Application without model-owned persistence metadata", async () => {
+    const { input } = setup();
+    const apply = vi.fn(async () => ({ receipt: {
+      version: "public-semantic-receipt-v1" as const, intentRevision: 4, speechAct: "inform" as const,
+      outcome: "accepted" as const, changes: [],
+    }, effectiveIntent: effectiveDestination("京都") }));
+    await new StrandsAgentEngine(options, { model: new ScriptedModel([
+      { tool: "update_current_budget", input: { action: "set",
+        budget: { amount: 50000, currency: "JPY", basis: "per_person" }, quote: "1人5万円くらい" } },
+      submitted,
+    ]) }).run({ ...input, userRequest: "予算は1人5万円くらい", conditionController: { apply } });
+    expect(apply).toHaveBeenCalledOnce();
+    expect(apply).toHaveBeenCalledWith({ target: "budget",
+      budget: { amount: 50000, currency: "JPY", basis: "per_person" }, quote: "1人5万円くらい" });
+  });
+
+  it("keeps a hypothetical budget out of the durable condition controller", async () => {
+    const { input } = setup();
+    const apply = vi.fn();
+    const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([
+      { tool: "consider_trip_scenario", input: { kind: "budget",
+        budget: { amount: 200000, currency: "JPY", basis: "trip" }, quote: "もし20万円なら" } },
+      submitted,
+    ]) }).run({ ...input, userRequest: "もし20万円ならどう？今の予算は変えない", conditionController: { apply } });
+    expect(apply).not.toHaveBeenCalled();
+    expect(result.effectiveIntent).toEqual(input.effectiveIntent);
+  });
+
   it("lets independent condition Tools use the same Application without an invocation-wide limiter", async () => {
     const { input } = setup();
     const apply = vi.fn(async () => ({ receipt: {
