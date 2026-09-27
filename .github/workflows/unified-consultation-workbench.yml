@@ -1,0 +1,41 @@
+name: UI / Consultation workbench
+
+on:
+  push:
+    branches: [feat/unified-consultation-entry]
+    paths:
+      - tools/unified-consultation-workbench.py
+      - .github/workflows/unified-consultation-workbench.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    if: github.ref == 'refs/heads/feat/unified-consultation-entry'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Apply reviewed source edits on this branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/feat/unified-consultation-entry
+          python3 tools/unified-consultation-workbench.py
+          git rm tools/unified-consultation-workbench.py .github/workflows/unified-consultation-workbench.yml
+          git add frontend/src/presentation/home frontend/src/presentation/trip-plan/trip-workspace.ts frontend/src/composition/viewer-composition.ts docs/architecture/unified-consultation-entry.md
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m '💬 探すを相談へ統合し旅程からの相談と入口を分ける'
+          git push origin HEAD:feat/unified-consultation-entry
+          git log -1 --format='%H' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Test consultation and Trip navigation without external services
+        run: npx vitest run frontend/src/presentation/home/ai-first-shell.test.ts frontend/src/presentation/home/consultation-screen.test.ts frontend/src/presentation/home/consultation-navigation.integration.test.ts frontend/src/presentation/trip-plan/trip-workspace.test.ts frontend/src/usecases/trip-plan/trip-consultation-navigation.test.ts
+      - run: npm run workspace:check && npm run architecture:check && npm run build
