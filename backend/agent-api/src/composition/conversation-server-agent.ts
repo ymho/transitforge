@@ -15,8 +15,18 @@ export function createConversationServerAgent(options: Omit<Parameters<typeof cr
     turns, ...(options.runRuntime ? { conditions: turns } : {}),
     adoptTripProposal: async (identity, lease, proposal) => {
       await turns.stageIntentProposal(identity, lease, proposal);
-      await tripApplication.execute(identity.principal, { version: "trip-api-v1", operation: "mutate",
-        tripId: proposal.tripId, baseRevision: proposal.baseRevision, mutationId: stableMutationId(proposal.intentBinding!.changes.map(({ changeRef }) => changeRef).join("|")), proposal });
+      const mutationId = stableMutationId(proposal.intentBinding!.changes.map(({ changeRef }) => changeRef).join("|"));
+      try {
+        await tripApplication.execute(identity.principal, { version: "trip-api-v1", operation: "mutate",
+          tripId: proposal.tripId, baseRevision: proposal.baseRevision, mutationId, proposal });
+      } catch (error) {
+        // A Trip transaction may have committed while the adoption-complete response was lost.
+        // Re-read the Trip and finish the same binding; never issue a different mutation.
+        const saved = await trips.get(identity.principal, proposal.tripId).catch(() => undefined);
+        if (!saved || saved.revision !== proposal.baseRevision + 1) throw error;
+        await turns.complete(identity.principal, { binding: proposal.intentBinding!, tripId: proposal.tripId,
+          baseTripRevision: proposal.baseRevision, committedTripRevision: saved.revision, mutationId });
+      }
     },
     ...(options.semanticIntentEnabled && !options.runRuntime ? { interpretIntent: createConversationIntentInterpreter(options.model) } : {}),
     runAgentTurn: (input, historyBeforeSequence, reportProgress, acceptCondition) =>
