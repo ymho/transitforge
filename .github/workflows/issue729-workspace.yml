@@ -13,19 +13,26 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+          path: feature
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - name: Package tracked public source and nested locked dependencies only
+          persist-credentials: false
+          ref: 9ac75713131a36ae92fd69e7f499ea015694e686
+          path: main-source
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+          ref: b4e496386c50e9b51d58af71c4378242d38accbc
+          path: base-source
+      - name: Package tracked source only; no credentials or runtime state
         run: |
           mkdir -p /tmp/issue729-offline
-          git archive --format=tar HEAD > /tmp/issue729-offline/source.tar
-          find backend frontend modules -type d -name node_modules -prune -print0 | tar --null -T - -cf /tmp/issue729-offline/nested-dependencies.tar
+          git -C feature archive --format=tar HEAD > /tmp/issue729-offline/feature.tar
+          git -C main-source archive --format=tar HEAD > /tmp/issue729-offline/main.tar
+          git -C base-source archive --format=tar HEAD > /tmp/issue729-offline/base.tar
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: issue729-offline-nested
+          name: issue729-source-snapshots
           path: /tmp/issue729-offline/*.tar
           retention-days: 1
           if-no-files-found: error
