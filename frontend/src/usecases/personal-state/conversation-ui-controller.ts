@@ -152,6 +152,7 @@ function toSession(value: ServerConversation): ConversationSession & { revision:
     createdAt: value.createdAt, updatedAt: value.updatedAt, revision: value.revision };
 }
 function metadataOf(value: ConversationSession): ServerConversationMetadata {
+  if (!value.tripId) throw new Error("Trip reference required");
   return { title: value.title, scope: "trip", summary: value.summary,
     resolvedTopics: value.resolvedTopics, pendingTopics: value.pendingTopics, tripId: value.tripId };
 }
