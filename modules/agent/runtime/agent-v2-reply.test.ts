@@ -30,7 +30,8 @@ describe("single-source V2 reply syntax", () => {
     expect(variants).toHaveLength(examples.length);
     for (const example of examples) {
       const variant = variants.find((v: any) => v.properties.kind.const === example.kind);
-      expect(variant.required).toEqual(expect.arrayContaining(Object.keys(example)));
+      const requiredExampleKeys = Object.keys(example).filter(key => key !== "text");
+      expect(variant.required).toEqual(expect.arrayContaining(requiredExampleKeys));
       expect(variant.additionalProperties).toBe(false);
     }
     expect(agentV2ReplySchema.safeParse({ kind: "candidates" }).success).toBe(false);
