@@ -4,7 +4,8 @@ export interface ConversationSession {
   id: string;
   title: string;
   scope: "trip";
-  tripId: string;
+  /** Missing only for the unsent in-memory Hero placeholder; persisted sessions always have one. */
+  tripId?: string;
   summary: string;
   resolvedTopics: string[];
   pendingTopics: string[];
