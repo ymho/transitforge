@@ -54,6 +54,19 @@ describe("verified intent proposal", () => {
     ] } });
   });
 
+  it("persists total people and end-date-only as partial conditions without fabricating composition or start date", () => {
+    const trip = createTrip(tripId, "旅", "2026-09-25T00:00:00Z");
+    const party = apply({ action: "set", target: "party_size", value: { kind: "quantity", amount: 3, unit: "people" }, modality: "preferred" });
+    const partyIntent = compileEffectiveIntent({ baseRequest: trip.request, baseSource: "trip", baseRevision: 0, overlay: party.overlay });
+    expect(proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent: partyIntent, receipt: party.receipt })?.patches[0])
+      .toMatchObject({ type: "request", request: { partialConditions: [{ target: "party_size", value: { kind: "quantity", amount: 3, unit: "people" } }] } });
+
+    const end = apply({ action: "set", target: "end_date", value: { kind: "local_date", date: "2026-10-03" }, modality: "preferred" });
+    const endIntent = compileEffectiveIntent({ baseRequest: trip.request, baseSource: "trip", baseRevision: 0, overlay: end.overlay });
+    expect(proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent: endIntent, receipt: end.receipt })?.patches[0])
+      .toMatchObject({ type: "request", request: { partialConditions: [{ target: "end_date", value: { kind: "local_date", date: "2026-10-03" } }] } });
+  });
+
   it("projects a fully confirmed budget basis without defaulting basis", () => {
     const trip = createTrip(tripId, "旅", "2026-09-25T00:00:00Z");
     const reduced = apply({ action: "set", target: "budget",
@@ -73,7 +86,7 @@ describe("verified intent proposal", () => {
   });
 });
 
-function apply(operation: { action: "set" | "add_alternative"; target: "origin" | "destination" | "experience" | "budget"; value: AcceptedIntentDelta["operations"][number]["value"]; modality: "preferred"; frame?: "actual" | "hypothetical" }) {
+function apply(operation: { action: "set" | "add_alternative"; target: "origin" | "destination" | "experience" | "budget" | "party_size" | "end_date"; value: AcceptedIntentDelta["operations"][number]["value"]; modality: "preferred"; frame?: "actual" | "hypothetical" }) {
   return reduceConversationIntent(emptyConversationIntentOverlay(), { version: 1, mutationId: `intent-turn:${turnId}`, baseIntentRevision: 0, speechAct: "inform", operations: [{
     operationId: `intent-op:${turnId}:1`, groupId: `intent-group:${turnId}:1`, action: operation.action, target: operation.target,
     scope: { type: "conversation" }, modality: operation.modality, precision: "exact", value: operation.value!, frame: operation.frame ?? "actual",
