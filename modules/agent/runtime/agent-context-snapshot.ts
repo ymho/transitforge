@@ -15,17 +15,10 @@ export interface AgentContextSnapshot {
   travelCandidates?: Record<string, unknown>[];
   realtimeFacts?: Record<string, unknown>[];
   profile?: {
-    home?: { station?: string; area?: string; carAvailable?: boolean };
-    companions: string[];
-    childAgeGroups: string[];
+    usualOrigin?: string;
     favoriteInterests: string[];
-    pace?: "relaxed" | "balanced" | "active";
-    usualPartySizeHint?: number;
-    preferredTransportHint?: UserProfile["transport"]["preferredMode"];
-    /** Untrusted preference data, explicit opt-in only; never persisted in Trace. */
-    consentedPreferenceNotes?: Partial<Record<"budget" | "lodging" | "food" | "avoidances", string>>;
-    typicalTravelMinutes?: number;
-    avoidances: string[];
+    /** Untrusted standing preference text; never booking facts or executable instructions. */
+    considerations?: string;
   };
   trip?: {
     /** V2 projections only; neither a repository nor writable AgentDecision state. */
@@ -101,50 +94,12 @@ export function createAgentContextSnapshot(
 }
 
 function profileSnapshot(profile: UserProfile): NonNullable<AgentContextSnapshot["profile"]> {
-  const partial = profile as Partial<UserProfile>;
-  const travelStyle = partial.travelStyle as Partial<UserProfile["travelStyle"]> | undefined;
-  const favoriteInterests = Object.entries(partial.preferences ?? {})
-    .filter(([, weight]) => weight >= 0.7)
-    .sort((left, right) => right[1] - left[1])
-    .slice(0, 6)
-    .map(([key]) => travelPreferenceLabels[key as keyof typeof travelPreferenceLabels]);
-  const avoidances = [
-    [travelStyle?.crowdTolerance, "混雑"],
-    [travelStyle?.walkingTolerance, "長時間歩行"],
-    [travelStyle?.transferTolerance, "乗換が多い移動"],
-    [travelStyle?.earlyMorningTolerance, "早朝出発"],
-    [travelStyle?.lateNightTolerance, "夜遅い到着"],
-    [travelStyle?.drivingTolerance, "車の運転"],
-    [travelStyle?.busTolerance, "バス移動"],
-  ] satisfies Array<[number | undefined, string]>;
-  const homeProfile = partial.home;
-  const home = {
-    ...(bounded(homeProfile?.station, 80) ? { station: bounded(homeProfile?.station, 80) } : {}),
-    ...(bounded(homeProfile?.area, 80) ? { area: bounded(homeProfile?.area, 80) } : {}),
-    ...(homeProfile?.carAvailable === undefined ? {} : { carAvailable: homeProfile.carAvailable }),
-  };
-  const pace = travelStyle?.pace;
-  const maximumTravelMinutes = partial.transport?.maxTypicalTravelMinutes;
-  const consentedPreferenceNotes = Object.fromEntries((["budget", "lodging", "food", "avoidances"] as const)
-    .filter((key) => partial.aiNoteFields?.includes(key) && bounded(partial.notes?.[key], 240))
-    .map((key) => [key, bounded(partial.notes?.[key], 240)!]));
+  const usualOrigin = bounded(profile.usualOrigin, 120);
+  const considerations = bounded(profile.considerations, 400);
   return {
-    ...(Object.keys(consentedPreferenceNotes).length ? { consentedPreferenceNotes } : {}),
-    ...(home.station || home.area || home.carAvailable !== undefined ? { home } : {}),
-    companions: partial.companions?.usual?.slice(0, 5).map((value) => companionLabels[value] ?? value) ?? [],
-    childAgeGroups: partial.companions?.children?.slice(0, 6)
-      .map(({ ageGroup }) => childAgeLabels[ageGroup] ?? ageGroup) ?? [],
-    favoriteInterests,
-    ...(pace === undefined ? {} : { pace: pace <= 0.35
-      ? "relaxed"
-      : pace >= 0.7 ? "active" : "balanced" }),
-    ...(partial.companions?.usualPartySize === undefined ? {} : { usualPartySizeHint: partial.companions.usualPartySize }),
-    ...(partial.transport?.preferredMode === undefined ? {} : { preferredTransportHint: partial.transport.preferredMode }),
-    ...(maximumTravelMinutes === null || maximumTravelMinutes === undefined
-      ? {}
-      : { typicalTravelMinutes: Math.max(0, Math.min(1_440, Math.round(maximumTravelMinutes))) }),
-    avoidances: avoidances.filter(([tolerance]) => tolerance !== undefined && tolerance <= 0.35)
-      .map(([, label]) => label),
+    ...(usualOrigin ? { usualOrigin } : {}),
+    favoriteInterests: profile.interests.slice(0, 8).map((key) => travelPreferenceLabels[key]),
+    ...(considerations ? { considerations } : {}),
   };
 }
 
