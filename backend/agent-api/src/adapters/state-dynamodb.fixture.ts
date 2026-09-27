@@ -14,8 +14,7 @@ export const conversationId = "11111111-1111-4111-8111-111111111111";
 export const secondId = "22222222-2222-4222-8222-222222222222";
 export const noCandidateResources = { purgeConversation: async () => ({ complete: true }) };
 export const stateMetadata = (): ConversationMetadata => ({ title: "会話", scope: "trip", summary: "相談", resolvedTopics: [], pendingTopics: ["日程"], tripId: secondId });
-export const stateProfile = (): UserProfile => ({ version: 2, home: {}, companions: { usual: ["solo"], children: [] }, travelStyle: { pace: 0.123 },
-  preferences: { railway: 0.8 }, transport: { maxTypicalTravelMinutes: null }, notes: { budget: "本人のメモ" }, aiNoteFields: [], updatedAt: "2026-09-18T00:00:00.000Z" });
+export const stateProfile = (): UserProfile => ({ version: 3, usualOrigin: "大阪", interests: ["railway"], considerations: "静かな場所を好む", updatedAt: "2026-09-18T00:00:00.000Z" });
 
 /** Command/condition contract fake, not a live AWS substitute. Transactions commit all or nothing. */
 export function stateDynamoFixture() {
