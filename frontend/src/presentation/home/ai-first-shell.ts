@@ -216,7 +216,10 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
       const tripId = window.history.state?.consultation === "trip" ? window.history.state?.tripId : undefined;
       if (isSignedIn() && typeof tripId === "string" && ports.consultTrip) {
         consultationMode = "starting"; entryStatus.textContent = "この旅の相談を読み込んでいます。"; paintRoute();
-        void Promise.resolve().then(() => ports.consultTrip!(tripId)).then(() => {
+        void Promise.resolve().then(() => {
+          if (generation !== entryGeneration || !root.isConnected || !isSignedIn()) return;
+          return ports.consultTrip!(tripId);
+        }).then(() => {
           if (generation !== entryGeneration || !root.isConnected || !isSignedIn()) return;
           consultationMode = "conversation"; paintRoute(); ports.openChat();
         }, () => {

@@ -252,3 +252,14 @@ it("keeps a failed trip consultation separate from new-chat hero and supports re
   await vi.waitFor(() => expect(document.querySelector("main")!.dataset.consultationMode).toBe("conversation"));
   expect(consultTrip).toHaveBeenCalledTimes(2);
 });
+
+it("does not start a queued Trip restore after the user already selected a new consultation", async () => {
+  window.history.replaceState({ consultation: "trip", tripId: "trip-one" }, "", "#chat");
+  const consultTrip = vi.fn(async () => {});
+  const { shell, ports } = setup({ authState: signedIn, consultTrip });
+  shell.navigate("chat");
+  await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+  expect(consultTrip).not.toHaveBeenCalled(); expect(ports.openChat).not.toHaveBeenCalled();
+  expect(document.querySelector("main")!.dataset.consultationMode).toBe("landing");
+  expect(window.history.state.tripId).toBeUndefined();
+});
