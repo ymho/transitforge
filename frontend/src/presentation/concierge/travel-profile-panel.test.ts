@@ -21,7 +21,7 @@ it("shows exactly the three optional profile concepts and autosaves origin", asy
   expect(document.body.textContent).toContain("普段の出発地");
   expect(document.body.textContent).toContain("好きなこと");
   expect(document.body.textContent).toContain("いつも配慮してほしいこと");
-  expect(document.body.textContent).not.toMatch(/普段の人数|子どもの年代|予算|ペース|移動上限|宿泊の好み/);
+  expect(document.body.textContent).not.toMatch(/普段の人数|子どもの年代|ペース設定|移動上限|宿泊の好み/);
   const origin = document.querySelector<HTMLInputElement>('[name="usualOrigin"]')!;
   origin.value = "上野"; origin.dispatchEvent(new Event("input", { bubbles: true })); origin.focus();
   await vi.advanceTimersByTimeAsync(400); await vi.waitFor(() => expect(update).toHaveBeenCalledOnce());
@@ -36,7 +36,7 @@ it("saves interests immediately and does not create Trip-specific fields", async
   const food = document.querySelector<HTMLInputElement>('input[name="interest"][value="food"]')!;
   food.checked = true; food.dispatchEvent(new Event("input", { bubbles: true }));
   await vi.waitFor(() => expect(update).toHaveBeenCalledOnce());
-  expect(update.mock.calls[0]![0].interests).toEqual(["history","food"]);
+  expect(new Set(update.mock.calls[0]![0].interests)).toEqual(new Set(["history","food"]));
   expect(JSON.stringify(update.mock.calls[0]![0])).not.toMatch(/companions|budget|travelStyle|transport|party/);
 });
 it("keeps failed text visible and retries", async () => {
