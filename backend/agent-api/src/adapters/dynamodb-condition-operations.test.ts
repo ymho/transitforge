@@ -31,8 +31,12 @@ describe("condition-operation acceptance and replay", () => {
     expect(await f.fresh().acceptCondition(identity, f.lease, { ...origin, quote: "大阪" })).toEqual(first);
     expect((await overlay(f))?.intentRevision).toBe(2);
     expect((await overlay(f))?.facts.map(({ target }) => target).sort()).toEqual(["destination", "origin"]);
-    await expect(f.turns.acceptCondition(identity, f.lease, { ...origin, place: "神戸" })).rejects.toMatchObject({ code: "conflict" });
-    const summary = publicSemanticReceipt(summarizeConditionReceipts([first, second])!);
+    const corrected = await f.turns.acceptCondition(identity, f.lease, { ...origin, place: "神戸", quote: "神戸からに変更" });
+    expect(corrected.intentRevision).toBe(3);
+    expect(corrected.mutationId).toBe(`condition:${turnId}:origin:2`);
+    expect((await overlay(f))?.facts.find(({ target }) => target === "origin")?.value).toEqual({ kind: "place_label", label: "神戸" });
+    expect(await f.fresh().acceptCondition(identity, f.lease, { ...origin, place: "神戸", quote: "同じ訂正の再送" })).toEqual(corrected);
+    const summary = publicSemanticReceipt(summarizeConditionReceipts([first, second, corrected])!);
     const final = { ...result, semanticReceipt: summary };
     await f.turns.completeTurn(identity, f.lease, final);
     expect(await f.fresh().beginTurn(identity, request)).toEqual({ state: "completed", result: final });
@@ -47,9 +51,11 @@ describe("condition-operation acceptance and replay", () => {
     expect((await overlay(f))?.facts[0]?.value).toEqual({ kind: "quantity", amount: 2, unit: "people" });
     expect(await f.fresh().acceptCondition(identity, f.lease, { ...count, quote: "2人" })).toEqual(first);
     expect((await overlay(f))?.intentRevision).toBe(1);
-    await expect(f.turns.acceptCondition(identity, f.lease, {
+    const corrected = await f.turns.acceptCondition(identity, f.lease, {
       target: "party_size", party: { kind: "composition", adults: 2, children: 0 }, quote: "大人2人",
-    })).rejects.toMatchObject({ code: "conflict" });
+    });
+    expect(corrected.mutationId).toBe(`condition:${turnId}:party_size:2`);
+    expect((await overlay(f))?.facts[0]?.value).toEqual({ kind: "party", adults: 2, children: [] });
   });
   it("persists one travel-period slot as three atomic Domain operations and replays the slot as one command", async () => {
     const f = await setup();
@@ -65,9 +71,12 @@ describe("condition-operation acceptance and replay", () => {
     expect((await overlay(f))?.tombstones).toContainEqual(expect.objectContaining({ target: "duration" }));
     expect(await f.fresh().acceptCondition(identity, f.lease, { ...period, quote: "別の同じ根拠" })).toEqual(receipt);
     expect((await overlay(f))?.intentRevision).toBe(1);
-    await expect(f.turns.acceptCondition(identity, f.lease, { ...period, period: {
+    const corrected = await f.turns.acceptCondition(identity, f.lease, { ...period, period: {
       start: { kind: "local_date", date: "2026-10-04" }, end: { kind: "local_date", date: "2026-10-05" },
-    } })).rejects.toMatchObject({ code: "conflict" });
+    }, quote: "10月4日から5日に変更" });
+    expect(corrected.mutationId).toBe(`condition:${turnId}:travel_period:2`);
+    expect((await overlay(f))?.facts.filter(({ target }) => ["start_date","end_date"].includes(target)).map(({ value }) => value))
+      .toEqual(expect.arrayContaining([{ kind: "local_date", date: "2026-10-04" }, { kind: "local_date", date: "2026-10-05" }]));
   });
   it("never persists a partial travel period when its single A-commit transaction fails", async () => {
     const f = await setup();
@@ -89,9 +98,21 @@ describe("condition-operation acceptance and replay", () => {
     expect((await overlay(f))?.facts[0]?.value).toEqual({ kind: "money", amount: 500, currency: "EUR" });
     expect(await f.fresh().acceptCondition(identity, f.lease, { ...budget, quote: "予算500ユーロ" })).toEqual(receipt);
     expect((await overlay(f))?.intentRevision).toBe(1);
-    await expect(f.turns.acceptCondition(identity, f.lease, {
+    const corrected = await f.turns.acceptCondition(identity, f.lease, {
       target: "budget", budget: { amount: 600, currency: "EUR" }, quote: "600ユーロ",
-    })).rejects.toMatchObject({ code: "conflict" });
+    });
+    expect(corrected.mutationId).toBe(`condition:${turnId}:budget:2`);
+    expect((await overlay(f))?.facts[0]?.value).toEqual({ kind: "money", amount: 600, currency: "EUR" });
+  });
+  it("accepts an explicit clear after a set and replays the clear without a third mutation", async () => {
+    const f = await setup();
+    const first = await f.turns.acceptCondition(identity, f.lease, destination);
+    const cleared = await f.turns.acceptCondition(identity, f.lease, { target: "destination", place: null, quote: "行き先は未定に戻す" });
+    expect(first.intentRevision).toBe(1); expect(cleared.intentRevision).toBe(2);
+    expect(cleared.mutationId).toBe(`condition:${turnId}:destination:2`);
+    expect((await overlay(f))?.facts.some(({ target }) => target === "destination")).toBe(false);
+    expect(await f.fresh().acceptCondition(identity, f.lease, { target: "destination", place: null, quote: "同じ撤回" })).toEqual(cleared);
+    expect((await overlay(f))?.intentRevision).toBe(2);
   });
   it("retains a committed first operation when the second fails and resumes only the missing work", async () => {
     const f = await setup();
