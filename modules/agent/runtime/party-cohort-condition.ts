@@ -20,7 +20,7 @@ export const partyCohortValueSchema = z.array(z.strictObject({
 })).min(1).max(20);
 /** This is a replacement value, not a sequence of clear/set commands. */
 export const partyDetailsUpdateInputSchema = z.strictObject({
-  finalCohorts: partyCohortValueSchema.nullable().describe("application.currentPartyDetailsをもとに今回の変更だけを反映した、更新後の全集合。参加範囲だけの変更ならschoolStage/ageDecade等の既存属性は全て保持する。再言及されない属性は撤回ではない。同じ人の訂正は既存要素を置換し、別の人の追加だけ新要素を作る。変更対象の人や参加期間が未定・不明なら、このToolを呼ばずclarificationで確認する。離脱後の不参加行や人数合わせの集団は不要。全詳細の明示撤回だけnull。"),
+  finalCohorts: partyCohortValueSchema.nullable().describe("既存の詳細を全て取り消す・未定に戻す依頼はnull。合計人数だけを残すための集団は不要。指定・訂正の場合はapplication.currentPartyDetailsへ今回の変更だけを反映した全集合。同じ人の訂正は置換し、参加範囲だけの訂正では既存schoolStage/ageDecade等を保持する。変更されない集団も残す。どの人への変更か未特定・未決定ならこのToolを呼ばずclarificationで確認する。対象を推測したり区別する属性を消したりして更新しない。"),
   quote: z.string().min(1).max(300),
 });
 /** Stored resolved scope is Application-owned, never part of a model Tool schema. */
