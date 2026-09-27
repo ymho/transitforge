@@ -1,0 +1,70 @@
+name: Agent v2 / Condition replay regression live
+on:
+  push:
+    branches: [fix/agent-v2-condition-receipt-payload]
+    paths: [.github/workflows/condition-replay-live.yml]
+permissions:
+  contents: read
+concurrency:
+  group: transitforge-strands-v2-live
+  cancel-in-progress: false
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-northeast-1
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      MODEL_ID: jp.amazon.nova-2-lite-v1:0
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Deterministic verification
+        run: |
+          npm ci
+          npm run typecheck:tools
+          npm run test:agent:v2
+      - name: Resolve evaluation role
+        id: role
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${AWS_DEPLOY_ROLE_ARN:?}"
+          account_id="${AWS_DEPLOY_ROLE_ARN#arn:aws:iam::}"
+          account_id="${account_id%%:*}"
+          [[ "$account_id" =~ ^[0-9]{12}$ ]]
+          echo "arn=arn:aws:iam::${account_id}:role/transitforge-dev-github-agent-eval" >> "$GITHUB_OUTPUT"
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5
+        with:
+          role-to-assume: ${{ steps.role.outputs.arn }}
+          aws-region: ap-northeast-1
+          mask-aws-account-id: true
+      - name: Three independent baseline Nova free-dialogue repetitions
+        env:
+          AGENT_V2_LIVE: 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/condition-replay
+          echo 'Six durable Conversation turns x3; unchanged Nova 2 Lite, 4096/4096 output caps; no production state or travel Providers. At most 108 model calls.' >> "$GITHUB_STEP_SUMMARY"
+          status=0
+          for attempt in 1 2 3; do
+            npm run test:agent:v2:free-dialogue-live -- --testNamePattern 'Nova 2 Lite free dialogue live' --reporter=default --reporter=json --outputFile=".artifacts/condition-replay/repetition-${attempt}.json" || status=1
+          done
+          exit "$status"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: condition-replay-live-${{ github.run_id }}
+          path: .artifacts/condition-replay
+          retention-days: 7
+          if-no-files-found: warn
