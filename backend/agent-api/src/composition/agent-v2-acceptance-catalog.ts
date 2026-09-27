@@ -131,6 +131,18 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
     testName: "never persists a partial travel period when its single A-commit transaction fails",
   },
   {
+    id: "V2-CONDITIONS-BUDGET-01", kind: "v2_specific",
+    invariant: "one current-trip budget slot grounds amount, currency and basis from the current user turn without guessing missing authority",
+    testFile: "modules/agent/runtime/conversation-condition.test.ts",
+    testName: "grounds budget amount, currency and basis without promoting guessed optional fields",
+  },
+  {
+    id: "V2-CONDITIONS-BUDGET-PROJECTION-01", kind: "v2_specific",
+    invariant: "a budget with unknown currency or basis stays a Conversation condition and is not silently promoted to a Trip budget constraint",
+    testFile: "modules/agent/runtime/verified-intent-proposal.test.ts",
+    testName: "does not promote a Conversation budget to Trip when currency or basis is unconfirmed",
+  },
+  {
     id: "V2-PROFILE-READ-01", kind: "v2_specific",
     invariant: "current conditions override profile hints without mutating the Profile or reviving a retracted default",
     testFile: "backend/agent-api/src/composition/strands-intent-acceptance.test.ts",

@@ -12,12 +12,13 @@
 - `update_current_origin({action, place?, quote})`
 - `update_current_party({action, party?, quote})`
 - `update_current_travel_period({action, period?, quote})`
+- `update_current_budget({action, budget?, quote})`
 
 `action=set`は指定・訂正、`action=clear`は明示された撤回である。訂正を`clear→set`の2操作に分けず、そのuser turnにおける条件の最終状態を1回で受理する。これによりApplicationの「1 turn・1 target・1 final decision」という冪等slotとTool粒度が一致する。検証フィードバックと逐次実行はSDK標準へ任せ、独自のAgent phase、ToolChoice強制、Proxy、入力補修を追加しない。
 
 ## Applicationの契約
 
-現在のscopeはConversationの行き先・出発地・globalな人数条件・旅行期間。Trip/Profile/予約/決済は更新しない。型と許可項目はZod、根拠が今回の発言に含まれることと地名がその根拠に含まれることはApplicationが確認する。仮定や比較を変更と扱うかはモデルの意味理解を実モデル試験で評価する。部分文字列検証だけで意味理解を証明したとは扱わない。
+現在のscopeはConversationの行き先・出発地・globalな人数条件・旅行期間・予算。Trip/Profile/予約/決済は更新しない。型と許可項目はZod、根拠が今回の発言に含まれることと地名がその根拠に含まれることはApplicationが確認する。仮定や比較を変更と扱うかはモデルの意味理解を実モデル試験で評価する。部分文字列検証だけで意味理解を証明したとは扱わない。
 
 1操作の正体は、このuser turnにおける1条件の最終意思決定。Applicationが `condition:<turnId>:<target>` を識別子にする。同じ条件/同じ値の再送は元receiptを返し、同じslot/別値は競合とする。異なる値へさらに変更したい場合は次の利用者turnで行う。モデルのtoolUseId、呼出順、再試行attemptに依存しない。
 
@@ -43,4 +44,4 @@
 
 ## Scenario
 
-仮定値は永続writerへ流さず、非永続の`consider_trip_scenario`へ集約する。party/date/budgetごとにwhat-if Toolを増殖させない。このToolはA commit、Intent revision、Profile、Tripを変更しない。
+仮定値は永続writerへ流さず、非永続の`consider_trip_scenario`へ集約する。party/date/budgetごとにwhat-if Toolを増殖させない。予算のcurrency/basisも同じApplication groundingを通し、モデルの推測をscenario factとして権威化しない。このToolはA commit、Intent revision、Profile、Tripを変更しない。

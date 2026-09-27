@@ -80,6 +80,19 @@ describe("condition-operation acceptance and replay", () => {
     expect(state?.intentRevision ?? 0).toBe(0);
     expect(state?.facts ?? []).toEqual([]);
   });
+  it("persists budget as one replayable business slot without reviving guessed basis", async () => {
+    const f = await setup();
+    const budget = { target: "budget" as const, budget: { amount: 500, currency: "EUR" as const }, quote: "500ユーロ" };
+    const receipt = await f.turns.acceptCondition(identity, f.lease, budget);
+    expect(receipt.intentRevision).toBe(1);
+    expect(receipt.operations).toHaveLength(1);
+    expect((await overlay(f))?.facts[0]?.value).toEqual({ kind: "money", amount: 500, currency: "EUR" });
+    expect(await f.fresh().acceptCondition(identity, f.lease, { ...budget, quote: "予算500ユーロ" })).toEqual(receipt);
+    expect((await overlay(f))?.intentRevision).toBe(1);
+    await expect(f.turns.acceptCondition(identity, f.lease, {
+      target: "budget", budget: { amount: 600, currency: "EUR" }, quote: "600ユーロ",
+    })).rejects.toMatchObject({ code: "conflict" });
+  });
   it("retains a committed first operation when the second fails and resumes only the missing work", async () => {
     const f = await setup();
     const first = await f.turns.acceptCondition(identity, f.lease, origin);

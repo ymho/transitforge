@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { admitConditionChange, admitTripScenario, conditionDelta, conditionOperationId, conditionPayload, placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, travelPeriodUpdateInputSchema, tripScenarioInputSchema } from "./conversation-condition";
+import { admitConditionChange, admitTripScenario, budgetConditionUpdateInputSchema, conditionDelta, conditionOperationId, conditionPayload, placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, travelPeriodUpdateInputSchema, tripScenarioInputSchema } from "./conversation-condition";
 import { reduceConversationIntent } from "./conversation-intent-reducer";
 import { compileEffectiveIntent } from "./effective-intent";
 import type { ConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
@@ -150,6 +150,50 @@ describe("small Conversation condition operations", () => {
     expect(explicitYear).toEqual({ target: "travel_period", period: {
       start: { kind: "local_date", date: "2028-01-21" },
     }, quote: "2028年1月21日" });
+  });
+
+  it("grounds budget amount, currency and basis without promoting guessed optional fields", () => {
+    expect(budgetConditionUpdateInputSchema.safeParse({ action: "set",
+      budget: { amount: 100000, currency: "JPY", basis: "trip" }, quote: "全部で10万円まで" }).success).toBe(true);
+    const total = admitConditionChange({ target: "budget",
+      budget: { amount: 100000, currency: "JPY", basis: "trip" }, quote: "全部で10万円まで" },
+      "全部で10万円までにしたい");
+    expect(total).toEqual({ target: "budget", budget: { amount: 100000, currency: "JPY", basis: "trip" }, quote: "全部で10万円まで" });
+
+    const perPerson = admitConditionChange({ target: "budget",
+      budget: { amount: 50000, currency: "JPY", basis: "per_person" }, quote: "1人5万円くらい" },
+      "予算は1人5万円くらい");
+    expect(perPerson).toEqual({ target: "budget", budget: { amount: 50000, currency: "JPY", basis: "per_person" }, quote: "1人5万円くらい" });
+    const reduced = reduceConversationIntent(empty(), conditionDelta(perPerson, "73200000-0000-4000-8000-000000000001", empty()));
+    expect(reduced.overlay.facts[0]).toMatchObject({ target: "budget", precision: "approximate",
+      value: { kind: "money", amount: 50000, currency: "JPY", basis: "per_person" } });
+
+    const euro = admitConditionChange({ target: "budget",
+      budget: { amount: 500, currency: "EUR", basis: "trip" }, quote: "500ユーロ" }, "予算は500ユーロ");
+    expect(euro).toEqual({ target: "budget", budget: { amount: 500, currency: "EUR" }, quote: "500ユーロ" });
+
+    const currencyUnknown = admitConditionChange({ target: "budget",
+      budget: { amount: 50000, currency: "JPY", basis: "trip" }, quote: "5万くらい" }, "予算は5万くらい");
+    expect(currencyUnknown).toEqual({ target: "budget", budget: { amount: 50000 }, quote: "5万くらい" });
+    expect(() => admitConditionChange({ target: "budget",
+      budget: { amount: 60000, currency: "JPY" }, quote: "5万円" }, "予算は5万円")).toThrow("invalid_source");
+  });
+
+  it("retracts only the current budget and keeps budget what-if non-persistent", () => {
+    let overlay = empty();
+    const set = admitConditionChange({ target: "budget",
+      budget: { amount: 100000, currency: "JPY", basis: "trip" }, quote: "全部で10万円" }, "全部で10万円");
+    overlay = reduceConversationIntent(overlay, conditionDelta(set, "73200000-0000-4000-8000-000000000002", overlay)).overlay;
+    expect(overlay.facts[0]?.value).toEqual({ kind: "money", amount: 100000, currency: "JPY", basis: "trip" });
+
+    expect(admitTripScenario({ kind: "budget", budget: { amount: 200000, currency: "JPY", basis: "trip" }, quote: "もし20万円なら" },
+      "もし20万円ならどう？")).toEqual({ kind: "budget", budget: { amount: 200000, currency: "JPY" }, quote: "もし20万円なら" });
+    expect(overlay.intentRevision).toBe(1);
+
+    const cleared = admitConditionChange({ target: "budget", budget: null, quote: "予算は未定に戻して" }, "予算は未定に戻して");
+    overlay = reduceConversationIntent(overlay, conditionDelta(cleared, "73200000-0000-4000-8000-000000000003", overlay)).overlay;
+    expect(overlay.facts).toHaveLength(0);
+    expect(overlay.tombstones).toContainEqual(expect.objectContaining({ target: "budget" }));
   });
 
   it("identifies a final condition decision independently of SDK call order and quote selection", () => {
