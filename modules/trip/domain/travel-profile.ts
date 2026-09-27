@@ -1,3 +1,5 @@
+export type TravelCompanion = "solo" | "partner" | "friends" | "children" | "family";
+export type ChildAgeGroup = "baby" | "preschool" | "elementary" | "teen";
 export type TravelPreference =
   | "sea" | "mountain" | "nature" | "onsen" | "food" | "railway"
   | "history" | "cityWalk" | "animals" | "art" | "themePark" | "shopping";
