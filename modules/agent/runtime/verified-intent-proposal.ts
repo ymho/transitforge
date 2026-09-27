@@ -32,6 +32,7 @@ export function proposeVerifiedIntentRequest(input: {
     !(constraint.semantic?.facts.some((fact) => removalSlots.has(slotOf(fact)))));
   const boundChanges = accepted.filter((operation) => supportedSlots.has(slotOf(operation)) || partialSlots.has(slotOf(operation)) || removalSlots.has(slotOf(operation)) && (
     trip.request.constraints.some((constraint) => constraint.semantic?.facts.some((fact) => slotOf(fact) === slotOf(operation))) ||
+    (trip.request.partialConditions ?? []).some((fact) => slotOf(fact) === slotOf(operation)) ||
     effectiveIntent.suppressedBaseRefs.some((ref) => trip.request.constraints.some((constraint) => `constraint:${constraint.id}` === ref && targetOf(constraint) === operation.target))));
   if (!boundChanges.length) return undefined;
   constraints = [...constraints, ...projected];
