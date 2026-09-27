@@ -1,4 +1,4 @@
-name: Agent v2 / Dialogue pre-merge live
+name: Agent v2 / Native reasoning comparison
 on:
   push:
     branches: [feat/agent-v2-party-cohorts-729]
@@ -12,7 +12,7 @@ jobs:
   evaluate:
     if: github.ref == 'refs/heads/feat/agent-v2-party-cohorts-729'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 12
     environment: dev
     permissions:
       contents: read
@@ -33,7 +33,6 @@ jobs:
         run: |
           npm ci
           npm run typecheck:tools
-          node --test tools/deployment/*.test.mjs
           npm run test:agent:v2
       - name: Resolve dedicated evaluation role
         id: role
@@ -50,46 +49,18 @@ jobs:
           role-to-assume: ${{ steps.role.outputs.arn }}
           aws-region: ap-northeast-1
           mask-aws-account-id: true
-      - name: Three independent dialogue and output repetitions
+      - name: Same six history turns with native low reasoning
         env:
           AGENT_V2_LIVE: 'true'
-        shell: bash
+          NOVA_DIALOGUE_REASONING: low
         run: |
-          set -euo pipefail
-          mkdir -p .artifacts/issue736-live
-          {
-            echo '### Free dialogue and persisted-history verification'
-            echo "- Commit: $GITHUB_SHA"
-            echo "- Model: $MODEL_ID"
-            echo '- Dialogue: 7 turns x 6 model calls x 3 = at most 126 model calls.'
-            echo '- Original party suite: 22 turns x 6 model calls x 1 = at most 132 model calls.'
-            echo '- Each turn: 60 seconds. Synthetic owner-scoped state only, no production writes or external Travel Providers.'
-            echo '- All three CI gates passed for the parent production-code head 37e7b647.'
-          } >> "$GITHUB_STEP_SUMMARY"
-          status=0
-          for attempt in 1 2 3; do
-            npm run test:agent:v2:dialogue-live -- --reporter=default --reporter=json --outputFile=".artifacts/issue736-live/dialogue-${attempt}.json" || status=1
-          done
-          exit "$status"
-      - name: Original party details quality and recovery suite
-        if: success()
-        env:
-          AGENT_V2_LIVE: 'true'
-        run: npm run test:agent:v2:party-details-live -- --reporter=default --reporter=json --outputFile=.artifacts/issue736-live/party-details.json
-      - name: Publish bounded summary
-        if: always()
-        shell: bash
-        run: |
-          for file in .artifacts/issue736-live/*.json; do
-            if [[ -f "$file" ]]; then
-              echo "$(basename "$file")" >> "$GITHUB_STEP_SUMMARY"
-              jq '{success,numPassedTests,numFailedTests,numPendingTests}' "$file" >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
+          mkdir -p .artifacts/issue736-low
+          echo 'Comparison only: same model ID, prompt, Tools, six user turns, model maxTokens=1536, invocation output=4096, 6 calls/turn, 60s/turn. No production state or external Travel Providers.' >> "$GITHUB_STEP_SUMMARY"
+          npx vitest run --root . backend/agent-api/src/composition/strands-dialogue-history-live.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=.artifacts/issue736-low/low.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: issue736-live-${{ github.run_id }}
-          path: .artifacts/issue736-live
+          name: issue736-low-${{ github.run_id }}
+          path: .artifacts/issue736-low
           retention-days: 14
           if-no-files-found: warn
