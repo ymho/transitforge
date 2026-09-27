@@ -1,0 +1,103 @@
+name: Agent v2 / Native history integration
+on:
+  push:
+    branches: [feat/agent-v2-party-cohorts-729]
+    paths: [.github/workflows/issue729-integration.yml]
+permissions:
+  contents: read
+concurrency:
+  group: transitforge-strands-v2-live
+  cancel-in-progress: false
+jobs:
+  snapshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+          path: feature
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+          ref: 33d499cf9cdfd5b6c967dc0284a291476ca2916e
+          path: main-source
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+          ref: 9ac75713131a36ae92fd69e7f499ea015694e686
+          path: base-source
+      - name: Archive tracked public source only
+        run: |
+          mkdir -p /tmp/issue729-integration
+          for source in feature main-source base-source; do
+            git -C "$source" archive --format=tar HEAD > "/tmp/issue729-integration/$source.tar"
+            git -C "$source" ls-tree -r HEAD > "/tmp/issue729-integration/$source-tree.txt"
+            git -C "$source" rev-parse HEAD HEAD^{tree} > "/tmp/issue729-integration/$source-refs.txt"
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: issue729-integration-source
+          path: /tmp/issue729-integration
+          retention-days: 1
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-northeast-1
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      MODEL_ID: jp.amazon.nova-2-lite-v1:0
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Deterministic contracts before any model calls
+        run: |
+          npm ci
+          npm run typecheck:tools
+          node --test tools/deployment/*.test.mjs
+          npm run test:agent:v2
+          npx vitest run --root . backend/agent-api/src/adapters/strands-conversation-input.test.ts backend/agent-api/src/adapters/strands-condition-replay.test.ts
+      - name: Resolve evaluation role
+        id: role
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${AWS_DEPLOY_ROLE_ARN:?}"
+          account_id="${AWS_DEPLOY_ROLE_ARN#arn:aws:iam::}"
+          account_id="${account_id%%:*}"
+          [[ "$account_id" =~ ^[0-9]{12}$ ]]
+          echo "arn=arn:aws:iam::${account_id}:role/transitforge-dev-github-agent-eval" >> "$GITHUB_OUTPUT"
+      - uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5
+        with:
+          role-to-assume: ${{ steps.role.outputs.arn }}
+          aws-region: ap-northeast-1
+          mask-aws-account-id: true
+      - name: Three independent native-history repetitions
+        env:
+          AGENT_V2_LIVE: 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/native-history
+          echo 'Same baseline Nova 2 Lite; six mandatory history turns plus one isolated what-if; 3 independent repetitions; at most 126 calls; no production state or external travel Providers.' >> "$GITHUB_STEP_SUMMARY"
+          status=0
+          for attempt in 1 2 3; do
+            npx vitest run --root . backend/agent-api/src/composition/strands-dialogue-history-live.test.ts backend/agent-api/src/composition/strands-dialogue-output-live.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=".artifacts/native-history/repetition-${attempt}.json" || status=1
+          done
+          exit "$status"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: issue729-native-history-${{ github.run_id }}
+          path: .artifacts/native-history
+          retention-days: 7
+          if-no-files-found: warn
