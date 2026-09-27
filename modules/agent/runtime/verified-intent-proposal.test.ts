@@ -37,15 +37,21 @@ describe("verified intent proposal", () => {
     expect(proposal?.intentBinding?.changes).toHaveLength(1);
   });
 
-  it("does not promote a Conversation budget to Trip when currency or basis is unconfirmed", () => {
+  it("persists an incomplete budget as a partial Trip condition without inventing currency or basis", () => {
     const trip = createTrip(tripId, "旅", "2026-09-25T00:00:00Z");
     const noBasis = apply({ action: "set", target: "budget", value: { kind: "money", amount: 500, currency: "EUR" }, modality: "preferred" });
     const effectiveNoBasis = compileEffectiveIntent({ baseRequest: trip.request, baseSource: "trip", baseRevision: 0, overlay: noBasis.overlay });
-    expect(proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent: effectiveNoBasis, receipt: noBasis.receipt })).toBeUndefined();
+    const first = proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent: effectiveNoBasis, receipt: noBasis.receipt });
+    expect(first?.patches[0]).toMatchObject({ type: "request", request: { partialConditions: [
+      { target: "budget", value: { kind: "money", amount: 500, currency: "EUR" } },
+    ] } });
 
     const noCurrency = apply({ action: "set", target: "budget", value: { kind: "money", amount: 50000, basis: "per_person" }, modality: "preferred" });
     const effectiveNoCurrency = compileEffectiveIntent({ baseRequest: trip.request, baseSource: "trip", baseRevision: 0, overlay: noCurrency.overlay });
-    expect(proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent: effectiveNoCurrency, receipt: noCurrency.receipt })).toBeUndefined();
+    const second = proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent: effectiveNoCurrency, receipt: noCurrency.receipt });
+    expect(second?.patches[0]).toMatchObject({ type: "request", request: { partialConditions: [
+      { target: "budget", value: { kind: "money", amount: 50000, basis: "per_person" } },
+    ] } });
   });
 
   it("projects a fully confirmed budget basis without defaulting basis", () => {
