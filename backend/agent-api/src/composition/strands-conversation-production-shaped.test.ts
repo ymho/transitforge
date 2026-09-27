@@ -1,3 +1,4 @@
+import { createTrip } from "@raiquora/trip/trip";
 import { expect, it, vi } from "vitest";
 import { Model, type BaseModelConfig, type Message, type ModelStreamEvent, type StreamOptions } from "@strands-agents/sdk";
 import type { Evidence } from "@raiquora/agent/evidence-model";
@@ -86,7 +87,8 @@ it("runs an actual Strands model-tool-model loop inside the production-shaped Co
   const { verifier } = cognitoTokenFixture();
   const principal = await verifier.verify(token());
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const { tripId: _tripId, ...metadata } = stateMetadata();
+  const metadata = stateMetadata();
+  trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
   await state.conversations.create(principal, conversationId, metadata);
   const operation = vi.fn(async () => ({ statusCode: 200, body: { place: "京都", verified: true } }));
   const descriptor: AgentToolDescriptor = { name: "lookup_verified_place", description: "検証済みの場所情報を取得する", effect: "read",
@@ -125,7 +127,8 @@ it("publishes and replays a no-evidence greeting without calling Domain Tools or
   const { verifier } = cognitoTokenFixture();
   const principal = await verifier.verify(token());
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const { tripId: _tripId, ...metadata } = stateMetadata();
+  const metadata = stateMetadata();
+  trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
   await state.conversations.create(principal, conversationId, metadata);
   const weather = { search: vi.fn(async () => { throw new Error("weather must not run"); }) };
   const v1Model = { converse: vi.fn(async () => { throw new Error("V1 model must not run"); }) };
@@ -154,7 +157,8 @@ it("reports unavailable save through the Application boundary and replays it wit
   const { verifier } = cognitoTokenFixture();
   const principal = await verifier.verify(token());
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const { tripId: _tripId, ...metadata } = stateMetadata();
+  const metadata = stateMetadata();
+  trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
   await state.conversations.create(principal, conversationId, metadata);
   const weather = { search: vi.fn(async () => { throw new Error("weather must not run"); }) };
   const v1Model = { converse: vi.fn(async () => { throw new Error("V1 model must not run"); }) };
@@ -186,7 +190,8 @@ it("persists a V2 intent A-commit across answer failure and retries without reap
   const { verifier } = cognitoTokenFixture();
   const principal = await verifier.verify(token());
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const { tripId: _tripId, ...metadata } = stateMetadata();
+  const metadata = stateMetadata();
+  trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
   await state.conversations.create(principal, conversationId, metadata);
   const v1Model = { converse: vi.fn(async () => { throw new Error("V1 model must not run"); }) };
   const failingEngine = new StrandsAgentEngine({

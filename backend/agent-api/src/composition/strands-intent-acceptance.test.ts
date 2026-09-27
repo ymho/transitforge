@@ -1,3 +1,4 @@
+import { createTrip } from "@raiquora/trip/trip";
 import { expect, it, vi } from "vitest";
 import { Model, type BaseModelConfig, type Message, type ModelStreamEvent, type StreamOptions } from "@strands-agents/sdk";
 import type { Evidence } from "@raiquora/agent/evidence-model";
@@ -51,7 +52,8 @@ const answer = (executionId: string): Step => ({ tool: "strands_structured_outpu
 async function setup() {
   const principal = await cognitoTokenFixture().verifier.verify(token());
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const { tripId: _tripId, ...metadata } = stateMetadata();
+  const metadata = stateMetadata();
+  trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
   await state.conversations.create(principal, conversationId, metadata);
   const turns = new DynamoDbConversationTurnRepository("test-state", state.client);
   const v1Model = { converse: vi.fn(async () => { throw new Error("V1 must not run"); }) };

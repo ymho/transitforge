@@ -345,10 +345,6 @@ aiGuideController = configureAiGuidePanel(
       try { tripWorkspaceController.preview(proposal); tripWorkspace.show("trip"); }
       catch { aiGuideController.notify("旅程が変わったため費用案を適用できません。現在の旅程で再予測してください。"); }
     },
-    onConsultationRequestProposal: (proposal) => {
-      try { consultationScreen.previewConsultationProposal(proposal); }
-      catch { aiGuideController.notify("相談の条件が変わったため、この案は適用できません。現在の条件で変更案を作り直してください。"); }
-    },
     onTripUpdateProposal: (proposal) => {
       if (!tripWorkspaceController.current()) return;
       try { tripWorkspaceController.preview(proposal); tripWorkspace.show("trip"); }
@@ -417,7 +413,9 @@ const tripNavigation = createTripConsultationNavigation({
   show: (view) => { returnToConversation(); aiGuideController.open(); tripWorkspace.show(view); },
   sessionVersion: () => serverTripClient.sessionVersion(),
 });
+let pendingStart: { tripId: string; prompt: string; account: number | undefined } | undefined;
 const resetConsultation = () => {
+  pendingStart = undefined;
   tripNavigation.cancel(); conversationUi.clear();
   activeConversationSession = { ...unsignedConversation, id: `ui-new-${crypto.randomUUID()}` };
   serverAgentSession.contextChanged();
@@ -429,27 +427,37 @@ const startNewConsultation = async (prompt: string) => {
   if (!isSignedIn()) throw new Error("Authentication required");
   if (!canLeaveConditions()) throw new Error("Navigation cancelled");
   const navigation = tripNavigation.cancel(), account = serverTripClient.sessionVersion();
-  const tripId = crypto.randomUUID(), now = new Date().toISOString();
-  await startTripConsultation({
-    prompt, tripId, now,
-    isCurrent: () => isSignedIn() && navigation === tripNavigation.version() && account === serverTripClient.sessionVersion(),
-    createTrip: (trip) => serverTripClient.create(trip),
-    archiveTrip: (id) => serverTripClient.archive(id),
-    createConversation: (metadata) => conversationUi.create(metadata, false),
-    activate: async (conversationId) => {
+  const attempt = pendingStart?.prompt === prompt && pendingStart.account === account
+    ? pendingStart : { tripId: crypto.randomUUID(), prompt, account };
+  pendingStart = attempt;
+  const isCurrent = () => isSignedIn() && navigation === tripNavigation.version() && account === serverTripClient.sessionVersion();
+  const started = await startTripConsultation({
+    prompt, tripId: attempt.tripId, isCurrent,
+    start: value => serverTripClient.startConsultation(value),
+    activate: async (conversationId, tripId) => {
+      const session = await conversationUi.findForTrip(tripId);
+      if (!isCurrent()) throw new Error("Consultation navigation changed");
+      if (session?.id !== conversationId) throw new Error("Trip history read-back unavailable");
       await activateConversation(conversationId);
-      await tripWorkspaceController.source()?.retry?.();
-      await serverTripList.refresh();
+      if (!isCurrent()) throw new Error("Consultation navigation changed");
+      const source = tripWorkspaceController.source();
+      if (!source) throw new Error("Trip source unavailable");
+      await source.retry?.();
+      if (!isCurrent()) throw new Error("Consultation navigation changed");
     },
-    current: () => ({ conversationId: activeConversationSession.id, tripId: activeConversationSession.tripId }),
+    current: () => ({ conversationId: activeConversationSession.id, tripId: tripWorkspaceController.current()?.id }),
     submit: value => aiGuideController.ask(value),
   });
+  pendingStart = undefined;
+  void serverTripList.refresh().catch(() => undefined);
+  return { tripId: started.trip.id };
 };
 let initialAuthenticationNotification = true;
 let authenticationGeneration = 0;
 currentAuthentication().subscribe(() => {
   if (initialAuthenticationNotification) { initialAuthenticationNotification = false; return; }
   const generation = ++authenticationGeneration;
+  pendingStart = undefined;
   tripNavigation.cancel(); serverTripReferences.clear();
   conversationUi.clear(); profileUi.clear(); activeConversationSession = unsignedConversation;
   aiGuideController.switchSession(unsignedConversation.id);

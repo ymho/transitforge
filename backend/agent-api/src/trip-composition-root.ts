@@ -1,3 +1,4 @@
+import { DynamoDbTripConsultationRepository } from "./adapters/dynamodb-trip-consultation-repository.js";
 import { DynamoDbTripRepository } from "./adapters/dynamodb-trip-repository.js";
 import { TripApplication } from "./usecases/trip-application.js";
 import { DynamoDbReservationRepository } from "./adapters/dynamodb-reservation-repository.js";
@@ -18,7 +19,8 @@ export function createAuthorizedTripApplications(table: string, stateTable?: str
   const reservations = new ReservationApplication(trips, new DynamoDbReservationRepository(table));
   const sharing = new TripSharingApplication(trips, sharingRepository, new CryptographicShareSecret(), sharingRepository, undefined, reservations);
   return { sharing, repository: trips, trips: new TripApplication(trips, trips, undefined, reservations, undefined, sharing,
-    stateTable ? new DynamoDbConversationTurnRepository(stateTable) : undefined) };
+    stateTable ? new DynamoDbConversationTurnRepository(stateTable) : undefined,
+    stateTable ? new DynamoDbTripConsultationRepository(table, stateTable) : undefined) };
 }
 
 /** IAM/internal worker composition only. Every operation still requires an explicit trusted owner. */

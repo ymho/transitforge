@@ -1,3 +1,4 @@
+import { DynamoDbTripRepository } from "./adapters/dynamodb-trip-repository.js";
 import { createCognitoAccessTokenVerifier } from "./adapters/cognito-access-token-verifier.js";
 import { DynamoDbConversationRepository } from "./adapters/dynamodb-conversation-repository.js";
 import { DynamoDbProfileRepository } from "./adapters/dynamodb-profile-repository.js";
@@ -21,7 +22,7 @@ export function createPersonalStateApiHandler(options: {
   if (!options.stateTable || !options.tripTable) throw new Error("Missing personal state API configuration");
   const authenticate = createHttpPrincipalResolver(options.verifier ?? createCognitoAccessTokenVerifier(options.auth), options.auth.requiredScopes);
   const conversations = createConversationApiHandler(new ConversationApplication(new DynamoDbConversationRepository(options.stateTable),
-    new DynamoDbItineraryCandidateRepository(options.tripTable)), authenticate);
+    new DynamoDbItineraryCandidateRepository(options.tripTable), undefined, new DynamoDbTripRepository(options.tripTable)), authenticate);
   const profile = createProfileApiHandler(new ProfileApplication(new DynamoDbProfileRepository(options.stateTable)), authenticate);
   return (event: LambdaHttpEvent, context?: LambdaContext) => {
     if (event.rawPath && event.path && event.rawPath !== event.path) return Promise.resolve(jsonResponse(404, { error: "not-found" }));

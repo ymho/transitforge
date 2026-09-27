@@ -1,3 +1,4 @@
+import { createTrip } from "@raiquora/trip/trip";
 import { expect, it, vi } from "vitest";
 import type { ConversationModel, ConversationModelRequest } from "../ports/conversation-model.js";
 import { stateDynamoFixture, stateA, conversationId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
@@ -11,7 +12,8 @@ const sourceExcerpt = "出雲大社は出雲市にあり、参拝と門前町散
 
 it("reuses a published candidate source after an unrelated follow-up Tool call", async () => {
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const { tripId: _tripId, ...metadata } = stateMetadata();
+  const metadata = stateMetadata();
+  trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), stateA.subject);
   await state.conversations.create(stateA, conversationId, { ...metadata, scope: "trip" });
   const requests: ConversationModelRequest[] = [];
   const responses = [toolCall("source-1", "discover_source"), finalPlan(), toolCall("lodging-1", "check_lodging"), finalPlan()];
@@ -42,7 +44,8 @@ it("reuses a published candidate source after an unrelated follow-up Tool call",
 
 it("keeps a verified draft usable when the next turn supplies tomorrow's departure", async () => {
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const { tripId: _tripId, ...metadata } = stateMetadata();
+  const metadata = stateMetadata();
+  trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), stateA.subject);
   await state.conversations.create(stateA, conversationId, { ...metadata, scope: "trip" });
   let providerUnavailable = false;
   const model: ConversationModel = { converse: vi.fn(async (request) => {

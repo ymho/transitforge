@@ -56,15 +56,14 @@ function fake(page: { items: ReturnType<typeof conversation>[] }) {
     history: async () => ({ items: [] }), update: async () => conversation("updated"), delete: async () => ({ complete: true }),
   };
 }
-it("finds a Trip conversation beyond the first page, with fresh identity, without selecting it", async () => {
-  const first = { ...conversation("same-name-a"), tripId: "trip-a" };
-  const target = { ...conversation("same-name-b"), tripId: "trip-b" };
-  const client = { ...fake({ items: [first] }), list: vi.fn(async (page?: { after?: string }) => page?.after ? { items: [target] } : { items: [first], nextAfter: "next" }), get: async () => target };
-  const controller = new ConversationUiController(client);
-  await controller.hydrate();
-  expect((await controller.findForTrip("trip-b"))?.id).toBe(target.conversationId);
+it("looks up a Trip's history by its immutable identity without scanning or selecting other chats", async () => {
+  const first = conversation("first"), id = "75300000-0000-4000-8000-000000000002";
+  const target = { ...conversation(id), tripId: id };
+  const client = { ...fake({ items: [first] }), list: vi.fn(async () => ({ items: [first] })), get: vi.fn(async () => target) };
+  const controller = new ConversationUiController(client); await controller.hydrate(); client.list.mockClear();
+  expect((await controller.findForTrip(id))?.id).toBe(id);
+  expect(client.get).toHaveBeenCalledExactlyOnceWith(id); expect(client.list).not.toHaveBeenCalled();
   expect(controller.active()?.id).toBe(first.conversationId);
-  expect(client.list).toHaveBeenCalledWith({ limit: 50, after: "next" });
 });
 it("creating a navigation candidate does not switch the selected conversation", async () => {
   const controller = new ConversationUiController(fake({ items: [conversation("a")] }));

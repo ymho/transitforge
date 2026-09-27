@@ -53,29 +53,16 @@ export class ConversationUiController {
     if (select) this.activeId = session.id; this.notify();
     return structuredClone(session);
   }
-  /** Search every server page; a matching title never establishes a Trip reference. */
+  /** A Trip has one history identity in the server namespace. No chat-list scan. */
   async findForTrip(tripId: string): Promise<ConversationSession | undefined> {
     this.requireAuthentication();
-    const generation = this.generation;
-    let after: string | undefined;
-    const cursors = new Set<string>();
-    do {
-      const page = await this.client.list({ limit: 50, ...(after ? { after } : {}) });
-      if (generation !== this.generation) throw new Error("Conversation session changed");
-      for (const match of page.items.filter((value) => value.tripId === tripId)) {
-        const fresh = await this.client.get(match.conversationId);
-        if (generation !== this.generation) throw new Error("Conversation session changed");
-        if (fresh?.tripId === tripId) {
-          const session = toSession(fresh);
-          this.sessions = [...this.sessions.filter((s) => s.id !== session.id), session];
-          return structuredClone(session);
-        }
-      }
-      after = page.nextAfter;
-      if (after && cursors.has(after)) throw new Error("Repeated Conversation cursor");
-      if (after) cursors.add(after);
-    } while (after);
-    return undefined;
+    const generation = this.generation, fresh = await this.client.get(tripId);
+    if (generation !== this.generation) throw new Error("Conversation session changed");
+    if (!fresh) return undefined;
+    if (fresh.tripId !== tripId || fresh.conversationId !== tripId) throw new Error("Conversation reference changed");
+    const session = toSession(fresh);
+    this.sessions = [...this.sessions.filter(item => item.id !== session.id), session];
+    return structuredClone(session);
   }
   async update(id: string, metadata: ServerConversationMetadata): Promise<ConversationSession> {
     this.requireAuthentication();

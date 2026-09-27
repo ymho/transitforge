@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { TrustedPrincipal } from "../contracts/trusted-principal.js";
 import { StateError, metadata, messageInputs, requireStatePrincipal, revision, stateId, pageOptions, type PageOptions } from "../contracts/server-state.js";
 import type { ConversationRepository } from "../ports/conversation-repository.js";
@@ -8,10 +7,27 @@ import type { ConversationCandidateResourceRepository } from "../ports/itinerary
 export class ConversationApplication {
   constructor(private readonly repository: ConversationRepository,
     private readonly candidateResources: ConversationCandidateResourceRepository,
-    private readonly newId: () => string = randomUUID) {}
+    private readonly newId: (tripId: string) => string = tripId => tripId,
+    private readonly trips?: Pick<import("../ports/trip-repository.js").TripRepository, "get">) {}
   async create(principal: TrustedPrincipal, input: unknown) {
     requireStatePrincipal(principal);
-    return this.repository.create(principal, this.newId(), metadata(input));
+    const fields = metadata(input), owner = structuredClone(principal);
+    if (!this.trips) throw new StateError("unavailable");
+    if (!await this.trips.get(owner, fields.tripId)) throw new StateError("not-found");
+    const id = this.newId(fields.tripId); stateId(id);
+    const existing = await this.repository.get(owner, id);
+    if (existing) {
+      if (existing.tripId !== fields.tripId) throw new StateError("conflict");
+      return existing;
+    }
+    try { return await this.repository.create(owner, id, fields); }
+    catch (error) {
+      // Concurrent creation and ambiguous transport completion use the SAME identity.
+      // Never overwrite, re-parent, resurrect a tombstone or create another history.
+      const saved = await this.repository.get(owner, id);
+      if (saved?.tripId === fields.tripId) return saved;
+      throw error;
+    }
   }
   async get(principal: TrustedPrincipal, conversationId: string) {
     requireStatePrincipal(principal); stateId(conversationId);

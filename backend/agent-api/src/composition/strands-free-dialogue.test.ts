@@ -1,3 +1,4 @@
+import { createTrip } from "@raiquora/trip/trip";
 import { expect, it } from "vitest";
 import { Agent, Model, AfterToolCallEvent, ModelMessageEvent, type BaseModelConfig, type Message, type ModelStreamEvent } from "@strands-agents/sdk";
 import { agentV2StructuredOutputSchema } from "@raiquora/agent/agent-v2-reply";
@@ -58,7 +59,8 @@ class DialogueModel extends Model<BaseModelConfig> {
 async function runDialogue(model?: Model<BaseModelConfig>) {
   const principal = await cognitoTokenFixture().verifier.verify(token());
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const { tripId: _tripId, ...metadata } = stateMetadata();
+  const metadata = stateMetadata();
+  trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
   await state.conversations.create(principal, conversationId, metadata);
   const profile = await state.profiles.get(principal);
   let calls = 0, writes = 0;

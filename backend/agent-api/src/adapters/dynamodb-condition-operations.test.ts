@@ -14,7 +14,7 @@ async function setup() {
   const clock = { now: () => new Date(time) };
   const fresh = () => new DynamoDbConversationTurnRepository("test-state", f.client, clock);
   const turns = fresh();
-  const { tripId: _trip, ...metadata } = stateMetadata();
+  const metadata = stateMetadata();
   await f.conversations.create(stateA, conversationId, metadata);
   const begun = await turns.beginTurn(identity, request);
   if (begun.state !== "started") throw new Error("Expected a new turn");
@@ -175,7 +175,7 @@ describe("condition-operation acceptance and replay", () => {
   });
   it("does not replay a receipt transplanted from a different turn", async () => {
     const f = await setup(); await f.turns.acceptCondition(identity, f.lease, destination);
-    const key = `OWNER#${stateA.subject}/TURN#${conversationId}#${turnId}`;
+    const key = `OWNER#${stateA.subject}/TRIP_TURN#${conversationId}#${turnId}`;
     const item = f.records.get(key)!; const payload = JSON.parse(item.payload.S!);
     payload.conditionUpdates.operations[0].receipt.mutationId = `condition:${secondId}:destination`;
     item.payload = { S: JSON.stringify(payload) };

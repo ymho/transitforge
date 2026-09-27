@@ -18,7 +18,7 @@ function validMetadata(value: unknown): value is ServerConversationMetadata {
 }
 function validConversation(value: unknown): value is ServerConversation {
   const v = value as Partial<ServerConversation>;
-  return validMetadata(value) && typeof v.conversationId === "string" && uuid.test(v.conversationId) && typeof v.createdAt === "string" && typeof v.updatedAt === "string" && Number.isSafeInteger(v.revision) && Number.isSafeInteger(v.messageCount);
+  return !!v && Object.keys(v).every(key => ["title", "scope", "summary", "resolvedTopics", "pendingTopics", "tripId", "conversationId", "createdAt", "updatedAt", "revision", "messageCount"].includes(key)) && validMetadata(value) && typeof v.conversationId === "string" && uuid.test(v.conversationId) && typeof v.createdAt === "string" && typeof v.updatedAt === "string" && Number.isSafeInteger(v.revision) && Number.isSafeInteger(v.messageCount);
 }
 function page<T>(value: unknown, item: (value: unknown) => value is T): ServerPage<T> {
   const v = value as { items?: unknown; nextAfter?: unknown };

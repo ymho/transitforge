@@ -9,9 +9,10 @@ import { stateDynamoFixture, stateA, conversationId as id, secondId, stateMetada
 
 describe("verified principal → applications → DynamoDB", () => {
   it("uses #484 identity for all account isolation and rejects forged owner input", async () => {
-    const auth = cognitoTokenFixture(), f = stateDynamoFixture();
+    const auth = cognitoTokenFixture(), f = stateDynamoFixture(), trips = tripDynamoFixture();
     const a = await auth.verifier.verify(token()), b = await auth.verifier.verify(token({ sub: "user-b" }));
-    const conversations = new ConversationApplication(f.conversations, noCandidateResources, () => id), profiles = new ProfileApplication(f.profiles, f.clock);
+    trips.seed(createTrip(secondId, "旅", "2026-09-18T00:00:00Z"), a.subject);
+    const conversations = new ConversationApplication(f.conversations, noCandidateResources, () => id, trips.repository), profiles = new ProfileApplication(f.profiles, f.clock);
     const create = authenticatedApplication(auth.verifier, [scope], (principal, input: unknown) => conversations.create(principal, input));
     const saved = await create(token(), stateMetadata());
     expect(saved.ownerSubject).toBe(a.subject);
@@ -51,27 +52,44 @@ describe("verified principal → applications → DynamoDB", () => {
     const trip = createTrip(secondId, "独立した旅程", "2026-09-18T00:00:00Z");
     await trips.repository.create(principal, trip);
     const original = structuredClone(trips.records), commandCount = trips.commands.length;
-    const app = new ConversationApplication(f.conversations, noCandidateResources, () => id), profile = new ProfileApplication(f.profiles, f.clock);
+    const app = new ConversationApplication(f.conversations, noCandidateResources, () => id, trips.repository), profile = new ProfileApplication(f.profiles, f.clock);
     await app.create(principal, stateMetadata());
     await profile.update(principal, stateProfile(), null);
     await profile.update(principal, { ...stateProfile(), interests: ["mountain"] }, 0);
     await profile.delete(principal, 1);
     await app.delete(principal, id, 0);
     expect(trips.records).toEqual(original);
-    expect(trips.commands).toHaveLength(commandCount);
+    expect(trips.commands.slice(commandCount).every(command => (command as object).constructor.name === "GetItemCommand")).toBe(true);
   });
   it("reports deletion complete only after cross-table candidate cleanup and resumes from the tombstone", async () => {
-    const f = stateDynamoFixture(); let attempts = 0;
+    const f = stateDynamoFixture(), trips = tripDynamoFixture();
+    trips.seed(createTrip(secondId, "旅", "2026-09-18T00:00:00Z"), stateA.subject);
+    let attempts = 0;
     const candidates = { purgeConversation: async (principal: { subject: string }, conversationId: string) => {
       expect(principal.subject).toBe(stateA.subject); expect(conversationId).toBe(id); attempts++;
       if (attempts === 1) throw Object.assign(new Error("candidate table unavailable"), { code: "unavailable" });
       return { complete: attempts >= 3 };
     } };
-    const app = new ConversationApplication(f.conversations, candidates, () => id);
+    const app = new ConversationApplication(f.conversations, candidates, () => id, trips.repository);
     await app.create(stateA, stateMetadata());
     await expect(app.delete(stateA, id, 0)).rejects.toMatchObject({ code: "unavailable" });
     expect(await f.conversations.get(stateA, id)).toBeUndefined();
     expect(await app.delete(stateA, id, 0)).toEqual({ complete: false });
     expect(await app.delete(stateA, id, 0)).toEqual({ complete: true });
   });
+});
+
+it("opens one history per owned Trip, replays lost create responses, and never moves history to a different Trip", async () => {
+  const f = stateDynamoFixture(), trips = tripDynamoFixture();
+  trips.seed(createTrip(secondId,"旅","2026-09-18T00:00:00Z"),stateA.subject);
+  const app = new ConversationApplication(f.conversations,noCandidateResources,undefined,trips.repository);
+  f.faults.lostResponse = true;
+  const created = await app.create(stateA,stateMetadata());
+  expect(created.conversationId).toBe(secondId);
+  expect(await app.create(stateA,{ ...stateMetadata(), title: "再表示" })).toEqual(created);
+  expect((await app.list(stateA)).items).toHaveLength(1);
+  await expect(app.update(stateA,secondId,0,{ ...stateMetadata(), tripId: id })).rejects.toMatchObject({ code: "invalid-input" });
+  expect((await app.get(stateA,secondId)).tripId).toBe(secondId);
+  await expect(app.create({ ...stateA, subject: `identity-v1:${"b".repeat(64)}` },stateMetadata())).rejects.toMatchObject({ code: "not-found" });
+  await expect(app.create(stateA,{ ...stateMetadata(), tripId: id })).rejects.toMatchObject({ code: "not-found" });
 });

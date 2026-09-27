@@ -1,3 +1,4 @@
+import { createTrip } from "@raiquora/trip/trip";
 import { expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -130,7 +131,8 @@ class MeteredDiagnosticModel extends Model<BaseModelConfig> {
 
 it("actual SDK usage reaches the Conversation diagnostic sink and CLI on a failed turn, never history", async () => {
   const model = new MeteredDiagnosticModel(), state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const { tripId: _tripId, ...metadata } = stateMetadata();
+  const metadata = stateMetadata();
+  trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), stateA.subject);
   await state.conversations.create(stateA, conversationId, metadata);
   const record = vi.fn(async (_event: AgentDiagnosticEvent) => undefined);
   const engine = new StrandsAgentEngine({ modelId: "unused", region: "ap-northeast-1", systemPrompt: "test",

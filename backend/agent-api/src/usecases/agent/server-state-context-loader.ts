@@ -59,7 +59,7 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
       savedWorkingState.target.tripId === tripId && (savedWorkingState.target.tripRevision === undefined || savedWorkingState.target.tripRevision === trip?.revision))
       ? savedWorkingState : undefined;
     const taskContext = conversationId || trip ? deriveAgentTaskContext({ conversationId, trip: trip ? { id: trip.id, revision: trip.revision,
-      lifecycleState: trip.lifecycleState } : undefined,
+      lifecycleState: trip.lifecycleState, planningState: trip.planningState } : undefined,
       requestRevision: trip?.revision,
       workingStateRevision: workingState?.revision, previousOutcome: workingState?.lastOutcome?.outcome }) : undefined;
     const receiptCandidate = before !== undefined && workingState?.sourceUserSequence === before

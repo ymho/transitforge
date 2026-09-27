@@ -12,8 +12,8 @@ import { StateError, exactObject, metadata, messageInputs, pageOptions, revision
 import type { ConversationRepository } from "../ports/conversation-repository.js";
 import { DynamoStateStore, type StateDynamoClient, type StateEnvelope } from "./dynamodb-state-store.js";
 
-const conversationKey = (id: string) => { stateId(id); return `CONVERSATION#${id}`; };
-const messagePrefix = (id: string) => { stateId(id); return `MESSAGE#${id}#`; };
+const conversationKey = (id: string) => { stateId(id); return `TRIP_CONVERSATION#${id}`; };
+const messagePrefix = (id: string) => { stateId(id); return `TRIP_MESSAGE#${id}#`; };
 const sequenceKey = (sequence: number) => String(sequence).padStart(12, "0");
 function sequence(value: unknown): asserts value is number {
   if (!Number.isSafeInteger(value) || Number(value) < 0 || Number(value) > 999_999_999_999) throw new StateError("invalid-input");
@@ -59,14 +59,14 @@ export class DynamoDbConversationRepository implements ConversationRepository {
     this.store.owner(principal);
     const { limit, after } = pageOptions(options);
     if (after !== undefined) stateId(after);
-    const result = await this.store.query(principal, "CONVERSATION#", limit, after ? conversationKey(after) : undefined);
+    const result = await this.store.query(principal, "TRIP_CONVERSATION#", limit, after ? conversationKey(after) : undefined);
     const items = result.items.flatMap((item) => {
-      const id = item.sk.S!.slice("CONVERSATION#".length);
+      const id = item.sk.S!.slice("TRIP_CONVERSATION#".length);
       try { stateId(id); } catch { throw new StateError("unavailable"); }
       const value = this.decode(principal, id, this.store.decode(item, this.store.owner(principal), conversationKey(id)));
       return value ? [value] : [];
     });
-    const nextAfter = result.next?.slice("CONVERSATION#".length);
+    const nextAfter = result.next?.slice("TRIP_CONVERSATION#".length);
     if (nextAfter) { try { stateId(nextAfter); } catch { throw new StateError("unavailable"); } }
     return { items, ...(nextAfter ? { nextAfter } : {}) };
   }
@@ -132,9 +132,8 @@ export class DynamoDbConversationRepository implements ConversationRepository {
   async update(principal: TrustedPrincipal, id: string, expected: number, input: ConversationMetadata) {
     this.store.owner(principal);
     const fields = metadata(input), current = await this.current(principal, id, expected);
-    // Whole metadata replacement deliberately allows tripId to be detached by omission.
-    const { tripId: _tripId, draftRequest: _draftRequest, ...previous } = current;
-    return this.write(principal, current, { ...previous, ...fields, updatedAt: this.now(current.updatedAt), revision: expected + 1 });
+    if (fields.tripId !== current.tripId) throw new StateError("invalid-input");
+    return this.write(principal, current, { ...current, ...fields, updatedAt: this.now(current.updatedAt), revision: expected + 1 });
   }
   async delete(principal: TrustedPrincipal, id: string, expected: number) {
     this.store.owner(principal); revision(expected);
@@ -149,7 +148,7 @@ export class DynamoDbConversationRepository implements ConversationRepository {
     // Every conversation-derived resource is owner scoped and begins with one of these
     // prefixes. Purge one bounded page per kind; a retry resumes from the tombstone.
     // Trip/Profile/Reservation are independent resources and deliberately stay intact.
-    for (const prefix of [messagePrefix(id), `TURN#${id}#`, `WORKING#${id}`]) {
+    for (const prefix of [messagePrefix(id), `TRIP_TURN#${id}#`, `TRIP_WORKING#${id}`]) {
       const page = await this.store.query(principal, prefix, 50);
       await this.store.purge(principal, page.items.map((item) => item.sk.S!));
       if (page.next !== undefined) return { complete: false };

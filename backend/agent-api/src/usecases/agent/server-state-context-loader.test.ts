@@ -11,15 +11,16 @@ import { tripDynamoFixture } from "../../adapters/trip-dynamodb.fixture.js";
 
 function setup() {
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const conversations = new ConversationApplication(state.conversations, noCandidateResources, () => id), profiles = new ProfileApplication(state.profiles, state.clock);
+  trips.seed(trip(), a.subject);
+  const conversations = new ConversationApplication(state.conversations, noCandidateResources, () => id, trips.repository), profiles = new ProfileApplication(state.profiles, state.clock);
   const history = vi.spyOn(conversations, "history");
   const load = createServerStateContextLoader({ conversations, profiles, trips: trips.repository });
-  return { ...state, trips, conversations, profiles, history, load };
+  return { ...state, conversationsRaw: state.conversations, trips, conversations, profiles, history, load };
 }
-const metadata = () => ({ ...stateMetadata(), tripId: undefined });
+const metadata = () => stateMetadata();
 const trip = () => ({ ...createTrip(tripId, "採用した旅", "2026-09-18T00:00:00Z", [
   { id: "stay", title: "宿泊", type: "stay" as const, schedule: { type: "unscheduled" as const }, selection: { status: "unselected" as const } },
-]), request: { goal: "鉄道で旅行", constraints: [], assumptions: [] } });
+]), planningState: "itinerary_refinement" as const, request: { goal: "鉄道で旅行", constraints: [], assumptions: [] } });
 
 describe("Server State Context Loader", () => {
   it("restores metadata/history, existing profile projection and owner Trip without writes", async () => {
@@ -51,7 +52,7 @@ describe("Server State Context Loader", () => {
   });
   it("checks owner for explicit Trips and references in the caller's own conversation", async () => {
     const f = setup(); await f.trips.repository.create(a, trip());
-    await f.conversations.create(b, stateMetadata());
+    await f.conversationsRaw.create(b, id, stateMetadata());
     for (const request of [{ principal: b, tripId }, { principal: b, tripId: id }, { principal: b, conversationId: id }]) {
       await expect(f.load(request)).rejects.toMatchObject({ code: "not-found", message: "not-found" });
     }
@@ -60,7 +61,7 @@ describe("Server State Context Loader", () => {
   it("rejects contradictory Trip references before looking up either Trip", async () => {
     const f = setup(); await f.conversations.create(a, stateMetadata());
     await expect(f.load({ principal: a, conversationId: id, tripId: id })).rejects.toMatchObject({ code: "invalid-input" });
-    expect(f.trips.commands).toHaveLength(0);
+    expect(f.trips.commands).toHaveLength(1); // creation authorization only; contradictory input performs no Trip read
   });
   it("keeps A/B Profile V3 isolated and preserves absence", async () => {
     const f = setup();
@@ -81,10 +82,12 @@ describe("Server State Context Loader", () => {
     await f.conversations.create(a, metadata());
     expect((await f.load({ principal: a, conversationId: id, tripId })).currentTrip?.title).toBe("採用した旅");
   });
-  it("keeps a fresh conversation in discovery while exposing only an empty proposal base", async () => {
-    const f = setup(); await f.conversations.create(a, metadata());
+  it("keeps a newly created inspiration Trip in discovery without a separate proposal base", async () => {
+    const f = setup(); f.trips.seed(createTrip(tripId, "検討中の旅", "2026-09-18T00:00:00Z"), a.subject);
+    await f.conversations.create(a, metadata());
     const context = await f.load({ principal: a, conversationId: id });
-    expect(context.consultationRequest).toEqual({ constraints: [], assumptions: [] });
+    expect(context.consultationRequest).toBeUndefined();
+    expect(context.currentTrip?.request).toEqual({ constraints: [], assumptions: [] });
     expect(context.taskContext).toMatchObject({ phase: "discovery", requestRevision: 0 });
   });
   it("does not promote unknown/no-Trip UI items or other UI state", async () => {
@@ -118,7 +121,7 @@ describe("Server State Context Loader", () => {
     expect(f.history.mock.calls.length).toBeGreaterThan(1); expect(f.history.mock.calls.length).toBeLessThanOrEqual(12);
     expect(JSON.stringify(context.conversation).length).toBeLessThanOrEqual(12_000);
     const queries = f.commands.filter((c) => c instanceof QueryCommand);
-    expect(queries[0].input.ExclusiveStartKey?.sk.S).toBe(`MESSAGE#${id}#000000000008`);
+    expect(queries[0].input.ExclusiveStartKey?.sk.S).toBe(`TRIP_MESSAGE#${id}#000000000008`);
   });
   it("fails closed on conversation changes across metadata/history reads", async () => {
     const f = setup(); await f.conversations.create(a, metadata()); await f.conversations.append(a, id, 0, [{ role: "user", text: "履歴" }]);
@@ -152,20 +155,15 @@ it("loads only the bounded history before the persisted user message, even on re
   expect(f.history).toHaveBeenCalledExactlyOnceWith(a, id, { after: "000000000002", limit: 12 });
 });
 
-it("loads saved consultation conditions without manufacturing an adopted Trip and clears them on handoff", async () => {
-  const f = setup(), draftRequest = { goal: "温泉", constraints: [], assumptions: [] };
-  await f.conversations.create(a, { ...metadata(), draftRequest });
-  const context = await f.load({ principal: a, conversationId: id });
-  expect(context.currentTrip).toBeUndefined(); expect(context.consultationRequest).toEqual(draftRequest);
-  expect(context.taskContext).toMatchObject({ phase: "draft", requestRevision: 0,
-    target: { kind: "conversation", conversationId: id } });
-  const decision = buildAgentDecisionContext({ executionId: "test", feature: "concierge", userRequest: "候補を相談", context }, []);
-  expect(decision.requestSource).toBe("conversation_draft"); expect(decision.persistedTripRequest).toEqual(draftRequest);
-  expect(agentDecisionContextText(decision)).toContain("conversation_draft");
-  await f.trips.repository.create(a, trip());
-  await f.conversations.update(a, id, 0, stateMetadata());
-  const linked = await f.load({ principal: a, conversationId: id });
-  expect(linked.consultationRequest).toBeUndefined(); expect(linked.currentTrip?.title).toBe("採用した旅");
+it("loads Trip conditions on first use and after a separate history revision without another condition store", async () => {
+  const f = setup(); await f.conversations.create(a, stateMetadata());
+  const first = await f.load({ principal: a, conversationId: id });
+  expect(first.consultationRequest).toBeUndefined(); expect(first.currentTrip?.request?.goal).toBe("鉄道で旅行");
+  await f.conversations.append(a, id, 0, [{ role: "user", text: "続きを" }]);
+  const next = await f.load({ principal: a, conversationId: id });
+  expect(next.currentTrip).toEqual(first.currentTrip);
+  expect(next.taskContext?.requestRevision).toBe(0);
+  expect(next.conversation?.messages).toEqual([{ role: "user", text: "続きを" }]);
 });
 it("restores bounded Working State through the production loader", async () => {
   const f = setup(); await f.conversations.create(a, metadata());

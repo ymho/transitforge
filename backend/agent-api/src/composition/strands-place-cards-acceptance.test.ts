@@ -1,3 +1,4 @@
+import { createTrip } from "@raiquora/trip/trip";
 import { expect, it, vi } from "vitest";
 import { Model, type BaseModelConfig, type Message, type ModelStreamEvent, type StreamOptions } from "@strands-agents/sdk";
 import { StrandsAgentEngine } from "../adapters/strands-agent-engine.js";
@@ -55,7 +56,8 @@ async function setup(empty = false) {
   const { verifier } = cognitoTokenFixture();
   const principal = await verifier.verify(token());
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const { tripId: _tripId, ...metadata } = stateMetadata();
+  const metadata = stateMetadata();
+  trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
   await state.conversations.create(principal, conversationId, metadata);
   const turns = new DynamoDbConversationTurnRepository("test-state", state.client);
   const sourceUrl = "https://example.org/places/garden";

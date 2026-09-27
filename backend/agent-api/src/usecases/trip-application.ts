@@ -16,7 +16,8 @@ export class TripApplication {
   constructor(private readonly trips: TripRepository, private readonly references: TripConversationReferences,
     private readonly clock: TripClock = { now: () => new Date() }, private readonly reservations?: ReservationReader,
     private readonly feasibility?: TripFeasibilityReader, private readonly authorization?: TripAuthorizer,
-    private readonly intentAdoptions?: IntentProposalAdoptionPort) {}
+    private readonly intentAdoptions?: IntentProposalAdoptionPort,
+    private readonly consultations?: import("../ports/trip-consultation-repository.js").TripConsultationRepository) {}
   private async ready(principal: TripPrincipal, proposed: Trip): Promise<void> {
     try {
       const reservations = await this.reservations?.facts(principal, proposed.id);
@@ -36,6 +37,9 @@ export class TripApplication {
     if (access) principal = access.owner;
     const version = tripApiVersion;
     switch (command.operation) {
+      case "start-consultation":
+        if (!this.consultations) throw new TripResourceError("unavailable");
+        return { version, ...await this.consultations.start(actor, { tripId: command.tripId, title: command.title }) };
       case "create": {
         if (command.trip.adoption !== undefined) throw new TripResourceError("confirmation-required");
         if (command.trip.planningState === "ready") await this.ready(principal, command.trip);

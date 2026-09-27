@@ -1,3 +1,4 @@
+import { createTrip } from "@raiquora/trip/trip";
 import { describe, expect, it, vi } from "vitest";
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import { asksForKnownIntent } from "@raiquora/agent/intent-action-policy";
@@ -16,8 +17,9 @@ const noChange = (speechAct: "inform" | "question" = "inform"): UtteranceInterpr
 
 describe("complex semantic acceptance matrix", () => {
   it("keeps latest presentation, explicit unknown, retry and later turns coherent beyond 12 messages", async () => {
-    const state = stateDynamoFixture();
-    const { tripId: _tripId, ...metadata } = stateMetadata();
+    const state = stateDynamoFixture(), trips = tripDynamoFixture();
+    const metadata = stateMetadata();
+    trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
     await state.conversations.create(principal, conversationId, metadata);
     const profiles = new ProfileApplication(state.profiles, state.clock);
     await profiles.update(principal, { ...stateProfile(), usualOrigin: "京都駅" }, null);
@@ -68,7 +70,7 @@ describe("complex semantic acceptance matrix", () => {
     expect((await state.conversations.history(principal, conversationId)).items.length).toBeGreaterThan(12);
 
     const conversations = new ConversationApplication(state.conversations, noCandidateResources, () => conversationId);
-    const context = await createServerStateContextLoader({ conversations, profiles, trips: tripDynamoFixture().repository, workingStates: turns })
+    const context = await createServerStateContextLoader({ conversations, profiles, trips: trips.repository, workingStates: turns })
       ({ principal, conversationId });
     expect(context.effectiveIntent?.actualConversationFacts).toEqual(expect.arrayContaining([
       expect.objectContaining({ target: "origin", value: expect.objectContaining({ kind: "unknown" }) }),

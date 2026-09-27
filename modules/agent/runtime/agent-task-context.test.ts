@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { deriveAgentTaskContext } from "./agent-task-context";
-
+const id = "22222222-2222-4222-8222-222222222222";
 describe("AgentTaskContext", () => {
-  it("derives discovery, draft, refine and in-trip without legacy planningStage", () => {
-    expect(deriveAgentTaskContext({ conversationId: "11111111-1111-4111-8111-111111111111" }).phase).toBe("discovery");
-    expect(deriveAgentTaskContext({ consultationRequest: { constraints: [] }, requestRevision: 7 }))
-      .toMatchObject({ phase: "draft", requestRevision: 7 });
-    expect(deriveAgentTaskContext({ trip: { id: "22222222-2222-4222-8222-222222222222", revision: 3, planningState: "candidate_selection" } }))
-      .toMatchObject({ phase: "refine", target: { kind: "trip", tripRevision: 3 } });
-    expect(deriveAgentTaskContext({ trip: { id: "22222222-2222-4222-8222-222222222222", lifecycleState: "in_trip" } }).phase).toBe("in_trip");
+  it("keeps an existing Trip in discovery until there is an itinerary draft", () => {
+    for (const planningState of ["inspiration", "candidate_discovery", "candidate_selection"]) {
+      expect(deriveAgentTaskContext({ trip: { id, revision: 3, planningState } })).toMatchObject({ phase: "discovery", target: { kind: "trip", tripId: id, tripRevision: 3 } });
+    }
+    expect(deriveAgentTaskContext({ trip: { id, planningState: "itinerary_draft" } }).phase).toBe("draft");
+    expect(deriveAgentTaskContext({ trip: { id, planningState: "itinerary_refinement" } }).phase).toBe("refine");
+    expect(deriveAgentTaskContext({ trip: { id, planningState: "ready", lifecycleState: "in_trip" } }).phase).toBe("in_trip");
+  });
+  it("keeps internal request-less discovery independent from arbitrary wording", () => {
+    expect(deriveAgentTaskContext({ conversationId: id }).phase).toBe("discovery");
+    expect(deriveAgentTaskContext({ trip: { id, planningState: "inspiration", title: "10/1から2泊3日" } }).phase).toBe("discovery");
   });
 });
