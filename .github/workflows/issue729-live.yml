@@ -1,0 +1,91 @@
+name: Agent v2 / Party details pre-merge live
+on:
+  push:
+    branches: [feat/agent-v2-party-cohorts-729]
+    paths: [.github/workflows/issue729-live.yml]
+permissions:
+  contents: read
+concurrency:
+  group: transitforge-strands-v2-live
+  cancel-in-progress: false
+jobs:
+  evaluate:
+    if: github.ref == 'refs/heads/feat/agent-v2-party-cohorts-729'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-northeast-1
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      MODEL_ID: jp.amazon.nova-2-lite-v1:0
+      AGENT_V2_LIVE: 'true'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Validate deterministic boundaries before model calls
+        env:
+          AGENT_V2_LIVE: 'false'
+        run: |
+          npm ci
+          npm run typecheck:tools
+          node --test tools/deployment/*.test.mjs
+          npm run test:agent:v2
+      - name: Resolve dedicated evaluation role
+        id: eval-role
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${AWS_DEPLOY_ROLE_ARN:?dev Environment variable is required}"
+          account_id="${AWS_DEPLOY_ROLE_ARN#arn:aws:iam::}"
+          account_id="${account_id%%:*}"
+          [[ "$account_id" =~ ^[0-9]{12}$ ]]
+          echo "role_arn=arn:aws:iam::${account_id}:role/transitforge-dev-github-agent-eval" >> "$GITHUB_OUTPUT"
+      - name: Configure evaluation credentials
+        uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5
+        with:
+          role-to-assume: ${{ steps.eval-role.outputs.role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+      - name: Run three independent Nova 2 Lite repetitions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/issue729-live
+          {
+            echo '### Party details pre-merge live'
+            echo "- Commit: $GITHUB_SHA"
+            echo "- Model: $MODEL_ID"
+            echo '- Budget: 10 turns x 6 model calls x 3 independent repetitions = at most 180 model calls'
+            echo '- Deadline: 60 seconds per turn; output: 1536 tokens per model call'
+            echo '- External Travel Providers and production writes: none'
+          } >> "$GITHUB_STEP_SUMMARY"
+          status=0
+          for attempt in 1 2 3; do
+            npm run test:agent:v2:party-details-live -- --reporter=default --reporter=json --outputFile=".artifacts/issue729-live/party-details-${attempt}.json" || status=1
+          done
+          exit "$status"
+      - name: Publish bounded result summary
+        if: always()
+        shell: bash
+        run: |
+          for file in .artifacts/issue729-live/party-details-*.json; do
+            if [[ -f "$file" ]]; then
+              echo "$(basename "$file")" >> "$GITHUB_STEP_SUMMARY"
+              jq '{success,numPassedTests,numFailedTests,numPendingTests}' "$file" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: issue729-live-${{ github.run_id }}
+          path: .artifacts/issue729-live
+          if-no-files-found: warn
+          retention-days: 14
