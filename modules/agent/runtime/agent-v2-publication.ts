@@ -29,7 +29,7 @@ const conversationText = {
 const questions: Record<ReplyQuestion, string> = {
   goal: "どのような旅にしたいですか？", origin: "どこから出発しますか？", destination: "行き先はどちらですか？",
   start_date: "出発日はいつですか？", duration: "何日間の旅を考えていますか？",
-  participation_scope: "途中参加・離脱を反映する旅程と、参加する日または区間を確認させてください。",
+  participation_scope: "どの同行者が、どの旅程の日・区間に参加するか、まだ決まっていない点を教えてください。実名は不要です。",
   party_size: "何人での旅行ですか？", budget: "今回の旅行の予算を教えてください。",
 };
 
@@ -55,7 +55,7 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
       const receipt = matches[0];
       if (matches.length !== 1 || !receipt || receipt.executionId !== context.executionId || receipt.status !== "succeeded" ||
           !Object.hasOwn(operationLabels, receipt.operation)) throw new AgentV2ReplyError("invalid_receipt");
-      proof.operation = { type: receipt.operation, status: "succeeded", receiptId: receipt.id };
+      proof.operation = { type: proposal.operation, status: "succeeded", receiptId: receipt.id };
       return reply(`${operationLabels[receipt.operation]}しました。`);
     }
     case "candidates": {
