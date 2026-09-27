@@ -1,4 +1,5 @@
 name: Agent v2 / Free dialogue pre-merge live
+# Native user/assistant history; unchanged six utterances and saved-state expectations.
 on:
   push:
     branches: [feat/agent-v2-free-dialogue-736]
@@ -63,7 +64,7 @@ jobs:
             echo '- Budget: 6 turns x 6 calls x 3 = at most 108 model calls.'
             echo '- Per turn: 60 seconds, per-model output 1536, cumulative output 4096.'
             echo '- Synthetic owner-scoped state only; no production writes or external Travel Providers.'
-            echo '- Parent 0c5f6ba passed Acceptance, Smoke, and full CI.'
+            echo '- Parent 9264a389 passed Acceptance, Smoke, and full CI.'
           } >> "$GITHUB_STEP_SUMMARY"
           status=0
           for attempt in 1 2 3; do
