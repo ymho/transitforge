@@ -1,5 +1,5 @@
 name: Agent v2 / Party details pre-merge live
-# Three independent repetitions after full CI for 21a2e2f; withdrawal versus unresolved target.
+# Three independent repetitions after full CI for cedf614; current request follows reference state.
 on:
   push:
     branches: [feat/agent-v2-party-cohorts-729]
