@@ -68,7 +68,7 @@ it("projects only nonnegative integer measurements, retaining zero but not manuf
   expect(strandsExecutionDiagnostic({ stopReason: "__proto__" }).stopReason).toBe("unknown");
 });
 
-function application(invoke: StrandsAgentLike["invoke"], record = vi.fn(async (_event: AgentDiagnosticEvent) => undefined)) {
+function application(invoke: StrandsAgentLike["invoke"], record = vi.fn(async (_event: AgentDiagnosticEvent): Promise<void> => undefined)) {
   const engine = new StrandsAgentEngine({ modelId: "unused", region: "ap-northeast-1", systemPrompt: "test", maxTurns: 2 },
     { createAgent: () => ({ invoke }) });
   const app = createServerAgentApplication({ newExecutionId: () => "test-execution", registerTools: () => undefined,
