@@ -138,9 +138,9 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
   },
   {
     id: "V2-CONDITIONS-BUDGET-PROJECTION-01", kind: "v2_specific",
-    invariant: "a budget with unknown currency or basis stays a Conversation condition and is not silently promoted to a Trip budget constraint",
+    invariant: "a budget with unknown currency or basis is persisted as a partial Trip condition without silently inventing the missing fields",
     testFile: "modules/agent/runtime/verified-intent-proposal.test.ts",
-    testName: "does not promote a Conversation budget to Trip when currency or basis is unconfirmed",
+    testName: "persists an incomplete budget as a partial Trip condition without inventing currency or basis",
   },
   {
     id: "V2-PROFILE-READ-01", kind: "v2_specific",
