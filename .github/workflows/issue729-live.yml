@@ -1,4 +1,5 @@
 name: Agent v2 / Dialogue output verification
+# bounded free conversation rerun
 on:
   push:
     branches: [feat/agent-v2-party-cohorts-729]
