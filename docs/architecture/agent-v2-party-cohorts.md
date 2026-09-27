@@ -4,7 +4,7 @@ Issue: #729。人数条件 #728 とは独立した `party_details` business slot
 
 ## 受理する条件
 
-`update_current_party_details(action=set|clear, cohorts?, quote)` を追加する。1回の呼び出しは、今回の相談における重複しない匿名集団の最終状態を1つの操作として受理する。属性ごとのToolや実名participantは作らない。既存の明示済み属性を維持した訂正も、この最終状態に含める。取消しと新しい詳細を同じ発言で指定した場合も、最後に残す集合を1回のsetで置換する。clear→setへ分割しない。clearは最終状態が未定の場合だけ詳細を撤回し、`party_size`は変更しない。
+`update_current_party_details(finalCohorts, quote)` を追加する。1回の呼び出しは、今回の相談における重複しない匿名集団の最終状態を1つの操作として受理する。属性ごとのToolや実名participantは作らない。既存の明示済み属性を維持した訂正も、この最終状態に含める。操作種別actionは設けず、`finalCohorts`に更新後に残す集合を渡して全体置換する。取消しと新しい詳細を同じ発言で指定した場合も、最後に残す集合だけを1回で提出する。`null`は最終状態が詳細未定の明示撤回であり、`party_size`は変更しない。これは内部の既存`cohorts|null`操作へそのまま写すだけで、別のcommitプロトコルは作らない。
 
 - `count`、任意の `schoolStage`、`ageDecade`、`exactAge`。
 - 学生区分: preschool / elementary / middle_school / high_school / university。
@@ -56,4 +56,4 @@ Trip/Profile writer、予約、決済は接続しない。Profileへ常設同行
 - `AGENT_V2_LIVE=true MODEL_ID=jp.amazon.nova-2-lite-v1:0 npm run test:agent:v2:party-details-live`。
 - `Agent Eval / Strands v2 Live` の `party-details` は10ターン、1/3独立反復、1ターン最大6 model calls、60秒。実Provider/production stateへの書き込みはない。
 
-liveは大学生かつ20代、小学生のexactAge未確認、途中離脱、途中追加、what-ifのwriter callback 0、区間参加、clear、挨拶/お礼、Trip未解決を確認する。決定論的テストは実モデルの意味理解を証明する代わりではなく、liveと別のゲートである。
+liveは大学生かつ20代、小学生のexactAge未確認、途中離脱、途中追加、what-ifのwriter callback 0、区間参加、詳細撤回、挨拶/お礼、Trip未解決を確認する。決定論的テストは実モデルの意味理解を証明する代わりではなく、liveと別のゲートである。

@@ -21,7 +21,7 @@ class CohortModel extends Model<BaseModelConfig> {
     const first = this.index++ === 0;
     if (first) this.beforeTool?.();
     const name = first ? "update_current_party_details" : "strands_structured_output";
-    const input = first ? { action: "set", cohorts: [{ count: 1, membership: "additional", schoolStage: "university", ageDecade: "twenties",
+    const input = first ? { finalCohorts: [{ count: 1, membership: "additional", schoolStage: "university", ageDecade: "twenties",
       scope: { kind: "logical_days", fromDay: 2 } }], quote: "20代の大学生1人が2日目から追加参加" }
       : { reply: this.beforeTool ? { kind: "uncertainty" } : { kind: "conversation", message: "acknowledgement" } };
     yield { type: "modelMessageStartEvent", role: "assistant" };

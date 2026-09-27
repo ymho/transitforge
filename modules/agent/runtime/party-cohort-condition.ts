@@ -15,13 +15,10 @@ export const partyCohortValueSchema = z.array(z.strictObject({
   exactAge: z.number().int().min(0).max(120).optional().describe("本人が明示した正確な年齢のみ。年代/学年から生成しない。"),
   scope: scopeSchema.describe("日・区間はApplicationの既知scope選択肢から番号で指定。raw IDは禁止。fromDay省略は初日、toDay省略は既知の最終日。"),
 })).min(1).max(20);
+/** This is a replacement value, not a sequence of clear/set commands. */
 export const partyDetailsUpdateInputSchema = z.strictObject({
-  action: z.enum(["set", "clear"]).describe("setは最終状態への全体置換。取消しと新条件の指定は1回のset。clearは最終的に詳細を未定へ戻す場合のみ。"),
-  cohorts: partyCohortValueSchema.optional().describe("重複しない匿名集団の最終状態。変更も撤回もされていない明示済み属性は維持し、撤回された属性は除く。不明な属性や人数合わせの集団は補完しない。"),
+  finalCohorts: partyCohortValueSchema.nullable().describe("利用者の発言全体を反映した、更新後に残す同行者詳細の集合。既存集合をこの値で置換する。取消しと新条件が同じ発言なら新条件の集合だけを渡す。最終的に詳細がすべて未定となる場合だけnull。変更も撤回もされていない明示済み属性は維持する。不明な属性や人数合わせの集団は補完しない。"),
   quote: z.string().min(1).max(300),
-}).superRefine((value, context) => {
-  if (value.action === "set" && value.cohorts === undefined || value.action === "clear" && value.cohorts !== undefined)
-    context.addIssue({ code: "custom", message: "set requires cohorts; clear forbids cohorts" });
 });
 /** Stored resolved scope is Application-owned, never part of a model Tool schema. */
 export const resolvedPartyCohortsSchema = z.custom<PartyCohort[]>((value: unknown) => {

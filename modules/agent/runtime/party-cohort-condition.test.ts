@@ -13,12 +13,15 @@ const catalog: PartyScopeCatalog = { tripId: "trip", tripRevision: 2,
   days: [{ id: "known-a", label: "初日" }, { id: "known-b", label: "2日目" }], segments: [] };
 
 describe("V2 cohort condition business slot", () => {
-  it("requires a complete set/clear decision and forbids identity, fare and raw scope IDs", () => {
-    expect(partyDetailsUpdateInputSchema.safeParse({ action: "set", cohorts: [cohort], quote }).success).toBe(true);
-    for (const wrong of [{ action: "set", quote }, { action: "clear", cohorts: [cohort], quote },
-      { action: "set", cohorts: [{ ...cohort, name: "someone" }], quote },
-      { action: "set", cohorts: [{ ...cohort, scope: { kind: "logical_days", dayIds: ["invented"] } }], quote },
-      { action: "set", cohorts: [{ ...cohort, scope: { kind: "segment", segmentId: "invented" } }], quote }])
+  it("requires the final replacement value and forbids procedural actions, identity, fare and raw scope IDs", () => {
+    expect(partyDetailsUpdateInputSchema.safeParse({ finalCohorts: [cohort], quote }).success).toBe(true);
+    expect(partyDetailsUpdateInputSchema.safeParse({ finalCohorts: null, quote }).success).toBe(true);
+    for (const wrong of [{ quote }, { finalCohorts: [], quote }, { action: "clear", quote }, { action: "set", cohorts: [cohort], quote },
+      { action: "clear", finalCohorts: [cohort], quote },
+      { finalCohorts: [{ ...cohort, name: "someone" }], quote },
+      { finalCohorts: [{ ...cohort, fareClass: "child" }], quote },
+      { finalCohorts: [{ ...cohort, scope: { kind: "logical_days", dayIds: ["invented"] } }], quote },
+      { finalCohorts: [{ ...cohort, scope: { kind: "segment", segmentId: "invented" } }], quote }])
       expect(partyDetailsUpdateInputSchema.safeParse(wrong).success).toBe(false);
   });
   it("uses one receipt/revision without modifying the global count, Trip or Profile", () => {

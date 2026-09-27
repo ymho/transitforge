@@ -263,15 +263,23 @@ describe("V2 cohort standard SDK Tools", () => {
     const { input } = setup();
     const apply = vi.fn(async () => ({ receipt: { version: "public-semantic-receipt-v1" as const, intentRevision: 4,
       speechAct: "inform" as const, outcome: "accepted" as const, changes: [] }, effectiveIntent: input.effectiveIntent }));
-    const model = new ScriptedModel([{ tool: "update_current_party_details", input: { action: "set", cohorts: [cohort], quote: "20代の大学生1人" } }, submitted]);
+    const model = new ScriptedModel([{ tool: "update_current_party_details", input: { finalCohorts: [cohort], quote: "20代の大学生1人" } }, submitted]);
     await new StrandsAgentEngine(options, { model }).run({ ...input, userRequest: "20代の大学生1人", conditionController: { apply } });
     expect(apply).toHaveBeenCalledExactlyOnceWith({ target: "party_details", cohorts: [cohort], quote: "20代の大学生1人" });
+  });
+  it("retracts details through the same final-state value without a procedural action", async () => {
+    const { input } = setup();
+    const apply = vi.fn(async () => ({ receipt: { version: "public-semantic-receipt-v1" as const, intentRevision: 4,
+      speechAct: "cancel" as const, outcome: "accepted" as const, changes: [] }, effectiveIntent: input.effectiveIntent }));
+    const model = new ScriptedModel([{ tool: "update_current_party_details", input: { finalCohorts: null, quote: "詳細は未定" } }, submitted]);
+    await new StrandsAgentEngine(options, { model }).run({ ...input, userRequest: "詳細は未定", conditionController: { apply } });
+    expect(apply).toHaveBeenCalledExactlyOnceWith({ target: "party_details", cohorts: null, quote: "詳細は未定" });
   });
   it.each(["scope_required", "scope_not_found", "stale_scope"] as const)("returns %s as a nonretryable Tool precondition without closing independent reads", async code => {
     const { input, execute } = setup();
     const apply = vi.fn(async () => { throw new ConditionUpdateRejectedError(code); });
     const model = new ScriptedModel([
-      { tool: "update_current_party_details", input: { action: "set", cohorts: [cohort], quote: "大学生1人" } },
+      { tool: "update_current_party_details", input: { finalCohorts: [cohort], quote: "大学生1人" } },
       lookup, { tool: "strands_structured_output", input: { kind: "clarification", target: "participation_scope" } },
     ]);
     const result = await new StrandsAgentEngine(options, { model }).run({ ...input, conditionController: { apply } });
