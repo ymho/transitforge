@@ -187,7 +187,10 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const requestHash = createHash("sha256").update(JSON.stringify([request.userRequest, request.requestedResearchMode ?? "standard", request.researchTarget ?? null, request.tripId ?? null, itemId ?? null, calendarDate ?? null])).digest("hex");
     const { current, old, turn } = await this.read(input);
     if (request.tripId !== undefined && request.tripId !== current.tripId) throw new StateError("invalid-input");
-    if ((await this.getWorkingState(input.principal, input.conversationId))?.semantic?.adoptionInFlight) throw new StateError("conflict");
+    const inFlightAdoption = (await this.getWorkingState(input.principal, input.conversationId))?.semantic?.adoptionInFlight;
+    // A retry of this exact turn may resume its staged Trip adoption. A different
+    // turn is fenced until the in-flight adoption is completed or released.
+    if (inFlightAdoption && !turn) throw new StateError("conflict");
     if (turn && turn.requestHash !== requestHash) throw new StateError("conflict");
     if (turn?.state === "completed") return { state: "completed", result: turn.result! };
     // A later user message supersedes unfinished older work. Completed turns replay
@@ -210,6 +213,31 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     return next.intentReceipt ? { state: "intent_accepted", lease: { attemptId, userSequence: next.userSequence }, receipt: next.intentReceipt,
       ...(next.conditionUpdates ? { conditionReceipts: next.conditionUpdates.operations.map(({ receipt }) => structuredClone(receipt)) } : {}) } :
       { state: "started", lease: { attemptId, userSequence: next.userSequence } };
+  }
+
+  async stageIntentProposal(identity: ConversationTurnIdentity, lease: ConversationTurnLease, proposal: import("@raiquora/trip/trip").TripUpdateProposal): Promise<void> {
+    const input = this.identity(identity), snapshot = await this.read(input);
+    this.validateLease(snapshot.turn, lease);
+    const binding = proposal.intentBinding;
+    if (!binding || binding.conversationId !== input.conversationId || proposal.tripId !== snapshot.turn?.targetTripId ||
+        proposal.baseRevision !== binding.changes.length && false) { /* keep exact checks below */ }
+    if (!binding || binding.conversationId !== input.conversationId || proposal.tripId !== snapshot.turn?.targetTripId) throw new StateError("invalid-input");
+    const workingKey = this.workingKey(input.conversationId), oldWorking = await this.store.read(input.principal, workingKey);
+    if (!oldWorking) throw new StateError("conflict");
+    const working = parseConversationWorkingState(oldWorking.payload), semantic = semanticStateOf(working);
+    if (!receiptMatches(semantic.receipts, binding) || working.target.tripId !== proposal.tripId) throw new StateError("conflict");
+    const pending = { binding: structuredClone(binding), tripId: proposal.tripId, baseTripRevision: proposal.baseRevision };
+    if (semantic.pendingProposal) {
+      if (JSON.stringify(semantic.pendingProposal) === JSON.stringify(pending)) return;
+      throw new StateError("conflict");
+    }
+    if (semantic.adoptionInFlight) throw new StateError("conflict");
+    const next = parseConversationWorkingState({ ...working, revision: working.revision + 1,
+      target: { ...working.target, tripId: proposal.tripId, tripRevision: proposal.baseRevision },
+      pendingProposalRefs: [...new Set([...working.pendingProposalRefs, "trip_update"])],
+      semantic: { ...semantic, pendingProposal: pending } });
+    await this.store.send(new TransactWriteItemsCommand({ TransactItems: [{ Put: this.store.put(input.principal, workingKey,
+      { revision: next.revision, deleted: false, payload: next }, oldWorking) }] }));
   }
 
   async acceptIntent(identity: ConversationTurnIdentity, lease: ConversationTurnLease, candidate: AcceptedIntentDelta): Promise<IntentApplicationReceipt> {
