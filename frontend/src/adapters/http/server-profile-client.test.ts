@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { HttpServerProfileClient } from "./server-profile-client";
 import type { UserProfile } from "@raiquora/trip/travel-profile";
-const profile: UserProfile = { version: 2, home: {}, companions: { usual: ["solo"], children: [] }, travelStyle: { pace: 0.1 }, preferences: {}, transport: { maxTypicalTravelMinutes: null }, notes: {}, aiNoteFields: [], updatedAt: "2026-09-18T00:00:00.000Z" };
+const profile: UserProfile = { version: 3, usualOrigin: "大阪", interests: ["history"], considerations: "歩きすぎない", updatedAt: "2026-09-18T00:00:00.000Z" };
 describe("Profile HTTP client", () => {
   it("uses a null profile for normal absence and sends no principal", async () => {
     const request = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ version: "profile-api-v1", profile: null }))).mockResolvedValueOnce(new Response(JSON.stringify({ version: "profile-api-v1", profile, revision: 0 })));
