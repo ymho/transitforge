@@ -31,3 +31,7 @@ Agentモデル・prompt・実行上限・保存済みTripへの操作契約・IA
 `ai-first-shell.test.ts`で4メニュー、Heroからの送信、IME、認証、二重送信、失敗時の入力保持、遅延完了とTrip参照復元を検証する。
 `consultation-navigation.integration.test.ts`で実Trip workspaceとShellを組み、旅程→相談→旅程→新規Heroを確認する。
 通常CIのTypeScript全体テスト・architecture・buildおよびV2 Acceptance/Smokeも確認する。
+
+## 再現可能なブラウザ確認
+
+`tools/verify_unified_consultation.mjs`はViteをlocalhostで起動し、実Shell・相談画面・Trip workspaceとCSSを固定メモリ状態で組み合わせる。1440px/390pxで新規Hero→送信→旅程→旅程の相談→旅程へ戻る→新規Heroを操作し、可視性・対象Trip・横溢れ・composerとメニューの重なりを検証して画像を保存する。実API/Bedrock/認証済み実ユーザーの検証とは分ける。`start-fresh-consultation.test.ts`は作成待ち・履歴読み込み待ちの両方で画面/アカウント変更後に送信しないことを確認する。

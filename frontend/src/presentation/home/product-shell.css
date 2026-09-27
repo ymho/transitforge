@@ -96,7 +96,6 @@
   .home-trip-copy > p { margin: .65rem 0 0; }
   .home-trip-copy button { align-self: end; }
   .home-trip-copy button[data-trip] { grid-column: 2; grid-row: 1 / span 4; border-color: var(--product-accent); background: var(--product-accent); color: #fff; box-shadow: 0 7px 16px #1023371f; }
-  .home-trip-copy button[data-trip-chat] { grid-column: 2; grid-row: 5; color: #234863; background: #f4f8fb; }
   .home-trip-manage { grid-column: 1; display: flex; gap: .7rem; margin-top: .55rem; }
   .home-trip-copy .home-trip-manage button { min-height: 2rem; padding: .25rem .1rem; border: 0; color: #6a7783; background: transparent; font-size: .75rem; }
   .product-page[data-page="trips"] .home-trip-card { max-width: 56rem; margin-block: .9rem; }

@@ -1,3 +1,4 @@
+import { startFreshConsultation } from "../usecases/concierge/start-fresh-consultation";
 import type { TripRequest } from "@raiquora/trip/trip-request";
 import { createTripConsultationNavigation } from "../usecases/trip-plan/trip-consultation-navigation";
 import { currentAuthentication } from "./auth-composition";
@@ -419,15 +420,6 @@ const tripNavigation = createTripConsultationNavigation({
   show: (view) => { returnToConversation(); aiGuideController.open(); tripWorkspace.show(view); },
   sessionVersion: () => serverTripClient.sessionVersion(),
 });
-const createAndActivateConversation = async () => {
-  if (!canLeaveConditions()) throw new Error("Navigation cancelled");
-  const navigation = tripNavigation.cancel(), account = serverTripClient.sessionVersion();
-  if (!isSignedIn()) throw new Error("Authentication required");
-  const session = await conversationUi.create({}, false);
-  if (navigation !== tripNavigation.version() || account !== serverTripClient.sessionVersion()) throw new Error("Navigation cancelled");
-  await activateConversation(session.id);
-  return session;
-};
 const resetConsultation = () => {
   tripNavigation.cancel(); conversationUi.clear();
   activeConversationSession = { ...unsignedConversation, id: `ui-new-${crypto.randomUUID()}` };
@@ -438,8 +430,15 @@ const resetConsultation = () => {
 };
 const startNewConsultation = async (prompt: string) => {
   if (!isSignedIn()) throw new Error("Authentication required");
-  await createAndActivateConversation();
-  aiGuideController.ask(prompt);
+  if (!canLeaveConditions()) throw new Error("Navigation cancelled");
+  const navigation = tripNavigation.cancel(), account = serverTripClient.sessionVersion();
+  await startFreshConsultation(prompt, {
+    create: () => conversationUi.create({}, false),
+    activate: activateConversation,
+    isCurrent: () => isSignedIn() && navigation === tripNavigation.version() && account === serverTripClient.sessionVersion(),
+    currentConversationId: () => activeConversationSession.id,
+    submit: value => aiGuideController.ask(value),
+  });
 };
 let initialAuthenticationNotification = true;
 let authenticationGeneration = 0;
