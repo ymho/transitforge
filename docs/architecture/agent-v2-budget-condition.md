@@ -74,3 +74,18 @@ V1 semantic interpreter、旧semantic corpus、V1 runtime testsをoracleにし�
 - what-ifはactual予算を変更しない
 
 実モデルはNova 2 Lite＋test repositoryで、actual設定、basis訂正、what-if、basis未確定の通貨予算、clearを反復確認する。
+
+
+## 実モデル結果
+
+Nova 2 Lite final budget live run 36282628548を3回独立実行し、3/3 PASSした。各反復で以下を確認した。
+
+- 挨拶: 条件更新なし
+- 「全部で10万円」: `update_current_budget` 1回、JPY / trip
+- 「1人5万円くらいへ変更」: `update_current_budget` 1回、JPY / per_person / approximate
+- 「もし500ユーロなら。今の予算は変えない」: `consider_trip_scenario`のみ。writer callback 0、accepted operation数不変
+- 「500ユーロへ変更」: `update_current_budget` 1回、EUR / basis未確認
+- 「予算未定へ戻す」: `update_current_budget(action=clear)`
+- お礼: 条件更新なし
+
+actual更新はwriter→structured outputの2 model calls、what-ifもscenario→structured outputの2 calls、更新不要turnは1 callだった。固定test repositoryでの結果であり、実Provider・実ブラウザとは区別する。
