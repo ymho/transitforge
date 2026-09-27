@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { emptyConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
-import type { PartyScopeCatalog } from "@raiquora/trip/party-cohorts";
+import { parsePartyCohorts, projectPartyAtScope, type PartyScopeCatalog } from "@raiquora/trip/party-cohorts";
 import { partyDetailsUpdateInputSchema } from "./party-cohort-condition";
 import { admitConditionChange, admitTripScenario, conditionDelta, conditionPayload, parseConditionJournal } from "./conversation-condition";
 import { reduceConversationIntent } from "./conversation-intent-reducer";
 import { compileEffectiveIntent } from "./effective-intent";
+import { admitAgentV2Reply } from "./agent-v2-publication";
 import { partyCohortContext, partyCohortReadBoundary } from "./party-cohort-context";
 
 const cohort = { count: 1, membership: "baseline" as const, schoolStage: "university" as const, ageDecade: "twenties" as const, scope: { kind: "whole_trip" as const } };
@@ -50,6 +51,38 @@ describe("V2 cohort condition business slot", () => {
     expect(result.receipt.operations).toHaveLength(1);
     expect(result.overlay.facts.find(f => f.target === "party_details")?.value).toEqual({ kind: "party_cohorts", cohorts: [child] });
     expect(result.overlay.facts.some(f => f.value.kind === "party_cohorts" && f.value.cohorts.some(c => c.ageDecade))).toBe(false);
+  });
+  it("corrects a previously accepted misunderstanding on a new turn without changing unrelated people or global count", () => {
+    const threeDays = { ...catalog, days: [...catalog.days, { id: "known-c", label: "3日目" }] };
+    const child = { count: 1, membership: "baseline" as const, schoolStage: "elementary" as const, scope: { kind: "whole_trip" as const } };
+    const adult = { count: 1, membership: "baseline" as const, ageDecade: "thirties" as const, scope: { kind: "whole_trip" as const } };
+    const scopedChild = { ...child, scope: { kind: "logical_days" as const, tripId: catalog.tripId, tripRevision: catalog.tripRevision, dayIds: ["known-a", "known-b"] } };
+    const initial = emptyConversationIntentOverlay();
+    const baseline = reduceConversationIntent(initial, conditionDelta({ target: "party_size", party: { kind: "count", people: 3 }, quote: "3人" }, "count", initial)).overlay;
+    // A syntactically valid but semantically mistaken prior model decision.
+    const wrong = reduceConversationIntent(baseline, conditionDelta({ target: "party_details", cohorts: parsePartyCohorts([child, scopedChild, adult]), quote: "以前の合成条件" }, "mistaken-turn", baseline)).overlay;
+    const message = "小学生は1人だけで2日目まで参加です。全行程の小学生という重複は取り消して。30代の人と合計3人はそのままです。";
+    const corrected = admitConditionChange({ target: "party_details", cohorts: [adult, { ...child, scope: { kind: "logical_days", fromDay: 1, toDay: 2 } }], quote: message }, message, undefined, threeDays);
+    const result = reduceConversationIntent(wrong, conditionDelta(corrected, "user-correction", wrong));
+    expect(result.overlay.intentRevision).toBe(wrong.intentRevision + 1);
+    expect(result.receipt.operations).toHaveLength(1);
+    expect(result.receipt.mutationId).toBe("condition:user-correction:party_details");
+    expect(result.overlay.facts.find(f => f.target === "party_details")?.value).toEqual({ kind: "party_cohorts", cohorts: parsePartyCohorts([adult, scopedChild]) });
+    expect(result.overlay.facts.find(f => f.target === "party_size")).toEqual(baseline.facts.find(f => f.target === "party_size"));
+    expect(projectPartyAtScope([adult, scopedChild], 3, threeDays, { kind: "logical_day", dayId: "known-a" })).toMatchObject({ status: "known", people: 3 });
+    expect(projectPartyAtScope([adult, scopedChild], 3, threeDays, { kind: "logical_day", dayId: "known-c" })).toMatchObject({ status: "known", people: 2 });
+  });
+  it("does not infer same-person identity merely from equal attributes", () => {
+    const sameAttributesDifferentPeople = [cohort, { ...cohort, scope: { kind: "logical_days" as const, tripId: catalog.tripId, tripRevision: catalog.tripRevision, dayIds: ["known-a"] } }];
+    expect(parsePartyCohorts(sameAttributesDifferentPeople)).toHaveLength(2);
+  });
+  it("allows clarification of a change target even when prior details are known, without mutating intent", () => {
+    const initial = emptyConversationIntentOverlay();
+    const overlay = reduceConversationIntent(initial, conditionDelta(admitConditionChange(input, quote), "prior", initial)).overlay;
+    const snapshot = structuredClone(overlay), intent = compileEffectiveIntent({ overlay });
+    const reply = admitAgentV2Reply({ kind: "clarification", target: "participation_scope" }, { executionId: "clarify", evidence: [], effectiveIntent: intent });
+    expect(reply.proof).toMatchObject({ kind: "clarification", question: "participation_scope" });
+    expect(overlay).toEqual(snapshot);
   });
   it("rejects an ungrounded quote and detail count exceeding the already accepted baseline", () => {
     expect(() => admitConditionChange(input, "別のメッセージ")).toThrow("invalid_source");
