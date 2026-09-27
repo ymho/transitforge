@@ -47,7 +47,8 @@ export interface StrandsAgentRunResult {
   evidence: Evidence[];
   trace: AgentTrace;
   limitReason?: "tool_calls" | "deadline";
-  metrics?: { modelCalls: number; toolCalls: number; inputTokens: number; outputTokens: number; totalTokens: number;
+  metrics?: { modelCalls: number; toolCalls: number; conditionToolCalls: number; structuredOutputCalls: number;
+    inputTokens: number; outputTokens: number; totalTokens: number;
     cacheReadInputTokens?: number; cacheWriteInputTokens?: number };
 }
 export interface StrandsAgentLike {
@@ -182,6 +183,11 @@ export class StrandsAgentEngine {
           modelCalls: result.metrics.cycleCount,
           // Local intent/reply operations are not external Domain Tool calls.
           toolCalls: budgetState.toolCalls,
+          // SDK-owned/local Tools are not external reads, but their bounded call counts
+          // distinguish a condition-write loop from structured-output retries.
+          conditionToolCalls: strandsConditionToolNames.reduce((sum, name) =>
+            sum + (result.metrics?.toolMetrics[name]?.callCount ?? 0), 0),
+          structuredOutputCalls: result.metrics.toolMetrics.strands_structured_output?.callCount ?? 0,
           inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens,
           ...(usage.cacheReadInputTokens === undefined ? {} : { cacheReadInputTokens: usage.cacheReadInputTokens }),
           ...(usage.cacheWriteInputTokens === undefined ? {} : { cacheWriteInputTokens: usage.cacheWriteInputTokens }),

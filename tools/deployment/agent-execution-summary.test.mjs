@@ -16,7 +16,7 @@ test("aggregates maxima with measurement coverage, preserving a real zero", () =
     event(),
   ]);
   assert.deepEqual(rows, [["output_token_budget", "limitOutputTokens", "-", "3", "4 (2/3)", "0 (1/3)",
-    "not_recorded (0/3)", "5000 (2/3)", "not_recorded (0/3)", "2026-09-27T00:00:02.000Z"]]);
+    "not_recorded (0/3)", "not_recorded (0/3)", "not_recorded (0/3)", "5000 (2/3)", "not_recorded (0/3)", "2026-09-27T00:00:02.000Z"]]);
 });
 
 test("keeps deadline, local Tool cap and per-call output cap distinct from cumulative output", () => {
@@ -50,7 +50,7 @@ test("rejects arbitrary strings and invalid numbers without retaining payloads",
   assert.equal(rows[0][0], "unknown");
   assert.equal(rows[0][1], "unknown");
   assert.ok(!JSON.stringify(rows).includes("PRIVATE"));
-  for (const cell of rows[0].slice(4, 9)) assert.equal(cell, "not_recorded (0/1)");
+  for (const cell of rows[0].slice(4, 11)) assert.equal(cell, "not_recorded (0/1)");
 });
 
 test("the real CLI reads Lambda-prefixed and wrapped logs but publishes only the diagnostic projection", () => {
@@ -68,7 +68,7 @@ test("the real CLI reads Lambda-prefixed and wrapped logs but publishes only the
     writeFileSync(streams, "[]");
     const output = execFileSync(process.execPath, [new URL("./summarize-agent-diagnostics.mjs", import.meta.url).pathname,
       diagnostics, streams], { encoding: "utf8" });
-    assert.match(output, /output_token_budget \| limitOutputTokens \| - \| 1 \| 2 \(1\/1\) \| 2 \(1\/1\) \| 200 \(1\/1\) \| 4800 \(1\/1\) \| 5000 \(1\/1\)/);
+    assert.match(output, /output_token_budget \| limitOutputTokens \| - \| 1 \| 2 \(1\/1\) \| 2 \(1\/1\) \| not_recorded \(0\/1\) \| not_recorded \(0\/1\) \| 200 \(1\/1\) \| 4800 \(1\/1\) \| 5000 \(1\/1\)/);
     assert.match(output, /not_recorded \(0\/1\)/);
     assert.match(output, /v2:publication:incomplete_execution/);
     assert.ok(!output.includes("PRIVATE"));

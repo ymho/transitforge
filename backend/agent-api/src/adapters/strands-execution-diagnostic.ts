@@ -7,7 +7,7 @@ const reasons: Record<AgentExecutionStopReason, AgentDiagnosticReason> = {
   cancelled: "cancelled", contentFiltered: "provider_refusal", guardrailIntervened: "provider_refusal",
   unknown: "failed", not_recorded: "failed",
 };
-const countKeys = ["modelCalls", "toolCalls", "inputTokens", "outputTokens", "totalTokens"] as const;
+const countKeys = ["modelCalls", "toolCalls", "conditionToolCalls", "structuredOutputCalls", "inputTokens", "outputTokens", "totalTokens"] as const;
 
 /** Copy only closed operational fields. Never serialize an SDK result, trace,
  * lastMessage, exception, Tool payload or caller-supplied extra property. */

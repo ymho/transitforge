@@ -6,7 +6,7 @@ const reasons = new Set([
   "completed", "failed", "iteration_budget", "total_token_budget", "output_token_budget",
   "model_output_limit", "context_window_limit", "cancelled", "provider_refusal", "tool_budget", "deadline",
 ]);
-const metrics = ["modelCalls", "toolCalls", "inputTokens", "outputTokens", "totalTokens"];
+const metrics = ["modelCalls", "toolCalls", "conditionToolCalls", "structuredOutputCalls", "inputTokens", "outputTokens", "totalTokens"];
 
 /** Bounded groups of execution events, never raw event objects or identifiers.
  * Every numeric cell is max (measured samples / samples in this group). */

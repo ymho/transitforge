@@ -39,7 +39,7 @@ table(
 console.log("");
 console.log("### Execution termination (separate from reply publication)");
 console.log("Usage cells show maximum (measured samples / group samples), not sums or percentiles. not_recorded is not zero. Legacy logs cannot reconstruct missing usage.");
-table(["Reason", "Stop reason", "Local limit", "Samples", "Model calls", "Read Tool calls", "Input tokens", "Output tokens", "Total tokens", "Latest (UTC)"],
+table(["Reason", "Stop reason", "Local limit", "Samples", "Model calls", "Read Tool calls", "Condition Tool calls", "Structured output calls", "Input tokens", "Output tokens", "Total tokens", "Latest (UTC)"],
   executionSummaryRows(diagnosticMessages));
 console.log("");
 table(["Stream event", "HTTP status", "Count", "Max latency (ms)"], groupedStreams(streams));
