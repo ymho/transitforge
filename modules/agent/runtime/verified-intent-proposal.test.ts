@@ -37,6 +37,28 @@ describe("verified intent proposal", () => {
     expect(proposal?.intentBinding?.changes).toHaveLength(1);
   });
 
+  it("does not promote a Conversation budget to Trip when currency or basis is unconfirmed", () => {
+    const trip = createTrip(tripId, "旅", "2026-09-25T00:00:00Z");
+    const noBasis = apply({ action: "set", target: "budget", value: { kind: "money", amount: 500, currency: "EUR" }, modality: "preferred" });
+    const effectiveNoBasis = compileEffectiveIntent({ baseRequest: trip.request, baseSource: "trip", baseRevision: 0, overlay: noBasis.overlay });
+    expect(proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent: effectiveNoBasis, receipt: noBasis.receipt })).toBeUndefined();
+
+    const noCurrency = apply({ action: "set", target: "budget", value: { kind: "money", amount: 50000, basis: "per_person" }, modality: "preferred" });
+    const effectiveNoCurrency = compileEffectiveIntent({ baseRequest: trip.request, baseSource: "trip", baseRevision: 0, overlay: noCurrency.overlay });
+    expect(proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent: effectiveNoCurrency, receipt: noCurrency.receipt })).toBeUndefined();
+  });
+
+  it("projects a fully confirmed budget basis without defaulting basis", () => {
+    const trip = createTrip(tripId, "旅", "2026-09-25T00:00:00Z");
+    const reduced = apply({ action: "set", target: "budget",
+      value: { kind: "money", amount: 50000, currency: "JPY", basis: "per_person" }, modality: "preferred" });
+    const effectiveIntent = compileEffectiveIntent({ baseRequest: trip.request, baseSource: "trip", baseRevision: 0, overlay: reduced.overlay });
+    const proposal = proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent, receipt: reduced.receipt });
+    expect(proposal?.patches[0]).toMatchObject({ type: "request", request: { constraints: [
+      { requirement: { type: "budget", limit: { amountMinor: 50000, currency: "JPY" }, basis: "per-person" } },
+    ] } });
+  });
+
   it("does not bind hypothetical or model-only meaning as a user proposal", () => {
     const trip = createTrip(tripId, "旅", "2026-09-25T00:00:00Z");
     const reduced = apply({ action: "set", target: "destination", value: { kind: "place_label", label: "京都" }, modality: "preferred", frame: "hypothetical" });
@@ -45,7 +67,7 @@ describe("verified intent proposal", () => {
   });
 });
 
-function apply(operation: { action: "set" | "add_alternative"; target: "origin" | "destination" | "experience"; value: AcceptedIntentDelta["operations"][number]["value"]; modality: "preferred"; frame?: "actual" | "hypothetical" }) {
+function apply(operation: { action: "set" | "add_alternative"; target: "origin" | "destination" | "experience" | "budget"; value: AcceptedIntentDelta["operations"][number]["value"]; modality: "preferred"; frame?: "actual" | "hypothetical" }) {
   return reduceConversationIntent(emptyConversationIntentOverlay(), { version: 1, mutationId: `intent-turn:${turnId}`, baseIntentRevision: 0, speechAct: "inform", operations: [{
     operationId: `intent-op:${turnId}:1`, groupId: `intent-group:${turnId}:1`, action: operation.action, target: operation.target,
     scope: { type: "conversation" }, modality: operation.modality, precision: "exact", value: operation.value!, frame: operation.frame ?? "actual",
