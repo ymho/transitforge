@@ -1,0 +1,45 @@
+name: Agent v2 / Apply reviewed offline patch
+on:
+  push:
+    branches: [feat/agent-v2-dialogue-history-736]
+    paths: [.github/workflows/issue729-transfer.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/feat/agent-v2-dialogue-history-736'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 2
+      - name: Verify exact tested source patch and publish to the isolated feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = bbf6a94a202584a888d2bdfe36702b092ddb9b23
+          cat .github/issue729-transfer/0.patch .github/issue729-transfer/1a.patch .github/issue729-transfer/1b.patch .github/issue729-transfer/2.patch .github/issue729-transfer/3.patch > /tmp/dialogue.patch
+          echo '83d295fa8988ea2e793c1bfbc5c7a5848caba1843e12fedff69cb2e1170ea1c8  /tmp/dialogue.patch' | sha256sum -c -
+          git apply --index --unidiff-zero --check /tmp/dialogue.patch
+          git apply --index --unidiff-zero /tmp/dialogue.patch
+          python3 - <<'PY'
+          import pathlib, subprocess
+          patch = pathlib.Path('/tmp/dialogue.patch').read_text()
+          count = 0
+          for part in patch.split('diff --git ')[1:]:
+              lines = part.splitlines()
+              path = next(line[6:] for line in lines if line.startswith('+++ b/'))
+              after = next(line.split('..')[1].split()[0] for line in lines if line.startswith('index '))
+              actual = subprocess.check_output(['git', 'hash-object', path], text=True).strip()
+              assert actual == after, path
+              count += 1
+          assert count == 32, count
+          print('All 32 post-change source blobs match the offline-tested files.')
+          PY
+          git restore --staged --worktree .github/workflows/strands-v2-live.yml
+          git rm -r .github/issue729-transfer
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m '💬 V2の自由な対話と受理条件の表示を実装する'
+          git push origin HEAD:refs/heads/feat/agent-v2-dialogue-history-736

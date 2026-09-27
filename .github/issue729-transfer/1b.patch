@@ -1,0 +1,156 @@
+diff --git a/backend/agent-api/src/composition/strands-dialogue-history.test.ts b/backend/agent-api/src/composition/strands-dialogue-history.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..5ab080134ca6d23d33f3db9c8852fa6bcb1406cf
+--- /dev/null
++++ b/backend/agent-api/src/composition/strands-dialogue-history.test.ts
+@@ -0,0 +1,82 @@
++import { expect, it } from "vitest";
++import { Model, type BaseModelConfig, type Message, type ModelStreamEvent } from "@strands-agents/sdk";
++import { parsePartyCohorts } from "@raiquora/trip/party-cohorts";
++import { dialogueHistoryFixture, dialogueMessages } from "./strands-dialogue-history.fixture.js";
++
++const whole = { kind: "whole_trip" }, untilTwo = { kind: "logical_days", fromDay: 1, toDay: 2 };
++const teen = { count: 1, membership: "baseline", schoolStage: "university", ageDecade: "teens", scope: whole };
++const college = { ...teen, ageDecade: "twenties" };
++type Step = { name: string; input: unknown };
++const say = (commentary: string): Step => ({ name: "strands_structured_output", input: { reply: { kind: "conversation", message: "acknowledgement", commentary } } });
++const update = (index: number, finalCohorts: unknown): Step => ({ name: "update_current_party_details", input: { finalCohorts, quote: dialogueMessages[index] } });
++class DialogueModel extends Model<BaseModelConfig> {
++  calls = 0;
++  readonly messages: Message[][] = [];
++  private config: BaseModelConfig = { modelId: "scripted-dialogue" };
++  private readonly steps: Step[] = [
++    { name: "update_current_party", input: { action: "set", party: { kind: "count", people: 3 }, quote: "全体で3人です。" } },
++    update(0, [teen, college]), say("大学生のお二人の条件を受け取りました。"),
++    { name: "update_current_origin", input: { action: "set", place: "大阪", quote: "出発地は大阪にします。" } },
++    { name: "strands_structured_output", input: { reply: { kind: "clarification", target: "participation_scope", commentary: "途中で帰る方はまだ未定ですね。決まったら10代か20代かを教えてください。同行者条件は保留にします。" } } },
++    update(2, [{ ...teen, scope: untilTwo }, college]), say("10代の大学生の方ですね。参加範囲を反映しました。"),
++    update(3, [teen, { ...college, scope: untilTwo }]), say("逆でしたね。20代の方が2日目まで参加する条件に訂正しました。"),
++    { name: "consider_trip_scenario", input: { kind: "party_details", cohorts: [teen, college], quote: dialogueMessages[4] } },
++    { name: "strands_structured_output", input: { reply: { kind: "uncertainty", commentary: "全行程参加できる仮定で検討できます。費用や空室はまだ確認していません。現在の条件は変更していません。" } } },
++    update(5, null), say("同行者の詳細だけを未定に戻しました。"),
++  ];
++  updateConfig(config: BaseModelConfig) { this.config = { ...this.config, ...config }; }
++  getConfig() { return this.config; }
++  async *stream(messages: Message[]): AsyncGenerator<ModelStreamEvent> {
++    this.messages.push(structuredClone(messages));
++    const step = this.steps[this.calls++];
++    if (!step) throw new Error("Unexpected extra model call");
++    yield { type: "modelMessageStartEvent", role: "assistant" };
++    yield { type: "modelContentBlockStartEvent", start: { type: "toolUseStart", name: step.name, toolUseId: `history-${this.calls}` } };
++    yield { type: "modelContentBlockDeltaEvent", delta: { type: "toolUseInputDelta", input: JSON.stringify(step.input) } };
++    yield { type: "modelContentBlockStopEvent" };
++    yield { type: "modelMessageStopEvent", stopReason: "toolUse" };
++  }
++}
++
++it("loads real persisted history for short corrections, exposes accepted conditions, and replays the identical public turn", async () => {
++  const model = new DialogueModel(), f = await dialogueHistoryFixture({ model });
++  const profileBefore = await f.state.profiles.get(f.principal);
++  const expectedRevisions = [2, 3, 4, 5, 5, 6];
++  for (let i = 0; i < dialogueMessages.length; i++) {
++    const before = await f.overlay(), callbacks = f.writerCallbacks, firstCall = model.calls;
++    const result = await f.app.runConversationTurn(f.input(i));
++    expect(result.status).toBe("completed");
++    const overlay = await f.overlay();
++    expect(overlay?.intentRevision).toBe(expectedRevisions[i]);
++    expect(overlay?.facts.find(f => f.target === "party_size")?.value).toEqual({ kind: "quantity", amount: 3, unit: "people" });
++    if (i >= 1) expect(overlay?.facts.find(f => f.target === "origin")?.value).toEqual({ kind: "place_label", label: "大阪" });
++    if (i === 1) {
++      expect(overlay?.facts.find(f => f.target === "party_details")).toEqual(before?.facts.find(f => f.target === "party_details"));
++      expect(result.response).toContain("決まったら10代か20代か");
++      expect(result.response).toContain("出発地：大阪");
++      expect(result.response).not.toContain("同行者の詳細：");
++    }
++    if (i === 2 || i === 3) {
++      const resolvedScope = { kind: "logical_days", tripId: f.trip.id, tripRevision: 0, dayIds: ["day-a", "day-b"] };
++      const expected = i === 2 ? [{ ...teen, scope: resolvedScope }, college] : [teen, { ...college, scope: resolvedScope }];
++      expect(overlay?.facts.find(f => f.target === "party_details")?.value).toEqual({ kind: "party_cohorts", cohorts: parsePartyCohorts(expected) });
++      expect(result.response).toContain("今回の相談条件（反映済み）");
++      expect(result.response).toContain("1〜2日目");
++      const input = JSON.parse((model.messages[firstCall]![0]!.content[0] as { text: string }).text);
++      expect(input.application.conversation.messages).toHaveLength(i * 2);
++      expect(input.application.conversation.messages.at(-1).role).toBe("assistant");
++      expect(input.application.conversation.messages.at(-2).text).toBe(dialogueMessages[i - 1]);
++      expect(input.userMessage).toBe(dialogueMessages[i]);
++    }
++    if (i === 4) { expect(overlay).toEqual(before); expect(f.writerCallbacks).toBe(callbacks); expect(result.response).not.toContain("反映済み"); }
++    if (i === 5) { expect(overlay?.facts.find(f => f.target === "party_details")).toBeUndefined(); expect(result.response).toContain("同行者の詳細：未定"); }
++    expect(result.response).not.toContain(f.trip.id);
++    expect(result.response).not.toContain("day-a");
++    const calls = model.calls;
++    expect(await f.app.runConversationTurn(f.input(i))).toEqual(result);
++    expect(model.calls).toBe(calls);
++    expect((await f.history()).items.at(-1)?.text).toBe(result.response);
++  }
++  expect(await f.trips.repository.get(f.principal, f.trip.id)).toEqual(f.trip);
++  expect(await f.state.profiles.get(f.principal)).toEqual(profileBefore);
++});
+diff --git a/backend/agent-api/src/composition/strands-dialogue-output-live.test.ts b/backend/agent-api/src/composition/strands-dialogue-output-live.test.ts
+index 32ba801593dca179834c2d24d03c932e50b8d467..804b41b46bb708f55f46e9b0705db78153617e55 100644
+--- a/backend/agent-api/src/composition/strands-dialogue-output-live.test.ts
++++ b/backend/agent-api/src/composition/strands-dialogue-output-live.test.ts
+@@ -3 +3 @@ import { Agent, AfterToolCallEvent } from "@strands-agents/sdk";
+-import { agentV2StructuredOutputSchema } from "@raiquora/agent/agent-v2-reply";
++import { outputSyntaxDiagnostic } from "../adapters/strands-output-syntax.fixture.js";
+@@ -19,14 +18,0 @@ import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
+-const fields = new Set(["reply", "kind", "text", "commentary", "message", "target", "references", "evidenceIds", "receiptId", "operation"]);
+-const codes = new Set(["unrecognized_keys", "invalid_type", "invalid_value", "invalid_union", "too_small", "too_big", "invalid_format", "custom"]);
+-const kinds = new Set(["answer", "candidates", "conversation", "clarification", "uncertainty", "unavailable", "operation_result"]);
+-export function outputSyntaxDiagnostic(value: unknown) {
+-  const parsed = agentV2StructuredOutputSchema.safeParse(value);
+-  const reply = value && typeof value === "object" && "reply" in value ? value.reply : undefined;
+-  const kind = reply && typeof reply === "object" && "kind" in reply ? reply.kind : undefined;
+-  return { valid: parsed.success, kind: typeof kind === "string" && kinds.has(kind) ? kind : "unknown",
+-    issues: parsed.success ? [] : parsed.error.issues.slice(0, 8).map(issue => ({
+-      code: codes.has(issue.code) ? issue.code : "other",
+-      path: issue.path.slice(0, 6).map(key => typeof key === "number" ? "index" : fields.has(String(key)) ? String(key) : "other"),
+-      ...(issue.code === "unrecognized_keys" ? { keys: issue.keys.slice(0, 8).map(key => fields.has(key) ? key : "other") } : {}),
+-    })) };
+-}
+@@ -49 +35 @@ describe.skipIf(process.env.AGENT_V2_LIVE !== "true")("dialogue output with real
+-    const engine = new StrandsAgentEngine({ modelId: process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0", region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1536 }, {
++    const engine = new StrandsAgentEngine({ modelId: process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0", region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1536, maxInvocationOutputTokens: 1536 }, {
+diff --git a/backend/agent-api/src/composition/strands-output-live.test.ts b/backend/agent-api/src/composition/strands-output-live.test.ts
+index 082b4030ea37cc8b5659a76956848431fd2a1650..ad1bd66773441fefd4fa00f161d048712bb3029c 100644
+--- a/backend/agent-api/src/composition/strands-output-live.test.ts
++++ b/backend/agent-api/src/composition/strands-output-live.test.ts
+@@ -40 +40 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
+-      maxTurns: 6, maxOutputTokens: 1024 }, { createAgent: config => {
++      maxTurns: 6, maxOutputTokens: 1024, maxInvocationOutputTokens: 1024 }, { createAgent: config => {
+diff --git a/backend/agent-api/src/composition/strands-party-condition-live.test.ts b/backend/agent-api/src/composition/strands-party-condition-live.test.ts
+index b14b2f92e3bdee1c6fc3daa3662536cad1bfa86f..7a35e2cb32372b66b83db5e9b64ee0ac2a29eb6d 100644
+--- a/backend/agent-api/src/composition/strands-party-condition-live.test.ts
++++ b/backend/agent-api/src/composition/strands-party-condition-live.test.ts
+@@ -54 +54 @@ describe.skipIf(!enabled)("party condition Tool with real Bedrock", () => {
+-      const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1_024 }, {
++      const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1_024, maxInvocationOutputTokens: 1_024 }, {
+diff --git a/backend/agent-api/src/composition/strands-party-details-live.test.ts b/backend/agent-api/src/composition/strands-party-details-live.test.ts
+index f29dcd599574df8ebe4797d22a30e254972bef13..8d71aa0ecdfb3713541941fb0270d01450cfade3 100644
+--- a/backend/agent-api/src/composition/strands-party-details-live.test.ts
++++ b/backend/agent-api/src/composition/strands-party-details-live.test.ts
+@@ -50,0 +51 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
++  const history: Array<{ role: "user" | "assistant"; text: string }> = [];
+@@ -67 +68 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
+-    const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1_536 }, {
++    const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1_536, maxInvocationOutputTokens: 1_536 }, {
+@@ -74 +75 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
+-      researchMode: { requestedMode: "standard", effectiveMode: "standard" }, context: { effectiveIntent: compileEffectiveIntent({ overlay }) },
++      researchMode: { requestedMode: "standard", effectiveMode: "standard" }, context: { effectiveIntent: compileEffectiveIntent({ overlay }), conversation: { messages: history.slice(-12) } },
+@@ -81,0 +83,2 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
++    history.push({ role: "user", text: scenario.message });
++    if (result.status === "completed") history.push({ role: "assistant", text: result.response });
+@@ -101,4 +104,3 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
+-        if (result.publicReply?.kind === "clarification") {
+-          expect.soft(writerCallbacks, "a clarification must not also write").toBe(0);
+-          expect.soft(overlay).toEqual(before);
+-        }
++        // A misinterpreted first turn stays a quality failure in the strict probe.
++        // Final-reply kind alone does not determine which independent slot may
++        // commit. The production-history fixture checks the unresolved slot.
+@@ -112,2 +113,0 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
+-    if (!dialogueCompletion) expect.soft(selectedTools.includes("update_current_party"), `${fixture} case ${index} must not flatten scope into count`).toBe(false);
+-    if (!scenario.noCatalog) expect.soft(selectedTools.includes("update_current_party_details"), `${fixture} case ${index} details writer`).toBe(!!scenario.update);
+@@ -120 +120 @@ async function runCases(fixture: string, cases: Case[], initialCohorts?: PartyCo
+-      expect.soft(writerCallbacks, `${fixture} case ${index} one final decision`).toBe(1);
++      expect.soft([...journal.keys()].filter(key => !journalBefore.has(key)), `${fixture} case ${index} one accepted decision`).toEqual([conditionOperationId(turnId, "party_details")]);

@@ -1,0 +1,192 @@
+diff --git a/modules/agent/runtime/agent-v2-condition-display.test.ts b/modules/agent/runtime/agent-v2-condition-display.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..1c71b1cbf95f3732bee4e7941481a2cc53cdbfe3
+--- /dev/null
++++ b/modules/agent/runtime/agent-v2-condition-display.test.ts
+@@ -0,0 +1,33 @@
++import { expect, it } from "vitest";
++import { emptyConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
++import type { PartyScopeCatalog } from "@raiquora/trip/party-cohorts";
++import { conditionDelta } from "./conversation-condition";
++import { reduceConversationIntent } from "./conversation-intent-reducer";
++import { compileEffectiveIntent } from "./effective-intent";
++import { publicSemanticReceipt } from "./public-semantic-receipt";
++import { conditionDisplayLines } from "./agent-v2-condition-display";
++
++it("joins accepted same-operation receipts to current conditions, deduplicating replay without exposing provenance", () => {
++  const overlay = emptyConversationIntentOverlay();
++  const change = { target: "origin" as const, place: "大阪", quote: "PRIVATE_QUOTE" };
++  const accepted = reduceConversationIntent(overlay, conditionDelta(change, "PRIVATE_TURN", overlay));
++  const receipt = publicSemanticReceipt(accepted.receipt), current = compileEffectiveIntent({ overlay: accepted.overlay });
++  expect(conditionDisplayLines([receipt, receipt], current)).toEqual(["出発地：大阪"]);
++  expect(conditionDisplayLines([], current)).toEqual([]);
++  const later = reduceConversationIntent(accepted.overlay, conditionDelta({ ...change, place: "神戸" }, "later", accepted.overlay));
++  expect(conditionDisplayLines([receipt], compileEffectiveIntent({ overlay: later.overlay }))).toEqual([]);
++  const cleared = reduceConversationIntent(accepted.overlay, conditionDelta({ ...change, place: null }, "clear", accepted.overlay));
++  expect(conditionDisplayLines([publicSemanticReceipt(cleared.receipt)], compileEffectiveIntent({ overlay: cleared.overlay }))).toEqual(["出発地：未定"]);
++});
++it("renders anonymous scopes and independent attributes without prices, inferred ages or internal IDs", () => {
++  const catalog: PartyScopeCatalog = { tripId: "PRIVATE_TRIP", tripRevision: 2, days: [{ id: "PRIVATE_DAY_1", label: "1日目" }, { id: "PRIVATE_DAY_2", label: "2日目" }], segments: [] };
++  const overlay = emptyConversationIntentOverlay();
++  const accepted = reduceConversationIntent(overlay, conditionDelta({ target: "party_details", quote: "PRIVATE_QUOTE", cohorts: [{
++    count: 1, membership: "baseline", ageDecade: "twenties", schoolStage: "university",
++    scope: { kind: "logical_days", tripId: catalog.tripId, tripRevision: 2, dayIds: catalog.days.map(d => d.id) },
++  }] }, "PRIVATE_TURN", overlay));
++  const receipt = publicSemanticReceipt(accepted.receipt), current = compileEffectiveIntent({ overlay: accepted.overlay });
++  expect(conditionDisplayLines([receipt], current, catalog)).toEqual(["同行者の詳細：20代・大学生 1人（1〜2日目、全体人数の内数）"]);
++  expect(JSON.stringify(conditionDisplayLines([receipt], current, catalog))).not.toContain("PRIVATE");
++  expect(conditionDisplayLines([receipt], current, { ...catalog, tripRevision: 3 })[0]).toContain("要確認");
++});
+diff --git a/modules/agent/runtime/agent-v2-condition-display.ts b/modules/agent/runtime/agent-v2-condition-display.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f78fb047e77c34e4ddae74bbc51280c30d90a4dc
+--- /dev/null
++++ b/modules/agent/runtime/agent-v2-condition-display.ts
+@@ -0,0 +1,56 @@
++import type { IntentTarget, IntentValue } from "@raiquora/trip/conversation-intent";
++import type { PartyScopeCatalog } from "@raiquora/trip/party-cohorts";
++import type { EffectiveIntent } from "./effective-intent";
++import type { PublicSemanticReceipt } from "./public-semantic-receipt";
++import { partyCohortEditableValue } from "./party-cohort-context";
++
++const labels: Partial<Record<IntentTarget, string>> = { origin: "出発地", destination: "行き先", party_size: "全体人数",
++  start_date: "出発日", end_date: "終了日", duration: "期間", budget: "予算", party_details: "同行者の詳細" };
++const schools = { preschool: "未就学", elementary: "小学生", middle_school: "中学生", high_school: "高校生", university: "大学生" };
++const decades = { teens: "10代", twenties: "20代", thirties: "30代", forties: "40代", fifties: "50代",
++  sixties: "60代", seventies: "70代", eighties: "80代", nineties_plus: "90歳以上" };
++
++/** Display only values joined to receipts returned by this invocation's authenticated
++ * condition controller. No model text, Profile hints, raw IDs or new state store.
++ * A replay receipt that no longer describes the current value is not shown as current. */
++export function conditionDisplayLines(receipts: readonly PublicSemanticReceipt[], intent?: EffectiveIntent,
++  catalog?: PartyScopeCatalog): string[] {
++  if (!intent) return [];
++  const targets = new Set<IntentTarget>();
++  const lines: string[] = [];
++  for (const receipt of receipts) for (const change of receipt.changes) {
++    if (change.status !== "accepted" || change.frame !== "actual" || change.scope.type !== "conversation" ||
++        targets.has(change.target) || !labels[change.target] || receipt.intentRevision > intent.intentRevision) continue;
++    const fact = intent.actualConversationFacts.find(f => f.target === change.target && f.sourceOperationId === change.changeRef &&
++      f.frame === "actual" && f.scope.type === "conversation");
++    const retracted = intent.retractions.some(f => f.target === change.target && f.sourceOperationId === change.changeRef &&
++      f.frame === "actual" && f.scope.type === "conversation");
++    if (!fact && !retracted) continue;
++    targets.add(change.target);
++    const value = fact ? displayValue(fact.value, intent, catalog) : "未定";
++    if (value) lines.push(`${labels[change.target]}：${value}${fact?.precision === "approximate" ? "（目安）" : ""}`);
++  }
++  return lines;
++}
++function displayValue(value: IntentValue, intent: EffectiveIntent, catalog?: PartyScopeCatalog): string | undefined {
++  switch (value.kind) {
++    case "place_label": return value.label;
++    case "local_date": return value.date;
++    case "quantity": return `${value.amount}${{ people: "人", days: "日", nights: "泊" }[value.unit]}`;
++    case "party": return `大人${value.adults}人・子ども${value.children.length}人`;
++    case "money": return `${value.amount} ${value.currency ?? "（通貨未確認）"}／${value.basis === "trip" ? "旅行全体" : value.basis === "per_person" ? "1人あたり" : "単位未確認"}`;
++    case "party_cohorts": {
++      const cohorts = partyCohortEditableValue(intent, catalog);
++      if (!cohorts) return "参加範囲または人数との整合性は要確認";
++      return cohorts.map(cohort => {
++        const attributes = [cohort.ageDecade ? decades[cohort.ageDecade] : "", cohort.schoolStage ? schools[cohort.schoolStage] : "",
++          cohort.exactAge === undefined ? "" : `${cohort.exactAge}歳`].filter(Boolean).join("・");
++        const scope = cohort.scope.kind === "whole_trip" ? "全行程" : cohort.scope.kind === "segment"
++          ? `区間${cohort.scope.segmentNumber}` : `${cohort.scope.fromDay}〜${cohort.scope.toDay}日目`;
++        return `${attributes || "属性未確認"} ${cohort.count}人（${scope}、${cohort.membership === "additional" ? "追加参加" : "全体人数の内数"}）`;
++      }).join("；");
++    }
++    case "unknown": return "未確認";
++    default: return undefined;
++  }
++}
+diff --git a/modules/agent/runtime/agent-v2-publication.test.ts b/modules/agent/runtime/agent-v2-publication.test.ts
+index 7bc629dfa845c82124ca184923fa82f52a64fe28..d3c0e465a401ae333b4b6ae5f42289308553c78b 100644
+--- a/modules/agent/runtime/agent-v2-publication.test.ts
++++ b/modules/agent/runtime/agent-v2-publication.test.ts
+@@ -165,0 +166,26 @@ describe("Agent v2 publication contract", () => {
++
++it.each([
++  { kind: "conversation", message: "acknowledgement" },
++  { kind: "clarification", target: "participation_scope" },
++  { kind: "uncertainty" },
++])("admits contextual dialogue without manufacturing Evidence or mutation authority: $kind", draft => {
++  const commentary = "帰る方はまだ未定ですね。決まってから参加範囲を反映しましょう。";
++  const result = admitAgentV2Reply({ ...draft, commentary }, { executionId: "dialogue", evidence: [] });
++  expect(result.text).toBe(commentary);
++  expect(result.claims).toEqual([]);
++  expect(result.evidence).toEqual([]);
++  expect(result.proof.operation).toBeUndefined();
++  expect(result.proof.commentary).toBe(true);
++  expect(JSON.stringify(result.proof)).not.toContain(commentary);
++  for (const extra of [{ receiptId: "invented" }, { references: [{ evidenceId: "invented", field: "price" }] }])
++    expect(() => admitAgentV2Reply({ ...draft, commentary, ...extra }, { executionId: "dialogue", evidence: [] })).toThrow("invalid_proposal");
++  for (const text of ["<thinking>private</thinking>", "\u0000hidden", " ", "x".repeat(1201)])
++    expect(() => admitAgentV2Reply({ ...draft, commentary: text }, { executionId: "dialogue", evidence: [] })).toThrow();
++  const html = admitAgentV2Reply({ ...draft, commentary: '<script>x</script>[x](javascript:bad)' }, { executionId: "dialogue", evidence: [] });
++  expect(html.text).not.toContain("<script>");
++  expect(html.text).not.toContain("[x](javascript:");
++});
++it("allows a contextual clarification about a known destination rather than repeating the fixed questionnaire", () => {
++  expect(admitAgentV2Reply({ kind: "clarification", target: "destination", commentary: "京都のどのエリアを考えていますか？" },
++    { executionId: "dialogue", evidence: [], effectiveIntent: intent() }).text).toContain("どのエリア");
++});
+diff --git a/modules/agent/runtime/agent-v2-publication.ts b/modules/agent/runtime/agent-v2-publication.ts
+index d54bf9b78f7d1fca09676320e46b951fe95c0c7d..43c8cdd54c1796ce27d89782a1d1175a9518d263 100644
+--- a/modules/agent/runtime/agent-v2-publication.ts
++++ b/modules/agent/runtime/agent-v2-publication.ts
+@@ -43,2 +43,6 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
+-    case "conversation": return reply(conversationText[proposal.message]);
+-    case "uncertainty": return reply("必要な情報をまだ確認できていません。未確認の内容を確定情報としては案内できません。");
++    case "conversation":
++      if (proposal.commentary) { proof.commentary = true; return reply(escapeMarkdown(boundedText(proposal.commentary))); }
++      return reply(conversationText[proposal.message]);
++    case "uncertainty":
++      if (proposal.commentary) { proof.commentary = true; return reply(escapeMarkdown(boundedText(proposal.commentary))); }
++      return reply("必要な情報をまだ確認できていません。未確認の内容を確定情報としては案内できません。");
+@@ -46 +50,3 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
+-      if (knownCondition(context.effectiveIntent, proposal.target)) throw new AgentV2ReplyError("known_condition");
++      // A fixed questionnaire must not re-ask a known value. A contextual question
++      // can instead clarify which known value/person the user means.
++      if (!proposal.commentary && knownCondition(context.effectiveIntent, proposal.target)) throw new AgentV2ReplyError("known_condition");
+@@ -47,0 +54 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
++      if (proposal.commentary) { proof.commentary = true; return reply(escapeMarkdown(boundedText(proposal.commentary))); }
+diff --git a/modules/agent/runtime/agent-v2-reply.test.ts b/modules/agent/runtime/agent-v2-reply.test.ts
+index 82d321bb0ed107029f3bb816de6750c7a69d75d0..531bc49e2a13de212a9f3673cae8bb4706173e13 100644
+--- a/modules/agent/runtime/agent-v2-reply.test.ts
++++ b/modules/agent/runtime/agent-v2-reply.test.ts
+@@ -17 +17 @@ describe("single-source V2 reply syntax", () => {
+-    { kind: "conversation", message: "greeting", commentary: "こんにちは" },
++    { kind: "conversation", message: "greeting", commentary: "" },
+diff --git a/modules/agent/runtime/agent-v2-reply.ts b/modules/agent/runtime/agent-v2-reply.ts
+index 1e8536ec438226ac62d89c3e455172720b70f9d8..de7a658b208bca6fe55e1ba236e3b10b98972c82 100644
+--- a/modules/agent/runtime/agent-v2-reply.ts
++++ b/modules/agent/runtime/agent-v2-reply.ts
+@@ -13,0 +14 @@ const commentary = z.string().min(1).max(1200).describe("Selected Evidenceに基
++const dialogue = z.string().min(1).max(1200).describe("利用者への自然な会話文。確認・補足・仮定・不確実性を説明する。外部事実や実行の証明ではなく、保存処理を起動しない。");
+@@ -15 +16 @@ export const agentV2ReplySchema = z.discriminatedUnion("kind", [
+-  z.strictObject({ kind: z.literal("answer"), references: z.array(reference).min(1).max(8), commentary: commentary.optional() }),
++  z.strictObject({ kind: z.literal("answer").describe("外部情報を確認した事実回答。実在するEvidence参照が必須。通常の会話・確認・仮定の説明はconversation/clarification/uncertainty。"), references: z.array(reference).min(1).max(8), commentary: commentary.optional() }),
+@@ -17,2 +18,2 @@ export const agentV2ReplySchema = z.discriminatedUnion("kind", [
+-  z.strictObject({ kind: z.literal("conversation"), message: z.enum(["greeting", "thanks", "acknowledgement"]) }),
+-  z.strictObject({ kind: z.literal("clarification"), target: z.enum(replyQuestions) }),
++  z.strictObject({ kind: z.literal("conversation"), message: z.enum(["greeting", "thanks", "acknowledgement"]), commentary: dialogue.optional() }),
++  z.strictObject({ kind: z.literal("clarification"), target: z.enum(replyQuestions), commentary: dialogue.optional() }),
+@@ -21 +22 @@ export const agentV2ReplySchema = z.discriminatedUnion("kind", [
+-  z.strictObject({ kind: z.literal("uncertainty") }),
++  z.strictObject({ kind: z.literal("uncertainty"), commentary: dialogue.optional() }),
+diff --git a/modules/agent/runtime/party-cohort-context.ts b/modules/agent/runtime/party-cohort-context.ts
+index c696272008fb0b72696d10bd49b1ee07fd41db97..30948af719edd5950f621faf12c7adebd50c2b94 100644
+--- a/modules/agent/runtime/party-cohort-context.ts
++++ b/modules/agent/runtime/party-cohort-context.ts
+@@ -38 +38 @@ export function partyCohortEditableValue(intent?: EffectiveIntent, catalog?: Par
+-  return projected.some(cohort => cohort === null) ? null : projected;
++  return projected.every(cohort => cohort !== null) ? projected : null;
+diff --git a/package.json b/package.json
+index b76e774e9fcafafe9ed13f9be38038c3d2f9077b..f16cbf9043ca15ea8f4cb5f17a6b0008586e5a89 100644
+--- a/package.json
++++ b/package.json
+@@ -36 +36 @@
+-    "test:agent:v2": "vitest run --root . backend/agent-api/src/adapters/dynamodb-conversation-turn-repository.test.ts backend/agent-api/src/usecases/agent/conversation-turn.test.ts backend/agent-api/src/adapters/strands-agent-engine.test.ts backend/agent-api/src/adapters/strands-server-runtime.test.ts backend/agent-api/src/composition/strands-conversation-production-shaped.test.ts backend/agent-api/src/composition/strands-intent-acceptance.test.ts backend/agent-api/src/composition/conversation-server-agent.test.ts backend/agent-api/src/composition/agent-v2-acceptance-catalog.test.ts backend/agent-api/src/usecases/agent-v2-system-prompt.test.ts backend/agent-api/src/production-server-agent-composition.test.ts tools/strands-v2-live-evaluation.test.ts modules/agent/runtime/agent-v2-publication.test.ts modules/agent/runtime/agent-v2-candidates.test.ts backend/agent-api/src/composition/strands-place-cards-acceptance.test.ts backend/agent-api/src/adapters/dynamodb-place-presentation.test.ts frontend/src/presentation/concierge/public-place-presentation-view.test.ts backend/agent-api/src/usecases/agent/server-agent-diagnostics.test.ts backend/agent-api/src/adapters/strands-runtime-diagnostics.test.ts modules/agent/runtime/agent-v2-reply.test.ts backend/agent-api/src/adapters/strands-structured-output.test.ts modules/agent/runtime/conversation-condition.test.ts backend/agent-api/src/adapters/dynamodb-condition-operations.test.ts backend/agent-api/src/usecases/agent/conversation-condition-application.test.ts modules/agent/runtime/verified-intent-proposal.test.ts modules/trip/domain/party-cohorts.test.ts modules/trip/domain/cohort-eligibility.test.ts modules/agent/runtime/party-cohort-condition.test.ts backend/agent-api/src/usecases/agent/party-scope-catalog.test.ts backend/agent-api/src/composition/strands-cohort-production-shaped.test.ts",
++    "test:agent:v2": "vitest run --root . backend/agent-api/src/adapters/dynamodb-conversation-turn-repository.test.ts backend/agent-api/src/usecases/agent/conversation-turn.test.ts backend/agent-api/src/adapters/strands-agent-engine.test.ts backend/agent-api/src/adapters/strands-server-runtime.test.ts backend/agent-api/src/composition/strands-conversation-production-shaped.test.ts backend/agent-api/src/composition/strands-intent-acceptance.test.ts backend/agent-api/src/composition/conversation-server-agent.test.ts backend/agent-api/src/composition/agent-v2-acceptance-catalog.test.ts backend/agent-api/src/usecases/agent-v2-system-prompt.test.ts backend/agent-api/src/production-server-agent-composition.test.ts tools/strands-v2-live-evaluation.test.ts modules/agent/runtime/agent-v2-publication.test.ts modules/agent/runtime/agent-v2-candidates.test.ts backend/agent-api/src/composition/strands-place-cards-acceptance.test.ts backend/agent-api/src/adapters/dynamodb-place-presentation.test.ts frontend/src/presentation/concierge/public-place-presentation-view.test.ts backend/agent-api/src/usecases/agent/server-agent-diagnostics.test.ts backend/agent-api/src/adapters/strands-runtime-diagnostics.test.ts modules/agent/runtime/agent-v2-reply.test.ts backend/agent-api/src/adapters/strands-structured-output.test.ts modules/agent/runtime/conversation-condition.test.ts backend/agent-api/src/adapters/dynamodb-condition-operations.test.ts backend/agent-api/src/usecases/agent/conversation-condition-application.test.ts modules/agent/runtime/verified-intent-proposal.test.ts modules/trip/domain/party-cohorts.test.ts modules/trip/domain/cohort-eligibility.test.ts modules/agent/runtime/party-cohort-condition.test.ts backend/agent-api/src/usecases/agent/party-scope-catalog.test.ts backend/agent-api/src/composition/strands-cohort-production-shaped.test.ts modules/agent/runtime/agent-v2-condition-display.test.ts backend/agent-api/src/composition/strands-dialogue-history.test.ts backend/agent-api/src/adapters/strands-output-syntax.test.ts",
+@@ -41,0 +42 @@
++    "test:agent:v2:dialogue-live": "vitest run --root . backend/agent-api/src/composition/strands-dialogue-output-live.test.ts backend/agent-api/src/composition/strands-dialogue-history-live.test.ts --maxWorkers=1",
