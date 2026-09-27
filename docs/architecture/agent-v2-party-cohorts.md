@@ -1,6 +1,6 @@
 # Agent v2: 同行者属性と参加範囲
 
-Issue: #729。人数条件 #728 とは独立した `party_details` business slot。
+Issue: #729。人数条件 #728 とは独立した `party_details` business slot。初回解釈の品質改善は #736。
 
 ## 受理する条件
 
@@ -19,11 +19,11 @@ Issue: #729。人数条件 #728 とは独立した `party_details` business slot
 
 1要素は同じ人たちの人数・属性・参加範囲を一体で表す。属性の記録と参加日の記録に分割しない。既存の人の参加範囲を変更する時は、その要素を置換し、旧要素を別人として残さない。離脱後の不参加行や人数合わせの集団も生成しない。
 
-変更対象の同行者や範囲が曖昧なら、モデルはwriterを呼ばず既存の`clarification(target=participation_scope)`で確認できる。質問は実名を要求せず、既知の年代等で区別できる。確認中はIntent revision、journal、保存済み条件を変えない。属性が既知でも、新しい発言の変更対象が確定しているとは限らない。
+変更対象の同行者や範囲が曖昧なら、モデルはwriterを呼ばず既存の`clarification(target=participation_scope)`で確認する方針とする。質問は実名を要求せず、既知の年代等で区別できる。確認を返す時はIntent revision、journal、保存済み条件を変えない。属性が既知でも、新しい発言の変更対象が確定しているとは限らない。ただし、モデルがこの方針に従わず対象未確定の発言で更新する実例があり、初回解釈の完全性は達成していない（#736）。
 
 受理済み条件は保存の正本だが、モデルの意味理解が正しかった証明ではない。ユーザーが誤解や重複を指摘した場合は、新しいturnの通常の条件更新で訂正後の最終集合を受理する。無関係な同行者、明示済み属性、全体人数は維持する。以前のturnの再送で訂正を取り消せないことは既存journal/CAS/replayの責務である。
 
-Applicationに発話regexや同じ属性の自動dedupeを追加しない。同じ属性を持つ別人は存在でき、属性一致だけで同一人物と判断できない。意味理解・確認・訂正の判断はモデル、値の妥当性と保存の一貫性はApplication/Domainという境界を保つ。すべての初回理解の完全性ではなく、曖昧な時の非更新と、ユーザーの補足・訂正から正しく復旧できることも受入対象とする。
+Applicationに発話regexや同じ属性の自動dedupeを追加しない。同じ属性を持つ別人は存在でき、属性一致だけで同一人物と判断できない。意味理解・確認・訂正の判断はモデル、値の妥当性と保存の一貫性はApplication/Domainという境界を保つ。
 
 ## scopeの権限とcurrentness
 
@@ -32,6 +32,8 @@ Tool入力は `whole_trip`、`logical_days(fromDay?, toDay?)`、`segment(segment
 Applicationがowner-scoped Tripを読み、そのrevisionのlogicalDaysと`projectTripStructure`から番号付きの選択肢を作る。fromDay省略は初日、toDay省略はその既知Tripの最終日。日範囲は両端を含む。日も区間も存在しない場合にモデルで新設しない。Tripがない相談で限定範囲を受理せず、対象Trip/範囲の確認を返す。
 
 永続化するscopeはApplicationが解決したTrip ID・revision・day IDs/segment IDを保持する。モデル入力後にTripが変更されたら再解決してすり替えず拒否する。保存済みscopeが現Tripと異なる場合も未確認とする。日時や料金ルールの推測による補完はしない。
+
+訂正用の`application.currentPartyDetails`は、保存済みの属性を保持し、scopeをToolと同じ番号形式へ投影する読み取り専用データである。モデルにraw IDの逆変換を任せない。stale・未知・非連続scopeは広げずnullとする。Domainで解決してからdata-only serializerへ渡し、別の永続ストアは作らない。
 
 純粋Domainの`projectPartyAtScope`は、その日または区間に存在する人数と属性未確認の残りのbaselineを返す。dayとsegmentの対応を推測せず、異なる粒度への変換は未確認とする。
 
@@ -59,13 +61,24 @@ what-ifは`consider_trip_scenario(kind=party_details)`。scope解決と値検証
 
 Trip/Profile writer、予約、決済は接続しない。Profileへ常設同行者情報を増やさない。旧`TripParty`/`participants`やプロフィール保存型に年代を押し込まない。
 
-## 検証
+## 検証とリリース判断
 
-- `npm run test:agent:v2`: Domainの独立軸・scope・資格、SDK Tool/what-if、journal/replay/CAS、認証済みproduction-shaped経路、保存済み誤解の訂正・確認時の非更新を含む。
-- `npm run eval:agent:smoke`、`npm test`、`npm run build`、通常CI。
-- `AGENT_V2_LIVE=true MODEL_ID=jp.amazon.nova-2-lite-v1:0 npm run test:agent:v2:party-details-live`。
-- `Agent Eval / Strands v2 Live` の `party-details` は14ターン、1/3独立反復、1ターン最大6 model calls、60秒。3反復の上限は252 model calls。実Provider/production stateへの書き込みはない。
+決定論的検証は`npm run test:agent:v2`、Smoke、full CIで行う。独立属性・資格、owner-scoped scope解決、現在値投影のround-trip、CAS/replay、production-shaped経路、条件の訂正・確認時の非更新を含む。
 
-liveの従来10ターンは大学生かつ20代、小学生のexactAge未確認、途中離脱、途中追加、what-ifのwriter callback 0、区間参加、詳細撤回、挨拶/お礼、Trip未解決を確認する。入力と保存結果の期待値は維持する。独立した合成状態から、以前の重複保存をユーザー訂正で解消する1ターンと、曖昧な変更対象の確認→回答の受理→再訂正の3ターンを追加する。確認とwhat-ifではwriter callback 0・状態不変、実際の訂正では1操作・1revisionと無関係な条件の維持を検証する。
+利用者の「初回に完璧な解釈を要求するより、確認や訂正から正しく復旧することを重視する」という方針に合わせ、liveを明示的に分ける。
 
-決定論的テストは実モデルの意味理解を証明する代わりではなく、liveと別のゲートである。固定ケースの成功を未知の全発話で完全に理解できる保証とは扱わない。
+- `party-details`: 厳密な初回解釈probeを含む全5fixture、22ターン。従来の10発言・保存期待値、曖昧対象の初回確認期待は変えない。現時点では未通過の品質測定であり、#736で改善する。3反復の最大model callsは396。
+- `party-details-dialogue`: 保存済み重複の訂正、曖昧対象への補足と再訂正、複合撤回の誤解からの訂正を扱う3fixture、9ターン。3反復で最大162 model calls。先行する初回解釈は良否を記録し、その後の明示的なユーザー訂正で正しい値に到達することを合否にする。初回の品質失敗を成功と呼び替えない。
+
+対話完了gateでも、各turnのglobal人数・無関係な条件の維持、同一slotのcommit上限1、revisionとcommit数の一致は必須。明示的な訂正後の保存値・1操作・返答完了は厳密に照合する。what-ifはwriter callback 0かつ状態不変、不明scopeは未受理を要求する。確認を返す場合にも同時の書き込みを許容しない。単なる拒否済みToolの余分な選択は保存成功とは扱わず、実際のcommitとcallbackを検証する。
+
+実行例:
+
+```sh
+AGENT_V2_LIVE=true MODEL_ID=jp.amazon.nova-2-lite-v1:0 npm run test:agent:v2:party-details-live
+AGENT_V2_LIVE=true MODEL_ID=jp.amazon.nova-2-lite-v1:0 npm run test:agent:v2:party-details-live -- --testNamePattern 'recovers from|dialogue completion'
+```
+
+どちらも1ターン最大6 model calls・60秒で、実Providerやproduction stateへは書き込まない。fixtureはユーザーの後続発言を別turnで実行するだけで、runtimeへの自動repairやretryを追加しない。
+
+厳密な初回probeのrun `36294025636`では、元の10ターンは2/3成功、重複訂正は3/3成功、対象未確定時の確認は0/3だった。対話完了gateの成功とこの未達項目は、PRと#736で別々に報告する。受理した条件が利用者に見えづらい表示の問題も#721/#736で扱う。固定fixtureの成功を未知の全発話に対する保証とは扱わない。
