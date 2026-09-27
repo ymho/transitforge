@@ -87,7 +87,7 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
       const receipt = context?.workingState?.presentations.find((value) => value.presentationId === target.presentationId);
       const taskTarget = context?.taskContext?.target;
       const workingTarget = context?.workingState?.target;
-      if (!receipt || !receipt.target || target.tripId !== receipt.target.tripId || target.baseTripRevision !== receipt.target.baseTripRevision ||
+      if (!receipt || !receipt.target || target.tripId !== receipt.target.tripId || target.baseTripRevision !== receipt.baseTripRevision ||
           target.tripId !== workingTarget?.tripId || target.baseTripRevision !== workingTarget?.tripRevision ||
           target.tripId !== undefined && (scope.tripId !== target.tripId || taskTarget?.kind !== "trip" || taskTarget.tripId !== target.tripId) ||
           target.baseTripRevision !== undefined && (taskTarget?.kind !== "trip" || taskTarget.tripRevision !== target.baseTripRevision) ||
@@ -129,6 +129,14 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
           toolExecutor,
           limits: selectedLimits,
           researchLedger,
+          reportExecution: diagnostic => safeDiagnostic(dependencies, {
+            version: "agent-diagnostic-v1", executionId: scope.executionId,
+            phase: "execution", reason: diagnostic.reason, stopReason: diagnostic.stopReason,
+            ...(diagnostic.limitReason ? { limitReason: diagnostic.limitReason } : {}),
+            ...(diagnostic.counts ? { counts: { ...diagnostic.counts } } : {}),
+            incomplete: diagnostic.reason !== "completed",
+            occurredAt: (dependencies.now?.() ?? new Date()).toISOString(),
+          }),
           ...(initialEvidence?.length ? { initialEvidence } : {}),
           ...(reportProgress ? { reportProgress } : {}),
         });
