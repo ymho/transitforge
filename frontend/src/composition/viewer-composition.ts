@@ -1,4 +1,4 @@
-import { startFreshConsultation } from "../usecases/concierge/start-fresh-consultation";
+import { startTripConsultation } from "../usecases/trip-plan/start-trip-consultation";
 import type { TripRequest } from "@raiquora/trip/trip-request";
 import { createTripConsultationNavigation } from "../usecases/trip-plan/trip-consultation-navigation";
 import { currentAuthentication } from "./auth-composition";
@@ -433,11 +433,19 @@ const startNewConsultation = async (prompt: string) => {
   if (!isSignedIn()) throw new Error("Authentication required");
   if (!canLeaveConditions()) throw new Error("Navigation cancelled");
   const navigation = tripNavigation.cancel(), account = serverTripClient.sessionVersion();
-  await startFreshConsultation(prompt, {
-    create: () => conversationUi.create({}, false),
-    activate: activateConversation,
+  const tripId = crypto.randomUUID(), now = new Date().toISOString();
+  await startTripConsultation({
+    prompt, tripId, now,
     isCurrent: () => isSignedIn() && navigation === tripNavigation.version() && account === serverTripClient.sessionVersion(),
-    currentConversationId: () => activeConversationSession.id,
+    createTrip: (trip) => serverTripClient.create(trip),
+    archiveTrip: (id) => serverTripClient.archive(id),
+    createConversation: (metadata) => conversationUi.create(metadata, false),
+    activate: async (conversationId) => {
+      await activateConversation(conversationId);
+      await tripWorkspaceController.source()?.retry?.();
+      await serverTripList.refresh();
+    },
+    current: () => ({ conversationId: activeConversationSession.id, tripId: activeConversationSession.tripId }),
     submit: value => aiGuideController.ask(value),
   });
 };
