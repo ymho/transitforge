@@ -1,6 +1,7 @@
 # Trip-centered consultation
 
 Related: #751 / #753. This change establishes creation, identity, storage and navigation.
+Accepted-condition adoption/display is tracked separately in #761; #753 remains open.
 
 ## Creation and authority
 
@@ -66,7 +67,7 @@ pending changes. EffectiveIntent combines the adopted Trip request with that
 journal and optional Profile hints. Removing `draftRequest` does not itself mean
 all conversational changes have already been adopted into `Trip.request`.
 Connecting accepted changes, persistent Trip adoption and the condition display
-without competing current-state projections remains a follow-up within #753.
+without competing current-state projections remains #761 within #753.
 This PR must not be used to claim that end-to-end adoption is complete or that the
 old model repetition problem has been resolved. Explicit Trip mutations already
 use the existing revision/receipt contract; they are not inferred from history.
@@ -86,9 +87,16 @@ use the existing revision/receipt contract; they are not inferred from history.
   cancellation, and Trip -> consultation -> Trip. Build checks all production
   compositions, including Lambda bundles.
 
+The branch-local verification run `36319787557` passed architecture checks,
+production build, `npm test` and `npm run test:agent:v2`, and published source
+commit `d77437628fd74f42c2aaae59229ada1b824aaea0`. The exact verified source tree
+was `eb1ee3cbc6b17fa5cf425d45bd833fa5ca381261`. Temporary transfer files and its
+workflow were removed before that source commit. Normal PR CI is run against the
+final PR head separately; this record is not a live provider or deployment claim.
+
 ## Subsequent boundaries
 
-Accepted current-condition adoption/display completion remains #753. Trip
+Accepted current-condition adoption/display completion is #761 within #753. Trip
 branching/history copy and draft -> confirmed lifecycle are #754; purpose-oriented
 Tools/photo answers #755; itinerary insertion/editing #756; weather #757; live
 model/provider/browser verification #758.
