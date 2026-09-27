@@ -84,8 +84,10 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
       }
       successfulTurns += 1;
       const working = await new DynamoDbConversationTurnRepository("test-state", state.client).getWorkingState(principal, conversationId);
+      const savedTrip = await trips.repository.get(principal, stateMetadata().tripId);
       console.log(JSON.stringify({ modelId, case: index, status: result.status, reads: calls.length - before,
         cards: result.publicPlacePresentation?.cards.length ?? 0, intentRevision: working?.semantic?.overlay.intentRevision ?? 0,
+        tripRevision: savedTrip?.revision,
         durationMs: Date.now() - started }));
       expect.soft(result.status).toBe("completed");
       const beforeReplay = calls.length;
@@ -93,11 +95,18 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
       expect(calls.length).toBe(beforeReplay);
       if (index === 0) expect.soft(calls).toHaveLength(0);
       if (index === 1) {
-        expect.soft(working?.semantic?.overlay.intentRevision, "initial destination must be accepted").toBe(1);
+        expect.soft(savedTrip?.request.constraints.some(({ requirement }) => requirement.type === "destinations" &&
+          requirement.places.some(({ name }) => name === "出雲大社")), "initial destination must be adopted into Trip").toBe(true);
+        expect.soft(working?.semantic?.overlay.facts.some(({ target }) => target === "destination"),
+          "adopted destination must not remain as a second authority").toBe(false);
         expect.soft(calls.length).toBeGreaterThan(before);
       }
       if (index === 2) {
-        expect.soft(working?.semantic?.overlay.intentRevision, "destination correction must be accepted").toBe(2);
+        expect.soft(savedTrip?.request.constraints.filter(({ requirement }) => requirement.type === "destinations")
+          .flatMap(({ requirement }) => requirement.type === "destinations" ? requirement.places.map(({ name }) => name) : []),
+        "destination correction must replace the Trip condition").toEqual(["清水寺"]);
+        expect.soft(working?.semantic?.overlay.facts.some(({ target }) => target === "destination"),
+          "adopted correction must not remain as a second authority").toBe(false);
         expect.soft(result.publicPlacePresentation?.cards.map(({ title }) => title)).toContain("清水寺");
         expect.soft(result.publicPlacePresentation?.cards.some(({ title }) => title.includes("出雲大社"))).toBe(false);
       }

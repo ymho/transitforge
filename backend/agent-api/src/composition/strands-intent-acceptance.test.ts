@@ -8,9 +8,12 @@ import { stateDynamoFixture, conversationId, secondId, stateMetadata, stateProfi
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, token } from "../adapters/cognito-token.fixture.js";
 import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
+import { DynamoDbTripRepository } from "../adapters/dynamodb-trip-repository.js";
 import { StrandsAgentEngine } from "../adapters/strands-agent-engine.js";
 import { createStrandsServerRuntime } from "../adapters/strands-server-runtime.js";
 import { createConversationServerAgent } from "./conversation-server-agent.js";
+import { createProductionAgentStream } from "../agent-stream-composition.js";
+import type { StreamWriter } from "../ports/agent-stream-transport.js";
 
 type ToolStep = { tool: string; input: Record<string, unknown> };
 type Step = ToolStep | ToolStep[] | "end";
@@ -50,10 +53,11 @@ const answer = (executionId: string): Step => ({ tool: "strands_structured_outpu
   kind: "answer", references: [{ evidenceId: `evidence:${executionId}:place`, field: "description" }],
 } });
 async function setup() {
-  const principal = await cognitoTokenFixture().verifier.verify(token());
+  const { verifier } = cognitoTokenFixture();
+  const principal = await verifier.verify(token());
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
   const metadata = stateMetadata();
-  trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
+  trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-14T00:00:00Z"), principal.subject);
   await state.conversations.create(principal, conversationId, metadata);
   const turns = new DynamoDbConversationTurnRepository("test-state", state.client);
   const v1Model = { converse: vi.fn(async () => { throw new Error("V1 must not run"); }) };
@@ -86,9 +90,47 @@ async function setup() {
     });
     return { app, model, runRuntime };
   };
-  return { principal, state, trips, turns, v1Model, operation, build,
+  return { verifier, principal, state, trips, turns, v1Model, operation, build,
     input: { principal, conversationId, turnId: secondId, userRequest: "行き先は京都にしたい" } };
 }
+
+it("persists accepted conditions through the authenticated stream, reloads them from Trip, and replays a correction", async () => {
+  const test = await setup();
+  const stream = async (app: ReturnType<typeof test.build>["app"], input: typeof test.input, executionId: string) => {
+    const frames: string[] = [];
+    const handle = createProductionAgentStream({ enabled: true, path: "/api/agent-stream", verifier: test.verifier,
+      createApplication: () => app, newExecutionId: () => executionId, log: vi.fn() });
+    const writer: StreamWriter = { signal: new AbortController().signal, start: vi.fn(), end: vi.fn(async () => {}),
+      write: async (frame) => { frames.push(frame); } };
+    await handle({ method: "POST", path: "/api/agent-stream", apiRequestId: "gateway", lambdaRequestId: "lambda",
+      headers: { authorization: `Bearer ${token()}`, "content-type": "application/json" },
+      body: JSON.stringify({ conversationId: input.conversationId, turnId: input.turnId, userRequest: input.userRequest }) }, writer);
+    expect(writer.start).toHaveBeenCalledWith(200, expect.anything());
+    expect(frames.at(-1)).toContain("event: done");
+    return frames.join("");
+  };
+
+  const first = test.build([update("京都"), uncertainty], "stream-condition-first");
+  const firstPayload = await stream(first.app, test.input, "stream-condition-first");
+  expect(firstPayload).toContain('"type":"intent_accepted"');
+  expect(firstPayload).toContain("今回の相談条件（反映済み）");
+  const firstReload = await test.trips.repository.get(test.principal, stateMetadata().tripId);
+  expect(firstReload?.request.constraints.some(({ requirement }) => requirement.type === "destinations" &&
+    requirement.places.some(({ name }) => name === "京都"))).toBe(true);
+
+  const correctedInput = { ...test.input, turnId: "71111111-1111-4111-8111-111111111112", userRequest: "行き先を大阪に訂正したい" };
+  const corrected = test.build([update("大阪"), uncertainty], "stream-condition-corrected");
+  const correctedPayload = await stream(corrected.app, correctedInput, "stream-condition-corrected");
+  expect(correctedPayload).toContain("行き先：大阪");
+  const correctedReload = await test.trips.repository.get(test.principal, stateMetadata().tripId);
+  const destinations = correctedReload?.request.constraints.flatMap(({ requirement }) =>
+    requirement.type === "destinations" ? requirement.places.map(({ name }) => name) : []) ?? [];
+  expect(destinations).toEqual(["大阪"]);
+  const calls = corrected.model.requests.length;
+  expect(await stream(corrected.app, correctedInput, "stream-condition-replay")).toContain("行き先：大阪");
+  expect(corrected.model.requests).toHaveLength(calls);
+  expect((await test.state.conversations.history(test.principal, conversationId)).items).toHaveLength(4);
+});
 
 it("publishes updated-intent Evidence through A commit, a read, B commit, history and replay within one Domain Tool budget", async () => {
   const test = await setup();
@@ -218,7 +260,8 @@ it("does not revive an old conversation condition after the Trip was manually ed
   }) };
   const proposal = { tripId: current.id, baseRevision: current.revision, summary: "手動で行き先を神戸へ変更",
     patches: [{ type: "request" as const, request }] };
-  await test.trips.repository.applyMutation(test.principal, { tripId: current.id, baseRevision: current.revision,
+  const manualTrips = new DynamoDbTripRepository("test-trips", test.trips.client, { now: () => new Date("2026-09-28T00:00:00Z") });
+  await manualTrips.applyMutation(test.principal, { tripId: current.id, baseRevision: current.revision,
     mutationId: "99999999-9999-4999-8999-999999999999", proposal }, (trip) => applyTripProposal(trip, proposal));
   const probe = test.build([uncertainty], "manual-edit-probe");
   await probe.app.runConversationTurn({ ...test.input, turnId: "79999999-9999-4999-8999-999999999999", userRequest: "今の行き先で相談を続けたい" });
@@ -241,7 +284,7 @@ it("uses standard Tool validation feedback and accepts a valid operation after r
 it("recovers a lost Trip mutation response without duplicating the accepted condition", async () => {
   const test = await setup();
   test.trips.faults.lostResponse = true;
-  const first = test.build([update(), read(), answer("intent-retry")], "intent-trip-lost-response");
+  const first = test.build([update(), read(), answer("intent-trip-lost-response")], "intent-trip-lost-response");
   const result = await first.app.runConversationTurn(test.input);
   expect(result.status).toBe("completed");
   expect(result.semanticReceipt).toMatchObject({ intentRevision: 1 });

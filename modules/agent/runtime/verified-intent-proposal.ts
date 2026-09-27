@@ -41,6 +41,10 @@ export function proposeVerifiedIntentRequest(input: {
   for (const fact of relevantFacts.filter(({ target, value }) => target === "origin" && value.kind === "unknown")) profileSuppressions.push({
     id: `profile-suppression:${fact.factId}`, target: fact.target, scope: structuredClone(fact.scope), sourceOperationId: fact.sourceOperationId, reason: "explicit_unknown",
   });
+  for (const operation of accepted.filter(({ action, target }) => action === "retract" && target === "origin")) profileSuppressions.push({
+    id: `profile-suppression:${operation.operationId}`, target: operation.target, scope: structuredClone(operation.scope),
+    sourceOperationId: operation.operationId, reason: "explicit_unknown",
+  });
   const previousPartial = trip.request.partialConditions ?? [];
   const partialConditions = [...previousPartial.filter((fact) => !removalSlots.has(slotOf(fact))), ...partialFacts.map((fact) => structuredClone(fact))];
   const { profileSuppressions: _oldSuppressions, partialConditions: _oldPartial, ...requestBase } = trip.request;

@@ -37,6 +37,23 @@ describe("verified intent proposal", () => {
     expect(proposal?.intentBinding?.changes).toHaveLength(1);
   });
 
+  it("persists an explicit origin retraction so a Profile default cannot return after adoption", () => {
+    const trip = createTrip(tripId, "旅", "2026-09-25T00:00:00Z", [], { constraints: [
+      { id: "current-origin", source: "user", strength: "soft", scope: { type: "trip" },
+        requirement: { type: "origin", place: { name: "大阪", sources: [] } } },
+    ], assumptions: [] });
+    const reduced = reduceConversationIntent(emptyConversationIntentOverlay(), { version: 1, mutationId: `intent-turn:${turnId}`,
+      baseIntentRevision: 0, speechAct: "cancel", operations: [{
+        operationId: `intent-op:${turnId}:1`, groupId: `intent-group:${turnId}:1`, action: "retract", target: "origin",
+        scope: { type: "conversation" }, frame: "actual", provenance: { kind: "user_turn", turnId, quote: "出発地を未定に戻す" },
+      }] });
+    const effectiveIntent = compileEffectiveIntent({ baseRequest: trip.request, baseSource: "trip", baseRevision: 0, overlay: reduced.overlay });
+    const proposal = proposeVerifiedIntentRequest({ conversationId, trip, effectiveIntent, receipt: reduced.receipt });
+    expect(proposal?.patches[0]).toMatchObject({ type: "request", request: { constraints: [], assumptions: [], profileSuppressions: [{
+      target: "origin", reason: "explicit_unknown", sourceOperationId: `intent-op:${turnId}:1`,
+    }] } });
+  });
+
   it("persists an incomplete budget as a partial Trip condition without inventing currency or basis", () => {
     const trip = createTrip(tripId, "旅", "2026-09-25T00:00:00Z");
     const noBasis = apply({ action: "set", target: "budget", value: { kind: "money", amount: 500, currency: "EUR" }, modality: "preferred" });

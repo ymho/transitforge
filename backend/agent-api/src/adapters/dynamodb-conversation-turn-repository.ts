@@ -117,10 +117,17 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const working = parseConversationWorkingState(old.payload), semantic = semanticStateOf(working);
     if (semantic.adoptions?.some((item) => sameAdoption(item, { ...input, binding }) && item.committedTripRevision === input.committedTripRevision)) return;
     if (!semantic.adoptionInFlight || !sameAdoption(semantic.adoptionInFlight, { ...input, binding }) || input.committedTripRevision !== input.baseTripRevision + 1) throw new StateError("conflict");
-    const receipt = semantic.receipts.find((item) => item.intentRevision === binding.intentRevision && receiptMatches([item], binding));
-    if (!receipt) throw new StateError("conflict");
     const selected = new Set(binding.changes.map(({ changeRef }) => changeRef));
-    const factRefs = new Set(receipt.operations.filter(({ operationId }) => selected.has(operationId)).flatMap(({ afterFactRefs }) => afterFactRefs));
+    // A single Trip proposal may adopt several independent condition commands
+    // accepted during the same turn. Each command has its own receipt/revision;
+    // the binding revision is the final revision, not a requirement that every
+    // selected operation lives in that final receipt.
+    const selectedOperations = semantic.receipts
+      .filter(({ intentRevision }) => intentRevision <= binding.intentRevision)
+      .flatMap(({ operations }) => operations)
+      .filter(({ operationId }) => selected.has(operationId));
+    if (selectedOperations.length !== selected.size || !receiptMatches(semantic.receipts, binding)) throw new StateError("conflict");
+    const factRefs = new Set(selectedOperations.flatMap(({ afterFactRefs }) => afterFactRefs));
     const overlay = { ...semantic.overlay, facts: semantic.overlay.facts.filter(({ factId }) => !factRefs.has(factId)),
       tombstones: semantic.overlay.tombstones.filter(({ sourceOperationId }) => !selected.has(sourceOperationId)) };
     const adoption = { binding, tripId: input.tripId, baseTripRevision: input.baseTripRevision, committedTripRevision: input.committedTripRevision, mutationId: input.mutationId };

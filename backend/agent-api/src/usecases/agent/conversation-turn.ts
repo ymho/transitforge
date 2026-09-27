@@ -1,6 +1,7 @@
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import { StateError, exactObject, requireStatePrincipal } from "../../contracts/server-state.js";
-import type { ConversationTurnContinuity, ConversationTurnRepository, ConversationTurnResult } from "../../ports/conversation-turn-repository.js";
+import type { ConversationTurnContinuity, ConversationTurnIdentity, ConversationTurnLease, ConversationTurnRepository,
+  ConversationTurnResult } from "../../ports/conversation-turn-repository.js";
 import type { ServerAgentTurn } from "./server-agent.js";
 import { presentationFromObservation, presentationFromPublicPlan } from "@raiquora/agent/conversation-working-state";
 import { semanticStateOf } from "@raiquora/agent/conversation-working-state";
