@@ -160,7 +160,7 @@ describe("StrandsAgentEngine", () => {
       model: new ScriptedModel([repeated, repeated, submitted]),
     }).run({ ...input, userRequest: "出雲大社に行きたい", conditionController: { apply } });
     expect(apply).toHaveBeenCalledOnce();
-    expect(result.effectiveIntent?.destination).toEqual(expect.objectContaining({ label: "出雲大社" }));
+    expect(result.effectiveIntent?.fingerprint).toBe("effective-izumo");
     expect(result.replyProposal).toEqual({ kind: "uncertainty" });
   });
 
