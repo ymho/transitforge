@@ -3,8 +3,7 @@ import type { EffectiveIntent } from "./effective-intent";
 
 /** No derived global count or provider adult/child classification is produced. */
 export function partyCohortContext(intent?: EffectiveIntent, catalog?: PartyScopeCatalog) {
-  const cohorts = intent?.actualConversationFacts.flatMap(fact =>
-    fact.target === "party_details" && fact.scope.type === "conversation" && fact.value.kind === "party_cohorts" ? fact.value.cohorts : []) ?? [];
+  const cohorts = currentCohorts(intent);
   if (!cohorts.length) return { status: "none" as const };
   try {
     assertPartyScopeCurrent(cohorts, catalog);
@@ -16,6 +15,32 @@ export function partyCohortContext(intent?: EffectiveIntent, catalog?: PartyScop
     if (error instanceof PartyCohortError) return { status: "unconfirmed" as const, reason: error.code };
     throw error;
   }
+}
+
+/** Lossless, read-only projection of current conditions into the Tool's input
+ * vocabulary. The model does not have to reverse-map private day/segment IDs.
+ * A stale or non-contiguous scope is not broadened into an editable range. */
+export function partyCohortEditableValue(intent?: EffectiveIntent, catalog?: PartyScopeCatalog) {
+  const applicability = partyCohortContext(intent, catalog);
+  if (applicability.status === "none" || applicability.status === "unconfirmed") return null;
+  const projected = currentCohorts(intent).map(cohort => {
+    const { scope, ...attributes } = cohort;
+    if (scope.kind === "whole_trip") return { ...attributes, scope: { kind: "whole_trip" as const } };
+    if (!catalog) return null;
+    if (scope.kind === "segment") {
+      const index = catalog.segments.findIndex(segment => segment.id === scope.segmentId);
+      return index < 0 ? null : { ...attributes, scope: { kind: "segment" as const, segmentNumber: index + 1 } };
+    }
+    const indexes = scope.dayIds.map(id => catalog.days.findIndex(day => day.id === id)).sort((a, b) => a - b);
+    if (!indexes.length || indexes[0]! < 0 || indexes.some((index, offset) => index !== indexes[0]! + offset)) return null;
+    return { ...attributes, scope: { kind: "logical_days" as const, fromDay: indexes[0]! + 1, toDay: indexes[indexes.length - 1]! + 1 } };
+  });
+  return projected.some(cohort => cohort === null) ? null : projected;
+}
+
+function currentCohorts(intent?: EffectiveIntent) {
+  return intent?.actualConversationFacts.flatMap(fact =>
+    fact.target === "party_details" && fact.scope.type === "conversation" && fact.value.kind === "party_cohorts" ? fact.value.cohorts : []) ?? [];
 }
 
 /** Existing global-count readers cannot yet express a day/segment-specific party.
