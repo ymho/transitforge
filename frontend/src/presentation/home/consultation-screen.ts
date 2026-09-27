@@ -107,7 +107,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   let renderedSession = "";
   const render = () => {
     const state = ports.read(), trip = state.trip;
-    const key = JSON.stringify([state, ports.profile()?.home]); if (key === lastKey) return; lastKey = key;
+    const key = JSON.stringify([state, ports.profile()?.usualOrigin]); if (key === lastKey) return; lastKey = key;
     const interruptedEditor = renderedSession === state.sessionId ? rows.querySelector(".consultation-condition-editor") : null;
     renderedSession = state.sessionId;
     if (aside.dataset.open === "true") sheet(false);
@@ -241,8 +241,8 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
       }
       if (trip.items.length) rows.append(node("p", "consultation-help", "日程は今回の希望です。採用済みの予定・旅行履歴の分類は変わりません。条件と異なる予定は、旅程の変更案で別途確認してください。"));
     } else {
-      const origin = ports.profile()?.home.station;
-      if (origin) row("普段の出発駅", origin);
+      const origin = ports.profile()?.usualOrigin;
+      if (origin) row("普段の出発地", origin);
       row("今回の条件", "会話で追加できます");
     }
     if (interruptedEditor && trip && !state.viewer) {

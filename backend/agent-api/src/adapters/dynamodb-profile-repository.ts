@@ -13,24 +13,24 @@ export class DynamoDbProfileRepository implements ProfileRepository {
     try { return { profile: boundedProfile(value.payload), revision: value.revision }; }
     catch { throw new StateError("unavailable"); }
   }
-  async get(principal: TrustedPrincipal) { return this.decode(await this.store.read(principal, "PROFILE")); }
+  async get(principal: TrustedPrincipal) { return this.decode(await this.store.read(principal, "PROFILE_V3")); }
   async put(principal: TrustedPrincipal, input: UserProfile, expected: number | null) {
     this.store.owner(principal);
     if (expected !== null) revision(expected);
-    const profile = boundedProfile(input), old = await this.store.read(principal, "PROFILE"), current = this.decode(old);
+    const profile = boundedProfile(input), old = await this.store.read(principal, "PROFILE_V3"), current = this.decode(old);
     if (expected === null ? current !== undefined : !current) throw new StateError(expected === null ? "conflict" : "not-found");
     if (expected !== null && current?.revision !== expected) throw new StateError("conflict");
     const nextRevision = old ? old.revision + 1 : 0;
     revision(nextRevision);
-    await this.store.send(new PutItemCommand(this.store.put(principal, "PROFILE", { revision: nextRevision, deleted: false, payload: profile }, old)));
+    await this.store.send(new PutItemCommand(this.store.put(principal, "PROFILE_V3", { revision: nextRevision, deleted: false, payload: profile }, old)));
     return { profile, revision: nextRevision };
   }
   async delete(principal: TrustedPrincipal, expected: number) {
     this.store.owner(principal); revision(expected);
-    const old = await this.store.read(principal, "PROFILE"), current = this.decode(old);
+    const old = await this.store.read(principal, "PROFILE_V3"), current = this.decode(old);
     if (!current) throw new StateError("not-found");
     if (current.revision !== expected) throw new StateError("conflict");
     // Preserve a content-free generation fence so stale writes cannot modify a recreated profile.
-    await this.store.send(new PutItemCommand(this.store.put(principal, "PROFILE", { revision: expected + 1, deleted: true }, old)));
+    await this.store.send(new PutItemCommand(this.store.put(principal, "PROFILE_V3", { revision: expected + 1, deleted: true }, old)));
   }
 }

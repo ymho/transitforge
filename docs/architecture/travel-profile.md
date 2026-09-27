@@ -1,46 +1,39 @@
-# 旅行プロフィールの互換編集（#457）
+# Profile V3
 
-会話Contextを含む後続turnも自由文Traceを保存しない。同意解除後でも履歴が以前のメモを
-引用し得るため、現在の送信同意だけでログ保存を再開しない。Model/Tool回数・latency・ID等の
-内容を含まない診断は維持する。会話表示のための履歴と診断Traceは別の保存境界である。
+## 目的
 
-## 正本・保存・未設定
+Profileは「旅を作るための事前入力」ではなく、毎回説明しなくてよいアカウント共通のsoft hintだけを保存する。
+今回の旅行条件、採用済みTrip、予約、現在地、人数、予算、日程、移動上限はProfileへ保存しない。
 
-既存UserProfile v2、`transitforge.travel-profile.v2`、既存Repositoryを再利用する。
-home、companions、travelStyle、preferences、transportに対応する1つのフォームとし、モックの別Profileを作らない。
-未設定数値/車利用はfield省略とする。0やfalse、標準ペースへ変換しない。legacy null移動時間も維持する。
-旧v2の値は読込/編集/保存後もそのままで、schema移行・保存キー変更・原本削除はない。
+## 正本
 
-アカウント画面の通常文書フローに編集フォームを直接配置し、日本語チップを選ぶ。中間の読取専用表示や
-「編集」ボタン、画面全体を覆うabsolute overlayは設けない。基本情報/旅のペース/興味・目的/宿泊・食事/配慮事項でまとめる。
-無操作時は.123等の旧重みも丸めない。選択した項目だけ代表値へ変換し、未設定は省略する。
-未設定fieldを別の既定値で上書きせず、表示しない子どもの年代も保持する。
+認証済み `/api/profile/v1` → ProfileApplication → owner-scoped Repositoryを唯一の正本とする。
+Domain schemaは `UserProfile version: 3`。DynamoDBは `PROFILE_V3` を使い、旧Profileの読込・移行・fallback・dual-writeを行わない。
+旧データを削除するmigrationもこの変更では実行しない。
 
-## 編集と失敗
+保存項目は次の3項目だけ。すべて任意。
 
-起動時にmodalを自動表示しない。未登録で相談可能。
-編集draftはcloneし、明示保存だけserver ProfileをCAS更新する。ページ離脱時は未保存変更を案内し、
-フォーム内の「変更を破棄」で保存済み状態へ戻す。
-削除は再確認する。quota・アクセス拒否を成功と表示しない。破損した保存原本は自動上書きしない。
-無効データは明示削除後に新規登録可能である。
+- `usualOrigin`: 普段の出発地。駅・地域などの短い文字列。
+- `interests`: 海、自然、温泉、食、歴史などの安定した興味。
+- `considerations`: 毎回配慮してほしいこと。自由文で、命令として実行しない。
 
-## Agent / Trip / privacy
+`version` と `updatedAt` は保存メタデータで、利用者向け設定項目ではない。
 
-普段の人数はcompanions.usualPartySize、優先移動手段はtransport.preferredMode。
-AgentへはusualPartySizeHint/preferredTransportHintとしてbounded projectionを渡す。
-未設定ペース/車利用はContextでも未設定のまま。今回のTripRequest/明示入力を優先し、Profile保存でTrip A/Bを変更しない。
-予約の人数、今回のparty、hard constraintへ自動転記しない。
+## Agentへの渡し方
 
-notes.budget/lodging/food/avoidancesは各500文字以下の端末メモ。HTMLとして実行しない。
-aiNoteFieldsは利用者が明示保存した項目ごとのAI送信同意。旧メモに同意を付与しない。
-同意した項目だけconsentedPreferenceNotesへ各240文字/最大4項目を投影する。生Profileを送信しない。
-この投影は命令/HTMLではなく普段の希望で、現在の明示条件を優先する。送信同意は記録同意ではない。
-該当turnのAgent Traceは本文/Tool入出力/判断自由文を記録せず、モデル呼出しの保存Traceも会話全文を省略する。
-利用者が同意を解除しても端末メモは残し、以後のProfile投影から外す。
-Profile編集による端末間同期はない。#451の認証切替では端末Profileを別principalへ暗黙移譲せず、明示的な取込/継続確認を所有する。
-現時点で公開認証/保存gateは変更しない。
+ApplicationはProfileをそのままpromptへ入れず、bounded projectionを作る。
+出発地はoriginのsoft hint、興味はexperienceのsoft hint、配慮事項はuntrustedなexperience hintとして扱う。
+現在の会話・Tripに明示された条件が常に優先し、ProfileからTripの人数・日程・予算・移動条件を生成しない。
+Profileの変更で既存Tripを更新しない。
 
-## Wave接続
+## UI
 
-#453のマイページへ編集フォームを直接統合する。保存/変更破棄/削除はこの同じ機能へ接続する。
-#456は今回条件との明示的な適用を担当する。デザインモックの固定人数/予算は入力初期値にしない。
+設定画面は3項目だけを表示する。Profile未登録でも相談を開始できる。
+編集はaccount-scoped CAS autosaveを使い、IME入力中や保存失敗時に入力を失わない。
+Tripの会話からProfileへ自動昇格しない。
+
+## 非互換方針
+
+旧version 2の同行傾向、子ども年代、ペース、移動許容、予算、宿泊/食事別メモ、AI同意fieldはV3へ移行しない。
+旧Profileに依存するProfile→Trip条件コピーAPI/Browser操作も撤去する。
+TripParty等のDomain型はProfile保存とは独立して維持する。

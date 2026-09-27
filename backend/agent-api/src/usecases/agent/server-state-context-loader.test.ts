@@ -25,16 +25,15 @@ describe("Server State Context Loader", () => {
   it("restores metadata/history, existing profile projection and owner Trip without writes", async () => {
     const f = setup(); await f.conversations.create(a, { ...stateMetadata(), resolvedTopics: ["行先"], pendingTopics: ["日程"] });
     await f.conversations.append(a, id, 0, [{ role: "user", text: "履歴" }, { role: "assistant", text: "回答" }]);
-    await f.profiles.update(a, { ...stateProfile(), aiNoteFields: ["budget"] }, null);
+    await f.profiles.update(a, stateProfile(), null);
     await f.trips.repository.create(a, trip());
     const stateBefore = structuredClone(f.records), tripBefore = structuredClone(f.trips.records);
     const context = await f.load({ principal: a, conversationId: id, tripId, uiContext: { itemId: "stay", calendarDate: "2026-09-21" } });
     expect(context.conversation).toMatchObject({ title: "会話", scope: "trip", summary: "相談", resolvedTopics: ["行先"], pendingTopics: ["日程"],
       messages: [{ role: "user", text: "履歴" }, { role: "assistant", text: "回答" }] });
-    expect(context.travelProfile).toMatchObject({ source: { profileVersion: 2, profileRevision: 0 }, application: "reference_only",
-      pace: 0.123, favoriteInterests: ["鉄道"] });
-    expect(context.travelProfile?.consentedPreferenceNotes).toBeUndefined();
-    expect(context.effectiveIntent?.ignoredProfileSettings).toContainEqual({ path: "notes.budget", reason: "trip_specific" });
+    expect(context.travelProfile).toMatchObject({ source: { profileVersion: 3, profileRevision: 0 }, application: "reference_only",
+      usualOrigin: "大阪", favoriteInterests: ["鉄道"], considerations: "静かな場所を好む" });
+    expect(context.effectiveIntent?.ignoredProfileSettings).toEqual([]);
     expect(context.currentTrip).toEqual(createAgentContextSnapshot(undefined, trip()).trip);
     expect(context.taskContext).toMatchObject({ version: 1, phase: "refine", requestRevision: 0,
       target: { kind: "trip", tripId, tripRevision: 0 } });
@@ -63,16 +62,15 @@ describe("Server State Context Loader", () => {
     await expect(f.load({ principal: a, conversationId: id, tripId: id })).rejects.toMatchObject({ code: "invalid-input" });
     expect(f.trips.commands).toHaveLength(0);
   });
-  it("keeps A/B profiles isolated and preserves absence and consent", async () => {
+  it("keeps A/B Profile V3 isolated and preserves absence", async () => {
     const f = setup();
     expect(await f.load({ principal: a })).toEqual({});
-    await f.profiles.update(a, { ...stateProfile(), home: { station: "A駅" }, notes: { food: "非同意メモ", budget: "同意メモ" }, aiNoteFields: ["budget"] }, null);
+    await f.profiles.update(a, { ...stateProfile(), usualOrigin: "A駅", considerations: "Aだけの配慮" }, null);
     expect(await f.load({ principal: b })).toEqual({});
-    await f.profiles.update(b, { ...stateProfile(), home: { station: "B駅" } }, null);
+    await f.profiles.update(b, { ...stateProfile(), usualOrigin: "B駅", considerations: "Bだけの配慮" }, null);
     const [left, right] = await Promise.all([f.load({ principal: a }), f.load({ principal: b })]);
-    expect(left.travelProfile?.home).toEqual({ station: "A駅" }); expect(right.travelProfile?.home).toEqual({ station: "B駅" });
-    expect(left.travelProfile?.consentedPreferenceNotes).toBeUndefined();
-    expect(JSON.stringify([left, right])).not.toMatch(/非同意メモ|同意メモ/);
+    expect(left.travelProfile?.usualOrigin).toBe("A駅"); expect(right.travelProfile?.usualOrigin).toBe("B駅");
+    expect(JSON.stringify(left)).not.toContain("Bだけの配慮"); expect(JSON.stringify(right)).not.toContain("Aだけの配慮");
   });
   it("supports no conversation, no profile and an explicit authorized Trip", async () => {
     const f = setup(); await f.trips.repository.create(a, trip());

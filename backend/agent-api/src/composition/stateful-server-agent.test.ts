@@ -11,8 +11,8 @@ it("verified principal → DynamoDB state → structured context → Server Mult
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
   await state.conversations.create(a, conversationId, { ...stateMetadata(), summary: "Aの会話要約" });
   await state.conversations.append(a, conversationId, 0, [{ role: "user", text: "以前の相談" }]);
-  await state.profiles.put(a, { ...stateProfile(), home: { area: "Aの地域" } }, null);
-  await state.profiles.put(b, { ...stateProfile(), home: { area: "Bの地域" } }, null);
+  await state.profiles.put(a, { ...stateProfile(), usualOrigin: "Aの地域" }, null);
+  await state.profiles.put(b, { ...stateProfile(), usualOrigin: "Bの地域" }, null);
   await trips.repository.create(a, { ...createTrip(secondId, "Aの旅程", "2026-09-18T00:00:00Z"), request: { goal: "今回の旅行目的", constraints: [], assumptions: [] } });
   const savedState = structuredClone(state.records), savedTrips = structuredClone(trips.records);
   const requests: ConversationModelRequest[] = [];
@@ -29,7 +29,7 @@ it("verified principal → DynamoDB state → structured context → Server Mult
   const context = JSON.parse(("text" in text ? text.text : "").match(/<agent_context>([\s\S]*)<\/agent_context>/)![1]);
   expect(context.userRequest).toBe(turn.userRequest);
   expect(context.conversation).toMatchObject({ summary: "Aの会話要約", messages: [{ role: "user", text: "以前の相談" }] });
-  expect(context.travelProfile.home.area).toBe("Aの地域");
+  expect(context.travelProfile.usualOrigin).toBe("Aの地域");
   expect(context.currentTrip.title).toBe("Aの旅程");
   expect(context.persistedTripRequest.goal).toBe("今回の旅行目的");
   expect(JSON.stringify(requests)).not.toMatch(/forged|Bの地域|identity-v1/);

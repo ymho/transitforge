@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ProfileUiController } from "./profile-ui-controller";
 
-const profile = { version: 2 as const, updatedAt: "2026-09-01T00:00:00Z", home: {}, companions: { usual: [], children: [] }, travelStyle: {}, preferences: {}, transport: {} };
+const profile = { version: 3 as const, updatedAt: "2026-09-01T00:00:00Z", usualOrigin: "大阪", interests: ["history" as const], considerations: "静かな場所" };
 describe("ProfileUiController", () => {
   it("hydrates, updates, and clears only its memory projection", async () => {
     const client = { get: async () => ({ profile, revision: 1 }), update: async () => ({ profile, revision: 2 }), delete: async () => undefined };
@@ -33,7 +33,7 @@ describe("ProfileUiController", () => {
         return { profile: next, revision: revision! + 1 };
       }) };
     const controller = new ProfileUiController(client); await controller.hydrate();
-    const first = { ...profile, home: { station: "東" } }, second = { ...profile, home: { station: "東京" } };
+    const first = { ...profile, usualOrigin: "東" }, second = { ...profile, usualOrigin: "東京" };
     const saving = controller.autosave(first); expect(client.update).toHaveBeenCalledOnce();
     expect(controller.autosave(second)).toBe(saving);
     release(); await saving;

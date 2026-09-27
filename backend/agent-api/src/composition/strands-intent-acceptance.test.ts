@@ -210,7 +210,7 @@ it("fails closed after post-commit context refresh failure and resumes without a
 
 it("overrides profile hints only in this Conversation and retracts without reviving a hidden default", async () => {
   const test = await setup();
-  const savedProfile = await test.state.profiles.put(test.principal, { ...stateProfile(), home: { station: "神戸" } }, null);
+  const savedProfile = await test.state.profiles.put(test.principal, { ...stateProfile(), usualOrigin: "神戸" }, null);
   const first = test.build([origin(), update(), read(), answer("profile-first")], "profile-first");
   const input = { ...test.input, userRequest: "今回は大阪から京都に行きたい" };
   const result = await first.app.runConversationTurn(input);

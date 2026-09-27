@@ -15,7 +15,7 @@ it("verified principal → idempotent messages → stateful Server Runtime → p
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
   await state.conversations.create(a, conversationId, stateMetadata());
   await state.conversations.append(a, conversationId, 0, [{ role: "user", text: "以前の相談" }]);
-  await state.profiles.put(a, { ...stateProfile(), home: { area: "Aの地域" } }, null);
+  await state.profiles.put(a, { ...stateProfile(), usualOrigin: "Aの地域" }, null);
   await trips.repository.create(a, createTrip(secondId, "Aの旅程", "2026-09-18T00:00:00Z"));
   const originalProfile = await state.profiles.get(a), originalTrips = structuredClone(trips.records);
   const requests: ConversationModelRequest[] = [];
@@ -36,7 +36,7 @@ it("verified principal → idempotent messages → stateful Server Runtime → p
   const context = JSON.parse(("text" in text ? text.text : "").match(/<agent_context>([\s\S]*)<\/agent_context>/)![1]);
   expect(context.userRequest).toBe(turn.userRequest);
   expect(context.conversation.messages).toEqual([{ role: "user", text: "以前の相談" }]);
-  expect(context.travelProfile.home.area).toBe("Aの地域");
+  expect(context.travelProfile.usualOrigin).toBe("Aの地域");
   expect(context.currentTrip.title).toBe("Aの旅程");
   expect(requests[0].trace).toBeUndefined();
   expect(await createConversationServerAgent(options).runConversationTurn(turn)).toEqual(result);

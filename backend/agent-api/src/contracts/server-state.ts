@@ -72,7 +72,7 @@ export function messageInputs(value: unknown): MessageInput[] {
 }
 /** Reuse the Domain validator; add only storage envelope/size and authority-field restrictions. */
 export function boundedProfile(value: unknown): UserProfile {
-  exactObject(value, ["version", "home", "companions", "travelStyle", "preferences", "transport", "notes", "aiNoteFields", "updatedAt"]);
+  exactObject(value, ["version", "usualOrigin", "interests", "considerations", "updatedAt"]);
   if (!isUserProfile(value)) throw new StateError("invalid-input");
   try {
     const raw = JSON.stringify(value);
