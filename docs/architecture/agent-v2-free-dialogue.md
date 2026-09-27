@@ -12,8 +12,23 @@ Applicationが実Controllerの受理記録と現在のEffectiveIntentをoperatio
 最終16KB上限と既存B commitを通り、SSE/history/replay共通になる。Trip保存や予約の成功を意味しない。
 既知の条件でも文脈付きの確認質問は可能とし、固定の同じ値を聞く質問だけを従来通り拒否する。
 
+## SDK標準の会話履歴
+
+通常の認証済みConversation組成・owner-scopedの履歴loaderで取得した公開user/assistant本文だけを、
+Strandsの`AgentConfig.messages`へ渡す。履歴をJSON内の参考データとして重複して埋め込まない。
+現在のuserMessageとApplication状態の入力は分離したまま、結合前の全データに従来24kの上限とprivate field除去を適用する。
+raw Tool結果・内部思考・system roleを会話履歴から作らず、不正なrole/textを拒否する。
+元のConversationが保存の正本であり、SDK sessionや別の会話保存先を作らない。
+
+JSONに履歴を埋め込んだ旧試験run 36298787600では自由文は全18ターンで返ったが、
+『大阪です』を出発地ではなく行き先として受理するため3反復とも失敗した。発言・期待する保存値は変更せず、
+SDK標準履歴へ移した同じ6ターンを再検証する。決定論的テストでは実SDKへ渡ったroleと順序も確認する。
+
+## 出力上限と検証
+
 maxOutputTokens（モデル1回）とmaxInvocationOutputTokens（累積実行）を分け、本番は4096/4096を明示して従来上限を維持する。
-通常の認証済みConversation組成・実際の履歴loaderで「大阪です」という短い返答、what-if、実条件の訂正、撤回、B replayと履歴の一致を検証する。
+人数指定→『大阪です』→人数what-if→実際の訂正→出発地撤回→お礼という会話で、保存値と受理表示、
+what-ifのwriter callback0、無関係な条件の維持、B replayと履歴の一致を検証する。
 `AGENT_V2_LIVE=true MODEL_ID=jp.amazon.nova-2-lite-v1:0 npm run test:agent:v2:free-dialogue-live`は実モデルの6ターン。
 各最大6 calls・60秒、model出力1536、累積4096。通常CIでは課金liveを実行しない。
 
