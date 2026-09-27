@@ -125,6 +125,19 @@ it("persists an accepted destination into Trip.request before treating it as ref
     .some(({ target }) => target === "destination")).toBe(false);
 });
 
+it("does not publish accepted state when the Trip mutation fails before commit", async () => {
+  const test = await setup();
+  const { app } = test.build([update("出雲大社"), uncertainty], "trip-authority-failure");
+  test.trips.faults.beforeTransaction = () => { throw new Error("synthetic Trip write failure"); };
+  const reportReceipt = vi.fn(async () => {});
+  await expect(app.runConversationTurn({ ...test.input, userRequest: "出雲大社に行きたい" }, undefined, reportReceipt)).rejects.toBeDefined();
+  expect(reportReceipt).not.toHaveBeenCalled();
+  const saved = await test.trips.repository.get(test.principal, stateMetadata().tripId);
+  expect(saved?.revision).toBe(0);
+  expect(saved?.request.constraints).toEqual([]);
+  expect((await test.state.conversations.history(test.principal, conversationId)).items).toHaveLength(1);
+});
+
 it("uses corrected conditions for both read validation and publication on a later turn", async () => {
   const test = await setup();
   const first = test.build([update("神戸"), read("神戸"), answer("intent-kobe"), "end"], "intent-kobe");
