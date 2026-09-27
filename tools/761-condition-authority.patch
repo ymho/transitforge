@@ -1,0 +1,136 @@
+--- a/backend/agent-api/src/adapters/strands-agent-engine.ts
++++ b/backend/agent-api/src/adapters/strands-agent-engine.ts
+@@ -97,17 +97,14 @@
+     });
+     const controller = input.conditionController;
+     if (controller) {
+-      const appliedConditionTargets = new Set<ConversationConditionInput["target"]>();
+       const apply = async (change: ConversationConditionInput, signal?: AbortSignal): Promise<JSONValue> => {
+         if (signal?.aborted) throw new Error("execution_cancelled");
+         if (intentUnavailable) throw new Error("condition_unavailable");
+-        if (appliedConditionTargets.has(change.target)) return jsonValue({
+-          ok: true, status: "already_applied_this_turn", condition: change.target,
+-        });
+         try {
++          // Application owns operation identity, replay, rejection and current state.
++          // A repeated target is not evidence that this particular change was accepted.
+           const accepted = await controller.apply(change);
+           currentEffectiveIntent = accepted.effectiveIntent;
+-          appliedConditionTargets.add(change.target);
+           // The model only needs the acceptance receipt. The authoritative effectiveIntent
+           // stays Application-owned and is bound to later reads through getEffectiveIntent.
+           return jsonValue({ ok: true, status: "applied", receipt: accepted.receipt });
+--- a/backend/agent-api/src/adapters/strands-agent-engine.test.ts
++++ b/backend/agent-api/src/adapters/strands-agent-engine.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, expect, it, vi } from "vitest";
++import { ConditionUpdateRejectedError } from "@raiquora/agent/conversation-condition";
+ import { Model, type AgentConfig, type BaseModelConfig, type Message, type ModelStreamEvent, type StreamOptions } from "@strands-agents/sdk";
+ import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
+ import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
+@@ -12,11 +13,13 @@
+   private index = 0;
+   private config: BaseModelConfig = { modelId: "synthetic" };
+   readonly toolChoices: StreamOptions["toolChoice"][] = [];
++  readonly observedMessages: string[] = [];
+   constructor(private readonly replies: Reply[]) { super(); }
+   updateConfig(config: BaseModelConfig): void { this.config = { ...this.config, ...config }; }
+   getConfig(): BaseModelConfig { return this.config; }
+   async *stream(_messages: Message[], options?: StreamOptions): AsyncGenerator<ModelStreamEvent> {
+     this.toolChoices.push(options?.toolChoice);
++    this.observedMessages.push(JSON.stringify(_messages));
+     const reply = this.replies[this.index++];
+     if (!reply) throw new Error("Unexpected extra model invocation");
+     yield { type: "modelMessageStartEvent", role: "assistant" };
+@@ -148,7 +151,7 @@
+     expect(result.replyProposal).toEqual({ kind: "uncertainty" });
+   });
+ 
+-  it("applies each durable condition target at most once per turn even if the model repeats the writer", async () => {
++  it("delegates repeated commands to Application rather than owning durable-write deduplication", async () => {
+     const { input } = setup();
+     const apply = vi.fn(async () => ({
+       receipt: { version: "public-semantic-receipt-v1" as const, intentRevision: 4, speechAct: "inform" as const,
+@@ -159,7 +162,7 @@
+     const result = await new StrandsAgentEngine(options, {
+       model: new ScriptedModel([repeated, repeated, submitted]),
+     }).run({ ...input, userRequest: "出雲大社に行きたい", conditionController: { apply } });
+-    expect(apply).toHaveBeenCalledOnce();
++    expect(apply).toHaveBeenCalledTimes(2);
+     expect(result.effectiveIntent?.fingerprint).toBe("effective-izumo");
+     expect(result.replyProposal).toEqual({ kind: "uncertainty" });
+   });
+@@ -290,3 +293,73 @@
+     expect(invocation).toMatchObject({ outputTokens: 2048 });
+   });
+ });
++
++
++// These are Adapter contract tests using the real SDK and a synthetic model.
++// They do not assert that the live model stops repeating or that Trip is saved.
++describe("condition authority remains in Application (#761)", () => {
++  const command = (place: string | null): Reply => ({ tool: "update_current_destination", input: {
++    action: place === null ? "clear" : "set", ...(place === null ? {} : { place }), quote: place ?? "行き先は未定に戻す",
++  } });
++  const accepted = (label: string, revision: number) => ({ receipt: {
++    version: "public-semantic-receipt-v1" as const, intentRevision: revision, speechAct: "correct" as const,
++    outcome: "accepted" as const, changes: [],
++  }, effectiveIntent: { ...effectiveDestination(label), intentRevision: revision, fingerprint: `accepted-${revision}` } });
++
++  it("uses a second Application-accepted value for subsequent reads rather than returning fake success", async () => {
++    const { input, execute } = setup();
++    const apply = vi.fn().mockResolvedValueOnce(accepted("京都", 4)).mockResolvedValueOnce(accepted("神戸", 5));
++    const model = new ScriptedModel([command("京都"), command("神戸"),
++      { tool: "lookup_place", input: { location: "神戸" } }, submitted]);
++    const result = await new StrandsAgentEngine(options, { model }).run({ ...input, conditionController: { apply } });
++    expect(apply).toHaveBeenCalledTimes(2);
++    expect(apply).toHaveBeenNthCalledWith(2, { target: "destination", place: "神戸", quote: "神戸" });
++    expect(execute).toHaveBeenCalledOnce();
++    expect(result.effectiveIntent?.fingerprint).toBe("accepted-5");
++    expect(model.observedMessages.join("\n")).not.toContain("already_applied_this_turn");
++  });
++
++  it("delegates the clear operation to Application after an accepted set", async () => {
++    const { input } = setup();
++    const cleared = accepted("京都", 5);
++    cleared.effectiveIntent.actualConversationFacts = [];
++    const apply = vi.fn().mockResolvedValueOnce(accepted("京都", 4)).mockResolvedValueOnce(cleared);
++    const result = await new StrandsAgentEngine(options, { model: new ScriptedModel([command("京都"), command(null), submitted]) })
++      .run({ ...input, conditionController: { apply } });
++    expect(apply).toHaveBeenNthCalledWith(2, { target: "destination", place: null, quote: "行き先は未定に戻す" });
++    expect(result.effectiveIntent?.actualConversationFacts).toEqual([]);
++  });
++
++  it("surfaces an Application conflict instead of telling the model the second request was applied", async () => {
++    const { input } = setup();
++    const apply = vi.fn().mockResolvedValueOnce(accepted("京都", 4))
++      .mockRejectedValueOnce(new ConditionUpdateRejectedError("condition_conflict"));
++    const model = new ScriptedModel([command("京都"), command("神戸"), submitted]);
++    const result = await new StrandsAgentEngine(options, { model }).run({ ...input, conditionController: { apply } });
++    expect(apply).toHaveBeenCalledTimes(2);
++    expect(result.effectiveIntent?.fingerprint).toBe("accepted-4");
++    expect(model.observedMessages.at(-1)).toContain("condition_conflict");
++    expect(model.observedMessages.at(-1)).not.toContain("already_applied_this_turn");
++  });
++
++  it("does not hide an uncertain second write and blocks both later reads and reply publication", async () => {
++    const { input, execute } = setup();
++    const apply = vi.fn().mockResolvedValueOnce(accepted("京都", 4)).mockRejectedValueOnce(new Error("storage unavailable"));
++    const model = new ScriptedModel([command("京都"), command("神戸"), lookup, submitted]);
++    await expect(new StrandsAgentEngine(options, { model }).run({ ...input, conditionController: { apply } }))
++      .rejects.toMatchObject({ stage: "intent_state", kind: "unknown" });
++    expect(apply).toHaveBeenCalledTimes(2);
++    expect(execute).not.toHaveBeenCalled();
++  });
++
++  it("allows another grounded command after a definite rejection without caching that rejection", async () => {
++    const { input } = setup();
++    const apply = vi.fn().mockRejectedValueOnce(new ConditionUpdateRejectedError("invalid_source"))
++      .mockResolvedValueOnce(accepted("神戸", 4));
++    const model = new ScriptedModel([command("京都"), command("神戸"), submitted]);
++    const result = await new StrandsAgentEngine(options, { model }).run({ ...input, conditionController: { apply } });
++    expect(apply).toHaveBeenCalledTimes(2);
++    expect(result.effectiveIntent?.fingerprint).toBe("accepted-4");
++    expect(model.observedMessages.at(-1)).toContain("invalid_source");
++  });
++});
