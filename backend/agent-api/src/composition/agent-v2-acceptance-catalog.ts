@@ -90,9 +90,9 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
   {
     id: "V2-INTENT-RECOVERY-01",
     kind: "v2_specific",
-    invariant: "an ambiguous post-commit refresh failure cannot publish stale state and retry preserves the accepted revision",
+    invariant: "a lost Trip mutation response is recovered by read-back without duplicating the accepted condition",
     testFile: "backend/agent-api/src/composition/strands-intent-acceptance.test.ts",
-    testName: "fails closed after post-commit context refresh failure and resumes without a second intent application",
+    testName: "recovers a lost Trip mutation response without duplicating the accepted condition",
   },
   {
     id: "V2-CONDITIONS-BATCH-01", kind: "v2_specific",
