@@ -29,6 +29,7 @@ const conversationText = {
 const questions: Record<ReplyQuestion, string> = {
   goal: "どのような旅にしたいですか？", origin: "どこから出発しますか？", destination: "行き先はどちらですか？",
   start_date: "出発日はいつですか？", duration: "何日間の旅を考えていますか？",
+  participation_scope: "どの同行者が、どの旅程の日・区間に参加するか、まだ決まっていない点を教えてください。実名は不要です。",
   party_size: "何人での旅行ですか？", budget: "今回の旅行の予算を教えてください。",
 };
 
@@ -39,11 +40,18 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
   const proof: AgentV2ReplyProof = { kind: proposal.kind, references: [] };
   const reply = (text: string): AgentV2AdmittedReply => ({ text, evidence: [], claims: [], proof });
   switch (proposal.kind) {
-    case "conversation": return reply(conversationText[proposal.message]);
-    case "uncertainty": return reply("必要な情報をまだ確認できていません。未確認の内容を確定情報としては案内できません。");
+    case "conversation":
+      if (proposal.text) { proof.commentary = true; return reply(escapeMarkdown(boundedText(proposal.text))); }
+      return reply(conversationText[proposal.message]);
+    case "uncertainty":
+      if (proposal.text) { proof.commentary = true; return reply(escapeMarkdown(boundedText(proposal.text))); }
+      return reply("必要な情報をまだ確認できていません。未確認の内容を確定情報としては案内できません。");
     case "clarification":
-      if (knownCondition(context.effectiveIntent, proposal.target)) throw new AgentV2ReplyError("known_condition");
+      // A fixed questionnaire must not re-ask a known value. A contextual question
+      // can instead clarify which known value/person the user means.
+      if (!proposal.text && knownCondition(context.effectiveIntent, proposal.target)) throw new AgentV2ReplyError("known_condition");
       proof.question = proposal.target;
+      if (proposal.text) { proof.commentary = true; return reply(escapeMarkdown(boundedText(proposal.text))); }
       return reply(questions[proposal.target]);
     case "unavailable":
       if (context.availableOperations?.includes(proposal.operation)) throw new AgentV2ReplyError("operation_available");
