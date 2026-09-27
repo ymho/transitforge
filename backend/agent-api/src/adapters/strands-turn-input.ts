@@ -1,4 +1,4 @@
-import type { partyCohortContext } from "@raiquora/agent/party-cohort-context";
+import { partyCohortEditableValue, type partyCohortContext } from "@raiquora/agent/party-cohort-context";
 import type { ServerAgentRuntimeInput } from "../ports/server-agent-runtime.js";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -40,6 +40,7 @@ export function strandsTurnInput(input: ServerAgentRuntimeInput & {
       ...(context?.featureContext?.serviceDate ? { serviceDate: context.featureContext.serviceDate } : {}),
     },
     effectiveIntent: context?.effectiveIntent ?? null,
+    currentPartyDetails: partyCohortEditableValue(context?.effectiveIntent, input.conditionController?.scopeCatalog),
     partyScopeChoices: input.conditionController?.scopeCatalog ? {
       days: input.conditionController.scopeCatalog.days.map((day, index) => ({ dayNumber: index + 1, label: day.label })),
       segments: input.conditionController.scopeCatalog.segments.map((segment, index) => ({ segmentNumber: index + 1, label: segment.label })),
