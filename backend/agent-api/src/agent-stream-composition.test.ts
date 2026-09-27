@@ -1,8 +1,9 @@
+import { createTrip } from "@raiquora/trip/trip";
 import { serverAgentDeadline } from "./composition/server-agent-deadline.js";
 import { afterEach, expect, it, vi } from "vitest";
 import { createProductionAgentStream } from "./agent-stream-composition.js";
 import { createProductionConversationAgent } from "./composition/production-conversation-agent.js";
-import { stateDynamoFixture, conversationId, secondId } from "./adapters/state-dynamodb.fixture.js";
+import { stateDynamoFixture, conversationId, secondId, stateMetadata } from "./adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "./adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, issuer, token } from "./adapters/cognito-token.fixture.js";
 import type { StreamWriter } from "./ports/agent-stream-transport.js";
@@ -33,7 +34,13 @@ function setup(enabled = true, maxExecutionMs?: number) {
   const request = { method: "POST", path: "/api/agent-stream", apiRequestId: "gateway-1", lambdaRequestId: "lambda-1",
     headers: { authorization: `Bearer ${token()}`, "content-type": "application/json" },
     body: JSON.stringify({ userRequest: "PRIVATE_MESSAGE", conversationId, turnId: secondId }) };
-  return { handle, request, writer, frames, log, model, createApplication, verify, controller, state, trips, verifier };
+  const seed = async () => {
+    const principal = await verifier.verify(token());
+    trips.seed(createTrip(secondId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
+    await state.conversations.create(principal, conversationId, stateMetadata());
+    state.commands.length = 0; verify.mockClear();
+  };
+  return { seed, handle, request, writer, frames, log, model, createApplication, verify, controller, state, trips, verifier };
 }
 afterEach(() => vi.useRealTimers());
 it("rejects disabled composition before authentication, Application construction or model execution", async () => {
@@ -60,7 +67,7 @@ it("requires Bearer even for direct Gateway events and rejects legacy/PoC routes
   }
 });
 it("runs the real Server Agent once, with correlated safe logs and no request/state/response content", async () => {
-  const s = setup(); await s.handle(s.request, s.writer);
+  const s = setup(); await s.seed(); await s.handle(s.request, s.writer);
   expect(s.createApplication).toHaveBeenCalledExactlyOnceWith("execution-1");
   expect(s.model.converse).toHaveBeenCalledOnce();
   expect(s.frames.join("")).toContain('"type":"final"'); expect(s.frames.at(-1)).toContain("event: done");
@@ -90,7 +97,7 @@ it("streams Application acceptance after commit without terminating the answer s
   expect(s.frames.at(-1)).toContain("event: done");
 });
 it("validates the Browser calendar date and exposes calculated relative dates to the model", async () => {
-  const s = setup();
+  const s = setup(); await s.seed();
   s.request.body = JSON.stringify({ userRequest: "明日から", conversationId, turnId: secondId,
     uiContext: { calendarDate: "2026-09-21" } });
   await s.handle(s.request, s.writer);
@@ -128,7 +135,7 @@ it("preserves the public runtime-limit code instead of collapsing it into agent_
   expect(s.frames.at(-1)).toContain("event: done");
 });
 it("never reports completion after a failed final write", async () => {
-  const s = setup();
+  const s = setup(); await s.seed();
   s.writer.write = vi.fn(async frame => { if (frame.includes('"type":"final"')) throw new Error("PRIVATE_WRITE"); });
   await s.handle(s.request, s.writer);
   expect(s.log.mock.calls.at(-1)?.[0].event).toBe("disconnected");
@@ -136,7 +143,7 @@ it("never reports completion after a failed final write", async () => {
 });
 
 it("persists final before write and replays without a second model run; altered input conflicts", async () => {
-  const s = setup(); const principal = await s.verifier.verify(token());
+  const s = setup(); await s.seed(); const principal = await s.verifier.verify(token());
   const write = s.writer.write;
   s.writer.write = async frame => {
     if (frame.includes('"type":"final"')) {
@@ -165,7 +172,7 @@ it("requires both stable UUID references before state access", async () => {
 
 it("ends a bounded business timeout with limit_reached and no saved final, before the transport timeout", async () => {
   vi.useFakeTimers();
-  const s = setup(true, serverAgentDeadline({ SERVER_AGENT_MAX_EXECUTION_MS: "120000" }));
+  const s = setup(true, serverAgentDeadline({ SERVER_AGENT_MAX_EXECUTION_MS: "120000" })); await s.seed();
   s.model.converse.mockImplementation(() => new Promise(() => {}));
   const pending = s.handle(s.request, s.writer);
   await vi.advanceTimersByTimeAsync(119_999);
@@ -176,5 +183,5 @@ it("ends a bounded business timeout with limit_reached and no saved final, befor
   expect(s.frames.join("")).not.toContain('"type":"final"');
   expect(s.frames.at(-1)).toContain("event: done");
   expect(s.model.converse).toHaveBeenCalledOnce();
-  expect([...s.state.records.values()].some(row => row.sk.S?.startsWith("TURN#") && row.payload.S?.includes('"completed"'))).toBe(false);
+  expect([...s.state.records.values()].some(row => row.sk.S?.startsWith("TRIP_TURN#") && row.payload.S?.includes('"completed"'))).toBe(false);
 });

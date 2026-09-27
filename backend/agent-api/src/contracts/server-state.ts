@@ -1,4 +1,3 @@
-import { parseConsultationRequest } from "@raiquora/trip/consultation-request";
 import { isUserProfile, type UserProfile } from "@raiquora/trip/travel-profile";
 import { AuthenticationError, type TrustedPrincipal } from "./trusted-principal.js";
 
@@ -8,13 +7,12 @@ export class StateError extends Error {
 }
 export interface ConversationMetadata {
   title: string;
-  scope: "general" | "trip" | "place" | "route";
+  scope: "trip";
   summary: string;
   resolvedTopics: string[];
   pendingTopics: string[];
-  /** Reference only. Following it requires independent Trip authorization. */
-  tripId?: string;
-  draftRequest?: import("@raiquora/trip/trip-request").TripRequest;
+  /** Every travel Conversation belongs to one Trip from creation. */
+  tripId: string;
 }
 export interface Conversation extends ConversationMetadata {
   conversationId: string;
@@ -51,14 +49,10 @@ export function exactObject(value: unknown, keys: readonly string[]): asserts va
 }
 function text(value: unknown, maximum: number): boolean { return typeof value === "string" && value.length <= maximum; }
 export function metadata(value: unknown): ConversationMetadata {
-  exactObject(value, ["title", "scope", "summary", "resolvedTopics", "pendingTopics", "tripId", "draftRequest"]);
-  if (!text(value.title, 160) || typeof value.scope !== "string" || !["general", "trip", "place", "route"].includes(value.scope) || !text(value.summary, 4000) ||
+  exactObject(value, ["title", "scope", "summary", "resolvedTopics", "pendingTopics", "tripId"]);
+  if (!text(value.title, 160) || value.scope !== "trip" || !text(value.summary, 4000) ||
     ![value.resolvedTopics, value.pendingTopics].every((v) => Array.isArray(v) && v.length <= 20 && v.every((t) => text(t, 200)))) throw new StateError("invalid-input");
-  if (value.tripId !== undefined) stateId(value.tripId);
-  if (value.draftRequest !== undefined) {
-    if (value.tripId !== undefined) throw new StateError("invalid-input");
-    try { parseConsultationRequest(value.draftRequest); } catch { throw new StateError("invalid-input"); }
-  }
+  stateId(value.tripId);
   return structuredClone(value) as unknown as ConversationMetadata;
 }
 export function messageInputs(value: unknown): MessageInput[] {

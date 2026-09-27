@@ -1,6 +1,3 @@
-import { createTrip, type Trip } from "@raiquora/trip/trip";
-import { parseConsultationRequest } from "@raiquora/trip/consultation-request";
-import type { TripRequest } from "@raiquora/trip/trip-request";
 import type { ConversationSession } from "../../domain/conversation-session";
 import type { ConversationHistoryRepository, ConversationMessage } from "../concierge/conversation-history-repository";
 import type { ServerConversation, ServerConversationClient, ServerConversationMetadata } from "./server-conversation-client";
@@ -56,56 +53,16 @@ export class ConversationUiController {
     if (select) this.activeId = session.id; this.notify();
     return structuredClone(session);
   }
-  /** Search every server page; a matching title never establishes a Trip reference. */
+  /** A Trip has one history identity in the server namespace. No chat-list scan. */
   async findForTrip(tripId: string): Promise<ConversationSession | undefined> {
     this.requireAuthentication();
-    const generation = this.generation;
-    let after: string | undefined;
-    const cursors = new Set<string>();
-    do {
-      const page = await this.client.list({ limit: 50, ...(after ? { after } : {}) });
-      if (generation !== this.generation) throw new Error("Conversation session changed");
-      for (const match of page.items.filter((value) => value.tripId === tripId)) {
-        const fresh = await this.client.get(match.conversationId);
-        if (generation !== this.generation) throw new Error("Conversation session changed");
-        if (fresh?.tripId === tripId) {
-          const session = toSession(fresh);
-          this.sessions = [...this.sessions.filter((s) => s.id !== session.id), session];
-          return structuredClone(session);
-        }
-      }
-      after = page.nextAfter;
-      if (after && cursors.has(after)) throw new Error("Repeated Conversation cursor");
-      if (after) cursors.add(after);
-    } while (after);
-    return undefined;
-  }
-  /** Ephemeral form projection only: never sent to the Trip API or model as an adopted Trip. */
-  draftView(id: string): Trip | undefined {
-    const session = this.sessions.find(s => s.id === id);
-    if (!session || session.tripId) return undefined;
-    return { ...createTrip(session.id, "相談中の条件", session.createdAt, [], session.draftRequest), revision: session.revision };
-  }
-  /** Stable content version for Agent cancellation checks; title/summary changes do not affect it. */
-  draftRequestVersion(id: string): string | undefined {
-    const session = this.sessions.find(s => s.id === id);
-    if (!session || session.tripId || session.draftRequest === undefined) return undefined;
-    return JSON.stringify(session.draftRequest);
-  }
-  async saveDraftRequest(id: string, expected: TripRequest, next: TripRequest): Promise<void> {
-    this.requireAuthentication();
-    const generation = this.generation, request = parseConsultationRequest(next), before = parseConsultationRequest(expected);
-    const current = await this.client.get(id);
-    if (generation !== this.generation || !current || current.tripId) throw new Error("Conversation changed");
-    const actual = current.draftRequest ?? { constraints: [], assumptions: [] };
-    if (JSON.stringify(actual) !== JSON.stringify(request)) {
-      if (JSON.stringify(actual) !== JSON.stringify(before)) throw new Error("条件が更新されています。会話を開き直してください。");
-      await this.client.update(id, current.revision, { ...metadataOf(toSession(current)), draftRequest: request });
-      if (generation !== this.generation) throw new Error("Conversation changed");
-    }
-    const saved = await this.client.get(id);
-    if (generation !== this.generation || !saved || saved.tripId || JSON.stringify(saved.draftRequest ?? { constraints: [], assumptions: [] }) !== JSON.stringify(request)) throw new Error("条件の保存結果を確認できません。");
-    this.sessions = this.sessions.map(s => s.id === id ? toSession(saved) : s); this.notify();
+    const generation = this.generation, fresh = await this.client.get(tripId);
+    if (generation !== this.generation) throw new Error("Conversation session changed");
+    if (!fresh) return undefined;
+    if (fresh.tripId !== tripId || fresh.conversationId !== tripId) throw new Error("Conversation reference changed");
+    const session = toSession(fresh);
+    this.sessions = [...this.sessions.filter(item => item.id !== session.id), session];
+    return structuredClone(session);
   }
   async update(id: string, metadata: ServerConversationMetadata): Promise<ConversationSession> {
     this.requireAuthentication();
@@ -178,16 +135,18 @@ export class ConversationUiController {
 
 function toSession(value: ServerConversation): ConversationSession & { revision: number } {
   return { id: value.conversationId, title: value.title, scope: value.scope, summary: value.summary,
-    resolvedTopics: value.resolvedTopics, pendingTopics: value.pendingTopics, tripId: value.tripId, draftRequest: value.draftRequest,
+    resolvedTopics: value.resolvedTopics, pendingTopics: value.pendingTopics, tripId: value.tripId,
     createdAt: value.createdAt, updatedAt: value.updatedAt, revision: value.revision };
 }
 function metadataOf(value: ConversationSession): ServerConversationMetadata {
-  return { title: value.title, scope: value.scope, summary: value.summary,
-    resolvedTopics: value.resolvedTopics, pendingTopics: value.pendingTopics, ...(value.tripId ? { tripId: value.tripId } : {}), ...(value.draftRequest ? { draftRequest: value.draftRequest } : {}) };
+  if (!value.tripId) throw new Error("Trip reference required");
+  return { title: value.title, scope: "trip", summary: value.summary,
+    resolvedTopics: value.resolvedTopics, pendingTopics: value.pendingTopics, tripId: value.tripId };
 }
 function metadataFor(value: Partial<ServerConversationMetadata>): ServerConversationMetadata {
-  return { title: value.title ?? "新しい会話", scope: value.scope ?? "general", summary: value.summary ?? "",
-    resolvedTopics: value.resolvedTopics ?? [], pendingTopics: value.pendingTopics ?? [], ...(value.tripId ? { tripId: value.tripId } : {}), ...(value.draftRequest ? { draftRequest: value.draftRequest } : {}) };
+  if (!value.tripId) throw new Error("Trip reference required");
+  return { title: value.title ?? "新しい旅", scope: "trip", summary: value.summary ?? "",
+    resolvedTopics: value.resolvedTopics ?? [], pendingTopics: value.pendingTopics ?? [], tripId: value.tripId };
 }
 function assistantResponse(item: import("./server-conversation-client").ServerConversationMessage): import("../../domain/viewer-agent-response").ViewerAgentResponse {
   return projectAssistantTurn({ response: item.text, ...item });

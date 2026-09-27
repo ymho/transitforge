@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { HttpServerConversationClient } from "./server-conversation-client";
 const id = "11111111-1111-4111-8111-111111111111";
-const metadata = { title: "相談", scope: "general" as const, summary: "", resolvedTopics: [], pendingTopics: [] };
+const metadata = { title: "相談", scope: "trip" as const, tripId: "22222222-2222-4222-8222-222222222222", summary: "", resolvedTopics: [], pendingTopics: [] };
 const conversation = { ...metadata, conversationId: id, createdAt: "2026-09-18T00:00:00.000Z", updatedAt: "2026-09-18T00:00:00.000Z", revision: 0, messageCount: 0 };
 describe("Conversation HTTP client", () => {
   it("uses the versioned personal endpoint without owner input", async () => {

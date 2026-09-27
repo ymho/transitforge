@@ -43,7 +43,7 @@ function session(id: string): ConversationSession {
   return {
     id,
     title: "会話",
-    scope: "general",
+    scope: "trip", tripId: "11111111-1111-4111-8111-111111111111",
     summary: "",
     resolvedTopics: [],
     pendingTopics: [],

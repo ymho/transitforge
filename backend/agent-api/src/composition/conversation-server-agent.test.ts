@@ -51,7 +51,8 @@ it("verified principal → idempotent messages → stateful Server Runtime → p
 it("runs natural language through semantic acceptance before Runtime", async () => {
   const { verifier } = cognitoTokenFixture(); const principal = await verifier.verify(token());
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const { tripId: _tripId, ...consultationMetadata } = stateMetadata();
+  const consultationMetadata = stateMetadata();
+  trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
   await state.conversations.create(principal, conversationId, consultationMetadata);
   const requests: ConversationModelRequest[] = [];
   const model = { converse: vi.fn(async (request: ConversationModelRequest) => {
@@ -70,11 +71,10 @@ it("runs natural language through semantic acceptance before Runtime", async () 
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
     model, weather: { search: async () => { throw new Error("not used"); } }, semanticIntentEnabled: true, newExecutionId: () => "runtime-execution" });
   const result = await app.runConversationTurn({ principal, conversationId, turnId: "11111111-1111-4111-8111-111111111111", userRequest: "出雲大社へ明日出発します", uiContext: { calendarDate: "2026-09-25" } });
-  expect(result.consultationRequestProposal).toMatchObject({ conversationId, baseRequest: { constraints: [], assumptions: [] },
-    request: { constraints: [
+  expect(result.tripUpdateProposal).toMatchObject({ tripId: secondId, baseRevision: 0, patches: [{ type: "request", request: { constraints: [
       { source: "user", requirement: { type: "dates", start: { earliest: "2026-09-26", latest: "2026-09-26" } } },
       { source: "user", requirement: { type: "destinations", places: [{ name: "出雲大社", sources: [] }] } },
-    ], assumptions: [] }, intentBinding: { version: "intent-proposal-binding-v1", intentRevision: 1, changes: [
+    ], assumptions: [] } }], intentBinding: { version: "intent-proposal-binding-v1", intentRevision: 1, changes: [
       { target: "destination" }, { target: "start_date" },
     ] } });
   const working = await new DynamoDbConversationTurnRepository("test-state", state.client).getWorkingState(principal, conversationId);
@@ -100,7 +100,8 @@ it("runs the production-shaped Conversation state path through the trusted Stran
   const { verifier } = cognitoTokenFixture();
   const principal = await verifier.verify(token()), other = await verifier.verify(token({ sub: "user-b" }));
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const { tripId: _tripId, ...consultationMetadata } = stateMetadata();
+  const consultationMetadata = stateMetadata();
+  trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
   await state.conversations.create(principal, conversationId, consultationMetadata);
   const evidence: Evidence = {
     id: "evidence:conversation:kyoto",

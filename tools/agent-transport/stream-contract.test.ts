@@ -1,7 +1,8 @@
 import { expect, it, vi } from "vitest";
+import { createTrip } from "@raiquora/trip/trip";
 import { createProductionAgentStream } from "../../backend/agent-api/src/agent-stream-composition.js";
 import { createProductionConversationAgent } from "../../backend/agent-api/src/composition/production-conversation-agent.js";
-import { stateDynamoFixture, conversationId, secondId } from "../../backend/agent-api/src/adapters/state-dynamodb.fixture.js";
+import { stateDynamoFixture, conversationId, secondId, stateMetadata } from "../../backend/agent-api/src/adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../../backend/agent-api/src/adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, token } from "../../backend/agent-api/src/adapters/cognito-token.fixture.js";
 import { consumeAgentStream } from "../../frontend/src/adapters/http/agent-stream/consumer.js";
@@ -10,6 +11,9 @@ import { ConversationTurnExecutionError } from "../../backend/agent-api/src/usec
 
 it("the real Browser consumer accepts a persisted Runtime answer and its replay", async () => {
   const { verifier } = cognitoTokenFixture(), state = stateDynamoFixture(), trips = tripDynamoFixture();
+  const principal = await verifier.verify(token());
+  trips.seed(createTrip(secondId, "検討中の旅", "2026-09-27T00:00:00Z"), principal.subject);
+  await state.conversations.create(principal, conversationId, stateMetadata());
   const converse = vi.fn(async () => ({ stopReason: "end_turn" as const, metadata: { modelId: "fixture", latencyMs: 0 },
     message: { role: "assistant" as const, content: [{ text: "確認した候補を案内します。" }] } }));
   const handle = createProductionAgentStream({ enabled: true, path: "/api/agent-stream", verifier, log: () => {},

@@ -1,7 +1,5 @@
 import { registerCostProposalTool } from "../usecases/agent/cost-proposal-tool.js";
 import type { PublicCostProposal } from "@raiquora/trip/public-cost-proposal";
-import { createTrip } from "@raiquora/trip/trip";
-import { parseConsultationRequestProposal, type ConsultationRequestProposal } from "@raiquora/trip/consultation-request-proposal";
 import type { Trip } from "@raiquora/trip/trip";
 import { parsePublicRequestProposal, type PublicRequestProposal } from "@raiquora/trip/public-request-proposal";
 import type { ServerAgentTurn } from "../usecases/agent/server-agent.js";
@@ -37,7 +35,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
   return { async runAgentTurn(input: ServerAgentTurn, reportProgress?: AgentProgressReporter,
     acceptCondition?: (change: ConversationConditionInput) => Promise<IntentApplicationReceipt>) {
     let tripCostProposal: PublicCostProposal | undefined, retainedCandidatePlan: RetainedCandidatePlan | undefined;
-    let trip: Trip | undefined, consultation: Trip | undefined, tripUpdateProposal: PublicRequestProposal | undefined, consultationRequestProposal: ConsultationRequestProposal | undefined;
+    let trip: Trip | undefined, tripUpdateProposal: PublicRequestProposal | undefined;
     let effectiveIntent: EffectiveIntent | undefined, currentIntentReceipt: IntentApplicationReceipt | undefined;
     const turnStates = new DynamoDbConversationTurnRepository(options.stateTable, options.stateClient);
     const contextLoader = createServerStateContextLoader({
@@ -47,7 +45,6 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
       trips: new DynamoDbTripRepository(options.tripTable, options.tripClient),
       workingStates: turnStates,
     }, { historyBeforeSequence: options.historyBeforeSequence, onTrip: value => { trip = value; },
-      onConsultation: value => { consultation = createTrip(value.conversationId, "相談中の条件", value.createdAt, [], value.request); },
       onEffectiveIntent: value => { effectiveIntent = value.effectiveIntent; currentIntentReceipt = value.currentReceipt; } });
     const runtime = options.runRuntime;
     const runRuntime = runtime ? async (runtimeInput: Parameters<typeof runtime>[0]) =>
@@ -82,14 +79,6 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
             }, value => { retainedCandidatePlan = value; });
           }
         }
-        else if (consultation) {
-          const base = consultation;
-          // Trip-shaped input reuses pure request rules only; never publish or persist it as a Trip.
-          registerRequestProposalTool(tools, base, proposal => {
-            consultationRequestProposal = parseConsultationRequestProposal({ conversationId: base.id, baseRequest: base.request,
-              request: proposal.patches[0].request, summary: proposal.summary });
-          });
-        }
       },
       // Restored private state may be echoed in any later turn block. Do not retain raw model-call traces.
       // Runtime metadata/latency diagnostics remain available; no Bedrock/provider implementation change.
@@ -97,23 +86,11 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
       loadContext: contextLoader,
       ...(runRuntime ? { runRuntime } : {}),
     }).runAgentTurn(input, reportProgress);
-    if (!options.runRuntime && input.conversationId && effectiveIntent && currentIntentReceipt) {
-      const base = trip ?? consultation;
-      if (base) {
-        const verified = proposeVerifiedIntentRequest({ conversationId: input.conversationId, trip: base, effectiveIntent, receipt: currentIntentReceipt });
-        if (verified) {
-          if (trip) tripUpdateProposal = parsePublicRequestProposal(verified);
-          else {
-            const patch = verified.patches[0];
-            if (patch?.type !== "request") throw new Error("Verified intent projection must be request-only");
-            consultationRequestProposal = parseConsultationRequestProposal({ conversationId: base.id, baseRequest: base.request,
-              request: patch.request, summary: verified.summary, intentBinding: verified.intentBinding });
-          }
-        }
-      }
+    if (!options.runRuntime && input.conversationId && effectiveIntent && currentIntentReceipt && trip) {
+      const verified = proposeVerifiedIntentRequest({ conversationId: input.conversationId, trip, effectiveIntent, receipt: currentIntentReceipt });
+      if (verified) tripUpdateProposal = parsePublicRequestProposal(verified);
     }
     return { ...result, ...((result.status === "completed" || result.status === "follow_up") && retainedCandidatePlan ? { publicPlanPresentation: retainedCandidatePlan.presentation } : {}),
-      ...((result.status === "completed" || result.status === "follow_up") && tripCostProposal ? { tripCostProposal } : {}), ...((result.status === "completed" || result.status === "follow_up") && tripUpdateProposal ? { tripUpdateProposal } : {}),
-      ...((result.status === "completed" || result.status === "follow_up") && consultationRequestProposal ? { consultationRequestProposal } : {}) };
+      ...((result.status === "completed" || result.status === "follow_up") && tripCostProposal ? { tripCostProposal } : {}), ...((result.status === "completed" || result.status === "follow_up") && tripUpdateProposal ? { tripUpdateProposal } : {}) };
   } };
 }

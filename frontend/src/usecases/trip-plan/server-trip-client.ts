@@ -14,6 +14,7 @@ export interface ServerTripClient {
   subscribeSessionChange?(listener: () => void): () => void;
   getRole?(tripId: string): import("@raiquora/trip/trip-sharing").TripRole | undefined;
   create(trip: Trip): Promise<Trip>;
+  startConsultation?(input: { tripId: string; title: string }): Promise<{ trip: Trip; conversationId: string }>;
   list(page?: { limit?: number; afterTripId?: string }): Promise<ServerTripPage>;
   archive(tripId: string): Promise<void>;
   mutate(mutation: TripMutationRequest): Promise<Trip>;

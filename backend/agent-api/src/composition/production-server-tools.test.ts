@@ -6,7 +6,7 @@ import { createFixedEgressAccommodationOperation } from "./fixed-egress-accommod
 import { productionServerTools } from "./production-server-tools.js";
 import { hasStructuredPresentationEvidence } from "@raiquora/agent/grounded-answer";
 import { createProductionConversationAgent } from "./production-conversation-agent.js";
-import { stateDynamoFixture, stateA, conversationId, secondId } from "../adapters/state-dynamodb.fixture.js";
+import { stateDynamoFixture, stateA, conversationId, secondId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 const evidenceContext = { retrievedAt: "2026-09-25T00:00:00Z", queryFingerprint: "history",
   executionId: "consultation", toolCallId: "tool-1", toolName: "search_travel_knowledge" };
@@ -88,6 +88,7 @@ it("compares only a verified journey result from the same server turn", async ()
 it("restores a Trip without Profile, invokes fixed-egress through the existing operation, and persists the grounded final", async () => {
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
   await trips.repository.create(stateA, createTrip(secondId, "server trip", "2026-09-18T00:00:00Z"));
+  await state.conversations.create(stateA, conversationId, stateMetadata());
   const search = vi.fn(async () => [{ kind: "accommodation" as const, provider: "travel-provider", providerItemId: "42", name: "宿",
     checkInDate: "2026-10-01", checkOutDate: "2026-10-02", availability: "unknown" as const }]);
   const provider = createFixedEgressProviderHandler({ search });

@@ -60,6 +60,12 @@ export class HttpServerTripClient implements ServerTripClient {
     if ((result!.trip as Trip).id !== trip.id) throw new Error("Wrong Trip response");
     return structuredClone(result!.trip as Trip);
   }
+  async startConsultation(input: { tripId: string; title: string }): Promise<{ trip: Trip; conversationId: string }> {
+    const result = await this.execute({ operation: "start-consultation", tripId: input.tripId, title: input.title });
+    validateTrip(result?.trip as Trip);
+    if ((result!.trip as Trip).id !== input.tripId || result?.conversationId !== input.tripId) throw new Error("Wrong Trip consultation response");
+    return { trip: structuredClone(result.trip as Trip), conversationId: result.conversationId as string };
+  }
   async list(page: { limit?: number; afterTripId?: string } = {}): Promise<ServerTripPage> {
     const result = await this.execute({ operation: "list", ...page });
     if (!Array.isArray(result?.trips) || !result.trips.every((trip) => { try { validateTrip(trip as Trip); return true; } catch { return false; } }) ||

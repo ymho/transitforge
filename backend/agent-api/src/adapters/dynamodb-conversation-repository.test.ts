@@ -15,8 +15,9 @@ describe("Conversation persistence", () => {
     expect(first.items).toEqual([{ ...message, sequence: 1, createdAt: f.clock.now().toISOString() }]);
     expect((await f.conversations.history(a, id, { after: first.nextAfter })).items[0].sequence).toBe(2);
     expect(f.records.size).toBe(3);
-    const { tripId: _trip, ...metadata } = stateMetadata();
-    expect(await f.conversations.update(a, id, 1, metadata)).not.toHaveProperty("tripId");
+    const metadata = stateMetadata();
+    expect(await f.conversations.update(a, id, 1, metadata)).toHaveProperty("tripId", secondId);
+    await expect(f.conversations.update(a, id, 2, { ...metadata, tripId: id })).rejects.toMatchObject({ code: "invalid-input" });
   });
   it("isolates get/list/history/update/append/delete even for equal IDs", async () => {
     const f = stateDynamoFixture(); await f.conversations.create(a, id, stateMetadata());
@@ -134,10 +135,21 @@ describe("Conversation persistence", () => {
   });
   it("fails closed on corrupt message payloads and foreign query cursors", async () => {
     const f = stateDynamoFixture(); await f.conversations.create(a, id, stateMetadata()); await f.conversations.append(a, id, 0, [message]);
-    const stored = [...f.records.values()].find((v) => v.sk.S?.startsWith("MESSAGE#"))!;
+    const stored = [...f.records.values()].find((v) => v.sk.S?.startsWith("TRIP_MESSAGE#"))!;
     stored.payload = { S: "not-json-private-content" };
     await expect(f.conversations.history(a, id)).rejects.toMatchObject({ code: "unavailable" });
-    const repository = new DynamoDbConversationRepository("test-state", { send: async () => ({ Items: [], LastEvaluatedKey: { pk: { S: `OWNER#${b.subject}` }, sk: { S: `CONVERSATION#${id}` } } }) });
+    const repository = new DynamoDbConversationRepository("test-state", { send: async () => ({ Items: [], LastEvaluatedKey: { pk: { S: `OWNER#${b.subject}` }, sk: { S: `TRIP_CONVERSATION#${id}` } } }) });
     await expect(repository.list(a)).rejects.toMatchObject({ code: "unavailable" });
   });
+});
+
+it("does not import or decode an old standalone chat even when its UUID matches the new Trip history", async () => {
+  const f = stateDynamoFixture();
+  f.records.set(`OWNER#${a.subject}/CONVERSATION#${id}`, { pk: { S: `OWNER#${a.subject}` }, sk: { S: `CONVERSATION#${id}` },
+    payload: { S: "old-incompatible-private-history" }, storageVersion: { N: "1" }, revision: { N: "0" }, deleted: { BOOL: false } });
+  expect((await f.conversations.list(a)).items).toEqual([]); expect(await f.conversations.get(a,id)).toBeUndefined();
+  await f.conversations.create(a,id,stateMetadata());
+  expect((await f.conversations.list(a)).items).toHaveLength(1);
+  expect((await f.conversations.history(a,id)).items).toEqual([]);
+  expect(f.records.get(`OWNER#${a.subject}/CONVERSATION#${id}`)?.payload.S).toBe("old-incompatible-private-history");
 });

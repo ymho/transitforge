@@ -1,3 +1,4 @@
+import { createTrip } from "@raiquora/trip/trip";
 import { describe, expect, it, vi } from "vitest";
 import { Agent, BeforeToolCallEvent, ModelMessageEvent, ToolResultEvent } from "@strands-agents/sdk";
 import { placeConditionUpdateInputSchema } from "@raiquora/agent/conversation-condition";
@@ -22,7 +23,8 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
     const { verifier } = cognitoTokenFixture();
     const principal = await verifier.verify(token());
     const state = stateDynamoFixture(), trips = tripDynamoFixture();
-    const { tripId: _tripId, ...metadata } = stateMetadata();
+    const metadata = stateMetadata();
+    trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
     await state.conversations.create(principal, conversationId, metadata);
     const calls: { query: string }[] = [];
     const searchPlaceMedia = vi.fn(async (input: { query: string }) => {

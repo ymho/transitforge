@@ -33,7 +33,7 @@ export function createPersonalApiHandler(options: {
     jsonResponse(501, { error: "unavailable" });
   if (!options.tripTable || !options.notificationTable || !options.stateTable) throw new Error("Missing personal API configuration");
   const authenticate = createHttpPrincipalResolver(createCognitoAccessTokenVerifier(options.auth), options.auth.requiredScopes);
-  const applications = createAuthorizedTripApplications(options.tripTable);
+  const applications = createAuthorizedTripApplications(options.tripTable, options.stateTable);
   const trips = createTripApiHandler(applications.trips, { authenticate });
   const sharing = createTripSharingHandler(applications.sharing, { authenticate });
   const notifications = createNotificationHandler(new NotificationApplication(
@@ -41,7 +41,7 @@ export function createPersonalApiHandler(options: {
     new DynamoDbTripRepository(options.tripTable)), authenticate);
   const inTrip = createInTripContextHandler(createInTripContextApplication(options.tripTable, options.notificationTable), authenticate);
   const conversations = createConversationApiHandler(new ConversationApplication(new DynamoDbConversationRepository(options.stateTable),
-    new DynamoDbItineraryCandidateRepository(options.tripTable)), authenticate);
+    new DynamoDbItineraryCandidateRepository(options.tripTable), undefined, new DynamoDbTripRepository(options.tripTable)), authenticate);
   const profile = createProfileApiHandler(new ProfileApplication(new DynamoDbProfileRepository(options.stateTable)), authenticate);
   return (event: LambdaHttpEvent, context?: LambdaContext) => {
     if (event.rawPath && event.path && event.rawPath !== event.path) return Promise.resolve(jsonResponse(404, { error: "not-found" }));

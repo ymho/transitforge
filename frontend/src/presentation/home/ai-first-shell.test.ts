@@ -263,3 +263,20 @@ it("does not start a queued Trip restore after the user already selected a new c
   expect(document.querySelector("main")!.dataset.consultationMode).toBe("landing");
   expect(window.history.state.tripId).toBeUndefined();
 });
+
+it("retains the current creation attempt across a failed submit and binds its successful route to the new Trip", async () => {
+  const tripId = "75300000-0000-4000-8000-000000000001";
+  const newConsultation = vi.fn().mockRejectedValueOnce(new Error("uncertain start")).mockResolvedValue({ tripId });
+  const { ports } = setup({ authState: signedIn, newConsultation });
+  const resets = vi.mocked(ports.resetConsultation).mock.calls.length;
+  const input = document.querySelector<HTMLTextAreaElement>("#home-prompt")!;
+  const form = document.querySelector<HTMLFormElement>(".home-prompt")!; input.value = "出雲大社へ";
+  form.dispatchEvent(new Event("submit", { cancelable: true }));
+  await vi.waitFor(() => expect(document.querySelector("main")!.dataset.consultationMode).toBe("landing"));
+  expect(input.value).toBe("出雲大社へ");
+  form.dispatchEvent(new Event("submit", { cancelable: true }));
+  await vi.waitFor(() => expect(document.querySelector("main")!.dataset.consultationMode).toBe("conversation"));
+  expect(ports.resetConsultation).toHaveBeenCalledTimes(resets);
+  expect(history.state).toMatchObject({ consultation: "trip", tripId });
+  expect(ports.openChat).toHaveBeenCalledOnce();
+});

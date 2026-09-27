@@ -146,7 +146,7 @@ describe("Conversation turn transactions", () => {
   it("bounds receipt growth without expiring old identities", async () => {
     const f = await setup(), lease = await begin(f);
     await f.turns.completeTurn(identity, lease, result);
-    const metadata = [...f.records.values()].find((v) => v.sk.S?.startsWith("CONVERSATION#"))!;
+    const metadata = [...f.records.values()].find((v) => v.sk.S?.startsWith("TRIP_CONVERSATION#"))!;
     metadata.payload!.S = JSON.stringify({ ...JSON.parse(metadata.payload!.S!), messageCount: conversationTurnLimits.newTurnMessageLimit });
     await expect(f.turns.beginTurn({ ...identity, turnId: secondId }, request)).rejects.toMatchObject({ code: "conflict" });
     expect((await f.turns.beginTurn(identity, request)).state).toBe("completed");
@@ -163,7 +163,7 @@ describe("Conversation turn transactions", () => {
     await expect(f.turns.completeTurn(identity, lease, { ...result, trace: "secret" } as never)).rejects.toMatchObject({ code: "invalid-input" });
     await f.turns.completeTurn(identity, lease, result);
     expect(JSON.stringify([...f.records.values()])).not.toContain("secret");
-    const stored = [...f.records.values()].find((v) => v.sk.S?.startsWith("TURN#"))!;
+    const stored = [...f.records.values()].find((v) => v.sk.S?.startsWith("TRIP_TURN#"))!;
     stored.payload = { S: '{"state":"completed"}' };
     await expect(f.turns.beginTurn(identity, request)).rejects.toMatchObject({ code: "unavailable" });
   });
@@ -186,7 +186,7 @@ it("metadata contention leaves no partial receipt or message and retry uses the 
   const f = await setup();
   f.faults.beforeWrite = async () => { await f.conversations.append(principal, conversationId, 0, [{ role: "user", text: "other message" }]); };
   await expect(begin(f)).rejects.toMatchObject({ code: "conflict" });
-  expect([...f.records.values()].filter((v) => v.sk.S?.startsWith("TURN#"))).toHaveLength(0);
+  expect([...f.records.values()].filter((v) => v.sk.S?.startsWith("TRIP_TURN#"))).toHaveLength(0);
   const lease = await begin(f); expect(lease.userSequence).toBe(2);
   await f.turns.completeTurn(identity, lease, result);
   expect((await f.conversations.history(principal, conversationId)).items.map((m) => m.sequence)).toEqual([1, 2, 3]);

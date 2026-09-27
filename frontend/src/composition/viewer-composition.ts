@@ -1,5 +1,4 @@
-import { startFreshConsultation } from "../usecases/concierge/start-fresh-consultation";
-import type { TripRequest } from "@raiquora/trip/trip-request";
+import { startTripConsultation } from "../usecases/trip-plan/start-trip-consultation";
 import { createTripConsultationNavigation } from "../usecases/trip-plan/trip-consultation-navigation";
 import { currentAuthentication } from "./auth-composition";
 import { createConversationStreamSession } from "../adapters/http/agent-stream/session";
@@ -89,7 +88,6 @@ import { createTripWorkspaceController } from "../usecases/trip-plan/trip-worksp
 import { createReferencedTripSource } from "../usecases/trip-plan/server-trip-workspace-source";
 import { HttpServerTripClient } from "../adapters/http/server-trip-client";
 import { createServerTripListSource } from "../usecases/trip-plan/server-trip-list-source";
-import { createConversationDraftTrip } from "../usecases/trip-plan/create-conversation-draft-trip";
 import { HttpNotificationClient } from "../adapters/http/notification-client";
 import { configureNotificationCenter } from "../presentation/notifications/notification-center";
 import { configureTripSharing } from "../presentation/trip-plan/trip-sharing-panel";
@@ -178,7 +176,7 @@ const serverConversationClient = new HttpServerConversationClient();
 const conversationUi = new ConversationUiController(serverConversationClient, canUsePersonalState);
 const profileUi = new ProfileUiController(new HttpServerProfileClient(), canUsePersonalState);
 const unsignedConversation: ConversationSession = {
-  id: "ui-unauthenticated", title: "新しい会話", scope: "general", summary: "", resolvedTopics: [], pendingTopics: [],
+  id: "ui-unauthenticated", title: "新しい旅", scope: "trip", summary: "", resolvedTopics: [], pendingTopics: [],
   createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
 };
 let activeConversationSession = unsignedConversation;
@@ -205,7 +203,6 @@ const tripWorkspaceController = createTripWorkspaceController(activeConversation
 const serverAgentSession = createConversationStreamSession({
   auth: currentAuthentication(), references: () => ({ conversationId: activeConversationSession.id,
     tripId: tripWorkspaceController.current()?.id, tripRevision: tripWorkspaceController.current()?.revision,
-    draftRequestVersion: conversationUi.draftRequestVersion(activeConversationSession.id),
     itemId: tripWorkspaceController.uiFocus()?.itemId }),
 });
 tripWorkspaceController.subscribe(() => {
@@ -219,7 +216,6 @@ conversationUi.subscribe(() => serverAgentSession.contextChanged());
 
 const serverTripClient = new HttpServerTripClient();
 const inTripContextClient = new HttpInTripContextClient();
-const pendingDraftTripIds = new Map<string, { id: string; now: string; request: TripRequest }>();
 const serverTripList = createServerTripListSource(serverTripClient, canUsePersonalState);
 const serverTripReferences = new Map<string, string>();
 const syncServerTripSource = (session: typeof activeConversationSession) => {
@@ -349,10 +345,6 @@ aiGuideController = configureAiGuidePanel(
       try { tripWorkspaceController.preview(proposal); tripWorkspace.show("trip"); }
       catch { aiGuideController.notify("旅程が変わったため費用案を適用できません。現在の旅程で再予測してください。"); }
     },
-    onConsultationRequestProposal: (proposal) => {
-      try { consultationScreen.previewConsultationProposal(proposal); }
-      catch { aiGuideController.notify("相談の条件が変わったため、この案は適用できません。現在の条件で変更案を作り直してください。"); }
-    },
     onTripUpdateProposal: (proposal) => {
       if (!tripWorkspaceController.current()) return;
       try { tripWorkspaceController.preview(proposal); tripWorkspace.show("trip"); }
@@ -421,7 +413,9 @@ const tripNavigation = createTripConsultationNavigation({
   show: (view) => { returnToConversation(); aiGuideController.open(); tripWorkspace.show(view); },
   sessionVersion: () => serverTripClient.sessionVersion(),
 });
+let pendingStart: { tripId: string; prompt: string; account: number | undefined } | undefined;
 const resetConsultation = () => {
+  pendingStart = undefined;
   tripNavigation.cancel(); conversationUi.clear();
   activeConversationSession = { ...unsignedConversation, id: `ui-new-${crypto.randomUUID()}` };
   serverAgentSession.contextChanged();
@@ -433,20 +427,38 @@ const startNewConsultation = async (prompt: string) => {
   if (!isSignedIn()) throw new Error("Authentication required");
   if (!canLeaveConditions()) throw new Error("Navigation cancelled");
   const navigation = tripNavigation.cancel(), account = serverTripClient.sessionVersion();
-  await startFreshConsultation(prompt, {
-    create: () => conversationUi.create({}, false),
-    activate: activateConversation,
-    isCurrent: () => isSignedIn() && navigation === tripNavigation.version() && account === serverTripClient.sessionVersion(),
-    currentConversationId: () => activeConversationSession.id,
+  const attempt = pendingStart?.prompt === prompt && pendingStart.account === account
+    ? pendingStart : { tripId: crypto.randomUUID(), prompt, account };
+  pendingStart = attempt;
+  const isCurrent = () => isSignedIn() && navigation === tripNavigation.version() && account === serverTripClient.sessionVersion();
+  const started = await startTripConsultation({
+    prompt, tripId: attempt.tripId, isCurrent,
+    start: value => serverTripClient.startConsultation(value),
+    activate: async (conversationId, tripId) => {
+      const session = await conversationUi.findForTrip(tripId);
+      if (!isCurrent()) throw new Error("Consultation navigation changed");
+      if (session?.id !== conversationId) throw new Error("Trip history read-back unavailable");
+      await activateConversation(conversationId);
+      if (!isCurrent()) throw new Error("Consultation navigation changed");
+      const source = tripWorkspaceController.source();
+      if (!source) throw new Error("Trip source unavailable");
+      await source.retry?.();
+      if (!isCurrent()) throw new Error("Consultation navigation changed");
+    },
+    current: () => ({ conversationId: activeConversationSession.id, tripId: tripWorkspaceController.current()?.id }),
     submit: value => aiGuideController.ask(value),
   });
+  pendingStart = undefined;
+  void serverTripList.refresh().catch(() => undefined);
+  return { tripId: started.trip.id };
 };
 let initialAuthenticationNotification = true;
 let authenticationGeneration = 0;
 currentAuthentication().subscribe(() => {
   if (initialAuthenticationNotification) { initialAuthenticationNotification = false; return; }
   const generation = ++authenticationGeneration;
-  tripNavigation.cancel(); pendingDraftTripIds.clear(); serverTripReferences.clear();
+  pendingStart = undefined;
+  tripNavigation.cancel(); serverTripReferences.clear();
   conversationUi.clear(); profileUi.clear(); activeConversationSession = unsignedConversation;
   aiGuideController.switchSession(unsignedConversation.id);
   tripWorkspaceController.activateSession(unsignedConversation.id);
@@ -571,9 +583,7 @@ primaryShell = configureAiFirstShell(document, app, {
 configureTravelProfile(document, profileUi);
 loadingScreen.complete();
 const consultationScreen = configureConsultationScreen(aiGuidePanel, aiGuideMessages, aiGuideForm, aiGuideInput, {
-  read: () => ({ sessionId: tripWorkspaceController.sessionId(), trip: tripWorkspaceController.current() ?? (isSignedIn() && !activeConversationSession.tripId ? conversationUi.draftView(activeConversationSession.id) : undefined),
-    pendingDraft: pendingDraftTripIds.has(activeConversationSession.id),
-    draft: isSignedIn() && !activeConversationSession.tripId && !tripWorkspaceController.current(),
+  read: () => ({ sessionId: tripWorkspaceController.sessionId(), trip: tripWorkspaceController.current(),
     unavailable: tripWorkspaceController.blocksLegacy() && !tripWorkspaceController.current(),
     viewer: tripWorkspaceController.source()?.getRole?.() === "viewer" }),
   profile: () => profileUi.current()?.profile, subscribe: (listener) => {
@@ -583,35 +593,7 @@ const consultationScreen = configureConsultationScreen(aiGuidePanel, aiGuideMess
   preview: (proposal) => { tripWorkspaceController.preview(proposal); tripWorkspace.show("trip"); },
   showTrip: () => { if (tripWorkspaceController.current()) tripWorkspace.show("trip"); },
   newConversation: () => { primaryShell?.navigate("chat"); },
-  cancelDraftTrip: () => { pendingDraftTripIds.delete(activeConversationSession.id); },
-  saveDraftRequest: async (next, expected) => {
-    const id = activeConversationSession.id, account = serverTripClient.sessionVersion();
-    if (pendingDraftTripIds.has(id)) throw new Error("仮旅程の保存を再試行してから、条件を編集してください。");
-    await conversationUi.saveDraftRequest(id, expected, next);
-    if (activeConversationSession.id === id && account === serverTripClient.sessionVersion()) {
-      activeConversationSession = conversationUi.list().find(session => session.id === id)!;
-      serverAgentSession.contextChanged();
-    }
-  },
-  saveDraftTrip: async () => {
-    if (!isSignedIn()) throw new Error("Authentication required");
-    const conversationId = activeConversationSession.id;
-    if (activeConversationSession.tripId) return;
-    const attempt = pendingDraftTripIds.get(conversationId) ?? { id: crypto.randomUUID(), now: new Date().toISOString(), request: structuredClone(conversationUi.draftView(conversationId)?.request ?? { constraints: [], assumptions: [] }) };
-    pendingDraftTripIds.set(conversationId, attempt);
-    const account = serverTripClient.sessionVersion();
-    // Copy only explicitly saved conditions; do not invent schedules, prices or adopted candidates.
-    const created = await createConversationDraftTrip({ conversationId, tripId: attempt.id, now: attempt.now, request: attempt.request, client: serverTripClient, conversations: serverConversationClient });
-    await conversationUi.refresh(conversationId);
-    const linked = conversationUi.list().find((session) => session.id === conversationId);
-    if (!linked?.tripId || linked.tripId !== created.id) throw new Error("Conversation reference unavailable");
-    pendingDraftTripIds.delete(conversationId);
-    if (activeConversationSession.id !== conversationId || account !== serverTripClient.sessionVersion()) { void serverTripList.refresh(); return; }
-    activeConversationSession = linked; syncServerTripSource(linked);
-    tripWorkspaceController.activateSession(linked.id);
-    await tripWorkspaceController.source()?.retry?.(); await serverTripList.refresh();
-    if (activeConversationSession.id === conversationId && account === serverTripClient.sessionVersion()) tripWorkspace.show("trip");
-  },
+
 });
 canLeaveConditions = () => consultationScreen.canLeave() && tripWorkspace.canLeave();
 if (import.meta.env.DEV && homePreview === "data") {

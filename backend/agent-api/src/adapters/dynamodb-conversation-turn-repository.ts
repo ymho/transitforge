@@ -78,8 +78,8 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     this.store.owner(input.principal); stateId(input.conversationId); stateId(input.turnId);
     return structuredClone(input);
   }
-  private key(input: ConversationTurnIdentity) { return `TURN#${input.conversationId}#${input.turnId}`; }
-  private workingKey(conversationId: string) { stateId(conversationId); return `WORKING#${conversationId}`; }
+  private key(input: ConversationTurnIdentity) { return `TRIP_TURN#${input.conversationId}#${input.turnId}`; }
+  private workingKey(conversationId: string) { stateId(conversationId); return `TRIP_WORKING#${conversationId}`; }
   async getWorkingState(principal: ConversationTurnIdentity["principal"], conversationId: string): Promise<ConversationWorkingState | undefined> {
     this.store.owner(principal);
     const envelope = await this.store.read(principal, this.workingKey(conversationId));
@@ -186,6 +186,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     if (calendarDate !== undefined && !validCalendarDate(calendarDate)) throw new StateError("invalid-input");
     const requestHash = createHash("sha256").update(JSON.stringify([request.userRequest, request.requestedResearchMode ?? "standard", request.researchTarget ?? null, request.tripId ?? null, itemId ?? null, calendarDate ?? null])).digest("hex");
     const { current, old, turn } = await this.read(input);
+    if (request.tripId !== undefined && request.tripId !== current.tripId) throw new StateError("invalid-input");
     if ((await this.getWorkingState(input.principal, input.conversationId))?.semantic?.adoptionInFlight) throw new StateError("conflict");
     if (turn && turn.requestHash !== requestHash) throw new StateError("conflict");
     if (turn?.state === "completed") return { state: "completed", result: turn.result! };
@@ -199,7 +200,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const attemptId = this.newAttemptId(); stateId(attemptId);
     const next: TurnRecord = { requestHash, state: turn?.intentReceipt ? "intent_accepted" : "started", attemptId, leaseUntil: time + conversationTurnLimits.leaseMs,
       userSequence: turn?.userSequence ?? current.messageCount + 1,
-      ...(calendarDate ? { baseCalendarDate: calendarDate } : {}), ...(request.tripId ? { targetTripId: request.tripId } : {}),
+      ...(calendarDate ? { baseCalendarDate: calendarDate } : {}), targetTripId: current.tripId,
       ...(turn?.intentReceipt ? { intentReceipt: turn.intentReceipt } : {}),
       ...(turn?.conditionUpdates ? { conditionUpdates: turn.conditionUpdates } : {}) };
     await this.write(input.principal, current, { ...current, revision: current.revision + 1, updatedAt: now,

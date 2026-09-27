@@ -37,8 +37,11 @@ export function deriveAgentTaskContext(input: {
   const tripId = text(input.trip?.tripId) ?? text(input.trip?.id);
   const tripRevision = integer(input.trip?.revision);
   const lifecycle = text(input.trip?.lifecycleState);
+  const planning = text(input.trip?.planningState);
   const phase: AgentTaskPhase = tripId
-    ? lifecycle === "in_trip" || lifecycle === "active" ? "in_trip" : "refine"
+    ? lifecycle === "in_trip" || lifecycle === "active" ? "in_trip"
+      : planning === "inspiration" || planning === "candidate_discovery" || planning === "candidate_selection" ? "discovery"
+      : planning === "itinerary_draft" ? "draft" : "refine"
     : input.consultationRequest === undefined ? "discovery" : "draft";
   const target = tripId
     ? { kind: "trip" as const, tripId, ...(tripRevision === undefined ? {} : { tripRevision }) }

@@ -27,7 +27,7 @@ export interface ServerStateContextReaders {
 }
 
 /** Read-only and per-turn. No cache, message append, transport or model dependencies. */
-export function createServerStateContextLoader(readers: ServerStateContextReaders, options: { historyBeforeSequence?: number; onTrip?: (trip: import("@raiquora/trip/trip").Trip) => void; onConsultation?: (value: { conversationId: string; createdAt: string; request: import("@raiquora/trip/trip-request").TripRequest }) => void;
+export function createServerStateContextLoader(readers: ServerStateContextReaders, options: { historyBeforeSequence?: number; onTrip?: (trip: import("@raiquora/trip/trip").Trip) => void;
   onEffectiveIntent?: (value: { effectiveIntent: EffectiveIntent; currentReceipt?: IntentApplicationReceipt }) => void } = {}) {
   const before = options.historyBeforeSequence;
   if (before !== undefined && (!Number.isSafeInteger(before) || before < 1)) throw new StateError("invalid-input");
@@ -49,11 +49,7 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
     const profile = await readers.profiles.get(principal);
     const history = conversation ? await recentConversation(readers.conversations, principal, conversation, before) : undefined;
     if (trip) options.onTrip?.(structuredClone(trip));
-    const persistedConsultationRequest = !trip && conversation ? conversation.draftRequest : undefined;
-    const consultationRequest = !trip && conversation ? persistedConsultationRequest ?? { constraints: [], assumptions: [] } : undefined;
-    // The empty proposal base enables the first consultation write; phase derivation still distinguishes it from persisted draft state.
-    if (conversation && consultationRequest) options.onConsultation?.({ conversationId: conversation.conversationId, createdAt: conversation.createdAt,
-      request: structuredClone(consultationRequest) });
+    if (conversation && !trip) throw new StateError("not-found");
     // Profile is resolved through EffectiveIntent below; do not expose a second
     // raw snapshot whose precedence would be left to the model.
     const snapshot = createAgentContextSnapshot(undefined, trip);
@@ -62,9 +58,9 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
     const workingState = savedWorkingState && (!tripId || savedWorkingState.target.tripId === undefined ||
       savedWorkingState.target.tripId === tripId && (savedWorkingState.target.tripRevision === undefined || savedWorkingState.target.tripRevision === trip?.revision))
       ? savedWorkingState : undefined;
-    const taskContext = conversationId || trip || consultationRequest ? deriveAgentTaskContext({ conversationId, trip: trip ? { id: trip.id, revision: trip.revision,
-      lifecycleState: trip.lifecycleState } : undefined,
-      consultationRequest: persistedConsultationRequest, requestRevision: trip?.revision ?? conversation?.revision,
+    const taskContext = conversationId || trip ? deriveAgentTaskContext({ conversationId, trip: trip ? { id: trip.id, revision: trip.revision,
+      lifecycleState: trip.lifecycleState, planningState: trip.planningState } : undefined,
+      requestRevision: trip?.revision,
       workingStateRevision: workingState?.revision, previousOutcome: workingState?.lastOutcome?.outcome }) : undefined;
     const receiptCandidate = before !== undefined && workingState?.sourceUserSequence === before
       ? workingState.semantic?.receipts.at(-1) : undefined;
@@ -75,10 +71,8 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
       currentIntentChange: { intentRevision: currentIntentReceipt.intentRevision, speechAct: currentIntentReceipt.speechAct,
         operations: acceptedIntentOperations.map(({ action, target, frame }) => ({ action, target, frame })) },
     } : taskContext;
-    const effectiveIntent = workingState?.semantic || trip?.request || consultationRequest || profile?.profile ? compileEffectiveIntent({
-      ...(trip?.request ? { baseRequest: trip.request, baseSource: "trip" as const } : consultationRequest ? {
-        baseRequest: consultationRequest, baseSource: "conversation_draft" as const,
-      } : {}),
+    const effectiveIntent = workingState?.semantic || trip?.request || profile?.profile ? compileEffectiveIntent({
+      ...(trip?.request ? { baseRequest: trip.request, baseSource: "trip" as const } : {}),
       ...(taskContext?.requestRevision === undefined ? {} : { baseRevision: taskContext.requestRevision }),
       ...(profile?.profile ? { profile: profile.profile, profileRevision: profile.revision } : {}),
       overlay: workingState?.semantic?.overlay ?? { version: 1, intentRevision: 0, facts: [], tombstones: [], appliedMutationIds: [] },
@@ -94,7 +88,6 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
       ...(history ? { conversation: history } : {}),
       ...(effectiveProfile ? { travelProfile: effectiveProfile } : {}),
       ...(snapshot.trip ? { currentTrip: snapshot.trip } : {}),
-      ...(consultationRequest ? { consultationRequest } : {}),
       ...(focusedItem || calendarDate ? { featureContext: {
         ...(focusedItem ? { uiFocus: { itemId: focusedItem.id, item: selectedTripItemSnapshot(focusedItem) } } : {}),
         ...(calendarDate ? { calendarDate } : {}),
