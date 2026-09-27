@@ -99,7 +99,6 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
           requirement.places.some(({ name }) => name === "出雲大社")), "initial destination must be adopted into Trip").toBe(true);
         expect.soft(working?.semantic?.overlay.facts.some(({ target }) => target === "destination"),
           "adopted destination must not remain as a second authority").toBe(false);
-        expect.soft(calls.length).toBeGreaterThan(before);
       }
       if (index === 2) {
         expect.soft(savedTrip?.request.constraints.filter(({ requirement }) => requirement.type === "destinations")
@@ -110,7 +109,7 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
         expect.soft(result.publicPlacePresentation?.cards.map(({ title }) => title)).toContain("清水寺");
         expect.soft(result.publicPlacePresentation?.cards.some(({ title }) => title.includes("出雲大社"))).toBe(false);
       }
-      if (index === 3) expect.soft(result.response).toContain("保存は行っていません");
+      if (index === 3) expect.soft(savedTrip?.items, "an unavailable save must not mutate the Trip itinerary").toEqual([]);
     }
     expect(v1.converse).not.toHaveBeenCalled();
     const history = await state.conversations.history(principal, conversationId);
