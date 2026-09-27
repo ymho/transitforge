@@ -1,7 +1,7 @@
 import {
   Agent, BedrockModel, StructuredOutputError, tool,
   type AgentConfig, type BaseModelConfig, type InvokableTool,
-  type JSONSchema, type JSONValue, type Model,
+  type JSONSchema, type JSONValue, type Model, type MessageData,
 } from "@strands-agents/sdk";
 import { AgentTraceRecorder, type AgentTrace } from "@raiquora/agent/agent-trace";
 import { validateToolIntentUse } from "@raiquora/agent/intent-action-policy";
@@ -32,6 +32,8 @@ export interface StrandsAgentRunInput {
   executionId: string;
   userRequest: string;
   modelInput?: string;
+  /** Public owner-scoped history; no raw SDK Tool results or internal reasoning. */
+  history?: MessageData[];
   tools: AgentToolRegistry;
   toolExecutor: AgentToolExecutor;
   effectiveIntent?: EffectiveIntent;
@@ -157,6 +159,7 @@ export class StrandsAgentEngine {
       maxTokens: this.options.maxOutputTokens ?? 2_048, temperature: 0, stream: false });
     const agent = this.createAgent({
       model: baseModel,
+      ...(input.history?.length ? { messages: input.history } : {}),
       structuredOutputSchema: agentV2StructuredOutputSchema,
       tools, systemPrompt: this.options.systemPrompt,
       printer: false, contextManager: false, retryStrategy: null, toolExecutor: "sequential",

@@ -35,8 +35,12 @@ class DialogueModel extends Model<BaseModelConfig> {
   getConfig() { return this.config; }
   async *stream(input: Message[]): AsyncGenerator<ModelStreamEvent> {
     if (this.calls === 2) {
-      const payload = JSON.parse((input[0]!.content[0] as { text: string }).text);
-      expect(payload.application.conversation.messages.at(-1).text).toContain("出発地");
+      const payload = JSON.parse((input.at(-1)!.content[0] as { text: string }).text);
+      expect(input[0]!.role).toBe("user");
+      expect((input[0]!.content[0] as { text: string }).text).toBe(messages[0]);
+      expect(input[1]!.role).toBe("assistant");
+      expect((input[1]!.content[0] as { text: string }).text).toContain("出発地");
+      expect(payload.application.conversation).not.toHaveProperty("messages");
       expect(payload.userMessage).toBe("大阪です。");
     }
     const step = this.steps[this.calls++];

@@ -1,3 +1,4 @@
+import type { MessageData } from "@strands-agents/sdk";
 import type { ServerAgentRuntimeInput } from "../ports/server-agent-runtime.js";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -55,6 +56,29 @@ export function strandsTurnInput(input: ServerAgentRuntimeInput): string {
   // Fail explicitly rather than silently dropping dates, exclusions or corrections.
   if (serialized.length > 24_000) throw new StrandsTurnInputError("context_budget");
   return serialized;
+}
+
+
+/** Preserve the Conversation's public user/assistant roles with the SDK's native
+ * history input. The same sanitized projection enforces the combined 24k budget;
+ * messages are removed from application data rather than duplicated in the prompt.
+ * This is data transport, not semantic interpretation or another state store. */
+export function strandsConversationInput(input: ServerAgentRuntimeInput): { modelInput: string; history: MessageData[] } {
+  const payload = JSON.parse(strandsTurnInput(input)) as {
+    userMessage: string; application: { conversation: { messages?: unknown } | null };
+  };
+  const conversation = payload.application.conversation;
+  const saved = conversation?.messages ?? [];
+  if (!Array.isArray(saved)) throw new StrandsTurnInputError("invalid_input");
+  const history: MessageData[] = saved.map((message: unknown) => {
+    if (!message || typeof message !== "object" || !("role" in message) || !("text" in message) ||
+        (message.role !== "user" && message.role !== "assistant") || typeof message.text !== "string" || !message.text.trim()) {
+      throw new StrandsTurnInputError("invalid_input");
+    }
+    return { role: message.role, content: [{ text: message.text }] };
+  });
+  if (conversation) delete conversation.messages;
+  return { modelInput: JSON.stringify({ application: payload.application, userMessage: payload.userMessage }), history };
 }
 
 function withoutRequest(value: Record<string, unknown>): Record<string, unknown> {
