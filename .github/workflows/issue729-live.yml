@@ -1,5 +1,5 @@
-name: Agent v2 / Party details pre-merge live
-# Three independent repetitions after full CI for cedf614; current request follows reference state.
+name: Agent v2 / Party dialogue recovery live
+# Full CI passed for 0c6afb3. This gate is distinct from first-pass quality (#736).
 on:
   push:
     branches: [feat/agent-v2-party-cohorts-729]
@@ -55,29 +55,30 @@ jobs:
           role-to-assume: ${{ steps.eval-role.outputs.role_arn }}
           aws-region: ${{ env.AWS_REGION }}
           mask-aws-account-id: true
-      - name: Run three independent Nova 2 Lite repetitions
+      - name: Run three independent Nova 2 Lite dialogue repetitions
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p .artifacts/issue729-live
+          mkdir -p .artifacts/issue729-dialogue-live
           {
-            echo '### Party details pre-merge live'
+            echo '### Party details dialogue completion/recovery gate'
             echo "- Commit: $GITHUB_SHA"
             echo "- Model: $MODEL_ID"
-            echo '- Budget: 14 turns x 6 model calls x 3 independent repetitions = at most 252 model calls'
+            echo '- Budget: 9 turns x 6 model calls x 3 independent repetitions = at most 162 model calls'
             echo '- Deadline: 60 seconds per turn; output: 1536 tokens per model call'
             echo '- External Travel Providers and production writes: none'
+            echo '- First-pass quality is a separate probe and remains unresolved in #736.'
           } >> "$GITHUB_STEP_SUMMARY"
           status=0
           for attempt in 1 2 3; do
-            npm run test:agent:v2:party-details-live -- --reporter=default --reporter=json --outputFile=".artifacts/issue729-live/party-details-${attempt}.json" || status=1
+            npm run test:agent:v2:party-details-live -- --testNamePattern 'recovers from|dialogue completion' --reporter=default --reporter=json --outputFile=".artifacts/issue729-dialogue-live/dialogue-${attempt}.json" || status=1
           done
           exit "$status"
       - name: Publish bounded result summary
         if: always()
         shell: bash
         run: |
-          for file in .artifacts/issue729-live/party-details-*.json; do
+          for file in .artifacts/issue729-dialogue-live/dialogue-*.json; do
             if [[ -f "$file" ]]; then
               echo "$(basename "$file")" >> "$GITHUB_STEP_SUMMARY"
               jq '{success,numPassedTests,numFailedTests,numPendingTests}' "$file" >> "$GITHUB_STEP_SUMMARY"
@@ -86,7 +87,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: issue729-live-${{ github.run_id }}
-          path: .artifacts/issue729-live
+          name: issue729-dialogue-live-${{ github.run_id }}
+          path: .artifacts/issue729-dialogue-live
           if-no-files-found: warn
           retention-days: 14
