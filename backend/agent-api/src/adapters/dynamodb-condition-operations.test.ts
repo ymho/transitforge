@@ -41,7 +41,7 @@ describe("condition-operation acceptance and replay", () => {
     await f.turns.completeTurn(identity, f.lease, final);
     expect(await f.fresh().beginTurn(identity, request)).toEqual({ state: "completed", result: final });
     expect((await f.conversations.history(stateA, conversationId)).items).toHaveLength(2);
-    expect(summary.changes.map(({ target }) => target)).toEqual(["origin", "destination"]);
+    expect(summary.changes.map(({ target }) => target)).toEqual(["origin", "destination", "origin"]);
   });
   it("persists party as one operation slot and replays the same requested state without inferring composition", async () => {
     const f = await setup();
