@@ -134,11 +134,12 @@ export class StrandsAgentEngine {
             ? { target: "budget", budget: value.budget!, quote: value.quote }
             : { target: "budget", budget: null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "consider_trip_scenario", inputSchema: tripScenarioInputSchema,
-          description: "現在の実旅行条件を一切変更せず、人数・旅行期間・予算の仮定、反実仮想、what-if、シナリオ比較を考える非永続Tool。条件writerの代わりに使い、保存・A commit・Intent revision更新を行わない。",
+          description: "現在の実旅行条件を一切変更せず、人数・旅行期間・予算の仮定、反実仮想、what-if、シナリオ比較を考える非永続Tool。成功時点でactual条件はすでに保持されているため、元の値へ戻す・維持する目的でupdate_current_*を呼ばない。同じuserMessageに仮定とは別の明示的なactual変更がある場合だけ、その変更に対応するwriterを別途使う。保存・A commit・Intent revision更新を行わない。",
           callback: (value, context) => {
             if (context?.cancelSignal.aborted) throw new Error("execution_cancelled");
             const scenario = admitTripScenario(value, input.userRequest);
-            return jsonValue({ ok: true, scenario, currentConditionsUnchanged: true });
+            return jsonValue({ ok: true, scenario, currentConditionsUnchanged: true,
+              actualConditionWriteRequired: false, restoreCurrentConditions: false });
           } }),
       );
     }
