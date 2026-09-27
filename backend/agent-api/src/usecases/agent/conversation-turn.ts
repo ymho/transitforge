@@ -47,10 +47,6 @@ export function createConversationTurnApplication(dependencies: {
       ? begun.conditionReceipts?.map(receipt => [receipt.mutationId, receipt]) : []);
     let acceptedReceipt = begun.state === "intent_accepted"
       ? summarizeConditionReceipts([...conditionReceipts.values()]) ?? begun.receipt : undefined;
-    if (acceptedReceipt) {
-      await reportIntentAccepted?.(publicSemanticReceipt(acceptedReceipt));
-      await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "publish", "completed", acceptedReceipt));
-    }
     let result: ConversationTurnResult;
     let continuity: ConversationTurnContinuity | undefined;
     try {
@@ -89,7 +85,6 @@ export function createConversationTurnApplication(dependencies: {
         conditionReceipts.set(receipt.mutationId, receipt);
         acceptedReceipt = summarizeConditionReceipts([...conditionReceipts.values()]);
         await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "accept", "accepted", receipt));
-        await reportIntentAccepted?.(publicSemanticReceipt(acceptedReceipt!));
         return receipt;
       } : undefined;
       const runtimeInput = { principal, conversationId, userRequest, requestedResearchMode, researchTarget, tripId, uiContext };
@@ -104,6 +99,13 @@ export function createConversationTurnApplication(dependencies: {
       if (autoAdoptConditionProposal) {
         if (!dependencies.adoptTripProposal) throw new StateError("unavailable");
         await dependencies.adoptTripProposal(identity, begun.lease, runtime.tripUpdateProposal!);
+      }
+      if (acceptedReceipt) {
+        // "Reflected" is public only after a verified request proposal was adopted.
+        // Partial values without a Trip representation remain internal until #761 persists them.
+        if (!autoAdoptConditionProposal) throw new StateError("unavailable");
+        await reportIntentAccepted?.(publicSemanticReceipt(acceptedReceipt));
+        await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "publish", "completed", acceptedReceipt));
       }
       const presentationReceipt = runtime.publicPlanPresentation ? presentationFromPublicPlan(runtime.publicPlanPresentation) : presentationFromObservation(turnId, runtime.turnObservation);
       if (presentationReceipt) await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId,
