@@ -1,0 +1,21 @@
+name: Issue 729 Workbench
+on:
+  push:
+    branches: [feat/agent-v2-party-cohorts-729]
+    paths: [.github/workflows/issue729-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Archive tracked source only
+        run: git archive --format=tar.gz --output=/tmp/issue729-source.tar.gz HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: issue729-source
+          path: /tmp/issue729-source.tar.gz
+          retention-days: 1
