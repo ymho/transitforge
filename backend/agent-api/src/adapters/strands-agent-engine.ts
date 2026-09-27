@@ -97,17 +97,14 @@ export class StrandsAgentEngine {
     });
     const controller = input.conditionController;
     if (controller) {
-      const appliedConditionTargets = new Set<ConversationConditionInput["target"]>();
       const apply = async (change: ConversationConditionInput, signal?: AbortSignal): Promise<JSONValue> => {
         if (signal?.aborted) throw new Error("execution_cancelled");
         if (intentUnavailable) throw new Error("condition_unavailable");
-        if (appliedConditionTargets.has(change.target)) return jsonValue({
-          ok: true, status: "already_applied_this_turn", condition: change.target,
-        });
         try {
+          // Application owns operation identity, replay, rejection and current state.
+          // A repeated target is not evidence that this particular change was accepted.
           const accepted = await controller.apply(change);
           currentEffectiveIntent = accepted.effectiveIntent;
-          appliedConditionTargets.add(change.target);
           // The model only needs the acceptance receipt. The authoritative effectiveIntent
           // stays Application-owned and is bound to later reads through getEffectiveIntent.
           return jsonValue({ ok: true, status: "applied", receipt: accepted.receipt });
