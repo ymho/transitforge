@@ -1,3 +1,5 @@
+import { conditionDisplayLines } from "@raiquora/agent/agent-v2-condition-display";
+import type { PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 import { mergeEvidenceObservations, validateEvidenceAndClaims } from "@raiquora/agent/evidence-model";
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import { AgentV2ReplyError, type AgentV2ReplyProof } from "@raiquora/agent/agent-v2-reply";
@@ -5,7 +7,7 @@ import { admitAgentV2Reply } from "@raiquora/agent/agent-v2-publication";
 import type { ServerAgentRuntimeInput } from "../ports/server-agent-runtime.js";
 import type { AgentExecutionDiagnostic } from "../ports/agent-diagnostics.js";
 import { StrandsAgentEngine } from "./strands-agent-engine.js";
-import { strandsTurnInput } from "./strands-turn-input.js";
+import { strandsConversationInput } from "./strands-turn-input.js";
 import { strandsExecutionDiagnostic } from "./strands-execution-diagnostic.js";
 
 /** Proof is Application-authored and intended for V2 evaluation/diagnostics. It
@@ -13,12 +15,18 @@ import { strandsExecutionDiagnostic } from "./strands-execution-diagnostic.js";
 export type StrandsRuntimeResult = AgentRuntimeResult & { publicReply?: AgentV2ReplyProof; publicationError?: string };
 export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
   return async (input: ServerAgentRuntimeInput): Promise<StrandsRuntimeResult> => {
+    const conversationInput = strandsConversationInput(input);
+    const conditionReceipts: PublicSemanticReceipt[] = [];
     let run: Awaited<ReturnType<StrandsAgentEngine["run"]>>;
     try {
       run = await engine.run({
-        executionId: input.executionId, userRequest: input.userRequest, modelInput: strandsTurnInput(input),
+        executionId: input.executionId, userRequest: input.userRequest, ...conversationInput,
         tools: input.tools, toolExecutor: input.toolExecutor, effectiveIntent: input.context?.effectiveIntent,
-        ...(input.conditionController ? { conditionController: input.conditionController } : {}),
+        ...(input.conditionController ? { conditionController: { ...input.conditionController, apply: async change => {
+          const accepted = await input.conditionController!.apply(change);
+          conditionReceipts.push(structuredClone(accepted.receipt));
+          return accepted;
+        } } } : {}),
         limits: { maxTurns: Math.min(input.limits.maxIterations, input.limits.maxModelCalls),
           maxToolCalls: input.limits.maxToolCalls, maxExecutionMs: input.limits.maxExecutionMs },
         reserveToolCall: () => input.researchLedger.reserve("toolCalls"),
@@ -49,6 +57,11 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
         // This composition exposes reads only. No model-supplied success receipts.
         receipts: [], availableOperations: [],
       });
+      // The model's prose is not a mutation receipt. Show the actual accepted values
+      // independently, in the same snapshot used by B commit / history / replay.
+      const changes = conditionDisplayLines(conditionReceipts, run.effectiveIntent);
+      if (changes.length) reply.text += "\n\n今回の相談条件（反映済み）\n" + changes.map(line =>
+        line.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replace(/[\\`*_{}\[\]()#+.!|]/gu, "\\$&")).join("\n");
       // Match the existing Conversation message envelope before committing a reply.
       // Count UTF-8 bytes after rendering/escaping, not source characters.
       if (Buffer.byteLength(reply.text, "utf8") > 16 * 1024) return denied("response_budget");

@@ -51,7 +51,7 @@ describe.skipIf(!enabled)("budget condition Tool with real Bedrock", () => {
         { attemptId: turnId, userSequence: index + 1 }, scenario.message);
       const tools = new AgentToolRegistry(), evidenceRegistry = new ToolEvidenceRegistry();
       let modelCalls = 0, writerCallbacks = 0; const selectedTools: string[] = [];
-      const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1_024 }, {
+      const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1_024, maxInvocationOutputTokens: 1_024 }, {
         createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, event => {
           modelCalls++; selectedTools.push(...event.message.content.flatMap(block => block.type === "toolUseBlock"
             ? [["update_current_budget", "consider_trip_scenario", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));

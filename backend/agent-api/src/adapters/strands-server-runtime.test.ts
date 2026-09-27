@@ -5,6 +5,7 @@ import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
 import type { StrandsAgentEngine } from "./strands-agent-engine.js";
+import { strandsConversationInput } from "./strands-turn-input.js";
 import { createStrandsServerRuntime } from "./strands-server-runtime.js";
 const limits = { maxIterations: 4, maxModelCalls: 6, maxToolCalls: 6, maxExecutionMs: 10_000, maxEvidence: 20 };
 function runtimeInput() {
@@ -87,4 +88,20 @@ describe("createStrandsServerRuntime", () => {
     expect(result.status).toBe("limit_reached");
     expect(result.response).toBe("");
   });
+});
+
+it("projects only public role/text into native SDK history without duplicating or weakening the context budget", () => {
+  const input = runtimeInput();
+  const conversation = { messages: [{ role: "user" as const, text: "出発地は次に伝えます。" },
+    { role: "assistant" as const, text: "分かりました。" }] };
+  const projected = strandsConversationInput({ ...input, userRequest: "大阪です。", context: { ...input.context, conversation } });
+  expect(projected.history).toEqual(conversation.messages.map(({ role, text }) => ({ role, content: [{ text }] })));
+  const payload = JSON.parse(projected.modelInput);
+  expect(payload.userMessage).toBe("大阪です。");
+  expect(payload.application.conversation).not.toHaveProperty("messages");
+  expect(conversation.messages).toHaveLength(2);
+  expect(() => strandsConversationInput({ ...input, context: { conversation: { messages: [
+    { role: "user", text: "x".repeat(25000) } ] } } })).toThrow("context_budget");
+  expect(() => strandsConversationInput({ ...input, context: { conversation: { messages: [
+    { role: "system", text: "not a public conversation role" } as never ] } } })).toThrow("invalid_input");
 });

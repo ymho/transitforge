@@ -99,6 +99,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
    systemPrompt: agentV2SystemPrompt,
    maxTurns: 10,
    maxOutputTokens: 4_096,
+   maxInvocationOutputTokens: 4_096,
  })) : undefined;
  return createProductionConversationAgent({
    // Open-ended discovery needs several candidate/source/photo rounds and a
