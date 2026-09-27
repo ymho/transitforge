@@ -1,5 +1,5 @@
 name: Budget condition workbench (temporary)
-# Diagnostic rerun: classify writer rejection without logging model/user payload.
+# Rerun: scenario success explicitly declares no restore writer is required.
 
 on:
   push:
