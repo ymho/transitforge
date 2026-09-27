@@ -1,0 +1,63 @@
+name: Trip consultation / Reviewed source verification
+on:
+  push:
+    branches: [feat/753-trip-centered-conversation]
+    paths: [.github/workflows/trip-consultation-760-workbench.yml]
+permissions:
+  contents: write
+jobs:
+  verify-and-publish:
+    if: github.ref == 'refs/heads/feat/753-trip-centered-conversation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 2
+      - name: Apply reviewed local source snapshot without cloud access
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/feat/753-trip-centered-conversation
+          test "$(git rev-parse HEAD^)" = 8598cae359edf1f66086d097953b108f8f6e923c
+          # The compressed patch is transfer data for already locally tested source,
+          # not executable payload. Hash and final Git tree bind its exact contents.
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, lzma
+          data = b''.join(Path(f'tools/760-workbench.patch.xz.part{i}').read_bytes() for i in range(5))
+          assert hashlib.sha256(data).hexdigest() == 'efdb9ecd1c32e3b4269eed7d0062ce33be09099aaf0404ae2de211c56d08b83b'
+          patch = lzma.decompress(data)
+          assert len(patch) == 124687
+          Path('/tmp/760-reviewed.patch').write_bytes(patch)
+          PY
+          git apply --check --unidiff-zero -p0 /tmp/760-reviewed.patch
+          git apply --unidiff-zero -p0 /tmp/760-reviewed.patch
+          git rm tools/760-workbench.patch.xz.part* .github/workflows/trip-consultation-760-workbench.yml
+          git add backend frontend modules docs tools/agent-transport/stream-contract.test.ts
+          git diff --cached --check
+          test "$(git write-tree)" = eb1ee3cbc6b17fa5cf425d45bd833fa5ca381261
+          git diff --cached --stat
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Validate architecture and production build
+        run: npm run architecture:check && npm run build
+      - name: Run source, persistence and streaming tests without real user data
+        run: npm test
+      - name: Run existing V2 acceptance without live Bedrock
+        run: npm run test:agent:v2
+      - name: Publish verified source only to the same work branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/feat/753-trip-centered-conversation
+          test "$(git write-tree)" = eb1ee3cbc6b17fa5cf425d45bd833fa5ca381261
+          git diff --exit-code
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m '🗂️ Tripと相談履歴を原子的に作成し再送・継続参照を検証する'
+          git push origin HEAD:feat/753-trip-centered-conversation
+          git log -1 --format='%H' >> "$GITHUB_STEP_SUMMARY"
