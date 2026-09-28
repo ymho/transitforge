@@ -34,7 +34,7 @@ jobs:
       - name: Load configuration into private temporary file
         run: |
           umask 077
-          aws lambda get-function-configuration --function-name transitforge-dev-agent-stream --query Environment.Variables --output json > "$RUNNER_TEMP/repro-env.json"
+          aws lambda get-function-configuration --function-name transitforge-dev-agent-stream --query Environment.Variables --output json | jq '. + {AWS_REGION:"ap-northeast-1"}' > "$RUNNER_TEMP/repro-env.json"
       - name: Reproduce one isolated turn with production Providers
         env:
           AGENT_V2_PRODUCTION_REPRO: 'true'
