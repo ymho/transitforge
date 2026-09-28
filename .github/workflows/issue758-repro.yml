@@ -44,4 +44,4 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/repro-env.json"
 
-# Verify request-scoped completion and unknown-condition semantics.
+# Verify Nova reasoning within the unchanged invocation budgets.
