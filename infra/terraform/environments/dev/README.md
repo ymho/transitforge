@@ -111,7 +111,7 @@ data-builder側へ渡す値はTerraform出力から取得し data-builderの`dev
 
 Data BuilderはGTFSとOSMから`otp/izumo-matsue/versions/<version>/`へgraphとmanifestを配布する。本リポジトリは指定したversionだけをS3から読み、private subnetのECS FargateでOTPを常駐させる。非VPCのAgent LambdaはOTPへ直接接続せず、IAM Invokeだけを許可したVPC Bridge Lambdaを経由する。OTPにはpublic ingress、ALB、Function URLを作らない。
 
-OTPの有効化、固定graph version、完全なgraph SHA-256、digest固定したOTP imageとgraph loader imageは、非秘密かつレビュー可能な`otp-runtime.auto.tfvars.json`を正本にする。初回は`enable_otp_route_service=false`のままData Builderの手動生成を完了し、manifest、graph hash、OTP image、GTFS有効期間を確認する。その後、同じOTP image、graph version、完全なgraph SHA-256を`otp-runtime.auto.tfvars.json`へ記録してplanを確認する。init containerはダウンロードしたgraphのSHA-256が一致しない限りOTPを起動しない。`current.json`だけでは稼働中サービスを切り替えない。Graph更新時は新versionでECS taskを入れ替え、徒歩・バス・対象外日・経路なしを確認してから旧taskを停止する。
+OTPの有効化、固定graph version、完全なgraph SHA-256、digest固定したOTP imageとgraph loader imageは、非秘密かつレビュー可能な`otp-runtime.auto.tfvars.json`を正本にする。初回は`enable_otp_route_service=false`のままData Builderの手動生成を完了し、manifest、graph hash、OTP image、GTFS有効期間を確認する。その後、同じOTP image、graph version、完全なgraph SHA-256を`otp-runtime.auto.tfvars.json`へ記録してplanを確認する。init containerはダウンロードしたgraphのSHA-256が一致しない限りOTPを起動しない。`current.json`だけでは稼働中サービスを切り替えない。Graph更新時は新versionでECS taskを入れ替える。CDはECSの安定化を待ち、Bridge Lambda経由の徒歩経路smokeを確認する。さらに徒歩・バス・対象外日・経路なしを確認してから旧taskを停止する。
 
 2026-09-28時点の初回候補では、OTP 2.10.0を`docker.io/opentripplanner/opentripplanner@sha256:8d54e5c589186707ee365417f2202dc878c451fa3001b8edff07019531100933`、graph loaderをAWS CLI 2.37.4の`public.ecr.aws/aws-cli/aws-cli@sha256:fdd8d1fcbea9c371678dee5a40df8b178c7a781b4586605756ee28114c97ead6`として確認した。いずれもmulti-architecture manifest digestである。設定時はData Builderのmanifestと一致すること、各registryでdigestを再確認する。
 
