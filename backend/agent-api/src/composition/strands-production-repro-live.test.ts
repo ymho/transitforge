@@ -1,3 +1,4 @@
+import { mergeEvidenceObservations } from "@raiquora/agent/evidence-model";
 import { createTrip } from "@raiquora/trip/trip";
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
@@ -116,6 +117,7 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
       const result = await executeOriginal.apply(this, args);
       console.log(JSON.stringify({ event: "repro-tool-result", tool: args[0].toolName,
         inputKeys: Object.keys(args[0].toolInput), ok: result.result.ok,
+        collisions: summarizeCollisions(result.evidence),
         output: result.result.ok ? summarizeReproOutput(result.result.output) : { error: result.result.error.code },
         evidenceCount: result.evidence.length, facts: result.evidence.map(item => Object.keys(item.facts)) }));
       return result;
@@ -147,14 +149,14 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
       const result = await original.call(this, input);
       console.log(JSON.stringify({ event: "production-repro-engine", stopReason: allowedStops.has(result.stopReason) ? result.stopReason : "other",
         limitReason: result.limitReason ?? null, metrics: result.metrics ?? null,
-        evidenceCount: result.evidence.length, replyKind: result.replyProposal?.kind ?? null,
+        collisions: summarizeCollisions(result.evidence), evidenceCount: result.evidence.length, replyKind: result.replyProposal?.kind ?? null,
         toolOutcomes: result.trace.events.filter(event => event.type === "tool_completed")
           .map(event => event.type === "tool_completed" ? { tool: event.toolName, outcome: event.outcome } : null) }));
       return result;
     });
     try {
       const app = createProductionServerAgent("production-repro-synthetic-execution", environment);
-      const input = { principal, conversationId, turnId: "73400000-0000-4000-8000-000000000001", userRequest: "出雲大社へ行ってみたい。魅力と近くの立ち寄り先を教えてください。" };
+      const input = { principal, conversationId, turnId: "73400000-0000-4000-8000-000000000001", userRequest: "出雲大社にいきたい" };
       let result: Awaited<ReturnType<typeof app.runConversationTurn>> | undefined;
       const started = Date.now();
       try { result = await app.runConversationTurn(input); }
@@ -216,3 +218,14 @@ it.skipIf(!enabled)("diagnoses one provider request without invoking a model", a
   console.log(JSON.stringify({ event: "repro-search-result", status: result.status,
     error: (result as any).error?.code, failure: (result as any).failure?.code, count: result.data?.results.length ?? 0 }));
 }, 30000);
+
+function summarizeCollisions(evidence: import("@raiquora/agent/evidence-model").Evidence[]) {
+ const result = mergeEvidenceObservations([], evidence);
+ return { count: result.collisions.length, conflicts: result.conflictingObservationIds.length,
+  pairs: result.collisions.slice(0, 8).map(({existing, incoming}) => ({
+   predicateA: existing.observation?.predicate, predicateB: incoming.observation?.predicate,
+   sameSource: existing.references[0]?.sourceRef === incoming.references[0]?.sourceRef,
+   changedTopLevel: Object.keys(incoming).filter(key => JSON.stringify((existing as any)[key]) !== JSON.stringify((incoming as any)[key])),
+   changedFacts: [...new Set([...Object.keys(existing.facts), ...Object.keys(incoming.facts)])].filter(key => JSON.stringify(existing.facts[key]) !== JSON.stringify(incoming.facts[key]))
+  })) };
+}
