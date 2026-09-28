@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import type { Evidence } from "@raiquora/agent/evidence-model";
 import { ConditionUpdateRejectedError } from "@raiquora/agent/conversation-condition";
-import { Model, type AgentConfig, type BaseModelConfig, type Message, type ModelStreamEvent, type StreamOptions } from "@strands-agents/sdk";
+import { BedrockModel, Model, type AgentConfig, type BaseModelConfig, type Message, type ModelStreamEvent, type StreamOptions } from "@strands-agents/sdk";
 import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
@@ -68,6 +69,49 @@ describe("StrandsAgentEngine", () => {
     expect(result.trace.events.some(({ type }) => type === "tool_completed")).toBe(true);
     expect(model.toolChoices).toHaveLength(2); // No model request after the structured result.
   });
+  it.each(["explore_destination", "discover_destinations"])(
+    "keeps %s research internals out of the model reply contract while preserving Evidence", async name => {
+      const tools = new AgentToolRegistry(), registry = new ToolEvidenceRegistry();
+      const evidence: Evidence = { id: "verified-page", category: "external", knowledgeKind: "deterministic_fact",
+        subject: "合成神社", facts: { sourceExcerpt: "合成神社の由来を紹介しています。" },
+        references: [{ sourceType: "external-source", sourceRef: "https://example.test/shrine",
+          retrievedAt: "2026-09-29T00:00:00Z", freshness: "current", summary: "合成資料" }] };
+      const discovery: Evidence = { ...evidence, id: "discovery-only", knowledgeKind: "unverified_information" };
+      const outcome = { status: "partial", verifiedCandidateCount: 1, photoCandidateCount: 0,
+        completedScopes: ["verified_sources"], failedScopes: ["place_photos"] };
+      tools.register({ name, description: "旅行先を調べる", effect: "read",
+        inputSchema: { type: "object", properties: {}, additionalProperties: false },
+        parseInput: () => validAgentToolInput({}), execute: async () => successfulAgentToolResult({
+          outcome, discovery: { internal: "research-state" }, webPages: { internal: "page-state" },
+          candidateAssessments: ["assessment-state"], result: { internal: "provider-state" },
+        }) });
+      registry.register(name, () => [discovery, evidence]);
+      const model = new ScriptedModel([{ tool: name, input: {} }, submitted]);
+      const result = await new StrandsAgentEngine(options, { model }).run({ executionId: "research-contract",
+        userRequest: "旅先の魅力を教えて", tools, toolExecutor: new AgentToolExecutor(tools, registry) });
+      const toolResult = JSON.parse(model.observedMessages[1]!).at(-1).content[0].toolResult.content[0].json;
+      expect(toolResult.output).toEqual({ outcome });
+      expect(toolResult.replyReferences).toEqual([{ evidenceId: evidence.id, fields: evidence.facts }]);
+      expect(model.observedMessages[1]).not.toContain("research-state");
+      expect(result.evidence.map(item => item.id)).toEqual([discovery.id, evidence.id]);
+    });
+
+  it.each(["jp.amazon.nova-2-lite-v1:0", "other-model"])(
+    "configures bounded reasoning only for the verified production model %s", async modelId => {
+      const { input } = setup();
+      let captured: ReturnType<BedrockModel["getConfig"]> = {};
+      const createAgent: StrandsAgentFactory = config => {
+        if (!(config.model instanceof BedrockModel)) throw new Error("Expected Bedrock model");
+        captured = config.model.getConfig();
+        return { invoke: async () => ({ stopReason: "toolUse", structuredOutput: { reply: { kind: "uncertainty" } } }) };
+      };
+      await new StrandsAgentEngine({ ...options, modelId, maxOutputTokens: 4096 }, { createAgent }).run(input);
+      expect(captured.additionalRequestFields).toEqual(modelId === "jp.amazon.nova-2-lite-v1:0"
+        ? { reasoningConfig: { type: "enabled", maxReasoningEffort: "low" } } : undefined);
+      expect(captured.maxTokens).toBe(4096);
+      expect(captured.stream).toBe(false);
+    });
+
   it("rejects stale model Tool input before the Domain Tool executes", async () => {
     const { execute, input } = setup();
     await new StrandsAgentEngine(options, { model: new ScriptedModel([lookup, submitted, end]) })

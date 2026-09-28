@@ -10,7 +10,7 @@ import type { Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { agentV2StructuredOutputSchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
-import { agentV2CandidateReferences, publicReplyField } from "@raiquora/agent/agent-v2-publication";
+import { agentV2CandidateReferences, agentV2ReplyReferences } from "@raiquora/agent/agent-v2-publication";
 import { placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, travelPeriodUpdateInputSchema, budgetConditionUpdateInputSchema,
   tripScenarioInputSchema, admitTripScenario, ConditionUpdateRejectedError, type ConversationConditionInput } from "@raiquora/agent/conversation-condition";
 import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
@@ -118,7 +118,7 @@ export class StrandsAgentEngine {
       };
       tools.push(
         tool({ name: "update_current_destination", inputSchema: placeConditionUpdateInputSchema,
-          description: "今回の相談の行き先について、利用者が実際の条件として設定・訂正・明示撤回した最終状態を1回で反映する。設定/訂正はaction=set、未定に戻す明示はaction=clear。訂正でclear→setの2操作に分けない。仮定・what-if・比較だけ、変更なしでは使わない。Tripやプロフィールは変更しない。",
+          description: "今回の相談の行き先について、利用者自身の行きたい場所の希望・訂正・明示撤回を1回で受理する。日程未定の希望や、魅力・見どころを尋ねる質問と一緒に述べた希望も対象。検索Toolは相談条件を保存しないため、このToolで希望を受理した上で質問にも答える。設定/訂正はaction=set、未定に戻す明示はaction=clear。訂正でclear→setの2操作に分けない。仮定・what-if・比較だけ、変更なしでは使わない。Tripやプロフィールは変更しない。",
           callback: (value, context) => apply(value.action === "set"
             ? { target: "destination", place: value.place!, quote: value.quote }
             : { target: "destination", place: null, quote: value.quote }, context?.cancelSignal) }),
@@ -153,7 +153,11 @@ export class StrandsAgentEngine {
       );
     }
     const baseModel = this.model ?? new BedrockModel({ modelId: this.options.modelId, region: this.options.region,
-      maxTokens: this.options.maxOutputTokens ?? 2_048, temperature: 0, stream: false });
+      maxTokens: this.options.maxOutputTokens ?? 2_048, temperature: 0, stream: false,
+      // Verified production model configuration; do not send Nova-only fields to other models.
+      ...(this.options.modelId === "jp.amazon.nova-2-lite-v1:0" ? {
+        additionalRequestFields: { reasoningConfig: { type: "enabled", maxReasoningEffort: "low" } },
+      } : {}) });
     const agent = this.createAgent({
       model: baseModel,
       ...(input.history?.length ? { messages: input.history } : {}),
@@ -251,10 +255,15 @@ export function createStrandsReadTools(input: {
       if (execution.evidence.length) input.evidence.push(...execution.evidence.map((item) => structuredClone(item)));
       if (!execution.result.ok) return jsonValue({ ok: false, error: {
         code: execution.result.error.code, retryable: execution.result.error.retryable } });
-      return jsonValue({ ok: true, output: execution.result.output, evidenceIds: execution.evidence.map(({ id }) => id),
+      // Purpose Tools already completed their research pipeline. Raw discovery,
+      // page bodies and assessments duplicate the validated reply references and
+      // are internal research state, not additional model work to perform.
+      const output = ["explore_destination", "discover_destinations"].includes(descriptor.name)
+        ? { outcome: jsonObject(execution.result.output)?.outcome }
+        : execution.result.output;
+      return jsonValue({ ok: true, output, evidenceIds: execution.evidence.map(({ id }) => id),
         candidateReferences: agentV2CandidateReferences(execution.evidence, effectiveIntent),
-        replyReferences: execution.evidence.map((item) => ({ evidenceId: item.id,
-          fields: Object.fromEntries(Object.entries(item.facts).filter(([key]) => publicReplyField(key))) })) });
+        replyReferences: agentV2ReplyReferences(execution.evidence, effectiveIntent) });
     },
   }));
 }

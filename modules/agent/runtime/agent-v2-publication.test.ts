@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Evidence } from "./evidence-model";
 import type { EffectiveIntent } from "./effective-intent";
 import { parseAgentV2Reply } from "./agent-v2-reply";
-import { admitAgentV2Reply } from "./agent-v2-publication";
+import { admitAgentV2Reply, agentV2ReplyReferences } from "./agent-v2-publication";
 
 function observation(): Evidence {
   return { id: "e-kyoto", category: "external", knowledgeKind: "deterministic_fact", subject: "京都",
@@ -190,4 +190,24 @@ it.each([
 it("allows a contextual clarification about a known destination rather than repeating the fixed questionnaire", () => {
   expect(admitAgentV2Reply({ kind: "clarification", target: "destination", text: "京都のどのエリアを考えていますか？" },
     { executionId: "dialogue", evidence: [], effectiveIntent: intent() }).text).toContain("どのエリア");
+});
+
+
+describe("model-facing reply references", () => {
+  it("offers only references admitted by the same publisher, preserving the original values", () => {
+    const eligible = observation();
+    eligible.facts = { ...eligible.facts, secretToken: "hidden", sourceUrl: "https://example.test",
+      empty: "", oversized: "x".repeat(2001), list: ["one", "two"] };
+    const discovery = { ...observation(), id: "snippet", knowledgeKind: "unverified_information" as const };
+    const stale = { ...observation(), id: "stale", observation: { ...observation().observation!, state: "stale" as const } };
+    const wrongIntent = { ...observation(), id: "old-intent", intentDependency: { intentRevision: 1, fingerprint: "old", targets: [] } };
+    const refs = agentV2ReplyReferences([discovery, stale, wrongIntent, eligible], intent());
+    expect(refs).toEqual([{ evidenceId: eligible.id, fields: { sourceExcerpt: eligible.facts.sourceExcerpt, value: 10, list: ["one", "two"] } }]);
+    for (const ref of refs) for (const field of Object.keys(ref.fields)) {
+      expect(() => admitAgentV2Reply({ kind: "answer", references: [{ evidenceId: ref.evidenceId, field }] },
+        { executionId: "test", evidence: [eligible], effectiveIntent: intent() })).not.toThrow();
+    }
+    expect(() => admitAgentV2Reply({ kind: "answer", references: [{ evidenceId: discovery.id, field: "sourceExcerpt" }] },
+      { executionId: "test", evidence: [discovery] })).toThrow("ineligible_evidence");
+  });
 });
