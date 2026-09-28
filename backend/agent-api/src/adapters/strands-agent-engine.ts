@@ -207,6 +207,8 @@ export class StrandsAgentEngine {
         } } : {}),
       };
     } catch (error) {
+      console.log(JSON.stringify({ event: "synthetic-engine-error", name: error instanceof Error ? error.name : "unknown",
+        message: error instanceof Error ? error.message.slice(0, 900) : "unknown" }));
       trace.taskCompleted("failed", Date.now() - startedAt, error instanceof Error ? error.name : "unknown_error");
       if (error instanceof ServerAgentRuntimeExecutionError) throw error;
       if (error instanceof StructuredOutputError) throw new ServerAgentRuntimeExecutionError("runtime_projection", "validation");
