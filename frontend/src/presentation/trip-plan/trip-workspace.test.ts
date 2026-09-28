@@ -98,6 +98,18 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(source.href).toBe("https://example.org/garden");
     expect(source.rel).toBe("noopener noreferrer");
   });
+  it("starts a weather discussion for one Trip activity without changing the confirmed itinerary", () => {
+    const trip = createTrip(placesTripId, "出雲の旅", placesAt, [{ id: "shrine", title: "出雲大社", type: "activity",
+      category: "sightseeing", schedule: { type: "day", date: "2026-10-01" }, place: { name: "出雲大社", area: "出雲市", sources: [] },
+      decision: { confirmedAt: "2026-09-26T10:00:00Z" } }]);
+    const f = setup({ getCurrentTrip: () => trip }); button(f.ui.panel, "旅程").click();
+    const item = f.ui.panel.querySelector<HTMLElement>('[data-item-id="shrine"]')!;
+    button(item, "天気を踏まえて相談").click();
+    expect(f.controller.uiFocus()).toEqual({ itemId: "shrine" });
+    expect(f.ask).toHaveBeenCalledWith(expect.stringContaining("日付と地域の天気を確認"));
+    expect(f.controller.proposal()).toBeUndefined();
+    expect(trip.items[0]?.decision).toMatchObject({ confirmedAt: "2026-09-26T10:00:00Z" });
+  });
   it("does not discard an unsubmitted cost edit while switching detail tabs", () => {
     const base = multiCityTrip();
     const trip = applyTripProposal(base, { tripId: base.id, baseRevision: base.revision, summary: "概算", patches: [
