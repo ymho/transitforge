@@ -160,6 +160,7 @@ jobs:
           echo "distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> "$GITHUB_OUTPUT"
           echo "agent_stream_log_group=$(terraform output -raw agent_stream_log_group_name)" >> "$GITHUB_OUTPUT"
           echo "agent_stream_function=$(terraform output -raw agent_stream_function_name)" >> "$GITHUB_OUTPUT"
+          echo "otp_bridge_function=$(terraform output -json otp_route_service | jq -r '.bridge_arn | split(":")[-1]')" >> "$GITHUB_OUTPUT"
 
       - name: Verify deployed Agent runtime
         if: env.CD_MODE == 'deploy'
@@ -173,6 +174,45 @@ jobs:
             --function-name "$AGENT_STREAM_FUNCTION" \
             --query '{state:State,updateStatus:LastUpdateStatus,v2:Environment.Variables.AGENT_RUNTIME_V2_ENABLED,semantic:Environment.Variables.SEMANTIC_INTENT_ENABLED}' \
             --output json | node tools/deployment/verify-agent-runtime.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify deployed OTP route service
+        if: env.CD_MODE == 'deploy'
+        env:
+          OTP_BRIDGE_FUNCTION: ${{ steps.terraform.outputs.otp_bridge_function }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          request='{"origin":{"name":"出雲市駅","latitude":35.36092,"longitude":132.75640},"destination":{"name":"出雲科学館","latitude":35.36104,"longitude":132.77344},"departureAt":"2026-10-01T10:00:00+09:00","mode":"walk"}'
+          for attempt in $(seq 1 18); do
+            rm -f otp-invoke.json otp-response.json
+            if aws lambda invoke \
+              --function-name "$OTP_BRIDGE_FUNCTION" \
+              --cli-binary-format raw-in-base64-out \
+              --payload "$request" \
+              otp-response.json > otp-invoke.json; then
+              function_error=$(jq -r '.FunctionError // ""' otp-invoke.json)
+              status=$(jq -r '.status // ""' otp-response.json 2>/dev/null || true)
+              if [ -z "$function_error" ] &&
+                jq -e '.status == "available" and (.routes | length > 0) and
+                  .coverage.serviceStart == "2026-10-01" and
+                  .coverage.serviceEnd == "2026-10-31"' otp-response.json > /dev/null; then
+                {
+                  echo "### OTP route smoke"
+                  echo "- Bridge Lambda: ready"
+                  echo "- Pinned graph coverage: 2026-10-01 to 2026-10-31"
+                  echo "- Walking route: available"
+                } >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+              if [ -z "$function_error" ] && [ "$status" != "unavailable" ] && [ -n "$status" ]; then
+                echo "OTP returned unexpected validated status: $status" >&2
+                exit 1
+              fi
+            fi
+            if [ "$attempt" -lt 18 ]; then sleep 10; fi
+          done
+          echo "OTP route bridge did not return an available walking route." >&2
+          exit 1
 
       - name: Summarize recent Agent failures without conversation content
         if: env.CD_MODE == 'deploy'
