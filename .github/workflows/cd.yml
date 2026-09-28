@@ -38,9 +38,6 @@ jobs:
     env:
       CD_MODE: ${{ github.event_name == 'workflow_run' && 'deploy' || inputs.mode || 'plan' }}
       TF_VAR_enable_fixed_egress_provider: ${{ vars.FIXED_EGRESS_PROVIDER_ENABLED }}
-      TF_VAR_enable_otp_route_service: ${{ vars.OTP_ROUTE_SERVICE_ENABLED || 'false' }}
-      TF_VAR_otp_graph_version: ${{ vars.OTP_GRAPH_VERSION || '' }}
-      TF_VAR_otp_graph_sha256: ${{ vars.OTP_GRAPH_SHA256 || '' }}
       TF_VAR_otp_image: ${{ vars.OTP_IMAGE || '' }}
       TF_VAR_otp_graph_loader_image: ${{ vars.OTP_GRAPH_LOADER_IMAGE || '' }}
       # #706: development-service cutover, not a general-availability quality gate.
