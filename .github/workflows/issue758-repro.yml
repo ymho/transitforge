@@ -44,4 +44,4 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/repro-env.json"
 
-# Verify Nova reasoning within the unchanged invocation budgets.
+# Verify destination interest and reply completion with production reasoning.

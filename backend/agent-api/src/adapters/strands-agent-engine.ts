@@ -154,7 +154,10 @@ export class StrandsAgentEngine {
     }
     const baseModel = this.model ?? new BedrockModel({ modelId: this.options.modelId, region: this.options.region,
       maxTokens: this.options.maxOutputTokens ?? 2_048, temperature: 0, stream: false,
-      additionalRequestFields: { reasoningConfig: { type: "enabled", maxReasoningEffort: "low" } } });
+      // Verified production model configuration; do not send Nova-only fields to other models.
+      ...(this.options.modelId === "jp.amazon.nova-2-lite-v1:0" ? {
+        additionalRequestFields: { reasoningConfig: { type: "enabled", maxReasoningEffort: "low" } },
+      } : {}) });
     const agent = this.createAgent({
       model: baseModel,
       ...(input.history?.length ? { messages: input.history } : {}),
