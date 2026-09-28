@@ -38,8 +38,6 @@ jobs:
     env:
       CD_MODE: ${{ github.event_name == 'workflow_run' && 'deploy' || inputs.mode || 'plan' }}
       TF_VAR_enable_fixed_egress_provider: ${{ vars.FIXED_EGRESS_PROVIDER_ENABLED }}
-      TF_VAR_otp_image: ${{ vars.OTP_IMAGE || '' }}
-      TF_VAR_otp_graph_loader_image: ${{ vars.OTP_GRAPH_LOADER_IMAGE || '' }}
       # #706: development-service cutover, not a general-availability quality gate.
       TF_VAR_agent_runtime_v2_enabled: "true"
       TF_VAR_conversation_semantic_kernel_enabled: "false"
