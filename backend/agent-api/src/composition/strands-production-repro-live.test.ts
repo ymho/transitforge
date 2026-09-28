@@ -139,7 +139,7 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
             console.log(JSON.stringify({ event: "repro-condition", target: change.target, accepted: true }));
             return accepted;
           } catch (error) {
-            console.log(JSON.stringify({ event: "repro-condition", target: change.target, accepted: false,
+            console.log(JSON.stringify({ event: "repro-condition", target: change.target, accepted: false, syntheticChange: change,
               errorName: error instanceof Error ? error.name : "unknown",
               code: safeReproCode((error as any)?.code), quoteMatches: input.userRequest.includes(change.quote) }));
             throw error;

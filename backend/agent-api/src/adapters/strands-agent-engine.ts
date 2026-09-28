@@ -110,12 +110,9 @@ export class StrandsAgentEngine {
           return jsonValue({ ok: true, status: "applied", receipt: accepted.receipt });
         } catch (error) {
           if (error instanceof ConditionUpdateRejectedError) {
-            const guidance = error.code === "invalid_source"
-              ? "今回のuserMessageに更新・撤回の根拠がありません。発言にない条件は変更せず保持してください。quoteや値を作らず、今回の発言に実際の根拠がある場合だけ訂正できます。根拠がなければ取得済み情報で回答するか必要な点を利用者へ確認してください。"
-              : error.code === "condition_conflict"
-                ? "現在の条件と更新が競合しました。この変更は適用されていません。既に受理した条件を保持し、変更が必要なら利用者へ確認してください。"
-                : "条件の形式または組み合わせが不正です。この変更は適用されていません。利用者が明示した値だけで訂正できる場合に限り再送し、不明な値は確認してください。";
-            throw new Error(`${error.code}: ${guidance}`);
+            return jsonValue({ ok: false, status: "rejected", target: change.target,
+              error: { code: error.code, retryable: false }, currentConditionsUnchanged: true,
+              guidance: "この条件更新は採用されていない。現在の利用者発言に根拠がなければ、値やquoteを作り直して再試行せず、現在の条件と取得済みEvidenceで回答する。回答に不可欠な条件だけを利用者に確認する。" });
           }
           // The SDK reports Tool errors. An uncertain write additionally closes reads
           // and publication; no recovery by reinterpreting or repairing the user input.
