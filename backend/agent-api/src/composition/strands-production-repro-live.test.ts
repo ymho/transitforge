@@ -92,7 +92,7 @@ const enabled = process.env.AGENT_V2_PRODUCTION_REPRO === "true";
 const allowedStops = new Set(["endTurn", "toolUse", "stopSequence", "limitTurns", "limitTotalTokens", "limitOutputTokens", "maxTokens", "modelContextWindowExceeded", "cancelled"]);
 
 describe.skipIf(!enabled)("one production-composed first turn with real Bedrock and travel Providers", () => {
-  it.each(["出雲大社にいきたい", "出雲大社へ行ってみたい。魅力と近くの立ち寄り先を教えてください。"])("completes a real destination request: %s", async userRequest => {
+  it.each(["出雲大社にいきたい", "出雲大社へ行ってみたい。魅力と近くの立ち寄り先を教えてください。", "厳島神社に行ってみたいので、見どころを知りたいです"])("completes a real destination request: %s", async userRequest => {
     const path = process.env.REPRO_ENV_PATH;
     if (!path) throw new Error("Explicit allowlisted environment file is required");
     const environment: Record<string, string | undefined> = JSON.parse(readFileSync(path, "utf8"));
