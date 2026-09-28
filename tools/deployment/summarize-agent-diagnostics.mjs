@@ -43,6 +43,10 @@ table(["Reason", "Stop reason", "Local limit", "Samples", "Model calls", "Read T
   executionSummaryRows(diagnosticMessages));
 console.log("");
 table(["Stream event", "HTTP status", "Count", "Max latency (ms)"], groupedStreams(streams));
+console.log("");
+console.log("### Latest iteration-limited execution");
+console.log("The execution ID and conversation content are omitted. Only registered Tool names and outcomes are displayed.");
+table(["Step", "Read Tool", "Outcome", "Latest (UTC)"], iterationLimitedToolRows(diagnosticMessages));
 if (modelShapePath) {
   console.log("");
   table(["Model response rejection", "Block kinds", "Count", "Max blocks"], groupedModelShapes(modelShapes));
@@ -135,4 +139,16 @@ function timestamp(value) {
   if (typeof value !== "string") return undefined;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+}
+
+function iterationLimitedToolRows(events) {
+  const stopped = events.filter(event => event.phase === "execution" && event.reason === "iteration_budget" &&
+    typeof event.executionId === "string" && event.executionId.length > 0)
+    .sort((left, right) => (right.occurredAt ?? "").localeCompare(left.occurredAt ?? ""))[0];
+  if (!stopped) return [];
+  return events.filter(event => event.executionId === stopped.executionId && event.phase === "tool")
+    .sort((left, right) => (left.occurredAt ?? "").localeCompare(right.occurredAt ?? ""))
+    .slice(0, 32).map((event, index) => [
+      String(index + 1), text(event.refs?.[0]), text(event.reason), timestamp(event.occurredAt) ?? "-"
+    ]);
 }
