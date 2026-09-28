@@ -182,8 +182,12 @@ export function productionServerTools(options: {
 function materializedEvidence(output: unknown, context: Parameters<typeof externalTravelEvidence>[1]) {
   if (!output || typeof output !== "object") return [];
   const values = output as Record<string, unknown>;
-  return [...(values.webPages ? externalTravelEvidence({ webPages: values.webPages }, context) : []),
-    ...(values.result ? externalTravelEvidence({ result: values.result }, context) : [])];
+  // Place resolution carries page references too. A page excerpt and a place
+  // projection are distinct observations even when their Provider ID is shared.
+  return [...(values.webPages ? externalTravelEvidence({ webPages: values.webPages },
+    { ...context, toolName: `${context.toolName ?? "external"}:webPages` }) : []),
+    ...(values.result ? externalTravelEvidence({ result: values.result },
+      { ...context, toolName: `${context.toolName ?? "external"}:result` }) : [])];
 }
 
 function resolvedPlaceCount(output: Record<string, unknown>): number {
