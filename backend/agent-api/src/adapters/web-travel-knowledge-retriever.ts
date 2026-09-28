@@ -1,5 +1,6 @@
 import type { DiscoveryBatch, DiscoveryQuery, TravelKnowledgeRetriever } from "@raiquora/agent/travel-discovery";
 import type { WebSearchProvider } from "../ports/web-research.js";
+import { stableContractHash } from "@raiquora/agent/output-contract";
 
 export class WebTravelKnowledgeRetriever implements TravelKnowledgeRetriever {
   readonly channel = "web" as const;
@@ -7,7 +8,8 @@ export class WebTravelKnowledgeRetriever implements TravelKnowledgeRetriever {
   async retrieve(query: string, request: DiscoveryQuery, limit: number): Promise<DiscoveryBatch> {
     const result = await this.provider.search({ query, limit: Math.min(10, limit) });
     const hits = result.status === "available" && result.data ? result.data.results.slice(0, limit).map((item, index) => ({
-      hitId: `web:${request.requestRef}:${encodeURIComponent(item.id)}`,
+      // Provider ranks such as web-1 are local to one query, not source identities.
+      hitId: `web:${stableContractHash([request.requestRef, query, item.id, item.url])}`,
       sourceRef: item.url,
       text: [item.title, item.description, ...(item.extraSnippets ?? [])].filter(Boolean).join("\n").slice(0, 4_000),
       retrievedAt: result.evidence[0]?.retrievedAt ?? this.now().toISOString(),
