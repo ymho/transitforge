@@ -44,4 +44,4 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/repro-env.json"
 
-# Verify compact purpose Tool results and publishable evidence references.
+# Verify request-scoped completion and unknown-condition semantics.
