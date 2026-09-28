@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/agent-production-diagnostics.yml
+      - tools/deployment/summarize-agent-diagnostics.mjs
 
 permissions:
   contents: read
