@@ -44,9 +44,11 @@ table(["Reason", "Stop reason", "Local limit", "Samples", "Model calls", "Read T
 console.log("");
 table(["Stream event", "HTTP status", "Count", "Max latency (ms)"], groupedStreams(streams));
 console.log("");
-console.log("### Latest iteration-limited execution");
-console.log("The execution ID and conversation content are omitted. Only registered Tool names and outcomes are displayed.");
-table(["Step", "Read Tool", "Outcome", "Latest (UTC)"], iterationLimitedToolRows(diagnosticMessages));
+console.log("### Iteration-limited executions (up to four latest)");
+console.log("Execution IDs and conversation content are omitted. Only bounded counts and registered Tool names are displayed.");
+table(["Stopped (UTC)", "Model calls", "Read calls", "Condition calls", "Structured calls", "Input tokens", "Output tokens"],
+  iterationLimitedExecutionRows(diagnosticMessages));
+table(["Stopped (UTC)", "Step", "Read Tool", "Outcome", "At (UTC)"], iterationLimitedToolRows(diagnosticMessages));
 if (modelShapePath) {
   console.log("");
   table(["Model response rejection", "Block kinds", "Count", "Max blocks"], groupedModelShapes(modelShapes));
@@ -141,14 +143,29 @@ function timestamp(value) {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
 }
 
-function iterationLimitedToolRows(events) {
-  const stopped = events.filter(event => event.phase === "execution" && event.reason === "iteration_budget" &&
+function iterationLimitedExecutions(events) {
+  return events.filter(event => event.phase === "execution" && event.reason === "iteration_budget" &&
     typeof event.executionId === "string" && event.executionId.length > 0)
-    .sort((left, right) => (right.occurredAt ?? "").localeCompare(left.occurredAt ?? ""))[0];
-  if (!stopped) return [];
-  return events.filter(event => event.executionId === stopped.executionId && event.phase === "tool")
-    .sort((left, right) => (left.occurredAt ?? "").localeCompare(right.occurredAt ?? ""))
-    .slice(0, 32).map((event, index) => [
-      String(index + 1), text(event.refs?.[0]), text(event.reason), timestamp(event.occurredAt) ?? "-"
-    ]);
+    .sort((left, right) => (right.occurredAt ?? "").localeCompare(left.occurredAt ?? "")).slice(0, 4);
+}
+
+function diagnosticCount(value) {
+  return Number.isSafeInteger(value) && value >= 0 ? String(value) : "not_recorded";
+}
+
+function iterationLimitedExecutionRows(events) {
+  return iterationLimitedExecutions(events).map(event => [
+    timestamp(event.occurredAt) ?? "-", ...["modelCalls", "toolCalls", "conditionToolCalls",
+      "structuredOutputCalls", "inputTokens", "outputTokens"].map(name => diagnosticCount(event.counts?.[name]))
+  ]);
+}
+
+function iterationLimitedToolRows(events) {
+  return iterationLimitedExecutions(events).flatMap(stopped =>
+    events.filter(event => event.executionId === stopped.executionId && event.phase === "tool")
+      .sort((left, right) => (left.occurredAt ?? "").localeCompare(right.occurredAt ?? ""))
+      .slice(0, 32).map((event, index) => [
+        timestamp(stopped.occurredAt) ?? "-", String(index + 1), text(event.refs?.[0]),
+        text(event.reason), timestamp(event.occurredAt) ?? "-"
+      ]));
 }
