@@ -109,7 +109,14 @@ export class StrandsAgentEngine {
           // stays Application-owned and is bound to later reads through getEffectiveIntent.
           return jsonValue({ ok: true, status: "applied", receipt: accepted.receipt });
         } catch (error) {
-          if (error instanceof ConditionUpdateRejectedError) throw error;
+          if (error instanceof ConditionUpdateRejectedError) {
+            const guidance = error.code === "invalid_source"
+              ? "今回のuserMessageに更新・撤回の根拠がありません。発言にない条件は変更せず保持してください。quoteや値を作らず、今回の発言に実際の根拠がある場合だけ訂正できます。根拠がなければ取得済み情報で回答するか必要な点を利用者へ確認してください。"
+              : error.code === "condition_conflict"
+                ? "現在の条件と更新が競合しました。この変更は適用されていません。既に受理した条件を保持し、変更が必要なら利用者へ確認してください。"
+                : "条件の形式または組み合わせが不正です。この変更は適用されていません。利用者が明示した値だけで訂正できる場合に限り再送し、不明な値は確認してください。";
+            throw new Error(`${error.code}: ${guidance}`);
+          }
           // The SDK reports Tool errors. An uncertain write additionally closes reads
           // and publication; no recovery by reinterpreting or repairing the user input.
           intentUnavailable = true;

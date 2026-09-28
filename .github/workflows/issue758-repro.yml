@@ -44,4 +44,4 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/repro-env.json"
 
-# Verify the observation-identity correction with the same isolated reproduction.
+# Verify actionable feedback after an Application condition rejection.

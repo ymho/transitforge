@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 import { mergeEvidenceObservations, validateEvidenceReferences } from "@raiquora/agent/evidence-model";
 import { BraveWebSearchProvider } from "../adapters/brave-web-search-provider.js";
 import { WebTravelKnowledgeRetriever } from "../adapters/web-travel-knowledge-retriever.js";
-import { createTravelDiscoveryOperation } from "../usecases/discover-travel-candidates.js";
+import { createTravelDiscoveryOperation, type DiscoveryResult } from "../usecases/discover-travel-candidates.js";
 import { productionServerTools } from "./production-server-tools.js";
 
 const context = { executionId: "turn-a", toolCallId: "call-a", toolName: "explore_destination",
@@ -30,9 +30,9 @@ function fixture() {
 it("keeps facet-local Brave ranks distinct through discovery and page/place projections", async () => {
   const { binding } = fixture();
   const response = await binding.operation({ destination: "合成神社", includeNearby: true }, { requestId: "turn-a" });
-  const hits = response.body.discovery.batch.hits;
+  const hits = (response.body.discovery as DiscoveryResult).batch.hits;
   expect(hits.length).toBeGreaterThan(2);
-  expect(new Set(hits.map((hit: { hitId: string }) => hit.hitId)).size).toBe(hits.length);
+  expect(new Set(hits.map(hit => hit.hitId)).size).toBe(hits.length);
   const evidence = binding.evidence(response.body, context);
   expect(validateEvidenceReferences(evidence).errors).toEqual([]);
   expect(mergeEvidenceObservations([], evidence).collisions).toEqual([]);
