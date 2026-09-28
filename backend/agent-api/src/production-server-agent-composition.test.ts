@@ -39,8 +39,13 @@ it("keeps Strands disabled by default and enables it only through trusted produc
     modelId: "test-model", region: "ap-northeast-1", maxTurns: 10, maxOutputTokens: 4096,
     systemPrompt: agentV2SystemPrompt,
   }));
+  expect(vi.mocked(StrandsAgentEngine).mock.calls.at(-1)?.[0]).not.toHaveProperty("novaReasoningEffort");
   expect(createStrandsServerRuntime).toHaveBeenCalledTimes(1);
   expect(createProductionConversationAgent).toHaveBeenLastCalledWith(expect.objectContaining({ runRuntime: expect.any(Function) }));
+  createProductionServerAgent("v2-nova", { ...base, AGENT_RUNTIME_V2_ENABLED: "true", AWS_REGION: "ap-northeast-1" });
+  expect(StrandsAgentEngine).toHaveBeenLastCalledWith(expect.objectContaining({
+    modelId: "jp.amazon.nova-2-lite-v1:0", novaReasoningEffort: "low", maxOutputTokens: 4096, maxInvocationOutputTokens: 4096,
+  }));
 });
 
 it("rejects an invalid Strands production flag and requires a real AWS region when enabled", () => {

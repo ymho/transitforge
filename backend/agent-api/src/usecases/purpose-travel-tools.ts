@@ -19,7 +19,7 @@ const textArray = (maximum: number) => ({ type: "array", maxItems: maximum, item
 export const exploreDestinationToolDescriptor: AgentToolDescriptor = {
   name: "explore_destination",
   effect: "read",
-  description: "行きたい特定の場所について、確認済み資料、表示可能な写真、魅力・楽しみ方、周辺候補をまとめて調べます。Web検索・Knowledge Base・ページ読込・地点/写真照合は内部で行います。具体的な日程がなくても使えます。検索失敗、候補なし、一部成功をoutcomeで区別します。Tripへの採用や保存は行いません",
+  description: "行きたい特定の場所について、確認済み資料、表示可能な写真、魅力・楽しみ方、周辺候補をまとめて調べます。Web検索・Knowledge Base・ページ読込・地点/写真照合は内部で行います。具体的な日程がなくても使えます。このToolは相談の行き先条件を受理しません。今回の発言で利用者自身の行き先の希望が示された場合、その希望の受理はupdate_current_destinationが担当します。検索失敗、候補なし、一部成功をoutcomeで区別します。Tripへの採用や保存は行いません",
   inputSchema: { type: "object", additionalProperties: false, properties: {
     destination: { type: "string", minLength: 1, maxLength: 160, description: "利用者が関心を示した具体的な場所・施設・エリア" },
     interests: textArray(8),

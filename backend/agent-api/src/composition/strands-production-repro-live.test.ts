@@ -1,3 +1,4 @@
+import { createTrip } from "@raiquora/trip/trip";
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { Model, type BaseModelConfig, type Message, type ModelStreamEvent } from "@strands-agents/sdk";
@@ -7,7 +8,7 @@ import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
 import { successfulAgentToolResult, validAgentToolInput } from "@raiquora/agent/tool-contract";
 import { StrandsAgentEngine } from "../adapters/strands-agent-engine.js";
 import { createProductionServerAgent } from "../production-server-agent-composition.js";
-import { stateDynamoFixture, conversationId } from "../adapters/state-dynamodb.fixture.js";
+import { stateDynamoFixture, conversationId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, token } from "../adapters/cognito-token.fixture.js";
 import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
@@ -78,7 +79,7 @@ const enabled = process.env.AGENT_V2_PRODUCTION_REPRO === "true";
 const allowedStops = new Set(["endTurn", "toolUse", "stopSequence", "limitTurns", "limitTotalTokens", "limitOutputTokens", "maxTokens", "modelContextWindowExceeded", "cancelled"]);
 
 describe.skipIf(!enabled)("one production-composed first turn with real Bedrock and travel Providers", () => {
-  it("accepts the destination and publishes a useful first response without greeting or card hints", async () => {
+  it.each(["出雲大社にいきたい", "出雲大社へ行ってみたい。魅力と近くの立ち寄り先を教えてください。"])("completes a destination request without invented conditions: %s", async userRequest => {
     const path = process.env.REPRO_ENV_PATH;
     if (!path) throw new Error("Explicit allowlisted environment file is required");
     const environment: Record<string, string | undefined> = JSON.parse(readFileSync(path, "utf8"));
@@ -89,6 +90,8 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
     isolated.stateClient = state.client; isolated.tripClient = trips.client;
     const { verifier } = cognitoTokenFixture();
     const principal = await verifier.verify(token());
+    trips.seed(createTrip(stateMetadata().tripId, "再現用の旅", "2026-09-28T00:00:00Z"), principal.subject);
+    await state.conversations.create(principal, conversationId, stateMetadata());
     const original = StrandsAgentEngine.prototype.run;
     let engineCalls = 0;
     const observer = vi.spyOn(StrandsAgentEngine.prototype, "run").mockImplementation(async function (this: StrandsAgentEngine, input) {
@@ -107,7 +110,7 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
     });
     try {
       const app = createProductionServerAgent("production-repro-synthetic-execution", environment);
-      const input = { principal, conversationId, turnId: "73400000-0000-4000-8000-000000000001", userRequest: "出雲大社に行きたい" };
+      const input = { principal, conversationId, turnId: "73400000-0000-4000-8000-000000000001", userRequest };
       let result: Awaited<ReturnType<typeof app.runConversationTurn>> | undefined;
       const started = Date.now();
       try { result = await app.runConversationTurn(input); }
@@ -119,6 +122,9 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
         engineCalls, durationMs: Date.now() - started }));
       expect.soft(result?.status, "First destination request must complete").toBe("completed");
       expect.soft(working?.semantic?.overlay.intentRevision, "Destination must be accepted").toBe(1);
+      const savedTrip = await trips.repository.get(principal, stateMetadata().tripId);
+      expect.soft(savedTrip?.request.constraints.filter(item => ["dates", "duration"].includes(item.requirement.type)),
+        "Unspoken dates must remain unset").toEqual([]);
       expect.soft(result?.publicPlacePresentation?.cards.length ?? 0, "Initial suggestion must be visible").toBeGreaterThan(0);
       if (result) {
         const before = engineCalls;
