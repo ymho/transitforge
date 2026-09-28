@@ -23,7 +23,10 @@ const limits = { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 1, maxExecuti
 const calendarDate = "2026-09-27";
 
 describe.skipIf(!enabled)("travel-period condition Tool with real Bedrock", () => {
-  it("persists actual period changes atomically and routes period what-if through the non-persistent scenario Tool", async () => {
+  it.each([
+    { name: "isolated-small-budget", maxTokens: 1024, novaReasoningEffort: undefined },
+    { name: "production-reasoning-budget", maxTokens: 4096, novaReasoningEffort: "low" as const },
+  ])("persists actual periods and keeps what-if non-persistent: $name", async configuration => {
     let overlay: ConversationIntentOverlay = { version: 1, intentRevision: 0, facts: [], tombstones: [], appliedMutationIds: [] };
     const journal = new Map<string, { payload: string; receipt: IntentApplicationReceipt }>();
     const repository: ConversationConditionRepository = { acceptCondition: async (identity, _lease, change) => {
@@ -50,7 +53,7 @@ describe.skipIf(!enabled)("travel-period condition Tool with real Bedrock", () =
         { attemptId: turnId, userSequence: index + 1 }, scenario.message, calendarDate);
       const tools = new AgentToolRegistry(), evidenceRegistry = new ToolEvidenceRegistry();
       let modelCalls = 0; const selectedTools: string[] = [];
-      const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: 1_024, maxInvocationOutputTokens: 1_024 }, {
+      const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: configuration.maxTokens, maxInvocationOutputTokens: configuration.maxTokens, novaReasoningEffort: configuration.novaReasoningEffort }, {
         createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, event => {
           modelCalls++; selectedTools.push(...event.message.content.flatMap(block => block.type === "toolUseBlock"
             ? [["update_current_travel_period", "consider_trip_scenario", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));
@@ -80,7 +83,7 @@ describe.skipIf(!enabled)("travel-period condition Tool with real Bedrock", () =
         return fact?.value.kind === "local_date" ? fact.value.date : undefined;
       };
       const duration = overlay.facts.find(value => value.target === "duration")?.value;
-      console.log(JSON.stringify({ case: index, modelId, status: result.status, modelCalls, acceptedOperations: journal.size,
+      console.log(JSON.stringify({ configuration: configuration.name, case: index, modelId, status: result.status, modelCalls, acceptedOperations: journal.size,
         publicationError: result.publicationError, selectedTools }));
       expect.soft(result.status, `case ${index} must reply`).toBe("completed");
       expect.soft(date("start_date"), `case ${index} start`).toBe(scenario.start);

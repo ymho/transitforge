@@ -96,8 +96,8 @@ describe("StrandsAgentEngine", () => {
       expect(result.evidence.map(item => item.id)).toEqual([discovery.id, evidence.id]);
     });
 
-  it.each(["jp.amazon.nova-2-lite-v1:0", "other-model"])(
-    "configures bounded reasoning only for the verified production model %s", async modelId => {
+  it.each([undefined, "low"] as const)(
+    "uses only explicitly configured Nova reasoning: %s", async novaReasoningEffort => {
       const { input } = setup();
       let captured: ReturnType<BedrockModel["getConfig"]> = {};
       const createAgent: StrandsAgentFactory = config => {
@@ -105,8 +105,8 @@ describe("StrandsAgentEngine", () => {
         captured = config.model.getConfig();
         return { invoke: async () => ({ stopReason: "toolUse", structuredOutput: { reply: { kind: "uncertainty" } } }) };
       };
-      await new StrandsAgentEngine({ ...options, modelId, maxOutputTokens: 4096 }, { createAgent }).run(input);
-      expect(captured.additionalRequestFields).toEqual(modelId === "jp.amazon.nova-2-lite-v1:0"
+      await new StrandsAgentEngine({ ...options, novaReasoningEffort, maxOutputTokens: 4096 }, { createAgent }).run(input);
+      expect(captured.additionalRequestFields).toEqual(novaReasoningEffort
         ? { reasoningConfig: { type: "enabled", maxReasoningEffort: "low" } } : undefined);
       expect(captured.maxTokens).toBe(4096);
       expect(captured.stream).toBe(false);

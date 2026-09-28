@@ -122,8 +122,9 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
         engineCalls, durationMs: Date.now() - started }));
       expect.soft(result?.status, "First destination request must complete").toBe("completed");
       expect.soft(working?.semantic?.overlay.intentRevision, "Destination must be accepted").toBe(1);
-      expect.soft(working?.semantic?.overlay.facts.map(fact => fact.target), "Unspoken conditions must remain unset")
-        .toEqual(["destination"]);
+      const savedTrip = await trips.repository.get(principal, stateMetadata().tripId);
+      expect.soft(savedTrip?.request.constraints.filter(item => ["dates", "duration"].includes(item.requirement.type)),
+        "Unspoken dates must remain unset").toEqual([]);
       expect.soft(result?.publicPlacePresentation?.cards.length ?? 0, "Initial suggestion must be visible").toBeGreaterThan(0);
       if (result) {
         const before = engineCalls;

@@ -39,7 +39,8 @@ Schemaの通過は事実の正しさや保存の権限を証明しない。Evide
 日程未定でも利用者自身の行き先の希望を受理できる。未指定をclearとして扱わず、写真等が不足するpartialは
 確認できた情報で回答し、不足を説明できる。固定Tool順・発話別分類・強制回答・独自の反復抑止は追加しない。
 
-本番で検証した`jp.amazon.nova-2-lite-v1:0`にはNovaの`reasoningConfig`をlowで指定する。
+本番compositionが、検証した`jp.amazon.nova-2-lite-v1:0`へNovaの`reasoningConfig`をlowで指定する。
+Engineの既定は推論設定を追加しない。小さい独立fixtureと本番設定を分け、日程liveは両構成で検証する。
 他のModel IDへNova固有パラメータを送らない。モデルの回数・累積出力・実行時間の上限は変更しない。
 推論tokenも出力課金と累積出力上限に含まれ、内部reasoningは公開・保存しない。
 参考: [AWS Nova 2 extended thinking](https://docs.aws.amazon.com/nova/latest/nova2-userguide/extended-thinking.html)。

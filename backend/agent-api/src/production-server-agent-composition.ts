@@ -117,6 +117,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
    maxTurns: 10,
    maxOutputTokens: 4_096,
    maxInvocationOutputTokens: 4_096,
+   ...(modelId === "jp.amazon.nova-2-lite-v1:0" ? { novaReasoningEffort: "low" as const } : {}),
  })) : undefined;
  return createProductionConversationAgent({
    // Open-ended discovery needs several candidate/source/photo rounds and a
