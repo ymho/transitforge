@@ -2,7 +2,7 @@ name: Agent / 758 isolated reproduction
 on:
   push:
     branches: [debug/758-repro-results]
-    paths: [.github/workflows/issue758-repro.yml]
+    paths: [.github/workflows/issue758-repro.yml, backend/agent-api/src/composition/strands-production-repro-live.test.ts]
 permissions:
   contents: read
 jobs:
