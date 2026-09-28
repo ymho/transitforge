@@ -114,6 +114,7 @@ export function createConversationTurnApplication(dependencies: {
         ...(acceptedReceipt ? { semanticReceipt: publicSemanticReceipt(acceptedReceipt) } : {}),
         ...(runtime.publicPlanPresentation ? { publicPlanPresentation: runtime.publicPlanPresentation } : {}),
         ...(runtime.publicJourneyPresentation ? { publicJourneyPresentation: runtime.publicJourneyPresentation } : {}),
+        ...(runtime.publicGroundRoutePresentation ? { publicGroundRoutePresentation: runtime.publicGroundRoutePresentation } : {}),
         ...(runtime.publicPlacePresentation ? { publicPlacePresentation: runtime.publicPlacePresentation } : {}),
         ...(runtime.researchExecution ? { researchExecution: reserveResearchResultSave(runtime.researchExecution) } : {}),
         ...(runtime.turnObservation ? { turnObservation: runtime.turnObservation } : {}),
@@ -126,6 +127,7 @@ export function createConversationTurnApplication(dependencies: {
         ...(runtime.publicPlanPresentation?.evidenceRefs ?? []),
         ...(runtime.publicPlanPresentation?.photoRefs ?? []),
         ...(runtime.publicJourneyPresentation?.evidenceRefs ?? []),
+        ...(runtime.publicGroundRoutePresentation ? [runtime.publicGroundRoutePresentation.evidenceId] : []),
         ...(runtime.publicPlacePresentation?.cards.map(({ evidenceId }) => evidenceId) ?? []),
         ...(runtime.claims ?? []).flatMap((claim) => claim.evidenceIds),
       ])];

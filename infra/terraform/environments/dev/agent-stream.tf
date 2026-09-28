@@ -155,6 +155,11 @@ resource "aws_lambda_function" "agent_stream" {
       SERVER_STATE_TABLE_NAME            = aws_dynamodb_table.server_state.name
       TRIP_TABLE_NAME                    = aws_dynamodb_table.trips.name
       FIXED_EGRESS_PROVIDER_FUNCTION_ARN = var.enable_fixed_egress_provider ? aws_lambda_function.fixed_egress_provider[0].arn : ""
+      OTP_ROUTE_PROVIDER_FUNCTION_ARN    = var.enable_otp_route_service ? aws_lambda_function.otp_bridge[0].arn : ""
+      OTP_GRAPH_MANIFEST_KEY             = var.enable_otp_route_service ? local.otp_graph_manifest_key : ""
+      OTP_GRAPH_VERSION                  = var.enable_otp_route_service ? var.otp_graph_version : ""
+      OTP_EXPECTED_IMAGE                 = var.enable_otp_route_service ? var.otp_image : ""
+      OTP_EXPECTED_GRAPH_SHA             = var.enable_otp_route_service ? var.otp_graph_sha256 : ""
       AGENT_PROVIDER_SECRET_ARN          = aws_secretsmanager_secret.agent_stream_providers[each.key].arn
       AI_TIMETABLE_BUCKET                = "${local.resource_prefix}-data-builder-source"
       PLANNING_TIMETABLE_PREFIX          = "timetable"
@@ -473,7 +478,7 @@ resource "aws_iam_role_policy" "agent_stream_dependencies" {
   policy = jsonencode({ Version = "2012-10-17", Statement = [
     { Effect = "Allow", Action = ["dynamodb:GetItem"], Resource = aws_dynamodb_table.trips.arn },
     { Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = aws_secretsmanager_secret.agent_stream_providers[each.key].arn },
-    { Effect = "Allow", Action = ["s3:GetObject"], Resource = ["arn:aws:s3:::${local.resource_prefix}-data-builder-source/timetable/*", "arn:aws:s3:::${local.resource_prefix}-data-builder-source/ai-timetable/*", "${aws_s3_bucket.website.arn}/api/traffic/delays.json"] }
+    { Effect = "Allow", Action = ["s3:GetObject"], Resource = concat(["arn:aws:s3:::${local.resource_prefix}-data-builder-source/timetable/*", "arn:aws:s3:::${local.resource_prefix}-data-builder-source/ai-timetable/*", "${aws_s3_bucket.website.arn}/api/traffic/delays.json", "${aws_s3_bucket.website.arn}/viewer-input/train_index.json"], var.enable_otp_route_service ? ["arn:aws:s3:::${local.otp_graph_bucket}/${local.otp_graph_manifest_key}"] : []) }
   ] })
 }
 resource "aws_iam_role_policy" "agent_stream_provider_invoke" {
@@ -482,4 +487,11 @@ resource "aws_iam_role_policy" "agent_stream_provider_invoke" {
   policy = jsonencode({ Version = "2012-10-17", Statement = [
     { Effect = "Allow", Action = ["lambda:InvokeFunction"], Resource = aws_lambda_function.fixed_egress_provider[0].arn }
   ] })
+}
+resource "aws_iam_role_policy" "agent_stream_otp_invoke" {
+  for_each = var.enable_otp_route_service ? local.agent_stream_instances : {}
+  role     = aws_iam_role.agent_stream[each.key].id
+  policy = jsonencode({ Version = "2012-10-17", Statement = [{
+    Effect = "Allow", Action = ["lambda:InvokeFunction"], Resource = aws_lambda_function.otp_bridge[0].arn
+  }] })
 }

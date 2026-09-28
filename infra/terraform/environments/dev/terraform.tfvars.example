@@ -22,5 +22,12 @@ viewer_domain_name                      = "app.ohmyki.com"
 cloudflare_front_door_enabled           = false
 legacy_cloudfront_redirect_enabled      = false
 
+# Data Builderで検証・配布した版を明示してから有効化する。
+enable_otp_route_service = false
+otp_graph_version        = ""
+otp_graph_sha256         = ""
+otp_image                = ""
+otp_graph_loader_image   = ""
+
 # Server Agent business budget only; transport/Lambda timeoutとは別。infra gateは既定OFF。
 # server_agent_max_execution_ms = 150000

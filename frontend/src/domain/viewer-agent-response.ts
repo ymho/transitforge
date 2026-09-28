@@ -14,6 +14,7 @@ import type { TripUpdateProposal } from "@raiquora/trip/trip";
 import type { ChecklistProposal } from "@raiquora/trip/trip-checklist";
 import type { PublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 import type { PublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
+import type { PublicGroundRoutePresentation } from "@raiquora/agent/public-ground-route-presentation";
 import type { PublicPlacePresentation } from "@raiquora/agent/public-place-presentation";
 
 /** Domain compatibility for pure journey follow-up rules; it is not a Browser response contract. */
@@ -52,6 +53,7 @@ export interface ViewerAgentTurnResponse {
   semanticReceipt?: import("@raiquora/agent/public-semantic-receipt").PublicSemanticReceipt;
   publicPlanPresentation?: PublicPlanPresentation;
   publicJourneyPresentation?: PublicJourneyPresentation;
+  publicGroundRoutePresentation?: PublicGroundRoutePresentation;
   publicPlacePresentation?: PublicPlacePresentation;
   tripCostProposal?: import("@raiquora/trip/public-cost-proposal").PublicCostProposal;
   consultationRequestProposal?: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal;

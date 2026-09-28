@@ -74,6 +74,15 @@ if (!providerMetadata.isFile() || providerMetadata.size < 1 || providerMetadata.
     typeof (await import(pathToFileURL(providerBundle).href)).handler !== "function") throw new Error("Invalid Provider bundle");
 console.log(JSON.stringify({ package: "fixed-egress-provider", runtime: provider.runtime, bytes: providerMetadata.size }));
 
+const otpBridge = JSON.parse(await readFile(resolve(root, "infra/packaging/otp-route-bridge.json"), "utf8"));
+if (otpBridge.runtime !== "nodejs22.x" || otpBridge.handler !== "index.handler" ||
+    JSON.stringify(otpBridge.files) !== '["index.cjs"]') throw new Error("Invalid OTP bridge package contract");
+const otpBridgeBundle = resolve(root, otpBridge.source, otpBridge.files[0]);
+const otpBridgeMetadata = await stat(otpBridgeBundle);
+if (!otpBridgeMetadata.isFile() || otpBridgeMetadata.size < 1 || otpBridgeMetadata.size > 20 * 1_024 * 1_024)
+  throw new Error("Invalid OTP bridge bundle");
+console.log(JSON.stringify({ package: "otp-route-bridge", runtime: otpBridge.runtime, bytes: otpBridgeMetadata.size }));
+
 // Streaming runtime global is provided by AWS; use a local shim only to validate the bundle export.
 const stream = JSON.parse(await readFile(resolve(root, "infra/packaging/agent-stream.json"), "utf8"));
 if (stream.runtime !== "nodejs22.x" || stream.handler !== "index.handler" ||

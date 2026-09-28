@@ -32,7 +32,7 @@ describe("V2 place candidate publication", () => {
     const result = submit([evidence]);
     expect(result.publicPlacePresentation?.cards).toEqual([{ evidenceId: evidence.id,
       placeRef: "place:fixture:garden", title: "庭園", description: "池の周囲を歩いて見学する庭園です。",
-      sourceUrl: "https://example.org/places/garden" }]);
+      sourceUrl: "https://example.org/places/garden", retrievedAt: "2026-09-26T10:00:00Z" }]);
     expect(result.text).toBe("散策先として、この候補を検討できます。");
     expect(result.text).not.toContain("池の周囲");
     expect(result.proof).toMatchObject({ kind: "candidates", commentary: true });

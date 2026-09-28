@@ -141,6 +141,7 @@ export class DynamoDbTripConsultationRepository implements TripConsultationRepos
     const costs = source.costs ? { ...structuredClone(source.costs), forecast: { ...structuredClone(source.costs.forecast), tripId: input.tripId, baseRevision: 0 }, stale: true } : undefined;
     const adoption = source.adoption ? { ...source.adoption, needsReconfirmation: true as const } : undefined;
     const trip = boundedTrip({ ...structuredClone(source), id: input.tripId, title, revision: 0, createdAt: now, updatedAt: now,
+      items: source.items.map(item => item.decision ? { ...item, decision: { ...item.decision, needsReconfirmation: true } } : item),
       lifecycleState: "pre_trip", ...(costs ? { costs } : {}), ...(adoption ? { adoption } : {}) });
     try {
       await this.client.send(new TransactWriteItemsCommand({ TransactItems: [

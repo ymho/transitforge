@@ -56,6 +56,21 @@ describe("Trip HTTP client", () => {
     expect(JSON.parse(request.mock.calls[0]![1]!.body as string)).toMatchObject({ operation: "branch-consultation", sourceTripId: trip.id, tripId: branchId });
     expect(JSON.parse(request.mock.calls[2]![1]!.body as string)).toMatchObject({ operation: "confirm-trip-adoption", confirmationKey });
   });
+  it("confirms an item decision and reloads the Trip after the saved revision", async () => {
+    const request = vi.fn<typeof fetch>(), client = new HttpServerTripClient("/api/trips/v1", request);
+    const target = { tripId: trip.id, itemId: "visit", baseTripRevision: 0,
+      mutationId: "75600000-0000-4000-8000-000000000010", action: "confirm" as const };
+    const confirmationKey = "d".repeat(64);
+    request.mockResolvedValueOnce(new Response(JSON.stringify({ version: "trip-api-v1", status: "confirmation-required", confirmationKey,
+      preview: { itemId: "visit", title: "参拝", action: "confirm", needsReconfirmation: false } })));
+    expect(await client.previewItemDecision(target)).toMatchObject({ confirmationKey });
+    const saved = { ...trip, revision: 1, items: [{ id: "visit", title: "参拝", type: "activity", category: "sightseeing",
+      schedule: { type: "day", date: "2026-10-01" }, decision: { confirmedAt: "2026-09-14T02:00:00.000Z" } }] };
+    request.mockResolvedValueOnce(new Response(JSON.stringify({ version: "trip-api-v1", status: "saved", trip: saved })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ version: "trip-api-v1", trip: saved })));
+    expect(await client.confirmItemDecision(target, confirmationKey)).toEqual(saved);
+    expect(JSON.parse(request.mock.calls[1]![1]!.body as string)).toMatchObject({ operation: "confirm-item-decision", itemId: "visit", confirmationKey });
+  });
   it("distinguishes not-found from auth/network/invalid response without stale cache", async () => {
     const request = vi.fn<typeof fetch>(); const client = new HttpServerTripClient("/api/trips/v1", request);
     request.mockResolvedValueOnce(new Response("", { status: 404 })); expect(await client.get(trip.id)).toBeUndefined();

@@ -55,6 +55,8 @@ export interface AgentTripScheduleItem {
   type: "transport" | "stay" | "activity";
   category?: import("@raiquora/trip/trip").ActivityCategory;
   placeName?: string;
+  researchObservedAt?: string;
+  researchSourceUrl?: string;
   area?: string;
   selectionStatus?: "selected" | "unresolved" | "unselected";
   mode?: import("@raiquora/trip/transport-detail").TransportMode;
@@ -110,7 +112,8 @@ export function selectedTripItemSnapshot(item: ItineraryItem): AgentTripSchedule
       const schedule = structuredClone(item.schedule);
       if (item.type === "activity") return { itemId: item.id, type: "activity", schedule,
         category: item.category, summary: bounded(item.title, 100)!,
-        ...(item.place ? { placeName: bounded(item.place.name, 100) } : {}) };
+        ...(item.place ? { placeName: bounded(item.place.name, 100) } : {}),
+        ...(item.research ? { researchObservedAt: item.research.observedAt, researchSourceUrl: item.research.sourceUrl } : {}) };
       if (item.type === "stay") {
         const place = item.selection.status === "selected" ? item.selection.accommodation.place : item.selection.place;
         return { itemId: item.id, type: "stay", schedule, selectionStatus: item.selection.status,

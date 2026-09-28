@@ -79,4 +79,20 @@ describe("Trip HTTP authentication and privacy boundary", () => {
     expect(execute).not.toHaveBeenCalled(); expect(executeTripAdoption.mock.calls[1]?.[2]).toEqual({ confirmationKey });
     expect((await handler(event({ ...base, operation: "confirm-trip-adoption", confirmationKey: "bad" }))).statusCode).toBe(400);
   });
+  it("routes item decisions only through typed preview and confirmation", async () => {
+    const execute = vi.fn(), confirmationKey = "d".repeat(64), mutationId = "75600000-0000-4000-8000-000000000010";
+    const executeItemDecision = vi.fn(async (_principal, request, authority) => request.operation === "preview"
+      ? { status: "confirmation-required" as const, confirmationKey, preview: { itemId: request.itemId, title: "参拝", action: request.action, needsReconfirmation: false } }
+      : authority?.confirmationKey === confirmationKey ? { status: "saved" as const, trip: { ...trip(), revision: 1 }, revision: 1, mutationId }
+        : Promise.reject(new TripResourceError("confirmation-required")));
+    const handler = createTripApiHandler({ execute, executeItemDecision }, { authenticate: async () => ({ subject: "trusted" }) });
+    const target = { version: "trip-api-v1", tripId: trip().id, itemId: "shrine", baseTripRevision: 0, mutationId, action: "confirm" };
+    expect((await handler(event({ ...target, operation: "preview-item-decision" }))).statusCode).toBe(200);
+    expect((await handler(event({ ...target, operation: "confirm-item-decision", confirmationKey }))).statusCode).toBe(200);
+    expect(execute).not.toHaveBeenCalled(); expect(executeItemDecision.mock.calls[1]?.[2]).toEqual({ confirmationKey });
+    for (const bad of [{ ...target, operation: "confirm-item-decision", confirmationKey: "bad" },
+      { ...target, operation: "preview-item-decision", ownerId: "forged" }]) {
+      expect((await handler(event(bad))).statusCode).toBe(400);
+    }
+  });
 });

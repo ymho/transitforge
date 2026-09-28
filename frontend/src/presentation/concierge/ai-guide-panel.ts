@@ -8,6 +8,8 @@ import {
 } from "../../usecases/concierge/conversation-history-repository";
 import { renderPublicPlanPresentation } from "./public-plan-presentation-view";
 import { renderPublicJourneyPresentation } from "./public-journey-presentation-view";
+import { renderPublicGroundRoutePresentation } from "./public-ground-route-presentation-view";
+import type { PublicGroundRoutePresentation } from "@raiquora/agent/public-ground-route-presentation";
 import { renderPublicPlacePresentation } from "./public-place-presentation-view";
 import {
   buildConversationFeedback,
@@ -67,12 +69,16 @@ export interface AiGuidePanelElements {
   onTripCostProposal?: (proposal: import("@raiquora/trip/public-cost-proposal").PublicCostProposal) => void;
   onConsultationRequestProposal?: (proposal: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal) => void;
   onTripUpdateProposal?: (proposal: import("@raiquora/trip/trip").TripUpdateProposal) => void;
+  placeMemoTargets?: () => readonly { key: string; label: string }[];
+  onPlaceMemoProposal?: (card: import("@raiquora/agent/public-place-presentation").PublicPlaceCard,
+    dayKey: string, category: import("@raiquora/trip/trip").ActivityCategory) => void;
   onChecklistProposal?: (proposal: import("@raiquora/trip/trip-checklist").ChecklistProposal) => void;
   onPlanAdoption?: (target: { conversationId: string; candidateSetId: string; candidateSetRevision: number; variantId: string; tripId: string; baseTripRevision: number; mutationId: string }) => Promise<{
     changes: { added: number; replaced: number; removed: number }; confirm(): Promise<void>;
   }>;
   onPlaces?: (places: PlaceMediaSearchResult["places"]) => void;
   onGroundAccess?: (access: GroundAccessRoute | GroundAccessMatrix | GroundAccessArea) => void;
+  onGroundRoute?: (route: PublicGroundRoutePresentation, index: number) => void;
   onRestaurantConsult?: (restaurant: RestaurantCandidate) => void;
   onRestaurants?: (restaurants: readonly RestaurantCandidate[]) => void;
   persistent?: () => boolean;
@@ -272,7 +278,7 @@ export function configureAiGuidePanel(
       : update && elements.onTripUpdateProposal ? () => elements.onTripUpdateProposal?.(update) : undefined;
     if (!review) return;
     const button = document.createElement("button");
-    button.type = "button"; button.textContent = "条件の変更案を確認";
+    button.type = "button"; button.textContent = !update || update.patches[0]?.type === "request" ? "条件の変更案を確認" : "予定の変更案を確認";
     button.addEventListener("click", review);
     message.append(button);
   };
@@ -358,7 +364,8 @@ export function configureAiGuidePanel(
         } else {
           input.placeholder = "列車、行き先、旅の相談を入力";
         }
-        resolveAssistantMessage(pendingMessage, response, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants);
+        resolveAssistantMessage(pendingMessage, response, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants,
+          true, elements.placeMemoTargets && elements.onPlaceMemoProposal ? { days: elements.placeMemoTargets, propose: elements.onPlaceMemoProposal } : undefined, elements.onGroundRoute);
         addProposalAction(pendingMessage, response);
         // Only a newly delivered V2 proposal opens the preview. Restoring history never reapplies it.
         if (typeof response !== "string" && "consultationRequestProposal" in response && response.consultationRequestProposal) elements.onConsultationRequestProposal?.(response.consultationRequestProposal);
@@ -509,7 +516,8 @@ export function configureAiGuidePanel(
           continue;
         }
         const restored = appendPendingMessage(messages, entry.messageId);
-        resolveAssistantMessage(restored, entry.response, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants, false);
+        resolveAssistantMessage(restored, entry.response, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants,
+          false, elements.placeMemoTargets && elements.onPlaceMemoProposal ? { days: elements.placeMemoTargets, propose: elements.onPlaceMemoProposal } : undefined, elements.onGroundRoute);
         addProposalAction(restored, entry.response);
         if (!submitFeedback) restored.querySelector(".conversation-feedback")?.remove();
         activeConversation = typeof entry.response !== "string" && "conversation" in entry.response
@@ -657,6 +665,8 @@ export function resolveAssistantMessage(
   onRestaurantConsult?: (restaurant: RestaurantCandidate) => void,
   onRestaurants?: (restaurants: readonly RestaurantCandidate[]) => void,
   animate = true,
+  placeMemoSelection?: Parameters<typeof renderPublicPlacePresentation>[1],
+  onGroundRoute?: (route: PublicGroundRoutePresentation, index: number) => void,
 ): void {
   item.classList.remove("ai-guide-message-pending");
   item.removeAttribute("aria-label");
@@ -669,7 +679,8 @@ export function resolveAssistantMessage(
     if ("semanticReceipt" in response && response.semanticReceipt) item.append(renderSemanticReceipt(response.semanticReceipt));
     if ("publicPlanPresentation" in response && response.publicPlanPresentation) item.append(renderPublicPlanPresentation(response.publicPlanPresentation));
     if ("publicJourneyPresentation" in response && response.publicJourneyPresentation) item.append(renderPublicJourneyPresentation(response.publicJourneyPresentation));
-    if ("publicPlacePresentation" in response && response.publicPlacePresentation) item.append(renderPublicPlacePresentation(response.publicPlacePresentation));
+    if ("publicGroundRoutePresentation" in response && response.publicGroundRoutePresentation) item.append(renderPublicGroundRoutePresentation(response.publicGroundRoutePresentation, onGroundRoute));
+    if ("publicPlacePresentation" in response && response.publicPlacePresentation) item.append(renderPublicPlacePresentation(response.publicPlacePresentation, placeMemoSelection));
   }
   // A question is metadata on the same turn, not a branch that hides its artifacts.
   if (typeof response !== "string" && "external" in response && response.external) {

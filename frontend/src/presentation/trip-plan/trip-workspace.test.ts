@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { applyTripProposal, createTrip } from "@raiquora/trip/trip";
+import type { TripUpdateProposal } from "@raiquora/trip/trip";
 import { multiCityTrip, placeActivity, placesAt, placesTripId } from "../../../../modules/trip/domain/trip-places.fixture";
 import { tripWorkspacePreviewSource } from "../../dev/trip-workspace-preview";
 import { createTripWorkspaceController, type TripWorkspaceSource } from "../../usecases/trip-plan/trip-workspace-controller";
@@ -11,7 +12,7 @@ import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.f
 import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 
 function setup(source?: TripWorkspaceSource, loadInTripContext?: (tripId: string) => Promise<InTripContextSnapshot | undefined>,
-  actions: Partial<Pick<Parameters<typeof configureTripWorkspace>[0], "changeAdoption" | "branchTrip">> = {}) {
+  actions: Partial<Pick<Parameters<typeof configureTripWorkspace>[0], "changeAdoption" | "changeItemDecision" | "branchTrip">> = {}) {
   const app = document.createElement("main"); app.id = "app"; document.body.append(app);
   const chat = document.createElement("section"); chat.id = "chat";
   const messages = document.createElement("ol"), input = document.createElement("input"); chat.append(messages, input);
@@ -47,6 +48,55 @@ describe("Trip workspace DOM and mobile navigation", () => {
     dayTabs[2]!.click();
     expect(f.ui.panel.querySelector<HTMLElement>('[data-item-id="hotel"]')?.closest<HTMLElement>(".trip-workspace-day")?.hidden).toBe(true);
     expect(f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')?.closest<HTMLElement>(".trip-workspace-day")?.hidden).toBe(false);
+  });
+  it("previews a selected day's meal without persisting a candidate or inventing a venue", async () => {
+    const trip = createTrip(placesTripId, "出雲の旅", placesAt, [
+      { id: "shrine", title: "出雲大社", type: "activity", category: "sightseeing", schedule: { type: "day", date: "2026-10-01", timeZone: "Asia/Tokyo" } },
+      { id: "hotel", title: "宿未定", type: "stay", selection: { status: "unselected" }, schedule: { type: "day", date: "2026-10-02", timeZone: "Asia/Tokyo" } },
+    ]);
+    const confirmProposal = vi.fn(async (_proposal: TripUpdateProposal) => undefined);
+    const f = setup({ getCurrentTrip: () => trip, confirmProposal });
+    button(f.ui.panel, "旅程").click();
+    const form = f.ui.panel.querySelector<HTMLFormElement>(".trip-workspace-add")!;
+    const [title, category, day] = [form.querySelector("input")!, form.querySelectorAll("select")[0]!, form.querySelectorAll("select")[1]!];
+    expect([...day.options].map((o) => o.textContent)).toEqual(["日時未定", "2026-10-01", "2026-10-02"]);
+    title.value = "昼食"; category.value = "food"; day.value = day.options[2]!.value;
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(trip.items).toHaveLength(2);
+    expect(f.controller.proposal()?.patches[0]).toMatchObject({ type: "add", item: { id: "new-free", category: "food", schedule: { type: "day", date: "2026-10-02", timeZone: "Asia/Tokyo" } } });
+    expect(f.ui.panel.textContent).toContain("まだ反映");
+    await f.controller.confirm();
+    expect(confirmProposal).toHaveBeenCalledTimes(1);
+    const savedPatch = confirmProposal.mock.calls[0]![0].patches[0];
+    if (savedPatch?.type !== "add") throw new Error("Expected an added activity");
+    expect(savedPatch.item).not.toHaveProperty("place");
+  });
+  it("previews an explicitly entered place name without claiming a verified search candidate", () => {
+    const trip = createTrip(placesTripId, "出雲の旅", placesAt, [{ id: "shrine", title: "出雲大社", type: "activity",
+      category: "sightseeing", schedule: { type: "day", date: "2026-10-01" } }]);
+    const f = setup({ getCurrentTrip: () => trip }); button(f.ui.panel, "旅程").click();
+    const form = f.ui.panel.querySelector<HTMLFormElement>(".trip-workspace-add")!;
+    const [title, place] = form.querySelectorAll<HTMLInputElement>("input");
+    title!.value = "昼食"; place!.value = "出雲そばの店";
+    form.querySelectorAll("select")[0]!.value = "food";
+    form.querySelectorAll("select")[1]!.selectedIndex = 1;
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(f.controller.proposal()?.patches[0]).toMatchObject({ type: "add", item: {
+      category: "food", place: { name: "出雲そばの店", sources: [] }, schedule: { type: "day", date: "2026-10-01" },
+    } });
+    expect(trip.items).toHaveLength(1);
+    expect(f.ui.panel.textContent).toContain("手入力");
+  });
+  it("displays the source and as-of date for a chosen place after it is saved in the Trip", () => {
+    const trip = createTrip(placesTripId, "出雲の旅", placesAt, [{ id: "garden", title: "青葉庭園", type: "activity",
+      category: "sightseeing", schedule: { type: "day", date: "2026-10-01" }, place: { name: "青葉庭園", sources: [] },
+      research: { sourceUrl: "https://example.org/garden", observedAt: "2026-09-26T10:00:00Z" } }]);
+    const f = setup({ getCurrentTrip: () => trip }); button(f.ui.panel, "旅程").click();
+    const item = f.ui.panel.querySelector<HTMLElement>('[data-item-id="garden"]')!;
+    expect(item.textContent).toContain("参照資料は2026/9/26時点");
+    const source = item.querySelector<HTMLAnchorElement>(".trip-workspace-research-source")!;
+    expect(source.href).toBe("https://example.org/garden");
+    expect(source.rel).toBe("noopener noreferrer");
   });
   it("does not discard an unsubmitted cost edit while switching detail tabs", () => {
     const base = multiCityTrip();
@@ -108,6 +158,18 @@ describe("Trip workspace DOM and mobile navigation", () => {
     button(f.ui.panel, "この旅程を分岐").click();
     await vi.waitFor(() => expect(branchTrip).toHaveBeenCalledWith(trip, "雨の日案"));
   });
+  it("shows item confirmation separate from Trip adoption and never shows it to a viewer", async () => {
+    const trip = createTrip(placesTripId, "出雲", placesAt, [{ id: "visit", title: "出雲大社", type: "activity", category: "sightseeing",
+      schedule: { type: "day", date: "2026-10-01" }, place: { name: "出雲大社", sources: [] } }]);
+    const changeItemDecision = vi.fn(async () => undefined); vi.stubGlobal("confirm", vi.fn(() => true));
+    const f = setup({ getCurrentTrip: () => trip, getRole: () => "owner" }, undefined, { changeItemDecision });
+    button(f.ui.panel, "旅程").click();
+    expect(f.ui.panel.textContent).toContain("仮の予定");
+    button(f.ui.panel, "この予定を確定").click();
+    await vi.waitFor(() => expect(changeItemDecision).toHaveBeenCalledWith(trip, trip.items[0], "confirm"));
+    f.controller.attach("viewer", { getCurrentTrip: () => trip, getRole: () => "viewer" }); f.controller.activateSession("viewer");
+    expect(button(f.ui.panel, "この予定を確定")).toBeUndefined();
+  });
   it("preserves input, session, both scroll positions, focus, collapse and proposal through chat/trip/chat", () => {
     const f = setup({ getCurrentTrip: multiCityTrip }); f.input.value = "編集中の文章"; f.messages.scrollTop = 240; f.input.focus();
     f.controller.focus("activity"); f.controller.propose("順序変更", [{ type: "move", itemId: "activity" }]);
@@ -141,6 +203,10 @@ describe("Trip workspace DOM and mobile navigation", () => {
     button(activity, "削除案").click(); expect(f.controller.proposal()?.patches).toEqual([{ type: "remove", itemId: "activity" }]);
     activity.querySelector<HTMLSelectElement>("select")!.value = ""; button(activity, "移動案").click();
     expect(f.controller.proposal()?.patches).toEqual([{ type: "move", itemId: "activity" }]);
+    const day = activity.querySelector<HTMLSelectElement>(".trip-workspace-day-target")!;
+    day.value = [...day.options].find(option => option.textContent === "2026-09-22")!.value;
+    button(activity, "日付変更案").click();
+    expect(f.controller.proposal()?.patches[0]).toMatchObject({ type: "replace", itemId: "activity", item: { schedule: { type: "day", date: "2026-09-22" } } });
     button(activity, "相談する").click(); expect(f.ask).toHaveBeenCalledWith("この予定を相談したい"); expect(f.controller.uiFocus()).toEqual({ itemId: "activity" });
     expect(f.app.dataset.tripWorkspaceView).toBe("chat"); expect(trip.items).toHaveLength(3);
   });

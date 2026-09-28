@@ -2,7 +2,7 @@ import { requestSessionVersion, subscribeRequestSession } from "./authenticated-
 import { ApiAuthenticationError } from "../../usecases/auth/api-authentication-error";
 import { personalApiFetch } from "./personal-api-fetch";
 import { validateTrip, TripRevisionConflict, type Trip } from "@raiquora/trip/trip";
-import { TripWriteRejected, type ServerTripClient, type ServerTripPage, type TripMutationRequest, type PlanAdoptionTarget, type PlanAdoptionPreview, type TripAdoptionTarget, type TripAdoptionPreview } from "../../usecases/trip-plan/server-trip-client";
+import { TripWriteRejected, type ServerTripClient, type ServerTripPage, type TripMutationRequest, type PlanAdoptionTarget, type PlanAdoptionPreview, type TripAdoptionTarget, type TripAdoptionPreview, type ItemDecisionTarget, type ItemDecisionPreview } from "../../usecases/trip-plan/server-trip-client";
 import { applyTripProposal } from "@raiquora/trip/trip";
 
 /** No owner parameter/header. The common authenticated transport supplies only an Access Token. */
@@ -122,6 +122,23 @@ export class HttpServerTripClient implements ServerTripClient {
     const result = await this.execute({ operation: "confirm-trip-adoption", ...target, confirmationKey });
     validateTrip(result?.trip as Trip); const trip = result!.trip as Trip;
     if (result?.status !== "saved" || trip.id !== target.tripId || trip.revision !== target.baseTripRevision + 1) throw new Error("Invalid Trip adoption result");
+    const reloaded = await this.get(target.tripId); if (!reloaded || reloaded.revision < trip.revision) throw new Error("Trip reload failed");
+    return reloaded;
+  }
+  async previewItemDecision(target: ItemDecisionTarget): Promise<ItemDecisionPreview> {
+    const result = await this.execute({ operation: "preview-item-decision", ...target });
+    const preview = result?.preview as ItemDecisionPreview["preview"] | undefined;
+    if (result?.status !== "confirmation-required" || typeof result.confirmationKey !== "string" || !/^[0-9a-f]{64}$/u.test(result.confirmationKey) ||
+        !preview || preview.itemId !== target.itemId || preview.action !== target.action ||
+        typeof preview.title !== "string" || typeof preview.needsReconfirmation !== "boolean") throw new Error("Invalid item decision preview");
+    return structuredClone({ confirmationKey: result.confirmationKey, preview });
+  }
+  async confirmItemDecision(target: ItemDecisionTarget, confirmationKey: string): Promise<Trip> {
+    if (!/^[0-9a-f]{64}$/u.test(confirmationKey)) throw new TripWriteRejected("予定の状態を確認し直してください");
+    const result = await this.execute({ operation: "confirm-item-decision", ...target, confirmationKey });
+    validateTrip(result?.trip as Trip); const trip = result!.trip as Trip;
+    if (result?.status !== "saved" || trip.id !== target.tripId || trip.revision !== target.baseTripRevision + 1 ||
+        !trip.items.some(({ id }) => id === target.itemId)) throw new Error("Invalid item decision result");
     const reloaded = await this.get(target.tripId); if (!reloaded || reloaded.revision < trip.revision) throw new Error("Trip reload failed");
     return reloaded;
   }

@@ -1,5 +1,6 @@
 import { expect, it, vi } from "vitest";
-import { createTrip } from "@raiquora/trip/trip";
+import { createTrip, type ItineraryItem } from "@raiquora/trip/trip";
+import { projectDailyItinerary } from "@raiquora/trip/daily-itinerary";
 import type { TripRequest } from "@raiquora/trip/trip-request";
 import { createConversationServerAgent } from "./conversation-server-agent.js";
 import { stateDynamoFixture, stateA, stateB, conversationId, secondId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
@@ -8,9 +9,9 @@ import type { ConversationModel, ConversationModelRequest } from "../ports/conve
 
 const request: TripRequest = { constraints: [{ id: "pace", source: "assumption", strength: "soft", scope: { type: "trip" }, requirement: { type: "pace", value: 0.3 }, assumptionId: "a" }],
   assumptions: [{ id: "a", source: "model", status: "unconfirmed", text: "ゆっくり巡る仮置き", affects: [{ type: "constraint", constraintId: "pace" }] }] };
-async function fixture(_withTrip = true, initialRequest?: TripRequest) {
+async function fixture(_withTrip = true, initialRequest?: TripRequest, items: readonly ItineraryItem[] = []) {
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const trip = createTrip(secondId, "同名の旅程", "2026-09-18T00:00:00Z", [], initialRequest);
+  const trip = createTrip(secondId, "同名の旅程", "2026-09-18T00:00:00Z", items, initialRequest);
   await trips.repository.create(stateA, trip);
   await state.conversations.create(stateA, conversationId, stateMetadata());
   const model = { converse: vi.fn<ConversationModel["converse"]>() };
@@ -54,8 +55,22 @@ it("persists and replays a reviewed replacement while retaining the original sav
     { type: "replace_constraint", constraintId: "pace", strength: "soft", requirement: { type: "pace", value: 0.2 }, reason: "ゆっくり巡る案" },
   ] } } }] }, stopReason: "tool_use", metadata: { modelId: "test", latencyMs: 1 } }));
   const result = await f.app.runConversationTurn(f.input);
-  expect(result.tripUpdateProposal?.patches[0].request.constraints[0]).toMatchObject({ id: "pace", source: "assumption", requirement: { type: "pace", value: 0.2 } });
+  expect(result.tripUpdateProposal?.patches[0]).toMatchObject({ type: "request", request: { constraints: [{ id: "pace", source: "assumption", requirement: { type: "pace", value: 0.2 } }] } });
   expect((await f.trips.repository.get(stateA, secondId))?.request).toEqual(original);
   expect((await f.state.conversations.history(stateA, conversationId)).items[1].tripUpdateProposal).toEqual(result.tripUpdateProposal);
   expect(await f.app.runConversationTurn(f.input)).toEqual(result); expect(f.model.converse).toHaveBeenCalledTimes(2);
+});
+
+it("retains an item preview in Trip conversation history without modifying the Trip", async () => {
+  const shrine: ItineraryItem = { id: "shrine", title: "出雲大社", type: "activity", category: "sightseeing", schedule: { type: "day", date: "2026-10-01" } };
+  const f = await fixture(true, undefined, [shrine]);
+  f.model.converse.mockImplementationOnce(async () => ({ message: { role: "assistant", content: [{ toolUse: { toolUseId: "meal", name: "propose_trip_item_change", input: {
+    action: "add-activity", expectedRevision: 0, dayKey: projectDailyItinerary(f.trip).days[0]!.dayKey, afterId: "shrine", title: "昼食", category: "food", placeName: "出雲そば",
+  } } }] }, stopReason: "tool_use", metadata: { modelId: "test", latencyMs: 1 } }));
+  const result = await f.app.runConversationTurn({ ...f.input, userRequest: "2日目の昼食に出雲そばを追加したい" });
+  expect(result.tripUpdateProposal).toMatchObject({ tripId: secondId, baseRevision: 0 });
+  expect(result.tripUpdateProposal?.patches[0]).toMatchObject({ type: "add", item: { category: "food", place: { name: "出雲そば", sources: [] } } });
+  expect((await f.trips.repository.get(stateA, secondId))?.items).toEqual([shrine]);
+  expect((await f.state.conversations.history(stateA, conversationId)).items[1].tripUpdateProposal).toEqual(result.tripUpdateProposal);
+  expect(await f.app.runConversationTurn({ ...f.input, userRequest: "2日目の昼食に出雲そばを追加したい" })).toEqual(result);
 });

@@ -1,0 +1,8 @@
+{
+  "source": "backend/agent-api/dist/otp-route-bridge",
+  "runtime": "nodejs22.x",
+  "handler": "index.handler",
+  "files": [
+    "index.cjs"
+  ]
+}

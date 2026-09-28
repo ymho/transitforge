@@ -92,7 +92,7 @@ it("publishes a real travel read as cards through Strands, A/B commits, owner-sc
   expect(result.semanticReceipt).toMatchObject({ intentRevision: 1 });
   expect(result.response).toBe("散策先として、この庭園を検討できます。\n\n今回の相談条件（反映済み）\n行き先：青葉庭園");
   expect(result.publicPlacePresentation?.cards).toEqual([{ evidenceId: expect.any(String), placeRef: "place:fixture:garden",
-    title: "青葉庭園", description: "池の周囲を歩いて見学する庭園です。", sourceUrl: "https://example.org/places/garden" }]);
+    title: "青葉庭園", description: "池の周囲を歩いて見学する庭園です。", sourceUrl: "https://example.org/places/garden", retrievedAt: "2026-09-26T10:00:00Z" }]);
   expect(result.publicPlacePresentation?.cards[0]?.evidenceId).toBe(model.seenCandidateIds[0]);
   expect(result).not.toHaveProperty("publicPlanPresentation");
   expect(JSON.stringify(result)).not.toContain("DO_NOT_PUBLISH_MODEL_TRAILER");

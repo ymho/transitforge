@@ -79,6 +79,22 @@ export function parseTripAdoptionCommand(value: unknown): TripAdoptionApiCommand
   return structuredClone(command) as unknown as TripAdoptionApiCommand;
 }
 
+export type ItemDecisionApiCommand = { version: typeof tripApiVersion; operation: "preview-item-decision" | "confirm-item-decision";
+  tripId: string; itemId: string; baseTripRevision: number; mutationId: string; action: "confirm" | "withdraw"; confirmationKey?: string };
+export function parseItemDecisionCommand(value: unknown): ItemDecisionApiCommand {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TripResourceError("invalid-input");
+  const command = value as Record<string, unknown>, confirm = command.operation === "confirm-item-decision";
+  const keys = ["version", "operation", "tripId", "itemId", "baseTripRevision", "mutationId", "action", ...(confirm ? ["confirmationKey"] : [])];
+  if (command.version !== tripApiVersion || !["preview-item-decision", "confirm-item-decision"].includes(String(command.operation)) ||
+      Object.keys(command).some(key => !keys.includes(key)) || confirm !== (command.confirmationKey !== undefined)) throw new TripResourceError("invalid-input");
+  tripIdentifier(command.tripId); tripIdentifier(command.mutationId);
+  if (typeof command.itemId !== "string" || !command.itemId.trim() || command.itemId.length > 160 ||
+      !Number.isSafeInteger(command.baseTripRevision) || Number(command.baseTripRevision) < 0 ||
+      !["confirm", "withdraw"].includes(String(command.action)) ||
+      confirm && (typeof command.confirmationKey !== "string" || !/^[0-9a-f]{64}$/u.test(command.confirmationKey))) throw new TripResourceError("invalid-input");
+  return structuredClone(command) as unknown as ItemDecisionApiCommand;
+}
+
 export interface TripMutation {
   tripId: string;
   baseRevision: number;
