@@ -61,6 +61,10 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const consult = control("相談する", () => { controller.focus(item.id); options.chat("この予定を相談したい"); });
   actions.append(control("名称を変更", () => { editor.hidden = !editor.hidden; if (!editor.hidden) title.focus(); }),
     control("削除案", () => safe(() => controller.preview(proposeTripItemChange(controller.current()!, { action: "remove", itemId: item.id })))));
+  if (item.type === "activity") actions.append(control("天気を踏まえて相談", () => {
+    controller.focus(item.id);
+    options.chat("この予定の日付と地域の天気を確認し、必要なら近くの候補や予定の変更案を相談したい。確定済みの予定は確認するまで変更しないでください");
+  }));
   const moveLabel = element("label", "", "並べ替え ");
   const after = element("select", "trip-workspace-move-target"); after.append(option("先頭", ""));
   for (const other of trip.items) if (other.id !== item.id) after.append(option(`${other.title}の後`, other.id));
