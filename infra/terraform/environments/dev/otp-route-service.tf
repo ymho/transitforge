@@ -248,6 +248,7 @@ resource "aws_ecs_service" "otp" {
   desired_count                      = 1
   launch_type                        = "FARGATE"
   platform_version                   = "LATEST"
+  wait_for_steady_state              = true
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
   deployment_circuit_breaker {
