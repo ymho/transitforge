@@ -169,7 +169,8 @@ function placeCard(evidence: Evidence, effective?: EffectiveIntent): PublicPlace
     : undefined;
   try {
     return parsePublicPlacePresentation({ version: publicPlacePresentationVersion, cards: [{
-      evidenceId: evidence.id, placeRef: observation.subjectKey, title, description, sourceUrl, ...(photo ? { photo } : {}),
+      evidenceId: evidence.id, placeRef: observation.subjectKey, title, description, sourceUrl,
+      retrievedAt: observation.retrievedAt, ...(photo ? { photo } : {}),
     }] }).cards[0]!;
   } catch { throw new AgentV2ReplyError("invalid_field"); }
 }

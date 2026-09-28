@@ -87,7 +87,7 @@ resource "aws_security_group" "ai_nat" {
     from_port       = 443
     to_port         = 443
     protocol        = "tcp"
-    security_groups = [aws_security_group.ai_lambda.id]
+    security_groups = concat([aws_security_group.ai_lambda.id], aws_security_group.otp_service[*].id, aws_security_group.otp_bridge[*].id)
   }
 
   egress {

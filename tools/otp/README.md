@@ -1,0 +1,11 @@
+# OTP graph staging for #756
+
+This local workflow stages a bounded Izumo/Matsue graph. It does not put feed archives, OSM extracts or `Graph.obj` in Git.
+
+1. Download the current GTFS ZIP from [松江市交通局のオープンデータ](https://matsue-bus.jp/opendata). The 2026-10-01 file covers **October 1–31, 2026** and includes both 松江市交通局 and 一畑バス; coverage must be checked per line/stop, and a new file must replace it after expiration. Record the exact download URL, retrieval timestamp and checksum. Rename the local file `matsue-gtfs.zip`.
+2. Download a dated [中国地方 OSM PBF](https://download.geofabrik.de/asia/japan/chugoku.html) and rename the local file `chugoku.osm.pbf`. Record its source date and checksum. Follow the OSM attribution requirements when displaying the map/route.
+3. Place both in `tools/otp/graph-data/`, select and pin an official OTP image **by digest**, and execute `OTP_IMAGE=... bash tools/otp/run-local.sh build tools/otp/graph-data`. Graph building requires adequate memory. The script records local input checksums before building.
+4. Execute `OTP_IMAGE=... bash tools/otp/run-local.sh serve tools/otp/graph-data`. The HTTP port is bound to localhost for testing only. Query `http://127.0.0.1:8080/otp/gtfs/v1` with the walk/bus cases before setting `OTP_GRAPHQL_ENDPOINT`.
+5. Construct `OTP_COVERAGE_JSON` from the **actual loaded** GTFS validity, OSM bounds and input metadata: `{"bounds":{"south":35.2,"west":132.4,"north":35.8,"east":133.2},"serviceStart":"2026-10-01","serviceEnd":"2026-10-31","feedUrl":"https://matsue-bus.jp/wp-content/uploads/2026/09/GTFS1001.zip","feedRetrievedAt":"<actual ISO instant>","graphBuiltAt":"<actual ISO instant>","attribution":"松江市交通局・一畑バス / © OpenStreetMap contributors"}`. The bounds shown here are an **illustration**, not measured graph coverage; measure the actual coverage and do not enable the Tool with these example values. Validate a route by both walking and bus, and also verify a date outside the service window.
+
+For production the Agent Lambda is outside the private network. A private OTP service/bridge and atomic graph+manifest rollout are still needed. Never expose the staging HTTP port or treat the current GTFS schedule as live vehicle telemetry.

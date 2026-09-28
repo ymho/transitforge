@@ -1,4 +1,6 @@
 import { startTripConsultation } from "../usecases/trip-plan/start-trip-consultation";
+import { proposeTripItemChange } from "@raiquora/trip/trip-item-proposal";
+import { projectDailyItinerary } from "@raiquora/trip/daily-itinerary";
 import { createTripConsultationNavigation } from "../usecases/trip-plan/trip-consultation-navigation";
 import { currentAuthentication } from "./auth-composition";
 import { createConversationStreamSession } from "../adapters/http/agent-stream/session";
@@ -336,6 +338,10 @@ aiGuideController = configureAiGuidePanel(
       groundAccessLayer?.show(access);
       contextWorkspaceController.show("map");
     },
+    onGroundRoute: (route, index) => {
+      groundAccessLayer?.showGroundRoute(route, index);
+      contextWorkspaceController.show("map");
+    },
     onRestaurantConsult: (restaurant) => {
       aiGuideController.ask(`${restaurant.name}を食事候補として旅程に入れたい`);
     },
@@ -349,6 +355,19 @@ aiGuideController = configureAiGuidePanel(
       if (!tripWorkspaceController.current()) return;
       try { tripWorkspaceController.preview(proposal); tripWorkspace.show("trip"); }
       catch { tripWorkspace.report("変更案を現在の旅程に適用できません。会話で確認し直してください。"); }
+    },
+    placeMemoTargets: () => {
+      const trip = tripWorkspaceController.current();
+      if (!trip || tripWorkspaceController.source()?.getRole?.() === "viewer" || activeConversationSession.tripId !== trip.id) return [];
+      return [{ key: "unscheduled", label: "日時未定" }, ...projectDailyItinerary(trip, { limit: 90 }).days.map(({ dayKey, label }) => ({ key: dayKey, label }))];
+    },
+    onPlaceMemoProposal: (card, dayKey, category) => {
+      const trip = tripWorkspaceController.current();
+      if (!trip || tripWorkspaceController.source()?.getRole?.() === "viewer" || activeConversationSession.tripId !== trip.id || !card.retrievedAt)
+        throw new Error("Trip or cited date unavailable");
+      tripWorkspaceController.preview(proposeTripItemChange(trip, { action: "add-researched-activity", itemId: crypto.randomUUID(),
+        dayKey, title: card.title, category, sourceUrl: card.sourceUrl, observedAt: card.retrievedAt }));
+      tripWorkspace.show("trip");
     },
     onPlanAdoption: async (target) => {
       if (!serverTripClient.previewPlanAdoption || !serverTripClient.confirmPlanAdoption || activeConversationSession.id !== target.conversationId) throw new Error("Adoption unavailable");
@@ -390,6 +409,13 @@ const tripWorkspace = configureTripWorkspace({
     const target = { tripId: trip.id, baseTripRevision: trip.revision, mutationId: crypto.randomUUID(), action };
     const preview = await serverTripClient.previewTripAdoption(target);
     await serverTripClient.confirmTripAdoption(target, preview.confirmationKey);
+    await tripWorkspaceController.source()?.retry?.(); await serverTripList.refresh();
+  },
+  changeItemDecision: async (trip, item, action) => {
+    if (!serverTripClient.previewItemDecision || !serverTripClient.confirmItemDecision) throw new Error("Item decision unavailable");
+    const target = { tripId: trip.id, itemId: item.id, baseTripRevision: trip.revision, mutationId: crypto.randomUUID(), action };
+    const preview = await serverTripClient.previewItemDecision(target);
+    await serverTripClient.confirmItemDecision(target, preview.confirmationKey);
     await tripWorkspaceController.source()?.retry?.(); await serverTripList.refresh();
   },
   branchTrip: (trip, title) => openBranchedTrip(trip, title),

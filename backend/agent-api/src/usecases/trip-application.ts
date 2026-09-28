@@ -47,8 +47,33 @@ export class TripApplication {
       baseRevision: request.baseTripRevision, mutationId: request.mutationId, proposal }, { confirmedAdoption: domainKey });
     return { status: "saved" as const, ...result };
   }
+  async executeItemDecision(principal: TripPrincipal | undefined, request: { operation: "preview" | "confirm"; tripId: string;
+    itemId: string; baseTripRevision: number; mutationId: string; action: "confirm" | "withdraw" }, authority?: { confirmationKey: string }) {
+    requireTripPrincipal(principal);
+    const proposal = { tripId: request.tripId, baseRevision: request.baseTripRevision,
+      summary: request.action === "confirm" ? "この予定を確定" : "この予定を仮に戻す",
+      patches: [{ type: "item_decision" as const, itemId: request.itemId, action: request.action }] };
+    const domainKey = JSON.stringify(proposal);
+    const confirmationKey = createHash("sha256").update(JSON.stringify(["item-decision-v1", domainKey, request.mutationId])).digest("hex");
+    if (request.operation === "preview") {
+      const current = await this.trips.get(principal, request.tripId);
+      if (!current) throw new TripResourceError("not-found");
+      if (current.revision !== request.baseTripRevision) throw new TripResourceError("conflict");
+      const item = current.items.find(({ id }) => id === request.itemId);
+      if (!item || ["cancelled", "completed"].includes(current.lifecycleState) || request.action === "withdraw" && !item.decision ||
+          request.action === "confirm" && (item.type === "stay" && item.selection.status !== "selected" ||
+            item.type === "transport" && item.detail.status !== "selected" ||
+            item.type === "activity" && !item.place && item.category !== "free-time")) throw new TripResourceError("invalid-input");
+      return { status: "confirmation-required" as const, confirmationKey,
+        preview: { itemId: item.id, title: item.title, action: request.action, needsReconfirmation: item.decision?.needsReconfirmation === true } };
+    }
+    if (authority?.confirmationKey !== confirmationKey) throw new TripResourceError("confirmation-required");
+    const result = await this.execute(principal, { version: tripApiVersion, operation: "mutate", tripId: request.tripId,
+      baseRevision: request.baseTripRevision, mutationId: request.mutationId, proposal }, { confirmedItemDecision: domainKey });
+    return { status: "saved" as const, ...result };
+  }
   async execute(principal: TripPrincipal | undefined, value: unknown,
-    authority: { confirmedLifecycle?: LifecycleState; confirmedAdoption?: string; confirmedReservationChange?: string;
+    authority: { confirmedLifecycle?: LifecycleState; confirmedAdoption?: string; confirmedItemDecision?: string; confirmedReservationChange?: string;
       replanTargets?: InTripReplanTargets; confirmedReplan?: string } = {}): Promise<Record<string, unknown>> {
     requireTripPrincipal(principal);
     const actor = principal;
@@ -66,7 +91,7 @@ export class TripApplication {
         if (!this.consultations) throw new TripResourceError("unavailable");
         return { version, ...await this.consultations.branch(actor, command) };
       case "create": {
-        if (command.trip.adoption !== undefined) throw new TripResourceError("confirmation-required");
+        if (command.trip.adoption !== undefined || command.trip.items.some(item => item.decision !== undefined)) throw new TripResourceError("confirmation-required");
         if (command.trip.planningState === "ready") await this.ready(principal, command.trip);
         return { version, trip: await this.trips.create(principal, command.trip) };
       }

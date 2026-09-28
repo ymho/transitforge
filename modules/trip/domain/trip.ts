@@ -35,7 +35,8 @@ export interface Trip {
   readonly updatedAt: string;
 }
 
-interface ItineraryItemBase { readonly id: string; readonly title: string; readonly schedule: ItinerarySchedule; readonly logicalDayId?: string; }
+export interface ItemDecision { readonly confirmedAt: string; readonly needsReconfirmation?: true; }
+interface ItineraryItemBase { readonly id: string; readonly title: string; readonly schedule: ItinerarySchedule; readonly logicalDayId?: string; readonly decision?: ItemDecision; }
 export interface TransportItineraryItem extends ItineraryItemBase {
   readonly type: "transport";
   readonly detail: TransportDetail;
@@ -52,6 +53,8 @@ export interface ActivityItineraryItem extends ItineraryItemBase {
   readonly type: "activity";
   readonly category: ActivityCategory;
   readonly place?: PlaceSnapshot;
+  /** User's chosen reference for later rechecking; not a current venue fact. */
+  readonly research?: { readonly sourceUrl: string; readonly observedAt: string };
 }
 export type ItineraryItem = TransportItineraryItem | StayItineraryItem | ActivityItineraryItem;
 
@@ -69,6 +72,7 @@ export type TripPatch = { readonly type: "replace"; readonly itemId: string; rea
   | { readonly type: "timeline"; readonly timeline?: TripTimeline }
   | { readonly type: "structure_intent"; readonly structureIntent?: TripStructureIntent }
   | { readonly type: "adoption"; readonly action: TripAdoptionAction }
+  | { readonly type: "item_decision"; readonly itemId: string; readonly action: "confirm" | "withdraw" }
   | { readonly type: "lifecycle"; readonly state: LifecycleState; readonly basis: "schedule" | "user_confirmation" };
 export interface TripUpdateProposal {
   readonly tripId: string;
@@ -124,9 +128,10 @@ export function validateTrip(trip: Trip): void {
 
 function validateItem(item: ItineraryItem): void {
   if (typeof item.id !== "string" || !item.id.trim() || typeof item.title !== "string") throw new Error("Invalid itinerary identity");
+  if (item.decision !== undefined) validateTripAdoption(item.decision);
   validateItinerarySchedule(item.schedule);
   if (item.type === "transport") {
-    exactKeys(item, ["id", "title", "type", "detail", "schedule", "logicalDayId"]);
+    exactKeys(item, ["id", "title", "type", "detail", "schedule", "logicalDayId", "decision"]);
     if (item.detail.status === "selected" && item.detail.mode === "rail") {
       exactKeys(item.detail, ["status", "mode", "journey"]);
       const projected = projectRailSchedule(item.detail.journey);
@@ -139,7 +144,7 @@ function validateItem(item: ItineraryItem): void {
       exactKeys(item.detail, ["status", "mode"]);
     } else throw new Error("Invalid transport selection");
   } else if (item.type === "stay") {
-    exactKeys(item, ["id", "title", "type", "selection", "schedule", "logicalDayId"]);
+    exactKeys(item, ["id", "title", "type", "selection", "schedule", "logicalDayId", "decision"]);
     if (item.selection.status === "unselected") {
       exactKeys(item.selection, ["status", "place"]);
       if (item.selection.place !== undefined) validatePlaceSnapshot(item.selection.place);
@@ -153,15 +158,30 @@ function validateItem(item: ItineraryItem): void {
     if (item.schedule.type !== "day" || item.schedule.date !== projected.date ||
         item.schedule.endDate !== projected.endDate || item.schedule.timeZone !== projected.timeZone) throw new Error("Stay schedule differs from adopted stay dates");
   } else if (item.type === "activity") {
-    exactKeys(item, ["id", "title", "type", "category", "place", "schedule", "logicalDayId"]);
+    exactKeys(item, ["id", "title", "type", "category", "place", "research", "schedule", "logicalDayId", "decision"]);
     if (!item.title.trim() || !activityCategories.includes(item.category)) throw new Error("Invalid activity");
     if (item.place !== undefined) validatePlaceSnapshot(item.place);
+    if (item.research !== undefined) {
+      if (!item.place) throw new Error("Research reference requires a place");
+      validateActivityResearchReference(item.research);
+    }
   } else throw new Error("Unsupported itinerary type");
+}
+
+/** A user-adopted reference, never an assertion of present opening or availability. */
+export function validateActivityResearchReference(value: { sourceUrl: string; observedAt: string }): void {
+  exactKeys(value, ["sourceUrl", "observedAt"]);
+  if (!validInstant(value.observedAt) || typeof value.sourceUrl !== "string" || value.sourceUrl.length > 2048) throw new Error("Invalid research reference");
+  let url: URL;
+  try { url = new URL(value.sourceUrl); } catch { throw new Error("Invalid research URL"); }
+  if (url.protocol !== "https:" || url.username || url.password || url.hash ||
+      [...url.searchParams.keys()].some((key) => /(?:token|secret|password|credential|authorization|cookie|signature|api_?key)/iu.test(key)))
+    throw new Error("Invalid research URL");
 }
 
 /** Pure in-memory proposal application, NOT a production writer/CAS implementation. */
 export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
-  authority: { clock?: TripClock; confirmedLifecycle?: LifecycleState; confirmedAdoption?: string } = {}): Trip {
+  authority: { clock?: TripClock; confirmedLifecycle?: LifecycleState; confirmedAdoption?: string; confirmedItemDecision?: string } = {}): Trip {
   validateTrip(trip);
   exactKeys(proposal, ["tripId", "baseRevision", "summary", "patches", "intentBinding"]);
   if (!Number.isSafeInteger(proposal.baseRevision) || proposal.baseRevision < 0 ||
@@ -188,6 +208,24 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
       adoptionAction = patch.action;
       continue;
     }
+    if (patch.type === "item_decision") {
+      exactKeys(patch, ["type", "itemId", "action"]);
+      const index = items.findIndex(({ id }) => id === patch.itemId);
+      if (index < 0 || !["confirm", "withdraw"].includes(patch.action) ||
+          authority.confirmedItemDecision !== JSON.stringify(proposal) ||
+          ["cancelled", "completed"].includes(trip.lifecycleState)) throw new Error("Explicit item confirmation required");
+      const item = items[index]!;
+      if (patch.action === "confirm") {
+        if (!authority.clock || item.type === "stay" && item.selection.status !== "selected" ||
+            item.type === "transport" && item.detail.status !== "selected" ||
+            item.type === "activity" && !item.place && item.category !== "free-time") throw new Error("Select a specific item before confirming it");
+        items[index] = { ...item, decision: { confirmedAt: authority.clock.now().toISOString() } };
+      } else {
+        if (!item.decision) throw new Error("Item is not confirmed");
+        const { decision: _decision, ...draft } = item; items[index] = draft as ItineraryItem;
+      }
+      continue;
+    }
     if (patch.type === "remove" || patch.type === "move") {
       exactKeys(patch, patch.type === "remove" ? ["type", "itemId"] : ["type", "itemId", "afterId"]);
       const index = items.findIndex(({ id }) => id === patch.itemId);
@@ -200,13 +238,14 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
         const [item] = items.splice(index, 1);
         // Omitted afterId means the beginning; references resolve against ordered patches.
         const after = patch.afterId === undefined ? -1 : items.findIndex(({ id }) => id === patch.afterId);
-        items.splice(after + 1, 0, item!);
+        items.splice(after + 1, 0, item!.decision ? { ...item!, decision: { ...item!.decision, needsReconfirmation: true } } : item!);
       }
       continue; // Request/assumption references are checked against the final aggregate below.
     }
     if (patch.type === "add") {
       exactKeys(patch, ["type", "item", "afterId"]);
       validateItem(patch.item);
+      if (patch.item.decision) throw new Error("Confirmation cannot be added through an item payload");
       if (items.some(({ id }) => id === patch.item.id)) throw new Error("Duplicate itinerary item ID");
       const after = patch.afterId === undefined ? items.length - 1 : items.findIndex(({ id }) => id === patch.afterId);
       if (patch.afterId !== undefined && (typeof patch.afterId !== "string" || !patch.afterId.trim() || after < 0)) throw new Error("Unknown insertion reference");
@@ -276,8 +315,13 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
     const index = items.findIndex(({ id }) => id === patch.itemId);
     if (patch.type !== "replace" || index < 0 || patch.item.id !== patch.itemId) throw new Error("Replacement requires an existing stable item ID");
     validateItem(patch.item);
+    if (patch.item.decision && JSON.stringify(patch.item.decision) !== JSON.stringify(items[index]!.decision)) throw new Error("Confirmation cannot be supplied through a replacement");
     if (patch.item.type !== items[index]!.type) throw new Error("Candidate kind differs from target item");
-    items[index] = patch.item;
+    const old = items[index]!;
+    const { decision: _newDecision, ...content } = patch.item;
+    const { decision: _oldDecision, ...oldContent } = old;
+    items[index] = old.decision ? { ...patch.item, decision: JSON.stringify(content) === JSON.stringify(oldContent) ? old.decision
+      : { ...old.decision, needsReconfirmation: true } } : patch.item;
   }
   if (costs && (JSON.stringify(request) !== JSON.stringify(trip.request) || JSON.stringify(items) !== JSON.stringify(trip.items))) costs = { ...costs, stale: true };
   // Preview keeps revision/updatedAt. Only a successful server CAS increments them.

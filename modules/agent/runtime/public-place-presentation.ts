@@ -12,6 +12,8 @@ export interface PublicPlaceCard {
   title: string;
   description: string;
   sourceUrl: string;
+  /** When the cited material was retrieved, not a claim of current opening/availability. */
+  retrievedAt?: string;
   photo?: PublicPlacePhoto;
 }
 export interface PublicPlacePresentation {
@@ -26,9 +28,10 @@ export function parsePublicPlacePresentation(value: unknown): PublicPlacePresent
       !Array.isArray(value.cards) || value.cards.length < 1 || value.cards.length > 8) return invalid();
   const evidenceIds = new Set<string>(), places = new Set<string>();
   const cards = value.cards.map((card): PublicPlaceCard => {
-    if (!record(card) || !only(card, ["evidenceId", "placeRef", "title", "description", "sourceUrl", "photo"]) ||
+    if (!record(card) || !only(card, ["evidenceId", "placeRef", "title", "description", "sourceUrl", "retrievedAt", "photo"]) ||
         !text(card.evidenceId, 240) || !text(card.placeRef, 1000) || !/^place:[^:]+:.+$/u.test(card.placeRef) ||
-        !text(card.title, 160) || !text(card.description, 400, true) || !text(card.sourceUrl, 2048)) return invalid();
+        !text(card.title, 160) || !text(card.description, 400, true) || !text(card.sourceUrl, 2048) ||
+        card.retrievedAt !== undefined && (typeof card.retrievedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u.test(card.retrievedAt) || !Number.isFinite(Date.parse(card.retrievedAt)))) return invalid();
     const sourceUrl = publicPlaceSourceUrl(card.sourceUrl);
     if (!sourceUrl || evidenceIds.has(card.evidenceId) || places.has(card.placeRef)) return invalid();
     evidenceIds.add(card.evidenceId); places.add(card.placeRef);
@@ -43,7 +46,7 @@ export function parsePublicPlacePresentation(value: unknown): PublicPlacePresent
         ...(card.photo.license === undefined ? {} : { license: card.photo.license }) };
     }
     return { evidenceId: card.evidenceId, placeRef: card.placeRef, title: card.title,
-      description: card.description, sourceUrl, ...(photo ? { photo } : {}) };
+      description: card.description, sourceUrl, ...(card.retrievedAt === undefined ? {} : { retrievedAt: card.retrievedAt }), ...(photo ? { photo } : {}) };
   });
   const result: PublicPlacePresentation = { version: publicPlacePresentationVersion, cards };
   if (new TextEncoder().encode(JSON.stringify(result)).length > 32 * 1024) return invalid();

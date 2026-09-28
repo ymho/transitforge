@@ -36,6 +36,18 @@ it("explicitly marks list/text omission and never manufactures an opaque identit
   expect(snapshot.itineraryPlaces?.visitedPlaces[1]?.place).not.toHaveProperty("ref");
   expect(snapshot.itineraryPlaces?.visitedPlaces[0]?.place.name).toHaveLength(100);
 });
+it("keeps the chosen reference date in Agent context without treating the memo as current availability", () => {
+  const trip = createTrip(placesTripId, "青葉庭園", placesAt, [{ id: "garden", type: "activity", title: "青葉庭園",
+    category: "sightseeing", schedule: { type: "unscheduled" }, place: { name: "青葉庭園", sources: [] },
+    research: { sourceUrl: "https://example.org/garden", observedAt: "2026-09-26T10:00:00Z" } }]);
+  const snapshot = createAgentContextSnapshot(undefined, trip).trip!;
+  expect(snapshot.schedule[0]).toMatchObject({ placeName: "青葉庭園", researchSourceUrl: "https://example.org/garden",
+    researchObservedAt: "2026-09-26T10:00:00Z" });
+  expect(snapshot.schedule[0]).not.toHaveProperty("selectionStatus", "verified");
+  const context = buildAgentDecisionContext({ executionId: "research", feature: "concierge", userRequest: "今も開いていますか",
+    context: { currentTrip: snapshot } }, []);
+  expect(agentDecisionContextText(context)).toContain("2026-09-26T10:00:00Z");
+});
 it("retains exact IDs and omission semantics through all context compression stages", () => {
   // Full-width / whitespace in opaque IDs must not be normalized into another provider ID.
   const trip = createTrip(placesTripId, "many", placesAt, Array.from({ length: 24 }, (_, i) => placeActivity(`p${i}`, resolvedPlace(`P${i}`, ` Ａ:${i} `))),

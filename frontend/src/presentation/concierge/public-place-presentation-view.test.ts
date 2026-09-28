@@ -45,6 +45,24 @@ describe("public place presentation view", () => {
     expect(root.querySelectorAll("img, iframe, button, form")).toHaveLength(0);
     expect(root.textContent).not.toMatch(/保存|予約|evidence:garden|place:fixture/u);
   });
+  it("offers a dated candidate as a day-specific preview, without saving on click", () => {
+    const cards = presentation(); cards.cards[0]!.retrievedAt = "2026-09-26T10:00:00Z";
+    const propose = vi.fn();
+    const root = renderPublicPlacePresentation(cards, { days: () => [{ key: "date:2026-10-01", label: "10月1日" }], propose });
+    expect(root.textContent).toContain("2026/9/26時点");
+    const trigger = [...root.querySelectorAll("button")].find(button => button.textContent === "旅程に追加案")!;
+    trigger.click();
+    const form = root.querySelector("form")!;
+    expect(form.hidden).toBe(false);
+    const selects = form.querySelectorAll("select");
+    expect(selects[0]?.value).toBe("date:2026-10-01");
+    selects[1]!.value = "food";
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(propose).toHaveBeenCalledWith(cards.cards[0], "date:2026-10-01", "food");
+    expect(root.textContent).toContain("まだ保存していません");
+    const legacy = renderPublicPlacePresentation(presentation(), { days: () => [], propose });
+    expect(legacy.querySelector("button")).toBeNull();
+  });
   it("treats title and excerpt markup as text, never active HTML", () => {
     const value = presentation();
     value.cards[0]!.title = "<img src=x onerror=alert(1)>";

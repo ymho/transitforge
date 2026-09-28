@@ -97,6 +97,19 @@ it("receives a public proposal as structured UI data only after a complete strea
   s.fetcher.mockResolvedValueOnce(new Response(progress + frame(2, { type: "final", status: "completed", response: "案を確認", tripUpdateProposal }) + 'event: done\ndata: {"v":1,"runId":"run","seq":3}\n\n', { headers: { "content-type": "text/event-stream" } }));
   expect(await s.session.start("相談").send()).toEqual({ text: "案を確認", tripUpdateProposal }); s.session.dispose();
 });
+it("receives a manual Trip item preview and rejects provider facts injected into the stream", async () => {
+  const s = setup();
+  const tripUpdateProposal = { tripId: "11111111-1111-4111-8111-111111111111", baseRevision: 0, summary: "昼食の追加案", patches: [
+    { type: "add", item: { id: "meal", type: "activity", title: "昼食", category: "food", schedule: { type: "unscheduled" }, place: { name: "出雲そば", sources: [] } } },
+    { type: "planning", state: "itinerary_draft" },
+  ] };
+  const respond = (proposal: object) => new Response(progress + frame(2, { type: "final", status: "completed", response: "変更案を確認", tripUpdateProposal: proposal }) + 'event: done\ndata: {"v":1,"runId":"run","seq":3}\n\n', { headers: { "content-type": "text/event-stream" } });
+  s.fetcher.mockResolvedValueOnce(respond(tripUpdateProposal));
+  expect(await s.session.start("相談").send()).toEqual({ text: "変更案を確認", tripUpdateProposal });
+  s.fetcher.mockResolvedValueOnce(respond({ ...tripUpdateProposal, patches: [{ ...tripUpdateProposal.patches[0], item: {
+    ...tripUpdateProposal.patches[0]!.item, place: { name: "店", sources: [{ sourceId: "fake" }] } }, }, tripUpdateProposal.patches[1]] }));
+  await expect(s.session.start("相談").send()).rejects.toThrow("invalid_event"); s.session.dispose();
+});
 it("rejects malformed proposal data without displaying a partial final", async () => {
   const s = setup(), onEvent = vi.fn();
   s.fetcher.mockResolvedValueOnce(new Response(progress + frame(2, { type: "final", status: "completed", response: "案", tripUpdateProposal: { trace: "private" } }) + 'event: done\ndata: {"v":1,"runId":"run","seq":3}\n\n', { headers: { "content-type": "text/event-stream" } }));

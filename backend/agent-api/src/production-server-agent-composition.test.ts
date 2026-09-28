@@ -53,3 +53,29 @@ it("rejects an invalid Strands production flag and requires a real AWS region wh
   expect(() => createProductionServerAgent("bad", { ...base, AGENT_RUNTIME_V2_ENABLED: "yes" })).toThrow("Invalid server configuration");
   expect(() => createProductionServerAgent("missing-region", { ...base, AGENT_RUNTIME_V2_ENABLED: "true" })).toThrow("Missing server configuration");
 });
+
+it("enables the OTP bridge only with one fully pinned graph deployment", () => {
+  vi.mocked(createProductionConversationAgent).mockClear();
+  const base = {
+    SERVER_AGENT_MAX_EXECUTION_MS: "90000", AI_TIMETABLE_BUCKET: "source", TRAFFIC_SNAPSHOT_BUCKET: "test",
+    AGENT_PROVIDER_SECRET_ARN: "test", VIEWER_ORIGIN: "https://example.com", SERVER_STATE_TABLE_NAME: "test",
+    TRIP_TABLE_NAME: "test", FIXED_EGRESS_PROVIDER_FUNCTION_ARN: "test",
+  };
+  const version = "20260928T080000Z-123456789abc";
+  const bridge = {
+    OTP_ROUTE_PROVIDER_FUNCTION_ARN: "arn:aws:lambda:ap-northeast-1:123456789012:function:test-otp-bridge",
+    OTP_GRAPH_MANIFEST_KEY: `otp/izumo-matsue/versions/${version}/manifest.json`, OTP_GRAPH_VERSION: version,
+    OTP_EXPECTED_IMAGE: "docker.io/opentripplanner/opentripplanner@sha256:" + "b".repeat(64),
+    OTP_EXPECTED_GRAPH_SHA: "a".repeat(64),
+  };
+
+  createProductionServerAgent("otp", { ...base, ...bridge });
+  expect(createProductionConversationAgent).toHaveBeenCalledWith(expect.objectContaining({ tripGroundRoutes: expect.anything() }));
+  expect(() => createProductionServerAgent("partial", { ...base, OTP_GRAPH_VERSION: version })).toThrow("Invalid OTP bridge configuration");
+  expect(() => createProductionServerAgent("mixed", { ...base, ...bridge,
+    OTP_GRAPHQL_ENDPOINT: "http://localhost:8080/otp/gtfs/v1",
+    OTP_COVERAGE_JSON: JSON.stringify({ bounds: { south: 35, west: 132, north: 36, east: 133 },
+      serviceStart: "2026-09-01", serviceEnd: "2026-10-31", feedUrl: "https://example.org/feed.zip",
+      feedRetrievedAt: "2026-09-28T00:00:00Z", graphBuiltAt: "2026-09-28T01:00:00Z", attribution: "test" }),
+  })).toThrow("Invalid OTP configuration");
+});

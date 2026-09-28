@@ -13,6 +13,13 @@ import { BraveWebSearchProvider } from "./adapters/brave-web-search-provider.js"
 import { SafeWebPageReader } from "./adapters/safe-web-page-reader.js";
 import { JmaHazardAlertProvider } from "./adapters/jma-hazard-alert-provider.js";
 import { MapboxGroundAccessProvider } from "./adapters/mapbox-ground-access-provider.js";
+import { OtpGroundRouteProvider } from "./adapters/otp-ground-route-provider.js";
+import { LambdaGroundRouteProvider } from "./adapters/lambda-ground-route-provider.js";
+import { S3OtpGraphManifestRepository } from "./adapters/s3-otp-graph-manifest-repository.js";
+import { S3StationCatalogRepository } from "./adapters/s3-station-catalog-repository.js";
+import { railBusConnectionTool } from "./usecases/agent/rail-bus-connection-tool.js";
+import { projectGroundRoutePresentation } from "./usecases/agent/project-ground-route-presentation.js";
+import type { GroundRouteCoverage } from "./ports/ground-route-provider.js";
 import { createMapboxHttpClient } from "./adapters/mapbox-http-client.js";
 import { HotPepperRestaurantProvider } from "./adapters/hot-pepper-restaurant-provider.js";
 import { SecretsManagerHotPepperCredentials } from "./adapters/secrets-manager-hot-pepper-credentials.js";
@@ -76,6 +83,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
  }));
  let turnResearchLedger: ResearchExecutionLedger | undefined;
  let verifiedJourneyResults: JourneySearchResponse[] = [];
+ let groundRouteEvidence: Array<{ id: string; output: Record<string, unknown> }> = [];
  const discovery = createTravelDiscoveryOperation({ retrievers: discoveryRetrievers, ledger: () => turnResearchLedger,
    ...(environment.BEDROCK_RERANK_MODEL_ARN ? { reranker: new BedrockCandidateReranker(environment.BEDROCK_RERANK_MODEL_ARN) } : {}) });
  const call = (operation: AgentOperation) => async (request: object) => {
@@ -83,6 +91,15 @@ export function createProductionServerAgent(executionId: string, environment: Re
    if ((result.statusCode ?? 200) >= 400) throw new Error("Provider unavailable");
    return result.body;
  };
+ const restaurantSearch = createRestaurantSearchOperation(new HotPepperRestaurantProvider(http, new SecretsManagerHotPepperCredentials(secrets, secretArn)));
+ const placeSearch = createPlaceMediaSearchOperation(places);
+ const otp = otpConfiguration(environment);
+ const otpBridge = otpBridgeConfiguration(environment);
+ if (otp && otpBridge) throw new Error("Invalid OTP configuration");
+ const groundRoutes = otp ? new OtpGroundRouteProvider(otp.endpoint, otp.coverage, http) : otpBridge
+   ? new LambdaGroundRouteProvider(otpBridge.functionArn, new S3OtpGraphManifestRepository(s3,
+     required("AI_TIMETABLE_BUCKET"), otpBridge.manifestKey, otpBridge.version, otpBridge.otpImage, otpBridge.graphSha256)) : undefined;
+ const railSearch = createJourneySearchOperation(journey);
  const modelId = environment.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
  const region = environment.AWS_REGION ?? "unknown";
  const conversationModel = new BedrockConversationModel(new AwsBedrockConverseClient(), {
@@ -119,31 +136,71 @@ export function createProductionServerAgent(executionId: string, environment: Re
    projectResult: result => {
      const published = new Set(result.claims.filter(claim => claim.groundingStatus === "supported").flatMap(claim => claim.evidenceIds));
      const presentation = verifiedJourneyResults.map(search => projectPublicJourneyPresentation(search, published)).find(Boolean);
+     const groundRoute = groundRouteEvidence.filter(entry => published.has(entry.id))
+       .map(entry => projectGroundRoutePresentation(entry.id, entry.output)).find(Boolean);
      verifiedJourneyResults = [];
-     return presentation ? { publicJourneyPresentation: presentation } : {};
+     groundRouteEvidence = [];
+     return { ...(presentation ? { publicJourneyPresentation: presentation } : {}),
+       ...(groundRoute ? { publicGroundRoutePresentation: groundRoute } : {}) };
    },
    stateTable: required("SERVER_STATE_TABLE_NAME"), tripTable: required("TRIP_TABLE_NAME"),
    newExecutionId: () => executionId, weather,
    model: conversationModel,
+   searchTripRestaurants: restaurantSearch,
+   searchTripPlaces: placeSearch,
+   ...(groundRoutes ? { tripGroundRoutes: groundRoutes } : {}),
+   onGroundRouteEvidence: (id, output) => { groundRouteEvidence.push({ id, output }); },
    ...(runRuntime ? { runRuntime } : {}),
    diagnostics: { record: async event => { console.info(JSON.stringify({ event: "agent_diagnostic", ...event })); } },
    log: (event, fields) => { console.warn(JSON.stringify({ event, ...fields })); },
-   additionalTools: productionServerTools({
+   additionalTools: [...productionServerTools({
      discovery,
-     journey: createJourneySearchOperation(journey),
+     journey: railSearch,
      representativeTimetable: createRepresentativeTimetableOperation(new S3RepresentativeTimetableRepository(s3, required("AI_TIMETABLE_BUCKET"), "ai-timetable")),
      accommodation: createFixedEgressAccommodationOperation(required("FIXED_EGRESS_PROVIDER_FUNCTION_ARN")),
      onJourneyResult: result => { verifiedJourneyResults.push(result); },
      external: {
-       searchPlaceMedia: call(createPlaceMediaSearchOperation(places)),
+       searchPlaceMedia: call(placeSearch),
        searchWeb: call(createWebSearchOperation(webSearch)),
        readWebPages: call(createWebPageReadOperation(new SafeWebPageReader(http))),
        searchHazardAlerts: call(createHazardAlertSearchOperation(new JmaHazardAlertProvider(http))),
        searchGroundAccess: call(createGroundAccessSearchOperation(new MapboxGroundAccessProvider(mapboxHttp, mapboxCredentials))),
-       searchRestaurants: call(createRestaurantSearchOperation(new HotPepperRestaurantProvider(http, new SecretsManagerHotPepperCredentials(secrets, secretArn)))),
+       searchRestaurants: call(restaurantSearch),
      },
-   }),
+   }), ...(groundRoutes ? [railBusConnectionTool(new S3StationCatalogRepository(s3, required("TRAFFIC_SNAPSHOT_BUCKET")), railSearch, groundRoutes)] : [])],
  });
+}
+
+/** Deploy both the private graph endpoint and an audited feed manifest together; never imply national coverage. */
+function otpConfiguration(environment: Readonly<Record<string, string | undefined>>): { endpoint: string; coverage: GroundRouteCoverage } | undefined {
+  const endpoint = environment.OTP_GRAPHQL_ENDPOINT, raw = environment.OTP_COVERAGE_JSON;
+  if (!endpoint && !raw) return;
+  if (!endpoint || !raw) throw new Error("Invalid OTP configuration");
+  let value: unknown;
+  try { value = JSON.parse(raw); } catch { throw new Error("Invalid OTP configuration"); }
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid OTP configuration");
+  const coverage = value as Record<string, unknown>, bounds = coverage.bounds as Record<string, unknown> | undefined;
+  const date = (item: unknown) => typeof item === "string" && /^\d{4}-\d{2}-\d{2}$/u.test(item) && !Number.isNaN(Date.parse(item));
+  if (!bounds || ["south", "west", "north", "east"].some(key => typeof bounds[key] !== "number" || !Number.isFinite(bounds[key])) ||
+      (bounds.south as number) >= (bounds.north as number) || (bounds.west as number) >= (bounds.east as number) ||
+      !date(coverage.serviceStart) || !date(coverage.serviceEnd) || String(coverage.serviceStart) > String(coverage.serviceEnd) ||
+      ![coverage.feedUrl, coverage.feedRetrievedAt, coverage.graphBuiltAt, coverage.attribution].every(item => typeof item === "string" && item.length > 0) ||
+      !/^https?:\/\//u.test(endpoint)) throw new Error("Invalid OTP configuration");
+  return { endpoint, coverage: coverage as unknown as GroundRouteCoverage };
+}
+
+function otpBridgeConfiguration(environment: Readonly<Record<string, string | undefined>>): {
+  functionArn: string; manifestKey: string; version: string; otpImage: string; graphSha256: string;
+} | undefined {
+  const functionArn = environment.OTP_ROUTE_PROVIDER_FUNCTION_ARN, manifestKey = environment.OTP_GRAPH_MANIFEST_KEY,
+    version = environment.OTP_GRAPH_VERSION, otpImage = environment.OTP_EXPECTED_IMAGE, graphSha256 = environment.OTP_EXPECTED_GRAPH_SHA;
+  if (!functionArn && !manifestKey && !version && !otpImage && !graphSha256) return;
+  if (!functionArn || !manifestKey || !version || !otpImage || !graphSha256 ||
+      !/^arn:aws:lambda:[a-z0-9-]+:\d{12}:function:[A-Za-z0-9-_]+$/u.test(functionArn) ||
+      manifestKey !== `otp/izumo-matsue/versions/${version}/manifest.json` || !/^\d{8}T\d{6}Z-[0-9a-f]{12}$/u.test(version) ||
+      !/^docker\.io\/opentripplanner\/opentripplanner@sha256:[0-9a-f]{64}$/u.test(otpImage) || !/^[0-9a-f]{64}$/u.test(graphSha256))
+    throw new Error("Invalid OTP bridge configuration");
+  return { functionArn, manifestKey, version, otpImage, graphSha256 };
 }
 
 function boundedInteger(value: string | undefined, fallback: number, minimum: number, maximum: number): number {

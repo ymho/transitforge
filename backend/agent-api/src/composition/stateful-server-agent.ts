@@ -1,10 +1,11 @@
 import { registerCostProposalTool } from "../usecases/agent/cost-proposal-tool.js";
 import type { PublicCostProposal } from "@raiquora/trip/public-cost-proposal";
-import type { Trip } from "@raiquora/trip/trip";
-import { parsePublicRequestProposal, type PublicRequestProposal } from "@raiquora/trip/public-request-proposal";
+import type { Trip, TripUpdateProposal } from "@raiquora/trip/trip";
+import { parsePublicRequestProposal } from "@raiquora/trip/public-request-proposal";
 import type { ServerAgentTurn } from "../usecases/agent/server-agent.js";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
 import { registerRequestProposalTool } from "../usecases/agent/request-proposal-tool.js";
+import { registerTripItemProposalTool } from "../usecases/agent/trip-item-proposal-tool.js";
 import { DynamoDbConversationRepository } from "../adapters/dynamodb-conversation-repository.js";
 import { DynamoDbProfileRepository } from "../adapters/dynamodb-profile-repository.js";
 import { DynamoDbTripRepository, type TripDynamoClient } from "../adapters/dynamodb-trip-repository.js";
@@ -15,6 +16,13 @@ import { createServerStateContextLoader } from "../usecases/agent/server-state-c
 import { createServerAgent } from "../server-agent-composition.js";
 import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
 import { registerTripReadTools } from "../usecases/agent/trip-read-tool.js";
+import { registerTripSearchContextTool } from "../usecases/agent/trip-search-context-tool.js";
+import { tripGapRestaurantTool } from "../usecases/agent/trip-gap-restaurant-tool.js";
+import { tripGapPlaceTool } from "../usecases/agent/trip-gap-place-tool.js";
+import { tripGapGroundRouteTool } from "../usecases/agent/trip-gap-ground-route-tool.js";
+import type { GroundRouteProvider } from "../ports/ground-route-provider.js";
+import { registerServerTools } from "../usecases/agent/server-tools.js";
+import type { AgentOperation } from "../ports/agent-operation.js";
 import { DynamoDbItineraryCandidateRepository } from "../adapters/dynamodb-itinerary-candidate-repository.js";
 import { PlanCandidateRetentionApplication, registerPlanCandidateRetentionTool, type RetainedCandidatePlan } from "../usecases/plan-candidate-retention.js";
 import { proposeVerifiedIntentRequest } from "@raiquora/agent/verified-intent-proposal";
@@ -31,11 +39,15 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
   tripTable: string;
   stateClient?: StateDynamoClient;
   tripClient?: TripDynamoClient;
+  searchTripRestaurants?: AgentOperation;
+  searchTripPlaces?: AgentOperation;
+  tripGroundRoutes?: GroundRouteProvider;
+  onGroundRouteEvidence?: (evidenceId: string, output: Record<string, unknown>) => void;
 }) {
   return { async runAgentTurn(input: ServerAgentTurn, reportProgress?: AgentProgressReporter,
     acceptCondition?: (change: ConversationConditionInput) => Promise<IntentApplicationReceipt>) {
     let tripCostProposal: PublicCostProposal | undefined, retainedCandidatePlan: RetainedCandidatePlan | undefined;
-    let trip: Trip | undefined, tripUpdateProposal: PublicRequestProposal | undefined;
+    let trip: Trip | undefined, tripUpdateProposal: TripUpdateProposal | undefined;
     let effectiveIntent: EffectiveIntent | undefined, currentIntentReceipt: IntentApplicationReceipt | undefined;
     const turnStates = new DynamoDbConversationTurnRepository(options.stateTable, options.stateClient);
     const contextLoader = createServerStateContextLoader({
@@ -69,7 +81,12 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
         options.registerAdditionalTools?.(tools, evidence, scope);
         if (trip) {
           registerTripReadTools(tools, evidence, trip);
+          registerTripSearchContextTool(tools, evidence, trip);
+          if (options.searchTripRestaurants) registerServerTools(tools, evidence, [tripGapRestaurantTool(trip, options.searchTripRestaurants)]);
+          if (options.searchTripPlaces) registerServerTools(tools, evidence, [tripGapPlaceTool(trip, options.searchTripPlaces)]);
+          if (options.tripGroundRoutes) registerServerTools(tools, evidence, [tripGapGroundRouteTool(trip, options.tripGroundRoutes, options.onGroundRouteEvidence)]);
           registerRequestProposalTool(tools, trip, proposal => { tripUpdateProposal = proposal; });
+          registerTripItemProposalTool(tools, trip, proposal => { tripUpdateProposal = proposal; });
           registerCostProposalTool(tools, trip, proposal => { tripCostProposal = proposal; });
           if (scope.conversationId) {
             const candidateRepository = new DynamoDbItineraryCandidateRepository(options.tripTable, options.tripClient);

@@ -1,6 +1,6 @@
 import { parsePublicCostProposal } from "@raiquora/trip/public-cost-proposal";
 import { parseConsultationRequestProposal } from "@raiquora/trip/consultation-request-proposal";
-import { parsePublicRequestProposal } from "@raiquora/trip/public-request-proposal";
+import { parsePublicTripProposal } from "@raiquora/trip/public-trip-proposal";
 import { conditionDelta, conditionPayload, conversationConditionSchema, parseConditionJournal,
   type ConditionOperationJournal, type ConditionOperationRecord, type ConversationConditionChange } from "@raiquora/agent/conversation-condition";
 import type { ConversationConditionRepository } from "../ports/conversation-condition-repository.js";
@@ -13,6 +13,7 @@ import { parseAcceptedIntentDelta, type AcceptedIntentDelta, type ConversationIn
 import { parseIntentApplicationReceipt, reduceConversationIntent, type IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 import { parsePublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
+import { parsePublicGroundRoutePresentation } from "@raiquora/agent/public-ground-route-presentation";
 import { parsePublicPlacePresentation } from "@raiquora/agent/public-place-presentation";
 import { parseResearchExecutionOutcome } from "@raiquora/agent/research-execution";
 import { parsePublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
@@ -38,13 +39,14 @@ interface TurnRecord {
 }
 interface TurnSnapshot { current: Conversation; old?: StateEnvelope; turn?: TurnRecord }
 function finalResult(value: ConversationTurnResult): ConversationTurnResult {
-  exactObject(value, ["status", "response", "delivery", "semanticReceipt", "publicPlanPresentation", "publicJourneyPresentation", "publicPlacePresentation", "researchExecution", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal", "turnObservation", "presentationReceipt"]);
+  exactObject(value, ["status", "response", "delivery", "semanticReceipt", "publicPlanPresentation", "publicJourneyPresentation", "publicGroundRoutePresentation", "publicPlacePresentation", "researchExecution", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal", "turnObservation", "presentationReceipt"]);
   if (value.status !== "completed" && value.status !== "follow_up") throw new StateError("invalid-input");
   messageInputs([{ role: "assistant", text: value.response }]);
   try {
     if ((value.tripUpdateProposal || value.tripCostProposal) && value.consultationRequestProposal) throw new Error();
     const publicPlanPresentation = value.publicPlanPresentation === undefined ? undefined : parsePublicPlanPresentation(value.publicPlanPresentation);
     const publicJourneyPresentation = value.publicJourneyPresentation === undefined ? undefined : parsePublicJourneyPresentation(value.publicJourneyPresentation);
+    const publicGroundRoutePresentation = value.publicGroundRoutePresentation === undefined ? undefined : parsePublicGroundRoutePresentation(value.publicGroundRoutePresentation);
     const publicPlacePresentation = value.publicPlacePresentation === undefined ? undefined : parsePublicPlacePresentation(value.publicPlacePresentation);
     const researchExecution = value.researchExecution === undefined ? undefined : parseResearchExecutionOutcome(value.researchExecution);
     const semanticReceipt = value.semanticReceipt === undefined ? undefined : parsePublicSemanticReceipt(value.semanticReceipt);
@@ -59,10 +61,11 @@ function finalResult(value: ConversationTurnResult): ConversationTurnResult {
       ...(semanticReceipt ? { semanticReceipt } : {}),
       ...(publicPlanPresentation ? { publicPlanPresentation } : {}),
       ...(publicJourneyPresentation ? { publicJourneyPresentation } : {}),
+      ...(publicGroundRoutePresentation ? { publicGroundRoutePresentation } : {}),
       ...(publicPlacePresentation ? { publicPlacePresentation } : {}),
       ...(researchExecution ? { researchExecution } : {}),
       ...(value.tripCostProposal !== undefined ? { tripCostProposal: parsePublicCostProposal(value.tripCostProposal) } : {}),
-      ...(value.tripUpdateProposal !== undefined ? { tripUpdateProposal: parsePublicRequestProposal(value.tripUpdateProposal) } : {}),
+      ...(value.tripUpdateProposal !== undefined ? { tripUpdateProposal: parsePublicTripProposal(value.tripUpdateProposal) } : {}),
       ...(value.consultationRequestProposal !== undefined ? { consultationRequestProposal: parseConsultationRequestProposal(value.consultationRequestProposal) } : {}),
       ...(value.turnObservation !== undefined ? { turnObservation: structuredClone(value.turnObservation) } : {}),
       ...(value.presentationReceipt !== undefined ? { presentationReceipt: structuredClone(value.presentationReceipt) } : {}) };
@@ -321,7 +324,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const { current, old, turn } = await this.read(input);
     if (!turn || turn.attemptId !== attemptId || turn.userSequence !== userSequence) throw new StateError("conflict");
     if (turn.state === "completed") {
-      if (!saved || saved.status !== turn.result!.status || saved.response !== turn.result!.response || JSON.stringify(saved.delivery) !== JSON.stringify(turn.result!.delivery) || JSON.stringify(saved.semanticReceipt) !== JSON.stringify(turn.result!.semanticReceipt) || JSON.stringify(saved.publicPlanPresentation) !== JSON.stringify(turn.result!.publicPlanPresentation) || JSON.stringify(saved.publicJourneyPresentation) !== JSON.stringify(turn.result!.publicJourneyPresentation) || JSON.stringify(saved.publicPlacePresentation) !== JSON.stringify(turn.result!.publicPlacePresentation) || JSON.stringify(saved.researchExecution) !== JSON.stringify(turn.result!.researchExecution) || JSON.stringify(saved.tripUpdateProposal) !== JSON.stringify(turn.result!.tripUpdateProposal) || JSON.stringify(saved.consultationRequestProposal) !== JSON.stringify(turn.result!.consultationRequestProposal) || JSON.stringify(saved.tripCostProposal) !== JSON.stringify(turn.result!.tripCostProposal)) throw new StateError("conflict");
+      if (!saved || saved.status !== turn.result!.status || saved.response !== turn.result!.response || JSON.stringify(saved.delivery) !== JSON.stringify(turn.result!.delivery) || JSON.stringify(saved.semanticReceipt) !== JSON.stringify(turn.result!.semanticReceipt) || JSON.stringify(saved.publicPlanPresentation) !== JSON.stringify(turn.result!.publicPlanPresentation) || JSON.stringify(saved.publicJourneyPresentation) !== JSON.stringify(turn.result!.publicJourneyPresentation) || JSON.stringify(saved.publicGroundRoutePresentation) !== JSON.stringify(turn.result!.publicGroundRoutePresentation) || JSON.stringify(saved.publicPlacePresentation) !== JSON.stringify(turn.result!.publicPlacePresentation) || JSON.stringify(saved.researchExecution) !== JSON.stringify(turn.result!.researchExecution) || JSON.stringify(saved.tripUpdateProposal) !== JSON.stringify(turn.result!.tripUpdateProposal) || JSON.stringify(saved.consultationRequestProposal) !== JSON.stringify(turn.result!.consultationRequestProposal) || JSON.stringify(saved.tripCostProposal) !== JSON.stringify(turn.result!.tripCostProposal)) throw new StateError("conflict");
       return turn.result;
     }
     if (!saved && turn.state === "failed") return;
@@ -355,7 +358,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     }) : undefined;
     await this.write(input.principal, current, { ...current, updatedAt: now, revision: current.revision + 1,
       messageCount: current.messageCount + (saved ? 1 : 0) },
-    saved ? [{ role: "assistant", text: saved.response, ...(saved.delivery ? { delivery: saved.delivery } : {}), ...(saved.semanticReceipt ? { semanticReceipt: saved.semanticReceipt } : {}), ...(saved.publicPlanPresentation ? { publicPlanPresentation: saved.publicPlanPresentation } : {}), ...(saved.publicJourneyPresentation ? { publicJourneyPresentation: saved.publicJourneyPresentation } : {}), ...(saved.publicPlacePresentation ? { publicPlacePresentation: saved.publicPlacePresentation } : {}), ...(saved.tripCostProposal ? { tripCostProposal: saved.tripCostProposal } : {}), ...(saved.tripUpdateProposal ? { tripUpdateProposal: saved.tripUpdateProposal } : {}), ...(saved.consultationRequestProposal ? { consultationRequestProposal: saved.consultationRequestProposal } : {}), sequence: current.messageCount + 1, createdAt: now }] : [],
+    saved ? [{ role: "assistant", text: saved.response, ...(saved.delivery ? { delivery: saved.delivery } : {}), ...(saved.semanticReceipt ? { semanticReceipt: saved.semanticReceipt } : {}), ...(saved.publicPlanPresentation ? { publicPlanPresentation: saved.publicPlanPresentation } : {}), ...(saved.publicJourneyPresentation ? { publicJourneyPresentation: saved.publicJourneyPresentation } : {}), ...(saved.publicGroundRoutePresentation ? { publicGroundRoutePresentation: saved.publicGroundRoutePresentation } : {}), ...(saved.publicPlacePresentation ? { publicPlacePresentation: saved.publicPlacePresentation } : {}), ...(saved.tripCostProposal ? { tripCostProposal: saved.tripCostProposal } : {}), ...(saved.tripUpdateProposal ? { tripUpdateProposal: saved.tripUpdateProposal } : {}), ...(saved.consultationRequestProposal ? { consultationRequestProposal: saved.consultationRequestProposal } : {}), sequence: current.messageCount + 1, createdAt: now }] : [],
     [this.store.put(input.principal, this.key(input), { revision: old!.revision + 1, deleted: false, payload: next }, old),
       ...(working ? [this.store.put(input.principal, workingKey, { revision: working.revision, deleted: false, payload: working }, oldWorking)] : [])]);
     return saved;

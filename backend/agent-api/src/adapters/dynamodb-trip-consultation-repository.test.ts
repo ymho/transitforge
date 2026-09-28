@@ -87,3 +87,15 @@ it("branches are independent, owner-scoped, and stale source snapshots fail CAS"
   await expect(f.repository().branch(stateA,branch)).rejects.toMatchObject({ code: "conflict" });
   expect(await f.trips.get(stateA,branch.tripId)).toBeUndefined();
 });
+it("branches confirmed items as independent plans requiring an explicit new decision", async () => {
+  const f = setup(); await f.repository().start(stateA, input);
+  const proposal = { tripId: input.tripId, baseRevision: 0, summary: "予定を確定", patches: [] };
+  await f.trips.applyMutation(stateA, { tripId: input.tripId, baseRevision: 0,
+    mutationId: "75600000-0000-4000-8000-000000000050", proposal }, current => ({ ...current,
+    items: [{ id: "visit", type: "activity" as const, title: "参拝", category: "sightseeing" as const,
+      schedule: { type: "day" as const, date: "2026-10-01" }, place: { name: "出雲大社", sources: [] },
+      decision: { confirmedAt: current.updatedAt } }] }));
+  const result = await f.repository().branch(stateA, { ...branch, sourceRevision: 1 });
+  expect(result.trip.items[0]!.decision).toMatchObject({ needsReconfirmation: true });
+  expect((await f.trips.get(stateA, input.tripId))!.items[0]!.decision).not.toHaveProperty("needsReconfirmation");
+});

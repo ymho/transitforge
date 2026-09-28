@@ -5,6 +5,8 @@ export interface PlanAdoptionTarget { conversationId: string; candidateSetId: st
 export interface PlanAdoptionPreview { confirmationKey: string; preview: { proposal: TripUpdateProposal; componentMap: readonly { componentId: string; itemId: string }[]; changes: { added: number; replaced: number; removed: number } } }
 export interface TripAdoptionTarget { tripId: string; baseTripRevision: number; mutationId: string; action: "confirm" | "withdraw" }
 export interface TripAdoptionPreview { confirmationKey: string; preview: { action: "confirm" | "withdraw"; summary: string; needsReconfirmation: boolean } }
+export interface ItemDecisionTarget { tripId: string; itemId: string; baseTripRevision: number; mutationId: string; action: "confirm" | "withdraw" }
+export interface ItemDecisionPreview { confirmationKey: string; preview: { itemId: string; title: string; action: "confirm" | "withdraw"; needsReconfirmation: boolean } }
 /** A definitive rejection, unlike a lost response whose mutation may already have committed. */
 export class TripWriteRejected extends Error {}
 
@@ -27,5 +29,7 @@ export interface ServerTripClient {
   confirmPlanAdoption?(target: PlanAdoptionTarget, confirmationKey: string): Promise<Trip>;
   previewTripAdoption?(target: TripAdoptionTarget): Promise<TripAdoptionPreview>;
   confirmTripAdoption?(target: TripAdoptionTarget, confirmationKey: string): Promise<Trip>;
+  previewItemDecision?(target: ItemDecisionTarget): Promise<ItemDecisionPreview>;
+  confirmItemDecision?(target: ItemDecisionTarget, confirmationKey: string): Promise<Trip>;
 }
 export type TripLoadState = "loading" | "loaded" | "unavailable";

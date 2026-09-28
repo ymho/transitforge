@@ -1,12 +1,13 @@
 import { renderTripCosts } from "./trip-cost-view";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import type { ContextViewKind } from "../../domain/context-workspace";
-import { proposeManualActivity } from "../../usecases/trip-plan/propose-trip-activity";
+import { proposeDayActivity } from "../../usecases/trip-plan/propose-day-activity";
+import { proposeTripItemChange } from "@raiquora/trip/trip-item-proposal";
 import { tripWorkspaceProjection, itemAssumptions } from "./trip-workspace-projection";
 import { renderWorkspaceCard, refreshMoveTargets } from "./trip-workspace-card";
 import { renderWorkspaceCandidates } from "./trip-workspace-candidates";
 import { renderWorkspaceProposal } from "./trip-workspace-proposal";
-import { element, control } from "./trip-workspace-elements";
+import { element, control, option } from "./trip-workspace-elements";
 import { renderTripFeasibility } from "./trip-feasibility-view";
 import { renderTripReadiness } from "./trip-readiness-view";
 import { renderTripChecklist } from "./trip-checklist-view";
@@ -26,6 +27,7 @@ export function configureTripWorkspace(options: {
   ask(prompt: string): void; nextItemId(): string;
   onViewChange?(view: "chat" | "trip"): void;
   changeAdoption?(trip: Trip, action: "confirm" | "withdraw"): Promise<void>;
+  changeItemDecision?(trip: Trip, item: Trip["items"][number], action: "confirm" | "withdraw"): Promise<void>;
   branchTrip?(trip: Trip, title: string): Promise<void>;
 }) {
   const { controller, app } = options;
@@ -94,12 +96,30 @@ export function configureTripWorkspace(options: {
   });
   const add = element("form", "trip-workspace-add"); const addLabel = element("label", "", "追加する予定 "); const addTitle = element("input");
   addTitle.required = true; addTitle.maxLength = 200; addLabel.append(addTitle);
-  const submit = element("button", "", "時間未定の自由時間として追加案"); submit.type = "submit"; add.append(addLabel, submit);
+  const categoryLabel = element("label", "", "種類 "); const addCategory = element("select");
+  for (const [value, label] of [["sightseeing", "観光"], ["food", "食事"], ["experience", "体験"], ["event", "イベント"], ["free-time", "自由時間"]] as const) {
+    addCategory.append(option(label, value));
+  }
+  categoryLabel.append(addCategory);
+  const placeLabel = element("label", "", "場所名（任意・手入力） "); const addPlace = element("input"); addPlace.maxLength = 200; placeLabel.append(addPlace);
+  const dayLabel = element("label", "", "追加する日 "); const addDay = element("select"); addDay.append(option("日時未定", "unscheduled")); dayLabel.append(addDay);
+  const kindLabel = element("label", "", "予定の種類 "), addKind = element("select");
+  for (const [value, label] of [["activity", "立ち寄り・食事"], ["transport", "未選択の移動"], ["stay", "未選択の宿泊"]] as const) addKind.append(option(label, value));
+  kindLabel.append(addKind);
+  const submit = element("button", "", "追加案を確認"); submit.type = "submit";
+  add.append(addLabel, categoryLabel, placeLabel, dayLabel, kindLabel, element("p", "trip-workspace-copy", "場所名は立ち寄り・食事の手入力にだけ使います。移動・宿泊は未選択の枠を作り、時刻・営業・予約は確認しません。"), submit);
+  addKind.addEventListener("change", () => { categoryLabel.hidden = placeLabel.hidden = addKind.value !== "activity"; });
   add.addEventListener("submit", (event) => {
     event.preventDefault(); const trip = controller.current(); if (!trip) return;
     try {
-      controller.preview(proposeManualActivity(trip, { itemId: options.nextItemId(), operation: "add", ...(controller.uiFocus()?.itemId ? { afterId: controller.uiFocus()!.itemId } : {}) },
-        { title: addTitle.value, category: "free-time", schedule: { type: "unscheduled" } }));
+      const focusedId = controller.uiFocus()?.itemId;
+      const target = { itemId: options.nextItemId(), title: addTitle.value, dayKey: addDay.value,
+        ...(focusedId && addDay.value !== "unscheduled" && tripWorkspaceProjection(trip).dayEntries
+          .find(([key]) => key === addDay.value)?.[1].some(({ sourceItemId }) => sourceItemId === focusedId) ? { afterId: focusedId } : {}) };
+      controller.preview(addKind.value === "activity" ? proposeDayActivity(trip, { ...target,
+        category: addCategory.value as "sightseeing" | "food" | "experience" | "event" | "free-time",
+        ...(addPlace.value.trim() ? { placeName: addPlace.value } : {}) })
+        : proposeTripItemChange(trip, { ...target, action: addKind.value === "transport" ? "add-transport" : "add-stay" }));
       report("追加案を表示しました。現在の旅程はまだ変更していません。");
     } catch { report("追加する予定の名称と対象を確認してください。"); }
   });
@@ -201,6 +221,10 @@ export function configureTripWorkspace(options: {
       previousTripId = trip.id; panel.scrollTop = viewState().scroll;
     }
     const view = tripWorkspaceProjection(trip), scroll = panel.scrollTop;
+    const chosenDay = addDay.value;
+    addDay.replaceChildren(option("日時未定", "unscheduled"), ...view.dayEntries.filter(([key]) => key !== "unscheduled")
+      .map(([key, , label]) => option(label, key)));
+    addDay.value = [...addDay.options].some((entry) => entry.value === chosenDay) ? chosenDay : "unscheduled";
     const evaluation = controller.feasibility()!;
     feasibility.replaceChildren(renderTripFeasibility(evaluation));
     const prepared = controller.readiness()!;
@@ -242,12 +266,14 @@ export function configureTripWorkspace(options: {
       if (days.children[[...dates].length - 1] !== group) days.insertBefore(group, days.children[[...dates].length - 1] ?? null);
       entries.forEach(({ item, entryKey }, index) => {
         ids.add(entryKey);
-        const key = JSON.stringify([item, itemAssumptions(trip, item.id), controller.reservations()?.filter((r) => r.itineraryItemId === item.id), evaluation.issues.filter((i) => i.itemIds.includes(item.id))]);
+        const key = JSON.stringify([item, itemAssumptions(trip, item.id), controller.reservations()?.filter((r) => r.itineraryItemId === item.id),
+          evaluation.issues.filter((i) => i.itemIds.includes(item.id)), personalOwner && !!options.changeItemDecision]);
         const collapseKey = `${activeSession}:${trip.id}:${entryKey}`;
         let card = cards.get(entryKey);
         if (card?.key !== key) {
           const node = renderWorkspaceCard(trip, item, controller, { collapsed: collapsed.get(collapseKey) ?? false,
-            collapse: (value) => collapsed.set(collapseKey, value), chat, report }, evaluation.issues.filter((i) => i.itemIds.includes(item.id)));
+            collapse: (value) => collapsed.set(collapseKey, value), chat, report,
+            ...(personalOwner && options.changeItemDecision ? { changeItemDecision: options.changeItemDecision } : {}) }, evaluation.issues.filter((i) => i.itemIds.includes(item.id)));
           if (card) card.node.replaceWith(node);
           card = { node, key }; cards.set(entryKey, card);
         }
