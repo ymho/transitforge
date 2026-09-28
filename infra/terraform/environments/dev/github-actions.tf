@@ -215,6 +215,7 @@ data "aws_iam_policy_document" "data_builder_github_deploy_iam" {
       "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-${var.environment}-data-builder-scheduler",
       "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-${var.environment}-data-builder-traffic-collector",
       "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-${var.environment}-data-builder-traffic-scheduler",
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-${var.environment}-data-builder-travel-knowledge-base",
     ]
   }
 }
