@@ -104,9 +104,9 @@ resource "aws_iam_role" "otp_task" {
   assume_role_policy = data.aws_iam_policy_document.otp_task_assume[0].json
 }
 resource "aws_iam_role_policy" "otp_task" {
-  count  = var.enable_otp_route_service ? 1 : 0
-  name   = "read-pinned-otp-graph"
-  role   = aws_iam_role.otp_task[0].id
+  count = var.enable_otp_route_service ? 1 : 0
+  name  = "read-pinned-otp-graph"
+  role  = aws_iam_role.otp_task[0].id
   policy = jsonencode({ Version = "2012-10-17", Statement = [{
     Effect = "Allow", Action = ["s3:GetObject"], Resource = "arn:aws:s3:::${local.otp_graph_bucket}/${local.otp_graph_key}"
   }] })
@@ -220,19 +220,19 @@ resource "aws_ecs_task_definition" "otp" {
   volume { name = "otp-graph" }
   container_definitions = jsonencode([
     {
-      name             = "load-graph", image = var.otp_graph_loader_image, essential = false, entryPoint = ["sh", "-c"],
-      command          = ["aws s3 cp 's3://${local.otp_graph_bucket}/${local.otp_graph_key}' /otp/graph.obj --only-show-errors && printf '%s  %s\\n' '${var.otp_graph_sha256}' /otp/graph.obj | sha256sum -c -"],
-      mountPoints      = [{ sourceVolume = "otp-graph", containerPath = "/otp", readOnly = false }],
+      name        = "load-graph", image = var.otp_graph_loader_image, essential = false, entryPoint = ["sh", "-c"],
+      command     = ["aws s3 cp 's3://${local.otp_graph_bucket}/${local.otp_graph_key}' /otp/graph.obj --only-show-errors && printf '%s  %s\\n' '${var.otp_graph_sha256}' /otp/graph.obj | sha256sum -c -"],
+      mountPoints = [{ sourceVolume = "otp-graph", containerPath = "/otp", readOnly = false }],
       logConfiguration = { logDriver = "awslogs", options = {
         awslogs-group = aws_cloudwatch_log_group.otp[0].name, awslogs-region = var.aws_region, awslogs-stream-prefix = "load"
       } }
     },
     {
-      name             = "otp", image = var.otp_image, essential = true, command = ["--load", "--serve"],
-      dependsOn        = [{ containerName = "load-graph", condition = "SUCCESS" }],
-      environment      = [{ name = "JAVA_TOOL_OPTIONS", value = "-Xms1g -Xmx3g" }],
-      mountPoints      = [{ sourceVolume = "otp-graph", containerPath = "/var/opentripplanner", readOnly = true }],
-      portMappings     = [{ containerPort = 8080, protocol = "tcp" }],
+      name         = "otp", image = var.otp_image, essential = true, command = ["--load", "--serve"],
+      dependsOn    = [{ containerName = "load-graph", condition = "SUCCESS" }],
+      environment  = [{ name = "JAVA_TOOL_OPTIONS", value = "-Xms1g -Xmx3g" }],
+      mountPoints  = [{ sourceVolume = "otp-graph", containerPath = "/var/opentripplanner", readOnly = true }],
+      portMappings = [{ containerPort = 8080, protocol = "tcp" }],
       logConfiguration = { logDriver = "awslogs", options = {
         awslogs-group = aws_cloudwatch_log_group.otp[0].name, awslogs-region = var.aws_region, awslogs-stream-prefix = "serve"
       } }
@@ -275,16 +275,16 @@ resource "aws_cloudwatch_log_group" "otp_bridge" {
   retention_in_days = 30
 }
 resource "aws_iam_role" "otp_bridge" {
-  count              = var.enable_otp_route_service ? 1 : 0
-  name               = "${local.otp_service_name}-bridge"
+  count = var.enable_otp_route_service ? 1 : 0
+  name  = "${local.otp_service_name}-bridge"
   assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{
     Effect = "Allow", Principal = { Service = "lambda.amazonaws.com" }, Action = "sts:AssumeRole"
   }] })
 }
 resource "aws_iam_role_policy" "otp_bridge" {
-  count  = var.enable_otp_route_service ? 1 : 0
-  name   = "read-manifest-and-run-in-vpc"
-  role   = aws_iam_role.otp_bridge[0].id
+  count = var.enable_otp_route_service ? 1 : 0
+  name  = "read-manifest-and-run-in-vpc"
+  role  = aws_iam_role.otp_bridge[0].id
   policy = jsonencode({ Version = "2012-10-17", Statement = [
     { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "${aws_cloudwatch_log_group.otp_bridge[0].arn}:*" },
     { Effect = "Allow", Action = ["s3:GetObject"], Resource = "arn:aws:s3:::${local.otp_graph_bucket}/${local.otp_graph_manifest_key}" },
@@ -319,7 +319,7 @@ resource "aws_lambda_function" "otp_bridge" {
 
 output "otp_route_service" {
   description = "Pinned private OTP deployment; null while disabled."
-  value       = var.enable_otp_route_service ? {
+  value = var.enable_otp_route_service ? {
     graph_version = var.otp_graph_version
     graph_sha256  = var.otp_graph_sha256
     bridge_arn    = aws_lambda_function.otp_bridge[0].arn
