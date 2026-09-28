@@ -10,7 +10,7 @@ import type { Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { agentV2StructuredOutputSchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
-import { agentV2CandidateReferences, publicReplyField } from "@raiquora/agent/agent-v2-publication";
+import { agentV2CandidateReferences, agentV2ReplyReferences } from "@raiquora/agent/agent-v2-publication";
 import { placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, travelPeriodUpdateInputSchema, budgetConditionUpdateInputSchema,
   tripScenarioInputSchema, admitTripScenario, ConditionUpdateRejectedError, type ConversationConditionInput } from "@raiquora/agent/conversation-condition";
 import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
@@ -109,11 +109,7 @@ export class StrandsAgentEngine {
           // stays Application-owned and is bound to later reads through getEffectiveIntent.
           return jsonValue({ ok: true, status: "applied", receipt: accepted.receipt });
         } catch (error) {
-          if (error instanceof ConditionUpdateRejectedError) {
-            return jsonValue({ ok: false, status: "rejected", target: change.target,
-              error: { code: error.code, retryable: false }, currentConditionsUnchanged: true,
-              guidance: "この条件更新は採用されていない。現在の利用者発言に根拠がなければ、値やquoteを作り直して再試行せず、現在の条件と取得済みEvidenceで回答する。回答に不可欠な条件だけを利用者に確認する。" });
-          }
+          if (error instanceof ConditionUpdateRejectedError) throw error;
           // The SDK reports Tool errors. An uncertain write additionally closes reads
           // and publication; no recovery by reinterpreting or repairing the user input.
           intentUnavailable = true;
@@ -255,10 +251,15 @@ export function createStrandsReadTools(input: {
       if (execution.evidence.length) input.evidence.push(...execution.evidence.map((item) => structuredClone(item)));
       if (!execution.result.ok) return jsonValue({ ok: false, error: {
         code: execution.result.error.code, retryable: execution.result.error.retryable } });
-      return jsonValue({ ok: true, output: execution.result.output, evidenceIds: execution.evidence.map(({ id }) => id),
+      // Purpose Tools already completed their research pipeline. Raw discovery,
+      // page bodies and assessments duplicate the validated reply references and
+      // are internal research state, not additional model work to perform.
+      const output = ["explore_destination", "discover_destinations"].includes(descriptor.name)
+        ? { outcome: jsonObject(execution.result.output)?.outcome }
+        : execution.result.output;
+      return jsonValue({ ok: true, output, evidenceIds: execution.evidence.map(({ id }) => id),
         candidateReferences: agentV2CandidateReferences(execution.evidence, effectiveIntent),
-        replyReferences: execution.evidence.map((item) => ({ evidenceId: item.id,
-          fields: Object.fromEntries(Object.entries(item.facts).filter(([key]) => publicReplyField(key))) })) });
+        replyReferences: agentV2ReplyReferences(execution.evidence, effectiveIntent) });
     },
   }));
 }

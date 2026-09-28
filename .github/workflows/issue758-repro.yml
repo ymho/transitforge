@@ -44,4 +44,4 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/repro-env.json"
 
-# Verify actionable feedback after an Application condition rejection.
+# Verify compact purpose Tool results and publishable evidence references.
