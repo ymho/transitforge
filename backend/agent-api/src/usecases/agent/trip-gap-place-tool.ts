@@ -4,11 +4,13 @@ import type { ServerAgentToolBinding } from "./server-tools.js";
 import { externalTravelEvidence } from "@raiquora/agent/external-travel-evidence";
 import { stableContractHash } from "@raiquora/agent/output-contract";
 import { placeAtTripItemEdge } from "./trip-gap-search-location.js";
+import type { WeatherForecastProvider } from "../../ports/weather-provider.js";
+import { nearbyWeatherCandidateIds, tripGapWeather } from "./trip-gap-weather.js";
 
 /** Discovery-only: provider proximity is a ranking hint, so bound results locally when coordinates exist. */
-export function tripGapPlaceTool(trip: Trip, searchPlaces: AgentOperation): ServerAgentToolBinding {
+export function tripGapPlaceTool(trip: Trip, searchPlaces: AgentOperation, weather?: WeatherForecastProvider): ServerAgentToolBinding {
   return { descriptor: { name: "search_trip_gap_places",
-    description: "Tripの指定予定の後に立ち寄る観光施設等を探す。地点候補の発見のみ。イベント開催日・営業・次の予定への移動可能性は未検証で、Tripに採用しない。",
+    description: "Tripの指定予定の後に立ち寄る観光施設等を探す。日付と地域があるときは天気予報も確認し、雨なら距離の短い候補や屋内候補を検討する。屋内性・営業・次の予定への移動可能性は未検証。主目的地や確定済み予定を消さず、Tripに採用しない。",
     effect: "read", prerequisite: ["trusted_trip_scope"], requiredCapabilities: ["trip.read"],
     inputSchema: { type: "object", additionalProperties: false, required: ["anchorItemId", "query"], properties: {
       anchorItemId: { type: "string", minLength: 1, maxLength: 200 }, expectedRevision: { type: "integer", minimum: 0 },
@@ -38,7 +40,17 @@ export function tripGapPlaceTool(trip: Trip, searchPlaces: AgentOperation): Serv
         if (distanceMeters(center.coordinate!, { latitude: raw.latitude, longitude: raw.longitude }) > radiusMeters) { excludedOutOfRadius++; return false; }
         return true;
       }) } } : result;
+    const weatherResult = weather ? await tripGapWeather(trip, anchor, center.area ?? "", weather) : undefined;
+    const places = record(resultWithBounds) && record(resultWithBounds.data) && Array.isArray(resultWithBounds.data.places)
+      ? resultWithBounds.data.places : [];
+    const ranked = weatherResult?.weatherContext.rainRisk === "high" && center.coordinate
+      ? nearbyWeatherCandidateIds(places, center.coordinate, "providerPlaceId") : [];
     return { body: { ...providerResult.body, result: resultWithBounds,
+      ...(weatherResult ? { ...weatherResult,
+        weatherContext: { ...weatherResult.weatherContext,
+          ...(ranked.length ? { nearbyCandidateIds: ranked,
+            rankingBasis: "straight_line_distance_to_saved_anchor_only; indoor_status_and_travel_time_unverified",
+            forecastUsedForRanking: true } : {}) } } : {}),
       searchContext: { tripId: trip.id, sourceRevision: trip.revision, anchorItemId: anchor.id,
         ...(next ? { nextItemId: next.id, nextSchedule: next.schedule } : {}),
         center: { name: center.name, ...(center.area ? { area: center.area } : {}),
@@ -49,7 +61,8 @@ export function tripGapPlaceTool(trip: Trip, searchPlaces: AgentOperation): Serv
         coverage: "limited-provider-results-not-exhaustive", travelTimeVerified: false, openingHoursVerified: false,
         eventScheduleVerified: false, adopted: false } } };
   }, evidence: (output, context) => {
-    const provider = externalTravelEvidence(output, context);
+    const provider = [...externalTravelEvidence(record(output) ? { result: output.result } : output, context),
+      ...externalTravelEvidence(record(output) ? { forecast: output.forecast } : output, context)];
     if (!record(output) || !record(output.searchContext) || typeof output.searchContext.tripId !== "string" ||
         !Number.isSafeInteger(output.searchContext.sourceRevision) || typeof output.searchContext.anchorItemId !== "string") return provider;
     const scope = output.searchContext, hash = stableContractHash({ anchorItemId: scope.anchorItemId, queryFingerprint: context.queryFingerprint }).slice(0, 16);

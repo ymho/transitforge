@@ -74,3 +74,13 @@ it("distinguishes zero results in a limited successful search from a provider fa
     toolName: "search_trip_gap_restaurants", queryFingerprint: "shrine", retrievedAt: at }))
     .toEqual(expect.arrayContaining([expect.objectContaining({ facts: expect.objectContaining({ resultCoverage: "no_candidates_in_limited_response", returnedCandidateCount: 0 }) })]));
 });
+
+it("keeps dining candidates when the weather provider fails", async () => {
+  const tools = new AgentToolRegistry();
+  registerServerTools(tools, new ToolEvidenceRegistry(), [tripGapRestaurantTool(trip, async () => ({ body: { restaurants: {
+    status: "available", freshness: "fresh", evidence: [], data: { area: "出雲", restaurants: [{ providerRestaurantId: "r-1", name: "夕食候補" }] },
+  } } }), { search: async () => { throw new Error("network"); } })]);
+  expect(await tools.execute("search_trip_gap_restaurants", { anchorItemId: "shrine" }, { executionId: "turn" }))
+    .toMatchObject({ ok: true, output: { restaurants: { status: "available", data: { restaurants: [{ providerRestaurantId: "r-1" }] } },
+      weatherContext: { status: "unavailable", reason: "provider_failed", forecastUsedForRanking: false } } });
+});

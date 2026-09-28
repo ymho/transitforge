@@ -59,3 +59,36 @@ it("refuses stale, foreign or locationless anchors before a provider call", asyn
     .toMatchObject({ ok: false, error: { code: "precondition_missing" } });
   expect(calls).toBe(0);
 });
+
+it("compares nearer places on a valid rainy Trip date while preserving provider candidates and weather Evidence", async () => {
+  const checkedAt = new Date().toISOString(), validUntil = new Date(Date.now() + 3_600_000).toISOString();
+  const tools = new AgentToolRegistry(), evidence = new ToolEvidenceRegistry();
+  const original = structuredClone(trip);
+  registerServerTools(tools, evidence, [tripGapPlaceTool(trip, async () => ({ body: { result: {
+    status: "available", freshness: "fresh", evidence: [{ id: "place-1", kind: "place", provider: "mapbox",
+      sourceId: "place-1", retrievedAt: checkedAt, confidence: "observed" }], data: { places: [
+      { providerPlaceId: "far", latitude: 35.42, longitude: 132.7 },
+      { providerPlaceId: "near", latitude: 35.401, longitude: 132.7 },
+    ] },
+  } } }), { search: async query => {
+    expect(query).toEqual({ location: "出雲市", startDate: "2026-10-01", endDate: "2026-10-01" });
+    return { status: "available", freshness: "fresh", evidence: [{ id: "weather-1", kind: "weather", provider: "open-meteo",
+      sourceId: "city", retrievedAt: checkedAt, validUntil, confidence: "provider-forecast" }], data: {
+      locationName: "出雲市", latitude: 35.4, longitude: 132.7, timezone: "Asia/Tokyo", hourly: [], alertsAvailable: false,
+      daily: [{ date: "2026-10-01", maximumPrecipitationProbabilityPercent: 80,
+        precipitationMillimeters: 11, weatherCode: 61, minimumTemperatureCelsius: 15, maximumTemperatureCelsius: 22 }],
+    } };
+  } })]);
+  const response = await tools.execute("search_trip_gap_places", { anchorItemId: "shrine", query: "庭園" }, { executionId: "turn" });
+  expect(response).toMatchObject({ ok: true, output: {
+    result: { data: { places: [{ providerPlaceId: "far" }, { providerPlaceId: "near" }] } },
+    weatherContext: { status: "forecast", rainRisk: "high", nearbyCandidateIds: ["near", "far"],
+      forecastUsedForRanking: true, adopted: false },
+  } });
+  if (!response.ok) throw new Error("unexpected search failure");
+  const citations = evidence.collect("search_trip_gap_places", response.output, { executionId: "turn", toolCallId: "rain",
+    toolName: "search_trip_gap_places", queryFingerprint: "shrine-rain", retrievedAt: checkedAt });
+  expect(citations.some(item => item.facts.provider === "mapbox")).toBe(true);
+  expect(citations.some(item => item.facts.provider === "open-meteo")).toBe(true);
+  expect(trip).toEqual(original);
+});

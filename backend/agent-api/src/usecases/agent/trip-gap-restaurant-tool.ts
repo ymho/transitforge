@@ -5,14 +5,16 @@ import { externalTravelEvidence } from "@raiquora/agent/external-travel-evidence
 import { stableContractHash } from "@raiquora/agent/output-contract";
 import type { RestaurantRequirements } from "@raiquora/trip/restaurant-search";
 import { placeAtTripItemEdge } from "./trip-gap-search-location.js";
+import type { WeatherForecastProvider } from "../../ports/weather-provider.js";
+import { nearbyWeatherCandidateIds, tripGapWeather } from "./trip-gap-weather.js";
 
 const requirementKeys = ["lunch", "lateNight", "childFriendly", "nonSmoking", "barrierFree", "parking", "privateRoom", "cardAccepted"] as const;
 
 /** A per-turn, authenticated Trip binding. Neither an arbitrary tripId nor a model-supplied search center is accepted. */
-export function tripGapRestaurantTool(trip: Trip, searchRestaurants: AgentOperation): ServerAgentToolBinding {
+export function tripGapRestaurantTool(trip: Trip, searchRestaurants: AgentOperation, weather?: WeatherForecastProvider): ServerAgentToolBinding {
   return {
     descriptor: { name: "search_trip_gap_restaurants",
-      description: "Tripの指定予定の直後に入れる飲食店候補を、保存済みの地点を起点に探す。次の予定も返すが、距離・所要時間・営業時間の適合は未検証。検索のみでTripは変更しない。",
+      description: "Tripの指定予定の直後に入れる飲食店候補を保存済み地点から探す。日付・地域があれば天気予報を添え、雨なら近い店を検討する。距離・所要時間・営業時間の適合は未検証。検索のみでTripは変更しない。",
       effect: "read", prerequisite: ["trusted_trip_scope"], requiredCapabilities: ["trip.read"],
       inputSchema: { type: "object", additionalProperties: false, required: ["anchorItemId"], properties: {
         anchorItemId: { type: "string", minLength: 1, maxLength: 200 }, expectedRevision: { type: "integer", minimum: 0 },
@@ -40,7 +42,14 @@ export function tripGapRestaurantTool(trip: Trip, searchRestaurants: AgentOperat
       const candidates = record(resultSet) && resultSet.status === "available" && record(resultSet.data) && Array.isArray(resultSet.data.restaurants)
         ? resultSet.data.restaurants : undefined;
       const candidateCount = candidates?.length;
-      return { body: { ...result.body, searchContext: { tripId: trip.id, sourceRevision: trip.revision, anchorItemId: anchor.id,
+      const weatherResult = weather ? await tripGapWeather(trip, anchor, center.area ?? "", weather) : undefined;
+      const ranked = weatherResult?.weatherContext.rainRisk === "high" && center.coordinate && candidates
+        ? nearbyWeatherCandidateIds(candidates, center.coordinate, "providerRestaurantId") : [];
+      return { body: { ...result.body, ...(weatherResult ? { ...weatherResult,
+        weatherContext: { ...weatherResult.weatherContext,
+          ...(ranked.length ? { nearbyCandidateIds: ranked,
+            rankingBasis: "straight_line_distance_to_saved_anchor_only; indoor_status_and_travel_time_unverified",
+            forecastUsedForRanking: true } : {}) } } : {}), searchContext: { tripId: trip.id, sourceRevision: trip.revision, anchorItemId: anchor.id,
         ...(next ? { nextItemId: next.id, nextSchedule: next.schedule } : {}),
         center: { name: center.name, ...(center.area ? { area: center.area } : {}),
           ...(center.coordinate ? { coordinate: center.coordinate } : {}), source: center.sources.length ? "retained-provider-snapshot" : "unverified-manual-snapshot" },
@@ -50,7 +59,8 @@ export function tripGapRestaurantTool(trip: Trip, searchRestaurants: AgentOperat
         ...(candidateCount === undefined ? {} : { returnedCandidateCount: candidateCount }) } } };
     },
     evidence: (output, context) => {
-      const providerEvidence = externalTravelEvidence(output, context);
+      const providerEvidence = [...externalTravelEvidence(record(output) ? { restaurants: output.restaurants } : output, context),
+        ...externalTravelEvidence(record(output) ? { forecast: output.forecast } : output, context)];
       if (!record(output) || !record(output.searchContext) || typeof output.searchContext.tripId !== "string" ||
           !Number.isSafeInteger(output.searchContext.sourceRevision) || typeof output.searchContext.anchorItemId !== "string") return providerEvidence;
       const scope = output.searchContext, hash = stableContractHash({ anchorItemId: scope.anchorItemId, nextItemId: scope.nextItemId }).slice(0, 16);

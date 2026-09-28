@@ -114,6 +114,7 @@ TypeScriptのテストは対象モジュールの隣へ置く。repository保守
 
 旅行機能の設計は [Trip V2契約](docs/architecture/trip-lifecycle.md)を参照する。Tripは会話と独立した
 Server V2 resourceであり、Browserにlegacy TravelPlan/TripPlanのwriterやmigration原本は残さない。
+[Trip天候候補と局所変更](docs/architecture/trip-weather-replanning.md)は、候補検索へ予報の対象日・鮮度・Evidenceを結び付け、検索とTripへの採用を分離する。
 [相対時間・日別投影・旅行構造・負荷契約](docs/architecture/trip-time-structure-workload.md)は、日付未定の意図を
 Tripへ保持しつつ、日別表示と負荷を`Trip.items`からrevision-boundに導出する。
 [費用・成立性・複数案・再計画の契約](docs/architecture/plan-variants-feasibility-and-replan.md)は、請求明細、
