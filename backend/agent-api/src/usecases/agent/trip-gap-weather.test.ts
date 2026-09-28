@@ -54,3 +54,17 @@ it("does not call weather without an exact trip date or saved area", async () =>
     .toMatchObject({ status: "unconfirmed", reason: "trip_date_or_area_missing" });
   expect(calls).toBe(0);
 });
+
+it("rechecks a changed Trip day instead of reusing the previous day's observation", async () => {
+  const requests: string[] = [];
+  const provider: WeatherForecastProvider = { search: async ({ startDate }) => {
+    requests.push(startDate!);
+    return { status: "available", freshness: "fresh", evidence, data: { ...forecast,
+      daily: [{ ...forecast.daily[0]!, date: startDate! }] } };
+  } };
+  const changed = { ...trip, revision: 1, items: [{ ...anchor, schedule: { type: "day" as const, date: "2026-10-02" } }] };
+  await tripGapWeather(trip, anchor, "出雲市", provider, now);
+  const result = await tripGapWeather(changed, changed.items[0]!, "出雲市", provider, now);
+  expect(requests).toEqual(["2026-10-01", "2026-10-02"]);
+  expect(result.weatherContext).toMatchObject({ targetDate: "2026-10-02", sourceRevision: 1 });
+});
