@@ -1,3 +1,4 @@
+import { createTrip } from "@raiquora/trip/trip";
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { BedrockModel, Model, type BaseModelConfig, type Message, type ModelStreamEvent } from "@strands-agents/sdk";
@@ -7,7 +8,7 @@ import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
 import { successfulAgentToolResult, validAgentToolInput } from "@raiquora/agent/tool-contract";
 import { StrandsAgentEngine } from "../adapters/strands-agent-engine.js";
 import { createProductionServerAgent } from "../production-server-agent-composition.js";
-import { stateDynamoFixture, conversationId } from "../adapters/state-dynamodb.fixture.js";
+import { stateDynamoFixture, conversationId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, token } from "../adapters/cognito-token.fixture.js";
 import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
@@ -89,6 +90,8 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
     isolated.stateClient = state.client; isolated.tripClient = trips.client;
     const { verifier } = cognitoTokenFixture();
     const principal = await verifier.verify(token());
+    trips.seed(createTrip(stateMetadata().tripId, "再現用の旅", "2026-09-28T00:00:00Z"), principal.subject);
+    await state.conversations.create(principal, conversationId, stateMetadata());
 
     const streamOriginal = BedrockModel.prototype.stream;
     let modelRound = 0;
@@ -155,7 +158,7 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
       let result: Awaited<ReturnType<typeof app.runConversationTurn>> | undefined;
       const started = Date.now();
       try { result = await app.runConversationTurn(input); }
-      catch { console.log(JSON.stringify({ event: "production-repro-result", status: "failed", durationMs: Date.now() - started })); }
+      catch (error) { console.log(JSON.stringify({ event: "production-repro-result", status: "failed", code: safeReproCode((error as any)?.code), durationMs: Date.now() - started })); }
       const working = await new DynamoDbConversationTurnRepository("test-state", state.client).getWorkingState(principal, conversationId);
       console.log(JSON.stringify({ event: "production-repro-final", status: result?.status ?? "failed",
         cards: result?.publicPlacePresentation?.cards.length ?? 0,
