@@ -82,8 +82,8 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
         if (trip) {
           registerTripReadTools(tools, evidence, trip);
           registerTripSearchContextTool(tools, evidence, trip);
-          if (options.searchTripRestaurants) registerServerTools(tools, evidence, [tripGapRestaurantTool(trip, options.searchTripRestaurants)]);
-          if (options.searchTripPlaces) registerServerTools(tools, evidence, [tripGapPlaceTool(trip, options.searchTripPlaces)]);
+          if (options.searchTripRestaurants) registerServerTools(tools, evidence, [tripGapRestaurantTool(trip, options.searchTripRestaurants, options.weather)]);
+          if (options.searchTripPlaces) registerServerTools(tools, evidence, [tripGapPlaceTool(trip, options.searchTripPlaces, options.weather)]);
           if (options.tripGroundRoutes) registerServerTools(tools, evidence, [tripGapGroundRouteTool(trip, options.tripGroundRoutes, options.onGroundRouteEvidence)]);
           registerRequestProposalTool(tools, trip, proposal => { tripUpdateProposal = proposal; });
           registerTripItemProposalTool(tools, trip, proposal => { tripUpdateProposal = proposal; });
