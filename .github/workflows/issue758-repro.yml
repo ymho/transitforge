@@ -39,7 +39,7 @@ jobs:
         env:
           AGENT_V2_PRODUCTION_REPRO: 'true'
           REPRO_ENV_PATH: ${{ runner.temp }}/repro-env.json
-        run: npx vitest run backend/agent-api/src/composition/strands-production-repro-live.test.ts --reporter=verbose -t "measures the cumulative"
+        run: npx vitest run backend/agent-api/src/composition/strands-production-repro-live.test.ts --reporter=verbose
       - name: Verify real model conversation and date-condition regressions
         if: ${{ !cancelled() }}
         env:

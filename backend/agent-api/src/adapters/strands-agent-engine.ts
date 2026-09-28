@@ -27,6 +27,8 @@ export interface StrandsAgentEngineOptions {
   maxOutputTokens?: number;
   maxInvocationOutputTokens?: number;
   toolTimeoutMs?: number;
+  /** Explicit Nova configuration selected by the composition root. */
+  novaReasoningEffort?: "low";
 }
 export interface StrandsAgentRunInput {
   executionId: string;
@@ -154,9 +156,9 @@ export class StrandsAgentEngine {
     }
     const baseModel = this.model ?? new BedrockModel({ modelId: this.options.modelId, region: this.options.region,
       maxTokens: this.options.maxOutputTokens ?? 2_048, temperature: 0, stream: false,
-      // Verified production model configuration; do not send Nova-only fields to other models.
-      ...(this.options.modelId === "jp.amazon.nova-2-lite-v1:0" ? {
-        additionalRequestFields: { reasoningConfig: { type: "enabled", maxReasoningEffort: "low" } },
+      // Provider configuration is explicit; isolated engines keep their existing budgets/configuration.
+      ...(this.options.novaReasoningEffort ? {
+        additionalRequestFields: { reasoningConfig: { type: "enabled", maxReasoningEffort: this.options.novaReasoningEffort } },
       } : {}) });
     const agent = this.createAgent({
       model: baseModel,
@@ -207,8 +209,6 @@ export class StrandsAgentEngine {
         } } : {}),
       };
     } catch (error) {
-      console.log(JSON.stringify({ event: "synthetic-engine-error", name: error instanceof Error ? error.name : "unknown",
-        message: error instanceof Error ? error.message.slice(0, 900) : "unknown" }));
       trace.taskCompleted("failed", Date.now() - startedAt, error instanceof Error ? error.name : "unknown_error");
       if (error instanceof ServerAgentRuntimeExecutionError) throw error;
       if (error instanceof StructuredOutputError) throw new ServerAgentRuntimeExecutionError("runtime_projection", "validation");
