@@ -35,6 +35,18 @@ vi.mock("./production-conversation-agent.js", async (importOriginal) => {
   } };
 });
 
+vi.mock("../adapters/strands-server-runtime.js", async importOriginal => {
+  const actual = await importOriginal<typeof import("../adapters/strands-server-runtime.js")>();
+  return { ...actual, createStrandsServerRuntime: (...args: Parameters<typeof actual.createStrandsServerRuntime>) => {
+    const runtime = actual.createStrandsServerRuntime(...args);
+    return async (...input: Parameters<typeof runtime>) => {
+      const result = await runtime(...input);
+      console.log(JSON.stringify({ event: "repro-publication", status: result.status, error: result.publicationError }));
+      return result;
+    };
+  } };
+});
+
 class MeteredModel extends Model<BaseModelConfig> {
   calls = 0;
   private config: BaseModelConfig = { modelId: "synthetic-metered-output" };
@@ -80,7 +92,7 @@ const enabled = process.env.AGENT_V2_PRODUCTION_REPRO === "true";
 const allowedStops = new Set(["endTurn", "toolUse", "stopSequence", "limitTurns", "limitTotalTokens", "limitOutputTokens", "maxTokens", "modelContextWindowExceeded", "cancelled"]);
 
 describe.skipIf(!enabled)("one production-composed first turn with real Bedrock and travel Providers", () => {
-  it("accepts the destination and publishes a useful first response without greeting or card hints", async () => {
+  it.each(["出雲大社にいきたい", "出雲大社へ行ってみたい。魅力と近くの立ち寄り先を教えてください。"])("completes a real destination request: %s", async userRequest => {
     const path = process.env.REPRO_ENV_PATH;
     if (!path) throw new Error("Explicit allowlisted environment file is required");
     const environment: Record<string, string | undefined> = JSON.parse(readFileSync(path, "utf8"));
@@ -156,7 +168,7 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
     });
     try {
       const app = createProductionServerAgent("production-repro-synthetic-execution", environment);
-      const input = { principal, conversationId, turnId: "73400000-0000-4000-8000-000000000001", userRequest: "出雲大社にいきたい" };
+      const input = { principal, conversationId, turnId: "73400000-0000-4000-8000-000000000001", userRequest };
       let result: Awaited<ReturnType<typeof app.runConversationTurn>> | undefined;
       const started = Date.now();
       try { result = await app.runConversationTurn(input); }
