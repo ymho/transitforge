@@ -16,12 +16,13 @@ export interface CandidateRetentionScope {
   tripId: string;
   baseTripRevision: number;
 }
+export const draftItineraryToolName = "draft_itinerary" as const;
 
 /** Registers the canonical proposal Tool. Published output is attached only after the Runtime completes. */
 export function registerPlanCandidateRetentionTool(tools: AgentToolRegistry, application: PlanCandidateRetentionApplication,
   scope: CandidateRetentionScope, publish: (value: RetainedCandidatePlan) => void): void {
-  tools.register<unknown, unknown>({ name: "propose_itinerary_candidate_set", effect: "proposal",
-    description: "旅行全体の複数案をtyped candidateとして提示する。候補ID・Trip/revision・期限はServerが発行し、保存は利用者確認後に別経路で行う。",
+  tools.register<unknown, unknown>({ name: draftItineraryToolName, effect: "proposal", requiredCapabilities: ["agent-v2-proposal"],
+    description: "現在のTripと会話で既知の条件から、1件以上の仮旅程をtyped candidateとして作る。未確認の移動時刻・料金・営業・宿泊を事実として補わずunknownsへ残す。候補ID・Trip/revision・期限はServerが発行し、Tripへの採用・保存は利用者確認後の別操作で行う。",
     inputSchema: candidateProposalInputSchema,
     outputSchema: { type: "object", properties: { candidateSetId: { type: "string" }, revision: { type: "integer" }, presentationId: { type: "string" }, saved: { type: "boolean" }, confirmationRequired: { type: "boolean" } },
       required: ["candidateSetId", "revision", "presentationId", "saved", "confirmationRequired"], additionalProperties: false },

@@ -37,8 +37,10 @@ describe("canonical candidate retention", () => {
     const tools = new AgentToolRegistry(); const scope = { principal, executionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", conversationId: "conversation-1", userRequest: "旅程", tripId, baseTripRevision: 4 };
     registerPlanCandidateRetentionTool(tools, new PlanCandidateRetentionApplication(repository, () => new Date("2026-09-23T12:00:00Z")), scope,
       (value) => { published = value.presentation; });
+    expect(tools.descriptors()).toEqual(expect.arrayContaining([expect.objectContaining({ name: "draft_itinerary", effect: "proposal",
+      requiredCapabilities: ["agent-v2-proposal"] })]));
     const safeDraft = { ...draft, variants: draft.variants.map((variant) => ({ ...variant, items: variant.items.map((item) => ({ ...item, evidenceRefs: [] })) })) };
-    const result = await tools.execute("propose_itinerary_candidate_set", { draft: safeDraft, presentation: { ...presentation(), evidenceRefs: [],
+    const result = await tools.execute("draft_itinerary", { draft: safeDraft, presentation: { ...presentation(), evidenceRefs: [],
       statements: [], candidates: presentation().candidates.map((candidate) => ({ ...candidate, items: candidate.items.map((item) => ({ ...item, evidenceRefs: [] })) })) } }, { executionId: scope.executionId });
     expect(result).toMatchObject({ ok: true, output: { candidateSetId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", revision: 0, saved: false, confirmationRequired: true } });
     expect(published?.candidateSetRef).toMatchObject({ kind: "candidate-set-ref", candidateSetId: saved!.id });

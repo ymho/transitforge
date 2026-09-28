@@ -162,9 +162,14 @@ function placeCard(evidence: Evidence, effective?: EffectiveIntent): PublicPlace
   const title = boundedText(facts.sourceTitle).trim(), raw = boundedText(facts.sourceExcerpt).trim();
   // A bounded source excerpt, not a generated description or a full fetched page.
   const description = raw.slice(0, 400).trimEnd();
+  const photo = typeof facts.imageUrl === "string" && typeof facts.imageSourceUrl === "string" &&
+    typeof facts.imageAttribution === "string" && facts.imageAttribution.trim()
+    ? { url: facts.imageUrl, sourceUrl: facts.imageSourceUrl, attribution: facts.imageAttribution,
+      ...(typeof facts.imageLicense === "string" && facts.imageLicense.trim() ? { license: facts.imageLicense } : {}) }
+    : undefined;
   try {
     return parsePublicPlacePresentation({ version: publicPlacePresentationVersion, cards: [{
-      evidenceId: evidence.id, placeRef: observation.subjectKey, title, description, sourceUrl,
+      evidenceId: evidence.id, placeRef: observation.subjectKey, title, description, sourceUrl, ...(photo ? { photo } : {}),
     }] }).cards[0]!;
   } catch { throw new AgentV2ReplyError("invalid_field"); }
 }

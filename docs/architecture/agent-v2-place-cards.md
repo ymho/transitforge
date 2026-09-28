@@ -7,7 +7,7 @@
 代表readは既存の`search_place_media`。写真の取得成功を前提にせず、`externalTravelEvidence`が作る解決済み場所の`place_description`だけを候補カードへ使う。
 モデルは`SDK structured output`の`kind=candidates`でEvidence IDの順序と根拠付きcommentaryを選ぶ。場所名、説明、出典URLはApplicationがEvidenceから投影し、モデルのカードpayloadを受け取らない。
 
-`PublicPlacePresentation`はConversationへ保存する表示snapshotであり、Trip、旅程、採用候補セット、第二の永続候補ストアではない。写真、価格、空室、営業状態、保存・予約の結果はこの型へ入れない。
+`PublicPlacePresentation`はConversationへ保存する表示snapshotであり、Trip、旅程、採用候補セット、第二の永続候補ストアではない。#755以降は、同じEvidenceへ束縛されたHTTPS画像・写真ページ・attribution・任意licenseだけを任意の`photo`として含める。価格、空室、営業状態、保存・予約の結果はこの型へ入れない。
 
 ```text
 Strands → 必要ならupdate_intent / A commit
@@ -25,7 +25,7 @@ Strands → 必要ならupdate_intent / A commit
 - 候補数や旅先ごとの固定応答は設けない。8件は公開payloadの上限であり、必ずその件数を作るという指示ではない。
 - 候補がない場合は空の架空カードを埋めず、既存の確認・不確実性回答を選ぶ。
 - replayは保存時点の表示snapshotを返す。履歴のカードを、新しい条件に対する最新検索結果へ自動昇格しない。
-- writer、旅程表示、写真表示、候補番号からの採用操作は後続sliceであり、本契約はそれらを許可しない。
+- writer、旅程表示、候補番号からの採用操作は別sliceであり、本契約はそれらを許可しない。写真表示は#755でEvidence-boundな任意fieldとして追加され、写真なし候補との互換を維持する。
 
 ## 検証
 

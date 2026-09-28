@@ -8,10 +8,11 @@ import { resolveAssistantMessage } from "./ai-guide-panel";
 import { consumeAgentStream } from "../../adapters/http/agent-stream/consumer";
 import { HttpServerConversationClient } from "../../adapters/http/server-conversation-client";
 
-function presentation() {
+function presentation(photo = false) {
   return parsePublicPlacePresentation({ version: "public-place-presentation-v1", cards: [{ evidenceId: "evidence:garden",
     placeRef: "place:fixture:garden", title: "青葉庭園", description: "池の周囲を歩けます。\n資料で紹介されている庭園です。",
-    sourceUrl: "https://example.org/garden" }] });
+    sourceUrl: "https://example.org/garden", ...(photo ? { photo: { url: "https://images.example.org/garden.jpg",
+      sourceUrl: "https://photos.example.org/garden", attribution: "Example", license: "CC BY" } } : {}) }] });
 }
 function stream(event: unknown): Response {
   return new Response(`event: agent\ndata: ${JSON.stringify({ v: 1, runId: "cards-test", seq: 1, event })}\n\nevent: done\ndata: ${JSON.stringify({ v: 1, runId: "cards-test", seq: 2 })}\n\n`,
@@ -52,6 +53,17 @@ describe("public place presentation view", () => {
     expect(root.querySelectorAll("script, img")).toHaveLength(0);
     expect(root.querySelector("h3")?.textContent).toBe(value.cards[0]!.title);
     expect(root.querySelector("blockquote")?.textContent).toBe(value.cards[0]!.description);
+  });
+  it("shows a lazy, attributed and source-linked photo when Application admitted one", () => {
+    const root = renderPublicPlacePresentation(presentation(true));
+    const image = root.querySelector("img")!;
+    expect(image.src).toBe("https://images.example.org/garden.jpg");
+    expect(image.alt).toBe("青葉庭園の写真");
+    expect(image.loading).toBe("lazy");
+    expect(image.referrerPolicy).toBe("no-referrer");
+    const credit = root.querySelector<HTMLAnchorElement>("figure a")!;
+    expect(credit.href).toBe("https://photos.example.org/garden");
+    expect(credit.textContent).toBe("写真: Example (CC BY)");
   });
   it("renders the same candidate snapshot from final SSE and restored history without duplicating the card", async () => {
     const cards = presentation();

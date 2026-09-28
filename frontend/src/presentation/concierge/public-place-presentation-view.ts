@@ -11,6 +11,26 @@ export function renderPublicPlacePresentation(input: PublicPlacePresentation): H
   for (const place of value.cards) {
     const card = document.createElement("article");
     card.className = "public-place-card";
+    if (place.photo) {
+      const figure = document.createElement("figure");
+      figure.className = "public-place-photo";
+      const image = document.createElement("img");
+      image.src = place.photo.url;
+      image.alt = `${place.title}の写真`;
+      image.loading = "lazy";
+      image.decoding = "async";
+      image.referrerPolicy = "no-referrer";
+      const caption = document.createElement("figcaption");
+      const credit = document.createElement("a");
+      credit.href = place.photo.sourceUrl;
+      credit.target = "_blank";
+      credit.rel = "noopener noreferrer";
+      credit.textContent = `写真: ${place.photo.attribution}${place.photo.license ? ` (${place.photo.license})` : ""}`;
+      credit.setAttribute("aria-label", `${place.title}の写真の出典を開く`);
+      caption.append(credit);
+      figure.append(image, caption);
+      card.append(figure);
+    }
     const header = document.createElement("header");
     const title = document.createElement("h3");
     title.textContent = place.title;

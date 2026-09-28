@@ -9,10 +9,13 @@ import { parsePublicPlacePresentation } from "./public-place-presentation";
 const intent: EffectiveIntent = { version: 1, base: { source: "none", fingerprint: "base" }, intentRevision: 1,
   activeBaseFacts: [], actualConversationFacts: [], profileHints: [], ignoredProfileSettings: [], hypotheticalFacts: [],
   retractions: [], suppressedBaseRefs: [], profileSuppressions: [], fingerprint: "intent-1" };
-function place(id = "garden", title = "庭園", description = "池の周囲を歩いて見学する庭園です。"): Evidence {
+function place(id = "garden", title = "庭園", description = "池の周囲を歩いて見学する庭園です。", photo = false): Evidence {
   const sourceUrl = `https://example.org/places/${id}`;
   const [evidence] = externalTravelEvidence({ result: { status: "available", freshness: "fresh",
-    data: { places: [{ providerPlaceId: id, name: title, summary: description, sourceUrl }] },
+    data: { places: [{ providerPlaceId: id, name: title, summary: description, sourceUrl, ...(photo ? { image: {
+      url: `https://images.example.org/${id}.jpg`, descriptionUrl: `https://photos.example.org/${id}`,
+      attribution: "Example photographer", license: "CC BY", hotlinkAllowed: true,
+    } } : {}) }] },
     evidence: [{ id: `provider:${id}`, provider: "fixture", sourceUrl, retrievedAt: "2026-09-26T10:00:00Z" }],
   } }, { executionId: "v2-cards", toolCallId: id, toolName: "search_place_media", queryFingerprint: id,
     retrievedAt: "2026-09-26T10:00:00Z" });
@@ -41,6 +44,15 @@ describe("V2 place candidate publication", () => {
     const garden = place(), museum = place("museum", "美術館");
     expect(submit([garden, museum], [museum.id, garden.id]).publicPlacePresentation?.cards.map(({ title }) => title)).toEqual(["美術館", "庭園"]);
     expect(submit([garden, museum], [museum.id]).publicPlacePresentation?.cards).toHaveLength(1);
+  });
+  it("projects only an Evidence-bound attributed photo and keeps it out of model-authored card data", () => {
+    const evidence = place("garden", "庭園", "池の周囲を歩けます。", true);
+    expect(submit([evidence]).publicPlacePresentation?.cards[0]?.photo).toEqual({
+      url: "https://images.example.org/garden.jpg", sourceUrl: "https://photos.example.org/garden",
+      attribution: "Example photographer", license: "CC BY",
+    });
+    evidence.facts.imageUrl = "javascript:alert(1)";
+    expect(() => submit([evidence])).toThrow();
   });
   it("binds a bounded excerpt and not the full source text into a card", () => {
     const evidence = place("garden", "庭園", "資料の説明です。".repeat(100));

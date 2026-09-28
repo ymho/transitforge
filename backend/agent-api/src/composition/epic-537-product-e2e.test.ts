@@ -32,7 +32,7 @@ it("traces production input → decision → search/Evidence → presentation �
     requests.push(structuredClone(request));
     const call = requests.length;
     if (call === 1) return { message: { role: "assistant", content: [{ toolUse: { toolUseId: "discovery-1", name: "search_eval_candidates", input: { perspectives: ["area", "rain", "car-free"] } } }] }, stopReason: "tool_use", metadata: { modelId: "synthetic", latencyMs: 1 } };
-    if (call === 2) return { message: { role: "assistant", content: [{ toolUse: { toolUseId: "candidate-1", name: "propose_itinerary_candidate_set", input: candidateToolInput() } }] }, stopReason: "tool_use", metadata: { modelId: "synthetic", latencyMs: 1 } };
+    if (call === 2) return { message: { role: "assistant", content: [{ toolUse: { toolUseId: "candidate-1", name: "draft_itinerary", input: candidateToolInput() } }] }, stopReason: "tool_use", metadata: { modelId: "synthetic", latencyMs: 1 } };
     const statement = "外部情報は未確認、または鮮度を確認できていません。移動の成立・空き状況・天気や警報に問題がないとは判断できません。必要な情報を追加確認してください。";
     const claim = { id: "fact-0", statement, kind: "fact", evidenceIds: ["eval-evidence-1"], bindings: [{ evidenceId: "eval-evidence-1", fieldPath: "facts.candidateCount",
       subjectRef: "eval-candidates", applicabilityScope: executionId, transform: "deterministic_calculation" }] };
