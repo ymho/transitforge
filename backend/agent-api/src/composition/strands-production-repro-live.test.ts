@@ -193,3 +193,26 @@ function summarizeReproOutput(value: any): unknown {
     replyReferences: value.replyReferences?.map((ref: any) => Object.keys(ref.fields ?? {})),
     output: value.output ? summarizeReproOutput(value.output) : undefined };
 }
+
+it.skipIf(!enabled)("diagnoses one provider request without invoking a model", async () => {
+  const environment = JSON.parse(readFileSync(process.env.REPRO_ENV_PATH!, "utf8"));
+  const { AwsSecretsManagerClient } = await import("../adapters/aws-sdk-clients.js");
+  const { SecretsManagerBraveSearchCredentials } = await import("../adapters/secrets-manager-brave-search-credentials.js");
+  const { BraveWebSearchProvider } = await import("../adapters/brave-web-search-provider.js");
+  const credentials = new SecretsManagerBraveSearchCredentials(new AwsSecretsManagerClient(), environment.AGENT_PROVIDER_SECRET_ARN);
+  const loaded = await credentials.load();
+  console.log(JSON.stringify({ event: "repro-search-credentials", configured: Boolean(loaded?.apiKey) }));
+  const provider = new BraveWebSearchProvider({ fetch: async (url, init) => {
+    const response = await fetch(url, init);
+    let body: any; try { body = await response.clone().json(); } catch {}
+    console.log(JSON.stringify({ event: "repro-search-http", status: response.status,
+      code: typeof body?.error?.code === "string" ? body.error.code : null,
+      type: typeof body?.type === "string" ? body.type : null,
+      locations: body?.error?.meta?.errors?.map((error: any) => error.loc),
+      resultCount: body?.web?.results?.length ?? 0 }));
+    return response;
+  } }, { load: async () => loaded });
+  const result = await provider.search({ query: "出雲大社 魅力 周辺 観光", limit: 5 });
+  console.log(JSON.stringify({ event: "repro-search-result", status: result.status,
+    error: (result as any).error?.code, failure: (result as any).failure?.code, count: result.data?.results.length ?? 0 }));
+}, 30000);
