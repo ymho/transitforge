@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { Model, type BaseModelConfig, type Message, type ModelStreamEvent } from "@strands-agents/sdk";
+import { BedrockModel, Model, type BaseModelConfig, type Message, type ModelStreamEvent } from "@strands-agents/sdk";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
@@ -89,6 +89,34 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
     isolated.stateClient = state.client; isolated.tripClient = trips.client;
     const { verifier } = cognitoTokenFixture();
     const principal = await verifier.verify(token());
+
+    const streamOriginal = BedrockModel.prototype.stream;
+    let modelRound = 0;
+    const streamObserver = vi.spyOn(BedrockModel.prototype, "stream").mockImplementation(async function* (this: BedrockModel, ...args) {
+      const messages = JSON.parse(JSON.stringify(args[0]));
+      const last = messages.at(-1);
+      console.log(JSON.stringify({ event: "repro-model-input", round: ++modelRound,
+        messageCount: messages.length, messageBytes: JSON.stringify(messages).length,
+        lastResults: (last?.content ?? []).filter((block: any) => block.toolResult).map((block: any) => {
+          const result = block.toolResult;
+          return { status: result.status, content: (result.content ?? []).map((part: any) => {
+            let value = part.json;
+            if (!value && typeof part.text === "string") { try { value = JSON.parse(part.text); } catch {} }
+            return value ? summarizeReproOutput(value) : { unparsedText: typeof part.text === "string",
+              textLength: part.text?.length ?? 0, validationError: /validation|invalid|rejected/i.test(part.text ?? "") };
+          }) };
+        }) }));
+      yield* streamOriginal.apply(this, args);
+    });
+    const executeOriginal = AgentToolExecutor.prototype.execute;
+    const executeObserver = vi.spyOn(AgentToolExecutor.prototype, "execute").mockImplementation(async function (this: AgentToolExecutor, ...args) {
+      const result = await executeOriginal.apply(this, args);
+      console.log(JSON.stringify({ event: "repro-tool-result", tool: args[0].toolName,
+        inputKeys: Object.keys(args[0].toolInput), ok: result.result.ok,
+        output: result.result.ok ? summarizeReproOutput(result.result.output) : { error: result.result.error.code },
+        evidenceCount: result.evidence.length, facts: result.evidence.map(item => Object.keys(item.facts)) }));
+      return result;
+    });
     const original = StrandsAgentEngine.prototype.run;
     let engineCalls = 0;
     const observer = vi.spyOn(StrandsAgentEngine.prototype, "run").mockImplementation(async function (this: StrandsAgentEngine, input) {
@@ -97,6 +125,22 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
         model: environment.MODEL_ID, limits: input.limits,
         tools: input.tools.descriptors().map(({ name }) => name),
         initialIntentRevision: input.effectiveIntent?.intentRevision ?? null }));
+
+      if (input.conditionController) {
+        const applyOriginal = input.conditionController.apply;
+        input = { ...input, conditionController: { ...input.conditionController, apply: async change => {
+          try {
+            const accepted = await applyOriginal(change);
+            console.log(JSON.stringify({ event: "repro-condition", target: change.target, accepted: true }));
+            return accepted;
+          } catch (error) {
+            console.log(JSON.stringify({ event: "repro-condition", target: change.target, accepted: false,
+              errorName: error instanceof Error ? error.name : "unknown",
+              code: safeReproCode((error as any)?.code), quoteMatches: input.userRequest.includes(change.quote) }));
+            throw error;
+          }
+        } } };
+      }
       const result = await original.call(this, input);
       console.log(JSON.stringify({ event: "production-repro-engine", stopReason: allowedStops.has(result.stopReason) ? result.stopReason : "other",
         limitReason: result.limitReason ?? null, metrics: result.metrics ?? null,
@@ -107,7 +151,7 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
     });
     try {
       const app = createProductionServerAgent("production-repro-synthetic-execution", environment);
-      const input = { principal, conversationId, turnId: "73400000-0000-4000-8000-000000000001", userRequest: "出雲大社に行きたい" };
+      const input = { principal, conversationId, turnId: "73400000-0000-4000-8000-000000000001", userRequest: "出雲大社へ行ってみたい。魅力と近くの立ち寄り先を教えてください。" };
       let result: Awaited<ReturnType<typeof app.runConversationTurn>> | undefined;
       const started = Date.now();
       try { result = await app.runConversationTurn(input); }
@@ -125,6 +169,24 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
         expect((await app.runConversationTurn(input)).status).toBe(result.status);
         expect(engineCalls).toBe(before);
       }
-    } finally { observer.mockRestore(); isolated.stateClient = undefined; isolated.tripClient = undefined; }
+    } finally { streamObserver.mockRestore(); executeObserver.mockRestore(); observer.mockRestore(); isolated.stateClient = undefined; isolated.tripClient = undefined; }
   }, 210000);
 });
+
+function safeReproCode(value: unknown) {
+  return typeof value === "string" && /^[a-z0-9_-]{1,64}$/.test(value) ? value : null;
+}
+function summarizeReproOutput(value: any): unknown {
+  if (!value || typeof value !== "object") return { type: typeof value };
+  return { keys: Object.keys(value), bytes: JSON.stringify(value).length, ok: value.ok,
+    error: safeReproCode(value.error?.code), retryable: value.error?.retryable,
+    outcome: value.outcome ? { status: safeReproCode(value.outcome.status),
+      candidateCount: value.outcome.candidateCount, verifiedCandidateCount: value.outcome.verifiedCandidateCount,
+      photoCandidateCount: value.outcome.photoCandidateCount,
+      reasons: value.outcome.reasonCodes?.map(safeReproCode) } : undefined,
+    hits: value.discovery?.batch?.hits?.length,
+    pages: value.webPages?.data?.pages?.length, places: value.result?.data?.places?.length,
+    evidenceCount: value.evidenceIds?.length, candidates: value.candidateReferences?.length,
+    replyReferences: value.replyReferences?.map((ref: any) => Object.keys(ref.fields ?? {})),
+    output: value.output ? summarizeReproOutput(value.output) : undefined };
+}
