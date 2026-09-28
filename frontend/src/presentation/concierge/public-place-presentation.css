@@ -15,6 +15,26 @@
   background: var(--product-surface-muted);
   overflow-wrap: anywhere;
 }
+.public-place-photo {
+  margin: -.85rem -.85rem .75rem;
+  overflow: hidden;
+  border-radius: .75rem .75rem 0 0;
+  background: var(--product-surface);
+}
+.public-place-photo img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+.public-place-photo figcaption {
+  padding: .35rem .65rem;
+  color: var(--product-muted);
+  font-size: .7rem;
+  line-height: 1.4;
+}
+.public-place-photo a { color: inherit; text-underline-offset: .18em; }
+.public-place-photo a:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .public-place-card > header {
   display: flex;
   align-items: baseline;

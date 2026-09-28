@@ -46,10 +46,11 @@ function effectiveDestination(label: string): EffectiveIntent {
       modality: "preferred", precision: "exact", value: { kind: "place_label", label }, frame: "actual",
       sourceOperationId: "destination-op", provenance: { kind: "user_turn", turnId: "00000000-0000-4000-8000-000000000001", quote: label } }] };
 }
-function setup(effect: "read" | "proposal" = "read") {
+function setup(effect: "read" | "proposal" = "read", agentV2Proposal = false) {
   const tools = new AgentToolRegistry();
   const execute = vi.fn(async () => successfulAgentToolResult({ name: "京都" }));
   tools.register({ name: "lookup_place", description: "場所を確認する", effect,
+    ...(agentV2Proposal ? { requiredCapabilities: ["agent-v2-proposal"] } : {}),
     inputSchema: { type: "object", properties: { location: { type: "string" } }, required: ["location"], additionalProperties: false },
     intentPolicy: { dependencies: ["destination"], requirements: [{ target: "destination", inputField: "location", necessity: "required", match: "exact" }] },
     parseInput: (value: unknown) => validAgentToolInput(value as { location: string }), execute });
@@ -86,6 +87,18 @@ describe("StrandsAgentEngine", () => {
     expect(captured?.structuredOutputSchema).toBeDefined();
     expect(execute).not.toHaveBeenCalled();
     expect((captured?.model as { getConfig(): { stream?: boolean } }).getConfig().stream).toBe(false);
+  });
+  it("exposes only an explicitly opted-in Agent v2 proposal capability", async () => {
+    const { execute, input } = setup("proposal", true);
+    let captured: AgentConfig | undefined;
+    const createAgent: StrandsAgentFactory = (config) => {
+      captured = config;
+      return { invoke: async () => ({ stopReason: "endTurn", lastMessage: { role: "assistant", content: [] } }) };
+    };
+    await new StrandsAgentEngine(options, { createAgent }).run(input);
+    expect(captured?.tools).toHaveLength(1);
+    expect((captured?.tools?.[0] as { name?: string })?.name).toBe("lookup_place");
+    expect(execute).not.toHaveBeenCalled();
   });
   it("stops additional Tool side effects after the per-turn Tool budget is exhausted", async () => {
     const { execute, input } = setup();

@@ -260,7 +260,8 @@ it("does not revive an old conversation condition after the Trip was manually ed
   }) };
   const proposal = { tripId: current.id, baseRevision: current.revision, summary: "手動で行き先を神戸へ変更",
     patches: [{ type: "request" as const, request }] };
-  const manualTrips = new DynamoDbTripRepository("test-trips", test.trips.client, { now: () => new Date("2026-09-28T00:00:00Z") });
+  const manualTrips = new DynamoDbTripRepository("test-trips", test.trips.client,
+    { now: () => new Date(Date.parse(current.updatedAt) + 1_000) });
   await manualTrips.applyMutation(test.principal, { tripId: current.id, baseRevision: current.revision,
     mutationId: "99999999-9999-4999-8999-999999999999", proposal }, (trip) => applyTripProposal(trip, proposal));
   const probe = test.build([uncertainty], "manual-edit-probe");

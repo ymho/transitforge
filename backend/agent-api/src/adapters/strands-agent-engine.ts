@@ -216,7 +216,8 @@ export function createStrandsReadTools(input: {
   budgetState?: { toolCalls: number; toolLimitReached: boolean }; maxToolCalls?: number;
   reserveToolCall?: () => boolean; canExecute?: () => boolean;
 }): InvokableTool<unknown, JSONValue>[] {
-  return input.registry.descriptors().filter(({ name }) => input.registry.effect(name) === "read").map((descriptor) => tool({
+  return input.registry.descriptors().filter((descriptor) => input.registry.effect(descriptor.name) === "read" ||
+    descriptor.effect === "proposal" && descriptor.requiredCapabilities?.includes("agent-v2-proposal")).map((descriptor) => tool({
     name: descriptor.name, description: descriptor.description, inputSchema: descriptor.inputSchema as JSONSchema,
     callback: async (rawInput, context) => {
       const toolInput = jsonObject(rawInput);

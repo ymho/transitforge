@@ -158,9 +158,37 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
   {
     id: "V2-TOOL-02",
     kind: "v2_specific",
-    invariant: "the initial greenfield runtime exposes read Tools only",
+    invariant: "the greenfield runtime hides proposal Tools unless the Application explicitly opts in an Agent v2 proposal capability",
     testFile: "backend/agent-api/src/adapters/strands-agent-engine.test.ts",
     testName: "does not expose proposal Tools in the initial Strands slice",
+  },
+  {
+    id: "V2-PURPOSE-TOOLS-01",
+    kind: "v2_specific",
+    invariant: "purpose-oriented destination reads compose discovery, verified pages and source-bound photos without a fixed prose classifier",
+    testFile: "backend/agent-api/src/composition/production-server-tools.test.ts",
+    testName: "exposes purpose destination reads and composes destination sources with an attributed photo",
+  },
+  {
+    id: "V2-PURPOSE-STATUS-01",
+    kind: "v2_specific",
+    invariant: "successful empty searches, provider failure and usable partial results remain distinct typed outcomes",
+    testFile: "backend/agent-api/src/usecases/purpose-travel-tools.test.ts",
+    testName: "keeps %s distinct",
+  },
+  {
+    id: "V2-DRAFT-ITINERARY-01",
+    kind: "v2_specific",
+    invariant: "draft_itinerary retains an owner-scoped candidate set without adopting it into the Trip",
+    testFile: "backend/agent-api/src/usecases/plan-candidate-retention.test.ts",
+    testName: "runs through the production Tool registry and publishes only the actually persisted ref",
+  },
+  {
+    id: "V2-PLACE-PHOTO-01",
+    kind: "v2_specific",
+    invariant: "only an Evidence-bound attributed photo is projected into a public place card",
+    testFile: "modules/agent/runtime/agent-v2-candidates.test.ts",
+    testName: "projects only an Evidence-bound attributed photo and keeps it out of model-authored card data",
   },
   {
     id: "V2-EVIDENCE-01",

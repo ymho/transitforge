@@ -11,6 +11,46 @@ import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 const evidenceContext = { retrievedAt: "2026-09-25T00:00:00Z", queryFingerprint: "history",
   executionId: "consultation", toolCallId: "tool-1", toolName: "search_travel_knowledge" };
 
+it("exposes purpose destination reads and composes destination sources with an attributed photo", async () => {
+  const url = "https://example.org/izumo";
+  const discovery = vi.fn(async () => ({ body: { discovery: { batch: { hits: [{ hitId: "hit", sourceRef: url,
+    retrievalChannel: "web", text: "出雲大社", originalRank: 1 }], coverage: { completedQueries: 1 }, incompleteReasons: [] } } } }));
+  const readWebPages = vi.fn(async () => ({ webPages: { status: "available", freshness: "fresh", data: {
+    pages: [{ url, title: "出雲大社", text: "出雲大社は長い歴史を持つ神社です。" }] },
+    evidence: [{ id: "page", provider: "reader", sourceUrl: url, retrievedAt: "2026-09-25T00:00:00Z" }] } }));
+  const searchPlaceMedia = vi.fn(async () => ({ result: { status: "available", freshness: "fresh", data: { places: [{
+    providerPlaceId: "izumo", name: "出雲大社", summary: "長い歴史を持つ神社です。", sourceUrl: "https://www.mapbox.com/",
+    officialWebsiteUrl: url, openingHoursStatus: "unknown", image: { url: "https://images.example/izumo.jpg",
+      descriptionUrl: "https://photos.example/izumo", attribution: "Example", hotlinkAllowed: true },
+    sources: [{ provider: "mapbox", label: "Mapbox", url: "https://www.mapbox.com/", role: "identity" }] }] },
+    evidence: [{ id: "place", provider: "mapbox", sourceUrl: "https://www.mapbox.com/", retrievedAt: "2026-09-25T00:00:00Z",
+      validUntil: "2099-09-26T00:00:00Z" }] } }));
+  const tools = productionServerTools({ external: { readWebPages, searchPlaceMedia }, discovery, accommodation: vi.fn(), journey: vi.fn() });
+  expect(tools.map(({ descriptor }) => descriptor.name)).toEqual(expect.arrayContaining(["explore_destination", "discover_destinations"]));
+  const explore = tools.find(({ descriptor }) => descriptor.name === "explore_destination")!;
+  const response = await explore.operation({ destination: "出雲大社", includeNearby: true }, { requestId: "consultation" });
+  expect(response.body.outcome).toMatchObject({ status: "complete", candidateCount: 1, verifiedCandidateCount: 1, photoCandidateCount: 1 });
+  expect(discovery).toHaveBeenCalledWith(expect.objectContaining({ facets: expect.arrayContaining([
+    { kind: "place", value: "出雲大社" }, { kind: "soft_preference", value: "周辺の立ち寄り候補" },
+  ]) }), expect.objectContaining({ requestId: "consultation" }));
+  expect(explore.evidence(response.body, { ...evidenceContext, toolName: "explore_destination" })
+    .some((item) => item.facts.imageUrl === "https://images.example/izumo.jpg")).toBe(true);
+});
+
+it.each([
+  ["no_candidates", { hits: [], coverage: { completedQueries: 1 }, incompleteReasons: [] }, undefined],
+  ["failed", { hits: [], coverage: { completedQueries: 0 }, incompleteReasons: ["retrieval_failed:web"] }, undefined],
+  ["partial", { hits: [{ hitId: "lead", sourceRef: "https://example.org/lead", retrievalChannel: "web" }], coverage: { completedQueries: 1 }, incompleteReasons: [] }, new Error("reader unavailable")],
+] as const)("returns %s instead of conflating provider failure and empty candidates", async (status, batch, readerError) => {
+  const binding = productionServerTools({ external: { readWebPages: vi.fn(async () => {
+    if (readerError) throw readerError;
+    return { webPages: { status: "available", freshness: "fresh", data: { pages: [] }, evidence: [] } };
+  }) }, discovery: vi.fn(async () => ({ body: { discovery: { batch } } })), accommodation: vi.fn(), journey: vi.fn() })
+    .find(({ descriptor }) => descriptor.name === "discover_destinations")!;
+  const response = await binding.operation({ experiences: ["歴史"] }, { requestId: "consultation" });
+  expect(response.body.outcome).toMatchObject({ status });
+});
+
 it("materializes discovery leads into verified page evidence in the same tool round", async () => {
   const url = "https://example.org/kurashiki";
   const readWebPages = vi.fn(async () => ({ webPages: { status: "available", freshness: "fresh",
