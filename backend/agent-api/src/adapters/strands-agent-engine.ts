@@ -156,7 +156,7 @@ export class StrandsAgentEngine {
       maxTokens: this.options.maxOutputTokens ?? 2_048, temperature: 0, stream: false,
       // Verified production model configuration; do not send Nova-only fields to other models.
       ...(this.options.modelId === "jp.amazon.nova-2-lite-v1:0" ? {
-        additionalRequestFields: { reasoningConfig: { type: "enabled", maxReasoningEffort: "low" } },
+        additionalRequestFields: { reasoningConfig: { type: "enabled", maxReasoningEffort: "medium" } },
       } : {}) });
     const agent = this.createAgent({
       model: baseModel,

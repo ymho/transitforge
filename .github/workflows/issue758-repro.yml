@@ -44,4 +44,4 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/repro-env.json"
 
-# Verify destination interest and reply completion with production reasoning.
+# Compare medium reasoning for reliable condition admission and reply completion.
