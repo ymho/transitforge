@@ -481,6 +481,16 @@ resource "aws_iam_role_policy" "agent_stream_dependencies" {
     { Effect = "Allow", Action = ["s3:GetObject"], Resource = concat(["arn:aws:s3:::${local.resource_prefix}-data-builder-source/timetable/*", "arn:aws:s3:::${local.resource_prefix}-data-builder-source/ai-timetable/*", "${aws_s3_bucket.website.arn}/api/traffic/delays.json", "${aws_s3_bucket.website.arn}/viewer-input/train_index.json"], var.enable_otp_route_service ? ["arn:aws:s3:::${local.otp_graph_bucket}/${local.otp_graph_manifest_key}"] : []) }
   ] })
 }
+# Verified condition adoption updates Trip and writes its mutation receipt/outbox atomically.
+# DynamoDB transactions authorize each item action, not a TransactWriteItems IAM action.
+resource "aws_iam_role_policy" "agent_stream_trip_adoption" {
+  for_each = local.agent_stream_instances
+  role     = aws_iam_role.agent_stream[each.key].id
+  policy = jsonencode({ Version = "2012-10-17", Statement = [{
+    Effect    = "Allow", Action = ["dynamodb:PutItem", "dynamodb:UpdateItem"], Resource = aws_dynamodb_table.trips.arn,
+    Condition = { "ForAnyValue:StringEquals" = { "dynamodb:EnclosingOperation" = ["TransactWriteItems"] } }
+  }] })
+}
 resource "aws_iam_role_policy" "agent_stream_provider_invoke" {
   for_each = var.enable_fixed_egress_provider ? local.agent_stream_instances : {}
   role     = aws_iam_role.agent_stream[each.key].id

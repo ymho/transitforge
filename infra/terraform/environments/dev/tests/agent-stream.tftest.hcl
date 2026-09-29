@@ -27,6 +27,19 @@ override_resource {
   override_during = plan
   values          = { response_streaming_invoke_arn = "arn:aws:apigateway:ap-northeast-1:lambda:path/2021-11-15/functions/arn:aws:lambda:ap-northeast-1:123456789012:function:stream/response-streaming-invocations" }
 }
+override_resource {
+  target          = aws_dynamodb_table.trips
+  override_during = plan
+  values          = { arn = "arn:aws:dynamodb:ap-northeast-1:123456789012:table/transitforge-dev-trips" }
+}
+override_resource {
+  target          = aws_iam_role.agent_stream["stream"]
+  override_during = plan
+  values = {
+    id  = "transitforge-dev-agent-stream"
+    arn = "arn:aws:iam::123456789012:role/transitforge-dev-agent-stream"
+  }
+}
 run "current_topology" {
   command = plan
   assert {
@@ -65,6 +78,19 @@ run "enabled_contract" {
   command = plan
   variables {
     enable_fixed_egress_provider = true
+  }
+  assert {
+    condition = (
+      aws_iam_role_policy.agent_stream_trip_adoption["stream"].role == aws_iam_role.agent_stream["stream"].id &&
+      length(jsondecode(aws_iam_role_policy.agent_stream_trip_adoption["stream"].policy).Statement) == 1 &&
+      alltrue([for statement in jsondecode(aws_iam_role_policy.agent_stream_trip_adoption["stream"].policy).Statement :
+        statement.Effect == "Allow" &&
+        toset(statement.Action) == toset(["dynamodb:PutItem", "dynamodb:UpdateItem"]) &&
+        statement.Resource == aws_dynamodb_table.trips.arn &&
+        toset(statement.Condition["ForAnyValue:StringEquals"]["dynamodb:EnclosingOperation"]) == toset(["TransactWriteItems"])
+      ])
+    )
+    error_message = "The Agent role must atomically update Trip and put mutation/outbox receipts, limited to the Trip table and TransactWriteItems (no delete, scan, wildcard or standalone writes)."
   }
   assert {
     condition     = aws_lambda_function.agent_stream["stream"].environment[0].variables.SERVER_AGENT_MAX_EXECUTION_MS == "150000"
