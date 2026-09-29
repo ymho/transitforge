@@ -70,7 +70,7 @@ it("puts the account icon in the shared navigation and sends signed-in people to
   expect(document.querySelector(".product-header")).toBeNull();
   expect(document.querySelector(".product-brand")).toBeNull();
   expect(document.querySelector(".product-nav [data-account]")!.textContent).toBe("設定");
-  expect(document.querySelector("[data-account]")!.getAttribute("aria-label")).toBe("ログインまたは新規登録");
+  expect(document.querySelector("[data-account]")!.getAttribute("aria-label")).toBe("ログイン");
   click("[data-account]"); expect(signedOut.ports.login).toHaveBeenCalledOnce();
   document.body.innerHTML = '<main id="app"></main>';
   const signedIn = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) });

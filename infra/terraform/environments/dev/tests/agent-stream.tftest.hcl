@@ -42,12 +42,12 @@ run "current_topology" {
     error_message = "The SPA must keep short-lived access/ID tokens and bound refresh to eight hours."
   }
   assert {
-    condition     = !aws_cognito_user_pool.users.admin_create_user_config[0].allow_admin_create_user_only && contains(aws_cognito_user_pool.users.auto_verified_attributes, "email")
-    error_message = "Managed Login must allow self-service sign-up with email verification."
+    condition     = aws_cognito_user_pool.users.admin_create_user_config[0].allow_admin_create_user_only && contains(aws_cognito_user_pool.users.auto_verified_attributes, "email")
+    error_message = "Public self-service sign-up must be disabled while email verification remains configured."
   }
   assert {
     condition     = aws_cognito_user_pool.users.password_policy[0].minimum_length == 12 && aws_cognito_user_pool.users.password_policy[0].require_lowercase && aws_cognito_user_pool.users.password_policy[0].require_uppercase && aws_cognito_user_pool.users.password_policy[0].require_numbers && aws_cognito_user_pool.users.password_policy[0].require_symbols
-    error_message = "Restoring sign-up must preserve the existing password requirements."
+    error_message = "The user pool must preserve the existing password requirements."
   }
   assert {
     condition     = length([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : b if b.path_pattern == "/api/agent-stream"]) == 1 && length([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : b if b.path_pattern == "/api/agent"]) == 1
