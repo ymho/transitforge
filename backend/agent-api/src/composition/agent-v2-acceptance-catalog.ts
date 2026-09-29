@@ -202,7 +202,7 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
     kind: "v2_specific",
     invariant: "natural explanation and comparison remain model-authored inference while factual values stay bound to selected Evidence fields",
     testFile: "modules/agent/runtime/agent-v2-publication.test.ts",
-    testName: "publishes natural commentary as an inference bound to the selected Evidence instead of replacing factual values",
+    testName: "publishes natural commentary bound to Evidence with compact sources instead of appending research bodies",
   },
   {
     id: "V2-PLACE-CARDS-01",

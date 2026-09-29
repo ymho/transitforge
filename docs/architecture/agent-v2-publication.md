@@ -45,6 +45,24 @@ Engineの既定は推論設定を追加しない。小さい独立fixtureと本�
 推論tokenも出力課金と累積出力上限に含まれ、内部reasoningは公開・保存しない。
 参考: [AWS Nova 2 extended thinking](https://docs.aws.amazon.com/nova/latest/nova2-userguide/extended-thinking.html)。
 
+## 短い説明・話題別表示・相談の継続
+
+`answer`は根拠となる`references`と、短い`commentary`または`sections`（見出しと本文、最大4節）を提出できる。
+説明がある場合、参照したWeb本文をその後へ連結せず、Applicationが検証した出典リンクだけをまとめる。
+説明のない直接引用でも`sourceExcerpt`は最大160文字とし、資料本文を大量表示しない。
+説明と各節は選択したEvidenceへのbindingを持ち、生成された事実を検証済みの資料値とは扱わない。
+見出しはモデルが内容から選ぶ。固定の分類器や必須の「概要・イベント・アクセス」テンプレートにはしない。
+イベントの過去/将来と未確認を区別する方針もモデルへ渡すが、Schema成功を事実性の証明にはしない。
+
+`answer`/`candidates`の`nextQuestion`で、情報提供と次の確認を同じターンに含められる。
+モデルは既知条件・利用者の関心から質問を1つ選ぶ。固定の質問順や未設定項目の一括聴取は行わない。
+見出し・本文・質問中のHTML/Markdownはエスケープし、見出しの構造だけをApplicationが付ける。
+
+Frontendはcurrentな回答を表示した後、actualな条件の受理receiptがあればTripをServerから再取得する。
+回答の表示前やSSE受信中にrevisionを更新して、自分の応答をstaleとして破棄しない。receiptの値をBrowserで
+Tripへ転記しない。履歴再表示・別会話の遅延応答・拒否のみのreceiptでは再取得しない。再取得失敗時は既存の
+unavailable表示とし、古い条件を最新情報として残さない。
+
 ## SDKの再試行を隠さない
 
 SDK 1.18.0は不正な構造化出力にvalidation feedbackを返す。plain textで終了しようとした場合は、SDKが構造化出力Toolを一度指定して再度modelへ要求し、それでも拒否すればStructuredOutputErrorとなる。これは追加の自前repairではなく、選択したSDKの標準動作である。
@@ -54,7 +72,7 @@ SDK 1.18.0は不正な構造化出力にvalidation feedbackを返す。plain tex
 ## 合否の区別
 
 - 決定論的Acceptance: actual SDK + scripted model。構文拒否、不要な末尾呼出しなし、上限、A/B/history/replay、owner・Evidence拒否。
-- `AGENT_V2_LIVE=true npm run test:agent:v2:conversation-live`: actual Bedrock + fixed travel Provider + state fixture。最大4 turns × 6 model cycles、各turnは60秒、writeなし。
+- `AGENT_V2_LIVE=true npm run test:agent:v2:conversation-live`: actual Bedrock + fixed travel Provider + state fixture。会話4 turnsと短い回答2 cases、最大6 model cycles/turn、各turnは60秒、productionへのwriteなし。
 - 実Provider/実ブラウザ: 別の確認。上記の成功で代用しない。
 
 #721のV2専用Frontend表示分離は別作業。今回の公開snapshotの保存契約は維持する。

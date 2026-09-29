@@ -13,9 +13,14 @@ export type ReplyReference = z.infer<typeof reference>;
 const commentary = z.string().min(1).max(1200).describe("Selected Evidenceに基づく説明・比較・推薦。未確認の時刻・料金・操作結果を作らない。");
 const conversationalText = z.string().min(1).max(600)
   .describe("短い自然な会話文。利用者発言とApplicationの現在条件を説明・確認するためだけに使い、外部事実や未検証の操作成功を作らない。");
+const sections = z.array(z.strictObject({
+  heading: z.string().min(1).max(40), text: z.string().min(1).max(240),
+})).min(1).max(4).describe("参照したEvidenceに基づく短い話題別説明。見出しは内容から選ぶ。概要・アクセス・イベントなど必要な話題だけを使い、各節1〜2文。commentaryと重複させない。");
+const nextQuestion = z.strictObject({ target: z.enum(replyQuestions), text: z.string().min(1).max(200) })
+  .describe("回答の後に相談を進めるための質問を1つ。現在の条件と利用者の関心から選び、既知の条件を単に聞き直さない。外部事実や操作の成功を含めない。");
 export const agentV2ReplySchema = z.discriminatedUnion("kind", [
-  z.strictObject({ kind: z.literal("answer").describe("外部情報を確認した事実回答。実在するEvidence参照が必須。通常の会話・確認・仮定の説明はconversation/clarification/uncertainty。"), references: z.array(reference).min(1).max(8), commentary: commentary.optional() }),
-  z.strictObject({ kind: z.literal("candidates"), evidenceIds: z.array(identifier(240)).min(1).max(8), commentary }),
+  z.strictObject({ kind: z.literal("answer").describe("外部情報を確認した事実回答。実在するEvidence参照が必須。通常の会話・確認・仮定の説明はconversation/clarification/uncertainty。"), references: z.array(reference).min(1).max(8), commentary: commentary.optional(), sections: sections.optional(), nextQuestion: nextQuestion.optional() }),
+  z.strictObject({ kind: z.literal("candidates"), evidenceIds: z.array(identifier(240)).min(1).max(8), commentary, nextQuestion: nextQuestion.optional() }),
   z.strictObject({ kind: z.literal("conversation"), message: z.enum(["greeting", "thanks", "acknowledgement"]), text: conversationalText.optional() }),
   z.strictObject({ kind: z.literal("clarification"), target: z.enum(replyQuestions), text: conversationalText.optional() }),
   z.strictObject({ kind: z.literal("unavailable"), operation: z.enum(replyOperations) }),

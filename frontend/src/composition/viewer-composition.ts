@@ -347,6 +347,13 @@ aiGuideController = configureAiGuidePanel(
     },
     persistent: () => true,
     responseContextKey: () => JSON.stringify([serverAgentSession.contextVersion(), activeConversationSession.id, tripWorkspaceController.current()?.id, tripWorkspaceController.current()?.revision]),
+    onTripConditionsSaved: () => {
+      // Reload after rendering, so our own saved revision does not invalidate its response.
+      // The source owns auth/session fencing and publishes the server's current Trip.
+      const source = tripWorkspaceController.source();
+      void source?.retry?.().catch(() => undefined);
+      void serverTripList.refresh().catch(() => undefined);
+    },
     onTripCostProposal: (proposal) => {
       try { tripWorkspaceController.preview(proposal); tripWorkspace.show("trip"); }
       catch { aiGuideController.notify("旅程が変わったため費用案を適用できません。現在の旅程で再予測してください。"); }

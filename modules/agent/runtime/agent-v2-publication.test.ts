@@ -33,7 +33,7 @@ describe("Agent v2 publication contract", () => {
     expect(result.proof.kind).toBe("answer");
     expect(result.claims).toHaveLength(1);
   });
-  it("publishes natural commentary as an inference bound to the selected Evidence instead of replacing factual values", () => {
+  it("publishes natural commentary bound to Evidence with compact sources instead of appending research bodies", () => {
     const kyoto = observation();
     const osaka = observation();
     osaka.id = "e-osaka";
@@ -48,8 +48,10 @@ describe("Agent v2 publication contract", () => {
     ] }, { executionId: "turn-1", evidence: [kyoto, osaka] });
 
     expect(result.text).toContain(commentary);
-    expect(result.text).toContain("京都について確認した資料です。");
-    expect(result.text).toContain("大阪は移動候補が多い確認済み資料です。");
+    expect(result.text).not.toContain("京都について確認した資料です。");
+    expect(result.text).not.toContain("大阪は移動候補が多い確認済み資料です。");
+    expect(result.text).toContain("[出典1](https://example.test/kyoto)");
+    expect(result.text).toContain("[出典2](https://example.test/osaka)");
     expect(result.claims.find(({ id }) => id === "v2-commentary")).toMatchObject({
       statement: commentary,
       kind: "inference",
@@ -164,6 +166,35 @@ describe("Agent v2 publication contract", () => {
     ctx.evidence[0]!.facts.sourceExcerpt = "changed";
     expect(result.evidence[0]!.facts.sourceExcerpt).not.toBe("changed");
   });
+});
+
+it("renders short topic sections and a contextual next question without publishing fetched page bodies", () => {
+  const evidence = observation(); evidence.facts.sourceExcerpt = "資料にある長いナビゲーション。".repeat(90);
+  const result = admitAgentV2Reply({ ...proposal, sections: [
+    { heading: "概要", text: "確認できた場所の魅力を短く案内します。" },
+    { heading: "アクセス", text: "出発地に合わせて行き方を調べられます。" },
+  ], nextQuestion: { target: "origin", text: "どこから出発する予定ですか？" } }, { ...context(), evidence: [evidence] });
+  expect(result.text).toContain("### 概要\n\n確認できた場所の魅力");
+  expect(result.text).toContain("### アクセス");
+  expect(result.text).not.toContain("ナビゲーション");
+  expect(result.text.endsWith("どこから出発する予定ですか？")).toBe(true);
+  expect(result.text.length).toBeLessThan(300);
+  expect(result.proof.question).toBe("origin");
+  expect(result.claims).toHaveLength(2);
+  expect(result.claims.every(claim => claim.bindings?.[0]?.evidenceId === evidence.id)).toBe(true);
+  expect(() => admitAgentV2Reply({ ...proposal, sections: [{ heading: "概要", text: "紹介" }] }, { ...context(), evidence: [] }))
+    .toThrow("missing_evidence");
+});
+it("bounds source-only quotations and safely escapes section and question markup", () => {
+  const evidence = observation(); evidence.facts.sourceExcerpt = "長い資料。".repeat(200);
+  const excerpt = admitAgentV2Reply(proposal, { ...context(), evidence: [evidence] });
+  expect(excerpt.text.length).toBeLessThan(300);
+  expect(excerpt.claims[0]?.statement.length).toBeLessThanOrEqual(160);
+  const result = admitAgentV2Reply({ ...proposal, sections: [{ heading: "概要\n<script>x</script>", text: "[偽リンク](javascript:bad)" }],
+    nextQuestion: { target: "origin", text: "<script>x</script>" } }, context());
+  expect(result.text).not.toContain("<script>");
+  expect(result.text).not.toContain("[偽リンク](javascript:");
+  expect(() => admitAgentV2Reply({ ...proposal, sections: [{ heading: "概要", text: "<thinking>private</thinking>" }] }, context())).toThrow("unsafe_content");
 });
 
 it.each([

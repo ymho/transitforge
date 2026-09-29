@@ -66,6 +66,8 @@ export interface AiGuidePanelElements {
   historyRepository: ConversationHistoryRepository;
   submitFeedback?: (feedback: ConversationFeedback) => Promise<void>;
   onFirstPrompt?: (prompt: string) => void;
+  /** Called only after a current live response is rendered; history never triggers a reload. */
+  onTripConditionsSaved?: () => void;
   onTripCostProposal?: (proposal: import("@raiquora/trip/public-cost-proposal").PublicCostProposal) => void;
   onConsultationRequestProposal?: (proposal: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal) => void;
   onTripUpdateProposal?: (proposal: import("@raiquora/trip/trip").TripUpdateProposal) => void;
@@ -374,6 +376,8 @@ export function configureAiGuidePanel(
         if (typeof response !== "string" && "checklistProposal" in response) elements.onChecklistProposal?.(response.checklistProposal);
         if (!submitFeedback) pendingMessage.querySelector(".conversation-feedback")?.remove();
         pendingMessage.dataset.messageId = assistantMessage.messageId;
+        if (typeof response !== "string" && "semanticReceipt" in response && response.semanticReceipt?.changes.some(
+          change => change.status === "accepted" && change.frame === "actual")) elements.onTripConditionsSaved?.();
       })
       .catch((error: unknown) => {
         if (requestedGeneration !== requestGeneration) {
