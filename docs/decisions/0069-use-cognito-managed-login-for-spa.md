@@ -8,8 +8,11 @@
 
 Cognito User PoolのEssentials、Managed Login v2、Cognito標準brandingをTerraformで管理する。
 メールをusernameとし、ログインとパスワード再設定はManaged Loginへ委ねる。
-2026-09-25以降は自己登録を無効化し、新しい利用者は管理者だけが作成する。Managed Loginに新規登録リンクを
-表示せず、公開されているApp Client IDを使った`SignUp` API要求も拒否する。既存利用者のログインは維持する。
+2026-09-29の利用者要望で、2026-09-25に停止した自己登録を再開する。AWS管理コンソールへのアクセスなしに
+Managed Loginの新規登録リンクからメールアドレスとパスワードで登録できるよう、User Poolの
+`allow_admin_create_user_only`をfalseにする。公開App Clientの`SignUp` APIも有効になる。
+メールの確認コードによる認証を維持し、自動承認のtriggerやテストアカウント特例は追加しない。
+パスワードは12文字以上・英大文字・小文字・数字・記号を必須とし、既存利用者のログインは維持する。
 公開SPA App Clientはsecretなし、Authorization Code + PKCE S256だけを使用する。
 Resource Serverが`raiquora/user`を定義し、`openid email`と合わせて要求する。
 
