@@ -38,6 +38,11 @@ const questions: Record<ReplyQuestion, string> = {
 export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext): AgentV2AdmittedReply {
   const proposal = parseAgentV2Reply(value);
   const proof: AgentV2ReplyProof = { kind: proposal.kind, references: [] };
+  const followUp = () => {
+    if (!("nextQuestion" in proposal) || !proposal.nextQuestion) return "";
+    proof.question = proposal.nextQuestion.target;
+    return `\n\n${escapeMarkdown(boundedText(proposal.nextQuestion.text))}`;
+  };
   const reply = (text: string): AgentV2AdmittedReply => ({ text, evidence: [], claims: [], proof });
   switch (proposal.kind) {
     case "conversation":
@@ -97,12 +102,13 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
       const commentary = boundedText(proposal.commentary);
       proof.commentary = true;
       claims.push({ id: "v2-commentary", statement: commentary, kind: "inference", evidenceIds: [...proposal.evidenceIds], bindings });
-      return { text: escapeMarkdown(commentary), evidence: selected.map((item) => structuredClone(item)), claims, proof, publicPlacePresentation };
+      return { text: escapeMarkdown(commentary) + followUp(), evidence: selected.map((item) => structuredClone(item)), claims, proof, publicPlacePresentation };
     }
     case "answer": {
       const selected = new Map<string, Evidence>();
       const claims: EvidenceClaim[] = [];
       const parts: string[] = [];
+      const hasExplanation = !!proposal.commentary || !!proposal.sections?.length;
       const commentaryBindings: NonNullable<EvidenceClaim["bindings"]> = [];
       const seenReferences = new Set<string>();
       for (const reference of proposal.references) {
@@ -116,15 +122,17 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
         if (!publicReplyField(reference.field) || !Object.hasOwn(evidence.facts, reference.field)) throw new AgentV2ReplyError("invalid_field");
         const fact = evidence.facts[reference.field];
         if (fact === null || fact === undefined || Array.isArray(fact) && !fact.length) throw new AgentV2ReplyError("invalid_field");
-        const text = factText(fact);
+        const rawText = factText(fact);
         const subject = boundedText(evidence.subject);
         const quotation = reference.field === "sourceExcerpt";
-        parts.push(`${escapeMarkdown(subject)}\n\n${quotation ? "> " : ""}${escapeMarkdown(text).replaceAll("\n", quotation ? "\n> " : "\n")}\n${sourceLink(evidence)}`.trim());
+        const text = quotation ? rawText.slice(0, 160).trimEnd() : rawText;
+        // Selected page bodies are research material, not paragraphs to append to an explanation.
+        if (!hasExplanation) parts.push(`${escapeMarkdown(subject)}\n\n${quotation ? "> " : ""}${escapeMarkdown(text).replaceAll("\n", quotation ? "\n> " : "\n")}${quotation && rawText.length > text.length ? "…" : ""}\n${sourceLink(evidence)}`.trim());
         selected.set(evidence.id, structuredClone(evidence));
         const binding = { evidenceId: evidence.id, fieldPath: `facts.${reference.field}`,
           subjectRef: evidence.observation?.subjectKey ?? evidence.subject,
           ...(evidence.observation?.scopeKey ? { applicabilityScope: evidence.observation.scopeKey } : {}) };
-        claims.push({ id: `v2-claim-${claims.length + 1}`, statement: text, kind: "fact", evidenceIds: [evidence.id],
+        if (!hasExplanation) claims.push({ id: `v2-claim-${claims.length + 1}`, statement: text, kind: "fact", evidenceIds: [evidence.id],
           bindings: [{ ...binding, transform: quotation ? "bounded_quote" : "identity" }] });
         commentaryBindings.push({ ...binding, transform: "recommendation" });
       }
@@ -136,7 +144,19 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
           evidenceIds: [...selected.keys()], bindings: commentaryBindings });
         parts.unshift(escapeMarkdown(commentary));
       }
-      return { text: parts.join("\n\n"), evidence: [...selected.values()], claims, proof };
+      for (const [index, section] of (proposal.sections ?? []).entries()) {
+        const heading = boundedText(section.heading), text = boundedText(section.text);
+        parts.push(`### ${escapeMarkdown(heading).replaceAll("\n", " ")}\n\n${escapeMarkdown(text)}`);
+        proof.commentary = true;
+        claims.push({ id: `v2-section-${index + 1}`, statement: `${heading}\n${text}`, kind: "inference",
+          evidenceIds: [...selected.keys()], bindings: commentaryBindings });
+      }
+      if (hasExplanation) {
+        const links = [...new Map([...selected.values()].map(item => [sourceLink(item), item])).values()]
+          .map((item, index) => sourceLink(item, `出典${index + 1}`)).filter(Boolean);
+        if (links.length) parts.push(links.join(" ・ "));
+      }
+      return { text: parts.join("\n\n") + followUp(), evidence: [...selected.values()], claims, proof };
     }
   }
 }
@@ -229,7 +249,7 @@ function escapeMarkdown(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
     .replace(/[\\`*_{}\[\]()#+.!|]/gu, "\\$&");
 }
-function sourceLink(evidence: Evidence): string {
+function sourceLink(evidence: Evidence, label = "出典"): string {
   const reference = evidence.references.find(({ sourceType }) => sourceType === "external-source");
   if (!reference) return "";
   try {
@@ -237,6 +257,6 @@ function sourceLink(evidence: Evidence): string {
     if (!["https:", "http:"].includes(url.protocol) || url.username || url.password ||
         [...url.searchParams.keys()].some((key) => !publicReplyField(key))) return "";
     const destination = url.href.replaceAll("(", "%28").replaceAll(")", "%29").replaceAll(">", "%3E");
-    return `[出典](${destination})`;
+    return `[${label}](${destination})`;
   } catch { return ""; }
 }

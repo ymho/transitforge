@@ -111,7 +111,7 @@ it("runs an actual Strands model-tool-model loop inside the production-shaped Co
   const result = await app.runConversationTurn(input);
   expect(result.status).toBe("completed");
   expect(result.response).toContain("確認済みの情報を見る限り、京都についてこの内容を案内できます。");
-  expect(result.response).toContain("Toolで京都を検証済みです");
+  expect(result.response).not.toContain("Toolで京都を検証済みです");
   expect(result.response).not.toContain("thinking");
   expect(result.response).not.toContain("保存しておきます");
   expect(operation).toHaveBeenCalledTimes(1);
