@@ -216,6 +216,14 @@ AWS applyせず確認する手順と#451/#479後の有効化条件は
 [Streaming実装記録](../../../../docs/architecture/agent-streaming-production.md)を参照。
 `terraform test -filter=tests/agent-stream.tftest.hcl`はmock providerのoffline planだけを実行する。
 
+相談条件のTrip反映はServer Agent自身が`DynamoDbTripRepository.applyMutation`を通じて行う。
+そのためAgent roleには既存のTrip `GetItem`に加え、Tripテーブル限定の`PutItem`・`UpdateItem`を
+`dynamodb:EnclosingOperation = TransactWriteItems`条件付きで許可する。Trip更新・mutation receipt・
+TripChanged outboxを同一transactionで保存するための権限で、単独write・削除・Scan・indexアクセスは追加しない。
+owner検証とrevision/CASはApplication/Repositoryが引き続き担う。
+offline testはこのIAM契約を検査する。実モデルテストでもDB fixtureを使う場合はAWS権限を検証できないため、
+反映後は認証済み相談で条件のTrip保存と`publish` / `respond` / `save completed`を確認する。
+
 ## Deployment safetyとplan-only CD
 
 `dev` Environmentの`FIXED_EGRESS_PROVIDER_ENABLED`はCDで明示する。これはServer Agent切替ではなく、
