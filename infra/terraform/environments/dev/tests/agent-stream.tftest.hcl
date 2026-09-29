@@ -35,7 +35,10 @@ override_resource {
 override_resource {
   target          = aws_iam_role.agent_stream["stream"]
   override_during = plan
-  values          = { id = "transitforge-dev-agent-stream" }
+  values = {
+    id  = "transitforge-dev-agent-stream"
+    arn = "arn:aws:iam::123456789012:role/transitforge-dev-agent-stream"
+  }
 }
 run "current_topology" {
   command = plan
