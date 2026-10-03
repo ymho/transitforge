@@ -135,3 +135,17 @@ Conversation fixtureは本番の`explore_destination`を使い、discovery・ペ
 - 回帰fixtureは報告の5ターンと時刻を明示した追加検索を実SDKで実行し、3宿・出発地の受理・2日分の案・
   空の列車名を含むカード・履歴/replay・preview/confirm保存まで検証する。
   paid laneはホテル・出発地/旅程・鉄道の3ターンに実Bedrockを使い、Providerと永続状態は合成fixtureである。
+- 条件Toolの成功応答は`scope=consultation_conditions_only`、`itineraryItemsChanged=false`、
+  `researchPerformed=false`を示す。これは実行した条件操作の範囲であり、次のToolをApplicationが選ぶ指示ではない。
+  宿検索と案作成の違いはToolの能力説明と公開回答schemaにも示し、条件受理だけを検索・案作成の完了としない。
+- 実Bedrockの先行検証では、宿の承諾を案作成と取り違える、出発地の受理だけで終わる、
+  案作成後に不要な検索を続けて4096の出力上限へ達する失敗があった。通常CIの成功だけで解消とはしなかった。
+  [修正後の相談検証](https://github.com/ymho/transitforge/actions/runs/37123255960)では2 testsが成功し、
+  ホテル・出発地/旅程・鉄道の実モデル3ターンはそれぞれ3/4/3 model callsで公開された。
+  出力tokenは2117/3363/2153で、上限は変更していない。Tripへの自動保存はなく、別のpreview/confirmを検証した。
+  この結果は固定Provider/状態fixtureの成功であり、実Providerの空室・ダイヤや利用者端末の成功を保証しない。
+- 同じheadで[会話全体を再測定](https://github.com/ymho/transitforge/actions/runs/37123599473)すると、
+  宿検索は成功したがモデルが`candidates`を選び、観光地専用の公開検証で拒否され出力上限へ達した。
+  `candidates`にも宿泊の型付き投影を接続し、`answer`と同じ比較カードを使う。
+  宿のcandidateReferencesは候補表示できるEvidenceだけを公開し、古い・情報不足の候補や観光地との混在を受理しない。
+  モデル生成のカードや価格へfallbackせず、名前・比較説明の双方にEvidence bindingを付ける。
