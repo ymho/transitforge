@@ -172,3 +172,8 @@ Conversation fixtureは本番の`explore_destination`を使い、discovery・ペ
   複数TextBlockの暗黙的な位置で現在発言を示すのをやめ、単一TextBlockの`application_reference`と
   `current_user_message`ラベルで参考JSONと生発言を明示する。履歴とTool結果を現在の依頼と混同しない方針も示す。
   ラベルはデータ境界だけで、推測した意味・作業一覧・Tool選択は含まない。ラベル込みでも24k上限を検証する。
+- [入力境界を明示した3回](https://github.com/ymho/transitforge/actions/runs/37127291804)も0/3で、
+  [Nova 1 Liteとの3回比較](https://github.com/ymho/transitforge/actions/runs/37127710826)も0/3だった。
+  前者は宿検索省略・未依頼の条件操作、後者はアクセス検索反復・構造化回答拒否が残った。
+  次にNova 2 Liteの推論無効（Providerの既定）とlowを比較する。モデル選択・turn/output/deadline上限は変えず、
+  この段階では本番のlow設定を維持する。比較fixtureの成功を本番設定の成功と扱わない。

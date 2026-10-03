@@ -41,8 +41,7 @@ it(`completes the exact confirmation turn with ${live ? "Bedrock" : "scripted SD
   await state.conversations.create(stateA, conversationId, metadata);
   const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
   const settings = { modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
-    maxTurns: 6, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096,
-    ...(modelId === "jp.amazon.nova-2-lite-v1:0" ? { novaReasoningEffort: "low" as const } : {}) };
+    maxTurns: 6, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096 };
   const prelude = createStrandsServerRuntime(new StrandsAgentEngine(settings, { model: new ScriptModel([
     { name: "update_current_destination", input: { action: "set", place: "出雲大社", quote: "出雲大社にいきたい" } }, reply("行き先を出雲大社として受け止めました。"),
     { name: "update_current_travel_period", input: { action: "set", period: { start: { kind: "relative_date", relation: "tomorrow" }, duration: { unit: "nights", amount: 1 } }, quote: "明日から1泊で行きたい" } },
@@ -88,8 +87,7 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
   await state.conversations.create(stateA, conversationId, metadata);
   const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
   const settings = { modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
-    maxTurns: 8, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096,
-    ...(modelId === "jp.amazon.nova-2-lite-v1:0" ? { novaReasoningEffort: "low" as const } : {}) };
+    maxTurns: 8, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096 };
   const scripts = [
     [{ name: "update_current_destination", input: { action: "set", place: "出雲大社", quote: "出雲大社にいきたい" } }, reply("出雲大社へ行く希望を受け止めました。アクセス駅は出雲市駅で調べられます。")],
     [{ name: "update_current_travel_period", input: { action: "set", period: { start: { kind: "relative_date", relation: "tomorrow" }, duration: { unit: "nights", amount: 1 } }, quote: "明日から1泊で行きたい" } }, reply("出雲大社へのアクセスや宿泊施設の提案が必要ですか？")],
