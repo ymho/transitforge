@@ -61,6 +61,7 @@ it(`completes the exact confirmation turn with ${live ? "Bedrock" : "scripted SD
     expect(await app.runConversationTurn(turn)).toEqual(result);
     if (index === 2) {
       const plan = result.publicPlanPresentation!;
+      expect(plan.researchOutcome.budget.modelCalls).toBeGreaterThan(0);
       expect(plan?.candidateSetRef.kind).toBe("candidate-set-ref");
       expect(plan.target).toEqual({ tripId: metadata.tripId, baseTripRevision: (await trips.repository.get(stateA, metadata.tripId))!.revision });
       expect(plan.candidates[0]!.days).toHaveLength(2);

@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   summarize:
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/fix/itinerary-presentation-projection'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: dev
@@ -35,13 +35,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          start_time="1791012600000"
-          end_time="1791013500000"
-          aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" --end-time "$end_time" \
+          start_time="$(( ($(date +%s) - 7200) * 1000 ))"
+          aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" \
             --filter-pattern '"agent_diagnostic"' --query 'events[].message' --output json > agent-diagnostics.json
-          aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" --end-time "$end_time" \
+          aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" \
             --filter-pattern '"agent_stream"' --query 'events[].message' --output json > agent-stream-events.json
-          aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" --end-time "$end_time" \
+          aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" \
             --filter-pattern '"agent_model_response_rejected"' --query 'events[].message' --output json > agent-model-shapes.json
           node tools/deployment/summarize-agent-diagnostics.mjs \
             agent-diagnostics.json agent-stream-events.json agent-model-shapes.json | tee -a "$GITHUB_STEP_SUMMARY"

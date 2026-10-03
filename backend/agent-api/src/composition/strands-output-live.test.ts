@@ -188,7 +188,7 @@ describe.skipIf(!enabled)("V2 itinerary proposal conversation with real Bedrock"
     });
     const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
       model: { converse: vi.fn(async () => { throw Error("legacy runtime called"); }) }, weather: { search: vi.fn() },
-      newExecutionId: () => `itinerary-live-${++execution}`, runRuntime: createStrandsServerRuntime(engine),
+      newExecutionId: () => `78300000-3333-4000-8000-${String(++execution).padStart(12, "0")}`, runRuntime: createStrandsServerRuntime(engine),
       limits: { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 2, maxExecutionMs: 60000 },
       diagnostics: { record: async event => {
         if (event.phase === "execution") console.log(JSON.stringify({ phase: "itinerary-execution", reason: event.reason, counts: event.counts }));
@@ -211,7 +211,7 @@ describe.skipIf(!enabled)("V2 itinerary proposal conversation with real Bedrock"
         const plan = result.publicPlanPresentation;
         expect(plan?.candidateSetRef.kind).toBe("candidate-set-ref");
         expect(plan?.candidates.length).toBeGreaterThan(0);
-        expect(plan!.candidates[0]!.days.length).toBeGreaterThanOrEqual(2);
+        expect(plan!.candidates[0]!.days).toHaveLength(2);
         expect(plan!.candidates[0]!.items.some(item => item.title.includes("出雲大社"))).toBe(true);
         expect(plan!.candidates[0]!.unknowns.length).toBeGreaterThan(0);
       }
