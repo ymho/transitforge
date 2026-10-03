@@ -22,7 +22,7 @@ export const agentV2ReplySchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("answer").describe("外部情報を確認した事実回答。実在するEvidence参照が必須。通常の会話・確認・仮定の説明はconversation/clarification/uncertainty。"), references: z.array(reference).min(1).max(8), commentary: commentary.optional(), sections: sections.optional(), nextQuestion: nextQuestion.optional() }),
   z.strictObject({ kind: z.literal("candidates").describe("ToolのcandidateReferencesにある観光地または宿泊施設の候補一覧。カードはApplicationが作る。"), evidenceIds: z.array(identifier(240)).min(1).max(8), commentary, nextQuestion: nextQuestion.optional() }),
   z.strictObject({ kind: z.literal("conversation"), message: z.enum(["greeting", "thanks", "acknowledgement"]), text: conversationalText.optional() }),
-  z.strictObject({ kind: z.literal("clarification").describe("実行できる相談・検索・提案に必要な入力を確認する質問。要求された保存・変更・予約・決済のToolが提供されていなければ、対象詳細を質問せずunavailableで操作能力がないことを示す。入力不足と能力不足を区別する。"), target: z.enum(replyQuestions), text: conversationalText.optional() }),
+  z.strictObject({ kind: z.literal("clarification"), target: z.enum(replyQuestions), text: conversationalText.optional() }),
   z.strictObject({ kind: z.literal("unavailable").describe("提供されていない保存・変更・予約・決済を求められた時の応答。操作対象の詳細が不明でも、実行できない能力はこの型で明示する。"), operation: z.enum(replyOperations) }),
   z.strictObject({ kind: z.literal("operation_result"), receiptId: identifier(240) }),
   z.strictObject({ kind: z.literal("uncertainty"), text: conversationalText.optional() }),

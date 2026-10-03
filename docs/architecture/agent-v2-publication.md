@@ -245,3 +245,7 @@ Conversation fixtureは本番の`explore_destination`を使い、discovery・ペ
   未対応保存の2回は保存成功の偽装ではなくclarificationを返したが、能力不足を明示する契約を満たさない。
   clarificationのSDK schema説明へ、提供できる能力の入力不足だけを質問し、能力不足はunavailableを使う区別を追加する。
   利用者発話の文字判定、外側retry、回答の強制変換は追加しない。
+
+- [clarificationの説明追加後の基本3回](https://github.com/ymho/transitforge/actions/runs/37135525166)も保存不可の分類は0/3だった。
+  効果を確認できない説明追加は戻す。これは#784で既に追跡する能力不足の応答型の問題として未解決を維持する。
+  宿比較・経路・旅程案・確認保存の本修正を全V2品質の合格と扱わず、基本評価の失敗をPR本文にも明記する。
