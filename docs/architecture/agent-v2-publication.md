@@ -154,3 +154,10 @@ Conversation fixtureは本番の`explore_destination`を使い、discovery・ペ
   そのため、このheadをマージせず、今回の生発言をSDKの独立した末尾TextBlockで渡す入力投影へ変更した。
   applicationは別TextBlockのJSONデータとし、既存24k予算・role/textだけの履歴・Effective Intentの正本を保つ。
   発言の意味をApplicationで推測したり、Tool選択や追加invokeを行う変更ではない。
+- [生発言を分けた独立3回の検証](https://github.com/ymho/transitforge/actions/runs/37125364755)も完全なフローは0/3だった。
+  条件受理後に案を省略、鉄道の後に宿を再検索して回答拒否・出力上限、宿検索省略と条件Tool拒否が残った。
+  Live fixtureが検索ごとの実Observation IDを固定`hotel-1`等へ上書きしていたため、再検索時に過去Evidenceと
+  衝突し得た。Liveでは本番と同じIDを保持し、短い固定IDはscripted fixtureだけに限定する。
+  Tool失敗の診断も既知の閉じた拒否codeだけを追加し、SDKのエラー本文・生成内容は記録しない。
+  今回依頼した検索だけを行うこと、宿の承諾と空のTripへの反映を区別することを一般的な会話例で明示する。
+  この変更も固定ルーティングやTool順の強制、予算拡大ではない。

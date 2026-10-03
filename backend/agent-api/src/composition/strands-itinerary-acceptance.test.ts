@@ -111,7 +111,9 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
   const bindings = productionServerTools({ external: {}, accommodation, journey });
   const hotelBinding = bindings.find(binding => binding.descriptor.name === "search_accommodations")!;
   const originalEvidence = hotelBinding.evidence;
-  hotelBinding.evidence = (output, context) => originalEvidence(output, context).map((evidence, index) => ({ ...evidence, id: `hotel-${index + 1}` }));
+  // Scripted replies use short predetermined IDs. Live calls keep the real
+  // observation identity so a later search cannot collide with earlier evidence.
+  if (!live) hotelBinding.evidence = (output, context) => originalEvidence(output, context).map((evidence, index) => ({ ...evidence, id: `hotel-${index + 1}` }));
   let index = 0, execution = 0;
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
     model: { converse: vi.fn(async () => { throw Error("legacy runtime called"); }) }, weather: { search: vi.fn() }, additionalTools: bindings,
@@ -126,7 +128,8 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
         tools: message.content.flatMap(block => block.type === "toolUseBlock" ? [block.name] : []),
         replies: message.content.flatMap(block => block.type === "toolUseBlock" && block.name === "strands_structured_output" && block.input && typeof block.input === "object" && "reply" in block.input && block.input.reply && typeof block.input.reply === "object" && "kind" in block.input.reply
           ? [typeof block.input.reply.kind === "string" && ["answer", "candidates", "conversation", "clarification", "unavailable", "operation_result", "uncertainty"].includes(block.input.reply.kind) ? block.input.reply.kind : "unknown"] : []) })));
-      agent.addHook(ToolResultEvent, ({ result }) => console.log(JSON.stringify({ turn: index + 1, phase: "consultation-tool", status: result.status })));
+      agent.addHook(ToolResultEvent, ({ result }) => console.log(JSON.stringify({ turn: index + 1, phase: "consultation-tool", status: result.status,
+        errors: closedToolErrors(result.error) })));
       return agent;
     } } : { model: new ScriptModel(scripts[index]!) }))(input);
     },
@@ -170,3 +173,16 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
   const history = (await state.conversations.history(stateA, conversationId)).items;
   expect(history).toHaveLength(12); expect.soft(history[5]?.publicAccommodationPresentation?.cards).toHaveLength(3);
 }, 300_000);
+
+/** Diagnostics contain known rejection codes only, never SDK error bodies. */
+function closedToolErrors(error: Error | undefined): string[] {
+  if (!error) return [];
+  const codes = ["invalid_proposal", "missing_evidence", "ineligible_evidence", "invalid_field", "known_condition", "operation_available", "invalid_receipt", "unsafe_content", "evidence_collision", "invalid_source", "invalid_condition", "condition_conflict"];
+  if (codes.includes(error.message)) return [error.message];
+  if (!("issues" in error) || !Array.isArray(error.issues)) return ["tool_error"];
+  return [...new Set(error.issues.map((issue: unknown) => {
+    if (!issue || typeof issue !== "object" || !("message" in issue) || typeof issue.message !== "string") return "schema_validation";
+    const message = issue.message;
+    return codes.find(code => message.startsWith(`${code}:`)) ?? "schema_validation";
+  }))];
+}
