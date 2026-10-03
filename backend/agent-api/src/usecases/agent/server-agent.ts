@@ -166,7 +166,17 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
       result = { ...result, publicPlanPresentation: bindPublicPlanTarget(result.publicPlanPresentation,
         { tripId: context.taskContext.target.tripId, baseTripRevision: context.taskContext.target.tripRevision }) };
     }
-    if (result.status === "completed" || result.status === "follow_up") result = { ...result, ...dependencies.projectResult?.(result, scope) };
+    if (result.status === "completed" || result.status === "follow_up") {
+      try { result = { ...result, ...dependencies.projectResult?.(result, scope) }; }
+      catch (error) {
+        // Closed stage diagnostics distinguish a completed search from a broken
+        // public projection without logging provider payloads or exception text.
+        await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: scope.executionId,
+          phase: "presentation", reason: "schema_invalid", mode: "application-projection", incomplete: true,
+          occurredAt: (dependencies.now?.() ?? new Date()).toISOString() });
+        throw error;
+      }
+    }
     await publishRuntimeDiagnostics(dependencies, result, scope.executionId);
     return result;
   } };

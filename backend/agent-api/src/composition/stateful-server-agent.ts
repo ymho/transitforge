@@ -91,10 +91,15 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
           registerCostProposalTool(tools, trip, proposal => { tripCostProposal = proposal; });
           if (scope.conversationId) {
             const candidateRepository = new DynamoDbItineraryCandidateRepository(options.tripTable, options.tripClient);
-            registerPlanCandidateRetentionTool(tools, new PlanCandidateRetentionApplication(candidateRepository), {
-              principal: scope.principal, executionId: scope.executionId, conversationId: scope.conversationId, userRequest: scope.userRequest,
-              tripId: trip.id, baseTripRevision: trip.revision, baseItemIds: trip.items.map(item => item.id),
-            }, value => { retainedCandidatePlan = value; }, () => knownItineraryDayCount(effectiveIntent));
+            registerPlanCandidateRetentionTool(tools, new PlanCandidateRetentionApplication(candidateRepository), () => ({
+              principal: scope.principal, executionId: scope.executionId, conversationId: scope.conversationId!, userRequest: scope.userRequest,
+              // Request-only condition adoption is the next atomic revision.
+              // The candidate is published only after that adoption succeeds.
+              tripId: trip!.id, baseTripRevision: trip!.revision + (effectiveIntent && currentIntentReceipt &&
+                proposeVerifiedIntentRequest({ conversationId: scope.conversationId!, trip: trip!, effectiveIntent, receipt: currentIntentReceipt }) ? 1 : 0),
+              baseItemIds: trip!.items.map(item => item.id),
+              baseDayIds: trip!.timeline?.logicalDays.map(day => day.id),
+            }), value => { retainedCandidatePlan = value; }, () => knownItineraryDayCount(effectiveIntent));
           }
         }
       },

@@ -31,7 +31,11 @@ export class HttpAccommodationProvider implements AccommodationProvider {
       const available = credentials.vacantHotelSearchUrl
         ? await this.confirmAvailability(credentials, request, discovered)
         : undefined;
-      return (available ?? discovered).map((result) => createAccommodationOffering("travel-provider", request, result));
+      // Vacancy search may confirm fewer hotels than discovery. Keep the other
+      // comparison options with unknown availability instead of dropping them.
+      const confirmedIds = new Set(available?.map(result => result.providerItemId) ?? []);
+      const candidates = available ? [...available, ...discovered.filter(result => !confirmedIds.has(result.providerItemId))].slice(0, request.limit) : discovered;
+      return candidates.map((result) => createAccommodationOffering("travel-provider", request, result));
     } catch (error) {
       throw new Error("宿泊提供者の検索を利用できません。", { cause: error });
     } finally { clearTimeout(timeout); }
@@ -92,7 +96,7 @@ function providerResults(value: unknown, limit: number, observedAt: string, avai
       // This endpoint returns integer JPY only. Observation is response receipt, not a provider update time.
       ...(Number.isSafeInteger(basic.hotelMinCharge) && (basic.hotelMinCharge as number) >= 0
         ? { price: { price: { amountMinor: basic.hotelMinCharge as number, currency: "JPY" as const }, observedAt,
-          basis: availabilityConfirmed ? "selected-dates" as const : "reference-minimum" as const } } : {}),
+          basis: "reference-minimum" as const } } : {}),
       availability: availabilityConfirmed ? "available" as const : "unknown" as const }];
   });
 }

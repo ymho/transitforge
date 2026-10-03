@@ -35,7 +35,7 @@ export interface AgentRuntimeResult {
   publicPlanPresentation?: import("./public-plan-presentation").PublicPlanPresentation;
   publicJourneyPresentation?: import("./public-journey-presentation").PublicJourneyPresentation;
   publicGroundRoutePresentation?: import("./public-ground-route-presentation").PublicGroundRoutePresentation;
-  publicPlacePresentation?: import("./public-place-presentation").PublicPlacePresentation;
+  publicPlacePresentation?: import("./public-place-presentation").PublicPlacePresentation; publicAccommodationPresentation?: import("./public-accommodation-presentation").PublicAccommodationPresentation;
   /** Content-free per-turn accounting. Safe to retain/replay with the turn receipt. */
   researchExecution?: import("./research-execution").ResearchExecutionOutcome;
   status: AgentRuntimeStatus;

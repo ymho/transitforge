@@ -109,3 +109,29 @@ Conversation fixtureは本番の`explore_destination`を使い、discovery・ペ
 - 実Provider/実ブラウザ: 別の確認。上記の成功で代用しない。
 
 #721のV2専用Frontend表示分離は別作業。今回の公開snapshotの保存契約は維持する。
+
+
+## 相談から旅程への接続（2026-10-03）
+
+- 普通列車などのダイヤでは`trainName`・`trainNumber`・`serviceType`が空文字になる。
+  PublicJourneyの表示検証はDomainに合わせて空文字を許し、serviceUid・駅・時刻を必須のまま保つ。
+  検索後のApplication表示変換例外は`presentation/schema_invalid/application-projection`で記録し、
+  SDK終了や検索障害、DynamoDB保存障害と区別する。例外本文・検索payloadは記録しない。
+- 宿泊Providerの空室応答で検索候補全体を置換しない。確認済み候補を先頭にし、残りを空室未確認として
+  最大5件まで比較に残す。`hotelMinCharge`は空室APIから得ても参考最安値として扱い、人数・泊数の合計、
+  税込条件へ昇格しない。Toolの検索人数も表示し、旅行人数の受理とは分ける。
+- `public-accommodation-presentation-v1`は、最終回答が選んだ宿と同じ検索scopeかつ現行Intentに適用できる
+  EvidenceからApplicationが生成する。1件のname参照を選んでも、同じ検索の最大5件を比較カードにする。
+  他の検索・古いIntentの候補を混ぜず、空室・参考料金・日付・評価の定義を固定文で表示する。
+  原Provider応答・モデル生成カード・画像・座標・予約権限は渡さない。SSE、履歴、replayに同じsnapshotを保持する。
+- 空のTripへ旅程作成・反映を求められたら`draft_itinerary`で往路・活動・宿泊・帰路の未選択枠を作れる。
+  検索時刻などの不足はunknownsと確認質問へ残し、条件受理だけで作成依頼を完了しない。
+- 条件更新と仮旅程作成が同じターンの場合、保持候補は検証済みRequest-only proposal採用後のrevisionに拘束する。
+  採用が失敗したターンから候補を公開しない。既存logical day IDは引き継ぎ、相対日程の採用proposalには不足する
+  logical dayのtimeline patchを項目と一緒に含める。既存の日・calendar bindingsは保持する。
+- 新しい仮旅程は旅程画面の「未保存の旅程案」にも表示する。条件保存後のTripを再読込してtarget/revisionを照合する。
+  履歴復元では画面を勝手に開かず、現行revisionと一致する案だけを復元する。
+  チャットと旅程画面の両方でpreview→利用者確認→既存CAS保存を使い、表示だけではTripを変更しない。
+- 回帰fixtureは報告の5ターンと時刻を明示した追加検索を実SDKで実行し、3宿・出発地の受理・2日分の案・
+  空の列車名を含むカード・履歴/replay・preview/confirm保存まで検証する。
+  paid laneはホテル・出発地/旅程・鉄道の3ターンに実Bedrockを使い、Providerと永続状態は合成fixtureである。

@@ -144,6 +144,18 @@ export function proposePlanAdoption(input: { candidateSet: ItineraryCandidateSet
       context.tripId !== input.currentTrip.id || context.baseTripRevision !== input.currentTrip.revision) throw new Error("Stale or foreign candidate set");
   const variant = input.candidateSet.variants.find(({ id }) => id === input.variantId); if (!variant) throw new Error("Unknown variant");
   const componentMap: { componentId: string; itemId: string }[] = [], patches: TripUpdateProposal["patches"][number][] = [];
+  // Relative candidate schedules refer to logical days. Adopt those days in
+  // the same proposal as the items, preserving existing days and date bindings.
+  const existingDays = input.currentTrip.timeline?.logicalDays ?? [];
+  const existingIds = new Set(existingDays.map(day => day.id));
+  const requiredDays = new Set(variant.items.flatMap(item => [
+    ...(item.logicalDayId ? [item.logicalDayId] : []),
+    ...(item.schedule.type === "relative" ? [item.schedule.dayId, ...(item.schedule.endDayId ? [item.schedule.endDayId] : [])] : []),
+  ]));
+  const addedDays = variant.timeline.dayOrder.filter(id => requiredDays.has(id) && !existingIds.has(id));
+  if (addedDays.length) patches.push({ type: "timeline", timeline: { version: 1,
+    logicalDays: [...existingDays, ...addedDays.map((id, index) => ({ id, label: `${existingDays.length + index + 1}日目` }))],
+    calendarBindings: [...(input.currentTrip.timeline?.calendarBindings ?? [])] } });
   const currentIds = new Set(input.currentTrip.items.map(({ id }) => id));
   if ([...variant.removedBaseItemIds, ...variant.retainedBaseItemIds, ...variant.items.flatMap(({ baseItemId }) => baseItemId ? [baseItemId] : [])].some((id) => !currentIds.has(id))) throw new Error("Candidate references unknown base item");
   if (variant.items.flatMap(({ baseItemId }) => baseItemId ? [baseItemId] : []).some((id, index, all) => all.indexOf(id) !== index) ||

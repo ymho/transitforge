@@ -55,6 +55,7 @@ export interface ViewerAgentTurnResponse {
   publicJourneyPresentation?: PublicJourneyPresentation;
   publicGroundRoutePresentation?: PublicGroundRoutePresentation;
   publicPlacePresentation?: PublicPlacePresentation;
+  publicAccommodationPresentation?: import("@raiquora/agent/public-accommodation-presentation").PublicAccommodationPresentation;
   tripCostProposal?: import("@raiquora/trip/public-cost-proposal").PublicCostProposal;
   consultationRequestProposal?: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal;
   tripUpdateProposal?: TripUpdateProposal;

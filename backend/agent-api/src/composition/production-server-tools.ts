@@ -157,7 +157,10 @@ export function productionServerTools(options: {
           : externalTravelEvidence(output, context);
       },
     })),
-    { descriptor: accommodationToolDescriptor, operation: options.accommodation, evidence: externalTravelEvidence },
+    { descriptor: accommodationToolDescriptor, operation: async (input, context) => {
+      const response = await options.accommodation(input, context);
+      return { ...response, body: { ...response.body, searchAdults: input.adults ?? 1 } };
+    }, evidence: externalTravelEvidence },
     { descriptor: journeyDescriptor, operation: async (input, context) => {
       const response = await options.journey({ ...input, contractVersion: "journey-search-v1" }, context);
       if ((response.statusCode ?? 200) >= 400) return response;

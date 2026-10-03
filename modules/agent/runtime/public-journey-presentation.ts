@@ -61,7 +61,10 @@ function validJourney(value: unknown): value is PublicJourney {
 }
 function validLeg(value: unknown): boolean {
   const v = value as PublicJourney["legs"][number]; if (!record(value) || Object.keys(value).some((key) => !["originStation", "destinationStation", "departureTime", "arrivalTime", "serviceUid", "trainNumber", "serviceType", "trainName", "serviceDestination", "delayMinutes", "delayStatus", "delayBasis", "transferWaitMinutes"].includes(key))) return false;
-  return [v.originStation, v.destinationStation, v.serviceUid, v.trainNumber, v.serviceType, v.trainName].every((x) => short(x, 200)) && clock(v.departureTime) && clock(v.arrivalTime) &&
+  // The timetable Domain permits missing labels for local services. Identity,
+  // stations and times remain required; do not invent a train name to render it.
+  return [v.originStation, v.destinationStation, v.serviceUid].every((x) => short(x, 200)) &&
+    [v.trainNumber, v.serviceType, v.trainName].every(x => typeof x === "string" && x.length <= 200) && clock(v.departureTime) && clock(v.arrivalTime) &&
     (v.serviceDestination === undefined || short(v.serviceDestination, 200)) && (v.delayMinutes === undefined || integer(v.delayMinutes, 0, 1_440)) && (v.delayStatus === undefined || v.delayStatus === "observed" || v.delayStatus === "estimated") &&
     (v.delayBasis === undefined || short(v.delayBasis, 240)) && (v.transferWaitMinutes === undefined || integer(v.transferWaitMinutes, 0, 1_440));
 }

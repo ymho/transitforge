@@ -309,6 +309,15 @@ sidebarRealtimeMap.addEventListener("click", selectSidebarMapMode);
 // The consultation controller still manages panel state, but its old map button is gone.
 const aiGuideToggle = document.createElement("button");
 aiGuideToggle.type = "button";
+const adoptPlan: NonNullable<Parameters<typeof configureAiGuidePanel>[0]["onPlanAdoption"]> = async (target) => {
+      if (!serverTripClient.previewPlanAdoption || !serverTripClient.confirmPlanAdoption || activeConversationSession.id !== target.conversationId) throw new Error("Adoption unavailable");
+      const preview = await serverTripClient.previewPlanAdoption(target);
+      return { changes: preview.preview.changes, confirm: async () => {
+        if (activeConversationSession.id !== target.conversationId) throw new Error("Conversation changed");
+        await serverTripClient.confirmPlanAdoption!(target, preview.confirmationKey);
+        await tripWorkspaceController.source()?.retry?.(); await serverTripList.refresh(); tripWorkspace.show("trip");
+      } };
+    };
 aiGuideController = configureAiGuidePanel(
   {
     conversationSessionId: activeConversationSession.id,
@@ -347,6 +356,14 @@ aiGuideController = configureAiGuidePanel(
     },
     persistent: () => true,
     responseContextKey: () => JSON.stringify([serverAgentSession.contextVersion(), activeConversationSession.id, tripWorkspaceController.current()?.id, tripWorkspaceController.current()?.revision]),
+    onPlanPresentation: (value, open) => {
+      const conversationId = activeConversationSession.id;
+      void serverTripList.refresh().catch(() => undefined);
+      void tripWorkspaceController.source()?.retry?.().then(() => {
+        if (activeConversationSession.id !== conversationId || activeConversationSession.tripId !== value.target?.tripId) return;
+        try { tripWorkspaceController.presentPlan(value); if (open) tripWorkspace.showPlan(); } catch { /* Ignore stale retained history. */ }
+      }).catch(() => { if (open) aiGuideController.notify("旅程案は相談に表示しました。旅程を再読み込みして確認してください。"); });
+    },
     onTripConditionsSaved: () => {
       // Reload after rendering, so our own saved revision does not invalidate its response.
       // The source owns auth/session fencing and publishes the server's current Trip.
@@ -376,15 +393,7 @@ aiGuideController = configureAiGuidePanel(
         dayKey, title: card.title, category, sourceUrl: card.sourceUrl, observedAt: card.retrievedAt }));
       tripWorkspace.show("trip");
     },
-    onPlanAdoption: async (target) => {
-      if (!serverTripClient.previewPlanAdoption || !serverTripClient.confirmPlanAdoption || activeConversationSession.id !== target.conversationId) throw new Error("Adoption unavailable");
-      const preview = await serverTripClient.previewPlanAdoption(target);
-      return { changes: preview.preview.changes, confirm: async () => {
-        if (activeConversationSession.id !== target.conversationId) throw new Error("Conversation changed");
-        await serverTripClient.confirmPlanAdoption!(target, preview.confirmationKey);
-        await tripWorkspaceController.source()?.retry?.(); await serverTripList.refresh(); tripWorkspace.show("trip");
-      } };
-    },
+    onPlanAdoption: adoptPlan,
     onChecklistProposal: (proposal) => {
       try { tripWorkspaceController.checklist.preview(proposal); }
       catch { tripWorkspace.report("準備リストの追加案を表示できません。最新のリストを確認してください。"); }
@@ -401,6 +410,7 @@ aiGuideController = configureAiGuidePanel(
 );
 let openBranchedTrip: (trip: import("@raiquora/trip/trip").Trip, title: string) => Promise<void> = async () => { throw new Error("Branch navigation unavailable"); };
 const tripWorkspace = configureTripWorkspace({
+  conversationId: () => activeConversationSession.id, onPlanAdoption: adoptPlan,
   app, chat: aiGuidePanel, messages: aiGuideMessages, input: aiGuideInput,
   controller: tripWorkspaceController,
   showContext: (view) => contextWorkspaceController.show(view), returnToConversation,

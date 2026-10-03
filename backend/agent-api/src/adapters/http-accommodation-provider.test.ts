@@ -61,11 +61,21 @@ describe("HttpAccommodationProvider", () => {
     expect(results[0]).toMatchObject({
       providerItemId: "42",
       availability: "available",
-      price: { price: { amountMinor: 12_000, currency: "JPY" }, observedAt: expect.any(String), basis: "selected-dates" },
+      price: { price: { amountMinor: 12_000, currency: "JPY" }, observedAt: expect.any(String), basis: "reference-minimum" },
     });
     expect(requestedUrls[1]).toContain("hotelNo=42");
     expect(requestedUrls[1]).toContain("checkinDate=2026-09-01");
     expect(requestedUrls[1]).toContain("checkoutDate=2026-09-02");
     expect(requestedUrls[1]).toContain("adultNum=2");
   });
+});
+
+it("keeps unconfirmed alternatives when only one of three hotels has confirmed vacancy", async () => {
+  const provider = new HttpAccommodationProvider({ async fetch(url) {
+    const ids = url.includes("/vacant") ? [2] : [1, 2, 3];
+    return { ok: true, async json() { return { hotels: ids.map(hotelNo => [{ hotelBasicInfo: { hotelNo, hotelName: `宿${hotelNo}`, hotelMinCharge: 5100 } }]) }; } };
+  } }, { async load() { return { applicationId: "fixture", accessKey: "fixture", hotelSearchUrl: "https://example.com/search", vacantHotelSearchUrl: "https://example.com/vacant" }; } });
+  const result = await provider.search({ destination: "出雲大社", checkInDate: "2026-10-04", checkOutDate: "2026-10-05", adults: 1, limit: 3 });
+  expect(result.map(hotel => [hotel.providerItemId, hotel.availability])).toEqual([["2", "available"], ["1", "unknown"], ["3", "unknown"]]);
+  expect(result.every(hotel => hotel.price?.basis === "reference-minimum")).toBe(true);
 });

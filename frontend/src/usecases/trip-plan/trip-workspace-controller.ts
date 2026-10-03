@@ -11,6 +11,7 @@ import { requireFeasibleTrip, requestsReady } from "@raiquora/trip/trip-ready";
 import { projectTripReadiness } from "@raiquora/trip/trip-readiness";
 import { createChecklistWorkspaceController, type ChecklistWorkspacePort } from "./checklist-workspace-controller";
 import { assertItineraryEditingAllowed, previewInTripReplan, type InTripReplanTargets } from "@raiquora/trip/in-trip-replan";
+import { parsePublicPlanPresentation, type PublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 
 export interface TripProposalConfirmation { reservationChangeKey?: string; replanConfirmationKey?: string; }
 
@@ -37,7 +38,7 @@ export interface TripWorkspaceSource {
 }
 export function createTripWorkspaceController(initialSessionId: string, now: () => Date = () => new Date()) {
   let sessionId = initialSessionId;
-  const sessions = new Map<string, { source: TripWorkspaceSource; itemId?: string; proposal?: TripUpdateProposal; base?: string; confirming?: boolean }>();
+  const sessions = new Map<string, { source: TripWorkspaceSource; itemId?: string; proposal?: TripUpdateProposal; base?: string; confirming?: boolean; plan?: PublicPlanPresentation }>();
   const subscriptions = new Map<string, () => void>();
   const listeners = new Set<() => void>();
   const state = () => sessions.get(sessionId);
@@ -82,6 +83,15 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
       return projectTripReadiness(trip, evaluateTripFeasibility(trip, facts, now().toISOString()), facts.reservations, checklist.items());
     },
     current,
+    plan() {
+      const plan = state()?.plan, trip = current();
+      return plan && trip && plan.target?.tripId === trip.id && plan.target.baseTripRevision === trip.revision ? structuredClone(plan) : undefined;
+    },
+    presentPlan(input: PublicPlanPresentation) {
+      const plan = parsePublicPlanPresentation(input), trip = current(), s = state();
+      if (!trip || !s || plan.target?.tripId !== trip.id || plan.target.baseTripRevision !== trip.revision) throw new TripRevisionConflict();
+      s.plan = plan; publish();
+    },
     reservations,
     feasibility(proposed?: Trip) {
       const trip = proposed ?? current();
@@ -106,7 +116,7 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
         const s = sessions.get(id), latest = source.getCurrentTrip();
         const nextAuthVersion = source.sessionVersion?.();
         if (s && nextAuthVersion !== authVersion) {
-          delete s.proposal; delete s.base; delete s.itemId; checklist.forget(id);
+          delete s.proposal; delete s.base; delete s.itemId; delete s.plan; checklist.forget(id);
         }
         authVersion = nextAuthVersion;
         if (s?.proposal && latest && latest.revision !== s.proposal.baseRevision) { delete s.proposal; delete s.base; }

@@ -7,7 +7,7 @@ export interface PublicAssistantTurn {
   publicPlanPresentation?: import("@raiquora/agent/public-plan-presentation").PublicPlanPresentation;
   publicJourneyPresentation?: import("@raiquora/agent/public-journey-presentation").PublicJourneyPresentation;
   publicGroundRoutePresentation?: import("@raiquora/agent/public-ground-route-presentation").PublicGroundRoutePresentation;
-  publicPlacePresentation?: import("@raiquora/agent/public-place-presentation").PublicPlacePresentation;
+  publicPlacePresentation?: import("@raiquora/agent/public-place-presentation").PublicPlacePresentation; publicAccommodationPresentation?: import("@raiquora/agent/public-accommodation-presentation").PublicAccommodationPresentation;
   tripCostProposal?: import("@raiquora/trip/public-cost-proposal").PublicCostProposal;
   consultationRequestProposal?: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal;
   tripUpdateProposal?: import("@raiquora/trip/trip").TripUpdateProposal;
@@ -17,7 +17,7 @@ export interface PublicAssistantTurn {
 export function projectAssistantTurn(turn: PublicAssistantTurn): ViewerAgentResponse {
   const artifacts = { ...(turn.delivery ? { delivery: turn.delivery } : {}), ...(turn.semanticReceipt ? { semanticReceipt: turn.semanticReceipt } : {}), ...(turn.publicPlanPresentation ? { publicPlanPresentation: turn.publicPlanPresentation } : {}), ...(turn.publicJourneyPresentation ? { publicJourneyPresentation: turn.publicJourneyPresentation } : {}),
     ...(turn.publicGroundRoutePresentation ? { publicGroundRoutePresentation: turn.publicGroundRoutePresentation } : {}),
-    ...(turn.publicPlacePresentation ? { publicPlacePresentation: turn.publicPlacePresentation } : {}),
+    ...(turn.publicPlacePresentation ? { publicPlacePresentation: turn.publicPlacePresentation } : {}), ...(turn.publicAccommodationPresentation ? { publicAccommodationPresentation: turn.publicAccommodationPresentation } : {}),
     ...(turn.tripCostProposal ? { tripCostProposal: turn.tripCostProposal } : {}), ...(turn.consultationRequestProposal ? { consultationRequestProposal: turn.consultationRequestProposal } : {}), ...(turn.tripUpdateProposal ? { tripUpdateProposal: turn.tripUpdateProposal } : {}) };
   return Object.keys(artifacts).length ? { text: turn.response, ...artifacts } : turn.response;
 }

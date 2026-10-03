@@ -13,6 +13,7 @@ on:
           - "tool-grounding"
           - "write-not-available"
           - "conversation-output"
+          - "consultation-plan"
           - "condition-operations"
           - "party-condition"
           - "travel-period"
@@ -42,7 +43,7 @@ concurrency:
 
 jobs:
   evaluate:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/fix/consultation-search-to-itinerary'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: dev
@@ -100,6 +101,7 @@ jobs:
             all) cases=2; cycles=4 ;;
             tool-grounding|write-not-available) cases=1; cycles=4 ;;
             conversation-output) cases=10; cycles=6 ;;
+            consultation-plan) cases=4; cycles=8 ;;
             condition-operations) cases=7; cycles=8 ;;
             party-condition|travel-period) cases=6; cycles=6 ;;
             budget-condition) cases=7; cycles=6 ;;
@@ -140,6 +142,7 @@ jobs:
           mkdir -p .artifacts/strands-v2-live
           case "$CASE_ID" in
             conversation-output) script=test:agent:v2:conversation-live ;;
+            consultation-plan) script=test:agent:v2:consultation-live ;;
             condition-operations) script=test:agent:v2:condition-live ;;
             party-condition) script=test:agent:v2:party-live ;;
             travel-period) script=test:agent:v2:period-live ;;

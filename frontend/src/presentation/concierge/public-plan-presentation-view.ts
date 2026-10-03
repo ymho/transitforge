@@ -1,13 +1,13 @@
 import type { PublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 
-export function renderPublicPlanPresentation(value: PublicPlanPresentation): HTMLElement {
+export function renderPublicPlanPresentation(value: PublicPlanPresentation, options: { idPrefix?: string; detailedResearch?: boolean } = {}): HTMLElement {
   const root = document.createElement("section"); root.className = "public-plan-presentation";
   root.dataset.presentationId = value.presentationId; root.setAttribute("aria-label", "旅の仮行程");
   const navigation = document.createElement("div"); navigation.className = "public-plan-candidate-tabs"; navigation.setAttribute("role", "tablist");
   const panels = value.candidates.map((candidate, index) => {
-    const panel = document.createElement("article"); panel.className = "public-plan-candidate"; panel.id = safeId(`${value.presentationId}-${candidate.variantId}`);
+    const panel = document.createElement("article"); panel.className = "public-plan-candidate"; panel.id = safeId(`${options.idPrefix ?? ""}${value.presentationId}-${candidate.variantId}`);
     if (value.candidates.length > 1) panel.setAttribute("role", "tabpanel"); panel.hidden = index !== 0;
-    const heading = document.createElement("h3"); heading.textContent = value.candidates.length === 1 ? "現地での過ごし方" : candidate.label; panel.append(heading);
+    const heading = document.createElement("h3"); heading.textContent = candidate.label; panel.append(heading);
     const axes = document.createElement("dl"); axes.className = "public-plan-axes";
     if (candidate.cost?.status === "known" || candidate.cost?.status === "partial")
       axis(axes, "費用の目安", `${formatMinorCurrency(candidate.cost.currency, candidate.cost.amountMinor)}${candidate.cost.status === "partial" ? "（一部）" : ""}`);
@@ -25,6 +25,7 @@ export function renderPublicPlanPresentation(value: PublicPlanPresentation): HTM
       dayList.append(dayItem);
     }
     panel.append(dayList);
+    if (candidate.unknowns.length) panel.append(text(`未確認: ${candidate.unknowns.join("・")}`));
     if (candidate.scenarioRefs.length) { const scenario = text(`耐性評価: ${candidate.scenarioRefs.length}シナリオ（仮定に基づく比較）`); scenario.className = "public-plan-scenarios"; panel.append(scenario); }
     if (value.candidateSetRef.kind === "candidate-set-ref" && value.target) {
       const candidateSetRef = value.candidateSetRef, target = value.target;
@@ -51,7 +52,7 @@ export function renderPublicPlanPresentation(value: PublicPlanPresentation): HTM
   });
   if (value.candidates.length > 1) root.append(navigation);
   root.append(...panels);
-  if (value.researchOutcome.effectiveMode === "standard" && value.candidateSetRef.kind === "candidate-set-ref") { const detail = document.createElement("button"); detail.type = "button"; detail.textContent = "さらに詳しく比較する";
+  if (options.detailedResearch !== false && value.researchOutcome.effectiveMode === "standard" && value.candidateSetRef.kind === "candidate-set-ref") { const detail = document.createElement("button"); detail.type = "button"; detail.textContent = "さらに詳しく比較する";
     detail.addEventListener("click", () => detail.dispatchEvent(new CustomEvent("raiquora:detailed-research", { bubbles: true, detail: { presentationId: value.presentationId,
       ...(value.candidateSetRef.kind === "candidate-set-ref" ? { candidateSetId: value.candidateSetRef.candidateSetId, candidateSetRevision: value.candidateSetRef.revision,
         ...(value.candidateSetRef.baseTripRevision === undefined ? {} : { baseTripRevision: value.candidateSetRef.baseTripRevision }) } : {}),

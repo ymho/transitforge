@@ -4,6 +4,15 @@ const frame = (seq: number, event: unknown) => `event: agent\ndata: ${JSON.strin
 const final = frame(2, { type: "final", status: "completed", response: "日本語の回答" });
 const progress = frame(1, { type: "progress", phase: "running" });
 const done = 'event: done\ndata: {"v":1,"runId":"run","seq":3}\n\n';
+it("accepts the hotel comparison snapshot and rejects raw provider fields", async () => {
+  const publicAccommodationPresentation = { version: "public-accommodation-presentation-v1", cards: [{ evidenceId: "hotel-1", name: "宿1",
+    summary: "空室は未確認\n参考最安値: JPY 5,100", retrievedAt: "2026-10-03T00:00:00Z", sourceUrl: "https://example.org/hotel/1" }] };
+  const options = setup(stream(progress + frame(2, { type: "final", status: "completed", response: "宿の比較です", publicAccommodationPresentation }) + done));
+  await consumeAgentStream(options);
+  expect(options.onEvent.mock.calls.at(-1)?.[0].publicAccommodationPresentation).toEqual(publicAccommodationPresentation);
+  const invalid = { ...publicAccommodationPresentation, cards: [{ ...publicAccommodationPresentation.cards[0], rawProvider: "private" }] };
+  await expect(consumeAgentStream(setup(stream(progress + frame(2, { type: "final", status: "completed", response: "宿", publicAccommodationPresentation: invalid }) + done)))).rejects.toThrow("invalid_event");
+});
 function stream(text: string, split = false) {
   const data = new TextEncoder().encode(text);
   return new Response(new ReadableStream({ start(controller) {

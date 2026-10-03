@@ -1,3 +1,4 @@
+import { parsePublicAccommodationPresentation } from "@raiquora/agent/public-accommodation-presentation";
 import { parsePublicCostProposal } from "@raiquora/trip/public-cost-proposal";
 import { parseConsultationRequestProposal } from "@raiquora/trip/consultation-request-proposal";
 import { parsePublicTripProposal } from "@raiquora/trip/public-trip-proposal";
@@ -28,7 +29,7 @@ function page<T>(value: unknown, item: (value: unknown) => value is T): ServerPa
 }
 function validMessage(value: unknown): value is ServerConversationMessage {
   const v = value as Partial<ServerConversationMessage>;
-  if (!v || typeof v !== "object" || Object.keys(v).some(key => !["role", "text", "sequence", "createdAt", "delivery", "semanticReceipt", "publicPlanPresentation", "publicJourneyPresentation", "publicGroundRoutePresentation", "publicPlacePresentation", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"].includes(key))) return false;
+  if (!v || typeof v !== "object" || Object.keys(v).some(key => !["role", "text", "sequence", "createdAt", "delivery", "semanticReceipt", "publicPlanPresentation", "publicJourneyPresentation", "publicGroundRoutePresentation", "publicPlacePresentation", "publicAccommodationPresentation", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"].includes(key))) return false;
   try {
     if (v.delivery !== undefined && (v.role !== "assistant" || !validDelivery(v.delivery))) return false;
     if (v.semanticReceipt !== undefined) { if (v.role !== "assistant") return false; parsePublicSemanticReceipt(v.semanticReceipt); }
@@ -36,6 +37,7 @@ function validMessage(value: unknown): value is ServerConversationMessage {
     if (v.publicJourneyPresentation !== undefined) { if (v.role !== "assistant") return false; parsePublicJourneyPresentation(v.publicJourneyPresentation); }
     if (v.publicGroundRoutePresentation !== undefined) { if (v.role !== "assistant") return false; parsePublicGroundRoutePresentation(v.publicGroundRoutePresentation); }
     if (v.publicPlacePresentation !== undefined) { if (v.role !== "assistant") return false; parsePublicPlacePresentation(v.publicPlacePresentation); }
+    if (v.publicAccommodationPresentation !== undefined) { if (v.role !== "assistant") return false; parsePublicAccommodationPresentation(v.publicAccommodationPresentation); }
     if (v.tripCostProposal !== undefined) { if (v.role !== "assistant" || v.consultationRequestProposal !== undefined) return false; parsePublicCostProposal(v.tripCostProposal); }
     if (v.consultationRequestProposal !== undefined) { if (v.role !== "assistant" || v.tripUpdateProposal !== undefined) return false; parseConsultationRequestProposal(v.consultationRequestProposal); }
     if (v.tripUpdateProposal !== undefined) { if (v.role !== "assistant") return false; parsePublicTripProposal(v.tripUpdateProposal); }
