@@ -13,7 +13,7 @@ import { productionServerTools } from "./production-server-tools.js";
 import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
 
 /** Paid opt-in: real SDK/Bedrock + fixed Providers and fixture state, never production data.
- * Four turns, 6 model cycles/2 reads/60 seconds per turn. All semantic failures remain
+ * Four turns, 6 model cycles/2 reads/60 seconds/4096 output tokens per turn. All semantic failures remain
  * test failures; soft assertions let later turns be measured without hiding them. */
 const enabled = process.env.AGENT_V2_LIVE === "true";
 const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
@@ -39,7 +39,8 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
     const v1 = { converse: vi.fn(async () => { throw new Error("V1 must not run"); }) };
     let execution = 0;
     const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
-      maxTurns: 6, maxOutputTokens: 1024, maxInvocationOutputTokens: 1024 }, { createAgent: config => {
+      maxTurns: 6, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096,
+      ...(modelId === "jp.amazon.nova-2-lite-v1:0" ? { novaReasoningEffort: "low" as const } : {}) }, { createAgent: config => {
       const agent = new Agent(config);
       // Read-only SDK hooks for this synthetic live lane; never alter input, Tools,
       // retries or termination. No user text, IDs, raw Tool data or reasoning is logged.

@@ -31,6 +31,8 @@ Schemaの通過は事実の正しさや保存の権限を証明しない。Evide
 ## 調査結果と回答の完了
 
 `replyReferences`は公開時と同じEvidence/currentness・Intent・表示可能な値の検証を通した参照だけを返す。
+各項目は`{ reference: { evidenceId, field }, value }`とし、モデルは`reference`をそのまま選択する。
+概要・アクセスなどの見出しからfieldを作らせず、資料値と参照の組を明示する。
 未検証の検索snippetを回答用根拠として提示しない。公開時の再検証は省略しない。
 `explore_destination` / `discover_destinations`のモデル向け結果はoutcome（部分失敗の範囲を含む）と
 回答・カード用参照へ絞る。内部のdiscovery batch、取得ページ、地点照合、assessmentは重複して渡さず、
@@ -68,6 +70,16 @@ unavailable表示とし、古い条件を最新情報として残さない。
 SDK 1.18.0は不正な構造化出力にvalidation feedbackを返す。plain textで終了しようとした場合は、SDKが構造化出力Toolを一度指定して再度modelへ要求し、それでも拒否すればStructuredOutputErrorとなる。これは追加の自前repairではなく、選択したSDKの標準動作である。
 
 すべて同一invokeのturn/token/deadline上限内で行い、外側でinvokeを再実行しない。不正出力の繰返し、指定後の拒否、token上限、通信失敗を完了と扱わない。Domain Tool budgetにはSDKの出力Toolを数えない。
+
+#781では既存のApplication admissionをZodの`superRefine`からも呼ぶ。最新のEffective Intentと、
+初期Evidence・今回のreadを同じ上限でmergeした参照に対して検証する。存在しないfield等をSDK終了後に
+初めて検出するのではなく、SDK標準のvalidation feedbackとして同一invoke内でモデルへ返す。
+feedbackは閉じた拒否codeと選択方法だけであり、会話や生のEvidence、秘密値をエラーへ含めない。
+独自の再invoke・補正・公開fallbackは追加せず、訂正できなければ既存上限で停止する。
+最終公開時のEvidence/claim、receipt、currentness、衝突検証とA/B commitは省略しない。
+
+実BedrockのConversation評価も本番と同じ4096累積出力token/Nova 2 reasoning lowを使う。
+旧1024上限による途中終了を本番設定の評価と混同しない。6 cycles/2 reads/60秒の上限は維持する。
 
 ## 合否の区別
 

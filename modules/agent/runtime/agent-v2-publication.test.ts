@@ -233,9 +233,13 @@ describe("model-facing reply references", () => {
     const stale = { ...observation(), id: "stale", observation: { ...observation().observation!, state: "stale" as const } };
     const wrongIntent = { ...observation(), id: "old-intent", intentDependency: { intentRevision: 1, fingerprint: "old", targets: [] } };
     const refs = agentV2ReplyReferences([discovery, stale, wrongIntent, eligible], intent());
-    expect(refs).toEqual([{ evidenceId: eligible.id, fields: { sourceExcerpt: eligible.facts.sourceExcerpt, value: 10, list: ["one", "two"] } }]);
-    for (const ref of refs) for (const field of Object.keys(ref.fields)) {
-      expect(() => admitAgentV2Reply({ kind: "answer", references: [{ evidenceId: ref.evidenceId, field }] },
+    expect(refs).toEqual([
+      { reference: { evidenceId: eligible.id, field: "sourceExcerpt" }, value: eligible.facts.sourceExcerpt },
+      { reference: { evidenceId: eligible.id, field: "value" }, value: 10 },
+      { reference: { evidenceId: eligible.id, field: "list" }, value: ["one", "two"] },
+    ]);
+    for (const { reference } of refs) {
+      expect(() => admitAgentV2Reply({ kind: "answer", references: [reference] },
         { executionId: "test", evidence: [eligible], effectiveIntent: intent() })).not.toThrow();
     }
     expect(() => admitAgentV2Reply({ kind: "answer", references: [{ evidenceId: discovery.id, field: "sourceExcerpt" }] },

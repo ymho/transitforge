@@ -91,7 +91,7 @@ describe("StrandsAgentEngine", () => {
         userRequest: "旅先の魅力を教えて", tools, toolExecutor: new AgentToolExecutor(tools, registry) });
       const toolResult = JSON.parse(model.observedMessages[1]!).at(-1).content[0].toolResult.content[0].json;
       expect(toolResult.output).toEqual({ outcome });
-      expect(toolResult.replyReferences).toEqual([{ evidenceId: evidence.id, fields: evidence.facts }]);
+      expect(toolResult.replyReferences).toEqual([{ reference: { evidenceId: evidence.id, field: "sourceExcerpt" }, value: evidence.facts.sourceExcerpt }]);
       expect(model.observedMessages[1]).not.toContain("research-state");
       expect(result.evidence.map(item => item.id)).toEqual([discovery.id, evidence.id]);
     });

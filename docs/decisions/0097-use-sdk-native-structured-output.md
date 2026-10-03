@@ -27,3 +27,11 @@ SDKの構造化出力検証にはvalidation feedbackがある。またplain text
 ## 検証
 
 actual SDK + scripted modelの契約テストと、actual Bedrock + fixed travel Providerの会話テストを分ける。後者はProduction-shaped Conversationを通し、挨拶・条件受理・訂正・カード・未対応保存・履歴/replayを検証する。実Providerや実ブラウザの成功とは区別する。個別失敗が残れば、schema / Tool情報 / Application admission / モデル適性のどの契約かを調べ、発話別例外を加えない。
+
+## 2026-09-30: 公開検証のSDKフィードバック接続（#781）
+
+本番と実Bedrock評価で、構文上は正しいが公開できないfield参照により、SDKが終了した後に公開が失敗した。
+本番ログのinvalid_fieldだけでは、不存在・禁止項目・値の型のどれかまでは確定できない。
+Applicationの既存admissionをrunごとのZod superRefineでも呼び、標準SDKが同一invoke内で拒否理由を
+モデルへ返せるようにする。検証の正本や公開権限をSDKへ移さず、最終admissionとclaim検証は維持する。
+独自retry loop・ToolChoice制御・不正参照の書換え・自由文fallbackは追加しない。

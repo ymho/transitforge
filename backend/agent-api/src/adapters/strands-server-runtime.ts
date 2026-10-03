@@ -22,6 +22,7 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
       run = await engine.run({
         executionId: input.executionId, userRequest: input.userRequest, ...conversationInput,
         tools: input.tools, toolExecutor: input.toolExecutor, effectiveIntent: input.context?.effectiveIntent,
+        initialEvidence: input.initialEvidence, maxEvidence: input.limits.maxEvidence,
         ...(input.conditionController ? { conditionController: { ...input.conditionController, apply: async change => {
           const accepted = await input.conditionController!.apply(change);
           conditionReceipts.push(structuredClone(accepted.receipt));

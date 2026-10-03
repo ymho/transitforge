@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { Agent, BeforeToolCallEvent } from "@strands-agents/sdk";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
 import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
@@ -31,7 +32,24 @@ describe.skipIf(process.env.AGENT_V2_LIVE !== "true")("concise destination answe
       })) };
     const userRequest = "青葉神社に行ってみたい。どんなところで、どう行くのがよいでしょう？次に何を決めればいいですか？";
     const result = await new StrandsAgentEngine({ modelId: process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0", region: "ap-northeast-1",
-      systemPrompt: agentV2SystemPrompt, maxTurns: 6, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096, novaReasoningEffort: "low" }).run({
+      systemPrompt: agentV2SystemPrompt, maxTurns: 6, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096, novaReasoningEffort: "low" }, {
+      createAgent: config => {
+        const agent = new Agent(config);
+        // Synthetic fixture only: inspect the selected field, never user data or reasoning.
+        agent.addHook(BeforeToolCallEvent, ({ toolUse }) => {
+          if (toolUse.name !== "strands_structured_output") return;
+          const input = toolUse.input as { reply?: { kind?: string; references?: { evidenceId?: string; field?: string }[] } };
+          if (input.reply?.kind !== "answer" || !Array.isArray(input.reply.references)) return;
+          console.log(JSON.stringify({ case: "synthetic-reference", knownOrigin,
+            references: input.reply.references.slice(0, 8).map(reference => ({
+              expectedEvidence: reference.evidenceId === evidence.id,
+              field: typeof reference.field === "string" && /^[a-zA-Z][a-zA-Z0-9_.]{0,79}$/u.test(reference.field) ? reference.field : "invalid_field_name",
+              offeredField: reference.field === "sourceExcerpt",
+            })) }));
+        });
+        return agent;
+      },
+    }).run({
       executionId: `concise-${knownOrigin}`, userRequest, modelInput: JSON.stringify({ userMessage: userRequest,
         application: { effectiveIntent, clock: { calendarDate: "2026-09-29" } } }), effectiveIntent, tools,
       toolExecutor: new AgentToolExecutor(tools, registry), limits: { maxTurns: 6, maxToolCalls: 2, maxExecutionMs: 60000 },
