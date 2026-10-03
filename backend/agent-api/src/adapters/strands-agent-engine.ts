@@ -6,11 +6,11 @@ import {
 import { AgentTraceRecorder, type AgentTrace } from "@raiquora/agent/agent-trace";
 import { validateToolIntentUse } from "@raiquora/agent/intent-action-policy";
 import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
-import type { Evidence } from "@raiquora/agent/evidence-model";
+import { mergeEvidenceObservations, type Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
-import { agentV2StructuredOutputSchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
-import { agentV2CandidateReferences, agentV2ReplyReferences } from "@raiquora/agent/agent-v2-publication";
+import { AgentV2ReplyError, agentV2StructuredOutputSchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
+import { admitAgentV2Reply, agentV2CandidateReferences, agentV2ReplyReferences } from "@raiquora/agent/agent-v2-publication";
 import { placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, travelPeriodUpdateInputSchema, budgetConditionUpdateInputSchema,
   tripScenarioInputSchema, admitTripScenario, ConditionUpdateRejectedError, type ConversationConditionInput } from "@raiquora/agent/conversation-condition";
 import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
@@ -39,6 +39,8 @@ export interface StrandsAgentRunInput {
   tools: AgentToolRegistry;
   toolExecutor: AgentToolExecutor;
   effectiveIntent?: EffectiveIntent;
+  initialEvidence?: Evidence[];
+  maxEvidence?: number;
   cancelSignal?: AbortSignal;
   limits?: { maxTurns?: number; maxToolCalls?: number; maxExecutionMs?: number; maxTotalTokens?: number; maxOutputTokens?: number };
   reserveToolCall?: () => boolean;
@@ -160,10 +162,27 @@ export class StrandsAgentEngine {
       ...(this.options.novaReasoningEffort ? {
         additionalRequestFields: { reasoningConfig: { type: "enabled", maxReasoningEffort: this.options.novaReasoningEffort } },
       } : {}) });
+    // Reuse Application admission in the SDK's native validation feedback. This
+    // does not repair a reply, start another invoke, or bypass final publication.
+    const validatedOutputSchema = agentV2StructuredOutputSchema.superRefine(({ reply }, context) => {
+      const merged = mergeEvidenceObservations([], [...(input.initialEvidence ?? []), ...evidence], input.maxEvidence);
+      if (merged.collisions.length || merged.conflictingObservationIds.length) {
+        context.addIssue({ code: "custom", message: "evidence_collision", path: ["reply"] });
+        return;
+      }
+      try {
+        admitAgentV2Reply(reply, { executionId: input.executionId, evidence: merged.evidence,
+          effectiveIntent: currentEffectiveIntent, receipts: [], availableOperations: [] });
+      } catch (error) {
+        if (!(error instanceof AgentV2ReplyError)) throw error;
+        context.addIssue({ code: "custom", path: ["reply"],
+          message: `${error.code}: select an exact reference from the latest Tool replyReferences for facts; otherwise use a supported conversation, clarification, uncertainty or unavailable reply. Never invent fields, IDs or operation receipts.` });
+      }
+    });
     const agent = this.createAgent({
       model: baseModel,
       ...(input.history?.length ? { messages: input.history } : {}),
-      structuredOutputSchema: agentV2StructuredOutputSchema,
+      structuredOutputSchema: validatedOutputSchema,
       tools, systemPrompt: this.options.systemPrompt,
       printer: false, contextManager: false, retryStrategy: null, toolExecutor: "sequential",
     });

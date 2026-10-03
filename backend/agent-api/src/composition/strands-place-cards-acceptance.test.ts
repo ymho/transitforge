@@ -13,7 +13,7 @@ import { cognitoTokenFixture, token } from "../adapters/cognito-token.fixture.js
 import type { StreamWriter } from "../ports/agent-stream-transport.js";
 import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
 
-type Step = { tool: string; input: Record<string, unknown> } | "candidates" | "end";
+type Step = { tool: string; input: Record<string, unknown> } | "candidates" | "answer" | "invalid-answer" | "end";
 const read: Step = { tool: "search_place_media", input: { query: "青葉庭園", mode: "discovery", limit: 1 } };
 const uncertainty: Step = { tool: "strands_structured_output", input: { kind: "uncertainty" } };
 const update: Step = { tool: "update_current_destination", input: { action: "set", place: "青葉庭園", quote: "青葉庭園" } };
@@ -30,7 +30,12 @@ class CandidateModel extends Model<BaseModelConfig> {
     const ids = candidateIds(JSON.parse(JSON.stringify(messages)));
     this.seenCandidateIds = [...new Set([...this.seenCandidateIds, ...ids])];
     const proposal = step === "candidates" ? { tool: "strands_structured_output", input: { kind: "candidates",
-      evidenceIds: ids.slice(-1), commentary: "散策先として、この庭園を検討できます。" } } : step;
+      evidenceIds: ids.slice(-1), commentary: "散策先として、この庭園を検討できます。" } }
+      : step === "answer" || step === "invalid-answer" ? { tool: "strands_structured_output", input: {
+        kind: "answer", references: [{ evidenceId: ids.at(-1), field: step === "answer" ? "sourceExcerpt" : "access" }],
+        sections: [{ heading: "見どころ", text: "池の周囲を散策できます。" }],
+        nextQuestion: { target: "origin", text: "どこから出発しますか？" },
+      } } : step;
     yield { type: "modelMessageStartEvent", role: "assistant" };
     if (proposal === "end") {
       yield { type: "modelContentBlockStartEvent" };
@@ -112,10 +117,28 @@ it("publishes a real travel read as cards through Strands, A/B commits, owner-sc
   expect(model.calls).toBe(calls); expect(test.searchPlaceMedia).toHaveBeenCalledOnce();
 });
 
+it("corrects an invalid answer reference within one turn and commits/replays the answer without repeating the condition write", async () => {
+  const test = await setup();
+  const { app, model } = test.build([update, read, "invalid-answer", "answer"]);
+  const result = await app.runConversationTurn(test.input);
+  expect(result.status).toBe("completed");
+  expect(result.response).toContain("どこから出発しますか？");
+  expect(result.semanticReceipt).toMatchObject({ intentRevision: 1 });
+  expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.intentRevision).toBe(1);
+  const history = await test.state.conversations.history(test.principal, conversationId);
+  expect(history.items).toHaveLength(2);
+  expect(history.items[1]?.text).toBe(result.response);
+  expect(model.calls).toBe(4);
+  expect(test.searchPlaceMedia).toHaveBeenCalledOnce();
+  expect(await app.runConversationTurn(test.input)).toEqual(result);
+  expect(model.calls).toBe(4);
+  expect(test.searchPlaceMedia).toHaveBeenCalledOnce();
+});
+
 it("cannot publish old candidate Evidence after an intent update and can retry against the committed conditions", async () => {
   const test = await setup();
-  const first = test.build([read, update, "candidates", "end"]);
-  await expect(first.app.runConversationTurn(test.input)).rejects.toMatchObject({ code: "agent_failed" });
+  const first = test.build([read, update, ...Array<Step>(6).fill("candidates")]);
+  await expect(first.app.runConversationTurn(test.input)).rejects.toMatchObject({ code: "limit_reached" });
   expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.intentRevision).toBe(1);
   expect((await test.state.conversations.history(test.principal, conversationId)).items).toHaveLength(1);
   const retry = test.build([read, "candidates", "end"], "v2-cards-retry");
@@ -141,10 +164,10 @@ it("returns uncertainty without fabricated cards when the travel Provider has no
 
 it("rejects a model-selected foreign Evidence reference without saving a successful candidate reply", async () => {
   const test = await setup();
-  const { app } = test.build([read, { tool: "strands_structured_output", input: {
+  const { app } = test.build([read, ...Array<Step>(7).fill({ tool: "strands_structured_output", input: {
     kind: "candidates", evidenceIds: ["foreign-evidence"], commentary: "確認できました。",
-  } }, "end"]);
-  await expect(app.runConversationTurn(test.input)).rejects.toMatchObject({ code: "agent_failed" });
+  } })]);
+  await expect(app.runConversationTurn(test.input)).rejects.toMatchObject({ code: "limit_reached" });
   expect((await test.state.conversations.history(test.principal, conversationId)).items).toHaveLength(1);
 });
 

@@ -1,3 +1,4 @@
+import { admitAgentV2Reply, agentV2CandidateReferences } from "@raiquora/agent/agent-v2-publication";
 import { createTrip } from "@raiquora/trip/trip";
 import { describe, expect, it, vi } from "vitest";
 import { Agent, BeforeToolCallEvent, ModelMessageEvent, ToolResultEvent } from "@strands-agents/sdk";
@@ -12,12 +13,52 @@ import { createConversationServerAgent } from "./conversation-server-agent.js";
 import { productionServerTools } from "./production-server-tools.js";
 import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
 
+function fixedDestinationProviders() {
+  const calls: { query: string }[] = [];
+  const source = (label: string) => `https://example.org/evaluation/${label === "出雲大社" ? "izumo" : "kiyomizu"}`;
+  const discovery = vi.fn(async (input: { facets?: { value: string }[] }) => {
+    const label = ["出雲大社", "清水寺"].find(name => input.facets?.some(facet => facet.value.includes(name)));
+    return { body: { discovery: { batch: { hits: label ? [{ hitId: `fixture-${label}`, sourceRef: source(label),
+      retrievalChannel: "web", text: label, originalRank: 1 }] : [], coverage: { completedQueries: 1 }, incompleteReasons: [] } } } };
+  });
+  const readWebPages = vi.fn(async (input: { urls: string[] }) => ({ webPages: {
+    status: "available", freshness: "fresh", data: { pages: input.urls.flatMap(url => {
+      const label = ["出雲大社", "清水寺"].find(name => source(name) === url);
+      return label ? [{ url, title: label, text: `${label}は散策の対象となる場所です。これは接続検証用の固定資料です。` }] : [];
+    }) }, evidence: input.urls.map(url => ({ id: `fixture-page-${url}`, provider: "fixture", sourceUrl: url, retrievedAt: new Date().toISOString(), validUntil: "2099-10-03T00:00:00Z" })),
+  } }));
+  const searchPlaceMedia = vi.fn(async (input: { query: string }) => {
+    calls.push({ query: input.query });
+    const label = ["出雲大社", "清水寺"].find((name) => input.query.includes(name));
+    if (!label) return { result: { status: "unavailable", freshness: "unknown", evidence: [] } };
+    const id = label === "出雲大社" ? "izumo" : "kiyomizu", sourceUrl = `https://places.example/evaluation/${id}`;
+    return { result: { status: "available", freshness: "fresh", data: { places: [{ providerPlaceId: id, name: label,
+      summary: "散策の対象となる場所です。これは接続検証用の固定資料です。", sourceUrl, officialWebsiteUrl: source(label), openingHoursStatus: "unknown" }] },
+      evidence: [{ id: `source-${id}`, provider: "fixture", sourceUrl, retrievedAt: new Date().toISOString(), validUntil: "2099-10-03T00:00:00Z" }] } };
+  });
+  return { calls, discovery, readWebPages, searchPlaceMedia };
+}
+
+it.each(["出雲大社", "清水寺"])("fixed purpose Providers offer a publishable %s card before any model call", async destination => {
+  const providers = fixedDestinationProviders();
+  const binding = productionServerTools({ external: providers, discovery: providers.discovery, accommodation: vi.fn(), journey: vi.fn() })
+    .find(({ descriptor }) => descriptor.name === "explore_destination")!;
+  const response = await binding.operation({ destination }, { requestId: "synthetic-fixture" });
+  const evidence = binding.evidence(response.body, { executionId: "synthetic-fixture", toolCallId: "read-1", toolName: "explore_destination",
+    queryFingerprint: "synthetic", retrievedAt: "2026-10-03T00:00:00Z" });
+  const candidates = agentV2CandidateReferences(evidence);
+  expect(candidates).toHaveLength(1);
+  const reply = admitAgentV2Reply({ kind: "candidates", evidenceIds: candidates.map(({ evidenceId }) => evidenceId), commentary: "確認した候補です。" },
+    { executionId: "synthetic-fixture", evidence });
+  expect(reply.publicPlacePresentation?.cards.map(({ title }) => title)).toEqual([destination]);
+});
+
 /** Paid opt-in: real SDK/Bedrock + fixed Providers and fixture state, never production data.
- * Four turns, 6 model cycles/2 reads/60 seconds per turn. All semantic failures remain
+ * Four turns, 6 model cycles/2 reads/60 seconds/4096 output tokens per turn. All semantic failures remain
  * test failures; soft assertions let later turns be measured without hiding them. */
 const enabled = process.env.AGENT_V2_LIVE === "true";
 const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
-const toolsToObserve = new Set(["update_current_origin", "update_current_destination", "search_place_media", "strands_structured_output"]);
+const toolsToObserve = new Set(["update_current_origin", "update_current_destination", "explore_destination", "search_place_media", "strands_structured_output"]);
 describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () => {
   it("handles greeting, destination, correction and unavailable save through Conversation/replay", async () => {
     const { verifier } = cognitoTokenFixture();
@@ -26,20 +67,12 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
     const metadata = stateMetadata();
     trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
     await state.conversations.create(principal, conversationId, metadata);
-    const calls: { query: string }[] = [];
-    const searchPlaceMedia = vi.fn(async (input: { query: string }) => {
-      calls.push({ query: input.query });
-      const label = ["出雲大社", "清水寺"].find((name) => input.query.includes(name));
-      if (!label) return { result: { status: "unavailable", freshness: "unknown", evidence: [] } };
-      const id = label === "出雲大社" ? "izumo" : "kiyomizu", sourceUrl = `https://example.org/evaluation/${id}`;
-      return { result: { status: "available", freshness: "fresh", data: { places: [{ providerPlaceId: id, name: label,
-        summary: "散策の対象となる場所です。これは接続検証用の固定資料です。", sourceUrl, openingHoursStatus: "unknown" }] },
-        evidence: [{ id: `source-${id}`, provider: "fixture", sourceUrl, retrievedAt: new Date().toISOString() }] } };
-    });
+    const { calls, discovery, readWebPages, searchPlaceMedia } = fixedDestinationProviders();
     const v1 = { converse: vi.fn(async () => { throw new Error("V1 must not run"); }) };
     let execution = 0;
     const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
-      maxTurns: 6, maxOutputTokens: 1024, maxInvocationOutputTokens: 1024 }, { createAgent: config => {
+      maxTurns: 6, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096,
+      ...(modelId === "jp.amazon.nova-2-lite-v1:0" ? { novaReasoningEffort: "low" as const } : {}) }, { createAgent: config => {
       const agent = new Agent(config);
       // Read-only SDK hooks for this synthetic live lane; never alter input, Tools,
       // retries or termination. No user text, IDs, raw Tool data or reasoning is logged.
@@ -67,9 +100,10 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
       model: v1, weather: { search: vi.fn() }, newExecutionId: () => `native-live-${++execution}`,
       limits: { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 2, maxExecutionMs: 60000 },
       runRuntime: createStrandsServerRuntime(engine),
-      // Isolate the model/contract with a real production read, not empty unrelated Provider stubs.
-      additionalTools: productionServerTools({ external: { searchPlaceMedia }, accommodation: vi.fn(), journey: vi.fn() })
-        .filter(({ descriptor }) => descriptor.name === "search_place_media") });
+      // Use the production purpose read and its source/media projection. The
+      // prompt calls explore_destination; a media-only fixture hides that contract.
+      additionalTools: productionServerTools({ external: { searchPlaceMedia, readWebPages }, discovery, accommodation: vi.fn(), journey: vi.fn() })
+        .filter(({ descriptor }) => ["explore_destination", "search_place_media"].includes(descriptor.name)) });
     const messages = ["おはよう", "出雲大社にいきたい", "やっぱり清水寺に行きたい。候補カードを見せて", "この候補を保存して"];
     let successfulTurns = 0;
     for (const [index, userRequest] of messages.entries()) {

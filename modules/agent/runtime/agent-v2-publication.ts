@@ -172,16 +172,16 @@ export function agentV2CandidateReferences(evidence: readonly Evidence[], effect
 /** Only offer references the answer publisher can actually admit. Discovery
  * snippets, stale observations and non-displayable fields remain research data. */
 export function agentV2ReplyReferences(evidence: readonly Evidence[], effective?: EffectiveIntent):
-  { evidenceId: string; fields: Record<string, unknown> }[] {
+  { reference: { evidenceId: string; field: string }; value: unknown }[] {
   return evidence.flatMap(item => {
     try { assertEvidence(item, effective); }
     catch (error) { if (error instanceof AgentV2ReplyError) return []; throw error; }
-    const fields = Object.fromEntries(Object.entries(item.facts).filter(([key, value]) => {
+    const fields = Object.entries(item.facts).filter(([key, value]) => {
       if (!publicReplyField(key)) return false;
       try { factText(value); return true; }
       catch (error) { if (error instanceof AgentV2ReplyError) return false; throw error; }
-    }));
-    return Object.keys(fields).length ? [{ evidenceId: item.id, fields }] : [];
+    });
+    return fields.map(([field, value]) => ({ reference: { evidenceId: item.id, field }, value }));
   });
 }
 
