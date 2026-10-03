@@ -33,6 +33,7 @@ on:
         options:
           - "amazon.nova-lite-v1:0"
           - "jp.amazon.nova-2-lite-v1:0"
+          - "jp.anthropic.claude-sonnet-4-6"
 
 permissions:
   contents: read
