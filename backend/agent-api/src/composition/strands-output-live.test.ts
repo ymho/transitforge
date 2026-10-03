@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { candidateProposalInputSchema } from "../usecases/plan-candidate-retention.js";
 import { admitAgentV2Reply, agentV2CandidateReferences } from "@raiquora/agent/agent-v2-publication";
 import { createTrip } from "@raiquora/trip/trip";
 import { describe, expect, it, vi } from "vitest";
@@ -172,6 +174,11 @@ describe.skipIf(!enabled)("V2 itinerary proposal conversation with real Bedrock"
         agent.addHook(BeforeToolCallEvent, ({ toolUse }) => {
           if (!observed.has(toolUse.name)) return;
           const input = toolUse.input as Record<string, unknown>;
+          if (toolUse.name === "draft_itinerary") {
+            const validation = z.fromJSONSchema(candidateProposalInputSchema).safeParse(input);
+            console.log(JSON.stringify({ phase: "itinerary-input-validation", valid: validation.success,
+              issues: validation.success ? [] : validation.error.issues.map(issue => ({ code: issue.code, path: issue.path })) }));
+          }
           console.log(JSON.stringify({ phase: "itinerary-tool", name: toolUse.name,
             ...(toolUse.name === "draft_itinerary" ? { hasDraft: !!input.draft, hasPresentation: !!input.presentation,
               inputBytes: Buffer.byteLength(JSON.stringify(input)) } : {}) }));
