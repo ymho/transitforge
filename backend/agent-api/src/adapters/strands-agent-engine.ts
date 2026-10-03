@@ -28,7 +28,7 @@ export interface StrandsAgentEngineOptions {
   maxInvocationOutputTokens?: number;
   toolTimeoutMs?: number;
   /** Explicit Nova configuration selected by the composition root. */
-  novaReasoningEffort?: "low" | "medium";
+  novaReasoningEffort?: "low";
 }
 export interface StrandsAgentRunInput {
   executionId: string;
@@ -115,7 +115,10 @@ export class StrandsAgentEngine {
             scope: "consultation_conditions_only", itineraryItemsChanged: false,
             researchPerformed: false });
         } catch (error) {
-          if (error instanceof ConditionUpdateRejectedError) throw error;
+          if (error instanceof ConditionUpdateRejectedError) {
+            if (error.code === "invalid_source") throw new Error("invalid_source: No condition was changed. quote must be an exact substring of the CURRENT user message, not an earlier user message or Application provenance. Already accepted conditions remain available for research; do not re-submit them. If the current message states no new condition, continue its requested work without a condition writer.");
+            throw error;
+          }
           // The SDK reports Tool errors. An uncertain write additionally closes reads
           // and publication; no recovery by reinterpreting or repairing the user input.
           intentUnavailable = true;

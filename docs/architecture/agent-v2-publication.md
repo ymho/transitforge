@@ -190,3 +190,13 @@ Conversation fixtureは本番の`explore_destination`を使い、discovery・ペ
   出発地受理・2日分の案・経路公開・確認保存まで成功したが、宿の承諾を案作成へ取り違えて全体は失敗した。
   既存low/推論無効/Nova 1の比較だけでは完了性を満たしていないため、次にmediumを同じturn/token/deadline上限で比較する。
   この比較時点では本番lowを変更しない。Engineの明示設定にmediumを追加し、SDKへの設定伝達を検証する。
+
+- [mediumの比較](https://github.com/ymho/transitforge/actions/runs/37129528633)でも全体は失敗した。
+  宿の承諾ターンの期間writerでquoteは今回発言に含まれず、過去発言に含まれていた。
+  mediumは採用せずfixture/Engine設定をlowへ戻す。Applicationの拒否自体は維持し、SDKのnative Tool errorに
+  「今回発言だけを根拠にする」「受理済み条件は再登録せず検索へ利用できる」という閉じた説明を追加する。
+  自由文・quoteの再出力、条件の補正、外側retry、Tool選択の強制は行わない。
+
+- draft_itineraryの成功応答にも`scope=unsaved_itinerary_only`、`researchPerformed=false`、
+  `tripItemsChanged=false`を明示する。保持した案の作成成功だけを検索・保存成功と扱わないための実行scopeであり、
+  次のTool選択や旅程採用をApplicationが強制するものではない。

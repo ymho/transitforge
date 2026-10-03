@@ -96,7 +96,7 @@ describe("StrandsAgentEngine", () => {
       expect(result.evidence.map(item => item.id)).toEqual([discovery.id, evidence.id]);
     });
 
-  it.each([undefined, "low", "medium"] as const)(
+  it.each([undefined, "low"] as const)(
     "uses only explicitly configured Nova reasoning: %s", async novaReasoningEffort => {
       const { input } = setup();
       let captured: ReturnType<BedrockModel["getConfig"]> = {};
@@ -418,5 +418,8 @@ describe("condition authority remains in Application (#761)", () => {
     expect(apply).toHaveBeenCalledTimes(2);
     expect(result.effectiveIntent?.fingerprint).toBe("accepted-4");
     expect(model.observedMessages.at(-1)).toContain("invalid_source");
+    expect(model.observedMessages.at(-1)).toContain("No condition was changed");
+    expect(model.observedMessages.at(-1)).toContain("CURRENT user message");
+    expect(model.observedMessages.at(-1)).toContain("Already accepted conditions remain available for research");
   });
 });

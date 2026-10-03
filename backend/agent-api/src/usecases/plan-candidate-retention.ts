@@ -29,8 +29,8 @@ export function registerPlanCandidateRetentionTool(tools: AgentToolRegistry, app
   tools.register<unknown, unknown>({ name: draftItineraryToolName, effect: "proposal", requiredCapabilities: ["agent-v2-proposal"],
     description: "旅程の作成・反映を依頼された時に、既知の条件から日別の仮旅程を作る。宿泊施設だけの提案・比較依頼はsearch_accommodationsを使う。空のTripでは出発地などの条件受理の後にこのToolを使う。時刻・経路・宿が未選択でも往路・活動・宿泊・帰路の枠を作りunknownsへ残せる。variantsへlabel・dayCount・itemsを指定する。itemsは行程順にkind・title・day（1始まり）を書く。翌日まで続く宿泊等はendDayを指定する。内部ID・参照配列・表示payloadはServerが生成する。確定的な期間条件があればServerがその日数を使う（1泊は2日）。未確認の移動時刻・料金・営業・宿泊を事実として補わない。成功したら最終回答で確認方法と不足条件を短く伝える。Tripへの採用・保存は利用者確認後の別操作で行う。",
     inputSchema: candidateProposalInputSchema,
-    outputSchema: { type: "object", properties: { candidateSetId: { type: "string" }, revision: { type: "integer" }, presentationId: { type: "string" }, saved: { type: "boolean" }, confirmationRequired: { type: "boolean" } },
-      required: ["candidateSetId", "revision", "presentationId", "saved", "confirmationRequired"], additionalProperties: false },
+    outputSchema: { type: "object", properties: { candidateSetId: { type: "string" }, revision: { type: "integer" }, presentationId: { type: "string" }, saved: { type: "boolean" }, confirmationRequired: { type: "boolean" }, scope: { type: "string", enum: ["unsaved_itinerary_only"] }, researchPerformed: { type: "boolean", enum: [false] }, tripItemsChanged: { type: "boolean", enum: [false] } },
+      required: ["candidateSetId", "revision", "presentationId", "saved", "confirmationRequired", "scope", "researchPerformed", "tripItemsChanged"], additionalProperties: false },
     parseInput: value => validateAgentToolInput(candidateProposalInputSchema, value),
     async execute(input) {
       try {
@@ -39,7 +39,8 @@ export function registerPlanCandidateRetentionTool(tools: AgentToolRegistry, app
         const draft = canonicalItineraryDraft(value, currentScope.baseItemIds ?? [], currentDayCount?.(), currentScope.baseDayIds ?? []);
         const retained = await application.retain(currentScope, draft, value.unknowns); publish(retained);
         return successfulAgentToolResult({ candidateSetId: retained.candidateSet.id, revision: retained.candidateSet.revision,
-          presentationId: retained.presentation.presentationId, saved: false, confirmationRequired: true });
+          presentationId: retained.presentation.presentationId, saved: false, confirmationRequired: true,
+          scope: "unsaved_itinerary_only", researchPerformed: false, tripItemsChanged: false });
       } catch (error) { return failedAgentToolResult({ code: error instanceof TripResourceError && error.code === "invalid-input" ? "invalid_input" : "unavailable", message: "候補案を保持できませんでした", retryable: false }); }
     },
   });
