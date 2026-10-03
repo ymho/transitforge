@@ -134,7 +134,7 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
     const input = { principal: stateA, conversationId, turnId: `78500000-1111-4000-8000-${String(index + 1).padStart(12, "0")}`, userRequest, uiContext: { calendarDate: "2026-10-03" } };
     const result = await app.runConversationTurn(input);
     expect(result.status).toBe("completed"); expect(await app.runConversationTurn(input)).toEqual(result);
-    if (index === 2) expect(result.publicAccommodationPresentation?.cards).toHaveLength(3);
+    if (index === 2) { expect.soft(accommodation).toHaveBeenCalled(); expect.soft(result.publicAccommodationPresentation?.cards).toHaveLength(3); }
     if (index === 4) {
       plan = result.publicPlanPresentation!;
       expect(plan?.candidates[0]?.days).toHaveLength(2);
@@ -162,5 +162,5 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
   expect(saved.status).toBe("saved");
   expect((await trips.repository.get(stateA, metadata.tripId))!.items.length).toBeGreaterThanOrEqual(3);
   const history = (await state.conversations.history(stateA, conversationId)).items;
-  expect(history).toHaveLength(12); expect(history[5]?.publicAccommodationPresentation?.cards).toHaveLength(3);
+  expect(history).toHaveLength(12); expect.soft(history[5]?.publicAccommodationPresentation?.cards).toHaveLength(3);
 }, 300_000);
