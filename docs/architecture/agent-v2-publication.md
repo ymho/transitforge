@@ -161,3 +161,9 @@ Conversation fixtureは本番の`explore_destination`を使い、discovery・ペ
   Tool失敗の診断も既知の閉じた拒否codeだけを追加し、SDKのエラー本文・生成内容は記録しない。
   今回依頼した検索だけを行うこと、宿の承諾と空のTripへの反映を区別することを一般的な会話例で明示する。
   この変更も固定ルーティングやTool順の強制、予算拡大ではない。
+- [Observation IDを保持した独立3回](https://github.com/ymho/transitforge/actions/runs/37125967575)も0/3だった。
+  検索と宿カードの公開は2回成功したが、空のTripへの案作成を省略し、1回は`invalid_source`、
+  1回は`malformedToolUse`も観測した。参照ID修正をモデルの依頼完了性の解消と混同しない。
+  [基本2ケース](https://github.com/ymho/transitforge/actions/runs/37126149764)も未対応保存の応答型が不安定だった。
+  条件・検索・案・未対応操作を重複して記述していたPromptを整理し、実行能力と現在依頼の完了条件を
+  先頭の短い英語policyへまとめる。公開回答の言語は日本語のまま、既存の期間・仮定・Evidence・Trip境界を維持する。
