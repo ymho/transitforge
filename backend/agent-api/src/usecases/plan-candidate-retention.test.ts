@@ -1,48 +1,109 @@
-import { describe, expect, it } from "vitest";
-import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
+import { compileEffectiveIntent } from "@raiquora/agent/effective-intent";
+import { describe, expect, it, vi } from "vitest";
 import type { ItineraryCandidateSet } from "@raiquora/trip/itinerary-candidates";
 import type { ItineraryCandidateRepository } from "../ports/itinerary-candidate-repository.js";
-import { PlanCandidateRetentionApplication, registerPlanCandidateRetentionTool } from "./plan-candidate-retention.js";
+import { knownItineraryDayCount, PlanCandidateRetentionApplication, registerPlanCandidateRetentionTool, type CanonicalPlanCandidateDraft } from "./plan-candidate-retention.js";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 
-const principal = { subject: "owner-a" }, tripId = "11111111-1111-4111-8111-111111111111";
-const draft = { coverage: { coveredScopes: ["day-1"], omittedScopes: [], complete: true }, variants: [{ id: "variant-1", label: "案1",
-  timeline: { dayOrder: ["day-1"], itemOrder: ["component-1"] }, items: [{ componentId: "component-1", kind: "activity" as const, title: "散策", schedule: { type: "unscheduled" as const }, evidenceRefs: ["evidence-1"], placement: { atBeginning: true as const } }],
-  assumptionRefs: [], assessmentRefs: [], changedComponentIds: ["component-1"], removedBaseItemIds: [], retainedBaseItemIds: [] }] };
-function presentation() { return parsePublicPlanPresentation({ version: "public-plan-presentation-v1", presentationId: "presentation-1", candidateSetRef: { kind: "unavailable", reason: "not-retained" },
-  candidateOrder: ["variant-1"], candidates: [{ variantId: "variant-1", label: "案1", dayOrder: ["day-1"], days: [{ dayRef: "day-1", label: "1日目", status: "planned", entries: [{ entryRef: "entry-1", itemRef: "item-1", role: "visit" }] }],
-    items: [{ itemRef: "item-1", sourceRef: "component-1", title: "散策", kind: "activity", timing: "unscheduled", evidenceRefs: ["evidence-1"], photoRefs: [] }], unknowns: [], comparisonAssessmentRefs: [], scenarioRefs: [] }],
-  evidenceRefs: ["evidence-1"], photoRefs: [], coverage: { status: "complete", coveredDayRefs: ["day-1"], omittedDayRefs: [], omittedScopes: [] }, statements: [{ kind: "proposal", ref: "component-1", evidenceRefs: ["evidence-1"] }], comparisonAssessmentRefs: [], scenarioRefs: [],
-  researchOutcome: { status: "complete", requestedMode: "standard", effectiveMode: "standard", budget: { modelCalls: 1, toolCalls: 1, wallClockMs: 10 }, coveredScopes: ["day-1"], remainingScopes: [] } }); }
-
-describe("canonical candidate retention", () => {
-  it("issues the real set ID/context server-side, persists owner+conversation scope and publishes the exact ref", async () => {
-    let saved: ItineraryCandidateSet | undefined;
-    const repository: ItineraryCandidateRepository = { put: async (owner, value) => { expect(owner).toEqual(principal); saved = structuredClone(value); }, get: async () => saved };
-    const app = new PlanCandidateRetentionApplication(repository, () => new Date("2026-09-23T12:00:00Z"));
-    const result = await app.retain({ principal, executionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", conversationId: "conversation-1", userRequest: "3日間の案を作って", tripId, baseTripRevision: 4 }, draft, presentation());
-    expect(saved).toMatchObject({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", revision: 0, contextRef: { conversationId: "conversation-1", tripId, baseTripRevision: 4 }, expiresAt: "2026-09-24T12:00:00.000Z" });
-    expect(saved!.contextRef.requestFingerprint).toMatch(/^[0-9a-f]{64}$/u);
-    expect(result.presentation).toMatchObject({ target: { tripId, baseTripRevision: 4 }, candidateSetRef: { kind: "candidate-set-ref", candidateSetId: saved!.id, revision: 0, baseTripRevision: 4 } });
+const scope = { principal: { subject: "owner-a" }, tripId: "11111111-1111-4111-8111-111111111111",
+  executionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", conversationId: "conversation-1", userRequest: "明日から1泊の案", baseTripRevision: 4 };
+export function itineraryDraft(): CanonicalPlanCandidateDraft {
+  return { coverage: { coveredScopes: ["day-1", "day-2"], omittedScopes: ["宿泊施設と移動時刻"], complete: false }, variants: [{ id: "variant-1", label: "1泊の案",
+    timeline: { dayOrder: ["day-1", "day-2"], itemOrder: ["visit", "stay", "return"] },
+    items: [{ componentId: "visit", kind: "activity", title: "出雲大社の参拝", schedule: { type: "relative", dayId: "day-1" }, evidenceRefs: [], placement: { atBeginning: true } },
+      { componentId: "stay", kind: "stay", title: "宿泊先は未選択", schedule: { type: "relative", dayId: "day-1", endDayId: "day-2" }, evidenceRefs: [], placement: { afterRef: "visit" } },
+      { componentId: "return", kind: "transport", title: "帰路は未選択", schedule: { type: "relative", dayId: "day-2" }, evidenceRefs: [], placement: { afterRef: "stay" } }],
+    assumptionRefs: [], assessmentRefs: [], changedComponentIds: ["visit", "stay", "return"], removedBaseItemIds: [], retainedBaseItemIds: [] }] };
+}
+function proposal() { return { variants: [{ label: "1泊の案", dayCount: 2, items: [
+  { kind: "activity", title: "出雲大社の参拝", day: 1 },
+  { kind: "stay", title: "宿泊先は未選択", day: 1, endDay: 2 },
+  { kind: "transport", title: "帰路は未選択", day: 2 },
+] }], unknowns: ["宿と移動時刻は未確認"] }; }
+function fixture(baseItemIds: string[] = [], currentDayCount?: () => number | undefined) {
+  let saved: ItineraryCandidateSet | undefined;
+  const repository: ItineraryCandidateRepository = { put: vi.fn(async (owner, value) => { expect(owner).toEqual(scope.principal); saved = structuredClone(value); }), get: async () => saved };
+  const app = new PlanCandidateRetentionApplication(repository, () => new Date("2026-10-03T00:00:00Z"));
+  const tools = new AgentToolRegistry(), publish = vi.fn();
+  registerPlanCandidateRetentionTool(tools, app, { ...scope, baseItemIds }, publish, currentDayCount);
+  return { repository, app, tools, publish, saved: () => saved };
+}
+describe("canonical candidate retention and deterministic presentation", () => {
+  it("builds the two-day cards from the exact retained items without a second model-authored presentation", async () => {
+    const f = fixture(), draft = itineraryDraft();
+    const result = await f.tools.execute("draft_itinerary", proposal(), { executionId: scope.executionId });
+    expect(result).toMatchObject({ ok: true, output: { candidateSetId: scope.executionId, revision: 0, saved: false, confirmationRequired: true } });
+    expect(f.saved()).toMatchObject({ contextRef: { tripId: scope.tripId, baseTripRevision: 4 }, expiresAt: "2026-10-04T00:00:00.000Z" });
+    const publicPlan = f.publish.mock.calls[0]![0].presentation;
+    expect(publicPlan.target).toEqual({ tripId: scope.tripId, baseTripRevision: 4 });
+    expect(publicPlan.candidates[0].items.map((item: { title: string }) => item.title)).toEqual(draft.variants[0]!.items.map(item => item.title));
+    expect(publicPlan.candidates[0].days.map((day: { entries: { itemRef: string }[] }) => day.entries.map(entry => entry.itemRef))).toEqual([["plan-1-item-1", "plan-1-item-2"], ["plan-1-item-2", "plan-1-item-3"]]);
+    expect(publicPlan.candidates[0].items.filter((item: { kind: string }) => item.kind === "stay")).toHaveLength(1);
+    expect(publicPlan.candidates[0].unknowns).toEqual(["宿と移動時刻は未確認"]);
+    expect(publicPlan.coverage.status).toBe("partial");
+    expect(f.saved()!.contextRef.requestFingerprint).toMatch(/^[0-9a-f]{64}$/u);
   });
-  it("rejects a presentation that invents a retained ID or does not exactly match variant order", async () => {
-    const repository: ItineraryCandidateRepository = { put: async () => { throw new Error("must not write"); }, get: async () => undefined };
-    const app = new PlanCandidateRetentionApplication(repository, () => new Date("2026-09-23T12:00:00Z"));
-    const scope = { principal, executionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", conversationId: "conversation-1", userRequest: "旅程", tripId, baseTripRevision: 4 };
-    await expect(app.retain(scope, draft, parsePublicPlanPresentation({ ...presentation(), candidateSetRef: { kind: "candidate-set-ref", candidateSetId: "fake", revision: 0 } }))).rejects.toMatchObject({ code: "invalid-input" });
+  it("rejects model-authored display payloads rather than allowing displayed and retained titles to diverge", async () => {
+    const f = fixture();
+    expect(await f.tools.execute("draft_itinerary", { ...proposal(), presentation: { title: "別の場所" } }, { executionId: scope.executionId }))
+      .toMatchObject({ ok: false, error: { code: "invalid_input" } });
+    expect(f.repository.put).not.toHaveBeenCalled();
   });
-  it("runs through the production Tool registry and publishes only the actually persisted ref", async () => {
-    let saved: ItineraryCandidateSet | undefined, published: ReturnType<typeof presentation> | undefined;
-    const repository: ItineraryCandidateRepository = { put: async (_owner, value) => { saved = structuredClone(value); }, get: async () => saved };
-    const tools = new AgentToolRegistry(); const scope = { principal, executionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", conversationId: "conversation-1", userRequest: "旅程", tripId, baseTripRevision: 4 };
-    registerPlanCandidateRetentionTool(tools, new PlanCandidateRetentionApplication(repository, () => new Date("2026-09-23T12:00:00Z")), scope,
-      (value) => { published = value.presentation; });
-    expect(tools.descriptors()).toEqual(expect.arrayContaining([expect.objectContaining({ name: "draft_itinerary", effect: "proposal",
-      requiredCapabilities: ["agent-v2-proposal"] })]));
-    const safeDraft = { ...draft, variants: draft.variants.map((variant) => ({ ...variant, items: variant.items.map((item) => ({ ...item, evidenceRefs: [] })) })) };
-    const result = await tools.execute("draft_itinerary", { draft: safeDraft, presentation: { ...presentation(), evidenceRefs: [],
-      statements: [], candidates: presentation().candidates.map((candidate) => ({ ...candidate, items: candidate.items.map((item) => ({ ...item, evidenceRefs: [] })) })) } }, { executionId: scope.executionId });
-    expect(result).toMatchObject({ ok: true, output: { candidateSetId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", revision: 0, saved: false, confirmationRequired: true } });
-    expect(published?.candidateSetRef).toMatchObject({ kind: "candidate-set-ref", candidateSetId: saved!.id });
+  it.each(["duplicate-order", "missing-day", "reverse-span", "evidence", "invalid-unknowns"])("rejects %s before persistence", async kind => {
+    const f = fixture(), draft = structuredClone(itineraryDraft()), variant = draft.variants[0]!;
+    const bad = kind === "duplicate-order" ? { ...variant, timeline: { ...variant.timeline, itemOrder: ["visit", "visit", "return"] } } :
+      kind === "missing-day" ? { ...variant, timeline: { ...variant.timeline, dayOrder: ["day-1"] } } :
+      kind === "reverse-span" ? { ...variant, timeline: { ...variant.timeline, dayOrder: ["day-2", "day-1"] } } :
+      kind === "evidence" ? { ...variant, items: variant.items.map(item => ({ ...item, evidenceRefs: ["invented"] })) } : variant;
+    await expect(f.app.retain(scope, { ...draft, variants: [bad] }, kind === "invalid-unknowns" ? ["x", "x"] : [])).rejects.toMatchObject({ code: "invalid-input" });
+    expect(f.repository.put).not.toHaveBeenCalled();
+  });
+  it("keeps unscheduled items visible without assigning an invented travel date", async () => {
+    const f = fixture(), draft = itineraryDraft(), variant = draft.variants[0]!;
+    const result = await f.app.retain(scope, { ...draft, variants: [{ ...variant,
+      items: variant.items.map(item => ({ ...item, schedule: { type: "unscheduled" } })) }] }, ["日程未定"]);
+    const candidate = result.presentation.candidates[0]!;
+    expect(candidate.days.at(-1)).toMatchObject({ label: "日程未定", entries: [{ itemRef: "visit" }, { itemRef: "stay" }, { itemRef: "return" }] });
+    expect(candidate.days.slice(0, 2).every(day => day.status === "not-retrieved")).toBe(true);
+  });
+  it.each(["outside-day", "reverse-span", "forged-base"])("rejects concise %s before persistence", async kind => {
+    const f = fixture(), input = proposal();
+    if (kind === "outside-day") input.variants[0]!.items[0]!.day = 3;
+    if (kind === "reverse-span") input.variants[0]!.items[1]!.endDay = 0;
+    if (kind === "forged-base") Object.assign(input.variants[0]!.items[0]!, { baseItemId: "invented" });
+    expect(await f.tools.execute("draft_itinerary", input, { executionId: scope.executionId })).toMatchObject({ ok: false, error: { code: "invalid_input" } });
+    expect(f.repository.put).not.toHaveBeenCalled();
+  });
+  it("derives retained and replaced base references from the current Trip", async () => {
+    const f = fixture(["hotel", "old-visit"]), input = proposal();
+    Object.assign(input.variants[0]!.items[0]!, { baseItemId: "old-visit" });
+    expect(await f.tools.execute("draft_itinerary", input, { executionId: scope.executionId })).toMatchObject({ ok: true });
+    expect(f.saved()!.variants[0]).toMatchObject({ retainedBaseItemIds: ["hotel"], removedBaseItemIds: [], items: [{ baseItemId: "old-visit" }, { placement: { afterRef: "plan-1-item-1" } }, { placement: { afterRef: "plan-1-item-2" } }] });
+  });
+  it("keeps all known travel days even when the model supplies only the first day", async () => {
+    let days = 1;
+    const f = fixture([], () => days), input = proposal();
+    days = 2; // A condition may be accepted after Tool registration in the same turn.
+    input.variants[0]!.dayCount = 1;
+    input.variants[0]!.items = [input.variants[0]!.items[0]!];
+    expect(await f.tools.execute("draft_itinerary", input, { executionId: scope.executionId })).toMatchObject({ ok: true });
+    expect(f.publish.mock.calls[0]![0].presentation.candidates[0].days).toMatchObject([{ status: "planned" }, { status: "not-retrieved" }]);
+    expect(f.publish.mock.calls[0]![0].presentation.coverage.omittedDayRefs).toHaveLength(1);
+  });
+  it.each(["exact", "approximate", "hypothetical", "multiple"])("derives the horizon only from an exact active duration: %s", kind => {
+    const intent = compileEffectiveIntent({ overlay: { version: 1, intentRevision: 0, facts: [], tombstones: [], appliedMutationIds: [] } });
+    const fact = { factId: "duration", target: "duration" as const, scope: { type: "conversation" as const }, modality: "preferred" as const,
+      precision: kind === "approximate" ? "approximate" as const : "exact" as const, value: { kind: "quantity" as const, amount: 1, unit: "nights" as const },
+      frame: "actual" as const, sourceOperationId: "operation", provenance: { kind: "user_turn" as const, turnId: "turn" } };
+    if (kind === "hypothetical") intent.hypotheticalFacts.push({ ...fact, frame: "hypothetical" });
+    else intent.actualConversationFacts.push(fact);
+    if (kind === "multiple") intent.actualConversationFacts.push({ ...fact, factId: "alternative" });
+    expect(knownItineraryDayCount(intent)).toBe(kind === "exact" ? 2 : undefined);
+  });
+  it("does not publish a card when the candidate repository fails", async () => {
+    const f = fixture(); vi.mocked(f.repository.put).mockRejectedValueOnce(new Error("private repository detail"));
+    expect(await f.tools.execute("draft_itinerary", proposal(), { executionId: scope.executionId }))
+      .toMatchObject({ ok: false, error: { code: "unavailable" } });
+    expect(f.publish).not.toHaveBeenCalled();
   });
 });

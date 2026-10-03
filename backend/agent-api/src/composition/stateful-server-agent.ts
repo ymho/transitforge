@@ -1,3 +1,4 @@
+import { withMeasuredResearchOutcome } from "@raiquora/agent/public-plan-presentation";
 import { registerCostProposalTool } from "../usecases/agent/cost-proposal-tool.js";
 import type { PublicCostProposal } from "@raiquora/trip/public-cost-proposal";
 import type { Trip, TripUpdateProposal } from "@raiquora/trip/trip";
@@ -24,7 +25,7 @@ import type { GroundRouteProvider } from "../ports/ground-route-provider.js";
 import { registerServerTools } from "../usecases/agent/server-tools.js";
 import type { AgentOperation } from "../ports/agent-operation.js";
 import { DynamoDbItineraryCandidateRepository } from "../adapters/dynamodb-itinerary-candidate-repository.js";
-import { PlanCandidateRetentionApplication, registerPlanCandidateRetentionTool, type RetainedCandidatePlan } from "../usecases/plan-candidate-retention.js";
+import { knownItineraryDayCount, PlanCandidateRetentionApplication, registerPlanCandidateRetentionTool, type RetainedCandidatePlan } from "../usecases/plan-candidate-retention.js";
 import { proposeVerifiedIntentRequest } from "@raiquora/agent/verified-intent-proposal";
 import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
@@ -92,8 +93,8 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
             const candidateRepository = new DynamoDbItineraryCandidateRepository(options.tripTable, options.tripClient);
             registerPlanCandidateRetentionTool(tools, new PlanCandidateRetentionApplication(candidateRepository), {
               principal: scope.principal, executionId: scope.executionId, conversationId: scope.conversationId, userRequest: scope.userRequest,
-              tripId: trip.id, baseTripRevision: trip.revision,
-            }, value => { retainedCandidatePlan = value; });
+              tripId: trip.id, baseTripRevision: trip.revision, baseItemIds: trip.items.map(item => item.id),
+            }, value => { retainedCandidatePlan = value; }, () => knownItineraryDayCount(effectiveIntent));
           }
         }
       },
@@ -106,6 +107,11 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
     if (input.conversationId && effectiveIntent && currentIntentReceipt && trip) {
       const verified = proposeVerifiedIntentRequest({ conversationId: input.conversationId, trip, effectiveIntent, receipt: currentIntentReceipt });
       if (verified) tripUpdateProposal = parsePublicRequestProposal(verified);
+    }
+    if (retainedCandidatePlan && result.researchExecution) {
+      const { usage, requestedMode, effectiveMode } = result.researchExecution;
+      retainedCandidatePlan = { ...retainedCandidatePlan, presentation: withMeasuredResearchOutcome(retainedCandidatePlan.presentation,
+        { modelCalls: usage.modelCalls, toolCalls: usage.toolCalls, wallClockMs: usage.wallClockMs, requestedMode, effectiveMode }) };
     }
     return { ...result, ...((result.status === "completed" || result.status === "follow_up") && retainedCandidatePlan ? { publicPlanPresentation: retainedCandidatePlan.presentation } : {}),
       ...((result.status === "completed" || result.status === "follow_up") && tripCostProposal ? { tripCostProposal } : {}), ...((result.status === "completed" || result.status === "follow_up") && tripUpdateProposal ? { tripUpdateProposal } : {}) };

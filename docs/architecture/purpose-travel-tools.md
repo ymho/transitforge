@@ -36,3 +36,32 @@ Frontendは保存済みsnapshotをlive SSEと履歴で同じように描画し�
 ## 検証境界
 
 決定論的テストでは、3 Toolの公開、typed facet、complete/partial/no_candidates/failed、内部ページ読込と写真照合、V2 proposalの明示opt-in、CandidateSet保持、写真のApplication投影、SSE/history共通parserを確認する。実Bedrockによる3発話の意味選択と実Provider/画面E2Eは#758で扱う。
+
+## 仮旅程の表示投影（#783）
+
+`draft_itinerary`のモデル入力は`variants`（案名・日数・各日の予定）と共通の`unknowns`だけとする。
+モデルがPublicPlanPresentation、表示日順、entry/item参照、表示タイトルを重複生成する経路を除く。
+Applicationが検証済みの本体からDomainの日別投影を使い、既存カード用のread modelを決定論的に生成する。
+タイトル・項目順・宿泊の複数日参照は本体と同じであり、日程未定は独立した未定欄へ置く。
+空の日を確認済み自由日とは扱わず、未確認の料金・移動負荷・外部根拠を生成しない。
+
+CandidateSetと表示の全検証を保持前に行い、保持に失敗した場合はカードを公開しない。
+owner/conversation/Trip revision/期限と利用者確認後の採用は既存契約を維持する。
+公開時のresearchOutcomeはServerの計測値を使い、モデルの自己申告や仮の0を公開しない。
+
+本番の2026-10-03 07:37:16 UTCの失敗は、Tool 2回失敗・model 2回・構造化回答0回、
+4581累積出力tokenで4096上限に達した。過去ログにはTool拒否の詳細がなく、具体的な不正項目は確定できない。
+今回から閉じたToolエラーコードを記録し、診断のTool一覧はiteration上限以外のtoken/deadline等も対象とする。
+会話・Tool入力・例外本文はログへ加えない。上限自体は引き上げない。
+
+実Bedrockでの修正途中の検証（[run 37116711186](https://github.com/ymho/transitforge/actions/runs/37116711186)）では、
+内部ID・itemOrder・差分一覧の欠落と、利用できない根拠参照を検出した。
+これらの管理情報もServer生成へ移し、モデル入力を案名・日数・予定・未確認事項に絞った。
+既存項目の置換・削除には現在のTripに実在するIDを要求し、保持項目一覧はServerが算出する。
+
+回帰検証では、3発話を実モデルで続けるケースと、報告された確認質問を固定して最後の
+「はい、作成お願いします。」だけを実モデルへ渡すケースを分ける。
+後者により、モデルが途中で出発地を質問した場合の「はい」の意味の変化と、旅程作成の失敗を混同しない。
+Providerと状態は合成データであり、本番の旅行情報や検索Providerの可用性を検証したとは扱わない。
+
+確定的な旅行期間は有効な会話条件からServerが日数へ変換する（1泊は2日）。モデルが短いdayCountを返しても日を失わず、予定のない日は未取得として残す。範囲・仮定・曖昧な期間から固定日数を捏造しない。同一ターン内の条件反映後も最新条件を参照する。

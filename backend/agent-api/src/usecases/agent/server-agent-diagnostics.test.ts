@@ -82,3 +82,19 @@ it("publishes only allowlisted V2 publication failure codes in runtime diagnosti
   }));
   expect(JSON.stringify(record.mock.calls)).not.toContain("private-request");
 });
+
+
+it.each(["invalid_input", "private-code"])("bounds Tool error classification: %s", async errorCode => {
+  const record = vi.fn();
+  const app = createServerAgentApplication({ newExecutionId: () => "execution", diagnostics: { record }, registerTools: () => undefined,
+    createModel: () => ({ generate: async () => { throw Error("unused"); } }),
+    runRuntime: async () => ({ status: "limit_reached", response: "", evidence: [], claims: [], trace: { executionId: "execution", events: [
+      { type: "tool_completed", toolCallId: "tool-1", toolName: "draft_itinerary", occurredAt: "2026-10-03T00:00:00Z",
+        outcome: "error", latencyMs: 1, errorCode, result: { private: "private-result" } },
+    ] } } as never),
+  });
+  await app.runAgentTurn({ principal: { subject: "owner", identity: { subject: "owner", issuer: "issuer" }, scopes: ["trip:read"] }, userRequest: "private-request" });
+  const event = record.mock.calls.map(([value]) => value).find(value => value.phase === "tool");
+  expect(event.toolErrorCode).toBe(errorCode === "invalid_input" ? "invalid_input" : undefined);
+  expect(JSON.stringify(event)).not.toMatch(/private-code|private-result|private-request/);
+});

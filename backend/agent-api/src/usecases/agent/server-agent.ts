@@ -182,7 +182,9 @@ async function publishRuntimeDiagnostics(dependencies: ServerAgentDependencies, 
     }
     if (event.type === "tool_completed") await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId,
       phase: "tool", reason: event.outcome === "success" ? "completed" : "failed", occurredAt: event.occurredAt,
-      correlation: { toolCallId: event.toolCallId }, refs: [event.toolName] });
+      correlation: { toolCallId: event.toolCallId }, refs: [event.toolName],
+      ...(["invalid_input", "precondition_failed", "unknown_tool", "not_found", "outside_coverage", "precondition_missing", "stale_revision", "permission_denied", "rate_limited", "unavailable", "ambiguous_entity", "execution_failed"].includes(event.errorCode ?? "")
+        ? { toolErrorCode: event.errorCode as import("@raiquora/agent/tool-contract").AgentToolErrorCode } : {}) });
   }
   const completion = [...result.trace.events].reverse().find((event) => event.type === "task_completed");
   const failureMode = result.status === "failed" || result.status === "limit_reached" ? publicationFailureMode(result) : undefined;
