@@ -36,6 +36,7 @@ export interface AgentDiagnosticEvent {
     "cacheReadInputTokens" | "cacheWriteInputTokens" | "parallelReads" | "retries", number>>;
   stopReason?: AgentExecutionStopReason;
   limitReason?: "tool_calls" | "deadline";
+  toolErrorCode?: import("@raiquora/agent/tool-contract").AgentToolErrorCode;
   refs?: string[];
   mode?: string;
   incomplete?: boolean;

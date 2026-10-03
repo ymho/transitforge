@@ -152,3 +152,63 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
     expect.soft(history.items[5]?.publicPlacePresentation?.cards.map(({ title }) => title)).toContain("清水寺");
   }, 280000);
 });
+
+// Regression for the reported three-turn path. Fixed Providers/state, production
+// SDK/prompt/proposal Tool, unchanged 4096 cumulative output budget.
+describe.skipIf(!enabled)("V2 itinerary proposal conversation with real Bedrock", () => {
+  it("accepts destination and one night, then retains and displays the requested plan", async () => {
+    const { verifier } = cognitoTokenFixture(), principal = await verifier.verify(token());
+    const state = stateDynamoFixture(), trips = tripDynamoFixture(), metadata = stateMetadata();
+    trips.seed(createTrip(metadata.tripId, "検討中の旅", "2026-10-03T00:00:00Z"), principal.subject);
+    await state.conversations.create(principal, conversationId, metadata);
+    const providers = fixedDestinationProviders();
+    let execution = 0;
+    const observed = new Set(["draft_itinerary", "explore_destination", "update_current_destination", "update_current_travel_period", "strands_structured_output"]);
+    const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
+      maxTurns: 6, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096,
+      ...(modelId === "jp.amazon.nova-2-lite-v1:0" ? { novaReasoningEffort: "low" as const } : {}) }, {
+      createAgent: config => {
+        const agent = new Agent(config);
+        agent.addHook(BeforeToolCallEvent, ({ toolUse }) => {
+          if (!observed.has(toolUse.name)) return;
+          const input = toolUse.input as Record<string, unknown>;
+          console.log(JSON.stringify({ phase: "itinerary-tool", name: toolUse.name,
+            ...(toolUse.name === "draft_itinerary" ? { hasDraft: !!input.draft, hasPresentation: !!input.presentation,
+              inputBytes: Buffer.byteLength(JSON.stringify(input)) } : {}) }));
+        });
+        return agent;
+      },
+    });
+    const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
+      model: { converse: vi.fn(async () => { throw Error("legacy runtime called"); }) }, weather: { search: vi.fn() },
+      newExecutionId: () => `itinerary-live-${++execution}`, runRuntime: createStrandsServerRuntime(engine),
+      limits: { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 2, maxExecutionMs: 60000 },
+      diagnostics: { record: async event => {
+        if (event.phase === "execution") console.log(JSON.stringify({ phase: "itinerary-execution", reason: event.reason, counts: event.counts }));
+        if (event.phase === "tool") console.log(JSON.stringify({ phase: "itinerary-tool-result", name: observed.has(event.refs?.[0] ?? "") ? event.refs![0] : "other",
+          reason: event.reason, code: event.toolErrorCode }));
+      } },
+      additionalTools: productionServerTools({ external: providers, discovery: providers.discovery, accommodation: vi.fn(), journey: vi.fn() })
+        .filter(({ descriptor }) => ["explore_destination", "search_place_media"].includes(descriptor.name)) });
+    for (const [index, userRequest] of ["出雲大社にいきたい", "明日から1泊で行きたい", "はい、作成お願いします。"].entries()) {
+      const turn = { principal, conversationId, turnId: `78300000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+        userRequest, uiContext: { calendarDate: "2026-10-03" } };
+      const result = await app.runConversationTurn(turn);
+      console.log(JSON.stringify({ phase: "itinerary-turn", index, status: result.status,
+        candidates: result.publicPlanPresentation?.candidates.length ?? 0 }));
+      expect(result.status).toBe("completed");
+      const saved = await trips.repository.get(principal, metadata.tripId);
+      expect(saved?.items).toEqual([]);
+      expect(await app.runConversationTurn(turn)).toEqual(result);
+      if (index === 2) {
+        const plan = result.publicPlanPresentation;
+        expect(plan?.candidateSetRef.kind).toBe("candidate-set-ref");
+        expect(plan?.candidates.length).toBeGreaterThan(0);
+        expect(plan!.candidates[0]!.days.length).toBeGreaterThanOrEqual(2);
+        expect(plan!.candidates[0]!.items.some(item => item.title.includes("出雲大社"))).toBe(true);
+        expect(plan!.candidates[0]!.unknowns.length).toBeGreaterThan(0);
+      }
+    }
+    expect((await state.conversations.history(principal, conversationId)).items).toHaveLength(6);
+  }, 210_000);
+});

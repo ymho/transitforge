@@ -1,3 +1,4 @@
+import { withMeasuredResearchOutcome } from "@raiquora/agent/public-plan-presentation";
 import { registerCostProposalTool } from "../usecases/agent/cost-proposal-tool.js";
 import type { PublicCostProposal } from "@raiquora/trip/public-cost-proposal";
 import type { Trip, TripUpdateProposal } from "@raiquora/trip/trip";
@@ -106,6 +107,11 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
     if (input.conversationId && effectiveIntent && currentIntentReceipt && trip) {
       const verified = proposeVerifiedIntentRequest({ conversationId: input.conversationId, trip, effectiveIntent, receipt: currentIntentReceipt });
       if (verified) tripUpdateProposal = parsePublicRequestProposal(verified);
+    }
+    if (retainedCandidatePlan && result.researchExecution) {
+      const { usage, requestedMode, effectiveMode } = result.researchExecution;
+      retainedCandidatePlan = { ...retainedCandidatePlan, presentation: withMeasuredResearchOutcome(retainedCandidatePlan.presentation,
+        { modelCalls: usage.modelCalls, toolCalls: usage.toolCalls, wallClockMs: usage.wallClockMs, requestedMode, effectiveMode }) };
     }
     return { ...result, ...((result.status === "completed" || result.status === "follow_up") && retainedCandidatePlan ? { publicPlanPresentation: retainedCandidatePlan.presentation } : {}),
       ...((result.status === "completed" || result.status === "follow_up") && tripCostProposal ? { tripCostProposal } : {}), ...((result.status === "completed" || result.status === "follow_up") && tripUpdateProposal ? { tripUpdateProposal } : {}) };

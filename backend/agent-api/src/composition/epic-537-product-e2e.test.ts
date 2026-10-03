@@ -108,16 +108,7 @@ function candidateToolInput() {
     schedule: { type: "relative", dayId: "day-3", part: "afternoon" }, logicalDayId: "day-3", evidenceRefs: [], placement: { afterRef: "hotel" } });
   const variant = (id: string, label: string, componentId: string, title: string) => ({ id, label, timeline: { dayOrder: ["day-1", "day-2", "day-3", "day-4"], itemOrder: [componentId] },
     items: [item(componentId, title)], assumptionRefs: [], assessmentRefs: [], changedComponentIds: [componentId], removedBaseItemIds: [], retainedBaseItemIds: ["hotel"] });
-  const publicCandidate = (id: string, label: string, componentId: string, title: string) => ({ variantId: id, label,
-    dayOrder: ["day-1", "day-2", "day-3", "day-4"], days: ["day-1", "day-2", "day-3", "day-4"].map(dayRef => ({ dayRef, label: dayRef, status: dayRef === "day-3" ? "planned" : "free",
-      entries: dayRef === "day-3" ? [{ entryRef: `entry-${id}`, itemRef: `item-${id}`, role: "visit" }] : [] })),
-    items: [{ itemRef: `item-${id}`, sourceRef: componentId, title, kind: "activity", timing: "day", evidenceRefs: [], photoRefs: [] }], unknowns: [],
-    workload: { status: "partial" }, cost: { status: "unknown" }, comparisonAssessmentRefs: [], scenarioRefs: ["rain"] });
   return { draft: { coverage: { coveredScopes: ["day-1", "day-2", "day-3", "day-4"], omittedScopes: [], complete: true }, variants: [
     variant("normal", "通常案", "activity-normal", "3日目の屋外散策"), variant("rain", "雨天案", "activity-rain", "3日目の屋内施設"),
-  ] }, presentation: { version: "public-plan-presentation-v1", presentationId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", candidateSetRef: { kind: "unavailable", reason: "not-retained" },
-    candidateOrder: ["normal", "rain"], candidates: [publicCandidate("normal", "通常案", "activity-normal", "3日目の屋外散策"), publicCandidate("rain", "雨天案", "activity-rain", "3日目の屋内施設")],
-    evidenceRefs: [], photoRefs: [], coverage: { status: "complete", coveredDayRefs: ["day-1", "day-2", "day-3", "day-4"], omittedDayRefs: [], omittedScopes: [] },
-    statements: [{ kind: "proposal", ref: "activity-normal", evidenceRefs: [] }, { kind: "proposal", ref: "activity-rain", evidenceRefs: [] }], comparisonAssessmentRefs: [], scenarioRefs: ["rain"],
-    researchOutcome: { status: "complete", requestedMode: "standard", effectiveMode: "standard", budget: { modelCalls: 3, toolCalls: 2, wallClockMs: 3 }, coveredScopes: ["day-1", "day-2", "day-3", "day-4"], remainingScopes: [] } } };
+  ] }, unknowns: ["移動と営業は未確認"] };
 }
