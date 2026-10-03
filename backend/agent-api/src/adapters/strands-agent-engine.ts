@@ -1,7 +1,7 @@
 import {
   Agent, BedrockModel, StructuredOutputError, tool,
   type AgentConfig, type BaseModelConfig, type InvokableTool,
-  type JSONSchema, type JSONValue, type Model, type MessageData, type ContentBlockData,
+  type JSONSchema, type JSONValue, type Model, type MessageData,
 } from "@strands-agents/sdk";
 import { AgentTraceRecorder, type AgentTrace } from "@raiquora/agent/agent-trace";
 import { validateToolIntentUse } from "@raiquora/agent/intent-action-policy";
@@ -33,7 +33,7 @@ export interface StrandsAgentEngineOptions {
 export interface StrandsAgentRunInput {
   executionId: string;
   userRequest: string;
-  modelInput?: string | ContentBlockData[];
+  modelInput?: string;
   /** Sanitized Application reference DATA; never a traveller request or instruction. */
   applicationReference?: string;
   /** Public owner-scoped history; no raw SDK Tool results or internal reasoning. */
@@ -62,7 +62,7 @@ export interface StrandsAgentRunResult {
     cacheReadInputTokens?: number; cacheWriteInputTokens?: number };
 }
 export interface StrandsAgentLike {
-  invoke(args: string | ContentBlockData[], options?: {
+  invoke(args: string, options?: {
     cancelSignal?: AbortSignal;
     limits?: { turns?: number; totalTokens?: number; outputTokens?: number };
   }): Promise<{
