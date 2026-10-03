@@ -17,7 +17,7 @@ import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
  * test failures; soft assertions let later turns be measured without hiding them. */
 const enabled = process.env.AGENT_V2_LIVE === "true";
 const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
-const toolsToObserve = new Set(["update_current_origin", "update_current_destination", "search_place_media", "strands_structured_output"]);
+const toolsToObserve = new Set(["update_current_origin", "update_current_destination", "explore_destination", "search_place_media", "strands_structured_output"]);
 describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () => {
   it("handles greeting, destination, correction and unavailable save through Conversation/replay", async () => {
     const { verifier } = cognitoTokenFixture();
@@ -27,11 +27,23 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
     trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
     await state.conversations.create(principal, conversationId, metadata);
     const calls: { query: string }[] = [];
+    const source = (label: string) => `https://example.org/evaluation/${label === "出雲大社" ? "izumo" : "kiyomizu"}`;
+    const discovery = vi.fn(async (input: { facets?: { value: string }[] }) => {
+      const label = ["出雲大社", "清水寺"].find(name => input.facets?.some(facet => facet.value.includes(name)));
+      return { body: { discovery: { batch: { hits: label ? [{ hitId: `fixture-${label}`, sourceRef: source(label),
+        retrievalChannel: "web", text: label, originalRank: 1 }] : [], coverage: { completedQueries: 1 }, incompleteReasons: [] } } } };
+    });
+    const readWebPages = vi.fn(async (input: { urls: string[] }) => ({ webPages: {
+      status: "available", freshness: "fresh", data: { pages: input.urls.flatMap(url => {
+        const label = ["出雲大社", "清水寺"].find(name => source(name) === url);
+        return label ? [{ url, title: label, text: `${label}は散策の対象となる場所です。これは接続検証用の固定資料です。` }] : [];
+      }) }, evidence: input.urls.map(url => ({ id: `fixture-page-${url}`, provider: "fixture", sourceUrl: url, retrievedAt: new Date().toISOString() })),
+    } }));
     const searchPlaceMedia = vi.fn(async (input: { query: string }) => {
       calls.push({ query: input.query });
       const label = ["出雲大社", "清水寺"].find((name) => input.query.includes(name));
       if (!label) return { result: { status: "unavailable", freshness: "unknown", evidence: [] } };
-      const id = label === "出雲大社" ? "izumo" : "kiyomizu", sourceUrl = `https://example.org/evaluation/${id}`;
+      const id = label === "出雲大社" ? "izumo" : "kiyomizu", sourceUrl = source(label);
       return { result: { status: "available", freshness: "fresh", data: { places: [{ providerPlaceId: id, name: label,
         summary: "散策の対象となる場所です。これは接続検証用の固定資料です。", sourceUrl, openingHoursStatus: "unknown" }] },
         evidence: [{ id: `source-${id}`, provider: "fixture", sourceUrl, retrievedAt: new Date().toISOString() }] } };
@@ -68,9 +80,10 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
       model: v1, weather: { search: vi.fn() }, newExecutionId: () => `native-live-${++execution}`,
       limits: { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 2, maxExecutionMs: 60000 },
       runRuntime: createStrandsServerRuntime(engine),
-      // Isolate the model/contract with a real production read, not empty unrelated Provider stubs.
-      additionalTools: productionServerTools({ external: { searchPlaceMedia }, accommodation: vi.fn(), journey: vi.fn() })
-        .filter(({ descriptor }) => descriptor.name === "search_place_media") });
+      // Use the production purpose read and its source/media projection. The
+      // prompt calls explore_destination; a media-only fixture hides that contract.
+      additionalTools: productionServerTools({ external: { searchPlaceMedia, readWebPages }, discovery, accommodation: vi.fn(), journey: vi.fn() })
+        .filter(({ descriptor }) => ["explore_destination", "search_place_media"].includes(descriptor.name)) });
     const messages = ["おはよう", "出雲大社にいきたい", "やっぱり清水寺に行きたい。候補カードを見せて", "この候補を保存して"];
     let successfulTurns = 0;
     for (const [index, userRequest] of messages.entries()) {

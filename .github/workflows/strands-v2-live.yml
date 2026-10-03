@@ -116,7 +116,7 @@ jobs:
             echo "- Case selection: $CASE_ID"
             echo "- Cases/turns: $cases"
             echo "- Repetitions: $REPETITIONS"
-            echo "- Maximum model calls: $((maximum_calls + 12)) (including two baseline turns)"
+            echo "- Maximum model calls: $maximum_calls"
             echo "- External read Tool calls per turn: at most 2 (basic cases: 1)"
             echo "- Deadline per turn: 60s"
             echo "- External Travel Providers / production state: none"
@@ -131,22 +131,6 @@ jobs:
           args=(--repetitions "$REPETITIONS" --output-dir .artifacts/strands-v2-live --require-all)
           if [[ "$CASE_ID" != "all" ]]; then args+=(--case "$CASE_ID"); fi
           npm run eval:agent:strands:live -- "${args[@]}"
-
-      - name: Compare the main reference contract with the fix on synthetic sources
-        env:
-          AGENT_V2_LIVE: 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p .artifacts/strands-v2-live
-          files=(backend/agent-api/src/adapters/strands-agent-engine.ts backend/agent-api/src/usecases/agent-v2-system-prompt.ts modules/agent/runtime/agent-v2-publication.ts)
-          for file in "${files[@]}"; do git show 790265c7aba085295f32fd0bd0431ef69d81d61a:"$file" > "$file"; done
-          set +e
-          npx vitest run --root . backend/agent-api/src/composition/strands-concise-answer-live.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=.artifacts/strands-v2-live/main-concise.json
-          baseline_status=$?
-          set -e
-          git restore -- "${files[@]}"
-          echo "Main concise fixture exit: $baseline_status (observation only; fixed cases must pass)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run independent Conversation or condition repetitions
         if: inputs.case_id == 'conversation-output' || inputs.case_id == 'condition-operations' || inputs.case_id == 'party-condition' || inputs.case_id == 'travel-period' || inputs.case_id == 'budget-condition' || inputs.case_id == 'trip-v2-product'
