@@ -100,7 +100,7 @@ jobs:
           case "$CASE_ID" in
             all) cases=2; cycles=4 ;;
             tool-grounding|write-not-available) cases=1; cycles=4 ;;
-            conversation-output) cases=10; cycles=6 ;;
+            conversation-output) cases=13; cycles=8 ;;
             consultation-plan) cases=4; cycles=8 ;;
             condition-operations) cases=7; cycles=8 ;;
             party-condition|travel-period) cases=6; cycles=6 ;;
@@ -117,8 +117,8 @@ jobs:
             echo "- Cases/turns: $cases"
             echo "- Repetitions: $REPETITIONS"
             echo "- Maximum model calls: $maximum_calls"
-            echo "- External read Tool calls per turn: at most 2 (basic cases: 1)"
-            echo "- Deadline per turn: 60s"
+            echo "- External read Tool calls per turn: at most 4 (basic cases: 1)"
+            echo "- Deadline per turn: at most 90s"
             echo "- External Travel Providers / production state: none"
           } >> "$GITHUB_STEP_SUMMARY"
 

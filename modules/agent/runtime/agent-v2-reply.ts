@@ -30,7 +30,7 @@ export const agentV2ReplySchema = z.discriminatedUnion("kind", [
 export type AgentV2ReplyProposal = z.infer<typeof agentV2ReplySchema>;
 /** The object envelope is the SDK Tool's input; the variant is nested, not flattened. */
 export const agentV2StructuredOutputSchema = z.strictObject({ reply: agentV2ReplySchema })
-  .describe("必要なread/条件受理の後の最終回答。replyだけを返す。カード本体や新たな事実・実行結果は生成しない。");
+  .describe("今回の依頼に必要な条件受理・検索・案作成を終えた後の最終回答。条件受理だけでは検索・案作成の依頼を完了できない。宿の検索後はanswerへ宿のreplyReferencesを選ぶ。仮旅程作成後はconversationで案の確認方法と不足を短く案内する。replyだけを返し、カード本体や新たな事実・実行結果は生成しない。");
 
 /** Trusted Application input, never a field in the model's reply schema.
  * The current read-only composition supplies no receipts. */

@@ -27,7 +27,7 @@ export const draftItineraryToolName = "draft_itinerary" as const;
 export function registerPlanCandidateRetentionTool(tools: AgentToolRegistry, application: PlanCandidateRetentionApplication,
   scope: CandidateRetentionScope | (() => CandidateRetentionScope), publish: (value: RetainedCandidatePlan) => void, currentDayCount?: () => number | undefined): void {
   tools.register<unknown, unknown>({ name: draftItineraryToolName, effect: "proposal", requiredCapabilities: ["agent-v2-proposal"],
-    description: "現在のTripと会話で既知の条件から、1件以上の仮旅程をtyped candidateとして作る。予定が空で旅程の作成・反映を求められた場合に使う。出発地などのupdate_current_*が成功しても、この案作成を省略しない。出発時刻・経路・宿が未選択でも、往路・活動・宿泊・帰路の枠を作りunknownsへ残せる。variantsへ案のlabel・dayCount・itemsを指定する。itemsは行程順にkind・title・day（1始まり）を1回ずつ書く。宿泊等の翌日まで続く項目はendDayを指定する。内部ID・参照配列・表示payloadはServerが生成するため渡さない。確定的な期間条件があればServerがその日数を使う（1泊は2日）。未確認の移動時刻・料金・営業・宿泊を事実として補わずunknownsへ残す。候補ID・Trip/revision・期限はServerが発行し、Tripへの採用・保存は利用者確認後の別操作で行う。",
+    description: "旅程の作成・反映を依頼された時に、既知の条件から日別の仮旅程を作る。宿泊施設だけの提案・比較依頼はsearch_accommodationsを使う。空のTripでは出発地などの条件受理の後にこのToolを使う。時刻・経路・宿が未選択でも往路・活動・宿泊・帰路の枠を作りunknownsへ残せる。variantsへlabel・dayCount・itemsを指定する。itemsは行程順にkind・title・day（1始まり）を書く。翌日まで続く宿泊等はendDayを指定する。内部ID・参照配列・表示payloadはServerが生成する。確定的な期間条件があればServerがその日数を使う（1泊は2日）。未確認の移動時刻・料金・営業・宿泊を事実として補わない。成功したら最終回答で確認方法と不足条件を短く伝える。Tripへの採用・保存は利用者確認後の別操作で行う。",
     inputSchema: candidateProposalInputSchema,
     outputSchema: { type: "object", properties: { candidateSetId: { type: "string" }, revision: { type: "integer" }, presentationId: { type: "string" }, saved: { type: "boolean" }, confirmationRequired: { type: "boolean" } },
       required: ["candidateSetId", "revision", "presentationId", "saved", "confirmationRequired"], additionalProperties: false },

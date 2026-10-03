@@ -124,7 +124,8 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
       console.log(JSON.stringify({ turn: index + 1, phase: "consultation-capabilities", tools: agent.tools.map(tool => tool.name) }));
       agent.addHook(ModelMessageEvent, ({ stopReason, message }) => console.log(JSON.stringify({ turn: index + 1, phase: "consultation-model", stopReason,
         tools: message.content.flatMap(block => block.type === "toolUseBlock" ? [block.name] : []),
-        replies: message.content.flatMap(block => block.type === "toolUseBlock" && block.name === "strands_structured_output" && block.input && typeof block.input === "object" && "reply" in block.input && block.input.reply && typeof block.input.reply === "object" && "kind" in block.input.reply ? [block.input.reply.kind] : []) })));
+        replies: message.content.flatMap(block => block.type === "toolUseBlock" && block.name === "strands_structured_output" && block.input && typeof block.input === "object" && "reply" in block.input && block.input.reply && typeof block.input.reply === "object" && "kind" in block.input.reply
+          ? [typeof block.input.reply.kind === "string" && ["answer", "candidates", "conversation", "clarification", "unavailable", "operation_result", "uncertainty"].includes(block.input.reply.kind) ? block.input.reply.kind : "unknown"] : []) })));
       agent.addHook(ToolResultEvent, ({ result }) => console.log(JSON.stringify({ turn: index + 1, phase: "consultation-tool", status: result.status })));
       return agent;
     } } : { model: new ScriptModel(scripts[index]!) }))(input);
