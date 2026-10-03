@@ -21,7 +21,7 @@ export function projectCandidatePresentation(set: ItineraryCandidateSet, unknown
     // The ephemeral value exists only for projection and is never persisted.
     const timeline = variant.timeline.dayOrder.length ? { version: 1 as const,
       logicalDays: variant.timeline.dayOrder.map((id, index) => ({ id, label: `${index + 1}日目` })), calendarBindings: [] } : undefined;
-    const daily = projectDailyItinerary(createTrip(set.id, variant.label, set.issuedAt, items,
+    const daily = projectDailyItinerary(createTrip(set.contextRef.tripId!, variant.label, set.issuedAt, items,
       undefined, "inspiration", undefined, timeline), { limit: 90 });
     if (!daily.coverage.complete) throw new Error("Candidate display exceeds day limit");
     const days: PublicPlanCandidate["days"][number][] = daily.days.map(day => ({ dayRef: `${variant.id}:${day.dayKey}`, label: day.label,

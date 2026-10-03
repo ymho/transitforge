@@ -36,6 +36,6 @@ Markdown、Browser内状態、modelのconfirmation fieldは保存入力にしな
 
 ## 2026-10-03: 表示用の二重生成を廃止（#783）
 
-モデルはcanonical draftと共通のunknownsを提出し、ApplicationがPublicPlanPresentationを本体から生成する。
+モデルは案名・日数・各日の予定・未確認事項を提出し、Applicationが内部ID・参照順・既存項目との差分・canonical candidateとPublicPlanPresentationを生成する。
 Presentationは引き続きversioned read modelであり、編集・採用の正本はcanonical candidateのままである。
 表示構造・計測値のモデル生成は不要とする。既存の保持済みPresentation/historyの読取形式は変えない。

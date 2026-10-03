@@ -52,9 +52,9 @@ it("traces production input → decision → search/Evidence → presentation �
   expect(modelContext.userRequest).toBe(userRequest);
   const discoveryResult = requests[1]!.messages.at(-1)?.content.find(block => "toolResult" in block);
   expect(discoveryResult).toMatchObject({ toolResult: { toolUseId: "discovery-1", status: "success" } });
-  expect(result.publicPlanPresentation).toMatchObject({ version: "public-plan-presentation-v1", candidateOrder: ["normal", "rain"],
+  expect(result.publicPlanPresentation).toMatchObject({ version: "public-plan-presentation-v1", candidateOrder: ["plan-1", "plan-2"],
     candidateSetRef: { kind: "candidate-set-ref", candidateSetId: executionId, revision: 0, baseTripRevision: 0 }, target: { tripId: secondId, baseTripRevision: 0 } });
-  expect(result.presentationReceipt).toMatchObject({ candidateSetRef: { candidateSetId: executionId }, entries: [{ ordinal: 1, candidateRef: "normal" }, { ordinal: 2, candidateRef: "rain" }] });
+  expect(result.presentationReceipt).toMatchObject({ candidateSetRef: { candidateSetId: executionId }, entries: [{ ordinal: 1, candidateRef: "plan-1" }, { ordinal: 2, candidateRef: "plan-2" }] });
   expect(diagnostics.map(({ phase }) => phase)).toEqual(expect.arrayContaining(["context", "decision", "tool", "presentation", "save"]));
   expect(JSON.stringify(requests[1])).toContain("eval-evidence-1");
   expect((await state.conversations.history(stateA, conversationId)).items.at(-1)?.publicPlanPresentation).toEqual(result.publicPlanPresentation);
@@ -65,7 +65,7 @@ it("traces production input → decision → search/Evidence → presentation �
   const adoption = new PlanCandidateAdoptionApplication(candidateRepository, trips.repository, candidateRepository, tripApplication,
     (draft) => ({ id: `adopted-${draft.componentId}`, type: "activity", title: draft.title, category: "sightseeing", schedule: draft.schedule }), trips.clock.now);
   const adoptionRequest = { operation: "preview" as const, conversationId, candidateSetId: executionId, candidateSetRevision: 0,
-    variantId: "rain", tripId: secondId, baseTripRevision: 0, mutationId };
+    variantId: "plan-2", tripId: secondId, baseTripRevision: 0, mutationId };
   const preview = await adoption.execute(stateA, adoptionRequest);
   expect(preview).toMatchObject({ status: "confirmation-required", preview: { changes: { added: 1, replaced: 0, removed: 0 } } });
   if (preview.status !== "confirmation-required") throw new Error("preview required");
@@ -74,14 +74,14 @@ it("traces production input → decision → search/Evidence → presentation �
   const adopted = await adoption.execute(stateA, { ...adoptionRequest, operation: "confirm" }, { confirmationKey: preview.confirmationKey });
   expect(adopted).toMatchObject({ status: "saved", revision: 1 });
   const readback = await trips.repository.get(stateA, secondId);
-  expect(readback?.items.map(({ id }) => id)).toEqual(["hotel", "adopted-activity-rain"]);
+  expect(readback?.items.map(({ id }) => id)).toEqual(["hotel", "adopted-plan-2-item-1"]);
 
-  const activity = readback!.items.find(({ id }) => id === "adopted-activity-rain")!;
+  const activity = readback!.items.find(({ id }) => id === "adopted-plan-2-item-1")!;
   await tripApplication.execute(stateA, { version: "trip-api-v1", operation: "mutate", tripId: secondId, baseRevision: 1, mutationId: replanMutationId,
     proposal: { tripId: secondId, baseRevision: 1, summary: "3日目だけ雨天向けに変更", patches: [{ type: "replace", itemId: activity.id,
       item: { ...activity, title: "3日目の屋内展示" } }] } });
   const replanned = await trips.repository.get(stateA, secondId);
-  expect(replanned).toMatchObject({ revision: 2, items: [{ id: "hotel", title: "維持する宿" }, { id: "adopted-activity-rain", title: "3日目の屋内展示" }] });
+  expect(replanned).toMatchObject({ revision: 2, items: [{ id: "hotel", title: "維持する宿" }, { id: "adopted-plan-2-item-1", title: "3日目の屋内展示" }] });
   expect(replanned?.items).toHaveLength(2);
   const expected = parseEpic537FinalExpected(JSON.parse(readFileSync(resolve(import.meta.dirname, "../../../../tests/fixtures/epic-537-final-eval/expected.json"), "utf8")));
   const expectedInvariants = expected.cases.find(({ caseId }) => caseId === "production-candidate-adopt-replan")!.requiredInvariantIds;
@@ -104,11 +104,8 @@ function syntheticSearchBinding(): ServerAgentToolBinding {
 }
 
 function candidateToolInput() {
-  const item = (componentId: string, title: string) => ({ componentId, kind: "activity", title,
-    schedule: { type: "relative", dayId: "day-3", part: "afternoon" }, logicalDayId: "day-3", evidenceRefs: [], placement: { afterRef: "hotel" } });
-  const variant = (id: string, label: string, componentId: string, title: string) => ({ id, label, timeline: { dayOrder: ["day-1", "day-2", "day-3", "day-4"], itemOrder: [componentId] },
-    items: [item(componentId, title)], assumptionRefs: [], assessmentRefs: [], changedComponentIds: [componentId], removedBaseItemIds: [], retainedBaseItemIds: ["hotel"] });
-  return { draft: { coverage: { coveredScopes: ["day-1", "day-2", "day-3", "day-4"], omittedScopes: [], complete: true }, variants: [
-    variant("normal", "通常案", "activity-normal", "3日目の屋外散策"), variant("rain", "雨天案", "activity-rain", "3日目の屋内施設"),
-  ] }, unknowns: ["移動と営業は未確認"] };
+  return { variants: [
+    { label: "通常案", dayCount: 4, items: [{ kind: "activity", title: "3日目の屋外散策", day: 3, part: "afternoon" }] },
+    { label: "雨天案", dayCount: 4, items: [{ kind: "activity", title: "3日目の屋内施設", day: 3, part: "afternoon" }] },
+  ], unknowns: ["移動と営業は未確認"] };
 }

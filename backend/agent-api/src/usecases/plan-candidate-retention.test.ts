@@ -14,24 +14,29 @@ export function itineraryDraft(): CanonicalPlanCandidateDraft {
       { componentId: "return", kind: "transport", title: "帰路は未選択", schedule: { type: "relative", dayId: "day-2" }, evidenceRefs: [], placement: { afterRef: "stay" } }],
     assumptionRefs: [], assessmentRefs: [], changedComponentIds: ["visit", "stay", "return"], removedBaseItemIds: [], retainedBaseItemIds: [] }] };
 }
-function fixture() {
+function proposal() { return { variants: [{ label: "1泊の案", dayCount: 2, items: [
+  { kind: "activity", title: "出雲大社の参拝", day: 1 },
+  { kind: "stay", title: "宿泊先は未選択", day: 1, endDay: 2 },
+  { kind: "transport", title: "帰路は未選択", day: 2 },
+] }], unknowns: ["宿と移動時刻は未確認"] }; }
+function fixture(baseItemIds: string[] = []) {
   let saved: ItineraryCandidateSet | undefined;
   const repository: ItineraryCandidateRepository = { put: vi.fn(async (owner, value) => { expect(owner).toEqual(scope.principal); saved = structuredClone(value); }), get: async () => saved };
   const app = new PlanCandidateRetentionApplication(repository, () => new Date("2026-10-03T00:00:00Z"));
   const tools = new AgentToolRegistry(), publish = vi.fn();
-  registerPlanCandidateRetentionTool(tools, app, scope, publish);
+  registerPlanCandidateRetentionTool(tools, app, { ...scope, baseItemIds }, publish);
   return { repository, app, tools, publish, saved: () => saved };
 }
 describe("canonical candidate retention and deterministic presentation", () => {
   it("builds the two-day cards from the exact retained items without a second model-authored presentation", async () => {
     const f = fixture(), draft = itineraryDraft();
-    const result = await f.tools.execute("draft_itinerary", { draft, unknowns: ["宿と移動時刻は未確認"] }, { executionId: scope.executionId });
+    const result = await f.tools.execute("draft_itinerary", proposal(), { executionId: scope.executionId });
     expect(result).toMatchObject({ ok: true, output: { candidateSetId: scope.executionId, revision: 0, saved: false, confirmationRequired: true } });
-    expect(f.saved()).toMatchObject({ variants: draft.variants, contextRef: { tripId: scope.tripId, baseTripRevision: 4 }, expiresAt: "2026-10-04T00:00:00.000Z" });
+    expect(f.saved()).toMatchObject({ contextRef: { tripId: scope.tripId, baseTripRevision: 4 }, expiresAt: "2026-10-04T00:00:00.000Z" });
     const publicPlan = f.publish.mock.calls[0]![0].presentation;
     expect(publicPlan.target).toEqual({ tripId: scope.tripId, baseTripRevision: 4 });
     expect(publicPlan.candidates[0].items.map((item: { title: string }) => item.title)).toEqual(draft.variants[0]!.items.map(item => item.title));
-    expect(publicPlan.candidates[0].days.map((day: { entries: { itemRef: string }[] }) => day.entries.map(entry => entry.itemRef))).toEqual([["visit", "stay"], ["stay", "return"]]);
+    expect(publicPlan.candidates[0].days.map((day: { entries: { itemRef: string }[] }) => day.entries.map(entry => entry.itemRef))).toEqual([["plan-1-item-1", "plan-1-item-2"], ["plan-1-item-2", "plan-1-item-3"]]);
     expect(publicPlan.candidates[0].items.filter((item: { kind: string }) => item.kind === "stay")).toHaveLength(1);
     expect(publicPlan.candidates[0].unknowns).toEqual(["宿と移動時刻は未確認"]);
     expect(publicPlan.coverage.status).toBe("partial");
@@ -39,7 +44,7 @@ describe("canonical candidate retention and deterministic presentation", () => {
   });
   it("rejects model-authored display payloads rather than allowing displayed and retained titles to diverge", async () => {
     const f = fixture();
-    expect(await f.tools.execute("draft_itinerary", { draft: itineraryDraft(), unknowns: [], presentation: { title: "別の場所" } }, { executionId: scope.executionId }))
+    expect(await f.tools.execute("draft_itinerary", { ...proposal(), presentation: { title: "別の場所" } }, { executionId: scope.executionId }))
       .toMatchObject({ ok: false, error: { code: "invalid_input" } });
     expect(f.repository.put).not.toHaveBeenCalled();
   });
@@ -60,9 +65,23 @@ describe("canonical candidate retention and deterministic presentation", () => {
     expect(candidate.days.at(-1)).toMatchObject({ label: "日程未定", entries: [{ itemRef: "visit" }, { itemRef: "stay" }, { itemRef: "return" }] });
     expect(candidate.days.slice(0, 2).every(day => day.status === "not-retrieved")).toBe(true);
   });
+  it.each(["outside-day", "reverse-span", "forged-base"])("rejects concise %s before persistence", async kind => {
+    const f = fixture(), input = proposal();
+    if (kind === "outside-day") input.variants[0]!.items[0]!.day = 3;
+    if (kind === "reverse-span") input.variants[0]!.items[1]!.endDay = 0;
+    if (kind === "forged-base") Object.assign(input.variants[0]!.items[0]!, { baseItemId: "invented" });
+    expect(await f.tools.execute("draft_itinerary", input, { executionId: scope.executionId })).toMatchObject({ ok: false, error: { code: "invalid_input" } });
+    expect(f.repository.put).not.toHaveBeenCalled();
+  });
+  it("derives retained and replaced base references from the current Trip", async () => {
+    const f = fixture(["hotel", "old-visit"]), input = proposal();
+    Object.assign(input.variants[0]!.items[0]!, { baseItemId: "old-visit" });
+    expect(await f.tools.execute("draft_itinerary", input, { executionId: scope.executionId })).toMatchObject({ ok: true });
+    expect(f.saved()!.variants[0]).toMatchObject({ retainedBaseItemIds: ["hotel"], removedBaseItemIds: [], items: [{ baseItemId: "old-visit" }, { placement: { afterRef: "plan-1-item-1" } }, { placement: { afterRef: "plan-1-item-2" } }] });
+  });
   it("does not publish a card when the candidate repository fails", async () => {
     const f = fixture(); vi.mocked(f.repository.put).mockRejectedValueOnce(new Error("private repository detail"));
-    expect(await f.tools.execute("draft_itinerary", { draft: itineraryDraft(), unknowns: [] }, { executionId: scope.executionId }))
+    expect(await f.tools.execute("draft_itinerary", proposal(), { executionId: scope.executionId }))
       .toMatchObject({ ok: false, error: { code: "unavailable" } });
     expect(f.publish).not.toHaveBeenCalled();
   });

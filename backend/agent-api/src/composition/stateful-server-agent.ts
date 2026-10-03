@@ -93,7 +93,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
             const candidateRepository = new DynamoDbItineraryCandidateRepository(options.tripTable, options.tripClient);
             registerPlanCandidateRetentionTool(tools, new PlanCandidateRetentionApplication(candidateRepository), {
               principal: scope.principal, executionId: scope.executionId, conversationId: scope.conversationId, userRequest: scope.userRequest,
-              tripId: trip.id, baseTripRevision: trip.revision,
+              tripId: trip.id, baseTripRevision: trip.revision, baseItemIds: trip.items.map(item => item.id),
             }, value => { retainedCandidatePlan = value; });
           }
         }

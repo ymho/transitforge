@@ -39,7 +39,7 @@ Frontendは保存済みsnapshotをlive SSEと履歴で同じように描画し�
 
 ## 仮旅程の表示投影（#783）
 
-`draft_itinerary`のモデル入力は`draft`（canonical variants/coverage）と共通の`unknowns`だけとする。
+`draft_itinerary`のモデル入力は`variants`（案名・日数・各日の予定）と共通の`unknowns`だけとする。
 モデルがPublicPlanPresentation、表示日順、entry/item参照、表示タイトルを重複生成する経路を除く。
 Applicationが検証済みの本体からDomainの日別投影を使い、既存カード用のread modelを決定論的に生成する。
 タイトル・項目順・宿泊の複数日参照は本体と同じであり、日程未定は独立した未定欄へ置く。

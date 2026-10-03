@@ -175,12 +175,12 @@ describe.skipIf(!enabled)("V2 itinerary proposal conversation with real Bedrock"
           if (!observed.has(toolUse.name)) return;
           const input = toolUse.input as Record<string, unknown>;
           if (toolUse.name === "draft_itinerary") {
-            const validation = z.fromJSONSchema(candidateProposalInputSchema).safeParse(input);
+            const validation = z.fromJSONSchema(candidateProposalInputSchema as Parameters<typeof z.fromJSONSchema>[0]).safeParse(input);
             console.log(JSON.stringify({ phase: "itinerary-input-validation", valid: validation.success,
               issues: validation.success ? [] : validation.error.issues.map(issue => ({ code: issue.code, path: issue.path })) }));
           }
           console.log(JSON.stringify({ phase: "itinerary-tool", name: toolUse.name,
-            ...(toolUse.name === "draft_itinerary" ? { hasDraft: !!input.draft, hasPresentation: !!input.presentation,
+            ...(toolUse.name === "draft_itinerary" ? { hasVariants: Array.isArray(input.variants), hasPresentation: !!input.presentation,
               inputBytes: Buffer.byteLength(JSON.stringify(input)) } : {}) }));
         });
         return agent;
