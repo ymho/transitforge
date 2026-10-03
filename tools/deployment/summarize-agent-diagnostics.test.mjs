@@ -40,3 +40,14 @@ writeFileSync(diagnostics, JSON.stringify([
 const publication = spawnSync(process.execPath, ["tools/deployment/summarize-agent-diagnostics.mjs", diagnostics, streams], { encoding: "utf8" });
 assert.equal(publication.status, 0, publication.stderr);
 assert.match(publication.stdout, /v2:publication:missing_reply_proposal/);
+
+writeFileSync(diagnostics, JSON.stringify([
+  JSON.stringify({ event: "agent_diagnostic", phase: "execution", reason: "output_token_budget", executionId: "private-id", occurredAt: "2026-10-03T07:37:16Z" }),
+  JSON.stringify({ event: "agent_diagnostic", phase: "tool", executionId: "private-id", reason: "failed", refs: ["draft_itinerary"], toolErrorCode: "invalid_input", occurredAt: "2026-10-03T07:37:10Z", input: "private-input" }),
+  JSON.stringify({ event: "agent_diagnostic", phase: "tool", executionId: "private-id", reason: "failed", refs: ["draft_itinerary"], toolErrorCode: "private-error", occurredAt: "2026-10-03T07:37:15Z" }),
+]));
+const limited = spawnSync(process.execPath, ["tools/deployment/summarize-agent-diagnostics.mjs", diagnostics, streams], { encoding: "utf8" });
+assert.equal(limited.status, 0, limited.stderr);
+assert.match(limited.stdout, /draft_itinerary \| failed \| invalid_input/);
+assert.match(limited.stdout, /draft_itinerary \| failed \| not_recorded/);
+assert.doesNotMatch(limited.stdout, /private-id|private-input|private-error/);

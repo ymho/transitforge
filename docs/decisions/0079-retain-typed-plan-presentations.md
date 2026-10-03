@@ -33,3 +33,9 @@ Markdown、Browser内状態、modelのconfirmation fieldは保存入力にしな
 - 連泊等は複数`entryRef`から1つの`itemRef`を参照でき、費用・予約を複製しない。
 - 180 KiBを超えるPresentation/CandidateSetはsilent truncationせず失敗し、参照/chunk化の要否はPR7の90日測定後に判断する。
 - 旧会話のPresentationなし本文は引き続き表示できるが、typed candidateとして直接採用できない。
+
+## 2026-10-03: 表示用の二重生成を廃止（#783）
+
+モデルはcanonical draftと共通のunknownsを提出し、ApplicationがPublicPlanPresentationを本体から生成する。
+Presentationは引き続きversioned read modelであり、編集・採用の正本はcanonical candidateのままである。
+表示構造・計測値のモデル生成は不要とする。既存の保持済みPresentation/historyの読取形式は変えない。

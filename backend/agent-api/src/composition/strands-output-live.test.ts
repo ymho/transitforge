@@ -197,7 +197,7 @@ describe.skipIf(!enabled)("V2 itinerary proposal conversation with real Bedrock"
       } },
       additionalTools: productionServerTools({ external: providers, discovery: providers.discovery, accommodation: vi.fn(), journey: vi.fn() })
         .filter(({ descriptor }) => ["explore_destination", "search_place_media"].includes(descriptor.name)) });
-    for (const [index, userRequest] of ["出雲大社にいきたい", "明日から1泊で行きたい", "はい、作成お願いします。"].entries()) {
+    for (const [index, userRequest] of ["出雲大社にいきたい", "明日から1泊で行きたい", "はい、仮旅程の作成をお願いします。"].entries()) {
       const turn = { principal, conversationId, turnId: `78300000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
         userRequest, uiContext: { calendarDate: "2026-10-03" } };
       const result = await app.runConversationTurn(turn);

@@ -24,12 +24,12 @@ export function projectCandidatePresentation(set: ItineraryCandidateSet, unknown
     const daily = projectDailyItinerary(createTrip(set.id, variant.label, set.issuedAt, items,
       undefined, "inspiration", undefined, timeline), { limit: 90 });
     if (!daily.coverage.complete) throw new Error("Candidate display exceeds day limit");
-    const days: PublicPlanCandidate["days"][number][] = daily.days.map(day => ({ dayRef: day.dayKey, label: day.label,
+    const days: PublicPlanCandidate["days"][number][] = daily.days.map(day => ({ dayRef: `${variant.id}:${day.dayKey}`, label: day.label,
       // An empty day is unplanned, not a user-confirmed free day.
       status: day.entries.length ? "planned" : "not-retrieved",
       entries: day.entries.map(entry => ({ entryRef: entry.entryKey, itemRef: entry.sourceItemId,
         role: entry.role === "possible-window" ? "possible" : entry.role })) }));
-    if (daily.unscheduled.length) days.push({ dayRef: "unscheduled", label: "日程未定", status: "planned",
+    if (daily.unscheduled.length) days.push({ dayRef: `${variant.id}:unscheduled`, label: "日程未定", status: "planned",
       entries: daily.unscheduled.map(entry => ({ entryRef: entry.entryKey, itemRef: entry.sourceItemId, role: "possible" })) });
     return { variantId: variant.id, label: variant.label, dayOrder: days.map(day => day.dayRef), days,
       items: ordered.map(item => ({ itemRef: item.componentId, sourceRef: item.componentId, title: item.title, kind: item.kind,
