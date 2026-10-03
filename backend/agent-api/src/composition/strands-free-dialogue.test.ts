@@ -42,7 +42,8 @@ class DialogueModel extends Model<BaseModelConfig> {
       expect(input[1]!.role).toBe("assistant");
       expect((input[1]!.content[0] as { text: string }).text).toContain("出発地");
       expect(payload.application.conversation).not.toHaveProperty("messages");
-      expect(payload.userMessage).toBe("大阪です。");
+      expect(payload).not.toHaveProperty("userMessage");
+      expect((input.at(-1)!.content[1] as { text: string }).text).toBe("大阪です。");
     }
     const step = this.steps[this.calls++];
     if (!step) throw new Error("Unexpected extra model call");

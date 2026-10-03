@@ -25,7 +25,7 @@ const evidence: Evidence = { id: "evidence:trip:kyoto", category: "station", kno
 const trace = { executionId: "strands-runtime-test", events: [], droppedEventCount: 0 };
 const answer = { kind: "answer", references: [{ evidenceId: evidence.id, field: "description" }] };
 function fake(overrides: Record<string, unknown> = {}) {
-  return { run: vi.fn(async (_input: { modelInput?: string }) => ({
+  return { run: vi.fn(async (_input: { modelInput?: { text: string }[] }) => ({
     stopReason: "toolUse", evidence: [], trace, ...overrides,
   })) };
 }
@@ -35,8 +35,10 @@ describe("createStrandsServerRuntime", () => {
       metrics: { modelCalls: 1, toolCalls: 0, inputTokens: 100, outputTokens: 20, totalTokens: 120 } });
     const result = await createStrandsServerRuntime(engine as unknown as StrandsAgentEngine)(input);
     expect(result.status).toBe("completed");
-    const payload = JSON.parse(engine.run.mock.calls[0]![0].modelInput!);
-    expect(payload.userMessage).toBe(input.userRequest);
+    const blocks = engine.run.mock.calls[0]![0].modelInput!;
+    const payload = JSON.parse(blocks[0]!.text);
+    expect(blocks[1]).toEqual({ text: input.userRequest });
+    expect(payload).not.toHaveProperty("userMessage");
     expect(payload.application).not.toHaveProperty("capabilities");
     expect(payload.application.clock).toMatchObject({ role: "reference_only", referenceDate: "2026-09-26" });
     expect(result.publicReply?.kind).toBe("conversation");
@@ -96,8 +98,9 @@ it("projects only public role/text into native SDK history without duplicating o
     { role: "assistant" as const, text: "分かりました。" }] };
   const projected = strandsConversationInput({ ...input, userRequest: "大阪です。", context: { ...input.context, conversation } });
   expect(projected.history).toEqual(conversation.messages.map(({ role, text }) => ({ role, content: [{ text }] })));
-  const payload = JSON.parse(projected.modelInput);
-  expect(payload.userMessage).toBe("大阪です。");
+  const payload = JSON.parse((projected.modelInput[0] as { text: string }).text);
+  expect(projected.modelInput[1]).toEqual({ text: "大阪です。" });
+  expect(payload).not.toHaveProperty("userMessage");
   expect(payload.application.conversation).not.toHaveProperty("messages");
   expect(conversation.messages).toHaveLength(2);
   expect(() => strandsConversationInput({ ...input, context: { conversation: { messages: [

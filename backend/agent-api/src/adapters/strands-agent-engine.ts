@@ -1,7 +1,7 @@
 import {
   Agent, BedrockModel, StructuredOutputError, tool,
   type AgentConfig, type BaseModelConfig, type InvokableTool,
-  type JSONSchema, type JSONValue, type Model, type MessageData,
+  type JSONSchema, type JSONValue, type Model, type MessageData, type ContentBlockData,
 } from "@strands-agents/sdk";
 import { AgentTraceRecorder, type AgentTrace } from "@raiquora/agent/agent-trace";
 import { validateToolIntentUse } from "@raiquora/agent/intent-action-policy";
@@ -33,7 +33,7 @@ export interface StrandsAgentEngineOptions {
 export interface StrandsAgentRunInput {
   executionId: string;
   userRequest: string;
-  modelInput?: string;
+  modelInput?: string | ContentBlockData[];
   /** Public owner-scoped history; no raw SDK Tool results or internal reasoning. */
   history?: MessageData[];
   tools: AgentToolRegistry;
@@ -60,7 +60,7 @@ export interface StrandsAgentRunResult {
     cacheReadInputTokens?: number; cacheWriteInputTokens?: number };
 }
 export interface StrandsAgentLike {
-  invoke(args: string, options?: {
+  invoke(args: string | ContentBlockData[], options?: {
     cancelSignal?: AbortSignal;
     limits?: { turns?: number; totalTokens?: number; outputTokens?: number };
   }): Promise<{
@@ -129,7 +129,7 @@ export class StrandsAgentEngine {
             ? { target: "destination", place: value.place!, quote: value.quote }
             : { target: "destination", place: null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "update_current_origin", inputSchema: placeConditionUpdateInputSchema,
-          description: "今回の相談の出発地について、利用者が実際の条件として設定・訂正・明示撤回した最終状態を1回で反映する。設定/訂正はaction=set、未定に戻す明示はaction=clear。訂正でclear→setの2操作に分けない。普段の出発地の推測、仮定・what-if・比較だけ、変更なしでは使わない。Tripやプロフィールは変更しない。",
+          description: "今回の相談の出発地について、利用者が実際の条件として設定・訂正・明示撤回した最終状態を1回で反映する。設定/訂正はaction=set、未定に戻す明示はaction=clear。訂正でclear→setの2操作に分けない。普段の出発地の推測、仮定・what-if・比較だけ、変更なしでは使わない。条件の受理だけで予定項目は作らない。同じ発言に空の旅程への反映依頼があれば、続けてdraft_itineraryで確認可能な案を作る。プロフィールは変更しない。",
           callback: (value, context) => apply(value.action === "set"
             ? { target: "origin", place: value.place!, quote: value.quote }
             : { target: "origin", place: null, quote: value.quote }, context?.cancelSignal) }),

@@ -149,3 +149,8 @@ Conversation fixtureは本番の`explore_destination`を使い、discovery・ペ
   `candidates`にも宿泊の型付き投影を接続し、`answer`と同じ比較カードを使う。
   宿のcandidateReferencesは候補表示できるEvidenceだけを公開し、古い・情報不足の候補や観光地との混在を受理しない。
   モデル生成のカードや価格へfallbackせず、名前・比較説明の双方にEvidence bindingを付ける。
+- [独立3回の検証](https://github.com/ymho/transitforge/actions/runs/37124368433)では宿の`candidates`公開は成功したが、
+  完全な相談フローは1/3だった。1回は出発地受理後に案を省略し、もう1回は宿検索を案作成へ取り違えた。
+  そのため、このheadをマージせず、今回の生発言をSDKの独立した末尾TextBlockで渡す入力投影へ変更した。
+  applicationは別TextBlockのJSONデータとし、既存24k予算・role/textだけの履歴・Effective Intentの正本を保つ。
+  発言の意味をApplicationで推測したり、Tool選択や追加invokeを行う変更ではない。
