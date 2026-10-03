@@ -80,6 +80,27 @@ feedbackは閉じた拒否codeと選択方法だけであり、会話や生のEv
 
 実BedrockのConversation評価も本番と同じ4096累積出力token/Nova 2 reasoning lowを使う。
 旧1024上限による途中終了を本番設定の評価と混同しない。6 cycles/2 reads/60秒の上限は維持する。
+Conversation fixtureは本番の`explore_destination`を使い、discovery・ページ読込・地点照合を固定Providerで
+組成する。mediaのみを渡して本番Promptの目的地調査が実行できないfixtureと混同しない。
+
+## #781の原因確認（2026-10-03）
+
+- 本番の失敗は検索2回とSDK終了の後の`v2:publication:invalid_field`である。選択したfieldは保存されておらず、
+  不存在・禁止項目・値の型のいずれだったかを過去ログから確定できない。
+- mainの実SDK構成へ同じscripted出力（不存在field・架空ID・禁止URL項目）を与えると、3ケースとも
+  不正参照を持ったままSDKが終了する。修正後は同じ入力を標準feedbackで訂正し、readは1回のまま公開まで成功する。
+- [実Bedrockの修正前後比較](https://github.com/ymho/transitforge/actions/runs/37105070543)では架空施設の2ケースは
+  両方とも`sourceExcerpt`を選んで成功した。この測定では本番の不正field選択を再現できていない。
+  同runのmedia-only Conversation fixtureは候補を得られず保存依頼が出力上限に達し、run全体は失敗した。
+  fixtureのTool構成を本番へ合わせて再検証する。不成功runを後の成功で消さない。
+- [目的地調査を組成した検証](https://github.com/ymho/transitforge/actions/runs/37105455049)では4ターンの
+  完了・Trip条件の受理/訂正・未対応保存・replayが成立したが、候補カードのassertionが失敗した。
+  固定Providerには公式ページ照合URLと鮮度期限が欠けていた。これらを補い、実モデル呼出し前に
+  Tool結果→候補参照→公開カードまで成立する非課金テストを追加した。本番の公開制約は緩めない。
+- [最終の実Bedrock検証](https://github.com/ymho/transitforge/actions/runs/37105876800)は5 tests成功。
+  会話4ターン（行き先受理・訂正・カード・未対応保存・履歴/replay）と短い説明2ケースが完了し、
+  固定Providerの公開テスト2ケースも成功した。実Provider・実ユーザーのブラウザでの再送は未実施である。
+  比較用のbranch限定workflow変更は最終差分から除去し、既存main限定の手動評価へ戻した。
 
 ## 合否の区別
 
