@@ -118,6 +118,7 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
     newExecutionId: () => `78500000-2222-4000-8000-${String(++execution).padStart(12, "0")}`,
     runRuntime: input => createStrandsServerRuntime(new StrandsAgentEngine(settings, live && [2, 4, 5].includes(index) ? { createAgent: config => {
       const agent = new Agent(config);
+      console.log(JSON.stringify({ turn: index + 1, phase: "consultation-capabilities", tools: agent.tools.map(tool => tool.name) }));
       agent.addHook(ModelMessageEvent, ({ stopReason, message }) => console.log(JSON.stringify({ turn: index + 1, phase: "consultation-model", stopReason,
         tools: message.content.flatMap(block => block.type === "toolUseBlock" ? [block.name] : []) })));
       agent.addHook(ToolResultEvent, ({ result }) => console.log(JSON.stringify({ turn: index + 1, phase: "consultation-tool", status: result.status })));
