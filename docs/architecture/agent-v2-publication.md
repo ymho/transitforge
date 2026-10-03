@@ -200,3 +200,10 @@ Conversation fixtureは本番の`explore_destination`を使い、discovery・ペ
 - draft_itineraryの成功応答にも`scope=unsaved_itinerary_only`、`researchPerformed=false`、
   `tripItemsChanged=false`を明示する。保持した案の作成成功だけを検索・保存成功と扱わないための実行scopeであり、
   次のTool選択や旅程採用をApplicationが強制するものではない。
+
+- [native拒否説明後の検証](https://github.com/ymho/transitforge/actions/runs/37130027923)では過去quoteのwriter反復は止まったが、
+  宿検索を省略したまま回答して全体は失敗した。出発地/案/経路/保存は成功した。
+  SDKのcurrent user-roleメッセージに参考状態と過去provenance quoteを含めていた入力境界を整理する。
+  現在のuser-roleは生発言だけ、sanitized Application referenceはpolicyと区別したsystem-context DATAへ渡す。
+  Native履歴、正本のEffective Intent、24k合算予算を保ち、JSON値のdelimiter文字はescapeする。
+  この変更は新たな意味解釈や権限を加えず、現在発言の実roleとApplicationのsource検証を一致させる。

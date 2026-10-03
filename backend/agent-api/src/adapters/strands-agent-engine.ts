@@ -34,6 +34,8 @@ export interface StrandsAgentRunInput {
   executionId: string;
   userRequest: string;
   modelInput?: string | ContentBlockData[];
+  /** Sanitized Application reference DATA; never a traveller request or instruction. */
+  applicationReference?: string;
   /** Public owner-scoped history; no raw SDK Tool results or internal reasoning. */
   history?: MessageData[];
   tools: AgentToolRegistry;
@@ -188,7 +190,8 @@ export class StrandsAgentEngine {
       model: baseModel,
       ...(input.history?.length ? { messages: input.history } : {}),
       structuredOutputSchema: validatedOutputSchema,
-      tools, systemPrompt: this.options.systemPrompt,
+      tools, systemPrompt: input.applicationReference
+        ? [{ text: this.options.systemPrompt }, { text: input.applicationReference }] : this.options.systemPrompt,
       printer: false, contextManager: false, retryStrategy: null, toolExecutor: "sequential",
     });
     const startedAt = Date.now();

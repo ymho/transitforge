@@ -15,12 +15,14 @@ class ScriptedModel extends Model<BaseModelConfig> {
   private config: BaseModelConfig = { modelId: "synthetic" };
   readonly toolChoices: StreamOptions["toolChoice"][] = [];
   readonly observedMessages: string[] = [];
+  readonly observedSystemPrompts: string[] = [];
   constructor(private readonly replies: Reply[]) { super(); }
   updateConfig(config: BaseModelConfig): void { this.config = { ...this.config, ...config }; }
   getConfig(): BaseModelConfig { return this.config; }
   async *stream(_messages: Message[], options?: StreamOptions): AsyncGenerator<ModelStreamEvent> {
     this.toolChoices.push(options?.toolChoice);
     this.observedMessages.push(JSON.stringify(_messages));
+    this.observedSystemPrompts.push(JSON.stringify(options?.systemPrompt));
     const reply = this.replies[this.index++];
     if (!reply) throw new Error("Unexpected extra model invocation");
     yield { type: "modelMessageStartEvent", role: "assistant" };
@@ -68,6 +70,17 @@ describe("StrandsAgentEngine", () => {
     expect(execute).toHaveBeenCalledOnce();
     expect(result.trace.events.some(({ type }) => type === "tool_completed")).toBe(true);
     expect(model.toolChoices).toHaveLength(2); // No model request after the structured result.
+  });
+  it("keeps Application reference data out of the native current user message", async () => {
+    const { input } = setup(), model = new ScriptedModel([submitted]);
+    const reference = '<application_reference>\n{"application":{"accepted":"過去の条件"}}\n</application_reference>';
+    await new StrandsAgentEngine(options, { model }).run({ ...input, applicationReference: reference });
+    const messages = JSON.parse(model.observedMessages[0]!);
+    expect(messages.at(-1)?.role).toBe("user");
+    expect(messages.at(-1)?.content).toEqual([{ text: input.userRequest }]);
+    expect(model.observedMessages[0]).not.toContain("過去の条件");
+    expect(model.observedSystemPrompts[0]).toContain("過去の条件");
+    expect(model.observedSystemPrompts[0]).toContain(options.systemPrompt);
   });
   it.each(["explore_destination", "discover_destinations"])(
     "keeps %s research internals out of the model reply contract while preserving Evidence", async name => {

@@ -1,4 +1,4 @@
-import type { MessageData, ContentBlockData } from "@strands-agents/sdk";
+import type { MessageData } from "@strands-agents/sdk";
 import type { ServerAgentRuntimeInput } from "../ports/server-agent-runtime.js";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -63,7 +63,7 @@ export function strandsTurnInput(input: ServerAgentRuntimeInput): string {
  * history input. The same sanitized projection enforces the combined 24k budget;
  * messages are removed from application data rather than duplicated in the prompt.
  * This is data transport, not semantic interpretation or another state store. */
-export function strandsConversationInput(input: ServerAgentRuntimeInput): { modelInput: ContentBlockData[]; history: MessageData[] } {
+export function strandsConversationInput(input: ServerAgentRuntimeInput): { modelInput: string; applicationReference: string; history: MessageData[] } {
   const payload = JSON.parse(strandsTurnInput(input)) as {
     userMessage: string; application: { conversation: { messages?: unknown } | null };
   };
@@ -78,11 +78,13 @@ export function strandsConversationInput(input: ServerAgentRuntimeInput): { mode
     return { role: message.role, content: [{ text: message.text }] };
   });
   if (conversation) delete conversation.messages;
-  // Delimit reference data and the verbatim current utterance in one text block.
-  // These are transport labels, not a task interpretation or Tool instruction.
-  const text = `<application_reference>\n${JSON.stringify({ application: payload.application })}\n</application_reference>\n\n<current_user_message>\n${payload.userMessage}\n</current_user_message>`;
-  if (text.length > 24_000) throw new StrandsTurnInputError("context_budget");
-  return { modelInput: [{ text }], history };
+  // Reference state is system-context data. The native user-role message contains
+  // only the traveller's current utterance, never quotes from accepted conditions.
+  // Escape delimiter characters in JSON values so they cannot close this data block.
+  const reference = JSON.stringify({ application: payload.application }).replaceAll("<", "\\u003c").replaceAll(">", "\\u003e");
+  const applicationReference = `<application_reference>\n${reference}\n</application_reference>`;
+  if (applicationReference.length + payload.userMessage.length > 24_000) throw new StrandsTurnInputError("context_budget");
+  return { modelInput: payload.userMessage, applicationReference, history };
 }
 
 function withoutRequest(value: Record<string, unknown>): Record<string, unknown> {
