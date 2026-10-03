@@ -8,6 +8,7 @@ import { createStrandsServerRuntime } from "../adapters/strands-server-runtime.j
 import { createConversationServerAgent } from "./conversation-server-agent.js";
 import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
 import { productionServerTools } from "./production-server-tools.js";
+import type { AgentOperation } from "../ports/agent-operation.js";
 import { projectPublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
 import { DynamoDbItineraryCandidateRepository } from "../adapters/dynamodb-itinerary-candidate-repository.js";
 import { PlanCandidateAdoptionApplication } from "../usecases/plan-candidate-adoption.js";
@@ -109,7 +110,7 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
   const accommodation = vi.fn(async () => ({ body: { accommodations: [1, 2, 3].map(id => ({ kind: "accommodation", provider: "fixture", providerItemId: String(id), name: `比較用の宿${id}`,
     checkInDate: "2026-10-04", checkOutDate: "2026-10-05", availability: id === 1 ? "available" : "unknown", bookingUrl: `https://example.org/hotels/${id}`,
     price: { price: { currency: "JPY", amountMinor: 5100 }, observedAt: "2026-10-03T00:00:00Z", basis: "reference-minimum" } })) } }));
-  const journey = vi.fn(async () => ({ body: rail }));
+  const journey = vi.fn<AgentOperation>(async () => ({ body: rail }));
   const bindings = productionServerTools({ external: {}, accommodation, journey });
   const hotelBinding = bindings.find(binding => binding.descriptor.name === "search_accommodations")!;
   const originalEvidence = hotelBinding.evidence;
@@ -157,11 +158,18 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
     expect(result.status).toBe("completed"); expect(await app.runConversationTurn(input)).toEqual(result);
     if (index === 2) { expect.soft(accommodation).toHaveBeenCalled(); expect.soft(result.publicAccommodationPresentation?.cards).toHaveLength(3); }
     if (index === 4) {
+      // No departure time has been supplied. The requested draft must remain
+      // usable without inventing a time for a rail search.
+      expect(journey).not.toHaveBeenCalled();
       plan = result.publicPlanPresentation!;
       expect(plan?.candidates[0]?.days).toHaveLength(2);
       expect(plan?.target).toEqual({ tripId: metadata.tripId, baseTripRevision: (await trips.repository.get(stateA, metadata.tripId))!.revision });
     }
-    if (index === 5) expect(result.publicJourneyPresentation?.journeys[0]?.legs[0]?.trainName).toBe("");
+    if (index === 5) {
+      expect(journey).toHaveBeenCalledWith(expect.objectContaining({ serviceDate: "2026-10-04",
+        originStation: "向日町駅", destinationStation: "出雲市駅", departureTimeMinutes: 480 }), expect.anything());
+      expect(result.publicJourneyPresentation?.journeys[0]?.legs[0]?.trainName).toBe("");
+    }
     expect((await trips.repository.get(stateA, metadata.tripId))!.items).toEqual([]);
     index++;
   }
