@@ -44,7 +44,7 @@ concurrency:
 
 jobs:
   evaluate:
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/fix/consultation-search-to-itinerary'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: dev
