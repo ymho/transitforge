@@ -167,3 +167,8 @@ Conversation fixtureは本番の`explore_destination`を使い、discovery・ペ
   [基本2ケース](https://github.com/ymho/transitforge/actions/runs/37126149764)も未対応保存の応答型が不安定だった。
   条件・検索・案・未対応操作を重複して記述していたPromptを整理し、実行能力と現在依頼の完了条件を
   先頭の短い英語policyへまとめる。公開回答の言語は日本語のまま、既存の期間・仮定・Evidence・Trip境界を維持する。
+- [policy整理後の3回](https://github.com/ymho/transitforge/actions/runs/37126745363)も0/3だった。
+  この測定では宿カード公開は1回成功したが、今回発言にない出発地・期間のwriterを呼ぶ失敗や案作成省略が残った。
+  複数TextBlockの暗黙的な位置で現在発言を示すのをやめ、単一TextBlockの`application_reference`と
+  `current_user_message`ラベルで参考JSONと生発言を明示する。履歴とTool結果を現在の依頼と混同しない方針も示す。
+  ラベルはデータ境界だけで、推測した意味・作業一覧・Tool選択は含まない。ラベル込みでも24k上限を検証する。

@@ -78,10 +78,11 @@ export function strandsConversationInput(input: ServerAgentRuntimeInput): { mode
     return { role: message.role, content: [{ text: message.text }] };
   });
   if (conversation) delete conversation.messages;
-  // Keep the raw current utterance in its own native text block, just as the
-  // public history uses native roles. Application JSON stays reference data;
-  // neither block contains an inferred task or selects a Tool.
-  return { modelInput: [{ text: JSON.stringify({ application: payload.application }) }, { text: payload.userMessage }], history };
+  // Delimit reference data and the verbatim current utterance in one text block.
+  // These are transport labels, not a task interpretation or Tool instruction.
+  const text = `<application_reference>\n${JSON.stringify({ application: payload.application })}\n</application_reference>\n\n<current_user_message>\n${payload.userMessage}\n</current_user_message>`;
+  if (text.length > 24_000) throw new StrandsTurnInputError("context_budget");
+  return { modelInput: [{ text }], history };
 }
 
 function withoutRequest(value: Record<string, unknown>): Record<string, unknown> {

@@ -36,14 +36,16 @@ class DialogueModel extends Model<BaseModelConfig> {
   getConfig() { return this.config; }
   async *stream(input: Message[]): AsyncGenerator<ModelStreamEvent> {
     if (this.calls === 2) {
-      const payload = JSON.parse((input.at(-1)!.content[0] as { text: string }).text);
+      const block = (input.at(-1)!.content[0] as { text: string }).text;
+      const payload = JSON.parse(block.match(/<application_reference>\n([\s\S]+?)\n<\/application_reference>/u)![1]!);
       expect(input[0]!.role).toBe("user");
       expect((input[0]!.content[0] as { text: string }).text).toBe(messages[0]);
       expect(input[1]!.role).toBe("assistant");
       expect((input[1]!.content[0] as { text: string }).text).toContain("出発地");
       expect(payload.application.conversation).not.toHaveProperty("messages");
       expect(payload).not.toHaveProperty("userMessage");
-      expect((input.at(-1)!.content[1] as { text: string }).text).toBe("大阪です。");
+      expect(input.at(-1)!.content).toHaveLength(1);
+      expect(block).toContain("<current_user_message>\n大阪です。\n</current_user_message>");
     }
     const step = this.steps[this.calls++];
     if (!step) throw new Error("Unexpected extra model call");

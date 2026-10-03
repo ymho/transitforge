@@ -36,8 +36,9 @@ describe("createStrandsServerRuntime", () => {
     const result = await createStrandsServerRuntime(engine as unknown as StrandsAgentEngine)(input);
     expect(result.status).toBe("completed");
     const blocks = engine.run.mock.calls[0]![0].modelInput!;
-    const payload = JSON.parse(blocks[0]!.text);
-    expect(blocks[1]).toEqual({ text: input.userRequest });
+    expect(blocks).toHaveLength(1);
+    const payload = JSON.parse(blocks[0]!.text.match(/<application_reference>\n([\s\S]+?)\n<\/application_reference>/u)![1]!);
+    expect(blocks[0]!.text).toContain(`<current_user_message>\n${input.userRequest}\n</current_user_message>`);
     expect(payload).not.toHaveProperty("userMessage");
     expect(payload.application).not.toHaveProperty("capabilities");
     expect(payload.application.clock).toMatchObject({ role: "reference_only", referenceDate: "2026-09-26" });
@@ -98,8 +99,10 @@ it("projects only public role/text into native SDK history without duplicating o
     { role: "assistant" as const, text: "分かりました。" }] };
   const projected = strandsConversationInput({ ...input, userRequest: "大阪です。", context: { ...input.context, conversation } });
   expect(projected.history).toEqual(conversation.messages.map(({ role, text }) => ({ role, content: [{ text }] })));
-  const payload = JSON.parse((projected.modelInput[0] as { text: string }).text);
-  expect(projected.modelInput[1]).toEqual({ text: "大阪です。" });
+  expect(projected.modelInput).toHaveLength(1);
+  const block = (projected.modelInput[0] as { text: string }).text;
+  const payload = JSON.parse(block.match(/<application_reference>\n([\s\S]+?)\n<\/application_reference>/u)![1]!);
+  expect(block).toContain("<current_user_message>\n大阪です。\n</current_user_message>");
   expect(payload).not.toHaveProperty("userMessage");
   expect(payload.application.conversation).not.toHaveProperty("messages");
   expect(conversation.messages).toHaveLength(2);
