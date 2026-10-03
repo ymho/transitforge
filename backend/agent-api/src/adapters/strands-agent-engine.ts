@@ -164,7 +164,7 @@ export class StrandsAgentEngine {
       } : {}) });
     // Reuse Application admission in the SDK's native validation feedback. This
     // does not repair a reply, start another invoke, or bypass final publication.
-    const structuredOutputSchema = agentV2StructuredOutputSchema.superRefine(({ reply }, context) => {
+    const validatedOutputSchema = agentV2StructuredOutputSchema.superRefine(({ reply }, context) => {
       const merged = mergeEvidenceObservations([], [...(input.initialEvidence ?? []), ...evidence], input.maxEvidence);
       if (merged.collisions.length || merged.conflictingObservationIds.length) {
         context.addIssue({ code: "custom", message: "evidence_collision", path: ["reply"] });
@@ -182,7 +182,7 @@ export class StrandsAgentEngine {
     const agent = this.createAgent({
       model: baseModel,
       ...(input.history?.length ? { messages: input.history } : {}),
-      structuredOutputSchema,
+      structuredOutputSchema: validatedOutputSchema,
       tools, systemPrompt: this.options.systemPrompt,
       printer: false, contextManager: false, retryStrategy: null, toolExecutor: "sequential",
     });
