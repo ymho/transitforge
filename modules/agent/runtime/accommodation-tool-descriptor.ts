@@ -1,7 +1,7 @@
 import type { AgentToolDescriptor } from "./tool-contract";
 export const accommodationToolDescriptor: AgentToolDescriptor = {
  name: "search_accommodations",
- description: "指定日程と宿泊地の宿泊候補を調べます。Providerで未確認の空室や料金を推測しません",
+ description: "宿泊施設を提案・比較するために実際の宿の候補を検索する。直前の宿泊施設の提案への承諾もこのToolを使う。通常limit=3。受理済みの開始日と泊数から検索用checkOutDateを計算でき、終了日の条件更新は不要。人数未定ならadultsは省略できる。結果の宿名またはaccommodationSummaryのreplyReferencesを最終回答へ選ぶと、Applicationが複数の比較カードを表示する。空室未確認と参考最安値を確定的な空室・旅行全体の料金にしない。",
  intentPolicy: { dependencies: ["destination", "start_date", "end_date", "duration", "party_size", "accommodation", "budget"], requirements: [
    { target: "destination", inputField: "destination", necessity: "required", match: "presence" },
    { target: "start_date", inputField: "checkInDate", necessity: "optional", match: "exact", acceptedPrecisions: ["exact"] },

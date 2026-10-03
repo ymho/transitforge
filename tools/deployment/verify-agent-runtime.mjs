@@ -9,12 +9,15 @@ function flag(value) {
 export function verifyAgentRuntime(snapshot, environment) {
   const expectedV2 = flag(environment.TF_VAR_agent_runtime_v2_enabled);
   const expectedSemantic = flag(environment.TF_VAR_conversation_semantic_kernel_enabled);
+  const expectedModelId = environment.TF_VAR_bedrock_model_id;
+  if (typeof expectedModelId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/u.test(expectedModelId))
+    throw new Error("Explicit model configuration required");
   if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot) ||
       snapshot.state !== "Active" || snapshot.updateStatus !== "Successful" ||
-      snapshot.v2 !== expectedV2 || snapshot.semantic !== expectedSemantic) {
+      snapshot.v2 !== expectedV2 || snapshot.semantic !== expectedSemantic || snapshot.modelId !== expectedModelId) {
     throw new Error("Deployed Agent runtime does not match the requested active configuration");
   }
-  return `Agent runtime verified: v2=${expectedV2}; semantic=${expectedSemantic}; state=Active; update=Successful.\n`;
+  return `Agent runtime verified: v2=${expectedV2}; semantic=${expectedSemantic}; state=Active; update=Successful; model=${expectedModelId}.\n`;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

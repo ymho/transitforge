@@ -7,7 +7,7 @@ import { successfulAgentToolResult } from "@raiquora/agent/tool-contract";
 import { validateAgentToolInput } from "@raiquora/agent/agent-tool-input-validator";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { ToolEvidenceRegistry, type ToolEvidenceMapper } from "@raiquora/agent/tool-evidence-registry";
-import { StrandsAgentEngine } from "../backend/agent-api/src/adapters/strands-agent-engine";
+import { StrandsAgentEngine, strandsProductionReasoning } from "../backend/agent-api/src/adapters/strands-agent-engine";
 import { createStrandsServerRuntime } from "../backend/agent-api/src/adapters/strands-server-runtime";
 import { agentV2SystemPrompt } from "../backend/agent-api/src/usecases/agent-v2-system-prompt";
 import { classifyStrandsV2LiveError, evaluateStrandsV2LiveCase, strandsV2LiveCases,
@@ -55,7 +55,7 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
     const ledger = new ResearchExecutionLedger(researchBudgetForRuntimeLimits(limits, "strands-v2-live-v2"),
       { requestedMode: "standard", effectiveMode: "standard" });
     const engine = new StrandsAgentEngine({ modelId, region, systemPrompt: agentV2SystemPrompt,
-      maxTurns: limits.maxIterations, maxOutputTokens: 1_024, toolTimeoutMs: 10_000 });
+      maxTurns: limits.maxIterations, maxOutputTokens: 1_024, toolTimeoutMs: 10_000, ...strandsProductionReasoning(modelId) });
     const runtime = createStrandsServerRuntime(engine), startedAt = Date.now();
     let observation: LiveObservation, error: string | undefined;
     try {

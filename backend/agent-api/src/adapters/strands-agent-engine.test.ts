@@ -15,12 +15,14 @@ class ScriptedModel extends Model<BaseModelConfig> {
   private config: BaseModelConfig = { modelId: "synthetic" };
   readonly toolChoices: StreamOptions["toolChoice"][] = [];
   readonly observedMessages: string[] = [];
+  readonly observedSystemPrompts: string[] = [];
   constructor(private readonly replies: Reply[]) { super(); }
   updateConfig(config: BaseModelConfig): void { this.config = { ...this.config, ...config }; }
   getConfig(): BaseModelConfig { return this.config; }
   async *stream(_messages: Message[], options?: StreamOptions): AsyncGenerator<ModelStreamEvent> {
     this.toolChoices.push(options?.toolChoice);
     this.observedMessages.push(JSON.stringify(_messages));
+    this.observedSystemPrompts.push(JSON.stringify(options?.systemPrompt));
     const reply = this.replies[this.index++];
     if (!reply) throw new Error("Unexpected extra model invocation");
     yield { type: "modelMessageStartEvent", role: "assistant" };
@@ -69,6 +71,17 @@ describe("StrandsAgentEngine", () => {
     expect(result.trace.events.some(({ type }) => type === "tool_completed")).toBe(true);
     expect(model.toolChoices).toHaveLength(2); // No model request after the structured result.
   });
+  it("keeps Application reference data out of the native current user message", async () => {
+    const { input } = setup(), model = new ScriptedModel([submitted]);
+    const reference = '<application_reference>\n{"application":{"accepted":"過去の条件"}}\n</application_reference>';
+    await new StrandsAgentEngine(options, { model }).run({ ...input, applicationReference: reference });
+    const messages = JSON.parse(model.observedMessages[0]!);
+    expect(messages.at(-1)?.role).toBe("user");
+    expect(messages.at(-1)?.content).toEqual([{ text: input.userRequest }]);
+    expect(model.observedMessages[0]).not.toContain("過去の条件");
+    expect(model.observedSystemPrompts[0]).toContain("過去の条件");
+    expect(model.observedSystemPrompts[0]).toContain(options.systemPrompt);
+  });
   it.each(["explore_destination", "discover_destinations"])(
     "keeps %s research internals out of the model reply contract while preserving Evidence", async name => {
       const tools = new AgentToolRegistry(), registry = new ToolEvidenceRegistry();
@@ -107,10 +120,28 @@ describe("StrandsAgentEngine", () => {
       };
       await new StrandsAgentEngine({ ...options, novaReasoningEffort, maxOutputTokens: 4096 }, { createAgent }).run(input);
       expect(captured.additionalRequestFields).toEqual(novaReasoningEffort
-        ? { reasoningConfig: { type: "enabled", maxReasoningEffort: "low" } } : undefined);
+        ? { reasoningConfig: { type: "enabled", maxReasoningEffort: novaReasoningEffort } } : undefined);
       expect(captured.maxTokens).toBe(4096);
       expect(captured.stream).toBe(false);
     });
+
+  it("uses native adaptive thinking without temperature and preserves the output budget", async () => {
+    const { input } = setup();
+    let captured: ReturnType<BedrockModel["getConfig"]> = {};
+    const createAgent: StrandsAgentFactory = config => {
+      if (!(config.model instanceof BedrockModel)) throw new Error("Expected Bedrock model");
+      captured = config.model.getConfig();
+      return { invoke: async () => ({ stopReason: "toolUse", structuredOutput: { reply: { kind: "uncertainty" } } }) };
+    };
+    await new StrandsAgentEngine({ ...options, modelId: "jp.anthropic.claude-sonnet-4-6",
+      anthropicAdaptiveEffort: "medium", maxOutputTokens: 4096 }, { createAgent }).run(input);
+    expect(captured.additionalRequestFields).toEqual({ thinking: { type: "adaptive" }, output_config: { effort: "medium" } });
+    expect(captured.temperature).toBeUndefined();
+    expect(captured.maxTokens).toBe(4096);
+    expect(captured.stream).toBe(false);
+    expect(() => new StrandsAgentEngine({ ...options, novaReasoningEffort: "low", anthropicAdaptiveEffort: "medium" }))
+      .toThrow("Conflicting Bedrock reasoning configuration");
+  });
 
   it("rejects stale model Tool input before the Domain Tool executes", async () => {
     const { execute, input } = setup();
@@ -418,5 +449,8 @@ describe("condition authority remains in Application (#761)", () => {
     expect(apply).toHaveBeenCalledTimes(2);
     expect(result.effectiveIntent?.fingerprint).toBe("accepted-4");
     expect(model.observedMessages.at(-1)).toContain("invalid_source");
+    expect(model.observedMessages.at(-1)).toContain("No condition was changed");
+    expect(model.observedMessages.at(-1)).toContain("CURRENT user message");
+    expect(model.observedMessages.at(-1)).toContain("Already accepted conditions remain available for research");
   });
 });

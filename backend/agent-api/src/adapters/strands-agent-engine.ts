@@ -29,11 +29,21 @@ export interface StrandsAgentEngineOptions {
   toolTimeoutMs?: number;
   /** Explicit Nova configuration selected by the composition root. */
   novaReasoningEffort?: "low";
+  /** Native Anthropic adaptive thinking; temperature must remain unset. */
+  anthropicAdaptiveEffort?: "medium";
+}
+/** Explicit production selection, also used by production-shaped paid fixtures. */
+export function strandsProductionReasoning(modelId: string): Pick<StrandsAgentEngineOptions, "novaReasoningEffort" | "anthropicAdaptiveEffort"> {
+  if (modelId === "jp.amazon.nova-2-lite-v1:0") return { novaReasoningEffort: "low" };
+  if (modelId === "jp.anthropic.claude-sonnet-4-6") return { anthropicAdaptiveEffort: "medium" };
+  return {};
 }
 export interface StrandsAgentRunInput {
   executionId: string;
   userRequest: string;
   modelInput?: string;
+  /** Sanitized Application reference DATA; never a traveller request or instruction. */
+  applicationReference?: string;
   /** Public owner-scoped history; no raw SDK Tool results or internal reasoning. */
   history?: MessageData[];
   tools: AgentToolRegistry;
@@ -82,6 +92,7 @@ export class StrandsAgentEngine {
   private readonly model?: Model<BaseModelConfig>;
   constructor(private readonly options: StrandsAgentEngineOptions,
     dependencies: { createAgent?: StrandsAgentFactory; model?: Model<BaseModelConfig> } = {}) {
+    if (options.novaReasoningEffort && options.anthropicAdaptiveEffort) throw new Error("Conflicting Bedrock reasoning configuration");
     this.model = dependencies.model;
     this.createAgent = dependencies.createAgent ?? ((config) => new Agent(config));
   }
@@ -111,9 +122,14 @@ export class StrandsAgentEngine {
           currentEffectiveIntent = accepted.effectiveIntent;
           // The model only needs the acceptance receipt. The authoritative effectiveIntent
           // stays Application-owned and is bound to later reads through getEffectiveIntent.
-          return jsonValue({ ok: true, status: "applied", receipt: accepted.receipt });
+          return jsonValue({ ok: true, status: "applied", receipt: accepted.receipt,
+            scope: "consultation_conditions_only", itineraryItemsChanged: false,
+            researchPerformed: false });
         } catch (error) {
-          if (error instanceof ConditionUpdateRejectedError) throw error;
+          if (error instanceof ConditionUpdateRejectedError) {
+            if (error.code === "invalid_source") throw new Error("invalid_source: No condition was changed. quote must be an exact substring of the CURRENT user message, not an earlier user message or Application provenance. Already accepted conditions remain available for research; do not re-submit them. If the current message states no new condition, continue its requested work without a condition writer.");
+            throw error;
+          }
           // The SDK reports Tool errors. An uncertain write additionally closes reads
           // and publication; no recovery by reinterpreting or repairing the user input.
           intentUnavailable = true;
@@ -127,7 +143,7 @@ export class StrandsAgentEngine {
             ? { target: "destination", place: value.place!, quote: value.quote }
             : { target: "destination", place: null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "update_current_origin", inputSchema: placeConditionUpdateInputSchema,
-          description: "今回の相談の出発地について、利用者が実際の条件として設定・訂正・明示撤回した最終状態を1回で反映する。設定/訂正はaction=set、未定に戻す明示はaction=clear。訂正でclear→setの2操作に分けない。普段の出発地の推測、仮定・what-if・比較だけ、変更なしでは使わない。Tripやプロフィールは変更しない。",
+          description: "今回の相談の出発地について、利用者が実際の条件として設定・訂正・明示撤回した最終状態を1回で反映する。設定/訂正はaction=set、未定に戻す明示はaction=clear。訂正でclear→setの2操作に分けない。普段の出発地の推測、仮定・what-if・比較だけ、変更なしでは使わない。条件の受理だけで予定項目は作らない。同じ発言に空の旅程への反映依頼があれば、続けてdraft_itineraryで確認可能な案を作る。プロフィールは変更しない。",
           callback: (value, context) => apply(value.action === "set"
             ? { target: "origin", place: value.place!, quote: value.quote }
             : { target: "origin", place: null, quote: value.quote }, context?.cancelSignal) }),
@@ -157,10 +173,13 @@ export class StrandsAgentEngine {
       );
     }
     const baseModel = this.model ?? new BedrockModel({ modelId: this.options.modelId, region: this.options.region,
-      maxTokens: this.options.maxOutputTokens ?? 2_048, temperature: 0, stream: false,
+      maxTokens: this.options.maxOutputTokens ?? 2_048,
+      ...(this.options.anthropicAdaptiveEffort ? {} : { temperature: 0 }), stream: false,
       // Provider configuration is explicit; isolated engines keep their existing budgets/configuration.
       ...(this.options.novaReasoningEffort ? {
         additionalRequestFields: { reasoningConfig: { type: "enabled", maxReasoningEffort: this.options.novaReasoningEffort } },
+      } : this.options.anthropicAdaptiveEffort ? {
+        additionalRequestFields: { thinking: { type: "adaptive" }, output_config: { effort: this.options.anthropicAdaptiveEffort } },
       } : {}) });
     // Reuse Application admission in the SDK's native validation feedback. This
     // does not repair a reply, start another invoke, or bypass final publication.
@@ -183,7 +202,8 @@ export class StrandsAgentEngine {
       model: baseModel,
       ...(input.history?.length ? { messages: input.history } : {}),
       structuredOutputSchema: validatedOutputSchema,
-      tools, systemPrompt: this.options.systemPrompt,
+      tools, systemPrompt: input.applicationReference
+        ? [{ text: this.options.systemPrompt }, { text: input.applicationReference }] : this.options.systemPrompt,
       printer: false, contextManager: false, retryStrategy: null, toolExecutor: "sequential",
     });
     const startedAt = Date.now();

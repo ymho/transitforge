@@ -7,7 +7,7 @@ import { successfulAgentToolResult, validAgentToolInput } from "@raiquora/agent/
 import { admitAgentV2Reply } from "@raiquora/agent/agent-v2-publication";
 import { validateEvidenceAndClaims, type Evidence } from "@raiquora/agent/evidence-model";
 import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
-import { StrandsAgentEngine } from "../adapters/strands-agent-engine.js";
+import { StrandsAgentEngine, strandsProductionReasoning } from "../adapters/strands-agent-engine.js";
 import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
 
 // Paid opt-in. Two synthetic turns, at most 6 model calls / 2 reads / 60s each.
@@ -31,8 +31,9 @@ describe.skipIf(process.env.AGENT_V2_LIVE !== "true")("concise destination answe
         modality: "preferred", precision: "exact", value: { kind: "place_label", label }, provenance: { kind: "user_turn", turnId: "prior", quote: label },
       })) };
     const userRequest = "青葉神社に行ってみたい。どんなところで、どう行くのがよいでしょう？次に何を決めればいいですか？";
-    const result = await new StrandsAgentEngine({ modelId: process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0", region: "ap-northeast-1",
-      systemPrompt: agentV2SystemPrompt, maxTurns: 6, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096, novaReasoningEffort: "low" }, {
+    const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
+    const result = await new StrandsAgentEngine({ modelId, region: "ap-northeast-1",
+      systemPrompt: agentV2SystemPrompt, maxTurns: 6, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096, ...strandsProductionReasoning(modelId) }, {
       createAgent: config => {
         const agent = new Agent(config);
         // Synthetic fixture only: inspect the selected field, never user data or reasoning.

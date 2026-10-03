@@ -5,7 +5,10 @@ import { StrandsAgentEngine } from "./adapters/strands-agent-engine.js";
 import { createStrandsServerRuntime } from "./adapters/strands-server-runtime.js";
 import { agentV2SystemPrompt } from "./usecases/agent-v2-system-prompt.js";
 vi.mock("./composition/production-conversation-agent.js", () => ({ createProductionConversationAgent: vi.fn() }));
-vi.mock("./adapters/strands-agent-engine.js", () => ({ StrandsAgentEngine: vi.fn(function () {}) }));
+vi.mock("./adapters/strands-agent-engine.js", async importOriginal => ({
+  ...await importOriginal<typeof import("./adapters/strands-agent-engine.js")>(),
+  StrandsAgentEngine: vi.fn(function () {}),
+}));
 vi.mock("./adapters/strands-server-runtime.js", () => ({ createStrandsServerRuntime: vi.fn(() => vi.fn()) }));
 it("passes the validated business deadline to the production stateful Runtime", () => {
   createProductionServerAgent("test", {
@@ -46,6 +49,12 @@ it("keeps Strands disabled by default and enables it only through trusted produc
   expect(StrandsAgentEngine).toHaveBeenLastCalledWith(expect.objectContaining({
     modelId: "jp.amazon.nova-2-lite-v1:0", novaReasoningEffort: "low", maxOutputTokens: 4096, maxInvocationOutputTokens: 4096,
   }));
+  createProductionServerAgent("v2-sonnet", { ...base, AGENT_RUNTIME_V2_ENABLED: "true", AWS_REGION: "ap-northeast-1",
+    MODEL_ID: "jp.anthropic.claude-sonnet-4-6" });
+  expect(StrandsAgentEngine).toHaveBeenLastCalledWith(expect.objectContaining({
+    modelId: "jp.anthropic.claude-sonnet-4-6", anthropicAdaptiveEffort: "medium", maxOutputTokens: 4096, maxInvocationOutputTokens: 4096,
+  }));
+  expect(vi.mocked(StrandsAgentEngine).mock.calls.at(-1)?.[0]).not.toHaveProperty("novaReasoningEffort");
 });
 
 it("rejects an invalid Strands production flag and requires a real AWS region when enabled", () => {

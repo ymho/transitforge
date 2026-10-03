@@ -71,6 +71,7 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
       return { status: "completed", response: reply.text, evidence: reply.evidence,
         claims: validation.claims, trace: run.trace, publicReply: reply.proof,
         ...(reply.publicPlacePresentation ? { publicPlacePresentation: reply.publicPlacePresentation } : {}),
+        ...(reply.publicAccommodationPresentation ? { publicAccommodationPresentation: reply.publicAccommodationPresentation } : {}),
         delivery: { status: "full", basis: "verified_projection" } };
     } catch (error) {
       if (error instanceof AgentV2ReplyError) return denied(error.code);

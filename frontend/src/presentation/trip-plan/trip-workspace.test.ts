@@ -10,9 +10,10 @@ import { createServerTripWorkspaceSource } from "../../usecases/trip-plan/server
 import { costForecast } from "../../../../modules/trip/domain/trip-costs.fixture";
 import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.fixture";
 import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
+import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 
 function setup(source?: TripWorkspaceSource, loadInTripContext?: (tripId: string) => Promise<InTripContextSnapshot | undefined>,
-  actions: Partial<Pick<Parameters<typeof configureTripWorkspace>[0], "changeAdoption" | "changeItemDecision" | "branchTrip">> = {}) {
+  actions: Partial<Pick<Parameters<typeof configureTripWorkspace>[0], "changeAdoption" | "changeItemDecision" | "branchTrip" | "conversationId" | "onPlanAdoption">> = {}) {
   const app = document.createElement("main"); app.id = "app"; document.body.append(app);
   const chat = document.createElement("section"); chat.id = "chat";
   const messages = document.createElement("ol"), input = document.createElement("input"); chat.append(messages, input);
@@ -26,6 +27,27 @@ function button(root: ParentNode, text: string) { return [...root.querySelectorA
 afterEach(() => { document.body.replaceChildren(); vi.unstubAllGlobals(); });
 
 describe("Trip workspace DOM and mobile navigation", () => {
+  it("shows an unsaved draft on the itinerary screen and requires preview then explicit save", async () => {
+    const trip = createTrip(placesTripId, "出雲旅行", placesAt), confirm = vi.fn(async () => undefined);
+    const adopt = vi.fn(async () => ({ changes: { added: 1, replaced: 0, removed: 0 }, confirm }));
+    const f = setup({ getCurrentTrip: () => trip }, undefined, { conversationId: () => "one", onPlanAdoption: adopt });
+    const plan = parsePublicPlanPresentation({ version: "public-plan-presentation-v1", presentationId: "draft", target: { tripId: trip.id, baseTripRevision: trip.revision },
+      candidateSetRef: { kind: "candidate-set-ref", candidateSetId: "draft", revision: 0, baseTripRevision: trip.revision }, candidateOrder: ["plan-1"],
+      candidates: [{ variantId: "plan-1", label: "1泊の案", dayOrder: ["day-1"], days: [{ dayRef: "day-1", label: "1日目", status: "planned", entries: [{ entryRef: "entry", itemRef: "visit", role: "visit" }] }],
+        items: [{ itemRef: "visit", sourceRef: "visit", title: "出雲大社を参拝", kind: "activity", timing: "day", evidenceRefs: [], photoRefs: [] }], unknowns: ["移動時刻"], cost: { status: "unknown" }, workload: { status: "unknown" }, comparisonAssessmentRefs: [], scenarioRefs: [] }],
+      evidenceRefs: [], photoRefs: [], coverage: { status: "partial", coveredDayRefs: ["day-1"], omittedDayRefs: [], omittedScopes: ["移動時刻"] }, statements: [], comparisonAssessmentRefs: [], scenarioRefs: [],
+      researchOutcome: { status: "partial", requestedMode: "standard", effectiveMode: "standard", budget: { modelCalls: 2, toolCalls: 1, wallClockMs: 10 }, coveredScopes: ["旅程"], remainingScopes: ["移動時刻"] } });
+    f.controller.presentPlan(plan); f.ui.showPlan();
+    expect(f.ui.panel.hidden).toBe(false);
+    expect(f.ui.panel.querySelector<HTMLElement>("#trip-detail-itinerary")?.hidden).toBe(false);
+    expect(f.ui.panel.textContent).toContain("未保存の旅程案"); expect(f.ui.panel.textContent).toContain("出雲大社を参拝");
+    expect(trip.items).toEqual([]); expect(adopt).not.toHaveBeenCalled();
+    button(f.ui.panel, "この案を採用する").click();
+    await vi.waitFor(() => expect(button(f.ui.panel, "この変更を確認して保存")).toBeDefined());
+    expect(adopt).toHaveBeenCalledWith(expect.objectContaining({ conversationId: "one", tripId: trip.id, baseTripRevision: trip.revision }));
+    expect(confirm).not.toHaveBeenCalled(); button(f.ui.panel, "この変更を確認して保存").click(); await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce());
+    f.controller.activateSession("two"); expect(f.controller.plan()).toBeUndefined();
+  });
   it("switches the four detail tabs with keyboard semantics while keeping one Trip source", () => {
     const f = setup({ getCurrentTrip: multiCityTrip });
     const tabs = [...f.ui.panel.querySelectorAll<HTMLButtonElement>('.trip-detail-tabs > [role="tab"]')];

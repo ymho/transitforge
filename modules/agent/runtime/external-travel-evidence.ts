@@ -2,6 +2,7 @@ import type { Evidence } from "./evidence-model";
 import { stableContractHash } from "./output-contract";
 import type { ToolEvidenceContext } from "./tool-evidence-registry";
 import type { TravelApplicabilityFact } from "./travel-applicability";
+import { formatMoney, isPriceObservation } from "@raiquora/trip/money";
 
 export function externalTravelEvidence(output: unknown, context: Pick<ToolEvidenceContext, "retrievedAt"> & Partial<ToolEvidenceContext>): Evidence[] {
   const identity = contextIdentity(context);
@@ -14,7 +15,14 @@ export function externalTravelEvidence(output: unknown, context: Pick<ToolEviden
     const observationId = boundedEvidenceId(`observation:${identity}:${subjectKey}`);
     return [{ id: observationId,
       category: "external" as const, knowledgeKind: "deterministic_fact" as const, subject: raw.name,
-      facts: { resultKind: "accommodation", name: raw.name, status: "available", freshness: "fresh", provider: raw.provider, providerItemId: raw.providerItemId, availability: raw.availability === "available" ? "available" : "unknown" },
+      facts: { resultKind: "accommodation", name: raw.name, status: "available", freshness: "fresh", provider: raw.provider, providerItemId: raw.providerItemId, availability: raw.availability === "available" ? "available" : "unknown",
+        ...(typeof raw.checkInDate === "string" && typeof raw.checkOutDate === "string" ? { accommodationSummary: [
+          `${raw.checkInDate}〜${raw.checkOutDate}`,
+          ...(Number.isSafeInteger(output.searchAdults) ? [`検索人数: 大人${output.searchAdults}名`] : []),
+          raw.availability === "available" ? "空室あり（取得時の検索条件）" : "空室は未確認",
+          isPriceObservation(raw.price) ? `${raw.price.basis === "selected-dates" ? "指定日の参考料金" : "参考最安値"}: ${formatMoney(raw.price.price)}（宿泊合計・税込条件は詳細で確認）` : "料金は未確認",
+          ...(typeof raw.reviewAverage === "number" && Number.isFinite(raw.reviewAverage) && raw.reviewAverage >= 0 && raw.reviewAverage <= 5 ? [`評価: ${raw.reviewAverage}/5`] : []),
+        ].join("\n") } : {}) },
       references: [{ sourceType: "external-source" as const,
         sourceRef: typeof raw.bookingUrl === "string" ? raw.bookingUrl : `${raw.provider}:${raw.providerItemId}`,
         retrievedAt: context.retrievedAt, freshness: "current" as const, summary: "宿泊Providerで確認した候補。未確認の空室・料金を含まない" }],

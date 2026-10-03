@@ -115,7 +115,7 @@ export function createConversationTurnApplication(dependencies: {
         ...(runtime.publicPlanPresentation ? { publicPlanPresentation: runtime.publicPlanPresentation } : {}),
         ...(runtime.publicJourneyPresentation ? { publicJourneyPresentation: runtime.publicJourneyPresentation } : {}),
         ...(runtime.publicGroundRoutePresentation ? { publicGroundRoutePresentation: runtime.publicGroundRoutePresentation } : {}),
-        ...(runtime.publicPlacePresentation ? { publicPlacePresentation: runtime.publicPlacePresentation } : {}),
+        ...(runtime.publicPlacePresentation ? { publicPlacePresentation: runtime.publicPlacePresentation } : {}), ...(runtime.publicAccommodationPresentation ? { publicAccommodationPresentation: runtime.publicAccommodationPresentation } : {}),
         ...(runtime.researchExecution ? { researchExecution: reserveResearchResultSave(runtime.researchExecution) } : {}),
         ...(runtime.turnObservation ? { turnObservation: runtime.turnObservation } : {}),
         ...(presentationReceipt ? { presentationReceipt } : {}),
@@ -129,6 +129,7 @@ export function createConversationTurnApplication(dependencies: {
         ...(runtime.publicJourneyPresentation?.evidenceRefs ?? []),
         ...(runtime.publicGroundRoutePresentation ? [runtime.publicGroundRoutePresentation.evidenceId] : []),
         ...(runtime.publicPlacePresentation?.cards.map(({ evidenceId }) => evidenceId) ?? []),
+        ...(runtime.publicAccommodationPresentation?.cards.map(({ evidenceId }) => evidenceId) ?? []),
         ...(runtime.claims ?? []).flatMap((claim) => claim.evidenceIds),
       ])];
       continuity = { publishedEvidenceIds, evidence: runtime.evidence ?? [] };

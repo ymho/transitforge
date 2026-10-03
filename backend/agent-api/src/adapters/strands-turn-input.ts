@@ -63,7 +63,7 @@ export function strandsTurnInput(input: ServerAgentRuntimeInput): string {
  * history input. The same sanitized projection enforces the combined 24k budget;
  * messages are removed from application data rather than duplicated in the prompt.
  * This is data transport, not semantic interpretation or another state store. */
-export function strandsConversationInput(input: ServerAgentRuntimeInput): { modelInput: string; history: MessageData[] } {
+export function strandsConversationInput(input: ServerAgentRuntimeInput): { modelInput: string; applicationReference: string; history: MessageData[] } {
   const payload = JSON.parse(strandsTurnInput(input)) as {
     userMessage: string; application: { conversation: { messages?: unknown } | null };
   };
@@ -78,7 +78,13 @@ export function strandsConversationInput(input: ServerAgentRuntimeInput): { mode
     return { role: message.role, content: [{ text: message.text }] };
   });
   if (conversation) delete conversation.messages;
-  return { modelInput: JSON.stringify({ application: payload.application, userMessage: payload.userMessage }), history };
+  // Reference state is system-context data. The native user-role message contains
+  // only the traveller's current utterance, never quotes from accepted conditions.
+  // Escape delimiter characters in JSON values so they cannot close this data block.
+  const reference = JSON.stringify({ application: payload.application }).replaceAll("<", "\\u003c").replaceAll(">", "\\u003e");
+  const applicationReference = `<application_reference>\n${reference}\n</application_reference>`;
+  if (applicationReference.length + payload.userMessage.length > 24_000) throw new StrandsTurnInputError("context_budget");
+  return { modelInput: payload.userMessage, applicationReference, history };
 }
 
 function withoutRequest(value: Record<string, unknown>): Record<string, unknown> {

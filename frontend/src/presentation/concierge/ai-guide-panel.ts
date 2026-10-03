@@ -1,3 +1,5 @@
+import { previewPlanAdoption } from "./plan-adoption-view";
+import { renderPublicAccommodationPresentation } from "./public-accommodation-presentation-view";
 import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
 import type {
   ConversationGuidance,
@@ -68,6 +70,7 @@ export interface AiGuidePanelElements {
   onFirstPrompt?: (prompt: string) => void;
   /** Called only after a current live response is rendered; history never triggers a reload. */
   onTripConditionsSaved?: () => void;
+  onPlanPresentation?: (value: import("@raiquora/agent/public-plan-presentation").PublicPlanPresentation, open: boolean) => void;
   onTripCostProposal?: (proposal: import("@raiquora/trip/public-cost-proposal").PublicCostProposal) => void;
   onConsultationRequestProposal?: (proposal: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal) => void;
   onTripUpdateProposal?: (proposal: import("@raiquora/trip/trip").TripUpdateProposal) => void;
@@ -373,10 +376,11 @@ export function configureAiGuidePanel(
         if (typeof response !== "string" && "consultationRequestProposal" in response && response.consultationRequestProposal) elements.onConsultationRequestProposal?.(response.consultationRequestProposal);
         if (typeof response !== "string" && "tripCostProposal" in response && response.tripCostProposal && !("tripUpdateProposal" in response && response.tripUpdateProposal)) elements.onTripCostProposal?.(response.tripCostProposal);
         if (typeof response !== "string" && "tripUpdateProposal" in response && response.tripUpdateProposal) elements.onTripUpdateProposal?.(response.tripUpdateProposal);
+        if (typeof response !== "string" && "publicPlanPresentation" in response && response.publicPlanPresentation) elements.onPlanPresentation?.(response.publicPlanPresentation, true);
         if (typeof response !== "string" && "checklistProposal" in response) elements.onChecklistProposal?.(response.checklistProposal);
         if (!submitFeedback) pendingMessage.querySelector(".conversation-feedback")?.remove();
         pendingMessage.dataset.messageId = assistantMessage.messageId;
-        if (typeof response !== "string" && "semanticReceipt" in response && response.semanticReceipt?.changes.some(
+        if (typeof response !== "string" && !("publicPlanPresentation" in response && response.publicPlanPresentation) && "semanticReceipt" in response && response.semanticReceipt?.changes.some(
           change => change.status === "accepted" && change.frame === "actual")) elements.onTripConditionsSaved?.();
       })
       .catch((error: unknown) => {
@@ -460,21 +464,10 @@ export function configureAiGuidePanel(
       ...(detail.tripId ? { tripId: detail.tripId } : {}), ...(detail.baseTripRevision === undefined ? {} : { baseTripRevision: detail.baseTripRevision }) });
   });
   messages.addEventListener("raiquora:preview-plan-adoption", (event) => {
-    const detail = (event as CustomEvent<{ candidateSetId?: string; candidateSetRevision?: number; variantId?: string; tripId?: string; baseTripRevision?: number }>).detail;
-    if (!elements.onPlanAdoption || !detail?.candidateSetId || detail.candidateSetRevision === undefined || !detail.variantId || !detail.tripId || detail.baseTripRevision === undefined) return;
-    const session = conversationSessionId, generation = requestGeneration, host = (event.target as Element | null)?.closest<HTMLElement>(".public-plan-candidate");
-    if (!host || host.querySelector(".public-plan-change-preview")) return;
-    const status = document.createElement("aside"); status.className = "public-plan-change-preview"; status.textContent = "変更内容を確認しています…"; host.append(status);
-    const target = { conversationId: session, candidateSetId: detail.candidateSetId, candidateSetRevision: detail.candidateSetRevision, variantId: detail.variantId,
-      tripId: detail.tripId, baseTripRevision: detail.baseTripRevision, mutationId: crypto.randomUUID() };
-    void elements.onPlanAdoption(target).then((result) => {
-      if (session !== conversationSessionId || generation !== requestGeneration || !status.isConnected) return;
-      status.replaceChildren(); const summary = document.createElement("p"); summary.textContent = `変更プレビュー: 追加${result.changes.added}件・差替${result.changes.replaced}件・削除${result.changes.removed}件`;
-      const confirm = document.createElement("button"); confirm.type = "button"; confirm.textContent = "この変更を確認して保存";
-      confirm.addEventListener("click", () => { confirm.disabled = true; void result.confirm().then(() => { status.textContent = "旅程へ保存し、最新状態を再読込しました。"; })
-        .catch(() => { confirm.disabled = false; status.append(feedbackStatus("保存できませんでした。最新の旅程で案を作り直してください。")); }); });
-      status.append(summary, confirm);
-    }).catch(() => { status.textContent = "変更プレビューを作成できませんでした。最新の旅程で案を作り直してください。"; });
+    if (!elements.onPlanAdoption) return;
+    const session = conversationSessionId, generation = requestGeneration;
+    previewPlanAdoption(event, { conversationId: session, adopt: elements.onPlanAdoption,
+      isCurrent: () => session === conversationSessionId && generation === requestGeneration });
   });
 
   form.addEventListener("submit", (event) => {
@@ -531,6 +524,9 @@ export function configureAiGuidePanel(
           activeTripContext = entry.response.tripContext;
         } else if (activeConversation) activeTripContext = activeConversation.tripContext;
       }
+      const latestPlan = [...restoredHistory].reverse().find(entry => entry.role === "assistant" && typeof entry.response !== "string" && "publicPlanPresentation" in entry.response && entry.response.publicPlanPresentation);
+      if (latestPlan?.role === "assistant" && typeof latestPlan.response !== "string" && "publicPlanPresentation" in latestPlan.response && latestPlan.response.publicPlanPresentation)
+        elements.onPlanPresentation?.(latestPlan.response.publicPlanPresentation, false);
       messages.scrollTop = scrollPositions.get(conversationSessionId) ?? 0;
       setContextChoices(activeConversation);
       input.placeholder = activeConversation
@@ -683,6 +679,7 @@ export function resolveAssistantMessage(
     if ("semanticReceipt" in response && response.semanticReceipt) item.append(renderSemanticReceipt(response.semanticReceipt));
     if ("publicPlanPresentation" in response && response.publicPlanPresentation) item.append(renderPublicPlanPresentation(response.publicPlanPresentation));
     if ("publicJourneyPresentation" in response && response.publicJourneyPresentation) item.append(renderPublicJourneyPresentation(response.publicJourneyPresentation));
+    if ("publicAccommodationPresentation" in response && response.publicAccommodationPresentation) item.append(renderPublicAccommodationPresentation(response.publicAccommodationPresentation));
     if ("publicGroundRoutePresentation" in response && response.publicGroundRoutePresentation) item.append(renderPublicGroundRoutePresentation(response.publicGroundRoutePresentation, onGroundRoute));
     if ("publicPlacePresentation" in response && response.publicPlacePresentation) item.append(renderPublicPlacePresentation(response.publicPlacePresentation, placeMemoSelection));
   }

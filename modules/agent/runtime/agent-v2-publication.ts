@@ -1,5 +1,6 @@
 import type { Evidence, EvidenceClaim } from "./evidence-model";
 import type { EffectiveIntent } from "./effective-intent";
+import { parsePublicAccommodationPresentation, type PublicAccommodationPresentation } from "./public-accommodation-presentation";
 import { AgentV2ReplyError, parseAgentV2Reply, type AgentV2OperationReceipt, type AgentV2ReplyProof,
   type ReplyOperation, type ReplyQuestion } from "./agent-v2-reply";
 import { parsePublicPlacePresentation, publicPlacePresentationVersion, publicPlaceSourceUrl,
@@ -19,6 +20,7 @@ export interface AgentV2AdmittedReply {
   claims: EvidenceClaim[];
   proof: AgentV2ReplyProof;
   publicPlacePresentation?: PublicPlacePresentation;
+  publicAccommodationPresentation?: PublicAccommodationPresentation;
 }
 const operationLabels: Record<ReplyOperation, string> = { save: "保存", change: "変更", book: "予約", pay: "決済" };
 const conversationText = {
@@ -29,6 +31,7 @@ const conversationText = {
 const questions: Record<ReplyQuestion, string> = {
   goal: "どのような旅にしたいですか？", origin: "どこから出発しますか？", destination: "行き先はどちらですか？",
   start_date: "出発日はいつですか？", duration: "何日間の旅を考えていますか？",
+  departure_time: "何時ごろ出発する予定ですか？",
   participation_scope: "どの同行者が、どの旅程の日・区間に参加するか、まだ決まっていない点を教えてください。実名は不要です。",
   party_size: "何人での旅行ですか？", budget: "今回の旅行の予算を教えてください。",
 };
@@ -77,6 +80,26 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
         if (matches.length !== 1) throw new AgentV2ReplyError("missing_evidence");
         return matches[0]!;
       });
+      if (selected.every(item => item.observation?.predicate === "accommodation_search_result")) {
+        // The candidate and answer replies share one trusted hotel projection.
+        // Place eligibility is unchanged; model prose never becomes a card.
+        if (selected.length > 5) throw new AgentV2ReplyError("invalid_proposal");
+        selected.forEach(item => accommodationCard(item, context.effectiveIntent));
+        const admitted = new Map(selected.map(item => [item.id, structuredClone(item)]));
+        const claims: EvidenceClaim[] = [];
+        const publicAccommodationPresentation = accommodationComparison(admitted, claims, context);
+        if (!publicAccommodationPresentation) throw new AgentV2ReplyError("ineligible_evidence");
+        const bindings = publicAccommodationPresentation.cards.map(card => {
+          const evidence = admitted.get(card.evidenceId)!;
+          proof.references.push({ evidenceId: evidence.id, field: "accommodationSummary" });
+          return { evidenceId: evidence.id, fieldPath: "facts.accommodationSummary", subjectRef: evidence.observation!.subjectKey,
+            applicabilityScope: evidence.observation!.scopeKey, transform: "recommendation" as const };
+        });
+        const commentary = boundedText(proposal.commentary);
+        proof.commentary = true;
+        claims.push({ id: "v2-commentary", statement: commentary, kind: "inference", evidenceIds: [...admitted.keys()], bindings });
+        return { text: escapeMarkdown(commentary) + followUp(), evidence: [...admitted.values()], claims, proof, publicAccommodationPresentation };
+      }
       let publicPlacePresentation: PublicPlacePresentation;
       try {
         publicPlacePresentation = parsePublicPlacePresentation({ version: publicPlacePresentationVersion,
@@ -156,7 +179,11 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
           .map((item, index) => sourceLink(item, `出典${index + 1}`)).filter(Boolean);
         if (links.length) parts.push(links.join(" ・ "));
       }
-      return { text: parts.join("\n\n") + followUp(), evidence: [...selected.values()], claims, proof };
+      // Publish all eligible hotels from the selected search, rather than making
+      // model prose a second candidate/price store. Never mix searches or revisions.
+      const publicAccommodationPresentation = accommodationComparison(selected, claims, context);
+      return { text: parts.join("\n\n") + followUp(), evidence: [...selected.values()], claims, proof,
+        ...(publicAccommodationPresentation ? { publicAccommodationPresentation } : {}) };
     }
   }
 }
@@ -165,7 +192,12 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
  * second candidate store or accepting a model-authored title/URL/price/image. */
 export function agentV2CandidateReferences(evidence: readonly Evidence[], effective?: EffectiveIntent): { evidenceId: string; title: string }[] {
   return evidence.flatMap((item) => {
-    try { const card = placeCard(item, effective); return [{ evidenceId: card.evidenceId, title: card.title }]; }
+    try {
+      if (item.observation?.predicate === "accommodation_search_result") {
+        const card = accommodationCard(item, effective); return [{ evidenceId: card.evidenceId, title: card.name }];
+      }
+      const card = placeCard(item, effective); return [{ evidenceId: card.evidenceId, title: card.title }];
+    }
     catch (error) { if (error instanceof AgentV2ReplyError) return []; throw error; }
   });
 }
@@ -183,6 +215,36 @@ export function agentV2ReplyReferences(evidence: readonly Evidence[], effective?
     });
     return fields.map(([field, value]) => ({ reference: { evidenceId: item.id, field }, value }));
   });
+}
+
+function accommodationCard(evidence: Evidence, effective?: EffectiveIntent): PublicAccommodationPresentation["cards"][number] {
+  assertEvidence(evidence, effective);
+  if (evidence.observation?.predicate !== "accommodation_search_result" ||
+      typeof evidence.facts.name !== "string" || typeof evidence.facts.accommodationSummary !== "string" || !evidence.observation.retrievedAt ||
+      effective && !evidence.intentDependency) throw new AgentV2ReplyError("ineligible_evidence");
+  const reference = evidence.references.find(ref => ref.sourceType === "external-source");
+  const sourceUrl = reference ? publicPlaceSourceUrl(reference.sourceRef) : undefined;
+  const card = { evidenceId: evidence.id, name: boundedText(evidence.facts.name).slice(0, 160), summary: boundedText(evidence.facts.accommodationSummary),
+    retrievedAt: evidence.observation.retrievedAt, ...(sourceUrl ? { sourceUrl } : {}) };
+  try { return parsePublicAccommodationPresentation({ version: "public-accommodation-presentation-v1", cards: [card] }).cards[0]!; }
+  catch { throw new AgentV2ReplyError("invalid_field"); }
+}
+function accommodationComparison(selected: Map<string, Evidence>, claims: EvidenceClaim[], context: AgentV2ReplyContext): PublicAccommodationPresentation | undefined {
+  const scopes = new Set([...selected.values()].filter(item => item.observation?.predicate === "accommodation_search_result").map(item => item.observation!.scopeKey));
+  const cards: PublicAccommodationPresentation["cards"] = [];
+  for (const evidence of context.evidence.filter(item => scopes.has(item.observation?.scopeKey ?? "") && item.observation?.predicate === "accommodation_search_result")) {
+    let card: PublicAccommodationPresentation["cards"][number];
+    try { card = accommodationCard(evidence, context.effectiveIntent); }
+    catch (error) { if (error instanceof AgentV2ReplyError) continue; throw error; }
+    cards.push(card); selected.set(evidence.id, structuredClone(evidence));
+    for (const [field, statement] of [["name", card.name], ["accommodationSummary", card.summary]] as const) {
+      claims.push({ id: `v2-hotel-${cards.length}-${field}`, statement, kind: "fact", evidenceIds: [evidence.id], bindings: [{
+        evidenceId: evidence.id, fieldPath: `facts.${field}`, subjectRef: evidence.observation!.subjectKey,
+        applicabilityScope: evidence.observation!.scopeKey, transform: "identity" }] });
+    }
+    if (cards.length === 5) break;
+  }
+  return cards.length ? parsePublicAccommodationPresentation({ version: "public-accommodation-presentation-v1", cards }) : undefined;
 }
 
 function placeCard(evidence: Evidence, effective?: EffectiveIntent): PublicPlaceCard {

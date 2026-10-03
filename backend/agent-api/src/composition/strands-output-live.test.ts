@@ -9,7 +9,7 @@ import { stateDynamoFixture, conversationId, stateMetadata } from "../adapters/s
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, token } from "../adapters/cognito-token.fixture.js";
 import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
-import { StrandsAgentEngine } from "../adapters/strands-agent-engine.js";
+import { StrandsAgentEngine, strandsProductionReasoning } from "../adapters/strands-agent-engine.js";
 import { createStrandsServerRuntime } from "../adapters/strands-server-runtime.js";
 import { createConversationServerAgent } from "./conversation-server-agent.js";
 import { productionServerTools } from "./production-server-tools.js";
@@ -74,7 +74,7 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
     let execution = 0;
     const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
       maxTurns: 6, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096,
-      ...(modelId === "jp.amazon.nova-2-lite-v1:0" ? { novaReasoningEffort: "low" as const } : {}) }, { createAgent: config => {
+      ...strandsProductionReasoning(modelId) }, { createAgent: config => {
       const agent = new Agent(config);
       // Read-only SDK hooks for this synthetic live lane; never alter input, Tools,
       // retries or termination. No user text, IDs, raw Tool data or reasoning is logged.
@@ -168,7 +168,7 @@ describe.skipIf(!enabled)("V2 itinerary proposal conversation with real Bedrock"
     const observed = new Set(["draft_itinerary", "explore_destination", "update_current_destination", "update_current_travel_period", "strands_structured_output"]);
     const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
       maxTurns: 6, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096,
-      ...(modelId === "jp.amazon.nova-2-lite-v1:0" ? { novaReasoningEffort: "low" as const } : {}) }, {
+      ...strandsProductionReasoning(modelId) }, {
       createAgent: config => {
         const agent = new Agent(config);
         agent.addHook(BeforeToolCallEvent, ({ toolUse }) => {

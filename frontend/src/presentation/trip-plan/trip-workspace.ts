@@ -17,6 +17,9 @@ import { renderTripTravelMode } from "./trip-travel-mode";
 import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 import type { Trip } from "@raiquora/trip/trip";
 import { canConfirmTrip } from "@raiquora/trip/trip-adoption";
+import { renderPublicPlanPresentation } from "../concierge/public-plan-presentation-view";
+import { previewPlanAdoption } from "../concierge/plan-adoption-view";
+import type { AiGuidePanelElements } from "../concierge/ai-guide-panel";
 
 /** DOM and navigation only. The supplied source owns the current server Trip. */
 export function configureTripWorkspace(options: {
@@ -29,6 +32,8 @@ export function configureTripWorkspace(options: {
   changeAdoption?(trip: Trip, action: "confirm" | "withdraw"): Promise<void>;
   changeItemDecision?(trip: Trip, item: Trip["items"][number], action: "confirm" | "withdraw"): Promise<void>;
   branchTrip?(trip: Trip, title: string): Promise<void>;
+  conversationId?(): string;
+  onPlanAdoption?: AiGuidePanelElements["onPlanAdoption"];
 }) {
   const { controller, app } = options;
   const panel = element("section", "trip-workspace"); panel.id = "trip-workspace"; panel.hidden = true;
@@ -125,7 +130,15 @@ export function configureTripWorkspace(options: {
   });
   const consult = control("＋ 予定を相談して追加", () => chat("旅程に追加する予定を相談したい"));
   overview.append(feasibility, readiness, checklist, assumptions);
-  itinerary.append(dayTabs, days, add, consult, candidates);
+  const planDraft = element("section", "trip-workspace-plan-draft"); planDraft.hidden = true; let planKey = "";
+  planDraft.addEventListener("raiquora:preview-plan-adoption", event => {
+    if (!options.onPlanAdoption || !options.conversationId) return;
+    const session = controller.sessionId(), trip = controller.current(), conversationId = options.conversationId();
+    previewPlanAdoption(event, { conversationId, adopt: options.onPlanAdoption,
+      isCurrent: () => controller.sessionId() === session && options.conversationId?.() === conversationId &&
+        controller.current()?.id === trip?.id && controller.current()?.revision === trip?.revision });
+  });
+  itinerary.append(planDraft, dayTabs, days, add, consult, candidates);
   costPanel.append(costs);
   const detail = element("div", "trip-detail-view"); detail.append(heading, status, retry, tablist, overview, itinerary, costPanel, mapPanel, proposal);
   const travelMode = element("div"); travelMode.hidden = true;
@@ -189,6 +202,12 @@ export function configureTripWorkspace(options: {
     const nextCostSession = controller.source()?.sessionVersion?.();
     if (nextCostSession !== costSessionVersion) { costs.replaceChildren(); costKey = ""; costTripId = undefined; costSessionVersion = nextCostSession; }
     const trip = controller.current();
+    const plan = controller.plan(), nextPlanKey = JSON.stringify([controller.sessionId(), plan]);
+    if (planKey !== nextPlanKey) {
+      planKey = nextPlanKey; planDraft.replaceChildren(); planDraft.hidden = !plan;
+      if (plan) planDraft.append(element("h2", "", "未保存の旅程案"), element("p", "", "内容を確認して「この案を採用する」から旅程へ保存できます。"),
+        renderPublicPlanPresentation(plan, { idPrefix: "workspace-", detailedResearch: false }));
+    }
     if (trip && travelTripKey && travelTripKey !== `${trip.id}:${trip.revision}`) { travelGeneration++; travelTripKey = ""; travelMode.hidden = true; detail.hidden = false; }
     panel.hidden = nav.hidden = !controller.blocksLegacy();
     if (!controller.blocksLegacy()) { delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; return; }
@@ -327,5 +346,6 @@ export function configureTripWorkspace(options: {
   document.defaultView?.addEventListener("beforeunload", beforeUnload);
   const unsubscribe = controller.subscribe(render); render();
   return { panel, nav, render, show, report, canLeave, openTravelMode: showTravelMode,
+    showPlan() { selectTab("itinerary"); show("trip"); },
     destroy() { document.defaultView?.removeEventListener("beforeunload", beforeUnload); unsubscribe(); panel.remove(); nav.remove(); delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; } };
 }

@@ -5,4 +5,9 @@ const result = { serviceDate: "2026-09-24", originStation: "京都", destination
 describe("public journey presentation", () => {
   it("projects only selected verified journeys", () => expect(projectPublicJourneyPresentation(result, new Set(["journey:2026-09-24:0"]))).toMatchObject({ journeys: [{ departureTime: "08:00", legs: [{ trainName: "やくも" }] }] }));
   it("rejects unknown browser fields", () => expect(() => parsePublicJourneyPresentation({ ...projectPublicJourneyPresentation(result), rawToolOutput: {} })).toThrow());
+  it("publishes a local train whose optional timetable labels are empty", () => {
+    const local = structuredClone(result);
+    Object.assign(local.journeys[0]!.legs[0]!, { trainName: "", trainNumber: "", serviceType: "" });
+    expect(projectPublicJourneyPresentation(local)?.journeys[0]?.legs[0]).toMatchObject({ trainName: "", trainNumber: "", serviceType: "" });
+  });
 });

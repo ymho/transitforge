@@ -32,7 +32,8 @@ describe("canonical candidate retention and deterministic presentation", () => {
   it("builds the two-day cards from the exact retained items without a second model-authored presentation", async () => {
     const f = fixture(), draft = itineraryDraft();
     const result = await f.tools.execute("draft_itinerary", proposal(), { executionId: scope.executionId });
-    expect(result).toMatchObject({ ok: true, output: { candidateSetId: scope.executionId, revision: 0, saved: false, confirmationRequired: true } });
+    expect(result).toMatchObject({ ok: true, output: { candidateSetId: scope.executionId, revision: 0, saved: false, confirmationRequired: true,
+      scope: "unsaved_itinerary_only", researchPerformed: false, tripItemsChanged: false } });
     expect(f.saved()).toMatchObject({ contextRef: { tripId: scope.tripId, baseTripRevision: 4 }, expiresAt: "2026-10-04T00:00:00.000Z" });
     const publicPlan = f.publish.mock.calls[0]![0].presentation;
     expect(publicPlan.target).toEqual({ tripId: scope.tripId, baseTripRevision: 4 });

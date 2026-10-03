@@ -98,3 +98,15 @@ it.each(["invalid_input", "private-code"])("bounds Tool error classification: %s
   expect(event.toolErrorCode).toBe(errorCode === "invalid_input" ? "invalid_input" : undefined);
   expect(JSON.stringify(event)).not.toMatch(/private-code|private-result|private-request/);
 });
+
+it("distinguishes public projection failure after a completed execution without logging its payload", async () => {
+  const record = vi.fn();
+  const app = createServerAgentApplication({ newExecutionId: () => "execution", diagnostics: { record }, registerTools: () => undefined,
+    createModel: () => ({ generate: async () => { throw Error("unused"); } }),
+    runRuntime: async () => ({ status: "completed", response: "private response", evidence: [], claims: [], trace: { executionId: "execution", events: [], droppedEventCount: 0 } }),
+    projectResult: () => { throw Error("private provider data"); },
+  });
+  await expect(app.runAgentTurn({ principal: { subject: "owner", identity: { subject: "owner", issuer: "issuer" }, scopes: ["trip:read"] }, userRequest: "private request" })).rejects.toThrow();
+  expect(record).toHaveBeenCalledWith(expect.objectContaining({ phase: "presentation", reason: "schema_invalid", mode: "application-projection" }));
+  expect(JSON.stringify(record.mock.calls)).not.toMatch(/private response|private provider|private request/);
+});

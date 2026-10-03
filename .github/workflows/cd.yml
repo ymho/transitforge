@@ -40,6 +40,8 @@ jobs:
       TF_VAR_enable_fixed_egress_provider: ${{ vars.FIXED_EGRESS_PROVIDER_ENABLED }}
       # #706: development-service cutover, not a general-availability quality gate.
       TF_VAR_agent_runtime_v2_enabled: "true"
+      # #785: independently verified consultation flow, native adaptive thinking/medium.
+      TF_VAR_bedrock_model_id: "jp.anthropic.claude-sonnet-4-6"
       TF_VAR_conversation_semantic_kernel_enabled: "false"
       AWS_REGION: ap-northeast-1
       AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
@@ -172,7 +174,7 @@ jobs:
           aws lambda wait function-updated-v2 --function-name "$AGENT_STREAM_FUNCTION"
           aws lambda get-function-configuration \
             --function-name "$AGENT_STREAM_FUNCTION" \
-            --query '{state:State,updateStatus:LastUpdateStatus,v2:Environment.Variables.AGENT_RUNTIME_V2_ENABLED,semantic:Environment.Variables.SEMANTIC_INTENT_ENABLED}' \
+            --query '{state:State,updateStatus:LastUpdateStatus,v2:Environment.Variables.AGENT_RUNTIME_V2_ENABLED,semantic:Environment.Variables.SEMANTIC_INTENT_ENABLED,modelId:Environment.Variables.MODEL_ID}' \
             --output json | node tools/deployment/verify-agent-runtime.mjs | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Verify deployed OTP route service

@@ -9,6 +9,12 @@ const examples = [
   { kind: "unavailable", operation: "save" }, { kind: "operation_result", receiptId: "receipt:1" }, { kind: "uncertainty", text: "まだ確認できていません。" },
 ];
 describe("single-source V2 reply syntax", () => {
+  it("can ask for the departure time needed by rail search without treating it as a date", () => {
+    const reply = { kind: "clarification", target: "departure_time", text: "何時ごろ出発しますか？" };
+    expect(agentV2StructuredOutputSchema.parse({ reply }).reply).toEqual(parseAgentV2Reply(reply));
+    expect(agentV2StructuredOutputSchema.parse({ reply: { kind: "answer", references: [{ evidenceId: "station", field: "name" }],
+      nextQuestion: { target: "departure_time", text: "出発時刻は何時ごろですか？" } } }).reply.kind).toBe("answer");
+  });
   it.each(examples)("shares a valid $kind between the SDK envelope and Application parser", (reply) => {
     expect(agentV2StructuredOutputSchema.parse({ reply }).reply).toEqual(parseAgentV2Reply(reply));
   });

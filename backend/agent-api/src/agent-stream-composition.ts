@@ -51,7 +51,7 @@ export function createProductionAgentStream(options: {
         ...(result.publicPlanPresentation ? { publicPlanPresentation: result.publicPlanPresentation } : {}),
         ...(result.publicJourneyPresentation ? { publicJourneyPresentation: result.publicJourneyPresentation } : {}),
         ...(result.publicGroundRoutePresentation ? { publicGroundRoutePresentation: result.publicGroundRoutePresentation } : {}),
-        ...(result.publicPlacePresentation ? { publicPlacePresentation: result.publicPlacePresentation } : {}),
+        ...(result.publicPlacePresentation ? { publicPlacePresentation: result.publicPlacePresentation } : {}), ...(result.publicAccommodationPresentation ? { publicAccommodationPresentation: result.publicAccommodationPresentation } : {}),
         ...(result.researchExecution ? { researchExecution: result.researchExecution } : {}),
         ...(result.tripUpdateProposal ? { tripUpdateProposal: result.tripUpdateProposal } : {}),
         ...(result.consultationRequestProposal ? { consultationRequestProposal: result.consultationRequestProposal } : {}),

@@ -49,7 +49,7 @@ import type { ModelTokenRates } from "@raiquora/agent/model-usage-cost";
 import type { ResearchExecutionLedger } from "@raiquora/agent/research-execution";
 import type { JourneySearchResponse } from "@raiquora/journey/journey-search-service";
 import { projectPublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
-import { StrandsAgentEngine } from "./adapters/strands-agent-engine.js";
+import { StrandsAgentEngine, strandsProductionReasoning } from "./adapters/strands-agent-engine.js";
 import { createStrandsServerRuntime } from "./adapters/strands-server-runtime.js";
 
 /** Constructed only after authentication, once per request. No Travel credentials or raw trace sink. */
@@ -117,7 +117,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
    maxTurns: 10,
    maxOutputTokens: 4_096,
    maxInvocationOutputTokens: 4_096,
-   ...(modelId === "jp.amazon.nova-2-lite-v1:0" ? { novaReasoningEffort: "low" as const } : {}),
+   ...strandsProductionReasoning(modelId),
  })) : undefined;
  return createProductionConversationAgent({
    // Open-ended discovery needs several candidate/source/photo rounds and a
