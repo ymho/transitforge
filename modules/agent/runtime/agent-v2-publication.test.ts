@@ -91,6 +91,10 @@ describe("Agent v2 publication contract", () => {
   it("allows a missing-condition question but does not ask an accepted condition again", () => {
     const input = { ...context(), effectiveIntent: intent() };
     expect(admitAgentV2Reply({ kind: "clarification", target: "start_date" }, input).proof.question).toBe("start_date");
+    const time = admitAgentV2Reply({ kind: "clarification", target: "departure_time" }, input);
+    expect(time.text).toBe("何時ごろ出発する予定ですか？");
+    expect(time.proof.question).toBe("departure_time");
+    expect(time.claims).toEqual([]);
     expect(() => admitAgentV2Reply({ kind: "clarification", target: "destination" }, input)).toThrow("known_condition");
   });
   it("does not treat hypothetical conditions as accepted actual conditions", () => {

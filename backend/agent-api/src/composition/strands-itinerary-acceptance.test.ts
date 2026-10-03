@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { Agent, Model, ModelMessageEvent, ToolResultEvent, type BaseModelConfig, type Message, type ModelStreamEvent } from "@strands-agents/sdk";
+import { Agent, Model, ModelMessageEvent, BeforeToolCallEvent, ToolResultEvent, type BaseModelConfig, type Message, type ModelStreamEvent } from "@strands-agents/sdk";
 import { createTrip } from "@raiquora/trip/trip";
 import { stateDynamoFixture, stateA, conversationId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
@@ -40,7 +40,7 @@ it(`completes the exact confirmation turn with ${live ? "Bedrock" : "scripted SD
   trips.seed(createTrip(metadata.tripId, "相談中の旅", "2026-10-03T00:00:00Z"), stateA.subject);
   await state.conversations.create(stateA, conversationId, metadata);
   const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
-  const settings = { modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
+  const settings = { modelId, ...(modelId === "jp.amazon.nova-2-lite-v1:0" ? { novaReasoningEffort: "low" as const } : {}), region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
     maxTurns: 6, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096 };
   const prelude = createStrandsServerRuntime(new StrandsAgentEngine(settings, { model: new ScriptModel([
     { name: "update_current_destination", input: { action: "set", place: "出雲大社", quote: "出雲大社にいきたい" } }, reply("行き先を出雲大社として受け止めました。"),
@@ -86,7 +86,7 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
   trips.seed(createTrip(metadata.tripId, "出雲旅行", "2026-10-03T00:00:00Z"), stateA.subject);
   await state.conversations.create(stateA, conversationId, metadata);
   const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
-  const settings = { modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
+  const settings = { modelId, ...(modelId === "jp.amazon.nova-2-lite-v1:0" ? { novaReasoningEffort: "low" as const } : {}), region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
     maxTurns: 8, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096 };
   const scripts = [
     [{ name: "update_current_destination", input: { action: "set", place: "出雲大社", quote: "出雲大社にいきたい" } }, reply("出雲大社へ行く希望を受け止めました。アクセス駅は出雲市駅で調べられます。")],
@@ -130,8 +130,18 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
         tools: message.content.flatMap(block => block.type === "toolUseBlock" ? [block.name] : []),
         replies: message.content.flatMap(block => block.type === "toolUseBlock" && block.name === "strands_structured_output" && block.input && typeof block.input === "object" && "reply" in block.input && block.input.reply && typeof block.input.reply === "object" && "kind" in block.input.reply
           ? [typeof block.input.reply.kind === "string" && ["answer", "candidates", "conversation", "clarification", "unavailable", "operation_result", "uncertainty"].includes(block.input.reply.kind) ? block.input.reply.kind : "unknown"] : []) })));
+      agent.addHook(BeforeToolCallEvent, ({ toolUse }) => {
+        if (!toolUse.name.startsWith("update_current_")) return;
+        const value = toolUse.input;
+        const quote = value && typeof value === "object" && "quote" in value && typeof value.quote === "string" ? value.quote : undefined;
+        const place = value && typeof value === "object" && "place" in value && typeof value.place === "string" ? value.place : undefined;
+        console.log(JSON.stringify({ turn: index + 1, phase: "consultation-condition-source", tool: toolUse.name,
+          quoteInCurrent: quote === undefined ? false : input.userRequest.includes(quote),
+          quoteInHistory: quote === undefined ? false : (input.context?.conversation?.messages ?? []).some(message => message.text.includes(quote)),
+          placeInQuote: place === undefined ? undefined : quote?.includes(place) ?? false }));
+      });
       agent.addHook(ToolResultEvent, ({ result }) => console.log(JSON.stringify({ turn: index + 1, phase: "consultation-tool", status: result.status,
-        errors: closedToolErrors(result.error) })));
+        errors: closedToolErrors(result.error), fields: closedIssueFields(result.error) })));
       return agent;
     } } : { model: new ScriptModel(scripts[index]!) }))(input);
     },
@@ -186,5 +196,15 @@ function closedToolErrors(error: Error | undefined): string[] {
     if (!issue || typeof issue !== "object" || !("message" in issue) || typeof issue.message !== "string") return "schema_validation";
     const message = issue.message;
     return codes.find(code => message.startsWith(`${code}:`)) ?? "schema_validation";
+  }))];
+}
+
+/** Field names only; never validation values or model-generated path components. */
+function closedIssueFields(error: Error | undefined): string[] {
+  if (!error || !("issues" in error) || !Array.isArray(error.issues)) return [];
+  const allowed = ["reply", "kind", "target", "nextQuestion", "references", "evidenceId", "field", "sections", "heading", "text", "commentary", "evidenceIds", "operation", "receiptId"];
+  return [...new Set(error.issues.flatMap((issue: unknown) => {
+    if (!issue || typeof issue !== "object" || !("path" in issue) || !Array.isArray(issue.path)) return [];
+    return issue.path.filter((part: unknown): part is string => typeof part === "string" && allowed.includes(part));
   }))];
 }

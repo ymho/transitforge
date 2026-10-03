@@ -177,3 +177,11 @@ Conversation fixtureは本番の`explore_destination`を使い、discovery・ペ
   前者は宿検索省略・未依頼の条件操作、後者はアクセス検索反復・構造化回答拒否が残った。
   次にNova 2 Liteの推論無効（Providerの既定）とlowを比較する。モデル選択・turn/output/deadline上限は変えず、
   この段階では本番のlow設定を維持する。比較fixtureの成功を本番設定の成功と扱わない。
+- 鉄道Toolは出発時刻を必要とする一方、公開質問schemaに出発時刻のtargetが存在しない契約の不一致もあった。
+  `clarification`と`nextQuestion`に`departure_time`を追加し、日付への誤分類を不要にする。
+  SDK構文とApplication公開の双方で時刻質問を受理する回帰を追加する。これは条件の自動保存権限を追加しない。
+
+- [Nova 2推論無効の3回比較](https://github.com/ymho/transitforge/actions/runs/37128346491)も0/3で、
+  宿の承諾ターンで期間writerを8回繰り返していた。比較fixtureを本番と同じlowへ戻す。
+  追加診断はquoteが今回発言/履歴に含まれるかの真偽とschemaの許可済みfield名に限定し、
+  元の発言・quote・モデル生成内容・任意のpathは記録しない。
