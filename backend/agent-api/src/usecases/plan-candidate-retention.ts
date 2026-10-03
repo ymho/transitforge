@@ -1,3 +1,4 @@
+import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import { createHash } from "node:crypto";
 import { createItineraryCandidateSet, type ItineraryCandidateSet, type PlanCoverage, type PlanVariant } from "@raiquora/trip/itinerary-candidates";
 import { bindPublicPlanTarget, type PublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
@@ -23,9 +24,9 @@ export const draftItineraryToolName = "draft_itinerary" as const;
 
 /** Registers the canonical proposal Tool. Published output is attached only after the Runtime completes. */
 export function registerPlanCandidateRetentionTool(tools: AgentToolRegistry, application: PlanCandidateRetentionApplication,
-  scope: CandidateRetentionScope, publish: (value: RetainedCandidatePlan) => void): void {
+  scope: CandidateRetentionScope, publish: (value: RetainedCandidatePlan) => void, currentDayCount?: () => number | undefined): void {
   tools.register<unknown, unknown>({ name: draftItineraryToolName, effect: "proposal", requiredCapabilities: ["agent-v2-proposal"],
-    description: "現在のTripと会話で既知の条件から、1件以上の仮旅程をtyped candidateとして作る。variantsへ案のlabel・dayCount・itemsを指定する。itemsは行程順にkind・title・day（1始まり）を1回ずつ書く。宿泊等の翌日まで続く項目はendDayを指定する。内部ID・参照配列・表示payloadはServerが生成するため渡さない。表示用データはServerが作る。未確認の移動時刻・料金・営業・宿泊を事実として補わずunknownsへ残す。候補ID・Trip/revision・期限はServerが発行し、Tripへの採用・保存は利用者確認後の別操作で行う。",
+    description: "現在のTripと会話で既知の条件から、1件以上の仮旅程をtyped candidateとして作る。variantsへ案のlabel・dayCount・itemsを指定する。itemsは行程順にkind・title・day（1始まり）を1回ずつ書く。宿泊等の翌日まで続く項目はendDayを指定する。内部ID・参照配列・表示payloadはServerが生成するため渡さない。確定的な期間条件があればServerがその日数を使う（1泊は2日）。未確認の移動時刻・料金・営業・宿泊を事実として補わずunknownsへ残す。候補ID・Trip/revision・期限はServerが発行し、Tripへの採用・保存は利用者確認後の別操作で行う。",
     inputSchema: candidateProposalInputSchema,
     outputSchema: { type: "object", properties: { candidateSetId: { type: "string" }, revision: { type: "integer" }, presentationId: { type: "string" }, saved: { type: "boolean" }, confirmationRequired: { type: "boolean" } },
       required: ["candidateSetId", "revision", "presentationId", "saved", "confirmationRequired"], additionalProperties: false },
@@ -33,7 +34,7 @@ export function registerPlanCandidateRetentionTool(tools: AgentToolRegistry, app
     async execute(input) {
       try {
         const value = input as ItineraryProposalInput;
-        const draft = canonicalItineraryDraft(value, scope.baseItemIds ?? []);
+        const draft = canonicalItineraryDraft(value, scope.baseItemIds ?? [], currentDayCount?.());
         const retained = await application.retain(scope, draft, value.unknowns); publish(retained);
         return successfulAgentToolResult({ candidateSetId: retained.candidateSet.id, revision: retained.candidateSet.revision,
           presentationId: retained.presentation.presentationId, saved: false, confirmationRequired: true });
@@ -67,15 +68,17 @@ export const candidateProposalInputSchema: import("@raiquora/agent/tool-contract
 };
 
 /** The model supplies proposal content; Application owns canonical identities and links. */
-function canonicalItineraryDraft(input: ItineraryProposalInput, baseItemIds: readonly string[]): CanonicalPlanCandidateDraft {
+function canonicalItineraryDraft(input: ItineraryProposalInput, baseItemIds: readonly string[], knownDays?: number): CanonicalPlanCandidateDraft {
   const variants: PlanVariant[] = input.variants.map((variant, variantIndex) => {
     const id = `plan-${variantIndex + 1}`, removed = variant.removedBaseItemIds ?? [];
+    const dayCount = knownDays ?? variant.dayCount;
+    if (!Number.isSafeInteger(dayCount) || dayCount < 1 || dayCount > 90) throw new TripResourceError("invalid-input");
     const replacements = variant.items.flatMap(item => item.baseItemId ? [item.baseItemId] : []);
     if (new Set([...removed, ...replacements]).size !== removed.length + replacements.length ||
         [...removed, ...replacements].some(ref => !baseItemIds.includes(ref))) throw new TripResourceError("invalid-input");
     let anchor = baseItemIds.filter(ref => !removed.includes(ref)).at(-1);
     const items = variant.items.map((item, itemIndex) => {
-      if (item.day > variant.dayCount || item.endDay !== undefined && (item.endDay < item.day || item.endDay > variant.dayCount)) throw new TripResourceError("invalid-input");
+      if (item.day > dayCount || item.endDay !== undefined && (item.endDay < item.day || item.endDay > dayCount)) throw new TripResourceError("invalid-input");
       const componentId = `${id}-item-${itemIndex + 1}`;
       const value = { componentId, kind: item.kind, title: item.title,
         schedule: { type: "relative" as const, dayId: `day-${item.day}`, ...(item.endDay ? { endDayId: `day-${item.endDay}` } : {}), ...(item.part ? { part: item.part } : {}) },
@@ -83,7 +86,7 @@ function canonicalItineraryDraft(input: ItineraryProposalInput, baseItemIds: rea
       anchor = componentId;
       return value;
     });
-    return { id, label: variant.label, timeline: { dayOrder: Array.from({ length: variant.dayCount }, (_, index) => `day-${index + 1}`), itemOrder: items.map(item => item.componentId) },
+    return { id, label: variant.label, timeline: { dayOrder: Array.from({ length: dayCount }, (_, index) => `day-${index + 1}`), itemOrder: items.map(item => item.componentId) },
       items, assumptionRefs: [], assessmentRefs: [], changedComponentIds: items.map(item => item.componentId), removedBaseItemIds: removed,
       retainedBaseItemIds: baseItemIds.filter(ref => !removed.includes(ref) && !replacements.includes(ref)) };
   });
@@ -111,4 +114,21 @@ export class PlanCandidateRetentionApplication {
     await this.repository.put(scope.principal, candidateSet);
     return { candidateSet, presentation };
   }
+}
+
+/** Only exact, active trip-wide user conditions define the display horizon.
+ * A range, hypothetical condition, profile hint or ambiguity remains a proposal choice. */
+export function knownItineraryDayCount(intent: EffectiveIntent | undefined): number | undefined {
+  if (!intent) return undefined;
+  const whole = (scope: { type: string }) => scope.type === "conversation" || scope.type === "trip";
+  const facts = intent.actualConversationFacts.filter(fact => fact.target === "duration" && whole(fact.scope));
+  if (facts.length) {
+    const fact = facts.length === 1 ? facts[0]! : undefined;
+    if (!fact || fact.precision !== "exact" || !["preferred", "required"].includes(fact.modality) || fact.value.kind !== "quantity" || fact.value.unit === "people") return undefined;
+    return fact.value.amount + (fact.value.unit === "nights" ? 1 : 0);
+  }
+  const base = intent.activeBaseFacts.filter(fact => fact.target === "duration" && whole(fact.scope) && fact.authority === "persisted_user");
+  const requirement = base.length === 1 ? base[0]!.requirement : undefined;
+  return requirement?.type === "duration" && requirement.minimum === requirement.maximum && requirement.minimum !== undefined
+    ? requirement.minimum + (requirement.unit === "nights" ? 1 : 0) : undefined;
 }

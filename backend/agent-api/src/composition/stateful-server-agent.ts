@@ -25,7 +25,7 @@ import type { GroundRouteProvider } from "../ports/ground-route-provider.js";
 import { registerServerTools } from "../usecases/agent/server-tools.js";
 import type { AgentOperation } from "../ports/agent-operation.js";
 import { DynamoDbItineraryCandidateRepository } from "../adapters/dynamodb-itinerary-candidate-repository.js";
-import { PlanCandidateRetentionApplication, registerPlanCandidateRetentionTool, type RetainedCandidatePlan } from "../usecases/plan-candidate-retention.js";
+import { knownItineraryDayCount, PlanCandidateRetentionApplication, registerPlanCandidateRetentionTool, type RetainedCandidatePlan } from "../usecases/plan-candidate-retention.js";
 import { proposeVerifiedIntentRequest } from "@raiquora/agent/verified-intent-proposal";
 import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
@@ -94,7 +94,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
             registerPlanCandidateRetentionTool(tools, new PlanCandidateRetentionApplication(candidateRepository), {
               principal: scope.principal, executionId: scope.executionId, conversationId: scope.conversationId, userRequest: scope.userRequest,
               tripId: trip.id, baseTripRevision: trip.revision, baseItemIds: trip.items.map(item => item.id),
-            }, value => { retainedCandidatePlan = value; });
+            }, value => { retainedCandidatePlan = value; }, () => knownItineraryDayCount(effectiveIntent));
           }
         }
       },

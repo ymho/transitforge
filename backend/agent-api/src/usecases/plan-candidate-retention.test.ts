@@ -1,7 +1,8 @@
+import { compileEffectiveIntent } from "@raiquora/agent/effective-intent";
 import { describe, expect, it, vi } from "vitest";
 import type { ItineraryCandidateSet } from "@raiquora/trip/itinerary-candidates";
 import type { ItineraryCandidateRepository } from "../ports/itinerary-candidate-repository.js";
-import { PlanCandidateRetentionApplication, registerPlanCandidateRetentionTool, type CanonicalPlanCandidateDraft } from "./plan-candidate-retention.js";
+import { knownItineraryDayCount, PlanCandidateRetentionApplication, registerPlanCandidateRetentionTool, type CanonicalPlanCandidateDraft } from "./plan-candidate-retention.js";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 
 const scope = { principal: { subject: "owner-a" }, tripId: "11111111-1111-4111-8111-111111111111",
@@ -19,12 +20,12 @@ function proposal() { return { variants: [{ label: "1泊の案", dayCount: 2, it
   { kind: "stay", title: "宿泊先は未選択", day: 1, endDay: 2 },
   { kind: "transport", title: "帰路は未選択", day: 2 },
 ] }], unknowns: ["宿と移動時刻は未確認"] }; }
-function fixture(baseItemIds: string[] = []) {
+function fixture(baseItemIds: string[] = [], currentDayCount?: () => number | undefined) {
   let saved: ItineraryCandidateSet | undefined;
   const repository: ItineraryCandidateRepository = { put: vi.fn(async (owner, value) => { expect(owner).toEqual(scope.principal); saved = structuredClone(value); }), get: async () => saved };
   const app = new PlanCandidateRetentionApplication(repository, () => new Date("2026-10-03T00:00:00Z"));
   const tools = new AgentToolRegistry(), publish = vi.fn();
-  registerPlanCandidateRetentionTool(tools, app, { ...scope, baseItemIds }, publish);
+  registerPlanCandidateRetentionTool(tools, app, { ...scope, baseItemIds }, publish, currentDayCount);
   return { repository, app, tools, publish, saved: () => saved };
 }
 describe("canonical candidate retention and deterministic presentation", () => {
@@ -78,6 +79,26 @@ describe("canonical candidate retention and deterministic presentation", () => {
     Object.assign(input.variants[0]!.items[0]!, { baseItemId: "old-visit" });
     expect(await f.tools.execute("draft_itinerary", input, { executionId: scope.executionId })).toMatchObject({ ok: true });
     expect(f.saved()!.variants[0]).toMatchObject({ retainedBaseItemIds: ["hotel"], removedBaseItemIds: [], items: [{ baseItemId: "old-visit" }, { placement: { afterRef: "plan-1-item-1" } }, { placement: { afterRef: "plan-1-item-2" } }] });
+  });
+  it("keeps all known travel days even when the model supplies only the first day", async () => {
+    let days = 1;
+    const f = fixture([], () => days), input = proposal();
+    days = 2; // A condition may be accepted after Tool registration in the same turn.
+    input.variants[0]!.dayCount = 1;
+    input.variants[0]!.items = [input.variants[0]!.items[0]!];
+    expect(await f.tools.execute("draft_itinerary", input, { executionId: scope.executionId })).toMatchObject({ ok: true });
+    expect(f.publish.mock.calls[0]![0].presentation.candidates[0].days).toMatchObject([{ status: "planned" }, { status: "not-retrieved" }]);
+    expect(f.publish.mock.calls[0]![0].presentation.coverage.omittedDayRefs).toHaveLength(1);
+  });
+  it.each(["exact", "approximate", "hypothetical", "multiple"])("derives the horizon only from an exact active duration: %s", kind => {
+    const intent = compileEffectiveIntent({ overlay: { version: 1, intentRevision: 0, facts: [], tombstones: [], appliedMutationIds: [] } });
+    const fact = { factId: "duration", target: "duration" as const, scope: { type: "conversation" as const }, modality: "preferred" as const,
+      precision: kind === "approximate" ? "approximate" as const : "exact" as const, value: { kind: "quantity" as const, amount: 1, unit: "nights" as const },
+      frame: "actual" as const, sourceOperationId: "operation", provenance: { kind: "user_turn" as const, turnId: "turn" } };
+    if (kind === "hypothetical") intent.hypotheticalFacts.push({ ...fact, frame: "hypothetical" });
+    else intent.actualConversationFacts.push(fact);
+    if (kind === "multiple") intent.actualConversationFacts.push({ ...fact, factId: "alternative" });
+    expect(knownItineraryDayCount(intent)).toBe(kind === "exact" ? 2 : undefined);
   });
   it("does not publish a card when the candidate repository fails", async () => {
     const f = fixture(); vi.mocked(f.repository.put).mockRejectedValueOnce(new Error("private repository detail"));

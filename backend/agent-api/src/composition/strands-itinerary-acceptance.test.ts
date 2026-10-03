@@ -41,7 +41,7 @@ it(`completes the exact confirmation turn with ${live ? "Bedrock" : "scripted SD
     reply("旅行期間を明日から1泊に設定しました。出雲大社の観光プランを作成しましょうか？"),
   ]) }));
   const finalRuntime = createStrandsServerRuntime(new StrandsAgentEngine(settings, live ? {} : { model: new ScriptModel([
-    { name: "draft_itinerary", input: { variants: [{ label: "1泊の仮旅程", dayCount: 2, items: [
+    { name: "draft_itinerary", input: { variants: [{ label: "1泊の仮旅程", dayCount: 1, items: [
       { kind: "activity", title: "出雲大社の参拝", day: 1 },
       { kind: "stay", title: "宿泊先は未選択", day: 1, endDay: 2 },
       { kind: "transport", title: "帰路は未選択", day: 2 },
