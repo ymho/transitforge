@@ -116,7 +116,10 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
     model: { converse: vi.fn(async () => { throw Error("legacy runtime called"); }) }, weather: { search: vi.fn() }, additionalTools: bindings,
     newExecutionId: () => `78500000-2222-4000-8000-${String(++execution).padStart(12, "0")}`,
-    runRuntime: input => createStrandsServerRuntime(new StrandsAgentEngine(settings, live && [2, 4, 5].includes(index) ? { createAgent: config => {
+    runRuntime: input => {
+      if (index === 2) expect(input.context?.conversation?.messages?.at(-1)?.text).toContain("宿泊施設の提案");
+      if (index === 4) expect(input.context?.conversation?.messages?.at(-1)?.text).toContain("出発駅");
+      return createStrandsServerRuntime(new StrandsAgentEngine(settings, live && [2, 4, 5].includes(index) ? { createAgent: config => {
       const agent = new Agent(config);
       console.log(JSON.stringify({ turn: index + 1, phase: "consultation-capabilities", tools: agent.tools.map(tool => tool.name) }));
       agent.addHook(ModelMessageEvent, ({ stopReason, message }) => console.log(JSON.stringify({ turn: index + 1, phase: "consultation-model", stopReason,
@@ -124,7 +127,8 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
         replies: message.content.flatMap(block => block.type === "toolUseBlock" && block.name === "strands_structured_output" && block.input && typeof block.input === "object" && "reply" in block.input && block.input.reply && typeof block.input.reply === "object" && "kind" in block.input.reply ? [block.input.reply.kind] : []) })));
       agent.addHook(ToolResultEvent, ({ result }) => console.log(JSON.stringify({ turn: index + 1, phase: "consultation-tool", status: result.status })));
       return agent;
-    } } : { model: new ScriptModel(scripts[index]!) }))(input),
+    } } : { model: new ScriptModel(scripts[index]!) }))(input);
+    },
     projectResult: result => ({ ...(index === 5 ? { publicJourneyPresentation: projectPublicJourneyPresentation(rail,
       new Set(result.claims.filter(claim => claim.groundingStatus === "supported").flatMap(claim => claim.evidenceIds))) } : {}) }),
     limits: { maxIterations: 8, maxModelCalls: 8, maxToolCalls: 4, maxExecutionMs: 90000 },

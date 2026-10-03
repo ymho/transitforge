@@ -111,7 +111,9 @@ export class StrandsAgentEngine {
           currentEffectiveIntent = accepted.effectiveIntent;
           // The model only needs the acceptance receipt. The authoritative effectiveIntent
           // stays Application-owned and is bound to later reads through getEffectiveIntent.
-          return jsonValue({ ok: true, status: "applied", receipt: accepted.receipt });
+          return jsonValue({ ok: true, status: "applied", receipt: accepted.receipt,
+            scope: "consultation_conditions_only", itineraryItemsChanged: false,
+            researchPerformed: false });
         } catch (error) {
           if (error instanceof ConditionUpdateRejectedError) throw error;
           // The SDK reports Tool errors. An uncertain write additionally closes reads
