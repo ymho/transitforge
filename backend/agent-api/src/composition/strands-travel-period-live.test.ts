@@ -10,7 +10,7 @@ import { publicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 import { compileEffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { ConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
 import { createConversationConditionApplication } from "../usecases/agent/conversation-condition-application.js";
-import { StrandsAgentEngine } from "../adapters/strands-agent-engine.js";
+import { StrandsAgentEngine, strandsProductionReasoning } from "../adapters/strands-agent-engine.js";
 import { createStrandsServerRuntime } from "../adapters/strands-server-runtime.js";
 import { stateA, conversationId } from "../adapters/state-dynamodb.fixture.js";
 import { StateError } from "../contracts/server-state.js";
@@ -24,8 +24,8 @@ const calendarDate = "2026-09-27";
 
 describe.skipIf(!enabled)("travel-period condition Tool with real Bedrock", () => {
   it.each([
-    { name: "isolated-small-budget", maxTokens: 1024, novaReasoningEffort: undefined },
-    { name: "production-reasoning-budget", maxTokens: 4096, novaReasoningEffort: "low" as const },
+    { name: "isolated-small-budget", maxTokens: 1024, reasoning: {} },
+    { name: "production-reasoning-budget", maxTokens: 4096, reasoning: strandsProductionReasoning(modelId) },
   ])("persists actual periods and keeps what-if non-persistent: $name", async configuration => {
     let overlay: ConversationIntentOverlay = { version: 1, intentRevision: 0, facts: [], tombstones: [], appliedMutationIds: [] };
     const journal = new Map<string, { payload: string; receipt: IntentApplicationReceipt }>();
@@ -53,7 +53,7 @@ describe.skipIf(!enabled)("travel-period condition Tool with real Bedrock", () =
         { attemptId: turnId, userSequence: index + 1 }, scenario.message, calendarDate);
       const tools = new AgentToolRegistry(), evidenceRegistry = new ToolEvidenceRegistry();
       let modelCalls = 0; const selectedTools: string[] = [];
-      const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: configuration.maxTokens, maxInvocationOutputTokens: configuration.maxTokens, novaReasoningEffort: configuration.novaReasoningEffort }, {
+      const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt, maxOutputTokens: configuration.maxTokens, maxInvocationOutputTokens: configuration.maxTokens, ...configuration.reasoning }, {
         createAgent: config => { const agent = new Agent(config); agent.addHook(ModelMessageEvent, event => {
           modelCalls++; selectedTools.push(...event.message.content.flatMap(block => block.type === "toolUseBlock"
             ? [["update_current_travel_period", "consider_trip_scenario", "strands_structured_output"].includes(block.name) ? block.name : "other"] : []));

@@ -10,21 +10,23 @@
 
 - `TF_VAR_agent_runtime_v2_enabled: "true"`
 - `TF_VAR_conversation_semantic_kernel_enabled: "false"`
+- `TF_VAR_bedrock_model_id: "jp.anthropic.claude-sonnet-4-6"`（#785の実モデル回帰で選択）
 
-Terraformの再利用可能な既定値はfalseのままにする。CD以外からdevへapplyする場合も、必ずこの明示設定と一致させる。
+Terraformの再利用可能なフラグ既定値はfalse、モデル既定値はNova 2のままにする。CD以外からdevへapplyする場合も、必ずこの明示設定と一致させる。
 AWSコンソールだけでフラグを変えない。次回CDに上書きされる変更を正本にしない。
 `mode=plan` は従来どおりapplyしない。通常CIと既存の破壊的変更チェックは弱めない。
 
 apply後、Terraformが出力した既存Agent Lambdaに対してAWSの設定を読み戻す。
-`State=Active`、`LastUpdateStatus=Successful`、実フラグとCDの期待値が一致した場合だけ
-`Agent runtime verified: v2=true; semantic=false; state=Active; update=Successful.` を記録する。
+`State=Active`、`LastUpdateStatus=Successful`、実フラグとMODEL_IDがCDの期待値に一致した場合だけ
+`Agent runtime verified: v2=true; semantic=false; state=Active; update=Successful; model=jp.anthropic.claude-sonnet-4-6.` を記録する。
 関数の全環境変数、Secret、会話内容は出力しない。設定検証はモデル応答の品質検証ではない。
 
 ## 維持する境界
 
 V2から公開する業務Toolはread-onlyのまま。回答提出 `SDK structured output` はDB更新Toolではない。
 旧Semantic Intentの実モデルgateを同時に有効化しない。
-認証、owner、CAS、Trip/Profile/Conversation正本、既存画面の手動保存API、IAM、予算は変更しない。
+認証、owner、CAS、Trip/Profile/Conversation正本、既存画面の手動保存API、認証・状態操作のIAMと実行回数/token/時間の上限は変更しない。モデル呼出しIAMは既存の選択モデル連動を使う。
+モデル料金は同一ではなく、Sonnetの推論tokenも出力課金へ含まれる。実行上限を料金据置きの保証とは扱わない。
 V2が失敗してもV1の回答へ自動フォールバックしない。利用不能と機能不足を混同せず、実際の失敗を記録する。
 
 ## 既知の未完了
@@ -46,7 +48,10 @@ CDの直近2時間診断には切替前V1も含まれるため、集計全体を
 ## 復帰
 
 重大な権限違反、データ破損、秘密情報露出、制御不能な課金・連続呼出し、利用不能は停止・修正対象とする。
-必要なら `.github/workflows/cd.yml` のV2フラグだけを `"false"` に戻すPRを作り、設定期待値のテストもその判断へ更新する。
+V2を維持してモデルだけ戻す場合は、CDのモデルIDを`jp.amazon.nova-2-lite-v1:0`へ戻すPRを作る。
+V1へ緊急復帰する場合は `.github/workflows/cd.yml` のV2フラグを `"false"`、モデルIDを旧実環境のNova 2へ戻すPRを作る。
+どちらも設定期待値のテストを更新し、成功した設定の読み戻しと対象フローの結果を別々に確認する。
+Novaへ戻すだけで#785の相談フローが安定するとは扱わない。
 通常CIとCDを通し、同じ検証で `v2=false; semantic=false` を確認する。
 旧SHAのRe-run jobs、Git全体の巻戻し、DBや会話履歴の削除は復帰手順にしない。
 フラグの復帰は履歴の巻戻しではない。V1はその間の明示的な緊急復帰用で、追加改良や自動fallbackの対象ではない。

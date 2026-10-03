@@ -41,7 +41,8 @@ Schemaの通過は事実の正しさや保存の権限を証明しない。Evide
 日程未定でも利用者自身の行き先の希望を受理できる。未指定をclearとして扱わず、写真等が不足するpartialは
 確認できた情報で回答し、不足を説明できる。固定Tool順・発話別分類・強制回答・独自の反復抑止は追加しない。
 
-本番compositionが、検証した`jp.amazon.nova-2-lite-v1:0`へNovaの`reasoningConfig`をlowで指定する。
+CDのdev環境は`jp.anthropic.claude-sonnet-4-6`を明示選択し、compositionはNative adaptive thinking/mediumを指定する。
+Nova 2を明示選択した場合は従来の`reasoningConfig`/lowを使う。両Providerの設定は排他とする。
 Engineの既定は推論設定を追加しない。小さい独立fixtureと本番設定を分け、日程liveは両構成で検証する。
 他のModel IDへNova固有パラメータを送らない。モデルの回数・累積出力・実行時間の上限は変更しない。
 推論tokenも出力課金と累積出力上限に含まれ、内部reasoningは公開・保存しない。
@@ -78,7 +79,7 @@ feedbackは閉じた拒否codeと選択方法だけであり、会話や生のEv
 独自の再invoke・補正・公開fallbackは追加せず、訂正できなければ既存上限で停止する。
 最終公開時のEvidence/claim、receipt、currentness、衝突検証とA/B commitは省略しない。
 
-実BedrockのConversation評価も本番と同じ4096累積出力token/Nova 2 reasoning lowを使う。
+実BedrockのConversation評価も選択モデルに対応する本番と同じ推論設定と4096累積出力tokenを使う。
 旧1024上限による途中終了を本番設定の評価と混同しない。6 cycles/2 reads/60秒の上限は維持する。
 Conversation fixtureは本番の`explore_destination`を使い、discovery・ページ読込・地点照合を固定Providerで
 組成する。mediaのみを渡して本番Promptの目的地調査が実行できないfixtureと混同しない。
@@ -231,3 +232,16 @@ Conversation fixtureは本番の`explore_destination`を使い、discovery・ペ
   本番と同じNative Bedrock設定をEngineの明示オプションとcomposition共通選択へ移し、fixtureだけのmodel注入を外す。
   thinking時のtemperature未指定、4096上限、Nova設定との排他、本番compositionとpaid fixtureの一致を回帰で確認する。
   モデル選択の本番切替・mergeは独立3回と周辺の有料回帰の完了後に判断する。
+
+- [adaptive/mediumの独立3回](https://github.com/ymho/transitforge/actions/runs/37134261839)は全フロー3/3、各2テストを通過した。
+  同じ設定をEngine/rootから使う[Conversation周辺回帰](https://github.com/ymho/transitforge/actions/runs/37134679096)も8/8を通過した。
+  CDのdev選択を日本国内profileのSonnet 4.6へ切り替え、MODEL_IDもAWSから読み戻して一致を検証する。
+  Terraformの再利用既定はNovaのまま。SDKの上限は増やさず、実空室・実ダイヤ・利用者端末は別の確認として残す。
+  Sonnetの料金はNovaと同一とは扱わない。日本国内profileの標準単価は入力$3.30/出力$16.50（100万token当たり）。
+  固定Providerで一部ターンだけ実モデルにした測定費用を、実利用の全会話料金として見積もらない。
+  参考: [Anthropic公式のBedrock価格表](https://www-cdn.anthropic.com/files/4zrzovbb/website/3684c2faafb97418665782cea0001f439f74b1d2.pdf)。
+
+- [基本2ケースの独立3回](https://github.com/ymho/transitforge/actions/runs/37134952374)は根拠付き回答3/3、未対応保存1/3だった。
+  未対応保存の2回は保存成功の偽装ではなくclarificationを返したが、能力不足を明示する契約を満たさない。
+  clarificationのSDK schema説明へ、提供できる能力の入力不足だけを質問し、能力不足はunavailableを使う区別を追加する。
+  利用者発話の文字判定、外側retry、回答の強制変換は追加しない。
