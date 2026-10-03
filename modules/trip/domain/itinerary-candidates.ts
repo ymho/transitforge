@@ -152,7 +152,7 @@ export function proposePlanAdoption(input: { candidateSet: ItineraryCandidateSet
     ...(item.logicalDayId ? [item.logicalDayId] : []),
     ...(item.schedule.type === "relative" ? [item.schedule.dayId, ...(item.schedule.endDayId ? [item.schedule.endDayId] : [])] : []),
   ]));
-  const addedDays = variant.timeline.dayOrder.filter(id => requiredDays.has(id) && !existingIds.has(id));
+  const addedDays = requiredDays.size ? variant.timeline.dayOrder.filter(id => !existingIds.has(id)) : [];
   if (addedDays.length) patches.push({ type: "timeline", timeline: { version: 1,
     logicalDays: [...existingDays, ...addedDays.map((id, index) => ({ id, label: `${existingDays.length + index + 1}日目` }))],
     calendarBindings: [...(input.currentTrip.timeline?.calendarBindings ?? [])] } });

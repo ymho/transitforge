@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { comparePlanVariants, createItineraryCandidateSet, proposePlanAdoption, selectDiverseCandidates, type ItineraryCandidateSet, type PlanVariantAssessment } from "./itinerary-candidates";
-import { createTrip } from "./trip";
+import { applyTripProposal, createTrip } from "./trip";
 
 const assessment = (id: string, overrides: Partial<PlanVariantAssessment> = {}): PlanVariantAssessment => ({ variantId: id,
   hardConstraints: { status: "satisfied", refs: [] }, unknowns: [], softPreferences: [{ ref: "pace", status: "matched" }],
@@ -8,6 +8,22 @@ const assessment = (id: string, overrides: Partial<PlanVariantAssessment> = {}):
   evidenceCoverage: { covered: 4, total: 4, sourceRefs: ["evidence-v1"] }, changeAmount: { changedComponents: 1, protectedChanges: 0, refetches: 0 }, ...overrides });
 
 describe("itinerary candidate comparison", () => {
+  it.each([false, true])("adopts all relative days, including an empty day, preserving existing date bindings (%s)", existing => {
+    const timeline = { version: 1 as const, logicalDays: [{ id: "day-1", label: "初日" }], calendarBindings: [{ logicalDayId: "day-1", date: "2026-09-04", timeZone: "Asia/Tokyo", basis: "explicit" as const }] };
+    const trip = createTrip("11111111-1111-4111-8111-111111111111", "base", "2026-09-01T00:00:00Z", [], undefined, undefined, undefined, existing ? timeline : undefined);
+    const set = createItineraryCandidateSet({ id: "set-1", revision: 0, contextRef: { conversationId: "conversation-1", requestFingerprint: "request", tripId: trip.id, baseTripRevision: 0 },
+      coverage: { coveredScopes: ["day-1"], omittedScopes: ["day-2"], complete: false }, issuedAt: "2026-09-02T00:00:00Z", expiresAt: "2026-09-03T00:00:00Z", variants: [{
+        id: "plan", label: "2日案", timeline: { dayOrder: ["day-1", "day-2"], itemOrder: ["visit"] },
+        items: [{ componentId: "visit", kind: "activity", title: "参拝", schedule: { type: "relative", dayId: "day-1" }, evidenceRefs: [], placement: { atBeginning: true } }],
+        changedComponentIds: ["visit"], retainedBaseItemIds: [], removedBaseItemIds: [], assumptionRefs: [], assessmentRefs: [],
+      }] });
+    const result = proposePlanAdoption({ candidateSet: set, variantId: "plan", currentTrip: trip, requestFingerprint: "request", now: "2026-09-02T12:00:00Z",
+      trustedFactory: draft => ({ id: "visit", type: "activity", title: draft.title, category: "sightseeing", schedule: draft.schedule }) });
+    const adopted = applyTripProposal(trip, result.proposal);
+    expect(adopted.timeline?.logicalDays.map(day => day.id)).toEqual(["day-1", "day-2"]);
+    expect(adopted.timeline?.calendarBindings).toEqual(existing ? timeline.calendarBindings : []);
+    expect(trip.items).toEqual([]);
+  });
   it("keeps hard violation, unknown, cost, workload, evidence and change as separate axes", () => {
     const good = assessment("good"); const bad = assessment("bad", { hardConstraints: { status: "violated", refs: ["hard-1"] },
       workload: { status: "unknown" }, cost: { status: "unknown", totals: [], sourceRefs: [] }, unknowns: ["duration"],

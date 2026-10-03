@@ -103,7 +103,7 @@ it("distinguishes public projection failure after a completed execution without 
   const record = vi.fn();
   const app = createServerAgentApplication({ newExecutionId: () => "execution", diagnostics: { record }, registerTools: () => undefined,
     createModel: () => ({ generate: async () => { throw Error("unused"); } }),
-    runRuntime: async () => ({ status: "completed", response: "private response", evidence: [], claims: [], trace: { executionId: "execution", events: [] } }),
+    runRuntime: async () => ({ status: "completed", response: "private response", evidence: [], claims: [], trace: { executionId: "execution", events: [], droppedEventCount: 0 } }),
     projectResult: () => { throw Error("private provider data"); },
   });
   await expect(app.runAgentTurn({ principal: { subject: "owner", identity: { subject: "owner", issuer: "issuer" }, scopes: ["trip:read"] }, userRequest: "private request" })).rejects.toThrow();

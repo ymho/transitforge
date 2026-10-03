@@ -310,14 +310,14 @@ sidebarRealtimeMap.addEventListener("click", selectSidebarMapMode);
 const aiGuideToggle = document.createElement("button");
 aiGuideToggle.type = "button";
 const adoptPlan: NonNullable<Parameters<typeof configureAiGuidePanel>[0]["onPlanAdoption"]> = async (target) => {
-      if (!serverTripClient.previewPlanAdoption || !serverTripClient.confirmPlanAdoption || activeConversationSession.id !== target.conversationId) throw new Error("Adoption unavailable");
-      const preview = await serverTripClient.previewPlanAdoption(target);
-      return { changes: preview.preview.changes, confirm: async () => {
-        if (activeConversationSession.id !== target.conversationId) throw new Error("Conversation changed");
-        await serverTripClient.confirmPlanAdoption!(target, preview.confirmationKey);
-        await tripWorkspaceController.source()?.retry?.(); await serverTripList.refresh(); tripWorkspace.show("trip");
-      } };
-    };
+  if (!serverTripClient.previewPlanAdoption || !serverTripClient.confirmPlanAdoption || activeConversationSession.id !== target.conversationId) throw new Error("Adoption unavailable");
+  const preview = await serverTripClient.previewPlanAdoption(target);
+  return { changes: preview.preview.changes, confirm: async () => {
+    if (activeConversationSession.id !== target.conversationId) throw new Error("Conversation changed");
+    await serverTripClient.confirmPlanAdoption!(target, preview.confirmationKey);
+    await tripWorkspaceController.source()?.retry?.(); await serverTripList.refresh(); tripWorkspace.show("trip");
+  } };
+};
 aiGuideController = configureAiGuidePanel(
   {
     conversationSessionId: activeConversationSession.id,

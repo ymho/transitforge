@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { Model, type BaseModelConfig, type Message, type ModelStreamEvent } from "@strands-agents/sdk";
+import { Agent, Model, ModelMessageEvent, ToolResultEvent, type BaseModelConfig, type Message, type ModelStreamEvent } from "@strands-agents/sdk";
 import { createTrip } from "@raiquora/trip/trip";
 import { stateDynamoFixture, stateA, conversationId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
@@ -116,7 +116,13 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
     model: { converse: vi.fn(async () => { throw Error("legacy runtime called"); }) }, weather: { search: vi.fn() }, additionalTools: bindings,
     newExecutionId: () => `78500000-2222-4000-8000-${String(++execution).padStart(12, "0")}`,
-    runRuntime: input => createStrandsServerRuntime(new StrandsAgentEngine(settings, live && [2, 4, 5].includes(index) ? {} : { model: new ScriptModel(scripts[index]!) }))(input),
+    runRuntime: input => createStrandsServerRuntime(new StrandsAgentEngine(settings, live && [2, 4, 5].includes(index) ? { createAgent: config => {
+      const agent = new Agent(config);
+      agent.addHook(ModelMessageEvent, ({ stopReason, message }) => console.log(JSON.stringify({ turn: index + 1, phase: "consultation-model", stopReason,
+        tools: message.content.flatMap(block => block.type === "toolUseBlock" ? [block.name] : []) })));
+      agent.addHook(ToolResultEvent, ({ result }) => console.log(JSON.stringify({ turn: index + 1, phase: "consultation-tool", status: result.status })));
+      return agent;
+    } } : { model: new ScriptModel(scripts[index]!) }))(input),
     projectResult: result => ({ ...(index === 5 ? { publicJourneyPresentation: projectPublicJourneyPresentation(rail,
       new Set(result.claims.filter(claim => claim.groundingStatus === "supported").flatMap(claim => claim.evidenceIds))) } : {}) }),
     limits: { maxIterations: 8, maxModelCalls: 8, maxToolCalls: 4, maxExecutionMs: 90000 },
