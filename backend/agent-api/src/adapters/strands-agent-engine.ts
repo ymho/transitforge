@@ -29,6 +29,14 @@ export interface StrandsAgentEngineOptions {
   toolTimeoutMs?: number;
   /** Explicit Nova configuration selected by the composition root. */
   novaReasoningEffort?: "low";
+  /** Native Anthropic adaptive thinking; temperature must remain unset. */
+  anthropicAdaptiveEffort?: "medium";
+}
+/** Explicit production selection, also used by production-shaped paid fixtures. */
+export function strandsProductionReasoning(modelId: string): Pick<StrandsAgentEngineOptions, "novaReasoningEffort" | "anthropicAdaptiveEffort"> {
+  if (modelId === "jp.amazon.nova-2-lite-v1:0") return { novaReasoningEffort: "low" };
+  if (modelId === "jp.anthropic.claude-sonnet-4-6") return { anthropicAdaptiveEffort: "medium" };
+  return {};
 }
 export interface StrandsAgentRunInput {
   executionId: string;
@@ -84,6 +92,7 @@ export class StrandsAgentEngine {
   private readonly model?: Model<BaseModelConfig>;
   constructor(private readonly options: StrandsAgentEngineOptions,
     dependencies: { createAgent?: StrandsAgentFactory; model?: Model<BaseModelConfig> } = {}) {
+    if (options.novaReasoningEffort && options.anthropicAdaptiveEffort) throw new Error("Conflicting Bedrock reasoning configuration");
     this.model = dependencies.model;
     this.createAgent = dependencies.createAgent ?? ((config) => new Agent(config));
   }
@@ -164,10 +173,13 @@ export class StrandsAgentEngine {
       );
     }
     const baseModel = this.model ?? new BedrockModel({ modelId: this.options.modelId, region: this.options.region,
-      maxTokens: this.options.maxOutputTokens ?? 2_048, temperature: 0, stream: false,
+      maxTokens: this.options.maxOutputTokens ?? 2_048,
+      ...(this.options.anthropicAdaptiveEffort ? {} : { temperature: 0 }), stream: false,
       // Provider configuration is explicit; isolated engines keep their existing budgets/configuration.
       ...(this.options.novaReasoningEffort ? {
         additionalRequestFields: { reasoningConfig: { type: "enabled", maxReasoningEffort: this.options.novaReasoningEffort } },
+      } : this.options.anthropicAdaptiveEffort ? {
+        additionalRequestFields: { thinking: { type: "adaptive" }, output_config: { effort: this.options.anthropicAdaptiveEffort } },
       } : {}) });
     // Reuse Application admission in the SDK's native validation feedback. This
     // does not repair a reply, start another invoke, or bypass final publication.

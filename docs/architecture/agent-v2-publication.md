@@ -207,3 +207,27 @@ Conversation fixtureは本番の`explore_destination`を使い、discovery・ペ
   現在のuser-roleは生発言だけ、sanitized Application referenceはpolicyと区別したsystem-context DATAへ渡す。
   Native履歴、正本のEffective Intent、24k合算予算を保ち、JSON値のdelimiter文字はescapeする。
   この変更は新たな意味解釈や権限を加えず、現在発言の実roleとApplicationのsource検証を一致させる。
+
+- [role境界整理後のNova 2検証](https://github.com/ymho/transitforge/actions/runs/37130567269)では宿3件は公開されたが、
+  出発地受理後に経路検索へ進み、案作成を省略して全体は失敗した。通常テストの成功と区別する。
+- 同じSDK・固定Provider・上限で`jp.anthropic.claude-sonnet-4-6`を比較した。
+  [初回](https://github.com/ymho/transitforge/actions/runs/37131766927)は全フローが成功し、
+  [独立3回](https://github.com/ymho/transitforge/actions/runs/37132017737)は宿比較・案作成3/3、保存まで2/3だった。
+  1回は後の経路依頼で同じ出発地を再登録し、Trip revisionが更新されて古い案のpreviewが競合になった。
+  この拒否を解除せず、検索パラメータとして既知条件を述べることと変更依頼をPromptで区別する。
+- 時刻未指定で勝手な8時検索を通さないassertionを追加した
+  [より厳密な独立3回](https://github.com/ymho/transitforge/actions/runs/37132846895)は全フロー0/3だった。
+  2回は未指定時刻の検索、1回は時刻質問で案作成を省略した。前の成功をこの条件での成功とは扱わない。
+  指定後の検索は日付・駅・8時の実Tool引数も検証する。駅名はToolが受理する「駅」有無を許す。
+- 次の比較は同じClaudeモデルの標準adaptive thinking/mediumで行った。temperatureは指定せず、
+  thinkingを含む累積出力4096とturn/read/deadlineの上限は維持する。本番compositionはNova 2/lowのまま。
+  外側retry、段階別toolChoice、独自の意味分類や旧Runtimeへのfallbackは追加しない。
+  参考: [AWS adaptive thinking/Converse](https://docs.aws.amazon.com/bedrock/latest/userguide/claude-messages-adaptive-thinking.html)。
+- 宿3件のSSE→表示用投影→DOM→履歴再表示の回帰も実行する。旧`ViewerAgentResponse`を通しても
+  カード数・未確認料金の表示・安全な文字表示を維持する。旧表示unionの分離は#721に残り、
+  この測定だけでv1関連コードを一括削除可能とはしない。公開artifactの`-v1`はデータ形式の版であり、旧実行エンジンの選択ではない。
+
+- [adaptive/mediumの初回](https://github.com/ymho/transitforge/actions/runs/37133525658)は、時刻未指定の検索禁止を含む全フロー2/2を通過した。
+  本番と同じNative Bedrock設定をEngineの明示オプションとcomposition共通選択へ移し、fixtureだけのmodel注入を外す。
+  thinking時のtemperature未指定、4096上限、Nova設定との排他、本番compositionとpaid fixtureの一致を回帰で確認する。
+  モデル選択の本番切替・mergeは独立3回と周辺の有料回帰の完了後に判断する。

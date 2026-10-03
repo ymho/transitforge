@@ -125,6 +125,24 @@ describe("StrandsAgentEngine", () => {
       expect(captured.stream).toBe(false);
     });
 
+  it("uses native adaptive thinking without temperature and preserves the output budget", async () => {
+    const { input } = setup();
+    let captured: ReturnType<BedrockModel["getConfig"]> = {};
+    const createAgent: StrandsAgentFactory = config => {
+      if (!(config.model instanceof BedrockModel)) throw new Error("Expected Bedrock model");
+      captured = config.model.getConfig();
+      return { invoke: async () => ({ stopReason: "toolUse", structuredOutput: { reply: { kind: "uncertainty" } } }) };
+    };
+    await new StrandsAgentEngine({ ...options, modelId: "jp.anthropic.claude-sonnet-4-6",
+      anthropicAdaptiveEffort: "medium", maxOutputTokens: 4096 }, { createAgent }).run(input);
+    expect(captured.additionalRequestFields).toEqual({ thinking: { type: "adaptive" }, output_config: { effort: "medium" } });
+    expect(captured.temperature).toBeUndefined();
+    expect(captured.maxTokens).toBe(4096);
+    expect(captured.stream).toBe(false);
+    expect(() => new StrandsAgentEngine({ ...options, novaReasoningEffort: "low", anthropicAdaptiveEffort: "medium" }))
+      .toThrow("Conflicting Bedrock reasoning configuration");
+  });
+
   it("rejects stale model Tool input before the Domain Tool executes", async () => {
     const { execute, input } = setup();
     await new StrandsAgentEngine(options, { model: new ScriptedModel([lookup, submitted, end]) })

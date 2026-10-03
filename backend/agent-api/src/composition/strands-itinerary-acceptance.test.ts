@@ -1,9 +1,9 @@
 import { expect, it, vi } from "vitest";
-import { Agent, BedrockModel, Model, ModelMessageEvent, BeforeToolCallEvent, ToolResultEvent, type BaseModelConfig, type Message, type ModelStreamEvent } from "@strands-agents/sdk";
+import { Agent, Model, ModelMessageEvent, BeforeToolCallEvent, ToolResultEvent, type BaseModelConfig, type Message, type ModelStreamEvent } from "@strands-agents/sdk";
 import { createTrip } from "@raiquora/trip/trip";
 import { stateDynamoFixture, stateA, conversationId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
-import { StrandsAgentEngine } from "../adapters/strands-agent-engine.js";
+import { StrandsAgentEngine, strandsProductionReasoning } from "../adapters/strands-agent-engine.js";
 import { createStrandsServerRuntime } from "../adapters/strands-server-runtime.js";
 import { createConversationServerAgent } from "./conversation-server-agent.js";
 import { agentV2SystemPrompt } from "../usecases/agent-v2-system-prompt.js";
@@ -36,27 +36,19 @@ class ScriptModel extends Model<BaseModelConfig> {
 }
 const reply = (text: string) => ({ name: "strands_structured_output", input: { reply: { kind: "conversation", message: "acknowledgement", text } } });
 const live = process.env.AGENT_V2_LIVE === "true";
-// Evaluation comparison only: production stays on Nova until the same bounded
-// acceptance cases pass. Native adaptive thinking uses the existing output budget.
-function comparisonModel(modelId: string): Model<BaseModelConfig> | undefined {
-  return modelId === "jp.anthropic.claude-sonnet-4-6" ? new BedrockModel({ modelId, region: "ap-northeast-1",
-    maxTokens: 4096, stream: false,
-    additionalRequestFields: { thinking: { type: "adaptive" }, output_config: { effort: "medium" } },
-  }) : undefined;
-}
 it(`completes the exact confirmation turn with ${live ? "Bedrock" : "scripted SDK"}, retaining cards and replay`, async () => {
   const state = stateDynamoFixture(), trips = tripDynamoFixture(), metadata = stateMetadata();
   trips.seed(createTrip(metadata.tripId, "相談中の旅", "2026-10-03T00:00:00Z"), stateA.subject);
   await state.conversations.create(stateA, conversationId, metadata);
   const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
-  const settings = { modelId, ...(modelId === "jp.amazon.nova-2-lite-v1:0" ? { novaReasoningEffort: "low" as const } : {}), region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
+  const settings = { modelId, ...strandsProductionReasoning(modelId), region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
     maxTurns: 6, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096 };
   const prelude = createStrandsServerRuntime(new StrandsAgentEngine(settings, { model: new ScriptModel([
     { name: "update_current_destination", input: { action: "set", place: "出雲大社", quote: "出雲大社にいきたい" } }, reply("行き先を出雲大社として受け止めました。"),
     { name: "update_current_travel_period", input: { action: "set", period: { start: { kind: "relative_date", relation: "tomorrow" }, duration: { unit: "nights", amount: 1 } }, quote: "明日から1泊で行きたい" } },
     reply("旅行期間を明日から1泊に設定しました。出雲大社の観光プランを作成しましょうか？"),
   ]) }));
-  const finalRuntime = createStrandsServerRuntime(new StrandsAgentEngine(settings, live ? { model: comparisonModel(modelId) } : { model: new ScriptModel([
+  const finalRuntime = createStrandsServerRuntime(new StrandsAgentEngine(settings, live ? {} : { model: new ScriptModel([
     { name: "draft_itinerary", input: { variants: [{ label: "1泊の仮旅程", dayCount: 1, items: [
       { kind: "activity", title: "出雲大社の参拝", day: 1 },
       { kind: "stay", title: "宿泊先は未選択", day: 1, endDay: 2 },
@@ -95,7 +87,7 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
   trips.seed(createTrip(metadata.tripId, "出雲旅行", "2026-10-03T00:00:00Z"), stateA.subject);
   await state.conversations.create(stateA, conversationId, metadata);
   const modelId = process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
-  const settings = { modelId, ...(modelId === "jp.amazon.nova-2-lite-v1:0" ? { novaReasoningEffort: "low" as const } : {}), region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
+  const settings = { modelId, ...strandsProductionReasoning(modelId), region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
     maxTurns: 8, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096 };
   const scripts = [
     [{ name: "update_current_destination", input: { action: "set", place: "出雲大社", quote: "出雲大社にいきたい" } }, reply("出雲大社へ行く希望を受け止めました。アクセス駅は出雲市駅で調べられます。")],
@@ -132,7 +124,7 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
     runRuntime: input => {
       if (index === 2) expect(input.context?.conversation?.messages?.at(-1)?.text).toContain("宿泊施設の提案");
       if (index === 4) expect(input.context?.conversation?.messages?.at(-1)?.text).toContain("出発駅");
-      return createStrandsServerRuntime(new StrandsAgentEngine(settings, live && [2, 4, 5].includes(index) ? { model: comparisonModel(modelId), createAgent: config => {
+      return createStrandsServerRuntime(new StrandsAgentEngine(settings, live && [2, 4, 5].includes(index) ? { createAgent: config => {
       const agent = new Agent(config);
       console.log(JSON.stringify({ turn: index + 1, phase: "consultation-capabilities", tools: agent.tools.map(tool => tool.name) }));
       agent.addHook(ModelMessageEvent, ({ stopReason, message }) => console.log(JSON.stringify({ turn: index + 1, phase: "consultation-model", stopReason,
