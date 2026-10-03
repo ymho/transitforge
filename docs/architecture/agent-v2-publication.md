@@ -185,3 +185,8 @@ Conversation fixtureは本番の`explore_destination`を使い、discovery・ペ
   宿の承諾ターンで期間writerを8回繰り返していた。比較fixtureを本番と同じlowへ戻す。
   追加診断はquoteが今回発言/履歴に含まれるかの真偽とschemaの許可済みfield名に限定し、
   元の発言・quote・モデル生成内容・任意のpathは記録しない。
+
+- [時刻質問を追加したlowの検証](https://github.com/ymho/transitforge/actions/runs/37129063372)では、
+  出発地受理・2日分の案・経路公開・確認保存まで成功したが、宿の承諾を案作成へ取り違えて全体は失敗した。
+  既存low/推論無効/Nova 1の比較だけでは完了性を満たしていないため、次にmediumを同じturn/token/deadline上限で比較する。
+  この比較時点では本番lowを変更しない。Engineの明示設定にmediumを追加し、SDKへの設定伝達を検証する。

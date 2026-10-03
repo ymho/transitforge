@@ -96,7 +96,7 @@ describe("StrandsAgentEngine", () => {
       expect(result.evidence.map(item => item.id)).toEqual([discovery.id, evidence.id]);
     });
 
-  it.each([undefined, "low"] as const)(
+  it.each([undefined, "low", "medium"] as const)(
     "uses only explicitly configured Nova reasoning: %s", async novaReasoningEffort => {
       const { input } = setup();
       let captured: ReturnType<BedrockModel["getConfig"]> = {};
@@ -107,7 +107,7 @@ describe("StrandsAgentEngine", () => {
       };
       await new StrandsAgentEngine({ ...options, novaReasoningEffort, maxOutputTokens: 4096 }, { createAgent }).run(input);
       expect(captured.additionalRequestFields).toEqual(novaReasoningEffort
-        ? { reasoningConfig: { type: "enabled", maxReasoningEffort: "low" } } : undefined);
+        ? { reasoningConfig: { type: "enabled", maxReasoningEffort: novaReasoningEffort } } : undefined);
       expect(captured.maxTokens).toBe(4096);
       expect(captured.stream).toBe(false);
     });

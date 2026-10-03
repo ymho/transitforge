@@ -28,7 +28,7 @@ export interface StrandsAgentEngineOptions {
   maxInvocationOutputTokens?: number;
   toolTimeoutMs?: number;
   /** Explicit Nova configuration selected by the composition root. */
-  novaReasoningEffort?: "low";
+  novaReasoningEffort?: "low" | "medium";
 }
 export interface StrandsAgentRunInput {
   executionId: string;
