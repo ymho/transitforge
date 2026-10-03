@@ -181,7 +181,7 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
     kind: "v2_specific",
     invariant: "draft_itinerary retains an owner-scoped candidate set without adopting it into the Trip",
     testFile: "backend/agent-api/src/usecases/plan-candidate-retention.test.ts",
-    testName: "runs through the production Tool registry and publishes only the actually persisted ref",
+    testName: "builds the two-day cards from the exact retained items without a second model-authored presentation",
   },
   {
     id: "V2-PLACE-PHOTO-01",
