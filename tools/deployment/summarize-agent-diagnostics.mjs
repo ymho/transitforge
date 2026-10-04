@@ -37,6 +37,9 @@ table(
   groupedDiagnostics(diagnostics),
 );
 console.log("");
+console.log("### Tool failures (including completed executions)");
+table(["Tool", "Error code", "Count", "Latest (UTC)"], failedToolRows(diagnosticMessages));
+console.log("");
 console.log("### Execution termination (separate from reply publication)");
 console.log("Usage cells show maximum (measured samples / group samples), not sums or percentiles. not_recorded is not zero. Legacy logs cannot reconstruct missing usage.");
 table(["Reason", "Stop reason", "Local limit", "Samples", "Model calls", "Read Tool calls", "Condition Tool calls", "Structured output calls", "Input tokens", "Output tokens", "Total tokens", "Latest (UTC)"],
@@ -172,4 +175,18 @@ function limitedToolRows(events) {
 
 function toolError(value) {
   return ["invalid_input", "precondition_failed", "unknown_tool", "not_found", "outside_coverage", "precondition_missing", "stale_revision", "permission_denied", "rate_limited", "unavailable", "ambiguous_entity", "execution_failed"].includes(value) ? value : "not_recorded";
+}
+
+function failedToolRows(events) {
+  const groups = new Map();
+  for (const event of events) {
+    if (event.phase !== "tool" || event.reason !== "failed") continue;
+    const name = text(event.refs?.[0]), code = toolError(event.toolErrorCode), at = timestamp(event.occurredAt) ?? "-";
+    const key = JSON.stringify([name, code]), group = groups.get(key) ?? { name, code, count: 0, at: "-" };
+    group.count++;
+    if (at > group.at) group.at = at;
+    groups.set(key, group);
+  }
+  return [...groups.values()].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 32)
+    .map(group => [group.name, group.code, String(group.count), group.at]);
 }

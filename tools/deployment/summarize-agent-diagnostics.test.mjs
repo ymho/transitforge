@@ -51,3 +51,12 @@ assert.equal(limited.status, 0, limited.stderr);
 assert.match(limited.stdout, /draft_itinerary \| failed \| invalid_input/);
 assert.match(limited.stdout, /draft_itinerary \| failed \| not_recorded/);
 assert.doesNotMatch(limited.stdout, /private-id|private-input|private-error/);
+
+writeFileSync(diagnostics, JSON.stringify([
+  JSON.stringify({ event: "agent_diagnostic", phase: "execution", reason: "completed", executionId: "private-id", occurredAt: "2026-10-04T08:28:16Z" }),
+  ...[1, 2].map(second => JSON.stringify({ event: "agent_diagnostic", phase: "tool", executionId: "private-id", reason: "failed", refs: ["draft_itinerary"], toolErrorCode: "unavailable", occurredAt: `2026-10-04T08:28:0${second}Z`, input: "private-input" })),
+]));
+const completedFailures = spawnSync(process.execPath, ["tools/deployment/summarize-agent-diagnostics.mjs", diagnostics, streams], { encoding: "utf8" });
+assert.equal(completedFailures.status, 0, completedFailures.stderr);
+assert.match(completedFailures.stdout, /draft_itinerary \| unavailable \| 2 \| 2026-10-04T08:28:02.000Z/);
+assert.doesNotMatch(completedFailures.stdout, /private-id|private-input/);

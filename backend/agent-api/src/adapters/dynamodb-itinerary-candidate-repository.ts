@@ -1,4 +1,4 @@
-import { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, TransactWriteItemsCommand, type AttributeValue } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, GetItemCommand, QueryCommand, TransactWriteItemsCommand, type AttributeValue } from "@aws-sdk/client-dynamodb";
 import { createItineraryCandidateSet, type ItineraryCandidateSet } from "@raiquora/trip/itinerary-candidates";
 import { conversationIdentifier, TripResourceError, tripIdentifier, validateMutation } from "../contracts/trip-api.js";
 import { requireTripPrincipal, type TripPrincipal } from "../ports/trip-repository.js";
@@ -6,7 +6,7 @@ import type { CandidateAdoptionPreviewReceipt, CandidateAdoptionReceiptRepositor
 
 const maximumCandidateBytes = 180_000;
 type Result = { Item?: Record<string, AttributeValue>; Items?: Record<string, AttributeValue>[]; LastEvaluatedKey?: Record<string, AttributeValue> };
-type CandidateCommand = GetItemCommand | PutItemCommand | QueryCommand | TransactWriteItemsCommand;
+type CandidateCommand = GetItemCommand | QueryCommand | TransactWriteItemsCommand;
 export interface CandidateDynamoClient { send(command: CandidateCommand): Promise<Result> }
 
 /** Candidate sets are immutable, bounded read models. They are not a second editable Trip source. */
@@ -17,10 +17,11 @@ export class DynamoDbItineraryCandidateRepository implements ItineraryCandidateR
   async put(principal: TripPrincipal, input: ItineraryCandidateSet): Promise<void> {
     const candidateSet = boundedCandidateSet(input), key = this.key(principal, candidateSet.contextRef.conversationId, candidateSet.id, candidateSet.revision);
     try {
-      await this.client.send(new PutItemCommand({ TableName: this.table, Item: { ...key, storageVersion: { N: "1" }, candidateSet: { S: JSON.stringify(candidateSet) }, expiresAtIso: { S: candidateSet.expiresAt } },
-        ConditionExpression: "attribute_not_exists(pk)" }));
+      // The streaming Agent may write this table only inside a transaction.
+      await this.client.send(new TransactWriteItemsCommand({ TransactItems: [{ Put: { TableName: this.table, Item: { ...key, storageVersion: { N: "1" }, candidateSet: { S: JSON.stringify(candidateSet) }, expiresAtIso: { S: candidateSet.expiresAt } },
+        ConditionExpression: "attribute_not_exists(pk)" } }] }));
     } catch (error) {
-      if (error instanceof Error && error.name === "ConditionalCheckFailedException") {
+      if (conditionalWriteFailed(error)) {
         const existing = await this.get(principal, candidateSet.contextRef.conversationId, candidateSet.id, candidateSet.revision);
         if (existing && JSON.stringify(existing) === JSON.stringify(candidateSet)) return;
         throw new TripResourceError("conflict");
@@ -45,10 +46,10 @@ export class DynamoDbItineraryCandidateRepository implements ItineraryCandidateR
   async putPreview(principal: TripPrincipal, value: CandidateAdoptionPreviewReceipt): Promise<CandidateAdoptionPreviewReceipt> {
     const receipt = boundedPreview(value), key = this.previewKey(principal, receipt.conversationId, receipt.mutationId), encoded = JSON.stringify(receipt);
     try {
-      await this.client.send(new PutItemCommand({ TableName: this.table, Item: { ...key, storageVersion: { N: "1" }, preview: { S: encoded } }, ConditionExpression: "attribute_not_exists(pk)" }));
+      await this.client.send(new TransactWriteItemsCommand({ TransactItems: [{ Put: { TableName: this.table, Item: { ...key, storageVersion: { N: "1" }, preview: { S: encoded } }, ConditionExpression: "attribute_not_exists(pk)" } }] }));
       return structuredClone(receipt);
     } catch (error) {
-      if (error instanceof Error && error.name === "ConditionalCheckFailedException") {
+      if (conditionalWriteFailed(error)) {
         const existing = await this.getPreview(principal, receipt.conversationId, receipt.mutationId);
         if (existing && JSON.stringify(existing) === encoded) return existing;
         throw new TripResourceError("mutation-reused");
@@ -93,6 +94,11 @@ export class DynamoDbItineraryCandidateRepository implements ItineraryCandidateR
     requireTripPrincipal(principal); conversationIdentifier(conversationId); tripIdentifier(mutationId);
     return { pk: { S: `OWNER#${principal.subject}` }, sk: { S: `CANDIDATE_ADOPTION#${conversationId}#${mutationId}` } };
   }
+}
+
+function conditionalWriteFailed(error: unknown): boolean {
+  return error instanceof Error && error.name === "TransactionCanceledException" &&
+    (error as Error & { CancellationReasons?: { Code?: string }[] }).CancellationReasons?.[0]?.Code === "ConditionalCheckFailed";
 }
 
 function boundedCandidateSet(value: ItineraryCandidateSet): ItineraryCandidateSet {

@@ -24,9 +24,7 @@ function fixture() {
       const item = records.get(key(command.input.Key!)); return item ? { Item: structuredClone(item) } : {};
     }
     if (command instanceof PutItemCommand) {
-      const k = key(command.input.Item!);
-      if (records.has(k)) throw Object.assign(new Error("conditional"), { name: "ConditionalCheckFailedException" });
-      records.set(k, structuredClone(command.input.Item!)); return {};
+      throw Object.assign(new Error("transaction-only policy"), { name: "AccessDeniedException" });
     }
     if (command instanceof QueryCommand) {
       expect(command.input.ConsistentRead).toBe(true); expect(command.input.Limit).toBe(50);
@@ -37,7 +35,16 @@ function fixture() {
     }
     if (command instanceof TransactWriteItemsCommand) {
       if (failDelete) { failDelete = false; throw new Error("private delete failure"); }
-      for (const action of command.input.TransactItems ?? []) records.delete(key(action.Delete!.Key!));
+      const actions = command.input.TransactItems ?? [];
+      const valid = actions.map(action => !action.Put || !records.has(key(action.Put.Item!)));
+      if (valid.includes(false)) throw Object.assign(new Error("conditional"), { name: "TransactionCanceledException",
+        CancellationReasons: valid.map(ok => ({ Code: ok ? "None" : "ConditionalCheckFailed" })) });
+      for (const action of actions) {
+        if (action.Put) {
+          expect(action.Put.ConditionExpression).toBe("attribute_not_exists(pk)");
+          records.set(key(action.Put.Item!), structuredClone(action.Put.Item!));
+        } else records.delete(key(action.Delete!.Key!));
+      }
       return {};
     }
     throw new Error("unexpected command");
@@ -46,6 +53,29 @@ function fixture() {
 }
 
 describe("owner-scoped retained candidate resources", () => {
+  it("retains candidates and adoption previews under the transaction-only Agent policy, with immutable replay", async () => {
+    const f = fixture();
+    await f.repository.put(owner, set); await f.repository.put(owner, set);
+    await expect(f.repository.put(owner, { ...set, coverage: { ...set.coverage, complete: false } })).rejects.toMatchObject({ code: "conflict" });
+    await f.repository.putPreview(owner, preview);
+    expect(await f.repository.putPreview(owner, preview)).toEqual(preview);
+    await expect(f.repository.putPreview(owner, { ...preview, confirmationKey: "b".repeat(64) })).rejects.toMatchObject({ code: "mutation-reused" });
+    expect(await f.repository.get(owner, conversationId, set.id, 0)).toEqual(set);
+    expect(await f.repository.getPreview(owner, conversationId, mutationId)).toEqual(preview);
+    expect(f.commands.some(command => command instanceof PutItemCommand)).toBe(false);
+  });
+
+  it("does not turn transaction permission or capacity failures into a successful replay", async () => {
+    for (const error of [Object.assign(new Error("private denial"), { name: "AccessDeniedException" }),
+      Object.assign(new Error("private cancellation"), { name: "TransactionCanceledException", CancellationReasons: [{ Code: "ProvisionedThroughputExceeded" }] })]) {
+      const commands: unknown[] = [];
+      const repository = new DynamoDbItineraryCandidateRepository("trips", { async send(command) { commands.push(command); throw error; } });
+      await expect(repository.put(owner, set)).rejects.toMatchObject({ code: "unavailable" });
+      await expect(repository.putPreview(owner, preview)).rejects.toMatchObject({ code: "unavailable" });
+      expect(commands.every(command => command instanceof TransactWriteItemsCommand)).toBe(true);
+    }
+  });
+
   it("binds candidate/adoption reads to owner+conversation and purges only that conversation", async () => {
     const f = fixture();
     await f.repository.put(owner, set); await f.repository.putPreview(owner, preview);
