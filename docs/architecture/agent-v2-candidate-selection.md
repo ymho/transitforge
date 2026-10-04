@@ -53,3 +53,11 @@ mutation IDは認証済みconversationとuser sequenceから決定し、1つの�
 同じ挙動の`3a5bf10f147dec8f7543eddcb3705ab9f783c5e0`の[Actions run 37170356201](https://github.com/ymho/transitforge/actions/runs/37170356201)では、#784の「挨拶→出雲大社→清水寺への訂正とカード→この候補を保存して」も選択turnを実モデルで独立3回確認した。3回とも上限内で完了し、Trip itemの追加・条件の再更新・再検索・再送時のモデル呼出しはなかった。初期3turnは実SDKの固定model、観光Providerと状態は合成fixtureである。
 
 実データの旅行検索、実画面操作、本番ホテルの選択保存はこのLive確認に含めていない。否定・仮定のあらゆる表現が保証されたとも扱わない。評価のためのbranch限定push workflowはマージ差分から外す。
+
+## 2026-10-04: ホテル施設参照の保存確認
+
+最小参照の保持を接続した`50d919fb697019228b295cd8170da475e4b51cfa`の[Actions run 37174189101](https://github.com/ymho/transitforge/actions/runs/37174189101)で、本番と同じSonnetによる選択turnを独立3回確認した。複数候補への曖昧な保存依頼、ホテル名指定、番号指定、単一候補の保存の4ケース×3回がすべて成功した。上限・期待値は緩めていない。
+
+初期検索は実SDKの固定modelで、Providerは合成API応答を実Http adapterと固定egressのhandler/Invoke契約へ通す。選択turnは実Bedrock/Strandsである。Tripと会話の状態はDynamoDB契約fixtureを使う。保存された宿泊先のホテル名、rakuten-travelの施設ID、楽天トラベルのサービス名、宿泊日と出所、既存Stayの置換、他所有者からの非公開、履歴receipt、再送時の重複防止・再検索なしを確認した。実ホテルAPI・実AWS保存・実画面操作のE2Eを実施したとは扱わない。
+
+ローカルでは`test:agent:v2`の340成功/1skip、全`npm test`（Frontend 1756、Backend 1459成功/15skip、stream 5、live fixture 9）、`workspace:check`、`architecture:check`、`build`を確認した。評価のためのbranch限定workflowは元に戻し、マージ差分から外す。
