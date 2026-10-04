@@ -2,272 +2,56 @@
 
 Agentic Transit Intelligence
 
-実時刻表をもとに列車の計画位置を3D地図へ表示する個人開発プロジェクト
+実時刻表をもとに列車の計画位置を3D地図へ表示し、旅行の相談から旅程を組み立てる個人開発プロジェクト。
 
-指定時刻に運行中の列車を動かしながら眺められるほか 混雑と遅延の表示 コンシェルジュによる列車案内と乗換3回までの経路検索に対応する
+## Current
 
-## 主な機能
+- Mapbox / Three.jsの列車表示と、取得できた遅延・混雑の運行情報。
+- Server Agentによる旅行相談、日付別時刻表の経路検索、観光・宿泊候補の比較。
+- 保存した旅程の一覧と日別タイムライン。検索済み経路・宿泊先の明示採用、予定の編集・経路全体の選び直し。
+- 任意のプロフィール「普段の出発地／好きなこと／いつも配慮してほしいこと」。今回の人数・日程・予算は各旅で扱う。
 
-- MapboxとThree.jsによる列車と全経路の3D表示
-- 現在時刻へ同期するリアルタイム列車表示
-- 端末のタイムゾーンに依存しない日本時間（Asia/Tokyo）基準の業務日付と24時を超える時刻の処理
-- 列車詳細 フォーカス 追跡 連結列車表示
-- リアルタイム運行状況での混雑 遅延位置 行き先変更 運休
-- 完全かつ新鮮な運行スナップショットだけを列車表示に使用
-- 天候と時間帯に応じた表示
-- 気象庁の公式防災情報と駅から目的地までの徒歩 車移動 飲食店候補
-- コンシェルジュによる列車検索 到着検索 直通または乗換3回までの経路検索
-- 旅行プロフィールの出発地 同行者 好みに基づく個別の旅行提案
-- UUIDで分けた会話セッションと端末内の旅程 継続的な好みの保存
-- 新しい会話の開始と端末内に保存した過去の会話へのページ再読み込みを伴わない切り替え
-- チャットと分離した移動 滞在 観光の旅程編集
-- 乗換ペースと経路優先の保存 自然言語による検索単位の上書き
-- 経路候補のタブ表示と路線色付きタイムライン
-- 直前の経路に対する途中停車駅の質問と区間列車の変更
-- 直前の経路を引き継いだ列車種別 列車名 特定列車の除外再検索
-- 乗りたい列車や種別 鈍行限定 乗換条件を経路より先に伝える対話検索
-- 混雑と遅延の履歴分析
+Homeの静的な入口以外はCognitoログインが必要。自己登録は無効で、新規アカウントは管理者が作成する。
+相談は認証済み`/api/agent-stream`のStrands v2専用Server Agentを使う。
+Conversation / Profile V3 / Trip V2の永続正本はServer API・DynamoDBであり、Browserに保存・復元・実行のfallbackはない。
+端末の経路検索設定と表示状態は[標準データモデル](docs/architecture/domain-model.md)を参照する。
 
-経路検索は収録路線内の直通列車と乗換3回までの列車を対象とする
-宿泊候補はコンシェルジュから日程と行き先を指定して検索できる
-宿泊候補は地図上で評価 料金 空室状況を比較して旅程へ選択できる
-日付別空室検索を設定していない環境では参考最安料金だけを表示し 空室を推測しない
+## ローカル起動
 
-## 開発環境
-
-Node.jsのバージョンは`.nvmrc`を正とする
-依存管理はrootのnpm workspaceと`package-lock.json`を正本にする
-Viewerは`frontend` workspaceで実行する
+Node.jsは[.nvmrc](.nvmrc)、依存管理はrootのnpm workspaceと`package-lock.json`を正とする。
 
 ```bash
 nvm use
-npm install
+npm ci
 cp .env.example .env.local
 npm run dev
 ```
 
-ローカルURLは`http://localhost:5173`を使う
-`delays.json`がない場合や運行スナップショットが古い場合は現在時刻のダイヤ上の列車位置を表示する。運行実績ではない旨を明示し、未取得の混雑・遅延は表示しない。
+入口は`http://localhost:5173`。地図表示には`.env.local`のMapbox公開トークンとdata-builder生成の
+`viewer-input/train_index.json` / `viewer-input/path_catalog.json`が必要。
+混雑・遅延が未取得または古い場合は計画位置を表示し、運行情報未取得を明示する。
+通常の相談・保存には認証設定とBackendが必要。公開設定の取得は[dev環境](infra/terraform/environments/dev/README.md)、
+合成データでのUI確認は[workspaceのDEV preview](docs/architecture/trip-workspace.md#開発確認)を参照する。
 
-旅程UIだけをAPIやBedrockなしで確認する場合は開発サーバーを起動して
-`http://localhost:5173/?trip-preview=1`を開く。検索済み経路と宿泊候補を含むダミー旅程を表示し
-LocalStorageの旅程は上書きしない。滞在カードの「地図で宿泊先を選ぶ」から 評価 参考料金
-空室状況を含む固定候補を地図上で確認できる
-
-Trip V2のread/proposal workspaceは`http://localhost:5173/?trip-workspace-preview=1`で確認する。
-DesktopはTripとChatを並べ、Mobileは会話/旅程で切り替える。これはAPIなしのsynthetic previewであり、
-変更案の確認はメモリ内のみ。本番のTrip V2保存はServer APIが正本で、legacy migrationは存在しない。
-責務と確認方法は[Trip workspace](docs/architecture/trip-workspace.md)を参照する。
-
-局地天気の見た目だけを外部APIなしで確認する場合は
-`http://localhost:5173/?weather-preview=mixed`を開く
-大阪付近を東西へ約1km動かすごとに 晴れ 曇り 雨が切り替わる固定データをMapboxのネイティブ表現で表示する
-通常のURLではBackendから日本全体の天気を最初にまとめて取得し 地図移動時は最寄りの取得済み地点へ即座に切り替える
-ズーム7以上では移動停止後に表示範囲を2×2から4×4で追加取得し 拡大するほど細かな現在値または予報へ切り替える
-
-`.env.local`へMapboxの公開アクセストークンを設定する
-ブラウザへ渡る値なので必要最小限の権限に限定し Gitへ追加しない
-
-ローカル表示には`transitforge-data-builder`が生成した次のファイルが必要
-
-```text
-viewer-input/train_index.json
-viewer-input/path_catalog.json
-viewer-input/congestion.json
-viewer-input/delays.json
-```
-
-入力形式は[ビューワー入力仕様](docs/data/viewer-input.md)を参照
-
-## リポジトリ構成
-
-```text
-modules/train/       列車 駅 経路座標と業務時刻の共有Domain
-modules/operation/   遅延 混雑 運休 行き先変更の共有Domain
-modules/journey/     経路条件 候補 比較 直通検索の共有Domain
-modules/trip/        旅行候補 費用 Profile TripContext 旅程の共有Domain
-frontend/src/domain/          Viewerと端末内状態に閉じた決定論的な契約と計算
-frontend/src/usecases/        ユースケースと外部境界のPort
-frontend/src/adapters/        ブラウザ HTTP Mapbox Bedrockへの接続
-frontend/src/presentation/    画面機能ごとのView CSS Three.js描画
-frontend/src/composition/     Viewerの依存組成
-backend/agent-api/  Node.js Agent APIの契約 Application Adapter Lambda entrypoint
-infra/               パッケージ契約とTerraform
-tests/               境界fixtureとrepository保守toolのPythonテスト
-tools/               検証 評価 再生成コマンド
-```
-
-production AgentはADR 0096に従うStrands v2専用である。`modules/agent/runtime`は共通契約を、`backend/agent-api/src/adapters`は実行ループを所有する。旧Runtime・旧Prompt・旧評価Actionsは#788で撤去した。画面は#721のv2専用`AssistantTurnView`を使い、live・履歴・replayを同じpublic projectionから描画する。旧表示union・質問ガイド・外部カードは撤去した。
-本番BrowserはCognito Access TokenでRegional RESTへ接続し、相談は常に`/api/agent-stream`を通る。
-Conversationは`/api/conversations/v1`、Profileは`/api/profile/v1`、Trip V2は`/api/trips/v1`がServer正本である。
-Bedrock・Server Tool・Evidence・Traceは`backend/agent-api`が所有する。Browser Agent Runtime、Browser Trip writer、
-Browser起動時recheck、legacy migrationとそれらへのfallbackは存在しない。Browser storageはUI状態だけに限る。
-
-本番Agent Lambdaは`backend/agent-api`のNode.js bundleを使う
-TypeScriptのテストは対象モジュールの隣へ置く。repository保守toolとfixtureの更新方法は
-[テストガイド](tests/README.md)を参照する。AWSリソース名など互換性に関わる
-`transitforge`識別子は製品名とは分けて維持する
-
-責務と依存方向は[モジュール境界](docs/architecture/module-boundaries.md)
-計算の正本は[Domainの所有権](docs/architecture/domain-ownership.md)
-移行結果は[TypeScript構成再編の完了監査](docs/architecture/typescript-reorganization-audit.md)を参照する
-
-旅行機能の設計は [Trip V2契約](docs/architecture/trip-lifecycle.md)を参照する。Tripは会話と独立した
-Server V2 resourceであり、Browserにlegacy TravelPlan/TripPlanのwriterやmigration原本は残さない。
-[Trip天候候補と局所変更](docs/architecture/trip-weather-replanning.md)は、候補検索へ予報の対象日・鮮度・Evidenceを結び付け、検索とTripへの採用を分離する。
-[相対時間・日別投影・旅行構造・負荷契約](docs/architecture/trip-time-structure-workload.md)は、日付未定の意図を
-Tripへ保持しつつ、日別表示と負荷を`Trip.items`からrevision-boundに導出する。
-[費用・成立性・複数案・再計画の契約](docs/architecture/plan-variants-feasibility-and-replan.md)は、請求明細、
-全体時間制約、採用前PlanVariant、scenario耐性と局所再評価をTrip正本から分離する。
-[Agent・旅行案のSecurity / Privacy threat model](docs/architecture/agent-security-privacy.md)は、外部入力、owner境界、
-候補採用、partial stream、保持・削除の防御と実行負例を対応付ける。
-
-#388の[Trip server保存基盤](docs/architecture/trip-server-persistence.md)はowner-scoped Repositoryと
-認証済み公開Trip CRUDを提供する。CAS/冪等性はServer V2 writerで適用し、Browserのlegacy writerへ戻さない。
-
-[#398 の Reservation](docs/architecture/trip-reservation.md)は採用済みTripとは独立した予約resourceとする。
-内部のowner-scoped保存・変更確認・Workspace/Agent向けprivate値を除いたread projectionを実装した。
-公開CRUDは認証gateの内側に閉じ、実予約・取消APIは実装しない。開発用Workspaceで5種類の予約状態を確認できる。
-
-[#402 の Trip Feasibility](docs/architecture/trip-feasibility.md)は採用済み旅程を決定論的に
-成立/不成立/未確認へ評価し、WorkspaceとAgentへ表示する。readyは変更後Tripの評価とCASを通す。
-未知情報を成立と扱わず、本番writer・認証gateは引き続きOFFとする。
-
-## 確認コマンド
-
-[#393 の Trip monitoring](docs/architecture/trip-monitoring.md)は採用済み計画から独立したWatch、
-外部Event、revision付きImpactの内部境界を提供する。
-[#394 の鉄道Impact](docs/architecture/rail-trip-impact.md)は内部subject逆引き・決定論的評価・owner-scoped保存を追加する。
-IAM-onlyの内部呼出seamであり、自律的な再チェック・利用者通知・public writerはまだ有効ではない。
-[#408の天気・警報Impact](docs/architecture/weather-hazard-trip-impact.md)は同じ内部routing/保存を再利用し、
-trustedな地域と旅程の時間精度に基づき暴露と未確認事項を記録する。自動再取得・通知はまだ有効ではない。
+## 通常の確認
 
 ```bash
+npm run docs:check
 npm run architecture:check
-npm test
-npm run test:trip:v2:gate
 npm run build
-python3 -m unittest discover -s tests -v
-npm run lambda:check:built
-npm run eval:agent:smoke
 ```
 
-作業中は変更箇所のtargeted testを使い、仕上げの全量確認は原則1回にする。同じrevisionで成功済みの
-CI確認を理由なく繰り返さない。`architecture:check`は`workspace:check`を含む。
-`npm test`は経路シナリオ、Agent v2 Acceptanceの共有39ファイル、Strandsの保存済みfixtureも含む。
-`test:trip:v2:gate`だけは独立したAcceptance checkで実行する。build済みなら`lambda:check:built`で
-再buildせず検証する。buildから行う単独の入口として`lambda:check`も維持する。
+作業中は対象のテストを使い、PRの全量検証は同じrevisionのCI結果を再利用する。
+全量・Acceptance・有料Liveの使い分けは[テストガイド](tests/README.md)を参照する。
 
-以下は必要な範囲だけを単独で調査・評価するコマンドであり、毎回追加実行する確認一覧ではない。
+## 詳細への入口
 
-```bash
-npm run test:journey-scenarios
-npm run eval:agent:full
-npm run eval:agent -- --case cancelled-service
-npm run test:agent:v2
-npm run test:agent:strands:live-fixtures
-npm run eval:agent:strategies
-```
+- [プロダクト概要](docs/product-brief.md): 現在の利用者価値と対象外。
+- [モジュール境界](docs/architecture/module-boundaries.md) / [Domainの所有権](docs/architecture/domain-ownership.md): コードの配置と依存方向。
+- [標準データモデル](docs/architecture/domain-model.md) / [プロフィール](docs/architecture/travel-profile.md) / [Trip workspace](docs/architecture/trip-workspace.md): 正本・保存先・画面。
+- [共通認証境界](docs/architecture/authentication-boundary.md) / [Server Agent](docs/architecture/server-agent-cutover.md): 公開経路と実行責務。
+- [Viewer入力](docs/data/viewer-input.md) / [Infrastructure](infra/README.md): データと運用。
+- [ADR索引](docs/decisions/README.md): 当時の判断履歴。Historical節のコマンドやgateを現行手順として使わない。
 
-Agent Benchmarkは42件を収録し 曖昧要求 運休 遅延 制約 情報不足 複数Tool
-のカテゴリ別に5指標を出す。失敗したcase IDは`--case`で単独再実行できる
-戦略実験はsingle pass 結果駆動再計画 常時Reflectionの品質と相対コストを比較する
-
-通常の`eval:agent`は再現可能な保存済みObservationを採点し CIの回帰検知に使う。
-Browser Runtimeを直接起動するscripted Ask/Progressと旧decision Live Evalは#481 Batch 1で撤去した。
-v2の実行・条件反映・Evidence・保存・再送は`test:agent:v2`とBackendのnative SDK composition testsで確認する。
-旧モデル比較・旧Semantic単独Live Evalは#788で撤去した。現在の実モデル検証は
-`Agent Eval / Strands v2 Live`と`eval:agent:strands:live`を使う。AWS認証と課金を伴い、
-通常CIのfixture成功を実モデル・実Provider・画面の合格と同一視しない。
-設定と復旧は[Agent v2実環境運用](docs/architecture/agent-v2-development-cutover.md)を参照する。
-過去のTrip Progress評価記録とthresholdは履歴として各architecture文書に残すが、現行コマンドではない。
-公開の最新事実読取は既存end-user認証gate（501）を維持する。
-会話Contextの保持と評価の限界は[会話品質監査](docs/architecture/conversation-quality-audit.md)を参照する。
-
-経路検索のシナリオだけを確認する場合は次を実行する
-
-```bash
-npm run test:journey-scenarios
-```
-
-非公開S3から取得した会話Feedbackをローカルで匿名化・集約する場合は次を使う。
-生会話は標準出力とreportへ出さず `reports/`はGit管理対象外とする。
-
-```bash
-python3 tools/analyze_conversation_feedback.py \
-  --input-dir /path/to/private-feedback \
-  --from 2026-08-01 --to 2026-08-31 --limit 200 --dry-run \
-  --output-json reports/feedback.json \
-  --output-markdown reports/feedback.md
-```
-
-分析済みclusterをIssue候補として確認する場合はExporterをdry-runで実行する。
-作成時は人が確認したfingerprintだけを明示する。
-
-```bash
-python3 tools/export_feedback_issues.py reports/feedback.json
-python3 tools/export_feedback_issues.py reports/feedback.json \
-  --create --approved-fingerprint 0123456789abcdef
-```
-
-シナリオは`tests/fixtures/journey-search-scenarios.json`へ追加する
-IDまたは名前を引数へ渡すと対象を絞り込める
-
-入力データの規模を確認する場合は次を実行
-
-```bash
-python3 tools/measure_viewer_input.py \
-  viewer-input/train_index.json \
-  viewer-input/path_catalog.json
-```
-
-## データとAIの境界
-
-- viewer inputの生成は`transitforge-data-builder`が担当
-- 現在地の座標は最寄り駅の選択だけに使い AWSやモデルへ送信しない
-- ブラウザやBedrockへ全履歴を渡さず Lambdaで決定的に絞り込む
-- 利用者の暦日は4時境界で業務日付へ変換し 日付別の生成済みダイヤを検索する
-- AIへ表示時刻変更 列車フォーカス レイヤー切替を公開せず 検索結果表示と手動地図操作を分離
-- 外部Agent向けMCPは内部Agentと同じDomain Serviceを使い 読み取り専用の5能力だけを公開
-- AWS認証情報や秘密値をソース Terraform変数ファイル stateへ保存しない
-
-詳細は[プロダクト概要](docs/product-brief.md) [モジュール境界](docs/architecture/module-boundaries.md) [Domainの所有権](docs/architecture/domain-ownership.md) [標準データモデル](docs/architecture/domain-model.md) [コンシェルジュの境界](docs/architecture/ai-operations-guide.md) [Issue運用](.github/ISSUE_MANAGEMENT.md) [ADR](docs/decisions/README.md)を参照
-
-## AWS
-
-Cognito Access Tokenから既存Tripのownerへ接続する[共通認証境界](docs/architecture/authentication-boundary.md)を
-Backendに用意している。公開APIへの接続、ログインUI、本番Trip writerはまだ有効化していない。
-
-静的ビューワー AI Lambda 混雑と遅延の保存基盤をTerraformで管理する
-継続的なデプロイはGitHub ActionsとOIDCを使用し 固定AWSアクセスキーを使わない
-
-`CI / Test`はPRとmain revisionを検証する。`CD / Deploy`はmainのCI成功後または
-mainからの手動実行だけでdev環境を更新する。両者は別Workflowとして権限と結果を分離する
-
-通常CIはTypeScriptテスト・build/Python・ブラウザ・Terraformを並列に確認し、全ジョブの成功を既存の`test` checkへ
-集約する。失敗・取消・skipも成功として扱わない。`Agent v2 / Acceptance`の自動実行は固有のTrip gateだけを
-確認し、共有39ファイルを通常CIと二重実行しない。全Acceptanceの単独再実行は手動入力`full_suite`で行う。
-Browserは実行に使うChromium headless shellだけを取得し、Playwright version別にcacheする。
-
-環境固有の値はGitHub EnvironmentまたはGit管理外のローカル変数で与える
-詳しい入口は[Terraform dev環境](infra/terraform/environments/dev/README.md)を参照
-
-## ライセンス
-
-ライセンス未設定
-外部データや生成物をこのリポジトリへ含めない
-
-## 利用者認証
-
-ログインはCognito Managed LoginとPKCEを使い、公開設定はTerraform出力から配信する。
-自己登録は無効で、新しい利用者はCognito管理者だけが作成する。既存アカウントは引き続きログインできる。
-Homeの静的な入口を除き、相談、旅程、プロフィール、通知、経路設定、地図・列車・運行情報はログイン後だけ起動する。
-未認証の直リンクはHomeへ戻し、地図と運行データを読み込まない。残存`/api/agent` operationを含む業務APIも
-Cognito Access Tokenと`raiquora/user` scopeを必須とする。CloudFrontのBasic認証は使用しない。
-[認証境界](docs/architecture/authentication-boundary.md)と[SPA認証ADR](docs/decisions/0069-use-cognito-managed-login-for-spa.md)を参照する。
-
-## Server Agent統合（#480）
-
-[cutover統合とTool inventory](docs/architecture/server-agent-cutover.md)を正とする。
-productionは認証済みREST streamからServer AgentのConversation turn・Context・Tool・final保存へ接続する。
-Browser Agentへのfallbackはなく、Server Agent障害時は相談を停止する。
+製品表示名は現行UIのRaiquoraに合わせる。`ymho/transitforge`、`@raiquora/*`、AWS resource名・API path・保存キーは互換性のため維持する。
+ライセンス未設定。外部データ・生成物・秘密値をGitへ追加しない。

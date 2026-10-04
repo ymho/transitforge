@@ -1,45 +1,41 @@
-# TypeScript Agent API
+# TypeScript Agent API（Current）
 
-Node.jsで動作するAgent APIのBackend Application
+Node.js BackendのApplication / Port / Adapter / Lambda entrypoint。
+Domain計算は`modules/*/domain`、Provider非依存Context / Tool / Evidence契約は`modules/agent/runtime`に置く。
+AWS SDK / Bedrock / Strandsの具体型はAdapterへ閉じ、BrowserやHTTP eventを内側へ持ち込まない。
 
-Lambda eventとHTTP応答 operation dispatch Domain Tool接続を所有する
-本番LambdaはこのworkspaceをbundleしたNode.js artifactを使用する
+| production入口 | 実行・保存の責務 |
+| --- | --- |
+| `agent-stream-lambda.ts` | 認証済み`/api/agent-stream` → `createProductionServerAgent` → Strands v2専用SDK loop / Server Tool / Conversation turn保存 |
+| `personal-state-lambda.ts` | `/api/conversations/v1` / `/api/profile/v1` → owner-scoped Conversation / Profile V3 |
+| `trip-api-lambda.ts` | `/api/trips/v1` → TripApplication / 採用preview・confirm / revision・CAS・receipt |
+| `lambda.ts` | 残存`/api/agent`の独立read operation。汎用会話・feedback・traceは410。旧Agent Runtimeではない |
 
-Trip APIはAgent operationとは独立した `trip-api-v1` 契約を持つ。trusted server principalを全操作に要求し、
-認証済み公開routeがServer V2のwriter/CASを提供する。
-詳細は[Trip server保存基盤](../../docs/architecture/trip-server-persistence.md)を参照する。
+`server-agent-composition.ts`はServerAgentRuntimeRunnerを必須入力とし、productionはStrands v2を渡す。
+旧Runtime / Prompt / Semantic pre-loop / Browser fallbackは撤去済み。画面はv2専用AssistantTurnViewへ投影する。
+Conversation / Profile V3 / Trip V2はServer正本で、LocalStorage migration / dual-writeはない。
 
-## 境界
-
-- `contracts`: Lambda event リクエスト HTTP応答のversioned contract
-- `ports`: Bedrock S3 DynamoDBなど外部能力を抽象化する境界
-- `usecases`: operation選択 入力検証 構造化ログ FeedbackとTraceのbounded record
-- `adapters`: S3など外部技術をPortへ変換する実装
-- `handler.ts`: AWS eventをApplicationへ渡す薄い入口
-
-AWS SDKの型は`contracts` `ports` `usecases` `handler.ts`へ持ち込まない
-
-Feedback v1 v2とAgent Traceは既存schema S3 key prefix サイズ上限を維持する
-保存ログには会話本文や保存失敗の例外内容を含めない
-
-Bedrock会話は`ConversationModel` Portを通し provider固有の`system` `toolConfig`
-`inferenceConfig`と応答検証をAdapter内へ閉じる。Applicationへ返すmetadataはmodel ID
-latency token usageだけに限定する
-
-代表ダイヤはS3 AdapterでgzipとETag cacheを扱い 検索Usecaseは最大5件に制限する
-混雑と遅延はDynamoDB AdapterがAttributeValueを正規化し `@raiquora/operation`が
-4時境界の業務日付 未観測値 日次 時間別 列車別の集計規則を所有する
-
-経路探索は`@raiquora/journey`の直通indexと多目的探索を正本とし S3 Adapterは
-日付別gzip indexと当日snapshotの取得だけを担う。Agentは経路や乗換を再計算しない
+`npm run build`は各専用bundleを生成し、`infra/packaging`のmanifestがsource / handlerの正本。
+代表ダイヤ・日付別経路入力はS3 Adapter、運行集計はDynamoDB Adapter / shared Domainへ委譲する。
+宿泊は固定egress LambdaへIAM Invokeし、Provider credentialsをAgentへ渡さない。
 
 ## 確認
 
 ```bash
 npm run build --workspace @raiquora/agent-api
 npm run test --workspace @raiquora/agent-api
-npm run lambda:check --workspace @raiquora/agent-api
+npm run lambda:check:built
 ```
+
+全量とAcceptanceを同じrevisionで重複実行しない。[テストガイド](../../tests/README.md)を参照する。
+Current契約は[Server Agent](../../docs/architecture/server-agent-cutover.md)、[認証](../../docs/architecture/authentication-boundary.md)、
+[Server state](../../docs/architecture/server-state-persistence.md)、[Trip保存](../../docs/architecture/trip-server-persistence.md)、
+[Streaming](../../docs/architecture/agent-streaming-production.md)を参照する。
+
+## Historical: Wave 2B / #462 PoC
+
+> 以下は移行前の実装・検証記録。2026-10-05のmain `32d51f6`で履歴として分離した。
+> 旧runner・型・未接続の記述とコマンドは現行の組成手順ではない。
 
 ## Server Agent Application（Wave 2B）
 
@@ -68,10 +64,3 @@ npm run typecheck --workspace @raiquora/agent-api
 `agent-stream-poc-lambda.ts`は独立したdefault-off検証入口で、production package/routeへは未接続。
 既存Server AgentをApplication event sinkで観測し、認証後にprogress/final/errorをSSEへ変換する。
 [検証記録](../../docs/experiments/agent-stream-462.md)と[ADR 0070](../../docs/decisions/0070-select-regional-rest-agent-streaming.md)に再現手順・測定値・未実施のAWS gateを記録する。
-
-## Production Server Agent Streaming
-
-`npm run build`は`dist/agent-stream/index.cjs`も生成する。manifestは
-`infra/packaging/agent-stream.json`。既存stream adapterとCognito verifierを使い、Server Applicationを接続する。
-production Browserは常にこの経路を利用する。runtime false gateやBrowser fallbackはない。
-構成・監視・確認コマンドは[Streaming実装記録](../../docs/architecture/agent-streaming-production.md)を参照。

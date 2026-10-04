@@ -1,4 +1,29 @@
-# Trip V2: 正本契約と段階移行
+# Trip V2: 正本契約（Current）
+
+Trip V2はproduction Server正本。独立UUID / schemaVersion 2 / revision / TripRequest / items / planningState / lifecycleStateを
+`modules/trip/domain`のvalidatorで検証し、認証済み`/api/trips/v1`のTripApplication / Repositoryで保存する。
+Conversation metadataのtripIdは参照だけで、会話削除はTripを削除しない。Profile V3は任意3項目の別resource。
+Browserに旧TripPlan reader / writer / fallback / migrationはない。
+
+| 境界 | Currentの契約 / 詳細 |
+| --- | --- |
+| 条件・仮定・人数 | Trip.request。受理済み会話条件とProfile hintを区別する。[TripRequest](trip-request.md) / [Profile V3](travel-profile.md) |
+| 計画・旅行状態 | Tripのplanning / lifecycleを正本にし、固定質問順を作らない。[状態](trip-state.md) |
+| 日時と予定 | transport / stay / activity、fixed / window / day / relative / unscheduled、calendar binding。[Schedule](trip-schedule.md) / [相対時間・構造](trip-time-structure-workload.md) |
+| 採用 | verified候補と採用Snapshotを分離。railは予定値と取得できた種別・列車名・行先、宿は保持許諾済み最小施設参照。[候補選択](agent-v2-candidate-selection.md) |
+| 保存 | create / applyMutation / archive、owner-scoped CAS / mutation receipt / outbox。同一再送を重複保存しない。[Server保存](trip-server-persistence.md) / [更新](trip-concurrency.md) |
+| 表示 | 専用旅程一覧・日別タイムライン。削除はarchive。集約準備パネルは撤去し、予約保護・成立性評価は保持。[workspace](trip-workspace.md) |
+| 公開範囲 | Trip writerは有効。共有 / in-trip / 通知の501 gate、Reservation / Checklistの未公開は別境界。[認証台帳](authentication-boundary.md) |
+
+一次根拠: `modules/trip/domain/trip.ts` / `trip-request.ts` / `itinerary-schedule.ts`と隣接test、
+`backend/agent-api/src/ports/trip-repository.ts` / `usecases/trip-application.ts`、`infra/terraform/environments/dev/agent-stream.tf`。
+以下は2026-09-12の#415設計と段階実装の判断履歴である。型の骨格・migration matrix・未有効gateを現在のAPIとして扱わない。
+現行型の詳細はコードを正とし、各Current文書へ進む。
+
+## Historical: #415の最終設計・段階migration（監査main 31a6517）
+
+> 以下は導入時点の実装範囲・検証記録。2026-10-05のmain `32d51f6`で履歴として分離した。
+> 当時の未有効gate・旧型・旧パス・コマンド・後続予定は現行手順ではない。現在の契約は上のCurrent節を参照する。
 
 決定日: 2026-09-12。設計の親方針は [#382](https://github.com/ymho/transitforge/issues/382)、
 本契約の担当は [#415](https://github.com/ymho/transitforge/issues/415)、判断記録は

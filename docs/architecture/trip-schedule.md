@@ -1,4 +1,19 @@
-# Trip V2 Schedule導入 (#386)
+# Trip Schedule（Current）
+
+ItineraryScheduleはfixed / window / day / unscheduledに加え、相対日を扱う現行Domain型を使う。
+ZonedInstantは明示offsetとIANA zoneを検証し、端末timezoneや今日で欠損を補完しない。
+選択済み鉄道は予定発着とfixed schedule、宿はcheck-in/outのday spanを整合させる。
+宿のoptional plannedTimingは利用者の予定時刻で、宿泊spanをfixedへ変えない。日別表示は同じitem IDから導出する。
+一次根拠: `modules/trip/domain/itinerary-schedule.ts` / `itinerary-schedule.test.ts`、
+`modules/trip/domain/trip.ts`、[相対時間・構造](trip-time-structure-workload.md)と[最新UI差分](product-timeline-design.md)。
+保存はServer CAS。旧converter / writer未有効 / UI後続の説明は#386当時の記録。
+
+保存・認可は[Trip保存](trip-server-persistence.md)、型契約は[Trip lifecycle](trip-lifecycle.md)を参照する。
+
+## Historical: #386のschedule導入
+
+> 以下は導入時点の実装範囲・検証記録。2026-10-05のmain `32d51f6`で履歴として分離した。
+> 当時の未有効gate・旧型・旧パス・コマンド・後続予定は現行手順ではない。現在の契約は上のCurrent節を参照する。
 
 親方針は[#382](https://github.com/ymho/transitforge/issues/382)、正本契約は
 [#415](https://github.com/ymho/transitforge/issues/415)、[ADR 0052](../decisions/0052-establish-trip-v2-contract-and-migration.md)。

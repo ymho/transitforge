@@ -1,4 +1,33 @@
-# Conversation / Profile Server保存・Context復元 — #479 Phase A/B
+# Conversation / Profile Server保存（Current）
+
+`/api/conversations/v1` / `/api/profile/v1` → 専用personal-state Lambda → 共通Cognito verifier →
+TrustedPrincipal → Application → owner-scoped DynamoDB server-stateが永続正本。
+Browserは認証済みHTTP clientで一覧・履歴・Profileを取得し、表示用メモリだけを保持する。
+LocalStorage import / fallback / dual-writeはない。[標準データモデル](domain-model.md)と[認証境界](authentication-boundary.md)を参照する。
+
+| Resource | owner内のkey / 保存契約 |
+| --- | --- |
+| Conversation metadata / message | `CONVERSATION#<UUID>` / `MESSAGE#<conversationId>#<sequence>`。一覧・履歴はcursorで読む |
+| Profile V3 | `PROFILE_V3`。`usualOrigin` / `interests` / `considerations`だけ。旧`PROFILE` / v2を読込・移行しない |
+| Conversation turn / working state | 同ownerのreceipt・public final・受理条件。完了済み再送ではmodel / Tool / 保存を再実行しない |
+
+更新はexpectedRevisionのCASを使う。Profile削除は本文のない世代fenceを残す。
+会話削除はmetadataを直ちに非表示化し、message / turn receiptの削除をcompleteになるまで続行する。
+会話のtripIdは独立Tripへの参照で、会話削除はTripを削除しない。archive / detachは会話を消さない。
+自動TTLやアカウント退会時の全件purgeの完成を宣言しない。PITR回復時には削除要求の扱いが必要となる。
+
+Server Context Loaderは同ownerのTrip、Profile V3、直近最大12件のtext履歴を読み、取得後のrevisionを再確認する。
+ProfileはEffective Intentで解決したreference-only hintから投影し、生Profileを並列の優先順位判断材料にしない。
+public finalの構造化表示は[Conversation turn保存](conversation-turn-persistence.md)と[表示契約](agent-v2-publication.md)を参照する。
+
+一次根拠: `backend/agent-api/src/personal-state-api-composition.ts`、`adapters/dynamodb-profile-repository.ts`、
+`usecases/agent/server-state-context-loader.ts`と各隣接test、`infra/terraform/environments/dev/server-state.tf` / `agent-stream.tf`。
+[Profile V3](travel-profile.md)の自動保存はIMEとaccount世代を保護し、Tripを暗黙更新しない。
+
+## Historical: #479 Phase A/Bの基盤導入
+
+> 以下は導入時点の実装範囲・検証記録。2026-10-05のmain `32d51f6`で履歴として分離した。
+> 当時の未有効gate・旧型・旧パス・コマンド・後続予定は現行手順ではない。現在の契約は上のCurrent節を参照する。
 
 ## 範囲とownership
 

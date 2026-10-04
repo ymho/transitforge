@@ -1,4 +1,18 @@
-# Trip V2の計画・旅行状態 (#383)
+# Tripの計画・旅行状態（Current）
+
+Trip.planningState / lifecycleStateがServer Trip V2の正本。段階の固定順やTool routerを作らない。
+planningはinspiration / candidate_discovery / candidate_selection / itinerary_draft / itinerary_refinement / ready、
+lifecycleはpre_trip / in_trip / completed / cancelled。readyは変更後Tripの成立性とCASを検証し、未知を成立と扱わない。
+時計だけでcompletedにせず、採用予定を訪問実績と混同しない。
+一次根拠: `modules/trip/domain/trip-state.ts` / `trip-state.test.ts`、`backend/agent-api/src/usecases/trip-application.ts`。
+旧Browser producer・状態復元・migrationは撤去済み。以下のwriter未導入記録は#383当時に限定する。
+
+保存・認可は[Trip保存](trip-server-persistence.md)、型契約は[Trip lifecycle](trip-lifecycle.md)を参照する。
+
+## Historical: #383の状態導入
+
+> 以下は導入時点の実装範囲・検証記録。2026-10-05のmain `32d51f6`で履歴として分離した。
+> 当時の未有効gate・旧型・旧パス・コマンド・後続予定は現行手順ではない。現在の契約は上のCurrent節を参照する。
 
 正本は #382/#415、[ADR 0052](../decisions/0052-establish-trip-v2-contract-and-migration.md)、
 [Trip lifecycle最終契約](trip-lifecycle.md)。#387までの同じTripへ状態を加える。

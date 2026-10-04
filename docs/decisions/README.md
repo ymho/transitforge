@@ -107,6 +107,7 @@ Server Runtime・Stateの新構成は#478以降で決定する。
 - [ADR 0073: 根拠付き旅行案を構造化選択から描画する](0073-render-grounded-travel-plans-from-structured-selections.md) — 一般旅行相談でEvidenceに結び付いた行程・AI概算・写真をApplicationが一括描画する。
 
 - [ADR 0074: Agent task・意味判断・会話Working Stateを型付き契約にする](0074-establish-agent-task-decision-and-working-state-contracts.md) — 型付き判断、提示参照、原子的Working State、production-shaped Evalの共有境界を定める。
+- [ADR 0075: 相対時間をTrip意図として保持し日別表示と負荷を導出する](0075-model-relative-trip-time-and-derived-days.md)
 - [ADR 0076: Agent Context・Provider schema・Tool実行をversioned contractで接続する](0076-compile-agent-context-and-provider-contracts.md) — Structured Outputs、Prompt Cache、段階Context、typed Tool runtime、privacy-safe diagnosticsの境界を定める。
 
 - [ADR 0077: 旅行候補発見をObservation lineageへ統合する](0077-unify-travel-discovery-with-observation-lineage.md) — Evidenceの観測scope、Applicability、Web/Knowledge/Rerankの共通契約を定める。
@@ -116,3 +117,19 @@ Server Runtime・Stateの新構成は#478以降で決定する。
 - [ADR 0081: 30日・90日測定後も単一Trip aggregateとimmutable receiptを維持する](0081-retain-single-trip-aggregate-after-scale-measurement.md) — items/bytes/receipt測定に基づきchunk移行を見送り、既存CAS正本を維持する。
 - [ADR 0082: 本番model routingを層別Final Evalの実測で判定する](0082-gate-model-routing-on-layered-final-evaluation.md) — A/B/C/D、2×2、未測定、反復、routing公開条件を分離する。
 - [ADR 0096: Agent実行ループをStrandsへ移しApplication契約を外側に保つ](0096-use-strands-for-agent-v2-execution.md) — #631の意味・権限・保存・Evidenceを維持し、汎用model/tool loopだけをStrandsへ委譲する。
+- [ADR 0083: 会話の意味差分を回答公開より先に受理する](0083-accept-conversation-meaning-before-publishing-an-answer.md)
+- [ADR 0084: 権限とframeを保ったEffective Intentを一度だけ導出する](0084-compile-effective-intent-with-authority-and-frames.md)
+- [ADR 0085: Tool actionとEvidenceをEffective Intentへ束縛する](0085-bind-tool-actions-and-evidence-to-effective-intent.md)
+- [ADR 0086: Profileをversion付きreference-onlyの普段の好みとして解決する](0086-resolve-profile-as-versioned-reference-only-preferences.md)
+- [ADR 0087: 普段の好み設定をcompactな自動保存UIにする](0087-autosave-compact-reference-profile-settings.md)
+- [ADR 0088: Application受理済み意味receiptだけを公開する](0088-publish-application-semantic-receipts.md)
+- [ADR 0089: 縮退応答はEffective Intentと検証済みEvidenceだけから作る](0089-degraded-response-from-effective-intent.md)
+- [ADR 0090: Bind verified conversation intent to request proposals](0090-bind-verified-intent-to-request-proposals.md)
+- [ADR 0091: 意味Proposalの採用をdurable reservationで直列化する](0091-adopt-intent-proposals-with-a-durable-reservation.md)
+- [ADR 0092: Resolve conversation scope selectors in Application](0092-resolve-conversation-scope-selectors-in-application.md)
+- [ADR 0093: Trace semantic phases from observed boundaries](0093-trace-semantic-phases-from-observed-boundaries.md)
+- [ADR 0094: 意味解釈を入力分離したgoldで採点する](0094-score-semantic-intent-with-separated-gold.md)
+- [ADR 0095: 複数ターン意味状態をServer Application経路で採点する](0095-run-multi-turn-semantics-through-server-application.md)
+- [ADR 0097: V2の出力構文と終端処理を標準ライブラリへ統一する](0097-use-sdk-native-structured-output.md)
+- [ADR 0098: Agent v2の基準モデルをNova 2 Liteへ変更する](0098-use-nova2-lite-for-agent-v2.md)
+- [ADR 0099: OTPで徒歩・バス経路を照会する](0099-use-otp-for-bus-and-walk-ground-routes.md)

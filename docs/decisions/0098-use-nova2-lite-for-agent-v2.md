@@ -1,6 +1,7 @@
 # ADR 0098: Agent v2の基準モデルをNova 2 Liteへ変更する
 
-- ステータス: Accepted
+- ステータス: Accepted（実サービスのモデル指定は部分置換）
+- Current: [Agent v2実環境運用](../architecture/agent-v2-development-cutover.md)。Terraform単体のNova 2 Lite既定は残るが、dev CDはSonnet 4.6を明示する。以下のNova merge gateは当時の評価方針。
 - 日付: 2026-09-26
 - 関連: ADR 0096、ADR 0097、#716、#724
 

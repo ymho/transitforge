@@ -66,6 +66,9 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
+      - name: Check Current documentation and historical links
+        run: npm run docs:check
+
       - name: Check architecture boundaries
         run: npm run architecture:check
 

@@ -24,8 +24,8 @@ Bedrockは判断とProposalを担うがTrip永続状態の所有者ではない�
 | 表示日時 業務時刻 列車フォーカス | `frontend/src/domain`と`frontend/src/usecases/viewer` | PresentationがUsecase Portを利用 | TypeScriptの隣接テスト |
 | 経路条件 候補 比較 直通検索 CSA 乗換判定 順位付け | `modules/journey/domain` | Node Agent APIが日付別indexをAdapterから渡す | shared moduleとjourney search scenario |
 | 遅延予測 遅延と混雑の履歴分析 | `modules/journey/domain`と`modules/operation/domain` | Agent Toolは計算済みの応答を変更せず利用 | shared module test Agent Eval |
-| 旅行候補 既知価格の費用集計 Profile TripContext 旅程 外部旅行情報のEvidenceと鮮度 天気 Place 再確認 | `modules/trip/domain` | Browser保存と外部Providerを境界の外へ分離 | shared module LocalStorage migration provider contractのテスト |
-| Agent Runtime Tool Evidence Trace Policy | `modules/agent/runtime`、実行責務はBackend Application | ServerのConversationModel/Tool Portへ接続。Browser組成は#480まで同じcoreを利用 | core隣接testとServer fake/Bedrock-weather縦切り |
+| 旅行候補 既知価格の費用集計 Profile TripContext 旅程 外部旅行情報のEvidenceと鮮度 天気 Place 再確認 | `modules/trip/domain` | Server保存と外部Providerを境界の外へ分離。端末の経路設定・表示状態は別 | shared module / Server owner・CAS / Provider contractのテスト |
+| Agent Runtime Tool Evidence Trace Policy | `modules/agent/runtime`、実行責務はBackend Application | Backend AdapterのStrands v2 loopとServer Toolへ接続。Browserは入力・表示・HTTPだけ | core隣接testとServer fake/Bedrock-weather縦切り |
 | HTTP Bedrock AWS 外部提供者の形式 | `frontend/src/adapters`と`backend/agent-api/src/adapters` | Domainへ変換してからUsecaseへ渡す | Adapter contract testとLambda package check |
 | 会話metadata・履歴 | `backend/agent-api` のConversation Application | BrowserはHTTP clientとmemory read modelで表示・選択する。永続状態はDynamoDB | owner-scoped Application/APIとfrontend controller test |
 
@@ -35,7 +35,7 @@ TypeScriptの`JourneySearchService`と探索engineは`modules/journey`が公開�
 日付別時刻表とprivateな運行データの取得だけをBackend Adapterへ分離する
 ブラウザとLLMは返された候補を表示 比較 フォーカスできるが CSAや乗換判定を再実装しない
 
-FrontendとBackendの通信境界はversioned HTTP contractである。Agent移行中のProvider非依存Application coreのみ、[ADR 0068](../decisions/0068-place-agent-runtime-in-server-application.md)に従い明示workspaceで共有する
+FrontendとBackendの通信境界はversioned HTTP contractである。Provider非依存のContext / Tool / Evidence契約は[ADR 0068](../decisions/0068-place-agent-runtime-in-server-application.md)に従い明示workspaceで共有する
 シナリオfixtureは境界をまたぐ期待挙動の適合試験として扱う
 
 ## 重複を許容する範囲
@@ -54,13 +54,13 @@ FrontendとBackendの通信境界はversioned HTTP contractである。Agent移�
 
 ## Agentからの利用
 
-本番Agentは共通RuntimeのTool Adapterから`JourneySearchService`を利用する。
+本番Strands v2 AgentはServer Tool Adapterから`JourneySearchService`を利用する。
 UI向けの経路 旅行 会話型への変換は鉄道探索を再実装せず 検証済みTool結果を投影する。
 
 Agent APIは外部APIとLambda entrypointを維持したまま Domain Application Adapterへ分ける
 ファイル移動だけで責務が変わったことにせず 依存方向とテストで所有権を確認する
 
-外部旅行ToolのBrowser状態収集は`frontend/src/usecases/agent/external-travel-tools.ts`に残す。天気descriptorと外部Evidence変換は`modules/agent/runtime`を正本とし、Server Toolも同じ契約を使う。
+外部旅行Toolの登録・実行はBackendが所有する。天気descriptorと外部Evidence変換は`modules/agent/runtime`を正本とし、Server Toolも同じ契約を使う。
 Bedrock AdapterはToolを再定義せず 共通Registryへ登録する。Provider固有payloadの取得と正規化は
 `backend/agent-api/src/adapters`が所有し 認証情報はProviderごとのPortからだけ参照する。
 

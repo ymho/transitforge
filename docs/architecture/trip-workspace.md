@@ -1,4 +1,58 @@
-# Trip V2 workspace（#390）
+# Trip workspace（Current）
+
+保存済み旅程は専用の一覧から開き、日別タイムライン / 日時未定の予定として表示する。
+相談は同じTripを参照する別の画面。共通ナビゲーションは相談 / 旅程 / 運行 / 設定。
+旧DesktopのTrip / Chat / Map常設並列配置を現行UIとして扱わない。
+
+`TripWorkspaceSource`はApplicationへのread / preview / confirm接続口で、別のRepositoryではない。
+本番はServer sourceを使い、loading / unavailableでも旧writerへ戻らない。編集はProposal → 確認 → Server CAS → 再取得。
+候補は採用済みitemsと分離し、候補ID・対象item・期限・Evidence・保持許諾をApplicationで検証する。
+
+- transport / stay / activity、日付・window・fixed・未定、相対日とcalendar bindingを同じTripから投影する。
+- 選択済み鉄道は全legs / 乗換間隔と、保持済み種別・列車名・行先を表示する。欠損は推測せず任意時刻編集を拒否する。
+- stayは日別にチェックイン / 連泊 / チェックアウトを投影する。plannedTimingは利用者の予定で、施設受付時間・空室・予約ではない。
+- 人数はTripRequest.partyを参照する。Profileから補完しない。participants等の参照がある場合の変更は既存保護を通す。
+- 費用は折りたたむ。準備 / 次に決めること / 確認ポイントの集約パネルは撤去し、成立性評価・予約保護・adoption / CASは保持する。
+- 単一transport候補はpublic sourceRef / Journey ID等が一意に一致する場合だけ検索カードへ採用操作を統合する。
+
+一次根拠: `frontend/src/presentation/trip-plan/trip-workspace.ts`、`trip-route-timeline.ts`、
+`trip-timeline-interaction.test.ts`、`frontend/src/presentation/home/ai-first-shell.ts`、
+`frontend/src/usecases/trip-plan/server-trip-workspace-source.ts`と隣接test。
+[最新UI差分](product-timeline-design.md)、[Server保存](trip-server-persistence.md)、[候補選択](agent-v2-candidate-selection.md)を参照する。
+
+## 開発確認
+
+```bash
+npm run dev
+```
+
+| DEV URL | 現存する実装 / 確認範囲 |
+| --- | --- |
+| `http://localhost:5173/?trip-workspace-preview=1` | `frontend/src/dev/trip-workspace-preview.ts`。多都市・時刻精度・仮定・参考EUR価格・未定予定の合成Trip。確認操作はメモリ内だけ |
+| `http://localhost:5173/?home-preview=data` | `frontend/src/dev/home-preview.ts`。合成Trip sourceをattachする。Home自体はHeroで、一覧は通常Server list sourceを使う |
+| `http://localhost:5173/?home-preview=loading` / `?home-preview=error` / `?home-preview=empty` | 一覧sourceの表示stateを置き換える。実APIの成功・認証・保存の証明ではない |
+| `http://localhost:5173/?weather-preview=mixed` | `frontend/src/dev/weather-grid-preview.ts`。地図天気の固定データ。地図表示には認証とMapbox設定・Viewer入力が必要 |
+
+flagの接続口は`frontend/src/composition/viewer-composition.ts`のDEV分岐。
+通常の画面認証は迂回しない。Backend / Bedrockの実データを使わない合成sourceでも、ログイン済み画面か
+`tools/verify_viewer_startup.mjs`の合成認証・APIによるブラウザ確認を使う。API不要を認証不要と読み替えない。
+公開auth設定の取得は[dev環境](../../infra/terraform/environments/dev/README.md)を参照する。
+合成fixtureは実運行・空室・予報・予約でも本番保存先でもない。撤去済みのlegacy previewは現行操作に含めない。
+
+## 経路全体の選び直し
+
+選択済みの移動予定は「経路全体を選び直す」から同じ予定IDを相談対象にして再検索する。
+再検索・比較・採用プレビューでは保存済みの経路をリセットしない。採用を確認した時だけ、
+その予定の経路・乗換・日時を新しい候補全体で置き換える。変更をやめた場合は元の経路が残る。
+一般の旅程相談からの再検索でも、検証済み候補と選択済み経路の始点・終点・日付が一意に一致すれば
+その経路項目を置き換え対象にする。同じ日の未選択の別移動枠より優先し、複数一致は対象を決め直す。
+選択済み経路があり始点・終点が一致しない検索は、追加・別区間・一部分の検索の区別を日付だけで推測せず、
+画面で相談対象を指定してから採用候補を保持する。
+
+## Historical: #390 / #392 / #398 / #402のworkspace導入
+
+> 以下は導入時点の実装範囲・検証記録。2026-10-05のmain `32d51f6`で履歴として分離した。
+> 当時の未有効gate・旧型・旧パス・コマンド・後続予定は現行手順ではない。現在の契約は上のCurrent節を参照する。
 
 #805で旅程一覧→日別タイムラインへ刷新した。[表示・操作・モデル差分](product-timeline-design.md)を参照。費用・準備・成立性は「旅程の詳細」に残す。
 
@@ -146,13 +200,3 @@ npm run eval:agent:decision:live -- --suite trip-progress --case J-refinement --
 
 server保存・migration・source供給は#388、revision/CAS/冪等性は#389。
 全旅程feasibility #402、予約UI #398、共同編集/共有 #399、通知は未実装のまま残す。
-
-## 経路全体の選び直し
-
-選択済みの移動予定は「経路全体を選び直す」から同じ予定IDを相談対象にして再検索する。
-再検索・比較・採用プレビューでは保存済みの経路をリセットしない。採用を確認した時だけ、
-その予定の経路・乗換・日時を新しい候補全体で置き換える。変更をやめた場合は元の経路が残る。
-一般の旅程相談からの再検索でも、検証済み候補と選択済み経路の始点・終点・日付が一意に一致すれば
-その経路項目を置き換え対象にする。同じ日の未選択の別移動枠より優先し、複数一致は対象を決め直す。
-選択済み経路があり始点・終点が一致しない検索は、追加・別区間・一部分の検索の区別を日付だけで推測せず、
-画面で相談対象を指定してから採用候補を保持する。

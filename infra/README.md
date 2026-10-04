@@ -47,17 +47,18 @@ CIとCDはいずれもLambda packageを事前検証する
 - package失敗: `npm run lambda:check`
 - Terraform構文とprovider: `terraform validate`
 - 予定外のresource差分: `terraform plan -refresh=false`
-- Lambda起動失敗: handler名とzip rootの`index.mjs`を確認
+- Lambda起動失敗: 対象`packaging/*.json`のhandlerとzip rootのbundle名を確認
 - Backend機能の回帰: `npm test`
 
 credential tfstate tfvarsの内容をIssue PR logへ貼らない
 
-## Trip保存基盤（#388）
+## Trip保存（Current）
 
 `environments/dev/trips.tf`は専用owner-scoped DynamoDB table（on-demand/暗号化/PITR/削除保護）と
-既存Lambda roleへのtable限定CRUD/Query権限を定義する。Scanや公開Trip routeは追加しない。
-認証Adapter未導入のためpublic Trip handlerは利用不可。内部組成はtable名を明示し、全操作にtrusted principalを渡す。
-通常UIのwriter有効化は#389と認証レビュー後。詳細は[Trip保存基盤](../docs/architecture/trip-server-persistence.md)。
+専用roleへのtable限定権限を定義する。公開routeは`agent-stream.tf`が既存Regional RESTの`POST /api/trips/v1`へ接続する。
+Cognito authorizer / Backend verifier → TrustedPrincipal → 専用Trip API hostが本番writer / CASを提供する。
+Conversation / Profile V3はpersonal-state host、相談はStrands v2専用stream hostに分離する。
+Scan・Browser writer・legacy migrationを導入しない。詳細は[Trip保存](../docs/architecture/trip-server-persistence.md)。
 PITRは再生成できない計画の回復性を優先し、保存量に応じた費用を許容する。TTLで自動削除しない。
 
 ## TripChanged内部配送（#407）

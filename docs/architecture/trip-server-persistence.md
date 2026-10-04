@@ -1,4 +1,30 @@
-# Trip server resource foundation（#388）
+# Trip Server保存（Current）
+
+Trip V2は認証済みPOST `/api/trips/v1` → 専用Trip API Lambda → TripApplication → owner-scoped Repositoryが永続正本。
+GatewayとBackendがCognito Access Token / `raiquora/user`を検証し、ownerはTrustedPrincipalから決める。
+BrowserにTrip本文・revisionのLocalStorage保存、legacy migration、dual-write、取得失敗時fallbackはない。
+
+`Trip.schemaVersion = 2`、wire `trip-api-v1`、DB `storageVersion`、編集revisionは別概念。
+`OWNER#<subject>` / `TRIP#<uuid>`内でcreate / get / cursor list / mutation / archiveを処理し、全table Scanを行わない。
+変更はbaseRevision / mutationId / Proposalを用い、Trip更新・receipt・outboxを原子的に保存する。
+応答消失後の同一mutation再送は同じreceiptを使い、競合時は再取得・再提案・再確認へ戻す。
+[更新契約](trip-concurrency.md)と[候補選択](agent-v2-candidate-selection.md)を参照する。
+
+Conversation metadataのtripIdは独立Tripへの参照。会話削除・参照解除でTripを削除しない。
+Browserは一覧cursorを収集してから表示し、途中失敗を空一覧へ変換しない。
+HomeはHeroだけで、保存済みTripは専用の旅程一覧から開く。
+一覧の「削除」はarchiveによる非表示化で本文を保持し、通常の復元UI・永久削除APIはない。予約取消ではない。
+
+一次根拠: `backend/agent-api/src/trip-api-composition.ts` / `trip-handler.ts`、
+`usecases/trip-application.ts` / `adapters/dynamodb-trip-repository.ts`と隣接test、
+`frontend/src/adapters/http/server-trip-client.ts` / `usecases/trip-plan/server-trip-workspace-source.ts`、
+`infra/terraform/environments/dev/trips.tf` / `agent-stream.tf`。
+画面とDEV previewは[Trip workspace](trip-workspace.md)、公開しない共有・通知・予約等は[認証台帳](authentication-boundary.md)を参照する。
+
+## Historical: #388 / #389 / #454の保存基盤・migration導入
+
+> 以下は導入時点の実装範囲・検証記録。2026-10-05のmain `32d51f6`で履歴として分離した。
+> 当時の未有効gate・旧型・旧パス・コマンド・後続予定は現行手順ではない。現在の契約は上のCurrent節を参照する。
 
 #451第一段階で[共通trusted principal / Cognito verifier](authentication-boundary.md)を追加した。
 検証済みissuer + subを既存`TripPrincipal.subject`へ写す。以下のProvider未導入記述は導入時の記録である。
