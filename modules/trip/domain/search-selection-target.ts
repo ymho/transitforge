@@ -1,5 +1,26 @@
 import { bindRelativeSchedule, bindTimelineFromAnchor, type ItinerarySchedule } from "./itinerary-schedule";
 import type { ItineraryItem, Trip } from "./trip";
+import { normalizeStationName } from "@raiquora/train/station-name";
+
+/** A reselection concerns the complete adopted journey, not an individual leg.
+ * Only verified endpoint facts are compared; titles are never identity. */
+export function matchingRailSelectionTargets(items: readonly ItineraryItem[], trip: Trip): readonly ItineraryItem[] {
+  const endpoints = (item: ItineraryItem): readonly string[] | undefined => {
+    if (item.type !== "transport" || item.detail.status !== "selected" || item.detail.mode !== "rail") return undefined;
+    const legs = item.detail.journey.legs;
+    if (!legs.length) return undefined;
+    return [normalizeStationName(legs[0]!.origin.name), normalizeStationName(legs.at(-1)!.destination.name)];
+  };
+  const expected = items.length ? endpoints(items[0]!) : undefined;
+  if (!expected || !items.every(item => {
+    const actual = endpoints(item);
+    return actual?.[0] === expected[0] && actual[1] === expected[1];
+  })) return [];
+  return trip.items.filter(item => {
+    const actual = endpoints(item);
+    return actual?.[0] === expected[0] && actual[1] === expected[1];
+  });
+}
 
 /** Match verified calendar days, never names or model-authored destination labels.
  * An undated or multiply matching slot remains ambiguous. All alternatives must

@@ -27,6 +27,16 @@ function button(root: ParentNode, text: string) { return [...root.querySelectorA
 afterEach(() => { document.body.replaceChildren(); vi.unstubAllGlobals(); });
 
 describe("Trip workspace DOM and mobile navigation", () => {
+  it("starts whole-route reselection with a stable item focus and keeps the adopted itinerary unchanged", () => {
+    const trip = multiCityTrip(), before = structuredClone(trip);
+    const f = setup({ getCurrentTrip: () => trip });
+    button(f.ui.panel, "旅程").click();
+    const card = f.ui.panel.querySelector<HTMLElement>('[data-item-id="movement"]')!;
+    button(card, "経路全体を選び直す").click();
+    expect(f.controller.uiFocus()).toEqual({ itemId: "movement" });
+    expect(f.ask).toHaveBeenCalledWith(expect.stringContaining("経路全体を再検索"));
+    expect(f.controller.current()).toEqual(before); expect(f.controller.proposal()).toBeUndefined();
+  });
   it("shows an unsaved draft on the itinerary screen and requires preview then explicit save", async () => {
     const trip = createTrip(placesTripId, "出雲旅行", placesAt), confirm = vi.fn(async () => undefined);
     const adopt = vi.fn(async () => ({ changes: { added: 1, replaced: 0, removed: 0 }, confirm }));

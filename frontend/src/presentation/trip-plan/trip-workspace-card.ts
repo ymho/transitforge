@@ -79,7 +79,12 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   actions.append(dayLabel, control("日付変更案", () => safe(() => controller.preview(proposeTripItemChange(controller.current()!,
     { action: "change-day", itemId: item.id, dayKey: day.value })))));
   if (item.type === "stay") actions.append(control("宿候補を相談", () => { controller.focus(item.id); options.chat("この宿泊予定の候補を比較したい"); }));
-  if (item.type === "transport") actions.append(control("交通手段を選ぶ", () => { controller.focus(item.id); options.chat("この移動区間の交通手段を相談したい"); }));
+  if (item.type === "transport") actions.append(control(item.detail.status === "selected" ? "経路全体を選び直す" : "交通手段を選ぶ", () => {
+    controller.focus(item.id);
+    options.chat(item.detail.status === "selected"
+      ? "この移動予定の経路全体を再検索して選び直したい。新しい経路を採用するまで元の経路を残し、変更をやめたら元の経路のままにしてください。ほかの予定は変更しないでください"
+      : "この移動区間の交通手段を相談したい");
+  }));
   actions.append(control("＋ この後の予定を相談", () => { controller.focus(item.id); options.chat("この予定の後に追加する予定を相談したい"); }));
   const editor = element("form", "trip-workspace-editor"); editor.hidden = true;
   const label = element("label", "", "予定の名称 "); const title = element("input"); title.value = item.title; title.required = true; title.maxLength = 200;

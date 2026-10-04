@@ -75,6 +75,56 @@ it("does not choose between unresolved slots without a target", () => {
   expect(searchSelectionDraft(items, trip, "missing")).toBeUndefined();
   expect(searchSelectionDraft(items, trip, "outbound")?.variants[0]?.items[0]?.baseItemId).toBe("outbound");
 });
+it("replaces the complete selected outbound journey, preserving it on cancellation and the other six items on adoption", async () => {
+  const timetable = { ...index, services: { ...index.services,
+    direct: { ...index.services.direct, destination_station: "京都", calls: [
+      { station_name: "向日町", departure_time_minutes: 600 }, { station_name: "京都", arrival_time_minutes: 610 }] },
+    connection: { service_uid: "connection", train_no: "12M", service_type: "普通", train_name: "", origin_station: "京都", destination_station: "出雲市",
+      calls: [{ station_name: "京都", departure_time_minutes: 620 }, { station_name: "出雲市", arrival_time_minutes: 680 }] },
+  } };
+  const routes = (departureTimeMinutes: number) => verifiedJourneySelectionItems(searchJourneyIndex({ serviceDate: index.service_date,
+    originStation: "向日町", destinationStation: "出雲市", departureTimeMinutes, maxTransfers: 1, limit: 3 }, { index: timetable }), timetable, at);
+  const original = { ...routes(600)[0]!, id: "outbound", title: "ユーザーが付けた往路の名前" };
+  expect(original).toMatchObject({ detail: { journey: { legs: [{ serviceUid: "direct" }, { serviceUid: "connection" }] } } });
+  const others: ItineraryItem[] = [
+    { id: "local", type: "transport", title: "出雲市 → 出雲大社前", schedule: { type: "day", date: index.service_date, timeZone: "Asia/Tokyo" }, detail: { status: "unresolved" } },
+    { id: "return", type: "transport", title: "帰路", schedule: { type: "day", date: "2026-10-05", timeZone: "Asia/Tokyo" }, detail: { status: "unresolved" } },
+    ...verifiedAccommodationSelectionItems([hotel().offering], [hotel().proof], at),
+    ...Array.from({ length: 3 }, (_, i): ItineraryItem => ({ id: `visit-${i}`, type: "activity", category: "sightseeing", title: `観光${i}`, schedule: { type: "unscheduled" } })),
+  ];
+  const trip = createTrip(tripId, "旅行", at, [original, ...others]), before = structuredClone(trip);
+  const items = routes(700), draft = searchSelectionDraft(items, trip)!;
+  expect(draft.variants[0]?.items[0]?.baseItemId).toBe("outbound");
+  expect(draft.variants[0]?.retainedBaseItemIds).toEqual(others.map(item => item.id));
+  expect(searchSelectionDraft(items, { ...trip, items: [...trip.items, { ...original, id: "duplicate" }] })).toBeUndefined();
+  expect(searchSelectionDraft(items, trip, others[2]!.id)).toBeUndefined();
+  const partial = verifiedJourneySelectionItems(searchJourneyIndex({ serviceDate: index.service_date,
+    originStation: "向日町", destinationStation: "京都", departureTimeMinutes: 600, maxTransfers: 0, limit: 3 }, { index: timetable }), timetable, at);
+  expect(searchSelectionDraft(partial, trip)).toBeUndefined();
+  expect(searchSelectionDraft(items, { ...trip, items: trip.items.map(item => item.id === "outbound"
+    ? { ...original, schedule: { type: "day", date: "2026-10-05", timeZone: "Asia/Tokyo" } } : item) })).toBeUndefined();
+  const fixture = tripDynamoFixture(); fixture.clock.now = () => new Date(at); fixture.seed(trip, stateA.subject);
+  const candidates = new DynamoDbItineraryCandidateRepository("trips", fixture.client);
+  const retained = await new PlanCandidateRetentionApplication(candidates, () => new Date(at)).retain(
+    { principal: stateA, executionId: "whole-route", conversationId, tripId, baseTripRevision: 0, userRequest: "往路全体を選び直す" }, draft, []);
+  const application = new TripApplication(fixture.repository, { attach: vi.fn(), detach: vi.fn(), reference: vi.fn() }, fixture.clock,
+    new ReservationApplication(fixture.repository, new DynamoDbReservationRepository("trips", fixture.client)));
+  const adoption = new PlanCandidateAdoptionApplication(candidates, fixture.repository, candidates, application,
+    (item, context) => trustedCandidateItem(item, context.candidateSetId, context.variantId, context.retainedItem, context.selectedAt), () => new Date(at));
+  if (retained.presentation.candidateSetRef.kind !== "candidate-set-ref") throw new Error("Candidate was not retained");
+  const request = { operation: "preview" as const, conversationId, tripId, candidateSetId: retained.presentation.candidateSetRef.candidateSetId,
+    candidateSetRevision: 0, variantId: "option-1", baseTripRevision: 0, mutationId: "75800000-0000-4000-8000-000000000002" };
+  const preview = await adoption.execute(stateA, request);
+  expect(preview.status).toBe("confirmation-required");
+  if (preview.status !== "confirmation-required") throw new Error("Missing preview");
+  expect(preview.preview.changes).toEqual({ added: 0, replaced: 1, removed: 0 });
+  // Leaving the preview/research without confirming needs no compensating write.
+  expect(trip).toEqual(before); expect(await fixture.repository.get(stateA, tripId)).toEqual(before);
+  await adoption.execute(stateA, { ...request, operation: "confirm" }, { confirmationKey: preview.confirmationKey });
+  const saved = (await fixture.repository.get(stateA, tripId))!;
+  expect(saved.items).toHaveLength(7); expect(saved.items.slice(1)).toEqual(others);
+  expect(saved.items[0]).toMatchObject({ id: "outbound", detail: { journey: { legs: [{ serviceUid: "later" }], transfers: [] } } });
+});
 it.each(["journey", "accommodation"] as const)("adopts the original %s through the button boundary and replays after expiry without another write", async kind => {
   const trips = tripDynamoFixture(); let now = new Date(at); trips.clock.now = () => now;
   const trip = createTrip(tripId, "旅行", at); trips.seed(trip, stateA.subject);

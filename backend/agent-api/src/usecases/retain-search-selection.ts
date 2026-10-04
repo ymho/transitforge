@@ -1,9 +1,9 @@
 import type { ItineraryItem, Trip } from "@raiquora/trip/trip";
-import { datedSearchSelectionTarget } from "@raiquora/trip/search-selection-target";
+import { datedSearchSelectionTarget, matchingRailSelectionTargets } from "@raiquora/trip/search-selection-target";
 import type { CanonicalPlanCandidateDraft } from "./plan-candidate-retention.js";
 
-/** Retain only server-verified items. Existing unresolved slots need a unique or
- * explicitly focused target; alternatives never overwrite a different item. */
+/** Retain without changing the Trip. A focused item or uniquely matching whole
+ * selected journey precedes unresolved slots. Adoption alone replaces the item. */
 export function searchSelectionDraft(items: readonly ItineraryItem[], trip: Trip, focusedItemId?: string): CanonicalPlanCandidateDraft | undefined {
   if (!items.length || items.length > 5 || items.some(item => item.type !== items[0]!.type)) return undefined;
   if (focusedItemId && !trip.items.some(item => item.id === focusedItemId)) return undefined;
@@ -11,9 +11,18 @@ export function searchSelectionDraft(items: readonly ItineraryItem[], trip: Trip
   const slots = trip.items.filter(item => item.type === kind &&
     (item.type === "transport" && item.detail.status === "unresolved" || item.type === "stay" && item.selection.status === "unselected"));
   const focused = focusedItemId ? trip.items.find(item => item.id === focusedItemId && item.type === kind) : undefined;
-  const dated = !focused && slots.length > 1 ? datedSearchSelectionTarget(items, slots, trip) : undefined;
-  if (!focused && slots.length > 1 && !dated) return undefined;
-  const target = focused ?? dated ?? slots[0];
+  if (focusedItemId && !focused) return undefined;
+  const selected = !focused ? matchingRailSelectionTargets(items, trip) : [];
+  const reselection = selected.length ? datedSearchSelectionTarget(items, selected, trip) : undefined;
+  // An ambiguous matching journey must never fall through to a different slot.
+  if (selected.length && !reselection) return undefined;
+  // Once a route is adopted, an unmatched search may concern a new journey or
+  // just one of its legs. Calendar proximity alone cannot establish that intent.
+  if (!focused && !reselection && kind === "transport" && trip.items.some(item =>
+    item.type === "transport" && item.detail.status === "selected")) return undefined;
+  const dated = !focused && !reselection && slots.length > 1 ? datedSearchSelectionTarget(items, slots, trip) : undefined;
+  if (!focused && !reselection && slots.length > 1 && !dated) return undefined;
+  const target = focused ?? reselection ?? dated ?? slots[0];
   return { selectionItems: structuredClone(items), coverage: { coveredScopes: ["取得済み候補の旅程への採用"], omittedScopes: [], complete: true },
     variants: items.map((item, index) => ({ id: `option-${index + 1}`, label: item.title, timeline: { dayOrder: [], itemOrder: ["selection-item"] },
       items: [{ componentId: "selection-item", kind: item.type, title: item.title, schedule: structuredClone(item.schedule),
