@@ -1,5 +1,10 @@
 # Agent v2 テスト戦略 — greenfield acceptance
 
+本番診断では、モデル呼出し前のApplication入力拒否を`v2:turn_input:invalid_input`、
+`v2:turn_input:unresolved_intent`、`v2:turn_input:context_budget`に分ける。
+本文・Trip ID・認証情報・例外本文は記録しない。入力拒否ではモデルを呼ばず、
+上限や入力検証を緩和しない。この診断変更だけでは保存の失敗を解決したとは扱わない。
+
 Agent v2はStrandsを使うgreenfield実装であり、V1 `MultiStepAgentRuntime` の内部挙動を再現することを目的にしない。
 
 ## Cutover gateの優先順位

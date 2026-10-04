@@ -34,6 +34,15 @@ assert.equal(unsafe.status, 0, unsafe.stderr);
 assert.match(unsafe.stdout, /runtime \| failed \| - \| true \| 1/);
 assert.doesNotMatch(unsafe.stdout, /private:secret/);
 
+writeFileSync(diagnostics, JSON.stringify(["context_budget", "invalid_input", "unresolved_intent", "private-input"].map(kind =>
+  JSON.stringify({ event: "agent_diagnostic", phase: "runtime", reason: "failed", mode: `v2:turn_input:${kind}`, incomplete: true, occurredAt: "2026-10-04T10:14:01Z" }))));
+const inputFailures = spawnSync(process.execPath, ["tools/deployment/summarize-agent-diagnostics.mjs", diagnostics, streams], { encoding: "utf8" });
+assert.equal(inputFailures.status, 0, inputFailures.stderr);
+assert.match(inputFailures.stdout, /v2:turn_input:context_budget/);
+assert.match(inputFailures.stdout, /v2:turn_input:invalid_input/);
+assert.match(inputFailures.stdout, /v2:turn_input:unresolved_intent/);
+assert.doesNotMatch(inputFailures.stdout, /private-input/);
+
 writeFileSync(diagnostics, JSON.stringify([
   JSON.stringify({ event: "agent_diagnostic", phase: "runtime", reason: "failed", mode: "v2:publication:missing_reply_proposal", incomplete: true, occurredAt: "2026-09-24T12:00:02Z" }),
 ]));
