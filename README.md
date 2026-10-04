@@ -97,7 +97,7 @@ tests/               境界fixtureとrepository保守toolのPythonテスト
 tools/               検証 評価 再生成コマンド
 ```
 
-productionの現行Agentは移行完了まで`modules/agent/runtime/agent-runtime.ts`を使用する。Agent v2はADR 0096に従い、#631の共通契約を再利用しつつStrandsの実行Adapterを`backend/agent-api`へ段階導入する。
+production AgentはADR 0096に従うStrands v2専用である。`modules/agent/runtime`は共通契約を、`backend/agent-api/src/adapters`は実行ループを所有する。旧Runtime・旧Prompt・旧評価Actionsは#788で撤去した。画面の旧表示型の分離は#721で扱う。
 本番BrowserはCognito Access TokenでRegional RESTへ接続し、相談は常に`/api/agent-stream`を通る。
 Conversationは`/api/conversations/v1`、Profileは`/api/profile/v1`、Trip V2は`/api/trips/v1`がServer正本である。
 Bedrock・Server Tool・Evidence・Traceは`backend/agent-api`が所有する。Browser Agent Runtime、Browser Trip writer、
@@ -154,8 +154,8 @@ npm run eval:agent
 npm run eval:agent:smoke
 npm run eval:agent:full
 npm run eval:agent -- --case cancelled-service
-npm run eval:agent:model:live -- --strategy candidate --repetitions 3
-npm run eval:agent:semantic:live -- --limit 10 --repetitions 3 --max-calls 30 --max-input-tokens 250000 --max-output-tokens 100000 --max-estimated-usd 1
+npm run test:agent:v2
+npm run test:agent:strands:live-fixtures
 npm run eval:agent:strategies
 ```
 
@@ -165,15 +165,11 @@ Agent Benchmarkは42件を収録し 曖昧要求 運休 遅延 制約 情報不�
 
 通常の`eval:agent`は再現可能な保存済みObservationを採点し CIの回帰検知に使う。
 Browser Runtimeを直接起動するscripted Ask/Progressと旧decision Live Evalは#481 Batch 1で撤去した。
-`eval:agent:model:live`は現行Server Agent、System Prompt、model class policyを使い、実Feedback由来の
-会話品質3ケースを合成Provider結果で反復する。合成結果も本番と同じExternalTravelInformationと
-Evidence mapperを通し、回答が参照するEvidence IDを生成する。AWS認証と課金を伴うため、通常はGitHub Actionsの
-`Agent Eval / Model Comparison`を手動実行する。固定アクセスキーは使わず、結果は14日保持のArtifactへ保存する。
-この比較は本番model設定を変更しない。
-`eval:agent:semantic:live`は入力とgoldを分離した120件の公開意味コーパスをDecision modelで採点する。
-実行前に`DECISION_INPUT_USD_PER_MILLION`と`DECISION_OUTPUT_USD_PER_MILLION`を公式料金に合わせて設定し、
-call・token・推計USDの全上限を固定する。上限超過は通常失敗と分けて停止し、失敗caseを実行後に除外しない。
-Server Agentの実行契約は`backend/agent-api`のcomposition/tool testsで確認する。
+v2の実行・条件反映・Evidence・保存・再送は`test:agent:v2`とBackendのnative SDK composition testsで確認する。
+旧モデル比較・旧Semantic単独Live Evalは#788で撤去した。現在の実モデル検証は
+`Agent Eval / Strands v2 Live`と`eval:agent:strands:live`を使う。AWS認証と課金を伴い、
+通常CIのfixture成功を実モデル・実Provider・画面の合格と同一視しない。
+設定と復旧は[Agent v2実環境運用](docs/architecture/agent-v2-development-cutover.md)を参照する。
 過去のTrip Progress評価記録とthresholdは履歴として各architecture文書に残すが、現行コマンドではない。
 公開の最新事実読取は既存end-user認証gate（501）を維持する。
 会話Contextの保持と評価の限界は[会話品質監査](docs/architecture/conversation-quality-audit.md)を参照する。

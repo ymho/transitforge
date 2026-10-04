@@ -60,7 +60,7 @@ async function setup() {
   trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-14T00:00:00Z"), principal.subject);
   await state.conversations.create(principal, conversationId, metadata);
   const turns = new DynamoDbConversationTurnRepository("test-state", state.client);
-  const v1Model = { converse: vi.fn(async () => { throw new Error("V1 must not run"); }) };
+
   const operation = vi.fn(async () => ({ statusCode: 200, body: { verified: true } }));
   const descriptor: AgentToolDescriptor = {
     name: "lookup_intent_place", description: "受理済みの行き先について資料を確認する", effect: "read",
@@ -84,13 +84,12 @@ async function setup() {
       limits: { ...input.limits, maxIterations: 8, maxModelCalls: 8, maxToolCalls: 1 } }));
     const app = createConversationServerAgent({
       stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-      model: v1Model, weather: { search: vi.fn() }, additionalTools: [{ descriptor, operation, evidence }],
-      // Even a stale V1 rollout option cannot add an interpreter call to the V2 path.
-      semanticIntentEnabled: true, newExecutionId: () => executionId, runRuntime,
+       weather: { search: vi.fn() }, additionalTools: [{ descriptor, operation, evidence }],
+             newExecutionId: () => executionId, runRuntime,
     });
     return { app, model, runRuntime };
   };
-  return { verifier, principal, state, trips, turns, v1Model, operation, build,
+  return { verifier, principal, state, trips, turns, operation, build,
     input: { principal, conversationId, turnId: secondId, userRequest: "行き先は京都にしたい" } };
 }
 
@@ -142,7 +141,6 @@ it("publishes updated-intent Evidence through A commit, a read, B commit, histor
   expect(result.semanticReceipt).toMatchObject({ intentRevision: 1 });
   expect(reportReceipt).toHaveBeenCalledOnce();
   expect(test.operation).toHaveBeenCalledOnce();
-  expect(test.v1Model.converse).not.toHaveBeenCalled();
   expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.intentRevision).toBe(1);
   const calls = model.requests.length;
   expect(await app.runConversationTurn(test.input)).toEqual(result);
@@ -195,7 +193,6 @@ it("uses corrected conditions for both read validation and publication on a late
   expect(working?.semantic?.overlay.facts.some(({ target }) => target === "destination")).toBe(false);
   const saved = await test.trips.repository.get(test.principal, stateMetadata().tripId);
   expect(saved?.request.constraints.some(({ requirement }) => requirement.type === "destinations" && requirement.places.some(({ name }) => name === "京都"))).toBe(true);
-  expect(test.v1Model.converse).not.toHaveBeenCalled();
 });
 
 it.each([
@@ -210,7 +207,6 @@ it.each([
   expect(result.semanticReceipt).toBeUndefined();
   expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.intentRevision ?? 0).toBe(0);
   expect(test.operation).not.toHaveBeenCalled();
-  expect(test.v1Model.converse).not.toHaveBeenCalled();
 });
 
 it("does not mutate intent after reply submission or on an unchanged conversational turn", async () => {
@@ -225,7 +221,6 @@ it("does not mutate intent after reply submission or on an unchanged conversatio
     expect(result.semanticReceipt).toBeUndefined();
     expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.intentRevision ?? 0).toBe(0);
     expect(test.operation).not.toHaveBeenCalled();
-    expect(test.v1Model.converse).not.toHaveBeenCalled();
   }
 });
 

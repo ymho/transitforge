@@ -65,15 +65,8 @@ HTTPSの両方を満たす画像だけを`img`として描画し、通常のMark
 production相談はServer Agent Runtimeで実行する。Browser Runtimeとその動的importは
 #481 Batch 1で撤去済みであり、追加した検証・描画処理をFrontendから起動しない。
 
-本番ConverseModelProvider → MultiStepAgentRuntime → DefaultAgentResponseGenerator →
-validateEvidenceAndClaimsの合成fixtureを使う。Structured generatorだけのテストではない。
-正常経路、25分直通という架空数値の誘導、別日付への流用要求を含む。
-正常ケースは実際のbound factual Claimが必要。否定ケースはbound factsまたはunknownのみを許可する。
-Grounded/Unsupported Claim Rateは実際の非unknown Claimを分母にし、分母0を成功扱いしない。
-
-旧Browser decision Live Eval harnessは#481 Batch 1で撤去した。
-Provider raw、内部推論、個人の会話・認証情報は保存しない。
-
-`tools/run_live_place_grounding.ts`はBackendのConversationModelProviderと共有Runtimeを使い、
-特徴説明・2候補比較・Profile推薦を検証する。
-安全性（根拠の結合）と有用性（具体的特徴・両候補・推薦理由）を独立に記録し、unknownだけの回答を成功にしない。
+#788で旧ConverseModelProvider/Runtime/rendererを使う合成fixtureと地点Live harnessを撤去した。
+現行経路はStrands native SDK → ToolEvidenceRegistry → v2 publication → history/replayである。
+根拠の結合・不適用なEvidenceの拒否は`agent-v2-publication.test.ts`、native loopと保存/再送は
+`strands-server-runtime.test.ts`と`strands-place-cards-acceptance.test.ts`で検証する。
+実モデル検証は`Agent Eval / Strands v2 Live`へ統一し、Provider raw・内部推論・個人の会話や認証情報は保存しない。

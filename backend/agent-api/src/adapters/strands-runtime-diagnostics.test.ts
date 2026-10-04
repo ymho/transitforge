@@ -73,7 +73,7 @@ function application(invoke: StrandsAgentLike["invoke"], record = vi.fn(async (_
   const engine = new StrandsAgentEngine({ modelId: "unused", region: "ap-northeast-1", systemPrompt: "test", maxTurns: 2 },
     { createAgent: () => ({ invoke }) });
   const app = createServerAgentApplication({ newExecutionId: () => "test-execution", registerTools: () => undefined,
-    createModel: () => { throw new Error("V1 must not run"); }, runRuntime: createStrandsServerRuntime(engine), diagnostics: { record } });
+    runRuntime: createStrandsServerRuntime(engine), diagnostics: { record } });
   return { record, run: () => app.runAgentTurn({ principal: stateA, userRequest: "PRIVATE_REQUEST" }) };
 }
 
@@ -139,7 +139,7 @@ it("actual SDK usage reaches the Conversation diagnostic sink and CLI on a faile
     maxTurns: 10, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096 }, { model });
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips",
     stateClient: state.client, tripClient: trips.client, diagnostics: { record }, newExecutionId: () => "test-execution",
-    model: { converse: vi.fn(async () => { throw new Error("V1 must not run"); }) }, weather: { search: vi.fn() },
+    weather: { search: vi.fn() },
     runRuntime: createStrandsServerRuntime(engine), limits: { maxIterations: 10, maxModelCalls: 14, maxToolCalls: 16, maxExecutionMs: 150000 },
     registerAdditionalTools: tools => { tools.register({ name: "read_place", description: "Test read", effect: "read",
       inputSchema: { type: "object", properties: {}, additionalProperties: false }, parseInput: () => validAgentToolInput({}),

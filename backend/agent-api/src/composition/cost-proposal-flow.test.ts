@@ -5,21 +5,19 @@ import { createConversationServerAgent } from "./conversation-server-agent.js";
 import { stateDynamoFixture, stateA, stateB, conversationId, secondId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 import { TripApplication } from "../usecases/trip-application.js";
-import type { ConversationModel } from "../ports/conversation-model.js";
+import { applicationProposalRuntime } from "./proposal-runtime.fixture.js";
 it("generates, persists and replays costs without writing Trip, then accepts explicit CAS confirmation and preserves overrides", async () => {
   const state = stateDynamoFixture(), trips = tripDynamoFixture(), items = costForecast().items;
   await trips.repository.create(stateA, createTrip(secondId, "旅行", "2026-09-01T00:00:00Z"));
   await state.conversations.create(stateA, conversationId, stateMetadata());
-  const model = { converse: vi.fn<ConversationModel["converse"]>() };
-  model.converse.mockResolvedValueOnce({ message: { role: "assistant", content: [{ toolUse: { toolUseId: "cost", name: "propose_trip_costs", input: { items } } }] }, stopReason: "tool_use", metadata: { modelId: "test", latencyMs: 1 } })
-    .mockResolvedValue({ message: { role: "assistant", content: [{ text: "AIによる概算です。前提と費用案を確認してください。まだ保存していません。" }] }, stopReason: "end_turn", metadata: { modelId: "test", latencyMs: 1 } });
-  const agent = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client, model, weather: { search: vi.fn() } });
+  const runRuntime = applicationProposalRuntime(() => ({ name: "propose_trip_costs", input: { items } }));
+  const agent = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client, runRuntime, weather: { search: vi.fn() } });
   const input = { principal: stateA, conversationId, turnId: secondId, userRequest: "費用を概算して" };
   const result = await agent.runConversationTurn(input), proposal = result.tripCostProposal!;
   expect(proposal.tripId).toBe(secondId); expect(proposal.patches[0].forecast.items).toEqual(items);
   expect((await trips.repository.get(stateA, secondId))?.costs).toBeUndefined();
   expect((await state.conversations.history(stateA, conversationId)).items[1].tripCostProposal).toEqual(proposal);
-  expect(await agent.runConversationTurn(input)).toEqual(result); expect(model.converse).toHaveBeenCalledTimes(2);
+  expect(await agent.runConversationTurn(input)).toEqual(result); expect(runRuntime).toHaveBeenCalledOnce();
   await expect(state.conversations.append(stateA, conversationId, 2, [{ role: "assistant", text: "偽造", tripCostProposal: proposal }] as never)).rejects.toMatchObject({ code: "invalid-input" });
   const app = new TripApplication(trips.repository, trips.repository, trips.clock);
   const mutation = { version: "trip-api-v1", operation: "mutate", tripId: secondId, baseRevision: 0, mutationId: conversationId, proposal };

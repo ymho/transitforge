@@ -83,7 +83,9 @@ describe.skipIf(!enabled)("one production-composed first turn with real Bedrock 
     const path = process.env.REPRO_ENV_PATH;
     if (!path) throw new Error("Explicit allowlisted environment file is required");
     const environment: Record<string, string | undefined> = JSON.parse(readFileSync(path, "utf8"));
-    expect(environment.AGENT_RUNTIME_V2_ENABLED).toBe("true");
+    expect(environment.AGENT_RUNTIME).toBe("strands-v2");
+    expect(environment.AGENT_RUNTIME_V2_ENABLED).toBeUndefined();
+    expect(environment.SEMANTIC_INTENT_ENABLED).toBeUndefined();
     environment.SERVER_STATE_TABLE_NAME = "test-state";
     environment.TRIP_TABLE_NAME = "test-trips";
     const state = stateDynamoFixture(), trips = tripDynamoFixture();

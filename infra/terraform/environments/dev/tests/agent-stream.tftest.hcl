@@ -48,7 +48,7 @@ run "current_topology" {
   }
   assert {
     condition     = aws_iam_role.github_agent_eval.name == "transitforge-dev-github-agent-eval" && aws_iam_role_policy.github_agent_eval.name == "invoke-bedrock-model-evaluation"
-    error_message = "Manual model comparison must use its dedicated OIDC role and inline Bedrock-only policy."
+    error_message = "Strands v2 evaluation must use its dedicated OIDC role and inline Bedrock-only policy."
   }
   assert {
     condition     = aws_cognito_user_pool_client.spa.access_token_validity == 5 && aws_cognito_user_pool_client.spa.id_token_validity == 5 && aws_cognito_user_pool_client.spa.refresh_token_validity == 8 && aws_cognito_user_pool_client.spa.token_validity_units[0].refresh_token == "hours"
@@ -91,6 +91,14 @@ run "enabled_contract" {
       ])
     )
     error_message = "The Agent role must atomically update Trip and put mutation/outbox receipts, limited to the Trip table and TransactWriteItems (no delete, scan, wildcard or standalone writes)."
+  }
+  assert {
+    condition = (
+      aws_lambda_function.agent_stream["stream"].environment[0].variables.AGENT_RUNTIME == "strands-v2" &&
+      !contains(keys(aws_lambda_function.agent_stream["stream"].environment[0].variables), "AGENT_RUNTIME_V2_ENABLED") &&
+      !contains(keys(aws_lambda_function.agent_stream["stream"].environment[0].variables), "SEMANTIC_INTENT_ENABLED")
+    )
+    error_message = "The Agent must deploy v2 only without legacy runtime selectors."
   }
   assert {
     condition     = aws_lambda_function.agent_stream["stream"].environment[0].variables.SERVER_AGENT_MAX_EXECUTION_MS == "150000"

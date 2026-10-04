@@ -1,22 +1,24 @@
 import type { TrustedPrincipal } from "../../contracts/trusted-principal.js";
 import { authenticatedApplication } from "../authenticated-application.js";
 import { describe, expect, it, vi } from "vitest";
-import type { AgentModelRequest, AgentModelResponse } from "@raiquora/agent/model-provider";
+import type { ServerAgentRuntimeInput } from "../../ports/server-agent-runtime.js";
 import { successfulAgentToolResult, validAgentToolInput } from "@raiquora/agent/tool-contract";
 import { createServerAgentApplication } from "./server-agent.js";
 import type { Evidence } from "@raiquora/agent/evidence-model";
 
-const final: AgentModelResponse = { message: { role: "assistant", content: [{ type: "text", text: "こんにちは" }] }, stopReason: "completed", metadata: { provider: "fake" } };
-const call: AgentModelResponse = { ...final, stopReason: "tool_calls", message: { role: "assistant", content: [{ type: "tool_call", name: "fake_tool", toolCallId: "call-1", input: {} }] } };
-function setup(responses: AgentModelResponse[] = [call, final], maxExecutionMs = 1_000) {
-  const requests: AgentModelRequest[] = [];
+function setup() {
+  const requests: ServerAgentRuntimeInput[] = [];
   const execute = vi.fn(async () => successfulAgentToolResult({ checked: true }));
-  const app = createServerAgentApplication({ newExecutionId: () => "execution-1", limits: { maxExecutionMs },
-    createModel: () => ({ generate: async request => { requests.push(structuredClone(request)); return responses.shift() ?? final; } }),
+  const runRuntime = vi.fn(async (request: ServerAgentRuntimeInput) => {
+    requests.push(request);
+    return { status: "completed" as const, response: "こんにちは", evidence: [], claims: [],
+      trace: { executionId: request.executionId, events: [], droppedEventCount: 0 } };
+  });
+  const app = createServerAgentApplication({ newExecutionId: () => "execution-1", runRuntime,
     registerTools: tools => tools.register({ name: "fake_tool", description: "fake", inputSchema: { type: "object", properties: {} },
       parseInput: value => validAgentToolInput(value), execute }),
   });
-  return { app, requests, execute };
+  return { app, requests, execute, runRuntime };
 }
 const fakePrincipal = (subject: string): TrustedPrincipal => ({ subject, identity: { issuer: "https://issuer.example.test", subject }, scopes: ["raiquora/user"] });
 const input = { principal: fakePrincipal("fake-principal"), userRequest: "確認して" };
@@ -27,20 +29,7 @@ const retainedSource: Evidence = { id: "evidence:izumo", category: "external", k
     applicability: "applicable", retention: "bounded_excerpt" } };
 
 describe("Server Agent Application without Browser APIs", () => {
-  it("completes model -> tool -> result -> model -> final with an ordered trace", async () => {
-    const { app, requests, execute } = setup();
-    const result = await app.runAgentTurn(input);
-    expect(result.status).toBe("completed");
-    expect(requests).toHaveLength(2);
-    expect(execute).toHaveBeenCalledOnce();
-    expect(requests[1].messages.at(-1)).toMatchObject({ role: "user", content: [{ type: "tool_result", toolCallId: "call-1", status: "success", output: { checked: true } }] });
-    const types = result.trace.events.map(event => event.type);
-    expect(types.filter(type => ["model_completed", "tool_called", "tool_completed", "response_generated"].includes(type)))
-      .toEqual(["model_completed", "tool_called", "tool_completed", "model_completed", "response_generated"]);
-    expect(JSON.stringify(result.trace)).not.toContain("fake-principal");
-  });
-  it("delegates the model/tool loop to an injected runtime without constructing the V1 model", async () => {
-    const createModel = vi.fn(() => { throw new Error("V1 model must not be created"); });
+  it("delegates the model/tool loop to an injected runtime through the required server runtime", async () => {
     const runRuntime = vi.fn(async ({ executionId }: Parameters<NonNullable<Parameters<typeof createServerAgentApplication>[0]["runRuntime"]>>[0]) => ({
       status: "completed" as const,
       response: "Strands runtime response",
@@ -50,7 +39,6 @@ describe("Server Agent Application without Browser APIs", () => {
     }));
     const app = createServerAgentApplication({
       newExecutionId: () => "strands-execution",
-      createModel,
       registerTools: tools => tools.register({ name: "read_only", description: "read", effect: "read",
         inputSchema: { type: "object", properties: {} }, parseInput: validAgentToolInput,
         execute: async () => successfulAgentToolResult({ ok: true }) }),
@@ -61,38 +49,10 @@ describe("Server Agent Application without Browser APIs", () => {
 
     expect(result.status).toBe("completed");
     expect(result.response).toBe("Strands runtime response");
-    expect(createModel).not.toHaveBeenCalled();
     expect(runRuntime).toHaveBeenCalledOnce();
     expect(runRuntime.mock.calls[0]?.[0].tools.descriptors().map(({ name }) => name)).toEqual(["read_only"]);
   });
 
-  it("does not execute duplicate calls", async () => {
-    const { app, execute } = setup([call, { ...call, message: { ...call.message, content: [{ type: "tool_call", name: "fake_tool", toolCallId: "call-2", input: {} }] } }, final]);
-    await app.runAgentTurn(input);
-    expect(execute).toHaveBeenCalledOnce();
-  });
-  it("bounds a hung model and returns a failed/limit trace", async () => {
-    const app = createServerAgentApplication({ newExecutionId: () => "timeout", registerTools: () => {},
-      createModel: () => ({ generate: () => new Promise(() => {}) }), limits: { maxExecutionMs: 10 } });
-    const result = await app.runAgentTurn(input);
-    expect(["failed", "limit_reached"]).toContain(result.status);
-    expect(result.trace.events.at(-1)?.type).toBe("task_completed");
-  });
-  it("records the exact safe budget reason without logging request or Tool input", async () => {
-    const diagnostics: unknown[] = [];
-    const app = createServerAgentApplication({ newExecutionId: () => "execution-1",
-      limits: { maxToolCalls: 1 }, diagnostics: { record: async event => { diagnostics.push(event); } },
-      createModel: () => ({ generate: async () => ({ ...call, message: { role: "assistant", content: [
-        { type: "tool_call", name: "fake_tool", toolCallId: "call-1", input: {} },
-        { type: "tool_call", name: "fake_tool", toolCallId: "call-2", input: {} },
-      ] } }) }),
-      registerTools: tools => tools.register({ name: "fake_tool", description: "fake", inputSchema: { type: "object", properties: {} },
-        parseInput: validAgentToolInput, execute: async () => successfulAgentToolResult({ checked: true }) }),
-    });
-    expect((await app.runAgentTurn({ ...input, userRequest: "PRIVATE_MESSAGE" })).status).toBe("limit_reached");
-    expect(diagnostics).toContainEqual(expect.objectContaining({ phase: "runtime", reason: "tool_budget", incomplete: true }));
-    expect(JSON.stringify(diagnostics)).not.toContain("PRIVATE_MESSAGE");
-  });
   it("validates principal and bounded input before constructing capabilities", async () => {
     const { app, execute, requests } = setup();
     await expect(app.runAgentTurn({ ...input, principal: fakePrincipal("") })).rejects.toThrow();
@@ -105,7 +65,12 @@ describe("Server Agent Application without Browser APIs", () => {
     let id = 0;
     const scopes: unknown[] = [];
     const app = createServerAgentApplication({ newExecutionId: () => `turn-${++id}`,
-      createModel: () => { let first = true; return { generate: async () => { if (first) { first = false; return call; } return final; } }; },
+      runRuntime: async runtime => {
+        const execution = await runtime.tools.execute("fake_tool", {}, { executionId: runtime.executionId, signal: new AbortController().signal });
+        if (!execution.ok) throw new Error("Scoped tool failed");
+        return { status: "completed", response: JSON.stringify(execution.output), evidence: [], claims: [],
+          trace: { executionId: runtime.executionId, events: [], droppedEventCount: 0 } };
+      },
       registerTools: (tools, _evidence, scope) => {
         scopes.push(scope);
         tools.register({ name: "fake_tool", description: "fake", inputSchema: { type: "object", properties: {} },
@@ -114,6 +79,8 @@ describe("Server Agent Application without Browser APIs", () => {
     const results = await Promise.all(["owner-a", "owner-b"].map(subject => app.runAgentTurn({ ...input, principal: fakePrincipal(subject),
       uiContext: { itemId: "item-1", ownerId: "untrusted" } as { itemId: string } })));
     expect(results.map(result => result.status)).toEqual(["completed", "completed"]);
+    expect(results[0].response).toContain("owner-a");
+    expect(results[1].response).toContain("owner-b");
     expect(JSON.stringify(scopes)).not.toContain("untrusted");
     expect(JSON.stringify(results[0])).not.toContain("owner-b");
     expect(JSON.stringify(results[1])).not.toContain("owner-a");
@@ -126,7 +93,7 @@ describe("Server Agent Application without Browser APIs", () => {
         target: { conversationId: "44444444-4444-4444-8444-444444444444", tripId, tripRevision: 4 }, presentations: [{ presentationId, version: 1 as const,
           target: { tripId, baseTripRevision: 4 }, candidateSetRef: { kind: "candidate-set-ref" as const, candidateSetId: "set-1", revision: 2, baseTripRevision: 4 }, entries: [{ ordinal: 1, candidateRef: "variant-1" }] }],
         pendingQuestionRefs: [], pendingProposalRefs: [] } };
-    const app = createServerAgentApplication({ newExecutionId: () => "execution-1", createModel: () => ({ generate: async () => final }), registerTools: () => {},
+    const app = createServerAgentApplication({ newExecutionId: () => "execution-1", runRuntime: setup().runRuntime, registerTools: () => {},
       detailedResearchAllowed: true, detailedResearchLimits: { maxModelCalls: 2, maxIterations: 2 }, loadContext: async () => context });
     const target = { presentationId, candidateSetId: "set-1", candidateSetRevision: 2, tripId, baseTripRevision: 4 };
     expect((await app.runAgentTurn({ ...input, tripId, requestedResearchMode: "detailed", researchTarget: target })).status).toBe("completed");
@@ -134,28 +101,27 @@ describe("Server Agent Application without Browser APIs", () => {
       await expect(app.runAgentTurn({ ...input, tripId, requestedResearchMode: "detailed", researchTarget: changed })).rejects.toThrow("Stale or foreign");
     }
   });
-  it("rehydrates published Evidence without embedding its payload in model-visible Working State", async () => {
-    const requests: AgentModelRequest[] = [];
-    const response: AgentModelResponse = { message: { role: "assistant", content: [{ type: "text", text: "出典を説明します" }] }, stopReason: "completed",
-      metadata: { provider: "fake", outputMode: "application_strict" }, declaredPresentation: { kind: "source-explanation",
-        sections: [{ evidenceId: retainedSource.id, quote: retainedSource.facts.sourceExcerpt, mode: "feature" }] } };
+  it("rehydrates published Evidence through the runtime input", async () => {
+    const requests: ServerAgentRuntimeInput[] = [];
     const workingState = { version: 1 as const, revision: 1, sourceTurnId: "33333333-3333-4333-8333-333333333333", sourceUserSequence: 1,
       target: { conversationId: "44444444-4444-4444-8444-444444444444" }, presentations: [], pendingQuestionRefs: [], pendingProposalRefs: [],
       groundingEvidence: [retainedSource] };
     const app = createServerAgentApplication({ newExecutionId: () => "execution-1", registerTools: () => {},
-      loadContext: async () => ({ workingState }), createModel: () => ({ generate: async request => { requests.push(structuredClone(request)); return response; } }) });
+      loadContext: async () => ({ workingState }), runRuntime: async request => {
+        requests.push(request);
+        return { status: "completed", response: "根拠を確認しました", evidence: request.initialEvidence ?? [], claims: [],
+          trace: { executionId: request.executionId, events: [], droppedEventCount: 0 } };
+      } });
     const result = await app.runAgentTurn(input);
     expect(result.status).toBe("completed");
     expect(result.evidence.map(({ id }) => id)).toEqual([retainedSource.id]);
-    expect(JSON.stringify(requests[0]!.messages)).toContain("出雲市にある神社です");
-    expect(JSON.stringify(requests[0]!.messages)).not.toContain("groundingEvidence");
-    expect(requests[0]!.prompt?.dynamicSegments.some(({ kind }) => kind === "evidence")).toBe(true);
+    expect(requests[0].initialEvidence).toEqual([retainedSource]);
   });
 });
 
 
 it("accepts the #451 authentication wrapper without trusting a body principal", async () => {
-  const { app, requests } = setup([final]);
+  const { app, requests } = setup();
   const verify = vi.fn(async () => fakePrincipal("verified-owner"));
   const execute = authenticatedApplication({ verify }, ["raiquora/user"],
     (principal, command: Omit<typeof input, "principal"> & { principal?: unknown }) => app.runAgentTurn({ ...command, principal }));
@@ -163,5 +129,6 @@ it("accepts the #451 authentication wrapper without trusting a body principal", 
   expect(requests).toHaveLength(0);
   expect((await execute("fake-token", { userRequest: "hello", principal: { subject: "forged" } })).status).toBe("completed");
   expect(verify).toHaveBeenCalledExactlyOnceWith("fake-token");
-  expect(JSON.stringify(requests)).not.toMatch(/fake-token|forged|verified-owner/);
+  expect(requests[0].userRequest).toBe("hello");
+  expect(requests[0]).not.toHaveProperty("principal");
 });

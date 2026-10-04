@@ -46,7 +46,7 @@ it("runs HTTP clients → authenticated applications → atomic storage → Agen
       trace: { executionId: input.executionId, events: [], droppedEventCount: 0 } };
   });
   const agent = createProductionConversationAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: f.client, tripClient: f.client,
-    runRuntime, model: { converse: vi.fn(async () => { throw new Error("V1 must not run"); }) }, weather: { search: vi.fn() } });
+    runRuntime, weather: { search: vi.fn() } });
   let answer: ReturnType<typeof agent.runConversationTurn> | undefined;
   const start = () => startTripConsultation({ prompt: "出雲大社に行きたい", tripId, isCurrent: () => true,
     start: value => trips.startConsultation(value),

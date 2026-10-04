@@ -2,17 +2,13 @@ import { expect, it } from "vitest";
 import { evaluateTripFeasibility } from "@raiquora/trip/trip-feasibility";
 import { feasibilityTrip, feasibilityNow, feasibilityFacts, feasibilityStayTrip } from "../../trip/domain/trip-feasibility.fixture";
 import { tripFeasibilityContext } from "@raiquora/agent/trip-feasibility-context";
-import { buildAgentDecisionContext, agentDecisionContextText } from "@raiquora/agent/agent-decision-context";
 
-it("keeps three-valued derived result separate from Trip/Reservation and in every context budget", () => {
+it("keeps three-valued derived result separate from Trip/Reservation", () => {
   const trip = feasibilityTrip();
   const evaluation = evaluateTripFeasibility(trip, undefined, feasibilityNow);
   const feasibility = tripFeasibilityContext(evaluation);
-  const context = buildAgentDecisionContext({ executionId: "test", feature: "concierge", userRequest: "この旅程は問題ない？",
-    context: { currentTrip: { id: trip.id, revision: trip.revision, request: trip.request }, tripFeasibility: feasibility } }, []);
-  expect(context.tripFeasibility?.status).toBe("unknown"); expect(context.currentTrip).not.toHaveProperty("tripFeasibility");
-  expect(agentDecisionContextText(context)).toContain('"tripFeasibility"');
-  expect(agentDecisionContextText({ ...context, conversation: { messages: Array.from({ length: 100 }, () => ({ role: "user" as const, text: "a".repeat(1000) })) } })).toContain('"tripFeasibility"');
+  expect(feasibility.status).toBe("unknown");
+  expect(trip).not.toHaveProperty("tripFeasibility");
 });
 it("never projects arbitrary private data or hides a violation by truncation", () => {
   const trip = feasibilityTrip(), evaluation = evaluateTripFeasibility(trip, feasibilityFacts(trip), feasibilityNow);
@@ -27,10 +23,8 @@ it("never projects arbitrary private data or hides a violation by truncation", (
 it("does not turn a ready overnight Trip's informational unknown into proof of feasibility", () => {
   const { trip, facts } = feasibilityStayTrip();
   const ready = { ...trip, planningState: "ready" as const };
-  const context = buildAgentDecisionContext({ executionId: "stay", feature: "concierge", userRequest: "準備完了？",
-    context: { currentTrip: ready, tripFeasibility: tripFeasibilityContext(evaluateTripFeasibility(ready, facts, feasibilityNow)) } }, []);
-  expect(context.tripFeasibility?.status).toBe("unknown");
-  expect(context.tripFeasibility?.issues.map((i) => i.code)).toContain("stay_time_precision");
-  expect(context.tripFeasibility?.issues).toContainEqual(expect.objectContaining({ code: "stay_visit_unchecked", status: "unknown", itemIds: ["hotel"] }));
-  expect(agentDecisionContextText(context)).toContain("readyは全事実の確認済みを意味せず");
+  const context = tripFeasibilityContext(evaluateTripFeasibility(ready, facts, feasibilityNow));
+  expect(context.status).toBe("unknown");
+  expect(context.issues.map((i) => i.code)).toContain("stay_time_precision");
+  expect(context.issues).toContainEqual(expect.objectContaining({ code: "stay_visit_unchecked", status: "unknown", itemIds: ["hotel"] }));
 });

@@ -1,6 +1,5 @@
 import { expect, it, vi } from "vitest";
 import { createServerAgentApplication } from "./server-agent.js";
-import { AgentModelError } from "@raiquora/agent/model-provider";
 import { ServerAgentRuntimeExecutionError } from "../../ports/server-agent-runtime.js";
 
 it("emits privacy-safe diagnostics and does not fail the turn when the sink fails", async () => {
@@ -9,9 +8,8 @@ it("emits privacy-safe diagnostics and does not fail the turn when the sink fail
     loadContext: async () => ({ currentTrip: { id: "trip", sourceRevision: 4, schedule: [], scheduleTruncated: true },
       travelProfile: { consentedPreferenceNotes: { food: "private-food" } } }),
     registerTools: () => undefined,
-    createModel: () => ({ generate: async () => ({ message: { role: "assistant", content: [{ type: "text", text: "回答" }] }, stopReason: "completed",
-      metadata: { provider: "fixture" }, decisionSummaryStatus: "valid", decisionSummary: { interpretedGoal: "相談", hardConstraints: [], softPreferences: [],
-        selectedAction: "answer", unresolvedFacts: [], reasonCodes: ["goal_interpreted"] } }) }),
+    runRuntime: async ({ executionId }) => ({ status: "completed", response: "回答", evidence: [], claims: [],
+      trace: { executionId, droppedEventCount: 0, events: [{ type: "decision_recorded", occurredAt: "2026-10-04T00:00:00Z" }] } } as never),
   });
   const result = await app.runAgentTurn({ principal: { subject: "owner", identity: { subject: "owner", issuer: "issuer" }, scopes: ["trip:read"] }, userRequest: "private-request" });
   expect(result.status).toBe("completed");
@@ -22,35 +20,13 @@ it("emits privacy-safe diagnostics and does not fail the turn when the sink fail
   expect(log).toHaveBeenCalledWith("agent_diagnostic_dropped", { executionId: "execution", phase: "decision" });
 });
 
-it.each([
-  ["refusal", "provider_refusal"],
-  ["provider_error", "provider_error"],
-  ["invalid_schema", "model_invalid_schema"],
-] as const)("classifies %s without retaining provider text", async (code, expectedReason) => {
-  const record = vi.fn();
-  const app = createServerAgentApplication({
-    newExecutionId: () => "execution",
-    diagnostics: { record },
-    registerTools: () => undefined,
-    createModel: () => ({ generate: async () => { throw new AgentModelError(code, "private provider detail", false); } }),
-  });
-  const result = await app.runAgentTurn({
-    principal: { subject: "owner", identity: { subject: "owner", issuer: "issuer" }, scopes: ["trip:read"] },
-    userRequest: "private-request",
-  });
-  expect(result.status).toBe("failed");
-  expect(record).toHaveBeenCalledWith(expect.objectContaining({ phase: "runtime", reason: expectedReason, incomplete: true }));
-  expect(JSON.stringify(record.mock.calls)).not.toContain("private provider detail");
-});
-
-
 it("records only bounded V2 runtime throw classification before rethrowing", async () => {
   const record = vi.fn();
   const app = createServerAgentApplication({
     newExecutionId: () => "execution",
     diagnostics: { record },
     registerTools: () => undefined,
-    createModel: () => ({ generate: async () => { throw new Error("V1 must not run"); } }),
+
     runRuntime: async () => { throw new ServerAgentRuntimeExecutionError("agent_invoke", "provider"); },
   });
   await expect(app.runAgentTurn({
@@ -69,7 +45,7 @@ it("publishes only allowlisted V2 publication failure codes in runtime diagnosti
   const trace = { executionId: "execution", omitContent: true, events: [{ type: "task_started", occurredAt: "2026-09-26T00:00:00Z" }, { type: "task_completed", occurredAt: "2026-09-26T00:00:01Z", outcome: "completed", reason: "completed", latencyMs: 1 }] };
   const app = createServerAgentApplication({
     newExecutionId: () => "execution", diagnostics: { record }, registerTools: () => undefined,
-    createModel: () => ({ generate: async () => { throw new Error("V1 must not run"); } }),
+
     runRuntime: async () => ({ status: "failed", response: "", evidence: [], claims: [], trace, publicationError: "missing_reply_proposal" } as never),
   });
   const result = await app.runAgentTurn({
@@ -87,7 +63,7 @@ it("publishes only allowlisted V2 publication failure codes in runtime diagnosti
 it.each(["invalid_input", "private-code"])("bounds Tool error classification: %s", async errorCode => {
   const record = vi.fn();
   const app = createServerAgentApplication({ newExecutionId: () => "execution", diagnostics: { record }, registerTools: () => undefined,
-    createModel: () => ({ generate: async () => { throw Error("unused"); } }),
+
     runRuntime: async () => ({ status: "limit_reached", response: "", evidence: [], claims: [], trace: { executionId: "execution", events: [
       { type: "tool_completed", toolCallId: "tool-1", toolName: "draft_itinerary", occurredAt: "2026-10-03T00:00:00Z",
         outcome: "error", latencyMs: 1, errorCode, result: { private: "private-result" } },
@@ -102,7 +78,7 @@ it.each(["invalid_input", "private-code"])("bounds Tool error classification: %s
 it("distinguishes public projection failure after a completed execution without logging its payload", async () => {
   const record = vi.fn();
   const app = createServerAgentApplication({ newExecutionId: () => "execution", diagnostics: { record }, registerTools: () => undefined,
-    createModel: () => ({ generate: async () => { throw Error("unused"); } }),
+
     runRuntime: async () => ({ status: "completed", response: "private response", evidence: [], claims: [], trace: { executionId: "execution", events: [], droppedEventCount: 0 } }),
     projectResult: () => { throw Error("private provider data"); },
   });

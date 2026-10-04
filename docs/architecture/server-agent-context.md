@@ -11,7 +11,7 @@ Server: createStatefulServerAgent().runAgentTurn(既存ServerAgentTurn)
   ↓ createServerStateContextLoader: authorized state resolution
 ConversationApplication / ProfileApplication / owner-scoped TripRepository
   ↓ 既存shared projectionによる構造化AgentRuntimeContextInput
-Server MultiStepAgentRuntime → 同じContext Builder / Model / Tool loop
+Server Strands v2 → bounded Application context / native Model / Tool loop
 ```
 
 Loaderは`backend/agent-api/src/usecases/agent/server-state-context-loader.ts`へ置く。
@@ -25,7 +25,7 @@ ApplicationとLoaderへHTTP/API Gateway/Bedrock型、Browser API、DOM、LocalSt
 Tool/Model生成前にloadContextをawaitしてRuntimeのcontextへ渡すhookだけである。
 依存を指定しない従来の内部組成も維持する。公開transportを繋ぐ際にはstateful組成を選ぶ。
 本文のcontext、ownerId、userIdをloadContextやauthorityとして採用しない。
-userRequestへState JSONを連結せず、既存Runtimeの構造化Context Builderを通す。
+userRequestへState JSONを連結せず、共有`agent-runtime-context.ts`のbounded入力をStrands Adapterへ渡す。
 
 ## 認可と参照解決
 
@@ -103,7 +103,7 @@ stateful composition testはローカル署名JWTを#484のverifierで検証し�
 Server Runtime/ConversationModel portまで通してContext・privacy・write-through不在を確認する。
 
 ```bash
-npx vitest run backend/agent-api/src/usecases/agent/server-state-context-loader.test.ts backend/agent-api/src/composition/stateful-server-agent.test.ts modules/agent/runtime/agent-decision-context.test.ts --maxWorkers=2
+npx vitest run backend/agent-api/src/usecases/agent/server-state-context-loader.test.ts backend/agent-api/src/composition/stateful-server-agent.test.ts backend/agent-api/src/adapters/strands-server-runtime.test.ts --maxWorkers=2
 npm run test --workspace @raiquora/agent-api -- --maxWorkers=2
 npm run build --workspace @raiquora/agent-api
 npm run architecture:check

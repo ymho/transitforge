@@ -170,12 +170,7 @@ resource "aws_lambda_function" "agent_stream" {
       COGNITO_USER_POOL_ID               = aws_cognito_user_pool.users.id
       COGNITO_CLIENT_ID                  = aws_cognito_user_pool_client.spa.id
       MODEL_ID                           = var.bedrock_model_id
-      LIGHTWEIGHT_MODEL_ID               = var.bedrock_lightweight_model_id
-      DECISION_MODEL_ID                  = var.bedrock_decision_model_id
-      SEMANTIC_INTENT_ENABLED            = tostring(var.conversation_semantic_kernel_enabled)
-      AGENT_RUNTIME_V2_ENABLED           = tostring(var.agent_runtime_v2_enabled)
-      BEDROCK_CAPABILITY_MATRIX_JSON     = var.bedrock_capability_matrix_json
-      BEDROCK_PROMPT_CACHING_ENABLED     = tostring(var.bedrock_prompt_caching_enabled)
+      AGENT_RUNTIME                      = "strands-v2"
       TRAVEL_KNOWLEDGE_BASE_ID           = var.travel_knowledge_base_id
       TRAVEL_KNOWLEDGE_VECTOR_STORE      = var.travel_knowledge_vector_store
       TRAVEL_KNOWLEDGE_SEARCH_TYPE       = var.travel_knowledge_search_type

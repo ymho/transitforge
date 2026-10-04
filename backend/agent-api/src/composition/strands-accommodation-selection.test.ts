@@ -57,7 +57,7 @@ it.each(["multiple", "named", "ordinal", "sole"] as const)(`${live ? "Bedrock" :
   let selectionRuntime: ReturnType<typeof createStrandsServerRuntime> | undefined, execution = 0, runtimeCalls = 0;
   let selectionReply: unknown;
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model: { converse: vi.fn(async () => { throw Error("legacy runtime called"); }) }, weather: { search: vi.fn() }, additionalTools: bindings,
+    weather: { search: vi.fn() }, additionalTools: bindings,
     newExecutionId: () => `78700000-2222-4000-8000-${String(++execution).padStart(12, "0")}`,
     runRuntime: async input => { runtimeCalls++; if (!selectionRuntime) return prelude(input);
       const result = await selectionRuntime(input); selectionReply = result.publicReply; return result; },

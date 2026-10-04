@@ -77,6 +77,14 @@ jobs:
       - name: Run TypeScript tests
         run: npm test
 
+      - name: Verify native v2 stream, browser display and replay
+        env:
+          PLAYWRIGHT_MODULE: /tmp/agent-browser-tools/node_modules/playwright/index.mjs
+        run: |
+          npm install --prefix /tmp/agent-browser-tools --no-save playwright@1.63.0
+          /tmp/agent-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          npm run test:agent-cutover:browser
+
       - name: Build viewer
         run: npm run build
         env:

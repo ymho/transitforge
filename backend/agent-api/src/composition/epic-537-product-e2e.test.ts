@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { applyTripProposal, createTrip } from "@raiquora/trip/trip";
-import type { ConversationModel, ConversationModelRequest } from "../ports/conversation-model.js";
+import { strandsScriptedRuntime } from "../adapters/strands-scripted-model.fixture.js";
 import { stateDynamoFixture, stateA, conversationId, secondId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 import { createConversationServerAgent } from "./conversation-server-agent.js";
@@ -27,35 +27,25 @@ it("traces production input → decision → search/Evidence → presentation �
   }], undefined, "inspiration", undefined, { version: 1, logicalDays: ["day-1", "day-2", "day-3", "day-4"].map(id => ({ id })), calendarBindings: [] });
   await trips.repository.create(stateA, original);
   await state.conversations.create(stateA, conversationId, { ...stateMetadata(), tripId: secondId });
-  const requests: ConversationModelRequest[] = [];
-  const model = { converse: vi.fn<ConversationModel["converse"]>(async request => {
-    requests.push(structuredClone(request));
-    const call = requests.length;
-    if (call === 1) return { message: { role: "assistant", content: [{ toolUse: { toolUseId: "discovery-1", name: "search_eval_candidates", input: { perspectives: ["area", "rain", "car-free"] } } }] }, stopReason: "tool_use", metadata: { modelId: "synthetic", latencyMs: 1 } };
-    if (call === 2) return { message: { role: "assistant", content: [{ toolUse: { toolUseId: "candidate-1", name: "draft_itinerary", input: candidateToolInput() } }] }, stopReason: "tool_use", metadata: { modelId: "synthetic", latencyMs: 1 } };
-    const statement = "外部情報は未確認、または鮮度を確認できていません。移動の成立・空き状況・天気や警報に問題がないとは判断できません。必要な情報を追加確認してください。";
-    const claim = { id: "fact-0", statement, kind: "fact", evidenceIds: ["eval-evidence-1"], bindings: [{ evidenceId: "eval-evidence-1", fieldPath: "facts.candidateCount",
-      subjectRef: "eval-candidates", applicabilityScope: executionId, transform: "deterministic_calculation" }] };
-    return { message: { role: "assistant", content: [{ text: JSON.stringify({ kind: "answer",
-      responseText: JSON.stringify({ text: statement, claims: [claim] }), evidenceIds: ["eval-evidence-1"] }) }] },
-      stopReason: "end_turn", metadata: { modelId: "synthetic", latencyMs: 1, outputMode: "application_strict" } };
-  }) };
+  const { model, runRuntime } = strandsScriptedRuntime([
+    { name: "search_eval_candidates", input: { perspectives: ["area", "rain", "car-free"] } },
+    { name: "draft_itinerary", input: candidateToolInput() },
+    { name: "strands_structured_output", input: { reply: { kind: "uncertainty", text: "移動の成立・空き状況・天気や警報は未確認です。" } } },
+  ]);
   const search = syntheticSearchBinding();
   const agent = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model, weather: { search: vi.fn() }, newExecutionId: () => executionId, additionalTools: [search],
+    runRuntime, weather: { search: vi.fn() }, newExecutionId: () => executionId, additionalTools: [search],
     diagnostics: { record: async event => { diagnostics.push(structuredClone(event)); } } });
   const turn = { principal: stateA, conversationId, turnId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", tripId: secondId, userRequest };
   const result = await agent.runConversationTurn(turn);
 
-  const firstContextBlock = requests[0]!.messages[0]!.content.find(block => "text" in block)!;
-  const modelContext = JSON.parse(("text" in firstContextBlock ? firstContextBlock.text : "").match(/<agent_context>([\s\S]*)<\/agent_context>/u)![1]!);
-  expect(modelContext.userRequest).toBe(userRequest);
-  const discoveryResult = requests[1]!.messages.at(-1)?.content.find(block => "toolResult" in block);
-  expect(discoveryResult).toMatchObject({ toolResult: { toolUseId: "discovery-1", status: "success" } });
+  const requests = model.observedMessages;
+  expect(JSON.stringify(requests[0])).toContain(userRequest);
+  expect(JSON.stringify(requests[1])).toContain('"toolUseId":"fixture-1"');
   expect(result.publicPlanPresentation).toMatchObject({ version: "public-plan-presentation-v1", candidateOrder: ["plan-1", "plan-2"],
     candidateSetRef: { kind: "candidate-set-ref", candidateSetId: executionId, revision: 0, baseTripRevision: 0 }, target: { tripId: secondId, baseTripRevision: 0 } });
   expect(result.presentationReceipt).toMatchObject({ candidateSetRef: { candidateSetId: executionId }, entries: [{ ordinal: 1, candidateRef: "plan-1" }, { ordinal: 2, candidateRef: "plan-2" }] });
-  expect(diagnostics.map(({ phase }) => phase)).toEqual(expect.arrayContaining(["context", "decision", "tool", "presentation", "save"]));
+  expect(diagnostics.map(({ phase }) => phase)).toEqual(expect.arrayContaining(["context", "execution", "tool", "presentation", "save"]));
   expect(JSON.stringify(requests[1])).toContain("eval-evidence-1");
   expect((await state.conversations.history(stateA, conversationId)).items.at(-1)?.publicPlanPresentation).toEqual(result.publicPlanPresentation);
   expect((await trips.repository.get(stateA, secondId))?.items).toEqual(original.items);

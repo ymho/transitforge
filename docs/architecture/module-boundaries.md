@@ -45,10 +45,10 @@ Infrastructureの確認と障害調査は`infra/README.md`を正本とする
 最終所有者はBackendとする。[ADR 0096](../decisions/0096-use-strands-for-agent-v2-execution.md)のAgent v2では、
 `modules/agent/runtime`はProvider非依存のEffective Intent、Tool、Evidence、Trace、Policy契約を所有し、
 Strands SDKによるmodel/tool loopは`backend/agent-api/src/adapters`へ閉じる。
-移行中のV1だけが`MultiStepAgentRuntime`を利用し、V2はその内部構造を互換要件にしない。
+#788でV1の実行経路と専用テストを撤去した。boundedなApplication入力は`agent-runtime-context.ts`、実行結果は`runtime-contract.ts`に分離し、旧Prompt serializerを介さない。
 BackendはFrontendをimportせず、coreはBrowser API、Vendor、HTTP eventへ依存しない。
 `backend/agent-api/src/usecases/agent`がtransport非依存turn入口とTool登録、
-`server-agent-composition.ts`が既存ConversationModelとweatherを接続する。
+`server-agent-composition.ts`が必須のServerAgentRuntimeRunnerとweatherを接続する。productionの組成は常にStrands v2を渡す。
 固定IP ProviderはTool operation Portの先へ分離し、Runtime全体をVPCへ固定しない。
 Browserのproduction組成とHTTP bridgeは#480まで残す。UI取得・表示・端末状態はBrowserに置く。
 

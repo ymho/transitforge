@@ -90,7 +90,7 @@ export function retainConversationEvidence(
   return parseConversationEvidence(retained);
 }
 
-/** Evidence is supplied through AgentRuntimeRequest.initialEvidence, not duplicated
+/** Evidence is supplied through the server runtime input initialEvidence, not duplicated
  * inside the model-visible Working State JSON. */
 export function workingStateWithoutEvidence(state: ConversationWorkingState): ConversationWorkingState {
   const { groundingEvidence: _groundingEvidence, ...visible } = state;

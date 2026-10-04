@@ -1,5 +1,5 @@
 import { createAgentContextSnapshot, selectedTripItemSnapshot } from "@raiquora/agent/agent-context-snapshot";
-import { boundAgentConversationContext, type AgentConversationContext, type AgentRuntimeContextInput } from "@raiquora/agent/agent-decision-context";
+import { boundAgentConversationContext, type AgentConversationContext, type AgentRuntimeContextInput } from "@raiquora/agent/agent-runtime-context";
 import type { TrustedPrincipal } from "../../contracts/trusted-principal.js";
 import { StateError, requireStatePrincipal, stateId, type Conversation } from "../../contracts/server-state.js";
 import type { TripRepository } from "../../ports/trip-repository.js";

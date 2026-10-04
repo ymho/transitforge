@@ -71,13 +71,13 @@ async function setup(empty = false) {
     : { status: "available", freshness: "fresh", data: { places: [{ providerPlaceId: "garden", name: "青葉庭園",
       summary: "池の周囲を歩いて見学する庭園です。", sourceUrl, openingHoursStatus: "unknown" }] },
       evidence: [{ id: "place-source", provider: "fixture", sourceUrl, retrievedAt: "2026-09-26T10:00:00Z" }] } }));
-  const v1 = { converse: vi.fn(async () => { throw new Error("V1 must not run"); }) };
+
   const accommodation = vi.fn(), journey = vi.fn();
   const build = (steps: Step[], executionId = "v2-place-cards") => {
     const model = new CandidateModel(steps);
     const app = createConversationServerAgent({
       stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-      model: v1, weather: { search: vi.fn() }, newExecutionId: () => executionId,
+       weather: { search: vi.fn() }, newExecutionId: () => executionId,
       runRuntime: createStrandsServerRuntime(new StrandsAgentEngine({ modelId: "unused", region: "ap-northeast-1",
         systemPrompt: agentV2SystemPrompt, maxTurns: 8 }, { model })),
       limits: { maxIterations: 8, maxModelCalls: 8, maxToolCalls: 2 },
@@ -85,7 +85,7 @@ async function setup(empty = false) {
     });
     return { app, model };
   };
-  return { verifier, principal, state, trips, turns, searchPlaceMedia, accommodation, journey, v1, build,
+  return { verifier, principal, state, trips, turns, searchPlaceMedia, accommodation, journey, build,
     input: { principal, conversationId, turnId: secondId, userRequest: "青葉庭園に行きたい" } };
 }
 
@@ -102,7 +102,7 @@ it("publishes a real travel read as cards through Strands, A/B commits, owner-sc
   expect(result).not.toHaveProperty("publicPlanPresentation");
   expect(JSON.stringify(result)).not.toContain("DO_NOT_PUBLISH_MODEL_TRAILER");
   expect(test.searchPlaceMedia).toHaveBeenCalledOnce();
-  expect(test.accommodation).not.toHaveBeenCalled(); expect(test.journey).not.toHaveBeenCalled(); expect(test.v1.converse).not.toHaveBeenCalled();
+  expect(test.accommodation).not.toHaveBeenCalled(); expect(test.journey).not.toHaveBeenCalled();
   const history = await test.state.conversations.history(test.principal, conversationId);
   expect(history.items.map(({ role }) => role)).toEqual(["user", "assistant"]);
   expect(history.items[1]?.publicPlacePresentation).toEqual(result.publicPlacePresentation);
@@ -148,7 +148,6 @@ it("cannot publish old candidate Evidence after an intent update and can retry a
   expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.intentRevision).toBe(1);
   expect(await retry.app.runConversationTurn(test.input)).toEqual(result);
   expect(test.searchPlaceMedia).toHaveBeenCalledTimes(2);
-  expect(test.v1.converse).not.toHaveBeenCalled();
 });
 
 it("returns uncertainty without fabricated cards when the travel Provider has no usable places", async () => {

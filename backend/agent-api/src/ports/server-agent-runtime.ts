@@ -1,6 +1,6 @@
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
 import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
-import type { AgentRuntimeContextInput } from "@raiquora/agent/agent-decision-context";
+import type { AgentRuntimeContextInput } from "@raiquora/agent/agent-runtime-context";
 import type { Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import type { AgentRuntimeLimits } from "@raiquora/agent/runtime-policies";
