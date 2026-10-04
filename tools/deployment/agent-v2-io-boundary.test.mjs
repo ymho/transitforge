@@ -6,7 +6,7 @@ const source = (name) => readFileSync(new URL(`../../backend/agent-api/src/adapt
 test("V2 input is a data projection, not the old instruction serializer", () => {
   const runtime = source("strands-server-runtime");
   assert.doesNotMatch(runtime, /agentDecisionContextText|buildAgentDecisionContext/u);
-  assert.match(runtime, /const conversationInput = strandsConversationInput\(input\)/u);
+  assert.match(runtime, /strandsConversationInput\(input\)/u);
   assert.match(runtime, /\.\.\.conversationInput/u);
   assert.match(source("strands-turn-input"), /JSON.parse\(strandsTurnInput\(input\)\)/u);
   assert.match(source("strands-agent-engine"), /messages: input\.history/u);

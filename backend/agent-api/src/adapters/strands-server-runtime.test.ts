@@ -30,6 +30,19 @@ function fake(overrides: Record<string, unknown> = {}) {
   })) };
 }
 describe("createStrandsServerRuntime", () => {
+  it("classifies rejected Application input before invoking the model without exposing its contents", async () => {
+    for (const [code, context] of [
+      ["context_budget", { conversation: { messages: [{ role: "user", text: "private-message".repeat(2000) }] } }],
+      ["invalid_input", { conversation: { messages: [{ role: "system", text: "private-message" }] } }],
+      ["unresolved_intent", { consultationRequest: { destination: "private-place" } }],
+    ] as const) {
+      const engine = fake();
+      const promise = createStrandsServerRuntime(engine as unknown as StrandsAgentEngine)({ ...runtimeInput(), context: context as never });
+      await expect(promise).rejects.toMatchObject({ name: "ServerAgentRuntimeExecutionError", stage: "turn_input", kind: code });
+      await expect(promise).rejects.toThrow(`server_agent_runtime_turn_input_${code}`);
+      expect(engine.run).not.toHaveBeenCalled();
+    }
+  });
   it("passes the existing bounded Application context to Strands", async () => {
     const input = runtimeInput(), engine = fake({ replyProposal: { kind: "conversation", message: "greeting" },
       metrics: { modelCalls: 1, toolCalls: 0, inputTokens: 100, outputTokens: 20, totalTokens: 120 } });

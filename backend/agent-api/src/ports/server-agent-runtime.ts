@@ -14,8 +14,8 @@ import type { AgentExecutionDiagnostic } from "./agent-diagnostics.js";
 
 /** Bounded runtime failure metadata. It deliberately carries no provider message,
  * prompt, user content, Tool payload, URL, ID or raw exception. */
-export type ServerAgentRuntimeFailureStage = "agent_invoke" | "intent_state" | "read_tool" | "runtime_projection";
-export type ServerAgentRuntimeFailureKind = "abort" | "timeout" | "provider" | "validation" | "unknown";
+export type ServerAgentRuntimeFailureStage = "agent_invoke" | "intent_state" | "read_tool" | "runtime_projection" | "turn_input";
+export type ServerAgentRuntimeFailureKind = "abort" | "timeout" | "provider" | "validation" | "unknown" | "invalid_input" | "unresolved_intent" | "context_budget";
 export class ServerAgentRuntimeExecutionError extends Error {
   constructor(readonly stage: ServerAgentRuntimeFailureStage, readonly kind: ServerAgentRuntimeFailureKind) {
     super(`server_agent_runtime_${stage}_${kind}`);

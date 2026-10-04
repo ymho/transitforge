@@ -7,7 +7,8 @@ import { admitAgentV2Reply } from "@raiquora/agent/agent-v2-publication";
 import type { ServerAgentRuntimeInput } from "../ports/server-agent-runtime.js";
 import type { AgentExecutionDiagnostic } from "../ports/agent-diagnostics.js";
 import { StrandsAgentEngine } from "./strands-agent-engine.js";
-import { strandsConversationInput } from "./strands-turn-input.js";
+import { strandsConversationInput, StrandsTurnInputError } from "./strands-turn-input.js";
+import { ServerAgentRuntimeExecutionError } from "../ports/server-agent-runtime.js";
 import { strandsExecutionDiagnostic } from "./strands-execution-diagnostic.js";
 
 /** Proof is Application-authored and intended for V2 evaluation/diagnostics. It
@@ -15,7 +16,12 @@ import { strandsExecutionDiagnostic } from "./strands-execution-diagnostic.js";
 export type StrandsRuntimeResult = AgentRuntimeResult & { publicReply?: AgentV2ReplyProof; publicationError?: string };
 export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
   return async (input: ServerAgentRuntimeInput): Promise<StrandsRuntimeResult> => {
-    const conversationInput = strandsConversationInput(input);
+    let conversationInput: ReturnType<typeof strandsConversationInput>;
+    try { conversationInput = strandsConversationInput(input); }
+    catch (error) {
+      if (error instanceof StrandsTurnInputError) throw new ServerAgentRuntimeExecutionError("turn_input", error.code);
+      throw error;
+    }
     const conditionReceipts: PublicSemanticReceipt[] = [];
     let run: Awaited<ReturnType<StrandsAgentEngine["run"]>>;
     try {
