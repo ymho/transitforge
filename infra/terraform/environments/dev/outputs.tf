@@ -49,6 +49,14 @@ output "agent_stream_log_group_name" {
   value       = one(values(aws_cloudwatch_log_group.agent_stream)).name
 }
 
+output "personal_api_gateway" {
+  description = "CDでJSON APIとAgentの実スロットリングを読み戻すGateway参照。"
+  value = {
+    restApiId = aws_api_gateway_rest_api.agent_stream["stream"].id
+    stageName = aws_api_gateway_stage.agent_stream["stream"].stage_name
+  }
+}
+
 output "ai_provider_egress_ip_address" {
   description = "旅行提供者など送信元IP許可制の外部提供者へ登録するAI Lambdaの固定IPv4アドレス。"
   value       = aws_eip.ai_egress.public_ip
