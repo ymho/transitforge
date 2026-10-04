@@ -247,7 +247,7 @@ export function configureTripWorkspace(options: {
     if (partyKey !== nextPartyKey) { partyKey = nextPartyKey; party.replaceChildren(renderTripPartyControl(trip, controller, report)); }
     const ids = new Set<string>(), dates = new Set<string>();
     const dayLabels = new Map<string, string>();
-    for (const [date, entries, label] of view.dayEntries) {
+    for (const [date, entries, label] of view.timelineDays) {
       dates.add(date); dayLabels.set(date, label);
       let group = groups.get(date);
       if (!group) { group = element("section", "trip-workspace-day"); group.append(element("h2", "", label)); groups.set(date, group); }
@@ -260,7 +260,7 @@ export function configureTripWorkspace(options: {
         const collapseKey = `${activeSession}:${trip.id}:${entryKey}`;
         let card = cards.get(entryKey);
         if (card?.key !== key) {
-          const node = renderWorkspaceCard(trip, item, controller, { entry, addAfter: () => startAdd(trip, date, item.id, cards.get(entryKey)?.node), collapsed: collapsed.get(collapseKey) ?? true,
+          const node = renderWorkspaceCard(trip, item, controller, { entry, addAfter: () => startAdd(trip, entry.sourceDayKey, item.id, cards.get(entryKey)?.node), collapsed: collapsed.get(collapseKey) ?? true,
             collapse: (value) => collapsed.set(collapseKey, value), chat, report,
             ...(personalOwner && options.changeItemDecision ? { changeItemDecision: options.changeItemDecision } : {}) }, evaluation.issues.filter((i) => i.itemIds.includes(item.id)));
           if (card) card.node.replaceWith(node);

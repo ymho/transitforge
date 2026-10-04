@@ -28,6 +28,8 @@ Agentの新しい専用Tool/Promptは追加しない。人の入力した時刻�
 
 ## 時刻入力と欠損情報
 
+同じlocal dateの移動・宿泊・観光は、一つの日付タブのタイムラインへまとめる（#814）。時刻未定・zone未取得の宿も同日に表示し、チェックアウトは翌日へ投影する。Presentationの暦日グループは閲覧用で、各entryの元のdayKey・logicalDayId・zone・entryKeyを保持する。追加・編集は元のDomain dayへ戻し、保存データや時刻の精度を変更しない。異なるzoneの同じlocal dateもそれぞれの保存済み現地日付でまとめ、端末zoneへ変換しない。日付未定のlogical dayは別のまま保持する。
+
 端末timezoneを使わない。入力したIANA zoneを使い、DSTの存在しない時刻は拒否。重複時刻はUTC差を明示するまで拒否する。活動終了日は任意で入力できる。省略時は開始日と同日。既存の翌日終了scheduleも終了日付きで編集する。
 鉄道は全legsと前後の発着時刻、実際の乗換間隔を表示。minimumTransferMinutesを徒歩や待ち時間に置き換えない。
 #809からSelectedRailJourneyの区間へoptional serviceType/trainName/serviceDestinationを保存する。検証に用いたimmutable TrainIndexの同一service_uidからのみ取得し、モデルの表示ラベルをコピーしない。新しい選択は新幹線・特急などの種別、列車名、行先を表示する。旧保存データは欠損を許容して列車番号だけを表示し、再検索・採用で取得する。路線名・platform・駅内徒歩分数は未保持。非鉄道の採用snapshotもmode/起終点/provenanceのみで内部legsや目的地までの徒歩を保持しない。検索中の公開カードは取得済みの区間情報を表示する。欠損データの追加保存は別モデル作業であり、推測補完しない。

@@ -11,6 +11,7 @@
 - transport / stay / activity、日付・window・fixed・未定、相対日とcalendar bindingを同じTripから投影する。
 - 選択済み鉄道は全legs / 乗換間隔と、保持済み種別・列車名・行先を表示する。欠損は推測せず任意時刻編集を拒否する。
 - stayは日別にチェックイン / 連泊 / チェックアウトを投影する。plannedTimingは利用者の予定で、施設受付時間・空室・予約ではない。
+- 日付タブは保存済みの現地暦日ごとに一つにまとめる。zone既知／未取得やlogical dayが混在しても同じ日を別タブにせず、同一日内はTrip.itemsの順序を保つ。操作は各entryの元のDomain dayへ戻し、zone・未定時刻・保存済み経路を変更しない。
 - 人数はTripRequest.partyを参照する。Profileから補完しない。participants等の参照がある場合の変更は既存保護を通す。
 - 費用は折りたたむ。準備 / 次に決めること / 確認ポイントの集約パネルは撤去し、成立性評価・予約保護・adoption / CASは保持する。
 - 単一transport候補はpublic sourceRef / Journey ID等が一意に一致する場合だけ検索カードへ採用操作を統合する。
