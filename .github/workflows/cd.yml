@@ -162,6 +162,19 @@ jobs:
           echo "agent_stream_function=$(terraform output -raw agent_stream_function_name)" >> "$GITHUB_OUTPUT"
           echo "otp_bridge_function=$(terraform output -json otp_route_service | jq -r '.bridge_arn | split(":")[-1]')" >> "$GITHUB_OUTPUT"
 
+      - name: Verify deployed login lifetime
+        if: env.CD_MODE == 'deploy'
+        working-directory: infra/terraform/environments/dev
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth_config=$(terraform output -json cognito_api_auth_config)
+          aws cognito-idp describe-user-pool-client \
+            --user-pool-id "$(jq -r '.userPoolId' <<< "$auth_config")" \
+            --client-id "$(jq -r '.clientId' <<< "$auth_config")" \
+            --query 'UserPoolClient.{access:AccessTokenValidity,id:IdTokenValidity,refresh:RefreshTokenValidity,units:TokenValidityUnits}' \
+            --output json | node ../../../../tools/deployment/verify-login-lifetime.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Verify deployed Agent runtime
         if: env.CD_MODE == 'deploy'
         env:

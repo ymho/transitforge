@@ -63,9 +63,11 @@ catalog testは、active gateがV1の `agent-runtime.test.ts` / `research-runtim
 architectureとtooling typecheckも通常CIで1回だけ実行する。全Acceptanceの独立調査は
 `npm run test:agent:v2`または手動Workflowの`full_suite=true`で行う。
 
-`CI / Test`はJavaScript/Python、ブラウザ、Terraformを並列実行し、全て成功したときだけ既存`test` checkを
+`CI / Test`はTypeScriptテスト、build/Python、ブラウザ、Terraformを並列実行し、全て成功したときだけ既存`test` checkを
 成功にする。failure/cancelled/skippedはgate失敗となり、CDもWorkflow全体の成功を引き続き要求する。
 検証範囲を減らすpath filterや、成功扱いにするskipは導入しない。
+Browserはbuild成功後に同じWorkflowのViewer artifactを取得し、stream/replayに加えて初期表示と
+12時間ログイン維持を確認する。ViewerはCI内で1回だけbuildし、CDは従来どおりproduction設定でbuildする。
 
 ## 追加テストの判断
 

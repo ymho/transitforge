@@ -41,10 +41,12 @@ OACを維持する。CloudFront Basic認証は2026-09-24に撤去し、Home以�
 
 ## 保持・期限・ログアウト
 
-Access/ID Tokenは最大5分のまま、Refresh TokenのCognito上の期限は8時間とする。タブ単位の
+Access/ID Tokenは最大5分のまま、Refresh TokenのCognito上の期限は12時間とする。タブ単位の
 sessionStorageへschema version、issuer、client ID、scope、発行時刻、Access Token期限、ログイン開始から
-最大8時間の絶対期限、Access/Refresh Token、表示名を保存する。localStorageへtokenを書かず、ID Tokenも
-保存しない。再読込では設定との完全一致と期限を検証し、不正または絶対期限切れのsessionを破棄する。
+最大12時間の絶対期限、Access/Refresh Token、表示名を保存する。localStorageへtokenを書かず、ID Tokenも
+保存しない。2026-10-04にアプリの絶対期限とCognito Refresh Token期限を8時間から12時間へ変更した。
+既存の8時間sessionは元の期限を保持し、更新や再読込で12時間へ延長しない。新規ログインから12時間を適用する。
+再読込では設定との完全一致と期限を検証し、不正または絶対期限切れのsessionを破棄する。
 
 Access Tokenの失効30秒前にはrefresh grantを行う。同時要求は単一flightへ集約し、rotationされたRefresh
 Tokenは同じ絶対期限で置換する。401だけは強制refresh後に同一要求を1回再送し、2度目の401でsessionを
@@ -58,7 +60,7 @@ logoutはまず当タブのsessionと未完了取引を消し、revoke成否に�
 logout世代より遅く完了したrefreshはsessionを復元しない。この段階は全端末logoutを保証しない。
 
 sessionStorageはXSSからtokenを守る仕組みではなく、同originの悪意あるscriptは読み取り可能である。
-絶対期限を8時間に限定し、token/claims/下位例外をログへ出さず、UIへはtextContentで表示する。
+絶対期限を12時間に限定し、token/claims/下位例外をログへ出さず、UIへはtextContentで表示する。
 stateとPKCEでlogin CSRF/code横取りを抑止し、nonceで応答との対応を確認する。
 BFFやIdentity Poolは追加しない。
 

@@ -57,8 +57,10 @@ npm run eval:agent:smoke
 
 自動Acceptanceは共有39ファイルを`CI / Test`の`npm test`へ任せ、固有の`test:trip:v2:gate`だけを実行する。
 `test:agent:v2`は全Acceptanceを単独調査するときの入口として維持する。手動Workflowでは`full_suite`で
-全量再実行を選べる。通常CIはJavaScript/Python、ブラウザ、Terraformを並列実行し、既存`test` checkが
+全量再実行を選べる。通常CIはTypeScriptテスト、build/Python、ブラウザ、Terraformを並列実行し、既存`test` checkが
 全ジョブの成功を要求する。ブラウザはheadless shellのみをversion別にcacheし、OS依存は毎回確認する。
+BrowserはbuildジョブのViewer artifactを受け取り、stream/replayとビルド後の初期表示・12時間ログイン維持を
+確認する。ViewerをBrowserジョブで再buildしない。CIのtest tokenを含むartifactはCDでは使用しない。
 
 CutoverのCD入力・破壊的plan拒否・plan-only条件はAWSなしで確認する。
 

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { configureAiFirstShell, type AiFirstShellPorts } from "./ai-first-shell";
+import { createServerTripListSource } from "../../usecases/trip-plan/server-trip-list-source";
 import { createTrip } from "@raiquora/trip/trip";
 
 beforeEach(() => { document.body.innerHTML = '<main id="app"></main>'; window.history.replaceState(null, "", "#chat"); sessionStorage.clear(); });
@@ -279,4 +280,15 @@ it("retains the current creation attempt across a failed submit and binds its su
   expect(ports.resetConsultation).toHaveBeenCalledTimes(resets);
   expect(history.state).toMatchObject({ consultation: "trip", tripId });
   expect(ports.openChat).toHaveBeenCalledOnce();
+});
+
+it.each(["/", "/index.html", "/#chat", "/#trip", "/#map", "/#my"])("mounts the actual signed-out Source and shell at %s without recursive notifications", path => {
+  window.history.replaceState(null, "", path);
+  const list = vi.fn(), source = createServerTripListSource({ list }, () => false);
+  const { shell, ports } = setup({ read: () => ({ state: source.getState(), trips: source.getTrips() }), subscribe: source.subscribe });
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("chat");
+  expect(window.location.hash).toBe("#chat");
+  expect(document.querySelector<HTMLElement>("[data-home-hero]")!.hidden).toBe(false);
+  expect(ports.openMap).not.toHaveBeenCalled(); expect(list).not.toHaveBeenCalled();
+  shell.refresh(); shell.dispose(); source.dispose();
 });

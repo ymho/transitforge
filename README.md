@@ -244,7 +244,7 @@ Backendに用意している。公開APIへの接続、ログインUI、本番Tr
 `CI / Test`はPRとmain revisionを検証する。`CD / Deploy`はmainのCI成功後または
 mainからの手動実行だけでdev環境を更新する。両者は別Workflowとして権限と結果を分離する
 
-通常CIはJavaScript/Python・ブラウザ・Terraformを並列に確認し、全ジョブの成功を既存の`test` checkへ
+通常CIはTypeScriptテスト・build/Python・ブラウザ・Terraformを並列に確認し、全ジョブの成功を既存の`test` checkへ
 集約する。失敗・取消・skipも成功として扱わない。`Agent v2 / Acceptance`の自動実行は固有のTrip gateだけを
 確認し、共有39ファイルを通常CIと二重実行しない。全Acceptanceの単独再実行は手動入力`full_suite`で行う。
 Browserは実行に使うChromium headless shellだけを取得し、Playwright version別にcacheする。
