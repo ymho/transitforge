@@ -495,7 +495,7 @@ S3書込失敗は成功として扱わず request ID付き503と構造化ログ�
 
 ### `agent-model-call-trace-v1`
 
-- Server実装: `backend/agent-api/src/usecases/model-call-trace.ts`
+- 旧Server保存実装は#799で撤去済み。現行Strands診断は`backend/agent-api/src/adapters/strands-runtime-diagnostics.ts`と`usecases/agent/server-agent-diagnostics.ts`を参照する。以下の形式は過去の保存契約の記録。
 - 保存先: private S3 `agent-traces/model-calls/YYYY/MM/DD/<modelCallId>/<apiRequestId>.json`
 - 保持期間: 30日
 - 1件の上限: 3MiB

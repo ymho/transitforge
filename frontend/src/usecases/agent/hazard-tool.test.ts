@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { hazardAlert, hazardInformation } from "../../../../modules/trip/domain/hazard-alert.fixture";
 import { executeExternalTravelTool, compactExternalTravelToolObservation, externalTravelEvidence, externalTravelToolDescription,
-  externalTravelToolInputSchema, externalTravelToolNames, type ExternalTravelToolState } from "./external-travel-tools";
+  externalTravelToolInputSchema, externalTravelToolNames, type ExternalTravelToolState } from "@raiquora/agent/external-travel-tools";
 
 describe("public hazard tool boundary", () => {
   it("keeps the tool name, declares public facts and no implicit impact", () => {

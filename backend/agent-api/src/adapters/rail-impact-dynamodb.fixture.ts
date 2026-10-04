@@ -1,7 +1,7 @@
 import { expect } from "vitest";
 import { QueryCommand, TransactWriteItemsCommand, type AttributeValue } from "@aws-sdk/client-dynamodb";
 import { watchDynamoFixture } from "./watch-dynamodb.fixture.js";
-import { DynamoDbRailImpactRouter } from "./dynamodb-rail-impact-router.js";
+import { DynamoDbTripImpactRouter } from "./dynamodb-trip-impact-router.js";
 import { DynamoDbTripImpactRepository } from "./dynamodb-trip-impact-repository.js";
 import type { TripDynamoClient } from "./dynamodb-trip-repository.js";
 
@@ -38,5 +38,5 @@ export function railImpactDynamoFixture() {
     if (impactFaults.lostResponse) { impactFaults.lostResponse = false; throw new Error("lost response"); }
     return {};
   } };
-  return { ...base, client, impactFaults, router: new DynamoDbRailImpactRouter("test-trips", client), impacts: new DynamoDbTripImpactRepository("test-trips", client) };
+  return { ...base, client, impactFaults, router: new DynamoDbTripImpactRouter("test-trips", client), impacts: new DynamoDbTripImpactRepository("test-trips", client) };
 }

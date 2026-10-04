@@ -18,7 +18,7 @@
 | 公開範囲 | public writer/認証gate OFF | 別internal Lambdaのみ。Agent/Browser/通知には未接続 |
 
 主なコードはDomainの`rail-trip-impact.ts`、`trip-impact-fact.ts`、既存`trip-impact.ts`、
-Backendの`rail-impact-application.ts`、`rail-trip-impact-evaluator.ts`、routing/persistence Adapter、
+Backendの`rail-impact-application.ts`、`trip-impact-evaluator.ts`、routing/persistence Adapter、
 `rail-impact-composition-root.ts`/`rail-impact-lambda.ts`。infraは`rail-impact.tf`とTrip GSI/packaging。
 
 ## 内部利用

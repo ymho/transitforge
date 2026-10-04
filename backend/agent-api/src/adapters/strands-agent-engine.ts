@@ -298,7 +298,7 @@ export class StrandsAgentEngine {
     }
   }
 }
-export function createStrandsReadTools(input: {
+function createStrandsReadTools(input: {
   registry: AgentToolRegistry; executor: AgentToolExecutor; executionId: string; getEffectiveIntent?: () => EffectiveIntent | undefined;
   toolTimeoutMs: number; trace: AgentTraceRecorder; evidence: Evidence[];
   budgetState?: { toolCalls: number; toolLimitReached: boolean }; maxToolCalls?: number;

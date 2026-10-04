@@ -1,10 +1,4 @@
-export interface VisualizationController {
-  setEnabled(enabled: boolean): void;
-}
 
-export interface DestinationArcLayer {
-  setDestinationArcsVisible(visible: boolean): void;
-}
 
 export interface DisplayModeElements {
   app: HTMLElement;
@@ -34,8 +28,6 @@ export function renderDisplayMode(
     else display.setAttribute("aria-haspopup", "dialog");
   }
   if (digitalTwinMode) {
-    const picker = document.querySelector<HTMLElement>("#date-time-picker");
-    if (picker) picker.hidden = true;
     if (display) display.ariaExpanded = "false";
   }
   elements.currentTimeButton.hidden = digitalTwinMode;
@@ -81,25 +73,4 @@ export function configureSidebarMapModeSelection(elements: SidebarMapModeElement
   observer.observe(elements.app, { attributes: true, attributeFilter: ["data-map-focus-mode", "data-display-mode"] });
   render();
   return () => observer.disconnect();
-}
-
-export function configureDestinationArcs(
-  trainLayer: DestinationArcLayer,
-  toggle: HTMLButtonElement,
-): VisualizationController {
-  let requested = false;
-  const apply = () => {
-    toggle.disabled = false;
-    toggle.ariaPressed = String(requested);
-    toggle.title = "行先アーチ";
-    toggle.ariaLabel = "行先アーチ";
-    trainLayer.setDestinationArcsVisible(requested);
-  };
-  const setEnabled = (nextEnabled: boolean) => {
-    requested = nextEnabled;
-    apply();
-  };
-  toggle.addEventListener("click", () => setEnabled(!requested));
-  apply();
-  return { setEnabled };
 }

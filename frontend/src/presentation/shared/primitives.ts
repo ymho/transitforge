@@ -26,20 +26,13 @@ export function createButton(document: Document, label: string, variant: "primar
   const button = document.createElement("button"); button.type = "button"; button.className = `ds-button ds-button--${variant}`; button.textContent = label; return button;
 }
 export function adoptFormControl<T extends HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(control: T): T { control.classList.add("ds-control"); return control; }
-export function createSurface(document: Document, tag: "section" | "article" | "div" = "section"): HTMLElement { const surface = document.createElement(tag); surface.className = "ds-surface"; return surface; }
-export function createDivider(document: Document): HTMLHRElement { const divider = document.createElement("hr"); divider.className = "ds-divider"; return divider; }
-export function createChip(document: Document, label: string): HTMLSpanElement { const chip = document.createElement("span"); chip.className = "ds-chip"; chip.textContent = label; return chip; }
-export function createEmptyState(document: Document, message: string): HTMLElement { const state = document.createElement("div"); state.className = "ds-empty-state"; state.setAttribute("role", "status"); state.textContent = message; return state; }
 export function createPageHeading(document: Document, eyebrow: string, title: string, description?: string): HTMLElement {
   const template = document.createElement("template"); template.innerHTML = pageHeadingMarkup(eyebrow, title, description); return template.content.firstElementChild as HTMLElement;
 }
-export function createSectionHeading(document: Document, title: string): HTMLHeadingElement { const heading = document.createElement("h2"); heading.className = "ds-section-heading"; heading.textContent = title; return heading; }
 export function adoptComposer(form: HTMLFormElement, control: HTMLInputElement | HTMLTextAreaElement, submit: HTMLButtonElement): HTMLFormElement {
   form.classList.add("ds-composer"); adoptFormControl(control); submit.classList.add("ds-button", "ds-button--primary"); return form;
 }
-export function createMediaFrame(document: Document, image: HTMLImageElement): HTMLElement { const frame = document.createElement("figure"); frame.className = "ds-media-frame"; frame.append(image); return frame; }
 export function createMediaCarousel(document: Document, items: HTMLElement[]): HTMLElement { const carousel = document.createElement("div"); carousel.className = "ds-media-carousel"; carousel.setAttribute("role", "region"); carousel.setAttribute("aria-label", "画像一覧"); carousel.append(...items); return carousel; }
-export function createSourceDisclosure(document: Document, text: string): HTMLElement { const disclosure = document.createElement("small"); disclosure.className = "ds-source-disclosure"; disclosure.textContent = text; return disclosure; }
 
 function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");

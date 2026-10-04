@@ -111,166 +111,6 @@
   cursor: pointer;
 }
 
-.date-time-picker {
-  position: absolute;
-  z-index: 12;
-  top: calc(100% + 0.55rem);
-  left: 0;
-  box-sizing: border-box;
-  width: min(20rem, calc(100vw - 1.3rem));
-  padding: 0.75rem;
-  border: 1px solid var(--glass-border);
-  border-radius: 1.25rem;
-  color: var(--glass-text);
-  background: var(--glass-surface-strong);
-  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 18%);
-  backdrop-filter: var(--glass-backdrop);
-  -webkit-backdrop-filter: var(--glass-backdrop);
-}
-
-.date-time-picker[hidden] {
-  display: none;
-}
-
-.date-time-picker header,
-.date-time-picker footer,
-.date-time-picker-navigation,
-.date-time-picker-time {
-  display: flex;
-  align-items: center;
-}
-
-.date-time-picker header {
-  justify-content: space-between;
-  padding: 0.1rem 0.2rem 0.55rem;
-}
-
-.date-time-picker-navigation {
-  gap: 0.35rem;
-}
-
-.date-time-picker button {
-  border: 0;
-  color: var(--glass-text);
-  background: transparent;
-  font: inherit;
-}
-
-.date-time-picker-navigation button {
-  display: grid;
-  width: 2rem;
-  height: 2rem;
-  padding: 0;
-  place-items: center;
-  border-radius: 50%;
-  color: var(--glass-accent-strong);
-  background: var(--glass-accent-soft);
-}
-
-.date-time-picker-navigation svg {
-  width: 1rem;
-  height: 1rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
-.date-time-picker-weekdays,
-.date-time-picker-days {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  text-align: center;
-}
-
-.date-time-picker-weekdays {
-  padding: 0.3rem 0;
-  color: var(--glass-muted);
-  font-size: 0.68rem;
-}
-
-.date-time-picker-days button {
-  min-width: 0;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  font-size: 0.75rem;
-}
-
-.date-time-picker-days button:hover,
-.date-time-picker-days button:focus-visible {
-  background: var(--glass-surface-muted);
-}
-
-.date-time-picker-days button[aria-selected="true"] {
-  color: #ffffff;
-  background: #0091ff;
-}
-
-.date-time-picker-days button[data-outside-month="true"] {
-  color: var(--glass-muted);
-  opacity: 0.55;
-}
-
-.date-time-picker-time {
-  justify-content: center;
-  gap: 0.25rem;
-  margin-top: 0.65rem;
-  padding: 0.55rem;
-  border-radius: 0.85rem;
-  background: var(--glass-surface-muted);
-}
-
-.date-time-picker-time label {
-  display: contents;
-}
-
-.date-time-picker-time select {
-  box-sizing: border-box;
-  width: 3.1rem;
-  min-height: 2.35rem;
-  padding: 0 0.45rem;
-  border: 0;
-  border-radius: 0.65rem;
-  color: var(--glass-text);
-  background: var(--glass-surface-strong);
-  text-align: center;
-  font: 650 0.9rem/1 system-ui, sans-serif;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-}
-
-.date-time-picker footer {
-  justify-content: space-between;
-  padding-top: 0.65rem;
-}
-
-.date-time-picker footer button {
-  display: grid;
-  width: 2.5rem;
-  height: 2.5rem;
-  padding: 0;
-  place-items: center;
-  border-radius: 50%;
-  color: var(--glass-accent-strong);
-  background: var(--glass-accent-soft);
-}
-
-.date-time-picker footer button[data-picker-action="cancel"] {
-  color: var(--glass-muted);
-  background: var(--glass-surface-muted);
-}
-
-.date-time-picker footer svg {
-  width: 1rem;
-  height: 1rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
 #map-status {
   max-height: 3.2rem;
   margin: 0.25rem 0.8rem 0.45rem;
@@ -325,7 +165,6 @@
 }
 
 .map-tools > button,
-.playback-speed-menu > button,
 .mapboxgl-ctrl-group button {
   box-sizing: border-box;
   display: grid;
@@ -354,7 +193,6 @@
 }
 
 .map-tools button:hover:not(:disabled),
-.playback-speed-menu > button:hover:not(:disabled),
 .mapboxgl-ctrl-group button:hover:not(:disabled) {
   color: var(--glass-text);
   background: var(--glass-surface-muted) !important;
@@ -379,17 +217,6 @@
   width: 1.125rem;
   height: 1.125rem;
   margin: 0;
-}
-
-.playback-speed-menu {
-  display: grid;
-  width: 2.25rem;
-  justify-items: center;
-  place-items: center;
-}
-
-.playback-speed-menu-toggle {
-  font: 590 0.68rem/2.25rem -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .playback-speed-controls {

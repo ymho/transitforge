@@ -8,7 +8,7 @@ import { railWatchRoutingKey } from "../adapters/dynamodb-trip-watch-repository.
 import { railImpactDynamoFixture } from "../adapters/rail-impact-dynamodb.fixture.js";
 import { TripWatchApplication, TripWatchWorker } from "./trip-watch-application.js";
 import { RailImpactApplication } from "./rail-impact-application.js";
-import { RailTripImpactEvaluator } from "./rail-trip-impact-evaluator.js";
+import { DeterministicTripImpactEvaluator } from "./trip-impact-evaluator.js";
 import { handler } from "../rail-impact-lambda.js";
 
 const ownerA = { subject: "owner-A" }, ownerB = { subject: "owner-B" }, now = { now: () => new Date(impactNow) };
@@ -17,7 +17,7 @@ async function setup() {
   const sync = new TripWatchApplication(f.repository, f.watches);
   await sync.reconcile(ownerA, trip.id);
   const facts = vi.fn(async () => []), record = vi.fn();
-  const evaluator = new RailTripImpactEvaluator();
+  const evaluator = new DeterministicTripImpactEvaluator();
   const worker = new TripWatchWorker(f.repository, f.watches, evaluator, { facts }, now);
   const app = new RailImpactApplication(f.router, worker, f.repository, f.impacts, { record }, now);
   return { ...f, trip, sync, app, record, worker, facts, evaluator };

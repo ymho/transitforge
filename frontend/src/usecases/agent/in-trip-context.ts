@@ -1,4 +1,4 @@
-import { buildInTripContext, validateInTripContext, type InTripContextSnapshot, type ContextLocation } from "@raiquora/trip/in-trip-context";
+import { buildInTripContext, validateInTripContext, type InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 import type { Trip } from "@raiquora/trip/trip";
 
 export interface InTripContextReader { read(tripId: string): Promise<InTripContextSnapshot | undefined>; }
@@ -22,8 +22,4 @@ export async function loadInTripContext(trip: Trip, now: Date, reader?: InTripCo
     } catch { /* The plan can still be discussed, but no successful safety/booking read is implied. */ }
   }
   return buildInTripContext(trip, { at: now.toISOString(), timeZone: "UTC" }, { unavailable: ["impacts", "notifications", "reservations"] });
-}
-/** No automatic geolocation prompt or history. Explicit opt-in host may supply this ephemeral value. */
-export function withInTripLocation(snapshot: InTripContextSnapshot, location: ContextLocation): InTripContextSnapshot {
-  const value = { ...snapshot, location }; validateInTripContext(value); return structuredClone(value);
 }

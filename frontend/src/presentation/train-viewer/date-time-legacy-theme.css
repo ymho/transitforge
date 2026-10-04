@@ -5,20 +5,13 @@
 }
 
 .time-control:hover,
-.time-control:focus-visible,
-.time-control[data-editing="true"] {
+.time-control:focus-visible {
   border-color: var(--ui-border);
   background: var(--ui-hover);
 }
 
-.date-time-steppers,
 .ai-guide-panel header,
 .ai-guide-form {
   border-color: var(--ui-border);
-}
-
-.date-time-stepper button:hover:not(:disabled) {
-  color: var(--ui-text);
-  background: var(--ui-hover);
 }
 

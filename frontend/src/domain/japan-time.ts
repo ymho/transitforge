@@ -35,8 +35,3 @@ export function dateFromJapanDateTime(parts: Omit<JapanDateTimeParts, "weekday">
   const pad = (value: number) => String(value).padStart(2, "0");
   return new Date(`${String(parts.year).padStart(4, "0")}-${pad(parts.month)}-${pad(parts.day)}T${pad(parts.hour)}:${pad(parts.minute)}:${pad(parts.second)}+09:00`);
 }
-
-export function japanCalendarDate(value: Date): string {
-  const { year, month, day } = japanDateTimeParts(value);
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}

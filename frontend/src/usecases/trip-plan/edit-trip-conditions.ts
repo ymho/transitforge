@@ -1,5 +1,5 @@
 import type { Trip, TripUpdateProposal } from "@raiquora/trip/trip";
-import type { TripConstraint, TripRequirement } from "@raiquora/trip/trip-request";
+import type { TripRequirement } from "@raiquora/trip/trip-request";
 import { proposeTripRequestUpdate, proposeUserParty } from "./update-trip-request";
 
 /** An explicit edit detaches only this constraint's hypothesis, preserving item hypotheses. */
@@ -26,6 +26,3 @@ export function boundedConditionText(value: string): string {
   return text;
 }
 export type EditableCondition = Extract<TripRequirement["type"], "origin" | "destinations" | "dates" | "duration" | "mobility" | "pace" | "budget" | "experience">;
-export function constraintSourceLabel(c: TripConstraint): string {
-  return c.source === "user" ? "あなたが指定" : c.source === "profile" ? "プロフィール由来" : "仮置き";
-}

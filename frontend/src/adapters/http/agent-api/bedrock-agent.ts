@@ -1,7 +1,6 @@
 import { ApiAuthenticationError } from "../../../usecases/auth/api-authentication-error";
 import { personalApiFetch } from "../personal-api-fetch";
 import type {
-  AccommodationSearchResponse,
   DailyCongestionAnalysisResponse,
   DailyCongestionPeakResponse,
   RepresentativeTimetableKind,
@@ -19,7 +18,6 @@ import type {
   WebPageReadResponse,
 } from "./bedrock-agent-contract";
 import {
-  isAccommodationSearchResponse,
   isDailyCongestionAnalysisResponse,
   isDailyCongestionPeakResponse,
   isRepresentativeTimetableSearchResponse,
@@ -66,20 +64,6 @@ export async function queryTrainDelayAnalysis(serviceDate: string, fetcher: type
   return postAgentBody({ operation: "train_delay_analysis", serviceDate }, "列車遅延分析を取得できません", "列車遅延分析", isTrainDelayAnalysisResponse, fetcher);
 }
 
-export async function searchAccommodations(
-  request: { destination: string; checkInDate: string; checkOutDate: string; adults?: number; limit?: number },
-  fetcher: typeof fetch = personalApiFetch,
-): Promise<AccommodationSearchResponse> {
-  return postAgentBody(
-    { operation: "travel_accommodation_search", ...request },
-    "宿泊候補を検索できません",
-    "宿泊候補",
-    isAccommodationSearchResponse,
-    fetcher,
-    true,
-  );
-}
-
 export async function searchWeatherForecast(
   request: { location: string; startDate?: string; endDate?: string },
   fetcher: typeof fetch = personalApiFetch,
@@ -119,20 +103,6 @@ export async function searchPlaceMedia(
     { operation: "place_media_search", ...request },
     "観光地情報を検索できません",
     "観光地情報",
-    isPlaceMediaSearchResponse,
-    fetcher,
-    true,
-  );
-}
-
-export async function researchPlaceDetail(
-  request: { query: string; latitude?: number; longitude?: number; targetRef?: import("@raiquora/trip/place-snapshot").PlaceRef },
-  fetcher: typeof fetch = personalApiFetch,
-): Promise<PlaceMediaSearchResponse> {
-  return postAgentBody(
-    { operation: "place_detail_research", ...request },
-    "観光地の詳しい情報を調べられません",
-    "観光地の詳細",
     isPlaceMediaSearchResponse,
     fetcher,
     true,
@@ -302,7 +272,7 @@ function isTransientStatus(status: number): boolean {
 }
 
 
-export async function sha256Hex(value: string): Promise<string> {
+async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }

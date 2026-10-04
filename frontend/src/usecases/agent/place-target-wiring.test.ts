@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { executeExternalTravelTool, compactExternalTravelToolObservation, type ExternalTravelToolState } from "./external-travel-tools";
+import { executeExternalTravelTool, compactExternalTravelToolObservation, type ExternalTravelToolState } from "@raiquora/agent/external-travel-tools";
 import { availableExternalInformation } from "@raiquora/trip/external-travel-information";
 import { createTrip } from "@raiquora/trip/trip";
 import type { PlaceMedia } from "@raiquora/trip/place-media";

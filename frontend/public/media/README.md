@@ -1,8 +1,5 @@
 # Media assets
 
-`home-rail-journey.webp` is an original AI-generated Raiquora hero image created with OpenAI image generation on 2026-09-24.
-Prompt: a calm editorial travel photograph of a modern Japanese local train through a green mountain valley, realistic natural light, no people, no logos, no text, ample landscape composition for a responsive website hero.
-
 The following original Raiquora hero images were created with OpenAI image generation on 2026-09-24 and exported as WebP:
 
 - `home-setouchi-v2.webp`: a wide editorial travel photograph of the Seto Inland Sea in western Japan, layered islands and a quiet coastal town, warm natural daylight, generous negative space, no people, no train, no logo, no text.

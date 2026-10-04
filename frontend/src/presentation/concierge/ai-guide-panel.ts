@@ -573,7 +573,7 @@ const semanticTargetLabels: Record<PublicSemanticReceipt["changes"][number]["tar
 };
 
 /** Stable public receipt presentation shared by live turns and restored history. */
-export function renderSemanticReceipt(receipt: PublicSemanticReceipt): HTMLElement {
+function renderSemanticReceipt(receipt: PublicSemanticReceipt): HTMLElement {
   const status = document.createElement("p");
   status.className = `semantic-receipt semantic-receipt-${receipt.outcome}`;
   status.textContent = semanticReceiptLabel(receipt);
