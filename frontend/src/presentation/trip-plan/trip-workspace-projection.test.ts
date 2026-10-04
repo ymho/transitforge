@@ -45,6 +45,39 @@ describe("Trip V2 workspace projections", () => {
     expect(itineraryItemCopy(window)).toContain("約90分"); expect(itineraryItemCopy(window)).toContain("Europe/Vienna");
     expect(itineraryItemCopy(placeStay("stay", "宿"))).toContain("2026-09-23 チェックアウト");
   });
+  it("combines known-zone rail and unknown-zone lodging into one calendar day without changing their source identities", () => {
+    const f = railSelectionFixture(), journey = selectRailJourney(f.candidate, f.inputs, f.selectedAt);
+    const originalStay = placeStay("stay", "宿");
+    const stay: ItineraryItem = { ...originalStay, schedule: { type: "day", date: "2026-09-13", endDate: "2026-09-14" },
+      selection: originalStay.selection.status === "selected" ? { status: "selected", accommodation: { ...originalStay.selection.accommodation,
+        checkInDate: "2026-09-13", checkOutDate: "2026-09-14" } } : originalStay.selection };
+    const trip = createTrip(placesTripId, "旅", placesAt, [
+      { id: "rail", title: "鉄道", type: "transport", schedule: projectRailSchedule(journey), detail: { mode: "rail", status: "selected", journey } }, stay,
+    ]), before = structuredClone(trip), view = tripWorkspaceProjection(trip);
+    expect(view.timelineDays.map(([, entries, label]) => [label, entries.map(e => [e.sourceItemId, e.role])])).toEqual([
+      ["2026-09-13", [["rail", "visit"], ["stay", "start"]]], ["2026-09-14", [["stay", "end"]]],
+    ]);
+    const [, entries] = view.timelineDays[0]!;
+    expect(entries[0]?.timeZone).toBe("Asia/Tokyo"); expect(entries[1]?.timeZone).toBeUndefined();
+    expect(entries[1]?.placement).toBe("date-only");
+    expect(entries.map(e => e.sourceDayKey)).toEqual(view.dayEntries.slice(0, 2).map(([key]) => key));
+    expect(entries.map(e => e.entryKey)).toEqual(view.dayEntries.slice(0, 2).flatMap(([, es]) => es.map(e => e.entryKey)));
+    expect(trip).toEqual(before);
+    expect(tripWorkspaceProjection(JSON.parse(JSON.stringify(trip))).timelineDays).toEqual(view.timelineDays);
+  });
+  it("keeps item order and logical edit targets when calendar dates coincide across zones and bindings", () => {
+    const fixed: ItineraryItem = { ...placeActivity("fixed"), schedule: { type: "fixed", startAt: { at: "2026-09-22T23:30:00-04:00", timeZone: "America/New_York" } } };
+    const trip: Trip = { ...createTrip(placesTripId, "旅", placesAt), items: [fixed,
+      { ...placeActivity("bound"), schedule: { type: "relative", dayId: "second" } },
+      { ...placeActivity("unbound"), schedule: { type: "relative", dayId: "third" } }], schemaVersion: 3,
+      timeline: { version: 1, logicalDays: [{ id: "second" }, { id: "third" }], calendarBindings: [{ logicalDayId: "second", date: "2026-09-22", timeZone: "Europe/Vienna", basis: "explicit" }] } };
+    const view = tripWorkspaceProjection(trip);
+    expect(view.timelineDays.map(([, entries, label]) => [label, entries.map(e => e.sourceItemId)])).toEqual([
+      ["2026-09-22", ["fixed", "bound"]], ["third", ["unbound"]],
+    ]);
+    expect(view.timelineDays[0]?.[1][1]).toMatchObject({ logicalDayId: "second", timeZone: "Europe/Vienna", sourceDayKey: "date:2026-09-22:Europe/Vienna:logical:second" });
+    expect(view.timelineDays[0]?.[1][0]?.localDate).toBe("2026-09-22");
+  });
   it("separates destinations, adopted cities, party and field-level assumptions", () => {
     const trip: Trip = { ...multiCityTrip(), request: { party: { adults: 2, children: [{}], source: "user" }, constraints: [
       { id: "wish", strength: "soft", source: "user", scope: { type: "trip" }, requirement: { type: "destinations", places: [{ name: "Paris", sources: [] }], order: "flexible" } },

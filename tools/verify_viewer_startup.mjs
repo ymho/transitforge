@@ -14,7 +14,7 @@ const rail = selectRailJourney(fixture.candidate, fixture.inputs, fixture.select
 const trips = [createTrip("11111111-1111-4111-8111-111111111111", "乗換のある旅", fixture.selectedAt, [
   { id: "rail", title: "AからCへ", type: "transport", detail: { status: "selected", mode: "rail", journey: rail }, schedule: projectRailSchedule(rail) },
   { id: "visit", title: "町を歩く", type: "activity", category: "sightseeing", schedule: { type: "day", date: "2026-09-13", timeZone: "Asia/Tokyo" } },
-  { id: "stay", title: "町の宿", type: "stay", selection: { status: "unselected" }, schedule: { type: "day", date: "2026-09-13", endDate: "2026-09-14", timeZone: "Asia/Tokyo" } }
+  { id: "stay", title: "町の宿", type: "stay", selection: { status: "unselected" }, schedule: { type: "day", date: "2026-09-13", endDate: "2026-09-14" } }
 ], { constraints: [], assumptions: [], party: { adults: 2, children: [{ age: 7 }], source: "user" } }),
 createTrip("22222222-2222-4222-8222-222222222222", "別の旅", fixture.selectedAt)];
 const conversation = trip => ({ conversationId: trip.id, tripId: trip.id, title: trip.title, scope: "trip", summary: "", resolvedTopics: [], pendingTopics: [], createdAt: trip.createdAt, updatedAt: trip.updatedAt, revision: 0, messageCount: 2 });
@@ -128,6 +128,13 @@ try {
     assert.deepEqual(errors, []);
     assert.equal(await page.locator(".trip-detail-tabs").count(), 0);
     assert.equal(await page.locator(".trip-workspace-readiness, .trip-workspace-checklist, .trip-workspace-feasibility").count(), 0);
+    assert.deepEqual(await page.locator('.trip-day-tabs [role="tab"]').allTextContents(), ["2026-09-13", "2026-09-14"]);
+    assert.deepEqual(await page.locator('.trip-workspace-day:not([hidden]) [data-item-id]').evaluateAll(cards => cards.map(card => card.dataset.itemId)), ["rail", "visit", "stay"]);
+    assert.match(await page.locator('.trip-workspace-day:not([hidden]) [data-item-id="stay"]').textContent(), /未定.*チェックイン/s);
+    await page.getByRole("tab", { name: "2026-09-14", exact: true }).click();
+    assert.match(await page.locator('.trip-workspace-day:not([hidden]) [data-item-id="stay"]').textContent(), /未定.*チェックアウト/s);
+    await checkLayout("checkout");
+    await page.getByRole("tab", { name: "2026-09-13", exact: true }).click();
     assert.match(await page.locator(".trip-route-service").first().textContent(), /新幹線 テスト列車/);
     await checkLayout("timeline");
     assert.equal(await page.locator(".trip-route-leg").count(), 2);

@@ -2,7 +2,7 @@
 import { expect, it, afterEach, vi } from "vitest";
 import { createTripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import { createTrip, applyTripProposal } from "@raiquora/trip/trip";
-import { multiCityTrip } from "../../../../modules/trip/domain/trip-places.fixture";
+import { multiCityTrip, placeStay } from "../../../../modules/trip/domain/trip-places.fixture";
 import { configureTripWorkspace } from "./trip-workspace";
 import { renderTripTimeEditor } from "./trip-time-editor";
 import { renderTripRouteTimeline } from "./trip-route-timeline";
@@ -46,4 +46,50 @@ it("projects a rail trip into the actual workspace without losing its legs", () 
   const app = document.createElement("main"); document.body.append(app);
   configureTripWorkspace({ app, chat: document.createElement("section"), messages: document.createElement("div"), input: document.createElement("input"), controller, ask: vi.fn(), showContext: vi.fn(), returnToConversation: vi.fn(), showMap: vi.fn(), nextItemId: () => "after" });
   expect(app.querySelectorAll(".trip-route-leg")).toHaveLength(2);
+});
+it("shares one date tab for rail and an unknown-zone stay, retaining the correct add and time-edit targets after reload", async () => {
+  const f = railSelectionFixture(), journey = selectRailJourney(f.candidate, f.inputs, f.selectedAt), originalStay = placeStay("hotel", "宿");
+  if (originalStay.selection.status !== "selected") throw new Error("Selected fixture required");
+  let trip = createTrip("11111111-1111-4111-8111-111111111111", "乗換と宿泊の旅", f.selectedAt, [
+    { id: "rail", title: "AからCへ", type: "transport", detail: { status: "selected", mode: "rail", journey }, schedule: projectRailSchedule(journey) },
+    { ...originalStay, schedule: { type: "day", date: "2026-09-13", endDate: "2026-09-14" }, selection: { status: "selected", accommodation: {
+      ...originalStay.selection.accommodation, checkInDate: "2026-09-13", checkOutDate: "2026-09-14" } } },
+  ]);
+  const originalRail = structuredClone(trip.items[0]);
+  const controller = createTripWorkspaceController("one");
+  const source = { getCurrentTrip: () => trip, confirmProposal: async (p: Parameters<typeof applyTripProposal>[1]) => { trip = applyTripProposal(trip, p); } };
+  controller.attach("one", source);
+  const app = document.createElement("main"); document.body.append(app);
+  let nextItem = 0;
+  const ui = configureTripWorkspace({ app, chat: document.createElement("section"), messages: document.createElement("div"), input: document.createElement("input"), controller,
+    ask: vi.fn(), showContext: vi.fn(), returnToConversation: vi.fn(), showMap: vi.fn(), nextItemId: () => `after-${++nextItem}` });
+  const tabs = () => [...app.querySelectorAll<HTMLButtonElement>('.trip-day-tabs [role="tab"]')];
+  expect(tabs().map(t => t.textContent)).toEqual(["2026-09-13", "2026-09-14"]);
+  const first = app.querySelector<HTMLElement>('.trip-workspace-day:not([hidden])')!;
+  expect([...first.querySelectorAll<HTMLElement>('[data-item-id]')].map(c => c.dataset.itemId)).toEqual(["rail", "hotel"]);
+  expect(first.querySelectorAll(".trip-route-leg")).toHaveLength(2);
+  const checkIn = first.querySelector<HTMLElement>('[data-item-id="hotel"]')!;
+  expect(checkIn.textContent).toContain("チェックイン");
+  const time = checkIn.querySelector<HTMLButtonElement>('.trip-time-control button')!;
+  expect(time.textContent).toBe("未定"); time.click();
+  const timeForm = checkIn.querySelector<HTMLFormElement>('.trip-time-editor')!;
+  expect(timeForm.querySelector<HTMLInputElement>('input[type="date"]')?.value).toBe("2026-09-13");
+  expect(timeForm.querySelector<HTMLInputElement>('input[type="text"]')?.value).toBe("");
+  button(timeForm, "取消").click();
+  button(checkIn, "＋ この後に追加").click();
+  const add = app.querySelector<HTMLFormElement>(".trip-workspace-add")!;
+  add.querySelector<HTMLInputElement>("input")!.value = "夕食"; add.dispatchEvent(new Event("submit", { cancelable: true }));
+  expect(controller.proposal()?.patches[0]).toMatchObject({ type: "add", afterId: "hotel", item: { schedule: { type: "day", date: "2026-09-13" } } });
+  await controller.confirm();
+  expect(trip.items[0]).toEqual(originalRail);
+  const meal = trip.items.find(i => i.id === "after-1")!; expect(meal.schedule).not.toHaveProperty("timeZone");
+  trip = JSON.parse(JSON.stringify(trip)); controller.attach("one", source); ui.render();
+  expect(tabs().map(t => t.textContent)).toEqual(["2026-09-13", "2026-09-14"]);
+  expect(app.querySelectorAll('.trip-workspace-day:not([hidden]) [data-item-id]')).toHaveLength(3);
+  tabs()[1]!.click();
+  const checkout = app.querySelector<HTMLElement>('.trip-workspace-day:not([hidden]) [data-item-id="hotel"]')!;
+  expect(checkout.textContent).toContain("チェックアウト");
+  button(checkout, "＋ この後に追加").click();
+  add.querySelector<HTMLInputElement>("input")!.value = "朝食"; add.dispatchEvent(new Event("submit", { cancelable: true }));
+  expect(controller.proposal()?.patches[0]).toMatchObject({ type: "add", afterId: "hotel", item: { schedule: { type: "day", date: "2026-09-14" } } });
 });
