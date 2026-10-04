@@ -51,8 +51,8 @@ run "current_topology" {
     error_message = "Strands v2 evaluation must use its dedicated OIDC role and inline Bedrock-only policy."
   }
   assert {
-    condition     = aws_cognito_user_pool_client.spa.access_token_validity == 5 && aws_cognito_user_pool_client.spa.id_token_validity == 5 && aws_cognito_user_pool_client.spa.refresh_token_validity == 8 && aws_cognito_user_pool_client.spa.token_validity_units[0].refresh_token == "hours"
-    error_message = "The SPA must keep short-lived access/ID tokens and bound refresh to eight hours."
+    condition     = aws_cognito_user_pool_client.spa.access_token_validity == 5 && aws_cognito_user_pool_client.spa.id_token_validity == 5 && aws_cognito_user_pool_client.spa.refresh_token_validity == 12 && aws_cognito_user_pool_client.spa.token_validity_units[0].refresh_token == "hours"
+    error_message = "The SPA must keep short-lived access/ID tokens and bound refresh to twelve hours."
   }
   assert {
     condition     = aws_cognito_user_pool.users.admin_create_user_config[0].allow_admin_create_user_only && contains(aws_cognito_user_pool.users.auto_verified_attributes, "email")
