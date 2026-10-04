@@ -54,7 +54,7 @@ export function parseProviderResponse(value: unknown, request: TravelProviderSea
     const accommodations = value.accommodations.map(item => {
       if (!record(item)) throw new Error();
       keys(item, ["kind", "provider", "providerItemId", "name", "checkInDate", "checkOutDate", "availability", "bookingUrl", "imageUrl", "areaName", "address", "latitude", "longitude", "reviewAverage", "reviewCount", "price"]);
-      if (item.kind !== "accommodation" || item.provider !== "travel-provider" || item.checkInDate !== request.checkInDate || item.checkOutDate !== request.checkOutDate || !["available", "unknown"].includes(item.availability as string)) throw new Error();
+      if (item.kind !== "accommodation" || !["travel-provider", "rakuten-travel"].includes(item.provider as string) || item.checkInDate !== request.checkInDate || item.checkOutDate !== request.checkOutDate || !["available", "unknown"].includes(item.availability as string)) throw new Error();
       for (const field of ["providerItemId", "name"]) if (typeof item[field] !== "string" || !(item[field] as string).trim()) throw new Error();
       for (const field of ["providerItemId", "name", "areaName", "address", "bookingUrl", "imageUrl"]) {
         if (item[field] !== undefined && (typeof item[field] !== "string" || (item[field] as string).length > 2_048)) throw new Error();
@@ -68,7 +68,8 @@ export function parseProviderResponse(value: unknown, request: TravelProviderSea
         if (number !== undefined && (typeof number !== "number" || !Number.isFinite(number) || number < min || number > max || field === "reviewCount" && !Number.isInteger(number))) throw new Error();
       }
       if (item.price !== undefined && !isPriceObservation(item.price)) throw new Error();
-      return createAccommodationOffering("travel-provider", request, item as unknown as AccommodationOffering);
+      if (item.provider === "rakuten-travel" && !/^[1-9][0-9]*$/u.test(item.providerItemId as string)) throw new Error();
+      return createAccommodationOffering(item.provider as string, request, item as unknown as AccommodationOffering);
     });
     return { ok: true, accommodations };
   } catch { throw new ProviderBoundaryError("malformed_response"); }

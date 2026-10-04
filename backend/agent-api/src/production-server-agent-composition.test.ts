@@ -4,12 +4,29 @@ import { createProductionConversationAgent } from "./composition/production-conv
 import { StrandsAgentEngine } from "./adapters/strands-agent-engine.js";
 import { createStrandsServerRuntime } from "./adapters/strands-server-runtime.js";
 import { agentV2SystemPrompt } from "./usecases/agent-v2-system-prompt.js";
+import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 vi.mock("./composition/production-conversation-agent.js", () => ({ createProductionConversationAgent: vi.fn() }));
 vi.mock("./adapters/strands-agent-engine.js", async importOriginal => ({
   ...await importOriginal<typeof import("./adapters/strands-agent-engine.js")>(),
   StrandsAgentEngine: vi.fn(function () {}),
 }));
 vi.mock("./adapters/strands-server-runtime.js", () => ({ createStrandsServerRuntime: vi.fn(() => vi.fn()) }));
+it("connects published hotel observations to minimal qualified identities in production composition", () => {
+  createProductionServerAgent("hotel-selection", {
+    SERVER_AGENT_MAX_EXECUTION_MS: "90000",
+    AI_TIMETABLE_BUCKET: "test", TRAFFIC_SNAPSHOT_BUCKET: "test", AGENT_PROVIDER_SECRET_ARN: "test", VIEWER_ORIGIN: "https://example.com",
+    SERVER_STATE_TABLE_NAME: "test", TRIP_TABLE_NAME: "test", FIXED_EGRESS_PROVIDER_FUNCTION_ARN: "test",
+  });
+  const options = vi.mocked(createProductionConversationAgent).mock.calls.at(-1)![0];
+  const accommodation = options.additionalTools!.find(binding => binding.descriptor.name === "search_accommodations")!;
+  const evidence = accommodation.evidence({ accommodations: [{ kind: "accommodation", provider: "rakuten-travel", providerItemId: "42", name: "検証用ホテル",
+    checkInDate: "2026-10-04", checkOutDate: "2026-10-05", availability: "unknown" }] },
+  { executionId: "hotel-selection", toolCallId: "hotel-call", toolName: "search_accommodations", queryFingerprint: "q", retrievedAt: "2026-10-04T00:00:00Z" });
+  const card = { evidenceId: evidence[0]!.id, name: "検証用ホテル", summary: evidence[0]!.facts.accommodationSummary as string, retrievedAt: "2026-10-04T00:00:00Z" };
+  expect(options.verifiedSearchSelectionItems!({ publicAccommodationPresentation: { version: "public-accommodation-presentation-v1", cards: [card] } } as AgentRuntimeResult)).toMatchObject([
+    { id: card.evidenceId, type: "stay", selection: { accommodation: { provider: "rakuten-travel", providerItemId: "42", place: { name: card.name }, sources: [{ attribution: "楽天トラベル" }] } } },
+  ]);
+});
 it("passes the validated business deadline to the production stateful Runtime", () => {
   createProductionServerAgent("test", {
     SERVER_AGENT_MAX_EXECUTION_MS: "90000", AI_TIMETABLE_BUCKET: "test", TRAFFIC_SNAPSHOT_BUCKET: "test",

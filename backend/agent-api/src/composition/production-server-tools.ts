@@ -22,6 +22,7 @@ export function productionServerTools(options: {
   representativeTimetable?: AgentOperation;
   discovery?: AgentOperation;
   onJourneyResult?: (result: JourneySearchResponse) => void;
+  onAccommodationEvidence?: (offerings: readonly import("@raiquora/trip/travel-candidate").AccommodationOffering[], evidence: readonly import("@raiquora/agent/evidence-model").Evidence[], retrievedAt: string) => void;
 }): ServerAgentToolBinding[] {
   const state: ExternalTravelToolState = {};
   const journeyResults = new Map<string, JourneySearchResponse>();
@@ -160,7 +161,13 @@ export function productionServerTools(options: {
     { descriptor: accommodationToolDescriptor, operation: async (input, context) => {
       const response = await options.accommodation(input, context);
       return { ...response, body: { ...response.body, searchAdults: input.adults ?? 1 } };
-    }, evidence: externalTravelEvidence },
+    }, evidence: (output, context) => {
+      const evidence = externalTravelEvidence(output, context);
+      if (output && typeof output === "object" && "accommodations" in output && Array.isArray(output.accommodations)) {
+        options.onAccommodationEvidence?.(output.accommodations, evidence, context.retrievedAt);
+      }
+      return evidence;
+    } },
     { descriptor: journeyDescriptor, operation: async (input, context) => {
       const response = await options.journey({ ...input, contractVersion: "journey-search-v1" }, context);
       if ((response.statusCode ?? 200) >= 400) return response;
