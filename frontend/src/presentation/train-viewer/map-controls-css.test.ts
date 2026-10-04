@@ -13,14 +13,13 @@ describe("map control hidden semantics with production CSS", () => {
     document.head.append(style);
     document.body.innerHTML = `<main data-mobile="${mobile}"><div class="map-tools">
       <button id="toggle">mode</button><button id="now">now</button>
-      <div class="playback-speed-menu"><button id="speed">1×</button></div>
       <fieldset id="simulation"><button>play</button></fieldset>
       <button id="congestion">congestion</button></div>
       <div class="date-time-display"><input id="time"></div></main>`;
     const get = <T extends HTMLElement>(s: string) => document.querySelector<T>(s)!;
     const elements = { app: get("main"), dateTimeInput: get<HTMLInputElement>("#time"),
       currentTimeButton: get<HTMLButtonElement>("#now"), toggle: get<HTMLButtonElement>("#toggle"),
-      simulationOnlyControls: [get("#now"), get(".playback-speed-menu"), get("#simulation")],
+      simulationOnlyControls: [get("#now"), get("#simulation")],
       realtimeOnlyControls: [get("#congestion")] };
     // A control with a display:none ancestor is not a sequential keyboard target.
     const visible = (node: HTMLElement): boolean => getComputedStyle(node).display !== "none"
@@ -28,15 +27,15 @@ describe("map control hidden semantics with production CSS", () => {
     for (const focusMode of ["true", "false", "true"]) {
       elements.app.dataset.mapFocusMode = focusMode;
       renderDisplayMode(elements, true, "simulation");
-      expect(getComputedStyle(get(".playback-speed-menu")).display).toBe("grid");
-      expect(visible(get("#speed"))).toBe(true);
+      expect(getComputedStyle(get("#now")).display).toBe("grid");
+      expect(visible(get("#now"))).toBe(true);
       expect(visible(get("#congestion"))).toBe(false);
       renderDisplayMode(elements, true, "digital-twin");
       for (const node of elements.simulationOnlyControls) expect(getComputedStyle(node).display).toBe("none");
-      expect(visible(get("#speed"))).toBe(false);
+      expect(visible(get("#now"))).toBe(false);
       expect(visible(get("#congestion"))).toBe(true);
       renderDisplayMode(elements, false, "simulation");
-      expect(visible(get("#speed"))).toBe(true);
+      expect(visible(get("#now"))).toBe(true);
       expect(visible(get("#congestion"))).toBe(false);
       expect(elements.toggle.disabled).toBe(true);
     }
