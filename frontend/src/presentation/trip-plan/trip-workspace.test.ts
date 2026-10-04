@@ -64,7 +64,10 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(f.ui.panel.querySelector("#trip-detail-map")).toBeNull();
     expect(f.ui.panel.querySelector(".trip-workspace-days")).not.toBeNull();
     const details = f.ui.panel.querySelector<HTMLDetailsElement>(".trip-extra-details")!;
-    expect(details.open).toBe(false); expect(details.textContent).toContain("旅程の詳細");
+    expect(f.ui.panel.querySelector(".trip-workspace-readiness")).toBeNull();
+    expect(f.ui.panel.querySelector(".trip-workspace-checklist")).toBeNull();
+    expect(f.ui.panel.querySelector(".trip-workspace-feasibility")).toBeNull();
+    expect(details.open).toBe(false); expect(details.textContent).toContain("費用");
     expect(f.controller.current()).toEqual(multiCityTrip());
   });
   it("derives day tabs from authored schedules and keeps unscheduled items separate", () => {
@@ -161,7 +164,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(f.ui.panel.textContent).toContain("別の旅");
     button(f.ui.panel, "旅行モードを開く").click();
     expect(load).toHaveBeenCalledTimes(1); expect(f.ui.panel.textContent).toContain("プレビュー");
-    button(f.ui.panel, "旅程詳細へ戻る").click(); expect(f.ui.panel.textContent).toContain("旅程の詳細");
+    button(f.ui.panel, "旅程詳細へ戻る").click(); expect(f.ui.panel.textContent).toContain("費用");
   });
   it("keeps server ownership while loading/unavailable, retries and only previews changes", async () => {
     const trip = multiCityTrip(), get = vi.fn(async () => trip);

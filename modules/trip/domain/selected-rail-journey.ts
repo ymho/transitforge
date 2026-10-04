@@ -17,6 +17,10 @@ export interface ScheduledRailLeg {
   readonly serviceDate: string;
   readonly serviceUid: string;
   readonly trainNumber: string;
+  /** Verified timetable labels; optional for records saved before this contract. */
+  readonly serviceType?: string;
+  readonly trainName?: string;
+  readonly serviceDestination?: string;
   readonly origin: PlaceSnapshot;
   readonly destination: PlaceSnapshot;
   readonly originStopIndex: number;
@@ -133,6 +137,9 @@ export function verifyRailCandidateSchedule(
     const result: ScheduledRailLeg = {
       id: `leg-${index + 1}`, serviceDate: ref.serviceDate, serviceUid: leg.serviceUid,
       trainNumber: leg.trainNumber,
+      ...(trains[0]!.service_type ? { serviceType: trains[0]!.service_type } : {}),
+      ...(trains[0]!.train_name ? { trainName: trains[0]!.train_name } : {}),
+      ...(trains[0]!.destination_station ? { serviceDestination: trains[0]!.destination_station } : {}),
       origin: scheduledStationPlace(origin.station_name, sources[index]!),
       destination: scheduledStationPlace(destination.station_name, sources[index]!),
       originStopIndex: ref.originStopIndex, destinationStopIndex: ref.destinationStopIndex,
@@ -175,7 +182,10 @@ function validateScheduledRailFacts(value: Pick<SelectedRailJourney, "serviceDat
     throw new Error("Invalid selected rail journey");
   }
   value.legs.forEach((leg, index) => {
-    exactKeys(leg, ["id", "serviceDate", "serviceUid", "trainNumber", "origin", "destination", "originStopIndex", "destinationStopIndex", "scheduledDeparture", "scheduledArrival"]);
+    exactKeys(leg, ["id", "serviceDate", "serviceUid", "trainNumber", "serviceType", "trainName", "serviceDestination", "origin", "destination", "originStopIndex", "destinationStopIndex", "scheduledDeparture", "scheduledArrival"]);
+    for (const label of [leg.serviceType, leg.trainName, leg.serviceDestination]) {
+      if (label !== undefined && (typeof label !== "string" || !label.trim() || label.length > 200)) throw new Error("Invalid scheduled rail label");
+    }
     validatePlaceSnapshot(leg.origin); validatePlaceSnapshot(leg.destination);
     exactKeys(leg.scheduledDeparture, ["at", "timeZone"]); exactKeys(leg.scheduledArrival, ["at", "timeZone"]);
     validateZonedInstant(leg.scheduledDeparture); validateZonedInstant(leg.scheduledArrival);
@@ -224,7 +234,10 @@ export function revalidateSelectedRailJourney(value: SelectedRailJourney, inputs
           evidence.sourceId !== input.sourceId || evidence.confidence !== "provider-schedule" ||
           !validInstant(evidence.retrievedAt)) return false;
       const trains = input.index.trains.filter((train) => train.service_uid === leg.serviceUid);
-      if (trains.length !== 1 || trains[0]!.train_no !== leg.trainNumber) return false;
+      if (trains.length !== 1 || trains[0]!.train_no !== leg.trainNumber ||
+          leg.serviceType !== undefined && leg.serviceType !== trains[0]!.service_type ||
+          leg.trainName !== undefined && leg.trainName !== trains[0]!.train_name ||
+          leg.serviceDestination !== undefined && leg.serviceDestination !== trains[0]!.destination_station) return false;
       const origin = trains[0]!.stops[leg.originStopIndex];
       const destination = trains[0]!.stops[leg.destinationStopIndex];
       if (origin?.station_name !== leg.origin.name || destination?.station_name !== leg.destination.name ||

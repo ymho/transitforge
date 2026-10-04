@@ -1,22 +1,25 @@
-/* Product screens share the approved palette. Realtime map keeps its existing cascade. */
-#app[data-primary-view]:not([data-primary-view="map"]) {
+/* Shared application chrome uses one palette; realtime map rendering is unchanged. */
+#app[data-primary-view] {
   --tf-bg: #fff; --tf-ink: #243043; --tf-muted: #667185; --tf-line: #e3e8ef; --tf-blue: #2867a8; --tf-soft: #f3f6fa;
   --product-surface: var(--tf-bg); --product-surface-muted: var(--tf-soft); --product-paper: var(--tf-bg); --product-ink: var(--tf-ink); --product-muted: var(--tf-muted); --product-line: var(--tf-line); --product-accent: var(--tf-blue);
   --product-font: -apple-system, BlinkMacSystemFont, "Noto Sans JP", sans-serif;
   --product-radius: 9px; --product-control-radius: 7px;
   --glass-canvas: var(--tf-bg); --glass-surface-strong: var(--tf-bg); --glass-surface-muted: var(--tf-soft); --glass-muted: var(--tf-muted); --glass-border-subtle: var(--tf-line); --glass-accent-soft: var(--tf-soft); --glass-surface: var(--tf-bg); --glass-text: var(--tf-ink); --glass-text-secondary: var(--tf-muted); --glass-accent: var(--tf-blue);
-  color-scheme: light; background: var(--tf-bg); color: var(--tf-ink); font: 400 14px/1.55 var(--product-font);
+  color-scheme: light;
+}
+#app[data-primary-view]:not([data-primary-view="map"]) {
+  background: var(--tf-bg); color: var(--tf-ink); font: 400 14px/1.55 var(--product-font);
 
   & .product-page, & .trip-workspace, & .my-shell { background: var(--tf-bg); color: var(--tf-ink); }
-  & :where(.product-page, .trip-workspace, .ai-guide-panel) { font: inherit; }
-  & :where(.product-page, .trip-workspace, .ai-guide-panel) :is(h1, h2, h3) { font-family: var(--product-font); font-weight: 500; letter-spacing: normal; }
-  & :where(.product-page, .trip-workspace, .ai-guide-panel) h1 { font-size: 20px; }
-  & :where(.product-page, .trip-workspace, .ai-guide-panel) h2 { font-size: 16px; }
-  & :where(.product-page, .trip-workspace, .ai-guide-panel) h3 { font-size: 14px; }
-  & :where(.product-page, .trip-workspace, .ai-guide-panel) p { color: var(--tf-muted); font-size: 12px; line-height: 1.55; }
-  & :where(.product-page, .trip-workspace, .ai-guide-panel) :is(button, summary) { min-height: 44px; font: inherit; cursor: pointer; }
-  & :where(.product-page, .trip-workspace, .ai-guide-panel) button { background: var(--tf-bg); color: var(--tf-blue); border: 1px solid var(--tf-line); border-radius: 7px; padding: 8px 10px; box-shadow: none; }
-  & :where(.product-page, .trip-workspace, .ai-guide-panel) :is(input:not([type="checkbox"]), select, textarea) { min-width: 0; max-width: 100%; min-height: 44px; box-sizing: border-box; border: 1px solid var(--tf-line); border-radius: 7px; padding: 8px; background: var(--tf-bg); color: var(--tf-ink); font: 400 16px/1.4 var(--product-font); }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) { font: inherit; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) :is(h1, h2, h3) { font-family: var(--product-font); font-weight: 500; letter-spacing: normal; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) h1 { font-size: 20px; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) h2 { font-size: 16px; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) h3 { font-size: 14px; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) p { color: var(--tf-muted); font-size: 12px; line-height: 1.55; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) :is(button, summary) { min-height: 44px; font: inherit; cursor: pointer; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) button { background: var(--tf-bg); color: var(--tf-blue); border: 1px solid var(--tf-line); border-radius: 7px; padding: 8px 10px; box-shadow: none; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) :is(input:not([type="checkbox"]), select, textarea) { min-width: 0; max-width: 100%; min-height: 44px; box-sizing: border-box; border: 1px solid var(--tf-line); border-radius: 7px; padding: 8px; background: var(--tf-bg); color: var(--tf-ink); font: 400 16px/1.4 var(--product-font); }
   & :is(button, a, summary, input, select, textarea):focus-visible { outline: 2px solid var(--tf-blue); outline-offset: 3px; }
   & .ds-icon { width: 17px; height: 17px; flex-shrink: 0; }
   & .product-nav { box-shadow: none; background: var(--tf-bg); border-color: var(--tf-line); border-radius: 9px; }
@@ -37,7 +40,13 @@
   & .trip-party-part { display: inline-flex; align-items: center; gap: 5px; }
   & .trip-party-part .ds-icon { width: 16px; height: 16px; }
   & .home-trip-manage { display: block; margin: 0; font-size: 12px; color: var(--tf-muted); }
-  & .home-trip-manage summary { display: flex; align-items: center; }
+  & .home-trip-manage { position: absolute; top: 10px; right: 0; }
+  & .home-trip-card { position: relative; padding-right: 44px; }
+  & .home-trip-manage summary { display: grid; place-items: center; width: 44px; font-size: 22px; list-style: none; border-radius: 7px; }
+  & .home-trip-manage summary::-webkit-details-marker { display: none; }
+  & .home-trip-manage[open] { z-index: 3; padding: 0 6px 6px; background: var(--tf-bg); border: 1px solid var(--tf-line); border-radius: 9px; box-shadow: 0 5px 18px #12273f12; }
+  & .home-trip-manage button { display: block; width: 100%; text-align: left; border: 0; }
+  & [data-trip-archive] { color: #c35252; }
   & .trip-workspace { border: 0; box-shadow: none; padding: 22px 20px 28px; overflow-x: hidden; }
   & .trip-workspace-heading { display: block; padding: 0 0 12px; margin: 0; border: 0; background: transparent; }
   & .trip-workspace-heading h1 { margin: 0 0 3px; }
@@ -128,10 +137,62 @@
   & .conversation-feedback button { width: 44px; height: 44px; }
   & .conversation-feedback .ds-icon { width: 15px; height: 15px; }
   & .trip-workspace-status:empty { display: none; }
+  & .consultation-page { background: var(--tf-bg); color: var(--tf-ink); font: inherit; padding-top: 18px; }
+  & .consultation-layout { max-width: 1080px; gap: 16px; }
+  & .consultation-heading h1 { font-size: 20px; font-weight: 500; }
+  & .consultation-heading .ds-eyebrow { color: var(--tf-muted); }
+  & .consultation-context { padding: 8px 0 12px; border-bottom: 1px solid var(--tf-line); }
+  & .consultation-identity { overflow: hidden; }
+  & .consultation-identity strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--tf-ink); font-size: 13px; font-weight: 500; }
+  & .consultation-identity strong::before { display: none; }
+  & .consultation-identity :is(p, small) { color: var(--tf-muted); font-size: 12px; }
+  & .consultation-context-actions { gap: 6px; }
+  & .consultation-context-actions button { color: var(--tf-blue); background: transparent; border: 0; border-radius: 7px; font-size: 12px; padding: 6px; min-height: 44px; }
+  & .consultation-messages { padding: 16px 0; }
+  & .consultation-messages > li { margin-bottom: 20px; color: var(--tf-ink); font-size: 14px; line-height: 1.65; }
+  & .consultation-messages > .ai-guide-message-assistant { width: 100%; max-width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  & .consultation-messages > .ai-guide-message-assistant::before { display: none; }
+  & .consultation-messages > .ai-guide-message-user { width: fit-content; max-width: 85%; padding: 9px 12px; border: 0; border-radius: 9px; color: var(--tf-ink); background: var(--tf-soft); text-align: left; }
+  & .ai-guide-message-copy :is(p, li) { color: var(--tf-ink); font-size: 14px; line-height: 1.65; }
+  & .ai-guide-message-copy p { margin: 0 0 12px; }
+  & .ai-guide-message-copy :is(h2, h3, h4, h5, h6) { font-size: 15px; margin: 16px 0 8px; font-weight: 500; }
+  & .ai-guide-message-copy :is(ul, ol) { padding-left: 20px; }
+  & .ai-guide-message-copy a { color: var(--tf-blue); }
+  & .consultation-composer { padding: 4px; margin: 0; gap: 4px; background: var(--tf-bg); border: 1px solid var(--tf-line); border-radius: 9px; box-shadow: none; }
+  & .consultation-composer input { border: 0; background: transparent; min-height: 44px; padding: 8px; }
+  & .consultation-composer button { width: 44px; min-width: 44px; min-height: 44px; flex-basis: 44px; padding: 10px; border: 0; background: var(--tf-blue); color: var(--tf-bg); border-radius: 7px; }
+  & .consultation-composer input::placeholder { color: var(--tf-muted); }
+  & .consultation-conditions { border-color: var(--tf-line); color: var(--tf-ink); background: var(--tf-bg); }
+  & :is(.consultation-condition-row, .consultation-conditions button, .consultation-conditions select) { border-color: var(--tf-line); color: var(--tf-ink); }
+  & .consultation-condition-row :is(span, small) { color: var(--tf-muted); }
+  & .consultation-backdrop { background: #11293b66; }
+  & .consultation-page button:hover:not(:disabled) { color: var(--tf-blue); background: var(--tf-soft); border-color: var(--tf-line); }
+  & .consultation-composer button:hover:not(:disabled) { background: var(--tf-blue); color: var(--tf-bg); }
+  & .journey-presentation { border: 1px solid var(--tf-line); padding: 12px; }
+  & .journey-presentation > header h2 { font-size: 14px; font-weight: 500; }
+  & .journey-presentation-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+  & :is(.journey-presentation-tabs, .public-plan-candidate-tabs) button { padding: 6px 10px; font-size: 12px; font-weight: 400; }
+  & :is(.journey-presentation-tabs, .public-plan-candidate-tabs) [aria-selected="true"] { color: var(--tf-blue); background: var(--tf-soft); border-color: var(--tf-blue); }
+  & .journey-card, & .journey-card.public-plan-candidate { border: 0; padding: 0; background: transparent; }
+  & .journey-card > header { padding: 4px 0 12px; }
+  & .journey-card > header > span { display: none; }
+  & .journey-card > header > strong { font-size: 16px; font-weight: 500; }
+  & .journey-card > header > small { font-size: 12px; color: var(--tf-muted); }
+  & .journey-card-legs { margin: 0; gap: 0; }
+  & .journey-card-legs > li { border-top: 1px solid var(--tf-line); padding: 12px 0; }
+  & .journey-card-route strong { font-size: 13px; font-weight: 500; }
+  & .journey-card-route :is(span, small) { font-size: 12px; color: var(--tf-muted); }
+  & .journey-adoption { padding: 12px 0 0; border-top: 1px solid var(--tf-line); }
+  & .journey-source-disclosure { margin: 8px 0 0; font-size: 11px; }
+  & .public-plan-presentation, & .public-plan-candidate { background: transparent; box-shadow: none; }
+  & .trip-costs { background: var(--tf-bg); color: var(--tf-ink); border-color: var(--tf-line); }
+  & .conversation-feedback button { border: 0; background: transparent; color: var(--tf-muted); }
+  & .home-prompt { border: 0; box-shadow: none; }
+  & .home-prompt :is(textarea, button) { border: 0; }
   & [hidden] { display: none !important; }
 }
 @media (prefers-color-scheme: dark) {
-  #app[data-primary-view]:not([data-primary-view="map"]) { color-scheme: dark; --tf-bg: #171b21; --tf-ink: #e3e9f1; --tf-muted: #a4afbf; --tf-line: #343c48; --tf-blue: #83b6ed; --tf-soft: #222a35; }
+  #app[data-primary-view] { color-scheme: dark; --tf-bg: #171b21; --tf-ink: #e3e9f1; --tf-muted: #a4afbf; --tf-line: #343c48; --tf-blue: #83b6ed; --tf-soft: #222a35; }
 }
 @media (min-width: 62.001rem) {
   #app[data-primary-view="trip"] .trip-workspace:not([hidden]) { inset: 5rem max(0px, calc((100vw - 720px)/2)) 0; }
@@ -141,4 +202,17 @@
   #app[data-primary-view="trip"] .trip-workspace:not([hidden]) { inset: 0 0 calc(66px + env(safe-area-inset-bottom)); }
   #app[data-primary-view]:not([data-primary-view="map"]) .product-nav { inset: auto 10px env(safe-area-inset-bottom); padding: 4px; }
   #app[data-primary-view]:not([data-primary-view="map"]) .trip-workspace-diff { grid-template-columns: 1fr; }
+}
+
+/* Navigation is shared even when the map canvas itself keeps its own theme. */
+#app[data-primary-view="map"] .product-nav { background: var(--tf-bg); border-color: var(--tf-line); box-shadow: none; border-radius: 9px; }
+#app[data-primary-view="map"] .product-nav :is(a, button) { color: var(--tf-muted); border: 0; font-size: 12px; font-weight: 500; }
+#app[data-primary-view="map"] .product-nav [aria-current="page"] { background: var(--tf-soft); color: var(--tf-blue); border-radius: 7px; }
+@media (prefers-color-scheme: dark) {
+  #app[data-primary-view="map"] .mapboxgl-ctrl-group { background: #222a35; border: 1px solid #343c48; }
+  #app[data-primary-view="map"] .mapboxgl-ctrl-group button + button { border-color: #343c48; }
+  #app[data-primary-view="map"] .mapboxgl-ctrl-icon { filter: invert(1); }
+}
+@media (max-width: 62rem) {
+  #app[data-primary-view="chat"] .consultation-page { inset: 0 0 calc(66px + env(safe-area-inset-bottom)); padding: 14px 16px 10px; }
 }

@@ -4,17 +4,20 @@ import { createServer } from "node:http";
 import { readFile, mkdir } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 
+import { consultationDesignFixture } from "../frontend/src/presentation/concierge/consultation-design.fixture.ts";
 import { createTrip } from "../modules/trip/domain/trip.ts";
 import { railSelectionFixture } from "../modules/trip/domain/selected-rail-journey.fixture.ts";
 import { selectRailJourney, projectRailSchedule } from "../modules/trip/domain/selected-rail-journey.ts";
-const fixture = railSelectionFixture(), rail = selectRailJourney(fixture.candidate, fixture.inputs, fixture.selectedAt);
+const fixture = railSelectionFixture();
+Object.assign(fixture.inputs[0].index.trains[0], { service_type: "新幹線", train_name: "テスト列車", destination_station: "B" });
+const rail = selectRailJourney(fixture.candidate, fixture.inputs, fixture.selectedAt);
 const trips = [createTrip("11111111-1111-4111-8111-111111111111", "乗換のある旅", fixture.selectedAt, [
   { id: "rail", title: "AからCへ", type: "transport", detail: { status: "selected", mode: "rail", journey: rail }, schedule: projectRailSchedule(rail) },
   { id: "visit", title: "町を歩く", type: "activity", category: "sightseeing", schedule: { type: "day", date: "2026-09-13", timeZone: "Asia/Tokyo" } },
   { id: "stay", title: "町の宿", type: "stay", selection: { status: "unselected" }, schedule: { type: "day", date: "2026-09-13", endDate: "2026-09-14", timeZone: "Asia/Tokyo" } }
 ], { constraints: [], assumptions: [], party: { adults: 2, children: [{ age: 7 }], source: "user" } }),
 createTrip("22222222-2222-4222-8222-222222222222", "別の旅", fixture.selectedAt)];
-const conversation = trip => ({ conversationId: trip.id, tripId: trip.id, title: trip.title, scope: "trip", summary: "", resolvedTopics: [], pendingTopics: [], createdAt: trip.createdAt, updatedAt: trip.updatedAt, revision: 0, messageCount: 0 });
+const conversation = trip => ({ conversationId: trip.id, tripId: trip.id, title: trip.title, scope: "trip", summary: "", resolvedTopics: [], pendingTopics: [], createdAt: trip.createdAt, updatedAt: trip.updatedAt, revision: 0, messageCount: 2 });
 await mkdir(".artifacts/product-design", { recursive: true });
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? "playwright");
 const root = resolve("dist");
@@ -55,7 +58,7 @@ try {
       const trip = trips.find(t => t.id === command?.tripId || t.id === command?.conversationId);
       const json = path === "/api/profile/v1" ? { version: "profile-api-v1", profile: null }
         : path === "/api/trips/v1" ? { version: "trip-api-v1", ...(command?.operation === "get" ? { trip, role: "owner" } : { trips }) }
-        : path === "/api/conversations/v1" ? { version: "conversation-api-v1", ...(command?.operation === "get" ? { conversation: conversation(trip ?? trips[0]) } : command?.operation === "history" ? { items: [] } : { items: trips.map(conversation) }) }
+        : path === "/api/conversations/v1" ? { version: "conversation-api-v1", ...(command?.operation === "get" ? { conversation: conversation(trip ?? trips[0]) } : command?.operation === "history" ? { items: [{ role: "user", text: "乗換のある経路を比べてください", sequence: 1, createdAt: fixture.selectedAt }, { role: "assistant", sequence: 2, createdAt: fixture.selectedAt, ...consultationDesignFixture() }] } : { items: trips.map(conversation) }) }
         : { version: "conversation-api-v1", items: [] };
       return route.fulfill({ json });
     });
@@ -124,6 +127,8 @@ try {
     console.log("Timeline render diagnostics", { errors, consoleErrors });
     assert.deepEqual(errors, []);
     assert.equal(await page.locator(".trip-detail-tabs").count(), 0);
+    assert.equal(await page.locator(".trip-workspace-readiness, .trip-workspace-checklist, .trip-workspace-feasibility").count(), 0);
+    assert.match(await page.locator(".trip-route-service").first().textContent(), /新幹線 テスト列車/);
     await checkLayout("timeline");
     assert.equal(await page.locator(".trip-route-leg").count(), 2);
     assert.match(await page.locator(".trip-route-transfer").textContent(), /乗換10分/);
@@ -143,6 +148,21 @@ try {
     await page.locator(`[data-trip="${trips[1].id}"]`).click();
     await page.waitForFunction(() => document.querySelector(".trip-workspace-heading h1")?.textContent === "別の旅");
     assert.equal(await page.locator(".trip-workspace-card").count(), 0);
+    await page.getByRole("button", { name: "‹ 旅程一覧", exact: true }).click();
+    await page.locator(`[data-trip="${trips[0].id}"]`).click();
+    await page.waitForLoadState("networkidle");
+    await page.locator(".trip-header-management summary").click();
+    await page.locator("[data-trip-consultation]").click();
+    await page.locator(".consultation-messages .journey-presentation").waitFor();
+    assert.equal(await page.locator(".consultation-page .public-plan-presentation").count(), 0);
+    assert.equal(await page.locator(".consultation-page .journey-presentation").count(), 1);
+    assert.match(await page.locator(".ai-guide-message-copy strong").first().textContent(), /経路1/);
+    assert.equal(await page.locator(".ai-guide-message-copy p").first().evaluate(el => getComputedStyle(el).fontSize), "14px");
+    await checkLayout("chat");
+    await page.emulateMedia({ colorScheme: "dark" });
+    assert.equal(await page.locator(".consultation-page").evaluate(el => getComputedStyle(el).backgroundColor), "rgb(23, 27, 33)");
+    await page.screenshot({ path: `.artifacts/product-design/chat-dark-${viewport.width}.png` });
+    await page.emulateMedia({ colorScheme: "light" });
     await page.locator('[data-account]').click();
     await page.emulateMedia({ colorScheme: "dark" });
     assert.equal(await page.locator("#app").evaluate(el => getComputedStyle(el).backgroundColor), "rgb(23, 27, 33)");

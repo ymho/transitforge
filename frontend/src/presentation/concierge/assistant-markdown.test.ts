@@ -45,3 +45,9 @@ describe("assistant markdown", () => {
       .toBe("**案内**");
   });
 });
+
+it("repairs a model's spaced bold delimiter without changing code, escaped syntax or URLs", () => {
+  expect(JSON.stringify(parseAssistantMarkdown("**経路1（推奨） **"))).toContain('"kind":"strong"');
+  expect(parseAssistantMarkdown("`**そのまま **`")).toMatchObject([{ children: [{ kind: "code", value: "**そのまま **" }] }]);
+  expect(parseAssistantMarkdown("```\n**そのまま **\n```")).toMatchObject([{ kind: "code", value: "**そのまま **" }]);
+});

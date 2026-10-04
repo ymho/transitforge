@@ -15,7 +15,7 @@ export function renderTripRouteTimeline(item: TransportItineraryItem): HTMLEleme
   legs.forEach((leg, index) => {
     const row = element("li", "trip-route-leg"), icon = element("span"); icon.innerHTML = iconMarkup("train");
     row.append(element("span", "trip-route-time", `${leg.scheduledDeparture.at.slice(11, 16)} 発`), icon,
-      element("strong", "", leg.origin.name), element("p", "trip-route-service", `列車 ${leg.trainNumber}`),
+      element("strong", "", leg.origin.name), element("p", "trip-route-service", `${[leg.serviceType, leg.trainName, leg.trainNumber].filter(Boolean).join(" ")}${leg.serviceDestination ? `・${leg.serviceDestination}行` : ""}`),
       element("span", "trip-route-time", `${leg.scheduledArrival.at.slice(11, 16)} 着`), element("span", "", leg.destination.name));
     list.append(row);
     const next = legs[index + 1];

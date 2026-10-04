@@ -4,6 +4,22 @@ import { revalidateSelectedRailJourney, selectRailJourney, validateSelectedRailJ
 import { validatePlaceSnapshot } from "./place-snapshot";
 
 describe("SelectedRailJourney", () => {
+  it("persists timetable service labels instead of model labels and accepts old records", () => {
+    const { candidate, inputs, selectedAt } = railSelectionFixture();
+    Object.assign(inputs[0]!.index.trains[0]!, { service_type: "新幹線", train_name: "のぞみ7号", destination_station: "博多" });
+    candidate.journey.legs[0]!.trainName = "untrusted model name";
+    const snapshot = selectRailJourney(candidate, inputs, selectedAt);
+    expect(snapshot.legs[0]).toMatchObject({ serviceType: "新幹線", trainName: "のぞみ7号", serviceDestination: "博多" });
+    expect(revalidateSelectedRailJourney(snapshot, inputs)).toBe(true);
+    const old = structuredClone(snapshot);
+    for (const leg of old.legs) { delete (leg as { serviceType?: string }).serviceType; delete (leg as { trainName?: string }).trainName; delete (leg as { serviceDestination?: string }).serviceDestination; }
+    expect(() => validateSelectedRailJourney(old)).not.toThrow();
+    expect(revalidateSelectedRailJourney(old, inputs)).toBe(true);
+    inputs[0]!.index.trains[0]!.train_name = "different";
+    expect(revalidateSelectedRailJourney(snapshot, inputs)).toBe(false);
+    Object.assign(snapshot.legs[0]!, { trainName: null });
+    expect(() => validateSelectedRailJourney(snapshot)).toThrow(/label/);
+  });
   it("uses sourced PlaceSnapshots without fabricated station IDs and preserves later revalidation", () => {
     const { candidate, inputs, selectedAt } = railSelectionFixture();
     const snapshot = selectRailJourney(candidate, inputs, selectedAt);
