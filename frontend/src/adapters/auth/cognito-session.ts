@@ -16,7 +16,7 @@ interface StoredSession {
 }
 const accessTokenMaximumSeconds = 300;
 const refreshWindowMs = 30_000;
-const absoluteSessionMs = 8 * 60 * 60 * 1000;
+const absoluteSessionMs = 12 * 60 * 60 * 1000;
 const clockSkewMs = 30_000;
 export interface AuthBrowser {
   storage: Storage;
@@ -186,7 +186,7 @@ function validStoredSession(value: unknown, config: AuthConfig, now: number): va
       typeof value.accessToken !== "string" || !value.accessToken || typeof value.refreshToken !== "string" || !value.refreshToken || typeof value.displayName !== "string" || !value.displayName ||
       !Number.isFinite(value.issuedAt) || !Number.isFinite(value.expiresAt) || !Number.isFinite(value.absoluteExpiresAt)) return false;
   const issuedAt = Number(value.issuedAt), expiresAt = Number(value.expiresAt), absoluteExpiresAt = Number(value.absoluteExpiresAt);
-  return issuedAt <= now + clockSkewMs && absoluteExpiresAt === issuedAt + absoluteSessionMs && absoluteExpiresAt > now &&
+  return issuedAt <= now + clockSkewMs && (absoluteExpiresAt === issuedAt + absoluteSessionMs || absoluteExpiresAt === issuedAt + 8 * 60 * 60 * 1000) && absoluteExpiresAt > now &&
     expiresAt > issuedAt && expiresAt <= now + accessTokenMaximumSeconds * 1000 + clockSkewMs && expiresAt <= absoluteExpiresAt;
 }
 function isRecord(value: unknown): value is Record<string, unknown> {

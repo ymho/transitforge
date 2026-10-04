@@ -93,6 +93,11 @@ jobs:
       - name: Check viewer bundle budget
         run: npm run bundle:check
 
+      - name: Verify built Viewer startup and login lifetime
+        env:
+          PLAYWRIGHT_MODULE: /tmp/agent-browser-tools/node_modules/playwright/index.mjs
+        run: node tools/verify_viewer_startup.mjs
+
       - name: Run Python tests
         run: python3 -m unittest discover -s tests -v
 
