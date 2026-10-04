@@ -34,3 +34,5 @@
 `npm run eval:trip:v2 -- /tmp/trip-v2-observations.json /tmp/trip-v2-report.json --require-all` は記録漏れ・失敗を非ゼロ終了にする。入力は配列で、要素例は `{ "scenario": "partial-failures", "stage": "real-provider", "status": "not_run", "commit": "<40桁SHA>", "reasons": ["weather_failure_not_exercised"] }`。`passed` には実行したGitHub Actions Run URLを必須とする。集計結果の `missing` と `failed` を残件としてIssueへ記録する。
 
 現段階では全caseの実Provider・両ブラウザ実行と実Bedrock縦断を未完了として扱う。#751/#758のクローズは各段階の記録と実際の不具合の解消後に判断する。
+
+相談履歴の読み戻し失敗はブラウザの `conversation_read_failed` で確認する。履歴取得と描画の段階、固定されたAPI操作名、通信／HTTP境界、HTTPステータスのみを記録する。ユーザ発言、応答本文、Trip ID、認証情報、元の例外は記録しない。診断の追加自体は実画面の読み戻し成功を意味しない。
