@@ -83,7 +83,7 @@ import { RuntimeMetrics } from "../observability/runtime-metrics";
 import { configureTravelProfile } from "../presentation/concierge/travel-profile-panel";
 import { HttpServerProfileClient } from "../adapters/http/server-profile-client";
 import { ProfileUiController } from "../usecases/personal-state/profile-ui-controller";
-import { HttpServerConversationClient } from "../adapters/http/server-conversation-client";
+import { HttpServerConversationClient, reportConversationReadFailure } from "../adapters/http/server-conversation-client";
 import { ConversationUiController } from "../usecases/personal-state/conversation-ui-controller";
 import { configureApplicationSettingsPanel } from "../presentation/settings/application-settings-panel";
 import { createTripWorkspaceController } from "../usecases/trip-plan/trip-workspace-controller";
@@ -433,12 +433,14 @@ const activateConversation = async (sessionId: string) => {
   tripWorkspaceController.activateSession(session.id); contextWorkspaceController.activateSession(session.id);
   aiGuideController.switchSession(session.id);
   aiGuideInput.disabled = true; aiGuideSubmit.disabled = true;
-  await conversationUi.loadHistory(session.id);
+  try { await conversationUi.loadHistory(session.id); }
+  catch (error) { reportConversationReadFailure("history", error); throw error; }
   if (conversationUi.active()?.id === session.id) {
     activeConversationSession = conversationUi.active()!;
     syncServerTripSource(activeConversationSession);
     tripWorkspaceController.activateSession(session.id);
-    aiGuideController.switchSession(session.id);
+    try { aiGuideController.switchSession(session.id); }
+    catch (error) { reportConversationReadFailure("render", error); throw error; }
   }
 };
 openBranchedTrip = async (trip, title) => {
