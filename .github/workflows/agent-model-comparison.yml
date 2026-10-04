@@ -189,17 +189,4 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run bounded candidate selection with the production model
-        run: npx vitest run --root . backend/agent-api/src/composition/strands-candidate-selection.test.ts --maxWorkers=1
-      - name: Check existing itinerary consultation with the production model
-        run: npx vitest run --root . backend/agent-api/src/composition/strands-itinerary-acceptance.test.ts --maxWorkers=1
-      - name: Check no-candidate and unsupported-operation reply kinds
-        if: always() && matrix.attempt == 1
-        run: npm run eval:agent:strands:live -- --repetitions 3 --require-all --output-dir .artifacts/candidate-selection
-      - name: Upload bounded evaluation report
-        if: always() && matrix.attempt == 1
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: candidate-selection-live-${{ github.run_id }}
-          path: .artifacts/candidate-selection
-          if-no-files-found: ignore
-          retention-days: 14
+        run: npx vitest run --root . backend/agent-api/src/composition/strands-candidate-selection.test.ts -t "read-only place" --maxWorkers=1

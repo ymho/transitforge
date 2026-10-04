@@ -112,3 +112,51 @@ it(`#784 ${live ? "Bedrock" : "SDK"} route choice saves the shown scheduled serv
   expect(saved?.items).toHaveLength(1); expect(saved?.items[0]).toMatchObject({ type: "transport", detail: { journey: { legs: [{ serviceUid: "later", trainNumber: "11M" }] } } });
   expect(await app.runConversationTurn(request)).toEqual(result); expect(journey).toHaveBeenCalledOnce();
 }, 90000);
+
+it(`#784 ${live ? "Bedrock" : "SDK"} read-only place selection completes the reported correction history without writes`, async () => {
+  const state = stateDynamoFixture(), trips = tripDynamoFixture(), metadata = stateMetadata();
+  trips.seed(createTrip(metadata.tripId, "候補の相談", "2026-10-04T00:00:00Z"), stateA.subject);
+  await state.conversations.create(stateA, conversationId, metadata);
+  const searchPlaceMedia = vi.fn(async () => ({ result: { status: "available", freshness: "fresh", data: {
+    places: [{ providerPlaceId: "synthetic-temple", name: "清水寺", summary: "評価用の観光候補です。", sourceUrl: "https://example.org/temple", openingHoursStatus: "unknown" }], },
+    evidence: [{ id: "source", provider: "fixture", sourceUrl: "https://example.org/temple", retrievedAt: "2026-10-04T00:00:00Z" }],
+  } }));
+  const bindings = productionServerTools({ external: { searchPlaceMedia }, accommodation: vi.fn(), journey: vi.fn() });
+  const binding = bindings.find(value => value.descriptor.name === "search_place_media")!;
+  const evidence = binding.evidence;
+  binding.evidence = (value, context) => evidence(value, context).map(item => ({ ...item, id: "place-A" }));
+  const prelude = createStrandsServerRuntime(new StrandsAgentEngine(settings, { model: new StrandsScriptedModel([
+    output({ kind: "conversation", message: "greeting", text: "おはようございます。" }),
+    { name: "update_current_destination", input: { action: "set", place: "出雲大社", quote: "出雲大社にいきたい" } },
+    output({ kind: "conversation", message: "acknowledgement", text: "出雲大社への希望を反映しました。" }),
+    { name: "update_current_destination", input: { action: "set", place: "清水寺", quote: "やっぱり清水寺に行きたい" } },
+    { name: "search_place_media", input: { query: "清水寺", mode: "discovery", limit: 1 } },
+    output({ kind: "candidates", evidenceIds: ["place-A"], commentary: "清水寺の候補カードです。" }),
+  ]) }));
+  const final = createStrandsServerRuntime(new StrandsAgentEngine(settings, live ? {} : { model: new StrandsScriptedModel([
+    { name: "select_presented_candidate", input: { presentationId: "shown:6:place", candidateId: "place-A", quote: "この候補を保存して", reference: { kind: "sole" } } },
+    output({ kind: "uncertainty", text: "この観光カードを旅程へ保存する操作は利用できません。旅程画面から相談を続けられます。" }),
+  ]) }));
+  let index = 0, execution = 0, calls = 0;
+  const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
+    model: { converse: vi.fn(async () => { throw Error("legacy runtime called"); }) }, weather: { search: vi.fn() }, additionalTools: bindings,
+    newExecutionId: () => `78400000-4444-4000-8000-${String(++execution).padStart(12, "0")}`,
+    runRuntime: input => { calls++; return index < 3 ? prelude(input) : final(input); },
+    limits: { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 3, maxExecutionMs: 60000 },
+  });
+  for (const userRequest of ["おはよう", "出雲大社にいきたい", "やっぱり清水寺に行きたい。候補カードを見せて", "この候補を保存して"]) {
+    const request = { principal: stateA, conversationId, turnId: `78400000-5555-4000-8000-${String(index + 1).padStart(12, "0")}`, userRequest };
+    const result = await app.runConversationTurn(request);
+    expect(result.status).toBe("completed");
+    if (index === 2) expect(result.publicPlacePresentation?.cards[0]?.evidenceId).toBe("place-A");
+    if (index === 3) {
+      expect(result.tripMutationReceipt).toBeUndefined(); expect(result.semanticReceipt).toBeUndefined();
+      expect((await trips.repository.get(stateA, metadata.tripId))?.items).toEqual([]);
+      const beforeReplay = calls; expect(await app.runConversationTurn(request)).toEqual(result); expect(calls).toBe(beforeReplay);
+      if (live) console.log(JSON.stringify({ mode: "read-only-place", status: result.status, committed: !!result.tripMutationReceipt }));
+    }
+    index++;
+  }
+  expect(searchPlaceMedia).toHaveBeenCalledOnce();
+  expect((await state.conversations.history(stateA, conversationId)).items).toHaveLength(8);
+}, 90000);
