@@ -29,6 +29,7 @@ export interface ServerStateContextReaders {
 
 /** Read-only and per-turn. No cache, message append, transport or model dependencies. */
 export function createServerStateContextLoader(readers: ServerStateContextReaders, options: { historyBeforeSequence?: number; onTrip?: (trip: import("@raiquora/trip/trip").Trip) => void;
+  onConversationMessages?: (messages: import("../../contracts/server-state.js").ConversationMessage[]) => void;
   onEffectiveIntent?: (value: { effectiveIntent: EffectiveIntent; currentReceipt?: IntentApplicationReceipt }) => void } = {}) {
   const before = options.historyBeforeSequence;
   if (before !== undefined && (!Number.isSafeInteger(before) || before < 1)) throw new StateError("invalid-input");
@@ -48,7 +49,7 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
     const trip = tripId ? await readers.trips.get(principal, tripId) : undefined;
     if (tripId && !trip) throw new StateError("not-found");
     const profile = await readers.profiles.get(principal);
-    const history = conversation ? await recentConversation(readers.conversations, principal, conversation, before) : undefined;
+    const history = conversation ? await recentConversation(readers.conversations, principal, conversation, before, options.onConversationMessages) : undefined;
     if (trip) options.onTrip?.(structuredClone(trip));
     if (conversation && !trip) throw new StateError("not-found");
     // Profile is resolved through EffectiveIntent below; do not expose a second
@@ -105,10 +106,11 @@ function validCalendarDate(value: string): boolean {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
-async function recentConversation(readers: ServerStateContextReaders["conversations"], principal: TrustedPrincipal, conversation: Conversation, before?: number) {
+async function recentConversation(readers: ServerStateContextReaders["conversations"], principal: TrustedPrincipal, conversation: Conversation, before?: number, onMessages?: (messages: import("../../contracts/server-state.js").ConversationMessage[]) => void) {
   const end = Math.min(conversation.messageCount, before === undefined ? conversation.messageCount : before - 1);
   const start = Math.max(0, end - serverStateContextLimits.historyMessages);
   let last = start;
+  const publicMessages: import("../../contracts/server-state.js").ConversationMessage[] = [];
   const messages: NonNullable<AgentConversationContext["messages"]> = [];
   // Seek into the tail using the existing sequence cursor, never scan earlier history.
   // At most 12 rows/pages even if DynamoDB ends a page at its byte limit.
@@ -119,12 +121,14 @@ async function recentConversation(readers: ServerStateContextReaders["conversati
     if (!page.items.length) throw new StateError("conflict");
     for (const message of page.items) {
       if (message.sequence !== last + 1 || message.sequence > end) throw new StateError("conflict");
+      publicMessages.push(structuredClone(message));
       messages.push({ role: message.role, text: message.text }); last = message.sequence;
     }
   }
   // Metadata/reference and history must belong to one conversation revision, including an empty history.
   const latest = await readers.get(principal, conversation.conversationId);
   if (latest.revision !== conversation.revision) throw new StateError("conflict");
+  onMessages?.(publicMessages);
   const context = boundAgentConversationContext({ title: conversation.title, scope: conversation.scope, summary: conversation.summary, resolvedTopics: conversation.resolvedTopics,
     pendingTopics: conversation.pendingTopics, messages });
   // Account for JSON escaping too. Prefer summary and recent history over older turns.

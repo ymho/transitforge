@@ -8,7 +8,7 @@ import type { JourneyDataRepository } from "../ports/journey-data.js";
 const constraintNames = ["excludedServiceTypes", "excludedTrainNames", "excludedTrainNumbers", "excludedServiceUids", "requiredServiceTypes", "requiredTrainNames", "requiredTrainNumbers", "allowedServiceTypes"] as const;
 export const journeySearchContractVersion = "journey-search-v1";
 
-export function createJourneySearchOperation(repository: JourneyDataRepository, options: { now?: () => Date; log?: (event: string, fields: Record<string, unknown>) => void } = {}): AgentOperation {
+export function createJourneySearchOperation(repository: JourneyDataRepository, options: { onVerifiedResult?: (result: import("@raiquora/journey/journey-search-service").JourneySearchResponse, index: JsonObject, retrievedAt: string) => void; now?: () => Date; log?: (event: string, fields: Record<string, unknown>) => void } = {}): AgentOperation {
   const now = options.now ?? (() => new Date()); const log = options.log ?? (() => undefined);
   return async (value, context) => {
     const request = validatedJourneyRequest(value);
@@ -17,6 +17,7 @@ export function createJourneySearchOperation(repository: JourneyDataRepository, 
     let result;
     try { result = searchJourneyIndex(request, { index, operations: realtime.operations, realtimeRouteTime: realtime.routeTime }); }
     catch (error) { throw new RequestError(503, error instanceof Error ? error.message : "経路を検索できません。"); }
+    options.onVerifiedResult?.(result, index, now().toISOString());
     const realtimeMetadata = realtime.metadata;
     result.trace.realtime = realtimeMetadata;
     log("journey_search_completed", { requestId: context.requestId, serviceDate: request.serviceDate, journeyCount: result.journeys.length, strategy: result.trace.strategy, realtimeApplied: realtimeMetadata.applied });

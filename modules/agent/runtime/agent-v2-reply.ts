@@ -4,7 +4,7 @@ import { z } from "zod";
  * References authorize nothing: Evidence/currentness/receipts are checked by admission. */
 export const replyOperations = ["save", "change", "book", "pay"] as const;
 export type ReplyOperation = typeof replyOperations[number];
-export const replyQuestions = ["goal", "origin", "destination", "start_date", "departure_time", "duration", "party_size", "budget", "participation_scope"] as const;
+export const replyQuestions = ["goal", "origin", "destination", "start_date", "departure_time", "duration", "party_size", "budget", "participation_scope", "candidate_selection", "itinerary_target"] as const;
 export type ReplyQuestion = typeof replyQuestions[number];
 const identifier = (maximum: number) => z.string().min(1).max(maximum)
   .regex(/^(?!\s)(?![\s\S]*\s$)[^\u0000-\u001f\u007f<>]+$/u);
@@ -23,7 +23,7 @@ export const agentV2ReplySchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("candidates").describe("ToolのcandidateReferencesにある観光地または宿泊施設の候補一覧。カードはApplicationが作る。"), evidenceIds: z.array(identifier(240)).min(1).max(8), commentary, nextQuestion: nextQuestion.optional() }),
   z.strictObject({ kind: z.literal("conversation"), message: z.enum(["greeting", "thanks", "acknowledgement"]), text: conversationalText.optional() }),
   z.strictObject({ kind: z.literal("clarification"), target: z.enum(replyQuestions), text: conversationalText.optional() }),
-  z.strictObject({ kind: z.literal("unavailable").describe("提供されていない保存・変更・予約・決済を求められた時の応答。操作対象の詳細が不明でも、実行できない能力はこの型で明示する。"), operation: z.enum(replyOperations) }),
+  z.strictObject({ kind: z.literal("unavailable").describe("提供されていない保存・変更・予約・決済を求められた時の応答。保存候補が存在しない場合の相談案内や、複数候補の選択確認とは区別する。"), operation: z.enum(replyOperations) }),
   z.strictObject({ kind: z.literal("operation_result"), receiptId: identifier(240) }),
   z.strictObject({ kind: z.literal("uncertainty"), text: conversationalText.optional() }),
 ]);
@@ -33,7 +33,7 @@ export const agentV2StructuredOutputSchema = z.strictObject({ reply: agentV2Repl
   .describe("今回の依頼に必要な条件受理・検索・案作成を終えた後の最終回答。条件受理だけでは検索・案作成の依頼を完了できない。宿の検索後はanswerへ宿のreplyReferencesを選ぶか、candidatesへcandidateReferencesのevidenceIdを選ぶ。仮旅程作成後はconversationで案の確認方法と不足を短く案内する。replyだけを返し、カード本体や新たな事実・実行結果は生成しない。");
 
 /** Trusted Application input, never a field in the model's reply schema.
- * The current read-only composition supplies no receipts. */
+ * Read-only compositions supply no receipts; selection uses actual commit read-back. */
 export interface AgentV2OperationReceipt {
   id: string;
   executionId: string;

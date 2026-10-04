@@ -24,7 +24,7 @@ export class PlanCandidateAdoptionApplication {
   constructor(private readonly candidates: ItineraryCandidateRepository, private readonly trips: TripRepository,
     private readonly receipts: CandidateAdoptionReceiptRepository,
     private readonly tripApplication: Pick<TripApplication, "execute">,
-    private readonly trustedFactory: (draft: DraftPlanItem, context: { candidateSetId: string; variantId: string }) => ItineraryItem,
+    private readonly trustedFactory: (draft: DraftPlanItem, context: { candidateSetId: string; variantId: string; retainedItem?: ItineraryItem; selectedAt: string }) => ItineraryItem,
     private readonly now: () => Date = () => new Date()) {}
 
   async execute(principal: TripPrincipal | undefined, value: CandidateAdoptionRequest, authority?: CandidateAdoptionAuthority): Promise<CandidateAdoptionResult> {
@@ -41,7 +41,8 @@ export class PlanCandidateAdoptionApplication {
     let adoption: ReturnType<typeof proposePlanAdoption>;
     try { adoption = proposePlanAdoption({ candidateSet, variantId: value.variantId, currentTrip: trip,
       requestFingerprint: candidateSet.contextRef.requestFingerprint, now: this.now().toISOString(),
-      trustedFactory: draft => this.trustedFactory(draft, { candidateSetId: candidateSet.id, variantId: value.variantId }) }); }
+      trustedFactory: draft => this.trustedFactory(draft, { candidateSetId: candidateSet.id, variantId: value.variantId, selectedAt: this.now().toISOString(),
+        ...(draft.sourceCandidateRef ? { retainedItem: candidateSet.selectionItems?.find(item => item.id === draft.sourceCandidateRef) } : {}) }) }); }
     catch { throw new TripResourceError("conflict"); }
     const confirmationKey = candidateConfirmationKey(value, adoption.proposal);
     const receipt = await this.receipts.putPreview(principal, { mutationId: value.mutationId, conversationId: value.conversationId,
@@ -60,7 +61,13 @@ export class PlanCandidateAdoptionApplication {
     if (value.operation === "preview") return { status: "confirmation-required", confirmationKey: receipt.confirmationKey, preview };
     if (!authority || !constantEqual(authority.confirmationKey, receipt.confirmationKey)) throw new TripResourceError("confirmation-required");
     const result = await this.tripApplication.execute(principal, { version: "trip-api-v1", operation: "mutate", tripId: value.tripId,
-      baseRevision: value.baseTripRevision, mutationId: value.mutationId, proposal: receipt.proposal });
+      baseRevision: value.baseTripRevision, mutationId: value.mutationId, proposal: receipt.proposal }, { validateCandidate: async () => {
+        // Run at the actual mutation boundary; committed receipt retries skip this.
+        const candidate = await this.candidates.get(principal, value.conversationId, value.candidateSetId, value.candidateSetRevision);
+        if (!candidate || Date.parse(this.now().toISOString()) >= Date.parse(candidate.expiresAt) ||
+            candidate.contextRef.tripId !== value.tripId || candidate.contextRef.baseTripRevision !== value.baseTripRevision ||
+            !candidate.variants.some(variant => variant.id === value.variantId)) throw new TripResourceError("conflict");
+      } });
     const saved = await this.trips.get(principal, value.tripId);
     const returned = (result as { trip?: unknown }).trip;
     if (!saved || saved.revision < value.baseTripRevision + 1 || !returned || typeof returned !== "object") throw new TripResourceError("unavailable");

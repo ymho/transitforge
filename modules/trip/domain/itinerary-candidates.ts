@@ -1,7 +1,7 @@
 import { validateItinerarySchedule, type ItinerarySchedule } from "./itinerary-schedule";
 import type { Money } from "./money";
 import type { ItineraryItem, Trip, TripUpdateProposal } from "./trip";
-import { applyTripProposal, validateTrip } from "./trip";
+import { applyTripProposal, validateTrip, createTrip } from "./trip";
 
 export interface CandidateSetContextRef {
   readonly conversationId: string;
@@ -48,6 +48,8 @@ export interface ItineraryCandidateSet {
   readonly coverage: PlanCoverage;
   readonly issuedAt: string;
   readonly expiresAt: string;
+  /** Trusted Application-owned prototypes from verified search, never model input. */
+  readonly selectionItems?: readonly ItineraryItem[];
 }
 export interface CandidateDiscoveryBatch {
   readonly hits: readonly { readonly hitId: string; readonly sourceRef: string; readonly originalRank: number }[];
@@ -74,6 +76,14 @@ export function validateCandidateSet(value: ItineraryCandidateSet): void {
   if (!Number.isSafeInteger(value.revision) || value.revision < 0 || !value.contextRef.conversationId || !value.contextRef.requestFingerprint ||
       value.contextRef.baseTripRevision !== undefined && (!Number.isSafeInteger(value.contextRef.baseTripRevision) || value.contextRef.baseTripRevision < 0) ||
       !validInstant(value.issuedAt) || !validInstant(value.expiresAt) || Date.parse(value.expiresAt) <= Date.parse(value.issuedAt) || !value.variants.length) throw new Error("Invalid candidate set");
+  if (value.selectionItems) {
+    if (value.selectionItems.length > 20 || new Set(value.selectionItems.map(item => item.id)).size !== value.selectionItems.length || value.selectionItems.some(item => item.decision !== undefined)) throw new Error("Invalid retained selection");
+    createTrip(value.contextRef.tripId!, "候補", value.issuedAt, value.selectionItems);
+    for (const variant of value.variants) for (const draft of variant.items) if (draft.sourceCandidateRef) {
+      const source = value.selectionItems.find(item => item.id === draft.sourceCandidateRef);
+      if (!source || source.type !== draft.kind || JSON.stringify(source.schedule) !== JSON.stringify(draft.schedule)) throw new Error("Invalid retained selection binding");
+    }
+  }
   const variantIds = new Set<string>();
   for (const variant of value.variants) {
     stableId(variant.id); if (variantIds.has(variant.id)) throw new Error("Duplicate variant"); variantIds.add(variant.id);

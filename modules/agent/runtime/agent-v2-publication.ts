@@ -29,6 +29,7 @@ const conversationText = {
   acknowledgement: "承知しました。",
 };
 const questions: Record<ReplyQuestion, string> = {
+  candidate_selection: "候補が複数あります。どの候補にしますか？", itinerary_target: "旅程画面で相談したい予定や追加箇所を選んでください。",
   goal: "どのような旅にしたいですか？", origin: "どこから出発しますか？", destination: "行き先はどちらですか？",
   start_date: "出発日はいつですか？", duration: "何日間の旅を考えていますか？",
   departure_time: "何時ごろ出発する予定ですか？",

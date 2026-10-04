@@ -23,6 +23,7 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
         executionId: input.executionId, userRequest: input.userRequest, ...conversationInput,
         tools: input.tools, toolExecutor: input.toolExecutor, effectiveIntent: input.context?.effectiveIntent,
         initialEvidence: input.initialEvidence, maxEvidence: input.limits.maxEvidence,
+        candidateController: input.candidateController,
         ...(input.conditionController ? { conditionController: { ...input.conditionController, apply: async change => {
           const accepted = await input.conditionController!.apply(change);
           conditionReceipts.push(structuredClone(accepted.receipt));
@@ -55,8 +56,8 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
     try {
       const reply = admitAgentV2Reply(run.replyProposal, {
         executionId: input.executionId, evidence: merged.evidence, effectiveIntent: run.effectiveIntent,
-        // This composition exposes reads only. No model-supplied success receipts.
-        receipts: [], availableOperations: [],
+        // Only Application-owned selection receipts authorize success.
+        receipts: run.operationReceipts ?? [], availableOperations: input.candidateController?.context.canSave ? ["save"] : [],
       });
       // The model's prose is not a mutation receipt. Show the actual accepted values
       // independently, in the same snapshot used by B commit / history / replay.
@@ -70,6 +71,7 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
       if (!validation.valid) return denied("invalid_claim_binding");
       return { status: "completed", response: reply.text, evidence: reply.evidence,
         claims: validation.claims, trace: run.trace, publicReply: reply.proof,
+        ...(run.savedTrip ? { tripMutationReceipt: { version: "public-trip-mutation-receipt-v1" as const, ...run.savedTrip } } : {}),
         ...(reply.publicPlacePresentation ? { publicPlacePresentation: reply.publicPlacePresentation } : {}),
         ...(reply.publicAccommodationPresentation ? { publicAccommodationPresentation: reply.publicAccommodationPresentation } : {}),
         delivery: { status: "full", basis: "verified_projection" } };

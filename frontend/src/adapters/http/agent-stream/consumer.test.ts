@@ -4,6 +4,17 @@ const frame = (seq: number, event: unknown) => `event: agent\ndata: ${JSON.strin
 const final = frame(2, { type: "final", status: "completed", response: "日本語の回答" });
 const progress = frame(1, { type: "progress", phase: "running" });
 const done = 'event: done\ndata: {"v":1,"runId":"run","seq":3}\n\n';
+it("carries an Application save receipt to the viewer and rejects forged receipt fields", async () => {
+  const receipt = { version: "public-trip-mutation-receipt-v1", tripId: "11111111-1111-4111-8111-111111111111", tripRevision: 3 };
+  const options = setup(stream(progress + frame(2, { type: "final", status: "completed", response: "保存しました", tripMutationReceipt: receipt }) + done));
+  await consumeAgentStream(options);
+  expect(options.onEvent.mock.calls.at(-1)?.[0].tripMutationReceipt).toEqual(receipt);
+  for (const invalid of [{ ...receipt, tripRevision: 0 }, { ...receipt, confirmationKey: "private" }, { ...receipt, tripId: "foreign" }]) {
+    const rejected = setup(stream(progress + frame(2, { type: "final", status: "completed", response: "保存しました", tripMutationReceipt: invalid }) + done));
+    await expect(consumeAgentStream(rejected)).rejects.toThrow("invalid_event");
+    expect(rejected.onEvent.mock.calls.some(([event]) => event.type === "final")).toBe(false);
+  }
+});
 it("accepts the hotel comparison snapshot and rejects raw provider fields", async () => {
   const publicAccommodationPresentation = { version: "public-accommodation-presentation-v1", cards: [{ evidenceId: "hotel-1", name: "宿1",
     summary: "空室は未確認\n参考最安値: JPY 5,100", retrievedAt: "2026-10-03T00:00:00Z", sourceUrl: "https://example.org/hotel/1" }] };

@@ -49,6 +49,7 @@ export function strandsTurnInput(input: ServerAgentRuntimeInput): string {
     // These objects are the actual admitted observations, not model interpretations
     // or duplicated summaries from the previous runtime's decision context.
     evidence: input.initialEvidence ?? [],
+    presentedCandidates: input.candidateController?.context ?? null,
     // SDK Tool specs are the capability source of truth. Do not duplicate an
     // incomplete registry view here (Application-local writers are added later).
   });

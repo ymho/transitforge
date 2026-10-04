@@ -10,9 +10,9 @@ export function projectCandidatePresentation(set: ItineraryCandidateSet, unknown
     const byId = new Map(variant.items.map(item => [item.componentId, item]));
     if (new Set(variant.timeline.itemOrder).size !== variant.items.length) throw new Error("Duplicate item order");
     const ordered = variant.timeline.itemOrder.map(id => byId.get(id)!);
-    if (ordered.some(item => item.evidenceRefs.length || item.sourceCandidateRef || item.sourcePlaceRef) ||
+    if (ordered.some(item => item.evidenceRefs.length || item.sourceCandidateRef && !set.selectionItems?.some(source => source.id === item.sourceCandidateRef) || item.sourcePlaceRef) ||
         variant.assessmentRefs.length || variant.discoveryRefs?.length) throw new Error("Unverified candidate references");
-    const items: ItineraryItem[] = ordered.map(item => ({ id: item.componentId, title: item.title, schedule: item.schedule,
+    const items: ItineraryItem[] = ordered.map(item => item.sourceCandidateRef ? { ...structuredClone(set.selectionItems!.find(source => source.id === item.sourceCandidateRef)!), id: item.componentId } : ({ id: item.componentId, title: item.title, schedule: item.schedule,
       ...(item.logicalDayId ? { logicalDayId: item.logicalDayId } : {}),
       ...(item.kind === "transport" ? { type: "transport" as const, detail: { status: "unresolved" as const } } :
         item.kind === "stay" ? { type: "stay" as const, selection: { status: "unselected" as const } } :
@@ -32,7 +32,7 @@ export function projectCandidatePresentation(set: ItineraryCandidateSet, unknown
     if (daily.unscheduled.length) days.push({ dayRef: `${variant.id}:unscheduled`, label: "日程未定", status: "planned",
       entries: daily.unscheduled.map(entry => ({ entryRef: entry.entryKey, itemRef: entry.sourceItemId, role: "possible" })) });
     return { variantId: variant.id, label: variant.label, dayOrder: days.map(day => day.dayRef), days,
-      items: ordered.map(item => ({ itemRef: item.componentId, sourceRef: item.componentId, title: item.title, kind: item.kind,
+      items: ordered.map(item => ({ itemRef: item.componentId, sourceRef: item.sourceCandidateRef ?? item.componentId, title: item.title, kind: item.kind,
         timing: item.schedule.type === "relative" ? "day" : item.schedule.type, evidenceRefs: [], photoRefs: [] })),
       unknowns: [...unknowns], cost: { status: "unknown" }, workload: { status: "unknown" },
       comparisonAssessmentRefs: [], scenarioRefs: [] };

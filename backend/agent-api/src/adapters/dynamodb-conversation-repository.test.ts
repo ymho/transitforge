@@ -4,6 +4,20 @@ import { DynamoDbConversationRepository } from "./dynamodb-conversation-reposito
 
 const message = { role: "user" as const, text: "日程を相談したい" };
 describe("Conversation persistence", () => {
+  it("retains bounded save read-back only on assistant messages", async () => {
+    const f = stateDynamoFixture(); await f.conversations.create(a, id, stateMetadata());
+    const tripMutationReceipt = { version: "public-trip-mutation-receipt-v1" as const, tripId: secondId, tripRevision: 1 };
+    await f.conversations.append(a, id, 0, [{ role: "assistant", text: "保存しました" }]);
+    const stored = [...f.records.values()].find(value => value.sk.S?.startsWith("TRIP_MESSAGE#"))!;
+    const original = JSON.parse(stored.payload.S!);
+    stored.payload.S = JSON.stringify({ ...original, tripMutationReceipt });
+    expect((await f.conversations.history(a, id)).items[0]?.tripMutationReceipt).toEqual(tripMutationReceipt);
+    await expect(f.conversations.append(a, id, 1, [{ ...message, tripMutationReceipt } as never])).rejects.toMatchObject({ code: "invalid-input" });
+    stored.payload.S = JSON.stringify({ ...original, tripMutationReceipt: { ...tripMutationReceipt, raw: "private" } });
+    await expect(f.conversations.history(a, id)).rejects.toMatchObject({ code: "unavailable" });
+    stored.payload.S = JSON.stringify({ ...original, role: "user", tripMutationReceipt });
+    await expect(f.conversations.history(a, id)).rejects.toMatchObject({ code: "unavailable" });
+  });
   it("round trips metadata and bounded ordered messages separately", async () => {
     const f = stateDynamoFixture(), input = stateMetadata();
     const created = await f.conversations.create(a, id, input);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { classifyStrandsV2LiveError, evaluateStrandsV2LiveCase, strandsV2LiveCases } from "./strands-v2-live-evaluation.js";
 import { admitAgentV2Reply } from "@raiquora/agent/agent-v2-publication";
-const ground = strandsV2LiveCases[0]!, save = strandsV2LiveCases[1]!;
+const ground = strandsV2LiveCases[0]!, save = strandsV2LiveCases[1]!, empty = strandsV2LiveCases[2]!;
 describe("Strands v2 live evaluation policy", () => {
   it("scores selected admitted factual fields, not a fluent unsupported answer", () => {
     expect(evaluateStrandsV2LiveCase(ground, { status: "completed", deliveryBasis: "verified_projection", toolCalls: 1,
@@ -17,7 +17,7 @@ describe("Strands v2 live evaluation policy", () => {
         .toContain("unavailable_operation_not_reported");
     });
   it("accepts Application-authored unavailable status without a verb-ending dictionary", () => {
-    const admitted = admitAgentV2Reply({ kind: "unavailable", operation: "save" }, { executionId: "live", evidence: [] });
+    const admitted = admitAgentV2Reply({ kind: "unavailable", operation: "book" }, { executionId: "live", evidence: [] });
     expect(evaluateStrandsV2LiveCase(save, { status: "completed", toolCalls: 0, evidenceCount: 0, claimStatuses: [],
       response: admitted.text, publicReply: admitted.proof })).toEqual([]);
   });
@@ -25,6 +25,12 @@ describe("Strands v2 live evaluation policy", () => {
     const admitted = admitAgentV2Reply({ kind: "conversation", message: "greeting" }, { executionId: "live", evidence: [] });
     expect(evaluateStrandsV2LiveCase(save, { status: "completed", toolCalls: 0, evidenceCount: 0, claimStatuses: [],
       response: admitted.text, publicReply: admitted.proof })).toContain("unavailable_operation_not_reported");
+  });
+  it("distinguishes a missing save target from an unsupported capability", () => {
+    const admitted = admitAgentV2Reply({ kind: "clarification", target: "itinerary_target" }, { executionId: "live", evidence: [] });
+    expect(evaluateStrandsV2LiveCase(empty, { status: "completed", toolCalls: 0, evidenceCount: 0, claimStatuses: [], response: admitted.text, publicReply: admitted.proof })).toEqual([]);
+    const unavailable = admitAgentV2Reply({ kind: "unavailable", operation: "save" }, { executionId: "live", evidence: [] });
+    expect(evaluateStrandsV2LiveCase(empty, { status: "completed", toolCalls: 0, evidenceCount: 0, claimStatuses: [], response: unavailable.text, publicReply: unavailable.proof })).toContain("missing_itinerary_navigation");
   });
   it("classifies provider failures without retaining provider messages", () => {
     const error = new Error("wrapped", { cause: { name: "AccessDeniedException", message: "private", $metadata: { httpStatusCode: 403 } } });

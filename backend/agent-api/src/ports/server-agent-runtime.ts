@@ -46,6 +46,7 @@ export interface ServerAgentRuntimeInput {
   reportExecution?: (diagnostic: AgentExecutionDiagnostic) => Promise<void>;
   /** Application-owned condition writer. Replays remain available after a partial turn. */
   conditionController?: ServerAgentConditionController;
+  candidateController?: import("../contracts/presented-candidate-selection.js").PresentedCandidateController;
 }
 
 /** Backend execution-engine port. Authentication/state resolution happens before this boundary. */

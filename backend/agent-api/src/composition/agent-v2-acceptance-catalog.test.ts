@@ -29,7 +29,6 @@ describe("Agent v2 greenfield acceptance catalog", () => {
     expect(deferred.map(({ id }) => id)).toEqual([
       "V2-CLARIFICATION-01",
       "V2-CURRENTNESS-01",
-      "V2-WRITE-01",
     ]);
     expect(deferred.every(({ reason }) => Boolean(reason?.trim()))).toBe(true);
   });

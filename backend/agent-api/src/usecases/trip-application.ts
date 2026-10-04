@@ -74,7 +74,7 @@ export class TripApplication {
   }
   async execute(principal: TripPrincipal | undefined, value: unknown,
     authority: { confirmedLifecycle?: LifecycleState; confirmedAdoption?: string; confirmedItemDecision?: string; confirmedReservationChange?: string;
-      replanTargets?: InTripReplanTargets; confirmedReplan?: string } = {}): Promise<Record<string, unknown>> {
+      replanTargets?: InTripReplanTargets; confirmedReplan?: string; validateCandidate?: () => Promise<void> } = {}): Promise<Record<string, unknown>> {
     requireTripPrincipal(principal);
     const actor = principal;
     const command = parseTripCommand(value);
@@ -104,6 +104,7 @@ export class TripApplication {
         }
         let trip: Trip;
         try { trip = await this.trips.applyMutation(principal, command, async (current) => {
+          await authority.validateCandidate?.();
           try { assertItineraryEditingAllowed(current, command.proposal); }
           catch { throw new TripResourceError("invalid-input"); }
           if (current.lifecycleState === "in_trip" && command.proposal.patches.some((p) => ["add", "replace", "remove", "move"].includes(p.type))) {
