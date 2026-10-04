@@ -191,7 +191,11 @@ export class StrandsAgentEngine {
         }
         budgetState.toolCalls += 1;
       };
-      tools.push(tool({ name: "review_presented_candidates", inputSchema: z.strictObject({ presentationId: z.string().min(1).max(160).optional() }),
+      const groupIds = candidates.context.groups.map(group => group.presentationId);
+      const groupId = groupIds.length ? z.enum(groupIds) : z.string().min(1).max(160);
+      // Reviewing a group is read-only. With several groups, require its actual
+      // ID so a missing-ID inspection cannot end without redisplaying any cards.
+      tools.push(tool({ name: "review_presented_candidates", inputSchema: z.strictObject({ presentationId: groupIds.length > 1 ? groupId : groupId.optional() }),
         description: "会話履歴の保存対象を確認し、表示した候補を同じ順序で再表示する。候補なしの保存依頼では引数を省略し、missingのnavigation.target/textで旅程画面の相談導線を案内する。複数候補への『保存して』なら群のIDを指定し、どれにするか確認する。新しい検索や保存は行わない。",
         callback: async (value, context) => {
           if (context?.cancelSignal.aborted) throw new Error("execution_cancelled"); reserveSelectionCall();

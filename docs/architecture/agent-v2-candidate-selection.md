@@ -6,6 +6,7 @@ SDKの会話履歴には従来どおり利用者発言と公開回答本文を�
 
 - 候補なしの「この条件を保存して」には引数なしの`review_presented_candidates`で対象を確認し、Applicationのmissing/navigationに基づく`clarification / itinerary_target`で旅程画面の相談・追加導線を案内する。条件は既存の条件受理で反映済みである。
 - 複数候補への「保存して」には`review_presented_candidates`で同じ公開表示を再送し、`clarification / candidate_selection`で選択を尋ねる。再検索・保存は行わない。再表示にも元の保持済み採用参照を付け、次の会話から選べるようにする。
+- 旅程案・ホテルなど複数の候補群が同居するときは、確認Toolのschemaで表示済み群IDを必須enumにする。群IDなしの確認が`ambiguous`で終わり、選び直すカードが欠落する経路を防ぐ。候補なし・一群だけの確認は従来どおり引数省略を許す。群を確認するだけでは採用・保存しない。
 - 「経路1でお願いします」「案2でお願いします」など一意な採用依頼では`select_presented_candidate`が今回の引用と確定済みIDだけをApplicationへ渡す。複数群・同名候補・追加先が曖昧なら選択を求める。比較・仮定・否定は採用ではない。
 
 ## 副作用の境界
