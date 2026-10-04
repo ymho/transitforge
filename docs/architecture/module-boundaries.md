@@ -76,8 +76,7 @@ Conversation metadataの`tripId`が唯一のTrip参照であり、旧TripPlan re
 Agentは推論とToolのオーケストレーションを担当し 鉄道の計算はDomain Serviceへ委譲する
 正本と重複のルールは[Domainの所有権](domain-ownership.md)を参照する
 
-外部旅行情報も同じ依存方向を使う。`usecases/agent/external-travel-tools.ts`が
-Browser Toolの入力検証と実行結果の収集を所有する。共有Evidence変換は
+外部旅行情報も同じ依存方向を使う。Server側のToolが入力検証と実行結果の収集を所有する。共有Evidence変換は
 `@raiquora/agent/external-travel-evidence`へ委譲し、`adapters/bedrock`はモデル形式との変換を行う。
 v2の会話表示は`frontend/src/domain/assistant-turn-view.ts`の`AssistantTurnView`へ統一する。
 SSEとServer履歴は`usecases/concierge/assistant-turn-projection.ts`で許可したpublic artifactだけを投影し、
@@ -105,9 +104,9 @@ HTML DNS Secrets Managerの具体型を漏らさない。Webで発見した候�
 | 責務 | 所有するモジュール |
 | --- | --- |
 | 必須DOM参照の取得と検証 | `usecases/viewer/viewer-elements.ts` |
-| 表示日時と日時ピッカー | `presentation/train-viewer/date-time-control.ts` |
-| 再生とデジタルツイン同期 | `presentation/train-viewer/playback-controls.ts` |
-| 天気 表示モード 行先アーチ | `presentation/train-viewer/map-controls.ts` |
+| 表示日時と日時ピッカー | `composition/viewer-composition.ts`（端末標準の日時入力） |
+| 再生とデジタルツイン同期 | `composition/viewer-composition.ts`（PlaybackController / clock） |
+| 天気と表示モード | `presentation/train-viewer/map-controls.ts` |
 | 混雑と遅延の定期更新 | `usecases/train-viewer/realtime-updates.ts` |
 | HTTP Browser Mapbox実装の注入 | `composition/viewer-composition.ts` |
 

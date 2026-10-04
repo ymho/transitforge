@@ -9,7 +9,7 @@ import {
   hasExternalTravelInformation,
   isSpecificPlaceCandidateName,
   type ExternalTravelToolState,
-} from "./external-travel-tools";
+} from "@raiquora/agent/external-travel-tools";
 
 describe("external travel tools", () => {
   it("binds bounded description only to its own fresh source, not unrelated pages or raw fields", () => {

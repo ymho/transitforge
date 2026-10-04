@@ -46,9 +46,7 @@ observedAtは有効なoffset付きISO instant必須。basis不明は省略でき
 日程指定料金であっても総額・人数分・税サービス料込み・予約価格とは認定しない。
 検索日の価格であり、同じ価格で現在購入できる保証ではない。
 
-backend/agent-api/src/adapters/provider-money.tsのparseProviderMoneyはdecimal stringを厳密変換する。
-指数、空白、符号、カンマ、leading zero、桁超過、負数、非stringを拒否し、BigIntによる10進組立後にsafe integerを検査する。
-末尾小数桁の切捨て/丸めも行わない。APIがdecimal stringならこの境界を再利用できる。
+旧decimal string用Adapterは未接続のため#799で撤去した。将来decimal stringのProviderを追加する場合は、指数・丸め・桁超過等を拒否する専用境界を実際のProviderへ接続して設ける。Moneyの整数契約と検証は共有Domainに維持する。
 
 既存宿泊APIのhotelMinChargeはJSON numberのJPY契約。整数0以上/MAX_SAFE_INTEGER以下だけ受け入れる。
 floatのMath.round(value * 100)はしない。string料金も、このnumber専用endpointでは勝手に解釈しない。

@@ -4,12 +4,9 @@ import { McpServer } from "@modelcontextprotocol/server";
 
 import {
   readonlyTransitToolNames,
-  type ReadonlyTransitToolName,
 } from "../../usecases/agent/readonly-transit-tool-registry";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { agentToolInputSchemaToZod } from "./agent-tool-schema";
-
-const readonlyToolNameSet = new Set<string>(readonlyTransitToolNames);
 
 export interface ReadonlyTransitMcpServerOptions {
   name?: string;
@@ -61,10 +58,4 @@ export function createReadonlyTransitMcpServer(
     );
   }
   return server;
-}
-
-export function isReadonlyTransitToolName(
-  name: string,
-): name is ReadonlyTransitToolName {
-  return readonlyToolNameSet.has(name);
 }

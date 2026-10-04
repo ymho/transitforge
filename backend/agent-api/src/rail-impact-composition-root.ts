@@ -17,4 +17,3 @@ export function createInternalTripImpact(table: string, metrics: TripImpactMetri
     new ReservationApplication(trips, new DynamoDbReservationRepository(table)));
   return new TripImpactApplication(new DynamoDbTripImpactRouter(table), worker, trips, new DynamoDbTripImpactRepository(table, undefined, notificationTable), metrics);
 }
-export const createInternalRailImpact = createInternalTripImpact;
