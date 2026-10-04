@@ -14,6 +14,7 @@ it("stores planned stay times independently, retains daily start/end projection,
   expect(original).toEqual(before); expect(next.items[1]?.schedule).toEqual(original.items[1]?.schedule);
   expect(projectDailyItinerary(next).days.flatMap(d => d.entries.filter(e => e.sourceItemId === "hotel").map(e => e.role))).toEqual(["start", "end"]);
   validateTrip(JSON.parse(JSON.stringify(next)));
+  expect(() => validateTrip({ ...next, items: next.items.map(i => i.type === "stay" ? { ...i, plannedTiming: null } : i) } as never)).toThrow();
   expect(() => proposeTripItemChange(original, { action: "set-stay-planned-time", itemId: "hotel", plannedTiming: { checkOut: { at: "2026-09-22T10:00:00+02:00", timeZone: "Europe/Vienna" } } })).toThrow();
 });
 it("inserts after an unscheduled spot, edits manual times, and rejects altering a provider rail schedule", () => {

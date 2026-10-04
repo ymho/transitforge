@@ -147,7 +147,7 @@ function validateItem(item: ItineraryItem, timeline?: TripTimeline): void {
     } else throw new Error("Invalid transport selection");
   } else if (item.type === "stay") {
     exactKeys(item, ["id", "title", "type", "selection", "schedule", "logicalDayId", "decision", "plannedTiming"]);
-    if (item.plannedTiming) {
+    if (item.plannedTiming !== undefined) {
       const selected = item.selection.status === "selected" ? item.selection.accommodation : undefined;
       const dated = item.schedule.type === "day" ? item.schedule : item.schedule.type === "relative" && timeline ? bindRelativeSchedule(item.schedule, timeline) : undefined;
       validateStayPlannedTiming(item.plannedTiming, { checkInDate: selected?.checkInDate ?? dated?.date,

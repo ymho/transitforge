@@ -7,7 +7,7 @@
   --glass-canvas: var(--tf-bg); --glass-surface-strong: var(--tf-bg); --glass-surface-muted: var(--tf-soft); --glass-muted: var(--tf-muted); --glass-border-subtle: var(--tf-line); --glass-accent-soft: var(--tf-soft); --glass-surface: var(--tf-bg); --glass-text: var(--tf-ink); --glass-text-secondary: var(--tf-muted); --glass-accent: var(--tf-blue);
   color-scheme: light; background: var(--tf-bg); color: var(--tf-ink); font: 400 14px/1.55 var(--product-font);
 
-  & .product-shell, & .product-page, & .trip-workspace, & .my-shell { background: var(--tf-bg); color: var(--tf-ink); }
+  & .product-page, & .trip-workspace, & .my-shell { background: var(--tf-bg); color: var(--tf-ink); }
   & :where(.product-page, .trip-workspace, .ai-guide-panel) { font: inherit; }
   & :where(.product-page, .trip-workspace, .ai-guide-panel) :is(h1, h2, h3) { font-family: var(--product-font); font-weight: 500; letter-spacing: normal; }
   & :where(.product-page, .trip-workspace, .ai-guide-panel) h1 { font-size: 20px; }
