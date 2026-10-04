@@ -52,9 +52,28 @@ export function strandsTurnInput(input: ServerAgentRuntimeInput): string {
     presentedCandidates: input.candidateController?.context ?? null,
     // SDK Tool specs are the capability source of truth. Do not duplicate an
     // incomplete registry view here (Application-local writers are added later).
-  });
-  const serialized = JSON.stringify({ userMessage: input.userRequest, application });
-  // Fail explicitly rather than silently dropping dates, exclusions or corrections.
+  }) as { [key: string]: Json };
+  const serialize = () => JSON.stringify({ userMessage: input.userRequest, application });
+  let serialized = serialize();
+  // Stored source excerpts and old dialogue can outgrow a valid current Trip.
+  // Bound only this transport copy. Current conditions, Trip, focus, candidate
+  // identities and the two most recent messages remain intact. Applications keep
+  // the complete admitted Evidence and persisted history for read-back/grounding.
+  const evidence = application.evidence as Json[];
+  const conversation = application.conversation as { [key: string]: Json } | null;
+  const history = Array.isArray(conversation?.messages) ? conversation.messages : [];
+  let omittedEvidence = 0, omittedHistoryMessages = 0;
+  const coverage = () => {
+    application.contextCoverage = { reason: "transport_budget", omittedEvidence, omittedHistoryMessages };
+    serialized = serialize();
+  };
+  while (serialized.length > 24_000 && evidence.length) {
+    evidence.shift(); omittedEvidence++; coverage();
+  }
+  while (serialized.length > 24_000 && history.length > 2) {
+    history.shift(); omittedHistoryMessages++; coverage();
+  }
+  // Never cut a condition, current utterance, candidate identity or current Trip.
   if (serialized.length > 24_000) throw new StrandsTurnInputError("context_budget");
   return serialized;
 }
