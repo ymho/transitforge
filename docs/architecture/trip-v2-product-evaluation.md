@@ -19,6 +19,8 @@
 
 ## 既存の局所証拠と残る実行
 
+本番streaming AgentのTrip書き込み権限は`dynamodb:EnclosingOperation=TransactWriteItems`に限る。旅程案・検索候補・採用previewの保持も単一Putのトランザクションを使い、条件付きの不変性と同一内容の再送を維持する。通常Putが通るfixtureだけではこの制約を検証できないため、候補Repositoryの回帰fixtureは通常Putを拒否する。本番診断は正常完了した回答の内部Tool失敗も、Tool名・許可されたerror code・件数・時刻だけで集計する。
+
 `npm run test:trip:v2:reported-live` は報告された出雲相談を10ターンで確認する。通常は合成SDK、`AGENT_V2_LIVE=true` では初回の紹介から最後の経路採用まで全ターンが実Bedrockとなる。手動workflowの `reported-trip-flow` は1回最大10ターン×8モデル呼出、各ターン90秒、出力上限4096、独立反復1または3回で実行する。3件の宿の曖昧な保存は無更新、ホテル名・経路番号の選択はApplicationの保存処理を使い、履歴再読込・再送・外部ホテルID・別ownerの拒否を確認する。Provider、認証主体、DynamoDBはfixtureのため、実Providerや実ブラウザの合格には数えない。
 
 未選択の往路・帰路を含む旅程では、検証済み検索候補の日付とIANAタイムゾーンが全候補について同じ一枠に一致する場合だけ保存先を特定する。保存済みcalendar bindingを優先し、bindingが空の場合だけ、旅程全体に適用するユーザ指定の確定開始日を最初のlogical dayへ一時的に結び付ける。日程のタイムゾーンが未指定なら、検証済み候補で一致した唯一のzoneを照合用に使う。この計算はTripの日程や他の予定を更新しない。開始日が未定・範囲・複数、zone不一致、同日に複数枠なら保存先を推測しない。明示された相談対象の枠がある場合はそちらを優先する。
