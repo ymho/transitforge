@@ -175,6 +175,19 @@ jobs:
             --query 'UserPoolClient.{access:AccessTokenValidity,id:IdTokenValidity,refresh:RefreshTokenValidity,units:TokenValidityUnits}' \
             --output json | node ../../../../tools/deployment/verify-login-lifetime.mjs | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: Verify deployed personal API throttles
+        if: env.CD_MODE == 'deploy'
+        working-directory: infra/terraform/environments/dev
+        shell: bash
+        run: |
+          set -euo pipefail
+          gateway_config=$(terraform output -json personal_api_gateway)
+          aws apigateway get-stage \
+            --rest-api-id "$(jq -r '.restApiId' <<< "$gateway_config")" \
+            --stage-name "$(jq -r '.stageName' <<< "$gateway_config")" \
+            --query 'methodSettings' --output json | \
+            node ../../../../tools/deployment/verify-personal-api-throttles.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Verify deployed Agent runtime
         if: env.CD_MODE == 'deploy'
         env:

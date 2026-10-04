@@ -387,6 +387,25 @@ resource "aws_api_gateway_method_settings" "agent_stream" {
   }
 }
 
+# Conversation activation reads metadata, history pages and a final revision in one
+# burst. Trip activation/save also performs bounded read-backs. Do not apply the
+# paid Agent's conservative default to these authenticated JSON methods.
+resource "aws_api_gateway_method_settings" "personal_api" {
+  for_each    = toset(["conversations", "trips"])
+  rest_api_id = aws_api_gateway_rest_api.agent_stream["stream"].id
+  stage_name  = aws_api_gateway_stage.agent_stream["stream"].stage_name
+  method_path = "api/${each.key}/v1/POST"
+  settings {
+    logging_level          = "OFF"
+    caching_enabled        = false
+    data_trace_enabled     = false
+    metrics_enabled        = true
+    throttling_burst_limit = 10
+    throttling_rate_limit  = 5
+  }
+  depends_on = [aws_api_gateway_method_settings.agent_stream]
+}
+
 resource "aws_iam_role_policy" "agent_stream_model" {
   for_each = local.agent_stream_instances
   role     = aws_iam_role.agent_stream[each.key].id

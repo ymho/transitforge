@@ -149,6 +149,14 @@ run "enabled_contract" {
     error_message = "Metrics must not enable body/token execution logging."
   }
   assert {
+    condition     = aws_api_gateway_method_settings.agent_stream["stream"].method_path == "*/*" && aws_api_gateway_method_settings.agent_stream["stream"].settings[0].throttling_burst_limit == 2 && aws_api_gateway_method_settings.agent_stream["stream"].settings[0].throttling_rate_limit == 1
+    error_message = "The paid Agent must retain the conservative default throttle."
+  }
+  assert {
+    condition     = length(aws_api_gateway_method_settings.personal_api) == 2 && alltrue([for name, method in aws_api_gateway_method_settings.personal_api : method.method_path == "api/${name}/v1/POST" && method.settings[0].throttling_burst_limit == 10 && method.settings[0].throttling_rate_limit == 5 && method.settings[0].metrics_enabled && !method.settings[0].data_trace_enabled && method.settings[0].logging_level == "OFF" && !method.settings[0].caching_enabled])
+    error_message = "Conversation/Trip read-back bursts need their own bounded method limits without body logs or caching."
+  }
+  assert {
     condition     = aws_iam_role.agent_stream_gateway_logs["stream"].assume_role_policy == jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Principal = { Service = "apigateway.amazonaws.com" }, Action = "sts:AssumeRole" }] }) && length(aws_iam_role_policy.agent_stream_gateway_logs) == 1 && aws_iam_role_policy_attachment.agent_stream_gateway_logs["stream"].policy_arn == "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
     error_message = "The API Gateway account role must retain the partial-apply inline policy and AWS managed CloudWatch Logs policy."
   }

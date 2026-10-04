@@ -84,7 +84,12 @@ API stage access logはrequestId、extendedRequestId、status、response/integra
 body/header/identity/error messageは記録せず、execution logging OFF、data trace OFF、metrics ON。
 Lambda/API logは30日保持。token、生会話、Profile、raw Tool、traceをログへ出さない。
 Lambda roleは専用logと選択Bedrock modelのInvokeModelだけを許可する。
-Gatewayのrate 1/s・burst 2、Lambda reserved concurrency 1は初期の保守的な上限であり、負荷調整は統合時に行う。
+Gatewayの既定rate 1/s・burst 2、Agent Lambda reserved concurrency 1は保守的な上限を維持する。
+会話・旅程のJSON API (`api/conversations/v1/POST`、`api/trips/v1/POST`) はmethod overrideで
+rate 5/s・burst 10とする。会話を開く際のmetadata→履歴page→最新版の連続読み取りや、保存後の
+read-backをAgent呼出しと同じburst 2で制限すると、通常操作でも429となるためである。
+認証・owner境界・モデル予算は変えず、body loggingとcachingはOFF、metricsはONを維持する。
+CDはTerraform記載だけでなく `get-stage` の実設定を読み戻し、JSON APIとAgentの上限を別々に検証する。
 
 Runtime完了時は内容を含まない`runtime`診断を追加し、`completed`、`budget_exhausted`、
 `provider_timeout`、`provider_refusal`、`provider_error`、`schema_invalid`、`response_rejected`、`failed`を区別する。
