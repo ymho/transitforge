@@ -8,7 +8,7 @@ import { productionServerTools } from "../../backend/agent-api/src/composition/p
 import { createFixedEgressAccommodationOperation } from "../../backend/agent-api/src/composition/fixed-egress-accommodation.js";
 import { createFixedEgressProviderHandler } from "../../backend/agent-api/src/adapters/fixed-egress-provider-handler.js";
 import { strandsScriptedRuntime } from "../../backend/agent-api/src/adapters/strands-scripted-model.fixture.js";
-import { stateDynamoFixture, conversationId, secondId } from "../../backend/agent-api/src/adapters/state-dynamodb.fixture.js";
+import { stateDynamoFixture, conversationId, secondId, stateMetadata } from "../../backend/agent-api/src/adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../../backend/agent-api/src/adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, token } from "../../backend/agent-api/src/adapters/cognito-token.fixture.js";
 import { createTrip } from "@raiquora/trip/trip";
@@ -19,6 +19,7 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
   const { verifier } = cognitoTokenFixture(); const principal = await verifier.verify(token());
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
   await trips.repository.create(principal, createTrip(secondId, "server trip", "2026-09-18T00:00:00Z"));
+  await state.conversations.create(principal, conversationId, stateMetadata());
   let release: (() => void) | undefined, hold = false, dropFinal = false, toolFailure = false;
   const provider = createFixedEgressProviderHandler({ search: async () => {
     if (toolFailure) throw new Error("private tool failure");
@@ -35,7 +36,7 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
       const { model, runRuntime } = strandsScriptedRuntime([
         { name: "search_accommodations", input: { destination: "京都", checkInDate: "2026-10-01", checkOutDate: "2026-10-02" } },
         { name: "strands_structured_output", input: { reply: { kind: "answer", commentary: "確認した宿泊候補です。空室は未確認です。",
-          references: [{ evidenceId: "browser-accommodation", field: "accommodationSummary" }] } } },
+          references: [{ evidenceId: `browser-accommodation:${executionId}`, field: "accommodationSummary" }] } } },
       ]);
       const stream = model.stream.bind(model);
       vi.spyOn(model, "stream").mockImplementation(async function* (messages) {
@@ -49,7 +50,7 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
       const accommodation = bindings.find(tool => tool.descriptor.name === "search_accommodations")!;
       const collect = accommodation.evidence;
       // Stable synthetic identity for the scripted model; retain the real Provider mapper's facts/claims.
-      accommodation.evidence = (output, context) => collect(output, context).map(evidence => ({ ...evidence, id: "browser-accommodation" }));
+      accommodation.evidence = (output, context) => collect(output, context).map(evidence => ({ ...evidence, id: `browser-accommodation:${executionId}` }));
       return createProductionConversationAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
         newExecutionId: () => executionId, weather: { search: vi.fn() }, additionalTools: bindings,
         runRuntime: input => { restoredContexts.push(input.context); return runRuntime(input); },
@@ -133,7 +134,9 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
     expect(state.commands).toHaveLength(beforeInvalid);
     expect(modelCalls).not.toHaveBeenCalled();
     await page.evaluate(() => (window as any).test.ask());
-    await page.waitForFunction(() => document.querySelector("#messages")?.textContent?.includes("確認した宿泊候補です"));
+    await page.waitForFunction(() => document.querySelector("#messages")?.textContent?.includes("確認した宿泊候補です") || document.querySelector(".ai-guide-message-failure"));
+    expect(await page.locator("#messages").textContent()).toContain("確認した宿泊候補です");
+    expect(await page.locator(".public-accommodation-presentation").textContent()).toContain("宿");
     expect(modelCalls).toHaveBeenCalledTimes(2); expect(invoke).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(restoredContexts)).toContain("server trip");
     expect(Object.keys(bodies[0]).sort()).toEqual(["conversationId", "requestedResearchMode", "tripId", "turnId", "uiContext", "userRequest"]);
