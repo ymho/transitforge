@@ -144,14 +144,24 @@ trustedな地域と旅程の時間精度に基づき暴露と未確認事項を�
 
 ```bash
 npm run architecture:check
-npm run workspace:check
 npm test
+npm run test:trip:v2:gate
 npm run build
 python3 -m unittest discover -s tests -v
-npm run lambda:check
-npm run test:journey-scenarios
-npm run eval:agent
+npm run lambda:check:built
 npm run eval:agent:smoke
+```
+
+作業中は変更箇所のtargeted testを使い、仕上げの全量確認は原則1回にする。同じrevisionで成功済みの
+CI確認を理由なく繰り返さない。`architecture:check`は`workspace:check`を含む。
+`npm test`は経路シナリオ、Agent v2 Acceptanceの共有39ファイル、Strandsの保存済みfixtureも含む。
+`test:trip:v2:gate`だけは独立したAcceptance checkで実行する。build済みなら`lambda:check:built`で
+再buildせず検証する。buildから行う単独の入口として`lambda:check`も維持する。
+
+以下は必要な範囲だけを単独で調査・評価するコマンドであり、毎回追加実行する確認一覧ではない。
+
+```bash
+npm run test:journey-scenarios
 npm run eval:agent:full
 npm run eval:agent -- --case cancelled-service
 npm run test:agent:v2
@@ -233,6 +243,11 @@ Backendに用意している。公開APIへの接続、ログインUI、本番Tr
 
 `CI / Test`はPRとmain revisionを検証する。`CD / Deploy`はmainのCI成功後または
 mainからの手動実行だけでdev環境を更新する。両者は別Workflowとして権限と結果を分離する
+
+通常CIはTypeScriptテスト・build/Python・ブラウザ・Terraformを並列に確認し、全ジョブの成功を既存の`test` checkへ
+集約する。失敗・取消・skipも成功として扱わない。`Agent v2 / Acceptance`の自動実行は固有のTrip gateだけを
+確認し、共有39ファイルを通常CIと二重実行しない。全Acceptanceの単独再実行は手動入力`full_suite`で行う。
+Browserは実行に使うChromium headless shellだけを取得し、Playwright version別にcacheする。
 
 環境固有の値はGitHub EnvironmentまたはGit管理外のローカル変数で与える
 詳しい入口は[Terraform dev環境](infra/terraform/environments/dev/README.md)を参照

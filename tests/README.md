@@ -43,11 +43,24 @@ Agent APIとDomainの実装やテストをPythonへ追加しない
 ```bash
 npm run architecture:check
 npm test
+npm run test:trip:v2:gate
+npm run build
 python3 -m unittest discover -s tests -v
-npm run lambda:check
-npm run test:journey-scenarios
+npm run lambda:check:built
 npm run eval:agent:smoke
 ```
+
+作業中は変更箇所のtargeted testを使い、仕上げの全量確認は原則1回とする。同じrevisionのCI成功結果を
+再利用し、変更・失敗・未確認範囲がなければ全量を繰り返さない。
+`architecture:check`は`workspace:check`を含む。`test:journey-scenarios`とStrands live-fixturesは`npm test`に
+含まれるため追加実行しない。`lambda:check:built`は直前のbuildを検証し、単独の`lambda:check`はbuildも行う。
+
+自動Acceptanceは共有39ファイルを`CI / Test`の`npm test`へ任せ、固有の`test:trip:v2:gate`だけを実行する。
+`test:agent:v2`は全Acceptanceを単独調査するときの入口として維持する。手動Workflowでは`full_suite`で
+全量再実行を選べる。通常CIはTypeScriptテスト、build/Python、ブラウザ、Terraformを並列実行し、既存`test` checkが
+全ジョブの成功を要求する。ブラウザはheadless shellのみをversion別にcacheし、OS依存は毎回確認する。
+BrowserはbuildジョブのViewer artifactを受け取り、stream/replayとビルド後の初期表示・12時間ログイン維持を
+確認する。ViewerをBrowserジョブで再buildしない。CIのtest tokenを含むartifactはCDでは使用しない。
 
 CutoverのCD入力・破壊的plan拒否・plan-only条件はAWSなしで確認する。
 

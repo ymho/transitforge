@@ -56,6 +56,19 @@ V1 testが守っていたものにユーザー可視の意味がある場合、�
 
 catalog testは、active gateがV1の `agent-runtime.test.ts` / `research-runtime-enforcement.test.ts` を参照しないことを強制する。
 
+## 自動CIでの重複実行を避ける
+
+`test:agent:v2`の40ファイル中39ファイルは通常の`npm test`が確認する。PR/mainの
+`Agent v2 / Acceptance`は残る`tools/trip-v2-product-gate.test.ts`だけを実行し、既存check名を維持する。
+architectureとtooling typecheckも通常CIで1回だけ実行する。全Acceptanceの独立調査は
+`npm run test:agent:v2`または手動Workflowの`full_suite=true`で行う。
+
+`CI / Test`はTypeScriptテスト、build/Python、ブラウザ、Terraformを並列実行し、全て成功したときだけ既存`test` checkを
+成功にする。failure/cancelled/skippedはgate失敗となり、CDもWorkflow全体の成功を引き続き要求する。
+検証範囲を減らすpath filterや、成功扱いにするskipは導入しない。
+Browserはbuild成功後に同じWorkflowのViewer artifactを取得し、stream/replayに加えて初期表示と
+12時間ログイン維持を確認する。ViewerはCI内で1回だけbuildし、CDは従来どおりproduction設定でbuildする。
+
 ## 追加テストの判断
 
 新しいV2 testは次の場合に追加する。
