@@ -146,7 +146,7 @@ it("fits a continuing seven-item Trip within 24k while keeping current authority
   const candidates = { groups: [{ presentationId: "shown:12:accommodation", kind: "accommodation", candidates: [
     { candidateId: "hotel-1", ordinal: 1, label: "御師の宿 ますや旅館" } ] }], itineraryItemCount: 7, canSave: true };
   const input = { ...runtimeInput(), userRequest: "御師の宿 ますや旅館でお願いします。保存してください。", initialEvidence,
-    context: { effectiveIntent, currentTrip, conversation: { messages }, featureContext: { uiFocus: { itemId: "item-4" } } },
+    context: { effectiveIntent, currentTrip, conversation: { messages }, featureContext: { uiFocus: { itemId: "item-4", item: { itemId: "item-4", type: "activity" as const, summary: "相談対象", schedule: { type: "unscheduled" as const } } } } },
     candidateController: { context: candidates } as never };
   const before = structuredClone({ initialEvidence, context: input.context, candidates });
   const serialized = strandsTurnInput(input), payload = JSON.parse(serialized);
