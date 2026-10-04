@@ -6,6 +6,8 @@ import { consumeAgentStream } from "../../adapters/http/agent-stream/consumer";
 import { HttpServerConversationClient } from "../../adapters/http/server-conversation-client";
 import { projectAssistantTurn } from "../../usecases/concierge/assistant-turn-projection";
 import { resolveAssistantMessage } from "./ai-guide-panel";
+import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
+import { canCombineAccommodationPlan } from "./public-accommodation-presentation-view";
 
 it("keeps all hotel comparisons through SSE, the viewer projection and restored history", async () => {
   const cards = parsePublicAccommodationPresentation({ version: "public-accommodation-presentation-v1", cards: [1, 2, 3].map(id => ({
@@ -39,4 +41,58 @@ it("keeps all hotel comparisons through SSE, the viewer projection and restored 
   expect(item.textContent).toContain("指定日の空室・料金は未確認です。");
   expect(item.textContent).toContain("日本時間");
   expect(item.querySelector("a")?.rel).toBe("noopener noreferrer");
+});
+
+function hotelFixture() {
+  const hotels = parsePublicAccommodationPresentation({ version: "public-accommodation-presentation-v1", cards: [1, 2].map(id => ({
+    evidenceId: `hotel-${id}`, name: "同名の宿", summary: `2026-10-05〜2026-10-06\n参考最安値: JPY ${id * 10000}\n空室は未確認`, retrievedAt: "2026-10-04T00:00:00Z", sourceUrl: `https://example.org/hotel/${id}`,
+  })) });
+  const candidates = [2, 1].map(id => ({ variantId: `variant-${id}`, label: "同名の宿", dayOrder: [`day-${id}-1`, `day-${id}-2`],
+    days: [1, 2].map(day => ({ dayRef: `day-${id}-${day}`, label: `2026-10-0${day + 4}`, status: "planned" as const,
+      entries: [{ entryRef: `entry-${id}-${day}`, itemRef: `item-${id}`, role: day === 1 ? "start" as const : "end" as const }] })),
+    items: [{ itemRef: `item-${id}`, sourceRef: `hotel-${id}`, title: "同名の宿", kind: "stay" as const, timing: "day" as const, evidenceRefs: [], photoRefs: [] }],
+    unknowns: ["空室"], comparisonAssessmentRefs: [], scenarioRefs: [], cost: { status: "unknown" as const }, workload: { status: "unknown" as const } }));
+  const plan = parsePublicPlanPresentation({ version: "public-plan-presentation-v1", presentationId: "hotels-plan", target: { tripId: "11111111-1111-4111-8111-111111111111", baseTripRevision: 5 },
+    candidateSetRef: { kind: "candidate-set-ref", candidateSetId: "hotel-set", revision: 2, baseTripRevision: 5 }, candidates, candidateOrder: candidates.map(c => c.variantId),
+    evidenceRefs: [], photoRefs: [], statements: [], comparisonAssessmentRefs: [], scenarioRefs: [],
+    coverage: { status: "complete", coveredDayRefs: candidates.flatMap(c => c.dayOrder), omittedDayRefs: [], omittedScopes: [] },
+    researchOutcome: { status: "complete", requestedMode: "standard", effectiveMode: "standard", budget: { modelCalls: 0, toolCalls: 0, wallClockMs: 0 }, coveredScopes: [], remainingScopes: [] } });
+  return { hotels, plan };
+}
+
+it("merges hotel facts and adoption once, keeping source-ID binding when names and ordering coincide", () => {
+  const { hotels, plan } = hotelFixture();
+  const item = document.createElement("li"); item.scrollIntoView = vi.fn();
+  const adoption = vi.fn(), detail = vi.fn(); item.addEventListener("raiquora:preview-plan-adoption", adoption); item.addEventListener("raiquora:detailed-research", detail);
+  resolveAssistantMessage(item, { text: "宿泊候補を比較できます。", publicAccommodationPresentation: hotels, publicPlanPresentation: plan }, { animate: false });
+  expect(item.querySelectorAll(".public-accommodation-presentation")).toHaveLength(1);
+  expect(item.querySelector(".public-plan-presentation")).toBeNull();
+  expect(item.querySelector(".public-plan-days")).toBeNull();
+  const cards = [...item.querySelectorAll<HTMLElement>(".public-place-card")];
+  expect(cards[0]!.hidden).toBe(false); expect(cards[1]!.hidden).toBe(true);
+  cards[0]!.querySelector<HTMLButtonElement>(".public-plan-adopt")!.click();
+  expect(adoption.mock.calls[0]![0].detail).toMatchObject({ variantId: "variant-1", candidateSetId: "hotel-set", baseTripRevision: 5 });
+  const tabs = [...item.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+  tabs[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+  expect(cards[1]!.hidden).toBe(false); expect(tabs[1]!.getAttribute("aria-selected")).toBe("true");
+  cards[1]!.querySelector<HTMLButtonElement>(".public-plan-adopt")!.click();
+  expect(adoption.mock.calls[1]![0].detail.variantId).toBe("variant-2");
+  [...item.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === "さらに詳しく比較する")!.click();
+  expect(detail.mock.calls[0]![0].detail.candidateSetId).toBe("hotel-set");
+  expect(item.textContent).toContain("JPY 10000"); expect(item.textContent).toContain("空室は未確認");
+});
+
+it("keeps unmatched, composite and display-only plans separate without guessing from hotel names", () => {
+  const { hotels, plan } = hotelFixture();
+  const wrong = { ...plan, candidates: plan.candidates.map((candidate, index) => index ? candidate :
+    { ...candidate, items: candidate.items.map(item => ({ ...item, sourceRef: "foreign-observation" })) }) };
+  expect(canCombineAccommodationPlan(hotels, wrong)).toBe(false);
+  const composite = { ...plan, candidates: plan.candidates.map((candidate, index) => index ? candidate :
+    { ...candidate, items: [...candidate.items, { ...candidate.items[0]!, itemRef: "extra", kind: "activity" as const }] }) };
+  expect(canCombineAccommodationPlan(hotels, composite)).toBe(false);
+  expect(canCombineAccommodationPlan(hotels, { ...plan, target: undefined })).toBe(false);
+  const item = document.createElement("li"); item.scrollIntoView = vi.fn();
+  resolveAssistantMessage(item, { text: "候補です。", publicAccommodationPresentation: hotels, publicPlanPresentation: wrong }, { animate: false });
+  expect(item.querySelectorAll(".public-plan-presentation")).toHaveLength(1);
+  expect(item.querySelectorAll(".public-accommodation-presentation .public-plan-adopt")).toHaveLength(0);
 });

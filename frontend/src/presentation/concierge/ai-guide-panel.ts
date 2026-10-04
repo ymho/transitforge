@@ -1,6 +1,6 @@
 import { iconMarkup } from "../shared/primitives";
 import { previewPlanAdoption } from "./plan-adoption-view";
-import { renderPublicAccommodationPresentation } from "./public-accommodation-presentation-view";
+import { canCombineAccommodationPlan, renderPublicAccommodationPresentation } from "./public-accommodation-presentation-view";
 import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
 import {
   type ConversationHistoryRepository,
@@ -550,16 +550,19 @@ export function resolveAssistantMessage(
   if (response.semanticReceipt) item.append(renderSemanticReceipt(response.semanticReceipt));
   const combined = response.publicJourneyPresentation && response.publicPlanPresentation &&
     canCombineJourneyPlan(response.publicJourneyPresentation, response.publicPlanPresentation);
+  const combinedAccommodation = !combined && response.publicAccommodationPresentation && response.publicPlanPresentation &&
+    canCombineAccommodationPlan(response.publicAccommodationPresentation, response.publicPlanPresentation);
   if (response.publicJourneyPresentation) item.append(renderPublicJourneyPresentation(response.publicJourneyPresentation,
     combined ? response.publicPlanPresentation : undefined));
-  if (response.publicPlanPresentation && !combined) {
+  if (response.publicPlanPresentation && !combined && !combinedAccommodation) {
     const plan = renderPublicPlanPresentation(response.publicPlanPresentation);
     if (response.publicJourneyPresentation && response.publicPlanPresentation.candidates.every(candidate => candidate.items.every(value => value.kind === "transport"))) {
       const details = document.createElement("details"), summary = document.createElement("summary");
       details.className = "journey-plan-actions"; summary.textContent = "旅程に追加・変更"; details.append(summary, plan); item.append(details);
     } else item.append(plan);
   }
-  if (response.publicAccommodationPresentation) item.append(renderPublicAccommodationPresentation(response.publicAccommodationPresentation));
+  if (response.publicAccommodationPresentation) item.append(renderPublicAccommodationPresentation(response.publicAccommodationPresentation,
+    combinedAccommodation ? response.publicPlanPresentation : undefined));
   if (response.publicGroundRoutePresentation) item.append(renderPublicGroundRoutePresentation(response.publicGroundRoutePresentation, options.onGroundRoute));
   if (response.publicPlacePresentation) item.append(renderPublicPlacePresentation(response.publicPlacePresentation, options.placeMemoSelection));
   appendConversationFeedback(item);

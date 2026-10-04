@@ -13,14 +13,19 @@ afterEach(() => document.body.replaceChildren());
 it("adds directly after the chosen spot with its day and fences a stale editor after switching trips", () => {
   const trip = multiCityTrip(), controller = createTripWorkspaceController("one"); controller.attach("one", { getCurrentTrip: () => trip });
   const app = document.createElement("main"), chat = document.createElement("section"); document.body.append(app);
-  const ui = configureTripWorkspace({ app, chat, messages: document.createElement("div"), input: document.createElement("input"), controller, ask: vi.fn(), showContext: vi.fn(), returnToConversation: vi.fn(), showMap: vi.fn(), nextItemId: () => "after", showTripList: vi.fn() });
+  const ask = vi.fn();
+  const ui = configureTripWorkspace({ app, chat, messages: document.createElement("div"), input: document.createElement("input"), controller, ask, showContext: vi.fn(), returnToConversation: vi.fn(), showMap: vi.fn(), nextItemId: () => "after", showTripList: vi.fn() });
   const card = app.querySelector<HTMLElement>('[data-item-id="hotel"]')!;
   button(card, "＋ この後に追加").click(); const form = app.querySelector<HTMLFormElement>(".trip-workspace-add")!;
   expect(form.hidden).toBe(false); expect(card.nextElementSibling).toBe(form);
+  button(form, "相談して追加").click();
+  expect(ask).toHaveBeenLastCalledWith(expect.stringContaining(`2026-09-22の「${trip.items.find(i => i.id === "hotel")!.title}」のチェックインの後`));
+  expect(controller.uiFocus()).toEqual({ itemId: "hotel" });
   form.querySelector("input")!.value = "夕食"; form.dispatchEvent(new Event("submit", { cancelable: true }));
   expect(controller.proposal()?.patches[0]).toMatchObject({ type: "add", afterId: "hotel", item: { schedule: { type: "day", date: "2026-09-22" } } });
   controller.attach("two", { getCurrentTrip: () => createTrip("22222222-2222-4222-8222-222222222222", "別の旅", trip.createdAt) }); controller.activateSession("two");
   form.dispatchEvent(new Event("submit", { cancelable: true })); expect(controller.proposal()).toBeUndefined(); expect(ui.panel.textContent).toContain("最新の旅程");
+  button(form, "相談して追加").click(); expect(ask).toHaveBeenCalledTimes(1);
 });
 it("previews and confirms a manually entered time; a detached editor cannot write into another trip", async () => {
   let trip = multiCityTrip(); const controller = createTripWorkspaceController("one"), report = vi.fn();
