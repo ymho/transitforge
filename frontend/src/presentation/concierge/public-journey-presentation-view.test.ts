@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parsePublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
 import { renderPublicJourneyPresentation } from "./public-journey-presentation-view";
+import { resolveAssistantMessage } from "./ai-guide-panel";
 
 describe("public journey presentation view", () => {
   it("renders verified stations, trains, transfers without boilerplate", () => {
@@ -10,5 +11,14 @@ describe("public journey presentation view", () => {
     expect(root.querySelectorAll(".journey-card")).toHaveLength(1);
     expect(root.textContent).toContain("京都 → 出雲市"); expect(root.textContent).toContain("特急 やくも 1M");
     expect(root.textContent).not.toContain("検証済み検索結果");
+    const item = document.createElement("li"); item.scrollIntoView = vi.fn();
+    const longText = "時刻や乗換を列挙する長い本文。".repeat(30);
+    resolveAssistantMessage(item, { text: longText, publicJourneyPresentation: value }, { animate: false });
+    expect(item.querySelector(".ai-guide-message-copy")?.textContent).toBe("経路1件を表示しました。パネルで比較できます。");
+    expect(item.querySelector<HTMLDetailsElement>(".candidate-reply-details")?.open).toBe(false);
+    expect(item.querySelector(".candidate-reply-details")?.textContent).toContain(longText);
+    resolveAssistantMessage(item, { text: "通常の説明です。" }, { animate: false });
+    expect(item.querySelector(".ai-guide-message-copy")?.textContent).toBe("通常の説明です。");
+    expect(item.querySelector(".candidate-reply-details")).toBeNull();
   });
 });

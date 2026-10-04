@@ -163,7 +163,14 @@ try {
     await page.locator(".consultation-messages .journey-presentation").waitFor();
     assert.equal(await page.locator(".consultation-page .public-plan-presentation").count(), 0);
     assert.equal(await page.locator(".consultation-page .journey-presentation").count(), 1);
-    assert.match(await page.locator(".ai-guide-message-copy strong").first().textContent(), /経路1/);
+    assert.equal(await page.locator(".ai-guide-message-copy").first().textContent(), "経路3件を表示しました。パネルで比較できます。");
+    const supplement = page.locator(".candidate-reply-details").first();
+    assert.equal(await supplement.evaluate(el => el.open), false);
+    assert.equal(await supplement.locator("strong").first().isVisible(), false);
+    await supplement.locator("summary").click();
+    assert.match(await supplement.locator("strong").first().textContent(), /経路1/);
+    assert.equal(await supplement.locator("strong").first().isVisible(), true);
+    await supplement.locator("summary").click();
     assert.equal(await page.locator(".ai-guide-message-copy p").first().evaluate(el => getComputedStyle(el).fontSize), "14px");
     await checkLayout("chat");
     await page.emulateMedia({ colorScheme: "dark" });

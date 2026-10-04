@@ -9,8 +9,11 @@ it("combines the shown journey with its bound adoption action for live and resto
     expect(root.querySelectorAll(".journey-presentation")).toHaveLength(1);
     expect(root.querySelector(".public-plan-presentation")).toBeNull();
     expect(root.querySelectorAll(".journey-card")).toHaveLength(3);
-    expect(root.querySelector(".ai-guide-message-copy strong")?.textContent).toBe("経路1（推奨）");
-    expect(root.querySelector("table")).not.toBeNull();
+    expect(root.querySelector(".ai-guide-message-copy")?.textContent).toBe("経路3件を表示しました。パネルで比較できます。");
+    const supplement = root.querySelector<HTMLDetailsElement>(".candidate-reply-details")!;
+    expect(supplement.open).toBe(false);
+    expect(supplement.querySelector("strong")?.textContent).toBe("経路1（推奨）");
+    expect(supplement.querySelector("table")).not.toBeNull();
     root.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1]!.click();
     const event = vi.fn(); root.addEventListener("raiquora:preview-plan-adoption", event);
     root.querySelectorAll<HTMLButtonElement>(".public-plan-adopt")[1]!.click();

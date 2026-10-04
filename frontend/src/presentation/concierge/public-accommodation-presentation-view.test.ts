@@ -40,6 +40,8 @@ it("keeps all hotel comparisons through SSE, the viewer projection and restored 
   expect(item.querySelector("h3")?.textContent).toBe(cards.cards[0]!.name);
   expect(item.textContent).toContain("指定日の空室・料金は未確認です。");
   expect(item.textContent).toContain("日本時間");
+  expect(item.querySelector(".ai-guide-message-copy")?.textContent).toBe("宿3件を表示しました。パネルで比較できます。");
+  expect(item.querySelector<HTMLDetailsElement>(".candidate-reply-details")?.open).toBe(false);
   expect(item.querySelector("a")?.rel).toBe("noopener noreferrer");
 });
 
@@ -64,7 +66,12 @@ it("merges hotel facts and adoption once, keeping source-ID binding when names a
   const { hotels, plan } = hotelFixture();
   const item = document.createElement("li"); item.scrollIntoView = vi.fn();
   const adoption = vi.fn(), detail = vi.fn(); item.addEventListener("raiquora:preview-plan-adoption", adoption); item.addEventListener("raiquora:detailed-research", detail);
-  resolveAssistantMessage(item, { text: "宿泊候補を比較できます。", publicAccommodationPresentation: hotels, publicPlanPresentation: plan }, { animate: false });
+  const longText = "宿の名前・価格・評価の長い説明。".repeat(20);
+  resolveAssistantMessage(item, { text: longText, publicAccommodationPresentation: hotels, publicPlanPresentation: plan }, { animate: false });
+  expect(item.querySelector(".ai-guide-message-copy")?.textContent).toBe("宿2件を表示しました。パネルで比較できます。");
+  const explanation = item.querySelector<HTMLDetailsElement>(".candidate-reply-details")!;
+  expect(explanation.open).toBe(false); expect(explanation.textContent).toContain(longText);
+  explanation.open = true; expect(explanation.textContent).toContain(longText);
   expect(item.querySelectorAll(".public-accommodation-presentation")).toHaveLength(1);
   expect(item.querySelector(".public-plan-presentation")).toBeNull();
   expect(item.querySelector(".public-plan-days")).toBeNull();

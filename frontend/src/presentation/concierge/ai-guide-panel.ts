@@ -540,7 +540,20 @@ export function resolveAssistantMessage(
 ): void {
   item.classList.remove("ai-guide-message-pending");
   item.removeAttribute("aria-label");
-  renderAssistantCopy(item, visibleAssistantText(response.text), options.animate ?? true);
+  const candidateGroups = [
+    ...(response.publicJourneyPresentation ? [`経路${response.publicJourneyPresentation.journeys.length}件`] : []),
+    ...(response.publicAccommodationPresentation ? [`宿${response.publicAccommodationPresentation.cards.length}件`] : []),
+  ];
+  const text = visibleAssistantText(response.text);
+  if (candidateGroups.length) {
+    renderAssistantCopy(item, `${candidateGroups.join("・")}を表示しました。パネルで比較できます。`, false);
+    // Keep explanations available without duplicating the comparison in the main reading flow.
+    if (text.trim()) {
+      const details = document.createElement("details"), summary = document.createElement("summary");
+      details.className = "candidate-reply-details"; summary.textContent = "比較の補足";
+      details.append(summary, renderAssistantMarkdown(text)); item.append(details);
+    }
+  } else renderAssistantCopy(item, text, options.animate ?? true);
   if (response.delivery && response.delivery.status !== "full") item.append(renderDeliveryStatus(response.delivery));
   if (response.semanticReceipt) item.append(renderSemanticReceipt(response.semanticReceipt));
   const combined = response.publicJourneyPresentation && response.publicPlanPresentation &&
