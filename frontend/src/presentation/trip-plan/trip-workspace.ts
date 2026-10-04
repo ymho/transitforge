@@ -1,4 +1,3 @@
-import { renderTripCosts } from "./trip-cost-view";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import type { ContextViewKind } from "../../domain/context-workspace";
 import { proposeDayActivity } from "../../usecases/trip-plan/propose-day-activity";
@@ -69,13 +68,13 @@ export function configureTripWorkspace(options: {
   const management = element("details", "trip-header-management"); management.append(element("summary", "", "旅程の操作"), openConsultation, adoption, branch, openTravelMode);
   heading.append(back, emblem, title, summary, party, notice, management);
   const retry = control("旅程を再読み込み", () => { void controller.source()?.retry?.(); });
-  const costs = element("div"); let costKey = "", costTripId: string | undefined, costSessionVersion: number | undefined;
+  const pendingCostEditors = new Map<string, { tripId: string; node: Element }>();
+  let costSessionVersion = controller.source()?.sessionVersion?.();
   const dayTabs = element("div", "trip-day-tabs"); dayTabs.setAttribute("role", "tablist"); dayTabs.setAttribute("aria-label", "旅程の日付");
   const days = element("div", "trip-workspace-days"), proposal = element("div"), candidates = element("div");
   const selectedDays = new Map<string, string>();
-  const itinerary = element("section", "trip-detail-panel"), details = element("details", "trip-extra-details");
+  const itinerary = element("section", "trip-detail-panel");
   itinerary.id = "trip-detail-itinerary";
-  details.append(element("summary", "", "費用"), costs);
   const add = element("form", "trip-workspace-add"); add.hidden = true;
   let addContext: { tripId: string; revision: number; session: string; afterId?: string } | undefined; const addLabel = element("label", "", "追加する予定 "); const addTitle = element("input");
   addTitle.required = true; addTitle.maxLength = 200; addLabel.append(addTitle);
@@ -123,7 +122,7 @@ export function configureTripWorkspace(options: {
         controller.current()?.id === trip?.id && controller.current()?.revision === trip?.revision });
   });
   itinerary.append(planDraft, dayTabs, days, addFirst, add, candidates);
-  const detail = element("div", "trip-detail-view"); detail.append(heading, status, retry, itinerary, proposal, candidates, details);
+  const detail = element("div", "trip-detail-view"); detail.append(heading, status, retry, itinerary, proposal, candidates);
   const travelMode = element("div"); travelMode.hidden = true;
   panel.append(detail, travelMode);
   app.append(panel, nav);
@@ -174,15 +173,18 @@ export function configureTripWorkspace(options: {
   }
 
   const render = () => {
+    const nextCostSession = controller.source()?.sessionVersion?.();
+    if (nextCostSession !== costSessionVersion) {
+      pendingCostEditors.clear(); panel.querySelectorAll(".trip-cost-editor").forEach(editor => editor.remove());
+      costSessionVersion = nextCostSession;
+    }
     if (activeSession !== controller.sessionId()) {
       viewState().scroll = panel.scrollTop; viewState().chatScroll = options.messages.scrollTop;
+      pendingCostEditors.clear(); panel.querySelectorAll(".trip-cost-editor").forEach(editor => editor.remove());
       activeSession = controller.sessionId(); previousTripId = undefined; report("");
       travelGeneration++; travelTripKey = ""; travelMode.hidden = true; detail.hidden = false;
-      costs.replaceChildren(); costKey = ""; costTripId = undefined;
       partyKey = ""; add.hidden = true; addContext = undefined;
     }
-    const nextCostSession = controller.source()?.sessionVersion?.();
-    if (nextCostSession !== costSessionVersion) { costs.replaceChildren(); costKey = ""; costTripId = undefined; costSessionVersion = nextCostSession; }
     const trip = controller.current();
     const plan = controller.plan(), nextPlanKey = JSON.stringify([controller.sessionId(), plan]);
     if (planKey !== nextPlanKey) {
@@ -208,8 +210,10 @@ export function configureTripWorkspace(options: {
     if (!trip) {
       title.textContent = "旅程"; summary.textContent = "";
       report(controller.loadState() === "loading" ? "サーバから旅程を読み込んでいます。" : "旅程を取得できません。認証と接続、参照先の状態を確認して再試行してください。端末の旧旅程へは切り替えていません。");
-      const costEditor = costs.querySelector(".trip-cost-editor");
-      costs.replaceChildren(...(costEditor ? [costEditor] : [])); costKey = "";
+      if (previousTripId) for (const [entryKey, card] of cards) {
+        const editor = card.node.querySelector(".trip-cost-editor");
+        if (editor) pendingCostEditors.set(entryKey, { tripId: previousTripId, node: editor });
+      }
       days.replaceChildren(); proposal.replaceChildren(); candidates.replaceChildren();
       dayTabs.replaceChildren();
       party.replaceChildren(); partyKey = "";
@@ -228,12 +232,6 @@ export function configureTripWorkspace(options: {
       .map(([key, , label]) => option(label, key)));
     addDay.value = [...addDay.options].some((entry) => entry.value === chosenDay) ? chosenDay : "unscheduled";
     const evaluation = controller.feasibility()!;
-    const nextCostKey = JSON.stringify([trip.id, trip.revision, trip.costs, controller.canConfirm()]);
-    if (costKey !== nextCostKey) {
-      const editor = costTripId === trip.id ? costs.querySelector(".trip-cost-editor") : null;
-      costKey = nextCostKey; costTripId = trip.id; costs.replaceChildren(renderTripCosts(trip, controller, chat, report));
-      if (editor) { costs.append(editor); report("旅程が更新されました。費用の入力は残しています。取消後、最新の費用から編集し直してください。"); }
-    }
     title.textContent = view.title;
     const role = controller.source()?.getRole?.(), personalOwner = role === undefined || role === "owner";
     adoption.hidden = !options.changeAdoption || !personalOwner || ["cancelled", "completed"].includes(trip.lifecycleState);
@@ -255,7 +253,7 @@ export function configureTripWorkspace(options: {
       entries.forEach((entry, index) => {
         const { item, entryKey } = entry;
         ids.add(entryKey);
-        const key = JSON.stringify([item, entry.role, itemAssumptions(trip, item.id), controller.reservations()?.filter((r) => r.itineraryItemId === item.id),
+        const key = JSON.stringify([item, trip.costs?.lines, controller.canConfirm(), entry.role, itemAssumptions(trip, item.id), controller.reservations()?.filter((r) => r.itineraryItemId === item.id),
           evaluation.issues.filter((i) => i.itemIds.includes(item.id)), personalOwner && !!options.changeItemDecision]);
         const collapseKey = `${activeSession}:${trip.id}:${entryKey}`;
         let card = cards.get(entryKey);
@@ -263,7 +261,14 @@ export function configureTripWorkspace(options: {
           const node = renderWorkspaceCard(trip, item, controller, { entry, addAfter: () => startAdd(trip, entry.sourceDayKey, item.id, cards.get(entryKey)?.node), collapsed: collapsed.get(collapseKey) ?? true,
             collapse: (value) => collapsed.set(collapseKey, value), chat, report,
             ...(personalOwner && options.changeItemDecision ? { changeItemDecision: options.changeItemDecision } : {}) }, evaluation.issues.filter((i) => i.itemIds.includes(item.id)));
-          if (card) card.node.replaceWith(node);
+          const pending = pendingCostEditors.get(entryKey);
+          if (pending?.tripId === trip.id && controller.canConfirm()) node.querySelector(".trip-item-cost")?.append(pending.node);
+          pendingCostEditors.delete(entryKey);
+          if (card) {
+            const editor = card.node.querySelector(".trip-cost-editor");
+            if (editor && controller.canConfirm()) node.querySelector(".trip-item-cost")?.append(editor);
+            card.node.replaceWith(node);
+          }
           card = { node, key }; cards.set(entryKey, card);
         }
         card.node.classList.toggle("is-focused", controller.uiFocus()?.itemId === item.id);
@@ -312,11 +317,11 @@ export function configureTripWorkspace(options: {
     panel.scrollTop = scroll;
   };
   const canLeave = () => {
-    const editor = costs.querySelector(".trip-cost-editor");
-    if (!editor || document.defaultView?.confirm("編集中の費用を破棄して移動しますか？")) { editor?.remove(); return true; }
+    const editors = [...panel.querySelectorAll(".trip-cost-editor"), ...[...pendingCostEditors.values()].map(value => value.node)];
+    if (!editors.length || document.defaultView?.confirm("編集中の費用を破棄して移動しますか？")) { editors.forEach(editor => editor.remove()); pendingCostEditors.clear(); return true; }
     return false;
   };
-  const beforeUnload = (event: BeforeUnloadEvent) => { if (costs.querySelector(".trip-cost-editor")) { event.preventDefault(); event.returnValue = ""; } };
+  const beforeUnload = (event: BeforeUnloadEvent) => { if (panel.querySelector(".trip-cost-editor") || pendingCostEditors.size) { event.preventDefault(); event.returnValue = ""; } };
   document.defaultView?.addEventListener("beforeunload", beforeUnload);
   const unsubscribe = controller.subscribe(render); render();
   return { panel, nav, render, show, report, canLeave, openTravelMode: showTravelMode,

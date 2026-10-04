@@ -117,6 +117,12 @@ export function validateTrip(trip: Trip): void {
   if (trip.structureIntent !== undefined) validateTripStructureIntent(trip.structureIntent, new Set(trip.items.map(({ id }) => id)),
     new Set(trip.timeline?.logicalDays.map(({ id }) => id) ?? []));
   trip.items.forEach((item) => { validateItem(item, trip.timeline); validateScheduleReferences(item.schedule, trip.timeline, item.logicalDayId); });
+  for (const line of trip.costs?.lines ?? []) {
+    if (!line.id.startsWith("item-estimate:")) continue;
+    const item = trip.items.find(item => item.id === line.targetRefs.itemIds?.[0]);
+    if (!item || line.targetRefs.itemIds?.length !== 1 || line.kind !== "user_override" || line.amountRole !== "total" ||
+        item.type === "transport" && item.detail.mode === "rail") throw new Error("Invalid item estimate target");
+  }
   const derivedSegmentIds = trip.items.flatMap((item) => item.type === "transport"
     ? ["intercity", "excursion", "unresolved"].map((kind) => `derived:${item.id}:${kind}`)
     : item.type === "stay" ? ["stay-base", "unresolved"].map((kind) => `derived:${item.id}:${kind}`) : []);
@@ -309,9 +315,9 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
     }
     if (patch.type === "cost_lines") {
       exactKeys(patch, ["type", "lines"]);
-      if (!costs || !Array.isArray(patch.lines)) throw new Error("Cost forecast compatibility basis required");
+      if (!Array.isArray(patch.lines)) throw new Error("Invalid cost lines");
       patch.lines.forEach(validateCostLine);
-      costs = { ...costs, lines: structuredClone(patch.lines) }; continue;
+      costs = { overrides: {}, stale: false, ...costs, lines: structuredClone(patch.lines) }; continue;
     }
     if (patch.type === "title") {
       exactKeys(patch, ["type", "title"]);
@@ -332,6 +338,8 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
       : { ...old.decision, needsReconfirmation: true } } : patch.item;
   }
   if (costs && (JSON.stringify(request) !== JSON.stringify(trip.request) || JSON.stringify(items) !== JSON.stringify(trip.items))) costs = { ...costs, stale: true };
+  if (costs?.lines && proposal.patches.some(patch => patch.type === "remove")) costs = { ...costs,
+    lines: costs.lines.filter(line => !line.id.startsWith("item-estimate:") || line.targetRefs.itemIds?.every(id => items.some(item => item.id === id))) };
   // Preview keeps revision/updatedAt. Only a successful server CAS increments them.
   let result: Trip = { id: trip.id, schemaVersion: timeline === undefined && structureIntent === undefined ? trip.schemaVersion : 3, revision: trip.revision, title,
     ...(trip.summaryDestination === undefined ? {} : { summaryDestination: trip.summaryDestination }),

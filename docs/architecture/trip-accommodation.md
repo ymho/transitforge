@@ -65,7 +65,7 @@ Money/TravelPriceやJPY固定値は追加しない。#412が必要に応じ同�
 sourceとPlaceのraw extraはallowlist変換で捨て、出力SnapshotへのextraはDomainで拒否する。
 保持可否は信頼済みAdapter/Applicationの責務であり、モデル/UIが任意のOfferingへ許可を付けることはできない。2026-10-04の利用者の保存許可により、本番Rakutenの施設番号・ホテル名・宿泊日・出所/取得時刻に限る旅程参照の保持方針を追加した。外部サービス名は`provider=rakuten-travel`と`sources.attribution=楽天トラベル`で保持する。この最小参照の方針は、提供元のデータ全般の複製権を確認したという意味ではない。
 
-[楽天トラベル施設検索API](https://webservice.rakuten.co.jp/documentation/simple-hotel-search)の`hotelNo`は施設番号であり、施設名`hotelName`との対応を実Adapterで確定する。施設番号を返すことが確認できたこのAPIだけに適用し、汎用の商品ID・legacyの`travel-provider`から施設IDを自動生成しない。Domainの汎用契約・独立resolverの経路も維持する。写真・レビュー・説明文・参考価格・空室・予約URL・rawを採用Snapshotへ保存する許可には拡大しない。
+[楽天トラベル施設検索API](https://webservice.rakuten.co.jp/documentation/simple-hotel-search)の`hotelNo`は施設番号であり、施設名`hotelName`との対応を実Adapterで確定する。施設番号を返すことが確認できたこのAPIだけに適用し、汎用の商品ID・legacyの`travel-provider`から施設IDを自動生成しない。Domainの汎用契約・独立resolverの経路も維持する。参考価格はtrusted Adapterの許諾と観測日時を検証して保存する。写真・レビュー・説明文・空室・予約URL・rawは採用Snapshotへ保存しない。
 
 候補A→Bは同じitem IDのreplaceで、候補配列や旧Snapshotを書き換えない。
 確認時は既存confirmCandidateSelectionで再解決し、selectedAtだけは確認時刻とする。

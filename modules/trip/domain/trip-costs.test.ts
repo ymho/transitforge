@@ -11,7 +11,7 @@ it("preserves originals and zero overrides across regeneration, and resets a sin
   trip = apply(trip, [{ type: "cost_override", category: "food", amount: { currency: "JPY", amountMinor: 0 } }]);
   expect(summarizeTripCosts(trip.costs!).totals).toEqual([{ currency: "JPY", amountMinor: 30000 }]);
   trip = apply({ ...trip, revision: 2 }, [{ type: "cost_forecast", forecast: costForecast(costTripId, 2, 20000) }]);
-  expect(trip.costs?.overrides.food?.amountMinor).toBe(0); expect(trip.costs?.forecast.items[3].amount?.amountMinor).toBe(20000);
+  expect(trip.costs?.overrides.food?.amountMinor).toBe(0); expect(trip.costs?.forecast?.items[3].amount?.amountMinor).toBe(20000);
   trip = apply(trip, [{ type: "cost_override", category: "food" }]);
   expect(summarizeTripCosts(trip.costs!).totals[0].amountMinor).toBe(80000);
 });

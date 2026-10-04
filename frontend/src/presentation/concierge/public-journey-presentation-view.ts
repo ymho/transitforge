@@ -39,7 +39,6 @@ export function renderPublicJourneyPresentation(value: PublicJourneyPresentation
     });
   }
   if (value.journeys.length > 1) heading.after(tabs);
-  const source = document.createElement("p"); source.className = "journey-source-disclosure"; source.textContent = "時刻・列車・乗換は検証済み検索結果を表示しています。"; section.append(source);
   return section;
 }
 function escapeHtml(value: string): string { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;"); }

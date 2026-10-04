@@ -14,7 +14,7 @@ function setup() {
   return { trip, record, request, port };
 }
 describe("accommodation adoption boundary", () => {
-  it("retains permitted EUR observation, keeps preview exact and never calls it current price", async () => {
+  it("retains permitted EUR observation without duplicating cost explanation in the preview", async () => {
     const f = setup(); f.record.accommodation!.priceRetention = "permitted";
     f.record.candidate.accommodations[0]!.price = { price: { currency: "EUR", amountMinor: 12000 }, observedAt: "2026-09-12T07:55:00Z", basis: "selected-dates" };
     const before = structuredClone(f.record);
@@ -22,7 +22,7 @@ describe("accommodation adoption boundary", () => {
     const stay = next.items[0] as StayItineraryItem;
     expect(stay).toMatchObject({ selection: { accommodation: { observedPrice: before.candidate.accommodations[0]!.price } } });
     const preview = accommodationPreview(stay);
-    expect(preview).toContain("選択時の参考価格: EUR 120.00"); expect(preview).toContain("2026-09-12T07:55:00Z");
+    expect(preview).not.toContain("選択時の参考価格"); expect(preview).not.toContain("2026-09-12T07:55:00Z");
     expect(preview).not.toMatch(/現在価格|JPY|空室あり/); expect(f.record).toEqual(before);
     if (stay.selection.status !== "selected") throw new Error("Missing stay");
     const snapshot = stay.selection.accommodation;

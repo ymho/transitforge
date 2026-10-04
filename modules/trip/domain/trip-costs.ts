@@ -8,7 +8,7 @@ export const costCategoryLabels: Record<CostCategory, string> = { transport: "äº
 /** Stable category IDs. Amounts cover all travelers; absence means unknown, not zero. */
 export interface CostForecastItem { readonly category: CostCategory; readonly amount?: Money; readonly explanation: string; readonly assumptions: readonly string[]; }
 export interface TripCostForecast { readonly tripId: string; readonly baseRevision: number; readonly generatedAt: string; readonly items: readonly CostForecastItem[]; }
-export interface TripCosts { readonly forecast: TripCostForecast; readonly overrides: Partial<Record<CostCategory, Money>>; readonly stale: boolean; readonly lines?: readonly CostLine[]; }
+export interface TripCosts { readonly forecast?: TripCostForecast; readonly overrides: Partial<Record<CostCategory, Money>>; readonly stale: boolean; readonly lines?: readonly CostLine[]; }
 export function validateCostForecast(value: TripCostForecast): void {
   exactKeys(value, ["tripId", "baseRevision", "generatedAt", "items"]);
   if (typeof value.tripId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(value.tripId) ||
@@ -22,13 +22,14 @@ export function validateCostForecast(value: TripCostForecast): void {
   }
 }
 export function validateTripCosts(value: TripCosts, tripId: string, revision: number): void {
-  exactKeys(value, ["forecast", "overrides", "stale", "lines"]); validateCostForecast(value.forecast);
-  if (value.forecast.tripId !== tripId || value.forecast.baseRevision > revision || typeof value.stale !== "boolean") throw new Error("Wrong cost basis");
+  exactKeys(value, ["forecast", "overrides", "stale", "lines"]);
+  if (value.forecast) validateCostForecast(value.forecast);
+  if (value.forecast && (value.forecast.tripId !== tripId || value.forecast.baseRevision > revision) || typeof value.stale !== "boolean" || !value.forecast && value.lines === undefined) throw new Error("Wrong cost basis");
   exactKeys(value.overrides, costCategories);
   for (const amount of Object.values(value.overrides)) validateMoney(amount!);
-  if (value.lines && !value.lines.length) throw new Error("Detailed cost lines cannot be empty");
+  if (!value.forecast && Object.keys(value.overrides).length) throw new Error("Legacy overrides require a forecast");
   value.lines?.forEach(validateCostLine);
-  if (value.lines) summarizeCostLines(value.lines, value.forecast.generatedAt);
+  if (value.lines) summarizeCostLines(value.lines, value.forecast?.generatedAt ?? "1970-01-01T00:00:00Z");
   summarizeTripCosts(value); // Reject unsafe aggregate overflow before any write.
 }
 
@@ -40,9 +41,9 @@ export function forecastAsCostLines(forecast: TripCostForecast): readonly CostLi
     coverage: item.amount ? "complete" : "unknown", ...(item.amount ? { amount: item.amount } : {}), included: [], excluded: [],
     assumptions: item.assumptions, inputFingerprint: costInputFingerprint({ tripId: forecast.tripId, baseRevision: forecast.baseRevision, category: item.category }) }));
 }
-export function summarizeTripCosts(value: TripCosts, evaluatedAt: string = value.forecast.generatedAt) {
+export function summarizeTripCosts(value: TripCosts, evaluatedAt: string = value.forecast?.generatedAt ?? "1970-01-01T00:00:00Z") {
   const legacyTotals = new Map<string, Money>(); let legacyUnknownCount = 0;
-  const items = value.forecast.items.map(item => {
+  const items = (value.forecast?.items ?? []).map(item => {
     const override = value.overrides[item.category], amount = override ?? item.amount;
     if (amount) legacyTotals.set(amount.currency, addMoney(legacyTotals.get(amount.currency) ?? { currency: amount.currency, amountMinor: 0 }, amount));
     else legacyUnknownCount++;

@@ -1,3 +1,4 @@
+import { renderItemCost } from "./trip-cost-view";
 import type { DayEntry } from "@raiquora/trip/daily-itinerary";
 import { renderTripTimeEditor } from "./trip-time-editor";
 import { renderTripRouteTimeline } from "./trip-route-timeline";
@@ -44,6 +45,9 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   decisionStatus.title = "予定の状態です。予約・購入の確認ではありません。";
   if (issues.length || itemAssumptions(trip, item.id).length) { decisionStatus.textContent += "・要確認"; decisionStatus.title += issues.map(feasibilityIssueText).join(" / "); }
   content.append(decisionStatus);
+  if (options.entry?.role !== "end" && options.entry?.role !== "continue") {
+    const cost = renderItemCost(trip, item, controller, options.report); if (cost) content.append(cost);
+  }
   if (item.type !== "activity") {
     const facts = controller.reservations(), relevant = facts?.filter(r => r.itineraryItemId === item.id);
     content.append(element("p", "trip-item-meta", facts === undefined ? "予約状況未取得" : relevant?.length ? relevant.map(r => reservationStatusLabels[r.status]).join("・") : "予約記録なし"));

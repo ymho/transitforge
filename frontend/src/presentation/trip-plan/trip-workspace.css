@@ -100,14 +100,15 @@
   .trip-workspace button:hover:not(:disabled) { border-color: #aec3d2; background: #f4f8fb; }
 }
 
-.trip-costs { margin-block: 1.5rem; padding: 1rem; background: #fff; border: 1px solid #dfe4e8; border-radius: 1rem; }
-.trip-cost-item { padding: .75rem 0; border-top: 1px solid #dfe4e8; overflow-wrap: anywhere; }
-.trip-cost-item p { font-size: .9rem; line-height: 1.6; }
-.trip-cost-item strong, .trip-cost-total { font-variant-numeric: tabular-nums; }
-.trip-cost-editor { display: flex; flex-wrap: wrap; gap: .5rem; padding-block: .5rem; }
-.trip-cost-editor input, .trip-cost-editor select, .trip-costs button { min-height: 44px; max-width: 100%; }
-.trip-cost-editor input { box-sizing: border-box; font-size: 16px; }
-.trip-cost-warning { color: #715418; }
+/* Estimates live beside the itinerary item, with the same light/dark tokens. */
+.trip-item-cost { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .6rem; margin-block: .4rem; font-size: .875rem; }
+.trip-item-cost-label { color: var(--tf-muted, #68778c); }
+.trip-item-cost-value { border: 0; background: transparent; color: var(--tf-blue, #2767a7); padding: .3rem 0; min-height: 36px; font: inherit; text-align: start; }
+.trip-cost-editor { display: flex; flex-wrap: wrap; gap: .5rem; padding-block: .5rem; width: 100%; }
+.trip-cost-editor label { min-width: 0; flex: 1 1 10rem; }
+.trip-cost-editor input, .trip-cost-editor select { min-height: 44px; max-width: 100%; }
+.trip-cost-editor input { box-sizing: border-box; font-size: 16px; width: 100%; }
+
 .trip-detail-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .35rem; margin-block: 1rem; }
 .trip-detail-tabs [role="tab"] { min-width: 0; overflow-wrap: anywhere; }
 .trip-detail-tabs [aria-selected="true"] { border-color: #587b98; background: #e7f0f7; font-weight: 700; }

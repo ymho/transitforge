@@ -1,4 +1,4 @@
-import { tripCostCopy } from "./trip-cost-view";
+import { itemCostCopy } from "./trip-cost-view";
 import type { Trip, TripUpdateProposal } from "@raiquora/trip/trip";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import { tripProposalProjection } from "./trip-workspace-projection";
@@ -26,9 +26,12 @@ export function renderWorkspaceProposal(trip: Trip, proposal: TripUpdateProposal
     compare(view.beforeConditions, view.afterConditions);
     if (proposal.patches.every(p => p.type === "request")) section.append(element("p", "", "旅行条件だけの変更案です。採用済みの予定や予約は変更しません。仮置きの値は、保存後も確認・修正できます。"));
   }
-  if (proposal.patches.some(p => p.type === "cost_forecast" || p.type === "cost_override")) {
-    compare(tripCostCopy(trip), tripCostCopy(applyTripProposal(trip, proposal)));
-    section.append(element("p", "", "費用は概算です。予約価格・価格保証や、予算条件の成立確認にはなりません。再予測でもユーザー編集は保持します。"));
+  if (proposal.patches.some(p => p.type === "cost_lines")) {
+    const after = applyTripProposal(trip, proposal);
+    for (const item of trip.items) {
+      const beforeCost = itemCostCopy(trip, item), afterCost = itemCostCopy(after, item);
+      if (beforeCost !== afterCost) compare(`${item.title}\n概算費用: ${beforeCost}`, `${item.title}\n概算費用: ${afterCost}`);
+    }
   }
   if (view.beforeState !== view.afterState) compare(view.beforeState, view.afterState);
   const warnings = controller.reservationWarnings();
