@@ -1,3 +1,5 @@
+import type { ZonedInstant } from "./itinerary-schedule";
+import type { StayPlannedTiming } from "./planned-itinerary-time";
 import { projectDailyItinerary } from "./daily-itinerary";
 import { createPlaceSnapshot } from "./place-snapshot";
 import { nonRailTransportModes, type NonRailTransportMode } from "./transport-detail";
@@ -11,6 +13,8 @@ export type TripItemChange =
   | { readonly action: "add-researched-activity"; readonly itemId: string; readonly dayKey: string; readonly afterId?: string;
       readonly title: string; readonly category: ActivityCategory; readonly sourceUrl: string; readonly observedAt: string }
   | { readonly action: "add-transport" | "add-stay"; readonly itemId: string; readonly dayKey: string; readonly afterId?: string; readonly title: string }
+  | { readonly action: "set-planned-time"; readonly itemId: string; readonly startAt: ZonedInstant; readonly endAt?: ZonedInstant }
+  | { readonly action: "set-stay-planned-time"; readonly itemId: string; readonly plannedTiming: StayPlannedTiming }
   | { readonly action: "rename"; readonly itemId: string; readonly title: string }
   | { readonly action: "remove"; readonly itemId: string }
   | { readonly action: "move"; readonly itemId: string; readonly afterId?: string }
@@ -26,6 +30,8 @@ export function proposeTripItemChange(trip: Trip, change: TripItemChange): TripU
     "add-researched-activity": ["action", "itemId", "dayKey", "afterId", "title", "category", "sourceUrl", "observedAt"],
     "add-transport": ["action", "itemId", "dayKey", "afterId", "title"],
     "add-stay": ["action", "itemId", "dayKey", "afterId", "title"],
+    "set-planned-time": ["action", "itemId", "startAt", "endAt"],
+    "set-stay-planned-time": ["action", "itemId", "plannedTiming"],
     rename: ["action", "itemId", "title"], remove: ["action", "itemId"], move: ["action", "itemId", "afterId"],
     "change-day": ["action", "itemId", "dayKey"],
     "select-manual-transport": ["action", "itemId", "title", "mode", "origin", "destination"],
@@ -40,7 +46,7 @@ export function proposeTripItemChange(trip: Trip, change: TripItemChange): TripU
     if (existing) throw new Error("Item already exists");
     const input = change as Extract<TripItemChange, { action: "add-activity" | "add-researched-activity" | "add-transport" | "add-stay" }>;
     const day = resolveDay(trip, input.dayKey);
-    if (input.afterId && !day?.entries.some(entry => entry.sourceItemId === input.afterId)) throw new Error("Insertion point is outside day");
+    if (input.afterId && !(day ? day.entries : projectDailyItinerary(trip).unscheduled).some(entry => entry.sourceItemId === input.afterId)) throw new Error("Insertion point is outside day");
     const schedule = daySchedule(day);
     const base = { id: itemId, title: label(input.title), schedule };
     let item: ItineraryItem;
@@ -56,6 +62,16 @@ export function proposeTripItemChange(trip: Trip, change: TripItemChange): TripU
   } else {
     if (!existing) throw new Error("Item is not in the Trip");
     switch (change.action) {
+      case "set-planned-time": {
+        if (existing.type === "stay" || existing.type === "transport" && existing.detail.status === "selected" &&
+          (existing.detail.mode === "rail" || existing.detail.provenance.type === "provider")) throw new Error("Reselect provider route instead of editing its times");
+        const logicalDayId = existing.schedule.type === "relative" ? existing.schedule.dayId : existing.logicalDayId;
+        patch = { type: "replace", itemId, item: { ...existing, ...(logicalDayId ? { logicalDayId } : {}),
+          schedule: { type: "fixed", startAt: change.startAt, ...(change.endAt ? { endAt: change.endAt } : {}) } } }; break;
+      }
+      case "set-stay-planned-time":
+        if (existing.type !== "stay") throw new Error("Stay item required");
+        patch = { type: "replace", itemId, item: { ...existing, plannedTiming: change.plannedTiming } }; break;
       case "rename": patch = { type: "replace", itemId, item: { ...existing, title: label(change.title) } }; break;
       case "remove": patch = { type: "remove", itemId }; break;
       case "move": patch = { type: "move", itemId, ...(change.afterId === undefined ? {} : { afterId: identifier(change.afterId) }) }; break;

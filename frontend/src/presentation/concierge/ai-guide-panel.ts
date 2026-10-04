@@ -1,3 +1,4 @@
+import { iconMarkup } from "../shared/primitives";
 import { previewPlanAdoption } from "./plan-adoption-view";
 import { renderPublicAccommodationPresentation } from "./public-accommodation-presentation-view";
 import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
@@ -604,7 +605,7 @@ function appendConversationFeedback(item: HTMLLIElement): void {
     button.type = "button";
     button.dataset.conversationFeedback = rating;
     button.ariaLabel = label;
-    button.textContent = rating === "good" ? "👍" : "👎";
+    button.innerHTML = iconMarkup(rating === "good" ? "thumbUp" : "thumbDown");
     feedback.append(button);
   }
   item.append(feedback);

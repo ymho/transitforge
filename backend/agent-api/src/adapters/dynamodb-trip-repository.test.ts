@@ -29,6 +29,18 @@ describe("owner-scoped Trip storage", () => {
     await expect(f.repository.applyMutation(a, mutation(), () => invalid)).rejects.toMatchObject({ code: "invalid-input" });
     expect(await f.repository.get(a, id)).toEqual(input);
   });
+  it("round trips user planned stay times through owner-scoped CAS without changing stay dates", async () => {
+    const f = fixture(), input = createTrip(id, "宿泊", "2026-09-13T01:00:00Z", [{ id: "stay", title: "宿", type: "stay", selection: { status: "unselected" },
+      schedule: { type: "day", date: "2026-10-05", endDate: "2026-10-06", timeZone: "Asia/Tokyo" } }]);
+    await f.repository.create(a, input);
+    const timing = { checkIn: { at: "2026-10-05T15:00:00+09:00", timeZone: "Asia/Tokyo" }, checkOut: { at: "2026-10-06T10:00:00+09:00", timeZone: "Asia/Tokyo" } };
+    const replacement = { ...input, items: [{ ...input.items[0]!, plannedTiming: timing }] };
+    await f.repository.applyMutation(a, mutation(), () => replacement);
+    const loaded = await f.repository.get(a, id);
+    expect(loaded?.items[0]).toMatchObject({ schedule: input.items[0]!.schedule, plannedTiming: timing });
+    expect(loaded?.revision).toBe(1); expect(await f.repository.get(b, id)).toBeUndefined();
+    await expect(f.repository.applyMutation(a, { ...mutation(), mutationId: id }, () => replacement)).rejects.toMatchObject({ code: "conflict" });
+  });
   it("round trips schema/revision, copies input and replaces only an existing active resource", async () => {
     const f = fixture(), input = trip();
     expect(await f.repository.create(a, input)).toEqual(input);

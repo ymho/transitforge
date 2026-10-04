@@ -12,7 +12,8 @@ import { renderTripFeasibility } from "./trip-feasibility-view";
 import { renderTripReadiness } from "./trip-readiness-view";
 import { renderTripChecklist } from "./trip-checklist-view";
 import { travelIcon } from "../shared/travel-icon";
-import { renderTripMap, tripDetailTabs, tripOverviewCopy, type TripDetailTab } from "./trip-detail-view";
+import { tripDateLabel } from "../../usecases/trip-plan/trip-header-presentation";
+import { renderTripPartyControl } from "./trip-party-control";
 import { renderTripTravelMode } from "./trip-travel-mode";
 import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 import type { Trip } from "@raiquora/trip/trip";
@@ -28,6 +29,7 @@ export function configureTripWorkspace(options: {
   showContext(view: ContextViewKind): void; returnToConversation(): void; showMap(itemId?: string): void;
   loadInTripContext?(tripId: string): Promise<InTripContextSnapshot | undefined>;
   ask(prompt: string): void; nextItemId(): string;
+  showTripList?(): void;
   onViewChange?(view: "chat" | "trip"): void;
   changeAdoption?(trip: Trip, action: "confirm" | "withdraw"): Promise<void>;
   changeItemDecision?(trip: Trip, item: Trip["items"][number], action: "confirm" | "withdraw"): Promise<void>;
@@ -65,7 +67,10 @@ export function configureTripWorkspace(options: {
     void options.branchTrip(trip, value).catch(() => report("旅程を分岐できませんでした。最新の旅程を確認してください。"))
       .finally(() => { branchBusy = false; branch.disabled = false; });
   });
-  heading.append(emblem, title, notice, summary, openConsultation, adoption, branch, openTravelMode);
+  const party = element("div", "trip-header-party"); let partyKey = "";
+  const back = control("‹ 旅程一覧", () => options.showTripList?.()); back.hidden = !options.showTripList;
+  const management = element("details", "trip-header-management"); management.append(element("summary", "", "旅程の操作"), openConsultation, adoption, branch, openTravelMode);
+  heading.append(back, emblem, title, summary, party, notice, management);
   const retry = control("旅程を再読み込み", () => { void controller.source()?.retry?.(); });
   const assumptions = element("section", "trip-workspace-assumptions");
   const feasibility = element("div");
@@ -75,31 +80,11 @@ export function configureTripWorkspace(options: {
   const dayTabs = element("div", "trip-day-tabs"); dayTabs.setAttribute("role", "tablist"); dayTabs.setAttribute("aria-label", "旅程の日付");
   const days = element("div", "trip-workspace-days"), proposal = element("div"), candidates = element("div");
   const selectedDays = new Map<string, string>();
-  const overview = element("section", "trip-detail-panel"), itinerary = element("section", "trip-detail-panel"), costPanel = element("section", "trip-detail-panel"), mapPanel = element("section", "trip-detail-panel");
-  const tablist = element("div", "trip-detail-tabs"); tablist.setAttribute("role", "tablist"); tablist.setAttribute("aria-label", "旅程詳細");
-  const detailPanels: Record<TripDetailTab, HTMLElement> = { overview, itinerary, costs: costPanel, map: mapPanel };
-  const selectedTabs = new Map<string, TripDetailTab>();
-  let activeTab: TripDetailTab = "overview", mapKey = "";
-  for (const [id, target] of Object.entries(detailPanels) as [TripDetailTab, HTMLElement][]) { target.id = `trip-detail-${id}`; target.setAttribute("role", "tabpanel"); }
-  const selectTab = (selected: TripDetailTab, focus = false) => {
-    activeTab = selected; selectedTabs.set(controller.sessionId(), selected);
-    for (const entry of tripDetailTabs) {
-      const button = tablist.querySelector<HTMLButtonElement>(`[data-tab="${entry.id}"]`)!;
-      const chosen = entry.id === selected; button.setAttribute("aria-selected", String(chosen)); button.tabIndex = chosen ? 0 : -1;
-      detailPanels[entry.id].hidden = !chosen;
-    }
-    if (focus) tablist.querySelector<HTMLButtonElement>(`[data-tab="${selected}"]`)?.focus();
-  };
-  tripDetailTabs.forEach((entry, index) => {
-    const button = control(entry.label, () => selectTab(entry.id)); button.setAttribute("role", "tab"); button.dataset.tab = entry.id;
-    button.setAttribute("aria-controls", detailPanels[entry.id].id); button.addEventListener("keydown", (event) => {
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
-      event.preventDefault(); const next = event.key === "Home" ? 0 : event.key === "End" ? tripDetailTabs.length - 1
-        : (index + (event.key === "ArrowRight" ? 1 : -1) + tripDetailTabs.length) % tripDetailTabs.length;
-      selectTab(tripDetailTabs[next]!.id, true);
-    }); tablist.append(button);
-  });
-  const add = element("form", "trip-workspace-add"); const addLabel = element("label", "", "追加する予定 "); const addTitle = element("input");
+  const itinerary = element("section", "trip-detail-panel"), details = element("details", "trip-extra-details");
+  itinerary.id = "trip-detail-itinerary";
+  details.append(element("summary", "", "旅程の詳細"), feasibility, readiness, checklist, assumptions, costs);
+  const add = element("form", "trip-workspace-add"); add.hidden = true;
+  let addContext: { tripId: string; revision: number; session: string; afterId?: string } | undefined; const addLabel = element("label", "", "追加する予定 "); const addTitle = element("input");
   addTitle.required = true; addTitle.maxLength = 200; addLabel.append(addTitle);
   const categoryLabel = element("label", "", "種類 "); const addCategory = element("select");
   for (const [value, label] of [["sightseeing", "観光"], ["food", "食事"], ["experience", "体験"], ["event", "イベント"], ["free-time", "自由時間"]] as const) {
@@ -116,10 +101,11 @@ export function configureTripWorkspace(options: {
   addKind.addEventListener("change", () => { categoryLabel.hidden = placeLabel.hidden = addKind.value !== "activity"; });
   add.addEventListener("submit", (event) => {
     event.preventDefault(); const trip = controller.current(); if (!trip) return;
+    if (!addContext || trip.id !== addContext.tripId || trip.revision !== addContext.revision || controller.sessionId() !== addContext.session) { report("最新の旅程から追加し直してください。"); return; }
     try {
-      const focusedId = controller.uiFocus()?.itemId;
+      const focusedId = addContext?.afterId ?? controller.uiFocus()?.itemId;
       const target = { itemId: options.nextItemId(), title: addTitle.value, dayKey: addDay.value,
-        ...(focusedId && addDay.value !== "unscheduled" && tripWorkspaceProjection(trip).dayEntries
+        ...(focusedId && tripWorkspaceProjection(trip).dayEntries
           .find(([key]) => key === addDay.value)?.[1].some(({ sourceItemId }) => sourceItemId === focusedId) ? { afterId: focusedId } : {}) };
       controller.preview(addKind.value === "activity" ? proposeDayActivity(trip, { ...target,
         category: addCategory.value as "sightseeing" | "food" | "experience" | "event" | "free-time",
@@ -128,8 +114,13 @@ export function configureTripWorkspace(options: {
       report("追加案を表示しました。現在の旅程はまだ変更していません。");
     } catch { report("追加する予定の名称と対象を確認してください。"); }
   });
-  const consult = control("＋ 予定を相談して追加", () => chat("旅程に追加する予定を相談したい"));
-  overview.append(feasibility, readiness, checklist, assumptions);
+  const consult = control("相談して追加", () => { if (addContext?.afterId) controller.focus(addContext.afterId); chat(addContext?.afterId ? "この予定の後に追加する予定を相談したい" : "旅程に追加する予定を相談したい"); });
+  add.append(consult, control("取消", () => { add.hidden = true; addContext = undefined; }));
+  const startAdd = (trip: Trip, dayKey: string, afterId?: string, anchor?: HTMLElement) => {
+    addContext = { tripId: trip.id, revision: trip.revision, session: controller.sessionId(), ...(afterId ? { afterId } : {}) };
+    addDay.value = dayKey; add.hidden = false; if (anchor) anchor.after(add); else days.after(add); addTitle.focus();
+  };
+  const addFirst = control("＋ 予定を追加", () => { const trip = controller.current(); if (trip) startAdd(trip, addDay.value); });
   const planDraft = element("section", "trip-workspace-plan-draft"); planDraft.hidden = true; let planKey = "";
   planDraft.addEventListener("raiquora:preview-plan-adoption", event => {
     if (!options.onPlanAdoption || !options.conversationId) return;
@@ -138,12 +129,10 @@ export function configureTripWorkspace(options: {
       isCurrent: () => controller.sessionId() === session && options.conversationId?.() === conversationId &&
         controller.current()?.id === trip?.id && controller.current()?.revision === trip?.revision });
   });
-  itinerary.append(planDraft, dayTabs, days, add, consult, candidates);
-  costPanel.append(costs);
-  const detail = element("div", "trip-detail-view"); detail.append(heading, status, retry, tablist, overview, itinerary, costPanel, mapPanel, proposal);
+  itinerary.append(planDraft, dayTabs, days, addFirst, add, candidates);
+  const detail = element("div", "trip-detail-view"); detail.append(heading, status, retry, itinerary, proposal, candidates, details);
   const travelMode = element("div"); travelMode.hidden = true;
   panel.append(detail, travelMode);
-  selectTab(activeTab);
   app.append(panel, nav);
   const views = new Map<string, { scroll: number; chatScroll: number; view: "chat" | "trip"; focus?: HTMLElement }>();
   const collapsed = new Map<string, boolean>();
@@ -197,7 +186,7 @@ export function configureTripWorkspace(options: {
       activeSession = controller.sessionId(); previousTripId = undefined; report("");
       travelGeneration++; travelTripKey = ""; travelMode.hidden = true; detail.hidden = false;
       costs.replaceChildren(); costKey = ""; costTripId = undefined;
-      activeTab = selectedTabs.get(activeSession) ?? "overview"; selectTab(activeTab); mapKey = "";
+      partyKey = ""; add.hidden = true; addContext = undefined;
     }
     const nextCostSession = controller.source()?.sessionVersion?.();
     if (nextCostSession !== costSessionVersion) { costs.replaceChildren(); costKey = ""; costTripId = undefined; costSessionVersion = nextCostSession; }
@@ -218,9 +207,10 @@ export function configureTripWorkspace(options: {
     notice.textContent = controller.source()?.getRole?.() === "viewer" ? "共有された旅程です（閲覧専用）。会話履歴・予約の個人情報は共有されません。"
       : controller.source()?.confirmationPersistence === "server" ? "変更案を確認するとサーバに保存します。競合した場合は最新の旅程で確認し直してください。"
       : "サーバの旅程を参照しています。変更案は確認用プレビューで、まだ保存できません。";
-    retry.hidden = !controller.source()?.retry;
+    notice.hidden = controller.source()?.getRole?.() !== "viewer";
+    retry.hidden = controller.loadState() !== "unavailable" || !controller.source()?.retry;
     retry.disabled = controller.loadState() === "loading";
-    add.hidden = consult.hidden = !trip;
+    addFirst.hidden = !trip || controller.source()?.getRole?.() === "viewer";
     openTravelMode.hidden = openConsultation.hidden = adoption.hidden = branch.hidden = !trip;
     if (!trip) {
       title.textContent = "旅程"; summary.textContent = "";
@@ -229,7 +219,7 @@ export function configureTripWorkspace(options: {
       costs.replaceChildren(...(costEditor ? [costEditor] : [])); costKey = "";
       feasibility.replaceChildren(); assumptions.replaceChildren(); days.replaceChildren(); proposal.replaceChildren(); candidates.replaceChildren();
       dayTabs.replaceChildren();
-      mapPanel.replaceChildren(); mapKey = "";
+      party.replaceChildren(); partyKey = "";
       readiness.replaceChildren(); checklist.replaceChildren(); checklistKey = "";
       cards.clear(); groups.clear(); previousTripId = undefined; proposalKey = candidateKey = "";
       return;
@@ -237,6 +227,7 @@ export function configureTripWorkspace(options: {
     if (server) report("");
     if (previousTripId !== trip.id) {
       cards.clear(); groups.clear(); days.replaceChildren(); proposalKey = candidateKey = "";
+      add.hidden = true; addContext = undefined; partyKey = "";
       previousTripId = trip.id; panel.scrollTop = viewState().scroll;
     }
     const view = tripWorkspaceProjection(trip), scroll = panel.scrollTop;
@@ -267,14 +258,9 @@ export function configureTripWorkspace(options: {
     adoption.disabled = adoptionBusy || (!trip.adoption || trip.adoption.needsReconfirmation ? !canConfirmTrip(trip) : false);
     branch.hidden = !options.branchTrip || !personalOwner;
     branch.disabled = branchBusy;
-    const partyLabel = view.party.startsWith("今回の人数") ? view.party : `今回の人数: ${view.party}`;
-    summary.textContent = `${view.state}\n${partyLabel}\n${view.places}`;
-    const oldSummary = overview.querySelector(".trip-detail-overview-copy"); oldSummary?.remove();
-    const overviewCopy = element("div", "trip-detail-overview-copy");
-    overviewCopy.append(element("h2", "", "旅程の概要"), ...tripOverviewCopy(trip).map((line) => element("p", "trip-workspace-copy", line)));
-    overview.prepend(overviewCopy);
-    const nextMapKey = JSON.stringify([trip.id, trip.revision, trip.items]);
-    if (mapKey !== nextMapKey) { mapKey = nextMapKey; mapPanel.replaceChildren(renderTripMap(trip, options.showMap, controller.focus)); }
+    summary.textContent = tripDateLabel(trip);
+    const nextPartyKey = JSON.stringify([trip.id, trip.revision, trip.request.party]);
+    if (partyKey !== nextPartyKey) { partyKey = nextPartyKey; party.replaceChildren(renderTripPartyControl(trip, controller, report)); }
     assumptions.replaceChildren(...view.assumptions.map((a) => element("p", "trip-workspace-assumption", `⚠ 仮置き（${a.target}）: ${a.text}`)));
     const ids = new Set<string>(), dates = new Set<string>();
     const dayLabels = new Map<string, string>();
@@ -283,14 +269,15 @@ export function configureTripWorkspace(options: {
       let group = groups.get(date);
       if (!group) { group = element("section", "trip-workspace-day"); group.append(element("h2", "", label)); groups.set(date, group); }
       if (days.children[[...dates].length - 1] !== group) days.insertBefore(group, days.children[[...dates].length - 1] ?? null);
-      entries.forEach(({ item, entryKey }, index) => {
+      entries.forEach((entry, index) => {
+        const { item, entryKey } = entry;
         ids.add(entryKey);
-        const key = JSON.stringify([item, itemAssumptions(trip, item.id), controller.reservations()?.filter((r) => r.itineraryItemId === item.id),
+        const key = JSON.stringify([item, entry.role, itemAssumptions(trip, item.id), controller.reservations()?.filter((r) => r.itineraryItemId === item.id),
           evaluation.issues.filter((i) => i.itemIds.includes(item.id)), personalOwner && !!options.changeItemDecision]);
         const collapseKey = `${activeSession}:${trip.id}:${entryKey}`;
         let card = cards.get(entryKey);
         if (card?.key !== key) {
-          const node = renderWorkspaceCard(trip, item, controller, { collapsed: collapsed.get(collapseKey) ?? false,
+          const node = renderWorkspaceCard(trip, item, controller, { entry, addAfter: () => startAdd(trip, date, item.id, cards.get(entryKey)?.node), collapsed: collapsed.get(collapseKey) ?? true,
             collapse: (value) => collapsed.set(collapseKey, value), chat, report,
             ...(personalOwner && options.changeItemDecision ? { changeItemDecision: options.changeItemDecision } : {}) }, evaluation.issues.filter((i) => i.itemIds.includes(item.id)));
           if (card) card.node.replaceWith(node);
@@ -301,6 +288,10 @@ export function configureTripWorkspace(options: {
         card.node.querySelector(".trip-workspace-item-focus")?.setAttribute("aria-pressed", String(controller.uiFocus()?.itemId === item.id));
         if (group!.children[index + 1] !== card.node) group!.insertBefore(card.node, group!.children[index + 1] ?? null);
       });
+    }
+    if (!add.hidden && addContext?.afterId) {
+      const target = view.dayEntries.find(([key, entries]) => entries.some(e => e.sourceItemId === addContext!.afterId) && key === addDay.value)?.[1].find(e => e.sourceItemId === addContext!.afterId);
+      if (target) cards.get(target.entryKey)?.node.after(add);
     }
     for (const [id, card] of cards) if (!ids.has(id)) { card.node.remove(); cards.delete(id); }
     for (const [date, group] of groups) if (!dates.has(date)) { group.remove(); groups.delete(date); }
@@ -346,6 +337,6 @@ export function configureTripWorkspace(options: {
   document.defaultView?.addEventListener("beforeunload", beforeUnload);
   const unsubscribe = controller.subscribe(render); render();
   return { panel, nav, render, show, report, canLeave, openTravelMode: showTravelMode,
-    showPlan() { selectTab("itinerary"); show("trip"); },
+    showPlan() { show("trip"); },
     destroy() { document.defaultView?.removeEventListener("beforeunload", beforeUnload); unsubscribe(); panel.remove(); nav.remove(); delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; } };
 }

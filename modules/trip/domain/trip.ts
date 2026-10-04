@@ -1,10 +1,11 @@
+import { validateStayPlannedTiming, type StayPlannedTiming } from "./planned-itinerary-time";
 import { validateTripCosts, validateCostForecast, costCategories, type TripCosts, type TripCostForecast, type CostCategory } from "./trip-costs";
 import { validateMoney, type Money } from "./money";
 import { validateAccommodationSnapshot, type AccommodationSnapshot } from "./accommodation-snapshot";
 import { exactKeys, validInstant, projectRailSchedule } from "./selected-rail-journey";
 import { transportModes, validateNonRailTransport, type TransportDetail } from "./transport-detail";
 import { validatePlaceSnapshot, type PlaceSnapshot } from "./place-snapshot";
-import { validateItinerarySchedule, validateTripTimeline, validateScheduleReferences, projectStaySchedule, sameZonedInstant, type ItinerarySchedule, type TripTimeline } from "./itinerary-schedule";
+import { bindRelativeSchedule, validateItinerarySchedule, validateTripTimeline, validateScheduleReferences, projectStaySchedule, sameZonedInstant, type ItinerarySchedule, type TripTimeline } from "./itinerary-schedule";
 import { validateTripRequest, validatePartyAssumptionTransition, type TripRequest } from "./trip-request";
 import { validatePlanningState, validateTripState, type PlanningState, type LifecycleState } from "./trip-state";
 import { assessTripTime, type TripClock } from "./trip-temporal";
@@ -43,6 +44,7 @@ export interface TransportItineraryItem extends ItineraryItemBase {
 }
 export interface StayItineraryItem extends ItineraryItemBase {
   readonly type: "stay";
+  readonly plannedTiming?: StayPlannedTiming;
   readonly selection:
     | { readonly status: "unselected"; readonly place?: PlaceSnapshot }
     | { readonly status: "selected"; readonly accommodation: AccommodationSnapshot };
@@ -114,7 +116,7 @@ export function validateTrip(trip: Trip): void {
   if (trip.timeline !== undefined) validateTripTimeline(trip.timeline);
   if (trip.structureIntent !== undefined) validateTripStructureIntent(trip.structureIntent, new Set(trip.items.map(({ id }) => id)),
     new Set(trip.timeline?.logicalDays.map(({ id }) => id) ?? []));
-  trip.items.forEach((item) => { validateItem(item); validateScheduleReferences(item.schedule, trip.timeline, item.logicalDayId); });
+  trip.items.forEach((item) => { validateItem(item, trip.timeline); validateScheduleReferences(item.schedule, trip.timeline, item.logicalDayId); });
   const derivedSegmentIds = trip.items.flatMap((item) => item.type === "transport"
     ? ["intercity", "excursion", "unresolved"].map((kind) => `derived:${item.id}:${kind}`)
     : item.type === "stay" ? ["stay-base", "unresolved"].map((kind) => `derived:${item.id}:${kind}`) : []);
@@ -126,7 +128,7 @@ export function validateTrip(trip: Trip): void {
   validateTripState(trip);
 }
 
-function validateItem(item: ItineraryItem): void {
+function validateItem(item: ItineraryItem, timeline?: TripTimeline): void {
   if (typeof item.id !== "string" || !item.id.trim() || typeof item.title !== "string") throw new Error("Invalid itinerary identity");
   if (item.decision !== undefined) validateTripAdoption(item.decision);
   validateItinerarySchedule(item.schedule);
@@ -144,7 +146,13 @@ function validateItem(item: ItineraryItem): void {
       exactKeys(item.detail, ["status", "mode"]);
     } else throw new Error("Invalid transport selection");
   } else if (item.type === "stay") {
-    exactKeys(item, ["id", "title", "type", "selection", "schedule", "logicalDayId", "decision"]);
+    exactKeys(item, ["id", "title", "type", "selection", "schedule", "logicalDayId", "decision", "plannedTiming"]);
+    if (item.plannedTiming !== undefined) {
+      const selected = item.selection.status === "selected" ? item.selection.accommodation : undefined;
+      const dated = item.schedule.type === "day" ? item.schedule : item.schedule.type === "relative" && timeline ? bindRelativeSchedule(item.schedule, timeline) : undefined;
+      validateStayPlannedTiming(item.plannedTiming, { checkInDate: selected?.checkInDate ?? dated?.date,
+        checkOutDate: selected?.checkOutDate ?? dated?.endDate, timeZone: selected?.place.timeZone ?? dated?.timeZone });
+    }
     if (item.selection.status === "unselected") {
       exactKeys(item.selection, ["status", "place"]);
       if (item.selection.place !== undefined) validatePlaceSnapshot(item.selection.place);
@@ -244,7 +252,7 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
     }
     if (patch.type === "add") {
       exactKeys(patch, ["type", "item", "afterId"]);
-      validateItem(patch.item);
+      validateItem(patch.item, timeline);
       if (patch.item.decision) throw new Error("Confirmation cannot be added through an item payload");
       if (items.some(({ id }) => id === patch.item.id)) throw new Error("Duplicate itinerary item ID");
       const after = patch.afterId === undefined ? items.length - 1 : items.findIndex(({ id }) => id === patch.afterId);
@@ -314,7 +322,7 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
     exactKeys(patch, ["type", "itemId", "item"]);
     const index = items.findIndex(({ id }) => id === patch.itemId);
     if (patch.type !== "replace" || index < 0 || patch.item.id !== patch.itemId) throw new Error("Replacement requires an existing stable item ID");
-    validateItem(patch.item);
+    validateItem(patch.item, timeline);
     if (patch.item.decision && JSON.stringify(patch.item.decision) !== JSON.stringify(items[index]!.decision)) throw new Error("Confirmation cannot be supplied through a replacement");
     if (patch.item.type !== items[index]!.type) throw new Error("Candidate kind differs from target item");
     const old = items[index]!;

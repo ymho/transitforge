@@ -8,7 +8,7 @@ import { activityPreview } from "../../usecases/trip-plan/activity-preview";
 import { itineraryScheduleLabel } from "../../usecases/trip-plan/itinerary-schedule-label";
 import { tripPartyView } from "../../usecases/trip-plan/trip-party-presentation";
 import { tripPlacesPreview } from "../../usecases/trip-plan/trip-places-preview";
-import { projectDailyItinerary } from "@raiquora/trip/daily-itinerary";
+import { projectDailyItinerary, type DayEntry } from "@raiquora/trip/daily-itinerary";
 
 export const assumptionFieldLabels = { schedule: "日時", place: "場所", selection: "採用内容" } as const;
 export const planningLabels = { inspiration: "旅のイメージ", candidate_discovery: "候補を探す", candidate_selection: "候補を比較",
@@ -42,10 +42,10 @@ export function tripWorkspaceProjection(trip: Trip) {
   const unscheduledLegacy = legacyBuckets.get("日時未定");
   if (unscheduledLegacy) { legacyBuckets.delete("日時未定"); legacyBuckets.set("日時未定", unscheduledLegacy); }
   const days: [string, ItineraryItem[]][] = [...legacyBuckets];
-  const dayEntries: [string, { item: ItineraryItem; entryKey: string; sourceItemId: string }[], string][] = daily.days.map((day) => [day.dayKey,
-    day.entries.flatMap((entry) => { const item = byId.get(entry.sourceItemId); return item ? [{ item, entryKey: entry.entryKey, sourceItemId: entry.sourceItemId }] : []; }), day.label]);
+  const dayEntries: [string, (DayEntry & { item: ItineraryItem })[], string][] = daily.days.map((day) => [day.dayKey,
+    day.entries.flatMap((entry) => { const item = byId.get(entry.sourceItemId); return item ? [{ ...entry, item }] : []; }), day.label]);
   if (daily.unscheduled.length) dayEntries.push(["unscheduled", daily.unscheduled.flatMap((entry) => {
-    const item = byId.get(entry.sourceItemId); return item ? [{ item, entryKey: entry.entryKey, sourceItemId: entry.sourceItemId }] : [];
+    const item = byId.get(entry.sourceItemId); return item ? [{ ...entry, item }] : [];
   }), "日時未定"]);
   return { title: trip.title, places: tripPlacesPreview(trip), party: tripPartyView(trip)?.text ?? "今回の人数は未確認",
     state: `${planningLabels[trip.planningState]} / ${lifecycleLabels[trip.lifecycleState]}`, days, dayEntries, dailyCoverage: daily.coverage,
