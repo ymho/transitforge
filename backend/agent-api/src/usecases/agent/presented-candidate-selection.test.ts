@@ -73,6 +73,25 @@ describe("Application-owned presented candidate selection", () => {
     expect(controller.context.groups.map(group => group.kind)).toEqual(["plan", "accommodation"]);
     await expect(controller.select({ presentationId: "shown:2:plan", candidateId: "plan-1", quote: "案1でお願いします", reference: { kind: "label" as const, quote: "案1" } })).resolves.toMatchObject({ status: "saved" });
   });
+  it("preserves the retained adoption reference when redisplayed search cards are chosen in the next turn", async () => {
+    const f = await fixture(["宿A", "宿B"]);
+    const originalPlan = f.message.publicPlanPresentation!;
+    const plan = { ...originalPlan, candidates: originalPlan.candidates.map((candidate, index) => ({ ...candidate,
+      items: candidate.items.map(item => ({ ...item, sourceRef: `hotel-${index + 1}` })) })) };
+    if (plan.candidateSetRef.kind !== "candidate-set-ref") throw Error("Retained reference missing");
+    const cards = { version: "public-accommodation-presentation-v1" as const, cards: [
+      { evidenceId: "hotel-1", name: "宿A", summary: "候補A", retrievedAt: at }, { evidenceId: "hotel-2", name: "宿B", summary: "候補B", retrievedAt: at }] };
+    const original = { ...f.message, publicPlanPresentation: plan, publicAccommodationPresentation: cards };
+    const review = createPresentedCandidateController({ messages: [original], trip, conversationId, userSequence: 3,
+      executionId: "review", userRequest: "保存して", adoptPlan: f.adoptPlan, show: f.show });
+    expect(review.context.groups.map(group => group.kind)).toEqual(["accommodation"]);
+    await review.review("shown:2:accommodation");
+    const redisplayed: ConversationMessage = { role: "assistant", sequence: 4, text: "どちらにしますか？", createdAt: at, ...f.show.mock.calls[0]![0] };
+    const selection = createPresentedCandidateController({ messages: [original, redisplayed], trip, conversationId, userSequence: 5,
+      executionId: "selection", userRequest: "宿Bでお願いします", adoptPlan: f.adoptPlan, show: vi.fn() });
+    await expect(selection.select({ presentationId: "shown:4:accommodation", candidateId: "hotel-2", quote: "宿Bでお願いします", reference: { kind: "label", quote: "宿B" } })).resolves.toMatchObject({ status: "saved" });
+    expect(f.adoptPlan.mock.calls[1]?.[0]).toMatchObject({ operation: "confirm", variantId: "plan-2", candidateSetId: plan.candidateSetRef.candidateSetId });
+  });
   it("keeps hotel identity and duplicate names distinct and replays exact cards", async () => {
     const presentation = { version: "public-accommodation-presentation-v1" as const, cards: [
       { evidenceId: "hotel-A", name: "同名ホテル", summary: "日付A", retrievedAt: at }, { evidenceId: "hotel-B", name: "同名ホテル", summary: "日付B", retrievedAt: at }] };

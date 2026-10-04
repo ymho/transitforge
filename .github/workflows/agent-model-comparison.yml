@@ -191,10 +191,9 @@ jobs:
       - name: Run bounded candidate selection with the production model
         run: npx vitest run --root . backend/agent-api/src/composition/strands-candidate-selection.test.ts --maxWorkers=1
       - name: Check existing itinerary consultation with the production model
-        if: matrix.attempt == 1
         run: npx vitest run --root . backend/agent-api/src/composition/strands-itinerary-acceptance.test.ts --maxWorkers=1
       - name: Check no-candidate and unsupported-operation reply kinds
-        if: matrix.attempt == 1
+        if: always() && matrix.attempt == 1
         run: npm run eval:agent:strands:live -- --repetitions 3 --require-all --output-dir .artifacts/candidate-selection
       - name: Upload bounded evaluation report
         if: always() && matrix.attempt == 1
