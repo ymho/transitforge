@@ -155,7 +155,8 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
         const quotation = reference.field === "sourceExcerpt";
         const text = quotation ? rawText.slice(0, 160).trimEnd() : rawText;
         // Selected page bodies are research material, not paragraphs to append to an explanation.
-        if (!hasExplanation) parts.push(`${escapeMarkdown(subject)}\n\n${quotation ? "> " : ""}${escapeMarkdown(text).replaceAll("\n", quotation ? "\n> " : "\n")}${quotation && rawText.length > text.length ? "…" : ""}\n${sourceLink(evidence)}`.trim());
+        if (!hasExplanation && !accommodationPanelFact(evidence, reference.field, context.effectiveIntent))
+          parts.push(`${escapeMarkdown(subject)}\n\n${quotation ? "> " : ""}${escapeMarkdown(text).replaceAll("\n", quotation ? "\n> " : "\n")}${quotation && rawText.length > text.length ? "…" : ""}\n${sourceLink(evidence)}`.trim());
         selected.set(evidence.id, structuredClone(evidence));
         const binding = { evidenceId: evidence.id, fieldPath: `facts.${reference.field}`,
           subjectRef: evidence.observation?.subjectKey ?? evidence.subject,
@@ -187,6 +188,7 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
       // Publish all eligible hotels from the selected search, rather than making
       // model prose a second candidate/price store. Never mix searches or revisions.
       const publicAccommodationPresentation = accommodationComparison(selected, claims, context);
+      if (!parts.length && publicAccommodationPresentation) parts.push("宿泊候補をパネルで比較できます。");
       return { text: parts.join("\n\n") + followUp(), evidence: [...selected.values()], claims, proof,
         ...(publicAccommodationPresentation ? { publicAccommodationPresentation } : {}) };
     }
@@ -233,6 +235,11 @@ function accommodationCard(evidence: Evidence, effective?: EffectiveIntent): Pub
     retrievedAt: evidence.observation.retrievedAt, ...(sourceUrl ? { sourceUrl } : {}) };
   try { return parsePublicAccommodationPresentation({ version: "public-accommodation-presentation-v1", cards: [card] }).cards[0]!; }
   catch { throw new AgentV2ReplyError("invalid_field"); }
+}
+function accommodationPanelFact(evidence: Evidence, field: string, effective?: EffectiveIntent): boolean {
+  if (field !== "name" && field !== "accommodationSummary") return false;
+  try { accommodationCard(evidence, effective); return true; }
+  catch (error) { if (error instanceof AgentV2ReplyError) return false; throw error; }
 }
 function accommodationComparison(selected: Map<string, Evidence>, claims: EvidenceClaim[], context: AgentV2ReplyContext): PublicAccommodationPresentation | undefined {
   const scopes = new Set([...selected.values()].filter(item => item.observation?.predicate === "accommodation_search_result").map(item => item.observation!.scopeKey));

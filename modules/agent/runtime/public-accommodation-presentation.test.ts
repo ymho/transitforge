@@ -13,6 +13,10 @@ it("publishes three hotel comparisons even when the answer selected one name, wi
   const final = admitAgentV2Reply({ kind: "answer", references: [{ evidenceId: evidence[0]!.id, field: "name" }], commentary: "宿泊候補を比較できます。" }, { executionId: "execution", evidence });
   expect(final.publicAccommodationPresentation?.cards).toHaveLength(3);
   expect(final.evidence).toHaveLength(3);
+  const panelOnly = admitAgentV2Reply({ kind: "answer", references: [{ evidenceId: evidence[0]!.id, field: "accommodationSummary" }] }, { executionId: "execution", evidence });
+  expect(panelOnly.text).toBe("宿泊候補をパネルで比較できます。");
+  expect(panelOnly.publicAccommodationPresentation).toEqual(final.publicAccommodationPresentation);
+  expect(validateEvidenceAndClaims(panelOnly.evidence, panelOnly.claims).valid).toBe(true);
   expect(validateEvidenceAndClaims(final.evidence, final.claims).valid).toBe(true);
   expect(final.publicAccommodationPresentation?.cards[0]?.summary).toContain("参考最安値: JPY 5,100");
   expect(final.publicAccommodationPresentation?.cards[1]?.summary).toContain("空室は未確認");

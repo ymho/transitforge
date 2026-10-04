@@ -15,6 +15,9 @@
 - 人数はTripRequest.partyを参照する。Profileから補完しない。participants等の参照がある場合の変更は既存保護を通す。
 - 費用は折りたたむ。準備 / 次に決めること / 確認ポイントの集約パネルは撤去し、成立性評価・予約保護・adoption / CASは保持する。
 - 単一transport候補はpublic sourceRef / Journey ID等が一意に一致する場合だけ検索カードへ採用操作を統合する。
+- 宿泊だけの採用候補もsourceRefと公開hotel evidenceIdが一意に一致する場合、比較カードへ採用操作を統合する。複合案・未束縛の案は分離する。
+- 経路・宿の検索は本文を1〜2文の案内・選ぶ理由に絞り、候補名・時刻・乗換・料金・評価の列挙はパネルへ集約する。
+- 「この後に追加」→「相談して追加」は、選択した日・予定名・チェックイン/アウト・次の予定・入力済み名称を本文へ渡し、元のIDをuiFocusへ渡す。既知の追加位置は聞き直さず、追加内容だけ相談する。別Trip/更新後の古い追加フォームからは相談を開始しない。
 
 一次根拠: `frontend/src/presentation/trip-plan/trip-workspace.ts`、`trip-route-timeline.ts`、
 `trip-timeline-interaction.test.ts`、`frontend/src/presentation/home/ai-first-shell.ts`、
