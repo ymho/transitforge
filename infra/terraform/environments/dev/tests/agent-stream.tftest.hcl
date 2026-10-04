@@ -40,6 +40,18 @@ override_resource {
     arn = "arn:aws:iam::123456789012:role/transitforge-dev-agent-stream"
   }
 }
+# Resolve dependency-policy ARNs at plan time so the permission assertion can
+# inspect the policy without provisioning resources or reading any secret value.
+override_resource {
+  target          = aws_secretsmanager_secret.agent_stream_providers["stream"]
+  override_during = plan
+  values          = { arn = "arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:transitforge-dev-providers-example" }
+}
+override_resource {
+  target          = aws_s3_bucket.website
+  override_during = plan
+  values          = { arn = "arn:aws:s3:::transitforge-dev-website" }
+}
 run "current_topology" {
   command = plan
   assert {
