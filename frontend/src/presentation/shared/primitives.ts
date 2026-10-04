@@ -1,6 +1,12 @@
-export type ProductIconName = "account" | "chat" | "close" | "compose" | "explore" | "notifications" | "send" | "train" | "trips";
+export type ProductIconName = "account" | "chat" | "close" | "compose" | "explore" | "notifications" | "send" | "train" | "trips" | "child" | "clock" | "settings" | "info" | "thumbUp" | "thumbDown";
 
 const paths: Record<ProductIconName, string> = {
+  thumbUp: '<path d="M8 10v11H3V10zM8 10l5-8 2 1v7h5l1 2-3 9H8"/>',
+  thumbDown: '<path d="M8 14V3H3v11zM8 14l5 8 2-1v-7h5l1-2-3-9H8"/>',
+  child: '<circle cx="12" cy="7" r="2.5"/><path d="M7 17v-3a5 5 0 0 1 10 0v3M10 17v4M14 17v4"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  settings: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="9" cy="18" r="2"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
   account: '<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0"/>',
   chat: '<path d="M20 15a4 4 0 0 1-4 4H8l-4 2V7a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v8Z"/><path d="M8 9h8M8 13h5"/>',
   close: '<path d="m6 6 12 12M18 6 6 18"/>',

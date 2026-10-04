@@ -1,9 +1,21 @@
 /** Real built Viewer in Chromium; synthetic auth/API only, no Cognito account or model. */
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { readFile, mkdir } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 
+import { createTrip } from "../modules/trip/domain/trip.ts";
+import { railSelectionFixture } from "../modules/trip/domain/selected-rail-journey.fixture.ts";
+import { selectRailJourney, projectRailSchedule } from "../modules/trip/domain/selected-rail-journey.ts";
+const fixture = railSelectionFixture(), rail = selectRailJourney(fixture.candidate, fixture.inputs, fixture.selectedAt);
+const trips = [createTrip("11111111-1111-4111-8111-111111111111", "乗換のある旅", fixture.selectedAt, [
+  { id: "rail", title: "AからCへ", type: "transport", detail: { status: "selected", mode: "rail", journey: rail }, schedule: projectRailSchedule(rail) },
+  { id: "visit", title: "町を歩く", type: "activity", category: "sightseeing", schedule: { type: "day", date: "2026-09-13", timeZone: "Asia/Tokyo" } },
+  { id: "stay", title: "町の宿", type: "stay", selection: { status: "unselected" }, schedule: { type: "day", date: "2026-09-13", endDate: "2026-09-14", timeZone: "Asia/Tokyo" } }
+], { constraints: [], assumptions: [], party: { adults: 2, children: [{ age: 7 }], source: "user" } }),
+createTrip("22222222-2222-4222-8222-222222222222", "別の旅", fixture.selectedAt)];
+const conversation = trip => ({ conversationId: trip.id, tripId: trip.id, title: trip.title, scope: "trip", summary: "", resolvedTopics: [], pendingTopics: [], createdAt: trip.createdAt, updatedAt: trip.updatedAt, revision: 0, messageCount: 0 });
+await mkdir(".artifacts/product-design", { recursive: true });
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? "playwright");
 const root = resolve("dist");
 const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml" };
@@ -24,7 +36,7 @@ const config = { issuer: "https://cognito-idp.ap-northeast-1.amazonaws.com/ap-no
 const key = `raiquora.auth.${config.clientId}.session`;
 const browser = await chromium.launch({ headless: true });
 try {
-  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+  for (const viewport of [{ width: 360, height: 844 }, { width: 390, height: 844 }, { width: 768, height: 1000 }, { width: 1280, height: 900 }, { width: 1440, height: 900 }]) {
     const context = await browser.newContext({ viewport });
     const page = await context.newPage(), errors = [], apiCalls = [], dataCalls = [], failures = [], consoleErrors = [];
     page.on("requestfailed", request => failures.push(new URL(request.url()).pathname));
@@ -39,8 +51,12 @@ try {
     await page.route("**/api/**", route => {
       assert.equal(route.request().headers().authorization, "Bearer fixture-access");
       const path = new URL(route.request().url()).pathname;
+      const command = route.request().postDataJSON();
+      const trip = trips.find(t => t.id === command?.tripId || t.id === command?.conversationId);
       const json = path === "/api/profile/v1" ? { version: "profile-api-v1", profile: null }
-        : path === "/api/trips/v1" ? { version: "trip-api-v1", trips: [] } : { version: "conversation-api-v1", items: [] };
+        : path === "/api/trips/v1" ? { version: "trip-api-v1", ...(command?.operation === "get" ? { trip, role: "owner" } : { trips }) }
+        : path === "/api/conversations/v1" ? { version: "conversation-api-v1", ...(command?.operation === "get" ? { conversation: conversation(trip ?? trips[0]) } : command?.operation === "history" ? { items: [] } : { items: trips.map(conversation) }) }
+        : { version: "conversation-api-v1", items: [] };
       return route.fulfill({ json });
     });
     async function ready() {
@@ -86,6 +102,45 @@ try {
     await page.waitForFunction(() => !document.getElementById("startup-status"));
     assert.equal(refreshes, 1);
 
+    // Production DOM and existing server contracts, with synthetic owner-scoped data only.
+    const checkLayout = async screen => {
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${screen} overflow at ${viewport.width}`);
+      assert.equal(await page.locator("#app").evaluate(el => getComputedStyle(el).backgroundColor), "rgb(255, 255, 255)");
+      await page.screenshot({ path: `.artifacts/product-design/${screen}-${viewport.width}.png` });
+    };
+    await checkLayout("settings");
+    await page.locator(".settings-section").filter({ has: page.locator("#travel-profile-page") }).locator("summary").first().click();
+    await checkLayout("preferences");
+    await page.locator('[data-primary="trips"]').click();
+    await page.locator("[data-trip]").first().waitFor(); assert.equal(await page.locator("[data-trip]").count(), 2);
+    await checkLayout("trip-list");
+    await page.locator(`[data-trip="${trips[0].id}"]`).click();
+    await page.locator('.trip-workspace [data-item-id="rail"]').waitFor();
+    assert.equal(await page.locator(".trip-detail-tabs").count(), 0);
+    assert.equal(await page.locator(".trip-route-leg").count(), 2);
+    assert.match(await page.locator(".trip-route-transfer").textContent(), /乗換10分/);
+    assert.match(await page.locator(".trip-workspace-heading").textContent(), /9月13日ー9月14日・1泊2日/);
+    await checkLayout("timeline");
+    await page.locator('[data-item-id="visit"] button').filter({ hasText: "＋ この後に追加" }).click();
+    assert.equal(await page.locator(".trip-workspace-add").isVisible(), true);
+    await checkLayout("spot-add");
+    await page.locator('.trip-workspace-add button').filter({ hasText: "取消" }).click();
+    await page.getByRole("button", { name: "町を歩くの時刻を登録", exact: true }).click();
+    assert.equal(await page.locator('[data-item-id="visit"] .trip-time-editor').isVisible(), true);
+    await checkLayout("time-editor");
+    await page.locator('[data-item-id="visit"] .trip-time-editor button').filter({ hasText: "取消" }).click();
+    await page.getByRole("button", { name: "人数を変更", exact: true }).click();
+    assert.equal(await page.locator(".trip-party-editor").isVisible(), true); await checkLayout("party-editor");
+    await page.getByRole("button", { name: "‹ 旅程一覧", exact: true }).click();
+    await page.locator(`[data-trip="${trips[1].id}"]`).click();
+    await page.waitForFunction(() => document.querySelector(".trip-workspace-heading h1")?.textContent === "別の旅");
+    assert.equal(await page.locator(".trip-workspace-card").count(), 0);
+    await page.locator('[data-account]').click();
+    await page.emulateMedia({ colorScheme: "dark" });
+    assert.equal(await page.locator("#app").evaluate(el => getComputedStyle(el).backgroundColor), "rgb(23, 27, 33)");
+    await page.screenshot({ path: `.artifacts/product-design/settings-dark-${viewport.width}.png` });
+    await page.emulateMedia({ colorScheme: "light" });
+
     // Resume a suspended tab after its absolute deadline: no refresh or protected data.
     const beforeExpiry = apiCalls.length;
     await page.clock.setSystemTime(new Date(issuedAt + 12 * 60 * 60 * 1000));
@@ -105,6 +160,7 @@ try {
     await page.route(`${config.loginOrigin}/logout?*`, route => route.fulfill({ status: 302, headers: { location: origin + "/" } }));
     await page.reload(); await ready();
     await page.locator("[data-account]").click(); await page.waitForSelector('[data-primary-view="my"]');
+    await page.locator(".settings-section").filter({ has: page.locator("[data-my-logout]") }).locator("summary").first().click();
     await Promise.all([page.waitForEvent("load"), page.locator("[data-my-logout]").click()]); await ready();
     assert.equal(await page.evaluate(key => sessionStorage.getItem(key), key), null);
     assert.deepEqual(errors, []); assert.deepEqual(dataCalls, []);

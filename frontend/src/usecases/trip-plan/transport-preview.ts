@@ -2,8 +2,8 @@ import type { TransportItineraryItem } from "@raiquora/trip/trip";
 import type { TransportMode } from "@raiquora/trip/transport-detail";
 import { itineraryScheduleLabel } from "./itinerary-schedule-label";
 
-const labels: Record<TransportMode, string> = { rail: "🚆 鉄道", air: "✈ 飛行機", bus: "🚌 バス", ferry: "⛴ フェリー", car: "🚗 車",
-  "rental-car": "🚗 レンタカー", taxi: "🚕 タクシー", "ride-hail": "🚕 配車", walk: "🚶 徒歩", bicycle: "🚲 自転車", other: "移動" };
+const labels: Record<TransportMode, string> = { rail: "鉄道", air: "飛行機", bus: "バス", ferry: "フェリー", car: "車",
+  "rental-car": "レンタカー", taxi: "タクシー", "ride-hail": "配車", walk: "徒歩", bicycle: "自転車", other: "移動" };
 export function transportPreview(item: TransportItineraryItem): string {
   const d = item.detail;
   const heading = d.mode ? labels[d.mode] : "移動手段未定";

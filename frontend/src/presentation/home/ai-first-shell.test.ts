@@ -161,7 +161,7 @@ it("all secondary actions use existing feature ports", () => {
 it("opens the actual Trip as a trips subview, not a selected chat tab", () => {
   const trip = createTrip("45300000-0000-4000-8000-000000000001", "旅程", "2026-09-18T00:00:00Z", []);
   const { ports } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }), read: () => ({ state: "available", trips: [trip] }) });
-  expect(document.querySelector('.home-trip-art svg[aria-hidden="true"]')).not.toBeNull();
+  expect(document.querySelector('.trip-list-emblem svg[aria-hidden="true"]')).not.toBeNull();
   click('[data-primary="trips"]'); click("[data-trip]");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("trip");
   expect(document.querySelector('[data-primary="trips"]')!.getAttribute("aria-current")).toBe("page");

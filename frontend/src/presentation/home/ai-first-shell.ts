@@ -1,9 +1,8 @@
 import { homeReadModel, tripDisplayLabels, type HomeReadInput } from "../../usecases/trip-plan/home-read-model";
-import { travelIcon } from "../shared/travel-icon";
 import { adoptComposer, iconMarkup, pageHeadingMarkup, type ProductIconName } from "../shared/primitives";
 import type { Trip } from "@raiquora/trip/trip";
-import { itineraryScheduleLabel } from "../../usecases/trip-plan/itinerary-schedule-label";
-import { tripPartyView } from "../../usecases/trip-plan/trip-party-presentation";
+import { tripDateLabel } from "../../usecases/trip-plan/trip-header-presentation";
+import { partyMarkup } from "../trip-plan/trip-party-control";
 import type { AuthState } from "../../usecases/auth/auth-session";
 
 export type PrimaryView = "chat" | "trips" | "my";
@@ -48,13 +47,23 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     <section class="product-page" data-page="chat" aria-label="相談"><div class="home-hero" data-home-hero role="region" aria-label="旅の相談を始める"><figure class="home-hero-media">${heroImages.map(([src, width, height, alt], index) => `<img data-hero-image src="${src}" width="${width}" height="${height}" alt="${alt}"${index === selectedHeroImage ? ' fetchpriority="high"' : ' loading="lazy" hidden'}>`).join("")}<figcaption>Raiquora original images</figcaption></figure><div class="home-hero-scrim" aria-hidden="true"></div><div class="home-hero-copy">
     <form class="home-prompt"><textarea id="home-prompt" aria-label="どんな旅にしたいですか？" maxlength="400" rows="1" placeholder="例：${selectedExample}"></textarea><button type="submit" aria-label="AIに相談する">${iconMarkup("send")}</button></form>
     <p class="consultation-entry-error" data-consultation-error role="status" hidden></p></div></div><div class="consultation-entry-progress" data-consultation-progress hidden><p role="status" data-consultation-status></p><button type="button" data-consultation-retry hidden>再試行</button></div></section>
-    <section class="product-page" data-page="trips" aria-label="旅程" hidden><div class="trip-list-heading">${pageHeadingMarkup("YOUR TRIPS", "旅程", "次の旅も、考え中の旅も。ここから続きの相談や確認を始められます。")}</div><div data-trip-list></div></section>
+    <section class="product-page" data-page="trips" aria-label="旅程" hidden><div class="trip-list-heading">${pageHeadingMarkup("", "旅程")}</div><div data-trip-list></div></section>
     <section class="product-page" data-page="my" aria-label="設定" hidden><div class="my-shell">${pageHeadingMarkup("SETTINGS", "設定")}<div class="my-grid"><section class="home-card my-account-card ds-surface"><h2>ログイン</h2><p data-my-account-status></p><button class="ds-button" type="button" data-my-login>ログイン</button><button class="ds-button" type="button" data-my-logout hidden>ログアウト</button></section><section class="home-card account-profile-card ds-surface" data-signed-in-only><div id="travel-profile-page" class="travel-profile-page" aria-label="いつもの好み設定"></div></section>
     <section class="home-card" data-signed-in-only><h2>通知</h2><div class="my-actions"><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button></div></section><section class="home-card account-journey-settings"><h2>経路検索の設定</h2><p>相談で経路を比較するときの既定値です。</p><label>乗換ペース<select data-account-transfer-pace><option value="hurried">急ぐ</option><option value="standard">普通</option><option value="relaxed">ゆっくり</option></select></label><label>経路の優先<select data-account-ranking-preference><option value="balanced">バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label></section><section class="home-card account-services"><h2>外部サービス</h2><p>旅の案内に利用する情報提供元です。</p><ul><li>GTFS-JP・公共交通オープンデータ</li><li>気象庁防災情報XML</li><li>ホットペッパーグルメ Webサービス</li><li>Wikipedia / Wikimedia Commons</li></ul></section></div></div></section>`;
   app.prepend(root);
   const services = root.querySelector<HTMLUListElement>(".account-services ul")!;
   services.className = "external-service-list";
   services.innerHTML = `<li><strong>Mapbox</strong><span>地図・徒歩と車の移動</span><a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noreferrer">地図の帰属表示</a></li><li><strong>OpenStreetMap contributors</strong><span>地図データ</span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">著作権とライセンス</a></li><li><strong>Open-Meteo</strong><span>天気予報</span><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">提供元</a></li><li><strong>気象庁</strong><span>警報・防災情報</span><a href="https://xml.kishou.go.jp/" target="_blank" rel="noreferrer">気象庁防災情報XML</a></li><li><strong>ホットペッパーグルメ Webサービス</strong><span>飲食店候補</span><a href="https://webservice.recruit.co.jp/" target="_blank" rel="noreferrer"><img src="https://webservice.recruit.co.jp/banner/hotpepper-s.gif" width="135" height="17" alt="ホットペッパーグルメ Webサービス" /></a></li><li><strong>Wikipedia / Wikimedia Commons</strong><span>観光情報・画像</span><a href="https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use" target="_blank" rel="noreferrer">利用条件</a></li><li><strong>Amazon Bedrock</strong><span>コンシェルジュの言語モデル</span></li>`;
+  const settings = root.querySelector<HTMLElement>(".my-grid")!;
+  const settingsSections: Array<[string, string, ProductIconName]> = [[".account-profile-card", "いつもの好み", "account"], [".account-journey-settings", "経路検索", "train"], ["[data-notifications]", "通知", "notifications"], [".my-account-card", "アカウント", "account"], [".account-services", "このサービスについて", "info"]];
+  for (const [selector, label, icon] of settingsSections) {
+    const found = settings.querySelector<HTMLElement>(selector)!;
+    const section = selector === "[data-notifications]" ? found.closest<HTMLElement>("section")! : found;
+    const wrapper = document.createElement("details"); wrapper.className = "settings-section";
+    if (section.hasAttribute("data-signed-in-only")) { wrapper.setAttribute("data-signed-in-only", ""); section.removeAttribute("data-signed-in-only"); }
+    const summary = document.createElement("summary"); summary.innerHTML = `${iconMarkup(icon)}<span>${label}</span>`;
+    wrapper.append(summary, section); settings.append(wrapper);
+  }
   let current: PrimaryView = "chat", composing = false;
   let consultationMode: "landing" | "starting" | "conversation" | "unavailable" = "landing";
   let entryGeneration = 0, appliedRoute = "";
@@ -268,7 +277,5 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
 }
 function esc(value: string): string { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;"); }
 function card(trip: Trip, group?: string, withTravelMode = false): string {
-  const dates = [...new Set(trip.items.map((item) => itineraryScheduleLabel(item.schedule)))];
-  const party = tripPartyView(trip)?.text;
-  return `<article class="home-card home-trip-card"><div class="home-trip-copy">${group ? `<small>${esc(group)}</small>` : ""}<h3>${esc(trip.title)}</h3><div class="home-tags">${dates.slice(0, 2).map((date) => `<span>${esc(date)}</span>`).join("")}${party ? `<span>${esc(party)}</span>` : ""}</div><p>${trip.items.length}件の予定から、旅をゆっくり整えましょう。</p><button type="button" data-trip="${esc(trip.id)}">旅程を見る <span aria-hidden="true">→</span></button>${withTravelMode ? `<button type="button" data-trip-travel="${esc(trip.id)}">旅行モードを開く</button>` : ""}<span class="home-trip-manage"><button type="button" data-trip-rename="${esc(trip.id)}">名称を編集</button><button type="button" data-trip-archive="${esc(trip.id)}">アーカイブ</button></span></div><div class="home-trip-art" aria-hidden="true">${travelIcon("trip")}</div></article>`;
+  return `<article class="home-card home-trip-card"><button class="trip-list-choice" type="button" data-trip="${esc(trip.id)}"><span class="trip-list-emblem">${iconMarkup("trips")}</span><span class="trip-list-copy"><strong>${esc(trip.title)}</strong><small>${esc(tripDateLabel(trip))}</small><span class="trip-party-pair">${partyMarkup(trip)}</span>${group ? `<small>${esc(group)}</small>` : ""}</span><span aria-hidden="true">›</span></button><details class="home-trip-manage"><summary>旅程の操作</summary><button type="button" data-trip-rename="${esc(trip.id)}">名称を編集</button><button type="button" data-trip-archive="${esc(trip.id)}">アーカイブ</button>${withTravelMode ? `<button type="button" data-trip-travel="${esc(trip.id)}">旅行モードを開く</button>` : ""}</details></article>`;
 }

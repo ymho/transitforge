@@ -396,6 +396,7 @@ aiGuideController = configureAiGuidePanel(
 );
 let openBranchedTrip: (trip: import("@raiquora/trip/trip").Trip, title: string) => Promise<void> = async () => { throw new Error("Branch navigation unavailable"); };
 const tripWorkspace = configureTripWorkspace({
+    showTripList: () => primaryShell?.navigate("trips"),
   conversationId: () => activeConversationSession.id, onPlanAdoption: adoptPlan,
   app, chat: aiGuidePanel, messages: aiGuideMessages, input: aiGuideInput,
   controller: tripWorkspaceController,

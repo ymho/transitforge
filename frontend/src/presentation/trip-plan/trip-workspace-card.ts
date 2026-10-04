@@ -1,9 +1,12 @@
+import type { DayEntry } from "@raiquora/trip/daily-itinerary";
+import { renderTripTimeEditor } from "./trip-time-editor";
+import { renderTripRouteTimeline } from "./trip-route-timeline";
 import type { Trip, ItineraryItem } from "@raiquora/trip/trip";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import { proposeTripItemChange } from "@raiquora/trip/trip-item-proposal";
 import { nonRailTransportModes } from "@raiquora/trip/transport-detail";
 import { projectDailyItinerary } from "@raiquora/trip/daily-itinerary";
-import { itineraryItemCopy, itineraryScheduleLabel, itemAssumptions } from "./trip-workspace-projection";
+import { itineraryItemCopy, itemAssumptions } from "./trip-workspace-projection";
 import { element, control, option } from "./trip-workspace-elements";
 import { reservationStatusLabels } from "../../usecases/trip-plan/reservation-reader";
 import type { TripFeasibilityIssue } from "@raiquora/trip/trip-feasibility";
@@ -12,7 +15,7 @@ import { travelIcon } from "../shared/travel-icon";
 import { researchDateLabel } from "../../usecases/trip-plan/research-date";
 
 export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller: TripWorkspaceController,
-  options: { collapsed: boolean; collapse(value: boolean): void; chat(prompt: string): void; report(message: string): void;
+  options: { entry?: DayEntry; addAfter?(): void; collapsed: boolean; collapse(value: boolean): void; chat(prompt: string): void; report(message: string): void;
     changeItemDecision?: (trip: Trip, item: ItineraryItem, action: "confirm" | "withdraw") => Promise<void> }, issues: TripFeasibilityIssue[] = []): HTMLElement {
   const card = element("article", "trip-workspace-card"); card.dataset.itemId = item.id;
   const header = element("header");
@@ -23,28 +26,35 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   focus.className = "trip-workspace-item-focus";
   focus.setAttribute("aria-label", `${item.title}を相談対象にする`);
   const body = element("div", "trip-workspace-item-body");
-  body.id = `trip-item-${encodeURIComponent(item.id)}`;
+  body.id = `trip-item-${encodeURIComponent(options.entry?.entryKey ?? item.id)}`;
   body.hidden = options.collapsed;
   const expand = control(options.collapsed ? "開く" : "閉じる", () => {
     body.hidden = !body.hidden; expand.textContent = body.hidden ? "開く" : "閉じる";
     expand.setAttribute("aria-expanded", String(!body.hidden)); options.collapse(body.hidden);
   });
   expand.setAttribute("aria-expanded", String(!body.hidden)); expand.setAttribute("aria-controls", body.id);
-  header.append(icon, focus, expand); card.append(header, element("p", "", itineraryScheduleLabel(item.schedule, true)));
-  card.append(element("p", "trip-workspace-item-decision", item.decision?.needsReconfirmation ? "変更後の予定を再確認してください" :
-    item.decision ? "確定した予定（予約・購入・情報の検証済みではありません）" : "仮の予定"));
-  for (const issue of issues) card.append(element("p", "trip-workspace-feasibility-issue", `⚠ ${feasibilityIssueText(issue)}`));
-  for (const r of controller.reservations()?.filter((r) => r.itineraryItemId === item.id) ?? []) {
-    card.append(element("p", "trip-workspace-reservation", `予約記録: ${reservationStatusLabels[r.status]}`));
-  }
-  for (const a of itemAssumptions(trip, item.id)) card.append(element("p", "trip-workspace-assumption", `⚠ ${a.field}の仮置き: ${a.text}`));
-  body.append(element("p", "trip-workspace-copy", itineraryItemCopy(item)));
+  header.append(icon, focus, expand);
+  const content = element("div", "trip-timeline-content"), rail = element("span", "trip-timeline-rail"); rail.setAttribute("aria-hidden", "true");
+  content.append(header); card.append(renderTripTimeEditor(trip, item, options.entry, controller, options.report), rail, content);
+  const stayRole = item.type === "stay" ? options.entry?.role === "end" ? "チェックアウト" : options.entry?.role === "continue" ? "連泊" : "チェックイン" : undefined;
+  const placeName = item.type === "stay" ? item.selection.status === "selected" ? item.selection.accommodation.place.name : item.selection.place?.name : item.type === "activity" ? item.place?.name : undefined;
+  if (placeName && placeName !== item.title) content.append(element("p", "trip-item-meta", placeName));
+  if (stayRole) content.append(element("p", "trip-item-meta", stayRole));
+  content.append(element("p", "trip-workspace-item-decision", item.decision?.needsReconfirmation ? "要再確認" :
+    item.decision ? "確定" : "仮の予定"));
+  const information = element("details", "trip-item-information"); information.append(element("summary", "", issues.length || itemAssumptions(trip, item.id).length ? "要確認・詳細" : "詳細"));
+  for (const issue of issues) information.append(element("p", "trip-workspace-feasibility-issue", feasibilityIssueText(issue)));
+  for (const r of controller.reservations()?.filter(r => r.itineraryItemId === item.id) ?? []) information.append(element("p", "trip-workspace-reservation", `予約記録: ${reservationStatusLabels[r.status]}`));
+  for (const a of itemAssumptions(trip, item.id)) information.append(element("p", "trip-workspace-assumption", `${a.field}の仮置き: ${a.text}`));
+  information.append(element("p", "trip-workspace-copy", itineraryItemCopy(item)));
+  if (item.type === "transport") content.append(renderTripRouteTimeline(item));
+  body.append(information);
   if (item.type === "activity" && item.research) {
     const source = element("a", "trip-workspace-research-source", `${researchDateLabel(item.research.observedAt)}に参照した資料を開く`);
     source.href = item.research.sourceUrl; source.target = "_blank"; source.rel = "noopener noreferrer";
     body.append(source);
   }
-  const safe = (action: () => void) => { try { action(); } catch { options.report("この変更では条件・仮定との整合が取れません。会話で変更内容を相談してください。"); } };
+  const safe = (action: () => void) => { try { if (controller.current()?.id !== trip.id || controller.source()?.getRole?.() === "viewer") throw new Error("Stale or readonly Trip"); action(); } catch { options.report("この変更では条件・仮定との整合が取れません。会話で変更内容を相談してください。"); } };
   const actions = element("div", "trip-workspace-actions");
   if (options.changeItemDecision) {
     const action = item.decision && !item.decision.needsReconfirmation ? "withdraw" : "confirm";
@@ -85,7 +95,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
       ? "この移動予定の経路全体を再検索して選び直したい。新しい経路を採用するまで元の経路を残し、変更をやめたら元の経路のままにしてください。ほかの予定は変更しないでください"
       : "この移動区間の交通手段を相談したい");
   }));
-  actions.append(control("＋ この後の予定を相談", () => { controller.focus(item.id); options.chat("この予定の後に追加する予定を相談したい"); }));
+
   const editor = element("form", "trip-workspace-editor"); editor.hidden = true;
   const label = element("label", "", "予定の名称 "); const title = element("input"); title.value = item.title; title.required = true; title.maxLength = 200;
   label.append(title); const submit = element("button", "", "変更案を確認"); submit.type = "submit";
@@ -128,7 +138,9 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const editing = element("details", "trip-workspace-editing");
   editing.append(element("summary", "", "予定を編集"), actions, editor);
   if (manualActivityForm) editing.append(manualActivityForm);
-  body.append(consult, editing); card.append(body); return card;
+  body.append(consult, editing); content.append(body);
+  if (options.addAfter && controller.source()?.getRole?.() !== "viewer") content.append(control("＋ この後に追加", options.addAfter));
+  return card;
 }
 
 /** Refresh sibling references without replacing the card, editor or keyboard focus. */

@@ -1,3 +1,4 @@
+import { iconMarkup } from "../shared/primitives";
 import { travelPreferenceLabels, type TravelPreference, type UserProfile } from "@raiquora/trip/travel-profile";
 import type { ProfileUiController } from "../../usecases/personal-state/profile-ui-controller";
 
@@ -43,12 +44,12 @@ export function configureTravelProfile(document: Document, client: ProfileUiCont
     if (immediate) flush(); else timer = setTimeout(flush, 400);
   };
   const render = () => {
-    page.innerHTML = `<section class="profile-editor"><header><div><h2>いつもの好み</h2><p>毎回説明しなくてよいことだけ。すべて任意で、今回の旅の条件が常に優先されます。</p></div><div class="profile-save-status"><span role="status" aria-live="polite" data-profile-message></span><button type="button" data-profile-retry hidden>再試行</button></div></header>
+    page.innerHTML = `<section class="profile-editor"><header><div><h2>いつもの好み</h2><p>すべて任意です。今回の旅の条件を優先します。</p></div><div class="profile-save-status"><span role="status" aria-live="polite" data-profile-message></span><button type="button" data-profile-retry hidden>再試行</button></div></header>
       <form id="travel-profile-form">
         <label>普段の出発地<input name="usualOrigin" type="text" maxlength="200" value="${esc(draft.usualOrigin)}" placeholder="例：大阪駅、神戸市"></label>
-        <fieldset><legend>好きなこと</legend><p>旅先を探すときの参考にします。</p><div class="profile-chips">${Object.entries(travelPreferenceLabels).map(([key,label]) => `<label><input type="checkbox" name="interest" value="${key}" ${draft.interests.includes(key as TravelPreference) ? "checked" : ""}><span>${label}</span></label>`).join("")}</div></fieldset>
+        <fieldset><legend>好きなこと</legend><p>旅先を探すときの参考にします。</p><div class="profile-chips">${Object.entries(travelPreferenceLabels).map(([key,label]) => `<label><input type="checkbox" name="interest" value="${key}" ${draft.interests.includes(key as TravelPreference) ? "checked" : ""}><span>${iconMarkup(key === "railway" ? "train" : "explore")}${label}</span></label>`).join("")}</div></fieldset>
         <label>いつも配慮してほしいこと<textarea name="considerations" maxlength="1000" rows="4" placeholder="例：歩きすぎない、地元の料理を楽しみたい、静かな宿が好き">${esc(draft.considerations)}</textarea></label>
-        <p class="profile-consent-explanation">この3項目は提案の参考としてAIへ渡します。日程・人数・予算など今回の条件は旅程側で扱い、ここへ自動保存しません。</p>
+        <p class="profile-consent-explanation">好みはAIの提案に使います。日程・人数・予算は旅程ごとに設定します。</p>
       </form>
       <details class="profile-storage-actions"><summary>プロフィールの管理</summary><p>設定はアカウントに保存されます。</p><button type="button" data-delete ${!read?.profile ? "hidden" : ""}>プロフィールを削除</button></details></section>`;
     const form = page.querySelector<HTMLFormElement>("form")!;
