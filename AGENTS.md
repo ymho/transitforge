@@ -36,12 +36,15 @@
 
 完了前に次を行う
 
-1. 文書化されたformat lint test buildを実行
+1. 変更に関係する文書化されたformat lint test buildを実行
 2. 実行しなかった確認と理由を報告
 3. 最終差分から無関係な変更を除外
 4. 秘密情報と大容量生成物がないことを確認
 
-実装中は対象のtargeted testを実行する。PR readyでは`workspace:check`、`architecture:check`、buildを実行する。
+実装中は対象のtargeted testを実行する。PR readyでは`architecture:check`（`workspace:check`を含む）とbuildを実行する。
+全量testは仕上げに原則1回とし、同じrevisionで成功済みのCI結果を再利用する。変更・失敗・未確認範囲がない限り繰り返さない。
+`npm test`の後に`test:journey-scenarios`、`test:agent:v2`、`test:agent:strands:live-fixtures`を重ねて実行しない。
+Acceptance固有の`test:trip:v2:gate`だけは`npm test`に含まれない。build後のLambda検証は`lambda:check:built`を使う。
 AgentのPrompt、Tool選択、model behaviorを変更した場合はSmoke、必要に応じてFull Evalを実行する。これらを
 変更しないcleanupではpaid Live Evalを要求しない。旧経路のtestを残すために旧コードを残さない。
 
